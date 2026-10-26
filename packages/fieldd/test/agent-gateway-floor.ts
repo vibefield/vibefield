@@ -55,7 +55,7 @@ import {
   typedScript,
 } from "./agent-gateway-fixture";
 import {
-  floorBootEvidence,
+  floorEvidence,
   killDaemonTree,
   nativeBinPath,
   removeTempRoot,
@@ -349,7 +349,7 @@ export async function floor(config: FloorConfig): Promise<Floor> {
     );
   } catch (error) {
     throw new Error(
-      `${error instanceof Error ? error.message : String(error)}\n${floorBootEvidence(dataDir, spawnedAt, daemon.native)}`,
+      `${error instanceof Error ? error.message : String(error)}\n${floorEvidence({ dataDir, spawnedAt, link: daemon.native })}`,
       { cause: error },
     );
   }

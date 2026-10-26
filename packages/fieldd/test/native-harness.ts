@@ -216,9 +216,10 @@ function dialOnce(endpoint: string): Promise<string | null> {
   });
 }
 
-/** The attributes of a floor log event that a boot's evidence carries. Nothing else: the events beside them hold
- * socket paths, endpoints, boot ids and session ids, and a cell's stderr `line` can carry its door URLs. */
-const FLOOR_EVIDENCE_ATTRS = [
+/** The attributes of a log event that a row's evidence carries. Nothing else: the events beside them hold socket
+ * paths, endpoints, boot ids and session tokens, and a cell's stderr `line` can carry its door URLs. The floor's
+ * (class … error) and, since item 68, fieldd's (sessionId, profileId, how, outcome, terminated). */
+const EVIDENCE_ATTRS = [
   "class",
   "role",
   "instance",
@@ -228,26 +229,41 @@ const FLOOR_EVIDENCE_ATTRS = [
   "state",
   "reason",
   "error",
+  "sessionId",
+  "profileId",
+  "how",
+  "outcome",
+  "terminated",
 ] as const;
 
-/** Item 63 (2026-10-26) — what a real floor's boot left, for the error a wait that gave up on it throws.
+/** The streams a real-floor row's evidence reads, under `<dataDir>/logs/system/`: the floor's (the suites set
+ * FIELD_LOG_DIR to `<dataDir>/logs`) and fieldd's (the suites' `bootstrap({ logRoot: <dataDir>/logs })`, item 68 —
+ * before it, fieldd logged nowhere in these suites). */
+const EVIDENCE_STREAMS = [
+  { tag: "floor", file: "field-native.ndjson" },
+  { tag: "fieldd", file: "fieldd.ndjson" },
+] as const;
+
+/** Item 68 — what a real-floor row's evidence is read from: its floor's data dir (both logs live under it), when
+ * the row spawned that floor (undefined for a restart's floor, spawned earlier), and the daemon's link to it. */
+export interface FloorScene {
+  dataDir: string;
+  spawnedAt: number | undefined;
+  link: Pick<NativeLink, "connected" | "terminalRoutes">;
+}
+
+/** Item 63 → item 68 (2026-10-26) — what a real floor and its daemon did, for the error a wait that gave up throws.
  *
- * A suite's wait for the floor's terminal endpoints that timed out used to say only that it had timed out
- * ("poll timed out after 30000ms"), and the floor's own log was deleted with the suite's temp root. That made one
- * stalled boot on CI (the nightly of 2026-10-26, agent-session AR-6-0) a lottery: nobody could tell which step
- * stalled. This reads the floor's log (`<FIELD_LOG_DIR>/system/field-native.ndjson`; the suites set FIELD_LOG_DIR
- * to `<dataDir>/logs`) and fieldd's view of the link, so the error names it. The shapes it is built to tell apart:
- * a cell killed at its 15 s hello deadline and respawned (`terminal.cell_ended`), a cell that crashed, and a route
- * snapshot fieldd never heard. Times are ms since the spawn (since the log's first event when the floor was
- * spawned earlier, as on a restart). The last `limit` events are shown. */
-export function floorBootEvidence(
-  dataDir: string,
-  spawnedAt: number | undefined,
-  link: Pick<NativeLink, "connected" | "terminalRoutes">,
-  limit = 40,
-): string {
-  const routes = link.terminalRoutes;
-  const linkLine = `fieldd's link: ${link.connected ? "connected" : "NOT connected"}; ${
+ * A real-floor row's wait that timed out used to say only that it had ("poll timed out after 15000ms"), and the
+ * logs that would have said why were deleted with the row's temp root. Four different rows cost a CI run that way
+ * on 2026-10-26. This reads the floor's log and fieldd's own (merged by time, each line tagged with its source) and
+ * fieldd's view of the link, so the error names the stalled step: a cell killed at its hello deadline
+ * (`terminal.cell_ended`), a route snapshot never heard, a login pane's reap that never answered
+ * (`fieldd.agents.login_started` with no `husk_reaped`), a re-read that failed (`login_finished … outcome`).
+ * Times are ms since the spawn (since the logs' first event for a restart's floor); the last `limit` are shown. */
+export function floorEvidence(scene: FloorScene, limit = 40): string {
+  const routes = scene.link.terminalRoutes;
+  const linkLine = `fieldd's link: ${scene.link.connected ? "connected" : "NOT connected"}; ${
     routes === undefined
       ? "no route snapshot heard (neither the hello nor a routes stream carried one)"
       : `routes heard at revision ${routes.revision}, ${routes.cells.length} cell(s)${
@@ -261,39 +277,96 @@ export function floorBootEvidence(
                 .join(", ")})`
         }`
   }`;
-  const file = join(dataDir, "logs", "system", "field-native.ndjson");
-  if (!existsSync(file)) return `${linkLine}\nthe floor wrote no log at ${file}`;
+  const dir = join(scene.dataDir, "logs", "system");
   const events: Array<{ time: number; text: string }> = [];
-  for (const line of readFileSync(file, "utf8").split("\n")) {
-    if (line.trim() === "") continue;
-    let record: {
-      time?: unknown;
-      event?: unknown;
-      level?: unknown;
-      attrs?: Record<string, unknown>;
-    };
-    try {
-      record = JSON.parse(line);
-    } catch {
+  const missing: string[] = [];
+  for (const stream of EVIDENCE_STREAMS) {
+    const file = join(dir, stream.file);
+    if (!existsSync(file)) {
+      missing.push(stream.tag);
       continue;
     }
-    if (typeof record.time !== "number" || typeof record.event !== "string") continue;
-    const attrs = FLOOR_EVIDENCE_ATTRS.flatMap((key) =>
-      record.attrs?.[key] === undefined ? [] : [`${key}=${JSON.stringify(record.attrs[key])}`],
-    );
-    const level =
-      typeof record.level === "number" && record.level >= 40 ? ` [level ${record.level}]` : "";
-    events.push({
-      time: record.time,
-      text: `${record.event}${level}${attrs.length ? ` ${attrs.join(" ")}` : ""}`,
-    });
+    for (const line of readFileSync(file, "utf8").split("\n")) {
+      if (line.trim() === "") continue;
+      let record: {
+        time?: unknown;
+        event?: unknown;
+        level?: unknown;
+        attrs?: Record<string, unknown>;
+      };
+      try {
+        record = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      if (typeof record.time !== "number" || typeof record.event !== "string") continue;
+      const attrs = EVIDENCE_ATTRS.flatMap((key) =>
+        record.attrs?.[key] === undefined ? [] : [`${key}=${JSON.stringify(record.attrs[key])}`],
+      );
+      const level =
+        typeof record.level === "number" && record.level >= 40 ? ` [level ${record.level}]` : "";
+      events.push({
+        time: record.time,
+        text: `${stream.tag} ${record.event}${level}${attrs.length ? ` ${attrs.join(" ")}` : ""}`,
+      });
+    }
   }
-  if (events.length === 0) return `${linkLine}\nthe floor's log at ${file} holds no event`;
-  const base = spawnedAt ?? events[0]?.time ?? 0;
+  const absent = missing.length === 0 ? "" : ` (no ${missing.join(" or ")} log at ${dir})`;
+  if (events.length === 0) return `${linkLine}\nthe logs hold no event${absent}`;
+  events.sort((a, b) => a.time - b.time);
+  const base = scene.spawnedAt ?? events[0]?.time ?? 0;
   const shown = events.slice(-limit);
   return [
     linkLine,
-    `the floor's log (${events.length} event(s)${shown.length < events.length ? `, the last ${shown.length}` : ""}; ms since ${spawnedAt === undefined ? "its first event" : "the spawn"}):`,
+    `the logs (${events.length} event(s)${shown.length < events.length ? `, the last ${shown.length}` : ""}; ms since ${scene.spawnedAt === undefined ? "their first event" : "the spawn"})${absent}:`,
     ...shown.map((event) => `  +${event.time - base} ${event.text}`),
   ].join("\n");
+}
+
+/** What a row reported it saw, rendered for an error: JSON, cut at 800 characters. */
+function rendered(value: unknown): string {
+  let text: string | undefined;
+  try {
+    text = JSON.stringify(value);
+  } catch {
+    text = undefined;
+  }
+  text ??= String(value);
+  return text.length > 800 ? `${text.slice(0, 800)}… (${text.length} characters)` : text;
+}
+
+/** Item 68 — a real-floor row's wait that carries its evidence at its deadline. `fn` is asked every `intervalMs`
+ * until it answers a value; it may call `seen(value)` with what it last observed (the persona, the row, the
+ * screen — never a credential), and at the deadline the error says what was awaited, what the row last saw, and
+ * `floorEvidence` of the row's `scene` (read at the deadline, so a row that re-booted its floor is read where it now
+ * runs). The budget is the caller's; nothing here changes how long anything waits. */
+export async function waitWithEvidence<T>(
+  what: string,
+  fn: (seen: (value: unknown) => void) => T | undefined | Promise<T | undefined>,
+  ms: number,
+  scene: () => FloorScene | undefined,
+  intervalMs = 100,
+): Promise<T> {
+  const deadline = Date.now() + ms;
+  let last: unknown;
+  let saw = false;
+  const seen = (value: unknown): void => {
+    last = value;
+    saw = true;
+  };
+  for (;;) {
+    const value = await fn(seen);
+    if (value !== undefined) return value;
+    if (Date.now() > deadline) {
+      const now = scene();
+      throw new Error(
+        [
+          `${what} did not hold within ${ms} ms`,
+          saw ? `the row last saw: ${rendered(last)}` : "the row reported nothing it saw",
+          now === undefined ? "no floor scene was recorded for this row" : floorEvidence(now),
+        ].join("\n"),
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
 }

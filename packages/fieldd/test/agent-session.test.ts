@@ -90,7 +90,7 @@ import { RootsRegistry } from "../src/workspace/roots";
 import { born } from "./agent-birth";
 import { catalogWith, SCRIPTED_CATALOG, SCRIPTED_ROW } from "./agent-catalog-fixture";
 import {
-  floorBootEvidence,
+  floorEvidence,
   killDaemonTree,
   nativeBinPath,
   nativeEndpoint,
@@ -616,7 +616,7 @@ async function setup(config: SetupConfig): Promise<Box> {
       );
     } catch (error) {
       throw new Error(
-        `the floor's terminal endpoints did not reach the daemon within 30 s\n${floorBootEvidence(dataDir, spawnedAt, daemon.native)}`,
+        `the floor's terminal endpoints did not reach the daemon within 30 s\n${floorEvidence({ dataDir, spawnedAt, link: daemon.native })}`,
         { cause: error },
       );
     }
