@@ -105,7 +105,7 @@ export class PadInk {
       INK_LAYER.h,
       this.layersNow,
     ]);
-    this.device.queue.submit([encoder.finish()]);
+    this.device.queue.submit([encoder.finish({ label: "comment-pad/ink grow" })]);
     this.texture.destroy();
     this.texture = next;
     this.viewNow = next.createView({ dimension: "2d-array" });

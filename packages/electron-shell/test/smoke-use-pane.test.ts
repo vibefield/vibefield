@@ -215,6 +215,30 @@ describe("the page in use — its rows", () => {
     expect(judgeIdle({ ...ok, arrivals: 5 })).toEqual(["IDLE: 5 frames arrived from a still page"]);
     expect(judgeIdle({ ...ok, ms: 900 })).toEqual(["IDLE: watched 900 ms, under 1200"]);
   });
+
+  it("IDLE: a submit for a still page in hand is NAMED — when after the mark, by whose tag, and what ICE uploaded", () => {
+    const ok: UseSeen["idle"] = { ms: 1210, frames: 0, submits: 0, arrivals: 0 };
+    expect(
+      judgeIdle({
+        ...ok,
+        submits: 3,
+        named: [
+          { dt: 12, labels: ["desk-live/still"] },
+          { dt: 14, labels: [""] },
+          { dt: 620, labels: ["comment-pad/ink grow", ""] },
+        ],
+        uploaded: { "desk-live/still": { writes: 1, bytes: 4096 } },
+      }),
+    ).toEqual([
+      "IDLE: the desk submitted 3 times for a still page in hand — +12 ms desk-live/still, +14 ms unlabelled (ICE's or the desk's), +620 ms comment-pad/ink grow; uploads desk-live/still ×1 (4096 B)",
+    ]);
+    // a door that kept nothing after the mark says so, rather than nothing
+    expect(judgeIdle({ ...ok, submits: 1, named: [], uploaded: {} })).toEqual([
+      "IDLE: the desk submitted 1 times for a still page in hand — none kept after the mark",
+    ]);
+    // a clean watch with the evidence along still passes
+    expect(judgeIdle({ ...ok, named: [], uploaded: {} })).toEqual([]);
+  });
 });
 
 describe("a point of the page on the window, the pane in hand", () => {

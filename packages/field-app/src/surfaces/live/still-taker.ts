@@ -143,7 +143,8 @@ export function createStillTaker(): StillTaker {
       pass.draw(3);
       pass.end();
       encoder.copyTextureToBuffer({ texture: target }, { buffer, bytesPerRow: stride }, [w, h]);
-      device.queue.submit([encoder.finish()]);
+      // labelled, so the desk door's submit watch names it (smoke:canvas's IDLE row)
+      device.queue.submit([encoder.finish({ label: "desk-live/still" })]);
       await buffer.mapAsync(GPUMapMode.READ);
       const rows = tightRows(new Uint8Array(buffer.getMappedRange()), w, h);
       buffer.unmap();

@@ -228,6 +228,14 @@ export interface VfDeskDoor {
   perf(): DeskLayerPerf;
   /** Every queue submit since the mount (the instrument installs at the mount); null before the device. */
   submits(): { readonly total: number; readonly buffers: number } | null;
+  /** smoke:canvas's IDLE evidence (2026-10-26): from the first call on, this desk device's queue submits are kept, the
+   * last {@link SUBMITS_KEPT}, each with its time and its command buffers' labels — the submitter's own tag (the
+   * still-taker's `desk-live/still`, comment-pad's `comment-pad/ink grow`); an unlabelled one is ICE's or the desk's.
+   * Installed only when a smoke asks. False, and null from `submitsSeen`, before the device. */
+  watchSubmits(): boolean;
+  submitsSeen(): ReadonlyArray<SubmitSeen> | null;
+  /** ICE's upload tally by label (`writeBuffer`, `writeTexture`, `copyExternalImageToTexture`); null before the device. */
+  uploads(): Readonly<Record<string, { readonly writes: number; readonly bytes: number }>> | null;
   /** The engine's loop at rest (K7a): asleep — the idle a still waits for and the idle-zero row reads (DK-4) —
    * or parked under a freeze, where the desk costs nothing and no still is taken (DK-10b; the cover's edges take it). */
   /** The engine's frame loop at rest or not (DK-5), and — DK-9 — WHY it is awake: its outside wakes counted by
@@ -492,6 +500,17 @@ export function installDeskDoor(desk: MountedDesk, platesSet: () => boolean): ()
       const s = handle.submits();
       return s === undefined ? null : { total: s.total(), buffers: s.buffers() };
     },
+    watchSubmits: () => {
+      const device = desk.device?.() ?? null;
+      if (device === null) return false;
+      watchSubmits(device.queue);
+      return true;
+    },
+    submitsSeen: () => {
+      const device = desk.device?.() ?? null;
+      return device === null ? null : (submitsSeenOn(device.queue) ?? null);
+    },
+    uploads: () => handle.submits()?.uploadsByLabel() ?? null,
     rest: () => {
       const stats = engine.frame.sleepStats();
       return {
@@ -772,6 +791,38 @@ function docRelay(engine: CanvasEngine): Pick<VfDeskDoor, "docSnapshot" | "docTa
     },
   };
 }
+
+/** One queue submit as {@link watchSubmits} keeps it: when (`performance.now()`) and its command buffers' labels. */
+export interface SubmitSeen {
+  readonly t: number;
+  readonly labels: readonly string[];
+}
+
+/** How many submits {@link watchSubmits} keeps, the newest. */
+export const SUBMITS_KEPT = 64;
+
+const submitsSeenBy = new WeakMap<GPUQueue, SubmitSeen[]>();
+
+/** Keep `queue`'s submits from now on (once per queue): each one's time and its buffers' labels, the newest
+ * {@link SUBMITS_KEPT}. smoke:canvas's IDLE row reads them to say WHO submitted for a still page in hand — a count alone
+ * could not (2026-10-26: "submitted 3 times" on two runs of the EL8 to ghosttea 0.13.5, never on two runs that kept
+ * them). The queue's own submit still runs, after ICE's instrument, exactly as before. */
+export function watchSubmits(queue: GPUQueue): void {
+  if (submitsSeenBy.has(queue)) return;
+  const seen: SubmitSeen[] = [];
+  submitsSeenBy.set(queue, seen);
+  const submit = queue.submit.bind(queue);
+  queue.submit = (buffers: Iterable<GPUCommandBuffer>) => {
+    const list = [...buffers];
+    seen.push({ t: performance.now(), labels: list.map((b) => b.label) });
+    if (seen.length > SUBMITS_KEPT) seen.splice(0, seen.length - SUBMITS_KEPT);
+    submit(list);
+  };
+}
+
+/** The submits {@link watchSubmits} kept on `queue`, oldest first; undefined when it was never watched. */
+export const submitsSeenOn = (queue: GPUQueue): readonly SubmitSeen[] | undefined =>
+  submitsSeenBy.get(queue);
 
 /** The smokes' URL door for the GPU faults (`?deskFaults=1`). */
 export const DESK_FAULTS = "deskFaults";

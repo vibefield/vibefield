@@ -111,6 +111,13 @@ export interface UseSeen {
     readonly frames: number;
     readonly submits: number;
     readonly arrivals: number;
+    /** each submit the desk door kept from the watch's mark on: ms after the mark, and its buffers' labels (the
+     * submitter's tag; none = ICE's or the desk's own) */
+    readonly named?: ReadonlyArray<{ readonly dt: number; readonly labels: readonly string[] }>;
+    /** ICE's uploads over the watch, by label */
+    readonly uploaded?: Readonly<
+      Record<string, { readonly writes: number; readonly bytes: number }>
+    >;
   };
 }
 
@@ -240,7 +247,24 @@ export function judgeEdit(seen: UseSeen["edit"]): string[] {
 export const judgeEsc = (seen: UseSeen["esc"]): string[] =>
   seen.down ? [] : ["ESC: one Esc did not put the pane down"];
 
-/** IDLE: a still page in hand — no desk frame, no GPU submit, no arrival — over the watch. */
+/** Who submitted, as the desk door kept it: each submit's time after the watch's mark and its submitter's tag, then
+ * what ICE uploaded over the watch. Empty when the row kept nothing (an older door). */
+export function namedSubmits(seen: UseSeen["idle"]): string {
+  if (seen.named === undefined) return "";
+  const who = seen.named
+    .map(
+      (s) =>
+        `+${s.dt} ms ${s.labels.filter((l) => l !== "").join("+") || "unlabelled (ICE's or the desk's)"}`,
+    )
+    .join(", ");
+  const up = Object.entries(seen.uploaded ?? {})
+    .map(([label, u]) => `${label || "unlabelled"} ×${u.writes} (${u.bytes} B)`)
+    .join(", ");
+  return ` — ${who || "none kept after the mark"}${up === "" ? "" : `; uploads ${up}`}`;
+}
+
+/** IDLE: a still page in hand — no desk frame, no GPU submit, no arrival — over the watch. A submit is named: when,
+ * and by whom (2026-10-26: "submitted 3 times" with frames 0 twice on one tree, never on the next two runs). */
 export function judgeIdle(seen: UseSeen["idle"]): string[] {
   const out: string[] = [];
   if (seen.ms < USE_ROWS.watchMs)
@@ -248,7 +272,9 @@ export function judgeIdle(seen: UseSeen["idle"]): string[] {
   if (seen.frames !== 0)
     out.push(`IDLE: the desk drew ${seen.frames} frames of a still page in hand`);
   if (seen.submits !== 0)
-    out.push(`IDLE: the desk submitted ${seen.submits} times for a still page in hand`);
+    out.push(
+      `IDLE: the desk submitted ${seen.submits} times for a still page in hand${namedSubmits(seen)}`,
+    );
   if (seen.arrivals !== 0) out.push(`IDLE: ${seen.arrivals} frames arrived from a still page`);
   return out;
 }
@@ -750,6 +776,7 @@ export async function usePaneRows(d: UseRowsDriver): Promise<string[]> {
     const v = report()?.view ?? [1280, 800];
     await press(await onPage(v[0] * 0.85, v[1] * 0.3));
     move(4, 4);
+    await js<boolean>("globalThis.__vfDesk.watchSubmits?.() ?? false");
     const counts = async (): Promise<{ frames: number; submits: number; arrivals: number }> => ({
       frames: await js<number>("globalThis.__vfDesk.perf().frames"),
       submits: await js<number>("globalThis.__vfDesk.submits()?.total ?? 0"),
@@ -762,15 +789,30 @@ export async function usePaneRows(d: UseRowsDriver): Promise<string[]> {
       last = now;
       await sleep(300);
     }
+    type Uploads = Record<string, { writes: number; bytes: number }>;
+    const uploads = () => js<Uploads | null>("globalThis.__vfDesk.uploads?.() ?? null");
+    const mark = await js<number>("performance.now()");
     const from = await counts();
+    const upFrom = await uploads();
     const t0 = Date.now();
     await sleep(USE_ROWS.watchMs);
     const to = await counts();
+    const upTo = await uploads();
+    const named = await js<{ dt: number; labels: string[] }[] | null>(
+      `globalThis.__vfDesk.submitsSeen?.()?.filter((s) => s.t >= ${mark}).map((s) => ({ dt: Math.round(s.t - ${mark}), labels: s.labels })) ?? null`,
+    );
+    const uploaded: Uploads = {};
+    for (const [label, u] of Object.entries(upTo ?? {})) {
+      const was = upFrom?.[label] ?? { writes: 0, bytes: 0 };
+      if (u.writes !== was.writes)
+        uploaded[label] = { writes: u.writes - was.writes, bytes: u.bytes - was.bytes };
+    }
     const idle: UseSeen["idle"] = {
       ms: Date.now() - t0,
       frames: to.frames - from.frames,
       submits: to.submits - from.submits,
       arrivals: to.arrivals - from.arrivals,
+      ...(named === null ? {} : { named, uploaded }),
     };
     said.idle = idle;
     problems.push(...judgeIdle(idle));
