@@ -90,13 +90,14 @@ import { RootsRegistry } from "../src/workspace/roots";
 import { born } from "./agent-birth";
 import { catalogWith, SCRIPTED_CATALOG, SCRIPTED_ROW } from "./agent-catalog-fixture";
 import {
-  floorEvidence,
+  type FloorScene,
   killDaemonTree,
   nativeBinPath,
   nativeEndpoint,
   removeTempRoot,
   shortTmpRoot,
   waitForMgmtEndpoint,
+  waitWithEvidence,
 } from "./native-harness";
 import { scriptedProfiles } from "./scripted-profiles";
 import { helloAs, type RpcErrorShape, WsRpc } from "./ws-rpc";
@@ -121,7 +122,10 @@ const rendererParticipant = (suffix: string) => ({
 let children: ChildProcess[] = [];
 let roots: string[] = [];
 let cleanup: Array<() => void | Promise<void>> = [];
+/** Item 68 — the row's floor and daemon, for its waits' evidence: set by `setup`, cleared after each row. */
+let scene: FloorScene | undefined;
 afterEach(async () => {
+  scene = undefined;
   for (const fn of cleanup.reverse()) {
     try {
       await fn();
@@ -556,6 +560,8 @@ async function setup(config: SetupConfig): Promise<Box> {
   };
   const daemon = await bootstrap({
     dataDir,
+    // item 68 — fieldd's own log beside the floor's, for the waits' evidence (fieldd logged nowhere here before)
+    logRoot: join(dataDir, "logs"),
     controlPort: 0,
     dataPort: 0,
     secretStore: config.secretStore ?? keychainIn(new Map()),
@@ -597,6 +603,7 @@ async function setup(config: SetupConfig): Promise<Box> {
     ...(config.floor === "mock" ? { terminalBirthWaitMs: 300 } : {}),
   });
   cleanup.push(() => daemon.stop().catch(() => undefined));
+  scene = { dataDir, spawnedAt, link: daemon.native };
   // The floor's terminal endpoints reach the daemon over the management link AFTER `bootstrap` resolves, so a row that
   // births at once is refused UNAVAILABLE "the terminal floor is not available". Wait for them, as a window would: the
   // 10-08 fix in `agent-gateway-floor.ts` (ec011806, "red in 3 of 9 gates, a different row each time"), whose second
@@ -604,23 +611,17 @@ async function setup(config: SetupConfig): Promise<Box> {
   // (2026-10-15 12:45Z, WP12 L2b-i's verify-2). A real floor only — a restart's floor is real too; the mock serves none.
   // 30 s, inside the rows' own 60 s budgets: a floor that never sends them fails HERE, as this wait timing out, not
   // as a refused birth deep inside a row. Item 63 (2026-10-26): the timeout's error carries the floor's own log and
-  // fieldd's view of the link, because the root that holds that log is removed after the row. Measured on a Mac
+  // fieldd's view of the link (since item 68 through this suite's `poll`, as every wait here does), because the root
+  // that holds those logs is removed after the row. Measured on a Mac
   // with 10 cores: a boot takes ~55 ms warm and ~2 s on a run's first (cold) exec, and it stays flat under CPU load
   // (2.6 s cold at load 290). So 30 s is ~11× the worst boot measured: a miss is a stalled boot, not a slow one, and
   // the error says which step stalled.
-  if (config.floor === "real") {
-    try {
-      await poll(
-        async () => (daemon.native.terminalEndpoints !== undefined ? true : undefined),
-        30_000,
-      );
-    } catch (error) {
-      throw new Error(
-        `the floor's terminal endpoints did not reach the daemon within 30 s\n${floorEvidence({ dataDir, spawnedAt, link: daemon.native })}`,
-        { cause: error },
-      );
-    }
-  }
+  if (config.floor === "real")
+    await poll(
+      async () => (daemon.native.terminalEndpoints !== undefined ? true : undefined),
+      30_000,
+      "the floor's terminal endpoints reaching the daemon",
+    );
   const records =
     restart?.records ??
     new SessionRecordStore({
@@ -675,14 +676,14 @@ const DECK = ["agent.spawn", "agent.observe", "terminal.attach", "index.read"];
  * projection cannot pass through this door unnoticed. */
 const FIELD_ROW_KEYS = Object.keys(AgentFieldRow.shape);
 
-async function poll<T>(fn: () => Promise<T | undefined>, ms: number): Promise<T> {
-  const deadline = Date.now() + ms;
-  for (;;) {
-    const value = await fn();
-    if (value !== undefined) return value;
-    if (Date.now() > deadline) throw new Error(`poll timed out after ${ms}ms`);
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
+/** Every wait in this suite (item 68): at its deadline it says what was awaited, what the row last `seen`, and the
+ * row's floor and fieldd logs with the link view (`waitWithEvidence`). The budgets are the rows' own. */
+async function poll<T>(
+  fn: (seen: (value: unknown) => void) => Promise<T | undefined>,
+  ms: number,
+  what = "the row's condition",
+): Promise<T> {
+  return await waitWithEvidence(what, fn, ms, () => scene);
 }
 
 const mode = (path: string) => statSync(path).mode & 0o777;
@@ -1541,14 +1542,21 @@ describe("managed sessions over the REAL floor (field-native)", () => {
     expect(login.terminal).toHaveProperty("attachGrant");
 
     // the scripted login returns at once → the pane ends → the identity is
-    // read from the vendor's status surface and recorded on the persona
-    const verified = await poll(async () => {
-      const { personas } = (await win.call("agents.profiles.list", {
-        provider: "claude",
-      })) as AgentsProfilesListResult;
-      const persona = personas.find((p) => p.profileId === "claude:native-default");
-      return persona?.identity?.loggedIn === true ? persona : undefined;
-    }, 15_000);
+    // read from the vendor's status surface and recorded on the persona. Item 68: measured flat at 314–901 ms
+    // (loads 0–278: fieldd's `husk_reaped` +242–542 ms, then `login_finished`); at the deadline the error names
+    // the persona last seen and fieldd's own login events, so a stalled step says which
+    const verified = await poll(
+      async (seen) => {
+        const { personas } = (await win.call("agents.profiles.list", {
+          provider: "claude",
+        })) as AgentsProfilesListResult;
+        const persona = personas.find((p) => p.profileId === "claude:native-default");
+        seen(persona);
+        return persona?.identity?.loggedIn === true ? persona : undefined;
+      },
+      15_000,
+      "the persona's identity re-read after its login pane ends",
+    );
     expect(verified.identity).toMatchObject({
       loggedIn: true,
       method: "claude.ai",
