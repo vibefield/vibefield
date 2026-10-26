@@ -14646,3 +14646,108 @@ clocks (`availabilityAt`, `publishedAt`, `updatedAt`), and every ms from 1793000
 - **`pnpm verify`:** EXIT 0 at 08:09:21Z, on its first run.
 - **CI is the exact-tree witness** on the pushed head.
 - Logs: `/Volumes/SamsungRed/lanes/item66/logs/proofs/`.
+
+## RD-5a-2 — puppeteer goes exact: `@vibefield/puppeteer-*` 0.2.3 from the registry, published from the tag v0.2.3 = `ee785ec1`; the `@vibecook/puppeteer-*` scope retires and no build reads a puppeteer checkout (2026-10-26; `a04850e29`, lane `hl/puppeteer-0.2.3`)
+
+**What happened:** RD-5a (2026-10-14) took rosetta's TypeScript half exact and left puppeteer's on `link:` rows, because
+0.2.1 lacked what the pin had (PJ-6's resume selection, SWF). puppeteer's public line took that content in #43
+(`0e530809`), zod 4.6.7 under the published packages in #44 (`7ec454d8`), and released 0.2.3 in #45 (`ee785ec1`, the tag
+`v0.2.3`; published 2026-10-26 07:08:51Z by the tag's release run). focus-session read all 23 packages at 0.2.3, `latest`
+0.2.3, and VF-PM relayed it at 07:12Z. The pin plan had been approved at 05:33Z with three rulings: a zod-4 typecheck red
+stops the lane; the desk rows are skipped only if the presence audit finds the tag's tree to be fa0d6cf's plus #44 and
+release metadata; and the old release-age row goes in the same commit after the one install.
+- **The pin (EL8, one commit):**
+  - the lock's puppeteer entry records `release.npm` "0.2.3", and its checkout coordinate moves fa0d6cf → ee785ec1;
+  - the seven rows leave the sibling fence for exact pins above it;
+  - preflight's PIN_EXPECTATIONS holds them, anchored to the line's end;
+  - minimumReleaseAgeExclude carries the 0.2.3 closure the seven reach: 20 packages, the adapters included, because each
+    is a dependency inside pnpm's one-day window. **No older puppeteer row existed to drop**: link: rows never needed one.
+  - The one install wrote the lock: the puppeteer packages plus `@agentclientprotocol/sdk` 1.2.1, `@webgpu/types` 0.1.72
+    and `zod` 4.6.7, and nothing else moved.
+- **The rename.** `@vibecook/puppeteer-*` → `@vibefield/puppeteer-*`, RL5's scope, which the public line took at
+  `5abe8f75`. It runs across fieldd, field-app, the walls (R20–R22), R23's door, the dev runner's shim entry, the tests
+  and the agent-plane pages: 135 files, then biome's safe fixes. Preflight's family rule names the old scope as retired.
+- **CI.** prepare-puppeteer retires from verify, package-preview and release, as prepare-ghosttea did. No job fetches
+  `../puppeteer`.
+
+**Found:**
+- **The tag is not fa0d6cf plus #44 and metadata.** It carries everything fa0d6cf has, but for two adapter-codex tests:
+  `app-server-process.test.ts`'s native-wakeup readiness tests. The code they test is in the tag. They go to puppeteer's
+  docket through focus-session.
+  - It also carries the public line's own work:
+    - #38: Claude Code 2.1.308, Codex 0.164.0 and Grok 1.0.70, across 19, 11 and 19 adapter source files;
+    - `5abe8f75`'s runtime changes: spawn-through's `shim-main.ts` now checks that the recipe is an executable regular
+      file before execve, because Node 22 aborts there; and `files.ts` folds a home path portably;
+    - #34's release hardening.
+  - The method was rename-normalized (the scope, and the public line's `:` → `%3A` event-file names). A 3-way merge
+    against the common base `1def18f` either leaves the tag unchanged or meets #38's rewrite of the same lines: codex
+    resume now carries model and effort through `CodexThreadHistory`.
+  - So the desk rows ran, as VF-PM ruled for this case.
+- **R23's probe could not load a published puppeteer.** It resolved fieldd's door with `createRequire().resolve`, under
+  CJS conditions. The published packages are ESM-only (`exports["."]` = `{ types, import }`), so preflight went red with
+  ERR_PACKAGE_PATH_NOT_EXPORTED on its first run at the pin.
+  - The fix, `fielddImport`, finds the manifest through fieldd's own edge (`module.findPackageJSON`) and imports its
+    `import` entry. It is still the R20 door, and the overlay's linked `./src/index.ts` still works.
+- **field-app's vitest externalized the published views.** Their dist imports its own CSS, and Node's loader refuses
+  that. The swarm suite also mocked its renderer by the checkout's `src` path.
+  - The suite now inlines `/\/node_modules\/@vibefield\/puppeteer-/`, which is tested against the module's PATH. An
+    anchored name pattern matched nothing and went red once.
+  - It mocks the dist module. 3/3, and the mocked paint's frame is read.
+- **zod 4 was already under the seam.** fa0d6cf declared zod ^4.4.3, so the link rows held zod 4 beside the workspace's
+  zod 3 all along. 0.2.3 moves it to 4.6.7, published 2026-10-12. The consumers' typecheck is green.
+- **Grok's approvals are answered in Grok's TUI.** With 0.2.3, every Grok session has its TUI attached, and with no host
+  handler the ask is left there (`unhandledApproval: "defer"`). VibeField registers no handler, and AR-6 is Designed.
+  - The phone's ReplyChips comment said "grok resolves through `approval.resolve`". It is corrected at its source, dated.
+    No chip changes.
+- **The ambient-animation audit followed the views as source.** field-app's `godview-cold-open.test.ts` found the
+  views' entry with `require.resolve` (the same ESM-only refusal, red in the first verify: "No "exports" main defined")
+  and mapped each view's `index` to `.ts`. It reads the root export's `import` entry through `findPackageJSON` and
+  follows the entry's own extension (the release's `.js`, the overlay's `.ts`): 11/11, the guard still finds ≥ 5 view
+  sheets and the swarm and timeline selectors.
+- **A regex over a wall-clock timestamp, not the pin's.** artifact-service's "publishes a narrow whole self-slice"
+  asserts the slice's JSON never matches `/source|scheme|allow|3000/`. Every millisecond timestamp from 1793000000000 to
+  1793000999999 (2026-10-26 07:33:20Z–07:50:00Z) contains `3000`, so the first verify, inside that window, was red there
+  (`availabilityAt: 1793000088536`). Any tree reds in that window and none outside it.
+
+**Validation** (this Mac, nice 19, each step alone behind the shared dev-app guard, ≥ 10 GiB on both disks):
+- **npm view, all seven:** 0.2.3 with `latest` 0.2.3. The SLSA provenance of core, runtime and views names
+  `refs/tags/v0.2.3` @ `ee785ec1`, built by release.yml.
+- **`pnpm siblings:pin puppeteer`: EXIT 0.**
+  - The sha moved to ee785ec1; rosettad was fresh.
+  - R23: pass, 10 catalog rows honoured by both pins, 0 warnings, self-test 28/28. The port and root table is
+    IDENTICAL to fa0d6cf's, which I read in the landed item-60 lane, so no catalog row moves.
+  - The consumers' typecheck ran fresh on 27 projects with no cache hit: 0 errors. gen:check was clean.
+- **`pnpm verify`** on the final tree `7a7aa0b99`, run after the `3000` window closed (07:50:05Z):
+  - every stage through bundle:assert is green;
+  - `pnpm test` is red on ONE row, fieldd's terminal-seam "a default create spawns the platform shell" ("the terminal
+    floor is not available"; load 182 from another session's vitest pool; it reads no puppeteer). Alone: 6/6.
+  - field-app ran fresh: 2,620 passed, 3 skipped. fieldd ran fresh: 2,451 passed, 1 failed, 29 skipped.
+  - The other 23 test targets replayed the first verify's FRESH passes on identical inputs. That first verify (07:31Z)
+    ran all 27 fresh and had four reds: cold-open (fixed), two load rows green alone (agent-gateway-panes 11/11,
+    agent-session 45 passed / 2 skipped) and item 66's clock.
+  - Then, alone: `pnpm test:rust` 458 passed, 0 failed, 13 ignored in 30 suites; `pnpm gen:check` clean.
+- **Rebased onto `cdd6b70fb`** (items 65 and 66, the fixer's; VF-PM 08:14Z): merge-tree rehearsed, tree `08d81e55b`, range-diff
+  `=`. No file is touched by both sides, and 65/66 add no `@vibecook/puppeteer` line. **`pnpm verify` on the rebased tip:**
+  - `pnpm test` all green: fieldd 2,456 passed / 29 skipped; field-app 2,620 / 3. 8 of 27 targets ran fresh (those 65/66
+    and the pin reach); the rest replayed fresh passes on identical inputs.
+  - `test:rust` red on item 64's `launch_check` (`field-native --help` / `--no-such-flag` past its 10 s deadline at load
+    252; the row's own message reads "None = it booted"). Green alone 3/3 in 1.78 s.
+  - Then, whole and alone: `test:rust` 458 passed, 0 failed, 13 ignored in 30 suites; `gen:check` clean.
+- **The desk rows** (the Mac mini, VF-PM's slot 07:35Z, the el8gt clone at the rebased tree `08d81e55b`, delta bundles
+  over its own b52aa6963):
+  - **`smoke:godview` ok, exit 0, 140 s.** It exercised the typed agent through the spawn-through shim that 5abe8f75
+    changed (TYPED items 2–5, the `--bare` refusal among them), the launch, the bloom under a profile with its
+    no-sign-in refusal, spend and the timeline. Its teardown left nothing (`left: []`).
+  - **`smoke:terminal-direct` ok, exit 0, 33 s.**
+  - Both ran 2026-10-26 13:50:31–13:53:24Z on jaspers-Mac-mini (Apple M4, macOS 26.3, its one 1920×1080 display, the
+    offscreen preload, canvas2d), unlocked by James (VF-PM 13:49Z). Each armed at idle ≥ 120 s, load 1.5, 21 GiB free.
+    Toolchain: node v26.5.0, pnpm 11.13.1, rustc 1.99.1. Never `-u`; the run's `caffeinate -d -i -w` ended with it.
+  - The mini is a gate-host deviation from desk-gates.md's "this Mac's GPU", as for the earlier mini rows.
+- Logs: `/Volumes/SamsungRed/lanes/hl-pin023/logs/`, and on the mini `~/vf-lanes/el8gt/logs-pin023/` and `logs-rows/`.
+
+**Owed:**
+- **CLAUDE.md** still says puppeteer's packages enter as `link:` rows, and its 10-23 measured note says a fresh tree
+  "names exactly `../puppeteer` …". Both wait on James's own line, with the other owed note.
+- **The two lost adapter-codex tests**, to puppeteer's docket through focus-session.
+- **Item 66, the artifact-service regex**: the fixer's test-only lane after item 65 (it hit the same row in 65's
+  verify): assert the slice's fields and the URL's port, never a substring, red first on a fixed clock.
