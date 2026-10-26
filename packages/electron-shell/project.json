@@ -12,6 +12,9 @@
     },
     "build:renderer": {
       "outputs": ["{projectRoot}/dist/renderer"]
+    },
+    "test": {
+      "inputs": ["default", "^default", "{workspaceRoot}/apps/desktop/packaging/*.mjs"]
     }
   }
 }

@@ -196,6 +196,12 @@ export function smokeHome(userRoot: string): string | null {
  * green, its whole HOME (DK-18: the logs; a red run keeps them and `SMOKE_HOME` names them, so a sweep never hunts by time). */
 export function removeSmokeRoot(root: string, ok: boolean): void {
   if (process.env["FIELDD_DATA_DIR"]) return;
+  // BP-D7 — `smoke:profile`'s PHASE A keeps its root for PHASE B (the packaged app is launched on its data root, the
+  // board this run laid its pane on). The row's runner sets the switch and removes the root itself once it has judged.
+  if (process.env["VF_SMOKE_KEEP_ROOT"] === "1") {
+    process.stdout.write(`SMOKE_ROOT_KEPT ${JSON.stringify({ root, home: smokeHome(root) })}\n`);
+    return;
+  }
   rmSync(root, { recursive: true, force: true });
   const home = smokeHome(root);
   if (home === null) return;

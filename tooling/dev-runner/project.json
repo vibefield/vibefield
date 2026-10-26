@@ -24,6 +24,8 @@
         "{workspaceRoot}/scripts/trust-keygen.mjs",
         "{workspaceRoot}/tooling/plugin-build/src/**/*",
         "{workspaceRoot}/apps/desktop/packaging/bundled-list.mjs",
+        "{workspaceRoot}/apps/desktop/packaging/run-browser-profile-smoke.mjs",
+        "{workspaceRoot}/apps/desktop/packaging/smoke-daemons.mjs",
         "{workspaceRoot}/scripts/siblings.mjs",
         "{workspaceRoot}/scripts/git-hooks/pre-commit",
         "{workspaceRoot}/siblings.lock.json",

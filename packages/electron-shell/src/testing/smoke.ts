@@ -160,6 +160,7 @@ import {
 import { LIVE_FLAG, type LiveRowsDriver, livePaneRows } from "./smoke-live-pane";
 import { faultRows, peersRows } from "./smoke-peers";
 import { pegboardRows } from "./smoke-pegboard";
+import { profileSeedRows, profileSeedUrl } from "./smoke-profile-seed";
 import { putDownRow } from "./smoke-put-down";
 import { restRows } from "./smoke-rest";
 import { selectionBarRows } from "./smoke-selection-bar";
@@ -1217,7 +1218,29 @@ export async function runSmokeCanvas(opts: {
       problems.push(...(await deskWitnesses(win, shotDir)));
       console.log(`SMOKE_CANVAS_MARKERS ${JSON.stringify(deskSaid.said)}`);
       deskSaid.stop();
-      if (process.argv.includes(LIVE_FLAG)) {
+      const profileSeed = profileSeedUrl(process.argv);
+      if (profileSeed !== undefined) {
+        // BP-D7 — smoke:profile's PHASE A, its rows ALONE after the boot's: one pane laid, pointed at the row's own fixture,
+        // live and saved, LEFT on the board for the packaged app to reopen (testing/smoke-profile-seed.ts)
+        problems.push(
+          ...(await profileSeedRows(
+            {
+              win,
+              shotDir,
+              say: (line) => console.log(line),
+              flushPage: async (address) => {
+                const page = webContents
+                  .getAllWebContents()
+                  .find((c) => !c.isDestroyed() && c.isOffscreen() && c.getURL() === address);
+                if (page === undefined) return null;
+                await page.session.cookies.flushStore();
+                return (await page.session.cookies.get({ url: address })).map((c) => c.name);
+              },
+            },
+            profileSeed,
+          )),
+        );
+      } else if (process.argv.includes(LIVE_FLAG)) {
         // PT-2 — the live page's rows ALONE after the boot's (the author's loop: `node packaging/run-smoke.mjs --smoke-canvas
         // --live-pane` on smoke:canvas's build); smoke:canvas runs them in its own order below
         problems.push(...(await liveRows(win, shotDir, opts.viteUrl, opts.liveSurfaces)));
