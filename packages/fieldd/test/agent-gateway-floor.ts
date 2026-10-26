@@ -55,12 +55,13 @@ import {
   typedScript,
 } from "./agent-gateway-fixture";
 import {
-  floorEvidence,
+  type FloorScene,
   killDaemonTree,
   nativeBinPath,
   removeTempRoot,
   shortTmpRoot,
   waitForMgmtEndpoint,
+  waitWithEvidence,
 } from "./native-harness";
 import { helloAs, WsRpc } from "./ws-rpc";
 
@@ -109,9 +110,12 @@ function loginZsh(): string | undefined {
 let floors: ChildProcess[] = [];
 let roots: string[] = [];
 let closers: Array<() => void | Promise<void>> = [];
+/** Item 68 — the latest `floor()`'s floor and daemon, for every wait's evidence; cleared by `teardownFloors`. */
+let scene: FloorScene | undefined;
 
 /** Every floor's tree reaped, every root removed — each row's `afterEach`. */
 export async function teardownFloors(): Promise<void> {
+  scene = undefined;
   for (const close of closers.reverse()) {
     try {
       await close();
@@ -126,18 +130,15 @@ export async function teardownFloors(): Promise<void> {
   roots = [];
 }
 
+/** Every wait of the suites on this harness (agent-gateway-panes takes it as `until`), item 68: at its deadline it
+ * says what was awaited, what the row last `seen`, and the latest floor's and fieldd's logs with the link view
+ * (`waitWithEvidence`). The budgets are the rows' own. */
 export async function poll<T>(
-  fn: () => T | undefined | Promise<T | undefined>,
+  fn: (seen: (value: unknown) => void) => T | undefined | Promise<T | undefined>,
   ms: number = FLOOR_WAIT_MS,
   what = "the condition",
 ): Promise<T> {
-  const deadline = Date.now() + ms;
-  for (;;) {
-    const value = await fn();
-    if (value !== undefined) return value;
-    if (Date.now() > deadline) throw new Error(`${what} did not hold within ${ms}ms`);
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
+  return await waitWithEvidence(what, fn, ms, () => scene);
 }
 
 /** A window of time in which something must NOT happen. */
@@ -285,6 +286,8 @@ export async function floor(config: FloorConfig): Promise<Floor> {
   if (config.index !== undefined) mkdirSync(indexHome, { recursive: true });
   const daemon = await bootstrap({
     dataDir,
+    // item 68 — fieldd's own log beside the floor's, for the waits' evidence (fieldd logged nowhere here before)
+    logRoot: join(dataDir, "logs"),
     controlPort: 0,
     dataPort: 0,
     secretStore: keychain(),
@@ -318,6 +321,7 @@ export async function floor(config: FloorConfig): Promise<Floor> {
     },
   });
   closers.push(() => daemon.stop().catch(() => undefined));
+  scene = { dataDir, spawnedAt, link: daemon.native };
   const home = agentShimHome(dataDir);
   // The gateway's start is not a boot gate, and it is the DAEMON's to begin:
   // a row waits for what that start leaves, and never starts it itself.
@@ -339,20 +343,13 @@ export async function floor(config: FloorConfig): Promise<Floor> {
   // `bootstrap` resolves; a row that births a pane before they land is refused
   // UNAVAILABLE "the terminal floor is not available" (2026-10-08: red under load in
   // 3 of 9 gates, a different AR-7 row each time). Wait for them, as a window would. Item 63 (2026-10-26): a wait
-  // that gives up says what the floor did, from its own log, and what fieldd heard of the link (the log goes with
-  // the root, which is removed after the row).
-  try {
-    await poll(
-      () => (daemon.native.terminalEndpoints !== undefined ? true : undefined),
-      FLOOR_WAIT_MS,
-      "the floor's terminal endpoints reaching the daemon",
-    );
-  } catch (error) {
-    throw new Error(
-      `${error instanceof Error ? error.message : String(error)}\n${floorEvidence({ dataDir, spawnedAt, link: daemon.native })}`,
-      { cause: error },
-    );
-  }
+  // that gives up says what the floor did and what fieldd heard of the link (since item 68 through `poll`, as every
+  // wait here does; the logs go with the root, which is removed after the row).
+  await poll(
+    () => (daemon.native.terminalEndpoints !== undefined ? true : undefined),
+    FLOOR_WAIT_MS,
+    "the floor's terminal endpoints reaching the daemon",
+  );
   return {
     root,
     dataDir,
