@@ -1,7 +1,16 @@
 #!/usr/bin/env node
 
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, renameSync, rmSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -52,6 +61,24 @@ const signingIdentifiers = {
   fixture: "com.jamesyong.vibefield.live-surface-capture-fixture",
 };
 
+// LSF-4 (2026-10-26; the first signed nightly, run 40272843651): a nested Mach-O with no Info.plist signs as its FILE
+// NAME under any signer that does not name it, and electron-builder's re-sign of nested code names none. The release
+// gate then read `live-surface-capture-helper` where its policy wants the reverse-DNS id. So each artifact carries its
+// identity IN ITS OWN BINARY: an embedded `__TEXT,__info_plist` whose CFBundleIdentifier codesign takes as the default
+// identifier, measured on this Mac for an executable and a `-bundle` alike.
+const plistRoot = mkdtempSync(join(tmpdir(), "vf-live-surface-plists-"));
+function embeddedIdentity(name, identifier) {
+  const path = join(plistRoot, `${name}.plist`);
+  writeFileSync(
+    path,
+    '<?xml version="1.0" encoding="UTF-8"?>\n' +
+      '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n' +
+      `<plist version="1.0"><dict><key>CFBundleIdentifier</key><string>${identifier}</string>` +
+      `<key>CFBundleName</key><string>${name}</string></dict></plist>\n`,
+  );
+  return [`-Wl,-sectcreate,__TEXT,__info_plist,${path}`];
+}
+
 const common = [
   "clang++",
   "-std=c++20",
@@ -88,6 +115,24 @@ function applyStableAdHocSignature(label, path, identifier) {
     throw new Error(`${label} ad-hoc signing failed with status ${result.status}`);
 }
 
+function assertEmbeddedIdentity(label, path, identifier) {
+  const copy = join(plistRoot, `${label.replaceAll(" ", "-")}.resign`);
+  copyFileSync(path, copy);
+  const sign = spawnSync("xcrun", ["codesign", "--force", "--sign", "-", copy], {
+    encoding: "utf8",
+  });
+  if (sign.status !== 0)
+    throw new Error(`${label}: the identity check's re-sign failed: ${sign.stderr}`);
+  const shown = spawnSync("xcrun", ["codesign", "--display", "--verbose=2", copy], {
+    encoding: "utf8",
+  });
+  const said = /^Identifier=(.+)$/mu.exec(`${shown.stdout}\n${shown.stderr}`)?.[1];
+  if (said !== identifier)
+    throw new Error(
+      `${label}: a re-sign with no identifier names it ${said ?? "nothing"}, not ${identifier} — its embedded __info_plist is missing or wrong`,
+    );
+}
+
 try {
   compile(
     "ScreenCaptureKit helper",
@@ -108,6 +153,7 @@ try {
       "IOSurface",
       "-framework",
       "CoreGraphics",
+      ...embeddedIdentity("live-surface-capture-helper", signingIdentifiers.helper),
       "-o",
       helperTemporary,
     ],
@@ -133,6 +179,7 @@ try {
       "IOSurface",
       "-framework",
       "CoreVideo",
+      ...embeddedIdentity("live-surface-adapter", signingIdentifiers.adapter),
       "-o",
       adapterTemporary,
     ],
@@ -150,6 +197,7 @@ try {
         "Foundation",
         "-framework",
         "CoreGraphics",
+        ...embeddedIdentity("live-surface-capture-fixture", signingIdentifiers.fixture),
         "-o",
         fixtureTemporary,
       ],
@@ -165,6 +213,9 @@ try {
   // renames, so the implicit code identifier otherwise ends in `.building`.
   // Give every artifact a stable identifier now; the release signer preserves
   // the identity while replacing this local signature with Developer ID.
+  // *(Corrected 2026-10-26, LSF-4: FALSE as written — the release signer re-signed these WITHOUT an identifier and
+  // they shipped as their file names (the first signed nightly). The identity lives in each binary's embedded
+  // __info_plist now, which every signer reads; this ad-hoc signature only names it for the local build.)*
   applyStableAdHocSignature("ScreenCaptureKit helper", helper, signingIdentifiers.helper);
   applyStableAdHocSignature("IOSurface Node-API adapter", adapter, signingIdentifiers.adapter);
   if (withFixture) {
@@ -174,7 +225,14 @@ try {
       signingIdentifiers.fixture,
     );
   }
+  // The build proves it every time: a COPY re-signed with no identifier, as the release signer does, must take the
+  // reverse-DNS id from the binary itself.
+  assertEmbeddedIdentity("ScreenCaptureKit helper", helper, signingIdentifiers.helper);
+  assertEmbeddedIdentity("IOSurface Node-API adapter", adapter, signingIdentifiers.adapter);
+  if (withFixture)
+    assertEmbeddedIdentity("ScreenCaptureKit pixel fixture", fixture, signingIdentifiers.fixture);
 } finally {
+  rmSync(plistRoot, { recursive: true, force: true });
   rmSync(helperTemporary, { force: true });
   rmSync(adapterTemporary, { force: true });
   rmSync(fixtureTemporary, { force: true });
