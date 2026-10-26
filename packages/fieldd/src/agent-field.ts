@@ -138,6 +138,62 @@ export function refuseBoardAsk(principal: string, ask: AgentSubscribeParams): Rp
   return null;
 }
 
+/**
+ * Item 60 (VF-PM 2026-10-26) — `agent.list` for its reader. The fold's FULL
+ * rows stay whole for this desktop's own windows. A caller across the tailnet —
+ * a peer daemon, the phone, a guest — reads the same rows with the free texts
+ * the desk bounds bounded the same way (`AGENT_FIELD.DESK_TEXT_CHARS`, by
+ * `boundText`): the latest reply, each blocker's question prompts, the
+ * activity line. A reply runs to megabytes, and thirty of them crossed
+ * PeerLink's 4 MiB reader whole; the whole text is History's (DS-7). Rows
+ * follow the asker, bytes follow the link. `agent.subscribe`'s `full` board
+ * is refused to the same callers (DS-D4, `refuseBoardAsk`), so this is the one
+ * door the fold's rows leave the device by.
+ */
+export function agentListFor(
+  principal: string,
+  result: AgentListResult,
+  chars: number = AGENT_FIELD.DESK_TEXT_CHARS,
+): AgentListResult {
+  if (principal !== "peer-fieldd" && principal !== "tailnet" && principal !== "tailnet-guest")
+    return result;
+  return { ...result, sessions: result.sessions.map((row) => linkSessionRow(row, chars)) };
+}
+
+/** One fold row with its mirror's free texts bounded (`agentListFor`). */
+function linkSessionRow(summary: AgentSessionSummary, chars: number): AgentSessionSummary {
+  const monitor = summary.monitor;
+  if (monitor === undefined) return summary;
+  const bound = (text: unknown): unknown =>
+    typeof text === "string" ? boundText(text, chars) : text;
+  const message = monitor.lastAssistantMessage as Record<string, unknown> | undefined;
+  const activity = monitor.activity;
+  return {
+    ...summary,
+    monitor: {
+      ...monitor,
+      blockers: monitor.blockers.map((blocker) => {
+        const questions = (blocker as Record<string, unknown>)["questions"];
+        if (!Array.isArray(questions)) return blocker;
+        return {
+          ...blocker,
+          questions: questions.map((question) =>
+            typeof question === "object" && question !== null
+              ? { ...question, prompt: bound((question as Record<string, unknown>)["prompt"]) }
+              : question,
+          ),
+        };
+      }),
+      ...(message !== undefined
+        ? { lastAssistantMessage: { ...message, text: bound(message["text"]) } }
+        : {}),
+      ...(activity !== undefined
+        ? { activity: { ...activity, line: bound(activity.line) as string } }
+        : {}),
+    },
+  };
+}
+
 // MF-1 (thinking-godview-mobile-first.md §5/§10.2) — the FIELD projection: the
 // fold's rows with their content removed, and the revision machinery that lets
 // an idle board cost nothing.

@@ -177,6 +177,7 @@ import { projectPluginAuthority } from "@vibefield/plugin-runtime";
 // needs only the version its supervisor holds a spawned rosettad to
 import { PROTOCOL_VERSION as ROSETTA_PROTOCOL_VERSION } from "@vibefield/rosetta-protocol/protocol-version";
 import {
+  agentListFor,
   createFieldSubscription,
   deskProjector,
   malformedBoardAsk,
@@ -3310,7 +3311,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
               },
       );
     });
-    api.register("agent.list", () => agents.list());
+    // item 60 — the fold's rows whole for a window, their free texts bounded for
+    // a caller across the tailnet (`agentListFor`)
+    api.register("agent.list", (ctx) => agentListFor(ctx.principal.kind, agents.list()));
     // DS-3 (DS-L3) — every field and desk subscription is its own revision
     // CHAIN, and its epoch says which: this boot plus the chain's ordinal. Two
     // subscriptions in one boot never share an epoch, so no reader can mistake

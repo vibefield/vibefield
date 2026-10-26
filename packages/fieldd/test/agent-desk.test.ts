@@ -2,11 +2,13 @@ import {
   AGENT_FIELD,
   AgentDeskRow,
   type AgentFieldDelta,
-  type AgentListResult,
+  AgentListResult,
   type AgentSessionSummary,
+  PRODUCT_API_LIMITS,
 } from "@vibefield/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  agentListFor,
   boundText,
   createFieldSubscription,
   FieldProjection,
@@ -123,6 +125,62 @@ describe("projectDeskRow — the field row plus the reply line, the question and
     const pending = summary({ monitor: false, pending: "not attached yet" });
     const { nativeSessionId: _phones, ...field } = projectFieldRow(pending);
     expect(projectDeskRow(pending)).toEqual(field);
+  });
+});
+
+describe("item 60 — agent.list for its reader (agentListFor)", () => {
+  /** a run doing something, asking something, with a long latest reply */
+  const talking = (i: number, text: string): AgentSessionSummary => {
+    const run = asking(summary({ runtimeRunId: `run-${i}`, lastAssistantText: text }), text);
+    const monitor = run.monitor;
+    if (monitor === undefined) throw new Error("a reply needs a mirror");
+    return {
+      ...run,
+      monitor: { ...monitor, activity: { kind: "tool", line: text, since: monitor.statusSince } },
+    };
+  };
+  const bytes = (value: unknown) => Buffer.byteLength(JSON.stringify(value), "utf8");
+  const points = (text: unknown) => Array.from(String(text)).length;
+  const ACROSS = ["peer-fieldd", "tailnet", "tailnet-guest"];
+  const LOCAL = ["local-token", "shell-main", "plugin", "mcp-agent"];
+
+  it("thirty 150 KB replies — item 60's measurement — reach a caller across the tailnet bounded, under PeerLink's reader; a window reads them whole", () => {
+    const reply = "word ".repeat(30_000);
+    const fold = board(...Array.from({ length: 30 }, (_, i) => talking(i, reply)));
+    // the measurement's case: the whole fold is past the 4 MiB reader
+    expect(bytes(fold)).toBeGreaterThan(PRODUCT_API_LIMITS.WS_MAX_INBOUND_BYTES);
+    for (const kind of LOCAL) expect(agentListFor(kind, fold), kind).toBe(fold);
+    for (const kind of ACROSS) {
+      const cut = agentListFor(kind, fold);
+      expect(bytes(cut), kind).toBeLessThan(PRODUCT_API_LIMITS.WS_MAX_INBOUND_BYTES / 16);
+      expect(AgentListResult.safeParse(cut).success, kind).toBe(true);
+      for (const [index, row] of cut.sessions.entries()) {
+        const monitor = row.monitor as unknown as Record<string, unknown> & {
+          lastAssistantMessage: { text: string; final?: boolean };
+          activity: { line: string };
+          blockers: Array<{ questions: Array<{ prompt: string; options: unknown[] }> }>;
+        };
+        expect(points(monitor.lastAssistantMessage.text)).toBe(AGENT_FIELD.DESK_TEXT_CHARS);
+        expect(monitor.lastAssistantMessage.text.endsWith("…")).toBe(true);
+        expect(monitor.lastAssistantMessage.final).toBe(true);
+        expect(points(monitor.activity.line)).toBe(AGENT_FIELD.DESK_TEXT_CHARS);
+        expect(points(monitor.blockers[0]?.questions[0]?.prompt)).toBe(AGENT_FIELD.DESK_TEXT_CHARS);
+        expect(monitor.blockers[0]?.questions[0]?.options).toHaveLength(2);
+        // nothing else of the row moved
+        const whole = fold.sessions[index] as AgentSessionSummary;
+        expect({ ...row, monitor: undefined }).toEqual({ ...whole, monitor: undefined });
+        expect(monitor["revision"]).toBe(whole.monitor?.revision);
+      }
+    }
+  });
+
+  it("a short text, a row with no mirror and a blocker with no questions pass as they are", () => {
+    const fold = board(
+      talking(1, "Keeping it greyed."),
+      summary({ runtimeRunId: "run-2", monitor: false }),
+      summary({ runtimeRunId: "run-3", permissionTool: "Bash" }),
+    );
+    for (const kind of ACROSS) expect(agentListFor(kind, fold), kind).toEqual(fold);
   });
 });
 
