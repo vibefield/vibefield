@@ -14542,6 +14542,13 @@ operator error.
   - Both refuse `--no-such-flag` with exit 2, the argument and the usage on stderr, nothing on stdout, and nothing
     written under HOME.
 
+> **Errata (2026-10-26, item 64's errata):** "bounded at 10 s, so a binary that boots instead of exiting is killed and
+> named" claimed more than the clock knew. A run still alive at 10 s was called booted ("None = it booted"), but under
+> load a binary that is only SLOW to exit is still alive at 10 s too: the lead's verify saw these rows pass 10 s at
+> load 252. Since the errata, booted and slow are told apart by evidence. A write under the empty temp HOME, where a
+> boot creates its data and log roots, is a boot and stops the run at once. No exit and no write by the deadline is
+> "slow, not booted". The deadline, 60 s, is set from a measurement of its load class. See item 64's errata below.
+
 **Found:**
 - With no HOME at all, field-native's `home_dir()` falls back to "." (the cwd) for its default roots. The rows always
   set HOME; noted, not changed.
@@ -15032,3 +15039,47 @@ So the push that carried that lane's step was half of what made this nightly unt
   next dispatch plans the head.
 - The draft corpus: WP12-D7 gains a dated note (when the tag is made), and EDP §12.2 its amendment (tag and publish
   write, nothing else). Both ride VF-PM's next snapshot turn.
+
+## NF — item 64's errata: the launch check tells booted from slow by evidence, never by the clock; its deadline set from a measurement (2026-10-26; `b6a2e7a81`, lane `fix/64e-launch-check-evidence`)
+
+**What happened:** the lead's verify of the pin tip saw item 64's launch_check rows (`--help`, `--no-such-flag`) run
+past their 10 s RUN_DEADLINE at load 252. Alone 3/3 they were green, in 1.78 s. At the deadline a row said "(None = it
+booted)", but under load a binary that is only slow to exit is still alive at 10 s as well. The message claimed more
+than it knew. VF-PM put it on the queue as 64's errata.
+
+**The fix, test-only** (`b6a2e7a81`, tests/launch_check.rs):
+- `run_bounded` watches the empty temp HOME as the binary runs, and answers one of three outcomes:
+  - `Exited` (code, stdout, stderr);
+  - `Booted`: the first write under HOME, where a booting field-native creates its default data and log roots (its
+    own log file among the first). The binary is stopped at once;
+  - `Slow`: no exit and no write by the deadline. It says "did not exit within <deadline> and wrote nothing under its
+    empty HOME: slow, not booted", with the stdout and stderr so far.
+- The two rows match on it, and a run that did not exit panics with its verdict.
+- **RUN_DEADLINE 10 s → 60 s, from a measurement** (records/measure64e.sh, eight samples per class). One `--help` run
+  of either binary, cold (a re-copied binary's first exec, which pays macOS's signature validation, as every first
+  run of a fresh `CARGO_BIN_EXE` does) and warm:
+  - load ~7: median 0.3–0.4 s cold and 12 ms warm, worst 0.5 s;
+  - 80 / 160 / 240 busy loops (loads ~50 / ~250 / ~450): medians 0.04–1.1 s, worst 5.3 s.
+  - The lead's 10 s at load 252 came with verify's own contention on top.
+  - 60 s is ~11× the worst measured. A boot never waits for it, because the first write stops it.
+- **A new stand-in row,** `a_write_under_home_is_a_boot_and_silence_past_the_deadline_is_only_slow`, uses a `/bin/sh`
+  script as the binary, so no daemon runs.
+  - A run that starts creating `Library/Logs/VibeField/` and its log file is `Booted` at the first write seen
+    (always `Library`, which `mkdir -p` makes first), and stopped before its 20 s deadline. With a 1 s gap forced
+    between the mkdir and the file, it is still `Booted`, on the directories alone.
+  - A run that only sleeps is `Slow` at a 500 ms deadline, never booted.
+- A dated errata at item 64's entry corrects its "killed and named" at the source.
+
+**Validation** (this Mac's SSD lane `/Volumes/SamsungRed/lanes/item64e`, guard v2, nice 19, on `4b6b6eb13`):
+- **Red-first** (records/redfirst64e.sh): a probe that is never committed puts a SLOW stand-in in field-native's
+  place in `BINARIES`. It sleeps 15 s and then answers as field-native does, writing nothing.
+  - With 4b6b6eb13's file it is red: "field-native --help did not exit 0 within 10s (None = it booted)", the false
+    claim.
+  - At the tip it is green (1 passed in 31.12 s): the slow exits are waited out.
+- **The rows as committed:** launch_check 4/4 ×5 (2.38–3.27 s), and clippy `--all-targets -D warnings` clean.
+  - Found on the way: the stand-in row first asserted the log FILE, and one run in a ×3 was red when the run had
+    been stopped at `Library` before the file existed. The row now asserts `Library`.
+- **`pnpm verify`:** EXIT 0 at 17:48:35Z on its SECOND run (test for 27 projects, cargo test 30 ok).
+  - The first, at 17:37:29Z, stopped at clippy on this commit's own doc comment: a paragraph right after a list,
+    which `doc_lazy_continuation` refuses. That is fixed in `b6a2e7a81`.
+- Logs: `/Volumes/SamsungRed/lanes/item64e/logs/` (`measure/`, `redfirst/`, `proofs/`).
