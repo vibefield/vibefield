@@ -14372,3 +14372,87 @@ load wait, James 00:07Z):
 - **Deltas are not byte-bounded** on the revisioned path. A burst past a page inside one floor window, about 110 rows at
   the text bound in a second, goes out as one delta. The catalog's pump sends such a delta as a paged reset. Measure
   before moving.
+
+## AR — item 63: a real floor's boot that never reaches the daemon says which step stalled; the suites' endpoint waits carry the floor's own log and fieldd's view of the link (2026-10-26; `4cc15f970`, lane `fix/63-floor-endpoints-budget`)
+
+**What happened:** the nightly's own verify (run 40272843651, job 121409287957) went red on ONE fieldd row,
+agent-session "AR-6-0 — the stop verb (agent.interrupt) > interrupts a live run through the floor…". The row's
+setup polls 30 s for `daemon.native.terminalEndpoints` (agent-session.test.ts:604) and timed out at 30,362 ms.
+The same bytes were green on CI at 05:10Z. The error said only "poll timed out after 30000ms", and the floor's log
+was deleted with the row's temp root, so nobody could say which step stalled. The same wait's twin in
+agent-gateway-floor.ts (FLOOR_WAIT_MS, 60 s) went red the same way twice on this Mac that night:
+- tool-5's verify-2: agent-gateway-panes row 13, at load 200;
+- td1-embed's verify-staged-1: the SB-2 row, at load 11 when it started.
+VF-PM made it item 63.
+
+**Measured** (this Mac, 10 cores, every boot in a lane temp dir; the floor's own log times spawn → first log →
+`lifecycle.ready` → both cells `terminal.cell_serving`):
+- **Warm:** ~55 ms.
+- **Cold, once per vitest run, ~2 s.** fieldd's globalSetup no-op `cargo build -p field-native` re-copies the
+  uplifted binaries (`target/debug/field-native` gets a new inode), and macOS validates a new file's code signature
+  on its first exec: field-native (31 MB, ad-hoc linker-signed) 1.1–1.35 s before `main`, field-terminal-host 0.7 s,
+  and 9–12 ms the next time. Neither the env vitest passes down, nor the cwd, nor a fresh data dir carries it.
+- **Flat under CPU load** (sh busy loops at nice 19, the tests' own priority). Cold `--version` / a boot with cold
+  cells / warm boots:
+  - 0 loops (load 8): 1,089 / 740 / 55 ms;
+  - 20 (load 38–69): 1,231–1,357 / 852–908 / 68–81 ms;
+  - 40 (load 114–148): 1,185–1,271 / 820–836 / 59–78 ms;
+  - 80 (load 219–291): 1,358–1,525 / 967–1,108 / 80–116 ms.
+- **CI agrees.** In that nightly, agent-session's 26 real-floor rows before AR-6-0 took 284 ms – 7.1 s each, the
+  whole row with its floor boot, most of them 0.5–1.3 s.
+- So AR-6-0's 30 s was ONE stalled boot, not a slow one. A longer wait would only hide it, and the 30 s stays:
+  ~11× the worst boot measured here (2.6 s cold at load 290), fieldd's stall-ceiling policy.
+
+**The fix, at the cause (the lost evidence), test-only:**
+- native-harness.ts `floorBootEvidence(dataDir, spawnedAt, link)` reads the floor's log
+  (`<dataDir>/logs/system/field-native.ndjson`) and `daemon.native`'s public `connected` and `terminalRoutes`.
+- It says three things:
+  - whether the link is connected;
+  - whether a route snapshot was heard (its revision and each cell's class/role);
+  - the floor's events in ms since the spawn (since its log's first event, for a restart's floor), the last 40.
+- Each event carries only whitelisted attributes (class, role, instance, detail, attribution, evidence, state,
+  reason, error). Socket paths, endpoints, boot ids, session ids and the cells' stderr `line` (it can carry door
+  URLs) are left out.
+- agent-session.test.ts's setup and agent-gateway-floor.ts's `floor()` record the spawn's time. Their endpoint waits
+  rethrow a timeout as an error that names it with that evidence, the original as its `cause`.
+- Three native-harness.test.ts rows:
+  - a cell killed at its hello deadline is named in ms since the spawn, with no socket, endpoint, token or stderr
+    line printed;
+  - the routes fieldd heard, and a floor that wrote no log;
+  - a restart's floor counted from its first event, the last `limit` shown.
+
+**The hypotheses the next red will confirm or exclude:**
+1. **A cell that misses its 15 s hello deadline** is killed and respawned (HELLO_DEADLINE_MS 15 s, RESPAWN_MAX 3 per
+   60 s); two misses exceed 30 s. The evidence shows `terminal.cell_ended … detail="no hello within 15s — killed"`.
+2. **A routes stream never armed.** fieldd's `ensureTerminalRoutes` logs a refused subscribe at debug and re-arms
+   only on the next connect, and the hello ack carries routes only when the cells already serve (rarely: they serve
+   30–700 ms after `ready`). The evidence then reads "no route snapshot heard" while the floor's log shows its cells
+   serving.
+
+**Found:**
+- Each fieldd vitest run's first floor costs ~2 s of macOS code-signature validation, because cargo re-copies the
+  binaries on every no-op build (above). It is not this item's fix: noted.
+- While measuring, a bare `field-native --help` ignored the flag and BOOTED for 10 s against the installed app's
+  user root (`~/Library/Application Support/VibeField`). It was reported to VF-PM at once, and nothing was deleted
+  or restored (James's data). That is item 64: `--help` must print the usage and exit.
+
+**Validation** (this Mac's SSD lane `/Volumes/SamsungRed/lanes/item63`, guard v2, nice 19, at `d83376b7c` on
+`71484275a`; no Rust changes):
+- **Red-first, deterministic** (`records/redfirst.sh`). A stand-in `field-terminal-host` that never says hello sits
+  beside a copy of the floor, and a probe-only override points the suites at it.
+  - main's agent-session.test.ts fails AR-6-0 with only `Error: poll timed out after 30000ms`.
+  - At this tip it fails with "the floor's terminal endpoints did not reach the daemon within 30 s", then
+    "fieldd's link: connected; routes heard at revision 1, 0 cell(s)", then the floor's own
+    `+15029 … cell_ended [level 50] class="agent" instance=2 detail="no hello within 15s — killed"` and its
+    respawn's at +30032. That is hypothesis 1, shown end to end.
+  - The gateway twin says the same at 60 s, with three rounds of killed cells.
+  - Both files were restored from HEAD; no stand-in process was left.
+- **The touched suites ×3, all green:** native-harness 9/9, agent-session 45/47 (2 skipped), agent-gateway-panes
+  11/11, agent-gateway 92/92. **fieldd's suite fresh:** 2,470 passed / 11 skipped.
+- **`pnpm verify` #1: RED** (06:24–06:30Z, load 21 → 248) on one field-app row, which this lane does not
+  touch (field-app is identical to main): doc-manager B4 "first run creates + seeds the default doc", vitest's 5 s
+  default. The file alone ×3: 19/19, that row 2.8 s. **`pnpm verify` #2** at the same tip: **EXIT 0** at 06:42:52Z
+  (test for 27 projects, cargo test 30 ok).
+- **CI is the second witness**, on the next push; a stalled boot there now names its step.
+- Logs: `/Volumes/SamsungRed/lanes/item63/logs/` (`measure/`, `redfirst/`, `proofs/`); the scripts and probes are
+  under `records/`.
