@@ -13779,3 +13779,99 @@ the History lead's fix lane. One commit.
 - **CI is the second witness**, on the next push.
 - No desk rows and no kit: the diff is fieldd's alone.
 - Logs: `/Volumes/SamsungRed/lanes/fix59/logs/mini/`.
+
+## BP-1 — the desk's browser says each permission it refuses, Settings clears its data, and an unpackaged shell never opens a signed build's profile (2026-10-26; `aede0c955`, lane `bp/1-profile`)
+
+**Why:** ESP §16 item 7 has gated RL8's signed dogfood build and any beta since 2026-10-15. Before the pane ships, it
+asks for four things: the persistent profile's lifecycle, cookie clearing, downloads, and per-site permission UX. The
+plan is `draft/thinking-browser-profile.md` (track BP; the prod-builder, 2026-10-26).
+- Its slate BP-D1…D8 was RULED PROVISIONALLY at the leans by VF-PM (00:11Z), under James's standing "go with your
+  lean, push forward everything" (23:48Z) and "clear all the blocks" (00:07Z). His one-word overrule stays open.
+- BP-1 is the plan's first slice, and it answers three of the four for RL8.
+
+**What happened:**
+- **BP-D1 — a permission a page requests is denied, and said.**
+  - Both of the pane session's handlers still deny (ESP §7.4).
+  - The REQUEST handler now also tells the WebContents that asked, by its word: Chromium's own, `camera` or
+    `microphone` for a media request, `unknown` for anything outside the contract's shape.
+  - A CHECK stays silent: Chromium asks checks constantly, and nothing was asked of a person.
+  - The producer says it once a document for each permission, on the refusal serial a download also moves.
+  - `LiveSurfaceBrowserStateV1.refused` is now a discriminated union (`download` | `permission` with its word). The
+    SDK's `LiveBrowserRefusal` follows it.
+  - The pane's head says it for its moment ("Camera blocked", "Location blocked", … "Permission blocked"), from one
+    table in `head.ts`.
+- **BP-D4 — Settings › General's "Clear browsing data".**
+  - A new host door, `IPC_CHANNELS.browserDataClear` (thirty channels; the pinned list and ESR §6.2's row moved with
+    it), gated by registered sender. It takes no payload and answers `BrowserDataClearResult { profiles, pages }`:
+    counts only.
+  - Main clears THIS shell's profiles (`live-surfaces/browser-data.ts`): the desk's, named as this shell names it,
+    and any other persistent profile an open page uses.
+    - `BROWSER_DESK_PROFILE_REF` is declared once, in contracts, and field-app's `DESK_PROFILE` reads it.
+    - It clears cookies, every site storage, and the HTTP and auth caches, through the same session the pages hold.
+    - It never makes a profile in order to clear it.
+  - Then it reloads the pages on what it cleared, clear first, so a page comes back signed out.
+  - The card uses DESIGN.md's two-step destructive confirm (only the second, red click asks), and says main's counts
+    and nothing more.
+- **BP-D6 — the profile's directory is keyed by `app.isPackaged`.**
+  - A packaged shell's digest gains `\0packaged`. The unpackaged name is unchanged, so a development desk keeps its
+    sites.
+  - The finding behind it: `dataRoot()` falls back to `~/Library/Application Support/VibeField` without
+    `FIELDD_DATA_DIR`. A shell started by hand shared the signed build's root, and would have opened its encrypted
+    cookie store (ESP-11's fuse) with the fuse off, a one-way spoil.
+  - Main says once when an unpackaged shell runs on that root.
+- **R6 — a support bundle never carries a profile.** It was already true by construction (the bundle is a plan of logs
+  and chosen crash artifacts), and is now a row: a planted cookie canary never reaches the archive.
+- **BP-D8:** ESP §7.5's partition table is corrected at its source (the path form, since PT-4; draft).
+
+**Said limits:**
+- **Downloads stay cancelled and said** until the first beta (BP-D2, BP-2).
+- **The profile's deletion with its user** waits on UA's user removal, which does not exist yet (BP-D5). That row is
+  owed there.
+- **A page PAUSED off screen** cannot be reloaded (`navigate` refuses it), so it keeps its in-memory state until its
+  next load. Its cookies and storage are cleared all the same.
+
+**Validation:**
+- **On the built tree** (`eae85a680`, on `7776f7be2`):
+  - focused vitest: contracts 70/0, electron-shell 199/0 (twice, clean), field-app 77/0, browser-pane 151/0;
+  - typecheck of the five packages; biome clean;
+  - `pnpm verify` run 1 was red on one fieldd real-floor row ("a pane BORN under an Agent Profile", 60 s), while the
+    History lead's EL8 suite ran real floors on this Mac. It re-ran alone, 11/11: the load class.
+  - Run 2 was EXIT 0: vitest 9,225/0/38, node --test 215/0, cargo 452/0/13.
+- **Rebased once** onto `291735449`, the fixer's four (VF-PM's GO, 00:53Z): range-diff `=`, the tree equal to the
+  merge-tree rehearsal, and no file shared. Backup `bp/1-profile-pre-rebase`.
+- **On the gated tree** (`4f467d585`, on `291735449`), this Mac's slot, nice 19, with no load wait (James, 00:07Z):
+  - **`pnpm verify`**, verbatim: EXIT 0 (armed 00:52:38Z at load 31.8; 419 s).
+    - vitest 9,225/0/38; node --test 221/0; cargo 452/0/13, in 29 suites.
+    - clippy, gen:check and biome (no error) clean.
+    - preflight OK with one warning: the lane's ghosttea checkout at 218e11f, not the release's revision
+      (C1's own WARN; nothing builds from it).
+    - Item 56's fix (`291735449`) is on this tree: rosettad's staleness WARN is gone.
+  - **The 14 stages, each alone** (`gate:landing --with-stages --only`; 01:00–01:07Z): 13 green.
+    - `test` was RED at load 405, on fieldd alone. Its row was hidden by Nx's 64 KiB cut ("NO COUNT in the log").
+    - fieldd's suite re-ran alone (load 54) and went red on ONE other real-floor row: terminal-seam's "the death of
+      an ATTACHED session also reaches the negotiated leg" ("the terminal floor is not available").
+    - That file re-ran alone (load 34): 6/6.
+    - This tree's verify had run fieldd fresh and green, and BP-1 touches neither fieldd nor field-native.
+    - Read as the load class: rotating real-floor rows while other lanes' suites ran on this Mac. The rule is
+      VF-PM's 00:11Z one: a load-class red re-runs alone once.
+- **Rebased once more** onto `99554b7d2` (the History lead's CLAUDE.md commit, docs only; VF-PM, 01:01Z) as
+  `aede0c955`.
+  - The range-diff is `=`.
+  - The landed tree differs from the gated `4f467d585` by CLAUDE.md alone: a landed, disjoint, gated change, which is
+    tonight's precedent.
+  - Backups are `bp/1-profile-pre-rebase` (`eae85a680`) and `bp/1-profile-pre-rebase2` (`4f467d585`).
+- **The desk rows are SKIPPED for this landing, and owed-and-covered** (VF-PM, 00:53Z, under James's 00:07Z word: the
+  interaction class goes to the mini or is skipped).
+  - The EL8 lane's gate runs the full 12 desk rows on the mini at James's next unlock, on a tree that includes BP-1.
+  - One unlock witnesses both, and that gate's LANDED entry says so.
+- **`pnpm still` is not reached:** BP-1 changes no still's render path (the playground's clock and pad).
+
+**Owed:**
+- **R3**, smoke:canvas's own BP rows (the pane says a refusal; Clear browsing data empties the desk's cookies), is
+  NOT written. It is the timing class, owed to the mini.
+- **R4**, ESP-11's witness as row 31 `smoke:profile` on the SIGNED package, waits on J4. It needs a run keychain and
+  never `--use-mock-keychain`.
+- **BP-2** (downloads, BP-D2) comes before the first beta.
+- **BP-D5's row** comes with UA's user removal.
+- **The drafts**, a commit-draft turn: `thinking-browser-profile.md`'s BUILT note, ESP §7.5 and §16 item 7, and ESR
+  §6.2's row.
