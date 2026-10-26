@@ -2645,6 +2645,11 @@ export class TerminalService {
         }
       }
     });
+    // Item 52 (b) — ghosttea 0.13.4's `session-metadata-changed` reaches this
+    // connection (the client negotiates minor 17) and has no listener on
+    // purpose: a shell's cwd and title reach fieldd on the floor's inventory,
+    // whose pump reconciles on that event (field-native's INVENTORY_EVENTS).
+    // One road for the row.
     // The client emits connection-error/transport-error (never "error" — the
     // review measured it): the only diagnostic explaining WHY a control
     // connection dropped, so it goes to evidence instead of the void.

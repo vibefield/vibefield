@@ -825,7 +825,11 @@ export const NATIVE_FLOOR_TICK = {
  * dated here.
  *  - BACKSTOP_MS — a cell's pump reconciles at least this often, events or none. No cell event
  *    fires on a shell's builtin `cd`, so a quiet cell's new cwd waits for it, and a healthy cell's
- *    inventory peaks near BACKSTOP_MS plus one round trip.
+ *    inventory peaks near BACKSTOP_MS plus one round trip. *Corrected 2026-10-26 (item 52 (b)):*
+ *    one does now. ghosttea 0.13.4's `session-metadata-changed` (control minor 17, which the floor
+ *    announces) carries a shell's cwd and title, and the pump reconciles on it, so an OSC 7 reaches
+ *    the inventory within one 100 ms reconcile tick. The backstop still bounds what an event
+ *    stream can lose, and the healthy peak it sets is unchanged.
  *  - STALE_MS — past the healthy peak, one reconcile, or a failed one's reconnect and immediate
  *    retry, has about 4.9 s to land. A hung `list-sessions` reads stale about 5 s into its 10 s
  *    request timeout, some 26 s before three failures degrade the unit.

@@ -538,6 +538,117 @@ async fn live_pty_enters_and_leaves_the_observed_inventory() {
     daemon.shutdown().await;
 }
 
+/// One session's row in an observed payload.
+fn row_of<'a>(payload: &'a Value, session_id: &str) -> Option<&'a Value> {
+    terminals(payload)
+        .iter()
+        .find(|t| t["sessionId"] == session_id)
+}
+
+/// Release a tenant blocked opening `fifo` for reading: this open returns only
+/// once the tenant's has, and the line ends its `read`.
+#[cfg(unix)]
+async fn release(fifo: &Path) {
+    let fifo = fifo.to_path_buf();
+    let opened = tokio::task::spawn_blocking(move || {
+        use std::io::Write;
+        std::fs::OpenOptions::new()
+            .write(true)
+            .open(&fifo)
+            .and_then(|mut writer| writer.write_all(b"go\n"))
+    });
+    timeout(Duration::from_secs(5), opened)
+        .await
+        .expect("the tenant opens its fifo")
+        .expect("the release ran")
+        .expect("the release reached the tenant");
+}
+
+/// Item 52 (b): a shell's cwd and title reach the published inventory on
+/// ghosttea's `session-metadata-changed`, within one reconcile tick, rather
+/// than at the 5 s backstop (`TERMINAL_INVENTORY.BACKSTOP_MS`).
+///
+/// The tenant prints an OSC 7, then an OSC 2, each when the test releases it,
+/// and blocks in the shell's own `read` in between. It runs nothing else, so
+/// its process group never changes and no `session-activity-changed` can
+/// stand in for the event. Each step's release follows a published change, a
+/// reconcile, so the backstop is at least 4 s away when it fires: at minor 9
+/// this row is red.
+#[cfg(unix)]
+#[tokio::test]
+async fn a_shells_cwd_and_title_reach_the_inventory_on_the_metadata_event() {
+    const WITHIN: Duration = Duration::from_secs(1);
+    let dir = short_tempdir();
+    let go = dir.path().join("go");
+    let fifo = std::ffi::CString::new(go.to_str().unwrap()).unwrap();
+    assert_eq!(unsafe { libc::mkfifo(fifo.as_ptr(), 0o600) }, 0, "mkfifo");
+    let place = dir.path().join("a-place");
+    let cwd = format!("file://localhost{}", place.display());
+    let title = "item 52 (b)";
+
+    let daemon = boot(dir.path()).await;
+    let mut mgmt = MgmtClient::connect(&daemon).await;
+    let ack = mgmt.hello(&daemon).await;
+    mgmt.subscribe_observed().await;
+    let (client, _events) = control(&ack).await;
+    let session = client
+        .create_session(json!({
+            "executable": "/bin/sh",
+            "args": [
+                "-c",
+                r#"read -r _ < "$1"; printf '\033]7;%s\007' "$2"; read -r _ < "$1"; printf '\033]2;%s\007' "$3"; read -r _ < "$1""#,
+                "sh",
+                go.to_str().unwrap(),
+                cwd,
+                title,
+            ],
+            "cols": 80,
+            "rows": 24,
+            "persistence": "keep-until-exit",
+            "environment": {"mode": "clean", "variables": {}},
+        }))
+        .await
+        .expect("create session");
+    let before = mgmt
+        .await_observed(Duration::from_secs(5), |p| has_session(p, &session.id))
+        .await;
+    assert_ne!(
+        row_of(&before, &session.id).unwrap()["cwd"],
+        json!(cwd),
+        "the place is the shell's to announce: {before}"
+    );
+
+    release(&go).await;
+    let released = Instant::now();
+    let moved = mgmt
+        .await_observed(WITHIN, |p| {
+            row_of(p, &session.id).is_some_and(|row| row["cwd"] == json!(cwd))
+        })
+        .await;
+    eprintln!("cwd published {:?} after its OSC 7", released.elapsed());
+    assert_ne!(row_of(&moved, &session.id).unwrap()["title"], json!(title));
+
+    release(&go).await;
+    let released = Instant::now();
+    let retitled = mgmt
+        .await_observed(WITHIN, |p| {
+            row_of(p, &session.id).is_some_and(|row| row["title"] == json!(title))
+        })
+        .await;
+    eprintln!("title published {:?} after its OSC 2", released.elapsed());
+    assert_eq!(
+        row_of(&retitled, &session.id).unwrap()["cwd"],
+        json!(cwd),
+        "a title change keeps the place: {retitled}"
+    );
+
+    client
+        .terminate(&session.id, "user")
+        .await
+        .expect("terminate");
+    daemon.shutdown().await;
+}
+
 /// The persistence of one session, as the observed inventory reports it.
 fn persistence_of<'a>(payload: &'a Value, session_id: &str) -> Option<&'a str> {
     terminals(payload)

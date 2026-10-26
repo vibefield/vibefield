@@ -170,6 +170,11 @@ const RECONCILE_FLOOR: Duration = Duration::from_millis(100);
 /// whatever an event stream can silently lose, at a pace that stays honest
 /// without being a poll.
 ///
+/// Since item 52 (b) (2026-10-26) it no longer bounds a shell's cwd or title
+/// either: ghosttea 0.13.4's `session-metadata-changed` (minor 1.17) marks the
+/// cell dirty, and an OSC 7 reaches the inventory within one `RECONCILE_FLOOR`
+/// tick (about 100 ms, `terminal_unit.rs`'s row) where it waited up to here.
+///
 /// Measured against a timestamp and NOT by counting ticks: with
 /// `MissedTickBehavior::Skip`, a reconcile slower than the floor eats ticks, so
 /// several of them could stretch well past the interval and the bound would
@@ -2042,7 +2047,8 @@ async fn pump_cell(endpoints: TerminalEndpoints, mut pump: CellPump) {
 
 /// One cell's pump, as it is carried across its connections: the cell it
 /// publishes for, its stamp (IL-D1), its bounds, the fault streak and the slow
-/// episode (IL-D3), both of which outlive a reconnect.
+/// episode (IL-D3), and the events it owed no reconcile (item 52 (b)), all of
+/// which outlive a reconnect.
 struct CellPump {
     instance: u32,
     cell: ObservedTerminalCell,
@@ -2051,6 +2057,7 @@ struct CellPump {
     bounds: InventoryBounds,
     watch: InventoryWatch,
     slow: SlowEpisode,
+    ignored: IgnoredEvents,
 }
 
 impl CellPump {
@@ -2069,6 +2076,38 @@ impl CellPump {
             stamp,
             bounds,
             slow: SlowEpisode::default(),
+            ignored: IgnoredEvents::default(),
+        }
+    }
+
+    /// An event this pump owes no reconcile (`INVENTORY_EVENTS`): counted, the
+    /// first of each kind said once, every later one at debug with the total.
+    fn ignored(&mut self, event: &Value) {
+        let kind = event
+            .get("type")
+            .and_then(Value::as_str)
+            .unwrap_or("(untyped)");
+        if self.ignored.note(kind) {
+            tracing::info!(
+                event = "field_native.terminal.inventory_event_ignored",
+                component = "terminal",
+                cell = self.instance,
+                cell_boot_id = %self.stamp.key.1,
+                kind,
+                ignored_events = self.ignored.total,
+                "The terminal inventory heard an event it owes no reconcile; it is counted, and \
+                 the backstop still reconciles"
+            );
+        } else {
+            tracing::debug!(
+                event = "field_native.terminal.inventory_event_ignored",
+                component = "terminal",
+                cell = self.instance,
+                cell_boot_id = %self.stamp.key.1,
+                kind,
+                ignored_events = self.ignored.total,
+                "The terminal inventory owes this event no reconcile either"
+            );
         }
     }
 
@@ -3256,6 +3295,72 @@ impl InventoryWatch {
 /// meaning is "you did not see what happened".
 const EVENTS_LOST: &str = "events-lost";
 
+/// Item 52 (b) — the events a cell's pump owes a reconcile: exactly what a 1.9
+/// connection hears today, plus `session-metadata-changed`. Zero change to
+/// today's triggers, one added.
+///
+/// The floor announces 1.17 for that one event (`terminal_client.rs`'s
+/// `PROTOCOL_MINOR`), and a minor is all or nothing, so the connection also
+/// hears 1.10-1.16's: `config-changed`, `remote-session-state-changed`,
+/// `view-state-changed` and `control-state`. They change nothing the published
+/// row carries, so they are counted (`IgnoredEvents`), never reconciled. An
+/// allow-list rather than "any event" is what keeps the next minor's events off
+/// the reconcile path until something here reads them.
+///
+/// Two facts of ghosttea 0.13.4 shape the list:
+/// - **No control event says a session was removed.** `Removed` lives on the
+///   in-process lifecycle channel alone, and a terminated session leaves the
+///   registry with no control event at all. The removal is seen at the next
+///   reconcile, whichever event or backstop causes it.
+/// - **`control-changed` is a live trigger.** A local session's controller
+///   change reaches every minor, and the reconcile it causes can be the one
+///   that publishes a removal. fieldd's item 59 grace is measured from that
+///   moment, so the trigger stays.
+///
+/// Every event still reaches `birth_to_govern` first; this decides only the
+/// reconcile.
+const INVENTORY_EVENTS: [&str; 6] = [
+    "session-created",
+    "session-exited",
+    "session-activity-changed",
+    "control-changed",
+    EVENTS_LOST,
+    "session-metadata-changed",
+];
+
+/// Does this pushed event owe the cell a reconcile (`INVENTORY_EVENTS`)?
+fn owes_reconcile(event: &Value) -> bool {
+    event
+        .get("type")
+        .and_then(Value::as_str)
+        .is_some_and(|kind| INVENTORY_EVENTS.contains(&kind))
+}
+
+/// Item 52 (b) — the events a cell's pump heard and owed no reconcile, counted
+/// rather than dropped. The count outlives a reconnect, like the rest of the
+/// pump's state; the kinds it has said are bounded, since they come off the
+/// wire.
+#[derive(Debug, Default)]
+struct IgnoredEvents {
+    total: u64,
+    kinds: Vec<String>,
+}
+
+impl IgnoredEvents {
+    /// Past this many kinds, a new one is counted without being named again.
+    const MAX_KINDS: usize = 16;
+
+    /// Count one, and say whether it is the first of its kind this pump heard.
+    fn note(&mut self, kind: &str) -> bool {
+        self.total += 1;
+        if self.kinds.len() >= Self::MAX_KINDS || self.kinds.iter().any(|seen| seen == kind) {
+            return false;
+        }
+        self.kinds.push(kind.to_owned());
+        true
+    }
+}
+
 /// TC-S3 — one cell's connection worth of inventory maintenance: the same
 /// loop as `pump_inventory` (reconcile on connect, then on events and the
 /// backstop; births re-governed per GT-D11), publishing through the merged
@@ -3298,10 +3403,14 @@ async fn pump_inventory_cell(
                     if let Some(birth) = birth_to_govern(&event) {
                         let _ = births_tx.send(birth);
                     }
-                    if event.get("type").and_then(Value::as_str) == Some(EVENTS_LOST) {
-                        gap = true;
+                    if owes_reconcile(&event) {
+                        if event.get("type").and_then(Value::as_str) == Some(EVENTS_LOST) {
+                            gap = true;
+                        }
+                        dirty = true;
+                    } else {
+                        pump.ignored(&event);
                     }
-                    dirty = true;
                 }
                 None => return Ok(()),
             },
@@ -3763,6 +3872,95 @@ mod tests {
             birth_to_govern(&json!({"requestId": 0, "type": "session-created"})).is_none(),
             "a birth with no summary owes no follow-up list"
         );
+    }
+
+    /// Item 52 (b): the pump reconciles on exactly what a 1.9 connection heard,
+    /// plus the metadata event 1.17 added, and on nothing else that 1.17 opted
+    /// this connection in to. The shapes are ghosttea 0.13.4's (service.rs).
+    #[test]
+    fn the_pump_reconciles_on_the_events_it_reads_and_counts_the_rest() {
+        let pushed = |kind: &str, extra: Value| {
+            let mut event = json!({"requestId": 0, "type": kind});
+            event
+                .as_object_mut()
+                .unwrap()
+                .extend(extra.as_object().unwrap().clone());
+            event
+        };
+        for owed in [
+            pushed("session-created", json!({"session": {"id": "s1"}})),
+            pushed("session-exited", json!({"sessionId": "s1", "exitCode": 0})),
+            pushed(
+                "session-activity-changed",
+                json!({"sessionId": "s1", "active": true}),
+            ),
+            pushed(
+                "control-changed",
+                json!({"sessionId": "s1", "controllerViewId": "v1", "controlEpoch": 2}),
+            ),
+            pushed(EVENTS_LOST, json!({"lost": 3})),
+            pushed(
+                "session-metadata-changed",
+                json!({"sessionId": "s1", "cwd": "file://localhost/tmp", "title": null}),
+            ),
+        ] {
+            assert!(
+                owes_reconcile(&owed),
+                "a 1.9 trigger, or the cwd hint: {owed}"
+            );
+        }
+
+        for ignored in [
+            pushed("config-changed", json!({"config": {}})),
+            pushed(
+                "remote-session-state-changed",
+                json!({"sessionId": "r1", "state": "live"}),
+            ),
+            pushed(
+                "view-state-changed",
+                json!({"sessionId": "r1", "viewId": "v1"}),
+            ),
+            pushed(
+                "control-state",
+                json!({"sessionId": "r1", "controller": null}),
+            ),
+            pushed("a-minor-nobody-has-shipped", json!({})),
+            json!({"requestId": 0}),
+        ] {
+            assert!(
+                !owes_reconcile(&ignored),
+                "1.10-1.16's events, the next minor's and an untyped one owe no reconcile: \
+                 {ignored}"
+            );
+        }
+    }
+
+    /// Item 52 (b): an ignored event is counted, never dropped silently; each
+    /// kind is said once, and the kinds a pump will name are bounded because
+    /// they come off the wire.
+    #[test]
+    fn ignored_events_are_counted_and_each_kind_is_said_once() {
+        let mut ignored = IgnoredEvents::default();
+        assert!(
+            ignored.note("view-state-changed"),
+            "the first of a kind is said"
+        );
+        assert!(
+            !ignored.note("view-state-changed"),
+            "the second is only counted"
+        );
+        assert!(ignored.note("control-state"), "a new kind is said too");
+        assert_eq!(ignored.total, 3, "every one is counted");
+
+        for n in 0..IgnoredEvents::MAX_KINDS {
+            ignored.note(&format!("kind-{n}"));
+        }
+        assert_eq!(ignored.kinds.len(), IgnoredEvents::MAX_KINDS);
+        assert!(
+            !ignored.note("one-kind-too-many"),
+            "past the bound a new kind is counted without being named"
+        );
+        assert_eq!(ignored.total, 3 + IgnoredEvents::MAX_KINDS as u64 + 1);
     }
 
     /// The observation-gap recovery: exactly the births a `session-created`

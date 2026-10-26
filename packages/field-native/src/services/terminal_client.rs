@@ -32,15 +32,31 @@ use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::sync::{mpsc, oneshot};
 
-/// Control protocol: ghosttea 0.10.0 serves 1.16. This client announces **1.9** —
+/// Control protocol: ghosttea 0.13.4 serves 1.17. This client announces **1.17** —
 /// the feature floor it consumes, not the newest it has heard of. The minor is
 /// not cosmetic: the service gates events on it — `session-activity-changed`
-/// below 1.6, `events-lost` below 1.8, and `session-created` below 1.9
-/// (`SESSION_CREATED_PROTOCOL_MINOR`, service.rs:48). 1.9 is what turns
-/// creation from a polled fact into a pushed hint (NF-7); the 1.10-1.16
-/// answers (reconnect era, per-session scrollback at 1.15, structured errors
-/// at 1.16) stay off THIS connection until something here reads them — the
-/// G16/G17 consumer is fieldd's npm client, which requires them per-command.
+/// below 1.6, `events-lost` below 1.8, `session-created` below 1.9
+/// (`SESSION_CREATED_PROTOCOL_MINOR`, service.rs:49) and
+/// `session-metadata-changed` below 1.17 (`METADATA_EVENT_PROTOCOL_MINOR`,
+/// service.rs:88). 1.9 is what turns creation from a polled fact into a pushed
+/// hint (NF-7); 1.17 does the same for a shell's cwd and title (item 52 (b)),
+/// which until then reached the inventory only at the 5 s backstop.
+///
+/// *Corrected 2026-10-26 (item 52 (b)):* this said 1.9, and that the 1.10-1.16
+/// answers stay off this connection until something here reads them. A minor
+/// is all or nothing, so 1.17 opts in to all of them, and what each one means
+/// HERE was read in ghosttea 0.13.4's service.rs before the number moved:
+/// - 1.10 `config-changed` and 1.12's `remote-session-state-changed`,
+///   `view-state-changed` and `control-state` are events the inventory pump
+///   hears and owes no reconcile (`terminal.rs`'s `INVENTORY_EVENTS`). The
+///   three 1.12 events come from a mesh runtime, which a cell does not have
+///   (TM-1), and so does the snapshot sent after a 1.12 hello.
+/// - 1.11 and 1.13-1.16 gate nothing per connection in that service.rs: their
+///   constants are declarations, the commands they name are none this floor
+///   sends, and an error at 1.16 still answers `type: "error"` with its
+///   `message`, the two fields `call_timed` reads.
+/// - `SessionSummary` stays a tolerant reader: serde defaults, no
+///   `deny_unknown_fields`, so 1.15's scrollback echo parses as before.
 ///
 /// Two different numbers, and confusing them is what made this a floor nobody
 /// checked. The service RECORDS `min(client, server)` per connection and gates
@@ -49,7 +65,7 @@ use tokio::sync::{mpsc, oneshot};
 /// what the server can do, not what was negotiated. That is precisely what makes
 /// it checkable, and `hello` checks it.
 pub const PROTOCOL_MAJOR: u16 = 1;
-pub const PROTOCOL_MINOR: u16 = 9;
+pub const PROTOCOL_MINOR: u16 = 17;
 
 /// = upstream `MAX_CONTROL_BYTES` (service.rs:34). Reading with the service's
 /// own ceiling keeps a hostile or wedged peer from making us allocate.
@@ -196,6 +212,11 @@ impl ControlClient {
     /// pane back at `terminate-with-app`, and not one line in any log. EL8 makes
     /// that unlikely; the exact pin is also precisely what would make it invisible
     /// when it happened, so the connection states the floor it needs.
+    ///
+    /// The floor has been 1.17 since item 52 (b), and the argument is the same
+    /// one: a service under 1.17 withholds `session-metadata-changed` just as
+    /// silently, and a shell's `cd` would wait for the backstop again with
+    /// nothing said.
     async fn hello(&self) -> Result<()> {
         let response = self
             .call(json!({
@@ -538,9 +559,14 @@ mod tests {
     /// back. `session-created` — the whole GT-D11 custody claim — is withheld
     /// below minor 9 silently, because withholding an event is not an error, so
     /// a service under our floor has to be refused at the handshake or it is
-    /// never noticed at all.
+    /// never noticed at all. Item 52 (b) raised the floor to 17 for
+    /// `session-metadata-changed`, withheld below it the same way.
     #[tokio::test]
     async fn a_service_below_our_protocol_floor_is_refused_at_the_handshake() {
+        assert_eq!(
+            PROTOCOL_MINOR, 17,
+            "the floor is the metadata event's minor (ghosttea's METADATA_EVENT_PROTOCOL_MINOR)"
+        );
         handshake_with(PROTOCOL_MAJOR, PROTOCOL_MINOR)
             .await
             .expect("a service serving exactly our floor is what we asked for");
@@ -550,12 +576,16 @@ mod tests {
 
         let refused = handshake_with(PROTOCOL_MAJOR, PROTOCOL_MINOR - 1)
             .await
-            .expect_err("one minor below the floor still cannot push session-created");
+            .expect_err("ghosttea 0.13.3 serves 1.16, and cannot push session-metadata-changed");
         let refused = format!("{refused:#}");
         assert!(
             refused.contains(&format!("{PROTOCOL_MAJOR}.{PROTOCOL_MINOR} is required")),
             "the refusal names the floor it needs: {refused}"
         );
+
+        handshake_with(PROTOCOL_MAJOR, 8)
+            .await
+            .expect_err("nor can a service below 1.9 push session-created");
 
         handshake_with(PROTOCOL_MAJOR + 1, PROTOCOL_MINOR)
             .await
