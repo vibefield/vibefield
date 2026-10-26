@@ -1638,11 +1638,21 @@ async function joinedRow(
   win: WsRpc,
   runtimeRunId: string,
 ): Promise<AgentListResult["sessions"][number]> {
-  return await poll(async () => {
-    const { sessions } = (await win.call("agent.list", {})) as AgentListResult;
-    const row = sessions.find((r) => r.runtimeRunId === runtimeRunId);
-    return row?.terminal?.cellBootId !== undefined ? row : undefined;
-  }, 15_000);
+  return await poll(
+    async (seen) => {
+      const { sessions } = (await win.call("agent.list", {})) as AgentListResult;
+      const row = sessions.find((r) => r.runtimeRunId === runtimeRunId);
+      // item 72 — what the row stood at: absent, or listed without its cell's join (its terminal as the fold has it)
+      seen(
+        row === undefined
+          ? { row: "not listed" }
+          : { terminal: row.terminal ?? "no terminal join" },
+      );
+      return row?.terminal?.cellBootId !== undefined ? row : undefined;
+    },
+    15_000,
+    "the run's row joined to its cell by the floor's inventory",
+  );
 }
 
 const listed = async (win: WsRpc, sessionId: string): Promise<boolean> => {
