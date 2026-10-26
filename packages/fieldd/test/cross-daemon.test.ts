@@ -10,15 +10,23 @@ import { fileURLToPath } from "node:url";
 import { SOCKETS } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
-import { bootstrap, type FielddHealth, NativeLink } from "../src/index";
 import {
+  bootstrap,
+  type FielddConfig,
+  type FielddDaemon,
+  type FielddHealth,
+  NativeLink,
+} from "../src/index";
+import {
+  type FloorScene,
   killDaemonTree,
   nativeBinPath,
   nativeEndpoint,
   removeTempRoot,
   waitForMgmtEndpoint,
+  waitWithEvidence,
 } from "./native-harness";
-import { helloAs, until, WsRpc } from "./ws-rpc";
+import { helloAs, WsRpc } from "./ws-rpc";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 const BIN = nativeBinPath(ROOT);
@@ -37,6 +45,8 @@ function nativeEnv(dataDir: string): NodeJS.ProcessEnv {
 }
 
 afterEach(async () => {
+  scene = undefined;
+  spawnedAt.clear();
   // Kill each daemon's whole TREE and await the real exits before removing the
   // root: a dying daemon (or its segment writer) can still be creating files
   // while rmSync walks — the ENOTEMPTY race that broke three verify runs — and
@@ -48,9 +58,38 @@ afterEach(async () => {
   dirs = [];
 });
 
+/** Item 68 — the row's latest daemon over its floor, for every wait's evidence (`boot` sets it), and when each floor
+ * was spawned. */
+let scene: FloorScene | undefined;
+const spawnedAt = new Map<string, number>();
+
+/** A daemon over the row's floor (item 68): fieldd's own log beside the floor's, and the scene the waits read. */
+async function boot(config: FielddConfig): Promise<FielddDaemon> {
+  const daemon = await bootstrap({ logRoot: join(config.dataDir, "logs"), ...config });
+  scene = {
+    dataDir: config.dataDir,
+    spawnedAt: spawnedAt.get(config.dataDir),
+    link: daemon.native,
+  };
+  return daemon;
+}
+
+/** This suite's waits (item 68): ws-rpc's `until` with the evidence at its deadline — what was awaited and the row's
+ * floor and fieldd logs with the link view. The budgets are the rows' own. */
+async function until(fn: () => boolean, ms = 4000, label = "the row's condition"): Promise<void> {
+  await waitWithEvidence(
+    label,
+    () => (fn() ? true : undefined),
+    ms,
+    () => scene,
+    25,
+  );
+}
+
 async function spawnNative(): Promise<string> {
   const dir = mkdtempSync(join(tmpdir(), "vf-"));
   dirs.push(dir);
+  spawnedAt.set(dir, Date.now());
   const child = spawn(BIN, [], {
     env: nativeEnv(dir),
     stdio: "ignore",
@@ -120,7 +159,7 @@ describe("cross-daemon handshake (TS fieldd ⇄ Rust field-native)", () => {
 
   it("full spine: WS client → ProductAPI → NativeLink → field-native", async () => {
     const dir = await spawnNative();
-    const daemon = await bootstrap({ dataDir: dir, controlPort: 0 });
+    const daemon = await boot({ dataDir: dir, controlPort: 0 });
     const grant = daemon.tokens.mint(["canvas.read"], "test-client");
 
     const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}`);
@@ -182,7 +221,7 @@ describe("cross-daemon handshake (TS fieldd ⇄ Rust field-native)", () => {
     const fatalNotification = new Promise<string>((resolve) => {
       fatalNotified = resolve;
     });
-    const daemon = await bootstrap({
+    const daemon = await boot({
       dataDir: dir,
       controlPort: 0,
       onFatal: (reason) => {
@@ -251,7 +290,7 @@ describe("cross-daemon handshake (TS fieldd ⇄ Rust field-native)", () => {
 
   it("product hello is contract-gated: malformed shape and major mismatch are refused (review P2)", async () => {
     const dir = await spawnNative();
-    const daemon = await bootstrap({ dataDir: dir, controlPort: 0 });
+    const daemon = await boot({ dataDir: dir, controlPort: 0 });
     const grant = daemon.tokens.mint([], "client");
 
     const ws1 = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}`);
@@ -286,7 +325,7 @@ describe("cross-daemon handshake (TS fieldd ⇄ Rust field-native)", () => {
   it("kill matrix: native death flips the live health stream; respawn restores it", async () => {
     const dir = await spawnNative();
     const nativeChild = children[children.length - 1]!;
-    const daemon = await bootstrap({ dataDir: dir, controlPort: 0 });
+    const daemon = await boot({ dataDir: dir, controlPort: 0 });
     const grant = daemon.tokens.mint([], "watcher");
 
     const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}`);
@@ -326,7 +365,7 @@ describe("cross-daemon handshake (TS fieldd ⇄ Rust field-native)", () => {
 
   it("bad token and disallowed Origin are rejected", async () => {
     const dir = await spawnNative();
-    const daemon = await bootstrap({ dataDir: dir, controlPort: 0 });
+    const daemon = await boot({ dataDir: dir, controlPort: 0 });
 
     const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}`);
     await new Promise<void>((r) => ws.once("open", () => r()));

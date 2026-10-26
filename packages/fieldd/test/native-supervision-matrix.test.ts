@@ -25,7 +25,12 @@ import { LAYOUT, ProductInfo } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import { bootstrap, type FielddDaemon } from "../src/index";
 import type { NativeSupervisionTimings } from "../src/native-supervisor";
-import { nativeBinPath, waitForMgmtEndpoint } from "./native-harness";
+import {
+  type FloorScene,
+  nativeBinPath,
+  waitForMgmtEndpoint,
+  waitWithEvidence,
+} from "./native-harness";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 const BIN = nativeBinPath(ROOT);
@@ -34,7 +39,11 @@ let children: ChildProcess[] = [];
 let dirs: string[] = [];
 let daemons: FielddDaemon[] = [];
 
+/** Item 68 — the row's supervised pair, for every wait's evidence; set by `bootSupervisedPair`. */
+let scene: FloorScene | undefined;
+
 afterEach(async () => {
+  scene = undefined;
   for (const d of daemons) await d.stop().catch(() => undefined);
   daemons = [];
   const exits = children.map((c) =>
@@ -69,13 +78,18 @@ function nativeEnv(dataDir: string): NodeJS.ProcessEnv {
   };
 }
 
+/** Every wait in the matrix, answering how long it took (the rows measure detection with it). Item 68: at its
+ * deadline it says what was awaited and the pair's floor and fieldd logs with the link view
+ * (`waitWithEvidence`). The budgets are the rows' own. */
 const until = async (cond: () => boolean, ms: number, what: string): Promise<number> => {
   const t0 = Date.now();
-  const deadline = t0 + ms;
-  while (!cond()) {
-    if (Date.now() > deadline) throw new Error(`until(${what}): never held within ${ms}ms`);
-    await new Promise((r) => setTimeout(r, 25));
-  }
+  await waitWithEvidence(
+    what,
+    () => (cond() ? true : undefined),
+    ms,
+    () => scene,
+    25,
+  );
   return Date.now() - t0;
 };
 
@@ -118,16 +132,20 @@ async function bootSupervisedPair(
     children.push(child);
     return child.pid;
   };
+  const spawnedAt = Date.now();
   const firstPid = spawner();
   await waitForMgmtEndpoint(dir, 10_000);
   const daemon = await bootstrap({
     dataDir: dir,
+    // item 68 — fieldd's own log beside the floor's, for the waits' evidence
+    logRoot: join(dir, "logs"),
     controlPort: 0,
     ...(firstPid !== undefined ? { nativePid: firstPid } : {}),
     nativeSpawner: spawner,
     ...(timings !== undefined ? { nativeSupervisionTimings: timings } : {}),
   });
   daemons.push(daemon);
+  scene = { dataDir: dir, spawnedAt, link: daemon.native };
   return { daemon, dir };
 }
 

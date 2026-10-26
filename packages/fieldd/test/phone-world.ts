@@ -32,12 +32,14 @@ import { filesHostLaunch } from "./files-host-bundle";
 import { productDoorPath, TEST_LOGIN, writeLinkFixture } from "./link-fixture";
 import { MeshStandIn } from "./mesh-stand-in";
 import {
+  type FloorScene,
   killDaemonTree,
   nativeBinPath,
   nativeEndpoint,
   removeTempRoot,
   shortTmpRoot,
   waitForMgmtEndpoint,
+  waitWithEvidence,
 } from "./native-harness";
 import { scriptedProfiles } from "./scripted-profiles";
 
@@ -105,12 +107,19 @@ class Unreachable extends WebSocket {
   }
 }
 
+/** Item 68 — the world's floor and daemon, for every wait's evidence; set once its daemon boots. */
+let scene: FloorScene | undefined;
+
+/** The world's waits (item 68): at the deadline the error says which part of the phone's world did not come up,
+ * and the world's floor and fieldd logs with the link view (`waitWithEvidence`). The budgets are the callers'. */
 async function until(label: string, ok: () => boolean, ms: number): Promise<void> {
-  const deadline = Date.now() + ms;
-  while (!ok()) {
-    if (Date.now() > deadline) throw new Error(`the phone's world did not come up: ${label}`);
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
+  await waitWithEvidence(
+    `the phone's world: ${label}`,
+    () => (ok() ? true : undefined),
+    ms,
+    () => scene,
+    50,
+  );
 }
 
 const rosettaRow = (
@@ -179,6 +188,7 @@ export async function bootPhoneWorld(
     JSON.stringify([rosettaRow("s-seed", "nat-seed", placePath, Date.now() - 3_600_000)]),
   );
 
+  const nativeSpawnedAt = Date.now();
   const native = spawn(process.env["FS2_NATIVE_BIN"] ?? nativeBinPath(REPO), [], {
     env: {
       ...process.env,
@@ -249,6 +259,8 @@ export async function bootPhoneWorld(
 
     const daemon = await bootstrap({
       dataDir,
+      // item 68 — fieldd's own log beside the floor's, for the waits' evidence
+      logRoot: join(dataDir, "logs"),
       controlPort: 0,
       dataPort: 0,
       peerWebSocket: Unreachable as unknown as WsCtor,
@@ -286,6 +298,7 @@ export async function bootPhoneWorld(
         }),
       },
     });
+    scene = { dataDir, spawnedAt: nativeSpawnedAt, link: daemon.native };
     stops.push(() => daemon.stop());
 
     await until("rosettad", () => daemon.health().rosettad.phase === "ready", 30_000);
