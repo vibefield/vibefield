@@ -1358,9 +1358,11 @@ describe("TerminalService (NF-3, mock native)", () => {
     // so the reconnect cannot re-learn endpoints — a SIGKILLed field-native)
     await mock.stop();
 
+    // Item 70: until fieldd hears the floor's close, a mint may still be served; that is "not yet", never a throw out
+    // of the poll (`callErr` throws on success)
     const refused = await poll(async () => {
-      const err = await rpc.callErr("terminal.openTicket", { sessionId: "s1" });
-      return err.data?.kind === "UNAVAILABLE" ? err : undefined;
+      const answer = await rpc.attempt("terminal.openTicket", { sessionId: "s1" });
+      return !answer.ok && answer.error.data?.kind === "UNAVAILABLE" ? answer.error : undefined;
     });
     expect((refused.data?.details as { state?: string } | undefined)?.state).toBe("absent");
 

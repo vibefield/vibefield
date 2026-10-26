@@ -74,6 +74,22 @@ export class WsRpc {
     }
     throw new Error(`expected ${method} to fail`);
   }
+
+  /** Item 70 (2026-10-26) — a call whose success and refusal are both ANSWERS, for a poll in which a success means
+   * "not yet" (a door that still answers a beat after its floor died). `callErr` throws on success, which ends such a
+   * poll on its first try; this throws only when there is no RPC answer at all. */
+  async attempt(
+    method: string,
+    params: unknown,
+  ): Promise<{ ok: true; result: unknown } | { ok: false; error: RpcErrorShape }> {
+    try {
+      return { ok: true, result: await this.call(method, params) };
+    } catch (e) {
+      const rpc = (e as { rpc?: RpcErrorShape }).rpc;
+      if (rpc) return { ok: false, error: rpc };
+      throw e;
+    }
+  }
 }
 
 /** Polls `fn` every 25 ms until it holds. `label` names the wait in the

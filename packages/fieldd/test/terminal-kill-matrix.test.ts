@@ -220,6 +220,25 @@ async function poll<T>(
   return await waitWithEvidence(what, fn, ms, () => scene);
 }
 
+/** Item 70 — ends a session a door made on a dying floor, bounded: what the ending said, or that it said nothing in
+ * time, is the wait's evidence, never the row's red. */
+async function endBounded(rpc: WsRpc, sessionId: string, ms = 2_000): Promise<string> {
+  let timer: NodeJS.Timeout | undefined;
+  const late = new Promise<string>((resolve) => {
+    timer = setTimeout(() => resolve(`no answer in ${ms} ms`), ms);
+  });
+  const ended = rpc.attempt("terminal.terminate", { sessionId }).then(
+    (answer) =>
+      answer.ok ? "terminated" : `refused: ${answer.error.data?.kind ?? answer.error.message}`,
+    (error: unknown) => `failed: ${error instanceof Error ? error.message : String(error)}`,
+  );
+  try {
+    return await Promise.race([ended, late]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 const listOf = async (rpc: WsRpc): Promise<TerminalInfo[]> =>
   ((await rpc.call("terminal.list", {})) as { terminals: TerminalInfo[] }).terminals;
 
@@ -470,10 +489,26 @@ describe("the kill matrix (NF-4, real field-native)", () => {
       // crash the floor: sessions die with it (the honest ceiling) and the seam
       // must refuse interactive ops rather than pretend
       native.child.kill("SIGKILL");
-      await poll(async () => {
-        const err = await rpc.callErr("terminal.create", { shell: HOLD });
-        return err.data?.kind === "UNAVAILABLE" ? true : undefined;
-      }, 10_000);
+      // Item 70 (2026-10-26) — the kill is a signal: the floor dies when it is next scheduled, and until fieldd hears
+      // the link close a create may still be SERVED (red at loads 241 and 263, 601 ms in, as "expected terminal.create
+      // to fail"). A create that succeeds is "not yet", never the row's red: the session it made is ended, bounded
+      // (what the ending said is evidence, not a red), and the wait goes on to its deadline.
+      const servedAfterTheKill: Array<{ sessionId: string; ended: string }> = [];
+      await poll(
+        async (seen) => {
+          const answer = await rpc.attempt("terminal.create", { shell: HOLD });
+          if (answer.ok) {
+            const { sessionId } = answer.result as { sessionId: string };
+            servedAfterTheKill.push({ sessionId, ended: await endBounded(rpc, sessionId) });
+            seen({ createsServedAfterTheKill: servedAfterTheKill });
+            return undefined;
+          }
+          seen({ createsServedAfterTheKill: servedAfterTheKill, refused: answer.error.data?.kind });
+          return answer.error.data?.kind === "UNAVAILABLE" ? true : undefined;
+        },
+        10_000,
+        "terminal.create refusing UNAVAILABLE once the floor is killed",
+      );
 
       // GT-5b — the hole this row never checked. `create` was the only op
       // re-tested after the kill, and the TICKET doors were the ones that had
@@ -487,13 +522,27 @@ describe("the kill matrix (NF-4, real field-native)", () => {
       // endpoints, and it is the cleared endpoints these two doors read.
       // (terminal.connectTicket retired at TP-S3e — openTicket is the one mint
       // left to try against a corpse)
+      // Item 70: a mint that still succeeds here is "not yet" by this comment's own reading, and polling it is the
+      // point. It used to throw out of the poll at once (`callErr` throws on success), and the `.catch` read that
+      // first try as a corpse's mint; now only the deadline fails, saying how many mints it saw.
       for (const [method, params] of [
         ["terminal.openTicket", { sessionId: created.sessionId }],
       ] as const) {
-        const kind = await poll(async () => {
-          const err = await rpc.callErr(method, params);
-          return err.data?.kind === "UNAVAILABLE" ? err.data.kind : undefined;
-        }, 10_000).catch(() => "MINTED-FOR-A-CORPSE");
+        let minted = 0;
+        const kind = await poll(
+          async (seen) => {
+            const answer = await rpc.attempt(method, params);
+            if (answer.ok) {
+              minted += 1; // the grant itself is never kept or shown
+              seen({ mintedForTheCorpse: minted });
+              return undefined;
+            }
+            seen({ mintedForTheCorpse: minted, refused: answer.error.data?.kind });
+            return answer.error.data?.kind === "UNAVAILABLE" ? answer.error.data.kind : undefined;
+          },
+          10_000,
+          `${method} refusing to mint for the corpse`,
+        );
         expect(kind, `${method} must not mint for a corpse`).toBe("UNAVAILABLE");
       }
 
