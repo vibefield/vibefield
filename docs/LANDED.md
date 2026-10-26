@@ -14228,3 +14228,53 @@ wait, James 00:07Z; load 55–186 from other lanes):
   (events as hints, the backstop; §10's scenario 5 is "list-sessions is truth") and the inventory-latency note's
   "none fires on a builtin `cd`" each get a dated line. The metadata event drives the reconcile, so the hint is
   honoured without a second writer of the row.
+
+## AR-S2 — item 62: the refresh row holds its read in flight, so "the answer says it is reading" is asserted while the read cannot have settled (2026-10-26; `63343594a`, lane `fix/62-profile-refresh-race`)
+
+**What happened:** CI's verify on main `c2c113788` (run 40266100851, 03:51–04:30Z) went red on ONE fieldd row,
+agent-runtime "Agent Profiles (AR-S2) > refresh reads This Mac's sign-ins with the vendor's own status command (the
+scripted claude), and the answer says it is reading": `expect(first.reading).toBe(true)` received false (fieldd 1
+failed / 2,460 passed / 11 skipped, its vitest 1,153 s on the runner). None of that head's eight commits touch the
+agent runtime, and the row was green on `a673d7ae0`'s CI. VF-PM made it item 62. Its CI rerun was cancelled by the
+push of `2ae90170a` (run 40269763389), so CI took no second sample of the unfixed row.
+- **The cause, read from the code:** the door (daemon.ts `agents.profileSets.list`) starts the read with
+  `void readNativeIdentities()`, which sets `reading` synchronously, then awaits `AgentProfileService.sets()`.
+  `sets()` awaits the runtime's profile sets, the index and each set's projection, and reads `reading !== null` only
+  as it builds the answer. The read itself (the install inventory, then the scripted claude's `auth status --json`)
+  runs beside it, and its `finally` clears `reading`. When the read settles first, the answer says
+  `reading: false`. That is an honest state of a read that already landed, so the row was the defect: it asserted an
+  in-flight state without holding the flight open.
+- **The fix, test-only:** packages/fieldd/test/fixtures/fake-claude gains an opt-in hold. While
+  `$FAKE_CLAUDE_STATE_DIR/status-hold` exists, `auth status` waits, with the adapter's own 10 s probe timeout as the
+  ceiling (puppeteer adapter-claude services/profiles.ts); with no file there is no wait. The row creates the hold
+  before the refresh, asserts `reading: true` and no claude identity yet in the first answer, then removes the hold.
+  Its `untilAsync` still asserts the end state (not reading, claude signed in as persona@example.test on max, only
+  the scripted claude asked). The door and the service are unchanged.
+
+**Found:**
+- A refresh that arrives while a read is in flight JOINS that read (agent-profiles.ts `readNativeIdentities`:
+  `if (this.reading !== null) return this.reading`) rather than starting another. So a sign-in made after that read
+  began shows at the next refresh, not this one. It isn't this item's, and no row covers it: a line for AR-S2's
+  owner.
+- loro-crdt 1.13.8 printed five "internal error: entered unreachable code: can apply directly" stacks to stderr in
+  CI's log. These are the expected prints of rows that panic Loro ON PURPOSE and prove it contained (the 2026-10-01
+  shallow-snapshot class):
+  - doc-compaction.test.ts, "DS-5d — an import that panics Loro is contained", three rows;
+  - loro-host.test.ts, "S4's carry (rebaseOnto) … one made below its root costs only itself", two stacks.
+  Every one of those rows passes.
+
+**Validation** (this Mac's SSD lane `/Volumes/SamsungRed/lanes/item62`, under guard v2, nice 19, at `2f8fff685` on
+`2ae90170a`; no Rust changes). The body was later reworded tree-identically (`14ae6d1e1`), then the commit was
+rebased onto `055be26c0` as `63343594a` (range-diff `=`). The landing between them, NF item 52 (b) `9b3aef7fa`, shares
+no file with this fix. The proofs:
+- **The probe** reproduces CI's red here. A temporary 3 s sleep in the door before `sets()` lets every read settle
+  first. The OLD row was RED at `agent-runtime.test.ts:618:27` "expected false to be true"; the NEW row was GREEN
+  under the same sleep. Both files were restored from HEAD.
+- **The row alone ×3:** green, 534–1,214 ms (load 90–124). **agent-runtime.test.ts alone:** 37/37 (load 272).
+  **fieldd's suite fresh:** 2,461 passed / 11 skipped (load ~241).
+- **`pnpm verify` #1: RED** (04:44–04:51Z, load 51 → 123) on one other fieldd row: agent-session AR-6-0, the stop
+  verb's 15 s poll for the run's exit after `agent.interrupt`. agent-session copies this fixture, but none of its rows
+  creates a hold. The file alone ×3: 45/45 each, that row 7.0–7.2 s (load 31 → 16).
+- **`pnpm verify` #2** at the same tip: **EXIT 0** at 05:04:13Z (test for 27 projects, cargo test 30 ok).
+- **CI is the second witness**, on the next push.
+- Logs: `/Volumes/SamsungRed/lanes/item62/logs/` (`probe/`, `proofs/`); the scripts are under `records/`.
