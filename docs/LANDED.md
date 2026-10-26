@@ -13875,3 +13875,74 @@ plan is `draft/thinking-browser-profile.md` (track BP; the prod-builder, 2026-10
 - **BP-D5's row** comes with UA's user removal.
 - **The drafts**, a commit-draft turn: `thinking-browser-profile.md`'s BUILT note, ESP §7.5 and §16 item 7, and ESR
   §6.2's row.
+
+## BP-1b — row 31 `smoke:profile` is built and measured: the packaged app reopens a board and its pane goes live unaided, os_crypt takes a run keychain, and the row is RED because a desk profile outside userData never writes its cookies (2026-10-26; `ea9a4e677`, lane `bp/1b-profile-row`)
+
+**Why:** BP-D7 (R4, ESP-11's witness) asks for a landing row that judges, from outside the packaged app, that a cookie a
+page set in it is encrypted at rest.
+- The packaged app hosts no smoke harness: the asar drops `testing/`, `NODE_OPTIONS` is fused off, and EDP §13.5 keeps
+  triggers out.
+- VF-PM ruled the two-phase row (01:32Z), with its four unknowns measured first on a dev-keyed `package:dir` (01:49Z),
+  then on the first signed nightly's zip.
+
+**What happened:**
+- **Phase A, the harness** (`testing/smoke-profile-seed.ts`, `--smoke-canvas --profile-seed=<url>`):
+  - lays one browser pane, points it at the row's loopback fixture, and waits for it live and for the board's save;
+  - flushes the page's cookie store through its own session (`flushPage`);
+  - LEAVES the pane on the board. The data root is kept only by the runner's `VF_SMOKE_KEEP_ROOT`.
+- **Phase B, the packaged app** (`apps/desktop/packaging/run-browser-profile-smoke.mjs`) runs on that root, with the
+  run's HOME, its own `--user-data-dir` and its own run mark. No input reaches it. The judge reads copies of both
+  profiles' cookie databases with sqlite3 `-readonly`.
+- **The run keychain, a finding of the lane's own review before any run.** `security create-keychain` writes the
+  CURRENT HOME's search list. Every `security` call now runs under the run HOME, the run keychain is that HOME's
+  default, and the person's list is digested before and after, STOPPING the run if it moved. Never
+  `--use-mock-keychain`.
+- **Phase A runs through an async `spawn`.** A `spawnSync` starved the in-process fixture server: a face `starting`, and
+  a fixture that heard nothing (runs 1–2 on the mini, the runner's own bug).
+
+**Measured on the Mac mini** (run 4, 03:17Z, a dev-keyed package built with `HARFBUZZ_SYS_NO_PKG_CONFIG=1`):
+- **U1 YES:** the packaged app reopened phase A's board, and its pane went live unaided. The fixture was asked after
+  7.5 s with no cookie, which is BP-D6's separate packaged profile.
+- **U2 YES:** "VibeField Safe Storage" landed in the RUN keychain, and the person's search list never moved. Row 30
+  can take the same shape instead of the mock keychain.
+- **U3 YES:** the board opened was phase A's.
+- **U4:** the mini, at James's unlock with a bounded caffeinate.
+- The production daemons it left running were all reaped by the mark.
+
+**FINDING — a `session.fromPath` profile outside Electron's userData keeps its cookies in memory only**
+(`draft/thinking-browser-profile.md` §3·8; BP-D9 OPEN with James):
+- Neither desk profile held a cookie database, though phase A's page had sent the witness back.
+- Four windowless Electron 43.1.1 probes (`draft/browser-profile/evidence/`): NO cookie database outside userData even
+  after `flushStore()` and quit; `Cookies` plus its journal inside userData, or in a `persist:` partition.
+- Production's default layout nests the two roots, and is expected to persist (unmeasured). `pnpm dev`, every smoke and
+  this row's phase B do not, so the dev desk loses its sign-ins at every restart.
+- The row stays RED as written: it says the truth.
+
+**FINDING — the package's native plane linked host libraries** (TD/WP's fix lane, VF-PM 03:14Z):
+- `field-native` and `field-terminal-host` linked Homebrew's `/opt/homebrew/opt/harfbuzz/lib/libharfbuzz.0.dylib`.
+  ghosttea-text 0.13.1 → harfbuzz_rs 2.0.1 → harfbuzz-sys 0.5.0, whose `build.rs` prefers a pkg-config host library.
+- On the mini, run 3's packaged fieldd never got ready.
+- `mille.darwin-arm64.node` links its build machine's absolute `libmille_binding.dylib`.
+- The entitlements grant no library-validation exception, so a signed build linking either should fail on every Mac.
+- Nothing in the release path loads field-native today.
+
+**Validation:**
+- On the landed tree (`ea9a4e677`, on `0118f5be9`): `pnpm verify` EXIT 0 (run 5, 03:33:11–03:36:56Z, nice 19, load 126 → 29): fieldd ran FRESH, 2,443/0/29 in 193 files; the other 26 projects replayed run 4's fresh, successful runs of this same tree — electron-shell 1,923/0/2, dev-runner node --test 234/0; cargo 452/0/13 in 29 suites; preflight OK with its one ghosttea WARN (nothing builds from that checkout). Run 4 (03:27:57Z, load 263) was red on ONE fieldd real-floor row, the kill matrix's "rows 3+6: a dead floor refuses honestly" (`expected terminal.create to fail`); that file alone, 13/0/1 — the load class, re-run alone once (VF-PM's rule). BP-1b touches neither fieldd nor field-native: fieldd ran fresh because the fixer's `47324bcbf` moved its harness.
+- The focused rows: dev-runner's `browser-profile-smoke.test.mjs` 6/6, electron-shell's `smoke-profile-seed.test.ts`
+  3/3.
+- Rebased once onto `0118f5be9` (the fixer's three; no file shared): range-diff `=`. Backup
+  `bp/1b-profile-row-pre-rebase`.
+- Row 31 itself: four runs on the mini (02:51Z, 02:58Z, 03:07Z, 03:17Z), as above.
+
+**Owed:**
+- **BP-D9** (James): the law that a desk profile lives inside userData, with dev and the smokes nested. Then row 31's
+  shape follows: phase B's userData contains the data root, as in production.
+- **The fix lane** (TD/WP, after the push):
+  - `HARFBUZZ_SYS_NO_PKG_CONFIG=1` in `.cargo/config.toml` `[env]`;
+  - mille's binding, upstream (a line for James);
+  - THE GATE: no packaged Mach-O links outside `/usr/lib`, `/System` or the bundle, and the build job launches
+    field-native once.
+- **R4 on the signed nightly's zip** once BP-D9 and the fix lane land.
+- **R3** on the mini; **BP-2** before the first beta; **BP-D5's row** with UA's user removal.
+- **The evidence on the mini** (four smoke roots, four run dirs, three probe dirs): removed by the prod-builder once
+  this packet is verified (VF-PM, 03:23Z).
