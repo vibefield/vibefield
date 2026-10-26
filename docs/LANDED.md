@@ -15122,3 +15122,36 @@ throws when the call SUCCEEDS.
 - **Alone ×3:** terminal-kill-matrix 13 / 1 skipped each, terminal-service 106/106 each.
 - **`pnpm verify`:** EXIT 0 at 18:18:33Z on its first run (test for 27 projects, cargo test 30 ok).
 - Logs: `/Volumes/SamsungRed/lanes/item70/logs/` (`redfirst/`, `proofs/`).
+
+## PT-3 (smoke) — smoke:canvas's IDLE red names its submits: the desk door keeps the desk queue's submits with their command buffers' labels, and the row says when after the still mark and by whom (2026-10-26; `5b4dc7203`, lane `hl/idle-names`)
+
+**What happened:** smoke:canvas's IDLE row (PT-3, `455b8bf6f`) checks a still page in hand: no desk frame, no GPU submit,
+no arrival over 1.2 s.
+- On the Mac mini it went red as "the desk submitted 3 times for a still page in hand", with frames 0 and arrivals 0.
+  That was 2 of 5 runs on the tree of the EL8 to ghosttea 0.13.5, one of them untouched by the idle-time arithmetic, and
+  0 of 1 on 0.13.4's control.
+- A count could not say who submitted. The desk device's queue takes the desk's frames, VibeField's still-taker (a still
+  of the held page), comment-pad's ink-grow copy and ICE's own work.
+- A one-off probe (never committed) ran twice and saw no IDLE red. VF-PM ruled at 18:39Z that the row should name its
+  submits from now on, landing before the EL8.
+
+**What landed:**
+- **The desk door** (packages/field-app/src/field/desk/desk-door.ts):
+  - `watchSubmits()` keeps this desk device's queue submits from the first call on: each one's time and its command
+    buffers' labels, the newest 64. It goes through an exported `watchSubmits(queue)`, one wrap per queue held in a
+    WeakMap. Only a smoke's ask installs it, and the queue's own submit runs as before.
+  - `submitsSeen()` reads them, and `uploads()` is ICE's upload tally by label.
+- **The tags are WebGPU labels at `finish()`:** the still-taker `desk-live/still`, comment-pad `comment-pad/ink grow`. An
+  unlabelled submit is ICE's or the desk's own. comment-pad is a plugin, so a label keeps wall R10 intact where an import
+  of field-app could not.
+- **The row** (packages/electron-shell/src/testing/smoke-use-pane.ts):
+  - it watches before the settle and marks before the first count;
+  - `judgeIdle`'s submit line names each submit after the mark (dt and tag) and ICE's uploads over the watch;
+  - a clean watch is judged as before.
+
+**Validation** (this Mac, nice 19, behind the dev-app guard):
+- **Red first on base sources:** the 4 new field-app rows (`watchSubmits is not a function`) and the named-IDLE row
+  failed. The existing IDLE row passed on both.
+- **`pnpm verify` EXIT 0:** all 27 test targets fresh. field-app 2,624 / 3, electron-shell 1,927 / 2, fieldd 2,460 / 29,
+  test:rust 460 / 0 / 13; gen:check clean.
+- No desk row: the change is the smoke's evidence. The EL8's smoke:canvas on the mini runs on the tree that carries it.
