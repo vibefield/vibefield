@@ -14512,3 +14512,60 @@ chain. The gate reads all of them on the next signed nightly, whose build job is
   never reached so far; then sign, converge, publish. W10, and W11's N, follow it.
 - `build-native-release.mjs`'s comment says ghosttea-text 0.13.1, and main is 0.13.4 (VF-PM's errata, for the next lane
   that touches it).
+
+## NF — item 64: the native binaries answer `--help` and refuse what they do not take; only a bare `field-native` boots (2026-10-26; `dd0f95f35`, lane `fix/64-help-exits`)
+
+**What happened:** field-native's `main` handled `--version` and nothing else, and it is configured by its
+environment alone. With no FIELD_NATIVE_DATA_DIR it serves `default_data_dir()`, the installed app's user root
+(`~/Library/Application Support/VibeField`), and its default log root. So any other argument was IGNORED and the
+daemon booted. On 2026-10-26 at 05:48:36Z, item 63's measurement ran a lane's debug `field-native --help`. It booted
+for 10 s against James's installed app's data dir before a timeout killed it: native/run's six sockets rebound, two
+cell crumbs, custody-admission.v1.json rewritten, 15 log lines. It was reported to VF-PM at once, and nothing was
+deleted or restored. VF-PM made it item 64: a daemon that boots on `--help` is a defect at the cause, not an
+operator error.
+
+**The fix:**
+- **field-native** (`src/main.rs`): the first argument decides, before any config is read.
+  - `--version` is unchanged (BP-1b's launch check).
+  - `--help` and `-h` print the usage and exit 0. The usage names FIELD_NATIVE_DATA_DIR and FIELD_LOG_DIR (with its
+    override), and says that with none set it serves this user's installed data.
+  - Anything else prints "unknown argument" and the usage to stderr and exits 2.
+  - Only a bare invocation boots.
+- **field-terminal-host** answers `--help` and exits 0; its refusals keep exit 2 and now print the usage.
+- **No launcher changed.** fieldd's `bin.ts` spawns field-native with `[]`, as the suites' harnesses do. The launch
+  check (stage-package, host-links, the build job) passes `--version` only. The floor spawns field-terminal-host with
+  exactly its flags, and field-native never re-execs itself.
+- **tests/launch_check.rs, two rows** against the real binaries. Each run gets `env_clear()` plus an EMPTY temp `HOME`,
+  where the default roots live, and is bounded at 10 s, so a binary that boots instead of exiting is killed and
+  named.
+  - Both binaries answer `--help` and `-h` with exit 0 and their usage, writing nothing under HOME.
+  - Both refuse `--no-such-flag` with exit 2, the argument and the usage on stderr, nothing on stdout, and nothing
+    written under HOME.
+
+**Found:**
+- With no HOME at all, field-native's `home_dir()` falls back to "." (the cwd) for its default roots. The rows always
+  set HOME; noted, not changed.
+- **The shared target dir reads an older lane's sources as fresh.** The first red-first pass ran item 63's stale test
+  binaries: that lane's verify had rebuilt the shared target after these sources were edited, and cargo checks a
+  package's files by path and mtime, so 1 test was listed, not 3. The script now touches the changed sources and
+  checks the row count in each phase.
+- verify #1's red exposed a real race in fieldd's rosettad supervisor, which composes the exit detail on 'exit'
+  before stderr drains. Under load, "refusing to start" lands after the detail is composed, and the same lines feed
+  its wrong-binary and schema-mismatch readings. That is item 65.
+
+**Validation** (this Mac's SSD lane `/Volumes/SamsungRed/lanes/item64`, guard v2, nice 19, at `224fad3e9` on
+`71484275a`, then rebased onto `7f837ce06` as `317b4ca01`, range-diff `=`, reworded to `ce7b63cd8`, and rebased onto `3f6f8cf6b`
+(LSF-4, which shares no file) as `dd0f95f35`, range-diff `=`):
+- **Red-first.** Against main's two sources, BP-1b's row passed and both new rows FAILED: "field-native --help did
+  not exit 0 within 10s (None = it booted)", and the same for `--no-such-flag`. The old boot ran inside the empty
+  temp HOME, was killed at the deadline, and left no process. At the fix: 3/3. Build `--all-targets`, clippy
+  `-D warnings` and fmt are clean.
+- **`pnpm test:rust` alone:** 30 ok / 0 FAILED, the launch_check rows among them. **terminal-kill-matrix alone ×3** on
+  this lane's binary: 13 / 1 skipped each.
+- **`pnpm verify`:**
+  - #1 RED on rosettad-daemon AR-1 at load 215 (no floor in that file; alone ×3 18/18);
+  - #2 RED on terminal-kill-matrix rows 3+6 at load 344 (green alone ×3; red the same way on main that night at
+    load 342→553). Both are the load class, outside this lane's path; packages/fieldd is identical to main;
+  - #3 **EXIT 0** at 07:10:37Z, both launch_check rows ok.
+- **CI is the exact-tree witness** on the pushed head.
+- Logs: `/Volumes/SamsungRed/lanes/item64/logs/`; the scripts are under `records/`.
