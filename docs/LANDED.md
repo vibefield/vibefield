@@ -14278,3 +14278,97 @@ no file with this fix. The proofs:
 - **`pnpm verify` #2** at the same tip: **EXIT 0** at 05:04:13Z (test for 27 projects, cargo test 30 ok).
 - **CI is the second witness**, on the next push.
 - Logs: `/Volumes/SamsungRed/lanes/item62/logs/` (`probe/`, `proofs/`); the scripts are under `records/`.
+
+## AR/SP — item 60's three doors: rows follow the asker, bytes follow the link — the session tail pages its snapshots behind one pager, index.project answers a peer within a byte budget and says how many rows it omitted, and agent.list answers a caller across the tailnet with the fold's free texts at the desk's bound (2026-10-26; `57e1de847` → `358180ade`, lane `hl/item60-doors`)
+
+**What happened:** item 60 capped PeerLink's reader at 4 MiB (`WS_MAX_INBOUND_BYTES`, the zod GHSA landing,
+`a673d7ae0`). Its measurement (the fixer's `lanes/item60/records/measure-results.md`, on the mini at `291735449`) found
+three doors whose honest answer to a peer could outgrow that reader.
+- The History lead's plan (`hl-docket/item60-doors-plan.md`) went to VF-PM at 04:56Z, and the rulings came at 04:58Z:
+  - (i) the principle, written beside the reader's own sentence;
+  - (ii) the tail pages through the shared revisioned path, unless a reader depends on one frame;
+  - (iii) `index.project` gets a byte budget with `clipped` now, plus the count beside the flag;
+  - (iv) `agent.list` gives a peer the desk's 280-character bound, and the phone the same, with James's veto open.
+- Three commits, one per door, each red first.
+- **The principle** (registries.ts, beside `WS_MAX_INBOUND_BYTES`): **rows follow the asker, bytes follow the link.**
+  - A peer daemon keeps the row limits of the window it asks for (tailnet-rows.ts, unchanged since SP-D13).
+  - Every answer that rides PeerLink is bounded in BYTES: a subscription by the rows protocol's own pages, a one-shot
+    answer by a byte budget with its door's honest marker.
+- **Door 1, the session tail** (`57e1de847`):
+  - **One pager.** rows-pages.ts holds the rows protocol's snapshot paging, moved from catalog-rows.ts, which now calls
+    it.
+  - **The revisioned path pages.** `RevisionedSubscription` takes an optional `pages` step:
+    - the open answer is page 0, and the rest are owed to `sendRest()`, which the owner calls once the open answer has
+      gone;
+    - a reset goes out as every page in order, and its gap closes only when the last page has landed;
+    - a snapshot that fits one page keeps today's wire byte for byte.
+  - **The tail uses it.** VF-PM's (ii) held: the readers were read first. The tail takes no foreign `device`, so no
+    relay forwards it. Its live reader, the phone's FieldProductClient, already assembles `more` pages. The desktop
+    renderer does not subscribe to it.
+- **Door 2, `index.project`** (`d9d1038f8`):
+  - **Contract first:** `IndexProjectResult.omitted`, present and positive exactly when `clipped`.
+  - **The budget:** `INDEX_MESH.PEER_ANSWER_BYTES` (half the reader, 2 MiB).
+  - **The door:** `peerAnswerBytes(principal)` is the bytes half beside `tailnetRowLimit`'s rows half.
+  - **The service:** `rowsWithin` stops the contribution rows where the encoded answer would pass the budget. Either
+    cut, the phone's rows or the peer's bytes, says `clipped` and how many rows it `omitted`.
+- **Door 3, `agent.list`** (`358180ade`):
+  - `agentListFor` answers this desktop's own callers with the fold's full rows, the same object.
+  - It answers `peer-fieldd`, `tailnet` and `tailnet-guest` with the mirror's free texts bounded by the desk's own
+    `boundText` at `DESK_TEXT_CHARS`: the latest reply, each blocker's question prompts, and the activity line.
+  - `agent.subscribe`'s `full` board was already refused to those callers (DS-D4). So `agent.list` was the one door the
+    fold's rows left the device by, verbatim.
+
+**Found:**
+- **Item 60's "a RESET crosses 4 MiB at 1,814 held rows" was arithmetic** (4 MiB ÷ 2,313 B), not an observed reset. A
+  resync's reset is rosetta's own snapshot, its newest 200 rows. The single large frame is real by another road:
+  - the session's socket is SHARED and holds every row appended since it opened;
+  - so a reader that opens late was answered every held row in one frame, and so was a gap's repair.
+
+  It is corrected at its source (index-tail.ts' header), and the row measures that road.
+- **The phone reads `agent.list` on demand, for one run's latest reply when a card opens** (`FieldLink.latestReply`).
+  With door 3 the card reads that reply's first 280 characters, with an ellipsis. The phone's reader caps a frame at
+  16 MiB (`ProductTransport.maximumFrameBytes`), PeerLink's at 4 MiB.
+- **`project.figures` already says a peer's byte cut, as a flag.** It folds a part's `clipped` into its own `clipped`
+  and `lifetimePartial`. A COUNT there would sum the peers' `omitted` across split parts whose session filter the peer's
+  cut hides; that is the PJ owner's question (Owed).
+- **The phone's Swift readers do not yet read `omitted`**, and do not read a page's `page`/`pages`. Both are tolerant
+  readers, so nothing breaks; the phone's "N more" is its own turn.
+
+**Validation** (this Mac, nice 19, each step alone behind the shared dev-app guard, with ≥ 10 GiB on both disks; no
+load wait, James 00:07Z):
+- **Each door's row was red first and is green with the change:**
+  - **The tail** (index-timeline.test.ts, the scripted rosettad):
+    - rosetta's 200-row snapshot is already two pages at the text bound;
+    - 2,400 rows are appended while that reader holds the socket;
+    - a second reader capped like PeerLink's (`ws` maxPayload = 4 MiB) is answered all 2,600 held rows in pages, each
+      ≤ 256 KiB at one {epoch, revision};
+    - then a resync's reset comes in pages.
+    - On main's sources the capped reader's socket CLOSED on the late open's single frame. The two projection rows
+      (pages, sendRest, reset, a lost page) were red too.
+  - **`index.project`** (index-tailnet-bound.test.ts, 30,000 contribution rows):
+    - a window gets every row, not clipped;
+    - a capped peer gets ≤ `PEER_ANSWER_BYTES`, `clipped`, `omitted` = 30,000 − kept, with the budget spent;
+    - the phone gets `MAX_ROWS` rows with its `omitted`.
+    - On the pre-door sources the capped peer's socket CLOSED on the whole answer.
+  - **`agent.list`** (agent-desk.test.ts, thirty runs with 150 KB replies):
+    - the four local callers get the same object;
+    - the peer, the phone and a guest get a valid `AgentListResult` under 256 KiB, each text at exactly 280 code points;
+    - with main's door (the fold answered whole) the peer's answer was 13,537,974 B.
+    - The row runs at the door's function, because a daemon seeds its fold here without a monitor mirror (MF-1f's
+      restart path), and a mirror needs a live adapter.
+- **Rebased onto `ac4ed9946`** (item 62): merge-tree rehearsed, tree `09f0ae29f`, range-diff `=` ×3.
+- **`pnpm verify` on the rebased tip `358180ade`: EXIT 0** (load 18 → 44). Each test target ran fresh, none replayed
+  from cache: contracts 1,154; fieldd 2,449 passed, 29 skipped (the six new rows among them); field-app 2,620 passed,
+  3 skipped; cargo 456 / 0 / 13 in 30 suites; gen:check without a diff.
+- No desk rows and no kit: fieldd and contracts only (VF-PM's GO).
+- Logs: `/Volumes/SamsungRed/lanes/hl-item60/logs/`.
+
+**Owed:**
+- **James's word on the phone (door 3):** his veto is open. If he says no, the phone's arm leaves `agentListFor`'s set
+  in one line.
+- **`project.figures`' count:** whether a merged project answer says how many rows its parts omitted. That is the PJ
+  owner's question, because a split part's filter is hidden by a peer's cut.
+- **The phone's "N more"** for `index.project`'s `omitted`, in its own turn.
+- **Deltas are not byte-bounded** on the revisioned path. A burst past a page inside one floor window, about 110 rows at
+  the text bound in a second, goes out as one delta. The catalog's pump sends such a delta as a paged reset. Measure
+  before moving.
