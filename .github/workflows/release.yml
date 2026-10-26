@@ -127,6 +127,15 @@ jobs:
             runner: macos-15
             out: mac-arm64
     runs-on: ${{ matrix.runner }}
+    # The toolchain is PINNED, like rust-toolchain.toml (2026-10-26, VF-PM 04:06Z): the first signed nightly
+    # (run 40262280678) failed at "Package, signed" because run-electron-builder.mjs needs full Xcode 26 with Icon
+    # Composer, and the image `macos-15-arm64` 20260907.0337 defaults to Xcode 16.4 (`xcode-select -p`, also
+    # /Applications/Xcode.app), with 26.3/26.2/26.1.1/26.0.1 installed by versioned name. One job-level line serves every
+    # step, the unsigned path's "Package, UNSIGNED" as much as the signed one. When an image rotates this Xcode away,
+    # the resolver's own refusal ("DEVELOPER_DIR does not identify Xcode 26 with Icon Composer") is the guard, never a
+    # silent fallback. The matrix's move to macos-26 (default Xcode 26.6, the dev Mac's) is ROADMAP's follow-on.
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
