@@ -31,7 +31,6 @@ import {
   committedCargoRow,
   committedNpmRow,
   crateVersion,
-  ensureElectronBinary,
   linkedPackages,
   lockHidden,
   NO_CARGO_ROW,
@@ -400,28 +399,6 @@ test("align links a linked package's dependencies and peers from the store, and 
       join(store, "@x+history-protocol@0.1.1_react@19.2.7/node_modules/@x/history-protocol"),
     ),
   );
-});
-
-test("a shape switch gives the desktop's Electron its binary when the store directory came back without one", (t) => {
-  const { root } = fixture(t);
-  assert.equal(ensureElectronBinary(root), "no Electron resolvable from apps/desktop");
-  mkdirSync(join(root, "apps", "desktop"), { recursive: true });
-  writeFileSync(
-    join(root, "apps", "desktop", "package.json"),
-    `${JSON.stringify({ name: "desktop" })}\n`,
-  );
-  const electron = join(root, "node_modules", "electron");
-  mkdirSync(electron, { recursive: true });
-  writeFileSync(join(electron, "package.json"), `${JSON.stringify({ name: "electron" })}\n`);
-  // Electron's own installer writes path.txt (and dist/) from its download cache; the fake one writes path.txt alone
-  writeFileSync(
-    join(electron, "install.js"),
-    'require("node:fs").writeFileSync(require("node:path").join(__dirname, "path.txt"), "Electron.app/Contents/MacOS/Electron");\n',
-  );
-  const did = quiet(() => ensureElectronBinary(root));
-  assert.match(did.result, /^Electron's binary installed at node_modules\/electron/);
-  assert.ok(existsSync(join(electron, "path.txt")));
-  assert.equal(ensureElectronBinary(root), null, "a binary already there is left alone");
 });
 
 // --- RD-3: the cargo and Swift overlays ---------------------------------------------------------------------------

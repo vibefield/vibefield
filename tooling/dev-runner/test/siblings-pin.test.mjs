@@ -24,6 +24,11 @@ function fixture(t, otherName = "rosetta", gateExit = 0, typecheckExit = 0, genE
   mkdirSync(scripts, { recursive: true });
   const cli = join(scripts, "siblings.mjs");
   copyFileSync(new URL("../../../scripts/siblings.mjs", import.meta.url), cli);
+  // the CLI's one local import: `use` gives Electron its binary through it
+  copyFileSync(
+    new URL("../../../scripts/electron-binary.mjs", import.meta.url),
+    join(scripts, "electron-binary.mjs"),
+  );
   const gateMarker = join(root, "catalog-called.json");
   writeFileSync(
     join(scripts, "check-agent-catalog.mjs"),

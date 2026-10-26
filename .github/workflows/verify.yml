@@ -124,6 +124,11 @@ jobs:
             ../rosetta-pin -> target
 
       - run: pnpm install --frozen-lockfile
+      # Electron 43 has no postinstall: the install leaves no binary, and the first test to require Electron downloaded
+      # it mid-run while the smoke launcher's rows read its path.txt (2026-10-26, run 40333930954). Fetched here by
+      # Electron's own install.js and proven executable, or red here in words.
+      - name: Electron's binary (its own install.js; path.txt and an executable binary)
+        run: node scripts/electron-binary.mjs
       - uses: ./.github/actions/prepare-mille
 
       # rosettad from the pinned sibling (rustup picks its rust-toolchain.toml). The fieldd

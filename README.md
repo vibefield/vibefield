@@ -78,6 +78,7 @@ lives in the manifests (`Cargo.toml`, `pnpm-workspace.yaml`); cite them from the
 node scripts/siblings.mjs fetch ghosttea # clone at its pin; preserves existing checkouts
 node scripts/siblings.mjs install-js    # frozen install of Ghosttea's renderer dependencies
 pnpm install
+node scripts/electron-binary.mjs # Electron's binary: Electron 43 has no postinstall (fetched lazily otherwise)
 pnpm siblings       # the sibling checkouts: path, pin, dirtiness, built binaries
 pnpm siblings:build # rosettad + Ghosttea's React renderer and its dependencies
 pnpm preflight      # tool versions + sibling pins + import-boundary walls

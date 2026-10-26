@@ -31,6 +31,7 @@
         "{workspaceRoot}/apps/desktop/packaging/codesign-entitlements.mjs",
         "{workspaceRoot}/apps/desktop/packaging/entitlements.mac.plist",
         "{workspaceRoot}/scripts/siblings.mjs",
+        "{workspaceRoot}/scripts/electron-binary.mjs",
         "{workspaceRoot}/scripts/git-hooks/pre-commit",
         "{workspaceRoot}/siblings.lock.json",
         "{workspaceRoot}/pnpm-workspace.yaml",

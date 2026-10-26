@@ -83,6 +83,7 @@ import {
 } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { ensureElectronBinary } from "./electron-binary.mjs";
 
 export const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const LOCK_FILE = "siblings.lock.json";
@@ -1084,8 +1085,24 @@ export function installShape(root, overlay = readOverlay(root), previous = []) {
     );
     for (const line of unalignOverlay(root, packages, lock)) console.log(`siblings:use: ${line}`);
   }
-  const electron = ensureElectronBinary(root);
-  if (electron !== null) console.log(`siblings:use: ${electron}`);
+  // A shape switch's last step (RD-2): pnpm re-creates a package's store directory when a switch moves it (the dev
+  // resolution dropped Electron's optional `supports-color` peer, so Electron moves between two directories), and
+  // Electron's binary (`dist/` and `path.txt`) is not in the content store. Electron 43 has no postinstall to re-run,
+  // so this tree's Electron gets its binary here, as a fresh lane's does. (2026-10-26: scripts/electron-binary.mjs took
+  // the function, CI's verify its second caller. This said "no switch's log shows Electron's postinstall": there is none.)
+  let electron;
+  try {
+    electron = ensureElectronBinary(root);
+  } catch (error) {
+    console.error(`siblings:use FAIL: ${error.message}`);
+    return 1;
+  }
+  if (electron === null) console.log("siblings:use: no Electron resolvable from apps/desktop");
+  else if (electron.installed) {
+    console.log(
+      `siblings:use: Electron's binary installed at ${relative(realpathSync(root), electron.binary)} (the store directory was re-created)`,
+    );
+  }
   if (overlay.length > 0) {
     const missing = alignOverlay(root, readLock(root), overlay);
     if (missing.length > 0) {
@@ -1133,33 +1150,6 @@ export function unalignOverlay(root, packages, lock = readLock(root)) {
     }
   }
   return said;
-}
-
-/** A shape switch's last step (RD-2): pnpm re-creates a package's store directory when a switch moves it (the dev
- * resolution dropped Electron's optional `supports-color` peer, so Electron moves between two directories), and
- * Electron's binary — `dist/` and `path.txt`, written by its own `install.js` from the download cache — is not in the
- * content store, nor re-run by pnpm on re-creation (no switch's log shows Electron's postinstall). So this tree's
- * Electron gets its binary here when `path.txt` is missing, as a fresh lane does. Returns what it did. */
-export function ensureElectronBinary(root = REPO_ROOT) {
-  // THIS tree's Electron only — the desktop's own node_modules, then the root's — never Node's search beyond the root
-  // (a parent directory's or a global folder's Electron is not the one the desktop runs)
-  const found = [
-    join(root, "apps", "desktop", "node_modules", "electron"),
-    join(root, "node_modules", "electron"),
-  ].find((candidate) => existsSync(join(candidate, "package.json")));
-  if (found === undefined) return "no Electron resolvable from apps/desktop";
-  const dir = realpathSync(found);
-  if (existsSync(join(dir, "path.txt"))) return null;
-  const run = spawnSync(process.execPath, [join(dir, "install.js")], {
-    cwd: dir,
-    stdio: "inherit",
-  });
-  if (run.status !== 0 || !existsSync(join(dir, "path.txt"))) {
-    throw new Error(
-      `siblings:use: Electron's binary is missing at ${dir} and its install.js did not restore it (exit ${run.status}) — run \`node install.js\` there`,
-    );
-  }
-  return `Electron's binary installed at ${relative(realpathSync(root), dir)} (the store directory was re-created)`;
 }
 
 /** `use NAME…` / `use --none` / `use`: the per-sibling switch (RD-D2). Only a sibling with a released plane can be
