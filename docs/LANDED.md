@@ -13946,3 +13946,119 @@ page set in it is encrypted at rest.
 - **R3** on the mini; **BP-2** before the first beta; **BP-D5's row** with UA's user removal.
 - **The evidence on the mini** (four smoke roots, four run dirs, three probe dirs): removed by the prod-builder once
   this packet is verified (VF-PM, 03:23Z).
+
+## EL8 — ghosttea 0.13.4 and truffle 0.7.22 on every plane in one event: the lock pins the v0.13.4 commit, truffle-core =0.7.22 moves with its five sidecars, a key's fate in Settings → Terminal is ghosttea's own answer, and the session-metadata event ships at control minor 17 (2026-10-26; `8eaaf48c9` → `8d7c6cd1b`, lane `hl/el8-ghosttea-0.13.4`)
+
+**What happened:** the EL8 to ghosttea 0.13.4 and truffle 0.7.22, three commits on main `c2c113788`. James, via VF-PM at
+2026-10-25 23:52Z: "go with your lean, push forward everything". The lean was one event, because ghosttea through 0.13.3
+declares truffle-core =0.7.19 on its cargo and Swift planes, so neither pin moves alone.
+- The lane was built while 0.13.4 was unpublished. It ran through the RD-2 overlay against ghosttea main `cc62ff3b`
+  (#85, the truffle move, and #86, item 52 (b)'s event; the same source as v0.13.4, at version 0.13.3), with truffle
+  0.7.22 from the registry.
+- It was retargeted when 0.13.4 shipped (VF-PM 01:45Z; npm 6/6 and crates 7/7 read first), the 0.13.0 → 0.13.1
+  pattern. It was then rebased onto main three more times (`a673d7ae0`, `0118f5be9`, then `c2c113788`, which carries
+  BP-1b), each merge-tree rehearsed, with every range-diff `=` three times.
+- **The pin** (`8eaaf48c9`):
+  - truffle 0.7.22 (`truffle-v0.7.22` = `f7e3900d`): `truffle-core = "=0.7.22"`, apps/desktop's five sidecar rows
+    (protocol 10, Go 1.27.3), PIN_EXPECTATIONS, and the lock's truffle sha and `release.swift`.
+  - ghosttea 0.13.4 (tag v0.13.4 = `139014b4`, signed): the five npm rows, preflight's six rows, and the lock's
+    `release` with its sha. `render --prod` wrote Cargo.toml's `=0.13.4` and Package.swift's two release lines.
+  - The locks were written by the tools:
+    - pnpm-lock moved ghosttea's rows alone;
+    - Cargo.lock (`cargo fetch`) moved the six ghosttea crates, truffle-core, and fontdb 0.23 → 0.24; ttf-parser and
+      core_maths left with RUSTSEC-2026-0192;
+    - Package.resolved (SwiftPM's resolve) reads ghosttea 0.13.4 and truffle 0.7.22. The Apple artifact
+      `ghosttea-apple-native-3ee0f5d6ccad` and TailscaleKit `tailscalekit-d1dc45d0-ts1.104.1-go1.27.3` come through
+      ghosttea's own manifest.
+  - The key catalog was regenerated at the 0.13.4 stamp; its keys are unchanged.
+  - field-native's one source change: truffle 0.7.20 gave `ProxyConfig` a public `accept_app_capabilities`, and
+    field-native's five literal builds name `vec![]`. That preserves 0.7.19's behaviour.
+- **The input delta** (`4e6b83326`, GT): ghosttea 0.13.3 (#79, #81) sends an unconsumed binding's key on as Ghostty
+  does, commits platform-inserted text, and interrupts on the exact Ctrl+C only.
+  - Settings → Terminal → Keyboard now says each key's fate by ghosttea's own `routeConsumesInput`, which is
+    `bindingKeyDisposition` plus `ignore`. Our `performable ? shell : swallowed` was wrong for `unconsumed:`,
+    `all:`/`global:` and `ignore`.
+  - A moved chord keeps every flag.
+  - The watch-only peek's row now also fires 0.13.3's text and interrupt paths.
+- **The docs at their sources** (`8d7c6cd1b`): the iOS docs' Swift lines read ghosttea 0.13.4 and truffle 0.7.22, with
+  dated corrections, and README's closure note gains a line.
+
+**Found:**
+- **An overlay's cargo patch applies only when the linked crate's version equals the committed requirement.** An
+  unpublished upstream therefore builds at its branch's own number, 0.13.3 here, and the release is a version edit.
+- **A lane under the overlay cannot commit** while it hides the locks, by design, so each commit is a `use --none`
+  pause.
+- **`siblings:pin` writes the lock with expanded arrays**, which biome reflows back. Fixer's queue.
+- **Two of the 0.13.1 EL8's Found lines closed on main before this landing.** The stage and the native harness now
+  ask cargo for its target (`47324bcbf`), and `siblings:pin` runs gen:check (`0118f5be9`); both are the fixer's.
+- **The Mac mini's disk is the binding constraint for a gate there**: about 10 GiB free beside three lanes, against
+  the rows' 10 GiB floor. A cargo target's incremental cache regrew 2.4 G in one verify. The rows ran with
+  `CARGO_INCREMENTAL=0`.
+- **Removing a clone removes its linked worktrees' history.** The History lead's slip on the mini cost the gate
+  clone its gitdir. It was rebuilt in place (`git init`, the public origin, the lane bundle, `checkout -f`) to the
+  identical tree before any row armed.
+
+**Validation** (each step alone, nice 19; on this Mac with no load wait, James 00:07Z):
+- **The tree built at ghosttea main `cc62ff3b`**, byte-identical in source to v0.13.4:
+  - first compile and clippy `--all-targets -D warnings` green;
+  - `pnpm verify` green but for one load-class fieldd row (agent-session AR-S2), which passed alone in 528 ms;
+  - `pnpm test:rust` 452 / 0 / 13 in 29 suites; `pnpm gen:check` without a diff.
+- **The retargeted tree** (`b52aa6963`, tree `01acf8a69`; the rebases since changed none of its files):
+  - **this Mac** (load 98 → 553 from other lanes' builds):
+    - first compile and clippy green;
+    - `pnpm verify` RED on one row (agent-session MF-1f/g);
+    - the 14 stages, each alone: 13 green, gen:check included. `test` was RED on one row, terminal-kill-matrix
+      rows 3+6.
+    - Each file alone was green: the kill matrix 13 passed / 1 skipped, agent-session 45 / 2.
+    - A different row in each full run, green alone: the recorded load class.
+  - **James's Mac mini, its own witness**, on a quiet host: first compile and clippy green, and `pnpm verify` EXIT 0
+    (cargo 452 / 0 / 13).
+  - **The 12 desk rows on the mini**, each alone, in James's 02:19Z unlock under el8-rows.sh's guard: unlocked, HID
+    idle ≥ 120 s, load < 10 and df ≥ 10 GiB read before every row. Every row ended unlocked, and every launcher that
+    reports leftovers found none. **BP-1's desk rows ride these: one unlock witnesses both** (BP-1, `aede0c955`, is in
+    this tree).
+    - **Ten green:** smoke 39 s, smoke:canvas:no-gpu 29 s, smoke:canvas:no-webgpu 28 s, smoke:plugin-restart 69 s,
+      smoke:plugin 52 s, smoke:godview 143 s, smoke:terminal-door 28 s, smoke:terminal-direct 32 s, smoke:studio
+      24 s, smoke:bundled 87 s.
+    - **Two red, of the recorded offscreen class, not rerun:** smoke:canvas (942 s: the occluded row, and
+      HAND_CALENDAR 251 ms at the 250 ms quantum) and smoke:kind-faults (75 s: the occluded row alone). Both match the
+      0.13.1 EL8's signature. Neither had an IDLE red or a stop-class rung, and the chain resumed inside each 600 s
+      hold.
+  - **The kit** on this Mac, on James's "kit ok" (VF-PM 03:50Z). Simulator iPhone 17 Pro, derived data on the SSD,
+    nice 19, no load wait, the shared dev-app guard and ≥ 10 GiB on both disks read before each step:
+    - the setup: a frozen install, preflight OK, field-native for the PJ-7 fixture;
+    - the compile: `** TEST BUILD SUCCEEDED **`, SwiftPM resolving ghosttea 0.13.4 and truffle 0.7.22 by URL;
+    - FieldRoutedTerminalTests 170 in 26 suites and FieldHomeTests 79 in 15, passed;
+    - **the whole kit with the PJ-7 fixture: 1,046 tests in 182 suites passed**, PJ-7's suite among them. That is the
+      0.13.1 kit's own count.
+    - **FieldTerminalTests run alone was red twice** at load 114–199, with 14 issues: seven AttachDeadlineTests waiting
+      5 s for "the control attach", and the door row's come-back wait. The same 176 tests in 33 suites passed inside
+      the whole kit.
+    - **Its A/B on main `c2c113788`** (ghosttea 0.13.1), alone at load 134, was red too, on one row (the come-back wait).
+      AttachDeadlineTests alone passed twice on each tree: 13 tests in 2.9–3.2 s, at load 87–244.
+    - Read as the contention class: 33 parallel suites' 5 s waits on a loaded host, not the pin. The lane's seven
+      against main's one is recorded, and a quiet-window run of FieldTerminalTests alone is the second witness, owed.
+- **`pnpm still` NOT REACHED**: no still mounts the terminal renderer or the key catalog this pin moves.
+- **smoke:update not run**: the EL8 touches no WP12 path.
+- Logs: `/Volumes/SamsungRed/lanes/hl-el8-0134/logs/` (gate-0134, kit) and the mini's
+  `~/vf-lanes/el8gt/logs-gate/b52aa6963/` and `logs-rows/b52aa6963/`.
+
+**Owed:**
+- **Item 52 (b)'s consumer lane:** 0.13.4 carries `session-metadata-changed` at minor 17, and fieldd's ghosttea
+  client now negotiates 17. The History lead's lane follows this landing.
+- **Item 61, the theme browser pages its catalog** (VF-PM 2026-10-26 00:41Z):
+  - Settings → Terminal's "Match a theme…" renders all 602 themes in one synchronous commit, and ghosttea's own
+    AppearanceSettings caps at 80 (120 filtered).
+  - CI run 40246501393 timed it out at 5,509 ms (the file 16.9 s there, 6.7 s here). Here it takes 469–774 ms, and
+    642 ms in a full verify.
+  - Lean: a first page plus search, from DESIGN.md. It is a GT lane after this landing, before the extension-key UI
+    turn.
+- **The mesh owner's question under FW:** which tailnet grants VibeField's serves should accept. The `vec![]` decides
+  nothing (VF-PM 00:25Z).
+- **CLAUDE.md's Machine setup** still names truffle 0.7.19. A one-edit draft is in the lane's records
+  (`records/claude-md/apply-claude-md-0134.py`), on James's own word.
+- **The UI turn for ghosttea's own keys** in Settings → Terminal (DESIGN.md, James's eyes), from the 0.13.1 EL8.
+- **FieldTerminalTests alone in a quiet window**, the second witness for the kit's contention read (above).
+- **The three item-60 door shapes** (VF-PM 01:03Z; the History lead's docket, after 52 (b)): `agent.list` gives a
+  peer a projection; `index.session.subscribe` gets a peer row bound and byte-paged snapshots; `index.project` gets a
+  peer `maxContributionRows`.
