@@ -12,8 +12,14 @@ import { GhostteaAutomationClient } from "@vibecook/ghosttea-client";
 import type { TerminalEndpoints, TerminalInfo } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
-import { bootstrap } from "../src/index";
-import { nativeBinPath, shortTmpRoot, waitForMgmtEndpoint } from "./native-harness";
+import { bootstrap, type FielddConfig, type FielddDaemon } from "../src/index";
+import {
+  type FloorScene,
+  nativeBinPath,
+  shortTmpRoot,
+  waitForMgmtEndpoint,
+  waitWithEvidence,
+} from "./native-harness";
 import { helloAs, type RpcErrorShape, WsRpc } from "./ws-rpc";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -27,8 +33,14 @@ const SHELL =
 
 let children: ChildProcess[] = [];
 let cleanup: Array<() => void | Promise<void>> = [];
+/** Item 68 — the row's latest daemon over its floor, for every wait's evidence (`boot` sets it), and when each floor
+ * was spawned. */
+let scene: FloorScene | undefined;
+const spawnedAt = new Map<string, number>();
 
 afterEach(async () => {
+  scene = undefined;
+  spawnedAt.clear();
   // error-isolated: a rejecting cleanup must not leak the daemons behind it
   const fns = cleanup.reverse();
   cleanup = [];
@@ -47,6 +59,7 @@ async function spawnNative(): Promise<string> {
   // the short-root rule (and why unix keeps /tmp) lives in native-harness.ts
   const dir = shortTmpRoot("vf-seam-");
   cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
+  spawnedAt.set(dir, Date.now());
   const child = spawn(BIN, [], {
     env: {
       ...process.env,
@@ -61,14 +74,26 @@ async function spawnNative(): Promise<string> {
   return dir;
 }
 
-async function poll<T>(fn: () => Promise<T | undefined>, ms = 5_000): Promise<T> {
-  const deadline = Date.now() + ms;
-  for (;;) {
-    const v = await fn();
-    if (v !== undefined) return v;
-    if (Date.now() > deadline) throw new Error("poll timed out");
-    await new Promise((r) => setTimeout(r, 100));
-  }
+/** A daemon over the row's floor (item 68): fieldd's own log beside the floor's, and the scene every wait's evidence
+ * reads. Every row boots through here. */
+async function boot(config: FielddConfig): Promise<FielddDaemon> {
+  const daemon = await bootstrap({ logRoot: join(config.dataDir, "logs"), ...config });
+  scene = {
+    dataDir: config.dataDir,
+    spawnedAt: spawnedAt.get(config.dataDir),
+    link: daemon.native,
+  };
+  return daemon;
+}
+
+/** Every wait in the seam's rows (item 68): at its deadline it says what was awaited, what the row last `seen`, and
+ * the row's floor and fieldd logs with the link view. The budgets are the rows' own. */
+async function poll<T>(
+  fn: (seen: (value: unknown) => void) => Promise<T | undefined>,
+  ms = 5_000,
+  what = "the row's condition",
+): Promise<T> {
+  return await waitWithEvidence(what, fn, ms, () => scene);
 }
 
 // WIN-6: ConPTY terminal hosting is live on Windows (the kill matrix runs on the
@@ -76,7 +101,7 @@ async function poll<T>(fn: () => Promise<T | undefined>, ms = 5_000): Promise<T>
 describe("the terminal seam (NF-3, real field-native)", () => {
   it("create → observe → ticket-attach → automate → terminate, one authority", async () => {
     const dataDir = await spawnNative();
-    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    const daemon = await boot({ dataDir, controlPort: 0, dataPort: 0 });
     cleanup.push(() => daemon.stop());
 
     const grant = daemon.tokens.mint(["terminal.attach"], "seam-test");
@@ -145,7 +170,7 @@ describe("the terminal seam (NF-3, real field-native)", () => {
 
   it("create answers with a ticket that attaches immediately — no observe window (GT-1)", async () => {
     const dataDir = await spawnNative();
-    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    const daemon = await boot({ dataDir, controlPort: 0, dataPort: 0 });
     cleanup.push(() => daemon.stop());
 
     const grant = daemon.tokens.mint(["terminal.attach"], "seam-test");
@@ -222,7 +247,7 @@ describe("the terminal seam (NF-3, real field-native)", () => {
 
   it("a default create (no shell) spawns the platform shell (WIN-6, GT-D10)", async () => {
     const dataDir = await spawnNative();
-    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    const daemon = await boot({ dataDir, controlPort: 0, dataPort: 0 });
     cleanup.push(() => daemon.stop());
     const grant = daemon.tokens.mint(["terminal.attach"], "seam-test");
     const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}`);
@@ -257,7 +282,7 @@ describe("the terminal seam (NF-3, real field-native)", () => {
     // Depth semantics (an agent session retains ≤2MiB) are upstream's own
     // pinned rows; this seam owns the option's safe passage.
     const dataDir = await spawnNative();
-    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    const daemon = await boot({ dataDir, controlPort: 0, dataPort: 0 });
     cleanup.push(() => daemon.stop());
     const grant = daemon.tokens.mint(["terminal.attach"], "seam-test");
     const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}`);
@@ -284,7 +309,7 @@ describe("the terminal seam (NF-3, real field-native)", () => {
 
   it("the death of an ATTACHED session also reaches the negotiated leg (TP-S3f — the deck pane case)", async () => {
     const dataDir = await spawnNative();
-    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    const daemon = await boot({ dataDir, controlPort: 0, dataPort: 0 });
     cleanup.push(() => daemon.stop());
 
     const grant = daemon.tokens.mint(["terminal.attach"], "seam-test");
@@ -380,7 +405,7 @@ describe("the terminal seam (NF-3, real field-native)", () => {
 
   it("a floor-side death reaches a negotiated control leg as SessionEvent (TP-S3f, G24)", async () => {
     const dataDir = await spawnNative();
-    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    const daemon = await boot({ dataDir, controlPort: 0, dataPort: 0 });
     cleanup.push(() => daemon.stop());
 
     const grant = daemon.tokens.mint(["terminal.attach"], "seam-test");

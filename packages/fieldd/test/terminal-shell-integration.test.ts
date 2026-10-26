@@ -40,12 +40,14 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { NativeLink } from "../src/index";
 import { TerminalService } from "../src/terminal-service";
 import {
+  type FloorScene,
   killDaemonTree,
   nativeBinPath,
   nativeEndpoint,
   removeTempRoot,
   shortTmpRoot,
   waitForMgmtEndpoint,
+  waitWithEvidence,
 } from "./native-harness";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -133,14 +135,18 @@ function shellEnvironment(home: string, zdotdir: string | undefined): Record<str
   return environment;
 }
 
-async function poll<T>(fn: () => T | undefined, ms: number, what: string): Promise<T> {
-  const deadline = Date.now() + ms;
-  for (;;) {
-    const value = fn();
-    if (value !== undefined) return value;
-    if (Date.now() > deadline) throw new Error(`poll timed out after ${ms}ms: ${what}`);
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
+/** Item 68 — the floor and the link this suite drives (no daemon: `NativeLink` and `TerminalService` directly), for
+ * every wait's evidence; set once the link connects. */
+let scene: FloorScene | undefined;
+
+/** Every wait in this suite (item 68): at its deadline it says what was awaited, what the row last `seen`, and the
+ * floor's log with the link view (`waitWithEvidence`). The budgets are the rows' own. */
+async function poll<T>(
+  fn: (seen: (value: unknown) => void) => T | undefined,
+  ms: number,
+  what: string,
+): Promise<T> {
+  return await waitWithEvidence(what, fn, ms, () => scene);
 }
 
 /** Every file under `dir`, recursively. */
@@ -244,6 +250,7 @@ describe.skipIf(ZSH === undefined)(
         });
 
         const environment = shellEnvironment(home, personZdot);
+        const floorSpawnedAt = Date.now();
         floor = spawn(BIN, [], {
           env: {
             ...environment,
@@ -265,6 +272,7 @@ describe.skipIf(ZSH === undefined)(
         });
         teardown.push(() => link.close());
         await link.connect();
+        scene = { dataDir, spawnedAt: floorSpawnedAt, link };
         const service = new TerminalService({
           link,
           // the person's login shell, as the daemon reads it: the zsh under test
