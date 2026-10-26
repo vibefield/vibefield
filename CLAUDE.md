@@ -82,19 +82,25 @@ moved again to 0.7.19 with the truffle bump (DECISIONS TB).** truffle **0.7.19**
   `pnpm dev` hands the floor the pinned sidecar itself (`devSidecar`).
 - field-native builds the egress arm by default (TB-E) and publishes its terminal doors for a linked desktop by default
   (TB-T).
-- `siblings.lock.json` keeps a `truffle` entry, reduced to its `swift` key and its public `repository`, so
-  `node scripts/siblings.mjs fetch truffle` creates `../truffle-rfc025` at the pin.
+- `siblings.lock.json` keeps a `truffle` entry, reduced to its `swift` key, its public `repository` and, since
+  2026-10-24, `release.swift` = "0.7.19". It is the dev overlay's coordinate: `node scripts/siblings.mjs fetch
+  truffle` creates `../truffle-rfc025` at the pin, and `pnpm siblings use truffle` links it. No build reads it
+  otherwise.
 
-**The SwiftPM plane is still open, and closing it is not ours.**
-- Forward to `exact: "0.7.19"` is UNSATISFIABLE, because `ghosttea` declares `exact: "0.7.12"` in every published Swift
-  tag through v0.12.0 (re-read 2026-10-17).
-- Back to 0.7.12 resolves and then does not compile (UA-P-5a's login API).
-- So the path package under `apps/ios/VibeFieldKit/.window/truffle` STAYS, with no truffle row in `Package.resolved`, and
-  **`../truffle-rfc025` is still required to build the iOS plane.**
-- The exit is one upstream event: a ghosttea Swift release whose `truffleVersion` equals the crate's version (0.7.19
-  today).
-- `../truffle-rfc025` is pinned at `1218b64`, the commit tagged `truffle-v0.7.19`, so every plane reads 0.7.19 code.
-  `Cargo.toml`'s closure note and `Package.swift` carry the resolver's and the compiler's own words.
+**The SwiftPM plane CLOSED on 2026-10-24 (the EL8 to ghosttea 0.13.1, G28's exit; its DECISIONS row).**
+- ghosttea v0.13.0 (`bfc59642`) first declared `let truffleVersion: Version = "0.7.19"`, the version our truffle-core pins (v0.13.1, the pin, still does), which was the
+  one upstream event the vice below waited for.
+- The kit's truffle row is the exact URL package 0.7.19 (`truffleRelease`, rendered from the lock), and
+  `Package.resolved` carries truffle 0.7.19 at `1218b64` beside ghosttea 0.13.1.
+- `apps/ios/VibeFieldKit/.window/truffle` stays as the overlay's link; with `../truffle-rfc025` absent it dangles, and
+  preflight reads it only while `use truffle` stands. **No checkout of truffle is needed to build the iOS plane.**
+- Every plane names truffle 0.7.19 by version. `Cargo.toml`'s closure note and `Package.swift` keep the vice's
+  measurements, with dated CLOSED notes.
+
+> **Errata (2026-10-24):** the block that stood here said "The SwiftPM plane is still open, and closing it is not
+> ours", that forward to `exact: "0.7.19"` was UNSATISFIABLE (ghosttea declared `exact: "0.7.12"` in every published
+> Swift tag through v0.12.0), and that "**`../truffle-rfc025` is still required to build the iOS plane**". All three
+> were true until ghosttea v0.13.0, and are false since: its tag declares truffle 0.7.19.
 
 > **Errata (2026-09-16):** the paragraph that stood here — "The repo builds standalone since
 > 2026-07-28 … the `../p008/truffle` sibling `[patch.crates-io]` and its `siblings.lock.json`
@@ -103,6 +109,11 @@ moved again to 0.7.19 with the truffle bump (DECISIONS TB).** truffle **0.7.19**
 > `../truffle-rfc025` is still required for the iOS plane, so **this repo does not build
 > standalone**; `pnpm preflight` says which checkout is missing rather than letting a build fail
 > later. `../p008/truffle` is James's own checkout and is still nothing this repo reads.
+> *Measured again 2026-10-22 on the EL8's 0.13.0 build and 2026-10-23 at its 0.13.1 tip (the gate's bare preflight; the same planes released): still TRUE, for different checkouts. Preflight on a fresh
+> tree with no checkout beside it names exactly `../puppeteer` (npm `link:` rows), `../rosetta-pin` (rosettad is built
+> from it) and `../mille-pin` (npm `link:` rows). With those three it installs, builds field-native and passes
+> preflight. Neither `../truffle-rfc025` nor `../ghosttea-0.11.2` is read: both siblings are released on every plane
+> they have (James's Mac mini; the lane's logs/mini/standalone-*.log and gate-r2's bare-preflight.log).*
 
 `@vibecook/ice` is an **exact registry pin of a RELEASE** (`0.15.0` since the desk landing, DK-18
 `490357dd`; declared once in the pnpm-workspace.yaml overrides — packages ask for `"*"`). It stopped
@@ -132,8 +143,8 @@ pnpm link ../infinite-canvas-engine/packages/ice   # undo: pnpm unlink
 
 **AR-0 sibling mode (2026-09-12):** the agent runtime is **puppeteer** and agent history is
 **rosetta** (chopsticks and spaghetti retired 2026-09-04). Neither is published, so this repo
-consumes two SIBLING CHECKOUTS, `../puppeteer` and `../rosetta-pin` (three since 2026-09-16 —
-`../truffle-rfc025` still serves the RFC 025 window's SwiftPM half above), pinned by revision in
+consumes two SIBLING CHECKOUTS, `../puppeteer` and `../rosetta-pin` (three from 2026-09-16 to 2026-10-24, while
+`../truffle-rfc025` served the RFC 025 window's SwiftPM half above; `../mille-pin` joined at FS-1b, below), pinned by revision in
 `siblings.lock.json`: puppeteer's packages enter as `link:` rows in the fenced block of
 `pnpm-workspace.yaml` (packages ask for `"*"`; only directly imported packages are rows; adapters
 never — walls R20–R22) — rosetta's two TypeScript packages left that block at RD-5a (2026-10-14) for
@@ -154,12 +165,17 @@ writes the committed rows from the lock (`--check` compares), and the pre-commit
 rows its own lock does not render. `pnpm siblings use NAME` links a released sibling's checkout back in a LOCAL overlay
 (RD-2): a gitignored root `.pnpmfile.cjs` pnpm loads for every command, with the dev lockfile under `.vibefield/dev/` —
 the committed `pnpm-lock.yaml` is never the overlay's; `use --none` removes it and reinstalls the committed shape. The
-cargo and Swift halves (RD-3): a released cargo plane (`release.cargo` = git + rev) is committed as git rows and linked
-through a generated, gitignored root `.cargo/config.toml`, Cargo.lock skip-worktree while it stands; a released Swift
+cargo and Swift halves (RD-3): a released cargo plane is committed in one of two shapes. As an exact registry version
+(`release.cargo` = "X", 2026-10-22, `thinking-release-deps.md` §13), it has NO `[patch.crates-io]` row, and its
+`[workspace.dependencies]` row is rendered `=X`. As a fork line (`release.cargo` = git + rev), it has git rows. Either
+way it is linked through a generated, gitignored root `.cargo/config.toml`, Cargo.lock skip-worktree while it stands;
+preflight refuses the overlay while a linked crate's version does not satisfy the requirement, because cargo would
+leave the patch unused (measured 2026-10-22). A released Swift
 plane is the manifest's own `let <name>Release` line, which the overlay renders nil in the working tree (the manifest
 shows modified) — the line itself, because SwiftPM caches a manifest by its contents plus its environment, never a file
-it reads. While a lock is hidden every commit is refused. Until G28 truffle's Swift plane records no release, so
-`.window/truffle` is still the committed coordinate (the SwiftPM paragraph above); after it, the overlay's.
+it reads. While a lock is hidden every commit is refused. Until G28 truffle's Swift plane recorded no release, so
+`.window/truffle` was the committed coordinate; since the EL8 (2026-10-24, ghosttea 0.13.1, G28's exit) it is the overlay's, as
+`.window/ghosttea` is ghosttea's. A sibling whose every plane is released needs no checkout (`needsCheckout`).
 Exit (RD-5, superseding W-D8's "delete the entry") is a `release` recorded in the lock and the rows re-rendered — the
 entry stays as the overlay's coordinate.
 
@@ -173,13 +189,17 @@ reads — his commits there no longer redden preflight. A pin move is
 Since RD-5a the same EL8 commit moves the two `@vibefield/rosetta-*` rows to the version published from
 that revision (and preflight's `PIN_EXPECTATIONS`), so rosettad and the client never name two revisions.
 
-**Terminal performance source window (2026-09-27):** `../ghosttea-0.11.2` is also pinned in
-the lock, supplying six Cargo patches and the React renderer. Run
-`node scripts/siblings.mjs fetch ghosttea` to create a missing checkout at its pin, then
-`node scripts/siblings.mjs install-js` for its frozen npm workspace install.
-`pnpm siblings:build` builds its generated JavaScript exports in dependency order as well
-as rosettad; `node scripts/siblings.mjs build-js` rebuilds just those exports after edits.
-CI uses the same commands. Existing checkouts are never reset by `fetch`.
+**Terminal performance source window (2026-09-27) — CLOSED 2026-10-24 (the EL8 to ghosttea 0.13.1):** ghosttea
+0.13.0 published the window's fixes, so it is released on every plane: npm and Swift exact 0.13.1, and cargo as the
+registry pin `ghosttea = "=0.13.1"` with no `[patch.crates-io]` row. The lock still pins `../ghosttea-0.11.2` at
+`ee3b721e`, the tag v0.13.1, as the dev overlay's coordinate. `node scripts/siblings.mjs fetch ghosttea` creates it,
+and `pnpm siblings use ghosttea` links its renderer, its six crates and its Swift package back. Name it to build its
+JavaScript (`install-js ghosttea`, `build-js ghosttea`): the sweep skips a released, unlinked plane. CI needs no
+ghosttea checkout, and the `prepare-ghosttea` composite retired.
+
+> **Errata (2026-10-24):** this paragraph said `../ghosttea-0.11.2` was "pinned in the lock, supplying six Cargo
+> patches and the React renderer", and that `install-js`, `siblings:build` and CI built it. All of that was true from
+> 2026-09-27 until the EL8 to 0.13.1.
 
 **Files service sibling window (FS-1b, 2026-10-05):** `../mille-pin` is a dedicated
 checkout at `siblings.lock.json`'s revision, supplying mille and mille-ui together for the
