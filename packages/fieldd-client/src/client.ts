@@ -113,6 +113,59 @@ function dialVerdictOf(error: unknown): FielddRpcError | undefined {
   return new FielddRpcError(kind, message, retryable === true, details);
 }
 
+/** Item 60 — `ws`'s own refusal of an inbound frame past its `maxPayload` (it
+ * reads the frame's length from its header, errors with this code and closes
+ * 1009 before it buffers the rest). Duck-typed: this file imports nothing of
+ * `ws`. */
+function isTransportFrameRefusal(error: unknown): boolean {
+  return (
+    error !== null &&
+    typeof error === "object" &&
+    (error as { code?: unknown }).code === "WS_ERR_UNSUPPORTED_MESSAGE_LENGTH"
+  );
+}
+
+/** Item 60 — whether a frame is over `bound` UTF-8 bytes, counted without
+ * encoding it. A UTF-16 unit is one to three bytes (a surrogate pair is two
+ * units, four bytes), so a frame of at most bound/3 units is under, uncounted;
+ * any other is counted, once, so a refusal says its size. */
+function overBytes(text: string, bound: number): { over: boolean; bytes?: number } {
+  if (text.length * 3 <= bound) return { over: false };
+  let bytes = 0;
+  for (let i = 0; i < text.length; i += 1) {
+    const unit = text.charCodeAt(i);
+    if (unit < 0x80) bytes += 1;
+    else if (unit < 0x800) bytes += 2;
+    else if (unit >= 0xd800 && unit <= 0xdbff && i + 1 < text.length) {
+      bytes += 4;
+      i += 1;
+    } else bytes += 3;
+  }
+  return { over: bytes > bound, bytes };
+}
+
+/** Item 60 — what every call waiting on a socket hears when an inbound frame
+ * was refused unread: the bound's own kind, the bound and (when it was counted)
+ * the frame's size. Not retryable: the same question meets the same answer. */
+function frameRefused(
+  maxInboundBytes: number | undefined,
+  bytes: number | undefined,
+): FielddRpcError {
+  const what = bytes !== undefined ? `a frame of ${bytes} bytes` : "a frame";
+  const bound =
+    maxInboundBytes !== undefined ? `${maxInboundBytes} bytes` : "its transport's own bound";
+  return new FielddRpcError(
+    "RESOURCE_EXHAUSTED",
+    `${what} arrived over this client's inbound bound of ${bound} and was not read`,
+    false,
+    {
+      reason: "frame_refused",
+      ...(maxInboundBytes !== undefined ? { maxInboundBytes } : {}),
+      ...(bytes !== undefined ? { bytes } : {}),
+    },
+  );
+}
+
 /** Structural WebSocket shape (browser + Node undici both satisfy it). */
 export interface WsLike {
   send(data: string): void;
@@ -144,6 +197,23 @@ export interface FielddClientOptions {
   userId?: string;
   webSocket?: WsCtor; // override for tests / exotic hosts
   maxBackoffMs?: number;
+  /** Item 60 (2026-10-26) — the most UTF-8 bytes one inbound frame may carry,
+   * checked BEFORE the frame is parsed. A frame over it is never parsed: the
+   * socket is closed, every call waiting on it fails RESOURCE_EXHAUSTED with
+   * the bound and the frame's size, and `onFrameRefused` hears it. A transport
+   * that refuses first (`ws`'s `maxPayload`, whose error this client reads as
+   * the same refusal) is the cheaper wall; this check holds on every host.
+   *
+   * An OPTION, never a default: a window reading its OWN fieldd honestly takes
+   * larger answers (a diagnostics page is
+   * `LOG_TRANSPORT_LIMITS.DIAGNOSTIC_PAGE_BYTES`, 8 MiB), while a reader of
+   * ANOTHER desktop's door takes no more than a door takes from a client
+   * (`PRODUCT_API_LIMITS.WS_MAX_INBOUND_BYTES` — PeerLink passes it). */
+  maxInboundBytes?: number;
+  /** Item 60 — an inbound frame was refused against `maxInboundBytes`.
+   * `bytes` is absent when the transport refused it at its header, before
+   * this client saw it. */
+  onFrameRefused?: (refusal: { bytes?: number; maxInboundBytes?: number }) => void;
   /** SP-1 / SP-L7 — the door's keepalive: every hello'd connection hears
    * `system.tick {at, intervalMs}` (`PRODUCT_API_LIMITS.TICK_INTERVAL_MS`). A
    * reader that keeps a dead-door deadline resets it here (any inbound frame is
@@ -545,13 +615,52 @@ export class FielddClient {
       if (this.ws === ws) void this.hello(ws);
     });
     ws.addEventListener("message", (ev) => {
-      if (this.ws === ws) this.onMessage(String((ev as { data: unknown }).data));
+      if (this.ws !== ws) return;
+      const data = String((ev as { data: unknown }).data);
+      const bound = this.opts.maxInboundBytes;
+      if (bound !== undefined) {
+        // item 60 — counted, never parsed: an oversized frame costs its own
+        // bytes and nothing more (zod would build an issue per element)
+        const size = overBytes(data, bound);
+        if (size.over) {
+          this.refuseFrame(ws, size.bytes);
+          return;
+        }
+      }
+      this.onMessage(data);
     });
     ws.addEventListener("close", () => this.onClose(ws));
     ws.addEventListener("error", (ev) => {
+      const error = (ev as { error?: unknown } | null | undefined)?.error;
+      if (this.ws !== ws) return;
+      // item 60 — the transport refused a frame at its header: the same
+      // refusal as the check above, without a count (close follows)
+      if (isTransportFrameRefusal(error)) {
+        this.dialVerdict = frameRefused(this.opts.maxInboundBytes, undefined);
+        this.heardRefusal(undefined);
+        return;
+      }
       // close follows; a structured verdict on the error is the dial's answer
-      const verdict = dialVerdictOf((ev as { error?: unknown } | null | undefined)?.error);
-      if (verdict !== undefined && this.ws === ws) this.dialVerdict = verdict;
+      const verdict = dialVerdictOf(error);
+      if (verdict !== undefined) this.dialVerdict = verdict;
+    });
+  }
+
+  /** Item 60 — an inbound frame over `maxInboundBytes`: the socket closes with
+   * its reason, and its close fails every waiting call with the refusal (the
+   * verdict `onClose` reads). The reconnect law is unchanged. */
+  private refuseFrame(ws: WsLike, bytes: number | undefined): void {
+    this.dialVerdict = frameRefused(this.opts.maxInboundBytes, bytes);
+    this.heardRefusal(bytes);
+    // 1000 with a reason: a browser's close() takes no other code below 3000
+    ws.close(1000, "an inbound frame was over this client's bound");
+  }
+
+  private heardRefusal(bytes: number | undefined): void {
+    const bound = this.opts.maxInboundBytes;
+    this.opts.onFrameRefused?.({
+      ...(bytes !== undefined ? { bytes } : {}),
+      ...(bound !== undefined ? { maxInboundBytes: bound } : {}),
     });
   }
 

@@ -6,6 +6,7 @@ import {
   type MeshEgressRouteRef,
   type MeshEgressRouteTable,
   MeshEgressUnavailableDetails,
+  PRODUCT_API_LIMITS,
 } from "@vibefield/contracts";
 import type { WsCtor, WsLike } from "@vibefield/fieldd-client";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
@@ -313,11 +314,32 @@ export interface EgressDialOptions {
    * peer, or is gone. It fails CLOSED: never retried over the OS network,
    * which would be a silent downgrade of the substrate (DS-L5). */
   onDialError?: (error: unknown) => void;
-  /** Today's dial, for a floor with no egress (default: the host's global
-   * WebSocket — exactly what FielddClient used before DS-1). */
+  /** Today's dial, for a floor with no egress (default: `cappedWebSocket` —
+   * item 60: no longer the host's global WebSocket, which bounds no frame). */
   direct?: WsCtor;
   /** the SOCKS5 handshake's budget (default 10 s) */
   socksTimeoutMs?: number;
+  /** Item 60 — the most bytes one inbound frame may carry on either path, the
+   * socket's own `maxPayload` (default `PRODUCT_API_LIMITS.WS_MAX_INBOUND_BYTES`:
+   * a reader of another desktop's door takes no more than a door takes). */
+  maxInboundBytes?: number;
+}
+
+/** Item 60 (2026-10-26) — the socket a peer dial rides when no proxy carries it:
+ * a `ws` client whose `maxPayload` is the reader's bound, so a frame past it is
+ * refused at its header — `ws` errors WS_ERR_UNSUPPORTED_MESSAGE_LENGTH and
+ * closes 1009 — before the rest is buffered. Node's global WebSocket takes no
+ * such bound: a peer's 100 MiB answer was read whole, then parsed (zod 3 builds
+ * an issue per bad element: ~650 MB for 4 MiB, item 60's bench). */
+export function cappedWebSocket(
+  maxInboundBytes: number = PRODUCT_API_LIMITS.WS_MAX_INBOUND_BYTES,
+): WsCtor {
+  class CappedWebSocket extends WebSocket {
+    constructor(url: string) {
+      super(url, [], { maxPayload: maxInboundBytes, perMessageDeflate: false });
+    }
+  }
+  return CappedWebSocket as unknown as WsCtor;
 }
 
 /** A WebSocket constructor for FielddClient that decides its substrate per
@@ -327,6 +349,7 @@ export interface EgressDialOptions {
  * socket it holds is a stand-in that is CONNECTING until the path is known and
  * then forwards every event of the real one. */
 export function egressWebSocket(opts: EgressDialOptions): WsCtor {
+  const bound = opts.maxInboundBytes ?? PRODUCT_API_LIMITS.WS_MAX_INBOUND_BYTES;
   const open = async (url: string, caller: { closedByCaller: boolean }): Promise<WsLike> => {
     const path = await opts.path();
     opts.onPath?.(path);
@@ -335,8 +358,9 @@ export function egressWebSocket(opts: EgressDialOptions): WsCtor {
     // backoff asks again on the next dial
     if (path.kind === "unavailable") throw egressDialUnavailable(path);
     if (path.kind === "direct") {
-      const Direct = opts.direct ?? (globalThis as { WebSocket?: WsCtor }).WebSocket;
-      if (Direct === undefined) throw new Error("no WebSocket implementation in this host");
+      // item 60 — the bounded socket, never the host's global WebSocket (which
+      // takes a frame of any size)
+      const Direct = opts.direct ?? cappedWebSocket(bound);
       return new Direct(url);
     }
     // The product door is plain HTTP inside WireGuard (`tls: false`); a TLS
@@ -350,7 +374,7 @@ export function egressWebSocket(opts: EgressDialOptions): WsCtor {
       password: path.credential,
       ...(opts.socksTimeoutMs !== undefined ? { timeoutMs: opts.socksTimeoutMs } : {}),
     });
-    const socket = new WebSocket(url, { agent, perMessageDeflate: false });
+    const socket = new WebSocket(url, { agent, perMessageDeflate: false, maxPayload: bound });
     // A DIAL failure only: an error after the socket opened is a dropped
     // session (FielddClient's reconnect law owns it), and the error `ws`
     // raises when its caller closes a socket still connecting is the

@@ -1,8 +1,8 @@
 import { EventEmitter } from "node:events";
-import { FORWARDING, MESH_EGRESS } from "@vibefield/contracts";
+import { FORWARDING, MESH_EGRESS, PRODUCT_API_LIMITS } from "@vibefield/contracts";
 import { FielddClient, FielddRpcError, type WsCtor } from "@vibefield/fieldd-client";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
-import { type EgressPath, egressWebSocket } from "./egress";
+import { cappedWebSocket, type EgressPath, egressWebSocket } from "./egress";
 import { type OutboundEnvelope, withEnvelope } from "./forward-envelope";
 import { CallerForwardJournal, forwardDigest } from "./forward-receipts";
 import { RpcCallError } from "./native-link";
@@ -145,10 +145,38 @@ function isNeverSent(e: unknown): boolean {
   );
 }
 
+/** Item 60 — the client refused one of this peer's frames unread, over the
+ * inbound bound (fieldd-client's `frameRefused`: RESOURCE_EXHAUSTED, no
+ * JSON-RPC code, `reason: frame_refused`). The peer answered; its answer was
+ * too large to read. */
+function isFrameRefusal(e: unknown): boolean {
+  return (
+    e instanceof FielddRpcError &&
+    e.code === undefined &&
+    e.kind === "RESOURCE_EXHAUSTED" &&
+    typeof e.details === "object" &&
+    e.details !== null &&
+    (e.details as { reason?: unknown }).reason === "frame_refused"
+  );
+}
+
+/** Item 60 (2026-10-26, VF-PM ruling (i)) — the most a reader of ANOTHER
+ * desktop's door takes in one frame: what a door takes from a client
+ * (`PRODUCT_API_LIMITS.WS_MAX_INBOUND_BYTES`, 4 MiB). The asymmetry is
+ * deliberate: a door may SEND up to `MESH_CONTROL_LIMITS.PRODUCT_FRAME_BYTES`
+ * (128 MiB, its own outbound bound), but a peer's answer is parsed here, and
+ * zod 3 builds an issue per bad element (~650 MB for 4 MiB, item 60's bench) —
+ * a door whose honest answer outgrows this pages it or moves its bytes to a
+ * ticketed socket (EL2), never a wider reader. */
+const PEER_INBOUND_BYTES = PRODUCT_API_LIMITS.WS_MAX_INBOUND_BYTES;
+
 interface Link {
   client: FielddClient;
   state: PeerLinkState;
   lastUsed: number;
+  /** Item 60 — the socket last closed because one of the peer's frames was over
+   * the inbound bound: the door ANSWERED, so its re-dial is not silence */
+  refusedFrame?: boolean;
   /** live upstream subscriptions riding this link (C6-5): each holds the
    * client-side unsubscribe plus the owner's link-death callback. A link with
    * members is PINNED against the idle sweep — quiet is not the same as
@@ -348,6 +376,29 @@ export class PeerLink extends EventEmitter {
         this.markAnswered(deviceId);
         return new RpcCallError(e.kind as never, e.message, e.retryable, e.details);
       }
+      if (isFrameRefusal(e)) {
+        // item 60 — the door ANSWERED, too large to read: the caller hears the
+        // link's honest state in the registry's own words, the bound and the
+        // size said; the door is not silent, and a retry would meet the same
+        // answer
+        this.markAnswered(deviceId);
+        const { maxInboundBytes, bytes } = e.details as {
+          maxInboundBytes?: number;
+          bytes?: number;
+        };
+        return new RpcCallError(
+          "UNAVAILABLE",
+          `the peer's answer was not read: ${e.message}`,
+          false,
+          {
+            service: "peer-link",
+            device: deviceId,
+            state: "frame_refused",
+            maxInboundBytes: maxInboundBytes ?? PEER_INBOUND_BYTES,
+            ...(bytes !== undefined ? { bytes } : {}),
+          },
+        );
+      }
       if (isEgressVerdict(e)) {
         // DS-1b — no road through the node: the caller reads the floor's own
         // state, the peer's record is untouched (it was never dialled), and the
@@ -545,16 +596,23 @@ export class PeerLink extends EventEmitter {
         device: deviceId,
         state: "offline",
       });
-    const webSocket = this.opts.webSocket ?? this.egressDial(deviceId);
+    // item 60 — every dial is bounded: the egress paths' own sockets, else the
+    // capped `ws` (never the host's global WebSocket, which bounds no frame)
+    const webSocket =
+      this.opts.webSocket ?? this.egressDial(deviceId) ?? cappedWebSocket(PEER_INBOUND_BYTES);
+    const owner: { link?: Link } = {};
     const client = new FielddClient({
       url: toWsUrl(endpoint),
       token: "", // the tailnet door grants from WhoIs — a token would be wrong here
       clientKind: "peer-fieldd",
       deviceId: this.opts.ownDeviceId(),
-      ...(webSocket !== undefined ? { webSocket } : {}),
+      webSocket,
       maxBackoffMs: 5_000,
+      maxInboundBytes: PEER_INBOUND_BYTES,
+      onFrameRefused: (refusal) => this.frameRefused(deviceId, owner.link, refusal),
     });
     const link: Link = { client, state: "dialing", lastUsed: this.now(), subs: new Set() };
+    owner.link = link;
     client.onStatusChange(() => {
       if (this.links.get(deviceId) !== link) return; // superseded/dropped
       if (client.status === "ready") {
@@ -569,6 +627,10 @@ export class PeerLink extends EventEmitter {
       } else if (client.status === "failed") {
         if (client.lastError?.kind === "INCOMPATIBLE") this.pinIncompatible(deviceId);
         else this.dropLink(deviceId); // terminal auth/config failure — re-dial later
+      } else if (link.state === "connected" && link.refusedFrame === true) {
+        // item 60 — this socket closed on OUR refusal of a frame the door sent:
+        // it answered, too large to read, so its re-dial is not silence
+        link.refusedFrame = false;
       } else if (link.state === "connected") {
         // DS-2b — a link that answered has lost its socket and its client is
         // re-dialling: the door is silent until it answers again. Recorded as
@@ -595,6 +657,7 @@ export class PeerLink extends EventEmitter {
     let complained = false;
     return egressWebSocket({
       path: egress,
+      maxInboundBytes: PEER_INBOUND_BYTES,
       onPath: (path) => {
         if (said === path.kind) return;
         said = path.kind;
@@ -737,6 +800,27 @@ export class PeerLink extends EventEmitter {
     const was = this.silentSince.has(deviceId);
     this.silentSince.set(deviceId, this.now());
     if (!was) this.emit("door-changed", { deviceId, door: "silent" });
+  }
+
+  /** Item 60 — one of this peer's frames was over the inbound bound and was
+   * not read; the client closed the socket. Said every time, with the bound
+   * and (when it was counted) the size: a refusal is a findable event. */
+  private frameRefused(
+    deviceId: string,
+    link: Link | undefined,
+    refusal: { bytes?: number; maxInboundBytes?: number },
+  ): void {
+    if (link !== undefined) link.refusedFrame = true;
+    this.logger.warn(
+      "fieldd.mesh.peer.frame_refused",
+      "A peer's frame was over the inbound bound: it was not read, and the link closed",
+      {
+        peer: deviceId,
+        cap: refusal.maxInboundBytes ?? PEER_INBOUND_BYTES,
+        // the transport refuses at the frame's header, before any count
+        ...(refusal.bytes !== undefined ? { bytes: refusal.bytes } : { refusedAt: "header" }),
+      },
+    );
   }
 
   /** DS-L8 — the door answered (a result, or the owner's own error). */

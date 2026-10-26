@@ -215,10 +215,20 @@ export const PRODUCT_API_LIMITS = {
    * the reap. */
   TICK_INTERVAL_MS: 120_000,
   /** The largest frame the product door accepts INBOUND, in bytes (`ws`'s
-   * `maxPayload`); a larger one closes the connection 1013. The outbound pair
+   * `maxPayload`); a larger one closes the connection 1009. The outbound pair
    * lives in `MESH_CONTROL_LIMITS` (`PRODUCT_FRAME_BYTES`, `PRODUCT_QUEUED_BYTES`).
    * DS wave 3 landing (2026-10-01): it was a fieldd literal (`product-api.ts:62`)
-   * that the corpus cited as a registry number — now it is one. */
+   * that the corpus cited as a registry number — now it is one.
+   * *Errata (2026-10-26, item 60): this said "closes the connection 1013";
+   * `ws` closes 1009 (Message Too Big) for a frame past `maxPayload`.*
+   *
+   * Item 60 (2026-10-26) — it is also what fieldd TAKES from another
+   * desktop's door: PeerLink's reader, on every dial (egress.ts's capped `ws`,
+   * fieldd-client's `maxInboundBytes`). The asymmetry is deliberate: a door may
+   * SEND up to `PRODUCT_FRAME_BYTES` (128 MiB), but the reader parses what it
+   * takes, and zod 3 builds an issue per bad element (~650 MB for 4 MiB). A
+   * door whose honest answer outgrows this pages it or moves its bytes to a
+   * ticketed socket (EL2), never a wider reader. */
   WS_MAX_INBOUND_BYTES: 4 * 1024 * 1024,
 } as const;
 
