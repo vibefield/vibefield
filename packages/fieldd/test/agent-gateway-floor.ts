@@ -284,6 +284,10 @@ export async function floor(config: FloorConfig): Promise<Floor> {
   const requestLog = join(root, "rosetta-requests.log");
   const indexHome = join(dataDir, "home");
   if (config.index !== undefined) mkdirSync(indexHome, { recursive: true });
+  const home = agentShimHome(dataDir);
+  // Item 67 — a restart's root may still hold the dead fieldd's rendezvous (a death leaves it; row 12 puts it back),
+  // and the new gateway is `listening` before it writes its own: the token on disk BEFORE this boot tells them apart.
+  const stale = restart === undefined ? undefined : (await readRendezvous(home))?.token;
   const daemon = await bootstrap({
     dataDir,
     // item 68 — fieldd's own log beside the floor's, for the waits' evidence (fieldd logged nowhere here before)
@@ -322,21 +326,31 @@ export async function floor(config: FloorConfig): Promise<Floor> {
   });
   closers.push(() => daemon.stop().catch(() => undefined));
   scene = { dataDir, spawnedAt, link: daemon.native };
-  const home = agentShimHome(dataDir);
   // The gateway's start is not a boot gate, and it is the DAEMON's to begin:
-  // a row waits for what that start leaves, and never starts it itself.
+  // a row waits for what that start leaves, and never starts it itself. What THIS boot leaves is a rendezvous naming
+  // its own listener under a bearer that is not the one on disk before it (item 67: a restart's wait that took the
+  // dead one's let row 12 read the old token).
   if (daemon.agentGateway !== null && config.launchers !== false) {
+    const gateway = daemon.agentGateway;
     const launcher = join(spawnThroughLayout(home).shimDirectory, TYPED_COMMAND);
     await poll(
-      () =>
-        daemon.agentGateway?.state().listening === true &&
-        existsSync(launcher) &&
-        existsSync(join(home, "gateway.json")) &&
-        existsSync(join(home, "terminals.json"))
-          ? true
-          : undefined,
+      async (seen) => {
+        const state = gateway.state();
+        const rendezvous = await readRendezvous(home);
+        // booleans only: the rendezvous carries the bearer
+        const view = {
+          listening: state.listening,
+          launcher: existsSync(launcher),
+          rendezvous: rendezvous !== undefined,
+          portIsTheListeners: rendezvous !== undefined && rendezvous.port === state.port,
+          tokenIsThisBoots: rendezvous !== undefined && rendezvous.token !== stale,
+          terminals: existsSync(join(home, "terminals.json")),
+        };
+        seen(view);
+        return Object.values(view).every((held) => held) ? true : undefined;
+      },
       FLOOR_WAIT_MS,
-      "the daemon's own gateway coming up",
+      "the daemon's own gateway coming up, its rendezvous written by this boot",
     );
   }
   // The floor's terminal endpoints reach the daemon over the management link after
