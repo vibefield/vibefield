@@ -143,4 +143,29 @@ jobs:
           echo "FIELDD_ROSETTAD_BIN=$bin" >> "$GITHUB_ENV"
 
       # THE gate, verbatim: preflight -> typecheck -> biome -> rustfmt/clippy -> TS+Rust tests -> gen freshness.
-      - run: pnpm verify
+      #
+      # Its output goes to a FILE (tooling (4), 2026-10-26). Nx prints at most 64 KiB of a task's section when its
+      # stdout is a PIPE, which a step's is: fieldd's vitest section stopped mid-line after about half of its files,
+      # so a red row past the cut was never in the log. On 7011674dd (run 40042292811) and 88c325698 (run 40047228992)
+      # workspace-places.test.ts, red where it was printed, had no line at all and was read as green (item 58). Given
+      # a file, Nx writes each section whole. `tail -F` streams that file into this log as it grows, so the job still
+      # reads live, and the file is uploaded whole below. A reader's rule all the same: a row absent from a log is
+      # UNRECORDED, not green.
+      - name: pnpm verify (whole output to verify.log, streamed here)
+        run: |
+          : > verify.log
+          tail -n +1 -F verify.log &
+          tailer=$!
+          status=0
+          pnpm verify > verify.log 2>&1 || status=$?
+          sleep 2
+          kill "$tailer" 2>/dev/null || true
+          exit "$status"
+      - name: Upload verify.log
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: verify-log
+          path: verify.log
+          if-no-files-found: warn
+          retention-days: 14
