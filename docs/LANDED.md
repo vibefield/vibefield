@@ -14872,3 +14872,42 @@ these suites): from `agents.profiles.login` returning to the persona's `identity
 - **CI is the exact-tree witness** on the pushed head, and the next red names its step.
 - Logs: `/Volumes/SamsungRed/lanes/item68/logs/` (`measure/`, `redfirst/`, `proofs/`); the scripts and the probe are
   under `records/`.
+
+## AR — item 67: a floor's gateway wait keys on what THIS boot writes; a restart no longer reads the dead fieldd's token (2026-10-26; `5a23e49b8`, lane `fix/67-gateway-rendezvous-wait`)
+
+**What happened:** agent-gateway-panes row 12 ("fieldd comes back while a launch waits") went red in item 65's lane
+verify on this Mac on 2026-10-26, at :558 `expect(after?.token).not.toBe(before?.token)`. Alone ×3 it was green. VF-PM
+made the finding item 67.
+
+**Cause:** `floor()` (agent-gateway-floor.ts) waited for four things: `state().listening`, the launcher,
+`gateway.json` and `terminals.json`. On a restart all four hold the moment the new listener binds:
+- the row copies the dead fieldd's `gateway.json` back, as a death leaves it;
+- the launchers and `terminals.json` are left by design;
+- `listening` turns true at `startSpawnThroughGateway`, before `publish()` reaches `writeRendezvous`.
+So the row's `readRendezvous` could return the OLD token.
+
+**The fix, test-only, budget unchanged:**
+- `floor()` reads the rendezvous on disk BEFORE this boot's `bootstrap` and keeps its token as `stale`. On a restart
+  that is the dead boot's token; on a fresh floor there is none.
+- The wait requires a parsed rendezvous whose `port` is the listener's `state().port` and whose token is not `stale`,
+  beside the launcher and `terminals.json`.
+- Item 68's `seen` gets only booleans (listening, launcher, rendezvous, portIsTheListeners, tokenIsThisBoots,
+  terminals), never the bearer.
+- It covers every restart through `floor()`: panes row 12 and agent-gateway.test.ts's seven `restartOf` rows.
+- agent-session.test.ts's own `setup(restartOf)` does not share the wait: it never reads the gateway's state or its
+  home.
+
+**Validation** (this Mac's SSD lane `/Volumes/SamsungRed/lanes/item67`, guard v2, nice 19, on `8c50052fa`):
+- **Red-first:** records/probe67-apply.py, a src probe never committed, holds this boot's FIRST `writeRendezvous`
+  2000 ms after its listener binds. Then row 12 runs alone.
+  - On `8c50052fa` it is red at :558 (the restart read back the dead boot's bearer).
+  - At `5a23e49b8` it is green.
+  - With records/probe67b-apply.py, which holds only the restart's write and holds it 65 s (past the 60 s budget), it
+    is red at the deadline. The message reads "the daemon's own gateway coming up, its rendezvous written by this
+    boot did not hold within 60000 ms", then "the row last saw: {listening: true, launcher: true, rendezvous: true,
+    portIsTheListeners: false, tokenIsThisBoots: false, terminals: true}", with the link view and the merged logs.
+    No 64-hex string reached the log.
+- **Alone ×3:** agent-gateway-panes 11/11 each, agent-gateway 92/92 each.
+- **`pnpm verify`:** EXIT 0 at 16:35:51Z on its first run (test for 27 projects, cargo test 30 ok), the 1-minute
+  load reaching ~198 while it ran.
+- Logs: `/Volumes/SamsungRed/lanes/item67/logs/` (`redfirst/`, `proofs/`).
