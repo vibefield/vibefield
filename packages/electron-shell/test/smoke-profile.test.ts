@@ -1,14 +1,5 @@
 import { spawnSync } from "node:child_process";
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
-import { createRequire } from "node:module";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -87,16 +78,26 @@ describe("the smoke launcher (apps/desktop/packaging/run-smoke.mjs)", () => {
   const desktopRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../../apps/desktop");
   const launcher = join(desktopRoot, "packaging", "run-smoke.mjs");
   /** Electron's own seam for its binary (`ELECTRON_OVERRIDE_DIST_PATH`): a stand-in Node script at the path Electron's
-   * package names, run in `dist`; the launcher spawns it as it would Electron. */
+   * package names, run in `dist`; the launcher spawns it as it would Electron. The path is asked of Electron's package
+   * in a child, exactly as the launcher asks it. Under the override it names `<dist>/<path.txt>` when the binary is
+   * installed and `<dist>/electron` when it is not, and never downloads, so these rows need no binary. They once read
+   * path.txt themselves, a file only the download writes. Electron 43 has no postinstall, so on a fresh install it
+   * appears at the run's first plain `require("electron")`, and the rows raced that (CI's verify 40333930954,
+   * 2026-10-26). */
   const fakeElectron = (dist: string, body: string): void => {
-    const relative = readFileSync(
-      join(
-        dirname(createRequire(join(desktopRoot, "package.json")).resolve("electron")),
-        "path.txt",
-      ),
-      "utf8",
+    const resolved = spawnSync(
+      process.execPath,
+      [
+        "-e",
+        'process.stdout.write(require("node:module").createRequire(process.argv[1])("electron"))',
+        launcher,
+      ],
+      { encoding: "utf8", env: { ...process.env, ELECTRON_OVERRIDE_DIST_PATH: dist } },
     );
-    const binary = join(dist, relative);
+    if (resolved.status !== 0) {
+      throw new Error(`Electron's package does not resolve from the launcher: ${resolved.stderr}`);
+    }
+    const binary = resolved.stdout;
     mkdirSync(dirname(binary), { recursive: true });
     writeFileSync(binary, `#!${process.execPath}\n${body}`);
     chmodSync(binary, 0o755);
@@ -192,19 +193,9 @@ describe("the smoke launcher (apps/desktop/packaging/run-smoke.mjs)", () => {
       // writes into the profile it was handed, says what it saw, and exits 3.
       const dist = mkdtempSync(join(tmpdir(), "dk-5-fake-electron-"));
       try {
-        const relative = readFileSync(
-          join(
-            dirname(createRequire(join(desktopRoot, "package.json")).resolve("electron")),
-            "path.txt",
-          ),
-          "utf8",
-        );
-        const binary = join(dist, relative);
-        mkdirSync(dirname(binary), { recursive: true });
-        writeFileSync(
-          binary,
-          `#!${process.execPath}\n` +
-            `const fs = require("node:fs"), path = require("node:path");\n` +
+        fakeElectron(
+          dist,
+          `const fs = require("node:fs"), path = require("node:path");\n` +
             `const args = process.argv.slice(2);\n` +
             `const dir = args.find((a) => a.startsWith("--user-data-dir=")).slice("--user-data-dir=".length);\n` +
             `fs.mkdirSync(path.join(dir, "Local Storage"), { recursive: true });\n` +
@@ -212,7 +203,6 @@ describe("the smoke launcher (apps/desktop/packaging/run-smoke.mjs)", () => {
             `process.stdout.write("FAKE_ELECTRON " + JSON.stringify({ args, wrote: fs.existsSync(path.join(dir, "Preferences")) }) + "\\n");\n` +
             `process.exit(3);\n`,
         );
-        chmodSync(binary, 0o755);
         const run = spawnSync(process.execPath, [launcher, "--smoke-canvas", "--disable-gpu"], {
           cwd: desktopRoot,
           encoding: "utf8",
