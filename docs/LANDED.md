@@ -14126,3 +14126,105 @@ The dated corrections are in LANDED "BP-1b" and ROADMAP.
 - **The harfbuzz exit:** ghosttea's harfbuzz_rs 3.0.1, then the EL8 (focus-session's docket).
 - **Windows and Linux packages** have no host-library gate yet (the reader is Mach-O's). A line when those stages
   ship.
+
+## NF — item 52 (b): a shell's cd reaches the inventory on ghosttea's own word — the floor announces control minor 17, its pump reconciles on `session-metadata-changed`, and an OSC 7 is published in one 100 ms tick where it waited for the 5 s backstop (2026-10-26; `9b3aef7fa`, lane `hl/52b-metadata-event`)
+
+**What happened:** James asked on 2026-10-19 that a shell's `cd` reach the desk when its OSC 7 arrives. Until now it
+arrived at the floor pump's next `list-sessions`, up to the 5 s backstop later (`TERMINAL_INVENTORY.BACKSTOP_MS`).
+- ghosttea 0.13.4 (on main since the EL8, `8eaaf48c9`) pushes `session-metadata-changed` at control minor 17. The event
+  carries a session's cwd and title as absolute state, only when one of them changed. The floor's control client
+  announced 1.9, so it never heard the event.
+- The plan went to VF-PM at 04:10Z (the History lead's docket, `52b-consumer-plan.md`); GO at 04:11Z. The allow-list was
+  corrected and ruled at 04:14Z. One commit.
+- **The floor announces 1.17** (terminal_client.rs). `PROTOCOL_MINOR` moves 9 → 17, with its doc corrected in place
+  and dated. A service below 1.17 is refused at the handshake rather than withholding the event silently; ghosttea
+  0.13.3 serves 1.16.
+- **The pump reconciles on an allow-list, `INVENTORY_EVENTS`** (terminal.rs). **The principle (VF-PM 04:14Z): exactly
+  what a 1.9 connection hears today (session-created, session-exited, session-activity-changed, control-changed,
+  events-lost) plus session-metadata-changed. Zero change to today's triggers, one added.** Two facts of 0.13.4
+  corrected the plan's first list:
+  - There is no `session-removed` control event. `Removed` lives only on the in-process lifecycle channel, and a
+    terminated session leaves the registry with no control event; the removal is seen at the next reconcile.
+  - `control-changed` is a live trigger whose timing item 59 depends on. A local session's controller change reaches
+    every minor, and the reconcile it causes can be the one that publishes a removal, the moment fieldd's item 59
+    grace is measured from.
+- **The four events 1.17 also opts the connection in to are counted, never reconciled.** They are `config-changed`
+  (10) and 1.12's `remote-session-state-changed`, `view-state-changed` and `control-state`.
+  - The count is `ignored_events` on the pump's state (`CellPump`, `IgnoredEvents`).
+  - The first of each kind is said at info (`field_native.terminal.inventory_event_ignored`, with the kind and the
+    total), every later one at debug.
+  - The kinds named are capped at 16, since they come off the wire.
+- **No separate reconcile budget, and no direct row patching.** The 100 ms dirty tick coalesces a burst into one
+  `list-sessions`, and the event only marks the cell dirty: `list-sessions` stays the truth path (spec §10.5).
+- **fieldd needs nothing on the inventory path.** Its per-cell clients negotiate 17 since the EL8 and hear the event with
+  no listener. A comment in terminal-service.ts, where the client's events are wired, says that is on purpose.
+
+**The 1.10–1.16 audit**, read in ghosttea 0.13.4's service.rs before the number moved, one line per minor:
+- **1.10 `config-changed`:** gated per connection; it reaches a cell connection after a config reload. Counted.
+- **1.11 config document:** gates nothing per connection; its constant is read only by its own assert.
+- **1.12 remote lifecycle:** three events, the snapshot sent after a 1.12 hello, and `control-state`'s downgrade to
+  `control-changed` below 12. **All come from a mesh runtime, and a cell has none** (`NoRemoteRuntime`, TM-1), so on
+  the floor's connections they are structurally absent. The ruled list is therefore what 1.9 heard here occasion for
+  occasion, not only by name. A future cell that grew a mesh would have them counted.
+- **1.13 control-revision CAS:** gates nothing per connection; the floor sends no control claim.
+- **1.14 session-owner transfer:** gates nothing per connection; the floor sends no `close-session-owner` and attaches
+  no view.
+- **1.15 per-session scrollback:** gates nothing per connection. `SessionSummary` stays a tolerant reader (serde
+  defaults, no `deny_unknown_fields`), so the scrollback echo parses as before.
+- **1.16 structured errors:** gates nothing per connection. An error still answers `type: "error"` with its `message`,
+  the two fields `call_timed` reads.
+- **So `config-changed` is the only ignored event that can reach a cell connection today.**
+- **1.17 `session-metadata-changed`:** consumed. `session-created`'s 1.9 shape is unchanged, so `birth_to_govern` reads
+  it as before, and every event reaches `birth_to_govern` before the dirty decision.
+
+**Found:**
+- **The plan's first allow-list named an event 0.13.4 does not send** (`session-removed`) **and left out a live trigger**
+  (`control-changed`). Both were caught by reading the service before the number moved; the audit belongs before a
+  minor moves, not after.
+- **ghosttea's activity event is a process-group fact, not an output one** (`sample_activity`: the foreground and root
+  process groups). A builtin `cd` changes neither, which is why it waited for the backstop at 1.9. A test tenant that
+  ran any child in a new process group would have hidden the red.
+
+**Validation** (this Mac, nice 19, each step alone behind the shared dev-app guard with ≥ 10 GiB on both disks; no load
+wait, James 00:07Z; load 55–186 from other lanes):
+- First compile, `cargo build --workspace --all-targets` and `clippy --all-targets -D warnings`: green.
+- **Rust units**, alone, green:
+  - `the_pump_reconciles_on_the_events_it_reads_and_counts_the_rest`: the six triggers in 0.13.4's shapes owe a
+    reconcile. 1.10–1.16's four, a next minor's event and an untyped one do not.
+  - `ignored_events_are_counted_and_each_kind_is_said_once`.
+  - `a_service_below_our_protocol_floor_is_refused_at_the_handshake`: 17 is the floor; 16 (ghosttea 0.13.3) and 8 are
+    refused.
+- **The real-floor row**, `a_shells_cwd_and_title_reach_the_inventory_on_the_metadata_event` (terminal_unit.rs, unix):
+  - What it does: a `/bin/sh` tenant prints an OSC 7, then an OSC 2, each on the test's release through a fifo. It
+    blocks in its own `read` in between and runs nothing else, so no `session-activity-changed` can stand in for the
+    event. The row asserts the published row's cwd, then its title, move within 1 s.
+  - **Red first at minor 9** (the constant set back for one run): no delta inside the bound. In a diagnostic run at
+    minor 9 with an 8 s bound, the cwd arrived 5.000 s after its OSC 7 and the title 5.099 s after its OSC 2: the
+    backstop.
+  - **At 17, alone ×3:** cwd 99.1–100.9 ms, title 98.5–100.2 ms. That is one reconcile tick.
+- **The first `pnpm verify`** (on `cda5e6b0c`, the lane's base `494584624`) stopped at `test` on smoke-profile.test.ts's
+  three rows: ENOENT on Electron's `path.txt`. That is the lane's setup, not the change: a frozen install had left no
+  Electron binary, which is the EL8 gate's step (0). The binary was installed, and the lane moved on.
+- **Rebased onto `2ae90170a`** (TD, landed at 04:19Z while this lane built; VF-PM 04:31Z). The merge-tree rehearsal was
+  clean (tree `768acb0bd`, the rebased tree), with no file in common, and the range-diff is `=`. TD touched
+  field-native's Rust, so on the rebased tip: the first compile, clippy, the three units and the row again, all green
+  (cwd 99.5 ms, title 101.4 ms).
+- **`pnpm verify` on the rebased tip `9b3aef7fa`:**
+  - **The first run** (load 76 → 241) was RED on one fieldd row, the kill matrix's rows 3+6. `terminal.create` answered
+    inside the 10 s after the floor's SIGKILL: a cell is its own process, and fieldd's create reaches it before fieldd
+    hears the floor die. That is the recorded load class (the EL8's retargeted tree, the same row).
+  - The file alone: 13 passed, 1 skipped, the row in 899 ms.
+  - `test:rust` and `gen:check`, which the chain had not reached, alone: 456 / 0 / 13 in 30 suites, the new row among
+    them, and no diff.
+  - **A second full run (load 23 → 86): EXIT 0.** fieldd ran fresh: 2,443 passed, 29 skipped. field-app's 2,620 / 3 is
+    its fresh run in the first verify on the same tree, replayed from cache. cargo: 456 / 0 / 13 in 30 suites.
+- No desk rows and no kit: the place line's rendering path is unchanged, only its data arrives sooner, and the iOS plane
+  does not read the floor's pump (VF-PM's GO).
+- Logs: `/Volumes/SamsungRed/lanes/hl-52b/logs/`.
+
+**Owed:**
+- **The phone's own speed-up**, through its routed ghosttea client, is a separate lane after this one (VF-PM's GO).
+- **The spec's note at its source**, a commit-draft turn right after these records (VF-PM 04:31Z): native-floor §4.3
+  (events as hints, the backstop; §10's scenario 5 is "list-sessions is truth") and the inventory-latency note's
+  "none fires on a builtin `cd`" each get a dated line. The metadata event drives the reconcile, so the hint is
+  honoured without a second writer of the row.
