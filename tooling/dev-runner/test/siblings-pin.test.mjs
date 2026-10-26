@@ -16,7 +16,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { readLock } from "../../../scripts/siblings.mjs";
 
-function fixture(t, otherName = "rosetta", gateExit = 0, typecheckExit = 0) {
+function fixture(t, otherName = "rosetta", gateExit = 0, typecheckExit = 0, genExit = 0) {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "vf-sibling-pin-")));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const root = join(dir, "consumer");
@@ -62,17 +62,20 @@ process.exit(${gateExit});
   };
   writeFileSync(join(root, "siblings.lock.json"), JSON.stringify(lock));
   const rendererHead = renderer.commit();
-  // The consumers' typecheck (2026-10-04): `pin` runs `pnpm typecheck` in the
+  // The consumers' typecheck (2026-10-04) and the generated places (tooling (c),
+  // 2026-10-26): `pin` runs `pnpm typecheck`, then `pnpm gen:check`, in the
   // consumer root. This root has no workspace, so `pnpm` is shadowed on the
-  // CLI's PATH by a stand-in that records where it ran and what it was asked,
-  // then exits as the row says — the manual proof's PATH shadow, kept.
+  // CLI's PATH by a stand-in that records EACH call (where it ran, what it was
+  // asked), then exits as the row says for that step — the manual proof's PATH
+  // shadow, kept.
   const bin = join(dir, "bin");
   mkdirSync(bin);
-  const typecheckMarker = join(root, "typecheck-called.txt");
+  const pnpmMarker = join(root, "pnpm-calls.txt");
   const pnpm = join(bin, "pnpm");
   writeFileSync(
     pnpm,
-    `#!/bin/sh\nprintf '%s\\n' "$(pwd -P)" "$@" > ${JSON.stringify(typecheckMarker)}\nexit ${typecheckExit}\n`,
+    `#!/bin/sh\nprintf '%s\\t%s\\n' "$(pwd -P)" "$*" >> ${JSON.stringify(pnpmMarker)}\n` +
+      `case "$1" in typecheck) exit ${typecheckExit};; gen:check) exit ${genExit};; esac\nexit 0\n`,
   );
   chmodSync(pnpm, 0o755);
   const run = (...names) =>
@@ -81,23 +84,30 @@ process.exit(${gateExit});
       encoding: "utf8",
       env: { ...process.env, PATH: `${bin}:${process.env.PATH ?? ""}` },
     });
-  const typecheckCall = () =>
-    existsSync(typecheckMarker)
-      ? readFileSync(typecheckMarker, "utf8").trimEnd().split("\n")
-      : null;
-  return { root, rendererHead, other, run, gateMarker, typecheckCall };
+  /** every `pnpm` call, in order: [cwd, ...args] */
+  const pnpmCalls = () =>
+    existsSync(pnpmMarker)
+      ? readFileSync(pnpmMarker, "utf8")
+          .trimEnd()
+          .split("\n")
+          .map((line) => {
+            const [cwd, args] = line.split("\t");
+            return [cwd, ...(args ?? "").split(" ")];
+          })
+      : [];
+  return { root, rendererHead, other, run, gateMarker, pnpmCalls };
 }
 
 for (const sibling of ["rosetta", "puppeteer"]) {
   test(`named pin stops before building or checking a mismatched ${sibling}`, (t) => {
-    const { root, rendererHead, other, run, gateMarker, typecheckCall } = fixture(t, sibling);
+    const { root, rendererHead, other, run, gateMarker, pnpmCalls } = fixture(t, sibling);
     other.commit();
     const result = run("renderer");
     assert.equal(result.status, 1);
     assert.match(result.stderr, new RegExp(`${sibling} HEAD .* differs from pin`));
     assert.doesNotMatch(result.stdout, /building rosettad/);
     assert.equal(existsSync(gateMarker), false);
-    assert.equal(typecheckCall(), null);
+    assert.deepEqual(pnpmCalls(), []);
     assert.equal(readLock(root).siblings.renderer.sha, rendererHead);
     assert.equal(readLock(root).siblings[sibling].sha, other.sha);
   });
@@ -139,16 +149,21 @@ test("named pin passes over an unselected sibling whose every plane is released 
 });
 
 test("named pin checks the catalog with enforcement once all checkouts match their pins", (t) => {
-  const { root, rendererHead, other, run, gateMarker, typecheckCall } = fixture(t);
+  const { root, rendererHead, other, run, gateMarker, pnpmCalls } = fixture(t);
   const result = run("renderer");
   assert.equal(result.status, 0, result.stderr);
   assert.deepEqual(JSON.parse(readFileSync(gateMarker, "utf8")), [
     "--enforce",
     "--require-rosetta",
   ]);
-  // …and then typechecks the consumers, the gate's own step, in the consumer root.
-  assert.deepEqual(typecheckCall(), [root, "typecheck"]);
+  // …then typechecks the consumers and checks the generated places the pins
+  // feed, the gate's own two steps, in that order, in the consumer root.
+  assert.deepEqual(pnpmCalls(), [
+    [root, "typecheck"],
+    [root, "gen:check"],
+  ]);
   assert.match(result.stdout, /typechecking the consumers at the new pins/);
+  assert.match(result.stdout, /checking the generated places the new pins feed/);
   assert.equal(readLock(root).siblings.renderer.sha, rendererHead);
   assert.equal(readLock(root).siblings.rosetta.sha, other.sha);
 });
@@ -173,18 +188,18 @@ test("uncommitted sibling edits warn but do not change revision pinning policy",
 });
 
 test("a catalog rejection remains fatal after recording the named pin", (t) => {
-  const { root, rendererHead, run, gateMarker, typecheckCall } = fixture(t, "rosetta", 42);
+  const { root, rendererHead, run, gateMarker, pnpmCalls } = fixture(t, "rosetta", 42);
   const result = run("renderer");
   assert.equal(result.status, 1);
   assert.match(result.stderr, /wall R23 is red/);
   assert.equal(readLock(root).siblings.renderer.sha, rendererHead);
   assert.equal(existsSync(gateMarker), true);
   // R23 first: a red catalog is settled before the consumers are compiled.
-  assert.equal(typecheckCall(), null);
+  assert.deepEqual(pnpmCalls(), []);
 });
 
 test("a consumer that does not typecheck at the new pins keeps them recorded and fails loudly", (t) => {
-  const { root, rendererHead, other, run, gateMarker, typecheckCall } = fixture(t, "rosetta", 0, 2);
+  const { root, rendererHead, other, run, gateMarker, pnpmCalls } = fixture(t, "rosetta", 0, 2);
   const result = run("renderer");
   assert.equal(result.status, 1);
   assert.match(
@@ -192,31 +207,60 @@ test("a consumer that does not typecheck at the new pins keeps them recorded and
     /the new pins ARE recorded in siblings\.lock\.json, but the consumers do not typecheck at them — pnpm typecheck is red above/,
   );
   assert.equal(existsSync(gateMarker), true);
-  assert.deepEqual(typecheckCall(), [root, "typecheck"]);
+  // a red typecheck is settled before the generated places are looked at
+  assert.deepEqual(pnpmCalls(), [[root, "typecheck"]]);
   assert.equal(readLock(root).siblings.renderer.sha, rendererHead);
   assert.equal(readLock(root).siblings.rosetta.sha, other.sha);
 });
 
-test("--skip-typecheck is the deliberate case: the pin stands, the catalog is proved, and the skip is said", (t) => {
-  const { root, rendererHead, run, gateMarker, typecheckCall } = fixture(t, "rosetta", 0, 2);
+test("a stale generated place keeps the pins recorded and fails loudly", (t) => {
+  // tooling (c) — the EL8 to ghosttea 0.13.1 (2026-10-23): the key catalog
+  // generated from the pinned ghosttea-config went stale, seen only a gate later
+  const { root, rendererHead, other, run, gateMarker, pnpmCalls } = fixture(t, "rosetta", 0, 0, 1);
+  const result = run("renderer");
+  assert.equal(result.status, 1);
+  assert.match(
+    result.stderr,
+    /the new pins ARE recorded in siblings\.lock\.json, but a generated place they feed is stale — pnpm gen:check is red above; gen has rewritten it in the working tree: stage what it wrote and commit it WITH the pin/,
+  );
+  assert.equal(existsSync(gateMarker), true);
+  assert.deepEqual(pnpmCalls(), [
+    [root, "typecheck"],
+    [root, "gen:check"],
+  ]);
+  assert.equal(readLock(root).siblings.renderer.sha, rendererHead);
+  assert.equal(readLock(root).siblings.rosetta.sha, other.sha);
+});
+
+test("--skip-typecheck is the deliberate case: the pin stands, the catalog is proved, the skip is said, and the generated places are still checked", (t) => {
+  const { root, rendererHead, run, gateMarker, pnpmCalls } = fixture(t, "rosetta", 0, 2);
   const result = run("--skip-typecheck", "renderer");
   assert.equal(result.status, 0, result.stderr);
   assert.match(
     result.stderr,
     /--skip-typecheck — the consumers were NOT typechecked at the new pins/,
   );
-  assert.equal(typecheckCall(), null);
+  assert.deepEqual(pnpmCalls(), [[root, "gen:check"]]);
   assert.equal(existsSync(gateMarker), true);
   assert.equal(readLock(root).siblings.renderer.sha, rendererHead);
 });
 
+test("--skip-typecheck does not skip the generated places: a stale one still fails the pin", (t) => {
+  const { root, rendererHead, run, pnpmCalls } = fixture(t, "rosetta", 0, 2, 1);
+  const result = run("--skip-typecheck", "renderer");
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /a generated place they feed is stale — pnpm gen:check is red above/);
+  assert.deepEqual(pnpmCalls(), [[root, "gen:check"]]);
+  assert.equal(readLock(root).siblings.renderer.sha, rendererHead);
+});
+
 test("an unknown flag is refused before anything is pinned", (t) => {
-  const { root, run, gateMarker, typecheckCall } = fixture(t);
+  const { root, run, gateMarker, pnpmCalls } = fixture(t);
   const before = readFileSync(join(root, "siblings.lock.json"), "utf8");
   const result = run("--skip-typechek", "renderer");
   assert.equal(result.status, 2);
   assert.match(result.stderr, /unknown flag --skip-typechek — the one flag is --skip-typecheck/);
   assert.equal(readFileSync(join(root, "siblings.lock.json"), "utf8"), before);
   assert.equal(existsSync(gateMarker), false);
-  assert.equal(typecheckCall(), null);
+  assert.deepEqual(pnpmCalls(), []);
 });

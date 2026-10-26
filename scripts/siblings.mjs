@@ -49,11 +49,11 @@
 //           against the new pins (wall R23, the rosetta half REQUIRED), then
 //           typecheck the consumers at them (`pnpm typecheck`, since
 //           2026-10-04; `--skip-typecheck` for the deliberate case, said when
-//           used). Every checkout must match its resulting pin before the
-//           build/gate; any red after the pin is recorded KEEPS it and exits 1.
-//           It does NOT regenerate the generated places a pin feeds (2026-10-23, the EL8 to ghosttea 0.13.1: the
-//           key catalog from the pinned ghosttea-config went stale, and only verify's test and gen:check saw it):
-//           run `pnpm gen:check` after a pin, and commit what it regenerates with the pin. Owed: pin runs it.
+//           used), then check the generated places they feed (`pnpm gen:check`, since 2026-10-26, tooling (c):
+//           the EL8 to ghosttea 0.13.1 left the key catalog from the pinned ghosttea-config stale, and only
+//           verify's test and gen:check saw it, a gate later; it runs under --skip-typecheck too, and what gen
+//           rewrites is left in the tree for the pin's commit). Every checkout must match its resulting pin before
+//           the build/gate; any red after the pin is recorded KEEPS it and exits 1.
 //   stamp   one line naming each sibling's HEAD + a hash of its working-tree
 //           state — the Nx `sharedGlobals` runtime input
 //   fetch   clone a named sibling at its pin; never reset an existing checkout
@@ -2045,30 +2045,54 @@ function pin(root, names, { skipTypecheck = false } = {}) {
   // checkout changes, so it runs), and a red is R23's red: the new SHAs STAY
   // recorded — the pin did move — and the exit is 1 so the event is loud.
   // `--skip-typecheck` is the deliberate case (a pin whose consumer change
-  // follows in the same lane), said when used.
+  // follows in the same lane), said when used. It skips the typecheck alone:
+  // the generated places below are checked either way.
+  const pnpmBin = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+  const howRan = (run) =>
+    run.error !== undefined
+      ? `could not run (${run.error.message})`
+      : run.signal !== null
+        ? `was killed by ${run.signal}`
+        : "is red above";
   if (skipTypecheck) {
     console.warn(
       "siblings:pin WARN: --skip-typecheck — the consumers were NOT typechecked at the new pins; run pnpm typecheck before relying on them",
     );
-    return 0;
+  } else {
+    console.log(
+      "siblings:pin: typechecking the consumers at the new pins (pnpm typecheck, the gate's own step)",
+    );
+    const typecheck = spawnSync(pnpmBin, ["typecheck"], {
+      cwd: root,
+      stdio: "inherit",
+      shell: process.platform === "win32",
+    });
+    if (typecheck.status !== 0) {
+      console.error(
+        `siblings:pin: the new pins ARE recorded in ${LOCK_FILE}, but the consumers do not typecheck at them — pnpm typecheck ${howRan(typecheck)}; a sibling's source can compile under its own tsc and not under this repo's lib and flags (the HeadersInit class, 2026-10-03): fix it upstream or in the consumer, then re-run pnpm typecheck`,
+      );
+      return 1;
+    }
   }
+  // The generated places a pin feeds (tooling (c), 2026-10-26). A pinned
+  // sibling is the source of files this repo generates and commits — the EL8 to
+  // ghosttea 0.13.1 (2026-10-23) moved ghosttea-config, the terminal key catalog
+  // generated from it went stale, and only verify's test and gen:check saw it, a
+  // gate later. So the pin runs the gate's own freshness step (`pnpm gen:check`:
+  // regenerate, then diff the INDEX), and a stale place is the same loud event as
+  // a red typecheck: the new SHAs STAY recorded and the exit is 1. What gen
+  // rewrote is left in the working tree — it belongs in the pin's commit.
   console.log(
-    "siblings:pin: typechecking the consumers at the new pins (pnpm typecheck, the gate's own step)",
+    "siblings:pin: checking the generated places the new pins feed (pnpm gen:check, the gate's own step)",
   );
-  const typecheck = spawnSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", ["typecheck"], {
+  const gen = spawnSync(pnpmBin, ["gen:check"], {
     cwd: root,
     stdio: "inherit",
     shell: process.platform === "win32",
   });
-  if (typecheck.status !== 0) {
-    const how =
-      typecheck.error !== undefined
-        ? `could not run (${typecheck.error.message})`
-        : typecheck.signal !== null
-          ? `was killed by ${typecheck.signal}`
-          : "is red above";
+  if (gen.status !== 0) {
     console.error(
-      `siblings:pin: the new pins ARE recorded in ${LOCK_FILE}, but the consumers do not typecheck at them — pnpm typecheck ${how}; a sibling's source can compile under its own tsc and not under this repo's lib and flags (the HeadersInit class, 2026-10-03): fix it upstream or in the consumer, then re-run pnpm typecheck`,
+      `siblings:pin: the new pins ARE recorded in ${LOCK_FILE}, but a generated place they feed is stale — pnpm gen:check ${howRan(gen)}; gen has rewritten it in the working tree: stage what it wrote and commit it WITH the pin (gen:check diffs the index), then re-run pnpm gen:check`,
     );
     return 1;
   }
