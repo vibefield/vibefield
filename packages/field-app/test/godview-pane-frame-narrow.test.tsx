@@ -21,7 +21,7 @@
  * package's own rule decides what it means.
  */
 
-import { PANE_NARROW_ATTRIBUTE, PaneFrame, type PaneFrameVerbs } from "@vibecook/puppeteer-views";
+import { PANE_NARROW_ATTRIBUTE, PaneFrame, type PaneFrameVerbs } from "@vibefield/puppeteer-views";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

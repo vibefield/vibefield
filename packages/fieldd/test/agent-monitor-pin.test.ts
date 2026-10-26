@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { AGENT_MONITOR_SCHEMA_VERSION as UPSTREAM_MONITOR_SCHEMA_VERSION } from "@vibecook/puppeteer-core";
 import { AGENT_MONITOR_SCHEMA_VERSION, AgentMonitorMirror } from "@vibefield/contracts";
+import { AGENT_MONITOR_SCHEMA_VERSION as UPSTREAM_MONITOR_SCHEMA_VERSION } from "@vibefield/puppeteer-core";
 import { describe, expect, it } from "vitest";
 
 // The monitor generation pin, gated against the PINNED puppeteer itself (AR-4b;

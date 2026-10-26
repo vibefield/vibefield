@@ -30,8 +30,9 @@
  * happy-dom does not have); the routing is view-independent.
  */
 
-import type { AgentView } from "@vibecook/puppeteer-view-sdk";
-import { createRecordingView } from "@vibecook/puppeteer-view-sdk/testing";
+import type { AgentModelMeshFrame, DeviceInfo } from "@vibefield/contracts";
+import type { AgentView } from "@vibefield/puppeteer-view-sdk";
+import { createRecordingView } from "@vibefield/puppeteer-view-sdk/testing";
 import {
   type AccountUsagePort,
   type HistoryPort,
@@ -40,8 +41,7 @@ import {
   monitorViewFor,
   rainDataString,
   rainTailLength,
-} from "@vibecook/puppeteer-views";
-import type { AgentModelMeshFrame, DeviceInfo } from "@vibefield/contracts";
+} from "@vibefield/puppeteer-views";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

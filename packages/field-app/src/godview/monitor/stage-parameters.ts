@@ -1,4 +1,4 @@
-import type { MonitorParameterGroup } from "@vibecook/puppeteer-views";
+import type { MonitorParameterGroup } from "@vibefield/puppeteer-views";
 
 /**
  * Stage-level tunables, which belong to no single view.

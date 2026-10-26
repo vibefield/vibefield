@@ -282,6 +282,8 @@ two-Mac check are James's hands. Nothing in step 1 writes.
    `@vibecook/puppeteer-view-sdk`, and typecheck, the renderer and fieldd builds, field-app's tests and every smoke that builds
    went red, on main as on the lane. Its frozen install (2026-10-08 21:28Z, James's go; online, for `happy-dom`) cleared them
    all: the gates' re-run on `fab71fa0`.
+   *(2026-10-26: puppeteer's npm plane is released — `@vibefield/puppeteer-*` 0.2.3, exact — so it needs no checkout and
+   nothing to prepare; its half of this item is history, kept for the DK-19 evidence above.)*
 
 **2. The fast-forward** (the main checkout, on `main`):
 ```sh

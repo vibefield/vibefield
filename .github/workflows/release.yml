@@ -145,7 +145,7 @@ jobs:
       - name: Fetch sibling checkouts at the pinned revisions (EL8, siblings.lock.json)
         run: |
           set -euo pipefail
-          for name in rosetta; do  # puppeteer: its own composite, after the install (prepare-puppeteer)
+          for name in rosetta; do  # puppeteer: released on npm since 2026-10-26, no checkout
             node scripts/siblings.mjs fetch "$name"
           done
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
@@ -164,7 +164,6 @@ jobs:
       - name: Install (frozen)
         run: pnpm install --frozen-lockfile
       - uses: ./.github/actions/prepare-mille
-      - uses: ./.github/actions/prepare-puppeteer
       - name: Build rosettad and the Ghosttea renderer from their pinned siblings
         run: pnpm siblings:build
       # field-native's release build is NOT a step here: `package:stage` runs THE one entry, `build:native-release`

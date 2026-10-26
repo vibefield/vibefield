@@ -19,7 +19,7 @@ import type {
   HistoryPort,
   HistorySearchRequest,
   HistorySearchResponse,
-} from "@vibecook/puppeteer-views";
+} from "@vibefield/puppeteer-views";
 import { act, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

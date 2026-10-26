@@ -1,4 +1,4 @@
-import type { FindAgent, HistoryPort } from "@vibecook/puppeteer-views";
+import type { FindAgent, HistoryPort } from "@vibefield/puppeteer-views";
 import { useSyncExternalStore } from "react";
 
 // WHAT GODVIEW LENDS THE PEEK (P2; DESIGN.md §8 "Search — the Peek"; One Frame

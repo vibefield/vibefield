@@ -1,5 +1,5 @@
-import type { MonitorEndedRow } from "@vibecook/puppeteer-view-sdk/model";
 import { AgentProviderId } from "@vibefield/contracts";
+import type { MonitorEndedRow } from "@vibefield/puppeteer-view-sdk/model";
 import { type StatusNotice, sayStatus } from "../../frame/status-line";
 import { getActiveView, requestView } from "../../frame/view-state";
 import { openHistoryAt } from "../../history/open-at";

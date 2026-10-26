@@ -1,18 +1,4 @@
 import type { SessionSummary } from "@vibecook/ghosttea-protocol";
-import type { AgentMonitorState, MonitorNotification } from "@vibecook/puppeteer-core";
-import {
-  createMemoryProjectIdentityStore,
-  createMonitorBackend,
-  type MonitorBackend,
-  type MonitorHostFacts,
-  type MonitorHostProfileSet,
-  type MonitorHostRun,
-  type MonitorHostTerminal,
-  type MonitorRuntimeSource,
-  type MonitorScheduler,
-  runtimeRunSource,
-} from "@vibecook/puppeteer-monitor";
-import type { DeviceOs, MonitorAgentRow } from "@vibecook/puppeteer-view-sdk/model";
 import {
   AGENT_CATALOG,
   AGENT_FIELD,
@@ -28,6 +14,20 @@ import {
   type RowsDeviceState,
   type MonitorAgentRow as WireMonitorRow,
 } from "@vibefield/contracts";
+import type { AgentMonitorState, MonitorNotification } from "@vibefield/puppeteer-core";
+import {
+  createMemoryProjectIdentityStore,
+  createMonitorBackend,
+  type MonitorBackend,
+  type MonitorHostFacts,
+  type MonitorHostProfileSet,
+  type MonitorHostRun,
+  type MonitorHostTerminal,
+  type MonitorRuntimeSource,
+  type MonitorScheduler,
+  runtimeRunSource,
+} from "@vibefield/puppeteer-monitor";
+import type { DeviceOs, MonitorAgentRow } from "@vibefield/puppeteer-view-sdk/model";
 import type { ModelBoardPort } from "../godview/monitor/remote-door";
 
 /**
@@ -38,7 +38,7 @@ import type { ModelBoardPort } from "../godview/monitor/remote-door";
  * fold alone mounts an empty stage. This module stands the model board up in
  * the browser for the catalog (`docs/UI_SYSTEM.md`: the catalog mounts the
  * shipping view with a FIXTURE ADAPTER): puppeteer's real backend
- * (`@vibecook/puppeteer-monitor`, browser-safe) over the fixture's own fold rows,
+ * (`@vibefield/puppeteer-monitor`, browser-safe) over the fixture's own fold rows,
  * one backend per desktop drawn, each cut to the board the window reads.
  *
  * FIXTURE-GRADE COPY (M37). What this is NOT: fieldd. The daemon hosts the

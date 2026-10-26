@@ -1,5 +1,5 @@
-import type { HistoryPort, HistorySearchHit } from "@vibecook/puppeteer-views";
 import { visibleCatalog } from "@vibefield/contracts";
+import type { HistoryPort, HistorySearchHit } from "@vibefield/puppeteer-views";
 import type { GodviewFindDoor, LiveFilters, LiveFindAgent } from "../frame/find-door";
 
 // LIVE NOW'S FIXTURE ADAPTER (P2; docs/UI_SYSTEM.md "Catalog fidelity";

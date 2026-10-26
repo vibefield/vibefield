@@ -1,5 +1,5 @@
-import { frameScheduler } from "@vibecook/puppeteer-view-sdk/host";
-import type { FrameScheduler } from "@vibecook/puppeteer-view-sdk/model";
+import { frameScheduler } from "@vibefield/puppeteer-view-sdk/host";
+import type { FrameScheduler } from "@vibefield/puppeteer-view-sdk/model";
 import type { LiveFeed, LiveFeedSnapshot, LiveFindAgent } from "../../frame/find-door";
 import { type DoorClient, historyPortOver, modelBoardOver } from "./doors";
 import { createFindAgents } from "./find-agents";

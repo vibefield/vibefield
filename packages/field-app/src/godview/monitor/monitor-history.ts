@@ -1,9 +1,9 @@
-import type { MonitorHistory } from "@vibecook/puppeteer-view-sdk";
-import { HISTORY_WINDOW_MS, keepPast, lendHistory } from "@vibecook/puppeteer-view-sdk/host";
-import type { MonitorEndedRow, MonitorPastSnapshot } from "@vibecook/puppeteer-view-sdk/model";
-import { projectColourFor } from "@vibecook/puppeteer-view-sdk/toolkit";
-import type { MonitorPalette } from "@vibecook/puppeteer-views";
 import type { AgentRecordedLanesResult } from "@vibefield/contracts";
+import type { MonitorHistory } from "@vibefield/puppeteer-view-sdk";
+import { HISTORY_WINDOW_MS, keepPast, lendHistory } from "@vibefield/puppeteer-view-sdk/host";
+import type { MonitorEndedRow, MonitorPastSnapshot } from "@vibefield/puppeteer-view-sdk/model";
+import { projectColourFor } from "@vibefield/puppeteer-view-sdk/toolkit";
+import type { MonitorPalette } from "@vibefield/puppeteer-views";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { sdkOsMark } from "./model-board";
 import { lendEndedLanes, type RecordedSessionRow } from "./open-ended-lane";

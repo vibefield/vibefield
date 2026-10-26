@@ -1,7 +1,7 @@
-import type { MonitorReplicaLike } from "@vibecook/puppeteer-view-sdk/host";
-import type { AgentView, MonitorModel } from "@vibecook/puppeteer-view-sdk/model";
-import { agentViewFixture, fixtureModel } from "@vibecook/puppeteer-view-sdk/testing";
 import type { RowsDeviceState } from "@vibefield/contracts";
+import type { MonitorReplicaLike } from "@vibefield/puppeteer-view-sdk/host";
+import type { AgentView, MonitorModel } from "@vibefield/puppeteer-view-sdk/model";
+import { agentViewFixture, fixtureModel } from "@vibefield/puppeteer-view-sdk/testing";
 import { describe, expect, it, vi } from "vitest";
 import {
   createWindowRows,

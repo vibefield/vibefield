@@ -1,4 +1,3 @@
-import type { AgentRuntime } from "@vibecook/puppeteer-runtime";
 import type {
   AgentModelCatalog,
   AgentModelsFailure,
@@ -6,6 +5,7 @@ import type {
   AgentProfileSetId,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
+import type { AgentRuntime } from "@vibefield/puppeteer-runtime";
 
 // PJ-6 (`draft/project-places/build-pj6.md`, Q1) — each agent's own model
 // picker, as fieldd last read it, per agent and Agent Profile. The lists are

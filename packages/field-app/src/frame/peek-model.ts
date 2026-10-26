@@ -1,4 +1,3 @@
-import { parseSnippet, type SnippetSegment, whenLabel, whoSaidIt } from "@vibecook/puppeteer-views";
 import {
   type AgentCatalogEntry,
   catalogEntry,
@@ -7,6 +6,12 @@ import {
   type IndexSearchResult,
   visibleCatalog,
 } from "@vibefield/contracts";
+import {
+  parseSnippet,
+  type SnippetSegment,
+  whenLabel,
+  whoSaidIt,
+} from "@vibefield/puppeteer-views";
 
 // THE PEEK'S MODEL (DESIGN.md §8 "Search — the Peek"; One Frame §23, GV-D8):
 // everything the popup decides without a DOM — the rows an answer groups into,

@@ -1,4 +1,4 @@
-import { PaneFrameChrome, paneFrameModel } from "@vibecook/puppeteer-views";
+import { PaneFrameChrome, paneFrameModel } from "@vibefield/puppeteer-views";
 import {
   type CSSProperties,
   type ReactElement,

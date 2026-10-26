@@ -1,14 +1,14 @@
-import type { AgentView } from "@vibecook/puppeteer-view-sdk/model";
+import type { AgentView } from "@vibefield/puppeteer-view-sdk/model";
 
 // The stage and its chrome read the SDK's model. Find's shared chrome shape
 // is adapted only where it joins local facts (`find-agents.ts`, M19).
 
-export type { MonitorSpawnMenu, MonitorSpawnTarget } from "@vibecook/puppeteer-view-sdk/model";
+export type { MonitorSpawnMenu, MonitorSpawnTarget } from "@vibefield/puppeteer-view-sdk/model";
 export type {
   MonitorRemoteFacet,
   MonitorTheme,
   MonitorViewEntry,
-} from "@vibecook/puppeteer-views";
+} from "@vibefield/puppeteer-views";
 
 export type MonitorAgent = AgentView;
 

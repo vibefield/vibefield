@@ -1,10 +1,10 @@
+import { type AgentProfileSet, catalogEntry } from "@vibefield/contracts";
 import type {
   MonitorSpawnMenu,
   MonitorSpawnProfile,
   MonitorSpawnTarget,
   ProfileTab,
-} from "@vibecook/puppeteer-views";
-import { type AgentProfileSet, catalogEntry } from "@vibefield/contracts";
+} from "@vibefield/puppeteer-views";
 
 // SB-3 — THE SPAWN MENU: what a new terminal can be born under, as the spawn
 // bloom (and the list view's two-step menu) offer it — the views' own tree

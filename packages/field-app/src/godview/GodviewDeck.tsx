@@ -5,6 +5,8 @@ import {
   type GhostteaWorkspaceContext,
   type GhostteaWorkspacePlatform,
 } from "@vibecook/ghosttea-react/workspace";
+import { AgentInterruptResult, AgentSpawnResult, type DeviceInfo } from "@vibefield/contracts";
+import { useFielddClient } from "@vibefield/fieldd-client/react";
 import {
   ChromeBoundary,
   DECK_FRAMED_CLASS,
@@ -20,9 +22,7 @@ import {
   useDeckZoom,
   useMonitorPalette,
   zoomLayoutApplied,
-} from "@vibecook/puppeteer-views";
-import { AgentInterruptResult, AgentSpawnResult, type DeviceInfo } from "@vibefield/contracts";
-import { useFielddClient } from "@vibefield/fieldd-client/react";
+} from "@vibefield/puppeteer-views";
 import {
   type CSSProperties,
   type ReactElement,
@@ -1435,7 +1435,7 @@ export function GodviewDeck({
   // ── THE PANE FRAME (GT-6, record §07) ───────────────────────────────────
   //
   // Every pane wears the reference's frame, and the frame is the PACKAGE'S
-  // (`@vibecook/puppeteer-views`, PU-14): the badge growing out of the top
+  // (`@vibefield/puppeteer-views`, PU-14): the badge growing out of the top
   // edge, the `model · effort` readout, the context meter along the bottom,
   // and the ghost verbs under the pointer. VibeField supplies what only a host
   // can — the agent facts behind each pane (the chrome's facts on the window's

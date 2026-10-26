@@ -1,5 +1,5 @@
-import { frameScheduler } from "@vibecook/puppeteer-view-sdk/host";
-import type { PaneFrameAgent } from "@vibecook/puppeteer-views";
+import { frameScheduler } from "@vibefield/puppeteer-view-sdk/host";
+import type { PaneFrameAgent } from "@vibefield/puppeteer-views";
 import {
   createContext,
   type ReactElement,

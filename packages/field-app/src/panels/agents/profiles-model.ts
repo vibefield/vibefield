@@ -1,4 +1,3 @@
-import { planTitle, serviceProduct } from "@vibecook/puppeteer-views";
 import type {
   AgentAccountUsageEntry,
   AgentAccountUsageMetric,
@@ -12,6 +11,7 @@ import type {
   AgentSignInService,
   AgentsProfileSetsListResult,
 } from "@vibefield/contracts";
+import { planTitle, serviceProduct } from "@vibefield/puppeteer-views";
 
 // Agent Profiles' one model (the design record's R1, pass 16: "Agent Profiles
 // are places"). A profile is puppeteer's profile set as fieldd projects it —

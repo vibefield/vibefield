@@ -1,3 +1,13 @@
+import type {
+  AgentCatalogReaders,
+  AgentListResult,
+  AgentProfileSet,
+  AgentSessionSummary,
+  AgentSessionTerminal,
+  AgentsProfileSetsListResult,
+  TerminalInfo,
+} from "@vibefield/contracts";
+import { createNoopLogger, type Logger } from "@vibefield/logging";
 import {
   createMonitorBackend,
   type MonitorBackend,
@@ -12,7 +22,7 @@ import {
   type MonitorScheduler,
   type ProjectIdentityStore,
   runtimeRunSource,
-} from "@vibecook/puppeteer-monitor";
+} from "@vibefield/puppeteer-monitor";
 import type {
   DeviceOs,
   MonitorAgentRow,
@@ -20,22 +30,12 @@ import type {
   MonitorModelChange,
   MonitorModelSnapshot,
   MonitorPastSnapshot,
-} from "@vibecook/puppeteer-view-sdk/model";
-import type {
-  AgentCatalogReaders,
-  AgentListResult,
-  AgentProfileSet,
-  AgentSessionSummary,
-  AgentSessionTerminal,
-  AgentsProfileSetsListResult,
-  TerminalInfo,
-} from "@vibefield/contracts";
-import { createNoopLogger, type Logger } from "@vibefield/logging";
+} from "@vibefield/puppeteer-view-sdk/model";
 
 // MV-3a (MV-D22, MV-D18) — THE MONITOR BACKEND, BESIDE THE RUNTIME.
 //
 // One backend per desktop computes every business fact about this desktop's
-// agents once (`@vibecook/puppeteer-monitor`'s `createMonitorBackend`): the run
+// agents once (`@vibefield/puppeteer-monitor`'s `createMonitorBackend`): the run
 // table from puppeteer's push bus, recency, the ten-minute cost window, unread,
 // project identity, the spawn menu. Until now each window derived all of that
 // again from the fold's `full` rows, and fieldd a third time for peers and the

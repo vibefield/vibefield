@@ -27,13 +27,6 @@ import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  type AgentProfile,
-  extensionActUnavailable,
-  extensionSkillFolderPlan,
-  type SkillItem,
-} from "@vibecook/puppeteer-core";
-import type { AgentProvider } from "@vibecook/puppeteer-runtime";
-import {
   type AgentCatalogEntry,
   type AgentCatalogResult,
   type AgentDistributionRecord,
@@ -65,6 +58,13 @@ import {
   SOCKETS,
   visibleCatalog,
 } from "@vibefield/contracts";
+import {
+  type AgentProfile,
+  extensionActUnavailable,
+  extensionSkillFolderPlan,
+  type SkillItem,
+} from "@vibefield/puppeteer-core";
+import type { AgentProvider } from "@vibefield/puppeteer-runtime";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, type FielddDaemon } from "../src/index";

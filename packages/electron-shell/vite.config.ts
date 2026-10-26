@@ -126,6 +126,9 @@ export default defineConfig(({ mode }) => ({
     // retires the flat entry; each importer then resolves the copy its own
     // package.json asked for. Dev-only by construction — rollup already
     // resolves per importer, which is why `build:design` never saw this.
+    // Still so since puppeteer 0.2.3 (2026-10-26): the published packages
+    // declare zod `^4.6.6` and pnpm installs it under each of them, beside this
+    // workspace's zod 3 — the same two copies, now from the registry.
     exclude: ["zod"],
   },
   build: {

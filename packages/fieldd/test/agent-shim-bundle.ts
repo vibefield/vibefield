@@ -16,7 +16,7 @@ import { build } from "esbuild";
 const PACKAGE_ROOT = join(fileURLToPath(import.meta.url), "../..");
 
 /** The kit's shim entry: importing it runs it, so it is only ever bundled. */
-export const AGENT_SHIM_ENTRY = "@vibecook/puppeteer-runtime/spawn-through/shim";
+export const AGENT_SHIM_ENTRY = "@vibefield/puppeteer-runtime/spawn-through/shim";
 
 /** Bundle the shim into `directory` and answer the file's path. */
 export async function bundleAgentShim(directory: string): Promise<string> {

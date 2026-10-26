@@ -1,15 +1,15 @@
 import type { SessionSummary } from "@vibecook/ghosttea-protocol";
-import type { MonitorCapabilities } from "@vibecook/puppeteer-view-sdk";
-import type { MonitorReplicaLike, ViewSlotCommands } from "@vibecook/puppeteer-view-sdk/host";
+import type { AgentProfileSet } from "@vibefield/contracts";
+import type { MonitorCapabilities } from "@vibefield/puppeteer-view-sdk";
+import type { MonitorReplicaLike, ViewSlotCommands } from "@vibefield/puppeteer-view-sdk/host";
 import type {
   AgentView,
   ModelChanges,
   MonitorAgentRow,
   MonitorModel,
-} from "@vibecook/puppeteer-view-sdk/model";
-import { projectColourFor, projectName } from "@vibecook/puppeteer-view-sdk/toolkit";
-import type { MonitorPalette, ProfileTab } from "@vibecook/puppeteer-views";
-import type { AgentProfileSet } from "@vibefield/contracts";
+} from "@vibefield/puppeteer-view-sdk/model";
+import { projectColourFor, projectName } from "@vibefield/puppeteer-view-sdk/toolkit";
+import type { MonitorPalette, ProfileTab } from "@vibefield/puppeteer-views";
 import {
   useCallback,
   useEffect,

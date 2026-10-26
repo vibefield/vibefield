@@ -14,12 +14,12 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { gunzipSync } from "node:zlib";
-import type { AgentView } from "@vibecook/puppeteer-view-sdk/model";
 import type {
   AgentModelBoardRow,
   AgentModelMeshFrame,
   AgentModelMeshOpen,
 } from "@vibefield/contracts";
+import type { AgentView } from "@vibefield/puppeteer-view-sdk/model";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DoorClient } from "../src/godview/monitor/doors";
 import { modelBoardOver } from "../src/godview/monitor/doors";

@@ -4,7 +4,7 @@
 // through a variable of its own — the fake's name, never a vendor's (AR-L1) —
 // its identity is whatever this says, and its native default points nowhere
 // real. Test-only; the gate's R23 never reads it.
-import type { AgentProfile, ProfileService } from "@vibecook/puppeteer-core";
+import type { AgentProfile, ProfileService } from "@vibefield/puppeteer-core";
 
 /** The one variable the scripted agent's binding sets: its managed root. */
 export const SCRIPTED_ROOT_VARIABLE = "SCRIPTED_HOME";

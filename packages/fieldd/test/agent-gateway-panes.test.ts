@@ -28,14 +28,14 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { LAYOUT, TerminalRosterResult } from "@vibefield/contracts";
 import {
   DEFAULT_RETRY_MS,
   readRendezvous,
   readTerminals,
   SPAWN_THROUGH_EXIT_REFUSED,
   spawnThroughLayout,
-} from "@vibecook/puppeteer-runtime/spawn-through";
-import { LAYOUT, TerminalRosterResult } from "@vibefield/contracts";
+} from "@vibefield/puppeteer-runtime/spawn-through";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { AGENT_GATEWAY_HOST_LABEL } from "../src/agent-gateway";
 import { linesOf, TYPED_COMMAND, TYPED_PROVIDER } from "./agent-gateway-fixture";

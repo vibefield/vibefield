@@ -4,8 +4,8 @@ import {
   fixtureInput,
   fixtureTheme,
   parameterDefaults,
-} from "@vibecook/puppeteer-view-sdk/testing";
-import { listMonitorView, readMonitorPalette } from "@vibecook/puppeteer-views";
+} from "@vibefield/puppeteer-view-sdk/testing";
+import { listMonitorView, readMonitorPalette } from "@vibefield/puppeteer-views";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 

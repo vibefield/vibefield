@@ -1,19 +1,23 @@
-import { presentAgentMonitorHeadline } from "@vibecook/puppeteer-core";
-import type { MonitorTheme, StageGeometry } from "@vibecook/puppeteer-view-sdk";
+import { presentAgentMonitorHeadline } from "@vibefield/puppeteer-core";
+import type { MonitorTheme, StageGeometry } from "@vibefield/puppeteer-view-sdk";
 import {
   frameScheduler,
   type MonitorReplicaLike,
   MonitorViewHost,
   type ViewSlotCommands,
-} from "@vibecook/puppeteer-view-sdk/host";
-import type { AgentView, MonitorDeviceRef, MonitorModel } from "@vibecook/puppeteer-view-sdk/model";
+} from "@vibefield/puppeteer-view-sdk/host";
+import type {
+  AgentView,
+  MonitorDeviceRef,
+  MonitorModel,
+} from "@vibefield/puppeteer-view-sdk/model";
 import {
   type LabAgent,
   monitorParameterDefaults,
   stateStages,
   swarmMonitorView,
   useMonitorPalette,
-} from "@vibecook/puppeteer-views";
+} from "@vibefield/puppeteer-views";
 import { type ReactElement, useEffect, useMemo, useRef, useState } from "react";
 
 // The swarm's bodies, every drawn state at once: the views package's own lab

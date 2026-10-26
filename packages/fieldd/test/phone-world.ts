@@ -18,11 +18,11 @@
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { AgentAdapterBinding } from "@vibecook/puppeteer-core";
-import type { AgentProvider } from "@vibecook/puppeteer-runtime";
 import type { AgentCatalogEntry } from "@vibefield/contracts";
 import { SOCKETS } from "@vibefield/contracts";
 import type { WsCtor } from "@vibefield/fieldd-client";
+import type { AgentAdapterBinding } from "@vibefield/puppeteer-core";
+import type { AgentProvider } from "@vibefield/puppeteer-runtime";
 import WebSocket from "ws";
 import { bootstrap, type FielddDaemon } from "../src/index";
 import type { SecretStore } from "../src/plugin-settings";

@@ -3,30 +3,6 @@ import { realpath } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import type { SessionExitedEvent } from "@vibecook/ghosttea-client";
 import {
-  type AgentProfile,
-  EXTENSION_SKILL_FOLDER_NAME,
-  type ExtensionActItem,
-  type ExtensionActPlan,
-  type ExtensionCatalog,
-  type ExtensionFailure,
-  type ExtensionInventory,
-  type ExtensionItem,
-  type ExtensionOrigin,
-  type ExtensionProvider,
-  type MarketplaceItem,
-  type McpServerDefinition,
-  type McpServerItem,
-  mcpServerDefinition,
-  type PluginItem,
-  type SkillItem,
-} from "@vibecook/puppeteer-core";
-import {
-  type AgentRuntime,
-  type ExtensionActEnd,
-  isLaunchValueName,
-  type StartedExtensionAct,
-} from "@vibecook/puppeteer-runtime";
-import {
   AGENT_OPERATION_OUTPUT_BYTES,
   type AgentCatalogReaders,
   type AgentExtensionAct,
@@ -69,6 +45,30 @@ import {
   type TerminalCreateOpenResult,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
+import {
+  type AgentProfile,
+  EXTENSION_SKILL_FOLDER_NAME,
+  type ExtensionActItem,
+  type ExtensionActPlan,
+  type ExtensionCatalog,
+  type ExtensionFailure,
+  type ExtensionInventory,
+  type ExtensionItem,
+  type ExtensionOrigin,
+  type ExtensionProvider,
+  type MarketplaceItem,
+  type McpServerDefinition,
+  type McpServerItem,
+  mcpServerDefinition,
+  type PluginItem,
+  type SkillItem,
+} from "@vibefield/puppeteer-core";
+import {
+  type AgentRuntime,
+  type ExtensionActEnd,
+  isLaunchValueName,
+  type StartedExtensionAct,
+} from "@vibefield/puppeteer-runtime";
 import { requireVisible } from "./agent-catalog-gates";
 import { displayTail } from "./agent-distribution";
 import {

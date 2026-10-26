@@ -15,10 +15,10 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AgentProfile, ProfileSet } from "@vibecook/puppeteer-core";
-import type { AgentRuntime } from "@vibecook/puppeteer-runtime";
 import { TerminalBindingsFile } from "@vibefield/contracts";
 import type { Logger } from "@vibefield/logging";
+import type { AgentProfile, ProfileSet } from "@vibefield/puppeteer-core";
+import type { AgentRuntime } from "@vibefield/puppeteer-runtime";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   BINDING_BIRTH_GRACE_MS,

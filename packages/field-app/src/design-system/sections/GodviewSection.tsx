@@ -49,7 +49,7 @@ export function GodviewSection({ dark = false }: { dark?: boolean } = {}): React
       </Specimen>
       <Specimen
         title="Timeline — the swarm through time: five runs from their births to now, runtime only"
-        source="@vibecook/puppeteer-views/views/timeline"
+        source="@vibefield/puppeteer-views/views/timeline"
         bleed
       >
         <div data-godview-timeline-catalog="">
@@ -58,7 +58,7 @@ export function GodviewSection({ dark = false }: { dark?: boolean } = {}): React
       </Specimen>
       <Specimen
         title="Spend — where the money went: what each agent spent in the last ten minutes, a line each from $0, runtime only"
-        source="@vibecook/puppeteer-views/views/spend"
+        source="@vibefield/puppeteer-views/views/spend"
         bleed
       >
         <div data-godview-spend-catalog="">
@@ -92,7 +92,7 @@ export function GodviewSection({ dark = false }: { dark?: boolean } = {}): React
       </Specimen>
       <Specimen
         title="Spawn bloom — hold empty ground, reach a profile, let go"
-        source="@vibecook/puppeteer-views/views/swarm/AgentSwarm.tsx"
+        source="@vibefield/puppeteer-views/views/swarm/AgentSwarm.tsx"
         bleed
       >
         <div data-spawn-bloom-catalog="">
@@ -101,7 +101,7 @@ export function GodviewSection({ dark = false }: { dark?: boolean } = {}): React
       </Specimen>
       <Specimen
         title="Spawn bloom — the list's ＋ TERMINAL offers the same tree, in two steps"
-        source="@vibecook/puppeteer-views/views/list/AgentList.tsx"
+        source="@vibefield/puppeteer-views/views/list/AgentList.tsx"
         bleed
       >
         <div data-spawn-bloom-list-catalog="">
@@ -156,21 +156,21 @@ export function GodviewSection({ dark = false }: { dark?: boolean } = {}): React
       </Specimen>
       <Specimen
         title="Pane frame — what the deck draws around every terminal"
-        source="@vibecook/puppeteer-views/deck/PaneFrame.tsx"
+        source="@vibefield/puppeteer-views/deck/PaneFrame.tsx"
         bleed
       >
         <PaneFramePreview />
       </Specimen>
       <Specimen
         title="Empty pane launcher — what a fresh shell offers: resume, or launch"
-        source="@vibecook/puppeteer-views/launcher/PaneLauncherChrome.tsx"
+        source="@vibefield/puppeteer-views/launcher/PaneLauncherChrome.tsx"
         bleed
       >
         <PaneLauncherPreview />
       </Specimen>
       <Specimen
         title="Swarm bodies — every drawn state, on the package's own fixtures"
-        source="@vibecook/puppeteer-views/views/swarm/AgentSwarm.tsx"
+        source="@vibefield/puppeteer-views/views/swarm/AgentSwarm.tsx"
         bleed
       >
         <SwarmBodiesPreview />

@@ -1,5 +1,5 @@
-import type { AgentModelDiscoveryResult } from "@vibecook/puppeteer-core";
-import type { DiscoverAgentModelsOptions } from "@vibecook/puppeteer-runtime";
+import type { AgentModelDiscoveryResult } from "@vibefield/puppeteer-core";
+import type { DiscoverAgentModelsOptions } from "@vibefield/puppeteer-runtime";
 import { describe, expect, it } from "vitest";
 import {
   AgentModelCatalogs,

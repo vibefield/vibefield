@@ -30,12 +30,6 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createCanvasEngine } from "@vibecook/ice";
-import {
-  type HistoryPort,
-  type HistorySearchResponse,
-  monitorParameterDefaults,
-  monitorViewFor,
-} from "@vibecook/puppeteer-views";
 import type {
   AgentProfileSet,
   FrameView,
@@ -44,6 +38,12 @@ import type {
 } from "@vibefield/contracts";
 import type { FielddClient } from "@vibefield/fieldd-client";
 import { FielddProvider } from "@vibefield/fieldd-client/react";
+import {
+  type HistoryPort,
+  type HistorySearchResponse,
+  monitorParameterDefaults,
+  monitorViewFor,
+} from "@vibefield/puppeteer-views";
 import { act, type ReactElement, useEffect, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";

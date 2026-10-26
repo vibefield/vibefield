@@ -1,9 +1,9 @@
-import type { AgentVisualStatus } from "@vibecook/puppeteer-views";
+import type { AgentVisualStatus } from "@vibefield/puppeteer-views";
 import type { AgentSessionSummary } from "./facet-types";
 import { folderName } from "./folder-name";
 
-export type { AgentVisualStatus } from "@vibecook/puppeteer-views";
-export { classifyTerminalStatus } from "@vibecook/puppeteer-views";
+export type { AgentVisualStatus } from "@vibefield/puppeteer-views";
+export { classifyTerminalStatus } from "@vibefield/puppeteer-views";
 
 /**
  * What a session is doing, derived ONLY from the fold's row — fieldd's one

@@ -1,10 +1,4 @@
 import type {
-  DeviceOs,
-  MonitorAgentRow,
-  MonitorModelChange,
-  MonitorModelSnapshot,
-} from "@vibecook/puppeteer-view-sdk/model";
-import type {
   AgentDeskTerminalRow,
   AgentModelBoardRow,
   AgentModelDeskRow,
@@ -15,6 +9,12 @@ import type {
   RowsSnapshot,
   MonitorAgentRow as WireMonitorRow,
 } from "@vibefield/contracts";
+import type {
+  DeviceOs,
+  MonitorAgentRow,
+  MonitorModelChange,
+  MonitorModelSnapshot,
+} from "@vibefield/puppeteer-view-sdk/model";
 
 /**
  * MV-3a (MV-D18, M3, M23) — THE MODEL BOARD, FOLDED INTO ONE CHAIN.

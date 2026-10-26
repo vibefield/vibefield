@@ -1,4 +1,4 @@
-import { folderName, type PaneFrameAgent } from "@vibecook/puppeteer-views";
+import { folderName, type PaneFrameAgent } from "@vibefield/puppeteer-views";
 import type { AgentVisualStatus } from "./agent-status";
 import type { ChromeRun } from "./chrome-facts";
 import type { AgentStatus } from "./facet-types";
@@ -16,7 +16,7 @@ import type { AgentStatus } from "./facet-types";
  * beside it (`local`). Every rule below is the one the fold's reading made, and
  * `godview-pane-frame-facts.test.ts` holds each of them through fieldd's own cut.
  *
- * The frame is `@vibecook/puppeteer-views`' and knows no host: it takes a
+ * The frame is `@vibefield/puppeteer-views`' and knows no host: it takes a
  * `PaneFrameAgent` in the host's own words and dials nothing (the AR-5 rule).
  * This module is that seam on VibeField's side — pure, so the projection's
  * rules are testable without a pane, a GPU or a daemon, exactly as

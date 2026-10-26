@@ -1,10 +1,4 @@
 import type { SessionSummary } from "@vibecook/ghosttea-protocol";
-import type { AgentMonitorState, MonitorNotification } from "@vibecook/puppeteer-core";
-import {
-  createMemoryProjectIdentityStore,
-  type MonitorRuntimeSource,
-  type MonitorScheduler,
-} from "@vibecook/puppeteer-monitor";
 import {
   AGENT_CATALOG,
   AGENT_FIELD,
@@ -21,6 +15,12 @@ import {
   type RowsDeviceState,
   type TerminalInfo,
 } from "@vibefield/contracts";
+import type { AgentMonitorState, MonitorNotification } from "@vibefield/puppeteer-core";
+import {
+  createMemoryProjectIdentityStore,
+  type MonitorRuntimeSource,
+  type MonitorScheduler,
+} from "@vibefield/puppeteer-monitor";
 import { projectDeskRow } from "../../fieldd/src/agent-field";
 import { ModelProjection } from "../../fieldd/src/agent-model-board";
 import {

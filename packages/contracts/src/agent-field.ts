@@ -146,9 +146,9 @@ export type AgentFieldRow = z.infer<typeof AgentFieldRow>;
 // of it — the transcript is History's, by ticket (DS-7).
 
 // MV-3a (MV-D22, MV-D18; `thinking-monitor-view-sdk`) — THE MODEL'S ROW ON THE
-// WIRE. The monitor backend beside the runtime (`@vibecook/puppeteer-monitor`,
+// WIRE. The monitor backend beside the runtime (`@vibefield/puppeteer-monitor`,
 // hosted by fieldd) computes every business fact about this desktop's agents
-// once and emits `MonitorAgentRow`s (`@vibecook/puppeteer-view-sdk/model`); the
+// once and emits `MonitorAgentRow`s (`@vibefield/puppeteer-view-sdk/model`); the
 // window's replica applies them with no logic of its own. The desk row carries
 // one as `monitorRow`, so a window — this desktop's, or another of this
 // person's reading it through the mesh board — maps a row to the model by

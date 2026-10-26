@@ -1,6 +1,6 @@
-import { createMonitorReplica, type MonitorReplica } from "@vibecook/puppeteer-monitor/replica";
-import type { FrameScheduler } from "@vibecook/puppeteer-view-sdk/model";
 import { AgentModelMeshFrame, AgentModelMeshOpen } from "@vibefield/contracts";
+import { createMonitorReplica, type MonitorReplica } from "@vibefield/puppeteer-monitor/replica";
+import type { FrameScheduler } from "@vibefield/puppeteer-view-sdk/model";
 import { useEffect, useState } from "react";
 import type { ChromeFacts } from "./chrome-facts";
 import { modelBoardFailure } from "./doors";
@@ -16,7 +16,7 @@ import type { ModelBoardPort } from "./remote-door";
  * feed, closed with it). fieldd answers this desktop's model board — every run
  * whole, every bare terminal — and every other self desktop's desk cut beside
  * it, each on its owner's chain. `ModelBoardFold` joins them into one chain of
- * `MonitorModelChange`s, and the replica (`@vibecook/puppeteer-monitor/replica`)
+ * `MonitorModelChange`s, and the replica (`@vibefield/puppeteer-monitor/replica`)
  * applies them with structural sharing. Nothing here derives a business fact:
  * the rows are the backend's, the replica joins what only this window knows.
  *

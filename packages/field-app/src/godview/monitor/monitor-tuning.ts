@@ -7,7 +7,7 @@ import {
   monitorViewFor,
   normalizeMonitorParameters,
   saveMonitorParameters,
-} from "@vibecook/puppeteer-views";
+} from "@vibefield/puppeteer-views";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { STAGE_PARAMETER_GROUPS } from "./stage-parameters";
 

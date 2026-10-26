@@ -4,7 +4,7 @@
  *
  * This file was `godview-monitor-parameters.test.ts` and held three things: the
  * parameter helpers, the swarm's own defaults, and the view registry. All three
- * moved into `@vibecook/puppeteer-views` with the views, and all three are
+ * moved into `@vibefield/puppeteer-views` with the views, and all three are
  * tested there (96 rows) — keeping a second copy here would be a transcription
  * that agrees until the day it quietly does not.
  *
@@ -29,7 +29,7 @@ import {
   MONITOR_VIEWS,
   monitorParameterDefaults,
   monitorViewFor,
-} from "@vibecook/puppeteer-views";
+} from "@vibefield/puppeteer-views";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";

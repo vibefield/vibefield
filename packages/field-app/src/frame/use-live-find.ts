@@ -7,7 +7,7 @@ import {
   type HistorySearchStatus,
   type HistorySessionFacts,
   liveScope,
-} from "@vibecook/puppeteer-views";
+} from "@vibefield/puppeteer-views";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { LiveFindAgent } from "./find-door";
 

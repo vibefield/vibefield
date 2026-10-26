@@ -7,10 +7,10 @@
 import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AgentProfile } from "@vibecook/puppeteer-core";
-import type { AgentRuntime, ProfileSetInfo } from "@vibecook/puppeteer-runtime";
 import { AGENT_CATALOG_READERS, AgentsProfileSetsListResult, LAYOUT } from "@vibefield/contracts";
 import { createNoopLogger } from "@vibefield/logging";
+import type { AgentProfile } from "@vibefield/puppeteer-core";
+import type { AgentRuntime, ProfileSetInfo } from "@vibefield/puppeteer-runtime";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { IndexService } from "../src/agent-index";
 import { AgentProfileService, type PersonaSessions } from "../src/agent-profiles";

@@ -1,3 +1,4 @@
+import { AGENT_CATALOG, type AgentProviderSummary } from "@vibefield/contracts";
 import {
   buildLauncherResults,
   cantLaunchLine,
@@ -15,8 +16,7 @@ import {
   orderAgents,
   PaneLaunchChrome,
   PaneLauncherChrome,
-} from "@vibecook/puppeteer-views/launcher";
-import { AGENT_CATALOG, type AgentProviderSummary } from "@vibefield/contracts";
+} from "@vibefield/puppeteer-views/launcher";
 import type { CSSProperties, ReactElement } from "react";
 import { DEFAULT_DECK_APPEARANCE } from "../godview/deck-appearance";
 import { godviewTerminalTheme, terminalGround } from "../godview/deck-theme";

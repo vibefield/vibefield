@@ -20,8 +20,6 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import type { SessionExitedEvent } from "@vibecook/ghosttea-client";
-import type { AgentAdapterBinding } from "@vibecook/puppeteer-core";
-import type { AgentProvider, AgentProviderSessionOptions } from "@vibecook/puppeteer-runtime";
 import {
   AgentLastRunResult,
   type AgentSessionRecord,
@@ -29,6 +27,8 @@ import {
   SOCKETS,
   TerminalInventoryStaleDetails,
 } from "@vibefield/contracts";
+import type { AgentAdapterBinding } from "@vibefield/puppeteer-core";
+import type { AgentProvider, AgentProviderSessionOptions } from "@vibefield/puppeteer-runtime";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import WebSocket from "ws";
 import { LAST_RUN_SETTLE_MS } from "../src/agent-last-run";

@@ -21,16 +21,16 @@
  * old door; the second holds the join's rules.
  */
 
-import type { AgentView } from "@vibecook/puppeteer-view-sdk/model";
-import { agentViewFixture } from "@vibecook/puppeteer-view-sdk/testing";
-import type { FindAgent } from "@vibecook/puppeteer-views";
+import type { AgentView } from "@vibefield/puppeteer-view-sdk/model";
+import { agentViewFixture } from "@vibefield/puppeteer-view-sdk/testing";
+import type { FindAgent } from "@vibefield/puppeteer-views";
 import {
   buildFindRows,
   type HistoryPort,
   lastActiveMs,
   liveScope,
   useMonitorPalette,
-} from "@vibecook/puppeteer-views";
+} from "@vibefield/puppeteer-views";
 import { act, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";

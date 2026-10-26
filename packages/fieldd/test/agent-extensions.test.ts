@@ -1,6 +1,14 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import {
+  AGENT_CATALOG_READERS,
+  AgentsExtensionsActResult,
+  AgentsExtensionsCatalogResult,
+  AgentsExtensionsCheckResult,
+  AgentsExtensionsListResult,
+  type TerminalCreateOpenResult,
+} from "@vibefield/contracts";
 import type {
   AgentProfile,
   ExtensionActPlan,
@@ -15,16 +23,8 @@ import type {
   McpServerItem,
   PluginItem,
   SkillItem,
-} from "@vibecook/puppeteer-core";
-import type { StartedExtensionAct } from "@vibecook/puppeteer-runtime";
-import {
-  AGENT_CATALOG_READERS,
-  AgentsExtensionsActResult,
-  AgentsExtensionsCatalogResult,
-  AgentsExtensionsCheckResult,
-  AgentsExtensionsListResult,
-  type TerminalCreateOpenResult,
-} from "@vibefield/contracts";
+} from "@vibefield/puppeteer-core";
+import type { StartedExtensionAct } from "@vibefield/puppeteer-runtime";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AgentExtensionStore } from "../src/agent-extension-store";
 import {

@@ -14,6 +14,12 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  AGENT_CATALOG_READERS,
+  AgentsExtensionsAddSkillResult,
+  AgentsExtensionsListResult,
+  AgentsExtensionsPlanSkillResult,
+} from "@vibefield/contracts";
+import {
   type AgentProfile,
   type ExtensionInventory,
   type ExtensionService,
@@ -21,17 +27,11 @@ import {
   extensionFilesPlan,
   extensionSkillFolderPlan,
   type SkillItem,
-} from "@vibecook/puppeteer-core";
+} from "@vibefield/puppeteer-core";
 import {
   createExtensionActRunner,
   createExtensionInventoryReader,
-} from "@vibecook/puppeteer-runtime";
-import {
-  AGENT_CATALOG_READERS,
-  AgentsExtensionsAddSkillResult,
-  AgentsExtensionsListResult,
-  AgentsExtensionsPlanSkillResult,
-} from "@vibefield/contracts";
+} from "@vibefield/puppeteer-runtime";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AgentExtensionStore } from "../src/agent-extension-store";
 import { AgentExtensionService } from "../src/agent-extensions";

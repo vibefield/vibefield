@@ -23,20 +23,20 @@
  * mounted view. Times are NOW-relative: the past is read over a wall-clock day.
  */
 
-import type { MonitorViewCommands } from "@vibecook/puppeteer-view-sdk";
-import { createRecordingView, type RecordingView } from "@vibecook/puppeteer-view-sdk/testing";
+import {
+  AgentRecordedLanesResult,
+  type FrameView,
+  type FrameViewState,
+} from "@vibefield/contracts";
+import type { MonitorViewCommands } from "@vibefield/puppeteer-view-sdk";
+import { createRecordingView, type RecordingView } from "@vibefield/puppeteer-view-sdk/testing";
 import {
   type AccountUsagePort,
   type HistoryPort,
   type MonitorViewEntry,
   monitorParameterDefaults,
   monitorViewFor,
-} from "@vibecook/puppeteer-views";
-import {
-  AgentRecordedLanesResult,
-  type FrameView,
-  type FrameViewState,
-} from "@vibefield/contracts";
+} from "@vibefield/puppeteer-views";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -67,8 +67,8 @@ import { type ScriptedModelBoard, scriptedModelBoard } from "./model-board-fixtu
 /** Every `commands` object the stage hands the view host, in render order; the
  * host itself is the SDK's, passed through. */
 const viewHost = vi.hoisted(() => ({ commands: [] as unknown[] }));
-vi.mock("@vibecook/puppeteer-view-sdk/host", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@vibecook/puppeteer-view-sdk/host")>();
+vi.mock("@vibefield/puppeteer-view-sdk/host", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@vibefield/puppeteer-view-sdk/host")>();
   return {
     ...actual,
     MonitorViewHost: (props: Parameters<typeof actual.MonitorViewHost>[0]) => {

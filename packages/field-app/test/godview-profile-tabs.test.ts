@@ -1,5 +1,5 @@
-import { agentViewFixture } from "@vibecook/puppeteer-view-sdk/testing";
 import type { AgentPersona, AgentProfileSet } from "@vibefield/contracts";
+import { agentViewFixture } from "@vibefield/puppeteer-view-sdk/testing";
 import { describe, expect, it } from "vitest";
 import {
   agentProfileSet,

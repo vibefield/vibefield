@@ -1,13 +1,13 @@
 import { homedir } from "node:os";
+import { ENV_PREFIXES, type TerminalRuntimeSession } from "@vibefield/contracts";
+import { createNoopLogger, type Logger } from "@vibefield/logging";
 import type {
   AgentHost,
   TerminalAutomationOperation,
   TerminalAutomationResult,
   TerminalSpec,
-} from "@vibecook/puppeteer-core";
-import { buildAgentEnvironment } from "@vibecook/puppeteer-runtime";
-import { ENV_PREFIXES, type TerminalRuntimeSession } from "@vibefield/contracts";
-import { createNoopLogger, type Logger } from "@vibefield/logging";
+} from "@vibefield/puppeteer-core";
+import { buildAgentEnvironment } from "@vibefield/puppeteer-runtime";
 import { RpcCallError } from "./native-link";
 import type { TerminalService } from "./terminal-service";
 

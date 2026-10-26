@@ -4,8 +4,10 @@ import { accessSync, constants, existsSync, realpathSync, statSync } from "node:
 import { chmod, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, delimiter, dirname, isAbsolute, join, resolve, sep } from "node:path";
-import type { AgentLaunchProvider } from "@vibecook/puppeteer-core";
-import { type AgentRuntime, prewarmTerminalAgents } from "@vibecook/puppeteer-runtime";
+import { type AgentCatalogReaders, LAYOUT, type TerminalInfo } from "@vibefield/contracts";
+import { createNoopLogger, type Logger } from "@vibefield/logging";
+import type { AgentLaunchProvider } from "@vibefield/puppeteer-core";
+import { type AgentRuntime, prewarmTerminalAgents } from "@vibefield/puppeteer-runtime";
 import {
   type AdoptedSpawnThroughSession,
   boundSpawnThroughText,
@@ -36,9 +38,7 @@ import {
   writeRendezvous,
   writeTerminals,
   ZSH_INTEGRATION,
-} from "@vibecook/puppeteer-runtime/spawn-through";
-import { type AgentCatalogReaders, LAYOUT, type TerminalInfo } from "@vibefield/contracts";
-import { createNoopLogger, type Logger } from "@vibefield/logging";
+} from "@vibefield/puppeteer-runtime/spawn-through";
 import type { AgentAdoption, SystemAudit } from "./agent-runtime";
 import { SPAWNED_BY_SHELL } from "./agent-typed-run";
 import type { AuditMutation, AuditMutationOutcome } from "./audit-service";

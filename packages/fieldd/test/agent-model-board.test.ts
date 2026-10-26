@@ -1,4 +1,3 @@
-import type { AgentMonitorState } from "@vibecook/puppeteer-core";
 import {
   AGENT_FIELD,
   AgentDeskRow,
@@ -12,6 +11,7 @@ import {
   AgentSubscribeParams,
   MonitorAgentRow,
 } from "@vibefield/contracts";
+import type { AgentMonitorState } from "@vibefield/puppeteer-core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createFieldSubscription,

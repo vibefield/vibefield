@@ -31,13 +31,13 @@
  * - A receded lane is lent like any other, and opens like any other.
  */
 
-import type { MonitorEndedRow } from "@vibecook/puppeteer-view-sdk/model";
-import { fixturePalette } from "@vibecook/puppeteer-view-sdk/testing";
 import {
   AgentRecordedLanesResult,
   type FrameView,
   type FrameViewState,
 } from "@vibefield/contracts";
+import type { MonitorEndedRow } from "@vibefield/puppeteer-view-sdk/model";
+import { fixturePalette } from "@vibefield/puppeteer-view-sdk/testing";
 import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

@@ -1,12 +1,12 @@
-import type { StageGeometry } from "@vibecook/puppeteer-view-sdk";
-import { MonitorViewHost } from "@vibecook/puppeteer-view-sdk/host";
-import type { AgentView } from "@vibecook/puppeteer-view-sdk/model";
+import type { StageGeometry } from "@vibefield/puppeteer-view-sdk";
+import { MonitorViewHost } from "@vibefield/puppeteer-view-sdk/host";
+import type { AgentView } from "@vibefield/puppeteer-view-sdk/model";
 import {
   agentViewFixture,
   createFixtureReplica,
   fixtureTheme,
-} from "@vibecook/puppeteer-view-sdk/testing";
-import { type SwarmFrame, swarmMonitorView } from "@vibecook/puppeteer-views";
+} from "@vibefield/puppeteer-view-sdk/testing";
+import { type SwarmFrame, swarmMonitorView } from "@vibefield/puppeteer-views";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -18,8 +18,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // handoff is M59's: a launcher's agent row arrives wearing the shell's
 // `visualId`, and the body the shell had is the one the agent keeps.
 const { paint } = vi.hoisted(() => ({ paint: vi.fn<(frame: SwarmFrame) => void>() }));
+// The renderer module inside the published views (0.2.3's per-file dist; the
+// linked checkout's `src` until 2026-10-26), reached through field-app's own
+// node_modules — the package exports no such subpath, and the suite inlines it.
 vi.mock(
-  "../../../../puppeteer/packages/views/src/views/swarm/gpu/swarm-renderer.js",
+  "../node_modules/@vibefield/puppeteer-views/dist/views/swarm/gpu/swarm-renderer.js",
   async (original) => ({
     ...(await original<object>()),
     createSwarmRenderer: async () => ({

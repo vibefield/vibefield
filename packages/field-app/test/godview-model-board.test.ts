@@ -2,9 +2,9 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createMonitorReplica } from "@vibecook/puppeteer-monitor/replica";
-import type { FrameScheduler } from "@vibecook/puppeteer-view-sdk/model";
 import { AgentModelDeskRow, AgentModelMeshFrame, AgentModelMeshOpen } from "@vibefield/contracts";
+import { createMonitorReplica } from "@vibefield/puppeteer-monitor/replica";
+import type { FrameScheduler } from "@vibefield/puppeteer-view-sdk/model";
 import { describe, expect, it, vi } from "vitest";
 import { ModelBoardFold } from "../src/godview/monitor/model-board";
 import { createGodviewMonitorFeed } from "../src/godview/monitor/model-replica";

@@ -1,12 +1,3 @@
-import type {
-  LauncherAgent,
-  LauncherHistoryStatus,
-  LauncherOutcome,
-  LauncherPort,
-  LauncherReadiness,
-  LauncherSession,
-  LauncherWordHit,
-} from "@vibecook/puppeteer-views/launcher";
 import {
   AGENT_OFFERED_STATUSES,
   AGENT_VISIBLE_STATUSES,
@@ -18,6 +9,15 @@ import {
   IndexSearchResult,
   IndexStatus,
 } from "@vibefield/contracts";
+import type {
+  LauncherAgent,
+  LauncherHistoryStatus,
+  LauncherOutcome,
+  LauncherPort,
+  LauncherReadiness,
+  LauncherSession,
+  LauncherWordHit,
+} from "@vibefield/puppeteer-views/launcher";
 import {
   AnswerLostError,
   type KeyedCallClient,
@@ -28,7 +28,7 @@ import { NATIVE_PROFILE } from "./monitor/profile-tabs";
 
 // THE EMPTY PANE LAUNCHER'S PORT (QL-1, thinking-ql-empty-pane-launcher.md),
 // over fieldd's doors. Pure adapters, like `monitor/doors.ts`: the launcher
-// (`@vibecook/puppeteer-views/launcher`) asks in its own shapes, and this file
+// (`@vibefield/puppeteer-views/launcher`) asks in its own shapes, and this file
 // answers from VibeField's contracts — `index.recent` for the list,
 // `index.search` for the words lane, `agent.spawn` and `agent.resume`'s native
 // form for the two verbs. Where the answer lands (the pane, the shell it

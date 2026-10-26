@@ -9,13 +9,13 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname } from "node:path";
+import { ProjectIdentityFile } from "@vibefield/contracts";
+import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/logging";
 import {
   createMemoryProjectIdentityStore,
   type MemoryProjectIdentityStore,
   type ProjectIdentityStore,
-} from "@vibecook/puppeteer-monitor";
-import { ProjectIdentityFile } from "@vibefield/contracts";
-import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/logging";
+} from "@vibefield/puppeteer-monitor";
 
 // MV-3a (L4) — THE PROJECT'S COLOUR IS IDENTITY, NOT HISTORY.
 //

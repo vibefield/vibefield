@@ -1,11 +1,3 @@
-import type { AgentMonitorState, MonitorNotification } from "@vibecook/puppeteer-core";
-import type {
-  MonitorClock,
-  MonitorHistoryPort,
-  MonitorRuntimeSource,
-  MonitorScheduler,
-} from "@vibecook/puppeteer-monitor";
-import { createMemoryProjectIdentityStore } from "@vibecook/puppeteer-monitor";
 import {
   AGENT_CATALOG,
   type AgentListResult,
@@ -15,6 +7,14 @@ import {
   createAgentCatalogReaders,
   type TerminalInfo,
 } from "@vibefield/contracts";
+import type { AgentMonitorState, MonitorNotification } from "@vibefield/puppeteer-core";
+import type {
+  MonitorClock,
+  MonitorHistoryPort,
+  MonitorRuntimeSource,
+  MonitorScheduler,
+} from "@vibefield/puppeteer-monitor";
+import { createMemoryProjectIdentityStore } from "@vibefield/puppeteer-monitor";
 import {
   type AgentMonitorDevices,
   type AgentMonitorFold,
@@ -326,9 +326,9 @@ export interface TestMonitor {
   scheduler: ManualScheduler;
   identity: ReturnType<typeof createMemoryProjectIdentityStore>;
   /** runs the queued tick and answers the rows */
-  rows(): readonly import("@vibecook/puppeteer-view-sdk/model").MonitorAgentRow[];
+  rows(): readonly import("@vibefield/puppeteer-view-sdk/model").MonitorAgentRow[];
   /** the row for a run, after the tick */
-  row(runtimeRunId: string): import("@vibecook/puppeteer-view-sdk/model").MonitorAgentRow;
+  row(runtimeRunId: string): import("@vibefield/puppeteer-view-sdk/model").MonitorAgentRow;
 }
 
 export async function testMonitor(

@@ -31,11 +31,11 @@ import {
 } from "node:fs";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { LAYOUT, SOCKETS } from "@vibefield/contracts";
 import {
   materializeShims,
   shellIntegrationEnvironment,
-} from "@vibecook/puppeteer-runtime/spawn-through";
-import { LAYOUT, SOCKETS } from "@vibefield/contracts";
+} from "@vibefield/puppeteer-runtime/spawn-through";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { NativeLink } from "../src/index";
 import { TerminalService } from "../src/terminal-service";

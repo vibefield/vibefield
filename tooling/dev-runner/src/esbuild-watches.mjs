@@ -75,7 +75,7 @@ export function esbuildDefinitions(paths) {
       // both to compare the bytes. The kit's sources reach this build through
       // esbuild's own input tracking, as they reach bin.cjs.
       name: "fieldd-agent-shim",
-      entry: "@vibecook/puppeteer-runtime/spawn-through/shim",
+      entry: "@vibefield/puppeteer-runtime/spawn-through/shim",
       outfile: paths.agentShimOutput,
       cwd: dirname(dirname(paths.fielddEntry)),
       format: "cjs",

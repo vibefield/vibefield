@@ -3,7 +3,7 @@
 // and the mesh board (`assembleMonitorAgents`): the run's id, its project and
 // colour, its status and detail line, recency, the pane join, the usage
 // ledger's history, the visual-id carry-forward. The backend beside the runtime
-// computes all of that once now (`@vibecook/puppeteer-monitor`, hosted by
+// computes all of that once now (`@vibefield/puppeteer-monitor`, hosted by
 // fieldd — MV-D22), and the window's replica applies it. The views read the
 // model directly. The retired MV-3 differential established parity before the
 // old assembly and its oracle went away in MV-8. (The counters' counts,

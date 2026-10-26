@@ -9,9 +9,9 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname } from "node:path";
-import type { AgentRuntime } from "@vibecook/puppeteer-runtime";
 import { TerminalBinding, type TerminalBindingsFile } from "@vibefield/contracts";
 import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/logging";
+import type { AgentRuntime } from "@vibefield/puppeteer-runtime";
 
 // SB-2 (AR-7g) — THE SHELL IS BORN UNDER ITS PROFILE. A `terminal.create` that
 // names an Agent Profile (puppeteer's profile set) is born with that profile's

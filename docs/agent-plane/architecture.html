@@ -1016,6 +1016,13 @@
               <a href="system.html">system.html</a>). The exit is a version edit
               (<span class="badge tone-designed">Designed</span> — W-D8, <code>draft/thinking-ar-sibling-workbench.md</code>
               §3).
+              <em>Corrected 2026-10-26 (read at puppeteer v0.2.3 = ee785ec1): the exit came for both TypeScript halves.
+              rosetta's client is exact <code>@vibefield/rosetta-*</code> 0.1.1 since RD-5a (2026-10-14), and puppeteer's
+              packages are exact <code>@vibefield/puppeteer-*</code> 0.2.3 since 2026-10-26 (RD-5's exit, the
+              <code>@vibecook/puppeteer-*</code> scope retired) — <span class="badge tone-built">Built</span>,
+              <code>pnpm-workspace.yaml</code>'s overrides. No build reads a puppeteer checkout; <code>rosettad</code> is
+              still built from the rosetta checkout until RD-D7. Both entries stay in <code>siblings.lock.json</code> as
+              the dev overlay's coordinates (<code>pnpm siblings use NAME</code>).</em>
             </div>
           </section>
 
@@ -1391,7 +1398,7 @@
                     <td><span class="badge tone-vibefield">fieldd</span></td>
                     <td>
                       <p>
-                        <code>@vibecook/puppeteer-builtin-providers</code> (<code>createBuiltinProviders</code>)<br />
+                        <code>@vibefield/puppeteer-builtin-providers</code> (<code>createBuiltinProviders</code>)<br />
                         <code>packages/fieldd/src/agent-runtime.ts</code>
                       </p>
                     </td>
@@ -1429,8 +1436,8 @@
                     <td><span class="route">monitor backend → replica → view</span></td>
                     <td><span class="badge tone-puppeteer">puppeteer</span></td>
                     <td><p>fieldd · field-app</p></td>
-                    <td><p><code>@vibecook/puppeteer-monitor</code> · <code>/replica</code><br />
-                      <code>@vibecook/puppeteer-view-sdk</code> · <code>/host</code><br />
+                    <td><p><code>@vibefield/puppeteer-monitor</code> · <code>/replica</code><br />
+                      <code>@vibefield/puppeteer-view-sdk</code> · <code>/host</code><br />
                       <code>packages/fieldd/src/agent-monitor.ts</code> · <code>agent-model-board.ts</code><br />
                       <code>packages/field-app/src/godview/monitor/model-replica.ts</code> · <code>window-view.ts</code></p></td>
                     <td><p>The backend publishes model rows. <code>agent.subscribe {projection: "model", scope: "mesh"}</code>
@@ -1453,8 +1460,8 @@
                     <td><span class="route">the record's past → a view (capability <code>history</code>)</span></td>
                     <td><span class="badge tone-puppeteer">puppeteer</span></td>
                     <td><p>fieldd · field-app</p></td>
-                    <td><p><code>@vibecook/puppeteer-monitor</code> (<code>MonitorHistoryPort</code>, <code>readPast</code>)<br />
-                      <code>@vibecook/puppeteer-view-sdk</code> · <code>/host</code> (<code>viewWantsHistory</code>,
+                    <td><p><code>@vibefield/puppeteer-monitor</code> (<code>MonitorHistoryPort</code>, <code>readPast</code>)<br />
+                      <code>@vibefield/puppeteer-view-sdk</code> · <code>/host</code> (<code>viewWantsHistory</code>,
                       <code>keepPast</code>, <code>lendHistory</code>)<br />
                       <code>packages/fieldd/src/index-activity.ts</code> · <code>agent-monitor.ts</code><br />
                       <code>packages/field-app/src/godview/monitor/monitor-history.ts</code></p></td>
@@ -1478,7 +1485,7 @@
                     <td><span class="route">host chrome ports</span></td>
                     <td><span class="badge tone-puppeteer">puppeteer</span></td>
                     <td><span class="badge tone-vibefield">field-app</span></td>
-                    <td><p><code>@vibecook/puppeteer-views</code> (<code>HistoryPort</code>, <code>AccountUsagePort</code>)<br />
+                    <td><p><code>@vibefield/puppeteer-views</code> (<code>HistoryPort</code>, <code>AccountUsagePort</code>)<br />
                       <code>packages/field-app/src/godview/monitor/remote-door.ts</code> · <code>doors.ts</code></p></td>
                     <td><p>Find and the usage column are host chrome beside the SDK view. Their injected ports adapt
                       fieldd's index and usage doors. No SDK view receives those ports or dials rosettad. Find joins
@@ -1772,7 +1779,7 @@
             </div>
             <div class="callout">
               <strong>One package the wall admits and the lock does not name.</strong> R21's door list includes
-              <code>@vibecook/puppeteer-react</code>, but <code>siblings.lock.json</code> has no row for it and neither
+              <code>@vibefield/puppeteer-react</code>, but <code>siblings.lock.json</code> has no row for it and neither
               does the fenced sibling block. That is correct, and the two comments explaining it were written a day
               apart and no longer agree. R21's own comment is the older one: it says the row "waits on the react-peer
               answer". <code>pnpm-workspace.yaml</code>'s block carries the answer, dated 2026-09-13 — a

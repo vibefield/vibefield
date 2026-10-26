@@ -1,11 +1,11 @@
 import type { SessionSummary } from "@vibecook/ghosttea-protocol";
-import type { AccountUsagePort, HistoryPort } from "@vibecook/puppeteer-views";
 import {
   AGENT_CATALOG,
   type AgentPersona,
   type AgentProfileSet,
   type AgentSessionSummary,
 } from "@vibefield/contracts";
+import type { AccountUsagePort, HistoryPort } from "@vibefield/puppeteer-views";
 import type { MonitorDoor } from "../godview/monitor/remote-door";
 import type { MonitorPaneFacts } from "../godview/monitor/useMonitorAgents";
 import { type CatalogDesktop, catalogModelBoard } from "./godview-model-fixture";

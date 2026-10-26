@@ -53,6 +53,13 @@ public struct ReplyChip: Identifiable, Equatable, Sendable {
 ///   button with nowhere to send, so there is NO chip: the card's existing
 ///   "approve at the desktop" line already says the true thing, and D-i6 says
 ///   an absence is a state in words rather than a dead control.
+///   *Corrected 2026-10-26 (VibeField's pin to puppeteer 0.2.3, Grok 1.0.70):
+///   grok is not structured here. Every Grok session puppeteer prepares has
+///   Grok's own TUI attached, and with no host approval handler — VibeField
+///   registers none — the ask is left to that TUI (adapter-grok's
+///   `unhandledApproval: "defer"`), so the person answers it in the pane, as
+///   with Claude. There is still no chip: this table does not know what Grok's
+///   TUI prints, and "approve at the desktop" stays true.*
 ///
 /// Nothing here reads the terminal. A frame reaches this phone as TRF1 bytes
 /// that only the Metal renderer can decode, so the design's regex-over-the-

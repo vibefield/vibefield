@@ -30,11 +30,11 @@ describe("UI system ownership boundaries", () => {
     // AR-5: the monitor's views ship in the puppeteer views package, and their
     // stylesheet enters through the manifest like any other — one row, the
     // package's own bundle, never a copy of its rules.
-    expect(appManifest).toContain('@import "@vibecook/puppeteer-views/styles/views.css";');
+    expect(appManifest).toContain('@import "@vibefield/puppeteer-views/styles/views.css";');
     // GT-6: the deck's pane frame (record §07) ships in the same package since
     // PU-14 and enters the same way — and AFTER godview.css, so the record's
     // pane rules outrank anything a host still says about a pane.
-    expect(appManifest).toContain('@import "@vibecook/puppeteer-views/styles/deck-frame.css";');
+    expect(appManifest).toContain('@import "@vibefield/puppeteer-views/styles/deck-frame.css";');
     expect(appManifest.indexOf("deck-frame.css")).toBeGreaterThan(
       appManifest.indexOf("godview.css"),
     );
@@ -140,7 +140,7 @@ describe("UI system ownership boundaries", () => {
     expect(section).toMatch(/<GodviewPreview door=\{moneyDoor\} initialView="spend"/);
     const fixture = source("design-system/godview-spend-fixtures.ts");
     expect(fixture).toMatch(
-      /import \{[^}]*spendAfternoon[^}]*spendRows[^}]*\} from "@vibecook\/puppeteer-views"/,
+      /import \{[^}]*spendAfternoon[^}]*spendRows[^}]*\} from "@vibefield\/puppeteer-views"/,
     );
     expect(fixture).not.toMatch(/vf-monitor-spend|mv-spend/);
     expect(fixture).not.toMatch(/<[a-z]+[\s/>]/);
@@ -822,7 +822,7 @@ describe("UI system ownership boundaries", () => {
 
   it("keeps the pane frame's own styling in the views package, never in a host's (GT-6)", () => {
     // The frame — the badge, the readout, the verbs, the meter — is the
-    // record's drawing and ships in `@vibecook/puppeteer-views`. A `.vf-pane-*`
+    // record's drawing and ships in `@vibefield/puppeteer-views`. A `.vf-pane-*`
     // rule written here would be VibeField's second reading of one record, and
     // two readings of a record is how they drift (the AR-5b chrome-rule
     // precedent, applied to the deck). The host keeps what a host owns: the
@@ -899,11 +899,11 @@ describe("UI system ownership boundaries", () => {
 
   it("keeps the empty pane launcher's styling in the views package, and its specimen an ADAPTER (QL-1)", () => {
     // The launcher — the field, the legend, the list — is the design's drawing
-    // and ships in `@vibecook/puppeteer-views` with its own stylesheet, entering
+    // and ships in `@vibefield/puppeteer-views` with its own stylesheet, entering
     // through the manifest after the frame's. A host rule for it would be a
     // second reading of one design.
     const manifest = source("styles.css");
-    expect(manifest).toContain('@import "@vibecook/puppeteer-views/styles/pane-launcher.css";');
+    expect(manifest).toContain('@import "@vibefield/puppeteer-views/styles/pane-launcher.css";');
     expect(manifest.indexOf("pane-launcher.css")).toBeGreaterThan(
       manifest.indexOf("deck-frame.css"),
     );

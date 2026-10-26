@@ -11,6 +11,9 @@
 # (`@vibefield/rosetta-*`), so its checkout serves rosettad's build alone (until RD-D7 ships
 # it as a release asset); both repos are PUBLIC now, so the clone needs no token and
 # SIBLINGS_TOKEN is retired.
+# 2026-10-26 (RD-5's exit for puppeteer's npm plane): puppeteer's packages are exact registry
+# pins too (`@vibefield/puppeteer-*` 0.2.3), so no job fetches ../puppeteer, and the
+# prepare-puppeteer composite retired with its link: rows.
 #
 # RFC 025 WINDOW (2026-09-16) — READ THIS BEFORE TRUSTING A RED RUN. truffle 0.7.14 closed
 # the cargo and npm halves the same day (UA-P-X): the [patch.crates-io] row is gone and the
@@ -58,7 +61,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       # The sibling checkouts, at the EXACT pinned SHAs, in the relative locations the
-      # lock names (preflight resolves ../puppeteer and ../rosetta-pin from siblings.lock.json).
+      # lock names (preflight resolves ../rosetta-pin from siblings.lock.json).
       # Both repos are PUBLIC (verified 2026-10-14), so `siblings.mjs fetch` clones each from
       # the lock's own `repository` with no token and checks out the pin detached; a pin that
       # is on no remote FAILS this step loudly — a verify that ran without the siblings would
@@ -67,9 +70,9 @@ jobs:
       # the branch tip. truffle was fetched too from the 0.7.19 bump (2026-10-17) until its Swift
       # plane closed (2026-10-23, the header's RFC 025 note): its checkout is no longer read.
       #
-      # puppeteer is NOT in this loop: its fetch and its own install are one composite,
-      # `.github/actions/prepare-puppeteer`, run below AFTER this tree's install (it needs pnpm
-      # from the packageManager field) — the same one package-preview and release run.
+      # No puppeteer checkout since 2026-10-26: its npm plane is released (siblings.lock.json),
+      # so its packages come from npm with this tree's install, and the prepare-puppeteer
+      # composite that fetched it and ran its own install retired with the link: rows.
       - name: Fetch sibling checkouts at the pinned revisions (EL8, siblings.lock.json)
         run: |
           set -euo pipefail
@@ -122,11 +125,6 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - uses: ./.github/actions/prepare-mille
-
-      # AR-2 — the puppeteer sibling: fetched at its pin and its OWN dependencies installed for
-      # exactly the packages fieldd's graph reaches (the composite says why it is filtered).
-      # PU-6 upstream would let a plain install work too; it is no longer a gate.
-      - uses: ./.github/actions/prepare-puppeteer
 
       # rosettad from the pinned sibling (rustup picks its rust-toolchain.toml). The fieldd
       # supervisor's kill matrix runs against a scripted daemon in every gate; the one row

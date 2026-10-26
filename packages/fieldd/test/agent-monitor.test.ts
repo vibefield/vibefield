@@ -1,10 +1,10 @@
-import type { AgentMonitorState } from "@vibecook/puppeteer-core";
-import type { MonitorAgentRow } from "@vibecook/puppeteer-view-sdk/model";
 import {
   AGENT_CATALOG,
   type AgentSessionSummary,
   createAgentCatalogReaders,
 } from "@vibefield/contracts";
+import type { AgentMonitorState } from "@vibefield/puppeteer-core";
+import type { MonitorAgentRow } from "@vibefield/puppeteer-view-sdk/model";
 import { describe, expect, it } from "vitest";
 import { hostProfileSetFrom, hostRunFromSummary, isUrgentChange } from "../src/agent-monitor";
 import { managedSummary as summary } from "./agent-field-summary";

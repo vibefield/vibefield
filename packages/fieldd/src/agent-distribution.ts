@@ -1,17 +1,5 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join } from "node:path";
-import type {
-  AgentInstallation,
-  DistributionFailure,
-  ReleaseSnapshot,
-  UpdateReceipt,
-} from "@vibecook/puppeteer-core";
-import {
-  type AgentRuntime,
-  availableUpdate,
-  type ReleaseCheckResult,
-  type UpdatePlan,
-} from "@vibecook/puppeteer-runtime";
 import {
   AGENT_DISTRIBUTION_FORMAT,
   AGENT_OPERATION_OUTPUT_BYTES,
@@ -38,6 +26,18 @@ import {
   LAYOUT,
 } from "@vibefield/contracts";
 import { durableRenameSync, type Logger } from "@vibefield/logging";
+import type {
+  AgentInstallation,
+  DistributionFailure,
+  ReleaseSnapshot,
+  UpdateReceipt,
+} from "@vibefield/puppeteer-core";
+import {
+  type AgentRuntime,
+  availableUpdate,
+  type ReleaseCheckResult,
+  type UpdatePlan,
+} from "@vibefield/puppeteer-runtime";
 import { withUsersLock } from "@vibefield/users";
 import { requireOffered, requireVisible } from "./agent-catalog-gates";
 import { RpcCallError } from "./native-link";

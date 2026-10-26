@@ -31,17 +31,17 @@ import { userInfo } from "node:os";
 import { basename, delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  parseSpawnThroughResponse,
-  readRendezvous,
-  type SpawnThroughResponse,
-  spawnThroughLayout,
-} from "@vibecook/puppeteer-runtime/spawn-through";
-import {
   AgentSessionRecord,
   type AgentSessionSummary,
   LAYOUT,
   type TerminalInfo,
 } from "@vibefield/contracts";
+import {
+  parseSpawnThroughResponse,
+  readRendezvous,
+  type SpawnThroughResponse,
+  spawnThroughLayout,
+} from "@vibefield/puppeteer-runtime/spawn-through";
 import WebSocket from "ws";
 import { agentShimHome } from "../src/agent-gateway";
 import { bootstrap, type FielddConfig, type FielddDaemon, SessionRecordStore } from "../src/index";

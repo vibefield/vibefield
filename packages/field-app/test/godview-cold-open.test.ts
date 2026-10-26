@@ -12,8 +12,8 @@
  */
 
 import { readFileSync } from "node:fs";
-import { createRequire } from "node:module";
-import { dirname, join } from "node:path";
+import { createRequire, findPackageJSON } from "node:module";
+import { dirname, extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { COLD_OPEN_PHASES, type ColdOpenPhase, ColdOpenTrace } from "../src/godview/cold-open";
@@ -175,18 +175,37 @@ function importedSheets(entry: string): string[] {
 }
 
 /**
+ * A package's root entry as the renderer's bundler imports it — the `import`
+ * condition of `exports["."]`, the manifest found from this file. Since
+ * puppeteer 0.2.3 (2026-10-26) the views are published ESM-only, which
+ * `require.resolve`'s CJS conditions cannot see; the dev overlay's linked
+ * checkout exports its `./src/index.ts`, a bare string.
+ */
+function packageEntry(name: string): string {
+  const manifest = findPackageJSON(name, import.meta.url);
+  if (manifest === undefined) throw new Error(`${name} is not installed beside field-app`);
+  const root = JSON.parse(readFileSync(manifest, "utf8")).exports?.["."];
+  const entry = typeof root === "string" ? root : (root?.import ?? root?.default);
+  if (typeof entry !== "string") throw new Error(`${manifest}: its root export names no entry`);
+  return join(dirname(manifest), entry);
+}
+
+/**
  * MV-4…MV-6 (L18) — each ported view's own stylesheets, as the overlay loads
  * them: the view's ENTRY module imports them (a side-effect import, never a
  * host's), so they are found by following the package's entry to each view's
- * `views/<id>/index` and reading the CSS that module imports.
+ * `views/<id>/index` and reading the CSS that module imports. The entry's own
+ * extension says the layout: the release's dist (`.js`, 2026-10-26) or the
+ * linked source (`.ts`).
  */
 function viewSheets(packageEntry: string): string[] {
   const root = dirname(packageEntry);
+  const ext = extname(packageEntry);
   const entries = [
     ...readFileSync(packageEntry, "utf8").matchAll(
       /export \* from ['"](\.\/views\/[^/'"]+\/index)\.js['"]/g,
     ),
-  ].map((match) => join(root, `${match[1]}.ts`));
+  ].map((match) => join(root, `${match[1]}${ext}`));
   return entries.flatMap((entry) =>
     [...readFileSync(entry, "utf8").matchAll(/^import ['"](\.[^'"]+\.css)['"];/gm)].flatMap(
       (match) => importedSheets(join(dirname(entry), match[1] as string)),
@@ -197,15 +216,15 @@ function viewSheets(packageEntry: string): string[] {
 describe("the ambient-animation audit (GT-D15.1)", () => {
   const godviewRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "src", "godview");
   // The views package's sheet, resolved through the very export the app's
-  // manifest imports (`@vibecook/puppeteer-views/styles/views.css`), so the
+  // manifest imports (`@vibefield/puppeteer-views/styles/views.css`), so the
   // audit reads what the overlay loads rather than a path it remembers — and,
   // since the views carry their own (L18), every ported view's sheets through
   // the package's entry, as the overlay's bundle reaches them.
   const require = createRequire(import.meta.url);
   const packageSheets = importedSheets(
-    require.resolve("@vibecook/puppeteer-views/styles/views.css"),
+    require.resolve("@vibefield/puppeteer-views/styles/views.css"),
   );
-  const ownSheets = viewSheets(require.resolve("@vibecook/puppeteer-views"));
+  const ownSheets = viewSheets(packageEntry("@vibefield/puppeteer-views"));
   const css = [
     readFileSync(join(godviewRoot, "godview.css"), "utf8"),
     readFileSync(join(godviewRoot, "deck-zoom.css"), "utf8"),

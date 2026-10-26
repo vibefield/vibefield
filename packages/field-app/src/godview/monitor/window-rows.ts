@@ -1,5 +1,5 @@
-import type { AgentView, MonitorModel } from "@vibecook/puppeteer-view-sdk/model";
 import type { RowsDeviceState } from "@vibefield/contracts";
+import type { AgentView, MonitorModel } from "@vibefield/puppeteer-view-sdk/model";
 import { type HeldModelRow, isTerminalBoardRow } from "./model-board";
 import type { MonitorPaneFacts } from "./useMonitorAgents";
 

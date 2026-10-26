@@ -1,4 +1,3 @@
-import type { MonitorAgentRow } from "@vibecook/puppeteer-view-sdk/model";
 import {
   AGENT_FIELD,
   type AgentListResult,
@@ -8,6 +7,7 @@ import {
   type AgentSessionSummary,
   type AgentSessionTerminal,
 } from "@vibefield/contracts";
+import type { MonitorAgentRow } from "@vibefield/puppeteer-view-sdk/model";
 import {
   type ProjectedDeskRow,
   type ProjectedTerminalRow,

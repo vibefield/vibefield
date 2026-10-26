@@ -44,7 +44,7 @@ import {
   ZOOM_COMMIT_GRACE_MS,
   ZOOM_DURATION_MS,
   ZOOM_REDUCED_DURATION_MS,
-} from "@vibecook/puppeteer-views/deck";
+} from "@vibefield/puppeteer-views/deck";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";

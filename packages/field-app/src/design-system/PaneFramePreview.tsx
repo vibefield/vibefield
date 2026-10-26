@@ -4,7 +4,7 @@ import {
   type PaneFrameSession,
   type PaneFrameVerbs,
   paneFrameModel,
-} from "@vibecook/puppeteer-views";
+} from "@vibefield/puppeteer-views";
 import { type CSSProperties, type ReactElement, useState } from "react";
 import { DEFAULT_DECK_APPEARANCE } from "../godview/deck-appearance";
 import { godviewTerminalTheme, terminalGround } from "../godview/deck-theme";

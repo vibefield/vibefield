@@ -1,8 +1,8 @@
-import { ProfileGlyph } from "@vibecook/puppeteer-view-sdk/react";
-import { keyLegend } from "@vibecook/puppeteer-view-sdk/toolkit";
-import { ChromeBoundary, type SnippetSegment } from "@vibecook/puppeteer-views";
 import type { FrameView } from "@vibefield/contracts";
 import { FieldGlyph } from "@vibefield/design-kit/glyphs";
+import { ProfileGlyph } from "@vibefield/puppeteer-view-sdk/react";
+import { keyLegend } from "@vibefield/puppeteer-view-sdk/toolkit";
+import { ChromeBoundary, type SnippetSegment } from "@vibefield/puppeteer-views";
 import {
   Fragment,
   type KeyboardEvent,

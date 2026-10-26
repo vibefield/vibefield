@@ -10,8 +10,6 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
-import type { AgentMonitorState } from "@vibecook/puppeteer-core";
-import type { AgentSessionInfo } from "@vibecook/puppeteer-runtime";
 import {
   AGENT_SESSION_RECORD_FORMAT,
   type AgentModelSelection,
@@ -23,6 +21,8 @@ import {
   type TerminalInfo,
 } from "@vibefield/contracts";
 import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/logging";
+import type { AgentMonitorState } from "@vibefield/puppeteer-core";
+import type { AgentSessionInfo } from "@vibefield/puppeteer-runtime";
 import { isTypedRun, SPAWNED_BY_SHELL } from "./agent-typed-run";
 
 // The managed-session records and the fold's projection (AR-3;

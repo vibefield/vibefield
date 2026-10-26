@@ -1,5 +1,5 @@
 // AR-7b/c — a typed agent is a managed agent: fieldd as the HOST of puppeteer's
-// spawn-through kit (`@vibecook/puppeteer-runtime/spawn-through`). The kit gives
+// spawn-through kit (`@vibefield/puppeteer-runtime/spawn-through`). The kit gives
 // the gateway, the wire, the shim, the launcher and the rendezvous files; what
 // is under test here is VibeField's side of it and nothing of any vendor's —
 // the scripted agent (agent-gateway-fixture.ts) is the instrument, and no row
@@ -31,14 +31,24 @@ import { createConnection } from "node:net";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { AgentInstallation, BoundIngress } from "@vibecook/puppeteer-core";
+import {
+  AGENT_CATALOG_READERS,
+  type AgentCatalogEntry,
+  type AgentProvidersResult,
+  type AgentSessionRecord,
+  type AgentSessionSummary,
+  createAgentCatalogReaders,
+  type TerminalInfo,
+} from "@vibefield/contracts";
+import type { Logger } from "@vibefield/logging";
+import type { AgentInstallation, BoundIngress } from "@vibefield/puppeteer-core";
 import {
   type AgentProvider,
   type AgentRuntime,
   createAgentRuntime,
   createFileCreationRequestRegistry,
   createFileProfileStore,
-} from "@vibecook/puppeteer-runtime";
+} from "@vibefield/puppeteer-runtime";
 import {
   boundSpawnThroughText,
   MAX_REFUSAL_MESSAGE_LENGTH,
@@ -58,17 +68,7 @@ import {
   spawnThroughLayout,
   startSpawnThroughGateway,
   writeRendezvous,
-} from "@vibecook/puppeteer-runtime/spawn-through";
-import {
-  AGENT_CATALOG_READERS,
-  type AgentCatalogEntry,
-  type AgentProvidersResult,
-  type AgentSessionRecord,
-  type AgentSessionSummary,
-  createAgentCatalogReaders,
-  type TerminalInfo,
-} from "@vibefield/contracts";
-import type { Logger } from "@vibefield/logging";
+} from "@vibefield/puppeteer-runtime/spawn-through";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { AgentDistributionService } from "../src/agent-distribution";
 import {

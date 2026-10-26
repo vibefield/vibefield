@@ -25,8 +25,8 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { AccountUsageBatch } from "@vibecook/puppeteer-core";
 import type { AgentProfileSet, DeviceInfo } from "@vibefield/contracts";
+import type { AccountUsageBatch } from "@vibefield/puppeteer-core";
 import { describe, expect, it, vi } from "vitest";
 import {
   type DoorClient,

@@ -1,4 +1,4 @@
-import { CHROME_RETRY_FIRST_MS } from "@vibecook/puppeteer-views";
+import { CHROME_RETRY_FIRST_MS } from "@vibefield/puppeteer-views";
 import { act } from "react";
 import { vi } from "vitest";
 

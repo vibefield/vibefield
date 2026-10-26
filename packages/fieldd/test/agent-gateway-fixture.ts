@@ -18,6 +18,7 @@
 // Test-only; the gate's R23 never reads it.
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import type { AgentCatalogEntry } from "@vibefield/contracts";
 import type {
   AgentAdapterBinding,
   AgentHost,
@@ -25,13 +26,12 @@ import type {
   BoundIngress,
   PromptReceipt,
   PromptSubmission,
-} from "@vibecook/puppeteer-core";
+} from "@vibefield/puppeteer-core";
 import type {
   AgentProvider,
   AgentProviderSessionOptions,
   AttachProviderSessionOptions,
-} from "@vibecook/puppeteer-runtime";
-import type { AgentCatalogEntry } from "@vibefield/contracts";
+} from "@vibefield/puppeteer-runtime";
 import { catalogWith } from "./agent-catalog-fixture";
 import { SCRIPTED_ROOT_VARIABLE, scriptedProfiles } from "./scripted-profiles";
 

@@ -1,4 +1,4 @@
-import { MONITOR_STAGE_CLASS } from "@vibecook/puppeteer-views";
+import { MONITOR_STAGE_CLASS } from "@vibefield/puppeteer-views";
 import {
   type KeyboardEvent,
   type PointerEvent,

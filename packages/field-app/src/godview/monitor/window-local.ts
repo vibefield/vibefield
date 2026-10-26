@@ -1,8 +1,8 @@
 import type {
   MonitorReplicaAttachment,
   MonitorReplicaLocal,
-} from "@vibecook/puppeteer-monitor/replica";
-import type { MonitorActivity, MonitorAgentRow } from "@vibecook/puppeteer-view-sdk/model";
+} from "@vibefield/puppeteer-monitor/replica";
+import type { MonitorActivity, MonitorAgentRow } from "@vibefield/puppeteer-view-sdk/model";
 import { type HeldModelRow, isTerminalBoardRow } from "./model-board";
 import type { MonitorPaneFacts } from "./useMonitorAgents";
 

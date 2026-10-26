@@ -11,33 +11,6 @@ import {
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
 import type { SessionExitedEvent } from "@vibecook/ghosttea-client";
-import type { BuiltinProviderOptions } from "@vibecook/puppeteer-builtin-providers";
-import { createBuiltinProviders } from "@vibecook/puppeteer-builtin-providers";
-import type {
-  AgentContinuation,
-  AgentHost,
-  AgentInstallation,
-  AgentMonitorState,
-  BoundIngress,
-  HostIngress,
-} from "@vibecook/puppeteer-core";
-import {
-  type Agent,
-  type AgentProvider,
-  type AgentRuntime,
-  type AgentRuntimeOptions,
-  type AgentSessionFailure,
-  type AgentSessionInfo,
-  type AgentWorkspaceRequest,
-  type CreateAgentSessionResult,
-  type CreationRequestRegistry,
-  createAgentRuntime,
-  createFileCreationRequestRegistry,
-  type ProfileStore,
-  parseProfileRegistrySnapshot,
-  type SpawnAgentResult,
-} from "@vibecook/puppeteer-runtime";
-import type { ProcessTable } from "@vibecook/puppeteer-runtime/spawn-through";
 import {
   AGENT_CATALOG,
   AGENT_FIELD,
@@ -76,6 +49,33 @@ import {
   type TerminalInfo,
 } from "@vibefield/contracts";
 import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/logging";
+import type { BuiltinProviderOptions } from "@vibefield/puppeteer-builtin-providers";
+import { createBuiltinProviders } from "@vibefield/puppeteer-builtin-providers";
+import type {
+  AgentContinuation,
+  AgentHost,
+  AgentInstallation,
+  AgentMonitorState,
+  BoundIngress,
+  HostIngress,
+} from "@vibefield/puppeteer-core";
+import {
+  type Agent,
+  type AgentProvider,
+  type AgentRuntime,
+  type AgentRuntimeOptions,
+  type AgentSessionFailure,
+  type AgentSessionInfo,
+  type AgentWorkspaceRequest,
+  type CreateAgentSessionResult,
+  type CreationRequestRegistry,
+  createAgentRuntime,
+  createFileCreationRequestRegistry,
+  type ProfileStore,
+  parseProfileRegistrySnapshot,
+  type SpawnAgentResult,
+} from "@vibefield/puppeteer-runtime";
+import type { ProcessTable } from "@vibefield/puppeteer-runtime/spawn-through";
 import { requireOffered as offeredBy, requireVisible as visibleBy } from "./agent-catalog-gates";
 import {
   AgentDistributionService,

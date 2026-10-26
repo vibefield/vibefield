@@ -1,15 +1,3 @@
-import type {
-  AccountUsageBatch,
-  AccountUsageEntry,
-  AccountUsageFailure,
-} from "@vibecook/puppeteer-core";
-import {
-  type AccountUsageMonitor,
-  type AccountUsageMonitorOptions,
-  type AccountUsageRefreshOptions,
-  type AgentRuntime,
-  createAccountUsageMonitor,
-} from "@vibecook/puppeteer-runtime";
 import {
   AgentAccountUsageBatch,
   type AgentAccountUsageCredits,
@@ -17,6 +5,18 @@ import {
   type AgentAccountUsageMetric,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
+import type {
+  AccountUsageBatch,
+  AccountUsageEntry,
+  AccountUsageFailure,
+} from "@vibefield/puppeteer-core";
+import {
+  type AccountUsageMonitor,
+  type AccountUsageMonitorOptions,
+  type AccountUsageRefreshOptions,
+  type AgentRuntime,
+  createAccountUsageMonitor,
+} from "@vibefield/puppeteer-runtime";
 
 // AR-5d — account usage: the reading behind `agents.usage` and
 // `agents.usage.subscribe` (thinking-ar-views-port.md §6.2). One row per
@@ -36,7 +36,7 @@ import { createNoopLogger, type Logger } from "@vibefield/logging";
  * frame of each per tick, not two cadences (agent-runtime.ts PUBLISH_TICK_MS). */
 const PUBLISH_TICK_MS = 16;
 
-// The monitor is puppeteer's (`@vibecook/puppeteer-runtime`
+// The monitor is puppeteer's (`@vibefield/puppeteer-runtime`
 // `createAccountUsageMonitor`, landed upstream 2026-09-13 with the views
 // package): per provider AND per account state, the adapter's own cadence,
 // exponential backoff that honours a provider's `retryAt`, a retained

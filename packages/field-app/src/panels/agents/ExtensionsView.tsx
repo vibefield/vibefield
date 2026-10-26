@@ -1,4 +1,3 @@
-import { AgentIcon } from "@vibecook/puppeteer-view-sdk/react";
 import type {
   AgentExtensionOffer,
   AgentExtensionRun,
@@ -15,6 +14,7 @@ import {
   UiButton,
   UiSwitch,
 } from "@vibefield/design-kit/primitives";
+import { AgentIcon } from "@vibefield/puppeteer-view-sdk/react";
 import {
   Fragment,
   type ReactElement,

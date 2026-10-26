@@ -2,17 +2,17 @@ import type { SessionSummary } from "@vibecook/ghosttea-protocol";
 import type { GhostteaTerminalRuntime } from "@vibecook/ghosttea-react";
 import type { GhostteaWorkspaceContext } from "@vibecook/ghosttea-react/workspace";
 import {
-  DeckLaunchers,
-  type LauncherOutcome,
-  type LauncherUnder,
-  watchDrawnSessions,
-} from "@vibecook/puppeteer-views/launcher";
-import {
   type AgentProfileSet,
   type AgentProviderSummary,
   AgentProvidersResult,
 } from "@vibefield/contracts";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
+import {
+  DeckLaunchers,
+  type LauncherOutcome,
+  type LauncherUnder,
+  watchDrawnSessions,
+} from "@vibefield/puppeteer-views/launcher";
 import {
   type ReactElement,
   type RefObject,

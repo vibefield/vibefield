@@ -1,5 +1,5 @@
-import type { ProfileTab } from "@vibecook/puppeteer-views";
 import type { AgentProfileSet } from "@vibefield/contracts";
+import type { ProfileTab } from "@vibefield/puppeteer-views";
 import type { MonitorAgent } from "./types";
 
 // AR-S5 — the bar's profile tabs (the agents-settings record's T3), as pure

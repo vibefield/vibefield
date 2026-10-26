@@ -1,18 +1,19 @@
+import type { AgentProfileSet } from "@vibefield/contracts";
 import type {
   MonitorCapabilities,
   MonitorTheme,
   StageGeometry,
   ViewReport,
-} from "@vibecook/puppeteer-view-sdk";
+} from "@vibefield/puppeteer-view-sdk";
 import {
   frameScheduler,
   keepStage,
   MonitorViewHost,
   type ViewSlotCommands,
   viewWantsHistory,
-} from "@vibecook/puppeteer-view-sdk/host";
-import type { MonitorEndedRow } from "@vibecook/puppeteer-view-sdk/model";
-import { ProfileGlyph } from "@vibecook/puppeteer-view-sdk/react";
+} from "@vibefield/puppeteer-view-sdk/host";
+import type { MonitorEndedRow } from "@vibefield/puppeteer-view-sdk/model";
+import { ProfileGlyph } from "@vibefield/puppeteer-view-sdk/react";
 import {
   type AccountUsagePort,
   ChromeBoundary,
@@ -22,8 +23,7 @@ import {
   type MonitorParameters,
   UsageColumn,
   useMonitorPalette,
-} from "@vibecook/puppeteer-views";
-import type { AgentProfileSet } from "@vibefield/contracts";
+} from "@vibefield/puppeteer-views";
 import {
   memo,
   type ReactElement,

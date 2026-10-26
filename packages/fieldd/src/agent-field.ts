@@ -1,4 +1,3 @@
-import type { MonitorAgentRow, MonitorPastSnapshot } from "@vibecook/puppeteer-view-sdk/model";
 import {
   AGENT_FIELD,
   type AgentDeskBlocker,
@@ -17,6 +16,7 @@ import {
   type AgentSubscribeParams,
   type MonitorAgentRow as WireMonitorRow,
 } from "@vibefield/contracts";
+import type { MonitorAgentRow, MonitorPastSnapshot } from "@vibefield/puppeteer-view-sdk/model";
 import { RpcCallError } from "./native-link";
 import {
   diffRows,

@@ -1,5 +1,5 @@
 import { GHOSTTY_COLOR_THEMES } from "@vibecook/ghosttea-react/workspace";
-import type { MonitorParameterDefinition } from "@vibecook/puppeteer-views";
+import type { MonitorParameterDefinition } from "@vibefield/puppeteer-views";
 import { type CSSProperties, type ReactElement, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { type DeckAppearance, deckThemeNameForMode, setDeckAppearance } from "./deck-appearance";

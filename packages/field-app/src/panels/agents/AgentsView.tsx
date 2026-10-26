@@ -1,4 +1,3 @@
-import { AgentIcon } from "@vibecook/puppeteer-view-sdk/react";
 import type { AgentInstall, AgentOperation, AgentProfileSet } from "@vibefield/contracts";
 import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import {
@@ -7,6 +6,7 @@ import {
   UiButton,
   UnavailableState,
 } from "@vibefield/design-kit/primitives";
+import { AgentIcon } from "@vibefield/puppeteer-view-sdk/react";
 import type { ReactElement, ReactNode } from "react";
 import type { SettingsSubpage } from "../SettingsDialog";
 import { labelCls, SettingsRow, SettingsSection } from "../settings-ui";

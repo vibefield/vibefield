@@ -1,4 +1,4 @@
-import type { FindRow, HistorySearchStatus } from "@vibecook/puppeteer-views";
+import type { FindRow, HistorySearchStatus } from "@vibefield/puppeteer-views";
 import type { LiveDesk, LiveFindAgent } from "./find-door";
 import { linesOf, type PeekLine, type PeekRow } from "./peek-model";
 

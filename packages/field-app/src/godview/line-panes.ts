@@ -1,4 +1,4 @@
-import type { PaneFrameAgent } from "@vibecook/puppeteer-views";
+import type { PaneFrameAgent } from "@vibefield/puppeteer-views";
 import type { LinePane, NewTerminalOutcome } from "../frame/line-door";
 import { folderName } from "./monitor/folder-name";
 import type { LocalMountOutcome } from "./monitor/remote-door";

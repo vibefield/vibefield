@@ -40,23 +40,6 @@ import {
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  type AccountUsageService,
-  type AgentAdapterBinding,
-  type AgentHost,
-  type AgentModelService,
-  type AgentProfile,
-  type BoundIngress,
-  defineModelService,
-  type ExtensionService,
-  type PromptReceipt,
-  type PromptSubmission,
-} from "@vibecook/puppeteer-core";
-import type {
-  AgentProvider,
-  AgentProviderSessionOptions,
-  AttachProviderSessionOptions,
-} from "@vibecook/puppeteer-runtime";
-import {
   AGENT_FIELD,
   AGENT_MONITOR_SCHEMA_VERSION,
   type AgentAccountUsageBatch,
@@ -80,6 +63,23 @@ import {
   SOCKETS,
   type TerminalInfo,
 } from "@vibefield/contracts";
+import {
+  type AccountUsageService,
+  type AgentAdapterBinding,
+  type AgentHost,
+  type AgentModelService,
+  type AgentProfile,
+  type BoundIngress,
+  defineModelService,
+  type ExtensionService,
+  type PromptReceipt,
+  type PromptSubmission,
+} from "@vibefield/puppeteer-core";
+import type {
+  AgentProvider,
+  AgentProviderSessionOptions,
+  AttachProviderSessionOptions,
+} from "@vibefield/puppeteer-runtime";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, type FielddDaemon, SessionRecordStore } from "../src/index";

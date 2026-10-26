@@ -6,7 +6,9 @@
 // `link:` rows in pnpm-workspace.yaml and rosettad is built from the sibling's
 // source. Since RD-5a (2026-10-14) rosetta's packages are exact registry pins and
 // its entry is a `cargo` key alone — the checkout serves rosettad's build until
-// RD-D7 ships it as a release asset. Three consumers need the same facts about those checkouts and must
+// RD-D7 ships it as a release asset. puppeteer's followed on 2026-10-26: its
+// `@vibefield/puppeteer-*` 0.2.3 rows are exact (`release.npm`), and no build here
+// reads its checkout; the entry is the dev overlay's coordinate. Three consumers need the same facts about those checkouts and must
 // never derive them twice: preflight (verify the pins), Nx (invalidate caches
 // when a sibling changes — a `link:` records no content hash in the lockfile,
 // so without this a sibling edit would never miss a cached typecheck), and the

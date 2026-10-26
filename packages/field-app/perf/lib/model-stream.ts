@@ -1,4 +1,3 @@
-import { createMemoryProjectIdentityStore } from "@vibecook/puppeteer-monitor";
 import {
   AGENT_CATALOG,
   AGENT_FIELD,
@@ -9,6 +8,7 @@ import {
   type DeviceInfo,
   type TerminalInfo,
 } from "@vibefield/contracts";
+import { createMemoryProjectIdentityStore } from "@vibefield/puppeteer-monitor";
 import { createFieldSubscription, deskProjector } from "../../../fieldd/src/agent-field";
 import { createModelSubscription } from "../../../fieldd/src/agent-model-board";
 import {

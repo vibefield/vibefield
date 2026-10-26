@@ -14,8 +14,9 @@
 // holds every row to BOTH pins:
 //
 //   the puppeteer half (§4.1) — `createBuiltinProviders()` from the pinned
-//     checkout, resolved THROUGH FIELDD'S OWN DEPENDENCY EDGE (createRequire from
-//     packages/fieldd/package.json: the R20 door, so this script loads exactly
+//     release (the checkout, under the overlay), resolved THROUGH FIELDD'S OWN
+//     DEPENDENCY EDGE (findPackageJSON from packages/fieldd/package.json, then the
+//     package's `import` entry — `fielddImport`: the R20 door, so this script loads exactly
 //     what fieldd may load — builtin-providers and runtime — and nothing else).
 //     Per provider: the ports (createSession ⇒ spawn · launch.provider.resume ⇒
 //     resume · attachSession ⇒ reattach · accountUsage ⇒ usage · distribution ⇒
@@ -43,7 +44,9 @@
 //
 // The puppeteer sibling ships TypeScript source (`exports` → ./src/index.ts,
 // with `.js` specifiers Node's own type stripping cannot resolve), so that half
-// runs in a CHILD process: `node --import tsx` — tsx resolved through the
+// runs in a CHILD process (since 0.2.3, 2026-10-26, the committed shape is the
+// published dist, which needs no loader; the dev overlay still links the
+// source, so the loader stays): `node --import tsx` — tsx resolved through the
 // contracts package, whose gen:schema already runs on it, so preflight needs no
 // install beyond the workspace's own. The child gets a SCRUBBED environment and
 // a fake empty HOME: an agent's native root must not depend on who runs the gate
@@ -140,7 +143,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from "node:fs";
-import { createRequire } from "node:module";
+import { createRequire, findPackageJSON } from "node:module";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -210,10 +213,10 @@ const OFFERED = new Set(["supported", "preview"]);
 /** The packages this script loads from the puppeteer pin — both inside fieldd's
  * R20 door (scripts/check-import-boundaries.mjs), both resolved from fieldd's
  * manifest. The walls' textual matcher sees `import`/`require` of a literal, not
- * a `createRequire(…).resolve`, so this list is the whole of the rule here. */
+ * a `findPackageJSON` lookup, so this list is the whole of the rule here. */
 const FIELDD_DOOR = {
-  providers: "@vibecook/puppeteer-builtin-providers",
-  runtime: "@vibecook/puppeteer-runtime",
+  providers: "@vibefield/puppeteer-builtin-providers",
+  runtime: "@vibefield/puppeteer-runtime",
 };
 
 /** Every class a finding may carry; `fail()` and `warn()` refuse any other, so
@@ -728,13 +731,33 @@ async function rootOf(provider, runtime, home, helpers) {
   return { root: tilde(raw, home), rootVia: "port" };
 }
 
+/** A package on fieldd's OWN dependency edge (the R20 door), imported as fieldd's
+ * ESM import resolves it: the manifest found from packages/fieldd
+ * (`findPackageJSON` walks fieldd's node_modules, the edge), then its root
+ * export's `import` entry. Since puppeteer 0.2.3 (2026-10-26) the packages are
+ * published ESM-only — `exports["."]` is `{ types, import }` — which
+ * `createRequire(…).resolve`, resolving under CJS conditions, cannot match (it
+ * threw ERR_PACKAGE_PATH_NOT_EXPORTED on the first run at the pin); the linked
+ * checkout's bare `./src/index.ts` (the overlay's shape, `pnpm siblings use
+ * puppeteer`) answered both and still does. */
+function fielddImport(name) {
+  const fieldd = pathToFileURL(join(REPO_ROOT, "packages", "fieldd", "package.json"));
+  const manifest = findPackageJSON(name, fieldd);
+  if (manifest === undefined) {
+    throw new Error(`${name} is not on fieldd's dependency edge — pnpm install`);
+  }
+  const root = JSON.parse(readFileSync(manifest, "utf8")).exports?.["."];
+  const entry = typeof root === "string" ? root : (root?.import ?? root?.default);
+  if (typeof entry !== "string")
+    throw new Error(`${manifest}: its root export names no import entry`);
+  return import(pathToFileURL(join(dirname(manifest), entry)).href);
+}
+
 /** The child's whole job: compose the pin the way fieldd does and write what it
  * implements to `outFile`. HOME is the parent's fake empty directory. */
 async function probePuppeteer(outFile) {
-  const fromFieldd = createRequire(join(REPO_ROOT, "packages", "fieldd", "package.json"));
-  const load = (name) => import(pathToFileURL(fromFieldd.resolve(name)).href);
-  const builtin = await load(FIELDD_DOOR.providers);
-  const runtimePackage = await load(FIELDD_DOOR.runtime);
+  const builtin = await fielddImport(FIELDD_DOOR.providers);
+  const runtimePackage = await fielddImport(FIELDD_DOOR.runtime);
   const home = homedir();
   const providers = builtin.createBuiltinProviders();
   const refuse = (what) => () => {
@@ -833,7 +856,7 @@ function readPuppeteerFacts() {
       return {
         ok: false,
         cls: "pin-probe",
-        message: `the puppeteer probe ${why} — is ../puppeteer at the pin and installed?\n${tail(`${child.stdout}\n${child.stderr}`)}`,
+        message: `the puppeteer probe ${why} — are fieldd's puppeteer packages installed (pnpm install; under the overlay, ../puppeteer at the pin)?\n${tail(`${child.stdout}\n${child.stderr}`)}`,
       };
     }
     try {

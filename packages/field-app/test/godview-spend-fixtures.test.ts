@@ -1,5 +1,5 @@
-import { spendWorld } from "@vibecook/puppeteer-views";
 import { AgentModelMeshFrame, AgentModelMeshOpen } from "@vibefield/contracts";
+import { spendWorld } from "@vibefield/puppeteer-views";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { THIS_MAC } from "../src/design-system/godview-profiles-fixtures";
 import { spendDoor } from "../src/design-system/godview-spend-fixtures";

@@ -1,19 +1,4 @@
 import {
-  type AccountUsageBatch,
-  type AccountUsageEntry,
-  type AccountUsageFailure,
-  type AccountUsageFetchResult,
-  type AccountUsageMetric,
-  AccountUsageScopeSchema,
-  type AccountUsageSource,
-} from "@vibecook/puppeteer-core";
-import type {
-  HistoryPort,
-  HistorySearchReadiness,
-  HistorySearchStatus,
-  HistorySessionFacts,
-} from "@vibecook/puppeteer-views";
-import {
   AgentAccountUsageBatch,
   type AgentAccountUsageEntry,
   AgentRecordedLanesResult,
@@ -23,6 +8,21 @@ import {
   IndexSessionsResult,
   IndexStatus,
 } from "@vibefield/contracts";
+import {
+  type AccountUsageBatch,
+  type AccountUsageEntry,
+  type AccountUsageFailure,
+  type AccountUsageFetchResult,
+  type AccountUsageMetric,
+  AccountUsageScopeSchema,
+  type AccountUsageSource,
+} from "@vibefield/puppeteer-core";
+import type {
+  HistoryPort,
+  HistorySearchReadiness,
+  HistorySearchStatus,
+  HistorySessionFacts,
+} from "@vibefield/puppeteer-views";
 import type { RecordedLanesPort } from "./monitor-history";
 import { instrumentModelClient } from "./perf/door-instruments";
 import type {

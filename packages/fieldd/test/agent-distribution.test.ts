@@ -1,13 +1,6 @@
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AgentInstallation, UpdateReceipt } from "@vibecook/puppeteer-core";
-import type {
-  AgentRuntime,
-  ReleaseCheckResult,
-  UpdateInstallationOptions,
-  UpdatePlan,
-} from "@vibecook/puppeteer-runtime";
 import {
   AGENT_CATALOG_READERS,
   AGENT_OPERATION_OUTPUT_BYTES,
@@ -16,6 +9,13 @@ import {
   LAYOUT,
 } from "@vibefield/contracts";
 import { createNoopLogger } from "@vibefield/logging";
+import type { AgentInstallation, UpdateReceipt } from "@vibefield/puppeteer-core";
+import type {
+  AgentRuntime,
+  ReleaseCheckResult,
+  UpdateInstallationOptions,
+  UpdatePlan,
+} from "@vibefield/puppeteer-runtime";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   AgentDistributionService,

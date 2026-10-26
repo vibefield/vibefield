@@ -1,11 +1,11 @@
+import type { FrameView, IndexRecentSession, IndexSearchHit } from "@vibefield/contracts";
+import { useFielddClient } from "@vibefield/fieldd-client/react";
 import {
   type CursorKey,
   FIND_DEBOUNCE_MS,
   type HistoryPort,
   moveCursor,
-} from "@vibecook/puppeteer-views";
-import type { FrameView, IndexRecentSession, IndexSearchHit } from "@vibefield/contracts";
-import { useFielddClient } from "@vibefield/fieldd-client/react";
+} from "@vibefield/puppeteer-views";
 import {
   type KeyboardEvent,
   type ReactElement,

@@ -1,10 +1,10 @@
+import type { AgentSessionRecord, AgentSpawnedBy, TerminalInfo } from "@vibefield/contracts";
 import {
   findOwningProcess,
   type ProcessTable,
   readProcessTable,
   watchProcessExit,
-} from "@vibecook/puppeteer-runtime/spawn-through";
-import type { AgentSessionRecord, AgentSpawnedBy, TerminalInfo } from "@vibefield/contracts";
+} from "@vibefield/puppeteer-runtime/spawn-through";
 
 // A TYPED RUN, as the fold holds it (AR-7b/c; thinking-ar7-typed-agents.md
 // §5.2–§5.3, §6): a run puppeteer adopted in a terminal the person's own shell

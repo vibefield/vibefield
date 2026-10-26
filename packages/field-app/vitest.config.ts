@@ -13,9 +13,11 @@ export default defineConfig({
   // WGSL as `.wgsl` files; the suite loads them as plugin-build inlines them — as their text
   plugins: [wgsl()],
   esbuild: { jsx: "automatic", jsxImportSource: "react" },
-  // The sibling `link:` rows (puppeteer's views) resolve their own react by
+  // The sibling `link:` rows (puppeteer's views) resolved their own react by
   // Node's rules; dedupe is what makes the tests load ONE React, exactly as
-  // the renderer's Vite config does for the bundle (AR-5a).
+  // the renderer's Vite config does for the bundle (AR-5a). Since puppeteer
+  // 0.2.3 (2026-10-26) the views are a registry package whose react is a peer,
+  // so pnpm already resolves this tree's copy; the dedupe stays as the belt.
   resolve: {
     dedupe: ["react", "react-dom"],
     alias: [
@@ -53,11 +55,20 @@ export default defineConfig({
         // renderer bundle, and `resolve.dedupe` reaches the Radix dialog it
         // carries — one React, the class the sibling link's own install hit as
         // "Invalid hook call" in History's search (2026-10-04).
+        //
+        // puppeteer's packages are registry packages since 0.2.3 (2026-10-26):
+        // the views' dist imports its own stylesheets as the room's does, and a
+        // suite that mocks one of their modules (the swarm's GPU renderer) needs
+        // that module in Vite's graph — the linked checkout's source was there
+        // by being outside node_modules. Inlined, all of them are transformed as
+        // they were then, and as the renderer bundle transforms them. A RegExp
+        // here is tested against the module's resolved PATH, never the name.
         inline: [
           "@vibecook/mille",
           "@vibecook/mille-ui",
           "@vibecook/ghosttea-react",
           "@vibefield/rosetta-room",
+          /\/node_modules\/@vibefield\/puppeteer-/,
         ],
       },
     },

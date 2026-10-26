@@ -18,7 +18,7 @@
  *   4. select mounts an existing session; create opens an empty terminal
  *   5. with no door there are no rows and no invented ones
  *
- * AR-5 moved the views into `@vibecook/puppeteer-views`, and two things about
+ * AR-5 moved the views into `@vibefield/puppeteer-views`, and two things about
  * this fixture follow from that. The swarm PAINTS ON WEBGPU now, which happy-dom
  * does not have, so it draws its honest unavailable notice and its keyboard list
  * instead of DOM bubbles — the rows are still there to assert on, in
@@ -33,13 +33,19 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { SessionSummary } from "@vibecook/ghosttea-protocol";
 import {
+  type AgentPersona,
+  type AgentProfileSet,
+  AgentRecordedLanesResult,
+  type TerminalInfo,
+} from "@vibefield/contracts";
+import {
   MONITOR_SKIN,
   type MonitorCreateAnswer,
   type MonitorViewCommands,
   type MonitorViewInput,
   type StageGeometry,
-} from "@vibecook/puppeteer-view-sdk";
-import { createRecordingView, type RecordingView } from "@vibecook/puppeteer-view-sdk/testing";
+} from "@vibefield/puppeteer-view-sdk";
+import { createRecordingView, type RecordingView } from "@vibefield/puppeteer-view-sdk/testing";
 import {
   type AccountUsagePort,
   CHROME_RETRY_FIRST_MS,
@@ -49,7 +55,7 @@ import {
   type MonitorViewEntry,
   monitorParameterDefaults,
   monitorViewFor,
-} from "@vibecook/puppeteer-views";
+} from "@vibefield/puppeteer-views";
 import {
   FRAME_HEADER_FLOATS,
   FRAME_STRIDE,
@@ -57,13 +63,7 @@ import {
   type SwarmAgentSpec,
   type SwarmObstacleRect,
   SwarmPhysics,
-} from "@vibecook/puppeteer-views/physics";
-import {
-  type AgentPersona,
-  type AgentProfileSet,
-  AgentRecordedLanesResult,
-  type TerminalInfo,
-} from "@vibefield/contracts";
+} from "@vibefield/puppeteer-views/physics";
 import { act, Profiler } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -131,8 +131,8 @@ vi.mock("../src/godview/GodviewHeadView", async (importOriginal) => {
  * view's capabilities while their members are the same objects, so only the
  * prop shows whether the STAGE rebuilt what it lends. */
 const viewHost = vi.hoisted(() => ({ handed: [] as unknown[] }));
-vi.mock("@vibecook/puppeteer-view-sdk/host", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@vibecook/puppeteer-view-sdk/host")>();
+vi.mock("@vibefield/puppeteer-view-sdk/host", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@vibefield/puppeteer-view-sdk/host")>();
   return {
     ...actual,
     MonitorViewHost: (props: Parameters<typeof actual.MonitorViewHost>[0]) => {

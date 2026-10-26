@@ -294,6 +294,34 @@ overrides:
   # published this week.
   "@vibefield/rosetta-protocol": 0.1.1
   "@vibefield/rosetta-room": 0.1.1
+  # puppeteer — EXACT registry pins since 2026-10-26 (RD-5's exit for its npm
+  # plane; packages ask for "*"). 0.2.3 was published from the tag v0.2.3
+  # (ee785ec1, the commit npm's SLSA provenance names for every package) under
+  # RL5's `@vibefield` scope; the `@vibecook/puppeteer-*` scope the link: rows
+  # carried is retired (preflight names it). It is the first release that carries
+  # what the link rows pinned (fa0d6cf: PJ-6's resume selection, SWF), plus the
+  # public line's own (Claude Code 2.1.308, Codex 0.164.0, Grok 1.0.70; zod 4.6.7
+  # under the packages). Only DIRECTLY imported packages are rows; the adapters
+  # and every other `@vibefield/puppeteer-*` package resolve as their
+  # dependencies, never as imports here (AR-L1: builtin-providers is the door —
+  # walls R20–R22). Their react peers resolve to this tree's React, and the
+  # renderer's Vite config and field-app's vitest config still `dedupe` it. The
+  # lock entry STAYS as the dev overlay's coordinate (`pnpm siblings use
+  # puppeteer` links the checkout back). A bump is ONE EL8 commit: these rows
+  # (`node scripts/siblings.mjs render --prod` writes them from the lock's
+  # `release.npm`), preflight's PIN_EXPECTATIONS, the lock's sha (`pnpm
+  # siblings:pin puppeteer` at the tag), and minimumReleaseAgeExclude for a
+  # version published this week.
+  "@vibefield/puppeteer-runtime": 0.2.3
+  "@vibefield/puppeteer-builtin-providers": 0.2.3
+  "@vibefield/puppeteer-core": 0.2.3
+  "@vibefield/puppeteer-record": 0.2.3
+  "@vibefield/puppeteer-monitor": 0.2.3
+  # MV-3a (2026-10-03): the monitor-view contract (`/model` is the model fieldd's
+  # backend emits and the desk row mirrors; the renderer's adapter and replica
+  # read it too). Types for fieldd; the replica's scheduler type for field-app.
+  "@vibefield/puppeteer-view-sdk": 0.2.3
+  "@vibefield/puppeteer-views": 0.2.3
   # FS-1a (2026-10-05, FS-D10 RULED (a) with its exit at once — 0.3.4 is on npm):
   # mille, the file explorer engine behind the files service, entered as an
   # EXACT registry pin (EL8; ice's shape — packages ask for "*"). Since FS-1b
@@ -327,7 +355,10 @@ overrides:
   # puppeteer-react contract it extends stays transitive, never a row.
   # (RD-5a, 2026-10-14: rosetta is published and its rows left this block for
   # exact pins above; puppeteer's follow at the release that carries what the
-  # pin has — its 0.2.1 lacks PJ-6's resume selection and the SWF commits.)
+  # pin has — its 0.2.1 lacks PJ-6's resume selection and the SWF commits.
+  # They followed on 2026-10-26: 0.2.3 carries both, and its packages declare
+  # react as a PEER, so the published views resolve this tree's React by pnpm's
+  # own peer resolution; the dedupe stays as the bundlers' belt.)
   # EXIT (RD-5; W-D8 as amended at RD-1, 2026-10-15): record the sibling's
   # `release` in siblings.lock.json and `pnpm siblings render --prod` writes these
   # rows exact — the lock entry STAYS as the dev overlay's coordinate
@@ -336,16 +367,9 @@ overrides:
   # ghosttea-react LEFT this block at the EL8 to 0.13.1 (2026-10-22/23): the Godview
   # performance window's exit, a published release carrying its fixes, came — its
   # exact row is above; `pnpm siblings use ghosttea` links the checkout back.
-  "@vibecook/puppeteer-runtime": link:../puppeteer/packages/runtime
-  "@vibecook/puppeteer-builtin-providers": link:../puppeteer/packages/builtin-providers
-  "@vibecook/puppeteer-core": link:../puppeteer/packages/core
-  "@vibecook/puppeteer-record": link:../puppeteer/packages/record
-  "@vibecook/puppeteer-monitor": link:../puppeteer/packages/monitor
-  # MV-3a (2026-10-03): the monitor-view contract (`/model` is the model fieldd's
-  # backend emits and the desk row mirrors; the renderer's adapter and replica
-  # read it too). Types for fieldd; the replica's scheduler type for field-app.
-  "@vibecook/puppeteer-view-sdk": link:../puppeteer/packages/view-sdk
-  "@vibecook/puppeteer-views": link:../puppeteer/packages/views
+  # puppeteer's seven rows LEFT this block on 2026-10-26 (RD-5's exit): 0.2.3
+  # carries what their pin had, so they are exact `@vibefield/puppeteer-*` pins
+  # above; `pnpm siblings use puppeteer` links the checkout back.
   # rosetta's two packages LEFT this block at RD-5a (2026-10-14): they are exact
   # registry pins above the fence now. rosettad is still built from the pinned
   # checkout (`../rosetta-pin`, siblings.lock.json's `cargo` key) until RD-D7.
@@ -379,6 +403,32 @@ minimumReleaseAgeExclude:
   # exact; our own packages, reviewed as an EL8 pin.
   - '@vibefield/rosetta-protocol@0.1.1'
   - '@vibefield/rosetta-room@0.1.1'
+  # puppeteer 0.2.3 (2026-10-26, RD-5's exit for its npm plane): published 2026-10-26 by
+  # the tag's release run (publish job 07:08:51Z), inside the release-age window on the day
+  # the pin goes exact; our own packages, reviewed as an EL8 pin. Every
+  # `@vibefield/puppeteer-*` package the seven rows reach is here, the adapters included:
+  # they are the rows' dependencies, and the window applies to each. No older
+  # puppeteer row existed to drop — the link: rows never needed one.
+  - '@vibefield/puppeteer-adapter-acp@0.2.3'
+  - '@vibefield/puppeteer-adapter-antigravity@0.2.3'
+  - '@vibefield/puppeteer-adapter-claude@0.2.3'
+  - '@vibefield/puppeteer-adapter-codex@0.2.3'
+  - '@vibefield/puppeteer-adapter-copilot@0.2.3'
+  - '@vibefield/puppeteer-adapter-grok@0.2.3'
+  - '@vibefield/puppeteer-adapter-hermes@0.2.3'
+  - '@vibefield/puppeteer-adapter-kimi@0.2.3'
+  - '@vibefield/puppeteer-adapter-opencode@0.2.3'
+  - '@vibefield/puppeteer-adapter-pi@0.2.3'
+  - '@vibefield/puppeteer-builtin-providers@0.2.3'
+  - '@vibefield/puppeteer-core@0.2.3'
+  - '@vibefield/puppeteer-monitor@0.2.3'
+  - '@vibefield/puppeteer-native-observation@0.2.3'
+  - '@vibefield/puppeteer-react@0.2.3'
+  - '@vibefield/puppeteer-record@0.2.3'
+  - '@vibefield/puppeteer-runtime@0.2.3'
+  - '@vibefield/puppeteer-view-sdk@0.2.3'
+  - '@vibefield/puppeteer-views@0.2.3'
+  - '@vibefield/puppeteer-workspaces@0.2.3'
   # The truffle pins are exact and move together as one EL8 commit across the three places.
   # 0.7.19 → 0.7.22 (2026-10-25, with ghosttea 0.13.4): published 2026-10-25
   # 10:58Z, inside the release-age window on the day the pin moves. Sidecar

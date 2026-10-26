@@ -14,13 +14,13 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { basename, isAbsolute, join, relative, resolve } from "node:path";
-import { EXTENSION_SKILL_FOLDER_NAME, parseSkillFrontmatter } from "@vibecook/puppeteer-core";
 import {
   type AgentExtensionChange,
   AgentExtensionKeep,
   type AgentExtensionServerDefinition,
   AgentProfileSetId,
 } from "@vibefield/contracts";
+import { EXTENSION_SKILL_FOLDER_NAME, parseSkillFrontmatter } from "@vibefield/puppeteer-core";
 import { RpcCallError } from "./native-link";
 import type { SecretStore } from "./plugin-settings";
 

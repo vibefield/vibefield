@@ -1,5 +1,5 @@
-import { ChromeBoundary } from "@vibecook/puppeteer-views";
 import { FieldGlyph } from "@vibefield/design-kit/glyphs";
+import { ChromeBoundary } from "@vibefield/puppeteer-views";
 import {
   type CSSProperties,
   type ReactElement,

@@ -1705,7 +1705,7 @@
 /* AR-S5 — a profile tab with no sessions under it says so over the stage, in
    the instrument's type (the agents-settings record's T3): the profile's glyph
    in a dashed ring, its name, one sentence. The bodies behind it step back to 7%
-   (`@vibecook/puppeteer-views` monitor/recede.ts), so the words read. */
+   (`@vibefield/puppeteer-views` monitor/recede.ts), so the words read. */
 .vf-monitor-profile-empty {
   position: absolute;
   z-index: 6;

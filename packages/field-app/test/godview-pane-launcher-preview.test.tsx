@@ -9,7 +9,7 @@
  * card in the catalog.
  */
 
-import { type LauncherPort, PaneLauncher } from "@vibecook/puppeteer-views/launcher";
+import { type LauncherPort, PaneLauncher } from "@vibefield/puppeteer-views/launcher";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";

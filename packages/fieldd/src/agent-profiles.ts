@@ -1,13 +1,6 @@
 import { existsSync, lstatSync, mkdirSync, realpathSync, rmSync } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import {
-  type AgentProfile,
-  type ProfileFailure,
-  type ProfileSetPlans,
-  profileSetPlans,
-} from "@vibecook/puppeteer-core";
-import type { AgentRuntime, ProfileSetInfo } from "@vibecook/puppeteer-runtime";
-import {
   type AgentCatalogReaders,
   type AgentPersona,
   type AgentProfileSet,
@@ -27,6 +20,13 @@ import {
   LAYOUT,
 } from "@vibefield/contracts";
 import type { Logger } from "@vibefield/logging";
+import {
+  type AgentProfile,
+  type ProfileFailure,
+  type ProfileSetPlans,
+  profileSetPlans,
+} from "@vibefield/puppeteer-core";
+import type { AgentRuntime, ProfileSetInfo } from "@vibefield/puppeteer-runtime";
 import { requireOffered } from "./agent-catalog-gates";
 import type { RevealPath } from "./agent-distribution";
 import type { EnrollRuntimeSpec, IndexService } from "./agent-index";

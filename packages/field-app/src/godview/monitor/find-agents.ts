@@ -1,5 +1,5 @@
-import type { AgentView } from "@vibecook/puppeteer-view-sdk/model";
-import { detailLine, projectName } from "@vibecook/puppeteer-view-sdk/toolkit";
+import type { AgentView } from "@vibefield/puppeteer-view-sdk/model";
+import { detailLine, projectName } from "@vibefield/puppeteer-view-sdk/toolkit";
 import type { LiveDesk, LiveFindAgent } from "../../frame/find-door";
 import type { ChromeRun } from "./chrome-facts";
 

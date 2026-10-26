@@ -1,7 +1,7 @@
-import type { MonitorViewKey, MonitorViewMark } from "@vibecook/puppeteer-view-sdk";
-import { keyLegend } from "@vibecook/puppeteer-view-sdk/toolkit";
-import { ViewMark } from "@vibecook/puppeteer-views";
 import { FieldGlyph } from "@vibefield/design-kit/glyphs";
+import type { MonitorViewKey, MonitorViewMark } from "@vibefield/puppeteer-view-sdk";
+import { keyLegend } from "@vibefield/puppeteer-view-sdk/toolkit";
+import { ViewMark } from "@vibefield/puppeteer-views";
 import {
   type CSSProperties,
   type FocusEvent,

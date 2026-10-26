@@ -1,10 +1,10 @@
-import type { MonitorReplicaLike } from "@vibecook/puppeteer-view-sdk/host";
+import type { MonitorReplicaLike } from "@vibefield/puppeteer-view-sdk/host";
 import type {
   AgentView,
   ModelChanges,
   MonitorModel,
   MonitorSpawnMenu,
-} from "@vibecook/puppeteer-view-sdk/model";
+} from "@vibefield/puppeteer-view-sdk/model";
 
 /**
  * THE MODEL A VIEW DRAWS IN THIS WINDOW (MV-4, MV-8).

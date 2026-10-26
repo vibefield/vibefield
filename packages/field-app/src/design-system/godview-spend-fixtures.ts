@@ -1,11 +1,11 @@
-import type { AgentView } from "@vibecook/puppeteer-view-sdk/model";
-import { type SpendAfternoon, spendAfternoon, spendRows } from "@vibecook/puppeteer-views";
 import type {
   AgentModelBoardRow,
   AgentModelMeshDevice,
   AgentModelMeshOpen,
   MonitorAgentRow as WireMonitorRow,
 } from "@vibefield/contracts";
+import type { AgentView } from "@vibefield/puppeteer-view-sdk/model";
+import { type SpendAfternoon, spendAfternoon, spendRows } from "@vibefield/puppeteer-views";
 import type { ModelBoardPort, MonitorDoor } from "../godview/monitor/remote-door";
 import { NO_HISTORY, NO_USAGE, THIS_MAC } from "./godview-profiles-fixtures";
 

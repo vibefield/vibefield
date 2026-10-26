@@ -18,14 +18,14 @@
 @import "./panels/terminal/terminal-settings.css";
 @import "./godview/godview.css";
 @import "./godview/deck-zoom.css";
-@import "@vibecook/puppeteer-views/styles/views.css";
+@import "@vibefield/puppeteer-views/styles/views.css";
 /* GT-6: the deck's pane frame (record §07) ships in the same package since
    PU-14 and enters the same way — one row, the package's own bundle, and after
    godview.css so the record's pane rules outrank a host's older reading. */
-@import "@vibecook/puppeteer-views/styles/deck-frame.css";
+@import "@vibefield/puppeteer-views/styles/deck-frame.css";
 /* QL-1: the empty pane launcher, beside the frame it sits inside — the same
    package, the same one row, after the frame's rules. */
-@import "@vibecook/puppeteer-views/styles/pane-launcher.css";
+@import "@vibefield/puppeteer-views/styles/pane-launcher.css";
 /* AR-8c: History is rosetta's room (`@vibefield/rosetta-room`), and its sheet does NOT
    enter here (2026-10-04): it rides the room's own chunk — one row in
    `history/HistoryRoomView.tsx`, the package's own bundle — so the first paint

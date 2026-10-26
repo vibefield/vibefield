@@ -1,6 +1,6 @@
-import { frameScheduler } from "@vibecook/puppeteer-view-sdk/host";
-import { ChromeBoundary } from "@vibecook/puppeteer-views";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
+import { frameScheduler } from "@vibefield/puppeteer-view-sdk/host";
+import { ChromeBoundary } from "@vibefield/puppeteer-views";
 import {
   type CSSProperties,
   type ReactElement,

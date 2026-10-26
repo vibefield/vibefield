@@ -21,9 +21,10 @@
  *   is known marks its lanes when the id arrives, with no new read, once.
  */
 
-import type { MonitorHistory } from "@vibecook/puppeteer-view-sdk";
-import { MonitorViewHost, viewWantsHistory } from "@vibecook/puppeteer-view-sdk/host";
-import type { MonitorEndedRow } from "@vibecook/puppeteer-view-sdk/model";
+import { AgentRecordedLanesResult } from "@vibefield/contracts";
+import type { MonitorHistory } from "@vibefield/puppeteer-view-sdk";
+import { MonitorViewHost, viewWantsHistory } from "@vibefield/puppeteer-view-sdk/host";
+import type { MonitorEndedRow } from "@vibefield/puppeteer-view-sdk/model";
 import {
   agentViewsFixture,
   createFixtureReplica,
@@ -32,9 +33,8 @@ import {
   fixturePalette,
   fixtureStage,
   fixtureTheme,
-} from "@vibecook/puppeteer-view-sdk/testing";
-import { projectColourFor } from "@vibecook/puppeteer-view-sdk/toolkit";
-import { AgentRecordedLanesResult } from "@vibefield/contracts";
+} from "@vibefield/puppeteer-view-sdk/testing";
+import { projectColourFor } from "@vibefield/puppeteer-view-sdk/toolkit";
 import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

@@ -16,7 +16,7 @@ import {
   type LauncherPort,
   type LauncherSession,
   type WatchFirstFrame,
-} from "@vibecook/puppeteer-views/launcher";
+} from "@vibefield/puppeteer-views/launcher";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

@@ -92,9 +92,9 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - uses: ./.github/actions/prepare-mille
-      # fieldd's bundle and the renderer import puppeteer's linked packages; without this the
-      # links dangle and `pnpm build` fails at the bundler (PR #1, 2026-10-21 — latent since AR-2).
-      - uses: ./.github/actions/prepare-puppeteer
+      # puppeteer's packages come from npm with the install above since 2026-10-26 (0.2.3 exact),
+      # so the prepare-puppeteer step this job needed while they were link: rows (PR #1,
+      # 2026-10-21) retired with them.
 
       # Root `build` is the Nx desktop build graph: fieldd, Electron main/preload/testing,
       # and the renderer are explicit dependency tasks and each executes at most once.

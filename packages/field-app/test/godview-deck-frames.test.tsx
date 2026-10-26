@@ -2,7 +2,7 @@
 /**
  * THE DECK WEARS THE RECORD'S FRAME (GT-6).
  *
- * The frame itself is `@vibecook/puppeteer-views`' since PU-14 and is tested
+ * The frame itself is `@vibefield/puppeteer-views`' since PU-14 and is tested
  * upstream; what is under test here is everything VibeField owns at that seam:
  * which pane gets which agent's facts, what the three verbs actually do, where
  * a remote device's name comes from, and that the deck element is marked so the
@@ -16,12 +16,12 @@
  */
 
 import type { SessionSummary } from "@vibecook/ghosttea-protocol";
+import { FielddRpcError } from "@vibefield/fieldd-client";
 import {
   monitorParameterDefaults,
   monitorViewFor,
   useMonitorPalette,
-} from "@vibecook/puppeteer-views";
-import { FielddRpcError } from "@vibefield/fieldd-client";
+} from "@vibefield/puppeteer-views";
 import {
   act,
   type ComponentType,
@@ -266,8 +266,8 @@ const chromeFaults = vi.hoisted(() => ({
   launchers: false,
 }));
 
-vi.mock("@vibecook/puppeteer-views", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@vibecook/puppeteer-views")>();
+vi.mock("@vibefield/puppeteer-views", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@vibefield/puppeteer-views")>();
   return {
     ...actual,
     PaneFrame: (props: Parameters<typeof actual.PaneFrame>[0]) => {
@@ -283,8 +283,8 @@ vi.mock("@vibecook/puppeteer-views", async (importOriginal) => {
   };
 });
 
-vi.mock("@vibecook/puppeteer-views/launcher", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@vibecook/puppeteer-views/launcher")>();
+vi.mock("@vibefield/puppeteer-views/launcher", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@vibefield/puppeteer-views/launcher")>();
   return {
     ...actual,
     DeckLaunchers: (props: Parameters<typeof actual.DeckLaunchers>[0]) => {

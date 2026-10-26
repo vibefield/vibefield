@@ -1,9 +1,3 @@
-import type {
-  MonitorHistoryPort,
-  MonitorRecordedActivity,
-  MonitorRecordedRun,
-  MonitorRecordedSession,
-} from "@vibecook/puppeteer-monitor";
 import {
   type AgentCatalogReaders,
   INDEX_ACTIVITY,
@@ -11,6 +5,12 @@ import {
   type IndexActivitySession,
   type IndexCatalogSession,
 } from "@vibefield/contracts";
+import type {
+  MonitorHistoryPort,
+  MonitorRecordedActivity,
+  MonitorRecordedRun,
+  MonitorRecordedSession,
+} from "@vibefield/puppeteer-monitor";
 import type { IndexCatalog, IndexCatalogPhase } from "./index-catalog";
 import { RpcCallError } from "./native-link";
 

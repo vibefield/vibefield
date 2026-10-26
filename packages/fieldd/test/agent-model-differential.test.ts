@@ -1,5 +1,3 @@
-import type { AgentMonitorState } from "@vibecook/puppeteer-core";
-import type { MonitorAgentRow } from "@vibecook/puppeteer-view-sdk/model";
 import {
   AGENT_FIELD,
   AgentDeskRow,
@@ -7,6 +5,8 @@ import {
   type AgentSessionSummary,
   MonitorAgentRow as MonitorAgentRowSchema,
 } from "@vibefield/contracts";
+import type { AgentMonitorState } from "@vibefield/puppeteer-core";
+import type { MonitorAgentRow } from "@vibefield/puppeteer-view-sdk/model";
 import { describe, expect, it } from "vitest";
 import { projectDeskRow, projectFieldRow, windowMonitorRow } from "../src/agent-field";
 import { createModelSubscription } from "../src/agent-model-board";

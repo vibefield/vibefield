@@ -1,16 +1,16 @@
 import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createBuiltinProviders } from "@vibecook/puppeteer-builtin-providers";
-import type { AgentHost } from "@vibecook/puppeteer-core";
-import { type AgentRuntime, createAgentRuntime } from "@vibecook/puppeteer-runtime";
+import { AGENT_CATALOG_READERS } from "@vibefield/contracts";
+import { createBuiltinProviders } from "@vibefield/puppeteer-builtin-providers";
+import type { AgentHost } from "@vibefield/puppeteer-core";
+import { type AgentRuntime, createAgentRuntime } from "@vibefield/puppeteer-runtime";
 import {
   materializeShims,
   prepareSpawnThroughLaunch,
   type SpawnThroughLaunchRequest,
   spawnThroughLayout,
-} from "@vibecook/puppeteer-runtime/spawn-through";
-import { AGENT_CATALOG_READERS } from "@vibefield/contracts";
+} from "@vibefield/puppeteer-runtime/spawn-through";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AGENT_GATEWAY_STRICT, offeredLaunch } from "../src/agent-gateway";
 

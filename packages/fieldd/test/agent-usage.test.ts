@@ -19,16 +19,6 @@
 // daemon in this test graph reach the network with a real token.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type {
-  AccountUsageFetchResult,
-  AgentProfile,
-  AccountUsageService as CoreAccountUsageService,
-  ProfileFailure,
-  ProfileIdentity,
-  ProfileService,
-  TerminalSpec,
-} from "@vibecook/puppeteer-core";
-import type { AgentProvider } from "@vibecook/puppeteer-runtime";
 import {
   AgentAccountUsageBatch,
   type AgentAccountUsageEntry,
@@ -38,6 +28,16 @@ import {
   SOCKETS,
 } from "@vibefield/contracts";
 import type { Logger } from "@vibefield/logging";
+import type {
+  AccountUsageFetchResult,
+  AgentProfile,
+  AccountUsageService as CoreAccountUsageService,
+  ProfileFailure,
+  ProfileIdentity,
+  ProfileService,
+  TerminalSpec,
+} from "@vibefield/puppeteer-core";
+import type { AgentProvider } from "@vibefield/puppeteer-runtime";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import type { FielddDaemon } from "../src/index";

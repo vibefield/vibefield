@@ -7,7 +7,10 @@
 // of cb652e0a, retired 7fcdfd2c when truffle graduated to a registry pin, revived
 // for two siblings). scripts/siblings.mjs is the one reader of that lock; this
 // file verifies what it says against the checkouts and against the overrides
-// block. A path dependency without a SHA pin makes verify unreplayable.
+// block. A path dependency without a SHA pin makes verify unreplayable. Both
+// went exact since (rosetta's packages at RD-5a, 2026-10-14; puppeteer's on
+// 2026-10-26, 0.2.3); their entries stay as the dev overlay's coordinates, and
+// rosettad is still built from rosetta's checkout.
 //
 // RFC 025 petition window (2026-09-16): truffle rejoins them, and the machinery
 // it seeded now verifies its own two extra shapes — the cargo [patch.crates-io]
@@ -216,6 +219,50 @@ const PIN_EXPECTATIONS = [
     label: '"@vibefield/rosetta-room": 0.1.1',
     package: "@vibefield/rosetta-room",
   },
+  // RD-5's exit for puppeteer's npm plane (2026-10-26): the seven rows are exact `@vibefield/puppeteer-*` 0.2.3,
+  // published from the tag v0.2.3 (ee785ec1), the revision the lock pins. Anchored to the line's end like rosetta's.
+  {
+    file: "pnpm-workspace.yaml",
+    re: /"@vibefield\/puppeteer-runtime":\s*0\.2\.3\s*$/m,
+    label: '"@vibefield/puppeteer-runtime": 0.2.3',
+    package: "@vibefield/puppeteer-runtime",
+  },
+  {
+    file: "pnpm-workspace.yaml",
+    re: /"@vibefield\/puppeteer-builtin-providers":\s*0\.2\.3\s*$/m,
+    label: '"@vibefield/puppeteer-builtin-providers": 0.2.3',
+    package: "@vibefield/puppeteer-builtin-providers",
+  },
+  {
+    file: "pnpm-workspace.yaml",
+    re: /"@vibefield\/puppeteer-core":\s*0\.2\.3\s*$/m,
+    label: '"@vibefield/puppeteer-core": 0.2.3',
+    package: "@vibefield/puppeteer-core",
+  },
+  {
+    file: "pnpm-workspace.yaml",
+    re: /"@vibefield\/puppeteer-record":\s*0\.2\.3\s*$/m,
+    label: '"@vibefield/puppeteer-record": 0.2.3',
+    package: "@vibefield/puppeteer-record",
+  },
+  {
+    file: "pnpm-workspace.yaml",
+    re: /"@vibefield\/puppeteer-monitor":\s*0\.2\.3\s*$/m,
+    label: '"@vibefield/puppeteer-monitor": 0.2.3',
+    package: "@vibefield/puppeteer-monitor",
+  },
+  {
+    file: "pnpm-workspace.yaml",
+    re: /"@vibefield\/puppeteer-view-sdk":\s*0\.2\.3\s*$/m,
+    label: '"@vibefield/puppeteer-view-sdk": 0.2.3',
+    package: "@vibefield/puppeteer-view-sdk",
+  },
+  {
+    file: "pnpm-workspace.yaml",
+    re: /"@vibefield\/puppeteer-views":\s*0\.2\.3\s*$/m,
+    label: '"@vibefield/puppeteer-views": 0.2.3',
+    package: "@vibefield/puppeteer-views",
+  },
 ];
 // A petition window's [patch.crates-io] row is part of its pin: without it the
 // exact version is a registry version again and the window is quietly shut. That
@@ -260,8 +307,9 @@ for (const { file, re, label, package: packageName } of PIN_EXPECTATIONS) {
 // (registry mode, W-D8) an exact version — a mixed family is the drift class a
 // per-line table would miss. The rule is asked PER SIBLING since RD-5a
 // (2026-10-14), when rosetta's packages went exact while puppeteer's stayed
-// linked; each family is matched under every scope it has carried, and the
-// retired `@rosetta/*` scope (RL5) is named as retired. Revision drift FAILS with the
+// linked; each family is matched under every scope it has carried, and a
+// retired scope is named as retired: `@rosetta/*` (RL5), and since puppeteer went
+// exact (2026-10-26) `@vibecook/puppeteer-*`. Revision drift FAILS with the
 // sync-or-repin choice spelled out; a dirty tree only WARNs (co-developing the
 // sibling is the normal state — the pin is about the base revision). The
 // rosettad binary is a WARN when absent: fieldd reports the agent index
@@ -281,8 +329,20 @@ for (const { file, re, label, package: packageName } of PIN_EXPECTATIONS) {
     Object.values(lock?.siblings ?? {}).flatMap((entry) => Object.keys(entry.packages ?? {})),
   );
   const SIBLING_FAMILIES = [
-    { sibling: "puppeteer", test: /^@(?:vibecook|vibefield)\/puppeteer-/ },
-    { sibling: "rosetta", test: /^@rosetta\/|^@vibefield\/rosetta-/, retired: /^@rosetta\// },
+    {
+      sibling: "puppeteer",
+      test: /^@(?:vibecook|vibefield)\/puppeteer-/,
+      retired: /^@vibecook\/puppeteer-/,
+      retiredWhy:
+        "the @vibecook/puppeteer-* scope is retired (RL5; puppeteer went exact 2026-10-26) — puppeteer publishes as @vibefield/puppeteer-*",
+    },
+    {
+      sibling: "rosetta",
+      test: /^@rosetta\/|^@vibefield\/rosetta-/,
+      retired: /^@rosetta\//,
+      retiredWhy:
+        "the @rosetta scope is retired (RL5, RD-5a) — rosetta publishes as @vibefield/rosetta-*",
+    },
   ];
   const EXACT_VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
   const familyOf = (name) => SIBLING_FAMILIES.find((f) => f.test.test(name));
@@ -293,11 +353,8 @@ for (const { file, re, label, package: packageName } of PIN_EXPECTATIONS) {
         familyOf(name) !== undefined || declaredPackages.has(name) || value.startsWith("link:"),
     );
   for (const [, name] of family) {
-    if (familyOf(name)?.retired?.test(name)) {
-      problems.push(
-        `${name}: the @rosetta scope is retired (RL5, RD-5a) — rosetta publishes as @vibefield/rosetta-*`,
-      );
-    }
+    const of = familyOf(name);
+    if (of?.retired?.test(name)) problems.push(`${name}: ${of.retiredWhy}`);
   }
   if (lock === null) {
     // Registry mode: no link: row may exist without a lock behind it.
