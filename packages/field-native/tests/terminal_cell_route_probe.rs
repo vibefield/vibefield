@@ -146,6 +146,7 @@ fn cell_route_config(
             strip_prefix: true,
             allow: vec![],
         }],
+        accept_app_capabilities: vec![],
     }
 }
 

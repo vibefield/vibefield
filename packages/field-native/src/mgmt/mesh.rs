@@ -1273,6 +1273,13 @@ pub fn build_serve_config(input: ServeConfigInput<'_>) -> Result<ProxyConfig, St
                 allow_non_loopback: false,
                 allow,
                 routes,
+                // Explicit EMPTY (the EL8 to truffle 0.7.22, 2026-10-25), for
+                // announce's reason: truffle 0.7.20 forwards the caller's tailnet
+                // grants for the names listed here as a `Tailscale-App-Capabilities`
+                // header. No serve of ours forwards a grant until a contract field
+                // asks for one, and naming the field keeps the next one truffle adds
+                // a build failure rather than a silent default.
+                accept_app_capabilities: vec![],
             })
         }
         // TM-2 (TM-D2) — a serve whose ENTIRE surface is its declared routes:
@@ -1349,6 +1356,7 @@ pub fn build_serve_config(input: ServeConfigInput<'_>) -> Result<ProxyConfig, St
                 allow_non_loopback: false,
                 allow,
                 routes,
+                accept_app_capabilities: vec![], // the port arm's law: no grant forwarded
             })
         }
         Some("dir") => {
@@ -1386,6 +1394,7 @@ pub fn build_serve_config(input: ServeConfigInput<'_>) -> Result<ProxyConfig, St
                 allow_non_loopback: false,
                 allow,
                 routes,
+                accept_app_capabilities: vec![], // the port arm's law: no grant forwarded
             })
         }
         _ => Err("target.kind must be port|dir|routes".into()),

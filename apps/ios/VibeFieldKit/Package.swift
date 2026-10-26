@@ -10,12 +10,13 @@ import PackageDescription
 // `truffleRelease` is written by `node scripts/siblings.mjs` from siblings.lock.json's truffle `release.swift`, never
 // by hand. While it is nil the dependency is the RFC 025 window's path package (`.window/truffle`), exactly as before;
 // once a ghosttea Swift release pins the same truffle (G28) the lock records the version, `render --prod` writes it
-// here and the committed shape is that exact version (recorded 2026-10-23 at ghosttea 0.13.1: "0.7.19"). The dev overlay (`pnpm siblings use truffle`) renders this line
+// here and the committed shape is that exact version (recorded 2026-10-23 at ghosttea 0.13.1: "0.7.19"; 2026-10-25,
+// the EL8 to ghosttea 0.13.4: "0.7.22", which ghosttea #85 declares too). The dev overlay (`pnpm siblings use truffle`) renders this line
 // nil again — the file then shows modified, the one-line diff being the overlay's own evidence — and `use --none`
 // renders the lock's value back. The line itself, not a file this manifest reads and not the environment: SwiftPM
 // caches a manifest's evaluation keyed on its contents plus its environment, never a file it reads, so a file flips
 // nothing until the cache misses, and Xcode's GUI evaluates with a fixed environment (§3, measured 2026-10-15).
-let truffleRelease: Version? = "0.7.19"
+let truffleRelease: Version? = "0.7.22"
 let truffleDependency: Package.Dependency =
   if let release = truffleRelease {
     .package(url: "https://github.com/vibecook-dev/truffle.git", exact: release)
@@ -27,7 +28,7 @@ let truffleDependency: Package.Dependency =
 // siblings.lock.json's ghosttea `release.swift`, never by hand: the exact tag in the committed shape, and the checkout
 // (`../ghosttea-0.11.2`, reached through `.window/ghosttea` so the path package keeps the package's own identity, as
 // `.window/truffle` does) while `pnpm siblings use ghosttea` renders it nil.
-let ghostteaRelease: Version? = "0.13.1"
+let ghostteaRelease: Version? = "0.13.4"
 let ghostteaDependency: Package.Dependency =
   if let release = ghostteaRelease {
     .package(url: "https://github.com/vibecook-dev/ghosttea.git", exact: release)

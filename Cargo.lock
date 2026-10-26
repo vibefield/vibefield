@@ -303,15 +303,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "core_maths"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77745e017f5edba1a9c1d854f6f3a52dac8a12dd5af5d2f54aecf61e43d80d30"
-dependencies = [
- "libm",
-]
-
-[[package]]
 name = "cpufeatures"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -565,16 +556,15 @@ dependencies = [
 
 [[package]]
 name = "fontdb"
-version = "0.23.0"
+version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "457e789b3d1202543297a350643cf459f836cade38934e7a4cf6a39e7cde2905"
+checksum = "2660c5e9157bf76d2db1294e4a9feba604ef610819a3b591088d0d8392a3290f"
 dependencies = [
  "fontconfig-parser",
  "log",
  "memmap2",
  "slotmap",
  "tinyvec",
- "ttf-parser",
 ]
 
 [[package]]
@@ -707,9 +697,9 @@ dependencies = [
 
 [[package]]
 name = "ghosttea"
-version = "0.13.1"
+version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a02b75dc96033fc84f11dad0d7ee9d239978fe801d096c9831f51b49fe4efeeb"
+checksum = "3978352150967154c991c30fc29b67110df770254da94a61dce475488beebf9e"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -730,9 +720,9 @@ dependencies = [
 
 [[package]]
 name = "ghosttea-config"
-version = "0.13.1"
+version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d836e0851ed5f56dbcdd2010ce3cc79d66c9bad6d0866226fcd991072ec6a5a2"
+checksum = "24c26bac04d221b6e2752e106324453a8ec2273395886365ec81278b08442dd0"
 dependencies = [
  "libc",
  "serde",
@@ -743,9 +733,9 @@ dependencies = [
 
 [[package]]
 name = "ghosttea-core"
-version = "0.13.1"
+version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "48d51d6f216fe17b5c3116179f56f1ae0a4f9f31fa8c0eb985ee4e5b664a2cab"
+checksum = "76e7afa077481c877520b65e1bc735dc61619802469ed70fca78eb1d48f257f8"
 dependencies = [
  "anyhow",
  "ghosttea-text",
@@ -756,9 +746,9 @@ dependencies = [
 
 [[package]]
 name = "ghosttea-text"
-version = "0.13.1"
+version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "05ccda0e5e4a2aa61e8eb503327fc6a6d42ac2975eb40d44e2891261d71ad83f"
+checksum = "ad472b2c6ee9979da2da1089e28ddb5fade4705b561905a1a73a298d70225c33"
 dependencies = [
  "anyhow",
  "fontdb",
@@ -770,18 +760,18 @@ dependencies = [
 
 [[package]]
 name = "ghosttea-vt"
-version = "0.13.1"
+version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ef78ad1f779d9e3f07476da2d1e38655a9a29dac511bb390d28498b769f6be3"
+checksum = "11edde4d74ead094d4f1f8bbf476852f59630ee586974af4617a45bf582c60ea"
 dependencies = [
  "ghosttea-vt-sys",
 ]
 
 [[package]]
 name = "ghosttea-vt-sys"
-version = "0.13.1"
+version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d740321d6ce200e07a83d19bea29e8023f169a5e952094950c01e74c084352dd"
+checksum = "0d1fe147201462fbeec556f1d3159c7f2a4fd5affada4af65bb5307122ee1e28"
 dependencies = [
  "cc",
  "serde",
@@ -2076,9 +2066,9 @@ dependencies = [
 
 [[package]]
 name = "truffle-core"
-version = "0.7.19"
+version = "0.7.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "00ea07bae7f62a3ff57664811251a1988f9cd860381a6f2a39ccf46106a159be"
+checksum = "88095e1fbbf782adbc6c2bf50e09829a588972e5d286b7c8223aa090c7303b82"
 dependencies = [
  "base64",
  "blake3",
@@ -2104,15 +2094,6 @@ dependencies = [
  "ulid",
  "unicode-normalization",
  "uuid",
-]
-
-[[package]]
-name = "ttf-parser"
-version = "0.25.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2df906b07856748fa3f6e0ad0cbaa047052d4a7dd609e231c4f72cee8c36f31"
-dependencies = [
- "core_maths",
 ]
 
 [[package]]

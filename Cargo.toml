@@ -154,7 +154,33 @@ opt-level = 3
 # 0.7.19 (1218b64). `.window/truffle` stays as the dev overlay's link, and a build
 # no longer needs `../truffle-rfc025`. Every plane names 0.7.19 by version now;
 # the exit list this note kept is empty.
-truffle-core = "=0.7.19"
+#
+# THE BUMP TO 0.7.22 (2026-10-25; James, via VF-PM 23:52Z: "go with your lean" —
+# ONE EL8 event with ghosttea 0.13.4, because ghosttea through 0.13.3 declares
+# truffle-core =0.7.19 on its cargo AND Swift planes, so neither moves alone).
+# `truffle-v0.7.22` = f7e3900d. The crate and the five npm sidecars move
+# together, as at 0.7.19. What it carries past 0.7.19:
+#   · 0.7.20 — sidecar PROTOCOL 9 (WhoIs carries app capabilities, tags and the
+#     user id; `ProxyConfig::accept_app_capabilities`) and PROTOCOL 10 (key
+#     expiry, the control server and the sidecar's own exit as status events,
+#     all on the #[non_exhaustive] `NetworkStatusEvent`); a headless-friendly
+#     start (re-sent login URLs; `NodeBuilder::start_timeout`, whose default is
+#     the 300 s 0.7.19 hard-coded, so an unchanged builder waits as long); the
+#     bridge no longer holds its listener map across a send; the sidecar reaps a
+#     bridged connection only when it is idle in BOTH directions.
+#   · 0.7.21 — lock-only: ctutils 0.4.5 and tokio 1.53.3 (RUSTSEC-2026-0385 and
+#     -0386), the sidecar built with Go 1.27.3 (CVE-2026-111943).
+#   · 0.7.22 — TailscaleKit rebuilt with Go 1.27.3; no Rust change.
+# Unlike 0.7.19, field-native needs a SOURCE change: `ProxyConfig` grew a public
+# field and field-native builds it literally (the three serve arms in
+# mgmt/mesh.rs, and two probe rows). Each names `accept_app_capabilities:
+# vec![]` rather than reaching for `..Default::default()`, for announce's
+# reason: a serve forwards no tailnet grants until a contract field asks, and
+# the next field truffle adds fails this build loudly instead of defaulting in
+# silently. Everything else field-native calls is unchanged or only grew (read
+# at the tag, call site by call site; the build is the check). The node-to-node
+# wire reads unchanged.
+truffle-core = "=0.7.22"
 # NF-0 (native-floor spec NF-D1): ghosttea graduated to crates.io the same way,
 # 2026-07-29 — exact pin, upgrades are deliberate events. NF-7 (2026-08-01) bumped
 # 0.6.0 → 0.7.0 for the G7/G8/G9 petition landings (shutdown drain, silent serve,
@@ -239,7 +265,19 @@ truffle-core = "=0.7.19"
 # 13 `STYLE_PALETTE`), none of which field-native builds literally; truffle 0.7.19
 # on ghosttea's own planes. This row is RENDERED from siblings.lock.json's
 # `release.cargo` (thinking-release-deps.md §13: one version, stated once).
-ghosttea = "=0.13.1"
+# EL8 (2026-10-25, lane hl/el8-ghosttea-0.13.4) bumps 0.13.1 → 0.13.4 on every plane in
+# ONE event with truffle-core 0.7.22 (above): ghosttea through 0.13.3 declares
+# truffle-core =0.7.19, so the two pins move together or not at all. On this plane
+# 0.13.2 rebuilt the prebuilt daemons against ctutils 0.4.5 and tokio 1.53.3 (crates.io
+# consumers resolve their own); 0.13.3 moved ghosttea-text to fontdb 0.24
+# (RUSTSEC-2026-0192 gone, API unchanged); 0.13.4 carries ghosttea #85 (truffle 0.7.22
+# on both of its planes) and #86, the session-metadata event at CONTROL minor 17
+# (item 52 (b): `session-metadata-changed {requestId: 0, sessionId, cwd, title}`,
+# deduped, replicas announce it; `Session::subscribe_metadata`), all additive, none
+# built literally here. Tag v0.13.4 = 139014b4; the lane was built at ghosttea main
+# cc62ff3b (the same source, version 0.13.3) through the RD-2 overlay and retargeted when
+# 0.13.4 shipped, because registry 0.13.3 still pins truffle-core =0.7.19.
+ghosttea = "=0.13.4"
 # RETIRED 2026-09-14 (TM-1): `ghosttea-truffle = "=0.11.1"`, GT-4's mesh half of
 # the terminal floor. It served TSP1 against an IN-PROCESS session registry
 # (`TruffleTerminalMesh::serve` takes ghosttea's `Registry` by value), which is

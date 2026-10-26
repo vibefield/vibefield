@@ -43,11 +43,11 @@ catalogs:
 overrides:
   loro-crdt: ^1.13.8
   '@vibecook/ice': 0.16.0
-  '@vibecook/ghosttea-client': 0.13.1
-  '@vibecook/ghosttea-electron': 0.13.1
-  '@vibecook/ghosttea-react': 0.13.1
-  '@vibecook/ghosttea-protocol': 0.13.1
-  '@vibecook/ghosttea-frame': 0.13.1
+  '@vibecook/ghosttea-client': 0.13.4
+  '@vibecook/ghosttea-electron': 0.13.4
+  '@vibecook/ghosttea-react': 0.13.4
+  '@vibecook/ghosttea-protocol': 0.13.4
+  '@vibecook/ghosttea-frame': 0.13.4
   '@vibefield/rosetta-protocol': 0.1.1
   '@vibefield/rosetta-room': 0.1.1
   '@vibecook/mille': link:../mille-pin/packages/mille
@@ -93,20 +93,20 @@ importers:
         version: 1.0.0-alpha.6
     optionalDependencies:
       '@vibecook/truffle-sidecar-darwin-arm64':
-        specifier: 0.7.19
-        version: 0.7.19
+        specifier: 0.7.22
+        version: 0.7.22
       '@vibecook/truffle-sidecar-darwin-x64':
-        specifier: 0.7.19
-        version: 0.7.19
+        specifier: 0.7.22
+        version: 0.7.22
       '@vibecook/truffle-sidecar-linux-arm64':
-        specifier: 0.7.19
-        version: 0.7.19
+        specifier: 0.7.22
+        version: 0.7.22
       '@vibecook/truffle-sidecar-linux-x64':
-        specifier: 0.7.19
-        version: 0.7.19
+        specifier: 0.7.22
+        version: 0.7.22
       '@vibecook/truffle-sidecar-win32-x64':
-        specifier: 0.7.19
-        version: 0.7.19
+        specifier: 0.7.22
+        version: 0.7.22
 
   apps/plugin-playground:
     dependencies:
@@ -303,8 +303,8 @@ importers:
   packages/electron-shell:
     dependencies:
       '@vibecook/ghosttea-electron':
-        specifier: 0.13.1
-        version: 0.13.1(electron@43.1.1)
+        specifier: 0.13.4
+        version: 0.13.4(electron@43.1.1)
       '@vibefield/audit':
         specifier: workspace:*
         version: link:../audit
@@ -343,8 +343,8 @@ importers:
         specifier: 'catalog:'
         version: 24.13.3
       '@vibecook/ghosttea-client':
-        specifier: 0.13.1
-        version: 0.13.1
+        specifier: 0.13.4
+        version: 0.13.4
       '@vibefield/fieldd':
         specifier: workspace:*
         version: link:../fieldd
@@ -382,11 +382,11 @@ importers:
   packages/field-app:
     dependencies:
       '@vibecook/ghosttea-protocol':
-        specifier: 0.13.1
-        version: 0.13.1
+        specifier: 0.13.4
+        version: 0.13.4
       '@vibecook/ghosttea-react':
-        specifier: 0.13.1
-        version: 0.13.1(react@19.2.7)
+        specifier: 0.13.4
+        version: 0.13.4(react@19.2.7)
       '@vibecook/ice':
         specifier: 0.16.0
         version: 0.16.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -494,8 +494,8 @@ importers:
   packages/fieldd:
     dependencies:
       '@vibecook/ghosttea-client':
-        specifier: 0.13.1
-        version: 0.13.1
+        specifier: 0.13.4
+        version: 0.13.4
       '@vibecook/mille':
         specifier: link:../../../mille-pin/packages/mille
         version: link:../../../mille-pin/packages/mille
@@ -957,11 +957,11 @@ importers:
   tooling/terminal-perf:
     dependencies:
       '@vibecook/ghosttea-client':
-        specifier: 0.13.1
-        version: 0.13.1
+        specifier: 0.13.4
+        version: 0.13.4
       '@vibecook/ghosttea-frame':
-        specifier: 0.13.1
-        version: 0.13.1
+        specifier: 0.13.4
+        version: 0.13.4
       '@vibefield/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -2283,28 +2283,28 @@ packages:
   '@types/ws@8.18.1':
     resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
 
-  '@vibecook/ghosttea-client@0.13.1':
-    resolution: {integrity: sha512-oeBJH8gFVQ/rxj52LXqiUbW24dW3Bhei0Aj+23ga9dRSbKOMzlATrFnnn0VmtNpkfh+RqVfRJCCt9FQm7/aw+A==}
+  '@vibecook/ghosttea-client@0.13.4':
+    resolution: {integrity: sha512-gnKsAFinFuDYhvOTtI/5Xn/Pm9xfY9gq2NzfaT94xpfIIFU+WEN5FsgtlF9OC5xv070lD28iK/cpA+ZqZxgMzg==}
     engines: {node: '>=22'}
 
-  '@vibecook/ghosttea-electron@0.13.1':
-    resolution: {integrity: sha512-UYXswX5U0+DVJnQuU9nj8RKHKnp0jl7S0MoxG+PSh1bLJ3nvghL0E0g4v0nh2YjSc+YGxqiyM4Za4dfieJihug==}
+  '@vibecook/ghosttea-electron@0.13.4':
+    resolution: {integrity: sha512-4+ttZPO9DozjkPQAAtY5L12LGF5oQBLqqmI7y9B4hrLXFP7EZ1FL39+eaZwBhSikAhPVm+uGhTKcoSvtcT+diw==}
     peerDependencies:
       electron: '>=35'
 
-  '@vibecook/ghosttea-frame@0.13.1':
-    resolution: {integrity: sha512-0ZSuWV8uqhy72SaLhffRp3nKYHrI4KBtEAbpTVRRssdonY7UFlCxmMRNk8NW1k4a6Xcq+AbcslbwPe1knFgvZA==}
+  '@vibecook/ghosttea-frame@0.13.4':
+    resolution: {integrity: sha512-YTVaoTQhXizq5tg5YWDDUPU7znrGE10POut53Fo+Hf/xtgxpxAu814pCTCCeRi1K7rMMkGnVYNCmfrUZDJ80Ww==}
 
-  '@vibecook/ghosttea-protocol@0.13.1':
-    resolution: {integrity: sha512-iPe+4TqY3nhKeSbfPK9jRp+RI7l1V9Jf6iGL0060bk79F8rSJ9b6DdPWhkcSVaUF+zceMNgrrvSVGjYr95JaLQ==}
+  '@vibecook/ghosttea-protocol@0.13.4':
+    resolution: {integrity: sha512-Nh1XjrZPn7J92NsLvtbzxgPMd73U9w0sZ6OBGo1rNtcj09VHi7KBHFyHp0FuFodYKon2k7IvitDExKkjyzUA1Q==}
 
-  '@vibecook/ghosttea-react@0.13.1':
-    resolution: {integrity: sha512-cCrn6KdMQCqt1SmqzyBBYdb5jalz8gKEWuMC7G5jAcwewPS7gs/dd7m/bW1YajDApuKTIY7AFil00i9rbvVdeg==}
+  '@vibecook/ghosttea-react@0.13.4':
+    resolution: {integrity: sha512-sB0H4CCEMvxDnEovuEKEFur5x9HvI+4iZMtIp1epSLy5n+xOj/JhXPYyMQ7NhXDYFGQ5VT4JbO2jN+saXVlSsA==}
     peerDependencies:
       react: '>=19'
 
-  '@vibecook/ghosttea@0.13.1':
-    resolution: {integrity: sha512-biwwo0r8jK3dv7Z1OltcXqOnCt0Zm73pXuip4OLESEsFliz3LIlca489aQS59bKYzoQa8sSPgSzWeOQGrgi41w==}
+  '@vibecook/ghosttea@0.13.4':
+    resolution: {integrity: sha512-yTHAyv0ATvCQscvmBYpoPyA+nQxBpu5qg1o147T+NKbPaT6P2sVQ2NS1oS4ZY/PKFezgJundDFyiPJkK+Ih1zg==}
 
   '@vibecook/ice@0.16.0':
     resolution: {integrity: sha512-+6au+93yr3BwbJ2bUkdZ2FwaE9Xvm0m6i0IOW5aOC/rJgm4z02UBUoX36Xf6TVeix7bN7IhaqiYJO7Tdu1Ob2g==}
@@ -2330,32 +2330,32 @@ packages:
       react:
         optional: true
 
-  '@vibecook/truffle-sidecar-darwin-arm64@0.7.19':
-    resolution: {integrity: sha512-w2oKMAiMqtqUoPJq4XGBUV8f8TyWgjnBV16Wu5evPsy0N+/qeFAoa/8wsVjYOquUOnFyYy5ohb2FE/FAz3CjcA==}
+  '@vibecook/truffle-sidecar-darwin-arm64@0.7.22':
+    resolution: {integrity: sha512-EmufvIAZQqcKlUEK/kSy4tVSZn74Y23vwGyH4fSZxm9/9glLulqXobFUdXLLcQp18JW0HRerhkveYcSA//nn5g==}
     engines: {node: '>=18'}
     cpu: [arm64]
     os: [darwin]
 
-  '@vibecook/truffle-sidecar-darwin-x64@0.7.19':
-    resolution: {integrity: sha512-huI1sWxSEqW4L7t9+UgFWTq4WpRsGiX3IltUOzXK+VyQejOgylYGbeVORFrk2nZfbbzWluoqwjnwWq0On4qGNw==}
+  '@vibecook/truffle-sidecar-darwin-x64@0.7.22':
+    resolution: {integrity: sha512-6X2TWyzMGgLQ9GrnCwscYOqdc7AnW8MA8X/voSFrE15pz6NO/rcbtQJzkUM9FUlE1QmxAtx0Qv93uFq6eJKCVw==}
     engines: {node: '>=18'}
     cpu: [x64]
     os: [darwin]
 
-  '@vibecook/truffle-sidecar-linux-arm64@0.7.19':
-    resolution: {integrity: sha512-IWJF70FZAwQsgROOtCBx4LNvz43020kW2poNoyLTwP1VNylPD8q4Q6N2lIOhs/lkqNzwXrNcYti3SH936hVNGA==}
+  '@vibecook/truffle-sidecar-linux-arm64@0.7.22':
+    resolution: {integrity: sha512-v/4CuTX0CKgbP7uwKdYwF49vKzN7vPzPUqr0ZAoOdH6dimJP/XVMD2rLl/7K8AN6Bd5wYb2yx/ZULr40qVfAVw==}
     engines: {node: '>=18'}
     cpu: [arm64]
     os: [linux]
 
-  '@vibecook/truffle-sidecar-linux-x64@0.7.19':
-    resolution: {integrity: sha512-Cx6FUMre2JSucnbMcFQrffG49k3Al/lAtR4KNxw0UUC5onsm1uexTgnQd91DHHw2jTwR0h/aWjkTeHBGFdOkAA==}
+  '@vibecook/truffle-sidecar-linux-x64@0.7.22':
+    resolution: {integrity: sha512-77VJ5s2UyWoAVMiUiGbju9bxWL4f7WUq22zdrXoZ1Z+oM47upMVUU9CXaKhyfjPJYaE1yrIammVMHGJl0Ti1HQ==}
     engines: {node: '>=18'}
     cpu: [x64]
     os: [linux]
 
-  '@vibecook/truffle-sidecar-win32-x64@0.7.19':
-    resolution: {integrity: sha512-e+R0jltTCzfhLTE1g54tmLKfqiWBCGdCaEUWCUSM8YW5KSqp4jXm/AcaO+WxUm/xGI/+ZjAym+4MNu1ITG18IA==}
+  '@vibecook/truffle-sidecar-win32-x64@0.7.22':
+    resolution: {integrity: sha512-QiPr1x5mk9gZHFv1Wr7P5eqJxQGPEO9JTFxW40OougGnOW5Lhee93XOKvUlvD1PVsIokNLRk3747XpuK8sRdjw==}
     engines: {node: '>=18'}
     cpu: [x64]
     os: [win32]
@@ -5098,30 +5098,30 @@ snapshots:
     dependencies:
       '@types/node': 24.13.3
 
-  '@vibecook/ghosttea-client@0.13.1':
+  '@vibecook/ghosttea-client@0.13.4':
     dependencies:
-      '@vibecook/ghosttea-protocol': 0.13.1
+      '@vibecook/ghosttea-protocol': 0.13.4
 
-  '@vibecook/ghosttea-electron@0.13.1(electron@43.1.1)':
+  '@vibecook/ghosttea-electron@0.13.4(electron@43.1.1)':
     dependencies:
-      '@vibecook/ghosttea-client': 0.13.1
-      '@vibecook/ghosttea-protocol': 0.13.1
+      '@vibecook/ghosttea-client': 0.13.4
+      '@vibecook/ghosttea-protocol': 0.13.4
       electron: 43.1.1(supports-color@7.2.0)
 
-  '@vibecook/ghosttea-frame@0.13.1': {}
+  '@vibecook/ghosttea-frame@0.13.4': {}
 
-  '@vibecook/ghosttea-protocol@0.13.1': {}
+  '@vibecook/ghosttea-protocol@0.13.4': {}
 
-  '@vibecook/ghosttea-react@0.13.1(react@19.2.7)':
+  '@vibecook/ghosttea-react@0.13.4(react@19.2.7)':
     dependencies:
-      '@vibecook/ghosttea': 0.13.1
-      '@vibecook/ghosttea-frame': 0.13.1
-      '@vibecook/ghosttea-protocol': 0.13.1
+      '@vibecook/ghosttea': 0.13.4
+      '@vibecook/ghosttea-frame': 0.13.4
+      '@vibecook/ghosttea-protocol': 0.13.4
       react: 19.2.7
 
-  '@vibecook/ghosttea@0.13.1':
+  '@vibecook/ghosttea@0.13.4':
     dependencies:
-      '@vibecook/ghosttea-protocol': 0.13.1
+      '@vibecook/ghosttea-protocol': 0.13.4
 
   '@vibecook/ice@0.16.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
     dependencies:
@@ -5138,19 +5138,19 @@ snapshots:
       loro-crdt: 1.13.8
       react: 19.2.7
 
-  '@vibecook/truffle-sidecar-darwin-arm64@0.7.19':
+  '@vibecook/truffle-sidecar-darwin-arm64@0.7.22':
     optional: true
 
-  '@vibecook/truffle-sidecar-darwin-x64@0.7.19':
+  '@vibecook/truffle-sidecar-darwin-x64@0.7.22':
     optional: true
 
-  '@vibecook/truffle-sidecar-linux-arm64@0.7.19':
+  '@vibecook/truffle-sidecar-linux-arm64@0.7.22':
     optional: true
 
-  '@vibecook/truffle-sidecar-linux-x64@0.7.19':
+  '@vibecook/truffle-sidecar-linux-x64@0.7.22':
     optional: true
 
-  '@vibecook/truffle-sidecar-win32-x64@0.7.19':
+  '@vibecook/truffle-sidecar-win32-x64@0.7.22':
     optional: true
 
   '@vibefield/rosetta-protocol@0.1.1': {}
