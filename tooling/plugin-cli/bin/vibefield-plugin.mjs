@@ -8,7 +8,14 @@
 // rather than dist, so there is no build-the-builder step between an edit and a
 // plugin check.
 
-import { registerHooks } from "node:module";
+import { enableCompileCache, registerHooks } from "node:module";
+
+// Node's compile cache, before the kit's module graph loads (tooling (6)): every run strips and compiles the kit's
+// TypeScript sources again, and a run that finds them cached skips that work. The first run on a host (or after an
+// edit, since entries are keyed by content) fills the cache and costs more than an uncached run. A user's
+// NODE_COMPILE_CACHE or NODE_DISABLE_COMPILE_CACHE still decides; the default directory is under the OS temp. The call
+// sets no environment, so no process the kit spawns inherits it.
+enableCompileCache();
 
 // Dev-source resolution, the same law and the same shape as plugin-build's bin:
 // workspace packages export .ts sources with EXTENSIONLESS relative imports
