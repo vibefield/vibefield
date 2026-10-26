@@ -207,10 +207,60 @@ async fn wait_for_diagnostic_event(client: &mut TestClient, request_id: u64, eve
         }
         assert!(
             Instant::now() < deadline,
-            "diagnostic event {event} did not arrive: {response}"
+            "{}",
+            missing_event(event, &response)
         );
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
+}
+
+/// What a wait for a diagnostic event says when it gives up (item 69, 2026-10-26). The sidecar's stderr line missing
+/// while the records hold the bring-up's failure means the sidecar ran, wrote and exited, and its words never reached
+/// field-native: truffle's forwarder dropped them, racing the handle's shutdown (truffle-core 0.7.22 and before), and
+/// the bring-up is never retried, so no later line can come. Any other miss keeps the plain words.
+fn missing_event(event: &str, response: &Value) -> String {
+    let exited = response["result"]["records"]
+        .as_array()
+        .is_some_and(|records| {
+            records
+                .iter()
+                .any(|record| record["event"] == "field_native.mesh.bring_up_failed")
+        });
+    if event == "field_native.sidecar.stderr" && exited {
+        format!(
+            "the sidecar exited and its stderr line never arrived — truffle's forwarder, item 69 \
+             (field_native.mesh.bring_up_failed is in the records, and the bring-up is never retried): {response}"
+        )
+    } else {
+        format!("diagnostic event {event} did not arrive: {response}")
+    }
+}
+
+#[test]
+fn a_missing_sidecar_line_after_the_sidecar_exited_names_truffles_forwarder() {
+    let records = |events: &[&str]| {
+        let records: Vec<Value> = events
+            .iter()
+            .map(|event| json!({ "event": event }))
+            .collect();
+        json!({ "result": { "records": records } })
+    };
+    let exited = records(&[
+        "field_native.lifecycle.ready",
+        "field_native.mesh.bring_up_failed",
+    ]);
+    assert!(
+        missing_event("field_native.sidecar.stderr", &exited).starts_with(
+            "the sidecar exited and its stderr line never arrived — truffle's forwarder, item 69"
+        )
+    );
+    // the sidecar has not exited yet: a slow start, said plainly
+    let starting = records(&["field_native.lifecycle.ready"]);
+    assert!(missing_event("field_native.sidecar.stderr", &starting)
+        .starts_with("diagnostic event field_native.sidecar.stderr did not arrive: "));
+    // another event's miss is never blamed on the forwarder
+    assert!(missing_event("field_native.other", &exited)
+        .starts_with("diagnostic event field_native.other did not arrive: "));
 }
 
 #[tokio::test]
