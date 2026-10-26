@@ -23,7 +23,15 @@
 //                   never written here. Unset, the run is exactly as it was.
 
 import { spawn, spawnSync } from "node:child_process";
-import { createWriteStream, existsSync, mkdirSync, mkdtempSync, readFileSync } from "node:fs";
+import {
+  appendFileSync,
+  closeSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  openSync,
+  readFileSync,
+} from "node:fs";
 import { constants, loadavg, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -115,9 +123,11 @@ export function onlyAr7b(text) {
 }
 
 /** The test stage's count for EVERY project, from its own section of Nx's output (`> nx run <project>:test`): vitest's
- * `Tests …` line, or node's test runner's `ℹ pass`/`ℹ fail`. A project whose section holds no count is SAID so — Nx
- * printed less of its output than it wrote (DK-18's final run: field-app's section stopped at 64 KiB under load 181) —
- * and its verdict is then Nx's alone: its exit, by the failed-tasks list. */
+ * `Tests …` line, or node's test runner's `ℹ pass`/`ℹ fail`. A project whose section holds no count is SAID so, and its
+ * verdict is then Nx's alone: its exit, by the failed-tasks list. Since tooling (5) the gate's stdout is its log file,
+ * which Nx writes whole, so a missing count is an anomaly of the project's own (it wrote none: a runner killed before
+ * its summary, a reporter that prints none), never Nx's 64 KiB cut of a pipe — the cause DK-18's final run met
+ * (field-app's section stopped at 64 KiB under load 181). */
 export function projectCounts(text) {
   const out = plain(text);
   const failed = new Set(
@@ -235,20 +245,23 @@ let interrupted = null;
 
 /** A gate in its own process group (a smoke is a tree: pnpm, the launcher, Electron, the daemons), stopped WHOLE at the
  * timeout as the kit's `try` stops the app: SIGTERM to the group (the smoke launchers forward it to Electron and still
- * take their daemon row), SIGKILL 20 s later. */
-function runGate(gate, logPath, timeoutMs) {
+ * take their daemon row), SIGKILL 20 s later.
+ *
+ * Tooling (5), 2026-10-26 — the gate's stdout and stderr ARE its log file, never a pipe copied into one. Nx prints at
+ * most 64 KiB of a task's section when its stdout is a pipe (the cut `projectCounts` met as "NO COUNT" in DK-18's
+ * final run), and writes every section whole to a file, as CI's verify step now does (tooling (4)). The file is opened
+ * for append: the child writes it in order, and this run's own lines (a timeout's) are appended to the same path. */
+export function runGate(gate, logPath, timeoutMs) {
   return new Promise((done) => {
-    const log = createWriteStream(logPath);
+    const fd = openSync(logPath, "a");
     const t0 = Date.now();
     const child = spawn(gate.run[0], gate.run.slice(1), {
       cwd: ROOT,
       env: { ...process.env, NX_SKIP_NX_CACHE: "true", NX_DAEMON: "false" },
       detached: true,
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: ["ignore", fd, fd],
     });
     running = child;
-    child.stdout.pipe(log, { end: false });
-    child.stderr.pipe(log, { end: false });
     let timedOut = false;
     let kill = null;
     const stop = (signal) => {
@@ -260,7 +273,8 @@ function runGate(gate, logPath, timeoutMs) {
     };
     const timer = setTimeout(() => {
       timedOut = true;
-      log.write(
+      appendFileSync(
+        logPath,
         `\ngate-landing: ${gate.name} ran past ${timeoutMs / 60_000} min and was stopped\n`,
       );
       stop("SIGTERM");
@@ -270,7 +284,8 @@ function runGate(gate, logPath, timeoutMs) {
       clearTimeout(timer);
       clearTimeout(kill);
       running = null;
-      log.end(() => done({ code: code ?? 128, signal, ms: Date.now() - t0, timedOut }));
+      closeSync(fd);
+      done({ code: code ?? 128, signal, ms: Date.now() - t0, timedOut });
     });
   });
 }

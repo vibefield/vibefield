@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import {
   LANDING,
@@ -6,6 +9,7 @@ import {
   perfLocks,
   preflightSiblingsOnly,
   projectCounts,
+  runGate,
   STAGES,
   said,
   secondCopiesOutside,
@@ -210,4 +214,66 @@ test("a lock present: the gate waits until it is gone, and the wait is said when
     "GATE_WAIT smoke:godview waits: a perf lock is held (/b/PERF.lock)",
     "GATE_WAIT smoke:godview waited 180s for the perf lock",
   ]);
+});
+
+// Tooling (5) — a gate's stdout and stderr ARE its log file. Nx prints at most 64 KiB of a task's section to a pipe; a
+// file gets every byte. The stand-in gate says what its own descriptors are, then writes past 64 KiB on both (every
+// tenth row on stderr).
+const STAND_IN = [
+  'const { fstatSync, writeSync } = require("node:fs");',
+  'writeSync(1, "stdout is a file: " + fstatSync(1).isFile() + "\\n");',
+  'writeSync(2, "stderr is a file: " + fstatSync(2).isFile() + "\\n");',
+  'const x = "x".repeat(64);',
+  "for (let i = 0; i < Number(process.argv[1]); i++)",
+  '  writeSync(i % 10 === 9 ? 2 : 1, "row " + String(i).padStart(5, "0") + " " + x + "\\n");',
+  'writeSync(1, "END\\n");',
+].join("\n");
+
+test("a gate's stdout and stderr are its log file: every byte, past 64 KiB, in the order written", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "vf-gate-landing-test-"));
+  try {
+    const rows = 3_000;
+    const logPath = join(dir, "01-stand-in.log");
+    const result = await runGate(
+      { name: "stand-in", run: [process.execPath, "-e", STAND_IN, String(rows)] },
+      logPath,
+      120_000,
+    );
+    assert.deepEqual(
+      { code: result.code, timedOut: result.timedOut },
+      { code: 0, timedOut: false },
+    );
+    let expected = "stdout is a file: true\nstderr is a file: true\n";
+    for (let i = 0; i < rows; i++)
+      expected += `row ${String(i).padStart(5, "0")} ${"x".repeat(64)}\n`;
+    expected += "END\n";
+    const log = readFileSync(logPath, "utf8");
+    assert.ok(Buffer.byteLength(log) > 3 * 64 * 1024, `${Buffer.byteLength(log)} bytes`);
+    assert.equal(log, expected);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a gate past its timeout: its group is stopped, and the stop is appended to the same log", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "vf-gate-landing-test-"));
+  try {
+    const logPath = join(dir, "01-sleeper.log");
+    const timeoutMs = 500;
+    const result = await runGate(
+      { name: "sleeper", run: [process.execPath, "-e", "setTimeout(() => {}, 60_000);"] },
+      logPath,
+      timeoutMs,
+    );
+    assert.deepEqual(
+      { code: result.code, signal: result.signal, timedOut: result.timedOut },
+      { code: 128, signal: "SIGTERM", timedOut: true },
+    );
+    assert.equal(
+      readFileSync(logPath, "utf8"),
+      `\ngate-landing: sleeper ran past ${timeoutMs / 60_000} min and was stopped\n`,
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
