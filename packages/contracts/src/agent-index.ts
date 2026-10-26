@@ -1332,7 +1332,11 @@ export type IndexProjectParams = z.infer<typeof IndexProjectParams>;
 
 /** `index.project`'s answer. `clipped` is SP-D13's word: the contribution rows
  * were cut at a tailnet caller's bound (`INDEX_TAILNET_LIMITS.MAX_ROWS`); a
- * window's answer carries every row and says false. */
+ * window's answer carries every row and says false. *Item 60 (2026-10-26):* a
+ * peer daemon's answer is cut too, in BYTES, at `INDEX_MESH.PEER_ANSWER_BYTES`
+ * (rows follow the asker, bytes follow the link), and whichever cut it was,
+ * `omitted` says how many rows it left out — a reader says "N more", never a
+ * bare "clipped". */
 export const IndexProjectResult = z
   .object({
     projectId: z.string().min(1),
@@ -1342,6 +1346,9 @@ export const IndexProjectResult = z
       .passthrough(),
     contribution: z.array(IndexContribution),
     clipped: z.boolean(),
+    /** the contribution rows the cut left out: present, and positive, exactly
+     * when `clipped` */
+    omitted: z.number().int().positive().optional(),
   })
   .passthrough();
 export type IndexProjectResult = z.infer<typeof IndexProjectResult>;

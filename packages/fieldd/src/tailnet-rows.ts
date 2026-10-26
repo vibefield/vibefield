@@ -5,7 +5,7 @@
 // listing, `index.projects`, `index.recent`) before a question reaches the
 // index service. The service stays free of principal knowledge: it sees a
 // limit, never who asked for it.
-import { INDEX_TAILNET_LIMITS, type Principal } from "@vibefield/contracts";
+import { INDEX_MESH, INDEX_TAILNET_LIMITS, type Principal } from "@vibefield/contracts";
 
 /**
  * The limit a history door asks its service for, given who is asking.
@@ -39,4 +39,15 @@ export function tailnetRowLimit(
 ): number | undefined {
   if (principal.kind !== "tailnet" && principal.kind !== "tailnet-guest") return requested;
   return Math.min(requested ?? fallback, INDEX_TAILNET_LIMITS.MAX_ROWS);
+}
+
+/**
+ * Item 60 — the byte budget of a one-shot history answer, given who is asking:
+ * `INDEX_MESH.PEER_ANSWER_BYTES` for the self peer DAEMON, whose answer crosses
+ * PeerLink's reader; none for anyone else. The rows half above leaves a peer a
+ * window's limits; this is the bytes half, the link's. A service that is handed
+ * it cuts its rows to fit and says how many it left out.
+ */
+export function peerAnswerBytes(principal: Principal): number | undefined {
+  return principal.kind === "peer-fieldd" ? INDEX_MESH.PEER_ANSWER_BYTES : undefined;
 }

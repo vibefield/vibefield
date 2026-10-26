@@ -434,6 +434,13 @@ export const INDEX_MESH = {
    * coalesces at 16 ms for a desktop, and a radio has no use for that; the
    * page door (`index.timeline`) is how the rows before the tail arrive. */
   SESSION_TAIL_MIN_INTERVAL_MS: 1_000,
+  /** Item 60 (2026-10-26) — the byte budget of a one-shot answer a PEER daemon
+   * is given (`index.project`): half PeerLink's reader
+   * (`PRODUCT_API_LIMITS.WS_MAX_INBOUND_BYTES`), so the figures beside the cut
+   * rows never matter. Past it the rows stop in their order, and the answer
+   * says `clipped` and how many it `omitted`. Rows follow the asker, bytes
+   * follow the link: a window's answer is never cut by it. */
+  PEER_ANSWER_BYTES: PRODUCT_API_LIMITS.WS_MAX_INBOUND_BYTES / 2,
 } as const;
 
 /** SP-6 (2026-10-04; `thinking-sync-planes.md` §5.4 "until RO-1", SP-D5 (a))

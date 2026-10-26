@@ -291,7 +291,7 @@ import {
 import { ServiceRegistry } from "./service-registry";
 import { SettingsDocService } from "./settings-doc";
 import { createSurfaceService } from "./surface-service";
-import { tailnetRowLimit } from "./tailnet-rows";
+import { peerAnswerBytes, tailnetRowLimit } from "./tailnet-rows";
 import { runtimeProfileBinding, TerminalBindingStore } from "./terminal-bindings";
 import { createTerminalLinkDoor } from "./terminal-links";
 import {
@@ -2312,6 +2312,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         sinceMs: parsed.data.sinceMs,
         offsetMinutes: parsed.data.offsetMinutes,
         maxContributionRows: tailnetRowLimit(ctx.principal, undefined, Number.MAX_SAFE_INTEGER),
+        maxAnswerBytes: peerAnswerBytes(ctx.principal),
       });
     });
     api.register("index.projectDay", async (_ctx, params) => {

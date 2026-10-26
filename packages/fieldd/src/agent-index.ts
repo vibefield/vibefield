@@ -497,6 +497,35 @@ interface BodyReader<T> {
 
 /** AR-8b — rosetta's six usage figures in VibeField's spelling. A cost rosetta
  * could not price (absent or null) stays null — never zero. */
+/** Item 60 — the contribution rows that fit `budget` once the whole answer is
+ * encoded, in their order: the answer's own bytes (counted as if cut, with the
+ * widest `omitted`) plus each row's and its comma. The RPC envelope around the
+ * answer is not counted: a peer daemon's budget is half PeerLink's reader. */
+function rowsWithin(
+  answer: IndexProjectResult,
+  budget: number,
+): IndexProjectResult["contribution"] {
+  let bytes = Buffer.byteLength(
+    JSON.stringify({
+      ...answer,
+      contribution: [],
+      clipped: true,
+      omitted: Number.MAX_SAFE_INTEGER,
+    }),
+    "utf8",
+  );
+  let kept = 0;
+  for (const row of answer.contribution) {
+    const next = bytes + Buffer.byteLength(JSON.stringify(row), "utf8") + 1;
+    if (next > budget) break;
+    bytes = next;
+    kept += 1;
+  }
+  return kept === answer.contribution.length
+    ? answer.contribution
+    : answer.contribution.slice(0, kept);
+}
+
 function usageFigures(row: {
   tokens: number;
   cost_micro_usd?: number | null | undefined;
@@ -1406,12 +1435,15 @@ export class IndexService {
    * contribution, three GETs in one flight over the same window and timezone.
    * `maxContributionRows` is the DOOR's SP-D13 bound for a tailnet caller —
    * the rows stop there in rosetta's order and the answer says `clipped`; this
-   * service knows no principal. */
+   * service knows no principal. `maxAnswerBytes` is the door's item-60 budget
+   * for a peer daemon: the rows stop where the encoded answer would pass it.
+   * Either cut says how many rows it left out (`omitted`). */
   async project(params: {
     projectId: string;
     sinceMs?: number | undefined;
     offsetMinutes?: number | undefined;
     maxContributionRows?: number | undefined;
+    maxAnswerBytes?: number | undefined;
   }): Promise<IndexProjectResult> {
     this.requireReady();
     const base = `/api/projects/${encodeURIComponent(params.projectId)}`;
@@ -1426,9 +1458,11 @@ export class IndexService {
       this.aggregate(`${base}/contribution`, IndexContributionResponse, "contribution"),
     ]);
     const limit = params.maxContributionRows;
-    const clipped = limit !== undefined && contribution.rows.length > limit;
-    const rows = clipped ? contribution.rows.slice(0, limit) : contribution.rows;
-    return {
+    const rows =
+      limit !== undefined && contribution.rows.length > limit
+        ? contribution.rows.slice(0, limit)
+        : contribution.rows;
+    const answer: IndexProjectResult = {
       projectId: params.projectId,
       heatmap: heatmap.days.map((day) => ({ day: day.day, ...usageFigures(day) })),
       usage: {
@@ -1449,8 +1483,12 @@ export class IndexService {
         messages: row.messages,
         ...usageFigures(row),
       })),
-      clipped,
+      clipped: false,
     };
+    if (params.maxAnswerBytes !== undefined)
+      answer.contribution = rowsWithin(answer, params.maxAnswerBytes);
+    const omitted = contribution.rows.length - answer.contribution.length;
+    return omitted > 0 ? { ...answer, clipped: true, omitted } : answer;
   }
 
   /** `index.projectDay` — one day of a project's hours by model (the heatmap's

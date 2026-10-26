@@ -764,12 +764,14 @@ describe("index.session.subscribe — the live tail as rows (SP-6)", () => {
     // a reader that opens now is answered every held row — through a reader
     // capped like PeerLink's, which closes on one frame past its 4 MiB
     const reader = await capped();
-    const late = await Promise.race([
-      tail(reader.rpc, { sessionId: "s3" }),
-      reader.closed.then((code): never => {
-        throw new Error(`the capped reader closed ${code}: a frame past its 4 MiB`);
-      }),
+    // whichever comes first; neither branch rejects, so the loser cannot either
+    const opening = await Promise.race([
+      tail(reader.rpc, { sessionId: "s3" }).then((sub) => ({ sub })),
+      reader.closed.then((code) => ({ code })),
     ]);
+    if ("code" in opening)
+      throw new Error(`the capped reader closed ${opening.code}: a frame past its 4 MiB`);
+    const late = opening.sub;
     expect(late.snapshot.more).toBe(true);
     const latePages = await opened(late);
     expect(reader.rpc.closed).toBe(false);

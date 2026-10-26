@@ -23,12 +23,15 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   CONTRACTS_VERSION,
+  INDEX_MESH,
   INDEX_TAILNET_LIMITS,
+  IndexProjectResult,
   IndexProjectsResult,
   IndexRecentResult,
   IndexSearchResult,
   IndexSessionsResult,
   PEER_FIELDD_SCOPES,
+  PRODUCT_API_LIMITS,
   type Principal,
   SOCKETS,
   TAILNET_SCOPES,
@@ -126,6 +129,24 @@ const hit = (i: number, word: string) => ({
 });
 const RARE = 3;
 
+/** Item 60 — one project's contribution: more rows than one 4 MiB answer holds
+ * (about 190 B each here; item 60 measured 350 on rosettad's own) */
+const CONTRIBUTION = 30_000;
+const contributionRow = (i: number) => ({
+  session_id: `c${i}`,
+  project_id: "p0",
+  commits: 0,
+  edits: 0,
+  loc: 0,
+  messages: 1,
+  tokens: 5,
+  cost_micro_usd: null,
+  billed_micro_usd: 12,
+  unpriced_tokens: 0,
+  unrecorded_output: 1,
+  reported_cost_adjustment_micro_usd: -3,
+});
+
 let cleanup: Array<() => void | Promise<void>> = [];
 
 interface World {
@@ -149,13 +170,21 @@ class Unreachable extends WebSocket {
   }
 }
 
-async function open(url: string, headers?: Record<string, string>): Promise<WsRpc> {
-  const ws = new WebSocket(url, headers ? { headers } : {});
+async function open(
+  url: string,
+  headers?: Record<string, string>,
+  maxPayload?: number,
+): Promise<WsRpc> {
+  const ws = new WebSocket(url, {
+    ...(headers ? { headers } : {}),
+    ...(maxPayload !== undefined ? { maxPayload } : {}),
+  });
   cleanup.push(() => ws.close());
   await new Promise<void>((resolve, reject) => {
     ws.once("open", () => resolve());
     ws.once("error", reject);
   });
+  ws.on("error", () => undefined);
   return new WsRpc(ws);
 }
 
@@ -164,9 +193,14 @@ async function open(url: string, headers?: Record<string, string>): Promise<WsRp
 async function tailnet(
   headers: Record<string, string>,
   clientKind: "ios" | "peer-fieldd",
+  maxPayload?: number,
 ): Promise<{ rpc: WsRpc; granted: string[] }> {
   const { daemon, mock } = world;
-  const rpc = await open(`ws://127.0.0.1:${daemon.controlPort}${productDoorPath(mock)}`, headers);
+  const rpc = await open(
+    `ws://127.0.0.1:${daemon.controlPort}${productDoorPath(mock)}`,
+    headers,
+    maxPayload,
+  );
   const ack = (await rpc.call("system.hello", {
     contractsVersion: CONTRACTS_VERSION,
     minCompatible: CONTRACTS_VERSION,
@@ -201,8 +235,15 @@ beforeAll(async () => {
     sessions: join(dataDir, "sessions.json"),
     search: join(dataDir, "search.json"),
     runtimes: join(dataDir, "runtimes.json"),
+    aggregates: join(dataDir, "aggregates.json"),
     log: join(dataDir, "requests.log"),
   };
+  writeFileSync(
+    files.aggregates,
+    JSON.stringify({
+      contribution: { rows: Array.from({ length: CONTRIBUTION }, (_, i) => contributionRow(i)) },
+    }),
+  );
   writeFileSync(
     files.sessions,
     JSON.stringify(Array.from({ length: ROWS }, (_, i) => sessionRow(i))),
@@ -239,6 +280,7 @@ beforeAll(async () => {
     FAKE_ROSETTAD_SESSIONS: files.sessions,
     FAKE_ROSETTAD_SEARCH: files.search,
     FAKE_ROSETTAD_RUNTIMES: files.runtimes,
+    FAKE_ROSETTAD_AGGREGATES: files.aggregates,
     FAKE_ROSETTAD_REQUEST_LOG: files.log,
   };
   const fakeSpawner = ((_bin: string, args: readonly string[], options: object) =>
@@ -445,4 +487,52 @@ describe("SP-D13 — the phone searches its own history, bounded at the door", (
     const refused = await world.peer.callErr("index.recent", { scope: "all", limit: WINDOW_ASK });
     expect(refused.data?.kind).toBe("FORBIDDEN_SCOPE");
   }, 30_000);
+});
+
+describe("item 60 — rows follow the asker, bytes follow the link: index.project", () => {
+  it("a peer daemon's answer stops at PEER_ANSWER_BYTES and says clipped and how many it omitted; a window gets every row; the phone's row cut says its count too", async () => {
+    const order = (answer: IndexProjectResult) => answer.contribution.map((row) => row.sessionId);
+    const firstN = (n: number) => Array.from({ length: n }, (_, i) => `c${i}`);
+
+    const all = IndexProjectResult.parse(
+      await world.window.call("index.project", { projectId: "p0" }),
+    );
+    expect(all.contribution).toHaveLength(CONTRIBUTION);
+    expect(all.clipped).toBe(false);
+    expect(all.omitted).toBeUndefined();
+
+    // a peer read the way PeerLink reads: a frame past its 4 MiB closes it
+    const capped = await tailnet(
+      { "Tailscale-User-Login": TEST_LOGIN, "Tailscale-Node-Id": "node-c" },
+      "peer-fieldd",
+      PRODUCT_API_LIMITS.WS_MAX_INBOUND_BYTES,
+    );
+    // whichever comes first; neither branch rejects, so the loser cannot either
+    const first = await Promise.race([
+      capped.rpc.call("index.project", { projectId: "p0" }).then((value) => ({ value })),
+      until(() => capped.rpc.closed, 30_000).then(
+        () => "closed" as const,
+        () => "open" as const,
+      ),
+    ]);
+    if (typeof first === "string")
+      throw new Error("the capped peer closed: an answer past its 4 MiB");
+    const raw = first.value;
+    const bytes = Buffer.byteLength(JSON.stringify(raw), "utf8");
+    expect(bytes).toBeLessThanOrEqual(INDEX_MESH.PEER_ANSWER_BYTES);
+    const peer = IndexProjectResult.parse(raw);
+    expect(peer.clipped).toBe(true);
+    expect(peer.contribution.length).toBeGreaterThan(0);
+    expect(peer.omitted).toBe(CONTRIBUTION - peer.contribution.length);
+    expect(order(peer)).toEqual(firstN(peer.contribution.length));
+    // the budget is spent, not padded: one more row would not have fitted
+    expect(bytes + 200).toBeGreaterThan(INDEX_MESH.PEER_ANSWER_BYTES);
+
+    const phone = IndexProjectResult.parse(
+      await world.phone.call("index.project", { projectId: "p0" }),
+    );
+    expect(order(phone)).toEqual(firstN(INDEX_TAILNET_LIMITS.MAX_ROWS));
+    expect(phone.clipped).toBe(true);
+    expect(phone.omitted).toBe(CONTRIBUTION - INDEX_TAILNET_LIMITS.MAX_ROWS);
+  }, 60_000);
 });
