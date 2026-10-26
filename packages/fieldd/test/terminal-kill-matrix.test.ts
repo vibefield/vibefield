@@ -12,8 +12,14 @@ import { GhostteaAutomationClient } from "@vibecook/ghosttea-client";
 import type { TerminalEndpoints, TerminalInfo } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
-import { bootstrap, type FielddDaemon } from "../src/index";
-import { nativeBinPath, shortTmpRoot, waitForMgmtEndpoint } from "./native-harness";
+import { bootstrap, type FielddConfig, type FielddDaemon } from "../src/index";
+import {
+  type FloorScene,
+  nativeBinPath,
+  shortTmpRoot,
+  waitForMgmtEndpoint,
+  waitWithEvidence,
+} from "./native-harness";
 import { helloAs, type RpcErrorShape, WsRpc } from "./ws-rpc";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -27,8 +33,14 @@ const SH = WIN ? CMD : "/bin/sh";
 
 let children: ChildProcess[] = [];
 let cleanup: Array<() => void | Promise<void>> = [];
+/** Item 68 — the row's latest daemon over its floor, for every wait's evidence (`boot` sets it), and when each floor
+ * was spawned. */
+let scene: FloorScene | undefined;
+const spawnedAt = new Map<string, number>();
 
 afterEach(async () => {
+  scene = undefined;
+  spawnedAt.clear();
   // error-isolated: a rejecting cleanup must not leak the daemons behind it
   const fns = cleanup.reverse();
   cleanup = [];
@@ -51,6 +63,7 @@ interface NativeHandle {
 async function spawnNative(dir?: string): Promise<NativeHandle> {
   const dataDir = dir ?? shortTmpRoot("vf-km-");
   if (dir === undefined) cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
+  spawnedAt.set(dataDir, Date.now());
   const child = spawn(BIN, [], {
     env: {
       ...process.env,
@@ -185,14 +198,26 @@ async function withNativeLog(native: NativeHandle, body: () => Promise<void>): P
   }
 }
 
-async function poll<T>(fn: () => Promise<T | undefined>, ms = 5_000): Promise<T> {
-  const deadline = Date.now() + ms;
-  for (;;) {
-    const v = await fn();
-    if (v !== undefined) return v;
-    if (Date.now() > deadline) throw new Error("poll timed out");
-    await new Promise((r) => setTimeout(r, 100));
-  }
+/** A daemon over the row's floor (item 68): fieldd's own log beside the floor's, and the scene every wait's evidence
+ * reads. Every row boots through here. */
+async function boot(config: FielddConfig): Promise<FielddDaemon> {
+  const daemon = await bootstrap({ logRoot: join(config.dataDir, "logs"), ...config });
+  scene = {
+    dataDir: config.dataDir,
+    spawnedAt: spawnedAt.get(config.dataDir),
+    link: daemon.native,
+  };
+  return daemon;
+}
+
+/** Every wait in the matrix (item 68): at its deadline it says what was awaited, what the row last `seen`, and the
+ * row's floor and fieldd logs with the link view. The budgets are the rows' own. */
+async function poll<T>(
+  fn: (seen: (value: unknown) => void) => Promise<T | undefined>,
+  ms = 5_000,
+  what = "the row's condition",
+): Promise<T> {
+  return await waitWithEvidence(what, fn, ms, () => scene);
 }
 
 const listOf = async (rpc: WsRpc): Promise<TerminalInfo[]> =>
@@ -220,7 +245,7 @@ describe("the kill matrix (NF-4, real field-native)", () => {
   it("row 1: the PTY survives fieldd; the next fieldd adopts it inside 2s", async () => {
     const native = await spawnNative();
     await withNativeLog(native, async () => {
-      const daemon1 = await bootstrap({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
+      const daemon1 = await boot({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
       // registered even though the test stops it mid-flow: a failure BEFORE that
       // stop must not leak a live fieldd (the afterEach tolerates double-stop)
       cleanup.push(() => daemon1.stop());
@@ -252,7 +277,7 @@ describe("the kill matrix (NF-4, real field-native)", () => {
 
       // a NEW product plane pairs and adopts — the spec's <2s row measured from
       // ready, not from process birth
-      const daemon2 = await bootstrap({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
+      const daemon2 = await boot({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
       cleanup.push(() => daemon2.stop());
       const rpc2 = await connect(daemon2);
       const adoptedAt = Date.now();
@@ -283,7 +308,7 @@ describe("the kill matrix (NF-4, real field-native)", () => {
       const supersededOld = new Promise<string>((resolve) => {
         fatalSeen = resolve;
       });
-      const old = await bootstrap({
+      const old = await boot({
         dataDir: native.dir,
         controlPort: 0,
         dataPort: 0,
@@ -301,7 +326,7 @@ describe("the kill matrix (NF-4, real field-native)", () => {
       expect(JSON.parse(readFileSync(productJson, "utf8"))).toMatchObject({ buildId: "build-x" });
 
       // this build's fieldd, while the old one still serves — no stop asked
-      const fresh = await bootstrap({
+      const fresh = await boot({
         dataDir: native.dir,
         controlPort: 0,
         dataPort: 0,
@@ -338,7 +363,7 @@ describe("the kill matrix (NF-4, real field-native)", () => {
   it("row WP12-R2a: a consented stop ends exactly the consented set — the floor drains, records its intent, and the next boot says planned", async () => {
     const native = await spawnNative();
     await withNativeLog(native, async () => {
-      const daemon = await bootstrap({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
+      const daemon = await boot({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
       cleanup.push(() => daemon.stop());
       let ownerAsked = false;
       daemon.onShutdownRequest(() => {
@@ -375,7 +400,7 @@ describe("the kill matrix (NF-4, real field-native)", () => {
 
       // the next floor on this root TAKES the intent and says how its predecessor ended
       const next = await spawnNative(native.dir);
-      const nextDaemon = await bootstrap({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
+      const nextDaemon = await boot({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
       cleanup.push(() => nextDaemon.stop());
       expect(nextDaemon.native.lastExit).toBe("planned");
       expect(nextDaemon.health().nativeLastExit).toBe("planned");
@@ -386,7 +411,7 @@ describe("the kill matrix (NF-4, real field-native)", () => {
   it("row WP12-R2b: a session born after consent refuses the stop — nothing ends, and births reopen", async () => {
     const native = await spawnNative();
     await withNativeLog(native, async () => {
-      const daemon = await bootstrap({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
+      const daemon = await boot({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
       cleanup.push(() => daemon.stop());
       let ownerAsked = false;
       daemon.onShutdownRequest(() => {
@@ -427,7 +452,7 @@ describe("the kill matrix (NF-4, real field-native)", () => {
   it("rows 3+6: a dead floor refuses honestly; a replacement boot empties the inventory and re-arms", async () => {
     const native = await spawnNative();
     await withNativeLog(native, async () => {
-      const daemon = await bootstrap({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
+      const daemon = await boot({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
       cleanup.push(() => daemon.stop());
       const rpc = await connect(daemon);
       const created = await createRetrying(rpc, { shell: HOLD }, native, 30_000);
@@ -494,7 +519,7 @@ describe("the kill matrix (NF-4, real field-native)", () => {
   it("row 6: the env strip holds through the real spawn path (EL7)", async () => {
     const native = await spawnNative();
     await withNativeLog(native, async () => {
-      const daemon = await bootstrap({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
+      const daemon = await boot({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
       cleanup.push(() => daemon.stop());
       const rpc = await connect(daemon);
 
@@ -559,7 +584,7 @@ describe("the kill matrix (NF-4, real field-native)", () => {
     async () => {
       const native = await spawnNative();
       await withNativeLog(native, async () => {
-        const daemon = await bootstrap({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
+        const daemon = await boot({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
         cleanup.push(() => daemon.stop());
         const rpc = await connect(daemon);
         const created = await createRetrying(rpc, { shell: SH }, native, 30_000);
@@ -594,7 +619,7 @@ describe("the kill matrix (NF-4, real field-native)", () => {
   it("epoch arbitration reaches through the ticket path", async () => {
     const native = await spawnNative();
     await withNativeLog(native, async () => {
-      const daemon = await bootstrap({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
+      const daemon = await boot({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
       cleanup.push(() => daemon.stop());
       const rpc = await connect(daemon);
       const created = await createRetrying(rpc, { shell: HOLD }, native, 30_000);
@@ -625,7 +650,7 @@ describe("the kill matrix (NF-4, real field-native)", () => {
   it("churn leaves no residue (bounded soak; the 24h variant is a named CI gate)", async () => {
     const native = await spawnNative();
     await withNativeLog(native, async () => {
-      const daemon = await bootstrap({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
+      const daemon = await boot({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
       cleanup.push(() => daemon.stop());
       const rpc = await connect(daemon);
 
@@ -650,7 +675,7 @@ describe("the kill matrix (NF-4, real field-native)", () => {
     // fieldd's receipt.
     const native = await spawnNative();
     await withNativeLog(native, async () => {
-      const daemon = await bootstrap({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
+      const daemon = await boot({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
       cleanup.push(() => daemon.stop());
       const rpc = await connect(daemon);
       const created = await createRetrying(rpc, { shell: HOLD }, native, 30_000);
@@ -709,7 +734,7 @@ describe("the kill matrix (NF-4, real field-native)", () => {
     // grandchild for the harness (or a user) to hunt down.
     const native = await spawnNative();
     await withNativeLog(native, async () => {
-      const daemon = await bootstrap({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
+      const daemon = await boot({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
       cleanup.push(() => daemon.stop());
       const cellPid = await poll(async () => daemon.native.terminalRoutes?.cells[0]?.pid, 20_000);
 
@@ -733,7 +758,7 @@ describe("the kill matrix (NF-4, real field-native)", () => {
     // the WHOLE counted blast, and the agent class comes back supervised.
     const native = await spawnNative();
     await withNativeLog(native, async () => {
-      const daemon = await bootstrap({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
+      const daemon = await boot({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
       cleanup.push(() => daemon.stop());
       const rpc = await connect(daemon);
       const agent = await createRetrying(
@@ -826,7 +851,7 @@ describe("the kill matrix (NF-4, real field-native)", () => {
     // appear; the other class keeps serving.
     const native = await spawnNative();
     await withNativeLog(native, async () => {
-      const daemon = await bootstrap({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
+      const daemon = await boot({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
       cleanup.push(() => daemon.stop());
       const rpc = await connect(daemon);
       const bait = await createRetrying(
@@ -880,7 +905,7 @@ describe("the kill matrix (NF-4, real field-native)", () => {
     // the file the cell itself writes on the way down.
     const native = await spawnNative();
     await withNativeLog(native, async () => {
-      const daemon = await bootstrap({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
+      const daemon = await boot({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
       cleanup.push(() => daemon.stop());
       const rpc = await connect(daemon);
       const offender = await createRetrying(
