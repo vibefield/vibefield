@@ -15083,3 +15083,42 @@ than it knew. VF-PM put it on the queue as 64's errata.
   - The first, at 17:37:29Z, stopped at clippy on this commit's own doc comment: a paragraph right after a list,
     which `doc_lazy_continuation` refuses. That is fixed in `b6a2e7a81`.
 - Logs: `/Volumes/SamsungRed/lanes/item64e/logs/` (`measure/`, `redfirst/`, `proofs/`).
+
+## NF — item 70: a poll in which a door that still SUCCEEDS means "not yet" no longer throws out on its first try; the kill matrix's two polls and terminal-service's use `WsRpc.attempt()` (2026-10-26; `5a5801833`)
+
+**What happened:** prod-builder's tag-lane verify (load 241), and BP-1b's run 4 before it (load 263), failed
+terminal-kill-matrix "rows 3+6" with `Error: expected terminal.create to fail` (ws-rpc.ts:75 via :474), inside the
+wait at 601 ms: a throw out of the callback, not a deadline. Alone at load 127 it was green in 913 ms. VF-PM made it
+item 70.
+
+**Cause:** after `native.child.kill("SIGKILL")` the poll called `rpc.callErr("terminal.create")`, and `callErr`
+throws when the call SUCCEEDS.
+- The kill is a signal. The floor dies when it is next scheduled, and until fieldd hears the link close, a create
+  can still be served.
+- So the first try ended the row where "not yet" was meant, and its 10 s budget was never spent.
+- Item 68's `waitWithEvidence` is not involved: the pre-68 poll (`4e5af4fc0^`, :188–196) had no try either.
+
+**The fix, test-only** (`5a5801833`):
+- `WsRpc.attempt()` answers `{ ok: true, result } | { ok: false, error }` and throws only when there is no RPC answer.
+  `callErr` stays for single-shot rows.
+- **The kill matrix's create poll:** a success is "not yet". The session it made is ended through `endBounded()`
+  (`terminal.terminate`, 2 s; what it said is evidence and never a red), and `seen` carries the creates served after
+  the kill.
+- **Its openTicket poll:** its own comment called a late mint "not yet". The first success used to throw, and the
+  `.catch(() => "MINTED-FOR-A-CORPSE")` read that first try as the defect. Now a mint is counted (the grant is never
+  kept), and only the deadline fails.
+- **terminal-service's openTicket after `mock.stop()`:** the same fix.
+- **Not changed:** agent-session.test.ts:2557 (`agent.resume` after a profile delete). Its next assertion
+  (`expect(seen.length).toBe(before)`) says no persona may spawn after the sign-out, so a success there is the defect
+  the row guards. Whether a resume can run while `activePersonas` settles after signOut is item 71's question
+  (AR's owner).
+- The scan covered all 24 `callErr` sites in fieldd/test by their enclosing call. The other 20 follow an `until` and
+  are single-shot.
+
+**Validation** (this Mac's SSD lane `/Volumes/SamsungRed/lanes/item70`, guard v2, nice 19, on `34c2f543e`):
+- **Red-first** (records/redfirst70.sh): a probe that is never committed makes the row's SIGKILL land 1500 ms late.
+  - On `34c2f543e`: red, `Error: expected terminal.create to fail`, CI's exact message.
+  - At the fix: green. 11 creates were served in the window, all 11 were terminated, then UNAVAILABLE.
+- **Alone ×3:** terminal-kill-matrix 13 / 1 skipped each, terminal-service 106/106 each.
+- **`pnpm verify`:** EXIT 0 at 18:18:33Z on its first run (test for 27 projects, cargo test 30 ok).
+- Logs: `/Volumes/SamsungRed/lanes/item70/logs/` (`redfirst/`, `proofs/`).
