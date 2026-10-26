@@ -14751,3 +14751,62 @@ release metadata; and the old release-age row goes in the same commit after the 
 - **The two lost adapter-codex tests**, to puppeteer's docket through focus-session.
 - **Item 66, the artifact-service regex**: the fixer's test-only lane after item 65 (it hit the same row in 65's
   verify): assert the slice's fields and the URL's port, never a substring, red first on a fixed clock.
+
+## CI — Electron's binary is fetched and proven before any test, and the smoke launcher's rows need none: Electron 43 has no postinstall, and the rows raced its lazy download (2026-10-26; `35bed6a98`, `98f8433bf`, lane `elx/electron-binary`)
+
+**Why:** main's verify on `cdd6b70fb` (run 40333930954, attempt 1, 14:09Z) was RED on three rows of
+`packages/electron-shell/test/smoke-profile.test.ts` with `ENOENT … electron/path.txt`. They are DK-18 (39)'s two and
+DK-5's "hands Electron a fresh profile…". The same rows were green on CI at `2ae90170a` and `71484275a`.
+- Electron 43.1.1 has NO postinstall. Its package.json has no `scripts`, only the bins `electron` and `install-electron`.
+  Its index.js downloads the binary (`dist/`, then `path.txt`) at the first plain `require("electron")`. So a fresh
+  `pnpm install --frozen-lockfile` leaves no binary.
+- The rows read path.txt themselves, to place a stand-in Electron. They passed only when another file in the same vitest
+  run had required Electron, and its download had finished, before they started.
+- The class was recorded in fresh lanes since 10-11 and sent to VF-PM on 10-19 ("CI's verify.yml has no Electron step").
+  It got no lane number then (VF-PM 14:17Z: "the shelf was mine"). This was its first CI witness.
+
+**The measurement** (the two job logs):
+- **Red, attempt 1 on `cdd6b70fb`:** `smoke-profile.test.ts (8 tests | 3 failed) 20ms`. The job's only download is
+  reported after it: `stdout | test/renderer-logging.test.ts` / `Downloading Electron binary...`.
+- **Green, `2ae90170a`'s verify job 121417524639:** two downloads, from renderer-logging.test.ts and
+  staged-serving-seam.test.ts, concurrently into the same `dist/`, are reported before `smoke-profile.test.ts (8 tests)
+  1939ms`.
+- Nothing between the two commits touches the rows, the launcher, the desktop's package.json or the lock. The difference
+  was which file vitest's workers finished first: a coin, on every run.
+
+**What happened:**
+- **`35bed6a98` — the rows need no binary (test-only).**
+  - `fakeElectron` asks Electron's package, in a child, where the launcher's own `require("electron")` resolves under
+    `ELECTRON_OVERRIDE_DIST_PATH`, and puts the stand-in there.
+  - Under the override, index.js names `<dist>/<path.txt>` with the binary installed and `<dist>/electron` without it,
+    and never downloads.
+  - An Electron package that does not resolve at all is refused in words. DK-5's row shares the helper.
+- **`98f8433bf` — CI fetches and proves the binary.** `scripts/electron-binary.mjs` is THE fetch-and-prove.
+  - It runs Electron's own install.js (@electron/get's cache, checked against checksums.json), then requires path.txt
+    AND an executable binary at the path it names.
+  - Callers: verify.yml's new step, right after the install (release.yml's verify job is this workflow), and
+    `siblings use` (RD-2), from which the function moved; a failed fetch there is now a `siblings:use FAIL:` line.
+  - The old function passed on path.txt alone.
+  - Electron's own install.js leaves an existing non-executable binary alone, so that case ends in the refusal.
+  - release.yml's build job needs no step. On run 40272843651's signed build job, electron-builder fetched its own
+    Electron zip, and no "Downloading Electron binary" appears.
+  - README's setup block gains `node scripts/electron-binary.mjs`, with the reason.
+
+**Validation:**
+- **Red-first, in the lane** (path.txt moved aside, then restored):
+  - main's rows: 3 failed | 5 passed, `ENOENT … electron/path.txt`, CI's signature;
+  - the lane's rows: 8/8 with no path.txt, and no path.txt after (nothing downloaded); 8/8 with it.
+  - main's `ensureElectronBinary`, given a package whose install.js writes path.txt alone, says "installed"; the lane's
+    refuses: "… (exit 0; path.txt names dist/Electron.app/Contents/MacOS/Electron, which is not an executable file)".
+- **The CLI on the lane's real Electron:** installed → exit 0; path.txt gone → re-fetched from the cache in 3.3 s, exit
+  0; `chmod a-x` → exit 1 in words (mode restored).
+- **Rows:** `electron-binary.test.mjs` 5/5, with `siblings-shape.test.mjs` (its row moved) 29/29.
+- **`pnpm verify`** EXIT 0 on `98f8433bf` (14:29–14:31Z, nice 19, the shared guard clear), preflight OK with its two warnings. dev-runner ran fresh, `node --test` 250/0. The other 26 test projects replayed run 1, on the same inputs, where they had run fresh: vitest 9,256/0/37. cargo 458/0/13 in 30 suites. Run 1 (14:24–14:28Z) was red only in dev-runner: siblings-pin.test.mjs's fixture copied the siblings CLI without its new import (13 rows, ERR_MODULE_NOT_FOUND), fixed inside `98f8433bf`.
+
+**Owed:**
+- **CI's own witness:** the next verify run's new step (`electron-binary: … is executable (fetched now by Electron's
+  install.js)`), and the rows on it.
+- **Two unit tests download Electron's binary** (found, not changed): `renderer-logging.test.ts` and
+  `staged-serving-seam.test.ts` reach Electron's index.js through their imports. On CI the step makes that a no-op; in a
+  fresh tree it fetches about 100 MB from a unit test. A docket line for electron-shell's owner (VF-PM 14:27Z); ROADMAP's
+  Open debts.
