@@ -228,7 +228,15 @@ export const PRODUCT_API_LIMITS = {
    * SEND up to `PRODUCT_FRAME_BYTES` (128 MiB), but the reader parses what it
    * takes, and zod 3 builds an issue per bad element (~650 MB for 4 MiB). A
    * door whose honest answer outgrows this pages it or moves its bytes to a
-   * ticketed socket (EL2), never a wider reader. */
+   * ticketed socket (EL2), never a wider reader.
+   *
+   * **The rule every PeerLink answer obeys (item 60's doors, VF-PM 2026-10-26):
+   * rows follow the asker, bytes follow the link.** A peer daemon keeps the
+   * row limits of the window it asks for (`tailnet-rows.ts`: bounding it would
+   * cut a window's answer at a phone's page), and every answer that rides
+   * PeerLink is bounded in BYTES to this reader: a subscription by the rows
+   * protocol's own pages (`ROWS.SNAPSHOT_PAGE_BYTES`), a one-shot answer by a
+   * byte budget with the honest marker its door already has. */
   WS_MAX_INBOUND_BYTES: 4 * 1024 * 1024,
 } as const;
 

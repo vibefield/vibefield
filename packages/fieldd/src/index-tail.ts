@@ -15,11 +15,22 @@
 // has its own revision chain (`RowsProjection`, one per reader) and its own
 // floor. The bearer rides the subprotocol pair (AUTH.md §3) — rosetta's client
 // carries it — and never leaves this process (EL7).
+//
+// Item 60 (2026-10-26) — a snapshot (the open, a reset) goes out in the rows
+// protocol's pages (`ROWS.SNAPSHOT_PAGE_BYTES`, rows-pages.ts), as the door's
+// declared `rows` shape promised. A window's and a peer's row bound is the
+// whole session (`tailnet-rows.ts`), and the shared socket holds every row
+// appended since it opened, so a reader that opens late — and a gap's repair —
+// was answered all of them in ONE frame: past PeerLink's 4 MiB reader at about
+// 2,000 rows. Rosetta's own snapshot (a resync, a fresh socket) is its newest
+// 200, already past a page at the text bound. Rows follow the asker, bytes
+// follow the link.
 import { createHash } from "node:crypto";
 import {
   INDEX_MESH,
   IndexTimelineEntryRow,
   type IndexTimelineRow,
+  ROWS,
   type RowsCursor,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
@@ -44,6 +55,7 @@ import {
   snapshotDeltaView,
 } from "./projection";
 import type { RosettadState, RosettadSupervisor } from "./rosettad-supervisor";
+import { meterRow, snapshotPages } from "./rows-pages";
 
 /** How long an open waits for rosetta's first snapshot before it is the
  * honest UNAVAILABLE: rosetta's own client gives a socket 15 s to greet. */
@@ -444,6 +456,8 @@ export class IndexTailService {
         emit(frame, kind);
       },
       minIntervalMs: Math.max(opts.minIntervalMs, INDEX_MESH.SESSION_TAIL_MIN_INTERVAL_MS),
+      pages: ({ rows, ...base }) =>
+        snapshotPages(base, rows.map(meterRow), ROWS.SNAPSHOT_PAGE_BYTES),
       onError: (error) =>
         logger.warn("fieldd.index.tail_frame_failed", "A tail subscriber's frame failed", {
           sessionId,
@@ -455,6 +469,8 @@ export class IndexTailService {
       open,
       start: () => {
         started = true;
+        // the rest of a paged open, which its `more` promised (item 60)
+        subscription?.sendRest();
         // the table may have moved under the open answer (rosetta reset it,
         // or a frame was refused above): the next frame replaces the copy
         if (subscription?.gapped || tail.generation !== openedAt) subscription?.resnapshot();

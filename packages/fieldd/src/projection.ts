@@ -227,6 +227,12 @@ export interface RevisionedSubscriptionOptions<TOpen, TFrame> {
   /** a throwing consumer or a source that failed to read: logged, never thrown
    * into the source's publish */
   onError?: (error: unknown) => void;
+  /** Item 60 — a snapshot too large for one frame, as the frames that carry it
+   * (the rows protocol's pages, rows-pages.ts). The open answer is the first;
+   * the rest are owed to `sendRest`, which the owner calls once the open
+   * answer has gone. A reset goes out as all of them, in order. One page, or
+   * absent: a snapshot is one frame, as the view built it. */
+  pages?: (snapshot: TOpen) => TOpen[];
 }
 
 /**
@@ -245,9 +251,11 @@ export interface RevisionedSubscriptionOptions<TOpen, TFrame> {
  *    it broke its own continuity).
  */
 export class RevisionedSubscription<TOpen, TFrame> {
-  /** the open answer */
+  /** the open answer (its first page, when the snapshot is paged) */
   readonly snapshot: TOpen;
   readonly #opts: RevisionedSubscriptionOptions<TOpen, TFrame>;
+  /** the open's remaining pages, until `sendRest` */
+  #rest: TOpen[];
   readonly #unsubscribe: () => void;
   #timer: ReturnType<typeof setTimeout> | null = null;
   #beat: ReturnType<typeof setTimeout> | null = null;
@@ -258,7 +266,9 @@ export class RevisionedSubscription<TOpen, TFrame> {
 
   constructor(opts: RevisionedSubscriptionOptions<TOpen, TFrame>) {
     this.#opts = opts;
-    this.snapshot = opts.view.open();
+    const [first, ...rest] = this.#paged(opts.view.open());
+    this.snapshot = first as TOpen;
+    this.#rest = rest;
     this.#lastFrameAt = Date.now();
     this.#unsubscribe = opts.subscribe((urgent) => this.#schedule(urgent === true));
     this.#armBeat();
@@ -273,6 +283,16 @@ export class RevisionedSubscription<TOpen, TFrame> {
   /** whether the next frame will replace the subscriber's copy */
   get gapped(): boolean {
     return this.#gap;
+  }
+
+  /** The open's remaining pages, in order, as `snapshot` frames: what the open
+   * answer promised with its `more`. Once; a page that does not land opens a
+   * gap, which a view that can reset repairs with a whole new snapshot. */
+  sendRest(): void {
+    const rest = this.#rest;
+    this.#rest = [];
+    if (this.#disposed) return;
+    for (const page of rest) if (!this.#deliver(page, "snapshot")) return;
   }
 
   /** The next frame replaces the subscriber's copy (at the floor, like any
@@ -343,7 +363,21 @@ export class RevisionedSubscription<TOpen, TFrame> {
       this.#opts.onError?.(error);
       return;
     }
-    if (this.#deliver(replacement.frame, replacement.kind)) this.#gap = false;
+    // a snapshot replacement goes out in its pages; the gap closes only once
+    // the last of them has landed, and a page that does not land stops the rest
+    const frames =
+      replacement.kind === "snapshot"
+        ? this.#paged(replacement.frame as TOpen)
+        : [replacement.frame];
+    for (const frame of frames) if (!this.#deliver(frame, replacement.kind)) return;
+    this.#gap = false;
+  }
+
+  /** A snapshot that fits one page goes out as the view built it, its wire
+   * unchanged; only one that does not is sent as its pages. */
+  #paged(snapshot: TOpen): TOpen[] {
+    const pages = this.#opts.pages?.(snapshot);
+    return pages === undefined || pages.length <= 1 ? [snapshot] : pages;
   }
 
   /** One frame out. A frame that does not land opens a gap — for a view that

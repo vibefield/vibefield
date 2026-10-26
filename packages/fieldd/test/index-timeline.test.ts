@@ -31,6 +31,8 @@ import {
   IndexSessionTailDelta,
   IndexSessionTailSnapshot,
   IndexTimelineResult,
+  PRODUCT_API_LIMITS,
+  ROWS,
   type Scope,
   SOCKETS,
 } from "@vibefield/contracts";
@@ -257,7 +259,9 @@ interface World {
   control(value: Record<string, unknown>): void;
 }
 
-async function setup(opts: { rosettad?: boolean; timeline?: unknown[] } = {}): Promise<World> {
+async function setup(
+  opts: { rosettad?: boolean; timeline?: unknown[]; sessions?: string[] } = {},
+): Promise<World> {
   const dataDir = mkdtempSync(join(tmpdir(), "vf-ixtl-"));
   cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
   mkdirSync(join(dataDir, "native", "run"), { recursive: true });
@@ -270,7 +274,7 @@ async function setup(opts: { rosettad?: boolean; timeline?: unknown[] } = {}): P
     control: join(dataDir, "timeline-control.json"),
     requests: join(dataDir, "requests.log"),
   };
-  writeFileSync(files.sessions, JSON.stringify([sessionRow("s1"), sessionRow("s2")]));
+  writeFileSync(files.sessions, JSON.stringify((opts.sessions ?? ["s1", "s2"]).map(sessionRow)));
   writeFileSync(files.runtimes, JSON.stringify(RUNTIMES));
   writeFileSync(files.timeline, JSON.stringify(opts.timeline ?? [...S1, ...S2]));
   writeFileSync(files.control, JSON.stringify({ watermark: "w-1" }));
@@ -682,6 +686,116 @@ describe("index.session.subscribe — the live tail as rows (SP-6)", () => {
     await win.call("system.unsubscribe", { subId: whole.subId });
     await until(() => world.daemon.indexTail.openSockets === 0, 5_000);
   }, 30_000);
+
+  it("item 60 — a snapshot past a page goes out in the rows protocol's pages: an open, a later reader's open of every held row, a reset", async () => {
+    // The measurement's rows: a reply at the text bound (item 60 measured
+    // 2.3 KB a row on rosettad's own; these project to about 2.1 KB). One
+    // socket serves every reader of a session, and what it holds grows with
+    // every append, so a reader that opens late is answered EVERY held row: on
+    // main, one frame, past PeerLink's 4 MiB reader here.
+    const HELD = 2_600;
+    const LONG = Array.from({ length: HELD }, (_, i) =>
+      entry("s3", i + 1, "agent", {
+        body: {
+          type: "agent",
+          text: { type: "inline", text: `${i + 1} `.padEnd(INDEX_TIMELINE.TEXT_CHARS, "y") },
+          attachments: [],
+          citations: [],
+        },
+      }),
+    );
+    const world = await setup({ timeline: [...S1, ...LONG.slice(0, 200)], sessions: ["s1", "s3"] });
+    await ready(world.daemon);
+    const bytes = (frame: unknown) => Buffer.byteLength(JSON.stringify(frame), "utf8");
+    type Page = { epoch?: string; revision: number; rows: { ordinal: number }[]; more?: boolean };
+    /** one snapshot's pages, from its first to the one that says no more */
+    const assemble = (pages: Page[]) => {
+      for (const page of pages) {
+        expect(bytes(page), "a page stays under the rows protocol's budget").toBeLessThanOrEqual(
+          ROWS.SNAPSHOT_PAGE_BYTES,
+        );
+        expect(page.epoch).toBe(pages[0]?.epoch);
+        expect(page.revision).toBe(pages[0]?.revision);
+      }
+      expect(pages.slice(0, -1).every((page) => page.more === true)).toBe(true);
+      expect(pages.at(-1)?.more).toBeUndefined();
+      return pages.flatMap((page) => page.rows.map((row) => row.ordinal));
+    };
+    const upTo = (n: number) => Array.from({ length: n }, (_, i) => i + 1);
+    /** the open's pages: its answer, then the `.snapshot` frames after it */
+    const opened = async (sub: Awaited<ReturnType<typeof tail>>) => {
+      await until(
+        () => sub.resets().some((page) => page.more !== true),
+        15_000,
+        "the open's last page",
+      );
+      return [sub.snapshot as Page, ...(sub.resets() as Page[])];
+    };
+
+    /** a window that reads the way PeerLink does: a frame past 4 MiB closes it
+     * (`ws`'s maxPayload; its own side reports the close as 1006) */
+    const capped = async () => {
+      const ws = new WebSocket(`ws://127.0.0.1:${world.daemon.controlPort}`, {
+        maxPayload: PRODUCT_API_LIMITS.WS_MAX_INBOUND_BYTES,
+      });
+      cleanup.push(() => ws.close());
+      const closed = new Promise<number>((resolve) => ws.once("close", (code) => resolve(code)));
+      await new Promise<void>((resolve, reject) => {
+        ws.once("open", () => resolve());
+        ws.once("error", reject);
+      });
+      ws.on("error", () => undefined);
+      const rpc = new WsRpc(ws);
+      await helloAs(rpc, world.daemon.tokens.mint(["index.search"], "ixtl-capped").token);
+      return { rpc, closed };
+    };
+
+    // rosetta's own snapshot, 200 rows: already past one page
+    const first = await tail(await windowOf(world.daemon), { sessionId: "s3" });
+
+    // the session runs on while the first reader holds the socket
+    world.timeline([...S1, ...LONG]);
+    await until(
+      () => first.deltas().some((delta) => delta.upserts.some((row) => row.ordinal === HELD)),
+      30_000,
+      "the appended rows",
+    );
+
+    // a reader that opens now is answered every held row — through a reader
+    // capped like PeerLink's, which closes on one frame past its 4 MiB
+    const reader = await capped();
+    const late = await Promise.race([
+      tail(reader.rpc, { sessionId: "s3" }),
+      reader.closed.then((code): never => {
+        throw new Error(`the capped reader closed ${code}: a frame past its 4 MiB`);
+      }),
+    ]);
+    expect(late.snapshot.more).toBe(true);
+    const latePages = await opened(late);
+    expect(reader.rpc.closed).toBe(false);
+    expect(latePages.length).toBeGreaterThan(Math.ceil((HELD * 2_000) / ROWS.SNAPSHOT_PAGE_BYTES));
+    expect(assemble(latePages)).toEqual(upTo(HELD));
+    // and the first reader's own open was paged the same way
+    expect(first.snapshot.more).toBe(true);
+    expect(assemble(await opened(first))).toEqual(upTo(200));
+
+    // rosetta's barrier: the reset is its fresh snapshot, in pages too
+    const before = late.resets().length;
+    world.control({ watermark: "w-2", resync: 1 });
+    await until(
+      () =>
+        late
+          .resets()
+          .slice(before)
+          .some((page) => page.more !== true),
+      15_000,
+      "the reset's last page",
+    );
+    const reset = late.resets().slice(before) as Page[];
+    expect(reset.length).toBeGreaterThan(1);
+    expect(reset[0]?.epoch).toBe(late.snapshot.epoch);
+    expect(assemble(reset)).toEqual(Array.from({ length: 200 }, (_, i) => HELD - 199 + i));
+  }, 90_000);
 
   it("rosetta's barrier (resync) and a dropped socket each reset the copy with a .snapshot frame — the chain stands", async () => {
     const world = await setup();

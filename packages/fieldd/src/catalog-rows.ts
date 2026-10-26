@@ -8,6 +8,7 @@ import {
   RowsResumed as RowsResumedSchema,
   type RowsSnapshot,
 } from "@vibefield/contracts";
+import { FRAME_OVERHEAD_BYTES, type SnapshotPage, snapshotPages } from "./rows-pages";
 
 // DS-L3 — the rows protocol, both halves, for one `{device, table}` (design-06
 // §5; `thinking-desktop-sync-plane.md` §6.1). The wire shapes are the base
@@ -60,10 +61,6 @@ interface Held<Row> {
   readonly bytes: number;
 }
 
-/** The envelope a snapshot page or a delta adds around its rows, counted
- * generously so a page stays under its budget once framed. */
-const FRAME_OVERHEAD_BYTES = 512;
-
 export interface CatalogTableOptions<Row> {
   /** The source's identity for the table (a fieldd boot, an index rebuild).
    * A reader's cursor from any other epoch resets. */
@@ -77,8 +74,8 @@ export interface CatalogTableOptions<Row> {
 }
 
 /** A snapshot page as this table sends it: the base's shape plus which page
- * of how many it is (see `snapshotPages`). */
-export type CatalogPage<Row> = RowsSnapshot<Row> & { page: number; pages: number };
+ * of how many it is (rows-pages.ts, the one pager). */
+export type CatalogPage<Row> = SnapshotPage<RowsSnapshot<Row>, Row>;
 
 /** What a subscribe opens with: the journal covered the cursor (and the
  * catch-up that brings the reader to the head, when anything moved), or a
@@ -257,37 +254,15 @@ export class CatalogTable<Row> {
   }
 
   /** The table as snapshot pages under the page budget, all at one
-   * `{epoch, revision}`; every page but the last says `more: true`. A single
-   * row larger than a page travels alone. An empty table is one empty page.
-   *
-   * Each page also says WHICH page it is (`page`, 0-based, of `pages`) — a
-   * passthrough member over the base's shape. The base's `more` alone assumes
-   * pages arrive in order, and one path does not deliver them so: FielddClient
-   * hands a replayed subscribe's OPEN answer (page 0) to its listener after the
-   * continuation pages that followed it on the wire (it awaits the reply, the
-   * pages route synchronously). With the index a reader assembles any order. */
+   * `{epoch, revision}`; every page but the last says `more: true`, and each
+   * says which page of how many it is (rows-pages.ts, the one pager). A single
+   * row larger than a page travels alone. An empty table is one empty page. */
   snapshotPages(): CatalogPage<Row>[] {
-    const chunks: Row[][] = [];
-    let rows: Row[] = [];
-    let bytes = FRAME_OVERHEAD_BYTES;
-    for (const held of this.#rows.values()) {
-      if (rows.length > 0 && bytes + held.bytes + 1 > this.pageBytes) {
-        chunks.push(rows);
-        rows = [];
-        bytes = FRAME_OVERHEAD_BYTES;
-      }
-      rows.push(held.row);
-      bytes += held.bytes + 1;
-    }
-    chunks.push(rows);
-    return chunks.map((chunk, page) => ({
-      epoch: this.epoch,
-      revision: this.#revision,
-      rows: chunk,
-      ...(page < chunks.length - 1 ? { more: true } : {}),
-      page,
-      pages: chunks.length,
-    }));
+    return snapshotPages(
+      { epoch: this.epoch, revision: this.#revision },
+      this.#rows.values(),
+      this.pageBytes,
+    );
   }
 
   digest(): RowsDigest {

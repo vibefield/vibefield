@@ -26,6 +26,11 @@ import { INDEX_TAILNET_LIMITS, type Principal } from "@vibefield/contracts";
  * (`peer-fieldd`). A peer asks on behalf of a window on another desktop and
  * carries that window's limits; bounding it would cut a window's answer at a
  * phone's page.
+ *
+ * Item 60 (2026-10-26): that is the ROWS half of the rule. Its bytes half is
+ * the link's: a peer's answer still crosses PeerLink's 4 MiB reader, so it is
+ * bounded in bytes, never in rows (`PRODUCT_API_LIMITS.WS_MAX_INBOUND_BYTES`'
+ * rule — rows follow the asker, bytes follow the link).
  */
 export function tailnetRowLimit(
   principal: Principal,

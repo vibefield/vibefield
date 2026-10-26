@@ -12,6 +12,7 @@ import {
   wholeValueDoor,
   wholeValueView,
 } from "../src/projection";
+import { FRAME_OVERHEAD_BYTES, meterRow, snapshotPages } from "../src/rows-pages";
 
 // SP-1 (SP-L4) — the projection helper's own rows: idle sends nothing, the
 // floor holds under churn, every subscriber keeps its own floor and chain, and
@@ -156,6 +157,8 @@ describe("RevisionedSubscription — one subscriber of one source", () => {
       minIntervalMs: number;
       resets?: boolean;
       emit?: (frame: unknown, kind: FrameKind) => void;
+      /** item 60 — page a snapshot at this budget (rows-pages.ts) */
+      pageBytes?: number;
     },
   ) {
     const table = itemProjection();
@@ -177,6 +180,12 @@ describe("RevisionedSubscription — one subscriber of one source", () => {
       },
       minIntervalMs: opts.minIntervalMs,
       onError: (error) => errors.push(error),
+      ...(opts.pageBytes !== undefined
+        ? {
+            pages: ({ rows, ...base }: SnapshotFrame<unknown>) =>
+              snapshotPages(base, rows.map(meterRow), opts.pageBytes as number),
+          }
+        : {}),
     });
     return { subscriber, sent, errors };
   }
@@ -313,6 +322,82 @@ describe("RevisionedSubscription — one subscriber of one source", () => {
         frame: { epoch: "boot-1.1", revision: 1, rows: [{ id: "a", status: "idle", revision: 1 }] },
       },
     ]);
+    subscriber.dispose();
+  });
+
+  /** five rows, two to a page: each row's JSON is about 40 bytes */
+  const FIVE = ["a", "b", "c", "d", "e"].map((id) => ({ id, status: "idle" }));
+  const TWO_ROWS = FRAME_OVERHEAD_BYTES + 90;
+  const pageOf = (frame: unknown) =>
+    frame as SnapshotFrame<{ id: string }> & { more?: true; page: number; pages: number };
+
+  it("item 60 — a snapshot past its page goes out in pages: the open answers the first, sendRest the rest, a reset all", () => {
+    const src = source(FIVE);
+    const { subscriber, sent } = rowsSubscriber(src, {
+      minIntervalMs: 250,
+      resets: true,
+      pageBytes: TWO_ROWS,
+    });
+    const first = pageOf(subscriber.snapshot);
+    expect(first).toMatchObject({ epoch: "boot-1.1", revision: 1, more: true, page: 0, pages: 3 });
+    expect(first.rows.map((row) => row.id)).toEqual(["a", "b"]);
+    // nothing is owed before the owner says the open answer has gone
+    vi.advanceTimersByTime(1_000);
+    expect(sent).toEqual([]);
+
+    subscriber.sendRest();
+    expect(sent.map(({ kind }) => kind)).toEqual(["snapshot", "snapshot"]);
+    const rest = sent.map(({ frame }) => pageOf(frame));
+    expect(rest.map(({ page, more }) => [page, more])).toEqual([
+      [1, true],
+      [2, undefined],
+    ]);
+    for (const page of rest) expect(page).toMatchObject({ epoch: "boot-1.1", revision: 1 });
+    // the reader's copy, assembled: every row, once, in order
+    expect([first, ...rest].flatMap((page) => page.rows.map((row) => row.id))).toEqual(
+      FIVE.map(({ id }) => id),
+    );
+    // once: the open's pages are not owed twice
+    subscriber.sendRest();
+    expect(sent).toHaveLength(2);
+
+    // a reset is every page of the replacement, in order, at the floor
+    subscriber.resnapshot();
+    vi.advanceTimersByTime(250);
+    const reset = sent.slice(2).map(({ frame, kind }) => ({ kind, ...pageOf(frame) }));
+    expect(reset.map(({ kind, page, pages, more }) => [kind, page, pages, more])).toEqual([
+      ["snapshot", 0, 3, true],
+      ["snapshot", 1, 3, true],
+      ["snapshot", 2, 3, undefined],
+    ]);
+    expect(subscriber.gapped).toBe(false);
+    subscriber.dispose();
+  });
+
+  it("item 60 — a page that does not land stops the rest and keeps the gap; the repair sends every page again", () => {
+    const src = source(FIVE);
+    let delivered = 0;
+    const { subscriber, sent, errors } = rowsSubscriber(src, {
+      minIntervalMs: 250,
+      resets: true,
+      pageBytes: TWO_ROWS,
+      // the reset's second page dies mid-frame, once
+      emit: () => {
+        delivered += 1;
+        if (delivered === 2) throw new Error("socket died mid-page");
+      },
+    });
+    subscriber.resnapshot();
+    vi.advanceTimersByTime(250);
+    expect(errors).toHaveLength(1);
+    expect(subscriber.gapped).toBe(true);
+    // the page after the lost one was never sent: a half snapshot is no snapshot
+    expect(sent.map(({ frame }) => pageOf(frame).page)).toEqual([0]);
+
+    subscriber.resnapshot();
+    vi.advanceTimersByTime(250);
+    expect(sent.slice(1).map(({ frame }) => pageOf(frame).page)).toEqual([0, 1, 2]);
+    expect(subscriber.gapped).toBe(false);
     subscriber.dispose();
   });
 
