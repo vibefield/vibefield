@@ -356,6 +356,8 @@ function scriptedProvider(
     seen?: Array<AgentProfile | undefined>;
     signInMark?: string;
     models?: ScriptedModels;
+    /** item 72 — held here after the PTY is born, before the spawn returns (and the runtime registers the run) */
+    afterBirth?: (runtimeSessionId: string) => Promise<void>;
   } = {},
 ): AgentProvider {
   let counter = 0;
@@ -399,6 +401,7 @@ function scriptedProvider(
           FIELDD_SMUGGLED: "never",
         },
       });
+      await extra.afterBirth?.(runtimeSessionId);
       const sessionId = options.resume ?? `scripted-native-${n}`;
       sessions.push({
         runtimeSessionId,
@@ -480,6 +483,8 @@ interface SetupConfig {
   usage?: AccountUsageService;
   /** PJ-6 (Q4) — whether the scripted agent's resume takes a model (default yes) */
   resumeSelection?: boolean;
+  /** item 72 — the scripted agent waits here once its PTY is born, before its spawn returns */
+  afterBirth?: (runtimeSessionId: string) => Promise<void>;
 }
 
 /** Boot fieldd: over the mock mgmt server (no floor) or the REAL field-native. */
@@ -590,6 +595,7 @@ async function setup(config: SetupConfig): Promise<Box> {
           seen,
           ...(config.extensions === true ? { signInMark: join(root, "scripted-signed-in") } : {}),
           models,
+          ...(config.afterBirth !== undefined ? { afterBirth: config.afterBirth } : {}),
         }),
       ];
     },
@@ -2902,6 +2908,48 @@ describe("MF-1f/MF-1g — an agent pane outlives its run, and the fold keeps its
     expect(again.data?.kind).toBe("PRECONDITION_FAILED");
     expect((again.data?.details as { state?: string } | undefined)?.state).toBe("replaced");
   }, 200_000);
+});
+
+describe("item 72 — a run joins the inventory it was born into", () => {
+  it("a run registered after the last inventory that lists its pane is joined to its cell at registration", async () => {
+    let daemon: FielddDaemon | undefined;
+    const box = await setup({
+      floor: "real",
+      // the order CI's load made, made certain: every inventory this birth causes reaches the runtime BEFORE the run
+      // is registered (the spawn returns only after it), and an idle pane causes no other
+      afterBirth: async (paneId) => {
+        await poll(
+          async (seen) => {
+            const terminals = daemon?.terminals;
+            const listed =
+              terminals !== undefined &&
+              terminals.observation() !== undefined &&
+              terminals.list().some((terminal) => terminal.sessionId === paneId);
+            seen({ listed });
+            return listed ? true : undefined;
+          },
+          15_000,
+          "the floor's inventory listing the new pane",
+        );
+        // the birth's own follow-up pushes (its program's exec) land too, still before the registration
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      },
+    });
+    daemon = box.daemon;
+    const win = await window(box.daemon, DECK, "i72");
+    const spawned = (await born(win, "agent.spawn", {
+      provider: "scripted",
+      cwd: box.envOut,
+    })) as AgentSpawnResult;
+    // read at once: no inventory came after the registration, so a join can only be the registration's own
+    const { sessions } = (await win.call("agent.list", {})) as AgentListResult;
+    const row = sessions.find((r) => r.runtimeRunId === spawned.session.runtimeRunId);
+    expect(row?.terminal?.runtimeSessionId).toBe(spawned.terminal.sessionId);
+    expect(
+      row?.terminal?.cellBootId,
+      "the row is joined to its cell at registration",
+    ).toBeDefined();
+  }, 60_000);
 });
 
 describe("AR-6-0 — the stop verb (agent.interrupt)", () => {

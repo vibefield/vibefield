@@ -2377,6 +2377,18 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       );
       return entry;
     }
+    // Item 72 (2026-10-26) — a run joins the inventory it was born into. puppeteer births the PTY before its spawn
+    // returns, so the floor may already list this terminal when the run is registered, and it pushes again only on an
+    // event: an idle pane raises none, so the row was never joined to its cell (CI: 15 s with no `cellBootId`), and an
+    // unjoined row steers to the wrong cell (AR-6-0). The floor's rows are read now, by the read `adopt()` makes; a later
+    // inventory still joins (or backstops) as before.
+    if (entry.terminal === undefined) {
+      const terminals = this.opts.terminals?.() ?? null;
+      if (terminals !== null && this.listed(terminals, info.terminalSessionId)) {
+        entry.terminal = terminals.get(info.terminalSessionId);
+        entry.seenInInventory = true;
+      }
+    }
     this.managed.set(info.runtimeRunId, entry);
     this.byTerminal.set(info.terminalSessionId, info.runtimeRunId);
     const current = this.runtime.monitorState(info.runtimeRunId);
