@@ -15337,3 +15337,95 @@ ghosttea's next release, then this EL8.
 - **`pnpm verify`:** EXIT 0 at 19:55:39Z on its first run (test for 27 projects, cargo test 30 ok), with the incremental cache off
   because of the SSD's floor.
 - Logs: `/Volumes/SamsungRed/lanes/item72/logs/` (`redfirst/`, `regression/`, `proofs/`).
+
+## EL8 — ghosttea 0.13.6, the render worker's and the claim's fixes: a closed pane no longer keeps the render worker spinning, a dirty surface is work only while a frame can draw it, and the phone's claim waits for its session's opening frame; truffle stays 0.7.22 (2026-10-26; `3c316bade`, lane `hl/el8-ghosttea-0.13.6`)
+
+**What happened:** ghosttea released 0.13.6 at 21:30–21:35Z: tag v0.13.6 = `9c114391`; npm 10/10 and crates 7/7 at
+0.13.6; the GitHub release Latest at 21:35:53Z; the Apple artifact ghosttea-apple-native-effc7e54b76e. VF-PM's brief came
+at 21:38Z, as its own event on this Mac's shared slot. The nightly was mid-run, and this EL8 touches no workflow file.
+- **truffle 0.7.23 stays out** (VF-PM ruled 21:42Z on the lead's read). Between truffle-v0.7.22 and v0.7.23 the only code
+  change is one truffle-core file: `network/tailscale/sidecar.rs`, #229, the stderr forwarder that kept a dying sidecar's
+  last words. The Go sidecar's source did not change, Swift changed only a README, and no protocol moved. In this
+  graph only field-native depends on truffle-core, so the cargo plane could move alone. Swift could not: the kit's exact
+  0.7.23 against ghosttea 0.13.6's exact 0.7.22 is the SwiftPM refusal the 10-24 EL8 closed. It waits for a ghosttea that
+  declares 0.7.23 (VF-PM queued that bump with focus-session), then moves in one EL8 the way 0.13.4 and 0.7.22 did.
+- **The pin, one commit:**
+  - the lock's ghosttea `release` `{npm, cargo, swift}: "0.13.6"` and sha `9c114391` (`pnpm siblings:pin ghosttea`);
+  - Cargo.toml's `ghosttea = "=0.13.6"` and Package.swift's `ghostteaRelease` (`render --prod`);
+  - the five npm rows and preflight's six;
+  - the 0.13.6 release-age rows, with 0.13.5's dropped after the one install.
+- **The locks, written by the tools:**
+  - Cargo.lock: the six ghosttea crates, nothing else.
+  - pnpm-lock: ghosttea's rows only, 44 for 44.
+  - Package.resolved: SwiftPM's `resolve` fetched the artifact ghosttea's own manifest pins and accepted its checksum
+    (7323617832b3…48357a).
+- **What reaches this repo** (ghosttea's CHANGELOG; `gh compare v0.13.5...v0.13.6`, 11 commits):
+  - #93 and #94 in ghosttea-react's runtime.ts and terminal-render.worker.ts, which serve the desk's terminal panes:
+    - a pane's blur that arrives after the runtime released its view no longer rebuilds the released surface, so a closed
+      pane stops the render worker spinning;
+    - a dirty surface counts as work only while a frame can draw it (mounted, sized and not occluded).
+  - #92 in ghosttea-truffle: a claim waits for the session's opening control frame before asking (the phone/freeway
+    reclaim race). The crate is retired from this graph (TM-1); it reaches the phone inside the Apple artifact.
+  - #91, the Metal renderer's render evidence.
+  - No API change, no protocol minor (17 stands) and no contract moved. The key catalog moved only its version line,
+    and COLORFGBG did not move.
+
+**Found:**
+- **`siblings:pin` writes the lock with JSON.stringify,** which unfolds mille's three short arrays. Biome folds them back,
+  so the lock's diff stays 4 lines. The pin's first run was red at gen:check alone, because the regenerated key catalog
+  was not yet staged and gen:check diffs against the index (the recorded gotcha).
+- **The kit's FieldTerminalTests is the recorded contention class again,** never the same row twice:
+
+  | run | load | result |
+  |---|---|---|
+  | 1, alone | 153 | green, 176/33 |
+  | 1, in the whole kit | 361 | red: one row's 5 s wait (`theCellASessionOpensOrComesBackOnIsSaidFocused`, "the demand to come back") |
+  | 2, alone | 185 | red: nine fix8 attach-deadline rows past Swift Testing's 60 s limit |
+  | 2, in the whole kit | 179 | green, 176/33 |
+
+  The row that went red first drives VibeField's own TerminalLanes against the CellDoorHarness, and it passed alone with
+  the same artifact. #92's claim change does not make it fail. The quiet-window witness (load < 10) stays owed: this Mac
+  held 150–360 all evening.
+- **smoke:canvas's NO-DOCUMENT went red for the first time,** on the touched run alone:
+  - after ↻ on a pane whose address is an attachment, the fixture was asked again (asked `[0,1,2]`, refused 2), but
+    `anew()` saw no new window id in `d.pages("")` over 30 s of 80 ms polls (`SMOKE_CANVAS_FIRST_UNMET` "a new window
+    for the page");
+  - just before it, the STILL section's wait for "no page left in main" ended with 2 pages alive. That wait is unmet in
+    4 of the mini's 7 earlier logs (the 0.13.4 control among them) with NO-DOCUMENT green, so it is not enough alone.
+  - It is PT-6a's check (`cf84dec5b`, 10-13). It was green in the mini's six earlier runs and in the untouched re-run.
+  - It goes to the PT owner's docket. Either the reload's window lived under one poll, or main reused or capped a
+    window while the leftover pages held the cap's slots.
+
+**Validation** (this Mac, nice 19, each step alone behind the dev-app guard, ≥ 10 GiB on both disks):
+- `pnpm siblings:pin ghosttea` EXIT 0: R23 passed (28 self-checks; 10 providers, 9 kinds), the consumers' typecheck ran 27
+  projects fresh, and gen:check was clean.
+- `cargo clippy --workspace --all-targets -- -D warnings` was green, with ghosttea 0.13.6 compiled into field-native.
+- **`pnpm verify` on the lane's tree `74291e57`:** EXIT 0 (21:49–21:56Z, load 60 → 39), all 27 test targets fresh.
+  - field-app 2,624 / 3 skipped; fieldd 2,461 / 29; electron-shell 1,926 / 3 (the release-binary row skips because this
+    lane built no release binary).
+  - `test:rust` 460 / 0 / 13 in 30 suites; gen:check clean.
+- **The kit** ran on James's "kit ok" (his board, 22:04:20Z, relayed by VF-PM 22:05Z), on the iPhone 17 Pro simulator
+  with Xcode 26.6, never his phone.
+  - The compile resolved ghosttea 0.13.6 and truffle 0.7.22 by URL.
+  - The whole kit with the PJ-7 fixture passed **1,046** on its second run, the 0.13.1/0.13.4/0.13.5 count.
+  - FieldRoutedTerminalTests 170/26 and FieldHomeTests 79/15 passed alone in both runs. FieldTerminalTests is in the
+    table above.
+- **The desk rows on the Mac mini.** James unlocked it at 22:08:48Z and VF-PM relayed at 22:11Z. Each row ran alone
+  under el8-0136-rows.sh's guard (unlocked, HID idle ≥ 120 s, load < 10, df ≥ 10 GiB; never `-u`), on the tree
+  `74291e57`, which the mini took from a 31 KB delta bundle.
+  - The three rows the render worker reaches were all green and untouched: smoke:godview 141 s, smoke:terminal-door 29 s
+    and smoke:terminal-direct 33 s. Idle grew +141, +29 and +33 s, each row's own duration.
+  - smoke:canvas was red twice, read side by side (VF-PM ruled the untouched re-run at 22:34Z):
+
+    | row | run 1, 964 s (touched once ~22:17:14Z: idle 334 → 797 s) | run 2, 934 s (untouched: 984 + 934 = 1,918 s) |
+    |---|---|---|
+    | the occluded row | red, the same rects | red, the same rects |
+    | the HAND quantum | NOTEBOOK 275, WHITEBOARD 253, CALENDAR 257 ms | NOTEBOOK 256, WHITEBOARD 256, CALENDAR 252, CLOCK 258 ms |
+    | IDLE | red, named: 3 submits at +13 ms; uploads hold ×6, mat ×2 (ICE's HoldPass) | green |
+    | COVER HISTORY | green | green |
+    | NO-DOCUMENT | red, first seen (above) | green |
+
+    The untouched run holds only the two classes recorded in every run on every tree. Nothing in this event's files
+    reaches these rows: smoke:canvas's desk holds no terminal, and nothing here touches electron-shell or the desk's
+    browser panes.
+- The rest of the 12 desk rows did not run: VF-PM chose the rows this event's changes reach.
