@@ -13923,6 +13923,9 @@ page set in it is encrypted at rest.
   ghosttea-text 0.13.1 → harfbuzz_rs 2.0.1 → harfbuzz-sys 0.5.0, whose `build.rs` prefers a pkg-config host library.
 - On the mini, run 3's packaged fieldd never got ready.
 - `mille.darwin-arm64.node` links its build machine's absolute `libmille_binding.dylib`.
+  *(Corrected 2026-10-26, the prod-builder: FALSE. That path is the `.node`'s OWN install name (LC_ID_DYLIB),
+  which `otool -L` prints first for any dylib; its load commands are /System and /usr/lib only. LANDED "TD — no
+  shipped binary links a host library" (`454c399f2`) reads load commands that way.)*
 - The entitlements grant no library-validation exception, so a signed build linking either should fail on every Mac.
 - Nothing in the release path loads field-native today.
 
@@ -13939,7 +13942,7 @@ page set in it is encrypted at rest.
   shape follows: phase B's userData contains the data root, as in production.
 - **The fix lane** (TD/WP, after the push):
   - `HARFBUZZ_SYS_NO_PKG_CONFIG=1` in `.cargo/config.toml` `[env]`;
-  - mille's binding, upstream (a line for James);
+  - mille's binding, upstream (a line for James); *(withdrawn 2026-10-26: a false positive, corrected above)*
   - THE GATE: no packaged Mach-O links outside `/usr/lib`, `/System` or the bundle, and the build job launches
     field-native once.
 - **R4 on the signed nightly's zip** once BP-D9 and the fix lane land.
@@ -14062,3 +14065,64 @@ declares truffle-core =0.7.19 on its cargo and Swift planes, so neither pin move
 - **The three item-60 door shapes** (VF-PM 01:03Z; the History lead's docket, after 52 (b)): `agent.list` gives a
   peer a projection; `index.session.subscribe` gets a peer row bound and byte-paged snapshots; `index.project` gets a
   peer `maxContributionRows`.
+
+## TD — no shipped binary links a host library: THE release build of field-native is one entry with the embedded harfbuzz, the stage and the build job refuse any Mach-O that loads outside /usr/lib, /System or the bundle, and the native binaries are launched once (2026-10-26; `454c399f2`, lane `td/host-libs`)
+
+**Why:** BP-1b's row 31 (run 3 on the Mac mini) found the package's field-native and field-terminal-host loading
+Homebrew's `/opt/homebrew/opt/harfbuzz/lib/libharfbuzz.0.dylib`, and fieldd never got ready.
+- ghosttea-text 0.13.1 → harfbuzz_rs 2.0.1 → harfbuzz-sys 0.5.0, whose build.rs links the host's harfbuzz through
+  pkg-config whenever it finds one. 0.5.0 has no `bundled` feature.
+- Under a signed build's hardened runtime, with no library-validation exception, such a binary loads nowhere.
+- No release step launched field-native.
+- VF-PM ruled the lane (03:14Z), its one entry (03:48Z) and its gate's scope (every Mach-O).
+
+**What happened:**
+- **THE release build is one entry**, `apps/desktop/packaging/build-native-release.mjs` (`build:native-release`):
+  `cargo build --release --locked -p field-native` with `HARFBUZZ_SYS_NO_PKG_CONFIG=1` in its own env object.
+  - `package:stage` runs it before `package:sea`.
+  - release.yml's own cargo step is gone: both of its packaging paths reach `package:stage`.
+  - The stage's and the SEA builder's messages name it. Dev builds are unchanged.
+- **THE GATE**, `scripts/host-links.mjs`: every packaged Mach-O may load only `/usr/lib/`, `/System/`, `@rpath/`,
+  `@loader_path/` or `@executable_path/`.
+  - It reads the five dependency load commands from each file's own headers (thin or fat), never LC_ID_DYLIB.
+  - It does not go through otool, which takes `name(member)` for an archive member and so cannot open
+    "VibeField Helper (GPU)".
+  - It runs in the stage's verify and in release.yml after packaging, over the whole `.app`.
+- **The launch check:** field-native and field-terminal-host answer `--version` before anything else. The stage's
+  verify and the build job run both, the latter under the hardened runtime once signed.
+- **The trade, said:** the embedded copy is HarfBuzz 2.6.8 (2020), inside CVE-2023-25193's range (through 6.0.0;
+  CVSS 7.5; quadratic handling of consecutive marks, reachable from terminal text). It is the copy ghosttea's own
+  ghosttead ships. The exit is ghosttea-text on harfbuzz_rs 3.0.1 (HarfBuzz 14.6.0, bundled and static by default) in
+  ghosttea's next release, then VibeField's EL8: a ROADMAP debt row.
+
+**Validation:**
+- **Witnesses on this Mac** (the lane's target, nice 19):
+  - W1, a bare release build, then the stage alone: `stage verify FAILED (2)`, both binaries
+    `HOST LINK … /opt/homebrew/opt/harfbuzz/lib/libharfbuzz.0.dylib`.
+  - W2, `package:stage` through the entry: `stage verify OK — 104 files … complete`, no Homebrew line, and the launch
+    check passed.
+  - W3, the build job's command: this lane's `package:dir` gives `24 Mach-O file(s) … no host link; launched
+    field-native, field-terminal-host --version`. 233e704a2's package gives the two HOST LINK lines.
+- `pnpm verify` EXIT 0 on the rebased tip (f094b98d1, the tree of `804ed9b9c` byte for byte; 04:07–04:15Z, nice 19), ALL 27 projects fresh (the EL8's lock): vitest 9,243/0/37, node --test 243/0, cargo 453/0/13 in 30 suites; preflight OK with its one ghosttea WARN. The pre-rebase tree (c2c113788 plus the TD commit) was EXIT 0 too (04:00–04:05Z). W2 and W3 re-ran on the rebased tip (ghosttea 0.13.4, harfbuzz-sys still 0.5.0): `stage verify OK — 104 files … complete`, and the package gave `24 Mach-O file(s) … no host link; launched field-native, field-terminal-host --version`.
+- The focused rows: `host-links.test.mjs` 7/7, and field-native's `launch_check.rs` 1/1; rustfmt and clippy clean.
+
+**And the build job's Xcode** (`804ed9b9c`, its own commit): the first signed nightly (run 40262280678) was RED at "Package,
+signed". `run-electron-builder.mjs` needs full Xcode 26 with Icon Composer, and the image `macos-15-arm64` 20260907.0337
+defaults to Xcode 16.4, with 26.3/26.2/26.1.1/26.0.1 installed by versioned name.
+- The job now pins `DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer`, one job-level line that the
+  unsigned path shares.
+- When an image rotates that Xcode away, the resolver's own refusal is the guard.
+- The move to `macos-26` (default Xcode 26.6) is ROADMAP's follow-on.
+- No release exists yet: W10 and W11's N move to the next nightly, whose build job is this lane's CI witness (the
+  pin, the gate, and harfbuzz on CI).
+
+**Corrected at its source:** BP-1b's "mille's `.node` links its build machine's absolute `libmille_binding.dylib`"
+was FALSE. That path is the `.node`'s own install name (LC_ID_DYLIB); its load commands are /System and /usr/lib only.
+The dated corrections are in LANDED "BP-1b" and ROADMAP.
+
+**Owed:**
+- **The signed nightly's own witness:** the build job's new step on its first run after the push.
+  nightly-20261026, built before this lane, is read separately (its zip's load commands).
+- **The harfbuzz exit:** ghosttea's harfbuzz_rs 3.0.1, then the EL8 (focus-session's docket).
+- **Windows and Linux packages** have no host-library gate yet (the reader is Mach-O's). A line when those stages
+  ship.
