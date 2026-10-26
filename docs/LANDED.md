@@ -14911,3 +14911,57 @@ So the row's `readRendezvous` could return the OLD token.
 - **`pnpm verify`:** EXIT 0 at 16:35:51Z on its first run (test for 27 projects, cargo test 30 ok), the 1-minute
   load reaching ~198 while it ran.
 - Logs: `/Volumes/SamsungRed/lanes/item67/logs/` (`redfirst/`, `proofs/`).
+
+## NF — item 69: native_logging names truffle's forwarder when a dying sidecar's stderr line is lost; the fix is a local truffle branch (2026-10-26; `47f42f624`)
+
+**What happened:** the late nightly 40327683391 (2026-10-26, on `71484275a`) went red ONCE in field-native's
+`native_logging.rs` `fieldd_link_death_does_not_stop_native_evidence_or_diagnostics`, at :208, "diagnostic event
+field_native.sidecar.stderr did not arrive". The same bytes were green on main's CI.
+
+**The read** (from the response that CI's panic printed, `gh run view 40327683391 --log-failed`, line 12253):
+- The sidecar (a `#!/bin/sh` that writes one line and exits 1) ran and exited: truffle's "sidecar stdout closed" at
+  +31 ms, the exit and `field_native.mesh.bring_up_failed` at +32 ms, "bridge shutting down" at +33 ms.
+- The writer accepted all 21 records and dropped none. No stderr record came in the 5 s after.
+- So the line was LOST, not late. field-native brings the mesh up once (`spawn_bring_up`) and never retries, so no
+  longer wait can help.
+- **Cause:** truffle-core's stderr forwarder (sidecar.rs, 0.7.22 and before) is
+  `loop { select! { shutdown => break, next_line => eprintln } }`: unbiased, with a fresh `notified()` per pass and no
+  read to EOF after the signal. The handle's shutdown lands 1–2 ms after the exit. On a busy host the forwarder wakes
+  to both branches ready, and `select!` picks one at random.
+
+**The fix, two halves:**
+- **VibeField, test-only** (`47f42f624`): the wait's deadline message comes from `missing_event(event, response)`.
+  - When the missing event is the sidecar's line and the records hold `bring_up_failed`, it says "the sidecar exited
+    and its stderr line never arrived — truffle's forwarder, item 69 (…the bring-up is never retried)".
+  - Any other miss keeps the plain words, and the deadline (5 s) is unchanged.
+  - A unit row covers the exited case, a slow start, and another event's miss.
+- **truffle, a LOCAL branch:** `fix/sidecar-stderr-drain` = `434486f` on `f7e3900` (v0.7.22), in the lane's truffle
+  clone (no remote).
+  - `forward_stderr()` has one enabled waiter and a `biased` select, and after the signal it reads to EOF within
+    `STDERR_DRAIN_GRACE` (500 ms).
+  - Two unit rows: the 64-round forced race, and a child that outlives its shutdown, on a paused clock.
+  - Red with 0.7.22's loop put back (0 passed, 2 failed). The race dropped the line on round 0. The grace row never
+    ended, a second defect: a signal that lands while a line is forwarded is lost to the next pass's fresh
+    `notified()`.
+  - Green at the branch (2 passed ×3, the lib suite 435 passed / 3 ignored, clippy and fmt clean).
+  - Its push, PR and release are James's word; our EL8 follows.
+
+**Validation** (this Mac's SSD lane `/Volumes/SamsungRed/lanes/item69`, guard v2, nice 19, on `0cf4fbf83`):
+- **Red-first** (records/redfirst69vf.sh): the row's sidecar is made silent by a probe that is never committed.
+  - With 0cf4fbf83's file the row says only "…did not arrive".
+  - At `47f42f624` it gives the item-69 words.
+  - As committed, both rows are green. The binary ran under a lane temp HOME, still empty after.
+- **`pnpm verify`:** EXIT 0 at 16:56:49Z on its SECOND run (test for 27 projects, cargo test 30 ok).
+  - The first, at 16:49:29Z, was red on 30 field-native lib tests, every one a fixture read NotFound.
+  - The cause: the shared target's cached unit-test binary had been built at 16:34Z in item 67's verify, with that
+    lane's `CARGO_MANIFEST_DIR` baked in, and that lane was retired at 16:38Z. This lane's checkout (16:29Z) was
+    older than that build, so cargo reused the binary.
+  - field-native's 88 `.rs` files were touched, and the rerun rebuilt them with this lane's path.
+- **The reproduction under load** (records/repro69.sh): bounded, three settings.
+  - 50 runs at no load: 0 lost. 200 runs at 80 busy loops (the 1-minute load reaching ~600): 0 lost. With ten tokio
+    workers here the forwarder is polled at once.
+  - field-native held to ONE worker (`TOKIO_WORKER_THREADS=1`, tokio's own knob), 200 runs at 80 busy loops:
+    9 LOST, 0 other reds.
+  - Each lost run has CI's shape exactly: 21 records accepted and 0 dropped, then the exit, `bring_up_failed` and
+    "bridge shutting down" within 1 ms, and no stderr record.
+- Logs: `/Volumes/SamsungRed/lanes/item69/logs/` (`redfirst-vf/`, `proofs/`, `repro/`, `truffle/`).
