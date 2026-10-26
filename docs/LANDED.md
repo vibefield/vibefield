@@ -15429,3 +15429,68 @@ at 21:38Z, as its own event on this Mac's shared slot. The nightly was mid-run, 
     reaches these rows: smoke:canvas's desk holds no terminal, and nothing here touches electron-shell or the desk's
     browser panes.
 - The rest of the 12 desk rows did not run: VF-PM chose the rows this event's changes reach.
+
+## WP12 — the first signed nightly is published, and W10 passes on it; W11's install and launch witness pass on the Mac mini (2026-10-26; records only; `nightly-20261026`, run 40398570391 on `d9eea75e0`)
+
+**Why:** VibeField's first release, the TD-3 gate (W10) and the first half of the signed apply (W11), recorded where they
+were witnessed.
+
+**The four dispatches it took** (each a fix on main before the next):
+- **40262280678** (on `a673d7ae0`): RED at "Package, signed". The image's default Xcode 16.4 had no Icon Composer, so
+  the job now pins 26.3 (`804ed9b9c`).
+- **40272843651** (attempt 2, on `2ae90170a`): signed and notarized, then refused by the LSF-4 gate's own parser and the
+  helpers' bare identifiers. Fixed by LANDED "LSF-4 — the release gate reads what a signed build carries".
+- **40342606623** (attempt 2, on `cdd6b70fb`): green through build, sign and converge. Its publish was refused twice
+  (HTTP 403) by GitHub's workflow-diff rule for GITHUB_TOKEN tags. Fixed by LANDED "WP12 — the release's tag is made at
+  plan time"; its bytes are abandoned.
+- **40398570391** (on `d9eea75e0`, dispatched 20:46:08Z): every job green.
+  - plan: `nightly-20261026`, `0.1.0-nightly.20261026`, skip false.
+  - tag: `tag: nightly-20261026 at d9eea75e0… (create)`, the repo's first nightly tag.
+  - verify: green. build (James's click): LSF-4 `ok` (app allow-jit; the helpers' reverse-DNS ids; team 9F79X9D26S,
+    hardened runtime, secure timestamp; deep signature, Gatekeeper, staple). host-links: 24 Mach-O, no host link, the
+    native binaries launched.
+  - sign (James's click): `channels.json version 10`, release-verify green. converge: green.
+  - publish: the tag asserted, created on with `--verify-tag`, payloads at 22:05:47Z and metadata 22:05:58–22:06:00Z (the
+    assets' own `created_at`), the empty expected-assets diff, the un-draft at 22:06:02Z.
+
+**The release:** https://github.com/vibefield/vibefield/releases/tag/nightly-20261026: prerelease, IMMUTABLE, 19 assets.
+- The published zip, downloaded again, is `sha256:83937de1c03a7d422f565a6159718489e1c22b1506c6b11824632053d501f155`,
+  the bytes read statically: no host link, codesign deep/strict, spctl "Notarized Developer ID", stapled.
+- **HarfBuzz is out of the shipped bytes:** nightly 1's (40342606623) field-terminal-host carried 59 `_hb_` symbols and 4
+  "harfbuzz" strings (the embedded 2.6.8, CVE-2023-25193). This release's has 0 and 0 (LANDED "EL8 — ghosttea 0.13.5, the
+  harfrust shaper").
+- **D11's digests moved 1 → 2 on every plane:** field-native `87df7fc8…` → `68f5fc97…`. Every plane's sources changed
+  too, so this is NOT D11's signing-only measurement.
+
+**W10 PASSED** (the runbook's runner, read-only toward GitHub; the client is verify-chain.ts from source at the released
+commit, anchored on the ledger's frozen trustRootKeys):
+- (a) The published trust-root is the embedded v1 byte for byte, release-verify accepts the release, and latest-mac.yml
+  verifies by the embedded release key.
+- (b) A byte appended to the feed, a `version: 99.0.0` lure, and a byte appended to the nightly policy and to
+  channels.json are each refused `feed-unverified`.
+- (c) A remembered policy v2 and remembered heads v11 are each refused `policy-rollback`; the control at v1 is accepted.
+- The runner was first fixed for the tag lane: seven jobs, and the commit read from the tag, not `targetCommitish`.
+
+**W11, the install and launch half** (the Mac mini, jasper; VF-PM's grant for /Applications and `~/Library/*VibeField*`,
+read and install, never delete):
+- The DMG came by curl, its sha256 GitHub's digest. With no quarantine, Gatekeeper's first-launch prompt was NOT
+  exercised. It was installed by `ditto` into /Applications.
+- codesign deep/strict, the Developer ID chain to Apple Root CA, spctl "Notarized Developer ID", stapler, version
+  `0.1.0-nightly.20261026`, app-update.yml (github, no token; it also carries electron-builder's `releaseType: draft`)
+  and the identity (`release`, `nightly`, the releases origin) all pass.
+- The launch, under the gate (unlocked, HID idle 1,998 s, `caffeinate -d -i`), ran after the lead's rows: production
+  boot; fieldd `spawn_required {no-run-files}` → `ready` in 1.4 s; then `desktop.update.cache_collected
+  {reason:"not-available"}` 31.7 s after boot. state.json remembers trustRoot 1, channels 10 and every policy at 1.
+- The app, fieldd, field-native and the files host are LEFT running by design. The Setup Assistant is James's.
+- Found on that first window, docket items 73 and 74 for the shell and live-surfaces owner: `unregistered_webcontents`
+  is a false positive on every factory window, and `live_surface_frame_rejected` is generation 1's ports arriving before
+  the main world.
+
+**J2** (James, 20:18Z): ruleset `nightly` 25911496 on refs/tags/nightly-* (deletion + update; no creation rule, so the
+release workflow creates) and `v*` 25911591 on refs/tags/v* (creation + update + deletion), bypass Repository admin;
+read back through the API.
+
+**Owed:**
+- **W11's apply:** nightly N → N+1 on the mini (Squirrel, D10's relaunch, the PTY clause if a plane is untouched).
+- **D11's signing-only measurement:** two nightlies sharing an unchanged plane.
+- **Packages ship no `field-freeway-host`:** fw/pack-host's rebase.
