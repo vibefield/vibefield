@@ -6,6 +6,7 @@ import {
   actionLabel,
   bindingLine,
   defaultBindings,
+  flaggedTrigger,
   KEYBOARD_GROUP_ORDER,
   type KeyboardRow,
   keyboardRows,
@@ -108,9 +109,10 @@ export function KeyboardTab({ model }: { model: TerminalPageModel }): ReactEleme
     if (id === null || row.action === null) return;
     const next = without([row.id, id]);
     if (id !== row.id && boundBelow(row)) next.push(bindingLine(row.trigger, null));
-    // The move keeps the binding's `performable:` flag, so a key that passed
-    // through to the shell on its old chord still does on the new one.
-    next.push(bindingLine(row.performable ? `performable:${trigger}` : trigger, row.action));
+    // The move keeps every one of the binding's flags, so a key that passed
+    // through to the shell on its old chord still does on the new one — since
+    // ghosttea 0.13.3 (#81) `unconsumed:` decides that too, not `performable:` alone.
+    next.push(bindingLine(flaggedTrigger(trigger, row.flags), row.action));
     writeBinds(next);
   };
   const remove = (row: KeyboardRow): void => {

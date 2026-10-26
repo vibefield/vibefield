@@ -12,6 +12,7 @@ import {
   bindingLine,
   chordGlyphs,
   defaultBindings,
+  flaggedTrigger,
   isPerformableTrigger,
   type KeyboardRow,
   keyboardRows,
@@ -19,6 +20,7 @@ import {
   routeOfAction,
   routeWords,
   splitBinding,
+  triggerFlags,
   triggerFromKeyEvent,
   triggerKey,
 } from "../src/panels/terminal/keyboard-model";
@@ -98,6 +100,24 @@ describe("chords", () => {
     expect(isPerformableTrigger("performable:super+f")).toBe(true);
     expect(isPerformableTrigger("global:performable:super+f")).toBe(true);
     expect(isPerformableTrigger("super+f")).toBe(false);
+  });
+
+  it("reads every flag a trigger carries, and writes them back on a moved chord", () => {
+    expect(triggerFlags("super+f")).toEqual({ performable: false });
+    expect(triggerFlags("unconsumed:performable:super+f")).toEqual({
+      performable: true,
+      unconsumed: true,
+    });
+    expect(triggerFlags("all:global:super+f")).toEqual({
+      performable: false,
+      all: true,
+      global: true,
+    });
+    // Ghostty's order whatever the input's, and the old chord's prefixes never survive
+    expect(flaggedTrigger("performable:super+m", { performable: true, unconsumed: true })).toBe(
+      "unconsumed:performable:super+m",
+    );
+    expect(flaggedTrigger("super+m", { performable: false })).toBe("super+m");
   });
 
   it("frees a chord by its bare name, and binds with the flags given", () => {
@@ -187,14 +207,65 @@ describe("the rows", () => {
     expect(find).toMatchObject({
       action: "search_selection",
       route: "unhandled",
-      performable: true,
+      flags: { performable: true },
     });
     expect(routeWords(find).text).toBe("Not in ghosttea yet — the key goes to the shell");
     // Ghostty's own spelling carries the step: `increase_font_size:1`.
     const bigger = rows.find(
-      (entry) => entry.action?.startsWith("increase_font_size") === true && !entry.performable,
+      (entry) =>
+        entry.action?.startsWith("increase_font_size") === true && !entry.flags.performable,
     );
     expect(bigger === undefined ? null : routeWords(bigger).text).toBe(
+      "Not in ghosttea yet — the key is swallowed",
+    );
+  });
+
+  it("says what becomes of the key once a binding in the deck ran — ghosttea 0.13.3 (#81)", () => {
+    // a binding that always acts keeps its key
+    expect(routeWords(row(rows, "super+d")).text).toBe("Runs in the deck");
+    // Shift+Arrow with no selection: Ghostty's `performable:` default, which 0.13.3
+    // sends on to the shell when there is nothing to adjust (0.13.1 dropped the key)
+    const extend = row(rows, "shift+arrow_left");
+    expect(extend).toMatchObject({ action: "adjust_selection:left", reserved: null });
+    expect(routeWords(extend)).toEqual({
+      text: "Runs in the deck when it can — otherwise the key goes to the shell",
+      runs: true,
+    });
+    // an `unconsumed:` bind runs AND sends its key on
+    const layered = keyboardRows(
+      {
+        keybindings: [{ trigger: "unconsumed:super+d", action: "new_split:right" }],
+        clearKeybindings: false,
+      },
+      [],
+    );
+    expect(routeWords(row(layered, "super+d"))).toEqual({
+      text: "Runs in the deck, and the key goes on to the shell",
+      runs: true,
+    });
+  });
+
+  it("asks ghosttea whether an unhandled bind's key still reaches the shell, flags and all", () => {
+    const layered = keyboardRows(
+      {
+        keybindings: [
+          { trigger: "unconsumed:super+j", action: "increase_font_size" },
+          // `global:` and `all:` binds always consume, `performable:` or not
+          { trigger: "global:performable:super+u", action: "increase_font_size" },
+          // `ignore` drops its key whatever its flags, before Ghostty reads them
+          { trigger: "performable:super+y", action: "ignore" },
+        ],
+        clearKeybindings: false,
+      },
+      [],
+    );
+    expect(routeWords(row(layered, "super+j")).text).toBe(
+      "Not in ghosttea yet — the key goes to the shell",
+    );
+    expect(routeWords(row(layered, "super+u")).text).toBe(
+      "Not in ghosttea yet — the key is swallowed",
+    );
+    expect(routeWords(row(layered, "super+y")).text).toBe(
       "Not in ghosttea yet — the key is swallowed",
     );
   });
@@ -245,11 +316,11 @@ describe("the rows", () => {
       },
       [],
     );
-    expect(row(layered, "super+e").performable).toBe(false);
+    expect(row(layered, "super+e").flags.performable).toBe(false);
     expect(routeWords(row(layered, "super+e")).text).toBe(
       "Not in ghosttea yet — the key is swallowed",
     );
-    expect(row(layered, "super+j").performable).toBe(true);
+    expect(row(layered, "super+j").flags.performable).toBe(true);
   });
 
   it("says who cleared the defaults: this Mac only when config.ghostty says `clear`", () => {

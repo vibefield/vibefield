@@ -234,10 +234,24 @@ describe("the live peek cannot take input focus, nor claim the terminal's size",
       input?.dispatchEvent(new Event("click", { bubbles: true }));
       input?.dispatchEvent(new KeyboardEvent("keydown", { key: "a", bubbles: true }));
       input?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      // ghosttea 0.13.3 (#79, #81): text the platform inserts with no keydown (the
+      // Character Viewer, a soft keyboard, dictation, an IME commit outside a
+      // composition) has its own path to the terminal now, and the exact Ctrl+C is the
+      // interrupt. A watcher's view takes neither.
+      input?.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "c", ctrlKey: true, bubbles: true }),
+      );
+      input?.dispatchEvent(
+        new InputEvent("beforeinput", { inputType: "insertText", data: "x", bubbles: true }),
+      );
+      input?.dispatchEvent(
+        new InputEvent("input", { inputType: "insertText", data: "x", bubbles: true }),
+      );
+      input?.dispatchEvent(new CompositionEvent("compositionend", { data: "é", bubbles: true }));
       await settle();
     });
     expect(claims()).toEqual([]);
-    for (const verb of ["sendKey", "sendText", "paste", "sendMouse"]) {
+    for (const verb of ["sendKey", "sendText", "paste", "sendMouse", "interrupt"]) {
       expect(runtimeCalls.filter((call) => call.verb === verb)).toEqual([]);
     }
   });

@@ -2,10 +2,13 @@ import {
   formatGhosttyTrigger,
   GHOSTTEA_BINDING_EXTENSIONS,
   GHOSTTY_MACOS_DEFAULT_BINDINGS,
+  type GhosttyBindingEntry,
   type GhosttyTrigger,
   parseGhostteaBindingAction,
   parseGhosttyTrigger,
+  type RoutedAction,
   routeBindingAction,
+  routeConsumesInput,
 } from "@vibecook/ghosttea-react/workspace";
 import type { TerminalConfigKeybinding } from "@vibefield/contracts";
 import { PRODUCT_CHORDS, type ProductChord } from "../../field/product-chords";
@@ -13,14 +16,21 @@ import { PRODUCT_CHORDS, type ProductChord } from "../../field/product-chords";
 // Settings → Terminal → Keyboard, as data (GT-7). Every fact here is ghosttea's
 // own: the defaults are the pinned package's dump of Ghostty's macOS table
 // (`GHOSTTY_MACOS_DEFAULT_BINDINGS`, 93, plus its one extension), whether an
-// action RUNS in the deck is its router's answer (`routeBindingAction`), and
-// the effective list is the loader's snapshot of every layer (`keybindings` +
+// action RUNS in the deck is its router's answer (`routeBindingAction`), what
+// becomes of the key once it has is the surface's own rule (`routeConsumesInput`),
+// and the effective list is the loader's snapshot of every layer (`keybindings` +
 // `clearKeybindings`). This file only lays them side by side.
 
 /** Where a binding's action goes in the deck — ghosttea's router, or `invalid`
- * for an action its parser refuses. `unhandled` binds are swallowed so they
- * never reach the shell, and do nothing yet. */
+ * for an action its parser refuses. An `unhandled` bind does nothing yet; whether
+ * its key still reaches the shell is `keyFate`'s answer, not the route's. */
 export type BindingRoute = "workspace" | "terminal" | "platform" | "unhandled" | "invalid";
+
+/** A binding's Ghostty flags (`all:`, `global:`, `unconsumed:`, `performable:`),
+ * in ghosttea's own shape. */
+export type BindingFlags = GhosttyBindingEntry["flags"];
+
+const NO_FLAGS: BindingFlags = { performable: false };
 
 const TRIGGER_PREFIXES = ["all:", "global:", "unconsumed:", "performable:"] as const;
 
@@ -44,10 +54,33 @@ function stripPrefixes(raw: string): string {
   return prefixesOf(raw).rest;
 }
 
-/** Whether a trigger, as a layer wrote it, carries Ghostty's `performable:`
- * flag — the loader keeps triggers verbatim, prefixes and all. */
+/** The flags a trigger carries, as a layer wrote it — the loader keeps triggers
+ * verbatim, prefixes and all. */
+export function triggerFlags(raw: string): BindingFlags {
+  const { prefixes } = prefixesOf(raw);
+  const flags: BindingFlags = { performable: prefixes.has("performable:") };
+  if (prefixes.has("unconsumed:")) flags.unconsumed = true;
+  if (prefixes.has("all:")) flags.all = true;
+  if (prefixes.has("global:")) flags.global = true;
+  return flags;
+}
+
+/** Whether a trigger, as a layer wrote it, carries Ghostty's `performable:` flag. */
 export function isPerformableTrigger(raw: string): boolean {
-  return prefixesOf(raw).prefixes.has("performable:");
+  return triggerFlags(raw).performable;
+}
+
+/** A bare trigger with `flags` written back as its prefixes, in Ghostty's order —
+ * what a chord moved to a new trigger keeps, so its key's fate moves with it. */
+export function flaggedTrigger(trigger: string, flags: BindingFlags): string {
+  const bare = stripPrefixes(trigger);
+  const on: Record<(typeof TRIGGER_PREFIXES)[number], boolean> = {
+    "all:": flags.all === true,
+    "global:": flags.global === true,
+    "unconsumed:": flags.unconsumed === true,
+    "performable:": flags.performable,
+  };
+  return `${TRIGGER_PREFIXES.filter((prefix) => on[prefix]).join("")}${bare}`;
 }
 
 function parseTrigger(raw: string): GhosttyTrigger | null {
@@ -187,13 +220,38 @@ export function triggerFromKeyEvent(
   return formatGhosttyTrigger({ mods, key });
 }
 
-/** An action's route in the deck, as ghosttea's router classifies it. */
-export function routeOfAction(action: string, performable = false): BindingRoute {
+function routed(action: string, flags: BindingFlags): RoutedAction | null {
   try {
-    return routeBindingAction(parseGhostteaBindingAction(action), { performable }).kind;
+    return routeBindingAction(parseGhostteaBindingAction(action), flags);
   } catch {
-    return "invalid";
+    return null;
   }
+}
+
+/** An action's route in the deck, as ghosttea's router classifies it. */
+export function routeOfAction(action: string, flags: BindingFlags = NO_FLAGS): BindingRoute {
+  return routed(action, flags)?.kind ?? "invalid";
+}
+
+/** What becomes of a binding's key, once its action ran (`performed`) and when it
+ * could not (`unperformed`): `consume` keeps it from the shell, `encode` sends it
+ * on, as if nothing were bound. Ghosttea 0.13.3's surface rule (#81, after Ghostty's
+ * `Surface.maybeHandleBinding`): an `unconsumed:` bind sends its key on after its
+ * action, a `performable:` one whose action could not run acts absent, `all:` and
+ * `global:` binds and `ignore` always consume, and anything else consumes, so app
+ * shortcuts never leak to the PTY. `routeConsumesInput` is ghosttea's
+ * `bindingKeyDisposition` plus the `ignore` rule, which is why this asks it rather
+ * than the bare disposition. An unhandled action is never performed. */
+export function keyFate(
+  action: string,
+  flags: BindingFlags,
+): { performed: "consume" | "encode"; unperformed: "consume" | "encode" } | null {
+  const route = routed(action, flags);
+  if (route === null) return null;
+  const fate = (performed: boolean) =>
+    routeConsumesInput(route, performed) ? ("consume" as const) : ("encode" as const);
+  const unperformed = fate(false);
+  return { performed: route.kind === "unhandled" ? unperformed : fate(true), unperformed };
 }
 
 const ACTION_LABEL: Record<string, string> = {
@@ -340,9 +398,9 @@ export interface KeyboardRow {
   /** the effective action, or null once unbound or cleared */
   readonly action: string | null;
   readonly route: BindingRoute | null;
-  /** the effective binding's `performable` flag (an unhandled performable bind
-   * acts absent, so its key reaches the shell) */
-  readonly performable: boolean;
+  /** the effective binding's flags — with its action, they decide whether its
+   * key also reaches the shell (`keyFate`) */
+  readonly flags: BindingFlags;
   /** Ghostty's own action on this chord, when it has one */
   readonly defaultAction: string | null;
   readonly state: RowState;
@@ -356,7 +414,7 @@ export interface KeyboardRow {
 interface DefaultEntry {
   trigger: string;
   action: string;
-  performable: boolean;
+  flags: BindingFlags;
 }
 
 /** Ghostty's macOS defaults + ghosttea's extension, one per chord identity. */
@@ -368,7 +426,7 @@ export function defaultBindings(): Map<string, DefaultEntry> {
     map.set(id, {
       trigger: entry.triggerRaw,
       action: entry.actionRaw,
-      performable: entry.flags.performable,
+      flags: entry.flags,
     });
   }
   return map;
@@ -403,7 +461,7 @@ export function keyboardRows(
     : "your-ghostty";
   const effective = new Map<
     string,
-    { trigger: string; action: string | null; setBy: RowSetter; performable: boolean }
+    { trigger: string; action: string | null; setBy: RowSetter; flags: BindingFlags }
   >();
   if (!snapshot.clearKeybindings) {
     for (const [id, entry] of DEFAULTS) {
@@ -411,7 +469,7 @@ export function keyboardRows(
         trigger: entry.trigger,
         action: entry.action,
         setBy: "ghostty",
-        performable: entry.performable,
+        flags: entry.flags,
       });
     }
   }
@@ -424,7 +482,7 @@ export function keyboardRows(
       trigger: binding.trigger.trim(),
       action,
       setBy,
-      performable: isPerformableTrigger(binding.trigger),
+      flags: triggerFlags(binding.trigger),
     });
   }
   const ids = new Set([...DEFAULTS.keys(), ...effective.keys()]);
@@ -443,13 +501,13 @@ export function keyboardRows(
             ? "default"
             : "changed";
     if (fallback === undefined && action === null) continue; // unbinding a chord nothing bound
-    const performable = now?.performable ?? fallback?.performable ?? false;
+    const flags = now?.flags ?? fallback?.flags ?? NO_FLAGS;
     rows.push({
       id,
       trigger: now?.trigger ?? fallback?.trigger ?? id,
       action,
-      route: action === null ? null : routeOfAction(action, performable),
-      performable,
+      route: action === null ? null : routeOfAction(action, flags),
+      flags,
       defaultAction,
       state,
       setBy: now?.setBy ?? (snapshot.clearKeybindings ? clearedBy : "ghostty"),
@@ -502,9 +560,19 @@ export function reservedWords(chord: ProductChord, defaultAction: string | null)
 export function routeWords(row: KeyboardRow): { text: string; runs: boolean } {
   if (row.action === null) return { text: "Unbound", runs: false };
   if (row.reserved !== null) return { text: `VibeField: ${row.reserved.label}`, runs: false };
+  const fate = keyFate(row.action, row.flags);
   switch (row.route) {
     case "workspace":
     case "terminal":
+      // ghosttea 0.13.3 (#81): the key's fate is said beside the action, because
+      // Shift+Arrow with no selection and an `unconsumed:` bind reach the shell
+      if (fate?.performed === "encode")
+        return { text: "Runs in the deck, and the key goes on to the shell", runs: true };
+      if (fate?.unperformed === "encode")
+        return {
+          text: "Runs in the deck when it can — otherwise the key goes to the shell",
+          runs: true,
+        };
       return { text: "Runs in the deck", runs: true };
     case "platform":
       return (
@@ -514,7 +582,7 @@ export function routeWords(row: KeyboardRow): { text: string; runs: boolean } {
         }
       );
     case "unhandled":
-      return row.performable
+      return fate?.unperformed === "encode"
         ? { text: "Not in ghosttea yet — the key goes to the shell", runs: false }
         : { text: "Not in ghosttea yet — the key is swallowed", runs: false };
     default:
