@@ -14618,3 +14618,31 @@ than the delay a wrong binary was retried as a crash. VF-PM made it item 65.
   - The gate on that rule is VF-PM's (item 64's): red only outside the lane's path, each file green alone ×3.
 - **CI is the exact-tree witness** on the pushed head.
 - Logs: `/Volumes/SamsungRed/lanes/item65/logs/proofs/`; the scripts are under `records/`.
+
+## AH-2 — item 66: the self-slice row judges the slice by its own fields, never a substring over a serialization whose clocks spelled "3000" (2026-10-26; `3c69956b8`, lane `fix/66-artifact-slice-fields`)
+
+**What happened:** fieldd's artifact-service row "publishes a narrow whole self-slice and republishes it after store
+replay" asserted `expect(JSON.stringify(slice)).not.toMatch(/source|scheme|allow|3000/)`. The slice carries epoch-ms
+clocks (`availabilityAt`, `publishedAt`, `updatedAt`), and every ms from 1793000000000 to 1793000999999 contains
+"3000". So from 2026-10-26 07:33:20Z to 07:50:00Z the row was red on EVERY run on every machine.
+- Item 65's verify met it at 07:41Z (`availabilityAt: 1793000391609`); the lead's pin lane met it at 07:42Z,
+  independently.
+- It recurs, in narrower windows, whenever a digit run of the clock spells 3000.
+- The row meant to forbid the private source (the proxy's `{kind, port: 3000, scheme}`) and its allow list.
+- VF-PM made it item 66.
+
+**The fix, test-only:**
+- The row asserts the slice's own fields, read by `keysAndValues`: none of the keys `source`, `scheme`, `allow`
+  at any depth; neither the source port 3000 nor the allow entry `*@example.com` as a VALUE (equality, not
+  substring); and the published URL's port is not 3000.
+- It runs at a clock pinned INSIDE the window through the service's own `now` seam (the harness's `service()`
+  gains the option): 1_793_000_391_609, the very ms it went red at. That makes it a permanent witness that the
+  assertion no longer reads clocks.
+
+**Validation** (this Mac's SSD lane `/Volumes/SamsungRed/lanes/item66`, guard v2, nice 19, at `2a4204893` on
+`ab18b804e`; rebased onto item 65's `0d7d2937a`, which shares no file, range-diff `=`; reworded to `3c69956b8`):
+- **Red-first:** main's assertion at the pinned clock FAILS, and the rewritten row passes.
+- **artifact-service ×3:** 43/43. **fieldd's suite fresh:** 2,470 / 11 skipped.
+- **`pnpm verify`:** EXIT 0 at 08:09:21Z, on its first run.
+- **CI is the exact-tree witness** on the pushed head.
+- Logs: `/Volumes/SamsungRed/lanes/item66/logs/proofs/`.
