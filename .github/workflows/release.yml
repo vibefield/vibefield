@@ -9,14 +9,19 @@
 # PERMISSIONS (EDP §12.2; the PM's ruling 2026-10-15 14:47Z) — nothing at the top; each job states its own:
 #   job        environment        permissions                          secrets (step-scoped)
 #   plan       —                  contents: read, actions: read        none
+#   tag        —                  contents: write                      none (GITHUB_TOKEN only)
 #   verify     —                  contents: read                       none (verify.yml, called)
 #   build      release-signing    contents: read                       VIBEFIELD_BUNDLED_INDEX_SECRET in the stage step;
 #                                                                      the Apple credentials in the signed-package step
 #   sign       release-signing    contents: read                       VIBEFIELD_RELEASE_SECRET in the sign step
 #   converge   —                  contents: read                       none
 #   publish    —                  contents: write                      none (GITHUB_TOKEN only)
-# Only publish writes. GitHub's required reviewers gate EVERY deployment to `release-signing`, so a SCHEDULED nightly
-# waits for an approval at the build job and again at the sign job (J2: "daily when approved" until James rules).
+# Only tag and publish write. GitHub's required reviewers gate EVERY deployment to `release-signing`, so a SCHEDULED
+# nightly waits for an approval at the build job and again at the sign job (J2: "daily when approved" until James rules).
+# THE TAG IS MADE AT PLAN TIME (2026-10-26, VF-PM's ruling A): GitHub refuses GITHUB_TOKEN a tag at a commit whose
+# .github/workflows differ from main's head, and the first signed nightly (run 40342606623) met that twice at publish
+# (HTTP 403, 17:03Z and 17:23Z) after a push changed workflows. The `tag` job makes it while the planned commit IS main's
+# head; publish asserts it and creates the release on it. A red nightly leaves its tag with no release.
 #
 # TRIGGERS: a schedule and a manual dispatch make a NIGHTLY (`nightly-YYYYMMDD`, skipped when main is red or unchanged
 # since the last nightly — RL4 (a)); a pushed `v*` tag makes a BETA (`vX.Y.Z-beta.N`) or a STABLE (`vX.Y.Z`), whose
@@ -81,11 +86,15 @@ jobs:
           conclusion=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow verify.yml --branch main --commit "$SHA" \
             --limit 1 --json conclusion --jq '.[0].conclusion // empty')
           if [ "$conclusion" = "success" ]; then echo "green=true" >> "$GITHUB_OUTPUT"; else echo "green=false" >> "$GITHUB_OUTPUT"; fi
-          # the newest nightly by NAME (nightly-YYYYMMDD sorts by day; a lightweight tag's creatordate is its commit's)
+          # the newest nightly TAG by name (nightly-YYYYMMDD sorts by day; a lightweight tag's creatordate is its
+          # commit's): today's is used once (D7)
           last=$(git tag --list 'nightly-*' --sort=-refname | head -n 1)
-          if [ -n "$last" ]; then
-            echo "lastTag=$last" >> "$GITHUB_OUTPUT"
-            echo "lastCommit=$(git rev-list -n 1 "$last")" >> "$GITHUB_OUTPUT"
+          if [ -n "$last" ]; then echo "lastTag=$last" >> "$GITHUB_OUTPUT"; fi
+          # the newest PUBLISHED nightly: "unchanged" is judged against it, never against a tag a red nightly left
+          published=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 200 --json tagName,isDraft \
+            --jq '[.[] | select(.isDraft | not) | .tagName | select(startswith("nightly-"))] | sort | last // empty')
+          if [ -n "$published" ]; then
+            echo "lastPublishedCommit=$(git rev-list -n 1 "$published")" >> "$GITHUB_OUTPUT"
           fi
       - name: Plan the release (D6, D7, D14)
         id: plan
@@ -95,25 +104,61 @@ jobs:
           SHA: ${{ github.sha }}
           MAIN_GREEN: ${{ steps.main.outputs.green || 'true' }}
           LAST_TAG: ${{ steps.main.outputs.lastTag }}
-          LAST_COMMIT: ${{ steps.main.outputs.lastCommit }}
+          LAST_PUBLISHED_COMMIT: ${{ steps.main.outputs.lastPublishedCommit }}
         run: |
           node scripts/release-plan.mjs --event "$EVENT" --ref "$REF" --commit "$SHA" --main-green "$MAIN_GREEN" \
-            --last-nightly-tag "$LAST_TAG" --last-nightly-commit "$LAST_COMMIT" --github-output "$GITHUB_OUTPUT"
+            --last-nightly-tag "$LAST_TAG" --last-published-nightly-commit "$LAST_PUBLISHED_COMMIT" \
+            --github-output "$GITHUB_OUTPUT"
       - name: Say a skipped nightly
         if: steps.plan.outputs.skip == 'true'
         env:
           REASON: ${{ steps.plan.outputs.reason }}
         run: echo "::notice title=No nightly today::$REASON"
 
-  verify:
+  # The run's tag, made right after plan while the planned commit is main's head, and before verify, so a re-run
+  # continues on the same tag (2026-10-26, ruling A). Idempotent at that commit; refused, in words, anywhere else. A
+  # pushed beta or stable tag is already there, so for those runs this only asserts it.
+  tag:
     needs: plan
+    if: needs.plan.outputs.skip != 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ needs.plan.outputs.commit }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+      - name: The tag, at the planned commit (D7 — used once)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.plan.outputs.tag }}
+          COMMIT: ${{ needs.plan.outputs.commit }}
+        run: |
+          refs=$(gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/$TAG" \
+            --jq "map(select(.ref == \"refs/tags/$TAG\")) | length")
+          existing=""
+          if [ "$refs" != "0" ]; then existing=$(gh api "repos/$GITHUB_REPOSITORY/commits/tags/$TAG" --jq .sha); fi
+          action=$(node scripts/release-plan.mjs tag --tag "$TAG" --commit "$COMMIT" --existing "$existing")
+          if [ "$action" = "create" ]; then
+            if ! gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$TAG" -f sha="$COMMIT" >/dev/null; then
+              echo "::error title=Tag refused::GitHub refuses GITHUB_TOKEN a tag at a commit whose .github/workflows differ from main's head: has main moved since this run was planned? (git diff --stat $COMMIT origin/main -- .github/)"
+              exit 1
+            fi
+          fi
+          echo "tag: $TAG at $COMMIT ($action)"
+
+  verify:
+    needs: [plan, tag]
     if: needs.plan.outputs.skip != 'true'
     permissions:
       contents: read
     uses: ./.github/workflows/verify.yml
 
   build:
-    needs: [plan, verify]
+    needs: [plan, tag, verify]
     if: needs.plan.outputs.skip != 'true'
     environment: release-signing
     permissions:
@@ -407,6 +452,18 @@ jobs:
         with:
           name: release-final
           path: release-out
+      # The tag job made the tag at plan time; a release is created ON it, never by targeting a commit (2026-10-26)
+      - name: The tag points at the planned commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.plan.outputs.tag }}
+          COMMIT: ${{ needs.plan.outputs.commit }}
+        run: |
+          at=$(gh api "repos/$GITHUB_REPOSITORY/commits/tags/$TAG" --jq .sha)
+          if [ "$at" != "$COMMIT" ]; then
+            echo "::error title=Tag moved::$TAG points at $at, not at the planned commit $COMMIT"
+            exit 1
+          fi
       # EDP §12.4's transaction: a draft, the payloads, the metadata LAST, then the un-draft. Immutable Releases makes
       # every asset final at the un-draft, so the expected assets are checked on the draft first.
       - name: Draft, payloads, then metadata last
@@ -414,10 +471,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.plan.outputs.tag }}
           VERSION: ${{ needs.plan.outputs.version }}
-          COMMIT: ${{ needs.plan.outputs.commit }}
           PRERELEASE: ${{ needs.plan.outputs.prerelease }}
         run: |
-          flags=(--draft --target "$COMMIT" --title "VibeField $VERSION" --notes "VibeField $VERSION ($TAG).")
+          flags=(--draft --verify-tag --title "VibeField $VERSION" --notes "VibeField $VERSION ($TAG).")
           if [ "$PRERELEASE" = "true" ]; then flags+=(--prerelease); fi
           gh release create "$TAG" --repo "$GITHUB_REPOSITORY" "${flags[@]}"
           cd release-out

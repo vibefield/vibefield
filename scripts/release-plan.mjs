@@ -3,16 +3,24 @@
 // anything is built. One answer, as JSON (and as `key=value` lines for `$GITHUB_OUTPUT` with `--github-output`):
 //   - a `schedule` or `workflow_dispatch` run is a NIGHTLY: tag `nightly-YYYYMMDD` (UTC), version
 //     `<product>-nightly.YYYYMMDD` — the one version a tool stamps (D6, RM-D7's stated exception) — and it is SKIPPED
-//     when main is red or unchanged since the last nightly (RL4 (a)), or when today's nightly already exists (a tag
-//     name is burned once used, D7: a second nightly in one UTC day waits for the next);
+//     when main is red or unchanged since the last PUBLISHED nightly (RL4 (a)), or when today's nightly tag already
+//     exists (a tag name is burned once used, D7: a second nightly in one UTC day waits for the next);
 //   - a pushed `v*` tag is a BETA (`vX.Y.Z-beta.N`) or a STABLE (`vX.Y.Z`), whose version must already be the committed
 //     product version (betas and stables are commit-bumped, RM-D7); a mismatch refuses the run.
 // Nightlies and betas are GitHub prereleases; only a stable is `latest` (`releases/latest/download/` reaches stable, D4).
 //
+// THE TAG IS MADE AT PLAN TIME (2026-10-26, VF-PM's ruling A): GitHub refuses GITHUB_TOKEN a tag, and so a release that
+// would create one, at a commit whose .github/workflows differ from main's head ("the GITHUB_TOKEN available to GitHub
+// Actions cannot be authorized for this"). Nightly 40342606623's publish met that twice, after a push changed workflows
+// between its plan and its publish. So release.yml's `tag` job makes the run's tag right after plan, while the planned
+// commit is main's head (`tagAction`), and publish only asserts it. A red nightly therefore leaves its tag with no
+// release, which is why "unchanged" reads the newest PUBLISHED nightly, and "today's" still the newest tag.
+//
 // usage: node scripts/release-plan.mjs --event <schedule|workflow_dispatch|push> --ref <git ref> --commit <sha>
-//          [--now <ms>] [--last-nightly-tag <tag>] [--last-nightly-commit <sha>] [--main-green <true|false>]
-//          [--github-output <file>]
+//          [--now <ms>] [--last-nightly-tag <tag>] [--last-published-nightly-commit <sha>]
+//          [--main-green <true|false>] [--github-output <file>]
 //        node scripts/release-plan.mjs stamp --version <version>   (writes apps/desktop/package.json's version)
+//        node scripts/release-plan.mjs tag --tag <tag> --commit <sha> [--existing <sha>]   (prints create | present)
 
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -37,7 +45,7 @@ export function planRelease({
   now = Date.now(),
   productVersion,
   lastNightlyTag = null,
-  lastNightlyCommit = null,
+  lastPublishedNightlyCommit = null,
   mainGreen = true,
 }) {
   if (!SEMVER.test(productVersion)) refuse(`the product version "${productVersion}" is not X.Y.Z`);
@@ -53,8 +61,8 @@ export function planRelease({
     };
     if (!mainGreen)
       return { ...base, skip: true, reason: "main is red: no nightly from a red trunk" };
-    if (lastNightlyCommit !== null && lastNightlyCommit === commit)
-      return { ...base, skip: true, reason: "main is unchanged since the last nightly" };
+    if (lastPublishedNightlyCommit !== null && lastPublishedNightlyCommit === commit)
+      return { ...base, skip: true, reason: "main is unchanged since the last published nightly" };
     if (lastNightlyTag === base.tag)
       return {
         ...base,
@@ -88,6 +96,17 @@ export function planRelease({
   return refuse(`a release runs on a schedule, a dispatch or a pushed tag — not on "${event}"`);
 }
 
+/** The run's tag, made once at the planned commit: `create` when it does not exist, `present` when it already points
+ * there (a re-run, or a pushed beta/stable tag), and refused when it points anywhere else — a tag name is used once
+ * (D7). `existing` is the commit the tag points at, peeled, or null. */
+export function tagAction({ tag, commit, existing = null }) {
+  if (!existing) return "create";
+  if (existing === commit) return "present";
+  return refuse(
+    `${tag} already points at ${existing}, not at this run's commit ${commit}: a tag name is used once (D7)`,
+  );
+}
+
 /** D6: a nightly's version, stamped into the runner's checkout only — never committed. */
 export function stampVersion(version, path = DESKTOP_PACKAGE) {
   if (!/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/.test(version))
@@ -116,6 +135,9 @@ if (resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) {
       console.log(
         `release-plan: apps/desktop/package.json version → ${a.version} (this checkout only)`,
       );
+    } else if (argv[0] === "tag") {
+      const a = args(argv.slice(1));
+      console.log(tagAction({ tag: a.tag, commit: a.commit, existing: a.existing || null }));
     } else {
       const a = args(argv);
       const plan = planRelease({
@@ -125,7 +147,7 @@ if (resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) {
         now: a.now ? Number(a.now) : Date.now(),
         productVersion: JSON.parse(readFileSync(DESKTOP_PACKAGE, "utf8")).version,
         lastNightlyTag: a["last-nightly-tag"] || null,
-        lastNightlyCommit: a["last-nightly-commit"] || null,
+        lastPublishedNightlyCommit: a["last-published-nightly-commit"] || null,
         mainGreen: a["main-green"] !== "false",
       });
       console.log(JSON.stringify(plan));

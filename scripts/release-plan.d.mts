@@ -17,7 +17,12 @@ export declare function planRelease(input: {
   now?: number;
   productVersion: string;
   lastNightlyTag?: string | null;
-  lastNightlyCommit?: string | null;
+  lastPublishedNightlyCommit?: string | null;
   mainGreen?: boolean;
 }): ReleasePlan;
+export declare function tagAction(input: {
+  tag: string;
+  commit: string;
+  existing?: string | null;
+}): "create" | "present";
 export declare function stampVersion(version: string, path?: string): void;

@@ -12,7 +12,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { auditAppUpdate } from "../../../../scripts/audit-app-update.mjs";
 import { asarFiles, auditAsar, readAsarHeader } from "../../../../scripts/audit-asar.mjs";
 import { hashPlanes, mergeManifest, planeOf } from "../../../../scripts/release-manifest.mjs";
-import { planRelease, ReleasePlanError } from "../../../../scripts/release-plan.mjs";
+import { planRelease, ReleasePlanError, tagAction } from "../../../../scripts/release-plan.mjs";
 import { buildChannels, ReleaseSignError, signRelease } from "../../../../scripts/release-sign.mjs";
 import { verifyReleaseDir } from "../../../../scripts/release-verify.mjs";
 // The release workflow's scripts (WP12 L3a, build-wp12-updater.md D4–D8, D11), driven against THE CLIENT'S OWN CHAIN:
@@ -286,14 +286,37 @@ describe("release-plan (D6, D7, D14)", () => {
     }
   });
 
-  it("a nightly is skipped when main is red or unchanged since the last nightly", () => {
+  it("a nightly is skipped when main is red or unchanged since the last PUBLISHED nightly", () => {
     expect(planRelease({ ...base, event: "schedule", ref: "", mainGreen: false })).toMatchObject({
       skip: true,
       reason: expect.stringMatching(/red/),
     });
     expect(
-      planRelease({ ...base, event: "schedule", ref: "", lastNightlyCommit: base.commit }),
+      planRelease({ ...base, event: "schedule", ref: "", lastPublishedNightlyCommit: base.commit }),
     ).toMatchObject({ skip: true, reason: expect.stringMatching(/unchanged/) });
+  });
+
+  it("a nightly tag with no release never makes main 'unchanged': only a published nightly does (2026-10-26)", () => {
+    // the tag is made at plan time, so a red nightly leaves `nightly-<day>` at main's commit with no release;
+    // tomorrow's run on that unchanged main is still the first PUBLISHED nightly of it
+    expect(
+      planRelease({
+        ...base,
+        event: "schedule",
+        ref: "",
+        lastNightlyTag: "nightly-20261015",
+        lastPublishedNightlyCommit: "b".repeat(40),
+      }),
+    ).toMatchObject({ skip: false, tag: "nightly-20261016" });
+  });
+
+  it("the run's tag is made once, at the planned commit: absent → create; there → present (a re-run); elsewhere → refused", () => {
+    const tag = "nightly-20261016";
+    expect(tagAction({ tag, commit: base.commit, existing: null })).toBe("create");
+    expect(tagAction({ tag, commit: base.commit, existing: base.commit })).toBe("present");
+    expect(() => tagAction({ tag, commit: base.commit, existing: "c".repeat(40) })).toThrow(
+      /nightly-20261016 already points at c{40}, not at this run's commit a{40}/,
+    );
   });
 
   it("a second nightly in one UTC day is skipped: today's tag name is already used (D7)", () => {
@@ -491,7 +514,8 @@ describe("audit-asar (D12): every asar path is in the stage's app/ census, and n
 // The WORKFLOW LINT that runs in every verify (actionlint is the second one, by hand: `actionlint
 // .github/workflows/*.yml`). release.yml is read as text — its jobs are its two-space keys under `jobs:` and its steps
 // the `- ` items — and held to the PM's permissions table (2026-10-15 14:47Z): every secret in the ONE step that uses
-// it, only the build and sign jobs in `release-signing`, only publish writing, every third-party action SHA-pinned.
+// it, only the build and sign jobs in `release-signing`, only tag and publish writing (tag since 2026-10-26), every
+// third-party action SHA-pinned.
 describe("release.yml's shape — the permissions table, as a test", () => {
   const WORKFLOWS = join(REPO, ".github", "workflows");
   const yml = readFileSync(join(WORKFLOWS, "release.yml"), "utf8");
@@ -516,11 +540,43 @@ describe("release.yml's shape — the permissions table, as a test", () => {
 
   it("grants nothing at the top, and each job exactly its row", () => {
     expect(yml).toMatch(/\npermissions: \{\}\n/);
-    expect([...jobs.keys()]).toEqual(["plan", "verify", "build", "sign", "converge", "publish"]);
+    expect([...jobs.keys()]).toEqual([
+      "plan",
+      "tag",
+      "verify",
+      "build",
+      "sign",
+      "converge",
+      "publish",
+    ]);
     expect(permissionsOf("plan")).toEqual({ contents: "read", actions: "read" });
     for (const job of ["verify", "build", "sign", "converge"])
       expect(permissionsOf(job), job).toEqual({ contents: "read" });
-    expect(permissionsOf("publish")).toEqual({ contents: "write" });
+    for (const job of ["tag", "publish"])
+      expect(permissionsOf(job), job).toEqual({ contents: "write" });
+  });
+
+  // 2026-10-26: GitHub refuses GITHUB_TOKEN a tag (and so a release that would create one) at a commit whose
+  // .github/workflows differ from main's head. Nightly 40342606623's publish met that twice, after a push that changed
+  // workflows. So the tag is made at plan time, when the planned commit IS main's head, and publish only asserts it.
+  it("makes the run's tag right after plan, before verify; publish asserts it and never targets a commit", () => {
+    const tag = jobs.get("tag") ?? "";
+    expect(tag).toMatch(/\n {4}needs: plan\n/);
+    expect(tag).toMatch(
+      /node scripts\/release-plan\.mjs tag --tag "\$TAG" --commit "\$COMMIT" --existing "\$existing"/,
+    );
+    expect(tag).toMatch(/git\/refs/);
+    expect(jobs.get("verify")).toMatch(/\n {4}needs: \[plan, tag\]\n/);
+    expect(jobs.get("build")).toMatch(/\n {4}needs: \[plan, tag, verify\]\n/);
+    const publish = stepsOf("publish").map((step) => step.name);
+    expect(publish.indexOf("The tag points at the planned commit")).toBeGreaterThan(-1);
+    expect(publish.indexOf("The tag points at the planned commit")).toBeLessThan(
+      publish.indexOf("Draft, payloads, then metadata last"),
+    );
+    expect(jobs.get("publish")).not.toMatch(/--target/);
+    // "unchanged since the last nightly" reads the newest PUBLISHED nightly, never the newest tag
+    expect(jobs.get("plan")).toMatch(/--last-published-nightly-commit "\$LAST_PUBLISHED_COMMIT"/);
+    expect(jobs.get("plan")).not.toMatch(/--last-nightly-commit/);
   });
 
   it("puts ONLY the build and sign jobs in release-signing", () => {
