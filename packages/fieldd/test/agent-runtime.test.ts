@@ -609,13 +609,21 @@ describe("Agent Profiles (AR-S2) — puppeteer's profile sets, one folder each u
   }, 20_000);
 
   it("refresh reads This Mac's sign-ins with the vendor's own status command (the scripted claude), and the answer says it is reading", async () => {
-    const { daemon } = await setup();
+    const { bin, daemon } = await setup();
     await ready(daemon);
     const win = await window(daemon, ["agent.spawn"], "s2");
+    // The read is held IN FLIGHT, so the answer to the refresh is built while it
+    // reads. Item 62: unheld, a read that settled before the answer was built
+    // made `reading` an honest false, and the row lost on CI (c2c113788).
+    const hold = join(bin, "status-hold");
+    writeFileSync(hold, "");
     const first = (await win.call("agents.profileSets.list", {
       refresh: true,
     })) as AgentsProfileSetsListResult;
     expect(first.reading).toBe(true);
+    // nothing read yet: the answer is the one built before the read lands
+    expect(first.sets[0]?.personas.find((p) => p.provider === "claude")?.identity).toBeUndefined();
+    rmSync(hold);
     await untilAsync(async () => {
       const listed = (await win.call("agents.profileSets.list", {})) as AgentsProfileSetsListResult;
       const claude = listed.sets[0]?.personas.find((p) => p.provider === "claude");

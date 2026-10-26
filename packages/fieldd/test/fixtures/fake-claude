@@ -18,6 +18,9 @@
 # (puppeteer's Claude model service): one `initialize` control request on
 # stdin, answered with the vendor's own `models` rows — two of them, the first
 # with its effort levels — under the request's own id, as Claude Code 2.1 does.
+# Item 62: a row that must see a read IN FLIGHT holds it. While
+# FAKE_CLAUDE_STATE_DIR/status-hold exists, `auth status` waits before it
+# answers; the adapter's own 10 s timeout is the ceiling. No file, no wait.
 mark() {
   if [ -n "$CLAUDE_CONFIG_DIR" ]; then echo "$CLAUDE_CONFIG_DIR/.fake-signed-out"
   elif [ -n "$FAKE_CLAUDE_STATE_DIR" ]; then echo "$FAKE_CLAUDE_STATE_DIR/native-signed-out"
@@ -41,6 +44,9 @@ case "$1" in
       login) m=$(mark); [ -n "$m" ] && rm -f "$m"; echo "fake claude: logged in" ;;
       logout) m=$(mark); [ -n "$m" ] && : > "$m"; echo "fake claude: logged out" ;;
       status)
+        if [ -n "$FAKE_CLAUDE_STATE_DIR" ]; then
+          while [ -f "$FAKE_CLAUDE_STATE_DIR/status-hold" ]; do sleep 0.05; done
+        fi
         m=$(mark)
         if [ -n "$m" ] && [ -f "$m" ]; then echo '{"loggedIn":false}'
         else echo '{"loggedIn":true,"authMethod":"claude.ai","apiProvider":"firstParty","email":"persona@example.test","orgName":"Example Org","subscriptionType":"max"}'
