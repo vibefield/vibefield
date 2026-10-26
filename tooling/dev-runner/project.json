@@ -28,6 +28,8 @@
         "{workspaceRoot}/apps/desktop/packaging/smoke-daemons.mjs",
         "{workspaceRoot}/apps/desktop/packaging/build-native-release.mjs",
         "{workspaceRoot}/scripts/host-links.mjs",
+        "{workspaceRoot}/apps/desktop/packaging/codesign-entitlements.mjs",
+        "{workspaceRoot}/apps/desktop/packaging/entitlements.mac.plist",
         "{workspaceRoot}/scripts/siblings.mjs",
         "{workspaceRoot}/scripts/git-hooks/pre-commit",
         "{workspaceRoot}/siblings.lock.json",

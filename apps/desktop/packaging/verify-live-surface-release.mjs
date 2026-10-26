@@ -5,6 +5,7 @@ import { lstat } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { ENTITLEMENT_ARGS, entitlementKeys } from "./codesign-entitlements.mjs";
 
 const execFileAsync = promisify(execFile);
 const desktopRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -194,15 +195,14 @@ async function describeSignature(path) {
   };
 }
 
+// LSF-4 (2026-10-26): the XML plist, never codesign's text form, which this gate once read as "no entitlement at all"
+// (the first signed nightly's "V8 JIT entitlement is absent"; packaging/codesign-entitlements.mjs).
 async function describeEntitlements(path) {
   const result = await run("entitlements description", "/usr/bin/codesign", [
-    "--display",
-    "--entitlements",
-    "-",
+    ...ENTITLEMENT_ARGS,
     path,
   ]);
-  const output = `${result.stdout}\n${result.stderr}`;
-  return Array.from(output.matchAll(/<key>([^<]+)<\/key>/gu), (match) => match[1]).sort();
+  return entitlementKeys(`${result.stdout}\n${result.stderr}`);
 }
 
 function checkSignaturePolicy(component, metadata, entitlementKeys) {
