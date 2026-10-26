@@ -3,14 +3,38 @@ use field_native::config::NativeConfig;
 use field_native::logging::{install_panic_hook, new_boot_id, NativeLogging};
 use std::time::Duration;
 
+/// Item 64 (2026-10-26) — what `--help` prints, and what an argument field-native does not take is refused with.
+/// field-native is configured by its environment alone, and with none set it serves the installed app's user
+/// root. So an argument it did not know used to be IGNORED and the daemon booted: a lane's `field-native --help`
+/// once ran 10 s against a person's own data dir. Every launcher passes either nothing (fieldd's `bin.ts`, the
+/// suites' harnesses) or `--version` (the launch check).
+const USAGE: &str = "\
+usage: field-native [--version | --help]
+
+VibeField's native plane. It takes no other argument: it is configured by its
+environment, and with none set it serves this user's installed VibeField data.
+  FIELD_NATIVE_DATA_DIR                 the user root it serves
+  FIELD_LOG_DIR                         its log root (honored only with
+  FIELD_NATIVE_ALLOW_LOG_DIR_OVERRIDE=1)
+";
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // BP-1b (2026-10-26) — the release's launch check (the stage's verify, the build job): `--version` says the name
     // and version and exits before anything else. dyld resolves every load command before `main`, so a binary whose
     // libraries cannot load fails here, loudly, instead of at its first boot on someone else's Mac (the package's
     // field-native once linked Homebrew's harfbuzz; LANDED "BP-1b").
-    if std::env::args().nth(1).as_deref() == Some("--version") {
-        println!("field-native {}", env!("CARGO_PKG_VERSION"));
+    // Item 64: `--help` prints the usage and exits 0; any other argument is refused, exit 2, before any config is
+    // read or any file touched. Only a bare invocation boots.
+    if let Some(arg) = std::env::args().nth(1) {
+        match arg.as_str() {
+            "--version" => println!("field-native {}", env!("CARGO_PKG_VERSION")),
+            "--help" | "-h" => print!("{USAGE}"),
+            other => {
+                eprint!("field-native: unknown argument: {other}\n\n{USAGE}");
+                std::process::exit(2);
+            }
+        }
         return Ok(());
     }
     let config = NativeConfig::from_env()?;

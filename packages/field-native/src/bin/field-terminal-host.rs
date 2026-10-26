@@ -42,12 +42,30 @@ fn parse_args() -> Result<CellArgs, String> {
     })
 }
 
+/// Item 64 (2026-10-26) — what `--help` prints, and what a refused invocation says beside its error. The floor
+/// spawns this binary with every flag below (`services/terminal.rs`, the cell's `ChildSpec`); a person never needs
+/// to.
+const USAGE: &str = "\
+usage: field-terminal-host --control <socket> --frame <socket> --config <file> --instance <n> [--crumb <file>]
+       field-terminal-host --version | --help
+
+A terminal cell of VibeField's native plane. field-native spawns it, hands it its
+bootstrap on stdin and reads its hello on stdout; it is not run by hand.
+";
+
 fn main() -> ExitCode {
     // BP-1b — the release's launch check (field-native's `main` says why): the name and version, then exit, before the
-    // protocol owns stdout.
-    if std::env::args().nth(1).as_deref() == Some("--version") {
-        println!("field-terminal-host {}", env!("CARGO_PKG_VERSION"));
-        return ExitCode::SUCCESS;
+    // protocol owns stdout. Item 64: `--help` likewise prints the usage and exits 0.
+    match std::env::args().nth(1).as_deref() {
+        Some("--version") => {
+            println!("field-terminal-host {}", env!("CARGO_PKG_VERSION"));
+            return ExitCode::SUCCESS;
+        }
+        Some("--help" | "-h") => {
+            print!("{USAGE}");
+            return ExitCode::SUCCESS;
+        }
+        _ => {}
     }
     // Diagnostics belong to stderr — stdout is the two-line protocol
     // (hello, then the exit report) and nothing else may write to it. Plain
@@ -61,7 +79,7 @@ fn main() -> ExitCode {
     let args = match parse_args() {
         Ok(args) => args,
         Err(error) => {
-            eprintln!("field-terminal-host: {error}");
+            eprint!("field-terminal-host: {error}\n\n{USAGE}");
             return ExitCode::from(2);
         }
     };
