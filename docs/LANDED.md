@@ -17059,3 +17059,63 @@ closed before the connection was established"), so the error was UNCAUGHT.
   relaunch, and a fieldd that no shell ever claimed is unbounded.
 - The notice after a fieldd `kill -9` on a packaged build, seen by a person.
 - ⌘Q reserved in the deck (and ⌘W/⌘N asked); Settings → Diagnostics' "Last exit" line; AL-6.
+
+## AO-6b1 — the moments' memory, and a new agent with a past: the setup ledger keeps `moments` beside its steps through `setup.moment` (a moment's key holds a device id or a date, TS-D18's half), and an agent whose history is on this Mac and that History's question never asked about gets one row at History's head, once per agent (2026-10-27; `eafcf52db` + `39bf6f638`, lane `ao/6b`; AO-D15; TS-D18)
+
+**What.** The sixth slice of track AO's ladder (`draft/thinking-agent-onboarding.md` §8), its first moments half, on
+James's AO-D15 = (a), ruled 15:27:13Z (`rule-ao-d15`). Two commits:
+- **The moments' memory** (`eafcf52db`, contracts · fieldd):
+  - `setup.moment {moment, state}` (settings.manage, local, idempotent) writes `moments` beside `steps` in the
+    ledger AO-2 made (`users/<fuid>/fieldd/setup.json`), so a reinstall or another window never asks again.
+  - A moment is `<name>` or `<name>:<key>`, one record per name and key. The name ends at the first colon; a key is
+    printable ASCII without spaces, up to a device id's 256. `retired` is its one state, stamped with `at`.
+  - Rows are read one at a time, so a newer build's moment is carried and never read as an answer.
+  - TS-D18, ruled (d) by James at 15:57:33Z (`rule-ts-d18`): track TS's notices are moments in the same ledger,
+    `device-joined:<deviceId>` and `renewal-notice:<YYYY-MM-DD>`. Agreed with track TS's lead at 15:58Z as one
+    spelling, no second `key` field (the board's correction on `rule-ts-d18`); main writes them as the shell.
+- **A new agent with a past** (`39bf6f638`, field-app · DESIGN.md):
+  - The rule: the first agent in the census's order not brought in whose `agent-past:<agent>` was never retired.
+    It waits for History's question to be answered with something brought in; until then Finish setting up lists
+    History, or the room shows History's pane itself.
+  - The row, in the frame's act slot over the room, under the head band: the agent's mark, "**Grok has history on
+    this Mac.** 240 MB, last used in August." with **Bring it in** · **Not now**, in the line's material.
+  - Bring it in reads the census afresh at the press and sends the complete set plus the agent, so nothing another
+    door brought in is revoked; a refusal stays on the row in the daemon's words. Either act retires the moment, and
+    the row leaves at once, for good even if the write is refused.
+  - History's pane, at every door, retires the moment of every agent it asked about when answered, whatever its
+    switch said; Not now retires none.
+  - The catalog's History gains its "new-agent" plate; DESIGN.md §8 gains "The moments".
+
+**Validation** (lane ao1, nice 19, the guard and no verify before every step):
+- the light pass: at `9b4320fa8` EXIT 1 on one row, the field-app typecheck refusing the new test's `.rows` off the
+  `HistoryCensus` union (fixed in the test); at `6861779d7` (16:20:49–16:22:20Z) EXIT 0: the three typechecks,
+  gen:check, contracts `1191 passed`, fieldd's ledger files `8 passed`, field-app's ten files `150 passed`,
+  preflight, walls, the words check.
+- red-first by mutation at `6861779d7` (16:22:20–16:22:42Z): 8 of 8 red on exactly their claiming rows, the tree
+  restored. `29b02bf03` is `6861779d7` with its message amended to say so; the tree is the same.
+- the gate at `29b02bf03` (16:49:07–16:52:04Z): the three typechecks EXIT 0; contracts `1191 passed`; fieldd's ledger
+  files `8 passed`; field-app's whole suite `2722 passed | 3 skipped`; the words check exit 0; History's new-agent plate
+  photographed in both themes, no console errors (`lanes/ao1/logs/gate-29b02bf03/shots/`); the tree clean after. Read
+  by eye: the row under the head band, centred, its words and acts legible in both themes; in a full room it covers
+  the first session rows until answered, the overlay §8 says.
+- `pnpm verify` at `29b02bf03` (16:52:04–16:57:14Z) exit 1, red at a load of 290 with nothing else armed:
+  - every stage through the TypeScript tests green but two rows of fieldd's `test/agent-session.test.ts`, both waits
+    that ran out, never an assertion: the real floor's spawn (its terminal endpoints within 30 s) and MF-1f/MF-1g's
+    restart (the row within 15 s). The same family went red in ts1's verify at 08:50Z and AO-5a's at 16:08Z.
+  - what the family is, as VF-PM relayed the fixer's item 81 read (16:58Z): a product race, not a budget. ghosttea-client's
+    `#onData` loops every frame of one socket read; a response resolves as a microtask while an event emits
+    synchronously, so when a create's answer and its terminal's exit arrive in one read, the exit is fanned out before
+    its registrant registers, and it is lost. The fix is the fixer's (TerminalService keeps a fanned-out exit for a
+    grace and answers it to a registrant that asks once registered); nothing in AO-6b1 changes for it.
+  - cargo and gen:check were not reached.
+- Restacked onto AL-8a's records tip `261f0ff3c` (`git merge-tree` clean beforehand; the range-diff `=` on both:
+  `615856e5e` → `eafcf52db`, `29b02bf03` → `39bf6f638`). On the rebased sha, serial, on VF-PM's word
+  (`lanes/ao1/logs/alone-39bf6f638/`):
+  - (a) the file alone `46 passed | 2 skipped` (16:59:41–17:01:00Z);
+  - (b) `pnpm test:rust` alone, ok 31, FAILED 0, `fixture_parity` and `layout_vector` among them (17:01:00–17:02:53Z);
+  - (c) `pnpm gen:check` alone EXIT 0 (17:02:53–17:02:57Z);
+  - (d) contracts' suite `1195 passed` and (e) fieldd's ledger files `8 passed` (17:02:58–17:03:23Z);
+  - the tree clean after.
+
+**Not here.** The limit moment (AO-6b2, next). The desk rows (`pnpm smoke`, `pnpm smoke:studio`) on a display, owed
+with AO-1…5a's.
