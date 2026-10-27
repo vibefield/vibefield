@@ -15837,3 +15837,61 @@ VF-PM started the event at 00:28Z on James's "continue the work", in the 0.13.4 
   - The W11 install on the mini has been on the tailnet since a person's login at 04:19Z. The rows run their own
     isolated profiles and daemons, so nothing of it reached them.
   - The smokes are not #229's witness: that is test:rust's native_logging rows and the paired A/B (Found).
+
+## FN — item 79: a torn-down mesh node's sidecar ends, and the lane transport follows the node (2026-10-27; `5d0cc20d1`, lane `fixer/item79`)
+
+**What happened** (prod-builder's brief, the W11 Mac mini, user 1's field-native `0.1.0-nightly.20261027`):
+- 04:19:41Z: `fieldd.link.captured {loginPresent: true}` promoted the capture to linked, and the floor REBUILT its node
+  (UA-P-4).
+- A second sidecar-slim came up on the same `<data>/native/mesh/tailscaled.state` with no second login.
+- BOTH ran, each with ESTABLISHED tailnet TCP and UDP sockets, for at least 24 minutes.
+- No `lane_transport.installed` came after 04:19:41Z: the lanes were never moved to the new node.
+
+**Mechanism: two holders**, measured on mesh_unit's stand-in sidecar by a probe (lanes/item79/records/item79_probe*.rs):
+1. **The lane transport kept the old node.** `install_when_ready` parked on `wait_for_node` ONCE at boot (lib.rs:170):
+   the bridge's transport slot (`set_transport`, never cleared) and `serve_inbound` held the FIRST node forever.
+   - After the promotion, the capture node's strong count stayed at 2: the probe's own reference plus the slot.
+   - A counterfactual swap of the slot onto the linked node let the capture node drop.
+   - So every lane rode the ungated capture node, and the gated node had no transport at all: UA-P-4/D2's worry.
+2. **A dropped node does not end its sidecar.** truffle's `Node::drop` only cancels node-scoped tasks; the session
+   loops and the provider that owns the sidecar end in `Node::stop()`. That holds in truffle 0.7.22 and 0.7.23 alike
+   (the lead's read of the tags: #229 touched no teardown).
+   - `teardown_node` only dropped, so even the released capture node's sidecar ran on.
+   - `mesh.stop()` left the CURRENT node's sidecar running for the life of the process, and an explicit `stop()` ended
+     one.
+   - So every unlink, stop and rebuild leaked a sidecar. Retire archived a state dir its sidecar still held.
+
+**The fix** (`5d0cc20d1`):
+- **(A)** `teardown_node` awaits `stop()` on the node it removes, then drops it. This covers the promotion, `stop` and
+  `retire`.
+  - The bring-up's two "discarded" paths (completed after a retire or a stop) stop their node too.
+  - Every comment that promised a drop kills the sidecar is corrected where it stood (mesh.rs).
+- **(B)** `install_when_ready` follows the mesh's node watch (`MeshHandle::subscribe_node`). Per node it builds the
+  transport, `set_transport`s it, and serves inbound as that node's own task.
+  - On a change, the serve and its connection tasks (now a `JoinSet` of `serve_inbound`'s) are aborted, and
+    `BridgeHandle::clear_transport` runs before the next install.
+  - Lane streams end on their own I/O with the stopped node, so fieldd hears each lane close.
+  - `lane_transport.installed` once per node; `lane_transport.removed` on each change.
+  - `RunningDaemon::lane_transport_on` (weak) names the node the lanes ride.
+- **(C)** `field_native.mesh.node_replaced {reason: gate_changed | stopped | retired, sidecar_pid, sidecar_exited}`.
+
+**Validation** (this Mac's SSD lane `/Volumes/SamsungRed/lanes/item79`, guard, nice 19, `CARGO_INCREMENTAL=0`, on
+`7662caf1b`):
+- **Red-first on `7662caf1b`** (a detached base worktree with only the two rows that compile there):
+  - `the_promotion_lets_the_capture_node_go_and_ends_its_sidecar` FAILED: "(1) after the promotion something besides
+    this row still holds the capture node".
+  - `stopping_the_mesh_ends_the_nodes_sidecar` FAILED: "(6) mesh.stop() left the node's sidecar running".
+  - The third row, `the_lane_transport_follows_the_promotion_to_the_linked_node`, needs `lane_transport_on`. Its red is
+    the probe's: on main the linked node never got a transport.
+- **At the fix:** mesh_unit 12 passed / 1 ignored; field-native's whole suite ×3 at 463 passed (30 test binaries)
+  each; clippy `--all-targets -D warnings` clean; `pnpm verify` EXIT 0 at 05:49:21Z on its first run (test for 27 projects, cargo test 30 ok), the 1-minute load reaching ~366.
+- **What the rows do NOT witness:** the stand-in speaks no QUIC, so `serve_inbound`'s listener does not bind there (a
+  real sidecar's does, and held a second reference on the mini), and no lane crosses a real tailnet.
+  - The live witness is the next nightly's promotion on the mini: ONE sidecar, and `node_replaced` (prod-builder's
+    row).
+- **Residual, unchanged and unmeasured:** a bring-up that `teardown_node` aborts mid-build drops what it was building.
+- **Design text carrying the false promise** (draft/, VF-PM's snapshot queue, not this commit):
+  - `draft/system-atlas/evidence.json:2929` and `:24668`: "VibeField node teardown aborts bring-up and drops handles".
+  - `draft/system-atlas/network.mjs:19`: "Drop node and sidecar on unlink / stop".
+- Logs: `/Volumes/SamsungRed/lanes/item79/logs/` (probe-v1/v2, probe.log, redfirst-base-rows.log, fix-mesh_unit-1.log,
+  fn-suite-1..3.log, clippy.log, verify/).
