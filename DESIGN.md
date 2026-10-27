@@ -575,6 +575,19 @@ tailnet on the legend's lower arc over 900ms on the island curve, 260ms behind t
 96px). Under reduced motion they appear together in a 120ms fade. It is the one staggered entrance that is
 not 26ms.
 
+Two more, with their reasons — **the hand-over** and **History's arc** (track AO; AO-D2, AO-D4 and AO-D8 ruled
+2026-10-27; §8 "The Setup Assistant's agent chapter"). **The hand-over** is a first run's reveal. Setting up's
+live phase breathes (the loop below) while the desk opens, warms and settles behind the wizard's glass. When the
+pane's facts are in, its title becomes the welcome by a **180ms** cross-fade in place (one element, M1) and holds
+**1.4s**, long enough to read the welcome and its one line; the old Ready pane's 700ms beat never was, because the
+splash stood in for the rest. Then the glass leaves exactly as the splash does: a 240ms plain `ease` fade while the
+desk settles `scale(0.99) → 1` over 560ms on the island curve. The mat under the glass is the desk's own, so nothing
+changes floor. Reduced motion: fades only, halved; no breath. **The arc** is the loop's travel drawn on a glyph.
+While History imports, a fifth of the History glyph's own circle, in the cell's ink at the glyph's weight, turns once
+every 1.1s on the island curve over the glyph resting at a third of its ink. It stops the moment the room says the
+archive is ready. It is the import's only sign outside History, so it carries no number (the room's law: a
+percentage names its step, never an invented whole).
+
 *Status 2026-10-12: ruled and built. Built: the Lip and its two buttons, the groove, the frame's tone and the well (GV-D7, GV-D12); where a session with no pane opens (GV-D4); the terminals away and called up as they were left (GV-D5's call, GV-D6); the edge's three outcomes and their readouts, and the monitor making room; maximized, the bar the window's title bar (GV-D11); the monitor alone at launch, the first call bringing last run's panes with the one it called (GV-D5, N14 (a)); ⌘W on the last pane minimizing them (N16 (a)); rest, the drawing's share above a floor on every height (N15 (a)).*
 **The terminals rise and fall** (Godview's deck, §8; One Frame §22 "Shared mechanics" and §23 —
 GV-D5, GV-D6, GV-D7 and GV-D11, ruled 2026-10-02; built 2026-10-11): two durations, no new
@@ -840,6 +853,11 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   208 × 52 pill, padding 5 × 6, at the line's left end (§10) — so the line can grow around it
   without the track moving. *Folded into the line 2026-10-03 (FR-2):* the same track and keys at
   the line's left end, on the line's glass; its own pill is gone, and nothing about it moved.
+  *Amended 2026-10-27 (track AO, AO-D8 ruled by James):* while History imports, its cell carries
+  **the arc** (§6): a fifth of the clock's own circle travels it once every 1.1s on the island curve
+  over the glyph at a third of its ink, until the room says the archive is ready. It carries no
+  number, never a badge or a count, and its accessible name adds "importing" ("History, importing").
+  The cell is otherwise unchanged and still presses at once.
 - **The line** (One Frame FR-2, FR-3, §5; FC-D1, FC-D3, FC-D14 ruled 2026-10-01; built
   2026-10-03): the frame's foot (§10), the same in every view — `[views] create │ draft mic send`,
   the composer as one product composition. 880 × 52 on the line's glass (§5), padding 5 × 6, its
@@ -1302,6 +1320,25 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   place at most once per 30 days after Not now, and at most one a day across them; each has ×,
   and one switch in Settings → Devices stops them all; each retires the moment the link lands. ×
   sends a nudge back the way it came (M4, the retract, 180ms).
+- **Finish setting up** (track AO, AO-D10 and AO-D12 ruled 2026-10-27; AO-L6): a step skipped in the
+  Setup Assistant stays findable and never asks. At the head of Settings, under the account card, one
+  tile lists what was skipped, each as a row with its glyph and its one line — "Bring in your past
+  sessions", "Connect your devices" — while anything was: **Continue setup** opens the same panes as a
+  sheet over the app (the wizard's glass and shell, the same words), and **Hide** removes the tile for
+  good (each step still lives on its page). A step answered elsewhere leaves the list by itself: a link
+  made from the face menu or Settings → Devices, history brought in from History. "Not now" records
+  later; turning every switch off and continuing records no, and a no is never listed. Someone who set
+  up before the chapter existed (AO-D12) gets no wizard: the tile lists "Bring in your past sessions"
+  while history is found on this Mac and none is brought in, and History shows its pane. Never a badge,
+  never a count on the face, never on launch.
+- **Settings → History** (track AO, AO-D9 ruled 2026-10-27; AO-L5): the home of whose history is read,
+  one page in the Workspace group after Agent Profiles. In order: the History pane's rows, each agent
+  with its mark, size, last use, where it lives and its switch, the switches meaning what they mean in
+  the pane (on: read; off: **Stop reading**, which keeps what was read and says so); **Look again**
+  (the census asked afresh, for an agent installed since); the space History's copy uses on this Mac;
+  and the room's own state while it imports, in the room's words. Changing a switch asks once more
+  only when it turns reading off. Profiles' own folders are read by construction and are listed with
+  their profile's name, not a switch.
 - **The desk's chrome** (Chrome on the Mat MC-1…MC-6, 2026-09-28; MC-D1 ruled through One Frame's
   lock and MC-D10 with DK-D23, 2026-10-02; the orchestrator's Phase 4 rulings R1–R25, 2026-10-03,
   cited below as Rn; built on the desk by DK-11…DK-16): **the mat keeps its marks and the chrome
@@ -1668,6 +1705,55 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   2026-10-07 (DK-17; the migration plan's (75)):* until then the line held ICE's message alone, and a
   person read "an uncaptured GPU error — GPUValidationError: …" as the whole of it. No Canvas2D fallback in v1
   (DK-D32): the state is the whole answer, and the frame around it still works.
+- **The Setup Assistant's agent chapter** (track AO, AO-D1…AO-D13 ruled by James 2026-10-27; the record
+  is `draft/thinking-agent-onboarding.md`, the page *Bring Your Agents*). Three panes after "What should
+  this field call you?" and before the Connect pane, then one Setting up pane that becomes Ready: **Agents
+  → Profiles → History → Devices → Setting up** (AO-D1, AO-D13). Each pane keeps the wizard's glass, its
+  fixed shell and W1–W6, and opens on what this Mac already told VibeField (AO-L1). A pane with nothing to
+  decide doesn't show (AO-L2): no agent installed or installing means no Profiles pane, and no history on
+  disk means no History pane. Continue on every pane gives a setup that works (AO-L3), and every skip
+  names its later home in the skip's own line (W3). Every agent is drawn by its own mark (`AgentIcon`, the
+  view SDK's, §13 kept exact) and named by the catalog's label, never a monogram.
+  **Agents — "Your agents are ready."** The installed agents as rows: the mark, the label, the version
+  and how it updates ("updates itself", "npm", "Homebrew") and a green **Ready**. The catalog's supported
+  agents that are missing follow with **Get**, which becomes **Install** and names what will run ("Runs
+  Anthropic's installer: curl -fsSL https://claude.ai/install.sh | bash", the command in mono) before it
+  runs it (AO-D5, AO-L7). Preview agents wait behind **More agents**. With nothing installed the title is
+  "Add your first agent." and Claude Code and Codex come first. Voice: "VibeField found these on this Mac.
+  It runs them as they are, with your settings and sign-ins, and keeps them up to date." An install runs
+  on after Continue, and the last pane reports it. Later: "Add agents anytime in Settings → Agents."
+  **Profiles — "Every subscription, side by side."** Taught with the person's own sign-ins: **This Mac**
+  as a card, each agent with who it is signed in as and its plan by name ("Claude Max"), and beside it a
+  dashed card, **Add a profile…**, which grows into the pane in place (M1). Voice: "A profile holds one
+  sign-in for each agent. This Mac is your first: it uses the accounts your agents are already signed in
+  to." The offer: "Another plan, for work or a client? Give it a profile." The fact: "Profiles keep their
+  sign-ins apart, so they work at the same time and never sign each other out." Adding is one field a
+  step: a name (placeholder "Work, a client, Personal…"), the agent, then that agent's own login in the
+  pane (the Sign-in terminal, "This runs in Work's folder, so the sign-in lands there and nowhere else").
+  The profile is kept once its first agent says who signed in (AO-D7); Cancel leaves nothing behind.
+  Done: "Work is ready. It starts with clean settings: its own skills and servers." Later: "Add one
+  anytime in Settings → Agent Profiles."
+  **History — "Bring in your past sessions."** One row per agent that has history on this Mac, an agent
+  no longer installed included: the mark, the label, its size (§9, as Finder counts it), when it was last
+  used and where it lives (`~/.claude`, mono), and a switch. **Every switch starts on** (AO-D3); nothing
+  is read before the button. Voice: "Search everything your agents did on this Mac, and pick up any
+  session where it left off." Under the rows, two sentences: how long the first reading takes ("About a
+  minute on a quiet Mac, one time only. History fills in while you work.") and where it stays ("Your
+  history stays on your devices. VibeField reads it here and never uploads it."). The acts: **Bring in
+  history** (the primary), **Not now** (recorded as later), and with every switch off the primary reads
+  **Continue without history** (recorded as no). Not enough space says so with both numbers. Later:
+  "Bring it in anytime from History."
+  **Setting up, then Ready** (AO-D2, AO-D4). Today's pane 3 is retired: the long jobs only exist after
+  the chapter, so one pane at the end lists the real phases, each a fact a door reports, never a bar of
+  its own: **Your desk** (the boot's own stages), **Agents** (an install still running, as background,
+  with its elapsed time), **Profiles**, and **History** in the room's own words ("Discovering
+  conversations · 1,215 files checked", then "4,441 sessions found in 74 projects" and "Reading
+  conversations, in the background"). The live phase breathes (§6); a done one takes its ✓. It waits
+  for the desk and History's first pass only, and for no more than 8s past the desk, then offers **Start
+  now** under "Finding sessions in a history this size takes longer. It carries on in History." Then
+  its title becomes "Welcome to your field, {name}." in place, with the line "Your face in the
+  bottom-left corner opens Settings — so does ⌘,", and the glass hands the window to the desk it opened
+  (§6, the hand-over). A second user's chapter is the same and its end has no welcome beat (UA §6.2).
 - **The users chooser** (Setup, second-user variant; 2026-09-22): Back from a new user's pane 2
   opens it, because that user already exists by then — the chooser is where you choose who to
   enter instead. Eyebrow "Users", one line of voice, then every user on this machine as a tile,
@@ -1713,6 +1799,10 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   `--vf-ease-island` (a breath, not a zoom). Fires once, fully warm. Reduced motion:
   fade only. Doc SWITCHES stay the loading veil's business — the splash exists only
   at boot.
+  *Amended 2026-10-27 (track AO, AO-D2):* on a first run the Setup Assistant's glass is what the
+  desk composes behind, never the splash: the wizard keeps the window from its last question until
+  its Ready beat ends, and then leaves with the splash's fade and the desk's settle (§6, the
+  hand-over). The splash never returns between the wizard and the desk.
 - **The switch** (UA-D15's reload, dressed; 2026-09-22): changing users reloads the window,
   so the transition is two halves that meet on one frame — the boot splash wearing the face of
   the user you are going to. **Leaving.** The face you clicked lifts out of its row (held,
@@ -2497,6 +2587,20 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     says rosetta's own words ("the recorded file is no longer available"); "Recorded files can't
     open here yet — no file door on the desktop" is said only when rosettad refuses the grant the
     file read (a daemon from before the scope, or a grant minted without it).
+    *Amended 2026-10-27 (track AO, AO-D9 ruled by James; gap 2 of the record, a dead end: Settings
+    → Agents had no such control):* an index waiting for consent shows **the History pane itself**
+    in the room's consent slot ("Bring in your past sessions.", §8 "The Setup Assistant's agent
+    chapter"), with its rows, its switches and its acts, on every visit until answered — the view's
+    empty state, never a pointer elsewhere. Its home is Settings → History. An index that is not
+    answering keeps the room's words and puts ours under them in a person's terms: **"History isn't
+    answering. VibeField is restarting it."** with **Try again**, the daemon's and fieldd's names
+    never on screen (§9 "The agents' words"; fieldd's sentences stay in the log and Diagnostics).
+    **While it imports, the room's import is the room's own** (ruled 2026-10-27, "rosetta app
+    already well designed, can be directly inherited"): its card's four named steps, its cold
+    start, its cooking cards, a transcript's "Indexing history" and "Progress updates paused"
+    stand as rosetta draws them, and VibeField feeds them every field they read (each project's
+    progress, the search build's stage, the daemon's clock). A percentage names its step, never an
+    invented whole, and the only sign outside History is the views track's arc (§6).
   - **It lists your projects** (PJ-4, H1–H6 ruled (a) 2026-10-09; "we map, the room draws"): the
     room's projects are fieldd's (`project.list`: places grouped by evidence, PJ-L1), each session
     filed under the key fieldd joined it to, and what the room draws beyond its own rows is
@@ -3069,6 +3173,21 @@ reads as no internet. "Tailnet", "node" and "link" stay in Network details (TS-L
 who must act: "Finish in your browser", "Waiting for approval", "Sign in to Tailscale again". The
 machine is named as Tailscale names it, in mono, so a person can match it on Tailscale's own page.
 Tailscale is named plainly, and its mark appears only where trust is decided (§13).
+
+**The agents' words** (track AO, ruled 2026-10-27; AO-L8, no machinery on screen). One word per thing,
+in the Setup Assistant, Settings, History and the launcher alike. An **agent** is named by the
+catalog's label (Claude Code, Codex, Grok). **This Mac** is the profile that uses the agents' own
+folders ("This PC" on Windows) — never "native", "This desktop" or "this machine". A **profile** is a
+set of sign-ins, one per agent; "Agent Profiles" is only the Settings group's head. A **sign-in** is
+one agent's account inside a profile ("Signed in as james@acme.dev"). A **plan** is what a sign-in
+runs on, by its product name ("Claude Max", "ChatGPT Pro"); "subscription" is only the idea ("Every
+subscription, side by side."). **History** is the place, and its verbs are **bring in** (the yes),
+**read** (the work) and **stop reading** (the no). What comes in is **past sessions**. **Get** starts
+an install and becomes **Install**; never "Download". Never on screen: ingest or ingestion, enroll or
+consent, runtime or kind, persona, index, rosetta or rosettad, puppeteer, fieldd, backfill, skim or
+census, and "we" ("VibeField found", never "we found"); they stay in logs, Diagnostics and the code.
+Inside History the room's own words stand as rosetta wrote them, and the Setup Assistant borrows them
+("Discovering conversations", "Reading conversations"), so History says the same thing when it opens.
 
 *Status 2026-10-12: ruled and built. Built: the Lip and its two buttons, the groove, the frame's tone and the well (GV-D7, GV-D12); where a session with no pane opens (GV-D4); the terminals away and called up as they were left (GV-D5's call, GV-D6); the edge's three outcomes and their readouts, and the monitor making room; maximized, the bar the window's title bar (GV-D11); the monitor alone at launch, the first call bringing last run's panes with the one it called (GV-D5, N14 (a)); ⌘W on the last pane minimizing them (N16 (a)); rest, the drawing's share above a floor on every height (N15 (a)).*
 **The terminals' wrapper says the window's own words** (Godview, §8, the deck; One Frame §23.2 —

@@ -16079,3 +16079,51 @@ stderr write.
 - AL-5, the orphan policy (an empty pair with no shell exits after 10 min), and AL-6, "Keep running when VibeField
   quits" (the Settings toggle + a Dock-less resident shell with its status item), are their own slices.
 - CLAUDE.md's "Two planes" law line needs a quit clause. It is proposed, not edited here.
+
+## AO-0 — the agent plane's first run is ruled, and DESIGN.md says it first: the Setup Assistant's agent chapter, Setting up over the desk it opens, Finish setting up, Settings → History, History's consent inline and its import inherited from rosetta's room, the agents' words (2026-10-27; records only, lane `ao/1`)
+
+**What.** James ruled the thirteen marks of *Bring Your Agents* (https://claude.ai/artifact/9SMSwRWxmdPaBVRWkJDWFS)
+on the page between 07:54 and 07:59Z: A on every one, the leans. His next word (08:04Z): "all ruled, now please plan
+and land this nice and proper". Earlier the same day, in words: "use existing agent icons in your design" and "for
+history view's loading state, rosetta app already well designed, can be directly inherited". This entry lands the
+records before any code, because a visual change is written in DESIGN.md first (docs/UI_SYSTEM.md):
+- **§8** adds three canon entries:
+  - **The Setup Assistant's agent chapter**: Agents ("Your agents are ready.", Get → Install naming what runs),
+    Profiles ("Every subscription, side by side.", This Mac in the person's own sign-ins, Add a profile… in place,
+    kept at its first sign-in), History ("Bring in your past sessions.", one switch per agent, every switch on), then
+    one Setting up pane that lists the real phases, waits for the desk and History's first pass (8 s at most past the
+    desk, then Start now) and becomes Ready in place. Pane 3 retires.
+  - **Finish setting up**: the skipped steps at Settings' head, Continue setup as a sheet, Hide; a step answered
+    elsewhere leaves by itself; people who set up before this get the history step and no wizard.
+  - **Settings → History**: whose history is read, Look again, the space used, Stop reading keeps what was read.
+  - It amends three entries: the views track (History's cell carries the arc while it imports, no number); the reveal
+    (a first run's desk composes behind the wizard's glass, and the splash never returns between them); History's
+    honest states (the History pane itself in the room's consent slot, replacing a dead end that pointed at a
+    Settings page with no such control; "History isn't answering. VibeField is restarting it." · Try again; the room's
+    import is the room's own, fed every field it reads).
+- **§6** records two timings with their reasons: the hand-over (180 ms title cross-fade, a 1.4 s welcome where the old
+  700 ms beat leaned on the splash, then the splash's own fade and settle) and History's arc (a fifth of the clock's
+  circle, 1.1 s on the island curve, stopping when the room says ready).
+- **§9** adds "The agents' words": agent, This Mac, profile, sign-in, plan, History (bring in, read, stop reading),
+  past sessions, Get, and the never-list (ingest, enroll, runtime, persona, index, rosetta, puppeteer, fieldd, "we").
+- **DECISIONS** gains the AO row (AO-D1…D13, AO-L1…L8), and **ROADMAP** the AO track and a head bullet.
+
+**Not in this entry.** No code, no token: the slices bring their own (the ladder below). The page names its marks
+AO-1…AO-13; the records call them AO-D1…AO-D13 so the ladder can take AO-0…AO-8.
+
+**Records.** The design record is `draft/thinking-agent-onboarding.md` (§7 the rulings, §8 the build ladder
+AO-0…AO-8; the draft snapshot through VF-PM's queue). The second code read behind the ladder (main `a135ea795`)
+found: the wizard holds the boot before the document opens, so Setting up over the opening desk is a boot-machine
+hand-over (a `handing-over` phase before `interactive`, which keeps meaning revealed); rosetta's `/api/status`
+already reports every field the room's import draws and fieldd's `index.status` drops four of them (per-project
+progress, the search build's stage, the daemon's start and uptime), so feeding the room is VibeField's own work;
+the room polls its own status at 500 ms and fieldd answers fresh, so only the desk's cell and Setting up need a
+push; the window's token lacks only `index.manage` for consent; puppeteer's update runner plans by an existing
+install, so Get needs an install recipe upstream (released, then an EL8 event). The onboarding seam with track TS is
+agreed (vibe-field-d0, 08:12Z, VF-PM cc): AO-1 splits `boot/onboarding/` per pane and lands first, TS-2 rebases
+onto it, "connect" stays one pane and "posture" stays until TS-6, and AO writes the ledger's devices row from the
+orchestrator and derives it done from the link.
+
+**Validation.** Docs only, so verify executes nothing new. Four field-app tests read named DESIGN.md sentences
+(`godview-head`, `godview-deck-edge`, `project-ink`, `line-model`); the diff only adds lines, and none of them reads
+an amended paragraph's old words.
