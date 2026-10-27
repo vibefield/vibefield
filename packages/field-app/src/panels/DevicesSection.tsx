@@ -21,7 +21,7 @@ import type { MonitorDeviceFacet } from "../godview/monitor/types";
 import { OsMark } from "../godview/os-marks";
 import { getHost } from "../host";
 import { MeshSection } from "./MeshSection";
-import { buttonCls, fieldCls, labelCls, SettingsSection } from "./settings-ui";
+import { buttonCls, fieldCls, labelCls, SettingsSection, SettingsSwitch } from "./settings-ui";
 import "./devices.css";
 
 // Settings → Devices (track TS, TS-3a; DESIGN.md §8 "Settings → Devices",
@@ -83,6 +83,12 @@ export interface DevicesSectionViewProps {
   onStartOver: () => void;
   onSheet: (sheet: DevicesSheet) => void;
   onDisconnect: () => void;
+  /** TS-D16 — Send logs on this network, on or off (the shared door's act) */
+  onSendLogs: (send: boolean) => void;
+  /** TS-D14 — the Disconnect just made could not sign out at Tailscale, so the
+   * admin console keeps this Mac: said once, on the page, with the console's
+   * address. Null or absent otherwise. */
+  signOutMissed?: { readonly adminUrl: string } | null | undefined;
   /** TS-3b (P9, TS-D17 A) — name this Mac (null: the computer's name again);
    * resolves the daemon's refusal in its words, or null */
   onRename: (name: string | null) => Promise<string | null>;
@@ -135,7 +141,12 @@ function stateWord(
 } {
   switch (face.kind) {
     case "linked":
-      return { word: "Connected", tone: "healthy" };
+      // T11 — up, but held by Tailnet Lock until a signing device signs it
+      return face.needsSignature
+        ? { word: "Not yet trusted", tone: "attention" }
+        : { word: "Connected", tone: "healthy" };
+    case "logsRequired":
+      return { word: "Needs device logs", tone: "attention" };
     case "offline":
       return { word: unlinkedWord(platform), tone: "muted" };
     case "capturing":
@@ -273,6 +284,41 @@ function TailscaleCard(props: DevicesSectionViewProps): ReactElement {
         </div>
       </>
     );
+  } else if (face.kind === "logsRequired") {
+    // TS-D16 — the network requires device logs and this Mac sends none (D15):
+    // sending them on this network is the person's act, or the admin's
+    body = (
+      <>
+        <div className={labelCls}>
+          Your Tailscale network's admin turned on network logging, which needs every device to send
+          its logs to Tailscale. VibeField sends none, so this Mac can't join this network.
+        </div>
+        <div className="vf-devices-acts">
+          {step.kind === "failed" && <Refusal reason={step.reason} />}
+          <a
+            className={buttonCls}
+            href={face.adminUrl ?? HOSTED_MACHINES_URL}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Manage in Tailscale ↗
+          </a>
+          {face.link === null && (
+            <button type="button" className={buttonCls} onClick={props.onCancel}>
+              Cancel
+            </button>
+          )}
+          <button
+            type="button"
+            className={buttonCls}
+            disabled={step.kind === "pending"}
+            onClick={() => props.onSendLogs(true)}
+          >
+            Send logs on this network
+          </button>
+        </div>
+      </>
+    );
   } else if (face.kind === "signedOut") {
     body = (
       <>
@@ -303,6 +349,12 @@ function TailscaleCard(props: DevicesSectionViewProps): ReactElement {
           <span className="vf-ui-mono">{link.login ?? "learning the login…"}</span>
           {link.tailnet !== undefined && <span className={labelCls}> · {link.tailnet}</span>}
         </div>
+        {face.needsSignature && (
+          <div className={labelCls}>
+            Your network uses Tailnet Lock. Until a device that can sign trusts this Mac, it can't
+            reach your other devices, and they can't reach it.
+          </div>
+        )}
         <div className="vf-devices-acts">
           <a
             className={buttonCls}
@@ -341,6 +393,27 @@ function TailscaleCard(props: DevicesSectionViewProps): ReactElement {
             </div>
           )}
           {body}
+          {face.kind === "offline" &&
+            props.signOutMissed !== null &&
+            props.signOutMissed !== undefined && (
+              // TS-D14 — said once, after the Disconnect whose sign-out missed
+              <>
+                <div className={labelCls}>
+                  This Mac couldn't reach Tailscale to sign out, so it stays listed in your admin
+                  console until you remove it there.
+                </div>
+                <div className="vf-devices-acts">
+                  <a
+                    className={buttonCls}
+                    href={props.signOutMissed.adminUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Manage in Tailscale ↗
+                  </a>
+                </div>
+              </>
+            )}
         </div>
       </div>
     </SettingsSection>
@@ -445,7 +518,12 @@ function NameRow({
 function ThisMac(props: DevicesSectionViewProps): ReactElement {
   const { face } = props;
   const self = props.devices.find((device) => device.self);
-  const tailscale = face.kind === "linked" || face.kind === "signedOut" ? face : null;
+  const tailscale =
+    face.kind === "linked" ||
+    face.kind === "signedOut" ||
+    (face.kind === "logsRequired" && face.link !== null)
+      ? face
+      : null;
   const expiresAt = face.kind === "linked" ? face.keyExpiresAt : undefined;
   const days = renewalDays(expiresAt, props.now);
   const due = face.kind === "signedOut" || (days !== null && days <= 0);
@@ -534,15 +612,14 @@ function Sheet(props: DevicesSectionViewProps): ReactElement | null {
   if (sheet === "none") return null;
   const login = props.face.kind === "linked" ? (props.face.link.login ?? "your account") : null;
   if (sheet === "disconnect") {
-    // TS-D14 — Disconnect signs out at Tailscale, then archives. Until truffle
-    // can sign out (petition T9), it archives and names where the record stays.
+    // TS-D14 — Disconnect signs out at Tailscale, then archives (truffle 0.7.24's
+    // logout, T9). A sign-out that could not reach Tailscale is said once, after.
     const busy = props.disconnect.kind === "pending";
     return (
       <SettingsSection title="Disconnect this Mac?">
         <div className={labelCls}>
           This Mac leaves your devices: your phone and other computers stop reaching this field, and
-          everything on this Mac stays. VibeField can't sign this Mac out of Tailscale yet, so it
-          stays listed in your admin console until you remove it there.
+          everything on this Mac stays. It signs out of Tailscale too.
         </div>
         <div className="vf-devices-acts">
           {props.disconnect.kind === "failed" && <Refusal reason={props.disconnect.reason} />}
@@ -611,6 +688,43 @@ function Sheet(props: DevicesSectionViewProps): ReactElement | null {
   );
 }
 
+/** Network details, collapsed (DESIGN.md §8, §9): while a link stands, the client
+ * this Mac embeds and Device logs with its switch (TS-D15, D16); then the mesh's
+ * own diagnostics (controller-owned; absent in the catalog). */
+function NetworkDetails(props: DevicesSectionViewProps): ReactElement | null {
+  const { face } = props;
+  const linked = face.kind === "linked" ? face : null;
+  const standing = linked !== null || (face.kind === "logsRequired" && face.link !== null);
+  if (!standing && props.networkDetails === undefined) return null;
+  const sending = linked?.sendLogs === true;
+  return (
+    <details className="vf-devices-details">
+      <summary className={labelCls}>Network details</summary>
+      {standing && (
+        <div className="vf-devices-facts">
+          {linked !== null && linked.tailscaleVersion !== null && (
+            <>
+              <span className={labelCls}>Version</span>
+              <span className="vf-ui-mono">Tailscale {linked.tailscaleVersion}</span>
+            </>
+          )}
+          <span className={labelCls}>Device logs</span>
+          <span className="vf-devices-fact-act">
+            <span>{sending ? "Sent on this network" : "Off · VibeField sends none"}</span>
+            <SettingsSwitch
+              checked={sending}
+              disabled={props.step.kind === "pending"}
+              onChange={props.onSendLogs}
+              label="Send logs on this network"
+            />
+          </span>
+        </div>
+      )}
+      {props.networkDetails}
+    </details>
+  );
+}
+
 export function DevicesSectionView(props: DevicesSectionViewProps): ReactElement {
   return (
     <div className="space-y-4">
@@ -619,12 +733,7 @@ export function DevicesSectionView(props: DevicesSectionViewProps): ReactElement
       <ThisMac {...props} />
       <YourDevices {...props} />
       {props.newProjects}
-      {props.networkDetails !== undefined && (
-        <details className="vf-devices-details">
-          <summary className={labelCls}>Network details</summary>
-          {props.networkDetails}
-        </details>
-      )}
+      <NetworkDetails {...props} />
     </div>
   );
 }
@@ -654,13 +763,22 @@ export function DevicesSection({
   const host = getHost();
   const [sheet, setSheet] = useState<DevicesSheet>("none");
   const [disconnect, setDisconnect] = useState<DisconnectStep>({ kind: "idle" });
+  const [signOutMissed, setSignOutMissed] = useState<{ adminUrl: string } | null>(null);
 
   const onDisconnect = (): void => {
+    // the console a missed sign-out leaves this Mac in, read before the face goes
+    const adminUrl =
+      (door.face.kind === "linked" ? door.face.adminUrl : null) ?? HOSTED_MACHINES_URL;
     setDisconnect({ kind: "pending" });
+    setSignOutMissed(null);
     void client.request("user.link.unlink", {}).then(
-      () => {
+      (answer) => {
         setDisconnect({ kind: "idle" });
         setSheet("none");
+        // TS-D14 — false only when the floor says Tailscale never took the
+        // sign-out; a daemon that does not say leaves nothing to say
+        const signedOut = (answer as { signedOut?: unknown } | null)?.signedOut;
+        setSignOutMissed(signedOut === false ? { adminUrl } : null);
       },
       (cause: unknown) =>
         setDisconnect({
@@ -705,6 +823,8 @@ export function DevicesSection({
         setSheet(next);
       }}
       onDisconnect={onDisconnect}
+      onSendLogs={(send) => void door.sendLogs(send)}
+      signOutMissed={signOutMissed}
       onRename={async (name) => {
         try {
           await client.request("device.rename", { name });

@@ -75,10 +75,21 @@ export type UserLinkStatus = {
   keyExpiresAt?: number | null;
   /** TS-1 — why the floor's last bring-up ended without a node, when one did. */
   failure?: LinkFailure | null;
+  /** TS-8 — the Tailscale client the floor embeds ("1.104.1"); null until known. */
+  tailscaleVersion?: string | null;
+  /** T11 — Tailnet Lock holds this running node until a signing device signs it. */
+  needsSignature?: boolean;
+  /** TS-D16 — whether device logs are sent on this network: link.json's opt-in. */
+  sendLogs?: boolean;
 };
 
-/** TS-1 — the floor's typed reason a bring-up ended without a node. */
-export type LinkFailure = "sidecar_missing" | "bring_up_failed" | "sidecar_exited";
+/** TS-1 — the floor's typed reason a bring-up ended without a node; TS-8 —
+ * `logging_required`, a tailnet that refused a node sending no device logs. */
+export type LinkFailure =
+  | "sidecar_missing"
+  | "bring_up_failed"
+  | "sidecar_exited"
+  | "logging_required";
 
 export type UserLink = NonNullable<UserLinkStatus["link"]>;
 
@@ -126,6 +137,23 @@ export type LinkFace =
       nodeState: string | null;
       /** ms; null = expiry disabled; undefined = not known */
       keyExpiresAt: number | null | undefined;
+      machineName: string | null;
+      adminUrl: string | null;
+      /** T11 — connected, not yet trusted: Tailnet Lock holds the node, so it
+       * reaches no device and none reaches it until a signing device signs it */
+      needsSignature: boolean;
+      /** TS-8 — the embedded client's version, for Network details */
+      tailscaleVersion: string | null;
+      /** TS-D16 — device logs are sent on this network (the person said so) */
+      sendLogs: boolean;
+    }
+  /** TS-D16 — a network that requires device logs keeps this node down: this Mac
+   * sends none (TS-D15) until the person sends them on this network. `link` is
+   * the standing record, whose act is `user.link.logs`; null for a capture the
+   * network refused, which begins again with logs. */
+  | {
+      kind: "logsRequired";
+      link: UserLink | null;
       machineName: string | null;
       adminUrl: string | null;
     }
@@ -276,6 +304,9 @@ export function linkFace(
               data.keyExpiresAt !== undefined ? data.keyExpiresAt : data.link.keyExpiresAt,
             machineName: data.machineName ?? null,
             adminUrl: data.adminUrl ?? null,
+            needsSignature: data.needsSignature === true,
+            tailscaleVersion: data.tailscaleVersion ?? null,
+            sendLogs: data.sendLogs === true,
           };
     case "capturing":
       return {
@@ -287,12 +318,15 @@ export function linkFace(
       };
     case "offline":
       return { kind: "offline", nodeState: data.nodeState };
-    // TS-D16 — the tailnet keeps the node down for sending no logs. The menu's
-    // word is "This Mac only" (thinking doc §11); the face with its own title
-    // and "Send logs on this network" comes with the link's words (DESIGN.md
-    // §9), in the faces' packet.
+    // TS-D16 — the network keeps the node down for sending no logs: its own
+    // face, whose act is "Send logs on this network" (DESIGN.md §9)
     case "logs_required":
-      return { kind: "offline", nodeState: data.nodeState };
+      return {
+        kind: "logsRequired",
+        link: data.link !== null && data.link.login !== null ? data.link : null,
+        machineName: data.machineName ?? null,
+        adminUrl: data.adminUrl ?? null,
+      };
     default:
       return {
         kind: "refused",
@@ -317,6 +351,7 @@ export function hasLink(face: LinkFace): boolean {
     face.kind === "linked" ||
     face.kind === "signedOut" ||
     (face.kind === "approval" && face.link !== null) ||
+    (face.kind === "logsRequired" && face.link !== null) ||
     (face.kind === "refused" && face.link !== null)
   );
 }

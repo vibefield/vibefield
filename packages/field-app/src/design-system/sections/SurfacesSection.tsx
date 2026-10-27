@@ -317,6 +317,8 @@ function DevicesSpecimenPage({ state }: { state: DevicesFixtureState }): ReactEl
       onStartOver={noop}
       onSheet={setSheet}
       onDisconnect={noop}
+      onSendLogs={noop}
+      signOutMissed={fixture.signOutMissed ?? null}
       onRename={async () => null}
       onNewUser={noop}
     />

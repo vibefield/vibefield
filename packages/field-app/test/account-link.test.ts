@@ -89,6 +89,9 @@ describe("linkFace", () => {
       keyExpiresAt: undefined,
       machineName: null,
       adminUrl: null,
+      needsSignature: false,
+      tailscaleVersion: null,
+      sendLogs: false,
     });
   });
 
@@ -217,16 +220,66 @@ describe("linkFace", () => {
     expect(linkFace("live", wire({ linkState: "expired" })).kind).toBe("offline");
   });
 
-  it("reads a link the tailnet keeps down for its logs as This Mac only, never as linked (TS-D16)", () => {
+  it("draws a network that requires device logs as its own face, never as linked (TS-D16)", () => {
     // The record stands, so a reading from the facts alone would say linked.
-    // Until its own face (TS-8b), the word draws the offline face, whose line
-    // is the menu word the thinking doc's §11 gives it.
-    const face = linkFace(
+    const standing = linkFace(
       "live",
-      wire({ linkState: "logs_required", link: LINK, meshEnabled: true, nodeState: "Stopped" }),
+      wire({
+        linkState: "logs_required",
+        link: LINK,
+        meshEnabled: true,
+        nodeState: "Stopped",
+        machineName: "truffle-vibefield-studio",
+        adminUrl: "https://login.tailscale.com/admin/machines",
+      }),
     );
-    expect(face).toEqual({ kind: "offline", nodeState: "Stopped" });
-    expect(linkLine(face, "darwin", Date.UTC(2026, 9, 27, 8)).detail).toBe("This Mac only");
+    expect(standing).toEqual({
+      kind: "logsRequired",
+      link: LINK,
+      machineName: "truffle-vibefield-studio",
+      adminUrl: "https://login.tailscale.com/admin/machines",
+    });
+    expect(hasLink(standing)).toBe(true);
+    // the menu reads This Mac only (DESIGN.md §9); a standing link sends its
+    // logs in Settings, so the row offers no second begin
+    const now = Date.UTC(2026, 9, 27, 8);
+    expect(linkLine(standing, "darwin", now)).toEqual({
+      detail: "This Mac only",
+      isLogin: false,
+      tone: "plain",
+      canLink: false,
+    });
+    // a capture the network refused has no record, and can begin again
+    const capture = linkFace("live", wire({ linkState: "logs_required", meshEnabled: true }));
+    expect(capture).toMatchObject({ kind: "logsRequired", link: null });
+    expect(hasLink(capture)).toBe(false);
+    expect(linkLine(capture, "darwin", now).canLink).toBe(true);
+  });
+
+  it("carries Tailnet Lock's hold, the embedded client and the logs opt-in on the linked face (T11, TS-8)", () => {
+    expect(
+      linkFace(
+        "live",
+        wire({
+          linkState: "linked",
+          link: LINK,
+          needsSignature: true,
+          tailscaleVersion: "1.104.1",
+          sendLogs: true,
+        }),
+      ),
+    ).toMatchObject({
+      kind: "linked",
+      needsSignature: true,
+      tailscaleVersion: "1.104.1",
+      sendLogs: true,
+    });
+    // a daemon that says none of them: no hold, no version, no logs
+    expect(linkFace("live", wire({ linkState: "linked", link: LINK }))).toMatchObject({
+      needsSignature: false,
+      tailscaleVersion: null,
+      sendLogs: false,
+    });
   });
 
   it("carries the floor's facts: the machine's name while capturing, the key's expiry when linked", () => {

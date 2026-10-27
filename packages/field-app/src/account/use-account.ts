@@ -124,6 +124,11 @@ export function linkLine(face: LinkFace, platform: string | undefined, now: numb
       return plain("Connecting…");
     case "approval":
       return plain("Waiting for approval");
+    case "logsRequired":
+      // TS-D16 — the menu reads "This Mac only" (DESIGN.md §9); its act is said
+      // where it is decided. A refused capture can begin again from the row; a
+      // standing link sends logs in Settings → Devices.
+      return plain(unlinkedWord(platform), face.link === null);
     case "signedOut":
       return {
         detail:

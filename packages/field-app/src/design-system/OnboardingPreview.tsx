@@ -67,6 +67,7 @@ const CONNECT_STATES = [
   "approval",
   "connected",
   "signed out",
+  "logs required",
   "refused",
   "quiet",
 ] as const;
@@ -77,8 +78,9 @@ const CONNECT_VARIANTS: Record<ConnectState, readonly string[]> = {
   opening: ["now", "slow"],
   "sign in": ["browser", "phone"],
   approval: [],
-  connected: ["your devices", "alone"],
+  connected: ["your devices", "alone", "not yet trusted"],
   "signed out": ["expired", "removed"],
+  "logs required": ["signing in", "connected before"],
   refused: ["taken", "tagged", "damaged"],
   quiet: ["loading", "unavailable", "no network part"],
 };
@@ -678,6 +680,7 @@ function ConnectPreview(): ReactElement {
         initialAside={connectAside(state, variant)}
         onBegin={pending}
         onRenew={pending}
+        onSendLogs={pending}
         onCancel={noop}
         onOpenAgain={noop}
         onCopyLink={async () => true}
@@ -850,6 +853,20 @@ function connectFace(state: ConnectState, variant: string): LinkFace {
         meshEnabled: true,
         nodeState: "Running",
         linkState: "linked",
+        ...facts,
+        tailscaleVersion: "1.104.1",
+        // T11 — up, and held by Tailnet Lock until a signing device signs it
+        needsSignature: variant === "not yet trusted",
+      });
+    case "logs required":
+      // TS-D16 — a network that requires device logs: a capture it refused, or
+      // a link that stood before the network turned its logging on
+      return linkFace("live", {
+        ...quiet,
+        link: variant === "connected before" ? linkRecord : null,
+        meshEnabled: true,
+        nodeState: "Stopped",
+        linkState: "logs_required",
         ...facts,
       });
     case "signed out":

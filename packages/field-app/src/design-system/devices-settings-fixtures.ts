@@ -13,7 +13,11 @@ export const DEVICES_FIXTURE_STATES = [
   "signing in",
   "approval",
   "expired",
+  "not yet trusted",
+  "logs sent",
+  "logs required",
   "disconnect",
+  "sign-out missed",
   "add a device",
 ] as const;
 export type DevicesFixtureState = (typeof DEVICES_FIXTURE_STATES)[number];
@@ -37,6 +41,8 @@ const FACTS = {
   machineName: "truffle-vibefield-studio",
   adminUrl: "https://login.tailscale.com/admin/machines",
 };
+/** The client a 0.7.24 floor embeds (TS-8), as Network details says it. */
+const CLIENT = { tailscaleVersion: "1.104.1", needsSignature: false, sendLogs: false };
 
 /** This Mac by the computer's name, as fieldd publishes it until the person
  * names it (TS-3b). */
@@ -58,6 +64,8 @@ export function devicesFixture(state: DevicesFixtureState): {
   face: LinkFace;
   sheet: DevicesSheet;
   devices: readonly DevicesRow[];
+  /** TS-D14 — the console a missed sign-out left this Mac in, said once */
+  signOutMissed?: { readonly adminUrl: string };
 } {
   const connected = linkFace("live", {
     ...QUIET,
@@ -66,6 +74,7 @@ export function devicesFixture(state: DevicesFixtureState): {
     nodeState: "Running",
     linkState: "linked",
     ...FACTS,
+    ...CLIENT,
     keyExpiresAt: Date.UTC(2027, 3, 24),
   });
   switch (state) {
@@ -80,6 +89,62 @@ export function devicesFixture(state: DevicesFixtureState): {
       };
     case "disconnect":
       return { face: connected, sheet: "disconnect", devices: ROSTER };
+    case "sign-out missed":
+      // TS-D14 — Disconnect done, but Tailscale never took the sign-out
+      return {
+        face: linkFace("live", { ...QUIET, linkState: "offline" }),
+        sheet: "none",
+        devices: ROSTER.slice(0, 1),
+        signOutMissed: { adminUrl: FACTS.adminUrl },
+      };
+    case "not yet trusted":
+      // T11 — up, and held by Tailnet Lock until a signing device signs it
+      return {
+        face: linkFace("live", {
+          ...QUIET,
+          link: LINK,
+          meshEnabled: true,
+          nodeState: "Running",
+          linkState: "linked",
+          ...FACTS,
+          ...CLIENT,
+          needsSignature: true,
+          keyExpiresAt: Date.UTC(2027, 3, 24),
+        }),
+        sheet: "none",
+        devices: ROSTER.slice(0, 1),
+      };
+    case "logs sent":
+      // TS-D16 — the person sends device logs on this network (Network details)
+      return {
+        face: linkFace("live", {
+          ...QUIET,
+          link: LINK,
+          meshEnabled: true,
+          nodeState: "Running",
+          linkState: "linked",
+          ...FACTS,
+          ...CLIENT,
+          sendLogs: true,
+          keyExpiresAt: Date.UTC(2027, 3, 24),
+        }),
+        sheet: "none",
+        devices: ROSTER,
+      };
+    case "logs required":
+      // TS-D16 — a standing link the network keeps down for its logs
+      return {
+        face: linkFace("live", {
+          ...QUIET,
+          link: LINK,
+          meshEnabled: true,
+          nodeState: "Stopped",
+          linkState: "logs_required",
+          ...FACTS,
+        }),
+        sheet: "none",
+        devices: ROSTER.slice(0, 1),
+      };
     case "add a device":
       return { face: connected, sheet: "add-device", devices: ROSTER };
     case "this Mac only":

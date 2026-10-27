@@ -41,6 +41,11 @@ export interface LinkDoor {
    * the phone's code instead of opening here. Resolves the refusal's words, or
    * null. */
   begin(options?: { authKey?: string; browser?: boolean }): Promise<string | null>;
+  /** TS-D16 — "Send logs on this network", on or off. A standing link keeps it in
+   * link.json and its node is built again with it (`user.link.logs`); a capture
+   * the network refused for its logs begins again sending them, and its new
+   * address opens when ready. */
+  sendLogs(send: boolean): Promise<string | null>;
   /** End a capture: the node stops, and the desktop is offline again. */
   cancel(): Promise<string | null>;
   /** Sign a signed-out link in again; the new address opens when ready. */
@@ -105,6 +110,14 @@ export function useLinkDoor(open: (url: string) => void = openSignIn): LinkDoor 
         "user.link.begin",
         options.authKey !== undefined ? { authKey: options.authKey } : {},
       );
+    },
+    sendLogs: (send) => {
+      if (send && face.kind === "logsRequired" && face.link === null) {
+        wants.current = true;
+        return act("user.link.begin", { sendLogs: true });
+      }
+      wants.current = false;
+      return act("user.link.logs", { send });
     },
     cancel: () => {
       wants.current = false;

@@ -231,7 +231,7 @@ describe("Settings → Devices: the Tailscale card (TS-D1, TS-D2, TS-D4)", () =>
     expect(button("Use another account")).not.toBeUndefined();
   });
 
-  it("disconnects through a sheet that says where the record stays (TS-D14)", async () => {
+  it("disconnects through a sheet that says it signs out of Tailscale too (TS-D14)", async () => {
     host(null);
     const fieldd = client({ link: LINKED() });
     await mount(fieldd);
@@ -239,7 +239,9 @@ describe("Settings → Devices: the Tailscale card (TS-D1, TS-D2, TS-D4)", () =>
     // the sheet asks; nothing has happened yet
     expect(fieldd.request).not.toHaveBeenCalled();
     expect(text()).toContain("Disconnect this Mac?");
-    expect(text()).toContain("stays listed in your admin console until you remove it there");
+    expect(text()).toContain("It signs out of Tailscale too.");
+    // where the record stays is said only after a sign-out that missed (below)
+    expect(text()).not.toContain("stays listed in your admin console");
     await act(async () => button("Disconnect")?.click());
     expect(fieldd.request).toHaveBeenCalledWith("user.link.unlink", {});
   });
@@ -516,5 +518,139 @@ describe("Settings → Devices: this Mac's own name (TS-3b, P9, TS-D17 A)", () =
     );
     // the field stays, with the words to fix
     expect(container?.querySelector('input[aria-label="This Mac\'s name"]')).not.toBeNull();
+  });
+});
+
+/** `client`, with a hand on the link's subscription: `push` moves it as the
+ * daemon would after an act, for every subscriber (the door's and the head's). */
+function pushable(options: {
+  link: unknown;
+  request: (method: string, params: unknown) => Promise<unknown>;
+}): { fieldd: FielddClient; push: (status: unknown) => Promise<void> } {
+  const fieldd = client({ link: options.link });
+  const onLink: Array<(status: unknown) => void> = [];
+  const subscribe = fieldd.subscribe as unknown as ReturnType<typeof vi.fn>;
+  const base = subscribe.getMockImplementation();
+  subscribe.mockImplementation(
+    async (method: string, params: unknown, onEvent?: (status: unknown) => void) => {
+      if (method === "user.link.subscribe" && onEvent !== undefined) onLink.push(onEvent);
+      return base?.(method, params, onEvent);
+    },
+  );
+  (fieldd.request as ReturnType<typeof vi.fn>).mockImplementation(options.request);
+  return {
+    fieldd,
+    push: async (status) => {
+      await act(async () => {
+        for (const onEvent of onLink) onEvent(status);
+      });
+    },
+  };
+}
+
+describe("Settings → Devices on truffle 0.7.24 (TS-8b; TS-D14, D15, D16 A, T11)", () => {
+  /** A standing link the network keeps down for sending no device logs. */
+  const LOGS_REQUIRED = (): Record<string, unknown> =>
+    LINKED({ linkState: "logs_required", nodeState: "Stopped" });
+
+  const logsSwitch = (): HTMLButtonElement | null | undefined =>
+    container?.querySelector<HTMLButtonElement>(
+      '[role="switch"][aria-label="Send logs on this network"]',
+    );
+
+  it("says a network requires device logs, and Send logs on this network keeps the opt-in (TS-D16)", async () => {
+    host(null);
+    const fieldd = client({ link: LOGS_REQUIRED() });
+    await mount(fieldd);
+    const state = container?.querySelector(".vf-devices-state");
+    expect(state?.textContent).toBe("Needs device logs");
+    expect(state?.getAttribute("data-tone")).toBe("attention");
+    expect(text()).toContain("VibeField sends none, so this Mac can't join this network.");
+    // a standing link is offered no second begin and nothing to cancel
+    expect(linkAct()).toBeUndefined();
+    expect(button("Cancel")).toBeUndefined();
+    await act(async () => button("Send logs on this network")?.click());
+    expect(fieldd.request).toHaveBeenCalledTimes(1);
+    expect(fieldd.request).toHaveBeenCalledWith("user.link.logs", { send: true });
+  });
+
+  it("begins a capture the network refused again, sending logs, or ends it (TS-D16)", async () => {
+    host(null);
+    const fieldd = client({ link: { ...OFFLINE, meshEnabled: true, linkState: "logs_required" } });
+    await mount(fieldd);
+    expect(container?.querySelector(".vf-devices-state")?.textContent).toBe("Needs device logs");
+    await act(async () => button("Send logs on this network")?.click());
+    expect(fieldd.request).toHaveBeenLastCalledWith("user.link.begin", { sendLogs: true });
+    await act(async () => button("Cancel")?.click());
+    expect(fieldd.request).toHaveBeenLastCalledWith("user.link.cancel", {});
+  });
+
+  it("says Tailnet Lock holds a connected Mac until a signing device trusts it (T11)", async () => {
+    host(null);
+    await mount(client({ link: LINKED({ needsSignature: true }) }));
+    const state = container?.querySelector(".vf-devices-state");
+    expect(state?.textContent).toBe("Not yet trusted");
+    expect(state?.getAttribute("data-tone")).toBe("attention");
+    expect(text()).toContain("Your network uses Tailnet Lock.");
+    // it is connected: its acts stay
+    expect(button("Disconnect…")).not.toBeUndefined();
+  });
+
+  it("names the embedded client, and sends logs from Network details' switch (TS-D15, D16)", async () => {
+    host(null);
+    const fieldd = client({ link: LINKED({ tailscaleVersion: "1.104.1" }) });
+    await mount(fieldd);
+    expect(text()).toContain("Tailscale 1.104.1");
+    expect(text()).toContain("Off · VibeField sends none");
+    expect(logsSwitch()?.getAttribute("aria-checked")).toBe("false");
+    await act(async () => logsSwitch()?.click());
+    expect(fieldd.request).toHaveBeenCalledWith("user.link.logs", { send: true });
+  });
+
+  it("reads Sent on this network once the person said so, and the switch turns it off", async () => {
+    host(null);
+    const fieldd = client({ link: LINKED({ sendLogs: true }) });
+    await mount(fieldd);
+    expect(text()).toContain("Sent on this network");
+    expect(logsSwitch()?.getAttribute("aria-checked")).toBe("true");
+    await act(async () => logsSwitch()?.click());
+    expect(fieldd.request).toHaveBeenCalledWith("user.link.logs", { send: false });
+  });
+
+  it("says once, on the page, that a Disconnect could not sign out at Tailscale (TS-D14)", async () => {
+    host(null);
+    const { fieldd, push } = pushable({
+      link: LINKED(),
+      request: async (method) =>
+        method === "user.link.unlink" ? { retired: true, signedOut: false } : { ok: true },
+    });
+    await mount(fieldd);
+    await act(async () => button("Disconnect…")?.click());
+    await act(async () => button("Disconnect")?.click());
+    await act(flush);
+    await push(OFFLINE);
+    expect(text()).toContain(
+      "This Mac couldn't reach Tailscale to sign out, so it stays listed in your admin console until you remove it there.",
+    );
+    const manage = Array.from(container?.querySelectorAll("a") ?? []).find(
+      (anchor) => anchor.textContent === "Manage in Tailscale ↗",
+    );
+    expect(manage?.getAttribute("href")).toBe("https://login.tailscale.com/admin/machines");
+  });
+
+  it("says nothing more after a Disconnect that signed out", async () => {
+    host(null);
+    const { fieldd, push } = pushable({
+      link: LINKED(),
+      request: async (method) =>
+        method === "user.link.unlink" ? { retired: true, signedOut: true } : { ok: true },
+    });
+    await mount(fieldd);
+    await act(async () => button("Disconnect…")?.click());
+    await act(async () => button("Disconnect")?.click());
+    await act(flush);
+    await push(OFFLINE);
+    expect(container?.querySelector(".vf-devices-state")?.textContent).toBe("This Mac only");
+    expect(text()).not.toContain("couldn't reach Tailscale");
   });
 });

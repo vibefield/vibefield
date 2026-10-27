@@ -611,6 +611,17 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(frame("connect").textContent).toContain("Sign in to Tailscale again.");
     await choose("connect", "removed");
     expect(frame("connect").textContent).toContain("This Mac was removed from your network.");
+    // TS-8b — a network that requires device logs, refusing a capture or a link
+    // that stood before, and a Mac Tailnet Lock holds (DESIGN.md §9)
+    await choose("connect", "logs required");
+    expect(frame("connect").textContent).toContain("Your network requires device logs.");
+    expect(frame("connect").textContent).toContain("Send logs on this network");
+    await choose("connect", "connected before");
+    expect(frame("connect").textContent).toContain("Your network requires device logs.");
+    await choose("connect", "connected");
+    await choose("connect", "not yet trusted");
+    expect(frame("connect").textContent).toContain("Connected, not yet trusted.");
+    expect(frame("connect").textContent).toContain("truffle-vibefield-studio");
     await choose("connect", "refused");
     expect(frame("connect").textContent).toContain("That account already has a field here.");
     expect(frame("connect").textContent).toContain('the local user "Work" is already linked');

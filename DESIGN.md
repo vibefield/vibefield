@@ -1278,7 +1278,8 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   place: VibeField learns your login and which of your devices are signed in; it joins as its own
   device, with no VPN prompt and no change to this Mac's network settings; only you can reach this
   Mac; your work goes device to device and Tailscale sees which devices connect, never what they
-  send; Settings → Devices → Disconnect undoes it. **One click to the browser** (TS-D5): the button
+  send; VibeField sends Tailscale no device logs (TS-D15); Settings → Devices → Disconnect undoes
+  it. **One click to the browser** (TS-D5): the button
   becomes its status ("Opening Tailscale…", M1), and the browser opens the moment the address
   arrives, once, because the person clicked. **Waiting** names two true steps — "Sign in or create
   an account at Tailscale" → "This Mac joins your network" — the live one breathing (§6's loop),
@@ -1309,11 +1310,12 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   the sign-in's renewal as "Due by 2 Nov" (the attention ink and **Sign in again** once due);
   **Your devices** — quiet rows: an OS mark (§13's set), the name, one word, and Add a device;
   **New projects** — the sync posture's two cards, moved from Account; **Network details**,
-  collapsed — today's mesh diagnostics in the panel's mono vocabulary, connection paths, and the
-  embedded client's version. Sheets: **Disconnect** signs this Mac out of Tailscale, then archives
-  its identity (TS-D14; until truffle can sign out, it archives and says the record stays in the
-  admin console until removed there) · **Add a device** (Phone | Computer) · **Use another
-  account** → New user… (TS-D12).
+  collapsed — today's mesh diagnostics in the panel's mono vocabulary, connection paths, the
+  embedded client's version, and **Device logs** with its switch, **Send logs on this network**
+  (TS-D16). Sheets: **Disconnect** signs this Mac out of Tailscale, then archives its identity
+  (TS-D14; on truffle 0.7.24 it signs out first, and only a sign-out that could not reach
+  Tailscale leaves the record in the admin console, which the page then says once) · **Add a
+  device** (Phone | Computer) · **Use another account** → New user… (TS-D12).
 - **Asking again** (track TS, TS-D7 ruled 2026-10-27; TS-L6): someone who said Not now said it
   before they had a reason, so the offer returns only where a connected device would do the job —
   the face menu's row (always, while not connected); a ghost row, "Your other devices", in
@@ -3255,6 +3257,26 @@ sign-in this session started); **‹name› joined your devices** · "It can rea
 reach it." (a device's first appearance, never the account's existing devices); **Tailscale sign-in
 renews in 3 days** ("tomorrow", "today") · "Sign in again on This Mac to keep your devices
 connected." (once per expiry date). Each opens Settings → Devices.
+*Amended 2026-10-27 (track TS, on truffle 0.7.24; TS-D14, D15, D16 A, T11):* four more, each where it
+is decided. **A network that requires logs** (TS-D16): the menu reads "This Mac only", and the card's
+word is "Needs device logs" in the attention ink. The pane says **Your network requires device logs.**
+· "Your Tailscale network's admin turned on network logging, which needs every device to send its logs
+to Tailscale. VibeField sends none, so this Mac can't join this network." Its acts are **Send logs on
+this network** (the primary) and **Manage in Tailscale ↗**; a capture asks the same, and Not now
+leaves it. **Network details** says the embedded client as "Tailscale 1.104.1" in mono, under
+Version, and **Device logs** as "Off · VibeField sends none", or "Sent on this network", beside the
+switch **Send logs on this network**. **Disconnect**'s sheet says "This Mac leaves your devices: your phone and other
+computers stop reaching this field, and everything on this Mac stays. It signs out of Tailscale too."
+Only a sign-out that could not reach Tailscale adds, once, on the page: "This Mac couldn't reach
+Tailscale to sign out, so it stays listed in your admin console until you remove it there." with
+Manage in Tailscale ↗. **Tailnet Lock** (T11) holds a running node until a signing device signs it:
+the card's word is "Not yet trusted", and the pane says **Connected, not yet trusted** · "Your network
+uses Tailnet Lock. Until a device that can sign trusts this Mac, it can't reach your other devices,
+and they can't reach it." with the machine name in mono, Copy, and Manage in Tailscale ↗. *James ruled
+the words new here as drafted, at the board on 2026-10-27 23:08:57Z: the card's two words, Version,
+Device logs' two readings, Disconnect's sentences and Tailnet Lock's. While Tailnet Lock holds this
+Mac, the Me menu keeps the login line (23:08:59Z). The words for a network that requires logs are the
+thinking doc's §11, ruled with TS-D16.*
 
 **The agents' words** (track AO, ruled 2026-10-27; AO-L8, no machinery on screen). One word per thing,
 in the Setup Assistant, Settings, History and the launcher alike. An **agent** is named by the

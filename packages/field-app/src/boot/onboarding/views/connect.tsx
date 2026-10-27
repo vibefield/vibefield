@@ -58,6 +58,9 @@ export interface ConnectPaneProps {
   /** A signed-out link signs in again on its own identity (its key lapsed, or
    * it was removed): `user.link.renew`, never a second begin. */
   onRenew: () => void;
+  /** TS-D16 — Send logs on this network: the door's act, for a standing link
+   * and for a capture the network refused alike. */
+  onSendLogs: () => void;
   onCancel: () => void;
   onOpenAgain: () => void;
   onCopyLink: () => Promise<boolean>;
@@ -441,7 +444,68 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
       );
     }
 
+    case "logsRequired":
+      // TS-D16 — a network that requires device logs keeps this Mac out until the
+      // person sends them on this network; Not now leaves it (DESIGN.md §9)
+      return (
+        <WizardPane
+          eyebrow="Your devices"
+          title="Your network requires device logs."
+          voice="Your Tailscale network's admin turned on network logging, which needs every device to send its logs to Tailscale. VibeField sends none, so this Mac can't join this network."
+          onSubmit={props.onSendLogs}
+          actions={
+            <>
+              <button type="submit" className={primaryCls} disabled={step.kind === "pending"}>
+                Send logs on this network
+              </button>
+              {face.adminUrl !== null && (
+                <a className={quietCls} href={face.adminUrl} target="_blank" rel="noreferrer">
+                  Manage in Tailscale ↗
+                </a>
+              )}
+              <SkipAction label="Not now" onSkip={props.onSkip} />
+            </>
+          }
+        >
+          {step.kind === "failed" && <WizardError reason={step.reason} />}
+        </WizardPane>
+      );
+
     case "linked": {
+      if (face.needsSignature) {
+        // T11 — up, but Tailnet Lock holds this Mac until a signing device signs
+        // it: the signer finds it by the name Tailscale shows (DESIGN.md §9)
+        const machine = face.machineName;
+        return (
+          <WizardPane
+            eyebrow="Your devices"
+            title="Connected, not yet trusted."
+            voice="Your network uses Tailnet Lock. Until a device that can sign trusts this Mac, it can't reach your other devices, and they can't reach it."
+            onSubmit={props.onContinue}
+            actions={
+              <>
+                <button type="submit" className={primaryCls}>
+                  Continue
+                </button>
+                {machine !== null && (
+                  <CopyButton label="Copy" copy={() => props.onCopyText(machine)} />
+                )}
+                {face.adminUrl !== null && (
+                  <a className={quietCls} href={face.adminUrl} target="_blank" rel="noreferrer">
+                    Manage in Tailscale ↗
+                  </a>
+                )}
+              </>
+            }
+          >
+            {machine !== null && (
+              <p className={factCls}>
+                This Mac shows as <span className="font-mono">{machine}</span>.
+              </p>
+            )}
+          </WizardPane>
+        );
+      }
       const alone = devices.filter((device) => device.self !== true).length === 0;
       const arrived: readonly DoorDevice[] =
         devices.length > 0

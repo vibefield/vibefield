@@ -242,3 +242,35 @@ describe("the phone's code (TS-D6)", () => {
     expect(qrMatrix("https://login.tailscale.com/a/1a2b3c4d5e6f")).toEqual(matrix);
   });
 });
+
+describe("Send logs on this network (TS-D16)", () => {
+  const LOGS_REQUIRED = { ...OFFLINE, meshEnabled: true, linkState: "logs_required" };
+
+  it("keeps a standing link's opt-in through user.link.logs, and opens nothing", async () => {
+    const harness = await mountDoor(async () => ({ ok: true }));
+    await harness.push({
+      ...LOGS_REQUIRED,
+      link: { login: "james@example.com", linkedAt: "2026-08-05T09:00:00.000Z" },
+    });
+    await act(async () => {
+      await harness.door().sendLogs(true);
+    });
+    expect(harness.client.request).toHaveBeenLastCalledWith("user.link.logs", { send: true });
+    await act(async () => {
+      await harness.door().sendLogs(false);
+    });
+    expect(harness.client.request).toHaveBeenLastCalledWith("user.link.logs", { send: false });
+    expect(harness.opened).toEqual([]);
+  });
+
+  it("begins a capture the network refused again, sending logs, and opens its new address once", async () => {
+    const harness = await mountDoor(async () => capturing(null));
+    await harness.push(LOGS_REQUIRED);
+    await act(async () => {
+      await harness.door().sendLogs(true);
+    });
+    expect(harness.client.request).toHaveBeenLastCalledWith("user.link.begin", { sendLogs: true });
+    await harness.push(capturing("https://login.tailscale.com/a/with-logs"));
+    expect(harness.opened).toEqual(["https://login.tailscale.com/a/with-logs"]);
+  });
+});

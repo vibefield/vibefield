@@ -80,6 +80,7 @@ export function ConnectPane({
       slow={slow}
       onBegin={(options) => void door.begin(options)}
       onRenew={() => void door.renew()}
+      onSendLogs={() => void door.sendLogs(true)}
       onCancel={() => void door.cancel()}
       onOpenAgain={door.openAgain}
       onCopyLink={door.copyLink}
