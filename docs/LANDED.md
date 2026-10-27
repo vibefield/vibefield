@@ -16127,3 +16127,92 @@ orchestrator and derives it done from the link.
 **Validation.** Docs only, so verify executes nothing new. Four field-app tests read named DESIGN.md sentences
 (`godview-head`, `godview-deck-edge`, `project-ink`, `line-model`); the diff only adds lines, and none of them reads
 an amended paragraph's old words.
+
+## TS-1 — no dead ends: a capture waits on the person, not a timer; approval, a lapsed key and a removed device are named states; success lands on the floor's word, not a 15 s poll; cancel, renew and auth keys (2026-10-27; `029af0e6f`, lane `ts/1-plumbing`)
+
+**What.** Track TS's first code slice (`draft/thinking-tailscale-onboarding.md` §10): contracts · field-native ·
+fieldd, plus one tolerant-reader change in field-app. It closes the plumbing gaps 11–15 and P7. The audit read those
+gaps in code (05:00–05:15Z on `e4f910ac6`) and did not reproduce them, so each was turned red first here:
+- **Gap 12, the five-minute dead end.** The floor builds both modes with `start_timeout(None)`
+  (`NativeConfig::mesh_start_timeout`, `None` in all three constructors). A capture now waits on the person, never on
+  truffle's 300 s default.
+- **Gap 13, approval.** The bring-up's `on_network_status` hook keeps `LinkFacts`: device approval, the hosted
+  console's Machines page, the key's expiry, and the machine name (truffle's own composition before the node is up,
+  the granted name after). The unit says "waiting for device approval", and fieldd reads `awaiting_approval`.
+- **Gap 14, expiry.** A 15 s tick reads the installed node's cached backend state for NeedsLogin. truffle 0.7.23
+  raises no event for it; that is petition T10.
+  - A signed-out node is degraded with the words "signed out of the tailnet: sign in again".
+  - fieldd reads `expired` when the key's time has passed, or is unknown. It reads `removed` when the key still had
+    time.
+  - The expiry is kept in link.json, for display only.
+  - `user.link.renew` asks the floor to rebuild the node on its own identity (`native.mesh.start {renew}`). The
+    build's interactive login hands out the new address.
+- **Gap 11, the 15 s probe.** The mesh unit's health delta brings LinkService's probe forward (`noteFloorHealth`,
+  with a 50 ms settle). The daemon-level row lands a sign-in in under 3 s; the probe took 15.
+- **Gap 15, no cancel.** `user.link.cancel` stops a capture or an approval wait, and the desktop is offline again. A
+  link that already stands answers its status: only unlink ends a link.
+- **P7, auth keys.** `user.link.begin {authKey}` becomes `native.mesh.start {mode: capture, authKey}`. The key is held
+  for one bring-up, has a redacted Debug and is never logged. The audit records `signIn: auth_key | browser`.
+- **Found while building:**
+  - A sidecar that exits on its own now takes its node down (typed `sidecar_exited`). Before, a dead node read as up.
+  - Each bring-up carries a generation. A superseded hook writes nothing, and a racing build installs nothing.
+  - A floor that states its posture (`mode`) is never re-asked on a lagging `disabled` read. This is UA-P-0k's stale
+    read, settled by the floor's own word.
+  - A capture the floor still holds when fieldd boots is adopted, because since P3 a capture outlives its fieldd.
+- **contracts:**
+  - UserLinkState gains `awaiting_approval`, `expired` and `removed`.
+  - UserLinkStatus gains machineName, adminUrl, keyExpiresAt and failure.
+  - UserLinkBeginParams, MeshNotUpDetails and MeshFailure are new.
+  - MeshStartParams gains authKey and renew.
+  - MeshSelfIdentity gains mode, machineName, keyExpiresAt, keyExpiryDisabled, adminUrl and needsLogin.
+  - Five new fixtures are parsed on both sides (EL9).
+  - Expiry is two fields on the floor's wire, because typify cannot tell `null` from absent. MeshNotUpDetails
+    restates its fields, because typify cannot follow zod `.extend`'s `$ref`s.
+- **The `hostname` crate.** Version 0.4.2 becomes a direct field-native dependency. That version was already in the
+  lock, so Cargo.lock gains one line (field-native's own entry) and no package.
+- **field-app** reads the three new states as the faces they had before, until TS-2 draws their own. An approval wait
+  stays a capture face, because an offline face would offer the act again and restart the wait.
+
+**Validation.**
+- **The lane.** `/Volumes/SamsungRed/lanes/ts1` on this Mac, at nice 19, with the guard read before each arm. It used
+  `CARGO_INCREMENTAL=0` and its own target (no debug info, 1.5 GiB). It rebased from `23615cc1f` on `a135ea795`, to
+  `10b1aaf07` (CLAUDE.md only), then to `a52ad14a7` (AO-0, records only); the range-diff is `=` at each step.
+- **`pnpm gen`**'s output is committed, and was regenerated after the rebase onto the AL contracts. clippy
+  `--all-targets -D warnings` is clean.
+- **field-native's TS-1 binaries, three times:** fixture_parity 17 and mesh_unit 18 (+1 ignored) each time;
+  mgmt_server 26, then 29, then 29 (the first run came before its last three rows). The third ran in the window at
+  the code tip (08:40:19–08:41:12Z, before the records-only rebase): green, no stub left.
+- **fieldd** link-service + link-posture-daemon: 39/39. **field-app** account-link: 17/17.
+- **`pnpm verify`** at the tip on `10b1aaf07` (logs/verify/verify.log, 08:41:15–08:49:00Z): EXIT 1 on ONE row. The
+  load was 15.9 at the arm and 206 at the end, with a second lane's install and tests beside it.
+  - The row: `agent-session.test.ts` MF-1f/MF-1g ("resume hands the pane over …: the row's condition did not hold
+    within 15000 ms"), the recorded lottery family. AL's second verify failed on the same row (LANDED "AL").
+  - Every stage before the tests passed: typecheck, biome, rustfmt, clippy, bundle.
+  - Every other project's tests passed: fieldd 2497 of 2509 (11 skipped), field-app 218 files, electron-shell 142,
+    dev-runner 256/256.
+  - Verify stops at its first red stage. VF-PM ruled AL's precedent (08:50Z): the row, and the stages verify never
+    reached, ran alone at nice 19 under the guard:
+    - the row's file alone: 46 passed, 2 skipped; MF-1f/MF-1g ✓ in 678 ms (logs/alone/a-agent-session.log,
+      08:52Z);
+    - `pnpm test:rust` alone at `029af0e6f`: EXIT 0, 31 suites, 474 passed, 0 failed (09:52:52–09:54:49Z;
+      logs/alone/b-test-rust.log);
+    - `pnpm gen:check` alone at `029af0e6f`: EXIT 0, the tree clean after it (09:55:06–09:55:14Z;
+      logs/alone/c-gen-check.log).
+- **Red-first by mutation, 9/9.** Each mutant went red, and each file was restored byte for byte after.
+  - fieldd: without the push, the daemon row times out at 3.2 s. Without the mode gate, the posture row fails.
+    Without not-up settling, the expired and approval rows fail.
+  - field-native: no timeout, no approval fact, no tick, no renewal bypass, no exit teardown, no key.
+- **The live probe** (`mesh_capture_probe.rs`, `#[ignore]`) ran twice on the test tailnet, by name, under VF-PM's rules.
+  - The floor's own capture signed in with the `.env` key, headless for the first time. It was up in 2.2 s.
+  - The real 0.7.23 sidecar sent the protocol-10 facts: the granted name, a 180-day expiry and the Machines URL.
+  - The promotion was gated on the floor's own login, with one sidecar.
+  - A witness node saw the node within 1.0 s. It was gone from the witness's device list at the first read after stop.
+    Both were ephemeral nodes, with a probe app id and name.
+  - The kept log holds 0 key occurrences.
+- **Logs:** `logs/` holds clippy, fn-tests-1/2, fieldd-link, mutation/, mutation-fn/, probe, probe-2 and gen-rebased.
+
+**Owed.**
+- renew's live half, which needs a person to expire a key in the admin console.
+- The words a person sees; they come with TS-2.
+- Four petitions are with focus-session: T9, T10 and T11 as one truffle release, then T8 after its probe.
+- TS-D16 (ruled A at 08:19Z) binds once T10 ships.
