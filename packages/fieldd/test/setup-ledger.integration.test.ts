@@ -96,6 +96,22 @@ describe("the setup ledger's doors (AO-2)", () => {
     const refused = await window.callErr("setup.answer", { step: "skills", state: "later" });
     expect(refused.data?.kind).toBe("PRECONDITION_FAILED");
     expect(refused.message).toContain("agents|profiles|history|devices");
+
+    // AO-6b (AO-D15) — a moment's Not now, beside the steps, in the same file
+    const retired = await window.call("setup.moment", { moment: "limit", state: "retired" });
+    expect(retired).toMatchObject({ moments: { limit: { state: "retired" } } });
+    expect(JSON.parse(readFileSync(file, "utf8"))).toMatchObject({
+      moments: { limit: { state: "retired" } },
+    });
+    // TS-D18 — a keyed moment: one record per name and key, the key as written
+    const joined = "device-joined:01JB8ZQ4N7M2X5K9T3V6W8Y0RC";
+    await window.call("setup.moment", { moment: joined, state: "retired" });
+    expect(JSON.parse(readFileSync(file, "utf8")).moments).toMatchObject({
+      limit: { state: "retired" },
+      [joined]: { state: "retired" },
+    });
+    const malformed = await window.callErr("setup.moment", { moment: "Limit", state: "retired" });
+    expect(malformed.data?.kind).toBe("PRECONDITION_FAILED");
   });
 
   it("requires both the local scope and a trusted desktop client kind", async () => {

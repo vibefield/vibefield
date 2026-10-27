@@ -1320,6 +1320,13 @@ export const METHODS: MethodDef[] = [
   }),
   defineMethod({
     surface: "product",
+    method: "setup.moment",
+    scope: "settings.manage",
+    idempotent: true, // declarative: the same answer twice is written once
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
     method: "setup.hide",
     scope: "settings.manage",
     idempotent: true,

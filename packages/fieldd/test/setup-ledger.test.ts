@@ -63,6 +63,19 @@ describe("the setup ledger store (AO-2)", () => {
     });
   });
 
+  it("retires a moment once, beside the steps, and keeps it across a restart (AO-6b)", () => {
+    const path = ledgerPath();
+    const store = new SetupLedgerStore({ path });
+    expect(store.moment("limit", "retired")).toBe(true);
+    expect(store.moment("limit", "retired")).toBe(false);
+    store.answer("history", "answered");
+    const again = new SetupLedgerStore({ path });
+    expect(again.snapshot()).toMatchObject({
+      steps: { history: { state: "answered" } },
+      moments: { limit: { state: "retired" } },
+    });
+  });
+
   it("hides Finish setting up, and says each change to its listeners as a snapshot", () => {
     const store = new SetupLedgerStore({ path: ledgerPath() });
     const seen: unknown[] = [];

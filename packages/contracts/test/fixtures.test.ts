@@ -215,7 +215,7 @@ import {
   ScreenshotHelperCommand,
   ScreenshotHelperEvent,
 } from "../src/screenshot";
-import { SetupAnswerParams, SetupLedger } from "../src/setup";
+import { SetupAnswerParams, SetupLedger, SetupMomentParams } from "../src/setup";
 import {
   ShellExitRecord,
   SystemShellAttachResult,
@@ -551,6 +551,9 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // device-local file the name is kept in
   "device-rename-params": DeviceRenameParams,
   "device-name-file": DeviceNameFile,
+  // AO-6b (AO-D15) — the moments beside the steps, and one moment's answer
+  "setup-ledger-moments": SetupLedger,
+  "setup-moment-params": SetupMomentParams,
   "agent-persona": AgentPersona,
   "agent-distribution": AgentDistributionRecord,
   "agents-installs": AgentsInstallsResult,

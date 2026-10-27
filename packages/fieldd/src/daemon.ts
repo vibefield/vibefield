@@ -139,6 +139,7 @@ import {
   SettingsSubscribeParams,
   SetupAnswerParams,
   SetupHideParams,
+  SetupMomentParams,
   ShellDialogPickFolderParams,
   type ShellDialogPickFolderResult,
   ShellOpenExternalParams,
@@ -5587,6 +5588,19 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         );
       }
       setupLedger.answer(parsed.data.step, parsed.data.state);
+      return setupLedger.snapshot();
+    });
+    api.register("setup.moment", (ctx, params) => {
+      requireDesktopCaller(ctx);
+      const parsed = SetupMomentParams.safeParse(params);
+      if (!parsed.success) {
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { moment: <name> or <name>:<key>, state: retired }",
+          false,
+        );
+      }
+      setupLedger.moment(parsed.data.moment, parsed.data.state);
       return setupLedger.snapshot();
     });
     api.register("setup.hide", (ctx, params) => {

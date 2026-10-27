@@ -3,8 +3,11 @@ import { dirname } from "node:path";
 import {
   emptySetupLedger,
   SetupLedger,
+  type SetupMomentKey,
+  type SetupMomentState,
   type SetupStep,
   type SetupStepState,
+  setupMomentState,
   setupStepState,
 } from "@vibefield/contracts";
 import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/logging";
@@ -46,6 +49,19 @@ export class SetupLedgerStore {
   answer(step: SetupStep, state: SetupStepState): boolean {
     if (setupStepState(this.ledger, step) === state) return false;
     this.ledger.steps[step] = { state, at: this.now().toISOString() };
+    this.commit();
+    return true;
+  }
+
+  /** AO-6b (AO-D15) — record one moment's answer beside the steps (Not now
+   * retires it for good). Declarative, and a newer build's row for it is
+   * replaced, as `answer` does. Returns whether the ledger changed. */
+  moment(moment: SetupMomentKey, state: SetupMomentState): boolean {
+    if (setupMomentState(this.ledger, moment) === state) return false;
+    this.ledger.moments = {
+      ...(this.ledger.moments ?? {}),
+      [moment]: { state, at: this.now().toISOString() },
+    };
     this.commit();
     return true;
   }

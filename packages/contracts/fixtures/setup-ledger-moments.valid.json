@@ -1,0 +1,12 @@
+{
+  "format": 1,
+  "steps": {
+    "agents": { "state": "answered", "at": "2026-10-27T05:41:02.000Z" },
+    "history": { "state": "answered", "at": "2026-10-27T05:41:30.000Z" }
+  },
+  "hidden": false,
+  "moments": {
+    "limit": { "state": "retired", "at": "2026-10-27T16:10:00.000Z" },
+    "agent-past:codex": { "state": "retired", "at": "2026-10-27T05:41:30.000Z" }
+  }
+}
