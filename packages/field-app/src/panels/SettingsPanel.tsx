@@ -337,12 +337,19 @@ export function SettingsPanel({
     setActivePage("diagnostics");
   }, [diagnosticsRequest]);
 
+  // What had the keyboard as Settings opened, read as it first renders: a page
+  // that moves the focus as it mounts (Agent Profiles' New profile…, AO-6b3)
+  // runs its effect before this panel's, so read there it would be a node of
+  // this dialog. It is given back on close only while it is still in the page.
+  const [opener] = useState(() =>
+    document.activeElement instanceof HTMLElement ? document.activeElement : null,
+  );
   useEffect(() => {
-    const previouslyFocused =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
     dialogRef.current?.focus();
-    return () => previouslyFocused?.focus();
-  }, []);
+    return () => {
+      if (opener?.isConnected === true) opener.focus();
+    };
+  }, [opener]);
 
   useEffect(() => {
     // Finish setting up's sheet sits over this dialog and keeps the keys while

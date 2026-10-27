@@ -1,4 +1,4 @@
-import type { AgentProfileSet, DeviceInfo } from "@vibefield/contracts";
+import type { AgentAccountUsageEntry, AgentProfileSet, DeviceInfo } from "@vibefield/contracts";
 import type { AccountUsagePort, HistoryPort } from "@vibefield/puppeteer-views";
 import type { DeckPlaced } from "../deck-placement";
 import type { RecordedLanesPort } from "./monitor-history";
@@ -11,6 +11,10 @@ export type MonitorFeedState =
  * parse failures beside it, without inventing an empty usage batch. */
 export interface MonitorUsagePort extends AccountUsagePort {
   subscribeState?(listener: (state: MonitorFeedState) => void): () => void;
+  /** AO-6b3 — fieldd's own rows, as the column's feed delivers them: the
+   * limit moment reads the readings the column draws, through the column's
+   * one subscription, and opens none of its own. The latest rows at once. */
+  subscribeRows?(listener: (rows: readonly AgentAccountUsageEntry[]) => void): () => void;
 }
 
 /**

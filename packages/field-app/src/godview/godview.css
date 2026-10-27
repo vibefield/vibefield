@@ -36,6 +36,8 @@
   --deck-well-edge: var(--vf-godview-light-well-edge);
   --deck-well-rim: var(--vf-godview-light-well-rim);
   --deck-well-shade: var(--vf-godview-light-well-shade);
+  /* §2.7 — the attention ink for a state word that has to be read (AO-6b3) */
+  --vf-monitor-ink-attention: var(--vf-godview-light-ink-attention);
   color-scheme: light;
 }
 
@@ -72,6 +74,7 @@
   --deck-well-edge: var(--vf-godview-dark-well-edge);
   --deck-well-rim: var(--vf-godview-dark-well-rim);
   --deck-well-shade: var(--vf-godview-dark-well-shade);
+  --vf-monitor-ink-attention: var(--vf-godview-dark-ink-attention);
   color-scheme: dark;
 }
 
@@ -536,24 +539,37 @@
   left: 72px;
   width: min(300px, calc(100% - 96px));
   display: flex;
-  flex-wrap: wrap;
   align-items: baseline;
   gap: 8px;
   color: var(--text-main);
   pointer-events: none;
 }
 
-/* AO-6b (DESIGN.md §8 "The moments") — the limit moment: VibeField's card on
-   its claims strip, under the counts, once. The strip measures it, so the
-   swarm steers around it as around the counts. Godview's instrument skin (its
-   panel, border and inks follow Godview's theme, not the app's), the
-   attention ink for the window running out, and the profile notice's 300ms
-   entry — a transition, never a keyframe (the overlay runs none). */
+/* AO-6b (DESIGN.md §8 "The moments"; one row since AO-6b3) — the limit
+   moment: VibeField's row on its claims strip, once, after the counts on
+   their line or under them when the stage is too narrow to hold both. Only
+   while it shows does the strip widen to its content and wrap: otherwise its
+   chips shrink on one line, as they always did. The strip measures the row,
+   so the swarm steers around it as around the counts, and in either place it
+   ends above the deck's fill line, so a raised deck never covers its acts.
+   Godview's instrument skin (its panel, border and inks follow Godview's
+   theme, not the app's), the attention ink for the number (§2.7) and the
+   fill for the line along its foot, and the profile notice's 300ms entry: a
+   transition, never a keyframe (the overlay runs none), and none under Reduce
+   Motion. */
+.vf-monitor-claims:has(> .vf-monitor-moment) {
+  flex-wrap: wrap;
+  width: max-content;
+  max-width: calc(100% - 96px);
+}
+
 .vf-monitor-moment {
-  flex: 1 0 100%;
-  display: grid;
-  gap: 6px;
-  padding: 10px 12px 12px;
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 3px 3px 3px 6px;
   border: 1px solid var(--panel-border);
   border-radius: 10px;
   color: var(--text-main);
@@ -572,10 +588,10 @@
   transition: none;
 }
 
-.vf-monitor-moment-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+@media (prefers-reduced-motion: reduce) {
+  .vf-monitor-moment {
+    transition: none;
+  }
 }
 
 /* The plan as its badge on Agent Profiles says it: the company's mark and the plan's name. */
@@ -583,7 +599,7 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 2px 8px 2px 5px;
+  padding: 1px 7px 1px 4px;
   border: 1px solid var(--panel-border);
   border-radius: 999px;
   font-size: 10px;
@@ -595,52 +611,43 @@
   height: 12px;
 }
 
+/* the number is read, so it takes Godview's attention ink, never the fill (§2.5, §2.7) */
 .vf-monitor-moment-use {
-  margin-left: auto;
-  color: var(--vf-orange);
+  color: var(--vf-monitor-ink-attention);
   font-size: 10px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
+.vf-monitor-moment-title {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.vf-monitor-moment-acts {
+  display: flex;
+  gap: 4px;
+}
+
+/* The window's use: a 2px line along the row's foot, between its corners, in the attention fill. */
 .vf-monitor-moment-bar {
-  position: relative;
-  height: 4px;
-  overflow: hidden;
-  border-radius: 2px;
-  background: var(--panel-border);
+  position: absolute;
+  inset: auto 10px 0;
+  height: 2px;
 }
 
 .vf-monitor-moment-bar::after {
   position: absolute;
   inset: 0 auto 0 0;
   width: var(--vf-moment-used);
-  border-radius: inherit;
   background: var(--vf-orange);
   content: "";
 }
 
-.vf-monitor-moment-title {
-  margin: 2px 0 0;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.vf-monitor-moment-voice {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: 10.5px;
-  line-height: 1.4;
-}
-
-.vf-monitor-moment-acts {
-  display: flex;
-  gap: 6px;
-  margin-top: 2px;
-}
-
+/* The acts hover as the deck fault's Try again does (the rule is that one's, below). */
 .vf-monitor-moment-act {
-  padding: 4px 9px;
+  padding: 2px 8px;
   border: 1px solid var(--panel-border);
   border-radius: 6px;
   color: var(--text-main);
@@ -648,11 +655,6 @@
   font-size: 10px;
   font-weight: 700;
   cursor: pointer;
-}
-
-.vf-monitor-moment-act:hover:not(:disabled) {
-  border-color: var(--control-hover-border);
-  background: var(--control-hover-bg);
 }
 
 .vf-monitor-moment-act[data-variant="primary"] {
@@ -1793,7 +1795,10 @@
   cursor: pointer;
 }
 
-.vf-godview-deck-fault-retry:hover {
+/* …and the limit moment's acts hover as it does (AO-6b3): the ink comes with the ground, so the
+   primary's panel-coloured label never stands on the hover's (it is 0,3,0 over the primary's 0,2,0). */
+.vf-godview-deck-fault-retry:hover,
+.vf-monitor-moment-act:hover:not(:disabled) {
   border-color: var(--control-hover-border);
   color: var(--text-main);
   background: var(--control-hover-bg);

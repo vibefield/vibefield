@@ -1,12 +1,16 @@
 import { emptySetupLedger } from "@vibefield/contracts";
-import { type LimitMomentFact, limitMoment } from "../setup/limit-moment";
-import { FIXTURE_NATIVE, FIXTURE_PROFILES_CONTEXT } from "./profiles-fixtures";
+import { type LimitMomentFact, limitCandidates, limitMoment } from "../setup/limit-moment";
+import {
+  FIXTURE_NATIVE,
+  FIXTURE_PROFILES_CONTEXT,
+  FIXTURE_PROFILES_NOW,
+} from "./profiles-fixtures";
 
 // AO-6b — the limit moment as the claims strip says it in the catalog: the
-// SHIPPING rule (`setup/limit-moment.ts`) over the profiles' own fixtures. This
-// Mac is the only profile, and the usage its first plan's sign-in reads has the
-// seven-day window at 92%. No agent is named here: the plan and its reading
-// are This Mac's fixture's.
+// SHIPPING rule (`setup/limit-moment.ts`) over the profiles' own fixtures, at
+// their own clock, with their own installs. This Mac is the only profile, and
+// the usage its first plan's sign-in reads has the seven-day window at 92%. No
+// agent is named here: the plan and its reading are This Mac's fixture's.
 
 const plan = FIXTURE_NATIVE.plans?.[0];
 const namer = FIXTURE_NATIVE.personas.find((persona) => persona.profileId === plan?.namedBy);
@@ -26,7 +30,11 @@ const usage = FIXTURE_PROFILES_CONTEXT.usage.map((entry) =>
 );
 
 export const FIXTURE_LIMIT_MOMENT: LimitMomentFact | null = limitMoment(
-  [FIXTURE_NATIVE],
-  usage,
-  emptySetupLedger(),
+  limitCandidates({
+    sets: [FIXTURE_NATIVE],
+    usage,
+    ledger: emptySetupLedger(),
+    now: FIXTURE_PROFILES_NOW,
+  }),
+  new Set(FIXTURE_PROFILES_CONTEXT.installs.map((install) => install.provider)),
 );

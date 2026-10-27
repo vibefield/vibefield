@@ -33,7 +33,10 @@ export const PROFILES_WORDS = {
   finishFirst: "Finish or cancel the sign-in first.",
   /** AO-6b — the limit moment, once, on Godview's claims strip (DESIGN.md §8 "The moments") */
   limitTitle: "Another subscription?",
+  /** said to a screen reader as Add a profile…'s description, not drawn (AO-6b3's one row) */
   limitVoice: "Add it as a profile and keep working. Each profile keeps its own sign-ins.",
-  limitUse: (percent: number, window: string) => `${percent}% · ${window}`,
+  /** "92% · 7 days"; a window of one part of the plan says it: "95% · Opus only · 7 days" */
+  limitUse: (percent: number, window: string, part?: string) =>
+    part === undefined ? `${percent}% · ${window}` : `${percent}% · ${part} · ${window}`,
   notNow: "Not now",
 } as const;

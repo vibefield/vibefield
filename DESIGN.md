@@ -194,6 +194,13 @@ the general chrome palette.
 | working body / text | `#222222 / #FFFFFF` | `#EEEEEE / #111111` |
 | terminal ground / divider | `#ECE8DC / #D2CEC3` | `#282C34 / #414650` |
 | deck sheet shadow (§8, the deck's edge) | `0 -20px 40px rgba(0,0,0,0.08)` | `0 -20px 40px rgba(0,0,0,0.4)` |
+| attention ink (a state word that has to be read, §2.5) | `#B25E00` `--vf-godview-light-ink-attention` | `#FF9F0A` `--vf-godview-dark-ink-attention` |
+
+The attention ink is §2.5's, keyed to Godview's own mode as the deck's shadow is (the app's
+`--vf-ink-attention` follows the app's theme, and Godview can be light over a dark field). On
+Godview's dark panel the orange itself reads (9.2:1 on `#111111`), so the dark ink is the fill;
+marks and bars keep the fill `--vf-orange` in both modes (added 2026-10-27, AO-6b3, for the limit
+moment's number, §8).
 
 **The phone's one pane** (D-i12, ruled 2026-10-18). The desktop lights a mounted body in its pane's
 colour, because its panes are told apart by colour. The phone has one pane, the open card, so a
@@ -1362,16 +1369,38 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     afresh at the press so nothing another door brought in is revoked; a refusal stays on the row in
     the daemon's words. Either act retires the moment, and the row leaves at once. Answering History's
     pane retires the moment of every agent it asked about, whatever its switch said.
-  - **The limit moment** (AO-D11; *built 2026-10-27, AO-6b*): a plan at 90% or more of one of its own
-    windows (never a budget, never a standby allowance) while This Mac is the only profile offers a
-    profile once, on VibeField's claims strip beside Godview's usage column, under the counts. The
-    fullest window speaks: the plan as its badge on Agent Profiles names it (the company's mark and
-    the plan), "92% · 7 days" and a thin bar in the attention ink, "Another subscription?", "Add it as
-    a profile and keep working. Each profile keeps its own sign-ins.", and **Add a profile…** (the
-    primary, which opens Settings on Agent Profiles' New profile… form) · **Not now**. Either act
-    retires the moment. The card is Godview's instrument skin (its panel, border and inks), corners
-    10, entering with the profile notice's 300ms fade, a transition never a keyframe; the strip
-    measures it, so the swarm steers around it as around the counts.
+  - **The limit moment** (AO-D11; *built 2026-10-27, AO-6b; one row since AO-6b3, the same day*): a
+    plan at 90% or more of one of its windows while This Mac is the only profile offers a profile
+    once, on VibeField's claims strip beside Godview's usage column: after the counts on their line,
+    or under them when the stage is too narrow to hold both. It speaks for
+    what Agent Profiles shows: a plan with an agent installed on This Mac and an account it names,
+    read as its card reads it (a reading kept after a failed refresh too). It never speaks for a
+    budget, a standby allowance, a window already past its reset, or a sign-in that has expired. The
+    fullest window speaks, in **one row**: the plan's badge as Agent Profiles names it (the company's
+    mark and the plan), "92% · 7 days" in the attention ink (§2.7), "**Another subscription?**", and
+    **Add a profile…** (the primary, which opens Settings on Agent Profiles' New profile… form) ·
+    **Not now**. A 2px line along the row's foot fills to the window's use in the attention fill. A
+    window that meters one part of the plan says the part, as Agent Profiles heads it: "95% · Opus
+    only · 7 days". The percent rounds as the usage column beside it rounds. "Add it as a profile and
+    keep working. Each profile keeps its own sign-ins." is the primary act's description, said to a
+    screen reader and not drawn. Either act retires the moment and hands the keyboard to the current
+    view's circle in Godview's head, so closing Settings returns there. The row is Godview's
+    instrument skin (its panel, border and inks), corners 10, entering with the profile notice's
+    300ms fade, a transition never a keyframe, and none under Reduce Motion. Only while it shows does
+    the strip widen to its content and wrap, so its chips otherwise shrink on one line as before; it
+    measures the row, so the swarm steers around it as around the counts. In either place the row
+    ends above the deck's fill line (104), so a raised deck never covers its acts, and the views in
+    flow move down by at most the row and a gap. Under the Last
+    Run curtain it waits: the curtain is the window's one question. It reads the stage's own feeds
+    (the profile filter's sets, the usage column's rows) and opens none of its own.
+    *Amended 2026-10-27 (AO-6b3; James, 23:13Z: "go ahead and fix, go with your lean", on the review
+    of AO-6b2):* it was a card about 150px tall (the badge and the number over a 4px bar, the title,
+    the voice drawn, the acts below), which moved every view in flow about 160px down and could sit
+    under a raised deck. It named an Opus-only week as the plan's own, drew its number in the orange
+    fill, dropped a kept reading, and could speak for a plan with no card on Agent Profiles. The lean
+    was a compact card above the fill line; under the counts that leaves room for one row only (the
+    strip stands at the head's reserve, 56, and the counts' line and its gap end at about 75, so 29px
+    remain before 104), and a row on the counts' own line ends at about 82, so the row stands there.
 - **The desk's chrome** (Chrome on the Mat MC-1…MC-6, 2026-09-28; MC-D1 ruled through One Frame's
   lock and MC-D10 with DK-D23, 2026-10-02; the orchestrator's Phase 4 rulings R1–R25, 2026-10-03,
   cited below as Rn; built on the desk by DK-11…DK-16): **the mat keeps its marks and the chrome

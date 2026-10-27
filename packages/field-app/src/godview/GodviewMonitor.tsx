@@ -1,4 +1,4 @@
-import type { AgentProfileSet } from "@vibefield/contracts";
+import type { AgentAccountUsageEntry, AgentProfileSet } from "@vibefield/contracts";
 import type {
   MonitorCapabilities,
   MonitorTheme,
@@ -48,6 +48,7 @@ import { type GodviewFilters, storedGodviewFilters, storeGodviewFilters } from "
 import { GodviewHeadView } from "./GodviewHeadView";
 import type { GodviewTheme } from "./GodviewTuningPanel";
 import { HEAD_RESERVE } from "./head-row";
+import { type MonitorAccountFacts, MonitorAccountFactsContext } from "./monitor/account-facts";
 import { type ChromeRun, NO_RUNS, useChromeKey } from "./monitor/chrome-facts";
 import { choiceNote, type DeviceChoice } from "./monitor/device-filter";
 import { useMonitorFeed } from "./monitor/GodviewAgentsProvider";
@@ -311,10 +312,13 @@ export interface GodviewMonitorProps {
    * door, the stage takes no pointer or key, and the Peek is not lent — the
    * curtain over it is the window's one question. The head stays live. */
   still?: boolean;
-  /** AO-6b — a moment VibeField says once on its claims strip, under the
+  /** AO-6b — a moment VibeField says once on its claims strip, after the
    * counts: the limit moment (`LimitMoment.tsx`), the overlay's controller in
-   * the product and the shipping card in the catalog. Its own boundary, and
-   * solid to the swarm as the strip is. */
+   * the product and the shipping card in the catalog. Its own boundary, solid
+   * to the swarm as the strip is, and lent the stage's account facts
+   * (`MonitorAccountFacts`: the profile filter's sets, the usage column's
+   * rows), so it opens no feed of its own. Withheld while the stage is still:
+   * the curtain is the window's one question. */
   moment?: ReactNode;
 }
 
@@ -455,6 +459,17 @@ export function GodviewMonitor({
     setUsageState({ state: usagePort === undefined ? "no-door" : "loading" });
     return usagePort?.subscribeState?.(setUsageState);
   }, [usagePort]);
+  // AO-6b3 — fieldd's usage rows, as the column's own feed reads them, and the
+  // profile filter's sets: what the claims strip's moment speaks from
+  const [usageRows, setUsageRows] = useState<readonly AgentAccountUsageEntry[] | null>(null);
+  useEffect(() => {
+    setUsageRows(null);
+    return usagePort?.subscribeRows?.(setUsageRows);
+  }, [usagePort]);
+  const accountFacts = useMemo<MonitorAccountFacts>(
+    () => ({ sets: profileSetsRead ? profileSets : null, usage: usageRows }),
+    [profileSets, profileSetsRead, usageRows],
+  );
   const claimsRef = useRef<HTMLDivElement>(null);
   // M49 — the claims behind their own boundary, INSIDE the strip: the strip
   // stays measured (its rectangle is the stage's top inset and an obstacle),
@@ -944,8 +959,10 @@ export function GodviewMonitor({
           <span className="vf-monitor-ack" aria-live="polite">
             {acknowledgement?.message ?? ""}
           </span>
-          {moment === undefined || moment === null ? null : (
-            <ChromeBoundary name="Moment">{moment}</ChromeBoundary>
+          {still || moment === undefined || moment === null ? null : (
+            <MonitorAccountFactsContext.Provider value={accountFacts}>
+              <ChromeBoundary name="Moment">{moment}</ChromeBoundary>
+            </MonitorAccountFactsContext.Provider>
           )}
         </div>
       </section>

@@ -198,6 +198,10 @@
   --vf-godview-dark-working-border: #ffffff;
   --vf-godview-dark-terminal-bg: #282c34;
   --vf-godview-dark-terminal-divider: #414650;
+  /* §2.7 (AO-6b3, 2026-10-27): §2.5's attention ink per GODVIEW mode, for a state
+     word that has to be read; the dark ink is the fill, which reads on the panel. */
+  --vf-godview-light-ink-attention: #b25e00;
+  --vf-godview-dark-ink-attention: #ff9f0a;
   /* §2.7 + §8 (2026-09-28): the terminal deck is a sheet over the monitor. The
      shadow is §5's Sheet recipe per GODVIEW mode (not the app theme's); the lip
      — since round 3 the Lip, the drag bar (GV-D7) — is never less than the

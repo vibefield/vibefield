@@ -67,6 +67,7 @@ import {
 import { act, Profiler, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { FIXTURE_NATIVE } from "../src/design-system/profiles-fixtures";
 import type { GodviewMonitorFacts } from "../src/development-console";
 import {
   answerGodviewDeckUp,
@@ -76,6 +77,7 @@ import {
 import { getGodviewFindDoor, resetGodviewFindDoorForTest } from "../src/frame/find-door";
 import { GODVIEW_FILTERS_STORAGE_KEY } from "../src/godview/filter-state";
 import { GodviewMonitor } from "../src/godview/GodviewMonitor";
+import { useMonitorAccountFacts } from "../src/godview/monitor/account-facts";
 import { usagePortOver } from "../src/godview/monitor/doors";
 import type { AgentSessionSummary } from "../src/godview/monitor/facet-types";
 import {
@@ -1561,7 +1563,7 @@ describe("the monitor stage", () => {
     expect(container.querySelector('.vf-stories-slot > span[role="status"]')).not.toBeNull();
   });
 
-  it("says a moment on the claims strip under the counts, in a boundary of its own (AO-6b)", async () => {
+  it("says a moment on the claims strip after the counts, in a boundary of its own (AO-6b)", async () => {
     const door = fakeDoor();
     const view = monitorViewFor(DEFAULT_MONITOR_VIEW_ID);
     syncBoard(PANES);
@@ -1569,13 +1571,14 @@ describe("the monitor stage", () => {
     document.body.appendChild(container);
     const uncaught = vi.fn();
     root = createRoot(container, { onUncaughtError: uncaught, onCaughtError: vi.fn() });
-    const stage = (moment: ReactNode) => (
+    const stage = (moment: ReactNode, still = false) => (
       <GodviewAgentsProvider door={door}>
         <GodviewMonitor
           view={view}
           parameters={monitorParameterDefaults(view.parameterGroups)}
           door={door}
           panes={PANES}
+          still={still}
           moment={moment}
         />
       </GodviewAgentsProvider>
@@ -1591,14 +1594,77 @@ describe("the monitor stage", () => {
     await act(async () => root?.render(stage(<Unreadable />)));
     await settle();
     expect(uncaught).not.toHaveBeenCalled();
-    const said = [...(claims?.querySelectorAll('span[role="status"]') ?? [])].map(
-      (status) => status.textContent,
-    );
-    expect(said).toEqual(["Moment unavailable"]);
-    // none at all: the strip is the counts alone, as before
+    const statuses = (): Array<string | null> =>
+      [...(claims?.querySelectorAll('span[role="status"]') ?? [])].map(
+        (status) => status.textContent,
+      );
+    expect(statuses()).toEqual(["Moment unavailable"]);
+    // none at all: the strip is the counts alone, as before — its failure goes with it
     await act(async () => root?.render(stage(undefined)));
     await settle();
     expect(claims?.querySelector("[data-moment]")).toBeNull();
+    expect(statuses()).toEqual([]);
+    // AO-6b3 — under the Last Run curtain it waits: the curtain is the window's one question
+    await act(async () => root?.render(stage(<p data-moment="">Another subscription?</p>, true)));
+    await settle();
+    expect(claims?.querySelector("[data-moment]")).toBeNull();
+    expect(statuses()).toEqual([]);
+  });
+
+  it("lends the moment the stage's own account facts: the profile filter's sets and the usage column's rows, through their one subscription each (AO-6b3)", async () => {
+    const door = fakeDoor();
+    const rows = [
+      {
+        provider: "claude",
+        label: "Claude Code",
+        state: "available" as const,
+        fetchedAt: CHECKED_AT,
+        metrics: [{ id: "7d", label: "7D", kind: "window" as const, usedPercent: 92 }],
+      },
+    ];
+    const batch = { generatedAt: CHECKED_AT, entries: rows };
+    const subscribe = vi.fn(async () => ({ snapshot: batch, unsubscribe: () => undefined }));
+    door.usage = usagePortOver({ request: async () => batch, subscribe });
+    const profiles: ProfileSetsPort = {
+      subscribe: (listener) => {
+        listener([FIXTURE_NATIVE]);
+        return () => undefined;
+      },
+    };
+    door.profiles = profiles;
+    const Facts = () => {
+      const { sets, usage } = useMonitorAccountFacts();
+      return (
+        <p data-moment="">
+          {`${sets?.map((set) => set.label).join(", ") ?? "unread"} · ${
+            usage?.map((row) => `${row.provider} ${row.metrics[0]?.usedPercent}%`).join(", ") ??
+            "unread"
+          }`}
+        </p>
+      );
+    };
+    const view = monitorViewFor(DEFAULT_MONITOR_VIEW_ID);
+    syncBoard(PANES);
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () =>
+      root?.render(
+        <GodviewAgentsProvider door={door}>
+          <GodviewMonitor
+            view={view}
+            parameters={monitorParameterDefaults(view.parameterGroups)}
+            door={door}
+            panes={PANES}
+            moment={<Facts />}
+          />
+        </GodviewAgentsProvider>,
+      ),
+    );
+    await settle();
+    expect(container.querySelector("[data-moment]")?.textContent).toBe("This Mac · claude 92%");
+    // the column's subscription is the only one: the moment reads its rows
+    expect(subscribe).toHaveBeenCalledTimes(1);
   });
 
   it("chooses the view with the head's circles; there is no theme switch (FC-D7)", async () => {

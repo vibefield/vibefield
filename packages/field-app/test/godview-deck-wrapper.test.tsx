@@ -110,6 +110,9 @@ vi.mock("../src/godview/GodviewDeck", async () => {
 
 vi.mock("@vibefield/fieldd-client/react", () => ({
   useFielddClient: () => ({ request: vi.fn(async () => ({})) }),
+  // AO-6b3 — the limit moment reads the setup ledger by subscription; here it
+  // never answers, so the moment stays silent rather than failing its boundary
+  useSubscription: () => ({ status: "loading", data: null, error: null }),
 }));
 
 const { GodviewOverlay } = await import("../src/godview/GodviewOverlay");

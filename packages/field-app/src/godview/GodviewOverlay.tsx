@@ -100,7 +100,13 @@ function whenIdle(task: () => void, timeoutMs: number): () => void {
 /** Godview as the cover's content (One Frame FR-1): a VIEW now, drawn below
  * the frame inside the one cover, open exactly while it is the window's view —
  * there is no bit of its own any more. */
-export function GodviewOverlay(): ReactElement | null {
+export function GodviewOverlay({
+  openNewProfile,
+}: {
+  /** AO-6b3 — the frame's Settings on Agent Profiles' New profile… form, for
+   * the limit moment's Add a profile…; absent while Settings is open */
+  openNewProfile?: (() => void) | undefined;
+} = {}): ReactElement | null {
   const open = useActiveView() === "godview";
   const [everOpened, setEverOpened] = useState(false);
   // FC-D7: the app's theme, unless Settings → Terminal overrides it — never a
@@ -350,7 +356,7 @@ export function GodviewOverlay(): ReactElement | null {
                 onSelectView={monitor.selectView}
                 still={question !== null}
                 // AO-6b — the limit moment, once, on the claims strip
-                moment={<LimitMoment />}
+                moment={<LimitMoment openNewProfile={openNewProfile} />}
               />
             </MonitorFeedOverride>
           ) : undefined

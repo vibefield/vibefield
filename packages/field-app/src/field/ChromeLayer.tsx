@@ -23,7 +23,6 @@ import { canvasHead } from "../frame/head-canvas";
 import { FramePeek } from "../frame/Peek";
 import type { FrameActRun } from "../frame/palette-acts";
 import { StatusLine } from "../frame/StatusLine";
-import { publishSettingsDoor, type SettingsTarget } from "../frame/settings-door";
 import { runSystemControl } from "../frame/system-control-door";
 import { ViewFrame } from "../frame/ViewFrame";
 import { requestView, subscribeMenuZoom, useActiveView } from "../frame/view-state";
@@ -47,6 +46,7 @@ import { isCommandPaletteChord, listenForProductChord } from "./product-chords";
 import {
   INITIAL_SHELL_PRESENTATION,
   reduceShellPresentation,
+  type ShellPresentationState,
   settingsOpening,
 } from "./shell-presentation";
 
@@ -139,19 +139,17 @@ export function ChromeLayer({
    * General; its name row and its Link… open Account (UA-D19); the limit
    * moment's Add a profile… opens Agent Profiles' New profile… (AO-6b). */
   const openSettings = useCallback(
-    (page: SettingsTarget) => {
+    (page: ShellPresentationState["target"]) => {
       setShellPresentation((state) => ({ ...state, target: page }));
       onSurfaceChange(null);
       setShowSettings(true);
     },
     [onSurfaceChange, setShowSettings],
   );
-  // AO-6b — the door a moment inside the cover opens Settings through
-  // (`settings-door.ts`): lent while the chrome is mounted
-  useEffect(() => {
-    publishSettingsDoor({ open: openSettings });
-    return () => publishSettingsDoor(null);
-  }, [openSettings]);
+  // AO-6b — the limit moment's Add a profile…, handed to the cover while
+  // Settings is closed (AO-6b3): an open panel takes no new page, so the
+  // moment would retire without its form ever showing
+  const openNewProfile = useCallback(() => openSettings("new-profile"), [openSettings]);
 
   // Opening it is asking the owner (which folds Settings and every other
   // surface); a fold of its own leaves the others alone.
@@ -412,7 +410,7 @@ export function ChromeLayer({
           the palette and the loading veil: a document that is still opening
           owns the window more than any view does. */}
       <ViewFrame
-        godview={<GodviewOverlay />}
+        godview={<GodviewOverlay openNewProfile={showSettings ? undefined : openNewProfile} />}
         history={historyView}
         surface={surface}
         onSurfaceChange={onSurfaceChange}

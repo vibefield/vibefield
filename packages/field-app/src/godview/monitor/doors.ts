@@ -278,7 +278,10 @@ function toEntry(row: AgentAccountUsageEntry): AccountUsageEntry {
 }
 
 export function toAccountUsageBatch(payload: unknown): AccountUsageBatch {
-  const batch = AgentAccountUsageBatch.parse(payload);
+  return viewsBatch(AgentAccountUsageBatch.parse(payload));
+}
+
+function viewsBatch(batch: AgentAccountUsageBatch): AccountUsageBatch {
   return { refreshedAt: batch.generatedAt, entries: batch.entries.map(toEntry) };
 }
 
@@ -288,6 +291,17 @@ export function usagePortOver(client: DoorClient): MonitorUsagePort {
   let snapshotAttempt = 0;
   let subscriptionReady = false;
   let state: MonitorFeedState = { state: "loading" };
+  // AO-6b3 — fieldd's rows, read once with the column's batch and handed to
+  // the limit moment: the moment reads what the column draws, and no second
+  // `agents.usage.subscribe` is opened for it
+  const rowsListeners = new Set<(rows: readonly AgentAccountUsageEntry[]) => void>();
+  let rows: readonly AgentAccountUsageEntry[] | null = null;
+  const read = (payload: unknown): AccountUsageBatch => {
+    const batch = AgentAccountUsageBatch.parse(payload);
+    rows = batch.entries;
+    for (const listener of rowsListeners) listener(batch.entries);
+    return viewsBatch(batch);
+  };
   const report = (source: "snapshot" | "subscription", cause?: unknown): void => {
     if (source === "subscription") subscriptionReady = cause === undefined;
     if (subscriptionReady) errors.delete("snapshot");
@@ -307,10 +321,17 @@ export function usagePortOver(client: DoorClient): MonitorUsagePort {
         listeners.delete(listener);
       };
     },
+    subscribeRows: (listener) => {
+      rowsListeners.add(listener);
+      if (rows !== null) listener(rows);
+      return () => {
+        rowsListeners.delete(listener);
+      };
+    },
     snapshot: async () => {
       const attempt = ++snapshotAttempt;
       try {
-        const batch = toAccountUsageBatch(await client.request("agents.usage", {}));
+        const batch = read(await client.request("agents.usage", {}));
         if (attempt === snapshotAttempt) report("snapshot");
         return batch;
       } catch (cause) {
@@ -326,7 +347,7 @@ export function usagePortOver(client: DoorClient): MonitorUsagePort {
         // Keep the last good batch on an unreadable frame, but expose the
         // failure to the host. A later valid frame clears this failure.
         try {
-          const batch = toAccountUsageBatch(payload);
+          const batch = read(payload);
           report("subscription");
           listener(batch);
         } catch (cause) {

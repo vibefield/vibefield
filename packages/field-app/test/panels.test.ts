@@ -205,6 +205,32 @@ describe("widgetlab panels", () => {
     );
   });
 
+  it("gives the keyboard back to what had it as Settings opened, though its page moves the focus as it mounts (AO-6b3)", () => {
+    const engine = makeEngine();
+    const client = new FielddClient({ url: "ws://127.0.0.1:1", token: "test" });
+    // the view's circle the limit moment hands the keyboard to before Settings opens
+    const opener = document.createElement("button");
+    opener.textContent = "List view";
+    document.body.appendChild(opener);
+    opener.focus();
+    mount(
+      createElement(
+        FielddProvider,
+        { client },
+        createElement(SettingsPanel, {
+          engine,
+          initialPage: "profiles",
+          initialProfiles: { kind: "new" },
+          onClose: () => {},
+        }),
+      ),
+    );
+    expect(document.activeElement).not.toBe(opener);
+    act(() => root?.unmount());
+    root = null;
+    expect(document.activeElement).toBe(opener);
+  });
+
   it("routes settings undo through the global Loro history toolbar", async () => {
     const engine = makeEngine();
     const request = vi.fn(async (method: string) =>
