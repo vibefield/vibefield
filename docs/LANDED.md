@@ -16333,3 +16333,58 @@ it kept were nobody's to see.
 - Settings → Diagnostics' "Last exit" line (it needs the record kept after the take).
 - The notification's physical witness (a `kill -9` on a packaged build).
 - The rows the acceptance run left: Dock → Quit, a logout, ⌘Q on a physical keyboard with a terminal focused.
+
+## AO-2 — the Setup Assistant keeps a ledger: fieldd's `setup.*` records which steps a person answered and which they put off, the wizard records Devices put off, and Settings' "Finish setting up" lists what was, with Continue setup as a sheet and Hide (2026-10-27; `ccf3769b8`, lane `ao/2`; AO-D10, design-03 §4.3)
+
+**What.** The second slice of track AO's ladder (`draft/thinking-agent-onboarding.md` §8): design-03 §4.3's fieldd-owned
+setup ledger, first called for in July, with its first two consumers.
+- **The contract** (`contracts/src/setup.ts`, TS-only like the agent plane — field-native reads none of it):
+  `SetupLedger` {format 1, steps, hidden}, its rows read one at a time (`setupStepState`) so a newer build's step or
+  state is carried and never read as an answer; `SetupStep` (agents | profiles | history | devices) and
+  `SetupStepState` (answered | later); four doors on `settings.manage`, `local` — `setup.get`, `setup.subscribe`,
+  `setup.answer` (declarative), `setup.hide`; `LAYOUT.SETUP_LEDGER_FILE` = `fieldd/setup.json` under the user root
+  (`pnpm gen`: `layout.json`, `registries.rs`); a leaf entry, `@vibefield/contracts/setup`, for boot-reachable code.
+  Fixtures: `setup-ledger.valid`, `setup-ledger.newer` (a step, a state and a top-level key from a later build),
+  `setup-answer-params.valid`.
+- **fieldd**: `SetupLedgerStore` — the enrollment record's discipline for a smaller record: loaded once, written
+  atomically (0600 in a 0700 directory) on a change, the same answer written once, an unreadable file set aside with a
+  logged reason and never overwritten. The doors sit beside the app preferences and are not audited (a person's place
+  in a setup, never a grant). The trusted-caller check every `settings.manage` door shares is named for what it is,
+  `requireAppPreferencesCaller` → `requireDesktopCaller`, TS-1's `user.link.begin`/`cancel`/`renew` included, and its
+  refusal says "this door requires a trusted desktop caller (the shell or a window)".
+- **field-app**: `setup/ledger.ts` (`useSetupLedger`, `answerSetupStep`, `finishSetupRows`); the wizard records Devices
+  put off from its orchestrator when the person moves on without a link (never inside track TS's files), and a link
+  made anywhere answers Devices by itself (agreed with TS); Settings' **Finish setting up** under the account card
+  (`SettingsFinishSetup`: its rows, Continue setup, Hide — no badge, no count) and `SetupSheet`, the wizard's own glass
+  over the app with the Connect pane's own controller in it, modal with its own keys (Settings' Escape and Tab stand
+  down while it is open), closing when nothing is left.
+- **Catalog**: the Settings dialog's specimen shows Finish setting up through the shipping `finishSetupRows` on a
+  fixture ledger.
+
+**Found by the gate** (the light runs never typecheck): Finish setting up's rows typed their step as any `SetupStep`
+while the sheet asks only the steps that can be finished later — the field-app typecheck said so at `d7de1f66e`
+(`SettingsPanel.tsx(739,21)`, TS2322). `FinishStep` in `setup/ledger.ts` is now the one type the rows and the sheet
+both read; the sheet's own `SheetStep` is gone.
+
+**Rebased onto AL-7** (`d51e4199c`, its records `c3e0958e7`), which added `LAYOUT.SHELL_EXIT` in the same four places
+(the seam VF-PM named): the vector, `registries.ts`, `gen/layout.json` and `registries.rs` merged with both rows, each
+where its slice put it; two import lines (contracts' fixtures test, fieldd's daemon) kept both. gen:check, the layout
+vector in TS and Rust and contracts' whole suite re-ran on the rebased tip (below).
+
+**Validation** (lane ao1, at the tip exactly, nice 19, the guard clear before every arm):
+- the gate at `d7de1f66e` (10:32Z): gen:check and the contracts and fieldd typechecks EXIT 0; field-app's typecheck
+  red (the finding above).
+- the gate at `ccf3769b8` (10:40:13–10:42:58Z): gen:check EXIT 0; the contracts, fieldd and field-app typechecks
+  EXIT 0; the layout vector in TS and in Rust (`cargo test -p field-native --test layout_vector`) EXIT 0; contracts'
+  whole suite `1174 passed`; fieldd's setup files (the ledger's unit and daemon rows, the app preferences' doors)
+  `9 passed`; field-app's whole suite `2639 passed | 3 skipped`; the tree clean after.
+- `pnpm verify` at `ccf3769b8` (10:43:21–10:47:28Z): preflight, the walls, deps, retired, the iOS fixtures, icons,
+  typecheck (27 projects), biome, rustfmt, clippy and the bundle green; the TS tests green in 26 of 27 projects. The
+  one red row, `tooling/dev-runner/test/dev-lock.test.mjs:129` (two runners reclaiming one stale lock, 50 times), was
+  red at load 132 in verify and green alone (6/6, 10:48:25Z): a timing-class row AO-2 cannot reach, on the lottery
+  family's list for the fixer (VF-PM). The stages it stopped then ran alone: `pnpm test:rust` EXIT 0 (31 suites ok,
+  0 failed, 10:50:27–10:52:06Z) and `pnpm gen:check` EXIT 0; the tree clean after.
+
+**Not here.** The agent chapter's own steps and their rows (AO-3 History, with the pre-AO users of AO-D12; AO-5
+Agents and Profiles). The desk rows (`pnpm smoke`, `pnpm smoke:studio`) on a display, owed with AO-1's on James's
+"away"/"unlocked".
