@@ -16641,3 +16641,63 @@ census's first kind (`FIXTURE_HISTORY_CONSENTED`). R23b's allow-list is unchange
 - The room's own import state on Settings → History.
 - Profiles' own folders listed there (AO-4, AO-5).
 - The desk rows (`pnpm smoke`, `pnpm smoke:studio`) on a display, owed with AO-1's and AO-2's on James's word.
+
+## AO-4 — the room fed, the desk told: History's room draws its first reading as designed (per-project progress keyed by this desktop's projects, the search build's stage, the daemon's start), `index.status.subscribe` pushes the reading from one poller in fieldd, History's cell carries the arc while History imports, and Setting up waits for the first pass in the room's own words, with Start now 8 s past the desk (2026-10-27; `5fa033685` + `0f6b15878`, lane `ao/4`; AO-D4, AO-D8)
+
+**What.** The fourth slice of track AO's ladder (`draft/thinking-agent-onboarding.md` §8), in two commits: AO-4a feeds
+the room, and AO-4b tells the desk.
+- **AO-4a, the room fed** (contracts · fieldd · field-app):
+  - The problem: History's room (rosetta's own import panel and cooking cards, inherited as is) read three things
+    VibeField dropped. "Elapsed" said 0 s for the whole import, step 4 said "Preparing search" with no count through
+    every search stage, and the cooking cards had no fill or per-project line.
+  - `IndexStatus` gains `startedAt` (the uptime is never sent: it is now minus the start, as rosetta derives it, so an
+    unchanged status stays the same status) and `projects`, the per-project fold.
+  - The search progress gains its stage (`IndexSearchBuildStage`, with a tolerant `unknown` that reads as no named
+    step).
+  - `ProjectDoors.backfills` keys rosetta's projects by this desktop's, placing each by its listed sessions' folders.
+    One held whole is summed into its project, or into the room's unassigned bucket. One that parts across several is
+    a total that cannot be cut, so every key it touches is left out rather than drawn short.
+  - The fold rides only to this desktop's windows. rosetta keeps it for the daemon's life, and the phone keeps no room.
+  - New fixtures `index-status.cold-start` and `index-status.search-building`; the three the phone mirrors are
+    unchanged.
+- **AO-4b, the desk told** (contracts · fieldd · field-app):
+  - `index.status.subscribe` (`index.read`, local, frames `stream` at a second) is pinned in the tailnet census, the
+    index rows and the family's subscription list.
+  - fieldd's `IndexStatusFeed` is one poller while anyone listens: a second while History reads, 30 s once nothing is
+    read, and at once when the daemon's phase moves. The last close stops it and forgets the status.
+  - `history/first-reading.ts` holds the room's own rules. `historyImporting` is the first-run panel's rule, and
+    `firstPassDone` holds when every brought-in agent is skimmed. rosetta returns a skimmed agent to `queued` until it
+    streams (`health.rs`), so a queued agent counts as skimmed once its count has landed.
+  - History's cell carries the arc (DESIGN.md §6): the kit's new `importing` glyph (§13, the set at 64), a fifth of
+    `history`'s own dial from twelve o'clock, once every 1.1 s on the island curve, over the glyph at a third of its
+    ink. It is named "History, importing", carries no number, and rests at the
+    top under reduced motion.
+  - Setting up lists History after the desk, in the room's own words. It waits for the first pass, never more than 8 s
+    past the desk, then offers Start now under "Finding sessions in a history this size takes longer. It carries on in
+    History."
+  - DESIGN.md first: §6 the arc's reduced motion, §8 Setting up's first and unavailable words, §13 the `importing`
+    glyph.
+  - Catalog: the track's "Importing" plate; Setting up's "finding" and "slow" states, drawn by the shipping
+    `historySetupPhase` over fixture statuses read from the catalog (AR-L1).
+
+**Found by the gate:** the arc was first drawn as an inline `<svg>` in the views track, and glyphs.test refuses one
+in product code (product code draws icons through FieldGlyph). It is now a glyph of the kit's own set, written into
+DESIGN.md §13 first, drawn in `tooling/glyphs/drawings.mjs` in both constructions and generated into `data.ts`. The
+catalog's glyph sheet counts 64. The inline-svg allowlist is untouched, and the phone's glyph assets are untouched
+(only the `ios` picks reach them).
+
+**Validation** (lane ao1, at the tip exactly, nice 19, the guard clear before every arm):
+- the light pass at the tip (12:03:58–12:04:41Z): the design-kit and field-app typechecks EXIT 0, the glyph build's
+  `--check` ("64 names, 10 hardware, 14 on iOS"), `pnpm preflight`, `pnpm check:walls` and `pnpm icons:check`
+  EXIT 0; glyphs, view-frame, design-system, selection-bar-glyph and ui-system-boundaries `76 passed`. (An earlier
+  light pass on the first base: the contracts, fieldd and field-app typechecks, preflight and walls, EXIT 0.)
+- the gate at `0f6b15878` (12:04:50–12:07:10Z): the contracts, fieldd and field-app typechecks EXIT 0; contracts'
+  whole suite `1179 passed`; fieldd's AO-4 files (the status fold, the keyed fold, the feed, the daemon's doors)
+  `69 passed`; field-app's whole suite `2684 passed | 3 skipped`; the arc's plate and Setting up's finding, slow
+  and ready photographed in both themes, 8 PNGs, no console errors (`lanes/ao1/logs/gate-0f6b15878/shots/`); the
+  tree clean after. A first pass at `936e6f18a` was red on glyphs.test (the finding above).
+- `pnpm verify` at `0f6b15878` (12:07:24–12:13:25Z) EXIT 0: every TS project's typecheck and tests (27 of 27),
+  31 cargo suites, gen:check; the tree clean after.
+
+**Not here.** The first pass measured on a real first run (§9's spike); today the rule rests on rosetta's own state
+sequence (`health.rs` and its tests). The desk rows (`pnpm smoke`, `pnpm smoke:studio`) on a display, owed with AO-1…3's.
