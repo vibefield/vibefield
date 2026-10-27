@@ -15609,3 +15609,90 @@ at 04:12Z on 10-18) shipped it and never landed. Main moved under it by 239 comm
   launch on the signed bundle (the host under the hardened runtime). It is the second launch witness; this landing's
   static half was the first.
 - The push waits for `nightly-20261027`'s publish. This landing touches no workflow.
+
+## W11 — the signed apply passes on the Mac mini: `nightly-20261026` → `nightly-20261027` by a person's restart, Squirrel's install, D10's fresh fieldd and a notarized bundle (2026-10-27; records only; run 40426614625 on `84509d642`)
+
+**Why:** W11 is WP12's signed apply and EDP slice 7's exit (`build-wp12-updater.md` §5): "Squirrel.Mac installs, the
+relaunch adopts or replaces fieldd per D10, and PTYs survive a shell/fieldd-only release". Its install-and-launch half
+passed on 10-26 (LANDED "WP12 — the first signed nightly is published, and W10 passes on it"). The apply needed a second
+signed nightly.
+
+**`nightly-20261027`** (run 40426614625 on `84509d642`; dispatched 00:28:24Z by VF-PM's watcher; every job green):
+- plan: `nightly-20261027`, `0.1.0-nightly.20261027`, skip false.
+- tag: `tag: nightly-20261027 at 84509d642… (create)` at 00:28:59Z. This is the plan-time tag's second witness, and its
+  first on a fresh day.
+- verify: green on its first attempt.
+- build (James's click, 00:59Z): macOS-release-preflight `ok` (notarization by the App Store Connect key); WP8's bundled
+  plugins `ok` (release key class); LSF-4-release `ok` (team 9F79X9D26S, the app and both live-surface helpers'
+  reverse-DNS ids, runtime and timestamp); `host-links: 24 Mach-O …; no host link; launched field-native,
+  field-terminal-host --version`.
+- sign (James's second click, which waited 01:24→04:11Z): `release-manifest: nightly-20261027 touches shell, fieldd,
+  field-native`; `release-sign: signed 6 documents for nightly-20261027 (nightly); channels.json version 11`;
+  `release-verify: latest-mac.yml, release-manifest.json verified as the newest nightly release nightly-20261027`.
+- converge: green.
+- publish: on the existing tag (`--draft --verify-tag`, then `--draft=false`) at 04:13:11Z. The release is a
+  prerelease, IMMUTABLE, with 19 assets.
+
+**The bytes:**
+- The published zip, downloaded again, is `sha256:4202c5814bb80cc06ae24a2f02c095ac77159e8c1c48bd2f7ea8a089c9e0b982`,
+  equal to GitHub's digest and the release's SHA256SUMS line.
+- Its sha512 equals the SIGNED `latest-mac.yml`'s. The feed therefore names these exact bytes, and the mini's staged
+  update must carry the same sha512.
+- The build log's `df2a900f…` is the Actions artifact archive, not this zip, and is never compared with it.
+- Static read of the app inside: codesign deep/strict, spctl "Notarized Developer ID", stapler.
+- main's host-links at `ecb19236d` reports `field-freeway-host: did not run (ENOENT)` on it. That is expected: this
+  nightly was cut before LANDED "FW (packaging) — the freeway host ships in the package".
+- W10, re-run on it: (a) the trust-root equals the embedded v1, release-verify passes, and the feed verifies by the
+  embedded release key; (b) the four tampered copies are each refused `feed-unverified`; (c) policy v2 and channels v12
+  are each refused `policy-rollback`, with v1 as the control.
+- D11, from `nightly-20261026`: shell `b6eb81a6…` → `31b59167…`, fieldd `9deb69bc…` → `d8a60ca3…`, field-native
+  `68f5fc97…` → `a5414c2b…`. Every plane's sources changed again (the EL8 to ghosttea 0.13.6), so this is still not D11's
+  signing-only measurement.
+
+**W11's apply** (the Mac mini, jasper, as the W11 runbook directs; agents read logs, the audit ledger and state.json and
+nothing else; James's acts, "done" at 04:17:13Z):
+- **Before:** the app (N, pid 65520, booted 22:50:36Z on 10-26) had checked once and read `not-available`. state.json
+  remembered channels 10, and `lastApply` was null.
+- **Staged:** `desktop.update.staged {version:"0.1.0-nightly.20261027", sha512:"bSvW/8QX…YVYSQ=="}` at 04:15:58.5Z.
+  The sha512 is the signed feed's.
+- **The apply, branch A:**
+  - 04:16:07.9Z: the audit's `app.update.apply` ATTEMPT `{version, consented:"1", native:"stop", trigger:"person"}`,
+    operationId `1812aeb6-8bee-4d02-8382-fc06e0ba1e64`.
+  - 04:16:08.2Z: `desktop.lifecycle.quit_requested`, and fieldd's `native_stop_consented {sessions:1}` ("the live
+    sessions are exactly the consented set").
+  - 04:16:12.6Z: `fieldd.native_supervisor.stopped_for_update {reason:update, how:closed}` and
+    `desktop.update.daemons_stopped {native:closed, sessions:1}`.
+  - fieldd exited with code 0, and the supervisor was disposed at 04:16:13.7Z.
+  - There was no `squirrel_refused`, `updater_error`, timeout or `install-failed`.
+- **The relaunch** (ShipIt replaced the bundle):
+  - 04:16:19.6Z: `desktop.lifecycle.boot_started {mode:production}`, pid 70694.
+  - D10: `fieldd.supervisor.spawn_required {probeFailure:"no-run-files"}` → `spawned` → `ready` in 1.4 s. fieldd was
+    never adopted across builds.
+  - 04:16:21.3Z: the audit's OUTCOME `succeeded` `{branch:"installing", consented:"1"}`, on the SAME operationId.
+  - field-native and its two cells started fresh.
+  - 04:16:50.4Z: the new boot's launch check read `not-available`.
+- **After:**
+  - state.json: `lastApply {version:"0.1.0-nightly.20261027", branch:"installing", consented:1, audited:true}`; the
+    remembered channels moved 10 → 11, and nothing is pending.
+  - The replaced bundle: codesign deep/strict, `Identifier=com.jamesyong.vibefield`, the Developer ID chain to Apple
+    Root CA, spctl "Notarized Developer ID", stapler, and `0.1.0-nightly.20261027`.
+  - The production pair runs on at N+1.
+
+**What this pair cannot witness:** the PTY clause. The release touched field-native, so the floor restarted fresh and
+the consented session ended, as the runbook's §1.3 predicted. Surviving PTYs need a release that leaves field-native's
+bytes untouched, which waits on D11's measurement (its debt).
+
+**Found on the way:**
+- The W11 reader's audit grep split "Application Support" (`xargs` without `-0`). It was fixed and the rows re-read.
+- A live `ssh … tail -F … fieldd.ndjson` from James's Mac matched the shared dev-app guard's fieldd rule (`fieldd` with
+  `/Library/` in a command's text). It held the lead's EL8 kit for three minutes, from 04:14:35Z to 04:17:38Z. VF-PM
+  ruled it a false positive.
+  - The fix (an ssh skip line) is James's.
+  - Until it lands, every session puts such reads in a script on the remote host and calls it by its path
+    (PM-WINDOW).
+
+**Owed:**
+- James's two answers, relayed by VF-PM: which acts he made (the check, the card or the tray, the census box), and
+  whether a keychain prompt appeared after the relaunch (the runbook's UNVERIFIED 9).
+- The PTY clause, on a release that leaves field-native untouched.
+- The freeway host's live witness (W11 round 3), on the next nightly carrying it.
