@@ -565,6 +565,16 @@ One more plain curve, with its reason: a **retract** goes back along the way it 
 stylesheet said 200ms, its constants table 180, and the table is the authority) — it accelerates
 home, the pop's reverse (M4). Leaving things never wait out an entrance's reveal delay.
 
+One more interval, with its reason — **the arrival** (track TS, TS-D8 ruled 2026-10-27; §8 "The Connect
+pane"). When a link lands, the account's devices arrive around your face **90ms apart**, not 26: each is a
+wire drawn from the face on the island curve (560ms) and an OS mark popped at its end on `--vf-ease-pop`
+(280ms). At 26ms three devices land inside two frames and read as one flash; at 90ms each is seen to
+arrive, which is the moment's whole point (TS-L8, arrival is the reward). The cap is the table's: the fifth
+device's delay, 360ms, is the last, and any after it arrive with the fifth. A coin face engraves its
+tailnet on the legend's lower arc over 900ms on the island curve, 260ms behind the first wire (§2.8, from
+96px). Under reduced motion they appear together in a 120ms fade. It is the one staggered entrance that is
+not 26ms.
+
 *Status 2026-10-12: ruled and built. Built: the Lip and its two buttons, the groove, the frame's tone and the well (GV-D7, GV-D12); where a session with no pane opens (GV-D4); the terminals away and called up as they were left (GV-D5's call, GV-D6); the edge's three outcomes and their readouts, and the monitor making room; maximized, the bar the window's title bar (GV-D11); the monitor alone at launch, the first call bringing last run's panes with the one it called (GV-D5, N14 (a)); ⌘W on the last pane minimizing them (N16 (a)); rest, the drawing's share above a floor on every height (N15 (a)).*
 **The terminals rise and fall** (Godview's deck, §8; One Frame §22 "Shared mechanics" and §23 —
 GV-D5, GV-D6, GV-D7 and GV-D11, ruled 2026-10-02; built 2026-10-11): two durations, no new
@@ -1223,6 +1233,75 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   writes it too, and Godview follows it (§1.1). The menu is one of the frame's open surfaces (§10),
   and stands with the frame above the cover in every view. **Devtools** leave the corner for
   Settings → Advanced, a "Developer" section shown in development builds only (FC-D12, F12).
+  *Amended 2026-10-27 (track TS; TS-D1, TS-D2, TS-D5, TS-D7 ruled by James):* the link row is
+  **Connect your devices…** (it wore "Link Tailscale account…"), shown while this Mac is not
+  connected and gone the moment it is. It still starts the link itself, and the browser opens
+  once, when the address is ready — the Connect pane and Settings → Devices now do the same
+  (TS-D5). The line under your name says **This Mac only** where it said "offline · not linked"
+  ("This PC only" on Windows): the ordinary first-run state, never red. While the link moves the
+  line says where it is, in the same 11px: "Connecting…", "Waiting for approval", "Sign-in renews
+  in 6 days" (in `--vf-ink-attention` from 14 days out), "Sign-in expired · this Mac only"
+  (attention ink). Connected, the login replaces them all. The row is the menu's one standing
+  ask (§8 "Asking again"): never badged, never on the face.
+- **The Connect pane** (Setup pane 4, and every surface that starts the link; track TS, ruled
+  2026-10-27 — TS-D1…TS-D8, TS-D12, TS-D13; the record is `draft/thinking-tailscale-onboarding.md`,
+  the page *Your Devices, One Field*). The pane keeps its place, the wizard's glass and its fixed
+  shell: nothing on it grows the shell. **Ask:** the eyebrow "Your devices", the title "Your field,
+  on every device.", a small constellation — your face at the centre, This Mac solid beside it, a
+  phone and another computer as dashed ghosts — beside three reasons, titles only ("Answer your
+  agents from your phone" · "Open sessions running on your other computers" · "Keep documents in
+  step across your desks"), and under them the **partner line**: Tailscale's mark (§13), "Private
+  network by Tailscale. Free for personal use; signing in creates an account if you don't have
+  one." and "Use the account you use for your own devices. A work account joins your company's
+  network." One primary act, **Continue with Tailscale** (↩), then **Not now** (esc), then a quiet
+  **Other ways to sign in**. "What VibeField can see", a quiet link, REPLACES the constellation in
+  place: VibeField learns your login and which of your devices are signed in; it joins as its own
+  device, with no VPN prompt and no change to this Mac's network settings; only you can reach this
+  Mac; your work goes device to device and Tailscale sees which devices connect, never what they
+  send; Settings → Devices → Disconnect undoes it. **One click to the browser** (TS-D5): the button
+  becomes its status ("Opening Tailscale…", M1), and the browser opens the moment the address
+  arrives, once, because the person clicked. **Waiting** names two true steps — "Sign in or create
+  an account at Tailscale" → "This Mac joins your network" — the live one breathing (§6's loop),
+  says "Tailscale will ask to connect `<machine name>`. That's this Mac.", and keeps its exits:
+  Open again · Copy link · Sign in on your phone (a QR of the same address, drawn locally) ·
+  Cancel. There is no timer: a new account takes the minutes it takes. **Approval** (a network
+  whose admin approves devices): the machine named as the console shows it; **Tell me when it's
+  approved** (the person carries on, and the face menu's line says "Waiting for approval"); Copy a
+  request for your admin (the machine name and the Machines page); Use another account; the
+  console's link for admins. **Arrival** (TS-D8): "Connected.", the account in mono, "Not this
+  account? Sign in again", and the account's devices arrive around your face (§6, the arrival).
+  When this Mac is alone, **Add your phone** is the primary act. **Not now** lands on the same
+  Ready pane; the face menu keeps Connect your devices… and nothing else asks until a moment where
+  it helps (§8 "Asking again"). The refusals keep the daemon's sentence and gain a person's words
+  and a way forward: "`<login>` already has a field here" with **Switch to `<user>`** and **Use
+  another account** (a second account is a second user — TS-D12 offers New user…); "That sign-in
+  can't own this Mac" (a tagged sign-in); "This Mac's link record is damaged" with Reveal in
+  Finder. **Other ways:** Sign in on your phone, and an auth key for a machine with no browser
+  (untagged; never stored). The sync question is not asked here: the first new project after
+  connecting asks it (TS-D13).
+- **Settings → Devices** (track TS, TS-D3 ruled 2026-10-27): the account's reach, one page under
+  the head, absorbing Mesh; Account keeps the profile and the users. In order: the **Tailscale
+  card** — the mark (§13), one state word (a green "Connected"; "This Mac only" muted; the
+  attention states in their ink), the login in mono and the tailnet, **Manage in Tailscale ↗**,
+  **Disconnect…**; **This Mac** — its name, the machine name as Tailscale shows it with Copy, and
+  the sign-in's renewal as "Due by 2 Nov" (the attention ink and **Sign in again** once due);
+  **Your devices** — quiet rows: an OS mark (§13's set), the name, one word, and Add a device;
+  **New projects** — the sync posture's two cards, moved from Account; **Network details**,
+  collapsed — today's mesh diagnostics in the panel's mono vocabulary, connection paths, and the
+  embedded client's version. Sheets: **Disconnect** signs this Mac out of Tailscale, then archives
+  its identity (TS-D14; until truffle can sign out, it archives and says the record stays in the
+  admin console until removed there) · **Add a device** (Phone | Computer) · **Use another
+  account** → New user… (TS-D12).
+- **Asking again** (track TS, TS-D7 ruled 2026-10-27; TS-L6): someone who said Not now said it
+  before they had a reason, so the offer returns only where a connected device would do the job —
+  the face menu's row (always, while not connected); a ghost row, "Your other devices", in
+  Godview's and History's device filters; Publish's choice of where to open; the status item's
+  **Connect Your Devices…** (title case, as macOS menus are); a card after an approval that waited
+  more than ten minutes, only once it is answered and never beside Allow and Deny; and a
+  once-only notice when the window closes with agents running. The rules: never on launch; each
+  place at most once per 30 days after Not now, and at most one a day across them; each has ×,
+  and one switch in Settings → Devices stops them all; each retires the moment the link lands. ×
+  sends a nudge back the way it came (M4, the retract, 180ms).
 - **The desk's chrome** (Chrome on the Mat MC-1…MC-6, 2026-09-28; MC-D1 ruled through One Frame's
   lock and MC-D10 with DK-D23, 2026-10-02; the orchestrator's Phase 4 rulings R1–R25, 2026-10-03,
   cited below as Rn; built on the desk by DK-11…DK-16): **the mat keeps its marks and the chrome
@@ -2982,6 +3061,15 @@ limit, the size is rounded up and the limit down, so the two never read as equal
 2026-10-18 (James). Known deviation, owed: the desk readout's GPU memory says MB for a count in
 1024s (`panels/DeskReadout.tsx`).*
 
+**The link's words** (track TS, TS-D1 and TS-D2 ruled 2026-10-27). The act is **Continue with
+Tailscale** on every button that starts it — the Connect pane, Settings → Devices, the phone — and
+the place that holds it says **Connect your devices**; the state is **Connected**. A desktop that
+is not connected is **This Mac only** ("This PC only" on Windows), never "offline", which a person
+reads as no internet. "Tailnet", "node" and "link" stay in Network details (TS-L2). Waiting says
+who must act: "Finish in your browser", "Waiting for approval", "Sign in to Tailscale again". The
+machine is named as Tailscale names it, in mono, so a person can match it on Tailscale's own page.
+Tailscale is named plainly, and its mark appears only where trust is decided (§13).
+
 *Status 2026-10-12: ruled and built. Built: the Lip and its two buttons, the groove, the frame's tone and the well (GV-D7, GV-D12); where a session with no pane opens (GV-D4); the terminals away and called up as they were left (GV-D5's call, GV-D6); the edge's three outcomes and their readouts, and the monitor making room; maximized, the bar the window's title bar (GV-D11); the monitor alone at launch, the first call bringing last run's panes with the one it called (GV-D5, N14 (a)); ⌘W on the last pane minimizing them (N16 (a)); rest, the drawing's share above a floor on every height (N15 (a)).*
 **The terminals' wrapper says the window's own words** (Godview, §8, the deck; One Frame §23.2 —
 "for close button, replace it with a minimize - button … for fill button, replace it with a
@@ -3330,7 +3418,16 @@ stills — and, on the desk, two named exceptions: the bar's ONE path renderer f
 the OS marks the device chip wears (Simple Icons, drawn inline in `os-marks.tsx` — the test's one
 other allowed file; a phone, wherever a surface marks one, wears the mark macOS wears, Apple's,
 since iOS's own is a word — James, DS-3: "do not use texts, use OS icons instead" — and no surface
-marks one today), the Face Club and AFTER HOURS art (§11), the file-tree family (§8). On the
+marks one today), the Face Club and AFTER HOURS art (§11), the file-tree family (§8), and
+**Tailscale's logomark** (track TS, TS-D4 ruled 2026-10-27), held to the rules of Tailscale's Brand
+Toolkit (its press and media kit, 10-2025): the nine dots exactly as its file draws them — the middle
+row and the bottom centre solid, the other five at 40% — never in one colour, never smaller than
+48 × 48 px (drawn at 56, so the dots themselves span 48), never on a busy ground, in
+`--vf-tailscale-ink` (`#1E1E1F` on light, `#FFFFFF` on dark, its two files' inks). It appears only
+where trust is decided — the Connect pane's partner line, Settings → Devices' card, the phone's
+sign-in — and every button stays words. It is drawn inline in `account/tailscale-mark.tsx`, the
+glyph test's allow-list naming it, and About carries "Tailscale is a registered trademark of
+Tailscale Inc.". On the
 phone (PJ-7) the OS marks are template SVGs in FieldDesign's `OSMarks.xcassets` (`DeviceMark`),
 copies of `os-marks.tsx`'s paths that `pnpm check:ios-fixtures` holds to them; and `start`,
 `resume` and `jump` join the phone's picks, so History's New agent, Resume and Jump to draw the

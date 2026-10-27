@@ -15956,3 +15956,37 @@ refused as LOG requires.
 - **Not witnessed here:** two pairs on the mini, both logging, is a later row with James's hands.
 - Records: `/Volumes/SamsungRed/lanes/item78/logs/`. A stray 2.2 GiB `target/` built by fieldd's vitest global setup
   without `CARGO_TARGET_DIR` was moved aside to `lanes/item78/stray-target-0700`, for the delete list.
+
+## TS-0 — the Tailscale door is ruled, and DESIGN.md says it first: the Connect pane, Settings → Devices, asking again, the link's words, the arrival's interval and Tailscale's logomark (2026-10-27; records only, lane `ts/0-records`)
+
+**What.** James ruled the fifteen marks of *Your Devices, One Field*
+(https://claude.ai/artifact/JNJa3uNgqPY6kpsrMfccJa) on the page between 07:07 and 07:11Z: A on every one, the
+leans. His next word (07:14Z): "all ruled, now plan and land this nicely". This entry lands the records before any
+code, because a visual change is written in DESIGN.md first (docs/UI_SYSTEM.md):
+- **§8** amends the Me menu: the row "Connect your devices…", "This Mac only" under your name, and the line's four
+  link states. It adds three canon entries:
+  - **The Connect pane**: Setup pane 4 and every surface that starts the link. It asks once with the payoff; one
+    click reaches the browser; waiting keeps its exits; it covers approval and arrival, re-voices the refusals, and
+    offers other ways in.
+  - **Settings → Devices**: the page that absorbs Mesh.
+  - **Asking again**: the moments and their rules.
+- **§9** adds "The link's words": Continue with Tailscale, Connect your devices, Connected, This Mac only.
+- **§6** records one interval with its reason: the arrival's devices 90 ms apart, since at 26 ms three of them land
+  inside two frames and read as one flash.
+- **§13** keeps Tailscale's logomark exact, as Tailscale's Brand Toolkit (media kit 10-2025) asks. It is two-tone,
+  never below 48 × 48 px, never on a busy ground, in `--vf-tailscale-ink`, and appears only where trust is decided.
+- **DECISIONS** gains the TS row (TS-D1…D15, TS-L1…L8), and **ROADMAP** the TS track.
+
+**Not in this entry.** No code. TS-1 (no dead ends: contracts, field-native and fieldd) is next, in lane ts1 under
+VF-PM's 07:27Z grant. `--vf-tailscale-ink` reaches `tokens.css` with the first UI slice (TS-2), along with the
+mark's file and its allow-list line.
+
+**Records.** The design record is `draft/thinking-tailscale-onboarding.md` (§9 the rulings, §10 the build ladder
+TS-0…TS-9; dev-local `036e67235`). The second code read behind the ladder found that truffle 0.7.23 already carries
+the no-timeout capture, the approval and expiry events, the admin console's URL and auth keys. Four petitions remain
+for upstream: an app-chosen hostname prefix, logout, the log-upload opt-out with a state event, and Tailnet Lock with
+the embedded version.
+
+**Validation.** Docs only, so verify executes nothing new. Four field-app tests read named DESIGN.md sentences
+(`godview-head`, `godview-deck-edge`, `project-ink`, `peers-on-the-mat`). The diff adds lines and rewrites one, §13's
+"Kept exact" sentence, which none of them reads.
