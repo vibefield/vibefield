@@ -6,9 +6,9 @@ import type { FieldUserProfile } from "../../host";
 // and its face in views/, one owner per file — this list is the one line two
 // tracks share (AO's agent chapter and TS's Connect pane), so it stays short.
 //
-// The questions run name → the agent chapter (Agents since AO-5, Profiles
-// joining it; History since AO-3) → Connect → the sync question (a linked
-// user's, until TS-6 moves it) → Setting up. A chapter pane with nothing to
+// The questions run name → the agent chapter (Agents and Profiles since AO-5,
+// History since AO-3) → Connect → the sync question (a linked user's, until
+// TS-6 moves it) → Setting up. A chapter pane with nothing to
 // decide moves on by itself (AO-L2). Setting up is
 // not a question: it reports the work the answers started, shows the desk
 // opening beneath it, and becomes Ready in place (AO-D2).
@@ -19,6 +19,8 @@ export type Pane =
   | "field"
   /** AO-5 — "Your agents are ready.": the agents on this Mac. */
   | "agents"
+  /** AO-5 — "Every subscription, side by side.": This Mac, and a profile more. */
+  | "profiles"
   /** AO-3 — "Bring in your past sessions.": whose history is read. */
   | "history"
   | "connect"
@@ -62,10 +64,16 @@ export function entryBeforeAsking(profile: FieldUserProfile): Pane | null {
  * (AO-2); a linked user lands on the sync question. */
 export function entryAfterName(
   variant: SetupVariant,
-  facts: { linked: boolean; agentsAnswered: boolean; historyAnswered: boolean },
+  facts: {
+    linked: boolean;
+    agentsAnswered: boolean;
+    profilesAnswered: boolean;
+    historyAnswered: boolean;
+  },
 ): Pane {
   if (variant === "migrated") return "setting-up";
   if (!facts.agentsAnswered) return "agents";
+  if (!facts.profilesAnswered) return "profiles";
   if (!facts.historyAnswered) return "history";
   return facts.linked ? "posture" : "connect";
 }
@@ -85,6 +93,8 @@ export function nextPane(
     case "field":
       return facts.variant === "migrated" ? "setting-up" : "agents";
     case "agents":
+      return "profiles";
+    case "profiles":
       return "history";
     case "history":
       return "connect";

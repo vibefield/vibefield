@@ -903,6 +903,12 @@ export function ProfilesSection({
         onMakeDefault={() => void update("default", { default: true })}
         onReveal={() => void reveal()}
         onDelete={() => void remove()}
+        onNewProfile={
+          // AO-5 — This Mac explains itself while it is the only profile
+          page.set.kind === "native" && context.sets.every((other) => other.kind === "native")
+            ? () => onRoute({ kind: "new" })
+            : undefined
+        }
         onPlanAct={(card) => {
           // a card's act is its agent's own login, in this profile's folder
           const target = page.set.personas.find(

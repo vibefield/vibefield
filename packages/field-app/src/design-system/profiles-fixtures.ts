@@ -28,6 +28,8 @@ export type ProfilesFixtureState =
   | "act running"
   | "act finished"
   | "this mac"
+  /** AO-5 — This Mac while it is the only profile: it explains itself */
+  | "this mac, alone"
   | "loading usage"
   | "refreshing usage"
   | "empty"
@@ -67,6 +69,7 @@ export const PROFILES_FIXTURE_STATES: readonly ProfilesFixtureState[] = [
   "act running",
   "act finished",
   "this mac",
+  "this mac, alone",
   "loading usage",
   "refreshing usage",
   "empty",

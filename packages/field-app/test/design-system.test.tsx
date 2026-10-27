@@ -438,12 +438,13 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(window.localStorage.getItem("vf-dark")).toBe("true");
     // One theme control per onboarding frame: eleven since AO-1 (2026-10-27),
     // when Ready and the second user's finishing folded into Setting up; twelve
-    // since AO-3, the agent chapter's History pane; thirteen since AO-5's Agents.
+    // since AO-3, the agent chapter's History pane; fourteen since AO-5's Agents
+    // and Profiles.
     expect(
       container?.querySelectorAll(
         '[data-onboarding-preview] button[aria-label="Switch to light mode"]',
       ),
-    ).toHaveLength(13);
+    ).toHaveLength(14);
 
     // One Frame FR-3: the playground's head runs on its real controller — its
     // chevron grows the pill into the fields explorer through the one owner.
@@ -520,12 +521,13 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     // AO-1 (2026-10-27): pane 3 retired, and Ready and the second user's
     // finishing folded into Setting up — the end of every path — whose own
     // refusals (the answers not saved, the desk that could not open) are frames.
-    // AO-3 adds the agent chapter's History pane, AO-5 its Agents pane.
-    expect(container?.querySelectorAll("[data-onboarding-preview]")).toHaveLength(13);
+    // AO-3 adds the agent chapter's History pane, AO-5 its Agents and Profiles.
+    expect(container?.querySelectorAll("[data-onboarding-preview]")).toHaveLength(14);
     for (const state of [
       "welcome",
       "field",
       "agents",
+      "profiles",
       "history",
       "connect",
       "posture",
@@ -539,7 +541,7 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     ]) {
       expect(container?.querySelector(`[data-onboarding-preview="${state}"]`)).not.toBeNull();
     }
-    expect(container?.querySelectorAll(".vf-wizard-shell")).toHaveLength(13);
+    expect(container?.querySelectorAll(".vf-wizard-shell")).toHaveLength(14);
     expect(container?.querySelector(".vf-ds-field-stage .vf-head-zoom")).not.toBeNull();
     expect(container?.querySelector("[data-ground-workbench]")).not.toBeNull();
     expect(container?.querySelector("[data-visual-tweak-controls]")).not.toBeNull();
@@ -660,6 +662,20 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(frame("agents").textContent).toContain("Add agents anytime in Settings → Agents.");
     await choose("agents", "unavailable");
     expect(frame("agents").textContent).toContain("Your agents.");
+
+    // AO-5 — the Profiles pane: This Mac's own sign-ins and the offer, then Add
+    // a profile… grown in place, a step at a time.
+    expect(frame("profiles").textContent).toContain("Every subscription, side by side.");
+    expect(frame("profiles").querySelector(".vf-profiles-pane-add")).not.toBeNull();
+    await choose("profiles", "name");
+    expect(frame("profiles").querySelector("#vf-profiles-pane-name")).not.toBeNull();
+    await choose("profiles", "signing in");
+    expect(frame("profiles").querySelector(".vf-profiles-signin")).not.toBeNull();
+    expect(frame("profiles").textContent).toContain("Finish or cancel the sign-in first.");
+    await choose("profiles", "ready");
+    expect(frame("profiles").textContent).toContain(
+      "Work is ready. It starts with clean settings: its own skills and servers.",
+    );
   });
 
   it("mounts the spawn bloom on the shipping monitor with its fixture door, and a create lands as a new terminal (SB-3)", async () => {

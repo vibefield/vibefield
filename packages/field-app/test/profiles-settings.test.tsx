@@ -1212,6 +1212,22 @@ describe("one agent inside a profile", () => {
 });
 
 describe("a new profile", () => {
+  it("explains itself on This Mac while it is the only profile, and offers New profile… (AO-5)", async () => {
+    const f = fake(doors({ "agents.profileSets.list": () => feed([NATIVE]) }));
+    const section = await mountSection(f.client, {
+      feed: feed([NATIVE]),
+      route: { kind: "profile", set: "native" },
+    });
+    expect(container?.querySelector(".vf-profiles-explain")?.textContent).toContain(
+      "Have another subscription?",
+    );
+    await click(button("New profile…"));
+    expect(section.onRoute).toHaveBeenCalledWith({ kind: "new" });
+    // a second profile retires it by itself: there is nothing to hide
+    await section.render({ feed: feed([NATIVE, WORK]) });
+    expect(container?.querySelector(".vf-profiles-explain")).toBeNull();
+  });
+
   it("suggests a glyph from the name until one is chosen, and makes the profile", async () => {
     const f = fake(
       doors({

@@ -1747,6 +1747,23 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   The profile is kept once its first agent says who signed in (AO-D7); Cancel leaves nothing behind.
   Done: "Work is ready. It starts with clean settings: its own skills and servers." Later: "Add one
   anytime in Settings → Agent Profiles."
+  *Built 2026-10-27, AO-5b:* the cards stack (the pane is the glass's one column): This Mac's rows are
+  Agent Profiles' own (`profilePage`), each saying "Signed in as {who}" with the plan it runs on by name
+  at the trailing edge, or "Not signed in" with **Sign in…**, which runs the agent's own login in the
+  card, in its own folder. Add a profile… steps: **Name this profile** (Enter is the add's Next, never
+  the pane's Continue), "Sign in to an agent in Work" (the installed agents that sign in), then the
+  login in the card. The profile is made as its login starts (the login writes into its folder) and is
+  kept once the agent says who signed in; Cancel deletes it. A login that ends before the agent says
+  who leaves it unkept, saying so in the agent's name, with **Sign in again** and **Cancel**: it is never
+  deleted unasked, because the login may have worked (AO-5a, on James's AO-D14, gives the unkept
+  profile fieldd's own mark). While a login is open, Continue and Back wait and the later line reads
+  "Finish or cancel the sign-in first." The glass scrolls a tall pane: while Add a profile… is open,
+  This Mac folds to one line (its agents' names) so the card has the pane, and each step, the login
+  above all, comes into view as it opens. The sign-in is Agent Profiles' own controller, shared. **This Mac explains itself**
+  on its Settings page while it is the only profile: "Have another subscription?" and "Give it a
+  profile. Each profile keeps its own sign-ins, so they work at the same time and never sign each other
+  out." with **New profile…**. It is page text, not a tip, and leaves by itself when a second profile
+  exists, so it has no Hide (the page's prototype drew one).
   **History — "Bring in your past sessions."** One row per agent that has history on this Mac, an agent
   no longer installed included: the mark, the label, its size (§9, as Finder counts it), when it was last
   used and where it lives (`~/.claude`, mono), and a switch. **Every switch starts on** (AO-D3); nothing

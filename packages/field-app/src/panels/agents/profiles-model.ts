@@ -573,7 +573,7 @@ export function signOutWords(
 }
 
 /** The sign-in terminal's note: where the sign-in lands. */
-export function signInNote(set: AgentProfileSet, label: string): string {
+export function signInNote(set: Pick<AgentProfileSet, "kind" | "label">, label: string): string {
   return set.kind === "native"
     ? `This runs in ${label}’s own folder, so the sign-in lands there.`
     : `This runs in ${set.label}’s folder, so the sign-in lands there and nowhere else.`;

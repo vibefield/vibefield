@@ -24,11 +24,20 @@ import {
 } from "../boot/onboarding/views/welcome";
 import { WizardShellView } from "../boot/onboarding/wizard-ui";
 import type { FieldUserFace } from "../host";
+import { signInNote } from "../panels/agents/profiles-model";
+import { signInEndNotice } from "../panels/agents/use-profile-sign-in";
 import { type AgentsInventory, AgentsWizardPaneView } from "../setup/AgentsPaneView";
 import { agentsPaneModel } from "../setup/agents-pane";
 import { HistoryConsentBody } from "../setup/HistoryConsentView";
 import { HistoryWizardPaneView } from "../setup/HistoryWizardPane";
 import { HISTORY_WORDS } from "../setup/history-words";
+import {
+  type AddProfileStep,
+  type PaneSignIn,
+  ProfilesPaneBody,
+  ProfilesWizardPaneView,
+} from "../setup/ProfilesPaneView";
+import { type ProfilesPaneModel, profilesPaneModel } from "../setup/profiles-pane";
 import {
   FIXTURE_FIRST_READING_FINDING,
   FIXTURE_FIRST_READING_FOUND,
@@ -37,6 +46,12 @@ import {
   FIXTURE_OTHERS,
 } from "./account-fixtures";
 import { fixtureAgentInstalls } from "./agents-fixtures";
+import {
+  FIXTURE_NATIVE,
+  FIXTURE_PROFILES_CONTEXT,
+  FIXTURE_SIGN_IN_OUTPUT,
+  FIXTURE_WORK,
+} from "./profiles-fixtures";
 
 const noop = (): void => undefined;
 
@@ -106,6 +121,70 @@ function agentsInventory(state: AgentsState): AgentsInventory {
       ? []
       : fixtureAgentInstalls().filter((install) => install.provider !== second);
   return { kind: "found", model: agentsPaneModel(AGENT_CATALOG, installs) };
+}
+
+/** AO-5 — the Profiles pane: This Mac alone, each step of Add a profile…, a
+ * login that ended before its agent said who, the profile kept, and the feed
+ * still being read. */
+const PROFILES_STATES = [
+  "this mac",
+  "name",
+  "agent",
+  "signing in",
+  "again",
+  "ready",
+  "reading",
+] as const;
+type ProfilesState = (typeof PROFILES_STATES)[number];
+
+/** The pane's parts for one state, through the shipping model and words. */
+function profilesFixture(state: ProfilesState): {
+  model: ProfilesPaneModel | null;
+  step: AddProfileStep;
+  signIn: PaneSignIn | null;
+} {
+  if (state === "reading") return { model: null, step: { kind: "offer" }, signIn: null };
+  const model = profilesPaneModel({
+    ...FIXTURE_PROFILES_CONTEXT,
+    sets: state === "ready" ? [FIXTURE_NATIVE, FIXTURE_WORK] : [FIXTURE_NATIVE],
+  });
+  const name = "Work";
+  // the still's login is This Mac's agent not signed in (the fixture's own),
+  // read from the model rather than named here
+  const waiting = model.thisMac?.rows.find((row) => row.canSignIn);
+  const provider = waiting?.provider ?? "";
+  const label = waiting?.label ?? "";
+  const step: AddProfileStep =
+    state === "name"
+      ? { kind: "name", name }
+      : state === "agent"
+        ? { kind: "agent", name }
+        : state === "signing in"
+          ? { kind: "signing-in", name, provider }
+          : state === "again"
+            ? {
+                kind: "again",
+                name,
+                provider,
+                said: signInEndNotice("unread", label)?.text ?? "",
+              }
+            : state === "ready"
+              ? { kind: "ready", name }
+              : { kind: "offer" };
+  const signIn: PaneSignIn | null =
+    state === "signing in"
+      ? {
+          at: "add",
+          provider,
+          agentLabel: label,
+          where: name,
+          note: signInNote({ kind: "managed", label: name }, label),
+          cancelling: false,
+          onCancel: noop,
+          terminal: <pre className="vf-agents-output-text">{FIXTURE_SIGN_IN_OUTPUT}</pre>,
+        }
+      : null;
+  return { model, step, signIn };
 }
 
 /** AO-3 — the History pane's census states, and every switch off (a no). */
@@ -210,6 +289,7 @@ export function OnboardingPreview({
 
           <FieldPreview />
           <AgentsPreview />
+          <ProfilesPreview />
           <HistoryPreview />
           <ConnectPreview />
           <PosturePreview />
@@ -368,6 +448,50 @@ function AgentsPreview(): ReactElement {
   );
 }
 
+/** The agent chapter's Profiles pane (AO-5): the shipping face on the catalog's
+ * profiles fixtures, each step of Add a profile… held still. */
+function ProfilesPreview(): ReactElement {
+  const [state, setState] = useState<ProfilesState>("this mac");
+  const { model, step, signIn } = profilesFixture(state);
+  return (
+    <OnboardingFrame
+      index="04"
+      label="Profiles"
+      note="This Mac in its own sign-ins · Add a profile… in place"
+      state="profiles"
+      controls={
+        <SegmentedControl
+          options={PROFILES_STATES}
+          value={state}
+          onChange={setState}
+          label="Profiles pane state"
+        />
+      }
+    >
+      <ProfilesWizardPaneView
+        holding={signIn !== null}
+        onContinue={noop}
+        onBack={noop}
+        body={
+          <ProfilesPaneBody
+            model={model}
+            step={step}
+            signIn={signIn}
+            notice={null}
+            onSignIn={noop}
+            onAdd={noop}
+            onName={noop}
+            onNext={noop}
+            onPick={noop}
+            onCancelAdd={noop}
+            onAgain={noop}
+          />
+        }
+      />
+    </OnboardingFrame>
+  );
+}
+
 /** The end of every path (AO-D2): the shipping pane, fed the boot machine's
  * states by hand so none of them advances on its own here. */
 /** The agent chapter's History pane (AO-3): the shipping face on a fixture
@@ -386,7 +510,7 @@ function HistoryPreview(): ReactElement {
   const choosing = census.kind === "found";
   return (
     <OnboardingFrame
-      index="04"
+      index="05"
       label="History"
       note="Every switch on · nothing read before the button"
       state="history"
@@ -430,7 +554,7 @@ function SettingUpPreview(): ReactElement {
   const [state, setState] = useState<SettingUpState>("drawing");
   return (
     <OnboardingFrame
-      index="07"
+      index="08"
       label="Setting up, then Ready"
       note="The desk opens beneath the glass · the title becomes the welcome in place"
       state="setting-up"
@@ -506,7 +630,7 @@ function ConnectPreview(): ReactElement {
   const pending = (): void => setStep({ kind: "pending" });
   return (
     <OnboardingFrame
-      index="05"
+      index="06"
       label="Connect devices"
       note="Every face the link shows, in the daemon's own words"
       state="connect"
@@ -585,7 +709,7 @@ function PosturePreview(): ReactElement {
 
   return (
     <OnboardingFrame
-      index="06"
+      index="07"
       label="Project default"
       note="Shared with Settings → Account"
       state="posture"

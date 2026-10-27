@@ -1,0 +1,232 @@
+/* The Profiles pane (track AO, AO-5; DESIGN.md §8 "The Setup Assistant's agent
+   chapter" — Profiles): This Mac as a card in the person's own sign-ins, the
+   profiles beside it, and the dashed Add a profile… card that grows into the
+   pane in place (M1). The chapter's row grammar (the Agents and History panes'),
+   neutral ink only; the one hue is Ready's healthy green. */
+.vf-profiles-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.vf-profiles-pane-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vf-profiles-pane-card,
+.vf-profiles-pane-grown {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--vf-fill);
+  box-shadow: 0 0 0 1px var(--vf-hairline);
+}
+
+.vf-profiles-pane-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--vf-text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.vf-profiles-pane-rows {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.vf-profiles-pane-row {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 10px;
+  min-height: 40px;
+  border-bottom: 1px solid var(--vf-hairline);
+}
+
+.vf-profiles-pane-row:last-child {
+  border-bottom: 0;
+}
+
+.vf-profiles-pane-mark {
+  display: flex;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+}
+
+.vf-profiles-pane-mark > svg {
+  width: 18px;
+  height: 18px;
+}
+
+.vf-profiles-pane-text {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.vf-profiles-pane-label {
+  color: var(--vf-text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.vf-profiles-pane-fact {
+  overflow: hidden;
+  margin: 0;
+  color: var(--vf-text-secondary);
+  font-size: 11.5px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-profiles-pane-plan {
+  color: var(--vf-text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.vf-profiles-pane-act {
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: var(--vf-text-primary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.vf-profiles-pane-act:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.vf-profiles-pane-add {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 2px;
+  padding: 10px 12px;
+  border: 1px dashed var(--vf-hairline-strong);
+  border-radius: 12px;
+  background: none;
+  color: var(--vf-text-primary);
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 180ms var(--vf-ease-island);
+}
+
+.vf-profiles-pane-add:hover {
+  background: var(--vf-fill-hover);
+}
+
+.vf-profiles-pane-add:focus-visible,
+.vf-profiles-pane-act:focus-visible,
+.vf-profiles-pane-pick:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: 2px;
+}
+
+.vf-profiles-pane-add-title {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.vf-profiles-pane-add-offer {
+  grid-column: 2;
+  color: var(--vf-text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.vf-profiles-pane-step {
+  color: var(--vf-text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.vf-profiles-pane-input {
+  height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--vf-fill-hover);
+  color: var(--vf-text-primary);
+  font-size: 13px;
+  outline: none;
+}
+
+.vf-profiles-pane-input:focus-visible {
+  box-shadow: 0 0 0 2px var(--vf-select);
+}
+
+.vf-profiles-pane-step-acts {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  padding-top: 4px;
+}
+
+.vf-profiles-pane-pick {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 10px;
+  min-height: 40px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--vf-text-primary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.vf-profiles-pane-pick:hover {
+  background: var(--vf-fill-hover);
+}
+
+.vf-profiles-pane-ready {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 6px;
+  color: var(--vf-text-primary);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.vf-profiles-pane-ready > .vf-glyph {
+  flex: none;
+  margin-top: 2px;
+  color: var(--vf-ink-healthy);
+}
+
+.vf-profiles-pane-note {
+  margin: 0;
+  color: var(--vf-text-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vf-profiles-pane-add {
+    transition: none;
+  }
+}

@@ -176,7 +176,11 @@ export function profilesPreviewHead(state: ProfilesFixtureState): {
     };
   }
   const set =
-    state === "this mac" ? FIXTURE_NATIVE : state === "empty" ? FIXTURE_DEMO : FIXTURE_WORK;
+    state === "this mac" || state === "this mac, alone"
+      ? FIXTURE_NATIVE
+      : state === "empty"
+        ? FIXTURE_DEMO
+        : FIXTURE_WORK;
   return { head: { title: set.label, description: "Agent profile" }, current: set.id };
 }
 
@@ -441,7 +445,11 @@ export function ProfilesSettingsPreview({
     );
   }
   const set =
-    state === "this mac" ? FIXTURE_NATIVE : state === "empty" ? FIXTURE_DEMO : FIXTURE_WORK;
+    state === "this mac" || state === "this mac, alone"
+      ? FIXTURE_NATIVE
+      : state === "empty"
+        ? FIXTURE_DEMO
+        : FIXTURE_WORK;
   const signing =
     state === "signing in" ? (
       <SignInCard
@@ -533,6 +541,7 @@ export function ProfilesSettingsPreview({
       onReveal={inert}
       onDelete={inert}
       onPlanAct={inert}
+      onNewProfile={state === "this mac, alone" ? inert : undefined}
     />
   );
 }

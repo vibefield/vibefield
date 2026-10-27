@@ -858,6 +858,9 @@ export interface ProfilePageViewProps {
   onDelete: () => void;
   /** a plan card's act: sign its account's agent in again, or a borrower in with its own login */
   onPlanAct?: ((card: PlanCard) => void) | undefined;
+  /** AO-5 — This Mac explains itself while it is the only profile: given, its
+   * page says what a profile is for and offers New profile… */
+  onNewProfile?: (() => void) | undefined;
 }
 
 export function ProfilePageView({
@@ -880,6 +883,7 @@ export function ProfilePageView({
   onReveal,
   onDelete,
   onPlanAct,
+  onNewProfile,
 }: ProfilePageViewProps): ReactElement {
   const { set, rows } = page;
   const managed = set.kind === "managed";
@@ -935,6 +939,21 @@ export function ProfilePageView({
         <InlineNotice tone={notice.tone} role={notice.tone === "error" ? "alert" : "status"}>
           {notice.text}
         </InlineNotice>
+      )}
+
+      {set.kind === "native" && onNewProfile !== undefined && (
+        <section className="vf-profiles-explain" aria-label="Another subscription">
+          <span className="vf-profiles-explain-text">
+            <span className="vf-profiles-explain-title">Have another subscription?</span>
+            <span>
+              Give it a profile. Each profile keeps its own sign-ins, so they work at the same time
+              and never sign each other out.
+            </span>
+          </span>
+          <UiButton className="vf-profiles-explain-act" onClick={onNewProfile}>
+            New profile…
+          </UiButton>
+        </section>
       )}
 
       {rows.length === 0 ? (

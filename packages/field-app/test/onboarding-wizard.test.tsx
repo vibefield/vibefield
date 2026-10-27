@@ -185,6 +185,7 @@ const CHAPTER_ANSWERED = {
   format: 1,
   steps: {
     agents: { state: "answered", at: "2026-10-27T05:41:20.000Z" },
+    profiles: { state: "answered", at: "2026-10-27T05:41:25.000Z" },
     history: { state: "answered", at: "2026-10-27T05:41:30.000Z" },
   },
   hidden: false,
@@ -359,6 +360,13 @@ async function arrive(done: () => boolean): Promise<void> {
   }
 }
 
+/** AO-5 — Profiles has nothing to explain from this harness (its daemon has no
+ * profiles feed), so once its code arrives it moves on by itself (AO-L2). */
+async function pastProfiles(): Promise<void> {
+  await arrive(() => title() !== "Every subscription, side by side.");
+  expect(title()).not.toBe("Every subscription, side by side.");
+}
+
 async function tick(ms: number): Promise<void> {
   await act(async () => {
     vi.advanceTimersByTime(ms);
@@ -429,6 +437,7 @@ describe("Setup Assistant", () => {
     expect(title()).toBe("Your agents.");
     expect(text()).toContain("Looking for your agents…");
     await click("Continue");
+    await pastProfiles();
 
     // History (AO-3) asks whose past comes in; with no census to give it
     // says it is looking too, and Continue moves on.
@@ -598,7 +607,8 @@ describe("Setup Assistant", () => {
 
     await click("Continue"); // the name → Agents (each person's own chapter)
     expect(title()).toBe("Your agents.");
-    await click("Continue"); // → History (each person's own past)
+    await click("Continue"); // → Profiles, which moves on here, → History
+    await pastProfiles();
     expect(text()).toContain("Bring in your past sessions.");
     await click("Continue"); // → Connect
     expect(text()).toContain("Your field, on every device.");
@@ -773,6 +783,7 @@ describe("Setup Assistant", () => {
     expect(title()).toBe("Your agents.");
     expect(text()).not.toContain("Bring in your past sessions.");
     await click("Continue"); // nothing known from this harness's inventory
+    await pastProfiles();
     expect(text()).toContain("Bring in your past sessions.");
   });
 
@@ -795,6 +806,7 @@ describe("Setup Assistant", () => {
       step: "agents",
       state: "answered",
     });
+    await pastProfiles();
     expect(text()).toContain("Bring in your past sessions.");
   });
 
@@ -805,7 +817,10 @@ describe("Setup Assistant", () => {
         link: NO_LINK,
         ledger: {
           format: 1,
-          steps: { agents: { state: "answered", at: "2026-10-27T05:41:20.000Z" } },
+          steps: {
+            agents: { state: "answered", at: "2026-10-27T05:41:20.000Z" },
+            profiles: { state: "answered", at: "2026-10-27T05:41:25.000Z" },
+          },
           hidden: false,
         },
       }),
@@ -1257,6 +1272,7 @@ describe("Setup Assistant", () => {
     await click("Get started");
     await click("Continue"); // nothing to write to — the pane still advances
     await click("Continue"); // Agents, with no inventory from this harness
+    await pastProfiles(); // Profiles, with nothing to explain
     await click("Continue"); // History, with nothing to ask from this harness
     await click("Not now");
     expect(onComplete).toHaveBeenCalledTimes(1);

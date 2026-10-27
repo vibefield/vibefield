@@ -13,6 +13,7 @@ import { ConnectPane } from "./panes/ConnectPane";
 import { FieldPane } from "./panes/FieldPane";
 import { HistoryPane } from "./panes/HistoryPane";
 import { PosturePane } from "./panes/PosturePane";
+import { ProfilesPane } from "./panes/ProfilesPane";
 import { SettingUpPane } from "./panes/SettingUpPane";
 import { UsersPane } from "./panes/UsersPane";
 import {
@@ -111,11 +112,12 @@ function WizardBody({
   // Read raw, not through `useSetupLedger`: the entry below waits while it is
   // still loading, which the hook's null does not tell apart from no ledger.
   const ledger = useSubscription<SetupLedger>("setup.subscribe");
-  const answered = (step: "agents" | "history"): boolean =>
+  const answered = (step: "agents" | "profiles" | "history"): boolean =>
     ledger.status === "live" &&
     ledger.data !== null &&
     setupStepState(ledger.data, step) !== undefined;
   const agentsAnswered = answered("agents");
+  const profilesAnswered = answered("profiles");
   const historyAnswered = answered("history");
 
   // W6 — the entry pane is DERIVED (order.ts): the top for a record that never
@@ -135,8 +137,18 @@ function WizardBody({
     if (pane !== null) return;
     // one honest beat, bounded: the link and the ledger both say where to resume
     if ((link.status === "loading" || ledger.status === "loading") && !settled) return;
-    setPane(entryAfterName(variant, { linked, agentsAnswered, historyAnswered }));
-  }, [pane, link.status, ledger.status, settled, variant, linked, agentsAnswered, historyAnswered]);
+    setPane(entryAfterName(variant, { linked, agentsAnswered, profilesAnswered, historyAnswered }));
+  }, [
+    pane,
+    link.status,
+    ledger.status,
+    settled,
+    variant,
+    linked,
+    agentsAnswered,
+    profilesAnswered,
+    historyAnswered,
+  ]);
 
   // Plain forward/back over panes. This is the ONLY position state in the
   // wizard and it lives for exactly as long as the window does — where you
@@ -209,6 +221,11 @@ function WizardBody({
       // Whatever Agents ended with (answered, put off with nothing installed,
       // or nothing known), the chapter moves on; the pane writes its answer.
       return shell(<AgentsPane onBack={onBack} onDone={() => go(nextPane("agents", facts))} />);
+
+    case "profiles":
+      // Answered on Continue, or moved past with nothing to explain (AO-L2); a
+      // profile made here is the profile feed's, whatever the pane ended with.
+      return shell(<ProfilesPane onBack={onBack} onDone={() => go(nextPane("profiles", facts))} />);
 
     case "history":
       // Whatever History ended with (answered, put off, or nothing to ask), the

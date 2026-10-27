@@ -904,3 +904,38 @@
     transition: none;
   }
 }
+
+/* AO-5 — This Mac explains itself while it is the only profile (DESIGN.md §8
+   "Settings → Agent Profiles", the agent chapter's later home): what a profile
+   is for, in one sentence, and New profile…. Page text, not a tip: it leaves
+   by itself once a second profile exists, so it has no Hide. */
+.vf-profiles-explain {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--vf-fill);
+  box-shadow: 0 0 0 1px var(--vf-hairline);
+}
+
+.vf-profiles-explain-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--vf-text-secondary);
+  font-size: 12px;
+  line-height: 17px;
+}
+
+.vf-profiles-explain-title {
+  color: var(--vf-text-primary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.vf-profiles-explain-act {
+  flex: none;
+  white-space: nowrap;
+}
