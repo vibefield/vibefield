@@ -23,7 +23,18 @@ describe("app preferences", () => {
       backgroundShell: true,
       screenshotHotkey: true,
       syncPosture: "automatic",
+      confirmQuit: true,
     });
+  });
+
+  it("asks before a quit that ends sessions by default, and respects 'Do not ask again' (AL-3)", () => {
+    expect(effectiveAppPreferences({}).confirmQuit).toBe(true);
+    expect(effectiveAppPreferences({ [APP_PREFERENCE_KEYS.CONFIRM_QUIT]: false }).confirmQuit).toBe(
+      false,
+    );
+    expect(effectiveAppPreferences({ [APP_PREFERENCE_KEYS.CONFIRM_QUIT]: "no" }).confirmQuit).toBe(
+      true,
+    );
   });
 
   it("enables the global screenshot chord by default and respects an explicit opt-out", () => {

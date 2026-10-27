@@ -42,6 +42,7 @@ export function DesktopSection({
   const showTray = preferences?.showTray ?? true;
   const backgroundShell = preferences?.backgroundShell ?? true;
   const screenshotHotkey = preferences?.screenshotHotkey ?? true;
+  const confirmQuit = preferences?.confirmQuit ?? true;
   const screenshotIssue = screenshotHotkey ? desktopState?.screenshotHotkey?.message : null;
   const trayUnavailable = desktopState?.tray.availability === "unavailable";
   const trayIssue = showTray ? desktopState?.tray.issue : null;
@@ -114,6 +115,19 @@ export function DesktopSection({
           )}
         </>
       )}
+      <SettingsRow
+        title="Ask before quitting"
+        description="When terminal sessions are running, quitting VibeField names the sessions it ends and asks first."
+      >
+        <SettingsSwitch
+          label="Ask before quitting"
+          checked={confirmQuit}
+          disabled={unavailable || pending !== null}
+          onChange={(checked) => {
+            void setPreference(APP_PREFERENCE_KEYS.CONFIRM_QUIT, checked);
+          }}
+        />
+      </SettingsRow>
       {subscription.status === "loading" && (
         <div className={`py-2 ${labelCls}`}>Loading preferences…</div>
       )}

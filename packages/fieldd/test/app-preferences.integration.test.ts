@@ -57,6 +57,7 @@ describe("trusted app preferences (D29′ desktop surface)", () => {
       backgroundShell: true,
       screenshotHotkey: true,
       syncPosture: "automatic",
+      confirmQuit: true,
     });
 
     await shell.call("storage.appPreferences.set", {
@@ -76,6 +77,7 @@ describe("trusted app preferences (D29′ desktop surface)", () => {
       backgroundShell: true,
       screenshotHotkey: true,
       syncPosture: "automatic",
+      confirmQuit: true,
     });
 
     const rendererGrant = daemon.tokens.mint(["settings.manage"], "test-window");
@@ -85,6 +87,7 @@ describe("trusted app preferences (D29′ desktop surface)", () => {
       backgroundShell: true,
       screenshotHotkey: true,
       syncPosture: "automatic",
+      confirmQuit: true,
     });
     await renderer.call("storage.appPreferences.set", {
       key: "desktop.screenshotHotkey",

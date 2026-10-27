@@ -58,7 +58,7 @@ export class FielddHandleCoordinator {
   async ensure(options?: { signal?: AbortSignal }): Promise<FielddHandle> {
     if (this.disposed) throw new Error("fieldd handle coordinator is disposed");
     if (this.held)
-      throw new Error("fieldd is held for an app update: nothing may start it until the app exits");
+      throw new Error("fieldd is held for a stop: nothing may start it until the app exits");
     let handle: FielddHandle;
     try {
       handle = await this.upstreamEnsure(options);
@@ -109,15 +109,21 @@ export class FielddHandleCoordinator {
     return handle;
   }
 
-  /** WP12c — an update is about to stop the daemons: from now `ensure()` refuses and a closed client recovers
-   * nothing. The current handle stays readable (`current`) for the stop request itself. */
-  holdForUpdate(): FielddHandle | null {
+  /** The live handle, if any — read without starting anything (AL-3: a quit must never spawn what it means to stop). */
+  get currentHandle(): FielddHandle | null {
+    return this.current;
+  }
+
+  /** WP12c, and AL-3 since 2026-10-27 — an update or a person's quit is about to stop the daemons: from now `ensure()`
+   * refuses and a closed client recovers nothing. The current handle stays readable for the stop request itself. */
+  holdForStop(): FielddHandle | null {
     this.held = true;
     this.clearReprobeTimer();
     return this.current;
   }
 
-  /** WP12c — the update aborted BEFORE the stop (nothing stopped): recovery and `ensure()` work again. */
+  /** WP12c / AL-3 — the update or the quit aborted BEFORE the stop (nothing stopped): recovery and `ensure()` work
+   * again. */
   releaseHold(): void {
     this.held = false;
   }

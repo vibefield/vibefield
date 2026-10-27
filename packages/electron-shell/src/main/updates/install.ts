@@ -4,19 +4,17 @@
 
 import { readdir, readFile, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
-import { SystemShutdownResult } from "@vibefield/contracts";
 import type { AuditAppendV1 } from "@vibefield/contracts/diagnostics";
 import type { FielddHandle } from "@vibefield/fieldd-supervisor";
 import { dialog, net, autoUpdater as squirrel } from "electron";
 import { autoUpdater, CancellationToken } from "electron-updater";
 import { getAppCacheDir } from "electron-updater/out/AppAdapter";
+import { readCensus, requestConsentedStop } from "../pair-stop";
 import type { QuitFlow } from "../quit-flow";
 import {
   type ApplyPort,
   type BoxContent,
-  CENSUS_BOUND_MS,
   type CensusSnapshot,
-  censusOf,
   NOTICE_AUTOCLOSE_MS,
   type StageOutcome,
   type StopOutcome,
@@ -143,7 +141,7 @@ export function createElectronApplyPort(deps: {
     /** the live handle (may spawn — only ever called BEFORE the stop) */
     ensure(): Promise<FielddHandle>;
     /** hold the coordinator (nothing may start fieldd from here) and return the current handle */
-    holdForUpdate(): FielddHandle | null;
+    holdForStop(): FielddHandle | null;
     releaseHold(): void;
   };
   readonly quitFlow: () => QuitFlow | null;
@@ -154,24 +152,9 @@ export function createElectronApplyPort(deps: {
   return {
     wired: deps.platform === "darwin",
 
-    async census(): Promise<CensusSnapshot> {
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      const unknown: CensusSnapshot = { known: false };
-      const read = (async (): Promise<CensusSnapshot> => {
-        const handle = await deps.fieldd.ensure();
-        // IL-D5 (a) — a list that names a cell older than its bound is unknown too (`censusOf`)
-        return censusOf(
-          await handle.client.request("terminal.list", {}, { timeoutMs: CENSUS_BOUND_MS }),
-        );
-      })().catch(() => unknown);
-      const answer = await Promise.race([
-        read,
-        new Promise<CensusSnapshot>((resolve) => {
-          timer = setTimeout(() => resolve(unknown), CENSUS_BOUND_MS);
-        }),
-      ]);
-      if (timer !== undefined) clearTimeout(timer);
-      return answer;
+    census(): Promise<CensusSnapshot> {
+      // IL-D5 (a) — a list that names a cell older than its bound is unknown too (`censusOf`)
+      return readCensus(async () => (await deps.fieldd.ensure()).client);
     },
 
     async confirm(content: BoxContent): Promise<boolean> {
@@ -196,43 +179,28 @@ export function createElectronApplyPort(deps: {
 
     async stopDaemons(sessions, version, native): Promise<StopOutcome> {
       // the hold FIRST: when fieldd goes, its client closes, and an unheld coordinator would start a new pair
-      const handle = deps.fieldd.holdForUpdate();
+      const handle = deps.fieldd.holdForStop();
       if (handle === null) {
         deps.fieldd.releaseHold();
         return { ok: false, reason: "fieldd is not attached" };
       }
-      try {
-        const answer = SystemShutdownResult.safeParse(
-          await handle.client.request(
-            "system.shutdown",
-            // B3: a release that leaves the floor's bytes alone stops fieldd alone (its plain stop), and the
-            // floor and its sessions live on for the next fieldd to adopt
-            native ? { native: { stop: true, sessions: [...sessions], toVersion: version } } : {},
-            { timeoutMs: STOP_DAEMONS_BOUND_MS },
-          ),
-        );
-        if (!answer.success || answer.data.stopping !== true) {
-          deps.fieldd.releaseHold();
-          return { ok: false, reason: "fieldd did not stop" };
-        }
-        deps.log.info("desktop.update.daemons_stopped", "The daemons stopped for the update", {
-          native: native ? (answer.data.native ?? null) : "kept",
-          sessions: sessions.length,
-        });
-        return { ok: true };
-      } catch (error) {
+      // B3: a release that leaves the floor's bytes alone stops fieldd alone (its plain stop), and the floor and its
+      // sessions live on for the next fieldd to adopt
+      const outcome = await requestConsentedStop(
+        handle.client,
+        { reason: "update", sessions, native, toVersion: version },
+        STOP_DAEMONS_BOUND_MS,
+      );
+      if (!outcome.ok) {
         // a refusal stops nothing (fieldd re-checked and said no): the coordinator may recover again
         deps.fieldd.releaseHold();
-        const details = (error as { details?: { live?: unknown } } | null)?.details;
-        const live = Array.isArray(details?.live)
-          ? details.live.filter((id): id is string => typeof id === "string")
-          : undefined;
-        return {
-          ok: false,
-          reason: error instanceof Error ? error.message : String(error),
-          ...(live !== undefined ? { live } : {}),
-        };
+        return outcome;
       }
+      deps.log.info("desktop.update.daemons_stopped", "The daemons stopped for the update", {
+        native: native ? (outcome.native ?? null) : "kept",
+        sessions: sessions.length,
+      });
+      return { ok: true };
     },
 
     stage(boundMs): Promise<StageOutcome> {

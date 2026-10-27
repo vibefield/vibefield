@@ -41,6 +41,9 @@ export function installDurableClose(
   win: BrowserWindow,
   logger?: Logger,
   onClosing?: () => void,
+  /** AL-D6 — the OS is ending the session: a failed drain closes without its box (loginwindow aborts a logout that an
+   * app holds 45 s), said in the log */
+  unattended?: () => boolean,
 ): void {
   let closeAllowed = false;
   let busy = false;
@@ -60,6 +63,16 @@ export function installDurableClose(
         error,
         { windowId: String(win.id) },
       );
+      if (unattended?.() === true) {
+        logger?.warn(
+          "desktop.window.close_forced_unattended",
+          "The OS is ending the session: the window closed without a successful renderer drain",
+          { windowId: String(win.id) },
+        );
+        closeAllowed = true;
+        if (!win.isDestroyed()) win.close();
+        return;
+      }
       const detail = error instanceof Error ? error.message : String(error);
       const choice = await dialog.showMessageBox(win, {
         type: "error",

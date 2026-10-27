@@ -34,6 +34,8 @@ export interface UpdateQuitPlan {
 }
 
 export interface QuitFlow {
+  /** AL-3 — an update's quit is armed: its own consent ran, so the quit gate does not ask again. */
+  readonly updateArmed: boolean;
   /** will-quit: ALWAYS defer the native quit; the first call starts teardown
    * and exits 0 when it settles. Later calls just keep deferring. */
   willQuit(preventDefault: () => void): void;
@@ -187,6 +189,9 @@ export function createQuitFlow(deps: {
     },
     updateInstallFailed(reason) {
       if (update !== null) stall(update, reason);
+    },
+    get updateArmed() {
+      return update !== null;
     },
   };
 }

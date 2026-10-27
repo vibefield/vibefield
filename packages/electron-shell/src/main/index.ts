@@ -25,7 +25,12 @@ import {
   type UsersCreateParams,
 } from "@vibefield/contracts";
 import { SupportBundleExportV1 } from "@vibefield/contracts/diagnostics";
-import type { FielddHandle, FielddSupervisor } from "@vibefield/fieldd-supervisor";
+import {
+  awaitDeparture,
+  type FielddHandle,
+  type FielddSupervisor,
+  tryAdopt,
+} from "@vibefield/fieldd-supervisor";
 import { type Logger, resolvePlatformLogRoot } from "@vibefield/logging";
 import { ScreenshotTool } from "@vibefield/screenshot";
 import {
@@ -95,14 +100,17 @@ import { LiveSurfaceWindowHost } from "./live-surfaces/window-host";
 import { ElectronLocalDiagnostics } from "./local-diagnostics";
 import { createElectronLogging, type ElectronLogging } from "./logging";
 import {
+  hasQuitGate,
   isSmokeLike,
   keepsFramesWhenCovered,
   keepsGpu,
   parseMode,
   rendererPolicyMode,
 } from "./modes";
+import { readCensus, requestConsentedStop } from "./pair-stop";
 import { installPluginProtocol } from "./plugin-protocol";
 import { RendererPluginProvenanceCatalog } from "./plugin-provenance";
+import { createQuitGate, type QuitGate, type QuitPair } from "./quit-gate";
 import { RecoveringFielddObservers } from "./recovering-fieldd-observers";
 import { installRendererLogging } from "./renderer-logging";
 import {
@@ -201,6 +209,10 @@ let supervisor: FielddSupervisor | null = null;
 let fielddHandles: FielddHandleCoordinator | null = null;
 /** WP12c — the quit flow, for the update apply's quit (assigned once the lifecycle is installed). */
 let lifecycleFlow: LifecycleFlow | null = null;
+/** AL-3 — the quit gate (built with the pairs in a gated mode) and the restore an aborted quit runs; null before the
+ * pairs exist and after teardown, when a person's quit leaves the pairs as before. */
+let quitGate: QuitGate | null = null;
+let restoreAfterAbortedQuit: (() => void) | null = null;
 /** P8b-2 — the live fieldd client the plugin protocol authorizes against. Null
  * until the pair is up, which is the honest state: with no authority reachable,
  * no plugin module is servable. */
@@ -1746,6 +1758,7 @@ async function main(
             () => {
               registry.markClosing(window);
             },
+            () => lifecycleFlow?.osSessionEnding === true,
           );
           await loadRenderer(
             window,
@@ -1812,6 +1825,21 @@ async function main(
   // WP12c (L2b-ii, build-wp12-updater.md §10) — the apply's port: the census and the consented stop through the held
   // coordinator (from the stop on, nothing may start fieldd), Squirrel staged only after the stop, the quit flow's
   // update mode. macOS only; elsewhere a staged update stays `apply-unbuilt`.
+  // WP12c / AL-3 — a quit that aborted before anything of the app's stopped (an update's re-check refused; a session
+  // was born during a person's quit and they kept the app): the app stays, the window comes back. The lifecycle has
+  // already cleared a quit's own state; an update's is cleared here.
+  const restoreAfterAbort = (what: "update" | "quit"): void => {
+    registry.cancelShutdown();
+    if (what === "update") lifecycleFlow?.resetAfterAbortedQuit();
+    trayController?.update({ quitting: false });
+    void revealPrimaryWindow().catch((error: unknown) => {
+      logger.error(
+        what === "update" ? "desktop.update.restore_failed" : "desktop.quit.restore_failed",
+        `The primary window could not reopen after an aborted ${what} quit`,
+        error,
+      );
+    });
+  };
   const applyPort =
     updateIdentity === null
       ? undefined
@@ -1819,24 +1847,12 @@ async function main(
           platform: process.platform,
           fieldd: {
             ensure: () => ensureFieldd(),
-            holdForUpdate: () => fielddHandles?.holdForUpdate() ?? null,
+            holdForStop: () => fielddHandles?.holdForStop() ?? null,
             releaseHold: () => fielddHandles?.releaseHold(),
           },
           quitFlow: () => lifecycleFlow,
           quitApp: () => app.quit(),
-          restore: () => {
-            // an update quit that aborted before the stop: the app stays, the window comes back
-            registry.cancelShutdown();
-            lifecycleFlow?.resetAfterAbortedQuit();
-            trayController?.update({ quitting: false });
-            void revealPrimaryWindow().catch((error: unknown) => {
-              logger.error(
-                "desktop.update.restore_failed",
-                "The primary window could not reopen after an aborted update quit",
-                error,
-              );
-            });
-          },
+          restore: () => restoreAfterAbort("update"),
           log: logger,
         });
   const updates =
@@ -1867,6 +1883,130 @@ async function main(
       "A dev-keyed build reads updates from VIBEFIELD_UPDATE_ORIGIN",
       { origin: updateIdentity.origin },
     );
+  }
+  // AL-3 (ESR §7.3 as amended 2026-10-27; `quit-gate.ts`) — a person's quit stops every pair this shell can reach,
+  // through the census gate: the pairs this run built (the attached user's among them), then every other user's
+  // resident pair, found by an adopt-only probe — never a spawn: a quit must not start what it means to stop.
+  if (hasQuitGate(MODE)) {
+    const quitPair = (pair: {
+      readonly label: string;
+      readonly attached: boolean;
+      readonly client: FielddHandle["client"];
+      readonly root: string;
+      readonly bootId: string;
+      readonly close?: () => void;
+    }): QuitPair => ({
+      label: pair.label,
+      attached: pair.attached,
+      census: () => readCensus(() => pair.client),
+      stop: async (sessions, reason) => {
+        const outcome = await requestConsentedStop(
+          pair.client,
+          { reason, sessions, native: true },
+          QUIT_STOP_BOUND_MS,
+        );
+        // the run files go with the pair, so a relaunch never adopts a daemon on its way out
+        if (outcome.ok) await awaitDeparture(pair.root, pair.bootId, QUIT_DEPARTURE_MS);
+        return outcome;
+      },
+      ...(pair.close !== undefined ? { close: pair.close } : {}),
+    });
+    quitGate = createQuitGate({
+      pairs: async () => {
+        const users = readUsersFile(attached.rootReal)?.users ?? [];
+        const pairs: QuitPair[] = [];
+        const reached = new Set<string>();
+        for (const [userId, bundle] of pairBundles) {
+          const handle = bundle.handles.currentHandle;
+          const user = users.find((u) => u.userId === userId);
+          if (handle === null || user === undefined) continue;
+          reached.add(userId);
+          pairs.push(
+            quitPair({
+              label: user.name,
+              attached: userId === attached.userId,
+              client: handle.client,
+              root: userRootFor(attached.rootReal, user),
+              bootId: handle.info.bootId,
+            }),
+          );
+        }
+        const probed = await Promise.all(
+          users
+            .filter((user) => !reached.has(user.userId))
+            .map(async (user) => {
+              const root = userRootFor(attached.rootReal, user);
+              const probe = await tryAdopt(
+                root,
+                RESIDENT_PROBE_MS,
+                undefined,
+                undefined,
+                user.userId,
+              );
+              if (!probe.ok) return null;
+              return quitPair({
+                label: user.name,
+                attached: user.userId === attached.userId,
+                client: probe.client,
+                root,
+                bootId: probe.info.bootId,
+                close: () => probe.client.close(),
+              });
+            }),
+        );
+        for (const pair of probed) if (pair !== null) pairs.push(pair);
+        return pairs;
+      },
+      confirmEnabled: () => {
+        const parsed = AppPreferences.safeParse(observedSnapshots.preferences);
+        return parsed.success ? parsed.data.confirmQuit : true;
+      },
+      confirm: async (box) => {
+        const options: Electron.MessageBoxOptions = {
+          type: "warning",
+          message: box.message,
+          detail: box.detail,
+          buttons: [...box.buttons],
+          defaultId: box.defaultId,
+          cancelId: box.cancelId,
+          noLink: true,
+          ...(box.suppressible
+            ? { checkboxLabel: "Do not ask again", checkboxChecked: false }
+            : {}),
+        };
+        const parent = registry.primary();
+        const answer =
+          parent !== null && !parent.isDestroyed()
+            ? await dialog.showMessageBox(parent, options)
+            : await dialog.showMessageBox(options);
+        return { confirmed: answer.response !== box.cancelId, suppress: answer.checkboxChecked };
+      },
+      suppress: () => {
+        void setAppPreference(APP_PREFERENCE_KEYS.CONFIRM_QUIT, false).catch((error: unknown) => {
+          logger.warn(
+            "desktop.quit.suppress_failed",
+            "'Do not ask again' could not be saved; the next quit asks again",
+            { error: error instanceof Error ? error.message : String(error) },
+          );
+        });
+      },
+      hold: () => {
+        for (const bundle of pairBundles.values()) bundle.handles.holdForStop();
+      },
+      release: () => {
+        for (const bundle of pairBundles.values()) bundle.handles.releaseHold();
+      },
+      log: logger,
+    });
+    restoreAfterAbortedQuit = () => restoreAfterAbort("quit");
+    // AL-D6 — logout, restart, power off (macOS, Linux): the quit that follows asks nothing
+    const onOsShutdown = (): void => lifecycleFlow?.noteOsSessionEnding();
+    powerMonitor.on("shutdown", onOsShutdown);
+    shellDisposers.add(() => {
+      powerMonitor.removeListener("shutdown", onOsShutdown);
+      quitGate = null;
+      restoreAfterAbortedQuit = null;
+    });
   }
   trayController = new TrayController({
     runtime: createElectronTrayRuntime(resources),
@@ -2263,10 +2403,17 @@ if (!hasInstanceLock) {
       disposeShell: disposeShellState,
       logger,
       closeLogging: closeEvidence,
+      getQuitGate: () => quitGate,
+      onQuitAborted: () => restoreAfterAbortedQuit?.(),
     });
     lifecycleFlow = flow;
     if (MODE === "dev") {
-      installDevSignalQuit(process, () => app.quit());
+      // AL-4 — a signal is never a person's quit: the runner restarts the shell (the next one adopts the pairs), or
+      // ends its session and stops the daemons itself. Only ⌘Q, the Dock, the tray and the menu meet the gate.
+      installDevSignalQuit(process, () => {
+        flow.leavePairsOnQuit("signal");
+        app.quit();
+      });
     }
     try {
       await main(userRoot, logRoot, logging, localDiagnostics, crashArtifacts, supportBundles, {
@@ -2286,6 +2433,13 @@ if (!hasInstanceLock) {
   });
 }
 
+/** AL-3 — a quit's consented stop: fieldd answers once the floor has stopped (its own bound covers the drain), so this
+ * is the update's bound. */
+const QUIT_STOP_BOUND_MS = 20_000;
+/** AL-3 — how long a quit waits for a stopped pair's run files to go (fieldd's plugin deactivation alone is up to 5 s). */
+const QUIT_DEPARTURE_MS = 8_000;
+/** AL-3 — the adopt-only probe of another user's resident pair (the supervisor's own adoption budget). */
+const RESIDENT_PROBE_MS = 1_500;
 /** WP12b — the bounded post-ready delay before the one launch check (EDP §11.2). */
 const UPDATE_LAUNCH_DELAY_MS = 30_000;
 /** WP12c — how often a staged update re-reads the session census for the tray's verb. */

@@ -2,7 +2,13 @@ import { type ChildProcess, spawn } from "node:child_process";
 import type { ProductInfo } from "@vibefield/contracts";
 import type { FielddClient } from "@vibefield/fieldd-client";
 import { assertDataRootUsable } from "./paths";
-import { type ProbeResult, readRecordedProduct, type StaleDaemon, tryAdopt } from "./probe";
+import {
+  awaitDeparture,
+  type ProbeResult,
+  readRecordedProduct,
+  type StaleDaemon,
+  tryAdopt,
+} from "./probe";
 import { createLineBuffer, createLogTail, redactLine } from "./process-log";
 import {
   type FielddHandle,
@@ -363,17 +369,11 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
       new Promise<boolean>((resolve) => setTimeout(() => resolve(false), SHUTDOWN_RPC_WAIT_MS)),
     ]);
     stale.client.close();
-    const deadline = Date.now() + REPLACE_WAIT_MS;
-    let gone = false;
-    while (Date.now() < deadline) {
-      throwIfAborted(signal);
-      const current = await readRecordedProduct(opts.dataRoot);
-      if (current === null || current.bootId !== stale.info.bootId) {
-        gone = true;
-        break;
-      }
-      await new Promise((resolve) => setTimeout(resolve, REPLACE_POLL_MS));
-    }
+    const gone = await awaitDeparture(opts.dataRoot, stale.info.bootId, REPLACE_WAIT_MS, {
+      pollMs: REPLACE_POLL_MS,
+      signal,
+    });
+    throwIfAborted(signal);
     if (gone) {
       lifecycle("fieldd.supervisor.replaced_build", "The other build's fieldd stopped", {
         pid: stale.info.pid,

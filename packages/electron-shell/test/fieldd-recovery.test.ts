@@ -115,11 +115,11 @@ describe("fieldd main-process recovery", () => {
     await coordinator.ensure();
     expect(upstream).toHaveBeenCalledTimes(1);
 
-    expect(coordinator.holdForUpdate()).toBe(current); // the stop request rides the CURRENT handle
+    expect(coordinator.holdForStop()).toBe(current); // the stop request rides the CURRENT handle
     client.status = "closed"; // fieldd stopped for the update
     for (const listener of [...statusListeners]) listener();
     await new Promise((resolve) => setTimeout(resolve, 20));
-    await expect(coordinator.ensure()).rejects.toThrow(/held for an app update/);
+    await expect(coordinator.ensure()).rejects.toThrow(/held for a stop/);
     expect(upstream).toHaveBeenCalledTimes(1); // no spawn was attempted
   });
 
@@ -128,7 +128,7 @@ describe("fieldd main-process recovery", () => {
     const upstream = vi.fn().mockResolvedValue(current) as unknown as FielddSupervisor["ensure"];
     const coordinator = new FielddHandleCoordinator(upstream);
     await coordinator.ensure();
-    coordinator.holdForUpdate();
+    coordinator.holdForStop();
     expect(coordinator.isHeld).toBe(true);
     coordinator.releaseHold();
     await expect(coordinator.ensure()).resolves.toBe(current);

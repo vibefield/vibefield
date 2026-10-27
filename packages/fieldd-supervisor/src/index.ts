@@ -8,7 +8,13 @@ export {
   runDir,
   tokenPath,
 } from "./paths";
-export { type ProbeResult, readRecordedProduct, type StaleDaemon, tryAdopt } from "./probe";
+export {
+  awaitDeparture,
+  type ProbeResult,
+  readRecordedProduct,
+  type StaleDaemon,
+  tryAdopt,
+} from "./probe";
 export {
   createLineBuffer,
   createLogTail,

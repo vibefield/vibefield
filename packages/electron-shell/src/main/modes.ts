@@ -95,6 +95,15 @@ export function keepsFramesWhenCovered(mode: ShellMode, argv: readonly string[])
   );
 }
 
+/** AL-3 (ESR §7.3 as amended 2026-10-27; `quit-gate.ts`) — the modes in which a
+ * PERSON's quit (⌘Q, Dock → Quit, the tray's or the menu's Quit) passes the quit
+ * gate and stops every pair. Production and dev alike (AL-D7: dev follows
+ * production; its signals are not a person's quit, `dev-signals.ts`). The smokes
+ * and labs keep their own policies: no hands answer a box there. */
+export function hasQuitGate(mode: ShellMode): boolean {
+  return mode === "production" || mode === "dev";
+}
+
 // The `--terminal-direct-door` rollback flag RETIRED at TP-S3e: the routed
 // transport is the only one, the production CSP admits the cells' loopback
 // WebSockets unconditionally (security-policy.ts), and the bridge it selected
@@ -115,6 +124,10 @@ export function keepsFramesWhenCovered(mode: ShellMode, argv: readonly string[])
  * `terminal-door-probe` (TP-S3a) is the same shape: its own pair, one session,
  * stop-owned. */
 export function shutdownPolicy(mode: ShellMode): "stop-owned" | "leave-running" {
+  // AL-3 (ESR §7.3 as amended 2026-10-27): `leave-running` is what DISPOSAL does —
+  // disconnect. A person's quit in a gated mode (`hasQuitGate`) has already stopped
+  // every pair through the census gate before disposal runs; a crash, a signal or
+  // a restart the shell performs leaves them, which is what this policy names.
   return mode === "smoke" ||
     mode === "smoke-canvas" ||
     mode === "smoke-plugin-restart" ||

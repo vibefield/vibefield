@@ -68,7 +68,8 @@ describe("DesktopSection", () => {
     const fieldd = client({ showTray: true, backgroundShell: true });
     await mount(fieldd, "linux");
     const switches = container?.querySelectorAll<HTMLButtonElement>('[role="switch"]');
-    expect(switches).toHaveLength(2);
+    // the status item, the close behavior, and (AL-3) asking before a quit that ends sessions
+    expect(switches).toHaveLength(3);
     expect(switches?.[0]?.getAttribute("aria-checked")).toBe("true");
     expect(switches?.[1]?.getAttribute("aria-checked")).toBe("true");
 
@@ -81,8 +82,23 @@ describe("DesktopSection", () => {
 
   it("hides the inapplicable close behavior on macOS", async () => {
     await mount(client({ showTray: true, backgroundShell: true }), "darwin");
-    expect(container?.querySelectorAll('[role="switch"]')).toHaveLength(2);
+    expect(container?.querySelectorAll('[role="switch"]')).toHaveLength(3);
     expect(container?.textContent).not.toContain("Keep running after window closes");
+  });
+
+  // AL-3 — "Do not ask again" in the quit box turns it off; this switch turns it back on
+  it("asks before quitting by default, and writes only desktop.confirmQuit", async () => {
+    const fieldd = client({ showTray: true, backgroundShell: true });
+    await mount(fieldd, "darwin");
+    const ask = container?.querySelector<HTMLButtonElement>(
+      '[role="switch"][aria-label="Ask before quitting"]',
+    );
+    expect(ask?.getAttribute("aria-checked")).toBe("true");
+    await act(async () => ask?.click());
+    expect(fieldd.request).toHaveBeenCalledWith("storage.appPreferences.set", {
+      key: "desktop.confirmQuit",
+      value: false,
+    });
   });
 
   it("defaults the global shortcut on, exposes conflicts, and writes its preference", async () => {

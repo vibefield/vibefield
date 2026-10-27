@@ -322,6 +322,9 @@ export const APP_PREFERENCE_KEYS = {
   BACKGROUND_SHELL: "desktop.backgroundShell",
   SCREENSHOT_HOTKEY: "desktop.screenshotHotkey",
   MESH_SYNC_POSTURE: "mesh.syncPosture",
+  /** AL-3 — a quit that would end terminal sessions asks first (`quit-gate.ts`); the box's "Do not ask again" turns it
+   * off, Settings turns it back on */
+  CONFIRM_QUIT: "desktop.confirmQuit",
 } as const;
 
 export const AppPreferenceKey = z.enum([
@@ -329,6 +332,7 @@ export const AppPreferenceKey = z.enum([
   APP_PREFERENCE_KEYS.BACKGROUND_SHELL,
   APP_PREFERENCE_KEYS.SCREENSHOT_HOTKEY,
   APP_PREFERENCE_KEYS.MESH_SYNC_POSTURE,
+  APP_PREFERENCE_KEYS.CONFIRM_QUIT,
 ]);
 export type AppPreferenceKey = z.infer<typeof AppPreferenceKey>;
 
@@ -346,6 +350,8 @@ export const AppPreferences = z
     // SNAP-1: global by default, including snapshots from an older daemon.
     screenshotHotkey: z.boolean().default(true),
     syncPosture: MeshSyncPosture,
+    // AL-3: on by default, including snapshots from an older daemon.
+    confirmQuit: z.boolean().default(true),
   })
   .passthrough();
 export type AppPreferences = z.infer<typeof AppPreferences>;

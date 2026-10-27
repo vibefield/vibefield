@@ -30,6 +30,23 @@ export async function readRecordedProduct(dataRoot: string): Promise<ProductInfo
   }
 }
 
+/** AL-3 / WP12 D10 — wait, bounded, until the daemon recorded as `bootId` has left `dataRoot`: its run files gone, or
+ * another boot's in their place. True when it left; false when the bound (or `signal`) came first. */
+export async function awaitDeparture(
+  dataRoot: string,
+  bootId: string,
+  boundMs: number,
+  options: { readonly pollMs?: number; readonly signal?: AbortSignal } = {},
+): Promise<boolean> {
+  const deadline = Date.now() + boundMs;
+  while (Date.now() < deadline && options.signal?.aborted !== true) {
+    const current = await readRecordedProduct(dataRoot);
+    if (current === null || current.bootId !== bootId) return true;
+    await new Promise((resolve) => setTimeout(resolve, options.pollMs ?? 100));
+  }
+  return false;
+}
+
 export async function tryAdopt(
   dataRoot: string,
   probeMs: number,

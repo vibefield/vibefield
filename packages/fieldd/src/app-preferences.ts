@@ -15,6 +15,8 @@ export const DEFAULT_APP_PREFERENCES: Readonly<AppPreferences> = {
   // UA-D7: `automatic` IS today's behavior, and that is why it is the default —
   // UA-6 must be invisible to a field nobody has touched a switch in.
   syncPosture: "automatic",
+  // AL-3 — a quit that would end sessions asks first, until the person says not to
+  confirmQuit: true,
 };
 
 export function effectiveAppPreferences(values: Readonly<Record<string, unknown>>): AppPreferences {
@@ -22,6 +24,7 @@ export function effectiveAppPreferences(values: Readonly<Record<string, unknown>
   const backgroundShell = values[APP_PREFERENCE_KEYS.BACKGROUND_SHELL];
   const screenshotHotkey = values[APP_PREFERENCE_KEYS.SCREENSHOT_HOTKEY];
   const posture = MeshSyncPosture.safeParse(values[APP_PREFERENCE_KEYS.MESH_SYNC_POSTURE]);
+  const confirmQuit = values[APP_PREFERENCE_KEYS.CONFIRM_QUIT];
   return {
     showTray: typeof showTray === "boolean" ? showTray : DEFAULT_APP_PREFERENCES.showTray,
     backgroundShell:
@@ -33,6 +36,8 @@ export function effectiveAppPreferences(values: Readonly<Record<string, unknown>
       typeof screenshotHotkey === "boolean"
         ? screenshotHotkey
         : DEFAULT_APP_PREFERENCES.screenshotHotkey,
+    confirmQuit:
+      typeof confirmQuit === "boolean" ? confirmQuit : DEFAULT_APP_PREFERENCES.confirmQuit,
   };
 }
 

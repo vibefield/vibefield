@@ -503,6 +503,8 @@ describe("tray shell commands and app preferences", () => {
       backgroundShell: false,
       screenshotHotkey: true,
       syncPosture: "opt-in",
+      // AL-3: an older daemon's snapshot has no confirmQuit; the default is to ask
+      confirmQuit: true,
     });
     expect(AppPreferences.safeParse({ showTray: true }).success).toBe(false);
     // UA-6: the posture is part of the EFFECTIVE snapshot, so a caller can
