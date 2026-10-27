@@ -63,6 +63,8 @@ export interface ScriptedRuntime {
   push(state: AgentMonitorState): void;
   remove(runtimeRunId: string, runtimeEpoch?: number): void;
   notify(notification: MonitorNotification): void;
+  /** M3 — the failures the runtime was asked to acknowledge, `[run, blocker]`, in order */
+  acknowledged: Array<[string, string]>;
 }
 
 export function scriptedRuntime(initial: readonly AgentMonitorState[] = []): ScriptedRuntime {
@@ -72,9 +74,25 @@ export function scriptedRuntime(initial: readonly AgentMonitorState[] = []): Scr
     (runtimeRunId: string, removal: { readonly runtimeEpoch: number }) => void
   >();
   const noticeListeners = new Set<(notification: MonitorNotification) => void>();
+  const acknowledged: Array<[string, string]> = [];
+  const remove = (runtimeRunId: string, runtimeEpoch = 1): void => {
+    states.delete(runtimeRunId);
+    for (const listener of [...removedListeners]) listener(runtimeRunId, { runtimeEpoch });
+  };
   return {
     states,
+    acknowledged,
     runtime: {
+      // M3 — puppeteer's verb, as the runtime answers it: a retained, dead
+      // failure blocker is taken and the run removed; anything else is refused
+      async acknowledgeFailureBlocker(runtimeRunId, blockerId) {
+        const state = states.get(runtimeRunId);
+        const failure = state?.blockers.find((blocker) => blocker.id === blockerId);
+        if (state === undefined || state.alive || failure?.kind !== "failure") return false;
+        acknowledged.push([runtimeRunId, blockerId]);
+        remove(runtimeRunId, state.runtimeEpoch);
+        return true;
+      },
       monitorStates: () => [...states.values()],
       onMonitorState(listener) {
         stateListeners.add(listener);
@@ -93,10 +111,7 @@ export function scriptedRuntime(initial: readonly AgentMonitorState[] = []): Scr
       states.set(state.runtimeRunId, state);
       for (const listener of [...stateListeners]) listener(state);
     },
-    remove(runtimeRunId, runtimeEpoch = 1) {
-      states.delete(runtimeRunId);
-      for (const listener of [...removedListeners]) listener(runtimeRunId, { runtimeEpoch });
-    },
+    remove,
     notify(notification) {
       for (const listener of [...noticeListeners]) listener(notification);
     },

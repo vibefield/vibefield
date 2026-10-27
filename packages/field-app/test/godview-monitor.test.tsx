@@ -1049,6 +1049,63 @@ describe("the monitor stage", () => {
     ).toBe(2);
   });
 
+  it("keeps a crashed run's body, its failure on it, until a screen shows its pane — then it leaves, the fold's row kept (Q06)", async () => {
+    // A25's launcher run: killed while another pane is focused, so nobody has
+    // seen it die. Its record is stamped, its PTY exited (the pane keeps the
+    // dead session), and puppeteer's failure is on it. A run that ended
+    // cleanly beside it is hidden, as every dead row was.
+    const live = managedSummary({ runtimeRunId: "run-crash", kind: "claude", label: "Claude" });
+    const door = fakeDoor([live]);
+    const working: MonitorPaneFacts = {
+      sessionIds: ["run-crash-pty", "pane-1"],
+      activeSessionId: "pane-1",
+      sessions: [pane("run-crash-pty"), pane("pane-1")],
+    };
+    await mountMonitor("list", door, working);
+    const run = (id: string): NonNullable<GodviewMonitorFacts["runs"]>[number] | undefined =>
+      latest().runs?.find((entry) => entry.run === id);
+    expect(run("run-crash")).toMatchObject({ exited: false, drawn: true });
+
+    const exited = { persisted: true, resumable: true, exited: true };
+    const crashed: AgentSessionSummary = {
+      ...managedSummary({
+        runtimeRunId: "run-crash",
+        kind: "claude",
+        label: "Claude",
+        status: "blocked",
+        alive: false,
+        blocker: { kind: "failure", detail: "Run failed: signal" },
+      }),
+      continuation: exited,
+    };
+    const ended: AgentSessionSummary = {
+      ...managedSummary({ runtimeRunId: "run-ended", alive: false, terminalSessionId: "pane-9" }),
+      continuation: exited,
+    };
+    act(() => {
+      door.push([crashed, ended]);
+    });
+    const dead: MonitorPaneFacts = {
+      sessionIds: ["run-crash-pty", "pane-1", "pane-9"],
+      activeSessionId: "pane-1",
+      sessions: [
+        { ...pane("run-crash-pty"), exited: true },
+        pane("pane-1"),
+        { ...pane("pane-9"), exited: true },
+      ],
+    };
+    await renderMonitor("list", door, dead);
+    expect(run("run-crash")).toMatchObject({ exited: true, drawn: true });
+    expect(run("run-ended")).toMatchObject({ exited: true, drawn: false });
+
+    // the person clicks into the dead pane: shown, so fieldd acknowledges the
+    // failure, puppeteer removes the run, and the body leaves
+    await renderMonitor("list", door, { ...dead, activeSessionId: "run-crash-pty" });
+    expect(run("run-crash")).toMatchObject({ exited: true, drawn: false });
+    // the fold still lists it: the dead pane's frame keeps its resume verb
+    expect(board?.rows().some((row) => row.runtimeRunId === "run-crash")).toBe(true);
+  });
+
   it("refreshes marker facts from chrome and drawn membership independently", async () => {
     const door = fakeDoor();
     await mountMonitor("list", door);

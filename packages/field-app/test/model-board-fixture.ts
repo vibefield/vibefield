@@ -134,9 +134,23 @@ function scriptedRuntime(): ScriptedRuntime {
     (runtimeRunId: string, removal: { readonly runtimeEpoch: number }) => void
   >();
   const noticeListeners = new Set<(notification: MonitorNotification) => void>();
+  /** M3 — runs whose failure was acknowledged: removed, and never a state again */
+  const acknowledged = new Set<string>();
   return {
     states,
     runtime: {
+      // M3 — puppeteer's verb (Q06: fieldd asks it for a failure a screen has
+      // shown): a retained, dead failure blocker is taken and the run removed
+      async acknowledgeFailureBlocker(runtimeRunId, blockerId) {
+        const state = states.get(runtimeRunId);
+        const failure = state?.blockers.find((blocker) => blocker.id === blockerId);
+        if (state === undefined || state.alive || failure?.kind !== "failure") return false;
+        acknowledged.add(runtimeRunId);
+        states.delete(runtimeRunId);
+        for (const listener of [...removedListeners])
+          listener(runtimeRunId, { runtimeEpoch: state.runtimeEpoch });
+        return true;
+      },
       monitorStates: () => [...states.values()],
       onMonitorState(listener) {
         stateListeners.add(listener);
@@ -156,7 +170,7 @@ function scriptedRuntime(): ScriptedRuntime {
     set(rows) {
       const next = new Map<string, AgentMonitorState>();
       for (const row of rows) {
-        if (row.monitor === undefined) continue;
+        if (row.monitor === undefined || acknowledged.has(row.runtimeRunId)) continue;
         const base = stateOf(row);
         // the runtime stamps every change with a newer revision, and the store
         // takes nothing older (`isNewerMonitorRevision`): a fixture's mirror

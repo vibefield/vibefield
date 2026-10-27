@@ -591,3 +591,129 @@ describe("the hosted backend — a shell promoted to an agent keeps its body (M2
     monitor.service.dispose();
   });
 });
+
+/** A run as the fold lists it once its process CRASHED: its record stamped
+ * (MF-1f keeps the row while the pane is listed) and puppeteer's failure on
+ * its mirror — the blocker the runtime publishes at a failed exit, alive no
+ * more, worded `Run failed: <code>`. */
+function crashed(base: AgentSessionSummary, code = "signal"): AgentSessionSummary {
+  const monitor = base.monitor;
+  if (monitor === undefined) throw new Error("a crash needs a mirror");
+  const at = "2026-09-13T10:05:05.000Z";
+  return {
+    ...base,
+    status: "blocked",
+    continuation: { persisted: true, resumable: true, exited: true },
+    monitor: {
+      ...monitor,
+      revision: monitor.revision + 1,
+      status: "blocked",
+      statusSince: at,
+      alive: false,
+      blockers: [
+        {
+          id: "run:runtime",
+          kind: "failure",
+          since: at,
+          detail: `Run failed: ${code}`,
+          failure: { code, recoverable: false },
+        },
+      ],
+    },
+  };
+}
+
+const kinds = (rows: readonly MonitorAgentRow[]): string[] =>
+  rows.map((row) => `${row.kind}:${row.id}`).sort();
+
+describe("the hosted backend — a crashed run stays until its pane is seen (Q06)", () => {
+  it("the failure stays on the row while another pane is shown; once a screen shows its pane, it is acknowledged once and the row leaves the model, the fold's row kept", async () => {
+    const live = summary({ runtimeRunId: "run-crashed", status: "working" });
+    const monitor = await testMonitor({
+      summaries: [live],
+      terminals: [floorTerminal({ sessionId: "run-crashed-pty", cwd: "/repo" }), floorTerminal()],
+    });
+    // born with its PTY listed: the run carries the PTY's id (M22)
+    expect(monitor.row("run-crashed").id).toBe("run-crashed-pty");
+    monitor.service.openScreen("win-1");
+    // the person works in another pane
+    expect(monitor.service.reportShown("win-1", ["pty-bare"])).toBe(true);
+    // the agent is killed: the fold stamps the exit, the runtime its failure
+    const dead = crashed(live);
+    monitor.fold.publish([dead]);
+    monitor.runtime.push(stateOf(dead));
+    expect(monitor.row("run-crashed")).toMatchObject({
+      id: "run-crashed-pty",
+      alive: false,
+      wait: { kind: "failure", code: "signal" },
+    });
+    expect(monitor.runtime.acknowledged).toEqual([]);
+    // another report of the other pane: still not seen
+    monitor.service.reportShown("win-1", ["pty-bare"]);
+    monitor.rows();
+    expect(monitor.runtime.acknowledged).toEqual([]);
+    // the person looks at its pane: the failure is acknowledged, the run removed
+    monitor.service.reportShown("win-1", ["run-crashed-pty"]);
+    await Promise.resolve();
+    expect(monitor.runtime.acknowledged).toEqual([["run-crashed", "run:runtime"]]);
+    expect(kinds(monitor.rows())).toEqual(["terminal:pty-bare", "terminal:run-crashed-pty"]);
+    expect(monitor.service.rowForRun("run-crashed")).toBeUndefined();
+    // the fold's own row is untouched: the dead pane keeps its resume verb (MF-1f)
+    expect(monitor.fold.list().sessions.map((row) => row.runtimeRunId)).toEqual(["run-crashed"]);
+    // shown again, nothing is asked twice
+    monitor.service.reportShown("win-1", ["run-crashed-pty"]);
+    expect(monitor.runtime.acknowledged).toHaveLength(1);
+    monitor.service.dispose();
+  });
+
+  it("a run that fails in the pane already shown is seen at once (A23's non-zero quit), and the pane's own session counts when the dead PTY is a row of its own", async () => {
+    const focused = summary({ runtimeRunId: "run-focused", status: "working" });
+    // its PTY not yet listed at its birth: the run carries its own id, and its
+    // dead PTY comes back as a bare terminal row once the run claims it no more
+    const monitor = await testMonitor({ summaries: [focused] });
+    expect(monitor.row("run-focused").id).toBe("run-focused");
+    monitor.terminals.observe([floorTerminal({ sessionId: "run-focused-pty", cwd: "/repo" })]);
+    monitor.rows();
+    monitor.service.openScreen("win-1");
+    // a live run shown is nothing to acknowledge
+    monitor.service.reportShown("win-1", ["run-focused-pty"]);
+    expect(monitor.runtime.acknowledged).toEqual([]);
+    const dead = crashed(focused, "crash");
+    monitor.fold.publish([dead]);
+    monitor.runtime.push(stateOf(dead));
+    monitor.rows();
+    // the pane the screen shows is the run's: its failure was seen as it came
+    expect(monitor.runtime.acknowledged).toEqual([["run-focused", "run:runtime"]]);
+    expect(monitor.service.rowForRun("run-focused")).toBeUndefined();
+    monitor.service.dispose();
+  });
+
+  it("a closed screen sees nothing, and a run that ended without a failure is never asked", async () => {
+    const later = summary({ runtimeRunId: "run-later", status: "working" });
+    const monitor = await testMonitor({
+      summaries: [later, exited],
+      terminals: [
+        floorTerminal({ sessionId: "run-later-pty", cwd: "/repo" }),
+        floorTerminal({ sessionId: "run-exited-pty", cwd: "/repo" }),
+      ],
+    });
+    monitor.rows();
+    const close = monitor.service.openScreen("win-1");
+    // the clean exit's pane, shown: a dead row with no failure is not one to take
+    monitor.service.reportShown("win-1", ["run-later-pty", "run-exited-pty"]);
+    expect(monitor.runtime.acknowledged).toEqual([]);
+    // the board closes; then the agent crashes
+    close();
+    const dead = crashed(later);
+    monitor.fold.publish([dead, exited]);
+    monitor.runtime.push(stateOf(dead));
+    monitor.rows();
+    expect(monitor.runtime.acknowledged).toEqual([]);
+    expect(monitor.row("run-later")).toMatchObject({ alive: false, wait: { kind: "failure" } });
+    // the next screen to show its pane sees it
+    monitor.service.openScreen("win-2");
+    monitor.service.reportShown("win-2", ["run-later-pty"]);
+    expect(monitor.runtime.acknowledged).toEqual([["run-later", "run:runtime"]]);
+    monitor.service.dispose();
+  });
+});

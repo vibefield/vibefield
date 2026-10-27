@@ -27,6 +27,7 @@ import type { MonitorFloorRecord } from "./agents";
 import { NO_RUNS, useChromeKey } from "./chrome-facts";
 import { type DeviceChoice, standingChoice } from "./device-filter";
 import { deviceFacet, useDeviceRoster } from "./devices";
+import { keepsFailure } from "./failed-bodies";
 import { createFindAgents, findJoinKey } from "./find-agents";
 import { useMonitorFeed } from "./GodviewAgentsProvider";
 import type { HeldModelRow } from "./model-board";
@@ -72,7 +73,8 @@ import { createWindowViewReplica, type WindowViewReplica } from "./window-view";
  *     born, what each pane's terminal is doing (M28), the body each row
  *     continues (M59: a launcher's agent takes the shell's place), which rows
  *     the chosen profile tab recedes, and which rows this window shows at all
- *     (M3: the live ones, and none whose pane has exited).
+ *     (M3: the live ones, and none whose pane has exited — save a crashed
+ *     run's, kept until a screen has shown its pane, Q06).
  *   · THE VERBS — every one through the DOOR the deck built (`MonitorDoor`): a
  *     local row's select brings its PTY into the terminals, a peer's attaches
  *     its terminal there, create opens an empty terminal — each placed by the
@@ -506,6 +508,9 @@ export function useMonitorAgents({
 
   // The exited panes: a dead pane is the deck's face to draw, not a row — and a
   // managed agent whose pane exited is dropped with it, as the seam dropped it.
+  // Q06 — save a crashed run: its failure is drawn on its body, dead pane or
+  // not, until a screen has shown that pane and fieldd has acknowledged it
+  // (`failed-bodies.ts`); then puppeteer removes the run and the row leaves.
   const exitedKey = (panes.sessions ?? [])
     .filter((session) => session.exited)
     .map((session) => joins.rowBySession.get(session.id) ?? session.id)
@@ -513,8 +518,10 @@ export function useMonitorAgents({
     .join("\n");
   const visible = useMemo(() => {
     const exited = new Set(exitedKey === "" ? [] : exitedKey.split("\n"));
-    return (row: MonitorAgentRow): boolean => row.alive && !exited.has(row.id);
-  }, [exitedKey]);
+    const panesHere = joins.sessionByRow;
+    return (row: MonitorAgentRow): boolean =>
+      (row.alive && !exited.has(row.id)) || keepsFailure(row, panesHere);
+  }, [exitedKey, joins]);
   const receded = useMemo(
     () =>
       chosenProfile === undefined

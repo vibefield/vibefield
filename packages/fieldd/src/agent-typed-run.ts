@@ -29,7 +29,8 @@ export function isTypedRun(run: { spawnedBy?: string | undefined }): boolean {
 
 /** How often a typed run's pid is asked whether it still lives, and how long
  * the terminal's own exit report is given to arrive first (it carries what a
- * vanished pid cannot: whether the shell itself ended, and how). */
+ * vanished pid cannot: whether the shell itself ended, and how — or, in the
+ * shell's own command-end report, the status it reaped, Q06). */
 export const TYPED_WATCH = { intervalMs: 250, graceMs: 250 } as const;
 
 export interface TypedWatchOptions {
@@ -52,6 +53,56 @@ export function watchTypedProcess(
     },
     onExit,
   );
+}
+
+/**
+ * Q06 — a shell's report that a command it ran has ENDED: its integration's
+ * command-end mark (OSC 133;D) with the status the shell reaped, and the
+ * process group the command ran as. It is how a typed run's crash is told from
+ * a clean quit, which a vanished pid cannot tell (the agent is the shell's
+ * child, and only the shell reaps it).
+ *
+ * NOT ON ANY WIRE YET. ghosttea's protocol at the pin (0.13.7) has no such
+ * event: a session's activity says `shell-idle` or `foreground-job` from its
+ * process groups, and nothing carries a status. So nothing produces this
+ * today; the floor's event, once it exists, is fanned out by the terminal
+ * service and reaches `AgentRuntimeService.handleCommandFinished` as
+ * `session-exited` reaches `handleTerminalExit`. Its wire shape is then a
+ * contract (`packages/contracts`), this its reading.
+ */
+export interface TerminalCommandFinished {
+  /** the floor session whose shell ran the command */
+  sessionId: string;
+  /** the status the shell reaped: 0 is a clean end; a shell reports a signal
+   * as 128 plus its number, which a program's own exit code can also be */
+  exitCode: number;
+  /** the process group the command ran as, its job's leader; absent when the
+   * floor cannot say, and then the report speaks for no run */
+  processGroupId?: number | undefined;
+}
+
+/** A process's end as the fold stamps it and puppeteer reads it. */
+export interface TypedExit {
+  exitCode: number | null;
+  signal: string | null;
+  reason: string;
+}
+
+/** Q06 — the record's word for a typed run that FAILED by its shell's report:
+ * the job's own non-zero status, as the shell reaped it — never a vanished
+ * pid's `process-exited`, which says nothing of how, nor the terminal's own
+ * end, which is the shell's and not the agent's. */
+export const COMMAND_FAILED = "command-failed";
+
+/** Q06 — a typed run's exit from its shell's report: 0 is the clean end the
+ * floor words `completed`; any other status is the process's failure, carried
+ * as its code and never decoded into a signal (above 128 is a shell's
+ * convention, not evidence). puppeteer reads a non-zero code as a crash
+ * (`processExitReason`: no signal, a code that is not 0). */
+export function typedExitOf(report: Pick<TerminalCommandFinished, "exitCode">): TypedExit {
+  return report.exitCode === 0
+    ? { exitCode: 0, signal: null, reason: "completed" }
+    : { exitCode: report.exitCode, signal: null, reason: COMMAND_FAILED };
 }
 
 /** One read of the whole process table — the kit's (`ps`, once): every pid,

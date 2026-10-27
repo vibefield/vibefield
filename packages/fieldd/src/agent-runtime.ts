@@ -103,11 +103,15 @@ import {
   summarizePending,
 } from "./agent-sessions";
 import {
+  COMMAND_FAILED,
   isTypedRun,
   processIsGone,
   readProcesses,
   SPAWNED_BY_SHELL,
+  type TerminalCommandFinished,
+  type TypedExit,
   type TypedWatchOptions,
+  typedExitOf,
   typedRunProof,
   watchTypedProcess,
 } from "./agent-typed-run";
@@ -1605,7 +1609,11 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       record.runtimeRunId,
     );
     if (running !== undefined) throw conversationRunning(running);
-    const husk = this.exited.get(record.runtimeRunId)?.terminalSessionId;
+    // Q06 — a typed run's held row names the person's live shell, which is
+    // never a husk: the successor takes a pane of its own and the shell stays
+    const husk = isTypedRun(record)
+      ? undefined
+      : this.exited.get(record.runtimeRunId)?.terminalSessionId;
     // and no resume of either form is starting it right now (claimed before
     // the await, as the native form claims it)
     const release = this.claimConversation(
@@ -1860,6 +1868,33 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       return;
     }
     await this.closeRun(runtimeRunId, exit);
+  }
+
+  /** Q06 — a shell's command-end report (`TerminalCommandFinished`; nothing
+   * produces one yet, see there). When the command was a typed run's own
+   * process, the run closes with the status its shell reaped, so a crash is
+   * told from a clean quit, and a run that failed keeps its row until its
+   * failure is seen (`holdExited`). The report rides the PTY's output, which
+   * the agent itself can write (EL7): it is taken only for the job the run's
+   * own pid leads and only once that process is GONE, so a report never ends
+   * a live run, and at worst an agent words its own end — the bound a typed
+   * record already has. One that speaks for no run here changes nothing, and
+   * the pid watch stays the fallback (a shell with no integration, a report
+   * later than the watch's grace). */
+  async handleCommandFinished(report: TerminalCommandFinished): Promise<void> {
+    const runtimeRunId = this.byTerminal.get(report.sessionId);
+    if (runtimeRunId === undefined) return;
+    const pending = this.pending.get(runtimeRunId);
+    const typed =
+      this.managed.get(runtimeRunId)?.typed ??
+      (pending !== undefined && isTypedRun(pending.record) ? pending.record.process : undefined);
+    if (typed === undefined || report.processGroupId !== typed.pid) return;
+    if (!processIsGone(typed.pid)) return;
+    if (pending !== undefined) {
+      this.closePending(runtimeRunId, typedExitOf(report));
+      return;
+    }
+    await this.closeRun(runtimeRunId, typedExitOf(report));
   }
 
   /** Item 81 — a session registered here after its birth answered may already
@@ -2473,6 +2508,14 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       );
     }
     this.yieldTerminal(info.terminalSessionId, info.runtimeRunId, input.process);
+    // Q06 — a failed typed run still held in this shell gives way: the person
+    // is at its pane, typing, and the new run takes the shell's body (one
+    // publish below carries both)
+    for (const [held, exited] of [...this.exited]) {
+      if (exited.terminalSessionId === info.terminalSessionId && isTypedRun(exited.record)) {
+        this.dropExited(held, "a new run was typed in its pane");
+      }
+    }
     const terminals = this.opts.terminals?.() ?? null;
     const row =
       terminals !== null && this.listed(terminals, info.terminalSessionId)
@@ -3556,12 +3599,19 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   /** MF-1f — hold an exited run's row while its pane is still on the floor.
    * Called at the exit this daemon watched; the restart path (`reattach`)
    * builds the same row from the record alone. */
-  private holdExited(entry: ManagedEntry): void {
+  private holdExited(entry: ManagedEntry, exit: Pick<TypedExit, "reason">): void {
     if (this.disposed) return;
     // AR-7 — a typed run's row is WITHDRAWN, never held: the exited row is for
     // a DEAD pane that still wears a resume verb, and a typed run's pane is a
-    // live shell the person goes on using
-    if (entry.typed !== undefined) return;
+    // live shell the person goes on using. Q06 (James, 2026-10-27) — save a
+    // typed run its shell reported FAILED (`handleCommandFinished`: its own
+    // job's non-zero status, the shell still there): its row stays,
+    // puppeteer's failure on it, until the person has seen its pane. The
+    // monitor acknowledges it then, puppeteer removes the run, and the row
+    // goes (`onMonitorRemoved`) — or sooner, when the shell leaves the floor
+    // or a new run is typed in it (`adopt`). Its shell is never a husk for a
+    // resume (`resumeRun`).
+    if (entry.typed !== undefined && exit.reason !== COMMAND_FAILED) return;
     const terminalSessionId = entry.info.terminalSessionId;
     const terminals = this.opts.terminals?.() ?? null;
     // The floor's OWN listing is the only evidence that the pane is there. No
@@ -3705,6 +3755,14 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   }
 
   private onMonitorRemoved(runtimeRunId: string): void {
+    // Q06 — a typed run's failure, held until seen, was acknowledged: the row
+    // goes and the shell is a bare terminal again. A spawned run's exited row
+    // stays, since its dead pane still wears the resume verb (MF-1f).
+    const held = this.exited.get(runtimeRunId);
+    if (held !== undefined && isTypedRun(held.record)) {
+      if (this.dropExited(runtimeRunId, "its failure was seen")) this.publish();
+      return;
+    }
     const entry = this.managed.get(runtimeRunId);
     if (entry === undefined || entry.exiting) return;
     // puppeteer withdrew the run (terminal, or the runtime is disposing): the
@@ -3763,7 +3821,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     // MF-1f — the process is over, but the PANE may not be: while the floor
     // still lists this PTY the deck is showing it, so the row stays (carrying
     // the mirror's last state and the resume verb) until the pane goes.
-    this.holdExited(entry);
+    this.holdExited(entry, exit);
     // AR-D25 — the last session of a signed-out persona lets it be finished
     if (entry.info.profileId !== undefined) void this.profiles.sweep();
     this.logger.info("fieldd.agents.session_exited", "Managed agent session exited", {

@@ -317,6 +317,15 @@ export function hostFactsFrom(input: {
   };
 }
 
+/** Q06 — a crashed run's failure, as a window draws it: a dead agent row whose
+ * wait is the runtime's failure (puppeteer retains it until acknowledged, M3).
+ * Its `since` tells one failure from the next (a run resumed, then failed
+ * again); undefined for any other row. */
+function failureSince(row: MonitorAgentRow | undefined): number | undefined {
+  if (row === undefined || row.kind !== "agent" || row.alive) return undefined;
+  return row.wait?.kind === "failure" ? row.wait.since : undefined;
+}
+
 /** What a person waits on, moved: the facts the window must see at once (L12). */
 export function isUrgentChange(
   previous: ReadonlyMap<string, MonitorAgentRow>,
@@ -450,6 +459,52 @@ export function createAgentMonitorService(opts: AgentMonitorServiceOptions): Age
 
   const screens = new Set<string>();
 
+  // Q06 (James, 2026-10-27, "B · Keep a failed body until you look") — a
+  // crashed run keeps its row, the failure on it, until the person has SEEN
+  // its pane: until an open screen reports shown its row, or the floor session
+  // its pane is (the fold's join; a dead PTY is a bare terminal row again, and
+  // this host keys a terminal row by its session). What a window reports
+  // shown is its focused pane while the terminals are up and the row the
+  // person pointed at (Q04), so that is the seeing. The failure is then
+  // acknowledged (the backend's M3 command): puppeteer removes the run and the
+  // row leaves the model for every screen. The fold's own row is untouched —
+  // a dead pane keeps its resume verb (MF-1f). Asked at each report and at
+  // each model change, since a run can fail in the pane already shown; each
+  // failure once, by run and `since`.
+  const shownByScreen = new Map<string, ReadonlySet<string>>();
+  const acknowledged = new Map<string, number>();
+  const acknowledgeSeen = (): void => {
+    if (disposed) return;
+    const shown = new Set<string>();
+    for (const [screenId, ids] of shownByScreen) {
+      if (!screens.has(screenId)) shownByScreen.delete(screenId);
+      else for (const id of ids) shown.add(id);
+    }
+    const failed = new Set<string>();
+    for (const summary of rows.sessions) {
+      const id = backend.idOf(summary.runtimeRunId);
+      const since = failureSince(id === undefined ? undefined : index().get(id));
+      if (id === undefined || since === undefined) continue;
+      failed.add(summary.runtimeRunId);
+      if (acknowledged.get(summary.runtimeRunId) === since) continue;
+      const terminal = summary.terminal;
+      const pane = terminal?.hosted === "local" ? terminal.runtimeSessionId : undefined;
+      if (!shown.has(id) && (pane === undefined || !shown.has(pane))) continue;
+      acknowledged.set(summary.runtimeRunId, since);
+      if (!backend.command({ type: "acknowledge", id })) {
+        logger.warn(
+          "fieldd.monitor.failure_unacknowledged",
+          "A failure a screen showed could not be acknowledged; its row stays",
+          { runtimeRunId: summary.runtimeRunId },
+        );
+      }
+    }
+    for (const runtimeRunId of [...acknowledged.keys()]) {
+      if (!failed.has(runtimeRunId)) acknowledged.delete(runtimeRunId);
+    }
+  };
+  unsubscribe.push(backend.subscribe(() => acknowledgeSeen()));
+
   return {
     backend,
     ready: backend.ready,
@@ -494,7 +549,9 @@ export function createAgentMonitorService(opts: AgentMonitorServiceOptions): Age
     },
     reportShown(screenId, ids) {
       if (disposed || !screens.has(screenId)) return false;
+      shownByScreen.set(screenId, new Set(ids));
       backend.reportShown(screenId, ids);
+      acknowledgeSeen();
       return true;
     },
     readPast: (window) => backend.readPast(window),

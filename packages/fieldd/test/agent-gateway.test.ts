@@ -3091,6 +3091,98 @@ describe("a name typed in a pane — the REAL floor (AR-7b)", () => {
   );
 
   it(
+    "row 3b — Q06, the shell's report tells a crash: one for a process still running, or for a job the run does not lead, changes nothing; its own job reaped at 137 closes the run FAILED, and its row stays, puppeteer's failure on it and the shell the pane's, until the failure is acknowledged",
+    async () => {
+      // No floor event carries a command's status yet (ghosttea 0.13.7), so the
+      // report is handed in as the floor would: `TerminalCommandFinished`. The
+      // watch's grace is long, so the run can only close through the report.
+      const box = await floor({ bundle: shimScript, gateway: { watch: { graceMs: 30_000 } } });
+      const pane = await openPane(box);
+      await type(box, pane, TYPED_COMMAND);
+      const row = await adopted(box, pane);
+      const pid = readRecord(box.dataDir, row.runtimeRunId).process?.pid as number;
+      await until(() => (linesOf(box.script.managedLog).length === 1 ? true : undefined));
+      const report = (exitCode: number, processGroupId: number) =>
+        box.daemon.agents.handleCommandFinished({
+          sessionId: pane.sessionId,
+          exitCode,
+          processGroupId,
+        });
+
+      // the mark rides the PTY's output, which the agent can write itself (EL7):
+      // while its process lives, no report ends the run
+      await report(1, pid);
+      expect(rowOf(box, row.runtimeRunId)?.continuation?.exited).toBeUndefined();
+      process.kill(pid, "SIGKILL");
+      await until(() => (isAlive(pid) ? undefined : true), FLOOR_WAIT_MS, "the agent reaped");
+      // a job the run's pid does not lead says nothing about the run
+      await report(137, pane.pid);
+      expect(rowOf(box, row.runtimeRunId)?.continuation?.exited).toBeUndefined();
+
+      // its own job, reaped by the shell at 128 + 9
+      await report(137, pid);
+      expect(rowOf(box, row.runtimeRunId)).toMatchObject({
+        spawnedBy: "user-shell",
+        terminal: { hosted: "local", runtimeSessionId: pane.sessionId },
+        continuation: { exited: true },
+      });
+      expect(readRecord(box.dataDir, row.runtimeRunId).exited).toMatchObject({
+        exitCode: 137,
+        signal: null,
+        reason: "command-failed",
+      });
+      // puppeteer's words for it: a failure it keeps until acknowledged (M3)
+      const failure = box.daemon.agents.runtime
+        .monitorState(row.runtimeRunId)
+        ?.blockers.find((blocker) => blocker.kind === "failure");
+      expect(failure).toMatchObject({ id: "run:runtime", failure: { code: "crash" } });
+      // the shell is the pane's, untouched
+      expect(listedRow(box, pane.sessionId)?.pid).toBe(pane.pid);
+      await answers(box, pane, "alive");
+
+      // seen: the monitor acknowledges it, puppeteer removes the run, the row goes
+      expect(
+        await box.daemon.agents.runtime.acknowledgeFailureBlocker(row.runtimeRunId, "run:runtime"),
+      ).toBe(true);
+      await until(
+        () => (rowOf(box, row.runtimeRunId) === undefined ? true : undefined),
+        FLOOR_WAIT_MS,
+        "the row leaving",
+      );
+      expect(listedRow(box, pane.sessionId)?.pid).toBe(pane.pid);
+      expect(isAlive(pane.pid)).toBe(true);
+    },
+    FLOOR_BUDGET_MS,
+  );
+
+  it(
+    "row 3c — Q06, the shell's report tells a clean quit: its own job reaped at 0 closes the run `completed`, and the row is withdrawn as before",
+    async () => {
+      const box = await floor({ bundle: shimScript, gateway: { watch: { graceMs: 30_000 } } });
+      const pane = await openPane(box);
+      await type(box, pane, TYPED_COMMAND);
+      const row = await adopted(box, pane);
+      const pid = readRecord(box.dataDir, row.runtimeRunId).process?.pid as number;
+      await until(() => (linesOf(box.script.managedLog).length === 1 ? true : undefined));
+      await key(box, pane, END_OF_INPUT);
+      await until(() => (isAlive(pid) ? undefined : true), FLOOR_WAIT_MS, "the agent reaped");
+      await box.daemon.agents.handleCommandFinished({
+        sessionId: pane.sessionId,
+        exitCode: 0,
+        processGroupId: pid,
+      });
+      expect(rowOf(box, row.runtimeRunId)).toBeUndefined();
+      expect(readRecord(box.dataDir, row.runtimeRunId).exited).toMatchObject({
+        exitCode: 0,
+        signal: null,
+        reason: "completed",
+      });
+      await answers(box, pane, "alive");
+    },
+    FLOOR_BUDGET_MS,
+  );
+
+  it(
     "row 4 — a second launch after the first ended is a NEW run; a launch while one is live is REFUSED on the pane's screen, nothing runs, and the ledger has the conflict",
     async () => {
       const box = await floor({ bundle: shimScript });
