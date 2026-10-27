@@ -1298,3 +1298,187 @@ async fn a_request_past_its_deadline_is_answered_timeout_and_never_run() {
 
     daemon.shutdown().await;
 }
+
+// ---- TS-1 (track TS): the sign-in facts on the wire, and the extras' modes ----
+
+/// TS-1 — a stand-in sidecar answering `tsnet:start` with `start` (the
+/// mesh_unit rows' pattern, minimal: this binary drives no lanes).
+#[cfg(unix)]
+fn ts1_wire_stub(dir: &std::path::Path, start: &str) -> std::path::PathBuf {
+    use std::os::unix::fs::PermissionsExt;
+    let stub = dir.join("sidecar-slim");
+    let script = r#"#!/bin/sh
+while IFS= read -r line; do
+  case "$line" in
+    *'"tsnet:start"'*)
+START_BLOCK
+      ;;
+    *tsnet:peers*)
+      printf '%s\n' '{"event":"tsnet:peers","data":{"peers":[]}}'
+      ;;
+    *'"tsnet:listen"'*)
+      rid=$(printf '%s' "$line" | sed -n 's/.*"requestId":"\([^"]*\)".*/\1/p')
+      port=$(printf '%s' "$line" | sed -n 's/.*"port":\([0-9]*\).*/\1/p')
+      printf '%s\n' "{\"event\":\"tsnet:listening\",\"data\":{\"port\":$port,\"requestId\":\"$rid\"}}"
+      ;;
+  esac
+done
+"#
+    .replace("START_BLOCK", start);
+    std::fs::write(&stub, script).unwrap();
+    std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
+    stub
+}
+
+/// TS-1 — each extra belongs to one mode: a key signs a CAPTURE in, a renewal
+/// re-signs a LINKED node. Either in the other mode is refused, nothing is
+/// recorded, and the refusal never echoes the key.
+#[tokio::test]
+async fn an_auth_key_belongs_to_a_capture_and_a_renewal_to_a_link() {
+    let (_dir, daemon) = boot().await;
+    let mut c = TestClient::connect(&daemon).await;
+    c.hello(&daemon, 1).await;
+
+    c.send(
+        json!({"jsonrpc":"2.0","id":2,"method":"native.mesh.start","params":{
+            "mode":"linked","login":"james@github","authKey":"tskey-auth-kTS1wire-0123456789"
+        }}),
+    )
+    .await;
+    let resp = c.recv().await;
+    assert_eq!(
+        resp["error"]["data"]["kind"], "PRECONDITION_FAILED",
+        "{resp}"
+    );
+    assert!(
+        !resp.to_string().contains("tskey"),
+        "the refusal echoed the key: {resp}"
+    );
+
+    c.send(
+        json!({"jsonrpc":"2.0","id":3,"method":"native.mesh.start","params":{
+            "mode":"capture","renew":true
+        }}),
+    )
+    .await;
+    let resp = c.recv().await;
+    assert_eq!(
+        resp["error"]["data"]["kind"], "PRECONDITION_FAILED",
+        "{resp}"
+    );
+
+    assert!(daemon.state.mesh.mode().is_none(), "nothing was recorded");
+    daemon.shutdown().await;
+}
+
+/// TS-1 — while a capture signs in there is no node, and the not-up answer
+/// carries what the pane says: the address, the posture, the machine's name.
+/// Typed on both sides (`MeshNotUpDetails`).
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_not_up_answer_names_the_capture_and_its_machine() {
+    use field_native::contracts::MeshNotUpDetails;
+    let dir = tempfile::tempdir().unwrap();
+    let config = NativeConfig {
+        sidecar_override: Some(ts1_wire_stub(
+            dir.path(),
+            r#"      printf '%s\n' '{"event":"tsnet:authRequired","data":{"authUrl":"https://login.tailscale.com/a/wire"}}'"#,
+        )),
+        ..NativeConfig::for_data_dir(dir.path().to_path_buf())
+    };
+    let daemon = bootstrap(config).await.expect("bootstrap");
+    let mut c = TestClient::connect(&daemon).await;
+    c.hello(&daemon, 1).await;
+    c.send(
+        json!({"jsonrpc":"2.0","id":2,"method":"native.mesh.start","params":{"mode":"capture"}}),
+    )
+    .await;
+    assert_eq!(c.recv().await["result"]["started"], true);
+
+    // the address reaches the unit on the bring-up's own schedule
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let details = loop {
+        c.send(json!({"jsonrpc":"2.0","id":3,"method":"native.mesh.self"}))
+            .await;
+        let resp = c.recv().await;
+        assert_eq!(resp["error"]["data"]["kind"], "UNAVAILABLE", "{resp}");
+        let details: MeshNotUpDetails =
+            serde_json::from_value(resp["error"]["data"]["details"].clone()).expect("typed");
+        if details.auth_url.is_some() {
+            break details;
+        }
+        assert!(Instant::now() < deadline, "no address within 10s: {resp}");
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    };
+    assert_eq!(
+        details.auth_url.as_deref(),
+        Some("https://login.tailscale.com/a/wire")
+    );
+    assert_eq!(
+        details.mode.map(|m| m.to_string()).as_deref(),
+        Some("capture")
+    );
+    let name = details
+        .machine_name
+        .expect("the machine's name before it is up");
+    assert!(name.starts_with("truffle-vibefield-"), "{name}");
+    assert_eq!(details.needs_approval, None);
+    daemon.shutdown().await;
+}
+
+/// TS-1 — once the node is up, `native.mesh.self` carries the sign-in facts:
+/// its posture, the name Tailscale granted, its key's expiry, the console, and
+/// that it is signed in. Typed on both sides (`MeshSelfIdentity`).
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_self_answer_carries_the_sign_in_facts() {
+    use field_native::contracts::MeshSelfIdentity;
+    let dir = tempfile::tempdir().unwrap();
+    let config = NativeConfig {
+        sidecar_override: Some(ts1_wire_stub(
+            dir.path(),
+            r#"      printf '%s\n' '{"event":"tsnet:started","data":{"state":"running","hostname":"truffle-vibefield-stub","dnsName":"truffle-vibefield-stub.tail0.ts.net","tailscaleIP":"127.0.0.1","nodeId":"nStub0CNTRL","loginName":"james@github","protocolVersion":10,"controlUrl":"https://controlplane.tailscale.com","keyExpiry":"2026-11-02T10:00:00Z"}}'"#,
+        )),
+        ..NativeConfig::for_data_dir(dir.path().to_path_buf())
+    };
+    let daemon = bootstrap(config).await.expect("bootstrap");
+    let mut c = TestClient::connect(&daemon).await;
+    c.hello(&daemon, 1).await;
+    c.send(
+        json!({"jsonrpc":"2.0","id":2,"method":"native.mesh.start","params":{
+            "mode":"linked","login":"james@github"
+        }}),
+    )
+    .await;
+    assert_eq!(c.recv().await["result"]["started"], true);
+
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let identity = loop {
+        c.send(json!({"jsonrpc":"2.0","id":3,"method":"native.mesh.self"}))
+            .await;
+        let resp = c.recv().await;
+        if resp.get("result").is_some() {
+            let identity: MeshSelfIdentity =
+                serde_json::from_value(resp["result"].clone()).expect("typed");
+            break identity;
+        }
+        assert!(Instant::now() < deadline, "no node within 10s: {resp}");
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    };
+    assert_eq!(
+        identity.mode.map(|m| m.to_string()).as_deref(),
+        Some("linked")
+    );
+    assert_eq!(
+        identity.machine_name.as_deref(),
+        Some("truffle-vibefield-stub")
+    );
+    assert_eq!(identity.key_expires_at, Some(1_793_613_600_000));
+    assert_eq!(identity.key_expiry_disabled, None);
+    assert_eq!(
+        identity.admin_url.as_deref(),
+        Some("https://login.tailscale.com/admin/machines")
+    );
+    assert_eq!(identity.needs_login, Some(false));
+    daemon.shutdown().await;
+}

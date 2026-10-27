@@ -104,6 +104,12 @@ export class MockMgmtServer {
   meshHealthLag = 0;
   meshStaleAnswers = 0;
   private meshStaleLeft = 0;
+  /** TS-1 — the interactive sign-in a CAPTURE posture waits on, modelled only
+   * for a suite that sets it. With no `login` the node is not up yet:
+   * `native.mesh.self` answers UNAVAILABLE `starting` with `authUrl` (and the
+   * not-up details' `mode`). Setting `login` is the person finishing in the
+   * browser: `self` then answers as the node, signed in as that login. */
+  meshCaptureSignIn: { authUrl: string; login?: string } | undefined = undefined;
   /** scripted node-side serve state (C2/AH-1 reconcile tests), keyed by serveId */
   meshServes = new Map<
     string,
@@ -616,6 +622,41 @@ export class MockMgmtServer {
       }
       if (this.meshPosture === null) {
         notUp("disabled");
+        return;
+      }
+      const signIn = this.meshCaptureSignIn;
+      if (msg.method === "native.mesh.self" && signIn !== undefined) {
+        if (this.meshPosture.mode === "capture" && signIn.login === undefined) {
+          reply({
+            error: {
+              code: -32006,
+              message: "mesh node not up",
+              data: {
+                kind: "UNAVAILABLE",
+                retryable: true,
+                details: {
+                  service: "mesh-gateway",
+                  state: "starting",
+                  authUrl: signIn.authUrl,
+                  mode: "capture",
+                },
+              },
+            },
+          });
+          return;
+        }
+        const login = this.meshPosture.login ?? signIn.login;
+        reply({
+          result: {
+            deviceId: "mock-device",
+            mode: this.meshPosture.mode,
+            ...(login !== undefined ? { login } : {}),
+            loginAllow:
+              this.meshPosture.mode === "linked" && this.meshPosture.login !== undefined
+                ? [this.meshPosture.login]
+                : [],
+          },
+        });
         return;
       }
       if (msg.method === "native.mesh.self") {

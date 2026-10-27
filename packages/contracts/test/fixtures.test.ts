@@ -162,6 +162,7 @@ import {
   MeshLaneCloseRequest,
   MeshLaneOpenRequest,
   MeshLanePeerOpened,
+  MeshNotUpDetails,
   MeshSelfIdentity,
   NativeHealth,
   NativeLinkHealth,
@@ -390,6 +391,11 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // `loginAllow` is the empty list truffle reads as "no gate"). The pair pins
   // that the gate is always stated and never inferred from the login's presence.
   "mesh-self-identity": MeshSelfIdentity,
+  // TS-1 (track TS) — the not-up answer's details: a capture signing in (its
+  // address and the name Tailscale will show), one held by device approval,
+  // and a linked desktop whose floor has no sidecar to start. `expiring` and
+  // `signed-out` above pin the facts the answer carries once the node is up.
+  "mesh-not-up-details": MeshNotUpDetails,
   "plugin-manifest": PluginManifestV1,
   "plugin-registry-snapshot": PluginRegistrySnapshot,
   // TD-0 (trust-and-distribution.md §2, §6.3; WP12a): the trust-root, the registry's signed index v2

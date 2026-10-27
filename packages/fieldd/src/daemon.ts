@@ -159,6 +159,7 @@ import {
   type TerminalRuntimeSessionsResult,
   TerminalSessionParams,
   TerminalTakeGeometryParams,
+  UserLinkBeginParams,
   WorkspaceFileActionParams,
 } from "@vibefield/contracts";
 import type { AuditHealthV1 } from "@vibefield/contracts/diagnostics";
@@ -1660,11 +1661,15 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         // the mesh node's own word reaches the mesh facade, which re-places the
         // desired serves on a turn to up and says so ("node-up")
         mesh.noteNodeState(meshNodeUp(latestHealth));
+        // TS-1 (P2) — and the link reads the node at once when its unit moves,
+        // so a sign-in finished in the browser lands within a beat, not 15 s
+        links.noteFloorHealth(latestHealth.units);
         emitHealth();
       },
     );
     latestHealth = snapshot as NativeHealth;
     mesh.noteNodeState(meshNodeUp(latestHealth));
+    links.noteFloorHealth(latestHealth.units);
     // link down/up flips stream immediately (each backoff attempt re-emits; cheap and honest)
     native.on("reconnecting", emitHealth);
     native.on("connected", emitHealth);
@@ -5234,14 +5239,56 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // same kind of event from the other side: this is the moment a desktop
     // stops being a default local account and asks for a tailnet identity, and
     // every mesh surface it will ever open descends from it.
-    api.register("user.link.begin", async (ctx) => {
+    //
+    // TS-1 (P7) — an auth key may ride the ask, for a machine with no browser.
+    // It goes to the floor on the one `native.mesh.start` and nowhere else: the
+    // audit records how the link was asked for, never the key.
+    api.register("user.link.begin", async (ctx, params) => {
       requireAppPreferencesCaller(ctx);
+      const parsed = UserLinkBeginParams.safeParse(params ?? {});
+      if (!parsed.success) {
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "user.link.begin takes {authKey?}: an auth key is a non-empty string",
+          false,
+        );
+      }
+      const authKey = parsed.data.authKey;
       return audit.requiredSystem(
         {
           action: "user.link.begin",
           target: { kind: "mesh", id: "tailnet-link" },
         },
-        () => links.begin(),
+        () => links.begin(authKey !== undefined ? { authKey } : {}),
+        (result) => ({
+          attrs: {
+            linkState: result.linkState,
+            signIn: authKey !== undefined ? "auth_key" : "browser",
+          },
+        }),
+      );
+    });
+    // TS-1 — the capture's way out, and the signed-out link's way back. Audited
+    // beside begin, as the same family of act.
+    api.register("user.link.cancel", async (ctx) => {
+      requireAppPreferencesCaller(ctx);
+      return audit.requiredSystem(
+        {
+          action: "user.link.cancel",
+          target: { kind: "mesh", id: "tailnet-link" },
+        },
+        () => links.cancel(),
+        (result) => ({ attrs: { linkState: result.linkState } }),
+      );
+    });
+    api.register("user.link.renew", async (ctx) => {
+      requireAppPreferencesCaller(ctx);
+      return audit.requiredSystem(
+        {
+          action: "user.link.renew",
+          target: { kind: "mesh", id: "tailnet-link" },
+        },
+        () => links.renew(),
         (result) => ({ attrs: { linkState: result.linkState } }),
       );
     });

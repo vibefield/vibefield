@@ -65,6 +65,9 @@ const floorWithLogin =
  * test never waits on a clock and a failure is never a flake. */
 const probe = (svc: LinkService) => (svc as unknown as { probe: () => Promise<void> }).probe();
 
+/** Let a fire-and-forget read (the boot's) settle on a real macrotask. */
+const drain = () => new Promise<void>((resolve) => setImmediate(resolve));
+
 describe("UA-3 — LinkService", () => {
   it("captures the self-whois login once, with the tailnet suffix", async () => {
     const root = mkRoot();
@@ -150,11 +153,15 @@ describe("UA-3 — LinkService", () => {
 // it sends — which is exactly the half that decides whether a door opens.
 
 describe("UA-P-0a — the mesh posture", () => {
-  it("an UNLINKED boot asks the floor for nothing", async () => {
+  it("an UNLINKED boot declares nothing, and only reads the floor for a capture it still holds", async () => {
     const root = mkRoot();
     const { svc, calls } = build(root, floorWithLogin());
     svc.start();
-    expect(calls).toEqual([]); // no start, and no probe of a node nobody asked for
+    // TS-1 — no start, and no probe loop: the one read asks whether the floor
+    // still holds a capture a previous fieldd began (a capture outlives its
+    // fieldd since P3); this floor's node names no capture posture
+    await drain();
+    expect(calls).toEqual(["native.mesh.self"]);
     expect(svc.status()).toMatchObject({
       linkState: "offline",
       linkDetail: null,
@@ -164,7 +171,7 @@ describe("UA-P-0a — the mesh posture", () => {
     // and the loop stays shut: reaching the probe from offline would be
     // probing a node that does not exist
     await probe(svc);
-    expect(calls).toEqual([]);
+    expect(calls).toEqual(["native.mesh.self"]);
     svc.stop();
   });
 
@@ -311,9 +318,14 @@ describe("UA-P-0a — the mesh posture", () => {
     svc.stop();
   });
 
-  it("a floor that cannot be reached does not move the posture", async () => {
+  it("a floor that cannot be reached does not move the posture to anything more open", async () => {
     // the link is still the link; the next probe or the next boot re-declares.
     // What must NOT happen is a silent downgrade to something more open.
+    //
+    // TS-1 — and a linked node whose floor offers a sign-in address is asked to
+    // sign in again: the word is `expired` (its key's time unknown here), the
+    // record and the scope stay exactly as they were. Before TS-1 this read as
+    // plain `linked` while nothing could reach the desktop (gap 14).
     const root = mkRoot();
     mkdirSync(join(root, "fieldd"), { recursive: true });
     writeFileSync(
@@ -332,8 +344,9 @@ describe("UA-P-0a — the mesh posture", () => {
     svc.start();
     await probe(svc);
     expect(svc.status()).toMatchObject({
-      linkState: "linked",
+      linkState: "expired",
       link: { login: "james@github" },
+      meshEnabled: true,
       nodeState: "starting",
       authUrl: "https://login.tailscale.example/a/b",
     });
@@ -373,8 +386,6 @@ const starts = (params: Call[]) => params.filter((call) => call.method === "nati
 const askLanded = async (svc: LinkService) => {
   await (svc as unknown as { declaring: Promise<void> | null }).declaring;
 };
-
-const drain = () => new Promise<void>((resolve) => setImmediate(resolve));
 
 /** A floor that holds a posture once asked, and holds none after `restart()`. */
 function restartableFloor(
@@ -533,13 +544,14 @@ describe("UA-P-0j — a floor that restarts under fieldd gets its posture back",
       expect(starts(params)).toHaveLength(2);
       svc.stop();
 
-      // an OFFLINE desktop holds no posture, so a re-dial asks for nothing
+      // an OFFLINE desktop holds no posture, so a re-dial asks for nothing —
+      // the one read is the boot's (TS-1: a capture the floor still holds)
       const { svc: offline, calls } = build(mkRoot(), floorWithLogin());
       offline.start();
       offline.floorReconnected();
       await vi.advanceTimersByTimeAsync(60_000);
       await drain();
-      expect(calls).toEqual([]);
+      expect(calls).toEqual(["native.mesh.self"]);
       offline.stop();
     } finally {
       vi.useRealTimers();
@@ -729,6 +741,352 @@ describe("UA-P-0b — one local user per tailscale account", () => {
       otherUserLinks: () => otherUserLinks(dirFor(2)),
     });
     expect((await svc.begin()).linkState).toBe("linked");
+    svc.stop();
+  });
+});
+
+// ---- TS-1 (track TS): no dead ends ----
+//
+// The plumbing hid four states a person needs words for, and the act that ends
+// a capture (gaps 11–15 of `thinking-tailscale-onboarding.md`). Each row drives
+// the service against the floor's own answers: `MeshNotUpDetails` while there is
+// no node, `MeshSelfIdentity` once there is.
+
+const NOW = 1_754_000_000_000;
+
+const notUpWith = (details: Record<string, unknown>): Promise<never> =>
+  Promise.reject(
+    new RpcCallError("UNAVAILABLE", "mesh node not up", true, {
+      service: "mesh-gateway",
+      ...details,
+    }),
+  );
+
+describe("TS-1 — no dead ends", () => {
+  it("a capture the tailnet's device approval holds is awaiting_approval, with the console and the machine's name", async () => {
+    let approved = false;
+    const { svc } = build(mkRoot(), (method) => {
+      if (method === "native.mesh.start")
+        return Promise.resolve({ mode: "capture", started: true });
+      if (method === "native.mesh.stop") return Promise.resolve({ stopped: true });
+      return approved
+        ? Promise.resolve({ deviceId: "01DEVICE", login: "james@github", loginAllow: [] })
+        : notUpWith({
+            state: "starting",
+            mode: "capture",
+            needsApproval: true,
+            adminUrl: "https://login.tailscale.com/admin/machines",
+            machineName: "truffle-vibefield-studio",
+          });
+    });
+    await svc.begin();
+    expect(svc.status()).toMatchObject({
+      linkState: "awaiting_approval",
+      meshEnabled: true,
+      link: null,
+      authUrl: null,
+      adminUrl: "https://login.tailscale.com/admin/machines",
+      machineName: "truffle-vibefield-studio",
+    });
+    // the admin approves: the node comes up and the capture lands as ever
+    approved = true;
+    await probe(svc);
+    expect(svc.status()).toMatchObject({ linkState: "linked", link: { login: "james@github" } });
+    svc.stop();
+  });
+
+  it("the floor's mesh unit moving brings the probe forward (P2), once per change", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      let login: string | undefined;
+      const { svc, calls } = build(mkRoot(), (method) => {
+        if (method === "native.mesh.start")
+          return Promise.resolve({
+            mode: login === undefined ? "capture" : "linked",
+            started: true,
+          });
+        return login === undefined
+          ? notUpWith({ state: "starting", mode: "capture", authUrl: "https://login.example/a/1" })
+          : Promise.resolve({ deviceId: "01DEVICE", login, loginAllow: [login] });
+      });
+      await svc.begin();
+      expect(svc.status().linkState).toBe("capturing");
+      const reads = () => calls.filter((call) => call === "native.mesh.self").length;
+      const before = reads();
+
+      // the person finishes in the browser and the unit says up: read at once,
+      // not at the 15 s probe
+      login = "james@github";
+      svc.noteFloorHealth([{ unit: "mesh-gateway", state: "up", detail: "tailnet host" }]);
+      await vi.advanceTimersByTimeAsync(100);
+      await drain();
+      expect(reads()).toBe(before + 1);
+      expect(svc.status().linkState).toBe("linked");
+
+      // the same word again, or another unit's, brings nothing forward
+      const settled = reads();
+      svc.noteFloorHealth([{ unit: "mesh-gateway", state: "up", detail: "tailnet host" }]);
+      svc.noteFloorHealth([
+        { unit: "mesh-gateway", state: "up", detail: "tailnet host" },
+        { unit: "terminal", state: "up" },
+      ]);
+      await vi.advanceTimersByTimeAsync(100);
+      await drain();
+      expect(reads()).toBe(settled);
+      svc.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("cancel ends a capture: the node stops, its identity stays, and the desktop is offline again", async () => {
+    const root = mkRoot();
+    const { svc, calls } = build(root, (method) => {
+      if (method === "native.mesh.start")
+        return Promise.resolve({ mode: "capture", started: true });
+      if (method === "native.mesh.stop") return Promise.resolve({ stopped: true });
+      return notUpWith({
+        state: "starting",
+        mode: "capture",
+        authUrl: "https://login.example/a/2",
+      });
+    });
+    await svc.begin();
+    expect(svc.status()).toMatchObject({
+      linkState: "capturing",
+      authUrl: "https://login.example/a/2",
+    });
+    const status = await svc.cancel();
+    expect(status).toMatchObject({ linkState: "offline", meshEnabled: false, authUrl: null });
+    expect(calls).toContain("native.mesh.stop");
+    expect(calls).not.toContain("native.mesh.retire");
+    expect(existsSync(linkPath(root))).toBe(false);
+    // and the loop is over: nothing is left to probe
+    const settled = calls.length;
+    await probe(svc);
+    expect(calls.length).toBe(settled);
+    svc.stop();
+  });
+
+  it("cancel never ends a link: a capture that landed as the person clicked is a link, honestly", async () => {
+    const { svc, calls } = build(mkRoot(), floorWithLogin());
+    await svc.begin();
+    expect(svc.status().linkState).toBe("linked");
+    const status = await svc.cancel();
+    expect(status).toMatchObject({ linkState: "linked", link: { login: "james@github" } });
+    expect(calls).not.toContain("native.mesh.stop");
+    svc.stop();
+  });
+
+  it("a linked node signed out of the tailnet is expired once its key's time has passed, removed while it had time", async () => {
+    for (const [facts, word] of [
+      [{ keyExpiresAt: NOW - 60_000 }, "expired"],
+      [{ keyExpiresAt: NOW + 86_400_000 }, "removed"],
+      [{ keyExpiryDisabled: true }, "removed"],
+      [{}, "expired"], // its time unknown: "sign in again" is true either way
+    ] as const) {
+      const { svc } = build(linkedRoot(), (method) =>
+        method === "native.mesh.start"
+          ? Promise.resolve({ mode: "linked", started: true })
+          : Promise.resolve({
+              deviceId: "01DEVICE",
+              login: "james@github",
+              loginAllow: ["james@github"],
+              mode: "linked",
+              needsLogin: true,
+              ...facts,
+            }),
+      );
+      svc.start();
+      await askLanded(svc);
+      await probe(svc);
+      expect(svc.status(), JSON.stringify(facts)).toMatchObject({
+        linkState: word,
+        meshEnabled: true,
+        link: { login: "james@github" },
+      });
+      svc.stop();
+    }
+  });
+
+  it("renew rebuilds the signed-out node with renew: true, and leaves a sign-in already on offer alone", async () => {
+    let offered: string | undefined;
+    const { svc, params } = build(linkedRoot(), (method) => {
+      if (method === "native.mesh.start") {
+        offered = "https://login.example/a/renew";
+        return Promise.resolve({ mode: "linked", started: true });
+      }
+      return offered === undefined
+        ? Promise.resolve({
+            deviceId: "01DEVICE",
+            login: "james@github",
+            loginAllow: ["james@github"],
+            needsLogin: true,
+            keyExpiresAt: NOW - 1,
+          })
+        : notUpWith({ state: "starting", mode: "linked", authUrl: offered });
+    });
+    // the boot's ask
+    svc.start();
+    await askLanded(svc);
+    offered = undefined;
+    await probe(svc);
+    expect(svc.status().linkState).toBe("expired");
+
+    const renewed = await svc.renew();
+    expect(starts(params).at(-1)).toEqual({
+      method: "native.mesh.start",
+      params: { mode: "linked", login: "james@github", renew: true },
+    });
+    expect(renewed).toMatchObject({
+      linkState: "expired",
+      authUrl: "https://login.example/a/renew",
+      link: { login: "james@github" },
+    });
+    // asked again while that address is live: nothing is rebuilt
+    const count = starts(params).length;
+    await svc.renew();
+    expect(starts(params)).toHaveLength(count);
+    svc.stop();
+  });
+
+  it("renew is refused unless the link is waiting to be signed in again", async () => {
+    const { svc: offline } = build(mkRoot(), floorWithLogin());
+    await expect(offline.renew()).rejects.toThrow(/nothing to renew/);
+    const { svc: linked } = build(mkRoot(), floorWithLogin());
+    await linked.begin();
+    await expect(linked.renew()).rejects.toThrow(/nothing to renew/);
+    // and a second link is refused while one stands signed out: renew is its act
+    const { svc: expired } = build(linkedRoot(), (method) =>
+      method === "native.mesh.start"
+        ? Promise.resolve({ mode: "linked", started: true })
+        : Promise.resolve({
+            deviceId: "01DEVICE",
+            login: "james@github",
+            loginAllow: ["james@github"],
+            needsLogin: true,
+          }),
+    );
+    expired.start();
+    await askLanded(expired);
+    await probe(expired);
+    expect(expired.status().linkState).toBe("expired");
+    await expect(expired.begin()).rejects.toThrow(/renew it/);
+    offline.stop();
+    linked.stop();
+    expired.stop();
+  });
+
+  it("an auth key rides the one native.mesh.start and nothing else: not the status, not a log line", async () => {
+    const KEY = "tskey-auth-kTS1test-0123456789abcdef";
+    const lines: string[] = [];
+    const spy = {
+      child: () => spy,
+      trace: (...args: unknown[]) => lines.push(JSON.stringify(args)),
+      debug: (...args: unknown[]) => lines.push(JSON.stringify(args)),
+      info: (...args: unknown[]) => lines.push(JSON.stringify(args)),
+      warn: (...args: unknown[]) => lines.push(JSON.stringify(args)),
+      error: (...args: unknown[]) => lines.push(JSON.stringify(args)),
+      fatal: (...args: unknown[]) => lines.push(JSON.stringify(args)),
+      isLevelEnabled: () => true,
+    };
+    const { svc, params } = build(mkRoot(), floorWithLogin(), {
+      logger: spy as unknown as import("@vibefield/logging").Logger,
+    });
+    await svc.begin({ authKey: KEY });
+    expect(starts(params)[0]).toEqual({
+      method: "native.mesh.start",
+      params: { mode: "capture", authKey: KEY },
+    });
+    // the promotion that follows the capture carries no key: the node has one
+    expect(starts(params).at(-1)).toEqual({
+      method: "native.mesh.start",
+      params: { mode: "linked", login: "james@github" },
+    });
+    expect(JSON.stringify(svc.status())).not.toContain("tskey");
+    expect(lines.join("\n")).not.toContain("tskey");
+    svc.stop();
+  });
+
+  it("a capture the floor still holds when fieldd boots is carried on, never orphaned", async () => {
+    const { svc, calls } = build(mkRoot(), (method) =>
+      method === "native.mesh.self"
+        ? notUpWith({ state: "starting", mode: "capture", authUrl: "https://login.example/a/held" })
+        : Promise.resolve({ mode: "capture", started: true }),
+    );
+    svc.start();
+    await drain();
+    await probe(svc);
+    expect(svc.status()).toMatchObject({
+      linkState: "capturing",
+      authUrl: "https://login.example/a/held",
+      link: null,
+    });
+    // it declared nothing: the posture was already the floor's
+    expect(calls).not.toContain("native.mesh.start");
+    svc.stop();
+  });
+
+  it("a floor that states its posture is never re-asked on a lagging `disabled` read", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const { svc, params } = build(linkedRoot(), (method) =>
+        method === "native.mesh.start"
+          ? Promise.resolve({ mode: "linked", started: true })
+          : notUpWith({ state: "disabled", mode: "linked" }),
+      );
+      svc.start();
+      await askLanded(svc);
+      // even after a re-dial, which makes a bare `disabled` evidence (UA-P-0j)
+      svc.floorReconnected();
+      await probe(svc);
+      await probe(svc);
+      expect(starts(params)).toHaveLength(1);
+      svc.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("the key's expiry is kept in the record, written only when it moves", async () => {
+    const root = linkedRoot();
+    let expiry = NOW + 10 * 86_400_000;
+    const { svc } = build(root, (method) =>
+      method === "native.mesh.start"
+        ? Promise.resolve({ mode: "linked", started: true })
+        : Promise.resolve({
+            deviceId: "01DEVICE",
+            login: "james@github",
+            loginAllow: ["james@github"],
+            keyExpiresAt: expiry,
+          }),
+    );
+    svc.start();
+    await askLanded(svc);
+    await probe(svc);
+    expect(svc.status().keyExpiresAt).toBe(expiry);
+    expect(JSON.parse(readFileSync(linkPath(root), "utf8")).keyExpiresAt).toBe(expiry);
+    const written = readFileSync(linkPath(root), "utf8");
+    await probe(svc);
+    expect(readFileSync(linkPath(root), "utf8")).toBe(written); // a verify never churns the disk
+    expiry += 180 * 86_400_000; // renewed in the console
+    await probe(svc);
+    expect(JSON.parse(readFileSync(linkPath(root), "utf8")).keyExpiresAt).toBe(expiry);
+    svc.stop();
+
+    // and a later boot whose node is down still knows the date
+    const { svc: again } = build(root, () => notUpWith({ state: "starting", mode: "linked" }));
+    expect(again.status().keyExpiresAt).toBe(expiry);
+  });
+
+  it("a floor with no sidecar to start says so: the failure rides the status", async () => {
+    const { svc } = build(mkRoot(), (method) =>
+      method === "native.mesh.start"
+        ? Promise.resolve({ mode: "capture", started: true })
+        : notUpWith({ state: "degraded", mode: "capture", failure: "sidecar_missing" }),
+    );
+    await svc.begin();
+    expect(svc.status()).toMatchObject({ linkState: "capturing", failure: "sidecar_missing" });
     svc.stop();
   });
 });

@@ -440,6 +440,7 @@ dependencies = [
  "ghosttea",
  "hex",
  "hmac",
+ "hostname",
  "http",
  "libc",
  "rand 0.10.2",

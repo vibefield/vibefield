@@ -17,7 +17,12 @@ export type UserLinkState =
   | "linked"
   | "link_corrupt"
   | "login_unavailable"
-  | "login_already_linked";
+  | "login_already_linked"
+  // TS-1 (track TS) — a capture held by device approval, and a link that
+  // stands while its node is signed out (lapsed, or removed in the console).
+  | "awaiting_approval"
+  | "expired"
+  | "removed";
 
 const LINK_STATES: readonly string[] = [
   "offline",
@@ -26,6 +31,9 @@ const LINK_STATES: readonly string[] = [
   "link_corrupt",
   "login_unavailable",
   "login_already_linked",
+  "awaiting_approval",
+  "expired",
+  "removed",
 ];
 
 function isLinkState(value: unknown): value is UserLinkState {
@@ -149,6 +157,18 @@ export function linkFace(
   if (status === "error" || data === null) return { kind: "unavailable" };
   const state = postureOf(data);
   switch (state) {
+    // TS-1 — the three words the daemon now says. Until TS-2 draws their own
+    // faces they read as the faces they had before the daemon could name them,
+    // so nothing a person sees regresses: an approval wait is still the
+    // capture it belongs to (never "offline", which would offer the act again
+    // and restart the wait), and a signed-out link is still its account.
+    case "awaiting_approval":
+      return { kind: "capturing", authUrl: null, nodeState: data.nodeState };
+    case "expired":
+    case "removed":
+      return data.link === null
+        ? { kind: "offline", nodeState: data.nodeState }
+        : { kind: "linked", link: data.link, nodeState: data.nodeState };
     case "linked":
       // A `linked` word over a missing record is a daemon disagreeing with
       // itself. The RECORD is the account (UA-4 compares the stored login), so

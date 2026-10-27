@@ -803,3 +803,345 @@ async fn the_lane_transport_follows_the_promotion_to_the_linked_node() {
     drop((capture, linked));
     daemon.shutdown().await;
 }
+
+// ---- TS-1 (track TS): no dead ends, on stand-in sidecars ----
+//
+// The sign-in states the floor now names (`LinkFacts`), each driven by a
+// stand-in sidecar that speaks the events a real one sends (item 79's pattern).
+// What these rows do NOT witness: tsnet itself — a real NeedsMachineAuth, a key
+// a person expires in the console, the console's own pages. The live probe on
+// the test tailnet (`mesh_capture_auth_key_probe.rs`) drives a real capture.
+
+/// A stand-in that answers `tsnet:start` with `start` (shell, may background
+/// later events), and peers/listen as item 79's does.
+#[cfg(unix)]
+fn ts1_stub(dir: &std::path::Path, start: &str) -> std::path::PathBuf {
+    use std::os::unix::fs::PermissionsExt;
+    let stub = dir.join("sidecar-slim");
+    let script = r#"#!/bin/sh
+while IFS= read -r line; do
+  case "$line" in
+    *'"tsnet:start"'*)
+START_BLOCK
+      ;;
+    *tsnet:peers*)
+      printf '%s\n' '{"event":"tsnet:peers","data":{"peers":[]}}'
+      ;;
+    *'"tsnet:listen"'*)
+      rid=$(printf '%s' "$line" | sed -n 's/.*"requestId":"\([^"]*\)".*/\1/p')
+      port=$(printf '%s' "$line" | sed -n 's/.*"port":\([0-9]*\).*/\1/p')
+      printf '%s\n' "{\"event\":\"tsnet:listening\",\"data\":{\"port\":$port,\"requestId\":\"$rid\"}}"
+      ;;
+  esac
+done
+"#
+    .replace("START_BLOCK", start);
+    std::fs::write(&stub, script).unwrap();
+    std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
+    stub
+}
+
+/// A protocol-10 `tsnet:started`: the hosted control server and a key expiry.
+#[cfg(unix)]
+const TS1_STARTED: &str = r#"printf '%s\n' '{"event":"tsnet:started","data":{"state":"running","hostname":"truffle-vibefield-stub","dnsName":"truffle-vibefield-stub.tail0.ts.net","tailscaleIP":"127.0.0.1","nodeId":"nStub0CNTRL","loginName":"james@github","protocolVersion":10,"controlUrl":"https://controlplane.tailscale.com","keyExpiry":"2026-11-02T10:00:00Z"}}'"#;
+/// 2026-11-02T10:00:00Z, the key expiry above, in ms.
+#[cfg(unix)]
+const TS1_EXPIRY_MS: i64 = 1_793_613_600_000;
+
+/// TS-1 (P3) — a capture waits on the person, never a timer, and each new
+/// sign-in address tsnet issues while it waits replaces the last. The second
+/// half proves the value reaches the builder: a test's one-second timeout fails
+/// the bring-up, typed `bring_up_failed`, where the product's `None` waits on.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_capture_waits_on_the_person_and_shows_each_new_address() {
+    use field_native::contracts::{MeshMode, UnitState};
+    use std::time::Duration;
+    let dir = tempfile::tempdir().unwrap();
+    let stub = ts1_stub(
+        dir.path(),
+        r#"      printf '%s\n' '{"event":"tsnet:authRequired","data":{"authUrl":"https://login.tailscale.com/a/first"}}'
+      ( sleep 1; printf '%s\n' '{"event":"tsnet:authRequired","data":{"authUrl":"https://login.tailscale.com/a/second"}}' ) &"#,
+    );
+    let config = NativeConfig {
+        sidecar_override: Some(stub.clone()),
+        ..NativeConfig::for_data_dir(dir.path().to_path_buf())
+    };
+    assert_eq!(
+        config.mesh_start_timeout, None,
+        "the product waits for ever"
+    );
+    let daemon = bootstrap(config).await.unwrap();
+    let mesh = &daemon.state.mesh;
+    mesh.start(MeshMode::Capture, None).await.unwrap();
+    item79_until(
+        "the second address never replaced the first",
+        Duration::from_secs(10),
+        || mesh.health().auth_url.as_deref() == Some("https://login.tailscale.com/a/second"),
+    )
+    .await;
+    // well past the stand-in's last word, still waiting, never failed
+    tokio::time::sleep(Duration::from_millis(1500)).await;
+    let health = mesh.health();
+    assert!(matches!(health.state, UnitState::Starting), "{health:?}");
+    let facts = mesh.link_facts();
+    assert!(facts.failure.is_none(), "{facts:?}");
+    let name = facts.machine_name.expect("the composed machine name");
+    assert!(name.starts_with("truffle-vibefield-"), "{name}");
+    daemon.shutdown().await;
+
+    // the same stand-in, with a test's timeout: the value reaches the builder
+    let dir = tempfile::tempdir().unwrap();
+    let config = NativeConfig {
+        sidecar_override: Some(ts1_stub(
+            dir.path(),
+            r#"      printf '%s\n' '{"event":"tsnet:authRequired","data":{"authUrl":"https://login.tailscale.com/a/first"}}'"#,
+        )),
+        mesh_start_timeout: Some(Duration::from_secs(1)),
+        ..NativeConfig::for_data_dir(dir.path().to_path_buf())
+    };
+    let daemon = bootstrap(config).await.unwrap();
+    let mesh = &daemon.state.mesh;
+    mesh.start(MeshMode::Capture, None).await.unwrap();
+    item79_until(
+        "a one-second start timeout never failed the bring-up",
+        Duration::from_secs(15),
+        || matches!(mesh.health().state, UnitState::Degraded),
+    )
+    .await;
+    assert_eq!(mesh.link_facts().failure, Some("bring_up_failed"));
+    daemon.shutdown().await;
+}
+
+/// TS-1 (P4) — device approval is a named state: the sign-in is done, the
+/// unit says who acts now, and the fact clears when the node comes up. Up, the
+/// node's own facts arrive: the name Tailscale granted, its key's expiry, and
+/// the hosted service's console.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn device_approval_is_a_named_state_until_the_node_comes_up() {
+    use field_native::contracts::MeshMode;
+    use std::time::Duration;
+    let dir = tempfile::tempdir().unwrap();
+    let start = format!(
+        r#"      printf '%s\n' '{{"event":"tsnet:needsApproval"}}'
+      ( sleep 1; {TS1_STARTED} ) &"#
+    );
+    let config = NativeConfig {
+        sidecar_override: Some(ts1_stub(dir.path(), &start)),
+        ..NativeConfig::for_data_dir(dir.path().to_path_buf())
+    };
+    let daemon = bootstrap(config).await.unwrap();
+    let mesh = &daemon.state.mesh;
+    mesh.start(MeshMode::Capture, None).await.unwrap();
+    item79_until(
+        "the approval never reached the unit",
+        Duration::from_secs(10),
+        || {
+            mesh.link_facts().needs_approval
+                && mesh.health().detail.as_deref() == Some("waiting for device approval")
+        },
+    )
+    .await;
+    assert!(mesh.health().auth_url.is_none(), "the sign-in is done");
+    let _node = await_node(mesh).await;
+    item79_until(
+        "the node came up still marked as waiting",
+        Duration::from_secs(5),
+        || !mesh.link_facts().needs_approval,
+    )
+    .await;
+    let facts = mesh.link_facts();
+    assert_eq!(
+        facts.machine_name.as_deref(),
+        Some("truffle-vibefield-stub")
+    );
+    assert_eq!(facts.key_expiry_ms, Some(Some(TS1_EXPIRY_MS)));
+    assert_eq!(
+        facts.admin_url.as_deref(),
+        Some("https://login.tailscale.com/admin/machines")
+    );
+    daemon.shutdown().await;
+}
+
+/// TS-1 (P5) — a running node that falls to NeedsLogin (its key expired, or it
+/// was removed) is degraded with the words, and the fact stands for fieldd.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_running_node_signed_out_of_the_tailnet_says_so() {
+    use field_native::contracts::{MeshMode, UnitState};
+    use std::time::Duration;
+    let dir = tempfile::tempdir().unwrap();
+    let start = format!(
+        r#"      {TS1_STARTED}
+      ( sleep 1; printf '%s\n' '{{"event":"tsnet:stateChange","data":{{"state":"NeedsLogin"}}}}' ) &"#
+    );
+    let config = NativeConfig {
+        sidecar_override: Some(ts1_stub(dir.path(), &start)),
+        mesh_state_tick: Duration::from_millis(200),
+        ..NativeConfig::for_data_dir(dir.path().to_path_buf())
+    };
+    let daemon = bootstrap(config).await.unwrap();
+    let mesh = &daemon.state.mesh;
+    mesh.start(MeshMode::Linked, Some("james@github".into()))
+        .await
+        .unwrap();
+    let _node = await_node(mesh).await;
+    item79_until(
+        "the sign-out never reached the unit",
+        Duration::from_secs(10),
+        || mesh.link_facts().needs_login,
+    )
+    .await;
+    let health = mesh.health();
+    assert!(matches!(health.state, UnitState::Degraded), "{health:?}");
+    assert!(
+        health
+            .detail
+            .as_deref()
+            .unwrap_or("")
+            .contains("signed out"),
+        "{health:?}"
+    );
+    daemon.shutdown().await;
+}
+
+/// TS-1 — renewal rebuilds an INSTALLED linked node whose gate did not move
+/// (only a new bring-up hands out a new sign-in address), on the same identity.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn renewal_rebuilds_the_installed_node_on_its_own_identity() {
+    use field_native::contracts::MeshMode;
+    use field_native::services::mesh::StartOptions;
+    let dir = tempfile::tempdir().unwrap();
+    let config = NativeConfig {
+        sidecar_override: Some(ts1_stub(dir.path(), &format!("      {TS1_STARTED}"))),
+        ..NativeConfig::for_data_dir(dir.path().to_path_buf())
+    };
+    let daemon = bootstrap(config).await.unwrap();
+    let mesh = &daemon.state.mesh;
+    mesh.start(MeshMode::Linked, Some("james@github".into()))
+        .await
+        .unwrap();
+    let before = await_node(mesh).await;
+    // the control: the same posture, no renewal, is the idempotent no-op
+    assert!(!mesh
+        .start(MeshMode::Linked, Some("james@github".into()))
+        .await
+        .unwrap());
+    assert!(mesh
+        .start_with(
+            MeshMode::Linked,
+            Some("james@github".into()),
+            StartOptions {
+                renew: true,
+                ..StartOptions::default()
+            },
+        )
+        .await
+        .unwrap());
+    let after = await_node(mesh).await;
+    assert!(!Arc::ptr_eq(&before, &after), "a renewal builds a new node");
+    assert_eq!(
+        before.local_info().device_id,
+        after.local_info().device_id,
+        "on the same identity: renewal is not a re-mint"
+    );
+    assert_eq!(mesh.login_allow(), vec!["james@github".to_string()]);
+    drop((before, after));
+    daemon.shutdown().await;
+}
+
+/// TS-1 — a node whose sidecar exits on its own is taken down, so nothing reads
+/// it as up, and the unit says why in a typed word.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_sidecar_that_exits_takes_its_node_down_and_says_why() {
+    use field_native::contracts::{MeshMode, UnitState};
+    use std::time::Duration;
+    let dir = tempfile::tempdir().unwrap();
+    let start = format!(
+        r#"      {TS1_STARTED}
+      ( sleep 1; kill $$ ) &"#
+    );
+    let config = NativeConfig {
+        sidecar_override: Some(ts1_stub(dir.path(), &start)),
+        ..NativeConfig::for_data_dir(dir.path().to_path_buf())
+    };
+    let daemon = bootstrap(config).await.unwrap();
+    let mesh = &daemon.state.mesh;
+    mesh.start(MeshMode::Linked, Some("james@github".into()))
+        .await
+        .unwrap();
+    let node = await_node(mesh).await;
+    drop(node);
+    item79_until(
+        "the dead sidecar's node was never taken down",
+        Duration::from_secs(10),
+        || !mesh.node_present() && matches!(mesh.health().state, UnitState::Degraded),
+    )
+    .await;
+    assert_eq!(mesh.link_facts().failure, Some("sidecar_exited"));
+    assert!(
+        mesh.health()
+            .detail
+            .as_deref()
+            .unwrap_or("")
+            .contains("sidecar exited"),
+        "{:?}",
+        mesh.health()
+    );
+    daemon.shutdown().await;
+}
+
+/// TS-1 (P7) — an auth key reaches the sidecar's start command, and nothing the
+/// floor reports carries it; its `Debug` is redacted.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn an_auth_key_reaches_the_sidecar_and_nothing_the_floor_reports() {
+    use field_native::contracts::MeshMode;
+    use field_native::services::mesh::{AuthKey, StartOptions};
+    use std::time::Duration;
+    const KEY: &str = "tskey-auth-kTS1stub-0123456789abcdef";
+    let dir = tempfile::tempdir().unwrap();
+    let seen = dir.path().join("start-line");
+    let start = format!(
+        "      printf '%s\\n' \"$line\" > '{}'\n      {TS1_STARTED}",
+        seen.display()
+    );
+    let config = NativeConfig {
+        sidecar_override: Some(ts1_stub(dir.path(), &start)),
+        ..NativeConfig::for_data_dir(dir.path().to_path_buf())
+    };
+    let daemon = bootstrap(config).await.unwrap();
+    let mesh = &daemon.state.mesh;
+    let key = AuthKey::new(KEY.to_owned());
+    assert!(!format!("{key:?}").contains("tskey"), "{key:?}");
+    mesh.start_with(
+        MeshMode::Capture,
+        None,
+        StartOptions {
+            auth_key: Some(key),
+            renew: false,
+        },
+    )
+    .await
+    .unwrap();
+    let _node = await_node(mesh).await;
+    item79_until(
+        "the stand-in never saw the start",
+        Duration::from_secs(5),
+        || seen.exists(),
+    )
+    .await;
+    let line = std::fs::read_to_string(&seen).unwrap();
+    assert!(line.contains(&format!("\"authKey\":\"{KEY}\"")), "{line}");
+    let reported = format!(
+        "{} {:?} {:?}",
+        serde_json::to_string(&mesh.health()).unwrap(),
+        mesh.link_facts(),
+        health_json(&daemon)
+    );
+    assert!(!reported.contains("tskey"), "{reported}");
+    daemon.shutdown().await;
+}

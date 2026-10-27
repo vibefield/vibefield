@@ -123,6 +123,7 @@ import {
   MeshEgressRouteRef,
   MeshEgressRouteTable,
   MeshEgressTarget,
+  MeshFailure,
   MeshLaneClass,
   MeshLaneClosed,
   MeshLaneCloseRequest,
@@ -130,6 +131,7 @@ import {
   MeshLanePeerOpened,
   MeshLaneProtocol,
   MeshMode,
+  MeshNotUpDetails,
   MeshRetireResult,
   MeshSelfIdentity,
   MeshStartParams,
@@ -206,6 +208,10 @@ const BASE_SHARED = {
   ObservedState,
   WhoIsIdentity,
   PeerInfo,
+  // TS-1 — the not-up answer's details and their failure word, named so the
+  // floor writes a typed `MeshNotUpDetails` and the enum is not copied inline.
+  MeshFailure,
+  MeshNotUpDetails,
   MeshSelfIdentity,
   MeshRetireResult,
   // UA-P-0a — the posture verbs. `MeshMode` is named for the usual typify
@@ -297,6 +303,7 @@ const ENTRIES: Record<string, ZodTypeAny> = {
   "observed-state": ObservedState,
   "peer-info": PeerInfo,
   "mesh-self-identity": MeshSelfIdentity,
+  "mesh-not-up-details": MeshNotUpDetails,
   "mesh-retire-result": MeshRetireResult,
   "mesh-start-params": MeshStartParams,
   "mesh-start-result": MeshStartResult,

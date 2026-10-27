@@ -151,6 +151,24 @@ describe("linkFace", () => {
     expect(face.kind).toBe("linked");
   });
 
+  it("reads TS-1's three new words as the faces they had before the daemon named them", () => {
+    // until TS-2 draws their own faces: an approval wait stays the capture it
+    // belongs to — never offline, which would offer the act again and restart
+    // the wait — and a signed-out link stays its account
+    expect(linkFace("live", wire({ linkState: "awaiting_approval", meshEnabled: true }))).toEqual({
+      kind: "capturing",
+      authUrl: null,
+      nodeState: null,
+    });
+    for (const linkState of ["expired", "removed"] as const) {
+      const face = linkFace(
+        "live",
+        wire({ linkState, link: LINK, meshEnabled: true, authUrl: "https://login.example/a/x" }),
+      );
+      expect(face, linkState).toEqual({ kind: "linked", link: LINK, nodeState: null });
+    }
+  });
+
   it("keeps loading and unavailable as themselves", () => {
     expect(linkFace("loading", null)).toEqual({ kind: "loading" });
     expect(linkFace("error", null)).toEqual({ kind: "unavailable" });

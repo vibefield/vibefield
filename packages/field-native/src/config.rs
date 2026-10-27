@@ -188,7 +188,42 @@ pub struct NativeConfig {
     /// authority, the list is hygiene. Rides the cell bootstrap line (a
     /// non-secret), never the cell's env.
     pub allowed_origins: Vec<String>,
+    /// TS-1 (track TS, P3) — how long a mesh bring-up waits for its node.
+    /// `None`, the product's value in every constructor, waits for ever: the
+    /// person ends a capture (`native.mesh.stop`), never a timer, and every new
+    /// sign-in address tsnet issues meanwhile reaches the unit. truffle's own
+    /// default was five minutes, which a person creating a Tailscale account
+    /// could outlast into a dead end (gap 12). A test sets a short one to prove
+    /// the value reaches the builder.
+    pub mesh_start_timeout: Option<std::time::Duration>,
+    /// TS-1 — how often the floor reads an installed node's backend state for a
+    /// fall to NeedsLogin (an expired key, a device removed in the console).
+    /// truffle raises no event for it (petition TF-c) and its sidecar refreshes
+    /// the value once a minute, so 15 s bounds the lag without reading for
+    /// nothing. A test shortens it.
+    pub mesh_state_tick: std::time::Duration,
+    /// TS-1 TEST SEAM — see [`MeshProbeIdentity`]. `None` in every constructor;
+    /// nothing in the product sets it.
+    #[doc(hidden)]
+    pub mesh_probe: Option<MeshProbeIdentity>,
 }
+
+/// TS-1 TEST SEAM — the `#[ignore]`d live probes only. The floor's own bring-up
+/// under a probe's app namespace and device name, and EPHEMERAL, so a probe on a
+/// real tailnet never appears as the product (`vibefield`, whose desktops would
+/// take it for a peer) or under one of its owner's machine names, and leaves no
+/// device behind. Nothing in the product sets it.
+#[doc(hidden)]
+#[derive(Clone, Debug)]
+pub struct MeshProbeIdentity {
+    /// a per-run app id outside the product's namespace (`vfprobe…`)
+    pub app_id: String,
+    /// a name that says it is a probe
+    pub device_name: String,
+}
+
+/// TS-1 — [`NativeConfig::mesh_state_tick`]'s product value.
+pub const MESH_STATE_TICK: std::time::Duration = std::time::Duration::from_secs(15);
 
 /// A binary cargo and the packaged app place beside this executable. Sibling first (the
 /// packaged and `cargo run` layout), then one level up: an EMBEDDED test's current_exe lives in
@@ -250,6 +285,9 @@ impl NativeConfig {
             freeway_bin_override,
             isolation_window_override,
             allowed_origins,
+            mesh_start_timeout: None,
+            mesh_state_tick: MESH_STATE_TICK,
+            mesh_probe: None,
         })
     }
 
@@ -268,6 +306,9 @@ impl NativeConfig {
             freeway_bin_override: None,
             isolation_window_override: None,
             allowed_origins: Vec::new(),
+            mesh_start_timeout: None,
+            mesh_state_tick: MESH_STATE_TICK,
+            mesh_probe: None,
         }
     }
 
@@ -285,6 +326,9 @@ impl NativeConfig {
             freeway_bin_override: None,
             isolation_window_override: None,
             allowed_origins: Vec::new(),
+            mesh_start_timeout: None,
+            mesh_state_tick: MESH_STATE_TICK,
+            mesh_probe: None,
         }
     }
 

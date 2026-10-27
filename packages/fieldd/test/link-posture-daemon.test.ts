@@ -3,10 +3,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SOCKETS } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
+import WebSocket from "ws";
 import { bootstrap } from "../src/index";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { TEST_LOGIN, writeLinkFixture } from "./link-fixture";
 import { nativeEndpoint } from "./native-harness";
+import { helloAs, until, WsRpc } from "./ws-rpc";
 
 // UA-P-0j — the posture re-ask, as the DAEMON wires it. `link-service.test.ts`
 // drives the service's probe directly, which proves the service and nothing
@@ -116,4 +118,65 @@ describe("UA-P-0k — a cold linked boot is asked for its posture once", () => {
     expect(mock.meshStarts).toHaveLength(1);
     expect(mock.meshPosture).toEqual({ mode: "linked", login: TEST_LOGIN });
   });
+});
+
+// TS-1 (P2) — success is pushed, not polled, as the DAEMON wires it: the floor's
+// mesh unit moving on the health stream brings the link's probe forward. Before
+// TS-1 a sign-in finished in the browser waited for the 15 s probe (gap 11), and
+// a person came back to a pane that had not moved. The bound below is a fifth of
+// that probe, so the row is red on a daemon that does not wire the push.
+describe("TS-1 (P2) — a sign-in finished in the browser lands on the floor's word", () => {
+  it("captures the login within a beat of the mesh unit's health delta, not at the 15 s probe", async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), "vf-ts1-"));
+    cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
+    mkdirSync(join(dataDir, "native", "run"), { recursive: true });
+    writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
+
+    const mock = new MockMgmtServer(nativeEndpoint(dataDir, SOCKETS.MGMT));
+    mock.meshPosture = null; // unlinked: the floor holds nothing until the link act
+    mock.meshCaptureSignIn = { authUrl: "https://login.tailscale.com/a/ts1push" };
+    const health = (meshState: string) => ({
+      state: "up",
+      bootId: "ts1-floor",
+      units: [{ unit: "mesh-gateway", state: meshState }],
+    });
+    mock.healthSnapshot = health("disabled");
+    await mock.start();
+    cleanup.push(() => mock.stop());
+
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+    const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}`);
+    cleanup.push(() => ws.close());
+    await new Promise<void>((resolve, reject) => {
+      ws.once("open", () => resolve());
+      ws.once("error", reject);
+    });
+    const shell = new WsRpc(ws);
+    await helloAs(shell, daemon.shellToken, "shell-main");
+
+    const begun = (await shell.call("user.link.begin", {})) as {
+      linkState: string;
+      authUrl: string | null;
+    };
+    expect(begun).toMatchObject({
+      linkState: "capturing",
+      authUrl: "https://login.tailscale.com/a/ts1push",
+    });
+
+    // the person finishes in the browser; the floor's unit goes up and says so
+    mock.meshCaptureSignIn = {
+      authUrl: "https://login.tailscale.com/a/ts1push",
+      login: TEST_LOGIN,
+    };
+    const pushedAt = Date.now();
+    mock.pushHealth(health("up"));
+    await until(
+      () => mock.meshStarts.some((start) => start["mode"] === "linked"),
+      3_000,
+      "the promotion that follows the captured login",
+    );
+    expect(Date.now() - pushedAt).toBeLessThan(3_000);
+    expect(mock.meshStarts.at(-1)).toEqual({ mode: "linked", login: TEST_LOGIN });
+  }, 30_000);
 });

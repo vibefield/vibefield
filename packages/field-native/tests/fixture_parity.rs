@@ -9,7 +9,7 @@ use field_native::contracts::{
     FreewayRevokeParams, FreewayRevokeResult, FreewayState, Hello, HelloAck, LogRecordV1,
     LoggingHealthV1, MeshEgressProxy, MeshEgressRouteAddParams, MeshEgressRouteBound,
     MeshEgressRouteRef, MeshEgressRouteTable, MeshLaneCloseRequest, MeshLaneClosed,
-    MeshLaneOpenRequest, MeshLanePeerOpened, MeshSelfIdentity, NativeHealth,
+    MeshLaneOpenRequest, MeshLanePeerOpened, MeshNotUpDetails, MeshSelfIdentity, NativeHealth,
     NativePrepareRestartParams, NativePrepareRestartResult, NativeShutdownParams,
     NativeShutdownResult, NativeTickParams, ObservedState, PeerInfo, PingAck, RpcNotification,
     RpcRequest, RpcResponse, ServeConfig, ServeEntry, StoreSnapshot, TerminalRouteSnapshot,
@@ -277,6 +277,14 @@ fn mgmt_mesh_fixtures() {
     // its (empty) gate, so a reader never has to infer "ungated" from silence.
     roundtrip::<MeshSelfIdentity>("mesh-self-identity.valid.json", true);
     roundtrip::<MeshSelfIdentity>("mesh-self-identity.capturing.json", true);
+    // TS-1 (track TS) — the sign-in facts the floor now writes beside the node
+    // (its posture, its name in Tailscale, its key's expiry, the console, a
+    // sign-out) and its answer while there is no node, typed on both sides.
+    roundtrip::<MeshSelfIdentity>("mesh-self-identity.expiring.json", true);
+    roundtrip::<MeshSelfIdentity>("mesh-self-identity.signed-out.json", true);
+    roundtrip::<MeshNotUpDetails>("mesh-not-up-details.signing-in.json", true);
+    roundtrip::<MeshNotUpDetails>("mesh-not-up-details.approval.json", true);
+    roundtrip::<MeshNotUpDetails>("mesh-not-up-details.sidecar-missing.json", true);
 }
 
 #[test]

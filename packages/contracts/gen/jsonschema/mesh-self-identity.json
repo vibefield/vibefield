@@ -596,6 +596,54 @@
       ],
       "additionalProperties": true
     },
+    "MeshFailure": {
+      "type": "string",
+      "enum": [
+        "sidecar_missing",
+        "bring_up_failed",
+        "sidecar_exited"
+      ]
+    },
+    "MeshNotUpDetails": {
+      "type": "object",
+      "properties": {
+        "service": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "authUrl": {
+          "type": "string"
+        },
+        "mode": {
+          "$ref": "#/definitions/MeshMode"
+        },
+        "needsApproval": {
+          "type": "boolean"
+        },
+        "adminUrl": {
+          "type": "string"
+        },
+        "machineName": {
+          "type": "string"
+        },
+        "keyExpiresAt": {
+          "type": "integer"
+        },
+        "keyExpiryDisabled": {
+          "type": "boolean"
+        },
+        "failure": {
+          "$ref": "#/definitions/MeshFailure"
+        }
+      },
+      "required": [
+        "service",
+        "state"
+      ],
+      "additionalProperties": true
+    },
     "MeshSelfIdentity": {
       "$ref": "#/definitions/MeshSelfIdentity"
     },
@@ -634,6 +682,13 @@
         "login": {
           "type": "string",
           "minLength": 1
+        },
+        "authKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "renew": {
+          "type": "boolean"
         }
       },
       "required": [

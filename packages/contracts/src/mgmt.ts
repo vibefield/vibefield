@@ -565,6 +565,23 @@ export const PeerInfo = z
   .passthrough();
 export type PeerInfo = z.infer<typeof PeerInfo>;
 
+/** UA-P-0a (D1) — the mesh POSTURE, which derives from the link and from
+ * nothing else. The floor runs no tailnet node until fieldd asks for one:
+ *
+ *  - `capture` — the user's Link act. The interactive login runs and
+ *    `native.mesh.self` starts answering once the netmap loads. NOTHING may be
+ *    declared or published in this mode: the floor itself refuses `serve.add`
+ *    and `store.set` (the belt), and fieldd declares no serve and publishes no
+ *    slice (the suspenders). The account is not known yet, so nothing can be
+ *    scoped to it.
+ *  - `linked` — a login was captured and IS the account. Every surface is
+ *    scoped to it; the floor carries the login so a later upstream gate
+ *    (UA-P-4) has it in hand without a second round trip.
+ *
+ * Unlinked is the absence of both: no node, no serve, no store, no lane. */
+export const MeshMode = z.enum(["capture", "linked"]);
+export type MeshMode = z.infer<typeof MeshMode>;
+
 /** UA-3 — `native.mesh.self`: the node's OWN identity, including the S1
  * self-whois login (best-effort — absent means the sidecar could not answer
  * for self, or a tagged node has no user; never synthesized, EL7). This is
@@ -595,26 +612,31 @@ export const MeshSelfIdentity = z
     ip: z.string().optional(),
     login: z.string().optional(),
     loginAllow: z.array(z.string()),
+    /** TS-1 (track TS) — the posture the floor holds this node in. Optional
+     * for a floor that predates it. */
+    mode: MeshMode.optional(),
+    /** TS-1 — the name Tailscale shows for this node, on its "connect the
+     * device …?" page and in the admin console (`truffle-vibefield-<host>`
+     * until TF-a; Tailscale may add `-1`). */
+    machineName: z.string().optional(),
+    /** TS-1 — when this node's sign-in lapses, ms since the epoch; absent
+     * when expiry is disabled for it (`keyExpiryDisabled`) or not known (a
+     * sidecar before protocol 10). Display and warning only, never a trust
+     * input. Two fields rather than a nullable one, because the floor's
+     * typed writer cannot tell `null` from absent. */
+    keyExpiresAt: z.number().int().optional(),
+    /** TS-1 — expiry is disabled for this node (an admin turned it off). */
+    keyExpiryDisabled: z.boolean().optional(),
+    /** TS-1 — the admin console's Machines page; absent for a custom control
+     * server (Headscale has no console). */
+    adminUrl: z.string().optional(),
+    /** TS-1 — the node was running and is signed out of the tailnet: its key
+     * expired, or it was removed in the console. Nothing reaches it until a
+     * new sign-in (`native.mesh.start` with `renew`). */
+    needsLogin: z.boolean().optional(),
   })
   .passthrough();
 export type MeshSelfIdentity = z.infer<typeof MeshSelfIdentity>;
-
-/** UA-P-0a (D1) — the mesh POSTURE, which derives from the link and from
- * nothing else. The floor runs no tailnet node until fieldd asks for one:
- *
- *  - `capture` — the user's Link act. The interactive login runs and
- *    `native.mesh.self` starts answering once the netmap loads. NOTHING may be
- *    declared or published in this mode: the floor itself refuses `serve.add`
- *    and `store.set` (the belt), and fieldd declares no serve and publishes no
- *    slice (the suspenders). The account is not known yet, so nothing can be
- *    scoped to it.
- *  - `linked` — a login was captured and IS the account. Every surface is
- *    scoped to it; the floor carries the login so a later upstream gate
- *    (UA-P-4) has it in hand without a second round trip.
- *
- * Unlinked is the absence of both: no node, no serve, no store, no lane. */
-export const MeshMode = z.enum(["capture", "linked"]);
-export type MeshMode = z.infer<typeof MeshMode>;
 
 /** UA-P-0a — `native.mesh.start`: bring the node up in one posture, or move a
  * running node to another (capture → linked is the ordinary promotion at the
@@ -625,9 +647,63 @@ export const MeshStartParams = z
   .object({
     mode: MeshMode,
     login: z.string().min(1).optional(),
+    /** TS-1 (track TS, P7) — `capture` only: sign the node in with this
+     * Tailscale auth key and no browser (a headless mini, a managed machine).
+     * Never stored and never logged on either side of the channel; the floor
+     * holds it for the one bring-up it signs in. Refused in `linked` mode: a
+     * linked node keeps the key it signed in with. */
+    authKey: z.string().min(1).optional(),
+    /** TS-1 — `linked` only: the node was signed out (its key expired, or it
+     * was removed), so rebuild an INSTALLED node on its own state even though
+     * its gate has not moved: only a new bring-up hands out a new sign-in
+     * address. A bring-up still waiting for its sign-in is left alone, since
+     * its address is the live one. Refused in `capture` mode. */
+    renew: z.boolean().optional(),
   })
   .passthrough();
 export type MeshStartParams = z.infer<typeof MeshStartParams>;
+
+/** TS-1 (track TS) — why the floor's last bring-up ended without a node: no
+ * sidecar to start (reinstalling is the way forward), a build that failed, or
+ * the sidecar of a node that was up exiting on its own. One word the person's
+ * sentence is chosen by; the unit's `detail` keeps the floor's own words. */
+export const MeshFailure = z.enum(["sidecar_missing", "bring_up_failed", "sidecar_exited"]);
+export type MeshFailure = z.infer<typeof MeshFailure>;
+
+/** TS-1 (track TS) — the details of `native.mesh.self`'s UNAVAILABLE answer,
+ * "mesh node not up": the C1 shape (the unit's own state, and its sign-in
+ * address while a browser login runs) plus the facts a person acts on while
+ * there is no node yet — the approval it waits on and the console that grants
+ * it, the name it will carry, and why a bring-up ended. The tolerant reader
+ * holds: a floor before TS-1 sends `service`, `state` and `authUrl` alone.
+ *
+ * It restates `UnavailableDetails`' two fields rather than `.extend()`ing it:
+ * zod-to-json-schema writes an extension as `$ref`s into the parent's
+ * properties, which typify cannot follow. */
+export const MeshNotUpDetails = z
+  .object({
+    /** always "mesh-gateway" */
+    service: z.string(),
+    /** the mesh unit's state (`UnitState`), or "unknown" */
+    state: z.string(),
+    /** the mesh unit's sign-in address while a browser login runs */
+    authUrl: z.string().optional(),
+    /** the posture the floor holds; absent when it holds none */
+    mode: MeshMode.optional(),
+    /** the tailnet's device approval holds this node (Tailscale's NeedsMachineAuth) */
+    needsApproval: z.boolean().optional(),
+    /** the admin console's Machines page; absent for a custom control server */
+    adminUrl: z.string().optional(),
+    /** the name the node will carry in Tailscale (composed before it is up) */
+    machineName: z.string().optional(),
+    /** ms since the epoch; absent = expiry disabled or not known */
+    keyExpiresAt: z.number().int().optional(),
+    /** expiry is disabled for this node */
+    keyExpiryDisabled: z.boolean().optional(),
+    failure: MeshFailure.optional(),
+  })
+  .passthrough();
+export type MeshNotUpDetails = z.infer<typeof MeshNotUpDetails>;
 
 /** `started: false` = the node was already up in this exact posture — an
  * idempotent re-ask, not a failure. A posture CHANGE always reports true. */

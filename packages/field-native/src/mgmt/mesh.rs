@@ -9,9 +9,12 @@
 //! Handlers send their own responses (subscribe paths must order the response
 //! line before any forwarded event).
 
-use crate::contracts::{MeshMode, MeshStartParams};
+use crate::contracts::{MeshFailure, MeshMode, MeshNotUpDetails, MeshStartParams};
 use crate::registries::{mesh_control_limits, stores};
-use crate::services::mesh::{JsonStore, MeshNode};
+use crate::services::mesh::{
+    AuthKey, JsonStore, LinkFacts, MeshNode, StartOptions, FAILURE_BRING_UP,
+    FAILURE_SIDECAR_EXITED, FAILURE_SIDECAR_MISSING,
+};
 use crate::services::mesh_bridge::{Lane, LaneClass, LaneEvent, INBOUND_LANE_ID_BASE};
 use crate::state::{DaemonState, MgmtOutbox, OutMsg};
 use serde_json::{json, Value};
@@ -138,7 +141,16 @@ pub async fn handle(
     let login_allow = state.mesh.login_allow();
     let gated = !login_allow.is_empty();
     let resp = match method {
-        "native.mesh.self" => ok(id, self_identity(&node, &login_allow).await),
+        "native.mesh.self" => ok(
+            id,
+            self_identity(
+                &node,
+                &login_allow,
+                state.mesh.mode(),
+                &state.mesh.link_facts(),
+            )
+            .await,
+        ),
         "native.mesh.peers.list" => ok(id, json!({ "peers": list_peers(&node, gated).await })),
         "native.mesh.peers.subscribe" => {
             let sub_id = state.sub_id();
@@ -520,9 +532,39 @@ fn spawn_lane_forwarder(
 /// before this landed. Always present, never guessed — a missing field would be
 /// a third state that means "ask again", and the whole point is a caller that
 /// can answer the question.
-async fn self_identity(node: &Arc<MeshNode>, login_allow: &[String]) -> Value {
+///
+/// TS-1 (track TS) — and the sign-in facts a person acts on while the node is
+/// up: the posture it is held in, the name Tailscale shows for it, its key's
+/// expiry (or that expiry is disabled), the console, and a sign-out the node
+/// fell to (an expired key, a removal), read live from the node where it can
+/// answer and from the unit's [`LinkFacts`] where only the floor knows.
+async fn self_identity(
+    node: &Arc<MeshNode>,
+    login_allow: &[String],
+    mode: Option<MeshMode>,
+    facts: &LinkFacts,
+) -> Value {
     let info = node.local_info();
     let mut out = json!({ "deviceId": info.device_id, "loginAllow": login_allow });
+    if let Some(mode) = mode {
+        out["mode"] = json!(mode.to_string());
+    }
+    if !info.tailscale_hostname.is_empty() {
+        out["machineName"] = json!(info.tailscale_hostname);
+    }
+    match node.key_expiry().map(|expiry| expiry.unix_millis()) {
+        Some(Some(ms)) => out["keyExpiresAt"] = json!(ms),
+        Some(None) => out["keyExpiryDisabled"] = json!(true),
+        None => {}
+    }
+    if let Some(url) = node
+        .control_server()
+        .and_then(|server| server.machines_admin_url().map(str::to_owned))
+        .or_else(|| facts.admin_url.clone())
+    {
+        out["adminUrl"] = json!(url);
+    }
+    out["needsLogin"] = json!(facts.needs_login);
     if !info.device_name.is_empty() {
         out["deviceName"] = json!(info.device_name);
     }
@@ -564,13 +606,38 @@ async fn mesh_start(state: &Arc<DaemonState>, params: &Value, id: Option<Value>)
                 id,
                 "PRECONDITION_FAILED",
                 -32005,
-                &format!("mesh.start expects {{mode, login?}}: {e}"),
+                &format!("mesh.start expects {{mode, login?, authKey?, renew?}}: {e}"),
                 false,
                 None,
             )
         }
     };
     let login = parsed.login.as_ref().map(|l| l.as_str().to_owned());
+    // TS-1 — each extra belongs to one mode: a key signs a CAPTURE in (a linked
+    // node keeps the key it has), and a renewal re-signs a LINKED node (a
+    // capture has nothing to renew). Either one in the other mode is refused,
+    // and the refusal never echoes the key.
+    let renew = parsed.renew.unwrap_or(false);
+    if parsed.auth_key.is_some() && parsed.mode != MeshMode::Capture {
+        return err(
+            id,
+            "PRECONDITION_FAILED",
+            -32005,
+            "an auth key signs in a capture; a linked node keeps the key it has",
+            false,
+            None,
+        );
+    }
+    if renew && parsed.mode != MeshMode::Linked {
+        return err(
+            id,
+            "PRECONDITION_FAILED",
+            -32005,
+            "only a linked node is renewed; a capture signs in for the first time",
+            false,
+            None,
+        );
+    }
     match (parsed.mode, login.as_deref()) {
         (MeshMode::Linked, None) => {
             return err(
@@ -594,7 +661,11 @@ async fn mesh_start(state: &Arc<DaemonState>, params: &Value, id: Option<Value>)
         }
         _ => {}
     }
-    match state.mesh.start(parsed.mode, login).await {
+    let options = StartOptions {
+        auth_key: parsed.auth_key.map(|key| AuthKey::new(String::from(key))),
+        renew,
+    };
+    match state.mesh.start_with(parsed.mode, login, options).await {
         Ok(started) => ok(
             id,
             json!({ "mode": parsed.mode.to_string(), "started": started }),
@@ -648,6 +719,12 @@ async fn retire_identity(state: &Arc<DaemonState>, id: Option<Value>) -> Value {
 }
 
 /// UNAVAILABLE carrying the mesh unit's live state (+authUrl) — the C1 shape.
+///
+/// TS-1 (track TS) — typed as `MeshNotUpDetails`, and carrying what a person
+/// acts on while there is no node: the posture the floor holds (so fieldd can
+/// tell a forgotten posture from a lagging read), the approval it waits on and
+/// the console that grants it, the name Tailscale will show, a key's expiry the
+/// last node reported, and why a bring-up ended.
 fn unavailable(state: &Arc<DaemonState>, id: Option<Value>) -> Value {
     let (mesh_state, auth_url) = {
         let h = state.health_tx.borrow();
@@ -657,18 +734,37 @@ fn unavailable(state: &Arc<DaemonState>, id: Option<Value>) -> Value {
             .map(|u| (u.state.to_string(), u.auth_url.clone()))
             .unwrap_or_else(|| ("unknown".into(), None))
     };
-    let mut details = json!({"service":"mesh-gateway","state": mesh_state});
-    if let Some(url) = auth_url {
-        details["authUrl"] = json!(url);
-    }
+    let facts = state.mesh.link_facts();
+    let details = MeshNotUpDetails {
+        service: "mesh-gateway".into(),
+        state: mesh_state,
+        auth_url,
+        mode: state.mesh.mode(),
+        needs_approval: facts.needs_approval.then_some(true),
+        admin_url: facts.admin_url,
+        machine_name: facts.machine_name,
+        key_expires_at: facts.key_expiry_ms.flatten(),
+        key_expiry_disabled: matches!(facts.key_expiry_ms, Some(None)).then_some(true),
+        failure: facts.failure.and_then(mesh_failure),
+    };
     err(
         id,
         "UNAVAILABLE",
         -32006,
         "mesh node not up",
         true,
-        Some(details),
+        serde_json::to_value(details).ok(),
     )
+}
+
+/// TS-1 — the unit's failure word, as the contract types it.
+fn mesh_failure(word: &str) -> Option<MeshFailure> {
+    match word {
+        FAILURE_SIDECAR_MISSING => Some(MeshFailure::SidecarMissing),
+        FAILURE_BRING_UP => Some(MeshFailure::BringUpFailed),
+        FAILURE_SIDECAR_EXITED => Some(MeshFailure::SidecarExited),
+        _ => None,
+    }
 }
 
 /// truffle errors → wire errors. NotRunning is transient (auth/network) → UNAVAILABLE.

@@ -1206,6 +1206,27 @@ export const METHODS: MethodDef[] = [
     idempotent: false,
     locality: "local",
   }),
+  // TS-1 (track TS) — the two acts the link was missing. `cancel` ends a
+  // capture the person no longer wants (the node stops; its identity stays, as
+  // with any stop; the desktop is offline again) — before it there was no
+  // way out of a capture but a restart. `renew` signs a linked node in again
+  // when it was signed out (an expired key, a removed device): the record
+  // stands, the floor rebuilds the node on its own state, and the new sign-in
+  // address reaches `user.link.subscribe`.
+  defineMethod({
+    surface: "product",
+    method: "user.link.cancel",
+    scope: "settings.manage",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "user.link.renew",
+    scope: "settings.manage",
+    idempotent: false,
+    locality: "local",
+  }),
   // D29′ app-section preferences. Unlike plugin settings these are an exact,
   // trusted desktop surface; plugins, tailnet callers, and agents never receive
   // settings.manage.

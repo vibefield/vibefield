@@ -1,0 +1,8 @@
+{
+  "service": "mesh-gateway",
+  "state": "starting",
+  "authUrl": "https://login.tailscale.com/a/1a2b3c4d5e6f",
+  "mode": "capture",
+  "adminUrl": "https://login.tailscale.com/admin/machines",
+  "machineName": "truffle-vibefield-jamess-macbook-pro"
+}

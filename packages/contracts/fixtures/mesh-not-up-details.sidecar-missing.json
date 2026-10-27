@@ -1,0 +1,7 @@
+{
+  "service": "mesh-gateway",
+  "state": "degraded",
+  "mode": "linked",
+  "machineName": "truffle-vibefield-jamess-macbook-pro",
+  "failure": "sidecar_missing"
+}

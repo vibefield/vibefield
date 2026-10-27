@@ -6500,6 +6500,83 @@ impl<'de> ::serde::Deserialize<'de> for MeshEgressTarget {
             })
     }
 }
+#[doc = "`MeshFailure`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"enum\": ["]
+#[doc = "    \"sidecar_missing\","]
+#[doc = "    \"bring_up_failed\","]
+#[doc = "    \"sidecar_exited\""]
+#[doc = "  ]"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(
+    :: serde :: Deserialize,
+    :: serde :: Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum MeshFailure {
+    #[serde(rename = "sidecar_missing")]
+    SidecarMissing,
+    #[serde(rename = "bring_up_failed")]
+    BringUpFailed,
+    #[serde(rename = "sidecar_exited")]
+    SidecarExited,
+}
+impl ::std::fmt::Display for MeshFailure {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::SidecarMissing => f.write_str("sidecar_missing"),
+            Self::BringUpFailed => f.write_str("bring_up_failed"),
+            Self::SidecarExited => f.write_str("sidecar_exited"),
+        }
+    }
+}
+impl ::std::str::FromStr for MeshFailure {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "sidecar_missing" => Ok(Self::SidecarMissing),
+            "bring_up_failed" => Ok(Self::BringUpFailed),
+            "sidecar_exited" => Ok(Self::SidecarExited),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for MeshFailure {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for MeshFailure {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for MeshFailure {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
 #[doc = "`MeshLaneClass`"]
 #[doc = r""]
 #[doc = r" <details><summary>JSON schema</summary>"]
@@ -6910,6 +6987,103 @@ impl ::std::convert::TryFrom<::std::string::String> for MeshMode {
         value.parse()
     }
 }
+#[doc = "`MeshNotUpDetails`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"service\","]
+#[doc = "    \"state\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"adminUrl\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"authUrl\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"failure\": {"]
+#[doc = "      \"$ref\": \"#/definitions/MeshFailure\""]
+#[doc = "    },"]
+#[doc = "    \"keyExpiresAt\": {"]
+#[doc = "      \"type\": \"integer\""]
+#[doc = "    },"]
+#[doc = "    \"keyExpiryDisabled\": {"]
+#[doc = "      \"type\": \"boolean\""]
+#[doc = "    },"]
+#[doc = "    \"machineName\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"mode\": {"]
+#[doc = "      \"$ref\": \"#/definitions/MeshMode\""]
+#[doc = "    },"]
+#[doc = "    \"needsApproval\": {"]
+#[doc = "      \"type\": \"boolean\""]
+#[doc = "    },"]
+#[doc = "    \"service\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"state\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct MeshNotUpDetails {
+    #[serde(
+        rename = "adminUrl",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub admin_url: ::std::option::Option<::std::string::String>,
+    #[serde(
+        rename = "authUrl",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub auth_url: ::std::option::Option<::std::string::String>,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub failure: ::std::option::Option<MeshFailure>,
+    #[serde(
+        rename = "keyExpiresAt",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub key_expires_at: ::std::option::Option<i64>,
+    #[serde(
+        rename = "keyExpiryDisabled",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub key_expiry_disabled: ::std::option::Option<bool>,
+    #[serde(
+        rename = "machineName",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub machine_name: ::std::option::Option<::std::string::String>,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub mode: ::std::option::Option<MeshMode>,
+    #[serde(
+        rename = "needsApproval",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub needs_approval: ::std::option::Option<bool>,
+    pub service: ::std::string::String,
+    pub state: ::std::string::String,
+}
+impl MeshNotUpDetails {
+    pub fn builder() -> builder::MeshNotUpDetails {
+        Default::default()
+    }
+}
 #[doc = "`MeshRetireResult`"]
 #[doc = r""]
 #[doc = r" <details><summary>JSON schema</summary>"]
@@ -6959,6 +7133,9 @@ impl MeshRetireResult {
 #[doc = "    \"loginAllow\""]
 #[doc = "  ],"]
 #[doc = "  \"properties\": {"]
+#[doc = "    \"adminUrl\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
 #[doc = "    \"deviceId\": {"]
 #[doc = "      \"type\": \"string\""]
 #[doc = "    },"]
@@ -6971,6 +7148,12 @@ impl MeshRetireResult {
 #[doc = "    \"ip\": {"]
 #[doc = "      \"type\": \"string\""]
 #[doc = "    },"]
+#[doc = "    \"keyExpiresAt\": {"]
+#[doc = "      \"type\": \"integer\""]
+#[doc = "    },"]
+#[doc = "    \"keyExpiryDisabled\": {"]
+#[doc = "      \"type\": \"boolean\""]
+#[doc = "    },"]
 #[doc = "    \"login\": {"]
 #[doc = "      \"type\": \"string\""]
 #[doc = "    },"]
@@ -6979,6 +7162,15 @@ impl MeshRetireResult {
 #[doc = "      \"items\": {"]
 #[doc = "        \"type\": \"string\""]
 #[doc = "      }"]
+#[doc = "    },"]
+#[doc = "    \"machineName\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"mode\": {"]
+#[doc = "      \"$ref\": \"#/definitions/MeshMode\""]
+#[doc = "    },"]
+#[doc = "    \"needsLogin\": {"]
+#[doc = "      \"type\": \"boolean\""]
 #[doc = "    },"]
 #[doc = "    \"tailscaleId\": {"]
 #[doc = "      \"type\": \"string\""]
@@ -6990,6 +7182,12 @@ impl MeshRetireResult {
 #[doc = r" </details>"]
 #[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
 pub struct MeshSelfIdentity {
+    #[serde(
+        rename = "adminUrl",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub admin_url: ::std::option::Option<::std::string::String>,
     #[serde(rename = "deviceId")]
     pub device_id: ::std::string::String,
     #[serde(
@@ -7006,10 +7204,36 @@ pub struct MeshSelfIdentity {
     pub dns_name: ::std::option::Option<::std::string::String>,
     #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
     pub ip: ::std::option::Option<::std::string::String>,
+    #[serde(
+        rename = "keyExpiresAt",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub key_expires_at: ::std::option::Option<i64>,
+    #[serde(
+        rename = "keyExpiryDisabled",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub key_expiry_disabled: ::std::option::Option<bool>,
     #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
     pub login: ::std::option::Option<::std::string::String>,
     #[serde(rename = "loginAllow")]
     pub login_allow: ::std::vec::Vec<::std::string::String>,
+    #[serde(
+        rename = "machineName",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub machine_name: ::std::option::Option<::std::string::String>,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub mode: ::std::option::Option<MeshMode>,
+    #[serde(
+        rename = "needsLogin",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub needs_login: ::std::option::Option<bool>,
     #[serde(
         rename = "tailscaleId",
         default,
@@ -7033,12 +7257,19 @@ impl MeshSelfIdentity {
 #[doc = "    \"mode\""]
 #[doc = "  ],"]
 #[doc = "  \"properties\": {"]
+#[doc = "    \"authKey\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"minLength\": 1"]
+#[doc = "    },"]
 #[doc = "    \"login\": {"]
 #[doc = "      \"type\": \"string\","]
 #[doc = "      \"minLength\": 1"]
 #[doc = "    },"]
 #[doc = "    \"mode\": {"]
 #[doc = "      \"$ref\": \"#/definitions/MeshMode\""]
+#[doc = "    },"]
+#[doc = "    \"renew\": {"]
+#[doc = "      \"type\": \"boolean\""]
 #[doc = "    }"]
 #[doc = "  },"]
 #[doc = "  \"additionalProperties\": true"]
@@ -7047,13 +7278,89 @@ impl MeshSelfIdentity {
 #[doc = r" </details>"]
 #[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
 pub struct MeshStartParams {
+    #[serde(
+        rename = "authKey",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub auth_key: ::std::option::Option<MeshStartParamsAuthKey>,
     #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
     pub login: ::std::option::Option<MeshStartParamsLogin>,
     pub mode: MeshMode,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub renew: ::std::option::Option<bool>,
 }
 impl MeshStartParams {
     pub fn builder() -> builder::MeshStartParams {
         Default::default()
+    }
+}
+#[doc = "`MeshStartParamsAuthKey`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"minLength\": 1"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct MeshStartParamsAuthKey(::std::string::String);
+impl ::std::ops::Deref for MeshStartParamsAuthKey {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<MeshStartParamsAuthKey> for ::std::string::String {
+    fn from(value: MeshStartParamsAuthKey) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for MeshStartParamsAuthKey {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for MeshStartParamsAuthKey {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for MeshStartParamsAuthKey {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for MeshStartParamsAuthKey {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for MeshStartParamsAuthKey {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
     }
 }
 #[doc = "`MeshStartParamsLogin`"]
@@ -14507,6 +14814,183 @@ pub mod builder {
         }
     }
     #[derive(Clone, Debug)]
+    pub struct MeshNotUpDetails {
+        admin_url: ::std::result::Result<
+            ::std::option::Option<::std::string::String>,
+            ::std::string::String,
+        >,
+        auth_url: ::std::result::Result<
+            ::std::option::Option<::std::string::String>,
+            ::std::string::String,
+        >,
+        failure:
+            ::std::result::Result<::std::option::Option<super::MeshFailure>, ::std::string::String>,
+        key_expires_at: ::std::result::Result<::std::option::Option<i64>, ::std::string::String>,
+        key_expiry_disabled:
+            ::std::result::Result<::std::option::Option<bool>, ::std::string::String>,
+        machine_name: ::std::result::Result<
+            ::std::option::Option<::std::string::String>,
+            ::std::string::String,
+        >,
+        mode: ::std::result::Result<::std::option::Option<super::MeshMode>, ::std::string::String>,
+        needs_approval: ::std::result::Result<::std::option::Option<bool>, ::std::string::String>,
+        service: ::std::result::Result<::std::string::String, ::std::string::String>,
+        state: ::std::result::Result<::std::string::String, ::std::string::String>,
+    }
+    impl ::std::default::Default for MeshNotUpDetails {
+        fn default() -> Self {
+            Self {
+                admin_url: Ok(Default::default()),
+                auth_url: Ok(Default::default()),
+                failure: Ok(Default::default()),
+                key_expires_at: Ok(Default::default()),
+                key_expiry_disabled: Ok(Default::default()),
+                machine_name: Ok(Default::default()),
+                mode: Ok(Default::default()),
+                needs_approval: Ok(Default::default()),
+                service: Err("no value supplied for service".to_string()),
+                state: Err("no value supplied for state".to_string()),
+            }
+        }
+    }
+    impl MeshNotUpDetails {
+        pub fn admin_url<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.admin_url = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for admin_url: {e}"));
+            self
+        }
+        pub fn auth_url<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.auth_url = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for auth_url: {e}"));
+            self
+        }
+        pub fn failure<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::MeshFailure>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.failure = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for failure: {e}"));
+            self
+        }
+        pub fn key_expires_at<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<i64>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.key_expires_at = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for key_expires_at: {e}"));
+            self
+        }
+        pub fn key_expiry_disabled<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<bool>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.key_expiry_disabled = value.try_into().map_err(|e| {
+                format!("error converting supplied value for key_expiry_disabled: {e}")
+            });
+            self
+        }
+        pub fn machine_name<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.machine_name = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for machine_name: {e}"));
+            self
+        }
+        pub fn mode<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::MeshMode>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.mode = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for mode: {e}"));
+            self
+        }
+        pub fn needs_approval<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<bool>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.needs_approval = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for needs_approval: {e}"));
+            self
+        }
+        pub fn service<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::string::String>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.service = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for service: {e}"));
+            self
+        }
+        pub fn state<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::string::String>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.state = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for state: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<MeshNotUpDetails> for super::MeshNotUpDetails {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: MeshNotUpDetails,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                admin_url: value.admin_url?,
+                auth_url: value.auth_url?,
+                failure: value.failure?,
+                key_expires_at: value.key_expires_at?,
+                key_expiry_disabled: value.key_expiry_disabled?,
+                machine_name: value.machine_name?,
+                mode: value.mode?,
+                needs_approval: value.needs_approval?,
+                service: value.service?,
+                state: value.state?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::MeshNotUpDetails> for MeshNotUpDetails {
+        fn from(value: super::MeshNotUpDetails) -> Self {
+            Self {
+                admin_url: Ok(value.admin_url),
+                auth_url: Ok(value.auth_url),
+                failure: Ok(value.failure),
+                key_expires_at: Ok(value.key_expires_at),
+                key_expiry_disabled: Ok(value.key_expiry_disabled),
+                machine_name: Ok(value.machine_name),
+                mode: Ok(value.mode),
+                needs_approval: Ok(value.needs_approval),
+                service: Ok(value.service),
+                state: Ok(value.state),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
     pub struct MeshRetireResult {
         archived_to: ::std::result::Result<
             ::std::option::Option<::std::string::String>,
@@ -14565,6 +15049,10 @@ pub mod builder {
     }
     #[derive(Clone, Debug)]
     pub struct MeshSelfIdentity {
+        admin_url: ::std::result::Result<
+            ::std::option::Option<::std::string::String>,
+            ::std::string::String,
+        >,
         device_id: ::std::result::Result<::std::string::String, ::std::string::String>,
         device_name: ::std::result::Result<
             ::std::option::Option<::std::string::String>,
@@ -14578,12 +15066,21 @@ pub mod builder {
             ::std::option::Option<::std::string::String>,
             ::std::string::String,
         >,
+        key_expires_at: ::std::result::Result<::std::option::Option<i64>, ::std::string::String>,
+        key_expiry_disabled:
+            ::std::result::Result<::std::option::Option<bool>, ::std::string::String>,
         login: ::std::result::Result<
             ::std::option::Option<::std::string::String>,
             ::std::string::String,
         >,
         login_allow:
             ::std::result::Result<::std::vec::Vec<::std::string::String>, ::std::string::String>,
+        machine_name: ::std::result::Result<
+            ::std::option::Option<::std::string::String>,
+            ::std::string::String,
+        >,
+        mode: ::std::result::Result<::std::option::Option<super::MeshMode>, ::std::string::String>,
+        needs_login: ::std::result::Result<::std::option::Option<bool>, ::std::string::String>,
         tailscale_id: ::std::result::Result<
             ::std::option::Option<::std::string::String>,
             ::std::string::String,
@@ -14592,17 +15089,33 @@ pub mod builder {
     impl ::std::default::Default for MeshSelfIdentity {
         fn default() -> Self {
             Self {
+                admin_url: Ok(Default::default()),
                 device_id: Err("no value supplied for device_id".to_string()),
                 device_name: Ok(Default::default()),
                 dns_name: Ok(Default::default()),
                 ip: Ok(Default::default()),
+                key_expires_at: Ok(Default::default()),
+                key_expiry_disabled: Ok(Default::default()),
                 login: Ok(Default::default()),
                 login_allow: Err("no value supplied for login_allow".to_string()),
+                machine_name: Ok(Default::default()),
+                mode: Ok(Default::default()),
+                needs_login: Ok(Default::default()),
                 tailscale_id: Ok(Default::default()),
             }
         }
     }
     impl MeshSelfIdentity {
+        pub fn admin_url<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.admin_url = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for admin_url: {e}"));
+            self
+        }
         pub fn device_id<T>(mut self, value: T) -> Self
         where
             T: ::std::convert::TryInto<::std::string::String>,
@@ -14643,6 +15156,26 @@ pub mod builder {
                 .map_err(|e| format!("error converting supplied value for ip: {e}"));
             self
         }
+        pub fn key_expires_at<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<i64>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.key_expires_at = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for key_expires_at: {e}"));
+            self
+        }
+        pub fn key_expiry_disabled<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<bool>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.key_expiry_disabled = value.try_into().map_err(|e| {
+                format!("error converting supplied value for key_expiry_disabled: {e}")
+            });
+            self
+        }
         pub fn login<T>(mut self, value: T) -> Self
         where
             T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
@@ -14663,6 +15196,36 @@ pub mod builder {
                 .map_err(|e| format!("error converting supplied value for login_allow: {e}"));
             self
         }
+        pub fn machine_name<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.machine_name = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for machine_name: {e}"));
+            self
+        }
+        pub fn mode<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::MeshMode>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.mode = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for mode: {e}"));
+            self
+        }
+        pub fn needs_login<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<bool>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.needs_login = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for needs_login: {e}"));
+            self
+        }
         pub fn tailscale_id<T>(mut self, value: T) -> Self
         where
             T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
@@ -14680,12 +15243,18 @@ pub mod builder {
             value: MeshSelfIdentity,
         ) -> ::std::result::Result<Self, super::error::ConversionError> {
             Ok(Self {
+                admin_url: value.admin_url?,
                 device_id: value.device_id?,
                 device_name: value.device_name?,
                 dns_name: value.dns_name?,
                 ip: value.ip?,
+                key_expires_at: value.key_expires_at?,
+                key_expiry_disabled: value.key_expiry_disabled?,
                 login: value.login?,
                 login_allow: value.login_allow?,
+                machine_name: value.machine_name?,
+                mode: value.mode?,
+                needs_login: value.needs_login?,
                 tailscale_id: value.tailscale_id?,
             })
         }
@@ -14693,33 +15262,56 @@ pub mod builder {
     impl ::std::convert::From<super::MeshSelfIdentity> for MeshSelfIdentity {
         fn from(value: super::MeshSelfIdentity) -> Self {
             Self {
+                admin_url: Ok(value.admin_url),
                 device_id: Ok(value.device_id),
                 device_name: Ok(value.device_name),
                 dns_name: Ok(value.dns_name),
                 ip: Ok(value.ip),
+                key_expires_at: Ok(value.key_expires_at),
+                key_expiry_disabled: Ok(value.key_expiry_disabled),
                 login: Ok(value.login),
                 login_allow: Ok(value.login_allow),
+                machine_name: Ok(value.machine_name),
+                mode: Ok(value.mode),
+                needs_login: Ok(value.needs_login),
                 tailscale_id: Ok(value.tailscale_id),
             }
         }
     }
     #[derive(Clone, Debug)]
     pub struct MeshStartParams {
+        auth_key: ::std::result::Result<
+            ::std::option::Option<super::MeshStartParamsAuthKey>,
+            ::std::string::String,
+        >,
         login: ::std::result::Result<
             ::std::option::Option<super::MeshStartParamsLogin>,
             ::std::string::String,
         >,
         mode: ::std::result::Result<super::MeshMode, ::std::string::String>,
+        renew: ::std::result::Result<::std::option::Option<bool>, ::std::string::String>,
     }
     impl ::std::default::Default for MeshStartParams {
         fn default() -> Self {
             Self {
+                auth_key: Ok(Default::default()),
                 login: Ok(Default::default()),
                 mode: Err("no value supplied for mode".to_string()),
+                renew: Ok(Default::default()),
             }
         }
     }
     impl MeshStartParams {
+        pub fn auth_key<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::MeshStartParamsAuthKey>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.auth_key = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for auth_key: {e}"));
+            self
+        }
         pub fn login<T>(mut self, value: T) -> Self
         where
             T: ::std::convert::TryInto<::std::option::Option<super::MeshStartParamsLogin>>,
@@ -14740,6 +15332,16 @@ pub mod builder {
                 .map_err(|e| format!("error converting supplied value for mode: {e}"));
             self
         }
+        pub fn renew<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<bool>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.renew = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for renew: {e}"));
+            self
+        }
     }
     impl ::std::convert::TryFrom<MeshStartParams> for super::MeshStartParams {
         type Error = super::error::ConversionError;
@@ -14747,16 +15349,20 @@ pub mod builder {
             value: MeshStartParams,
         ) -> ::std::result::Result<Self, super::error::ConversionError> {
             Ok(Self {
+                auth_key: value.auth_key?,
                 login: value.login?,
                 mode: value.mode?,
+                renew: value.renew?,
             })
         }
     }
     impl ::std::convert::From<super::MeshStartParams> for MeshStartParams {
         fn from(value: super::MeshStartParams) -> Self {
             Self {
+                auth_key: Ok(value.auth_key),
                 login: Ok(value.login),
                 mode: Ok(value.mode),
+                renew: Ok(value.renew),
             }
         }
     }

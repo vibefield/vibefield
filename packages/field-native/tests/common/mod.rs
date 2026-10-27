@@ -70,28 +70,42 @@ fn authkey_named(name: &str) -> Option<String> {
             return Some(k);
         }
     }
+    // TS-1 — a lane worktree holds no `.env` of its own: `TRUFFLE_TEST_DOTENV`
+    // names the checkout's file, so THIS process reads the key from it and no
+    // shell, command line or environment of a parent ever carries the secret.
+    if let Some(file) = std::env::var_os("TRUFFLE_TEST_DOTENV") {
+        return dotenv_value(Path::new(&file), name);
+    }
     let mut dir: Option<&Path> = Some(Path::new(env!("CARGO_MANIFEST_DIR")));
     while let Some(d) = dir {
         let candidate = d.join(".env");
         if candidate.is_file() {
-            let body = std::fs::read_to_string(&candidate).ok()?;
-            for line in body.lines() {
-                let line = line.trim();
-                if line.is_empty() || line.starts_with('#') {
-                    continue;
-                }
-                let Some((key_name, value)) = line.split_once('=') else {
-                    continue;
-                };
-                if key_name.trim() == name {
-                    let v = value.trim().trim_matches('"').trim_matches('\'');
-                    if !v.is_empty() {
-                        return Some(v.to_string());
-                    }
-                }
+            if let Some(value) = dotenv_value(&candidate, name) {
+                return Some(value);
             }
         }
         dir = d.parent();
+    }
+    None
+}
+
+/// `name`'s value in the `.env` at `file`, or `None`.
+fn dotenv_value(file: &Path, name: &str) -> Option<String> {
+    let body = std::fs::read_to_string(file).ok()?;
+    for line in body.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let Some((key_name, value)) = line.split_once('=') else {
+            continue;
+        };
+        if key_name.trim() == name {
+            let v = value.trim().trim_matches('"').trim_matches('\'');
+            if !v.is_empty() {
+                return Some(v.to_string());
+            }
+        }
     }
     None
 }

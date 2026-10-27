@@ -12,6 +12,8 @@ import {
 import { basename, dirname, join } from "node:path";
 import {
   LAYOUT,
+  type MeshFailure,
+  MeshNotUpDetails,
   MeshRetireResult,
   MeshSelfIdentity,
   MeshStartResult,
@@ -63,6 +65,19 @@ import { isNativeUnresponsive, RpcCallError } from "./native-link";
 // this, a corrupt `link.json` paused capture forever while `status().link` read
 // null — a LINKED desktop serving an open door under a UI that said "not
 // linked". That state is offline now, and it says which file to move.
+//
+// TS-1 (track TS, 2026-10-27) — AND NO DEAD ENDS. The plumbing hid four states a
+// person needs words for (gaps 11–15 of `thinking-tailscale-onboarding.md`):
+//   - a capture the tailnet's device approval holds → `awaiting_approval`;
+//   - a linked node signed out of the tailnet → `expired` (its key's time has
+//     passed, or is unknown) or `removed` (its key still had time: the device
+//     was removed in the console), both answered by `renew()`;
+//   - a capture the person no longer wants → `cancel()`, offline again;
+//   - success, which waited for a 15 s probe → the floor's mesh unit now moves
+//     on the health stream and `noteFloorHealth` brings the probe forward.
+// The floor no longer times a capture out (P3), so a capture outlives the
+// fieldd that asked for it: one this daemon finds the floor holding at boot is
+// carried on (`adoptFloorCapture`), never orphaned.
 
 export interface LinkServiceOptions {
   dataDir: string;
@@ -89,6 +104,21 @@ export interface LinkServiceOptions {
 const PROBE_MS = 15_000;
 const VERIFY_MS = 300_000;
 const CAPTURE_ATTEMPTS = 8;
+/** TS-1 (P2) — a bring-up says starting, then its address, then up, within a
+ * beat; the probe a burst of health deltas brings forward runs once, after it. */
+const PUSH_SETTLE_MS = 50;
+
+/** TS-1 — the postures that hold a node, so the probe runs and `meshEnabled`
+ * reads true: a capture (signing in, or held for approval) and a link that
+ * stands (up, or signed out and waiting to be signed in again). */
+const LIVE: ReadonlySet<UserLinkState> = new Set<UserLinkState>([
+  "capturing",
+  "awaiting_approval",
+  "linked",
+  "expired",
+  "removed",
+]);
+const isLive = (state: UserLinkState): boolean => LIVE.has(state);
 
 export class LinkService extends EventEmitter {
   private readonly linkPath: string;
@@ -101,6 +131,19 @@ export class LinkService extends EventEmitter {
   private captureMisses = 0;
   private nodeState: string | null = null;
   private authUrl: string | null = null;
+  /** TS-1 — the sign-in facts the floor reports beside the node
+   * (`MeshSelfIdentity`, `MeshNotUpDetails`): the name Tailscale shows, its
+   * console, and when the key lapses (`null` = expiry disabled; `undefined` =
+   * not known). */
+  private machineName: string | null = null;
+  private adminUrl: string | null = null;
+  private keyExpiresAt: number | null | undefined = undefined;
+  /** TS-1 — why the floor's last bring-up ended without a node, when one did. */
+  private failure: MeshFailure | null = null;
+  /** TS-1 (P2) — the mesh unit's last word heard on the health stream, so a
+   * delta about another unit, or one that says nothing new, brings nothing
+   * forward. */
+  private lastFloorWord = "";
   private timer: NodeJS.Timeout | null = null;
   private stopped = false;
   private lastEmitted = "";
@@ -129,6 +172,8 @@ export class LinkService extends EventEmitter {
     this.logger = opts.logger ?? createNoopLogger();
     this.now = opts.now ?? Date.now;
     this.loadLink();
+    // TS-1 — a desktop whose node is down still knows its sign-in's date.
+    if (this.link?.keyExpiresAt !== undefined) this.keyExpiresAt = this.link.keyExpiresAt;
   }
 
   status(): UserLinkStatus {
@@ -137,11 +182,15 @@ export class LinkService extends EventEmitter {
       // UA-P-0a — "have we asked the floor for a node?", which is a posture
       // question and not the floor's opinion. `nodeState` below is the floor's
       // own answer about the node it was asked for.
-      meshEnabled: this.state === "capturing" || this.state === "linked",
+      meshEnabled: isLive(this.state),
       nodeState: this.nodeState,
       authUrl: this.authUrl,
       linkState: this.state,
       linkDetail: this.detail,
+      machineName: this.machineName,
+      adminUrl: this.adminUrl,
+      ...(this.keyExpiresAt !== undefined ? { keyExpiresAt: this.keyExpiresAt } : {}),
+      failure: this.failure,
     };
   }
 
@@ -160,10 +209,36 @@ export class LinkService extends EventEmitter {
     const login = this.link?.login ?? null;
     if (login === null) {
       this.enter("offline", null);
+      void this.adoptFloorCapture();
       return;
     }
     this.enter("linked", null);
     void this.declarePosture("linked", login);
+    this.schedule(0);
+  }
+
+  /** TS-1 — a capture outlives the fieldd that asked for it: the floor
+   * outlives fieldd (design-02), and since P3 a capture waits for the person,
+   * never a timer. So a daemon that boots unlinked reads the floor once, and a
+   * capture it still holds — a person mid-sign-in when fieldd restarted — is
+   * carried on rather than left as a node nobody watches. It declares nothing:
+   * the posture is already the floor's. */
+  private async adoptFloorCapture(): Promise<void> {
+    let mode: string | undefined;
+    try {
+      mode = MeshSelfIdentity.parse(await this.opts.native.request("native.mesh.self")).mode;
+    } catch (error) {
+      mode = notUpDetails(error)?.mode;
+    }
+    if (mode !== "capture" || this.state !== "offline" || this.stopped) return;
+    this.logger.info(
+      "fieldd.link.capture_adopted",
+      "The floor still holds a capture a previous fieldd began; carrying it on",
+      {},
+    );
+    this.captureMisses = 0;
+    this.postureLanded = true;
+    this.enter("capturing", null);
     this.schedule(0);
   }
 
@@ -184,8 +259,32 @@ export class LinkService extends EventEmitter {
    * answer evidence again once an ask has landed (UA-P-0k, `postureLanded`). */
   floorReconnected(): void {
     this.postureLanded = false;
-    if (this.state !== "linked" && this.state !== "capturing") return;
+    if (!isLive(this.state)) return;
     this.schedule(0);
+  }
+
+  /** TS-1 (P2) — the floor's mesh unit moved: its state, its sign-in address or
+   * its words. Read the node now rather than at the next 15 s probe, so a
+   * sign-in finished in the browser lands on the pane within a beat. The probe
+   * stays the reader and the backstop; this only brings it forward. */
+  noteFloorHealth(
+    units:
+      | ReadonlyArray<{
+          unit: string;
+          state: string;
+          detail?: string | undefined;
+          authUrl?: string | undefined;
+        }>
+      | undefined,
+  ): void {
+    // the tolerant reader: a health payload without units says nothing new
+    const mesh = units?.find((unit) => unit.unit === "mesh-gateway");
+    const word =
+      mesh === undefined ? "" : [mesh.state, mesh.detail ?? "", mesh.authUrl ?? ""].join("\u0000");
+    if (word === this.lastFloorWord) return;
+    this.lastFloorWord = word;
+    if (!isLive(this.state)) return;
+    this.schedule(PUSH_SETTLE_MS);
   }
 
   /** UA-P-0a (D1) — THE LINK ACT. The floor brings a node up in `capture` mode,
@@ -196,14 +295,27 @@ export class LinkService extends EventEmitter {
    * Idempotent while capturing (a second ask re-declares the same posture and
    * the floor answers `started: false`); refused once linked, because relinking
    * a different account is unlink-then-link and unlink is the act that retires
-   * the tailnet identity. */
-  async begin(): Promise<UserLinkStatus> {
+   * the tailnet identity.
+   *
+   * TS-1 (P7) — `authKey` signs the capture in with no browser: it rides this
+   * one `native.mesh.start` and is never kept, logged or audited (the floor
+   * holds it for the one bring-up). A link that stands but is signed out is
+   * signed in again by `renew()`, not by a second link. */
+  async begin(options: { authKey?: string } = {}): Promise<UserLinkStatus> {
     if (this.state === "linked") {
       throw new RpcCallError(
         "PRECONDITION_FAILED",
         "this user is already linked to a tailscale account; unlink first",
         false,
         { login: this.link?.login ?? null },
+      );
+    }
+    if (this.hasStandingLink()) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        "this user's tailscale link stands and is waiting to be signed in again; renew it",
+        false,
+        { login: this.link?.login ?? null, linkState: this.state },
       );
     }
     if (this.linkFileCorrupt) {
@@ -215,7 +327,7 @@ export class LinkService extends EventEmitter {
     }
     this.captureMisses = 0;
     this.enter("capturing", null);
-    await this.declarePosture("capture");
+    await this.declarePosture("capture", undefined, options.authKey);
     // The first probe is AWAITED rather than scheduled, so the answer this act
     // returns is a real posture and not an optimistic one: on a floor whose
     // node is already up (a relink after `login_unavailable`, a second user's
@@ -223,6 +335,65 @@ export class LinkService extends EventEmitter {
     // lands in the same call the user's click made.
     await this.probe();
     return this.status();
+  }
+
+  /** TS-1 (P6) — the person ends a capture: the node it asked for stops, its
+   * identity stays (a stop never retires: a later link reuses the keys), and
+   * the desktop is offline again. Only a capture is cancelled — a link that
+   * stands is ended by unlink — so anything else answers its status as it is:
+   * a capture that landed as the person clicked is a link, honestly. */
+  async cancel(): Promise<UserLinkStatus> {
+    if (
+      this.hasStandingLink() ||
+      (this.state !== "capturing" && this.state !== "awaiting_approval")
+    ) {
+      return this.status();
+    }
+    if (this.timer !== null) clearTimeout(this.timer);
+    this.timer = null;
+    await this.stopNode();
+    this.nodeState = null;
+    this.captureMisses = 0;
+    this.adminUrl = null;
+    this.enter("offline", null);
+    this.logger.info("fieldd.link.capture_cancelled", "The person cancelled the link capture", {});
+    return this.status();
+  }
+
+  /** TS-1 — sign a linked node in again: its key lapsed, or it was removed in
+   * the console. The record stands; the floor rebuilds the node on its own
+   * state (the same identity and keys — Tailscale's re-auth keeps the node and
+   * its IP), and the build's interactive login hands out the address the
+   * person finishes in a browser. A sign-in already offered is the live one,
+   * so asking again changes nothing. */
+  async renew(): Promise<UserLinkStatus> {
+    const login = this.link?.login ?? null;
+    if (login === null || (this.state !== "expired" && this.state !== "removed")) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        "nothing to renew: the link is not waiting to be signed in again",
+        false,
+        { linkState: this.state },
+      );
+    }
+    if (this.authUrl === null) {
+      this.logger.info("fieldd.link.renew", "Signing the linked node in again", {
+        linkState: this.state,
+      });
+      await this.declarePosture("linked", login, undefined, true);
+    }
+    await this.probe();
+    return this.status();
+  }
+
+  /** TS-1 — the link record stands (a captured login) and its node waits on a
+   * sign-in: renewal's two states, and an approval that holds a renewal. */
+  private hasStandingLink(): boolean {
+    return (
+      this.link !== null &&
+      this.link.login !== null &&
+      (this.state === "expired" || this.state === "removed" || this.state === "awaiting_approval")
+    );
   }
 
   /** UA-3 unlink: native retire (node dropped, sidecar dead, state archived)
@@ -243,6 +414,10 @@ export class LinkService extends EventEmitter {
     this.nodeState = "disabled";
     this.postureLanded = false;
     this.authUrl = null;
+    // TS-1 — the facts belonged to the identity just retired.
+    this.machineName = null;
+    this.adminUrl = null;
+    this.keyExpiresAt = undefined;
     // UA-P-0a — unlink is the posture going offline, and the timer goes with
     // it: an unlinked desktop has no node and therefore nothing to probe.
     if (this.timer !== null) clearTimeout(this.timer);
@@ -255,21 +430,35 @@ export class LinkService extends EventEmitter {
 
   // ---- the posture, as asked of the floor ----
 
-  private declarePosture(mode: "capture" | "linked", login?: string): Promise<void> {
+  private declarePosture(
+    mode: "capture" | "linked",
+    login?: string,
+    authKey?: string,
+    renew?: boolean,
+  ): Promise<void> {
     this.postureLanded = false;
-    const asking = this.askFloor(mode, login).finally(() => {
+    const asking = this.askFloor(mode, login, authKey, renew).finally(() => {
       if (this.declaring === asking) this.declaring = null;
     });
     this.declaring = asking;
     return asking;
   }
 
-  private async askFloor(mode: "capture" | "linked", login?: string): Promise<void> {
+  private async askFloor(
+    mode: "capture" | "linked",
+    login?: string,
+    authKey?: string,
+    renew?: boolean,
+  ): Promise<void> {
     try {
       MeshStartResult.parse(
         await this.opts.native.request("native.mesh.start", {
           mode,
           ...(login !== undefined ? { login } : {}),
+          // TS-1 — the key rides this one request and is never logged: the
+          // warning below names the mode and the error, never the params.
+          ...(authKey !== undefined ? { authKey } : {}),
+          ...(renew === true ? { renew } : {}),
         }),
       );
       this.postureLanded = true;
@@ -307,7 +496,7 @@ export class LinkService extends EventEmitter {
   private enter(state: UserLinkState, detail: string | null): void {
     this.state = state;
     this.detail = detail;
-    if (state !== "capturing" && state !== "linked") this.authUrl = null;
+    if (!isLive(state)) this.authUrl = null;
     this.emitIfChanged();
   }
 
@@ -323,17 +512,27 @@ export class LinkService extends EventEmitter {
   }
 
   private async probe(): Promise<void> {
-    // UA-P-0a — the loop belongs to the two live postures. Reaching it from an
+    // UA-P-0a — the loop belongs to the live postures. Reaching it from an
     // offline one would be probing a node nobody asked for.
-    if (this.state !== "capturing" && this.state !== "linked") return;
+    if (!isLive(this.state)) return;
     try {
       const self = MeshSelfIdentity.parse(await this.opts.native.request("native.mesh.self"));
       this.nodeState = "up";
       this.authUrl = null;
+      this.noteFacts(self);
+      // TS-1 — the node is installed and signed out of the tailnet (its key
+      // lapsed, or it was removed in the console): nothing reaches this desktop,
+      // and the link that stands waits to be signed in again (`renew`). Before
+      // TS-1 this read as linked while every other device lost it (gap 14).
+      if (self.needsLogin === true && this.link !== null && this.link.login !== null) {
+        this.enter(this.signedOutWord(), null);
+        this.schedule(this.opts.probeMs ?? PROBE_MS);
+        return;
+      }
       const login = self.login;
       if (login !== undefined && login.length > 0 && !this.linkFileCorrupt) {
         if (await this.capture(login, self.dnsName)) return;
-      } else if (this.state === "capturing") {
+      } else if (this.state === "capturing" || this.state === "awaiting_approval") {
         // A RUNNING node with no login: the netmap answered, the tailnet has no
         // user for us. Once is timing; repeatedly is a TAGGED node, which has
         // no login by construction. Capture ends rather than spinning forever.
@@ -366,12 +565,11 @@ export class LinkService extends EventEmitter {
         this.schedule(this.opts.probeMs ?? PROBE_MS);
         return;
       }
-      const details =
-        error instanceof RpcCallError && typeof error.details === "object" && error.details !== null
-          ? (error.details as { state?: unknown; authUrl?: unknown })
-          : {};
-      this.nodeState = typeof details.state === "string" ? details.state : null;
-      this.authUrl = typeof details.authUrl === "string" ? details.authUrl : null;
+      const details: MeshNotUpReading = notUpDetails(error) ?? {};
+      this.nodeState = details.state ?? null;
+      this.authUrl = details.authUrl ?? null;
+      this.noteFacts(details);
+      this.settleNotUp(details);
       // UA-P-0j — `disabled` is the floor's word for "no posture held": its boot
       // default, `stop` and `retire` set it and nothing else does
       // (services/mesh.rs). This service holding a posture while the floor holds
@@ -387,7 +585,17 @@ export class LinkService extends EventEmitter {
       // floor tore down the bring-up the first ask began and built another. The
       // UA-P-0j note that the boot's ask was "never doubled" held only against
       // a probe racing the ask, not against one reading the floor just after it.
-      if (this.nodeState === "disabled" && this.declaring === null && !this.postureLanded) {
+      //
+      // TS-1 — a floor that states its posture (`mode`) settles the question
+      // outright: holding one, it has forgotten nothing, whatever its lagging
+      // aggregated health says. The `disabled` reading stays the rule for a
+      // floor from before TS-1, which states none.
+      if (
+        this.nodeState === "disabled" &&
+        details.mode === undefined &&
+        this.declaring === null &&
+        !this.postureLanded
+      ) {
         await this.restorePosture();
       }
       this.emitIfChanged();
@@ -395,17 +603,93 @@ export class LinkService extends EventEmitter {
     }
   }
 
+  /** TS-1 — the word a not-up answer moves the posture to. A capture is held
+   * by approval or is signing in. A link that stands is held by approval (its
+   * renewal on a tailnet that asks again), or is asked to sign in again (an
+   * address is on offer: the key lapsed, or the device was removed), or keeps
+   * the word it had — a bring-up in flight, or a floor that lost the posture,
+   * which the caller restores. */
+  private settleNotUp(details: MeshNotUpReading): void {
+    const linkStands = this.link !== null && this.link.login !== null;
+    if (!linkStands) {
+      if (this.state === "capturing" || this.state === "awaiting_approval") {
+        this.enter(details.needsApproval === true ? "awaiting_approval" : "capturing", null);
+      }
+      return;
+    }
+    if (details.needsApproval === true) {
+      this.enter("awaiting_approval", null);
+    } else if (this.authUrl !== null) {
+      this.enter(this.signedOutWord(), null);
+    }
+  }
+
+  /** TS-1 — a node asked to sign in again LAPSED when its key's time has
+   * passed, or when that time is unknown (the honest guess: "Sign in to
+   * Tailscale again" is true either way); it was REMOVED when its key still had
+   * time, or never expires — someone took the device out in the console. */
+  private signedOutWord(): "expired" | "removed" {
+    const at = this.keyExpiresAt;
+    if (at === null) return "removed";
+    if (at !== undefined && at > this.now()) return "removed";
+    return "expired";
+  }
+
+  /** TS-1 — keep what the floor said beside the node. Absent says nothing new:
+   * an older floor, or a fact not known yet. */
+  private noteFacts(facts: {
+    machineName?: string | undefined;
+    adminUrl?: string | undefined;
+    keyExpiresAt?: number | undefined;
+    keyExpiryDisabled?: boolean | undefined;
+    failure?: MeshFailure | undefined;
+  }): void {
+    if (facts.machineName !== undefined) this.machineName = facts.machineName;
+    if (facts.adminUrl !== undefined) this.adminUrl = facts.adminUrl;
+    const expiry = facts.keyExpiryDisabled === true ? null : facts.keyExpiresAt;
+    if (expiry !== undefined && expiry !== this.keyExpiresAt) {
+      this.keyExpiresAt = expiry;
+      this.rememberExpiry();
+    }
+    this.failure = facts.failure ?? null;
+  }
+
+  /** TS-1 — the expiry rides the record (display only, never a trust input),
+   * so a boot whose node is down still says the date and tells a lapse from a
+   * removal. Written only when it moves: a verify never churns the disk. */
+  private rememberExpiry(): void {
+    const link = this.link;
+    if (link === null || this.linkFileCorrupt || this.keyExpiresAt === undefined) return;
+    if (link.keyExpiresAt === this.keyExpiresAt) return;
+    const next: TailscaleLink = { ...link, keyExpiresAt: this.keyExpiresAt };
+    try {
+      this.persistLink(next);
+      this.link = next;
+    } catch (error) {
+      this.logger.warn(
+        "fieldd.link.expiry_unrecorded",
+        "The sign-in's expiry could not be recorded",
+        {
+          error: String(error),
+        },
+      );
+    }
+  }
+
   /** UA-P-0j — re-ask the floor for the posture this service holds. */
   private async restorePosture(): Promise<void> {
     const login = this.link?.login ?? null;
-    if (this.state === "linked" && login !== null) {
+    const standing =
+      this.state === "linked" || this.state === "expired" || this.state === "removed";
+    const renewalHeld = this.state === "awaiting_approval" && login !== null;
+    if ((standing || renewalHeld) && login !== null) {
       this.logger.warn(
         "fieldd.link.posture_restored",
         "The floor held no mesh posture while this desktop is linked; declared it again",
         { mode: "linked" },
       );
       await this.declarePosture("linked", login);
-    } else if (this.state === "capturing") {
+    } else if (this.state === "capturing" || this.state === "awaiting_approval") {
       this.logger.warn(
         "fieldd.link.posture_restored",
         "The floor held no mesh posture while a link was being captured; declared it again",
@@ -453,6 +737,8 @@ export class LinkService extends EventEmitter {
         ...(tailnetOf(dnsName) !== undefined ? { tailnet: tailnetOf(dnsName) } : {}),
         linkedAt: this.link?.linkedAt ?? at,
         lastVerifiedAt: at,
+        // TS-1 — the date the node reported with its login, if it did
+        ...(this.keyExpiresAt !== undefined ? { keyExpiresAt: this.keyExpiresAt } : {}),
       };
       this.persistLink(next);
       this.link = next;
@@ -616,6 +902,20 @@ export function otherUserLinks(
   }
   return out;
 }
+
+/** TS-1 — the floor's not-up answer (`MeshNotUpDetails`), read tolerantly: a
+ * floor before TS-1 sends `service`, `state` and `authUrl` alone, and a field
+ * of the wrong type is no reading at all rather than a guess. */
+function notUpDetails(error: unknown): MeshNotUpReading | null {
+  if (!(error instanceof RpcCallError)) return null;
+  if (typeof error.details !== "object" || error.details === null) return null;
+  const parsed = MeshNotUpReading.safeParse(error.details);
+  return parsed.success ? parsed.data : null;
+}
+
+/** TS-1 — the not-up answer with every field optional: the tolerant read. */
+const MeshNotUpReading = MeshNotUpDetails.partial();
+type MeshNotUpReading = ReturnType<typeof MeshNotUpReading.parse>;
 
 /** "host.tail1234.ts.net" → "tail1234.ts.net" — display only, never trust. */
 function tailnetOf(dnsName: string | undefined): string | undefined {

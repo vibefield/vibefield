@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MeshFailure } from "./mgmt";
 
 // UA-D8/UA-D10 — the user directory ABOVE the per-user roots (`users.json` +
 // `layout.json` at the VibeField root). Deliberately TS-only in the generation
@@ -89,6 +90,11 @@ export const TailscaleLink = z
     tailnet: z.string().optional(),
     linkedAt: z.string(),
     lastVerifiedAt: z.string().optional(),
+    /** TS-1 (track TS) — display only, never a trust input: when the node's
+     * sign-in lapses (ms since the epoch; `null` = expiry disabled), kept so a
+     * desktop whose node is down still knows the date, and can tell a lapsed
+     * key from a removed device. Written only when it changes. */
+    keyExpiresAt: z.number().int().nullable().optional(),
   })
   .passthrough();
 export type TailscaleLink = z.infer<typeof TailscaleLink>;
@@ -113,7 +119,22 @@ export type TailscaleLink = z.infer<typeof TailscaleLink>;
  *  - `login_already_linked` — UA-P-0b (D8): another local user on this machine
  *    already holds this tailscale account. One local user per tailscale
  *    account, LAW; `linkDetail` names the other user, and capture succeeds
- *    only after that user unlinks. */
+ *    only after that user unlinks.
+ *
+ * TS-1 (track TS, 2026-10-27) adds the three states the plumbing hid (gaps
+ * 13 and 14 of `thinking-tailscale-onboarding.md`), each a node waiting on
+ * someone rather than a fault:
+ *
+ *  - `awaiting_approval` — the tailnet's device approval holds this node
+ *    (Tailscale's NeedsMachineAuth): the sign-in is done, and an admin must
+ *    approve the device. A capture's state, or a renewal's on a tailnet that
+ *    asks again. `adminUrl` names the console when there is one.
+ *  - `expired` — the link stands and the node is signed out because its key
+ *    lapsed (or the lapse is the honest guess: its time is unknown). Nothing
+ *    reaches this desktop until `user.link.renew`.
+ *  - `removed` — the link stands and the node was signed out while its key
+ *    still had time: someone removed the device in the console. The same act
+ *    brings it back, as a new device in the console. */
 export const UserLinkState = z.enum([
   "offline",
   "capturing",
@@ -121,6 +142,9 @@ export const UserLinkState = z.enum([
   "link_corrupt",
   "login_unavailable",
   "login_already_linked",
+  "awaiting_approval",
+  "expired",
+  "removed",
 ]);
 export type UserLinkState = z.infer<typeof UserLinkState>;
 
@@ -140,9 +164,36 @@ export const UserLinkStatus = z
     authUrl: z.string().nullable(),
     linkState: UserLinkState,
     linkDetail: z.string().nullable(),
+    /** TS-1 — the name Tailscale shows for this desktop's node (its "connect
+     * the device …?" page, the admin console), so a person can match it there;
+     * null until the floor has named one. Optional for an older daemon. */
+    machineName: z.string().nullable().optional(),
+    /** TS-1 — the admin console's Machines page, for approval and expiry;
+     * null for a custom control server, or until the floor knows. */
+    adminUrl: z.string().nullable().optional(),
+    /** TS-1 — when the node's sign-in lapses (ms since the epoch); `null` =
+     * expiry disabled; absent = not known. Renewal's date and its notice. */
+    keyExpiresAt: z.number().int().nullable().optional(),
+    /** TS-1 — why the floor's last bring-up ended without a node, when one
+     * did ("Network part missing" is `sidecar_missing`); null otherwise. */
+    failure: MeshFailure.nullable().optional(),
   })
   .passthrough();
 export type UserLinkStatus = z.infer<typeof UserLinkStatus>;
+
+/** TS-1 (track TS, P7) — `user.link.begin`'s optional ask. With no key the
+ * floor runs the interactive sign-in, finished in a browser (here or on a
+ * phone). With one, a machine with no browser signs in by the key: an
+ * UNTAGGED key from the admin console (Settings → Keys), held for the one
+ * bring-up and never stored or logged by fieldd or the floor. A tagged key
+ * makes a node that belongs to no one, which capture refuses as
+ * `login_unavailable`. */
+export const UserLinkBeginParams = z
+  .object({
+    authKey: z.string().min(1).max(512).optional(),
+  })
+  .passthrough();
+export type UserLinkBeginParams = z.infer<typeof UserLinkBeginParams>;
 
 /** UA-3 — the Account page's profile write over the closed IPC surface. All
  * fields optional (the handler refuses an empty update); `onboarded` exists
