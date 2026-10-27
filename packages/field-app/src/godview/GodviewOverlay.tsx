@@ -29,6 +29,7 @@ import {
 } from "./GodviewTuningPanel";
 import { useGodviewTheme } from "./godview-theme";
 import { LastRunCurtain } from "./LastRunCurtain";
+import { LimitMoment } from "./LimitMoment";
 import { useLabSwitches } from "./lab-switches";
 import {
   askLastRun,
@@ -348,6 +349,8 @@ export function GodviewOverlay(): ReactElement | null {
                 publishesFind
                 onSelectView={monitor.selectView}
                 still={question !== null}
+                // AO-6b — the limit moment, once, on the claims strip
+                moment={<LimitMoment />}
               />
             </MonitorFeedOverride>
           ) : undefined

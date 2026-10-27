@@ -72,6 +72,9 @@ interface SettingsPanelProps {
   /** The page to open on when diagnostics was not asked for — the Me menu
    * opens Account from its name row (UA-D19). */
   initialPage?: SettingsPage;
+  /** Where Agent Profiles opens: the limit moment opens it on New profile…
+   * (AO-6b); This Mac's page otherwise. */
+  initialProfiles?: ProfilesRoute;
   /** ICE's devtools, which left the corner for Settings → Advanced (One Frame
    * FC-D12): shown in development builds only, and only where a host lends
    * the switch. */
@@ -169,6 +172,7 @@ export function SettingsPanel({
   diagnosticsRequest = 0,
   diagnosticsInitiallyOpen = false,
   initialPage = "general",
+  initialProfiles,
   devtools,
   onClose,
 }: SettingsPanelProps): ReactElement {
@@ -268,10 +272,9 @@ export function SettingsPanel({
     const parsed = AgentsProfileSetsListResult.safeParse(profilesFeed.data);
     return parsed.success ? parsed.data : null;
   }, [profilesFeed.data]);
-  const [profilesRoute, setProfilesRoute] = useState<ProfilesRoute>({
-    kind: "profile",
-    set: "native",
-  });
+  const [profilesRoute, setProfilesRoute] = useState<ProfilesRoute>(
+    () => initialProfiles ?? { kind: "profile", set: "native" },
+  );
   const [profilesSubpage, setProfilesSubpage] = useState<SettingsSubpage | null>(null);
   // GT-7: the theme browser, a page below Terminal.
   const [terminalSubpage, setTerminalSubpage] = useState<SettingsSubpage | null>(null);

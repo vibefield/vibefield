@@ -23,6 +23,7 @@ import { canvasHead } from "../frame/head-canvas";
 import { FramePeek } from "../frame/Peek";
 import type { FrameActRun } from "../frame/palette-acts";
 import { StatusLine } from "../frame/StatusLine";
+import { publishSettingsDoor, type SettingsTarget } from "../frame/settings-door";
 import { runSystemControl } from "../frame/system-control-door";
 import { ViewFrame } from "../frame/ViewFrame";
 import { requestView, subscribeMenuZoom, useActiveView } from "../frame/view-state";
@@ -43,7 +44,11 @@ import { useBoardFacts } from "./desk/pegboard/board-door";
 import { Pegboard } from "./desk/pegboard/Pegboard";
 import { useSettingsChord } from "./me-menu-wiring";
 import { isCommandPaletteChord, listenForProductChord } from "./product-chords";
-import { INITIAL_SHELL_PRESENTATION, reduceShellPresentation } from "./shell-presentation";
+import {
+  INITIAL_SHELL_PRESENTATION,
+  reduceShellPresentation,
+  settingsOpening,
+} from "./shell-presentation";
 
 // ChromeLayer (§5.4.3): the head, the pegboard's chrome (Objects, behind the
 // line — the board itself is the desk's), the edges, the corner, settings, and
@@ -105,6 +110,7 @@ export function ChromeLayer({
   // one owner folds it when any other opens, and it folds them (DESIGN.md §10).
   const meOpen = surface === "me";
   const [shellPresentation, setShellPresentation] = useState(INITIAL_SHELL_PRESENTATION);
+  const opening = settingsOpening(shellPresentation.target);
   const [desktopState, setDesktopState] = useState<DesktopShellState | null>(null);
   // Artifacts' drawer is open (One Frame FR-4): the attention stack steps
   // clear of it, as it stepped clear of the side panel.
@@ -130,15 +136,22 @@ export function ChromeLayer({
   useEffect(() => prefetchHistoryRoomWhenIdle(), []);
 
   /** Settings, on the page asked for — the Me menu's Settings… and ⌘, open
-   * General; its name row and its Link… open Account (UA-D19). */
+   * General; its name row and its Link… open Account (UA-D19); the limit
+   * moment's Add a profile… opens Agent Profiles' New profile… (AO-6b). */
   const openSettings = useCallback(
-    (page: "general" | "account") => {
+    (page: SettingsTarget) => {
       setShellPresentation((state) => ({ ...state, target: page }));
       onSurfaceChange(null);
       setShowSettings(true);
     },
     [onSurfaceChange, setShowSettings],
   );
+  // AO-6b — the door a moment inside the cover opens Settings through
+  // (`settings-door.ts`): lent while the chrome is mounted
+  useEffect(() => {
+    publishSettingsDoor({ open: openSettings });
+    return () => publishSettingsDoor(null);
+  }, [openSettings]);
 
   // Opening it is asking the owner (which folds Settings and every other
   // surface); a fold of its own leaves the others alone.
@@ -362,11 +375,8 @@ export function ChromeLayer({
           desktopState={desktopState}
           diagnosticsRequest={shellPresentation.diagnosticsRequest}
           diagnosticsInitiallyOpen={shellPresentation.target === "diagnostics"}
-          initialPage={
-            shellPresentation.target === "account" || shellPresentation.target === "devices"
-              ? shellPresentation.target
-              : "general"
-          }
+          initialPage={opening.page}
+          {...(opening.profiles !== undefined ? { initialProfiles: opening.profiles } : {})}
           devtools={{ open: showEcs, onToggle: () => chrome.setShowEcs((open) => !open) }}
           onClose={() => {
             setShellPresentation((state) => ({ ...state, target: "general" }));

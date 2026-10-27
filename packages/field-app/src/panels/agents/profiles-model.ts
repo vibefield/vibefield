@@ -196,12 +196,13 @@ export function inOnWords(set: AgentProfileSet): string {
 }
 
 /** The account usage reading that belongs to this sign-in: the persona's own
- * row, or — for an agent's own folder — the provider's unkeyed row. */
-function usageFor(
-  context: ProfilesContext,
+ * row, or — for an agent's own folder — the provider's unkeyed row. The limit
+ * moment (`setup/limit-moment.ts`) joins usage to This Mac's plans the same way. */
+export function usageOf(
+  usage: readonly AgentAccountUsageEntry[],
   persona: AgentPersona,
 ): AgentAccountUsageEntry | undefined {
-  return context.usage.find(
+  return usage.find(
     (entry) =>
       entry.provider === persona.provider &&
       (entry.profileId === persona.profileId ||
@@ -233,7 +234,7 @@ export function whoWords(persona: AgentPersona): string | undefined {
 }
 
 export function agentRow(context: ProfilesContext, persona: AgentPersona): ProfileAgentRow {
-  const usage = usageFor(context, persona);
+  const usage = usageOf(context.usage, persona);
   const state = signInState(persona, usage, context.identity.includes(persona.provider));
   const who = whoWords(persona);
   const email = persona.identity?.email ?? persona.identity?.organization;

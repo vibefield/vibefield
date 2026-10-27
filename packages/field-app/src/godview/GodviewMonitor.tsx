@@ -27,6 +27,7 @@ import {
 import {
   memo,
   type ReactElement,
+  type ReactNode,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -310,6 +311,11 @@ export interface GodviewMonitorProps {
    * door, the stage takes no pointer or key, and the Peek is not lent — the
    * curtain over it is the window's one question. The head stays live. */
   still?: boolean;
+  /** AO-6b — a moment VibeField says once on its claims strip, under the
+   * counts: the limit moment (`LimitMoment.tsx`), the overlay's controller in
+   * the product and the shipping card in the catalog. Its own boundary, and
+   * solid to the swarm as the strip is. */
+  moment?: ReactNode;
 }
 
 /** LR — a still stage's verbs: nothing is selected or born on a picture. The
@@ -332,6 +338,7 @@ export function GodviewMonitor({
   initialProfile = null,
   onSelectView,
   still = false,
+  moment,
 }: GodviewMonitorProps): ReactElement {
   const stageRef = useRef<HTMLElement>(null);
   // The palette reads THIS stage's Godview root, never the document's first:
@@ -937,6 +944,9 @@ export function GodviewMonitor({
           <span className="vf-monitor-ack" aria-live="polite">
             {acknowledgement?.message ?? ""}
           </span>
+          {moment === undefined || moment === null ? null : (
+            <ChromeBoundary name="Moment">{moment}</ChromeBoundary>
+          )}
         </div>
       </section>
     </>

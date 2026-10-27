@@ -1360,11 +1360,16 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     afresh at the press so nothing another door brought in is revoked; a refusal stays on the row in
     the daemon's words. Either act retires the moment, and the row leaves at once. Answering History's
     pane retires the moment of every agent it asked about, whatever its switch said.
-  - **The limit moment** (AO-D11; *owed, AO-6b2*): a plan past 90% of any window while This Mac is the
-    only profile offers a profile once, on VibeField's claims strip beside Godview's usage column: the
-    plan's badge, "92% · 7 days", "Another subscription?", "Add it as a profile and keep working. Each
-    profile keeps its own sign-ins." with **Add a profile…** (Agent Profiles' New profile…) · **Not
-    now**.
+  - **The limit moment** (AO-D11; *built 2026-10-27, AO-6b*): a plan at 90% or more of one of its own
+    windows (never a budget, never a standby allowance) while This Mac is the only profile offers a
+    profile once, on VibeField's claims strip beside Godview's usage column, under the counts. The
+    fullest window speaks: the plan as its badge on Agent Profiles names it (the company's mark and
+    the plan), "92% · 7 days" and a thin bar in the attention ink, "Another subscription?", "Add it as
+    a profile and keep working. Each profile keeps its own sign-ins.", and **Add a profile…** (the
+    primary, which opens Settings on Agent Profiles' New profile… form) · **Not now**. Either act
+    retires the moment. The card is Godview's instrument skin (its panel, border and inks), corners
+    10, entering with the profile notice's 300ms fade, a transition never a keyframe; the strip
+    measures it, so the swarm steers around it as around the counts.
 - **The desk's chrome** (Chrome on the Mat MC-1…MC-6, 2026-09-28; MC-D1 ruled through One Frame's
   lock and MC-D10 with DK-D23, 2026-10-02; the orchestrator's Phase 4 rulings R1–R25, 2026-10-03,
   cited below as Rn; built on the desk by DK-11…DK-16): **the mat keeps its marks and the chrome

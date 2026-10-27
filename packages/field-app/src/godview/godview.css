@@ -536,10 +536,139 @@
   left: 72px;
   width: min(300px, calc(100% - 96px));
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   gap: 8px;
   color: var(--text-main);
   pointer-events: none;
+}
+
+/* AO-6b (DESIGN.md §8 "The moments") — the limit moment: VibeField's card on
+   its claims strip, under the counts, once. The strip measures it, so the
+   swarm steers around it as around the counts. Godview's instrument skin (its
+   panel, border and inks follow Godview's theme, not the app's), the
+   attention ink for the window running out, and the profile notice's 300ms
+   entry — a transition, never a keyframe (the overlay runs none). */
+.vf-monitor-moment {
+  flex: 1 0 100%;
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  color: var(--text-main);
+  background: var(--panel-bg);
+  pointer-events: auto;
+  transition: opacity 300ms ease-out;
+}
+
+@starting-style {
+  .vf-monitor-moment {
+    opacity: 0;
+  }
+}
+
+.vf-godview[data-godview-animations="off"] .vf-monitor-moment {
+  transition: none;
+}
+
+.vf-monitor-moment-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* The plan as its badge on Agent Profiles says it: the company's mark and the plan's name. */
+.vf-monitor-moment-plan {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px 2px 5px;
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.vf-monitor-moment-plan > svg {
+  width: 12px;
+  height: 12px;
+}
+
+.vf-monitor-moment-use {
+  margin-left: auto;
+  color: var(--vf-orange);
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.vf-monitor-moment-bar {
+  position: relative;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--panel-border);
+}
+
+.vf-monitor-moment-bar::after {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--vf-moment-used);
+  border-radius: inherit;
+  background: var(--vf-orange);
+  content: "";
+}
+
+.vf-monitor-moment-title {
+  margin: 2px 0 0;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.vf-monitor-moment-voice {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+
+.vf-monitor-moment-acts {
+  display: flex;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.vf-monitor-moment-act {
+  padding: 4px 9px;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  color: var(--text-main);
+  background: transparent;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.vf-monitor-moment-act:hover:not(:disabled) {
+  border-color: var(--control-hover-border);
+  background: var(--control-hover-bg);
+}
+
+.vf-monitor-moment-act[data-variant="primary"] {
+  border-color: var(--text-main);
+  color: var(--panel-bg);
+  background: var(--text-main);
+}
+
+.vf-monitor-moment-act:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.vf-monitor-moment-act:focus-visible {
+  outline: 1px solid var(--text-main);
+  outline-offset: 2px;
 }
 
 /* The local claim (AR-3): how many managed agents fieldd's fold reports on

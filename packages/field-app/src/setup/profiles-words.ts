@@ -31,4 +31,9 @@ export const PROFILES_WORDS = {
   againTitle: "Sign in again",
   /** Continue waits while a sign-in is open */
   finishFirst: "Finish or cancel the sign-in first.",
+  /** AO-6b — the limit moment, once, on Godview's claims strip (DESIGN.md §8 "The moments") */
+  limitTitle: "Another subscription?",
+  limitVoice: "Add it as a profile and keep working. Each profile keeps its own sign-ins.",
+  limitUse: (percent: number, window: string) => `${percent}% · ${window}`,
+  notNow: "Not now",
 } as const;

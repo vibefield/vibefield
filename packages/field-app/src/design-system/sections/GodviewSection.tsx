@@ -1,10 +1,12 @@
 import { type ReactElement, useMemo } from "react";
+import { LimitMomentCard } from "../../godview/LimitMoment";
 import { Section, Specimen } from "../catalog-ui";
 import { GodviewPreview } from "../GodviewPreview";
 import { meshBoardDoor } from "../godview-mesh-fixtures";
 import { profileTabsDoor } from "../godview-profiles-fixtures";
 import { spendDoor } from "../godview-spend-fixtures";
 import { timelineDoor } from "../godview-timeline-fixtures";
+import { FIXTURE_LIMIT_MOMENT } from "../limit-moment-fixtures";
 import { PaneFrameDeck, PaneFramePreview } from "../PaneFramePreview";
 import { PaneLauncherPreview } from "../PaneLauncherPreview";
 import { PeekPlate } from "../PeekPreview";
@@ -72,6 +74,28 @@ export function GodviewSection({ dark = false }: { dark?: boolean } = {}): React
       >
         <div data-godview-profiles-catalog="">
           <GodviewPreview door={profilesDoor} theme={theme} initialProfile="work" />
+        </div>
+      </Specimen>
+      <Specimen
+        title="The limit moment — once, on the claims strip: a plan at 90% or more of a window while This Mac is the only profile (AO-6b)"
+        source="godview/LimitMoment.tsx"
+        bleed
+      >
+        <div data-godview-limit-catalog="">
+          <GodviewPreview
+            door={profilesDoor}
+            theme={theme}
+            moment={
+              // the shipping card over the shipping rule's fixture; a catalog acts on no one
+              FIXTURE_LIMIT_MOMENT === null ? null : (
+                <LimitMomentCard
+                  fact={FIXTURE_LIMIT_MOMENT}
+                  onAddProfile={() => undefined}
+                  onNotNow={() => undefined}
+                />
+              )
+            }
+          />
         </div>
       </Specimen>
       <Specimen

@@ -184,6 +184,27 @@ describe("widgetlab panels", () => {
     expect(onToggle).toHaveBeenCalledOnce();
   });
 
+  it("opens on Agent Profiles' New profile… when the limit moment asks (AO-6b)", () => {
+    const engine = makeEngine();
+    const client = new FielddClient({ url: "ws://127.0.0.1:1", token: "test" });
+    mount(
+      createElement(
+        FielddProvider,
+        { client },
+        createElement(SettingsPanel, {
+          engine,
+          initialPage: "profiles",
+          initialProfiles: { kind: "new" },
+          onClose: () => {},
+        }),
+      ),
+    );
+    expect(container?.textContent).toContain("New agent profile");
+    expect(container?.textContent).toContain(
+      "An empty folder for each agent. Nothing is signed in until you add one.",
+    );
+  });
+
   it("routes settings undo through the global Loro history toolbar", async () => {
     const engine = makeEngine();
     const request = vi.fn(async (method: string) =>

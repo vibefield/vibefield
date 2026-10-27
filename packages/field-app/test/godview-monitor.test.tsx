@@ -64,7 +64,7 @@ import {
   type SwarmObstacleRect,
   SwarmPhysics,
 } from "@vibefield/puppeteer-views/physics";
-import { act, Profiler } from "react";
+import { act, Profiler, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GodviewMonitorFacts } from "../src/development-console";
@@ -1559,6 +1559,46 @@ describe("the monitor stage", () => {
     await settle();
     expect(head.renders).toBe(tries);
     expect(container.querySelector('.vf-stories-slot > span[role="status"]')).not.toBeNull();
+  });
+
+  it("says a moment on the claims strip under the counts, in a boundary of its own (AO-6b)", async () => {
+    const door = fakeDoor();
+    const view = monitorViewFor(DEFAULT_MONITOR_VIEW_ID);
+    syncBoard(PANES);
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    const uncaught = vi.fn();
+    root = createRoot(container, { onUncaughtError: uncaught, onCaughtError: vi.fn() });
+    const stage = (moment: ReactNode) => (
+      <GodviewAgentsProvider door={door}>
+        <GodviewMonitor
+          view={view}
+          parameters={monitorParameterDefaults(view.parameterGroups)}
+          door={door}
+          panes={PANES}
+          moment={moment}
+        />
+      </GodviewAgentsProvider>
+    );
+    await act(async () => root?.render(stage(<p data-moment="">Another subscription?</p>)));
+    await settle();
+    const claims = container.querySelector(".vf-monitor-claims");
+    expect(claims?.querySelector("[data-moment]")?.textContent).toBe("Another subscription?");
+    // a moment that cannot be drawn says so where it stood; the counts' own boundary stands
+    const Unreadable = (): never => {
+      throw new Error("the moment's facts could not be read");
+    };
+    await act(async () => root?.render(stage(<Unreadable />)));
+    await settle();
+    expect(uncaught).not.toHaveBeenCalled();
+    const said = [...(claims?.querySelectorAll('span[role="status"]') ?? [])].map(
+      (status) => status.textContent,
+    );
+    expect(said).toEqual(["Moment unavailable"]);
+    // none at all: the strip is the counts alone, as before
+    await act(async () => root?.render(stage(undefined)));
+    await settle();
+    expect(claims?.querySelector("[data-moment]")).toBeNull();
   });
 
   it("chooses the view with the head's circles; there is no theme switch (FC-D7)", async () => {
