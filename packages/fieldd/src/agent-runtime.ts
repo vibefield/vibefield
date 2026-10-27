@@ -1547,6 +1547,9 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       // AR-7c — a typed run is alive in the person's own shell: the
       // replacement would end that shell, and is refused before anything else
       if (isTypedRun(record)) throw typedRunAlive(record);
+      // RA-D7 — the agent has not saved the conversation the record names: the
+      // replacement would end the running agent and then resume nothing
+      if (!conversationSaved(record)) throw conversationUnsaved(record);
       // AR-D25 — the replacement ends the running PTY first, and a signed-out
       // account starts nothing: refused before anything is ended
       if (!this.personaActive(record.profileId)) {
@@ -3137,7 +3140,9 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     this.logger.warn(
       "fieldd.agents.reattach_held",
       typed === undefined
-        ? "A managed session's PTY survived the restart but could not be re-attached; held pending, resumes when idle"
+        ? conversationSaved(held)
+          ? "A managed session's PTY survived the restart but could not be re-attached; held pending, resumes when idle"
+          : "A managed session's PTY survived the restart but could not be re-attached, and its agent had not saved the conversation; held, and nothing resumes it"
         : "A typed agent outlived the restart and could not be re-attached; it is shown unobserved, and is never replaced",
       {
         runtimeRunId: record.runtimeRunId,
@@ -3215,8 +3220,16 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   }
 
   private armPending(entry: PendingEntry): void {
-    // AR-7c — and a typed run is never armed, whoever asks
-    if (this.disposed || entry.resuming || isTypedRun(entry.record)) return;
+    // AR-7c — and a typed run is never armed, whoever asks; RA-D7 — nor a run
+    // whose agent had not saved its conversation: no resume of it can succeed,
+    // and nothing observes the run that could learn otherwise
+    if (
+      this.disposed ||
+      entry.resuming ||
+      isTypedRun(entry.record) ||
+      !conversationSaved(entry.record)
+    )
+      return;
     const delay = Math.min(this.pollMs * 2 ** entry.failures, RESUME_POLL_MAX_MS);
     entry.poll = setTimeout(() => void this.pollPending(entry), delay);
     entry.poll.unref();
@@ -3364,6 +3377,9 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     const { record } = entry;
     // AR-7c — never a typed run: the PTY this would end is the person's shell
     if (isTypedRun(record)) throw typedRunAlive(record);
+    // RA-D7 — never a conversation the agent had not saved: the PTY this would
+    // end is the only place the session lives, and the resume would fail
+    if (!conversationSaved(record)) throw conversationUnsaved(record);
     if (entry.resuming) {
       throw new RpcCallError("PRECONDITION_FAILED", "the session is being resumed already", false, {
         runtimeRunId: record.runtimeRunId,
@@ -3697,7 +3713,9 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         terminal: entry.terminal,
         reason: entry.reason,
         since: entry.since,
-        resumable: this.personaActive(entry.record.profileId),
+        // AR-D25's signed-out account, and RA-D7's unsaved conversation: the
+        // row stays, and says nothing continues it
+        resumable: this.personaActive(entry.record.profileId) && conversationSaved(entry.record),
       }),
     );
   }
@@ -4093,6 +4111,29 @@ function typedRunAlive(record: AgentSessionRecord): RpcCallError {
     "it is running in your shell; quit it and start it again to manage it",
     false,
     { runtimeRunId: record.runtimeRunId, state: "typed-run-alive" },
+  );
+}
+
+/** RA-D7 — puppeteer's word on the record, opaque otherwise: `resumable:
+ * false` while the agent has not saved the conversation the continuation
+ * names (a provisional id, or an exact one before the agent's first durable
+ * record). Absent — every record a runtime without the mark wrote — reads as
+ * it always did. The mark is what the run's last observer saw: a run held
+ * pending is observed by nothing, so a conversation its agent saved since
+ * still reads unsaved here. Only a replacement is refused on it: once the run
+ * has ended, its resume ends nothing, and is left to the adapter. */
+function conversationSaved(record: AgentSessionRecord): boolean {
+  return record.continuation.resumable !== false;
+}
+
+/** The refusal of a replacement whose resume could not succeed: given before
+ * the running PTY is touched, so the session keeps running. */
+function conversationUnsaved(record: AgentSessionRecord): RpcCallError {
+  return new RpcCallError(
+    "PRECONDITION_FAILED",
+    "the agent has not saved this conversation yet, so it cannot be resumed; it keeps running",
+    false,
+    { runtimeRunId: record.runtimeRunId, state: "not-yet-resumable" },
   );
 }
 

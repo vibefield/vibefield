@@ -444,6 +444,23 @@ describe("SessionSummary v2 and the doors", () => {
     ).toBe(false);
   });
 
+  it("RA-D7: the continuation carries puppeteer's not-yet-resumable mark; a record without it is every record before it", () => {
+    const record = AgentSessionRecord.parse(fixture("agent-session-record.valid.json"));
+    expect(record.continuation.resumable).toBeUndefined();
+    const unwritten = AgentSessionRecord.parse({
+      ...record,
+      continuation: { ...record.continuation, resumable: false },
+    });
+    expect(unwritten.continuation.resumable).toBe(false);
+    // typed: the mark is a boolean, never a word
+    expect(
+      AgentSessionRecord.safeParse({
+        ...record,
+        continuation: { ...record.continuation, resumable: "no" },
+      }).success,
+    ).toBe(false);
+  });
+
   it("AR-4: the row says whether it was re-attached, or is pending a resume at its next idle", () => {
     const summary = AgentSessionSummary.parse(fixture("agent-session-summary.valid.json"));
     expect(summary.continuation).toEqual({ persisted: true, resumable: false, reattached: true });

@@ -272,6 +272,13 @@ export const AgentSessionRecord = z
         nativeSessionId: z.string().min(1),
         implementation: z.string().optional(),
         state: z.string().optional(),
+        /** RA-D7 — puppeteer's mark, carried as it said it: `false` while the
+         * agent has not written the conversation this id names (a provisional
+         * id, or an exact one before the agent's first durable record), so no
+         * resume of it can succeed and nothing is ended for one. Absent once
+         * it can, and on every record a runtime without the mark wrote: those
+         * read as today's. */
+        resumable: z.boolean().optional(),
       })
       .passthrough(),
     workspace: AgentSessionWorkspace.optional(),

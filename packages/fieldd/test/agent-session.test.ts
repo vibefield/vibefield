@@ -3435,6 +3435,52 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
     await win2.call("terminal.terminate", { sessionId: resumed.terminal.sessionId });
   }, 150_000);
 
+  it("RA-D7 — a pending run whose agent had not saved its conversation: the row says nothing continues it, and agent.resume is refused BEFORE its PTY is touched", async () => {
+    const first = await setup({ floor: "real" });
+    const win1 = await window(first.daemon, DECK, "ns1");
+    const spawned = (await born(win1, "agent.spawn", {
+      provider: "scripted",
+      cwd: first.envOut,
+      title: "unsaved",
+    })) as AgentSpawnResult;
+    const runId = spawned.session.runtimeRunId;
+    const ptyId = spawned.terminal.sessionId;
+    await joinedRow(win1, runId);
+    await first.daemon.stop();
+    // the record as a runtime with puppeteer's mark writes it for a run whose
+    // agent has not saved the conversation yet (a provisional id, or an exact
+    // one before the agent's first durable record), signed like any other
+    const record = first.records.read(runId);
+    if (record === undefined) throw new Error("the first boot wrote no verified record for its run");
+    first.records.write({ ...record, continuation: { ...record.continuation, resumable: false } });
+
+    const second = await setup({ floor: "real", restartOf: first });
+    const win2 = await window(second.daemon, DECK, "ns2");
+    const pending = await poll(async () => {
+      const { sessions } = (await win2.call("agent.list", {})) as AgentListResult;
+      const found = sessions.find((r) => r.runtimeRunId === runId);
+      return found?.continuation?.pending !== undefined ? found : undefined;
+    }, 20_000);
+    // held, and says no resume is coming (AR-D25's signed-out shape)
+    expect(pending.continuation).toMatchObject({ persisted: true, resumable: false });
+    expect(pending.terminal).toMatchObject({ hosted: "local", runtimeSessionId: ptyId });
+
+    const refused = (await win2.callErr("agent.resume", { runtimeRunId: runId })) as RpcErrorShape;
+    expect(refused.data?.kind).toBe("PRECONDITION_FAILED");
+    expect((refused.data?.details as { state?: string } | undefined)?.state).toBe(
+      "not-yet-resumable",
+    );
+    // nothing was ended and nothing was born: the PTY runs, no second run
+    // exists, and the record says only that the boot could not attach
+    expect(await listed(win2, ptyId)).toBe(true);
+    expect(first.sessions).toHaveLength(1);
+    const after = readRecord(first.dataDir, runId);
+    expect(after.exited).toBeUndefined();
+    expect(after.reattach).toMatchObject({ state: "unsupported" });
+    expect(after.continuation.resumable).toBe(false);
+    await win2.call("terminal.terminate", { sessionId: ptyId });
+  }, 120_000);
+
   it("resume-when-idle: a pending run stays pending while the index knows nothing of it, while its row carries no activity, while its conversation has just moved, and while a still SUBAGENT row sits beside an active canonical one — and is resumed by the daemon itself once the canonical row says the conversation has been still", async () => {
     const first = await setup({ floor: "real" });
     const win1 = await window(first.daemon, DECK, "ri1");
