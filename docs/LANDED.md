@@ -16388,3 +16388,57 @@ vector in TS and Rust and contracts' whole suite re-ran on the rebased tip (belo
 **Not here.** The agent chapter's own steps and their rows (AO-3 History, with the pre-AO users of AO-D12; AO-5
 Agents and Profiles). The desk rows (`pnpm smoke`, `pnpm smoke:studio`) on a display, owed with AO-1's on James's
 "away"/"unlocked".
+
+## AL-5 — an orphaned pair is bounded: with no shell and no session for 10 minutes it ends itself (the floor drained with reason `idle`), and an unplanned exit that left sessions relaunches the app into the menu bar, at most 3 times in 10 minutes (2026-10-27; `6c7e2a71e`, lane `al/lease`; AL-D4, AL-D8; VF-PM's GO)
+
+**Why** (`draft/thinking-app-lifecycle.md` §8.2): after AL-7 a crash is SAID at the next launch, but nothing bounded a
+pair nobody relaunches. An empty pair ran forever, and a pair with sessions had no visible owner and no Quit within
+reach.
+
+**What landed:**
+- **Contracts:** `NativeRestartReason` gains `idle`, a planned stop, so the floor's next boot reads planned. `pnpm gen`
+  regenerated 44 schema entries + the bundle and field-native's contracts.rs (`Idle`).
+  `SHELL_BACKGROUND_RELAUNCH_ARG` lives in shell-lease.ts, and both sides read it there. The fixture
+  `native-shutdown-params.idle.json` is parsed on both sides.
+- **fieldd** (`shell-absence.ts`, pure policy wired to AL-7's lease `onVacant`/`onHeld`):
+  - **The idle bound:** no shell and a COUNTED zero sessions for 10 min (polled every 30 s) → the consented stop with
+    nothing to end (`sessions: []`, reason `idle`, the same exact-set re-check), then fieldd's owner is asked to
+    exit. An unreadable count is never idle; a session born, or a shell attaching, resets the span.
+  - **The relaunch:** an UNPLANNED exit that left sessions → after 5 s, `open -g -a <bundle> --args
+    --background-relaunch`, at most 3 inside 10 min, then it stops relaunching and says so. The bundle is read from
+    fieldd's own path (EL7); a dev or unpackaged fieldd only waits.
+  - **A quit never relaunches the app:** AL-7's seal keeps fieldd's own stop from reading as a vacancy, and the watch is
+    disposed before the seal.
+- **The shell:** launched with `--background-relaunch` (macOS, production), it opens no window and hides its Dock
+  icon. The status item is its one presence, forced on until a window opens; then the Dock icon returns and
+  Settings' tray preference applies again.
+
+**Found, red-first:** a REFUSED idle stop (a session born at the last moment, an inventory older than its bound) left
+the bound dead until the next vacancy. Now the watch re-arms while no shell holds the lease. RED 1 of 10 → GREEN
+10/10, and a probe (re-arm always) reds the held-meanwhile row.
+
+**Rows:**
+- shell-absence 10.
+- Kill-matrix row AL-5a over a REAL floor: the scaled bound drains the floor with `idle`, fieldd's owner is asked, and
+  the next boot reads planned. Green alone in 3.6 s; red with the `onVacant` wiring removed.
+- fixture_parity's idle row.
+
+**The skew** (dated note in §8, the rule for a reason-set change): AL-5a's first run was red on BUILD STATE. A floor
+built before the gen answered `unknown variant 'idle'`, the stop lingered, and the floor stayed up (safe). A release
+cannot ship that skew, because a new reason changes contracts.rs and so the floor's bytes. `pnpm gen` runs before
+cargo.
+
+**Gates:**
+- The light pass: typecheck of contracts, fieldd and electron-shell, and biome.
+- `pnpm verify` EXIT 0 at `6b9c94427` on `c3e0958e7` (10:52:48–10:59:18Z): 27 projects, cargo 31 suites.
+- Rebased onto `a07d48652` (AO-2). One conflict, the daemon.ts import line, resolved as both. The generated files
+  merged clean, and `pnpm gen` left the tree clean. `git range-diff`: `!` on that import context alone.
+- At the rebased tip: typecheck EXIT 0, contracts 49/49 (1175), field-native's build, fixture_parity + layout_vector
+  17 + 1, gen:check EXIT 0.
+
+**Owed:**
+- The relaunch's physical witness: a packaged build, a `kill -9` with sessions, then the app back in the menu bar.
+- The cap persisted across a fieldd restart; it lives in memory, and the doc said "persisted with the record".
+- Windows and Linux relaunch.
+- A fieldd that no shell ever claimed is unbounded.
+- AL-8: fieldd under launchd, design pass first.
