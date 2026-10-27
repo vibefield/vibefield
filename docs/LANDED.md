@@ -16909,3 +16909,63 @@ never a synced preference, which would name every device alike, and never crosse
 
 **Owed.**
 - The catalog's photographs and the desk rows, with TS-2's and TS-3a's, on James's display word.
+
+## AO-5a — the draft set: a profile Add a profile… makes is a draft fieldd notes, kept at the first sign-in that says who, discarded by Cancel only while it is one, and deleted at the next start if nothing kept it; Settings' New profile… makes a draft too (2026-10-27; `a15cb9845`, lane `ao/5a`; AO-D7, AO-D14)
+
+**What.** The fifth slice of track AO's ladder (`draft/thinking-agent-onboarding.md` §8), its fieldd half: AO-5b's
+seam (a set created as its login starts, deleted on Cancel, an unread end asking and never deleting) replaced on
+James's AO-D14 = (a), ruled 15:27:11Z (his click on the PM board, `rule-ao-d14`). One commit, in contracts, fieldd and
+field-app:
+- **Contracts.** `agents.profileSets.create {draft}`; the feed's `draft` flag on a set; a new door,
+  `agents.profileSets.discard {set}` → `{discarded, stopped}` (agent.spawn, local, idempotent); the note's shape,
+  `AgentProfileDraftsFile`; and `LAYOUT.AGENT_PROFILE_DRAFTS_FILE` = `["fieldd", "profile-drafts.json"]` after
+  TS-3b's DEVICE_NAME_FILE, in all four places.
+- **fieldd.** `ProfileDraftsStore` keeps one note per user (0600, written whole and atomically; an unreadable note is
+  set aside, never overwritten). A draft is noted at create and marked in the feed; the first sign-in that says who
+  keeps it (at a login pane's end, and through `agents.profiles.verify`; for an agent that never says who, its login
+  ending on its own); `discardSet` deletes only while the set is noted, and a Cancel already deleting is never
+  "kept" by a sign-in landing after it; every start sweeps after the re-attach (a noted set with a verified sign-in,
+  or the default, is kept; a gone set leaves the note; any other noted set is deleted; a profile made before this
+  was never noted and is never touched).
+- **field-app.** The chapter's Add a profile… creates a draft and Cancel is `discard`; a login that ends unread
+  leaves a draft with Sign in again and Cancel, one left unkept the next start's to delete. Settings' New profile…
+  creates a draft too: its page says "kept once an agent signs in here", and its empty state "Add an agent and sign
+  in: {label} is kept once one does."
+- DESIGN.md §8 records the drafts as built; the catalog's Agent Profiles gains a "draft" state.
+
+**Restacked onto TS-3b.** Built on `b4c4befd1` as `314f84ea7`; rebased onto `4b12b01f3` (TS-3b, `fb530e716`) as
+`a15cb9845`. The range-diff is one commit, 1:1: the LAYOUT row now after DEVICE_NAME_FILE (registries.ts and the
+vector by hand; gen/layout.json and registries.rs resolved by hand and confirmed by `pnpm gen:check`, gen agreeing
+byte for byte), the row's comment without its rebase note, and the message's layout line. Nothing else moved.
+
+**Validation** (lane ao1, at the tip exactly, nice 19, the guard clear before every arm):
+- the light pass at `3f3c881fd` (before the rebase): contracts `1182 passed`; the fieldd files `14 passed` alone after a
+  fixture fix (the stub's set info now carries its sign-ins, as puppeteer's does); field-app's targeted files
+  load-class red at a load of 423 (40 panes never rendered in 5 s), `113 passed` alone.
+- the rebase's light rows at `a15cb9845` (15:57:35–15:59:28Z): the three typechecks EXIT 0; `pnpm gen:check` EXIT 0;
+  contracts `1185 passed`; the fieldd files `50 passed | 2 skipped`; field-app's `71 passed`; preflight OK, walls
+  clean, the words check exit 0. cargo `layout_vector` 17 and `fixture_parity` 1 passed on VF-PM's relay
+  (16:00:57–16:01:14Z).
+- the gate at `a15cb9845` (16:01:14–16:03:56Z): the three typechecks EXIT 0; contracts `1185 passed`; fieldd's AO-5a
+  files `57 passed | 2 skipped`; field-app's whole suite `2713 passed | 3 skipped`; the words check exit 0; the draft
+  page photographed in both themes, no console errors (`lanes/ao1/logs/gate-a15cb9845/shots/`); the tree clean after.
+  Read by eye: the head says "No agents yet · kept once an agent signs in here" and the empty state "Add an agent and
+  sign in: Client demo is kept once one does." Two harness facts, unchanged since AO-5b's photograph at `274716e4d`:
+  the catalog's state bar over Agent Profiles overlaps its labels at 34 states, and the plate's height shows the
+  sidebar's first profile only.
+- `pnpm verify` at `a15cb9845` (16:03:56–16:08:45Z) exit 1, red at a load of 465 (a light pass from another lane ran
+  beside its test stage), green alone. Cargo and gen:check were not reached.
+  - The two rows, both in fieldd's `test/agent-session.test.ts`, are the recorded lottery family (red in ts1's verify
+    at 08:50Z, green alone): MF-1 ("a settled board sent a frame", a 1 s quiet window) and MF-1f/MF-1g (the row's
+    15 s bound).
+  - AO-5a's runtime change is the drafts option, the start's sweep and a login pane's end. Neither row opens a login,
+    and the sweep's closing publish reaches only the profile feed's subscribers.
+  - The stages alone, serial, on VF-PM's precedent (`lanes/ao1/logs/alone-a15cb9845/`): (a) the file `46 passed | 2
+    skipped` (16:10:40–16:11:44Z); (b) `pnpm test:rust` ok 31, FAILED 0 (16:11:44–16:13:43Z); (c) `pnpm gen:check`
+    EXIT 0 (16:13:43–16:13:47Z); the tree clean after.
+
+**Rule from here** (VF-PM 16:10Z, every lane): while a verify runs on this Mac nothing else runs but editing, the light
+pass included.
+
+**Not here.** AO-6b (the two once-moments, AO-D15). The desk rows (`pnpm smoke`, `pnpm smoke:studio`) on a display,
+owed with AO-1…6a's.
