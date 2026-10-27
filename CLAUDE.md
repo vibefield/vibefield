@@ -304,6 +304,7 @@ sidecar was built from source while the window's Go half was open, and comes fro
   states surface as `UNAVAILABLE {service, state, progress}` — honest states, never blanks.
 - **Two planes.** field-native outlives fieldd outlives the shell. The session-persistence
   ceiling is daemon-lifetime — UX says so honestly, never promises more.
+  A person's Quit (⌘Q, Dock, tray, menu) stops them through the census gate (ESR §7.3 as amended); a crash, a Force Quit or a signal leaves them.
 
 ## Style & tests
 
