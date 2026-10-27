@@ -9,6 +9,7 @@ import {
   MGMT_NOTIFICATIONS,
   NATIVE_SUPERVISION,
   NativeLastExit,
+  NativeLastManager,
   NativeTickParams,
   NativeUnavailableDetails,
   PingAck,
@@ -280,6 +281,9 @@ interface Pending {
   subKey?: number;
 }
 
+/** AL-8a — how long a stopping fieldd gives the floor to note its goodbye. */
+const DETACH_DEADLINE_MS = 1_000;
+
 export class NativeLink extends EventEmitter {
   private sock: Socket | null = null;
   private connectingSock: Socket | null = null;
@@ -346,6 +350,11 @@ export class NativeLink extends EventEmitter {
    * from its restart intent at its boot. undefined = the floor did not say (it predates the field, or runs
    * embedded) — never read as `unplanned`. Provenance for health and the logs, never parsed for behavior. */
   lastExit: NativeLastExit | undefined;
+  /** AL-8a (`thinking-app-lifecycle.md` §8.3.1) — how the management client before this one left the floor
+   * (`HelloAck.lastManager`), believed on THIS process's first hello alone: a re-pair's record is about this fieldd's
+   * own dropped connection, never another fieldd's crash. The daemon takes it once (undefined after). */
+  lastManager: NativeLastManager | undefined;
+  private pairedOnce = false;
   /** TM-1/TM-2 (MF-1l) — "this floor's terminal doors are PUBLISHED on the
    * tailnet", the floor's own word (`HelloAck.terminalMesh`), re-learned at
    * every re-pair.
@@ -589,6 +598,7 @@ export class NativeLink extends EventEmitter {
       terminalRoutes?: unknown;
       nativeBuild?: unknown;
       lastExit?: unknown;
+      lastManager?: unknown;
       pid?: unknown;
       serverMac?: unknown;
     };
@@ -629,6 +639,10 @@ export class NativeLink extends EventEmitter {
     // WP12 L2b — on its own terms like the label: anything outside the vocabulary is a floor that did not say.
     const lastExit = NativeLastExit.safeParse(record.lastExit);
     this.lastExit = lastExit.success ? lastExit.data : undefined;
+    // AL-8a — on its own terms like `lastExit`, and on the first hello of this process only
+    const lastManager = NativeLastManager.safeParse(record.lastManager);
+    if (!this.pairedOnce) this.lastManager = lastManager.success ? lastManager.data : undefined;
+    this.pairedOnce = true;
     // TM-1/TM-2 (MF-1l): read on its own terms like `nativeBuild`, and for the
     // same reason — a floor whose ROUTES are malformed still answers "are the
     // doors published", and the reverse. Anything but a boolean is a floor
@@ -1278,6 +1292,16 @@ export class NativeLink extends EventEmitter {
       this.removeSubscription(key, entry);
       throw e;
     }
+  }
+
+  /** AL-8a (`thinking-app-lifecycle.md` §8.3.1) — fieldd's goodbye before a planned stop, so the floor records the
+   * departure planned (`native.lifecycle.detach`). Said only on a paired link and bounded: a floor already stopped
+   * (a quit's consented stop) has no connection to say it on, and a stop never waits out a reconnect. */
+  async detach(): Promise<void> {
+    if (!this.connected || this.closed) return;
+    await this.rawRequest("native.lifecycle.detach", {}, undefined, DETACH_DEADLINE_MS).catch(
+      () => undefined,
+    );
   }
 
   close(): void {

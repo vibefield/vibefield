@@ -113,6 +113,14 @@ pub mod terminal_inventory {
     pub const SAMPLE_MS: u64 = 1000;
 }
 
+/// AL-5 + AL-8a — the orphan bound: no session for IDLE_EXIT_MS, read every
+/// IDLE_POLL_MS, ends the floor with reason `idle` while no management client
+/// holds its slot. One authority with fieldd's bound; see registries.ts.
+pub mod orphan_bound {
+    pub const IDLE_EXIT_MS: u64 = 600000;
+    pub const IDLE_POLL_MS: u64 = 30000;
+}
+
 /// TPv3 (terminal-pipeline-v3 §5.1/§8; §20 item 5) — the pipeline's numbers:
 /// protocol version, door hygiene, grant validity, the cell's receive caps and
 /// the announced ProtocolLimits. PROVISIONAL until the numeric checkpoint; one
@@ -244,6 +252,7 @@ pub mod layout {
     pub const MESH_STATE_DIR: &[&str] = &["native", "mesh"];
     pub const LINK_FILE: &[&str] = &["fieldd", "link.json"];
     pub const SHELL_EXIT: &[&str] = &["fieldd", "shell-exit.json"];
+    pub const MANAGER_EXIT: &[&str] = &["fieldd", "manager-exit.json"];
     pub const TERMINAL_BINDINGS_FILE: &[&str] = &["fieldd", "terminal-bindings.json"];
     pub const PROJECT_IDENTITY_FILE: &[&str] = &["fieldd", "project-identity.json"];
     pub const SETUP_LEDGER_FILE: &[&str] = &["fieldd", "setup.json"];
@@ -308,6 +317,7 @@ pub mod layout {
         ("MESH_STATE_DIR", MESH_STATE_DIR),
         ("LINK_FILE", LINK_FILE),
         ("SHELL_EXIT", SHELL_EXIT),
+        ("MANAGER_EXIT", MANAGER_EXIT),
         ("TERMINAL_BINDINGS_FILE", TERMINAL_BINDINGS_FILE),
         ("PROJECT_IDENTITY_FILE", PROJECT_IDENTITY_FILE),
         ("SETUP_LEDGER_FILE", SETUP_LEDGER_FILE),

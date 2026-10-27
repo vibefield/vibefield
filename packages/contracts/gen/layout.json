@@ -62,6 +62,10 @@
     "fieldd",
     "shell-exit.json"
   ],
+  "MANAGER_EXIT": [
+    "fieldd",
+    "manager-exit.json"
+  ],
   "TERMINAL_BINDINGS_FILE": [
     "fieldd",
     "terminal-bindings.json"

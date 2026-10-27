@@ -5,11 +5,11 @@
 // through the D6 ticket; churn leaves no residue. Row 2 (field-native's own
 // SIGTERM sweep) is pinned Rust-side in field-native/tests/terminal_unit.rs.
 import { type ChildProcess, spawn } from "node:child_process";
-import { readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { GhostteaAutomationClient } from "@vibecook/ghosttea-client";
-import type { TerminalEndpoints, TerminalInfo } from "@vibefield/contracts";
+import { LAYOUT, type TerminalEndpoints, type TerminalInfo } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, type FielddConfig, type FielddDaemon } from "../src/index";
@@ -60,7 +60,7 @@ interface NativeHandle {
   child: ChildProcess;
 }
 
-async function spawnNative(dir?: string): Promise<NativeHandle> {
+async function spawnNative(dir?: string, env: Record<string, string> = {}): Promise<NativeHandle> {
   const dataDir = dir ?? shortTmpRoot("vf-km-");
   if (dir === undefined) cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
   spawnedAt.set(dataDir, Date.now());
@@ -80,6 +80,7 @@ async function spawnNative(dir?: string): Promise<NativeHandle> {
       // so it IS a FIELD_ var — and ghosttea's case-sensitive `starts_with` strip
       // may miss it. Whether it leaks is asserted (empirically) below.
       Field_Native_Case_Probe: "CASE_LEAK_WITNESS",
+      ...env,
     },
     stdio: "ignore",
   });
@@ -533,6 +534,121 @@ describe("the kill matrix (NF-4, real field-native)", () => {
       const nextDaemon = await boot({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
       cleanup.push(() => nextDaemon.stop());
       expect(nextDaemon.native.lastExit).toBe("planned");
+    });
+  }, 90_000);
+
+  // AL-8a (`draft/thinking-app-lifecycle.md` §8.3.1; AL-D10 "A", AL-D11) — the floor's own bound and the record of
+  // how its fieldd left, over a REAL floor. fieldd runs in this process, so its crash is what the floor sees of one:
+  // the management link dropped without `native.lifecycle.detach` (`daemon.native.close()`); its later stop() has no
+  // paired link to say goodbye on.
+  it("row AL-8a-1: fieldd gone without a goodbye and no session — the floor stops itself `idle` after the span", async () => {
+    const native = await spawnNative(undefined, { FIELD_NATIVE_ORPHAN_IDLE_MS: "1500" });
+    await withNativeLog(native, async () => {
+      const daemon = await boot({
+        dataDir: native.dir,
+        controlPort: 0,
+        dataPort: 0,
+        shellRelaunch: null,
+      });
+      cleanup.push(() => daemon.stop());
+      await poll(
+        async () => (daemon.terminals.liveCount() === 0 ? true : undefined),
+        10_000,
+        "the floor's inventory observed empty",
+      );
+      let exitCode: number | null | undefined;
+      native.child.once("exit", (code) => {
+        exitCode = code;
+      });
+      daemon.native.close(); // fieldd's crash, as the floor sees it
+      await poll(
+        async () => (exitCode !== undefined ? true : undefined),
+        20_000,
+        "the floor's own idle stop",
+      );
+      expect(exitCode).toBe(0); // the drain, not a kill
+      const intent = JSON.parse(
+        readFileSync(join(native.dir, "native", "restart-intent.json"), "utf8"),
+      ) as Record<string, unknown>;
+      expect(intent).toMatchObject({ schemaVersion: 1, reason: "idle" });
+      await daemon.stop();
+
+      await spawnNative(native.dir);
+      const nextDaemon = await boot({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
+      cleanup.push(() => nextDaemon.stop());
+      expect(nextDaemon.native.lastExit).toBe("planned");
+    });
+  }, 90_000);
+
+  it("row AL-8a-2: fieldd gone without a goodbye beside a session — the floor stays, and the next fieldd says it once", async () => {
+    const native = await spawnNative();
+    await withNativeLog(native, async () => {
+      const crashed = await boot({
+        dataDir: native.dir,
+        controlPort: 0,
+        dataPort: 0,
+        shellRelaunch: null,
+      });
+      cleanup.push(() => crashed.stop());
+      const rpc = await connectAdmin(crashed);
+      const session = await createRetrying(rpc, { shell: HOLD }, native, 30_000);
+      await poll(
+        async () => (crashed.terminals.liveCount() === 1 ? true : undefined),
+        10_000,
+        "the session in the floor's inventory",
+      );
+      crashed.native.close(); // fieldd's crash, as the floor sees it
+      await crashed.stop(); // no paired link left: nothing to say goodbye on
+
+      const next = await boot({
+        dataDir: native.dir,
+        controlPort: 0,
+        dataPort: 0,
+        shellRelaunch: null,
+      });
+      cleanup.push(() => next.stop());
+      await poll(
+        async () => (existsSync(join(native.dir, ...LAYOUT.MANAGER_EXIT)) ? true : undefined),
+        10_000,
+        "the crashed fieldd's record on disk",
+      );
+      const shell = await connectShell(next);
+      const answer = (await shell.rpc.call("system.shell.attach", {})) as {
+        lastManagerExit: { sessions: number | null } | null;
+      };
+      expect(answer.lastManagerExit).toMatchObject({ sessions: 1 });
+      expect(await shell.rpc.call("system.shell.attach", {})).toMatchObject({
+        lastManagerExit: null,
+      });
+      expect(alive(native.child.pid as number)).toBe(true); // the floor kept the session: the law
+      const listed = await listOf(await connectAdmin(next));
+      expect(listed.map((t) => t.sessionId)).toContain(session.sessionId);
+    });
+  }, 90_000);
+
+  it("row AL-8a-3: fieldd's own stop says goodbye — the next fieldd hands no crash", async () => {
+    const native = await spawnNative();
+    await withNativeLog(native, async () => {
+      const first = await boot({
+        dataDir: native.dir,
+        controlPort: 0,
+        dataPort: 0,
+        shellRelaunch: null,
+      });
+      await first.stop(); // a planned stop says `native.lifecycle.detach` before it closes the link
+      const next = await boot({
+        dataDir: native.dir,
+        controlPort: 0,
+        dataPort: 0,
+        shellRelaunch: null,
+      });
+      cleanup.push(() => next.stop());
+      const shell = await connectShell(next);
+      expect(await shell.rpc.call("system.shell.attach", {})).toMatchObject({
+        lastExit: null,
+        lastManagerExit: null,
+      });
+      expect(existsSync(join(native.dir, ...LAYOUT.MANAGER_EXIT))).toBe(false);
     });
   }, 90_000);
 

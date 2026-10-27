@@ -449,6 +449,10 @@ class DeferredSocket implements WsLike {
     open(url, this).then(
       (inner) => {
         if (this.closedEarly) {
+          // closed before the real socket arrived: closed now, and a socket still CONNECTING answers `close()` with an
+          // `error` event (`ws`: "closed before the connection was established") — absorbed here, since nothing has
+          // listened to `inner` yet and an unheard error is an uncaught exception (found by AL-8a's verify, FW-L10)
+          inner.addEventListener("error", () => undefined);
           inner.close();
           return;
         }

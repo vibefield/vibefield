@@ -116,6 +116,18 @@ describe("the shell lease (AL-7)", () => {
     });
   });
 
+  it("a crashed fieldd's record (AL-8a) is kept on disk and handed once, beside the shell's own", async () => {
+    const root = tempRoot();
+    const a = lease(root);
+    a.value.noteManagerExit({ at: 5_000, sessions: 3 });
+    await a.value.flush();
+    // a NEW fieldd on the same root hands it over: it is fieldd's file, as the shell's record is
+    const b = lease(root);
+    expect(await b.value.takeManagerExit()).toEqual({ at: 5_000, sessions: 3 });
+    expect(await b.value.takeManagerExit()).toBeNull();
+    expect(await b.value.attach("c1")).toBeNull();
+  });
+
   it("a garbled record is set aside and read as none", async () => {
     const root = tempRoot();
     const path = join(root, ...LAYOUT.SHELL_EXIT);
@@ -126,16 +138,19 @@ describe("the shell lease (AL-7)", () => {
   });
 });
 
-async function fixture(): Promise<{ daemon: FielddDaemon; dataDir: string }> {
+async function fixture(
+  shape?: (native: MockMgmtServer) => void,
+): Promise<{ daemon: FielddDaemon; dataDir: string; native: MockMgmtServer }> {
   const dataDir = tempRoot();
   mkdirSync(join(dataDir, "native", "run"), { recursive: true });
   writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
   const native = new MockMgmtServer(nativeEndpoint(dataDir, SOCKETS.MGMT));
+  shape?.(native);
   await native.start();
   cleanup.push(() => native.stop());
   const daemon = await bootstrap({ dataDir, controlPort: 0 });
   cleanup.push(() => daemon.stop());
-  return { daemon, dataDir };
+  return { daemon, dataDir, native };
 }
 
 async function connect(
@@ -158,7 +173,10 @@ describe("the shell lease's verbs (AL-7, the daemon)", () => {
   it("a shell's socket that drops after attach is an UNPLANNED exit, handed to the next shell's attach once", async () => {
     const { daemon, dataDir } = await fixture();
     const first = await connect(daemon, daemon.shellToken, "shell-main");
-    expect(await first.rpc.call("system.shell.attach", {})).toEqual({ lastExit: null });
+    expect(await first.rpc.call("system.shell.attach", {})).toEqual({
+      lastExit: null,
+      lastManagerExit: null,
+    });
     first.socket.terminate();
     await until(() => existsSync(join(dataDir, ...LAYOUT.SHELL_EXIT)));
     const next = await connect(daemon, daemon.shellToken, "shell-main");
@@ -166,7 +184,10 @@ describe("the shell lease's verbs (AL-7, the daemon)", () => {
       lastExit: { planned: boolean } | null;
     };
     expect(answer.lastExit).toMatchObject({ planned: false });
-    expect(await next.rpc.call("system.shell.attach", {})).toEqual({ lastExit: null });
+    expect(await next.rpc.call("system.shell.attach", {})).toEqual({
+      lastExit: null,
+      lastManagerExit: null,
+    });
   });
 
   it("a shell that says it is restarting leaves PLANNED", async () => {
@@ -202,6 +223,40 @@ describe("the shell lease's verbs (AL-7, the daemon)", () => {
     shell.socket.terminate();
     await new Promise((resolve) => setTimeout(resolve, 150));
     expect(existsSync(join(dataDir, ...LAYOUT.SHELL_EXIT))).toBe(false);
+  });
+
+  // AL-8a (`thinking-app-lifecycle.md` §8.3.1) — the floor's word that the fieldd before this one went without a
+  // goodbye reaches the next shell's attach once; a planned departure says nothing; and fieldd's own stop says goodbye.
+  it("a floor that says the previous fieldd crashed reaches the next attach once; a planned one never does", async () => {
+    const crashed = await fixture((native) => {
+      native.helloLastManager = { planned: false, at: 7_000, sessions: 2 };
+    });
+    await until(() => existsSync(join(crashed.dataDir, ...LAYOUT.MANAGER_EXIT)));
+    const shell = await connect(crashed.daemon, crashed.daemon.shellToken, "shell-main");
+    expect(await shell.rpc.call("system.shell.attach", {})).toEqual({
+      lastExit: null,
+      lastManagerExit: { at: 7_000, sessions: 2 },
+    });
+    expect(await shell.rpc.call("system.shell.attach", {})).toEqual({
+      lastExit: null,
+      lastManagerExit: null,
+    });
+
+    const planned = await fixture((native) => {
+      native.helloLastManager = { planned: true, at: 7_000, sessions: 0 };
+    });
+    const next = await connect(planned.daemon, planned.daemon.shellToken, "shell-main");
+    expect(await next.rpc.call("system.shell.attach", {})).toEqual({
+      lastExit: null,
+      lastManagerExit: null,
+    });
+  });
+
+  it("fieldd's own stop says goodbye to its floor before it closes the link", async () => {
+    const { daemon, native } = await fixture();
+    await until(() => native.paired.size > 0);
+    await daemon.stop();
+    expect(native.requestLog.map((request) => request.method)).toContain("native.lifecycle.detach");
   });
 
   it("a probe (hello alone) leaves no record, and a window may not touch the lease", async () => {

@@ -205,6 +205,8 @@ pub struct DaemonState {
     /// WP12 L2b (`build-wp12-updater.md` §9 R2/R3) — the restart intent's file, how the previous floor ended, and
     /// the request that stops this floor. Configured at boot; embedded unit daemons leave it unconfigured.
     pub restart: crate::restart::RestartControl,
+    /// AL-8a — who holds the management slot, since when nobody has, and how the last holder left (`orphan.rs`).
+    pub manager: crate::orphan::ManagerPresence,
     next_conn_id: AtomicU64,
     next_sub_id: AtomicU64,
     next_tick_seq: AtomicU64,
@@ -246,6 +248,7 @@ impl DaemonState {
             freeway,
             logging,
             restart: crate::restart::RestartControl::default(),
+            manager: crate::orphan::ManagerPresence::new(std::time::Instant::now()),
             next_conn_id: AtomicU64::new(1),
             next_sub_id: AtomicU64::new(1),
             next_tick_seq: AtomicU64::new(0),

@@ -359,6 +359,9 @@ struct Shared {
     /// the sampler's on age, and a cell can be both at once. Only the sampler
     /// writes it.
     inventory_stale: Mutex<BTreeMap<u32, String>>,
+    /// AL-8a — the inventory's per-cell stamps, once the inventory is installed: the census's "has this cell
+    /// reconciled at all" (`InventoryStamp::applied`).
+    inventory_stamps: std::sync::OnceLock<Arc<InventoryStamps>>,
     /// IL-D6 — the machine-wide ledger has not answered for longer than the
     /// bound: "the machine-wide ledger has not answered since …", or `None`.
     /// Only the sampler writes it; the ledger's thread cannot, since a thread
@@ -698,6 +701,29 @@ impl TerminalHandle {
             .count()
     }
 
+    /// AL-8a (`thinking-app-lifecycle.md` §8.3.1) — the floor's own session count, for its orphan bound and the
+    /// record of how its management client left, read at the source: the sum over every live cell's applied
+    /// inventory. `None` — UNKNOWN, and unknown is never idle — before the inventory is installed, while a live cell
+    /// has not had a reconcile applied (its stamp), while any cell's inventory is stale, or while the pump is faulted.
+    /// A cell that reconciled empty publishes nothing, so its missing `occupancy` entry reads 0.
+    pub fn census(&self) -> Option<u64> {
+        let shared = &self.shared;
+        if shared.inventory_fault.lock().unwrap().is_some()
+            || !shared.inventory_faults.lock().unwrap().is_empty()
+            || !shared.inventory_stale.lock().unwrap().is_empty()
+        {
+            return None;
+        }
+        let applied = shared.inventory_stamps.get()?.applied_instances();
+        let cells: Vec<u32> = shared.route_rows.lock().unwrap().keys().copied().collect();
+        let occupancy = shared.occupancy.borrow();
+        cells.iter().try_fold(0u64, |total, cell| {
+            applied
+                .contains(cell)
+                .then(|| total + u64::from(occupancy.get(cell).copied().unwrap_or(0)))
+        })
+    }
+
     /// TC-D6(e), the immediate half: a create the kernel refused for
     /// descriptors puts the unit in `fd_pressure` NOW rather than at the next
     /// sample. A refusal is stronger evidence than any sample — it already
@@ -783,6 +809,7 @@ impl TerminalUnit {
                 inventory_faults: Mutex::new(BTreeMap::new()),
                 inventory_fault: Mutex::new(None),
                 inventory_stale: Mutex::new(BTreeMap::new()),
+                inventory_stamps: std::sync::OnceLock::new(),
                 ledger_late: Mutex::new(None),
                 fd_pressure: Mutex::new(None),
                 pty_pressure: Mutex::new(None),
@@ -1908,6 +1935,8 @@ fn install_inventory_with(
     bounds: InventoryBounds,
 ) -> tokio::task::JoinHandle<()> {
     let stamps = Arc::new(InventoryStamps::default());
+    // AL-8a — the census reads which cells have reconciled from the same stamps the judge does
+    let _ = handle.shared.inventory_stamps.set(stamps.clone());
     let sampler = InventorySampler::new(
         stamps.clone(),
         state.clone(),
@@ -2277,6 +2306,9 @@ struct InventoryStamp {
     since: u64,
     /// What the pump is doing now, which the stale line reports.
     activity: PumpActivity,
+    /// AL-8a — a reconcile has been applied at least once, published or not (an empty cell's first reconcile equals
+    /// the pump's seed and publishes nothing, so `occupancy` alone cannot say it).
+    applied: bool,
 }
 
 /// What a cell's pump is doing, as the stale line says it (IL-D3).
@@ -2334,6 +2366,7 @@ impl InventoryStamps {
             as_of: tokio::time::Instant::now(),
             since: unix_ms_now(),
             activity: PumpActivity::Dialing,
+            applied: false,
         };
         self.cells.lock().unwrap().insert(key.clone(), stamp);
     }
@@ -2353,6 +2386,17 @@ impl InventoryStamps {
 
     fn snapshot(&self) -> BTreeMap<CellKey, InventoryStamp> {
         self.cells.lock().unwrap().clone()
+    }
+
+    /// AL-8a — the instances whose inventory has been applied at least once.
+    fn applied_instances(&self) -> std::collections::BTreeSet<u32> {
+        self.cells
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(_, stamp)| stamp.applied)
+            .map(|((instance, _), _)| *instance)
+            .collect()
     }
 }
 
@@ -2384,6 +2428,7 @@ impl CellStamp {
             stamp.as_of = began;
             stamp.since = since;
             stamp.activity = PumpActivity::Idle;
+            stamp.applied = true;
         });
     }
 }
@@ -4027,6 +4072,7 @@ mod tests {
             inventory_faults: Mutex::new(BTreeMap::new()),
             inventory_fault: Mutex::new(None),
             inventory_stale: Mutex::new(BTreeMap::new()),
+            inventory_stamps: std::sync::OnceLock::new(),
             ledger_late: Mutex::new(None),
             fd_pressure: Mutex::new(None),
             pty_pressure: Mutex::new(None),

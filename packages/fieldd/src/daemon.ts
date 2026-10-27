@@ -2134,6 +2134,18 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       onHeld: () => shellAbsence.held(),
     });
     shellLeaseRef = shellLease;
+    // AL-8a (`thinking-app-lifecycle.md` §8.3.1) — a fieldd that crashed before this one, in the floor's word on this
+    // process's first hello: handed to the next shell's attach once, beside the shell's own record.
+    const noteManagerExit = (): void => {
+      const lastManager = native.lastManager;
+      if (lastManager === undefined) return;
+      native.lastManager = undefined; // said once
+      if (!lastManager.planned) {
+        shellLease.noteManagerExit({ at: lastManager.at, sessions: lastManager.sessions });
+      }
+    };
+    native.on("connected", noteManagerExit);
+    noteManagerExit();
     const leaseConnection = (ctx: {
       transport: string;
       principal: { kind: string };
@@ -2153,7 +2165,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     };
     api.register("system.shell.attach", async (ctx) => {
       const lastExit = await shellLease.attach(leaseConnection(ctx));
-      const result: SystemShellAttachResult = { lastExit };
+      const result: SystemShellAttachResult = {
+        lastExit,
+        lastManagerExit: await shellLease.takeManagerExit(),
+      };
       return result;
     });
     api.register("system.shell.leave", (ctx, params) => {
@@ -6911,6 +6926,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           settings.dispose();
           plugins.dispose();
           diagnosticsService.dispose();
+          await native.detach(); // AL-8a — the floor records this stop planned, never as a crash
           native.close();
           await artifactDrain;
           // a superseding fieldd rewrites these for the same dataDir — never

@@ -15,6 +15,7 @@ import {
   FrameZoomRequest,
   IPC_CHANNELS,
   LAYOUT,
+  type ManagerExitRecord,
   PluginModuleResolution,
   releasePlatformKey,
   type ScreenshotCaptureResult,
@@ -845,18 +846,27 @@ async function main(
   // AL-7 (`thinking-app-lifecycle.md` §8.1) — an UNPLANNED exit (a crash, a Force Quit, a signal) is said once, as one
   // native notification (OS chrome; DESIGN.md §9's words in shell-exit-notice.ts). Clicking it opens the crash report
   // when the crash manager holds one for this exit, the window otherwise.
-  const showUnplannedExitNotice = async (record: ShellExitRecord): Promise<void> => {
+  const showUnplannedExitNotice = async (
+    record: ShellExitRecord | null,
+    managerExit: ManagerExitRecord | null,
+  ): Promise<void> => {
     if (isSmokeLike(MODE) || !Notification.isSupported()) return;
-    const list = await crashes.refresh().catch(() => null);
-    const crashReport =
-      list?.artifacts.some(
-        (artifact) => !artifact.viewed && artifact.createdAt >= record.at - CRASH_REPORT_WINDOW_MS,
-      ) ?? false;
-    const words = shellExitNotice(record, {
-      time: new Date(record.at).toLocaleTimeString(undefined, {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
+    // a crash report is the SHELL's (Electron's crash reporter holds no fieldd dump)
+    const shellCrashed = record !== null && !record.planned;
+    let crashReport = false;
+    if (record !== null && !record.planned) {
+      const since = record.at - CRASH_REPORT_WINDOW_MS;
+      const list = await crashes.refresh().catch(() => null);
+      crashReport =
+        list?.artifacts.some((artifact) => !artifact.viewed && artifact.createdAt >= since) ??
+        false;
+    }
+    const words = shellExitNotice(record, managerExit, {
+      time: (at) =>
+        new Date(at).toLocaleTimeString(undefined, {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
       crashReport,
     });
     if (words === null) return;
@@ -873,7 +883,8 @@ async function main(
     });
     notice.show();
     logger.info("desktop.shell_lease.notice_shown", "The unplanned exit was said", {
-      sessions: record.sessions,
+      shell: shellCrashed,
+      fieldd: managerExit !== null,
       crashReport,
     });
   };
@@ -881,12 +892,14 @@ async function main(
    * claims the lease, and the ATTACHED user's unplanned last exit is said once; a background user's is logged. */
   const claimLease = async (userId: string, handle: FielddHandle): Promise<void> => {
     let lastExit: ShellExitRecord | null;
+    let lastManagerExit: ManagerExitRecord | null;
     try {
       const parsed = SystemShellAttachResult.safeParse(
         await handle.client.request("system.shell.attach", {}, { timeoutMs: LEASE_ATTACH_MS }),
       );
       if (!parsed.success) return;
       lastExit = parsed.data.lastExit;
+      lastManagerExit = parsed.data.lastManagerExit ?? null;
     } catch (error) {
       logger.warn(
         "desktop.shell_lease.attach_failed",
@@ -897,13 +910,27 @@ async function main(
       );
       return;
     }
-    if (lastExit === null || lastExit.planned) return;
-    logger.warn(
-      "desktop.shell_lease.unplanned_exit",
-      "The last shell on this pair went without saying why (a crash, a Force Quit or a signal)",
-      { attached: userId === attached.userId, sessions: lastExit.sessions, at: lastExit.at },
-    );
-    if (userId === attached.userId) await showUnplannedExitNotice(lastExit);
+    const shellCrashed = lastExit !== null && !lastExit.planned;
+    if (!shellCrashed && lastManagerExit === null) return;
+    if (lastExit !== null && !lastExit.planned) {
+      logger.warn(
+        "desktop.shell_lease.unplanned_exit",
+        "The last shell on this pair went without saying why (a crash, a Force Quit or a signal)",
+        { attached: userId === attached.userId, sessions: lastExit.sessions, at: lastExit.at },
+      );
+    }
+    if (lastManagerExit !== null) {
+      logger.warn(
+        "desktop.shell_lease.fieldd_lost",
+        "The fieldd before this one went without a goodbye to the floor (a crash)",
+        {
+          attached: userId === attached.userId,
+          sessions: lastManagerExit.sessions,
+          at: lastManagerExit.at,
+        },
+      );
+    }
+    if (userId === attached.userId) await showUnplannedExitNotice(lastExit, lastManagerExit);
   };
   const pairBundles = new Map<string, PairBundle>();
   let windowRendererBoundary: ReturnType<typeof registerWindowBootstrap> | null = null;

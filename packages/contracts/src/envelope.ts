@@ -205,6 +205,20 @@ export type TerminalRouteSnapshot = z.infer<typeof TerminalRouteSnapshot>;
 export const NativeLastExit = z.enum(["planned", "unplanned"]);
 export type NativeLastExit = z.infer<typeof NativeLastExit>;
 
+/** AL-8a (`thinking-app-lifecycle.md` §8.3.1) — how the PREVIOUS management client left this floor, in THIS floor's
+ * run (a floor that restarted has none; its own `lastExit` says how IT ended). `planned` = it said
+ * `native.lifecycle.detach`, or a newer client superseded it; otherwise it was simply gone (a fieldd crash). `at` =
+ * epoch millis; `sessions` = the floor's own count then, from its cells, null when a cell's inventory could not be
+ * read (never said as zero). */
+export const NativeLastManager = z
+  .object({
+    planned: z.boolean(),
+    at: z.number().int().nonnegative(),
+    sessions: z.number().int().nonnegative().nullable(),
+  })
+  .passthrough();
+export type NativeLastManager = z.infer<typeof NativeLastManager>;
+
 export const HelloAck = z
   .object({
     contractsVersion: SemverString,
@@ -277,6 +291,9 @@ export const HelloAck = z
     /** WP12 L2b — mgmt surface only: how the previous floor ended (`NativeLastExit`). Absent on every product
      * ack and from a floor predating it; a tolerant reader treats absence as "this floor cannot say". */
     lastExit: NativeLastExit.optional(),
+    /** AL-8a — mgmt surface only: how the previous management client left this floor (`NativeLastManager`). Absent
+     * when none held the slot in this floor's run, and from a floor predating it. */
+    lastManager: NativeLastManager.optional(),
     /** WG-D6 (`draft/thinking-floor-wedge.md` §5.3 item 6) — mgmt surface only: the floor's
      * own pid, so the stops the wedge ladder allows have a lever on a floor this fieldd did not
      * spawn (an ADOPTED floor — after every fieldd-only restart). fieldd takes it as the paired

@@ -195,6 +195,9 @@ export class MockMgmtServer {
   /** WG-D6 — the pid the hello ack states (`HelloAck.pid`); null = a floor
    * predating WG-D6, which states none. */
   helloPid: number | null = null;
+  /** AL-8a — how the previous management client left, as the hello ack states it (`HelloAck.lastManager`); null =
+   * none held the slot before, or a floor predating AL-8a. */
+  helloLastManager: { planned: boolean; at: number; sessions: number | null } | null = null;
   /** WG-D6 — every request this floor read, in order: its method, and its
    * `deadlineAt` exactly as sent (the key is absent when the request carried
    * none). Read before a silent method swallows it. */
@@ -370,6 +373,7 @@ export class MockMgmtServer {
             ...(this.helloTerminal !== null ? { terminal: this.helloTerminal } : {}),
             ...(this.terminalRoutes !== null ? { terminalRoutes: this.terminalRoutes } : {}),
             ...(this.helloPid !== null ? { pid: this.helloPid } : {}),
+            ...(this.helloLastManager !== null ? { lastManager: this.helloLastManager } : {}),
             ...(serverMac !== undefined ? { serverMac } : {}),
           },
         }) + "\n",
@@ -398,6 +402,11 @@ export class MockMgmtServer {
           result: { subId, snapshot: this.observedState },
         })}\n`,
       );
+      return;
+    }
+    // AL-8a — fieldd's goodbye before a planned stop (witnessed through `requestLog`)
+    if (msg.method === "native.lifecycle.detach") {
+      sock.write(`${JSON.stringify({ jsonrpc: "2.0", id: msg.id, result: { noted: true } })}\n`);
       return;
     }
     if (msg.method === "native.freeway.declare") {

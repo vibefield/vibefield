@@ -870,6 +870,16 @@ export const TERMINAL_INVENTORY = {
   SAMPLE_MS: 1_000,
 } as const;
 
+/** AL-5 + AL-8a (`thinking-app-lifecycle.md` §8.2, §8.3.1; AL-D4, AL-D11 — James 2026-10-27) — the orphan bound, ONE
+ * authority for both of its holders (fieldd by import, the floor by generation): fieldd's, while no shell holds its
+ * lease, and the floor's, while no management client holds its single-client slot. Only one is ever armed — fieldd
+ * connecting disarms the floor's, fieldd going arms it with a fresh span. No session for IDLE_EXIT_MS, read every
+ * IDLE_POLL_MS, ends the pair (or the floor) with reason `idle`; a count that cannot be read is never idle. */
+export const ORPHAN_BOUND = {
+  IDLE_EXIT_MS: 10 * 60_000,
+  IDLE_POLL_MS: 30_000,
+} as const;
+
 /** TPv3 — the terminal pipeline's numbers (terminal-pipeline-v3 §5.1, §8; §20
  * item 5 "numeric limits with owners"). ONE authority for the cell (Rust, by
  * generation), fieldd (the grant TTLs) and the renderer. Every value is
@@ -1490,6 +1500,9 @@ export const LAYOUT = {
   /** AL-7 — how the last shell left this pair (`ShellExitRecord`): written when the last shell-main connection
    * closes, handed once to the next shell that claims the lease (`system.shell.attach`). */
   SHELL_EXIT: ["fieldd", "shell-exit.json"],
+  /** AL-8a — how the PREVIOUS fieldd left this pair's floor, when it went without a goodbye (`ManagerExitRecord`):
+   * written by the fieldd whose hello-ack said so, handed once to the next shell that claims the lease. */
+  MANAGER_EXIT: ["fieldd", "manager-exit.json"],
   /** SB-2 (AR-7g) — which shells fieldd birthed under an Agent Profile
    * (`TerminalBindingsFile`, 0600): session → profile set, never a variable.
    * fieldd's, because nothing below it can hold a session's metadata, and on

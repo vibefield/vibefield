@@ -17,12 +17,14 @@ import {
 import { afterEach, describe, expect, it } from "vitest";
 import {
   EGRESS_PATH_DEADLINE_MS,
+  type EgressPath,
   type EgressRoster,
   type EgressRouteDrop,
   type EgressRouteFacade,
   EgressRoutes,
   egressRefusal,
   egressRouteId,
+  egressWebSocket,
   FakeEgressRoutes,
   resolveEgressPath,
 } from "../src/egress";
@@ -492,5 +494,44 @@ describe("DS-1 — route ids", () => {
     expect(odd).toMatch(/^egress-h[0-9a-f]{32}-9422$/);
     expect(egressRouteId("dev b/with:odd", CELLS)).toBe(odd);
     expect(egressRouteId("dev b/with:odd2", CELLS)).not.toBe(odd);
+  });
+});
+
+// AL-8a's verify (2026-10-27, `freeway-daemon.test.ts` FW-L10, two unhandled errors) — a dial whose caller closed it
+// before the real socket arrived closes that socket the moment it does. A socket still CONNECTING answers `close()`
+// with an `error` event (`ws`: "WebSocket was closed before the connection was established"); the stand-in had
+// attached no listener to it yet, so that error was uncaught. The fake raises it synchronously when nobody listens.
+describe("the dial's stand-in, closed before its socket arrives", () => {
+  it("closes the late socket with a listener for the error a connecting socket raises — never an uncaught one", async () => {
+    const seen: string[] = [];
+    class Connecting {
+      readyState = 0;
+      private readonly errorListeners: Array<(event: unknown) => void> = [];
+      addEventListener(type: string, listener: (event: unknown) => void): void {
+        if (type === "error") this.errorListeners.push(listener);
+      }
+      send(): void {}
+      close(): void {
+        seen.push(`close with ${this.errorListeners.length} error listener(s)`);
+        if (this.errorListeners.length === 0) {
+          throw new Error("WebSocket was closed before the connection was established");
+        }
+        for (const listener of this.errorListeners) listener({});
+      }
+    }
+    let arrive: () => void = () => undefined;
+    const path = () =>
+      new Promise<EgressPath>((resolve) => {
+        arrive = () => resolve({ kind: "direct", state: "egress-unsupported" });
+      });
+    const Socket = egressWebSocket({
+      path,
+      direct: Connecting as unknown as ReturnType<typeof egressWebSocket>,
+    });
+    const socket = new Socket("ws://peer.example:9420/");
+    socket.close(); // the caller is done before the path is known
+    arrive();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(seen).toEqual(["close with 1 error listener(s)"]);
   });
 });

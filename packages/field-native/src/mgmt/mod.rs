@@ -34,13 +34,14 @@ mod mesh_egress;
 
 use crate::config::MeshPlan;
 use crate::contracts::{
-    DesiredState, Hello, NativePrepareRestartParams, NativePrepareRestartResult,
-    NativeShutdownParams, NativeShutdownResult, NativeTickParams, TerminalRouteSnapshot,
-    TerminalRoutesStreamPayload,
+    DesiredState, Hello, NativeDetachResult, NativePrepareRestartParams,
+    NativePrepareRestartResult, NativeShutdownParams, NativeShutdownResult, NativeTickParams,
+    TerminalRouteSnapshot, TerminalRoutesStreamPayload,
 };
 #[cfg(test)]
 use crate::contracts::{TerminalEndpoints, TerminalRouteCell};
 use crate::local_ipc;
+use crate::orphan::Departure;
 use crate::pairing;
 use crate::registries::{mesh_control_limits, native_floor_tick, native_refusals};
 use crate::services::mesh::NodePresence;
@@ -519,6 +520,18 @@ async fn handle_conn(stream: local_ipc::Stream, state: Arc<DaemonState>, mesh_qu
                     ),
                 }
             }
+            // AL-8a (`thinking-app-lifecycle.md` §8.3.1) — the paired client is leaving ON PURPOSE (fieldd's planned
+            // stop). Its close will read planned; a client simply gone reads unplanned, and the next hello says so.
+            "native.lifecycle.detach" => {
+                state.manager.detach(conn_id);
+                tracing::info!(
+                    event = "field_native.lifecycle.manager_detaching",
+                    component = "lifecycle",
+                    connection = conn_id,
+                    "the paired client is leaving on purpose; its close will read planned"
+                );
+                send(&tx, ok(id, json!(NativeDetachResult { noted: true })));
+            }
             "native.lifecycle.observed.subscribe" => {
                 let sub_id = state.sub_id();
                 let snapshot = serde_json::to_value(&*state.observed_tx.borrow()).unwrap();
@@ -718,6 +731,20 @@ async fn handle_conn(stream: local_ipc::Stream, state: Arc<DaemonState>, mesh_qu
     let mut cur = state.current_client.lock().await;
     if cur.as_ref().is_some_and(|c| c.conn_id == conn_id) {
         *cur = None;
+        // AL-8a — the holder left: record how, and arm the floor's orphan bound with a fresh span
+        let planned = state.manager.left(
+            conn_id,
+            Departure::Closed,
+            unix_ms_now().max(0) as u64,
+            std::time::Instant::now(),
+        );
+        tracing::info!(
+            event = "field_native.lifecycle.manager_left",
+            component = "lifecycle",
+            connection = conn_id,
+            planned,
+            "the management client left; the floor's orphan bound is armed"
+        );
     }
     drop(cur);
     send_raw(&tx, OutMsg::Close);
@@ -815,6 +842,13 @@ async fn handle_hello(
                 .to_string(),
         ));
         let _ = old.tx.send(OutMsg::Close);
+        // AL-8a — a newer client taking the slot is no crash of the old one
+        state.manager.left(
+            old.conn_id,
+            Departure::Superseded,
+            unix_ms_now().max(0) as u64,
+            std::time::Instant::now(),
+        );
         tracing::info!(
             event = "field_native.mgmt.client_superseded",
             component = "mgmt",
@@ -827,6 +861,7 @@ async fn handle_hello(
         conn_id,
         tx: tx.clone(),
     });
+    state.manager.held();
     tracing::info!(
         event = "field_native.mgmt.client_authenticated",
         component = "mgmt",
@@ -879,6 +914,11 @@ async fn handle_hello(
     // an unconfigured (embedded) floor: it cannot say, and silence is not `unplanned`.
     if let Some(last_exit) = state.restart.last_exit() {
         ack["lastExit"] = json!(last_exit);
+    }
+    // AL-8a (`thinking-app-lifecycle.md` §8.3.1) — how the previous management client left this floor, handed ONCE:
+    // fieldd says an unplanned one (a fieldd crash) through AL-7's notice. Absent when none held the slot before.
+    if let Some(last_manager) = state.manager.take_last() {
+        ack["lastManager"] = json!(last_manager);
     }
     // WG-D6 — this process's pid (`HelloAck.pid`), so a fieldd that ADOPTED
     // this floor, as every fieldd-only restart does, has a target for the stops

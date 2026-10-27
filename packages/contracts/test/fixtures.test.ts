@@ -166,6 +166,8 @@ import {
   MeshLanePeerOpened,
   MeshNotUpDetails,
   MeshSelfIdentity,
+  NativeDetachParams,
+  NativeDetachResult,
   NativeHealth,
   NativeLinkHealth,
   NativePrepareRestartParams,
@@ -302,6 +304,8 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "native-prepare-restart-result": NativePrepareRestartResult,
   "native-shutdown-params": NativeShutdownParams,
   "native-shutdown-result": NativeShutdownResult,
+  "native-detach-params": NativeDetachParams,
+  "native-detach-result": NativeDetachResult,
   "system-shutdown-params": SystemShutdownParams,
   // AL-7 — the shell lease (TS-only: fieldd and the shell)
   "system-shell-leave-params": SystemShellLeaveParams,

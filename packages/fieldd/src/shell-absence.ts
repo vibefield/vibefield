@@ -1,5 +1,9 @@
 import { spawn } from "node:child_process";
-import { SHELL_BACKGROUND_RELAUNCH_ARG, type ShellExitRecord } from "@vibefield/contracts";
+import {
+  ORPHAN_BOUND,
+  SHELL_BACKGROUND_RELAUNCH_ARG,
+  type ShellExitRecord,
+} from "@vibefield/contracts";
 import type { Logger } from "@vibefield/logging";
 
 // AL-5 (`draft/thinking-app-lifecycle.md` §8.2; AL-D4, AL-D8) — what a pair does while no shell holds its lease:
@@ -11,10 +15,11 @@ import type { Logger } from "@vibefield/logging";
 // A shell attaching ends both. Pure policy over injected effects; the daemon wires the effects.
 
 export const SHELL_ABSENCE = {
-  /** AL-D4 — no shell and no session for this long ends the pair */
-  IDLE_EXIT_MS: 10 * 60_000,
+  /** AL-D4 — no shell and no session for this long ends the pair; the floor's own bound reads the same number
+   * (AL-8a, `ORPHAN_BOUND` in the registry) */
+  IDLE_EXIT_MS: ORPHAN_BOUND.IDLE_EXIT_MS,
   /** how often the idle watch reads the floor's count while no shell holds the lease */
-  IDLE_POLL_MS: 30_000,
+  IDLE_POLL_MS: ORPHAN_BOUND.IDLE_POLL_MS,
   /** AL-D8 — the relaunch waits this long after an unplanned exit (a quick manual relaunch wins) */
   RELAUNCH_DELAY_MS: 5_000,
   /** AL-D8 — at most this many relaunches … */

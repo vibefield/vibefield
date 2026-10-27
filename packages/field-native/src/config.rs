@@ -179,6 +179,9 @@ pub struct NativeConfig {
     /// env is our own domain — EL7's strip discipline is about what enters
     /// CELLS, and this value never does.
     pub isolation_window_override: Option<u64>,
+    /// AL-8a — the orphan bound's span override in ms (test seam, FIELD_NATIVE_ORPHAN_IDLE_MS): the kill matrix cannot
+    /// wait out the registry's ten minutes. Floor-side env, like the isolation window's; it never enters a cell.
+    pub orphan_idle_override: Option<u64>,
     /// TP-S3a — the renderer `Origin` values the cells' T1 doors admit at the
     /// HTTP upgrade (terminal-pipeline-v3 §8 door hygiene): the packaged app
     /// origin plus the dev renderer's, comma-separated in
@@ -263,6 +266,9 @@ impl NativeConfig {
         let isolation_window_override = std::env::var("FIELD_NATIVE_ISOLATION_WINDOW_MS")
             .ok()
             .and_then(|value| value.trim().parse::<u64>().ok());
+        let orphan_idle_override = std::env::var("FIELD_NATIVE_ORPHAN_IDLE_MS")
+            .ok()
+            .and_then(|value| value.trim().parse::<u64>().ok());
         let allowed_origins = std::env::var("FIELD_NATIVE_ALLOWED_ORIGINS")
             .ok()
             .map(|value| {
@@ -284,6 +290,7 @@ impl NativeConfig {
             cell_bin_override,
             freeway_bin_override,
             isolation_window_override,
+            orphan_idle_override,
             allowed_origins,
             mesh_start_timeout: None,
             mesh_state_tick: MESH_STATE_TICK,
@@ -305,6 +312,7 @@ impl NativeConfig {
             cell_bin_override: None,
             freeway_bin_override: None,
             isolation_window_override: None,
+            orphan_idle_override: None,
             allowed_origins: Vec::new(),
             mesh_start_timeout: None,
             mesh_state_tick: MESH_STATE_TICK,
@@ -325,6 +333,7 @@ impl NativeConfig {
             cell_bin_override: None,
             freeway_bin_override: None,
             isolation_window_override: None,
+            orphan_idle_override: None,
             allowed_origins: Vec::new(),
             mesh_start_timeout: None,
             mesh_state_tick: MESH_STATE_TICK,

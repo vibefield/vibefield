@@ -1305,6 +1305,52 @@
       ],
       "additionalProperties": true
     },
+    "NativeDetachParams": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": true
+    },
+    "NativeDetachResult": {
+      "type": "object",
+      "properties": {
+        "noted": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "noted"
+      ],
+      "additionalProperties": true
+    },
+    "NativeLastManager": {
+      "type": "object",
+      "properties": {
+        "planned": {
+          "type": "boolean"
+        },
+        "at": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sessions": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "planned",
+        "at",
+        "sessions"
+      ],
+      "additionalProperties": true
+    },
     "FreewayJoinsFrame": {
       "type": "object",
       "properties": {

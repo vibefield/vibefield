@@ -40,10 +40,25 @@ export const ShellExitRecord = z
   .passthrough();
 export type ShellExitRecord = z.infer<typeof ShellExitRecord>;
 
+/** AL-8a (`thinking-app-lifecycle.md` §8.3.1) — a fieldd that went without saying goodbye to its floor (a crash), as
+ * the next fieldd's hello-ack told it (`HelloAck.lastManager`): when, and the floor's count then (null when it could
+ * not be read). Held at `LAYOUT.MANAGER_EXIT`, so it reaches a shell even across another fieldd restart. */
+export const ManagerExitRecord = z
+  .object({
+    at: z.number().int().nonnegative(),
+    sessions: z.number().int().nonnegative().nullable(),
+  })
+  .passthrough();
+export type ManagerExitRecord = z.infer<typeof ManagerExitRecord>;
+
 /** `system.shell.attach` — this connection holds the lease from now on, and the answer carries the record of how the
  * LAST lease holder left, ONCE: the next attach answers `lastExit: null`, so a shell says a crash once, never at every
- * launch. Same scope and principal rule as `system.shell.leave`. */
+ * launch. Same scope and principal rule as `system.shell.leave`. Since AL-8a it also carries, once, a fieldd that
+ * crashed (`lastManagerExit`); absent from a fieldd predating it. */
 export const SystemShellAttachResult = z
-  .object({ lastExit: ShellExitRecord.nullable() })
+  .object({
+    lastExit: ShellExitRecord.nullable(),
+    lastManagerExit: ManagerExitRecord.nullable().optional(),
+  })
   .passthrough();
 export type SystemShellAttachResult = z.infer<typeof SystemShellAttachResult>;

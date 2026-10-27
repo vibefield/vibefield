@@ -15,6 +15,7 @@
   "MESH_STATE_DIR": ["native", "mesh"],
   "LINK_FILE": ["fieldd", "link.json"],
   "SHELL_EXIT": ["fieldd", "shell-exit.json"],
+  "MANAGER_EXIT": ["fieldd", "manager-exit.json"],
   "TERMINAL_BINDINGS_FILE": ["fieldd", "terminal-bindings.json"],
   "PROJECT_IDENTITY_FILE": ["fieldd", "project-identity.json"],
   "SETUP_LEDGER_FILE": ["fieldd", "setup.json"],

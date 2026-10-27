@@ -924,6 +924,108 @@ async fn a_planned_stop_is_recorded_and_the_next_boot_says_so_once() {
     after.shutdown().await;
 }
 
+// AL-8a (`thinking-app-lifecycle.md` §8.3.1) — how the previous management client left rides the next hello ONCE:
+// planned when it said `native.lifecycle.detach` or a newer client superseded it, unplanned when it was simply gone
+// (a fieldd crash). The server's cleanup runs after the close, so a row waits for the slot to empty before the next
+// hello — a probing hello would itself leave, and record.
+async fn until_vacant(daemon: &RunningDaemon) {
+    timeout(Duration::from_secs(2), async {
+        while daemon.state.manager.vacant_since().is_none() {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("the management slot emptied after the close");
+}
+
+#[tokio::test]
+async fn the_next_hello_says_how_the_previous_client_left_once() {
+    let (_dir, daemon) = boot().await;
+    let mut first = TestClient::connect(&daemon).await;
+    let ack = first.hello(&daemon, 1).await;
+    assert!(
+        ack["result"].get("lastManager").is_none(),
+        "no client held the slot before: {ack}"
+    );
+    first
+        .send(json!({"jsonrpc":"2.0","id":2,"method":"native.lifecycle.detach","params":{}}))
+        .await;
+    assert_eq!(first.recv().await["result"]["noted"], true);
+    drop(first);
+    until_vacant(&daemon).await;
+
+    let mut second = TestClient::connect(&daemon).await;
+    let ack = second.hello(&daemon, 1).await;
+    assert_eq!(
+        ack["result"]["lastManager"]["planned"], true,
+        "a detach reads planned: {ack}"
+    );
+    drop(second); // no goodbye: a crash
+    until_vacant(&daemon).await;
+
+    let mut third = TestClient::connect(&daemon).await;
+    let ack = third.hello(&daemon, 1).await;
+    assert_eq!(
+        ack["result"]["lastManager"]["planned"], false,
+        "a close without it reads unplanned: {ack}"
+    );
+    assert!(
+        ack["result"]["lastManager"]["at"].as_u64().is_some(),
+        "{ack}"
+    );
+
+    // a newer client taking the slot is no crash of the one it superseded, and the record was handed once
+    let mut fourth = TestClient::connect(&daemon).await;
+    let ack = fourth.hello(&daemon, 1).await;
+    assert_eq!(
+        ack["result"]["lastManager"]["planned"], true,
+        "a supersession reads planned: {ack}"
+    );
+    drop(third);
+    daemon.shutdown().await;
+}
+
+#[tokio::test]
+async fn an_empty_floor_with_no_client_stops_itself_idle_and_a_held_slot_never_does() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut config = NativeConfig::for_data_dir(dir.path().to_path_buf());
+    config.orphan_idle_override = Some(400);
+    let daemon = bootstrap(config).await.expect("bootstrap");
+    // held: three spans pass with a client in the slot, and nothing stops
+    let mut held = TestClient::connect(&daemon).await;
+    assert!(held.hello(&daemon, 1).await["result"].is_object());
+    assert!(
+        timeout(
+            Duration::from_millis(1_500),
+            daemon.state.restart.shutdown_requested()
+        )
+        .await
+        .is_err(),
+        "a floor whose slot is held never ends itself"
+    );
+    // gone: a whole span with no client and no session, then the confirming read, then main's third arm. The span
+    // starts at the first counted zero, which waits for every cell's first reconcile: a real floor's budget (30 s),
+    // and a red says what the bound last saw.
+    drop(held);
+    if timeout(
+        Duration::from_secs(30),
+        daemon.state.restart.shutdown_requested(),
+    )
+    .await
+    .is_err()
+    {
+        panic!(
+            "the floor's own orphan bound did not wake main's third arm in 30 s: census {:?}, vacant {}",
+            daemon.state.manager.census(),
+            daemon.state.manager.vacant_since().is_some()
+        );
+    }
+    let intent = std::fs::read_to_string(intent_file(&dir))
+        .expect("the idle intent is on disk before the stop");
+    assert!(intent.contains("\"idle\""), "{intent}");
+    daemon.shutdown().await;
+}
+
 #[tokio::test]
 async fn a_superseded_client_can_neither_record_an_intent_nor_stop_the_floor() {
     let dir = tempfile::tempdir().unwrap();

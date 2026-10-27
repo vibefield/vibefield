@@ -1,0 +1,8 @@
+{
+  "contractsVersion": "0.1.0",
+  "serverKind": "field-native",
+  "grantedScopes": [],
+  "nativeBuild": "field-native/0.1.0+0.9.0+2490459",
+  "lastExit": "planned",
+  "lastManager": { "planned": false, "at": 1793097396974, "sessions": 2 }
+}

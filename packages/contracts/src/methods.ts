@@ -515,6 +515,15 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "local",
   }),
+  // AL-8a (`thinking-app-lifecycle.md` §8.3.1) — fieldd's goodbye before a planned stop, so the floor can tell it from
+  // a crash; the single-client rule alone authorizes it, as it does the two above.
+  defineMethod({
+    surface: "mgmt",
+    method: "native.lifecycle.detach",
+    scope: null,
+    idempotent: true,
+    locality: "local",
+  }),
   // RETIRED 2026-09-14 (TM-3, `thinking-terminal-mesh-cells.md` §7 / TM-D3):
   // the mgmt row `native.terminal.mirrorWriteCapability`, by which the floor
   // handed its mirror-write capability to its ONE paired management client so

@@ -285,6 +285,17 @@ export type NativeShutdownParams = z.infer<typeof NativeShutdownParams>;
 export const NativeShutdownResult = z.object({ stopping: z.boolean() }).passthrough();
 export type NativeShutdownResult = z.infer<typeof NativeShutdownResult>;
 
+/** AL-8a (`thinking-app-lifecycle.md` §8.3.1; AL-D10 "A", James 2026-10-27 15:31Z) — `native.lifecycle.detach`: the
+ * management client is leaving ON PURPOSE (fieldd's planned stop: a quit, an update, a signal, AL-5's `idle`), said
+ * before it closes. The floor records the departure planned; a client that is simply gone — EOF without it, a crash —
+ * left unplanned, and the next client's hello says so (`HelloAck.lastManager`). Authorized by the single-client rule
+ * alone, like the other lifecycle verbs. */
+export const NativeDetachParams = z.object({}).passthrough();
+export type NativeDetachParams = z.infer<typeof NativeDetachParams>;
+
+export const NativeDetachResult = z.object({ noted: z.boolean() }).passthrough();
+export type NativeDetachResult = z.infer<typeof NativeDetachResult>;
+
 /** TC-D1/TC-D2 supervision timings (fieldd-side), and the wedge ladder WG-D1
  * ruled (`draft/thinking-floor-wedge.md` §5.3; the WEDGE_* numbers are WG-D2's
  * first values, re-ruled on the evidence of WG-D0's episode lines with a dated

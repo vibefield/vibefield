@@ -51,6 +51,7 @@ import {
   Hello,
   HelloAck,
   NativeLastExit,
+  NativeLastManager,
   PairingMac,
   RpcError,
   RpcFailure,
@@ -137,6 +138,8 @@ import {
   MeshStartParams,
   MeshStartResult,
   MeshStopResult,
+  NativeDetachParams,
+  NativeDetachResult,
   NativeHealth,
   NativePrepareRestartParams,
   NativePrepareRestartResult,
@@ -256,6 +259,9 @@ const BASE_SHARED = {
   NativePrepareRestartResult,
   NativeShutdownParams,
   NativeShutdownResult,
+  NativeDetachParams,
+  NativeDetachResult,
+  NativeLastManager,
 } as const;
 
 // Logging/diagnostics (LOG-42) — ONLY the native-consumed subset. Audit,
@@ -325,6 +331,9 @@ const ENTRIES: Record<string, ZodTypeAny> = {
   "native-prepare-restart-result": NativePrepareRestartResult,
   "native-shutdown-params": NativeShutdownParams,
   "native-shutdown-result": NativeShutdownResult,
+  // AL-8a (`thinking-app-lifecycle.md` §8.3.1) — fieldd's goodbye before a planned stop
+  "native-detach-params": NativeDetachParams,
+  "native-detach-result": NativeDetachResult,
   // FW-D4 — the freeway's floor seam: fieldd declares, the floor reports state and joins, revoke
   "freeway-declare-params": FreewayDeclareParams,
   "freeway-declare-result": FreewayDeclareResult,

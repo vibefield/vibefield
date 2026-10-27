@@ -188,6 +188,27 @@ describe("NativeLink concurrency", () => {
     expect(state).toEqual({ n: 1 });
   });
 
+  // AL-8a (`thinking-app-lifecycle.md` §8.3.1) — how the previous management client left the floor is believed on this
+  // process's FIRST hello alone (a re-pair's record is about this link's own dropped connection), and the goodbye is
+  // said only on a paired link.
+  it("believes the floor's lastManager on the first hello only, and says detach only while paired", async () => {
+    const { mock, link } = await setup();
+    mock.helloLastManager = { planned: false, at: 1_000, sessions: 2 };
+    await link.connect();
+    expect(link.lastManager).toEqual({ planned: false, at: 1_000, sessions: 2 });
+    link.lastManager = undefined; // the daemon takes it once
+    mock.killClients();
+    await sleep(900); // first backoff is 500ms
+    expect(link.connected).toBe(true);
+    expect(link.lastManager).toBeUndefined();
+    await link.detach();
+    expect(mock.requestLog.map((request) => request.method)).toContain("native.lifecycle.detach");
+    link.close();
+    const before = mock.requestLog.length;
+    await link.detach(); // a closed link says nothing, and does not wait
+    expect(mock.requestLog.length).toBe(before);
+  });
+
   it("reconnects once and replays snapshot before a same-chunk delta", async () => {
     const { mock, link } = await setup();
     await link.connect();

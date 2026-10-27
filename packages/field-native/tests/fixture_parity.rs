@@ -9,11 +9,11 @@ use field_native::contracts::{
     FreewayRevokeParams, FreewayRevokeResult, FreewayState, Hello, HelloAck, LogRecordV1,
     LoggingHealthV1, MeshEgressProxy, MeshEgressRouteAddParams, MeshEgressRouteBound,
     MeshEgressRouteRef, MeshEgressRouteTable, MeshLaneCloseRequest, MeshLaneClosed,
-    MeshLaneOpenRequest, MeshLanePeerOpened, MeshNotUpDetails, MeshSelfIdentity, NativeHealth,
-    NativePrepareRestartParams, NativePrepareRestartResult, NativeShutdownParams,
-    NativeShutdownResult, NativeTickParams, ObservedState, PeerInfo, PingAck, RpcNotification,
-    RpcRequest, RpcResponse, ServeConfig, ServeEntry, StoreSnapshot, TerminalRouteSnapshot,
-    TerminalRoutesStreamPayload,
+    MeshLaneOpenRequest, MeshLanePeerOpened, MeshNotUpDetails, MeshSelfIdentity,
+    NativeDetachParams, NativeDetachResult, NativeHealth, NativePrepareRestartParams,
+    NativePrepareRestartResult, NativeShutdownParams, NativeShutdownResult, NativeTickParams,
+    ObservedState, PeerInfo, PingAck, RpcNotification, RpcRequest, RpcResponse, ServeConfig,
+    ServeEntry, StoreSnapshot, TerminalRouteSnapshot, TerminalRoutesStreamPayload,
 };
 use field_native::registries::{native_refusals, terminal_inventory};
 use serde_json::Value;
@@ -77,6 +77,8 @@ fn hello_ack_fixture() {
     // WP12 L2b (§9 R3) — the ack saying how the previous floor ended (`lastExit`), taken from the restart intent
     // at boot. Emitted here, so strict.
     roundtrip::<HelloAck>("hello-ack.last-exit.json", true);
+    // AL-8a — how the previous management client left this floor
+    roundtrip::<HelloAck>("hello-ack.last-manager.json", true);
     // DS-D15's client half (2026-10-01) — the PRODUCT door's ack naming the
     // device its daemon is (`deviceId`). fieldd emits it, field-native never
     // does; strict anyway, because the generated type is shared and a field it
@@ -486,6 +488,9 @@ fn restart_verb_fixtures() {
     // AL-5 — the orphan bound's own reason
     roundtrip::<NativeShutdownParams>("native-shutdown-params.idle.json", true);
     roundtrip::<NativeShutdownResult>("native-shutdown-result.valid.json", true);
+    // AL-8a — fieldd's goodbye before a planned stop
+    roundtrip::<NativeDetachParams>("native-detach-params.valid.json", true);
+    roundtrip::<NativeDetachResult>("native-detach-result.valid.json", true);
     let mut whim = load("native-shutdown-params.valid.json");
     whim["reason"] = serde_json::json!("whim");
     assert!(serde_json::from_value::<NativeShutdownParams>(whim).is_err());

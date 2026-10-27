@@ -3136,6 +3136,9 @@ impl Hello {
 #[doc = "    \"lastExit\": {"]
 #[doc = "      \"$ref\": \"#/definitions/NativeLastExit\""]
 #[doc = "    },"]
+#[doc = "    \"lastManager\": {"]
+#[doc = "      \"$ref\": \"#/definitions/NativeLastManager\""]
+#[doc = "    },"]
 #[doc = "    \"nativeBuild\": {"]
 #[doc = "      \"type\": \"string\""]
 #[doc = "    },"]
@@ -3187,6 +3190,12 @@ pub struct HelloAck {
         skip_serializing_if = "::std::option::Option::is_none"
     )]
     pub last_exit: ::std::option::Option<NativeLastExit>,
+    #[serde(
+        rename = "lastManager",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub last_manager: ::std::option::Option<NativeLastManager>,
     #[serde(
         rename = "nativeBuild",
         default,
@@ -7492,6 +7501,68 @@ impl MeshStopResult {
         Default::default()
     }
 }
+#[doc = "`NativeDetachParams`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+#[serde(transparent)]
+pub struct NativeDetachParams(pub ::serde_json::Map<::std::string::String, ::serde_json::Value>);
+impl ::std::ops::Deref for NativeDetachParams {
+    type Target = ::serde_json::Map<::std::string::String, ::serde_json::Value>;
+    fn deref(&self) -> &::serde_json::Map<::std::string::String, ::serde_json::Value> {
+        &self.0
+    }
+}
+impl ::std::convert::From<NativeDetachParams>
+    for ::serde_json::Map<::std::string::String, ::serde_json::Value>
+{
+    fn from(value: NativeDetachParams) -> Self {
+        value.0
+    }
+}
+impl ::std::convert::From<::serde_json::Map<::std::string::String, ::serde_json::Value>>
+    for NativeDetachParams
+{
+    fn from(value: ::serde_json::Map<::std::string::String, ::serde_json::Value>) -> Self {
+        Self(value)
+    }
+}
+#[doc = "`NativeDetachResult`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"noted\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"noted\": {"]
+#[doc = "      \"type\": \"boolean\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct NativeDetachResult {
+    pub noted: bool,
+}
+impl NativeDetachResult {
+    pub fn builder() -> builder::NativeDetachResult {
+        Default::default()
+    }
+}
 #[doc = "`NativeHealth`"]
 #[doc = r""]
 #[doc = r" <details><summary>JSON schema</summary>"]
@@ -7686,6 +7757,53 @@ impl ::std::convert::TryFrom<::std::string::String> for NativeLastExit {
         value: ::std::string::String,
     ) -> ::std::result::Result<Self, self::error::ConversionError> {
         value.parse()
+    }
+}
+#[doc = "`NativeLastManager`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"at\","]
+#[doc = "    \"planned\","]
+#[doc = "    \"sessions\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"at\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"minimum\": 0.0"]
+#[doc = "    },"]
+#[doc = "    \"planned\": {"]
+#[doc = "      \"type\": \"boolean\""]
+#[doc = "    },"]
+#[doc = "    \"sessions\": {"]
+#[doc = "      \"anyOf\": ["]
+#[doc = "        {"]
+#[doc = "          \"type\": \"integer\","]
+#[doc = "          \"minimum\": 0.0"]
+#[doc = "        },"]
+#[doc = "        {"]
+#[doc = "          \"type\": \"null\""]
+#[doc = "        }"]
+#[doc = "      ]"]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct NativeLastManager {
+    pub at: u64,
+    pub planned: bool,
+    pub sessions: ::std::option::Option<u64>,
+}
+impl NativeLastManager {
+    pub fn builder() -> builder::NativeLastManager {
+        Default::default()
     }
 }
 #[doc = "`NativePrepareRestartParams`"]
@@ -12610,6 +12728,10 @@ pub mod builder {
             ::std::option::Option<super::NativeLastExit>,
             ::std::string::String,
         >,
+        last_manager: ::std::result::Result<
+            ::std::option::Option<super::NativeLastManager>,
+            ::std::string::String,
+        >,
         native_build: ::std::result::Result<
             ::std::option::Option<::std::string::String>,
             ::std::string::String,
@@ -12644,6 +12766,7 @@ pub mod builder {
                 device_id: Ok(Default::default()),
                 granted_scopes: Err("no value supplied for granted_scopes".to_string()),
                 last_exit: Ok(Default::default()),
+                last_manager: Ok(Default::default()),
                 native_build: Ok(Default::default()),
                 pid: Ok(Default::default()),
                 server_kind: Err("no value supplied for server_kind".to_string()),
@@ -12694,6 +12817,16 @@ pub mod builder {
             self.last_exit = value
                 .try_into()
                 .map_err(|e| format!("error converting supplied value for last_exit: {e}"));
+            self
+        }
+        pub fn last_manager<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::NativeLastManager>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.last_manager = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for last_manager: {e}"));
             self
         }
         pub fn native_build<T>(mut self, value: T) -> Self
@@ -12785,6 +12918,7 @@ pub mod builder {
                 device_id: value.device_id?,
                 granted_scopes: value.granted_scopes?,
                 last_exit: value.last_exit?,
+                last_manager: value.last_manager?,
                 native_build: value.native_build?,
                 pid: value.pid?,
                 server_kind: value.server_kind?,
@@ -12803,6 +12937,7 @@ pub mod builder {
                 device_id: Ok(value.device_id),
                 granted_scopes: Ok(value.granted_scopes),
                 last_exit: Ok(value.last_exit),
+                last_manager: Ok(value.last_manager),
                 native_build: Ok(value.native_build),
                 pid: Ok(value.pid),
                 server_kind: Ok(value.server_kind),
@@ -15466,6 +15601,46 @@ pub mod builder {
         }
     }
     #[derive(Clone, Debug)]
+    pub struct NativeDetachResult {
+        noted: ::std::result::Result<bool, ::std::string::String>,
+    }
+    impl ::std::default::Default for NativeDetachResult {
+        fn default() -> Self {
+            Self {
+                noted: Err("no value supplied for noted".to_string()),
+            }
+        }
+    }
+    impl NativeDetachResult {
+        pub fn noted<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<bool>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.noted = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for noted: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<NativeDetachResult> for super::NativeDetachResult {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: NativeDetachResult,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                noted: value.noted?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::NativeDetachResult> for NativeDetachResult {
+        fn from(value: super::NativeDetachResult) -> Self {
+            Self {
+                noted: Ok(value.noted),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
     pub struct NativeHealth {
         boot_id: ::std::result::Result<::std::string::String, ::std::string::String>,
         state: ::std::result::Result<super::NativeHealthState, ::std::string::String>,
@@ -15530,6 +15705,74 @@ pub mod builder {
                 boot_id: Ok(value.boot_id),
                 state: Ok(value.state),
                 units: Ok(value.units),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct NativeLastManager {
+        at: ::std::result::Result<u64, ::std::string::String>,
+        planned: ::std::result::Result<bool, ::std::string::String>,
+        sessions: ::std::result::Result<::std::option::Option<u64>, ::std::string::String>,
+    }
+    impl ::std::default::Default for NativeLastManager {
+        fn default() -> Self {
+            Self {
+                at: Err("no value supplied for at".to_string()),
+                planned: Err("no value supplied for planned".to_string()),
+                sessions: Err("no value supplied for sessions".to_string()),
+            }
+        }
+    }
+    impl NativeLastManager {
+        pub fn at<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<u64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.at = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for at: {e}"));
+            self
+        }
+        pub fn planned<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<bool>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.planned = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for planned: {e}"));
+            self
+        }
+        pub fn sessions<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<u64>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.sessions = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for sessions: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<NativeLastManager> for super::NativeLastManager {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: NativeLastManager,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                at: value.at?,
+                planned: value.planned?,
+                sessions: value.sessions?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::NativeLastManager> for NativeLastManager {
+        fn from(value: super::NativeLastManager) -> Self {
+            Self {
+                at: Ok(value.at),
+                planned: Ok(value.planned),
+                sessions: Ok(value.sessions),
             }
         }
     }

@@ -16,6 +16,7 @@ pub mod local_ipc;
 pub mod logging;
 pub mod manager;
 pub mod mgmt;
+pub mod orphan;
 pub mod pairing;
 /// GENERATED (NF-D9) — registries-as-code from @vibefield/contracts; `pnpm gen`.
 pub mod registries;
@@ -75,6 +76,8 @@ pub struct RunningDaemon {
     /// F1: the freeway unit's feeds (cells, sessions, peers). Held so shutdown can abort them
     /// before the unit stops.
     freeway_feeds: Vec<tokio::task::JoinHandle<()>>,
+    /// AL-8a: the floor's own orphan bound. Held so shutdown can abort it.
+    orphan_bound: tokio::task::JoinHandle<()>,
     manager: Arc<manager::NativeServiceManager>,
     logging: Option<logging::NativeLogging>,
 }
@@ -89,6 +92,7 @@ impl RunningDaemon {
         self.server.abort();
         self.health_refresh.abort();
         self.lane_transport.abort();
+        self.orphan_bound.abort();
         // Before stop_all: the terminal unit's G7 drain is the authority on the
         // session registry from here on, and a pump still reconciling would
         // only publish inventory nobody is subscribed to any more.
@@ -257,6 +261,15 @@ pub async fn bootstrap_with_logging(
     let listener =
         local_ipc::bind(&mgmt_endpoint).with_context(|| format!("bind {mgmt_endpoint}"))?;
 
+    // AL-8a (`thinking-app-lifecycle.md` §8.3.1) — the floor's own orphan bound, counted at the cells. It runs from
+    // boot: a floor whose fieldd never came, or went, ends itself after a whole span with no session.
+    state.manager.configure_census({
+        let terminal = terminal_handle.clone();
+        Arc::new(move || terminal.census())
+    });
+    let (orphan_span, orphan_poll) = orphan::timings(config.orphan_idle_override);
+    let orphan_bound = orphan::spawn(state.clone(), orphan_span, orphan_poll);
+
     let server = tokio::spawn(mgmt::serve(listener, state.clone()));
 
     Ok(RunningDaemon {
@@ -273,6 +286,7 @@ pub async fn bootstrap_with_logging(
         lane_transport_on,
         terminal_inventory,
         freeway_feeds,
+        orphan_bound,
         manager: mgr,
         logging,
     })
