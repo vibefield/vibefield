@@ -16788,3 +16788,68 @@ lines, and keeps main's agent-id literal count, which is why R23b holds.
 
 **Not here.** AO-5a (the draft set) on James's AO-D14. Get (AO-7). Finish setting up's agents row, which joins with
 Get. The desk rows (`pnpm smoke`, `pnpm smoke:studio`) on a display, owed with AO-1…4's.
+
+## AO-6a — the words: the chapter, Settings, History and Godview say the page's words. AO-5b's four §10 rows come to the table, History's first open says "Opening History…", this desktop is This Mac in the spawn menu, and an Add agent… menu on a Mac with none says so. A words check now diffs every slice's words against the page's states table (2026-10-27; `a9365b35d`, lane `ao/6`; AO-L8)
+
+**What.** The sixth slice of track AO's ladder (`draft/thinking-agent-onboarding.md` §8), its words half. The two
+once-moments (AO-6b) wait on James's AO-D15. One commit, in field-app and design-kit:
+- **AO-5b's four rows, from the page's §10 states table** (the dated erratum stands at AO-5b's entry):
+  - "Looking on this Mac…" while the inventory has not answered.
+  - "VibeField couldn't read the agents on this Mac." with **Try again**, a fresh `agents.installs {refresh}`.
+  - **Sign in again** for a lapsed sign-in on This Mac.
+  - For a second person on this Mac (UA §6.2), "These sign-ins belong to this Mac, so everyone using VibeField
+    here shares them."
+- **The page's rewrites:**
+  - History's first open says "Opening History…" with nothing under it. `EmptyState`'s description became
+    optional for it; the change is backward compatible and plugin-sdk's typecheck is clean.
+  - This desktop is "This Mac" ("This PC" on Windows) in the spawn menu. `thisDeviceWord` sits beside TS's
+    `unlinkedWord`, which now builds on it.
+  - An Add agent… menu on a Mac with no agent says "No agents on this Mac yet.".
+- DESIGN.md: each correction dated at its source (§8's AO-5b notes, §8 History's "Opening History"), and a §9 note of
+  what is built and what waits.
+
+**Found by eye.** The first tip, `af527309e`, was green on the gate and on verify. Its photographs showed the Agents
+pane's unavailable state still saying "VibeField found these on this Mac." under "Your agents.", a finding that never
+happened, which AO-5b had shipped too.
+- The voice now says "VibeField found these" only once the inventory has found agents (`agentsVoice`), with the
+  first-agent voice before that. The lazy fallback does the same.
+- agents-pane asserts it.
+
+**Decided here.** An agent that never says who keeps Settings' "Doesn't say who is signed in" over the page's "Signed
+in · doesn't say which account". The page's own lede has the chapter adopt Settings' words, and no agent at puppeteer
+0.2.3 is identity-less, so the row is unreachable today and needs no ask. The words check names it as the one row
+standing by decision.
+
+**Upstream.**
+- History's not-answering title is rosetta-room's own ("rosettad is not answering"), and the host only words the line
+  under it. "History isn't answering. VibeField is restarting it." is a rosetta petition, for AO-8.
+- The launcher's refusal is puppeteer-views' `{accepted: false, reason}` and carries no act. "Sign in to Codex in
+  Work…" rides AO-7's puppeteer release.
+- History's own "This desktop has…" sentences go to the History lead's docket.
+
+**The words check** (VF-PM 2026-10-27 13:35Z, after AO-5b shipped four §10 rows off the page's words). The lane's
+`ao-states-diff.mjs` looks up every row of the page's §10 states table and §11 rewrites in field-app's product source:
+agent and profile names, template holes and numbers are normalised, and every exception and deferral is named in the
+script.
+- At main `c774855c8` it was red: 5 rows off.
+- At `a9365b35d`: §10, 22 rows = 16 matched + 5 deferred (AO-7's four Get rows, AO-3's disk check) + 1 by decision +
+  0 off; §11, 6 rewrites = 4 in the source + 2 upstream + 0 off.
+- It runs in the gate, and every words slice runs it before its packet.
+
+**Validation** (lane ao1, at the tip exactly, nice 19, the guard clear before every arm):
+- the light pass:
+  - the design-kit, plugin-sdk and field-app typechecks EXIT 0
+  - the ten touched suites `268 passed`
+  - `pnpm preflight` OK, `pnpm check:walls` clean, the words check exit 0
+  - red-first by mutation (`lanes/ao1/ao6-mutate.sh`, re-run at the tip), 7 of 7 red on exactly their claiming row: the old looking
+    words, no Try again, a lapse offered Sign in…, no second-person line, the machinery back under "Opening
+    History…", "This desktop", the old empty-menu sentence
+- the gate at `a9365b35d` (13:56:21–13:58:14Z): the three typechecks EXIT 0; field-app's whole suite `2708 passed | 3 skipped`; the words
+  check exit 0; the Agents pane's unavailable state and the Profiles pane's second person photographed in both themes
+  (`lanes/ao1/logs/gate-a9365b35d/shots/`); the tree clean after.
+- `pnpm verify` at `a9365b35d` (13:58:14–14:04:21Z) EXIT 0: every TS project's typecheck and tests (27 of 27), 31 cargo suites,
+  gen:check; the tree clean after.
+
+**Not here.** AO-6b, the limit moment and a new agent with a past, on James's AO-D15 (the page's AO-15). The launcher's
+act and the empty launcher (AO-7). History's not-answering title (AO-8). The desk rows (`pnpm smoke`, `pnpm
+smoke:studio`) on a display, owed with AO-1…5b's.
