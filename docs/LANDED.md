@@ -15494,3 +15494,34 @@ read back through the API.
 - **W11's apply:** nightly N → N+1 on the mini (Squirrel, D10's relaunch, the PTY clause if a plane is untouched).
 - **D11's signing-only measurement:** two nightlies sharing an unchanged plane.
 - **Packages ship no `field-freeway-host`:** fw/pack-host's rebase.
+
+## ESR — item 75: the supervisor's readiness rows wait, bounded, for the readiness event `ensure()` does not wait for (2026-10-27; `4396409e0`, test-only)
+
+**What happened:** CI's verify on `75b1a0c5d` (run 40416178775) went red on fieldd-supervisor `spawn.test.ts`
+"spawns the fixture, reaches readiness, ownership spawned + childPid set": `expected [] to deeply equal [ { kind:
+'readiness', … } ]`. The same run's other red, agent-session's persona-login row, was green on `84509d642`'s verify and
+is recorded as the lottery class (item 76, no read).
+
+**Mechanism** (the lead's read): readiness arrives on two independent channels.
+- `ensure()` resolves from the run-file probe (`tryAdopt` → `probe.ok` → `makeHandle`, supervisor.ts:175–200).
+- The `readiness` event comes from the child's stdout line sink (:285).
+- FIXTURE_READY writes `run/shell.token` and `run/product.json` first, then prints its line. Under load the probe
+  answered before the line was read, and the row asserted the event synchronously after `await sup.ensure()`.
+
+**The fix, test-only** (`4396409e0`):
+- `waitForEvent(events, match, what, ms = 2_000)` in test/helpers.ts.
+  - At its deadline it says "<what> did not arrive within N ms; the events seen: [kinds…]", with kinds only, never a
+    line.
+  - The bound sits inside vitest's default 5 s test budget, so this wait is the one that says why.
+- Both rows that assert the event await it first: spawn.test.ts's row and redaction.test.ts's `[redacted]` row.
+- The fixture is not reordered: the product promises no order between its run files and its line.
+
+**Validation** (this Mac's SSD lane `/Volumes/SamsungRed/lanes/item75`, guard v2, nice 19, on `84509d642`):
+- **Red-first** (records/probe75-apply.py, never committed: the fixture prints its line 1500 ms after its run files):
+  - On `84509d642`: 2 failed / 21 passed, with CI's exact message and `expected [] to have a length of 1 but got +0`.
+  - At the fix: 23/23.
+  - With a 7 s gap: "the fixture's readiness line did not arrive within 2000 ms; the events seen: [lifecycle,
+    lifecycle, lifecycle]".
+- **The fieldd-supervisor suite:** 66/66 ×3.
+- **`pnpm verify`:** EXIT 0 at 00:47:03Z on its first run (test for 27 projects, cargo test 30 ok), the 1-minute load reaching ~184.
+- Logs: `/Volumes/SamsungRed/lanes/item75/logs/` (`redfirst/`, `proofs/`).
