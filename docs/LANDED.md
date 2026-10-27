@@ -16544,6 +16544,13 @@ only, as DESIGN.md §8 "Settings → Devices" (TS-0) says. P9, this Mac's own di
 - **The catalog's** Settings › Devices specimen mounts the shipping view in the shipping dialog over a fixture adapter
   (wire snapshots through `linkFace`). `devices.css` and TS-2's `door.css` join the no-hex rule.
 
+> **Erratum (2026-10-27):** the move left the Setup Assistant's skip behind. The Connect pane and the posture pane
+> still said "Set up later — Settings → Account" for the link and the posture this slice moved to Settings → Devices,
+> until `067d4895c` pointed SkipAction's default there. TS-8b's gate photographs found it, and VF-PM ruled it this
+> slice's leftover at 23:15Z. The location is James's TS-D3 ruling, so the words needed no new one. Its light pass
+> was green; its verify, red at load 326 on three timing rows in files it does not touch, was green alone, with
+> test:rust and gen:check green.
+
 **Validation.**
 - **The lane.** `/Volumes/SamsungRed/lanes/ts3`, a worktree on `3d3e893a7`, at nice 19 under the guard. It has its
   own target, `rust/ts3`. Setup (frozen install, preflight) passed at 11:23–11:24Z.
