@@ -16,9 +16,12 @@ import {
   useRef,
   useState,
 } from "react";
+import { hasLink, linkFace, type UserLinkStatus } from "../account/link";
 import { refusalSentence, useAccountSnapshot } from "../account/use-account";
 import { leaveFor } from "../boot/switch";
 import { getHost } from "../host";
+import { finishSetupRows, useSetupLedger } from "../setup/ledger";
+import { SetupSheet } from "../setup/SetupSheet";
 import { AccountSection } from "./AccountSection";
 import { AppearanceSection } from "./AppearanceSection";
 import { AgentsSection } from "./agents/AgentsSection";
@@ -33,6 +36,7 @@ import { PluginsSection } from "./PluginsSection";
 import {
   type SettingsAccountHead,
   SettingsDialog,
+  type SettingsFinishSetup,
   type SettingsPage,
   type SettingsProfilesNav,
   type SettingsSubpage,
@@ -210,6 +214,27 @@ export function SettingsPanel({
                   });
                 },
         };
+  // AO-D10 — Finish setting up: the Setup Assistant's steps put off, read from
+  // fieldd's ledger and judged against today's facts (a link answers Devices,
+  // wherever it was made). Continue setup opens their panes as a sheet.
+  const setupLedger = useSetupLedger();
+  const link = useSubscription<UserLinkStatus>("user.link.subscribe");
+  const linked = hasLink(
+    linkFace(link.status, link.status === "live" ? (link.data ?? null) : null),
+  );
+  const finishRows = finishSetupRows(setupLedger, { linked });
+  const [setupSheet, setSetupSheet] = useState(false);
+  const closeSetupSheet = useCallback(() => setSetupSheet(false), []);
+  const finishSetup: SettingsFinishSetup | undefined =
+    finishRows.length === 0
+      ? undefined
+      : {
+          rows: finishRows,
+          onContinue: () => setSetupSheet(true),
+          onHide: () => {
+            void client.request("setup.hide", { hidden: true }).catch(() => undefined);
+          },
+        };
   const handledDiagnosticsRequest = useRef(diagnosticsRequest);
   const [activePage, setActivePage] = useState<SettingsPage>(
     diagnosticsInitiallyOpen ? "diagnostics" : initialPage,
@@ -310,6 +335,9 @@ export function SettingsPanel({
   }, []);
 
   useEffect(() => {
+    // Finish setting up's sheet sits over this dialog and keeps the keys while
+    // it is open: its Escape closes it alone, and its Tab stays in it.
+    if (setupSheet) return;
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -337,7 +365,7 @@ export function SettingsPanel({
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
+  }, [onClose, setupSheet]);
 
   const runHistory = useCallback(
     async (direction: "undo" | "redo"): Promise<void> => {
@@ -692,6 +720,7 @@ export function SettingsPanel({
         redoAvailable={redoAvailable}
         historyNote={historyNote}
         account={accountHead}
+        finish={finishSetup}
         profiles={profilesNav}
         head={activePage === "profiles" ? profilesHead : null}
         subpage={
@@ -706,6 +735,9 @@ export function SettingsPanel({
       >
         {pageContent}
       </SettingsDialog>
+      {setupSheet && (
+        <SetupSheet steps={finishRows.map((row) => row.step)} onClose={closeSetupSheet} />
+      )}
     </div>
   );
 }

@@ -12,8 +12,9 @@ import {
 } from "../../panels/SettingsDialog";
 import { buttonCls } from "../../panels/settings-ui";
 import { UpdatesDoctorView, UpdatesSectionView } from "../../panels/UpdatesSection";
+import { finishSetupRows } from "../../setup/ledger";
 import { AgentsSettingsPreview } from "../AgentsSettingsPreview";
-import { FIXTURE_ME, FIXTURE_OTHERS_WAITING } from "../account-fixtures";
+import { FIXTURE_ME, FIXTURE_OTHERS_WAITING, FIXTURE_SETUP_LEDGER } from "../account-fixtures";
 import { AGENTS_FIXTURE_STATES, type AgentsFixtureState } from "../agents-fixtures";
 import { CommandPalettePreview } from "../CommandPalettePreview";
 import { Section, Specimen } from "../catalog-ui";
@@ -41,6 +42,8 @@ export function SurfacesSection(): ReactElement {
   // A press on a nav item returns to that page's top (the Agents shelf).
   const [settingsVisit, setSettingsVisit] = useState(0);
   const [settingsSubpage, setSettingsSubpage] = useState<SettingsSubpage | null>(null);
+  // AO-D10 — Finish setting up under the account, until Hide is pressed here.
+  const [finishHidden, setFinishHidden] = useState(false);
   return (
     <Section
       id="surfaces"
@@ -69,6 +72,15 @@ export function SurfacesSection(): ReactElement {
               others: FIXTURE_OTHERS_WAITING,
               onSwitch: () => undefined,
             }}
+            finish={
+              finishHidden
+                ? undefined
+                : {
+                    rows: finishSetupRows(FIXTURE_SETUP_LEDGER, { linked: false }),
+                    onContinue: () => undefined,
+                    onHide: () => setFinishHidden(true),
+                  }
+            }
             subpage={
               settingsPage === "agents" || settingsPage === "terminal" ? settingsSubpage : null
             }

@@ -1,8 +1,9 @@
 import type { FielddClient } from "@vibefield/fieldd-client";
-import { FielddProvider, useSubscription } from "@vibefield/fieldd-client/react";
+import { FielddProvider, useFielddClient, useSubscription } from "@vibefield/fieldd-client/react";
 import { type ReactElement, useEffect, useState } from "react";
 import { hasLink, linkFace, type UserLinkStatus } from "../../account/link";
 import { type FieldUserProfile, getHost } from "../../host";
+import { answerSetupStep } from "../../setup/ledger";
 import type { BootOnboarding, BootView } from "../machine";
 import { entryAfterName, entryBeforeAsking, nextPane, type Pane, variantOf } from "./order";
 import { ConnectPane } from "./panes/ConnectPane";
@@ -93,6 +94,7 @@ function WizardBody({
   onReveal: () => void;
   onRetry: () => void;
 }): ReactElement {
+  const client = useFielddClient();
   const usersUpdate = getHost().usersUpdate;
   const [profile, setProfile] = useState<FieldUserProfile>(onboarding.profile);
   const variant = variantOf(profile);
@@ -142,6 +144,20 @@ function WizardBody({
   const canChooseUser =
     variant === "second-user" && host.usersList !== undefined && host.usersSwitch !== undefined;
 
+  // AO-2 — a step put off is recorded in the ledger, so Settings' "Finish
+  // setting up" can list it. Devices is put off when the person moves on
+  // without a link; a link, made here or anywhere, answers it by itself.
+  const putOffDevices = (): void => {
+    void answerSetupStep(client, "devices", "later").catch((cause: unknown) =>
+      host.logger
+        .child({ component: "onboarding" })
+        .warn("renderer.setup.answer_refused", "The setup ledger did not record a step put off", {
+          step: "devices",
+          reason: cause instanceof Error ? cause.message : String(cause),
+        }),
+    );
+  };
+
   const shell = (content: ReactElement): ReactElement => <WizardShell>{content}</WizardShell>;
 
   if (pane === null) {
@@ -179,8 +195,14 @@ function WizardBody({
         <ConnectPane
           face={face}
           onBack={onBack}
-          onContinue={() => go(nextPane("connect", facts))}
-          onSkip={() => go(nextPane("connect", facts, "skip"))}
+          onContinue={() => {
+            if (!linked) putOffDevices();
+            go(nextPane("connect", facts));
+          }}
+          onSkip={() => {
+            putOffDevices();
+            go(nextPane("connect", facts, "skip"));
+          }}
         />,
       );
 

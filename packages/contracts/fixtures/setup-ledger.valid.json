@@ -1,0 +1,10 @@
+{
+  "format": 1,
+  "steps": {
+    "agents": { "state": "answered", "at": "2026-10-27T05:41:02.000Z" },
+    "profiles": { "state": "answered", "at": "2026-10-27T05:41:19.000Z" },
+    "history": { "state": "later", "at": "2026-10-27T05:41:30.000Z" },
+    "devices": { "state": "later", "at": "2026-10-27T05:41:34.000Z" }
+  },
+  "hidden": false
+}

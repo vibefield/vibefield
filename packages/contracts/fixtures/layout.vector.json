@@ -17,6 +17,7 @@
   "SHELL_EXIT": ["fieldd", "shell-exit.json"],
   "TERMINAL_BINDINGS_FILE": ["fieldd", "terminal-bindings.json"],
   "PROJECT_IDENTITY_FILE": ["fieldd", "project-identity.json"],
+  "SETUP_LEDGER_FILE": ["fieldd", "setup.json"],
   "TERMINAL_CONFIG_FILE": ["native", "config.ghostty"],
   "RESTART_INTENT_FILE": ["native", "restart-intent.json"],
   "MGMT_SOCKET": ["native", "run", "mgmt.sock"],

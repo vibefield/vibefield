@@ -6,8 +6,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   type SettingsAccountHead,
   SettingsDialog,
+  type SettingsFinishSetup,
   type SettingsPage,
 } from "../src/panels/SettingsDialog";
+import { finishSetupRows } from "../src/setup/ledger";
 
 // UA-D19 — Settings, headed by you. The account card replaces the gear tile
 // and the word "Settings"; the Account nav group folds into it; the other users
@@ -43,6 +45,7 @@ const ACCOUNT = (onSwitch = vi.fn()): SettingsAccountHead => ({
 async function mount(
   account: SettingsAccountHead | undefined,
   activePage: SettingsPage = "general",
+  finish?: SettingsFinishSetup,
 ): Promise<ReturnType<typeof vi.fn>> {
   const onSelectPage = vi.fn();
   container = document.createElement("div");
@@ -60,6 +63,7 @@ async function mount(
         undoAvailable: false,
         redoAvailable: false,
         account,
+        finish,
         children: createElement("p", null, "page"),
       }),
     ),
@@ -136,5 +140,62 @@ describe("SettingsDialog head (UA-D19)", () => {
     expect(container?.textContent).toContain("Settings");
     expect(navLabels()).toContain("Account");
     expect(container?.querySelector('button[aria-label="Account settings"]')).not.toBeNull();
+  });
+});
+
+// AO-D10 (track AO, AO-2) — Finish setting up: what the Setup Assistant was told
+// "Not now", under the account card, until it is answered or hidden. Never a
+// badge or a count; a no is never listed; a link answers Devices by itself.
+describe("Finish setting up (AO-D10)", () => {
+  const LEDGER = (steps: Record<string, unknown>, hidden = false) => ({
+    format: 1 as const,
+    steps,
+    hidden,
+  });
+  const LATER = { state: "later", at: "2026-10-27T05:41:34.000Z" };
+
+  it("lists a step put off while it still is, and nothing once it is answered or hidden", () => {
+    expect(finishSetupRows(LEDGER({ devices: LATER }), { linked: false })).toEqual([
+      { step: "devices", glyph: "mesh", label: "Connect your devices" },
+    ]);
+    // a link answers Devices, wherever it was made
+    expect(finishSetupRows(LEDGER({ devices: LATER }), { linked: true })).toEqual([]);
+    // a no is never listed; a step never put off is not either
+    expect(
+      finishSetupRows(LEDGER({ devices: { state: "answered", at: LATER.at } }), { linked: false }),
+    ).toEqual([]);
+    expect(finishSetupRows(LEDGER({}), { linked: false })).toEqual([]);
+    // hidden by the person: no tile at all; and nothing guessed before the read
+    expect(finishSetupRows(LEDGER({ devices: LATER }, true), { linked: false })).toEqual([]);
+    expect(finishSetupRows(null, { linked: false })).toEqual([]);
+  });
+
+  it("sits under the account card with its rows, Continue setup and Hide", async () => {
+    const onContinue = vi.fn();
+    const onHide = vi.fn();
+    await mount(ACCOUNT(), "general", {
+      rows: [{ step: "devices", glyph: "mesh", label: "Connect your devices" }],
+      onContinue,
+      onHide,
+    });
+    const head = container?.querySelector(".vf-settings-account");
+    const tile = container?.querySelector(".vf-settings-finish");
+    expect(tile?.previousElementSibling).toBe(head);
+    expect(tile?.getAttribute("aria-labelledby")).toBe("vf-settings-finish-title");
+    expect(tile?.textContent).toContain("Finish setting up");
+    expect(tile?.textContent).toContain("Connect your devices");
+    // no count anywhere in it
+    expect(tile?.textContent).not.toMatch(/\d/);
+    const buttons = Array.from(tile?.querySelectorAll("button") ?? []);
+    expect(buttons.map((button) => button.textContent)).toEqual(["Continue setup", "Hide"]);
+    await act(async () => buttons[0]?.click());
+    await act(async () => buttons[1]?.click());
+    expect(onContinue).toHaveBeenCalledTimes(1);
+    expect(onHide).toHaveBeenCalledTimes(1);
+  });
+
+  it("draws nothing when nothing was put off", async () => {
+    await mount(ACCOUNT(), "general", { rows: [], onContinue: vi.fn(), onHide: vi.fn() });
+    expect(container?.querySelector(".vf-settings-finish")).toBeNull();
   });
 });

@@ -8,6 +8,7 @@
     "./diagnostics": "./src/diagnostics.ts",
     "./logging": "./src/logging.ts",
     "./registries": "./src/registries.ts",
+    "./setup": "./src/setup.ts",
     "./user-face": "./src/user-face.ts"
   },
   "scripts": {

@@ -1,5 +1,6 @@
 import { faceLiftHostClass, UserFaceView } from "@vibefield/design-kit/face";
 import { FieldGlyph, type GlyphName } from "@vibefield/design-kit/glyphs";
+import { UiButton } from "@vibefield/design-kit/primitives";
 import {
   Fragment,
   type ReactElement,
@@ -152,6 +153,20 @@ export interface SettingsAccountHead {
   readonly notice?: string | null | undefined;
 }
 
+/** AO-D10 — "Finish setting up": the Setup Assistant's steps put off, under the
+ * account card, each with its glyph and its one line (DESIGN.md §8). Continue
+ * setup opens their panes as a sheet over the app; Hide removes the tile for
+ * good, and every step still lives on its page. Empty: no tile at all. */
+export interface SettingsFinishSetup {
+  readonly rows: readonly {
+    readonly step: string;
+    readonly glyph: GlyphName;
+    readonly label: string;
+  }[];
+  readonly onContinue: () => void;
+  readonly onHide: () => void;
+}
+
 /** AR-S2 — the sidebar's "Agent Profiles" group (the design record's R1: a
  * profile is a place). One item per profile, This Mac first, each led by its
  * mark (the caller draws it: the glyph, filled for the default), then "New
@@ -252,6 +267,33 @@ function AccountHead({
   );
 }
 
+/** Finish setting up — never a badge, never a count on the face, never on launch:
+ * a quiet tile Settings shows while something was put off. */
+function FinishSetupTile({ finish }: { finish: SettingsFinishSetup }): ReactElement | null {
+  if (finish.rows.length === 0) return null;
+  return (
+    <section className="vf-settings-finish" aria-labelledby="vf-settings-finish-title">
+      <span id="vf-settings-finish-title" className="vf-settings-finish-title">
+        Finish setting up
+      </span>
+      <ul className="vf-settings-finish-rows">
+        {finish.rows.map((row) => (
+          <li key={row.step}>
+            <FieldGlyph name={row.glyph} size={14} />
+            <span>{row.label}</span>
+          </li>
+        ))}
+      </ul>
+      <div className="vf-settings-finish-acts">
+        <UiButton variant="primary" onClick={finish.onContinue}>
+          Continue setup
+        </UiButton>
+        <UiButton onClick={finish.onHide}>Hide</UiButton>
+      </div>
+    </section>
+  );
+}
+
 /** The "Agent Profiles" nav group: every profile as a place, then New profile…
  * (the add item in the muted ramp, as the record draws it). */
 function ProfilesNavGroup({
@@ -343,6 +385,7 @@ export function SettingsDialog({
   redoAvailable,
   historyNote = null,
   account,
+  finish,
   profiles,
   head = null,
   subpage = null,
@@ -361,6 +404,8 @@ export function SettingsDialog({
   historyNote?: string | null;
   /** UA-D19 — the account at the head of Settings; see `SettingsAccountHead`. */
   account?: SettingsAccountHead | undefined;
+  /** AO-D10 — Finish setting up, under the account (see `SettingsFinishSetup`). */
+  finish?: SettingsFinishSetup | undefined;
   /** AR-S2 — the Agent Profiles group (see `SettingsProfilesNav`); absent, no group. */
   profiles?: SettingsProfilesNav | undefined;
   /** A page's own title and line when its page meta cannot say it (a profile's name). */
@@ -410,6 +455,7 @@ export function SettingsDialog({
             </span>
           </div>
         )}
+        {finish !== undefined && <FinishSetupTile finish={finish} />}
 
         <nav className="min-h-0 flex-1 overflow-y-auto py-2" aria-label="Settings categories">
           {navGroups.map((group) => (

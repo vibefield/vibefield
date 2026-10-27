@@ -1041,6 +1041,26 @@ describe("Setup Assistant", () => {
     expect(onReveal).toHaveBeenCalledTimes(1);
   });
 
+  it("records Devices as put off in the ledger when the person moves on without a link (AO-2)", async () => {
+    host(vi.fn(async () => ({ ...FRESH, color: "accent-2" }) as FieldUserProfile));
+    const fieldd = client({ link: NO_LINK });
+    await mount({ fieldd, onboarding: onboarding({ color: "accent-2" }), onComplete: vi.fn() });
+    await click("Skip");
+    // Settings' "Finish setting up" lists it from here (AO-D10)...
+    expect(fieldd.request).toHaveBeenCalledWith("setup.answer", {
+      step: "devices",
+      state: "later",
+    });
+  });
+
+  it("asks nothing of the ledger for a linked person — a link answers Devices by itself", async () => {
+    host(vi.fn(async () => ({ ...FRESH, color: "accent-2" }) as FieldUserProfile));
+    const fieldd = client({ link: LINKED });
+    await mount({ fieldd, onboarding: onboarding({ color: "accent-2" }), onComplete: vi.fn() });
+    await click("Continue"); // the sync question → Setting up
+    expect(fieldd.request).not.toHaveBeenCalledWith("setup.answer", expect.anything());
+  });
+
   it("says why a desk could not open beneath the glass, and its Retry is the boot's own", async () => {
     host(
       vi.fn(

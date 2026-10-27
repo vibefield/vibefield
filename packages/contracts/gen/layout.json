@@ -70,6 +70,10 @@
     "fieldd",
     "project-identity.json"
   ],
+  "SETUP_LEDGER_FILE": [
+    "fieldd",
+    "setup.json"
+  ],
   "TERMINAL_CONFIG_FILE": [
     "native",
     "config.ghostty"

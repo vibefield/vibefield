@@ -1270,6 +1270,41 @@ export const METHODS: MethodDef[] = [
     locality: "sync",
     subscription: true,
   }),
+  // AO-2 (track AO; design-03 §4.3's `setup.*` ledger, setup.ts) — the Setup
+  // Assistant's steps: which a person answered and which they put off. A trusted
+  // desktop caller's (the wizard, Settings' "Finish setting up"), on
+  // `settings.manage` like the app preferences above. `local`: a step is
+  // answered at the device in front of the person, and every step's facts (the
+  // agents installed, the history on disk, this desktop's link) are this one's.
+  defineMethod({
+    surface: "product",
+    method: "setup.get",
+    scope: "settings.manage",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "setup.subscribe",
+    scope: "settings.manage",
+    idempotent: true,
+    locality: "local",
+    subscription: true,
+  }),
+  defineMethod({
+    surface: "product",
+    method: "setup.answer",
+    scope: "settings.manage",
+    idempotent: true, // declarative: the same answer twice is written once
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "setup.hide",
+    scope: "settings.manage",
+    idempotent: true,
+    locality: "local",
+  }),
   defineMethod({
     surface: "product",
     method: "storage.kv.get",

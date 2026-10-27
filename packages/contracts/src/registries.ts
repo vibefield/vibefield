@@ -1494,6 +1494,11 @@ export const LAYOUT = {
    * project did. Desktop-local — a sequence never crosses the sync plane
    * (M16), so this is a LAYOUT file and not a STORES slice. */
   PROJECT_IDENTITY_FILE: ["fieldd", "project-identity.json"],
+  /** AO-2 (track AO; design-03 §4.3) — the Setup Assistant's ledger
+   * (`SetupLedger`, 0600): which of its steps this user answered and which they
+   * put off. fieldd's, written atomically; per user, because each person on a
+   * machine sets up their own field. */
+  SETUP_LEDGER_FILE: ["fieldd", "setup.json"],
   TERMINAL_CONFIG_FILE: ["native", FILES.TERMINAL_CONFIG],
   RESTART_INTENT_FILE: ["native", FILES.RESTART_INTENT],
   // RETIRED 2026-09-14 (TM-3, `thinking-terminal-mesh-cells.md` §7 / TM-D3):

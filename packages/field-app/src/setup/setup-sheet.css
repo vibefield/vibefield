@@ -1,0 +1,34 @@
+/* Finish setting up's sheet (track AO, AO-D10; DESIGN.md §8 "Finish setting up"):
+   the Setup Assistant's glass over the app — above Settings — on a scrim, so the
+   panes a person put off read as the same panes they skipped. */
+.vf-setup-sheet {
+  position: fixed;
+  z-index: 70;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--vf-foreground) 10%, transparent);
+  animation: vf-setup-sheet-in 200ms ease both;
+}
+
+/* The sheet holds focus so its keys are its own; its panes show the rings. */
+.vf-setup-sheet:focus {
+  outline: none;
+}
+
+@keyframes vf-setup-sheet-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vf-setup-sheet {
+    animation-duration: 100ms;
+  }
+}

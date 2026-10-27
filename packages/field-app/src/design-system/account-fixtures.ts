@@ -43,3 +43,12 @@ export const FIXTURE_OTHERS_WAITING: readonly AccountPerson[] = FIXTURE_OTHERS.m
 /** The ladder the catalog stages a face on — every threshold of DESIGN.md §2.8
  * lands between two rungs. */
 export const FACE_LADDER = [112, 80, 56, 40, 28, 20, 16] as const;
+
+/** AO-2 — a ledger as fieldd keeps it for someone who said "Not now" to
+ * Connect: what Settings' "Finish setting up" lists, through the shipping
+ * `finishSetupRows`. */
+export const FIXTURE_SETUP_LEDGER = {
+  format: 1 as const,
+  steps: { devices: { state: "later", at: "2026-10-27T05:41:34.000Z" } },
+  hidden: false,
+};

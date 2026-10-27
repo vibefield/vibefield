@@ -127,10 +127,13 @@ import {
   ROWS,
   SCOPES,
   type Scope,
+  SETUP_STEPS,
   SettingsGetParams,
   SettingsResetParams,
   SettingsSetParams,
   SettingsSubscribeParams,
+  SetupAnswerParams,
+  SetupHideParams,
   ShellDialogPickFolderParams,
   type ShellDialogPickFolderResult,
   ShellOpenExternalParams,
@@ -296,6 +299,7 @@ import {
 } from "./service-host";
 import { ServiceRegistry } from "./service-registry";
 import { SettingsDocService } from "./settings-doc";
+import { SetupLedgerStore } from "./setup-ledger";
 import { ShellLease } from "./shell-lease";
 import { createSurfaceService } from "./surface-service";
 import { peerAnswerBytes, tailnetRowLimit } from "./tailnet-rows";
@@ -858,6 +862,13 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
   const enrollment = new EnrollmentStore({
     path: join(config.dataDir, ...LAYOUT.INDEX_ENROLLMENT_FILE),
     logger: logger.child({ component: "index_enrollment" }),
+  });
+  // AO-2 — the Setup Assistant's ledger (design-03 §4.3's `setup.*`): which of
+  // its steps this user answered and which they put off. Loaded now; written
+  // only by the setup.* doors below.
+  const setupLedger = new SetupLedgerStore({
+    path: join(config.dataDir, ...LAYOUT.SETUP_LEDGER_FILE),
+    logger: logger.child({ component: "setup_ledger" }),
   });
   const rosettad =
     config.rosettadBin === undefined || config.rosettadBin === ""
@@ -5254,11 +5265,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         dispose: () => settings.off("changed", fn),
       };
     });
-    // D29′ app-section preferences. The method registry supplies the
+    // D29′ app-section preferences — and every settings.manage door since
+    // (the link, the setup ledger). The method registry supplies the
     // settings.manage capability gate; this additional caller-kind check is
     // restrict-only, keeping a copied token from turning a plugin worker or
     // debug client into a desktop settings principal.
-    const requireAppPreferencesCaller = (ctx: {
+    const requireDesktopCaller = (ctx: {
       principal: { kind: string };
       clientKind?: string;
     }): void => {
@@ -5270,7 +5282,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       ) {
         throw new RpcCallError(
           "FORBIDDEN_SCOPE",
-          "app preferences require a trusted desktop caller",
+          "this door requires a trusted desktop caller (the shell or a window)",
           false,
         );
       }
@@ -5280,11 +5292,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // retirement — audited attempt-before-effect, and there is no rollback:
     // a retired node key cannot be un-retired, only relinked fresh.
     api.register("user.link.get", (ctx) => {
-      requireAppPreferencesCaller(ctx);
+      requireDesktopCaller(ctx);
       return links.status();
     });
     api.registerSubscription("user.link.subscribe", (ctx, _params, emit) => {
-      requireAppPreferencesCaller(ctx);
+      requireDesktopCaller(ctx);
       const fn = (status: unknown) => emit(status);
       links.on("changed", fn);
       return { snapshot: links.status(), dispose: () => links.off("changed", fn) };
@@ -5298,7 +5310,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // It goes to the floor on the one `native.mesh.start` and nowhere else: the
     // audit records how the link was asked for, never the key.
     api.register("user.link.begin", async (ctx, params) => {
-      requireAppPreferencesCaller(ctx);
+      requireDesktopCaller(ctx);
       const parsed = UserLinkBeginParams.safeParse(params ?? {});
       if (!parsed.success) {
         throw new RpcCallError(
@@ -5325,7 +5337,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // TS-1 — the capture's way out, and the signed-out link's way back. Audited
     // beside begin, as the same family of act.
     api.register("user.link.cancel", async (ctx) => {
-      requireAppPreferencesCaller(ctx);
+      requireDesktopCaller(ctx);
       return audit.requiredSystem(
         {
           action: "user.link.cancel",
@@ -5336,7 +5348,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       );
     });
     api.register("user.link.renew", async (ctx) => {
-      requireAppPreferencesCaller(ctx);
+      requireDesktopCaller(ctx);
       return audit.requiredSystem(
         {
           action: "user.link.renew",
@@ -5347,7 +5359,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       );
     });
     api.register("user.link.unlink", async (ctx) => {
-      requireAppPreferencesCaller(ctx);
+      requireDesktopCaller(ctx);
       return audit.requiredSystem(
         {
           action: "user.link.unlink",
@@ -5360,11 +5372,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     const appPreferencesSnapshot = async () =>
       effectiveAppPreferences(await settingsDoc.appValues());
     api.register("storage.appPreferences.get", async (ctx, _params) => {
-      requireAppPreferencesCaller(ctx);
+      requireDesktopCaller(ctx);
       return appPreferencesSnapshot();
     });
     api.register("storage.appPreferences.set", async (ctx, params) => {
-      requireAppPreferencesCaller(ctx);
+      requireDesktopCaller(ctx);
       const parsed = AppPreferenceSetParams.safeParse(params);
       if (!parsed.success) {
         throw new RpcCallError(
@@ -5381,7 +5393,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       return { ok: true };
     });
     api.registerSubscription("storage.appPreferences.subscribe", async (ctx, _params, emit) => {
-      requireAppPreferencesCaller(ctx);
+      requireDesktopCaller(ctx);
       let disposed = false;
       const onChanged = (event: { section: string; pluginId?: string }) => {
         if (
@@ -5409,6 +5421,41 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           settingsDoc.off("changed", onChanged);
         },
       };
+    });
+    // AO-2 — the Setup Assistant's ledger. The same trusted-desktop posture as
+    // the preferences above: the wizard writes its answers here, and Settings'
+    // "Finish setting up" reads what was put off. Not audited: an answer is a
+    // person's place in a setup, never a grant.
+    api.register("setup.get", (ctx) => {
+      requireDesktopCaller(ctx);
+      return setupLedger.snapshot();
+    });
+    api.registerSubscription("setup.subscribe", (ctx, _params, emit) => {
+      requireDesktopCaller(ctx);
+      const off = setupLedger.onChange((ledger) => emit(ledger));
+      return { snapshot: setupLedger.snapshot(), dispose: off };
+    });
+    api.register("setup.answer", (ctx, params) => {
+      requireDesktopCaller(ctx);
+      const parsed = SetupAnswerParams.safeParse(params);
+      if (!parsed.success) {
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          `expected { step: ${SETUP_STEPS.join("|")}, state: answered|later }`,
+          false,
+        );
+      }
+      setupLedger.answer(parsed.data.step, parsed.data.state);
+      return setupLedger.snapshot();
+    });
+    api.register("setup.hide", (ctx, params) => {
+      requireDesktopCaller(ctx);
+      const parsed = SetupHideParams.safeParse(params);
+      if (!parsed.success) {
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { hidden: boolean }", false);
+      }
+      setupLedger.hide(parsed.data.hidden);
+      return setupLedger.snapshot();
     });
     api.register("storage.kv.get", async (ctx, params) => {
       const parsed = KvGetParams.safeParse(params);

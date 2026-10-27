@@ -163,6 +163,56 @@
   line-height: 1.35;
 }
 
+/* Finish setting up (track AO, AO-D10; DESIGN.md §8): what the Setup Assistant
+   was told "Not now", under the account card, in the card's own material. No
+   badge and no count — a quiet list, Continue setup and Hide. */
+.vf-settings-finish {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: -4px 0 12px;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--vf-hairline);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--vf-foreground) 2%, transparent);
+}
+
+.vf-settings-finish-title {
+  color: var(--vf-text-primary);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.vf-settings-finish-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.vf-settings-finish-rows li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--vf-text-secondary);
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+
+.vf-settings-finish-rows li > svg {
+  flex: none;
+  color: var(--vf-text-tertiary);
+}
+
+.vf-settings-finish-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 /* Its baseline 1px above the faces' box: where an emoji's ink ends (measured —
    the padding here IS the baseline's height over that edge). */
 .vf-settings-account-eyebrow {

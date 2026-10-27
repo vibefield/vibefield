@@ -211,6 +211,7 @@ import {
   ScreenshotHelperCommand,
   ScreenshotHelperEvent,
 } from "../src/screenshot";
+import { SetupAnswerParams, SetupLedger } from "../src/setup";
 import {
   ShellExitRecord,
   SystemShellAttachResult,
@@ -534,6 +535,12 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // T4 — rosetta's own body for `/api/activity` (protocol 27), transcribed
   // from the checkout's wire golden, which fieldd parses
   "index-activity-response": IndexActivityResponse,
+  // AO-2 — the Setup Assistant's ledger, as fieldd keeps it and a window reads
+  // it: a row per step, Finish setting up hidden or not; and one from a newer
+  // build (a step and a state this one has never heard of, a top-level key) that
+  // must still parse — `setup.test.ts` holds that its rows are carried, unread.
+  "setup-ledger": SetupLedger,
+  "setup-answer-params": SetupAnswerParams,
   "agent-persona": AgentPersona,
   "agent-distribution": AgentDistributionRecord,
   "agents-installs": AgentsInstallsResult,
