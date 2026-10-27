@@ -16256,3 +16256,80 @@ rebases onto (agreed with vibe-field-d0 08:12Z, VF-PM cc).
 
 **Not in this entry.** The agent chapter's panes (AO-3 History, AO-5 Agents and Profiles) and the ledger that records
 them (AO-2). The desk rows (`pnpm smoke`, `pnpm smoke:studio`) on a display are owed on James's "away"/"unlocked".
+
+## AL-7 — a crash is said once: the shell claims a lease on its pair and says why when it leaves on purpose, and the next launch after a crash, a Force Quit or a signal gets one notification naming what kept running (2026-10-27; `d51e4199c`, lane `al/lease`; James ruled AL-D8/D9 at 08:10Z; VF-PM's GO 10:34Z)
+
+**Why** (`draft/thinking-app-lifecycle.md` §8, AL-D8/D9): after the quit gate, a crash still left the pair running —
+by design — and nothing ever said so. The next launch adopted the pair as if nothing had happened, and the sessions
+it kept were nobody's to see.
+
+**What landed:**
+- **Contracts** (`shell-lease.ts`, TS-only): `system.shell.attach` → `{lastExit}` and `system.shell.leave {why}`
+  (native.admin, local; fieldd answers a `shell-main` principal on the loopback socket alone). `ShellLeaveReason` =
+  quit · restart · user-switch · update. `ShellExitRecord {planned, why?, at, sessions|null}` at `LAYOUT.SHELL_EXIT`
+  (fieldd/shell-exit.json); the golden `layout.vector.json` gains it on purpose, and `pnpm gen` wrote
+  contracts/gen/layout.json and field-native's registries.rs.
+- **fieldd** (`shell-lease.ts`): the lease is CLAIMED. A hello alone is a probe (the supervisor's adoption, the quit
+  gate's look at another user's pair) and its close records nothing. The last holder's close writes the record
+  atomically: planned when it said why first, unplanned otherwise, with the floor's live count (null when the
+  inventory was never observed, never said as zero). The next attach takes it ONCE.
+- **The seal:** the lease is sealed when fieldd accepts `system.shutdown` and when its stop begins. The sockets fieldd's
+  own stop closes are no shell leaving, and the seal records NOTHING rather than a planned record: a stopping pair is
+  not a shell leaving a running one, and a write there would overwrite a crash record still owed (§8.1 as built;
+  VF-PM concurred 09:52Z).
+- **fieldd-supervisor:** `dispose({leave})` says `system.shell.leave` on the held client before closing it (1.5 s
+  bound), and only on a `ready` connection.
+- **The shell:** each pair handle (a fresh boot included) claims the lease. `lifecycle.leaveReason`: a signal's quit →
+  restart, an armed update → update, a decided gate → quit (the pairs a person's quit left running), a user switched
+  away → user-switch. An unplanned record for the attached user is ONE native notification (`shell-exit-notice.ts`,
+  DESIGN.md §9):
+  - title "VibeField quit unexpectedly at 10:42";
+  - body "2 terminal sessions kept running.", "No terminal sessions were running." at 0, "Its terminal service kept
+    running." when unreadable;
+  - plus " Click to see the crash report." only when an unviewed report sits within 60 s before the record; the
+    click opens Diagnostics, else the window.
+
+  A background user's exit is logged, and smokes show nothing.
+
+**Found reading the diff, before any commit, both red-first** (logs: lanes/al2/logs/{red,green}-*.log):
+- (a) fieldd's own stop closed the shell's socket, and the lease read it as a crash. Every quit's next launch would
+  have said "quit unexpectedly". RED: both daemon rows found the record written.
+- (b) a quit whose pair had already stopped waited out a reconnect for the leave. RED: the row measured 1568 ms.
+
+**Gates** on `cca93b710` (lane al2, nice 19, the guard before each):
+- typecheck of the four packages: EXIT 0.
+- The suites: fieldd 195 files, supervisor 11, shell 143 green. contracts' layout vector was red on the new key (the
+  tripwire working; the fixture is edited by hand), then 48/48 (1167 tests).
+- `pnpm gen` ran before cargo, because `layout_vector.rs` pins the generated side. cargo build, then
+  `--test fixture_parity --test layout_vector`: 17 + 1 green. `pnpm gen:check`: EXIT 0.
+- `pnpm verify` EXIT 0 at `a1990ee3b` (10:23:20–10:30:39Z, logs/al7-verify.log). `d51e4199c` is that tree with only
+  the message amended.
+
+**The quit gate's acceptance run** (§AL's owed Eyeballs; recorded here because the ledger is append-only):
+- **What ran:** 08:24–08:39Z, an agent driving this Mac by computer use. An unpackaged build at `a135ea795`, isolated
+  profile `/tmp/vf-quit-test-20261027`.
+- **Evidence:** /Volumes/SamsungRed/lanes/records/al/witness-20261027/ (results.txt, process-observations.jsonl,
+  seven screenshots, the 08:24–08:29Z window of the production log).
+- **PASS:**
+  - the two-session box from Canvas, with its names;
+  - Cancel keeps everything;
+  - a confirmed quit leaves 0 processes (consent → pair stopped 5.08 s);
+  - census 0 quits with no box (1.12 s);
+  - `kill -9` of main leaves all six daemons, and the relaunch adopts them with the same terminal;
+  - "Do not ask again", and Settings' "Ask before quitting" restoring the box;
+  - dev's signal restart without a box.
+- **NOT RUN:** Dock → Quit (the tool could not reach the Dock) and a logout (skipped on purpose).
+- **THE DIFFERENCE:** with a terminal pane focused, ⌘Q hid the deck instead of quitting.
+  - The mechanism: ghosttea runs Ghostty's default `super+q` → `quit` action, which VibeField maps to "Closes
+    Godview" (`keyboard-model.ts`, `PLATFORM_WORDS.quit`). Chromium offers ⌘ keys to the page before the app menu,
+    so the menu's ⌘Q never fired.
+  - The proof: no `desktop.quit.census_read` at 08:26:12Z or 08:28:43Z, only `deck_changed up→away`.
+  - The census went 2 → 3 in that window, and that shell's origin is not determined.
+  - The fix direction (owed, AL's follow-up): reserve ⌘Q in the deck as a product chord, the Peek's ⌘F mechanism, and
+    ask the same of ⌘W/⌘N.
+
+**Not in this entry:**
+- AL-5, the orphan bound and the capped relaunch (the next slice on al/lease).
+- Settings → Diagnostics' "Last exit" line (it needs the record kept after the take).
+- The notification's physical witness (a `kill -9` on a packaged build).
+- The rows the acceptance run left: Dock → Quit, a logout, ⌘Q on a physical keyboard with a terminal focused.
