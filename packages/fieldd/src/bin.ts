@@ -8,10 +8,18 @@ import { join } from "node:path";
 import { FIELDD_TRUST_ROOT_ENV, FIELDD_TRUST_ROOT_KEYS_ENV } from "@vibefield/contracts";
 import { resolvePlatformLogRoot, serializeError } from "@vibefield/logging";
 import { ensureUsersRoot, rootAboveUserRoot } from "@vibefield/users";
-import { defaultDataRoot, nativeAlive, nativeMgmtEndpoint, splitPathList } from "./boot-env";
+import {
+  defaultDataRoot,
+  nativeAlive,
+  nativeMgmtEndpoint,
+  outliveStdioReaders,
+  splitPathList,
+} from "./boot-env";
 import { FILES_HOST_BUNDLE, FILES_HOST_ROLE_ARG } from "./workspace/launch";
 
 async function main(): Promise<void> {
+  // AL-1 — before anything writes: this process outlives the shell that reads its stdio (boot-env.ts).
+  outliveStdioReaders();
   // FS-1a — the daemon's module graph loads HERE, never at the bundle's top:
   // the same bundle runs as the files worker (below), which must not carry it
   const { bootstrap } = await import("./daemon");

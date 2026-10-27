@@ -94,3 +94,18 @@ export function nativeAlive(endpoint: string): Promise<boolean> {
     });
   });
 }
+
+/** AL-1 — fieldd outlives the shell that spawned it (EL1), and that shell's stdio pipes do not: the supervisor reads
+ * fieldd's stdout and stderr as pipes, and once it is gone a DIRECT write to either fails with EPIPE, asynchronously.
+ * An unhandled stream `'error'` ends the process (measured 2026-10-26 on Node 26: exit 1), so a shell-less fieldd died
+ * the first time its log writer failed — the logging emergency path (`emitEmergency`) writes stderr directly, and its
+ * try/catch cannot catch an asynchronous error. With a listener the failure is that write's own: the bytes had no
+ * reader, and the structured log stays the record. `console.*` already ignores stream errors; this covers the writes
+ * that bypass it. */
+export function outliveStdioReaders(
+  streams: readonly NodeJS.WritableStream[] = [process.stdout, process.stderr],
+): void {
+  for (const stream of streams) stream.on("error", ignoreStdioError);
+}
+
+function ignoreStdioError(): void {}

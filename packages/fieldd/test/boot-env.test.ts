@@ -1,9 +1,12 @@
+import { spawn } from "node:child_process";
+import { once } from "node:events";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { isPipeEndpoint, pipeEndpointFor, SOCKETS } from "@vibefield/contracts";
-import { afterEach, describe, expect, it } from "vitest";
+import { build } from "esbuild";
+import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { defaultDataRoot, nativeAlive, nativeMgmtEndpoint, splitPathList } from "../src/boot-env";
 
 // WIN-3 (thinking-windows-port §4.3/§4.4) — the four decisions fieldd's entry
@@ -145,5 +148,65 @@ describe("nativeAlive is a connect probe, not a stat (WIN-3)", () => {
 
   it("a path that never existed reads dead — the dial IS the probe", async () => {
     expect(await nativeAlive(join(tempRoot(), "absent", "mgmt.sock"))).toBe(false);
+  });
+});
+
+// AL-1 (`draft/thinking-app-lifecycle.md` AL-F4) — the shell spawns fieldd with stdout and stderr as pipes it reads,
+// and fieldd outlives that shell (EL1). The child below is a real process born the way fieldd is, running the REAL
+// guard bundled from source (vitest does not bundle; files-host-bundle.ts's precedent): the test reads its ready
+// line, closes its own read ends — the shell's exit, as the child sees it — and asks it to write DIRECTLY, as the
+// logging emergency path does. Both rows run, so the mechanism stays proven beside the fix.
+describe("fieldd outlives the readers of its stdio (AL-1)", () => {
+  const entry = (async () => {
+    const dir = mkdtempSync(join(tmpdir(), "vf-al1-"));
+    const outfile = join(dir, "orphan-writer.cjs");
+    await build({
+      stdin: {
+        contents: [
+          'import { outliveStdioReaders } from "../src/boot-env";',
+          'if (process.argv.includes("--guard")) outliveStdioReaders();',
+          'process.stdin.once("data", () => {',
+          '  process.stderr.write("an emergency line with no reader\\n");',
+          '  process.stdout.write("and a stdout line\\n");',
+          "  setTimeout(() => process.exit(0), 300);",
+          "});",
+          'process.stdout.write("ready\\n");',
+        ].join("\n"),
+        resolveDir: import.meta.dirname,
+        loader: "ts",
+      },
+      bundle: true,
+      platform: "node",
+      format: "cjs",
+      outfile,
+      logLevel: "silent",
+    });
+    return { dir, outfile };
+  })();
+  afterAll(async () => rmSync((await entry).dir, { recursive: true, force: true }));
+
+  const orphanedWriterExit = async (guard: boolean): Promise<number | null> => {
+    const { outfile } = await entry;
+    const child = spawn(process.execPath, [outfile, ...(guard ? ["--guard"] : [])], {
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    const exited = once(child, "exit") as Promise<[number | null, NodeJS.Signals | null]>;
+    await new Promise<void>((ready, failed) => {
+      child.stdout.once("data", () => ready());
+      child.once("error", failed);
+    });
+    child.stdout.destroy();
+    child.stderr.destroy();
+    child.stdin.write("go\n");
+    const [code] = await exited;
+    return code;
+  };
+
+  it("unguarded, a direct write to a pipe whose reader left ENDS the process (the mechanism, red-first)", async () => {
+    expect(await orphanedWriterExit(false)).toBe(1);
+  });
+
+  it("guarded, the same writes fail on their own and the process lives on", async () => {
+    expect(await orphanedWriterExit(true)).toBe(0);
   });
 });
