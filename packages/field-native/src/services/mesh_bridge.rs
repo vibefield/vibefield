@@ -469,10 +469,18 @@ impl BridgeHandle {
         });
     }
 
-    /// Install the remote leg. C6-3 hands the truffle-backed transport in once
-    /// the node is up; until then lanes are local-only and say so.
+    /// Install the remote leg. C6-3 hands the truffle-backed transport in each
+    /// time a mesh node is up (item 79: once per node, not once per boot);
+    /// until then lanes are local-only and say so.
     pub fn set_transport(&self, transport: Arc<dyn LaneTransport>) {
         *self.shared.transport.lock().unwrap() = Some(transport);
+    }
+
+    /// Item 79 — take the remote leg down: the node it rode is gone. A lane
+    /// still open on it ends at the transport (its stream dies with the node)
+    /// and says so; a write in the meantime is answered `no-transport`.
+    pub fn clear_transport(&self) {
+        *self.shared.transport.lock().unwrap() = None;
     }
 
     /// An inbound delivery from a peer: framed to the connected fieldd client.

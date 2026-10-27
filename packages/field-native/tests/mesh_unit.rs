@@ -589,3 +589,217 @@ async fn await_node(
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     }
 }
+
+// ---- item 79: a torn-down node's sidecar ends, and the lanes follow the node --
+//
+// The W11 mini (2026-10-27 04:19Z) ran TWO sidecars on one tailscaled.state for
+// 24 minutes after a capture → linked promotion. Two holders, both measured on
+// the stand-in below (lanes/item79's probe): the boot-time lane transport kept
+// the OLD node in the bridge's slot and was never re-installed, and truffle's
+// `Node::drop` does not end a sidecar — only `Node::stop()` does — while
+// `teardown_node` only dropped. What these rows do NOT witness: the stand-in
+// speaks no QUIC, so `serve_inbound`'s listener does not bind here (on a real
+// sidecar it binds, as on the mini's 9440, and holds a second reference), and
+// no lane crosses a real tailnet.
+
+/// The stand-in of the promotion row above, protocol 5, also answering
+/// `tsnet:listen` (requestId echoed) so a listener request is not left hanging.
+#[cfg(unix)]
+fn item79_stub(dir: &std::path::Path) -> std::path::PathBuf {
+    use std::os::unix::fs::PermissionsExt;
+    let stub = dir.join("sidecar-slim");
+    std::fs::write(
+        &stub,
+        r#"#!/bin/sh
+while IFS= read -r line; do
+  case "$line" in
+    *tsnet:start*)
+      printf '%s\n' '{"event":"tsnet:started","data":{"state":"running","hostname":"truffle-vibefield-stub","dnsName":"truffle-vibefield-stub.tail0.ts.net","tailscaleIP":"127.0.0.1","nodeId":"nStub0CNTRL","loginName":"james@github","protocolVersion":5}}'
+      ;;
+    *tsnet:peers*)
+      printf '%s\n' '{"event":"tsnet:peers","data":{"peers":[]}}'
+      ;;
+    *'"tsnet:listen"'*)
+      rid=$(printf '%s' "$line" | sed -n 's/.*"requestId":"\([^"]*\)".*/\1/p')
+      port=$(printf '%s' "$line" | sed -n 's/.*"port":\([0-9]*\).*/\1/p')
+      printf '%s\n' "{\"event\":\"tsnet:listening\",\"data\":{\"port\":$port,\"requestId\":\"$rid\"}}"
+      ;;
+  esac
+done
+"#,
+    )
+    .unwrap();
+    std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
+    stub
+}
+
+/// A sidecar is gone when `ps` no longer lists it, or lists a zombie (the kill
+/// landed; only the reap is pending).
+#[cfg(unix)]
+fn item79_alive(pid: u32) -> bool {
+    std::process::Command::new("ps")
+        .args(["-o", "stat=", "-p", &pid.to_string()])
+        .output()
+        .map(|out| {
+            let stat = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            !stat.is_empty() && !stat.starts_with('Z')
+        })
+        .unwrap_or(false)
+}
+
+#[cfg(unix)]
+async fn item79_until(what: &str, within: std::time::Duration, done: impl Fn() -> bool) {
+    let deadline = tokio::time::Instant::now() + within;
+    while !done() {
+        assert!(tokio::time::Instant::now() < deadline, "{what}");
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+}
+
+/// Item 79 (1)+(2) — after the promotion NOTHING holds the capture node but this
+/// row, and its sidecar has ENDED: one sidecar on the state dir, not two. The
+/// row keeps its own reference throughout, so the sidecar's end is the
+/// teardown's `stop()`, not a drop this row happened to make.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_promotion_lets_the_capture_node_go_and_ends_its_sidecar() {
+    use field_native::contracts::MeshMode;
+    use std::time::Duration;
+    let dir = tempfile::tempdir().unwrap();
+    let config = NativeConfig {
+        sidecar_override: Some(item79_stub(dir.path())),
+        ..NativeConfig::for_data_dir(dir.path().to_path_buf())
+    };
+    let daemon = bootstrap(config).await.unwrap();
+    let mesh = &daemon.state.mesh;
+    mesh.start(MeshMode::Capture, None).await.unwrap();
+    let capture = await_node(mesh).await;
+    let capture_pid = capture
+        .sidecar_pid()
+        .expect("the capture node's sidecar pid");
+    // The precondition the mini had: the lane transport ON the capture node
+    // (this row, the watch's copy, the bring-up's, and the transport's).
+    item79_until(
+        "the lane transport never took the capture node",
+        Duration::from_secs(20),
+        || Arc::strong_count(&capture) >= 4,
+    )
+    .await;
+
+    assert!(mesh
+        .start(MeshMode::Linked, Some("james@github".into()))
+        .await
+        .unwrap());
+    let linked = await_node(mesh).await;
+    assert!(!Arc::ptr_eq(&capture, &linked));
+    let linked_pid = linked.sidecar_pid().expect("the linked node's sidecar pid");
+
+    item79_until(
+        "(1) after the promotion something besides this row still holds the capture node",
+        Duration::from_secs(5),
+        || Arc::strong_count(&capture) == 1,
+    )
+    .await;
+    item79_until(
+        "(2) the capture node's sidecar outlived the promotion (two sidecars, one state dir)",
+        Duration::from_secs(5),
+        || !item79_alive(capture_pid),
+    )
+    .await;
+    assert!(
+        item79_alive(linked_pid),
+        "the linked node's sidecar is the one that runs"
+    );
+    drop((capture, linked));
+    daemon.shutdown().await;
+}
+
+/// Item 79 (6) — `stop` ends the node's sidecar. It used to drop the node and
+/// trust the drop, which ends no sidecar: every unlink, stop and rebuild left
+/// one running for the life of the process.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn stopping_the_mesh_ends_the_nodes_sidecar() {
+    use field_native::contracts::MeshMode;
+    use std::time::Duration;
+    let dir = tempfile::tempdir().unwrap();
+    let config = NativeConfig {
+        sidecar_override: Some(item79_stub(dir.path())),
+        ..NativeConfig::for_data_dir(dir.path().to_path_buf())
+    };
+    let daemon = bootstrap(config).await.unwrap();
+    let mesh = &daemon.state.mesh;
+    mesh.start(MeshMode::Linked, Some("james@github".into()))
+        .await
+        .unwrap();
+    let pid = await_node(mesh)
+        .await
+        .sidecar_pid()
+        .expect("the node's sidecar pid");
+    assert!(item79_alive(pid));
+    mesh.stop().await;
+    assert!(!mesh.node_present());
+    item79_until(
+        "(6) mesh.stop() left the node's sidecar running",
+        Duration::from_secs(5),
+        || !item79_alive(pid),
+    )
+    .await;
+    daemon.shutdown().await;
+}
+
+/// Item 79 — the lanes FOLLOW the node: after the promotion the lane transport
+/// rides the LINKED node (by identity, not by name — both nodes carry one
+/// device id), so no lane is left on the ungated node and the gated one is not
+/// left without a transport.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_lane_transport_follows_the_promotion_to_the_linked_node() {
+    use field_native::contracts::MeshMode;
+    use std::time::Duration;
+    let dir = tempfile::tempdir().unwrap();
+    let config = NativeConfig {
+        sidecar_override: Some(item79_stub(dir.path())),
+        ..NativeConfig::for_data_dir(dir.path().to_path_buf())
+    };
+    let daemon = bootstrap(config).await.unwrap();
+    let mesh = &daemon.state.mesh;
+    mesh.start(MeshMode::Capture, None).await.unwrap();
+    let capture = await_node(mesh).await;
+    item79_until(
+        "the lane transport never rode the capture node",
+        Duration::from_secs(20),
+        || {
+            daemon
+                .lane_transport_on
+                .node()
+                .is_some_and(|n| Arc::ptr_eq(&n, &capture))
+        },
+    )
+    .await;
+    assert!(mesh
+        .start(MeshMode::Linked, Some("james@github".into()))
+        .await
+        .unwrap());
+    let linked = await_node(mesh).await;
+    item79_until(
+        "after the promotion the lane transport does not ride the linked node",
+        Duration::from_secs(20),
+        || {
+            daemon
+                .lane_transport_on
+                .node()
+                .is_some_and(|n| Arc::ptr_eq(&n, &linked))
+        },
+    )
+    .await;
+    mesh.stop().await;
+    item79_until(
+        "after stop the lane transport still names a node",
+        Duration::from_secs(5),
+        || daemon.lane_transport_on.node().is_none(),
+    )
+    .await;
+    drop((capture, linked));
+    daemon.shutdown().await;
+}

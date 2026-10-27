@@ -38,9 +38,10 @@ use crate::services::mesh_bridge::{
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::time::Duration;
-use tokio::sync::{mpsc, oneshot, Mutex};
+use tokio::sync::{mpsc, oneshot, watch, Mutex};
+use tokio::task::JoinSet;
 use truffle_core::transport::{
     quic::{QuicConnection, QuicStream},
     DatagramSocket,
@@ -772,15 +773,30 @@ pub async fn serve_inbound(transport: Arc<TruffleLaneTransport>) {
         port,
         "Inbound mesh lanes are open"
     );
-    while let Some(conn) = listener.accept().await {
-        let node = node.clone();
-        let bridge = bridge.clone();
-        let lossy = transport.lossy.clone();
-        let inbound_closers = transport.inbound_closers.clone();
-        tokio::spawn(
-            async move { serve_connection(node, bridge, lossy, inbound_closers, conn).await },
-        );
+    // Item 79 — every connection is a task of THIS loop's set, so aborting the
+    // loop (its node went away: `install_when_ready`) ends them with it. Each
+    // one holds the node; spawned detached, they outlived the loop and kept it.
+    // The lane streams below them are left to end on their own I/O — the node
+    // is stopped with them — because their end is what tells fieldd the lane
+    // closed (`finish_inbound`).
+    let mut connections = JoinSet::new();
+    loop {
+        tokio::select! {
+            accepted = listener.accept() => {
+                let Some(conn) = accepted else { break };
+                let node = node.clone();
+                let bridge = bridge.clone();
+                let lossy = transport.lossy.clone();
+                let inbound_closers = transport.inbound_closers.clone();
+                connections.spawn(async move {
+                    serve_connection(node, bridge, lossy, inbound_closers, conn).await
+                });
+            }
+            Some(_) = connections.join_next(), if !connections.is_empty() => {}
+        }
     }
+    // The listener ended on its own: let the live connections finish theirs.
+    while connections.join_next().await.is_some() {}
 }
 
 async fn serve_connection(
@@ -1146,29 +1162,98 @@ async fn resolve_peer_by_ip(node: &Arc<MeshNode>, ip: String) -> String {
 
 // ---- installation ----------------------------------------------------------
 
-/// Park until the mesh node exists, then put the remote leg behind the bridge's
-/// seam and start accepting inbound lanes.
+/// Which node the lane transport is installed on — for the daemon's wiring and
+/// its tests. WEAK, so knowing which node carries the lanes never keeps one
+/// alive: item 79 was exactly a reference that did.
+#[derive(Clone)]
+pub struct InstalledOn(watch::Receiver<Option<Weak<MeshNode>>>);
+
+impl InstalledOn {
+    /// The node the lanes ride now, if it is still alive and still installed.
+    pub fn node(&self) -> Option<Arc<MeshNode>> {
+        self.0.borrow().as_ref().and_then(Weak::upgrade)
+    }
+}
+
+/// Follow the mesh node: put the remote leg behind the bridge's seam on EVERY
+/// node the mesh installs, accept inbound lanes on it, and take both down when
+/// that node goes.
 ///
-/// Spawned once at boot. With the mesh disabled — the default — it simply never
-/// fires, and lanes stay local-only, which `lane.open` already reports honestly
-/// as UNAVAILABLE with the mesh unit's real state.
+/// Spawned once at boot. With the mesh disabled — the default — it never
+/// installs anything, and lanes stay local-only, which `lane.open` already
+/// reports honestly as UNAVAILABLE with the mesh unit's real state.
+///
+/// Item 79 (2026-10-27): this used to park on `wait_for_node` ONCE and serve
+/// that node forever. The capture → linked promotion REBUILDS the node (UA-P-4),
+/// so the transport went on holding the OLD, ungated node — in the bridge's slot
+/// and in `serve_inbound`'s loop — which kept its sidecar alive beside the new
+/// one (the W11 mini, 04:19Z), left every lane on the ungated node, and gave the
+/// gated one no transport at all. Now, per node: build the transport, install
+/// it, serve inbound as that node's own task; when the mesh's node is no longer
+/// it, abort that serve (and its connections) and clear the bridge's slot
+/// BEFORE the next install, so no lane rides a node the mesh no longer has. The
+/// mesh unit still never learns what a lane is (C6-3): this follows its watch.
 pub fn install_when_ready(
     mesh: MeshHandle,
     bridge: BridgeHandle,
     port: u16,
-) -> tokio::task::JoinHandle<()> {
-    tokio::spawn(async move {
-        let node = mesh.wait_for_node().await;
-        let transport = Arc::new(TruffleLaneTransport::new(node, bridge.clone(), port).await);
-        bridge.set_transport(transport.clone());
-        tracing::info!(
-            event = "field_native.lane_transport.installed",
-            component = "lane_transport",
-            port,
-            "The mesh lane transport is live"
-        );
-        serve_inbound(transport).await;
-    })
+) -> (tokio::task::JoinHandle<()>, InstalledOn) {
+    let (installed_tx, installed_rx) = watch::channel(None::<Weak<MeshNode>>);
+    let task = tokio::spawn(async move {
+        let mut nodes = mesh.subscribe_node();
+        loop {
+            let Some(node) = nodes.borrow_and_update().clone() else {
+                if nodes.changed().await.is_err() {
+                    // The unit is gone; there will never be a node. Park — the
+                    // task is aborted at shutdown.
+                    std::future::pending::<()>().await;
+                }
+                continue;
+            };
+            let installed = Arc::downgrade(&node);
+            let transport = Arc::new(TruffleLaneTransport::new(node, bridge.clone(), port).await);
+            bridge.set_transport(transport.clone());
+            installed_tx.send_replace(Some(installed.clone()));
+            tracing::info!(
+                event = "field_native.lane_transport.installed",
+                component = "lane_transport",
+                port,
+                "The mesh lane transport is live"
+            );
+            // The serve is a task of a SET this loop owns: dropped (a node
+            // change below, or this task aborted at shutdown), it is aborted.
+            let mut serving = JoinSet::new();
+            serving.spawn(serve_inbound(transport));
+            // Park while THIS node is the mesh's node. Checked before waiting,
+            // so a node torn down while the transport was being built is left
+            // at once.
+            let unit_gone = loop {
+                let current = nodes
+                    .borrow_and_update()
+                    .as_ref()
+                    .is_some_and(|n| std::ptr::eq(Arc::as_ptr(n), installed.as_ptr()));
+                if !current {
+                    break false;
+                }
+                if nodes.changed().await.is_err() {
+                    break true;
+                }
+            };
+            drop(serving);
+            bridge.clear_transport();
+            installed_tx.send_replace(None);
+            tracing::info!(
+                event = "field_native.lane_transport.removed",
+                component = "lane_transport",
+                port,
+                "The mesh lane transport left a node the mesh no longer has"
+            );
+            if unit_gone {
+                std::future::pending::<()>().await;
+            }
+        }
+    });
+    (task, InstalledOn(installed_rx))
 }
 
 #[cfg(test)]

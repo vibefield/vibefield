@@ -324,6 +324,15 @@ impl MeshHandle {
         }
     }
 
+    /// Item 79 — the installed node as a WATCH, `None` between nodes. For wiring
+    /// that must follow the node across a rebuild (the lane transport: a
+    /// promotion replaces the node, and a transport built once on the first one
+    /// kept it, and its sidecar, alive). A caller that wants one node, once,
+    /// wants `wait_for_node`.
+    pub fn subscribe_node(&self) -> watch::Receiver<Option<Arc<MeshNode>>> {
+        self.shared.node.subscribe()
+    }
+
     /// Get-or-create a JSON synced store, file-backed under the node's state dir.
     pub async fn open_store(&self, node: &Arc<MeshNode>, store_id: &str) -> Arc<JsonStore> {
         let mut stores = self.shared.stores.lock().await;
@@ -423,11 +432,11 @@ impl MeshHandle {
             return Ok(true);
         }
         // UA-P-4 — the gate moved (or there is no node yet), so BUILD. The
-        // teardown is unconditional: it kills a live node's sidecar before the
-        // new one binds the state dir, AND it aborts an in-flight bring-up that
-        // would otherwise install a node the new posture never asked for. On a
-        // first start it is a no-op.
-        self.teardown_node().await;
+        // teardown is unconditional: it STOPS a live node (which ends its
+        // sidecar) before the new one binds the state dir, AND it aborts an
+        // in-flight bring-up that would otherwise install a node the new posture
+        // never asked for. On a first start it is a no-op.
+        self.teardown_node("gate_changed").await;
         self.shared
             .retired
             .store(false, std::sync::atomic::Ordering::SeqCst);
@@ -441,7 +450,10 @@ impl MeshHandle {
     /// builds again immediately). Factored out so the two paths cannot drift on
     /// what "the node is gone" means — a store handle or serve record surviving
     /// a rebuild would be bound to a dead node.
-    async fn teardown_node(&self) {
+    ///
+    /// `reason` names the act for `field_native.mesh.node_replaced`:
+    /// `gate_changed` (the promotion's rebuild), `stopped`, `retired`.
+    async fn teardown_node(&self, reason: &'static str) {
         if let Some(t) = self.shared.task.lock().unwrap().take() {
             t.abort(); // in-flight bring-up: the sidecar child is kill_on_drop
         }
@@ -456,7 +468,30 @@ impl MeshHandle {
         if self.egress().reset().await > 0 {
             self.note_egress_changed();
         }
-        drop(had); // node drop kills the sidecar (kill_on_drop)
+        // Item 79 (2026-10-27) — STOP the node, then drop it. This line used to
+        // read `drop(had); // node drop kills the sidecar (kill_on_drop)`, and
+        // that was false: truffle's `Node::drop` only cancels the node-scoped
+        // tasks; the session's loops and the provider that owns the sidecar end
+        // in `Node::stop()` (truffle-core node.rs `impl Drop` and `stop`, the
+        // same in 0.7.22 and 0.7.23). So every teardown left the sidecar
+        // running: after a promotion beside its replacement on the same state
+        // dir (the W11 mini, 04:19Z), and after a stop or a retire for the rest
+        // of the process's life (the item-79 probe: an explicit `stop()` ends
+        // it, `mesh.stop()` did not). `stop()` is bounded (truffle's grace, then
+        // a kill), so a teardown cannot hang on it.
+        if let Some(node) = had {
+            let sidecar_pid = node.sidecar_pid();
+            node.stop().await;
+            let sidecar_exited = node.sidecar_pid().is_none();
+            tracing::info!(
+                event = "field_native.mesh.node_replaced",
+                component = "mesh",
+                reason,
+                sidecar_pid = ?sidecar_pid,
+                sidecar_exited,
+                "The mesh node was taken down"
+            );
+        }
     }
 
     /// UA-P-0a — drop the node WITHOUT touching the identity on disk.
@@ -468,15 +503,17 @@ impl MeshHandle {
     /// both of which the user may resolve and retry.
     pub async fn stop(&self) -> bool {
         let was_up = self.shared.node.borrow().is_some();
-        self.teardown_node().await;
+        self.teardown_node("stopped").await;
         *self.shared.mode.lock().unwrap() = None;
         self.shared
             .set(UnitState::Disabled, Some(OFFLINE.into()), None);
         was_up
     }
 
-    /// UA-3 unlink, native half: drop the node (the sidecar dies with it),
-    /// clear the facade's node-bound state, mark the unit retired so a
+    /// UA-3 unlink, native half: stop the node (its sidecar ends with the stop,
+    /// before the caller archives the state dir it held — item 79: a drop alone
+    /// left it running on the archived identity), clear the facade's node-bound
+    /// state, mark the unit retired so a
     /// mid-flight bring-up cannot resurrect the identity, and hand back the
     /// state dir to archive — Some only when there is state on disk. The
     /// caller (the mgmt handler) owns the rename; this owns the lifecycle.
@@ -486,7 +523,7 @@ impl MeshHandle {
             .store(true, std::sync::atomic::Ordering::SeqCst);
         // UA-P-0a: an in-flight bring-up dies with the identity — `retired` is
         // set FIRST so a build that completes in the same beat discards itself.
-        self.teardown_node().await;
+        self.teardown_node("retired").await;
         *self.shared.mode.lock().unwrap() = None;
         self.shared.set(
             UnitState::Disabled,
@@ -603,8 +640,8 @@ impl NativeService for MeshUnit {
 
     async fn stop(&self) -> anyhow::Result<()> {
         // UA-P-0a — one teardown, shared with the posture verb: abort any
-        // in-flight bring-up, drop the node (which kills the sidecar), clear
-        // the facade state, and say offline.
+        // in-flight bring-up, stop the node (which ends its sidecar; a drop
+        // alone did not — item 79), clear the facade state, and say offline.
         self.handle().stop().await;
         Ok(())
     }
@@ -700,8 +737,10 @@ fn spawn_bring_up(shared: &Arc<Shared>) -> anyhow::Result<()> {
             Ok(node) => {
                 if shared.retired.load(std::sync::atomic::Ordering::SeqCst) {
                     // UA-3: retired mid-bring-up — never resurrect an identity
-                    // the user just archived; dropping the node kills the
-                    // sidecar and the retired face stands.
+                    // the user just archived; STOPPING the node ends its sidecar
+                    // (a drop alone does not — item 79) and the retired face
+                    // stands.
+                    node.stop().await;
                     tracing::info!(
                         event = "field_native.mesh.bring_up_discarded",
                         component = "mesh",
@@ -714,7 +753,9 @@ fn spawn_bring_up(shared: &Arc<Shared>) -> anyhow::Result<()> {
                     // race, but a build that completed in the same beat must not
                     // install a node the posture no longer asks for — an
                     // unlinked desktop is offline, and a node nobody asked for
-                    // would publish its presence on somebody's tailnet.
+                    // would publish its presence on somebody's tailnet. Stopped,
+                    // not dropped: a dropped node's sidecar runs on (item 79).
+                    node.stop().await;
                     tracing::info!(
                         event = "field_native.mesh.bring_up_discarded",
                         component = "mesh",

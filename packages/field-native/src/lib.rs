@@ -61,10 +61,13 @@ pub struct RunningDaemon {
     pub state: Arc<state::DaemonState>,
     server: tokio::task::JoinHandle<()>,
     health_refresh: tokio::task::JoinHandle<()>,
-    /// C6-3: parked until the mesh node exists, then the remote leg + inbound
-    /// accept loop. Held so shutdown can abort it — with the mesh disabled it
-    /// simply never fires.
+    /// C6-3: follows the mesh node — the remote leg + inbound accept loop on
+    /// each node the mesh installs (item 79). Held so shutdown can abort it —
+    /// with the mesh disabled it never installs anything.
     lane_transport: tokio::task::JoinHandle<()>,
+    /// Item 79 — which node the lane transport rides (weak): for tests, and
+    /// for any reader that must not ask the bridge what a QUIC stream is.
+    pub lane_transport_on: services::lane_transport::InstalledOn,
     /// NF-2: parked until the terminal service serves, then the self-client's
     /// `observed.terminals` pump. Held so shutdown can abort it before the
     /// drain runs.
@@ -167,7 +170,7 @@ pub async fn bootstrap_with_logging(
     // C6-3: joining the mesh unit to the byte plane is WIRING, so it happens
     // here rather than inside either of them. The bridge never learns what a
     // QUIC stream is; the mesh unit never learns what a lane is.
-    let lane_transport = services::lane_transport::install_when_ready(
+    let (lane_transport, lane_transport_on) = services::lane_transport::install_when_ready(
         mesh_handle.clone(),
         bridge_handle.clone(),
         services::lane_transport::DOC_SYNC_QUIC_PORT,
@@ -267,6 +270,7 @@ pub async fn bootstrap_with_logging(
         server,
         health_refresh,
         lane_transport,
+        lane_transport_on,
         terminal_inventory,
         freeway_feeds,
         manager: mgr,
