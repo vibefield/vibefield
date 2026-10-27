@@ -1,0 +1,74 @@
+{
+  "phase": "backfilling",
+  "search": {
+    "reachable": true,
+    "capabilities": { "sessionScope": true, "prefix": true },
+    "canonicalReady": false,
+    "readiness": "building"
+  },
+  "rosettad": { "phase": "ready", "detail": null, "pid": 51207, "protocolVersion": 20 },
+  "enrollment": {
+    "enabledKinds": ["claude-code", "codex"],
+    "runtimes": [],
+    "retired": [],
+    "updatedAt": "2026-10-27T09:11:58.000Z"
+  },
+  "runtimes": [
+    {
+      "runtimeId": "rt_5f0c9a2e1b7d4c3a",
+      "kind": "claude-code",
+      "provenance": "discovered",
+      "dataRoot": "~/.claude",
+      "watched": true,
+      "backfill": {
+        "state": "streaming",
+        "filesTotal": 5912,
+        "bytesTotal": 12200000000,
+        "filesSkimmed": 5912,
+        "bytesStreamed": 4100000000,
+        "sessionsTotal": 5240,
+        "records": 1203311
+      }
+    },
+    {
+      "runtimeId": "rt_9c1d7e3a5b2f4068",
+      "kind": "codex",
+      "provenance": "discovered",
+      "dataRoot": "~/.codex",
+      "watched": true,
+      "backfill": {
+        "state": "queued",
+        "filesTotal": 412,
+        "bytesTotal": 1100000000,
+        "filesSkimmed": 412,
+        "bytesStreamed": 0,
+        "sessionsTotal": 398,
+        "records": 0
+      }
+    }
+  ],
+  "startedAt": 1793092320000,
+  "projects": [
+    {
+      "key": "p1:k7m2q9x4c3v8b6n1z5r0t2w4y6a8",
+      "sessionsTotal": 1840,
+      "sessionsDone": 612,
+      "bytesTotal": 5300000000,
+      "bytesStreamed": 1900000000
+    },
+    {
+      "key": "p1:h0m3pr0j3cth0m3pr0j3cth0m3",
+      "sessionsTotal": 233,
+      "sessionsDone": 233,
+      "bytesTotal": 410000000,
+      "bytesStreamed": 410000000
+    },
+    {
+      "key": null,
+      "sessionsTotal": 71,
+      "sessionsDone": 0,
+      "bytesTotal": 96000000,
+      "bytesStreamed": 0
+    }
+  ]
+}

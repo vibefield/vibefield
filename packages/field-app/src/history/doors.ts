@@ -3,6 +3,7 @@ import {
   INDEX_MESH,
   type IndexCatalogSource,
   type IndexPhase,
+  type IndexSearchBuildProgress,
   IndexSearchResult,
   type IndexSession,
   IndexSessionsResult,
@@ -33,6 +34,7 @@ import type {
   ProjectRow,
   RuntimeBackfill,
   RuntimeRow,
+  SearchBuildProgress,
   SearchHit,
   SearchReadiness,
   SearchResponse,
@@ -342,8 +344,10 @@ export function selfOf(sources: readonly IndexCatalogSource[] | undefined): stri
 
 /** `index.status` as the room's `CatalogStatus` — or null when the index is
  * not up (the supervisor's own phase: unconfigured, starting, restarting,
- * failed, stopped), which the port answers as a refusal in fieldd's words. */
-export function catalogStatusOf(status: IndexStatus): CatalogStatus | null {
+ * failed, stopped), which the port answers as a refusal in fieldd's words.
+ * AO-4: everything the room's first reading draws is fed — the per-project
+ * fold, the search build's stage, the daemon's clock. */
+export function catalogStatusOf(status: IndexStatus, now = Date.now()): CatalogStatus | null {
   if (!INGEST_PHASES.has(status.phase)) return null;
   const runtimes: RuntimeBackfill[] = [];
   for (const runtime of status.runtimes) {
@@ -362,7 +366,19 @@ export function catalogStatusOf(status: IndexStatus): CatalogStatus | null {
       records: backfill.records,
     });
   }
-  const ingest: IngestProgress = { phase: status.phase as IngestPhase, runtimes, projects: [] };
+  const ingest: IngestProgress = {
+    phase: status.phase as IngestPhase,
+    runtimes,
+    // keyed by fieldd the way this room keys its projects; a null key is the
+    // room's unassigned bucket, and a project with no row cooks as before
+    projects: (status.projects ?? []).map((row) => ({
+      project_id: row.key,
+      sessions_total: row.sessionsTotal,
+      sessions_done: row.sessionsDone,
+      bytes_total: row.bytesTotal,
+      bytes_streamed: row.bytesStreamed,
+    })),
+  };
   const readiness = status.search?.readiness;
   return {
     canonicalReady: status.search?.canonicalReady ?? status.phase === "live",
@@ -370,16 +386,26 @@ export function catalogStatusOf(status: IndexStatus): CatalogStatus | null {
       readiness !== undefined && SEARCH_READINESS.has(readiness)
         ? (readiness as SearchReadiness)
         : "building",
-    // fieldd projects the search build's counters without rosetta's stage;
-    // the room reads them only in its search sheet — which did not ship here
-    // until the search interim (2026-10-04): it does now, and with no counters
-    // a build draws the sheet's fixed sliver of a meter and its own words
-    // ("search is being prepared")
-    searchProgress: null,
+    searchProgress: searchBuildProgressOf(status.search?.progress),
     ingest,
-    // fieldd's projection names the daemon's phase and pid, not its clock
-    startedAt: null,
-    uptimeMs: 0,
+    // the daemon's clock: its start, and its uptime as rosetta derives it
+    // (`health.rs`: now minus the start), so "elapsed" counts from the start
+    startedAt: status.startedAt ?? null,
+    uptimeMs: status.startedAt === undefined ? 0 : Math.max(0, now - status.startedAt),
+  };
+}
+
+/** A search build's live work in rosetta's spelling, or null: none, or a stage
+ * this build cannot name — the room names its step by the stage, and with no
+ * progress it says "Preparing search" and claims no count. */
+function searchBuildProgressOf(
+  progress: IndexSearchBuildProgress | undefined,
+): SearchBuildProgress | null {
+  if (progress?.stage === undefined || progress.stage === "unknown") return null;
+  return {
+    stage: progress.stage,
+    documents_done: progress.done,
+    documents_total: progress.total,
   };
 }
 
@@ -1106,7 +1132,7 @@ export function catalogPortOver(
       return {
         state: {
           readiness: SEARCH_READINESS.has(readiness) ? (readiness as SearchReadiness) : "building",
-          progress: null,
+          progress: searchBuildProgressOf(result.state.progress),
           projection_epoch: null,
           revision: null,
         },

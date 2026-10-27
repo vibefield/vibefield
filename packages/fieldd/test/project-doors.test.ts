@@ -870,6 +870,90 @@ describe("PJ-4 — the join column (A-D4): every catalog session carries its pro
   });
 });
 
+// ── AO-4: the first reading's per-project fold ──────────────────────────────
+
+describe("AO-4 — the first reading's per-project fold, keyed the way History keys its projects", () => {
+  /** world()'s desktop plus a session in a folder no place holds, each session
+   * filed under the rosetta project `filing` names (none: rosetta's own
+   * unassigned bucket), and grouped. */
+  function filed(filing: Record<string, string>) {
+    const w = world();
+    w.sessions.upsert(
+      [...w.sessions.rows(), session("dev-a", "s6", "/Volumes/Elsewhere/scratch", 5)].map((row) => {
+        const projectId = filing[row.sessionId];
+        return projectId === undefined ? row : { ...row, projectId };
+      }),
+    );
+    w.groups.regroupNow();
+    const page = ProjectListResult.parse(w.doors.list({}, WINDOW_VIEW, 100));
+    const key = (name: string) => page.rows.find((row) => row.name === name)?.key;
+    return { doors: w.doors, app: key("app"), notes: key("notes"), home: key("Home") };
+  }
+  const meters = (n: number) => ({
+    sessionsTotal: n,
+    sessionsDone: n - 1,
+    bytesTotal: n * 100,
+    bytesStreamed: n * 50,
+  });
+
+  it("folds each rosetta project into the project that holds its sessions — rosetta's own bucket joined the same way, a folder no place holds into the room's", () => {
+    const f = filed({ s1: "r-app", s2: "r-app", s5: "r-app", s3: "r-notes", s6: "r-scratch" });
+    expect(
+      f.doors.backfills([
+        { projectId: "r-app", ...meters(3) },
+        { projectId: "r-notes", ...meters(1) },
+        // s4 is in rosetta's unassigned bucket, and in the home's place
+        { projectId: null, ...meters(1) },
+        { projectId: "r-scratch", ...meters(1) },
+        // no listed session: the room lists none of it
+        { projectId: "r-ghost", ...meters(9) },
+      ]),
+    ).toEqual([
+      { key: f.app, ...meters(3) },
+      { key: f.notes, ...meters(1) },
+      { key: f.home, ...meters(1) },
+      { key: null, ...meters(1) },
+    ]);
+  });
+
+  it("sums the rosetta projects one project holds whole", () => {
+    const f = filed({ s1: "r-app", s2: "r-app", s5: "r-app-2" });
+    expect(
+      f.doors
+        .backfills([
+          { projectId: "r-app", ...meters(2) },
+          { projectId: "r-app-2", ...meters(1) },
+        ])
+        .find((row) => row.key === f.app),
+    ).toEqual({
+      key: f.app,
+      sessionsTotal: 3,
+      sessionsDone: 1,
+      bytesTotal: 300,
+      bytesStreamed: 150,
+    });
+  });
+
+  it("leaves out every project a rosetta project parts across — a total is never cut, nor drawn short", () => {
+    // the notes' session is filed under the app's rosetta project too
+    const f = filed({ s1: "r-app", s2: "r-app", s5: "r-app", s3: "r-app", s4: "r-home" });
+    expect(
+      f.doors.backfills([
+        { projectId: "r-app", ...meters(4) },
+        { projectId: "r-home", ...meters(1) },
+      ]),
+    ).toEqual([{ key: f.home, ...meters(1) }]);
+    // part in a place and part in none: the room's bucket is left out with it
+    const g = filed({ s4: "r-home", s6: "r-home" });
+    expect(g.doors.backfills([{ projectId: "r-home", ...meters(2) }])).toEqual([]);
+  });
+
+  it("is nothing before this boot's first grouping, when no session has a key to join", () => {
+    const w = world();
+    expect(w.doors.backfills([{ projectId: null, ...meters(5) }])).toEqual([]);
+  });
+});
+
 // ── PJ-4: the merged figures (H2 (a), A-D3) ─────────────────────────────────
 
 /** One session's recorded usage in one hour, as a desktop's rosetta holds it. */

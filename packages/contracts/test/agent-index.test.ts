@@ -6,13 +6,16 @@ import {
   AgentsReleasesResult,
   AgentsSetActiveResult,
   INDEX_PHASES,
+  INDEX_SEARCH_BUILD_STAGES,
   IndexEnrollmentRecord,
   IndexPhase,
+  IndexProjectBackfill,
   IndexProjectsParams,
   IndexProjectsResponse,
   IndexRecentParams,
   IndexRecentResult,
   IndexRecentSession,
+  IndexSearchBuildProgress,
   IndexSearchParams,
   IndexSessionRow,
   IndexSessionsParams,
@@ -575,6 +578,65 @@ describe("IndexPhase — the tolerant fold", () => {
       runtimes: [],
     });
     expect(status.phase).toBe("unknown");
+  });
+});
+
+describe("AO-4 — History's first reading rides index.status", () => {
+  const base = {
+    phase: "backfilling",
+    rosettad: { phase: "ready", detail: null, pid: 1, protocolVersion: 20 },
+    enrollment: { enabledKinds: [], runtimes: [], retired: [], updatedAt: null },
+    runtimes: [],
+  };
+  const fold = { sessionsTotal: 3, sessionsDone: 1, bytesTotal: 900, bytesStreamed: 300 };
+
+  it("names the search build's stage, and reads an unheard-of stage as unknown — never as a step it can name", () => {
+    expect(INDEX_SEARCH_BUILD_STAGES).toEqual([
+      "indexing",
+      "optimizing",
+      "validating",
+      "publishing",
+      "unknown",
+    ]);
+    const stageOf = (stage: unknown) =>
+      IndexStatus.parse({
+        ...base,
+        search: {
+          reachable: true,
+          capabilities: { sessionScope: true, prefix: true },
+          readiness: "building",
+          progress: { done: 1, total: 2, stage },
+        },
+      }).search?.progress?.stage;
+    expect(stageOf("optimizing")).toBe("optimizing");
+    expect(stageOf("compacting")).toBe("unknown");
+    // a build before AO-4 sends none, and none is read into it
+    expect(IndexSearchBuildProgress.parse({ done: 1, total: 2 }).stage).toBeUndefined();
+  });
+
+  it("carries the daemon's start and the per-project fold: a project's key, or null for the room's unassigned bucket", () => {
+    const status = IndexStatus.parse({
+      ...base,
+      startedAt: 1_793_092_320_000,
+      projects: [
+        { key: "p1:k7m2q9x4c3v8b6n1z5r0t2w4y6a8", ...fold },
+        { key: null, ...fold },
+      ],
+    });
+    expect(status.startedAt).toBe(1_793_092_320_000);
+    expect(status.projects?.map((row) => row.key)).toEqual([
+      "p1:k7m2q9x4c3v8b6n1z5r0t2w4y6a8",
+      null,
+    ]);
+    // a key is a key: never an empty one standing in for the bucket
+    expect(IndexProjectBackfill.safeParse({ key: "", ...fold }).success).toBe(false);
+    expect(IndexProjectBackfill.safeParse({ key: null, ...fold, bytesStreamed: -1 }).success).toBe(
+      false,
+    );
+    // an answer from before AO-4 still parses: neither is required
+    const before = IndexStatus.parse(base);
+    expect(before.startedAt).toBeUndefined();
+    expect(before.projects).toBeUndefined();
   });
 });
 

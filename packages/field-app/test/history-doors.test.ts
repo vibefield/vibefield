@@ -403,6 +403,44 @@ describe("the catalog port's rows (AR-8c; PJ-4 H1)", () => {
     ).toBeNull();
   });
 
+  it("AO-4: feeds the room's first reading — the per-project fold keyed as the room keys projects, the search build's stage, the daemon's clock", () => {
+    const cold = IndexStatus.parse(fixture("index-status.cold-start.json"));
+    const started = cold.startedAt ?? 0;
+    const answer = catalogStatusOf(cold, started + 95_000);
+    // a null key is the room's unassigned bucket
+    expect(answer?.ingest?.projects).toEqual([
+      {
+        project_id: VIBE_FIELD,
+        sessions_total: 1840,
+        sessions_done: 612,
+        bytes_total: 5_300_000_000,
+        bytes_streamed: 1_900_000_000,
+      },
+      expect.objectContaining({ project_id: HOME, sessions_done: 233 }),
+      expect.objectContaining({ project_id: null, sessions_total: 71 }),
+    ]);
+    // "elapsed" counts from the daemon's start, as rosetta derives its uptime
+    expect(answer?.startedAt).toBe(started);
+    expect(answer?.uptimeMs).toBe(95_000);
+    expect(catalogStatusOf(cold, started - 5)?.uptimeMs).toBe(0);
+    // no search build under way yet: no progress claimed
+    expect(answer?.searchProgress).toBeNull();
+
+    const building = IndexStatus.parse(fixture("index-status.search-building.json"));
+    expect(catalogStatusOf(building)?.searchProgress).toEqual({
+      stage: "indexing",
+      documents_done: 41230,
+      documents_total: 90411,
+    });
+    // a stage this build cannot name is no named step and no count
+    expect(
+      catalogStatusOf({
+        ...building,
+        search: { ...building.search!, progress: { done: 1, total: 2, stage: "unknown" } },
+      })?.searchProgress,
+    ).toBeNull();
+  });
+
   it("PJ-4 (H2): splits ONE project.figures answer into the panel's figures and its usage, nulls kept null", () => {
     const stats = projectStatsOf(FIGURES);
     expect(stats.heat[0]).toEqual({

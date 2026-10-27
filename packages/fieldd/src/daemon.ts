@@ -2225,7 +2225,18 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // (no origin, no enrolled root's path). Mutations rewrite THIS user's
     // record, are audited (consent is an act of the person at this device),
     // and bounce the daemon when the record changed.
-    api.register("index.status", () => index.status());
+    // AO-4 — History's room reads its first reading here. The per-project
+    // fold, keyed by THIS desktop's grouping as the join column is (PJ-4),
+    // rides only to this desktop's own windows: the room is theirs, and
+    // rosetta keeps the fold for the daemon's life, so the phone (which keeps
+    // no room) is not sent it on every read.
+    api.register("index.status", (ctx) =>
+      index.status(
+        ctx.principal.kind === "local-token" || ctx.principal.kind === "shell-main"
+          ? { projects: (rows) => projectDoors.backfills(rows) }
+          : {},
+      ),
+    );
     api.register("index.discoveries", () => index.discoveries());
     // AR-5e — the find sheet's two reads (thinking-ar-views-port.md §6.3).
     // Projections like the two above: no origin, no enrolled root's path. A

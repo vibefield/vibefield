@@ -345,6 +345,32 @@ export const IndexSearchCapabilities = z
   .passthrough();
 export type IndexSearchCapabilities = z.infer<typeof IndexSearchCapabilities>;
 
+/** rosetta's `SearchBuildStage` (mirrored) plus the tolerant reader's own
+ * answer (AO-4): a stage this build has never heard of folds to `unknown`,
+ * which a reader draws as no named step rather than as one it can name. */
+export const INDEX_SEARCH_BUILD_STAGES = [
+  "indexing",
+  "optimizing",
+  "validating",
+  "publishing",
+  "unknown",
+] as const;
+export const IndexSearchBuildStage = z.enum(INDEX_SEARCH_BUILD_STAGES).catch("unknown");
+export type IndexSearchBuildStage = (typeof INDEX_SEARCH_BUILD_STAGES)[number];
+
+/** A search build's live work (rosetta `SearchBuildProgress`): the documents
+ * done and in all, and since AO-4 the stage, which History's room names its
+ * step by ("Preparing search" while indexing, "Finishing search" after). A
+ * build before AO-4 sends no stage. */
+export const IndexSearchBuildProgress = z
+  .object({
+    done: z.number().finite(),
+    total: z.number().finite(),
+    stage: IndexSearchBuildStage.optional(),
+  })
+  .passthrough();
+export type IndexSearchBuildProgress = z.infer<typeof IndexSearchBuildProgress>;
+
 /** The find sheet's foot (AR-5e): whether the index answered at all, what it
  * can do, and how ready its search projection is. It rides `index.status`
  * because the `/api/status` read it is folded from is one fieldd already
@@ -357,15 +383,31 @@ export const IndexSearchHealth = z
     capabilities: IndexSearchCapabilities,
     canonicalReady: z.boolean().optional(),
     readiness: IndexSearchReadiness.optional(),
-    progress: z
-      .object({ done: z.number().finite(), total: z.number().finite() })
-      .passthrough()
-      .optional(),
+    progress: IndexSearchBuildProgress.optional(),
     /** one sentence for the foot — never the daemon's origin (EL7) */
     detail: z.string().optional(),
   })
   .passthrough();
 export type IndexSearchHealth = z.infer<typeof IndexSearchHealth>;
+
+/** AO-4 — one project's share of the first reading (rosetta `ProjectBackfill`),
+ * keyed the way History keys its projects: the PJ project's key, or null for
+ * the sessions no project holds (the room's unassigned bucket). rosetta folds
+ * by ITS projects, which part differently: fieldd sums the ones a project
+ * holds whole, and leaves out every project one of them parts across — a
+ * total cannot be cut — so a project with no row is one no fold vouches for,
+ * never one with nothing to read. Census figures: a source that grows while
+ * it is read can carry a meter past its total, and readers clamp. */
+export const IndexProjectBackfill = z
+  .object({
+    key: z.string().min(1).nullable(),
+    sessionsTotal: z.number().int().nonnegative(),
+    sessionsDone: z.number().int().nonnegative(),
+    bytesTotal: z.number().int().nonnegative(),
+    bytesStreamed: z.number().int().nonnegative(),
+  })
+  .passthrough();
+export type IndexProjectBackfill = z.infer<typeof IndexProjectBackfill>;
 
 /** `index.status` — the whole honest picture in one read: the folded phase,
  * the daemon projection, the record, every runtime the daemon lists (empty
@@ -378,6 +420,17 @@ export const IndexStatus = z
     enrollment: IndexEnrollmentSummary,
     runtimes: z.array(IndexRuntimeStatus),
     search: IndexSearchHealth.optional(),
+    /** AO-4 — when this daemon generation began serving (rosetta
+     * `DaemonStatus.started_at`, epoch ms); the room's "elapsed" counts from
+     * it. Its uptime is now minus this, as rosetta derives it, so it is never
+     * sent: an unchanged status stays the same status. Absent until the daemon
+     * answers. */
+    startedAt: z.number().int().nonnegative().optional(),
+    /** AO-4 — the first reading's per-project fold, for History's room: empty
+     * until rosetta's skims settle its plan, kept (all read) for the daemon's
+     * life after, and sent to this desktop's own windows only — never to the
+     * phone, a plugin or a peer daemon. */
+    projects: z.array(IndexProjectBackfill).optional(),
   })
   .passthrough();
 export type IndexStatus = z.infer<typeof IndexStatus>;
@@ -823,10 +876,7 @@ export const IndexSearchState = z
     readiness: IndexSearchReadiness,
     /** the canonical projection is serveable (rosetta's `canonical_ready`) */
     canonicalReady: z.boolean().optional(),
-    progress: z
-      .object({ done: z.number().finite(), total: z.number().finite() })
-      .passthrough()
-      .optional(),
+    progress: IndexSearchBuildProgress.optional(),
     detail: z.string().optional(),
   })
   .passthrough();

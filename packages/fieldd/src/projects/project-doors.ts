@@ -3,6 +3,7 @@ import {
   type CallerContext,
   type IndexCatalogSession,
   type IndexCatalogSource,
+  type IndexProjectBackfill,
   type PlaceRef,
   PROJECT_DOORS,
   type ProjectEdge,
@@ -29,6 +30,7 @@ import {
   pathKeyIn,
   type RowsCursor,
 } from "@vibefield/contracts";
+import type { RosettaProjectBackfill } from "../agent-index";
 import { sessionActivityAt } from "../index-catalog";
 import { compareKeys, decodeCursor, pageOf, type SortKey } from "../index-mesh";
 import { RpcCallError } from "../native-link";
@@ -332,6 +334,55 @@ export class ProjectDoors {
       const key = byRoot.get(row.rootSessionId);
       return { ...(rest as Row), ...(key !== undefined ? { projectKey: key } : {}) };
     });
+  }
+
+  /** AO-4 — the first reading's per-project fold, keyed the way History keys
+   * its projects (`index.status`, for this desktop's own windows). rosetta
+   * folds by ITS projects; this desktop's listed sessions say which of ours
+   * holds each. One held whole by one project — or by no place, the room's
+   * unassigned bucket (`key: null`) — is summed into it. One whose sessions
+   * part across several is a total that cannot be cut, so every key it touches
+   * is left out rather than drawn short. One with no session listed yet is left
+   * out too: the room lists none of its sessions. Nothing before this boot's
+   * first grouping, when no session has a key to join. */
+  backfills(rows: readonly RosettaProjectBackfill[]): IndexProjectBackfill[] {
+    if (this.#opts.groups.current() === null) return [];
+    const self = this.#opts.deviceId();
+    const keyOfCwd = new Map<string, string | null>();
+    const holders = new Map<string | null, Set<string | null>>();
+    for (const session of this.#opts.localSessions()) {
+      const cwd = session.cwd ?? "";
+      let key = keyOfCwd.get(cwd);
+      if (key === undefined) {
+        key = this.keyOf(self, cwd) ?? null;
+        keyOfCwd.set(cwd, key);
+      }
+      const rosetta = session.projectId ?? null;
+      const held = holders.get(rosetta) ?? new Set<string | null>();
+      held.add(key);
+      holders.set(rosetta, held);
+    }
+    const folds = new Map<string | null, IndexProjectBackfill>();
+    const cut = new Set<string | null>();
+    for (const row of rows) {
+      const held = holders.get(row.projectId);
+      if (held === undefined) continue;
+      if (held.size > 1) {
+        for (const key of held) cut.add(key);
+        continue;
+      }
+      const [only] = [...held];
+      const key = only ?? null;
+      const fold = folds.get(key);
+      folds.set(key, {
+        key,
+        sessionsTotal: (fold?.sessionsTotal ?? 0) + row.sessionsTotal,
+        sessionsDone: (fold?.sessionsDone ?? 0) + row.sessionsDone,
+        bytesTotal: (fold?.bytesTotal ?? 0) + row.bytesTotal,
+        bytesStreamed: (fold?.bytesStreamed ?? 0) + row.bytesStreamed,
+      });
+    }
+    return [...folds.values()].filter((fold) => !cut.has(fold.key));
   }
 
   // ── the reads ──

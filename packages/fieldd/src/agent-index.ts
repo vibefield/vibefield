@@ -27,6 +27,7 @@ import {
   type IndexMutationResult,
   type IndexPhase,
   IndexPhase as IndexPhaseSchema,
+  type IndexProjectBackfill,
   type IndexProjectDayResult,
   type IndexProjectResult,
   type IndexProjectRow,
@@ -34,6 +35,8 @@ import {
   type IndexRecentParams,
   type IndexRecentResult,
   type IndexRuntimeStatus,
+  type IndexSearchBuildProgress,
+  IndexSearchBuildStage,
   type IndexSearchCapabilities,
   type IndexSearchHealth,
   type IndexSearchHit,
@@ -407,6 +410,25 @@ export interface IndexServiceOptions {
   logger?: Logger;
 }
 
+/** AO-4 — one rosetta project's share of the first reading (rosetta
+ * `ProjectBackfill`, mirrored; `projectId` null is rosetta's own unassigned
+ * bucket). Keyed by rosetta's project, which History does not key by: the
+ * caller folds it by its own (`ProjectDoors.backfills`). */
+export interface RosettaProjectBackfill {
+  readonly projectId: string | null;
+  readonly sessionsTotal: number;
+  readonly sessionsDone: number;
+  readonly bytesTotal: number;
+  readonly bytesStreamed: number;
+}
+
+/** AO-4 — how `index.status` answers one caller. */
+export interface IndexStatusOptions {
+  /** the first reading's per-project fold, keyed for this desktop's own
+   * windows; absent, the answer carries no `projects` */
+  readonly projects?: (rows: readonly RosettaProjectBackfill[]) => IndexProjectBackfill[];
+}
+
 /** AC-D8 — the daemon's refusal of an enrolled root at start, as rosettad and
  * the scripted daemon both word it (`enroll.rs`: `--enroll <file>: runtime #N
  * (kind "<k>", data_root "<root>"): unknown agent kind`). The root is printed
@@ -699,7 +721,7 @@ export class IndexService {
 
   /** The honest picture: the folded phase, the daemon projection, the record,
    * and every runtime the daemon lists (none until it is ready). */
-  async status(): Promise<IndexStatus> {
+  async status(options: IndexStatusOptions = {}): Promise<IndexStatus> {
     const health = this.opts.supervisor?.health() ?? ROSETTAD_UNCONFIGURED;
     const enrollment = this.opts.store.summary();
     if (health.phase !== "ready") {
@@ -737,6 +759,11 @@ export class IndexService {
       // AR-5e — folded from the SAME `/api/status` read; the search
       // projection's readiness is its own question, never the ingest phase
       search: this.foldSearchHealth(status),
+      // AO-4 — the room's clock and its per-project fold, from the same read
+      ...startedAtOf(daemon),
+      ...(options.projects !== undefined
+        ? { projects: options.projects(projectBackfillsOf(daemon)) }
+        : {}),
     };
   }
 
@@ -2170,15 +2197,64 @@ function unansweredSearch(state: IndexSearchState): IndexSearchResult {
   return { answered: false, state, hits: [], clipped: false };
 }
 
-/** rosetta's build progress, narrowed to the two counters a foot shows. Both
- * must be finite numbers or there is no progress to show. */
-function foldSearchProgress(value: unknown): { done: number; total: number } | undefined {
+/** rosetta's build progress, narrowed to what a reader shows: the two
+ * counters, which must both be finite numbers or there is no progress to show,
+ * and (AO-4) the stage History's room names its step by — an unheard-of word
+ * folds to `unknown`. */
+function foldSearchProgress(value: unknown): IndexSearchBuildProgress | undefined {
   if (typeof value !== "object" || value === null) return undefined;
   const done = (value as { documents_done?: unknown }).documents_done;
   const total = (value as { documents_total?: unknown }).documents_total;
   if (typeof done !== "number" || !Number.isFinite(done)) return undefined;
   if (typeof total !== "number" || !Number.isFinite(total)) return undefined;
-  return { done, total };
+  const stage: unknown = (value as { stage?: unknown }).stage;
+  return {
+    done,
+    total,
+    ...(stage !== undefined ? { stage: IndexSearchBuildStage.parse(stage) } : {}),
+  };
+}
+
+/** A count or a clock reading from a CAST body, or undefined when the value is
+ * not one: AO-4's fields leave it out rather than send it, because a reader
+ * refuses a whole status over one field it cannot read. */
+function countOf(value: unknown): number | undefined {
+  const n = Number(value);
+  return Number.isSafeInteger(n) && n >= 0 ? n : undefined;
+}
+
+/** AO-4 — when the daemon began serving (epoch ms), when it says so. */
+function startedAtOf(daemon: DaemonStatus | null): { startedAt?: number } {
+  const at = daemon === null ? undefined : countOf(daemon.started_at);
+  return at === undefined ? {} : { startedAt: at };
+}
+
+/** AO-4 — rosetta's per-project fold of the first reading, mirrored: a row
+ * whose meters are not counts is left out, and a daemon that predates the fold
+ * has none. */
+function projectBackfillsOf(daemon: DaemonStatus | null): RosettaProjectBackfill[] {
+  const rows: RosettaProjectBackfill[] = [];
+  for (const row of daemon?.ingest?.projects ?? []) {
+    const sessionsTotal = countOf(row.sessions_total);
+    const sessionsDone = countOf(row.sessions_done);
+    const bytesTotal = countOf(row.bytes_total);
+    const bytesStreamed = countOf(row.bytes_streamed);
+    if (
+      sessionsTotal === undefined ||
+      sessionsDone === undefined ||
+      bytesTotal === undefined ||
+      bytesStreamed === undefined
+    )
+      continue;
+    rows.push({
+      projectId: typeof row.project_id === "string" ? row.project_id : null,
+      sessionsTotal,
+      sessionsDone,
+      bytesTotal,
+      bytesStreamed,
+    });
+  }
+  return rows;
 }
 
 /** rosetta's session row → the door's answer (AR-5e). The evidence is folded
