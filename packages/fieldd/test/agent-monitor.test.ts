@@ -515,48 +515,64 @@ describe("the hosted backend — live changes", () => {
   });
 });
 
-describe("the hosted backend — screens (L5, M20)", () => {
-  it("no mark accrues while no screen is open; an open screen's unshown row is marked when its turn finishes; showing it clears; forgetting the last screen drops every mark", async () => {
+describe("the hosted backend — screens (L5, M20), and the marks that outlive them (Q05)", () => {
+  it("marks a turn that ends while no screen is open; a screen's report clears it; neither a reload nor a closed Godview drops a mark", async () => {
+    // Q05 (James, 2026-10-27): fieldd keeps what the person last saw of each
+    // session. A reload is a new connection, so its old screen is forgotten and
+    // a new one opens (L10); a closed Godview unsubscribes the board, so no
+    // screen is open while a turn ends (L10b). Neither resets the ledger.
     const monitor = await testMonitor({ summaries: [working] });
     monitor.rows();
+    const id = monitor.row("run-working").id;
     const base = stateOf(working);
-    const flip = (revision: number, status: "idle" | "working", at: string): void =>
+    // each flip happens at its own time: the clock moves there first
+    const flip = (revision: number, status: "idle" | "working", at: string): void => {
+      monitor.clock.advance(Date.parse(at) - monitor.clock.now());
       monitor.runtime.push({
         ...base,
         revision: base.revision + revision,
         status,
         statusSince: at,
       } as AgentMonitorState);
-    // Godview closed: a turn that finishes is never marked (today's behaviour)
+    };
+    // no screen has opened yet: a turn that finishes is marked all the same
     flip(1, "idle", "2026-09-13T10:06:00.000Z");
-    expect(monitor.row("run-working")).toMatchObject({ status: "idle", unread: false });
+    expect(monitor.row("run-working")).toMatchObject({ status: "idle", unread: true });
     // a report from a screen that is not open is refused, and changes nothing
-    expect(monitor.service.reportShown("win-1", ["run-working"])).toBe(false);
-    // the board opens: the screen's first (empty) report stamps first sight
+    expect(monitor.service.reportShown("win-1", [id])).toBe(false);
+    expect(monitor.row("run-working").unread).toBe(true);
+    // the board opens: its first (empty) report finds the mark
     const close = monitor.service.openScreen("win-1");
+    expect(monitor.row("run-working").unread).toBe(true);
+    // the pane shows it: cleared now, and a turn that finishes while it shows stays clear
+    expect(monitor.service.reportShown("win-1", [id])).toBe(true);
     expect(monitor.row("run-working").unread).toBe(false);
-    // a turn finishes while the pane shows nothing: unread
     flip(2, "working", "2026-09-13T10:07:00.000Z");
     flip(3, "idle", "2026-09-13T10:08:00.000Z");
-    expect(monitor.row("run-working").unread).toBe(true);
-    // the pane shows it: cleared now, and the next finished turn stays clear
-    expect(monitor.service.reportShown("win-1", ["run-working"])).toBe(true);
     expect(monitor.row("run-working").unread).toBe(false);
+    // the pane shows nothing (an empty report keeps the screen open): the next turn is marked
+    expect(monitor.service.reportShown("win-1", [])).toBe(true);
     flip(4, "working", "2026-09-13T10:09:00.000Z");
     flip(5, "idle", "2026-09-13T10:10:00.000Z");
+    expect(monitor.row("run-working").unread).toBe(true);
+    // the window reloads: the old connection's screen is forgotten (its reports
+    // refused from then on), the mark stays, and the new connection's screen finds it
+    close();
+    expect(monitor.row("run-working").unread).toBe(true);
+    expect(monitor.service.reportShown("win-1", [id])).toBe(false);
+    const reloaded = monitor.service.openScreen("win-2");
+    expect(monitor.row("run-working").unread).toBe(true);
+    expect(monitor.service.reportShown("win-2", [id])).toBe(true);
     expect(monitor.row("run-working").unread).toBe(false);
-    // the pane shows nothing again — an empty report keeps the screen open
-    expect(monitor.service.reportShown("win-1", [])).toBe(true);
+    // Godview closes: a turn that ends while no screen is open is marked, and
+    // the board that opens on the return finds it
+    reloaded();
     flip(6, "working", "2026-09-13T10:11:00.000Z");
     flip(7, "idle", "2026-09-13T10:12:00.000Z");
     expect(monitor.row("run-working").unread).toBe(true);
-    // the board closes: the screen is forgotten, the marks go, reports are refused
-    close();
-    expect(monitor.row("run-working").unread).toBe(false);
-    expect(monitor.service.reportShown("win-1", ["run-working"])).toBe(false);
-    flip(8, "working", "2026-09-13T10:13:00.000Z");
-    flip(9, "idle", "2026-09-13T10:14:00.000Z");
-    expect(monitor.row("run-working").unread).toBe(false);
+    const reopened = monitor.service.openScreen("win-3");
+    expect(monitor.row("run-working").unread).toBe(true);
+    reopened();
     monitor.service.dispose();
   });
 });

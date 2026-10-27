@@ -138,10 +138,13 @@ export interface AgentMonitorService {
   subscribe(listener: (change: MonitorModelChange, urgent: boolean) => void): () => void;
   /**
    * L5, M20 — a screen is a window's model board while it is open: opening it
-   * is an empty first report (its pane shows nothing yet, and the backend
-   * stamps first sight), what it reports shown clears unread marks, and closing
-   * it FORGETS the screen. While no screen is open no mark accrues, so a closed
-   * Godview marks nothing — today's single-window behaviour. Returns the close.
+   * is an empty first report (its pane shows nothing yet), what it reports
+   * shown clears unread marks, and closing it FORGETS the screen: what it
+   * showed is shown no more. Q05 (James, 2026-10-27): the marks are fieldd's,
+   * not the screen's. The backend's ledger lives as long as this service (the
+   * daemon), so a turn that ends while no screen is open is marked, and
+   * neither a reload (a new connection's screen) nor a closed Godview (the
+   * board unsubscribed) drops a mark. Returns the close.
    *
    * Q06 — what a screen reports shown also acknowledges a crashed run's
    * failure, so the row leaves for every screen: that is the person's look,
@@ -547,8 +550,8 @@ export function createAgentMonitorService(opts: AgentMonitorServiceOptions): Age
     openScreen(screenId, options) {
       screens.add(screenId);
       if (options?.acknowledges === true) looking.add(screenId);
-      // the first report opens the screen, an empty one too (M20): the backend
-      // stamps first sight and marks accrue from here
+      // the first report opens the screen, an empty one too (M20); the marks
+      // it finds are the ledger's, kept while no screen was open (Q05)
       backend.reportShown(screenId, []);
       let open = true;
       return () => {

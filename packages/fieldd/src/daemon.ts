@@ -3591,6 +3591,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
      * model board: opened with the connection's first model board, forgotten
      * with its last (a window opens one; two share the connection's screen).
      * A call with no connection id (none a product door mints) has no screen.
+     * Q05: forgetting a screen keeps the unread marks — a reload's new
+     * connection and a Godview opened again find them (`agent-monitor.ts`).
      * Q06: only this desktop's own window looks for the person, so only its
      * screen's reports acknowledge a crashed run's failure; a plugin holding
      * `agent.observe` opens a screen that acknowledges nothing. */

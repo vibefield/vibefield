@@ -179,9 +179,11 @@ describe("the model stream", { timeout: 30_000 }, () => {
 
   it("opens the window's screen with its board, so a turn that ends unseen marks its row unread (M51)", async () => {
     // A real window's model board IS its screen: fieldd opens it with the
-    // subscription and an empty report (M20), and marks accrue from there. A
-    // stream computed with no screen never marks a row, and the lab's B arm
-    // drew "idle" where A drew "reply unseen" (build-mv M51).
+    // subscription and an empty report (M20). Under M20 marks accrued only
+    // from there: a stream computed with no screen never marked a row, and the
+    // lab's B arm drew "idle" where A drew "reply unseen" (build-mv M51).
+    // Since Q05 (James, 2026-10-27) the ledger outlives every screen, so marks
+    // accrue without one too; this row still holds the stream to them.
     // eight seconds: the two-second recipe's only flip falls in the marker's
     // quiet window, on the marker agent, so no turn ends after the screen opens
     const { stream } = await streamOf({ n: 10, durationMs: 8_000, seed: 1 });
