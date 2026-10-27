@@ -28,6 +28,12 @@ import type { TerminalService } from "./terminal-service";
 // subprocesses, a locale, an ssh agent, the XDG roots the native-default
 // profile's layout is discovered under). AR-L1 holds: no vendor variable is
 // spelled in this repository — the one puppeteer sets is puppeteer's.
+//
+// The same policy composes the environment of a HELPER an adapter spawns
+// itself (`helperEnvironment`: a private server, a leader, a backend). Such a
+// helper runs the agent's turns and tools, so it is the agent as much as the
+// PTY is; before it asked the host, it inherited the daemon's whole
+// environment (item 50's class; the re-attach study's Step 0).
 
 /** The keys VibeField passes through from the daemon's own environment when
  * present. Everything else the daemon inherited stays with the daemon. */
@@ -150,6 +156,11 @@ export interface TerminalAgentHost extends AgentHost {
    * attempt refused (puppeteer folds host errors into its own failure code;
    * the door prefers the floor's own words). Cleared by the next attempt. */
   lastRefusal(): RpcCallError | undefined;
+  /** puppeteer's `AgentHost.helperEnvironment` (declared here as well, so a
+   * pin whose `AgentHost` lacks it still compiles): the complete environment
+   * of a helper an adapter spawns itself — this host's agent policy over the
+   * adapter's own variables, exactly as an agent PTY's is composed. */
+  helperEnvironment(env: Record<string, string>): Record<string, string>;
 }
 
 /** puppeteer's `AgentHost` over the floor's agent cell. */
@@ -164,6 +175,13 @@ export function createTerminalAgentHost(options: TerminalAgentHostOptions): Term
       true,
       { service: "agents", state: "no-terminal-host" },
     );
+  // one policy for the agent's PTY and for every helper that runs its turns
+  const composed = (allowed: Record<string, string> | undefined): Record<string, string> =>
+    agentEnvironment({
+      allowed,
+      ...(options.environment !== undefined ? { parent: options.environment } : {}),
+      ...(options.home !== undefined ? { home: options.home } : {}),
+    });
   return {
     async spawnTerminal(spec: TerminalSpec): Promise<{ runtimeSessionId: string }> {
       lastRefusal = undefined;
@@ -172,11 +190,7 @@ export function createTerminalAgentHost(options: TerminalAgentHostOptions): Term
         lastRefusal = noHost();
         throw lastRefusal;
       }
-      const variables = agentEnvironment({
-        allowed: spec.env,
-        ...(options.environment !== undefined ? { parent: options.environment } : {}),
-        ...(options.home !== undefined ? { home: options.home } : {}),
-      });
+      const variables = composed(spec.env);
       let born: BornTerminal;
       try {
         born = await terminals.spawn({
@@ -210,6 +224,9 @@ export function createTerminalAgentHost(options: TerminalAgentHostOptions): Term
         ? { accepted: true }
         : { accepted: false, reason: result.reason ?? "human-input-conflict" };
     },
+    // EL7 — no floor is involved: the adapter spawns the helper itself, under
+    // exactly what this answers
+    helperEnvironment: (env) => composed(env),
     born: (sessionId) => births.get(sessionId),
     forget: (sessionId) => {
       births.delete(sessionId);
