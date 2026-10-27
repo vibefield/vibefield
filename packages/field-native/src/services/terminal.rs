@@ -141,6 +141,7 @@ use crate::contracts::{
     TerminalRouteSnapshot, TerminalWorkloadClass, UnitHealth, UnitState,
 };
 use crate::manager::NativeService;
+use crate::orphan::{Census, SessionCensus};
 use crate::registries;
 use crate::registries::terminal_inventory;
 use crate::resource_pressure::{
@@ -682,6 +683,52 @@ pub struct TerminalHandle {
     shared: Arc<Shared>,
 }
 
+/// AL-8a (`thinking-app-lifecycle.md` §8.3.1) — the floor's own session count, for its orphan bound and the record of
+/// how its management client left, read at the source: the sum over every live cell's applied inventory, counted only
+/// from reconciles that BEGAN after `after` when one is given. `Unknown` (never idle) before the inventory is
+/// installed, while any cell's inventory is stale, or while the pump is faulted; `NotYet` while a live cell has no such
+/// reconcile applied (its stamp). A cell that reconciled empty publishes nothing, so its missing `occupancy` entry
+/// reads 0.
+///
+/// *Corrected 2026-10-27 (found by the EL8's verify, AL-8a-2):* this read every cell's last applied reconcile,
+/// whenever it began. A session born after it is not in `occupancy` until the next one (an event's, at the next
+/// 100 ms tick, which a loaded floor stretches), so a fieldd that died inside that gap was recorded beside a session
+/// as `sessions: 0`, a zero the floor never saw. A count that must hold at a moment (a departure, the bound's stop)
+/// asks every pump for a reconcile and counts from those begun after it: a quiet cell would not reconcile again until
+/// its backstop.
+impl SessionCensus for TerminalHandle {
+    fn count(&self, after: Option<Instant>) -> Census {
+        let shared = &self.shared;
+        if shared.inventory_fault.lock().unwrap().is_some()
+            || !shared.inventory_faults.lock().unwrap().is_empty()
+            || !shared.inventory_stale.lock().unwrap().is_empty()
+        {
+            return Census::Unknown;
+        }
+        let Some(stamps) = shared.inventory_stamps.get() else {
+            return Census::Unknown;
+        };
+        let applied = stamps.applied_instances(after.map(tokio::time::Instant::from_std));
+        let cells: Vec<u32> = shared.route_rows.lock().unwrap().keys().copied().collect();
+        // read after the stamps: a reconcile updates `occupancy` before its stamp, so this is at least as new
+        let occupancy = shared.occupancy.borrow();
+        cells
+            .iter()
+            .try_fold(0u64, |total, cell| {
+                applied
+                    .contains(cell)
+                    .then(|| total + u64::from(occupancy.get(cell).copied().unwrap_or(0)))
+            })
+            .map_or(Census::NotYet, Census::Counted)
+    }
+
+    fn ask(&self) {
+        if let Some(stamps) = self.shared.inventory_stamps.get() {
+            stamps.ask();
+        }
+    }
+}
+
 impl TerminalHandle {
     /// TC-D15 — the route snapshot watch, wired into DaemonState by bootstrap
     /// so the mgmt plane can serve hello + the routes subscription without
@@ -699,29 +746,6 @@ impl TerminalHandle {
             .values()
             .filter(|cell| cell.send(line.clone()).is_ok())
             .count()
-    }
-
-    /// AL-8a (`thinking-app-lifecycle.md` §8.3.1) — the floor's own session count, for its orphan bound and the
-    /// record of how its management client left, read at the source: the sum over every live cell's applied
-    /// inventory. `None` — UNKNOWN, and unknown is never idle — before the inventory is installed, while a live cell
-    /// has not had a reconcile applied (its stamp), while any cell's inventory is stale, or while the pump is faulted.
-    /// A cell that reconciled empty publishes nothing, so its missing `occupancy` entry reads 0.
-    pub fn census(&self) -> Option<u64> {
-        let shared = &self.shared;
-        if shared.inventory_fault.lock().unwrap().is_some()
-            || !shared.inventory_faults.lock().unwrap().is_empty()
-            || !shared.inventory_stale.lock().unwrap().is_empty()
-        {
-            return None;
-        }
-        let applied = shared.inventory_stamps.get()?.applied_instances();
-        let cells: Vec<u32> = shared.route_rows.lock().unwrap().keys().copied().collect();
-        let occupancy = shared.occupancy.borrow();
-        cells.iter().try_fold(0u64, |total, cell| {
-            applied
-                .contains(cell)
-                .then(|| total + u64::from(occupancy.get(cell).copied().unwrap_or(0)))
-        })
     }
 
     /// TC-D6(e), the immediate half: a create the kernel refused for
@@ -2294,6 +2318,11 @@ struct InventoryStamps {
     /// `staleCells` and the unit's health at once rather than at the next
     /// sample.
     removed: tokio::sync::Notify,
+    /// AL-8a — a census that must be fresh bumps this, and every pump hears it
+    /// as an event owed a reconcile: each cell reconciles at its next tick
+    /// rather than at its backstop. A watch, so a pump in the middle of a
+    /// reconcile still hears the bump when it next waits.
+    asked: watch::Sender<u64>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -2388,13 +2417,26 @@ impl InventoryStamps {
         self.cells.lock().unwrap().clone()
     }
 
-    /// AL-8a — the instances whose inventory has been applied at least once.
-    fn applied_instances(&self) -> std::collections::BTreeSet<u32> {
+    /// AL-8a — every pump reconciles at its next tick.
+    fn ask(&self) {
+        self.asked.send_modify(|asks| *asks = asks.wrapping_add(1));
+    }
+
+    fn asked(&self) -> watch::Receiver<u64> {
+        self.asked.subscribe()
+    }
+
+    /// AL-8a — the instances whose inventory has been applied, by a reconcile that began after `after` when one is
+    /// given (`as_of` is when the last applied one began).
+    fn applied_instances(
+        &self,
+        after: Option<tokio::time::Instant>,
+    ) -> std::collections::BTreeSet<u32> {
         self.cells
             .lock()
             .unwrap()
             .iter()
-            .filter(|(_, stamp)| stamp.applied)
+            .filter(|(_, stamp)| stamp.applied && after.is_none_or(|after| stamp.as_of > after))
             .map(|((instance, _), _)| *instance)
             .collect()
     }
@@ -3426,6 +3468,9 @@ async fn pump_inventory_cell(
         governed_tx,
     )));
 
+    // AL-8a — subscribed before the first reconcile, which begins after any
+    // ask this misses: a census asking from now on is heard.
+    let mut asked = pump.stamp.stamps.asked();
     // A connection that has only just opened was not watching a moment ago, so
     // its first reconcile closes an observation gap by definition.
     let known = pump.merged.session_ids(instance);
@@ -3460,6 +3505,7 @@ async fn pump_inventory_cell(
                 None => return Ok(()),
             },
             Some(()) = governed_rx.recv() => dirty = true,
+            Ok(()) = asked.changed() => dirty = true,
             _ = ticker.tick() => {
                 if dirty || last_reconcile.elapsed() >= pump.bounds.backstop {
                     dirty = false;
@@ -5519,6 +5565,51 @@ mod tests {
             "the late answer lands, the next reconcile applies, and the cell is fresh"
         );
         assert_eq!(shared.health().state, UnitState::Up);
+    }
+
+    /// AL-8a — a census that must be fresh asks for it. A quiet cell, whose
+    /// next reconcile is a whole backstop away, reconciles at its next tick
+    /// once asked, so the count from after the ask comes at once.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_census_ask_reconciles_a_quiet_cell_at_its_next_tick() {
+        let cell = FakeCell::serve();
+        // a minute's backstop, and a stale bound past it, so only the ask can bring a reconcile in time
+        let bounds = InventoryBounds {
+            backstop: Duration::from_secs(60),
+            stale: Duration::from_secs(120),
+            ..InventoryBounds::REGISTRY
+        };
+        let dir = tempfile::tempdir().expect("tempdir");
+        let shared = test_shared();
+        let state = test_state(dir.path());
+        shared.route_upsert(1, fake_route(1, &cell.endpoint));
+        let handle = TerminalHandle {
+            shared: shared.clone(),
+        };
+        let _inventory = TaskGuard(install_inventory_with(
+            handle.clone(),
+            state.clone(),
+            LedgerThread::spawn(None, shared.clone()),
+            bounds,
+        ));
+        assert!(
+            settles(REAL_TIME_BOUND, || handle.count(None) == Census::Counted(1)).await,
+            "the pump's first reconcile counts the cell's session"
+        );
+        let asked = Instant::now();
+        assert_eq!(
+            handle.count(Some(asked)),
+            Census::NotYet,
+            "no reconcile has begun since: a quiet cell's next is its backstop"
+        );
+        handle.ask();
+        assert!(
+            settles(REAL_TIME_BOUND, || handle.count(Some(asked))
+                == Census::Counted(1))
+            .await,
+            "the ask is heard as an event owed a reconcile"
+        );
     }
 
     /// IL-D6 (a), the bound's precondition, end to end: with the ledger's

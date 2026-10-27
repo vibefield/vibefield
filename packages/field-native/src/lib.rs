@@ -263,10 +263,9 @@ pub async fn bootstrap_with_logging(
 
     // AL-8a (`thinking-app-lifecycle.md` §8.3.1) — the floor's own orphan bound, counted at the cells. It runs from
     // boot: a floor whose fieldd never came, or went, ends itself after a whole span with no session.
-    state.manager.configure_census({
-        let terminal = terminal_handle.clone();
-        Arc::new(move || terminal.census())
-    });
+    state
+        .manager
+        .configure_census(Arc::new(terminal_handle.clone()));
     let (orphan_span, orphan_poll) = orphan::timings(config.orphan_idle_override);
     let orphan_bound = orphan::spawn(state.clone(), orphan_span, orphan_poll);
 

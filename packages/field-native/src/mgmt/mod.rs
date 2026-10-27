@@ -917,7 +917,7 @@ async fn handle_hello(
     }
     // AL-8a (`thinking-app-lifecycle.md` §8.3.1) — how the previous management client left this floor, handed ONCE:
     // fieldd says an unplanned one (a fieldd crash) through AL-7's notice. Absent when none held the slot before.
-    if let Some(last_manager) = state.manager.take_last() {
+    if let Some(last_manager) = state.manager.take_last().await {
         ack["lastManager"] = json!(last_manager);
     }
     // WG-D6 — this process's pid (`HelloAck.pid`), so a fieldd that ADOPTED

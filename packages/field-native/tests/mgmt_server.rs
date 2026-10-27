@@ -1016,7 +1016,7 @@ async fn an_empty_floor_with_no_client_stops_itself_idle_and_a_held_slot_never_d
     {
         panic!(
             "the floor's own orphan bound did not wake main's third arm in 30 s: census {:?}, vacant {}",
-            daemon.state.manager.census(),
+            daemon.state.manager.census(None),
             daemon.state.manager.vacant_since().is_some()
         );
     }

@@ -592,8 +592,14 @@ describe("the kill matrix (NF-4, real field-native)", () => {
       cleanup.push(() => crashed.stop());
       const rpc = await connectAdmin(crashed);
       const session = await createRetrying(rpc, { shell: HOLD }, native, 30_000);
+      // the FLOOR's own listing, never `liveCount()`: that counts births the floor has not listed yet, so it
+      // passed before any reconcile had seen the session (the EL8 verify's red, 2026-10-27)
       await poll(
-        async () => (crashed.terminals.liveCount() === 1 ? true : undefined),
+        async () =>
+          crashed.terminals.observation() !== undefined &&
+          crashed.terminals.list().some((t) => t.sessionId === session.sessionId)
+            ? true
+            : undefined,
         10_000,
         "the session in the floor's inventory",
       );
@@ -623,6 +629,45 @@ describe("the kill matrix (NF-4, real field-native)", () => {
       expect(alive(native.child.pid as number)).toBe(true); // the floor kept the session: the law
       const listed = await listOf(await connectAdmin(next));
       expect(listed.map((t) => t.sessionId)).toContain(session.sessionId);
+    });
+  }, 90_000);
+
+  // AL-8a-2's finding (2026-10-27, red in the EL8's verify and alone): the floor counted a crash's sessions from the
+  // cells' last reconciles, however old, so a fieldd that died before any reconcile saw a new session was recorded
+  // as `sessions: 0`. The floor now counts from reconciles begun after the departure, and the next hello waits for
+  // one. Here fieldd dies the moment the create returns, the gap the old count read a stale zero in.
+  it("row AL-8a-4: fieldd gone the moment a session is born — the next fieldd still counts it, never a stale 0", async () => {
+    const native = await spawnNative();
+    await withNativeLog(native, async () => {
+      const crashed = await boot({
+        dataDir: native.dir,
+        controlPort: 0,
+        dataPort: 0,
+        shellRelaunch: null,
+      });
+      cleanup.push(() => crashed.stop());
+      const rpc = await connectAdmin(crashed);
+      await createRetrying(rpc, { shell: HOLD }, native, 30_000);
+      crashed.native.close(); // no wait for any reconcile: the crash lands inside the gap
+      await crashed.stop();
+
+      const next = await boot({
+        dataDir: native.dir,
+        controlPort: 0,
+        dataPort: 0,
+        shellRelaunch: null,
+      });
+      cleanup.push(() => next.stop());
+      await poll(
+        async () => (existsSync(join(native.dir, ...LAYOUT.MANAGER_EXIT)) ? true : undefined),
+        10_000,
+        "the crashed fieldd's record on disk",
+      );
+      const shell = await connectShell(next);
+      const answer = (await shell.rpc.call("system.shell.attach", {})) as {
+        lastManagerExit: { sessions: number | null } | null;
+      };
+      expect(answer.lastManagerExit).toMatchObject({ sessions: 1 });
     });
   }, 90_000);
 

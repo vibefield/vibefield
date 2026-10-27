@@ -176,7 +176,10 @@ export const NATIVE_MGMT_MAX_FRAME_BYTES = MESH_CONTROL_LIMITS.MGMT_FRAME_BYTES;
 const NATIVE_MGMT_RETAINED_FRAME_BYTES = 1024 * 1024;
 /** How long the handshake may take before the dial is abandoned. Generous
  * against a loaded box (field-native answers a hello in microseconds once it is
- * listening) and finite against something that accepts and never speaks. */
+ * listening) and finite against something that accepts and never speaks.
+ * *Corrected 2026-10-27 (AL-8a):* after a fieldd that went without a word, the
+ * floor holds its ack until it has counted that fieldd's sessions afresh, at
+ * most its `FRESH_COUNT_WAIT` (2 s, orphan.rs), a fifth of this. */
 const HELLO_TIMEOUT_MS = 10_000;
 
 /** Newline framing for one mgmt socket, bounded at `limit` bytes per frame.

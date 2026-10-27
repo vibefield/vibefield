@@ -10,6 +10,13 @@
 //! A client that says `native.lifecycle.detach` before it closes left planned, and so did one a newer client
 //! superseded; one that is simply gone (EOF without either: a fieldd crash) left unplanned. The next client's hello
 //! carries the record ONCE (`HelloAck.lastManager`), and fieldd says it through AL-7's notice.
+//!
+//! A count that must hold at a moment is ASKED for and read from reconciles begun AFTER it (`SessionCensus`): the
+//! record's count from after the departure, the bound's stop from after its decision. *Corrected 2026-10-27 (the EL8's
+//! verify, AL-8a-2):* both read the cells' last reconciles, however old, so a session born after a cell's last
+//! reconcile and before a fieldd crash was recorded as `sessions: 0`, and the bound's confirming read could take the
+//! same stale zero for idle. A quiet cell reconciles only every `TERMINAL_INVENTORY.BACKSTOP_MS` (5 s), so a fresh count
+//! is asked for, never waited for.
 
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
@@ -18,8 +25,43 @@ use crate::contracts::{NativeLastManager, NativePrepareRestartParams, NativeRest
 use crate::registries::{orphan_bound, terminal_inventory};
 use crate::state::DaemonState;
 
-/// The floor's own session count, read at the source; `None` = unknown (never idle).
-pub type Census = Arc<dyn Fn() -> Option<u64> + Send + Sync>;
+/// The floor's own session count, read at the source (`SessionCensus::count`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Census {
+    /// every live cell's inventory applied, from a reconcile begun after the moment asked about
+    Counted(u64),
+    /// a live cell has no such reconcile yet: one asked for begins within a reconcile tick
+    NotYet,
+    /// no count can be read (no inventory, a stale cell, a faulted pump); never idle
+    Unknown,
+}
+
+impl Census {
+    pub fn counted(self) -> Option<u64> {
+        match self {
+            Census::Counted(sessions) => Some(sessions),
+            Census::NotYet | Census::Unknown => None,
+        }
+    }
+}
+
+/// The floor's sessions, counted where they live: the terminal unit (`TerminalHandle`).
+pub trait SessionCensus: Send + Sync {
+    /// The count from reconciles begun after `after`, or from the last applied ones (`None`).
+    fn count(&self, after: Option<Instant>) -> Census;
+    /// Asks every live cell for a reconcile now, so a count from after this moment comes within a reconcile tick
+    /// rather than at a quiet cell's backstop.
+    fn ask(&self);
+}
+
+/// How long a fresh count is waited for once asked: twice the slow-reconcile line, 2 × 1 s = 2 s. An asked reconcile
+/// begins within one 100 ms reconcile tick and a healthy one is a local socket hop, so this covers a slow reconcile
+/// with as much again to spare. The hello holds its ack this long at most, a fifth of fieldd's 10 s hello deadline
+/// (`HELLO_TIMEOUT_MS` in fieldd's native-link.ts), and the departure asked first, so the next fieldd's boot is a head
+/// start. Past it the count is sent as unknown, never as a zero the floor did not see.
+pub const FRESH_COUNT_WAIT: Duration =
+    Duration::from_millis(2 * terminal_inventory::SLOW_RECONCILE_MS);
+const FRESH_COUNT_POLL: Duration = Duration::from_millis(25);
 
 /// How a management client's slot emptied.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -33,7 +75,7 @@ pub enum Departure {
 /// Who holds the management slot, since when nobody has, and how the last holder left.
 pub struct ManagerPresence {
     inner: Mutex<Presence>,
-    census: OnceLock<Census>,
+    census: OnceLock<Arc<dyn SessionCensus>>,
 }
 
 struct Presence {
@@ -42,7 +84,15 @@ struct Presence {
     /// since when no client holds the slot (from boot until the first hello)
     vacant_since: Option<Instant>,
     /// how the previous client left, handed to the next hello once
-    last: Option<NativeLastManager>,
+    last: Option<Departed>,
+}
+
+/// A departure, its count still to be read from after it.
+#[derive(Debug, Clone, Copy)]
+struct Departed {
+    planned: bool,
+    at_ms: u64,
+    at: Instant,
 }
 
 impl ManagerPresence {
@@ -59,12 +109,35 @@ impl ManagerPresence {
     }
 
     /// Bootstrap's wiring: the terminal unit's count. An unconfigured floor (an embedded unit daemon) reads unknown.
-    pub fn configure_census(&self, census: Census) {
+    pub fn configure_census(&self, census: Arc<dyn SessionCensus>) {
         let _ = self.census.set(census);
     }
 
-    pub fn census(&self) -> Option<u64> {
-        self.census.get().and_then(|census| census())
+    pub fn census(&self, after: Option<Instant>) -> Census {
+        self.census
+            .get()
+            .map_or(Census::Unknown, |census| census.count(after))
+    }
+
+    fn ask(&self) {
+        if let Some(census) = self.census.get() {
+            census.ask();
+        }
+    }
+
+    /// The count from reconciles begun after `after`, asked for and waited for up to `wait`: `None` when it cannot be
+    /// read or is not fresh in time — unknown, never a stale zero.
+    pub async fn fresh_count(&self, after: Instant, wait: Duration) -> Option<u64> {
+        self.ask();
+        let deadline = Instant::now() + wait;
+        loop {
+            match self.census(Some(after)) {
+                Census::Counted(sessions) => return Some(sessions),
+                Census::Unknown => return None,
+                Census::NotYet if Instant::now() >= deadline => return None,
+                Census::NotYet => tokio::time::sleep(FRESH_COUNT_POLL).await,
+            }
+        }
     }
 
     /// A client authenticated and holds the slot: the bound is disarmed.
@@ -78,29 +151,49 @@ impl ManagerPresence {
     }
 
     /// The holder `conn_id` left the slot; answers whether it left planned. A closed slot arms the bound with a fresh
-    /// span; a superseded one is held again at once by the hello that superseded it.
+    /// span; a superseded one is held again at once by the hello that superseded it. The departure asks for its count
+    /// at once, so the next hello rarely waits for it.
     pub fn left(&self, conn_id: u64, how: Departure, at_ms: u64, now: Instant) -> bool {
-        let sessions = self.census();
-        let mut inner = self.inner.lock().unwrap();
-        let said = inner.detaching == Some(conn_id);
-        if said {
-            inner.detaching = None;
-        }
-        let planned = said || how == Departure::Superseded;
-        inner.last = Some(NativeLastManager {
-            planned,
-            at: at_ms,
-            sessions,
-        });
-        if how == Departure::Closed {
-            inner.vacant_since = Some(now);
-        }
+        let planned = {
+            let mut inner = self.inner.lock().unwrap();
+            let said = inner.detaching == Some(conn_id);
+            if said {
+                inner.detaching = None;
+            }
+            let planned = said || how == Departure::Superseded;
+            inner.last = Some(Departed {
+                planned,
+                at_ms,
+                at: now,
+            });
+            if how == Departure::Closed {
+                inner.vacant_since = Some(now);
+            }
+            planned
+        };
+        self.ask();
         planned
     }
 
-    /// The hello's `lastManager`: how the previous client left, once.
-    pub fn take_last(&self) -> Option<NativeLastManager> {
-        self.inner.lock().unwrap().last.take()
+    /// The hello's `lastManager`: how the previous client left, once, with the sessions that kept running counted
+    /// from reconciles begun after it left. An unplanned departure (the one fieldd says) asks again and waits up to
+    /// `FRESH_COUNT_WAIT` for that count; a planned one is never waited on, since nothing says its count.
+    pub async fn take_last(&self) -> Option<NativeLastManager> {
+        self.take_last_within(FRESH_COUNT_WAIT).await
+    }
+
+    pub async fn take_last_within(&self, wait: Duration) -> Option<NativeLastManager> {
+        let departed = self.inner.lock().unwrap().last.take()?;
+        let sessions = if departed.planned {
+            self.census(Some(departed.at)).counted()
+        } else {
+            self.fresh_count(departed.at, wait).await
+        };
+        Some(NativeLastManager {
+            planned: departed.planned,
+            at: departed.at_ms,
+            sessions,
+        })
     }
 
     pub fn vacant_since(&self) -> Option<Instant> {
@@ -184,9 +277,10 @@ pub fn timings(span_override: Option<u64>) -> (Duration, Duration) {
     }
 }
 
-/// The bound, running: a whole span with no management client and no session, then a confirming read one inventory
-/// sample later (a birth with no fieldd needs a grant fieldd minted before it went, so a session can still arrive),
-/// then the `idle` intent and main's shutdown arm — the floor's own SIGTERM drain, never a kill.
+/// The bound, running: a whole span with no management client and no session, then a confirming read from
+/// reconciles begun after the decision (a birth with no fieldd needs a grant fieldd minted before it went, so a
+/// session can still arrive), then the `idle` intent and main's shutdown arm — the floor's own SIGTERM drain, never a
+/// kill.
 pub fn spawn(
     state: Arc<DaemonState>,
     span: Duration,
@@ -198,16 +292,18 @@ pub fn spawn(
         tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         loop {
             tick.tick().await;
+            let decided = Instant::now();
             let verdict = bound.observe(
-                Instant::now(),
+                decided,
                 state.manager.vacant_since(),
-                state.manager.census(),
+                state.manager.census(None).counted(),
             );
             if verdict == Verdict::Wait {
                 continue;
             }
-            tokio::time::sleep(Duration::from_millis(terminal_inventory::SAMPLE_MS)).await;
-            let census = state.manager.census();
+            // the confirming read: a count asked for and read from reconciles begun after the decision, so a session
+            // born since a cell's last reconcile is in it; one not fresh in time is a whole new wait, never a stop
+            let census = state.manager.fresh_count(decided, FRESH_COUNT_WAIT).await;
             if state.manager.vacant_since().is_none() || census != Some(0) {
                 bound.refused();
                 tracing::info!(
@@ -337,23 +433,36 @@ mod tests {
         );
     }
 
-    #[test]
-    fn a_detach_reads_planned_a_close_without_it_unplanned_and_a_supersession_planned() {
+    /// A census that always reads the same.
+    struct Fixed(Census);
+
+    impl SessionCensus for Fixed {
+        fn count(&self, _after: Option<Instant>) -> Census {
+            self.0
+        }
+        fn ask(&self) {}
+    }
+
+    #[tokio::test]
+    async fn a_detach_reads_planned_a_close_without_it_unplanned_and_a_supersession_planned() {
         let presence = ManagerPresence::new(Instant::now());
-        presence.configure_census(Arc::new(|| Some(2)));
+        presence.configure_census(Arc::new(Fixed(Census::Counted(2))));
         presence.held();
         presence.detach(1);
         assert!(presence.left(1, Departure::Closed, 10, Instant::now()));
-        let planned = presence.take_last().expect("a record");
+        let planned = presence.take_last().await.expect("a record");
         assert_eq!(
             (planned.planned, planned.at, planned.sessions),
             (true, 10, Some(2))
         );
-        assert!(presence.take_last().is_none(), "the record is handed once");
+        assert!(
+            presence.take_last().await.is_none(),
+            "the record is handed once"
+        );
 
         presence.held();
         assert!(!presence.left(2, Departure::Closed, 20, Instant::now()));
-        assert!(!presence.take_last().unwrap().planned);
+        assert!(!presence.take_last().await.unwrap().planned);
         assert!(
             presence.vacant_since().is_some(),
             "a closed slot arms the bound"
@@ -367,16 +476,136 @@ mod tests {
         );
     }
 
-    #[test]
-    fn a_detach_said_by_another_connection_does_not_plan_this_one() {
+    #[tokio::test]
+    async fn a_detach_said_by_another_connection_does_not_plan_this_one() {
         let presence = ManagerPresence::new(Instant::now());
         presence.held();
         presence.detach(7);
         assert!(!presence.left(8, Departure::Closed, 1, Instant::now()));
         assert_eq!(
-            presence.take_last().unwrap().sessions,
+            presence.take_last().await.unwrap().sessions,
             None,
             "an unconfigured census is unknown, never zero"
+        );
+    }
+
+    /// One cell as `TerminalHandle` counts it: its sessions now, and its last applied reconcile (when it began, what
+    /// it saw). An answering cell reconciles when asked; a mute one never does.
+    struct OneCell {
+        sessions: u64,
+        answers: bool,
+        last: Mutex<(Instant, u64)>,
+        asks: std::sync::atomic::AtomicUsize,
+    }
+
+    impl OneCell {
+        /// Its last reconcile saw it empty, and `sessions` were born since.
+        fn born_since(sessions: u64, answers: bool) -> Arc<Self> {
+            Arc::new(Self {
+                sessions,
+                answers,
+                last: Mutex::new((Instant::now(), 0)),
+                asks: std::sync::atomic::AtomicUsize::new(0),
+            })
+        }
+
+        fn asks(&self) -> usize {
+            self.asks.load(std::sync::atomic::Ordering::SeqCst)
+        }
+    }
+
+    impl SessionCensus for OneCell {
+        fn count(&self, after: Option<Instant>) -> Census {
+            let (began, seen) = *self.last.lock().unwrap();
+            if after.is_none_or(|after| began > after) {
+                Census::Counted(seen)
+            } else {
+                Census::NotYet
+            }
+        }
+
+        fn ask(&self) {
+            self.asks.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            if self.answers {
+                // an asked reconcile begins at the pump's next tick, after the ask
+                std::thread::sleep(Duration::from_millis(1));
+                *self.last.lock().unwrap() = (Instant::now(), self.sessions);
+            }
+        }
+    }
+
+    // AL-8a-2's finding (2026-10-27): the count at a departure was the cells' LAST reconcile, however old, so a
+    // session born after it and before a fieldd crash was recorded as 0. The departure asks for a reconcile and the
+    // record counts only from one begun after it; a cell that does not answer in time is unknown, never that zero.
+    #[tokio::test]
+    async fn a_departure_asks_for_its_count_and_never_says_a_stale_zero() {
+        let mute = OneCell::born_since(1, false);
+        let presence = ManagerPresence::new(Instant::now());
+        presence.configure_census(mute.clone());
+        presence.held();
+        std::thread::sleep(Duration::from_millis(2));
+        assert!(!presence.left(1, Departure::Closed, 10, Instant::now()));
+        assert_eq!(mute.asks(), 1, "the departure asks at once");
+        assert_eq!(presence.census(None), Census::Counted(0), "the stale zero");
+        let unknown = presence
+            .take_last_within(Duration::from_millis(60))
+            .await
+            .expect("a record");
+        assert_eq!(
+            (unknown.planned, unknown.sessions),
+            (false, None),
+            "a count no reconcile after the crash has made is unknown, never 0"
+        );
+
+        // a cell that answers: the reconcile the departure asked for sees the session, and the record counts it
+        let answering = OneCell::born_since(1, true);
+        let presence = ManagerPresence::new(Instant::now());
+        presence.configure_census(answering.clone());
+        presence.held();
+        std::thread::sleep(Duration::from_millis(2));
+        assert!(!presence.left(2, Departure::Closed, 20, Instant::now()));
+        let counted = presence
+            .take_last_within(Duration::from_secs(5))
+            .await
+            .expect("a record");
+        assert_eq!((counted.planned, counted.sessions), (false, Some(1)));
+    }
+
+    #[tokio::test]
+    async fn a_planned_departure_is_never_waited_on_and_an_unreadable_count_ends_the_wait() {
+        let presence = ManagerPresence::new(Instant::now());
+        presence.configure_census(OneCell::born_since(0, false));
+        presence.held();
+        presence.detach(1);
+        std::thread::sleep(Duration::from_millis(2));
+        assert!(presence.left(1, Departure::Closed, 10, Instant::now()));
+        let began = Instant::now();
+        let planned = presence
+            .take_last_within(Duration::from_secs(5))
+            .await
+            .unwrap();
+        assert_eq!((planned.planned, planned.sessions), (true, None));
+        assert!(
+            began.elapsed() < Duration::from_secs(1),
+            "a planned record never waits"
+        );
+
+        let unknown = ManagerPresence::new(Instant::now());
+        unknown.configure_census(Arc::new(Fixed(Census::Unknown)));
+        unknown.held();
+        assert!(!unknown.left(2, Departure::Closed, 20, Instant::now()));
+        let began = Instant::now();
+        assert_eq!(
+            unknown
+                .take_last_within(Duration::from_secs(5))
+                .await
+                .unwrap()
+                .sessions,
+            None
+        );
+        assert!(
+            began.elapsed() < Duration::from_secs(1),
+            "a count that cannot be read is not waited for"
         );
     }
 
