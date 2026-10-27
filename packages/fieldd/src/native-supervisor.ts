@@ -7,6 +7,7 @@ import {
   type NativeLinkState,
   type NativePrepareRestartParams,
   NativePrepareRestartResult,
+  type NativeRestartReason,
   type NativeUnavailableDetails,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
@@ -549,8 +550,8 @@ export class NativeSupervisor extends EventEmitter {
     }
   }
 
-  /** WP12 L2b (`build-wp12-updater.md` §9 R2; the PM's ruling 2026-10-15 12:20Z) — stop the floor for an update, in
-   * ONE place and in this order:
+  /** WP12 L2b (`build-wp12-updater.md` §9 R2; the PM's ruling 2026-10-15 12:20Z) — stop the floor for an update or,
+   * since AL-2, a person's quit or the OS's logout (`intent.reason`), in ONE place and in this order:
    *   1. suppress respawn (and the heartbeat: misses during the drain would read as a wedge);
    *   2. `native.lifecycle.prepareRestart` — the intent the next boot reports as `lastExit`;
    *   3. `native.lifecycle.shutdown` — the floor runs its own SIGTERM drain;
@@ -563,7 +564,7 @@ export class NativeSupervisor extends EventEmitter {
    * The shutdown is asked once and wanted for the whole wait: its deadline (`deadlineAt`, WG-D6) covers
    * `rungMs + closeWaitMs`, so a floor that reads it late still stops rather than answering TIMEOUT. The forced
    * rung is the drain ladder's: after SIGTERM it waits `drainWaitMs` (KILL_DRAIN_WAIT_MS) before SIGKILL. */
-  async stopForUpdate(
+  async stopFloor(
     intent: NativePrepareRestartParams,
     bounds: { closeWaitMs?: number; rungMs?: number; drainWaitMs?: number } = {},
   ): Promise<"closed" | "forced" | "lingering"> {
@@ -601,7 +602,7 @@ export class NativeSupervisor extends EventEmitter {
       )
       .catch(() => undefined);
     if (await this.closedWithin(rungMs + closeWaitMs)) {
-      return this.stoppedForUpdate("closed", fields);
+      return this.floorStopped("closed", intent.reason, fields);
     }
     if (this.pid === undefined || !this.opts.killNative) {
       this.logger.warn(
@@ -619,7 +620,7 @@ export class NativeSupervisor extends EventEmitter {
     );
     await this.drainLadder(pid, bounds.drainWaitMs ?? this.t.KILL_DRAIN_WAIT_MS, rungMs);
     this.forgetExitedFloor(pid);
-    return this.stoppedForUpdate("forced", fields);
+    return this.floorStopped("forced", intent.reason, fields);
   }
 
   /** Resolves true the moment the management link reports its socket closed, false when `ms` passes first. */
@@ -640,19 +641,27 @@ export class NativeSupervisor extends EventEmitter {
     });
   }
 
-  private stoppedForUpdate(
+  private floorStopped(
     how: "closed" | "forced",
+    reason: NativeRestartReason,
     fields: Record<string, unknown>,
   ): "closed" | "forced" {
-    this.setState("gone", "stopped for an app update; the next shell starts a fresh floor");
-    this.logger.info(
-      "fieldd.native_supervisor.stopped_for_update",
-      "The floor stopped for an update",
-      {
-        ...fields,
-        how,
-      },
-    );
+    if (reason === "update") {
+      this.setState("gone", "stopped for an app update; the next shell starts a fresh floor");
+      this.logger.info(
+        "fieldd.native_supervisor.stopped_for_update",
+        "The floor stopped for an update",
+        { ...fields, how },
+      );
+    } else {
+      // AL-2 — its own event (logging spec §8.4: a published name is never reused for another meaning)
+      this.setState("gone", "stopped when VibeField quit; the next launch starts a fresh floor");
+      this.logger.info(
+        "fieldd.native_supervisor.stopped_for_quit",
+        "The floor stopped because VibeField quit",
+        { ...fields, how },
+      );
+    }
     return how;
   }
 

@@ -472,6 +472,9 @@ fn restart_verb_fixtures() {
     roundtrip::<NativePrepareRestartParams>("native-prepare-restart-params.valid.json", true);
     roundtrip::<NativePrepareRestartResult>("native-prepare-restart-result.valid.json", true);
     roundtrip::<NativeShutdownParams>("native-shutdown-params.valid.json", true);
+    // AL-2 — a person's quit is a reason the floor's intent records (and its next boot reads planned)
+    roundtrip::<NativePrepareRestartParams>("native-prepare-restart-params.quit.json", true);
+    roundtrip::<NativeShutdownParams>("native-shutdown-params.quit.json", true);
     roundtrip::<NativeShutdownResult>("native-shutdown-result.valid.json", true);
     let mut whim = load("native-shutdown-params.valid.json");
     whim["reason"] = serde_json::json!("whim");

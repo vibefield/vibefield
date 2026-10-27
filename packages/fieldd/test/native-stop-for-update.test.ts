@@ -1,4 +1,4 @@
-// WP12 L2b (`build-wp12-updater.md` §9 R2; the PM's ruling 2026-10-15 12:20Z) — `NativeSupervisor.stopForUpdate`,
+// WP12 L2b (`build-wp12-updater.md` §9 R2; the PM's ruling 2026-10-15 12:20Z) — `NativeSupervisor.stopFloor`,
 // against a scripted link: ONE function, in this order — suppress respawn → prepareRestart → shutdown → a bounded
 // wait for the management socket to close → the drain ladder only if this fieldd holds a pid and the wait passed.
 // The ADOPTED case (no pid) is the update path's by construction: no ladder, and the socket closing is the witness.
@@ -13,14 +13,16 @@ import { type FloorOfRecord, NativeSupervisor } from "../src/native-supervisor";
 class FakeLink extends EventEmitter {
   connected = true;
   readonly asked: string[] = [];
+  readonly params: unknown[] = [];
   floorGoes = true;
   failPrepare = false;
   dialNow(): void {}
   async ping(): Promise<{ bootId: string; ts: number }> {
     return { bootId: "fake-native-boot", ts: Date.now() };
   }
-  async request(method: string, _params: unknown): Promise<unknown> {
+  async request(method: string, params: unknown): Promise<unknown> {
     this.asked.push(method);
+    this.params.push(params);
     if (method === "native.lifecycle.prepareRestart") {
       if (this.failPrepare) throw new Error("the floor could not record");
       return { recorded: true };
@@ -71,10 +73,10 @@ function rig(opts: { pid?: number; dieOn?: NodeJS.Signals; pidWitness?: boolean 
  * (production: NATIVE_SUPERVISION.KILL_DRAIN_WAIT_MS). */
 const FAST = { closeWaitMs: 60, rungMs: 40, drainWaitMs: 40 };
 
-describe("NativeSupervisor.stopForUpdate (WP12 L2b)", () => {
+describe("NativeSupervisor.stopFloor (WP12 L2b)", () => {
   it("an ADOPTED floor (no pid): prepareRestart, then shutdown; the socket closing is the witness; no ladder", async () => {
     const { link, sup, kills, spawns } = rig();
-    await expect(sup.stopForUpdate({ reason: "update", toVersion: "0.9.0" }, FAST)).resolves.toBe(
+    await expect(sup.stopFloor({ reason: "update", toVersion: "0.9.0" }, FAST)).resolves.toBe(
       "closed",
     );
     expect(link.asked).toEqual(["native.lifecycle.prepareRestart", "native.lifecycle.shutdown"]);
@@ -88,17 +90,32 @@ describe("NativeSupervisor.stopForUpdate (WP12 L2b)", () => {
     expect(spawns).toEqual([]);
   });
 
+  // AL-2 (`draft/thinking-app-lifecycle.md`; ESR §7.3 as amended 2026-10-27) — a person's quit stops the floor by the
+  // same rungs; the floor is told WHY (its intent, so its next boot reads planned), and the state says the app quit,
+  // never that an update ran.
+  it("a QUIT stops the floor by the same rungs, tells it why, and says the app quit — not an update", async () => {
+    const { link, sup, kills } = rig();
+    await expect(sup.stopFloor({ reason: "quit" }, FAST)).resolves.toBe("closed");
+    expect(link.asked).toEqual(["native.lifecycle.prepareRestart", "native.lifecycle.shutdown"]);
+    expect(link.params).toEqual([{ reason: "quit" }, { reason: "quit" }]);
+    expect(kills).toEqual([]);
+    expect(sup.state).toBe("gone");
+    expect(sup.stateDetail).toBe(
+      "stopped when VibeField quit; the next launch starts a fresh floor",
+    );
+  });
+
   it("an ADOPTED floor that does not close is reported lingering — never signalled", async () => {
     const { link, sup, kills } = rig();
     link.floorGoes = false;
-    await expect(sup.stopForUpdate({ reason: "update" }, FAST)).resolves.toBe("lingering");
+    await expect(sup.stopFloor({ reason: "update" }, FAST)).resolves.toBe("lingering");
     expect(kills).toEqual([]);
   });
 
   it("a SPAWNED floor that does not close meets the ladder only after the wait: TERM, then KILL", async () => {
     const { link, sup, kills } = rig({ pid: 4242 });
     link.floorGoes = false;
-    await expect(sup.stopForUpdate({ reason: "update" }, FAST)).resolves.toBe("forced");
+    await expect(sup.stopFloor({ reason: "update" }, FAST)).resolves.toBe("forced");
     expect(link.asked).toEqual(["native.lifecycle.prepareRestart", "native.lifecycle.shutdown"]);
     expect(kills).toEqual([
       { pid: 4242, signal: "SIGTERM" },
@@ -109,7 +126,7 @@ describe("NativeSupervisor.stopForUpdate (WP12 L2b)", () => {
   it("a SPAWNED floor that goes at TERM never sees KILL", async () => {
     const { link, sup, kills } = rig({ pid: 4242, dieOn: "SIGTERM" });
     link.floorGoes = false;
-    await expect(sup.stopForUpdate({ reason: "update" }, FAST)).resolves.toBe("forced");
+    await expect(sup.stopFloor({ reason: "update" }, FAST)).resolves.toBe("forced");
     expect(kills).toEqual([{ pid: 4242, signal: "SIGTERM" }]);
   });
 
@@ -118,7 +135,7 @@ describe("NativeSupervisor.stopForUpdate (WP12 L2b)", () => {
     const pids: Array<number | null> = [];
     sup.on("floor-of-record", (event: FloorOfRecord) => pids.push(event.pid));
     link.floorGoes = false;
-    await expect(sup.stopForUpdate({ reason: "update" }, FAST)).resolves.toBe("forced");
+    await expect(sup.stopFloor({ reason: "update" }, FAST)).resolves.toBe("forced");
     expect(sup.recordedFloorPid).toBeNull();
     expect(pids).toEqual([null]);
   });
@@ -127,21 +144,21 @@ describe("NativeSupervisor.stopForUpdate (WP12 L2b)", () => {
     const { sup } = rig({ pid: 4242, pidWitness: true });
     const pids: Array<number | null> = [];
     sup.on("floor-of-record", (event: FloorOfRecord) => pids.push(event.pid));
-    await expect(sup.stopForUpdate({ reason: "update" }, FAST)).resolves.toBe("closed");
+    await expect(sup.stopFloor({ reason: "update" }, FAST)).resolves.toBe("closed");
     expect(sup.recordedFloorPid).toBe(4242);
     expect(pids).toEqual([]);
   });
 
   it("a SPAWNED floor that closes in time is never signalled at all", async () => {
     const { sup, kills } = rig({ pid: 4242 });
-    await expect(sup.stopForUpdate({ reason: "update" }, FAST)).resolves.toBe("closed");
+    await expect(sup.stopFloor({ reason: "update" }, FAST)).resolves.toBe("closed");
     expect(kills).toEqual([]);
   });
 
   it("a floor that cannot record its intent is still stopped (its next boot reads unplanned)", async () => {
     const { link, sup } = rig();
     link.failPrepare = true;
-    await expect(sup.stopForUpdate({ reason: "update" }, FAST)).resolves.toBe("closed");
+    await expect(sup.stopFloor({ reason: "update" }, FAST)).resolves.toBe("closed");
     expect(link.asked).toEqual(["native.lifecycle.prepareRestart", "native.lifecycle.shutdown"]);
   });
 });

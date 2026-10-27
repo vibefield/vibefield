@@ -1173,7 +1173,9 @@
     "NativeRestartReason": {
       "type": "string",
       "enum": [
-        "update"
+        "update",
+        "quit",
+        "logout"
       ]
     },
     "NativePrepareRestartParams": {

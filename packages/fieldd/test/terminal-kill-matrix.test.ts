@@ -427,6 +427,47 @@ describe("the kill matrix (NF-4, real field-native)", () => {
     });
   }, 90_000);
 
+  // AL-2 (`draft/thinking-app-lifecycle.md`; ESR §7.3 as amended 2026-10-27) — a person's QUIT is a consented stop
+  // like the update's: the same exact-set re-check ends the floor and its sessions, the floor records WHY (`quit`), its
+  // next boot reads planned — and nothing announces a restart, because a quit is none.
+  it("row AL-2a: a consented QUIT ends exactly the consented set, records `quit`, and announces no restart", async () => {
+    const native = await spawnNative();
+    await withNativeLog(native, async () => {
+      const daemon = await boot({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
+      cleanup.push(() => daemon.stop());
+      daemon.onShutdownRequest(() => undefined);
+      const rpc = await connectAdmin(daemon);
+      const a = await createRetrying(rpc, { shell: HOLD }, native, 30_000);
+      const row = await poll(async () => {
+        const listed = await listOf(rpc);
+        const found = listed.find((t) => t.sessionId === a.sessionId);
+        return found?.pid !== undefined ? found : undefined;
+      });
+      const pid = row.pid as number;
+      const exited = new Promise<number | null>((resolve) =>
+        native.child.once("exit", (code) => resolve(code)),
+      );
+      const answer = (await rpc.call("system.shutdown", {
+        reason: "quit",
+        native: { stop: true, sessions: [a.sessionId] },
+      })) as { stopping: boolean; native?: string };
+      expect(answer).toMatchObject({ stopping: true, native: "closed" });
+      expect(daemon.health().restartScheduled ?? null).toBeNull();
+      await expect(exited).resolves.toBe(0); // the drain, not a kill
+      await poll(async () => (alive(pid) ? undefined : true), 5_000);
+      const intent = JSON.parse(
+        readFileSync(join(native.dir, "native", "restart-intent.json"), "utf8"),
+      ) as Record<string, unknown>;
+      expect(intent).toMatchObject({ schemaVersion: 1, reason: "quit" });
+      await daemon.stop();
+
+      await spawnNative(native.dir);
+      const nextDaemon = await boot({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
+      cleanup.push(() => nextDaemon.stop());
+      expect(nextDaemon.native.lastExit).toBe("planned");
+    });
+  }, 90_000);
+
   it("row WP12-R2b: a session born after consent refuses the stop — nothing ends, and births reopen", async () => {
     const native = await spawnNative();
     await withNativeLog(native, async () => {

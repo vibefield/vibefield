@@ -98,6 +98,7 @@ import {
   type NativeLastExit,
   type NativeLinkHealth,
   type NativeLinkState,
+  type NativeRestartReason,
   PluginsDisableParams,
   PluginsEnableParams,
   PluginsGetParams,
@@ -1968,21 +1969,23 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // unix signal handlers take, now reachable on every platform. Unregistered
     // (a library embedding without a process owner) the verb says so honestly.
     //
-    // WP12 L2b (`build-wp12-updater.md` §9 R2; design-00 EL1's 2026-10-15 note) — `native` is the ONE consented
-    // exception to the two-planes law: an update that touches field-native stops the floor too. The census is
-    // re-verified HERE, at the point of effect, with the terminal service closed to births: only an exact match
-    // between the live set and the set the person consented to end (`[]` at census zero), with no birth in flight,
-    // stops the floor; anything else refuses and reopens births. The floor then stops itself through
-    // `NativeSupervisor.stopForUpdate` (prepareRestart → shutdown → the socket closing; the ladder only for a floor
-    // this fieldd spawned), and fieldd follows. Without `native`, unchanged: fieldd alone, the floor lives on.
-    let stoppingForUpdate = false;
-    const stopNativeForUpdate = async (
+    // WP12 L2b (`build-wp12-updater.md` §9 R2; design-00 EL1's 2026-10-15 note) — `native` is the consented exception
+    // to the two-planes law: an update that touches field-native stops the floor too, and since AL-2 (2026-10-27,
+    // EL1's errata) so does a person's quit or the OS's logout (`reason`). The census is re-verified HERE, at the
+    // point of effect, with the terminal service closed to births: only an exact match between the live set and the
+    // set the person consented to end (`[]` at census zero), with no birth in flight, stops the floor; anything else
+    // refuses and reopens births. The floor then stops itself through `NativeSupervisor.stopFloor` (prepareRestart →
+    // shutdown → the socket closing; the ladder only for a floor this fieldd spawned), and fieldd follows. Without
+    // `native`, unchanged: fieldd alone, the floor lives on.
+    let nativeStopping: NativeRestartReason | null = null;
+    const stopNativeConsented = async (
       asked: NonNullable<SystemShutdownParams["native"]>,
+      reason: NativeRestartReason,
     ): Promise<"closed" | "forced" | "lingering"> => {
-      if (stoppingForUpdate)
+      if (nativeStopping !== null)
         throw new RpcCallError(
           "PRECONDITION_FAILED",
-          "a stop for an update is already underway",
+          `a stop (${nativeStopping}) is already underway`,
           false,
         );
       const census = terminals.closeToBirthsForStop();
@@ -2010,8 +2013,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         terminals.reopenToBirths();
         logger.info(
           "fieldd.lifecycle.native_stop_refused",
-          "A stop for an update was refused: the terminal inventory is older than its bound",
-          { staleCells: terminals.staleCells().length },
+          "A consented stop was refused: the terminal inventory is older than its bound",
+          { reason, staleCells: terminals.staleCells().length },
         );
         throw stale;
       }
@@ -2024,8 +2027,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         terminals.reopenToBirths();
         logger.info(
           "fieldd.lifecycle.native_stop_refused",
-          "A stop for an update was refused: the live sessions are not the consented set",
-          { live: census.live.length, consented: consented.size, births: census.births },
+          "A consented stop was refused: the live sessions are not the consented set",
+          { reason, live: census.live.length, consented: consented.size, births: census.births },
         );
         throw new RpcCallError(
           "PRECONDITION_FAILED",
@@ -2036,20 +2039,23 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           { live: census.live, births: census.births },
         );
       }
-      stoppingForUpdate = true;
-      restartScheduled = {
-        reason: "update",
-        planes: ["shell", "fieldd", "field-native"],
-        at: Date.now(),
-      };
+      nativeStopping = reason;
+      // a RESTART is announced (the phone and the peers read `restarting`); a quit or a logout is no restart
+      if (reason === "update") {
+        restartScheduled = {
+          reason,
+          planes: ["shell", "fieldd", "field-native"],
+          at: Date.now(),
+        };
+      }
       logger.info(
         "fieldd.lifecycle.native_stop_consented",
-        "Stopping the floor for an update: the live sessions are exactly the consented set",
-        { sessions: census.live.length },
+        "Stopping the floor: the live sessions are exactly the consented set",
+        { reason, sessions: census.live.length },
       );
       emitHealth();
-      return await supervisor.stopForUpdate({
-        reason: "update",
+      return await supervisor.stopFloor({
+        reason,
         ...(asked.toVersion !== undefined ? { toVersion: asked.toVersion } : {}),
       });
     };
@@ -2059,14 +2065,16 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       if (!parsed.success)
         throw new RpcCallError(
           "PRECONDITION_FAILED",
-          "expected {} or { native: { stop: true, sessions: string[], toVersion? } }",
+          "expected { reason?: update|quit|logout, native?: { stop: true, sessions: string[], toVersion? } }",
           false,
         );
+      const reason = parsed.data.reason ?? "update";
       const nativeStop =
         parsed.data.native === undefined
           ? undefined
-          : await stopNativeForUpdate(parsed.data.native);
+          : await stopNativeConsented(parsed.data.native, reason);
       logger.info("fieldd.lifecycle.shutdown_requested", "system.shutdown received", {
+        reason,
         native: nativeStop ?? null,
       });
       const callback = shutdownRequested;

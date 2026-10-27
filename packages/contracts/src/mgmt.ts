@@ -244,9 +244,12 @@ export const NativeTickParams = z
   .passthrough();
 export type NativeTickParams = z.infer<typeof NativeTickParams>;
 
-/** WP12 L2b (`build-wp12-updater.md` §9 R2/R3) — why the floor is asked to restart. One reason today: an app update
- * that touches field-native, after the person's consent or at census zero (EDP-33/35). */
-export const NativeRestartReason = z.enum(["update"]);
+/** WP12 L2b (`build-wp12-updater.md` §9 R2/R3) — why the floor is asked to stop: `update`, an app update that touches
+ * field-native, after the person's consent or at census zero (EDP-33/35); since AL-2 (2026-10-27,
+ * `thinking-app-lifecycle.md`; ESR §7.3 as amended) `quit`, a person's quit after the same census gate, and `logout`,
+ * the OS ending the session (no box asks, AL-D6). Every one is a PLANNED stop: the next boot reads `lastExit:
+ * planned`. The "restart" in the name is the next launch's. */
+export const NativeRestartReason = z.enum(["update", "quit", "logout"]);
 export type NativeRestartReason = z.infer<typeof NativeRestartReason>;
 
 /** `native.lifecycle.prepareRestart` — record the restart intent BEFORE the floor is stopped, so the next boot can

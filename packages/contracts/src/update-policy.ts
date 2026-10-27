@@ -382,9 +382,14 @@ export type RestartScheduled = z.infer<typeof RestartScheduled>;
  * closes the terminal service to births, then compares its OWN live set (the observed inventory plus every session
  * born and not yet observed) with `sessions`: any difference, a birth in flight, or an unobserved inventory refuses
  * (`PRECONDITION_FAILED {live}` / `UNAVAILABLE {service: "terminal", state: "unobserved"}`) and reopens births; only
- * an exact match stops the floor (`native.lifecycle.prepareRestart` → `native.lifecycle.shutdown`), then fieldd. */
+ * an exact match stops the floor (`native.lifecycle.prepareRestart` → `native.lifecycle.shutdown`), then fieldd.
+ *
+ * `reason` (AL-2, 2026-10-27) — why the shell asks: `update`, or a person's `quit`, or the OS's `logout`. It rides into
+ * the floor's intent and the logs; absent = `update`, the only caller before it (the apply port, `replaceStaleBuild`'s
+ * plain stop). It changes no rule: a native stop is an exact consented match whatever the reason. */
 export const SystemShutdownParams = z
   .object({
+    reason: NativeRestartReason.optional(),
     native: z
       .object({
         stop: z.literal(true),
