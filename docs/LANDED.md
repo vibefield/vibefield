@@ -15525,3 +15525,87 @@ is recorded as the lottery class (item 76, no read).
 - **The fieldd-supervisor suite:** 66/66 ×3.
 - **`pnpm verify`:** EXIT 0 at 00:47:03Z on its first run (test for 27 projects, cargo test 30 ok), the 1-minute load reaching ~184.
 - Logs: `/Volumes/SamsungRed/lanes/item75/logs/` (`redfirst/`, `proofs/`).
+
+## FW (packaging) — the freeway host ships in the package: staged in the floor's set, on the signing list, counted in the native plane, and launched by the release's launch check; its live half is owed to the next nightly's install (2026-10-27; `f47987f18` … `a91fcf351`, lane `fw/pack-host` rebased from `846398b1e`; VF-PM 00:28Z, 00:37Z, 00:47Z)
+
+**Why:** the floor resolves `field-freeway-host` beside itself and starts it on fieldd's first declaration
+(`config.rs` `freeway_binary()`). The stage never staged it, so no package has carried it:
+not run 40342606623's abandoned bytes, not `nightly-20261026`, not `nightly-20261027`. Their D11 members and the installed
+app's `bin/` name none, and an installed floor's freeway reads `disabled`. `846398b1e` (2026-10-17, the PM's R-a/R-b/R-c
+at 04:12Z on 10-18) shipped it and never landed. Main moved under it by 239 commits.
+
+**What happened** (two commits):
+- **`f47987f18` NF — the host answers `--version` and `--help`.** Rebasing found it. Since BP-1b the stage's verify and the
+  build job run each packaged native binary's `--version` (`host-links.mjs` `launchCheck`), and the host answered
+  `unknown flag: --version`, exit 2. Item 64's shape now applies to it: `--version` and `--help`/`-h` exit 0, and any
+  other argument exits 2 with the usage on stderr, before any config is read. The host's only bootable form is the
+  floor's `--listener-fd 3`. A bare invocation was refused and still is, now with the usage: a binary that must never
+  boot alone (VF-PM 00:47Z).
+- **`a91fcf351` FW (packaging), the lane's commit rebased:**
+  - `scripts/native-floor.mjs`: the floor's set (field-native, its cell, its host) and `floorSetProblems`. The stager,
+    the SEA probe, the release manifest and the launch check all read it.
+  - The stager keeps main's list shape (tooling (a), `cargoBinaries`), its names now the set, with a gap each. A floor
+    without its host fails the stage (R-a).
+  - `LAUNCHED` is the set.
+  - B3's native plane gains the host on both sides (`release-manifest.mjs`, `native-plane.ts`). A client on either
+    published nightly hashes three members, and the first release carrying the host names four. So B3 reads field-native
+    TOUCHED by `members`: correct, and nothing migrates.
+  - electron-builder's `binaries:` signs it inside-out.
+  - The SEA probe copies every floor sibling.
+  - Every `smoke:update` run requires the packaged floor's `field-freeway-host --listener-fd 3` from the app's own
+    `bin/` (R-c).
+- **The rebase:**
+  - release.yml has NO hunk: the step the lane renamed is gone since TD `454c399f2` (`build:native-release` is the one
+    release build), so `git diff 84509d642 -- .github/` is empty, and so is the diff from `ffe4f517c`.
+  - Main moved once more while the lane was gated: item 75 (`4396409e0` … `ffe4f517c`, test-only, fieldd-supervisor).
+    The two commits were cherry-picked onto it: merge-tree clean, range-diff `=`.
+  - Four conflicts, resolved to main's shapes plus the host: release.yml, `build-fieldd-sea.mjs`, desk-gates row 30,
+    `stage-package.mjs`.
+  - `cargo-target.test.mjs`'s source-shape row moved with the stager.
+
+**Validation:**
+- NF, `launch_check.rs` red-first on main's binary: 3 of 4 FAILED, every failure on the host (`--version exited
+  ExitStatus(unix_wait_status(512))`; `--help exited Some(2)`). With the change: 4/4. `freeway_host.rs` 4/4.
+- `pnpm verify` (nice 19, the lane's own CARGO_TARGET_DIR, the guard first):
+  - #1 red at check:deps: the lane's `../mille-pin` dist predated its pin's exports (environment). Rebuilt by
+    `siblings.mjs install-js mille` and `build-js mille`.
+  - #2 red at biome: one wrap in this commit's `NATIVE_GAPS`, fixed.
+  - #3 red on dev-runner alone: `cargo-target.test.mjs`'s source-shape row (above), moved.
+  - #4 EXIT 0 at 00:55:30Z on the tip on `84509d642`, load 63 → 14.
+  - Every row ran fresh on that tree's inputs:
+    - typecheck, 27 projects, in #2 (0/27 cache);
+    - test, 26 projects, in #3 (0/26 cache; it differs from the tip only in that test file);
+    - dev-runner's test in #4;
+    - cargo test in #4: 30 binaries, 460 passed;
+    - clippy `-D warnings` in #3 and #4;
+    - gen:check in #4.
+  - #5 on the rebased tip (onto item 75's `ffe4f517c`, the records commit included): EXIT 0 at 01:03:42Z, load 8 → 22.
+    fieldd-supervisor and electron-shell, the projects item 75 reaches, ran typecheck and test fresh. The other 25
+    matched #2's and #4's inputs (Nx cache). cargo test: 30 binaries, 460 passed.
+- The static half (VF-PM 00:47Z): a local, DEV-keyed, unsigned build; no app launched.
+  - `package:stage` (its `build:native-release` built the set), then the stage's own `--verify --require-complete`: OK,
+    105 files, 256.56 MB. The staged host is the release build's bytes, `a7707cae…`.
+  - `host-links --dir build/stage --launch build/stage/bin`: 10 Mach-O, no host link, "launched field-native,
+    field-terminal-host, field-freeway-host --version".
+  - Two probes on a copy of the stage, through its `--verify`, exit 1 each:
+    - a host that refuses `--version` → `LAUNCH  field-freeway-host: --version exited 2 — field-freeway-host: unknown
+      flag: --version`;
+    - no host → `MISSING  bin/field-freeway-host` and the SET line, which names `build:native-release`.
+  - The census: exit 0; its note names the host.
+  - `electron-builder --dir` on that stage (fuses flipped and verified; signing skipped by `identity: null`): the app's
+    `Contents/Resources/bin/field-freeway-host` is 0755, 2,873,936 bytes, the same `a7707cae…`.
+  - `host-links --app` on that app: 25 Mach-O, no host link, the three launched.
+  - The app's host: `--version` → `field-freeway-host 0.1.0`, exit 0. Bare → exit 2, nothing on stdout,
+    `--listener-fd is required` and the usage on stderr.
+  - `release-manifest.mjs hash --app`: field-native is 4 files with members `bin/field-freeway-host`, `bin/field-native`,
+    `bin/field-terminal-host`, `bin/sidecar-slim`, digest `4fa09071…`.
+
+**Owed:**
+- **The live half, on the next nightly carrying the host** (VF-PM 00:47Z): `smoke:update`'s five packaged launches are an
+  interaction row on James's own display, armed only while he is away, and he was at it. The witness is W11's round 3
+  on the Mac mini: the installed app's production logs show the floor spawning `field-freeway-host --listener-fd 3`
+  (row 30's R-c, read from the logs, no display).
+- **The signed half, on that nightly's build job:** LSF-4's deep signature and Gatekeeper on the app, and host-links'
+  launch on the signed bundle (the host under the hardened runtime). It is the second launch witness; this landing's
+  static half was the first.
+- The push waits for `nightly-20261027`'s publish. This landing touches no workflow.
