@@ -37,19 +37,19 @@
     "truffle": {
       "path": "../truffle-rfc025",
       "repository": "https://github.com/vibecook-dev/truffle.git",
-      "sha": "f7e3900df25a84fed1858b78dcb035759879ebd6",
+      "sha": "0b83a2ceac54b60c54c01ab5b95fad480bc7d6bc",
       "swift": {
         "manifest": "apps/ios/VibeFieldKit/Package.swift",
         "link": "apps/ios/VibeFieldKit/.window/truffle"
       },
       "release": {
-        "swift": "0.7.22"
+        "swift": "0.7.23"
       }
     },
     "ghosttea": {
       "path": "../ghosttea-0.11.2",
       "repository": "https://github.com/vibecook-dev/ghosttea.git",
-      "sha": "9c1143916bb039dc6f44f4fbcd09a55b7520ed72",
+      "sha": "3eee581c14b05850c90bea09536d4bc6b856223b",
       "javascript": {
         "workspaces": [
           "@vibecook/ghosttea-protocol",
@@ -74,9 +74,9 @@
         "link": "apps/ios/VibeFieldKit/.window/ghosttea"
       },
       "release": {
-        "npm": "0.13.6",
-        "cargo": "0.13.6",
-        "swift": "0.13.6"
+        "npm": "0.13.7",
+        "cargo": "0.13.7",
+        "swift": "0.13.7"
       }
     },
     "mille": {

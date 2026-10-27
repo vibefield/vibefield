@@ -1,13 +1,13 @@
 {
-  "originHash" : "0bd5564f1e43332b75291831164a1cf9d1de3663051a7ee32de3bcfe1e5030bf",
+  "originHash" : "fd1eef8bd2d65a5a96737f3ac9589f84553c68f4f2d01ec5f23bb7824b901839",
   "pins" : [
     {
       "identity" : "ghosttea",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/vibecook-dev/ghosttea.git",
       "state" : {
-        "revision" : "9c1143916bb039dc6f44f4fbcd09a55b7520ed72",
-        "version" : "0.13.6"
+        "revision" : "3eee581c14b05850c90bea09536d4bc6b856223b",
+        "version" : "0.13.7"
       }
     },
     {
@@ -15,8 +15,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/vibecook-dev/truffle.git",
       "state" : {
-        "revision" : "f7e3900df25a84fed1858b78dcb035759879ebd6",
-        "version" : "0.7.22"
+        "revision" : "0b83a2ceac54b60c54c01ab5b95fad480bc7d6bc",
+        "version" : "0.7.23"
       }
     }
   ],

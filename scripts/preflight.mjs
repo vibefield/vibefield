@@ -154,8 +154,10 @@ const PIN_EXPECTATIONS = [
   // sidecar protocol 8, the crate and the five npm sidecars in one EL8 event.
   // 0.7.19 → 0.7.22 on 2026-10-25, in ONE EL8 event with ghosttea 0.13.4 (ghosttea through 0.13.3 declares
   // truffle-core =0.7.19): sidecar protocols 9 and 10, the crate and the five npm sidecars together again.
+  // 0.7.22 → 0.7.23 on 2026-10-27, in ONE EL8 event with ghosttea 0.13.7 (the first ghosttea that declares it):
+  // truffle-core #229 (the sidecar's stderr forwarder), the crate and the five npm sidecars together again.
   // Cargo.toml's closure note carries every event and every place they touched.
-  { file: "Cargo.toml", re: /^truffle-core\s*=\s*"=0\.7\.22"/m, label: 'truffle-core = "=0.7.22"' },
+  { file: "Cargo.toml", re: /^truffle-core\s*=\s*"=0\.7\.23"/m, label: 'truffle-core = "=0.7.23"' },
   // The FINAL 0.16.0 on `latest` since PORTALS PT-6b (M24 LT1–LT5; LT5 — I52 — the reference
   // kinds' drivers idle unless their own object is in hand). Before it, prereleases on `next`
   // from PT-2 (0.16.0-portals.2 — LT1 + LT2, the live face and the hand's input; PT-3:
@@ -174,37 +176,38 @@ const PIN_EXPECTATIONS = [
   // 0.13.1 → 0.13.4 on 2026-10-25/26 (the EL8 with truffle 0.7.22): the same six rows, the same anchors.
   // 0.13.4 → 0.13.5 on 2026-10-26 (the EL8 to the harfrust shaper, ghosttea #89): the same six again.
   // 0.13.5 → 0.13.6 on 2026-10-26 (the EL8 to the render worker's and the claim's fixes, ghosttea #92–#94): the same six again.
-  { file: "Cargo.toml", re: /^ghosttea\s*=\s*"=0\.13\.6"\s*$/m, label: 'ghosttea = "=0.13.6"' },
+  // 0.13.6 → 0.13.7 on 2026-10-27 (the EL8 with truffle 0.7.23, ghosttea #96's Windows C runtime): the same six again.
+  { file: "Cargo.toml", re: /^ghosttea\s*=\s*"=0\.13\.7"\s*$/m, label: 'ghosttea = "=0.13.7"' },
   // TM-1 (2026-09-14): the ghosttea-truffle row is GONE with the crate — the TSP1
   // adapter left the floor (`thinking-terminal-mesh-cells.md`, TM-D1 ruled T), so
   // there is no second ghosttea consumer to keep in lockstep; the ghosttea row
   // alone carries truffle-core's version agreement now.
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ghosttea-client":\s*0\.13\.6\s*$/m,
-    label: '"@vibecook/ghosttea-client": 0.13.6',
+    re: /"@vibecook\/ghosttea-client":\s*0\.13\.7\s*$/m,
+    label: '"@vibecook/ghosttea-client": 0.13.7',
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ghosttea-electron":\s*0\.13\.6\s*$/m,
-    label: '"@vibecook/ghosttea-electron": 0.13.6',
+    re: /"@vibecook\/ghosttea-electron":\s*0\.13\.7\s*$/m,
+    label: '"@vibecook/ghosttea-electron": 0.13.7',
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ghosttea-react":\s*0\.13\.6\s*$/m,
-    label: '"@vibecook/ghosttea-react": 0.13.6',
+    re: /"@vibecook\/ghosttea-react":\s*0\.13\.7\s*$/m,
+    label: '"@vibecook/ghosttea-react": 0.13.7',
     package: "@vibecook/ghosttea-react",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ghosttea-protocol":\s*0\.13\.6\s*$/m,
-    label: '"@vibecook/ghosttea-protocol": 0.13.6',
+    re: /"@vibecook\/ghosttea-protocol":\s*0\.13\.7\s*$/m,
+    label: '"@vibecook/ghosttea-protocol": 0.13.7',
   },
   // The EL8 to 0.13.1 (2026-10-22/23): terminal-perf's frame reader joins the event (it had no row; the lock held 0.10.1).
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ghosttea-frame":\s*0\.13\.6\s*$/m,
-    label: '"@vibecook/ghosttea-frame": 0.13.6',
+    re: /"@vibecook\/ghosttea-frame":\s*0\.13\.7\s*$/m,
+    label: '"@vibecook/ghosttea-frame": 0.13.7',
   },
   // RD-5a (2026-10-14): rosetta's TypeScript packages are exact registry pins,
   // published from the revision the lock still pins for rosettad's build. Anchored

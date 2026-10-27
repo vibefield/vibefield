@@ -615,9 +615,9 @@ dependencies = [
 
 [[package]]
 name = "ghosttea"
-version = "0.13.6"
+version = "0.13.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7990e26231747b27529a9205d78d79a93198a60b9d958115fda27120c957bac1"
+checksum = "e2f258e5f09dde240481a9e0cebe57bf7af0d57f81ce35e7187e4a5cc3cc3b0a"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -638,9 +638,9 @@ dependencies = [
 
 [[package]]
 name = "ghosttea-config"
-version = "0.13.6"
+version = "0.13.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad9358178d747996aab08eb438d2de6f0916899f357225caa63381bcfb6457a2"
+checksum = "15a394ceea888dc163c7ec01d2c216ce5a7d6f1b7491ad952d51f1b1a2036c6e"
 dependencies = [
  "libc",
  "serde",
@@ -651,9 +651,9 @@ dependencies = [
 
 [[package]]
 name = "ghosttea-core"
-version = "0.13.6"
+version = "0.13.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "148bedd479ed8689a22031df65dbd1047bbb350b69e40e96bac8d72f0fe680b4"
+checksum = "4418b950115882da8318749fb7c3a22ae82f0e4e9118feabd1020646d1bfc126"
 dependencies = [
  "anyhow",
  "ghosttea-text",
@@ -664,9 +664,9 @@ dependencies = [
 
 [[package]]
 name = "ghosttea-text"
-version = "0.13.6"
+version = "0.13.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f3881ca6487de6705e003177e9fb78993cac9887bdd945224f2aa1f3833364e"
+checksum = "44869fd534db2216aa8b835a614942986bc240c67404e9d842dedead1ec88a3c"
 dependencies = [
  "anyhow",
  "fontdb",
@@ -678,18 +678,18 @@ dependencies = [
 
 [[package]]
 name = "ghosttea-vt"
-version = "0.13.6"
+version = "0.13.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c1acc47cd692bdfe983f32487386afab04b77fa4d5e76f01fd1cb0e1afeaf2f"
+checksum = "9cea93260fa4e95654998d555477cc5c86c8d0182a03e50905730d2de20349bd"
 dependencies = [
  "ghosttea-vt-sys",
 ]
 
 [[package]]
 name = "ghosttea-vt-sys"
-version = "0.13.6"
+version = "0.13.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd6c8e33eaaee2c7c8c4160b3105ca601a2e1ef93ef88dd973d24bc9cb63104a"
+checksum = "4d51ce693067b352c8bb48ced465f3bcf25e79a0ea6676475fdfaf9adddaede7"
 dependencies = [
  "cc",
  "serde",
@@ -1998,9 +1998,9 @@ dependencies = [
 
 [[package]]
 name = "truffle-core"
-version = "0.7.22"
+version = "0.7.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88095e1fbbf782adbc6c2bf50e09829a588972e5d286b7c8223aa090c7303b82"
+checksum = "e7d223e2093723478435e551e5e737fa7fe8485fc459a5bd795acbdd8f1825a9"
 dependencies = [
  "base64",
  "blake3",

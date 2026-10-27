@@ -268,26 +268,30 @@ overrides:
   # longer rebuilds its pane, so a closed pane stops the worker spinning (#93), and a dirty
   # surface is work only while a frame can draw it (#94). No API change and no protocol
   # minor (17 stands); protocol and frame move by version alone.
-  "@vibecook/ghosttea-client": 0.13.6
+  # EL8 (2026-10-27, lane hl/el8-ghosttea-0.13.7-truffle-0.7.23) bumps 0.13.6 → 0.13.7 on every
+  # plane in ONE event with truffle 0.7.23, which 0.13.7 declares. Tag v0.13.7 = 3eee581c. On
+  # this plane the rows move by version alone: 0.13.7 changed no TypeScript source (its fix is
+  # the Windows Ghostty VT library, #96; Cargo.toml has the cargo half). No protocol minor (17).
+  "@vibecook/ghosttea-client": 0.13.7
   # GT-0 (2026-08-01): the Godview terminal planes join at the same exact version
   # (one-version law) — electron-shell consumes ghosttea-electron, field-app
   # consumes ghosttea-react; packages ask for "*".
-  "@vibecook/ghosttea-electron": 0.13.6
+  "@vibecook/ghosttea-electron": 0.13.7
   # ghosttea-react: a link: row into the Godview performance window's checkout
   # (2026-09-27) until ghosttea 0.13.0 published the window's renderer fixes.
-  "@vibecook/ghosttea-react": 0.13.6
+  "@vibecook/ghosttea-react": 0.13.7
   # GT-3m (2026-08-04): field-app declares the wire vocabulary directly — the
   # monitor's rows ARE floor sessions, so `SessionSummary` is the honest type for
   # them. Types-and-constants only (zero dependencies), already resolved at this
   # version transitively; declaring it puts it under the one-version law rather
   # than leaving a hoisted transitive to drift.
-  "@vibecook/ghosttea-protocol": 0.13.6
+  "@vibecook/ghosttea-protocol": 0.13.7
   # The EL8 to 0.13.1 found this row MISSING: tooling/terminal-perf asks
   # `@vibecook/ghosttea-frame: "*"`, and with no row the lock had held it at
   # 0.10.1 while the renderer's own frame moved on — two copies. It joins the
   # one-version law here. FRAME_PROTOCOL_VERSION is 1 in both, so the committed
   # TRF1 corpus (captured at 0.10.1) stays readable; the bench is the proof.
-  "@vibecook/ghosttea-frame": 0.13.6
+  "@vibecook/ghosttea-frame": 0.13.7
   # rosetta — EXACT registry pins since RD-5a (2026-10-14; W-D8's exit shape under
   # RL5's `@vibefield` scope; packages ask for "*"). `@vibefield/rosetta-protocol`
   # is the TypeScript client (types + the REST/WS client); `@vibefield/rosetta-room`
@@ -399,15 +403,15 @@ catalog:
 minimumReleaseAgeExclude:
   - '@vibecook/strata-ecs@0.13.0'
   - '@vibecook/ice@0.16.0'
-  # The EL8 to ghosttea 0.13.6 (2026-10-26): published 2026-10-26 21:30–21:35Z, inside the
-  # release-age window; our own packages, reviewed as an EL8 pin. The 0.13.5 rows went after
-  # the one install that rewrote the lock.
-  - '@vibecook/ghosttea-client@0.13.6'
-  - '@vibecook/ghosttea-protocol@0.13.6'
-  - '@vibecook/ghosttea-electron@0.13.6'
-  - '@vibecook/ghosttea-react@0.13.6'
-  - '@vibecook/ghosttea-frame@0.13.6'
-  - '@vibecook/ghosttea@0.13.6'
+  # The EL8 to ghosttea 0.13.7 with truffle 0.7.23 (2026-10-27): published 2026-10-26 23:57Z –
+  # 2026-10-27 00:01Z, inside the release-age window; our own packages, reviewed as an EL8 pin.
+  # The 0.13.6 rows went after the one install that rewrote the lock.
+  - '@vibecook/ghosttea-client@0.13.7'
+  - '@vibecook/ghosttea-protocol@0.13.7'
+  - '@vibecook/ghosttea-electron@0.13.7'
+  - '@vibecook/ghosttea-react@0.13.7'
+  - '@vibecook/ghosttea-frame@0.13.7'
+  - '@vibecook/ghosttea@0.13.7'
   # RD-5a (2026-10-14): rosetta's first `@vibefield` release, published
   # 2026-10-13T23:36Z — inside the release-age window on the day the pin went
   # exact; our own packages, reviewed as an EL8 pin.
@@ -447,8 +451,12 @@ minimumReleaseAgeExclude:
   # (CVE-2026-111943). It carries 0.7.19's protocol 8 and T6 (a PACKAGED app
   # admits the phone's product hello; the floor's QUIC lanes need >= 6 and
   # egress >= 7). The 0.7.19 rows went after the one install that rewrote the lock.
-  - '@vibecook/truffle-sidecar-darwin-arm64@0.7.22'
-  - '@vibecook/truffle-sidecar-darwin-x64@0.7.22'
-  - '@vibecook/truffle-sidecar-linux-arm64@0.7.22'
-  - '@vibecook/truffle-sidecar-linux-x64@0.7.22'
-  - '@vibecook/truffle-sidecar-win32-x64@0.7.22'
+  # 0.7.22 → 0.7.23 (2026-10-27, with ghosttea 0.13.7): published 2026-10-26 21:01–21:03Z,
+  # inside the release-age window on the day the pin moves. One truffle-core fix (#229: the
+  # sidecar's stderr forwarder keeps a dying sidecar's last words); the sidecars' Go source is
+  # unchanged, no protocol moves (10 stands). The 0.7.22 rows went after the one install.
+  - '@vibecook/truffle-sidecar-darwin-arm64@0.7.23'
+  - '@vibecook/truffle-sidecar-darwin-x64@0.7.23'
+  - '@vibecook/truffle-sidecar-linux-arm64@0.7.23'
+  - '@vibecook/truffle-sidecar-linux-x64@0.7.23'
+  - '@vibecook/truffle-sidecar-win32-x64@0.7.23'

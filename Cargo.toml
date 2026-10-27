@@ -180,7 +180,19 @@ opt-level = 3
 # silently. Everything else field-native calls is unchanged or only grew (read
 # at the tag, call site by call site; the build is the check). The node-to-node
 # wire reads unchanged.
-truffle-core = "=0.7.22"
+#
+# THE BUMP TO 0.7.23 (2026-10-27; VF-PM 21:42Z on the lead's read, started 00:28Z on James's
+# "continue the work"): ONE EL8 event with ghosttea 0.13.7, the first ghosttea that declares
+# truffle 0.7.23 on its cargo AND Swift planes (truffle-core =0.7.23; Swift exact 0.7.23 at
+# 0b83a2ce). Here only field-native depends on truffle-core, so the cargo plane could have
+# moved alone; the Swift plane could not (the kit's exact pin against ghosttea's is the
+# SwiftPM refusal the 10-24 EL8 closed), so the crate, the five npm sidecars and the kit move
+# together. `truffle-v0.7.23` = 0b83a2ce. What it carries: ONE truffle-core file,
+# network/tailscale/sidecar.rs (#229) — the stderr forwarder keeps a dying sidecar's last
+# lines, which it used to drop at shutdown (item 69's measured cause: 9 of 200 lost at load on
+# one tokio worker). The sidecars' Go source is unchanged, Swift changed only a README, and no
+# sidecar protocol moves (10 stands). No field-native source change: the build is the check.
+truffle-core = "=0.7.23"
 # NF-0 (native-floor spec NF-D1): ghosttea graduated to crates.io the same way,
 # 2026-07-29 — exact pin, upgrades are deliberate events. NF-7 (2026-08-01) bumped
 # 0.6.0 → 0.7.0 for the G7/G8/G9 petition landings (shutdown drain, silent serve,
@@ -290,7 +302,15 @@ truffle-core = "=0.7.22"
 # one crate whose code changed between the tags, ghosttea-truffle (#92, a claim waits for
 # the session's opening control frame), is retired from this graph (TM-1, below); it
 # reaches the phone inside the Apple native artifact. Tag v0.13.6 = 9c114391.
-ghosttea = "=0.13.6"
+# EL8 (2026-10-27, lane hl/el8-ghosttea-0.13.7-truffle-0.7.23) bumps 0.13.6 → 0.13.7 on every
+# plane in ONE event with truffle-core 0.7.23 (above), the version 0.13.7 declares. On this
+# plane 0.13.7 is ghosttea #96: on Windows, ghosttea-vt-sys links a Ghostty VT library built
+# for the C runtime its consumer links (/MD by default, /MT under crt-static) instead of /MT
+# alone, which failed LNK2038 for a consumer linking C++ of its own (field-terminal-host's
+# Windows build). The Ghostty VT artifacts are re-released as ghostty-vt-1dceb4dd5089 from the
+# same Ghostty commit (f8041e84); the patch adds MSVC-only flags, and ghosttea says the macOS
+# library is byte-identical (re-read here: see the event's LANDED). Tag v0.13.7 = 3eee581c.
+ghosttea = "=0.13.7"
 # RETIRED 2026-09-14 (TM-1): `ghosttea-truffle = "=0.11.1"`, GT-4's mesh half of
 # the terminal floor. It served TSP1 against an IN-PROCESS session registry
 # (`TruffleTerminalMesh::serve` takes ghosttea's `Registry` by value), which is
