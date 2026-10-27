@@ -536,7 +536,10 @@ describe("Setup Assistant", () => {
     await tick(1);
     expect(onReveal).toHaveBeenCalledTimes(1);
     expect(onComplete).toHaveBeenCalledTimes(1);
-  });
+    // 30s: the file's first row pays its cold import, each lazy pane's code arriving
+    // inside act on the way through: 1029–1347 ms alone (×5, 2026-10-27), 5022 ms under
+    // item 81's verify at load 185 (item 82) — the 5s default flakes.
+  }, 30_000);
 
   it("re-deals the proposal against the roster when it lands, if nobody picked", async () => {
     const roster = lateRoster();
