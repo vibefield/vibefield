@@ -1377,6 +1377,14 @@
                         recipe; the host composes the environment policy, finds a cell and execs.
                       </p>
                       <p>
+                        A third, optional since puppeteer's QW1 attach branch (2026-10-27; not in the 0.2.3 pin):
+                        <code>helperEnvironment(env)</code> answers the complete environment of a helper an adapter
+                        spawns itself (a private server, a leader, a backend that runs the agent's turns and tools).
+                        fieldd answers it with the same <code>agentEnvironment()</code> an agent PTY is born with, so
+                        the helper never inherits fieldd's own (EL7). A host without it leaves the helper on the
+                        adapter's process environment, which is the pin's behaviour until the EL8 that brings it.
+                      </p>
+                      <p>
                         The same file carries the half that makes a <em>daemon</em> host possible:
                         <code>HostIngress {port?, token?, onBound?}</code> and <code>BoundIngress {port, token}</code>.
                         An adapter that binds a loopback endpoint mints it ephemeral by default; a host that outlives
