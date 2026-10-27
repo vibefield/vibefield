@@ -16853,3 +16853,59 @@ script.
 **Not here.** AO-6b, the limit moment and a new agent with a past, on James's AO-D15 (the page's AO-15). The launcher's
 act and the empty launcher (AO-7). History's not-answering title (AO-8). The desk rows (`pnpm smoke`, `pnpm
 smoke:studio`) on a display, owed with AO-1…5b's.
+
+## TS-3b — this Mac's own name (P9, TS-D17 A): kept on this device only, published in its own slice, renamed from This Mac, with the computer's name a click away (2026-10-27; `fb530e716`, lane `ts/3-devices`)
+
+**What.** P9 is the second half of the ladder's TS-3. James ruled TS-D17 = A at 15:25:19Z (thinking doc §12). The name
+is a device fact: D30 makes the device the user-on-device. So it lives in a device-local file in fieldd's root. It is
+never a synced preference, which would name every device alike, and never crosses the sync plane (M16).
+- **contracts:**
+  - `LAYOUT.DEVICE_NAME_FILE` (`["fieldd", "device-name.json"]`, after SETUP_LEDGER_FILE) is in registries.ts, the
+    layout vector, gen/layout.json and field-native's registries.rs;
+  - `device.rename {name | null}`: settings.manage, local, for desktop callers;
+  - `DeviceRenameParams`: trimmed, 1–128 characters (`DEVICE_LIMITS.NAME_CHARS`, the roster row's bound); null means
+    the computer's name;
+  - `DeviceNameFile`, and `DeviceNameSource` on the slice and the row (optional);
+  - three fixtures.
+- **fieldd:**
+  - DeviceService reads the file at boot, `name: stored ?? hostname()` (D30's fallback kept). A corrupt file falls
+    back to the hostname with a warn, never a crash.
+  - `rename()` writes atomically (0600) or removes the file, then republishes the self-slice.
+  - The handler is under `requireDesktopCaller`. It refuses a longer name WITH ITS COUNT, never clipping it, and an
+    empty one.
+  - The audit says only whether it was a reset; a name is a person's words.
+- **field-app:**
+  - This Mac is drawn linked or not. Its Name row has Rename…: Enter saves, Esc cancels, the refusal shows under the
+    field.
+  - "Use the computer's name" appears once the name is the person's own.
+  - The catalog gains a "renamed" state.
+- **Not in it:** Tailscale's machine name stays truffle's (`truffle-vibefield-…`, TS-D10, petition T8).
+
+**Validation.**
+- **The lane:** `/Volumes/SamsungRed/lanes/ts3`, fast-forwarded to main `b4c4befd1` before the code, at nice 19 under
+  the guard.
+- **The light pass** (VF-PM's rules, 15:30–15:36Z):
+  - contracts, fieldd, field-app and electron-shell typechecks; biome clean;
+  - preflight 0 WARN/FAIL; check:walls clean;
+  - cargo `layout_vector` (1) and `fixture_parity` (17);
+  - fieldd device-service + device-routing 50/50, with +5 rows: the rename across a restart (the kill-matrix row), a
+    corrupt file, the reset, and too long or empty refused with nothing written;
+  - field-app 6 files 87/87 (devices-section +4 rows); contracts 49 files 1182/1182.
+- **`pnpm check:deps` + `pnpm verify`** at `6d75dc070` over code `75919a6af` (logs/window/check-deps.log,
+  logs/verify/verify.log):
+  - check:deps: EXIT 0 (15:37:47Z).
+  - verify: EXIT 1 (15:37:47–15:43:27Z) on six rows in files TS-3b does not touch, red at a load of 305–511 (two
+    other lanes' passes and two cargo compiles beside its test stage). Every stage before the tests passed, and
+    contracts' suite did too. The rows: field-app's godview-monitor ×2, peek and doc-manager; fieldd's
+    agent-gateway AR-7b and rosettad-supervisor AR-0 S2.
+  - VF-PM ruled the lottery precedent (15:46Z). Each ran ALONE at the tip, at nice 19 under the guard
+    (logs/alone/):
+    - field-app's four files green, 108/108 and 19/19;
+    - agent-gateway 92/92 and rosettad-supervisor 32/32;
+    - `pnpm test:rust` EXIT 0, 474 passed in 31 suites;
+    - `pnpm gen:check` EXIT 0, the tree clean (15:50:29Z).
+- **Rebased after verify** onto `25cce58d1` (AL's docs-only commit): range-diff `=` on both commits, the code
+  `75919a6af` → `fb530e716`. No re-gate for a docs-only move.
+
+**Owed.**
+- The catalog's photographs and the desk rows, with TS-2's and TS-3a's, on James's display word.
