@@ -498,7 +498,7 @@ describe("Setup Assistant", () => {
 
     // 4 — Connect. Skippable, and the skip says where the question went (W3).
     expect(text()).toContain("Your field, on every device.");
-    expect(text()).toContain("Set up later — Settings → Account");
+    expect(text()).toContain("Set up later — Settings → Devices");
     await click("Not now");
 
     // 5 — Setting up: the answers are written first, and only a landed write
