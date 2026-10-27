@@ -73,7 +73,32 @@ fn listener_from_args() -> Result<std::net::TcpListener, String> {
     )
 }
 
+/// Item 64's shape (2026-10-26), for the third binary the package ships (F1) — what `--help` prints, and what a refused
+/// invocation says beside its error. The floor spawns this binary with `--listener-fd 3` (`services/freeway.rs`, the
+/// host's `ChildSpec`); a person never needs to.
+const USAGE: &str = "\
+usage: field-freeway-host --listener-fd <fd>
+       field-freeway-host --version | --help
+
+The freeway host of VibeField's native plane. field-native spawns it on the
+listener it holds, hands it its bootstrap on stdin and reads its hello on
+stdout; it is not run by hand.
+";
+
 fn main() -> ExitCode {
+    // BP-1b — the release's launch check (field-native's `main` says why): the name and version, then exit, before the
+    // protocol owns stdout. Item 64: `--help` likewise prints the usage and exits 0.
+    match std::env::args().nth(1).as_deref() {
+        Some("--version") => {
+            println!("field-freeway-host {}", env!("CARGO_PKG_VERSION"));
+            return ExitCode::SUCCESS;
+        }
+        Some("--help" | "-h") => {
+            print!("{USAGE}");
+            return ExitCode::SUCCESS;
+        }
+        _ => {}
+    }
     // Diagnostics belong to stderr: stdout is the hello and the reports, and nothing else.
     tracing_subscriber::fmt()
         .with_writer(std::io::stderr)
@@ -82,7 +107,7 @@ fn main() -> ExitCode {
     let listener = match listener_from_args() {
         Ok(listener) => listener,
         Err(error) => {
-            eprintln!("field-freeway-host: {error}");
+            eprint!("field-freeway-host: {error}\n\n{USAGE}");
             return ExitCode::from(2);
         }
     };

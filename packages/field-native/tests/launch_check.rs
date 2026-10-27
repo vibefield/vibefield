@@ -16,6 +16,10 @@ fn each_native_binary_answers_version_and_exits() {
             env!("CARGO_BIN_EXE_field-terminal-host"),
             "field-terminal-host",
         ),
+        (
+            env!("CARGO_BIN_EXE_field-freeway-host"),
+            "field-freeway-host",
+        ),
     ] {
         let out = Command::new(exe)
             .arg("--version")
@@ -163,11 +167,16 @@ fn written_under(dir: &Path) -> Vec<PathBuf> {
     found
 }
 
-const BINARIES: [(&str, &str); 2] = [
+const BINARIES: [(&str, &str); 3] = [
     (env!("CARGO_BIN_EXE_field-native"), "field-native"),
     (
         env!("CARGO_BIN_EXE_field-terminal-host"),
         "field-terminal-host",
+    ),
+    // F1 — the freeway host ships in the package beside the cell, so the launch check runs it too
+    (
+        env!("CARGO_BIN_EXE_field-freeway-host"),
+        "field-freeway-host",
     ),
 ];
 
