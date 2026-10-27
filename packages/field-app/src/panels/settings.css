@@ -363,3 +363,42 @@
   text-align: right;
   overflow-wrap: anywhere;
 }
+
+/* Settings → History (track AO, AO-3; AO-D9; DESIGN.md §8 "Settings → History"):
+   the History pane's rows, their switches applying at once, and Stop reading
+   asked once under them. */
+.vf-history-settings-note {
+  margin: 0;
+  color: var(--vf-text-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.vf-history-settings-stop {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--vf-hairline);
+  border-radius: 12px;
+}
+
+.vf-history-settings-stop > p {
+  margin: 0;
+  color: var(--vf-text-primary);
+  font-size: 12.5px;
+  line-height: 18px;
+}
+
+.vf-history-settings-stop-acts {
+  display: flex;
+  gap: 6px;
+}
+
+.vf-history-settings-error {
+  margin: 8px 0 0;
+  color: var(--vf-ink-attention);
+  font-size: 12px;
+  line-height: 18px;
+}

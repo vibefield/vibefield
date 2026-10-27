@@ -110,14 +110,23 @@ export function WizardPane({
   );
 }
 
-/** Every skip names its later home (W3) — this subtitle is verbatim spec. */
-export function SkipAction({ label, onSkip }: { label: string; onSkip: () => void }): ReactElement {
+/** Every skip names its later home (W3) — the spec's subtitle, unless the pane
+ * names its own (the agent chapter's: "Bring it in anytime from History."). */
+export function SkipAction({
+  label,
+  onSkip,
+  home = "Set up later — Settings → Account",
+}: {
+  label: string;
+  onSkip: () => void;
+  home?: string;
+}): ReactElement {
   return (
     <div className="flex flex-col gap-1">
       <button type="button" className={quietCls} onClick={onSkip}>
         {label}
       </button>
-      <span className={factCls}>Set up later — Settings → Account</span>
+      <span className={factCls}>{home}</span>
     </div>
   );
 }

@@ -5,6 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./agent-catalog": "./src/agent-catalog.ts",
+    "./agent-index": "./src/agent-index.ts",
     "./diagnostics": "./src/diagnostics.ts",
     "./logging": "./src/logging.ts",
     "./registries": "./src/registries.ts",

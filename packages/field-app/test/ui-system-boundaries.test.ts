@@ -792,6 +792,8 @@ describe("UI system ownership boundaries", () => {
       "boot/boot.css",
       "boot/onboarding/wizard-ui.css",
       "setup/setup-sheet.css",
+      "setup/history-consent.css",
+      "history/history-consent-slot.css",
       "hud/CommandPalette.css",
       "hud/edge-tray/edge-tray.css",
       "hud/LoadingVeil.css",

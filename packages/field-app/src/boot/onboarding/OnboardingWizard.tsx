@@ -1,3 +1,4 @@
+import { type SetupLedger, setupStepState } from "@vibefield/contracts/setup";
 import type { FielddClient } from "@vibefield/fieldd-client";
 import { FielddProvider, useFielddClient, useSubscription } from "@vibefield/fieldd-client/react";
 import { type ReactElement, useEffect, useState } from "react";
@@ -9,6 +10,7 @@ import type { BootOnboarding, BootView } from "../machine";
 import { entryAfterName, entryBeforeAsking, nextPane, type Pane, variantOf } from "./order";
 import { ConnectPane } from "./panes/ConnectPane";
 import { FieldPane } from "./panes/FieldPane";
+import { HistoryPane } from "./panes/HistoryPane";
 import { PosturePane } from "./panes/PosturePane";
 import { SettingUpPane } from "./panes/SettingUpPane";
 import { UsersPane } from "./panes/UsersPane";
@@ -104,6 +106,14 @@ function WizardBody({
   const face = linkFace(link.status, link.status === "live" ? (link.data ?? null) : null);
   const linked = hasLink(face);
   const facts = { variant, linked };
+  // AO-2 — the ledger: which of the agent chapter's steps this user answered.
+  // Read raw, not through `useSetupLedger`: the entry below waits while it is
+  // still loading, which the hook's null does not tell apart from no ledger.
+  const ledger = useSubscription<SetupLedger>("setup.subscribe");
+  const historyAnswered =
+    ledger.status === "live" &&
+    ledger.data !== null &&
+    setupStepState(ledger.data, "history") !== undefined;
 
   // W6 — the entry pane is DERIVED (order.ts): the top for a record that never
   // answered the name pane, else the first thing still unanswered once the link
@@ -120,9 +130,10 @@ function WizardBody({
 
   useEffect(() => {
     if (pane !== null) return;
-    if (link.status === "loading" && !settled) return; // one honest beat, bounded
-    setPane(entryAfterName(variant, linked));
-  }, [pane, link.status, settled, variant, linked]);
+    // one honest beat, bounded: the link and the ledger both say where to resume
+    if ((link.status === "loading" || ledger.status === "loading") && !settled) return;
+    setPane(entryAfterName(variant, { linked, historyAnswered }));
+  }, [pane, link.status, ledger.status, settled, variant, linked, historyAnswered]);
 
   // Plain forward/back over panes. This is the ONLY position state in the
   // wizard and it lives for exactly as long as the window does — where you
@@ -190,6 +201,11 @@ function WizardBody({
           }}
         />,
       );
+
+    case "history":
+      // Whatever History ended with (answered, put off, or nothing to ask), the
+      // chapter moves on; its answer is the ledger's, written by the pane.
+      return shell(<HistoryPane onBack={onBack} onDone={() => go(nextPane("history", facts))} />);
 
     case "connect":
       return shell(

@@ -1,7 +1,8 @@
 import { UiButton } from "@vibefield/design-kit";
 import type { ReactElement } from "react";
+import { formatBytes } from "../../format/bytes";
 import { labelCls, SettingsRow, SettingsSwitch } from "../settings-ui";
-import { formatBytes, GHOSTTY_DEFAULT_SCROLLBACK } from "./config-text";
+import { GHOSTTY_DEFAULT_SCROLLBACK } from "./config-text";
 import { KEY_BY_NAME } from "./ghostty-key-groups";
 import { DeviceUnavailable } from "./LookTab";
 import type { TerminalPageModel } from "./page-model";

@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { ConnectPane } from "../boot/onboarding/panes/ConnectPane";
 import type { ConnectMe } from "../boot/onboarding/views/connect";
 import { WizardShell } from "../boot/onboarding/wizard-ui";
+import { HistoryWizardPane } from "./HistoryWizardPane";
 import type { FinishStep } from "./ledger";
 import "./setup-sheet.css";
 
@@ -97,6 +98,8 @@ function SheetPane({
   onDone: () => void;
 }): ReactElement {
   switch (step) {
+    case "history":
+      return <HistoryWizardPane onDone={onDone} />;
     case "devices":
       return <DevicesStep me={me} onDone={onDone} />;
   }

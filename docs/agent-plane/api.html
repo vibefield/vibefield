@@ -1732,6 +1732,18 @@
               loopback origin never crosses this surface, and an enrolled root's path stays inside fieldd.
             </p>
             <p class="contract-caption">
+              <em>Update 2026-10-27 (track AO, AO-3; AO-D3, AO-D9 ruled by James):</em> the window's token holds
+              <code>index.manage</code> now. It stayed out "until a surface asks for consent", and one does: the
+              History pane — the Setup Assistant's, History's own consent slot (which replaced a dead end that
+              pointed at Settings → Agents), Finish setting up's sheet and Settings → History — reads
+              <code>index.discoveries</code> beside <code>agent.catalog</code> and brings past sessions in with one
+              <code>index.enroll</code> carrying the COMPLETE set: the kinds already consented that it does not
+              list, plus every switch the person left on, so nothing is revoked by omission and the daemon restarts
+              once. Still local-only, still in no plugin eligibility table; only spine code holds this token
+              (<code>electron-shell/src/main/bootstrap.ts</code>). The answer is also recorded in the Setup
+              Assistant's ledger (<code>setup.answer</code>, AO-2), which is not an agent-plane door.
+            </p>
+            <p class="contract-caption">
               <em>Update 2026-10-03 (SP-D13, ruled (a) by James):</em> <code>index.search</code> is in the
               tailnet preset, <code>TAILNET_SCOPES</code>, so a self phone may search and list its own
               history: <code>index.sessions</code>, <code>index.search</code> and <code>index.recent</code> above,

@@ -1,5 +1,3 @@
-import { FieldGlyph } from "@vibefield/design-kit/glyphs";
-import { EmptyState } from "@vibefield/design-kit/primitives";
 import {
   HistoryRoom,
   type HistoryRoomHandle,
@@ -91,20 +89,6 @@ export function historyEmptyPrompt(keys: ViewKeys): string {
   return `Pick a session, or search with ${keys === "mac" ? "⌘F" : "Ctrl+F"}.`;
 }
 
-/** What the room shows while the index waits for consent to read anything:
- * consent is the enrollment, and it is given in Settings (AR-1). */
-export function HistoryConsentState(): ReactElement {
-  return (
-    <div className="vf-history-state">
-      <EmptyState
-        visual={<FieldGlyph name="history" size={28} />}
-        title="No agent's history is read yet"
-        description="Nothing is enrolled yet, so the index reads nothing. Choose whose history it reads in Settings → Agents."
-      />
-    </div>
-  );
-}
-
 export interface HistoryRoomViewProps {
   /** The room's ports: fieldd's in the product, the package's fixtures in the
    * catalog. */
@@ -137,6 +121,12 @@ export interface HistoryRoomViewProps {
   /** fix7 — the frame's own act under the room (the index's restart while it
    * has failed; `index-restart.tsx`): VibeField's, not the room's. */
   act?: ReactNode;
+  /** AO-3 (AO-D9) — what the room shows while the index waits for consent to
+   * read anything: the History pane itself, "Bring in your past sessions.",
+   * from the controller. It replaces a dead end that pointed at a Settings page
+   * with no such control. Absent (a catalog with no daemon), the room's own
+   * words. */
+  consent?: ReactNode;
 }
 
 export function HistoryRoomView({
@@ -149,6 +139,7 @@ export function HistoryRoomView({
   roomRef,
   inputs,
   act = null,
+  consent,
 }: HistoryRoomViewProps): ReactElement {
   const [layers, setLayers] = useState<HTMLDivElement | null>(null);
   // An object ref, not a ref callback: the room's handle type is declared in
@@ -186,7 +177,7 @@ export function HistoryRoomView({
           storagePrefix={HISTORY_STORAGE_PREFIX}
           storage={store}
           unavailable={unavailable}
-          consent={<HistoryConsentState />}
+          consent={consent}
           emptyPrompt={emptyPrompt}
           onSelect={onSelect}
           {...inputs}

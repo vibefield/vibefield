@@ -660,7 +660,10 @@ describe("SettingsDialog — Agents, and a page below it", () => {
       node.getAttribute("aria-label"),
     );
     expect(nav.indexOf("Agents settings")).toBeGreaterThanOrEqual(0);
-    expect(nav.indexOf("Agents settings")).toBe(nav.indexOf("Plugins settings") - 1);
+    // AO-D9 (DESIGN.md §8 "Settings → History") — History's page follows Agents
+    // and its profiles (none here), and Plugins follows History
+    expect(nav.indexOf("History settings")).toBe(nav.indexOf("Agents settings") + 1);
+    expect(nav.indexOf("Plugins settings")).toBe(nav.indexOf("History settings") + 1);
     expect(
       container.querySelector('[aria-label="Agents settings"]')?.getAttribute("aria-current"),
     ).toBe("page");

@@ -22,6 +22,7 @@ import { leaveFor } from "../boot/switch";
 import { getHost } from "../host";
 import { finishSetupRows, useSetupLedger } from "../setup/ledger";
 import { SetupSheet } from "../setup/SetupSheet";
+import { useHistoryCensus } from "../setup/use-history-census";
 import { AccountSection } from "./AccountSection";
 import { AppearanceSection } from "./AppearanceSection";
 import { AgentsSection } from "./agents/AgentsSection";
@@ -32,6 +33,7 @@ import { BrowserDataSection } from "./BrowserDataSection";
 import { DeskReadout } from "./DeskReadout";
 import { DesktopSection } from "./DesktopSection";
 import { DevicesSection } from "./DevicesSection";
+import { HistorySettings } from "./HistorySettings";
 import { PluginsSection } from "./PluginsSection";
 import {
   type SettingsAccountHead,
@@ -222,7 +224,12 @@ export function SettingsPanel({
   const linked = hasLink(
     linkFace(link.status, link.status === "live" ? (link.data ?? null) : null),
   );
-  const finishRows = finishSetupRows(setupLedger, { linked });
+  const { census: historyCensus } = useHistoryCensus(client);
+  const finishRows = finishSetupRows(setupLedger, {
+    linked,
+    historyToBringIn:
+      historyCensus.kind === "found" && historyCensus.rows.some((row) => !row.consented),
+  });
   const [setupSheet, setSetupSheet] = useState(false);
   const closeSetupSheet = useCallback(() => setSetupSheet(false), []);
   const finishSetup: SettingsFinishSetup | undefined =
@@ -590,6 +597,8 @@ export function SettingsPanel({
         onOpenApp={openAgentApp}
       />
     );
+  } else if (activePage === "history") {
+    pageContent = <HistorySettings />;
   } else if (activePage === "plugins") {
     pageContent = (
       <PluginsSection settingsRevision={settingsRevision} onSettingsChanged={markSettingsChanged} />

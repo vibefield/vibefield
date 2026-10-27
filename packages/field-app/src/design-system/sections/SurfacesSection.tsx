@@ -6,6 +6,7 @@ import { LoadingVeilView } from "../../hud/LoadingVeil";
 import { AppearanceSectionView } from "../../panels/AppearanceSection";
 import { ProfileMark } from "../../panels/agents/ProfilesView";
 import { DevicesSectionView, type DevicesSheet } from "../../panels/DevicesSection";
+import { HistorySettingsView } from "../../panels/HistorySettings";
 import {
   SettingsDialog,
   type SettingsPage,
@@ -15,7 +16,13 @@ import { buttonCls } from "../../panels/settings-ui";
 import { UpdatesDoctorView, UpdatesSectionView } from "../../panels/UpdatesSection";
 import { finishSetupRows } from "../../setup/ledger";
 import { AgentsSettingsPreview } from "../AgentsSettingsPreview";
-import { FIXTURE_ME, FIXTURE_OTHERS_WAITING, FIXTURE_SETUP_LEDGER } from "../account-fixtures";
+import {
+  FIXTURE_HISTORY_CENSUS,
+  FIXTURE_HISTORY_CONSENTED,
+  FIXTURE_ME,
+  FIXTURE_OTHERS_WAITING,
+  FIXTURE_SETUP_LEDGER,
+} from "../account-fixtures";
 import { AGENTS_FIXTURE_STATES, type AgentsFixtureState } from "../agents-fixtures";
 import { CommandPalettePreview } from "../CommandPalettePreview";
 import { Section, Specimen } from "../catalog-ui";
@@ -83,7 +90,10 @@ export function SurfacesSection(): ReactElement {
               finishHidden
                 ? undefined
                 : {
-                    rows: finishSetupRows(FIXTURE_SETUP_LEDGER, { linked: false }),
+                    rows: finishSetupRows(FIXTURE_SETUP_LEDGER, {
+                      linked: false,
+                      historyToBringIn: true,
+                    }),
                     onContinue: () => undefined,
                     onHide: () => setFinishHidden(true),
                   }
@@ -100,6 +110,20 @@ export function SurfacesSection(): ReactElement {
                 key={settingsVisit}
                 state="installed"
                 onSubpage={setSettingsSubpage}
+              />
+            ) : settingsPage === "history" ? (
+              // AO-3 — Settings → History, the shipping view on a fixture census.
+              <HistorySettingsView
+                census={FIXTURE_HISTORY_CENSUS}
+                consented={FIXTURE_HISTORY_CONSENTED}
+                stopping={null}
+                busy={false}
+                error={null}
+                now={Date.parse("2026-10-27T12:00:00Z")}
+                onToggle={() => undefined}
+                onConfirmStop={() => undefined}
+                onCancelStop={() => undefined}
+                onLookAgain={() => undefined}
               />
             ) : settingsPage === "terminal" ? (
               <TerminalSettingsPreview

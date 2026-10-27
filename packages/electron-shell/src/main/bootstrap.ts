@@ -356,7 +356,11 @@ async function mint(
     // join to, and the search itself) and the usage column's readings onto
     // agent.usage — both local-only and plugin-ineligible, held by the
     // window because the monitor is spine code. index.manage (consent — the
-    // roll call's checkboxes) stays out until a surface asks for consent.
+    // roll call's checkboxes) stayed out until a surface asked for consent; one
+    // does now (track AO, AO-3): the History pane — in the Setup Assistant, in
+    // History's consent slot, in Finish setting up and on Settings → History —
+    // brings past sessions in with `index.enroll`. Local-only, in no plugin
+    // eligibility table, and only spine code holds this token.
     // GT-8a: terminal.link — the deck's terminal links ride
     // `terminal.link.open` (an http(s) link to the browser, a file shown in
     // Finder, nothing else; GT-D22), and the deck is spine code on this token.
@@ -384,6 +388,7 @@ async function mint(
       "agent.control",
       "index.read",
       "index.search",
+      "index.manage",
       "agent.usage",
       "agents.manage",
       "terminal.link",

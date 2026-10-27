@@ -41,6 +41,7 @@ import {
   type SessionTarget,
   thrownReason,
 } from "./acts";
+import { HistoryConsent } from "./HistoryConsent";
 import {
   type HistoryHostActs,
   type HistoryHostState,
@@ -408,6 +409,7 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
       ports={ports}
       unavailable={words}
       act={indexPhase === "failed" ? <HistoryIndexRestart client={fieldd} /> : null}
+      consent={<HistoryConsent />}
       onSelect={setSelection}
       openAt={openAt}
       keys={keys}

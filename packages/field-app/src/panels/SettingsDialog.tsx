@@ -19,6 +19,7 @@ export type SettingsPage =
   | "canvas"
   | "agents"
   | "profiles"
+  | "history"
   | "plugins"
   | "devices"
   | "terminal"
@@ -36,6 +37,7 @@ interface PageMeta {
     | "canvas"
     | "agents"
     | "profiles"
+    | "history"
     | "plugin"
     | "mesh"
     | "terminal"
@@ -83,6 +85,13 @@ const PAGES: readonly PageMeta[] = [
     icon: "profiles",
   },
   {
+    // AO-D9 — the home of whose history is read (DESIGN.md §8 "Settings → History").
+    id: "history",
+    label: "History",
+    description: "Whose past sessions History reads on this Mac.",
+    icon: "history",
+  },
+  {
     id: "plugins",
     label: "Plugins",
     description: "Installed extensions and their preferences.",
@@ -118,7 +127,7 @@ const PAGES: readonly PageMeta[] = [
 const NAV_GROUPS: ReadonlyArray<{ label: string; pages: readonly SettingsPage[] }> = [
   { label: "Account", pages: ["account", "devices"] },
   { label: "Preferences", pages: ["general", "appearance", "canvas"] },
-  { label: "Workspace", pages: ["agents", "plugins", "terminal"] },
+  { label: "Workspace", pages: ["agents", "history", "plugins", "terminal"] },
   { label: "Support", pages: ["diagnostics", "advanced"] },
 ];
 
@@ -359,6 +368,7 @@ const PAGE_GLYPH: Record<PageMeta["icon"], GlyphName> = {
   canvas: "canvas",
   agents: "agents",
   profiles: "profiles",
+  history: "history",
   plugin: "plugin",
   mesh: "mesh",
   terminal: "terminal",

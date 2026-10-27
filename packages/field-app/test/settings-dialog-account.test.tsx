@@ -155,19 +155,39 @@ describe("Finish setting up (AO-D10)", () => {
   const LATER = { state: "later", at: "2026-10-27T05:41:34.000Z" };
 
   it("lists a step put off while it still is, and nothing once it is answered or hidden", () => {
-    expect(finishSetupRows(LEDGER({ devices: LATER }), { linked: false })).toEqual([
+    const none = { linked: false, historyToBringIn: false };
+    expect(finishSetupRows(LEDGER({ devices: LATER }), none)).toEqual([
       { step: "devices", glyph: "mesh", label: "Connect your devices" },
     ]);
     // a link answers Devices, wherever it was made
-    expect(finishSetupRows(LEDGER({ devices: LATER }), { linked: true })).toEqual([]);
+    expect(finishSetupRows(LEDGER({ devices: LATER }), { ...none, linked: true })).toEqual([]);
     // a no is never listed; a step never put off is not either
-    expect(
-      finishSetupRows(LEDGER({ devices: { state: "answered", at: LATER.at } }), { linked: false }),
-    ).toEqual([]);
-    expect(finishSetupRows(LEDGER({}), { linked: false })).toEqual([]);
+    expect(finishSetupRows(LEDGER({ devices: { state: "answered", at: LATER.at } }), none)).toEqual(
+      [],
+    );
+    expect(finishSetupRows(LEDGER({}), none)).toEqual([]);
     // hidden by the person: no tile at all; and nothing guessed before the read
-    expect(finishSetupRows(LEDGER({ devices: LATER }, true), { linked: false })).toEqual([]);
-    expect(finishSetupRows(null, { linked: false })).toEqual([]);
+    expect(finishSetupRows(LEDGER({ devices: LATER }, true), none)).toEqual([]);
+    expect(finishSetupRows(null, none)).toEqual([]);
+  });
+
+  it("lists History while something on this Mac is left to bring in, in the assistant's order (AO-3, AO-D12)", () => {
+    const toBringIn = { linked: false, historyToBringIn: true };
+    const history = { step: "history", glyph: "history", label: "Bring in your past sessions" };
+    // put off, and history found that is not brought in
+    expect(finishSetupRows(LEDGER({ history: LATER, devices: LATER }), toBringIn)).toEqual([
+      history,
+      { step: "devices", glyph: "mesh", label: "Connect your devices" },
+    ]);
+    // someone who set up before the chapter existed: no row, history found (AO-D12)
+    expect(finishSetupRows(LEDGER({}), toBringIn)).toEqual([history]);
+    // answered — yes or no — never listed; nothing left to bring in, never listed
+    expect(
+      finishSetupRows(LEDGER({ history: { state: "answered", at: LATER.at } }), toBringIn),
+    ).toEqual([]);
+    expect(
+      finishSetupRows(LEDGER({ history: LATER }), { linked: false, historyToBringIn: false }),
+    ).toEqual([]);
   });
 
   it("sits under the account card with its rows, Continue setup and Hide", async () => {

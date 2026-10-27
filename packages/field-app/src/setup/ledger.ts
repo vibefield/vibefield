@@ -31,8 +31,8 @@ export async function answerSetupStep(
 }
 
 /** The steps Finish setting up can list, and its sheet ask again: each joins
- * with its slice (History with AO-3, Agents and Profiles with AO-5). */
-export type FinishStep = Extract<SetupStep, "devices">;
+ * with its slice (Agents and Profiles with AO-5). */
+export type FinishStep = Extract<SetupStep, "history" | "devices">;
 
 /** One step Finish setting up lists, with its glyph and its one line. */
 export interface FinishSetupRow {
@@ -41,16 +41,26 @@ export interface FinishSetupRow {
   readonly label: string;
 }
 
-/** What Finish setting up lists (DESIGN.md §8): the steps put off, and only
- * while they still are. A step answered elsewhere leaves by itself — Devices
- * the moment a link exists, wherever it was made (agreed with track TS) —
- * and a no is never listed. Nothing while the person has hidden it. */
+/** What Finish setting up lists (DESIGN.md §8), in the assistant's order: the
+ * steps put off, and only while they still are. A step answered elsewhere
+ * leaves by itself — Devices the moment a link exists, wherever it was made
+ * (agreed with track TS); History once nothing found on this Mac is left to
+ * bring in — and a no is never listed. History is also listed, with no row in
+ * the ledger, for someone who set up before the chapter existed (AO-D12) or
+ * whose census had not answered in time. Nothing while the person has hidden it. */
 export function finishSetupRows(
   ledger: SetupLedger | null,
-  facts: { readonly linked: boolean },
+  facts: {
+    readonly linked: boolean;
+    /** the census found history on this Mac that is not brought in */
+    readonly historyToBringIn: boolean;
+  },
 ): readonly FinishSetupRow[] {
   if (ledger === null || ledger.hidden) return [];
   const rows: FinishSetupRow[] = [];
+  if (setupStepState(ledger, "history") !== "answered" && facts.historyToBringIn) {
+    rows.push({ step: "history", glyph: "history", label: "Bring in your past sessions" });
+  }
   if (setupStepState(ledger, "devices") === "later" && !facts.linked) {
     rows.push({ step: "devices", glyph: "mesh", label: "Connect your devices" });
   }

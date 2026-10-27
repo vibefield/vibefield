@@ -1,0 +1,77 @@
+/* The History pane's rows (track AO, AO-3; DESIGN.md §8 "The Setup Assistant's
+   agent chapter" — History): one per agent with history on this Mac, its own mark,
+   its label, its size, when it was last used and where it lives, and a switch.
+   Neutral ink only, so the same rows sit on the wizard's glass, in History's
+   consent slot, in Finish setting up's sheet and on Settings → History. */
+.vf-history-consent-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.vf-history-consent-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 12px;
+  min-height: 48px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--vf-hairline);
+}
+
+.vf-history-consent-row:last-child {
+  border-bottom: 0;
+}
+
+.vf-history-consent-mark {
+  display: flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+}
+
+.vf-history-consent-mark > svg {
+  width: 20px;
+  height: 20px;
+}
+
+.vf-history-consent-text {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.vf-history-consent-label {
+  color: var(--vf-text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.vf-history-consent-facts {
+  overflow: hidden;
+  color: var(--vf-text-secondary);
+  font-size: 11.5px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-history-consent-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.vf-history-consent-summary > p,
+.vf-history-consent-note {
+  margin: 0;
+  color: var(--vf-text-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}

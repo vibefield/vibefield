@@ -6,9 +6,10 @@ import type { FieldUserProfile } from "../../host";
 // and its face in views/, one owner per file — this list is the one line two
 // tracks share (AO's agent chapter and TS's Connect pane), so it stays short.
 //
-// The questions run name → [the agent chapter: Agents, Profiles, History — its
-// panes join this list as AO-3 and AO-5 build them] → Connect → the sync
-// question (a linked user's, until TS-6 moves it) → Setting up. Setting up is
+// The questions run name → the agent chapter (Agents and Profiles join with
+// AO-5; History since AO-3) → Connect → the sync question (a linked user's,
+// until TS-6 moves it) → Setting up. A chapter pane with nothing to decide
+// moves on by itself (AO-L2). Setting up is
 // not a question: it reports the work the answers started, shows the desk
 // opening beneath it, and becomes Ready in place (AO-D2).
 
@@ -16,6 +17,8 @@ export type Pane =
   | "welcome"
   | "welcome-back"
   | "field"
+  /** AO-3 — "Bring in your past sessions.": whose history is read. */
+  | "history"
   | "connect"
   | "posture"
   /** The end of every path: the answers are recorded, the desk opens beneath
@@ -49,13 +52,19 @@ export function entryBeforeAsking(profile: FieldUserProfile): Pane | null {
   return "welcome";
 }
 
-/** W6, once the link snapshot has answered (or its bounded wait ran out): the
- * first thing still unanswered. Migration's only remaining step after the name
- * is the end — its link, if there is one, is acknowledged rather than re-asked
- * (spec §6, migration). A linked user lands on the sync question. */
-export function entryAfterName(variant: SetupVariant, linked: boolean): Pane {
+/** W6, once the link and the ledger have answered (or their bounded wait ran
+ * out): the first thing still unanswered. Migration's only remaining step
+ * after the name is the end — its link, if there is one, is acknowledged
+ * rather than re-asked (spec §6, migration); its history is History's own
+ * pane's to ask (AO-D12). The agent chapter's steps are the ledger's rows
+ * (AO-2); a linked user lands on the sync question. */
+export function entryAfterName(
+  variant: SetupVariant,
+  facts: { linked: boolean; historyAnswered: boolean },
+): Pane {
   if (variant === "migrated") return "setting-up";
-  return linked ? "posture" : "connect";
+  if (!facts.historyAnswered) return "history";
+  return facts.linked ? "posture" : "connect";
 }
 
 /** Where each question goes when it is answered (`continue`) or put off
@@ -71,7 +80,9 @@ export function nextPane(
     case "welcome-back":
       return "field";
     case "field":
-      return facts.variant === "migrated" ? "setting-up" : "connect";
+      return facts.variant === "migrated" ? "setting-up" : "history";
+    case "history":
+      return "connect";
     case "connect":
       return act === "continue" && facts.linked ? "posture" : "setting-up";
     case "posture":

@@ -174,10 +174,18 @@ const wearing = (emoji: string): FieldUserProfile => ({
   onboarded: true,
 });
 
+/** AO-2/AO-3 — the ledger of someone who answered History before they quit: a
+ * record that resumes past the name lands where it did before the chapter. */
+const HISTORY_ANSWERED = {
+  format: 1,
+  steps: { history: { state: "answered", at: "2026-10-27T05:41:30.000Z" } },
+  hidden: false,
+};
+
 /** The product half. `link: undefined` makes `user.link.subscribe` REJECT,
  * which is what a daemon without the UA-3 method actually does. */
 function client(
-  options: { link?: unknown; preferences?: Record<string, unknown> } = {},
+  options: { link?: unknown; preferences?: Record<string, unknown>; ledger?: unknown } = {},
 ): FielddClient {
   const preferences = options.preferences ?? {
     showTray: true,
@@ -198,6 +206,13 @@ function client(
       // TS-2 — the Connect pane's arrival reads the account's devices
       if (method === "device.subscribe") {
         return { subId: "devices", snapshot: [], unsubscribe: () => undefined };
+      }
+      if (method === "setup.subscribe") {
+        return {
+          subId: "setup",
+          snapshot: options.ledger ?? HISTORY_ANSWERED,
+          unsubscribe: () => undefined,
+        };
       }
       throw new Error(`unexpected subscription: ${method}`);
     }),
@@ -349,15 +364,19 @@ describe("Setup Assistant", () => {
     await click("Continue");
     expect(updates).toEqual([{ name: "James", face: { emoji: other, frame: "sticker" } }]);
 
-    // 3 — the next question, at once: pane 3 is retired (AO-D2), because
-    // nothing long runs before the answers do. Skippable, and the skip says
-    // where the question went (W3).
+    // 3 — the agent chapter (AO-3): History asks whose past comes in. This
+    // harness's daemon has no census to give, so the pane says it is looking
+    // and Continue moves on without recording anything.
+    expect(text()).toContain("Bring in your past sessions.");
+    expect(text()).not.toContain("Your field is already running"); // pane 3 retired (AO-D2)
+    await click("Continue");
+
+    // 4 — Connect. Skippable, and the skip says where the question went (W3).
     expect(text()).toContain("Your field, on every device.");
-    expect(text()).not.toContain("Your field is already running");
     expect(text()).toContain("Set up later — Settings → Account");
     await click("Not now");
 
-    // 4 — Setting up: the answers are written first, and only a landed write
+    // 5 — Setting up: the answers are written first, and only a landed write
     // releases the boot (W5) — the document opens beneath the glass.
     expect(updates).toEqual([
       { name: "James", face: { emoji: other, frame: "sticker" } },
@@ -376,7 +395,7 @@ describe("Setup Assistant", () => {
     expect(container?.querySelector(".vf-wizard-title-swap")?.children).toHaveLength(2);
     expect(title()).not.toContain("Welcome");
 
-    // 5 — the desk is warm and stable behind the glass: the title becomes the
+    // 6 — the desk is warm and stable behind the glass: the title becomes the
     // welcome in place, with where Settings went said once (DESIGN.md §8)...
     await boot(bootAt("handing-over"));
     expect(container?.querySelector('.vf-wizard-phase[data-state="done"]')?.textContent).toContain(
@@ -512,7 +531,9 @@ describe("Setup Assistant", () => {
       ),
     ).toBe(false);
 
-    await click("Continue"); // the name → Connect
+    await click("Continue"); // the name → History (each person's own past)
+    expect(text()).toContain("Bring in your past sessions.");
+    await click("Continue"); // → Connect
     expect(text()).toContain("Your field, on every device.");
 
     await click("Not now");
@@ -672,6 +693,20 @@ describe("Setup Assistant", () => {
       "Manage all your agents and compose your agentic workflow in one place.",
     );
     expect(container?.querySelector('input[aria-label="Your name"]')).toBeNull();
+  });
+
+  it("resumes at History when the ledger holds no answer for it, before Connect (W6, AO-3)", async () => {
+    host(vi.fn(async () => ({ ...FRESH, color: "accent-2" }) as FieldUserProfile));
+    await mount({
+      fieldd: client({ link: NO_LINK, ledger: { format: 1, steps: {}, hidden: false } }),
+      onboarding: onboarding({ color: "accent-2" }),
+      onComplete: vi.fn(),
+    });
+    // the name was answered (a legacy accent says so); History was not
+    expect(text()).toContain("Bring in your past sessions.");
+    expect(text()).not.toContain("Your field, on every device.");
+    await click("Continue"); // nothing to ask from this harness's census
+    expect(text()).toContain("Your field, on every device.");
   });
 
   it("does not re-ask a root that is already linked — it moves on to the posture question", async () => {
@@ -1033,7 +1068,7 @@ describe("Setup Assistant", () => {
     await act(async () => {
       form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     });
-    expect(text()).toContain("Your field, on every device.");
+    expect(text()).toContain("Bring in your past sessions.");
   });
 
   it("respects reduced motion — the pane entrance has a fade fallback, no transitions survive", async () => {
@@ -1111,6 +1146,7 @@ describe("Setup Assistant", () => {
 
     await click("Get started");
     await click("Continue"); // nothing to write to — the pane still advances
+    await click("Continue"); // History, with nothing to ask from this harness
     await click("Not now");
     expect(onComplete).toHaveBeenCalledTimes(1);
     await boot(bootAt("handing-over"));

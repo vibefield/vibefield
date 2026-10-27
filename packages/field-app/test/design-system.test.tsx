@@ -429,12 +429,13 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(document.documentElement.dataset.theme).toBe("dark");
     expect(window.localStorage.getItem("vf-dark")).toBe("true");
     // One theme control per onboarding frame: eleven since AO-1 (2026-10-27),
-    // when Ready and the second user's finishing folded into Setting up.
+    // when Ready and the second user's finishing folded into Setting up; twelve
+    // since AO-3, the agent chapter's History pane.
     expect(
       container?.querySelectorAll(
         '[data-onboarding-preview] button[aria-label="Switch to light mode"]',
       ),
-    ).toHaveLength(11);
+    ).toHaveLength(12);
 
     // One Frame FR-3: the playground's head runs on its real controller — its
     // chevron grows the pill into the fields explorer through the one owner.
@@ -511,10 +512,12 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     // AO-1 (2026-10-27): pane 3 retired, and Ready and the second user's
     // finishing folded into Setting up — the end of every path — whose own
     // refusals (the answers not saved, the desk that could not open) are frames.
-    expect(container?.querySelectorAll("[data-onboarding-preview]")).toHaveLength(11);
+    // AO-3 adds the agent chapter's History pane.
+    expect(container?.querySelectorAll("[data-onboarding-preview]")).toHaveLength(12);
     for (const state of [
       "welcome",
       "field",
+      "history",
       "connect",
       "posture",
       "setting-up",
@@ -527,7 +530,7 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     ]) {
       expect(container?.querySelector(`[data-onboarding-preview="${state}"]`)).not.toBeNull();
     }
-    expect(container?.querySelectorAll(".vf-wizard-shell")).toHaveLength(11);
+    expect(container?.querySelectorAll(".vf-wizard-shell")).toHaveLength(12);
     expect(container?.querySelector(".vf-ds-field-stage .vf-head-zoom")).not.toBeNull();
     expect(container?.querySelector("[data-ground-workbench]")).not.toBeNull();
     expect(container?.querySelector("[data-visual-tweak-controls]")).not.toBeNull();
@@ -603,6 +606,16 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(
       frame("setting-up").querySelector('.vf-wizard-phase[data-state="waiting"]'),
     ).not.toBeNull();
+
+    // AO-3 — the History pane: its rows with every switch on, then a no.
+    expect(frame("history").querySelectorAll('[role="switch"][aria-checked="true"]')).toHaveLength(
+      3,
+    );
+    expect(frame("history").textContent).toContain("Bring in history");
+    await choose("history", "all off");
+    expect(frame("history").textContent).toContain("Continue without history");
+    await choose("history", "looking");
+    expect(frame("history").textContent).toContain("Looking for past sessions…");
   });
 
   it("mounts the spawn bloom on the shipping monitor with its fixture door, and a create lands as a new terminal (SB-3)", async () => {

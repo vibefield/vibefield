@@ -22,7 +22,10 @@ import {
 } from "../boot/onboarding/views/welcome";
 import { WizardShellView } from "../boot/onboarding/wizard-ui";
 import type { FieldUserFace } from "../host";
-import { FIXTURE_ME, FIXTURE_OTHERS } from "./account-fixtures";
+import { HistoryConsentBody } from "../setup/HistoryConsentView";
+import { HistoryWizardPaneView } from "../setup/HistoryWizardPane";
+import { HISTORY_WORDS } from "../setup/history-words";
+import { FIXTURE_HISTORY_CENSUS, FIXTURE_ME, FIXTURE_OTHERS } from "./account-fixtures";
 
 const noop = (): void => undefined;
 
@@ -75,6 +78,10 @@ const FIELD_STATES = ["fresh", "second user", "saving", "error"] as const;
 type FieldState = (typeof FIELD_STATES)[number];
 
 const CHOOSER_STATES = ["ready", "opening", "refused", "reading"] as const;
+
+/** AO-3 — the History pane's census states, and every switch off (a no). */
+const HISTORY_STATES = ["found", "all off", "looking", "unavailable"] as const;
+type HistoryState = (typeof HISTORY_STATES)[number];
 type ChooserState = (typeof CHOOSER_STATES)[number];
 
 /** The chooser's users: this machine's, plus the new one being set up. */
@@ -153,6 +160,7 @@ export function OnboardingPreview({
           </OnboardingFrame>
 
           <FieldPreview />
+          <HistoryPreview />
           <ConnectPreview />
           <PosturePreview />
           <SettingUpPreview />
@@ -281,11 +289,67 @@ function ChooserPreview(): ReactElement {
 
 /** The end of every path (AO-D2): the shipping pane, fed the boot machine's
  * states by hand so none of them advances on its own here. */
+/** The agent chapter's History pane (AO-3): the shipping face on a fixture
+ * census — two agents with history on this Mac and one no longer installed. */
+function HistoryPreview(): ReactElement {
+  const [state, setState] = useState<HistoryState>("found");
+  const census =
+    state === "looking"
+      ? { kind: "looking" as const }
+      : state === "unavailable"
+        ? { kind: "unavailable" as const }
+        : FIXTURE_HISTORY_CENSUS;
+  const chosen = new Set(
+    state === "found" ? FIXTURE_HISTORY_CENSUS.rows.map((row) => row.kind) : [],
+  );
+  const choosing = census.kind === "found";
+  return (
+    <OnboardingFrame
+      index="03"
+      label="History"
+      note="Every switch on · nothing read before the button"
+      state="history"
+      controls={
+        <SegmentedControl
+          options={HISTORY_STATES}
+          value={state}
+          onChange={setState}
+          label="History pane state"
+        />
+      }
+    >
+      <HistoryWizardPaneView
+        parts={{
+          body: (
+            <HistoryConsentBody
+              census={census}
+              chosen={chosen}
+              now={Date.parse("2026-10-27T12:00:00Z")}
+              onToggle={noop}
+            />
+          ),
+          primaryLabel: !choosing
+            ? "Continue"
+            : chosen.size === 0
+              ? HISTORY_WORDS.without
+              : HISTORY_WORDS.bringIn,
+          primaryBusy: false,
+          choosing,
+          error: null,
+          onPrimary: noop,
+          onLater: noop,
+        }}
+        onBack={noop}
+      />
+    </OnboardingFrame>
+  );
+}
+
 function SettingUpPreview(): ReactElement {
   const [state, setState] = useState<SettingUpState>("drawing");
   return (
     <OnboardingFrame
-      index="05"
+      index="06"
       label="Setting up, then Ready"
       note="The desk opens beneath the glass · the title becomes the welcome in place"
       state="setting-up"
@@ -360,7 +424,7 @@ function ConnectPreview(): ReactElement {
   const pending = (): void => setStep({ kind: "pending" });
   return (
     <OnboardingFrame
-      index="03"
+      index="04"
       label="Connect devices"
       note="Every face the link shows, in the daemon's own words"
       state="connect"
@@ -439,7 +503,7 @@ function PosturePreview(): ReactElement {
 
   return (
     <OnboardingFrame
-      index="04"
+      index="05"
       label="Project default"
       note="Shared with Settings → Account"
       state="posture"

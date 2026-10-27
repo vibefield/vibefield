@@ -6,10 +6,10 @@
  * are ghosttea's own, so its editor and this page recognize each other's block.
  */
 import { describe, expect, it } from "vitest";
+import { formatBytes } from "../src/format/bytes";
 import {
   changedKeyCount,
   EMPTY_MANAGED_VALUES,
-  formatBytes,
   MANAGED_BLOCK_END,
   MANAGED_BLOCK_START,
   MalformedManagedBlockError,

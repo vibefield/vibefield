@@ -1,0 +1,40 @@
+/* History's consent slot (track AO, AO-3; DESIGN.md §8 "History is rosetta's
+   room", amended): the History pane in the room's place while the index waits
+   for consent — a quiet column on the cover's glass, the room's measure. */
+.vf-history-consent {
+  display: flex;
+  width: min(100%, 30rem);
+  flex-direction: column;
+  gap: 12px;
+  margin: 0 auto;
+  padding: 48px 24px;
+}
+
+.vf-history-consent-title {
+  margin: 0;
+  color: var(--vf-text-primary);
+  font-size: 22px;
+  font-weight: 300;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.vf-history-consent-voice {
+  margin: 0;
+  color: var(--vf-text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.vf-history-consent-error {
+  margin: 0;
+  color: var(--vf-ink-attention);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.vf-history-consent-acts {
+  display: flex;
+  gap: 8px;
+  padding-top: 4px;
+}
