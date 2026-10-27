@@ -100,7 +100,8 @@ describe("widgetlab panels", () => {
     expect(category("Appearance")).toBeDefined();
     expect(category("Canvas")).toBeDefined();
     expect(category("Plugins")).toBeDefined();
-    expect(category("Mesh")).toBeDefined();
+    expect(category("Devices")).toBeDefined();
+    expect(category("Mesh")).toBeUndefined();
     expect(category("Diagnostics")).toBeDefined();
     expect(category("Advanced")).toBeDefined();
 
@@ -139,7 +140,11 @@ describe("widgetlab panels", () => {
     const stress = buttons.find((b) => b.textContent === "+50");
     expect(stress?.disabled).toBe(true);
 
-    act(() => category("Mesh")?.click());
+    act(() => category("Devices")?.click());
+    // TS-3a (TS-D3) — Devices absorbs Mesh: the card, your devices, and
+    // today's diagnostics under Network details, collapsed
+    expect(container?.textContent).toContain("Your devices");
+    expect(container?.textContent).toContain("Network details");
     expect(container?.textContent).toContain("Mesh network");
     expect(container?.textContent).toContain("devices");
     expect(container?.textContent).toContain("no devices yet");

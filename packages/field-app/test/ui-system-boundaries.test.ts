@@ -788,6 +788,7 @@ describe("UI system ownership boundaries", () => {
     for (const stylesheet of [
       "account/FacePicker.css",
       "account/MeMenu.css",
+      "account/door/door.css",
       "boot/boot.css",
       "boot/onboarding/wizard-ui.css",
       "setup/setup-sheet.css",
@@ -795,6 +796,7 @@ describe("UI system ownership boundaries", () => {
       "hud/edge-tray/edge-tray.css",
       "hud/LoadingVeil.css",
       "hud/PluginSurfaceSlot.css",
+      "panels/devices.css",
       "panels/settings.css",
       "panels/terminal/terminal-settings.css",
       "godview/deck-zoom.css",

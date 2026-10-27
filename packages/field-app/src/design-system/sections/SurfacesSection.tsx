@@ -5,6 +5,7 @@ import { type ReactElement, useState } from "react";
 import { LoadingVeilView } from "../../hud/LoadingVeil";
 import { AppearanceSectionView } from "../../panels/AppearanceSection";
 import { ProfileMark } from "../../panels/agents/ProfilesView";
+import { DevicesSectionView, type DevicesSheet } from "../../panels/DevicesSection";
 import {
   SettingsDialog,
   type SettingsPage,
@@ -18,6 +19,12 @@ import { FIXTURE_ME, FIXTURE_OTHERS_WAITING, FIXTURE_SETUP_LEDGER } from "../acc
 import { AGENTS_FIXTURE_STATES, type AgentsFixtureState } from "../agents-fixtures";
 import { CommandPalettePreview } from "../CommandPalettePreview";
 import { Section, Specimen } from "../catalog-ui";
+import {
+  DEVICES_FIXTURE_NOW,
+  DEVICES_FIXTURE_STATES,
+  type DevicesFixtureState,
+  devicesFixture,
+} from "../devices-settings-fixtures";
 import { ArtifactsDrawer } from "../EdgesPreview";
 import { ProfilesSettingsPreview, profilesPreviewHead } from "../ProfilesSettingsPreview";
 import {
@@ -113,6 +120,14 @@ export function SurfacesSection(): ReactElement {
 
       <Specimen title="Agents settings" source="panels/agents/AgentsSection.tsx" bleed>
         <AgentsSettingsSpecimen />
+      </Specimen>
+
+      <Specimen
+        title="Devices — Settings › Devices: the account's reach (TS-3a)"
+        source="panels/DevicesSection.tsx"
+        bleed
+      >
+        <DevicesSettingsSpecimen />
       </Specimen>
 
       <Specimen title="Agent profiles" source="panels/agents/ProfilesSection.tsx" bleed>
@@ -218,6 +233,68 @@ function AgentsSettingsSpecimen(): ReactElement {
         <AgentsSettingsPreview key={state} state={state} onSubpage={setSubpage} />
       </SettingsDialog>
     </div>
+  );
+}
+
+/** Settings → Devices in the shipping dialog (TS-3a): the page is
+ * `DevicesSectionView` over the fixture adapter, never a replica. */
+function DevicesSettingsSpecimen(): ReactElement {
+  const [state, setState] = useState<DevicesFixtureState>("connected");
+  return (
+    <div className="vf-ds-settings-stage vf-ds-agents-stage" data-devices-settings-catalog="">
+      <div className="vf-ds-production-statebar">
+        <span>Production state</span>
+        <UiSegmentedControl
+          options={DEVICES_FIXTURE_STATES}
+          value={state}
+          onChange={setState}
+          label="Devices settings state"
+        />
+      </div>
+      <SettingsDialog
+        className="vf-ds-settings-dialog"
+        activePage="devices"
+        onSelectPage={() => undefined}
+        onClose={() => undefined}
+        onUndo={() => undefined}
+        onRedo={() => undefined}
+        historyBusy={false}
+        undoAvailable={false}
+        redoAvailable={false}
+        account={{ me: FIXTURE_ME, others: FIXTURE_OTHERS_WAITING, onSwitch: () => undefined }}
+        subpage={null}
+      >
+        <DevicesSpecimenPage key={state} state={state} />
+      </SettingsDialog>
+    </div>
+  );
+}
+
+function DevicesSpecimenPage({ state }: { state: DevicesFixtureState }): ReactElement {
+  const fixture = devicesFixture(state);
+  // the sheets open and close in place, as they do on the shipping page
+  const [sheet, setSheet] = useState<DevicesSheet>(fixture.sheet);
+  const noop = (): void => undefined;
+  return (
+    <DevicesSectionView
+      face={fixture.face}
+      step={{ kind: "idle" }}
+      disconnect={{ kind: "idle" }}
+      sheet={sheet}
+      devices={fixture.devices}
+      platform="darwin"
+      now={DEVICES_FIXTURE_NOW}
+      onBegin={noop}
+      onCancel={noop}
+      onRenew={noop}
+      onOpenAgain={noop}
+      onCopyLink={async () => true}
+      onCopyText={async () => true}
+      onStartOver={noop}
+      onSheet={setSheet}
+      onDisconnect={noop}
+      onNewUser={noop}
+    />
   );
 }
 

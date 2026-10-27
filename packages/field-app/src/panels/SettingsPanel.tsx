@@ -31,7 +31,7 @@ import { profileNavItems } from "./agents/profiles-model";
 import { BrowserDataSection } from "./BrowserDataSection";
 import { DeskReadout } from "./DeskReadout";
 import { DesktopSection } from "./DesktopSection";
-import { MeshSection } from "./MeshSection";
+import { DevicesSection } from "./DevicesSection";
 import { PluginsSection } from "./PluginsSection";
 import {
   type SettingsAccountHead,
@@ -594,8 +594,8 @@ export function SettingsPanel({
     pageContent = (
       <PluginsSection settingsRevision={settingsRevision} onSettingsChanged={markSettingsChanged} />
     );
-  } else if (activePage === "mesh") {
-    pageContent = <MeshSection />;
+  } else if (activePage === "devices") {
+    pageContent = <DevicesSection onSettingsChanged={markSettingsChanged} />;
   } else if (activePage === "terminal") {
     // GT-7: one page over two owners — this window's look and this Mac's
     // config.ghostty — each section saying which it is (GT-D18).

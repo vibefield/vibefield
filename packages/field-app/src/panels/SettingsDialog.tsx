@@ -20,7 +20,7 @@ export type SettingsPage =
   | "agents"
   | "profiles"
   | "plugins"
-  | "mesh"
+  | "devices"
   | "terminal"
   | "diagnostics"
   | "advanced";
@@ -89,9 +89,10 @@ const PAGES: readonly PageMeta[] = [
     icon: "plugin",
   },
   {
-    id: "mesh",
-    label: "Mesh",
-    description: "Connected devices and document synchronization.",
+    // TS-3a (TS-D3) — the account's reach, under the head, absorbing Mesh
+    id: "devices",
+    label: "Devices",
+    description: "This Mac, your other devices, and the network that joins them.",
     icon: "mesh",
   },
   {
@@ -115,9 +116,9 @@ const PAGES: readonly PageMeta[] = [
 ] as const;
 
 const NAV_GROUPS: ReadonlyArray<{ label: string; pages: readonly SettingsPage[] }> = [
-  { label: "Account", pages: ["account"] },
+  { label: "Account", pages: ["account", "devices"] },
   { label: "Preferences", pages: ["general", "appearance", "canvas"] },
-  { label: "Workspace", pages: ["agents", "plugins", "mesh", "terminal"] },
+  { label: "Workspace", pages: ["agents", "plugins", "terminal"] },
   { label: "Support", pages: ["diagnostics", "advanced"] },
 ];
 

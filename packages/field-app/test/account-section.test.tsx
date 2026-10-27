@@ -64,16 +64,6 @@ const OFFLINE = {
   linkDetail: null,
 };
 
-/** A refusal on the wire, with the daemon's own sentence. */
-const refused = (linkState: string, linkDetail: string): Record<string, unknown> => ({
-  link: null,
-  meshEnabled: false,
-  nodeState: null,
-  authUrl: null,
-  linkState,
-  linkDetail,
-});
-
 /** The supervisor half. `usersUpdate: null` is a host WITHOUT the bridge — a
  * browser harness, or a shell built before the seam landed. `users` is UA-5's
  * half of the same door: each member absent independently, because a shell
@@ -151,22 +141,17 @@ const typeInto = (input: HTMLInputElement, value: string): void => {
   input.dispatchEvent(new Event("input", { bubbles: true }));
 };
 
-/** The one phrase for the act, found the way a person finds it: by its label. */
-const linkAct = (): HTMLButtonElement | undefined =>
-  Array.from(container?.querySelectorAll<HTMLButtonElement>("button") ?? []).find(
-    (button) => button.textContent === "Continue with Tailscale",
-  );
-
 describe("AccountSection", () => {
-  it("renders all four sections and seeds the profile from an empty update", async () => {
+  it("renders its sections and seeds the profile from an empty update", async () => {
     const usersUpdate = vi.fn(async () => PROFILE);
     host(usersUpdate);
     await mount(client({ link: OFFLINE }));
 
     expect(text()).toContain("Profile");
-    expect(text()).toContain("Connect your devices");
-    expect(text()).toContain("Sync posture");
     expect(text()).toContain("Keep running in background");
+    // TS-3a (TS-D3) — the link and the posture moved to Settings → Devices
+    expect(text()).not.toContain("Continue with Tailscale");
+    expect(container?.querySelector('[aria-label="Sync posture"]')).toBeNull();
 
     // The read is the empty update — no separate read method to keep in step.
     expect(usersUpdate).toHaveBeenCalledWith({});
@@ -193,13 +178,8 @@ describe("AccountSection", () => {
     expect(changeFace()?.disabled).toBe(true);
     expect(text()).toContain("no supervisor bridge");
     expect(text()).toContain("Residency is a supervisor setting");
-
-    // The product half is unaffected — posture is still live.
-    const posture = container?.querySelectorAll<HTMLInputElement>(
-      '[role="radiogroup"][aria-label="Sync posture"] input[type="radio"]',
-    );
-    expect(posture).toHaveLength(2);
-    expect(posture?.[0]?.disabled).toBe(false);
+    // The product half (the link, the posture) lives on Settings → Devices
+    // since TS-3a, where its own rows hold it live without the bridge.
   });
 
   it("changes the face through the picker, and greys the one another user wears", async () => {
@@ -325,232 +305,6 @@ describe("AccountSection", () => {
     );
     // Only the profile read reached main.
     expect(usersUpdate.mock.calls.every(([params]) => Object.keys(params).length === 0)).toBe(true);
-  });
-
-  it("survives a daemon with no link method and says so", async () => {
-    host(vi.fn(async () => PROFILE));
-    await mount(client({}));
-
-    expect(text()).toContain("Link service unavailable");
-    expect(text()).toContain("Everything local keeps working");
-    // The rest of the page is intact — an absent method is not a dead page.
-    expect(text()).toContain("Sync posture");
-  });
-
-  it("names the linked account and holds the unlink behind a second step", async () => {
-    host(vi.fn(async () => PROFILE));
-    const fieldd = client({
-      link: {
-        link: {
-          login: "james@example.com",
-          tailnet: "example.ts.net",
-          linkedAt: "2026-08-05T09:00:00.000Z",
-        },
-        meshEnabled: true,
-        nodeState: "running",
-        authUrl: null,
-        linkState: "linked",
-        linkDetail: null,
-      },
-    });
-    await mount(fieldd);
-
-    expect(text()).toContain("james@example.com");
-    expect(text()).toContain("example.ts.net");
-
-    const unlink = (): HTMLButtonElement | undefined =>
-      Array.from(container?.querySelectorAll<HTMLButtonElement>("button") ?? []).find(
-        (button) => button.textContent === "Unlink",
-      );
-    await act(async () => unlink()?.click());
-    // Armed, not done: the first click asks, and names what a relink costs.
-    expect(fieldd.request).not.toHaveBeenCalled();
-    expect(text()).toContain("mints a fresh node identity");
-
-    await act(async () => unlink()?.click());
-    expect(fieldd.request).toHaveBeenCalledWith("user.link.unlink", {});
-  });
-
-  it("offers the browser flow while the node waits for authentication", async () => {
-    host(vi.fn(async () => PROFILE));
-    await mount(
-      client({
-        link: {
-          link: null,
-          meshEnabled: true,
-          nodeState: "needs-login",
-          authUrl: "https://login.tailscale.com/a/abc123",
-          linkState: "capturing",
-          linkDetail: null,
-        },
-      }),
-    );
-
-    // TS-2 — the waiting face keeps its exits in reach (TS-D5): the address is
-    // opened again by the door, never by a bare underlined word
-    const labels = Array.from(container?.querySelectorAll("button") ?? []).map(
-      (button) => button.textContent,
-    );
-    expect(labels).toEqual(expect.arrayContaining(["Open again", "Copy link", "Cancel"]));
-    expect(text()).toContain("Finish signing in in your browser");
-  });
-
-  // UA-P-0g — the act. Before this, an unlinked desktop (which is every fresh
-  // install, and anything that pressed Unlink) had no way to link from the UI
-  // at all: the daemon has had `user.link.begin` since UA-P-0a and nothing in
-  // the renderer called it.
-
-  it("offers the link act on an unlinked desktop and sends exactly one begin", async () => {
-    host(vi.fn(async () => PROFILE));
-    const fieldd = client({ link: OFFLINE });
-    await mount(fieldd);
-
-    // TS-D2 — the ordinary first-run state in its own words, never "offline"
-    expect(text()).toContain("This Mac only");
-    expect(text()).not.toContain("offline");
-    // ...and the sentence that was false since UA-P-0a is gone with its face.
-    expect(text()).not.toContain("FIELD_NATIVE_MESH");
-
-    await act(async () => linkAct()?.click());
-    expect(fieldd.request).toHaveBeenCalledTimes(1);
-    expect(fieldd.request).toHaveBeenCalledWith("user.link.begin", {});
-  });
-
-  it("renders a refused begin instead of a blank, and keeps the act", async () => {
-    host(vi.fn(async () => PROFILE));
-    const fieldd = client({ link: OFFLINE });
-    (fieldd.request as ReturnType<typeof vi.fn>).mockRejectedValue(
-      new Error("this user is already linked to a tailscale account; unlink first"),
-    );
-    await mount(fieldd);
-
-    await act(async () => linkAct()?.click());
-
-    expect(text()).toContain("already linked to a tailscale account; unlink first");
-    expect(linkAct()?.disabled).toBe(false);
-  });
-
-  it("says what the node is doing while capture runs without an address yet", async () => {
-    host(vi.fn(async () => PROFILE));
-    await mount(
-      client({
-        link: {
-          link: null,
-          meshEnabled: true,
-          nodeState: "Starting",
-          authUrl: null,
-          linkState: "capturing",
-          linkDetail: null,
-        },
-      }),
-    );
-
-    expect(text()).toContain("Opening Tailscale…");
-    // Capture is already running — offering to start it again would be a lie.
-    expect(linkAct()).toBeUndefined();
-  });
-
-  it("speaks a corrupt link record verbatim and withholds an act that could only fail", async () => {
-    host(vi.fn(async () => PROFILE));
-    await mount(
-      client({
-        link: refused(
-          "link_corrupt",
-          "link.json is present but unusable: /Users/j/Library/VibeField/users/1/fieldd/link.json",
-        ),
-      }),
-    );
-
-    expect(text()).toContain("Link record unreadable");
-    expect(text()).toContain("/Users/j/Library/VibeField/users/1/fieldd/link.json");
-    expect(text()).toContain("moved aside");
-    expect(linkAct()).toBeUndefined();
-  });
-
-  it("speaks a tagged node and offers the act again", async () => {
-    host(vi.fn(async () => PROFILE));
-    const fieldd = client({
-      link: refused(
-        "login_unavailable",
-        "the tailnet has no user for this node (a tagged node cannot link)",
-      ),
-    });
-    await mount(fieldd);
-
-    expect(text()).toContain("No tailnet user for this node");
-    expect(text()).toContain("a tagged node cannot link");
-
-    await act(async () => linkAct()?.click());
-    expect(fieldd.request).toHaveBeenCalledWith("user.link.begin", {});
-  });
-
-  it("names the other local user holding the account and offers the act again", async () => {
-    host(vi.fn(async () => PROFILE));
-    const fieldd = client({
-      link: refused(
-        "login_already_linked",
-        'the local user "Work" is already linked to this tailscale account; unlink it first',
-      ),
-    });
-    await mount(fieldd);
-
-    expect(text()).toContain("Already linked by another user here");
-    expect(text()).toContain('the local user "Work" is already linked');
-
-    await act(async () => linkAct()?.click());
-    expect(fieldd.request).toHaveBeenCalledWith("user.link.begin", {});
-  });
-
-  it("does not offer the act to a linked desktop — that path is unlink first", async () => {
-    host(vi.fn(async () => PROFILE));
-    await mount(
-      client({
-        link: {
-          link: { login: "james@example.com", linkedAt: "2026-08-05T09:00:00.000Z" },
-          meshEnabled: true,
-          nodeState: "running",
-          authUrl: null,
-          linkState: "linked",
-          linkDetail: null,
-        },
-      }),
-    );
-
-    expect(linkAct()).toBeUndefined();
-    expect(text()).toContain("james@example.com");
-  });
-
-  it("reads a daemon that predates the posture word from what it did send", async () => {
-    // Tolerant reader: no `linkState` on the wire, and the page still lands on
-    // the offline face rather than throwing or going blank.
-    host(vi.fn(async () => PROFILE));
-    await mount(
-      client({ link: { link: null, meshEnabled: false, nodeState: null, authUrl: null } }),
-    );
-
-    expect(text()).toContain("This Mac only");
-    expect(linkAct()).not.toBeUndefined();
-  });
-
-  it("writes the posture key as a plain string and reflects the stored value", async () => {
-    host(vi.fn(async () => PROFILE));
-    const fieldd = client({
-      link: OFFLINE,
-      preferences: { showTray: true, backgroundShell: true, syncPosture: "opt-in" },
-    });
-    await mount(fieldd);
-
-    const posture = container?.querySelectorAll<HTMLInputElement>(
-      '[role="radiogroup"][aria-label="Sync posture"] input[type="radio"]',
-    );
-    expect(posture?.[0]?.checked).toBe(false);
-    expect(posture?.[1]?.checked).toBe(true);
-
-    await act(async () => posture?.[0]?.click());
-    expect(fieldd.request).toHaveBeenCalledWith("storage.appPreferences.set", {
-      key: "mesh.syncPosture",
-      value: "automatic",
-    });
   });
 
   it("keeps the profile honest when the supervisor refuses the read", async () => {
@@ -712,7 +466,7 @@ describe("AccountSection users switcher", () => {
     expect(newUser()?.disabled).toBe(true);
     expect(container?.querySelector("[aria-current]")).toBeNull();
     // The rest of the page is untouched — one absent door is not a dead page.
-    expect(text()).toContain("Sync posture");
+    expect(text()).toContain("Keep running in background");
   });
 
   it("never leaves a row disabled without saying why", async () => {
@@ -742,7 +496,6 @@ describe("AccountSection users switcher", () => {
     expect(text()).toContain("users.json is locked");
     // Minting does not depend on the read that failed.
     expect(newUser()?.disabled).toBe(false);
-    expect(text()).toContain("Sync posture");
-    expect(text()).toContain("Connect your devices");
+    expect(text()).toContain("Keep running in background");
   });
 });

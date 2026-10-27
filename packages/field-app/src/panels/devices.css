@@ -1,0 +1,98 @@
+/* Settings → Devices (track TS, TS-3a; DESIGN.md §8 "Settings → Devices").
+ * Semantic tokens only (docs/UI_SYSTEM.md): the state word's tones are the
+ * ink of what they say — healthy for Connected, the attention ink for every
+ * state that asks something, muted for This Mac only. */
+
+.vf-devices-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 14px;
+  align-items: start;
+}
+
+.vf-devices-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.vf-devices-state {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--vf-text-primary);
+}
+
+.vf-devices-state[data-tone="healthy"] {
+  color: var(--vf-ink-healthy);
+}
+
+.vf-devices-state[data-tone="attention"],
+.vf-devices-fact-act[data-tone="attention"] {
+  color: var(--vf-ink-attention);
+}
+
+.vf-devices-state[data-tone="muted"] {
+  color: var(--vf-text-secondary);
+}
+
+.vf-devices-acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 8px;
+}
+
+.vf-devices-facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 16px;
+  align-items: center;
+}
+
+.vf-devices-fact-act {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.vf-devices-rows {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.vf-devices-row {
+  display: grid;
+  grid-template-columns: 16px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 0;
+  color: var(--vf-text-secondary);
+}
+
+.vf-devices-row + .vf-devices-row {
+  border-top: 1px solid var(--vf-hairline);
+}
+
+.vf-devices-row-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--vf-text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-devices-kind {
+  padding-bottom: 8px;
+}
+
+.vf-devices-details > summary {
+  cursor: pointer;
+  padding: 4px 0;
+}
