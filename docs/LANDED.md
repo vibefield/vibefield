@@ -13411,7 +13411,7 @@ refusal half as James reversed it on 2026-10-18. Thirteen commits.
   - The probe, red as above, then reverted and its blob checked.
   - A clean recompile.
   - FieldRoutedTerminalTests: 170 / 26. FieldHomeTests: 79 / 15.
-  - **The whole kit with the PJ-7 fixture:** 1,046 tests in 182 suites, green.
+  - **The whole kit with the PJ-7 fixture:** ~~1,046 tests in 182 suites~~ *(Corrected 2026-10-27, the EL8 to ghosttea 0.13.7: FALSE, 1,310 tests in 239 suites, its log's 13 test-target tallies summed. The kit's tally keeps its last 12 lines, which dropped two targets' 110 and 154.)* green.
     - The PJ-7 live row `aLaunchFromThePhoneLandsInTheNamedPlaceOnTheNamedDesktop()` passed against the fixture.
     - One opt-in row was not run: FS-2's `WorkspaceLoopbackTests`, which needs its own fixture (ios-workspace.ts).
   - The logs are in `/Volumes/SamsungRed/lanes/hl-tp/logs/kit2/`.
@@ -13698,7 +13698,7 @@ version edit (VF-PM's rule, 2026-10-23 22:30Z).
     own target (its `target` link held equal to it);
   - the compile: `** TEST BUILD SUCCEEDED **`, SwiftPM resolving ghosttea 0.13.1 and truffle 0.7.19 by URL;
   - FieldTerminalTests 176 in 33 suites, FieldRoutedTerminalTests 170 in 26, FieldHomeTests 79 in 15, all passed;
-  - the whole kit with the PJ-7 fixture: 1,046 tests in 182 suites passed, PJ-7's loopback row among them; one
+  - the whole kit with the PJ-7 fixture: ~~1,046 tests in 182 suites~~ *(Corrected 2026-10-27, the EL8 to ghosttea 0.13.7: FALSE, 1,310 tests in 239 suites, its log's 13 test-target tallies summed. The kit's tally keeps its last 12 lines, which dropped two targets' 110 and 154.)* passed, PJ-7's loopback row among them; one
     opt-in row skipped (the workspace fixture's), as in the pump lane's kit.
 - **`pnpm still` NOT REACHED:** no still mounts the terminal renderer or the key catalog the pin moves, and the stills'
   inputs (playground, plugins, ice, Dawn) are unchanged.
@@ -14032,7 +14032,7 @@ declares truffle-core =0.7.19 on its cargo and Swift planes, so neither pin move
     - the setup: a frozen install, preflight OK, field-native for the PJ-7 fixture;
     - the compile: `** TEST BUILD SUCCEEDED **`, SwiftPM resolving ghosttea 0.13.4 and truffle 0.7.22 by URL;
     - FieldRoutedTerminalTests 170 in 26 suites and FieldHomeTests 79 in 15, passed;
-    - **the whole kit with the PJ-7 fixture: 1,046 tests in 182 suites passed**, PJ-7's suite among them. That is the
+    - **the whole kit with the PJ-7 fixture: ~~1,046 tests in 182 suites~~ passed** *(Corrected 2026-10-27, the EL8 to ghosttea 0.13.7: FALSE, 1,310 tests in 239 suites, its log's 13 test-target tallies summed. The kit's tally keeps its last 12 lines, which dropped two targets' 110 and 154.)*, PJ-7's suite among them. That is the
       0.13.1 kit's own count.
     - **FieldTerminalTests run alone was red twice** at load 114–199, with 14 issues: seven AttachDeadlineTests waiting
       5 s for "the control attach", and the door row's come-back wait. The same 176 tests in 33 suites passed inside
@@ -15253,7 +15253,7 @@ ghosttea's next release, then this EL8.
   data on the SSD, nice 19, the dev-app guard and ≥ 10 GiB on both disks read before each step.
   - The compile: `** TEST BUILD SUCCEEDED **`, SwiftPM resolving ghosttea 0.13.5 and truffle 0.7.22 by URL.
   - FieldHomeTests 79 in 15 suites passed.
-  - **The whole kit with the PJ-7 fixture: 1,046 tests passed**, the 0.13.1 and 0.13.4 kits' own count. FieldTerminalTests'
+  - **The whole kit with the PJ-7 fixture: ~~1,046~~ tests passed** *(Corrected 2026-10-27, the EL8 to ghosttea 0.13.7: FALSE, 1,310 tests in 239 suites, its log's 13 test-target tallies summed. The kit's tally keeps its last 12 lines, which dropped two targets' 110 and 154.)*, the 0.13.1 and 0.13.4 kits' own count. FieldTerminalTests'
     176 and FieldRoutedTerminalTests' 170 passed inside it, and PJ-7's suite with them. Fixture exit 0; the tree was untouched.
   - **FieldTerminalTests and FieldRoutedTerminalTests, each alone, were red first** at load 224–362, with the fixer's item-67
     typecheck running: 16 and 2 issues, every one a timeout. They are the 0.13.4 kit's recorded contention class: the
@@ -15380,7 +15380,7 @@ at 21:38Z, as its own event on this Mac's shared slot. The nightly was mid-run, 
   |---|---|---|
   | 1, alone | 153 | green, 176/33 |
   | 1, in the whole kit | 361 | red: one row's 5 s wait (`theCellASessionOpensOrComesBackOnIsSaidFocused`, "the demand to come back") |
-  | 2, alone | 185 | red: nine fix8 attach-deadline rows past Swift Testing's 60 s limit |
+  | 2, alone | 185 | red: ~~nine fix8 attach-deadline rows~~ *(Corrected 2026-10-27, the EL8 to ghosttea 0.13.7: FALSE, seventeen rows, 15 fix8 and 2 C8, in AttachDeadline 12 and AttachLog 5. The count was read from the kit's tally, which keeps its last 12 lines; the log has 17. The 0.13.7 kit's alone red is the same 17, site for site.)* past Swift Testing's 60 s limit |
   | 2, in the whole kit | 179 | green, 176/33 |
 
   The row that went red first drives VibeField's own TerminalLanes against the CellDoorHarness, and it passed alone with
@@ -15407,7 +15407,7 @@ at 21:38Z, as its own event on this Mac's shared slot. The nightly was mid-run, 
 - **The kit** ran on James's "kit ok" (his board, 22:04:20Z, relayed by VF-PM 22:05Z), on the iPhone 17 Pro simulator
   with Xcode 26.6, never his phone.
   - The compile resolved ghosttea 0.13.6 and truffle 0.7.22 by URL.
-  - The whole kit with the PJ-7 fixture passed **1,046** on its second run, the 0.13.1/0.13.4/0.13.5 count.
+  - The whole kit with the PJ-7 fixture passed **~~1,046~~** *(Corrected 2026-10-27, the EL8 to ghosttea 0.13.7: FALSE, 1,310 tests in 239 suites, its log's 13 test-target tallies summed. The kit's tally keeps its last 12 lines, which dropped two targets' 110 and 154.)* on its second run, the 0.13.1/0.13.4/0.13.5 count.
   - FieldRoutedTerminalTests 170/26 and FieldHomeTests 79/15 passed alone in both runs. FieldTerminalTests is in the
     table above.
 - **The desk rows on the Mac mini.** James unlocked it at 22:08:48Z and VF-PM relayed at 22:11Z. Each row ran alone
@@ -15696,3 +15696,137 @@ bytes untouched, which waits on D11's measurement (its debt).
   whether a keychain prompt appeared after the relaunch (the runbook's UNVERIFIED 9).
 - The PTY clause, on a release that leaves field-native untouched.
 - The freeway host's live witness (W11 round 3), on the next nightly carrying it.
+
+## EL8 — ghosttea 0.13.7 and truffle 0.7.23 in one event: truffle-core keeps a dying sidecar's last stderr lines, ghosttea-vt-sys links a Windows Ghostty VT library built for its consumer's C runtime, and the macOS VT library is byte-identical (2026-10-27; `5ba36785b`, lane `hl/el8-ghosttea-0.13.7-truffle-0.7.23`)
+
+**What happened:** on 10-26 at 21:42Z VF-PM ruled that truffle 0.7.23 wait for a ghosttea declaring it, then move in one
+EL8 with it. ghosttea 0.13.7 is that release:
+- tag v0.13.7 = `3eee581c`, published 2026-10-26 23:57Z to 10-27 00:01Z;
+- truffle-core =0.7.23 on its cargo plane and Swift exact 0.7.23 at `0b83a2ce`;
+- the Apple artifact ghosttea-apple-native-74b3ccb87e58.
+
+VF-PM started the event at 00:28Z on James's "continue the work", in the 0.13.4 + 0.7.22 shape, from main `84509d642`
+(= origin, verify green).
+- **truffle 0.7.22 → 0.7.23** (truffle-v0.7.23 = `0b83a2ce`):
+  - Cargo.toml's `truffle-core = "=0.7.23"`, with a closure-note paragraph;
+  - the five `@vibecook/truffle-sidecar-*` rows and their release-age rows;
+  - preflight's row;
+  - the lock's `release.swift` and sha, and Package.swift's `truffleRelease` (`render --prod`).
+- **ghosttea 0.13.6 → 0.13.7:**
+  - the five npm rows and preflight's six;
+  - the lock's `release` and sha;
+  - Cargo.toml's row and Package.swift's `ghostteaRelease`;
+  - the release-age rows.
+- **The locks, written by the tools:**
+  - Cargo.lock: the six ghosttea crates and truffle-core, nothing else.
+  - pnpm-lock: ghosttea's and the sidecars' rows only, 69 for 69.
+  - Package.resolved: ghosttea at `3eee581c` and truffle at `0b83a2ce`. SwiftPM accepted the Apple artifact at
+    ghosttea's own checksum (`db8724bc…a868ff`), and TailscaleKit came from cache unchanged.
+- **What it carries:**
+  - truffle-core #229, one file (network/tailscale/sidecar.rs): the stderr forwarder now keeps a dying sidecar's last
+    lines, which it dropped at shutdown (item 69's cause). The sidecars' Go source did not change, Swift changed only a
+    README, and no sidecar protocol moved (10 stands).
+  - ghosttea #96: on Windows, ghosttea-vt-sys links a Ghostty VT library built for the C runtime its consumer links (/MD
+    by default, /MT under crt-static) instead of /MT alone, which failed LNK2038 for a consumer linking C++ of its own
+    (field-terminal-host's Windows build).
+  - No TypeScript source changed between the ghosttea tags, no API change, no protocol minor (17 stands), no contract
+    moved, and no field-native source change. The key catalog moved only its version line.
+
+**Found:**
+- **The macOS Ghostty VT library is byte-identical, re-read here, not taken from ghosttea's CHANGELOG.** In the shared
+  cargo target:
+  - ghosttea-vt-sys 0.13.6's build (ghostty-vt-222a4b1b224b) and 0.13.7's (ghostty-vt-1dceb4dd5089) hold the same
+    libghostty-vt.a and libghosttea_ghostty_vt_static.a: sha256 `54525d46…ae7851b`, 2,027,160 bytes;
+  - only the release tars differ (`5342714e` → `dd29f5ea`, artifacts.json's values);
+  - the Ghostty commit is unchanged (`f8041e84`), and the patch adds compiler flags for MSVC targets only.
+
+  So on macOS the one code change under field-native is truffle-core's forwarder.
+- **#229's first witness is the fixer's paired A/B on the exact source 0.7.23 ships** (`6480f81`, empty diff to v0.7.23
+  across truffle-core/src). There, 0.7.22 lost 19/200 at one worker under 80 busy loops, and the fix 0/200.
+  - Here, item 69's rows pass in verify.
+  - 200 default-worker runs also passed, but that is the condition under which 0.7.22 passed too, so that run is no
+    witness on its own.
+  - **The in-repo paired A/B, on the Mac mini after its rows (04:49–04:59Z), the second witness:** item 69's row
+    (`fieldd_link_death_does_not_stop_native_evidence_or_diagnostics`), 200 runs a side.
+
+    | side | tree | truffle-core | lost |
+    |---|---|---|---|
+    | A | `ecb19236d` (ghosttea 0.13.6) | 0.7.22 | **61 / 200**, in every block (4, 8, 5, 7, 6, 7, 7, 7, 4, 6) |
+    | B | `5ba36785b` (ghosttea 0.13.7) | 0.7.23 | **0 / 200** |
+
+    - The method (mini/el8-0137-ab69.sh): TOKIO_WORKER_THREADS=1 under 80 busy loops (load 54 → 89), 10 blocks of 20
+      a side, the order alternating per block (A B, B A, …). LOST is a red in item 69's own words ("…its stderr line
+      never arrived — truffle's forwarder, item 69"); there were no other reds on either side.
+    - A cannot be truffle-core 0.7.22 alone: ghosttea 0.13.7 pins truffle-core =0.7.23. So A is main before this event.
+      On macOS the pair still differs by #229 alone, because the VT library is byte-identical (above).
+    - The row spawns `env!("CARGO_BIN_EXE_field-native")`, a path baked at compile time, so both sides' test binaries
+      name one `target/debug/field-native`. Each side's own field-native (A `17cf70c5`, B `6a220416`, sha256 prefixes)
+      was copied into place before each of its blocks.
+- **FieldTerminalTests' 60 s red is a fixed set of 17, and load alone does not explain it.** The 0.13.6 kit's alone red
+  (load 185) and this one (load 12 at the arm) stopped the same 17 rows at Swift Testing's 60 s limit. They were stuck,
+  not slow: every one ran to the limit. One shared wait that all 17 sit behind would read that way, but that is a
+  reading, not a cause: the fixer's item 77, a read first (VF-PM 04:28Z). At 05:00Z the fixer named the 5 s shape: with
+  no injected session, every attach leg makes its own URLSession, so the 17 rows open about 34 at once, and the first
+  requests serialize on CFNetwork's first-use lock. VF-PM ruled (05:01Z) that the attach suites' wait helper rise from
+  5 s to 20 s, the product's step deadline, built red-first in the fixer's lane with the lead reviewing it. The 60 s
+  shape is still open.
+- **The kit's tally kept its last 12 lines, and two counts were read from it** (VF-PM's sum of the whole-kit log, 04:28Z).
+  - The whole kit is 1,310 tests in 239 suites, not "1,046 in 182": the tally dropped the two targets that sort first
+    (110 / 26 and 154 / 31). Every whole-kit log since 10-23 re-sums to 1,310 / 13 tallies: TP's, and the 0.13.1, 0.13.4,
+    0.13.5 and 0.13.6 kits'. Each entry's "1,046" is corrected at its source.
+  - The 0.13.6 kit's alone red was 17 rows, not "nine"; corrected at its source.
+  - The kit script now also prints its issues counted whole.
+- **The pin's own gotchas, handled:** the tree was staged before `siblings:pin`, so gen:check passed on its first run,
+  and biome folded the lock's arrays back after the pin's JSON writer.
+
+**Validation** (this Mac, nice 19, each step alone behind the dev-app guard, ≥ 10 GiB on both disks):
+- `pnpm siblings:pin ghosttea truffle` EXIT 0:
+  - R23 passed (28 self-checks; 10 providers, 9 kinds);
+  - the consumers' typecheck ran 27 projects fresh (0/27 cached);
+  - gen:check was clean.
+- `cargo clippy --workspace --all-targets -- -D warnings` was green.
+- **`pnpm verify` on the lane's tree `f1042ce07`:** EXIT 0 (00:36–00:48Z, load 121 → 68), all 27 test targets fresh.
+  - field-app 2,624 / 3, fieldd 2,461 / 29, electron-shell 1,926 / 3, fieldd-supervisor 66 / 0.
+  - `test:rust` 460 / 0 / 13 in 30 suites, item 69's two native_logging rows among them; gen:check clean.
+- **The rebase:** onto `ecb19236d` (item 75 and the freeway host's packaging) before the kit, so the kit and the mini
+  ran the tree that lands. merge-tree gave tree `8e6660094`; range-diff `=`; no file overlap. **`pnpm verify` on the
+  rebased tip:** EXIT 0 (01:07–01:13Z, load 10 → 31), 26 of 27 test targets fresh (test-env replayed on identical
+  inputs) and the same counts; test:rust 460 / 0 / 13, item 69's rows green; gen:check clean.
+- **The kit** on this Mac, on James's "kit ok" (his board, 04:10:22Z; VF-PM 04:11Z). Simulator iPhone 17 Pro (iOS 26.5),
+  Xcode 26.6, derived data on the SSD, nice 19, the dev-app guard and ≥ 10 GiB on both disks read before each step.
+  - Its first run stopped at the guard before step 3 (exit 76), after the compile and FieldTerminalTests 176 / 33 (load
+    212) had passed. prod-builder's ssh tail of the mini's logs, watching W11, names `fieldd` and `/Library/` in its
+    command text, and the guard's rule (ii) reads command text. VF-PM ruled it a false positive (04:17Z) and gave no
+    waiver: the guard's edit is James's (`lanes/guard/add-ssh-skip.sh`).
+  - Re-run whole from step 0 once the tail ended (04:18–04:22Z): the compile (`** TEST BUILD SUCCEEDED **`, SwiftPM
+    resolving ghosttea 0.13.7 and truffle 0.7.23 by URL), and FieldHomeTests 79 / 15.
+  - **The whole kit with the PJ-7 fixture: 1,310 tests in 239 suites passed.** The method: Package.swift's 13 test
+    targets give 5-whole-kit.log 13 "Test run with" tallies, one each, summed. FieldTerminalTests' 176 and
+    FieldRoutedTerminalTests' 170 passed inside it, and PJ-7's suite with them. Fixture exit 0; the tree was untouched.
+  - FieldTerminalTests alone:
+
+    | run | load at the arm | result |
+    |---|---|---|
+    | 1, alone | 212 | green, 176 / 33 in 3.8 s (then the guard's stop) |
+    | 2, alone | 12 (130 at its end) | red: 17 rows past Swift Testing's 60 s limit, the 0.13.6 kit's 17 site for site (15 fix8, 2 C8) |
+    | 2, re-run alone once | 55 | red: 7 rows' 5 s "control attach" wait, 14 issues (the 0.13.5 kit's shape) |
+    | 2, in the whole kit | 163 | green, 176 / 33 |
+
+  - FieldRoutedTerminalTests alone was red on FakeCellDoor's stale route (2 issues, the 0.13.5 kit's row), and green on
+    its one re-run (170 / 26, armed at load 89).
+  - Every red row is a row the earlier kits recorded, and every one is green inside the whole kit. The < 10 quiet-window
+    witness stays owed.
+- **The desk rows on the Mac mini.** James unlocked it at 04:29:52Z (his board; VF-PM relayed 04:31Z), but the production
+  daemons W11's relaunch had started, for both of his VibeField user roots, were still up. The product leaves them
+  running by design (`leave-running`), so he stopped them himself at 04:45:24Z, and VF-PM relayed at 04:46Z.
+  - Each row ran alone under el8-0137-rows.sh's guard (unlocked, HID idle ≥ 120 s, load < 10, df ≥ 10 GiB; never
+    `-u`), after a read of 0 processes under /Applications/VibeField.app.
+  - The tree was the landed `8e6660094` (`5ba36785b`), which the mini took from a 56 KB delta bundle. Its field-native
+    compiled the seven crates at 0.13.7 and 0.7.23.
+  - The three terminal rows were green and untouched: smoke:godview 141 s, smoke:terminal-door 29 s and
+    smoke:terminal-direct 32 s. Idle grew +141, +29 and +33 s (the stamps' whole seconds), each row's own duration. The
+    0.13.6 rows took 141, 29 and 33 s.
+  - smoke:canvas was skipped (VF-PM 00:51Z): no terminal is on its desk, and nothing in this event reaches it.
+  - The W11 install on the mini has been on the tailnet since a person's login at 04:19Z. The rows run their own
+    isolated profiles and daemons, so nothing of it reached them.
+  - The smokes are not #229's witness: that is test:rust's native_logging rows and the paired A/B (Found).
