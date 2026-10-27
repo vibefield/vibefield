@@ -4601,7 +4601,18 @@ mod tests {
             eventually(LEDGER_TEST_BOUND, || machine_total_at(&path) == 1),
             "this floor's one session is published"
         );
-        let first = slot.as_of().expect("the publish landed");
+        // The file shows the publish before its attempt returns: the read-back
+        // is a second flock, and until it returns `as_of` is still the seed. A
+        // reservation made in that window is answered by the publish's own
+        // read-back, with no refresh at all (item 83). So `first` is an attempt
+        // that returned: once `as_of` has moved past the seed, the attempt it
+        // names read the machine total back before this row reserves.
+        let seed = slot.as_of().expect("the first total seeded as_of");
+        assert!(
+            eventually(LEDGER_TEST_BOUND, || slot.as_of() > Some(seed)),
+            "an attempt after the first returned"
+        );
+        let first = slot.as_of().expect("an attempt returned");
         assert_eq!(
             shared.health().state,
             UnitState::Up,
