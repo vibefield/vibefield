@@ -17198,3 +17198,80 @@ deterministic reds are the probes.
 - On a host loaded enough that an asked reconcile takes longer than 2 s plus the next fieldd's boot, AL-8a-2/-4 would
   read `null` and go red. That red would be honest, and it would be the place to measure.
 - The draft side: dev-local `8a9031791` carried §8.3.1's first errata; its corrected block rides the next snapshot.
+
+## EL8 — truffle 0.7.24, the split: the crate and the five npm sidecars move to sidecar protocol 11, and the kit's Swift plane stays 0.7.23, which ghosttea 0.13.7 declares exact (2026-10-27; `af3f3078f`, lane `hl/el8-truffle-0.7.24-split`)
+
+**What happened:** James merged truffle #234 (release 0.7.24) at 16:04:55Z, and VF-PM gave the EL8 to the History lead
+at 16:06Z.
+- The brief moved every plane. The lead's read before any work (16:07Z) found that it could not:
+  - ghosttea 0.13.7's Package.swift declares `let truffleVersion: Version = "0.7.23"`, resolved exactly, so a kit at
+    exact 0.7.24 beside it is SwiftPM's refusal;
+  - no ghosttea crate depends on truffle-core (only field-native does), so the cargo plane could move alone;
+  - 0.7.24 changes no Swift (`git diff --stat truffle-v0.7.23 truffle-v0.7.24 -- apple` is empty).
+- VF-PM put the choice on James's board (a: split now; b: wait for a ghosttea that declares 0.7.24), and **James ruled
+  a at 16:08:43Z**.
+- truffle 0.7.24 was published everywhere by 16:40Z (focus-session's registries line, 16:50Z; the five sidecars re-read
+  here, 16:21:38–16:24:52Z).
+- **Moved:**
+  - Cargo.toml's `truffle-core = "=0.7.24"`, with THE SPLIT paragraph;
+  - apps/desktop's five `@vibecook/truffle-sidecar-*` at 0.7.24;
+  - their release-age rows (0.7.23's dropped after the one install);
+  - preflight's cargo row.
+- **Stayed 0.7.23:** the kit's `truffleRelease` (a dated comment only), Package.resolved, and siblings.lock.json's
+  truffle `release.swift`.
+- **preflight anchors the split:** the cargo row at `=0.7.24` and a new Swift row at `"0.7.23"`, each anchored to the
+  line's end. PIN_EXPECTATIONS grows a generic `overlay: "<sibling>"` field, so the Swift row stands aside while
+  `pnpm siblings use truffle` renders that line nil on purpose (RD-3).
+- **What 0.7.24 carries** (#233): sidecar protocol 11.
+  - The local truffle-core ↔ sidecar commands `tsnet:logout`, `tsnet:version`, `tsnet:lockStatus` and
+    `tsnet:loggingRequired`, and the client-log opt-out (`client_log_upload`).
+  - The node-to-node wire reads unchanged (transport/quic.rs gains only that config field).
+  - truffle-core's own dependencies did not move.
+  - The pins only. VibeField's use of the commands, the client-log opt-out included, is TS's code (d0's TS-2/TS-3).
+- **The locks, written by the tools:**
+  - Cargo.lock moved truffle-core alone.
+  - pnpm-lock moved the five sidecars alone: their entries and integrity, and apps/desktop's importer rows, 20 lines.
+  - Package.resolved is untouched.
+  - The sidecar's bytes are pinned by pnpm-lock's sha512 `integrity`. truffle's own checksum pin (its main 053c4730)
+    matches the release assets (focus-session's 16:50Z line).
+- DECISIONS TB names the split, its reason and its rejoin condition: the first ghosttea that declares 0.7.24. It gains
+  the one-line 0.7.23 entry its EL8 never added.
+
+**Found:**
+- **A brief that moves every plane can be unsatisfiable when a sibling pins one plane exactly.** The SwiftPM conflict
+  is the 10-24 EL8's, and it holds for every truffle release a ghosttea has not yet declared. The read that caught it
+  was two files: ghosttea's tag's Package.swift and Cargo.lock's users of truffle-core.
+- **The split is safe in this repo's terms.** The core and its sidecar move TOGETHER, never one alone (TB's revert
+  note: a 0.7.14 core with a v8 sidecar loses the authenticated UDP relay). The Swift plane talks to no sidecar.
+- **CLAUDE.md is not moved here.** Its Machine-setup line is drafted (lanes/hl-el8-0724/records/claude-md-held.md) and
+  HELD for James's own typed word, with the other owed CLAUDE.md notes. A relayed board click on a/b does not cover
+  an edit to it (VF-PM agreed, 16:11Z).
+
+**Validation** (this Mac; each step through the lane's step.sh: the dev-app guard, ≥ 10 GiB on both disks, nice 19):
+- **install** (17:07:06–17:07:30Z, at 4b12b01f3):
+  - `cargo update -p truffle-core --precise 0.7.24`;
+  - the one install, then the frozen install without the 0.7.23 age rows;
+  - mille's install and build, and Electron's binary;
+  - all EXIT 0.
+- **light** (17:07:31–17:09:11Z): typecheck (27 projects), preflight (both truffle rows read), check:walls, gen:check,
+  `swift package resolve` (Package.resolved untouched): all EXIT 0.
+- **The two rows, probed** against the files' text with mutated copies: the Swift row rejects "0.7.24", "0.7.23-rc.1"
+  and nil; the cargo row rejects `=0.7.24-rc.1`.
+- **The rebase** onto `03095573a` (AO-5a, AL-8a and AO-6b1 landed meanwhile): merge-tree tree `799e109d0`; range-diff
+  `=`; the one file both sides touch is DECISIONS.md, in different rows.
+- **On the rebased tip `105c26fdb`:** the frozen install (17:11:11Z) and preflight, EXIT 0, the tree clean.
+- **The cargo rows** (VF-PM's word; field-native's sources touched for the shared target): truffle-core 0.7.24 and
+  field-native, with AL-8a's +2522/−81 under it, compiled together in 41.5 s; `--test fixture_parity` 17 passed and
+  `--test layout_vector` 1 passed (17:11:18–17:12:01Z).
+- **verify, three runs:**
+  - Run 1 (105c26fdb): red at biome on this commit's preflight.mjs format. A `$` anchor pushed a row past 100
+    columns, and the light pass had not run biome on the touched files, which every lane's light pass now does
+    (VF-PM 17:16Z). `biome format --write` on that file, amended.
+  - Run 2 (96123ac9d, load 10 → 115): red on three fieldd rows. agent-gateway-panes row 15 and rosettad-supervisor
+    item 65 were green alone (the lottery list). terminal-kill-matrix AL-8a-2 was red alone: a REAL bug in
+    field-native's census at fieldd's exit (better-quit's read, fixed in `73240a2d1`), not this EL8's. test:rust
+    483 / 0 / 14 and gen:check were green alone.
+  - Run 3 (dab8c4724, on 7466fce8a = the census fix and its records; held from 17:58Z until James's cleanup lifted the
+    SSD over the floor): **EXIT 0** (18:05:14–18:12:35Z, load 12 → 34). 8 of 27 test targets ran fresh, and 19
+    replayed on inputs identical to run 2's. fieldd 2,545 / 29, field-app 2,722 / 3, test:rust 486 / 0 / 14 in 31
+    suites, gen:check clean.
