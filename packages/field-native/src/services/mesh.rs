@@ -57,12 +57,12 @@ use crate::services::mesh_egress::{self, EgressBackend};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, Weak};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::watch;
-use truffle_core::network::NetworkStatusEvent;
+use truffle_core::network::{BackendState, NetworkStatusEvent};
 use truffle_core::synced_store::SyncedStore;
 use truffle_core::{network::tailscale::TailscaleProvider, Node};
 
@@ -140,19 +140,21 @@ struct Shared {
     /// node ([`LinkFacts`]): what a person needs to act on a link that waits on
     /// someone, lapses, or is asked for again. Reset by every bring-up.
     facts: Mutex<LinkFacts>,
-    /// TS-1 — bumped by every bring-up and captured by the status hook and the
-    /// state tick it starts, so a hook still running for a node a rebuild has
-    /// replaced can never write its successor's facts or tear its successor down.
+    /// TS-1 — bumped by every bring-up and captured by the status hook it
+    /// starts, so a hook still running for a node a rebuild has replaced can
+    /// never write its successor's facts or tear its successor down.
     generation: AtomicU64,
-    /// TS-1 — the installed node's state tick ([`watch_node_state`]), aborted
-    /// with the node.
-    watcher: Mutex<Option<tokio::task::JoinHandle<()>>>,
     /// TS-1 (P3) — `NativeConfig::mesh_start_timeout`; `None` waits for ever.
     start_timeout: Option<Duration>,
-    /// TS-1 — `NativeConfig::mesh_state_tick`.
-    state_tick: Duration,
     /// TS-1 TEST SEAM — `NativeConfig::mesh_probe`; `None` in the product.
     probe: Option<MeshProbeIdentity>,
+    /// TS-D15/D16 — whether the current bring-up's node sends Tailscale its
+    /// client logs: false (VibeField's default, D15) unless the link opted in on
+    /// a network that requires them (D16). Like `login_allow`, the BUILT value,
+    /// which truffle fixes for the node's lifetime: written only by
+    /// `spawn_bring_up`, cleared by `teardown_node`, read by `start` (a changed
+    /// opt-in rebuilds) and by `native.mesh.self`.
+    client_log_upload: AtomicBool,
 }
 
 /// TS-1 (track TS) — what the floor knows about this node's sign-in beyond the
@@ -174,17 +176,26 @@ pub struct LinkFacts {
     /// or a node not up yet).
     pub key_expiry_ms: Option<Option<i64>>,
     /// A node that was running asks to be signed in again: its key expired, or
-    /// it was removed in the console. truffle's cached backend state reads
-    /// NeedsLogin; nothing reaches the tailnet until a new sign-in.
+    /// it was removed in the console. truffle says so with
+    /// `BackendStateChanged { NeedsLogin }`; nothing reaches the tailnet until a
+    /// new sign-in.
     pub needs_login: bool,
+    /// T11 — Tailnet Lock holds this node: it is up, but reaches no peer and no
+    /// peer reaches it until a signing device signs it (`NeedsSignature`, then
+    /// `Signed`).
+    pub needs_signature: bool,
+    /// T11 — the Tailscale release the node's sidecar embeds (`1.104.1`); `None`
+    /// until a node is up.
+    pub tailscale_version: Option<String>,
     /// The name Tailscale shows for this node — on its "connect the device …?"
     /// page and in the admin console: the name truffle composes before the
     /// node is up, the one Tailscale granted after (it may add `-1`).
     pub machine_name: Option<String>,
     /// Why the last bring-up ended without a node, as one word a person's
     /// sentence is chosen by: [`FAILURE_SIDECAR_MISSING`],
-    /// [`FAILURE_BRING_UP`] or [`FAILURE_SIDECAR_EXITED`]. The unit's `detail`
-    /// keeps the floor's own words.
+    /// [`FAILURE_BRING_UP`], [`FAILURE_SIDECAR_EXITED`] or
+    /// [`FAILURE_LOGGING_REQUIRED`]. The unit's `detail` keeps the floor's own
+    /// words.
     pub failure: Option<&'static str>,
 }
 
@@ -194,6 +205,18 @@ pub const FAILURE_SIDECAR_MISSING: &str = "sidecar_missing";
 pub const FAILURE_BRING_UP: &str = "bring_up_failed";
 /// TS-1 — the sidecar of a node that was up exited on its own.
 pub const FAILURE_SIDECAR_EXITED: &str = "sidecar_exited";
+/// TS-D16 — the tailnet requires client logs (its flow logs are on) and this
+/// node sends none, so Tailscale keeps it down until it is built again with
+/// uploads allowed, or until the flow logs are off.
+pub const FAILURE_LOGGING_REQUIRED: &str = "logging_required";
+
+/// TS-D16 — the words truffle's start error carries when a tailnet that
+/// requires client logs refused an opted-out node (truffle-core 0.7.24
+/// provider.rs, the status processor's `LoggingRequired` arm: "this tailnet
+/// requires client logging (network flow logs are on), …"). Read because the
+/// typed event can be lost with a failed build; a typed refusal is a candidate
+/// truffle petition.
+const LOGGING_REQUIRED_REFUSAL: &str = "requires client logging";
 
 /// TS-1 (P7) — a Tailscale auth key on its way to a capture's builder. It is
 /// never stored and never logged: `Debug` redacts it, the floor holds it only
@@ -226,6 +249,11 @@ pub struct StartOptions {
     /// hands out a new sign-in address. A bring-up still waiting for its
     /// sign-in is left alone: its address is already the live one.
     pub renew: bool,
+    /// TS-D15/D16 — either mode: the node sends Tailscale its client logs. false
+    /// is VibeField's default; true only where the person opted in on a network
+    /// that requires logs. truffle fixes it for a node's lifetime, so a node
+    /// built with the other setting is rebuilt.
+    pub client_log_upload: bool,
 }
 
 /// E-F1 — a subscription to `node_present()`: "is a tailnet node installed?",
@@ -533,13 +561,17 @@ impl MeshHandle {
         // interactive login hands out an address (the identity and the keys
         // survive it, as Tailscale's own re-auth keeps the node and its IP).
         let renewing = options.renew && node_present;
+        // TS-D15/D16 — the log upload is part of the node's construction, as the
+        // gate is: a node built with the other setting is rebuilt.
+        let same_build = self.login_allow() == desired_allow
+            && self.client_log_upload() == options.client_log_upload;
         // (An auth key needs no rule of its own: with no node installed every
         // `start` builds, and a node already up has nothing left to sign in.)
         if !renewing {
-            if already == Some(mode) && node_present && self.login_allow() == desired_allow {
+            if already == Some(mode) && node_present && same_build {
                 return Ok(false);
             }
-            if node_present && self.login_allow() == desired_allow {
+            if node_present && same_build {
                 // a live node whose GATE does not move: the tailnet identity did
                 // not move either, and nothing about the node's construction
                 // changed — only what we call the posture.
@@ -557,7 +589,7 @@ impl MeshHandle {
         self.shared
             .retired
             .store(false, std::sync::atomic::Ordering::SeqCst);
-        spawn_bring_up(&self.shared, options.auth_key)?;
+        spawn_bring_up(&self.shared, options.auth_key, options.client_log_upload)?;
         Ok(true)
     }
 
@@ -565,6 +597,12 @@ impl MeshHandle {
     /// there is no node report them.
     pub fn link_facts(&self) -> LinkFacts {
         self.shared.facts.lock().unwrap().clone()
+    }
+
+    /// TS-D15/D16 — whether the current bring-up's node sends Tailscale its
+    /// client logs: the BUILT value, `false` with no node.
+    pub fn client_log_upload(&self) -> bool {
+        self.shared.client_log_upload.load(Ordering::SeqCst)
     }
 
     /// UA-P-4 — drop the installed node and everything bound to it, WITHOUT
@@ -582,18 +620,14 @@ impl MeshHandle {
         if let Some(t) = self.shared.task.lock().unwrap().take() {
             t.abort(); // in-flight bring-up: the sidecar child is kill_on_drop
         }
-        // TS-1 — the state tick reads the node it was started for; it holds the
-        // node only weakly, and goes with it. And the generation moves on, so
-        // the old bring-up's status hook falls silent before anything else
-        // happens to the unit.
-        if let Some(t) = self.shared.watcher.lock().unwrap().take() {
-            t.abort();
-        }
+        // TS-1 — the generation moves on, so the old bring-up's status hook
+        // falls silent before anything else happens to the unit.
         self.shared.generation.fetch_add(1, Ordering::SeqCst);
         let had = self.shared.node.send_replace(None);
         self.shared.stores.lock().await.clear();
         self.shared.serves.lock().await.clear();
         *self.shared.login_allow.lock().unwrap() = Vec::new();
+        self.shared.client_log_upload.store(false, Ordering::SeqCst);
         // DS-1 — egress routes are listeners the SIDECAR bound for this node,
         // so they die with it; the table is rebuilt-not-persisted like the
         // serves above. Pushed only when something was dropped: an empty
@@ -661,12 +695,38 @@ impl MeshHandle {
     /// mid-flight bring-up cannot resurrect the identity, and hand back the
     /// state dir to archive — Some only when there is state on disk. The
     /// caller (the mgmt handler) owns the rename; this owns the lifecycle.
-    pub async fn retire(&self) -> Option<PathBuf> {
+    ///
+    /// TS-D14 — and first, sign the device out of its tailnet, so the admin
+    /// console stops counting it as signed in.
+    pub async fn retire(&self) -> Retired {
         self.shared
             .retired
             .store(true, std::sync::atomic::Ordering::SeqCst);
         // UA-P-0a: an in-flight bring-up dies with the identity — `retired` is
         // set FIRST so a build that completes in the same beat discards itself.
+        //
+        // TS-D14 — the logout comes before the teardown, on the node that is
+        // up. truffle bounds it (`LOGOUT_TIMEOUT`, 12 s, which contains the
+        // sidecar's own 10 s) and stops the node whatever the control server
+        // said; only a sidecar before protocol 11 leaves it running
+        // (`Unsupported`), and the teardown below stops it then. A node still
+        // signing in has nothing to sign out.
+        let node = self.shared.node.borrow().clone();
+        let signed_out = match node {
+            Some(node) => match node.logout().await {
+                Ok(()) => true,
+                Err(e) => {
+                    tracing::warn!(
+                        event = "field_native.mesh.logout_failed",
+                        component = "mesh",
+                        error = %e,
+                        "The node was not signed out of its tailnet; the admin console keeps it"
+                    );
+                    false
+                }
+            },
+            None => false,
+        };
         self.teardown_node("retired").await;
         *self.shared.mode.lock().unwrap() = None;
         self.forget_facts();
@@ -676,8 +736,20 @@ impl MeshHandle {
             None,
         );
         let dir = self.shared.state_dir.clone();
-        dir.exists().then_some(dir)
+        Retired {
+            state_dir: dir.exists().then_some(dir),
+            signed_out,
+        }
     }
+}
+
+/// UA-3 / TS-D14 — what [`MeshHandle::retire`] did: the state dir to archive
+/// (`None` when there is no state on disk), and whether the device was signed
+/// out of its tailnet first.
+#[derive(Debug)]
+pub struct Retired {
+    pub state_dir: Option<PathBuf>,
+    pub signed_out: bool,
 }
 
 impl Shared {
@@ -734,10 +806,9 @@ impl MeshUnit {
                 retired: std::sync::atomic::AtomicBool::new(false),
                 facts: Mutex::new(LinkFacts::default()),
                 generation: AtomicU64::new(0),
-                watcher: Mutex::new(None),
                 start_timeout: config.mesh_start_timeout,
-                state_tick: config.mesh_state_tick,
                 probe: config.mesh_probe.clone(),
+                client_log_upload: AtomicBool::new(false),
             }),
         }
     }
@@ -815,9 +886,13 @@ impl NativeService for MeshUnit {
 /// timer (`start_timeout`, P3 — the person ends a capture, never a clock), the
 /// status hook that keeps [`LinkFacts`], and the auth key a capture may sign in
 /// with (P7), which lives in this task alone and dies with it.
-fn spawn_bring_up(shared: &Arc<Shared>, auth_key: Option<AuthKey>) -> anyhow::Result<()> {
+fn spawn_bring_up(
+    shared: &Arc<Shared>,
+    auth_key: Option<AuthKey>,
+    client_log_upload: bool,
+) -> anyhow::Result<()> {
     // TS-1 — this bring-up's generation. Everything it starts (the status
-    // hook, the state tick) carries it, and acts only while it is current.
+    // hook) carries it, and acts only while it is current.
     let generation = shared.generation.fetch_add(1, Ordering::SeqCst) + 1;
     // TS-1 — a new bring-up starts from no facts but its name: the one truffle
     // composes from the same app id and this machine's hostname, so the pane
@@ -840,6 +915,10 @@ fn spawn_bring_up(shared: &Arc<Shared>, auth_key: Option<AuthKey>) -> anyhow::Re
         }
     };
     *shared.login_allow.lock().unwrap() = login_allow.clone();
+    // TS-D15/D16 — the log upload this bring-up is for, recorded beside the gate
+    shared
+        .client_log_upload
+        .store(client_log_upload, Ordering::SeqCst);
     let Some(sidecar) = shared.sidecar.clone() else {
         shared.facts.lock().unwrap().failure = Some(FAILURE_SIDECAR_MISSING);
         shared.set(
@@ -894,6 +973,12 @@ fn spawn_bring_up(shared: &Arc<Shared>, auth_key: Option<AuthKey>) -> anyhow::Re
                 // into a dead end (gap 12). Every new address tsnet issues
                 // while it waits reaches the auth handler below.
                 .start_timeout(start_timeout)
+                // TS-D15 — the embedded node sends Tailscale no client logs
+                // unless the person opted in on a network that requires them
+                // (TS-D16). With false, truffle refuses a sidecar before
+                // protocol 11 before anything starts, since an older one would
+                // upload the logs it was asked not to.
+                .client_log_upload(client_log_upload)
                 .on_network_status(move |event| {
                     if let Some(shared) = hook_shared.upgrade() {
                         note_network_status(&shared, generation, event);
@@ -984,7 +1069,7 @@ fn spawn_bring_up(shared: &Arc<Shared>, auth_key: Option<AuthKey>) -> anyhow::Re
                 // node's own answers: the name Tailscale granted (a collision
                 // adds `-1`), the console, and the key's expiry, read here as
                 // well as heard, since a status event can race the install.
-                {
+                let held = {
                     let mut facts = shared.facts.lock().unwrap();
                     facts.needs_approval = false;
                     facts.needs_login = false;
@@ -998,7 +1083,17 @@ fn spawn_bring_up(shared: &Arc<Shared>, auth_key: Option<AuthKey>) -> anyhow::Re
                     if let Some(expiry) = node.key_expiry() {
                         facts.key_expiry_ms = Some(expiry.unix_millis());
                     }
-                }
+                    // T11 — the embedded client, and Tailnet Lock's hold, read
+                    // here as well as heard (`NeedsSignature` arrives before
+                    // `start()` returns, and can race this install)
+                    if let Some(version) = node.tailscale_version() {
+                        facts.tailscale_version = Some(version.version);
+                    }
+                    if let Some(locked_out) = node.needs_signature() {
+                        facts.needs_signature = locked_out;
+                    }
+                    facts.needs_signature
+                };
                 // UA-P-0d — truffle creates `synced_store/` under the state dir
                 // on its own schedule; re-harden now that the tree exists.
                 harden_state_dir(&shared.state_dir);
@@ -1007,13 +1102,7 @@ fn spawn_bring_up(shared: &Arc<Shared>, auth_key: Option<AuthKey>) -> anyhow::Re
                 if let Some(stale) = shared.node.send_replace(Some(node.clone())) {
                     stale.stop().await;
                 }
-                *shared.watcher.lock().unwrap() = Some(tokio::spawn(watch_node_state(
-                    Arc::downgrade(&shared),
-                    generation,
-                    Arc::downgrade(&node),
-                    shared.state_tick,
-                )));
-                shared.set(UnitState::Up, Some(format!("tailnet {name}")), None);
+                shared.set(UnitState::Up, Some(up_words(&name, held)), None);
                 tracing::info!(
                     event = "field_native.mesh.node_ready",
                     component = "mesh",
@@ -1022,7 +1111,23 @@ fn spawn_bring_up(shared: &Arc<Shared>, auth_key: Option<AuthKey>) -> anyhow::Re
                 );
             }
             Err(e) => {
-                shared.facts.lock().unwrap().failure = Some(FAILURE_BRING_UP);
+                // TS-D16 — a tailnet that requires client logs refuses an
+                // opted-out node at its start. truffle raises `LoggingRequired`
+                // just before the start fails, but aborts the status forwarder
+                // with the failed build (truffle-core 0.7.24 node.rs, the
+                // `status_task.abort()` after `provider.start()`), so the hook
+                // can miss it: the refusal is read from the start error as
+                // well. Anything else the hook named during this bring-up
+                // stays named: the facts were reset when it began.
+                let refused_for_logs = e.to_string().contains(LOGGING_REQUIRED_REFUSAL);
+                {
+                    let mut facts = shared.facts.lock().unwrap();
+                    if refused_for_logs {
+                        facts.failure = Some(FAILURE_LOGGING_REQUIRED);
+                    } else if facts.failure.is_none() {
+                        facts.failure = Some(FAILURE_BRING_UP);
+                    }
+                }
                 // UA-P-4 — truffle's reason rides through VERBATIM, and the one
                 // that matters most here is RFC 025 D3's: a GATED node refuses
                 // to start against a sidecar below protocol 5 ("login_allow
@@ -1117,59 +1222,136 @@ fn note_network_status(shared: &Arc<Shared>, generation: u64, event: NetworkStat
                 );
             });
         }
+        // TS-D16 — the tailnet requires client logs (its flow logs are on) and
+        // this node sends none. While the build waits, its start fails next,
+        // and the failure branch keeps this word. A node that was UP has been
+        // stopped by Tailscale, so it goes as a node whose sidecar exited does,
+        // and stays down until it is built again: with uploads allowed, or
+        // after the tailnet's flow logs are off.
+        NetworkStatusEvent::LoggingRequired => {
+            tracing::warn!(
+                event = "field_native.mesh.logging_required",
+                component = "mesh",
+                "The tailnet requires client logs, and this node sends none"
+            );
+            shared.facts.lock().unwrap().failure = Some(FAILURE_LOGGING_REQUIRED);
+            if shared.node.borrow().is_none() {
+                return;
+            }
+            let handle = MeshHandle {
+                shared: shared.clone(),
+            };
+            tokio::spawn(async move {
+                if handle.shared.generation.load(Ordering::SeqCst) != generation {
+                    return;
+                }
+                handle.teardown_node("logging_required").await;
+                handle.shared.set(
+                    UnitState::Degraded,
+                    Some(
+                        "the tailnet requires client logs and this node sends none; it is down until it is built again"
+                            .into(),
+                    ),
+                    None,
+                );
+            });
+        }
+        // T11 — Tailnet Lock: the node runs, but reaches no peer and no peer
+        // reaches it until a signing device signs it. Heard before `start()`
+        // returns when the node starts unsigned (the install reads it too), and
+        // whenever it becomes unsigned later; `Signed` follows. The words move
+        // while a node is up, so fieldd reads it again (P2).
+        NetworkStatusEvent::NeedsSignature => {
+            shared.facts.lock().unwrap().needs_signature = true;
+            tracing::info!(
+                event = "field_native.mesh.needs_signature",
+                component = "mesh",
+                "Tailnet Lock holds this node until a signing device signs it"
+            );
+            let node = shared.node.borrow().clone();
+            if let Some(node) = node {
+                shared.set(UnitState::Up, Some(up_words(&node_name(&node), true)), None);
+            }
+        }
+        NetworkStatusEvent::Signed => {
+            shared.facts.lock().unwrap().needs_signature = false;
+            tracing::info!(
+                event = "field_native.mesh.signed",
+                component = "mesh",
+                "Tailnet Lock signed this node"
+            );
+            let node = shared.node.borrow().clone();
+            if let Some(node) = node {
+                shared.set(
+                    UnitState::Up,
+                    Some(up_words(&node_name(&node), false)),
+                    None,
+                );
+            }
+        }
+        // T10 — the installed node's backend moved. NeedsLogin is the one a
+        // person acts on: its key expired, or it was removed or logged out in
+        // the console, and nothing reaches it until a new sign-in (`renew`).
+        // truffle delivers it for every sidecar, within about a second at
+        // protocol 11 and at an older sidecar's once-a-minute check, so the
+        // floor's own 15 s tick of TS-1 retired with the pin (exact 0.7.24).
+        // Running again — the same node signed back in — puts it back up.
+        NetworkStatusEvent::BackendStateChanged { state } => {
+            let node = shared.node.borrow().clone();
+            let Some(node) = node else {
+                return;
+            };
+            let needs_login = matches!(state, BackendState::NeedsLogin);
+            let back = matches!(state, BackendState::Running);
+            let changed = {
+                let mut facts = shared.facts.lock().unwrap();
+                let was = facts.needs_login;
+                if needs_login {
+                    facts.needs_login = true;
+                } else if back {
+                    facts.needs_login = false;
+                }
+                facts.needs_login != was
+            };
+            if !changed {
+                return;
+            }
+            if needs_login {
+                tracing::warn!(
+                    event = "field_native.mesh.needs_login",
+                    component = "mesh",
+                    "The mesh node was signed out of the tailnet (its key expired, or it was removed)"
+                );
+                shared.set(
+                    UnitState::Degraded,
+                    Some("signed out of the tailnet: sign in again".into()),
+                    None,
+                );
+            } else {
+                let held = shared.facts.lock().unwrap().needs_signature;
+                shared.set(UnitState::Up, Some(up_words(&node_name(&node), held)), None);
+            }
+        }
         // LoginKnown: fieldd reads the login from `native.mesh.self`.
         _ => {}
     }
 }
 
-/// TS-1 — the installed node's later states. A node that was running and is
-/// signed out — its key expired, or it was removed in the console — keeps no
-/// connection, and truffle 0.7.23 reports the fall only in its cached backend
-/// state (`Node::health().state`, "NeedsLogin"), which the sidecar refreshes
-/// once a minute. So the floor reads that cached value on a tick, and moves the
-/// unit's words when it changes. A status event is petitioned (TF-c).
-async fn watch_node_state(
-    shared: Weak<Shared>,
-    generation: u64,
-    node: Weak<MeshNode>,
-    tick: Duration,
-) {
-    let mut interval = tokio::time::interval(tick);
-    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-    loop {
-        interval.tick().await;
-        let (Some(shared), Some(node)) = (shared.upgrade(), node.upgrade()) else {
-            return;
-        };
-        if shared.generation.load(Ordering::SeqCst) != generation {
-            return;
-        }
-        let needs_login = node.health().await.state.eq_ignore_ascii_case("NeedsLogin");
-        let changed = {
-            let mut facts = shared.facts.lock().unwrap();
-            let changed = facts.needs_login != needs_login;
-            facts.needs_login = needs_login;
-            changed
-        };
-        if !changed {
-            continue;
-        }
-        if needs_login {
-            tracing::warn!(
-                event = "field_native.mesh.needs_login",
-                component = "mesh",
-                "The mesh node was signed out of the tailnet (its key expired, or it was removed)"
-            );
-            shared.set(
-                UnitState::Degraded,
-                Some("signed out of the tailnet: sign in again".into()),
-                None,
-            );
-        } else {
-            let info = node.local_info();
-            let name = info.dns_name.unwrap_or(info.tailscale_hostname);
-            shared.set(UnitState::Up, Some(format!("tailnet {name}")), None);
-        }
+/// The name a unit's words give its node: its MagicDNS name, or the hostname
+/// Tailscale granted.
+fn node_name(node: &MeshNode) -> String {
+    let info = node.local_info();
+    info.dns_name.unwrap_or(info.tailscale_hostname)
+}
+
+/// T11 — an UP unit's words: its node's name, and Tailnet Lock's hold while it
+/// holds the node, so the words say why no peer answers. A node that starts
+/// unsigned hears the hold before its install, so the install chooses too.
+fn up_words(name: &str, held: bool) -> String {
+    if held {
+        format!("tailnet {name}: locked until a signing device signs it")
+    } else {
+        format!("tailnet {name}")
     }
 }
 
@@ -1505,7 +1687,10 @@ mod tests {
         let (ping, _rx) = mpsc::unbounded_channel();
         let unit = MeshUnit::new(&config, ping);
         let handle = unit.handle();
-        assert!(handle.retire().await.is_none());
+        let retired = handle.retire().await;
+        assert!(retired.state_dir.is_none());
+        // TS-D14 — no node was up, so none was signed out
+        assert!(!retired.signed_out);
         let health = unit.shared.health.lock().unwrap().clone();
         assert!(matches!(health.state, UnitState::Disabled));
         assert!(health.detail.unwrap_or_default().contains("retired"));
@@ -1522,6 +1707,7 @@ mod tests {
         let handed = handle
             .retire()
             .await
+            .state_dir
             .expect("existing state dir handed back");
         assert_eq!(handed, config.mesh_state_dir());
         // the retired flag stands — a bring-up finishing AFTER an unlink must

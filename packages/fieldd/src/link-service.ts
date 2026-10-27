@@ -81,7 +81,9 @@ import { isNativeUnresponsive, RpcCallError } from "./native-link";
 
 export interface LinkServiceOptions {
   dataDir: string;
-  native: { request(method: string, params?: unknown): Promise<unknown> };
+  native: {
+    request(method: string, params?: unknown, opts?: { deadlineMs?: number }): Promise<unknown>;
+  };
   logger?: Logger;
   now?: () => number;
   /** cadence while capturing (default 15s) */
@@ -107,16 +109,27 @@ const CAPTURE_ATTEMPTS = 8;
 /** TS-1 (P2) — a bring-up says starting, then its address, then up, within a
  * beat; the probe a burst of health deltas brings forward runs once, after it. */
 const PUSH_SETTLE_MS = 50;
+/** TS-D14 — `native.mesh.retire` signs the node out first, and truffle bounds
+ * that logout at 12 s (`LOGOUT_TIMEOUT`, which contains the sidecar's own
+ * 10 s). The mgmt default (`NATIVE_SUPERVISION.REQUEST_DEADLINE_MS`, 10 s)
+ * would give up on an offline Disconnect while the floor still waits, so the
+ * retire asks for the floor's bound plus a margin. */
+const RETIRE_DEADLINE_MS = 20_000;
 
 /** TS-1 — the postures that hold a node, so the probe runs and `meshEnabled`
  * reads true: a capture (signing in, or held for approval) and a link that
- * stands (up, or signed out and waiting to be signed in again). */
+ * stands (up, or signed out and waiting to be signed in again).
+ *
+ * TS-D16 — and a node the tailnet keeps down for sending no logs: the posture
+ * is still held, and a probe that finds the floor restarted declares it again,
+ * which builds the node again (up, if the tailnet's flow logs are off now). */
 const LIVE: ReadonlySet<UserLinkState> = new Set<UserLinkState>([
   "capturing",
   "awaiting_approval",
   "linked",
   "expired",
   "removed",
+  "logs_required",
 ]);
 const isLive = (state: UserLinkState): boolean => LIVE.has(state);
 
@@ -140,6 +153,14 @@ export class LinkService extends EventEmitter {
   private keyExpiresAt: number | null | undefined = undefined;
   /** TS-1 — why the floor's last bring-up ended without a node, when one did. */
   private failure: MeshFailure | null = null;
+  /** T11 — the Tailscale client the node embeds, kept while the node is down. */
+  private tailscaleVersion: string | null = null;
+  /** T11 — Tailnet Lock holds the node that is up: connected, not yet trusted. */
+  private needsSignature = false;
+  /** TS-D16 — the capture in flight asked to send logs ("Send logs on this
+   * network", after a tailnet refused one that sent none). Capture keeps it in
+   * the new link.json; a standing link's own `sendLogs` is read from there. */
+  private captureSendLogs = false;
   /** TS-1 (P2) — the mesh unit's last word heard on the health stream, so a
    * delta about another unit, or one that says nothing new, brings nothing
    * forward. */
@@ -191,6 +212,9 @@ export class LinkService extends EventEmitter {
       adminUrl: this.adminUrl,
       ...(this.keyExpiresAt !== undefined ? { keyExpiresAt: this.keyExpiresAt } : {}),
       failure: this.failure,
+      tailscaleVersion: this.tailscaleVersion,
+      needsSignature: this.needsSignature,
+      sendLogs: this.link?.sendLogs === true,
     };
   }
 
@@ -300,8 +324,11 @@ export class LinkService extends EventEmitter {
    * TS-1 (P7) — `authKey` signs the capture in with no browser: it rides this
    * one `native.mesh.start` and is never kept, logged or audited (the floor
    * holds it for the one bring-up). A link that stands but is signed out is
-   * signed in again by `renew()`, not by a second link. */
-  async begin(options: { authKey?: string } = {}): Promise<UserLinkStatus> {
+   * signed in again by `renew()`, not by a second link.
+   *
+   * TS-D16 — `sendLogs` begins the capture again with "Send logs on this
+   * network", after the tailnet refused one that sent none (`logs_required`). */
+  async begin(options: { authKey?: string; sendLogs?: boolean } = {}): Promise<UserLinkStatus> {
     if (this.state === "linked") {
       throw new RpcCallError(
         "PRECONDITION_FAILED",
@@ -313,7 +340,9 @@ export class LinkService extends EventEmitter {
     if (this.hasStandingLink()) {
       throw new RpcCallError(
         "PRECONDITION_FAILED",
-        "this user's tailscale link stands and is waiting to be signed in again; renew it",
+        this.state === "logs_required"
+          ? "this user's tailscale link stands and its network requires device logs; send logs on this network (user.link.logs)"
+          : "this user's tailscale link stands and is waiting to be signed in again; renew it",
         false,
         { login: this.link?.login ?? null, linkState: this.state },
       );
@@ -326,6 +355,7 @@ export class LinkService extends EventEmitter {
       );
     }
     this.captureMisses = 0;
+    this.captureSendLogs = options.sendLogs === true;
     this.enter("capturing", null);
     await this.declarePosture("capture", undefined, options.authKey);
     // The first probe is AWAITED rather than scheduled, so the answer this act
@@ -341,11 +371,16 @@ export class LinkService extends EventEmitter {
    * identity stays (a stop never retires: a later link reuses the keys), and
    * the desktop is offline again. Only a capture is cancelled — a link that
    * stands is ended by unlink — so anything else answers its status as it is:
-   * a capture that landed as the person clicked is a link, honestly. */
+   * a capture that landed as the person clicked is a link, honestly.
+   *
+   * TS-D16 — a capture the tailnet refused for sending no logs is ended the
+   * same way, when the person would rather not send them. */
   async cancel(): Promise<UserLinkStatus> {
     if (
       this.hasStandingLink() ||
-      (this.state !== "capturing" && this.state !== "awaiting_approval")
+      (this.state !== "capturing" &&
+        this.state !== "awaiting_approval" &&
+        this.state !== "logs_required")
     ) {
       return this.status();
     }
@@ -354,6 +389,7 @@ export class LinkService extends EventEmitter {
     await this.stopNode();
     this.nodeState = null;
     this.captureMisses = 0;
+    this.captureSendLogs = false;
     this.adminUrl = null;
     this.enter("offline", null);
     this.logger.info("fieldd.link.capture_cancelled", "The person cancelled the link capture", {});
@@ -387,20 +423,55 @@ export class LinkService extends EventEmitter {
   }
 
   /** TS-1 — the link record stands (a captured login) and its node waits on a
-   * sign-in: renewal's two states, and an approval that holds a renewal. */
+   * sign-in: renewal's two states, and an approval that holds a renewal.
+   * TS-D16 — or waits on the network's logs: "Send logs on this network". */
   private hasStandingLink(): boolean {
     return (
       this.link !== null &&
       this.link.login !== null &&
-      (this.state === "expired" || this.state === "removed" || this.state === "awaiting_approval")
+      (this.state === "expired" ||
+        this.state === "removed" ||
+        this.state === "awaiting_approval" ||
+        this.state === "logs_required")
     );
+  }
+
+  /** TS-D16 (ruled A) — "Send logs on this network" for the link that stands,
+   * on or off. It is kept in link.json (never an env var), and the node is
+   * built again with it: truffle fixes the setting for a node's lifetime, and a
+   * node the tailnet refused for sending none comes up only when built anew. A
+   * capture asks through `begin({sendLogs})` instead, having no link yet. */
+  async logs(send: boolean): Promise<UserLinkStatus> {
+    const link = this.link;
+    const login = link?.login ?? null;
+    if (link === null || login === null || this.linkFileCorrupt) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        "no tailscale link to send logs on; a capture asks with user.link.begin {sendLogs}",
+        false,
+        { linkState: this.state },
+      );
+    }
+    if ((link.sendLogs === true) === send) return this.status();
+    const next: TailscaleLink = { ...link, sendLogs: send };
+    this.persistLink(next);
+    this.link = next;
+    this.logger.info("fieldd.link.logs", "Send logs on this network changed", { send });
+    await this.declarePosture("linked", login);
+    await this.probe();
+    return this.status();
   }
 
   /** UA-3 unlink: native retire (node dropped, sidecar dead, state archived)
    * then the local record clears. Local product state is untouched — unlink
-   * keeps every byte except the tailnet identity (UA-D8). */
+   * keeps every byte except the tailnet identity (UA-D8).
+   *
+   * TS-D14 — the floor signs the device out of its tailnet first, and the
+   * answer says whether Tailscale took it (`signedOut`). */
   async unlink(): Promise<MeshRetireResult> {
-    const result = MeshRetireResult.parse(await this.opts.native.request("native.mesh.retire"));
+    const result = MeshRetireResult.parse(
+      await this.opts.native.request("native.mesh.retire", {}, { deadlineMs: RETIRE_DEADLINE_MS }),
+    );
     try {
       rmSync(this.linkPath, { force: true });
     } catch (error) {
@@ -418,6 +489,9 @@ export class LinkService extends EventEmitter {
     this.machineName = null;
     this.adminUrl = null;
     this.keyExpiresAt = undefined;
+    this.tailscaleVersion = null;
+    this.needsSignature = false;
+    this.captureSendLogs = false;
     // UA-P-0a — unlink is the posture going offline, and the timer goes with
     // it: an unlinked desktop has no node and therefore nothing to probe.
     if (this.timer !== null) clearTimeout(this.timer);
@@ -450,6 +524,9 @@ export class LinkService extends EventEmitter {
     authKey?: string,
     renew?: boolean,
   ): Promise<void> {
+    // TS-D15/D16 — the node sends no logs unless the person said to, for this
+    // link (link.json) or for the capture in flight.
+    const clientLogUpload = mode === "linked" ? this.link?.sendLogs === true : this.captureSendLogs;
     try {
       MeshStartResult.parse(
         await this.opts.native.request("native.mesh.start", {
@@ -459,6 +536,7 @@ export class LinkService extends EventEmitter {
           // warning below names the mode and the error, never the params.
           ...(authKey !== undefined ? { authKey } : {}),
           ...(renew === true ? { renew } : {}),
+          ...(clientLogUpload ? { clientLogUpload } : {}),
         }),
       );
       this.postureLanded = true;
@@ -520,6 +598,8 @@ export class LinkService extends EventEmitter {
       this.nodeState = "up";
       this.authUrl = null;
       this.noteFacts(self);
+      // T11 — Tailnet Lock: the node is up and reaches no one until it is signed
+      this.needsSignature = self.needsSignature === true;
       // TS-1 — the node is installed and signed out of the tailnet (its key
       // lapsed, or it was removed in the console): nothing reaches this desktop,
       // and the link that stands waits to be signed in again (`renew`). Before
@@ -569,6 +649,8 @@ export class LinkService extends EventEmitter {
       this.nodeState = details.state ?? null;
       this.authUrl = details.authUrl ?? null;
       this.noteFacts(details);
+      // T11 — no node up, so no lock holding one
+      this.needsSignature = false;
       this.settleNotUp(details);
       // UA-P-0j — `disabled` is the floor's word for "no posture held": its boot
       // default, `stop` and `retire` set it and nothing else does
@@ -608,8 +690,15 @@ export class LinkService extends EventEmitter {
    * renewal on a tailnet that asks again), or is asked to sign in again (an
    * address is on offer: the key lapsed, or the device was removed), or keeps
    * the word it had — a bring-up in flight, or a floor that lost the posture,
-   * which the caller restores. */
+   * which the caller restores.
+   *
+   * TS-D16 — whatever the posture, a node the tailnet keeps down for sending
+   * no logs is `logs_required`: a capture's, or a link's. */
   private settleNotUp(details: MeshNotUpReading): void {
+    if (details.failure === "logging_required") {
+      this.enter("logs_required", null);
+      return;
+    }
     const linkStands = this.link !== null && this.link.login !== null;
     if (!linkStands) {
       if (this.state === "capturing" || this.state === "awaiting_approval") {
@@ -643,9 +732,11 @@ export class LinkService extends EventEmitter {
     keyExpiresAt?: number | undefined;
     keyExpiryDisabled?: boolean | undefined;
     failure?: MeshFailure | undefined;
+    tailscaleVersion?: string | undefined;
   }): void {
     if (facts.machineName !== undefined) this.machineName = facts.machineName;
     if (facts.adminUrl !== undefined) this.adminUrl = facts.adminUrl;
+    if (facts.tailscaleVersion !== undefined) this.tailscaleVersion = facts.tailscaleVersion;
     const expiry = facts.keyExpiryDisabled === true ? null : facts.keyExpiresAt;
     if (expiry !== undefined && expiry !== this.keyExpiresAt) {
       this.keyExpiresAt = expiry;
@@ -679,8 +770,14 @@ export class LinkService extends EventEmitter {
   /** UA-P-0j — re-ask the floor for the posture this service holds. */
   private async restorePosture(): Promise<void> {
     const login = this.link?.login ?? null;
+    // TS-D16 — a link the tailnet kept down for its logs stands too: declared
+    // again, its node is built again (up, if the flow logs are off now). A
+    // capture the tailnet refused is not: the person begins it again.
     const standing =
-      this.state === "linked" || this.state === "expired" || this.state === "removed";
+      this.state === "linked" ||
+      this.state === "expired" ||
+      this.state === "removed" ||
+      this.state === "logs_required";
     const renewalHeld = this.state === "awaiting_approval" && login !== null;
     if ((standing || renewalHeld) && login !== null) {
       this.logger.warn(
@@ -739,9 +836,14 @@ export class LinkService extends EventEmitter {
         lastVerifiedAt: at,
         // TS-1 — the date the node reported with its login, if it did
         ...(this.keyExpiresAt !== undefined ? { keyExpiresAt: this.keyExpiresAt } : {}),
+        // TS-D16 — the capture's "Send logs on this network" becomes the
+        // link's; a login that moved under a live link keeps what its node
+        // was built with
+        ...(this.captureSendLogs || this.link?.sendLogs === true ? { sendLogs: true } : {}),
       };
       this.persistLink(next);
       this.link = next;
+      this.captureSendLogs = false;
       if (moved) {
         this.logger.warn(
           "fieldd.link.login_changed",

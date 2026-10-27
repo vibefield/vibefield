@@ -65,6 +65,7 @@ async fn the_floors_own_capture_signs_in_with_an_auth_key() {
         StartOptions {
             auth_key: Some(AuthKey::new(key.clone())),
             renew: false,
+            client_log_upload: false,
         },
     )
     .await

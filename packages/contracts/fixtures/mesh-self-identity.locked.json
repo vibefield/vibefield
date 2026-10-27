@@ -1,0 +1,14 @@
+{
+  "deviceId": "01J0FAKEULID0000000000SELF",
+  "deviceName": "jamess-macbook-pro",
+  "dnsName": "truffle-vibefield-jamess-macbook-pro.tail1a2b3.ts.net",
+  "login": "me@jamesyong42.com",
+  "loginAllow": ["me@jamesyong42.com"],
+  "mode": "linked",
+  "machineName": "truffle-vibefield-jamess-macbook-pro",
+  "keyExpiryDisabled": true,
+  "needsLogin": false,
+  "tailscaleVersion": "1.104.1",
+  "needsSignature": true,
+  "clientLogUpload": false
+}

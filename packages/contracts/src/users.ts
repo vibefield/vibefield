@@ -95,6 +95,11 @@ export const TailscaleLink = z
      * desktop whose node is down still knows the date, and can tell a lapsed
      * key from a removed device. Written only when it changes. */
     keyExpiresAt: z.number().int().nullable().optional(),
+    /** TS-D16 (ruled A) — the person's "Send logs on this network", for THIS
+     * link only: the node sends Tailscale its client logs, which a network
+     * with flow logs requires. Absent or false is VibeField's default, none
+     * (TS-D15). Kept here and nowhere else: never an env var, never synced. */
+    sendLogs: z.boolean().optional(),
   })
   .passthrough();
 export type TailscaleLink = z.infer<typeof TailscaleLink>;
@@ -134,7 +139,16 @@ export type TailscaleLink = z.infer<typeof TailscaleLink>;
  *    reaches this desktop until `user.link.renew`.
  *  - `removed` — the link stands and the node was signed out while its key
  *    still had time: someone removed the device in the console. The same act
- *    brings it back, as a new device in the console. */
+ *    brings it back, as a new device in the console.
+ *
+ * TS-D16 (ruled A, 2026-10-27) adds one more, the same family:
+ *
+ *  - `logs_required` — the tailnet requires client logs (its network flow
+ *    logs are on) and this node sends none (TS-D15), so Tailscale keeps it
+ *    down: at a capture's start, a linked node's start, or a running node's
+ *    when an admin turns flow logs on. The person acts with "Send logs on this
+ *    network" (`user.link.logs`, or a capture begun again with `sendLogs`), or
+ *    the tailnet's admin turns flow logs off. */
 export const UserLinkState = z.enum([
   "offline",
   "capturing",
@@ -145,6 +159,7 @@ export const UserLinkState = z.enum([
   "awaiting_approval",
   "expired",
   "removed",
+  "logs_required",
 ]);
 export type UserLinkState = z.infer<typeof UserLinkState>;
 
@@ -177,6 +192,15 @@ export const UserLinkStatus = z
     /** TS-1 — why the floor's last bring-up ended without a node, when one
      * did ("Network part missing" is `sidecar_missing`); null otherwise. */
     failure: MeshFailure.nullable().optional(),
+    /** T11 — the Tailscale client this desktop's node embeds (`1.104.1`), for
+     * Network details; null until a node has said. */
+    tailscaleVersion: z.string().nullable().optional(),
+    /** T11 — Tailnet Lock holds this desktop's node: connected, not yet
+     * trusted. It reaches no other device until a signing device signs it. */
+    needsSignature: z.boolean().optional(),
+    /** TS-D16 — the link's "Send logs on this network" (link.json's
+     * `sendLogs`; false when there is no link). */
+    sendLogs: z.boolean().optional(),
   })
   .passthrough();
 export type UserLinkStatus = z.infer<typeof UserLinkStatus>;
@@ -187,13 +211,26 @@ export type UserLinkStatus = z.infer<typeof UserLinkStatus>;
  * UNTAGGED key from the admin console (Settings → Keys), held for the one
  * bring-up and never stored or logged by fieldd or the floor. A tagged key
  * makes a node that belongs to no one, which capture refuses as
- * `login_unavailable`. */
+ * `login_unavailable`.
+ *
+ * TS-D16 — `sendLogs`: a capture the person began again with "Send logs on
+ * this network", after the tailnet refused one that sent none
+ * (`logs_required`). It rides the capture, and capture keeps it in the new
+ * link.json. */
 export const UserLinkBeginParams = z
   .object({
     authKey: z.string().min(1).max(512).optional(),
+    sendLogs: z.boolean().optional(),
   })
   .passthrough();
 export type UserLinkBeginParams = z.infer<typeof UserLinkBeginParams>;
+
+/** TS-D16 (ruled A) — `user.link.logs`: "Send logs on this network" for the
+ * standing link, on or off. fieldd keeps it in link.json and builds the node
+ * again with it (truffle fixes the setting for a node's lifetime). Audited: it
+ * changes what this desktop tells Tailscale. */
+export const UserLinkLogsParams = z.object({ send: z.boolean() }).passthrough();
+export type UserLinkLogsParams = z.infer<typeof UserLinkLogsParams>;
 
 /** UA-3 — the Account page's profile write over the closed IPC surface. All
  * fields optional (the handler refuses an empty update); `onboarded` exists

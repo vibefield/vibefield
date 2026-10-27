@@ -22,7 +22,9 @@ export type UserLinkState =
   // stands while its node is signed out (lapsed, or removed in the console).
   | "awaiting_approval"
   | "expired"
-  | "removed";
+  | "removed"
+  // TS-D16 — a tailnet that requires client logs keeps this node down.
+  | "logs_required";
 
 const LINK_STATES: readonly string[] = [
   "offline",
@@ -34,6 +36,7 @@ const LINK_STATES: readonly string[] = [
   "awaiting_approval",
   "expired",
   "removed",
+  "logs_required",
 ];
 
 function isLinkState(value: unknown): value is UserLinkState {
@@ -283,6 +286,12 @@ export function linkFace(
         failure: data.failure ?? null,
       };
     case "offline":
+      return { kind: "offline", nodeState: data.nodeState };
+    // TS-D16 — the tailnet keeps the node down for sending no logs. The menu's
+    // word is "This Mac only" (thinking doc §11); the face with its own title
+    // and "Send logs on this network" comes with the link's words (DESIGN.md
+    // §9), in the faces' packet.
+    case "logs_required":
       return { kind: "offline", nodeState: data.nodeState };
     default:
       return {

@@ -572,7 +572,8 @@
       "enum": [
         "sidecar_missing",
         "bring_up_failed",
-        "sidecar_exited"
+        "sidecar_exited",
+        "logging_required"
       ]
     },
     "MeshNotUpDetails": {
@@ -659,6 +660,15 @@
         },
         "needsLogin": {
           "type": "boolean"
+        },
+        "tailscaleVersion": {
+          "type": "string"
+        },
+        "needsSignature": {
+          "type": "boolean"
+        },
+        "clientLogUpload": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -678,6 +688,9 @@
             "string",
             "null"
           ]
+        },
+        "signedOut": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -708,6 +721,9 @@
           "minLength": 1
         },
         "renew": {
+          "type": "boolean"
+        },
+        "clientLogUpload": {
           "type": "boolean"
         }
       },

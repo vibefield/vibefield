@@ -646,6 +646,16 @@ export const MeshSelfIdentity = z
      * expired, or it was removed in the console. Nothing reaches it until a
      * new sign-in (`native.mesh.start` with `renew`). */
     needsLogin: z.boolean().optional(),
+    /** T11 (track TS) — the Tailscale client the node's sidecar embeds, the
+     * release a person compares with the admin console (`1.104.1`). */
+    tailscaleVersion: z.string().optional(),
+    /** T11 — Tailnet Lock holds this node: it runs, but reaches no peer and no
+     * peer reaches it until a signing device signs it ("connected, not yet
+     * trusted"). */
+    needsSignature: z.boolean().optional(),
+    /** TS-D15/D16 — the node sends Tailscale its client logs: what the RUNNING
+     * node was built with (`MeshStartParams.clientLogUpload`). */
+    clientLogUpload: z.boolean().optional(),
   })
   .passthrough();
 export type MeshSelfIdentity = z.infer<typeof MeshSelfIdentity>;
@@ -671,6 +681,12 @@ export const MeshStartParams = z
      * address. A bring-up still waiting for its sign-in is left alone, since
      * its address is the live one. Refused in `capture` mode. */
     renew: z.boolean().optional(),
+    /** TS-D15/D16 — send Tailscale the node's client logs. Absent or false is
+     * VibeField's default, none (D15); true only for a link, or a capture, the
+     * person opted in on a network that requires logs (D16, "Send logs on this
+     * network"). truffle fixes it for a node's lifetime, so a change rebuilds a
+     * running node. Either mode. */
+    clientLogUpload: z.boolean().optional(),
   })
   .passthrough();
 export type MeshStartParams = z.infer<typeof MeshStartParams>;
@@ -678,8 +694,19 @@ export type MeshStartParams = z.infer<typeof MeshStartParams>;
 /** TS-1 (track TS) — why the floor's last bring-up ended without a node: no
  * sidecar to start (reinstalling is the way forward), a build that failed, or
  * the sidecar of a node that was up exiting on its own. One word the person's
- * sentence is chosen by; the unit's `detail` keeps the floor's own words. */
-export const MeshFailure = z.enum(["sidecar_missing", "bring_up_failed", "sidecar_exited"]);
+ * sentence is chosen by; the unit's `detail` keeps the floor's own words.
+ *
+ * TS-D16 adds `logging_required`: the tailnet requires client logs (its
+ * network flow logs are on) and this node sends none, so Tailscale keeps it
+ * down, at its start or, for a running node, when an admin turns flow logs
+ * on. It stays down until it is built again with uploads allowed, or until the
+ * tailnet's flow logs are off. */
+export const MeshFailure = z.enum([
+  "sidecar_missing",
+  "bring_up_failed",
+  "sidecar_exited",
+  "logging_required",
+]);
 export type MeshFailure = z.infer<typeof MeshFailure>;
 
 /** TS-1 (track TS) — the details of `native.mesh.self`'s UNAVAILABLE answer,
@@ -743,11 +770,19 @@ export type MeshStopResult = z.infer<typeof MeshStopResult>;
  * sidecar dies with it), archives the state dir to `mesh.retired-<ts>`
  * beside itself, and reports where. `retired: false` = nothing to retire
  * (no state on disk) — an honest no-op, not an error. Answered BEFORE the
- * node gate: retiring a half-authed or disabled mesh must still work. */
+ * node gate: retiring a half-authed or disabled mesh must still work.
+ *
+ * TS-D14 — the node is signed out of its tailnet first (truffle's
+ * `Node::logout`, bounded at 12 s), so the admin console stops counting it as
+ * signed in. `signedOut: false` = the logout did not reach Tailscale (the
+ * device was offline, or there was no node up to sign out), and the console
+ * keeps listing it until someone removes it there. Absent from a floor before
+ * TS-D14. The caller's deadline must outlast the logout's bound. */
 export const MeshRetireResult = z
   .object({
     retired: z.boolean(),
     archivedTo: z.string().nullable(),
+    signedOut: z.boolean().optional(),
   })
   .passthrough();
 export type MeshRetireResult = z.infer<typeof MeshRetireResult>;

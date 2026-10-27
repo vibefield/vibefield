@@ -411,6 +411,9 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // address and the name Tailscale will show), one held by device approval,
   // and a linked desktop whose floor has no sidecar to start. `expiring` and
   // `signed-out` above pin the facts the answer carries once the node is up.
+  // On truffle 0.7.24: `logs-required` is a tailnet that refuses a node sending
+  // no client logs (TS-D16), and `locked` above is a node Tailnet Lock holds
+  // until it is signed (T11), with the embedded client's version and uploads off.
   "mesh-not-up-details": MeshNotUpDetails,
   "plugin-manifest": PluginManifestV1,
   "plugin-registry-snapshot": PluginRegistrySnapshot,

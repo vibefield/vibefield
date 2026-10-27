@@ -310,6 +310,19 @@ async fn the_development_override_is_ungated() {
     daemon.shutdown().await;
 }
 
+/// TS-D15 — what a stand-in with an OLD protocol can run: a node that sends
+/// Tailscale its client logs. An opted-out node (VibeField's default) makes
+/// truffle refuse any sidecar before protocol 11 before anything starts, which
+/// would hide what the UA-P-4 rows below witness: the login gate's own floor
+/// (protocol 5), met by the gate and not by the opt-out.
+#[cfg(unix)]
+fn uploads() -> field_native::services::mesh::StartOptions {
+    field_native::services::mesh::StartOptions {
+        client_log_upload: true,
+        ..Default::default()
+    }
+}
+
 /// UA-P-4 (RFC 025 D3) — A GATED NODE REFUSES TO START AGAINST A SIDECAR THAT
 /// CANNOT REPORT LOGINS, and the refusal reaches the health shape with
 /// truffle's own sentence in it.
@@ -356,7 +369,7 @@ done
     daemon
         .state
         .mesh
-        .start(MeshMode::Linked, Some("james@github".into()))
+        .start_with(MeshMode::Linked, Some("james@github".into()), uploads())
         .await
         .unwrap();
 
@@ -427,7 +440,7 @@ done
     daemon
         .state
         .mesh
-        .start(MeshMode::Capture, None)
+        .start_with(MeshMode::Capture, None, uploads())
         .await
         .unwrap();
     assert!(daemon.state.mesh.login_allow().is_empty());
@@ -511,7 +524,9 @@ done
     // it is UNGATED. A row that only checked the end state could pass because
     // the node was gated all along — which is the shape of the bug this slice
     // exists to fix.
-    mesh.start(MeshMode::Capture, None).await.unwrap();
+    mesh.start_with(MeshMode::Capture, None, uploads())
+        .await
+        .unwrap();
     let capture_node = await_node(mesh).await;
     assert!(
         mesh.login_allow().is_empty(),
@@ -525,7 +540,10 @@ done
     // rebuild below: if every `start` replaced the node, the assertion that the
     // promotion replaced it would mean nothing.
     assert!(
-        !mesh.start(MeshMode::Capture, None).await.unwrap(),
+        !mesh
+            .start_with(MeshMode::Capture, None, uploads())
+            .await
+            .unwrap(),
         "re-asking for the live posture is an idempotent no-op"
     );
     assert!(
@@ -535,7 +553,7 @@ done
 
     // THE PROMOTION.
     assert!(
-        mesh.start(MeshMode::Linked, Some("james@github".into()))
+        mesh.start_with(MeshMode::Linked, Some("james@github".into()), uploads())
             .await
             .unwrap(),
         "capture → linked is a real transition"
@@ -602,6 +620,16 @@ async fn await_node(
 // sidecar it binds, as on the mini's 9440, and holds a second reference), and
 // no lane crosses a real tailnet.
 
+/// TS-D15 — a stand-in's answer to `tsnet:version`, as a protocol-11 sidecar
+/// gives it (truffle's own `v11_script`). The floor's node sends no client logs
+/// unless asked (D15), so truffle asks a sidecar its protocol before anything
+/// starts, and refuses one before 11.
+#[cfg(unix)]
+const VERSION_11_CASE: &str = r#"    *'"tsnet:version"'*)
+      rid=$(printf '%s' "$line" | sed -n 's/.*"requestId":"\([^"]*\)".*/\1/p')
+      printf '%s\n' "{\"event\":\"tsnet:versionResult\",\"data\":{\"requestId\":\"$rid\",\"protocolVersion\":11,\"tailscaleVersion\":\"1.104.1\",\"tailscaleVersionLong\":\"1.104.1-stub\"}}"
+      ;;"#;
+
 /// The stand-in of the promotion row above, protocol 5, also answering
 /// `tsnet:listen` (requestId echoed) so a listener request is not left hanging.
 #[cfg(unix)]
@@ -613,6 +641,7 @@ fn item79_stub(dir: &std::path::Path) -> std::path::PathBuf {
         r#"#!/bin/sh
 while IFS= read -r line; do
   case "$line" in
+VERSION_CASE
     *tsnet:start*)
       printf '%s\n' '{"event":"tsnet:started","data":{"state":"running","hostname":"truffle-vibefield-stub","dnsName":"truffle-vibefield-stub.tail0.ts.net","tailscaleIP":"127.0.0.1","nodeId":"nStub0CNTRL","loginName":"james@github","protocolVersion":5}}'
       ;;
@@ -626,7 +655,8 @@ while IFS= read -r line; do
       ;;
   esac
 done
-"#,
+"#
+        .replace("VERSION_CASE", VERSION_11_CASE),
     )
     .unwrap();
     std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
@@ -821,6 +851,7 @@ fn ts1_stub(dir: &std::path::Path, start: &str) -> std::path::PathBuf {
     let script = r#"#!/bin/sh
 while IFS= read -r line; do
   case "$line" in
+VERSION_CASE
     *'"tsnet:start"'*)
 START_BLOCK
       ;;
@@ -835,7 +866,8 @@ START_BLOCK
   esac
 done
 "#
-    .replace("START_BLOCK", start);
+    .replace("START_BLOCK", start)
+    .replace("VERSION_CASE", VERSION_11_CASE);
     std::fs::write(&stub, script).unwrap();
     std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
     stub
@@ -966,6 +998,8 @@ async fn device_approval_is_a_named_state_until_the_node_comes_up() {
 
 /// TS-1 (P5) — a running node that falls to NeedsLogin (its key expired, or it
 /// was removed) is degraded with the words, and the fact stands for fieldd.
+/// Since the 0.7.24 pin the fall arrives as truffle's `BackendStateChanged`
+/// (T10), within a beat of the sidecar's `tsnet:stateChange`; no tick reads it.
 #[cfg(unix)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_running_node_signed_out_of_the_tailnet_says_so() {
@@ -978,7 +1012,6 @@ async fn a_running_node_signed_out_of_the_tailnet_says_so() {
     );
     let config = NativeConfig {
         sidecar_override: Some(ts1_stub(dir.path(), &start)),
-        mesh_state_tick: Duration::from_millis(200),
         ..NativeConfig::for_data_dir(dir.path().to_path_buf())
     };
     let daemon = bootstrap(config).await.unwrap();
@@ -1123,6 +1156,7 @@ async fn an_auth_key_reaches_the_sidecar_and_nothing_the_floor_reports() {
         StartOptions {
             auth_key: Some(key),
             renew: false,
+            client_log_upload: false,
         },
     )
     .await
@@ -1143,5 +1177,326 @@ async fn an_auth_key_reaches_the_sidecar_and_nothing_the_floor_reports() {
         health_json(&daemon)
     );
     assert!(!reported.contains("tskey"), "{reported}");
+    daemon.shutdown().await;
+}
+
+// ---- TS-D14/D15/D16 and T11 (track TS): truffle 0.7.24's surface, on stand-ins ----
+//
+// The stand-ins speak sidecar protocol 11 (`VERSION_11_CASE`), and each row
+// scripts the events a real one sends. What these rows do NOT witness: tsnet
+// itself — a real tailnet with flow logs, Tailnet Lock, a logout the control
+// server takes. Those are the live witnesses owed on a real tailnet.
+
+/// A protocol-11 `tsnet:started`: TS1_STARTED's facts, and the client it embeds.
+#[cfg(unix)]
+const V11_STARTED: &str = r#"printf '%s\n' '{"event":"tsnet:started","data":{"state":"running","hostname":"truffle-vibefield-stub","dnsName":"truffle-vibefield-stub.tail0.ts.net","tailscaleIP":"127.0.0.1","nodeId":"nStub0CNTRL","loginName":"james@github","protocolVersion":11,"controlUrl":"https://controlplane.tailscale.com","keyExpiry":"2026-11-02T10:00:00Z","tailscaleVersion":"1.104.1","tailscaleVersionLong":"1.104.1-stub"}}'"#;
+
+/// The control server took the logout (truffle's `tsnet:loggedOut`).
+#[cfg(unix)]
+const LOGGED_OUT: &str =
+    r#"      printf '%s\n' "{\"event\":\"tsnet:loggedOut\",\"data\":{\"requestId\":\"$rid\"}}""#;
+
+/// A protocol-11 stand-in, after truffle's own `v11_script`: it logs every
+/// command line to `log`, answers `tsnet:version`, starts with `V11_STARTED`,
+/// and answers `tsnet:logout` with `logout` (empty: never answered, as from a
+/// device that cannot reach the control server).
+#[cfg(unix)]
+fn v11_stub(dir: &std::path::Path, log: &std::path::Path, logout: &str) -> std::path::PathBuf {
+    use std::os::unix::fs::PermissionsExt;
+    let stub = dir.join("sidecar-slim");
+    let script = r#"#!/bin/sh
+while IFS= read -r line; do
+  printf '%s\n' "$line" >> 'LOG_PATH'
+  case "$line" in
+VERSION_CASE
+    *'"tsnet:start"'*)
+      START_LINE
+      ;;
+    *'"tsnet:logout"'*)
+      rid=$(printf '%s' "$line" | sed -n 's/.*"requestId":"\([^"]*\)".*/\1/p')
+LOGOUT_BLOCK
+      ;;
+    *tsnet:peers*)
+      printf '%s\n' '{"event":"tsnet:peers","data":{"peers":[]}}'
+      ;;
+    *'"tsnet:listen"'*)
+      rid=$(printf '%s' "$line" | sed -n 's/.*"requestId":"\([^"]*\)".*/\1/p')
+      port=$(printf '%s' "$line" | sed -n 's/.*"port":\([0-9]*\).*/\1/p')
+      printf '%s\n' "{\"event\":\"tsnet:listening\",\"data\":{\"port\":$port,\"requestId\":\"$rid\"}}"
+      ;;
+  esac
+done
+"#
+    .replace("LOG_PATH", &log.display().to_string())
+    .replace("VERSION_CASE", VERSION_11_CASE)
+    .replace("START_LINE", V11_STARTED)
+    .replace("LOGOUT_BLOCK", logout);
+    std::fs::write(&stub, script).unwrap();
+    std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
+    stub
+}
+
+/// TS-D15 — the node sends Tailscale no client logs unless the person asked:
+/// the start command carries `clientLogUpload: false` by default and leaves it
+/// out when uploads are asked for (truffle's wire), and the floor reports what
+/// the node was built with.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_node_sends_no_client_logs_unless_asked() {
+    use field_native::contracts::MeshMode;
+    use field_native::services::mesh::StartOptions;
+    for asked in [false, true] {
+        let dir = tempfile::tempdir().unwrap();
+        let log = dir.path().join("commands.log");
+        let config = NativeConfig {
+            sidecar_override: Some(v11_stub(dir.path(), &log, LOGGED_OUT)),
+            ..NativeConfig::for_data_dir(dir.path().to_path_buf())
+        };
+        let daemon = bootstrap(config).await.unwrap();
+        let mesh = &daemon.state.mesh;
+        mesh.start_with(
+            MeshMode::Capture,
+            None,
+            StartOptions {
+                client_log_upload: asked,
+                ..StartOptions::default()
+            },
+        )
+        .await
+        .unwrap();
+        let _node = await_node(mesh).await;
+        let commands = std::fs::read_to_string(&log).unwrap();
+        let start = commands
+            .lines()
+            .find(|line| line.contains(r#""tsnet:start""#))
+            .expect("a start command");
+        assert_eq!(
+            start.contains(r#""clientLogUpload":false"#),
+            !asked,
+            "{start}"
+        );
+        assert_eq!(mesh.client_log_upload(), asked);
+        daemon.shutdown().await;
+    }
+}
+
+/// TS-D16 — a tailnet that requires client logs refuses an opted-out node at
+/// its start: no node, and the failure named `logging_required`, whether the
+/// status hook heard the event or only the start error said it.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_tailnet_that_requires_logs_refuses_the_opted_out_node() {
+    use field_native::contracts::{MeshMode, UnitState};
+    use std::time::Duration;
+    let dir = tempfile::tempdir().unwrap();
+    let config = NativeConfig {
+        sidecar_override: Some(ts1_stub(
+            dir.path(),
+            r#"      printf '%s\n' '{"event":"tsnet:loggingRequired"}'"#,
+        )),
+        ..NativeConfig::for_data_dir(dir.path().to_path_buf())
+    };
+    let daemon = bootstrap(config).await.unwrap();
+    let mesh = &daemon.state.mesh;
+    mesh.start(MeshMode::Linked, Some("james@github".into()))
+        .await
+        .unwrap();
+    // the word is set before the unit is Degraded (by the hook, or by the
+    // failure branch just ahead of its words), so the wait reads both
+    item79_until(
+        "the refusal never reached the unit",
+        Duration::from_secs(10),
+        || {
+            mesh.link_facts().failure == Some("logging_required")
+                && matches!(mesh.health().state, UnitState::Degraded)
+        },
+    )
+    .await;
+    assert!(mesh.node().is_none());
+    let health = mesh.health();
+    assert!(
+        health
+            .detail
+            .as_deref()
+            .unwrap_or("")
+            .contains("requires client logging"),
+        "{health:?}"
+    );
+    daemon.shutdown().await;
+}
+
+/// TS-D16 — a node that was running stops when an admin turns flow logs on:
+/// the floor takes it down, as it does a node whose sidecar exited, and says
+/// why. It stays down until it is built again.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_running_node_refused_for_its_logs_goes_down_and_says_why() {
+    use field_native::contracts::{MeshMode, UnitState};
+    use std::time::Duration;
+    let dir = tempfile::tempdir().unwrap();
+    let start = format!(
+        r#"      {V11_STARTED}
+      ( sleep 1; printf '%s\n' '{{"event":"tsnet:loggingRequired"}}' ) &"#
+    );
+    let config = NativeConfig {
+        sidecar_override: Some(ts1_stub(dir.path(), &start)),
+        ..NativeConfig::for_data_dir(dir.path().to_path_buf())
+    };
+    let daemon = bootstrap(config).await.unwrap();
+    let mesh = &daemon.state.mesh;
+    mesh.start(MeshMode::Linked, Some("james@github".into()))
+        .await
+        .unwrap();
+    drop(await_node(mesh).await);
+    // the teardown takes the node out before it stops it, and the words move
+    // once it has, so the wait reads both (as the sidecar-exit row does)
+    item79_until(
+        "the refusal never took the node down",
+        Duration::from_secs(10),
+        || !mesh.node_present() && matches!(mesh.health().state, UnitState::Degraded),
+    )
+    .await;
+    assert_eq!(mesh.link_facts().failure, Some("logging_required"));
+    let health = mesh.health();
+    assert!(
+        health
+            .detail
+            .as_deref()
+            .unwrap_or("")
+            .contains("client logs"),
+        "{health:?}"
+    );
+    daemon.shutdown().await;
+}
+
+/// T11 — Tailnet Lock: a node that starts unsigned is UP and held (read at its
+/// install as well as heard), and is trusted once a signing device signs it.
+/// The floor reads the embedded Tailscale client at the install too.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn tailnet_lock_holds_the_node_until_it_is_signed() {
+    use field_native::contracts::{MeshMode, UnitState};
+    use std::time::Duration;
+    let dir = tempfile::tempdir().unwrap();
+    // the signature waits for the row's word, so the held state is read first
+    let signed = dir.path().join("signed");
+    let start = format!(
+        r#"      printf '%s\n' '{{"event":"tsnet:lockStatus","data":{{"enabled":true,"signed":false}}}}'
+      {V11_STARTED}
+      ( while [ ! -f '{flag}' ]; do sleep 0.1; done; printf '%s\n' '{{"event":"tsnet:lockStatus","data":{{"enabled":true,"signed":true}}}}' ) &"#,
+        flag = signed.display()
+    );
+    let config = NativeConfig {
+        sidecar_override: Some(ts1_stub(dir.path(), &start)),
+        ..NativeConfig::for_data_dir(dir.path().to_path_buf())
+    };
+    let daemon = bootstrap(config).await.unwrap();
+    let mesh = &daemon.state.mesh;
+    mesh.start(MeshMode::Linked, Some("james@github".into()))
+        .await
+        .unwrap();
+    drop(await_node(mesh).await);
+    // up and held: the hold was heard before the install, and the install's
+    // words say it
+    let locked = |held: bool| {
+        let health = mesh.health();
+        mesh.link_facts().needs_signature == held
+            && matches!(health.state, UnitState::Up)
+            && health.detail.as_deref().unwrap_or("").contains("locked") == held
+    };
+    item79_until(
+        "Tailnet Lock's hold never reached the unit",
+        Duration::from_secs(10),
+        || locked(true),
+    )
+    .await;
+    assert_eq!(
+        mesh.link_facts().tailscale_version.as_deref(),
+        Some("1.104.1")
+    );
+    std::fs::write(&signed, b"").unwrap();
+    item79_until(
+        "the signature never released the node",
+        Duration::from_secs(10),
+        || locked(false),
+    )
+    .await;
+    daemon.shutdown().await;
+}
+
+/// TS-D14 — Disconnect signs the device out of its tailnet before the identity
+/// is archived: the logout reaches the sidecar, retire says so, and no sidecar
+/// outlives it (item 79's class).
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn retire_signs_the_device_out_first() {
+    use field_native::contracts::MeshMode;
+    use std::time::Duration;
+    let dir = tempfile::tempdir().unwrap();
+    let log = dir.path().join("commands.log");
+    let config = NativeConfig {
+        sidecar_override: Some(v11_stub(dir.path(), &log, LOGGED_OUT)),
+        ..NativeConfig::for_data_dir(dir.path().to_path_buf())
+    };
+    let daemon = bootstrap(config).await.unwrap();
+    let mesh = &daemon.state.mesh;
+    mesh.start(MeshMode::Linked, Some("james@github".into()))
+        .await
+        .unwrap();
+    let pid = await_node(mesh)
+        .await
+        .sidecar_pid()
+        .expect("the node's sidecar pid");
+    let retired = mesh.retire().await;
+    assert!(retired.signed_out, "the logout was answered");
+    let commands = std::fs::read_to_string(&log).unwrap();
+    assert!(commands.contains(r#""tsnet:logout""#), "{commands}");
+    assert!(mesh.node().is_none());
+    item79_until(
+        "the sidecar outlived the retire",
+        Duration::from_secs(10),
+        || !item79_alive(pid),
+    )
+    .await;
+    daemon.shutdown().await;
+}
+
+/// TS-D14 — a logout the control server never takes (the device is offline) is
+/// bounded by truffle (`LOGOUT_TIMEOUT`, 12 s): retire still ends the node,
+/// inside the 20 s fieldd gives it, and says the device was NOT signed out, so
+/// the admin console keeps it.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn an_offline_retire_is_bounded_and_says_the_console_keeps_the_device() {
+    use field_native::contracts::MeshMode;
+    use std::time::{Duration, Instant};
+    let dir = tempfile::tempdir().unwrap();
+    let log = dir.path().join("commands.log");
+    let config = NativeConfig {
+        sidecar_override: Some(v11_stub(dir.path(), &log, "")),
+        ..NativeConfig::for_data_dir(dir.path().to_path_buf())
+    };
+    let daemon = bootstrap(config).await.unwrap();
+    let mesh = &daemon.state.mesh;
+    mesh.start(MeshMode::Linked, Some("james@github".into()))
+        .await
+        .unwrap();
+    let pid = await_node(mesh)
+        .await
+        .sidecar_pid()
+        .expect("the node's sidecar pid");
+    let began = Instant::now();
+    let retired = tokio::time::timeout(Duration::from_secs(20), mesh.retire())
+        .await
+        .expect("retire answers inside fieldd's 20 s deadline");
+    assert!(!retired.signed_out, "no answer is no sign-out");
+    assert!(began.elapsed() >= Duration::from_secs(10), "truffle waited");
+    assert!(mesh.node().is_none());
+    item79_until(
+        "the sidecar outlived the retire",
+        Duration::from_secs(10),
+        || !item79_alive(pid),
+    )
+    .await;
     daemon.shutdown().await;
 }

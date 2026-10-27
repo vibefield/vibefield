@@ -287,6 +287,11 @@ fn mgmt_mesh_fixtures() {
     roundtrip::<MeshNotUpDetails>("mesh-not-up-details.signing-in.json", true);
     roundtrip::<MeshNotUpDetails>("mesh-not-up-details.approval.json", true);
     roundtrip::<MeshNotUpDetails>("mesh-not-up-details.sidecar-missing.json", true);
+    // T11 and TS-D15/D16 (track TS) — a node Tailnet Lock holds, with the
+    // client it embeds and the log upload it was built with; and a node a
+    // tailnet that requires client logs keeps down.
+    roundtrip::<MeshSelfIdentity>("mesh-self-identity.locked.json", true);
+    roundtrip::<MeshNotUpDetails>("mesh-not-up-details.logs-required.json", true);
 }
 
 #[test]

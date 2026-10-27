@@ -199,12 +199,6 @@ pub struct NativeConfig {
     /// could outlast into a dead end (gap 12). A test sets a short one to prove
     /// the value reaches the builder.
     pub mesh_start_timeout: Option<std::time::Duration>,
-    /// TS-1 — how often the floor reads an installed node's backend state for a
-    /// fall to NeedsLogin (an expired key, a device removed in the console).
-    /// truffle raises no event for it (petition TF-c) and its sidecar refreshes
-    /// the value once a minute, so 15 s bounds the lag without reading for
-    /// nothing. A test shortens it.
-    pub mesh_state_tick: std::time::Duration,
     /// TS-1 TEST SEAM — see [`MeshProbeIdentity`]. `None` in every constructor;
     /// nothing in the product sets it.
     #[doc(hidden)]
@@ -224,9 +218,6 @@ pub struct MeshProbeIdentity {
     /// a name that says it is a probe
     pub device_name: String,
 }
-
-/// TS-1 — [`NativeConfig::mesh_state_tick`]'s product value.
-pub const MESH_STATE_TICK: std::time::Duration = std::time::Duration::from_secs(15);
 
 /// A binary cargo and the packaged app place beside this executable. Sibling first (the
 /// packaged and `cargo run` layout), then one level up: an EMBEDDED test's current_exe lives in
@@ -293,7 +284,6 @@ impl NativeConfig {
             orphan_idle_override,
             allowed_origins,
             mesh_start_timeout: None,
-            mesh_state_tick: MESH_STATE_TICK,
             mesh_probe: None,
         })
     }
@@ -315,7 +305,6 @@ impl NativeConfig {
             orphan_idle_override: None,
             allowed_origins: Vec::new(),
             mesh_start_timeout: None,
-            mesh_state_tick: MESH_STATE_TICK,
             mesh_probe: None,
         }
     }
@@ -336,7 +325,6 @@ impl NativeConfig {
             orphan_idle_override: None,
             allowed_origins: Vec::new(),
             mesh_start_timeout: None,
-            mesh_state_tick: MESH_STATE_TICK,
             mesh_probe: None,
         }
     }

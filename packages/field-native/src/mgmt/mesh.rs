@@ -13,7 +13,7 @@ use crate::contracts::{MeshFailure, MeshMode, MeshNotUpDetails, MeshStartParams}
 use crate::registries::{mesh_control_limits, stores};
 use crate::services::mesh::{
     AuthKey, JsonStore, LinkFacts, MeshNode, StartOptions, FAILURE_BRING_UP,
-    FAILURE_SIDECAR_EXITED, FAILURE_SIDECAR_MISSING,
+    FAILURE_LOGGING_REQUIRED, FAILURE_SIDECAR_EXITED, FAILURE_SIDECAR_MISSING,
 };
 use crate::services::mesh_bridge::{Lane, LaneClass, LaneEvent, INBOUND_LANE_ID_BASE};
 use crate::state::{DaemonState, MgmtOutbox, OutMsg};
@@ -148,6 +148,7 @@ pub async fn handle(
                 &login_allow,
                 state.mesh.mode(),
                 &state.mesh.link_facts(),
+                state.mesh.client_log_upload(),
             )
             .await,
         ),
@@ -538,11 +539,15 @@ fn spawn_lane_forwarder(
 /// expiry (or that expiry is disabled), the console, and a sign-out the node
 /// fell to (an expired key, a removal), read live from the node where it can
 /// answer and from the unit's [`LinkFacts`] where only the floor knows.
+///
+/// T11 — and Tailnet Lock's hold on it and the Tailscale client it embeds;
+/// TS-D15/D16 — and whether it sends Tailscale its client logs.
 async fn self_identity(
     node: &Arc<MeshNode>,
     login_allow: &[String],
     mode: Option<MeshMode>,
     facts: &LinkFacts,
+    client_log_upload: bool,
 ) -> Value {
     let info = node.local_info();
     let mut out = json!({ "deviceId": info.device_id, "loginAllow": login_allow });
@@ -565,6 +570,15 @@ async fn self_identity(
         out["adminUrl"] = json!(url);
     }
     out["needsLogin"] = json!(facts.needs_login);
+    out["needsSignature"] = json!(facts.needs_signature);
+    if let Some(version) = node
+        .tailscale_version()
+        .map(|v| v.version)
+        .or_else(|| facts.tailscale_version.clone())
+    {
+        out["tailscaleVersion"] = json!(version);
+    }
+    out["clientLogUpload"] = json!(client_log_upload);
     if !info.device_name.is_empty() {
         out["deviceName"] = json!(info.device_name);
     }
@@ -606,7 +620,9 @@ async fn mesh_start(state: &Arc<DaemonState>, params: &Value, id: Option<Value>)
                 id,
                 "PRECONDITION_FAILED",
                 -32005,
-                &format!("mesh.start expects {{mode, login?, authKey?, renew?}}: {e}"),
+                &format!(
+                    "mesh.start expects {{mode, login?, authKey?, renew?, clientLogUpload?}}: {e}"
+                ),
                 false,
                 None,
             )
@@ -664,6 +680,8 @@ async fn mesh_start(state: &Arc<DaemonState>, params: &Value, id: Option<Value>)
     let options = StartOptions {
         auth_key: parsed.auth_key.map(|key| AuthKey::new(String::from(key))),
         renew,
+        // TS-D15/D16 — none unless the person opted in (absent = false)
+        client_log_upload: parsed.client_log_upload.unwrap_or(false),
     };
     match state.mesh.start_with(parsed.mode, login, options).await {
         Ok(started) => ok(
@@ -681,13 +699,22 @@ async fn mesh_start(state: &Arc<DaemonState>, params: &Value, id: Option<Value>)
     }
 }
 
-/// UA-3 unlink, mgmt half: lifecycle through the handle (drop node, kill/// UA-3 unlink, mgmt half: lifecycle through the handle (drop node, kill
+/// UA-3 unlink, mgmt half: lifecycle through the handle (drop node, kill
 /// sidecar, mark retired), then archive the state dir beside itself. The
 /// sidecar's death is asynchronous (kill_on_drop), so the rename retries a
 /// few beats before reporting an honest INTERNAL.
+///
+/// TS-D14 — the handle signs the device out of its tailnet first, and the
+/// answer says whether Tailscale took it (`signedOut`). That logout is bounded
+/// at 12 s, so fieldd asks this with a longer deadline than its default.
 async fn retire_identity(state: &Arc<DaemonState>, id: Option<Value>) -> Value {
-    let Some(dir) = state.mesh.retire().await else {
-        return ok(id, json!({ "retired": false, "archivedTo": Value::Null }));
+    let retired = state.mesh.retire().await;
+    let signed_out = retired.signed_out;
+    let Some(dir) = retired.state_dir else {
+        return ok(
+            id,
+            json!({ "retired": false, "archivedTo": Value::Null, "signedOut": signed_out }),
+        );
     };
     let secs = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -705,7 +732,11 @@ async fn retire_identity(state: &Arc<DaemonState>, id: Option<Value>) -> Value {
     match result {
         Ok(()) => ok(
             id,
-            json!({ "retired": true, "archivedTo": target.display().to_string() }),
+            json!({
+                "retired": true,
+                "archivedTo": target.display().to_string(),
+                "signedOut": signed_out,
+            }),
         ),
         Err(e) => err(
             id,
@@ -763,6 +794,7 @@ fn mesh_failure(word: &str) -> Option<MeshFailure> {
         FAILURE_SIDECAR_MISSING => Some(MeshFailure::SidecarMissing),
         FAILURE_BRING_UP => Some(MeshFailure::BringUpFailed),
         FAILURE_SIDECAR_EXITED => Some(MeshFailure::SidecarExited),
+        FAILURE_LOGGING_REQUIRED => Some(MeshFailure::LoggingRequired),
         _ => None,
     }
 }

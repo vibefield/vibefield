@@ -6519,7 +6519,8 @@ impl<'de> ::serde::Deserialize<'de> for MeshEgressTarget {
 #[doc = "  \"enum\": ["]
 #[doc = "    \"sidecar_missing\","]
 #[doc = "    \"bring_up_failed\","]
-#[doc = "    \"sidecar_exited\""]
+#[doc = "    \"sidecar_exited\","]
+#[doc = "    \"logging_required\""]
 #[doc = "  ]"]
 #[doc = "}"]
 #[doc = r" ```"]
@@ -6543,6 +6544,8 @@ pub enum MeshFailure {
     BringUpFailed,
     #[serde(rename = "sidecar_exited")]
     SidecarExited,
+    #[serde(rename = "logging_required")]
+    LoggingRequired,
 }
 impl ::std::fmt::Display for MeshFailure {
     fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
@@ -6550,6 +6553,7 @@ impl ::std::fmt::Display for MeshFailure {
             Self::SidecarMissing => f.write_str("sidecar_missing"),
             Self::BringUpFailed => f.write_str("bring_up_failed"),
             Self::SidecarExited => f.write_str("sidecar_exited"),
+            Self::LoggingRequired => f.write_str("logging_required"),
         }
     }
 }
@@ -6560,6 +6564,7 @@ impl ::std::str::FromStr for MeshFailure {
             "sidecar_missing" => Ok(Self::SidecarMissing),
             "bring_up_failed" => Ok(Self::BringUpFailed),
             "sidecar_exited" => Ok(Self::SidecarExited),
+            "logging_required" => Ok(Self::LoggingRequired),
             _ => Err("invalid value".into()),
         }
     }
@@ -7113,6 +7118,9 @@ impl MeshNotUpDetails {
 #[doc = "    },"]
 #[doc = "    \"retired\": {"]
 #[doc = "      \"type\": \"boolean\""]
+#[doc = "    },"]
+#[doc = "    \"signedOut\": {"]
+#[doc = "      \"type\": \"boolean\""]
 #[doc = "    }"]
 #[doc = "  },"]
 #[doc = "  \"additionalProperties\": true"]
@@ -7124,6 +7132,12 @@ pub struct MeshRetireResult {
     #[serde(rename = "archivedTo")]
     pub archived_to: ::std::option::Option<::std::string::String>,
     pub retired: bool,
+    #[serde(
+        rename = "signedOut",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub signed_out: ::std::option::Option<bool>,
 }
 impl MeshRetireResult {
     pub fn builder() -> builder::MeshRetireResult {
@@ -7144,6 +7158,9 @@ impl MeshRetireResult {
 #[doc = "  \"properties\": {"]
 #[doc = "    \"adminUrl\": {"]
 #[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"clientLogUpload\": {"]
+#[doc = "      \"type\": \"boolean\""]
 #[doc = "    },"]
 #[doc = "    \"deviceId\": {"]
 #[doc = "      \"type\": \"string\""]
@@ -7181,7 +7198,13 @@ impl MeshRetireResult {
 #[doc = "    \"needsLogin\": {"]
 #[doc = "      \"type\": \"boolean\""]
 #[doc = "    },"]
+#[doc = "    \"needsSignature\": {"]
+#[doc = "      \"type\": \"boolean\""]
+#[doc = "    },"]
 #[doc = "    \"tailscaleId\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"tailscaleVersion\": {"]
 #[doc = "      \"type\": \"string\""]
 #[doc = "    }"]
 #[doc = "  },"]
@@ -7197,6 +7220,12 @@ pub struct MeshSelfIdentity {
         skip_serializing_if = "::std::option::Option::is_none"
     )]
     pub admin_url: ::std::option::Option<::std::string::String>,
+    #[serde(
+        rename = "clientLogUpload",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub client_log_upload: ::std::option::Option<bool>,
     #[serde(rename = "deviceId")]
     pub device_id: ::std::string::String,
     #[serde(
@@ -7244,11 +7273,23 @@ pub struct MeshSelfIdentity {
     )]
     pub needs_login: ::std::option::Option<bool>,
     #[serde(
+        rename = "needsSignature",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub needs_signature: ::std::option::Option<bool>,
+    #[serde(
         rename = "tailscaleId",
         default,
         skip_serializing_if = "::std::option::Option::is_none"
     )]
     pub tailscale_id: ::std::option::Option<::std::string::String>,
+    #[serde(
+        rename = "tailscaleVersion",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub tailscale_version: ::std::option::Option<::std::string::String>,
 }
 impl MeshSelfIdentity {
     pub fn builder() -> builder::MeshSelfIdentity {
@@ -7269,6 +7310,9 @@ impl MeshSelfIdentity {
 #[doc = "    \"authKey\": {"]
 #[doc = "      \"type\": \"string\","]
 #[doc = "      \"minLength\": 1"]
+#[doc = "    },"]
+#[doc = "    \"clientLogUpload\": {"]
+#[doc = "      \"type\": \"boolean\""]
 #[doc = "    },"]
 #[doc = "    \"login\": {"]
 #[doc = "      \"type\": \"string\","]
@@ -7293,6 +7337,12 @@ pub struct MeshStartParams {
         skip_serializing_if = "::std::option::Option::is_none"
     )]
     pub auth_key: ::std::option::Option<MeshStartParamsAuthKey>,
+    #[serde(
+        rename = "clientLogUpload",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub client_log_upload: ::std::option::Option<bool>,
     #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
     pub login: ::std::option::Option<MeshStartParamsLogin>,
     pub mode: MeshMode,
@@ -15137,12 +15187,14 @@ pub mod builder {
             ::std::string::String,
         >,
         retired: ::std::result::Result<bool, ::std::string::String>,
+        signed_out: ::std::result::Result<::std::option::Option<bool>, ::std::string::String>,
     }
     impl ::std::default::Default for MeshRetireResult {
         fn default() -> Self {
             Self {
                 archived_to: Err("no value supplied for archived_to".to_string()),
                 retired: Err("no value supplied for retired".to_string()),
+                signed_out: Ok(Default::default()),
             }
         }
     }
@@ -15167,6 +15219,16 @@ pub mod builder {
                 .map_err(|e| format!("error converting supplied value for retired: {e}"));
             self
         }
+        pub fn signed_out<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<bool>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.signed_out = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for signed_out: {e}"));
+            self
+        }
     }
     impl ::std::convert::TryFrom<MeshRetireResult> for super::MeshRetireResult {
         type Error = super::error::ConversionError;
@@ -15176,6 +15238,7 @@ pub mod builder {
             Ok(Self {
                 archived_to: value.archived_to?,
                 retired: value.retired?,
+                signed_out: value.signed_out?,
             })
         }
     }
@@ -15184,6 +15247,7 @@ pub mod builder {
             Self {
                 archived_to: Ok(value.archived_to),
                 retired: Ok(value.retired),
+                signed_out: Ok(value.signed_out),
             }
         }
     }
@@ -15193,6 +15257,8 @@ pub mod builder {
             ::std::option::Option<::std::string::String>,
             ::std::string::String,
         >,
+        client_log_upload:
+            ::std::result::Result<::std::option::Option<bool>, ::std::string::String>,
         device_id: ::std::result::Result<::std::string::String, ::std::string::String>,
         device_name: ::std::result::Result<
             ::std::option::Option<::std::string::String>,
@@ -15221,7 +15287,12 @@ pub mod builder {
         >,
         mode: ::std::result::Result<::std::option::Option<super::MeshMode>, ::std::string::String>,
         needs_login: ::std::result::Result<::std::option::Option<bool>, ::std::string::String>,
+        needs_signature: ::std::result::Result<::std::option::Option<bool>, ::std::string::String>,
         tailscale_id: ::std::result::Result<
+            ::std::option::Option<::std::string::String>,
+            ::std::string::String,
+        >,
+        tailscale_version: ::std::result::Result<
             ::std::option::Option<::std::string::String>,
             ::std::string::String,
         >,
@@ -15230,6 +15301,7 @@ pub mod builder {
         fn default() -> Self {
             Self {
                 admin_url: Ok(Default::default()),
+                client_log_upload: Ok(Default::default()),
                 device_id: Err("no value supplied for device_id".to_string()),
                 device_name: Ok(Default::default()),
                 dns_name: Ok(Default::default()),
@@ -15241,7 +15313,9 @@ pub mod builder {
                 machine_name: Ok(Default::default()),
                 mode: Ok(Default::default()),
                 needs_login: Ok(Default::default()),
+                needs_signature: Ok(Default::default()),
                 tailscale_id: Ok(Default::default()),
+                tailscale_version: Ok(Default::default()),
             }
         }
     }
@@ -15254,6 +15328,16 @@ pub mod builder {
             self.admin_url = value
                 .try_into()
                 .map_err(|e| format!("error converting supplied value for admin_url: {e}"));
+            self
+        }
+        pub fn client_log_upload<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<bool>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.client_log_upload = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for client_log_upload: {e}"));
             self
         }
         pub fn device_id<T>(mut self, value: T) -> Self
@@ -15366,6 +15450,16 @@ pub mod builder {
                 .map_err(|e| format!("error converting supplied value for needs_login: {e}"));
             self
         }
+        pub fn needs_signature<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<bool>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.needs_signature = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for needs_signature: {e}"));
+            self
+        }
         pub fn tailscale_id<T>(mut self, value: T) -> Self
         where
             T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
@@ -15376,6 +15470,16 @@ pub mod builder {
                 .map_err(|e| format!("error converting supplied value for tailscale_id: {e}"));
             self
         }
+        pub fn tailscale_version<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.tailscale_version = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for tailscale_version: {e}"));
+            self
+        }
     }
     impl ::std::convert::TryFrom<MeshSelfIdentity> for super::MeshSelfIdentity {
         type Error = super::error::ConversionError;
@@ -15384,6 +15488,7 @@ pub mod builder {
         ) -> ::std::result::Result<Self, super::error::ConversionError> {
             Ok(Self {
                 admin_url: value.admin_url?,
+                client_log_upload: value.client_log_upload?,
                 device_id: value.device_id?,
                 device_name: value.device_name?,
                 dns_name: value.dns_name?,
@@ -15395,7 +15500,9 @@ pub mod builder {
                 machine_name: value.machine_name?,
                 mode: value.mode?,
                 needs_login: value.needs_login?,
+                needs_signature: value.needs_signature?,
                 tailscale_id: value.tailscale_id?,
+                tailscale_version: value.tailscale_version?,
             })
         }
     }
@@ -15403,6 +15510,7 @@ pub mod builder {
         fn from(value: super::MeshSelfIdentity) -> Self {
             Self {
                 admin_url: Ok(value.admin_url),
+                client_log_upload: Ok(value.client_log_upload),
                 device_id: Ok(value.device_id),
                 device_name: Ok(value.device_name),
                 dns_name: Ok(value.dns_name),
@@ -15414,7 +15522,9 @@ pub mod builder {
                 machine_name: Ok(value.machine_name),
                 mode: Ok(value.mode),
                 needs_login: Ok(value.needs_login),
+                needs_signature: Ok(value.needs_signature),
                 tailscale_id: Ok(value.tailscale_id),
+                tailscale_version: Ok(value.tailscale_version),
             }
         }
     }
@@ -15424,6 +15534,8 @@ pub mod builder {
             ::std::option::Option<super::MeshStartParamsAuthKey>,
             ::std::string::String,
         >,
+        client_log_upload:
+            ::std::result::Result<::std::option::Option<bool>, ::std::string::String>,
         login: ::std::result::Result<
             ::std::option::Option<super::MeshStartParamsLogin>,
             ::std::string::String,
@@ -15435,6 +15547,7 @@ pub mod builder {
         fn default() -> Self {
             Self {
                 auth_key: Ok(Default::default()),
+                client_log_upload: Ok(Default::default()),
                 login: Ok(Default::default()),
                 mode: Err("no value supplied for mode".to_string()),
                 renew: Ok(Default::default()),
@@ -15450,6 +15563,16 @@ pub mod builder {
             self.auth_key = value
                 .try_into()
                 .map_err(|e| format!("error converting supplied value for auth_key: {e}"));
+            self
+        }
+        pub fn client_log_upload<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<bool>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.client_log_upload = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for client_log_upload: {e}"));
             self
         }
         pub fn login<T>(mut self, value: T) -> Self
@@ -15490,6 +15613,7 @@ pub mod builder {
         ) -> ::std::result::Result<Self, super::error::ConversionError> {
             Ok(Self {
                 auth_key: value.auth_key?,
+                client_log_upload: value.client_log_upload?,
                 login: value.login?,
                 mode: value.mode?,
                 renew: value.renew?,
@@ -15500,6 +15624,7 @@ pub mod builder {
         fn from(value: super::MeshStartParams) -> Self {
             Self {
                 auth_key: Ok(value.auth_key),
+                client_log_upload: Ok(value.client_log_upload),
                 login: Ok(value.login),
                 mode: Ok(value.mode),
                 renew: Ok(value.renew),

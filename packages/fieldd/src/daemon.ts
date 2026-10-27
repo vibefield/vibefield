@@ -172,6 +172,7 @@ import {
   TerminalSessionParams,
   TerminalTakeGeometryParams,
   UserLinkBeginParams,
+  UserLinkLogsParams,
   WorkspaceFileActionParams,
 } from "@vibefield/contracts";
 import type { AuditHealthV1 } from "@vibefield/contracts/diagnostics";
@@ -5430,21 +5431,28 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       if (!parsed.success) {
         throw new RpcCallError(
           "PRECONDITION_FAILED",
-          "user.link.begin takes {authKey?}: an auth key is a non-empty string",
+          "user.link.begin takes {authKey?, sendLogs?}: an auth key is a non-empty string",
           false,
         );
       }
       const authKey = parsed.data.authKey;
+      // TS-D16 — a capture begun again with "Send logs on this network"
+      const sendLogs = parsed.data.sendLogs === true;
       return audit.requiredSystem(
         {
           action: "user.link.begin",
           target: { kind: "mesh", id: "tailnet-link" },
         },
-        () => links.begin(authKey !== undefined ? { authKey } : {}),
+        () =>
+          links.begin({
+            ...(authKey !== undefined ? { authKey } : {}),
+            ...(sendLogs ? { sendLogs } : {}),
+          }),
         (result) => ({
           attrs: {
             linkState: result.linkState,
             signIn: authKey !== undefined ? "auth_key" : "browser",
+            sendLogs,
           },
         }),
       );
@@ -5473,6 +5481,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         (result) => ({ attrs: { linkState: result.linkState } }),
       );
     });
+    // TS-D14 — the device is signed out of its tailnet before the identity is
+    // archived; the audit says whether Tailscale took the sign-out.
     api.register("user.link.unlink", async (ctx) => {
       requireDesktopCaller(ctx);
       return audit.requiredSystem(
@@ -5481,7 +5491,30 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           target: { kind: "mesh", id: "tailnet-link" },
         },
         () => links.unlink(),
-        (result) => ({ attrs: { retired: result.retired } }),
+        (result) => ({ attrs: { retired: result.retired, signedOut: result.signedOut === true } }),
+      );
+    });
+    // TS-D16 (ruled A) — "Send logs on this network" for the standing link, on
+    // or off. Audited: it changes what this desktop tells Tailscale, whose
+    // default here is nothing (TS-D15).
+    api.register("user.link.logs", async (ctx, params) => {
+      requireDesktopCaller(ctx);
+      const parsed = UserLinkLogsParams.safeParse(params);
+      if (!parsed.success) {
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "user.link.logs takes {send: boolean}",
+          false,
+        );
+      }
+      const { send } = parsed.data;
+      return audit.requiredSystem(
+        {
+          action: "user.link.logs",
+          target: { kind: "mesh", id: "tailnet-link" },
+        },
+        () => links.logs(send),
+        (result) => ({ attrs: { send, linkState: result.linkState } }),
       );
     });
     // TS-3b (P9, TS-D17 A) — the person's own name for THIS device, or null

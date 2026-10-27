@@ -1265,6 +1265,17 @@ export const METHODS: MethodDef[] = [
     idempotent: false,
     locality: "local",
   }),
+  // TS-D16 (ruled A) — "Send logs on this network", on or off, for the standing
+  // link: kept in link.json and audited, and the node is built again with it.
+  // Declarative (the same answer twice changes nothing), but never replayed
+  // blind: it rebuilds a node.
+  defineMethod({
+    surface: "product",
+    method: "user.link.logs",
+    scope: "settings.manage",
+    idempotent: false,
+    locality: "local",
+  }),
   // D29′ app-section preferences. Unlike plugin settings these are an exact,
   // trusted desktop surface; plugins, tailnet callers, and agents never receive
   // settings.manage.

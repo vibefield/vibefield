@@ -1404,7 +1404,10 @@ async fn a_request_past_its_deadline_is_answered_timeout_and_never_run() {
 // ---- TS-1 (track TS): the sign-in facts on the wire, and the extras' modes ----
 
 /// TS-1 — a stand-in sidecar answering `tsnet:start` with `start` (the
-/// mesh_unit rows' pattern, minimal: this binary drives no lanes).
+/// mesh_unit rows' pattern, minimal: this binary drives no lanes). It answers
+/// `tsnet:version` at protocol 11 as mesh_unit's stand-ins do: the floor's node
+/// sends no client logs unless asked (TS-D15), so truffle asks a sidecar its
+/// protocol before anything starts, and refuses one before 11.
 #[cfg(unix)]
 fn ts1_wire_stub(dir: &std::path::Path, start: &str) -> std::path::PathBuf {
     use std::os::unix::fs::PermissionsExt;
@@ -1412,6 +1415,10 @@ fn ts1_wire_stub(dir: &std::path::Path, start: &str) -> std::path::PathBuf {
     let script = r#"#!/bin/sh
 while IFS= read -r line; do
   case "$line" in
+    *'"tsnet:version"'*)
+      rid=$(printf '%s' "$line" | sed -n 's/.*"requestId":"\([^"]*\)".*/\1/p')
+      printf '%s\n' "{\"event\":\"tsnet:versionResult\",\"data\":{\"requestId\":\"$rid\",\"protocolVersion\":11,\"tailscaleVersion\":\"1.104.1\",\"tailscaleVersionLong\":\"1.104.1-stub\"}}"
+      ;;
     *'"tsnet:start"'*)
 START_BLOCK
       ;;
@@ -1582,5 +1589,9 @@ async fn the_self_answer_carries_the_sign_in_facts() {
         Some("https://login.tailscale.com/admin/machines")
     );
     assert_eq!(identity.needs_login, Some(false));
+    // TS-8a — on the wire, the node was built sending no client logs (TS-D15),
+    // and Tailnet Lock holds nothing here (T11)
+    assert_eq!(identity.client_log_upload, Some(false));
+    assert_eq!(identity.needs_signature, Some(false));
     daemon.shutdown().await;
 }

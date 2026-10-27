@@ -365,12 +365,12 @@ describe("UA-P-0a — the mesh posture", () => {
 // `setTimeout` is faked, so the boot's `schedule(0)` fires only when a row says
 // so, and a real `setImmediate` drains a probe a timer started.
 
-const linkedRoot = () => {
+const linkedRoot = (link: Record<string, unknown> = {}) => {
   const root = mkRoot();
   mkdirSync(join(root, "fieldd"), { recursive: true });
   writeFileSync(
     linkPath(root),
-    JSON.stringify({ login: "james@github", linkedAt: "2026-01-01T00:00:00.000Z" }),
+    JSON.stringify({ login: "james@github", linkedAt: "2026-01-01T00:00:00.000Z", ...link }),
   );
   return root;
 };
@@ -1088,5 +1088,227 @@ describe("TS-1 — no dead ends", () => {
     await svc.begin();
     expect(svc.status()).toMatchObject({ linkState: "capturing", failure: "sidecar_missing" });
     svc.stop();
+  });
+});
+
+// ---- TS-D14/D15/D16 and T11 (track TS): truffle 0.7.24's surface ----
+//
+// The node sends Tailscale no client logs unless the person said to (D15); a
+// tailnet that requires them keeps it down, a named state with its act (D16);
+// Disconnect signs out first (D14); Tailnet Lock and the embedded client reach
+// the status (T11). Each row drives the service against the floor's answers.
+
+const storedLink = (root: string) => JSON.parse(readFileSync(linkPath(root), "utf8"));
+
+describe("TS-D14/D15/D16 and T11 — on truffle 0.7.24's surface", () => {
+  it("a capture the tailnet refuses for sending no logs is logs_required, and begins again with Send logs on this network", async () => {
+    let sending = false;
+    const root = mkRoot();
+    const { svc, params } = build(root, (method) => {
+      if (method === "native.mesh.start")
+        return Promise.resolve({ mode: "capture", started: true });
+      if (method === "native.mesh.stop") return Promise.resolve({ stopped: true });
+      return sending
+        ? Promise.resolve({ deviceId: "01DEVICE", login: "james@github", loginAllow: [] })
+        : notUpWith({ state: "degraded", mode: "capture", failure: "logging_required" });
+    });
+    await svc.begin();
+    expect(svc.status()).toMatchObject({
+      linkState: "logs_required",
+      meshEnabled: true,
+      link: null,
+      failure: "logging_required",
+      sendLogs: false,
+    });
+    // VibeField's default (D15): the first ask sent no opt-in
+    expect(starts(params)[0]?.params).toEqual({ mode: "capture" });
+
+    sending = true;
+    await svc.begin({ sendLogs: true });
+    expect(starts(params)[1]?.params).toEqual({ mode: "capture", clientLogUpload: true });
+    expect(svc.status()).toMatchObject({ linkState: "linked", sendLogs: true });
+    // capture keeps the opt-in in the new link.json, and the promotion asks with it
+    expect(storedLink(root)).toMatchObject({ login: "james@github", sendLogs: true });
+    expect(starts(params).at(-1)?.params).toEqual({
+      mode: "linked",
+      login: "james@github",
+      clientLogUpload: true,
+    });
+    svc.stop();
+  });
+
+  it("a capture refused for its logs can be cancelled, and the desktop is offline again", async () => {
+    const { svc, calls } = build(mkRoot(), (method) => {
+      if (method === "native.mesh.start")
+        return Promise.resolve({ mode: "capture", started: true });
+      if (method === "native.mesh.stop") return Promise.resolve({ stopped: true });
+      return notUpWith({ state: "degraded", mode: "capture", failure: "logging_required" });
+    });
+    await svc.begin();
+    expect(svc.status().linkState).toBe("logs_required");
+    await svc.cancel();
+    expect(calls).toContain("native.mesh.stop");
+    expect(svc.status()).toMatchObject({ linkState: "offline", meshEnabled: false });
+    svc.stop();
+  });
+
+  it("a standing link the tailnet keeps down for its logs is logs_required; Send logs on this network keeps it in link.json and builds the node again", async () => {
+    let sending = false;
+    const root = linkedRoot();
+    const { svc, params } = build(root, (method) => {
+      if (method === "native.mesh.start") return Promise.resolve({ mode: "linked", started: true });
+      return sending
+        ? Promise.resolve({
+            deviceId: "01DEVICE",
+            login: "james@github",
+            loginAllow: ["james@github"],
+            clientLogUpload: true,
+          })
+        : notUpWith({ state: "degraded", mode: "linked", failure: "logging_required" });
+    });
+    svc.start();
+    await drain();
+    await probe(svc);
+    expect(svc.status()).toMatchObject({ linkState: "logs_required", meshEnabled: true });
+    // a standing link is not linked again: its act is Send logs on this network
+    await expect(svc.begin()).rejects.toThrow(/requires device logs/);
+
+    sending = true;
+    await svc.logs(true);
+    expect(storedLink(root)).toMatchObject({ login: "james@github", sendLogs: true });
+    expect(starts(params).at(-1)?.params).toEqual({
+      mode: "linked",
+      login: "james@github",
+      clientLogUpload: true,
+    });
+    expect(svc.status()).toMatchObject({ linkState: "linked", sendLogs: true });
+
+    // the same answer twice changes nothing
+    const asked = starts(params).length;
+    await svc.logs(true);
+    expect(starts(params)).toHaveLength(asked);
+
+    // and off again: the node is built again sending none
+    await svc.logs(false);
+    expect(storedLink(root).sendLogs).toBe(false);
+    expect(starts(params).at(-1)?.params).toEqual({ mode: "linked", login: "james@github" });
+    expect(svc.status().sendLogs).toBe(false);
+    svc.stop();
+  });
+
+  it("Send logs on this network needs a link that stands", async () => {
+    const { svc } = build(mkRoot(), floorWithLogin());
+    await expect(svc.logs(true)).rejects.toThrow(/no tailscale link/);
+  });
+
+  it("a link's opt-in survives fieldd's restart: the boot asks for the node with it", async () => {
+    const root = linkedRoot({ sendLogs: true });
+    const { svc, params } = build(root, floorWithLogin());
+    svc.start();
+    await Promise.resolve(); // the declare is fire-and-forget off start()
+    expect(params[0]).toEqual({
+      method: "native.mesh.start",
+      params: { mode: "linked", login: "james@github", clientLogUpload: true },
+    });
+    expect(svc.status().sendLogs).toBe(true);
+    svc.stop();
+  });
+
+  it("Tailnet Lock's hold and the embedded client reach the status, and the hold goes with the node", async () => {
+    let answer: () => Promise<unknown> = () =>
+      Promise.resolve({
+        deviceId: "01DEVICE",
+        login: "james@github",
+        loginAllow: ["james@github"],
+        needsSignature: true,
+        tailscaleVersion: "1.104.1",
+      });
+    const { svc } = build(linkedRoot(), (method) =>
+      method === "native.mesh.start"
+        ? Promise.resolve({ mode: "linked", started: true })
+        : answer(),
+    );
+    svc.start();
+    await drain();
+    await probe(svc);
+    expect(svc.status()).toMatchObject({
+      linkState: "linked",
+      needsSignature: true,
+      tailscaleVersion: "1.104.1",
+    });
+    answer = () =>
+      Promise.resolve({
+        deviceId: "01DEVICE",
+        login: "james@github",
+        loginAllow: ["james@github"],
+      });
+    await probe(svc);
+    expect(svc.status()).toMatchObject({ needsSignature: false, tailscaleVersion: "1.104.1" });
+    answer = () => notUpWith({ state: "degraded", mode: "linked", failure: "sidecar_exited" });
+    await probe(svc);
+    expect(svc.status()).toMatchObject({ needsSignature: false, tailscaleVersion: "1.104.1" });
+    svc.stop();
+  });
+
+  it("unlink signs out first, with the floor's bound plus a margin, and says whether Tailscale took it", async () => {
+    for (const signedOut of [true, false]) {
+      const deadlines: unknown[] = [];
+      const svc = new LinkService({
+        dataDir: linkedRoot(),
+        native: {
+          request: (method: string, _params?: unknown, opts?: { deadlineMs?: number }) => {
+            if (method === "native.mesh.retire") {
+              deadlines.push(opts?.deadlineMs);
+              return Promise.resolve({
+                retired: true,
+                archivedTo: "/tmp/mesh.retired-1",
+                signedOut,
+              });
+            }
+            return floorWithLogin()(method);
+          },
+        },
+        now: () => NOW,
+      });
+      const result = await svc.unlink();
+      expect(result.signedOut).toBe(signedOut);
+      // truffle's LOGOUT_TIMEOUT is 12 s: the default 10 s deadline would give up first
+      expect(deadlines).toEqual([20_000]);
+      svc.stop();
+    }
+  });
+
+  it("an offline Disconnect answers signedOut inside its deadline: the floor's 12 s bound, then no sign-out", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const svc = new LinkService({
+        dataDir: linkedRoot(),
+        native: {
+          request: (method: string) =>
+            method === "native.mesh.retire"
+              ? new Promise((resolve) =>
+                  setTimeout(
+                    () =>
+                      resolve({
+                        retired: true,
+                        archivedTo: "/tmp/mesh.retired-1",
+                        signedOut: false,
+                      }),
+                    12_000,
+                  ),
+                )
+              : floorWithLogin()(method),
+        },
+        now: () => NOW,
+      });
+      const unlinking = svc.unlink();
+      await vi.advanceTimersByTimeAsync(12_000);
+      const result = await unlinking;
+      expect(result).toMatchObject({ retired: true, signedOut: false });
+      expect(svc.status()).toMatchObject({ linkState: "offline", link: null });
+      svc.stop();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

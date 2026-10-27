@@ -217,6 +217,18 @@ describe("linkFace", () => {
     expect(linkFace("live", wire({ linkState: "expired" })).kind).toBe("offline");
   });
 
+  it("reads a link the tailnet keeps down for its logs as This Mac only, never as linked (TS-D16)", () => {
+    // The record stands, so a reading from the facts alone would say linked.
+    // Until its own face (TS-8b), the word draws the offline face, whose line
+    // is the menu word the thinking doc's §11 gives it.
+    const face = linkFace(
+      "live",
+      wire({ linkState: "logs_required", link: LINK, meshEnabled: true, nodeState: "Stopped" }),
+    );
+    expect(face).toEqual({ kind: "offline", nodeState: "Stopped" });
+    expect(linkLine(face, "darwin", Date.UTC(2026, 9, 27, 8)).detail).toBe("This Mac only");
+  });
+
   it("carries the floor's facts: the machine's name while capturing, the key's expiry when linked", () => {
     expect(
       linkFace(
