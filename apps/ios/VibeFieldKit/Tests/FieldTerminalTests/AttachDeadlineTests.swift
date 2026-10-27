@@ -23,7 +23,17 @@ import Testing
 /// budget grants the first attach of a run at once, whatever doors History and
 /// Browse opened before it (`runTwosOrderAttachesAtOnce`). Neither is what held
 /// run 2's card.
-@Suite struct AttachDeadlineTests {
+///
+/// SERIALIZED (item 77, 2026-10-27): each row's own 1 s `deadline` covers the
+/// DIAL as well as the step the row tests, and these rows started together
+/// stampede the loopback dial. Under load the concurrent dials took p50
+/// 2.1–2.3 s, so an attach stopped itself at the dial before the step under
+/// test ("stopped waiting at dial after 1 s"). One at a time, the dials stay
+/// short: interleaved at load, the base was red 4 of 6 in that shape, and
+/// serialized 0 of 6. The principled shape is a row whose step comes after the
+/// dial starting from an ACCEPTED leg; a socket opened in the fixture alone was
+/// not enough, because the hello and the accept still outran 1 s.
+@Suite(.serialized) struct AttachDeadlineTests {
   static let session = "sess-01J8Z3K9"
   static let deadline: Duration = .seconds(1)
 
