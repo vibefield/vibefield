@@ -4205,6 +4205,27 @@ describe("SB-2 — fieldd's record of a bound shell: the answer, the roster, a r
     expect(service.profileSetOf(born.sessionId)).toBeUndefined();
   });
 
+  it("keeps a session's exit, once fanned out, for whoever registers the session after its birth answered (item 81)", async () => {
+    const floor = await startFakeFloor();
+    const { cat } = programs();
+    const { service } = inventoriedService(floor, []);
+    await service.ensureStarted();
+    const born = await service.create({ shell: cat });
+    expect(service.exitOf(born.sessionId), "a live session has no exit").toBeUndefined();
+    const exited = new Promise<void>((resolve) => {
+      service.onSessionExited(() => resolve());
+    });
+    floor.exit(born.sessionId);
+    await exited;
+    // every listener has been offered it; a registrant that comes after them asks here
+    expect(service.exitOf(born.sessionId)).toMatchObject({
+      sessionId: born.sessionId,
+      exitCode: 0,
+      exitOutcome: "completed",
+    });
+    expect(service.exitOf("never-born")).toBeUndefined();
+  });
+
   it("through the daemon: the create's answer names the set, the roster says it once the floor lists the session, and the record on disk holds the session and the set — never a variable", async () => {
     const { cat } = programs();
     const { dataDir, mock, rpc, rpcWith } = await daemonOverFakeFloor(

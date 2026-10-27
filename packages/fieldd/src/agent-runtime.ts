@@ -813,6 +813,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
                 const terminals = this.opts.terminals?.() ?? null;
                 if (terminals !== null) await this.reapHusk(sessionId, terminals);
               },
+              exited: (sessionId) => this.opts.terminals?.()?.exitOf(sessionId),
             },
           }
         : {}),
@@ -1793,6 +1794,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       sessionId: result.runtimeSessionId,
       ...(params.route !== undefined ? { route: params.route } : {}),
     });
+    this.settleEarlyExit(result.runtimeSessionId);
     return {
       persona: await this.profiles.project(
         result.profile,
@@ -1858,6 +1860,21 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       return;
     }
     await this.closeRun(runtimeRunId, exit);
+  }
+
+  /** Item 81 — a session registered here after its birth answered may already
+   * have ended: the floor's exit can come in the same socket read as the
+   * birth's answer, and `handleTerminalExit` drops what no map held yet
+   * (`TerminalService.exitOf`). Asked in the registration's own turn, so each
+   * exit is handled once: one that came before is kept there, one that comes
+   * after reaches the listener. It is handled in a turn of its own, as the
+   * floor's event would have been one read later: handled in the
+   * registration's turn, `closeRun`'s `terminalHost.forget` could run before
+   * the spawn door's `ticketed` mints the ticket from those same birth facts,
+   * and a run that ended at birth would be answered INTERNAL. */
+  private settleEarlyExit(sessionId: string): void {
+    const exited = this.opts.terminals?.()?.exitOf(sessionId);
+    if (exited !== undefined) setImmediate(() => void this.handleTerminalExit(exited));
   }
 
   /** Item 59 — how long the backstop waits for the floor's `session-exited`
@@ -2396,6 +2413,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     }
     this.managed.set(info.runtimeRunId, entry);
     this.byTerminal.set(info.terminalSessionId, info.runtimeRunId);
+    this.settleEarlyExit(info.terminalSessionId);
     const current = this.runtime.monitorState(info.runtimeRunId);
     if (current !== undefined) this.applyMonitor(entry, current);
     this.logger.info(

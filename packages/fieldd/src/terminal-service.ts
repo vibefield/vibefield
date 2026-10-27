@@ -442,7 +442,9 @@ interface CellClient {
 }
 
 /** How long a session's birth cell is kept after its exit, for the listeners
- * that close its husk (see `bornIn`); the inventory places a husk long before. */
+ * that close its husk (see `bornIn`); the inventory places a husk long before.
+ * Item 81 — the exit itself is kept as long (`exitOf`): a registrant that asks
+ * for it then closes the husk through `bornIn`, so neither may outlive the other. */
 const BORN_IN_EXIT_GRACE_MS = 30_000;
 
 /** Item 59 — how long a termination fieldd asked for is remembered while its
@@ -504,6 +506,9 @@ export class TerminalService {
    * interactive cell, which answered "unknown session", and its husk stood on
    * the agent cell for good. A terminate that lands forgets it at once. */
   private readonly bornIn = new Map<string, string>();
+  /** Item 81 — every `session-exited` fanned out, by session, for
+   * BORN_IN_EXIT_GRACE_MS after it came (`exitOf`). */
+  private readonly heardExits = new Map<string, SessionExitedEvent>();
   /** WP12 L2b (`build-wp12-updater.md` §9 R2) — the consented stop's census reads the observed inventory PLUS what
    * this service birthed and the floor has not listed yet (GT-1: create outruns the inventory by design), and counts
    * births still in flight, so a session the person never saw cannot end without their consent. */
@@ -1619,6 +1624,19 @@ export class TerminalService {
     return () => this.exitListeners.delete(listener);
   }
 
+  /** Item 81 — the floor's `session-exited` for a session, once it has come
+   * (kept BORN_IN_EXIT_GRACE_MS). Whoever registers a session after its birth
+   * answered asks here, in the same turn as the registration. A birth's answer
+   * and the exit of a PTY that ends at once can arrive in ONE socket read, and
+   * ghosttea-client emits the event synchronously while the answer only
+   * resolves a promise, so the exit is fanned out before the registrant holds
+   * the id, and a listener that finds no one drops it (CI 40530144594: a login
+   * pane read "signing in" for good). ghosttea's own `waitForExit` asks the
+   * session the same question. */
+  exitOf(sessionId: string): SessionExitedEvent | undefined {
+    return this.heardExits.get(sessionId);
+  }
+
   /** AR-3 — every applied inventory, in order. */
   onInventory(listener: (terminals: readonly TerminalInfo[]) => void): () => void {
     this.inventoryListeners.add(listener);
@@ -2634,9 +2652,14 @@ export class TerminalService {
     // service. The client is per cell, so a session's exit arrives on the
     // connection to the cell that held it.
     client.on("session-exited", (event: SessionExitedEvent) => {
-      // the birth cell outlives the exit: a listener below may close the husk (see `bornIn`)
+      // the birth cell outlives the exit: a listener below may close the husk (see `bornIn`),
+      // and so does the exit, for a registrant that comes after it (item 81, `exitOf`)
       const { sessionId } = event;
-      setTimeout(() => this.bornIn.delete(sessionId), BORN_IN_EXIT_GRACE_MS).unref?.();
+      this.heardExits.set(sessionId, event);
+      setTimeout(() => {
+        this.bornIn.delete(sessionId);
+        if (this.heardExits.get(sessionId) === event) this.heardExits.delete(sessionId);
+      }, BORN_IN_EXIT_GRACE_MS).unref?.();
       // WP12 L2b — a birth that ended before any inventory listed it is no longer live
       this.bornUnseen.delete(sessionId);
       // item 59 — the exit an ask was waiting for has come

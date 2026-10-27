@@ -190,6 +190,9 @@ export interface ExtensionSignInPanes {
   open(sessionId: string, principal: GrantPrincipal): TerminalCreateOpenResult;
   /** The floor forgets the pane and its husk is closed; a pane already gone is not an error. */
   close(sessionId: string): Promise<void>;
+  /** Item 81 — the floor's exit for a pane once it has come (`TerminalService.exitOf`): a pane that ends at once can
+   * be over before its sign-in is registered, and its exit was then dropped. */
+  exited(sessionId: string): SessionExitedEvent | undefined;
 }
 
 /** How long a sign-in's pane is waited on before it is settled and left to the person (a profile login's wait). */
@@ -2124,6 +2127,7 @@ export class AgentExtensionService {
       provider: params.provider,
       sessionId,
     });
+    this.settleEarlyExit(panes, sessionId);
     return { run: projectRun(entry), terminal };
   }
 
@@ -2222,7 +2226,17 @@ export class AgentExtensionService {
       act: params.act,
       sessionId,
     });
+    this.settleEarlyExit(panes, sessionId);
     return { run: projectRun(entry), terminal };
+  }
+
+  /** Item 81 — a pane registered above after its birth answered may already have ended (`ExtensionSignInPanes.exited`).
+   * Asked in the registration's own turn, so each exit is settled once, and settled in a turn of its own, as the
+   * floor's event would have been one read later: settled in the registration's turn, the pane's close (its birth
+   * forgotten, its husk terminated) would begin before the door had handed out the ticket to it. */
+  private settleEarlyExit(panes: ExtensionSignInPanes, sessionId: string): void {
+    const exited = panes.exited(sessionId);
+    if (exited !== undefined) setImmediate(() => void this.handleTerminalExit(exited));
   }
 
   /** The act a terminal door runs, as the agent offered it in the last read (or its catalog's) — or the refusal. */

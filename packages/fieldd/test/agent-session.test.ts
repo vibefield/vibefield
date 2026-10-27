@@ -358,6 +358,8 @@ function scriptedProvider(
     models?: ScriptedModels;
     /** item 72 — held here after the PTY is born, before the spawn returns (and the runtime registers the run) */
     afterBirth?: (runtimeSessionId: string) => Promise<void>;
+    /** item 81 — the PTY's own `sh -c` program (default: the environment written, then the PTY held by `cat`) */
+    program?: string;
   } = {},
 ): AgentProvider {
   let counter = 0;
@@ -388,7 +390,8 @@ function scriptedProvider(
         // once read the adapter's token as absent under a loaded host
         args: [
           "-c",
-          `env > "$SCRIPTED_ENV_OUT.part" && mv "$SCRIPTED_ENV_OUT.part" "$SCRIPTED_ENV_OUT"; exec /bin/cat >> "$SCRIPTED_TYPED_OUT"`,
+          extra.program ??
+            `env > "$SCRIPTED_ENV_OUT.part" && mv "$SCRIPTED_ENV_OUT.part" "$SCRIPTED_ENV_OUT"; exec /bin/cat >> "$SCRIPTED_TYPED_OUT"`,
         ],
         cwd: options.cwd,
         env: {
@@ -485,6 +488,8 @@ interface SetupConfig {
   resumeSelection?: boolean;
   /** item 72 — the scripted agent waits here once its PTY is born, before its spawn returns */
   afterBirth?: (runtimeSessionId: string) => Promise<void>;
+  /** item 81 — the scripted agent's own `sh -c` program */
+  program?: string;
 }
 
 /** Boot fieldd: over the mock mgmt server (no floor) or the REAL field-native. */
@@ -596,6 +601,7 @@ async function setup(config: SetupConfig): Promise<Box> {
           ...(config.extensions === true ? { signInMark: join(root, "scripted-signed-in") } : {}),
           models,
           ...(config.afterBirth !== undefined ? { afterBirth: config.afterBirth } : {}),
+          ...(config.program !== undefined ? { program: config.program } : {}),
         }),
       ];
     },
@@ -1550,7 +1556,10 @@ describe("managed sessions over the REAL floor (field-native)", () => {
     // the scripted login returns at once → the pane ends → the identity is
     // read from the vendor's status surface and recorded on the persona. Item 68: measured flat at 314–901 ms
     // (loads 0–278: fieldd's `husk_reaped` +242–542 ms, then `login_finished`); at the deadline the error names
-    // the persona last seen and fieldd's own login events, so a stalled step says which
+    // the persona last seen and fieldd's own login events, so a stalled step says which. Item 81 (CI 40530144594,
+    // attempt 1): it said the pane's end never reached the login — the exit came in the read that answered the
+    // birth and was dropped before the login was registered; fixed at the cause (`TerminalService.exitOf`), and the
+    // order is made certain below ("item 81 — an exit that comes before its pane is registered")
     const verified = await poll(
       async (seen) => {
         const { personas } = (await win.call("agents.profiles.list", {
@@ -2959,6 +2968,77 @@ describe("item 72 — a run joins the inventory it was born into", () => {
       row?.terminal?.cellBootId,
       "the row is joined to its cell at registration",
     ).toBeDefined();
+  }, 60_000);
+});
+
+/** Item 81 — the order CI's load made (run 40530144594, attempt 1), made certain: a birth answers its caller only once
+ * the floor's exit of that PTY has been fanned out to every listener and one more turn has passed. That is what
+ * happens when the birth's answer and the exit of a PTY that ends at once come in one socket read. */
+function exitBeforeRegistration(daemon: FielddDaemon): void {
+  const heard = new Set<string>();
+  const off = daemon.terminals.onSessionExited((event) => heard.add(event.sessionId));
+  cleanup.push(() => {
+    off();
+  });
+  const spawn = daemon.terminals.spawn.bind(daemon.terminals);
+  vi.spyOn(daemon.terminals, "spawn").mockImplementation(async (spec) => {
+    const birth = await spawn(spec);
+    await poll(
+      async (seen) => {
+        seen({ heard: heard.has(birth.sessionId) });
+        return heard.has(birth.sessionId) ? true : undefined;
+      },
+      15_000,
+      "the floor's exit of the new PTY, fanned out before its birth answers",
+    );
+    // fieldd's own exit listener has had its turn: the exit was offered while nothing held the PTY
+    await new Promise((resolve) => setImmediate(resolve));
+    return birth;
+  });
+}
+
+describe("item 81 — an exit that comes before its pane is registered", () => {
+  it("a login pane that ends before it is registered still verifies its persona", async () => {
+    const { daemon } = await setup({ floor: "real" });
+    exitBeforeRegistration(daemon);
+    const win = await window(daemon, DECK, "i81a");
+    await win.call("agents.profiles.login", { profileId: "claude:native-default" });
+    const verified = await poll(
+      async (seen) => {
+        const { personas } = (await win.call("agents.profiles.list", {
+          provider: "claude",
+        })) as AgentsProfilesListResult;
+        const persona = personas.find((p) => p.profileId === "claude:native-default");
+        seen(persona);
+        return persona?.identity?.loggedIn === true ? persona : undefined;
+      },
+      15_000,
+      "the persona's identity re-read after a login pane that ended before it was registered",
+    );
+    expect(verified.signingIn, "the pane is no longer signing in").toBeUndefined();
+    expect(verified.identity).toMatchObject({ loggedIn: true, email: "persona@example.test" });
+  }, 60_000);
+
+  it("a run whose agent ends before it is registered is closed with the floor's own outcome", async () => {
+    const box = await setup({ floor: "real", program: "exit 0" });
+    exitBeforeRegistration(box.daemon);
+    const win = await window(box.daemon, DECK, "i81b");
+    const spawned = (await born(win, "agent.spawn", {
+      provider: "scripted",
+      cwd: box.envOut,
+    })) as AgentSpawnResult;
+    const runId = spawned.session.runtimeRunId;
+    const exited = await poll(
+      async (seen) => {
+        const stamp = box.records.read(runId)?.exited;
+        seen(stamp ?? null);
+        return stamp;
+      },
+      15_000,
+      "the record of a run whose agent ended before it was registered, stamped",
+    );
+    expect(exited.reason, "the floor's word, never the backstop's unknown").toBe("completed");
+    expect(exited.exitCode).toBe(0);
   }, 60_000);
 });
 

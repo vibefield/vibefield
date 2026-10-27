@@ -1006,6 +1006,7 @@ describe("AgentExtensionService sign-ins (AR-S4c)", () => {
     const panes = {
       open: vi.fn<ExtensionSignInPanes["open"]>(() => TICKET),
       close: vi.fn<ExtensionSignInPanes["close"]>(async () => undefined),
+      exited: vi.fn<ExtensionSignInPanes["exited"]>(() => undefined),
     };
     const make = (extra: { panes?: ExtensionSignInPanes | null; signInWaitMs?: number } = {}) =>
       new AgentExtensionService({
@@ -1149,6 +1150,32 @@ describe("AgentExtensionService sign-ins (AR-S4c)", () => {
       exitCode: null,
       stopped: true,
     });
+  });
+
+  it("settles a pane that ended before its sign-in was registered, from the exit the floor already heard (item 81)", async () => {
+    const t = codexAsking();
+    // the exit came in the read that answered the birth, so it was fanned out while no sign-in held the pane
+    t.panes.exited.mockImplementation((sessionId) =>
+      sessionId === "pty-sign-in"
+        ? exit("pty-sign-in", { exitCode: 0, requestedTermination: null })
+        : undefined,
+    );
+    const answered = await t
+      .make()
+      .signIn({ set: "work", provider: "codex", id: "linear" }, PRINCIPAL);
+    // the door answers first, with the pane it opened; the exit is settled in a turn of its own
+    expect(answered.run).toMatchObject({
+      state: "running",
+      terminal: { sessionId: "pty-sign-in" },
+    });
+    expect(t.settleExtensionAct).not.toHaveBeenCalled();
+    await vi.waitFor(() =>
+      expect(t.settleExtensionAct).toHaveBeenCalledWith(
+        expect.objectContaining({ runtimeSessionId: "pty-sign-in" }),
+        { exitCode: 0, stopped: false },
+      ),
+    );
+    expect(t.panes.close).toHaveBeenCalledWith("pty-sign-in");
   });
 
   it("refuses without a floor, ends a pane no ticket can reach, and says when the agent no longer offers it", async () => {
@@ -1868,6 +1895,7 @@ describe("AgentExtensionService catalogs and installs (AR-S4e2)", () => {
     const panes = {
       open: vi.fn<ExtensionSignInPanes["open"]>(() => TICKET),
       close: vi.fn<ExtensionSignInPanes["close"]>(async () => undefined),
+      exited: vi.fn<ExtensionSignInPanes["exited"]>(() => undefined),
     };
     const make = () =>
       new AgentExtensionService({
