@@ -33,6 +33,7 @@ const ME: AccountMe = {
   waiting: 0,
   detail: "james@example.com",
   detailIsLogin: true,
+  detailTone: "plain",
   canLink: false,
 };
 
@@ -270,15 +271,36 @@ describe("MeMenuView", () => {
     expect(spies.onNewUser).toHaveBeenCalledTimes(1);
   });
 
-  it("offers Link… only while unlinked, and says offline in words", async () => {
+  it("offers Connect your devices… only while unlinked, and says This Mac only in words", async () => {
     await mountView(
-      { me: { ...ME, detail: "offline · not linked", detailIsLogin: false, canLink: true } },
+      { me: { ...ME, detail: "This Mac only", detailIsLogin: false, canLink: true } },
       true,
     );
-    expect(item("Link Tailscale account…")).toBeDefined();
-    expect(container?.querySelector(".vf-me-you-detail")?.textContent).toBe("offline · not linked");
-    // Offline is the ordinary first-run state, not a fault: nothing turns red.
+    expect(item("Connect your devices…")).toBeDefined();
+    expect(container?.querySelector(".vf-me-you-detail")?.textContent).toBe("This Mac only");
+    // The ordinary first-run state, not a fault (TS-D2): nothing turns red or
+    // orange, and "offline" (which reads as no internet) is gone.
     expect(container?.querySelector(".vf-me-you-detail")?.className).not.toMatch(/red|danger/);
+    expect(container?.querySelector(".vf-me-you-detail")?.getAttribute("data-tone")).toBeNull();
+  });
+
+  it("says a link state that needs the person in the attention ink (TS-2)", async () => {
+    await mountView(
+      {
+        me: {
+          ...ME,
+          detail: "Sign-in renews in 6 days",
+          detailIsLogin: false,
+          detailTone: "attention",
+        },
+      },
+      true,
+    );
+    const line = container?.querySelector(".vf-me-you-detail");
+    expect(line?.textContent).toBe("Sign-in renews in 6 days");
+    expect(line?.getAttribute("data-tone")).toBe("attention");
+    // and it is not a login, so it is not monospace
+    expect(line?.className).not.toContain("vf-ui-mono");
   });
 
   it("on a one-user machine shows no switch list at all", async () => {
@@ -624,7 +646,7 @@ describe("MeMenu (controller)", () => {
     );
   });
 
-  it("starts the link from Link Tailscale account… — never Account (F16) — and opens the sign-in", async () => {
+  it("starts the link from Connect your devices… — never Account (F16) — and opens the sign-in", async () => {
     const opened = vi.spyOn(window, "open").mockImplementation(() => null);
     const request = vi.fn(async () => ({
       link: null,
@@ -639,7 +661,7 @@ describe("MeMenu (controller)", () => {
     const onOpenChange = vi.fn();
     await mountWith({ request }, onOpenSettings, { open: true, onOpenChange });
     await act(async () => {
-      item("Link Tailscale account…")?.click();
+      item("Connect your devices…")?.click();
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -677,7 +699,7 @@ describe("MeMenu (controller)", () => {
       { open: true },
     );
     await act(async () => {
-      item("Link Tailscale account…")?.click();
+      item("Connect your devices…")?.click();
       await Promise.resolve();
     });
     expect(opened).not.toHaveBeenCalled();
@@ -713,13 +735,13 @@ describe("MeMenu (controller)", () => {
       { open: true, onOpenChange },
     );
     await act(async () => {
-      item("Link Tailscale account…")?.click();
+      item("Connect your devices…")?.click();
       await Promise.resolve();
       await Promise.resolve();
     });
     expect(onOpenChange).toHaveBeenLastCalledWith(true);
     expect(container?.querySelector(".vf-me-notice")?.textContent).toBe(
-      "Couldn't link this device — this user is already linked to a tailscale account; unlink first.",
+      "Couldn't connect to Tailscale — this user is already linked to a tailscale account; unlink first.",
     );
   });
 

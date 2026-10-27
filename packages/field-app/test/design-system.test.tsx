@@ -562,18 +562,30 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     await choose("field", "error");
     expect(frame("field").textContent).toContain("The profile service refused this write.");
 
-    await choose("connect", "linked");
-    expect(frame("connect").textContent).toContain("Linked as james@example.com");
-
-    // UA-P-0g — the lab reaches the refusals and the act itself, through the
-    // production derivation: the adapter hands `linkFace` a wire snapshot, so a
-    // posture the catalog can show is one the shipping surfaces can show.
-    await choose("connect", "already linked");
+    // TS-2 — every face of the Connect pane, through the production derivation:
+    // the adapter hands `linkFace` a wire snapshot, so a face the catalog can
+    // show is one the shipping surfaces can show (UA-P-0g's rule, kept).
+    await choose("connect", "connected");
+    expect(frame("connect").textContent).toContain("Connected.");
+    expect(frame("connect").textContent).toContain("james@example.com");
+    await choose("connect", "approval");
+    expect(frame("connect").textContent).toContain("Waiting for approval.");
+    expect(frame("connect").textContent).toContain("truffle-vibefield-studio");
+    await choose("connect", "signed out");
+    expect(frame("connect").textContent).toContain("Sign in to Tailscale again.");
+    await choose("connect", "removed");
+    expect(frame("connect").textContent).toContain("This Mac was removed from your network.");
+    await choose("connect", "refused");
+    expect(frame("connect").textContent).toContain("That account already has a field here.");
     expect(frame("connect").textContent).toContain('the local user "Work" is already linked');
-    await choose("connect", "offline");
-    expect(frame("connect").textContent).toContain("Not linked yet");
-    await choose("connect", "Link Tailscale account");
-    expect(frame("connect").textContent).toContain("Linking…");
+    await choose("connect", "ask");
+    expect(frame("connect").textContent).toContain("Your field, on every device.");
+    expect(frame("connect").textContent).toContain("Private network by Tailscale.");
+    await choose("connect", "what it sees");
+    expect(frame("connect").textContent).toContain("Only you can reach this Mac.");
+    await choose("connect", "devices");
+    await choose("connect", "Continue with Tailscale");
+    expect(frame("connect").textContent).toContain("Opening Tailscale…");
 
     await choose("posture", "unavailable");
     expect(frame("posture").textContent).toContain("This daemon is not reporting preferences");

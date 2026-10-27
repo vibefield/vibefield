@@ -1,9 +1,10 @@
 import { SegmentedControl } from "@vibefield/design-kit";
 import { createContext, type ReactElement, type ReactNode, useContext, useState } from "react";
+import type { DoorDevice } from "../account/door/door-parts";
 import { faceKey } from "../account/faces";
-import { type LinkBeginStep, type LinkFace, linkFace } from "../account/link";
+import { type LinkBeginStep, type LinkFace, linkFace, type UserLinkStatus } from "../account/link";
 import type { SyncPosture, SyncPostureControl } from "../account/posture";
-import { OnboardingConnectPaneView } from "../boot/onboarding/views/connect";
+import { type ConnectAside, OnboardingConnectPaneView } from "../boot/onboarding/views/connect";
 import { OnboardingFieldPaneView } from "../boot/onboarding/views/field";
 import { OnboardingPosturePaneView } from "../boot/onboarding/views/posture";
 import {
@@ -25,21 +26,47 @@ import { FIXTURE_ME, FIXTURE_OTHERS } from "./account-fixtures";
 
 const noop = (): void => undefined;
 
-/** UA-P-0g — every posture `user.link.subscribe` can report, including the
- * three refusals the daemon writes a sentence for. `mesh off` is gone with the
- * face it named. */
+/** TS-2 — every face the Connect pane shows, each from a wire snapshot through
+ * the production `linkFace` (the daemon's words). The second control is what a
+ * state can show besides its first face: a panel the person chose, or a variant
+ * of the daemon's word. */
 const CONNECT_STATES = [
-  "offline",
-  "capturing",
+  "ask",
+  "opening",
   "sign in",
-  "linked",
-  "corrupt link",
-  "tagged node",
-  "already linked",
-  "loading",
-  "unavailable",
+  "approval",
+  "connected",
+  "signed out",
+  "refused",
+  "quiet",
 ] as const;
 type ConnectState = (typeof CONNECT_STATES)[number];
+
+const CONNECT_VARIANTS: Record<ConnectState, readonly string[]> = {
+  ask: ["devices", "what it sees", "other ways", "auth key"],
+  opening: ["now", "slow"],
+  "sign in": ["browser", "phone"],
+  approval: [],
+  connected: ["your devices", "alone"],
+  "signed out": ["expired", "removed"],
+  refused: ["taken", "tagged", "damaged"],
+  quiet: ["loading", "unavailable", "no network part"],
+};
+
+/** The account's devices at arrival: this Mac, and two more of the person's. */
+const CONNECT_DEVICES: readonly DoorDevice[] = [
+  { id: "self", name: "Studio", os: "macos", self: true },
+  { id: "laptop", name: "James's MacBook Air", os: "macos" },
+  { id: "pc", name: "Workshop PC", os: "windows" },
+];
+
+function connectAside(state: ConnectState, variant: string): ConnectAside {
+  if (state === "ask" && variant === "what it sees") return "why";
+  if (state === "ask" && variant === "other ways") return "other";
+  if (state === "ask" && variant === "auth key") return "key";
+  if (state === "sign in" && variant === "phone") return "phone";
+  return "constellation";
+}
 
 const POSTURE_STATES = ["automatic", "opt-in", "loading", "unavailable", "write error"] as const;
 type PostureState = (typeof POSTURE_STATES)[number];
@@ -323,33 +350,67 @@ function FieldPreview(): ReactElement {
 }
 
 function ConnectPreview(): ReactElement {
-  const [state, setState] = useState<ConnectState>("offline");
+  const [state, setState] = useState<ConnectState>("ask");
+  const [variant, setVariant] = useState<string>("devices");
   // The act's in-flight beat is the one thing the snapshot cannot carry, so the
-  // adapter answers the click the way the wizard's own wrapper does — and no
-  // further: there is no daemon here to finish or refuse it.
-  const [beginStep, setBeginStep] = useState<LinkBeginStep>({ kind: "idle" });
+  // adapter answers the click the way the door does — and no further: there is
+  // no daemon here to finish or refuse it.
+  const [step, setStep] = useState<LinkBeginStep>({ kind: "idle" });
+  const variants = CONNECT_VARIANTS[state];
+  const pending = (): void => setStep({ kind: "pending" });
   return (
     <OnboardingFrame
       index="03"
       label="Connect devices"
-      note="Every posture the daemon reports"
+      note="Every face the link shows, in the daemon's own words"
       state="connect"
       controls={
-        <SegmentedControl
-          options={CONNECT_STATES}
-          value={state}
-          onChange={(next) => {
-            setBeginStep({ kind: "idle" });
-            setState(next);
-          }}
-          label="Connect pane state"
-        />
+        <>
+          <SegmentedControl
+            options={CONNECT_STATES}
+            value={state}
+            onChange={(next) => {
+              setStep({ kind: "idle" });
+              setState(next);
+              setVariant(CONNECT_VARIANTS[next][0] ?? "");
+            }}
+            label="Connect pane state"
+          />
+          {variants.length > 0 && (
+            <SegmentedControl
+              options={variants}
+              value={variant}
+              onChange={(next) => {
+                setStep({ kind: "idle" });
+                setVariant(next);
+              }}
+              label="Connect pane variant"
+            />
+          )}
+        </>
       }
     >
       <OnboardingConnectPaneView
-        face={connectFace(state)}
-        beginStep={beginStep}
-        onBeginLink={() => setBeginStep({ kind: "pending" })}
+        key={`${state}:${variant}`}
+        face={connectFace(state, variant)}
+        step={step}
+        me={{ face: FIXTURE_ME.face, seed: FIXTURE_ME.userId }}
+        devices={
+          state === "connected" && variant === "alone"
+            ? CONNECT_DEVICES.slice(0, 1)
+            : CONNECT_DEVICES
+        }
+        platform="darwin"
+        slow={state === "opening" && variant === "slow"}
+        initialAside={connectAside(state, variant)}
+        onBegin={pending}
+        onRenew={pending}
+        onCancel={noop}
+        onOpenAgain={noop}
+        onCopyLink={async () => true}
+        onCopyText={async () => true}
+        onSignInAgain={pending}
+        onNewUser={noop}
         onContinue={noop}
         onSkip={noop}
         onBack={noop}
@@ -464,81 +525,98 @@ function OnboardingFrame({
  * production derivation turns it into a face. Building `LinkFace` values here
  * directly would have been a second reader of the same subscription, free to
  * drift from `linkFace` the moment a posture is added. */
-function connectFace(state: ConnectState): LinkFace {
+function connectFace(state: ConnectState, variant: string): LinkFace {
   const linkRecord = {
     login: "james@example.com",
     tailnet: "studio.ts.net",
     linkedAt: "2026-08-05T19:24:00.000Z",
   };
+  const quiet = {
+    link: null,
+    meshEnabled: false,
+    nodeState: null,
+    authUrl: null,
+    linkDetail: null,
+  };
+  const facts = {
+    machineName: "truffle-vibefield-studio",
+    adminUrl: "https://login.tailscale.com/admin/machines",
+  };
   switch (state) {
-    case "offline":
+    case "ask":
+      return linkFace("live", { ...quiet, linkState: "offline" });
+    case "opening":
       return linkFace("live", {
-        link: null,
-        meshEnabled: false,
-        nodeState: null,
-        authUrl: null,
-        linkState: "offline",
-        linkDetail: null,
-      });
-    case "capturing":
-      return linkFace("live", {
-        link: null,
+        ...quiet,
         meshEnabled: true,
         nodeState: "Starting",
-        authUrl: null,
         linkState: "capturing",
-        linkDetail: null,
+        machineName: facts.machineName,
       });
     case "sign in":
       return linkFace("live", {
-        link: null,
+        ...quiet,
         meshEnabled: true,
         nodeState: "NeedsLogin",
         authUrl: "https://login.tailscale.com/a/vibefield-preview",
         linkState: "capturing",
-        linkDetail: null,
+        machineName: facts.machineName,
       });
-    case "linked":
+    case "approval":
       return linkFace("live", {
+        ...quiet,
+        meshEnabled: true,
+        nodeState: "NeedsMachineAuth",
+        linkState: "awaiting_approval",
+        ...facts,
+      });
+    case "connected":
+      return linkFace("live", {
+        ...quiet,
         link: linkRecord,
         meshEnabled: true,
         nodeState: "Running",
-        authUrl: null,
         linkState: "linked",
-        linkDetail: null,
+        ...facts,
       });
-    case "corrupt link":
+    case "signed out":
       return linkFace("live", {
-        link: null,
-        meshEnabled: false,
-        nodeState: null,
-        authUrl: null,
-        linkState: "link_corrupt",
-        linkDetail:
-          "link.json is present but unusable: ~/Library/Application Support/VibeField/users/1/fieldd/link.json",
+        ...quiet,
+        link: linkRecord,
+        meshEnabled: true,
+        nodeState: "NeedsLogin",
+        authUrl: "https://login.tailscale.com/a/vibefield-renew",
+        linkState: variant === "removed" ? "removed" : "expired",
+        ...facts,
       });
-    case "tagged node":
+    case "refused": {
+      const refusal: Pick<UserLinkStatus, "linkState" | "linkDetail"> =
+        variant === "damaged"
+          ? {
+              linkState: "link_corrupt",
+              linkDetail:
+                "link.json is present but unusable: ~/Library/Application Support/VibeField/users/1/fieldd/link.json",
+            }
+          : variant === "tagged"
+            ? {
+                linkState: "login_unavailable",
+                linkDetail: "the tailnet has no user for this node (a tagged node cannot link)",
+              }
+            : {
+                linkState: "login_already_linked",
+                linkDetail:
+                  'the local user "Work" is already linked to this tailscale account; unlink it first',
+              };
+      return linkFace("live", { ...quiet, ...refusal });
+    }
+    case "quiet":
+      if (variant === "loading") return linkFace("loading", null);
+      if (variant === "unavailable") return linkFace("error", null);
       return linkFace("live", {
-        link: null,
-        meshEnabled: false,
-        nodeState: null,
-        authUrl: null,
-        linkState: "login_unavailable",
-        linkDetail: "the tailnet has no user for this node (a tagged node cannot link)",
+        ...quiet,
+        meshEnabled: true,
+        linkState: "capturing",
+        failure: "sidecar_missing",
       });
-    case "already linked":
-      return linkFace("live", {
-        link: null,
-        meshEnabled: false,
-        nodeState: null,
-        authUrl: null,
-        linkState: "login_already_linked",
-        linkDetail:
-          'the local user "Work" is already linked to this tailscale account; unlink it first',
-      });
-    case "loading":
-      return linkFace("loading", null);
-    case "unavailable":
-      return linkFace("error", null);
   }
 }

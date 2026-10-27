@@ -1,8 +1,7 @@
-import { useSubscription } from "@vibefield/fieldd-client/react";
 import { type ReactElement, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { linkFace, type UserLinkStatus } from "../account/link";
 import { ConnectPane } from "../boot/onboarding/panes/ConnectPane";
+import type { ConnectMe } from "../boot/onboarding/views/connect";
 import { WizardShell } from "../boot/onboarding/wizard-ui";
 import type { FinishStep } from "./ledger";
 import "./setup-sheet.css";
@@ -14,9 +13,12 @@ import "./setup-sheet.css";
 // list, and the sheet closes when nothing is left.
 
 export function SetupSheet({
+  me,
   steps,
   onClose,
 }: {
+  /** who is finishing setup: the face the Connect pane is drawn around (TS-2) */
+  me: ConnectMe;
   /** The steps still put off, in the assistant's order. */
   steps: readonly FinishStep[];
   onClose: () => void;
@@ -78,22 +80,30 @@ export function SetupSheet({
       }}
     >
       <WizardShell>
-        <SheetPane step={step} onDone={next} />
+        <SheetPane me={me} step={step} onDone={next} />
       </WizardShell>
     </div>,
     document.body,
   );
 }
 
-function SheetPane({ step, onDone }: { step: FinishStep; onDone: () => void }): ReactElement {
+function SheetPane({
+  me,
+  step,
+  onDone,
+}: {
+  me: ConnectMe;
+  step: FinishStep;
+  onDone: () => void;
+}): ReactElement {
   switch (step) {
     case "devices":
-      return <DevicesStep onDone={onDone} />;
+      return <DevicesStep me={me} onDone={onDone} />;
   }
 }
 
-function DevicesStep({ onDone }: { onDone: () => void }): ReactElement {
-  const link = useSubscription<UserLinkStatus>("user.link.subscribe");
-  const face = linkFace(link.status, link.status === "live" ? (link.data ?? null) : null);
-  return <ConnectPane face={face} onBack={undefined} onContinue={onDone} onSkip={onDone} />;
+// TS-2 — the pane owns the link through the shared door; the sheet keeps
+// Escape for itself (it closes), so the pane's Esc-as-Not-now stays off here.
+function DevicesStep({ me, onDone }: { me: ConnectMe; onDone: () => void }): ReactElement {
+  return <ConnectPane me={me} onBack={undefined} onContinue={onDone} onSkip={onDone} />;
 }

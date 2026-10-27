@@ -11,14 +11,23 @@ export const FIXTURE_ME: AccountMe = {
   waiting: 0,
   detail: "james@example.com",
   detailIsLogin: true,
+  detailTone: "plain",
   canLink: false,
 };
 
 export const FIXTURE_ME_OFFLINE: AccountMe = {
   ...FIXTURE_ME,
-  detail: "offline · not linked",
+  detail: "This Mac only",
   detailIsLogin: false,
   canLink: true,
+};
+
+/** TS-2 — a sign-in 6 days from renewal: the line in the attention ink. */
+export const FIXTURE_ME_RENEWING: AccountMe = {
+  ...FIXTURE_ME,
+  detail: "Sign-in renews in 6 days",
+  detailIsLogin: false,
+  detailTone: "attention",
 };
 
 export const FIXTURE_OTHERS: readonly AccountPerson[] = [

@@ -341,6 +341,12 @@
   line-height: 1.2;
 }
 
+/* TS-2 — a link state that needs the person: a renewal due, a sign-in lapsed,
+   a device removed (DESIGN.md §8, the Me menu's amendment). */
+.vf-me-you-detail[data-tone="attention"] {
+  color: var(--vf-ink-attention);
+}
+
 /* ---- another user is waiting: a count BESIDE the face, never on it (I-5) --- */
 
 .vf-me-badge {

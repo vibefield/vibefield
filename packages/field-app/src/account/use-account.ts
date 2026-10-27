@@ -2,7 +2,14 @@ import { useSubscription } from "@vibefield/fieldd-client/react";
 import { useEffect, useState } from "react";
 import { type FieldUserFace, type FieldUserProfile, getHost } from "../host";
 import { shownFaces } from "./faces";
-import { type LinkFace, linkFace, type UserLinkStatus } from "./link";
+import {
+  type LinkFace,
+  linkFace,
+  RENEWAL_WARN_DAYS,
+  renewalDays,
+  type UserLinkStatus,
+  unlinkedWord,
+} from "./link";
 
 // Who is at this window, and who else is on this machine — the one reading the
 // Me menu and the head of Settings share (UA-D19), so the corner and the
@@ -26,9 +33,12 @@ export interface AccountPerson {
 export interface AccountMe extends AccountPerson {
   /** The line under the name: the login, or the link state in words. */
   readonly detail: string;
-  /** The login is monospace; a sentence ("offline · not linked") is not. */
+  /** The login is monospace; a sentence ("This Mac only") is not. */
   readonly detailIsLogin: boolean;
-  /** Offer "Link Tailscale account…" — true only when linking is a real act. */
+  /** TS-2 — a state that needs the person (a renewal due, a sign-in lapsed)
+   * takes the attention ink (DESIGN.md §8, the Me menu's amendment). */
+  readonly detailTone: "plain" | "attention";
+  /** Offer "Connect your devices…" — true only when linking is a real act. */
   readonly canLink: boolean;
 }
 
@@ -72,23 +82,68 @@ export function refusalSentence(head: string, cause: unknown): string {
   return trimmed.length > 0 ? `${head} — ${trimmed}.` : `${head}.`;
 }
 
-function linkDetail(face: LinkFace): { detail: string; isLogin: boolean; canLink: boolean } {
+type LinkLine = {
+  detail: string;
+  isLogin: boolean;
+  tone: "plain" | "attention";
+  canLink: boolean;
+};
+
+/** "This Mac only" → "this Mac only": the word after a separator, its noun kept. */
+const lowerFirst = (words: string): string => words.charAt(0).toLowerCase() + words.slice(1);
+
+/** TS-2 — the line under your name, in DESIGN.md §9's link words. Exported for
+ * its rows: the face menu and the head of Settings both read it. */
+export function linkLine(face: LinkFace, platform: string | undefined, now: number): LinkLine {
+  const plain = (detail: string, canLink = false): LinkLine => ({
+    detail,
+    isLogin: false,
+    tone: "plain",
+    canLink,
+  });
   switch (face.kind) {
-    case "linked":
-      return face.link.login === null
-        ? { detail: "linked · learning the login…", isLogin: false, canLink: false }
-        : { detail: face.link.login, isLogin: true, canLink: false };
+    case "linked": {
+      if (face.link.login === null) return plain("Connected · learning the login…");
+      const days = renewalDays(face.keyExpiresAt, now);
+      if (days !== null && days <= RENEWAL_WARN_DAYS) {
+        // TS-D9 — 14 days out the line says it, in the attention ink
+        const when = days === 0 ? "today" : days === 1 ? "in 1 day" : `in ${days} days`;
+        return {
+          detail: `Sign-in renews ${when}`,
+          isLogin: false,
+          tone: "attention",
+          canLink: false,
+        };
+      }
+      return { detail: face.link.login, isLogin: true, tone: "plain", canLink: false };
+    }
     case "offline":
-      // The ordinary first-run state, in words — never red (UA-P-D1).
-      return { detail: "offline · not linked", isLogin: false, canLink: true };
+      // The ordinary first-run state, in words — never red (UA-P-D1, TS-D2).
+      return plain(unlinkedWord(platform), true);
     case "capturing":
-      return { detail: "linking…", isLogin: false, canLink: false };
+      return plain("Connecting…");
+    case "approval":
+      return plain("Waiting for approval");
+    case "signedOut":
+      return {
+        detail:
+          face.reason === "removed"
+            ? "Removed from Tailscale"
+            : `Sign-in expired · ${lowerFirst(unlinkedWord(platform))}`,
+        isLogin: false,
+        tone: "attention",
+        canLink: false,
+      };
     case "refused":
-      return { detail: face.title, isLogin: false, canLink: face.canBegin };
+      // the refusal is said where the act is (the pane, Settings); the line
+      // keeps the ordinary state's words, except a record nobody can read
+      return face.state === "link_corrupt"
+        ? plain(face.title)
+        : plain(unlinkedWord(platform), face.canBegin);
     case "unavailable":
-      return { detail: "on this machine", isLogin: false, canLink: false };
+      return plain("on this machine");
     case "loading":
-      return { detail: "", isLogin: false, canLink: false };
+      return plain("");
   }
 }
 
@@ -161,8 +216,10 @@ export function useAccountSnapshot(): AccountSnapshot {
     waiting: 0,
   });
   const meRecord = users.find((user) => user.userId === attachedUserId) ?? null;
-  const words = linkDetail(
+  const words = linkLine(
     linkFace(link.status, link.status === "live" ? (link.data ?? null) : null),
+    host.platform,
+    Date.now(),
   );
   return {
     status: "ready",
@@ -173,6 +230,7 @@ export function useAccountSnapshot(): AccountSnapshot {
             ...person(meRecord),
             detail: words.detail,
             detailIsLogin: words.isLogin,
+            detailTone: words.tone,
             canLink: words.canLink,
           },
     others: users

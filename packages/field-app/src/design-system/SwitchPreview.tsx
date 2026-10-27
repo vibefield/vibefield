@@ -51,7 +51,13 @@ const EVERYONE: readonly AccountPerson[] = [FIXTURE_ME, ...FIXTURE_OTHERS];
 function meFor(person: AccountPerson): AccountMe {
   return person.userId === FIXTURE_ME.userId
     ? FIXTURE_ME
-    : { ...person, detail: "offline · not linked", detailIsLogin: false, canLink: false };
+    : {
+        ...person,
+        detail: "This Mac only",
+        detailIsLogin: false,
+        detailTone: "plain",
+        canLink: false,
+      };
 }
 
 export function SwitchPreview(): ReactElement {

@@ -45,7 +45,13 @@ function isLinkState(value: unknown): value is UserLinkState {
  * UA-3. Kept a tolerant shape so an early daemon that omits a field renders
  * honestly instead of throwing. */
 export type UserLinkStatus = {
-  link: { login: string | null; tailnet?: string; linkedAt: string } | null;
+  link: {
+    login: string | null;
+    tailnet?: string;
+    linkedAt: string;
+    /** TS-1 — display only: when the node's sign-in lapses (ms; null = never). */
+    keyExpiresAt?: number | null;
+  } | null;
   meshEnabled: boolean;
   nodeState: string | null;
   authUrl: string | null;
@@ -57,7 +63,19 @@ export type UserLinkStatus = {
   /** The sentence that makes a refusal actionable — the corrupt file's path,
    * the other local user's name. Null whenever the word needs no elaboration. */
   linkDetail?: string | null;
+  /** TS-1 — the name Tailscale shows for this Mac's node, so a person can match
+   * it on Tailscale's own page; null until the floor has named one. */
+  machineName?: string | null;
+  /** TS-1 — the admin console's Machines page; null for a custom server. */
+  adminUrl?: string | null;
+  /** TS-1 — when the node's sign-in lapses (ms); null = never; absent = unknown. */
+  keyExpiresAt?: number | null;
+  /** TS-1 — why the floor's last bring-up ended without a node, when one did. */
+  failure?: LinkFailure | null;
 };
+
+/** TS-1 — the floor's typed reason a bring-up ended without a node. */
+export type LinkFailure = "sidecar_missing" | "bring_up_failed" | "sidecar_exited";
 
 export type UserLink = NonNullable<UserLinkStatus["link"]>;
 
@@ -80,9 +98,45 @@ export type LinkFace =
    * state Unlink returns to. The act belongs here. */
   | { kind: "offline"; nodeState: string | null }
   /** The act is running. `authUrl` is the sign-in address once the node offers
-   * one, and null in the window before it does. */
-  | { kind: "capturing"; authUrl: string | null; nodeState: string | null }
-  | { kind: "linked"; link: UserLink; nodeState: string | null }
+   * one, and null in the window before it does. TS-2 — `machineName` is the
+   * name Tailscale's page will ask about ("Tailscale will ask to connect …"),
+   * and `failure` says why a bring-up ended, when one did. */
+  | {
+      kind: "capturing";
+      authUrl: string | null;
+      nodeState: string | null;
+      machineName: string | null;
+      failure: LinkFailure | null;
+    }
+  /** TS-2 — the tailnet's device approval holds this node: the sign-in is done
+   * and an admin acts now. `link` is the record a renewal holds; null for a
+   * first capture. */
+  | {
+      kind: "approval";
+      machineName: string | null;
+      adminUrl: string | null;
+      link: UserLink | null;
+    }
+  | {
+      kind: "linked";
+      link: UserLink;
+      nodeState: string | null;
+      /** ms; null = expiry disabled; undefined = not known */
+      keyExpiresAt: number | null | undefined;
+      machineName: string | null;
+      adminUrl: string | null;
+    }
+  /** TS-2 — a link that stands while its node is signed out of the tailnet:
+   * its key lapsed (`expired`), or it was removed in the console (`removed`).
+   * `authUrl` is the renewal's address once the floor offers it. */
+  | {
+      kind: "signedOut";
+      reason: "expired" | "removed";
+      link: UserLink;
+      authUrl: string | null;
+      machineName: string | null;
+      adminUrl: string | null;
+    }
   /** A refusal, spoken. `detail` is the daemon's own sentence wherever it sent
    * one; `title` is this module's one-phrase reading of the word, held here
    * rather than in each surface's chrome so the two can never disagree about
@@ -101,12 +155,33 @@ export type LinkFace =
       link: UserLink | null;
     };
 
-/** One phrase for the act, on both surfaces and in every face that offers it —
- * including the browser hand-off, so the name survives its flow (DESIGN.md
- * §9). */
-export const LINK_ACT_LABEL = "Link Tailscale account";
-/** ...and the same name in progress. */
-export const LINK_ACT_PENDING_LABEL = "Linking…";
+/** One phrase for the act, on every button that starts it (DESIGN.md §9 "The
+ * link's words", TS-D1): it says where you are going, and works for a person
+ * with an account and one without. */
+export const LINK_ACT_LABEL = "Continue with Tailscale";
+/** ...and the same act in progress: the button becomes its status (M1). */
+export const LINK_ACT_PENDING_LABEL = "Opening Tailscale…";
+/** The place that holds the act: the face menu's row, a section's title. */
+export const CONNECT_ROW_LABEL = "Connect your devices…";
+
+/** TS-D2 — a desktop that is not connected, in its own platform's words: the
+ * ordinary first-run state, never "offline" (which reads as no internet). */
+export function unlinkedWord(platform: string | undefined): string {
+  if (platform === "win32") return "This PC only";
+  if (platform === "darwin" || platform === undefined) return "This Mac only";
+  return "This computer only";
+}
+
+/** TS-D9 — whole days until a sign-in lapses, rounded up (a key due in an hour
+ * renews "today"), or null when it never lapses or is not known. */
+export function renewalDays(keyExpiresAt: number | null | undefined, now: number): number | null {
+  if (keyExpiresAt === null || keyExpiresAt === undefined) return null;
+  return Math.max(0, Math.ceil((keyExpiresAt - now) / 86_400_000));
+}
+
+/** TS-D9 — the renewal speaks up 14 days out: the date turns to the attention
+ * ink, and the line under your name says it. */
+export const RENEWAL_WARN_DAYS = 14;
 
 /** The link act's own two steps, shared so the two surfaces cannot invent
  * different shapes for the same call. `pending` covers the first probe, which
@@ -157,27 +232,50 @@ export function linkFace(
   if (status === "error" || data === null) return { kind: "unavailable" };
   const state = postureOf(data);
   switch (state) {
-    // TS-1 — the three words the daemon now says. Until TS-2 draws their own
-    // faces they read as the faces they had before the daemon could name them,
-    // so nothing a person sees regresses: an approval wait is still the
-    // capture it belongs to (never "offline", which would offer the act again
-    // and restart the wait), and a signed-out link is still its account.
+    // TS-2 — the three words TS-1 taught the daemon, each with its own face.
     case "awaiting_approval":
-      return { kind: "capturing", authUrl: null, nodeState: data.nodeState };
+      return {
+        kind: "approval",
+        machineName: data.machineName ?? null,
+        adminUrl: data.adminUrl ?? null,
+        link: data.link !== null && data.link.login !== null ? data.link : null,
+      };
     case "expired":
     case "removed":
+      // a signed-out word over a missing record reads as what it can prove
       return data.link === null
         ? { kind: "offline", nodeState: data.nodeState }
-        : { kind: "linked", link: data.link, nodeState: data.nodeState };
+        : {
+            kind: "signedOut",
+            reason: state,
+            link: data.link,
+            authUrl: data.authUrl,
+            machineName: data.machineName ?? null,
+            adminUrl: data.adminUrl ?? null,
+          };
     case "linked":
       // A `linked` word over a missing record is a daemon disagreeing with
       // itself. The RECORD is the account (UA-4 compares the stored login), so
       // the record wins and the desktop reads as what it can prove: unlinked.
       return data.link === null
         ? { kind: "offline", nodeState: data.nodeState }
-        : { kind: "linked", link: data.link, nodeState: data.nodeState };
+        : {
+            kind: "linked",
+            link: data.link,
+            nodeState: data.nodeState,
+            keyExpiresAt:
+              data.keyExpiresAt !== undefined ? data.keyExpiresAt : data.link.keyExpiresAt,
+            machineName: data.machineName ?? null,
+            adminUrl: data.adminUrl ?? null,
+          };
     case "capturing":
-      return { kind: "capturing", authUrl: data.authUrl, nodeState: data.nodeState };
+      return {
+        kind: "capturing",
+        authUrl: data.authUrl,
+        nodeState: data.nodeState,
+        machineName: data.machineName ?? null,
+        failure: data.failure ?? null,
+      };
     case "offline":
       return { kind: "offline", nodeState: data.nodeState };
     default:
@@ -200,7 +298,12 @@ export function linkFace(
  * never asked again — including from a refused posture, where the keys were
  * deliberately left in place. */
 export function hasLink(face: LinkFace): boolean {
-  return face.kind === "linked" || (face.kind === "refused" && face.link !== null);
+  return (
+    face.kind === "linked" ||
+    face.kind === "signedOut" ||
+    (face.kind === "approval" && face.link !== null) ||
+    (face.kind === "refused" && face.link !== null)
+  );
 }
 
 /** A timestamp reads as a time or as itself — never as "Invalid Date". */

@@ -1,6 +1,7 @@
 import type { FielddClient } from "@vibefield/fieldd-client";
 import { FielddProvider, useFielddClient, useSubscription } from "@vibefield/fieldd-client/react";
 import { type ReactElement, useEffect, useState } from "react";
+import { faceOf } from "../../account/faces";
 import { hasLink, linkFace, type UserLinkStatus } from "../../account/link";
 import { type FieldUserProfile, getHost } from "../../host";
 import { answerSetupStep } from "../../setup/ledger";
@@ -193,7 +194,8 @@ function WizardBody({
     case "connect":
       return shell(
         <ConnectPane
-          face={face}
+          me={{ face: faceOf(profile, []), seed: profile.userId }}
+          escapeIsNotNow
           onBack={onBack}
           onContinue={() => {
             if (!linked) putOffDevices();

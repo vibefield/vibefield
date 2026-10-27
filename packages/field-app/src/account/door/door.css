@@ -1,0 +1,230 @@
+/* TS-2 (track TS) — the door's parts (DESIGN.md §8 "The Connect pane"). Tokens only; the
+   named curves of §6; the arrival's 90 ms interval is the one stagger that is not 26 ms. */
+
+/* §13 — Tailscale's logomark in its own ink, never shrunk by its row */
+.vf-ts-mark {
+  color: var(--vf-tailscale-ink);
+  flex: none;
+}
+
+/* ---- the partner line ---- */
+.vf-door-partner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.vf-door-partner-words {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  color: var(--vf-text-secondary);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.vf-door-quiet {
+  color: var(--vf-text-tertiary);
+  font-size: 12px;
+}
+
+/* ---- What VibeField can see: replaces the constellation in place ---- */
+.vf-door-see {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--vf-text-secondary);
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+
+.vf-door-see strong {
+  color: var(--vf-text-primary);
+  font-weight: 600;
+}
+
+/* ---- the constellation: a square, the face at its centre ---- */
+.vf-door-constellation {
+  position: relative;
+  width: 100%;
+  max-width: 260px;
+  aspect-ratio: 1 / 1;
+  margin: 0 auto;
+}
+
+.vf-door-you {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.vf-door-wire {
+  position: absolute;
+  height: 0;
+  border-top: 1px solid var(--vf-hairline-strong);
+  transform-origin: 0 0;
+}
+
+.vf-door-wire[data-ghost] {
+  border-top-style: dashed;
+  border-top-color: var(--vf-hairline);
+}
+
+.vf-door-device {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  transform: translate(-50%, -18px);
+}
+
+.vf-door-device-disc {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--vf-chrome-solid);
+  border: 1px solid var(--vf-hairline-strong);
+  color: var(--vf-text-primary);
+}
+
+.vf-door-device[data-ghost] .vf-door-device-disc {
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--vf-hairline);
+  color: var(--vf-text-faint);
+}
+
+.vf-door-device-name {
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--vf-text-secondary);
+  font-size: 11px;
+}
+
+.vf-door-device[data-ghost] .vf-door-device-name {
+  color: var(--vf-text-faint);
+}
+
+/* the arrival (§6): a wire draws on the island curve, its mark pops at its end, 90 ms apart */
+.vf-door-constellation[data-arriving] .vf-door-wire {
+  animation: vf-door-wire 560ms var(--vf-ease-island) both;
+  animation-delay: var(--vf-door-delay, 0ms);
+}
+
+.vf-door-constellation[data-arriving] .vf-door-device {
+  animation: vf-door-pop 280ms var(--vf-ease-pop) both;
+  animation-delay: calc(var(--vf-door-delay, 0ms) + 280ms);
+}
+
+@keyframes vf-door-wire {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes vf-door-pop {
+  from {
+    opacity: 0;
+    scale: 0.6;
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+  }
+}
+
+/* ---- the waiting steps: the live one breathes (§6's loop) ---- */
+.vf-door-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  color: var(--vf-text-tertiary);
+}
+
+.vf-door-steps li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.vf-door-steps li[data-state="live"] {
+  color: var(--vf-text-primary);
+}
+
+.vf-door-steps li[data-state="done"] {
+  color: var(--vf-text-secondary);
+}
+
+.vf-door-step-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--vf-hairline-strong);
+  flex: none;
+}
+
+.vf-door-steps li[data-state="done"] .vf-door-step-dot {
+  background: var(--vf-green);
+}
+
+.vf-door-steps li[data-state="live"] .vf-door-step-dot {
+  background: var(--vf-text-primary);
+  animation: vf-door-breath 1.1s ease-in-out infinite alternate;
+}
+
+@keyframes vf-door-breath {
+  from {
+    scale: 1;
+  }
+  to {
+    scale: 1.06;
+  }
+}
+
+/* ---- the phone's code: a canvas in the ink, on a quiet card ---- */
+.vf-door-qr {
+  display: grid;
+  place-items: center;
+  padding: 10px;
+  border-radius: 14px;
+  background: var(--vf-chrome-solid);
+  border: 1px solid var(--vf-hairline);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vf-door-constellation[data-arriving] .vf-door-wire,
+  .vf-door-constellation[data-arriving] .vf-door-device {
+    animation: vf-door-fade 120ms ease both;
+    animation-delay: 0ms;
+  }
+
+  .vf-door-steps li[data-state="live"] .vf-door-step-dot {
+    animation: none;
+  }
+}
+
+@keyframes vf-door-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

@@ -605,6 +605,9 @@
 }
 
 .vf-ds-onboarding-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
   width: min(100%, 620px);
 }
 

@@ -735,8 +735,13 @@ export function SettingsPanel({
       >
         {pageContent}
       </SettingsDialog>
-      {setupSheet && (
-        <SetupSheet steps={finishRows.map((row) => row.step)} onClose={closeSetupSheet} />
+      {/* the sheet opens from the head, so the person it draws is the head's */}
+      {setupSheet && account.me !== null && (
+        <SetupSheet
+          me={{ face: account.me.face, seed: account.me.userId }}
+          steps={finishRows.map((row) => row.step)}
+          onClose={closeSetupSheet}
+        />
       )}
     </div>
   );

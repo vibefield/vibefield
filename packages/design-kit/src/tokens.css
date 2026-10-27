@@ -90,6 +90,14 @@
   --vf-ink-danger: #d70015;
   --vf-ink-info: #0a6a93;
 
+  /* §13 Tailscale's logomark, kept exact (TS-D4): its media kit's own two inks,
+     #1E1E1F on light and white on dark, never a state colour. */
+  --vf-tailscale-ink: #1e1e1f;
+  /* §8 the sign-in code (TS-2): black on white in BOTH themes — a scanner reads
+     contrast, not a theme, so .dark leaves these alone */
+  --vf-qr-ground: #ffffff;
+  --vf-qr-ink: #000000;
+
   /* §2.9 The project ink: only the HUE is a project's (dealt on the cool half,
      design-kit project-ink.ts); its lightness and chroma are the theme's. */
   --vf-project-ink-l: 0.6;
@@ -314,6 +322,8 @@
   --vf-ink-attention: var(--vf-orange);
   --vf-ink-danger: var(--vf-red);
   --vf-ink-info: var(--vf-cyan);
+  /* §13 Tailscale's logomark by night: its white file */
+  --vf-tailscale-ink: #ffffff;
   /* §2.9 the project ink by night: lighter, the same chroma */
   --vf-project-ink-l: 0.74;
 

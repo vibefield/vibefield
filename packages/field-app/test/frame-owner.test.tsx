@@ -155,6 +155,7 @@ function mount(door: LineViewDoor | null = null): void {
             waiting: 0,
             detail: "james@example.com",
             detailIsLogin: true,
+            detailTone: "plain",
             canLink: false,
           }}
           others={[]}

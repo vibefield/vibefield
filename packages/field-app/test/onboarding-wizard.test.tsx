@@ -195,6 +195,10 @@ function client(
         if (options.link === undefined) throw new Error("method not found: user.link.subscribe");
         return { subId: "user-link", snapshot: options.link, unsubscribe: () => undefined };
       }
+      // TS-2 — the Connect pane's arrival reads the account's devices
+      if (method === "device.subscribe") {
+        return { subId: "devices", snapshot: [], unsubscribe: () => undefined };
+      }
       throw new Error(`unexpected subscription: ${method}`);
     }),
     request: vi.fn(async () => ({ ok: true })),
@@ -348,10 +352,10 @@ describe("Setup Assistant", () => {
     // 3 — the next question, at once: pane 3 is retired (AO-D2), because
     // nothing long runs before the answers do. Skippable, and the skip says
     // where the question went (W3).
-    expect(text()).toContain("Connect your devices");
+    expect(text()).toContain("Your field, on every device.");
     expect(text()).not.toContain("Your field is already running");
     expect(text()).toContain("Set up later — Settings → Account");
-    await click("Skip");
+    await click("Not now");
 
     // 4 — Setting up: the answers are written first, and only a landed write
     // releases the boot (W5) — the document opens beneath the glass.
@@ -466,7 +470,7 @@ describe("Setup Assistant", () => {
     expect(container?.querySelector('input[aria-label="Your name"]')).not.toBeNull();
     await click("Continue"); // → straight to Setting up; no connect
 
-    expect(text()).not.toContain("Connect your devices");
+    expect(text()).not.toContain("Your field, on every device.");
     expect(onComplete).toHaveBeenCalledTimes(1);
     await boot(bootAt("handing-over"));
     expect(title()).toBe("Welcome to your field, james.");
@@ -509,9 +513,9 @@ describe("Setup Assistant", () => {
     ).toBe(false);
 
     await click("Continue"); // the name → Connect
-    expect(text()).toContain("Connect your devices");
+    expect(text()).toContain("Your field, on every device.");
 
-    await click("Skip");
+    await click("Not now");
     // The write goes out at once, as for anyone...
     expect(updates).toEqual([{ name: "james", face: DEALT_FACE }, { onboarded: true }]);
     expect(onComplete).toHaveBeenCalledTimes(1);
@@ -613,10 +617,10 @@ describe("Setup Assistant", () => {
 
     // A face on the record means pane 2 completed (UA-D17) — the derivation does
     // not care which variant asked it.
-    expect(text()).toContain("Connect your devices");
+    expect(text()).toContain("Your field, on every device.");
     expect(container?.querySelector('input[aria-label="Your name"]')).toBeNull();
 
-    await click("Skip");
+    await click("Not now");
     expect(updates).toEqual([{ onboarded: true }]);
     expect(onComplete).toHaveBeenCalledTimes(1);
   });
@@ -641,7 +645,7 @@ describe("Setup Assistant", () => {
       onComplete,
     });
 
-    await click("Skip");
+    await click("Not now");
     // The variant drops the greeting, never the honesty that goes with it.
     expect(onComplete).not.toHaveBeenCalled();
     expect(text()).toContain("Setup could not be recorded");
@@ -663,7 +667,7 @@ describe("Setup Assistant", () => {
 
     // A pre-v0.3 record's accent means pane 2 was answered before faces
     // existed, and no link means pane 4 is the first thing still unanswered.
-    expect(text()).toContain("Connect your devices");
+    expect(text()).toContain("Your field, on every device.");
     expect(text()).not.toContain(
       "Manage all your agents and compose your agentic workflow in one place.",
     );
@@ -701,34 +705,44 @@ describe("Setup Assistant", () => {
     });
   });
 
-  it("names the tailnet on the linked face and offers the browser flow while it waits", async () => {
+  // TS-2 — the Connect pane (DESIGN.md §8): the payoff asked once,
+  // one click to the browser through the shared door, waiting that keeps its
+  // exits, approval and the refusals in a person's words, other ways in.
+
+  it("names the machine while it waits, keeps its four exits, and opens only when asked", async () => {
     host(vi.fn(async () => ({ ...FRESH, color: "accent-2" }) as FieldUserProfile));
+    const opened = vi.spyOn(window, "open").mockReturnValue(null);
     await mount({
       fieldd: client({
         link: {
-          ...LINKED,
-          link: null,
+          ...NO_LINK,
+          meshEnabled: true,
+          nodeState: "NeedsLogin",
           linkState: "capturing",
           authUrl: "https://login.tailscale.com/a/abc",
+          machineName: "truffle-vibefield-studio",
         },
       }),
       onboarding: onboarding({ color: "accent-2" }),
       onComplete: vi.fn(),
     });
 
-    const anchor = container?.querySelector<HTMLAnchorElement>(
-      'a[href^="https://login.tailscale"]',
+    expect(title()).toBe("Finish in your browser.");
+    expect(text()).toContain("Tailscale will ask to connect truffle-vibefield-studio.");
+    for (const exit of ["Open again", "Copy link", "Sign in on your phone", "Cancel"]) {
+      expect(button(exit)).not.toBeUndefined();
+    }
+    // a capture this pane did not start opens nothing by itself (TS-D5)
+    expect(opened).not.toHaveBeenCalled();
+    await click("Open again");
+    expect(opened).toHaveBeenCalledWith(
+      "https://login.tailscale.com/a/abc",
+      "_blank",
+      "noopener,noreferrer",
     );
-    expect(anchor?.textContent).toBe("Link Tailscale account");
-    expect(anchor?.target).toBe("_blank");
-    expect(text()).toContain("Finish signing in in your browser");
   });
 
-  // UA-P-0g — pane 4 is where the link BEGINS, on the same daemon method and
-  // under the same phrase as Settings → Account. Before this it could only
-  // report a link someone else had already made.
-
-  it("begins the link from pane 4 and sends exactly one begin", async () => {
+  it("asks once with the payoff, and begins the link with exactly one begin", async () => {
     host(vi.fn(async () => ({ ...FRESH, color: "accent-2" }) as FieldUserProfile));
     const fieldd = client({ link: NO_LINK });
     await mount({
@@ -737,14 +751,29 @@ describe("Setup Assistant", () => {
       onComplete: vi.fn(),
     });
 
-    expect(text()).toContain("Connect your devices");
-    expect(text()).toContain("Not linked yet");
+    expect(title()).toBe("Your field, on every device.");
+    expect(text()).toContain("Private network by Tailscale.");
     // ...and the sentence that was false since UA-P-0a is gone with its face.
     expect(text()).not.toContain("FIELD_NATIVE_MESH");
 
-    await click("Link Tailscale account");
+    await click("Continue with Tailscale");
     expect(fieldd.request).toHaveBeenCalledTimes(1);
     expect(fieldd.request).toHaveBeenCalledWith("user.link.begin", {});
+  });
+
+  it("is Not now on Esc, like the button", async () => {
+    host(vi.fn(async () => ({ ...FRESH, color: "accent-2" }) as FieldUserProfile));
+    await mount({
+      fieldd: client({ link: NO_LINK }),
+      onboarding: onboarding({ color: "accent-2" }),
+      onComplete: vi.fn(),
+    });
+
+    expect(title()).toBe("Your field, on every device.");
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    });
+    expect(title()).not.toBe("Your field, on every device.");
   });
 
   it("renders a refused begin on the pane instead of swallowing it", async () => {
@@ -759,23 +788,23 @@ describe("Setup Assistant", () => {
       onComplete: vi.fn(),
     });
 
-    await click("Link Tailscale account");
+    await click("Continue with Tailscale");
 
     expect(text()).toContain("move it aside to link again: /x/link.json");
     expect(container?.querySelector('[role="alert"]')).not.toBeNull();
     // A refusal is not a trap: the pane's other ways out are still there (W3).
-    expect(button("Continue")).not.toBeUndefined();
-    expect(button("Skip")).not.toBeUndefined();
+    expect(button("Not now")).not.toBeUndefined();
+    expect(button("Other ways to sign in")).not.toBeUndefined();
   });
 
-  it("speaks each refused posture with the daemon's own sentence", async () => {
+  it("says each refused posture in a person's words, keeping the daemon's sentence", async () => {
     const cases = [
       {
         wire: refused(
           "login_unavailable",
           "the tailnet has no user for this node (a tagged node cannot link)",
         ),
-        title: "No tailnet user for this node",
+        title: "That sign-in can't own this Mac.",
         act: true,
       },
       {
@@ -783,12 +812,12 @@ describe("Setup Assistant", () => {
           "login_already_linked",
           'the local user "Work" is already linked to this tailscale account; unlink it first',
         ),
-        title: "Already linked by another user here",
+        title: "That account already has a field here.",
         act: true,
       },
       {
         wire: refused("link_corrupt", "link.json is present but unusable: /x/link.json"),
-        title: "Link record unreadable",
+        title: "This Mac's link record is damaged.",
         act: false,
       },
     ];
@@ -801,12 +830,12 @@ describe("Setup Assistant", () => {
         onComplete: vi.fn(),
       });
 
-      expect(text()).toContain(shape.title);
+      expect(title()).toBe(shape.title);
       expect(text()).toContain(String(shape.wire.linkDetail));
       // The act is offered only where asking again is a real act: a corrupt
       // record refuses `begin` by construction until the file is moved aside.
       const offered = Array.from(container?.querySelectorAll("button") ?? []).some(
-        (candidate) => candidate.textContent?.trim() === "Link Tailscale account",
+        (candidate) => candidate.textContent?.trim() === "Use another account",
       );
       expect(offered).toBe(shape.act);
 
@@ -815,6 +844,52 @@ describe("Setup Assistant", () => {
       container?.remove();
       container = null;
     }
+  });
+
+  it("starts over for another account: the refused identity is archived before the new sign-in", async () => {
+    host(vi.fn(async () => ({ ...FRESH, color: "accent-2" }) as FieldUserProfile));
+    const fieldd = client({
+      link: refused(
+        "login_already_linked",
+        'the local user "Work" is already linked to this tailscale account; unlink it first',
+      ),
+    });
+    await mount({
+      fieldd,
+      onboarding: onboarding({ color: "accent-2" }),
+      onComplete: vi.fn(),
+    });
+
+    await click("Use another account");
+    // the refused capture kept its keys: a plain begin would sign the same
+    // account in again, so unlink archives them first
+    expect(
+      (fieldd.request as ReturnType<typeof vi.fn>).mock.calls.map(([method]) => method),
+    ).toEqual(["user.link.unlink", "user.link.begin"]);
+  });
+
+  it("names the machine an admin approves, and lets the person carry on", async () => {
+    host(vi.fn(async () => ({ ...FRESH, color: "accent-2" }) as FieldUserProfile));
+    await mount({
+      fieldd: client({
+        link: {
+          ...NO_LINK,
+          meshEnabled: true,
+          nodeState: "NeedsMachineAuth",
+          linkState: "awaiting_approval",
+          machineName: "truffle-vibefield-studio",
+          adminUrl: "https://login.tailscale.com/admin/machines",
+        },
+      }),
+      onboarding: onboarding({ color: "accent-2" }),
+      onComplete: vi.fn(),
+    });
+
+    expect(title()).toBe("Waiting for approval.");
+    expect(text()).toContain("truffle-vibefield-studio");
+    expect(button("Copy a request for your admin")).not.toBeUndefined();
+    await click("Tell me when it's approved");
+    expect(title()).not.toBe("Waiting for approval.");
   });
 
   it("says what capture is waiting on before the node offers an address", async () => {
@@ -827,13 +902,15 @@ describe("Setup Assistant", () => {
       onComplete: vi.fn(),
     });
 
-    expect(text()).toContain("Asking the tailnet who this node is");
+    expect(title()).toBe("Opening Tailscale…");
+    expect(text()).toContain("Sign in or create an account at Tailscale");
     // Capture is already running — offering to start it again would be a lie.
     expect(
       Array.from(container?.querySelectorAll("button") ?? []).some(
-        (candidate) => candidate.textContent?.trim() === "Link Tailscale account",
+        (candidate) => candidate.textContent?.trim() === "Continue with Tailscale",
       ),
     ).toBe(false);
+    expect(button("Cancel")).not.toBeUndefined();
   });
 
   it("holds the pane and says why when the profile write is refused", async () => {
@@ -897,7 +974,7 @@ describe("Setup Assistant", () => {
       onComplete,
     });
 
-    await click("Skip"); // Connect → Setting up, whose first act is the write
+    await click("Not now"); // Connect → Setting up, whose first act is the write
     // The hold is NOT released: nothing durable says setup happened.
     expect(onComplete).not.toHaveBeenCalled();
     expect(text()).toContain("Setup could not be recorded");
@@ -923,7 +1000,7 @@ describe("Setup Assistant", () => {
       onComplete,
     });
 
-    await click("Skip");
+    await click("Not now");
     await click("Continue anyway");
     // The boot proceeds — the wizard is a hold, never a trap — and the
     // unflipped record means it honestly asks again next launch.
@@ -956,7 +1033,7 @@ describe("Setup Assistant", () => {
     await act(async () => {
       form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     });
-    expect(text()).toContain("Connect your devices");
+    expect(text()).toContain("Your field, on every device.");
   });
 
   it("respects reduced motion — the pane entrance has a fade fallback, no transitions survive", async () => {
@@ -1034,7 +1111,7 @@ describe("Setup Assistant", () => {
 
     await click("Get started");
     await click("Continue"); // nothing to write to — the pane still advances
-    await click("Skip");
+    await click("Not now");
     expect(onComplete).toHaveBeenCalledTimes(1);
     await boot(bootAt("handing-over"));
     await tick(WELCOME_BEAT_MS);
@@ -1045,7 +1122,7 @@ describe("Setup Assistant", () => {
     host(vi.fn(async () => ({ ...FRESH, color: "accent-2" }) as FieldUserProfile));
     const fieldd = client({ link: NO_LINK });
     await mount({ fieldd, onboarding: onboarding({ color: "accent-2" }), onComplete: vi.fn() });
-    await click("Skip");
+    await click("Not now");
     // Settings' "Finish setting up" lists it from here (AO-D10)...
     expect(fieldd.request).toHaveBeenCalledWith("setup.answer", {
       step: "devices",
@@ -1077,7 +1154,7 @@ describe("Setup Assistant", () => {
       onReveal,
       onRetry,
     });
-    await click("Skip");
+    await click("Not now");
     await boot(
       bootAt("opening-document", {
         stage: "opening doc",

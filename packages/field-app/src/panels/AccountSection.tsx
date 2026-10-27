@@ -1,5 +1,5 @@
 import { UserFaceView } from "@vibefield/design-kit/face";
-import { useFielddClient, useSubscription } from "@vibefield/fieldd-client/react";
+import { useFielddClient } from "@vibefield/fieldd-client/react";
 import { type ReactElement, useEffect, useRef, useState } from "react";
 import { FacePicker } from "../account/FacePicker";
 import { faceLabel, faceOf, heldFaces } from "../account/faces";
@@ -7,13 +7,13 @@ import {
   LINK_ACT_LABEL,
   LINK_ACT_PENDING_LABEL,
   type LinkBeginStep,
-  linkFace,
   readableTime,
-  type UserLinkStatus,
+  unlinkedWord,
 } from "../account/link";
 import { POSTURE_CHOICES, useSyncPosture } from "../account/posture";
 import { UserSwitcher } from "../account/UserSwitcher";
 import { accountChanged } from "../account/use-account";
+import { useLinkDoor } from "../account/use-link-door";
 import { type FieldUserFace, type FieldUserProfile, getHost } from "../host";
 import {
   buttonCls,
@@ -327,9 +327,11 @@ function LinkAction({ step, onBegin }: { step: LinkBeginStep; onBegin: () => voi
 
 function LinkBlock(): ReactElement {
   const client = useFielddClient();
-  const status = useSubscription<UserLinkStatus>("user.link.subscribe");
+  // TS-2 — the link's one machinery (account/use-link-door.ts): the hand-off
+  // opens the browser once, the moment the address is ready (TS-D5), here as on
+  // the Setup Assistant's pane and in the face menu.
+  const door = useLinkDoor();
   const [step, setStep] = useState<UnlinkStep>({ kind: "idle" });
-  const [beginStep, setBeginStep] = useState<LinkBeginStep>({ kind: "idle" });
 
   // Esc disarms, consistently (DESIGN.md §7).
   useEffect(() => {
@@ -356,26 +358,16 @@ function LinkBlock(): ReactElement {
     }
   };
 
-  /** UA-P-0g — the link act. The answer IS a `UserLinkStatus`, and it is
-   * deliberately NOT applied here: `user.link.subscribe` is the one thing that
-   * moves this face, and a response written into local state could only ever
-   * disagree with it. What this step owns is the two things the subscription
-   * cannot say — that a click is in flight, and that the daemon refused. */
-  const begin = async (): Promise<void> => {
-    setBeginStep({ kind: "pending" });
-    try {
-      await client.request("user.link.begin", {});
-      setBeginStep({ kind: "idle" });
-    } catch (cause) {
-      setBeginStep({
-        kind: "failed",
-        reason: cause instanceof Error ? cause.message : String(cause),
-      });
-    }
+  /** UA-P-0g — the link act. The face moves on `user.link.subscribe` alone;
+   * what the door's step owns is the two things the subscription cannot say —
+   * that a click is in flight, and that the daemon refused. */
+  const begin = (): void => {
+    void door.begin();
   };
+  const beginStep: LinkBeginStep = door.step;
 
   // One reading of the snapshot, shared with the Setup Assistant's pane 4.
-  const face = linkFace(status.status, status.status === "live" ? (status.data ?? null) : null);
+  const face = door.face;
 
   let body: ReactElement;
   if (face.kind === "loading") {
@@ -390,27 +382,19 @@ function LinkBlock(): ReactElement {
       </div>
     );
   } else if (face.kind === "offline") {
-    // UA-P-0g — the ordinary unlinked desktop, and the whole point of this
-    // slice: before it, this face said the mesh was env-gated and offered
-    // nothing, so a fresh install (or anything that pressed Unlink) could
-    // never link from the UI at all.
+    // UA-P-0g — the ordinary unlinked desktop. TS-2 — in the link's words: not
+    // "offline", which reads as no internet (TS-D2).
     body = (
       <div className="space-y-1">
         <div className="flex items-center justify-between gap-2">
           <span className={labelCls}>account</span>
-          <span>not linked</span>
+          <span>{unlinkedWord(getHost().platform)}</span>
         </div>
-        {face.nodeState !== null && (
-          <div className="flex items-center justify-between gap-2">
-            <span className={labelCls}>node</span>
-            <span>{face.nodeState}</span>
-          </div>
-        )}
         <div className={labelCls}>
-          This device is offline: no tailnet, no other machines, nothing published. Everything local
-          keeps working. Linking signs you in to Tailscale in your browser.
+          Everything local keeps working. Connecting signs you in to Tailscale in your browser, and
+          your other devices reach this field.
         </div>
-        <LinkAction step={beginStep} onBegin={() => void begin()} />
+        <LinkAction step={beginStep} onBegin={begin} />
       </div>
     );
   } else if (face.kind === "refused") {
@@ -424,13 +408,75 @@ function LinkBlock(): ReactElement {
         </div>
         <div className={labelCls}>{face.detail}</div>
         {face.canBegin ? (
-          <LinkAction step={beginStep} onBegin={() => void begin()} />
+          <LinkAction step={beginStep} onBegin={begin} />
         ) : (
           <div className={labelCls}>
             Linking is refused until that file is moved aside — this field never overwrites an
             identity record by guessing.
           </div>
         )}
+      </div>
+    );
+  } else if (face.kind === "approval") {
+    // TS-2 — the tailnet's device approval holds this Mac: an admin acts now.
+    body = (
+      <div className="space-y-1">
+        <div className="flex items-center justify-between gap-2">
+          <span className={labelCls}>account</span>
+          <span className="vf-ui-tone-attention">Waiting for approval</span>
+        </div>
+        <div className={labelCls}>
+          An admin approves new devices on this network.
+          {face.machineName !== null && (
+            <>
+              {" "}
+              This Mac shows as <span className="vf-ui-mono">{face.machineName}</span>.
+            </>
+          )}
+        </div>
+        <div className="flex items-center justify-end gap-2 pt-2">
+          {face.adminUrl !== null && (
+            <a className={buttonCls} href={face.adminUrl} target="_blank" rel="noreferrer">
+              Open the admin console
+            </a>
+          )}
+          {face.link === null && (
+            <button type="button" className={buttonCls} onClick={() => void door.cancel()}>
+              Cancel
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  } else if (face.kind === "signedOut") {
+    // TS-2 — the link stands, and its node is signed out: one click signs it
+    // in again (renew), and the new address opens when the floor offers it.
+    body = (
+      <div className="space-y-1">
+        <div className="flex items-center justify-between gap-2">
+          <span className={labelCls}>account</span>
+          <span>{face.link.login ?? "your account"}</span>
+        </div>
+        <div className={labelCls}>
+          {face.reason === "removed"
+            ? "This Mac was removed from your network. Connecting again adds it as a new device."
+            : "Tailscale's sign-in for this Mac expired. Your other devices can't reach it until you sign in again; nothing here is lost."}
+        </div>
+        <div className="flex flex-col items-end gap-2 pt-2">
+          {beginStep.kind === "failed" && (
+            <div className="text-right text-[12px] text-amber-600 dark:text-amber-400" role="alert">
+              {beginStep.reason}
+            </div>
+          )}
+          <button
+            type="button"
+            className={buttonCls}
+            disabled={beginStep.kind === "pending"}
+            onClick={() => (face.authUrl !== null ? door.openAgain() : void door.renew())}
+          >
+            {face.reason === "removed" ? "Connect again" : "Sign in again"}
+          </button>
+        </div>
       </div>
     );
   } else if (face.kind === "linked") {
@@ -503,26 +549,29 @@ function LinkBlock(): ReactElement {
       </div>
     );
   } else if (face.authUrl !== null) {
-    // Capturing, with an address: the node is up and the browser has the ball.
+    // Capturing, with an address: the browser has the ball, and the exits stay
+    // in reach (TS-2 — Open again, Copy link, Cancel).
     body = (
       <div className="space-y-1">
-        <div className="flex items-center justify-between gap-2">
-          <span className={labelCls}>node</span>
-          <span className="flex items-center gap-1.5">
-            <a
-              href={face.authUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="vf-ui-tone-info underline"
-            >
-              authenticate
-            </a>
-            {face.nodeState ?? "waiting for authentication"}
-          </span>
-        </div>
         <div className={labelCls}>
-          Waiting for you to finish in the browser. This page names the account as soon as the node
-          comes up.
+          Finish signing in in your browser. This page names the account as soon as this Mac joins.
+          {face.machineName !== null && (
+            <>
+              {" "}
+              Tailscale will ask to connect <span className="vf-ui-mono">{face.machineName}</span>.
+            </>
+          )}
+        </div>
+        <div className="flex items-center justify-end gap-2 pt-2">
+          <button type="button" className={buttonCls} onClick={() => door.openAgain()}>
+            Open again
+          </button>
+          <button type="button" className={buttonCls} onClick={() => void door.copyLink()}>
+            Copy link
+          </button>
+          <button type="button" className={buttonCls} onClick={() => void door.cancel()}>
+            Cancel
+          </button>
         </div>
       </div>
     );
@@ -532,13 +581,15 @@ function LinkBlock(): ReactElement {
     // what we are waiting on rather than a promise of what comes next.
     body = (
       <div className="space-y-1">
-        <div className="flex items-center justify-between gap-2">
-          <span className={labelCls}>node</span>
-          <span>{face.nodeState ?? "starting"}</span>
-        </div>
         <div className={labelCls}>
-          Linking: asking the tailnet who this node is. The sign-in address appears here as soon as
-          the node offers one.
+          {face.failure === "sidecar_missing"
+            ? "VibeField's network part is missing. Reinstall VibeField to connect; everything local keeps working."
+            : "Opening Tailscale… The sign-in opens in your browser as soon as this Mac has its address."}
+        </div>
+        <div className="flex items-center justify-end gap-2 pt-2">
+          <button type="button" className={buttonCls} onClick={() => void door.cancel()}>
+            Cancel
+          </button>
         </div>
       </div>
     );
@@ -547,7 +598,7 @@ function LinkBlock(): ReactElement {
   return (
     <SettingsSection
       title="Connect your devices"
-      description="Your devices, your tailnet. Everything here works locally without it."
+      description="Your devices, privately, by Tailscale. Everything here works locally without it."
     >
       {body}
     </SettingsSection>

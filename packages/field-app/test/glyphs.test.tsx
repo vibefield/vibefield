@@ -243,6 +243,8 @@ describe("the glyph set", () => {
     // one component, one <svg> — and no other file of the bar's. DK-16 (R17):
     // the peers' pointer arrow, the page's drawing — one view, one <svg>.
     const allow = new Map<string, number>([
+      // TS-D4 (DESIGN.md §13): Tailscale's logomark, a vendor mark kept exact
+      ["account/tailscale-mark.tsx", 1],
       ["field/desk/bar/KindGlyph.tsx", 1],
       ["field/desk/peers/PeersView.tsx", 1],
       ["godview/os-marks.tsx", 1],

@@ -1281,8 +1281,10 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   arrives, once, because the person clicked. **Waiting** names two true steps — "Sign in or create
   an account at Tailscale" → "This Mac joins your network" — the live one breathing (§6's loop),
   says "Tailscale will ask to connect `<machine name>`. That's this Mac.", and keeps its exits:
-  Open again · Copy link · Sign in on your phone (a QR of the same address, drawn locally) ·
-  Cancel. There is no timer: a new account takes the minutes it takes. **Approval** (a network
+  Open again · Copy link · Sign in on your phone (a QR of the same address, drawn locally, 148 px
+  square: black on white in both themes, `--vf-qr-ink` `#000000` on `--vf-qr-ground` `#FFFFFF`
+  with its two-module quiet border inside the ground, because a scanner reads contrast, not a
+  theme) · Cancel. There is no timer: a new account takes the minutes it takes. **Approval** (a network
   whose admin approves devices): the machine named as the console shows it; **Tell me when it's
   approved** (the person carries on, and the face menu's line says "Waiting for approval"); Copy a
   request for your admin (the machine name and the Machines page); Use another account; the

@@ -154,7 +154,7 @@ const typeInto = (input: HTMLInputElement, value: string): void => {
 /** The one phrase for the act, found the way a person finds it: by its label. */
 const linkAct = (): HTMLButtonElement | undefined =>
   Array.from(container?.querySelectorAll<HTMLButtonElement>("button") ?? []).find(
-    (button) => button.textContent === "Link Tailscale account",
+    (button) => button.textContent === "Continue with Tailscale",
   );
 
 describe("AccountSection", () => {
@@ -386,12 +386,13 @@ describe("AccountSection", () => {
       }),
     );
 
-    const anchor = container?.querySelector<HTMLAnchorElement>(
-      'a[href^="https://login.tailscale.com"]',
+    // TS-2 — the waiting face keeps its exits in reach (TS-D5): the address is
+    // opened again by the door, never by a bare underlined word
+    const labels = Array.from(container?.querySelectorAll("button") ?? []).map(
+      (button) => button.textContent,
     );
-    expect(anchor?.textContent).toBe("authenticate");
-    expect(anchor?.target).toBe("_blank");
-    expect(text()).toContain("Waiting for you to finish in the browser");
+    expect(labels).toEqual(expect.arrayContaining(["Open again", "Copy link", "Cancel"]));
+    expect(text()).toContain("Finish signing in in your browser");
   });
 
   // UA-P-0g — the act. Before this, an unlinked desktop (which is every fresh
@@ -404,8 +405,9 @@ describe("AccountSection", () => {
     const fieldd = client({ link: OFFLINE });
     await mount(fieldd);
 
-    expect(text()).toContain("not linked");
-    expect(text()).toContain("This device is offline");
+    // TS-D2 — the ordinary first-run state in its own words, never "offline"
+    expect(text()).toContain("This Mac only");
+    expect(text()).not.toContain("offline");
     // ...and the sentence that was false since UA-P-0a is gone with its face.
     expect(text()).not.toContain("FIELD_NATIVE_MESH");
 
@@ -443,8 +445,7 @@ describe("AccountSection", () => {
       }),
     );
 
-    expect(text()).toContain("asking the tailnet who this node is");
-    expect(text()).toContain("Starting");
+    expect(text()).toContain("Opening Tailscale…");
     // Capture is already running — offering to start it again would be a lie.
     expect(linkAct()).toBeUndefined();
   });
@@ -527,7 +528,7 @@ describe("AccountSection", () => {
       client({ link: { link: null, meshEnabled: false, nodeState: null, authUrl: null } }),
     );
 
-    expect(text()).toContain("This device is offline");
+    expect(text()).toContain("This Mac only");
     expect(linkAct()).not.toBeUndefined();
   });
 

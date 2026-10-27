@@ -2,7 +2,6 @@ import type { ThemeName, ThemePreference } from "@vibefield/contracts";
 import { faceLiftHostClass, UserFaceView } from "@vibefield/design-kit/face";
 import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import { SegmentedControl } from "@vibefield/design-kit/primitives";
-import { useFielddClient, useSubscription } from "@vibefield/fieldd-client/react";
 import {
   type CSSProperties,
   Fragment,
@@ -18,13 +17,14 @@ import { leaveFor } from "../boot/switch";
 import { roundButtonCls } from "../field/theme-constants";
 import { getHost } from "../host";
 import { setAppTheme, THEME_LABELS, themeChoice, themeLabel, useAppTheme } from "../theme";
-import type { UserLinkStatus } from "./link";
+import { CONNECT_ROW_LABEL } from "./link";
 import {
   type AccountMe,
   type AccountPerson,
   refusalSentence,
   useAccountSnapshot,
 } from "./use-account";
+import { useLinkDoor } from "./use-link-door";
 import "./MeMenu.css";
 
 // The Me menu (UA-D19; DESIGN.md §8 "The Me menu") — the owner's face in the
@@ -58,8 +58,9 @@ export interface MeMenuViewProps {
   onOpenSettings: () => void;
   /** Your name and login open Settings → Account. */
   onOpenAccount: () => void;
-  /** Link Tailscale account… (offered only while unlinked) STARTS the link
-   * (One Frame F16): the menu folds and the controller asks the daemon. */
+  /** Connect your devices… (offered only while this Mac is not connected)
+   * STARTS the link (One Frame F16; TS-D1 its words): the menu folds and the
+   * controller asks the daemon. */
   onLink: () => void;
   /** Absent: this host cannot switch, and the rows say nothing false. `from`
    * is the row that was pressed — the switch carries its face (§8). */
@@ -355,7 +356,7 @@ export function MeMenuView({
           <span className="vf-me-slot vf-me-icon">
             <MenuIcon name="link" />
           </span>
-          <span className="vf-me-row-label">Link Tailscale account…</span>
+          <span className="vf-me-row-label">{CONNECT_ROW_LABEL}</span>
         </button>
       ),
     });
@@ -419,7 +420,10 @@ export function MeMenuView({
       >
         <span className="vf-me-you-name">{me.name}</span>
         {me.detail.length > 0 && (
-          <span className={`vf-me-you-detail${me.detailIsLogin ? " vf-ui-mono" : ""}`}>
+          <span
+            className={`vf-me-you-detail${me.detailIsLogin ? " vf-ui-mono" : ""}`}
+            data-tone={me.detailTone === "attention" ? "attention" : undefined}
+          >
             {me.detail}
           </span>
         )}
@@ -505,12 +509,6 @@ export function MeMenuView({
   );
 }
 
-/** Open a sign-in address in the browser: a window the shell denies and hands
- * to the OS (design-03 §5.1), a tab in a browser harness. */
-function openSignIn(url: string): void {
-  window.open(url, "_blank", "noopener,noreferrer");
-}
-
 /** The controller: the account snapshot, the app's one theme, and the acts.
  * Renders nothing while it learns who this window belongs to — the corner
  * never shows a face it has to take back — and falls back to the plain
@@ -532,12 +530,11 @@ export function MeMenu({
   const account = useAccountSnapshot();
   // The app's ONE theme (FC-D5): the same store Settings → Appearance reads.
   const theme = useAppTheme();
-  const client = useFielddClient();
-  const link = useSubscription<UserLinkStatus>("user.link.subscribe");
+  // TS-2 — the link's one machinery: the hand-off (F16) lives there now, shared
+  // with the Setup Assistant's pane and Settings → Devices (TS-D5)
+  const door = useLinkDoor();
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
-  /** A link this menu started is waiting for the node's sign-in address. */
-  const [signingIn, setSigningIn] = useState(false);
   const host = getHost();
   // Folding the menu clears a refusal: it is said once, where the act was.
   const onMenuOpenChange = useCallback(
@@ -547,15 +544,6 @@ export function MeMenu({
     },
     [onOpenChange],
   );
-
-  // F16 — the link's second half: the moment the node offers its sign-in
-  // address, the browser opens it, once.
-  const authUrl = link.status === "live" ? (link.data?.authUrl ?? null) : null;
-  useEffect(() => {
-    if (!signingIn || authUrl === null) return;
-    setSigningIn(false);
-    openSignIn(authUrl);
-  }, [authUrl, signingIn]);
 
   if (account.me === null) {
     if (account.status === "loading") return null;
@@ -587,27 +575,18 @@ export function MeMenu({
     });
   };
 
-  /** Link Tailscale account… STARTS the link (One Frame F16 — it opened
-   * Settings → Account, as the name row does). The daemon's own act, the one
-   * Account's button runs: the face beside you moves on the subscription, the
-   * sign-in opens in the browser when the node offers it, and a refusal comes
-   * back to the top of the menu in the daemon's words. */
+  /** Connect your devices… STARTS the link (One Frame F16 — it opened
+   * Settings → Account, as the name row does). The daemon's own act, through
+   * the door every surface shares: the line under your name moves on the
+   * subscription, the sign-in opens in the browser when the node offers it,
+   * and a refusal comes back to the top of the menu in the daemon's words. */
   const beginLink = (): void => {
     setRefusal(null);
-    setSigningIn(true);
-    client.request("user.link.begin", {}).then(
-      (answer) => {
-        const url = (answer as Partial<UserLinkStatus> | null)?.authUrl ?? null;
-        if (url === null) return;
-        setSigningIn(false);
-        openSignIn(url);
-      },
-      (cause: unknown) => {
-        setSigningIn(false);
-        setRefusal(refusalSentence("Couldn't link this device", cause));
-        onOpenChange(true);
-      },
-    );
+    void door.begin().then((reason) => {
+      if (reason === null) return;
+      setRefusal(refusalSentence("Couldn't connect to Tailscale", reason));
+      onOpenChange(true);
+    });
   };
 
   return (

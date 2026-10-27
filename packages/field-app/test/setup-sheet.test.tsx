@@ -37,6 +37,9 @@ afterEach(async () => {
   container = null;
 });
 
+/** Who is finishing setup — the face the Connect pane is drawn around (TS-2). */
+const ME = { face: { emoji: "🦊" }, seed: "01J8Z3K6W9QX2M4N7P5R8T1V3B" };
+
 function fieldd(): FielddClient {
   return {
     status: "ready",
@@ -53,8 +56,12 @@ function fieldd(): FielddClient {
             linkState: "offline",
             linkDetail: null,
           },
-          unsubscribe: () => undefined,
+          unsubscribe: (): void => undefined,
         };
+      }
+      // TS-2 — the Connect pane reads the account's devices for its arrival
+      if (method === "device.subscribe") {
+        return { subId: "devices", snapshot: [], unsubscribe: (): void => undefined };
       }
       throw new Error(`unexpected subscription: ${method}`);
     }),
@@ -78,7 +85,7 @@ async function open(onClose: () => void): Promise<FielddClient> {
       createElement(
         FielddProvider,
         { client },
-        createElement(SetupSheet, { steps: ["devices"], onClose }),
+        createElement(SetupSheet, { me: ME, steps: ["devices"], onClose }),
       ),
     );
   });
@@ -134,7 +141,7 @@ describe("Finish setting up's sheet (AO-D10)", () => {
         createElement(
           FielddProvider,
           { client: fieldd() },
-          createElement(SetupSheet, { steps: [], onClose }),
+          createElement(SetupSheet, { me: ME, steps: [], onClose }),
         ),
       );
     });
