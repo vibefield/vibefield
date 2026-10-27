@@ -183,9 +183,47 @@
   outline-offset: 2px;
 }
 
-.vf-views-cell > .vf-glyph {
+/* The glyph's place: one cell of a grid, so History's arc lies exactly over its
+   glyph and the cell's column never moves. */
+.vf-views-glyph {
+  display: grid;
   flex: none;
   transition: opacity 160ms ease;
+}
+
+.vf-views-glyph > * {
+  grid-area: 1 / 1;
+}
+
+/* AO-4b — History's arc (DESIGN.md §6 "the arc", §8 the views track): while
+   History imports, a fifth of the glyph's own circle travels it once every
+   1.1s on the island curve, over the glyph resting at a third of its ink. It
+   carries no number; the cell still presses at once. */
+.vf-views-glyph[data-importing] > .vf-glyph:not(.vf-views-arc) {
+  opacity: 0.33;
+}
+
+/* The kit's `importing` glyph (§13): the fifth starts at twelve o'clock. */
+.vf-views-arc {
+  animation: vf-views-arc 1.1s var(--vf-ease-island) infinite;
+}
+
+@keyframes vf-views-arc {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* M6: no travel — the arc rests at the top of the circle until the archive is
+   ready. */
+@media (prefers-reduced-motion: reduce) {
+  .vf-views-arc {
+    animation: none;
+  }
 }
 
 /* The key, printed under the glyph: the digit the legend at 9/600 in
@@ -223,7 +261,7 @@
 }
 
 /* ⌘ held alone for 400ms: the keys light up and the glyphs step back. */
-.vf-views-line[data-held] .vf-views-cell:not([aria-disabled]) > .vf-glyph {
+.vf-views-line[data-held] .vf-views-cell:not([aria-disabled]) .vf-views-glyph {
   opacity: 0.45;
 }
 

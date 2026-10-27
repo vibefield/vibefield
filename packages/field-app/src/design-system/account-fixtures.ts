@@ -1,4 +1,4 @@
-import { AGENT_CATALOG } from "@vibefield/contracts";
+import { AGENT_CATALOG, type IndexStatus } from "@vibefield/contracts";
 import type { AccountMe, AccountPerson } from "../account/use-account";
 import type { HistoryAgentRow } from "../setup/history-consent";
 
@@ -104,4 +104,54 @@ export const FIXTURE_HISTORY_CENSUS = {
  * census's first agent, brought in already. */
 export const FIXTURE_HISTORY_CONSENTED: ReadonlySet<string> = new Set(
   FIXTURE_HISTORY_CENSUS.rows.slice(0, 1).map((row) => row.kind),
+);
+
+/** AO-4b — History's first reading as Setting up hears it pushed: the census's
+ * first agent brought in, its skim at 1,215 of 5,912 files; then landed (rosetta
+ * queues a skimmed agent again to stream it), 4,441 sessions in 74 projects. */
+const firstReading = (
+  backfill: { state: string; filesSkimmed: number; sessionsTotal: number },
+  projects: number,
+): IndexStatus => {
+  const reading = FIXTURE_HISTORY_CENSUS.rows.slice(0, 1);
+  return {
+    phase: "backfilling",
+    rosettad: { phase: "ready", detail: null, pid: 51207, protocolVersion: 20 },
+    enrollment: {
+      enabledKinds: reading.map((row) => row.kind),
+      runtimes: [],
+      retired: [],
+      updatedAt: null,
+    },
+    runtimes: reading.map((row) => ({
+      runtimeId: "rt_5f0c9a2e1b7d4c3a",
+      kind: row.kind,
+      provenance: "discovered" as const,
+      dataRoot: row.root,
+      watched: true,
+      backfill: {
+        filesTotal: 5912,
+        bytesTotal: 12_200_000_000,
+        bytesStreamed: 0,
+        records: 0,
+        ...backfill,
+      },
+    })),
+    projects: Array.from({ length: projects }, (_, i) => ({
+      key: `p1:fixture${i}`,
+      sessionsTotal: 60,
+      sessionsDone: 0,
+      bytesTotal: 165_000_000,
+      bytesStreamed: 0,
+    })),
+  };
+};
+
+export const FIXTURE_FIRST_READING_FINDING = firstReading(
+  { state: "skimming", filesSkimmed: 1215, sessionsTotal: 0 },
+  0,
+);
+export const FIXTURE_FIRST_READING_FOUND = firstReading(
+  { state: "queued", filesSkimmed: 5912, sessionsTotal: 4441 },
+  74,
 );

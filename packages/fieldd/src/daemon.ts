@@ -67,6 +67,7 @@ import {
   IdempotencyKey,
   INDEX_MESH,
   INDEX_RECENT_DEFAULT_LIMIT,
+  INDEX_STATUS_FEED,
   INDEX_TIMELINE,
   IndexActivityParams,
   IndexCatalogSubscribeParams,
@@ -82,6 +83,7 @@ import {
   IndexSessionParams,
   IndexSessionSubscribeParams,
   IndexSessionsParams,
+  type IndexStatus,
   IndexTimelineParams,
   isAgentResumeRun,
   KvDeleteParams,
@@ -233,6 +235,7 @@ import { clipActivity, createActivityReader, monitorHistoryPort } from "./index-
 import { IndexCatalog } from "./index-catalog";
 import { IndexMesh } from "./index-mesh";
 import { INDEX_SERVE_ID, IndexServeDriver, IndexTicketMinter, indexPlaneLive } from "./index-serve";
+import { IndexStatusFeed } from "./index-status-feed";
 import { IndexTailService } from "./index-tail";
 import { checkThreadsCaller, createThreadsPager } from "./index-threads";
 import { InstallSetReconciler } from "./install-reconciler";
@@ -2230,13 +2233,45 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // rides only to this desktop's own windows: the room is theirs, and
     // rosetta keeps the fold for the daemon's life, so the phone (which keeps
     // no room) is not sent it on every read.
+    const ownWindow = (ctx: CallerContext): boolean =>
+      ctx.principal.kind === "local-token" || ctx.principal.kind === "shell-main";
     api.register("index.status", (ctx) =>
-      index.status(
-        ctx.principal.kind === "local-token" || ctx.principal.kind === "shell-main"
-          ? { projects: (rows) => projectDoors.backfills(rows) }
-          : {},
-      ),
+      index.status(ownWindow(ctx) ? { projects: (rows) => projectDoors.backfills(rows) } : {}),
     );
+    // AO-4b — the same status pushed, for the desk's History cell and Setting
+    // up: ONE poller while anyone listens (`IndexStatusFeed`), reading as this
+    // desktop's windows are answered, and at once when the daemon's phase
+    // moves; another caller's frames leave the per-project fold out, as
+    // `index.status` does. Whole values at the feed's floor (`wholeValueDoor`):
+    // a frame equal to what this reader holds is not sent.
+    const indexStatusFeed = new IndexStatusFeed({
+      read: () => index.status({ projects: (rows) => projectDoors.backfills(rows) }),
+      logger,
+    });
+    rosettad?.on("transition", () => indexStatusFeed.poke());
+    api.registerSubscription("index.status.subscribe", async (ctx, _params, emit) => {
+      const lease = await indexStatusFeed.open();
+      const view = (status: IndexStatus): IndexStatus => {
+        if (ownWindow(ctx)) return status;
+        const { projects: _fold, ...rest } = status;
+        return rest;
+      };
+      const door = wholeValueDoor(
+        { read: () => view(lease.current()), onChange: lease.onChange },
+        emit,
+        {
+          minIntervalMs: INDEX_STATUS_FEED.IMPORT_TICK_MS,
+          onError: streamFrameFailed("index.status.subscribe"),
+        },
+      );
+      return {
+        snapshot: door.snapshot,
+        dispose: () => {
+          door.dispose();
+          lease.close();
+        },
+      };
+    });
     api.register("index.discoveries", () => index.discoveries());
     // AR-5e — the find sheet's two reads (thinking-ar-views-port.md §6.3).
     // Projections like the two above: no origin, no enrolled root's path. A

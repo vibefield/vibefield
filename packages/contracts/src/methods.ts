@@ -3,6 +3,7 @@ import { NativeTickParams } from "./mgmt";
 import {
   AGENT_FIELD,
   INDEX_MESH,
+  INDEX_STATUS_FEED,
   PEER_FIELDD_SCOPES,
   PRODUCT_API_LIMITS,
   PROJECT_DOORS,
@@ -1785,6 +1786,18 @@ export const METHODS: MethodDef[] = [
     scope: "index.read",
     idempotent: true,
     locality: "local",
+  }),
+  // AO-4b — the first reading, pushed: the desk's History cell (the arc) and
+  // Setting up's History line hear `index.status` whole, the newest standing,
+  // instead of polling at the room's pace. The read it pushes is `index.read`
+  // and this desktop's, so is the push.
+  defineMethod({
+    surface: "product",
+    method: "index.status.subscribe",
+    scope: "index.read",
+    idempotent: true,
+    locality: "local",
+    subscription: { shape: "stream", cadenceFloorMs: INDEX_STATUS_FEED.IMPORT_TICK_MS },
   }),
   // AR-5e — the find sheet's two questions: `sessions` is what the index
   // knows about the live runs (by provider-native id) and `search` is one

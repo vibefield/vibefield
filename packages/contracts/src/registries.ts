@@ -475,6 +475,17 @@ export const INDEX_TIMELINE = {
   OBJECT_CHARS: 200,
 } as const;
 
+/** AO-4b (track AO; `thinking-agent-onboarding.md` §5) — `index.status.subscribe`'s
+ * one poller in fieldd (`IndexStatusFeed`), running while anyone listens: it
+ * reads the daemon's status every IMPORT_TICK_MS while History imports and
+ * every REST_TICK_MS once nothing is being read, and at once when the
+ * enrollment changes or the daemon's phase does. The stream floor is the
+ * import tick: no reader is served faster. TS-only: no native reader. */
+export const INDEX_STATUS_FEED = {
+  IMPORT_TICK_MS: 1_000,
+  REST_TICK_MS: 30_000,
+} as const;
+
 /** PJ-1 (`thinking-project-places.md` §4, PJ-D1…D24 RULED (a) 2026-10-07;
  * `build-pj.md` L4, L5) — the project grouping is a LOCKSTEP event (PJ-L1):
  * every daemon computes the same projects from the same place facts, so

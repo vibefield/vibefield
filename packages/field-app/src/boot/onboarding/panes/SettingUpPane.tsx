@@ -1,6 +1,13 @@
 import { type ReactElement, useCallback, useEffect, useRef, useState } from "react";
+import { useIndexStatus } from "../../../history/first-reading";
 import type { FieldHost, FieldUserProfile } from "../../../host";
 import type { BootView } from "../../machine";
+import {
+  historySetupPhase,
+  historyToShow,
+  START_NOW_AFTER_MS,
+  waitsForHistory,
+} from "../history-line";
 import {
   type OnboardingCompletionFlag,
   OnboardingSettingUpPaneView,
@@ -21,8 +28,10 @@ export const WELCOME_BEAT_MS = 1_400;
  *   2. the desk opens beneath the glass — its line is the boot machine's own
  *      phase and stage (W4), and a desk that cannot open says why and offers
  *      the boot's Retry, as the splash would;
- *   3. once every fact is in, the welcome's beat, then the reveal. A second
- *      user's end has no welcome (§6.2): the glass hands over at once. */
+ *   3. once every fact is in — the desk, and History's first pass when history
+ *      was brought in (AO-4b: at most 8s past the desk, then Start now) — the
+ *      welcome's beat, then the reveal. A second user's end has no welcome
+ *      (§6.2): the glass hands over at once. */
 export function SettingUpPane({
   profile,
   welcomeName,
@@ -103,9 +112,24 @@ export function SettingUpPane({
             }
           : { key: "desk", label: "Your desk", state: "waiting" };
 
+  // AO-4b — History's first pass, when history was brought in (AO-D4): its
+  // line in the room's own words, heard pushed, and waited for — but never
+  // more than 8s past the desk, when Start now goes on without it.
+  const index = useIndexStatus();
+  const history = historyToShow(index) ? historySetupPhase(index) : null;
+  const waiting = waitsForHistory(index);
+  const [slow, setSlow] = useState(false);
+  const [startNow, setStartNow] = useState(false);
+  useEffect(() => {
+    if (!deskReady || !waiting) return;
+    const timer = setTimeout(() => setSlow(true), START_NOW_AFTER_MS);
+    return () => clearTimeout(timer);
+  }, [deskReady, waiting]);
+  const factsIn = answered && deskReady && (!waiting || startNow);
+
   // 3 — every fact in: the welcome's beat, then the reveal.
   useEffect(() => {
-    if (!answered || !deskReady) return;
+    if (!factsIn) return;
     if (welcomeName === null) {
       onReveal();
       return;
@@ -113,11 +137,11 @@ export function SettingUpPane({
     setReady(true);
     const timer = setTimeout(onReveal, WELCOME_BEAT_MS);
     return () => clearTimeout(timer);
-  }, [answered, deskReady, welcomeName, onReveal]);
+  }, [factsIn, welcomeName, onReveal]);
 
   return (
     <OnboardingSettingUpPaneView
-      phases={[desk]}
+      phases={history === null ? [desk] : [desk, history]}
       name={welcomeName}
       ready={ready}
       flag={flag}
@@ -128,6 +152,7 @@ export function SettingUpPane({
         onAnswered(profile);
       }}
       onRetryPhase={onRetryBoot}
+      onStartNow={slow && waiting && !startNow ? () => setStartNow(true) : undefined}
       settingsChord={settingsChord}
     />
   );

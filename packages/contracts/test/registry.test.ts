@@ -29,6 +29,7 @@ import {
   HOST_SINGLETON_EXTERNALS,
   HOST_SINGLETON_MODULE_SPECIFIERS,
   INDEX_MESH,
+  INDEX_STATUS_FEED,
   LOG_STREAMS,
   MESH_CONTROL_LIMITS,
   PEER_FIELDD_SCOPES,
@@ -290,6 +291,12 @@ describe("SP-1 — the subscription descriptor (SP-L4)", () => {
       "index.session.subscribe": {
         shape: "rows",
         cadenceFloorMs: INDEX_MESH.SESSION_TAIL_MIN_INTERVAL_MS,
+      },
+      // AO-4b — the first reading, whole, at the feed's import tick (a second;
+      // the phone may open it and reads it without the per-project fold)
+      "index.status.subscribe": {
+        shape: "stream",
+        cadenceFloorMs: INDEX_STATUS_FEED.IMPORT_TICK_MS,
       },
       // FS-1a (L3) — the files service's roots, as rows at the stream floor
       "workspace.subscribe": {

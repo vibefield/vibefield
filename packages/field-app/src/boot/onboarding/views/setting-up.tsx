@@ -23,6 +23,10 @@ export interface OnboardingSetupPhase {
   readonly detail?: string | undefined;
 }
 
+/** History's first pass has run 8s past the desk (AO-D4): said over Start now. */
+export const START_NOW_LINE =
+  "Finding sessions in a history this size takes longer. It carries on in History.";
+
 export function OnboardingSettingUpPaneView({
   phases,
   name,
@@ -31,6 +35,7 @@ export function OnboardingSettingUpPaneView({
   onRetryWrite,
   onContinueAnyway,
   onRetryPhase,
+  onStartNow,
   settingsChord = "⌘,",
 }: {
   phases: readonly OnboardingSetupPhase[];
@@ -45,6 +50,9 @@ export function OnboardingSettingUpPaneView({
   onContinueAnyway: () => void;
   /** A failed phase's one act — the boot's own Retry for the desk. */
   onRetryPhase: () => void;
+  /** AO-D4 — present once History's first pass has run 8s past the desk: go on
+   * without it, and History carries on reading. */
+  onStartNow?: (() => void) | undefined;
   /** The Settings chord as this platform spells it. */
   settingsChord?: string;
 }): ReactElement {
@@ -72,6 +80,7 @@ export function OnboardingSettingUpPaneView({
 
   const failed = phases.some((phase) => phase.state === "failed");
   const welcome = name !== null && ready;
+  const slow = !failed && !ready && onStartNow !== undefined;
   return (
     <WizardPane
       eyebrow={welcome ? "Ready" : "Setting up"}
@@ -88,10 +97,15 @@ export function OnboardingSettingUpPaneView({
           <button type="submit" className={primaryCls}>
             Retry
           </button>
+        ) : slow ? (
+          <button type="submit" className={primaryCls}>
+            Start now
+          </button>
         ) : null
       }
       onSubmit={() => {
         if (failed) onRetryPhase();
+        else if (slow) onStartNow?.();
       }}
     >
       <ul className="vf-wizard-phases" aria-label="Setting up">
@@ -107,6 +121,7 @@ export function OnboardingSettingUpPaneView({
           </li>
         ))}
       </ul>
+      {slow && <p className={factCls}>{START_NOW_LINE}</p>}
       {name !== null && (
         // DESIGN.md §8's discoverability, said once: a face does not say
         // "settings" the way the gear it replaced did. It arrives with the welcome.

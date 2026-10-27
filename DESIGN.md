@@ -586,7 +586,9 @@ changes floor. Reduced motion: fades only, halved; no breath. **The arc** is the
 While History imports, a fifth of the History glyph's own circle, in the cell's ink at the glyph's weight, turns once
 every 1.1s on the island curve over the glyph resting at a third of its ink. It stops the moment the room says the
 archive is ready. It is the import's only sign outside History, so it carries no number (the room's law: a
-percentage names its step, never an invented whole).
+percentage names its step, never an invented whole). *Amended 2026-10-27 (AO-4b, built):* reduced motion (M6) stops
+the travel, and the arc rests at the top of the circle, a fifth of it from twelve o'clock, until the archive is ready;
+the glyph stays at a third of its ink.
 
 *Status 2026-10-12: ruled and built. Built: the Lip and its two buttons, the groove, the frame's tone and the well (GV-D7, GV-D12); where a session with no pane opens (GV-D4); the terminals away and called up as they were left (GV-D5's call, GV-D6); the edge's three outcomes and their readouts, and the monitor making room; maximized, the bar the window's title bar (GV-D11); the monitor alone at launch, the first call bringing last run's panes with the one it called (GV-D5, N14 (a)); ⌘W on the last pane minimizing them (N16 (a)); rest, the drawing's share above a floor on every height (N15 (a)).*
 **The terminals rise and fall** (Godview's deck, §8; One Frame §22 "Shared mechanics" and §23 —
@@ -1750,7 +1752,9 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   its own: **Your desk** (the boot's own stages), **Agents** (an install still running, as background,
   with its elapsed time), **Profiles**, and **History** in the room's own words ("Discovering
   conversations · 1,215 files checked", then "4,441 sessions found in 74 projects" and "Reading
-  conversations, in the background"). The live phase breathes (§6); a done one takes its ✓. It waits
+  conversations, in the background"; *built 2026-10-27, AO-4b:* "Finding your history", the room's own first words,
+  until a file is checked, and "History isn't available right now." with no wait when it cannot start). The live
+  phase breathes (§6); a done one takes its ✓. It waits
   for the desk and History's first pass only, and for no more than 8s past the desk, then offers **Start
   now** under "Finding sessions in a history this size takes longer. It carries on in History." Then
   its title becomes "Welcome to your field, {name}." in place, with the line "Your face in the
@@ -3444,14 +3448,14 @@ design kit or the production design system. Packaged icon masters remain governe
 Every functional icon the chrome draws — the HUD's round buttons, the file pill, the Settings rail,
 the agent rows, the edge trays, the plugins' toolbars, the phone's composer and keypad, the swarm's
 marks, the desk's bar, the tools in hand and the wrapper around Godview's terminals — is one of
-**63 named glyphs** in one **24-unit box**,
+**64 named glyphs** in one **24-unit box**,
 optical centre at 12,12, live area 2 to 22, drawn in `currentColor` and nothing else. The host says
 the size and the colour, the way it says them for text (§2.4); a glyph never carries state (§2.5,
 I-5) and never a colour of its own. Two constructions, one set:
 
 | Construction | Glyphs | Law |
 |---|---|---|
-| **Instrument** (53) | everything not listed as Hardware | one 2-unit stroke, round caps and joins, 3-unit corners; solid dots only where a mark ends in one (the question and the failure) |
+| **Instrument** (54) | everything not listed as Hardware | one 2-unit stroke, round caps and joins, 3-unit corners; solid dots only where a mark ends in one (the question and the failure) |
 | **Hardware** (10) | close · check · search · rename (pencil) · return · backspace · more (ellipsis) · arrow · general (sliders) · keyboard | one solid silhouette as a single `evenodd` path — bodies and their holes, no masks, no filters — so the same geometry is a template asset on iOS |
 
 **Sizes** are the host's, by CSS: 12 (captions) · 13–16 (row controls) · 18 (the Settings rail, the
@@ -3464,10 +3468,12 @@ outward · link · return · backspace · ellipsis · start · resume · jump ·
 pen · eraser · today · minimize · maximize · restore; navigation: chevron · arrow; places and objects:
 gear · person · sliders · canvas · agents · profiles · plugin · mesh · terminal · pulse · code · sun ·
 moon · clipboard · package · capture · panes · history · sidepanel · bug · globe · folder · keyboard ·
-mic · scantext · snippets · prompt; signals: message · key · question · exclaim · flame · missing;
+mic · scantext · snippets · prompt; signals: message · key · question · exclaim · flame · missing · importing;
 Studio only: document · layers · sparkle. **`history`** (2026-10-03, One Frame §13) is the views
 track's History cell (§10): a clock turning back, the dial at `globe`'s radius opened where its arrow
-turns it.
+turns it. **`importing`** (2026-10-27, AO-4b) is History's arc (§6, the arc; §8, the views track): a fifth of
+that dial, from twelve o'clock, drawn only over the History cell's glyph while History imports and turned by the
+host, which says the turn and the rest; it is never drawn alone.
 **`start`** and **`resume`** (2026-10-03, One Frame §13; Session Glyphs' picks of 30 Sep, spawn-T3
 and resume-play-T3) are the composer's create in Godview and in History (§8, the line): `terminal`'s
 window with its chevron, the frame opened at the lower right to hold the verb — a plus for a session

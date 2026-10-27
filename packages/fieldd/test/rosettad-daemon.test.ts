@@ -381,6 +381,18 @@ describe("the index doors (AR-1) — against the scripted rosettad", () => {
     expect(Object.keys(status.rosettad).sort()).toEqual(PROJECTION_KEYS);
     expectNoOrigin(status, origin);
 
+    // AO-4b — the same projection, pushed (one poller in fieldd while anyone
+    // listens): its snapshot is the status a read answers, the fold included
+    // for a window, and it carries no origin either
+    const pushed = (await win.call("index.status.subscribe", {})) as {
+      subId: string;
+      snapshot: IndexStatus;
+    };
+    expect(pushed.snapshot.phase).toBe("awaiting_consent");
+    expect(Object.keys(pushed.snapshot.rosettad).sort()).toEqual(PROJECTION_KEYS);
+    expect(pushed.snapshot.projects).toEqual([]);
+    expectNoOrigin(pushed.snapshot, origin);
+
     const found = (await win.call("index.discoveries", {})) as IndexDiscoveriesResult;
     expect(found.discoveries.map((d) => [d.kind, d.installed, d.consented])).toEqual([
       ["claude-code", true, false],

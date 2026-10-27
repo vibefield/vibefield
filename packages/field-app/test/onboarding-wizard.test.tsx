@@ -25,6 +25,9 @@ import { type FieldHost, type FieldUserProfile, type FieldUserRoster, setHost } 
 
 /** DESIGN.md §6, the hand-over: the welcome's beat before the glass leaves. */
 const WELCOME_BEAT_MS = 1_400;
+/** DESIGN.md §8 (AO-D4): how long past the desk Setting up waits for History's
+ * first pass before it offers Start now. */
+const START_NOW_AFTER_MS = 8_000;
 const ENTRY_SETTLE_MS = 1_200;
 const WIZARD_CSS = readFileSync(join(process.cwd(), "src/boot/onboarding/wizard-ui.css"), "utf8");
 
@@ -184,8 +187,17 @@ const HISTORY_ANSWERED = {
 
 /** The product half. `link: undefined` makes `user.link.subscribe` REJECT,
  * which is what a daemon without the UA-3 method actually does. */
+/** AO-4b — the daemon's next History status, pushed to whoever subscribed. */
+let pushIndex: ((payload: unknown) => void) | null = null;
+
 function client(
-  options: { link?: unknown; preferences?: Record<string, unknown>; ledger?: unknown } = {},
+  options: {
+    link?: unknown;
+    preferences?: Record<string, unknown>;
+    ledger?: unknown;
+    /** History's status as `index.status.subscribe` answers it (absent: refused) */
+    index?: unknown;
+  } = {},
 ): FielddClient {
   const preferences = options.preferences ?? {
     showTray: true,
@@ -195,7 +207,11 @@ function client(
   return {
     status: "ready",
     onStatusChange: () => () => undefined,
-    subscribe: vi.fn(async (method: string) => {
+    subscribe: vi.fn(async (method: string, _params: unknown, frame: (p: unknown) => void) => {
+      if (method === "index.status.subscribe" && options.index !== undefined) {
+        pushIndex = frame;
+        return { subId: "index-status", snapshot: options.index, unsubscribe: () => undefined };
+      }
       if (method === "storage.appPreferences.subscribe") {
         return { subId: "app-preferences", snapshot: preferences, unsubscribe: () => undefined };
       }
@@ -1211,6 +1227,121 @@ describe("Setup Assistant", () => {
     expect(title()).toBe("Welcome to your field, james.");
     await tick(WELCOME_BEAT_MS);
     expect(onReveal).toHaveBeenCalledTimes(1);
+  });
+
+  describe("History's line (AO-4b; AO-D4)", () => {
+    /** History's status: brought in, and its one agent where `backfill` says. */
+    const reading = (
+      backfill: Record<string, unknown>,
+      extra: Record<string, unknown> = {},
+    ): Record<string, unknown> => ({
+      phase: "backfilling",
+      rosettad: { phase: "ready", detail: null, pid: 1, protocolVersion: 20 },
+      enrollment: { enabledKinds: ["claude-code"], runtimes: [], retired: [], updatedAt: null },
+      runtimes: [
+        {
+          runtimeId: "rt-1",
+          kind: "claude-code",
+          provenance: "discovered",
+          watched: true,
+          backfill: {
+            filesTotal: 5912,
+            bytesTotal: 12_200_000_000,
+            bytesStreamed: 0,
+            records: 0,
+            ...backfill,
+          },
+        },
+      ],
+      ...extra,
+    });
+    const FINDING = reading({ state: "skimming", filesSkimmed: 1215, sessionsTotal: 0 });
+    // the skim has landed: rosetta queues the agent again to stream it
+    const FOUND = reading(
+      { state: "queued", filesSkimmed: 5912, sessionsTotal: 4441 },
+      {
+        projects: Array.from({ length: 74 }, (_, i) => ({
+          key: `p1:project${i}`,
+          sessionsTotal: 60,
+          sessionsDone: 0,
+          bytesTotal: 1,
+          bytesStreamed: 0,
+        })),
+      },
+    );
+    const line = () => container?.querySelector(".vf-wizard-phase[data-state] + .vf-wizard-phase");
+
+    async function toSettingUp(index: unknown, onReveal = vi.fn()): Promise<typeof onReveal> {
+      host(vi.fn(async () => ({ ...FRESH, color: "accent-2" }) as FieldUserProfile));
+      await mount({
+        fieldd: client({ link: NO_LINK, index }),
+        onboarding: onboarding({ color: "accent-2" }),
+        onComplete: vi.fn(),
+        onReveal,
+      });
+      await click("Not now"); // Connect, put off (TS-2's words)
+      await boot(bootAt("handing-over"));
+      return onReveal;
+    }
+
+    it("waits for the first pass in the room's own words, then says what it found and hands over", async () => {
+      const onReveal = await toSettingUp(FINDING);
+      expect(line()?.getAttribute("data-state")).toBe("live");
+      expect(line()?.textContent).toContain("Discovering conversations · 1,215 files checked");
+      // the desk is ready, but the first pass is not: no welcome yet
+      expect(title()).toBe("Getting your desk ready.");
+      await tick(WELCOME_BEAT_MS);
+      expect(onReveal).not.toHaveBeenCalled();
+
+      await act(async () => pushIndex?.(FOUND));
+      expect(line()?.getAttribute("data-state")).toBe("done");
+      expect(line()?.textContent).toContain(
+        "4,441 sessions found in 74 projects · Reading conversations, in the background",
+      );
+      expect(title()).toBe("Welcome to your field, james.");
+      await tick(WELCOME_BEAT_MS);
+      expect(onReveal).toHaveBeenCalledTimes(1);
+    });
+
+    it("offers Start now 8s past the desk, and goes on without the first pass", async () => {
+      const onReveal = await toSettingUp(FINDING);
+      await tick(START_NOW_AFTER_MS - 1);
+      expect(text()).not.toContain("Start now");
+      await tick(1);
+      expect(text()).toContain(
+        "Finding sessions in a history this size takes longer. It carries on in History.",
+      );
+      await click("Start now");
+      expect(title()).toBe("Welcome to your field, james.");
+      // History carries on, and says so
+      expect(line()?.getAttribute("data-state")).toBe("live");
+      await tick(WELCOME_BEAT_MS);
+      expect(onReveal).toHaveBeenCalledTimes(1);
+    });
+
+    it("lists no History and waits for none when nothing was brought in, or History cannot be had", async () => {
+      for (const index of [
+        { ...reading({ state: "queued", filesSkimmed: 0, sessionsTotal: 0 }) },
+        undefined,
+      ]) {
+        const nothing =
+          index === undefined
+            ? undefined
+            : {
+                ...index,
+                enrollment: { enabledKinds: [], runtimes: [], retired: [], updatedAt: null },
+              };
+        const onReveal = await toSettingUp(nothing);
+        expect(line()).toBeNull();
+        expect(title()).toBe("Welcome to your field, james.");
+        await tick(WELCOME_BEAT_MS);
+        expect(onReveal).toHaveBeenCalledTimes(1);
+        await act(async () => root?.unmount());
+        root = null;
+        container?.remove();
+        pushIndex = null;
+      }
+    });
   });
 
   it("cross-fades the welcome in place, and keeps reduced motion to fades with no breath", () => {

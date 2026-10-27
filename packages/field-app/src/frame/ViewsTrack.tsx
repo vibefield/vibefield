@@ -33,7 +33,13 @@ export interface ViewsTrackViewProps {
   /** A cell was chosen — by a click, Enter or Space. The waiting cell is
    * chosen too: the controller answers it with the note. */
   onSelect?: (view: FrameView) => void;
+  /** AO-4b — History imports (`history/first-reading.ts`): its cell carries
+   * the arc (DESIGN.md §6) and its name says so, "History, importing". */
+  importing?: boolean;
 }
+
+/** The track's glyphs, in CSS px. */
+const GLYPH_PX = 15;
 
 export function ViewsTrackView({
   view,
@@ -42,6 +48,7 @@ export function ViewsTrackView({
   press = null,
   note = null,
   onSelect,
+  importing = false,
 }: ViewsTrackViewProps): ReactElement {
   const index = Math.max(
     0,
@@ -76,6 +83,7 @@ export function ViewsTrackView({
         {FRAME_VIEWS.map((cell) => {
           const built = frameViewBuilt(cell.view);
           const on = built && cell.view === view;
+          const arc = importing && cell.view === "history";
           const { modifier, digit } = viewKeyParts(cell, keys);
           return (
             <button
@@ -85,7 +93,13 @@ export function ViewsTrackView({
               data-view={cell.view}
               {...(on ? { "data-on": "true" } : {})}
               {...(built ? { "aria-pressed": on } : { "aria-disabled": true })}
-              aria-label={built ? cell.name : `${cell.name}, not built yet`}
+              aria-label={
+                built
+                  ? arc
+                    ? `${cell.name}, importing`
+                    : cell.name
+                  : `${cell.name}, not built yet`
+              }
               aria-keyshortcuts={viewKeyShortcut(cell, keys)}
               title={
                 built ? `${cell.name}  ${viewKeyLabel(cell, keys)}` : `${cell.name} — not built yet`
@@ -93,7 +107,10 @@ export function ViewsTrackView({
               onClick={() => onSelect?.(cell.view)}
               onKeyDown={(event) => onKeyDown(event, cell.view)}
             >
-              <FieldGlyph name={cell.glyph} size={15} />
+              <span className="vf-views-glyph" {...(arc ? { "data-importing": "true" } : {})}>
+                <FieldGlyph name={cell.glyph} size={GLYPH_PX} />
+                {arc && <FieldGlyph name="importing" size={GLYPH_PX} className="vf-views-arc" />}
+              </span>
               {/* The cell's name is its label and its key is `aria-keyshortcuts`;
                   the printed key is the picture of both. */}
               <kbd className="vf-views-key">

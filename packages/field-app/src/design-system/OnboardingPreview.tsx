@@ -4,6 +4,7 @@ import type { DoorDevice } from "../account/door/door-parts";
 import { faceKey } from "../account/faces";
 import { type LinkBeginStep, type LinkFace, linkFace, type UserLinkStatus } from "../account/link";
 import type { SyncPosture, SyncPostureControl } from "../account/posture";
+import { historySetupPhase } from "../boot/onboarding/history-line";
 import { type ConnectAside, OnboardingConnectPaneView } from "../boot/onboarding/views/connect";
 import { OnboardingFieldPaneView } from "../boot/onboarding/views/field";
 import { OnboardingPosturePaneView } from "../boot/onboarding/views/posture";
@@ -25,7 +26,13 @@ import type { FieldUserFace } from "../host";
 import { HistoryConsentBody } from "../setup/HistoryConsentView";
 import { HistoryWizardPaneView } from "../setup/HistoryWizardPane";
 import { HISTORY_WORDS } from "../setup/history-words";
-import { FIXTURE_HISTORY_CENSUS, FIXTURE_ME, FIXTURE_OTHERS } from "./account-fixtures";
+import {
+  FIXTURE_FIRST_READING_FINDING,
+  FIXTURE_FIRST_READING_FOUND,
+  FIXTURE_HISTORY_CENSUS,
+  FIXTURE_ME,
+  FIXTURE_OTHERS,
+} from "./account-fixtures";
 
 const noop = (): void => undefined;
 
@@ -108,8 +115,19 @@ const COMPLETION_FAILURE = {
 };
 
 /** AO-D2 — Setting up as the boot machine moves under it: the answers being
- * written, the desk's own stages (the DocManager's words), then Ready. */
-const SETTING_UP_STATES = ["saving", "opening", "drawing", "settling", "ready"] as const;
+ * written, the desk's own stages (the DocManager's words), then Ready. AO-4b:
+ * History's line beside it, in the room's words (the shipping
+ * `historySetupPhase` over a fixture status) — still finding with the desk
+ * ready, Start now 8s past it, and found at Ready. */
+const SETTING_UP_STATES = [
+  "saving",
+  "opening",
+  "drawing",
+  "settling",
+  "finding",
+  "slow",
+  "ready",
+] as const;
 type SettingUpState = (typeof SETTING_UP_STATES)[number];
 
 const DESK_WAITING: OnboardingSetupPhase = { key: "desk", label: "Your desk", state: "waiting" };
@@ -125,9 +143,18 @@ function deskPhase(state: SettingUpState): OnboardingSetupPhase {
       return { key: "desk", label: "Your desk", state: "live", detail: "drawing the board" };
     case "settling":
       return { key: "desk", label: "Your desk", state: "live", detail: "settling" };
+    case "finding":
+    case "slow":
     case "ready":
       return DESK_READY;
   }
+}
+
+/** History's line in each state: still finding until Ready. */
+function historyPhase(state: SettingUpState): OnboardingSetupPhase {
+  return historySetupPhase(
+    state === "ready" ? FIXTURE_FIRST_READING_FOUND : FIXTURE_FIRST_READING_FINDING,
+  );
 }
 
 const OnboardingPreviewTheme = createContext<{
@@ -363,13 +390,14 @@ function SettingUpPreview(): ReactElement {
       }
     >
       <OnboardingSettingUpPaneView
-        phases={[deskPhase(state)]}
+        phases={[deskPhase(state), historyPhase(state)]}
         name="James"
         ready={state === "ready"}
         flag={state === "saving" ? { kind: "writing" } : { kind: "idle" }}
         onRetryWrite={noop}
         onContinueAnyway={noop}
         onRetryPhase={noop}
+        onStartNow={state === "slow" ? noop : undefined}
       />
     </OnboardingFrame>
   );

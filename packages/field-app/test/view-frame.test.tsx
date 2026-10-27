@@ -7,6 +7,8 @@
  * focused terminal pane in a live window is the godview smoke's row 11g.
  */
 import type { FrameView, FrameViewState, FrameZoomAct } from "@vibefield/contracts";
+import type { FielddClient } from "@vibefield/fieldd-client";
+import { FielddProvider } from "@vibefield/fieldd-client/react";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -81,18 +83,35 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-function mountFrame(): HTMLElement {
+/** A daemon whose History status the test says (AO-4b: the frame hears it
+ * pushed for the arc); `null` refuses the push, as an older daemon would. */
+function fieldd(status: unknown = null): FielddClient {
+  return {
+    status: "ready",
+    onStatusChange: () => () => undefined,
+    request: async () => ({}),
+    subscribe: async (method: string) => {
+      if (method !== "index.status.subscribe" || status === null)
+        throw new Error(`${method} is not scripted`);
+      return { subId: "sub-1", snapshot: status, unsubscribe: () => undefined };
+    },
+  } as unknown as FielddClient;
+}
+
+function mountFrame(client: FielddClient = fieldd()): HTMLElement {
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
   act(() =>
     root?.render(
-      <ViewFrame
-        godview={<div data-testid="godview-content" />}
-        history={(active) => <div data-testid="history-content" data-active={String(active)} />}
-        surface={null}
-        onSurfaceChange={() => undefined}
-      />,
+      <FielddProvider client={client}>
+        <ViewFrame
+          godview={<div data-testid="godview-content" />}
+          history={(active) => <div data-testid="history-content" data-active={String(active)} />}
+          surface={null}
+          onSurfaceChange={() => undefined}
+        />
+      </FielddProvider>,
     ),
   );
   return host;
@@ -241,6 +260,65 @@ describe("the views track (DESIGN.md §8)", () => {
     act(() => cell("assistant").click());
     expect(asked).toEqual([]);
     expect(track().querySelector(".vf-views-note")?.textContent).toBe("Assistant · not built yet");
+  });
+});
+
+describe('History\'s arc (AO-4b; DESIGN.md §6 "the arc", §8 the views track)', () => {
+  const status = (phase: string, search: Record<string, unknown> = {}) => ({
+    phase,
+    rosettad: { phase: "ready", detail: null, pid: 1, protocolVersion: 20 },
+    enrollment: { enabledKinds: ["claude-code"], runtimes: [], retired: [], updatedAt: null },
+    runtimes: [],
+    search: { reachable: true, capabilities: { sessionScope: true, prefix: true }, ...search },
+  });
+  const arc = () => cell("history").querySelector(".vf-views-glyph[data-importing] .vf-views-arc");
+  /** The pushed status lands after the first paint. */
+  async function mountWith(pushed: unknown): Promise<void> {
+    mountFrame(fieldd(pushed));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+  }
+
+  it("turns on History's cell while History imports, and the cell says so", async () => {
+    await mountWith(status("backfilling", { readiness: "building", canonicalReady: false }));
+    expect(arc()).not.toBeNull();
+    expect(cell("history").getAttribute("aria-label")).toBe("History, importing");
+    // no number, no badge: the cell is otherwise unchanged and still presses
+    expect(cell("history").textContent).toBe("⌘3");
+    expect(cell("history").title).toBe("History  ⌘3");
+    expect(cell("canvas").querySelector(".vf-views-arc")).toBeNull();
+  });
+
+  it("stays while search is prepared after the archive, and stops when the room says it is ready", async () => {
+    await mountWith(
+      status("live", {
+        readiness: "building",
+        canonicalReady: true,
+        progress: { done: 1, total: 2, stage: "indexing" },
+      }),
+    );
+    expect(arc()).not.toBeNull();
+    act(() => root?.unmount());
+    host?.remove();
+    await mountWith(status("live", { readiness: "ready", canonicalReady: true }));
+    expect(arc()).toBeNull();
+    expect(cell("history").getAttribute("aria-label")).toBe("History");
+  });
+
+  it("is not drawn for a routine catch-up, a pause, a wait for consent, or no status at all", async () => {
+    for (const pushed of [
+      status("live", { readiness: "catching-up", canonicalReady: true }),
+      status("metadata_ready"),
+      status("awaiting_consent"),
+      null,
+    ]) {
+      await mountWith(pushed);
+      expect(arc(), JSON.stringify(pushed)).toBeNull();
+      act(() => root?.unmount());
+      host?.remove();
+    }
   });
 });
 

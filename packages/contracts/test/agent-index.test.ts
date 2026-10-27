@@ -58,6 +58,13 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
       // status and the launcher's list (`index.recent`) stay `local`
       { method: "index.discoveries", scope: "index.read", idempotent: true, locality: "local" },
       { method: "index.status", scope: "index.read", idempotent: true, locality: "local" },
+      // AO-4b — the same status pushed (the desk's History cell, Setting up)
+      {
+        method: "index.status.subscribe",
+        scope: "index.read",
+        idempotent: true,
+        locality: "local",
+      },
       // AR-5e — the find sheet's doors, reads like the two above
       // AR-5b: the sheet's CONTENT reads ride their own scope — a plugin holding
       // index.read for the roll call must not gain transcript search on an upgrade
@@ -358,7 +365,9 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
           m.method === "index.catalog.subscribe" ||
           m.method === "index.changes.subscribe" ||
           // SP-6 — one session's live tail over the door
-          m.method === "index.session.subscribe",
+          m.method === "index.session.subscribe" ||
+          // AO-4b — the first reading, pushed whole
+          m.method === "index.status.subscribe",
       );
     }
   });

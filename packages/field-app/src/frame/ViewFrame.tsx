@@ -10,6 +10,7 @@ import {
 } from "react";
 import { emitViewKeyMarker } from "../development-console";
 import { listenForProductChord } from "../field/product-chords";
+import { historyImporting, useIndexStatus } from "../history/first-reading";
 import { getHost } from "../host";
 import { Composer, type LineActs } from "./Composer";
 import type { FrameSurface } from "./frame-surface";
@@ -60,6 +61,9 @@ export function ViewFrame({
   const presses = useRef(0);
   const current = useRef(view);
   current.current = view;
+  // AO-4b — History's cell carries the arc while History imports, heard pushed
+  // (`index.status.subscribe`), whether or not History was ever opened.
+  const importing = historyImporting(useIndexStatus());
 
   // The cover's motion is decided when the view changes and KEPT until the
   // next change, so an unrelated render mid-fade (a dip, the ⌘ light) can never
@@ -216,6 +220,7 @@ export function ViewFrame({
             press={press}
             note={note}
             onSelect={select}
+            importing={importing}
           />
         }
       />

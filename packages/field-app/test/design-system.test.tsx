@@ -197,9 +197,9 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(away?.getAttribute("data-godview-deck")).toBe("away");
     expect(away?.querySelector(".vf-godview-terminal-deck")?.hasAttribute("inert")).toBe(true);
     expect(away?.querySelector(".vf-godview-monitor-stage")).not.toBeNull();
-    // DESIGN.md §13: the glyph section mounts the shipping set from the kit leaf, all 63 —
+    // DESIGN.md §13: the glyph section mounts the shipping set from the kit leaf, all 64 —
     // the wrapper's three (round 3) among them, drawn by the shipping component.
-    expect(container?.querySelectorAll("#glyphs .vf-ds-glyph")).toHaveLength(63);
+    expect(container?.querySelectorAll("#glyphs .vf-ds-glyph")).toHaveLength(64);
     for (const name of ["minimize", "maximize", "restore"]) {
       const tile = [...(container?.querySelectorAll("#glyphs .vf-ds-glyph") ?? [])].find(
         (figure) => figure.querySelector("code")?.textContent === name,
@@ -216,7 +216,15 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       [...(container?.querySelectorAll(".vf-ds-views-plate") ?? [])].map((plate) =>
         plate.getAttribute("data-state"),
       ),
-    ).toEqual(["rest", "cmd", "gv", "hx", "note", "rest"]);
+    ).toEqual(["rest", "cmd", "gv", "hx", "import", "note", "rest"]);
+    // AO-4b — History's arc on the shipping track, on the canvas while it imports
+    const importing = container?.querySelector('.vf-ds-views-plate[data-state="import"]');
+    expect(
+      importing?.querySelector('.vf-views-cell[data-view="history"] .vf-views-arc'),
+    ).not.toBeNull();
+    expect(
+      importing?.querySelector('.vf-views-cell[data-view="history"]')?.getAttribute("aria-label"),
+    ).toBe("History, importing");
     // One Frame FR-2: the line — live on its real controller over the frame's
     // field (the track at its left end), and a plate per state the page's §03
     // plates draw for it, the last Godview's keys as Windows prints them.
@@ -606,6 +614,21 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(
       frame("setting-up").querySelector('.vf-wizard-phase[data-state="waiting"]'),
     ).not.toBeNull();
+    // AO-4b — History's line beside the desk, in the room's words, and Start now
+    // once the first pass has run 8s past the desk
+    expect(frame("setting-up").textContent).toContain(
+      "Discovering conversations · 1,215 files checked",
+    );
+    await choose("setting-up", "slow");
+    expect(frame("setting-up").textContent).toContain("Start now");
+    expect(frame("setting-up").textContent).toContain(
+      "Finding sessions in a history this size takes longer. It carries on in History.",
+    );
+    await choose("setting-up", "ready");
+    expect(frame("setting-up").textContent).toContain(
+      "4,441 sessions found in 74 projects · Reading conversations, in the background",
+    );
+    expect(frame("setting-up").textContent).not.toContain("Start now");
 
     // AO-3 — the History pane: its rows with every switch on, then a no.
     expect(frame("history").querySelectorAll('[role="switch"][aria-checked="true"]')).toHaveLength(

@@ -24,9 +24,10 @@ import { StageBoard } from "./PegboardPreview";
 // and the CSS are the product's.
 
 /** The states the One Frame page's Chrome & Composer plates show for the
- * frame (`data-state`): at rest on the canvas, ⌘ held, Godview, History, and
- * ⌘4's note — each in the catalog's light and dark. */
-export const FRAME_STATES = ["rest", "cmd", "gv", "hx", "note"] as const;
+ * frame (`data-state`): at rest on the canvas, ⌘ held, Godview, History, the
+ * arc while History imports (AO-4b), and ⌘4's note — each in the catalog's
+ * light and dark. */
+export const FRAME_STATES = ["rest", "cmd", "gv", "hx", "import", "note"] as const;
 export type FrameState = (typeof FRAME_STATES)[number];
 
 const STATE_LABEL: Record<FrameState, string> = {
@@ -34,6 +35,7 @@ const STATE_LABEL: Record<FrameState, string> = {
   cmd: "⌘ held",
   gv: "Godview",
   hx: "History",
+  import: "Importing",
   note: "⌘4 waits",
 };
 
@@ -42,6 +44,7 @@ const VIEW_OF: Record<FrameState, FrameView> = {
   cmd: "canvas",
   gv: "godview",
   hx: "history",
+  import: "canvas",
   note: "canvas",
 };
 
@@ -76,6 +79,7 @@ export function ViewsTrackSpecimen({
               keys={keys}
               held={state === "cmd"}
               note={state === "note" ? said : null}
+              importing={state === "import"}
             />
           }
         />
@@ -178,6 +182,7 @@ export function ViewFramePreview({ dark }: { dark: boolean }): ReactElement {
               held={state === "cmd"}
               press={press}
               note={note}
+              importing={state === "import"}
               onSelect={(asked) => {
                 if (asked === "assistant") choose("note");
                 else choose(asked === "canvas" ? "rest" : asked === "godview" ? "gv" : "hx");

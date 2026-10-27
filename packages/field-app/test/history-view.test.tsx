@@ -196,7 +196,9 @@ function fieldd(
       frame: (payload: unknown, kind?: "snapshot" | "delta") => void,
     ) {
       calls.push({ method, params });
-      onFrame = frame;
+      // the pings are project.subscribe's; the frame's own feed (AO-4b's
+      // index.status.subscribe) opens beside it and must not take them
+      if (method === "project.subscribe") onFrame = frame;
       return {
         subId: "sub-1",
         snapshot: { snapshot: { epoch: "projects-1", revision: 0, rows: [] } },

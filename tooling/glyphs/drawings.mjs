@@ -714,6 +714,20 @@ export const DRAWINGS = {
       d: `${rectPath(3.5, 3.5, 17, 17, 3)}${capsule(7.5, 13.5, 13.5, 7.5, 1.1)}${capsule(10.5, 16.5, 16.5, 10.5, 1.1)}`,
     },
   },
+  importing: {
+    label: "Importing",
+    group: "signals",
+    role: "History's arc while it imports: a fifth of the dial `history` draws, turned over the History cell by the host",
+    // AO-4b (2026-10-27; DESIGN.md §6 "the arc"): the dial's circle (radius 8.4,
+    // as `history` and `globe` draw it) from twelve o'clock through 72°, a fifth,
+    // so the host's turn travels the History glyph's own circle. Under reduced
+    // motion it rests where it starts, at the top.
+    instrument: { s: P("M12 3.6a8.4 8.4 0 0 1 7.99 5.8") },
+    // the same fifth as one solid band, its two ends rounded
+    hardware: {
+      d: "M12 2.6A9.4 9.4 0 0 1 20.94 9.1A1 1 0 0 1 19.04 9.71A7.4 7.4 0 0 0 12 4.6A1 1 0 0 1 12 2.6Z",
+    },
+  },
   document: {
     label: "Document",
     group: "studio",
