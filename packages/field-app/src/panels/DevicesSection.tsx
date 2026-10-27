@@ -1,7 +1,7 @@
 import type { DeviceInfo } from "@vibefield/contracts";
 import { SegmentedControl } from "@vibefield/design-kit";
 import { useFielddClient, useSubscription } from "@vibefield/fieldd-client/react";
-import { type ReactElement, type ReactNode, useEffect, useState } from "react";
+import { type ReactElement, type ReactNode, useEffect, useRef, useState } from "react";
 import {
   LINK_ACT_LABEL,
   LINK_ACT_PENDING_LABEL,
@@ -21,7 +21,7 @@ import type { MonitorDeviceFacet } from "../godview/monitor/types";
 import { OsMark } from "../godview/os-marks";
 import { getHost } from "../host";
 import { MeshSection } from "./MeshSection";
-import { buttonCls, labelCls, SettingsSection } from "./settings-ui";
+import { buttonCls, fieldCls, labelCls, SettingsSection } from "./settings-ui";
 import "./devices.css";
 
 // Settings → Devices (track TS, TS-3a; DESIGN.md §8 "Settings → Devices",
@@ -54,6 +54,8 @@ export interface DevicesRow {
   readonly os: MonitorDeviceFacet["os"];
   readonly self: boolean;
   readonly online: boolean;
+  /** TS-3b — whether the person named it (so the computer's name is offered back) */
+  readonly nameSource?: "user" | "hostname" | undefined;
 }
 
 export interface DevicesSectionViewProps {
@@ -81,6 +83,9 @@ export interface DevicesSectionViewProps {
   onStartOver: () => void;
   onSheet: (sheet: DevicesSheet) => void;
   onDisconnect: () => void;
+  /** TS-3b (P9, TS-D17 A) — name this Mac (null: the computer's name again);
+   * resolves the daemon's refusal in its words, or null */
+  onRename: (name: string | null) => Promise<string | null>;
   /** TS-D12 — a second account is a second user; absent where none can be made */
   onNewUser?: (() => void) | undefined;
 }
@@ -342,26 +347,118 @@ function TailscaleCard(props: DevicesSectionViewProps): ReactElement {
   );
 }
 
-/** This Mac: its name, the name Tailscale shows with Copy, and the sign-in's
- * renewal (TS-D9: a date; the attention ink and Sign in again once due). */
-function ThisMac(props: DevicesSectionViewProps): ReactElement | null {
+/** TS-3b (P9, TS-D17 A) — this Mac's name, the person's own or the computer's:
+ * Rename… opens the field (Enter saves, Esc cancels), and once the name is the
+ * person's, the computer's is offered back. The daemon's refusal (a name over
+ * 128 characters, said with its count) stays under the field. */
+function NameRow({
+  self,
+  onRename,
+}: {
+  self: DevicesRow | undefined;
+  onRename: (name: string | null) => Promise<string | null>;
+}): ReactElement {
+  const [draft, setDraft] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [refusal, setRefusal] = useState<string | null>(null);
+  const field = useRef<HTMLInputElement>(null);
+  const editing = draft !== null;
+  useEffect(() => {
+    if (editing) field.current?.focus();
+  }, [editing]);
+  const name = self?.name ?? "This Mac";
+  const save = async (next: string | null): Promise<void> => {
+    setBusy(true);
+    setRefusal(null);
+    const reason = await onRename(next);
+    setBusy(false);
+    if (reason === null) setDraft(null);
+    else setRefusal(reason);
+  };
+  const stop = (): void => {
+    setDraft(null);
+    setRefusal(null);
+  };
+  return (
+    <>
+      <span className={labelCls}>Name</span>
+      <span className="vf-devices-fact-act">
+        {editing ? (
+          <>
+            <input
+              ref={field}
+              aria-label="This Mac's name"
+              className={fieldCls}
+              value={draft}
+              disabled={busy}
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  void save(draft);
+                } else if (event.key === "Escape") {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  stop();
+                }
+              }}
+            />
+            <button
+              type="button"
+              className={buttonCls}
+              disabled={busy}
+              onClick={() => void save(draft)}
+            >
+              Save
+            </button>
+            <button type="button" className={buttonCls} disabled={busy} onClick={stop}>
+              Cancel
+            </button>
+          </>
+        ) : (
+          <>
+            <span>{name}</span>
+            <button type="button" className={buttonCls} onClick={() => setDraft(name)}>
+              Rename…
+            </button>
+            {self?.nameSource === "user" && (
+              <button
+                type="button"
+                className={buttonCls}
+                disabled={busy}
+                onClick={() => void save(null)}
+              >
+                Use the computer's name
+              </button>
+            )}
+          </>
+        )}
+        {refusal !== null && <Refusal reason={refusal} />}
+      </span>
+    </>
+  );
+}
+
+/** This Mac: its name (TS-3b), the name Tailscale shows with Copy, and the
+ * sign-in's renewal (TS-D9: a date; the attention ink and Sign in again once
+ * due). The Tailscale facts are drawn only while a link stands. */
+function ThisMac(props: DevicesSectionViewProps): ReactElement {
   const { face } = props;
-  if (face.kind !== "linked" && face.kind !== "signedOut") return null;
   const self = props.devices.find((device) => device.self);
+  const tailscale = face.kind === "linked" || face.kind === "signedOut" ? face : null;
   const expiresAt = face.kind === "linked" ? face.keyExpiresAt : undefined;
   const days = renewalDays(expiresAt, props.now);
   const due = face.kind === "signedOut" || (days !== null && days <= 0);
   return (
     <SettingsSection title="This Mac">
       <div className="vf-devices-facts">
-        <span className={labelCls}>Name</span>
-        <span>{self?.name ?? "This Mac"}</span>
-        {face.machineName !== null && (
+        <NameRow self={self} onRename={props.onRename} />
+        {tailscale !== null && tailscale.machineName !== null && (
           <>
             <span className={labelCls}>In Tailscale</span>
             <span className="vf-devices-fact-act">
-              <span className="vf-ui-mono">{face.machineName}</span>
-              <CopyButton label="Copy" copy={() => props.onCopyText(face.machineName ?? "")} />
+              <span className="vf-ui-mono">{tailscale.machineName}</span>
+              <CopyButton label="Copy" copy={() => props.onCopyText(tailscale.machineName ?? "")} />
             </span>
           </>
         )}
@@ -540,6 +637,7 @@ function rowsOf(roster: readonly DeviceInfo[] | null): DevicesRow[] {
     os: osOf(device.platform),
     self: device.self,
     online: device.online,
+    nameSource: device.nameSource,
   }));
   return rows.sort((a, b) => Number(b.self) - Number(a.self));
 }
@@ -607,6 +705,14 @@ export function DevicesSection({
         setSheet(next);
       }}
       onDisconnect={onDisconnect}
+      onRename={async (name) => {
+        try {
+          await client.request("device.rename", { name });
+          return null;
+        } catch (cause) {
+          return cause instanceof Error ? cause.message : String(cause);
+        }
+      }}
       onNewUser={onNewUser}
     />
   );

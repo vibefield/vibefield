@@ -54,7 +54,9 @@ import {
   type CallerContext,
   CONTRACTS_VERSION,
   createAgentCatalogReaders,
+  DEVICE_LIMITS,
   DeviceGetParams,
+  DeviceRenameParams,
   DocCreateParams,
   DocDeleteParams,
   DocHoldersParams,
@@ -5442,6 +5444,33 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         },
         () => links.unlink(),
         (result) => ({ attrs: { retired: result.retired } }),
+      );
+    });
+    // TS-3b (P9, TS-D17 A) — the person's own name for THIS device, or null
+    // for the computer's. A longer name is refused with its count, never
+    // clipped; the audit says whether it was a reset, never the name itself
+    // (a name is a person's words).
+    api.register("device.rename", async (ctx, params) => {
+      requireDesktopCaller(ctx);
+      const parsed = DeviceRenameParams.safeParse(params);
+      if (!parsed.success) {
+        const raw = (params as { name?: unknown } | null | undefined)?.name;
+        const length = typeof raw === "string" ? raw.trim().length : null;
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          length === 0
+            ? "a device name can't be empty"
+            : length !== null && length > DEVICE_LIMITS.NAME_CHARS
+              ? `a device name is at most ${DEVICE_LIMITS.NAME_CHARS} characters (this one is ${length})`
+              : "expected { name: string (1–128 characters) | null }",
+          false,
+        );
+      }
+      const name = parsed.data.name;
+      return audit.requiredSystem(
+        { action: "device.rename", target: { kind: "device", id: "self" } },
+        () => devices.rename(name),
+        () => ({ attrs: { reset: name === null } }),
       );
     });
     const appPreferencesSnapshot = async () =>

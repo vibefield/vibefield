@@ -74,6 +74,10 @@
     "fieldd",
     "setup.json"
   ],
+  "DEVICE_NAME_FILE": [
+    "fieldd",
+    "device-name.json"
+  ],
   "TERMINAL_CONFIG_FILE": [
     "native",
     "config.ghostty"

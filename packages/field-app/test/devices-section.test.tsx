@@ -170,6 +170,12 @@ const LINKED = (patch: Record<string, unknown> = {}): Record<string, unknown> =>
   ...patch,
 });
 
+/** Type into a React-controlled input the way a keyboard does. */
+const typeInto = (input: HTMLInputElement, value: string): void => {
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+};
+
 const button = (label: string): HTMLButtonElement | undefined =>
   Array.from(container?.querySelectorAll<HTMLButtonElement>("button") ?? []).find(
     (candidate) => candidate.textContent?.trim() === label,
@@ -432,5 +438,83 @@ describe("Settings → Devices: new projects (moved from Account, TS-D3)", () =>
     expect(details).not.toBeNull();
     expect(details?.hasAttribute("open")).toBe(false);
     expect(details?.querySelector("summary")?.textContent).toBe("Network details");
+  });
+});
+
+describe("Settings → Devices: this Mac's own name (TS-3b, P9, TS-D17 A)", () => {
+  const SELF = {
+    deviceId: "d-self",
+    name: "Studio.local",
+    platform: "darwin",
+    self: true,
+    online: true,
+    lastSeenAt: 0,
+    nameSource: "hostname",
+  };
+
+  it("renames this Mac: Rename… opens the field, and Enter sends the words", async () => {
+    host(null);
+    const fieldd = client({ link: OFFLINE, devices: [SELF] });
+    await mount(fieldd);
+    // the name is the device's, linked or not
+    expect(text()).toContain("Studio.local");
+    expect(button("Use the computer's name")).toBeUndefined();
+    await act(async () => button("Rename…")?.click());
+    const field = container?.querySelector<HTMLInputElement>(
+      'input[aria-label="This Mac\'s name"]',
+    );
+    expect(field?.value).toBe("Studio.local");
+    await act(async () => {
+      if (field) typeInto(field, "Studio");
+    });
+    await act(async () => {
+      field?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    await act(flush);
+    expect(fieldd.request).toHaveBeenCalledWith("device.rename", { name: "Studio" });
+  });
+
+  it("cancels on Esc without asking anything", async () => {
+    host(null);
+    const fieldd = client({ link: OFFLINE, devices: [SELF] });
+    await mount(fieldd);
+    await act(async () => button("Rename…")?.click());
+    const field = container?.querySelector<HTMLInputElement>(
+      'input[aria-label="This Mac\'s name"]',
+    );
+    await act(async () => {
+      field?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    expect(container?.querySelector('input[aria-label="This Mac\'s name"]')).toBeNull();
+    expect(fieldd.request).not.toHaveBeenCalled();
+  });
+
+  it("offers the computer's name back once the name is the person's own", async () => {
+    host(null);
+    const fieldd = client({
+      link: OFFLINE,
+      devices: [{ ...SELF, name: "Studio", nameSource: "user" }],
+    });
+    await mount(fieldd);
+    await act(async () => button("Use the computer's name")?.click());
+    await act(flush);
+    expect(fieldd.request).toHaveBeenCalledWith("device.rename", { name: null });
+  });
+
+  it("says the daemon's refusal under the field, in its words", async () => {
+    host(null);
+    const fieldd = client({ link: OFFLINE, devices: [SELF] });
+    (fieldd.request as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("a device name is at most 128 characters (this one is 129)"),
+    );
+    await mount(fieldd);
+    await act(async () => button("Rename…")?.click());
+    await act(async () => button("Save")?.click());
+    await act(flush);
+    expect(container?.querySelector('[role="alert"]')?.textContent).toBe(
+      "a device name is at most 128 characters (this one is 129)",
+    );
+    // the field stays, with the words to fix
+    expect(container?.querySelector('input[aria-label="This Mac\'s name"]')).not.toBeNull();
   });
 });

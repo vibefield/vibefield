@@ -82,12 +82,19 @@ export const ProductEndpoint = z
   .passthrough();
 export type ProductEndpoint = z.infer<typeof ProductEndpoint>;
 
+/** TS-3b (P9, TS-D17 A) — where a device's name came from: the person gave it
+ * (`user`, kept on that device only), or it is the computer's (`hostname`,
+ * D30's fallback). Optional everywhere: a slice from an older daemon says neither. */
+export const DeviceNameSource = z.enum(["user", "hostname"]);
+export type DeviceNameSource = z.infer<typeof DeviceNameSource>;
+
 /** One device's self-published slice in `field.devices.v1` (published on boot
  * and on change; the slice key IS the writer's mesh deviceId — D30). */
 export const DeviceSlice = z
   .object({
     deviceId: z.string().min(1).max(DEVICE_LIMITS.DEVICE_ID_CHARS),
     name: z.string().min(1).max(DEVICE_LIMITS.NAME_CHARS),
+    nameSource: DeviceNameSource.optional(),
     platform: z.string().min(1).max(DEVICE_LIMITS.PLATFORM_CHARS),
     headless: z.boolean(),
     fielddVersion: z.string().min(1).max(DEVICE_LIMITS.VERSION_CHARS),
@@ -144,6 +151,9 @@ export const DeviceInfo = z
   .object({
     deviceId: z.string().min(1).max(DEVICE_LIMITS.DEVICE_ID_CHARS),
     name: z.string().min(1).max(DEVICE_LIMITS.NAME_CHARS),
+    /** TS-3b — whether the person named this device (so "Use the computer's
+     * name" is offered), as its own slice says. */
+    nameSource: DeviceNameSource.optional(),
     platform: z.string().min(1).max(DEVICE_LIMITS.PLATFORM_CHARS).optional(),
     headless: z.boolean().optional(),
     fielddVersion: z.string().min(1).max(DEVICE_LIMITS.VERSION_CHARS).optional(),
@@ -189,3 +199,22 @@ export type DeviceListResult = z.infer<typeof DeviceListResult>;
 
 export const DeviceGetParams = z.object({ deviceId: z.string() }).passthrough();
 export type DeviceGetParams = z.infer<typeof DeviceGetParams>;
+
+/** TS-3b (P9, TS-D17 A) — `device.rename`: the person's own name for THIS
+ * device, 1–`DEVICE_LIMITS.NAME_CHARS` characters once trimmed; `null` is "Use
+ * the computer's name". A longer name is refused with its count, never clipped. */
+export const DeviceRenameParams = z
+  .object({ name: z.string().trim().min(1).max(DEVICE_LIMITS.NAME_CHARS).nullable() })
+  .passthrough();
+export type DeviceRenameParams = z.infer<typeof DeviceRenameParams>;
+
+/** TS-3b — `LAYOUT.DEVICE_NAME_FILE` (0600, written atomically): the name the
+ * person gave this device. On this device only — never a synced preference,
+ * which would name every device alike, and never across the sync plane (M16). */
+export const DeviceNameFile = z
+  .object({
+    name: z.string().min(1).max(DEVICE_LIMITS.NAME_CHARS),
+    setAt: z.number().int(),
+  })
+  .passthrough();
+export type DeviceNameFile = z.infer<typeof DeviceNameFile>;

@@ -963,6 +963,16 @@ export const METHODS: MethodDef[] = [
     locality: "sync",
     subscription: WHOLE_VALUE_STREAM,
   }),
+  // TS-3b (P9, TS-D17 A) — the person's own name for THIS device, or null for
+  // the computer's. Local: it edits this device's file and republishes its own
+  // slice; a peer is never renamed from here. Desktop callers only.
+  defineMethod({
+    surface: "product",
+    method: "device.rename",
+    scope: "settings.manage",
+    idempotent: true, // declarative: the same name twice is written once
+    locality: "local",
+  }),
   // DS-2 (DS-D15, 2026-09-30) — the receipt of a keyed forwarded mutation, as
   // THIS daemon knows it: applied, refused, or outcome-unknown (the forward
   // left and its answer was lost), with `inFlight` while an attempt is out.

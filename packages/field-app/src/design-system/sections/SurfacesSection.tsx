@@ -317,6 +317,7 @@ function DevicesSpecimenPage({ state }: { state: DevicesFixtureState }): ReactEl
       onStartOver={noop}
       onSheet={setSheet}
       onDisconnect={noop}
+      onRename={async () => null}
       onNewUser={noop}
     />
   );

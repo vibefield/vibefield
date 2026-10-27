@@ -1510,6 +1510,11 @@ export const LAYOUT = {
    * put off. fieldd's, written atomically; per user, because each person on a
    * machine sets up their own field. */
   SETUP_LEDGER_FILE: ["fieldd", "setup.json"],
+  /** TS-3b (P9, TS-D17 A — James, 2026-10-27) — the name the person gave this
+   * device (`DeviceNameFile`, 0600): fieldd's, written atomically, published in
+   * its self-slice. Device-local by construction (D30: the device is the
+   * user-on-device), so never a synced preference and never a STORES slice. */
+  DEVICE_NAME_FILE: ["fieldd", "device-name.json"],
   TERMINAL_CONFIG_FILE: ["native", FILES.TERMINAL_CONFIG],
   RESTART_INTENT_FILE: ["native", FILES.RESTART_INTENT],
   // RETIRED 2026-09-14 (TM-3, `thinking-terminal-mesh-cells.md` §7 / TM-D3):

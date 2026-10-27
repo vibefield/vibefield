@@ -1,12 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { dirname, join } from "node:path";
 import {
   CONTRACTS_VERSION,
   DEVICE_LIMITS,
   type DeviceInfo,
+  DeviceNameFile,
   DeviceSlice,
   type DeviceState,
   LAYOUT,
@@ -14,7 +15,7 @@ import {
   type ProductEndpoint,
   STORES,
 } from "@vibefield/contracts";
-import { createNoopLogger, type Logger } from "@vibefield/logging";
+import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/logging";
 import { MESH_BUS_CARRIES_CONTENT } from "./mesh-bus";
 import type { MeshClient } from "./mesh-client";
 
@@ -166,6 +167,32 @@ export function deviceState(
   return "awake";
 }
 
+/** TS-3b — the name file, read once at boot. Absent is the ordinary case (the
+ * computer's name). Unreadable or invalid falls back to the computer's name
+ * with a warn, never a crash: a device always has a name. */
+function readOwnName(path: string, logger: Logger): string | null {
+  let raw: string;
+  try {
+    raw = readFileSync(path, "utf8");
+  } catch {
+    return null;
+  }
+  try {
+    const parsed = DeviceNameFile.safeParse(JSON.parse(raw));
+    if (parsed.success) return parsed.data.name;
+  } catch {
+    // not JSON: the same fallback as a shape that does not parse
+  }
+  logger.warn(
+    "fieldd.device.name_file_unreadable",
+    "This device's name file is unreadable; using the computer's name",
+    {
+      path,
+    },
+  );
+  return null;
+}
+
 export class DeviceService extends EventEmitter {
   private readonly now: () => number;
   private readonly logger: Logger;
@@ -212,6 +239,9 @@ export class DeviceService extends EventEmitter {
   private unlistedLogged = new Set<string>();
   /** syncs SERIALIZE (the MeshClient chain law): each pass sees its trigger's state */
   private chain: Promise<void> = Promise.resolve();
+  /** TS-3b (P9, TS-D17 A) — the person's own name for this device, kept in
+   * `LAYOUT.DEVICE_NAME_FILE` on this device only; null = the computer's name. */
+  private ownName: string | null;
   /** C5/D32 — wired post-construction (PeerLink is built after DeviceService) */
   private peers?: PeerLinkView;
   private disposed = false;
@@ -221,6 +251,7 @@ export class DeviceService extends EventEmitter {
     this.now = opts.now ?? Date.now;
     this.logger = (opts.logger ?? createNoopLogger()).child({ component: "devices" });
     this.localId = localDeviceIdAt(opts.dataDir);
+    this.ownName = readOwnName(this.namePath(), this.logger);
     this.deviceId = this.localId;
     // Re-sync on every mesh event that can change identity, reachability, or
     // the capability URL. "reconciled" also fires after every link reconnect.
@@ -358,6 +389,33 @@ export class DeviceService extends EventEmitter {
     this.emitRoster();
   }
 
+  private namePath(): string {
+    return join(this.opts.dataDir, ...LAYOUT.DEVICE_NAME_FILE);
+  }
+
+  /** TS-3b (P9, TS-D17 A) — name THIS device: the person's words (already
+   * trimmed and bounded by `DeviceRenameParams`), or null for the computer's
+   * name again. The file is written atomically (0600) or removed, and the
+   * self-slice republished, so every roster moves on the next delta. A peer
+   * is never renamed from here: the name is a fact of the device that has it. */
+  async rename(name: string | null): Promise<DeviceInfo> {
+    const path = this.namePath();
+    if (name === null) {
+      rmSync(path, { force: true });
+    } else {
+      mkdirSync(dirname(path), { recursive: true });
+      const record: DeviceNameFile = { name, setAt: this.now() };
+      const tmp = `${path}.${process.pid}.tmp`;
+      writeFileSync(tmp, `${JSON.stringify(record)}\n`, { mode: 0o600 });
+      durableRenameSync(tmp, path);
+    }
+    this.ownName = name;
+    await this.sync();
+    const self = this.get(this.deviceId);
+    if (self === undefined) throw new Error("this device is missing from its own roster");
+    return self;
+  }
+
   /** The self-slice, published into `field.devices.v1` (D31 field set). */
   private async publish(): Promise<void> {
     const slice = this.selfSlice();
@@ -368,7 +426,10 @@ export class DeviceService extends EventEmitter {
   private selfSlice(): DeviceSlice {
     return {
       deviceId: this.deviceId,
-      name: hostname(), // user-set display name deferred (D30: hostname fallback)
+      // TS-3b (P9) — the person's own name when they gave one, else the
+      // computer's (D30's fallback), and which of the two it is
+      name: this.ownName ?? hostname(),
+      nameSource: this.ownName !== null ? "user" : "hostname",
       platform: process.platform,
       headless: false, // the shell is the only launcher today
       fielddVersion: this.opts.fielddVersion,
@@ -625,6 +686,7 @@ export class DeviceService extends EventEmitter {
       out.push({
         deviceId: slice.deviceId,
         name: slice.name,
+        ...(slice.nameSource !== undefined ? { nameSource: slice.nameSource } : {}),
         platform: slice.platform,
         headless: slice.headless,
         fielddVersion: slice.fielddVersion,

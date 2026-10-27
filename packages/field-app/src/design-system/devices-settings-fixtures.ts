@@ -8,6 +8,7 @@ import type { DevicesRow, DevicesSheet } from "../panels/DevicesSection";
 
 export const DEVICES_FIXTURE_STATES = [
   "connected",
+  "renamed",
   "this Mac only",
   "signing in",
   "approval",
@@ -37,11 +38,21 @@ const FACTS = {
   adminUrl: "https://login.tailscale.com/admin/machines",
 };
 
-const ROSTER: readonly DevicesRow[] = [
-  { id: "self", name: "Studio", os: "macos", self: true, online: true },
+/** This Mac by the computer's name, as fieldd publishes it until the person
+ * names it (TS-3b). */
+const SELF: DevicesRow = {
+  id: "self",
+  name: "Studio.local",
+  os: "macos",
+  self: true,
+  online: true,
+  nameSource: "hostname",
+};
+const PEERS: readonly DevicesRow[] = [
   { id: "air", name: "MacBook Air", os: "macos", self: false, online: true },
   { id: "pc", name: "Workshop PC", os: "windows", self: false, online: false },
 ];
+const ROSTER: readonly DevicesRow[] = [SELF, ...PEERS];
 
 export function devicesFixture(state: DevicesFixtureState): {
   face: LinkFace;
@@ -60,6 +71,13 @@ export function devicesFixture(state: DevicesFixtureState): {
   switch (state) {
     case "connected":
       return { face: connected, sheet: "none", devices: ROSTER };
+    case "renamed":
+      // TS-3b — the person named this Mac: the computer's name is offered back
+      return {
+        face: connected,
+        sheet: "none",
+        devices: [{ ...SELF, name: "Studio", nameSource: "user" }, ...PEERS],
+      };
     case "disconnect":
       return { face: connected, sheet: "disconnect", devices: ROSTER };
     case "add a device":

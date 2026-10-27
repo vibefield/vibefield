@@ -4,13 +4,23 @@
 // the store stream, the tolerant malformed-slice drop, device.subscribe
 // streaming, meshless identity stability across a restart, and device.get.
 import { EventEmitter } from "node:events";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { hostname, tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   CONTRACTS_VERSION,
   type DeviceInfo,
   type DeviceListResult,
+  DeviceNameFile,
+  LAYOUT,
   PEER_FIELDD_SCOPES,
   PORTS,
   SOCKETS,
@@ -930,4 +940,87 @@ describe("D1 — isDocHost reads the roster row", () => {
     };
     expect(again.grantedScopes).toEqual([...PEER_FIELDD_SCOPES]);
   }, 30_000);
+});
+
+describe("TS-3b — this device's own name (P9, TS-D17 A)", () => {
+  const namePath = (dataDir: string): string => join(dataDir, ...LAYOUT.DEVICE_NAME_FILE);
+
+  async function boot(dataDir: string) {
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, daemon.shellToken, "shell-main");
+    return { daemon, rpc };
+  }
+  const selfOf = async (rpc: WsRpc): Promise<DeviceInfo> =>
+    (await pollDevices(rpc, (d) => d.some((x) => x.self))).find((x) => x.self) as DeviceInfo;
+
+  it("names this device on this device only: the file, the slice and the row say it", async () => {
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    linkTo(dataDir);
+    const { rpc } = await boot(dataDir);
+    expect((await selfOf(rpc)).nameSource).toBe("hostname");
+
+    const row = (await rpc.call("device.rename", { name: "  Studio  " })) as DeviceInfo;
+    // trimmed, and the person's: the answer is the self row
+    expect(row.self).toBe(true);
+    expect(row.name).toBe("Studio");
+    expect(row.nameSource).toBe("user");
+    // kept on this device, 0600, in the shape the boot reads back
+    const file = DeviceNameFile.parse(JSON.parse(readFileSync(namePath(dataDir), "utf8")));
+    expect(file.name).toBe("Studio");
+    expect(statSync(namePath(dataDir)).mode & 0o777).toBe(0o600);
+    // republished: every roster moves on the next delta
+    await until(
+      () => mock.storeWrites.some((w) => (w as Record<string, unknown>)["name"] === "Studio"),
+      8000,
+    );
+  });
+
+  it("keeps the name across a fieldd restart (kill-matrix)", async () => {
+    const dataDir = makeDataDir();
+    await startMock(dataDir);
+    const first = await boot(dataDir);
+    await first.rpc.call("device.rename", { name: "Studio" });
+    await first.daemon.stop();
+    const second = await boot(dataDir);
+    const self = await selfOf(second.rpc);
+    expect(self.name).toBe("Studio");
+    expect(self.nameSource).toBe("user");
+  });
+
+  it("falls back to the computer's name over a corrupt file, never a crash", async () => {
+    const dataDir = makeDataDir();
+    await startMock(dataDir);
+    mkdirSync(join(dataDir, "fieldd"), { recursive: true });
+    writeFileSync(namePath(dataDir), "{not json");
+    const { rpc } = await boot(dataDir);
+    const self = await selfOf(rpc);
+    expect(self.name).toBe(hostname());
+    expect(self.nameSource).toBe("hostname");
+  });
+
+  it("returns to the computer's name on null, and the file goes", async () => {
+    const dataDir = makeDataDir();
+    await startMock(dataDir);
+    const { rpc } = await boot(dataDir);
+    await rpc.call("device.rename", { name: "Studio" });
+    expect(existsSync(namePath(dataDir))).toBe(true);
+    const row = (await rpc.call("device.rename", { name: null })) as DeviceInfo;
+    expect(row.name).toBe(hostname());
+    expect(row.nameSource).toBe("hostname");
+    expect(existsSync(namePath(dataDir))).toBe(false);
+  });
+
+  it("refuses a longer name with its count, and an empty one, writing nothing", async () => {
+    const dataDir = makeDataDir();
+    await startMock(dataDir);
+    const { rpc } = await boot(dataDir);
+    const long = await rpc.callErr("device.rename", { name: "x".repeat(129) });
+    expect(long.message).toContain("a device name is at most 128 characters (this one is 129)");
+    const empty = await rpc.callErr("device.rename", { name: "   " });
+    expect(empty.message).toContain("a device name can't be empty");
+    expect(existsSync(namePath(dataDir))).toBe(false);
+  });
 });

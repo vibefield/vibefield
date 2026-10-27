@@ -106,7 +106,7 @@ import {
   ArtifactView,
   LocalArtifactIntent,
 } from "../src/artifacts";
-import { DeviceInfo, DeviceSlice } from "../src/devices";
+import { DeviceInfo, DeviceNameFile, DeviceRenameParams, DeviceSlice } from "../src/devices";
 import {
   AuditRecordV1,
   DiagnosticLeaseV1,
@@ -541,6 +541,10 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // must still parse — `setup.test.ts` holds that its rows are carried, unread.
   "setup-ledger": SetupLedger,
   "setup-answer-params": SetupAnswerParams,
+  // TS-3b (P9, TS-D17 A) — a rename, and its reset to the computer's name; the
+  // device-local file the name is kept in
+  "device-rename-params": DeviceRenameParams,
+  "device-name-file": DeviceNameFile,
   "agent-persona": AgentPersona,
   "agent-distribution": AgentDistributionRecord,
   "agents-installs": AgentsInstallsResult,
