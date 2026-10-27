@@ -10,7 +10,7 @@ import {
   PARTIAL_LINE_TRUNCATION_MARKER,
   redactLine,
 } from "../src/index";
-import { createHarness, FIXTURE_READY, type Harness } from "./helpers";
+import { createHarness, FIXTURE_READY, type Harness, waitForEvent } from "./helpers";
 
 // §12.2 log redaction: the unit primitives (redactLine · createLineBuffer ·
 // createLogTail) and the end-to-end guarantee that a secret printed by a
@@ -148,6 +148,12 @@ describe("redaction through a spawned child", () => {
     const joined = output.join("\n");
     expect(joined).not.toContain(raw); // the raw secret never reached the sink
     expect(output.some((line) => line.includes("token=[redacted]"))).toBe(true);
+    // item 75 — the readiness LINE is the child's stdout, which may land after `ensure()` answered from the run files
+    await waitForEvent(
+      events,
+      (event) => event.kind === "readiness",
+      "the fixture's readiness line",
+    );
     expect(events.filter((event) => event.kind === "readiness")).toHaveLength(1);
   });
 });

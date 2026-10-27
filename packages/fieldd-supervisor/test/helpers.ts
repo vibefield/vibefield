@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CONTRACTS_VERSION, type Scope } from "@vibefield/contracts";
 import { ProductApi } from "@vibefield/fieldd";
-import type { FielddSupervisor } from "../src/index";
+import type { FielddSupervisor, FielddSupervisorEvent } from "../src/index";
 
 // Shared test harness for the supervisor suite. Every resource it hands out is
 // tracked and torn down by `cleanup()` in afterEach: temp roots removed,
@@ -162,6 +162,27 @@ export function createHarness(): Harness {
       }
     },
   };
+}
+
+/** Item 75 (2026-10-26) — waits, bounded, for an event the supervisor emits from the child's STDOUT. `ensure()` may
+ * resolve first: it answers from the run-file probe, and a fixture writes its run files before it prints its line, an
+ * order the product never promises. At the deadline it names the wait and the event kinds seen (never a line: in the
+ * redaction row the lines are the subject). */
+export async function waitForEvent(
+  events: readonly FielddSupervisorEvent[],
+  match: (event: FielddSupervisorEvent) => boolean,
+  what: string,
+  // inside vitest's default 5 s test budget (this package sets none), so it is THIS wait that says why
+  ms = 2_000,
+): Promise<void> {
+  const end = Date.now() + ms;
+  while (!events.some(match)) {
+    if (Date.now() > end) {
+      const kinds = events.map((event) => event.kind).join(", ");
+      throw new Error(`${what} did not arrive within ${ms} ms; the events seen: [${kinds}]`);
+    }
+    await new Promise<void>((r) => setTimeout(r, 10));
+  }
 }
 
 /** Poll (bounded) until `pid` is gone — signal delivery is asynchronous. */

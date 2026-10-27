@@ -16,6 +16,7 @@ import {
   FIXTURE_READY,
   type Harness,
   waitDead,
+  waitForEvent,
 } from "./helpers";
 
 // §12.2 spawn-when-none, child-exit-before-readiness, bounded readiness
@@ -98,6 +99,8 @@ describe("spawn: no adoptable fieldd exists", () => {
     expect(handle.info.port).toBe(port);
     expect(handle.info.pid).toBe(handle.childPid);
     expect(handle.client.status).toBe("ready");
+    // item 75 — `ensure()` answered from the run files; the readiness LINE is the child's stdout and may land after
+    await waitForEvent(logs, (event) => event.kind === "readiness", "the fixture's readiness line");
     expect(logs.filter((event) => event.kind === "readiness")).toEqual([
       {
         kind: "readiness",
