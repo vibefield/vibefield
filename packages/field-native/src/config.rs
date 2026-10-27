@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// The terminal mesh's master switch: the ONE spelling of the env var, read by
 /// `NativeConfig::from_env` below and by nothing else in this process.
@@ -211,7 +211,7 @@ impl NativeConfig {
         let data_dir = std::env::var_os("FIELD_NATIVE_DATA_DIR")
             .map(PathBuf::from)
             .unwrap_or_else(default_data_dir);
-        let log_root = Some(resolve_log_root()?);
+        let log_root = Some(resolve_log_root(&data_dir)?);
         let log_filter = (std::env::var("FIELD_NATIVE_ALLOW_LOG_FILTER").as_deref() == Ok("1"))
             .then(|| std::env::var("FIELD_NATIVE_LOG_FILTER").ok())
             .flatten();
@@ -484,7 +484,11 @@ fn default_data_dir() -> PathBuf {
     }
 }
 
-fn resolve_log_root() -> anyhow::Result<PathBuf> {
+/// The log root this field-native writes. An explicit `FIELD_LOG_DIR` (honored only under the allow flag) is used as it
+/// is: fieldd hands field-native the PAIR's root it already derived (item 78). Without one, this resolves the same
+/// pair root itself — `pair_log_root` of the platform root and the data dir — so a field-native started by anything
+/// but fieldd lands where its pair logs (LOG §7.1: derived, not configured).
+fn resolve_log_root(data_dir: &Path) -> anyhow::Result<PathBuf> {
     if std::env::var("FIELD_NATIVE_ALLOW_LOG_DIR_OVERRIDE").as_deref() == Ok("1") {
         if let Some(value) = std::env::var_os("FIELD_LOG_DIR") {
             let path = PathBuf::from(value);
@@ -492,25 +496,60 @@ fn resolve_log_root() -> anyhow::Result<PathBuf> {
             return Ok(path);
         }
     }
+    Ok(pair_log_root(&platform_log_root(), data_dir))
+}
 
+/// Item 78 (UA-D16 reversed 2026-10-27, James's O1; LOG §6.5, §7.1) — one VibeField user's pair log root:
+/// `<platform root>/users/<fuid>` when `user_root` is a user root (`<VibeField root>/users/<fuid>`: the registry's
+/// `USERS_DIR` segments, and a positive decimal fuid with no leading zero, `String(record.fuid)`), else the platform
+/// root itself (a test's temporary root, an injected root: where every pair logged before). The Rust twin of
+/// `@vibefield/logging`'s `pairLogRoot`, case for case; two users' pairs then never contend for one stream under LOG's
+/// one-writer-per-file rule (the W11 mini, 2026-10-27 04:19Z: the second user's pair was refused, unlogged).
+pub fn pair_log_root(platform_root: &Path, user_root: &Path) -> PathBuf {
+    let Some(fuid) = user_root.file_name().and_then(|name| name.to_str()) else {
+        return platform_root.to_path_buf();
+    };
+    let decimal = !fuid.is_empty() && fuid.bytes().all(|byte| byte.is_ascii_digit());
+    if !decimal || fuid.starts_with('0') {
+        return platform_root.to_path_buf();
+    }
+    let mut candidate = user_root.parent();
+    for segment in crate::registries::layout::USERS_DIR.iter().rev() {
+        match candidate {
+            Some(dir) if dir.file_name().and_then(|name| name.to_str()) == Some(*segment) => {
+                candidate = dir.parent();
+            }
+            _ => return platform_root.to_path_buf(),
+        }
+    }
+    let mut root = platform_root.to_path_buf();
+    for segment in crate::registries::layout::USERS_DIR {
+        root.push(segment);
+    }
+    root.push(fuid);
+    root
+}
+
+/// LOG §7.1's platform root, per OS: Electron's own streams live directly under it.
+fn platform_log_root() -> PathBuf {
     let home = home_dir();
     #[cfg(target_os = "macos")]
     {
-        Ok(home.join("Library/Logs/VibeField"))
+        home.join("Library/Logs/VibeField")
     }
     #[cfg(target_os = "windows")]
     {
-        Ok(std::env::var_os("LOCALAPPDATA")
+        std::env::var_os("LOCALAPPDATA")
             .map(PathBuf::from)
             .unwrap_or_else(|| home.join("AppData/Local"))
-            .join("VibeField/Logs"))
+            .join("VibeField/Logs")
     }
     #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
     {
-        Ok(std::env::var_os("XDG_STATE_HOME")
+        std::env::var_os("XDG_STATE_HOME")
             .map(PathBuf::from)
             .unwrap_or_else(|| home.join(".local/state"))
-            .join("vibefield/logs"))
+            .join("vibefield/logs")
     }
 }
 
@@ -521,6 +560,47 @@ fn resolve_log_root() -> anyhow::Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Item 78 — a user's pair logs under `users/<fuid>` of the platform root, read off the user root; the twin of
+    /// `@vibefield/logging`'s `pairLogRoot` rows (packages/logging/test/paths.test.ts), case for case.
+    #[test]
+    fn a_pair_logs_under_users_fuid_read_off_its_user_root() {
+        let platform = Path::new("/Users/test/Library/Logs/VibeField");
+        assert_eq!(
+            pair_log_root(
+                platform,
+                Path::new("/Users/test/Library/Application Support/VibeField/users/2")
+            ),
+            platform.join("users").join("2")
+        );
+        assert_eq!(
+            pair_log_root(
+                Path::new("/state/vibefield/logs"),
+                Path::new("/data/VibeField/users/1/")
+            ),
+            Path::new("/state/vibefield/logs/users/1")
+        );
+    }
+
+    /// …and at the platform root itself for a data dir of any other shape (tests, injected roots), as before.
+    #[test]
+    fn a_data_dir_of_any_other_shape_logs_at_the_platform_root() {
+        let platform = Path::new("/logs");
+        for user_root in [
+            "/tmp/vf-test-abc",
+            "/data/VibeField/users/abc",
+            "/data/VibeField/users/0",
+            "/data/VibeField/users/01",
+            "/data/VibeField/users/1/native",
+            "/data/VibeField/accounts/2",
+        ] {
+            assert_eq!(
+                pair_log_root(platform, Path::new(user_root)),
+                platform,
+                "{user_root}"
+            );
+        }
+    }
 
     /// TM-1 — the plan is a two-state answer to ONE question, and `Off` is the
     /// test constructor's default. It used to select a serve shape; the row

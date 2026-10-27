@@ -23,7 +23,14 @@ export {
   type FramedLine,
 } from "./line-framer";
 export { createNodeLogging, createNoopLogger } from "./node-logging";
-export { type ResolveLogRootOptions, resolvePlatformLogRoot } from "./paths";
+export {
+  isPairLogStream,
+  PAIR_LOG_STREAMS,
+  pairLogRoot,
+  pairLogRoots,
+  type ResolveLogRootOptions,
+  resolvePlatformLogRoot,
+} from "./paths";
 export {
   type PluginLogInput,
   PluginLogRouter,

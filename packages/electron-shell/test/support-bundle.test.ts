@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { gunzipSync } from "node:zlib";
 import { AuditLedgerWriter } from "@vibefield/audit";
 import { LAYOUT, LOG_STREAMS, PORTS } from "@vibefield/contracts";
-import { createNoopLogger } from "@vibefield/logging";
+import { createNodeLogging, createNoopLogger, pairLogRoot } from "@vibefield/logging";
 import { afterEach, describe, expect, it } from "vitest";
 import { CrashArtifactManager } from "../src/main/crash-artifacts";
 import { createElectronLogging } from "../src/main/logging";
@@ -433,5 +433,54 @@ describe("the doctor surface in a support bundle", () => {
         },
       }),
     ).toMatchObject({ state: "available", surfaces: { error: "Error: the updater is gone" } });
+  });
+});
+
+// Item 78 (UA-D16 reversed 2026-10-27; LOG §6.5, §7.1) — every user's daemon pair logs under its own root,
+// `<log root>/users/<fuid>/`, so a bundle that selects a PAIR stream collects it from every user's root, each under
+// `logs/users/<fuid>/`, and still from the platform root, where the pair wrote before the move.
+describe("a pair stream in a support bundle", () => {
+  it("is collected from every user's pair root, each under logs/users/<fuid>/", async () => {
+    const { root, logRoot, logging, service } = await fixture();
+    const now = Date.now();
+    for (const fuid of ["1", "2"]) {
+      const pair = await createNodeLogging({
+        logRoot: pairLogRoot(logRoot, join(root, "vf", ...LAYOUT.USERS_DIR, fuid)),
+        stream: LOG_STREAMS.SYSTEM_FIELDD,
+        service: "fieldd",
+        role: "daemon",
+        bootId: `fieldd-user${fuid}`,
+        instanceId: `fieldd-user${fuid}`,
+        component: "bootstrap",
+      });
+      pair.logger.info(`fieldd.support.user_${fuid}`, `user ${fuid}'s fieldd`);
+      await pair.close();
+    }
+    const preview = await service.preview({
+      range: { from: now - 60_000, to: now + 60_000 },
+      sources: [LOG_STREAMS.SYSTEM_FIELDD],
+      pluginIds: [],
+      includeAudit: false,
+      crashArtifactIds: [],
+    });
+    const destination = join(root, "support-pairs.tar.gz");
+    await service.export(preview.previewId, destination);
+    const files = unpackTarGz(await readFile(destination));
+    expect([...files.keys()]).toEqual(
+      expect.arrayContaining([
+        "logs/users/1/system/fieldd.ndjson",
+        "logs/users/2/system/fieldd.ndjson",
+      ]),
+    );
+    expect(files.get("logs/users/1/system/fieldd.ndjson")?.toString("utf8")).toContain(
+      "fieldd.support.user_1",
+    );
+    expect(files.get("logs/users/2/system/fieldd.ndjson")?.toString("utf8")).toContain(
+      "fieldd.support.user_2",
+    );
+    expect(files.get("logs/users/1/system/fieldd.ndjson")?.toString("utf8")).not.toContain(
+      "fieldd.support.user_2",
+    );
+    await logging.close();
   });
 });

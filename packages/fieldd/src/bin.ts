@@ -6,7 +6,7 @@ import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { FIELDD_TRUST_ROOT_ENV, FIELDD_TRUST_ROOT_KEYS_ENV } from "@vibefield/contracts";
-import { resolvePlatformLogRoot, serializeError } from "@vibefield/logging";
+import { pairLogRoot, resolvePlatformLogRoot, serializeError } from "@vibefield/logging";
 import { ensureUsersRoot, rootAboveUserRoot } from "@vibefield/users";
 import {
   defaultDataRoot,
@@ -87,9 +87,16 @@ async function main(): Promise<void> {
   // runs resolve it in-package. Explicit env always wins.
   const serviceHarnessPath =
     process.env["FIELDD_SERVICE_HARNESS"] ?? join(__dirname, "service-harness.mjs");
-  const logRoot = resolvePlatformLogRoot({
-    allowOverride: process.env["FIELDD_ALLOW_LOG_DIR_OVERRIDE"] === "1",
-  });
+  // Item 78 (UA-D16 reversed 2026-10-27; LOG §6.5, §7.1) — this USER's pair logs under its own root, derived from the
+  // user root it runs out of (`<root>/users/<fuid>` → `<log root>/users/<fuid>`). The launcher hands the PLATFORM
+  // root (the shell does, under its own mode policy); every user's fieldd used to write the platform root itself, so a
+  // second user's was refused as `writer-conflict` and logged nothing. field-native is handed the derived root below.
+  const logRoot = pairLogRoot(
+    resolvePlatformLogRoot({
+      allowOverride: process.env["FIELDD_ALLOW_LOG_DIR_OVERRIDE"] === "1",
+    }),
+    dataDir,
+  );
 
   let nativePid: number | undefined;
   const mgmtEndpoint = nativeMgmtEndpoint(dataDir);
@@ -106,8 +113,9 @@ async function main(): Promise<void> {
           const child = spawn(nativeBin, [], {
             env: {
               ...process.env,
-              // fieldd passes the root it already resolved under the trusted shell
-              // mode decision. field-native never trusts an ambient override alone.
+              // fieldd passes the PAIR's root it already derived (item 78: users/<fuid>
+              // under the platform root the trusted shell mode decision resolved).
+              // field-native never trusts an ambient override alone.
               // WIN-D1 — and it is the SAME string the probe above resolved its
               // endpoint from: on win32 both planes derive the pipe name from a hash of
               // this root, so re-spelling it here (a resolve, a realpath, a trailing

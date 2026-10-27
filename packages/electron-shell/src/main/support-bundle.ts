@@ -29,8 +29,10 @@ import {
 } from "@vibefield/contracts/diagnostics";
 import {
   ExportPseudonyms,
+  isPairLogStream,
   type Logger,
   type LogSanitizerAliases,
+  pairLogRoots,
   readLogHistory,
   sanitizeLogRecordForExport,
 } from "@vibefield/logging";
@@ -648,6 +650,7 @@ export class SupportBundleService {
     const collectLogFile = async (
       source: SupportBundleSelection["sources"][number],
       path: string,
+      logRoot: string,
       pluginId?: string,
     ): Promise<void> => {
       signal?.throwIfAborted();
@@ -657,7 +660,7 @@ export class SupportBundleService {
         return;
       }
       const page = await readLogHistory({
-        logRoot: this.options.logRoot,
+        logRoot,
         query: {
           sources: [source],
           sinceTime: selection.range.from,
@@ -699,15 +702,44 @@ export class SupportBundleService {
       files.push(memoryFile(path, source.startsWith("plugins/") ? "plugin" : "system", data));
     };
 
+    // Item 78 (UA-D16 reversed 2026-10-27; LOG §6.5, §7.1) — a user's daemon pair writes its streams under that
+    // user's own root, so a PAIR stream is collected from every user's root (each under `logs/users/<fuid>/`) and from
+    // the platform root, where every pair wrote before the move. The application's own streams live at the platform
+    // root alone.
+    const rootsFor = async (
+      source: SupportBundleSelection["sources"][number],
+    ): Promise<Array<{ root: string; prefix: string }>> => {
+      const platform = { root: this.options.logRoot, prefix: "logs" };
+      if (!isPairLogStream(source)) return [platform];
+      const pairs = await pairLogRoots(this.options.logRoot);
+      return [
+        platform,
+        ...pairs.map((pair) => ({
+          root: pair.root,
+          prefix: `logs/${LAYOUT.USERS_DIR.join("/")}/${pair.fuid}`,
+        })),
+      ];
+    };
     for (const source of selection.sources) {
-      if (source.startsWith("plugins/")) {
-        const entry = source.slice("plugins/".length);
-        for (const pluginId of selection.pluginIds) {
-          const alias = pseudonyms.alias("plugin", pluginId);
-          await collectLogFile(source, `logs/plugins/${alias}/${entry}.ndjson`, pluginId);
+      for (const { root, prefix } of await rootsFor(source)) {
+        if (source.startsWith("plugins/")) {
+          const entry = source.slice("plugins/".length);
+          for (const pluginId of selection.pluginIds) {
+            const alias = pseudonyms.alias("plugin", pluginId);
+            await collectLogFile(
+              source,
+              `${prefix}/plugins/${alias}/${entry}.ndjson`,
+              root,
+              pluginId,
+            );
+          }
+        } else {
+          await collectLogFile(
+            source,
+            `${prefix}/system/${source.slice("system/".length)}.ndjson`,
+            root,
+          );
         }
-      } else {
-        await collectLogFile(source, `logs/system/${source.slice("system/".length)}.ndjson`);
       }
     }
 
