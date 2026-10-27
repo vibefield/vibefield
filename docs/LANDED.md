@@ -17543,3 +17543,70 @@ row in the same commit):
 - The ghosttea "last pane closed" hook, with the next ghosttea petition round.
 - AL's rest: Settings → Diagnostics' "Last exit" line, AL-5's relaunch cap persisted, AL-6 "Keep running when
   VibeField quits".
+
+## AO — item 82: one slow row is one red in the Setup Assistant's suite — no act() outlives its row; and the suite's cold first row takes its measured budget (2026-10-27; `714ecbaae` + `8828601ed`, lane `fix/item82-act-scope`; VF-PM's rulings 20:50Z and 21:08Z)
+
+**What happened:** item 81's `pnpm verify` at `6e0da9902` (20:42–20:48Z, load 185 at its end) went red on field-app's
+`onboarding-wizard.test.tsx` alone, with 40 of its 42 rows red:
+- its first row ("walks a fresh install…") timed out at 5022 ms, and one more ("records Agents answered from the
+  inventory and moves on to History (AO-5)") at 5005 ms;
+- every other row failed in 1–8 ms on an EMPTY DOM (`no button labelled "Get started" in: ` with nothing after it;
+  `expected '' to contain …`).
+Alone it was 42/42, its first row 1202 ms and the next-slowest 28 ms. One slow row read as 40 findings and hid which,
+if any, were real.
+
+**The cause is React's own act scope, not a stale render** (VF-PM's two suggestions, a fresh render per row or a wait
+on the wizard's ready word, would not reach it: `mount()` already makes a new container and root every row):
+- react 19.2.7 (`cjs/react.development.js:806` on) keeps one `actScopeDepth` for the module. `popActScope` restores
+  the depth an act was ENTERED at, and an act entered at depth > 0 resolves without flushing.
+- The row that timed out was inside `arrive()`'s act, awaiting `vi.dynamicImportSettled()` (a lazy pane's cold import).
+  That act stayed open past its row, so afterEach's unmount and every later mount nested inside it and committed
+  nothing.
+- The row itself ran on as a zombie, through `arrive`'s turns on the next row's container and fake clock. Acts that
+  finished out of order left the depth above zero for the rest of the file, which is why the AO-5 row timed out too.
+
+**The fix** (`714ecbaae`, test-only, file-local by VF-PM's ruling: a shared helper the day a second file needs it):
+- A file-local `it`/`it.fails` runs each row's body in an `AsyncLocalStorage` scope that holds vitest 3.2.7's
+  `context.signal`, which the runner aborts synchronously at the row's timeout, before afterEach
+  (@vitest/runner `chunk-hooks.js:641`, `:1914`), and the row's end as one promise with one abort listener. One per act
+  would trip Node's MaxListenersExceededWarning, since a row makes more than 10.
+- A file-local `act` races an async callback against the row's end, so the act a row was in when it timed out ends with
+  it and React pops its scope. A row that is over starts no act. Outside a row (afterEach's unmount) `act` is React's
+  own.
+- afterEach awaits the row's acts before it unmounts. `arrive` stops after the import when its row is over, because the
+  clock it would advance is the next row's.
+- The proof, at the file's end ("item 82 — one slow row is one red"): an `it.fails` row times out inside an act on
+  purpose (100 ms), and the row after it must mount the wizard, read "Welcome." and answer Get started.
+
+**The budget** (`8828601ed`, VF-PM 21:08Z: "not a budget" was for the cascade; a cold row that is one honest red under
+load is the budget case): row 1 is the file's first walk through every pane, so each lazy pane's code arrives inside act
+on its way. 30 s in doc-manager.test.ts:168's form, with 1029–1347 ms alone (×5) and 5022 ms under item 81's verify
+beside it.
+
+**Validation** (this Mac's SSD lane `/Volumes/SamsungRed/lanes/item82`, guard, nice 19; the slot from 21:44Z):
+- **Red-first** (records/redfirst-onboarding-wizard.test.tsx: main's file at `1341c06b7` byte for byte, with the two
+  proof rows appended; logs/redfirst/): the on-purpose row times out as it must (106 ms). The row after it is RED in
+  1 ms, `expected '' to contain 'Welcome.'`, the cascade's own signature.
+- **At the fix:** 44/44, the row after 9 ms, with no MaxListeners, overlapping-act or unhandled warnings.
+- **The witness**, both harnesses at `--testTimeout=600`, so the file's own cold first row times out as under that
+  verify (logs/witness/):
+  - the old harness reads 41 of 44 red: row 1 (666 ms) and the AO-5 row (602 ms) time out, and every other row is empty
+    in 0–5 ms. That is item 81's verify, reproduced on demand.
+  - The fix reads ONE red, row 1's own timeout (606 ms), and the other 43 rows are green.
+- **Row 1 alone ×5** (logs/row1/): 1333, 1191, 1090, 1029, 1347 ms, every run green.
+- **Rebased** onto `d9e5eb119` (merge-tree rehearsed: tree `6258e8abd`, no lane file in the onto-range; patch-ids
+  `16e2f2659a1e` and `2ed2f0fe2de8` unchanged): the file 44/44; typecheck field-app, preflight, check:walls and biome
+  at error level all 0.
+- **`pnpm verify`** at `8828601ed` (logs/verify/verify.log): EXIT 101 (21:49:40–21:57:27Z; load 8.7 armed, 125 at its end).
+  Every stage before the Rust tests passed, and the TS test target too ("Successfully ran target test for 27 projects"):
+  field-app 2,746 passed, this file among them; fieldd 2,567 passed (11 skipped). The one red is Rust, in a file neither
+  this slice nor its onto-range touches: field-native `tests/resource_governance.rs` ›
+  `fd_exhaustion_refuses_honestly_and_the_boot_raise_carries_the_floor_past_it` (:549). Its 12 s health poll ended on
+  "agent: cell 2 serving; pid 72217; interactive: spawning", without the fd-pressure word. cargo stopped there with 24
+  suites ok. No floor was left running and 76 of 511 PTYs were in use, so this is not the 2026-08-22 PTY exhaustion
+  that once reddened the same row.
+- **Alone**, the precedent (logs/alone/, gated on a 1-min load under 25, open at 21:59:10Z):
+  - `pnpm test:rust` in full: 31 suites, 486 passed, 0 failed, the fd_exhaustion row among them, EXIT 0
+    (21:59:10–22:00:37Z);
+  - `pnpm gen:check` EXIT 0 (22:00:37–22:00:42Z), tree clean.
+- Records: `/Volumes/SamsungRed/lanes/records/item82/`.
