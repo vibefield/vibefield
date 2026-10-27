@@ -17711,3 +17711,82 @@ slice, in two packets (VF-PM named them at 22:08Z): TS-8a the floor's facts, her
 **Owed.** The live witnesses, on a real tailnet and James's word: no connection to log.tailscale.com while uploads are
 off; a tailnet with flow logs (the refusal, then Send logs on this network); renew's live half, now on the event;
 Disconnect leaving the admin console; Tailnet Lock signed.
+
+## TS-8b — the faces and the words on truffle 0.7.24 (TS-D14, D15, D16 A; T11; James's words, 23:08:57Z): a network that requires device logs, with Send logs on this network; Connected, not yet trusted; Network details' client and Device logs; Disconnect's two endings (2026-10-27; `adf3d972f`, lane `ts/8-surface`)
+
+**What.** TS-8a gave the floor and the doors truffle 0.7.24's facts. TS-8b gives the person their faces and words.
+James ruled the words as drafted at the board (23:08:57Z), and ruled that the Me menu keeps the login line while
+Tailnet Lock holds the Mac (23:08:59Z).
+- **DESIGN.md first:** §8's Connect pane and Settings → Devices, and §9's amendment, which now records both rulings
+  at the source.
+- **The reader** (`account/link.ts`):
+  - a `logsRequired` face: the standing record, or none for a capture the network refused;
+  - the linked face carries Tailnet Lock's hold, the embedded client's version and the logs opt-in;
+  - hasLink counts a standing record. It replaces TS-8a's interim mapping to the offline face.
+- **The door** (`use-link-door.ts`): `sendLogs(send)` is one act for every surface. A standing link calls
+  `user.link.logs`; a refused capture begins again with `{sendLogs: true}`, and its new address opens once.
+- **The menu line:** "This Mac only"; a refused capture can begin again from the row.
+- **The Connect pane:**
+  - "Your network requires device logs.", with Send logs on this network, Manage in Tailscale ↗ and Not now;
+  - "Connected, not yet trusted.", with the machine name, Copy and Manage in Tailscale ↗.
+- **Settings → Devices:**
+  - the card's words "Needs device logs" and "Not yet trusted", in the attention ink;
+  - Network details' Version ("Tailscale 1.104.1") and Device logs with the kit's switch;
+  - Disconnect's sheet says it signs out too. Only a sign-out that missed (unlink's `signedOut: false`) is said once
+    after, on the page, with the console.
+- **The catalog**, through the production `linkFace`:
+  - Devices' "not yet trusted", "logs sent", "logs required" and "sign-out missed";
+  - the Connect pane's "logs required" (signing in, connected before) and connected's "not yet trusted".
+- **Not in it:** T8's hostname prefix (TS-8c, after its probe), and asking again (TS-4, next).
+
+**Found:**
+- **The page has two subscribers to `user.link.subscribe`** (the door's and the head's), so a test fake that pushes
+  the link must push to each. The light pass's first run was red on two new rows whose fake fed only the last.
+- **The catalog's Connect frame sits below a tall viewport** (y 3907 of 2400), so a clipped shot of it is blank. The
+  gate's harness isolates each specimen by hiding the siblings along its ancestor chain; a probe named the cause.
+- **Not TS-8b's:** the Connect pane's "Not now" hint said "Set up later — Settings → Account", while the link has lived
+  on Settings → Devices since TS-3a (James's own ruling). VF-PM ruled it TS-3a's leftover (23:15Z): its erratum
+  follows TS-8b in the same slot.
+
+**Validation.**
+- **The lane:** `/Volumes/SamsungRed/lanes/ts3`, its own target, at nice 19 under the guard. Packet 2's DESIGN.md (WIP
+  `58bd21060`) was restacked onto TS-8a's records `5488c8773`: merge-tree clean, and the tree equals the rehearsal's
+  (`4a53dd179`). The faces were then written with field-app typechecks and biome only, as VF-PM ruled (23:05Z),
+  until the slot.
+- **The light pass** on `6ccd7d641` (23:07:32–23:09:48Z, VF-PM's rules) was green at its second run:
+  - the lane's setup, preflight 0 WARN/FAIL; check:walls clean; biome at the error level on the 13 touched files
+    clean;
+  - the field-app typecheck;
+  - the 4 targeted files 72/72 (account-link, devices-section, link-door, design-system); the whole field-app suite
+    2757/2757 in 227 files.
+  - Its first run was red on two new rows whose fake fed only one of the link's two subscribers (Found, above).
+- **James's ruling** (23:08:57Z, 23:08:59Z) entered as a DESIGN.md amend and message only (`d46821d53`). The code is
+  the light pass's tree.
+- **The gate's photographs** (logs/photos8b, 23:13Z), read by eye:
+  - the catalog's states for the seven ruled words, in light and dark (18 PNGs);
+  - no console error during the shots; the one at load was the catalog server's favicon 404;
+  - shot by headless Chrome on its own profile against the catalog's own Vite, with no input to the live machine.
+- **`pnpm check:deps` + `pnpm verify`** at `adf3d972f` (logs/window8b2, logs/verify8b2):
+  - check:deps: EXIT 0 (23:14:54Z).
+  - verify: EXIT 1 (23:14:54–23:21:28Z), red at load 394 on five timing files TS-8b does not touch: the History
+    room's waits, peek, doc-manager and rosettad-supervisor (the lottery list; VF-PM 23:23Z). The load was not a
+    lane's: James at the machine with other projects' agents and dev servers, with both swarms throttled to four.
+    - `@vibefield/field-app:test`, 24 failed | 2733 passed, in history-view (13), peek (6), room-host-inputs (3) and
+      doc-manager (2): 14 "Test timed out in 5000ms", 8 `until:` waits on the room's rows, and 2 follow-on asserts.
+      The same suite was 2757/2757 in the light pass at load 13, on this code.
+    - `@vibefield/fieldd:test`, 1 failed | 2574 passed | 11 skipped: rosettad-supervisor.
+    - Every stage before the tests passed, and the other 25 projects' tests passed.
+- **Alone**, the precedent (logs/alone8b2/ and alone8b3/, each step gated on a 1-min load under 25), on `adf3d972f`:
+  - rosettad-supervisor.test.ts 32/32, EXIT 0 (23:26:43–23:26:54Z);
+  - the four field-app files in one run, 85/85, EXIT 0 (23:26:54–23:28:09Z): history-view 17, room-host-inputs 25,
+    peek 24, doc-manager 19;
+  - `pnpm test:rust`, which verify never reached, was EXIT 101 (23:28:09–23:28:38Z) on field-native's ledger row
+    `the_ledger_refreshes_the_machine_total_while_this_floors_total_stands_still` (terminal.rs:4626, f601f7ff0), in
+    code TS-8b does not change (its field-native tree is TS-8a's). The row's own read raced, and the product is right:
+    `observe` stamps `as_of` before it sets the pressure (terminal.rs:3203, :3217), and the row can take `first` from
+    the seed while attempt 1, whose stamp is that seed, is still inside its two flocks. It is item 83, the fixer's,
+    test-only (VF-PM 23:34Z). Alone ×30, the row passed 30/30, and VF-PM's one full rerun (23:30Z) was 31 suites,
+    492 passed, 0 failed, EXIT 0 (23:30:56–23:32:59Z);
+  - `pnpm gen:check` EXIT 0 (23:30:04Z), tree clean.
+
+**Owed.** The live witnesses stay TS-8a's, on a real tailnet and James's word.
