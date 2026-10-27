@@ -7837,7 +7837,8 @@ impl NativePrepareRestartResult {
 #[doc = "  \"enum\": ["]
 #[doc = "    \"update\","]
 #[doc = "    \"quit\","]
-#[doc = "    \"logout\""]
+#[doc = "    \"logout\","]
+#[doc = "    \"idle\""]
 #[doc = "  ]"]
 #[doc = "}"]
 #[doc = r" ```"]
@@ -7861,6 +7862,8 @@ pub enum NativeRestartReason {
     Quit,
     #[serde(rename = "logout")]
     Logout,
+    #[serde(rename = "idle")]
+    Idle,
 }
 impl ::std::fmt::Display for NativeRestartReason {
     fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
@@ -7868,6 +7871,7 @@ impl ::std::fmt::Display for NativeRestartReason {
             Self::Update => f.write_str("update"),
             Self::Quit => f.write_str("quit"),
             Self::Logout => f.write_str("logout"),
+            Self::Idle => f.write_str("idle"),
         }
     }
 }
@@ -7878,6 +7882,7 @@ impl ::std::str::FromStr for NativeRestartReason {
             "update" => Ok(Self::Update),
             "quit" => Ok(Self::Quit),
             "logout" => Ok(Self::Logout),
+            "idle" => Ok(Self::Idle),
             _ => Err("invalid value".into()),
         }
     }

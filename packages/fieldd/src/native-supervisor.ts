@@ -653,6 +653,17 @@ export class NativeSupervisor extends EventEmitter {
         "The floor stopped for an update",
         { ...fields, how },
       );
+    } else if (reason === "idle") {
+      // AL-5 — the orphan bound: nothing held the pair, and nothing ran on it, for its whole span
+      this.setState(
+        "gone",
+        "stopped: no window and no session used it; the next launch starts a fresh floor",
+      );
+      this.logger.info(
+        "fieldd.native_supervisor.stopped_idle",
+        "The floor stopped: no shell and no session for the orphan bound",
+        { ...fields, how },
+      );
     } else {
       // AL-2 — its own event (logging spec §8.4: a published name is never reused for another meaning)
       this.setState("gone", "stopped when VibeField quit; the next launch starts a fresh floor");

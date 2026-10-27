@@ -1248,7 +1248,8 @@
       "enum": [
         "update",
         "quit",
-        "logout"
+        "logout",
+        "idle"
       ]
     },
     "NativePrepareRestartParams": {

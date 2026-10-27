@@ -300,6 +300,7 @@ import {
 import { ServiceRegistry } from "./service-registry";
 import { SettingsDocService } from "./settings-doc";
 import { SetupLedgerStore } from "./setup-ledger";
+import { appBundleOf, relaunchFromBundle, type SHELL_ABSENCE, ShellAbsence } from "./shell-absence";
 import { ShellLease } from "./shell-lease";
 import { createSurfaceService } from "./surface-service";
 import { peerAnswerBytes, tailnetRowLimit } from "./tailnet-rows";
@@ -344,6 +345,11 @@ export const DOC_HOLDERS_STOP_MS = 2_000;
 
 export interface FielddConfig {
   dataDir: string;
+  /** AL-5 (AL-D8) — how this fieldd relaunches the app after an unplanned exit that left sessions; undefined = derived
+   * from its own path (a packaged fieldd inside the .app), null = never. Tests inject a recorder. */
+  shellRelaunch?: (() => Promise<boolean>) | null;
+  /** AL-5 — the orphan bound's timings, scaled down by tests (`SHELL_ABSENCE` in shell-absence.ts) */
+  shellAbsenceTimings?: Partial<Record<keyof typeof SHELL_ABSENCE, number>>;
   controlPort?: number; // default 0 = ephemeral (UA-D12; product.json records the actual)
   // default 0 = ephemeral; bin.ts supplies PORTS.FIELDD_WS_DATA for the real
   // launch. Kept ephemeral-by-default so parallel test daemons never collide on
@@ -1896,6 +1902,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // AL-7 — the shell lease reads its holders' closes; late-bound because it counts the floor's sessions, and the
     // terminal service is constructed after the api.
     let shellLeaseRef: ShellLease | null = null;
+    let shellAbsenceRef: ShellAbsence | null = null;
     const api = new ProductApi({
       // UA-D12 — ephemeral default; the fixed registry number is legacy
       // documentation, and product.json is the only discovery
@@ -2083,12 +2090,34 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         ...(asked.toVersion !== undefined ? { toVersion: asked.toVersion } : {}),
       });
     };
+    // AL-5 (`thinking-app-lifecycle.md` §8.2) — the orphan bound: while no shell holds the lease, an empty pair ends
+    // itself after the idle span (the consented stop with nothing to end, then the process owner's exit), and an
+    // unplanned exit that left sessions relaunches the app into the menu bar, capped.
+    const derivedBundle = appBundleOf(process.execPath, process.platform);
+    const shellAbsence = new ShellAbsence({
+      liveSessions: () => terminals.liveCount(),
+      stopForIdle: async () => {
+        await stopNativeConsented({ stop: true, sessions: [] }, "idle");
+        shutdownRequested?.();
+      },
+      relaunchShell:
+        config.shellRelaunch !== undefined
+          ? config.shellRelaunch
+          : derivedBundle === null
+            ? null
+            : relaunchFromBundle(derivedBundle),
+      logger: logger.child({ component: "shell.absence" }),
+      ...(config.shellAbsenceTimings !== undefined ? { timings: config.shellAbsenceTimings } : {}),
+    });
+    shellAbsenceRef = shellAbsence;
     // AL-7 (`thinking-app-lifecycle.md` §8.1) — the shell lease. Only the local shell (`shell-main`, the shell token)
     // claims it or leaves it; a probe's hello never claims it, so a probe's close is no shell leaving.
     const shellLease = new ShellLease({
       dataDir: config.dataDir,
       liveSessions: () => terminals.liveCount(),
       logger: logger.child({ component: "shell.lease" }),
+      onVacant: (record) => shellAbsence.vacant(record),
+      onHeld: () => shellAbsence.held(),
     });
     shellLeaseRef = shellLease;
     const leaseConnection = (ctx: {
@@ -6714,6 +6743,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       stopPromise ??= (async () => {
         logger.info("fieldd.lifecycle.stopping", "fieldd is stopping");
         try {
+          shellAbsenceRef?.dispose(); // AL-5 — a stopping pair watches for nothing
           // AL-7 — the sockets this stop closes are no shell leaving, and a record already owed is on disk first
           shellLeaseRef?.seal();
           await shellLeaseRef?.flush();

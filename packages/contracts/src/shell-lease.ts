@@ -15,6 +15,11 @@ import { z } from "zod";
 export const ShellLeaveReason = z.enum(["quit", "restart", "user-switch", "update"]);
 export type ShellLeaveReason = z.infer<typeof ShellLeaveReason>;
 
+/** AL-5 (AL-D8) — the argument fieldd relaunches the app with after an UNPLANNED exit that left live sessions: the
+ * shell comes up in the menu bar alone (no window, no Dock icon), its status item the one presence, and says what
+ * happened (`system.shell.attach`'s record). Both sides read it from here. */
+export const SHELL_BACKGROUND_RELAUNCH_ARG = "--background-relaunch";
+
 /** `system.shell.leave` — scope `native.admin`, local only, and only a `shell-main` principal may say it. */
 export const SystemShellLeaveParams = z.object({ why: ShellLeaveReason }).passthrough();
 export type SystemShellLeaveParams = z.infer<typeof SystemShellLeaveParams>;

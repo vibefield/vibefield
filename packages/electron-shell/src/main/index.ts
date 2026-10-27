@@ -18,6 +18,7 @@ import {
   PluginModuleResolution,
   releasePlatformKey,
   type ScreenshotCaptureResult,
+  SHELL_BACKGROUND_RELAUNCH_ARG,
   type ShellCommand,
   ShellCommandRequest,
   type ShellExitRecord,
@@ -207,6 +208,9 @@ if (keepsFramesWhenCovered(MODE, process.argv) || MODE === "godview-perf-lab") {
 const VITE_URL = process.env["VITE_DEV_SERVER_URL"] ?? "http://localhost:5173";
 const PRELOAD_PATH = join(__dirname, "..", "preload", "index.cjs");
 const DESKTOP_BOOT_ID = `desktop-${randomBytes(8).toString("hex")}`;
+/** AL-5 (AL-D8) — fieldd relaunched this app after an unplanned exit that left sessions: the menu bar alone (macOS). */
+const BACKGROUND_RELAUNCH =
+  process.platform === "darwin" && process.argv.includes(SHELL_BACKGROUND_RELAUNCH_ARG);
 const DEVELOPMENT_EXTENSION = desktopDevelopmentExtension();
 
 let supervisor: FielddSupervisor | null = null;
@@ -798,6 +802,7 @@ async function main(
             : "starting";
     trayController?.update({ link: observedLink });
   };
+  let statusItemForced = BACKGROUND_RELAUNCH && MODE === "production";
   const applyPreferences = (raw: unknown): void => {
     observedSnapshots.preferences = raw;
     observedSnapshots.hasPreferences = true;
@@ -811,7 +816,9 @@ async function main(
       return;
     }
     trayController?.update({
-      showTray: parsed.data.showTray,
+      // AL-5 — a background relaunch's status item is its one presence: shown until a window opens, whatever Settings
+      // says (an app nobody can see is the defect AL-D8 exists for)
+      showTray: parsed.data.showTray || statusItemForced,
       backgroundShell: parsed.data.backgroundShell,
     });
     screenshotShortcut?.setEnabled(parsed.data.screenshotHotkey);
@@ -2274,12 +2281,30 @@ async function main(
   };
   const stopWindowObservation = registry.onPrimaryChanged((windowOpen) => {
     if (windowOpen) primaryHasOpened = true;
+    if (windowOpen && statusItemForced) {
+      // AL-5 — the window is open: the relaunch's menu-bar-only presence ends, the Dock icon comes back
+      statusItemForced = false;
+      app.dock?.show();
+      if (observedSnapshots.hasPreferences) applyPreferences(observedSnapshots.preferences);
+    }
     trayController?.update({ windowOpen });
   });
   shellDisposers.add(stopWindowObservation);
   if (observedSnapshots.hasPreferences) applyPreferences(observedSnapshots.preferences);
 
-  await revealPrimaryWindow();
+  if (statusItemForced && trayController !== null) {
+    // AL-5 (AL-D8) — relaunched by fieldd after an unplanned exit that left sessions: no window, no Dock icon, the
+    // status item the one presence (the lease's record raises the notice when the pair is attached)
+    trayController.update({ showTray: true });
+    app.dock?.hide();
+    logger.info(
+      "desktop.lifecycle.background_relaunch",
+      "Relaunched after an unplanned exit: the menu bar alone, until a window opens",
+    );
+  } else {
+    statusItemForced = false;
+    await revealPrimaryWindow();
+  }
   await DEVELOPMENT_EXTENSION?.onHostReady();
 }
 

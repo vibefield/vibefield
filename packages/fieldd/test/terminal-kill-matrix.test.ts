@@ -116,6 +116,19 @@ async function connectAdmin(daemon: FielddDaemon): Promise<WsRpc> {
   return rpc;
 }
 
+/** AL-5 — the local shell's own connection (the shell token, `shell-main`): the one principal the lease answers. */
+async function connectShell(daemon: FielddDaemon): Promise<{ rpc: WsRpc; ws: WebSocket }> {
+  const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}`);
+  await new Promise<void>((resolve, reject) => {
+    ws.once("open", resolve);
+    ws.once("error", reject);
+  });
+  cleanup.push(() => ws.close());
+  const rpc = new WsRpc(ws);
+  await helloAs(rpc, daemon.shellToken, "shell-main");
+  return { rpc, ws };
+}
+
 /** Is a process alive? Signal 0 asks the kernel without delivering anything. */
 const alive = (pid: number): boolean => {
   try {
@@ -459,6 +472,61 @@ describe("the kill matrix (NF-4, real field-native)", () => {
         readFileSync(join(native.dir, "native", "restart-intent.json"), "utf8"),
       ) as Record<string, unknown>;
       expect(intent).toMatchObject({ schemaVersion: 1, reason: "quit" });
+      await daemon.stop();
+
+      await spawnNative(native.dir);
+      const nextDaemon = await boot({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
+      cleanup.push(() => nextDaemon.stop());
+      expect(nextDaemon.native.lastExit).toBe("planned");
+    });
+  }, 90_000);
+
+  // AL-5 (`draft/thinking-app-lifecycle.md` §8.2; AL-D4) — the orphan bound over a REAL floor: the last shell gone and
+  // no session for the (scaled) idle span, so the pair ends itself — the floor drained with reason `idle`, fieldd's
+  // owner asked to exit — and the next boot reads planned.
+  it("row AL-5a: no shell and no session for the idle span — the floor stops `idle`, fieldd's owner is asked, the next boot reads planned", async () => {
+    const native = await spawnNative();
+    await withNativeLog(native, async () => {
+      const daemon = await boot({
+        dataDir: native.dir,
+        controlPort: 0,
+        dataPort: 0,
+        shellRelaunch: null,
+        shellAbsenceTimings: { IDLE_EXIT_MS: 1_500, IDLE_POLL_MS: 100 },
+      });
+      cleanup.push(() => daemon.stop());
+      let ownerAsked = false;
+      daemon.onShutdownRequest(() => {
+        ownerAsked = true;
+      });
+      // an observed empty inventory: zero is a count, never a guess
+      await poll(
+        async () => (daemon.terminals.liveCount() === 0 ? true : undefined),
+        10_000,
+        "the floor's inventory observed empty",
+      );
+      const shell = await connectShell(daemon);
+      expect(await shell.rpc.call("system.shell.attach", {})).toMatchObject({ lastExit: null });
+      let exitCode: number | null | undefined;
+      native.child.once("exit", (code) => {
+        exitCode = code;
+      });
+      shell.ws.close(); // the last shell gone without a word: unplanned, no session, so no relaunch — the idle span
+      await poll(
+        async () => (exitCode !== undefined ? true : undefined),
+        10_000,
+        "the floor's idle stop",
+      );
+      expect(exitCode).toBe(0); // the drain, not a kill
+      await poll(
+        async () => (ownerAsked ? true : undefined),
+        5_000,
+        "fieldd's owner asked to exit",
+      );
+      const intent = JSON.parse(
+        readFileSync(join(native.dir, "native", "restart-intent.json"), "utf8"),
+      ) as Record<string, unknown>;
+      expect(intent).toMatchObject({ schemaVersion: 1, reason: "idle" });
       await daemon.stop();
 
       await spawnNative(native.dir);
