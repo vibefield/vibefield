@@ -17275,3 +17275,60 @@ at 16:06Z.
     SSD over the floor): **EXIT 0** (18:05:14–18:12:35Z, load 12 → 34). 8 of 27 test targets ran fresh, and 19
     replayed on inputs identical to run 2's. fieldd 2,545 / 29, field-app 2,722 / 3, test:rust 486 / 0 / 14 in 31
     suites, gen:check clean.
+
+## TS-5 — the link's notices (P10, TS-D9; TS-D18 = d): "Connected to Tailscale", "‹name› joined your devices" and the renewal 3 days out, said once outside the app (2026-10-27; `d42797be4`, lane `ts/3-devices`)
+
+**What.** TS-5 is the ladder's rung for telling the person (thinking doc §10, P10). TS-D9 ruled one renewal notice 3
+days out. James ruled TS-D18 = (d) at 15:57:33Z (§13): what was already said is kept in the setup ledger's moments,
+on AO-6b1's `setup.moment`. Main decides, because a notice must reach someone with no window in front, or none open.
+- **DESIGN.md first:** §9 "The link's words" is amended with the three notices' words, and when they are never said.
+- **electron-shell main** (`link-notices.ts`):
+  - `LinkNotices` is a pure decider over the link, roster and ledger streams, a clock and a focus probe.
+  - `LinkNoticeObserver` binds it to each fieldd handle, with generation guards, the event-wins-over-snapshot rule
+    and an hourly look at the renewal's date. It is wired in `wireAttachment` and disposed with it, and a smoke never
+    shows a notice.
+  - The rules:
+    - nothing in main's first minute, or while a VibeField window is in front;
+    - "Connected" only after a capture this session saw;
+    - the session's first roster read, and the devices arriving with the link (30 s), are recorded without a notice;
+    - nothing is decided before the ledger answers, or against a ledger this build cannot read;
+    - the renewal waits while VibeField is in front, and is said at the next look outside it.
+- **The moments:** `device-joined:<deviceId>` and `renewal-notice:<YYYY-MM-DD>` (the expiry's UTC date), the keys
+  contracts' `SetupMomentKey` names for track TS. They are written `retired` through `setup.moment` as `shell-main`
+  (fieldd stamps `at`), and read through the contract's own `SetupLedger` and `setupMomentState`, as every moment is.
+- **A click** opens Settings → Devices: `ShellCommand` "open-devices" (TS-only, no gen), the renderer's target
+  "devices", and ChromeLayer's initial page.
+- **Not in it:** asking again (TS-4, which needs a `later`-like moment state), and the slice on truffle 0.7.24's
+  surface (D14–D16, the backend state event, Tailnet Lock, the embedded version).
+
+**Found:**
+- **The first build read the ledger's moments by hand.** It was written before AO-6b's door landed, so it walked
+  `moments` itself and counted any row whose state said `retired`. On AO-6b1's landed shape the contract's reader
+  (`setupMomentState`) is the one reader: a row without its `at` no longer counts, and a ledger this build cannot
+  parse decides nothing, where the walk would have treated every moment as unsaid.
+
+**Validation.**
+- **The lane:** `/Volumes/SamsungRed/lanes/ts3`, its own target, at nice 19 under the guard. It was built on TS-3b's
+  records (`4b12b01f3`) and restacked twice, each with a merge-tree rehearsal, and each restacked tree equals its
+  rehearsal's:
+  - onto AO-6b1's records `03095573a`, where the shared files (DESIGN.md, main/index.ts) met in separate hunks;
+  - onto the EL8's records `e2bee8692`, with no shared files.
+- **The light pass** on `d42797be4` (18:17–18:19Z, VF-PM's rules):
+  - the lane's setup for the EL8's lock (the frozen host install, mille); preflight 0 WARN/FAIL;
+  - check:walls clean; biome at the error level on the 7 touched files clean;
+  - the contracts, electron-shell (main + renderer) and field-app typechecks;
+  - contracts shell 55/55, electron-shell link-notices 9/9 + preload-shell-commands 3/3, field-app
+    shell-presentation 2/2 + panels 3/3.
+- **`pnpm check:deps` + `pnpm verify`** at `d42797be4` (logs/window/check-deps.log, logs/verify/verify.log):
+  - check:deps: EXIT 0 (18:20:07Z).
+  - verify: EXIT 1 (18:20:08–18:26:07Z), red at load 164 on the AR-6-0 interrupt row (the lottery list), in a file
+    TS-5 does not touch. Every stage before the tests passed. `@vibefield/fieldd:test` was the only failed task
+    (1 failed | 2562 passed | 11 skipped), and the other 26 projects' tests passed. The row is agent-session's
+    "AR-6-0 — the stop verb (agent.interrupt) > interrupts a live run through the floor…", whose 15 s wait went
+    unmet (17 166 ms).
+- **Alone**, the precedent (logs/alone5/, gated on a 1-min load under 25):
+  - agent-session.test.ts 46/46 (2 skipped), EXIT 0 (18:28:22–18:29:27Z);
+  - `pnpm test:rust`, which verify never reached: 31 suites, 486 passed, 0 failed, EXIT 0 (18:29:27–18:31:36Z);
+  - `pnpm gen:check` EXIT 0 (18:31:37–18:31:41Z), tree clean.
+
+**Owed.** A real notice is a desk row, owed with TS-2/3a/3b's photographs and desk rows on James's display word.
