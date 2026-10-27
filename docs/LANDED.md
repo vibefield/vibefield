@@ -15956,6 +15956,10 @@ refused as LOG requires.
 - **Not witnessed here:** two pairs on the mini, both logging, is a later row with James's hands.
 - Records: `/Volumes/SamsungRed/lanes/item78/logs/`. A stray 2.2 GiB `target/` built by fieldd's vitest global setup
   without `CARGO_TARGET_DIR` was moved aside to `lanes/item78/stray-target-0700`, for the delete list.
+  > **Errata (2026-10-27, item 81's docs commit; the fixer):** both halves of this bullet are false since the lane
+  > retired (07:28Z). The stray `target/` was never moved aside: retire-lane.sh deleted it with the lane directory,
+  > against the PM's "leave it", as the fixer told VF-PM at 07:28Z. The records were kept, at
+  > `/Volumes/SamsungRed/lanes/records/item78/logs/`, not under `lanes/item78/`, which no longer exists.
 
 ## TS-0 — the Tailscale door is ruled, and DESIGN.md says it first: the Connect pane, Settings → Devices, asking again, the link's words, the arrival's interval and Tailscale's logomark (2026-10-27; records only, lane `ts/0-records`)
 
@@ -17332,3 +17336,80 @@ on AO-6b1's `setup.moment`. Main decides, because a notice must reach someone wi
   - `pnpm gen:check` EXIT 0 (18:31:37–18:31:41Z), tree clean.
 
 **Owed.** A real notice is a desk row, owed with TS-2/3a/3b's photographs and desk rows on James's display word.
+
+## AR-3 — item 81: an exit that comes before its pane is registered is kept, not dropped — the floor's `session-exited` held by TerminalService (`exitOf`), asked by a login pane, a server's sign-in pane and a managed run in their registration's turn; and GT-7's theme-browser row takes its own measured budget (2026-10-27; `2b8a15c8b` + `6e0da9902`, lane `fix/item81-lost-exit`; VF-PM's scope ruling 17:00Z)
+
+**What happened:** CI verify 40530144594 on origin `b4c4befd1` (the eleven slices pushed 15:21Z) went red twice, on two
+different rows, each time with 224 of 225 files green:
+- attempt 1 (16:00Z): fieldd `agent-session.test.ts` › the persona login pane — "the persona's identity re-read after
+  its login pane ends did not hold within 15000 ms" (15836 ms);
+- attempt 2 (16:33Z): field-app `terminal-settings.test.tsx` › GT-7 "opens the theme browser as the dialog's subpage,
+  with the way back" — "Test timed out in 5000ms" (6952 ms; 984 ms green in attempt 1).
+
+**Attempt 1 is a product bug, and item 68's evidence named it** (this run is its witness):
+- At the deadline the persona still carried `signingIn` (session 408d02cb…). fieldd logged `terminal_spawned` +577 ms and
+  `login_started` +578 ms, then nothing of that pane: no `husk_reaped`, no `login_finished`. The scripted login is one
+  `sh` line that exits at once; the chain measures 314–901 ms (item 68).
+- **The cause, a race by construction.** ghosttea-client 0.13.7's `#onData` (dist/index.js:385) walks every frame of one
+  socket read: a response resolves its request's promise (a microtask), an event is `emit`ted synchronously in the loop.
+  `login()` registers the pane (`logins`/`loginPanes`) only after `startProfileLogin` returns, microtask hops through
+  birth → spawn → host → puppeteer's onboarding. When the birth's answer and the exit of a PTY that ended at once
+  arrive in one read (fieldd's loop busy for longer than the script lives), `handleTerminalExit` runs first, finds no
+  login, no pane and no run, and returns without a word. Nothing backstops it: the husk stays listed
+  (keep-until-explicit-close) and the observed row does not carry ghosttea's `exited`. In the product, the persona read
+  "signing in" for LOGIN_TIMEOUT_MS (10 min); a server's sign-in pane, and a managed run whose agent dies at birth,
+  shared the window (item 72 closed its inventory half for the run).
+- ghosttea's own `waitForExit` guards the same race: it listens, then asks the session for `exited`.
+
+**The fix** (`2b8a15c8b`):
+- `TerminalService.exitOf(sessionId)`: every `session-exited` fanned out is kept for BORN_IN_EXIT_GRACE_MS, in the timer
+  that already keeps `bornIn` (the husk's close dials through `bornIn`, so neither outlives the other).
+- agent-runtime `settleEarlyExit` in `login()` and `enter()` (spawn, resume, adopt, re-attach); agent-extensions
+  `settleEarlyExit`, through `ExtensionSignInPanes.exited`, in `signIn()` and `terminal()`.
+- Each registrant asks in its registration's own turn, so an exit is handled once: one that came before is kept, one
+  that comes after reaches the listener. It is handled in a turn of its own (setImmediate), as the floor's event would
+  have been one read later: in the registration's turn `closeRun`'s `terminalHost.forget` could run before the spawn
+  door's `ticketed` mints the ticket from those same birth facts.
+- No budget moved, no retry, no sleep.
+
+**Attempt 2 is a budget, not a wait:** the row's "fieldd" is an in-process fake; past its mount it awaits nothing. Its
+cost is one synchronous act(): "Match a theme…" opens the palette target (tone All), so ThemeBrowser renders all 602 of
+Ghostty's themes in happy-dom, each a chip of six inline-styled swatches, and the miniature. Measured alone on this Mac
+(the fix's rebased tree, 20:39Z): the probe's five rounds mount 17–59 ms, browser 148–226 ms, back 30–36 ms; the file
+alone ×5 by json, the row 222–254 ms. CI's 984 and 6952 ms are 4–28× that. The row takes the house's own budget line
+(doc-manager.test.ts:168's form, 30 s) with those numbers beside it (`6e0da9902`). No product change for a happy-dom
+cost.
+
+**Validation** (this Mac's SSD lane `/Volumes/SamsungRed/lanes/item81`, guard, nice 19; red-first, green and light on
+`261f0ff3c` in the gap slot 17:35–17:42Z, then rebased onto `8f9b45fa2` in the item's own slot from 20:34Z):
+- **Red-first** (the three src files at `261f0ff3c`, the new rows kept; logs/redfirst/): terminal-service
+  `exitOf is not a function`; agent-extensions the sign-in's settle never called; agent-session's login row CI's exact
+  signature (`signingIn` kept, nothing after `login_started`) and its managed twin's record never stamped. In both real-floor
+  rows the spy's own wait for the exit passed: each exit came and was dropped.
+- **At the fix:** the four rows green; the login row 2790 ms and the managed twin 618 ms at load ~13. The real-floor rows
+  make CI's order certain: a spy on `daemon.terminals.spawn` holds the birth's answer until the exit has been fanned out,
+  plus one turn; the twin's scripted program is `exit 0` (a `program` seam beside item 72's `afterBirth`).
+- **Light:** typecheck fieldd and field-app, preflight, check:walls, biome at error level; fieldd terminal-service 107,
+  agent-extensions 36, agent-session 48 (+2 real-agent skipped); field-app terminal-settings 18.
+- **Rebased** onto `8f9b45fa2` (merge-tree rehearsed: tree `df539968b`, no lane file in the onto-range; patch-id
+  `05ef0915c230` unchanged): setup again (install, mille, Electron, preflight 0), field-native --all-targets, typecheck
+  fieldd and field-app 0, check:walls 0, the four item 81 rows green.
+- **`pnpm verify`** at `6e0da9902` (logs/verify/verify.log): EXIT 1 (20:42:06–20:48:22Z), at load 9.7 armed and 184.9 at
+  its end, with the internal disk's fseventsd and mds_stores replaying the day's writes. Every stage before the tests passed.
+  fieldd's 2,567 rows passed (204 files, 11 skipped), item 81's rows and the persona login row among them, and so did 25 more
+  projects. `@vibefield/field-app:test` was the only failed task (1 failed | 225 passed files; 40 failed | 2,686 passed):
+  `onboarding-wizard.test.tsx`, a file neither this slice nor its onto-range touches. One cascade, not 40 findings: its first
+  row ("walks a fresh install…") timed out at 5022 ms and one more ("records Agents answered from the inventory…") at
+  5005 ms; every other row failed in 1–8 ms on an empty DOM. An act() left pending by a timed-out row leaves the file
+  rendering nothing (item 82, the fixer's next).
+- **Alone**, the precedent (logs/alone/, gated on a 1-min load under 25, open at 20:50:49Z):
+  - onboarding-wizard.test.tsx 42/42, EXIT 0; its first row 1202 ms (the next 28 ms): the row that pays the file's cold cost;
+  - `pnpm test:rust`, which verify never reached: 31 suites, 486 passed, 0 failed, EXIT 0 (20:50:54–20:52:44Z);
+  - `pnpm gen:check` EXIT 0 (20:52:44–20:52:48Z), tree clean.
+- **One row's meaning changes:** of the agent-session rows recorded as the CI lottery's, only item 68's persona login
+  row was this race, and it comes off the list by name. MF-1 ("a settled board sent a frame", a 1 s quiet window over a
+  run held open by `cat`) and MF-1f/MF-1g (`endedRun`'s 15 s bound, an exit after `agent.interrupt` on a joined run) end
+  nowhere near a birth and stay listed, as does item 63's AR-6-0 30 s endpoint wait. The memory's lottery note carries a dated correction at its source.
+- Records: `/Volumes/SamsungRed/lanes/records/item81/` (the lane's logs and records, kept there before it retired).
+- Errata in this commit: item 78's entry said its stray `target/` was moved aside for the delete list; it was deleted
+  with the lane, and its records live under `lanes/records/item78/` (a dated correction at its source).
