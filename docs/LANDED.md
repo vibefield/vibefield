@@ -15990,3 +15990,92 @@ the embedded version.
 **Validation.** Docs only, so verify executes nothing new. Four field-app tests read named DESIGN.md sentences
 (`godview-head`, `godview-deck-edge`, `project-ink`, `peers-on-the-mat`). The diff adds lines and rewrites one, §13's
 "Kept exact" sentence, which none of them reads.
+
+## AL — a person's Quit stops the daemons: ⌘Q, Dock → Quit, the tray's or the menu's Quit pass a census gate, then the consented stop of every pair; a crash, a Force Quit or a signal still leaves them (2026-10-27; `7ebb1eeda` `5eea4b2d5` `697beb199`, lane `al/lifecycle`; James ruled AL-D1…D7 at 05:29Z, every lean; VF-PM's GOs)
+
+**Why** (`draft/thinking-app-lifecycle.md` v0.2 RULED, AL-F1…F14):
+- On the mini at 04:29Z a Dock Quit left six daemon processes for two user roots, with no sign to James.
+- Every quit path ended in `app.quit()`, and production disposal only disconnects (`leave-running`). design-00 EL1's
+  crash matrix ("shell dies → nothing else does") had been applied to a person's quit as well as to process death.
+- Flipping to `stop-owned` would not have fixed it. From the second launch the pair is ADOPTED, and `stopOwned` never
+  stops an adopted pair. The stop rides the update's verb instead, which reaches any pair this shell's token reaches.
+- The errata went at source first: ESR §7.3 (the normative rule), design-00 EL1 + its crash matrix, EDP §8.4 + EDP-35
+  (dev-local `6e52ab8fb`).
+
+**AL-1** (`7ebb1eeda`; landed alone at 06:04Z): a fieldd that outlives its shell no longer dies on its first direct
+stderr write.
+- The supervisor reads fieldd's stdout/stderr as pipes, and logging's emergency path (`emitEmergency`, a log-writer
+  failure such as a full disk) writes stderr directly. Once the shell was gone the EPIPE was an unhandled stream
+  `'error'`: exit 1, measured on Node 26.
+- `outliveStdioReaders()` (boot-env.ts) runs first in bin.ts. `console.*` and Node's warnings were never exposed.
+- Red-first: the guarded row is red with the guard stubbed.
+- Verify #2 `EXIT: 0`. #1's two reds were the load-class rows, each green alone.
+- After main moved to item 79, the PM ruled a reduced gate: range-diff `=`, typecheck, and fieldd 2481 green.
+
+**AL-2** (`5eea4b2d5`): `system.shutdown` says why.
+- Contracts: `NativeRestartReason` = update | quit | logout, and `SystemShutdownParams.reason`. `pnpm gen` regenerated
+  the enum in 44 schema entries + the bundle, plus two Rust variants. Quit fixtures exist on both sides.
+- fieldd's consented stop (`stopNativeConsented`) has the same exact-set re-check for every reason. The floor records
+  `quit`, and its next boot reads planned. Only an update announces `restartScheduled`.
+- `stopForUpdate` → `stopFloor`. A quit gets its own event, `fieldd.native_supervisor.stopped_for_quit`.
+- Real-floor row AL-2a, plus WP12-R2a/R2b green. Red-first: both rows red on the pre-AL-2 fieldd.
+
+**AL-3** (`697beb199`): the quit gate (`quit-gate.ts`), wired into the lifecycle.
+- **What it reaches:** every pair this shell can reach — the bundles it built, then other users' resident pairs
+  through an adopt-only `tryAdopt`, never a spawn. The attached pair stops last.
+- **The box per state** (DESIGN.md §9):
+  - census 0: no box;
+  - sessions: "Quit VibeField and end N terminal sessions?", naming five, [Cancel] · [Quit and end N sessions] +
+    "Do not ask again";
+  - a session born during the quit: the box asks again; its Cancel gives the app back;
+  - any census unknown: "VibeField couldn't check for running sessions" … [Cancel] · [Quit and leave it running], and
+    NO session ends. VF-PM's 06:14Z check found that the first cut ended a known pair's sessions beside an unknown
+    one; this was fixed red-first before the landing;
+  - an OS logout (powerMonitor `shutdown`): no box, and the durable close never shows its modal.
+- **Which quits skip the gate:** an update's armed quit and a signal's quit. AL-4 is folded in: dev's SIGTERM/SIGINT
+  is never a person's quit, and ⌘Q in dev meets the gate (AL-D7).
+- **The preference:** `desktop.confirmQuit`, default on; Settings → Desktop behavior → "Ask before quitting".
+- **One copy, shared:** `pair-stop.ts` holds the census and the stop, and the update's apply port uses it too.
+  `awaitDeparture` is the replace path's poll, and a quit waits for the run files to go.
+- **Tests:** quit-gate 12 rows, lifecycle 8 gate rows (red-first: 7 of 8 red on the pre-AL-3 lifecycle), departure 5,
+  Settings 1.
+- **The rebases** (07:28Z onto main `9c3f687da`, item 78 and item 77's test row; 07:47Z onto `5a75e02d8`, TS-0,
+  records only): disjoint in code; only the ledgers had appended. `git range-diff` is `=` at each step for AL-2
+  (`71ede06dd` → `85cc6b37e` → `5eea4b2d5`) and for AL-3 (`ce39a056a` → `cc1162ca1` → `697beb199`).
+  The mini's rows and `pnpm still` ran at the pre-rebase tip `ce39a056a`. The FULL verify re-ran at the rebased tip
+  (VF-PM: fieldd is shared with item 78's delta).
+- **The rebased tip's full verify** (logs/al-rebased-verify.log): EXIT 1 on ONE row. `doc-sync-service.test.ts` DS-5c
+  ("a pair no send could reach is greeted again … each wait twice the last": expected 140 ≥ 155, a wall-clock gap
+  between two retry greetings with a 5 ms margin) is a FIRST-SEEN lottery row, green alone (fieldd alone, 2485
+  passed). Neither delta touches doc-sync. VF-PM logged it as item 80, the margin a test-budget hazard of item 77's
+  kind. The SECOND full verify (logs/al-rebased-verify-r2.log): EXIT 1 on ONE row,
+  `agent-session.test.ts` MF-1f/MF-1g ("resume hands the pane over …": the real floor's condition did not hold within
+  15000 ms), the recorded lottery family, green alone (logs/al-r2-rerun-mf1.log). Two verifies, two different
+  lottery rows, each green alone, and every other project green twice. Verify stops at its first red stage, so
+  `pnpm test:rust` and `pnpm gen:check` ran ALONE at this tip: they witness item 78's config.rs under AL-2's generated
+  contracts.rs (logs/al-r2-test-rust.log, al-r2-gen-check.log).
+- **Verify at the tip (pre-rebase, `ce39a056a`):** `pnpm verify` EXIT 0 on its first run (logs/al23-verify-r2.log, 06:15:48–06:23:44Z, load ~150): typecheck + test for 27 projects, cargo 463 passed in 30 suites, gen:check clean.
+- **gate:landing:** `pnpm still` ok on this Mac (13/13). The smokes ran on the MINI on James's "unlocked" (06:48:12Z), in the lead's `el8gt` clone by its leave: a 67 KB delta bundle over `5ba36785b`, the in-repo target, the clone restored to `5ba36785b` after, clean.
+  - smoke:canvas RED: four recorded classes (the offscreen occluder, the bar-back 253 ms, COVER HISTORY's first frame, the in-hand IDLE submits = ICE's held-pane blur) + one FIRST-SEEN reason on the live row's still watch ("drew 1 frames over 1203 ms": a desk redraw with no arrival or present), docketed for PT by the lead's read.
+  - smoke:kind-faults RED on the occluder alone (recorded).
+  - ok: smoke:canvas:no-gpu · smoke:canvas:no-webgpu · smoke · smoke:plugin-restart · smoke:plugin · smoke:godview · smoke:terminal-door · smoke:terminal-direct · smoke:studio · smoke:bundled.
+  - Every SMOKE_DAEMONS left [].
+- **This Mac's display, on James's "away" (07:32:13Z), at the rebased tip:**
+  - `smoke:update` ok: staged · forged · rollback · killed · unresolved, every run's daemons [], footprint clean.
+  - `smoke` ok, but ATTENDED (HID idle 0 s at both ends: James was at the Mac), so not the unattended witness.
+  - `smoke:studio` was stopped mid-run when VF-PM held the pointer rows; its orphaned shell and floor were stopped by
+    hand, none left.
+- **Then on the mini, at the rebased tip `b3a832177`,** on James's 07:48:37Z "unlocked", UNATTENDED (HID idle
+  122–172 s): `smoke` ok (29 s) and `smoke:studio` ok (20 s). el8gt was restored after, clean, and the lead verified it.
+- OWED: only the clean `smoke:canvas`, on this Mac on an unattended "away" (HID idle ≥ 120 s at the arm).
+- **Red-firsts per commit:** AL-1's guarded row (the guard stubbed); AL-2's two rows (the pre-AL-2 fieldd); AL-3's lifecycle rows (7 of 8 on the pre-AL-3 lifecycle) and the unknown-census row (on AL-3's first cut).
+
+**Owed** (said, not hidden):
+- James's physical rows: a real ⌘Q with live sessions, Cancel, "Do not ask again", a `kill -9` crash that must still
+  leave the pair, a logout (steps on the board).
+- The box's agent labels: managed agents are counted as the sessions that host them.
+- powerMonitor `shutdown` arriving after the box is already up: the box would wait.
+- Windows logoff: `before-quit` never fires there.
+- AL-5, the orphan policy (an empty pair with no shell exits after 10 min), and AL-6, "Keep running when VibeField
+  quits" (the Settings toggle + a Dock-less resident shell with its status item), are their own slices.
+- CLAUDE.md's "Two planes" law line needs a quit clause. It is proposed, not edited here.
