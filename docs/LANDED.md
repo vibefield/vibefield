@@ -16516,3 +16516,47 @@ closes the audit's gaps 1–5 and 8, and begins 10 (Add your phone when this Mac
 - "Switch to ‹user›" on the taken refusal.
 - A Windows sweep of the pane's "this Mac" words.
 - TS-3, Settings → Devices.
+
+## TS-3a — Settings → Devices: the account's reach on one page under the head — the Tailscale card, This Mac, your devices, new projects and the network's details; Mesh is absorbed, and Account keeps the profile and the users (2026-10-27; `32fe49be1`, lane `ts/3-devices`)
+
+**What.** Track TS's Settings slice, the first half of `draft/thinking-tailscale-onboarding.md` §10's TS-3: field-app
+only, as DESIGN.md §8 "Settings → Devices" (TS-0) says. P9, this Mac's own display name, is TS-3b.
+- **The page** (`panels/DevicesSection.tsx`, TS-D3): `DevicesSectionView` takes props, and `DevicesSection` drives it
+  through the shared door, `device.subscribe` and the account snapshot. The "mesh" page became "devices" in the
+  Account group.
+- **The Tailscale card:**
+  - the mark (TS-D4);
+  - one state word: green "Connected", "This Mac only" muted (TS-D2), the attention ink for the rest;
+  - the login and the tailnet;
+  - Manage in Tailscale ↗, Use another account (TS-D12) and Disconnect… (TS-D14);
+  - not connected, the door's states, moved from Account.
+- **This Mac:** its name; the name Tailscale shows, with Copy; "Due by <date>" (TS-D9).
+- **Your devices:** quiet rows (an OS mark, the name, one word), with Add a device.
+- **New projects:** the posture, moved from Account. **Network details:** today's MeshSection, collapsed.
+- **The sheets:**
+  - Disconnect says the Mac stays in the admin console until truffle can sign out (T9);
+  - Add a device: Phone | Computer;
+  - Use another account → New user….
+- **The catalog's** Settings › Devices specimen mounts the shipping view in the shipping dialog over a fixture adapter
+  (wire snapshots through `linkFace`). `devices.css` and TS-2's `door.css` join the no-hex rule.
+
+**Validation.**
+- **The lane.** `/Volumes/SamsungRed/lanes/ts3`, a worktree on `3d3e893a7`, at nice 19 under the guard. It has its
+  own target, `rust/ts3`. Setup (frozen install, preflight) passed at 11:23–11:24Z.
+- **The light pass** (VF-PM's rules), before the verify slot:
+  - field-app and electron-shell typechecks green; biome clean;
+  - preflight 0 WARN/FAIL; check:walls clean;
+  - devices-section (17 rows), account-section, panels, mesh-section, settings-dialog-account, glyphs,
+    ui-system-boundaries and design-system: 8 files, 98/98.
+- **`pnpm check:deps` + `pnpm verify`** at `dbb9c20a7` over code `32fe49be1` (this line was amended in after;
+  logs/window/check-deps.log, logs/verify/verify.log):
+  - check:deps: EXIT 0, one copy each (11:38:48Z).
+  - verify: EXIT 0 (11:38:48–11:46:44Z), with the cold field-native build into `rust/ts3`. The tests of all 27
+    projects passed: field-app 221 files / 2666 tests, fieldd 198 files (+3 skipped), electron-shell 143 files.
+    cargo passed 474 in 31 suites, and gen:check is clean.
+- **The rename's evidence:** the "mesh" page was named in 8 places at `3d3e893a7` and in 2 after, both meant (the
+  icon union's glyph name, and the row proving the Mesh category is gone). No menu, tray or deep link ever opened it.
+
+**Owed.**
+- TS-3b: P9, this Mac's display name (contracts · fieldd · field-app).
+- The catalog's photographs and the desk rows, on James's display word.
