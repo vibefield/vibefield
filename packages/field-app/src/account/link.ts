@@ -164,12 +164,18 @@ export const LINK_ACT_PENDING_LABEL = "Opening Tailscale…";
 /** The place that holds the act: the face menu's row, a section's title. */
 export const CONNECT_ROW_LABEL = "Connect your devices…";
 
+/** This desktop in its own platform's words (DESIGN.md §9: "This Mac", "This PC"
+ * on Windows; never "This desktop"). */
+export function thisDeviceWord(platform: string | undefined): string {
+  if (platform === "win32") return "This PC";
+  if (platform === "darwin" || platform === undefined) return "This Mac";
+  return "This computer";
+}
+
 /** TS-D2 — a desktop that is not connected, in its own platform's words: the
  * ordinary first-run state, never "offline" (which reads as no internet). */
 export function unlinkedWord(platform: string | undefined): string {
-  if (platform === "win32") return "This PC only";
-  if (platform === "darwin" || platform === undefined) return "This Mac only";
-  return "This computer only";
+  return `${thisDeviceWord(platform)} only`;
 }
 
 /** TS-D9 — whole days until a sign-in lapses, rounded up (a key due in an hour

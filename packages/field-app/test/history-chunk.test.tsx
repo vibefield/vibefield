@@ -201,10 +201,9 @@ describe("History's room, its own chunk (2026-10-04)", () => {
     expect(face.style.getPropertyValue("--vf-history-edge")).toBe("8px");
     const words = face.querySelector<HTMLElement>(".vf-history-room > .vf-history-face[data-late]");
     expect(words?.getAttribute("role")).toBe("status");
-    expect(words?.querySelector(".vf-ui-empty-state__title")?.textContent).toBe("Opening History");
-    expect(words?.querySelector(".vf-ui-empty-state__description")?.textContent).toBe(
-      "rosetta's room is loading.",
-    );
+    // AO-6 — the title says it all; no machinery under it (DESIGN.md §9)
+    expect(words?.querySelector(".vf-ui-empty-state__title")?.textContent).toBe("Opening History…");
+    expect(words?.querySelector(".vf-ui-empty-state__description")).toBeNull();
     expect(historySlot()?.querySelector(".ah-frame")).toBeNull();
     // The controller is here before the room: the line already holds History's
     // create, waiting for a choice.

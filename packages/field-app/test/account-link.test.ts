@@ -6,6 +6,7 @@ import {
   linkFace,
   RENEWAL_WARN_DAYS,
   renewalDays,
+  thisDeviceWord,
   type UserLinkStatus,
   unlinkedWord,
 } from "../src/account/link";
@@ -265,6 +266,11 @@ describe("the link's words (TS-2; DESIGN.md §9)", () => {
   const DAY = 86_400_000;
 
   it("names an unconnected desktop by its own platform, never offline", () => {
+    // AO-6 — the device word itself, which the spawn menu says too
+    expect(thisDeviceWord("darwin")).toBe("This Mac");
+    expect(thisDeviceWord("win32")).toBe("This PC");
+    expect(thisDeviceWord("linux")).toBe("This computer");
+    expect(thisDeviceWord(undefined)).toBe("This Mac");
     expect(unlinkedWord("darwin")).toBe("This Mac only");
     expect(unlinkedWord("win32")).toBe("This PC only");
     expect(unlinkedWord("linux")).toBe("This computer only");

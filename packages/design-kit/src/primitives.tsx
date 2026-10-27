@@ -270,7 +270,8 @@ export function EmptyState({
   className = "",
 }: {
   title: ReactNode;
-  description: ReactNode;
+  /** absent: the title says it all (AO-6, "Opening History…") */
+  description?: ReactNode;
   visual?: ReactNode;
   actions?: ReactNode;
   className?: string;
@@ -279,7 +280,9 @@ export function EmptyState({
     <div className={`vf-ui-empty-state ${className}`.trim()}>
       {visual !== undefined && <div className="vf-ui-empty-state__visual">{visual}</div>}
       <strong className="vf-ui-empty-state__title">{title}</strong>
-      <span className="vf-ui-empty-state__description">{description}</span>
+      {description !== undefined && (
+        <span className="vf-ui-empty-state__description">{description}</span>
+      )}
       {actions !== undefined && <div className="vf-ui-empty-state__actions">{actions}</div>}
     </div>
   );

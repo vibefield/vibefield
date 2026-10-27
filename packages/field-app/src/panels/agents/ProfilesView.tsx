@@ -908,7 +908,11 @@ export function ProfilePageView({
       align={align}
       icon={variant === "quiet" ? <PlusIcon /> : undefined}
       heading={`Sign in to an agent ${page.inOn}`}
-      empty="Every installed agent is signed in here."
+      empty={
+        page.nothingInstalled
+          ? "No agents on this Mac yet."
+          : "Every installed agent is signed in here."
+      }
       items={addItems}
       disabled={busy?.startsWith("add:") === true}
       onPick={onAdd}

@@ -46,11 +46,7 @@ export function HistoryOpeningState(): ReactElement {
   return (
     <HistoryGlass face="opening">
       <div className="vf-history-state vf-history-face" data-late="" role="status">
-        <EmptyState
-          visual={<FieldGlyph name="history" size={28} />}
-          title="Opening History"
-          description="rosetta's room is loading."
-        />
+        <EmptyState visual={<FieldGlyph name="history" size={28} />} title="Opening History…" />
       </div>
     </HistoryGlass>
   );

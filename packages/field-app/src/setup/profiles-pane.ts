@@ -21,8 +21,9 @@ export interface ThisMacRow {
   readonly fact: string;
   /** the plan it runs on, by its product name, when one is known */
   readonly plan?: string;
-  /** not signed in, or lapsed: its own login can run in the pane */
-  readonly canSignIn: boolean;
+  /** its own login can run in the pane: never signed in (`first`), or lapsed
+   * (`again`); absent while signed in */
+  readonly signIn?: "first" | "again";
 }
 
 /** A profile made beside This Mac. */
@@ -61,7 +62,11 @@ function thisMacRow(row: ProfileAgentRow): ThisMacRow {
     label: row.label,
     fact: thisMacFact(row),
     ...(plan !== undefined ? { plan } : {}),
-    canSignIn: row.state === "signed-out" || row.state === "expired",
+    ...(row.state === "signed-out"
+      ? { signIn: "first" as const }
+      : row.state === "expired"
+        ? { signIn: "again" as const }
+        : {}),
   };
 }
 

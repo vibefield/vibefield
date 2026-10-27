@@ -58,9 +58,12 @@ interface Pending {
 export function ProfilesWizardPane({
   onDone,
   onBack,
+  shared = false,
 }: {
   onDone: (end: ProfilesPaneEnd) => void;
   onBack?: (() => void) | undefined;
+  /** a second person on this Mac (UA §6.2): This Mac's sign-ins are shared */
+  shared?: boolean;
 }): ReactElement {
   const client = useFielddClient();
   const platform = getHost().platform;
@@ -332,6 +335,7 @@ export function ProfilesWizardPane({
           onPick={(provider) => void pick(provider)}
           onCancelAdd={cancelAdd}
           onAgain={again}
+          shared={shared}
         />
       }
     />

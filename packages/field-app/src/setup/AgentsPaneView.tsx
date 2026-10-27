@@ -80,7 +80,14 @@ export function AgentsPaneBody({
     return <p className="vf-agents-pane-note">{AGENTS_WORDS.looking}</p>;
   }
   if (inventory.kind === "unavailable") {
-    return <p className="vf-agents-pane-note">{AGENTS_WORDS.unavailable}</p>;
+    return (
+      <div className="vf-agents-pane-first">
+        <p className="vf-agents-pane-note">{AGENTS_WORDS.unavailable}</p>
+        <button type="button" className={quietCls} disabled={lookingAgain} onClick={onLookAgain}>
+          {lookingAgain ? AGENTS_WORDS.lookingAgain : AGENTS_WORDS.tryAgain}
+        </button>
+      </div>
+    );
   }
   const { model } = inventory;
   return (
@@ -113,6 +120,14 @@ export function AgentsPaneBody({
   );
 }
 
+/** The voice says "VibeField found these" only once it has found them; before
+ * that, and with none, it says what VibeField does with any agent. */
+export function agentsVoice(inventory: AgentsInventory): string {
+  return inventory.kind === "found" && !inventory.model.first
+    ? AGENTS_WORDS.voice
+    : AGENTS_WORDS.firstVoice;
+}
+
 /** The title claims only what the inventory said: ready agents, or none. */
 export function agentsTitle(inventory: AgentsInventory): string {
   if (inventory.kind !== "found") return AGENTS_WORDS.plainTitle;
@@ -143,7 +158,7 @@ export function AgentsWizardPaneView({
     <WizardPane
       eyebrow={AGENTS_WORDS.eyebrow}
       title={agentsTitle(inventory)}
-      voice={first ? AGENTS_WORDS.firstVoice : AGENTS_WORDS.voice}
+      voice={agentsVoice(inventory)}
       onSubmit={onContinue}
       actions={
         <>

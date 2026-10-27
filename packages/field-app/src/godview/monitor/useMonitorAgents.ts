@@ -19,8 +19,10 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import { thisDeviceWord } from "../../account/link";
 import { askGodviewDeckUp } from "../../frame/deck-door";
 import type { LiveFindAgent } from "../../frame/find-door";
+import { peekHost } from "../../host";
 import type { MonitorFloorRecord } from "./agents";
 import { NO_RUNS, useChromeKey } from "./chrome-facts";
 import { type DeviceChoice, standingChoice } from "./device-filter";
@@ -425,7 +427,9 @@ export function useMonitorAgents({
 
   // AR-S5 — the tabs and the spawn menu (SB-3), from the profiles feed and the rows
   const tabs = useMemo(() => profileTabs(profiles, agents), [profiles, agents]);
-  const nextSpawnMenu = hasProfiles ? spawnMenuOf(profilesRead ? profiles : null, tabs) : undefined;
+  const nextSpawnMenu = hasProfiles
+    ? spawnMenuOf(profilesRead ? profiles : null, tabs, thisDeviceWord(peekHost()?.platform))
+    : undefined;
   const spawnMenuKey = nextSpawnMenu === undefined ? "" : JSON.stringify(nextSpawnMenu);
   const spawnMenuRef = useRef<{ key: string; menu: MonitorSpawnMenu | undefined }>({
     key: "",

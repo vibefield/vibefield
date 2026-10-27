@@ -5,6 +5,7 @@ import type {
   MonitorSpawnTarget,
   ProfileTab,
 } from "@vibefield/puppeteer-views";
+import { thisDeviceWord } from "../../account/link";
 
 // SB-3 — THE SPAWN MENU: what a new terminal can be born under, as the spawn
 // bloom (and the list view's two-step menu) offer it — the views' own tree
@@ -16,10 +17,10 @@ import type {
  * id is the menu's own, and a create is only ever asked of this desktop. */
 export const HERE_DEVICE_ID = "here";
 
-/** Its name. No contract hands the renderer this machine's name, and none is
+/* Its name is its platform's word (DESIGN.md §9, AO-6: "This Mac", never "This
+ * desktop"). No contract hands the renderer this machine's name, and none is
  * needed yet: one desktop blooms its profiles, and a desktop's name and initial
  * are drawn only when there are two or more (SB-6 names each from the roster). */
-const HERE_LABEL = "This desktop";
 
 /**
  * Who is signed in under a profile, in the catalog's labels and the feed's
@@ -48,9 +49,11 @@ export function signedInLabels(set: AgentProfileSet): string[] {
 export function spawnMenuOf(
   sets: readonly AgentProfileSet[] | null,
   tabs: readonly ProfileTab[],
+  /** this desktop, in its platform's word (`thisDeviceWord`) */
+  here: string = thisDeviceWord(undefined),
 ): MonitorSpawnMenu {
   if (sets === null) {
-    return { devices: [{ id: HERE_DEVICE_ID, label: HERE_LABEL, self: true, state: "reading" }] };
+    return { devices: [{ id: HERE_DEVICE_ID, label: here, self: true, state: "reading" }] };
   }
   const blocked = new Set(tabs.filter((tab) => tab.blocked === true).map((tab) => tab.id));
   const profiles = sets.map(
@@ -65,7 +68,7 @@ export function spawnMenuOf(
     }),
   );
   return {
-    devices: [{ id: HERE_DEVICE_ID, label: HERE_LABEL, self: true, state: "ready", profiles }],
+    devices: [{ id: HERE_DEVICE_ID, label: here, self: true, state: "ready", profiles }],
   };
 }
 

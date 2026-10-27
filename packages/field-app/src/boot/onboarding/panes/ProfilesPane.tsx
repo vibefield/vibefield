@@ -17,9 +17,12 @@ const ProfilesWizardPane = lazy(() =>
 export function ProfilesPane({
   onDone,
   onBack,
+  shared,
 }: {
   onDone: (end: ProfilesPaneEnd) => void;
   onBack: (() => void) | undefined;
+  /** a second person on this Mac: This Mac's sign-ins are shared */
+  shared: boolean;
 }): ReactElement {
   return (
     <Suspense
@@ -42,7 +45,7 @@ export function ProfilesPane({
         </WizardPane>
       }
     >
-      <ProfilesWizardPane onDone={onDone} onBack={onBack} />
+      <ProfilesWizardPane onDone={onDone} onBack={onBack} shared={shared} />
     </Suspense>
   );
 }

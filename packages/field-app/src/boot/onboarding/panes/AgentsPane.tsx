@@ -26,7 +26,7 @@ export function AgentsPane({
         <WizardPane
           eyebrow={AGENTS_WORDS.eyebrow}
           title={AGENTS_WORDS.plainTitle}
-          voice={AGENTS_WORDS.voice}
+          voice={AGENTS_WORDS.firstVoice}
           onSubmit={() => onDone("skipped")}
           actions={
             <>

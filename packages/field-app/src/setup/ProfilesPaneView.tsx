@@ -76,15 +76,19 @@ function ThisMacRows({
             <span className="vf-profiles-pane-label">{row.label}</span>
             <span className="vf-profiles-pane-fact">{row.fact}</span>
           </span>
-          {row.canSignIn ? (
+          {row.signIn !== undefined ? (
             <button
               type="button"
               className="vf-profiles-pane-act"
               disabled={holding}
-              aria-label={`Sign in to ${row.label} on This Mac`}
+              aria-label={
+                row.signIn === "again"
+                  ? `Sign in to ${row.label} again on This Mac`
+                  : `Sign in to ${row.label} on This Mac`
+              }
               onClick={() => onSignIn(row.provider)}
             >
-              {PROFILES_WORDS.signIn}
+              {row.signIn === "again" ? PROFILES_WORDS.signInAgain : PROFILES_WORDS.signIn}
             </button>
           ) : row.plan !== undefined ? (
             <span className="vf-profiles-pane-plan">{row.plan}</span>
@@ -284,6 +288,7 @@ export function ProfilesPaneBody({
   onPick,
   onCancelAdd,
   onAgain,
+  shared = false,
 }: {
   model: ProfilesPaneModel | null;
   step: AddProfileStep;
@@ -296,6 +301,8 @@ export function ProfilesPaneBody({
   onPick: (provider: string) => void;
   onCancelAdd: () => void;
   onAgain: () => void;
+  /** a second person on this Mac: This Mac's sign-ins are everyone's here */
+  shared?: boolean;
 }): ReactElement {
   if (model === null || model.thisMac === null) {
     return <p className="vf-profiles-pane-note">{PROFILES_WORDS.reading}</p>;
@@ -323,6 +330,7 @@ export function ProfilesPaneBody({
                 onSignIn={onSignIn}
               />
               {model.reading && <p className="vf-profiles-pane-note">{PROFILES_WORDS.reading}</p>}
+              {shared && <p className="vf-profiles-pane-note">{PROFILES_WORDS.shared}</p>}
               {signIn !== null && signIn.at === "this-mac" && <SignInSlot signIn={signIn} />}
             </>
           )}

@@ -1733,9 +1733,12 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   voice is "VibeField runs the coding agents you install, as they are, with your settings and sign-ins,
   and keeps them up to date.", under the rows Settings → Agents' own sentence "Install one, and it
   appears here." with **Look again**, and the later line under them. The title claims only what the
-  inventory said: "Your agents." while it has not answered ("Looking for your agents…") or could not
-  ("VibeField couldn't read the agents on this Mac right now."), and Continue then moves on recording
-  nothing. Continue records the step answered when an agent is on this Mac, put off when none is.
+  inventory said: "Your agents." while it has not answered ("Looking on this Mac…") or could not
+  ("VibeField couldn't read the agents on this Mac.", with **Try again**, a fresh read), and the voice
+  says "VibeField found these" only once it has found them (before that, the first-agent voice), and
+  Continue then moves on recording nothing. Continue records the step answered when an agent is on this Mac, put
+  off when none is. *Corrected 2026-10-27 (AO-6a): this note said "Looking for your agents…" and "…on
+  this Mac right now." with no Try again; the page's §10 states table, which governs, says it as above.*
   **Profiles — "Every subscription, side by side."** Taught with the person's own sign-ins: **This Mac**
   as a card, each agent with who it is signed in as and its plan by name ("Claude Max"), and beside it a
   dashed card, **Add a profile…**, which grows into the pane in place (M1). Voice: "A profile holds one
@@ -1750,7 +1753,11 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   *Built 2026-10-27, AO-5b:* the cards stack (the pane is the glass's one column): This Mac's rows are
   Agent Profiles' own (`profilePage`), each saying "Signed in as {who}" with the plan it runs on by name
   at the trailing edge, or "Not signed in" with **Sign in…**, which runs the agent's own login in the
-  card, in its own folder. Add a profile… steps: **Name this profile** (Enter is the add's Next, never
+  card, in its own folder; a lapsed one says "Sign-in expired" with **Sign in again** (*corrected
+  2026-10-27, AO-6a: AO-5b offered Sign in… there; the page's §10 row says Sign in again*). For a second
+  person on this Mac (UA §6.2) This Mac's card says "These sign-ins belong to this Mac, so everyone
+  using VibeField here shares them." (*added 2026-10-27, AO-6a: a §10 row AO-5b missed*), and Add a
+  profile… is how they get their own. Add a profile… steps: **Name this profile** (Enter is the add's Next, never
   the pane's Continue), "Sign in to an agent in Work" (the installed agents that sign in), then the
   login in the card. The profile is made as its login starts (the login writes into its folder) and is
   kept once the agent says who signed in; Cancel deletes it. A login that ends before the agent says
@@ -2747,7 +2754,9 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     glass under them is the room's own, so nothing moves when the room takes their place. A room
     that cannot open says so in the same place, never a blank: **"History could not open"** over
     what failed, in its own words, and a quiet **Retry** (the splash's rule: the plain reason, then
-    Retry).
+    Retry). *Amended 2026-10-27 (AO-6a; §9 "The agents' words", the page's rewrite): it says
+    **"Opening History…"** and nothing under it. "rosetta's room is loading." named the machinery,
+    which is never on screen.*
   - **Its search is the Peek** (§8 "Search — the Peek"; built 2026-10-08, P1). The search interim
     (ruled by James 2026-10-04) retired with its landing, as AR-D41 said it would: the room's strip
     no longer holds its launcher pill and the room's own sheet is never drawn — VibeField passes the
@@ -3221,6 +3230,21 @@ consent, runtime or kind, persona, index, rosetta or rosettad, puppeteer, fieldd
 census, and "we" ("VibeField found", never "we found"); they stay in logs, Diagnostics and the code.
 Inside History the room's own words stand as rosetta wrote them, and the Setup Assistant borrows them
 ("Discovering conversations", "Reading conversations"), so History says the same thing when it opens.
+*Built 2026-10-27, AO-6a — the page's rewrites:*
+- History's first open says "Opening History…" (§8, amended at its source).
+- This desktop is "This Mac" ("This PC" on Windows) wherever VibeField names it, the spawn menu's device row
+  included (`thisDeviceWord`, beside TS's "This Mac only").
+- An Add agent… menu on a Mac with no agent says "No agents on this Mac yet.". Its "Get an agent…" waits for Get
+  (AO-7).
+- Two wait on their libraries:
+  - History's not-answering title is rosetta's room's own ("rosettad is not answering"), and the host only words
+    the line under it. "History isn't answering. VibeField is restarting it." is a rosetta petition (AO-8).
+  - The launcher's refusal carries a reason and no act in puppeteer's views, so "Sign in to Codex in Work…" rides
+    AO-7's puppeteer release.
+- A words slice diffs its built words against the page's §10 states table before its packet (the lane's
+  `ao-states-diff.mjs`; VF-PM 2026-10-27).
+- One row stands by decision. An agent that never says who keeps Settings' "Doesn't say who is signed in" over the
+  page's "Signed in · doesn't say which account": VibeField cannot know it is signed in.
 
 *Status 2026-10-12: ruled and built. Built: the Lip and its two buttons, the groove, the frame's tone and the well (GV-D7, GV-D12); where a session with no pane opens (GV-D4); the terminals away and called up as they were left (GV-D5's call, GV-D6); the edge's three outcomes and their readouts, and the monitor making room; maximized, the bar the window's title bar (GV-D11); the monitor alone at launch, the first call bringing last run's panes with the one it called (GV-D5, N14 (a)); ⌘W on the last pane minimizing them (N16 (a)); rest, the drawing's share above a floor on every height (N15 (a)).*
 **The terminals' wrapper says the window's own words** (Godview, §8, the deck; One Frame §23.2 —

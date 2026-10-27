@@ -23,6 +23,8 @@ export const AGENTS_WORDS = {
   more: "More agents",
   /** W3 — where the question went */
   later: "Add agents anytime in Settings → Agents.",
-  looking: "Looking for your agents…",
-  unavailable: "VibeField couldn't read the agents on this Mac right now.",
+  /** the page's §10 states table, word for word */
+  looking: "Looking on this Mac…",
+  unavailable: "VibeField couldn't read the agents on this Mac.",
+  tryAgain: "Try again",
 } as const;

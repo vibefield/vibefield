@@ -63,7 +63,7 @@ const DEMO = set("demo", "Demo", [], { glyph: "flask" });
 describe("the spawn menu (SB-3)", () => {
   it("offers this desktop alone, reading its profiles until the feed answers", () => {
     expect(spawnMenuOf(null, [])).toEqual({
-      devices: [{ id: HERE_DEVICE_ID, label: "This desktop", self: true, state: "reading" }],
+      devices: [{ id: HERE_DEVICE_ID, label: "This Mac", self: true, state: "reading" }],
     });
     // reading is no choice yet: the hold creates at once, under nothing named
     const menu = menuOf(spawnMenuOf(null, []));

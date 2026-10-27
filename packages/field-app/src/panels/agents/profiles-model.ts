@@ -177,6 +177,8 @@ export interface ProfilePageModel {
   rows: ProfileAgentRow[];
   /** installed agents that can sign in here and are not signed in yet */
   addable: Array<{ provider: string; label: string }>;
+  /** no agent is installed on this Mac at all (AO-6: the add menu says so) */
+  nothingInstalled: boolean;
   /** the hero's fact line */
   facts: string;
   /** the plans it runs on, each once (pass 19): the cards above the agents */
@@ -472,7 +474,15 @@ export function profilePage(set: AgentProfileSet, context: ProfilesContext): Pro
     ...(set.kind === "native" ? ["each in its own folder"] : []),
     ...(set.default ? ["default for new sessions"] : []),
   ].join(" · ");
-  return { set, inOn: inOnWords(set), rows, addable, facts, plans };
+  return {
+    set,
+    inOn: inOnWords(set),
+    rows,
+    addable,
+    nothingInstalled: here.size === 0,
+    facts,
+    plans,
+  };
 }
 
 /** Where one agent is signed in, profile by profile (the Agents page's

@@ -128,6 +128,7 @@ function agentsInventory(state: AgentsState): AgentsInventory {
  * still being read. */
 const PROFILES_STATES = [
   "this mac",
+  "second person",
   "name",
   "agent",
   "signing in",
@@ -151,7 +152,7 @@ function profilesFixture(state: ProfilesState): {
   const name = "Work";
   // the still's login is This Mac's agent not signed in (the fixture's own),
   // read from the model rather than named here
-  const waiting = model.thisMac?.rows.find((row) => row.canSignIn);
+  const waiting = model.thisMac?.rows.find((row) => row.signIn === "first");
   const provider = waiting?.provider ?? "";
   const label = waiting?.label ?? "";
   const step: AddProfileStep =
@@ -485,6 +486,7 @@ function ProfilesPreview(): ReactElement {
             onPick={noop}
             onCancelAdd={noop}
             onAgain={noop}
+            shared={state === "second person"}
           />
         }
       />

@@ -258,14 +258,21 @@ describe("the Agents pane on the wizard's glass", () => {
     const onDone = vi.fn();
     await mount(client, onDone);
     expect(heading()).toBe("Your agents.");
-    expect(text()).toContain("Looking for your agents…");
+    expect(text()).toContain("Looking on this Mac…");
+    // nothing found yet, so nothing claimed found (found by eye at the AO-6a gate)
+    expect(text()).not.toContain("VibeField found these");
     await act(async () => {
       vi.advanceTimersByTime(15_000);
     });
     await act(async () => {
       vi.advanceTimersByTime(1_000);
     });
-    expect(text()).toContain("VibeField couldn't read the agents on this Mac right now.");
+    // the page's §10 row, word for word, with Try again (a fresh read)
+    expect(text()).toContain("VibeField couldn't read the agents on this Mac.");
+    expect(text()).not.toContain("VibeField found these");
+    await click("Try again");
+    expect(client.request).toHaveBeenCalledWith("agents.installs", { refresh: true });
+    await flush();
     await click("Continue");
     expect(client.request).not.toHaveBeenCalledWith("setup.answer", expect.anything());
     expect(onDone).toHaveBeenCalledWith("skipped");

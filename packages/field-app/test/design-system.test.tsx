@@ -662,11 +662,16 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(frame("agents").textContent).toContain("Add agents anytime in Settings → Agents.");
     await choose("agents", "unavailable");
     expect(frame("agents").textContent).toContain("Your agents.");
+    expect(frame("agents").textContent).toContain("Try again");
 
     // AO-5 — the Profiles pane: This Mac's own sign-ins and the offer, then Add
     // a profile… grown in place, a step at a time.
     expect(frame("profiles").textContent).toContain("Every subscription, side by side.");
     expect(frame("profiles").querySelector(".vf-profiles-pane-add")).not.toBeNull();
+    await choose("profiles", "second person");
+    expect(frame("profiles").textContent).toContain(
+      "These sign-ins belong to this Mac, so everyone using VibeField here shares them.",
+    );
     await choose("profiles", "name");
     expect(frame("profiles").querySelector("#vf-profiles-pane-name")).not.toBeNull();
     await choose("profiles", "signing in");

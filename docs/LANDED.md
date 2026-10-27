@@ -16704,6 +16704,14 @@ sequence (`health.rs` and its tests). The desk rows (`pnpm smoke`, `pnpm smoke:s
 
 ## AO-5b — Agents and Profiles in the chapter: the Setup Assistant opens on the agents this Mac already has, teaches a profile with This Mac's own sign-ins and offers Add a profile… in place (a name, the agent, then its own login in the pane, on the one sign-in controller Agent Profiles uses), writes the ledger's agents and profiles rows, and This Mac explains itself in Settings while it is the only profile (2026-10-27; `30c74f858` + `a82ff072e` + `274716e4d`, lane `ao/5`; AO-D1, AO-D6, AO-D7, AO-D13)
 
+> **Erratum (2026-10-27, AO-6a):** four rows of the page's §10 states table shipped off its words:
+> - the Agents pane said "Looking for your agents…" where the page says "Looking on this Mac…";
+> - its failed state lacked Try again;
+> - a lapsed sign-in offered Sign in… where the page says Sign in again;
+> - a second person on this Mac was not told whose sign-ins This Mac's are.
+>
+> AO-6a brings them to the table. A words slice now diffs its built words against that table before its packet.
+
 **What.** The fifth slice of track AO's ladder (`draft/thinking-agent-onboarding.md` §8), its panes half. The draft-set
 half (AO-5a) waits on James's AO-D14. Three commits, all in field-app:
 - **The Agents pane** (`30c74f858`):

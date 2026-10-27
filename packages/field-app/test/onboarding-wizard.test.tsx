@@ -435,7 +435,7 @@ describe("Setup Assistant", () => {
     // harness's daemon has none to give, so the pane claims nothing, says it
     // is looking, and Continue moves on without recording anything.
     expect(title()).toBe("Your agents.");
-    expect(text()).toContain("Looking for your agents…");
+    expect(text()).toContain("Looking on this Mac…");
     await click("Continue");
     await pastProfiles();
 

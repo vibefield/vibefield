@@ -129,18 +129,40 @@ describe("the Profiles pane's model", () => {
         profileId: "claude:native-default",
         label: "Claude Code",
         fact: "Signed in as me@home.example",
-        canSignIn: false,
       },
       {
         provider: "codex",
         profileId: "codex:native-default",
         label: "Codex",
         fact: "Not signed in",
-        canSignIn: true,
+        signIn: "first",
       },
     ]);
     expect(model.addable.map((agent) => agent.provider)).toEqual(["claude", "codex"]);
     expect(profilesPaneShows(model)).toBe(true);
+  });
+
+  it("asks a lapsed sign-in to sign in again (the page's §10 row)", () => {
+    const model = profilesPaneModel({
+      ...emptyProfilesContext(feedOf([THIS_MAC])),
+      providers: PROVIDERS,
+      installs: [install("claude"), install("codex")],
+      // the account's usage says the folder's sign-in has lapsed
+      usage: [
+        {
+          provider: "claude",
+          label: "Claude Code",
+          state: "unauthenticated",
+          metrics: [],
+          fetchedAt: READ,
+        },
+      ],
+    });
+    expect(model.thisMac?.rows[0]).toMatchObject({
+      provider: "claude",
+      fact: "Sign-in expired · me@home.example",
+      signIn: "again",
+    });
   });
 
   it("has nothing to explain where no agent is in This Mac's folders (AO-L2)", () => {
@@ -330,6 +352,27 @@ describe("the Profiles pane on the wizard's glass", () => {
     await mount(client, onDone);
     expect(onDone).toHaveBeenCalledWith("skipped");
     expect(client.request).not.toHaveBeenCalledWith("setup.answer", expect.anything());
+  });
+
+  it("tells a second person on this Mac whose sign-ins This Mac's are (the page's §10 row)", async () => {
+    const client = daemon(feedOf([THIS_MAC]), [install("claude"), install("codex")]);
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => {
+      root?.render(
+        createElement(
+          FielddProvider,
+          { client },
+          createElement(ProfilesWizardPane, { onDone: vi.fn(), shared: true }),
+        ),
+      );
+    });
+    await flush();
+    expect(text()).toContain(
+      "These sign-ins belong to this Mac, so everyone using VibeField here shares them.",
+    );
+    expect(button("Add a profile…")).toBeDefined();
   });
 
   it("runs This Mac's own login in the pane for an agent not signed in", async () => {

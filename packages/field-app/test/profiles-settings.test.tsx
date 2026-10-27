@@ -1125,6 +1125,17 @@ describe("a profile's page", () => {
     );
     expect(hasButton("Add agent…")).toBe(true);
   });
+
+  it("says a Mac with no agents has none, where its Add agent… menu would list them (AO-6)", async () => {
+    const f = fake(doors({ "agents.installs": () => ({ installs: [], machineScope: true }) }));
+    await mountSection(f.client, {
+      feed: feed([NATIVE, set({ id: "client-demo", label: "Client demo", glyph: "flask" })]),
+      route: { kind: "profile", set: "client-demo" },
+    });
+    await click(button("Add agent…"));
+    expect(text()).toContain("No agents on this Mac yet.");
+    expect(text()).not.toContain("Every installed agent is signed in here.");
+  });
 });
 
 describe("one agent inside a profile", () => {

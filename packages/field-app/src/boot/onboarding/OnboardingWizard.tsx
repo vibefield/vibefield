@@ -225,7 +225,13 @@ function WizardBody({
     case "profiles":
       // Answered on Continue, or moved past with nothing to explain (AO-L2); a
       // profile made here is the profile feed's, whatever the pane ended with.
-      return shell(<ProfilesPane onBack={onBack} onDone={() => go(nextPane("profiles", facts))} />);
+      return shell(
+        <ProfilesPane
+          onBack={onBack}
+          onDone={() => go(nextPane("profiles", facts))}
+          shared={variant === "second-user"}
+        />,
+      );
 
     case "history":
       // Whatever History ended with (answered, put off, or nothing to ask), the

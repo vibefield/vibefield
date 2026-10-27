@@ -14,6 +14,10 @@ export const PROFILES_WORDS = {
   later: "Add one anytime in Settings → Agent Profiles.",
   reading: "Reading who is signed in…",
   signIn: "Sign in…",
+  /** a sign-in that lapsed */
+  signInAgain: "Sign in again",
+  /** a second person on this Mac: This Mac's sign-ins are the agents' own folders */
+  shared: "These sign-ins belong to this Mac, so everyone using VibeField here shares them.",
   /** the add, one field a step */
   nameLabel: "Name this profile",
   namePlaceholder: "Work, a client, Personal…",

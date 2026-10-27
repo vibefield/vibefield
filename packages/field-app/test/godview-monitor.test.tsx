@@ -2234,7 +2234,7 @@ describe("the spawn menu and the create it asks for (SB-3)", () => {
     const door = slowTabDoor();
     await mountProbe(door);
     expect(probed?.capabilities.spawn?.devices).toEqual([
-      { id: HERE_DEVICE_ID, label: "This desktop", self: true, state: "reading" },
+      { id: HERE_DEVICE_ID, label: "This Mac", self: true, state: "reading" },
     ]);
     await act(async () => door.pushSets(TAB_SETS));
     const menu = probed?.capabilities.spawn;
