@@ -15900,3 +15900,59 @@ VF-PM started the event at 00:28Z on James's "continue the work", in the 0.13.4 
   - `draft/system-atlas/network.mjs:19`: "Drop node and sidecar on unlink / stop".
 - Logs: `/Volumes/SamsungRed/lanes/item79/logs/` (probe-v1/v2, probe.log, redfirst-base-rows.log, fix-mesh_unit-1.log,
   fn-suite-1..3.log, clippy.log, verify/).
+
+## LOG — item 78: a VibeField user's daemon pair logs under its own root, `<log root>/users/<fuid>/`, derived from its user root (2026-10-27; `3151ebfad`, lane `fixer/item78`; UA-D16 reversed, James's O1)
+
+**What happened** (prod-builder's brief, the W11 Mac mini, `0.1.0-nightly.20261027`):
+- 04:19:52Z: a "New user…" click minted fuid 2, and the shell started user 2's pair.
+- Its fieldd logged three `desktop.fieldd.emergency_output` lines, "logging open failed (writer-conflict)": field-native's
+  stream and BOTH of fieldd's (`system/fieldd`, daemon.ts:741, and `plugins/service`, :756).
+- From then on, user 2's pair wrote no records. The log root's locks were user 1's.
+
+**Why:** LOG allows one physical writer per stream (decision 4; §6.5: one fieldd and one field-native "per
+profile/device"). UA-D16 kept the diagnostic root per OS account, so the shell handed every user's pair the same root
+(index.ts:2117 → `buildSupervisor({ logRoot })` → fieldd.ts:147's `FIELD_LOG_DIR`), and the second pair's writers were
+refused as LOG requires.
+
+**The ruling:**
+- James, board 06:48:37Z, O1 of four (O2 per-user stream names; O3 one multi-writer stream; O4 one owner that others
+  forward to): each user's pair logs under `<OS log root>/users/<fuid>/`, and the shell's own streams stay at the OS
+  root.
+- The ruled text changed first, at its source (dev-local `cd06cf7aa`): UA-D16 struck and reversed
+  (users-and-accounts.md:184, its restatement at :649), and LOG §6.5 and §7.1 amended. docs/DECISIONS.md's UA row flips
+  in `3151ebfad`.
+- VF-PM's ruling on the env, (F): the pair DERIVES its segment and no env changes. A fieldd started by anything but the
+  shell lands in the same place (§7.1: "derived, not configured"), and the fuid has one carrier, the user root.
+
+**The fix** (`3151ebfad`):
+- `@vibefield/logging`: `pairLogRoot(platformRoot, userRoot)` reads the fuid off the user root (`<root>/users/<fuid>`,
+  `userRootFor`; `userId` is a ULID, not the fuid). A data dir of any other shape logs at the platform root, as before.
+  Also `pairLogRoots` for readers that span users, and `PAIR_LOG_STREAMS` / `isPairLogStream`.
+- fieldd's bin derives its root from its user root, for its two streams and its diagnostics service, and hands
+  field-native the derived root as `FIELD_LOG_DIR`.
+- field-native's resolver (config.rs) derives the same root from `FIELD_NATIVE_DATA_DIR` when no override is given:
+  `pair_log_root`, the Rust twin, walking the registry's `USERS_DIR`. segment.rs keeps its refusal.
+- The support bundle collects a pair stream from every user's root (`logs/users/<fuid>/…`) and from the platform root,
+  where pairs wrote before the move.
+- Readers swept and left unchanged: local diagnostics (the shell's own streams only); fieldd's diagnostics service (it
+  reads its own pair's root, which moved with it); the update smoke's `readEvents` (desktop segments only); the doctor
+  surfaces (the updater's lines); field-native's and fieldd's tests (explicit log dirs or a `bootstrap` `logRoot`). No
+  live doc names the daemons' file paths.
+- **Production's pair streams MOVE**, for user 1 too: `~/Library/Logs/VibeField/users/<fuid>/system/fieldd.ndjson`
+  (and `field-native.ndjson`, `plugins/service`). Every reader of the old path must follow, among them the W11
+  runbook's readers on the mini (prod-builder's, told by VF-PM).
+
+**Validation** (this Mac's SSD lane `/Volumes/SamsungRed/lanes/item78`, guard, nice 19, on `b1e9bf53d`):
+- **Red-first** (logs/pair-redfirst-3.log, bundle-redfirst-1.log, redfirst-{1,2,3}.log):
+  - fieldd `pair-log-root.test.ts` runs fieldd's own entry point as two processes on one `FIELD_LOG_DIR`, with user
+    roots …/users/1 and …/users/2. On `b1e9bf53d` it read "records by pid: user 1: 0, user 2: 10; files:
+    /system/fieldd.ndjson", the mini's shape.
+  - The support bundle's pair row: the per-user files absent.
+  - The logging-level probe (records/item78-probe.test.ts): `system/fieldd`'s second writer `writer-conflict` and its
+    record MISSING, 3 of 3.
+- **At the fix:** the pair row green (each fieldd in its own `users/<fuid>/system/fieldd.ndjson`), the bundle row
+  green, and the helper's unit rows in TS (paths.test.ts, 6) and Rust (config.rs, 5).
+- **Gates:** logging 54 passed (7 files), fieldd 2,464 passed (194 files), electron-shell 1,927 passed (141 files), typecheck, biome, rustfmt; `pnpm verify` EXIT 0 at 07:24:37Z on its first run (test for 27 projects, cargo test 30 ok), tree clean.
+- **Not witnessed here:** two pairs on the mini, both logging, is a later row with James's hands.
+- Records: `/Volumes/SamsungRed/lanes/item78/logs/`. A stray 2.2 GiB `target/` built by fieldd's vitest global setup
+  without `CARGO_TARGET_DIR` was moved aside to `lanes/item78/stray-target-0700`, for the delete list.
