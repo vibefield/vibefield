@@ -16969,3 +16969,93 @@ pass included.
 
 **Not here.** AO-6b (the two once-moments, AO-D15). The desk rows (`pnpm smoke`, `pnpm smoke:studio`) on a display,
 owed with AO-1…6a's.
+
+## AL-8a — the floor bounds itself, and a fieldd crash is said: with no fieldd and no session for 10 minutes field-native stops itself `idle`; a planned fieldd says goodbye to its floor, and one that went without a word is named in the next launch's notice (2026-10-27; `89bfb6ed8`, lane `al/lease`; AL-D10 "A", AL-D11; VF-PM's GO)
+
+**Why** (`draft/thinking-app-lifecycle.md` §8.3): after AL-5 two gaps stood. G1: AL-5's bound lives in fieldd, so an
+empty floor whose fieldd died leaked for good. G2: a fieldd crash while no shell ran was never said, because no
+goodbye crossed the management channel. James ruled the floor's own bound and a goodbye, with no LaunchAgent (AL-D10
+"A", 15:31:29Z; AL-8b retired).
+
+**What landed:**
+- **Contracts:** `native.lifecycle.detach` {} → {noted} (mgmt, the single-client rule alone, like prepareRestart and
+  shutdown). `HelloAck.lastManager {planned, at, sessions|null}` says how the previous client left THIS floor's run,
+  and is absent when none held the slot. `SystemShellAttachResult.lastManagerExit` is taken once.
+  `LAYOUT.MANAGER_EXIT` (fieldd/manager-exit.json; the golden vector gains it on purpose). It sits beside
+  `SHELL_EXIT`, not at the table's end after `AGENT_PROFILE_DRAFTS_FILE`, because the lease's two records belong
+  together: shell-lease.ts writes and takes both through one pair of helpers. The rebase over TS-3b's
+  `DEVICE_NAME_FILE` and AO-5a's `AGENT_PROFILE_DRAFTS_FILE` merged clean, and the generated layout agrees.
+  `ORPHAN_BOUND` (10 min, polled every 30 s) is ONE number for both bounds: fieldd's `SHELL_ABSENCE` imports it and the floor's
+  `registries::orphan_bound` is generated from it. Fixtures on both sides: the detach params and result,
+  hello-ack.last-manager, the attach answer with a manager record.
+- **field-native** (`orphan.rs`):
+  - `ManagerPresence` records who holds the slot, since when nobody has (from boot), and how the last holder left.
+    It was planned on `detach` or a supersession, and unplanned on an EOF with neither. The record goes to the next
+    hello once.
+  - `OrphanBound` is pure over instants. It is armed only while the slot is empty, takes a fresh span for every
+    vacancy and counts from the first counted zero. A session or an UNKNOWN count restarts it.
+  - The task waits a whole span, then reads again one inventory sample later (a birth with no fieldd needs a grant
+    minted before fieldd went). Then it records the `idle` restart intent and arms main's shutdown: the floor's own
+    SIGTERM drain, never a kill.
+  - `TerminalHandle::census()` sums every live cell's reconciled occupancy. It is None while a cell has not
+    reconciled, is stale, or the pump is faulted.
+  - Only one of the two bounds is ever armed: fieldd holding the slot disarms the floor's.
+- **fieldd:** its main stop path says `detach` on a PAIRED link, bounded at 1 s, so a quit whose floor already stopped
+  never waits. `lastManager` is believed on the process's FIRST hello only, since a re-pair's record is about its own
+  dropped connection. An unplanned one becomes the lease's MANAGER_EXIT record, handed with the next attach once.
+- **The shell:** one notice, "Fieldd stopped unexpectedly at 10:43" / "2 terminal sessions kept running.". DESIGN.md
+  names fieldd to the person, and "the terminal service stopped" beside "sessions kept running" would contradict
+  itself. When the shell crashed too, the shell's notice says " Fieldd stopped too.", never two notices. A fieldd
+  crash offers no crash report, because Electron's reporter holds no fieldd dump.
+- **LOG events** (logging spec §8.4, new names): field_native.lifecycle.manager_detaching · …manager_left ·
+  …idle_refused · …idle_exit · fieldd.shell_lease.manager_lost · fieldd.shell_lease.manager_record_failed ·
+  desktop.shell_lease.fieldd_lost.
+
+**Found by its own rows (the census):** the first cut read "no `occupancy` entry" as "not reconciled". But a pump
+publishes only on a change, and an unseen cell's seed is the empty inventory, so an EMPTY cell never gets an entry and
+the count read unknown for good on every floor (the agent class host is empty). mgmt_server's row 2 said "census None,
+vacant true", AL-8a-1's idle stop never came, and AL-8a-2 handed `sessions: null`. The signal is now the inventory
+stamp's `applied` flag, set on every applied reconcile whether published or not, and a missing occupancy reads as 0.
+`occupancy` is untouched, since it drives the solo rotation and reaping. The 15:46Z guess that it was load was wrong.
+
+**Found by its first verify (egress, LATENT; for the History/FW lead's eye):** egress's `DeferredSocket`
+(`packages/fieldd/src/egress.ts`, the dial's stand-in) closes a real socket that arrives after its caller closed it,
+but attached no listener to it first. A `ws` still CONNECTING answers `close()` with an `error` event ("WebSocket was
+closed before the connection was established"), so the error was UNCAUGHT.
+- What caught it: freeway-daemon.test.ts's FW-L10 row ("a restarted fieldd leaves the floor's serve standing"), as two
+  unhandled errors with every row green and vitest exit 1. It reproduced alone.
+- AL-8a exposed it rather than caused it: stop() now awaits `native.detach()` before `native.close()`, and in that
+  pause a pending direct dial's path resolves with a connecting socket, where the link's close used to reject it
+  first.
+- The fix, in AL-8a's commit (one cause, one commit): a no-op `error` listener on the late socket before that close.
+  Red-first: egress.test.ts's new row ("close with 0 error listener(s)"). Then green, with freeway-daemon alone 29/29
+  and no errors.
+
+**Rows:**
+- field-native orphan 7: the span, a session or unknown, a fresh vacancy, a refused stop, planned vs unplanned vs
+  superseded, the scaled timings.
+- mgmt_server 2: the next hello says how the last client left, once; an empty floor stops itself `idle` and a held
+  slot never does.
+- fieldd shell-lease 3, native-link 1, egress 1; the shell's notice 3.
+- Kill matrix over a real floor: AL-8a-1 (G1: no session → the floor's own idle stop, 4.6 s on a 1.5 s span, and a
+  planned next boot); AL-8a-2 (a session → the floor stays, and the next fieldd hands the crash once); AL-8a-3 (a
+  planned stop → nothing handed).
+- Mutation probes: the first-hello gate, the stop's detach and the lease's note, each removed → its row RED.
+
+**Gates** (lane al2, nice 19, the guard before each; logs `lanes/al2/logs/al8a-*.log`):
+- The light pass: typecheck of contracts, fieldd and electron-shell; biome; rustfmt; `pnpm preflight`;
+  `pnpm check:walls`; `pnpm gen` (the generated .rs byte-identical after fmt); contracts 49/49 (1183); the targeted
+  vitest files.
+- The second cargo block (16:15:35–16:16:55Z): `--lib` 294 (1 ignored), mgmt_server 31/31, fixture_parity 17,
+  layout_vector 1, clippy `--all-targets -D warnings`, and kill matrix AL-8a-1/2/3, all green.
+- `pnpm verify` #1 at `96744ed39` (16:23:38–16:29:06Z): EXIT 1 on the egress finding above.
+- Rebased onto `95d41e3ad` (TS-3b, AO-5a) with no conflict: `pnpm gen` byte-identical, contracts 49/49 (1189),
+  fixture_parity 17 + layout_vector 1, gen:check 0.
+- `pnpm verify` #2 at `5b8e064d5` (16:41:15–16:48:09Z): EXIT 0, typecheck and test for 27 projects, gen fresh, no
+  unhandled error. `89bfb6ed8` is the same tree (`1328419bc`) with the verify lines filled in its message.
+
+**Owed:**
+- AL-5's owed stand: the relaunch's physical witness on a packaged build, the cap persisted, Windows and Linux
+  relaunch, and a fieldd that no shell ever claimed is unbounded.
+- The notice after a fieldd `kill -9` on a packaged build, seen by a person.
+- ⌘Q reserved in the deck (and ⌘W/⌘N asked); Settings → Diagnostics' "Last exit" line; AL-6.
