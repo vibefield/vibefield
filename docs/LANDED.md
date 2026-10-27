@@ -17465,3 +17465,81 @@ on James's AO-D11 = A (07:54–07:59Z) and AO-D15 = (a) (15:27:13Z). One commit,
 **Not here.** The desk rows (`pnpm smoke`, `pnpm smoke:studio`) on a display, owed with AO-1…6b1's. AO-7 (Get) waits
 on James's puppeteer release; AO-8's petitions are filed (RO-24…RO-28 as vibefield/rosetta#23…#27, PU-19 as
 vibefield/puppeteer#47), each an EL8 event when released.
+
+## AL-9 — main takes ⌘Q and ⌃⌘F above every page, and the deck's closing verbs swap no session: ⌘Q over a focused terminal minimized the deck and swapped the active pane's session out instead of quitting (2026-10-27; `933d2fba3`, lane `al/chords`; AL-D14 "A", AL-D15…D18; VF-PM's GO)
+
+**Why:** the quit gate's acceptance run (08:24–08:39Z, §AL-7) passed every row it ran, except one: ⌘Q over a focused
+terminal hid the deck instead of quitting. The read (`draft/thinking-app-lifecycle.md` §9):
+- On macOS Electron offers a key to the page first, and a key the page claims never reaches the menu (SNAP-3's
+  finding, `screenshot-chord.ts`).
+- ghosttea's workspace (`Workspace.js:690`) claims Ghostty's `quit` (⌘Q), `close_window` (⌘⇧W) and
+  `toggle_fullscreen` (⌃⌘F) on the window's capture phase, and never checks `defaultPrevented`. A page product chord
+  on the same node cannot stop it.
+- The deck gave it no `quit` hook, so ⌘Q fell back to `closeWindow`: the terminals minimized, N16's `emptyLastPane`
+  swapped the ACTIVE pane's session out (any pane, not only the last), and nothing quit. ⌘⇧W and
+  `close_all_windows` did the same. The deck's `toggleFullscreen` is empty, so ⌃⌘F did nothing.
+
+**What landed** (electron-shell · field-app; ruled by James at the PM board 17:12:47–17:13:47Z, DECISIONS' AL-D14…AL-D18
+row in the same commit):
+- AL-D14 "A": `window-chords.ts` `installWindowChords` acts in main's `before-input-event`, before the page is offered
+  the key. `preventDefault` keeps the chord from the page and from the menu shortcut, so it acts exactly once. ⌘Q
+  calls `app.quit()`, the call the menu role and the tray's Quit make, so it reaches AL-3's census gate as a person's
+  quit. Installed on the main window (beside SNAP-3's screenshot chord) and on Studio's window.
+- AL-D15: ⌃⌘F through the same door (`setFullScreen(!isFullScreen())`). ⌘H, ⌘⌥H and ⌘M are taken only if a hand row
+  shows a pane eats them; ⌘W never. Off the Mac nothing is taken: the Windows port measures first (§9.3).
+- AL-D16 (keep GT-D5/N16's ⌘W lend) and AL-D17 (⌘N unclaimed): nothing built.
+- AL-D18: ⌘⇧W, `close_all_windows` and any other chord bound to Ghostty's `quit` put the terminals away
+  (`putTerminalsAway`: the owner minimizes, or a deck no overlay owns asks for Canvas) and swap no session. N16's
+  emptying is kept for the deck's LAST pane alone (`panes.length === 1`). With one pane ⌘⇧W still reads as ⌘W, because
+  ghosttea gives the two no separate hooks. A ghosttea "last pane closed" hook is a recorded upstream ask (DECISIONS,
+  §9.3), filed with the next ghosttea petition round.
+- The words:
+  - `product-chords.ts` gains `takenBy: "shell"` rows for ⌘Q ("Quit VibeField") and ⌃⌘F ("Full screen"); `matches`
+    is optional for a chord no page listener hears.
+  - Settings → Terminal → Keyboard's rows say them. keyboard-model's platform words for
+    `close_window`/`close_all_windows`/`quit` said "Closes Godview" and now say "Puts the terminals away"
+    (`close_window`: "— with one pane, it empties that pane too").
+  - The keyfoot names ⌘Q and ⌃⌘F as the app's, taken before any page.
+
+**What a test reaches, and what only a hand does:**
+- Tests:
+  - the predicate (`windowChordOf`: darwin only, keyDown, no auto-repeat, ⌘ alone or ⌃⌘, never ⌥ or ⇧);
+  - the installer (`preventDefault`, then quit once, or full screen toggled);
+  - the deck's verbs (⌘⇧W, close-all and quit minimize and never empty a pane among several; the last pane alone
+    empties);
+  - the words.
+- No test or smoke here can press a physical key (no input injection on this Mac). Only James's row 1 proves the whole
+  path: a physical ⌘Q over a focused pane brings up the census box, logs `desktop.quit.census_read` and sends no
+  `deck_changed`. His ten rows are in ROADMAP's Eyeballs ("The window chords (AL-9)").
+
+**Rows:**
+- `packages/electron-shell/test/window-chords.test.ts` (new, 7).
+- godview-deck.test.tsx "the closing verbs put the terminals away and swap no session (AL-9, AL-D18)" (3).
+- terminal-keyboard-model.test.ts (the platform words, ⌘⇧W, a layered ⌘⇧Q → quit; the ⌘Q/⌃⌘F reserved row,
+  "VibeField: Quit VibeField").
+- product-chords.test.tsx (the triggers and `takenBy`).
+
+**Gates** (lane al2, nice 19, the guard before each):
+- Restacked three times, git only, each rehearsed with `git merge-tree` first:
+  - onto the census fix's records `7466fce8a` (the keyfoot folded in);
+  - onto TS-5's records `8f9b45fa2` (20:36Z): clean; TS-5's overlap (DECISIONS.md, main's index.ts) textual only;
+  - onto AO-6b2's records `bb1a2c823` (21:30Z): clean, the tree `32f860d6a` as rehearsed. AO-6b2's ChromeLayer and
+    shell-presentation hunks change only Settings' target, and its overlay hunk mounts the limit moment; none touches
+    the chords, the deck's verbs or the words.
+- The light pass at `079c8532e` (21:32–21:34Z, load 20–40) EXIT 0:
+  - typecheck electron-shell and field-app 0; biome 0; preflight OK; check:walls 0.
+  - biome's first run (on `babc64819`) named this slice's own line wrapping in KeyboardTab.tsx and
+    product-chords.test.tsx. `biome format` on the two, folded in.
+  - window-chords 7/7; godview-deck, terminal-keyboard-model and product-chords 103/103.
+- `pnpm verify` at `079c8532e` (21:34:38–21:42:54Z, load 21→27): **EXIT 0**.
+  - typecheck 27/27.
+  - test 27/27 with no Nx cache hit: electron-shell 145 files, 1971 + 2 skipped; field-app 227 files, 2741 + 3 skipped.
+  - clippy, bundle:assert, test:rust and gen:check green.
+  - `933d2fba3` is that tree with its message amended (the tree identical, checked).
+
+**Owed:**
+- James's ten rows (Eyeballs), row 1 first. A miss on ⌘H or ⌘M puts that chord on D15's list.
+- The draft: §9/§10's status flips ride the next dev-local snapshot.
+- The ghosttea "last pane closed" hook, with the next ghosttea petition round.
+- AL's rest: Settings → Diagnostics' "Last exit" line, AL-5's relaunch cap persisted, AL-6 "Keep running when
+  VibeField quits".
