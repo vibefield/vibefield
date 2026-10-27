@@ -2,6 +2,7 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { AGENT_CATALOG } from "@vibefield/contracts/agent-catalog";
 import { dealFace, effectiveFaces } from "@vibefield/contracts/user-face";
 import type { FielddClient } from "@vibefield/fieldd-client";
 import { act, createElement } from "react";
@@ -177,13 +178,31 @@ const wearing = (emoji: string): FieldUserProfile => ({
   onboarded: true,
 });
 
-/** AO-2/AO-3 — the ledger of someone who answered History before they quit: a
- * record that resumes past the name lands where it did before the chapter. */
-const HISTORY_ANSWERED = {
+/** AO-2/AO-3/AO-5 — the ledger of someone who answered the agent chapter
+ * before they quit: a record that resumes past the name lands where it did
+ * before the chapter. */
+const CHAPTER_ANSWERED = {
   format: 1,
-  steps: { history: { state: "answered", at: "2026-10-27T05:41:30.000Z" } },
+  steps: {
+    agents: { state: "answered", at: "2026-10-27T05:41:20.000Z" },
+    history: { state: "answered", at: "2026-10-27T05:41:30.000Z" },
+  },
   hidden: false,
 };
+
+/** AO-5 — an install as `agents.installs` answers it, for a catalog row. */
+const installOf = (provider: string, version: string): Record<string, unknown> => ({
+  provider,
+  executable: `/usr/local/bin/${provider}`,
+  realPath: `/usr/local/bin/${provider}`,
+  version,
+  method: "native-installer",
+  autoUpdate: "enabled",
+  active: true,
+});
+/** The catalog's supported agents — derived from the table, so no agent is
+ * named here. */
+const SUPPORTED = AGENT_CATALOG.filter((row) => row.status === "supported");
 
 /** The product half. `link: undefined` makes `user.link.subscribe` REJECT,
  * which is what a daemon without the UA-3 method actually does. */
@@ -197,6 +216,9 @@ function client(
     ledger?: unknown;
     /** History's status as `index.status.subscribe` answers it (absent: refused) */
     index?: unknown;
+    /** AO-5 — what `agents.installs` answers, with the catalog beside it
+     * (absent: the harness answers neither, and the Agents pane keeps looking) */
+    installs?: readonly unknown[];
   } = {},
 ): FielddClient {
   const preferences = options.preferences ?? {
@@ -226,13 +248,21 @@ function client(
       if (method === "setup.subscribe") {
         return {
           subId: "setup",
-          snapshot: options.ledger ?? HISTORY_ANSWERED,
+          snapshot: options.ledger ?? CHAPTER_ANSWERED,
           unsubscribe: () => undefined,
         };
       }
       throw new Error(`unexpected subscription: ${method}`);
     }),
-    request: vi.fn(async () => ({ ok: true })),
+    request: vi.fn(async (method: string) => {
+      if (options.installs !== undefined && method === "agent.catalog") {
+        return { catalog: AGENT_CATALOG };
+      }
+      if (options.installs !== undefined && method === "agents.installs") {
+        return { installs: options.installs };
+      }
+      return { ok: true };
+    }),
   } as unknown as FielddClient;
 }
 
@@ -316,6 +346,19 @@ async function click(label: string): Promise<void> {
   });
 }
 
+/** A lazy pane's code arrives INSIDE act, so React retries the suspended pane in
+ * the test's own scope rather than on its scheduler; turns until `done` holds,
+ * bounded, so a loaded host waits longer and a wrong pane still fails. */
+async function arrive(done: () => boolean): Promise<void> {
+  for (let turn = 0; turn < 20 && !done(); turn += 1) {
+    await act(async () => {
+      await vi.dynamicImportSettled();
+      vi.advanceTimersByTime(10);
+      for (let hop = 0; hop < 8; hop += 1) await Promise.resolve();
+    });
+  }
+}
+
 async function tick(ms: number): Promise<void> {
   await act(async () => {
     vi.advanceTimersByTime(ms);
@@ -380,9 +423,15 @@ describe("Setup Assistant", () => {
     await click("Continue");
     expect(updates).toEqual([{ name: "James", face: { emoji: other, frame: "sticker" } }]);
 
-    // 3 — the agent chapter (AO-3): History asks whose past comes in. This
-    // harness's daemon has no census to give, so the pane says it is looking
-    // and Continue moves on without recording anything.
+    // 3 — the agent chapter (AO-5): Agents opens on the inventory. This
+    // harness's daemon has none to give, so the pane claims nothing, says it
+    // is looking, and Continue moves on without recording anything.
+    expect(title()).toBe("Your agents.");
+    expect(text()).toContain("Looking for your agents…");
+    await click("Continue");
+
+    // History (AO-3) asks whose past comes in; with no census to give it
+    // says it is looking too, and Continue moves on.
     expect(text()).toContain("Bring in your past sessions.");
     expect(text()).not.toContain("Your field is already running"); // pane 3 retired (AO-D2)
     await click("Continue");
@@ -547,7 +596,9 @@ describe("Setup Assistant", () => {
       ),
     ).toBe(false);
 
-    await click("Continue"); // the name → History (each person's own past)
+    await click("Continue"); // the name → Agents (each person's own chapter)
+    expect(title()).toBe("Your agents.");
+    await click("Continue"); // → History (each person's own past)
     expect(text()).toContain("Bring in your past sessions.");
     await click("Continue"); // → Connect
     expect(text()).toContain("Your field, on every device.");
@@ -711,10 +762,53 @@ describe("Setup Assistant", () => {
     expect(container?.querySelector('input[aria-label="Your name"]')).toBeNull();
   });
 
-  it("resumes at History when the ledger holds no answer for it, before Connect (W6, AO-3)", async () => {
+  it("resumes at Agents when the ledger holds no answer for it, before History (W6, AO-5)", async () => {
     host(vi.fn(async () => ({ ...FRESH, color: "accent-2" }) as FieldUserProfile));
     await mount({
       fieldd: client({ link: NO_LINK, ledger: { format: 1, steps: {}, hidden: false } }),
+      onboarding: onboarding({ color: "accent-2" }),
+      onComplete: vi.fn(),
+    });
+    // the name was answered (a legacy accent says so); the chapter was not
+    expect(title()).toBe("Your agents.");
+    expect(text()).not.toContain("Bring in your past sessions.");
+    await click("Continue"); // nothing known from this harness's inventory
+    expect(text()).toContain("Bring in your past sessions.");
+  });
+
+  it("records Agents answered from the inventory and moves on to History (AO-5)", async () => {
+    host(vi.fn(async () => ({ ...FRESH, color: "accent-2" }) as FieldUserProfile));
+    const first = SUPPORTED[0];
+    if (first === undefined) throw new Error("the catalog has no supported agent");
+    const fieldd = client({
+      link: NO_LINK,
+      ledger: { format: 1, steps: {}, hidden: false },
+      installs: [installOf(first.id, "2.1.270")],
+    });
+    await mount({ fieldd, onboarding: onboarding({ color: "accent-2" }), onComplete: vi.fn() });
+    // the pane's code arrives, then the inventory's answer
+    await arrive(() => title() === "Your agents are ready.");
+    expect(title()).toBe("Your agents are ready.");
+    expect(text()).toContain(first.label);
+    await click("Continue");
+    expect(fieldd.request).toHaveBeenCalledWith("setup.answer", {
+      step: "agents",
+      state: "answered",
+    });
+    expect(text()).toContain("Bring in your past sessions.");
+  });
+
+  it("resumes at History when the ledger holds no answer for it, before Connect (W6, AO-3)", async () => {
+    host(vi.fn(async () => ({ ...FRESH, color: "accent-2" }) as FieldUserProfile));
+    await mount({
+      fieldd: client({
+        link: NO_LINK,
+        ledger: {
+          format: 1,
+          steps: { agents: { state: "answered", at: "2026-10-27T05:41:20.000Z" } },
+          hidden: false,
+        },
+      }),
       onboarding: onboarding({ color: "accent-2" }),
       onComplete: vi.fn(),
     });
@@ -1084,7 +1178,7 @@ describe("Setup Assistant", () => {
     await act(async () => {
       form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     });
-    expect(text()).toContain("Bring in your past sessions.");
+    expect(title()).toBe("Your agents.");
   });
 
   it("respects reduced motion — the pane entrance has a fade fallback, no transitions survive", async () => {
@@ -1162,6 +1256,7 @@ describe("Setup Assistant", () => {
 
     await click("Get started");
     await click("Continue"); // nothing to write to — the pane still advances
+    await click("Continue"); // Agents, with no inventory from this harness
     await click("Continue"); // History, with nothing to ask from this harness
     await click("Not now");
     expect(onComplete).toHaveBeenCalledTimes(1);

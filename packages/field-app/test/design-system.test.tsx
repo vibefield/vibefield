@@ -438,12 +438,12 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(window.localStorage.getItem("vf-dark")).toBe("true");
     // One theme control per onboarding frame: eleven since AO-1 (2026-10-27),
     // when Ready and the second user's finishing folded into Setting up; twelve
-    // since AO-3, the agent chapter's History pane.
+    // since AO-3, the agent chapter's History pane; thirteen since AO-5's Agents.
     expect(
       container?.querySelectorAll(
         '[data-onboarding-preview] button[aria-label="Switch to light mode"]',
       ),
-    ).toHaveLength(12);
+    ).toHaveLength(13);
 
     // One Frame FR-3: the playground's head runs on its real controller — its
     // chevron grows the pill into the fields explorer through the one owner.
@@ -520,11 +520,12 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     // AO-1 (2026-10-27): pane 3 retired, and Ready and the second user's
     // finishing folded into Setting up — the end of every path — whose own
     // refusals (the answers not saved, the desk that could not open) are frames.
-    // AO-3 adds the agent chapter's History pane.
-    expect(container?.querySelectorAll("[data-onboarding-preview]")).toHaveLength(12);
+    // AO-3 adds the agent chapter's History pane, AO-5 its Agents pane.
+    expect(container?.querySelectorAll("[data-onboarding-preview]")).toHaveLength(13);
     for (const state of [
       "welcome",
       "field",
+      "agents",
       "history",
       "connect",
       "posture",
@@ -538,7 +539,7 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     ]) {
       expect(container?.querySelector(`[data-onboarding-preview="${state}"]`)).not.toBeNull();
     }
-    expect(container?.querySelectorAll(".vf-wizard-shell")).toHaveLength(12);
+    expect(container?.querySelectorAll(".vf-wizard-shell")).toHaveLength(13);
     expect(container?.querySelector(".vf-ds-field-stage .vf-head-zoom")).not.toBeNull();
     expect(container?.querySelector("[data-ground-workbench]")).not.toBeNull();
     expect(container?.querySelector("[data-visual-tweak-controls]")).not.toBeNull();
@@ -639,6 +640,26 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(frame("history").textContent).toContain("Continue without history");
     await choose("history", "looking");
     expect(frame("history").textContent).toContain("Looking for past sessions…");
+
+    // AO-5 — the Agents pane: ready rows and a supported one missing, the
+    // preview agents behind More agents, then a Mac with none.
+    expect(frame("agents").textContent).toContain("Your agents are ready.");
+    expect(frame("agents").querySelectorAll('.vf-agents-pane-row[data-state="ready"]').length).toBe(
+      2,
+    );
+    expect(frame("agents").textContent).toContain("Not on this Mac");
+    expect(
+      frame("agents").querySelector(".vf-agents-pane-more")?.getAttribute("aria-expanded"),
+    ).toBe("false");
+    await choose("agents", "more");
+    expect(
+      frame("agents").querySelector(".vf-agents-pane-more")?.getAttribute("aria-expanded"),
+    ).toBe("true");
+    await choose("agents", "first");
+    expect(frame("agents").textContent).toContain("Add your first agent.");
+    expect(frame("agents").textContent).toContain("Add agents anytime in Settings → Agents.");
+    await choose("agents", "unavailable");
+    expect(frame("agents").textContent).toContain("Your agents.");
   });
 
   it("mounts the spawn bloom on the shipping monitor with its fixture door, and a create lands as a new terminal (SB-3)", async () => {

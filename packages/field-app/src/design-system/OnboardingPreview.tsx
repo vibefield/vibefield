@@ -1,3 +1,4 @@
+import { AGENT_CATALOG } from "@vibefield/contracts";
 import { SegmentedControl } from "@vibefield/design-kit";
 import { createContext, type ReactElement, type ReactNode, useContext, useState } from "react";
 import type { DoorDevice } from "../account/door/door-parts";
@@ -23,6 +24,8 @@ import {
 } from "../boot/onboarding/views/welcome";
 import { WizardShellView } from "../boot/onboarding/wizard-ui";
 import type { FieldUserFace } from "../host";
+import { type AgentsInventory, AgentsWizardPaneView } from "../setup/AgentsPaneView";
+import { agentsPaneModel } from "../setup/agents-pane";
 import { HistoryConsentBody } from "../setup/HistoryConsentView";
 import { HistoryWizardPaneView } from "../setup/HistoryWizardPane";
 import { HISTORY_WORDS } from "../setup/history-words";
@@ -33,6 +36,7 @@ import {
   FIXTURE_ME,
   FIXTURE_OTHERS,
 } from "./account-fixtures";
+import { fixtureAgentInstalls } from "./agents-fixtures";
 
 const noop = (): void => undefined;
 
@@ -85,6 +89,24 @@ const FIELD_STATES = ["fresh", "second user", "saving", "error"] as const;
 type FieldState = (typeof FIELD_STATES)[number];
 
 const CHOOSER_STATES = ["ready", "opening", "refused", "reading"] as const;
+
+/** AO-5 — the Agents pane: agents on this Mac with a supported one missing,
+ * More agents open, nothing installed, and the inventory's two quiet states. */
+const AGENTS_STATES = ["ready", "more", "first", "looking", "unavailable"] as const;
+type AgentsState = (typeof AGENTS_STATES)[number];
+
+/** The catalog's Mac: the fixture inventory without the second supported agent,
+ * so the pane shows a ready row and a missing one (derived from the catalog,
+ * never an agent named here). */
+function agentsInventory(state: AgentsState): AgentsInventory {
+  if (state === "looking" || state === "unavailable") return { kind: state };
+  const second = AGENT_CATALOG.filter((row) => row.status === "supported")[1]?.id;
+  const installs =
+    state === "first"
+      ? []
+      : fixtureAgentInstalls().filter((install) => install.provider !== second);
+  return { kind: "found", model: agentsPaneModel(AGENT_CATALOG, installs) };
+}
 
 /** AO-3 — the History pane's census states, and every switch off (a no). */
 const HISTORY_STATES = ["found", "all off", "looking", "unavailable"] as const;
@@ -187,6 +209,7 @@ export function OnboardingPreview({
           </OnboardingFrame>
 
           <FieldPreview />
+          <AgentsPreview />
           <HistoryPreview />
           <ConnectPreview />
           <PosturePreview />
@@ -314,6 +337,37 @@ function ChooserPreview(): ReactElement {
   );
 }
 
+/** The agent chapter's Agents pane (AO-5): the shipping face on the fixture
+ * inventory, joined with the agent catalog by the shipping model. */
+function AgentsPreview(): ReactElement {
+  const [state, setState] = useState<AgentsState>("ready");
+  return (
+    <OnboardingFrame
+      index="03"
+      label="Agents"
+      note="The agents on this Mac · Get joins with AO-7"
+      state="agents"
+      controls={
+        <SegmentedControl
+          options={AGENTS_STATES}
+          value={state}
+          onChange={setState}
+          label="Agents pane state"
+        />
+      }
+    >
+      <AgentsWizardPaneView
+        inventory={agentsInventory(state)}
+        moreOpen={state === "more"}
+        onToggleMore={noop}
+        onLookAgain={noop}
+        onContinue={noop}
+        onBack={noop}
+      />
+    </OnboardingFrame>
+  );
+}
+
 /** The end of every path (AO-D2): the shipping pane, fed the boot machine's
  * states by hand so none of them advances on its own here. */
 /** The agent chapter's History pane (AO-3): the shipping face on a fixture
@@ -332,7 +386,7 @@ function HistoryPreview(): ReactElement {
   const choosing = census.kind === "found";
   return (
     <OnboardingFrame
-      index="03"
+      index="04"
       label="History"
       note="Every switch on · nothing read before the button"
       state="history"
@@ -376,7 +430,7 @@ function SettingUpPreview(): ReactElement {
   const [state, setState] = useState<SettingUpState>("drawing");
   return (
     <OnboardingFrame
-      index="06"
+      index="07"
       label="Setting up, then Ready"
       note="The desk opens beneath the glass · the title becomes the welcome in place"
       state="setting-up"
@@ -452,7 +506,7 @@ function ConnectPreview(): ReactElement {
   const pending = (): void => setStep({ kind: "pending" });
   return (
     <OnboardingFrame
-      index="04"
+      index="05"
       label="Connect devices"
       note="Every face the link shows, in the daemon's own words"
       state="connect"
@@ -531,7 +585,7 @@ function PosturePreview(): ReactElement {
 
   return (
     <OnboardingFrame
-      index="05"
+      index="06"
       label="Project default"
       note="Shared with Settings → Account"
       state="posture"

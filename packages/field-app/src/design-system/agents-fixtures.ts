@@ -209,6 +209,12 @@ function operation(state: AgentOperation["state"]): AgentOperation {
   };
 }
 
+/** What `agents.installs` answers on the catalog's Mac (AO-5's Agents pane
+ * joins it with the agent catalog). */
+export function fixtureAgentInstalls(): AgentInstall[] {
+  return installs("2.2.0");
+}
+
 /** The shelf the catalog draws for one production state. */
 export function fixtureAgentShelf(state: AgentsFixtureState): AgentShelfItem[] {
   if (state === "empty" || state === "loading" || state === "unavailable") return [];

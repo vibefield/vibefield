@@ -1,0 +1,140 @@
+/* The Agents pane's rows (track AO, AO-5; DESIGN.md §8 "The Setup Assistant's
+   agent chapter" — Agents): one per agent, its own mark, its label, its version
+   and how it stays current, then a green Ready — or, for a supported agent this
+   Mac does not have, "Not on this Mac" in the secondary ink, where Get will be.
+   The History pane's row grammar, so the chapter's panes read as one. */
+.vf-agents-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.vf-agents-pane-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.vf-agents-pane-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 12px;
+  min-height: 48px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--vf-hairline);
+}
+
+.vf-agents-pane-row:last-child {
+  border-bottom: 0;
+}
+
+.vf-agents-pane-mark {
+  display: flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+}
+
+.vf-agents-pane-mark > svg {
+  width: 20px;
+  height: 20px;
+}
+
+.vf-agents-pane-row[data-state="missing"] .vf-agents-pane-mark {
+  opacity: 0.55;
+}
+
+.vf-agents-pane-text {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.vf-agents-pane-label {
+  color: var(--vf-text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.vf-agents-pane-fact {
+  overflow: hidden;
+  color: var(--vf-text-secondary);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-agents-pane-ready {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--vf-ink-healthy);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.vf-agents-pane-missing {
+  color: var(--vf-text-secondary);
+  font-size: 12px;
+}
+
+.vf-agents-pane-more {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: var(--vf-text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.vf-agents-pane-more:hover {
+  color: var(--vf-text-primary);
+}
+
+.vf-agents-pane-more:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid var(--vf-select);
+  outline-offset: 2px;
+}
+
+.vf-agents-pane-more > .vf-glyph {
+  transition: transform 180ms var(--vf-ease-island);
+}
+
+.vf-agents-pane-more[aria-expanded="true"] > .vf-glyph {
+  transform: rotate(90deg);
+}
+
+.vf-agents-pane-first {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.vf-agents-pane-note {
+  margin: 0;
+  color: var(--vf-text-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vf-agents-pane-more > .vf-glyph {
+    transition: none;
+  }
+}

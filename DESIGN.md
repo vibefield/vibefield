@@ -1726,6 +1726,16 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   "Add your first agent." and Claude Code and Codex come first. Voice: "VibeField found these on this Mac.
   It runs them as they are, with your settings and sign-ins, and keeps them up to date." An install runs
   on after Continue, and the last pane reports it. Later: "Add agents anytime in Settings → Agents."
+  *Built 2026-10-27, AO-5b, until Get (AO-7):* a missing agent's row says **Not on this Mac** in the
+  secondary ink where Get will stand, its mark at half ink; "Claude Code and Codex first" is the catalog's
+  supported rows in its own order; More agents lists the preview rows VibeField installs and updates
+  (`offers.distribution`), so a protocol is never offered as an agent to get. With nothing installed the
+  voice is "VibeField runs the coding agents you install, as they are, with your settings and sign-ins,
+  and keeps them up to date.", under the rows Settings → Agents' own sentence "Install one, and it
+  appears here." with **Look again**, and the later line under them. The title claims only what the
+  inventory said: "Your agents." while it has not answered ("Looking for your agents…") or could not
+  ("VibeField couldn't read the agents on this Mac right now."), and Continue then moves on recording
+  nothing. Continue records the step answered when an agent is on this Mac, put off when none is.
   **Profiles — "Every subscription, side by side."** Taught with the person's own sign-ins: **This Mac**
   as a card, each agent with who it is signed in as and its plan by name ("Claude Max"), and beside it a
   dashed card, **Add a profile…**, which grows into the pane in place (M1). Voice: "A profile holds one
