@@ -1,5 +1,5 @@
 import { type ChildProcess, spawn } from "node:child_process";
-import type { ProductInfo } from "@vibefield/contracts";
+import type { ProductInfo, ShellLeaveReason } from "@vibefield/contracts";
 import type { FielddClient } from "@vibefield/fieldd-client";
 import { assertDataRootUsable } from "./paths";
 import {
@@ -461,7 +461,22 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
     });
   }
 
-  async function dispose(): Promise<void> {
+  /** AL-7 — the leave verb rides the client this supervisor holds, bounded like the stop verb: a pair that cannot
+   * answer it inside the budget records the exit unplanned, which is the honest reading. Said on a LIVE connection
+   * only: the lease reads that connection's close, and a pair already gone (a quit's consented stop) has none to read,
+   * so the dispose never waits out a reconnect for it. */
+  async function sayLeave(client: FielddClient, why: ShellLeaveReason): Promise<void> {
+    if (client.status !== "ready") return;
+    await Promise.race([
+      client.request("system.shell.leave", { why }).then(
+        () => undefined,
+        () => undefined,
+      ),
+      new Promise<void>((resolve) => setTimeout(resolve, SHUTDOWN_RPC_WAIT_MS)),
+    ]);
+  }
+
+  async function dispose(options?: { readonly leave?: ShellLeaveReason }): Promise<void> {
     if (disposed) return;
     disposed = true;
     internal.abort();
@@ -479,6 +494,7 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
       // stop BEFORE closing the client: the WIN-D5 stop verb rides that
       // connection. Close afterwards is idempotent on a dead socket.
       if (opts.shutdownPolicy === "stop-owned") await h.stopOwned();
+      else if (options?.leave !== undefined) await sayLeave(h.client, options.leave);
       h.client.close();
     } else if (opts.shutdownPolicy === "stop-owned" && child && child.exitCode === null) {
       // ensure() never resolved but we DID spawn — don't leak the child

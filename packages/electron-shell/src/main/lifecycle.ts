@@ -1,3 +1,4 @@
+import type { ShellLeaveReason } from "@vibefield/contracts";
 import type { FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import type { Logger } from "@vibefield/logging";
 import { app } from "electron";
@@ -39,6 +40,11 @@ export interface LifecycleFlow extends QuitFlow {
    * never asks, and the durable close never waits on a person. */
   noteOsSessionEnding(): void;
   readonly osSessionEnding: boolean;
+  /** AL-7 — why this shell leaves the pairs it holds, when it leaves them running ON PURPOSE (each supervisor's
+   * dispose says it, `system.shell.leave`): a signal's quit is a `restart`, an armed update an `update`, and a person's
+   * quit whose census could not be read a `quit`. undefined = nothing planned to say: the pairs were stopped, or the
+   * shell is simply going (then the pair records the exit unplanned, which is true). */
+  readonly leaveReason: ShellLeaveReason | undefined;
 }
 
 export function installLifecycle(opts: {
@@ -63,7 +69,9 @@ export function installLifecycle(opts: {
     dispose: async () => {
       logger.info("desktop.lifecycle.stopping", "Electron shell is stopping");
       opts.disposeShell();
-      await (opts.getSupervisor()?.dispose() ?? Promise.resolve());
+      const leave = leaveReason();
+      await (opts.getSupervisor()?.dispose(leave === undefined ? undefined : { leave }) ??
+        Promise.resolve());
       logger.info("desktop.lifecycle.stopped", "Electron shell teardown completed");
       await opts.closeLogging();
     },
@@ -102,6 +110,8 @@ export function installLifecycle(opts: {
   let restarting = false;
   let osSessionEnding = false;
   let stopping = false;
+  const leaveReason = (): ShellLeaveReason | undefined =>
+    restarting ? "restart" : flow.updateArmed ? "update" : gate === "decided" ? "quit" : undefined;
   const replayQuit = (): void => {
     replayingNativeQuit = true;
     setImmediate(() => app.quit());
@@ -242,6 +252,9 @@ export function installLifecycle(opts: {
     },
     get osSessionEnding() {
       return osSessionEnding;
+    },
+    get leaveReason() {
+      return leaveReason();
     },
   };
 }

@@ -243,6 +243,7 @@ pub mod layout {
     pub const PAIRING_FILE: &[&str] = &["native", "pairing"];
     pub const MESH_STATE_DIR: &[&str] = &["native", "mesh"];
     pub const LINK_FILE: &[&str] = &["fieldd", "link.json"];
+    pub const SHELL_EXIT: &[&str] = &["fieldd", "shell-exit.json"];
     pub const TERMINAL_BINDINGS_FILE: &[&str] = &["fieldd", "terminal-bindings.json"];
     pub const PROJECT_IDENTITY_FILE: &[&str] = &["fieldd", "project-identity.json"];
     pub const TERMINAL_CONFIG_FILE: &[&str] = &["native", "config.ghostty"];
@@ -303,6 +304,7 @@ pub mod layout {
         ("PAIRING_FILE", PAIRING_FILE),
         ("MESH_STATE_DIR", MESH_STATE_DIR),
         ("LINK_FILE", LINK_FILE),
+        ("SHELL_EXIT", SHELL_EXIT),
         ("TERMINAL_BINDINGS_FILE", TERMINAL_BINDINGS_FILE),
         ("PROJECT_IDENTITY_FILE", PROJECT_IDENTITY_FILE),
         ("TERMINAL_CONFIG_FILE", TERMINAL_CONFIG_FILE),

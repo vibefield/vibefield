@@ -1476,6 +1476,9 @@ export const LAYOUT = {
   PAIRING_FILE: ["native", "pairing"],
   MESH_STATE_DIR: ["native", "mesh"],
   LINK_FILE: ["fieldd", "link.json"],
+  /** AL-7 — how the last shell left this pair (`ShellExitRecord`): written when the last shell-main connection
+   * closes, handed once to the next shell that claims the lease (`system.shell.attach`). */
+  SHELL_EXIT: ["fieldd", "shell-exit.json"],
   /** SB-2 (AR-7g) — which shells fieldd birthed under an Agent Profile
    * (`TerminalBindingsFile`, 0600): session → profile set, never a variable.
    * fieldd's, because nothing below it can hold a session's metadata, and on

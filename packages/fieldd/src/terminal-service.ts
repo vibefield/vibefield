@@ -2254,6 +2254,16 @@ export class TerminalService {
     return { live: [...live].sort(), births: this.birthsInFlight };
   }
 
+  /** AL-7 — the floor's live session count NOW, read without closing anything (the shell lease's record of how the
+   * last shell left): the observed inventory plus what this service birthed and the floor has not listed yet. null =
+   * the inventory was never observed. */
+  liveCount(): number | null {
+    if (this.lastObservation === undefined) return null;
+    const live = new Set(this.terminals.map((terminal) => terminal.sessionId));
+    for (const sessionId of this.bornUnseen) live.add(sessionId);
+    return live.size;
+  }
+
   /** The stop was refused: births are welcome again. */
   reopenToBirths(): void {
     this.closedForUpdate = false;

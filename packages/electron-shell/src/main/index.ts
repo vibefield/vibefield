@@ -20,6 +20,8 @@ import {
   type ScreenshotCaptureResult,
   type ShellCommand,
   ShellCommandRequest,
+  type ShellExitRecord,
+  SystemShellAttachResult,
   type UpdateView,
   type UserRecord,
   type UsersCreateParams,
@@ -49,6 +51,7 @@ import {
   dialog,
   globalShortcut,
   MessageChannelMain,
+  Notification,
   nativeImage,
   nativeTheme,
   powerMonitor,
@@ -132,6 +135,7 @@ import {
 } from "./security";
 import { buildCsp, importMapHashesFromHtml } from "./security-policy";
 import { backfillMigratedSetupVariant } from "./setup-variant";
+import { shellExitNotice } from "./shell-exit-notice";
 import { RecoveringShellProvider } from "./shell-provider";
 import { isolateSmokeProfile } from "./smoke-profile";
 import { installStillProtocol, resolveStillFile } from "./still-protocol";
@@ -831,6 +835,69 @@ async function main(
     supervisor: FielddSupervisor;
     handles: FielddHandleCoordinator;
   }
+  // AL-7 (`thinking-app-lifecycle.md` §8.1) — an UNPLANNED exit (a crash, a Force Quit, a signal) is said once, as one
+  // native notification (OS chrome; DESIGN.md §9's words in shell-exit-notice.ts). Clicking it opens the crash report
+  // when the crash manager holds one for this exit, the window otherwise.
+  const showUnplannedExitNotice = async (record: ShellExitRecord): Promise<void> => {
+    if (isSmokeLike(MODE) || !Notification.isSupported()) return;
+    const list = await crashes.refresh().catch(() => null);
+    const crashReport =
+      list?.artifacts.some(
+        (artifact) => !artifact.viewed && artifact.createdAt >= record.at - CRASH_REPORT_WINDOW_MS,
+      ) ?? false;
+    const words = shellExitNotice(record, {
+      time: new Date(record.at).toLocaleTimeString(undefined, {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      crashReport,
+    });
+    if (words === null) return;
+    const notice = new Notification({ title: words.title, body: words.body });
+    notice.on("click", () => {
+      const reveal = crashReport ? revealSurface("open-diagnostics") : revealPrimaryWindow();
+      void reveal.catch((error: unknown) => {
+        logger.error(
+          "desktop.shell_lease.notice_reveal_failed",
+          "The notice could not open VibeField",
+          error,
+        );
+      });
+    });
+    notice.show();
+    logger.info("desktop.shell_lease.notice_shown", "The unplanned exit was said", {
+      sessions: record.sessions,
+      crashReport,
+    });
+  };
+  /** AL-7 — this shell holds every pair it keeps a handle to: each handle (a fresh boot of that pair included)
+   * claims the lease, and the ATTACHED user's unplanned last exit is said once; a background user's is logged. */
+  const claimLease = async (userId: string, handle: FielddHandle): Promise<void> => {
+    let lastExit: ShellExitRecord | null;
+    try {
+      const parsed = SystemShellAttachResult.safeParse(
+        await handle.client.request("system.shell.attach", {}, { timeoutMs: LEASE_ATTACH_MS }),
+      );
+      if (!parsed.success) return;
+      lastExit = parsed.data.lastExit;
+    } catch (error) {
+      logger.warn(
+        "desktop.shell_lease.attach_failed",
+        "This shell could not claim the pair's lease",
+        {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      );
+      return;
+    }
+    if (lastExit === null || lastExit.planned) return;
+    logger.warn(
+      "desktop.shell_lease.unplanned_exit",
+      "The last shell on this pair went without saying why (a crash, a Force Quit or a signal)",
+      { attached: userId === attached.userId, sessions: lastExit.sessions, at: lastExit.at },
+    );
+    if (userId === attached.userId) await showUnplannedExitNotice(lastExit);
+  };
   const pairBundles = new Map<string, PairBundle>();
   let windowRendererBoundary: ReturnType<typeof registerWindowBootstrap> | null = null;
   const ensurePairBundle = (
@@ -872,6 +939,7 @@ async function main(
         );
       },
     );
+    handles.onHandle((handle) => void claimLease(userId, handle));
     const bundle = { supervisor: sup, handles };
     pairBundles.set(userId, bundle);
     return bundle;
@@ -1081,7 +1149,10 @@ async function main(
     for (const bundle of pairBundles.values()) {
       if (bundle.handles === fielddHandles) continue;
       bundle.handles.dispose();
-      void bundle.supervisor.dispose().catch(() => undefined);
+      const leave = lifecycleFlow?.leaveReason;
+      void bundle.supervisor
+        .dispose(leave === undefined ? undefined : { leave })
+        .catch(() => undefined);
     }
     pairBundles.clear();
   });
@@ -1209,8 +1280,9 @@ async function main(
         if (previous !== undefined) {
           previous.handles.dispose();
           // dispose stops OWNED children under a stop-owned policy; an
-          // adopted external pair is not ours to kill — it stays, honestly
-          void previous.supervisor.dispose().catch(() => undefined);
+          // adopted external pair is not ours to kill — it stays, honestly,
+          // and (AL-7) is told this shell left it on purpose
+          void previous.supervisor.dispose({ leave: "user-switch" }).catch(() => undefined);
         }
       }
       void setLastAttached(attached.rootReal, target.userId, {}, (error) => {
@@ -2433,6 +2505,10 @@ if (!hasInstanceLock) {
   });
 }
 
+/** AL-7 — how long a pair has to answer the lease claim before this shell logs it and goes on. */
+const LEASE_ATTACH_MS = 2_000;
+/** AL-7 — a crash report written this long before the exit's record still belongs to that exit. */
+const CRASH_REPORT_WINDOW_MS = 60_000;
 /** AL-3 — a quit's consented stop: fieldd answers once the floor has stopped (its own bound covers the drain), so this
  * is the update's bound. */
 const QUIT_STOP_BOUND_MS = 20_000;

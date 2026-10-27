@@ -36,6 +36,7 @@ export * from "./remote-endpoints";
 export * from "./rows";
 export * from "./screenshot";
 export * from "./shell";
+export * from "./shell-lease";
 export * from "./terminal";
 export * from "./terminal-pipeline";
 export * from "./terminal-pipeline-machines";

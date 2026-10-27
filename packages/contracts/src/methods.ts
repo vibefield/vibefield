@@ -300,6 +300,24 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "local",
   }),
+  // AL-7 (`thinking-app-lifecycle.md` §8.1) — the shell lease's two verbs, the stop verb's posture: native.admin,
+  // local only, and fieldd answers them for a `shell-main` principal alone (the shell token). `attach` claims the
+  // lease (a probe's hello never does) and hands over the record of how the last holder left, once; `leave` states
+  // why a holder disconnects on purpose while the pair keeps running.
+  defineMethod({
+    surface: "product",
+    method: "system.shell.leave",
+    scope: "native.admin",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "system.shell.attach",
+    scope: "native.admin",
+    idempotent: false,
+    locality: "local",
+  }),
   // TC-D1 (terminal-custody TC-S1) — the escalation affordance: after the
   // floor's respawn intensity trips to the permanent honest "gone" state, a
   // human overrides ON PURPOSE. Resets the intensity window and runs one

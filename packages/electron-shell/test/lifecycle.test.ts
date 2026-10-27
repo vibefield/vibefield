@@ -316,6 +316,30 @@ describe("the quit gate in the lifecycle (AL-3)", () => {
     expect(rig.gate.stop).not.toHaveBeenCalled();
   });
 
+  // AL-7 — why the shell leaves the pairs it holds running, said by each supervisor's dispose
+  it("the leave reason: a signal's quit is a restart, a decided gate a quit, an armed update an update, else nothing", async () => {
+    const idle = gateRig({});
+    expect(idle.flow.leaveReason).toBeUndefined();
+    idle.flow.leavePairsOnQuit("signal");
+    expect(idle.flow.leaveReason).toBe("restart");
+
+    electron.reset();
+    const quitting = gateRig({});
+    electron.emit("before-quit", { preventDefault: vi.fn() });
+    await vi.waitFor(() => expect(quitting.close).toHaveBeenCalledTimes(1));
+    expect(quitting.flow.leaveReason).toBe("quit");
+
+    electron.reset();
+    const updating = gateRig({});
+    updating.flow.armUpdate({
+      prepare: async () => ({ kind: "install" }),
+      install: vi.fn(),
+      aborted: vi.fn(),
+      installStalled: vi.fn(async () => {}),
+    });
+    expect(updating.flow.leaveReason).toBe("update");
+  });
+
   it("an update's quit skips the gate: its own consent already ran", () => {
     const rig = gateRig({});
     const plan: UpdateQuitPlan = {

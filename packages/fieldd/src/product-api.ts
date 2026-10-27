@@ -125,6 +125,8 @@ export interface ProductApiOptions {
   /** SP-1 — the keepalive's interval (`system.tick`); tests shorten it. The
    * registry's `PRODUCT_API_LIMITS.TICK_INTERVAL_MS` by default. */
   tickIntervalMs?: number;
+  /** AL-7 — a connection closed: the shell lease reads its holders' closes (`shell-lease.ts`) */
+  onConnectionClosed?: (connectionId: string) => void;
 }
 
 /** DS-L7/DS-D15 — `envelope` is what the forwarding hop adds beside the
@@ -598,6 +600,7 @@ export class ProductApi extends EventEmitter {
       this.shellProvider.withdraw(state.shellTransport);
       for (const dispose of state.subs.values()) dispose();
       state.subs.clear();
+      this.opts.onConnectionClosed?.(state.connectionId);
     });
   }
 

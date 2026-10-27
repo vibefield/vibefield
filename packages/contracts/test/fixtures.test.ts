@@ -211,6 +211,11 @@ import {
   ScreenshotHelperCommand,
   ScreenshotHelperEvent,
 } from "../src/screenshot";
+import {
+  ShellExitRecord,
+  SystemShellAttachResult,
+  SystemShellLeaveParams,
+} from "../src/shell-lease";
 import { TerminalBindingsFile, TerminalCreateParams, TerminalListResult } from "../src/terminal";
 import {
   AttachControlLeg,
@@ -295,6 +300,10 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "native-shutdown-params": NativeShutdownParams,
   "native-shutdown-result": NativeShutdownResult,
   "system-shutdown-params": SystemShutdownParams,
+  // AL-7 — the shell lease (TS-only: fieldd and the shell)
+  "system-shell-leave-params": SystemShellLeaveParams,
+  "shell-exit-record": ShellExitRecord,
+  "system-shell-attach-result": SystemShellAttachResult,
   "system-shutdown-result": SystemShutdownResult,
   "restart-scheduled": RestartScheduled,
   // WG-D1…D6 (draft/thinking-floor-wedge.md §7) — the wedge ladder. The floor's half is

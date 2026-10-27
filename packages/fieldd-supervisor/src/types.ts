@@ -1,4 +1,4 @@
-import type { ProductInfo } from "@vibefield/contracts";
+import type { ProductInfo, ShellLeaveReason } from "@vibefield/contracts";
 import type { FielddClient } from "@vibefield/fieldd-client";
 
 // @vibefield/fieldd-supervisor (ESR spec §5.3): Node-only fieldd discovery,
@@ -167,5 +167,9 @@ export interface FielddSupervisor {
   /** Idempotent: cancels outstanding probes, closes the client, and applies
    * the shutdown policy (stop-owned stops only a SPAWNED fieldd, and the floor
    * its record names). */
-  dispose(): Promise<void>;
+  dispose(options?: {
+    /** AL-7 — the shell leaves the pair running ON PURPOSE (`system.shell.leave`, said on the client before it closes,
+     * bounded): the pair records a planned exit. Absent = say nothing; under `stop-owned` the pair is stopped anyway. */
+    readonly leave?: ShellLeaveReason;
+  }): Promise<void>;
 }

@@ -139,6 +139,9 @@ import {
   STORES,
   SystemNativeRestartParams,
   type SystemNativeRestartResult,
+  type SystemShellAttachResult,
+  SystemShellLeaveParams,
+  type SystemShellLeaveResult,
   SystemShutdownParams,
   TERMINAL_INVENTORY_REFUSALS,
   type TerminalConfigDocument,
@@ -293,6 +296,7 @@ import {
 } from "./service-host";
 import { ServiceRegistry } from "./service-registry";
 import { SettingsDocService } from "./settings-doc";
+import { ShellLease } from "./shell-lease";
 import { createSurfaceService } from "./surface-service";
 import { peerAnswerBytes, tailnetRowLimit } from "./tailnet-rows";
 import { runtimeProfileBinding, TerminalBindingStore } from "./terminal-bindings";
@@ -1878,6 +1882,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // (bin.ts: graceful stop then exit); late-bound because stop() closes over
     // resources constructed after the api below.
     let shutdownRequested: (() => void) | null = null;
+    // AL-7 — the shell lease reads its holders' closes; late-bound because it counts the floor's sessions, and the
+    // terminal service is constructed after the api.
+    let shellLeaseRef: ShellLease | null = null;
     const api = new ProductApi({
       // UA-D12 — ephemeral default; the fixed registry number is legacy
       // documentation, and product.json is the only discovery
@@ -1894,6 +1901,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       // UA-4 — the door's comparison value (UA-D13): read fresh per hello, so
       // a capture landing mid-uptime activates the law without a restart
       getLinkedLogin: () => links.status().link?.login ?? null,
+      onConnectionClosed: (connectionId) => shellLeaseRef?.closed(connectionId),
     });
     diagnosticsService.register(api);
     shellApi = api;
@@ -2064,6 +2072,51 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         ...(asked.toVersion !== undefined ? { toVersion: asked.toVersion } : {}),
       });
     };
+    // AL-7 (`thinking-app-lifecycle.md` §8.1) — the shell lease. Only the local shell (`shell-main`, the shell token)
+    // claims it or leaves it; a probe's hello never claims it, so a probe's close is no shell leaving.
+    const shellLease = new ShellLease({
+      dataDir: config.dataDir,
+      liveSessions: () => terminals.liveCount(),
+      logger: logger.child({ component: "shell.lease" }),
+    });
+    shellLeaseRef = shellLease;
+    const leaseConnection = (ctx: {
+      transport: string;
+      principal: { kind: string };
+      connection?: { id: string };
+    }): string => {
+      if (ctx.transport !== "ws-loopback" || ctx.principal.kind !== "shell-main") {
+        throw new RpcCallError(
+          "FORBIDDEN_SCOPE",
+          "the shell lease is the local shell's alone",
+          false,
+        );
+      }
+      if (ctx.connection === undefined) {
+        throw new RpcCallError("PRECONDITION_FAILED", "no connection to hold the lease", false);
+      }
+      return ctx.connection.id;
+    };
+    api.register("system.shell.attach", async (ctx) => {
+      const lastExit = await shellLease.attach(leaseConnection(ctx));
+      const result: SystemShellAttachResult = { lastExit };
+      return result;
+    });
+    api.register("system.shell.leave", (ctx, params) => {
+      const connectionId = leaseConnection(ctx);
+      const parsed = SystemShellLeaveParams.safeParse(params ?? {});
+      if (!parsed.success) {
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { why: quit|restart|user-switch|update }",
+          false,
+        );
+      }
+      const result: SystemShellLeaveResult = {
+        noted: shellLease.leave(connectionId, parsed.data.why),
+      };
+      return result;
+    });
     api.register("system.shutdown", async (_ctx, params) => {
       if (!shutdownRequested) return { stopping: false, detail: "no shutdown owner registered" };
       const parsed = SystemShutdownParams.safeParse(params ?? {});
@@ -2082,6 +2135,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         reason,
         native: nativeStop ?? null,
       });
+      shellLease.seal(); // AL-7 — a shell that drops from here on is fieldd stopping, not a shell leaving
       const callback = shutdownRequested;
       setImmediate(() => callback());
       return { stopping: true, ...(nativeStop === undefined ? {} : { native: nativeStop }) };
@@ -6613,6 +6667,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       stopPromise ??= (async () => {
         logger.info("fieldd.lifecycle.stopping", "fieldd is stopping");
         try {
+          // AL-7 — the sockets this stop closes are no shell leaving, and a record already owed is on disk first
+          shellLeaseRef?.seal();
+          await shellLeaseRef?.flush();
           // the record is this stop's to remove below, never to rewrite again
           productClosed = true;
           supervisor.off("floor-of-record", onFloorOfRecord);
