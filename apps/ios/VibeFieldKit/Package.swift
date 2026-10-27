@@ -12,7 +12,8 @@ import PackageDescription
 // once a ghosttea Swift release pins the same truffle (G28) the lock records the version, `render --prod` writes it
 // here and the committed shape is that exact version (recorded 2026-10-23 at ghosttea 0.13.1: "0.7.19"; 2026-10-25,
 // the EL8 to ghosttea 0.13.4: "0.7.22", which ghosttea #85 declares too; 2026-10-27, the EL8 to ghosttea 0.13.7: "0.7.23",
-// which 0.13.7 declares too). The dev overlay (`pnpm siblings use truffle`) renders this line
+// which 0.13.7 declares too; it STAYS "0.7.23" at the truffle 0.7.24 split of 2026-10-27, James's ruling a: ghosttea 0.13.7
+// declares it exact, 0.7.24 changes no Swift, and the cargo plane and the npm sidecars moved alone). The dev overlay (`pnpm siblings use truffle`) renders this line
 // nil again — the file then shows modified, the one-line diff being the overlay's own evidence — and `use --none`
 // renders the lock's value back. The line itself, not a file this manifest reads and not the environment: SwiftPM
 // caches a manifest's evaluation keyed on its contents plus its environment, never a file it reads, so a file flips

@@ -455,8 +455,12 @@ minimumReleaseAgeExclude:
   # inside the release-age window on the day the pin moves. One truffle-core fix (#229: the
   # sidecar's stderr forwarder keeps a dying sidecar's last words); the sidecars' Go source is
   # unchanged, no protocol moves (10 stands). The 0.7.22 rows went after the one install.
-  - '@vibecook/truffle-sidecar-darwin-arm64@0.7.23'
-  - '@vibecook/truffle-sidecar-darwin-x64@0.7.23'
-  - '@vibecook/truffle-sidecar-linux-arm64@0.7.23'
-  - '@vibecook/truffle-sidecar-linux-x64@0.7.23'
-  - '@vibecook/truffle-sidecar-win32-x64@0.7.23'
+  # 0.7.23 → 0.7.24 (2026-10-27, THE SPLIT, James's ruling a): published 2026-10-27 16:21–16:25Z, inside the
+  # release-age window on the day the pin moves. Sidecar protocol 11 (#233: sign-out, the Tailscale version, Tailnet Lock
+  # state, logging-required and the client-log opt-out). The cargo plane moves with it; the kit's Swift plane
+  # stays 0.7.23 (ghosttea 0.13.7 declares it exact). The 0.7.23 rows go after the one install.
+  - '@vibecook/truffle-sidecar-darwin-arm64@0.7.24'
+  - '@vibecook/truffle-sidecar-darwin-x64@0.7.24'
+  - '@vibecook/truffle-sidecar-linux-arm64@0.7.24'
+  - '@vibecook/truffle-sidecar-linux-x64@0.7.24'
+  - '@vibecook/truffle-sidecar-win32-x64@0.7.24'

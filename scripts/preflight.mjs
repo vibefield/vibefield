@@ -156,8 +156,24 @@ const PIN_EXPECTATIONS = [
   // truffle-core =0.7.19): sidecar protocols 9 and 10, the crate and the five npm sidecars together again.
   // 0.7.22 → 0.7.23 on 2026-10-27, in ONE EL8 event with ghosttea 0.13.7 (the first ghosttea that declares it):
   // truffle-core #229 (the sidecar's stderr forwarder), the crate and the five npm sidecars together again.
+  // 0.7.23 → 0.7.24 on 2026-10-27, THE SPLIT (James's ruling a): the crate and the five npm sidecars (protocol 11)
+  // move, the kit's Swift plane stays 0.7.23 because ghosttea 0.13.7 declares it exact (0.7.24 changes no Swift).
+  // So the table holds BOTH, each anchored to the line's end so a prerelease never passes: the cargo row at 0.7.24
+  // and the Swift row at 0.7.23, until the first ghosttea that declares 0.7.24 rejoins them (DECISIONS TB). The
+  // Swift row stands aside while the dev overlay links truffle, which renders that line nil on purpose (RD-3).
   // Cargo.toml's closure note carries every event and every place they touched.
-  { file: "Cargo.toml", re: /^truffle-core\s*=\s*"=0\.7\.23"/m, label: 'truffle-core = "=0.7.23"' },
+  {
+    file: "Cargo.toml",
+    re: /^truffle-core\s*=\s*"=0\.7\.24"$/m,
+    label: 'truffle-core = "=0.7.24"',
+  },
+  {
+    file: "apps/ios/VibeFieldKit/Package.swift",
+    re: /^let truffleRelease: Version\? = "0\.7\.23"$/m,
+    label:
+      'let truffleRelease: Version? = "0.7.23" (the split: the Swift plane stays until a ghosttea declares 0.7.24)',
+    overlay: "truffle",
+  },
   // The FINAL 0.16.0 on `latest` since PORTALS PT-6b (M24 LT1–LT5; LT5 — I52 — the reference
   // kinds' drivers idle unless their own object is in hand). Before it, prereleases on `next`
   // from PT-2 (0.16.0-portals.2 — LT1 + LT2, the live face and the hand's input; PT-3:
@@ -285,7 +301,10 @@ const PIN_EXPECTATIONS = [
 // drift apart. Its registry-mode branch carries the same rule for the one case
 // this table could not see anyway: a patch row still standing after the LAST
 // lock entry goes (W-D8), when there is no lock left to derive anything from.
-for (const { file, re, label, package: packageName } of PIN_EXPECTATIONS) {
+for (const { file, re, label, package: packageName, overlay } of PIN_EXPECTATIONS) {
+  // A row on a line the dev overlay rewrites (RD-3: `use truffle` renders the kit's `truffleRelease` nil) stands
+  // aside while that sibling is linked; the overlay's own checks below hold the linked shape.
+  if (overlay && readOverlay(root).includes(overlay)) continue;
   // A co-development window replaces this registry pin with a revision-backed
   // link. The sibling checks below verify the exact path and checkout revision.
   // Since RD-1 a lock entry also names a RELEASED sibling's packages (the overlay's link targets), so the window is

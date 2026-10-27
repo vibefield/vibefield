@@ -68,10 +68,10 @@
     "postject": "^1.0.0-alpha.6"
   },
   "optionalDependencies": {
-    "@vibecook/truffle-sidecar-darwin-arm64": "0.7.23",
-    "@vibecook/truffle-sidecar-darwin-x64": "0.7.23",
-    "@vibecook/truffle-sidecar-linux-arm64": "0.7.23",
-    "@vibecook/truffle-sidecar-linux-x64": "0.7.23",
-    "@vibecook/truffle-sidecar-win32-x64": "0.7.23"
+    "@vibecook/truffle-sidecar-darwin-arm64": "0.7.24",
+    "@vibecook/truffle-sidecar-darwin-x64": "0.7.24",
+    "@vibecook/truffle-sidecar-linux-arm64": "0.7.24",
+    "@vibecook/truffle-sidecar-linux-x64": "0.7.24",
+    "@vibecook/truffle-sidecar-win32-x64": "0.7.24"
   }
 }

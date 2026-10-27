@@ -192,7 +192,20 @@ opt-level = 3
 # lines, which it used to drop at shutdown (item 69's measured cause: 9 of 200 lost at load on
 # one tokio worker). The sidecars' Go source is unchanged, Swift changed only a README, and no
 # sidecar protocol moves (10 stands). No field-native source change: the build is the check.
-truffle-core = "=0.7.23"
+#
+# THE SPLIT AT 0.7.24 (2026-10-27; James's ruling a, board rule-el8-truffle-0724-split, 16:08:43Z): the
+# cargo plane and the five npm sidecars move to 0.7.24 WITHOUT the Swift plane. ghosttea 0.13.7 declares
+# truffle exact 0.7.23 in its Package.swift, so the kit's exact 0.7.24 beside it would be the SwiftPM
+# refusal the 10-24 EL8 closed; here only field-native depends on truffle-core, so this plane can move
+# alone. 0.7.24 changes no Swift (`git diff --stat truffle-v0.7.23 truffle-v0.7.24 -- apple` is empty),
+# so the kit's `truffleRelease` stays "0.7.23" and loses nothing. It REJOINS at the first ghosttea that
+# declares 0.7.24 (DECISIONS TB). `truffle-v0.7.24` = aa6019c (#234). What it carries (#233): sidecar
+# protocol 11, the local truffle-core <-> sidecar commands `tsnet:logout`, `tsnet:version`,
+# `tsnet:lockStatus`, `tsnet:loggingRequired` and the client-log opt-out (`client_log_upload`). The
+# node-to-node wire reads unchanged (transport/quic.rs gains only that config field), and truffle-core's own
+# dependencies did not move (its Cargo.toml changed only its version). Pins only: VibeField's use of the new
+# commands is TS's code (d0's TS-2/TS-3); the build is the check.
+truffle-core = "=0.7.24"
 # NF-0 (native-floor spec NF-D1): ghosttea graduated to crates.io the same way,
 # 2026-07-29 — exact pin, upgrades are deliberate events. NF-7 (2026-08-01) bumped
 # 0.6.0 → 0.7.0 for the G7/G8/G9 petition landings (shutdown drain, silent serve,
