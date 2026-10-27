@@ -17413,3 +17413,55 @@ cost.
 - Records: `/Volumes/SamsungRed/lanes/records/item81/` (the lane's logs and records, kept there before it retired).
 - Errata in this commit: item 78's entry said its stray `target/` was moved aside for the delete list; it was deleted
   with the lane, and its records live under `lanes/records/item78/` (a dated correction at its source).
+
+## AO-6b2 — the limit moment: a plan at 90% or more of one of its windows, while This Mac is the only profile, offers a profile once on Godview's claims strip; Add a profile… opens Agent Profiles' New profile…, and either act retires it (2026-10-27; `e709085ed`, lane `ao/6b2`; AO-D11, AO-D15)
+
+**What.** The sixth slice of track AO's ladder (`draft/thinking-agent-onboarding.md` §8), its second moments half,
+on James's AO-D11 = A (07:54–07:59Z) and AO-D15 = (a) (15:27:13Z). One commit, in field-app and DESIGN.md:
+- **The rule** (`setup/limit-moment.ts`, pure): it speaks only once the ledger, the profiles and the usage have
+  each answered, never once `limit` is retired, only while This Mac is the only profile, and only for a plan's own
+  windows (never a budget, never a standby allowance). The fullest window at 90% or more speaks, the plan named as
+  This Mac's page names it (`planTitle`) and its usage joined as that page joins it (`usageOf`, now exported).
+- **The card** on VibeField's claims strip, under the counts, in Godview's instrument skin: the plan's badge,
+  "92% · 7 days" over a thin bar in the attention ink, "Another subscription?", "Add it as a profile and keep working.
+  Each profile keeps its own sign-ins.", **Add a profile…** · **Not now**; corners 10, the profile notice's 300ms
+  entry (a transition, never a keyframe). Its controller reads this window's own fieldd, held only while the stage is.
+- **GodviewMonitor's `moment` slot**, in a boundary of its own; the strip wraps, so it measures the card and the swarm
+  steers around it. The overlay passes the controller; the catalog has no fieldd, so it passes the shipping card.
+- **Settings from inside the cover**: `frame/settings-door.ts`, the door the frame lends; `settingsOpening` says
+  where each target opens ("new-profile" is Agent Profiles on its New profile… form); SettingsPanel takes
+  `initialProfiles`. `settingsOpening` is TS-5's and AO-6b2's shared seam: restacked past TS-5 (`d42797be4`), it
+  opens TS-5's `devices` (a link notice's click) on its own page, as TS-5's ChromeLayer did inline.
+- The catalog's Godview gains the limit plate (the shipping rule over the profiles' fixtures, no agent named);
+  DESIGN.md §8 "The moments" records the limit moment as built.
+
+**Validation** (lane ao1, nice 19, the guard and no other run before every step):
+- Restacked twice, git only, each rehearsed with `git merge-tree` first:
+  - onto TS-5's records tip `8f9b45fa2` (20:36Z): two conflicts, both TS-5's `devices` target on the lines
+    `new-profile` took in shell-presentation.ts and ChromeLayer.tsx. Resolved as above, with a test row and a probe.
+  - onto item 81's ROADMAP tip `1341c06b7` (21:03Z): clean, the tree `f3466f063` as rehearsed.
+  The lane's setup then took the EL8's lock (the sidecars at 0.7.24; preflight with no WARN or FAIL line).
+- the light pass at `c21b44cf7` (21:05:41–21:07:43Z) EXIT 0: the three typechecks, biome on the slice's 18 files,
+  gen:check, contracts `1195 passed`, fieldd's ledger files `8 passed`, field-app's thirteen files `268 passed`
+  (TS-5's shell-presentation.test among them), preflight, walls, the words check.
+- red-first by mutation at `c21b44cf7` (21:07:58–21:08:44Z): 11 of 11 red on exactly their claiming rows, the tree
+  restored. `e709085ed` is `c21b44cf7` with its message amended to say so; the tree is the same.
+- the gate at `e709085ed` (21:09:15–21:12:22Z): the three typechecks EXIT 0; contracts `1195 passed`; fieldd's ledger
+  files `8 passed`; field-app's whole suite `2737 passed | 3 skipped`; the words check exit 0; Godview's limit plate
+  photographed in both themes, no console errors (`lanes/ao1/logs/gate-e709085ed…/shots/`); the tree clean after.
+  - Read by eye: the card under the counts, with the plan's badge, "92% · 7 days" over the bar in the attention ink,
+    the title, the voice and both acts legible in both themes; dark inverts the primary act.
+  - The list's toolbar ("6 SESSIONS · + TERMINAL") shows under the card in two of six photographs (the gate's pair
+    and two re-shoots of both themes). A DOM probe in both themes, five reads each, found it at 235 px, opaque and on
+    top at every read, with the deck's sheet at 262. So the four without it are the photographer's capture beyond the
+    viewport, not the page. The dark toolbar's faintness is `--text-faint`'s on every Godview plate, the profile
+    filter's too.
+- `pnpm verify` at `e709085ed` (21:12:23–21:20:12Z) EXIT 0, with nothing else armed and a load of 62 at its start:
+  every stage; the TypeScript tests of 27 projects, none red (field-app `2740 passed`, fieldd `2567 passed | 11
+  skipped`, electron-shell `1963 passed | 3 skipped`, contracts `1195 passed`); cargo ok 31, FAILED 0; gen freshness;
+  the tree clean after and no stub left (`lanes/ao1/logs/verify/verify.log`). fieldd's agent-session file, whose
+  waits AO-6b1's verify lost at load 290, passed (`50 tests | 2 skipped`) with item 81's fix (`2b8a15c8b`) in the base.
+
+**Not here.** The desk rows (`pnpm smoke`, `pnpm smoke:studio`) on a display, owed with AO-1…6b1's. AO-7 (Get) waits
+on James's puppeteer release; AO-8's petitions are filed (RO-24…RO-28 as vibefield/rosetta#23…#27, PU-19 as
+vibefield/puppeteer#47), each an EL8 event when released.
