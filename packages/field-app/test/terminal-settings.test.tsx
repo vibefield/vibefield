@@ -402,7 +402,10 @@ describe("Settings → Terminal against fieldd (GT-7)", () => {
     act(() => opened?.onBack());
     expect(subpages.at(-1)).toBeNull();
     expect(button("Match a theme…")).toBeDefined();
-  });
+    // 30s: "Match a theme…" renders ThemeBrowser in one act(), all 602 of Ghostty's themes as
+    // chips of six inline-styled swatches: 222–254 ms alone (the browser 148–226 ms, 2026-10-27),
+    // 984 ms and 6952 ms under CI's full suite (verify 40530144594) — the 5s default flakes.
+  }, 30_000);
 });
 
 /** The Behavior tab's Links section, and its switch when there is one. */
