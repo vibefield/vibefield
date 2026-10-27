@@ -17610,3 +17610,104 @@ beside it.
     (21:59:10–22:00:37Z);
   - `pnpm gen:check` EXIT 0 (22:00:37–22:00:42Z), tree clean.
 - Records: `/Volumes/SamsungRed/lanes/records/item82/`.
+
+## TS-8a — the floor's facts on truffle 0.7.24 (TS-D14, D15, D16 A; T9–T11): no client logs unless the link asks, a tailnet that requires them is `logs_required`, Disconnect signs out first, and Tailnet Lock and the embedded client reach the status (2026-10-27; `d48e131fc`, lane `ts/8-p1`)
+
+**What.** TS-8 is the ladder's upstream rung (thinking doc §10): T9, T10 and T11 shipped together as truffle 0.7.24
+(sidecar protocol 11, the lead's EL8 `af3f3078f`). The EL8 moved only the pins, so VibeField's use of them is this
+slice, in two packets (VF-PM named them at 22:08Z): TS-8a the floor's facts, here, and TS-8b the faces and their words.
+- **contracts:**
+  - the floor's seam: `MeshStartParams.clientLogUpload`; `MeshSelfIdentity`'s `tailscaleVersion`, `needsSignature`
+    and `clientLogUpload`; `MeshFailure` "logging_required"; `MeshRetireResult.signedOut`;
+  - the link: `UserLinkState` "logs_required", a state rather than a reason (the tolerant-reader law);
+    `UserLinkStatus`'s `tailscaleVersion`, `needsSignature` and `sendLogs`; `TailscaleLink.sendLogs`, kept in
+    link.json and never in an env var; `UserLinkBeginParams.sendLogs`;
+  - a door, `user.link.logs {send}` (settings.manage, local);
+  - two fixtures parsed on both sides, `mesh-self-identity.locked` and `mesh-not-up-details.logs-required`.
+- **field-native:**
+  - The builder's `client_log_upload` is false unless asked (D15). It is the BUILT value beside the gate, so a changed
+    opt-in builds the node again.
+  - The status hook hears truffle's new events:
+    - `LoggingRequired` names `logging_required`, and takes a running node down as `SidecarExited` does;
+    - `NeedsSignature` and `Signed` set Tailnet Lock's hold, and the unit's words say it;
+    - `BackendStateChanged` with NeedsLogin reads as signed out, and Running as up again.
+  - At the install, the version and the hold are read from the node.
+  - TS-1's 15 s tick is RETIRED: the pin is exact 0.7.24, so no older sidecar is in the build, and truffle delivers
+    the backend event for every sidecar.
+  - `retire()` calls `Node::logout()` first. truffle bounds it at 12 s (LOGOUT_TIMEOUT) and stops the node either way,
+    and `native.mesh.retire` answers `signedOut`.
+- **fieldd (the link service):**
+  - The floor is asked with link.json's `sendLogs`, or the capture's.
+  - `logging_required` → `logs_required`, live and after a floor restart. `begin({sendLogs})` begins a refused
+    capture again, and refuses a standing link, naming its act. `cancel()` ends a refused capture.
+  - `logs(send)` keeps the opt-in in link.json and builds the node again. Its door is audited.
+  - `unlink()` gives the retire 20 s: the mgmt default (10 s) would give up before truffle's 12 s bound, which
+    contains the sidecar's own 10 s. Its audit records `signedOut`.
+- **field-app:** the tolerant reader knows `logs_required`, and draws the offline face ("This Mac only", §11's menu
+  word) until TS-8b gives it its own.
+- **Not in it:** the faces and their words (TS-8b: DESIGN.md §8/§9 are drafted on `ts/8-surface`, and "Connected,
+  not yet trusted" goes to James with its photograph), and T8's hostname prefix (TS-8c, after its probe).
+
+**Found:**
+- **D15's default reaches every stub sidecar.** truffle probes an opted-out node's sidecar protocol first, and refuses
+  one below 11. The stand-ins for "a sidecar" answer `tsnet:version` at protocol 11: mesh_unit's two, and
+  mgmt_server's TS-1 wire stand-in, which the light pass did not run and the first verify's alone `test:rust` caught.
+  The UA-P-4 rows, whose old protocol is their point, ask for uploads, so the login gate is still what refuses them.
+- **truffle can drop a `LoggingRequired` at a start.** It aborts the status forwarder with a failed build, so the
+  failure branch also reads the refusal from truffle's start error. A typed refusal is a candidate petition, in
+  focus-session's queue after T8.
+- **field-app keeps its own list of the link's words**, so a contract word it does not list is derived from the facts.
+  Without `logs_required` in it, a standing record kept down for its logs would have read as linked. The light pass's
+  field-app typecheck caught it.
+- **A node that starts unsigned hears Tailnet Lock's hold before its install**, so the install's words said plain Up.
+  The install now chooses its words from the hold (`up_words`).
+
+**Validation.**
+- **The lane:** `/Volumes/SamsungRed/lanes/ts3`, its own target, at nice 19 under the guard. It was written by editing
+  only while other slots ran (WIP `7f3fe0b37` on TS-5's records `8f9b45fa2`), then built in VF-PM's grant (22:02Z):
+  - `pnpm gen` (22:04Z, exit 0): the mesh types live in BASE_SHARED, so their new fields reach every per-entry schema and
+    the bundle (47 files, +784/−47); contracts.rs +126/−1 (typify's new variant, five fields and their builders).
+  - Restacked once, onto item 82's records `a79da53a1`: merge-tree clean with no file shared with the onto-range, and
+    the restacked tree equals its rehearsal's (`48e3e0add`); the fix below was amended onto it. The onto-range
+    touches nothing under contracts, so gen stays fresh.
+- **The light pass** (VF-PM's rules) was green at its third run, on `0c318f879` before the restack (22:15–22:18Z):
+  - the lane's setup, preflight 0 WARN/FAIL; check:walls clean; biome at the error level on the 11 touched files, and
+    `cargo fmt --check`, clean;
+  - the contracts, fieldd, field-app and electron-shell typechecks; `pnpm lint:rust` clean;
+  - vitest: contracts 528/528 (fixtures with the 2 new, users, registry); fieldd 52/52 (link-service's 8 new rows,
+    the offline Disconnect's 12 s on fake timers among them, link-posture-daemon, freeway-daemon); field-app 62/62
+    (account-link +1, link-door, me-menu);
+  - cargo test: field-native's lib mesh rows 46/46; mesh_unit 24 passed + 1 ignored (the live probe), the 6 new rows
+    among them; fixture_parity 17/17.
+  - Its first two runs were red, and each red is fixed in the packet: field-app's typecheck (the word missing from its
+    list, 22:07Z), then the refusal-while-running row reading the unit's words before they moved (22:09Z). That row's
+    read also found the unsigned start's words (Found, above).
+- **The first verify**, at `55ad82f9e`, before mgmt_server's stand-in was fixed (logs/window8a, logs/verify8a):
+  - check:deps: EXIT 0 (22:20:12Z).
+  - verify: EXIT 1 (22:20:13–22:25:48Z), red at load 442 on godview-monitor's GV-D1 row (the lottery list), a 5 s
+    timeout in a file TS-8a does not touch: "the monitor stage › keeps the swarm's bodies below the head's reserve…".
+    field-app's vitest spent 446 s in setup and 385 s collecting. The load was not a lane's (VF-PM 22:27Z: fseventsd,
+    Ghostty, WindowServer and Chrome). Every stage before the tests passed. `@vibefield/field-app:test` was the only
+    failed task (1 failed | 2746 passed), and the other 26 projects' tests passed (fieldd 2575 | 11 skipped).
+  - Alone, the precedent (logs/alone8a/, each step gated on a 1-min load under 25): godview-monitor.test.tsx 85/85,
+    EXIT 0 (22:29:25–38Z). Then `pnpm test:rust`, which verify never reached, was EXIT 101 (22:29:38–22:31:05Z) on two
+    of TS-1's wire rows in mgmt_server, both "bring_up_failed": TS-8a's own (Found, above).
+- **The fix** was amended in and checked on `f31121757` (logs/fix8a, 22:33Z): `cargo fmt --check` and `pnpm lint:rust`
+  clean, mgmt_server 31/31, mesh_unit 24 passed + 1 ignored.
+- **`pnpm check:deps` + `pnpm verify`** at `d48e131fc` (logs/window8b, logs/verify8b):
+  - check:deps: EXIT 0 (22:34:15Z).
+  - verify: EXIT 1 (22:34:16–22:40:38Z), red at load 534 on two rows of the lottery list, each a 5 s timeout in a
+    file TS-8a does not touch: agent-session's MF-1f/g row ("the pane stays and the row with it — exited, hosted,
+    resumable — until the pane is closed"; fieldd 1 failed | 2574 passed | 11 skipped) and godview-monitor's GV-D1 row
+    again (field-app 1 failed | 2746 passed; its vitest spent 519 s in setup). Every stage before the tests passed,
+    and the other 25 projects' tests passed. No build ran beside it. The load came from two agent swarms on the Mac
+    (26 claude processes, with fseventsd and mds_stores over 24 fresh worktrees) and James's own apps (VF-PM 22:42Z).
+- **Alone**, the precedent (logs/alone8b/, each step gated on a 1-min load under 25), on `d48e131fc`:
+  - agent-session.test.ts 48 passed | 2 skipped (50), EXIT 0 (22:45:23–22:46:29Z);
+  - godview-monitor.test.tsx 85/85, EXIT 0 (22:46:30–22:46:42Z);
+  - `pnpm test:rust`, which verify never reached: 31 suites, 492 passed, 0 failed, EXIT 0 (22:46:42–22:48:12Z);
+  - `pnpm gen:check` EXIT 0 (22:48:12–22:48:16Z), tree clean.
+
+**Owed.** The live witnesses, on a real tailnet and James's word: no connection to log.tailscale.com while uploads are
+off; a tailnet with flow logs (the refusal, then Send logs on this network); renew's live half, now on the event;
+Disconnect leaving the admin console; Tailnet Lock signed.
