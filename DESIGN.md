@@ -1762,8 +1762,14 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   login in the card. The profile is made as its login starts (the login writes into its folder) and is
   kept once the agent says who signed in; Cancel deletes it. A login that ends before the agent says
   who leaves it unkept, saying so in the agent's name, with **Sign in again** and **Cancel**: it is never
-  deleted unasked, because the login may have worked (AO-5a, on James's AO-D14, gives the unkept
-  profile fieldd's own mark). While a login is open, Continue and Back wait and the later line reads
+  deleted unasked, because the login may have worked. *Built 2026-10-27, AO-5a (AO-D14, ruled (a)):*
+  - The profile is made as a draft that fieldd notes (`agents.profileSets.create {draft}`), and fieldd
+    keeps it at the first sign-in that says who.
+  - Cancel is `agents.profileSets.discard`, which deletes it only while it is still a draft, so a sign-in
+    that landed first wins.
+  - A draft nothing kept is deleted at fieldd's next start.
+  - Settings → New profile… makes a draft too. Its page says "kept once an agent signs in here" beside
+    its facts, and its empty state says "Add an agent and sign in: Work is kept once one does." While a login is open, Continue and Back wait and the later line reads
   "Finish or cancel the sign-in first." The glass scrolls a tall pane: while Add a profile… is open,
   This Mac folds to one line (its agents' names) so the card has the pane, and each step, the login
   above all, comes into view as it opens. The sign-in is Agent Profiles' own controller, shared. **This Mac explains itself**

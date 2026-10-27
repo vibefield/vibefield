@@ -19,6 +19,7 @@
   "PROJECT_IDENTITY_FILE": ["fieldd", "project-identity.json"],
   "SETUP_LEDGER_FILE": ["fieldd", "setup.json"],
   "DEVICE_NAME_FILE": ["fieldd", "device-name.json"],
+  "AGENT_PROFILE_DRAFTS_FILE": ["fieldd", "profile-drafts.json"],
   "TERMINAL_CONFIG_FILE": ["native", "config.ghostty"],
   "RESTART_INTENT_FILE": ["native", "restart-intent.json"],
   "MGMT_SOCKET": ["native", "run", "mgmt.sock"],

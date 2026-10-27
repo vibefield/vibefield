@@ -7,6 +7,7 @@ import {
   type AgentSignInRoute,
   type AgentsProfileSetsCreateParams,
   type AgentsProfileSetsDeleteResult,
+  type AgentsProfileSetsDiscardResult,
   type AgentsProfileSetsListResult,
   type AgentsProfileSetsRevealParams,
   type AgentsProfileSetsRevealResult,
@@ -32,6 +33,7 @@ import type { RevealPath } from "./agent-distribution";
 import type { EnrollRuntimeSpec, IndexService } from "./agent-index";
 import type { AuditMutation, AuditMutationOutcome } from "./audit-service";
 import { RpcCallError } from "./native-link";
+import type { ProfileDraftsStore } from "./profile-drafts";
 import type { RosettadSupervisor } from "./rosettad-supervisor";
 
 // AGENT PROFILES (AR-S2; AR-D23…D25) — the doors behind Settings → Agent
@@ -131,6 +133,10 @@ export interface AgentProfileServiceOptions {
   ) => Promise<T>;
   /** AR-S4d — the profile's kept servers and their values, forgotten with it */
   forgetExtensions?: (setId: string) => Promise<void>;
+  /** AO-5a (AO-D14) — the note of the profiles Add a profile… made and no
+   * sign-in has kept; absent = nothing is noted (a test or embedded daemon), and
+   * `create {draft}` makes an ordinary profile */
+  drafts?: ProfileDraftsStore;
   now: () => Date;
   logger: Logger;
 }
@@ -259,9 +265,13 @@ export class AgentProfileService {
       if (isFailure(moved)) throw failureToError(moved);
       info = moved;
     }
+    // AO-D14 — made for a sign-in about to run in its folder: kept once its
+    // first agent says who signed in, and until then a draft
+    if (params.draft === true) this.opts.drafts?.note(info.set.id);
     this.logger.info("fieldd.agents.profile_created", "Agent profile created", {
       set: info.set.id,
       default: info.isDefault,
+      ...(params.draft === true ? { draft: true } : {}),
     });
     return { set: await this.projectOne(info) };
   }
@@ -397,6 +407,86 @@ export class AgentProfileService {
       for (const id of ids) this.deleting.delete(id);
       this.deletingSets.delete(setId);
     }
+  }
+
+  // ── drafts (AO-5a; AO-D14) ──
+
+  /** Cancel for a profile Add a profile… made: deleted as `deleteSet` deletes,
+   * but only while it is still a draft. One whose first agent has said who
+   * signed in is kept and left alone, so a sign-in that landed before Cancel
+   * was read wins. */
+  async discardSet(setId: string): Promise<AgentsProfileSetsDiscardResult> {
+    await this.requireSet(setId);
+    if (this.opts.drafts?.has(setId) !== true) {
+      this.logger.info("fieldd.agents.draft_kept", "Discard left a kept profile alone", {
+        set: setId,
+      });
+      return { discarded: false, stopped: 0 };
+    }
+    const deleted = await this.deleteSet(setId);
+    this.opts.drafts?.clear(setId);
+    this.logger.info("fieldd.agents.draft_discarded", "Agent profile draft discarded", {
+      set: setId,
+      stopped: deleted.stopped,
+    });
+    return { discarded: deleted.deleted, stopped: deleted.stopped };
+  }
+
+  /** A sign-in in this persona's profile said who signed in (or, for an agent
+   * that never says who, its login ended on its own): a draft profile is kept.
+   * Returns whether a draft was kept. */
+  async keepDraftOf(profileId: string): Promise<boolean> {
+    const drafts = this.opts.drafts;
+    if (drafts === undefined) return false;
+    const setId = (await this.opts.runtime.profile(profileId))?.set;
+    // a Cancel that is already deleting it was read first: it is not kept
+    if (setId === undefined || this.deletingSets.has(setId) || !drafts.clear(setId)) return false;
+    this.logger.info("fieldd.agents.draft_kept", "Agent profile kept at its first sign-in", {
+      set: setId,
+      profileId,
+    });
+    this.publish();
+    return true;
+  }
+
+  /** Every start (AO-D14): a noted profile one of whose sign-ins has said who
+   * is kept; a gone one leaves the note; any other is deleted as a profile's
+   * delete deletes. A profile made before AO-5a was never noted, so none is
+   * ever swept. Fire and forget: a failure is logged and the note stays for the
+   * next start. */
+  async sweepDrafts(): Promise<void> {
+    const drafts = this.opts.drafts;
+    if (drafts === undefined || this.disposed) return;
+    for (const setId of drafts.list()) {
+      if (this.disposed) return;
+      try {
+        const info = (await this.opts.runtime.profileSets()).find((set) => set.set.id === setId);
+        if (info === undefined) {
+          drafts.clear(setId);
+          continue;
+        }
+        const kept =
+          info.isDefault || info.profiles.some((profile) => profile.identity?.loggedIn === true);
+        if (kept) {
+          drafts.clear(setId);
+          this.logger.info("fieldd.agents.draft_kept", "Agent profile draft kept at start", {
+            set: setId,
+          });
+          continue;
+        }
+        await this.deleteSet(setId);
+        drafts.clear(setId);
+        this.logger.info("fieldd.agents.draft_swept", "Agent profile draft deleted at start", {
+          set: setId,
+        });
+      } catch (error) {
+        this.logger.warn("fieldd.agents.draft_sweep_failed", "A profile draft was not swept", {
+          set: setId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+    this.publish();
   }
 
   /** Show in Finder: a profile's folder, or one agent's folder in it. */
@@ -541,6 +631,7 @@ export class AgentProfileService {
       };
     }
     const fresh = (await this.opts.runtime.profile(profileId)) ?? profile;
+    if (fresh.identity?.loggedIn === true) await this.keepDraftOf(profileId);
     return { persona: await this.project(fresh, ids) };
   }
 
@@ -788,6 +879,7 @@ export class AgentProfileService {
       ...(info.set.directory !== undefined ? { folder: this.tilde(info.set.directory) } : {}),
       personas,
       plans: plans?.plans ?? [],
+      ...(this.opts.drafts?.has(info.set.id) === true ? { draft: true } : {}),
     };
   }
 

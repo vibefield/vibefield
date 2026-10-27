@@ -48,5 +48,7 @@ describe("the setup ledger (AO-2)", () => {
 
   it("lives in the user's fieldd directory, beside the other files fieldd owns", () => {
     expect(LAYOUT.SETUP_LEDGER_FILE).toEqual(["fieldd", "setup.json"]);
+    // AO-5a (AO-D14) — the profiles no sign-in has kept yet, beside it
+    expect(LAYOUT.AGENT_PROFILE_DRAFTS_FILE).toEqual(["fieldd", "profile-drafts.json"]);
   });
 });

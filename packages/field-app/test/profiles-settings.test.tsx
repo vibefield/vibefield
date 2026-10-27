@@ -1239,6 +1239,19 @@ describe("a new profile", () => {
     expect(container?.querySelector(".vf-profiles-explain")).toBeNull();
   });
 
+  it("says on a draft's page that it is kept once an agent signs in (AO-D14)", async () => {
+    const f = fake(doors());
+    await mountSection(f.client, {
+      feed: feed([
+        NATIVE,
+        set({ id: "client-demo", label: "Client demo", glyph: "flask", draft: true }),
+      ]),
+      route: { kind: "profile", set: "client-demo" },
+    });
+    expect(text()).toContain("kept once an agent signs in here");
+    expect(text()).toContain("Add an agent and sign in: Client demo is kept once one does.");
+  });
+
   it("suggests a glyph from the name until one is chosen, and makes the profile", async () => {
     const f = fake(
       doors({
@@ -1264,8 +1277,9 @@ describe("a new profile", () => {
     await click(button("rocket"));
     expect(button("rocket").getAttribute("aria-checked")).toBe("true");
     await click(button("Create profile"));
+    // AO-D14 — made as a draft: kept once its first agent signs in
     expect(f.calls("agents.profileSets.create")).toEqual([
-      { label: "Client demo", glyph: "rocket" },
+      { label: "Client demo", glyph: "rocket", draft: true },
     ]);
     expect(section.onRoute).toHaveBeenCalledWith({ kind: "profile", set: "client-demo" });
   });

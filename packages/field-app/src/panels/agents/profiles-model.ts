@@ -473,6 +473,8 @@ export function profilePage(set: AgentProfileSet, context: ProfilesContext): Pro
     count === 0 ? "No agents yet" : plural(count, "agent"),
     ...(set.kind === "native" ? ["each in its own folder"] : []),
     ...(set.default ? ["default for new sessions"] : []),
+    // AO-D14 — a draft is kept once one of its agents signs in
+    ...(set.draft === true ? ["kept once an agent signs in here"] : []),
   ].join(" · ");
   return {
     set,
@@ -516,7 +518,9 @@ export function emptyProfileWords(set: AgentProfileSet): { title: string; descri
     description:
       set.kind === "native"
         ? "An agent you install appears here, in its own folder. To keep work and personal apart, make another agent profile."
-        : `Add an agent and sign in. It gets its own folder in ${set.label}; your other profiles stay as they are.`,
+        : set.draft === true
+          ? `Add an agent and sign in: ${set.label} is kept once one does. It gets its own folder in ${set.label}; your other profiles stay as they are.`
+          : `Add an agent and sign in. It gets its own folder in ${set.label}; your other profiles stay as they are.`,
   };
 }
 

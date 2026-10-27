@@ -214,6 +214,12 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
         locality: "local",
       },
       {
+        method: "agents.profileSets.discard",
+        scope: "agent.spawn",
+        idempotent: true,
+        locality: "local",
+      },
+      {
         method: "agents.profileSets.reveal",
         scope: "agent.spawn",
         idempotent: true,

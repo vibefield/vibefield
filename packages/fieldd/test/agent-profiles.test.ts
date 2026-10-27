@@ -4,7 +4,7 @@
  * read never becomes an unhandled rejection. The doors, the real runtime and
  * the real floor are agent-runtime.test.ts and agent-session.test.ts.
  */
-import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AGENT_CATALOG_READERS, AgentsProfileSetsListResult, LAYOUT } from "@vibefield/contracts";
@@ -14,6 +14,7 @@ import type { AgentRuntime, ProfileSetInfo } from "@vibefield/puppeteer-runtime"
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { IndexService } from "../src/agent-index";
 import { AgentProfileService, type PersonaSessions } from "../src/agent-profiles";
+import { ProfileDraftsStore } from "../src/profile-drafts";
 
 const roots: string[] = [];
 afterEach(() => {
@@ -110,7 +111,12 @@ const idleSessions: PersonaSessions = {
   signingIn: () => undefined,
 };
 
-function service(root: string, runtime: AgentRuntime, sessions: PersonaSessions = idleSessions) {
+function service(
+  root: string,
+  runtime: AgentRuntime,
+  sessions: PersonaSessions = idleSessions,
+  drafts?: ProfileDraftsStore,
+) {
   const logger = createNoopLogger();
   const warn = vi.spyOn(logger, "warn");
   const profiles = new AgentProfileService({
@@ -122,10 +128,17 @@ function service(root: string, runtime: AgentRuntime, sessions: PersonaSessions 
     userRoot: root,
     home: "/Users/nobody",
     revealPath: () => null,
+    ...(drafts !== undefined ? { drafts } : {}),
     now: () => new Date(NOW),
     logger,
   });
   return { profiles, warn };
+}
+
+/** AO-5a — the drafts note, under the user root as fieldd keeps it. */
+function draftsAt(root: string): { drafts: ProfileDraftsStore; path: string } {
+  const path = join(root, ...LAYOUT.AGENT_PROFILE_DRAFTS_FILE);
+  return { drafts: new ProfileDraftsStore({ path, now: () => new Date(NOW) }), path };
 }
 
 function managedSet(root: string, id: string, directory?: string): ProfileSetInfo {
@@ -406,5 +419,94 @@ describe("AgentProfileService — what each profile runs on (AR-S2c)", () => {
     expect(feed.sets[0]?.plans).toEqual([]);
     expect(feed.sets[0]?.personas[0]).not.toHaveProperty("holds");
     expect(feed.routes).toEqual({});
+  });
+});
+
+describe("AO-5a — a profile Add a profile… made is kept at its first sign-in (AO-D14)", () => {
+  it("notes a draft at create, marks it in the feed, and Cancel deletes it only while it is one", async () => {
+    const root = userRoot();
+    const state = { sets: [] as ProfileSetInfo[], profiles: [] as AgentProfile[] };
+    const runtime = stubRuntime(state, {
+      createProfileSet: async ({ label }: { label: string }) => {
+        const info = {
+          ...managedSet(root, "work"),
+          set: { ...managedSet(root, "work").set, label },
+        };
+        mkdirSync(info.set.directory as string, { recursive: true });
+        state.sets.push(info);
+        return info;
+      },
+    });
+    const { drafts, path } = draftsAt(root);
+    const { profiles } = service(root, runtime, idleSessions, drafts);
+    const made = await profiles.createSet({ label: "Work", draft: true });
+    expect(made.set.draft).toBe(true);
+    expect(drafts.list()).toEqual(["work"]);
+    // fieldd's own, private, written whole
+    expect(statSync(path).mode & 0o777).toBe(0o600);
+    // Cancel: deleted as a delete deletes, folder and all
+    expect(await profiles.discardSet("work")).toEqual({ discarded: true, stopped: 0 });
+    expect(state.sets).toEqual([]);
+    expect(existsSync(join(root, ...LAYOUT.AGENT_PROFILE_SETS_DIR, "work"))).toBe(false);
+    expect(drafts.list()).toEqual([]);
+  });
+
+  it("is kept once its first sign-in says who, and a Cancel after that leaves it alone", async () => {
+    const root = userRoot();
+    const claude = account(root, "work", "p-claude");
+    const state = { sets: [managedSet(root, "work")], profiles: [claude] };
+    const { drafts } = draftsAt(root);
+    drafts.note("work");
+    const signedIn = { loggedIn: true, email: "kim@work.example", verifiedAt: NOW };
+    const runtime = stubRuntime(state, {
+      verifyProfile: async () => {
+        claude.identity = signedIn as AgentProfile["identity"];
+        return signedIn;
+      },
+    });
+    const { profiles } = service(root, runtime, idleSessions, drafts);
+    // the agent says who signed in: the profile is kept
+    await profiles.verifyPersona("p-claude");
+    expect(drafts.has("work")).toBe(false);
+    const feed = AgentsProfileSetsListResult.parse(await profiles.sets());
+    expect(feed.sets.find((set) => set.id === "work")).not.toHaveProperty("draft");
+    // a Cancel that arrives after it is read as kept deletes nothing
+    expect(await profiles.discardSet("work")).toEqual({ discarded: false, stopped: 0 });
+    expect(state.sets.map((info) => info.set.id)).toEqual(["work"]);
+  });
+
+  it("every start deletes a draft no sign-in kept, keeps one that was, forgets a gone one, and never touches a profile it never noted", async () => {
+    const root = userRoot();
+    const kept = account(root, "client", "p-client");
+    kept.identity = { loggedIn: true, verifiedAt: NOW } as AgentProfile["identity"];
+    // a set's info carries its sign-ins, as puppeteer's does
+    const state = {
+      sets: [
+        managedSet(root, "abandoned"),
+        { ...managedSet(root, "client"), profiles: [kept] },
+        managedSet(root, "older"),
+      ],
+      profiles: [kept],
+    };
+    for (const info of state.sets) mkdirSync(info.set.directory as string, { recursive: true });
+    const { drafts } = draftsAt(root);
+    drafts.note("abandoned");
+    drafts.note("client");
+    drafts.note("vanished");
+    const { profiles } = service(root, stubRuntime(state), idleSessions, drafts);
+    await profiles.sweepDrafts();
+    // the abandoned draft is deleted, folder and all; the kept one stays and
+    // leaves the note; a profile made before AO-5a ("older") was never noted
+    expect(state.sets.map((info) => info.set.id)).toEqual(["client", "older"]);
+    expect(existsSync(join(root, ...LAYOUT.AGENT_PROFILE_SETS_DIR, "abandoned"))).toBe(false);
+    expect(drafts.list()).toEqual([]);
+  });
+
+  it("notes nothing in a daemon that keeps no drafts: create makes an ordinary profile, and discard deletes nothing", async () => {
+    const root = userRoot();
+    const state = { sets: [managedSet(root, "work")], profiles: [] as AgentProfile[] };
+    const { profiles } = service(root, stubRuntime(state));
+    expect(await profiles.discardSet("work")).toEqual({ discarded: false, stopped: 0 });
+    expect(state.sets).toHaveLength(1);
   });
 });

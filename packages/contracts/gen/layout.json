@@ -78,6 +78,10 @@
     "fieldd",
     "device-name.json"
   ],
+  "AGENT_PROFILE_DRAFTS_FILE": [
+    "fieldd",
+    "profile-drafts.json"
+  ],
   "TERMINAL_CONFIG_FILE": [
     "native",
     "config.ghostty"

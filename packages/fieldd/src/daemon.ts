@@ -31,6 +31,7 @@ import {
   AgentsInstallsParams,
   AgentsProfileSetsCreateParams,
   AgentsProfileSetsDeleteParams,
+  AgentsProfileSetsDiscardParams,
   AgentsProfileSetsListParams,
   AgentsProfileSetsRevealParams,
   AgentsProfileSetsUpdateParams,
@@ -276,6 +277,7 @@ import { PluginUpdateTransport } from "./plugin-update-transport";
 import { PresenceRoomRouter } from "./presence-room";
 import { ProcessService, spawnMcpStdio } from "./process-service";
 import { ProductApi } from "./product-api";
+import { ProfileDraftsStore } from "./profile-drafts";
 import { createProjectIdentityStore } from "./project-identity";
 import { atFloor, wholeValueDoor } from "./projection";
 import { KeyJournal } from "./projects/key-journal";
@@ -881,6 +883,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     path: join(config.dataDir, ...LAYOUT.SETUP_LEDGER_FILE),
     logger: logger.child({ component: "setup_ledger" }),
   });
+  // AO-5a (AO-D14) — the profiles Add a profile… made and no sign-in has kept:
+  // noted at create, cleared at the first sign-in, swept at every start.
+  const profileDrafts = new ProfileDraftsStore({
+    path: join(config.dataDir, ...LAYOUT.AGENT_PROFILE_DRAFTS_FILE),
+    logger: logger.child({ component: "profile_drafts" }),
+  });
   const rosettad =
     config.rosettadBin === undefined || config.rosettadBin === ""
       ? null
@@ -1071,6 +1079,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     onProfileSignedIn: async (profileId): Promise<void> => {
       await agentUsage.signedIn(profileId);
     },
+    profileDrafts,
     revealPath: () => {
       const shell = shellApi;
       if (shell === null || !shell.revealPathAvailable()) return null;
@@ -3010,6 +3019,19 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         },
         () => agents.profiles.deleteSet(parsed.data.set),
         (result) => ({ attrs: { deleted: result.deleted, stopped: result.stopped } }),
+      );
+    });
+    api.register("agents.profileSets.discard", async (ctx, params) => {
+      const parsed = AgentsProfileSetsDiscardParams.safeParse(params);
+      if (!parsed.success) throw new RpcCallError("PRECONDITION_FAILED", "expected { set }", false);
+      return await audit.required(
+        ctx,
+        {
+          action: "agents.profile_sets.discard",
+          target: { kind: "agent-profile", id: parsed.data.set },
+        },
+        () => agents.profiles.discardSet(parsed.data.set),
+        (result) => ({ attrs: { discarded: result.discarded, stopped: result.stopped } }),
       );
     });
     api.register("agents.profileSets.reveal", async (_ctx, params) => {

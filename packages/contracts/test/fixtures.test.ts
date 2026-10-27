@@ -39,7 +39,9 @@ import {
 import {
   AgentDistributionRecord,
   AgentPersona,
+  AgentProfileDraftsFile,
   AgentsInstallsResult,
+  AgentsProfileSetsDiscardResult,
   AgentsProfileSetsListResult,
   AgentsProfilesVerifyResult,
   AgentsReleasesResult,
@@ -579,6 +581,11 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // AR-S2 — Agent Profiles: the native set beside a managed one, a sign-in
   // mid-login, the display folders, the Add menu's candidates.
   "agents-profile-sets": AgentsProfileSetsListResult,
+  // AO-5a (AO-D14) — a frame with a profile Add a profile… just made: a draft no
+  // sign-in has kept; its Cancel's answer; fieldd's note of it on disk.
+  "agents-profile-sets-draft": AgentsProfileSetsListResult,
+  "agents-profile-sets-discard": AgentsProfileSetsDiscardResult,
+  "agent-profile-drafts": AgentProfileDraftsFile,
   "agents-extensions": AgentsExtensionsListResult,
   // AR-S4c — an act's answer: the finished run and its receipt.
   "agents-extensions-act": AgentsExtensionsActResult,

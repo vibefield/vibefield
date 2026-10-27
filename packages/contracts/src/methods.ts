@@ -2361,6 +2361,13 @@ export const METHODS: MethodDef[] = [
   }),
   defineMethod({
     surface: "product",
+    method: "agents.profileSets.discard",
+    scope: "agent.spawn",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
     method: "agents.profileSets.reveal",
     scope: "agent.spawn",
     idempotent: true,

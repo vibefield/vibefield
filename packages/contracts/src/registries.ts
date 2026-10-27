@@ -1515,6 +1515,10 @@ export const LAYOUT = {
    * its self-slice. Device-local by construction (D30: the device is the
    * user-on-device), so never a synced preference and never a STORES slice. */
   DEVICE_NAME_FILE: ["fieldd", "device-name.json"],
+  /** AO-5a (track AO; AO-D14) — the profiles Add a profile… made and no sign-in
+   * has kept yet (`AgentProfileDraftsFile`, 0600, written whole). fieldd's; per
+   * user, since a profile is one person's. */
+  AGENT_PROFILE_DRAFTS_FILE: ["fieldd", "profile-drafts.json"],
   TERMINAL_CONFIG_FILE: ["native", FILES.TERMINAL_CONFIG],
   RESTART_INTENT_FILE: ["native", FILES.RESTART_INTENT],
   // RETIRED 2026-09-14 (TM-3, `thinking-terminal-mesh-cells.md` §7 / TM-D3):

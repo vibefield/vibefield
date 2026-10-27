@@ -30,6 +30,8 @@ export type ProfilesFixtureState =
   | "this mac"
   /** AO-5 — This Mac while it is the only profile: it explains itself */
   | "this mac, alone"
+  /** AO-5a — a profile New profile… just made: a draft, kept once an agent signs in */
+  | "draft"
   | "loading usage"
   | "refreshing usage"
   | "empty"
@@ -70,6 +72,7 @@ export const PROFILES_FIXTURE_STATES: readonly ProfilesFixtureState[] = [
   "act finished",
   "this mac",
   "this mac, alone",
+  "draft",
   "loading usage",
   "refreshing usage",
   "empty",

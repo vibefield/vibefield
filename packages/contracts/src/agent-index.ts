@@ -2344,6 +2344,9 @@ export const AgentProfileSet = z
     /** AR-S2c: the plans it runs on, in the order its agents first hold them
      * (puppeteer's `profileSetPlans`); absent from an older fieldd */
     plans: z.array(AgentPlan).optional(),
+    /** AO-D14 — made by Add a profile… and not kept yet: none of its agents has
+     * said who signed in. Absent = kept (a profile made before AO-5a included). */
+    draft: z.boolean().optional(),
   })
   .passthrough();
 export type AgentProfileSet = z.infer<typeof AgentProfileSet>;
@@ -2385,12 +2388,18 @@ export type AgentsProfileSetsListResult = z.infer<typeof AgentsProfileSetsListRe
 export const AgentProfileGlyph = z.string().regex(/^[a-z][a-z0-9-]{0,31}$/);
 
 /** `agents.profileSets.create` — a new, empty Agent Profile and its folder;
- * `default: true` also makes it the one new sessions use. */
+ * `default: true` also makes it the one new sessions use. `draft: true`
+ * (AO-D14): the profile is made for a sign-in about to run in its folder and is
+ * kept once its first agent says who signed in — until then fieldd notes it
+ * (`LAYOUT.AGENT_PROFILE_DRAFTS_FILE`), the feed marks it `draft`,
+ * `agents.profileSets.discard` may delete it, and every start deletes a noted
+ * profile no sign-in has kept. */
 export const AgentsProfileSetsCreateParams = z
   .object({
     label: z.string().trim().min(1).max(64),
     glyph: AgentProfileGlyph.optional(),
     default: z.boolean().optional(),
+    draft: z.boolean().optional(),
   })
   .passthrough();
 export type AgentsProfileSetsCreateParams = z.infer<typeof AgentsProfileSetsCreateParams>;
@@ -2424,6 +2433,37 @@ export const AgentsProfileSetsDeleteResult = z
   .object({ deleted: z.boolean(), stopped: z.number().int().nonnegative() })
   .passthrough();
 export type AgentsProfileSetsDeleteResult = z.infer<typeof AgentsProfileSetsDeleteResult>;
+
+/** `agents.profileSets.discard` — Cancel for a profile Add a profile… made
+ * (AO-D14): it is deleted as `agents.profileSets.delete` deletes, but only while
+ * it is still a draft. A profile one of whose agents has said who signed in is
+ * kept and left alone (`discarded: false`), so a sign-in that lands as Cancel is
+ * pressed wins. */
+export const AgentsProfileSetsDiscardParams = z.object({ set: AgentProfileSetId }).passthrough();
+export type AgentsProfileSetsDiscardParams = z.infer<typeof AgentsProfileSetsDiscardParams>;
+
+export const AgentsProfileSetsDiscardResult = z
+  .object({ discarded: z.boolean(), stopped: z.number().int().nonnegative() })
+  .passthrough();
+export type AgentsProfileSetsDiscardResult = z.infer<typeof AgentsProfileSetsDiscardResult>;
+
+export const AGENT_PROFILE_DRAFTS_FORMAT = 1;
+
+/** AO-D14 — fieldd's note of the profiles Add a profile… made and no sign-in has
+ * kept yet (`LAYOUT.AGENT_PROFILE_DRAFTS_FILE`, 0600, written whole), keyed by
+ * set id, each with when it was made. A profile leaves it when its first agent
+ * says who signed in, when it is discarded, or when a start deletes it. */
+export const AgentProfileDraftsFile = z
+  .object({
+    format: z.literal(AGENT_PROFILE_DRAFTS_FORMAT),
+    drafts: z.record(AgentProfileSetId, z.object({ at: z.string().min(1) }).passthrough()),
+  })
+  .passthrough();
+export type AgentProfileDraftsFile = z.infer<typeof AgentProfileDraftsFile>;
+
+export function emptyAgentProfileDrafts(): AgentProfileDraftsFile {
+  return { format: AGENT_PROFILE_DRAFTS_FORMAT, drafts: {} };
+}
 
 /** `agents.profileSets.reveal` — Show in Finder for a profile's folder, or for
  * one agent's folder in it (`provider`; in the native set, the agent's own

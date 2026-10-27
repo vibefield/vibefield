@@ -741,6 +741,36 @@ describe("Agent Profiles (AR-S2) — puppeteer's profile sets, one folder each u
     expect(auditText(dataDir)).toContain('"agents.profile_sets.delete"');
   }, 30_000);
 
+  it("AO-5a: a draft is noted at create, marked in the feed, and Cancel's discard deletes it only while it is one (AO-D14)", async () => {
+    const { dataDir, daemon } = await setup();
+    await ready(daemon);
+    const win = await window(daemon, ALL, "s4d");
+    await win.call("agents.profileSets.create", { label: "Work", draft: true });
+    await win.call("agents.profileSets.create", { label: "Older" });
+    const note = join(dataDir, ...LAYOUT.AGENT_PROFILE_DRAFTS_FILE);
+    expect(JSON.parse(readFileSync(note, "utf8"))).toMatchObject({
+      format: 1,
+      drafts: { work: { at: expect.any(String) } },
+    });
+    const listed = (await win.call("agents.profileSets.list", {})) as AgentsProfileSetsListResult;
+    expect(listed.sets.find((set) => set.id === "work")?.draft).toBe(true);
+    expect(listed.sets.find((set) => set.id === "older")).not.toHaveProperty("draft");
+    // a profile no Add a profile… made is left alone
+    expect(await win.call("agents.profileSets.discard", { set: "older" })).toEqual({
+      discarded: false,
+      stopped: 0,
+    });
+    expect(await win.call("agents.profileSets.discard", { set: "work" })).toEqual({
+      discarded: true,
+      stopped: 0,
+    });
+    expect(existsSync(join(dataDir, ...LAYOUT.AGENT_PROFILE_SETS_DIR, "work"))).toBe(false);
+    expect(JSON.parse(readFileSync(note, "utf8")).drafts).toEqual({});
+    const gone = await win.callErr("agents.profileSets.discard", { set: "work" });
+    expect(gone.data?.kind).toBe("NOT_FOUND");
+    expect(auditText(dataDir)).toContain('"agents.profile_sets.discard"');
+  }, 30_000);
+
   it("the subscription carries whole frames as the profiles change; Show in Finder resolves ids and refuses what it cannot show", async () => {
     const { daemon } = await setup();
     await ready(daemon);

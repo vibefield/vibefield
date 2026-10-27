@@ -35,11 +35,14 @@ import { profilesPaneModel, profilesPaneShows } from "./profiles-pane";
 // profile with the person's own sign-ins: This Mac from the profiles feed, each
 // agent's plan from its usage. Add a profile… grows in place — a name, the agent,
 // then that agent's own login in the pane, on the one sign-in controller Agent
-// Profiles uses. The profile is made when its sign-in starts (its folder is where
-// the login writes) and kept once its agent says who signed in; Cancel deletes
-// it again. A login that ends before the agent says who leaves it unkept, with
-// Sign in again and Cancel — never deleted unasked, since the login may have
-// worked. (AO-5a, on James's AO-D14, gives the unkept profile fieldd's own mark.)
+// Profiles uses. The profile is made as a draft when its sign-in starts (its
+// folder is where the login writes; AO-D14: `agents.profileSets.create
+// {draft}`), and fieldd keeps it once its agent says who signed in; Cancel is
+// `agents.profileSets.discard`, which deletes it only while it is still a draft,
+// so a sign-in that landed first wins. A login that ends before the agent says
+// who leaves it a draft, with Sign in again and Cancel — never discarded unasked,
+// since the login may have worked; a draft nothing kept is deleted at fieldd's
+// next start.
 //
 // Continue records the step answered; a Mac with nothing to explain (no agent
 // in This Mac's folders, or no profiles feed) moves on by itself (AO-L2).
@@ -158,11 +161,11 @@ export function ProfilesWizardPane({
     }
   };
 
-  /** Cancel's delete: the profile Add a profile… made goes, sign-in and folder.
-   * (AO-5a: its draft discard.) */
-  const deleteMade = (made: Pending): void => {
+  /** Cancel: the draft Add a profile… made goes, sign-in and folder — fieldd
+   * deletes it only while it is still a draft (AO-D14). */
+  const discardMade = (made: Pending): void => {
     pending.current = null;
-    void client.request("agents.profileSets.delete", { set: made.set }).catch((cause: unknown) => {
+    void client.request("agents.profileSets.discard", { set: made.set }).catch((cause: unknown) => {
       if (mounted.current) {
         setNotice({ tone: "error", text: refusalSentence(`Couldn't remove ${made.name}`, cause) });
       }
@@ -185,7 +188,7 @@ export function ProfilesWizardPane({
       const made = pending.current;
       if (made === null) return;
       if (end === "cancelled") {
-        deleteMade(made);
+        discardMade(made);
         setStep({ kind: "offer" });
       } else if (end === "signed-in" || end === "unsaid") {
         // kept: its first agent signed in (AO-D7)
@@ -220,6 +223,7 @@ export function ProfilesWizardPane({
         await client.request("agents.profileSets.create", {
           label: name,
           glyph: suggestProfileGlyph(name),
+          draft: true,
         }),
       ),
     );
@@ -239,7 +243,7 @@ export function ProfilesWizardPane({
       name,
     };
     if (added === null) {
-      deleteMade(kept);
+      discardMade(kept);
       if (mounted.current) setStep({ kind: "agent", name });
       return;
     }
@@ -248,7 +252,7 @@ export function ProfilesWizardPane({
     if (!mounted.current) return;
     if (signIn.signInRef.current === null) {
       // the login could not start; the act said why
-      deleteMade(kept);
+      discardMade(kept);
       setStep({ kind: "agent", name });
       return;
     }
@@ -276,7 +280,7 @@ export function ProfilesWizardPane({
       void signIn.cancel();
       return;
     }
-    if (made !== null) deleteMade(made);
+    if (made !== null) discardMade(made);
     setStep({ kind: "offer" });
   };
 

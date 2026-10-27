@@ -115,6 +115,7 @@ import type { AccountUsageRuntime } from "./agent-usage";
 import type { AuditMutation, AuditMutationOutcome } from "./audit-service";
 import { RpcCallError } from "./native-link";
 import { createDarwinSecretStore, type SecretStore } from "./plugin-settings";
+import type { ProfileDraftsStore } from "./profile-drafts";
 import type { OwnPlace } from "./projects/project-groups";
 import type { LaunchRecipe } from "./projects/project-records";
 import type { RosettadState, RosettadSupervisor } from "./rosettad-supervisor";
@@ -401,6 +402,9 @@ export interface AgentRuntimeServiceOptions {
   resumeWhenIdle?: { afterMs?: number; pollMs?: number };
   /** A login pane ended and the agent confirmed it is signed in. */
   onProfileSignedIn?: (profileId: string) => Promise<void>;
+  /** AO-5a (AO-D14) — the note of the profiles Add a profile… made and no
+   * sign-in has kept (`LAYOUT.AGENT_PROFILE_DRAFTS_FILE`); absent = none noted */
+  profileDrafts?: ProfileDraftsStore;
   /** AR-S4d test seam: where a profile's server values are kept (default: the OS keychain) */
   secretStore?: SecretStore;
   /** AR-7 — the agents a launcher stands for on this device NOW (the gateway
@@ -776,6 +780,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       ...(opts.audit !== undefined ? { audit: opts.audit } : {}),
       // AR-S4d — a deleted profile's keep and keychain entry go with it
       forgetExtensions: (setId) => this.extensionStore.forgetProfile(setId),
+      ...(opts.profileDrafts !== undefined ? { drafts: opts.profileDrafts } : {}),
       now: this.now,
       logger: this.logger,
     });
@@ -2767,6 +2772,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     // none does; after a restart this is the first moment that is known
     this.reattachDone = true;
     void this.profiles.sweep();
+    // AO-D14 — every start: a draft profile no sign-in kept is deleted
+    void this.profiles.sweepDrafts();
   }
 
   /** A record whose PTY the first inventory lacked (AR-4b): the same grace
@@ -3767,9 +3774,13 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     if (this.disposed) return;
     let outcome: string;
     let signedIn = false;
+    // an agent that never says who (`unsupported`): its login ending on its own
+    // is all there is to know of the sign-in
+    let unsaid = false;
     try {
       const verified = await this.runtime.verifyProfile(login.profileId);
       signedIn = !isFailure(verified) && verified.loggedIn;
+      unsaid = isFailure(verified) && verified.status === "unsupported";
       outcome = isFailure(verified)
         ? `${verified.status}: ${verified.message}`
         : verified.loggedIn
@@ -3784,6 +3795,15 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       how,
       outcome,
     });
+    // AO-D14 — the first sign-in that says who keeps a draft profile
+    if ((signedIn || (unsaid && how === "exited")) && !this.disposed) {
+      await this.profiles.keepDraftOf(login.profileId).catch((error: unknown) =>
+        this.logger.warn("fieldd.agents.draft_keep_failed", "A draft profile was not kept", {
+          profileId: login.profileId,
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    }
     // the pane is closed whatever the read said: a frame says so
     this.profiles.publish();
     if (how === "exited" && signedIn && !this.disposed) {

@@ -645,6 +645,8 @@ export function ProfilesSection({
           label: profile.label,
           glyph: profile.glyph,
           ...(profile.isDefault ? { default: true } : {}),
+          // AO-D14 — kept once its first agent signs in; until then a draft
+          draft: true,
         }),
       ),
     );

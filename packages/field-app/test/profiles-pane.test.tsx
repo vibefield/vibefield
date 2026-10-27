@@ -246,7 +246,7 @@ function daemon(feed: AgentsProfileSetsListResult | null, installs: AgentInstall
           terminal: ticket(params.profileId === "p-work-claude" ? "login-work" : "login-mac"),
         };
       }
-      if (method === "agents.profileSets.delete") return { deleted: true };
+      if (method === "agents.profileSets.discard") return { discarded: true, stopped: 0 };
       if (method === "terminal.terminate") return { ok: true };
       return { ok: true };
     }),
@@ -307,9 +307,10 @@ async function addWork(client: FielddClient): Promise<void> {
   await click("Next");
   expect(text()).toContain("Sign in to an agent in Work");
   await click("Claude Code");
+  // AO-D14 — made as a draft as its login starts
   expect(client.request).toHaveBeenCalledWith(
     "agents.profileSets.create",
-    expect.objectContaining({ label: "Work" }),
+    expect.objectContaining({ label: "Work", draft: true }),
   );
   expect(client.request).toHaveBeenCalledWith("agents.profiles.create", {
     set: "work",
@@ -407,7 +408,10 @@ describe("the Profiles pane on the wizard's glass", () => {
     expect(text()).toContain(
       "Work is ready. It starts with clean settings: its own skills and servers.",
     );
-    expect(client.request).not.toHaveBeenCalledWith("agents.profileSets.delete", expect.anything());
+    expect(client.request).not.toHaveBeenCalledWith(
+      "agents.profileSets.discard",
+      expect.anything(),
+    );
     expect(button("Continue").disabled).toBe(false);
   });
 
@@ -418,7 +422,7 @@ describe("the Profiles pane on the wizard's glass", () => {
     await click("Cancel");
     expect(client.request).toHaveBeenCalledWith("terminal.terminate", { sessionId: "login-work" });
     await frame([THIS_MAC, { ...WORK_SET, personas: [workPersona()] }]);
-    expect(client.request).toHaveBeenCalledWith("agents.profileSets.delete", { set: "work" });
+    expect(client.request).toHaveBeenCalledWith("agents.profileSets.discard", { set: "work" });
     expect(button("Add a profile…")).toBeDefined();
   });
 
@@ -434,7 +438,10 @@ describe("the Profiles pane on the wizard's glass", () => {
     expect(text()).toContain(
       "The sign-in ended before Claude Code said who is signed in. Sign in again when you're ready.",
     );
-    expect(client.request).not.toHaveBeenCalledWith("agents.profileSets.delete", expect.anything());
+    expect(client.request).not.toHaveBeenCalledWith(
+      "agents.profileSets.discard",
+      expect.anything(),
+    );
     await click("Sign in again");
     expect(
       vi.mocked(client.request).mock.calls.filter(([method]) => method === "agents.profiles.login"),

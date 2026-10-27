@@ -180,7 +180,9 @@ export function profilesPreviewHead(state: ProfilesFixtureState): {
       ? FIXTURE_NATIVE
       : state === "empty"
         ? FIXTURE_DEMO
-        : FIXTURE_WORK;
+        : state === "draft"
+          ? { ...FIXTURE_DEMO, draft: true }
+          : FIXTURE_WORK;
   return { head: { title: set.label, description: "Agent profile" }, current: set.id };
 }
 
@@ -449,7 +451,9 @@ export function ProfilesSettingsPreview({
       ? FIXTURE_NATIVE
       : state === "empty"
         ? FIXTURE_DEMO
-        : FIXTURE_WORK;
+        : state === "draft"
+          ? { ...FIXTURE_DEMO, draft: true }
+          : FIXTURE_WORK;
   const signing =
     state === "signing in" ? (
       <SignInCard
