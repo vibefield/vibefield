@@ -17,4 +17,10 @@ describe("shell presentation sequencing", () => {
     expect(settings).toEqual({ diagnosticsRequest: 1, target: "general" });
     expect(secondDiagnostics).toEqual({ diagnosticsRequest: 2, target: "diagnostics" });
   });
+
+  it("opens Settings → Devices for a link notice's click (TS-5), keeping the sequence", () => {
+    const diagnostics = reduceShellPresentation(INITIAL_SHELL_PRESENTATION, "open-diagnostics");
+    const devices = reduceShellPresentation(diagnostics, "open-devices");
+    expect(devices).toEqual({ diagnosticsRequest: 1, target: "devices" });
+  });
 });

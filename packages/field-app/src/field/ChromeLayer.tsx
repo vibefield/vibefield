@@ -362,7 +362,11 @@ export function ChromeLayer({
           desktopState={desktopState}
           diagnosticsRequest={shellPresentation.diagnosticsRequest}
           diagnosticsInitiallyOpen={shellPresentation.target === "diagnostics"}
-          initialPage={shellPresentation.target === "account" ? "account" : "general"}
+          initialPage={
+            shellPresentation.target === "account" || shellPresentation.target === "devices"
+              ? shellPresentation.target
+              : "general"
+          }
           devtools={{ open: showEcs, onToggle: () => chrome.setShowEcs((open) => !open) }}
           onClose={() => {
             setShellPresentation((state) => ({ ...state, target: "general" }));

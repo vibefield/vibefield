@@ -128,7 +128,8 @@ export type CloseResult = z.infer<typeof CloseResult>;
 /** Presentation commands the native shell may route into the one field
  * renderer. They carry no authority: the renderer decides how to reveal its
  * existing Settings surface. */
-export const ShellCommand = z.enum(["open-settings", "open-diagnostics"]);
+/** TS-5 — `open-devices` is a link notice's click: Settings → Devices. */
+export const ShellCommand = z.enum(["open-settings", "open-diagnostics", "open-devices"]);
 export type ShellCommand = z.infer<typeof ShellCommand>;
 
 export const ShellCommandRequest = z

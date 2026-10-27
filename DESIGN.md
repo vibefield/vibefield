@@ -3243,6 +3243,13 @@ reads as no internet. "Tailnet", "node" and "link" stay in Network details (TS-L
 who must act: "Finish in your browser", "Waiting for approval", "Sign in to Tailscale again". The
 machine is named as Tailscale names it, in mono, so a person can match it on Tailscale's own page.
 Tailscale is named plainly, and its mark appears only where trust is decided (§13).
+*Amended 2026-10-27 (track TS, TS-5; TS-D9, TS-D18 = d):* the link tells a person three things outside
+the app, as OS notices, once each and never while VibeField is in front or in its first minute:
+**Connected to Tailscale** · "Your phone and your other computers can reach this field." (after a
+sign-in this session started); **‹name› joined your devices** · "It can reach this field, and you can
+reach it." (a device's first appearance, never the account's existing devices); **Tailscale sign-in
+renews in 3 days** ("tomorrow", "today") · "Sign in again on This Mac to keep your devices
+connected." (once per expiry date). Each opens Settings → Devices.
 
 **The agents' words** (track AO, ruled 2026-10-27; AO-L8, no machinery on screen). One word per thing,
 in the Setup Assistant, Settings, History and the launcher alike. An **agent** is named by the

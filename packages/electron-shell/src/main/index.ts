@@ -88,6 +88,7 @@ import {
   registerWindowBootstrap,
 } from "./ipc";
 import { installLifecycle, type LifecycleFlow } from "./lifecycle";
+import { LinkNoticeObserver } from "./link-notices";
 import { LiveSurfaceAuthority } from "./live-surfaces/authority";
 import {
   createProductionLiveSurfaceSupport,
@@ -1140,9 +1141,40 @@ async function main(
       },
       logger.child({ component: "shell.provider" }),
     );
+    // TS-5 (TS-D9; TS-D18 d) — the link's notices, said outside the app once:
+    // connected, a device joined, the renewal 3 days out. A click opens
+    // Settings → Devices. A smoke never puts one on the person's screen.
+    const linkNotices = new LinkNoticeObserver(
+      bundle.handles,
+      {
+        now: () => Date.now(),
+        focused: () => BrowserWindow.getFocusedWindow() !== null,
+        notify: (words) => {
+          if (isSmokeLike(MODE) || !Notification.isSupported()) return;
+          const notice = new Notification({ title: words.title, body: words.body });
+          notice.on("click", () => {
+            void revealSurface("open-devices").catch((error: unknown) => {
+              logger.error(
+                "desktop.link_notice.reveal_failed",
+                "The notice could not open Settings → Devices",
+                error,
+              );
+            });
+          });
+          notice.show();
+        },
+      },
+      (error) =>
+        logger.error(
+          "desktop.link_notice.observe_failed",
+          "The link's notices could not follow fieldd",
+          error,
+        ),
+    );
     return {
       dispose: () => {
         observers.dispose();
+        linkNotices.dispose();
         shellProvider.dispose();
         stopDaemonBootFence();
         stopPluginModuleClient();
