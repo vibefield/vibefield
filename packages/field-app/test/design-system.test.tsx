@@ -428,11 +428,13 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(document.documentElement.classList.contains("dark")).toBe(true);
     expect(document.documentElement.dataset.theme).toBe("dark");
     expect(window.localStorage.getItem("vf-dark")).toBe("true");
+    // One theme control per onboarding frame: eleven since AO-1 (2026-10-27),
+    // when Ready and the second user's finishing folded into Setting up.
     expect(
       container?.querySelectorAll(
         '[data-onboarding-preview] button[aria-label="Switch to light mode"]',
       ),
-    ).toHaveLength(12);
+    ).toHaveLength(11);
 
     // One Frame FR-3: the playground's head runs on its real controller — its
     // chevron grows the pill into the fields explorer through the one owner.
@@ -506,24 +508,26 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
         '.vf-ds-stage-board .vf-pegboard-track > button[aria-pressed="true"]',
       )?.textContent,
     ).toBe("All");
-    expect(container?.querySelectorAll("[data-onboarding-preview]")).toHaveLength(12);
+    // AO-1 (2026-10-27): pane 3 retired, and Ready and the second user's
+    // finishing folded into Setting up — the end of every path — whose own
+    // refusals (the answers not saved, the desk that could not open) are frames.
+    expect(container?.querySelectorAll("[data-onboarding-preview]")).toHaveLength(11);
     for (const state of [
       "welcome",
       "field",
-      "setting-up",
       "connect",
       "posture",
-      "ready",
+      "setting-up",
       "deriving",
       "welcome-back",
-      "finishing",
+      "setting-up-second-user",
+      "setting-up-write-failed",
+      "setting-up-desk-failed",
       "users",
-      "ready-failed",
-      "finishing-failed",
     ]) {
       expect(container?.querySelector(`[data-onboarding-preview="${state}"]`)).not.toBeNull();
     }
-    expect(container?.querySelectorAll(".vf-wizard-shell")).toHaveLength(12);
+    expect(container?.querySelectorAll(".vf-wizard-shell")).toHaveLength(11);
     expect(container?.querySelector(".vf-ds-field-stage .vf-head-zoom")).not.toBeNull();
     expect(container?.querySelector("[data-ground-workbench]")).not.toBeNull();
     expect(container?.querySelector("[data-visual-tweak-controls]")).not.toBeNull();
@@ -573,6 +577,20 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
 
     await choose("posture", "unavailable");
     expect(frame("posture").textContent).toContain("This daemon is not reporting preferences");
+
+    // AO-1 — Setting up, fed the boot machine's states by hand: the desk's own
+    // stage while it opens, then the welcome in place of the title (one cell).
+    expect(frame("setting-up").textContent).toContain("drawing the board");
+    await choose("setting-up", "ready");
+    const swap = frame("setting-up").querySelector(".vf-wizard-title-swap");
+    expect(swap?.getAttribute("data-ready")).toBe("true");
+    expect(swap?.querySelector('[aria-hidden="false"]')?.textContent).toBe(
+      "Welcome to your field, James.",
+    );
+    await choose("setting-up", "saving");
+    expect(
+      frame("setting-up").querySelector('.vf-wizard-phase[data-state="waiting"]'),
+    ).not.toBeNull();
   });
 
   it("mounts the spawn bloom on the shipping monitor with its fixture door, and a create lands as a new terminal (SB-3)", async () => {

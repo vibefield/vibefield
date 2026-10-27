@@ -56,6 +56,7 @@ function fakeMachine() {
     retry: () => {},
     closePlugins: async () => undefined,
     completeOnboarding: () => {},
+    revealDesk: () => {},
   };
   const set = (patch: Partial<BootView>): void => {
     view = { ...view, ...patch };

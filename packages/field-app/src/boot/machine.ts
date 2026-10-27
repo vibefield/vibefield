@@ -16,6 +16,13 @@ import type { PreparedRendererPlugins } from "../plugin-host/staged-loader";
 // door: it sits between a warm daemon and an open document, and every way of
 // failing to read the flag proceeds rather than stops (W5 — the wizard ends
 // inside the product, so the product must be able to start without it).
+//
+// Track AO (AO-D2, 2026-10-27) gives that hold a second half. Once the wizard's
+// questions are answered the document opens, warms and settles BEHIND its
+// glass — its Setting up pane reports those very stages — and the machine
+// holds once more, after the frame-stability gate and before `interactive`
+// (`handing-over`), until the wizard's last beat ends. `interactive` keeps
+// meaning revealed: the glass leaves exactly when the splash would have.
 
 export type WorkspaceModule = typeof import("../workspace");
 
@@ -26,6 +33,9 @@ export type BootPhase =
   | "opening-document"
   | "warming"
   | "stabilizing"
+  /** AO-D2 — the desk is warm and stable behind the Setup Assistant's glass,
+   * and the machine waits for the wizard to hand it over (`revealDesk`). */
+  | "handing-over"
   | "interactive";
 
 export interface BootUnavailable {
@@ -60,14 +70,12 @@ export interface BootReady {
   profile?: FieldUserProfile;
 }
 
-/** What the wizard is handed while the boot holds for it (UA-3w). The profile
+/** What the wizard is handed when the boot holds for it (UA-3w). The profile
  * is the record the gate actually read — the wizard derives its entry pane from
- * those durable fields (W6) rather than from any remembered position.
- * `stagesDone` is the honest list of stage labels this boot already passed, so
- * the setting-up pane can name real work instead of drawing a fake bar (W4). */
+ * those durable fields (W6) rather than from any remembered position. What the
+ * desk is doing while the wizard shows is the machine's own view (W4). */
 export interface BootOnboarding {
   profile: FieldUserProfile;
-  stagesDone: readonly string[];
 }
 
 export interface BootMachineDeps {
@@ -93,9 +101,10 @@ export interface BootMachine {
   subscribe(fn: () => void): () => void;
   readonly ready: BootReady | null;
   readonly client: FielddClient | null;
-  /** Non-null exactly while `view().phase === "onboarding"`. Set BEFORE the
-   * phase patch that notifies subscribers, so a render triggered by that patch
-   * reads a matching pair (the `ready` precedent). */
+  /** Non-null from the onboarding hold on: the Setup Assistant owns the window
+   * from then until the reveal (AO-D2), and keeps its input through the glass's
+   * fade. Set BEFORE the phase patch that notifies subscribers, so a render
+   * triggered by that patch reads a matching pair (the `ready` precedent). */
   readonly onboarding: BootOnboarding | null;
   /** idempotent; called after the first paint (mount schedules it on rAF) */
   start(): void;
@@ -104,11 +113,18 @@ export interface BootMachine {
   /** Prevents any not-yet-started plugin preparation and closes a staged runtime even before the
    * document-ready checkpoint exists. Single-flight for the window prepare-close barrier. */
   closePlugins(): Promise<void>;
-  /** UA-3w — the wizard is finished; release the hold and boot on. Idempotent,
-   * and inert when nothing is holding. The wizard calls it only after the
-   * durable `onboarded` write lands, so a later retry() re-reads a record that
-   * skips the phase on its own — no "already shown" bit is kept anywhere. */
+  /** UA-3w — the wizard's questions are answered; release the hold and boot on,
+   * the document opening behind the wizard's glass. Idempotent, and inert when
+   * nothing is holding. The wizard calls it only after the durable `onboarded`
+   * write lands (or on the person's "Continue anyway"), so a later retry()
+   * re-reads a record that skips the phase on its own — no "already shown" bit
+   * is kept anywhere. AO-D2: a released hold also holds the reveal, at
+   * `handing-over`, until `revealDesk()`. */
   completeOnboarding(profile?: FieldUserProfile): void;
+  /** AO-D2 — the wizard's last beat is over: reveal the desk it opened, at once
+   * if the desk is already waiting at `handing-over`, else the moment it is
+   * stable. Idempotent, and inert when no wizard holds the reveal. */
+  revealDesk(): void;
 }
 
 /** The splash's first words — and the switch's, whose leaving window says
@@ -132,15 +148,8 @@ export function createBootMachine(deps: BootMachineDeps): BootMachine {
     progress: null,
     degradedReveal: false,
   };
-  // Every stage label this boot actually entered, in order — the wizard's
-  // setting-up pane names these (W4) rather than inventing a progress story.
-  const stagesSeen: string[] = [view.stage];
   const patch = (next: Partial<BootView>): void => {
     view = { ...view, ...next };
-    const stage = next.stage;
-    if (stage !== undefined && stage !== "" && stagesSeen[stagesSeen.length - 1] !== stage) {
-      stagesSeen.push(stage);
-    }
     for (const fn of [...listeners]) fn();
   };
 
@@ -155,6 +164,10 @@ export function createBootMachine(deps: BootMachineDeps): BootMachine {
   let started = false;
   let onboarding: BootOnboarding | null = null;
   let releaseOnboarding: (() => void) | null = null;
+  // AO-D2 — the wizard's second hold: set when its questions release the first,
+  // cleared by `revealDesk()`; `releaseReveal` exists only while `handing-over`.
+  let revealHeld = false;
+  let releaseReveal: (() => void) | null = null;
   let pluginCloseRequested = false;
   let pluginCloseTask: Promise<void> | null = null;
   let currentProfile: FieldUserProfile | null = null;
@@ -284,22 +297,21 @@ export function createBootMachine(deps: BootMachineDeps): BootMachine {
       }
 
       // UA-3w — the Setup Assistant holds HERE: after the daemon answered and
-      // the workspace chunk landed (so the wizard's setting-up pane names two
-      // finished stages, not two hopeful ones) and before the document opens
-      // (so it owns the window, and the field it hands you is the one it just
-      // named). The gate re-reads the record on every pass through run(): once
-      // the wizard flips the flag, a retry derives "already onboarded" from
-      // disk instead of trusting a bit this machine remembered.
+      // the workspace chunk landed (so its panes have a live client) and before
+      // the document opens (so it owns the window, and the field it hands you
+      // is the one it just named). The gate re-reads the record on every pass
+      // through run(): once the wizard flips the flag, a retry derives "already
+      // onboarded" from disk instead of trusting a bit this machine remembered
+      // — and a wizard already on screen keeps the window (AO-D2).
       if (ready === null) {
         const profile = await onboardingProfile();
         if (profile !== null) {
-          onboarding = { profile, stagesDone: [...stagesSeen] };
+          onboarding = { profile };
           patch({ phase: "onboarding", stage: "", progress: null });
           await new Promise<void>((resolve) => {
             releaseOnboarding = resolve;
           });
           releaseOnboarding = null;
-          onboarding = null;
         }
       }
 
@@ -355,6 +367,16 @@ export function createBootMachine(deps: BootMachineDeps): BootMachine {
             "renderer.boot.stability_cap_reached",
             "The renderer used the bounded degraded reveal path",
           );
+      }
+
+      // AO-D2 — handing over: the desk is ready behind the Setup Assistant's
+      // glass, and the wizard says when its last beat is over.
+      if (revealHeld) {
+        patch({ phase: "handing-over", stage: "" });
+        await new Promise<void>((resolve) => {
+          releaseReveal = resolve;
+        });
+        releaseReveal = null;
       }
 
       patch({ phase: "interactive", stage: "", degradedReveal: degraded });
@@ -419,7 +441,14 @@ export function createBootMachine(deps: BootMachineDeps): BootMachine {
     },
     completeOnboarding: (profile) => {
       if (profile !== undefined) currentProfile = profile;
-      releaseOnboarding?.();
+      if (releaseOnboarding === null) return;
+      // The wizard keeps the window while the desk opens behind it (AO-D2).
+      revealHeld = true;
+      releaseOnboarding();
+    },
+    revealDesk: () => {
+      revealHeld = false;
+      releaseReveal?.();
     },
     closePlugins: () => {
       if (pluginCloseTask !== null) return pluginCloseTask;

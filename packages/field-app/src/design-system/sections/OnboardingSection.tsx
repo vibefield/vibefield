@@ -17,11 +17,7 @@ export function OnboardingSection({
       title="The complete Setup Assistant"
       description="Every shipping pane, alternate entry, transitional face, and completion refusal is mounted from production code. Change a pane once and both onboarding and this catalog move together."
     >
-      <Specimen
-        title="Production flow and state inventory"
-        source="boot/onboarding/onboarding-views.tsx"
-        bleed
-      >
+      <Specimen title="Production flow and state inventory" source="boot/onboarding/views/" bleed>
         <OnboardingPreview dark={dark} onToggleTheme={onToggleTheme} />
       </Specimen>
     </Section>

@@ -134,8 +134,105 @@
   line-height: 1.2;
 }
 
-.vf-wizard-stage-check {
+/* Setting up, then Ready (track AO, AO-D2; DESIGN.md §8 "The Setup Assistant's
+   agent chapter", §6 "the hand-over"). Both titles hold one grid cell from the
+   start, so the welcome cross-fades in place (M1) and nothing below it moves. */
+.vf-wizard-title-swap {
+  display: grid;
+}
+
+.vf-wizard-title-swap > span {
+  grid-area: 1 / 1;
+  transition: opacity 180ms ease;
+}
+
+.vf-wizard-title-swap[data-ready="false"] > span + span,
+.vf-wizard-title-swap[data-ready="true"] > span:first-child {
+  opacity: 0;
+}
+
+/* One line per phase: its mark, its name, what it is doing in its door's words. */
+.vf-wizard-phases {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.vf-wizard-phase {
+  display: grid;
+  grid-template-columns: 16px auto minmax(0, 1fr);
+  align-items: baseline;
+  column-gap: 8px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--vf-text-primary);
+}
+
+.vf-wizard-phase[data-state="waiting"] {
+  color: var(--vf-text-tertiary);
+}
+
+.vf-wizard-phase-mark {
+  display: inline-flex;
+  width: 16px;
+  justify-content: center;
   color: var(--vf-green);
+}
+
+/* The live phase breathes: DESIGN.md §6's loop, for a fact it cannot predict. */
+.vf-wizard-phase[data-state="live"] .vf-wizard-phase-mark::before {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--vf-text-secondary);
+  content: "";
+  animation: vf-wizard-breath 1.1s ease-in-out infinite alternate;
+}
+
+.vf-wizard-phase[data-state="failed"] .vf-wizard-phase-mark::before {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--vf-ink-attention);
+  content: "";
+}
+
+.vf-wizard-phase-label {
+  font-weight: 500;
+}
+
+.vf-wizard-phase-detail {
+  overflow: hidden;
+  color: var(--vf-text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-wizard-phase[data-state="failed"] .vf-wizard-phase-detail {
+  color: var(--vf-ink-attention);
+  white-space: normal;
+}
+
+/* Where Settings went, said once — it arrives with the welcome. */
+.vf-wizard-ready-line {
+  transition: opacity 180ms ease;
+}
+
+.vf-wizard-ready-line[data-ready="false"] {
+  opacity: 0;
+}
+
+@keyframes vf-wizard-breath {
+  from {
+    transform: scale(1);
+  }
+
+  to {
+    transform: scale(1.06);
+  }
 }
 
 @keyframes vf-wizard-in {
@@ -157,6 +254,16 @@
 
   .vf-wizard-user {
     transition-duration: 60ms;
+  }
+
+  /* Fades only, halved; no breath (M6). */
+  .vf-wizard-title-swap > span,
+  .vf-wizard-ready-line {
+    transition-duration: 90ms;
+  }
+
+  .vf-wizard-phase[data-state="live"] .vf-wizard-phase-mark::before {
+    animation: none;
   }
 
   @keyframes vf-wizard-fade {

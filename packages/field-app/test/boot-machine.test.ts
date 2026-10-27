@@ -546,20 +546,25 @@ describe("boot machine (ESR slice 4 — splash-gated boot)", () => {
     // The empty update IS the read — the same door the wizard writes through.
     expect(usersUpdate).toHaveBeenCalledWith({});
     expect(h.machine.onboarding?.profile).toEqual(NEW_USER);
-    // W4 — the stages the wizard may claim are done are the ones this boot
-    // really passed, in order, and nothing further.
-    expect(h.machine.onboarding?.stagesDone).toEqual(["waking the daemon", "loading the field"]);
     // The hold is BEFORE the document: the wizard owns the window alone.
     expect(FakeManager.instances).toHaveLength(0);
-    expect(h.machine.client).not.toBeNull(); // ...but the client is live for pane 4
+    expect(h.machine.client).not.toBeNull(); // ...but the client is live for its panes
 
     h.machine.completeOnboarding();
     await flush();
-    expect(h.machine.onboarding).toBeNull();
+    // AO-D2 — the answers released the hold, and the wizard keeps the window:
+    // its input stays while the document opens behind its glass.
+    expect(h.machine.onboarding?.profile).toEqual(NEW_USER);
+    expect(FakeManager.instances).toHaveLength(1);
     firstManager().emit({ phase: "ready", loading: null });
     await flush();
     await feedCleanFrames(h);
 
+    // Warm and stable, the desk waits for the wizard's last beat...
+    expect(h.machine.view().phase).toBe("handing-over");
+    h.machine.revealDesk();
+    await flush();
+    // ...and only then is it revealed.
     expect(h.machine.view().phase).toBe("interactive");
     expect(phases).toEqual([
       "requesting-bootstrap",
@@ -568,8 +573,60 @@ describe("boot machine (ESR slice 4 — splash-gated boot)", () => {
       "opening-document",
       "warming",
       "stabilizing",
+      "handing-over",
       "interactive",
     ]);
+  });
+
+  it("holds the reveal at `handing-over` until the wizard's beat ends — `interactive` keeps meaning revealed (AO-D2)", async () => {
+    const h = harness({ usersUpdate: vi.fn(async () => NEW_USER) });
+    await bootToOnboarding(h);
+    h.machine.completeOnboarding();
+    await flush();
+    firstManager().emit({ phase: "ready", loading: null });
+    await flush();
+    await feedCleanFrames(h);
+
+    expect(h.machine.view().phase).toBe("handing-over");
+    // The desk is stable, but the reveal's mark waits for the reveal itself.
+    expect(h.marks).toContain("vf:renderer:stable");
+    expect(h.marks).not.toContain("vf:renderer:interactive");
+    await vi.advanceTimersByTimeAsync(60_000); // no timer stands in for the wizard
+    expect(h.machine.view().phase).toBe("handing-over");
+
+    h.machine.revealDesk();
+    h.machine.revealDesk(); // twice is once
+    await flush();
+    expect(h.machine.view().phase).toBe("interactive");
+    expect(h.marks.filter((name) => name === "vf:renderer:interactive")).toHaveLength(1);
+  });
+
+  it("never holds a desk whose wizard was done before it was ready, nor one no wizard holds", async () => {
+    // The wizard's beat can end first (a second user has none): the desk then
+    // reveals the moment it is stable, with no `handing-over` at all.
+    const early = harness({ usersUpdate: vi.fn(async () => NEW_USER) });
+    const seen: BootPhase[] = [];
+    early.machine.subscribe(() => seen.push(early.machine.view().phase));
+    await bootToOnboarding(early);
+    early.machine.completeOnboarding();
+    early.machine.revealDesk();
+    await flush();
+    firstManager().emit({ phase: "ready", loading: null });
+    await flush();
+    await feedCleanFrames(early);
+    expect(early.machine.view().phase).toBe("interactive");
+    expect(seen).not.toContain("handing-over");
+
+    // A boot no wizard held: revealDesk is inert, and the reveal is the splash's.
+    FakeManager.instances = [];
+    const plain = harness({ usersUpdate: vi.fn(async () => ({ ...NEW_USER, onboarded: true })) });
+    plain.machine.revealDesk();
+    await bootToOnboarding(plain);
+    expect(plain.machine.onboarding).toBeNull();
+    firstManager().emit({ phase: "ready", loading: null });
+    await flush();
+    await feedCleanFrames(plain);
+    expect(plain.machine.view().phase).toBe("interactive");
   });
 
   it("the development preview reopens a fresh wizard without changing the durable profile", async () => {
@@ -675,14 +732,19 @@ describe("boot machine (ESR slice 4 — splash-gated boot)", () => {
 
     h.machine.retry();
     await flush();
-    // Re-read (2 calls now), and no second visit to the wizard.
+    // Re-read (2 calls now), and no second visit to the wizard's questions...
     expect(usersUpdate).toHaveBeenCalledTimes(2);
     expect(phases.filter((p) => p === "onboarding")).toHaveLength(1);
-    expect(h.machine.onboarding).toBeNull();
+    // ...while the wizard already on screen keeps the window (AO-D2): its
+    // Setting up said why the desk failed and offered this very retry.
+    expect(h.machine.onboarding?.profile).toEqual(NEW_USER);
 
     firstManager().emit({ phase: "ready", loading: null });
     await flush();
     await feedCleanFrames(h);
+    expect(h.machine.view().phase).toBe("handing-over");
+    h.machine.revealDesk();
+    await flush();
     expect(h.machine.view().phase).toBe("interactive");
   });
 

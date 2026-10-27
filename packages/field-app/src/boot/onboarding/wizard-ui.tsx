@@ -74,7 +74,8 @@ export function WizardPane({
   centered = false,
 }: {
   eyebrow: string;
-  title: string;
+  /** Words, or — for Setting up's welcome — one cell whose words cross-fade. */
+  title: ReactNode;
   voice?: ReactNode;
   children?: ReactNode;
   actions: ReactNode;
@@ -118,6 +119,17 @@ export function SkipAction({ label, onSkip }: { label: string; onSkip: () => voi
       </button>
       <span className={factCls}>Set up later — Settings → Account</span>
     </div>
+  );
+}
+
+/** W6's other half — Back always works, so every question but the first offers
+ * it; absent where there is nowhere earlier to go. */
+export function BackAction({ onBack }: { onBack: (() => void) | undefined }): ReactElement | null {
+  if (onBack === undefined) return null;
+  return (
+    <button type="button" className={quietCls} onClick={onBack}>
+      Back
+    </button>
   );
 }
 

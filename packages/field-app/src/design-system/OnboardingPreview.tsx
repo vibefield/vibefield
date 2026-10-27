@@ -3,19 +3,22 @@ import { createContext, type ReactElement, type ReactNode, useContext, useState 
 import { faceKey } from "../account/faces";
 import { type LinkBeginStep, type LinkFace, linkFace } from "../account/link";
 import type { SyncPosture, SyncPostureControl } from "../account/posture";
+import { OnboardingConnectPaneView } from "../boot/onboarding/views/connect";
+import { OnboardingFieldPaneView } from "../boot/onboarding/views/field";
+import { OnboardingPosturePaneView } from "../boot/onboarding/views/posture";
+import {
+  OnboardingSettingUpPaneView,
+  type OnboardingSetupPhase,
+} from "../boot/onboarding/views/setting-up";
 import {
   type OnboardingChooserUser,
-  OnboardingConnectPaneView,
-  OnboardingDerivingPaneView,
-  OnboardingFieldPaneView,
-  OnboardingFinishingPaneView,
-  OnboardingPosturePaneView,
-  OnboardingReadyPaneView,
-  OnboardingSettingUpPaneView,
   OnboardingUsersPaneView,
+} from "../boot/onboarding/views/users";
+import {
+  OnboardingDerivingPaneView,
   OnboardingWelcomeBackPaneView,
   OnboardingWelcomePaneView,
-} from "../boot/onboarding/onboarding-views";
+} from "../boot/onboarding/views/welcome";
 import { WizardShellView } from "../boot/onboarding/wizard-ui";
 import type { FieldUserFace } from "../host";
 import { FIXTURE_ME, FIXTURE_OTHERS } from "./account-fixtures";
@@ -70,6 +73,29 @@ const COMPLETION_FAILURE = {
   reason: "The profile store is read-only — your field is ready either way.",
 };
 
+/** AO-D2 — Setting up as the boot machine moves under it: the answers being
+ * written, the desk's own stages (the DocManager's words), then Ready. */
+const SETTING_UP_STATES = ["saving", "opening", "drawing", "settling", "ready"] as const;
+type SettingUpState = (typeof SETTING_UP_STATES)[number];
+
+const DESK_WAITING: OnboardingSetupPhase = { key: "desk", label: "Your desk", state: "waiting" };
+const DESK_READY: OnboardingSetupPhase = { key: "desk", label: "Your desk", state: "done" };
+
+function deskPhase(state: SettingUpState): OnboardingSetupPhase {
+  switch (state) {
+    case "saving":
+      return DESK_WAITING;
+    case "opening":
+      return { key: "desk", label: "Your desk", state: "live", detail: "opening doc" };
+    case "drawing":
+      return { key: "desk", label: "Your desk", state: "live", detail: "drawing the board" };
+    case "settling":
+      return { key: "desk", label: "Your desk", state: "live", detail: "settling" };
+    case "ready":
+      return DESK_READY;
+  }
+}
+
 const OnboardingPreviewTheme = createContext<{
   dark: boolean;
   onToggleTheme: () => void;
@@ -100,41 +126,15 @@ export function OnboardingPreview({
           </OnboardingFrame>
 
           <FieldPreview />
-
-          <OnboardingFrame
-            index="03"
-            label="Already running"
-            note="Honest boot stages · normally advances after one beat"
-            state="setting-up"
-          >
-            <OnboardingSettingUpPaneView
-              stagesDone={["waking the daemon", "loading the field", "opening your last field"]}
-              onContinue={noop}
-            />
-          </OnboardingFrame>
-
           <ConnectPreview />
           <PosturePreview />
-
-          <OnboardingFrame
-            index="06"
-            label="Ready"
-            note="Durable completion write in progress"
-            state="ready"
-          >
-            <OnboardingReadyPaneView
-              profileName="James"
-              flag={{ kind: "writing" }}
-              onRetry={noop}
-              onContinueAnyway={noop}
-            />
-          </OnboardingFrame>
+          <SettingUpPreview />
         </OnboardingGroup>
 
         <OnboardingGroup
           eyebrow="Derived and recovery states"
           title="Every alternate face"
-          description="Resume, migration, second-user completion, and both refusal paths are preserved here so none can silently drift."
+          description="Resume, migration, a second user's end, and the refusals of the answers and the desk are preserved here so none can silently drift."
         >
           <OnboardingFrame
             index="A1"
@@ -156,45 +156,63 @@ export function OnboardingPreview({
 
           <OnboardingFrame
             index="A3"
-            label="Second-user completion"
-            note="Successful writes disappear immediately"
-            state="finishing"
+            label="A second user's end"
+            note="No welcome beat · the glass hands over once the desk is ready"
+            state="setting-up-second-user"
           >
-            <OnboardingFinishingPaneView
-              flag={{ kind: "writing" }}
-              onRetry={noop}
+            <OnboardingSettingUpPaneView
+              phases={[DESK_READY]}
+              name={null}
+              ready
+              flag={{ kind: "idle" }}
+              onRetryWrite={noop}
               onContinueAnyway={noop}
+              onRetryPhase={noop}
             />
           </OnboardingFrame>
 
           <OnboardingFrame
             index="A4"
-            label="Ready write refused"
-            note="Fresh-user recovery actions"
-            state="ready-failed"
+            label="Answers not saved"
+            note="The completion write refused · the desk waits for it"
+            state="setting-up-write-failed"
           >
-            <OnboardingReadyPaneView
-              profileName="James"
+            <OnboardingSettingUpPaneView
+              phases={[DESK_WAITING]}
+              name="James"
+              ready={false}
               flag={COMPLETION_FAILURE}
-              onRetry={noop}
+              onRetryWrite={noop}
               onContinueAnyway={noop}
+              onRetryPhase={noop}
+            />
+          </OnboardingFrame>
+
+          <OnboardingFrame
+            index="A5"
+            label="The desk could not open"
+            note="The boot's own reason and Retry, as the splash says them"
+            state="setting-up-desk-failed"
+          >
+            <OnboardingSettingUpPaneView
+              phases={[
+                {
+                  key: "desk",
+                  label: "Your desk",
+                  state: "failed",
+                  detail: "document open failed: the daemon refused doc.open (UNAVAILABLE)",
+                },
+              ]}
+              name="James"
+              ready={false}
+              flag={{ kind: "idle" }}
+              onRetryWrite={noop}
+              onContinueAnyway={noop}
+              onRetryPhase={noop}
             />
           </OnboardingFrame>
 
           <ChooserPreview />
-
-          <OnboardingFrame
-            index="A5"
-            label="Second-user write refused"
-            note="Immediate completion recovery"
-            state="finishing-failed"
-          >
-            <OnboardingFinishingPaneView
-              flag={COMPLETION_FAILURE}
-              onRetry={noop}
-              onContinueAnyway={noop}
-            />
-          </OnboardingFrame>
         </OnboardingGroup>
       </div>
     </OnboardingPreviewTheme.Provider>
@@ -229,6 +247,38 @@ function ChooserPreview(): ReactElement {
         }
         onChoose={noop}
         onContinue={noop}
+      />
+    </OnboardingFrame>
+  );
+}
+
+/** The end of every path (AO-D2): the shipping pane, fed the boot machine's
+ * states by hand so none of them advances on its own here. */
+function SettingUpPreview(): ReactElement {
+  const [state, setState] = useState<SettingUpState>("drawing");
+  return (
+    <OnboardingFrame
+      index="05"
+      label="Setting up, then Ready"
+      note="The desk opens beneath the glass · the title becomes the welcome in place"
+      state="setting-up"
+      controls={
+        <SegmentedControl
+          options={SETTING_UP_STATES}
+          value={state}
+          onChange={setState}
+          label="Setting up state"
+        />
+      }
+    >
+      <OnboardingSettingUpPaneView
+        phases={[deskPhase(state)]}
+        name="James"
+        ready={state === "ready"}
+        flag={state === "saving" ? { kind: "writing" } : { kind: "idle" }}
+        onRetryWrite={noop}
+        onContinueAnyway={noop}
+        onRetryPhase={noop}
       />
     </OnboardingFrame>
   );
@@ -280,7 +330,7 @@ function ConnectPreview(): ReactElement {
   const [beginStep, setBeginStep] = useState<LinkBeginStep>({ kind: "idle" });
   return (
     <OnboardingFrame
-      index="04"
+      index="03"
       label="Connect devices"
       note="Every posture the daemon reports"
       state="connect"
@@ -328,7 +378,7 @@ function PosturePreview(): ReactElement {
 
   return (
     <OnboardingFrame
-      index="05"
+      index="04"
       label="Project default"
       note="Shared with Settings → Account"
       state="posture"

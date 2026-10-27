@@ -1,144 +1,111 @@
 import type { FielddClient } from "@vibefield/fieldd-client";
-import { FielddProvider, useFielddClient, useSubscription } from "@vibefield/fieldd-client/react";
-import { type ReactElement, useEffect, useRef, useState } from "react";
-import { faceOf, heldFaces, shownFaces } from "../../account/faces";
+import { FielddProvider, useSubscription } from "@vibefield/fieldd-client/react";
+import { type ReactElement, useEffect, useState } from "react";
+import { hasLink, linkFace, type UserLinkStatus } from "../../account/link";
+import { type FieldUserProfile, getHost } from "../../host";
+import type { BootOnboarding, BootView } from "../machine";
+import { entryAfterName, entryBeforeAsking, nextPane, type Pane, variantOf } from "./order";
+import { ConnectPane } from "./panes/ConnectPane";
+import { FieldPane } from "./panes/FieldPane";
+import { PosturePane } from "./panes/PosturePane";
+import { SettingUpPane } from "./panes/SettingUpPane";
+import { UsersPane } from "./panes/UsersPane";
 import {
-  hasLink,
-  type LinkBeginStep,
-  type LinkFace,
-  linkFace,
-  type UserLinkStatus,
-} from "../../account/link";
-import { useSyncPosture } from "../../account/posture";
-import { accountChanged, refusalSentence } from "../../account/use-account";
-import {
-  type FieldUserFace,
-  type FieldUserProfile,
-  type FieldUserRoster,
-  getHost,
-} from "../../host";
-import type { BootOnboarding } from "../machine";
-import { leaveFor } from "../switch";
-import {
-  type OnboardingCompletionFlag,
-  OnboardingConnectPaneView,
   OnboardingDerivingPaneView,
-  OnboardingFieldPaneView,
-  OnboardingFinishingPaneView,
-  OnboardingPosturePaneView,
-  OnboardingReadyPaneView,
-  OnboardingSettingUpPaneView,
-  OnboardingUsersPaneView,
   OnboardingWelcomeBackPaneView,
   OnboardingWelcomePaneView,
-} from "./onboarding-views";
+} from "./views/welcome";
 import { WizardShell } from "./wizard-ui";
 
-// The Setup Assistant (UA-3w; spec §6). Held open by the boot machine between
-// a warm daemon and an open document, and closed by the only thing that may
-// close it: a durable `onboarded: true`.
+// The Setup Assistant (UA-3w; spec §6; track AO — draft/thinking-agent-onboarding.md).
+// Held open by the boot machine between a warm daemon and an open document;
+// its answers recorded, it keeps the window while the desk opens beneath it,
+// and hands the window over when Setting up becomes Ready (AO-D2).
 //
 // The laws it implements, and where each one lives:
-//   W1 one decision per pane          — the Pane union below; nothing asks twice.
-//   W2 the mandatory core is a name   — pane 2 pre-fills it and Continue never
+//   W1 one decision per pane          — the Pane union in order.ts; nothing asks twice.
+//   W2 the mandatory core is a name   — the name pane pre-fills it and Continue never
 //                                       validates; an empty box keeps the
 //                                       pre-filled name rather than blocking.
 //   W3 everything else is skippable   — SkipAction, whose subtitle names the
 //                                       later home verbatim.
-//   W4 honest progress only           — pane 3 lists the stages this boot
-//                                       ACTUALLY passed (machine.onboarding
-//                                       .stagesDone) and says the rest is
-//                                       already running behind the window.
-//   W5 it ends inside the product     — the last act is a write, then the boot
-//                                       machine carries on to the real field.
-//   W6 position derives from facts    — `entryPane` reads users.json fields and
-//                                       the link snapshot. There is no wizard
-//                                       state store, so quitting and relaunching
-//                                       lands on the first incomplete pane by
-//                                       construction, not by memory.
+//   W4 honest progress only           — Setting up lists the boot machine's own
+//                                       phase and stage for the desk, as it opens.
+//   W5 it ends inside the product     — the answers are a durable write, then the
+//                                       desk opens beneath the glass, and the
+//                                       glass hands the window to it.
+//   W6 position derives from facts    — order.ts's entry derivation reads users.json
+//                                       fields and the link snapshot. There is no
+//                                       wizard state store, so quitting and
+//                                       relaunching lands on the first incomplete
+//                                       pane by construction, not by memory.
+//
+// Each pane's controller is its own file under panes/ and its face under
+// views/, one owner each: the Connect pane and the sync question are track TS's.
 
-/** One beat on the setting-up pane. Long enough to read two finished stages,
- * short enough that a warm machine never feels detained. */
-const SETTING_UP_BEAT_MS = 900;
-/** One beat on Ready before the flag write — the sentence lands, then it goes. */
-const READY_BEAT_MS = 700;
 /** How long a RESUMING wizard waits for the link snapshot before deciding
  * where to land. A silent daemon must not park the user on a blank pane, so
  * the derivation proceeds with "no link known" once this elapses. */
 const ENTRY_SETTLE_MS = 1_200;
 
-type Pane =
-  | "welcome"
-  | "welcome-back"
-  | "field"
-  | "setting-up"
-  | "connect"
-  | "posture"
-  | "ready"
-  /** The second-user variant's end (§6.2) — the same durable write Ready makes,
-   * without the pause or the greeting. Not a sixth question: a terminal state
-   * that only has a face if the write is refused. */
-  | "finishing"
-  /** The users chooser (§6.2; DESIGN.md §8) — where a second user's Back leads.
-   * By then this user exists, so going back means choosing who to enter. */
-  | "users";
-
 export function OnboardingWizard({
   client,
   onboarding,
+  boot,
   onComplete,
+  onReveal,
+  onRetry,
 }: {
   client: FielddClient;
   onboarding: BootOnboarding;
+  /** The boot machine's view — the desk's real phase and stage (W4). */
+  boot: BootView;
+  /** The questions are answered and recorded: the document opens beneath the glass. */
   onComplete: (profile?: FieldUserProfile) => void;
+  /** Setting up's last beat is over: the glass hands the window to the desk. */
+  onReveal: () => void;
+  /** The boot's own Retry, for a desk that could not open. */
+  onRetry: () => void;
 }): ReactElement {
   return (
     <FielddProvider client={client}>
-      <WizardBody onboarding={onboarding} onComplete={onComplete} />
+      <WizardBody
+        onboarding={onboarding}
+        boot={boot}
+        onComplete={onComplete}
+        onReveal={onReveal}
+        onRetry={onRetry}
+      />
     </FielddProvider>
   );
 }
 
 function WizardBody({
   onboarding,
+  boot,
   onComplete,
+  onReveal,
+  onRetry,
 }: {
   onboarding: BootOnboarding;
+  boot: BootView;
   onComplete: (profile?: FieldUserProfile) => void;
+  onReveal: () => void;
+  onRetry: () => void;
 }): ReactElement {
   const usersUpdate = getHost().usersUpdate;
   const [profile, setProfile] = useState<FieldUserProfile>(onboarding.profile);
-  // A field a version-skewed writer set, never a schema field (host.ts).
-  const migrated = profile.setupVariant === "migrated";
-  // UA-5 §6.2 — the second user this machine ever had. The field is already
-  // set up; only this PERSON is new, so the variant drops the two beats that
-  // exist to introduce the product: the Welcome pane and the Ready pause. What
-  // is left is panes 2 → 4 — name, the honest stages, the mesh — and then the
-  // same completion write, immediately.
-  const secondUser = profile.setupVariant === "second-user";
-  /** Where every path ends. The two variants differ only in whether that end
-   * has a face to read. */
-  const endPane: Pane = secondUser ? "finishing" : "ready";
+  const variant = variantOf(profile);
 
   const link = useSubscription<UserLinkStatus>("user.link.subscribe");
   const face = linkFace(link.status, link.status === "live" ? (link.data ?? null) : null);
   const linked = hasLink(face);
+  const facts = { variant, linked };
 
-  // W6 — the entry pane is DERIVED. A record with no face never finished pane
-  // 2 (mint never writes one — UA-D17), so the wizard starts at the top; a
-  // record with one did, so it resumes at the first thing still unanswered. A
-  // pre-v0.3 record's `color` proves the same thing: that user answered pane 2
-  // before faces existed. "The top" is variant-specific: a second user starts
-  // AT pane 2, because the field it is joining needs no welcome.
-  const [pane, setPane] = useState<Pane | null>(() =>
-    profile.face === undefined && profile.color === undefined
-      ? migrated
-        ? "welcome-back"
-        : secondUser
-          ? "field"
-          : "welcome"
-      : null,
-  );
+  // W6 — the entry pane is DERIVED (order.ts): the top for a record that never
+  // answered the name pane, else the first thing still unanswered once the link
+  // snapshot has spoken.
+  const [pane, setPane] = useState<Pane | null>(() => entryBeforeAsking(profile));
   const [history, setHistory] = useState<Pane[]>([]);
   const [settled, setSettled] = useState(false);
 
@@ -151,12 +118,8 @@ function WizardBody({
   useEffect(() => {
     if (pane !== null) return;
     if (link.status === "loading" && !settled) return; // one honest beat, bounded
-    // Migration's only remaining pane after the name is Ready — its link, if
-    // there is one, is acknowledged rather than re-asked (spec §6, migration).
-    // The second-user variant resumes exactly like a fresh one: a record with a
-    // color enters at Connect, and its END is the only thing that differs.
-    setPane(migrated ? endPane : linked ? "posture" : "connect");
-  }, [pane, link.status, settled, migrated, linked, endPane]);
+    setPane(entryAfterName(variant, linked));
+  }, [pane, link.status, settled, variant, linked]);
 
   // Plain forward/back over panes. This is the ONLY position state in the
   // wizard and it lives for exactly as long as the window does — where you
@@ -177,56 +140,7 @@ function WizardBody({
   // chooser's "Continue setup" returns to the pane it was opened from.
   const host = getHost();
   const canChooseUser =
-    secondUser && host.usersList !== undefined && host.usersSwitch !== undefined;
-
-  // Pane 3 auto-advances: it reports work that is already done, so it is a
-  // beat, not a gate.
-  useEffect(() => {
-    if (pane !== "setting-up") return;
-    const timer = setTimeout(() => {
-      setHistory((stack) => [...stack, "setting-up"]);
-      setPane("connect");
-    }, SETTING_UP_BEAT_MS);
-    return () => clearTimeout(timer);
-  }, [pane]);
-
-  // The last act. The flag is written FIRST and the hold released only on
-  // success — a wizard that says it finished when nothing was recorded would
-  // reopen next launch with no explanation.
-  const [flag, setFlag] = useState<OnboardingCompletionFlag>({ kind: "idle" });
-  const [attempt, setAttempt] = useState(0);
-
-  useEffect(() => {
-    // ONE completion path for both variants (§6.2): the second-user end differs
-    // only in having no beat to wait out, never in what it records.
-    if (pane !== "ready" && pane !== "finishing") return;
-    let cancelled = false;
-    const timer = setTimeout(
-      () => {
-        if (usersUpdate === undefined) {
-          onComplete(profile);
-          return;
-        }
-        setFlag({ kind: "writing" });
-        usersUpdate({ onboarded: true })
-          .then((updated) => {
-            if (!cancelled) onComplete(updated);
-          })
-          .catch((cause: unknown) => {
-            if (cancelled) return;
-            setFlag({
-              kind: "failed",
-              reason: `${cause instanceof Error ? cause.message : String(cause)} — your field is ready either way.`,
-            });
-          });
-      },
-      pane === "finishing" || attempt > 0 ? 0 : READY_BEAT_MS,
-    );
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [pane, attempt, usersUpdate, onComplete, profile]);
+    variant === "second-user" && host.usersList !== undefined && host.usersSwitch !== undefined;
 
   const shell = (content: ReactElement): ReactElement => <WizardShell>{content}</WizardShell>;
 
@@ -239,30 +153,24 @@ function WizardBody({
 
   switch (pane) {
     case "welcome":
-      return shell(<OnboardingWelcomePaneView onContinue={() => go("field")} />);
+      return shell(<OnboardingWelcomePaneView onContinue={() => go(nextPane("welcome", facts))} />);
 
     case "welcome-back":
-      return shell(<OnboardingWelcomeBackPaneView onContinue={() => go("field")} />);
+      return shell(
+        <OnboardingWelcomeBackPaneView onContinue={() => go(nextPane("welcome-back", facts))} />,
+      );
 
     case "field":
       return shell(
         <FieldPane
           profile={profile}
           usersUpdate={usersUpdate}
-          eyebrow={secondUser ? "New user" : "Your field"}
+          eyebrow={variant === "second-user" ? "New user" : "Your field"}
           onBack={onBack}
           onDone={(updated) => {
             setProfile(updated);
-            go(migrated ? endPane : "setting-up");
+            go(nextPane("field", facts));
           }}
-        />,
-      );
-
-    case "setting-up":
-      return shell(
-        <OnboardingSettingUpPaneView
-          stagesDone={onboarding.stagesDone}
-          onContinue={() => go("connect")}
         />,
       );
 
@@ -271,270 +179,29 @@ function WizardBody({
         <ConnectPane
           face={face}
           onBack={onBack}
-          onContinue={() => go(linked ? "posture" : endPane)}
-          onSkip={() => go(endPane)}
+          onContinue={() => go(nextPane("connect", facts))}
+          onSkip={() => go(nextPane("connect", facts, "skip"))}
         />,
       );
 
     case "posture":
-      return shell(<PosturePane onBack={onBack} onDone={() => go(endPane)} />);
-
-    case "ready":
-      return shell(
-        <OnboardingReadyPaneView
-          profileName={profile.name}
-          flag={flag}
-          onRetry={() => setAttempt((n) => n + 1)}
-          onContinueAnyway={() => onComplete(profile)}
-          settingsChord={getHost().platform === "darwin" ? "⌘," : "Ctrl+,"}
-        />,
-      );
+      return shell(<PosturePane onBack={onBack} onDone={() => go(nextPane("posture", facts))} />);
 
     case "users":
       return shell(<UsersPane profile={profile} onContinue={back} />);
 
-    case "finishing":
-      // §6.2 — a successful write is gone before anyone could read a greeting,
-      // so this state's only real face is the refusal. The passing case still
-      // renders a fact rather than a blank window (§8), because a slow
-      // supervisor must not look like a hang.
+    case "setting-up":
       return shell(
-        <OnboardingFinishingPaneView
-          flag={flag}
-          onRetry={() => setAttempt((n) => n + 1)}
-          onContinueAnyway={() => onComplete(profile)}
+        <SettingUpPane
+          profile={profile}
+          welcomeName={variant === "second-user" ? null : profile.name}
+          usersUpdate={usersUpdate}
+          boot={boot}
+          onAnswered={onComplete}
+          onReveal={onReveal}
+          onRetryBoot={onRetry}
+          settingsChord={host.platform === "darwin" ? "⌘," : "Ctrl+,"}
         />,
       );
   }
-}
-
-/** Pane 2 — the one mandatory decision, and the only write the wizard needs to
- * make before it can call anything set up. */
-function FieldPane({
-  profile,
-  usersUpdate,
-  eyebrow,
-  onBack,
-  onDone,
-}: {
-  profile: FieldUserProfile;
-  usersUpdate: ReturnType<typeof getHost>["usersUpdate"];
-  eyebrow: string;
-  onBack: (() => void) | undefined;
-  onDone: (updated: FieldUserProfile) => void;
-}): ReactElement {
-  const [name, setName] = useState(profile.name);
-  // The machine's deal, preselected (UA-D17) — so Continue always writes a
-  // face, and so `face`'s presence is a trustworthy "pane 2 was completed"
-  // fact for W6. Dealt against this user alone until the roster arrives, then
-  // against everyone, so it is never a face somebody else already wears.
-  const [roster, setRoster] = useState<readonly FieldUserProfile[]>([]);
-  const [face, setFace] = useState<FieldUserFace>(() => faceOf(profile, []));
-  // A ref, not state: the roster read below closes over it once, and must see
-  // a choice made while it was in flight rather than the value at entry.
-  const chosen = useRef(profile.face !== undefined);
-  const [writing, setWriting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const usersList = getHost().usersList;
-    if (usersList === undefined) return;
-    let cancelled = false;
-    void usersList().then(
-      (snapshot) => {
-        if (cancelled) return;
-        setRoster(snapshot.users);
-        if (!chosen.current) setFace(faceOf(profile, snapshot.users));
-      },
-      () => undefined,
-    );
-    return () => {
-      cancelled = true;
-    };
-    // Once, on entry: a later choice must never be re-dealt underneath the user.
-  }, []);
-
-  const commit = (): void => {
-    if (writing) return;
-    if (usersUpdate === undefined) {
-      onDone(profile);
-      return;
-    }
-    // W2 — never blocked by validation. An empty box keeps the name we came in
-    // with rather than refusing to move.
-    const trimmed = name.trim();
-    setWriting(true);
-    setError(null);
-    void usersUpdate({ name: trimmed.length > 0 ? trimmed : profile.name, face })
-      .then((updated) => {
-        accountChanged();
-        onDone(updated);
-      })
-      .catch((cause: unknown) => {
-        setError(cause instanceof Error ? cause.message : String(cause));
-        setWriting(false);
-      });
-  };
-
-  return (
-    <OnboardingFieldPaneView
-      name={name}
-      face={face}
-      seed={profile.userId}
-      held={heldFaces(roster, profile.userId)}
-      writing={writing}
-      error={error}
-      onNameChange={setName}
-      onFaceChange={(next) => {
-        chosen.current = true;
-        setFace(next);
-      }}
-      onSubmit={commit}
-      onBack={onBack}
-      eyebrow={eyebrow}
-    />
-  );
-}
-
-/** The users chooser's controller: the roster, and the switch. Choosing another
- * user re-targets this window and reloads it (UA-D15) — the switch (DESIGN.md
- * §8) carries the tile's face across, so only a refusal comes back, said on
- * the pane in main's words. Choosing the user being set up is "Continue setup". */
-function UsersPane({
-  profile,
-  onContinue,
-}: {
-  profile: FieldUserProfile;
-  onContinue: () => void;
-}): ReactElement {
-  const host = getHost();
-  const usersList = host.usersList;
-  const [roster, setRoster] = useState<FieldUserRoster | null>(null);
-  const [opening, setOpening] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (usersList === undefined) return;
-    let cancelled = false;
-    void usersList().then(
-      (snapshot) => {
-        if (!cancelled) setRoster(snapshot);
-      },
-      (cause: unknown) => {
-        if (!cancelled)
-          setError(refusalSentence("The users on this machine could not be read", cause));
-      },
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [usersList]);
-
-  const faces = roster === null ? null : shownFaces(roster.users);
-  const users =
-    roster === null
-      ? null
-      : [...roster.users]
-          .sort((a, b) => a.fuid - b.fuid)
-          .map((user) => ({
-            userId: user.userId,
-            name: user.name,
-            face: faces?.get(user.userId)?.face ?? faceOf(user, roster.users),
-            current: user.userId === profile.userId,
-            detail:
-              user.userId === profile.userId
-                ? "Setting up"
-                : user.onboarded
-                  ? undefined
-                  : "Not set up yet",
-          }));
-
-  return (
-    <OnboardingUsersPaneView
-      users={users}
-      opening={opening}
-      error={error}
-      onContinue={onContinue}
-      onChoose={(userId, from) => {
-        if (userId === profile.userId) {
-          onContinue();
-          return;
-        }
-        const usersSwitch = host.usersSwitch;
-        if (usersSwitch === undefined || opening !== null) return;
-        const chosen = users?.find((user) => user.userId === userId);
-        const name = chosen?.name ?? "that user";
-        setOpening(userId);
-        setError(null);
-        void leaveFor(
-          chosen === undefined ? null : { userId, name, face: chosen.face },
-          from ?? null,
-          () => usersSwitch({ userId }),
-        ).catch((cause: unknown) => {
-          setOpening(null);
-          setError(refusalSentence(`Couldn't open ${name}'s field`, cause));
-        });
-      }}
-    />
-  );
-}
-
-/** Pane 4 — the link, and since UA-P-0g the place it BEGINS. The same act as
- * Settings → Account: the same method, the same phrase on the button, and the
- * same rule about where the face comes from — `user.link.subscribe` moves it,
- * this call never does. Only the in-flight beat and a refusal live here.
- *
- * The client rather than the view owns it for the same reason `PosturePane`
- * below does: `onboarding-views` is the Electron-free surface the catalog
- * mounts, and a view that reached for a daemon could not be shown there. */
-function ConnectPane({
-  face,
-  onContinue,
-  onSkip,
-  onBack,
-}: {
-  face: LinkFace;
-  onContinue: () => void;
-  onSkip: () => void;
-  onBack: (() => void) | undefined;
-}): ReactElement {
-  const client = useFielddClient();
-  const [step, setStep] = useState<LinkBeginStep>({ kind: "idle" });
-
-  const begin = async (): Promise<void> => {
-    setStep({ kind: "pending" });
-    try {
-      await client.request("user.link.begin", {});
-      setStep({ kind: "idle" });
-    } catch (cause) {
-      setStep({
-        kind: "failed",
-        reason: cause instanceof Error ? cause.message : String(cause),
-      });
-    }
-  };
-
-  return (
-    <OnboardingConnectPaneView
-      face={face}
-      beginStep={step}
-      onBeginLink={() => void begin()}
-      onContinue={onContinue}
-      onSkip={onSkip}
-      onBack={onBack}
-    />
-  );
-}
-
-/** The posture question — the same two cards, the same words, the same key as
- * Settings → Account (they share `POSTURE_CHOICES` and `useSyncPosture`). */
-function PosturePane({
-  onBack,
-  onDone,
-}: {
-  onBack: (() => void) | undefined;
-  onDone: () => void;
-}): ReactElement {
-  const posture = useSyncPosture();
-  return <OnboardingPosturePaneView posture={posture} onDone={onDone} onBack={onBack} />;
 }

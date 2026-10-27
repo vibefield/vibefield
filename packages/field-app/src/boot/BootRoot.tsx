@@ -7,7 +7,7 @@ import {
 } from "react";
 import type { AppearanceOverrideSource } from "../appearance";
 import type { ProductPresentationContextReporter } from "../presentation-context";
-import type { BootMachine, BootView } from "./machine";
+import type { BootMachine } from "./machine";
 import { OnboardingWizard } from "./onboarding/OnboardingWizard";
 import { SwitchLayer } from "./SwitchScene";
 import { SplashFace } from "./splash-parts";
@@ -20,12 +20,15 @@ import "./boot.css";
 // the reveal (240ms fade + a 560ms island-ease settle) plays only when the
 // machine reaches `interactive` — fully warm, frame-stable, never mid-hitch.
 //
-// UA-3w borrows that first face once per install: while the machine holds in
-// `onboarding` the Setup Assistant takes the splash's layer and ground, and the
-// splash's own face (wordmark, bar, stage line) stands down. When the wizard
-// releases the hold the ordinary stages return underneath it and the reveal
-// happens exactly as it always does — which is W5 in mechanism: the wizard
-// hands back to the real boot and ends inside the field, not at a door.
+// UA-3w borrows that first face once per install: from the machine's
+// `onboarding` hold the Setup Assistant takes the splash's layer and ground,
+// and the splash's own face (wordmark, bar, stage line) stands down. Since
+// AO-D2 it keeps them to the end: its answers recorded, the document opens,
+// warms and settles behind its glass while Setting up reports those stages,
+// and at `interactive` the glass leaves exactly as the splash would — the
+// 240ms fade over the 560ms settle — so the splash never returns between the
+// wizard and the desk. W5 in mechanism: the wizard ends inside the field it
+// opened, not at a door.
 //
 // The switch (DESIGN.md §8) borrows it once per user change. The window being
 // left draws its scene over everything — the field recedes and freezes under
@@ -119,20 +122,25 @@ export function BootRoot({
           </ready.mod.FielddProvider>
         </div>
       )}
-      {view.phase === "onboarding" && machine.client !== null && machine.onboarding !== null ? (
-        <BootGround inert={covered}>
+      {machine.client !== null && machine.onboarding !== null ? (
+        <LeavingGround revealed={revealed} inert={covered}>
           <OnboardingWizard
             client={machine.client}
             onboarding={machine.onboarding}
+            boot={view}
             onComplete={machine.completeOnboarding}
+            onReveal={machine.revealDesk}
+            onRetry={machine.retry}
           />
-        </BootGround>
+        </LeavingGround>
       ) : switching.kind === "arriving" || splashRetired ? null : (
-        <Splash view={view} onRetry={machine.retry} />
+        <LeavingGround revealed={revealed}>
+          <SplashFace status={view} onRetry={machine.retry} />
+        </LeavingGround>
       )}
       <SwitchLayer
         boot={view}
-        ready={revealed || view.phase === "onboarding"}
+        ready={revealed || machine.onboarding !== null}
         onRetry={machine.retry}
       />
     </>
@@ -164,8 +172,18 @@ function BootGround({
   );
 }
 
-function Splash({ view, onRetry }: { view: BootView; onRetry: () => void }): ReactElement | null {
-  const revealed = view.phase === "interactive";
+/** The first face — the splash, or the Setup Assistant that kept the window
+ * (AO-D2) — leaves on the reveal: a 240ms fade over the desk's settle, then it
+ * unmounts. One leaving for both, so the two can never part differently. */
+function LeavingGround({
+  revealed,
+  inert = false,
+  children,
+}: {
+  revealed: boolean;
+  inert?: boolean;
+  children: ReactNode;
+}): ReactElement | null {
   const [mounted, setMounted] = useState(true);
   useEffect(() => {
     if (!revealed) return;
@@ -180,8 +198,9 @@ function Splash({ view, onRetry }: { view: BootView; onRetry: () => void }): Rea
         revealed ? "pointer-events-none opacity-0" : "opacity-100"
       }`}
       ariaHidden={revealed}
+      inert={inert}
     >
-      <SplashFace status={view} onRetry={onRetry} />
+      {children}
     </BootGround>
   );
 }

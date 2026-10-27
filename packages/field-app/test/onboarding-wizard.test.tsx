@@ -15,13 +15,16 @@ import { type FieldHost, type FieldUserProfile, type FieldUserRoster, setHost } 
 // UA-3w — the Setup Assistant (spec §6). The cases that matter are the ones
 // where the wizard must NOT behave like a form: it is entered from durable
 // facts rather than remembered position (W6), it never blocks on validation
-// (W2), every skip states where the question went (W3), and its last act is a
-// durable write that is also the only thing allowed to end it (W5).
+// (W2), every skip states where the question went (W3), and its answers end in
+// a durable write that is the only thing allowed to release the boot (W5).
+// AO-1 (track AO, AO-D2): pane 3 is retired, and Setting up is the end of
+// every path — the write, the desk opening beneath the glass in the boot
+// machine's own words, then the welcome and the hand-over.
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const SETTING_UP_BEAT_MS = 900;
-const READY_BEAT_MS = 700;
+/** DESIGN.md §6, the hand-over: the welcome's beat before the glass leaves. */
+const WELCOME_BEAT_MS = 1_400;
 const ENTRY_SETTLE_MS = 1_200;
 const WIZARD_CSS = readFileSync(join(process.cwd(), "src/boot/onboarding/wizard-ui.css"), "utf8");
 
@@ -95,6 +98,7 @@ beforeEach(() => {
 afterEach(() => {
   if (root !== null) act(() => root?.unmount());
   root = null;
+  mounted = null;
   container?.remove();
   container = null;
   vi.useRealTimers();
@@ -198,34 +202,68 @@ function client(
 }
 
 function onboarding(profile: Partial<FieldUserProfile> = {}): BootOnboarding {
-  return {
-    profile: { ...FRESH, ...profile },
-    stagesDone: ["waking the daemon", "loading the field"],
-  };
+  return { profile: { ...FRESH, ...profile } };
 }
 
-async function mount(props: {
+/** The boot machine's view, as the wizard is handed it. */
+function bootAt(phase: BootView["phase"], patch: Partial<BootView> = {}): BootView {
+  return { phase, unavailable: null, stage: "", progress: null, degradedReveal: false, ...patch };
+}
+
+interface MountProps {
   fieldd: FielddClient;
   onboarding: BootOnboarding;
-  onComplete: () => void;
-}): Promise<void> {
+  onComplete: (profile?: FieldUserProfile) => void;
+  onReveal?: () => void;
+  onRetry?: () => void;
+  boot?: BootView;
+}
+let mounted: (MountProps & { boot: BootView }) | null = null;
+
+function render(): void {
+  if (mounted === null) return;
+  root?.render(
+    createElement(OnboardingWizard, {
+      client: mounted.fieldd,
+      onboarding: mounted.onboarding,
+      boot: mounted.boot,
+      onComplete: mounted.onComplete,
+      onReveal: mounted.onReveal ?? (() => undefined),
+      onRetry: mounted.onRetry ?? (() => undefined),
+    }),
+  );
+}
+
+async function mount(props: MountProps): Promise<void> {
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
-  await act(async () => {
-    root?.render(
-      createElement(OnboardingWizard, {
-        client: props.fieldd,
-        onboarding: props.onboarding,
-        onComplete: props.onComplete,
-      }),
-    );
-  });
+  mounted = { ...props, boot: props.boot ?? bootAt("onboarding") };
+  await act(async () => render());
   // The entry pane may wait on the link snapshot (bounded) before it decides.
   await act(async () => {
     vi.advanceTimersByTime(ENTRY_SETTLE_MS);
   });
 }
+
+/** The boot machine moves on beneath the glass: the wizard is handed its view. */
+async function boot(view: BootView): Promise<void> {
+  if (mounted === null) throw new Error("nothing is mounted");
+  mounted = { ...mounted, boot: view };
+  await act(async () => render());
+}
+
+/** The visible title. Setting up's two titles share one cell (M1), and the one
+ * not showing is hidden from assistive tech, so it is not the title. */
+const title = (): string => {
+  const heading = container?.querySelector("h1");
+  const swap = heading?.querySelector(".vf-wizard-title-swap");
+  if (swap === null || swap === undefined) return heading?.textContent ?? "";
+  return Array.from(swap.children)
+    .filter((part) => part.getAttribute("aria-hidden") !== "true")
+    .map((part) => part.textContent ?? "")
+    .join("");
+};
 
 const text = (): string => container?.textContent ?? "";
 
@@ -250,7 +288,7 @@ async function tick(ms: number): Promise<void> {
 }
 
 describe("Setup Assistant", () => {
-  it("walks a fresh install: name and face, the real stages, a named skip, then the flag", async () => {
+  it("walks a fresh install: name and face, a named skip, then Setting up over the desk it opens, the welcome and the hand-over", async () => {
     const updates: unknown[] = [];
     const usersUpdate = vi.fn(async (params: Record<string, unknown>) => {
       updates.push(params);
@@ -258,7 +296,13 @@ describe("Setup Assistant", () => {
     });
     host(usersUpdate);
     const onComplete = vi.fn();
-    await mount({ fieldd: client({ link: NO_LINK }), onboarding: onboarding(), onComplete });
+    const onReveal = vi.fn();
+    await mount({
+      fieldd: client({ link: NO_LINK }),
+      onboarding: onboarding(),
+      onComplete,
+      onReveal,
+    });
 
     // 1 — Welcome. One decision, and it is not a question (W1).
     expect(text()).toContain("Welcome.");
@@ -301,30 +345,48 @@ describe("Setup Assistant", () => {
     await click("Continue");
     expect(updates).toEqual([{ name: "James", face: { emoji: other, frame: "sticker" } }]);
 
-    // 3 — setting up: the stages this boot really passed, and no bar (W4).
-    expect(text()).toContain("waking the daemon");
-    expect(text()).toContain("loading the field");
-    expect(container?.querySelector('[role="progressbar"]')).toBeNull();
-
-    // ...and it advances on its own.
-    await tick(SETTING_UP_BEAT_MS);
+    // 3 — the next question, at once: pane 3 is retired (AO-D2), because
+    // nothing long runs before the answers do. Skippable, and the skip says
+    // where the question went (W3).
     expect(text()).toContain("Connect your devices");
-
-    // 4 — skippable, and the skip says where the question went (W3).
+    expect(text()).not.toContain("Your field is already running");
     expect(text()).toContain("Set up later — Settings → Account");
     await click("Skip");
 
-    // 5 — Ready: one beat, then the durable write, and only then the release.
-    expect(text()).toContain("Welcome to your field, James");
-    // ...and where Settings went, said once (DESIGN.md §8): a face does not
-    // say "settings" the way the gear did.
-    expect(text()).toContain("Your face in the bottom-left corner opens Settings — so does");
-    expect(onComplete).not.toHaveBeenCalled();
-    await tick(READY_BEAT_MS);
+    // 4 — Setting up: the answers are written first, and only a landed write
+    // releases the boot (W5) — the document opens beneath the glass.
     expect(updates).toEqual([
       { name: "James", face: { emoji: other, frame: "sticker" } },
       { onboarded: true },
     ]);
+    expect(onComplete).toHaveBeenCalledTimes(1);
+    expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ onboarded: true }));
+    expect(title()).toBe("Getting your desk ready.");
+    // W4 — the desk's line is the boot machine's own phase and stage, never a bar.
+    await boot(bootAt("warming", { stage: "drawing the board", progress: 0.6 }));
+    const desk = container?.querySelector('.vf-wizard-phase[data-state="live"]');
+    expect(desk?.textContent).toContain("Your desk");
+    expect(desk?.textContent).toContain("drawing the board");
+    expect(container?.querySelector('[role="progressbar"]')).toBeNull();
+    // The welcome's words hold their cell from the start (M1), hidden until Ready.
+    expect(container?.querySelector(".vf-wizard-title-swap")?.children).toHaveLength(2);
+    expect(title()).not.toContain("Welcome");
+
+    // 5 — the desk is warm and stable behind the glass: the title becomes the
+    // welcome in place, with where Settings went said once (DESIGN.md §8)...
+    await boot(bootAt("handing-over"));
+    expect(container?.querySelector('.vf-wizard-phase[data-state="done"]')?.textContent).toContain(
+      "Your desk",
+    );
+    expect(title()).toBe("Welcome to your field, James.");
+    expect(
+      container?.querySelector('.vf-wizard-ready-line[aria-hidden="false"]')?.textContent,
+    ).toContain("Your face in the bottom-left corner opens Settings — so does");
+    // ...and holds it one beat before the glass hands the window over (W5).
+    await tick(WELCOME_BEAT_MS - 1);
+    expect(onReveal).not.toHaveBeenCalled();
+    await tick(1);
+    expect(onReveal).toHaveBeenCalledTimes(1);
     expect(onComplete).toHaveBeenCalledTimes(1);
   });
 
@@ -391,21 +453,25 @@ describe("Setup Assistant", () => {
     );
     host(usersUpdate);
     const onComplete = vi.fn();
+    const onReveal = vi.fn();
     await mount({
       fieldd: client({ link: NO_LINK }),
       onboarding: onboarding({ setupVariant: "migrated" }),
       onComplete,
+      onReveal,
     });
 
     expect(text()).toContain("Your field now lives in a user");
     await click("Continue"); // → the name pane
     expect(container?.querySelector('input[aria-label="Your name"]')).not.toBeNull();
-    await click("Continue"); // → straight to Ready; no setting-up, no connect
+    await click("Continue"); // → straight to Setting up; no connect
 
-    expect(text()).toContain("Welcome to your field");
     expect(text()).not.toContain("Connect your devices");
-    await tick(READY_BEAT_MS);
     expect(onComplete).toHaveBeenCalledTimes(1);
+    await boot(bootAt("handing-over"));
+    expect(title()).toBe("Welcome to your field, james.");
+    await tick(WELCOME_BEAT_MS);
+    expect(onReveal).toHaveBeenCalledTimes(1);
   });
 
   it("opens a second user at the name pane and ends without a greeting", async () => {
@@ -418,14 +484,16 @@ describe("Setup Assistant", () => {
     });
     host(usersUpdate);
     const onComplete = vi.fn();
+    const onReveal = vi.fn();
     await mount({
       fieldd: client({ link: NO_LINK }),
       onboarding: onboarding({ setupVariant: "second-user" }),
       onComplete,
+      onReveal,
     });
 
-    // §6.2 — panes 2 → 4. There is no Welcome: the field is already set up and
-    // only this person is new.
+    // §6.2 — the name, then the rest. There is no Welcome: the field is already
+    // set up and only this person is new.
     expect(text()).not.toContain(
       "Manage all your agents and compose your agentic workflow in one place.",
     );
@@ -440,18 +508,18 @@ describe("Setup Assistant", () => {
       ),
     ).toBe(false);
 
-    await click("Continue"); // pane 2 → 3
-    expect(text()).toContain("Your field is already running");
-    await tick(SETTING_UP_BEAT_MS);
-    expect(text()).toContain("Connect your devices"); // pane 4
+    await click("Continue"); // the name → Connect
+    expect(text()).toContain("Connect your devices");
 
     await click("Skip");
-    // No Ready beat: the write goes out immediately, and the greeting a first
-    // run gets is never shown to the second user.
-    await tick(0);
-    expect(text()).not.toContain("Welcome to your field");
+    // The write goes out at once, as for anyone...
     expect(updates).toEqual([{ name: "james", face: DEALT_FACE }, { onboarded: true }]);
     expect(onComplete).toHaveBeenCalledTimes(1);
+    // ...and with the desk ready there is no welcome beat: the greeting a first
+    // run gets is never shown to the second user, and the glass hands over.
+    await boot(bootAt("handing-over"));
+    expect(text()).not.toContain("Welcome to your field");
+    expect(onReveal).toHaveBeenCalledTimes(1);
   });
 
   it("takes a second user's Back to the users chooser, and Continue setup back again", async () => {
@@ -549,7 +617,6 @@ describe("Setup Assistant", () => {
     expect(container?.querySelector('input[aria-label="Your name"]')).toBeNull();
 
     await click("Skip");
-    await tick(0);
     expect(updates).toEqual([{ onboarded: true }]);
     expect(onComplete).toHaveBeenCalledTimes(1);
   });
@@ -575,7 +642,6 @@ describe("Setup Assistant", () => {
     });
 
     await click("Skip");
-    await tick(0);
     // The variant drops the greeting, never the honesty that goes with it.
     expect(onComplete).not.toHaveBeenCalled();
     expect(text()).toContain("Setup could not be recorded");
@@ -831,8 +897,7 @@ describe("Setup Assistant", () => {
       onComplete,
     });
 
-    await click("Skip"); // pane 4 → Ready
-    await tick(READY_BEAT_MS);
+    await click("Skip"); // Connect → Setting up, whose first act is the write
     // The hold is NOT released: nothing durable says setup happened.
     expect(onComplete).not.toHaveBeenCalled();
     expect(text()).toContain("Setup could not be recorded");
@@ -859,11 +924,13 @@ describe("Setup Assistant", () => {
     });
 
     await click("Skip");
-    await tick(READY_BEAT_MS);
     await click("Continue anyway");
     // The boot proceeds — the wizard is a hold, never a trap — and the
     // unflipped record means it honestly asks again next launch.
     expect(onComplete).toHaveBeenCalledTimes(1);
+    // Setting up carries on as for anyone: the desk opens beneath the glass.
+    expect(title()).toBe("Getting your desk ready.");
+    expect(text()).toContain("Your desk");
   });
 
   it("is operable from the keyboard alone: the field takes focus and Enter advances", async () => {
@@ -889,7 +956,7 @@ describe("Setup Assistant", () => {
     await act(async () => {
       form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     });
-    expect(text()).toContain("Your field is already running");
+    expect(text()).toContain("Connect your devices");
   });
 
   it("respects reduced motion — the pane entrance has a fade fallback, no transitions survive", async () => {
@@ -957,66 +1024,167 @@ describe("Setup Assistant", () => {
   it("keeps going when there is no supervisor bridge at all rather than trapping the boot", async () => {
     host(null);
     const onComplete = vi.fn();
-    await mount({ fieldd: client({ link: NO_LINK }), onboarding: onboarding(), onComplete });
+    const onReveal = vi.fn();
+    await mount({
+      fieldd: client({ link: NO_LINK }),
+      onboarding: onboarding(),
+      onComplete,
+      onReveal,
+    });
 
     await click("Get started");
     await click("Continue"); // nothing to write to — the pane still advances
-    await tick(SETTING_UP_BEAT_MS);
     await click("Skip");
-    await tick(READY_BEAT_MS);
     expect(onComplete).toHaveBeenCalledTimes(1);
+    await boot(bootAt("handing-over"));
+    await tick(WELCOME_BEAT_MS);
+    expect(onReveal).toHaveBeenCalledTimes(1);
+  });
+
+  it("says why a desk could not open beneath the glass, and its Retry is the boot's own", async () => {
+    host(
+      vi.fn(
+        async (params: Record<string, unknown>) =>
+          ({ ...FRESH, color: "accent-2", ...params }) as FieldUserProfile,
+      ),
+    );
+    const onRetry = vi.fn();
+    const onReveal = vi.fn();
+    await mount({
+      fieldd: client({ link: NO_LINK }),
+      onboarding: onboarding({ color: "accent-2" }),
+      onComplete: vi.fn(),
+      onReveal,
+      onRetry,
+    });
+    await click("Skip");
+    await boot(
+      bootAt("opening-document", {
+        stage: "opening doc",
+        unavailable: { phase: "opening-document", reason: "document open failed", retryable: true },
+      }),
+    );
+
+    // The splash's rule, on the glass: the plain reason, then Retry (§8).
+    const desk = container?.querySelector('.vf-wizard-phase[data-state="failed"]');
+    expect(desk?.textContent).toContain("Your desk");
+    expect(desk?.textContent).toContain("document open failed");
+    await click("Retry");
+    expect(onRetry).toHaveBeenCalledTimes(1);
+    expect(onReveal).not.toHaveBeenCalled();
+
+    // The retried boot reaches the desk, and the end goes on as for anyone.
+    await boot(bootAt("handing-over"));
+    expect(title()).toBe("Welcome to your field, james.");
+    await tick(WELCOME_BEAT_MS);
+    expect(onReveal).toHaveBeenCalledTimes(1);
+  });
+
+  it("cross-fades the welcome in place, and keeps reduced motion to fades with no breath", () => {
+    // M1 — the two titles share one grid cell, so nothing below the title moves.
+    expect(WIZARD_CSS).toMatch(/\.vf-wizard-title-swap \{[^}]*display: grid;/);
+    expect(WIZARD_CSS).toMatch(/\.vf-wizard-title-swap > span \{[^}]*grid-area: 1 \/ 1;/);
+    expect(WIZARD_CSS).toContain("transition: opacity 180ms ease");
+    // §6's loop: the live phase breathes 1.1s, 1 → 1.06, and stops under M6.
+    expect(WIZARD_CSS).toContain("animation: vf-wizard-breath 1.1s ease-in-out infinite alternate");
+    expect(WIZARD_CSS).toMatch(/transform: scale\(1\.06\)/);
+    const reduced = WIZARD_CSS.slice(WIZARD_CSS.indexOf("prefers-reduced-motion: reduce"));
+    expect(reduced).toContain("transition-duration: 90ms");
+    expect(reduced).toMatch(
+      /\.vf-wizard-phase\[data-state="live"\] \.vf-wizard-phase-mark::before \{\s*animation: none;/,
+    );
   });
 });
 
 describe("BootRoot during onboarding", () => {
-  /** The machine, held at the wizard: client live, document not yet open. */
-  function heldMachine(): { machine: BootMachine; completeOnboarding: () => void } {
-    const view: BootView = {
-      phase: "onboarding",
-      unavailable: null,
-      stage: "",
-      progress: null,
-      degradedReveal: false,
-    };
-    const completeOnboarding = vi.fn();
+  /** A hand-driven machine: its view moves when the test says, and it holds the
+   * wizard (client live, the onboarding input set) from the start. */
+  function heldMachine(initial: BootView = bootAt("onboarding")): {
+    machine: BootMachine;
+    set: (next: BootView) => Promise<void>;
+  } {
+    let view = initial;
+    const listeners = new Set<() => void>();
+    const fieldd = client({ link: NO_LINK });
+    const input = onboarding();
     const machine: BootMachine = {
       view: () => view,
-      subscribe: () => () => undefined,
+      subscribe: (fn) => {
+        listeners.add(fn);
+        return () => listeners.delete(fn);
+      },
       get ready() {
         return null;
       },
       get client() {
-        return client({ link: NO_LINK });
+        return fieldd;
       },
       get onboarding() {
-        return onboarding();
+        return input;
       },
       start: () => {},
       retry: () => {},
       closePlugins: async () => undefined,
-      completeOnboarding,
+      completeOnboarding: vi.fn(),
+      revealDesk: vi.fn(),
     };
-    return { machine, completeOnboarding };
+    const set = async (next: BootView): Promise<void> => {
+      view = next;
+      await act(async () => {
+        for (const fn of [...listeners]) fn();
+      });
+    };
+    return { machine, set };
   }
 
-  it("gives the wizard the splash's layer and ground, and stands the splash face down", async () => {
-    host(vi.fn(async () => FRESH));
-    const { machine } = heldMachine();
+  async function mountBoot(machine: BootMachine): Promise<void> {
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
     await act(async () => {
       root?.render(createElement(BootRoot, { machine }));
     });
+  }
+
+  it("gives the wizard the splash's layer and ground, and stands the splash face down", async () => {
+    host(vi.fn(async () => FRESH));
+    const { machine } = heldMachine();
+    await mountBoot(machine);
 
     // Same full-bleed ground the splash paints...
-    const ground = container.querySelector(".vf-splash");
+    const ground = container?.querySelector(".vf-splash");
     expect(ground).not.toBeNull();
     expect(ground?.className).toContain("absolute inset-0");
     // ...without the splash's own face: no bar, no stage line.
-    expect(container.querySelector('[role="progressbar"]')).toBeNull();
+    expect(container?.querySelector('[role="progressbar"]')).toBeNull();
     expect(text()).toContain(
       "Manage all your agents and compose your agentic workflow in one place.",
     );
+  });
+
+  it("keeps the wizard's glass while the desk opens beneath it, then leaves as the splash would (AO-D2)", async () => {
+    host(vi.fn(async () => FRESH));
+    const { machine, set } = heldMachine();
+    await mountBoot(machine);
+    const ground = container?.querySelector(".vf-splash");
+
+    // Past the hold the document opens, warms, settles and waits — and the
+    // wizard keeps the window the whole way: the splash never comes back.
+    for (const phase of ["opening-document", "warming", "stabilizing", "handing-over"] as const) {
+      await set(bootAt(phase, { stage: phase === "warming" ? "drawing the board" : "" }));
+      expect(container?.querySelector(".vf-splash")).toBe(ground);
+      expect(container?.querySelector(".vf-wizard-shell")).not.toBeNull();
+      expect(container?.querySelector('[role="progressbar"]')).toBeNull();
+      expect(ground?.className).toContain("opacity-100");
+    }
+
+    // The reveal: the glass fades 240ms over the desk's settle, then is gone.
+    await set(bootAt("interactive"));
+    expect(ground?.className).toContain("opacity-0");
+    expect(ground?.className).toContain("duration-[240ms]");
+    expect(ground?.getAttribute("aria-hidden")).toBe("true");
+    await tick(400);
+    expect(container?.querySelector(".vf-splash")).toBeNull();
+    expect(container?.querySelector(".vf-wizard-shell")).toBeNull();
   });
 });

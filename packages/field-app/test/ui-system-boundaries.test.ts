@@ -120,12 +120,21 @@ describe("UI system ownership boundaries", () => {
   it("keeps UA-7's boot-reachable modules on leaf entries, never a barrel", () => {
     // The Setup Assistant mounts these, so they take the kit's and the face
     // policy's leaf entries (`/face`, `/primitives`, `/user-face`).
+    // AO-1: every file of the Setup Assistant, its controllers and views alike,
+    // so a pane added later is held to the rule without being listed here.
+    const onboarding = readdirSync(join(PACKAGE_ROOT, "src", "boot", "onboarding"), {
+      recursive: true,
+    })
+      .map((file) => String(file).replaceAll("\\", "/"))
+      .filter((file) => /\.tsx?$/.test(file))
+      .map((file) => `boot/onboarding/${file}`);
+    expect(onboarding).toContain("boot/onboarding/OnboardingWizard.tsx");
+    expect(onboarding).toContain("boot/onboarding/views/connect.tsx");
     for (const module of [
       "account/FacePicker.tsx",
       "account/faces.ts",
       "account/use-account.ts",
-      "boot/onboarding/onboarding-views.tsx",
-      "boot/onboarding/OnboardingWizard.tsx",
+      ...onboarding,
     ]) {
       expect(source(module), module).not.toMatch(/from "@vibefield\/(?:contracts|design-kit)";/);
     }
@@ -579,9 +588,7 @@ describe("UI system ownership boundaries", () => {
       "OnboardingConnectPaneView",
       "OnboardingDerivingPaneView",
       "OnboardingFieldPaneView",
-      "OnboardingFinishingPaneView",
       "OnboardingPosturePaneView",
-      "OnboardingReadyPaneView",
       "OnboardingSettingUpPaneView",
       "OnboardingUsersPaneView",
       "OnboardingWelcomeBackPaneView",
