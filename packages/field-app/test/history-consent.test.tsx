@@ -214,6 +214,13 @@ describe("the History pane (AO-3)", () => {
       step: "history",
       state: "answered",
     });
+    // AO-6b — an agent the pane asked about is never offered again as new
+    for (const agent of ["claude", "codex"]) {
+      expect(client.request).toHaveBeenCalledWith("setup.moment", {
+        moment: `agent-past:${agent}`,
+        state: "retired",
+      });
+    }
     expect(onDone).toHaveBeenCalledWith("answered");
   });
 
@@ -224,6 +231,11 @@ describe("the History pane (AO-3)", () => {
     expect(container?.textContent).not.toContain("About a minute");
     await act(async () => button("Continue without history").click());
     expect(client.request).toHaveBeenCalledWith("index.enroll", { kinds: [] });
+    // asked, whatever its switch said (AO-6b)
+    expect(client.request).toHaveBeenCalledWith("setup.moment", {
+      moment: "agent-past:codex",
+      state: "retired",
+    });
     expect(onDone).toHaveBeenCalledWith("answered");
   });
 
@@ -233,6 +245,7 @@ describe("the History pane (AO-3)", () => {
     expect(container?.textContent).toContain("Bring it in anytime from History.");
     await act(async () => button("Not now").click());
     expect(client.request).not.toHaveBeenCalledWith("index.enroll", expect.anything());
+    expect(client.request).not.toHaveBeenCalledWith("setup.moment", expect.anything());
     expect(client.request).toHaveBeenCalledWith("setup.answer", {
       step: "history",
       state: "later",

@@ -1,5 +1,7 @@
+import { IndexDiscoveriesResult } from "@vibefield/contracts/agent-index";
 import type { FielddClient } from "@vibefield/fieldd-client";
-import { answerSetupStep } from "./ledger";
+import type { HistoryAgentRow } from "./history-consent";
+import { agentPastMoment, answerSetupStep, retireSetupMoment } from "./ledger";
 
 // History's consent act (track AO, AO-3; AO-D3, AO-L5): one `index.enroll` with
 // the COMPLETE set — the kinds already brought in that the pane does not list,
@@ -15,6 +17,9 @@ export interface ConsentChoice {
   readonly listed: readonly string[];
   /** the listed kinds whose switch is on */
   readonly chosen: ReadonlySet<string>;
+  /** AO-6b — the agents the pane asked about (catalog ids): none of them is
+   * "a new agent with a past" afterwards, whatever its switch said */
+  readonly asked?: readonly string[];
 }
 
 /** The complete set Bring in history sends. */
@@ -29,6 +34,29 @@ export function enrollmentFor(choice: ConsentChoice): string[] {
 export async function bringInHistory(client: FielddClient, choice: ConsentChoice): Promise<void> {
   await client.request("index.enroll", { kinds: enrollmentFor(choice) });
   await answerSetupStep(client, "history", "answered").catch(() => undefined);
+  // AO-6b (AO-D15) — an agent this pane asked about is never offered again as
+  // new: its moment is retired here
+  await Promise.all(
+    (choice.asked ?? []).map((agent) =>
+      retireSetupMoment(client, agentPastMoment(agent)).catch(() => undefined),
+    ),
+  );
+}
+
+/** AO-6b — Bring it in, for the one agent History's head offers: the complete
+ * set read afresh (another door — Settings → History — may have changed it since
+ * the census), plus its kind; then its moment is retired. */
+export async function bringInAgent(
+  client: FielddClient,
+  row: Pick<HistoryAgentRow, "kind" | "agent">,
+): Promise<void> {
+  const now = IndexDiscoveriesResult.parse(await client.request("index.discoveries", {}));
+  await bringInHistory(client, {
+    consented: now.discoveries.filter((found) => found.consented).map((found) => found.kind),
+    listed: [row.kind],
+    chosen: new Set([row.kind]),
+    asked: row.agent === null ? [] : [row.agent],
+  });
 }
 
 /** Not now: nothing is read, and Finish setting up lists the step. */

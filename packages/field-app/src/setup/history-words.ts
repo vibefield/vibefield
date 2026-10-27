@@ -15,4 +15,7 @@ export const HISTORY_WORDS = {
   looking: "Looking for past sessions…",
   unavailable: "History isn't available right now. You can bring sessions in later from History.",
   privacy: "Your history stays on your devices. VibeField reads it here and never uploads it.",
+  /** AO-6b — a new agent with a past, at History's head, once per agent */
+  newAgent: (label: string) => `${label} has history on this Mac.`,
+  bringItIn: "Bring it in",
 } as const;

@@ -25,8 +25,17 @@ import { catalogPortOver, type HistoryCatalogPort, type HistoryDoorClient } from
 
 /** The states the catalog draws History in. `projects`: History BY PROJECT
  * (PJ-4) — the shipping adapter (`history/doors.ts`) over a fixture fieldd
- * that answers `project.list`, the keyed listing and the merged figures. */
-export const HISTORY_STATES = ["room", "chosen", "projects", "unavailable", "consent"] as const;
+ * that answers `project.list`, the keyed listing and the merged figures.
+ * `new-agent`: the room with AO-6b's new agent with a past at its head (the
+ * shipping row over the census's fixture agent, `account-fixtures.ts`). */
+export const HISTORY_STATES = [
+  "room",
+  "chosen",
+  "projects",
+  "unavailable",
+  "consent",
+  "new-agent",
+] as const;
 export type HistoryState = (typeof HISTORY_STATES)[number];
 
 /** The words the frame says under "rosettad is not answering" in the

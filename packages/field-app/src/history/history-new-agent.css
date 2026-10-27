@@ -1,0 +1,80 @@
+/* A new agent with a past (track AO, AO-6b; DESIGN.md §8 "The moments"): one row
+   at History's head — under the head band, centred over the room — in the
+   frame's own line material (MC-D2: the solid chrome at 88%, 94% by night, a 24px
+   blur, the hairline ring, the island shadow, by night a 6% top light), corners
+   18 as a menu's. The mark, then the words and the two acts in one column.
+   Tokens only; the room's reduced-motion floor (history-room-view.css) covers
+   its entrance. */
+.vf-history-new-agent {
+  position: absolute;
+  top: calc(var(--vf-history-head) + 12px);
+  left: 50%;
+  display: grid;
+  width: min(440px, calc(100% - 32px));
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px 10px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--vf-chrome-solid) 88%, transparent);
+  backdrop-filter: blur(24px);
+  box-shadow:
+    0 0 0 1px var(--vf-hairline),
+    var(--vf-shadow-island);
+  transform: translateX(-50%);
+  animation: vf-history-new-agent-in 240ms var(--vf-ease-island) both;
+}
+
+.dark .vf-history-new-agent {
+  background: color-mix(in srgb, var(--vf-chrome-solid) 94%, transparent);
+  box-shadow:
+    0 0 0 1px var(--vf-hairline-strong),
+    var(--vf-shadow-island),
+    inset 0 1px 0 rgb(255 255 255 / 6%);
+}
+
+@keyframes vf-history-new-agent-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -4px);
+  }
+}
+
+.vf-history-new-agent-mark {
+  display: flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+}
+
+.vf-history-new-agent-mark > svg {
+  width: 20px;
+  height: 20px;
+}
+
+.vf-history-new-agent-words {
+  margin: 4px 0 0;
+  color: var(--vf-text-secondary);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.vf-history-new-agent-words > strong {
+  color: var(--vf-text-primary);
+  font-weight: 500;
+}
+
+.vf-history-new-agent-error {
+  grid-column: 2;
+  margin: 0;
+  color: var(--vf-red);
+  font-size: 11.5px;
+  line-height: 16px;
+}
+
+.vf-history-new-agent-acts {
+  display: flex;
+  grid-column: 2;
+  gap: 8px;
+}

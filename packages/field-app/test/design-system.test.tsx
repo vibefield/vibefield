@@ -383,6 +383,15 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     );
     // PJ-4 — History by project's plate (its rows: history-projects-plate.test.tsx)
     expect(history("projects")?.querySelector(".vf-history .ah-frame")).not.toBeNull();
+    // AO-6b — a new agent with a past: the shipping row at the room's head
+    const head = history("new-agent")?.querySelector(".vf-history .vf-history-new-agent");
+    expect(head?.querySelector(".vf-history-new-agent-words")?.textContent).toMatch(
+      /^.+ has history on this Mac\. 240 MB, last used in August\.$/u,
+    );
+    expect([...(head?.querySelectorAll("button") ?? [])].map((b) => b.textContent)).toEqual([
+      "Bring it in",
+      "Not now",
+    ]);
     expect(
       [...(container?.querySelectorAll(".vf-ds-peek-plate") ?? [])].map((plate) =>
         plate.getAttribute("data-state"),

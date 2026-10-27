@@ -118,8 +118,9 @@ export interface HistoryRoomViewProps {
    * the room as rosetta's app shows it. Memoized by the controller — the room
    * calls them as it renders. */
   inputs?: RoomHostInputs;
-  /** fix7 — the frame's own act under the room (the index's restart while it
-   * has failed; `index-restart.tsx`): VibeField's, not the room's. */
+  /** fix7 — the frame's own acts over the room: the index's restart under it
+   * while it has failed (`index-restart.tsx`), and AO-6b's new agent with a past
+   * at its head (`NewAgentPast.tsx`). VibeField's, not the room's. */
   act?: ReactNode;
   /** AO-3 (AO-D9) — what the room shows while the index waits for consent to
    * read anything: the History pane itself, "Bring in your past sessions.",

@@ -8,9 +8,9 @@ import { PeekPlate } from "../PeekPreview";
 // it, on the package's fixture ports — the shipping view in every state the
 // host owns: the room on the cover's glass, a session chosen with the line's
 // Resume live, one running here with its Jump to (P3), the index not
-// answering, and nothing enrolled yet — and the
-// two faces before the room (2026-10-04, the room's own chunk): opening, and
-// a room that could not open. Its search is the frame's Peek (2026-10-08;
+// answering, nothing enrolled yet, and an agent with a past offered at its
+// head (AO-6b) — and the two faces before the room (2026-10-04, the room's own
+// chunk): opening, and a room that could not open. Its search is the frame's Peek (2026-10-08;
 // §8 "Search — the Peek"): the shipping controller over a fixture port drawn
 // from the same demo — the button at rest, and the popup holding words.
 
@@ -89,6 +89,15 @@ export function HistorySection(): ReactElement {
       >
         <div className="vf-ds-history-plate is-short" data-state="consent">
           <HistoryPreview state="consent" />
+        </div>
+      </Specimen>
+      <Specimen
+        title="A new agent with a past — one row at History's head, once per agent (AO-6b)"
+        source="history/NewAgentPast.tsx"
+        bleed
+      >
+        <div className="vf-ds-history-plate" data-state="new-agent">
+          <HistoryPreview state="new-agent" />
         </div>
       </Specimen>
       <Specimen

@@ -15,6 +15,8 @@ import {
 } from "../history/host-inputs";
 import { EMPTY_HOST_MODEL, hostModelOf } from "../history/host-model";
 import { launchActs } from "../history/launch-acts";
+import { NewAgentPastCard } from "../history/NewAgentPast";
+import { FIXTURE_HISTORY_NOW, FIXTURE_NEW_AGENT_PAST } from "./account-fixtures";
 import { FIXTURE_LINE_DOOR, fixtureClipboardStore, fixtureStillUrl } from "./ComposerLinePreview";
 import {
   FIXTURE_CHOSEN_SESSION,
@@ -49,6 +51,17 @@ function HistoryStatePreview({ state }: { state: HistoryState }): ReactElement {
       openAt={openAt}
       storage={null}
       keys="mac"
+      act={
+        // AO-6b — the shipping row at the room's head; a catalog acts on no one
+        state === "new-agent" && FIXTURE_NEW_AGENT_PAST !== null ? (
+          <NewAgentPastCard
+            row={FIXTURE_NEW_AGENT_PAST}
+            now={FIXTURE_HISTORY_NOW}
+            onBringIn={() => undefined}
+            onNotNow={() => undefined}
+          />
+        ) : null
+      }
     />
   );
 }

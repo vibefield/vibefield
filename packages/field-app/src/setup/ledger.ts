@@ -1,5 +1,6 @@
 import {
   type SetupLedger,
+  type SetupMomentKey,
   type SetupStep,
   type SetupStepState,
   setupStepState,
@@ -28,6 +29,21 @@ export async function answerSetupStep(
   state: SetupStepState,
 ): Promise<void> {
   await client.request("setup.answer", { step, state });
+}
+
+/** AO-6b (AO-D15) — a new agent with a past, one moment per agent (its catalog id). */
+export function agentPastMoment(agent: string): SetupMomentKey {
+  return `agent-past:${agent}`;
+}
+
+/** Retire one moment for good: Not now, or its act done (declarative — the
+ * same answer twice is written once). A refused write is the ledger's loss,
+ * never the person's: the moment may show once more. */
+export async function retireSetupMoment(
+  client: FielddClient,
+  moment: SetupMomentKey,
+): Promise<void> {
+  await client.request("setup.moment", { moment, state: "retired" });
 }
 
 /** The steps Finish setting up can list, and its sheet ask again: each joins

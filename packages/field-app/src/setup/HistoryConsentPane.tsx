@@ -100,6 +100,7 @@ export function HistoryConsentPane({
         consented: census.consented,
         listed: rows.map((row) => row.kind),
         chosen,
+        asked: rows.flatMap((row) => (row.agent === null ? [] : [row.agent])),
       }).then(
         () => onDone("answered"),
         (cause: unknown) => {

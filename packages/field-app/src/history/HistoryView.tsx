@@ -52,6 +52,7 @@ import { deviceOf, EMPTY_HOST_MODEL, type HistoryHostModel, hostModelOf } from "
 import { HistoryIndexRestart } from "./index-restart";
 import { readLiveRun } from "./jump";
 import { launchActs } from "./launch-acts";
+import { HistoryNewAgentPast } from "./NewAgentPast";
 import { useHistoryOpenAt } from "./open-at";
 import { type ResumeReading, readResume } from "./resume";
 import { HistoryRoomMount } from "./room-chunk";
@@ -408,7 +409,13 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
     <HistoryRoomMount
       ports={ports}
       unavailable={words}
-      act={indexPhase === "failed" ? <HistoryIndexRestart client={fieldd} /> : null}
+      act={
+        <>
+          {indexPhase === "failed" ? <HistoryIndexRestart client={fieldd} /> : null}
+          {/* AO-6b — a new agent with a past, once per agent, at History's head */}
+          <HistoryNewAgentPast />
+        </>
+      }
       consent={<HistoryConsent />}
       onSelect={setSelection}
       openAt={openAt}

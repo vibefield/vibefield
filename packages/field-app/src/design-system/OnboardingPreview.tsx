@@ -42,6 +42,7 @@ import {
   FIXTURE_FIRST_READING_FINDING,
   FIXTURE_FIRST_READING_FOUND,
   FIXTURE_HISTORY_CENSUS,
+  FIXTURE_HISTORY_NOW,
   FIXTURE_ME,
   FIXTURE_OTHERS,
 } from "./account-fixtures";
@@ -531,7 +532,7 @@ function HistoryPreview(): ReactElement {
             <HistoryConsentBody
               census={census}
               chosen={chosen}
-              now={Date.parse("2026-10-27T12:00:00Z")}
+              now={FIXTURE_HISTORY_NOW}
               onToggle={noop}
             />
           ),

@@ -100,6 +100,14 @@ export const FIXTURE_HISTORY_CENSUS = {
   consented: [],
 };
 
+/** The catalog's clock for History's rows, so they say "today", "yesterday"
+ * and "in August" in every run. */
+export const FIXTURE_HISTORY_NOW = Date.parse("2026-10-27T12:00:00Z");
+
+/** AO-6b — a new agent with a past, as History's head offers it: the census's
+ * agent not used since the summer, never asked about. */
+export const FIXTURE_NEW_AGENT_PAST = FIXTURE_HISTORY_CENSUS.rows[2] ?? null;
+
 /** AO-3 — what Settings → History's specimen says History reads now: the
  * census's first agent, brought in already. */
 export const FIXTURE_HISTORY_CONSENTED: ReadonlySet<string> = new Set(

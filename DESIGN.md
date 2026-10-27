@@ -1343,6 +1343,28 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   and the room's own state while it imports, in the room's words. Changing a switch asks once more
   only when it turns reading off. Profiles' own folders are read by construction and are listed with
   their profile's name, not a switch.
+- **The moments** (track AO, AO-D11 and AO-D15 ruled 2026-10-27; AO-L6): a reminder is tied to a
+  moment of need and shown once, as one row with its act; **Not now** retires it for good. What was
+  retired, and what was acted on, is kept in the setup ledger beside the steps (`setup.moment`), so it
+  is the same in every window and survives a reinstall. Never a badge, a count, or a return on launch.
+  The same ledger remembers track TS's notices (TS-D18, ruled (d) 2026-10-27), once per device and once
+  per expiry date.
+  - **A new agent with a past** (*built 2026-10-27, AO-6b*): an agent whose history is on this Mac and
+    that History's own question never asked about (installed after it was answered) gets one row at
+    **History's head**, once per agent. It waits for that question to be answered with something
+    brought in: until then Finish setting up lists History, or the room shows History's pane itself,
+    which lists every agent. The row sits under the head band, centred over the room, in the line's
+    material (MC-D2) with a menu's corners (18), entering with a 4px settle on the island curve: the
+    agent's mark, "**Grok has history on this Mac.** 240 MB, last used in August." and **Bring it in**
+    (the primary) · **Not now**. Bring it in adds the agent to the complete set History reads, read
+    afresh at the press so nothing another door brought in is revoked; a refusal stays on the row in
+    the daemon's words. Either act retires the moment, and the row leaves at once. Answering History's
+    pane retires the moment of every agent it asked about, whatever its switch said.
+  - **The limit moment** (AO-D11; *owed, AO-6b2*): a plan past 90% of any window while This Mac is the
+    only profile offers a profile once, on VibeField's claims strip beside Godview's usage column: the
+    plan's badge, "92% · 7 days", "Another subscription?", "Add it as a profile and keep working. Each
+    profile keeps its own sign-ins." with **Add a profile…** (Agent Profiles' New profile…) · **Not
+    now**.
 - **The desk's chrome** (Chrome on the Mat MC-1…MC-6, 2026-09-28; MC-D1 ruled through One Frame's
   lock and MC-D10 with DK-D23, 2026-10-02; the orchestrator's Phase 4 rulings R1–R25, 2026-10-03,
   cited below as Rn; built on the desk by DK-11…DK-16): **the mat keeps its marks and the chrome
