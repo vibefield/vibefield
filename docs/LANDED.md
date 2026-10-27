@@ -15765,11 +15765,18 @@ VF-PM started the event at 00:28Z on James's "continue the work", in the 0.13.4 
 - **FieldTerminalTests' 60 s red is a fixed set of 17, and load alone does not explain it.** The 0.13.6 kit's alone red
   (load 185) and this one (load 12 at the arm) stopped the same 17 rows at Swift Testing's 60 s limit. They were stuck,
   not slow: every one ran to the limit. One shared wait that all 17 sit behind would read that way, but that is a
-  reading, not a cause: the fixer's item 77, a read first (VF-PM 04:28Z). At 05:00Z the fixer named the 5 s shape: with
+  reading, not a cause: the fixer's item 77, a read first (VF-PM 04:28Z). At 05:00Z the fixer named the 5 s shape: ~~with
   no injected session, every attach leg makes its own URLSession, so the 17 rows open about 34 at once, and the first
-  requests serialize on CFNetwork's first-use lock. VF-PM ruled (05:01Z) that the attach suites' wait helper rise from
+  requests serialize on CFNetwork's first-use lock.~~ VF-PM ruled (05:01Z) that the attach suites' wait helper rise from
   5 s to 20 s, the product's step deadline, built red-first in the fixer's lane with the lead reviewing it. The 60 s
   shape is still open.
+  *(Corrected 2026-10-27 05:21Z: FALSE as the 5 s shape's mechanism. The 20 s wait failed at load in the fixer's lane
+  (4 red of 6, each about 23 s) and was reverted; nothing landed. The 14 issues are the seven AttachDeadlineTests
+  rows' own 1 s attach deadline (`Self.deadline`) firing at the dial: under load the concurrent loopback WebSocket
+  dials take p50 2.1–2.3 s (0.3–0.7 s in passes), so the control attach each row waits for is never sent. This kit's
+  alone re-run logs "stopped waiting at dial after 1 s" for 8 attachments (the dial row's own and the seven), and the
+  whole kit's pass for 1. The fixer's 05:20Z read; VF-PM withdrew the 20 s raise (05:21Z), and the fix is the lead's
+  pick from three shapes the fixer measures at load. The 60 s red logs no such line.)*
 - **The kit's tally kept its last 12 lines, and two counts were read from it** (VF-PM's sum of the whole-kit log, 04:28Z).
   - The whole kit is 1,310 tests in 239 suites, not "1,046 in 182": the tally dropped the two targets that sort first
     (110 / 26 and 154 / 31). Every whole-kit log since 10-23 re-sums to 1,310 / 13 tallies: TP's, and the 0.13.1, 0.13.4,
