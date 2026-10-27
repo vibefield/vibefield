@@ -15887,8 +15887,13 @@ VF-PM started the event at 00:28Z on James's "continue the work", in the 0.13.4 
   each; clippy `--all-targets -D warnings` clean; `pnpm verify` EXIT 0 at 05:49:21Z on its first run (test for 27 projects, cargo test 30 ok), the 1-minute load reaching ~366.
 - **What the rows do NOT witness:** the stand-in speaks no QUIC, so `serve_inbound`'s listener does not bind there (a
   real sidecar's does, and held a second reference on the mini), and no lane crosses a real tailnet.
-  - The live witness is the next nightly's promotion on the mini: ONE sidecar, and `node_replaced` (prod-builder's
-    row).
+  - ~~The live witness is the next nightly's promotion on the mini: ONE sidecar, and `node_replaced` (prod-builder's
+    row).~~ *(Corrected 2026-10-27 05:56Z: FALSE as written. The mini's user 1 is already linked (`link.json`), so
+    its boot declares `native.mesh.start {mode: "linked"}` at once (link-service.ts:152–166), and the 10-28 install
+    never runs the capture → linked promotion. That install witnesses the plain-boot half only: one sidecar, one
+    `lane_transport.installed`, no `node_replaced`. The promotion's live witness is OWED to a fresh unlinked root with
+    a person's login, James's call since it spends a device identity. Until then the unit rows above (the stand-in,
+    no QUIC) are the only witness of that path. prod-builder's read, VF-PM 05:55Z.)*
 - **Residual, unchanged and unmeasured:** a bring-up that `teardown_node` aborts mid-build drops what it was building.
 - **Design text carrying the false promise** (draft/, VF-PM's snapshot queue, not this commit):
   - `draft/system-atlas/evidence.json:2929` and `:24668`: "VibeField node teardown aborts bring-up and drops handles".
