@@ -16216,3 +16216,43 @@ gaps in code (05:00–05:15Z on `e4f910ac6`) and did not reproduce them, so each
 - The words a person sees; they come with TS-2.
 - Four petitions are with focus-session: T9, T10 and T11 as one truffle release, then T8 after its probe.
 - TS-D16 (ruled A at 08:19Z) binds once T10 ships.
+
+## AO-1 — the Setup Assistant ends on the desk it opened: pane 3 retires, Setting up is the end of every path and becomes Ready in place over the desk opening beneath its glass, and boot/onboarding/ splits into one file per pane (2026-10-27; `b260f13a2`, lane `ao/1`; AO-D2)
+
+**What.** The first slice of track AO's ladder (`draft/thinking-agent-onboarding.md` §8), and the seam track TS's TS-2
+rebases onto (agreed with vibe-field-d0 08:12Z, VF-PM cc).
+- **The order is a pure module** (`boot/onboarding/order.ts`): the panes, W6's entry derivation (`entryBeforeAsking`,
+  `entryAfterName`) and where each question goes on Continue or a skip (`nextPane`). The agent chapter's panes join its
+  list after "field" as AO-3 and AO-5 build them.
+- **One owner per file.** The controllers live in `panes/`, the faces in `views/`. TS's Connect and sync-question
+  controllers and views moved verbatim, except `export` and two stale pointers in one comment. `onboarding-views.tsx`
+  is gone, and the catalog imports each view from its own file.
+- **Pane 3 retires; Setting up is the end of every path.** The questions end in the durable `onboarded` write, and the
+  hold releases only on a landed write or the person's "Continue anyway"; a refusal is said on the pane. Then the
+  document opens, warms and settles BEHIND the wizard's glass while "Your desk" shows the boot machine's own stage (W4).
+  With every fact in, the title cross-fades to "Welcome to your field, {name}." (one cell, 180 ms), holds 1.4 s, and the
+  glass hands the window over (W5). A second user's end has no welcome beat. A desk that cannot open says the boot's
+  reason and offers its Retry.
+- **The boot machine** gains `handing-over`, after the frame-stability gate and before `interactive`, held until the
+  wizard's `revealDesk()`. `interactive` and its perf mark keep meaning revealed. `onboarding` stays set from the hold on,
+  so a retried boot keeps the wizard's window. `stagesDone` retires.
+- **BootRoot** keeps the wizard on the splash's layer and ground through opening, warming, stabilizing and handing
+  over; the splash never returns between wizard and desk, and the glass leaves with the splash's own 240 ms fade (one
+  `LeavingGround` for both).
+
+**Validation** (lane ao1, at `31a050d9b` exactly, nice 19, the guard clear before every arm):
+- the four touched test files 96/96 at the first tip (08:44Z); red-first by mutation, each restored byte for byte: without the
+  `handing-over` hold 3 rows red, with BootRoot's old condition 1 red, with no welcome beat 1 red
+  (`lanes/ao1/logs/ao1-mutation/`);
+- the heavy gate at `83f71bdc2` (10:02–10:13Z): field-app typecheck EXIT 0; the full field-app vitest EXIT 0,
+  `217 passed | 1 skipped` files, `2630 passed | 3 skipped` tests; the catalog's onboarding frames photographed headless
+  in both themes, 14 PNGs, no console errors (`lanes/ao1/logs/gate-83f71bdc2/shots/`); `pnpm verify` EXIT 0 (every
+  TS project's tests, 30 cargo suites, gen:check; the tree clean after). Rebased onto TS-1 (`8423f1792`, which touched
+  field-app's `account/link.ts`): typecheck and the full field-app vitest again, `2631 passed | 3 skipped`, the
+  photographs again, at `b260f13a2`. Two passes before the green one were red on `design-system.test`, whose
+  onboarding inventory still named the retired frames (12 → 11, with the new states named), fixed in this commit.
+- Records: DESIGN.md said it first (AO-0). draft: `specs/users-and-accounts.md` §6.1/§6.2 and design-03 §4.3 dated
+  amendments (the next snapshot).
+
+**Not in this entry.** The agent chapter's panes (AO-3 History, AO-5 Agents and Profiles) and the ledger that records
+them (AO-2). The desk rows (`pnpm smoke`, `pnpm smoke:studio`) on a display are owed on James's "away"/"unlocked".
