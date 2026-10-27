@@ -406,13 +406,22 @@ export const AGENT_CATALOG = [
     // pin. Alternative recorded in the slate: `declined`.
     // 2026-09-27 AR-7a: no `invoke` — the pin's ACP launch provider declares no
     // native CLI grammar (`nativeInvocation`, puppeteer 524709b; R23 reads it).
+    // 2026-10-27 Q17 (ruled A by James the same day, "narrow the row now";
+    // draft/testing/godview-swarm-qa-plan.md §12; AC-D7's dated note): `spawn`
+    // WITHDRAWN — the pin's ACP `createSession` needs a connector and fieldd
+    // supplies puppeteer none, so a spawn could only fail. The catalog offers only
+    // what works: no launcher chip, and `agent.spawn` is refused before puppeteer
+    // is asked. Claimed again with the slice that supplies a connector. `resume`
+    // runs the same connector-less `createSession` and is left claimed: whether it
+    // goes too is the catalog owner's call. R23 now warns `candidate` for `spawn`
+    // (AC-D5: a warning).
     id: "acp",
     label: "ACP",
     status: "preview",
     seams: { puppeteer: { provider: "acp" }, rosetta: null },
     layoutRoot: null,
     offers: {
-      spawn: true,
+      spawn: false,
       resume: true,
       reattach: false,
       history: false,
@@ -423,7 +432,7 @@ export const AGENT_CATALOG = [
     },
     admitted: "2026-09-22",
     decision:
-      "AC-D7 — preview, spawn and resume only: a protocol, not a vendor; no ledger, no personas",
+      "AC-D7, narrowed by Q17 (2026-10-27) — preview, no spawn until fieldd supplies an ACP connector: a protocol, not a vendor; no ledger, no personas",
     surfaces: { desktop: true, phone: false },
   },
 ] as const satisfies readonly AgentCatalogEntry[];

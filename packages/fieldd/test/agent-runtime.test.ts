@@ -2009,9 +2009,11 @@ describe("the catalog (AC-3) — the doors answer from the table, the roll call 
       available: false,
       history: "unavailable",
     });
-    // a protocol row: spawn only, no history state at all
+    // a protocol row: listed, no spawn until fieldd supplies an ACP connector
+    // (Q17, 2026-10-27), no history state at all
     const acp = providers.find((p) => p.id === "acp");
     expect(acp).toMatchObject({ status: "preview" });
+    expect(acp?.offers?.spawn).toBe(false);
     expect(acp?.offers?.history).toBe(false);
     expect(acp).not.toHaveProperty("history");
     expect(JSON.stringify(providers)).not.toContain("/");
@@ -2049,7 +2051,7 @@ describe("the catalog (AC-3) — the doors answer from the table, the roll call 
     expect(providers.some((p) => p.id === "grok")).toBe(false);
   });
 
-  it("a door refuses typed what the catalog does not offer: no row is NOT_FOUND, a declined row PRECONDITION_FAILED {reason: unsupported-agent}, a row without personas refuses profiles.create", async () => {
+  it("a door refuses typed what the catalog does not offer: no row is NOT_FOUND, a declined row PRECONDITION_FAILED {reason: unsupported-agent}, a preview row without spawn refuses agent.spawn, a row without personas refuses profiles.create", async () => {
     const { daemon } = await setup({
       catalog: catalogWith("claude", {
         status: "declined",
@@ -2066,6 +2068,15 @@ describe("the catalog (AC-3) — the doors answer from the table, the roll call 
     expect(declined.data?.details).toMatchObject({
       reason: "unsupported-agent",
       status: "declined",
+    });
+    // Q17 (2026-10-27): the protocol row is offered (preview) and claims no
+    // spawn, so the door refuses before puppeteer is asked for a session
+    const protocol = await win.callErr("agent.spawn", { provider: "acp" });
+    expect(protocol.data?.kind).toBe("PRECONDITION_FAILED");
+    expect(protocol.data?.details).toMatchObject({
+      reason: "unsupported-agent",
+      status: "preview",
+      capability: "spawn",
     });
     const persona = await win.callErr("agents.profiles.create", {
       set: "native",

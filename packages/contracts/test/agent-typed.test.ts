@@ -91,7 +91,8 @@ describe("the catalog's `invoke` (AR-7a; AR7-D15)", () => {
     expect(rows.find((row) => row.id === "grok")?.status).toBe("preview");
     expect(isOffered("grok", "spawn")).toBe(true);
     expect(isOffered("acp", "invoke")).toBe(false);
-    expect(isOffered("acp", "spawn")).toBe(true);
+    // Q17 (2026-10-27): nor a spawn, until fieldd supplies an ACP connector
+    expect(isOffered("acp", "spawn")).toBe(false);
   });
 
   it("an older desktop's row, sent before the word existed, reads as unclaimed — never a refusal", () => {

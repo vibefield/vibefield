@@ -93,7 +93,10 @@ describe("the agent catalog (AC-1)", () => {
     expect(isOffered("claude")).toBe(true);
     expect(isOffered("claude", "spawn")).toBe(true);
     expect(isOffered("acp", "history")).toBe(false);
-    expect(isOffered("acp", "spawn")).toBe(true);
+    // Q17 (2026-10-27): the protocol row offers no spawn until fieldd supplies
+    // an ACP connector; `resume` is the catalog owner's call, left claimed
+    expect(isOffered("acp", "spawn")).toBe(false);
+    expect(isOffered("acp", "resume")).toBe(true);
     expect(isOffered("not-a-row")).toBe(false);
     expect(isVisible("not-a-row")).toBe(false);
     // the phone never sees the protocol row (AC-D7); the desktop does
