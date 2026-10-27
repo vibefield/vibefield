@@ -201,7 +201,8 @@ export function KeyboardTab({ model }: { model: TerminalPageModel }): ReactEleme
         )}
         <p className={`vf-ts-keyfoot ${labelCls}`}>
           Ghostty's own table: {defaultBindings().size} chords on macOS, ghosttea's ⌘⇧O among them.
-          VibeField keeps ⌘K, ⌘, and ⌘⇧V for itself, everywhere — a pane never sees them.
+          VibeField keeps ⌘K, ⌘, and ⌘⇧V for itself, everywhere, and the app takes ⌘Q and ⌃⌘F before
+          any page — a pane never sees them.
         </p>
       </PageSection>
     </div>

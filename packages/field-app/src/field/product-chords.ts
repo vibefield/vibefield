@@ -30,6 +30,15 @@ import { isSettingsChord } from "./me-menu-wiring";
 // own Find left with P2, 2026-10-09). So Ghostty's start_search reaches a pane
 // in neither — the row says WHEN, so Settings says it honestly rather than as
 // an always.
+//
+// ⌘Q and ⌃⌘F (AL-9, AL-D14/D15, 2026-10-27) are the SHELL's: main takes them
+// in `before-input-event`, above every page (`window-chords.ts`), because the
+// capture phase is not enough for them. ghosttea's workspace listens on the
+// same window in the same phase, and stopping the key never stops a sibling
+// listener, so a pane ran Ghostty's `quit` and `toggle_fullscreen` anyway, and
+// the menu never heard a key the page had claimed. A page never hears these
+// two, so their rows carry no matcher; they are here so Settings can say which
+// Ghostty defaults they keep from a pane.
 
 type ChordKey = Pick<
   KeyboardEvent,
@@ -82,14 +91,20 @@ export interface ProductChord {
     | "view-canvas"
     | "view-godview"
     | "view-history"
-    | "view-assistant";
+    | "view-assistant"
+    | "quit"
+    | "full-screen";
   /** The chord in Ghostty's own spelling (macOS), so a Ghostty binding on the
    * same keys can be recognized as the one it overrides. */
   readonly trigger: string;
   readonly label: string;
   /** When VibeField keeps the chord, if not always — said beside the label. */
   readonly when?: string;
-  readonly matches: (event: ChordKey) => boolean;
+  /** How the page knows the chord; absent for a chord the shell takes above
+   * the page (`takenBy: "shell"`), which no page listener ever hears. */
+  readonly matches?: (event: ChordKey) => boolean;
+  /** "shell": main takes the chord in `before-input-event` (AL-9). */
+  readonly takenBy?: "shell";
 }
 
 export const PRODUCT_CHORDS: readonly ProductChord[] = [
@@ -125,6 +140,9 @@ export const PRODUCT_CHORDS: readonly ProductChord[] = [
       matches: (event) => viewForKey(event, viewKeysOf(getHost().platform)) === cell.view,
     }),
   ),
+  // The shell's two (AL-9), over Ghostty's quit and toggle_fullscreen.
+  { id: "quit", trigger: "super+q", label: "Quit VibeField", takenBy: "shell" },
+  { id: "full-screen", trigger: "super+ctrl+f", label: "Full screen", takenBy: "shell" },
 ];
 
 /** Listen for one product chord on the window's CAPTURE phase and stop it

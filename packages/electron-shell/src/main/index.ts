@@ -152,6 +152,7 @@ import { readUpdateIdentity } from "./updates/identity";
 import { createElectronApplyPort, installUpdateController } from "./updates/install";
 import { applyProfileUpdate, dealOwedFace } from "./users-profile";
 import { ViewRegistry } from "./view";
+import { installWindowChords } from "./window-chords";
 import { hasInsetLights, LightsRegistry } from "./window-lights";
 import { WindowRegistry } from "./window-policy";
 import { createMainWindow, loadRenderer } from "./windows";
@@ -1887,6 +1888,10 @@ async function main(
           if (screenshotHelperAvailable) {
             installScreenshotChord(window.webContents, takeScreenshot);
           }
+          // ⌘Q and ⌃⌘F — above the page too (AL-9): a terminal pane's ghosttea
+          // claimed both, so the menu never heard them. ⌘Q is the menu's own
+          // `app.quit()`, so it reaches the census gate.
+          installWindowChords(window, { quit: () => app.quit() });
           installNavigationPolicy(window, MODE);
           // FR-4: told the theme on every load (a reload included) and change.
           themeOwner?.watch(window.webContents);

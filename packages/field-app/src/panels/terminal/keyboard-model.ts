@@ -537,12 +537,22 @@ type PlatformAction =
 
 /** What the deck does with a PLATFORM action — the `platform` object
  * GodviewDeck hands the workspace: its "window" is the overlay, so the closing
- * verbs close Godview; the config reload is ghosttea's own; the rest are hooks
- * the deck leaves empty. A change to that object changes these words. */
+ * verbs put the terminals away (N16) and Godview stays; the config reload is
+ * ghosttea's own; the rest are hooks the deck leaves empty. A change to that
+ * object changes these words.
+ *
+ * AL-9 (AL-D18, 2026-10-27): these said "Closes Godview" while every closing
+ * verb also swapped the active pane's session out. Only `close_window` empties
+ * a pane now, and only the deck's last one, because ghosttea calls the same hook
+ * for the last pane's ⌘W. ⌘Q's own row is the shell's (`PRODUCT_CHORDS`); these
+ * words are for any other chord bound to `quit`. */
 const PLATFORM_WORDS: Partial<Record<PlatformAction, { text: string; runs: boolean }>> = {
-  close_window: { text: "Closes Godview", runs: true },
-  close_all_windows: { text: "Closes Godview", runs: true },
-  quit: { text: "Closes Godview", runs: true },
+  close_window: {
+    text: "Puts the terminals away — with one pane, it empties that pane too",
+    runs: true,
+  },
+  close_all_windows: { text: "Puts the terminals away", runs: true },
+  quit: { text: "Puts the terminals away", runs: true },
   reload_config: { text: "Reloads the config", runs: true },
 };
 

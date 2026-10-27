@@ -213,6 +213,18 @@ function refusedForNow(cause: unknown): boolean {
   );
 }
 
+/** The deck's closing verbs (ghosttea's platform `closeWindow`, `closeAllWindows`
+ * and `quit`): the terminals' owner minimizes them and Godview stays (N16), or a
+ * deck no overlay owns asks the frame for Canvas. True when the owner took them. */
+function putTerminalsAway(minimize: (() => void) | undefined): boolean {
+  if (minimize === undefined) {
+    void requestView("canvas");
+    return false;
+  }
+  minimize();
+  return true;
+}
+
 /** The workspace publishes its context to its sidebar and nowhere else, so the
  * sidebar slot is how an embedder observes and drives panes. It renders
  * nothing: this deck's chrome is the overlay's, not a second sidebar. */
@@ -2193,17 +2205,25 @@ export function GodviewDeck({
             // the closed session gone the way ⌘W sends one (`emptyLastPane`).
             // Until N16 it went back to the canvas (FR-1's door), which is
             // still the answer of a deck no overlay owns.
+            //
+            // AL-9 (AL-D18, 2026-10-27): ghosttea calls this for Ghostty's
+            // `close_window` (⌘⇧W) too, and it falls back to it for `quit` and
+            // `close_all_windows`, so the emptying ran on a pane that was not
+            // the last and swapped its session out. The emptying is N16's
+            // alone: only while the deck holds ONE pane. With one pane ⌘⇧W
+            // still reads as ⌘W there, because ghosttea gives the two no
+            // separate hooks (an upstream ask, `thinking-app-lifecycle.md` §9.3).
             closeWindow: () => {
-              const minimize = lastPaneClose.current;
-              if (minimize === undefined) {
-                void requestView("canvas");
-                return;
-              }
-              // away at once; then the pane is emptied, never re-shown (the
-              // lead's rule: ⌘W closed its session)
-              minimize();
-              void emptyLastPaneNow.current();
+              if (!putTerminalsAway(lastPaneClose.current)) return;
+              // then the pane is emptied, never re-shown (the lead's rule: ⌘W
+              // closed its session)
+              if (workspaceRef.current?.panes.length === 1) void emptyLastPaneNow.current();
             },
+            // ⌘Q never reaches here: main takes it above the page (AL-D14).
+            // Any other chord bound to Ghostty's `quit`, or its
+            // `close_all_windows`, puts the terminals away and swaps no session.
+            closeAllWindows: () => void putTerminalsAway(lastPaneClose.current),
+            quit: () => void putTerminalsAway(lastPaneClose.current),
             onMenuAction: () => () => undefined,
           },
     [shell],

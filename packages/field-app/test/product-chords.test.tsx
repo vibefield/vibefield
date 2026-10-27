@@ -68,7 +68,20 @@ describe("the product chords (GT-D21)", () => {
       "super+2",
       "super+3",
       "super+4",
+      // AL-9 (AL-D14/D15): the shell's two, over ghostty's quit and toggle_fullscreen
+      "super+q",
+      "super+ctrl+f",
     ]);
+    // a chord main takes above the page is heard by no page listener, so it
+    // carries no matcher; every other chord carries one
+    expect(
+      PRODUCT_CHORDS.filter((chord) => chord.takenBy === "shell").map((chord) => chord.id),
+    ).toEqual(["quit", "full-screen"]);
+    expect(
+      PRODUCT_CHORDS.every(
+        (chord) => (chord.takenBy === "shell") === (chord.matches === undefined),
+      ),
+    ).toBe(true);
     expect(
       isCommandPaletteChord({
         key: "k",

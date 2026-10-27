@@ -1,10 +1,11 @@
 import { join } from "node:path";
-import { type BrowserWindow, MessageChannelMain, session } from "electron";
+import { app, type BrowserWindow, MessageChannelMain, session } from "electron";
 import type {
   DesktopDevelopmentExtension,
   DevelopmentExtensionContext,
 } from "../main/development-extension";
 import { installNavigationPolicy, installPermissionPolicy } from "../main/security";
+import { installWindowChords } from "../main/window-chords";
 import { createHostAuxiliaryWindow, loadRenderer } from "../main/windows";
 import {
   STUDIO_PRODUCT_PORT_CHANNEL,
@@ -95,6 +96,8 @@ export function createStudioHost(opts: {
       next.webContents.on("did-finish-load", () => attachStudioPort(next));
       next.webContents.on("render-process-gone", () => router.closeStudio("studio-crashed"));
       installNavigationPolicy(next, "dev");
+      // ⌘Q and ⌃⌘F are main's above every page, Studio's too (AL-9)
+      installWindowChords(next, { quit: () => app.quit() });
       try {
         await loadRenderer(next, "dev", studioRendererUrl(context.rendererBaseUrl));
         if (next.isDestroyed()) throw new Error("Studio closed before its renderer became ready");

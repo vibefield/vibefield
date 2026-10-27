@@ -2314,6 +2314,86 @@ describe("⌘W on the last pane goes to the terminals' owner (N16 (a))", () => {
   });
 });
 
+// AL-9 (AL-D18, James 2026-10-27): ghosttea calls `closeWindow` for Ghostty's
+// `close_window` (⌘⇧W) as well as for the last pane's ⌘W, and fell back to it for
+// `quit` and `close_all_windows`. Each of those ran N16's emptying on whatever
+// pane was active, so ⌘Q over a pane (before main took it) and ⌘⇧W with panes
+// open swapped a running session out of its pane. They put the terminals away
+// and nothing else; the emptying is the last pane's alone (the block above).
+describe("the closing verbs put the terminals away and swap no session (AL-9, AL-D18)", () => {
+  const TWO: readonly ProbePane[] = [
+    { id: "pane-1", session: { id: "user-pty", cols: 100, rows: 30 } },
+    { id: "pane-2", session: { id: "other-pty", cols: 100, rows: 30 } },
+  ];
+  const creates = (): number => calls.filter(([method]) => method === "terminal.create").length;
+  type ClosingVerbs = { closeWindow: () => void; closeAllWindows?: () => void; quit?: () => void };
+
+  function platformOf(): ClosingVerbs {
+    const platform = workspaceMounts[workspaceMounts.length - 1]?.["platform"] as
+      | ClosingVerbs
+      | undefined;
+    if (platform === undefined) throw new Error("no workspace was mounted");
+    return platform;
+  }
+
+  it("⌘⇧W (`close_window`) with two panes: the terminals go away, and both panes keep their sessions", async () => {
+    const minimized = vi.fn();
+    const store = workspaceProbe({ panes: TWO, activePaneId: "pane-1" });
+    floor = [...floor, { sessionId: "user-pty" }, { sessionId: "other-pty" }];
+    const { dispose } = await mountDeckWithDoor(store, { onLastPaneClose: minimized });
+    const before = creates();
+    await act(async () => platformOf().closeWindow());
+    await settle();
+    expect(minimized).toHaveBeenCalledTimes(1);
+    expect(creates()).toBe(before);
+    expect(store.panes.map((pane) => [pane.id, pane.session.id])).toEqual([
+      ["pane-1", "user-pty"],
+      ["pane-2", "other-pty"],
+    ]);
+    expect(store.log).toEqual([]);
+    await dispose();
+  });
+
+  it("`quit` and `close_all_windows` put them away and swap nothing, even on the last pane", async () => {
+    const minimized = vi.fn();
+    const store = workspaceProbe({
+      panes: [{ id: "pane-1", session: { id: "user-pty", cols: 100, rows: 30 } }],
+      activePaneId: "pane-1",
+    });
+    floor = [...floor, { sessionId: "user-pty" }];
+    const { dispose } = await mountDeckWithDoor(store, { onLastPaneClose: minimized });
+    const before = creates();
+    const platform = platformOf();
+    await act(async () => platform.quit?.());
+    await act(async () => platform.closeAllWindows?.());
+    await settle();
+    expect(minimized).toHaveBeenCalledTimes(2);
+    expect(creates()).toBe(before);
+    expect(store.panes.map((pane) => pane.session.id)).toEqual(["user-pty"]);
+    expect(store.log).toEqual([]);
+    await dispose();
+  });
+
+  it("with no owner, `quit` and `close_all_windows` ask for Canvas, as `closeWindow` does", async () => {
+    await mountDeck();
+    const views: string[] = [];
+    setHost({
+      ...getHost(),
+      view: {
+        set: (view: string) => {
+          views.push(view);
+          return Promise.resolve({ view });
+        },
+        onState: () => () => undefined,
+      },
+    } as unknown as FieldHost);
+    const platform = platformOf();
+    await act(async () => platform.quit?.());
+    await act(async () => platform.closeAllWindows?.());
+    expect(views).toEqual(["canvas", "canvas"]);
+  });
+});
+
 // GV-D5, GV-D6 (DESIGN.md §8 "Called up"): any session brings the terminals
 // back. Every caller reaches the deck through one of its doors — a body, a list
 // row, a rain column, a timeline lane and a spend row through the monitor's

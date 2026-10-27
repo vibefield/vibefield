@@ -193,11 +193,38 @@ describe("the rows", () => {
   });
 
   it("says what a platform action does in the deck, where the window is Godview", () => {
-    const quit = rows.find((entry) => entry.action === "quit");
-    expect(quit === undefined ? null : routeWords(quit)).toEqual({
-      text: "Closes Godview",
+    // AL-9 (AL-D18): the closing verbs put the terminals away; only
+    // `close_window` empties a pane, and only the last one (the deck's
+    // `closeWindow`); "Closes Godview" hid the session swap they all made
+    expect(routeWords(row(rows, "shift+super+w"))).toEqual({
+      text: "Puts the terminals away — with one pane, it empties that pane too",
       runs: true,
     });
+    // a chord of the person's own bound to `quit` (⌘Q is the shell's, below)
+    const layered = keyboardRows(
+      { keybindings: [{ trigger: "super+shift+q", action: "quit" }], clearKeybindings: false },
+      [],
+    );
+    expect(routeWords(row(layered, "shift+super+q"))).toEqual({
+      text: "Puts the terminals away",
+      runs: true,
+    });
+  });
+
+  it("⌘Q and ⌃⌘F are the shell's, above the page — Ghostty's quit and full screen never run on them (AL-9)", () => {
+    const quit = row(rows, "super+q");
+    expect(quit).toMatchObject({ defaultAction: "quit", reserved: { id: "quit" } });
+    expect(routeWords(quit)).toEqual({ text: "VibeField: Quit VibeField", runs: false });
+    if (quit.reserved === null) throw new Error("⌘Q is not kept");
+    expect(reservedWords(quit.reserved, quit.defaultAction)).toBe(
+      "VibeField: Quit VibeField — Ghostty's quit never runs on this chord.",
+    );
+    const full = row(rows, "ctrl+super+f");
+    expect(full).toMatchObject({
+      defaultAction: "toggle_fullscreen",
+      reserved: { id: "full-screen", takenBy: "shell" },
+    });
+    expect(routeWords(full)).toEqual({ text: "VibeField: Full screen", runs: false });
   });
 
   it("tells a swallowed key from one that reaches the shell", () => {
