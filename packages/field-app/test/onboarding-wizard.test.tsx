@@ -1,13 +1,14 @@
 // @vitest-environment happy-dom
 
+import { AsyncLocalStorage } from "node:async_hooks";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { AGENT_CATALOG } from "@vibefield/contracts/agent-catalog";
 import { dealFace, effectiveFaces } from "@vibefield/contracts/user-face";
 import type { FielddClient } from "@vibefield/fieldd-client";
-import { act, createElement } from "react";
+import { createElement, act as reactAct } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, vi, it as vitestIt } from "vitest";
 import { BootRoot } from "../src/boot/BootRoot";
 import type { BootMachine, BootOnboarding, BootView } from "../src/boot/machine";
 import { OnboardingWizard } from "../src/boot/onboarding/OnboardingWizard";
@@ -23,6 +24,52 @@ import { type FieldHost, type FieldUserProfile, type FieldUserRoster, setHost } 
 // machine's own words, then the welcome and the hand-over.
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+/** Item 82 — no act() outlives its row. React keeps one act scope for the whole
+ * module (`actScopeDepth`), and an act still pending when its row timed out held
+ * it open: every act after it nested inside, flushed nothing, and the rows behind
+ * read an empty DOM, so one slow row was 40 reds (item 81's verify at
+ * `6e0da9902`, 2026-10-27). Each row runs in a scope of its own instead: vitest
+ * aborts the row's signal at its timeout, which ends the act the row was in; a
+ * row that is over starts no other; and afterEach lets the row's acts close
+ * before the next row mounts. */
+interface Row {
+  signal: AbortSignal;
+  /** Rejects with the row's own timeout once vitest aborts its signal. */
+  ended: Promise<never>;
+}
+const row = new AsyncLocalStorage<Row>();
+const rowActs: Promise<void>[] = [];
+
+function inRow(body: () => void | Promise<void>) {
+  return ({ signal }: { signal: AbortSignal }): void | Promise<void> => {
+    const ended = new Promise<never>((_, reject) => {
+      signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+    });
+    ended.catch(() => undefined); // a row that times out between acts races nothing
+    return row.run({ signal, ended }, body);
+  };
+}
+
+function it(name: string, body: () => void | Promise<void>, timeout?: number): void {
+  vitestIt(name, inRow(body), timeout);
+}
+/** A row that must fail: item 82's own proof times one out on purpose. */
+it.fails = (name: string, body: () => void | Promise<void>, timeout?: number): void => {
+  vitestIt.fails(name, inRow(body), timeout);
+};
+
+function act(callback: () => void | Promise<void>): Promise<void> {
+  const current = row.getStore();
+  current?.signal.throwIfAborted();
+  return reactAct(() => {
+    const result = callback();
+    if (current === undefined || !(result instanceof Promise)) return result;
+    const open = Promise.race([result, current.ended]);
+    rowActs.push(open);
+    return open;
+  });
+}
 
 /** DESIGN.md §6, the hand-over: the welcome's beat before the glass leaves. */
 const WELCOME_BEAT_MS = 1_400;
@@ -99,7 +146,8 @@ beforeEach(() => {
   document.documentElement.removeAttribute("data-theme");
   window.localStorage.clear();
 });
-afterEach(() => {
+afterEach(async () => {
+  await Promise.allSettled(rowActs.splice(0));
   if (root !== null) act(() => root?.unmount());
   root = null;
   mounted = null;
@@ -354,6 +402,9 @@ async function arrive(done: () => boolean): Promise<void> {
   for (let turn = 0; turn < 20 && !done(); turn += 1) {
     await act(async () => {
       await vi.dynamicImportSettled();
+      // A row that timed out while the code arrived goes no further: the clock
+      // these turns would advance is the next row's (item 82).
+      row.getStore()?.signal.throwIfAborted();
       vi.advanceTimersByTime(10);
       for (let hop = 0; hop < 8; hop += 1) await Promise.resolve();
     });
@@ -1561,5 +1612,31 @@ describe("BootRoot during onboarding", () => {
     await tick(400);
     expect(container?.querySelector(".vf-splash")).toBeNull();
     expect(container?.querySelector(".vf-wizard-shell")).toBeNull();
+  });
+});
+
+describe("item 82 — one slow row is one red", () => {
+  it.fails("a row that times out inside an act fails alone (on purpose)", async () => {
+    host(null);
+    await mount({
+      fieldd: client({ link: NO_LINK }),
+      onboarding: onboarding(),
+      onComplete: vi.fn(),
+    });
+    await act(() => new Promise<void>(() => undefined));
+  }, 100);
+
+  it("leaves the row after it a wizard that renders and answers", async () => {
+    host(null);
+    await mount({
+      fieldd: client({ link: NO_LINK }),
+      onboarding: onboarding(),
+      onComplete: vi.fn(),
+    });
+    expect(text()).toContain("Welcome.");
+    await click("Get started");
+    expect(container?.querySelector<HTMLInputElement>('input[aria-label="Your name"]')?.value).toBe(
+      "james",
+    );
   });
 });
