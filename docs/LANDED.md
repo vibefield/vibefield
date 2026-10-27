@@ -16560,3 +16560,84 @@ only, as DESIGN.md §8 "Settings → Devices" (TS-0) says. P9, this Mac's own di
 **Owed.**
 - TS-3b: P9, this Mac's display name (contracts · fieldd · field-app).
 - The catalog's photographs and the desk rows, on James's display word.
+
+## AO-3 — History: one consent, every door. The History pane asks whose past sessions come in, in the Setup Assistant, in History's own consent slot, in Finish setting up and on a new Settings → History page, and the window's token holds `index.manage` (2026-10-27; `f3b215117`, lane `ao/3`; AO-D3, AO-D9, AO-D12)
+
+**What.** The third slice of track AO's ladder (`draft/thinking-agent-onboarding.md` §8): the History pane, the one
+question about agents' past sessions, asked the same way at every door that asks it.
+- **The pane** (field-app `setup/`):
+  - The census (`agent.catalog` + `index.discoveries`) is asked again while the index starts, for up to 15 s, then
+    the pane says "History isn't available right now."
+  - Its rows are the agents with history on this Mac whose catalog row offers it, installed or not, each with its
+    size as Finder counts it and when it was last used, in words. Every switch is on at first (AO-D3).
+  - Two sentences: the first reading's time ("About a minute on a quiet Mac, one time only."), from James's measured
+    5.2 s a GB, never a countdown; and where the history stays.
+  - Bring in history sends ONE `index.enroll` with the complete set: the kinds already consented that the pane does
+    not list, plus every switch left on. Nothing is revoked by omission.
+  - With every switch off the button reads Continue without history, and a no is an answer. Not now is recorded as
+    later and names its home: "Bring it in anytime from History."
+  - With nothing to decide, the pane moves on by itself (AO-L2).
+- **The Setup Assistant:** "history" joins the order after the name (AO-D13). W6 enters at it while the ledger holds
+  no answer. Its code loads lazily, so first-run code never weighs an ordinary boot.
+- **History's consent slot:** the same pane in the room's place, without Not now (leaving History is that). It
+  replaces the dead end that pointed at Settings → Agents, which had no such control.
+- **Settings → History** (AO-D9):
+  - What History reads now, a change applied at once (one enroll, the complete set).
+  - Stop reading asked once, keeping what was read.
+  - Look again.
+- **Finish setting up:** History is listed while something on this Mac is left to bring in and the step is not
+  answered. That covers put off, and never asked: people who set up before the chapter (AO-D12), and censuses that
+  had not answered in time. It is asked in the sheet with the same pane.
+- **The window's token** holds `index.manage` (electron-shell `bootstrap.ts`; docs/agent-plane/api.html says so).
+  contracts gains leaf entries `./agent-catalog` and `./agent-index` for boot-reachable code. `formatBytes` moves to
+  `format/bytes.ts`.
+- **Catalog:**
+  - The onboarding inventory's History frame (found, all off, looking, unavailable), 03 before Connect.
+  - Settings → History on a fixture census.
+  - Finish setting up with both rows.
+
+**Restacked onto TS-2** (`f491fa494`, its records `3d3e893a7`; rehearsed first with `git merge-tree`). One file
+conflicted, the wizard test (five hunks). AO-3's walks met TS-2's Connect: its title "Your field, on every device.",
+its harness's `device.subscribe`, and its skip "Not now". AO-3's own W6 row merged by itself but named Connect by its
+old title, so it now names the new one. Finish setting up's sheet merged by itself: SheetPane hands TS-2's `me` to
+the Devices step and keeps History's.
+
+**Found by the gate** (the light runs never typecheck): the wizard's W6 read checked `ledger.data !== undefined` on
+data that is `T | null`. The field-app typecheck said so at `63d6fe9d3` (`OnboardingWizard.tsx(114,20)`, TS2345),
+and the check is now `!== null`. A first try routed the read through AO-2's `useSetupLedger()`. The light typecheck
+refused it: the entry waits while the ledger is still loading, and the hook's null does not tell loading apart from no
+ledger. The raw subscription stays, with a comment saying why. The suite then found one row pinning the old Settings nav (Agents just before
+Plugins, a proxy for "Agents first under Workspace"). It now pins DESIGN.md §8's ruled order: History after Agents and its
+profiles, then Plugins. That is the test brought to the spec, not the spec brought to the test. Verify's preflight then refused AO-3's design-catalog fixture: the
+R23b wall (AR-L1) found seven agent-id literals, in the History census's sample agents and in the Settings → History
+specimen's `consented` set. The census is now derived from `AGENT_CATALOG`, read through the catalog's door to contracts
+(the barrel; a leaf entry from `design-system/` is refused by ui-system-boundaries, which verify's tests caught): the
+first three rows that offer history with a rosetta kind and a layout root, sizes and dates by index, so the same three
+agents appear. The specimen reads the
+census's first kind (`FIXTURE_HISTORY_CONSENTED`). R23b's allow-list is unchanged, with no literal to list.
+
+**Validation** (lane ao1, nice 19, the guard clear before every arm):
+- the gate at `ecb41e055` (11:27:22–11:29:37Z): the contracts, electron-shell and field-app typechecks EXIT 0;
+  field-app's whole suite `2672 passed | 3 skipped`; the catalog's History frames photographed in both themes, 10 PNGs
+  (the wizard's History pane, Connect, Setting up, Settings, Settings → History), no console errors
+  (`lanes/ao1/logs/gate-ecb41e055/shots/`); the tree clean after. Earlier passes, each red on a finding above: the
+  field-app typecheck at `63d6fe9d3`, the suite's nav row at `573608ce0`, verify's preflight (R23b) at `ecb41e055`,
+  and verify's boundaries row at `08589be1c`.
+- the light pass at `c0e4b0c1b` (11:38:24–11:39:08Z; only the fixture adapter and the one section moved since the
+  gate): the field-app typecheck EXIT 0, `pnpm preflight` EXIT 0, `pnpm check:walls` EXIT 0, and ui-system-boundaries
+  with the fixture's four readers `65 passed`.
+- `pnpm verify` at `c0e4b0c1b` (11:47:23–11:53:24Z) EXIT 0: every TS project's typecheck and tests (27 of 27),
+  31 cargo suites, gen:check; the tree clean after.
+- Rebased onto TS-3a (`32fe49be1`, its records `b11af0ef3`; rehearsed with `git merge-tree`). There were three
+  one-hunk conflicts: Settings' Workspace group (TS-3a moved Devices to Account; History stays after Agents), and the
+  Settings panel's and catalog section's import lines. The range-diff `c0e4b0c1b` → `f3b215117` is TS-3a's context
+  alone. The shared package was gated again at `f3b215117` (11:53:58–11:56:37Z): the
+  contracts, electron-shell and field-app typechecks EXIT 0; field-app's whole suite `2677 passed | 3 skipped`; the 10
+  photographs again, no console errors, Settings → History under TS-3a's nav (`lanes/ao1/logs/gate-f3b215117/shots/`);
+  the tree clean after.
+
+**Not here.**
+- The disk check ("not enough space" needs a door that reports the copy's size).
+- The room's own import state on Settings → History.
+- Profiles' own folders listed there (AO-4, AO-5).
+- The desk rows (`pnpm smoke`, `pnpm smoke:studio`) on a display, owed with AO-1's and AO-2's on James's word.
