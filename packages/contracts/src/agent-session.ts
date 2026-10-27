@@ -219,6 +219,12 @@ export const AgentSessionSummary = z
      * `app`). `user-shell`: the pane is the person's shell, which the agent's
      * exit leaves standing. */
     spawnedBy: z.string().min(1).max(32).optional(),
+    /** Q08 — the key `agent.interrupt` presses in this run's pane, in
+     * puppeteer's words (its `TerminalKey`: `escape`, `ctrl-c`; OPEN): the
+     * turn stop the run's adapter names, else the floor's ⌃C while it names
+     * none. Absent: the stop presses no key (the agent's own control stops the
+     * turn), or a daemon from before Q08. */
+    stopKey: z.string().min(1).max(32).optional(),
   })
   .passthrough();
 export type AgentSessionSummary = z.infer<typeof AgentSessionSummary>;

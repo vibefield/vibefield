@@ -585,6 +585,8 @@ export function localFactsOf(summary: AgentSessionSummary): AgentModelLocalFacts
     ...(cwd !== "" ? { cwd } : {}),
     ...(summary.spawnedBy !== undefined ? { spawnedBy: summary.spawnedBy } : {}),
     ...(summary.continuation?.exited === true ? { exited: true } : {}),
+    // Q08 — the key the pane frame's stop title names
+    ...(summary.stopKey !== undefined ? { stopKey: summary.stopKey } : {}),
     ...(monitor !== undefined
       ? {
           mirror: {

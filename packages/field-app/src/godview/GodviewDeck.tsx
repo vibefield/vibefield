@@ -1730,11 +1730,15 @@ export function GodviewDeck({
    * THE VERBS the deck lends the frame.
    *
    * `stop` is `agent.interrupt` on the fold's RUN — the one door AR-6-0 adds
-   * for exactly this (the floor delivers what ^C would, and yields to a human
-   * mid-keystroke). It answers whether the interrupt was DELIVERED, which is
-   * what turns the square hollow; a run the fold does not name, a refusal and a
-   * failure are all "not accepted", and each says so in the log rather than on
-   * a button that lies.
+   * for exactly this. Since Q08 fieldd sends the run's own turn stop, the one
+   * its adapter names (a key the floor delivers, yielding to a human
+   * mid-keystroke, or the agent's own control), and the floor's ⌃C only while
+   * the adapter names none. The verb names no key itself: the frame's title
+   * takes it from the run's row (`local.stopKey`, `pane-frame-facts.ts`), so
+   * the title and the act are the same fieldd fact. It answers whether the
+   * interrupt was DELIVERED, which is what turns the square hollow; a run the
+   * fold does not name, a refusal and a failure are all "not accepted", and
+   * each says so in the log rather than on a button that lies.
    *
    * `resume` is `agent.resume` — the existing door — and the answer carries the
    * new run beside the SAME routed create ticket a birth gets, so the pool

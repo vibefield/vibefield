@@ -98,6 +98,7 @@ import {
   mirrorOf,
   recordForRun,
   SessionRecordStore,
+  stopKeyOf,
   summarizeExitedRecord,
   summarizeManaged,
   summarizePending,
@@ -1701,13 +1702,22 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
    * ending it, the ⎋ a person at the keyboard would press. One semantic input
    * through the floor's own epoch-ordered path, so it cannot race a human's
    * typing into the same PTY.
+   * *Correction 2026-10-27 (Q08, ruled C):* it was never ⎋ — it sent the
+   * floor's interrupt, ⌃C, to every agent, and ⌃C clears one agent's input and
+   * quits another when idle. It sends the RUN'S OWN turn stop now, the one its
+   * adapter names (puppeteer's `Agent.stopTurn`): a key through the same
+   * epoch-ordered path, or the agent's own control. Only while the adapter
+   * names none does it still send the floor's ⌃C, and the row says so
+   * (`stopKey`, `stopKeyOf`). Which agent it is never enters here (AR-L1).
    *
    * The PTY is always the RECORD'S OWN. The params name a RUN, and the id sent
    * to the floor comes from the managed entry fieldd wrote when it spawned
    * that run — never a terminal id a caller chose, and never a PTY this daemon
    * did not mint. That is what keeps the act inside `agent.control` rather than
    * making it a `terminal.attach`-class power (the `agent.resume` scope
-   * argument in methods.ts, applied here).
+   * argument in methods.ts, applied here). An adapter's key goes to its
+   * binding's terminal, which is that same PTY (`info.terminalSessionId` is
+   * the binding's own).
    *
    * Three answers, all honest:
    *  - an unknown run is NOT_FOUND;
@@ -1715,8 +1725,9 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
    *    nothing observes, which fieldd holds no adapter for) is
    *    PRECONDITION_FAILED `{state: "not-alive"}` — refusing to type into a
    *    terminal we cannot claim to be steering;
-   *  - otherwise the FLOOR's answer, verbatim. `accepted` means the floor took
-   *    the interrupt, never that the agent obeyed it. */
+   *  - otherwise the FLOOR's answer, verbatim (or the agent's own control's).
+   *    `accepted` means the stop was delivered, never that the agent obeyed
+   *    it. */
   async interrupt(params: AgentInterruptParams): Promise<AgentInterruptResult> {
     const entry = this.managed.get(params.runtimeRunId);
     if (entry === undefined || entry.exiting) {
@@ -1741,12 +1752,17 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       // the same words the host itself would answer with — no floor, no act
       return { accepted: false, reason: "no-terminal-host" };
     }
-    const result = await host.automateTerminal(entry.info.terminalSessionId, {
-      kind: "interrupt",
-    });
+    const stop = entry.agent.turnStop;
+    const result =
+      stop === undefined
+        ? await host.automateTerminal(entry.info.terminalSessionId, { kind: "interrupt" })
+        : await entry.agent.stopTurn();
+    const stopKey = stopKeyOf(stop);
     this.logger.info("fieldd.agents.interrupted", "An agent run was interrupted", {
       runtimeRunId: params.runtimeRunId,
       sessionId: entry.info.terminalSessionId,
+      // what was sent, in puppeteer's words: a key, or the agent's own control
+      stop: stopKey ?? "native",
       accepted: result.accepted,
       ...(result.accepted ? {} : { reason: result.reason }),
     });
@@ -3895,6 +3911,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         },
         replaced: entry.replaced,
         ...(entry.typed !== undefined ? { spawnedBy: SPAWNED_BY_SHELL } : {}),
+        stopKey: stopKeyOf(entry.agent.turnStop),
         createdAt: entry.createdAt,
         stateChangedAt: entry.stateChangedAt,
         lastActivityAt: entry.lastActivityAt,

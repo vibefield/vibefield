@@ -537,6 +537,10 @@ export const AgentModelLocalFacts = z
     /** MF-1f — fieldd witnessed the run's process end while its pane is still
      * on the floor; absent: it did not */
     exited: z.boolean().optional(),
+    /** Q08 — the key the stop verb presses in the run's pane (the fold's
+     * `stopKey`): the pane frame's stop title names it. Absent: the stop
+     * presses no key, and the title names none */
+    stopKey: z.string().optional(),
     /** The mirror's own words the chrome reads, present exactly when fieldd
      * holds a monitor mirror for the run — the provider has spoken. Absent is
      * the run before its first state: the pane frame's bare badge, the
@@ -861,7 +865,9 @@ export type AgentInterruptParams = z.infer<typeof AgentInterruptParams>;
 /** Accepted = the floor took the interrupt, not that the agent obeyed it —
  * what happens next is the vendor's. A refusal carries the floor's own word
  * (`no-terminal-host`, `human-input-conflict`, …), never a sentence composed
- * here. */
+ * here. Q08 — the interrupt is the run's own turn stop: accepted is the floor
+ * taking its key, or the agent's own control answering, and a refusal is that
+ * one's word. */
 export const AgentInterruptResult = z.discriminatedUnion("accepted", [
   z.object({ accepted: z.literal(true) }),
   z.object({ accepted: z.literal(false), reason: z.string() }),

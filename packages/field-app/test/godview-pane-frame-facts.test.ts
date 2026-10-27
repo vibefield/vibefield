@@ -236,6 +236,20 @@ describe("the pane frame's facts", () => {
     expect(
       key(managedSummary({ runtimeRunId: "run-a", terminalSessionId: "pty-a", monitor: false })),
     ).not.toBe(key(row));
+    // Q08 — the stop's key is in the title the frame draws
+    expect(key({ ...row, stopKey: "escape" })).not.toBe(key(row));
+    expect(key({ ...row, stopKey: "escape" })).not.toBe(key({ ...row, stopKey: "ctrl-c" }));
+  });
+
+  it("Q08 — hands the frame the key fieldd says the stop presses, and none when it presses none", () => {
+    const row = managedSummary({ runtimeRunId: "run-a", status: "working" });
+    // the run's adapter names its own key, which fieldd repeats on the row
+    expect(factsOf({ ...row, stopKey: "escape" })?.stopKey).toBe("escape");
+    // an adapter that names none: the floor's ⌃C, said as such
+    expect(factsOf({ ...row, stopKey: "ctrl-c" })?.stopKey).toBe("ctrl-c");
+    // the agent's own control presses no key (or a daemon from before Q08):
+    // the frame is handed none, and its title names none
+    expect(factsOf(row)).not.toHaveProperty("stopKey");
   });
 });
 

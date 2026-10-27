@@ -69,6 +69,7 @@ import {
   type AgentHost,
   type AgentModelService,
   type AgentProfile,
+  type AgentTurnStopService,
   type BoundIngress,
   defineModelService,
   type ExtensionService,
@@ -176,11 +177,35 @@ interface ScriptedAttach {
   sessionId: string;
   ingress: AttachProviderSessionOptions["ingress"];
 }
+/** The text the scripted turn stop types: a line, because the PTY's `cat`
+ * reads in canonical mode and a lone key byte would never reach its file. */
+const SCRIPTED_TURN_STOP_TEXT = "scripted-turn-stop\n";
+
+/** `turnStops` — Q08: the binding names a turn stop (an `escape` key, by
+ * declaration) and records each press, by its terminal; absent, the binding
+ * names none, as an adapter that has not been censused yet. */
 function scriptedBinding(
   host: AgentHost,
   runtimeSessionId: string,
   sessionId: string,
+  turnStops?: string[],
 ): AgentAdapterBinding {
+  const turnStop: AgentTurnStopService | undefined =
+    turnStops === undefined
+      ? undefined
+      : {
+          stop: { kind: "key", key: "escape" },
+          async submit() {
+            turnStops.push(runtimeSessionId);
+            const result = await host.automateTerminal(runtimeSessionId, {
+              kind: "text",
+              text: SCRIPTED_TURN_STOP_TEXT,
+            });
+            return result.accepted
+              ? { accepted: true }
+              : { accepted: false, reason: result.reason };
+          },
+        };
   return {
     sessionId,
     runtimeSessionId,
@@ -199,6 +224,7 @@ function scriptedBinding(
             : { status: "rejected", reason: result.reason };
         },
       },
+      turnStop,
     },
     async dispose() {},
   };
@@ -360,6 +386,8 @@ function scriptedProvider(
     afterBirth?: (runtimeSessionId: string) => Promise<void>;
     /** item 81 — the PTY's own `sh -c` program (default: the environment written, then the PTY held by `cat`) */
     program?: string;
+    /** Q08 — each binding names a turn stop, and each press lands here (absent: none named) */
+    turnStops?: string[];
   } = {},
 ): AgentProvider {
   let counter = 0;
@@ -415,7 +443,7 @@ function scriptedProvider(
         bornAt,
         typedOut,
       });
-      return scriptedBinding(options.host, runtimeSessionId, sessionId);
+      return scriptedBinding(options.host, runtimeSessionId, sessionId, extra.turnStops);
     },
     // AR-4 — an adapter that can re-attach to its running process: it records
     // what it was handed and binds the same terminal and native session
@@ -428,7 +456,12 @@ function scriptedProvider(
               sessionId: options.sessionId,
               ingress: options.ingress,
             });
-            return scriptedBinding(options.host, options.runtimeSessionId, options.sessionId);
+            return scriptedBinding(
+              options.host,
+              options.runtimeSessionId,
+              options.sessionId,
+              extra.turnStops,
+            );
           },
         }),
   };
@@ -460,6 +493,8 @@ interface Box {
   seen: Array<AgentProfile | undefined>;
   /** PJ-6 — the scripted agent's model picker and what each launch started at */
   models: ScriptedModels;
+  /** Q08 — each press of the scripted turn stop, by terminal (`turnStop: true`) */
+  turnStops: string[];
 }
 
 interface SetupConfig {
@@ -490,6 +525,8 @@ interface SetupConfig {
   afterBirth?: (runtimeSessionId: string) => Promise<void>;
   /** item 81 — the scripted agent's own `sh -c` program */
   program?: string;
+  /** Q08 — the scripted adapter names a turn stop (default: it names none) */
+  turnStop?: boolean;
 }
 
 /** Boot fieldd: over the mock mgmt server (no floor) or the REAL field-native. */
@@ -561,6 +598,7 @@ async function setup(config: SetupConfig): Promise<Box> {
   const sessions: ScriptedSession[] = restart?.sessions ?? [];
   const seen: Array<AgentProfile | undefined> = restart?.seen ?? [];
   const attached: ScriptedAttach[] = restart?.attached ?? [];
+  const turnStops: string[] = restart?.turnStops ?? [];
   const models: ScriptedModels = restart?.models ?? {
     fail: false,
     reads: 0,
@@ -602,6 +640,7 @@ async function setup(config: SetupConfig): Promise<Box> {
           models,
           ...(config.afterBirth !== undefined ? { afterBirth: config.afterBirth } : {}),
           ...(config.program !== undefined ? { program: config.program } : {}),
+          ...(config.turnStop === true ? { turnStops } : {}),
         }),
       ];
     },
@@ -655,6 +694,7 @@ async function setup(config: SetupConfig): Promise<Box> {
     records,
     seen,
     models,
+    turnStops,
   };
 }
 
@@ -3071,11 +3111,14 @@ describe("AR-6-0 — the stop verb (agent.interrupt)", () => {
     // where the floor answers "unknown or remote session" and TerminalService
     // raises INTERNAL (terminal-service.ts:645-660 — the pre-existing shape for
     // paste and text too, not something this door introduced).
-    await poll(async () => {
+    const tagged = await poll(async () => {
       const { sessions: rows } = (await win.call("agent.list", {})) as AgentListResult;
       const row = rows.find((r) => r.runtimeRunId === runId);
       return row?.terminal?.cellBootId !== undefined ? row : undefined;
     }, 10_000);
+    // Q08 — this adapter names no turn stop, so the verb is still the floor's
+    // ⌃C, and the row says that key rather than none
+    expect(tagged.stopKey).toBe("ctrl-c");
 
     // ── the act: the floor takes it, and the scripted PTY's `cat` dies of it ──
     // `accepted` is the FLOOR's word — that the interrupt reached the PTY's
@@ -3132,6 +3175,55 @@ describe("AR-6-0 — the stop verb (agent.interrupt)", () => {
     expect(missed.outcome.reasonCode).toBe("NOT_FOUND");
     // (a real floor, two spawns' worth of ladders and an explicit reap: this
     // row outgrew the 5 s default the day MF-1g gave it a pane to close)
+  }, 120_000);
+
+  it("Q08 — sends the run's own turn stop, as its adapter names it, never the floor's ⌃C; the row names the key", async () => {
+    const { daemon, dataDir, envOut, sessions, turnStops } = await setup({
+      floor: "real",
+      turnStop: true,
+    });
+    const win = await window(daemon, [...DECK, "agent.control"], "q8");
+    const spawned = (await born(win, "agent.spawn", {
+      provider: "scripted",
+      cwd: envOut,
+    })) as AgentSpawnResult;
+    const runId = spawned.session.runtimeRunId;
+    // the cell's tag first, as above: the stop's key rides the same automate
+    const tagged = await poll(async () => {
+      const { sessions: rows } = (await win.call("agent.list", {})) as AgentListResult;
+      const row = rows.find((r) => r.runtimeRunId === runId);
+      return row?.terminal?.cellBootId !== undefined ? row : undefined;
+    }, 10_000);
+    // the adapter's word, repeated: fieldd names no agent and picks no key
+    expect(tagged.stopKey).toBe("escape");
+
+    // ── the act: the adapter's stop, once, on the run's own PTY ──
+    expect(await win.call("agent.interrupt", { runtimeRunId: runId })).toEqual({ accepted: true });
+    expect(turnStops).toEqual([spawned.terminal.sessionId]);
+    const typedOut = sessions[0]?.typedOut;
+    if (typedOut === undefined) throw new Error("the scripted run was not born");
+    const typed = (marker: string) =>
+      poll(async () => {
+        if (!existsSync(typedOut)) return undefined;
+        const text = readFileSync(typedOut, "utf8");
+        return text.includes(marker) ? text : undefined;
+      }, 10_000);
+    // it went through the floor's epoch path to the process ...
+    expect(await typed(SCRIPTED_TURN_STOP_TEXT.trim())).toContain(SCRIPTED_TURN_STOP_TEXT.trim());
+    // ... and no ⌃C went with it: the `cat` a ⌃C kills still takes a prompt
+    const agent = daemon.agents.runtime.agent(spawned.terminal.sessionId);
+    expect((await agent?.submitPrompt({ text: "still-running" }))?.status).toBe("confirmed");
+    expect(await typed("still-running")).toContain("still-running");
+    const { sessions: rows } = (await win.call("agent.list", {})) as AgentListResult;
+    expect(rows.find((r) => r.runtimeRunId === runId)?.continuation?.exited).not.toBe(true);
+
+    // ── the ledger: the same act, the same outcome ──
+    const act = await auditAct(
+      dataDir,
+      (entry) => entry.action === "agent.session.interrupt" && entry.target.id === runId,
+    );
+    expect(act.outcome.outcome).toBe("succeeded");
+    expect(act.outcome.attrs?.["accepted"]).toBe(true);
   }, 120_000);
 });
 

@@ -21,7 +21,7 @@ import {
   type TerminalInfo,
 } from "@vibefield/contracts";
 import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/logging";
-import type { AgentMonitorState } from "@vibefield/puppeteer-core";
+import type { AgentMonitorState, AgentTurnStop, TerminalKey } from "@vibefield/puppeteer-core";
 import type { AgentSessionInfo } from "@vibefield/puppeteer-runtime";
 import { isTypedRun, SPAWNED_BY_SHELL } from "./agent-typed-run";
 
@@ -434,6 +434,22 @@ export interface SummarizeInput {
   /** AR-7 — where the run came from, when it did not come from one of our
    * doors (`user-shell`); a spawned row says nothing, which reads `app` */
   spawnedBy?: string | undefined;
+  /** Q08 — the key `agent.interrupt` presses for this run (`stopKeyOf`) */
+  stopKey?: string | undefined;
+}
+
+/** Q08 — the floor's own interrupt, which is ⌃C (ghosttea encodes it `\x03`),
+ * in puppeteer's word for that key. */
+export const FLOOR_INTERRUPT_KEY: TerminalKey = "ctrl-c";
+
+/** Q08 — the key the stop verb presses for a run, from the turn stop its
+ * adapter names (puppeteer's `Agent.turnStop`): that key; none when the stop
+ * is the agent's own control; and the floor's ⌃C while the adapter names no
+ * stop, because that is what `agent.interrupt` then sends. Pure, and blind to
+ * which agent it is (AR-L1): the adapter says, fieldd repeats it. */
+export function stopKeyOf(stop: AgentTurnStop | undefined): string | undefined {
+  if (stop === undefined) return FLOOR_INTERRUPT_KEY;
+  return stop.kind === "key" ? stop.key : undefined;
 }
 
 /** SessionSummary v2 for a managed run — pure. */
@@ -471,6 +487,7 @@ export function summarizeManaged(input: SummarizeInput): AgentSessionSummary {
     ...(input.title !== undefined ? { title: input.title } : {}),
     continuation: input.record,
     ...(input.spawnedBy !== undefined ? { spawnedBy: input.spawnedBy } : {}),
+    ...(input.stopKey !== undefined ? { stopKey: input.stopKey } : {}),
   };
 }
 
