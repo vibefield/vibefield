@@ -17018,6 +17018,13 @@ vacant true", AL-8a-1's idle stop never came, and AL-8a-2 handed `sessions: null
 stamp's `applied` flag, set on every applied reconcile whether published or not, and a missing occupancy reads as 0.
 `occupancy` is untouched, since it drives the solo rotation and reaping. The 15:46Z guess that it was load was wrong.
 
+> **Errata (2026-10-27, found by the EL8's verify: AL-8a-2 red in its run at 17:15–17:20Z, load 10→115, and again
+> alone at 17:21:53Z; fixed by `73240a2d1`, §AL-8a's census fix below):** the `applied` flag was one step short. It
+> says a cell has reconciled ONCE, and the census never read the stamp's `as_of`. So a session born after its cell's
+> last reconcile and before a fieldd crash was recorded as `sessions: 0`, a zero the floor never saw, and the bound's
+> "reads again one inventory sample later" trusted the same stale count. A count that must hold at a moment is now
+> ASKED for, and counted only from reconciles begun after it.
+
 **Found by its first verify (egress, LATENT; for the History/FW lead's eye):** egress's `DeferredSocket`
 (`packages/fieldd/src/egress.ts`, the dial's stand-in) closes a real socket that arrives after its caller closed it,
 but attached no listener to it first. A `ws` still CONNECTING answers `close()` with an `error` event ("WebSocket was
@@ -17119,3 +17126,75 @@ James's AO-D15 = (a), ruled 15:27:13Z (`rule-ao-d15`). Two commits:
 
 **Not here.** The limit moment (AO-6b2, next). The desk rows (`pnpm smoke`, `pnpm smoke:studio`) on a display, owed
 with AO-1…5a's.
+
+## AL-8a's census fix — the floor asks for a crash's count: a session born after its cell's last reconcile and before a fieldd crash was recorded as `sessions: 0`; a count that must hold at a moment is now asked for, and read only from reconciles begun after it (2026-10-27; `73240a2d1`, lane `al/census`; VF-PM's GO)
+
+**Why:** the EL8's verify (run 2 on `96123ac9d`, 17:15–17:20Z, load 10→115; then terminal-kill-matrix ALONE at
+17:21:53–17:22:17Z, load 36→28; logs `lanes/hl-el8-0724/logs`) was red on AL-8a-2 twice. Both times
+terminal-kill-matrix.test.ts:619 expected `lastManagerExit {sessions: 1}` and got `{sessions: 0}`, beside the session
+the row had opened.
+- The cause: AL-8a's census summed `occupancy` over the cells whose stamp was `applied` (reconciled once), never its
+  `as_of`. A birth reaches `occupancy` at the pump's next 100 ms tick (`RECONCILE_FLOOR`), which a loaded floor
+  stretches, and a fieldd that died inside that gap left a stale zero (errata at §AL-8a's source).
+- The row let it through because it waited on fieldd's `liveCount()`, which counts births the floor has not listed
+  (`bornUnseen`).
+
+**What landed** (field-native; fieldd's native-link.ts comment gains a dated correction):
+- `orphan::SessionCensus {count(after), ask()}`, implemented by `TerminalHandle`. `count` gives
+  `Counted | NotYet | Unknown`, counted only from reconciles that BEGAN after `after`.
+- The ask: a watch on `InventoryStamps` that every pump subscribes to before its first reconcile and hears as an
+  event owed a reconcile. Each cell runs `list-sessions` at its next tick, not at its 5 s backstop (§10.5:
+  list-sessions is truth).
+- A departure keeps its instant and asks at once, a head start. The next hello asks again and waits up to
+  `FRESH_COUNT_WAIT` for an unplanned one's count, then sends `null`, never 0. A planned one is never waited on, and an
+  unreadable count ends the wait at once.
+- `FRESH_COUNT_WAIT` = 2 × `SLOW_RECONCILE_MS` = 2 s, a fifth of fieldd's 10 s `HELLO_TIMEOUT_MS`. 5 s (half the
+  deadline) was weighed for a loaded verify host. 2 s plus the head start (the next fieldd's whole boot) was kept: a
+  longer cap delays every relaunch after a crash, and null is honest.
+- The bound's confirming read asks too. A count not fresh in time is a whole new span, never a stop.
+
+**Found before its build (its own first cut):** the first cut WAITED up to "one sample plus a slow reconcile" for a
+reconcile to come. `SAMPLE_MS` is the sampler's cadence, not the pump's: a quiet cell reconciles only on an event or
+every `BACKSTOP_MS` (5 s). That count would mostly have read null where the truth was 1, and the bound would mostly
+have restarted its span. Reading the pump before the build caught it, and the ask replaced the wait.
+
+**Not reproduced alone at idle:** before the build, the kill matrix's AL-8a rows ran on the OLD floor (built 16:46Z
+at AL-8a's tree), 17:31:48–17:31:56Z at load 8.4. AL-8a-1, -2 and the new -4 were all green, because at idle the
+birth's reconcile lands within one tick, before fieldd's close does. The EL8's log is the reproduction; the
+deterministic reds are the probes.
+
+**Rows:**
+- terminal.rs `a_census_ask_reconciles_a_quiet_cell_at_its_next_tick` (a FakeCell, a 60 s backstop).
+- orphan.rs `a_departure_asks_for_its_count_and_never_says_a_stale_zero` (a mute cell: asked once, the stale zero
+  visible, the record `null`; an answering cell: `{sessions: 1}`), and
+  `a_planned_departure_is_never_waited_on_and_an_unreadable_count_ends_the_wait`.
+- Kill matrix:
+  - AL-8a-2 waits for the floor's own listing.
+  - The new AL-8a-4 kills fieldd the moment the create returns and expects 1.
+- Mutation probes, each red, then restored byte-identical:
+  - (A) `applied_instances` ignoring `after`;
+  - (B) no `asked.changed()` arm;
+  - (C) the hello reading the last count, the old way, which gives `(false, Some(0))` against `(false, None)`.
+
+**Gates** (lane al2, nice 19, the guard before each):
+- The compile: EXIT 0.
+- `--lib orphan:: a_census_ask`: 10/10. mgmt_server: 31/31. clippy `--all-targets -D warnings`: 0. rustfmt: clean.
+- Kill matrix AL-8a-1…4 on the new floor: green at load 28, then AL-8a-2/-4 3/3 at load 36–42.
+- typecheck fieldd, biome, preflight, check:walls: 0.
+- `pnpm verify` at `73240a2d1` (17:47:45–17:52:02Z): **EXIT 1**.
+  - Every stage before `pnpm test` was green.
+  - `pnpm test`: 2544 passed and 1 failed, at load 327 by its end. The failure was fieldd's `doc-sync-service.test.ts`
+    › DS-5c (:1146, `expected 138 to be greater than or equal to 155`): a retry observed sooner than 4T−5, an
+    observer that recorded late under load.
+  - The diff cannot reach it: DS-5c runs on a fake control with no field-native, and fieldd's only src change is a
+    comment. The file alone on the same sha: 44/44 twice, at load 164–178.
+  - The chain stopped there, so its last two stages ran alone on the sha: `pnpm test:rust` EXIT 0 (lib 297, 1
+    ignored; mgmt_server 31; every integration binary ok) and `pnpm gen:check` EXIT 0.
+  - Landed on AO-6b1's precedent (red under load on a row the diff cannot reach, green alone) by VF-PM's GO. The lane
+    SSD sat at 9.95 GiB free after the Rust stage, under its 10 GiB floor, so no verbatim rerun was made.
+
+**Owed:**
+- No kill-matrix row can place a hello inside the gap on purpose. The honest `null` is pinned by the unit row alone.
+- On a host loaded enough that an asked reconcile takes longer than 2 s plus the next fieldd's boot, AL-8a-2/-4 would
+  read `null` and go red. That red would be honest, and it would be the place to measure.
+- The draft side: dev-local `8a9031791` carried §8.3.1's first errata; its corrected block rides the next snapshot.
