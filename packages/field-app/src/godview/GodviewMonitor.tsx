@@ -293,6 +293,11 @@ export interface GodviewMonitorProps {
   door?: MonitorDoor | null;
   /** The deck's pane facts, read-only. */
   panes?: MonitorPaneFacts;
+  /** Q04 — whether the terminals are up, the value its owner holds (the
+   * window's Godview: not `away`). Away, the focused pane is hidden, so its
+   * row is not reported shown and a reply there turns unread; its outer light
+   * stays. Default true: a stage with no terminals' state (the catalog's). */
+  terminalsUp?: boolean;
   /** MV-W4 — the stage's animations switch, the value its owner hands
    * `GodviewStage` (GT-3p: the lab's kill switch; the catalog's still stage;
    * GV-D11: the window's own Godview, off while its terminals are maximized).
@@ -337,6 +342,7 @@ export function GodviewMonitor({
   theme = "light",
   door = null,
   panes,
+  terminalsUp = true,
   animations = true,
   publishesFind = false,
   initialProfile = null,
@@ -428,6 +434,7 @@ export function GodviewMonitor({
     palette,
     door,
     ...(panes ? { panes } : {}),
+    terminalsUp,
     profiles: profileSets,
     profilesRead: profileSetsRead,
     hasProfiles: profilesPort !== undefined,

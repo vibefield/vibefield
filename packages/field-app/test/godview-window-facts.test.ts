@@ -8,7 +8,13 @@ import type { MonitorAgentRow } from "@vibefield/puppeteer-view-sdk/model";
 import { describe, expect, it } from "vitest";
 import { type HeldModelRow, ModelBoardFold } from "../src/godview/monitor/model-board";
 import type { MonitorPaneFacts } from "../src/godview/monitor/useMonitorAgents";
-import { boardJoins, windowKindsKey, windowLocal } from "../src/godview/monitor/window-local";
+import {
+  type BoardJoins,
+  boardJoins,
+  windowKindsKey,
+  windowLocal,
+  windowShown,
+} from "../src/godview/monitor/window-local";
 import { createRowOrder } from "../src/godview/monitor/window-rows";
 
 const open = AgentModelMeshOpen.parse(
@@ -178,5 +184,75 @@ describe("the local join's row-kind key", () => {
     expect(windowKindsKey({ ...input, panes: { sessionIds: [] }, spawnHints: new Map() })).toBe(
       "[]",
     );
+  });
+});
+
+// Q04 (James, 2026-10-27): the focused pane counts as shown only while the
+// terminals are up; the outer light (O9, the join's `activeIds`) is apart.
+describe("what the window reports shown, apart from the outer light (L5, Q04)", () => {
+  const joins: BoardJoins = {
+    rowBySession: new Map([
+      ["pty-a", "a"],
+      ["pty-b", "b"],
+    ]),
+    sessionByRow: new Map([
+      ["a", "pty-a"],
+      ["b", "pty-b"],
+    ]),
+    runByRow: new Map([["a", "run-a"]]),
+    rowByRun: new Map([["run-a", "a"]]),
+    replacements: [],
+    terminalRows: ["b"],
+  };
+  const kinds = new Map<string, MonitorAgentRow["kind"]>([
+    ["a", "agent"],
+    ["b", "terminal"],
+  ]);
+  const base = {
+    joins,
+    kindOf: (id: string) => kinds.get(id),
+    links: new Map<string, string>(),
+    spawnHints: new Map<string, { x: number; y: number }>(),
+    receded: undefined,
+    visible: () => true,
+  };
+
+  it("reports the focused pane's row only while the terminals are up, and lights it either way", () => {
+    const input = {
+      ...base,
+      panes: { sessionIds: ["pty-a", "pty-b"], activeSessionId: "pty-a" },
+      previewSelectedId: undefined,
+    };
+    expect([...windowShown(input, true)]).toEqual(["a"]);
+    expect([...windowLocal(input).activeIds]).toEqual(["a"]);
+    // minimized: the focused pane is hidden, so a reply there earns the mark,
+    // and the body keeps its outer light
+    expect([...windowShown(input, false)]).toEqual([]);
+    expect([...windowLocal(input).activeIds]).toEqual(["a"]);
+  });
+
+  it("reports the row the person pointed at whatever the terminals do, and nothing for a pane no row stands for", () => {
+    const input = {
+      ...base,
+      panes: { sessionIds: ["pty-x"], activeSessionId: "pty-x" },
+      previewSelectedId: "b",
+    };
+    expect([...windowShown(input, true)]).toEqual(["b"]);
+    expect([...windowShown(input, false)]).toEqual(["b"]);
+    expect([...windowLocal(input).activeIds]).toEqual(["b"]);
+    expect([...windowShown({ ...input, previewSelectedId: undefined }, true)]).toEqual([]);
+    expect([...windowShown({ ...input, panes: { sessionIds: [] } }, true)]).toEqual(["b"]);
+  });
+
+  it("joins a peer row attached in the focused pane as the light does", () => {
+    const input = {
+      ...base,
+      links: new Map([["peer-row", "pty-r"]]),
+      panes: { sessionIds: ["pty-r"], activeSessionId: "pty-r" },
+      previewSelectedId: undefined,
+    };
+    expect([...windowLocal(input).activeIds]).toEqual(["peer-row"]);
+    expect([...windowShown(input, true)]).toEqual(["peer-row"]);
+    expect([...windowShown(input, false)]).toEqual([]);
   });
 });

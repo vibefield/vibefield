@@ -3636,3 +3636,91 @@ describe("a chrome read cannot take down the monitor", () => {
     expect([recording.mounts, recording.unmounts]).toEqual([1, 0]);
   });
 });
+
+// Q04 (James, 2026-10-27): with the terminals minimized the focused pane is
+// hidden, so a reply there turns unread like any other. What the window
+// reports SHOWN follows the terminals; the outer light (O9) follows the
+// focused pane alone. P08b and A13's minimized half run it live.
+describe("the screen's report follows the terminals, the outer light does not (L5, Q04)", () => {
+  /** The deck's panes with the codex agent's PTY focused. */
+  const FOCUSED: MonitorPaneFacts = { ...PANES, activeSessionId: "run-codex-pty" };
+
+  /** Mount the stage on the first call, re-render the same root after: the
+   * overlay handing the monitor its terminals' state as it changes. */
+  async function renderStage(door: MonitorDoor, terminalsUp: boolean): Promise<HTMLElement> {
+    const view = monitorViewFor(DEFAULT_MONITOR_VIEW_ID);
+    syncBoard(FOCUSED);
+    if (root === null) {
+      container = document.createElement("div");
+      document.body.appendChild(container);
+      root = createRoot(container);
+    }
+    const mounted = root;
+    await act(async () => {
+      mounted.render(
+        <GodviewAgentsProvider door={door}>
+          <GodviewMonitor
+            view={view}
+            parameters={monitorParameterDefaults(view.parameterGroups)}
+            door={door}
+            panes={FOCUSED}
+            terminalsUp={terminalsUp}
+            publishesFind
+          />
+        </GodviewAgentsProvider>,
+      );
+    });
+    await settle();
+    return container as HTMLElement;
+  }
+
+  it("reports the focused pane's row while the terminals are up and leaves it out while they are away, its light kept (P08b)", async () => {
+    const door = fakeDoor();
+    const host = await renderStage(door, true);
+    const codex = board?.service.rowForRun("run-codex")?.id;
+    expect(codex).toBeDefined();
+    expect(board?.reports.at(-1)).toEqual([codex]);
+    const lit = (): string[] =>
+      swarmRows(host)
+        .filter((row) => row.getAttribute("aria-current") === "true")
+        .map((row) => `${row.dataset["agentBubbleSource"]}:${row.dataset["agentBubbleId"]}`);
+    const light = lit();
+    expect(light).toHaveLength(1);
+    expect(light[0]?.startsWith("agent:")).toBe(true);
+    // minimized: the focused pane is hidden, so its row is not shown and its
+    // next idle earns the mark…
+    await renderStage(door, false);
+    expect(board?.reports.at(-1)).toEqual([]);
+    // …while its body keeps the outer light: the focused pane is still its
+    expect(lit()).toEqual(light);
+    // called up again: shown again, so a mark clears as the pane shows
+    await renderStage(door, true);
+    expect(board?.reports.at(-1)).toEqual([codex]);
+    expect(lit()).toEqual(light);
+  });
+
+  it("a click on the body its focused pane already shows leaves no claim behind: minimized again, the row is not shown (P08b)", async () => {
+    // P08b ends by clicking Claude's body, which its focused pane shows: the
+    // select is acknowledged, not mounted, and the click must not stand as the
+    // "pointed at" row the window reports shown whatever the terminals do
+    const door = fakeDoor();
+    const host = await renderStage(door, true);
+    const codex = board?.service.rowForRun("run-codex")?.id;
+    resetGodviewDeckDoorForTest();
+    let calls = 0;
+    const stop = answerGodviewDeckUp(() => {
+      calls += 1;
+    });
+    const body = swarmRows(host).find((row) => row.getAttribute("aria-current") === "true");
+    expect(body).toBeDefined();
+    await act(async () => body?.click());
+    await settle();
+    expect(door.mountLocal).not.toHaveBeenCalled();
+    expect(ackText(host)).toContain("is in the active pane");
+    expect(calls).toBe(1);
+    expect(board?.reports.at(-1)).toEqual([codex]);
+    await renderStage(door, false);
+    expect(board?.reports.at(-1)).toEqual([]);
+    stop();
+  });
+});

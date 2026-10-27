@@ -348,6 +348,8 @@ export function GodviewOverlay({
                 theme={theme}
                 door={remoteDoor}
                 panes={monitorPanes}
+                // Q04: away, the focused pane is hidden, so it is not shown
+                terminalsUp={deckState !== "away"}
                 // MV-W4: the same switch, for a ported view's own loop — and
                 // under a maximized deck the view's bodies rest (GV-D11)
                 animations={labSwitches.animations && deckState !== "maximized"}

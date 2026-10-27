@@ -42,6 +42,7 @@ import {
   paneFactsKey,
   windowKindsKey,
   windowLocal,
+  windowShown,
 } from "./window-local";
 import {
   createRowOrder,
@@ -79,8 +80,9 @@ import { createWindowViewReplica, type WindowViewReplica } from "./window-view";
  *     pane shows it) — and every outcome is said out loud, in fieldd's own
  *     words. Views receive SDK commands; the window handles the door's
  *     promises.
- *   · THE SCREEN — what the active pane shows, reported to the backend
- *     (`reportShown`, L5), which keeps the unread marks.
+ *   · THE SCREEN — what the active pane shows while the terminals are up
+ *     (Q04), reported to the backend (`reportShown`, L5), which keeps the
+ *     unread marks.
  *
  * What left: the fold's assembly (`agents.ts`), the usage and unread ledgers and
  * the project colours (the backend's, L4/L5/L11), the mesh board's second reader
@@ -99,6 +101,10 @@ export interface UseMonitorAgentsOptions {
   /** The sessions the deck's panes are showing, and the one the user is in.
    * Facts, published by the deck; the monitor reads them and drives nothing. */
   panes?: MonitorPaneFacts;
+  /** Q04 — whether the terminals are up (their state is not `away`): only
+   * then is the focused pane in front of the person, so only then is its row
+   * reported shown. Default true: a host with no terminals' state. */
+  terminalsUp?: boolean;
   /** AR-S5 — the Agent Profiles as the stage's feed last had them: the tabs,
    * the spawn menu, and what the acknowledgements call a birth's profile
    * ("opened under Work"). Empty while there is no feed. */
@@ -312,6 +318,7 @@ export function useMonitorAgents({
   palette,
   door = null,
   panes = NO_PANES,
+  terminalsUp = true,
   profiles = NO_PROFILES,
   profilesRead = false,
   hasProfiles = false,
@@ -542,9 +549,12 @@ export function useMonitorAgents({
   useLayoutEffect(() => {
     feed?.replica.setLocal(local);
   }, [feed, local]);
-  // L5 — a screen's shown rows are whatever its active pane shows (and the row
-  // the person pointed at); the backend clears their marks.
-  const shownKey = [...local.activeIds].sort().join("\n");
+  // L5, Q04 — a screen's shown rows are what its focused pane shows while the
+  // terminals are up, and the row the person pointed at; the backend clears
+  // their marks. Never the join's `activeIds`: the outer light (O9) stays lit
+  // on the focused pane's row while the terminals are away.
+  const reported = windowShown({ joins, links, panes, previewSelectedId: selectedId }, terminalsUp);
+  const shownKey = [...reported].sort().join("\n");
   useEffect(() => {
     feed?.reportShown(shownKey === "" ? [] : shownKey.split("\n"));
   }, [feed, shownKey]);
@@ -676,6 +686,9 @@ export function useMonitorAgents({
         return;
       }
       if (agent.active && panes.activeSessionId === sessionId) {
+        // mounted already, so no preview is left behind: the focused pane is
+        // the claim, and it lapses while the terminals are away (Q04)
+        setSelectedId(undefined);
         // the door is not asked, so the select is the call itself: with the
         // terminals away, this session brings them back too (GV-D6)
         askGodviewDeckUp();

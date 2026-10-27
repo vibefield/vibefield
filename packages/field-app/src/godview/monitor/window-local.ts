@@ -123,11 +123,42 @@ export interface WindowLocalInput {
 }
 
 /** The pane join for a floor session: the row standing for it here, or the peer row attached as it. */
-function rowOfSession(input: WindowLocalInput, sessionId: string): string | undefined {
+function rowOfSession(
+  input: Pick<WindowLocalInput, "joins" | "links">,
+  sessionId: string,
+): string | undefined {
   const own = input.joins.rowBySession.get(sessionId);
   if (own !== undefined) return own;
   for (const [rowId, local] of input.links) if (local === sessionId) return rowId;
   return undefined;
+}
+
+/** The row the focused pane shows, by the pane join; undefined while no pane
+ * is focused or no row stands for its session. */
+function focusedRowOf(
+  input: Pick<WindowLocalInput, "joins" | "links" | "panes">,
+): string | undefined {
+  const sessionId = input.panes.activeSessionId;
+  return sessionId === undefined ? undefined : rowOfSession(input, sessionId);
+}
+
+/**
+ * L5, Q04 (James, 2026-10-27) — what this window reports SHOWN to the backend,
+ * which clears those rows' unread marks: the focused pane's row while the
+ * terminals are up, and the row the person pointed at. With the terminals
+ * minimized the focused pane is hidden, so a reply there turns unread like
+ * any other. Kept apart from `activeIds` (the outer light, O9), which follows
+ * the focused pane whatever the terminals do.
+ */
+export function windowShown(
+  input: Pick<WindowLocalInput, "joins" | "links" | "panes" | "previewSelectedId">,
+  terminalsUp: boolean,
+): ReadonlySet<string> {
+  const shown = new Set<string>();
+  const focused = terminalsUp ? focusedRowOf(input) : undefined;
+  if (focused !== undefined) shown.add(focused);
+  if (input.previewSelectedId !== undefined) shown.add(input.previewSelectedId);
+  return shown;
 }
 
 /** Only these row kinds participate in the local join. A model publish can
@@ -177,11 +208,11 @@ export function windowLocal(input: WindowLocalInput): MonitorReplicaLocal {
   }
   // The pane the person is working in, and the row they pointed at (a weaker
   // claim, kept apart in the seam; the replica's one word for both is `active`).
+  // This is the outer light (O9), lit whatever the terminals do: what the
+  // window reports shown is `windowShown`'s (Q04).
   const activeIds = new Set<string>();
-  if (panes.activeSessionId !== undefined) {
-    const rowId = rowOfSession(input, panes.activeSessionId);
-    if (rowId !== undefined) activeIds.add(rowId);
-  }
+  const focused = focusedRowOf(input);
+  if (focused !== undefined) activeIds.add(focused);
   if (input.previewSelectedId !== undefined) activeIds.add(input.previewSelectedId);
   // Spawn hints by the row the session stands for; a row not on the board yet
   // is keyed by the session, which is the id a bare terminal's row carries.
