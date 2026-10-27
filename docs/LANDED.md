@@ -16701,3 +16701,82 @@ catalog's glyph sheet counts 64. The inline-svg allowlist is untouched, and the 
 
 **Not here.** The first pass measured on a real first run (§9's spike); today the rule rests on rosetta's own state
 sequence (`health.rs` and its tests). The desk rows (`pnpm smoke`, `pnpm smoke:studio`) on a display, owed with AO-1…3's.
+
+## AO-5b — Agents and Profiles in the chapter: the Setup Assistant opens on the agents this Mac already has, teaches a profile with This Mac's own sign-ins and offers Add a profile… in place (a name, the agent, then its own login in the pane, on the one sign-in controller Agent Profiles uses), writes the ledger's agents and profiles rows, and This Mac explains itself in Settings while it is the only profile (2026-10-27; `30c74f858` + `a82ff072e` + `274716e4d`, lane `ao/5`; AO-D1, AO-D6, AO-D7, AO-D13)
+
+**What.** The fifth slice of track AO's ladder (`draft/thinking-agent-onboarding.md` §8), its panes half. The draft-set
+half (AO-5a) waits on James's AO-D14. Three commits, all in field-app:
+- **The Agents pane** (`30c74f858`):
+  - `agent.catalog` is joined with `agents.installs` in the catalog's order: the agents on this Mac first, each with
+    its own mark, version, how it stays current and a green Ready.
+  - The supported agents this Mac lacks say "Not on this Mac" where Get will stand (AO-7). The preview ones wait
+    behind More agents. Only an agent VibeField installs and updates (`offers.distribution`) is offered.
+  - The title claims only what the inventory said. With nothing installed, Settings → Agents' own sentence and
+    Look again (`agents.installs {refresh}`) appear.
+  - Continue records the step: answered when an agent is on this Mac, put off when none is, nothing before the
+    inventory answers. W6 enters at Agents.
+- **One sign-in controller** (`a82ff072e`): Agent Profiles' sign-in moves unchanged into `use-profile-sign-in.ts`.
+  That is the close as the pane ends, the identity wait, the unseen check, Cancel and a fresh add's cleanup. How a
+  sign-in ended is named: cancelled, signed-in, unsaid or unread. The chapter runs the same controller, never a copy.
+- **The Profiles pane, and This Mac explained** (`274716e4d`):
+  - This Mac's rows are Agent Profiles' own (`profilePage`): "Signed in as {who}" with the plan by name, or "Not
+    signed in" with Sign in…, which runs its own login in the card.
+  - Add a profile… grows in place: Name this profile, then "Sign in to an agent in Work", then the login.
+  - The profile is made as its login starts and kept once the agent says who. Cancel deletes it.
+  - A login that ends unread asks, with Sign in again and Cancel. It is never deleted unasked, because the login
+    may have worked. Continue and Back wait while a login is open.
+  - The pane shows only with an agent in This Mac's folders (AO-L2). Continue writes the profiles row. W6 enters
+    at Profiles.
+  - Settings → This Mac says "Have another subscription?" with New profile… while it is the only profile.
+- DESIGN.md first. §8 records the Agents pane as built until Get, the Profiles pane as built, and This Mac's
+  explainer.
+- The catalog gains the Agents frame (five states), the Profiles frame (seven states) and Agent Profiles'
+  "this mac, alone". All of them are the shipping views over fixtures, and no agent id is written.
+
+**Decided here, said in DESIGN.md §8.**
+- This Mac's explainer has no Hide, though the page's prototype drew one: "It is page text, not a tip, and leaves by
+  itself when a second profile exists, so it has no Hide (the page's prototype drew one)."
+- The interim seam AO-5a replaces: Add a profile… creates the set with `agents.profileSets.create`, and Cancel
+  deletes it with `agents.profileSets.delete`. On James's AO-D14 these become the draft door (`create {draft}`,
+  `discard`, fieldd's note and its boot sweep, under (a)), in the chapter and in Settings alike.
+
+**Found by the gate (a harness finding).** The first tip, `184ecd68b`, went red in field-app's whole suite on one row, the
+wizard's fresh walk. It had been green on the five-file light pass. React's stderr named the cause: "A suspended
+resource finished loading inside a test, but the event was not wrapped in act(...)".
+- The Profiles pane's lazy code resolved during `vi.dynamicImportSettled()` outside act, so React retried the
+  suspended pane outside the test's control.
+- The helper's fixed eight microtask hops held for the file alone but not under the whole suite's load.
+- It was the test's race, not the product's. One helper, `arrive`, now loads a lazy pane's code inside act and turns,
+  bounded (20 turns of 10 ms of fake time), until the title it waits for is up.
+- It is folded into the commits that introduced each use: the Agents row and `pastProfiles`. The next lazy pane's
+  test starts from it.
+
+**Found by the photographs.** The second tip (`8578123a9`) was green on the gate and on verify, but its photographs were
+looked at before any packet, and they showed two things.
+- The glass is a fixed 32rem that scrolls a tall pane, so Add a profile…'s login opened below the fold. Now This Mac
+  folds to one line while the add is open (the card grows into the pane, M1), and each step, both logins included,
+  scrolls into view as it opens.
+- Settings' New profile… wrapped onto two lines.
+Both are fixed in the third commit, and DESIGN.md §8 records the fold.
+
+**Found along the way.** The light pass's first preflight was red on R23b: the catalog's sign-in still named its
+agent as a new literal in the allow-listed `profiles-fixtures.ts`, whose count is exact. It now reads that agent from
+the model (This Mac's not-signed-in fixture row). The fixture file gains only the "this mac, alone" state, three
+lines, and keeps main's agent-id literal count, which is why R23b holds.
+
+**Validation** (lane ao1, at the tip exactly, nice 19, the guard clear before every arm):
+- the light pass:
+  - the field-app typecheck EXIT 0
+  - the touched suites `141 passed` (agents-pane, profiles-pane, onboarding-wizard, profiles-settings,
+    ui-system-boundaries, glyphs); design-system `8 passed`; the extraction alone `68 passed`
+  - `pnpm preflight` OK and `pnpm check:walls` clean
+  - red-first by mutation (`lanes/ao1/ao5-mutate.sh`, re-run at the tip), 5 of 5 red on exactly their claiming row:
+    no Agents entry in W6, Agents never later, an unread end deleting, Continue not waiting, no explainer
+- the gate at `274716e4d` (13:15:31–13:17:36Z): the field-app typecheck EXIT 0; field-app's whole suite `2705 passed | 3 skipped`; the
+  Agents and Profiles frames and "this mac, alone" photographed in both themes, 20 PNGs, no console errors
+  (`lanes/ao1/logs/gate-274716e4d/shots/`); the tree clean after.
+- `pnpm verify` at `274716e4d` (13:17:36–13:23:29Z) EXIT 0: every TS project's typecheck and tests (27 of 27), 31 cargo
+  suites, gen:check; the tree clean after.
+
+**Not here.** AO-5a (the draft set) on James's AO-D14. Get (AO-7). Finish setting up's agents row, which joins with
+Get. The desk rows (`pnpm smoke`, `pnpm smoke:studio`) on a display, owed with AO-1…4's.
