@@ -627,7 +627,8 @@ arrives, and neither runs under reduced motion.
 - **M3 — CSS transitions, not WAAPI**, for chrome: a stalled compositor leaves WAAPI
   pending forever; a transition worst-case snaps to its end state.
 - **M4 — Depart ≠ vanish.** Things put themselves back (glide home, spring pop) or shrink
-  along their travel; only cancelled ghosts fade.
+  along their travel; only cancelled ghosts fade. A swarm body leaving the field departs as
+  **The departure** below these laws says (Q12).
 - **M5 — The stage recedes.** When a sheet opens, the canvas eases to `scale(0.98)` — focus is
   physical — and the world keeps stepping behind it, so undo and collab land visibly behind a
   partial overlay. *Rewritten 2026-10-07 (DK-17 — the policy as built):* two gates, no third. **A
@@ -641,6 +642,33 @@ arrives, and neither runs under reduced motion.
   demand loop; ICE retired both with its planes at design-015 D5b.)
 - **M6 — Respect `prefers-reduced-motion`**: morphs become fades, springs become ease-out,
   durations halve. Non-negotiable quality floor.
+
+**The departure: a body leaving the field** (Godview's swarm; Q12, James ruled B on 2026-10-27: "a short exit, so a
+body leaving reads as leaving"). It applies when a body's row leaves the field: a shell closed or reaped, a session that
+ended, or a crashed agent's body once its pane has been seen (Q06). The body **shrinks where it stands**, about its own
+centre, to nothing. It is the arrival's pop run backwards, over the pop's own **280ms** on the **retract curve** above,
+so it accelerates away. Everything it wears goes with it (fill, rim, light and words) at the weight it was drawn at, so
+a receded body leaves faint. It shrinks and never fades, because only cancelled ghosts fade (M4). It keeps its place in
+the crowd until it has gone, so the field closes over the gap after it and never under it. It is out of reach while it
+leaves (no grab, no hover, no focus ring), and its row's button leaves with the row at once. Bodies leaving together
+leave together, with no stagger, because leaving things never wait. Why 280 and not the buds' 180: a body is about
+twice a bud and has stood in the field. At 180 the second half of the shrink lands in about four frames and reads as a
+blink; 280 gives it about six and is still less than half the arrival. There is no new curve, and nothing projects into
+`tokens.css`: the swarm draws the shrink in its shader, not in CSS.
+**A row that comes back while its body is leaving** (a close refused, or a hand-over's second row a frame late) puts
+the body back where it stands. It pops back from the size its shrink had reached, on the swarm's arrival curve
+(0 → 1.2 → 0.96 → 1.035 → 1 over 720ms, started from that size), and no second body appears beside it. A row that
+comes back after the body has gone is a new arrival.
+**The clean exit's hand-over is a morph under M1, not a departure.** When a launched agent quits cleanly, the fresh
+shell takes its body in place (the deck hands the agent's spatial identity to the shell). It is one body changing its
+role: its radius eases on the swarm's spring and its light switches to the shell's. Nothing shrinks and nothing
+arrives. Only a failed or unknown exit leaves, the way a crashed body leaves once seen (Q06).
+**Reduced motion (M6):** no shrink. The body fades where it stands, at its size, over **140ms** (half the length) on
+plain `ease-out`, and the field is still again the moment it has gone. With the stage's animations switch off (the
+lab's kill switch, the catalog's still stage, or a maximized deck whose bodies have already faded out) it is gone in the
+frame that draws the change: a still stage is the host's, and nothing moves on it.
+*Status 2026-10-27: specified (QW1 depart). Puppeteer's swarm draws it on that lane; it reaches Godview with
+puppeteer's next release and its EL8 pin.*
 
 **The view switch (One Frame §12, FC-D13; ruled 2026-10-01, built 2026-10-03).** The canvas is the
 ground floor (FV-D1); every other view is ONE cover over it (§10). From Canvas the cover fades in
