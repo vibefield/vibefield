@@ -464,7 +464,11 @@ describe("MV-3d — the chrome's facts ride the window's own run rows (M35, M42)
   it("Q08 — the run's stop key rides the window's cut for the frame's title; a stop that presses no key says none, and no peer or phone row carries it", () => {
     const keyed: AgentSessionSummary = { ...summary({ runtimeRunId: "run-k" }), stopKey: "escape" };
     expect(localFactsOf(keyed).stopKey).toBe("escape");
-    const cut = AgentModelDeskRow.parse(projectDeskRow(keyed, undefined, undefined, "window"));
+    // the row as it rides the window's board: the board stamps the revision when it publishes
+    const cut = AgentModelDeskRow.parse({
+      ...projectDeskRow(keyed, undefined, undefined, "window"),
+      revision: 1,
+    });
     expect(cut.local?.stopKey).toBe("escape");
     expect(localFactsOf(summary({ runtimeRunId: "run-n" }))).not.toHaveProperty("stopKey");
     // the key is the window's chrome alone: the peer's desk cut and the phone's row carry none
