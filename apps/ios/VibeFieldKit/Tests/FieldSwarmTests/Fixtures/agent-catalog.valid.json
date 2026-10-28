@@ -285,7 +285,7 @@
       },
       "layoutRoot": null,
       "offers": {
-        "spawn": true,
+        "spawn": false,
         "resume": true,
         "reattach": false,
         "history": false,
@@ -295,7 +295,7 @@
         "invoke": false
       },
       "admitted": "2026-09-22",
-      "decision": "AC-D7 — preview, spawn and resume only: a protocol, not a vendor; no ledger, no personas",
+      "decision": "AC-D7, narrowed by Q17 (2026-10-27) — preview, no spawn until fieldd supplies an ACP connector: a protocol, not a vendor; no ledger, no personas",
       "surfaces": {
         "desktop": true,
         "phone": false
