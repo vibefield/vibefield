@@ -66,6 +66,9 @@ import {
 import {
   type AccountUsageService,
   type AgentAdapterBinding,
+  type AgentAttachNext,
+  type AgentAttachRecord,
+  AgentAttachRefusedError,
   type AgentHost,
   type AgentModelService,
   type AgentProfile,
@@ -176,7 +179,16 @@ interface ScriptedAttach {
   runtimeSessionId: string;
   sessionId: string;
   ingress: AttachProviderSessionOptions["ingress"];
+  /** the re-attach study's Step 1 — the launch options the codec restored,
+   * and the attach record the host handed back */
+  agentOptions: unknown;
+  attachRecord: AgentAttachRecord | undefined;
 }
+
+/** Step 1 — what the scripted codec captures for every launch (`facts`): a
+ * stand-in for a typed root an attach must hand back */
+const SCRIPTED_STATE = JSON.stringify({ root: "scripted-root" });
+
 /** The text the scripted turn stop types: a line, because the PTY's `cat`
  * reads in canonical mode and a lone key byte would never reach its file. */
 const SCRIPTED_TURN_STOP_TEXT = "scripted-turn-stop\n";
@@ -376,7 +388,9 @@ function scriptedModels(state: ScriptedModels): AgentModelService {
 function scriptedProvider(
   envOut: string,
   sessions: ScriptedSession[],
-  attach: { records: ScriptedAttach[] } | undefined,
+  /** `refusals` — G5: the attaches this provider refuses first, each with its
+   * next step, in order */
+  attach: { records: ScriptedAttach[]; refusals?: AgentAttachNext[] } | undefined,
   extra: {
     profiles?: boolean;
     seen?: Array<AgentProfile | undefined>;
@@ -388,11 +402,27 @@ function scriptedProvider(
     program?: string;
     /** Q08 — each binding names a turn stop, and each press lands here (absent: none named) */
     turnStops?: string[];
+    /** the re-attach study's Step 1 — a continuation codec (every launch
+     * captures `SCRIPTED_STATE`) and an attach record, reported before the
+     * launch (`endpoint-<n>`) and again by each attach (`<handed>-attached`) */
+    facts?: boolean;
   } = {},
 ): AgentProvider {
   let counter = 0;
   return {
     descriptor: { id: "scripted", label: "Scripted" },
+    ...(extra.facts === true
+      ? {
+          launch: {
+            provider: { id: "scripted", label: "Scripted", resume: true },
+            continuation: {
+              capture: () => SCRIPTED_STATE,
+              restore: (state: string | undefined) =>
+                state === undefined ? undefined : (JSON.parse(state) as unknown),
+            },
+          },
+        }
+      : {}),
     ...(extra.profiles === true ? { profiles: scriptedProfiles() } : {}),
     ...(extra.signInMark !== undefined ? { extensions: scriptedExtensions(extra.signInMark) } : {}),
     ...(extra.models !== undefined ? { models: scriptedModels(extra.models) } : {}),
@@ -411,6 +441,13 @@ function scriptedProvider(
       // listener is ever really bound, and nothing here assumes uniqueness.)
       const ingress: BoundIngress = { port: 40_000 + n, token: `bearer-${n}` };
       options.ingress?.onBound?.(ingress);
+      if (extra.facts === true) {
+        options.ingress?.onAttachRecord?.({
+          version: 1,
+          state: `endpoint-${n}`,
+          secret: `nonce-${n}`,
+        });
+      }
       const { runtimeSessionId } = await options.host.spawnTerminal({
         command: "/bin/sh",
         // the environment lands ATOMICALLY (written beside, then renamed): the
@@ -455,7 +492,19 @@ function scriptedProvider(
               runtimeSessionId: options.runtimeSessionId,
               sessionId: options.sessionId,
               ingress: options.ingress,
+              agentOptions: options.agentOptions,
+              attachRecord: options.attachRecord,
             });
+            const next = attach.refusals?.shift();
+            if (next !== undefined) throw new AgentAttachRefusedError(next, `scripted: ${next}`);
+            // the attached run's facts moved (a helper reborn): the next restart must read these
+            if (extra.facts === true) {
+              options.onAttachRecord?.({
+                version: 1,
+                state: `${options.attachRecord?.state ?? "none"}-attached`,
+                secret: "nonce-attached",
+              });
+            }
             return scriptedBinding(
               options.host,
               options.runtimeSessionId,
@@ -504,6 +553,10 @@ interface SetupConfig {
   realAgent?: boolean;
   /** AR-4 — give the scripted provider an `attachSession` */
   attach?: boolean;
+  /** G5 — the attaches THIS boot's scripted provider refuses first, in order */
+  attachRefusals?: AgentAttachNext[];
+  /** the re-attach study's Step 1 — the scripted codec and attach record */
+  facts?: boolean;
   /** AR-4 — boot a SECOND fieldd on this box's root, its field-native still
    * running and its records on disk: the restart */
   restartOf?: Box;
@@ -633,15 +686,28 @@ async function setup(config: SetupConfig): Promise<Box> {
             );
       return [
         ...(config.extensions === true ? providers.map(withoutExtensionReads) : providers),
-        scriptedProvider(envOut, sessions, config.attach ? { records: attached } : undefined, {
-          profiles: config.profiles === true,
-          seen,
-          ...(config.extensions === true ? { signInMark: join(root, "scripted-signed-in") } : {}),
-          models,
-          ...(config.afterBirth !== undefined ? { afterBirth: config.afterBirth } : {}),
-          ...(config.program !== undefined ? { program: config.program } : {}),
-          ...(config.turnStop === true ? { turnStops } : {}),
-        }),
+        scriptedProvider(
+          envOut,
+          sessions,
+          config.attach
+            ? {
+                records: attached,
+                ...(config.attachRefusals !== undefined
+                  ? { refusals: [...config.attachRefusals] }
+                  : {}),
+              }
+            : undefined,
+          {
+            profiles: config.profiles === true,
+            seen,
+            ...(config.extensions === true ? { signInMark: join(root, "scripted-signed-in") } : {}),
+            models,
+            ...(config.afterBirth !== undefined ? { afterBirth: config.afterBirth } : {}),
+            ...(config.program !== undefined ? { program: config.program } : {}),
+            ...(config.turnStop === true ? { turnStops } : {}),
+            ...(config.facts === true ? { facts: true } : {}),
+          },
+        ),
       ];
     },
     ...(config.resumeWhenIdle !== undefined ? { agentResumeWhenIdle: config.resumeWhenIdle } : {}),
@@ -3390,6 +3456,121 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
     // left no record of what it did — the session record is the resume's, and
     // the status ledger's directory is never made
     expect(existsSync(join(first.dataDir, "agents", "history"))).toBe(false);
+  }, 150_000);
+
+  it("the re-attach study's Step 1 — an attach is handed what the launch knew: the codec's launch options come back, the record keeps its state, and the attach record an attach reports reaches the next restart", async () => {
+    const first = await setup({ floor: "real", attach: true, facts: true });
+    const win1 = await window(first.daemon, DECK, "rf1");
+    const spawned = (await born(win1, "agent.spawn", {
+      provider: "scripted",
+      cwd: first.envOut,
+      title: "facts",
+    })) as AgentSpawnResult;
+    const runId = spawned.session.runtimeRunId;
+    const ptyId = spawned.terminal.sessionId;
+    // what the launch knew, persisted: the codec's state and the attach record
+    // the adapter reported before its process launched
+    const record = readRecord(first.dataDir, runId);
+    expect(record.continuation.state).toBe(SCRIPTED_STATE);
+    expect(record.attach).toEqual({ version: 1, state: "endpoint-1", secret: "nonce-1" });
+    expect(mode(join(first.dataDir, ...LAYOUT.AGENT_SESSIONS_DIR, `${runId}.json`))).toBe(0o600);
+    await joinedRow(win1, runId);
+    const reattachedAt = async (win: WsRpc, epoch: number) =>
+      await poll(async () => {
+        const { sessions } = (await win.call("agent.list", {})) as AgentListResult;
+        const found = sessions.find((r) => r.runtimeRunId === runId);
+        return found?.continuation?.reattached === true && found.runtimeEpoch === epoch
+          ? found
+          : undefined;
+      }, 20_000);
+
+    // ── the first restart: the adapter is handed the launch's facts ──
+    await first.daemon.stop();
+    const second = await setup({ floor: "real", attach: true, facts: true, restartOf: first });
+    const win2 = await window(second.daemon, DECK, "rf2");
+    await reattachedAt(win2, 2);
+    expect(first.attached).toHaveLength(1);
+    expect(first.attached[0]).toMatchObject({
+      runtimeSessionId: ptyId,
+      // puppeteer's codec restored them from the continuation fieldd handed back
+      agentOptions: { root: "scripted-root" },
+      attachRecord: { version: 1, state: "endpoint-1", secret: "nonce-1" },
+    });
+    const after = readRecord(first.dataDir, runId);
+    // one attach no longer drops what a later resume needs
+    expect(after.continuation).toMatchObject({ state: SCRIPTED_STATE, implementation: "native" });
+    expect(after.reattach).toMatchObject({ state: "attached" });
+    // the record the attach reported is the one kept (the boot's copy did not
+    // write over it)
+    expect(after.attach).toEqual({
+      version: 1,
+      state: "endpoint-1-attached",
+      secret: "nonce-attached",
+    });
+
+    // ── the second restart reads the fresh facts, not the launch's ──
+    await second.daemon.stop();
+    const third = await setup({ floor: "real", attach: true, facts: true, restartOf: first });
+    const win3 = await window(third.daemon, DECK, "rf3");
+    await reattachedAt(win3, 3);
+    expect(first.attached).toHaveLength(2);
+    expect(first.attached[1]?.attachRecord).toEqual({
+      version: 1,
+      state: "endpoint-1-attached",
+      secret: "nonce-attached",
+    });
+    expect(readRecord(first.dataDir, runId).continuation.state).toBe(SCRIPTED_STATE);
+  }, 180_000);
+
+  it("G5 — an attach the adapter calls transient is asked again: the row is held meanwhile, nothing replaces it, and the retry takes the run back on the same PTY", async () => {
+    const first = await setup({ floor: "real", attach: true });
+    const win1 = await window(first.daemon, DECK, "rt1");
+    const spawned = (await born(win1, "agent.spawn", {
+      provider: "scripted",
+      cwd: first.envOut,
+      title: "transient",
+    })) as AgentSpawnResult;
+    const runId = spawned.session.runtimeRunId;
+    const ptyId = spawned.terminal.sessionId;
+    const nativeId = spawned.session.sessionId;
+    await joinedRow(win1, runId);
+    await first.daemon.stop();
+    // the index says the conversation has been still for a minute, and
+    // resume-when-idle runs at its quickest: were it armed while the retry
+    // waits (1 s), it would replace the PTY before the retry could attach
+    writeFileSync(first.sessionsFile, JSON.stringify([rosettaRow(nativeId, 60_000)]));
+    const second = await setup({
+      floor: "real",
+      attach: true,
+      restartOf: first,
+      attachRefusals: ["retry"],
+      resumeWhenIdle: { afterMs: 1, pollMs: 50 },
+    });
+    const win2 = await window(second.daemon, DECK, "rt2");
+    const row = await poll(async () => {
+      const { sessions } = (await win2.call("agent.list", {})) as AgentListResult;
+      const found = sessions.find((r) => r.runtimeRunId === runId);
+      return found?.continuation?.reattached === true ? found : undefined;
+    }, 20_000);
+    // the same PTY, the next epoch: the retry attached, nothing replaced it
+    expect(row.runtimeEpoch).toBe(2);
+    expect(row.terminal).toMatchObject({ runtimeSessionId: ptyId });
+    expect(first.attached).toHaveLength(2);
+    expect(first.attached.map((a) => a.runtimeSessionId)).toEqual([ptyId, ptyId]);
+    expect(first.sessions).toHaveLength(1);
+    // the ledger: the refused attempt with the adapter's word, then the retry
+    const outcomes = await poll(async () => {
+      const found = auditEntries(first.dataDir).filter(
+        (entry) =>
+          entry.action === "agent.session.reattach" &&
+          entry.target.id === runId &&
+          entry.phase === "outcome",
+      );
+      return found.length === 2 ? found : undefined;
+    }, 10_000);
+    expect(outcomes.map((entry) => entry.outcome)).toEqual(["failed", "succeeded"]);
+    expect(outcomes[0]?.attrs).toMatchObject({ state: "failed", next: "retry" });
+    expect(readRecord(first.dataDir, runId).reattach).toMatchObject({ state: "attached" });
   }, 150_000);
 
   it("a provider that cannot attach: the run is held PENDING across the restart (live, unobserved, resumable), and agent.resume replaces its PTY by hand — the new row names the PTY it replaced", async () => {

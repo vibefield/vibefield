@@ -461,6 +461,41 @@ describe("SessionSummary v2 and the doors", () => {
     ).toBe(false);
   });
 
+  it("RA-D3: the record keeps the adapter's attach record opaque, and a failed attach's next step as an open word", () => {
+    const record = AgentSessionRecord.parse(fixture("agent-session-record.valid.json"));
+    // every record before the re-attach study's Step 1 has neither
+    expect(record.attach).toBeUndefined();
+    expect(record.reattach?.next).toBeUndefined();
+    const attach = {
+      version: 2,
+      state: '{"endpoint":"unix:///tmp/helper.sock"}',
+      secret: "nonce-1",
+    };
+    const kept = AgentSessionRecord.parse({
+      ...record,
+      attach,
+      reattach: { state: "failed", at: record.createdAt, reason: "starting", next: "retry" },
+    });
+    expect(kept.attach).toEqual(attach);
+    expect(kept.reattach?.next).toBe("retry");
+    // a key a newer puppeteer adds rides through whole (the HMAC covers it),
+    // and so does a next word this pin does not know
+    const later = { version: 1, state: "", later: true };
+    expect(AgentSessionRecord.parse({ ...record, attach: later }).attach).toEqual(later);
+    const unknownNext = { state: "failed", at: record.createdAt, next: "a-later-step" };
+    expect(AgentSessionRecord.safeParse({ ...record, reattach: unknownNext }).success).toBe(true);
+    // typed: a version is a whole number, a secret is not empty
+    for (const bad of [
+      { version: 1.5, state: "s" },
+      { version: -1, state: "s" },
+      { state: "s" },
+      { version: 1, state: "s", secret: "" },
+    ]) {
+      const parsed = AgentSessionRecord.safeParse({ ...record, attach: bad });
+      expect(parsed.success, JSON.stringify(bad)).toBe(false);
+    }
+  });
+
   it("AR-4: the row says whether it was re-attached, or is pending a resume at its next idle", () => {
     const summary = AgentSessionSummary.parse(fixture("agent-session-summary.valid.json"));
     expect(summary.continuation).toEqual({ persisted: true, resumable: false, reattached: true });

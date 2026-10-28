@@ -255,6 +255,25 @@ export type AgentModelSelection = z.infer<typeof AgentModelSelection>;
 
 export const AGENT_SESSION_RECORD_FORMAT = 1;
 
+/** RA-D3 (ruled A, 2026-10-27; `draft/thinking-ar-reattach.md` §3.5 G1) — one
+ * adapter's attach record for one session, OPAQUE (AR-L1): what puppeteer's
+ * adapter reported it must find again to bind to the running process after a
+ * fieldd restart, beyond the continuation (a helper's endpoint, pid and start
+ * time; a provisional id's anchor). `version` is the adapter's own format,
+ * `state` its own words, `secret` a credential (a helper's password, an
+ * endpoint's nonce). fieldd keeps the latest one the adapter reported, never
+ * reads it, never logs it, and hands it back to `runtime.attach` as it was
+ * reported. Passthrough, so a key a newer puppeteer adds reaches an older
+ * reader whole (the record's HMAC covers it). */
+export const AgentSessionAttach = z
+  .object({
+    version: z.number().int().nonnegative(),
+    state: z.string(),
+    secret: z.string().min(1).optional(),
+  })
+  .passthrough();
+export type AgentSessionAttach = z.infer<typeof AgentSessionAttach>;
+
 /** One managed session's record: puppeteer's OPAQUE continuation (persisted,
  * never inspected — its `state` is adapter-versioned and credential-free by
  * puppeteer's contract) beside the launch facts fieldd itself chose, and the
@@ -298,15 +317,25 @@ export const AgentSessionRecord = z
       .object({ port: z.number().int().positive(), token: z.string().min(1) })
       .passthrough()
       .optional(),
+    /** RA-D3 — the adapter's attach record (`AgentSessionAttach`): reported
+     * before the process launched and again whenever it changed, the latest
+     * kept here under the same custody as `ingress` (0600, signed). Absent on
+     * a run whose adapter reported none, and on every record before the
+     * re-attach study's Step 1: such a record verifies as it did. */
+    attach: AgentSessionAttach.optional(),
     /** AR-4 — what the last fieldd boot did with a live terminal: attached at
      * the next epoch, failed (the reason), unsupported by the adapter, or
      * resumed into a new run — `replacedBy` names the successor run (AR-4b;
-     * `replaced`, the old PTY, was the first spelling and is kept readable). */
+     * `replaced`, the old PTY, was the first spelling and is kept readable).
+     * `next` (the re-attach study's G1) is the adapter's word on a failed
+     * attach — `retry`, `respawn`, `native-log` or `resume` at this pin, kept
+     * OPEN (a word a newer puppeteer adds must not set the record aside). */
     reattach: z
       .object({
         state: z.enum(["attached", "failed", "unsupported", "resumed"]),
         at: z.string(),
         reason: z.string().optional(),
+        next: z.string().min(1).max(32).optional(),
         replaced: z.string().optional(),
         replacedBy: z.string().optional(),
       })

@@ -33,6 +33,7 @@ import {
   type AgentResumeNativeParams,
   type AgentResumeParams,
   type AgentResumeRunParams,
+  AgentSessionAttach,
   type AgentSessionRecord,
   type AgentSessionSummary,
   type AgentSpawnParams,
@@ -52,6 +53,7 @@ import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/log
 import type { BuiltinProviderOptions } from "@vibefield/puppeteer-builtin-providers";
 import { createBuiltinProviders } from "@vibefield/puppeteer-builtin-providers";
 import type {
+  AgentAttachRecord,
   AgentContinuation,
   AgentHost,
   AgentInstallation,
@@ -298,6 +300,13 @@ const RESUME_POLL_MAX_MS = 60_000;
 /** AR-4b — a stop waits this long for a replacement in flight (the old PTY
  * already terminated, its successor not yet born) before releasing the rest. */
 const DISPOSE_REPLACEMENT_WAIT_MS = 10_000;
+/** G5 (`draft/thinking-ar-reattach.md` §3.5) — an attach the adapter called
+ * transient is asked again this many times, the first after `ATTACH_RETRY_MS`
+ * and each later one after twice the last (1, 2, 4, 8 and 16 s: about half a
+ * minute, the span of a helper's start or a port's release), before its run
+ * rests pending. */
+const ATTACH_RETRY_ATTEMPTS = 5;
+const ATTACH_RETRY_MS = 1_000;
 
 /** AR-7c — a process table that could not be read says nothing about a
  * typed run: it is asked again, this many times and this far apart, before
@@ -328,7 +337,16 @@ export interface AgentAdoptionInput {
   info: AgentSessionInfo;
   cwd: string;
   process: { pid: number; startedAt: string };
-  launched: { creationRequestId: string; ingress?: BoundIngress | undefined };
+  launched: LaunchedIdentity;
+}
+
+/** AR-4 — what a birth was given and what its adapter reported before the
+ * process launched: the creation request (puppeteer's durable claim), the
+ * ingress it bound, and (RA-D3) its attach record, the latest one reported */
+export interface LaunchedIdentity {
+  creationRequestId: string;
+  ingress?: BoundIngress | undefined;
+  attach?: AgentSessionAttach | undefined;
 }
 
 /** AR-7 — the fold's entry points for a typed run, as the gateway service
@@ -341,7 +359,7 @@ export interface AgentAdoption {
   identity(): {
     creationRequestId: string;
     ingress: HostIngress;
-    launched(): { creationRequestId: string; ingress?: BoundIngress | undefined };
+    launched(): LaunchedIdentity;
   };
   /** the adopted run enters the fold: its record written and signed, its row
    * published, its process watched. Throws when it cannot — the caller undoes
@@ -501,6 +519,11 @@ interface PendingEntry {
   /** AR-7c — a typed run held pending: stops the watch on its process, which
    * is how its row leaves (nothing replaces it, so nothing else would) */
   unwatch?: (() => void) | undefined;
+  /** G5 — the next attach of a run whose adapter called its failure
+   * transient (`next: retry`) */
+  retry?: NodeJS.Timeout | undefined;
+  /** G5 — that attach is in flight: a replacement waits for its outcome */
+  attaching: boolean;
 }
 
 /** MF-1f — a run whose PROCESS ended while its PTY is still on the floor.
@@ -2248,6 +2271,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     for (const entry of this.pending.values()) {
       if (entry.backstop !== undefined) clearTimeout(entry.backstop);
       if (entry.poll !== undefined) clearTimeout(entry.poll);
+      if (entry.retry !== undefined) clearTimeout(entry.retry);
       entry.unwatch?.();
       entry.unwatch = undefined;
     }
@@ -2296,26 +2320,70 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
    * ingress, whose bound port and bearer the adapter reports BEFORE the
    * process launches (an adapter without an ingress reports nothing).
    * AR-7 — ONE identity for every birth: a run adopted in a caller's
-   * terminal is prepared with the same (`AgentAdoption.identity`). */
+   * terminal is prepared with the same (`AgentAdoption.identity`).
+   * RA-D3 — the adapter's attach record rides the same say: reported before
+   * the launch, it is held here until the run's record exists; reported after
+   * (a helper reborn on a new endpoint), it is written into that record, so
+   * the next boot hands the adapter the latest. */
   identity(): {
     creationRequestId: string;
     ingress: HostIngress;
-    launched(): { creationRequestId: string; ingress?: BoundIngress | undefined };
+    launched(): LaunchedIdentity;
   } {
     const creationRequestId = randomUUID();
     let bound: BoundIngress | undefined;
+    let attach: AgentSessionAttach | undefined;
     return {
       creationRequestId,
       ingress: {
         onBound: (b) => {
           bound = b;
         },
+        onAttachRecord: (reported) => {
+          const kept = this.attachRecordOf(reported, { creationRequestId });
+          if (kept === undefined) return;
+          attach = kept;
+          for (const entry of this.managed.values()) {
+            if (entry.creationRequestId === creationRequestId) {
+              this.keepAttach(entry.info.runtimeRunId, kept);
+            }
+          }
+        },
       },
       launched: () => ({
         creationRequestId,
         ...(bound !== undefined ? { ingress: bound } : {}),
+        ...(attach !== undefined ? { attach } : {}),
       }),
     };
+  }
+
+  /** RA-D3 — an attach record as the contract keeps it, or undefined (said
+   * once per report, never with its contents) when the adapter reported one
+   * the record could not carry: a record that does not parse is SET ASIDE at
+   * the next read, which would lose the whole session, not just its facts. */
+  private attachRecordOf(
+    reported: AgentAttachRecord,
+    run: { creationRequestId?: string; runtimeRunId?: string },
+  ): AgentSessionAttach | undefined {
+    const parsed = AgentSessionAttach.safeParse(reported);
+    if (parsed.success) return parsed.data;
+    this.logger.warn(
+      "fieldd.agents.attach_record_refused",
+      "An adapter reported an attach record the session record cannot carry; the last one kept stands",
+      { ...run, issue: parsed.error.issues[0]?.message ?? "invalid" },
+    );
+    return undefined;
+  }
+
+  /** RA-D3 — a run's adapter reported a new attach record after its record
+   * was written: the record on disk (the truth; the fold's copies lag) takes
+   * it, unless the run has ended or the record already says the same. */
+  private keepAttach(runtimeRunId: string, attach: AgentSessionAttach): void {
+    const record = this.records.read(runtimeRunId);
+    if (record === undefined || record.exited !== undefined) return;
+    if (JSON.stringify(record.attach) === JSON.stringify(attach)) return;
+    this.records.write({ ...record, attach, updatedAt: this.now().toISOString() });
   }
 
   /** A run puppeteer just started (spawned, resumed, or — AR-4 — re-attached)
@@ -2328,6 +2396,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       title?: string | undefined;
       creationRequestId?: string | undefined;
       ingress?: BoundIngress | undefined;
+      /** RA-D3 — the adapter's attach record, the latest reported before launch */
+      attach?: AgentSessionAttach | undefined;
       /** the floor session this run replaced (resume-when-idle) */
       replaced?: string | undefined;
       /** AR-4 — the record already exists: this run was re-attached, and the
@@ -2359,14 +2429,18 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
           now,
           creationRequestId: launch.creationRequestId,
           ingress: launch.ingress,
+          attach: launch.attach,
           replaced: launch.replaced,
           adopted: launch.adopted?.process,
           modelSelection: launch.modelSelection,
         }),
       );
     } else {
+      // the record as it stands on disk: an attach record the adapter reported
+      // while it attached is already there, and the boot's copy predates it
+      const current = this.records.read(info.runtimeRunId) ?? launch.reattached.record;
       this.records.write({
-        ...launch.reattached.record,
+        ...current,
         runtimeEpoch: info.runtimeEpoch,
         continuation: { ...info.continuation },
         reattach: { state: "attached", at: now },
@@ -2501,6 +2575,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       cwd: input.cwd,
       creationRequestId: input.launched.creationRequestId,
       ingress: input.launched.ingress,
+      attach: input.launched.attach,
       adopted: { process: input.process, terminal: row },
     });
     // A preparation slower than the launcher's patience leaves fieldd holding
@@ -2651,12 +2726,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     cwdOverride: string | undefined,
     replaced: string | undefined,
   ): Promise<ManagedEntry> {
-    const continuation: AgentContinuation = {
-      providerId: record.continuation.providerId,
-      nativeSessionId: record.continuation.nativeSessionId,
-      implementation: record.continuation.implementation === "imposter" ? "imposter" : "native",
-      ...(record.continuation.state !== undefined ? { state: record.continuation.state } : {}),
-    };
+    const continuation = continuationOf(record);
     const cwd = cwdOverride ?? record.cwd;
     const identity = this.identity();
     // PJ-6 (Q4) — the session's own launch model, where its resume takes one;
@@ -2901,11 +2971,13 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
 
   /** One record, one live PTY: puppeteer's `attach` at the claim's epoch, or a
    * pending row when the adapter cannot. The fold is updated INSIDE the audited
-   * act, so a ledger that fails after the effect leaves nothing orphaned. */
+   * act, so a ledger that fails after the effect leaves nothing orphaned.
+   * `attempt` counts G5's retries of an attach the adapter called transient. */
   private async attachRecord(
     record: AgentSessionRecord,
     row: TerminalInfo,
     terminalId: string,
+    attempt = 0,
   ): Promise<void> {
     if (this.disposed) return;
     if (isTypedRun(record)) {
@@ -2991,6 +3063,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       async () => {
         const outcome = await this.tryAttach(record, terminalId, expectedEpoch, claimState);
         if (outcome.state === "attached") {
+          // G5 — a retried attach that succeeded: the row it held gives way
+          this.releasePending(record.runtimeRunId);
           const entry = this.enter(outcome.agent, {
             cwd: record.cwd,
             title: record.title,
@@ -3008,7 +3082,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
           }
           return { state: "attached" as const, runtimeEpoch: entry.info.runtimeEpoch };
         }
-        this.hold(record, row, terminalId, outcome.state, outcome.reason, expectedEpoch);
+        this.hold(record, row, terminalId, outcome, expectedEpoch, attempt);
         return outcome;
       },
       (value) =>
@@ -3017,7 +3091,11 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
           : {
               outcome: "failed",
               reasonCode: value.state === "unsupported" ? "ATTACH_UNSUPPORTED" : "ATTACH_FAILED",
-              attrs: { state: value.state, reason: value.reason },
+              attrs: {
+                state: value.state,
+                reason: value.reason,
+                ...(value.next !== undefined ? { next: value.next } : {}),
+              },
             },
     );
   }
@@ -3027,9 +3105,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     terminalId: string,
     expectedEpoch: number,
     claimState: "allocated" | "terminal" | "missing" | "unread",
-  ): Promise<
-    { state: "attached"; agent: Agent } | { state: "failed" | "unsupported"; reason: string }
-  > {
+  ): Promise<{ state: "attached"; agent: Agent } | AttachFailure> {
     if (record.creationRequestId === undefined) {
       return {
         state: "failed",
@@ -3065,6 +3141,16 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
           : {}),
         ...(record.profileId !== undefined ? { profile: record.profileId } : {}),
         workspace: restoredWorkspaceRequest(record.workspace, record.cwd),
+        // the re-attach study's Step 1: what the launch knew comes back — the
+        // continuation (puppeteer's codec restores a typed root's options from
+        // it, and the run keeps its state and implementation) and the adapter's
+        // attach record, as reported; a later report rewrites the record
+        continuation: continuationOf(record),
+        ...(record.attach !== undefined ? { attachRecord: record.attach } : {}),
+        onAttachRecord: (reported) => {
+          const kept = this.attachRecordOf(reported, { runtimeRunId: record.runtimeRunId });
+          if (kept !== undefined) this.keepAttach(record.runtimeRunId, kept);
+        },
       });
     } catch (error) {
       return { state: "failed", reason: error instanceof Error ? error.message : String(error) };
@@ -3073,6 +3159,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       return {
         state: result.error.code === "ATTACH_UNSUPPORTED" ? "unsupported" : "failed",
         reason: result.error.message,
+        // the adapter's word on what to do instead, mapped without knowing the vendor (AR-L1)
+        ...(result.error.next !== undefined ? { next: result.error.next } : {}),
       };
     }
     const agent = this.runtime.agent(result.terminalSessionId);
@@ -3084,24 +3172,31 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
 
   /** A live PTY this boot could not re-attach to: the record says what
    * happened (and carries the claim's epoch, re-synced), the fold carries a
-   * pending row, and resume-when-idle is armed. */
+   * pending row, and resume-when-idle is armed — or, G5, while the adapter
+   * calls the failure transient, the attach is asked again first. */
   private hold(
     record: AgentSessionRecord,
     row: TerminalInfo,
     terminalId: string,
-    state: "failed" | "unsupported",
-    reason: string,
+    failure: AttachFailure,
     runtimeEpoch: number,
+    attempt: number,
   ): void {
+    const { state, reason, next } = failure;
     const now = this.now().toISOString();
+    // the record as it stands on disk: an attach record the adapter reported
+    // during the attempt is already there, and the boot's copy predates it
+    const current = this.records.read(record.runtimeRunId) ?? record;
     const held: AgentSessionRecord = {
-      ...record,
+      ...current,
       runtimeEpoch,
-      reattach: { state, at: now, reason },
+      reattach: { state, at: now, reason, ...(next !== undefined ? { next } : {}) },
       updatedAt: now,
     };
     this.records.write(held);
     if (this.disposed) return;
+    // a retried attach that failed again: the row it held gives way to this one
+    this.releasePending(record.runtimeRunId);
     const entry: PendingEntry = {
       record: held,
       reason,
@@ -3110,10 +3205,22 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       seenInInventory: true,
       resuming: false,
       failures: 0,
+      attaching: false,
     };
     this.pending.set(record.runtimeRunId, entry);
     this.byTerminal.set(terminalId, record.runtimeRunId);
     const typed = isTypedRun(held) ? held.process : undefined;
+    if (next === "retry" && attempt < ATTACH_RETRY_ATTEMPTS) {
+      const inMs = this.retryAttach(entry, attempt + 1);
+      this.logger.info(
+        "fieldd.agents.reattach_retry",
+        "A managed session's adapter called its attach transient; it is asked again, and the row is held meanwhile",
+        { runtimeRunId: record.runtimeRunId, provider: record.provider, attempt, inMs, reason },
+      );
+      if (typed !== undefined) this.watchPendingTyped(entry, typed.pid);
+      this.publish();
+      return;
+    }
     this.logger.warn(
       "fieldd.agents.reattach_held",
       typed === undefined
@@ -3127,12 +3234,61 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         sessionId: terminalId,
         state,
         reason,
+        ...(next !== undefined ? { next } : {}),
         ...(typed !== undefined ? { spawnedBy: SPAWNED_BY_SHELL, pid: typed.pid } : {}),
       },
     );
     if (typed === undefined) this.armPending(entry);
     else this.watchPendingTyped(entry, typed.pid);
     this.publish();
+  }
+
+  /** G5 (`draft/thinking-ar-reattach.md` §3.5) — the next attach of a run
+   * whose adapter called its failure transient (`next: retry`: a port still
+   * held, a helper still starting), `ATTACH_RETRY_MS` doubled per attempt.
+   * Resume-when-idle is not armed meanwhile, so no replacement races an attach
+   * that may still succeed; a person's own resume cancels the retry
+   * (`replacePendingClaimed`). An attempt that ends in neither an attach nor a
+   * new hold leaves the row resting as after the last one. Answers the delay. */
+  private retryAttach(entry: PendingEntry, attempt: number): number {
+    const runtimeRunId = entry.record.runtimeRunId;
+    const delay = ATTACH_RETRY_MS * 2 ** (attempt - 1);
+    entry.retry = setTimeout(() => {
+      entry.retry = undefined;
+      const terminalId = entry.record.terminalSessionId;
+      const row = entry.terminal;
+      if (this.disposed || entry.resuming || this.pending.get(runtimeRunId) !== entry) return;
+      if (terminalId === undefined || row === undefined) return;
+      entry.attaching = true;
+      void this.attachRecord(entry.record, row, terminalId, attempt)
+        .catch((error: unknown) => {
+          this.logger.warn(
+            "fieldd.agents.reattach_failed",
+            "A managed session could not be re-attached or held; its record stands",
+            { runtimeRunId, error: error instanceof Error ? error.message : String(error) },
+          );
+        })
+        .finally(() => {
+          entry.attaching = false;
+          if (this.pending.get(runtimeRunId) === entry) this.armPending(entry);
+        });
+    }, delay);
+    entry.retry.unref();
+    return delay;
+  }
+
+  /** A pending row that gives way to its own run (G5: a retried attach that
+   * succeeded, or failed again and is held anew): its timers and its process
+   * watch stop. The run, its record and its terminal are untouched. */
+  private releasePending(runtimeRunId: string): void {
+    const entry = this.pending.get(runtimeRunId);
+    if (entry === undefined) return;
+    if (entry.poll !== undefined) clearTimeout(entry.poll);
+    if (entry.backstop !== undefined) clearTimeout(entry.backstop);
+    if (entry.retry !== undefined) clearTimeout(entry.retry);
+    entry.unwatch?.();
+    entry.unwatch = undefined;
+    this.pending.delete(runtimeRunId);
   }
 
   /** AR-7c — a typed run held pending leaves when its PROCESS does: nothing
@@ -3363,6 +3519,16 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         state: "resuming",
       });
     }
+    // G5 — an attach in flight may still bind to the PTY this would end: its
+    // outcome comes first (an attached run refuses a resume as alive)
+    if (entry.attaching) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        "the session is being re-attached; ask again in a moment",
+        true,
+        { runtimeRunId: record.runtimeRunId, state: "attaching" },
+      );
+    }
     if (this.disposed) {
       throw new RpcCallError("UNAVAILABLE", "the agent service is stopping", true, {
         service: "agents",
@@ -3374,6 +3540,12 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     if (entry.poll !== undefined) {
       clearTimeout(entry.poll);
       entry.poll = undefined;
+    }
+    // a person's resume (or the idle one) is chosen over an attach still to be
+    // retried: the retry would bind to a PTY this ends
+    if (entry.retry !== undefined) {
+      clearTimeout(entry.retry);
+      entry.retry = undefined;
     }
     if (entry.backstop !== undefined) {
       clearTimeout(entry.backstop);
@@ -3519,6 +3691,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     if (entry === undefined || entry.resuming) return;
     if (entry.poll !== undefined) clearTimeout(entry.poll);
     if (entry.backstop !== undefined) clearTimeout(entry.backstop);
+    if (entry.retry !== undefined) clearTimeout(entry.retry);
     entry.unwatch?.();
     entry.unwatch = undefined;
     this.pending.delete(runtimeRunId);
@@ -4063,6 +4236,29 @@ function restoredWorkspaceRequest(
       request.resumeRoot = workspace.root;
   }
   return request;
+}
+
+/** puppeteer's continuation, from the record that keeps it opaque: what a
+ * resume continues and (the re-attach study's Step 1) what an attach hands
+ * back. Rebuilt key by key, never spread: a key a newer runtime wrote (RA-D7's
+ * `resumable`) is the record's to keep, and an older runtime's strict schema
+ * would refuse the whole continuation for it. */
+function continuationOf(record: AgentSessionRecord): AgentContinuation {
+  return {
+    providerId: record.continuation.providerId,
+    nativeSessionId: record.continuation.nativeSessionId,
+    implementation: record.continuation.implementation === "imposter" ? "imposter" : "native",
+    ...(record.continuation.state !== undefined ? { state: record.continuation.state } : {}),
+  };
+}
+
+/** G1 — how an attach failed, for the record and the ledger: `next` is the
+ * adapter's word on what to do instead (puppeteer's `AgentAttachNext`), kept as
+ * it said it and acted on only where fieldd knows the word (G5's `retry`). */
+interface AttachFailure {
+  state: "failed" | "unsupported";
+  reason: string;
+  next?: string | undefined;
 }
 
 /** AR-7c — what `agent.resume` (and anything that would replace a run)
