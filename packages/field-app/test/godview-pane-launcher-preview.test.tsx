@@ -65,8 +65,9 @@ describe("the empty pane launcher's catalog specimen", () => {
   it("reaches each state through the shipping model, not by hand", () => {
     const host = render();
     const [rest] = specimen(host, "rest");
-    // ten agents at most, the catalog's rows through the shipping projection
-    expect(rest?.querySelectorAll(".vf-pane-launcher-agent").length).toBe(10);
+    // ten agents at most, the catalog's rows through the shipping projection: nine since Q17 (James, 2026-10-27)
+    // narrowed ACP's row to no spawn until fieldd supplies a connector, so the launcher offers no ACP chip
+    expect(rest?.querySelectorAll(".vf-pane-launcher-agent").length).toBe(9);
     expect(
       specimen(host, "hover")[0]?.querySelector(".vf-pane-launcher-preview")?.textContent,
     ).toMatch(/ · its defaults$/);
