@@ -151,9 +151,10 @@ plain ground alone, the appearance document's v4.
 
 Runtime-free adapters replace only data or controllers. For example, Artifact Hub receives a
 fixture product client and the head receives a fixture document manager and canvas door; their
-DOM, interaction state, accessibility, and CSS are production code. Engine-rendered widget content
-is represented by deterministic card fixtures, while its stable visual identities come from shared
-content tokens and the plugin-owned stylesheets.
+DOM, interaction state, accessibility, and CSS are production code. Engine-rendered desk content
+(object-kind faces) is represented by deterministic fixtures, while its stable visual identities come
+from shared content tokens and the plugin-owned stylesheets. *(Corrected 2026-10-28, the housekeeping
+pass: this said "widget content" and "card fixtures"; the widgets and cards retired at DK-17.)*
 
 Godview mounts the shipping SDK views through `MonitorViewHost`, one at a time. `GodviewPreview`
 mounts the product `GodviewMonitor` with `godview-model-fixture.ts` supplying the model board; it

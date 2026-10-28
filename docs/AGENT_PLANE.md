@@ -21,7 +21,8 @@ returns a persisted picked root or `null` on cancellation. Pass that root direct
 `attach(root, path?)` to obtain an independent recovering lease, without resolving it
 through the bounded roots list. Each `ports` event transfers a fresh tree/git pair;
 the consumer replaces its engine on reconnect and disposes the lease on close.
-The widget, decorations and composer drag integration remain DK's work.
+The tree consumer itself (FS-3), decorations and composer drag remain DK's work. *(Corrected
+2026-10-28, the housekeeping pass: this said "the widget"; the desk has object kinds, not widgets.)*
 
 The packaged Files worker has a separate artifact check:
 `pnpm --filter @vibefield/desktop run package:verify:files --native-root <Resources/bin>`.
@@ -76,17 +77,24 @@ URLs, because a relative path cannot resolve between checkouts.
 
 Main-tracked:
 
-- `CLAUDE.md` — the laws condensed, the workspace taxonomy, the sibling mode, the commands. **current**
+- `CLAUDE.md` — the laws condensed, the workspace taxonomy, the sibling mode, the commands. **current, except
+  Machine setup's pins**: a dated pass is drafted and lands only on James's approval of its text (James, 2026-10-28,
+  the housekeeping page (Q1)); until then the manifests are the authority for every number.
 - [`docs/ROADMAP.md`](ROADMAP.md) — now/next, rewritten in place at each milestone; the AR row names the next rung. **current**
 - [`docs/LANDED.md`](LANDED.md) — the append-only ledger; every `## AR-` entry is this plane's build history with its revision and witness. **current**
 - [`docs/DECISIONS.md`](DECISIONS.md) — the decision index; AR-D1…D14 and AR-D15…D22 carry this plane's rulings and amendments; AR7-D1…D16 the typed agent's slate. **current**
 - `DESIGN.md` · [`docs/UI_SYSTEM.md`](UI_SYSTEM.md) — art direction, and where it lives in code. Any view in this plane defers to them. **current**
+- [`docs/agent-plane/usage-meters.md`](agent-plane/usage-meters.md) — the agent profile usage meters: the data path
+  and its owners, the adapters' polling intervals, explicit refresh. **current** (re-read 2026-10-28 against the
+  pinned puppeteer)
 
 Design corpus (`draft/`, tracked on the local-only `dev-local` branch, never on main):
 
 - `draft/thinking-ar-agent-plane.md` — the triad design: the ownership law, the planes, the identity spine, the durability ceilings, the cross-repo asks. §17 is the re-verification delta. **RATIFIED 2026-09-12**
 - `draft/thinking-ar-data-topology.md` — consent by construction, the machine scope, personas as profiles, who writes what. **RATIFIED 2026-09-12**
-- `draft/thinking-ar-sibling-workbench.md` — the three-repo workbench: the link mechanism, the pin, the walls, the build, the exit (W-D8). **current**
+- `draft/thinking-ar-sibling-workbench.md` — the three-repo workbench: the link mechanism, the pin, the walls, the build, the exit (W-D8). **current**, its exit
+  superseded by RD-5 (a `release` block recorded in `siblings.lock.json`, the entry kept as the dev overlay's
+  coordinate; `draft/thinking-release-deps.md`)
 - `draft/thinking-ar-agent-catalog.md` — the agent CATALOG: which agents VibeField supports, decided by hand in
   `packages/contracts/src/agent-catalog.ts` and held to both pins by wall R23; the slate AC-D1…AC-D11; §13 as built.
   **RULED + BUILT 2026-09-22** (LANDED §AC)
@@ -94,7 +102,11 @@ Design corpus (`draft/`, tracked on the local-only `dev-local` branch, never on 
   the slate AR7-D1…D16 (six ruled by James), the build table and the witnesses. **RULED + BUILT 2026-09-27/28**
   (LANDED §AR-7)
 - `draft/thinking-ar-views-port.md` — the views port as built. `draft/thinking-ar-approvals-prompts.md` — the design AR-6 will run. **current**
-- `draft/design-00…design-04` — the governing specification in authority order. The agent plane defers to these for mechanics. **current**
+- `draft/thinking-agent-onboarding.md` — Bring Your Agents (track AO): the agent plane's first run, its marks and
+  build ladder. **RULED 2026-10-27; built through AO-6b3** (LANDED §AO); AO-7 waits on a puppeteer release
+- `draft/design-00…design-04` — the governing specification in authority order. The agent plane defers to these for
+  mechanics. **current, with fold-backs owed** (ROADMAP's records): the D1–D4 name fold-back (chopsticks and
+  spaghetti → puppeteer and rosetta) and design-03's desk fold
 
 ### puppeteer — the agent runtime
 

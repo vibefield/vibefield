@@ -1005,6 +1005,11 @@
               <em>Update 2026-09-22:</em> the AC notes on this page (LANDED §AC) were read in the code at the
               AC chain's tip. The MV ownership, backend/view seams and runtime-only corrections below describe the
               monitor-view implementation; older revision-specific diagrams remain explicitly dated snapshots.
+              <em>Note 2026-10-28 (the housekeeping pass):</em> the three revisions above are the page's first
+              reading (2026-09-21) and were never re-stamped as a whole. Every later edit carries its own dated
+              "read at" in the section it changed — the latest the 2026-10-26 RD-5a-2 correction (puppeteer v0.2.3 =
+              <code>ee785ec1</code>) and the 2026-10-27 QW1 attach note (<code>94029a3c5</code>). A whole-page re-read and
+              re-stamp is owed to the next agent-plane slice.
             </div>
             <div class="callout warning">
               <strong>Two of the three repositories are machine-coupled checkouts, not registry packages.</strong>
@@ -1708,8 +1713,10 @@
               Saved picks retain their canonical path and missing state across daemon restarts.
               <code>WorkspaceClient.pickFolder()</code> returns a root or null;
               <code>attach(root, path?)</code> gives an independent recovering port lease even
-              when that root falls outside the bounded roots list. DK still owns the tree widget,
-              decorations and composer drag integration.</p>
+              when that root falls outside the bounded roots list. The tree consumer (FS-3: a desk object kind
+              or panel, unowned since DK completed), decorations and composer drag integration are owed
+              (ROADMAP §4 FS). <em>(Corrected 2026-10-28, the housekeeping pass: this said "DK still owns the
+              tree widget"; DK is complete, and the desk has object kinds, not widgets.)</em></p>
             <p><strong>R24:</strong> native mille imports are confined to the files worker;
               field-app may import the <code>/port</code> and <code>/remote</code> clients and
               mille-ui. Native-free channel imports in tests witness the wire.

@@ -4,7 +4,8 @@ DK-18, the desk migration's Phase 5 (`draft/thinking-desk-migration.md` §5, "th
 cutover of `desk/landing` needs, what each proves, where it runs, and its verdict at the landing SHA. Two commands run them.
 
 - **`pnpm verify`** — THE gate (CLAUDE.md, "Commands"), CI's: the stages below in one `&&` chain. It stops at its first red,
-  and `preflight` is red in every worktree whose sibling checkouts are off their pins (ghosttea's today), so a worktree's grade
+  and `preflight` is red in a worktree whose sibling checkouts (`../rosetta-pin`, `../mille-pin`) are off their pins
+  *(corrected 2026-10-28, the housekeeping pass: this named ghosttea's, released on every plane since the EL8 to 0.13.1)*, so a worktree's grade
   runs the stages ONE AT A TIME — `pnpm gate:landing --with-stages` does, every one even after a red, and says a red that is
   MAIN's known row as main's (`red — main's: …`, still counted red).
 - **`pnpm gate:landing`** — the landing-only gates, by ICE's example (its `gate:landing`: required at every landing, out of
@@ -32,7 +33,7 @@ said `"left": []`.
 
 | # | Gate | Command | What it proves | Where | Verdict |
 |---|---|---|---|---|---|
-| 1 | preflight | `pnpm preflight` | tool versions (cargo-typify), the EL8 pins (ICE `0.15.0`, truffle, ghosttea, loro), the sibling checkouts at `siblings.lock.json`'s pins, the import walls, the agent catalog (R23) | CI · every checkout | red — MAIN's (exit 1): ghosttea at `10d0b17bbc14`, the lock pins `8a0930e86fc7`; the same row alone on main's tip |
+| 1 | preflight | `pnpm preflight` | tool versions (cargo-typify, rustc per `rust-toolchain.toml`), the EL8 pins (ICE, truffle, ghosttea, loro — the numbers are the manifests'), the sibling checkouts at `siblings.lock.json`'s pins, the import walls, the agent catalog (R23) | CI · every checkout | red — MAIN's (exit 1): ghosttea at `10d0b17bbc14`, the lock pins `8a0930e86fc7`; the same row alone on main's tip |
 | 2 | check:walls | `pnpm check:walls` | the import-boundary walls ON THEIR OWN (R1–R25, `--self-test` then `--enforce`) — a red preflight never hides them again (plan (85)) | CI | ok — self-test passed, clean |
 | 3 | check:deps | `pnpm check:deps` | one copy each of loro-crdt, ICE, strata, react (EL8's single-copy law) | CI | red — MAIN's (exit 1): the second loro / ICE / strata copies all under the main checkout's `node_modules` (FS-1b's mille links); the same three rows on main's tip; this checkout's own one each |
 | 4 | check:retired | `pnpm check:retired` | no name the retire table deleted comes back in code (DK-17) | CI | ok |
@@ -62,9 +63,9 @@ said `"left": []`.
 | 28 | the two-desktop check | James's steps, below | presence across two DESKTOPS over a real mesh; (20)'s stamp-wait drop; a real pointer in the `.app-drag` strip | two Macs | not runnable on one Mac (below) |
 | 29 | smoke:bundled | `pnpm smoke:bundled` | a bundled plugin loads through the staged path under a verified index; a corrupted copy is refused on its row; a forged index refuses the root (WP8d, W7). `apps/desktop/packaging/stage-bundled-fixture.mjs` stages the app's own plugins as a package carries them (the stage's producer, DEV keys minted in memory, nothing secret written) and launches smoke:canvas `--bundled --disable-gpu` THREE times, each on its own copy keyed to that root alone (`FIELDD_PLUGIN_ROOTS` the copy, `FIELDD_PLUGIN_DEV_ROOTS` empty, `FIELDD_TRUST_ROOT`/`_KEYS`): **loads** — every bundled row `enabled` with its provenance block, `stagedPlugins` = the renderer-bearing plugins, no root problem; **corrupt** — one byte of `vibefield.browser`'s `dist/renderer.js` flipped: that row `invalid` `PLUGIN_ARTIFACT_MISMATCH` naming the file, the others (the browser pane, the pad) enabled and staged; **forged** — the same flip, its hash written into the index and the index re-signed by a stranger's key: 0 bundled rows, 1 root problem naming the signature, 0 staged. One `SMOKE_BUNDLED {…}` line a run; `BUNDLED_FIXTURE_DONE` the three exits | landing | not yet run |
 | 30 | smoke:update | `pnpm smoke:update` | WP12f (W9; `draft/specs/build-wp12-updater.md` §14): a DEV-keyed PACKAGED app — the zip a person downloads, staged on the run's own trust-root (`--dev-trust-root`; keys minted in memory, nothing secret written), unzipped per run — against the loopback fixture update origin (`apps/desktop/packaging/update-fixture.mjs`), five runs judged from OUTSIDE the process (a package hosts no smoke harness): **staged** (`desktop.update.staged` names N and the signed feed's sha512, the updater's cache repeats it, the zip asked for once; Squirrel's first touch at download completion said, R6) · **feed-unverified** · **policy-rollback** · **killed** · **channel-unresolved** — no payload asked for on runs 2–5. **Every run:** the floor's freeway host runs from the app's own `Contents/Resources/bin` (`field-freeway-host --listener-fd 3`, F1 — staged in the floor's set, executable, found as the floor's sibling and spawned on fieldd's first declaration). Each run inside its temp root (`HOME`, `FIELDD_DATA_DIR`, `--user-data-dir`); the product's two DEV-gated doors it opens are `--allow-dev-trust` and `VIBEFIELD_UPDATE_ORIGIN` (D9: honored only for `keyClass: dev`). `SMOKE_UPDATE_FOOTPRINT` says what still landed outside the root. The physical apply is W11's (no input injection here; the silent path's display clause reads the live display; EDP §13.5) | landing-only, once per WP12 landing (~10 min: the zip build ~4, five runs ~5). It needs full Xcode 26: `run-electron-builder.mjs` requires `actool` and Icon Composer's `ictool`, so a Command Line Tools host cannot run it, and James's Mac mini is one (2026-10-23). With a person at the Mac the row raises a "keychain not found" dialog per run: Chromium's os_crypt looks for the login keychain under the run's own HOME (R5). Cancel it; no verdict depends on it, and the 10-17 run most likely raised the same on an unattended screen (2026-10-23) | green 2026-10-17 (WP12 L4 `18aa2a25`, five runs, James's Mac); green 2026-10-23 (the wedge and inventory train, `5fb2ca5ff`, five runs, James's Mac) (corrected 2026-10-23: this cell read "not yet run" after the 10-17 run) |
-| 31 | smoke:profile | `pnpm smoke:profile --app <VibeField.app or the nightly's .zip>` | BP-D7 (`draft/thinking-browser-profile.md` §3·6; ESP-11's witness; VF-PM 2026-10-26 01:32Z, the two-phase row): a cookie a PAGE set in the PACKAGED app is encrypted at rest. **A** the harness, unpackaged (`run-smoke.mjs --smoke-canvas --profile-seed=<url>`, `testing/smoke-profile-seed.ts`) lays one browser pane, points it at the row's loopback fixture (its response sets the witness cookie), waits for it live and saved, and LEAVES it; its root is kept (`VF_SMOKE_KEEP_ROOT`). This run writes the UNPACKAGED profile directory with the fuse off: the plaintext control (BP-D6). **B** the packaged app on that data root, its `HOME` the run's own with a login keychain created for the run (never the person's, never `--use-mock-keychain`), `--user-data-dir` its own. Every `security` call runs under the run `HOME`, the run keychain is made that `HOME`'s default, and the person's search list is digested before and after: the run STOPS before any app starts if it moved. Measured 2026-10-26 on this Mac: under a fresh `HOME` the user search list is empty and no default keychain exists, and a create plus `default-keychain -s` there left the person's list digest unchanged (`security create-keychain` adds to the CURRENT `HOME`'s list, so run under the real one it would have written the person's). The board it reopens is the only driver: no smoke trigger is in the asar (EDP §13.5), and no input reaches it. **The judge**, after its graceful quit: the packaged directory's `Cookies` holds the witness with an empty `value` and a `v10` `encrypted_value`, and its bytes appear nowhere in the file; the unpackaged directory holds it in plaintext; "VibeField Safe Storage" is in the RUN keychain; the shell's own profile holds no cookie of the fixture's. A DEV-keyed package (a local `package:dir`) launches with `--allow-dev-trust`, said so: the cookie fact holds, and the release-keyed reading is the signed nightly's (VF-PM 2026-10-26 01:49Z: the unknowns are measured first on a dev-keyed `package:dir`, then the row runs on the first signed nightly's zip; a package release-signed locally is refused) | landing-only, beside the gate: the INTERACTION class — phase A's synthetic input in its own window and phase B's real window on the live display. It runs on the mini at James's unlock (HID idle ≥ 120 s); on this Mac only by the PM's word while he is away, never while he works. Its green row needs a SIGNED package (J4's nightly) and `pnpm build:all`'s harness, on the same host as the package (phase B opens phase A's data root) | RED, and says why (2026-10-26 03:18Z, the mini, a dev-keyed package): U1 the pane live unaided, U2 os_crypt's key in the RUN keychain, U3 phase A's board reopened, all YES; U4 the mini. Neither desk profile holds a cookie database: a `session.fromPath` profile outside Electron's userData keeps its cookies in memory (`draft/thinking-browser-profile.md` §3·8, BP-D9 open). The package's field-native linked Homebrew harfbuzz (`HARFBUZZ_SYS_NO_PKG_CONFIG=1` built the measured one; the fix lane is TD/WP's) |
+| 31 | smoke:profile | `pnpm --filter @vibefield/desktop smoke:profile --app <VibeField.app or the nightly's .zip>` (no root script; corrected 2026-10-28, the housekeeping pass: this cell read `pnpm smoke:profile`) | BP-D7 (`draft/thinking-browser-profile.md` §3·6; ESP-11's witness; VF-PM 2026-10-26 01:32Z, the two-phase row): a cookie a PAGE set in the PACKAGED app is encrypted at rest. **A** the harness, unpackaged (`run-smoke.mjs --smoke-canvas --profile-seed=<url>`, `testing/smoke-profile-seed.ts`) lays one browser pane, points it at the row's loopback fixture (its response sets the witness cookie), waits for it live and saved, and LEAVES it; its root is kept (`VF_SMOKE_KEEP_ROOT`). This run writes the UNPACKAGED profile directory with the fuse off: the plaintext control (BP-D6). **B** the packaged app on that data root, its `HOME` the run's own with a login keychain created for the run (never the person's, never `--use-mock-keychain`), `--user-data-dir` its own. Every `security` call runs under the run `HOME`, the run keychain is made that `HOME`'s default, and the person's search list is digested before and after: the run STOPS before any app starts if it moved. Measured 2026-10-26 on this Mac: under a fresh `HOME` the user search list is empty and no default keychain exists, and a create plus `default-keychain -s` there left the person's list digest unchanged (`security create-keychain` adds to the CURRENT `HOME`'s list, so run under the real one it would have written the person's). The board it reopens is the only driver: no smoke trigger is in the asar (EDP §13.5), and no input reaches it. **The judge**, after its graceful quit: the packaged directory's `Cookies` holds the witness with an empty `value` and a `v10` `encrypted_value`, and its bytes appear nowhere in the file; the unpackaged directory holds it in plaintext; "VibeField Safe Storage" is in the RUN keychain; the shell's own profile holds no cookie of the fixture's. A DEV-keyed package (a local `package:dir`) launches with `--allow-dev-trust`, said so: the cookie fact holds, and the release-keyed reading is the signed nightly's (VF-PM 2026-10-26 01:49Z: the unknowns are measured first on a dev-keyed `package:dir`, then the row runs on the first signed nightly's zip; a package release-signed locally is refused) | landing-only, beside the gate: the INTERACTION class — phase A's synthetic input in its own window and phase B's real window on the live display. It runs on the mini at James's unlock (HID idle ≥ 120 s); on this Mac only by the PM's word while he is away, never while he works. Its green row needs a SIGNED package (J4's nightly) and `pnpm build:all`'s harness, on the same host as the package (phase B opens phase A's data root). *(2026-10-28, the housekeeping pass: J4 is met — the nightly signed and notarized on 2026-10-26, LANDED "LSF-4", and W11 applied `nightly-20261026` → `nightly-20261027` on the mini — so the row no longer waits on it; R4 on the signed zip stays owed, DECISIONS BP.)* | RED, and says why (2026-10-26 03:18Z, the mini, a dev-keyed package): U1 the pane live unaided, U2 os_crypt's key in the RUN keychain, U3 phase A's board reopened, all YES; U4 the mini. Neither desk profile holds a cookie database: a `session.fromPath` profile outside Electron's userData keeps its cookies in memory (`draft/thinking-browser-profile.md` §3·8, BP-D9 open). The package's field-native linked Homebrew harfbuzz (`HARFBUZZ_SYS_NO_PKG_CONFIG=1` built the measured one; the fix lane is TD/WP's) |
 
-`pnpm verify`'s chain is rows 1–14 in that order. `pnpm gate:landing` is rows 15–26, then 29; `--with-stages` puts 1–14 first. Row 30 is landing-only: `pnpm smoke:update` runs once per WP12 landing, beside the gate, never inside `gate:landing` (WP12 L4, the PM's ruling 2026-10-15 21:41Z: ten minutes is the zip build and five packaged launches). Row 31 is landing-only too: `pnpm smoke:profile` runs on a SIGNED package, beside the gate, never inside `gate:landing` (BP-D7, VF-PM 2026-10-26).
+`pnpm verify`'s chain is rows 1–14 in that order. `pnpm gate:landing` is rows 15–26, then 29; `--with-stages` puts 1–14 first. Row 30 is landing-only: `pnpm smoke:update` runs once per WP12 landing, beside the gate, never inside `gate:landing` (WP12 L4, the PM's ruling 2026-10-15 21:41Z: ten minutes is the zip build and five packaged launches). Row 31 is landing-only too: `pnpm --filter @vibefield/desktop smoke:profile` runs on a SIGNED package, beside the gate, never inside `gate:landing` (BP-D7, VF-PM 2026-10-26).
 
 **Re-run at DK-19, on main merged in** (`695ff9d1`; `pnpm gate:landing --with-stages`, 2026-10-08 09:32→09:47Z, load 3, 124
 under the test stage, 5 at the end; `field-native` rebuilt from the merge first). The same 26 gates, red only by preflight
@@ -194,8 +195,11 @@ lane's field-native, rebuilt after gen:check), the dev runner's 131. The orchest
   is `pnpm gen && git diff --exit-code -- <the generated paths>`, so an uncommitted `bundle.json`, `contracts.rs`,
   `registries.rs` or `gen/layout.json` is a diff even when it is fresh. To settle freshness without a window, stage
   and run `pnpm gen:check` alone: gen and fmt need no PM-WINDOW; `cargo build`/`check`/`test` always do.
-- **OWED — a red test stage must name its row** (2026-10-15, the PM's item): Nx caps a task's printed output, so a gate's red fieldd stage can end mid-line with no failing row named (seen 10-15 on two gates); the gate's test stage should write vitest's own report file per project so the row is always on disk. Until it does, read a capped fieldd red by running the suite alone (vitest directly, its full output to a file), then each failing file alone (the lottery rule: `fieldd-test-graph-lottery-rows`).
-- **OWED — a gate waits for a quiet host** (2026-10-15, the PM's item): `gate:landing` gains a `--wait-load N` that waits for load < N before the first gate, since three gates armed at load ≥ 10 each hit a fieldd lottery at load ~100. WP12 L3a's gate (`3eb90abf`) armed at load 10, L3b-i's (`9ec6bf48`) at 14 and L3b-ii's (`421e6355`) at 30 — each straight after a verify — and each met a fieldd red in its test stage at load ~100 whose solo read was green. The prod-builder's own guard waits for a one-minute load under 10, bounded at 10 minutes (the PM, 18:11Z). *Widened 2026-10-17 (WP12 L4 `18aa2a25`): the wait belongs before EACH desk row, not only the first gate. L4's gate armed at load 9.95, yet smoke:canvas armed at 40 and smoke:kind-faults at 17, straight out of the test stage's 309 (the one-minute average lags), and both met presence-timing reds there; alone, smoke:canvas (armed at 9.44) was red only on DK-14, main's own, and smoke:kind-faults (armed past the guard's 10-minute bound at 11.28, on ambient desktop load, no build running) was green.*
+- ~~**OWED — a red test stage must name its row**~~ *CLOSED 2026-10-25 by `c2c113788` (DK-18, tooling (5)): a landing
+  gate's stdout and stderr are its log file, which Nx writes whole, so no row is cut at a pipe's 64 KiB (noted 2026-10-28,
+  the housekeeping pass).* (2026-10-15, the PM's item): Nx caps a task's printed output, so a gate's red fieldd stage can end mid-line with no failing row named (seen 10-15 on two gates); the gate's test stage should write vitest's own report file per project so the row is always on disk. Until it does, read a capped fieldd red by running the suite alone (vitest directly, its full output to a file), then each failing file alone (the lottery rule: `fieldd-test-graph-lottery-rows`).
+- ~~**OWED — a gate waits for a quiet host**~~ *DROPPED 2026-10-28 (James, 2026-10-28, the housekeeping page (Q11)): the
+  desk rows run on the Mac mini; a flag for the mini would be a fresh tooling item.* (2026-10-15, the PM's item): `gate:landing` gains a `--wait-load N` that waits for load < N before the first gate, since three gates armed at load ≥ 10 each hit a fieldd lottery at load ~100. WP12 L3a's gate (`3eb90abf`) armed at load 10, L3b-i's (`9ec6bf48`) at 14 and L3b-ii's (`421e6355`) at 30 — each straight after a verify — and each met a fieldd red in its test stage at load ~100 whose solo read was green. The prod-builder's own guard waits for a one-minute load under 10, bounded at 10 minutes (the PM, 18:11Z). *Widened 2026-10-17 (WP12 L4 `18aa2a25`): the wait belongs before EACH desk row, not only the first gate. L4's gate armed at load 9.95, yet smoke:canvas armed at 40 and smoke:kind-faults at 17, straight out of the test stage's 309 (the one-minute average lags), and both met presence-timing reds there; alone, smoke:canvas (armed at 9.44) was red only on DK-14, main's own, and smoke:kind-faults (armed past the guard's 10-minute bound at 11.28, on ambient desktop load, no build running) was green.*
 
 ## The doors (plan (74))
 
@@ -238,82 +242,17 @@ FIRST; the two with no row were built as smoke:canvas's TAKE rows (`packages/ele
 | compares stills | `SMOKE_CANVAS_QUARTER` (the explorer's quarter still is the desk, smaller), `_THUMB` (a thumbnail is the desk without the selection's marks), `_THEME` (the stills by day and night), `pnpm still` (the Dawn goldens) | TAKE's before/after region per kind |
 | the K-H discipline for timing rows | COVER_BUDGET (240 ms), PEERS EXIT (one publish), IDLE (8 s) | **LANDED**: release → the object counted, the budget (250 ms) on the MINIMUM over the kinds, the median and the load beside it, a red minimum measured again once (D-KH.3) |
 
-## The cutover — the fast-forward, the fleet, the two Macs (DK-19; plan addenda (73), (93), (95))
+## The cutover (DK-19) — executed
 
-The fast-forward is the ORCHESTRATOR's command, run with James's word at a moment main is quiet. The fleet's upgrade and the
-two-Mac check are James's hands. Nothing in step 1 writes.
+*This heading was "The cutover — the fast-forward, the fleet, the two Macs" (DK-19; plan addenda (73), (93), (95)).*
 
-**1. Verify first, in this order.**
-1. The lane's tip is the graded one: `git -C ../vf-desk rev-parse desk/landing` prints the SHA the orchestrator graded, and
-   `git -C ../vf-desk status --short` prints nothing.
-2. Main has not moved since the lane last merged it: `git rev-parse main` equals the second parent of the lane's last merge
-   (`6a6cf37e` at DK-19's fifth merge, `1fa5d8f7` —
-   `git log --merges --first-parent -1 --format=%P desk/landing`), and `git merge-base --is-ancestor main desk/landing`
-   exits 0. **If main moved, merge it into the lane again — never a rebase ((73): a rebase orphans every graded SHA the
-   landing log names):** `git merge-tree --write-tree desk/landing main` first; each conflict resolved keeping both intents;
-   the lock regenerated by `pnpm install --offline`, never hand-merged; `touch` every `.rs` file the merge changed and
-   `cargo build -p field-native` (the cargo target, above); then the cheap stages, each alone (preflight, check:walls,
-   check:deps, check:retired, typecheck, lint, gen:check), and the suites of the projects the merge touches, alone. The full
-   `node scripts/gate-landing.mjs --with-stages` runs ONCE, on the final merge, right before the fast-forward, in a quiet
-   window James gives (the main checkout's work committed, landings paused): the orchestrator's grade (its ruling 2026-10-08
-   22:18Z, after main moved under each full run). Then this list again, from 1.
-3. The main checkout holds no work of another session in a file the lane changes or adds — a fast-forward refuses to
-   overwrite it, and nobody but its owner commits, stashes, resets or checks out over it:
-   ```sh
-   cd /Users/jamesyong/Projects/project100/vibe-field
-   git diff --name-only main desk/landing | sort > /tmp/cutover-lane.txt
-   git --no-optional-locks status --porcelain=v1 --untracked-files=all | cut -c4- | sort > /tmp/cutover-dirty.txt
-   comm -12 /tmp/cutover-dirty.txt /tmp/cutover-lane.txt   # must print nothing
-   git diff --cached --name-only                            # must print nothing (a bystander's staged files)
-   ```
-   At every DK-19 hand-back before the fifth merge it printed `DESIGN.md` (another session's uncommitted logo work, its two
-   hunks in §12 and at §13's end, far from the lane's); main's `6a6cf37e` resolved it, and at the fifth merge it printed
-   nothing. Work like that is its owner's to commit first — and then main has moved: 1.2.
-4. ICE's `latest` is `0.15.0`: `npm view @vibecook/ice dist-tags` (James moved it 2026-10-08 06:29Z; the pin is exact and does
-   not wait on it).
-5. Every sibling is PREPARED at its pin, not only checked out at it; preflight is green either way. Read the sibling's entry in
-   `siblings.lock.json` first. One with a `pnpm` or `javascript` section is prepared by
-   `node scripts/siblings.mjs install-js <name>` and `build-js <name>` from the main checkout. One with neither, puppeteer's
-   among them, is SKIPPED by both: they exit 0 at once having done nothing. Puppeteer is prepared by its own frozen install,
-   `pnpm install --frozen-lockfile` inside `../puppeteer` (the pnpm its `packageManager` names; offline first, online only for
-   a tarball the store lacks), its `git status` clean after; there is nothing to build, since its packages export `./src/*.ts`.
-   Either way it is the sibling owner's to run, never the lane's. At DK-19's second merge the puppeteer sibling sat at MV's pin
-   `594d222` unprepared: `../puppeteer/packages/monitor` and `views` could not resolve their new
-   `@vibecook/puppeteer-view-sdk`, and typecheck, the renderer and fieldd builds, field-app's tests and every smoke that builds
-   went red, on main as on the lane. Its frozen install (2026-10-08 21:28Z, James's go; online, for `happy-dom`) cleared them
-   all: the gates' re-run on `fab71fa0`.
-   *(2026-10-26: puppeteer's npm plane is released — `@vibefield/puppeteer-*` 0.2.3, exact — so it needs no checkout and
-   nothing to prepare; its half of this item is history, kept for the DK-19 evidence above.)*
-
-**2. The fast-forward** (the main checkout, on `main`):
-```sh
-cd /Users/jamesyong/Projects/project100/vibe-field
-git merge --ff-only desk/landing
-```
-Then, in the main checkout: `pnpm install --frozen-lockfile --offline` (the lock moves with the lane: ICE 0.15.0, three gone);
-`touch packages/field-native/src/registries.rs` and `cargo build -p field-native`; the gates on the cutover SHA,
-`NX_SKIP_NX_CACHE=true NX_DAEMON=false node scripts/gate-landing.mjs --with-stages`, red only by main's known rows;
-`pnpm commit-draft` (the drafts' snapshot). Pushing is James's word (every push is HELD). The main before the cutover is
-`6a6cf37e` at DK-19's fifth merge (or the main 1.2 merged): a fast-forward is undone only by moving main back to it —
-James's call, never over a dirty tree.
-
-**3. If the fast-forward refuses:**
-- `fatal: Not possible to fast-forward, aborting.` — main moved: 1.2, then this list again.
-- `error: Your local changes to the following files would be overwritten by merge:` — a session's uncommitted work in a file
-  the lane changes: its owner commits it (main moves: 1.2), never a stash, reset or checkout over it.
-- `error: The following untracked working tree files would be overwritten by merge:` — the same for a file the lane ADDS:
-  its owner moves or commits it.
-- Never `--force`, never a rebase of the lane, never `git checkout --` over another session's files.
-
-**4. The fleet, upgraded TOGETHER** (plan (93); DK-D16): both Macs on the cutover's SHA at once — an older build beside a desk.6+
-one draws its peer as on the root and never away until the 8 s idle. On each Mac: the cutover SHA (reaching the other Mac is a
-push, James's word), `pnpm install --frozen-lockfile`, `pnpm build`, then quit and relaunch the desktop app. The pre-desk boards
-in each Mac's stores open as "This board is from before the desk" and are listed in the fields explorer as "before the desk"
-with Delete: delete them there (DK-D13/D14 — dropped, never converted); nothing else migrates.
-
-**5. The two-Mac check** — the eleven steps below, on the cutover SHA, each result beside its number. Step 10 decides plan (20):
-if B learns a plugin's pack live, the enable's stamp wait can go (its own commit, a slice's); if not, it stays. Step 6 answers
-plan (95)'s drag strip. Step 11 is the smokes' pointer isolation by hand (plan (36)).
+The desk's cutover — verify, the fast-forward of `desk/landing` onto main, the fleet upgraded together (DK-D16) — ran at DK-19
+(its fifth merge of main, `1fa5d8f7`, is dated 2026-10-09); LANDED §DK holds it, and its full procedure is this file at `a7498883f`
+(`git show a7498883f:docs/desk-gates.md`). Two of its laws still bind every landing: merge main into a lane, never rebase it
+((73): a rebase orphans every graded SHA), and a fast-forward never runs over another session's uncommitted files. What it
+left open is the two-desktop check below: step 10 decides plan (20) (if B learns a plugin's pack live, the enable's stamp wait
+can go, in its own commit), step 6 answers plan (95)'s drag strip, and step 11 is the smokes' pointer isolation by hand
+(plan (36)). *(Cut 2026-10-28, the housekeeping pass: the section was the five-step procedure for a cutover already run.)*
 
 ## The two-desktop check — James's steps (plans (20), (78), (95))
 
@@ -328,10 +267,16 @@ daemons on one Mac) join them IN PROCESS — a mock management server names each
 constructors route each one's tailnet coordinate to the other's loopback door — a seam no shell can reach. Giving the floor
 an auth-key path, or the shell a loopback mesh, is a product change, out of this slice. So the check is a person's, on two
 Macs, and **the enable stamp's wait (plan (20)) stays** until it has run.
+*Corrected 2026-10-28 (the housekeeping pass): TS-1 (`029af0e6f`, 2026-10-27) gave the floor its auth-key path — a capture
+signs the node in with an untagged Tailscale auth key and no browser (`user.link.begin {authKey}`; mesh.rs passes it to the
+builder before `build_with_auth_handler`). A one-Mac, two-profile run is therefore possible in principle; re-judge it before
+the next two-desktop check.*
 
-**Before:** both Macs on the cutover's SHA (DK-19 upgrades them together — an older build beside a desk.6+ one draws its peer as
-if on the root and never away, until 8 s idle; plan (93)), both linked to the SAME tailscale account in Settings (one local user
-per account on each Mac), both on the same tailnet, the desktop app on each. Call them A and B.
+**Before:** both Macs on the same current main (an older build beside a desk.6+ one draws its peer as if on the root and
+never away, until 8 s idle; plan (93)), both connected to the same tailnet in Settings → Devices (TS-D3; one local user per
+account on each Mac), the desktop app on each. Call them A and B. *(Corrected 2026-10-28, the housekeeping pass: this said
+"on the cutover's SHA" and "linked to the SAME tailscale account in Settings"; the cutover ran at DK-19, and TS-3a moved the
+link to Settings → Devices.)*
 
 1. **Open the same board on both.** On A open a board; on B open the same board from the fields explorer. Each desk draws the
    other's objects; an edit on one appears on the other within a second.
@@ -376,7 +321,8 @@ Report each step's result beside its number.
   in its `idle` mode (design-015 D-D9), the canon's (DESIGN.md §6 M5). With the wind stilled the desk rests 0.3 s after a move;
   a cover lowered over a still wind rests at once; a cover lowered INSIDE the wind rests by the touch's 22 s (2,277 frames
   after the lowering — DK-9's ≈ 2,370). The explorer's owed still waits for that rest (DK-4's policy), so a thumbnail follows
-  an edit by ≈ 22 s: James's call whether it should.
+  an edit by ≈ 22 s: James's call whether it should. *(Ruled 2026-10-28 — James, the housekeeping page (Q4): shorten the
+  wait, `deskLayer({ ambientIdleMs })`; an owed code item.)*
 - **Timing rows met under load** (each re-run at a quiet moment, said where it happened): SEND_BAR's 40 ms step-aside bound
   read +40.x ms once (load 23–44); THUMB's undo still (30 s for a still the wind delays to ≈ 22 s after the last touch) once;
   fieldd's `service-drain-deadline` (PRC-2) "expected 209 to be less than 175" in the final run's test stage (load 94) —

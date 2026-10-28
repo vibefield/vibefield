@@ -2,6 +2,13 @@
 
 Inspected 2026-09-24 in VibeField and the linked `../puppeteer` checkout.
 
+*Re-read 2026-10-28 (the housekeeping pass) at vibe-field `a7498883f` against the pinned puppeteer release (the
+installed `@vibefield/puppeteer-runtime` and `-adapter-*` packages; `siblings.lock.json` names the version). Every
+VibeField file named below exists and plays the part described; the five adapter intervals, the 30-minute backoff
+cap (`MAX_BACKOFF_MS`) and the 30-second manual-refresh guard (`MANUAL_REFRESH_INTERVAL_MS`) hold, and no other
+built-in adapter ships an account-usage service. puppeteer is consumed from the registry now, so the
+`../puppeteer/packages/…` paths below are read in its published packages (`dist/services/…`), not a checkout.*
+
 ## Data path and ownership
 
 - `packages/field-app/src/panels/SettingsPanel.tsx` subscribes to the profile sets.

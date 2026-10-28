@@ -1,8 +1,10 @@
 # VibeField
 
-A personal programmable field for agentic computing — infinite canvases hosting live widgets,
-a two-plane daemon pair per device (`fieldd` Node product plane · `field-native` Rust native plane),
-a private mesh across machines, and an iPhone companion.
+A personal programmable field for agentic computing — a desk (ICE's GPU canvas) of object kinds and
+live portals, a two-plane daemon pair per device (`fieldd` Node product plane · `field-native` Rust
+native plane), a private mesh across machines, and an iPhone companion. *(Corrected 2026-10-28, the
+housekeeping pass: this said "infinite canvases hosting live widgets"; the widgets left at the desk
+landing, design-00's desk amendment of 2026-10-08.)*
 
 > Build anything. See everything alive.
 
@@ -11,7 +13,7 @@ a private mesh across machines, and an iPhone companion.
 | Path | What |
 |---|---|
 | `packages/contracts` | `@vibefield/contracts` — zod-first source of every VibeField-owned protocol; `gen/` JSON Schema → typify'd Rust |
-| `packages/field-native` | Rust native-plane daemon: mgmt server, D8 pairing, MeshGateway (truffle node), and the TerminalUnit that supervises the `field-terminal-host` cells — the native floor that outlives fieldd (NF-0…7). *(Corrected 2026-09-14 by the TM review: this row said "the embedded ghosttea TerminalService … (NF-0…7 + NF-remote)". Ghosttea's `TerminalService` is constructed in the CELL binary — `packages/field-native/src/cell.rs:199`, since the cells landed at TC-S2 — and the floor's own remote half retired at TM-1 `afc35b15`; the remote posture is T, each cell's door reached over the sidecar's route.)* |
+| `packages/field-native` | Rust native-plane daemon: mgmt server, D8 pairing, MeshGateway (truffle node), and the TerminalUnit that supervises the `field-terminal-host` cells — the native floor that outlives fieldd (NF-0…7). Ghosttea's `TerminalService` runs in each CELL binary (TC-S2), and a cell's door is reached remotely over the sidecar's route (T). *(Row corrected 2026-09-14 by the TM review: it named an embedded TerminalService and an NF-remote half, which retired at TM-1 `afc35b15`.)* |
 | `packages/fieldd` | Node product-plane daemon: NativeLink, TokenService, ProductAPI (dual-WS), MeshClient, DocumentService, ArtifactService |
 | `packages/users` | the multi-persona layer: the users.json lock, per-user roots, mint/migrate (UA track) |
 | `packages/logging` · `packages/audit` | the structured logging/diagnostics pipeline and the append-only audit log (LOG track) |
@@ -24,13 +26,16 @@ a private mesh across machines, and an iPhone companion.
 | `packages/field-app` | the browser-compatible renderer product: boot machine, DocManager, the FieldView units (session/canvas/persistence/chrome/previews), HUD |
 | `packages/design-kit` | the design kit — tokens, primitives, glyphs, the face and the logo (DESIGN.md made code; its DOM and GL card dressing left with the desk, DK-17) |
 | `packages/plugin-runtime` | plugin manifest / registry / renderer context (P0 core of the design-03 plugin system) |
-| `plugins/*` | built-in plugins at the repo root (product actors beside the platform — plugin spec §5.1): `comment-pad` (the comment pad — VibeField's own object kind, DK-8), `browser` (the Artifact Hub panel) |
-
+| `packages/live-surfaces` | `@vibefield/live-surfaces` — the live-surfaces foundation (LSF): the surface lifecycle, demand and frame queue the desk's portals ride |
+| `plugins/*` | built-in plugins at the repo root (product actors beside the platform — plugin spec §5.1): `comment-pad` (the comment pad — VibeField's own object kind, DK-8), `browser` (the Artifact Hub panel), `browser-pane` (the browser pane — the first portal, PT-1) |
 | `apps/desktop` | packaging-only: delegating scripts + the electron dep; no application source lives here — the native helpers' sources do (`native/macos/live-surface-capture` the SCK helper · `native/macos/screenshot-helper` the Swift screenshot helper · `native/windows/screenshot-helper` its Rust twin, an own-workspace crate) with their build/test/verify scripts under `packaging/` |
 | `apps/ios` | the iPhone companion — thin xcodeproj over the `VibeFieldKit` SPM package (FieldHome · FieldAgents · FieldMesh · FieldTerminal · FieldDesign · SwarmPhysics). Deliberately outside `pnpm verify` (the gate must not require Xcode); its gate is the `xcodebuild` commands in `apps/ios/README.md` |
-| `docs/` | the main-tracked corpus: `ROADMAP.md` (now/next) · `LANDED.md` (append-only history) · `DECISIONS.md` (decision index) · `UI_SYSTEM.md` (where `DESIGN.md` lives in code) · `AGENT_PLANE.md` + `agent-plane/` (the three-repo agent plane) |
+| `docs/` | the main-tracked corpus: `ROADMAP.md` (now/next) · `LANDED.md` (append-only history) · `DECISIONS.md` (decision index) · `UI_SYSTEM.md` (where `DESIGN.md` lives in code) · `AGENT_PLANE.md` + `agent-plane/` (the three-repo agent plane) · `desk-gates.md` (the landing gates) · `WINDOWS_PORT_STATUS.md` (the parked Windows port) · `perf/` (measurement records) · `plugin-authoring/` (generated by `pnpm gen:docs`; never hand-edited) |
 | `tooling/dev-runner` | repo-owned desktop development supervisor: Vite HMR, watched process builds, safe Electron/daemon restarts, native/codegen refresh, and Nx affected typechecks |
-| `services/push-relay` | *(planned)* the one cloud hop — open-source APNs wake-hint relay |
+| `tooling/plugin-build` · `plugin-cli` · `create-plugin` | the plugin authoring kit: the build, the `vibefield-plugin` CLI and the scaffold |
+| `tooling/*` (the rest) | `test-env` (the shared test-environment shims) · `terminal-perf` (terminal measurements) · `glyphs` (the glyph builder) · `fieldmarks` and `face-stickers` (retiring: James, 2026-10-28, the housekeeping page (Q19), a code slice removes them) |
+
+*(Not in the tree: `services/push-relay`, the one cloud hop of design-00's EL3 — the APNs wake-hint relay — is planned and holds no code yet. Corrected 2026-10-28, the housekeeping pass: the table listed it as a path.)*
 
 ## Getting started
 
@@ -47,26 +52,14 @@ ghosttea 0.13.1 is released on every plane and declares truffle exact 0.7.19, so
 `../ghosttea-0.11.2` or `../truffle-rfc025` any more. Preflight on a fresh tree with no checkout
 beside it names exactly the three above (measured on James's Mac mini). Both stay in
 `siblings.lock.json` as the dev overlay's coordinates: `pnpm siblings use ghosttea` / `use truffle`.)*
-**The RFC 025 petition window (2026-09-16) closed on two planes of three:** truffle 0.7.14
-shipped, so `truffle-core` is an exact registry pin again, the `[patch.crates-io]` row is gone,
-and the mesh sidecar comes from npm rather than being built from source (Go is no longer a
-prereq). The iOS kit's path package STAYS: ghosttea pins truffle `exact: "0.7.12"` in every
-published Swift tag, so the kit can move neither to 0.7.14 nor back to 0.7.12 (its own sources
-need RFC 025's login API) — the unblock is a ghosttea Swift release, and `Cargo.toml`'s closure
-note carries it. *(2026-10-17, the truffle bump: the cargo and npm planes moved to 0.7.19
-together, and `../truffle-rfc025` is pinned at the tag `truffle-v0.7.19`; the vice is unchanged,
-so the ghosttea release the kit now waits for is one at truffle 0.7.19. `Cargo.toml` is the
-authority for the number.)* *(2026-10-22: that release came, v0.13.0. The kit lands at
-0.13.1, which declares truffle exact 0.7.19 too, so the third plane closed on 2026-10-23: the
-kit's truffle row is that exact version, and `Package.resolved` carries it.)* *(2026-10-26: the
-two moved together again in one EL8 event, ghosttea 0.13.4 with truffle 0.7.22 on every plane;
-`Cargo.toml` stays the authority for the numbers.)* *(2026-10-26, later: ghosttea 0.13.5 on every
-plane, the harfrust shaper; truffle stays 0.7.22, which 0.13.5 declares too.)* *(Later still: ghosttea
-0.13.6 on every plane, the render worker's and the claim's fixes; truffle stays 0.7.22, which 0.13.6
-declares too.)* *(2026-10-27: ghosttea 0.13.7 with truffle 0.7.23 on every plane in one EL8 event, the
-first ghosttea that declares 0.7.23.)* *(Later on 2026-10-27, the truffle 0.7.24 split: the crate and the npm
-sidecars at 0.7.24, sidecar protocol 11; the kit's Swift plane stays 0.7.23, which ghosttea 0.13.7 declares, until a
-ghosttea declares 0.7.24.)* The repo still
+**Released siblings.** truffle and ghosttea are released on every plane, so no build reads their
+checkouts. truffle's crate is an exact registry pin (`Cargo.toml`) and its mesh sidecars come from npm
+at the same version (Go is no longer a prereq). The iOS kit's Swift plane takes truffle at the version
+the pinned ghosttea declares, which can trail the crate until a ghosttea declares the newer one
+(DECISIONS TB). `Cargo.toml`, `pnpm-workspace.yaml` and `apps/ios/VibeFieldKit/Package.resolved` hold
+the numbers. *(Corrected 2026-10-28, the housekeeping pass: this paragraph told the RFC 025 petition
+window's history, from 2026-09-16 through the truffle split of 2026-10-27, in eight dated
+parentheticals with their version numbers; LANDED and git hold that history.)* The repo still
 does not build standalone: rosetta (rosettad) and mille are checkouts until their releases are
 recorded (RD-5); puppeteer's was recorded on 2026-10-26. Every revision is pinned in
 `siblings.lock.json`:
@@ -81,12 +74,14 @@ lives in the manifests (`Cargo.toml`, `pnpm-workspace.yaml`); cite them from the
 2026-09-16 when the manifest had been at `0.11.0` for weeks, which is why it now names none.
 
 ```sh
-node scripts/siblings.mjs fetch ghosttea # clone at its pin; preserves existing checkouts
-node scripts/siblings.mjs install-js    # frozen install of Ghosttea's renderer dependencies
+node scripts/siblings.mjs fetch rosetta  # clone at its pin; preserves existing checkouts
+node scripts/siblings.mjs fetch mille
 pnpm install
 node scripts/electron-binary.mjs # Electron's binary: Electron 43 has no postinstall (fetched lazily otherwise)
+node scripts/siblings.mjs install-js mille # frozen install of mille, with the host's React peers
+node scripts/siblings.mjs build-js mille   # build mille and mille-ui
 pnpm siblings       # the sibling checkouts: path, pin, dirtiness, built binaries
-pnpm siblings:build # rosettad + Ghosttea's React renderer and its dependencies
+pnpm siblings:build # rosettad from ../rosetta-pin (and any unreleased sibling's JavaScript)
 pnpm preflight      # tool versions + sibling pins + import-boundary walls
 pnpm hooks:install  # one-time: wires scripts/git-hooks (the dev-local push guard)
 pnpm dev            # desktop app dev loop
@@ -96,9 +91,12 @@ pnpm dev:design:web # optional browser-only catalog loop (no live app authority)
 pnpm verify         # full gate: typecheck · biome · rustfmt/clippy · TS+Rust tests · gen freshness
 ```
 
-Ghosttea exports generated `dist` files, so rebuild after editing its TypeScript sources
-with `node scripts/siblings.mjs build-js`. CI uses the same lock-driven fetch, install and
-build commands; the native Cargo patches resolve directly to the pinned source checkout.
+mille exports generated `dist` files, so rebuild after editing its sources with
+`node scripts/siblings.mjs build-js mille`. CI runs the same lock-driven commands in the same order
+(`.github/workflows/verify.yml`, `.github/actions/prepare-mille`). A released sibling (truffle,
+ghosttea, puppeteer) is linked back only through the dev overlay: `pnpm siblings use NAME`.
+*(Corrected 2026-10-28, the housekeeping pass: the block fetched, installed and built ghosttea,
+released on every plane since the EL8 to ghosttea 0.13.1, and left out rosetta and mille.)*
 
 Env toggles are documented in `.env.example` (nothing auto-loads it — export in your shell).
 
@@ -131,8 +129,8 @@ long-running stack:
   background. `pnpm build`, `pnpm test`, and `pnpm typecheck` use the same graph and local cache;
   `pnpm verify` remains the uncropped release-quality gate.
 
-The development watcher is deliberately repository-bounded: it does not monitor
-`../p008/truffle` or its manifests. After changing dependencies or package manifests, run
+The development watcher is deliberately repository-bounded: it does not watch
+sibling checkouts (`../rosetta-pin`, `../mille-pin`, any overlay-linked sibling) or their manifests. After changing dependencies or package manifests, run
 `pnpm install` and restart `pnpm dev`; installs are never performed implicitly by the watcher.
 
 `pnpm dev:studio` starts the real product and VibeField Studio under the same runner, Vite server,

@@ -12,9 +12,13 @@ ink on a pure black ground. Keep the package serialization and its referenced ve
 - `Assets/mark-dark.svg` SHA-256:
   `0c2051f06515df8c873e1570e003fd102c5830e01c81db5a04df1d3cb34621cb`
 
-The two SVGs are the wormhole lab's own vector export of its Plain White and Plain Black icons
-(`draft/wormhole`, tracked on `dev-local`): `node draft/wormhole/test/export-icon.mjs
-apps/desktop/packaging/icons/app.icon/Assets` writes them, a saved look applied with `--look=`.
+The two SVGs are the wormhole lab's own vector export of its Plain White and Plain Black icons.
+The lab lives in its own project since 2026-10-25, `vf-splash` (github.com/vibefield/vibefield-splash,
+private; a checkout beside this one): from there, `node test/export-icon.mjs
+<this repo>/apps/desktop/packaging/icons/app.icon/Assets` writes them, a saved look applied with
+`--look=`. *(Corrected 2026-10-28, the housekeeping pass: this named `draft/wormhole` and its
+`test/export-icon.mjs`; that copy is the record of how the lab was built here, archived at
+`draft/archive/superseded/wormhole/` on `dev-local`, and is no longer updated.)*
 Each is the mark alone on a 1024 canvas: its band in two halves (far, near) filled and outlined
 in the ink, its lights as stroked pieces. The ground is the icon's fill, never a shape in the
 layer. `icon.json` gives the default appearance a solid white fill and the dark appearance a

@@ -1,12 +1,15 @@
 # DESIGN.md — VibeField Art Direction
 
 **Authority:** this document governs how every VibeField surface looks, moves, and speaks —
-shell HUD, canvas widgets, Godview, panels, settings, empty states. Structure and mechanics
+the frame (the head, the line, the edges, the corner), the desk's chrome, Godview, History,
+Settings, Setup, the phone, and every empty state. Structure and mechanics
 live in the design corpus (`draft/design-03*`); *look and feel* live here. When they seem to
 conflict, mechanics defer to design-03, aesthetics defer to this file.
-**Source DNA:** distilled from `infinite-canvas-engine/apps/widgetlab` (the ICE widget lab —
-CardShell chrome, the morphing widget tray, the iOS card set), which is itself the refined
-v1-playground look. Exact values below are lifted from that code, not invented.
+**Source DNA:** the values below are lifted from code, not invented. *(History: until DK-17,
+2026-10-07, this line said the direction was distilled from `infinite-canvas-engine/apps/widgetlab`
+— the ICE widget lab's CardShell chrome, its morphing widget tray and its iOS card set, itself the
+refined v1-playground look. Those surfaces are retired: the card and its tray at DK-13 and DK-17,
+the widgetlab plugin at DK-8. Corrected 2026-10-28, the housekeeping pass.)*
 **The bar:** Apple-keynote / Figma-release quality. The review question for any new UI is
 literal: *would this frame survive in an Apple Weather-widget screenshot or a Figma launch
 post?* If it reads as "developer tool that got some Tailwind," it does not ship.
@@ -30,6 +33,13 @@ Three surface families, one physics:
 | **The field** (canvas + widgets) | Neutral ground, dual-theme. Cards are content-first and may carry their own committed surface (dark card, sky gradient, sticky yellow) in either app theme — exactly like iOS widgets on any wallpaper. |
 | **The chrome** (HUD islands, tray, panels, palette) | Floating translucent materials over the field. Dual-theme, near-colorless, hairline-bordered, blurred. |
 | **The control room** (Godview, diagnostics) | May commit to dark — it is a stage, not a document. Its palette still derives from §2 (no bespoke greens). |
+
+*Corrected 2026-10-28 (the housekeeping pass), against the desk as built:* the ground is the cutting
+mat (§2.1), not dots, and what sits on it are the desk's objects, each drawn by its kind on the GPU
+(ICE's object model; DK-3…DK-17), not DOM cards. An object's own surface is still content, never
+theme (§2.2). The chrome's family is One Frame's five places (§10) — the head, the line, the two
+edges, the corner, and an object's own chrome — with the menus they grow; the HUD islands and the
+tray retired into the line and the pegboard (FR-2, 2026-10-03; DK-13, 2026-10-06).
 
 ### 1.1 Godview visual source
 
@@ -57,11 +67,28 @@ remembered light are gone, and the parchment or graphite deck is whichever the a
 control (§8, the Me menu) resolves to — unless Settings → Terminal → Look holds the one override,
 Godview's mode (As the app · Light · Dark), saved with the rest of this viewer's deck appearance.
 
-**The two signatures** (spend boldness here, keep everything else quiet):
-1. **The living card** — CardShell physics: lift-on-grab, hot-point glow and rim on overlap,
-   the sole-selection ring. A VibeField card feels *held*, not dragged.
-2. **The morphing island** — HUD chrome is one element that morphs between roles (pill ⇄
-   sheet), never two elements crossfading.
+**The two signatures** (spend boldness here, keep everything else quiet; ruled by James,
+2026-10-28, the housekeeping page (Q18)):
+1. **The mat under one light** — the desk is one cutting mat, a material the same in both
+   themes, and the theme changes only the light that falls on it: the Sun by day, the Moon by
+   night (§2.1). Every object on it is drawn by its kind under that one light — its face, its
+   shadow, its lift — and the mat's marks (the pencil brackets, the laser guides, the tapes, the
+   printed rulers) are its own inks in the same light (§8, the desk's chrome). One light, one
+   spring set, one mass (§5.1's guardrails): no object keeps a private light. The chrome over the
+   mat is lit by nothing and follows the theme (MC-1).
+2. **The one frame** — one head, one line, two edges and a corner stand above every view, and
+   they never move or change material when the view changes; only the head's contents and the
+   stage do (One Frame §3's laws; built by the slices FR-1…FR-4, 2026-10-03; §10). One plus, one
+   theme control, one way to each view (⌘1–⌘4, printed under the views track's glyphs), one
+   surface open at a time. Floating controls are the line's glass and menus are solid (§5). Canvas is the ground floor; Godview,
+   History and the Assistant are one cover under the frame.
+
+*History (2026-10-28, Q18):* until this ruling the signatures were **the living card** — CardShell
+physics: lift-on-grab, hot-point glow and rim on overlap, the sole-selection ring; "a VibeField card
+feels *held*, not dragged" — and **the morphing island** — HUD chrome as one element morphing
+between roles (pill ⇄ sheet). The card left with the 0.11 canvas at DK-17 (2026-10-07; the desk
+draws no DOM card, DK-D2) and the island retired into the line at FR-2 (2026-10-03) and the
+pegboard at DK-13 (2026-10-06). The island's law outlives it as M1 (§6): one element morphs.
 
 ---
 
@@ -115,13 +142,18 @@ gobo plates are the product's assets; the engine ships the mat's law and its two
 
 | Token | Value | Use |
 |---|---|---|
-| `--vf-card` | `#1C1C1E` | default card surface (iOS dark-elevated) — both themes |
-| `--vf-card-deep` | `#000000` | data-dense cards (stocks-class) |
-| content surfaces | per-widget | committed gradients/colors are content, not theme (e.g. weather `linear-gradient(135deg, #3A86FF 0%, #1D4ED8 55%, #0B2AB5 100%)`; note sticky `#F6E7A9`) |
+| `--vf-card` | `#1C1C1E` | the dark-elevated content surface (iOS) — both themes: the clipboard's tiles and the capture's fly-in ghost (§8, edge trays) |
+| `--vf-card-deep` | `#000000` | the deepest content surface: the terminal preview's miniature cards (Settings → Terminal) |
+| content surfaces | per object | committed gradients/colors are content, not theme; on the desk each kind draws its own (§5.1's materials). Kept as values: the weather `linear-gradient(135deg, #3A86FF 0%, #1D4ED8 55%, #0B2AB5 100%)`, which the catalog's weather card carries as its own content (`docs/UI_SYSTEM.md`), and the note's sticky `#F6E7A9` (`--vf-note-surface`) |
 | `--vf-fill` | light `#F2F2F7` · dark `#2C2C2E` | inset fills: segmented tracks, chip resting |
 | `--vf-fill-hover` | light `#E5E5EA` · dark `#2C2C2E` (opaque) | hover step of the above |
-| chrome material | light `white` · dark `#1C1C1E`, at the §5 opacity/blur tiers | islands, sheets, overlays |
-| solid chrome | light `white` · dark `neutral-800` | small floating round buttons, zoom pill |
+| chrome material | light `white` · dark `#1C1C1E`, at the §5 opacity/blur tiers | the line's glass, sheets, overlays |
+| solid chrome | light `white` · dark `neutral-800` | the 40px round buttons, the menus (§5, "Menus are solid"), the notches and their drawers |
+
+*Corrected 2026-10-28 (the housekeeping pass):* the Use column named the DOM card's surfaces
+(default and stocks-class cards, per-widget content) and the zoom pill. The widgets retired at DK-8
+and the card at DK-17; the zoom pill became the head's zoom readout, on the line's glass, at FR-3
+(2026-10-03).
 
 ### 2.3 Hairlines & lines
 
@@ -427,13 +459,18 @@ text belongs to Ghosttea's renderer, not CSS.
 
 | Role | Spec | Where |
 |---|---|---|
-| **Eyebrow** | 10–11px · medium · uppercase · `tracking-wider` (0.05–0.08em) · 60–80% opacity | card headers ("CLOCK · WED 16"), section labels |
-| **Label** | 11–13px · medium | buttons, chips, tray tile names, badges |
-| **Body** | 13–14px · regular · 1.45 line height | notes, prose, settings |
-| **Title** | 12px · semibold | card row titles (ticker symbol class) |
-| **Data numeral** | 28–34px · **light** · `tabular-nums` · `leading-none` | the hero number (temperature class) |
-| **Data small** | 12px · medium · `tabular-nums` | prices, times, counts |
-| **Caption** | 9–10px · 40% opacity | sub-labels ("NASDAQ" class) |
+| **Eyebrow** | 10–11px · medium · uppercase · `tracking-wider` (0.05–0.08em) · 60–80% opacity | section labels, the switch's "Switching to" (§8) |
+| **Label** | 11–13px · medium | buttons, chips, badges, row names |
+| **Body** | 13–14px · regular · 1.45 line height | the line's draft (14, §8), notes, prose, settings |
+| **Title** | 12px · semibold | row titles |
+| **Data numeral** | 28–34px · **light** · `tabular-nums` · `leading-none` | the hero number — no desktop surface draws one today |
+| **Data small** | 12px · medium · `tabular-nums` | times, counts, sizes |
+| **Caption** | 9–10px · 40% opacity | sub-labels, the clipboard's day captions and the notch's count (9px mono, §8) |
+
+*Corrected 2026-10-28 (the housekeeping pass):* the Where column named the widgets' type (the
+clock's "CLOCK · WED 16", the stocks card's ticker, prices and "NASDAQ", the weather card's
+temperature) and the tray's tile names. The widgets retired at DK-8 and the tray at DK-13; the
+ramp's roles stand.
 
 Laws: every number that can change is `tabular-nums`. Weight makes hierarchy *down* (big =
 light, small = medium) — the iOS inversion; never bold a hero numeral. Sentence case
@@ -446,15 +483,17 @@ everywhere except eyebrows.
 | Token | Value | Notes |
 |---|---|---|
 | `--vf-radius-card` | `22px` | THE card radius (the DOM card's `CARD_RADIUS` until DK-17 deleted it; the token stays the chrome's); scaled minis use `max(6, 22 × scale)` — silhouette is preserved, never re-styled |
-| `--vf-radius-island` | `32px` | the closed HUD pill |
-| `--vf-radius-sheet` | `40px` | sheet top corners (open island) |
-| `--vf-radius-control` | `6–10px` | inline controls, change badges (`rounded` ≈ 4–6 for tiny) |
-| pills/buttons | fully round (`999px`) | chips, round icon buttons, pull bar |
+| `--vf-radius-island` | `32px` | the Setup Assistant's glass (the wizard's shell); it named the closed HUD pill until FR-2 |
+| `--vf-radius-sheet` | `40px` | a sheet's far corners — the fields explorer's lower two (`22 22 40 40`, §8 the head, drawn by value); it named the open island's top corners until DK-13. No CSS reads the token today |
+| `--vf-radius-control` | `6–10px` | inline controls (`rounded` ≈ 4–6 for tiny) |
+| pills/buttons | fully round (`999px`) | chips, round icon buttons |
 
-**The iOS size grid** (cards snap to it; the tray previews in it): small `155×155`,
-medium `329×155`, large `329×345`; canvas gap `19px` → pitch `174`. Tray grid: `132px`
-cells, `18px` gap, spans by size class. Card padding: `16px` (`p-4`); dense cards
-`16px × 12px`. Round icon buttons: `40px` (`h-10 w-10`); island height `64px`.
+Round icon buttons: `40px` (`h-10 w-10`).
+*Retired 2026-10-28 (the housekeeping pass), recording DK-13 and DK-17:* the iOS size grid (small
+`155×155`, medium `329×155`, large `329×345`; canvas gap `19px` → pitch `174`), the tray grid
+(`132px` cells, `18px` gap), the card padding (`16px`; dense `16px × 12px`), the island's height
+(`64px`) and the pull bar. Desk objects size by ICE's object model (`design-015` §5), and the tray
+and the island are gone.
 
 ---
 
@@ -465,15 +504,23 @@ dark, or hard. The exact recipes (do not eyeball new ones):
 
 | Level | Recipe |
 |---|---|
-| Card, resting | `0 20px 40px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.05)` |
-| Card, lifted | `0 30px 60px rgba(0,0,0,0.22), 0 0 0 1px rgba(0,0,0,0.06)` |
+| Card, resting (`--vf-shadow-card`) | `0 20px 40px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.05)` |
+| Card, lifted (`--vf-shadow-card-lifted`) | `0 30px 60px rgba(0,0,0,0.22), 0 0 0 1px rgba(0,0,0,0.06)` |
 | Island / floating chrome | `0 8px 30px rgba(0,0,0,0.08)` · dark `rgba(0,0,0,0.4)` |
 | Sheet (rises from bottom) | `0 -20px 40px rgba(0,0,0,0.08)` · dark `0.4` |
 | Side panel (enters from right) | `-20px 0 40px rgba(0,0,0,0.08)` · dark `0.4` |
 | Edge tray (enters from the left; 2026-09-23) | `20px 0 40px rgba(0,0,0,0.08)` · dark `0.4` — the side panel's shadow cast the other way; as `drop-shadow()` where the silhouette is a path (`--vf-drop-edge`, and `--vf-drop-island` for the island recipe) |
 | Drag proxy (above everything) | `drop-shadow(0 24px 48px rgba(0,0,0,0.35))` |
-| Tray tile | `drop-shadow(0 10px 18px rgba(0,0,0,0.16))` |
 | Search popup (the Peek, §8 "Search"; GV-D8, built 2026-10-08) | `0 40px 100px rgba(0,0,0,0.24), 0 12px 30px rgba(0,0,0,0.10)` · dark `0 40px 100px rgba(0,0,0,0.6)` and a 6% top light (`inset 0 1px 0` white/6) — ringed by the strong hairline |
+
+*Corrected 2026-10-28 (the housekeeping pass), recording DK-13 and DK-17:* the two card rows are the
+record of the DOM card, which retired with the 0.11 canvas (DK-17); their tokens stand in
+`tokens.css` until a token pass removes them, doc first, and only the catalog reads
+`--vf-shadow-card` today. The drag proxy's row is the card's too; the capture's fly-in ghost wears
+it lightened for a small thing (`0 12px 24px` at 28%, §8 edge trays). The sheet and side-panel
+recipes have no wearer since the island's sheet (DK-13) and the Artifact side panel (FR-4) left;
+the side panel's still names the edge tray's, cast the other way. The tray tile's row
+(`drop-shadow(0 10px 18px rgba(0,0,0,0.16))`) left with the tray at DK-13.
 
 **One exception to "chrome is glass" (2026-09-23, James — the notch):** the edge tray's notch
 and its drawer (§8, edge trays) are OPAQUE solid chrome (`--vf-chrome-solid`, the theme's
@@ -485,10 +532,10 @@ claim it.
 
 | Tier | Recipe | Use |
 |---|---|---|
-| Island | surface `/80` + `backdrop-blur-xl` (hover `/90`) | closed pill, toolbars |
+| Island | surface `/80` + `backdrop-blur-xl` (hover `/90`) | the file tree's context menu (§8 "The file tree"); the closed pill and its toolbars retired with the island (FR-2, DK-13) |
 | Line (MC-D2, ruled 2026-10-01) | `--vf-chrome-solid` at 88% (94% by night) + a 24px blur, ringed by the hairline (`--vf-hairline-strong` by night), the island shadow, and by night a 6% top light (`inset 0 1px 0` white/6) | the composer line (§8), the views track at its left end on the same pane of glass — the track's own pill folded into it 2026-10-03 (FR-2); the head's name pill and zoom readout, the frame's floating controls at the top (FR-3, 2026-10-03); on the desk, the selection bar and the tools in hand (§8; MC-D2, R20) |
-| Sheet | surface `/90` + `backdrop-blur-3xl` | open tray, large panels, the fields explorer grown from the head's pill (FR-3) |
-| Overlay chip | surface `/90–95` + `backdrop-blur-xl` | put-back affordance, HUD toasts |
+| Sheet | surface `/90` + `backdrop-blur-3xl` | the fields explorer grown from the head's pill (FR-3); the open tray left at DK-13 |
+| Overlay chip | surface `/90–95` + `backdrop-blur-xl` | no wearer today: the put-back affordance and the HUD's toasts retired (DK-13, DK-17); the peers' chips wear the line's glass and the status line solid chrome (§8) |
 | Backdrop dim | `black/10` light · `black/40` dark | behind open sheets; canvas recedes to `scale(0.98)` |
 | Search scrim (GV-D8; K7, 2026-10-08) | `black/16` light · `black/46` dark, over a backdrop blur of 18 and `saturate(0.9)` | behind the Peek only (§8 "Search"): the window blurred and dimmed, the view and the frame receding to `scale(0.98)` under it. Darker than the backdrop dim so it reads as dimmed (One Frame §23); the backdrop dim stays the sheets' until James rules otherwise (docket PK1) |
 
@@ -511,8 +558,8 @@ paragraph read "the composited profile draws the card's material on the ground",
 at design-015 D5b, so that profile never reached VibeField). Each object kind draws its own face,
 shadow and lift on the GPU under the mat's one light; the selection is the mat's pencil brackets (§8,
 the desk's chrome); no DOM card exists to carry a shadow, so the two card rows of the table above
-are the record of the card that retired, and the rest are the chrome's — the islands, the sheets,
-the edges, the menus. What the desk's materials mean is the material book's (§5.1).
+are the record of the card that retired, and the rest are the chrome's — the line's glass, the
+sheets, the edges, the menus. What the desk's materials mean is the material book's (§5.1).
 
 ### 5.1 The material book — what the desk's materials mean (DK-D5; a stub)
 
@@ -557,10 +604,15 @@ Three easings, by name — new curves require a reason recorded here:
 
 | Name | Curve | Duration | Use |
 |---|---|---|---|
-| `--vf-ease-island` | `cubic-bezier(0.25, 1, 0.3, 1)` | 600ms morph · 240ms glide · 560ms flow-in | the island morph, proxy glides, segmented thumb (300ms), anything that *travels* |
-| `--vf-ease-lift` | `cubic-bezier(0.2, 0.9, 0.3, 1.2)` | 180ms | the card lift transform (slight overshoot = "held") |
-| `--vf-ease-pop` | `cubic-bezier(0.34, 1.45, 0.64, 1)` | 280ms | spring pops: tile return, spawn pop-in (1.3 variant) |
+| `--vf-ease-island` | `cubic-bezier(0.25, 1, 0.3, 1)` | 600ms morph · 240ms glide · 560ms flow-in | morphs (the name pill into the fields explorer, the Me menu, the create's plus into ✕), the sliver into the notch, the capture's fly-in, the segmented thumb (300ms), anything that *travels* |
+| `--vf-ease-lift` | `cubic-bezier(0.2, 0.9, 0.3, 1.2)` | 180ms | a lift (slight overshoot = "held"): the face lifting, the clipboard's tiles, the views track's 1px dip (240ms) |
+| `--vf-ease-pop` | `cubic-bezier(0.34, 1.45, 0.64, 1)` | 280ms | spring pops: the arrival's OS marks, the notch's bump on a capture, the line's create growing under the pointer |
 | plain `ease` / `ease-out` | — | 120–240ms | opacity, color, shadow (shadow 220ms, ring 120ms) |
+
+*Corrected 2026-10-28 (the housekeeping pass):* the Use column named the island morph, the drag
+proxy's glides, the card's lift and the tray tile's return, which retired with the island, the card
+and the tray (FR-2, DK-13, DK-17), and a spawn pop-in on a 1.3 overshoot variant that this pass found
+no wearer for. The three curves are unchanged.
 
 Choreography constants: staggered entrances `26ms/item` (cap 400ms); content reveal delay
 `140–200ms` behind its container; lift/hold response poll ≤ 60ms ("snappy — the lift must
@@ -597,7 +649,7 @@ percentage names its step, never an invented whole). *Amended 2026-10-27 (AO-4b,
 the travel, and the arc rests at the top of the circle, a fifth of it from twelve o'clock, until the archive is ready;
 the glyph stays at a third of its ink.
 
-*Status 2026-10-12: ruled and built. Built: the Lip and its two buttons, the groove, the frame's tone and the well (GV-D7, GV-D12); where a session with no pane opens (GV-D4); the terminals away and called up as they were left (GV-D5's call, GV-D6); the edge's three outcomes and their readouts, and the monitor making room; maximized, the bar the window's title bar (GV-D11); the monitor alone at launch, the first call bringing last run's panes with the one it called (GV-D5, N14 (a)); ⌘W on the last pane minimizing them (N16 (a)); rest, the drawing's share above a floor on every height (N15 (a)).*
+*(Godview round 3, built 2026-10-12; its status is §8 the deck's.)*
 **The terminals rise and fall** (Godview's deck, §8; One Frame §22 "Shared mechanics" and §23 —
 GV-D5, GV-D6, GV-D7 and GV-D11, ruled 2026-10-02; built 2026-10-11): two durations, no new
 curve. The deck **rises** — called up from away, or maximized by its button — over **480ms on
@@ -619,11 +671,15 @@ launch, §8): a **breath** — `ease-in-out`, alternate, 1.1s, scale 1 → 1.06 
 arrives, and neither runs under reduced motion.
 
 **Motion laws:**
-- **M1 — One element morphs.** A role change (pill→sheet, plus→close, proxy→widget) is one
-  element transitioning; never unmount-and-replace, never two things crossfading.
+- **M1 — One element morphs.** A role change (the name pill into the fields explorer, the
+  line's plus into ✕, the sliver into the notch) is one element transitioning; never
+  unmount-and-replace, never two things crossfading. *(Its examples until 2026-10-28 were the
+  island's pill→sheet and the card's proxy→widget, both retired.)*
 - **M2 — The grab point is the invariant.** Whatever is under the finger at press stays
   under it through pickup, morph, and drop (`transform-origin` at the grab point; scale
-  about it). Nothing ever snaps or re-anchors.
+  about it). Nothing ever snaps or re-anchors. *(2026-10-28: on the desk the carry is ICE's —
+  an object's lift and drag are the kind's, `design-015` §7–§8 — so there the law is ICE's to
+  keep; the chrome draws no drag proxy since DK-17.)*
 - **M3 — CSS transitions, not WAAPI**, for chrome: a stalled compositor leaves WAAPI
   pending forever; a transition worst-case snaps to its end state.
 - **M4 — Depart ≠ vanish.** Things put themselves back (glide home, spring pop) or shrink
@@ -727,89 +783,59 @@ behind it — the scrim fades out over the same 240ms and the window comes forwa
 
 ---
 
-## 7. Interactive states (the living card)
+## 7. Interactive states
 
 | State | Treatment |
 |---|---|
-| **Lift** (grab or armed hold) | `scale(liftScale)` — 1.05, read from the engine's `ChromeSettings.liftScale` (one source; selection chrome uses the same number) · opacity `0.75` for the whole hold+drag · lifted shadow. GL content fades in lockstep. |
-| **Selection, sole** | `1.5px` inside ring, `--vf-select`, drawn *inside* the scaled base so the lift transform carries it; 120ms fade. |
-| **Selection, multi** | no per-card ring — the engine's union box wraps the set. |
-| **Overlap, accept** (`t` tier) | hot-point glow + rim, strong: inset glow offset `±8px` toward the hot point, rim radial anchored at it, masked to the border ring. |
-| **Overlap, reject** (`c` tier) | same anatomy, weak alphas. |
-| **Hover / active** (tiles, buttons) | `scale(1.03)` hover · `scale(0.95)` active · fills step `black/5 → black/10` (dark `white/10 → white/20`) · `cursor-grab/-grabbing`. |
+| **Hover / active** (tiles, buttons) | `scale(1.03)` hover · `scale(0.95)` active · fills step `black/5 → black/10` (dark `white/10 → white/20`) · `cursor-grab/-grabbing` where the thing can be dragged. |
+| **Selection, sole** | `1.5px` inside ring, `--vf-select`, drawn *inside* the element so any transform carries it; 120ms fade — the fields explorer's current tile, the file tree's focused row (§8). |
+| **Selection, multi** | never N rings: a set is one union, or, in a list with no union, N fills and one ring (§8 "The file tree"). |
+| **Drag** (a chrome drag source) | opacity `0.75` for the whole hold and drag — a file row carried toward a chip (§8 "The file tree"). |
 | **Keyboard focus** | visible ring, always (quality floor); Esc = close/cancel, consistently. |
 
-*Retired 2026-10-07 (DK-17; DK-0d's erratum, executed):* the overlap glow and rim knobs — the
-`--ic-glow-*` and `--ic-rim-*` CSS vars Studio tuned — were the DOM card's, and the desk draws no
-DOM card (DK-D2). They left `tokens.css` with the card itself, its `card-appearance` defaults and
-the appearance document's `overlapFeedback` (the document is v4 — the plain ground alone, §2.1).
+*History (renamed 2026-10-28; James, the housekeeping page (Q18)):* this section was "Interactive
+states (the living card)", and its table led with the DOM card's own rows: the **lift**
+(`scale(liftScale)`, 1.05 from the engine's `ChromeSettings.liftScale`, opacity `0.75` for the hold
+and drag, the lifted shadow, GL content fading in lockstep), the sole ring drawn inside the scaled
+base, the multi-selection's union box, and the **overlap** pair — accept (`t` tier: a hot-point glow
+offset `±8px` toward the hot point and a rim radial anchored at it, masked to the border ring) and
+reject (`c` tier: the same anatomy at weak alphas). They left with the card (DK-17); the 0.75 stays
+as the Drag row above. *Retired 2026-10-07 (DK-17; DK-0d's erratum, executed):* the overlap glow and
+rim knobs — the `--ic-glow-*` and `--ic-rim-*` CSS vars Studio tuned — were the DOM card's, and the
+desk draws no DOM card (DK-D2). They left `tokens.css` with the card itself, its `card-appearance`
+defaults and the appearance document's `overlapFeedback` (the document is v4 — the plain ground
+alone, §2.1).
 
 **On the desk the living states are the kinds' and the mat's** (ICE design-015 §7–§8; DK-D2, R22;
 *rewritten 2026-10-07, DK-17* — this paragraph read "in the composited profile", 2026-09-07, a
 profile that never shipped, §5): hover is a rise, never an outline; a drag lifts and carries the
 object; a sole selection wears the pencil brackets 6 out and several one union, so the select ring
 stays the chrome's focus (MC-4); a picked-up object rises into the hand (§8, tools in hand) while the
-desk behind it goes out of focus. The table above is the DOM card's, which the desk does not draw —
-its hot-point glow and rim left with the card (above); its last two rows are the chrome's.
+desk behind it goes out of focus. The table above is the chrome's; the desk does not draw it.
+*(Until 2026-10-28 this said the table was the DOM card's and only its last two rows the chrome's.)*
 
 ---
 
 ## 8. Component canon
 
-- **Card anatomy** (CardShell, landing in `@vibefield/design-kit` — 03·A D14): rounded-22
-  clip → content → glow layer → rim layer → ring layer. Chrome layers are
-  `pointer-events: none` and ride the base transform. Header = eyebrow row (label left,
-  meta right). Every widget ships a **compact face** for the zoom readability floor
-  (03·A D15): title + badge, no micro-text.
-  *Erratum 2026-10-03 (DK-0d, against the desk):* the DOM card under the camera ends with the desk
-  (DK-D2, ruled 2026-09-25; ICE design-015 §2): on the Canvas view no widget is a DOM tree in a
-  DOM plane — an object kind draws its face, its compact form at a small zoom, its shadow and its
-  lift on the GPU, the mat's marks are its selection (the desk's chrome, below), and the only DOM
-  over the desk is screen-space chrome and the one focused editor. *Retired 2026-10-07 (DK-17):*
-  CardShell and this anatomy left the design kit with the 0.11 canvas — the record of the card that was.
-- **HUD island**: one morphing element (§6 M1), island material, centered-bottom;
-  `64px` closed; opens to a sheet with pull bar (48×6 rounded-full, `black/20`),
-  morphing ⊕→✕ (135° rotation), edge-fade scroll masks, no visible scrollbars.
-  *Retired into the line 2026-10-03 (One Frame FR-2; DK-D29):* the closed pill is gone — its 48px
-  ⊕ disc, its Select · Pan · Wire switch and its ✨ Clean up with it (Select and Pan stay on V and
-  H, Wire on C; Clean up waits for the selection bar's More, on the desk) — and the line's create
-  is the door: Objects (B) raises the SHEET behind the line, and the create's ⊕ is what turns to ✕.
-  The sheet is the old catalog, unchanged (the backdrop, the recede and the stage hold, the category
-  pills, the drag-out insert, its pull bar), a transitional door until the desk's pegboard replaces
-  it (DK-13).
-  *Erratum 2026-10-03 (DK-0d, against the desk — R14, R21):* on the desk the sheet goes too: Objects
-  raises the pegboard (below) — the desk's own drawer, behind the line — and **the tray island and
-  its state are deleted at DK-13** (R21), the catalog's tiles, its category pills and its drag-out
-  insert with them, as are §4's tray grid (132 cells, 18 gap) and §5's tray-tile shadow; DK-17
-  sweeps what remains. The pegboard keeps none of the sheet's backdrop, recede or stage hold: the
-  stage neither recedes nor dims behind it, the desk dimming under the board itself (R14). Select
-  and Pan retire too — the desk's one tool pans the bare mat and with Space — C no longer connects,
-  and Clean up is More's (DK-D29, DK-D24).
-- **Artifact Hub side panel** (AH-3/4; amended 2026-08-03): a `vibefield.browser`
-  contribution inside the spine-owned `hud.side-panel` stage, separate from the bottom island.
-  Its persistent 40px round toggle is the outermost control in the top-right chrome cluster:
-  zoom pill · theme · Artifacts, with 8px gaps, anchored `top-4 right-4`. It uses the floating
-  round-button recipe and the inverted active state; the same button toggles open/closed and
-  carries the matching tooltip/accessible name. *Since 2026-10-03 (One Frame FR-3) that cluster is
-  the head's right slot — the zoom readout · theme · Artifacts, 8 apart, on the head's axis
-  (`top-2 right-4`) — until FR-4 moves the toggle behind the right notch (FC-D10).*
-  *Retired into the right edge 2026-10-03 (One Frame FR-4, FC-D10 — closes D-7; F10):* the toggle
-  and the 26rem stage below are gone. The right notch (`package`) is Artifacts' only door and its
+- **Artifacts — the right drawer's contents** (AH-3/4; amended 2026-08-03; the Artifact Hub side
+  panel until One Frame FR-4): a `vibefield.browser` contribution in the spine-owned
+  `hud.side-panel` slot.
+  *Retired into the right edge 2026-10-03 (One Frame FR-4, FC-D10 — closes D-7; F10):* the panel's
+  40px round toggle (the top-right cluster's outermost, then the head's right slot at FR-3) and its
+  26rem stage are gone. The right notch (`package`) is Artifacts' only door and its
   drawer holds the SAME contents — the `hud.side-panel` contribution, mounted in the drawer's
   152-wide column (edge trays, below) — where the panel reads in its narrow form: the plugin's own
   stylesheet answers a narrow container (under 200 wide) by stacking each row into a 128-wide card,
   the preview on top (16:10, full width), the title, the fact line and the status below, the
   overflow on a chip over the preview, the Add step's choices stacked; the wide form below stays
   for any host that is wider. Escape, focus back to the notch, plugin disable or hot-reload folding
-  it, and M6 stand as written; the spine's arbitration is the frame's one owner now (§10).
-  The panel is fixed `top-16 right-0 bottom-0 w-[min(92vw,26rem)]`, with
-  `rounded-l-[2.5rem]`, sheet material, a left-cast side-panel shadow from §5, and internal
-  edge-faded scrolling. The same physical panel translates from the right on the 600ms island
-  curve; it is never a crossfade. It overlays without resizing the infinite canvas and is
-  deliberately non-modal: no backdrop, canvas recede, stage hold, or focus trap. The spine
-  still arbitrates one expanded focus surface across the side panel, docs, tray, settings, and
-  Godview; Escape closes, focus returns to the toggle, plugin disable/hot-reload closes, and
-  M6 applies.
+  it, and M6 stand; the spine's arbitration is the frame's one owner now (§10). The drawer is
+  non-modal, as the panel was: no backdrop, recede or focus trap.
+  *Corrected 2026-10-28 (the housekeeping pass):* this entry still described the retired panel —
+  fixed `top-16 right-0 bottom-0 w-[min(92vw,26rem)]`, `rounded-l-[2.5rem]`, sheet material, the
+  left-cast side-panel shadow, translating from the right on the 600ms island curve, its focus
+  returning to the toggle. The recipes below are the contents', in whatever host holds them.
   Header = “Artifacts” + quiet count + one round Add action. The catalog is a single-column
   list; each row uses a left `w-28 aspect-[16/10] rounded-[10px]` clipped preview, then title at
   12px medium, one 11px `/50` fact line (`origin · proxy|folder`), and an honest status dot +
@@ -826,8 +852,9 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   it is not a warning banner or a green reachability promise.
 - **Edge trays — the notch and its drawer** (2026-09-23, James; the record is
   `draft/composer/compact.html` §15–19 and `compact.md` Parts II–IV): a spine-owned tray on the
-  window's LEFT edge — the **clipboard** — with its twin on the right reserved for Artifacts
-  once D-7 is ruled. The **notch** (N1) sits at the edge's mid-height: 26 × 116, one path drawn
+  window's LEFT edge — the **clipboard** — with its twin on the right for Artifacts (*corrected
+  2026-10-28:* this said "reserved for Artifacts once D-7 is ruled"; FC-D10 closed D-7 and FR-4
+  built the twin on 2026-10-03, below). The **notch** (N1) sits at the edge's mid-height: 26 × 116, one path drawn
   FROM the wall — a concave fillet of 12 into the edge, a convex face of 14 — in the theme's
   solid chrome with the strong hairline, the island shadow at rest; the glyph (16px) and the
   count (9px mono) on the text ramp. Hover widens it 15% from the wall on the island curve;
@@ -984,41 +1011,50 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   not the line's: the head's three surfaces — the fields explorer, the zoom's menu, the palette —
   are in the same one value (the head, below). Since FR-4 (2026-10-03) the Me menu and the two
   drawers are in it too (§10).*
-- **Chips / category pills**: full-round, `--vf-fill` resting; active = **inverted solid**
-  (black-on-light / white-on-dark) with `shadow-md`; `active:scale-95`.
-- **Status badge** (`StateBadge`, 03·A C-7): dot or pill in §2.5 color + label; always
-  carries tier + `ObservationLevel` provenance; wait times in `tabular-nums`. Change
-  badges (±%) are solid green/red with white text, `rounded px-1`.
-- **Floating round buttons**: 40px, solid chrome surface, `shadow-lg`, icon at
-  `neutral-500` → full on hover; persistent active/toggled state is inverted solid.
-- **The file pill** (B4): top-center chrome, `top-4`, **40px tall** (the top-chrome
-  control height — 64px stays the bottom island's) — ⊕ new doc · the doc name (13px
-  medium, click-to-rename in place: transparent input, Enter/blur commits, Esc reverts)
-  · a chevron. It morphs (M1, island ease 600ms) into the **docs explorer**: a
-  top-attached sheet `w-[min(56%,34rem)] × min(46vh,420px)`, `rounded-b-[2.5rem]`,
-  sheet material, the §5 sheet shadow **sign-flipped** (`0 20px 40px …` — a top sheet
-  throws its shadow down); chevron rotates 180°; backdrop dim + recede + stage hold,
-  one sheet at a time with the tray. Doc tiles: `aspect-[16/10] rounded-[10px]` faces
+- **Pills** (`UiPill`; the settings rows' `SettingsPill`): full-round, padded 2 × 8, 10px
+  medium in tertiary ink on the foreground at 5% — a label, never a control: a plugin's source
+  (below), a fact beside a name.
+  *Corrected 2026-10-28 (the housekeeping pass):* this entry was "Chips / category pills":
+  `--vf-fill` resting, active = **inverted solid** (black-on-light / white-on-dark) with
+  `shadow-md`, `active:scale-95`. The category pills left with the tray (DK-13) and the pegboard's
+  filters are the segmented control (MC-D3); no product surface draws an inverted-active chip.
+  The catalog's "Category pill" specimen is a replica, owed to the catalog's slice.
+- **Status dot** (`StatusDot`): a 6px dot (8 large) in a §2.5 fill — muted (the faint text),
+  healthy green, attention orange, error red — beside a word that says the state; when the word is
+  coloured it takes the §2.5 ink, never the fill. Wait times are `tabular-nums`.
+  *Corrected 2026-10-28 (the housekeeping pass):* this entry was "Status badge" (`StateBadge`,
+  03·A C-7): a dot or pill always carrying tier and `ObservationLevel` provenance, and solid
+  green/red change badges (±%) in white text. No `StateBadge` exists in the code; the change
+  badges were the widgets', retired with them (DK-8).
+- **Floating round buttons**: 40px, solid chrome surface, `shadow-lg`, icon in tertiary ink →
+  secondary over `--vf-fill` on hover, `scale(0.95)` active; persistent active/toggled state is
+  inverted solid. Worn by the Setup Assistant's theme toggle and the Me menu's Settings button
+  while no one is signed in. *(Corrected 2026-10-28: the hover read "`neutral-500` → full"; the
+  primitive, `UiIconButton`, steps as written here.)*
+- **The fields explorer and its tiles** (B4; grown from the file pill until One Frame FR-3, and
+  from the head's name pill since — §8 "The head" owns the pill and the explorer's sheet).
+  *Corrected 2026-10-28 (the housekeeping pass):* the pill's own paragraph is retired — its ⊕ new
+  doc, its single-click rename, its `top-4` place, and the docs explorer it morphed into
+  (`rounded-b-[2.5rem]`, the sign-flipped sheet shadow, the stage hold, one sheet at a time with
+  the tray). What stands is below. Doc tiles: `aspect-[16/10] rounded-[10px]` faces
   painted as a **mini mat** — the lattice at a quarter (§2.1) — under the board's **still** as it
   lands: the document's picture through the capture door, never the person's selection, taken
   without the selection's marks (ICE I23, I40 — `capture({ scale: 0.25, marks: false })`; DK-D27);
   name 12px medium, relative time caption in `tabular-nums`; the CURRENT doc wears the 1.5px inside `--vf-select`
   ring (it is the selection); hover 1.03 / active 0.95. **The sync dot (C6-4):** a 6px
-  dot after the pill's doc name for STANDING sync states only — pending / peer-offline
+  dot after the name pill's field name for STANDING sync states only — pending / peer-offline
   (muted grey `rgba(128,128,128,0.45)`) · peer-declined / epoch-stale (`--vf-orange`);
   in-step and transient syncing render NOTHING here — the signature chrome never
   flickers with routine traffic. The title carries the words, numbers, and the
   last-exchange time. Explorer tiles append the honest sync word to their time caption
   ("· syncing", "· waiting on 3", "· peer offline") only when there is one.
-  *Its ⊕ retired 2026-10-03 (One Frame FR-3: one plus — the line's create on Canvas is the only
-  bare plus on screen):* the pill keeps the name and the chevron, and **New field** is the
-  explorer's first tile, in words — a doc tile's footprint whose face is the fill inside a dashed
-  strong hairline, the words 12/500 in secondary ink at its centre, hover 1.03 / active 0.95 like
-  its neighbours. The empty explorer says "No fields yet" in words beside it, never "⊕ creates
-  one". *Became the head's name pill 2026-10-03 (One Frame FR-3, below):* its place (`top-4`,
-  280 wide), its single-click rename, the separate breadcrumbs beside it and its own 560ms curve
-  (F14 — this entry already said the island's 600ms) retired; the explorer, its tiles, New field
-  and the sync dot stand, as written here.
+  **New field** (One Frame FR-3, 2026-10-03: one plus — the line's create on Canvas is the only
+  bare plus on screen) is the explorer's first tile, in words — a doc tile's footprint whose face
+  is the fill inside a dashed strong hairline, the words 12/500 in secondary ink at its centre,
+  hover 1.03 / active 0.95 like its neighbours. The empty explorer says "No fields yet" in words
+  beside it, never "⊕ creates one". *(The pill became the head's name pill the same day: its place,
+  `top-4` and 280 wide, its single-click rename, the separate breadcrumbs beside it and its own
+  560ms curve, F14, retired.)*
   *History of the tiles' face:* a mini empty field — canvas-bg and the §2.1 CSS-fallback dots, the
   ground motif as the doc's face until real thumbnails (B4); the board's still since DK-4 (2026-10-03,
   DK-D27); a mini mat under it since DK-16 (2026-10-07, §2.1's erratum); the still without the
@@ -1055,7 +1091,7 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     shadow; the backdrop dim and the field's recede behind it, as before (no stage hold since DK-17 —
     M5: the desk keeps its own idle). Its head
     row is the pill's own: the field's name and the chevron turned up ("Close  Esc"). Below, the
-    doc tiles (the file pill, above) in three columns, **New field** first, in words. Esc or the
+    doc tiles (the fields explorer, above) in three columns, **New field** first, in words. Esc or the
     dim closes it.
   - **The zoom readout** (FC-D8; Canvas's one instrument): at least 66 wide, the line's glass,
     corners 20, the zoom as one number at 13/500 `tabular-nums` in secondary ink (primary under
@@ -1089,17 +1125,16 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   - **One surface at a time** (FR-4): the explorer, the zoom's menu and the palette are three of
     **the frame's open surface** — the line's owner, renamed now that it holds the head's too:
     `objects · @ · fields · zoom · palette`, one value, so opening any one folds the rest by
-    construction; Settings, the Artifact panel and the Me menu fold them and are folded by them as
-    before. A change of view folds whichever is open.
-  - *As built (FR-3, 2026-10-03):* until FR-4 moves them, the theme button and the Artifacts
-    toggle stand beside the readout in the head's right slot, 8 apart, on the head's axis where
-    the cluster stood (FR-4 takes the theme into the Me menu, FC-D5, and Artifacts behind the
-    right notch, FC-D10). The head is still the canvas's own chrome: it lies under the cover with
-    the field, and Godview's and History's heads are their own bands (FC-D6). Full screen's left
-    slot (16 rather than 96) waits for a host signal; none exists.
-  - *Since FR-4 (2026-10-03) the right cluster is GONE:* the theme went into the Me menu (FC-D5,
-    F3) and Artifacts behind the right notch (FC-D10, F10), so the head's right slot is the zoom
-    readout alone, 16 in, and the pill gives up only the wider of the lights' 96 and that slot.
+    construction; Settings folds them and is folded by them. Since FR-4 the Me menu and the two
+    edges' drawers are in the same value (§10). A change of view folds whichever is open.
+  - **The right slot is the zoom readout alone**, 16 in, and the pill gives up only the wider of
+    the lights' 96 and that slot (FR-4, 2026-10-03: the theme went into the Me menu, FC-D5, F3, and
+    Artifacts behind the right notch, FC-D10, F10). *History (folded 2026-10-28, the housekeeping
+    pass):* at FR-3 the theme button and the Artifacts toggle stood beside the readout, 8 apart,
+    where the old cluster stood; the side panel and its toggle are §8 "Artifacts — the right
+    drawer's contents". As built at FR-3, the head was the canvas's own chrome, lying under the
+    cover with the field, with Godview's and History's heads their own bands (FC-D6); full screen's
+    left slot (16 rather than 96) waits for a host signal, and none exists.
 - **Godview's head — Stories** (One Frame §23, round 3; GV-D1 ruled 2026-10-02; MV-D16 marks only,
   ruled 2026-10-03; N12 (a) and N13 (a) ruled 2026-10-11; built 2026-10-11): the monitor's views
   switch in a row of glass circles on the frame's head row (the head, above) — every circle 40 at
@@ -1235,8 +1270,8 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   focus to the face, as does anything else that folds it while focus is inside (`⌘,`, the tray's
   Settings…); a click outside folds it and leaves focus where the click put it, and Tab folds it
   on its way out. It is a menu, not a sheet — no dim, no recede — but it is one of
-  the spine's expanded surfaces: opening it folds the tray or the docs explorer, and they fold
-  it. Reduced motion: a 120ms fade at full size (M6).
+  the frame's open surfaces: since FR-4 the frame's one owner folds it and it folds the rest (§10;
+  *corrected 2026-10-28* — this said it folded "the tray or the docs explorer"). Reduced motion: a 120ms fade at full size (M6).
   **Settings stays the centred dialog, headed by you.** Settings… (or `⌘,` from anywhere)
   opens it while the menu folds. The sidebar's head is the account card — the 40px face, the
   name, the login; it opens the Account page — in place of the gear tile and the word
@@ -1946,7 +1981,9 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   560ms; the row's own face goes with it (M1), so there is never a second copy. Behind it the
   window defocuses: a backdrop blur climbs to 40px in 360ms `ease-out` while the stage recedes
   to `scale(0.98)` on the island curve (M5 — the engine freezes, since this covers the window),
-  and from 120ms the splash's own ground — `--vf-canvas-bg` and the §2.1 dots — rises over it
+  and from 120ms the splash's own ground — the mat in CSS, `--vf-mat-ground` and
+  `--vf-mat-lattice` (DK-16; *corrected 2026-10-28:* this said `--vf-canvas-bg` and the §2.1 dots,
+  which left at DK-17; the switch's ground wears `.vf-splash`, `boot/boot.css`) — rises over it
   in 360ms `ease` until the field is gone. The words follow 200ms behind the face (240ms
   `ease`, rising 6px): the eyebrow "Switching to", the name in the Setup headline's type (28px
   light), and the splash's bar and stage line as the splash begins them — "waking the daemon",
@@ -1970,12 +2007,15 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   begins. Nothing here is theater: no spinner, and the bar moves on real progress only.
   Reduced motion (M6): no travel, blur or recede — the face and the words fade in place
   (120ms), the ground rises in 180ms and falls in 120ms.
-- **Empty / degraded states**: a state is rendered, never blank space — dashed-hairline
-  pill for drop affordances ("Release here to put it back"), progress with numbers
-  ("index rebuilding · 42%"), placeholder faces for missing plugins (A6/A8). Empty
-  screens invite the next action.
-  *Erratum 2026-10-03 (DK-0d, against the desk):* on the desk a missing plugin's object wears ICE's
-  missing face, never a VibeField placeholder (DK-D18 as amended; the missing face, above).
+- **Empty / degraded states**: a state is rendered, never blank space — the kit's `EmptyState`
+  and `UnavailableState` (compact, in place, and the card a whole view shows when it cannot draw:
+  §8 "When the desk can't draw"), progress with numbers ("index rebuilding · 42%"), and on the
+  desk a missing plugin's object in ICE's missing face, never a VibeField placeholder (DK-D18 as
+  amended; the missing face, above). Empty screens invite the next action.
+  *Corrected 2026-10-28 (the housekeeping pass):* the examples were a dashed-hairline put-back
+  pill ("Release here to put it back") and placeholder faces for missing plugins (A6/A8). No code
+  draws the pill since the pre-desk canvas retired (DK-13, DK-17), and DK-0d's erratum of
+  2026-10-03 (the missing face) is folded into the text.
 - **Doc sync state** (C6-4; Settings Mesh section): one row per doc sync has FACTS
   for — no facts, no row (with no peers, quiet IS the honesty; never a vacuous
   "synced"). Vocabulary: `in step` · `syncing` (green — healthy work) · `pending`
@@ -1990,10 +2030,14 @@ its hot-point glow and rim left with the card (above); its last two rows are the
 - **The plugin source badge** (P7; spec §20.5 / §5.3): every plugin row labels its
   source and rung as a FACT in the muted text ramp (`labelCls`), never a warning — no
   hue (§2.5: color is for honest state, and a source is not a state of concern). A
-  `rounded px-1` chip with no fill, so it reads as a label, not a status. Words:
-  bundled → "built-in", dev-linked → "dev", registry → "registry · reviewed" with the
-  publisher appended ("reviewed names who reviewed" — the registry publisher is the
-  reviewer), sideload → "sideload" (honest, not alarmed — the word IS the caution).
+  pill (§8 "Pills"), so it reads as a label, not a status. Words: bundled → "Built in",
+  dev-linked → "Development", registry → "Registry" with the publisher appended ("Registry ·
+  ‹publisher›" — the registry publisher is the reviewer), sideload → "Sideloaded" (honest, not
+  alarmed — the word IS the caution).
+  *Corrected 2026-10-28 (the housekeeping pass), to the shipped words (`panels/PluginsSection.tsx`,
+  `SOURCE_LABEL`):* this said a `rounded px-1` chip with no fill and the words "built-in", "dev",
+  "registry · reviewed" and "sideload". The catalog's ControlsSection still shows a
+  "registry · reviewed" replica, owed to the catalog's slice (it mounts the shipping view).
 - **The updates flow** (P7; spec §5.3.1): a section-top "updates ▸" disclosure that
   NEVER checks on its own — opening it reveals a "check for updates" action and nothing
   fetches on mount, on expand, or on a timer (no push feed, no polling; a fetch is a
@@ -2025,21 +2069,35 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   - **The advisory UNSUPPORTED line** is a sentence, never a block.
   - **Settings › Diagnostics' "Updater" block** renders the doctor's lines as `SystemSection`'s key/value rows. A support
     bundle's `doctor/status.json` carries the same lines.
-- **The destructive uninstall affordance** (P7; spec §16.5): registry/sideload rows
-  carry a "···" overflow revealing two acts — "uninstall" (muted, keeps data) and
-  "remove data too" (the destructive variant: `--vf-red` text, visually distinct BEFORE
-  any confirm, §2.5 red = destructive). Each is a two-step confirm — a narrow-panel
-  click is never irreversible. The keep-data confirm says "keeps its data"; the
-  destructive confirm names the object and states exactly what dies ("deletes its
-  settings and stored data — canvas cards it made are kept"). Red is text-only, never a
-  filled alarm — honesty over dread.
-- **The settings undo affordance** (P7 D29′; spec §16.6): compact "undo · redo" text
-  buttons at the head of a plugin's settings form, in the muted ramp, `disabled:opacity-40`
-  when there is nothing to reach. A right-aligned caption tells the coverage truth at all
-  times — "covers user-scope keys only" when live, "no user-scope keys" when the plugin
-  declares none (device/secret keys are never on the stack), and the honest outcome when
-  an action no-ops ("nothing to undo", "history horizon reached"). No optimistic echo — an
-  applied undo re-gets every row from the daemon.
+- **The destructive uninstall affordance** (P7; spec §16.5): registry and sideloaded rows
+  carry a **More +** disclosure revealing two buttons — **Uninstall** (keeps data) and **Remove
+  plugin and data** (the destructive variant: the danger tone, `--vf-red` text, visually distinct
+  BEFORE any confirm, §2.5 red = destructive). Each is a two-step confirm with Cancel beside it —
+  a narrow-panel click is never irreversible. The keep-data confirm asks "Uninstall ‹title›?" and
+  says "Plugin data is preserved, so reinstalling can restore its settings."; the destructive
+  confirm asks "Remove ‹title› and its data?", states exactly what dies, and its button says
+  **Remove data**. Red is text-only, never a filled alarm — honesty over dread.
+  *Corrected 2026-10-28 (the housekeeping pass), to the shipped form (`panels/PluginsSection.tsx`,
+  `PluginUninstall`):* this said a "···" overflow with "uninstall" and "remove data too", and the
+  destructive confirm's words "deletes its settings and stored data — canvas cards it made are
+  kept". **Owed, doc first:** the product's destructive line still says "Plugin settings and stored
+  data are deleted. Canvas cards it created remain." The desk has no cards: what an uninstall
+  leaves of a desk kind's objects is to be verified and then said in the desk's word (objects),
+  here first and then in the string.
+- **The settings undo affordance** (P7 D29′; spec §16.6): **Undo** and **Redo** in the Settings
+  dialog's toolbar, beside its close — one pill of two buttons (glyph and word, 11px medium in the
+  muted ramp, `disabled:opacity-30` when there is nothing to reach), titled with their keys (⌘Z,
+  ⇧⌘Z; a focused field keeps its own). Only user-scope keys are on the stack: device and secret
+  keys never are, and a plugin's form says which applies at its foot — "Synced user settings can
+  be undone from the window toolbar." or "Device and secret settings stay on this device and are
+  not part of settings history." The outcome is said in words: "Last synced change undone",
+  "Change restored", "Nothing left to undo", "Nothing left to redo", "Settings history limit
+  reached". No optimistic echo — an applied undo re-gets every row from the daemon.
+  *Corrected 2026-10-28 (the housekeeping pass), to the shipped form (`panels/SettingsDialog.tsx`,
+  `SettingsPanel.tsx`, `PluginSettingsForm.tsx`):* this said compact "undo · redo" text buttons at
+  the head of each plugin's settings form, with a right-aligned coverage caption ("covers
+  user-scope keys only", "no user-scope keys") and the outcomes "nothing to undo" and "history
+  horizon reached".
 - **Fact labels — scope and timing** (GT-7, Settings → Terminal; 2026-09-24): a page whose
   settings have DIFFERENT owners says, on each section head, whose a setting is and when it
   lands — as facts, in the plugin-source-badge recipe (hairline chip, no fill, no hue; 10px
@@ -3231,7 +3289,7 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   takes the seat (DS-4b), so the readout shows only while another device holds the seat as the card
   sits on the screen.
 - **The file tree** (mille; 2026-08-09 — first consumer is the History room's files rail,
-  `draft/four-views/design.md` §4): a tree is a **reader** surface, not chrome. It leans on
+  `draft/archive/superseded/four-views/design.md` §4): a tree is a **reader** surface, not chrome. It leans on
   the type ramp and hairlines, never on materials — no glass, no card, no shadow (four-views
   §0: "the drama stays in what the agents said, never in the chrome"). `@vibecook/mille-ui`
   ships its own GitHub-derived palette; **none of it reaches a VibeField pixel.**
@@ -3285,6 +3343,24 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   so the bridge dresses that one part in island material (§5) — the menu is chrome floating
   over the reader, and the only place in the tree where a material appears at all.
 
+**Retired surfaces** (removed from this canon 2026-10-28, the housekeeping pass; git history and
+`docs/LANDED.md` §DK hold their full entries):
+- **Card anatomy** — CardShell (rounded-22 clip → content → glow → rim → ring layers, the eyebrow
+  header, the compact face at the zoom floor, 03·A D14/D15). DK-0d's erratum (2026-10-03) ended
+  the DOM card under the camera (DK-D2); CardShell left the design kit at DK-17 (2026-10-07). On the
+  desk an object kind draws its face, its compact form, its shadow and its lift on the GPU (§7, "On
+  the desk").
+- **The HUD island** — the 64px bottom pill with its ⊕ disc, its Select · Pan · Wire switch and ✨
+  Clean up, opening to the catalog sheet with a pull bar. It retired into the line at FR-2
+  (2026-10-03; Objects is the line's create, B), and the tray island and its state were deleted at
+  DK-13 (2026-10-06; R21), when the pegboard became Objects' drawer (§8 "The pegboard"). Select and
+  Pan retired with it — the desk's one tool pans the bare mat, and so does Space — C no longer
+  connects, and Clean up is More's (DK-D29, DK-D24).
+- **The Artifact Hub side panel** — its toggle and 26rem stage, into the right edge's drawer at
+  FR-4 (§8 "Artifacts — the right drawer's contents").
+- **The file pill** — into the head's name pill at FR-3 (§8 "The head"; "The fields explorer and its
+  tiles").
+
 ---
 
 ## 9. Voice
@@ -3294,7 +3370,9 @@ Sentence case (eyebrows uppercase). Buttons say what they do ("Spawn agent", not
 numbers and provenance — "syncing history…", "external terminal — state only",
 "needs approval · 4m" — and never overstate what we know (EL5). Errors say what happened
 and what to do next; they don't apologize and they're never vague. No filler, no lorem:
-demo content is real-shaped (AAPL, San Francisco, 64°).
+demo content is real-shaped — a session's folder name (`vibe-field`), "needs approval · 4m", a
+device's name in mono as Tailscale names it. *(Until 2026-10-28 the examples were the widgets'
+AAPL, San Francisco and 64°; the widgets retired at DK-8.)*
 
 **Sizes are said as Finder counts them**, in thousands — bytes, KB, MB, GB (the terminal settings
 page, the line's notes) — and a size a person did not make, such as a link's message, is never
@@ -3369,7 +3447,7 @@ Inside History the room's own words stand as rosetta wrote them, and the Setup A
 - One row stands by decision. An agent that never says who keeps Settings' "Doesn't say who is signed in" over the
   page's "Signed in · doesn't say which account": VibeField cannot know it is signed in.
 
-*Status 2026-10-12: ruled and built. Built: the Lip and its two buttons, the groove, the frame's tone and the well (GV-D7, GV-D12); where a session with no pane opens (GV-D4); the terminals away and called up as they were left (GV-D5's call, GV-D6); the edge's three outcomes and their readouts, and the monitor making room; maximized, the bar the window's title bar (GV-D11); the monitor alone at launch, the first call bringing last run's panes with the one it called (GV-D5, N14 (a)); ⌘W on the last pane minimizing them (N16 (a)); rest, the drawing's share above a floor on every height (N15 (a)).*
+*(Godview round 3, built 2026-10-12; its status is §8 the deck's.)*
 **The terminals' wrapper says the window's own words** (Godview, §8, the deck; One Frame §23.2 —
 "for close button, replace it with a minimize - button … for fill button, replace it with a
 maximize button", James, 2 Oct; ruled 2026-10-02; built 2026-10-11). **The two readouts** while the edge is held are
@@ -3384,41 +3462,37 @@ their place". "Fullscreen" stays the pane's word (§8).
 
 ## 10. Implementation & governance
 
-- **Tokens live in `@vibefield/design-kit`** (design kit, 03·A D14) as CSS vars under
-  `--vf-*`, exposed to Tailwind v4 via `@theme`. Upstream vars bridge onto ours
-  (`--ic-*` chrome knobs, `--mille-*` tree vars — design-00 §3.4); widgets consume
-  tokens, never hex literals (exception: a widget's own committed content surface).
-- **Dark mode**: `.dark` class + `data-theme="dark"` stamped together (03·A §6); cards
-  keep their committed surfaces across themes.
-- **Converged (Track D + cleanup, 2026-07-21):** the note widget wears CardShell (D1);
-  the ad-hoc Field toolbar died with the island (D2); the System/health page and the app
-  bar are REMOVED outright. **Placement laws:** the window IS the field — chrome floats
-  over the canvas, there is no app bar; dev-facing diagnostics render as *sections inside
-  the Settings panel* (`SystemSection` is the template) — never as standalone pages.
-  Top-row slots (all inside the 52px drag strip, all `no-drag`): breadcrumbs left
-  (`left-24`, clearing the traffic lights) · **the file pill center** · the right chrome
-  cluster anchored `top-4 right-4` (zoom pill · theme FAB · Artifact FAB outermost).
-  *(Superseded 2026-10-03 by the head — the five places below, §8 "The head": the crumbs fold
-  into the name pill, the cluster goes and only the zoom readout is the head's right; the window
-  still drags by the strip between the pills.)*
-  **Bottom-left (2026-09-22, UA-D19):** the Me menu — the owner's face, §8 — then Godview,
-  with the `hud.panel` slot above them; the Settings gear retires into the menu and `⌘,`.
-  *(Godview's button retired 2026-10-03 — the views track below is the way in. Since FR-4 the
-  corner is the face's alone, centred on the foot axis, and its menu opens above the line; the
-  bottom-right corner's devtools button is gone — into Settings → Advanced, development builds
-  only, a section like every other dev-facing diagnostic (FC-D12).)*
-  **The left edge (2026-09-23, SNAP-3):** the clipboard tray's notch at mid-height, its drawer
-  from `top-16` to `bottom-20` (clearing the Me menu and Godview); the right edge is reserved
-  for its twin — *Artifacts', since FR-4 (§8, edge trays): the right edge is Artifacts' door and
-  nothing else's.* **Bottom-centre:** the HUD island — *retired into the line 2026-10-03 (One Frame
-  FR-2): the bottom centre is the line's, and the island's sheet rises behind it (§8).*
+- **Tokens live in `@vibefield/design-kit`** (`packages/design-kit/src/tokens.css`) as CSS vars
+  under `--vf-*`, imported into the renderer's Tailwind v4 sheet and read as `var(--vf-…)`.
+  Upstream themes read ours by name (mille-ui's `theme/vibefield.css`, §8 "The file tree"); product
+  code and plugin kinds consume tokens, never hex literals (`docs/UI_SYSTEM.md`).
+  *Corrected 2026-10-28 (the housekeeping pass):* this said the tokens are exposed to Tailwind
+  through `@theme` (no `@theme` block exists in the packages or plugins), that `--ic-*` chrome
+  knobs bridge onto ours (one `--ic-*` var is left, `--ic-selection-radius`, and its removal goes
+  to James with the token pass), and that widgets consume tokens with their committed content
+  surface as the exception (an object's surface is still content, §2.2).
+- **Dark mode**: `.dark` class + `data-theme="dark"` stamped together (03·A §6;
+  `field-app/src/theme.ts`); committed content surfaces stay the same across themes (§2.2), as the
+  mat does under its two lights (§2.1).
+- **Placement laws** (Track D + cleanup, 2026-07-21): the window IS the field — chrome floats
+  over the desk, there is no app bar; dev-facing diagnostics render as *sections inside the
+  Settings panel* (`SystemSection` is the template) — never as standalone pages. Where each
+  piece of chrome stands is the five places below.
+  *History (folded 2026-10-28, the housekeeping pass):* this bullet also carried the 2026-07-21
+  convergence (the note widget wearing CardShell, the Field toolbar dying with the island, the
+  System page and app bar removed) and the slot map that grew after it — breadcrumbs, the file
+  pill and the right cluster on the top row; the Me menu, Godview's button and the `hud.panel`
+  slot bottom-left (UA-D19); the clipboard's notch on the left edge (SNAP-3); the HUD island
+  bottom-centre; the devtools button bottom-right. One Frame replaced the map with the five places
+  (FR-1…FR-4, 2026-10-03; devtools into Settings → Advanced, FC-D12), and the desk retired the
+  note widget and the card (DK-8, DK-17).
 - **One frame, every view — five places, two axes** (One Frame FR-1 and FR-6, ruled
   2026-10-01; first built 2026-10-03). Chrome lives in FIVE places: **the head** (the window's top
   0–52, its controls 40 tall at `top-2`, centred on the lights' axis), **the line** (the foot:
   880 × 52 at 20 from the bottom — x 150–1030, y 708–760 at the default 1180 × 780 — never
   starting nearer the left than 76, so it never meets the corner), **the two edges** (the notches
   and their drawers, §8), **the corner** (your face, centred on the foot axis), or **on its own
-  object** (a card's bar, the tools in hand, a pane's band; object chrome stays with its object,
+  object** (the desk's selection bar, the tools in hand, a pane's band; object chrome stays with its object,
   even where it stands under the head). **Two axes:** everything in the head centres on y 28, the
   traffic lights' centre; everything at the foot on y 734, the line's centre. **The frame stands
   above every view.** The canvas is the ground floor; Godview, History and (once it exists) the
@@ -3459,15 +3533,12 @@ their place". "Fullscreen" stays the pane's word (§8).
   second time (the menu's zoom is an act the head answers since FR-4, below). **The frame's open
   surfaces have ONE owner** (FR-4; the line's, renamed at FR-3 when
   the head's joined): @'s list, Objects, the fields explorer, the zoom's menu and the palette are
-  one value, so opening any one folds the rest, and every surface that folded the tray folds them.
-  *As built (FR-1, 2026-10-03):* the frame so far is the views track, on
-  the line's glass at the line's left end; the line (FR-2), the head (FR-3), the edges and the
-  corner (FR-4) join it next. Until they do, the slots above stay the canvas's own chrome and lie
-  under the cover with the field. *As built (FR-2, 2026-10-03):* the line is whole, the track at its
-  left end; the head (FR-3), the edges and the corner (FR-4) are next. *As built (FR-3,
-  2026-10-03):* the head is the name pill and the zoom readout on y 28 (§8 "The head"), still the
-  canvas's chrome under the cover; until FR-4 the theme button and the Artifacts toggle stand
-  beside the readout. The edges and the corner (FR-4) are next.
+  one value, so opening any one folds the rest, and Settings folds them and is folded by them
+  (*corrected 2026-10-28:* this said "every surface that folded the tray folds them"; the tray left
+  at DK-13). *History (folded 2026-10-28):* the frame was built in four slices on 2026-10-03 — FR-1
+  the views track on the line's glass, FR-2 the whole line, FR-3 the head (the name pill and the
+  zoom readout on y 28, then still the canvas's chrome under the cover, the theme button and the
+  Artifacts toggle beside the readout), FR-4 the edges and the corner.
   *As built (FR-4, 2026-10-03):* **the edges and the corner join the frame** and stand above the
   cover with the line in every view: the clipboard's notch on the left, Artifacts' on the right,
   each resting as a sliver over a covered view (§8, edge trays), and your face in the corner with
@@ -3522,7 +3593,7 @@ their place". "Fullscreen" stays the pane's word (§8).
   the Peek's popup (§8 "Search — the Peek").* **The status line** (§8) is the head's: centred under it at y 56, or under the
   tools in hand at y 112 while an object is held (R12).
 - **Review ritual**: UI PRs cite the sections they follow, include a screenshot in both
-  themes, and answer the §0 bar question. Deviations from a token/recipe/easing are a
+  themes, and answer the bar's question (the preamble's **The bar**). Deviations from a token/recipe/easing are a
   change *to this file first* — the doc moves, then the code.
 
 ---
@@ -3619,8 +3690,8 @@ design kit or the production design system. Packaged icon masters remain governe
 ## 13. Glyphs — the chrome's icon law
 
 **Chosen 2026-09-24 (James, from the Field Glyphs page; `tooling/glyphs/picks.json` is the record).**
-Every functional icon the chrome draws — the HUD's round buttons, the file pill, the Settings rail,
-the agent rows, the edge trays, the plugins' toolbars, the phone's composer and keypad, the swarm's
+Every functional icon the chrome draws — the line's create and the views track, the head's name
+pill and its chevron, the 40px round buttons, the Settings rail, the agent rows, the edge trays, the plugins' toolbars, the phone's composer and keypad, the swarm's
 marks, the desk's bar, the tools in hand and the wrapper around Godview's terminals — is one of
 **64 named glyphs** in one **24-unit box**,
 optical centre at 12,12, live area 2 to 22, drawn in `currentColor` and nothing else. The host says
@@ -3633,8 +3704,10 @@ I-5) and never a colour of its own. Two constructions, one set:
 | **Hardware** (10) | close · check · search · rename (pencil) · return · backspace · more (ellipsis) · arrow · general (sliders) · keyboard | one solid silhouette as a single `evenodd` path — bodies and their holes, no masks, no filters — so the same geometry is a template asset on iOS |
 
 **Sizes** are the host's, by CSS: 12 (captions) · 13–16 (row controls) · 18 (the Settings rail, the
-Snap tile, the Me menu) · 20 (the 40px round buttons) · 22 (the tray's plus, the artifact choices) ·
-28 (the Agents head). Instrument's stroke therefore renders 1 px at 12 and 1.67 px at 20 — one
+Snap tile, the Me menu) · 20 (the 40px round buttons) · 22 (the artifact choices) ·
+28 (the Agents head). *(Corrected 2026-10-28, the housekeeping pass: the consumers above named the
+HUD's round buttons, the file pill and the tray's plus at 22, which retired with the island, the
+pill and the tray — FR-2, FR-3, DK-13; the line's create draws its glyph at 16, §8 "The line".)* Instrument's stroke therefore renders 1 px at 12 and 1.67 px at 20 — one
 weight, scaled, never nine. **One drawing per meaning:** a chevron is drawn pointing right and
 *turned* (90 down, 180 left, 270 up); the four cursor keys are one arrow turned; redo is undo
 *flipped*. The set, by group — actions: plus · close · check · search · pencil · undo · reset ·

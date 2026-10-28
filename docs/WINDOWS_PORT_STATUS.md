@@ -1,5 +1,11 @@
 # Windows Port — Live Status & Handoff
 
+> **PARKED since 2026-08-24** (the last WIN commit, `c16e618f4`, "WIN-10 errata: the DACL grant
+> names the TOKEN, not the session"). The port re-enters with the Windows leg of the release
+> (WIN-8: NSIS and Azure signing). What is still open is the handoff at this file's end; the body
+> below is the 2026-08-11 snapshot, with dated corrections where it went stale. *(Added 2026-10-28,
+> the housekeeping pass.)*
+
 > A working handoff for an agent continuing the Windows (WIN) track — especially one
 > running **directly on Windows** without this repo's `dev-local` branch or the
 > orchestrating agent's memories. The design law lives elsewhere; this is the
@@ -126,11 +132,10 @@ Two consequences worth carrying into the visual pass:
   predesign-03 risk to check — cheap once keyed. The sidecar now resolves (`edd5882`).
 - **WIN-8 packaging** — NSIS + `.ico` family + Azure signing (EDP-39). Needs the **cert/ops**.
   Signing also unblocks the frozen tray GUID (WIN-5 note above).
-- **G13** (upstream petition, drafted on dev-local `draft/petitions/G13-*.md`) — a case-variant
-  private-env key leaks past ghosttea's case-sensitive strip on Windows (defense-in-depth). File to
-  electron-ghostty when ready; `terminal-kill-matrix` row 6b is an `it.fails` witness that flips
-  green when the pin consuming it lands. **Note for whoever files it:** the petition file is not in
-  this clone (dev-local only), so from a Windows checkout row 6b is the only in-tree artifact of it.
+- **G13** — LANDED upstream in ghosttea 0.10.1 (2026-08-18; Windows env keys strip
+  ASCII-case-insensitively) and consumed the same day: `terminal-kill-matrix` row 6b dropped its
+  `.fails` and passed live on the box (the petitions README's G13 row). *(Corrected 2026-10-28, the
+  housekeeping pass: this bullet said the petition was drafted and still to be filed.)*
 
 ## WIN-10 — the two things POSIX gave for free and Windows does not (2026-08-11)
 
@@ -304,9 +309,18 @@ has none today because it never ran anywhere but Windows.
 
 ## Handoff to a Windows agent — what James must do
 
-1. **Push `main`** so the Windows clone has the ~15 WIN commits + this doc (they are all unpushed).
-   Do NOT push `dev-local`.
-2. To give the agent the FULL plan + the G13 petition, either push nothing and have it read
-   `git show dev-local:draft/thinking-windows-port.md`, or copy that file into the working tree for it.
-3. The immediate next task is the **doc.list timeout** (above) — that's what blocks a clean real-app
-   session. Then WIN-5 visual polish (with your eyeball) and/or WIN-7 (with a tailnet key).
+The open asks, as of 2026-10-28:
+
+1. **WIN-D6…D9** — James's rulings (DECISIONS' WIN row; WIN-D9 is the titlebar, WIN-5 above).
+2. **WIN-7's tailnet key** — the live mesh witness needs one. Since TS-1 (`029af0e6f`, 2026-10-27) a
+   machine with no browser can sign in with an untagged Tailscale auth key (`user.link.begin
+   {authKey}`), beside `TRUFFLE_TEST_AUTHKEY` for the `#[ignore]`d probes.
+3. **WIN-8's Azure signing** — the cert and the ops (EDP-39); the Windows leg of the release.
+4. **SNAP-4's box round** — the section above.
+
+An agent on Windows reads the full plan with `git show dev-local:draft/thinking-windows-port.md`, or
+James copies that file into its working tree. Do NOT push `dev-local`.
+
+*(Corrected 2026-10-28, the housekeeping pass: this list said to push `main` (done since 2026-08-11,
+the errata under "Where the port stands") and named the doc.list timeout as the next task (fixed
+2026-08-11, item 2 under "ACTIVE debugging").)*
