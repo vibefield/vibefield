@@ -838,3 +838,88 @@ test("render's missing-row message names what the lock renders: a Swift line's r
     /pnpm-workspace\.yaml has no row for @x\/history-protocol — siblings\.lock\.json renders "0\.1\.1"/,
   );
 });
+
+test("use links a linked package's `workspace:` dependencies from the sibling's own workspace, and never hands the host a `workspace:` range", (t) => {
+  // puppeteer's packages since RD-5a-2 (2026-10-28, lanes/qa-w1): runtime → `@vibefield/puppeteer-workspaces:
+  // workspace:*`, which the host was handed and refused with ERR_PNPM_WORKSPACE_PKG_NOT_FOUND
+  const lock = {
+    siblings: {
+      ...LOCK.siblings,
+      agents: {
+        path: "../agents",
+        sha: "d".repeat(40),
+        packages: { "@x/agents-runtime": "packages/runtime" },
+        release: { npm: "0.2.3" },
+      },
+    },
+  };
+  const { dir, root, git } = fixture(t, { lock });
+  const agents = join(dir, "agents");
+  writeFileSync(
+    join(agents, "pnpm-workspace.yaml"),
+    'packages:\n  - "packages/*"\n  - apps/*\noverrides:\n  zod: ^4\n',
+  );
+  const pkg = (sub, manifest) => {
+    mkdirSync(join(agents, sub), { recursive: true });
+    writeFileSync(join(agents, sub, "package.json"), `${JSON.stringify(manifest)}\n`);
+  };
+  pkg("packages/runtime", {
+    name: "@x/agents-runtime",
+    dependencies: { "@x/agents-core": "workspace:*", zod: "^4.6.6" },
+  });
+  pkg("packages/core", {
+    name: "@x/agents-core",
+    dependencies: { "@x/agents-words": "workspace:^", ws: "^8.21.0" },
+  });
+  pkg("packages/words", { name: "@x/agents-words" });
+  pkg("apps/demo", {
+    name: "@x/agents-demo",
+    dependencies: { "@x/agents-runtime": "workspace:*" },
+  });
+
+  assert.equal(quiet(() => useSiblings(root, ["agents", "--no-install"])).result, 0);
+  const { hooks } = createRequire(import.meta.url)(join(root, OVERLAY_PNPMFILE));
+  const { overrides } = hooks.updateConfig({ overrides: {} });
+  assert.deepEqual(
+    Object.fromEntries(Object.entries(overrides).filter(([name]) => name.startsWith("@x/agents-"))),
+    {
+      "@x/agents-runtime": `link:${join(agents, "packages", "runtime")}`,
+      "@x/agents-core": `link:${join(agents, "packages", "core")}`,
+      "@x/agents-words": `link:${join(agents, "packages", "words")}`,
+    },
+  );
+  // the host installs the closure's registry dependencies once; no `workspace:` range reaches it
+  assert.deepEqual(hooks.readPackage({ name: "fixture-root" }).dependencies, {
+    zod: "^4.6.6",
+    ws: "^8.21.0",
+  });
+  // align and the single-copy guard see the same closure; the app no linked package needs stays out
+  assert.deepEqual(
+    [...linkedPackages(root).entries()]
+      .filter(([, { sibling }]) => sibling === "agents")
+      .map(([name, { via }]) => `${name}:${via}`)
+      .sort(),
+    ["@x/agents-core:overlay", "@x/agents-runtime:overlay", "@x/agents-words:overlay"],
+  );
+  assert.equal(git("status", "--porcelain"), "", "the overlay touched a committed file");
+  // align: runtime comes first and needs core, which is linked too — it resolves to core's checkout, never "missing"
+  const store = join(root, "node_modules", ".pnpm");
+  for (const [name, at] of [
+    ["zod", "zod@4.6.6/node_modules/zod"],
+    ["ws", "ws@8.21.0/node_modules/ws"],
+  ]) {
+    mkdirSync(join(store, at), { recursive: true });
+    writeFileSync(join(store, at, "package.json"), `${JSON.stringify({ name })}\n`);
+    mkdirSync(join(store, "node_modules"), { recursive: true });
+    symlinkSync(join(store, at), join(store, "node_modules", name));
+  }
+  assert.deepEqual(alignOverlay(root), []);
+  assert.equal(
+    realpathSync(join(agents, "packages", "runtime", "node_modules", "@x", "agents-core")),
+    realpathSync(join(agents, "packages", "core")),
+  );
+  assert.equal(
+    realpathSync(join(agents, "packages", "core", "node_modules", "ws")),
+    realpathSync(join(store, "ws@8.21.0/node_modules/ws")),
+  );
+});

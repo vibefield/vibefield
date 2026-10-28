@@ -306,11 +306,82 @@ export function linkedPackages(
     const via =
       plane === "dev" ? "committed" : plane === "prod" && overlay.includes(name) ? "overlay" : null;
     if (via === null) continue;
+    const base = siblingDir(root, entry);
+    const queue = [];
     for (const [pkg, packageDir] of Object.entries(entry.packages)) {
-      out.set(pkg, { sibling: name, dir: join(siblingDir(root, entry), packageDir), via });
+      out.set(pkg, { sibling: name, dir: join(base, packageDir), via });
+      queue.push(pkg);
+    }
+    // A linked package's `workspace:` dependency is another package of the sibling's own workspace: pnpm writes its
+    // version only when it publishes, so a checkout links it from the same tree, and its `workspace:` ones after it.
+    // Handed to this tree instead, the range names a workspace package it does not have (ERR_PNPM_WORKSPACE_PKG_NOT_
+    // FOUND: puppeteer's packages since RD-5a-2, measured 2026-10-28 by `use puppeteer` in lanes/qa-w1).
+    let members;
+    while (queue.length > 0) {
+      for (const [dep, range] of Object.entries(
+        manifestOf(out.get(queue.shift()).dir).dependencies ?? {},
+      )) {
+        if (!String(range).startsWith("workspace:") || out.has(dep)) continue;
+        members ??= workspacePackages(base);
+        const dir = members.get(dep);
+        if (dir === undefined) continue;
+        out.set(dep, { sibling: name, dir, via });
+        queue.push(dep);
+      }
     }
   }
   return out;
+}
+
+function manifestOf(dir) {
+  try {
+    return JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+/** A sibling checkout's own workspace packages, `Map<name, dir>`, from its `pnpm-workspace.yaml` `packages:` list:
+ * each entry a directory or `<dir>/*` (the only shapes a sibling's workspace uses). */
+function workspacePackages(base) {
+  let yaml = "";
+  try {
+    yaml = readFileSync(join(base, "pnpm-workspace.yaml"), "utf8");
+  } catch {
+    return new Map();
+  }
+  const globs = [];
+  let listing = false;
+  for (const line of yaml.split("\n")) {
+    if (/^packages:\s*$/.test(line)) listing = true;
+    else if (listing && /^\s+-\s/.test(line))
+      globs.push(
+        line
+          .replace(/^\s+-\s+/, "")
+          .replace(/["']/g, "")
+          .trim(),
+      );
+    else if (/^\S/.test(line)) listing = false;
+  }
+  const members = new Map();
+  for (const glob of globs) {
+    const dirs = glob.endsWith("/*")
+      ? (() => {
+          try {
+            return readdirSync(join(base, glob.slice(0, -2)), { withFileTypes: true })
+              .filter((d) => d.isDirectory())
+              .map((d) => join(base, glob.slice(0, -2), d.name));
+          } catch {
+            return [];
+          }
+        })()
+      : [join(base, glob)];
+    for (const dir of dirs) {
+      const { name } = manifestOf(dir);
+      if (typeof name === "string") members.set(name, dir);
+    }
+  }
+  return members;
 }
 
 /** The dependency SHAPE (RD-D10): what each sibling reaches this tree as, plane by plane, with the overlay
@@ -928,10 +999,11 @@ export function renderOverlay(root, linked, lock = readLock(root)) {
         crates.set(crate, join(siblingDir(root, entry), crateDir));
       }
     }
-    if (npmPlane(entry) !== "prod") continue;
-    for (const [pkg, packageDir] of Object.entries(entry.packages)) {
-      links.set(pkg, join(siblingDir(root, entry), packageDir));
-    }
+  }
+  // the overlay's npm links are linkedPackages' (the packages the lock names and their `workspace:` closure), so the
+  // pnpmfile links exactly what align, the single-copy guard and the shape see
+  for (const [pkg, { dir, via }] of linkedPackages(root, lock, linked)) {
+    if (via === "overlay") links.set(pkg, dir);
   }
   writeOverlayCargo(root, crates);
   const swift = writeOverlaySwift(root, lock, linked);
@@ -971,6 +1043,8 @@ export function renderOverlay(root, linked, lock = readLock(root)) {
         manifest = {};
       }
       for (const [dep, range] of Object.entries(manifest.dependencies ?? {})) {
+        // a `workspace:` range is the sibling's own package, linked above when its workspace holds it; never the host's
+        if (String(range).startsWith("workspace:")) continue;
         if (!links.has(dep) && !hostDeps.has(dep)) hostDeps.set(dep, range);
       }
     }
@@ -988,15 +1062,21 @@ export function renderOverlay(root, linked, lock = readLock(root)) {
 export function alignOverlay(root, lock = readLock(root), overlay = readOverlay(root)) {
   const hoist = join(root, "node_modules", ".pnpm", "node_modules");
   const missing = [];
-  for (const [pkg, { dir, via }] of linkedPackages(root, lock, overlay)) {
-    if (via !== "overlay") continue;
-    // pnpm keeps the store's copy in its hidden hoist after the overlay's install, where a package inside the store
-    // that reaches this name by hoisting would still find the registry copy — the second copy the single-copy law
-    // forbids. Point the hoist at the checkout too; the way back's frozen install re-hoists the store's copy.
+  const linked = [...linkedPackages(root, lock, overlay)].filter(
+    ([, { via }]) => via === "overlay",
+  );
+  // pnpm keeps the store's copy in its hidden hoist after the overlay's install, where a package inside the store
+  // that reaches this name by hoisting would still find the registry copy — the second copy the single-copy law
+  // forbids. Point the hoist at the checkout too; the way back's frozen install re-hoists the store's copy. Every
+  // linked package's hoist comes first, so one linked package's dependency on another (puppeteer's runtime → core)
+  // finds that checkout whatever order the lock names them in (2026-10-28, lanes/qa-w1).
+  for (const [pkg, { dir }] of linked) {
     const hoisted = join(hoist, pkg);
     mkdirSync(dirname(hoisted), { recursive: true });
     rmSync(hoisted, { recursive: true, force: true });
     symlinkSync(dir, hoisted, process.platform === "win32" ? "junction" : "dir");
+  }
+  for (const [pkg, { dir }] of linked) {
     let manifest = {};
     try {
       manifest = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
