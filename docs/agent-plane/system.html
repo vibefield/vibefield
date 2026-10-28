@@ -1557,8 +1557,8 @@
             </p>
             <p class="section-note">
               The same composition answers <code>helperEnvironment(env)</code>, optional on
-              <code>AgentHost</code> since puppeteer's QW1 attach branch (2026-10-27; not in the 0.2.3
-              pin): the environment of a helper an adapter spawns itself, such as a private server, a
+              <code>AgentHost</code> since puppeteer 0.3.0 (2026-10-28; built on its QW1 attach
+              branch): the environment of a helper an adapter spawns itself, such as a private server, a
               leader or a backend. Such a helper runs the agent's turns and tools, so it is born as the
               agent PTY is, and never inherits fieldd's own environment. Until the EL8 that brings it,
               the pinned adapters still merge their variables over fieldd's <code>process.env</code>

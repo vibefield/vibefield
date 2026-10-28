@@ -326,16 +326,21 @@ overrides:
   # `release.npm`), preflight's PIN_EXPECTATIONS, the lock's sha (`pnpm
   # siblings:pin puppeteer` at the tag), and minimumReleaseAgeExclude for a
   # version published this week.
-  "@vibefield/puppeteer-runtime": 0.2.3
-  "@vibefield/puppeteer-builtin-providers": 0.2.3
-  "@vibefield/puppeteer-core": 0.2.3
-  "@vibefield/puppeteer-record": 0.2.3
-  "@vibefield/puppeteer-monitor": 0.2.3
+  # 0.2.3 → 0.3.0 (2026-10-28, the EL8 to QA fix wave 1's puppeteer half, #48):
+  # published from the tag v0.3.0 (d0aa1224, the commit npm's provenance names).
+  # A minor, not a patch: #48 merged as `feat(views)!`, which removes four exports
+  # (`hostWriteWord`, `hostWriteTitle`, `remoteWriteLabel`, `remoteWriteTitle`),
+  # none imported here. No package manifest moved beyond its version.
+  "@vibefield/puppeteer-runtime": 0.3.0
+  "@vibefield/puppeteer-builtin-providers": 0.3.0
+  "@vibefield/puppeteer-core": 0.3.0
+  "@vibefield/puppeteer-record": 0.3.0
+  "@vibefield/puppeteer-monitor": 0.3.0
   # MV-3a (2026-10-03): the monitor-view contract (`/model` is the model fieldd's
   # backend emits and the desk row mirrors; the renderer's adapter and replica
   # read it too). Types for fieldd; the replica's scheduler type for field-app.
-  "@vibefield/puppeteer-view-sdk": 0.2.3
-  "@vibefield/puppeteer-views": 0.2.3
+  "@vibefield/puppeteer-view-sdk": 0.3.0
+  "@vibefield/puppeteer-views": 0.3.0
   # FS-1a (2026-10-05, FS-D10 RULED (a) with its exit at once — 0.3.4 is on npm):
   # mille, the file explorer engine behind the files service, entered as an
   # EXACT registry pin (EL8; ice's shape — packages ask for "*"). Since FS-1b
@@ -417,32 +422,32 @@ minimumReleaseAgeExclude:
   # exact; our own packages, reviewed as an EL8 pin.
   - '@vibefield/rosetta-protocol@0.1.1'
   - '@vibefield/rosetta-room@0.1.1'
-  # puppeteer 0.2.3 (2026-10-26, RD-5's exit for its npm plane): published 2026-10-26 by
-  # the tag's release run (publish job 07:08:51Z), inside the release-age window on the day
-  # the pin goes exact; our own packages, reviewed as an EL8 pin. Every
-  # `@vibefield/puppeteer-*` package the seven rows reach is here, the adapters included:
-  # they are the rows' dependencies, and the window applies to each. No older
-  # puppeteer row existed to drop — the link: rows never needed one.
-  - '@vibefield/puppeteer-adapter-acp@0.2.3'
-  - '@vibefield/puppeteer-adapter-antigravity@0.2.3'
-  - '@vibefield/puppeteer-adapter-claude@0.2.3'
-  - '@vibefield/puppeteer-adapter-codex@0.2.3'
-  - '@vibefield/puppeteer-adapter-copilot@0.2.3'
-  - '@vibefield/puppeteer-adapter-grok@0.2.3'
-  - '@vibefield/puppeteer-adapter-hermes@0.2.3'
-  - '@vibefield/puppeteer-adapter-kimi@0.2.3'
-  - '@vibefield/puppeteer-adapter-opencode@0.2.3'
-  - '@vibefield/puppeteer-adapter-pi@0.2.3'
-  - '@vibefield/puppeteer-builtin-providers@0.2.3'
-  - '@vibefield/puppeteer-core@0.2.3'
-  - '@vibefield/puppeteer-monitor@0.2.3'
-  - '@vibefield/puppeteer-native-observation@0.2.3'
-  - '@vibefield/puppeteer-react@0.2.3'
-  - '@vibefield/puppeteer-record@0.2.3'
-  - '@vibefield/puppeteer-runtime@0.2.3'
-  - '@vibefield/puppeteer-view-sdk@0.2.3'
-  - '@vibefield/puppeteer-views@0.2.3'
-  - '@vibefield/puppeteer-workspaces@0.2.3'
+  # puppeteer (RD-5's exit for its npm plane, 0.2.3 on 2026-10-26): our own packages, reviewed as an EL8 pin.
+  # Every `@vibefield/puppeteer-*` package the seven rows reach is here, the adapters included: they are the
+  # rows' dependencies, and the window applies to each.
+  # 0.2.3 → 0.3.0 (2026-10-28, QA fix wave 1's puppeteer half): published 2026-10-28 08:27–08:35Z by the tag's
+  # release run (v0.3.0 = d0aa1224), inside the release-age window on the day the pin moves. The same 20 packages
+  # as 0.2.3. The 0.2.3 rows went after the one install.
+  - '@vibefield/puppeteer-adapter-acp@0.3.0'
+  - '@vibefield/puppeteer-adapter-antigravity@0.3.0'
+  - '@vibefield/puppeteer-adapter-claude@0.3.0'
+  - '@vibefield/puppeteer-adapter-codex@0.3.0'
+  - '@vibefield/puppeteer-adapter-copilot@0.3.0'
+  - '@vibefield/puppeteer-adapter-grok@0.3.0'
+  - '@vibefield/puppeteer-adapter-hermes@0.3.0'
+  - '@vibefield/puppeteer-adapter-kimi@0.3.0'
+  - '@vibefield/puppeteer-adapter-opencode@0.3.0'
+  - '@vibefield/puppeteer-adapter-pi@0.3.0'
+  - '@vibefield/puppeteer-builtin-providers@0.3.0'
+  - '@vibefield/puppeteer-core@0.3.0'
+  - '@vibefield/puppeteer-monitor@0.3.0'
+  - '@vibefield/puppeteer-native-observation@0.3.0'
+  - '@vibefield/puppeteer-react@0.3.0'
+  - '@vibefield/puppeteer-record@0.3.0'
+  - '@vibefield/puppeteer-runtime@0.3.0'
+  - '@vibefield/puppeteer-view-sdk@0.3.0'
+  - '@vibefield/puppeteer-views@0.3.0'
+  - '@vibefield/puppeteer-workspaces@0.3.0'
   # The truffle pins are exact and move together as one EL8 commit across the three places.
   # 0.7.19 → 0.7.22 (2026-10-25, with ghosttea 0.13.4): published 2026-10-25
   # 10:58Z, inside the release-age window on the day the pin moves. Sidecar
