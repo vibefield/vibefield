@@ -96,7 +96,7 @@
 - Landed: ghosttea 0.13.7 + truffle 0.7.23 (`5ba36785b`); truffle 0.7.24, the split (`af3f3078f`, DECISIONS TB (a)).
 - Watch: the kit's Swift plane rejoins truffle 0.7.24 at the first ghosttea that declares it. Next events: a later
   puppeteer release (§3 item 3; 0.3.0 pinned 10-28, `1469639a6`), mille's first release. The next event's kit pre-boots the
-  simulator (`/Volumes/SamsungRed/lanes/hl-k1/kit-template.sh`, item 77's k1). CLAUDE.md's pin lines ride the dated CLAUDE.md pass (§5).
+  simulator (`/Volumes/SamsungRed/lanes/hl-k1/kit-template.sh`, item 77's k1). CLAUDE.md names no pin since its dated pass (2026-10-28), so an EL8 event leaves it alone.
 
 **Fixer** · fixer · law the LANDED item entries
 - Landed since the audit: items 82 (`714ecbaae`, `8828601ed`), 83 (`f0b5342ac`) and 84 (`68296443f`).
@@ -254,10 +254,6 @@
   release (0.3.x or 0.4.0) for AO-7's `installRecipe`, item 50's env seam, item 39 and the tuck (push and merge
   `vf/item-39`, `vf/after-a` first) · mille's first
   npm release · rosettad as a release asset (RD-D7) · RD-4's pipelines (who runs them is open, §9).
-- The CLAUDE.md pass (Q1): one dated pass, number-free where a manifest holds the number (the pin lines, the Tools
-  line, the opener's "A · B · C" tracks, design-06 in the authority order, the taxonomy, the closed-window blocks and
-  their errata, and the checkout count: CLAUDE.md says "three", which LANDED "QW1 stack A" names stale, and it is two,
-  `../rosetta-pin` and `../mille-pin`, since RD-5a-2 (`a04850e29`)). It lands only after his typed approval of its text.
 - The Mac mini (Q24): full Xcode 26 there is DEFERRED (James, 2026-10-28 08:46Z: "not able to install xcode on mini
   right now, please run those test on this mac instead"), so row 30 (`smoke:update`), the one gate row that needs it,
   runs on James's Mac. Claude lists the mini's leftovers, read-only, for his hand (`/tmp/vf-smoke-*`, `~/vf-lanes`
@@ -370,7 +366,6 @@
 - SNAP's DECISIONS status (the audit's item 18), only after `codesign -dv` on a nightly's zip shows a Developer ID-signed `field-screenshot-helper.app`.
 - DECISIONS rows not yet written (the audit's appendix B), each after its owner's status read: RL2…RL8, K-D1…K-D6, AR6-D1…D9, CO-D.
 - G27's own file (`draft/petitions/G27-ghosttea-kit-routed-terminal-client.md`) still says "Filed 2026-09-14": a dated correction at its source.
-- The archive's same-snapshot edits to moved docs are not done (the desk-chrome and ios-pocket stubs, composer's README, one-frame's README line, p3–p7's and predesign-04's Status lines, mat-chrome's flip): `draft/archive/INDEX.md` "Same-snapshot work" speaks for each.
 - LANDED's dated corrections: the EL8 to ghosttea 0.13.7 entry's "FieldTerminalTests' 60 s red is a fixed set of 17", corrected or confirmed now that item 77b measured the 60 s block (§2 Fixer).
 - `.github/workflows/verify.yml`'s step name still says "Build rosettad and the Ghosttea renderer from their pinned siblings".
 - DESIGN.md's own owed lines: the catalog's replica specimens (the catalog slice: it mounts the shipping view) and §8's uninstall words, doc first.

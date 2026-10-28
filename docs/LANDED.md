@@ -18211,3 +18211,28 @@ wave 1 is complete):
 - Step 1's two parts stay owed to fix wave 2 (the provisional record before the PTY is spawned; Claude's open
   permission at an attach), with Q06 (2), Q08's census and the rest the RA and Q rows name.
 - QA wave 1, the plan's run on this main.
+
+## HK — the CLAUDE.md pass (Q1): Machine setup names no pin, the errata fold into one note, and the checkout count is two (2026-10-28; James's typed approval "approve CLAUDE.md", 16:44Z)
+
+The housekeeping page's Q1 "A" (one dated pass, number-free where a manifest holds the number), HELD in LANDED "HK"
+until James approved the text. The text is the one he approved (`owed/CLAUDE.md.proposed`, the five points), plus two
+corrections made at landing, each on his word:
+- It said `smoke:profile --app`, but row 31 has no root script, so it now reads
+  `pnpm --filter @vibefield/desktop smoke:profile --app` (desk-gates row 31's own correction).
+- It said to copy `fixtures/agent-catalog.valid.json` to "the kit's three mirrors". There are five:
+  `Sources/FieldWorkspace/Fixtures`, and the `Tests/*/Fixtures` of FieldMesh, FieldProduct, FieldSwarm and
+  FieldWorkspace. `2ac789293` wrote all five; VF-PM found the line at its verification, 2026-10-28 16:48Z.
+- The opener drops the retired "A · B · C" track names and points at `docs/ROADMAP.md`.
+- `design-06-sync-planes` joins the authority order. There is no design-05.
+- The taxonomy names `live-surfaces` and the plugin authoring kit (`tooling/plugin-cli`, `tooling/create-plugin`).
+- **Machine setup names no pin.** It points at the manifests that hold them: Cargo.toml/Cargo.lock, the pnpm-workspace
+  overrides, apps/desktop's five sidecar rows, Package.swift/Package.resolved, siblings.lock.json, rust-toolchain.toml
+  and preflight's `PIN_EXPECTATIONS`. The four errata blocks (08-07, 09-16, 10-24 ×2) fold into one dated note.
+  truffle and ghosttea are stated as released on every plane, and the sibling model and the dev overlay become bullets.
+- **The checkout count is two:** `../rosetta-pin` and `../mille-pin`. `needsCheckout` is true for rosetta and mille
+  alone, read again at main `e3a00a07f`, after the EL8 to puppeteer 0.3.0. The 10-22/23 mini measurement of three is
+  kept as the last measurement. LANDED "QW1 stack A" had named the "three" stale.
+- The commands name the packaged rows 29–31.
+- ROADMAP: §5's Q1 bullet and §6's "same-snapshot edits" item leave (the latter was done in dev-local `3bfc5f604`),
+  and §2's EL8 line says CLAUDE.md names no pin.
+- Checks (docs only): nothing reads CLAUDE.md at runtime, so no verify ran.
