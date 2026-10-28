@@ -17966,3 +17966,55 @@ render. The class is the same; the window is milliseconds wide.
   `pnpm test:rust` 31 suites with 492 passed and 0 failed, and gen:check clean. The verify ran at `63cd8384f`, whose
   body was then amended with the red-first numbers: `68296443f` carries the same tree.
 - Records: `/Volumes/SamsungRed/lanes/records/item84/`.
+
+## QW1 stack A — fix wave 1's first landing: Q17 (ACP offers no spawn), Q04 (hidden means unread), Q06 (1) (a failed body stays until its pane is seen), Q12's departure in DESIGN.md, re-attach Step 0's VibeField half, and the dev overlay's `workspace:` closure (2026-10-28; `3932cc190` … `6b3d33af6`, lane `qa-w1`; James's rulings of 2026-10-27, the fix waves on his word 22:26Z)
+
+**What landed** (14 commits on `9612ade48`, linear; 46 files, +1285/−104), all on the pinned puppeteer 0.2.3:
+- `3932cc190`, the DECISIONS rows for Q01…Q21 (the Godview swarm QA rulings) and RA-D1…RA-D9 (re-attach).
+- `c33543e92`, Q17: ACP's catalog row stops offering spawn until fieldd supplies a connector (AC-D7's dated note at its
+  source). `2ac789293` is `pnpm gen`'s catalog and fixture, mirrored to all five kit copies. CLAUDE.md's "three" is
+  stale; that line is James's to correct.
+- `8dda9b9fa`, Q04: the focused pane counts as shown only while the terminals are up.
+- `d4d1e3650`, Q06 (1): a crashed agent keeps its body until a screen has shown its pane, then fieldd acknowledges the
+  failure, and only from the person's own window (`43c613ba2`). Q06 (2), telling a typed crash from a clean quit,
+  was WITHDRAWN in review: it was a consumer with no producer, and its test passed only on a widened grace.
+- `2d50c5ddb`, Q12: DESIGN.md §6 specifies the departure. The swarm draws it in puppeteer's half, with 0.2.4.
+- `4c54f20c7`, `fc00e34c3`, `94029a3c5`, re-attach Step 0:
+  - an adapter's helper is born with the agent's environment, never fieldd's (EL7, item 50's class), once the
+    pinned puppeteer asks;
+  - a resume of a conversation the agent has not saved is refused before its PTY is touched (RA-D7 A);
+  - the agent-plane pages.
+- `43c613ba2`, the review fixes on A: Q14's `words()` catch is left to the kit; the phone's idle never dims (Q01);
+  DESIGN.md's put-back; the DECISIONS status.
+- `cd585b1b4`, RD: the overlay links a linked package's `workspace:` dependencies from the sibling's own workspace, and
+  aligns every linked package's hoist first. Since the 0.2.3 pin, `pnpm siblings use puppeteer` had failed twice
+  over: ERR_PNPM_WORKSPACE_PKG_NOT_FOUND, then align's "no copy of …runtime → …core". It is red-first: the shape suite
+  is 24/25 on each old script and 25/25 with the fix.
+- `804a1f147` and `6b3d33af6`, gate fixes on A: the launcher counts nine agents since Q17, and the swarm-interaction
+  test finds its renderer module by the installed file (dist, or the overlay's src).
+- `9ea733f04`, DECISIONS: Q16's n20 goldens were re-blessed on James's word, 2026-10-28 03:58Z.
+
+**What waits** is stack B (`qa-w1/linear`, on A): Q05 (the marks fieldd keeps), Q08 (the adapter-named stop),
+re-attach Step 1, the write-word ruling (James, typed 2026-10-28 04:22Z) and the gate fixes for B. It waits with
+puppeteer's half of every lane (`qa-w1/integration` in puppeteer) for puppeteer 0.2.4 and the EL8 pin.
+
+**The gates** ran on lanes/qa-w1, this Mac, at nice 19, with the guard before each, in VF-PM's slot from 03:32Z.
+- **(a) puppeteer at `582361e5`:** `pnpm test` and format:check EXIT 0 on run 3.
+  - Run 1 was environment: the lane's ghosttea SDK was unbuilt.
+  - Run 2's reds were fixed in four commits: the groundtruth maps regenerated; one prettier line; three tests that had
+    passed on the `starting` look Q07 removed; and the n20 goldens re-blessed for Q16.
+- **(b) the full tip under the dev overlay:**
+  - The overlay itself was fixed first (`cd585b1b4`).
+  - Its puppeteer stood at the pin `ee785ec1` with the wave's tree `582361e5` as staged edits (write-tree equal):
+    RD-2's co-development shape, with preflight's "dirty" WARN.
+  - Run 4's verify had five reds, each fixed at the cause. On A: the launcher count and the swarm test's mock. On B:
+    the stop-key row, and the model-stream fixtures regenerated per stack. Two rows were load-class.
+- **(c) stack A's landing verify, committed shape, no overlay:**
+  - Run 1 EXIT 1. It had one real red, the swarm test's mock against the published export map (fixed in
+    `6b3d33af6`). It had two load-class rows, each green alone, under a load of 57–109 (mds_stores, WindowServer):
+    fieldd agent-session MF-1f's 15 s floor wait (9.0 s alone) and electron-shell smoke-profile DK-18's 5 s
+    (1.77 s alone).
+  - Run 2 at `6b3d33af6` EXIT 0: preflight OK with 3 WARNs, every vitest suite green, `test:rust` 31 ok, and
+    gen:check clean. Log: `/Volumes/SamsungRed/lanes/qa-w1/logs/c-6b3d33af6/verify.log`.
+- VF-PM verified the packet read-only at 04:31Z.
+- Records: `/Volumes/SamsungRed/lanes/qa-w1/` (the scripts and every gate's logs).
