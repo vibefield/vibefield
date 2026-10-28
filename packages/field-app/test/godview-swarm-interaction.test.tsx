@@ -17,20 +17,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // view's driver runs the same host in this thread and says so) all run. The
 // handoff is M59's: a launcher's agent row arrives wearing the shell's
 // `visualId`, and the body the shell had is the one the agent keeps.
-// The renderer module inside the views package as it resolves here: the published per-file `dist` (.js) from the
-// registry, or the checkout's `src` (.ts) while the dev overlay links it (RD-2) — the package exports no such
-// subpath, so it is found beside the package's own entry, and the mock holds in both shapes (a fixed `dist` path
-// missed the overlay's module and let the real WebGPU renderer run: lanes/qa-w1, 2026-10-28).
+// The renderer module inside the views package as it is installed here: the published per-file `dist` (.js)
+// from the registry, or the checkout's `src` (.ts) while the dev overlay links it (RD-2). The package exports no
+// such subpath (and its export map gives `require` no entry), so the module is found by the file that exists in
+// field-app's own node_modules link, and the mock holds in both shapes (a fixed `dist` path missed the overlay's
+// module and let the real WebGPU renderer run: lanes/qa-w1, 2026-10-28).
 const { paint, RENDERER } = await vi.hoisted(async () => {
-  const { createRequire } = await import("node:module");
-  const { dirname, join } = await import("node:path");
-  const entry = createRequire(import.meta.url).resolve("@vibefield/puppeteer-views");
+  const { existsSync, realpathSync } = await import("node:fs");
+  // the test file's own directory (vitest's import.meta.dirname; this environment's import.meta.url is not file:)
+  const views = realpathSync(`${import.meta.dirname}/../node_modules/@vibefield/puppeteer-views`);
+  const dist = `${views}/dist/views/swarm/gpu/swarm-renderer.js`;
   return {
     paint: vi.fn<(frame: SwarmFrame) => void>(),
-    RENDERER: join(
-      dirname(entry),
-      `views/swarm/gpu/swarm-renderer.${entry.endsWith(".ts") ? "ts" : "js"}`,
-    ),
+    RENDERER: existsSync(dist) ? dist : `${views}/src/views/swarm/gpu/swarm-renderer.ts`,
   };
 });
 vi.mock(RENDERER, async (original) => ({
