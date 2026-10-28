@@ -18018,3 +18018,86 @@ puppeteer's half of every lane (`qa-w1/integration` in puppeteer) for puppeteer 
     gen:check clean. Log: `/Volumes/SamsungRed/lanes/qa-w1/logs/c-6b3d33af6/verify.log`.
 - VF-PM verified the packet read-only at 04:31Z.
 - Records: `/Volumes/SamsungRed/lanes/qa-w1/` (the scripts and every gate's logs).
+
+## HK — the housekeeping pass: every roadmap and plan item re-judged against the desk and today's tracks; ROADMAP rewritten, DECISIONS flipped, the root docs brought to main, and the stale drafts archived (2026-10-28; `d59b9f557`, lane `hk/records`; James's 40 rulings on the page 04:15Z–07:36Z, and D-1/D-10 at 08:39Z–08:40Z)
+
+**The ask** (James, 2026-10-27 21:29Z): go through the roadmap item by item, trace each item's history and decisions,
+judge it against the latest direction and the work in flight, re-organise the roadmap and planning, and archive what
+is stale (his example: the widgetlab port, retired by the desk). The record is
+`draft/thinking-housekeeping-2026-10-27.md`.
+
+**How it was judged:**
+- The audit: workflow `wf_3f37d7e0-58e`, 2026-10-27 21:50Z → 10-28 ~04:00Z, 88 agents, on main `bb1a2c823` and
+  dev-local `073a6d3c8`. It read 1,084 items: 353 DONE, 221 STALE-FACT, 163 LAW, 133 OWED, 60 PARKED, 39 DUPLICATE,
+  37 SUPERSEDED, 32 ASK-JAMES, 27 RETIRED and 19 ACTIVE. An adversarial verifier checked every chunk and added 267
+  missed items.
+- The rulings: James on the page *Roadmap Housekeeping* (https://claude.ai/artifact/DNgNF6ijv9ATGVXDy4R1Ew, db
+  `decisions`). He ruled R1, A1, Q1…Q29 and ten lab rows, 40 of 40, 04:15Z–07:36Z (read back 07:38Z). Q23's follow-ups,
+  compact.md's D-1 and D-10, he ruled 08:39Z–08:40Z (read back 08:41Z). Two rulings followed on the board: Q25's
+  `draft/ground/results` KEPT (08:37:56Z) and Q24's Xcode install on the mini DEFERRED (08:46Z), so row 30 runs on his
+  Mac.
+- The records pass: workflow `wf_eb6198ce-c1f` (nine writers, one adversarial reviewer, 07:44Z–08:32Z). The reviewer's
+  blocker and its 19 findings were fixed before this commit.
+
+**What landed** (one commit, 13 files, +1021/−2510, docs only):
+- **docs/ROADMAP.md, rewritten in place:** 2,074 → 473 lines.
+  - §1's "Heads" bullet is the head (the lead's ruling, 07:40Z).
+  - Sections: §2 now and next (a QW1 row stays for stack B to flip) · §3 next up · §4 parked · §5 owed by James ·
+    §6 open debts, with "Records" listing what this pass leaves owed · §7 upstream · §8 retired and superseded ·
+    §9 open questions, two left (`draft/work/`; who runs RD-4's pipelines).
+  - Done work points at this ledger, `draft/archive/INDEX.md` and DECISIONS' HK row instead of being restated.
+- **docs/DECISIONS.md:** 99 → 104 rows, 47 rows amended (three of them re-titled: EDP-1…EDP-41, UA-P-W, TB) and five new
+  (GT — no kill control; DESIGN.md's signatures and Fieldmarks; TC-D1…TC-D15; HK; compact D-1…D-12).
+  - The AO, TS, Q01…Q21 and RA rows are byte-identical to `a7498883f`, so stack B (`ffdfe4808`) merges clean (merge-tree
+    tree `4421ea992`).
+  - Among the flips: TC ratified as built (Q6); WP12-D6 amended to 0.1.0 until the v0.9.0-beta.1 cut (Q7); PRC-6c2b's
+    run 1 recorded as failed (1,535 samples), root-caused first (Q8); M9 withdrawn (Q10); FV-D6 closed by One Frame
+    (Q15); PJ-D23 superseded by PK4 (`93cacd7ec`); D11/D14/D15/D16 retired with the widget canvas; TB-E's row is T13
+    (Q22); DS's two built trades accepted (Q29).
+- **DESIGN.md:** the desk sweep; Q18 (§1's signatures become the mat under one light and the one frame; §7 becomes
+  "Interactive states"); one path moves to `draft/archive/superseded/four-views/`. §2.9, which `project-ink.test.ts`
+  reads, is unchanged byte for byte. §11/§11.1 stay until Q19's code slice retires Fieldmarks.
+- **The root docs brought to main:** README.md, .env.example (the link moved to Settings → Devices at TS-3a; a dated
+  comment correction), WINDOWS_PORT_STATUS, desk-gates (the cutover heading's old name kept as a note), AGENT_PLANE,
+  the agent-plane pages (architecture: FS-3's tree consumer is unowned since DK; system), usage-meters, UI_SYSTEM and
+  the icons README.
+
+**The draft half lands in the next dev-local snapshot**, on VF-PM's queue word, after this fast-forward:
+- 79 archive moves, 1,445 files, into `draft/archive/{executed,superseded,retired,evidence}/` (`archive.sh`);
+- 108 reference rewrites in 39 living draft files (`refs.sh`);
+- `draft/archive/INDEX.md`, the map from every old path to its new one, which code comments keep;
+- 44 thinking docs' Status headers, 22 specs and design docs' dated amendments, the petitions README restructured
+  (Open, Parked, Closed, Retired), compact.md's D-1/D-10 notes, and the record doc.
+
+**HELD:**
+- CLAUDE.md (Q1): `owed/CLAUDE.md.proposed` lands only on James's typed approval of its text.
+- Archive rows 10, 13, 20, 31, 33, 55 and 65, and 58 on its precondition (each with its reason in the INDEX).
+- The Mac mini's disk inventory: read-only, for James's hand (VF-PM's grant, 08:50Z).
+- The Q19 Fieldmarks code slice: its own lane.
+- Owed (ROADMAP §6 "Records"):
+  - the design-00…04 fold-back and design-03's TPv3 §13 fold;
+  - thinking-portals §4's limits as law;
+  - the LIVE docs' corrections once their owners release them;
+  - siblings.lock.json's stale `//` comment (QW1's pin commit);
+  - verify.yml's step name;
+  - this ledger's two dated corrections (QW1 stack A's puppeteer 0.2.4; the 0.13.7 entry's "fixed set of 17");
+  - F-C6-4's confirmation.
+
+**Checks** (docs only, no verify):
+- DESIGN.md's runtime readers hold without a run. Five field-app tests read it:
+  - `project-ink.test.ts`: §2.9 is byte-identical;
+  - `godview-head.test.tsx` :610;
+  - `godview-deck-edge.test.tsx` :1164 and :1343;
+  - `limit-moment.test.tsx` :261;
+  - `line-model.test.ts` :134, its three refusal sentences.
+  Each of their 32 assertions was evaluated against this commit's DESIGN.md and holds as it does on main (VF-PM read
+  them separately at 08:58Z). The first commit's message said only project-ink reads it; the three `.tsx` readers were
+  found by VF-PM, and `line-model.test.ts` and `limit-moment.test.tsx` by the re-check. `check-retired-names` skips
+  docs.
+- biome on the two HTML pages: the same 4 warnings as main.
+- DECISIONS' and ROADMAP's tables are column-clean.
+- `archive.sh --check` and `refs.sh --check` exit 0.
+- merge-tree: clean onto main `a7498883f` and with stack B `ffdfe4808`.
+- VF-PM verified the packet read-only at 08:56Z.
+- Cost: about 14.1M subagent tokens for the audit (the account's usage limit paused it 00:14Z–02:31Z) and about 2.24M
+  for the records pass.
