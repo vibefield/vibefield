@@ -32,7 +32,8 @@
   verify on `a7498883f` is GREEN (run 40638591985, 06:02:37Z). Before it: green on `9612ade48` (run 40624603346), and
   RED on `0ec11879e` (run 40605216364: item 84, AO-3's fixed-date History row expired at midnight UTC; `9612ade48`
   fixed it). `nightly-20261028` may dispatch on the green head (`scripts/release-plan.mjs:62`: never from a red trunk).
-  Since the audit's base (`bb1a2c823`): AL-9, items 82–84, TS-8a/8b, the TS-3a erratum, AO-6b3 and QW1 stack A landed.
+  Since the audit's base (`bb1a2c823`): AL-9, items 82–84, TS-8a/8b, the TS-3a erratum, AO-6b3 and QW1 stack A landed;
+  then HK, the EL8 to puppeteer 0.3.0 (`1469639a6`) and QW1 stack B (10-28).
 - **The live program.** §2: TS, AO, AL, QW1 (the Godview swarm's fix wave 1), the release rails, the EL8 watch, the
   fixer, upstream. The first-beta blockers are §3 item 7. Everything valid but unscheduled is §4.
 
@@ -75,12 +76,13 @@
   is seen; Q06 (2) withdrawn in review), Q12's departure in DESIGN.md §6, re-attach Step 0's VibeField half (the
   helpers' environment; RA-D7's resume guard), the dev overlay's `workspace:` closure (`cd585b1b4`), and Q16's goldens
   re-blessed on James's word (`9ea733f04`).
-- **Stack B waits** (`qa-w1/linear`, on A): Q05 (the marks fieldd keeps), Q08 (the adapter-named stop), re-attach
-  Step 1, the write-word ruling (James, 10-28 04:22Z) and B's gate fixes, with puppeteer's half of every lane (Q01/Q02,
-  Q03, Q07, Q09, Q12's drawing, Q14, Q16, Q21, the Hermes bearer). Its gate: James's puppeteer 0.3.0 (PUBLISHED 10-28
-  08:19Z), then its EL8 pin; B rebases onto this records pass (VF-PM's sequence, 10-28 07:41Z) and flips this row at its landing.
-- Then QA wave 1, the plan's run on B's tip (VF-PM's grant and James's display). RA-D2 B amends design-02 §2.6 at its
-  landing; RA-D6's own item is owed (§6).
+- **The EL8 to puppeteer 0.3.0 and stack B LANDED 10-28** (`1469639a6`, then B's eight to `9d7e99fbb`, + records; LANDED
+  "EL8 — puppeteer 0.3.0" and "QW1 stack B"), one verify at B's tip: Q05 (the marks fieldd keeps), Q08 (the
+  adapter-named stop), re-attach Step 1 and the write-word ruling (James, 10-28 04:22Z), with puppeteer's half of every
+  lane from the registry (Q01/Q02, Q03, Q05's ledger, Q07, Q09, Q12's drawing, Q14, Q16, Q21, the Hermes bearer). Fix
+  wave 1 is complete.
+- Next: QA wave 1, the plan's run on main (VF-PM's grant and James's display). §2.6's fold is owed at Step 3's custody
+  slice (design-02:13; its erratum stands since 10-27); RA-D6's own item is owed (§6).
 
 **Release rails — WP12 · TD · BP · FW packaging · RD** · prod-builder (resting) · law `specs/build-wp12-updater.md`,
 `specs/trust-and-distribution.md`, the three `specs/electron-*.md` + `electron-packaging-implementation-plan.md`,
@@ -92,8 +94,8 @@
 
 **EL8 — the pins** · vibe-field-5c (template lane `hl-el8-0724`) · law DECISIONS TB, the manifests
 - Landed: ghosttea 0.13.7 + truffle 0.7.23 (`5ba36785b`); truffle 0.7.24, the split (`af3f3078f`, DECISIONS TB (a)).
-- Watch: the kit's Swift plane rejoins truffle 0.7.24 at the first ghosttea that declares it. Next events: puppeteer
-  0.3.0 (PUBLISHED 10-28 08:19Z; one EL8 commit; stack B waits on it), mille's first release. The next event's kit pre-boots the
+- Watch: the kit's Swift plane rejoins truffle 0.7.24 at the first ghosttea that declares it. Next events: a later
+  puppeteer release (§3 item 3; 0.3.0 pinned 10-28, `1469639a6`), mille's first release. The next event's kit pre-boots the
   simulator (`/Volumes/SamsungRed/lanes/hl-k1/kit-template.sh`, item 77's k1). CLAUDE.md's pin lines ride the dated CLAUDE.md pass (§5).
 
 **Fixer** · fixer · law the LANDED item entries
@@ -101,7 +103,9 @@
 - Queue: item 80 (DS-5c's wall-clock gap margin, `doc-sync-service.test.ts`, shaped with the DS owner) with its
   sibling TC-S3 (`terminal-service.test.ts`, 99 against ≥100, red at AO-6b3's verify) · item 71 (persona refresh
   window) · item 73 (`unregistered_webcontents` false positive on every factory window) · item 74 (the generation-1 port
-  forward before the main world, live-surfaces) · the sibling 5 s waits (§6 Gates).
+  forward before the main world, live-surfaces) · the sibling 5 s waits (§6 Gates) · the shell lease's cleanup race
+  (fieldd `shell-lease.test.ts:26`, AL-7: ENOTEMPTY on its own temp dir's `rmSync`, red in QW1 stack B's verify at load
+  236 and green alone; the cleanup waits for the holders or tolerates it, fixed at the cause; VF-PM 10-28 09:39Z).
 - **Item 77b**, FieldTerminalTests' 60 s block. The 5 s shape is fixed: (d) `b1e9bf53d` runs AttachDeadlineTests
   `.serialized`, because each row's 1 s deadline covers the dial too and rows started together stampeded the loopback
   dial under load. k1 is separate: `test-without-building` cold-boots a Shutdown simulator, and pre-booting it
@@ -118,16 +122,16 @@
 
 **PM — main and pushes** · VF-PM
 - Pushes go on James's click, never while CI's verify runs (the concurrency group cancels it). `pnpm commit-draft` only
-  through VF-PM's queue; this rewrite's at-source corrections ride it (§6 Records). This records pass lands first
-  through the docs slot; QW1 stack B rebases onto it.
+  through VF-PM's queue; this rewrite's at-source corrections ride it (§6 Records). This records pass landed first
+  through the docs slot; QW1 stack B rebased onto it and landed on the EL8 pin (10-28).
 
 ## 3 Next — queued, in order
 
 1. `nightly-20261028` and round 3 (prod-builder), after a green verify on origin's head.
 2. The housekeeping records pass through the docs slot (this ROADMAP, DECISIONS' HK row, the archive moves, the
-   at-source corrections), ahead of QW1 stack B.
+   at-source corrections): LANDED 10-28 (`88e8289ea`), ahead of QW1 stack B.
 3. James's puppeteer 0.3.0, PUBLISHED 10-28 08:19Z (`d0aa1224`; its notes list #48 alone, merged as `feat(views)!`
-   at 07:34Z, `e79fc53d`) → its EL8 pin → QW1 stack B → QA wave 1 (vibe-field-d4). 0.3.0 carries none of the
+   at 07:34Z, `e79fc53d`) → its EL8 pin → QW1 stack B (both LANDED 10-28) → QA wave 1 (vibe-field-d4), next. 0.3.0 carries none of the
    following (read at its tag), so they wait on a later puppeteer release (0.3.x or 0.4.0): AO-7 (Get)'s
    `installRecipe`; item 50's env seam (puppeteer `9ffe59d1` + fieldd
    `c0581e952`, branch `focus/agent-probe-env`); item 39 (the swarm's physics at the display's rate, ruled (i) 10-19);
@@ -246,7 +250,7 @@
   after AL-9), other heights. Fold into QA wave 1 if the plan covers it.
 
 **Releases, edits and chores**
-- Releases: puppeteer 0.3.0 PUBLISHED 10-28 08:19Z (#48 alone; its EL8 pin, then QW1 stack B) · a later puppeteer
+- Releases: puppeteer 0.3.0 PUBLISHED 10-28 08:19Z and pinned (`1469639a6`, with QW1 stack B) · a later puppeteer
   release (0.3.x or 0.4.0) for AO-7's `installRecipe`, item 50's env seam, item 39 and the tuck (push and merge
   `vf/item-39`, `vf/after-a` first) · mille's first
   npm release · rosettad as a release asset (RD-D7) · RD-4's pipelines (who runs them is open, §9).
@@ -367,8 +371,7 @@
 - DECISIONS rows not yet written (the audit's appendix B), each after its owner's status read: RL2…RL8, K-D1…K-D6, AR6-D1…D9, CO-D.
 - G27's own file (`draft/petitions/G27-ghosttea-kit-routed-terminal-client.md`) still says "Filed 2026-09-14": a dated correction at its source.
 - The archive's same-snapshot edits to moved docs are not done (the desk-chrome and ios-pocket stubs, composer's README, one-frame's README line, p3–p7's and predesign-04's Status lines, mat-chrome's flip): `draft/archive/INDEX.md` "Same-snapshot work" speaks for each.
-- LANDED's dated corrections: "QW1 stack A"'s puppeteer 0.2.4 claim (0.3.0 shipped instead), at B's landing · the EL8 to ghosttea 0.13.7 entry's "FieldTerminalTests' 60 s red is a fixed set of 17", corrected or confirmed now that item 77b measured the 60 s block (§2 Fixer).
-- `siblings.lock.json`'s `//` comment is stale (ghosttea 0.13.1, truffle's checkout at the tag `truffle-v0.7.19`, Swift "0.7.19"; the entries say 0.13.7 and Swift 0.7.23): fixed with the next EL8 pin commit.
+- LANDED's dated corrections: the EL8 to ghosttea 0.13.7 entry's "FieldTerminalTests' 60 s red is a fixed set of 17", corrected or confirmed now that item 77b measured the 60 s block (§2 Fixer).
 - `.github/workflows/verify.yml`'s step name still says "Build rosettad and the Ghosttea renderer from their pinned siblings".
 - DESIGN.md's own owed lines: the catalog's replica specimens (the catalog slice: it mounts the shipping view) and §8's uninstall words, doc first.
 - Code comments (code lanes): `GodviewDeck.tsx:2327` (re-locate the audit's second line, cited as :2360 at the audit's base) · `terminal-pool.ts:620` (0.13.7, no `prepare()`) · `smoke.ts:9213` (DS-4e's path) · `lab-switches.ts:22` · `plugin-sdk/src/canvas.ts:5-7` · `window-policy.ts:15` · `build-widget.ts:7` · `HomeScreen.swift:20-22` · `TESTFLIGHT.md:212`.
@@ -380,7 +383,7 @@
 | truffle | `truffle-core = "=0.7.24"` (Cargo.toml) + the five npm sidecars 0.7.24 (protocol 11) · Swift exact 0.7.23 (Package.swift's `truffleRelease`; lock `release.swift`) | the split, DECISIONS TB (a), `af3f3078f`; Swift rejoins at the first ghosttea declaring 0.7.24 |
 | ghosttea | 0.13.7 on cargo (`=0.13.7`), npm and Swift | `5ba36785b`; no checkout needed; `../ghosttea-0.11.2` is only the overlay's coordinate |
 | ICE | `@vibecook/ice` 0.16.0 exact (overrides row) · strata 0.13.0 via ICE · `loro-crdt` ^1.13.8, one resolution | EL8 |
-| puppeteer | `@vibefield/puppeteer-*` 0.2.3 exact (tag v0.2.3 = `ee785ec1`) | RD-5a-2 `a04850e29`; next 0.3.0 (PUBLISHED 10-28 08:19Z, `d0aa1224`: #48 alone, merged as `feat(views)!` at 07:34Z), one EL8 commit; `../puppeteer` is the overlay's coordinate |
+| puppeteer | `@vibefield/puppeteer-*` 0.3.0 exact (tag v0.3.0 = `d0aa1224`) | the EL8 `1469639a6` (10-28; RD-5a-2 `a04850e29` took it exact at 0.2.3); `../puppeteer` is the overlay's coordinate |
 | rosetta | `@vibefield/rosetta-protocol` / `-room` 0.1.1 exact · rosettad built from `../rosetta-pin` at `4348545` | RD-5a `fe01ac797`; RD-D7 (no release asset) |
 | mille | `link:../mille-pin` at `c8160d5` (`@vibecook/mille`, `mille-ui`) | FS-1b; no release past v0.3.4; exit RD-6 |
 | rustc | 1.99.1 (`rust-toolchain.toml`) | EL8 |
@@ -395,7 +398,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
   route id's refusal, loopback pages) are recorded as accepted.
 - **rosetta:** RO-8 (retire/forget a runtime; RO-27 depends on it) · RO-11 (with DS-7) · RO-17…RO-23 · RO-24…RO-28
   filed as #23–#27 (AO-8) · RO-10's follow-ups need a row · RO-4's remainder is RD-D7.
-- **puppeteer:** 0.3.0 PUBLISHED 10-28 (its EL8 pin, then QW1 stack B) · a later release for AO-7's `installRecipe`,
+- **puppeteer:** 0.3.0 PUBLISHED and pinned 10-28 (`1469639a6`) · a later release for AO-7's `installRecipe`,
   item 50's env seam, item 39 and the tuck · PU-12 (verify first) · PU-19 filed as #47 (AO-8) · PU-15
   (with AR-6).
 - **mille:** M11 (with WIN). **ICE:** I47, I48 (named, parked) · the remount edge (a pointer `leave` with no point; a
@@ -409,11 +412,11 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | TS — the Tailscale door | ACTIVE; TS-0…3b, 5, 8a, 8b landed | `thinking-tailscale-onboarding.md`; DESIGN.md §6/§8/§9/§13 | TS-4 |
 | AO — Bring Your Agents | ACTIVE; AO-0…6b3 landed | `thinking-agent-onboarding.md` | AO-7 on a puppeteer release after 0.3.0 (`installRecipe`) |
 | AL — app lifecycle | ACTIVE; AL-1…3, 5, 7, 8a, 9 landed | `thinking-app-lifecycle.md`; ESR §7.3 | AL-6, Last exit, relaunch cap |
-| QW1 — Godview swarm QA, fix wave 1 | ACTIVE; stack A landed 10-28; stack B waits on puppeteer 0.3.0's EL8 pin (0.3.0 PUBLISHED 10-28 08:19Z) | `godview-swarm-qa-plan.md`; `thinking-ar-reattach.md` | stack B → QA wave 1 |
+| QW1 — Godview swarm QA, fix wave 1 | ACTIVE; stacks A and B landed 10-28, B on puppeteer 0.3.0's EL8 pin | `godview-swarm-qa-plan.md`; `thinking-ar-reattach.md` | QA wave 1 |
 | Release rails (EDP/ESP, WP12, TD, BP, RD, RM) | ACTIVE; nightlies live, W10/W11 passed | the release specs; `thinking-browser-profile.md`, `thinking-release-deps.md`, `thinking-release-management.md` | round 3; the first-beta list |
-| EL8 — pins | ACTIVE (watch) | DECISIONS TB; the manifests | puppeteer 0.3.0's pin (published 10-28); Swift rejoin |
+| EL8 — pins | ACTIVE (watch) | DECISIONS TB; the manifests | puppeteer 0.3.0 pinned 10-28 (`1469639a6`); Swift rejoin; mille's release |
 | AR — agent runtime | PARKED; AR-3…AR-5b, AR-7, AR-S1…S4e2, AR-S5 landed | `thinking-ar-agent-plane.md`, `thinking-ar-data-topology.md`, `thinking-ar7-typed-agents.md`, `thinking-ar-agents-settings.md` | AR-6 on AR6-D; AR-7j for the beta |
-| MV — monitor views | PARKED; landed 10-08 | `draft/monitor-view-sdk/design-mv.md`; DESIGN.md §8 | puppeteer 0.3.0's rows at its EL8 pin (item 39 and the tuck wait on a later release); QL ratifications |
+| MV — monitor views | PARKED; landed 10-08 | `draft/monitor-view-sdk/design-mv.md`; DESIGN.md §8 | puppeteer 0.3.0 pinned 10-28 (`1469639a6`); item 39 and the tuck wait on a later release; QL ratifications |
 | History (AR-8) / PJ | PARKED; PJ-1…4, 6, 7 landed | `build-hf.md`, `thinking-ar-history-room.md`, `thinking-project-places.md` | R8/R9; B-D4/B-D5; PJ-5 re-judged; PJ-8 after DS-7 |
 | DS / SP — sync planes (was C — mesh) | PARKED; waves 1–3 landed | design-04, `design-06-sync-planes.md`, `thinking-desktop-sync-plane.md`, `thinking-sync-planes.md`, `thinking-c6-meshdata.md` | DS-7 with an owner + the two-desktop run |
 | FW — the freeway | PARKED; F1 landed 10-20, packaging 10-27 | `thinking-freeway.md` | James's device round; FD1/FD2's owner |

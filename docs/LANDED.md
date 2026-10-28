@@ -17978,7 +17978,7 @@ render. The class is the same; the window is milliseconds wide.
 - `d4d1e3650`, Q06 (1): a crashed agent keeps its body until a screen has shown its pane, then fieldd acknowledges the
   failure, and only from the person's own window (`43c613ba2`). Q06 (2), telling a typed crash from a clean quit,
   was WITHDRAWN in review: it was a consumer with no producer, and its test passed only on a widened grace.
-- `2d50c5ddb`, Q12: DESIGN.md §6 specifies the departure. The swarm draws it in puppeteer's half, with 0.2.4.
+- `2d50c5ddb`, Q12: DESIGN.md §6 specifies the departure. The swarm draws it in puppeteer's half, with ~~0.2.4~~ *(Corrected 2026-10-28, the EL8 to puppeteer 0.3.0: FALSE as a version. The release is 0.3.0. James squash-merged #48 as `feat(views)!`, a breaking change by the letter (four exports removed, none imported here), so release-please cut a minor.)*
 - `4c54f20c7`, `fc00e34c3`, `94029a3c5`, re-attach Step 0:
   - an adapter's helper is born with the agent's environment, never fieldd's (EL7, item 50's class), once the
     pinned puppeteer asks;
@@ -17996,7 +17996,7 @@ render. The class is the same; the window is milliseconds wide.
 
 **What waits** is stack B (`qa-w1/linear`, on A): Q05 (the marks fieldd keeps), Q08 (the adapter-named stop),
 re-attach Step 1, the write-word ruling (James, typed 2026-10-28 04:22Z) and the gate fixes for B. It waits with
-puppeteer's half of every lane (`qa-w1/integration` in puppeteer) for puppeteer 0.2.4 and the EL8 pin.
+puppeteer's half of every lane (`qa-w1/integration` in puppeteer) for puppeteer ~~0.2.4~~ *(Corrected 2026-10-28, the EL8 to puppeteer 0.3.0: FALSE as a version. The release is 0.3.0. James squash-merged #48 as `feat(views)!`, a breaking change by the letter (four exports removed, none imported here), so release-please cut a minor.)* and the EL8 pin.
 
 **The gates** ran on lanes/qa-w1, this Mac, at nice 19, with the guard before each, in VF-PM's slot from 03:32Z.
 - **(a) puppeteer at `582361e5`:** `pnpm test` and format:check EXIT 0 on run 3.
@@ -18101,3 +18101,113 @@ is stale (his example: the widgetlab port, retired by the desk). The record is
 - VF-PM verified the packet read-only at 08:56Z.
 - Cost: about 14.1M subagent tokens for the audit (the account's usage limit paused it 00:14Z–02:31Z) and about 2.24M
   for the records pass.
+
+## EL8 — puppeteer 0.3.0: QA fix wave 1's puppeteer half from the registry, `@vibefield/puppeteer-*` 0.3.0 published from the tag v0.3.0 = `d0aa1224`; the lock's header rewritten to today's planes (2026-10-28; `1469639a6`, lane qa-w1, landed with QW1 stack B)
+
+**What landed** (one commit on `88e8289ea`, 7 files; RD-5a-2's shape, `a04850e29`, without its rename):
+- The lock's puppeteer entry records `release.npm` "0.3.0", and its checkout coordinate moves `ee785ec1` → `d0aa1224`
+  (`pnpm siblings:pin puppeteer` at the tag). `render --prod` writes the seven override rows; the overrides comment
+  carries a dated 0.3.0 line; preflight's seven PIN_EXPECTATIONS move to 0.3.0, still anchored to the line's end.
+- minimumReleaseAgeExclude: the 20 rows the seven reach move to @0.3.0 (published today). The 0.2.3 rows stayed for the
+  one install and went after it (`af3f3078f`'s shape); a frozen offline install after the drop left the lock
+  byte-identical.
+- pnpm-lock.yaml: the 20 `@vibefield/puppeteer-*` entries 0.2.3 → 0.3.0 (specifiers, versions, integrity) and nothing
+  else.
+- siblings.lock.json's `//` header is REWRITTEN to today's planes (VF-PM 08:37Z, from HK's audit). It had kept ghosttea
+  0.13.1 and truffle 0.7.19 on every plane. Each number was read from its manifest: Cargo.toml's `truffle-core =
+  "=0.7.24"` and `ghosttea = "=0.13.7"`, apps/desktop's five sidecars 0.7.24, Package.resolved (ghosttea 0.13.7 at
+  `3eee581`, truffle 0.7.23 at `0b83a2c`), and the lock's release blocks.
+- The three agent-plane lines stack A wrote as "not in the 0.2.3 pin" (`AgentHost.helperEnvironment` in api.html,
+  architecture.html and system.html) say "since puppeteer 0.3.0".
+
+**What 0.3.0 is** (read 2026-10-28 09:16–09:18Z):
+- Release PR #49 (`d0aa1224`) on #48 (`e79fc53d`, QA fix wave 1's puppeteer half, squash-merged as `feat(views)!`) and
+  #46 (a Grok conformance test in packages/imposter, which no row reaches). The tree is the wave's tip `ca52eddb` plus
+  #46 plus release-please's version lines.
+- A minor, not a patch: `feat(views)!` removes four exports (`hostWriteWord`, `hostWriteTitle` from the view-sdk's
+  toolkit; `remoteWriteLabel`, `remoteWriteTitle` from the views), none imported here.
+- The same 23 packages as 0.2.3, all public; no package manifest moved beyond its version, so the seven rows reach the
+  same 20.
+- npm: all 20 at 0.3.0 and `latest`, published 08:27:35–08:35:28Z; the SLSA provenance of core, runtime and views names
+  refs/tags/v0.3.0 @ `d0aa1224`, built by release.yml; `git ls-remote` gives the same tag (lightweight).
+
+**Gates on this commit alone** (VF-PM's ruling 08:16Z: one verify, at stack B's tip, because the tests 0.3.0 moves
+ride B):
+- `pnpm siblings:pin puppeteer` exit 0: rosettad fresh; wall R23 pass (10 catalog rows honoured by both pins, self-test
+  28/28, one warning, "`acp` could offer `spawn` — the pin implements `createSession`", Q17's own ruling, present in
+  stack A's and B's gate logs before this pin); the consumers' `pnpm typecheck` green; gen:check clean.
+- `render --prod --check` green; `pnpm preflight` OK (that one warning); no overlay.
+- The lane's truffle checkout sat at 0.7.22 (`f7e3900`), which `siblings:pin` refuses (it checks every present
+  checkout); it was moved to main's pin `0b83a2c` first.
+
+**Found, not new:** `@vibefield/puppeteer-view-sdk` declares an OPTIONAL peer `vitest >=4.1.11 <5` against this tree's
+vitest 3.2.7. 0.2.3 declared the same (npm view); the frozen installs never printed it.
+
+**Owed:** verify.yml's stale step name ("…and the Ghosttea renderer…"), the fixer's one line (ROADMAP §6). CLAUDE.md's
+pin lines ride James's dated CLAUDE.md pass.
+
+## QW1 stack B — fix wave 1's second landing: Q05 (the marks fieldd keeps), Q08 (the adapter-named stop), re-attach Step 1 and the write-word ruling, on puppeteer 0.3.0 (2026-10-28; `b540fca8e` … `9d7e99fbb`, lane qa-w1, on the EL8 pin `1469639a6`)
+
+**What landed** (8 commits on `1469639a6`, linear; B's eight from `ffdfe4808`, rebased; with puppeteer 0.3.0, fix
+wave 1 is complete):
+- `b540fca8e`, Q05: the marks are fieldd's. No reload or closed Godview drops a mark; a turn that ends with no board
+  open is marked, through puppeteer's ledger and its host seed/read seam.
+- `f86588d43`, Q08: the stop verb sends the run's own turn stop as its adapter names it (Pi and Claude: Esc; Hermes:
+  its gateway's interrupt), the frame's title names it, and an observed idle agent's stop presses nothing. The rest
+  send ⌃C until QA wave 1's census.
+- `08dc31b18` and `4548615e8`, re-attach Step 1: an attach is handed what the launch knew, the continuation and the
+  adapter's opaque attach record (RA-D3 A), kept in the signed record's `attach` slot; a failed attach carries the
+  adapter's next step, and fieldd retries a transient one after 1, 2, 4, 8 and 16 s; the agent-plane pages.
+- `51369a8a8`, the review fixes on B: api.html's reportShown row says Q05's ledger is puppeteer's, since 0.3.0.
+- `e5fdadb43`, a gate fix: the stop-key row parses the desk row as the board publishes it, with its revision.
+- `ca738b9f6`, the write-word ruling (James, typed 2026-10-28 04:22Z): a peer is writable by default, so no surface
+  marks writable or read-only. field-app's `remote-write.ts` is deleted; the phone's swarm body says the desk's name
+  alone and its write invitation retires; DECISIONS' Q16 clause and GT row.
+- `9d7e99fbb`, a gate fix: the model-stream fixtures as the wave's puppeteer writes them, a peer's ended turn keeping
+  its unread mark (Q05). Written under the dev overlay at the wave's tree; they hold against the registry 0.3.0.
+
+**The rebase onto the pin** (`git range-diff a7498883f..ffdfe4808 1469639a6..9d7e99fbb`, in
+`/Volumes/SamsungRed/lanes/qa-w1/records/range-diff-B-Bprime.txt`):
+- Five commits are `=`.
+- `4548615e8` carries a fixup: architecture.html's two lines say "since puppeteer 0.3.0", not "on puppeteer's QW1
+  attach branch … not in the 0.2.3 pin".
+- `51369a8a8` is reworded by an amend!: its one hunk, the reportShown row's Q05 qualifier, names the release, and its
+  subject and body say so.
+- `ca738b9f6` differs in context only: HK rewrote DECISIONS' rows around its hunks, whose own lines are
+  byte-identical.
+- merge-tree onto `88e8289ea` was clean (HK's own check and this lane's).
+
+**The gates** ran on lanes/qa-w1, this Mac, at nice 19, with the guard before each, in VF-PM's slot (the grant 09:17Z;
+"A VERIFY RUNS" from 09:29Z). There was no overlay: `.pnpmfile.cjs` was absent and preflight names no linked puppeteer.
+- **The light pass at `9d7e99fbb`** (09:25–09:28Z), all green:
+  - typecheck for contracts, field-app and fieldd; preflight OK (Q17's one R23 warning); the walls; biome (19 files);
+  - vitest: contracts 2 files / 60 tests; field-app 30 files / 512 tests (B's touched suites, plus every field-app
+    suite that imports puppeteer's views, view-sdk or monitor, the model-stream fixtures among them, against the
+    registry 0.3.0); fieldd agent-model-board, agent-monitor, agent-session and agent-stop-key, 91 passed / 2 skipped.
+- **`pnpm verify` at `9d7e99fbb`** (09:29:08–09:34:08Z) EXIT 1, by two loaded-host rows (load 236 at its end):
+  - Preflight through bundle:assert were green. In `pnpm test`, 26 of 27 projects were green: field-app 227 files
+    (1 skipped), electron-shell 145, contracts 49 / 1,199.
+  - fieldd had 2 failed, 201 passed and 3 skipped (2,568 tests):
+    - agent-session.test.ts:2904, MF-1's "a settled board kept sending frames" (3 frames, not 2): the known MF-1
+      lottery family. Rerun once alone at 09:34:52Z (load 236 → 79): 52 passed / 2 skipped.
+    - shell-lease.test.ts:26, AL-7's ENOTEMPTY on its own temp dir's `rmSync` at cleanup: a cleanup race that reads
+      nothing from puppeteer. Rerun once alone at 09:36:00Z: 15/15. It goes to the fixer as its own item (the cleanup
+      waits for the holders or tolerates ENOTEMPTY, fixed at the cause).
+  - The verify never reached its last two stages, so they ran alone at clean `9d7e99fbb`: `pnpm test:rust`
+    (09:36:22–09:38:24Z), 492 passed / 0 failed / 14 ignored in 31 suites; `pnpm gen:check`, EXIT 0, with the tree
+    clean.
+  - VF-PM ACCEPTED this record at 09:39Z, on `a04850e29`'s precedent, with no whole re-run.
+  - Logs: `/Volumes/SamsungRed/lanes/qa-w1/logs/bprime-verify-9d7e99fbb/` (verify.log, alone-*.log).
+- **The kit at `9d7e99fbb`:** `kit.sh` on the lane's own simulator (09:38:46–09:39:58Z): EXIT 0, `** TEST SUCCEEDED **`,
+  1,308 tests in 238 suites over 13 runs, none failed, no recorded issue. That is B's count at `ffdfe4808`; B's Swift half has
+  no puppeteer edge, so this run is the rebase's. Log: `/Volumes/SamsungRed/lanes/qa-w1/logs/kit-9d7e99fbb/kit-bprime.log`.
+- Records: `/Volumes/SamsungRed/lanes/qa-w1/` (el8-pin.sh, el8-bprime.sh, kit.sh, the logs, records/).
+
+**Owed after this landing:**
+- The draft turn (VF-PM's queue opens on the ff): the QA plan's §12.1 rows this landing flips (Q05, Q08, Q16's write
+  word, puppeteer's half in 0.3.0) and the re-attach study's Status (Step 1 landed; Step 0's puppeteer half in 0.3.0).
+- design-02 §2.6's fold is owed at Step 3's custody slice (design-02:13; its erratum stands since 10-27), not here
+  (VF-PM 09:04Z).
+- Step 1's two parts stay owed to fix wave 2 (the provisional record before the PTY is spawned; Claude's open
+  permission at an attach), with Q06 (2), Q08's census and the rest the RA and Q rows name.
+- QA wave 1, the plan's run on this main.
