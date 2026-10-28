@@ -17797,3 +17797,54 @@ Tailnet Lock holds the Mac (23:08:59Z).
   - `pnpm gen:check` EXIT 0 (23:30:04Z), tree clean.
 
 **Owed.** The live witnesses stay TS-8a's, on a real tailnet and James's word.
+
+## FN — item 83: the ledger's refresh row takes its first `as_of` from an attempt that returned — the row's read raced, the ledger is right (2026-10-27; `f0b5342ac`, lane `fix/item83-ledger-as-of`; VF-PM's ruling 23:34Z)
+
+**What happened:** TS-8b's alone `pnpm test:rust` (23:28:09–23:28:38Z) went red once on field-native's
+`services::terminal::tests::the_ledger_refreshes_the_machine_total_while_this_floors_total_stands_still`
+(terminal.rs:4626, FN's row of `f601f7ff0`, 2026-10-19), "and every refresh that lands is an answer: as_of moved". The
+row passed 30/30 alone after that, and the field-native tree was TS-8a's, which TS-8b does not touch.
+
+**The cause is the row's read, not the ledger's stamp order** (d0's read, unproven, was that the pressure is set
+inside the attempt and `as_of` stamped when it returns. The code does it the other way round):
+- One ledger attempt is two flocks: `publish` writes this floor's total, then `machine_total` reads the machine's back
+  (admission.rs:284, :291).
+- `LedgerPump::observe` seeds `as_of` with the attempt's `begun` before the file work, stamps the same `begun` when the
+  attempt returns (:3203), and only then sets the pressure (:3217).
+- The row waited for the file to show 1 and took `first = slot.as_of()` with `.expect("the publish landed")`. That was
+  the misread: the file shows the publish while the attempt is still inside, so `first` could be attempt 1's seed.
+- When the other pair's `try_reserve` took the flock before attempt 1's read-back, attempt 1 answered PtyExhausted
+  itself and stamped `begun_1`, the same value as `first`. The assert went red, and the refresh the row claims to prove
+  never ran.
+
+**The product is right.** `as_of` is "the moment the ledger's last returned attempt began". Attempt 1 began before the
+reservation and its answer included it, so `begun_1` is the honest stamp. Because the stamp comes before the pressure
+write, a reader who sees PtyExhausted sees the stamp of the attempt that read it. The ledger thread is the pressure's
+only writer, and the sampler's late judge (:2697) reads `as_of` alone. Moving the stamp after the apply would not
+touch this red either: both values are `begun_1`.
+
+**The fix** (`f0b5342ac`, test-only, the row alone, +12/−1):
+- After the file shows 1, the row waits for `as_of` to move past the seed, then reads `first` and asserts Up.
+- A stamped value's read-back came before the row read it, so it came before the reservation. The PtyExhausted answer
+  therefore comes from a later attempt.
+- :4626 stays a hard assert (not an `eventually`), so the refresh claim stays tested. The Up assert now reads a real
+  answer, where before it held because the pressure starts None.
+- Siblings read and left as they are: the flock row and IL-D6's held-flock row wait for `as_of().is_some()` and mean
+  the seed; `a_ledger_that_fails_at_once_is_never_late` drives `observe` synchronously.
+
+**Validation** (this Mac's SSD lane `/Volumes/SamsungRed/lanes/item83`, guard, nice 19; VF-PM's GRANT 23:52Z):
+- **The witness** (logs/witness/, 23:51–23:52Z, load 8–11; each half recompiled once). A lane-only 100 ms sleep
+  between the attempt's `publish` and its `machine_total`, never committed, holds the window open:
+  - main's row (`18515be3b`) with it: RED 5 of 5 in 0.10–0.11 s, each on "and every refresh that lands is an answer:
+    as_of moved", the red's own message;
+  - the fixed row with it: green 5 of 5 (0.41–0.43 s);
+  - the file was restored from HEAD after each half, and the tree was clean.
+- **Green ×30** (logs/green/): 30 of 30, 0.07–0.11 s (median 0.07).
+- **Rebased** onto `0ec11879e` (merge-tree rehearsed; nothing in `5488c8773..0ec11879e` touches field-native or Cargo;
+  patch-id `92259af04252` unchanged): cargo fmt --check, clippy `-p field-native --all-targets -D warnings`, preflight
+  and check:walls all 0 (logs/light/).
+- **`pnpm verify`** at `f0b5342ac` (logs/verify/verify.log): EXIT 0 (23:55:32Z–00:03:29Z; load 7.8 armed, 48 at
+  its end, 146 over the last 5 min). Every stage passed: the TS test target ("Successfully ran target test for 27
+  projects": field-app 2,757 passed in 227 files, fieldd 2,575 passed (11 skipped)), `pnpm test:rust` 31 suites with
+  492 passed and 0 failed, the row among them, and gen:check clean.
+- Records: `/Volumes/SamsungRed/lanes/records/item83/`.
