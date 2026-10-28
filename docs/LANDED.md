@@ -17915,3 +17915,54 @@ AO-6b2 had been pushed at 21:52Z, so this lands on top. One commit, in field-app
 **Not here.** ChromeLayer's `showSettings ? undefined : openNewProfile` has no test that mounts it (frame-owner
 reproduces the glue). The desk rows on a display (`pnpm smoke`, `pnpm smoke:studio`, `pnpm smoke:godview`), owed with
 AO-1…6b2's. AO-7 waits on James's puppeteer release.
+
+## AO — item 84: the History pane says "last used" against the clock it is given — the Setup Assistant's pane forwards `now`, so the suite's "today" no longer expires at midnight (2026-10-28; `68296443f`, lane `fix/item84-history-clock`; VF-PM's ruling 02:41Z)
+
+**What happened:** CI's verify on the pushed `0ec11879e` (run 40605216364, the verify job 23:53Z–00:26Z) failed ONE
+row, field-app `test/history-consent.test.tsx:202`, "the History pane (AO-3) › opens with every switch on, says the
+time and where it stays, and brings the complete set in", on "expected … to contain '6.2 GB · last used today'".
+Every other row was green (field-app 2756/2757; fieldd 2575 with 11 skipped). This is not a lottery row, so CI was not
+rerun: a rerun would be green or red by the clock and hide the cause.
+
+**The cause is a fixed date read against the wall clock** (the class of 2026-10-03's TL status-history row):
+- The suite dates its census fixtures from a fixed `NOW = new Date("2026-10-27T12:00:00")`: claude-code's newest file
+  at NOW, codex's a day before. Its `lastUsedWords` unit rows pass NOW.
+- The pane row mounts `HistoryWizardPane`, which took no `now`, so `HistoryConsentPane` said "last used" against its
+  default, `Date.now()`.
+- "today" was therefore true on 2026-10-27 local time alone: green on CI's runs before midnight UTC, red on the first
+  after it (00:17Z). On a Mac in PDT it reds from 07:00Z on 10-28.
+
+**The gap was the controller's door, not the view.** `HistoryConsentPane` already takes `now` (default `Date.now()`),
+and the design-system catalog already hands the body `FIXTURE_HISTORY_NOW`. `HistoryWizardPane`, the pane of the Setup
+Assistant and of Finish setting up, had no way to pass one.
+
+**The fix** (`68296443f`, 3 files, +12/−2):
+- `HistoryWizardPane` takes an optional `now` and forwards it, with the pane's own clock when none is given. Production
+  is unchanged: SetupSheet and the onboarding HistoryPane pass none.
+- `HistoryConsentPane`'s `now` is typed `number | undefined`, so a forwarded absence reaches its default
+  (exactOptionalPropertyTypes).
+- The suite's `mountPane` passes `now: NOW`. Its fixtures stay dated from NOW, never from the wall clock.
+
+**The known sibling, left as it is** (VF-PM 02:41Z: not worth a change): `NewAgentPast`'s host renders with
+`now={Date.now()}`, and `new-agent-past.test.tsx` dates one fixture `Date.now()` for "last used today". Both read the
+wall clock, so that row can red only on a run that crosses local midnight between building the fixture and the
+render. The class is the same; the window is milliseconds wide.
+
+**Validation** (this Mac's SSD lane `/Volumes/SamsungRed/lanes/item84`, guard, nice 19; VF-PM's GRANT 02:41Z):
+- **Red-first** (logs/redfirst/, 02:42Z, the file alone):
+  - main's three files (`09c239090`) byte for byte under TZ=Pacific/Kiritimati, where the real clock is already a day
+    past the fixture's: RED, 8 of 9, the row at :202 on "expected … to contain '6.2 GB · last used today'". That is
+    CI's red on demand.
+  - Main's files with a lane-only fake Date (`toFake: ["Date"]`) at NOW + a day: RED, the same row, the same words.
+  - The fix with the same fake Date: green, 9 of 9.
+  - The fix as committed: green, 9 of 9, under each of UTC (CI's), America/Los_Angeles (this Mac's),
+    Pacific/Kiritimati (+14) and Pacific/Pago_Pago (−11).
+  - The tree was restored from HEAD after each run, and was clean.
+- **The light pass** (logs/light/, 02:42:52Z–02:43:19Z): typecheck field-app, biome at error level on the three files,
+  preflight and check:walls all 0.
+- **`pnpm verify`** on the tree of `68296443f` (logs/verify/verify.log): EXIT 0 (02:43:19Z–02:50:56Z; load 12.7
+  armed, 19.6 at its end, 68 over the last 5 min). Every stage passed: the TS test target ("Successfully ran target
+  test for 27 projects": field-app 2,769 passed, this file 9/9 among them; fieldd 2,575 passed (11 skipped)),
+  `pnpm test:rust` 31 suites with 492 passed and 0 failed, and gen:check clean. The verify ran at `63cd8384f`, whose
+  body was then amended with the red-first numbers: `68296443f` carries the same tree.
+- Records: `/Volumes/SamsungRed/lanes/records/item84/`.
