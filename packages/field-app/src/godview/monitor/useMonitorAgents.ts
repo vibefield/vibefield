@@ -27,7 +27,7 @@ import type { MonitorFloorRecord } from "./agents";
 import { NO_RUNS, useChromeKey } from "./chrome-facts";
 import { type DeviceChoice, standingChoice } from "./device-filter";
 import { deviceFacet, useDeviceRoster } from "./devices";
-import { keepsFailure } from "./failed-bodies";
+import { isFailedRow, keepsFailure } from "./failed-bodies";
 import { createFindAgents, findJoinKey } from "./find-agents";
 import { useMonitorFeed } from "./GodviewAgentsProvider";
 import type { HeldModelRow } from "./model-board";
@@ -559,8 +559,14 @@ export function useMonitorAgents({
   // L5, Q04 — a screen's shown rows are what its focused pane shows while the
   // terminals are up, and the row the person pointed at; the backend clears
   // their marks. Never the join's `activeIds`: the outer light (O9) stays lit
-  // on the focused pane's row while the terminals are away.
-  const reported = windowShown({ joins, links, panes, previewSelectedId: selectedId }, terminalsUp);
+  // on the focused pane's row while the terminals are away. Q06 — a failed row
+  // only by its pane: fieldd acknowledges a failure a screen shows.
+  const failed = (id: string): boolean => isFailedRow(model.byId.get(id) ?? feed?.held(id)?.row);
+  const reported = windowShown(
+    { joins, links, panes, previewSelectedId: selectedId },
+    terminalsUp,
+    failed,
+  );
   const shownKey = [...reported].sort().join("\n");
   useEffect(() => {
     feed?.reportShown(shownKey === "" ? [] : shownKey.split("\n"));

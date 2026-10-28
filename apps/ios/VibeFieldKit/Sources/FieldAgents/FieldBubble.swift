@@ -314,7 +314,11 @@ public struct FieldAssembly: Sendable {
           id: bubble.id, project: bubble.project, detail: bubble.detail, status: bubble.status,
           identityKey: bubble.identityKey, createdAt: bubble.createdAt, agent: facet, remote: bubble.remote)
         dressed.color = projects.seqByKey[bubble.project].map { SwarmColor.project($0, tint) }
-        if let evidence = facet.lastEvidenceAt {
+        // Q01 (James, 2026-10-27) — stale only while the agent should be
+        // talking: a quiet idle agent is just idle, as puppeteer's monitor
+        // rules it for Godview. Q02's open tool is not on the field row yet,
+        // so a long silent tool still dims here (owed: the row carries it).
+        if let evidence = facet.lastEvidenceAt, bubble.status != .idle {
           dressed.stale = nowMs - evidence.timeIntervalSince1970 * 1000 > Self.staleAfterMs
         }
         // DS-8 (DS-L8) — a run whose desktop is not live on the phone's home

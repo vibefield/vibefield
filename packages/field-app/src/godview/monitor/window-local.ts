@@ -149,15 +149,22 @@ function focusedRowOf(
  * minimized the focused pane is hidden, so a reply there turns unread like
  * any other. Kept apart from `activeIds` (the outer light, O9), which follows
  * the focused pane whatever the terminals do.
+ *
+ * Q06 — a FAILED row (`failed`) is shown only by its pane, focused with the
+ * terminals up: fieldd acknowledges a failure a screen reports shown, and
+ * pointing at a body is not looking at its pane. Q04 loses nothing by it: a
+ * failed row is never idle, so it has no unread mark to clear.
  */
 export function windowShown(
   input: Pick<WindowLocalInput, "joins" | "links" | "panes" | "previewSelectedId">,
   terminalsUp: boolean,
+  failed: (rowId: string) => boolean,
 ): ReadonlySet<string> {
   const shown = new Set<string>();
   const focused = terminalsUp ? focusedRowOf(input) : undefined;
   if (focused !== undefined) shown.add(focused);
-  if (input.previewSelectedId !== undefined) shown.add(input.previewSelectedId);
+  const pointed = input.previewSelectedId;
+  if (pointed !== undefined && !failed(pointed)) shown.add(pointed);
   return shown;
 }
 

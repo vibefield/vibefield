@@ -441,9 +441,10 @@ export function scriptedModelBoard(options: ScriptedModelBoardOptions = {}): Scr
       const mine = onFrame;
       // L5, M20 — the board IS the connection's screen, as the daemon ties it
       // (`agent.reportShown` answers for the subscription's screen; closing the
-      // board forgets it): no unread accrues before the open, none after the close
+      // board forgets it): no unread accrues before the open, none after the close.
+      // The window is this desktop's own, so its look acknowledges a failure (Q06)
       const mineScreen = `screen-${opened}`;
-      const forget = here.service.openScreen(mineScreen);
+      const forget = here.service.openScreen(mineScreen, { acknowledges: true });
       screen = mineScreen;
       return {
         snapshot: open(),

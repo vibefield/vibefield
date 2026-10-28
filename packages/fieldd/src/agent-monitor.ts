@@ -142,8 +142,14 @@ export interface AgentMonitorService {
    * stamps first sight), what it reports shown clears unread marks, and closing
    * it FORGETS the screen. While no screen is open no mark accrues, so a closed
    * Godview marks nothing — today's single-window behaviour. Returns the close.
+   *
+   * Q06 — what a screen reports shown also acknowledges a crashed run's
+   * failure, so the row leaves for every screen: that is the person's look,
+   * and only a screen opened with `acknowledges` (this desktop's own window)
+   * looks for the person. Any other screen's reports clear marks and
+   * acknowledge nothing.
    */
-  openScreen(screenId: string): () => void;
+  openScreen(screenId: string, options?: { acknowledges?: boolean }): () => void;
   /** What a screen shows in its active pane; false when no such screen is open. */
   reportShown(screenId: string, ids: readonly string[]): boolean;
   /** TL — the lanes' past for a window, read through to the record and joined
@@ -465,12 +471,16 @@ export function createAgentMonitorService(opts: AgentMonitorServiceOptions): Age
   // its pane is (the fold's join; a dead PTY is a bare terminal row again, and
   // this host keys a terminal row by its session). What a window reports
   // shown is its focused pane while the terminals are up and the row the
-  // person pointed at (Q04), so that is the seeing. The failure is then
-  // acknowledged (the backend's M3 command): puppeteer removes the run and the
-  // row leaves the model for every screen. The fold's own row is untouched —
-  // a dead pane keeps its resume verb (MF-1f). Asked at each report and at
-  // each model change, since a run can fail in the pane already shown; each
-  // failure once, by run and `since`.
+  // person pointed at, unless that row has failed (Q04; field-app's
+  // `windowShown`), so that is the seeing. Only a screen that looks for the
+  // person counts (`acknowledges`, this desktop's own window): a plugin's
+  // screen, under the same `agent.observe`, acknowledges nothing. The failure
+  // is then acknowledged (the backend's M3 command): puppeteer removes the run
+  // and the row leaves the model for every screen. The fold's own row is
+  // untouched — a dead pane keeps its resume verb (MF-1f). Asked at each report
+  // and at each model change, since a run can fail in the pane already shown;
+  // each failure once, by run and `since`.
+  const looking = new Set<string>();
   const shownByScreen = new Map<string, ReadonlySet<string>>();
   const acknowledged = new Map<string, number>();
   const acknowledgeSeen = (): void => {
@@ -534,8 +544,9 @@ export function createAgentMonitorService(opts: AgentMonitorServiceOptions): Age
         listener(change, urgent);
       });
     },
-    openScreen(screenId) {
+    openScreen(screenId, options) {
       screens.add(screenId);
+      if (options?.acknowledges === true) looking.add(screenId);
       // the first report opens the screen, an empty one too (M20): the backend
       // stamps first sight and marks accrue from here
       backend.reportShown(screenId, []);
@@ -544,12 +555,13 @@ export function createAgentMonitorService(opts: AgentMonitorServiceOptions): Age
         if (!open) return;
         open = false;
         screens.delete(screenId);
+        looking.delete(screenId);
         if (!disposed) backend.forgetScreen(screenId);
       };
     },
     reportShown(screenId, ids) {
       if (disposed || !screens.has(screenId)) return false;
-      shownByScreen.set(screenId, new Set(ids));
+      if (looking.has(screenId)) shownByScreen.set(screenId, new Set(ids));
       backend.reportShown(screenId, ids);
       acknowledgeSeen();
       return true;
@@ -562,6 +574,7 @@ export function createAgentMonitorService(opts: AgentMonitorServiceOptions): Age
       unsubscribe.length = 0;
       hostListeners.clear();
       screens.clear();
+      looking.clear();
       backend.dispose();
     },
   };

@@ -656,9 +656,12 @@ twice a bud and has stood in the field. At 180 the second half of the shrink lan
 blink; 280 gives it about six and is still less than half the arrival. There is no new curve, and nothing projects into
 `tokens.css`: the swarm draws the shrink in its shader, not in CSS.
 **A row that comes back while its body is leaving** (a close refused, or a hand-over's second row a frame late) puts
-the body back where it stands. It pops back from the size its shrink had reached, on the swarm's arrival curve
-(0 → 1.2 → 0.96 → 1.035 → 1 over 720ms, started from that size), and no second body appears beside it. A row that
-comes back after the body has gone is a new arrival.
+the body back where it stands. It pops back from the size its shrink had reached, on the swarm's own arrival, started
+from that size, and no second body appears beside it. That arrival is the one puppeteer's views draw for every body
+that joins the swarm (`views/swarm/bloom/field-frame.ts`, `arrivalFrom`; its keyframes and length are that source's,
+not this section's). It is not one of the named curves above, and its row here, with its reason, is owed. Under reduced
+motion the body comes back by fading up from the opacity its fade had reached, on plain `ease-out` over the share of the
+140ms that opacity is from whole, and nothing pops. A row that comes back after the body has gone is a new arrival.
 **The clean exit's hand-over is a morph under M1, not a departure.** When a launched agent quits cleanly, the fresh
 shell takes its body in place (the deck hands the agent's spatial identity to the shell). It is one body changing its
 role: its radius eases on the swarm's spring and its light switches to the shell's. Nothing shrinks and nothing

@@ -216,6 +216,8 @@ describe("what the window reports shown, apart from the outer light (L5, Q04)", 
     receded: undefined,
     visible: () => true,
   };
+  /** no row has failed */
+  const healthy = (): boolean => false;
 
   it("reports the focused pane's row only while the terminals are up, and lights it either way", () => {
     const input = {
@@ -223,11 +225,11 @@ describe("what the window reports shown, apart from the outer light (L5, Q04)", 
       panes: { sessionIds: ["pty-a", "pty-b"], activeSessionId: "pty-a" },
       previewSelectedId: undefined,
     };
-    expect([...windowShown(input, true)]).toEqual(["a"]);
+    expect([...windowShown(input, true, healthy)]).toEqual(["a"]);
     expect([...windowLocal(input).activeIds]).toEqual(["a"]);
     // minimized: the focused pane is hidden, so a reply there earns the mark,
     // and the body keeps its outer light
-    expect([...windowShown(input, false)]).toEqual([]);
+    expect([...windowShown(input, false, healthy)]).toEqual([]);
     expect([...windowLocal(input).activeIds]).toEqual(["a"]);
   });
 
@@ -237,11 +239,30 @@ describe("what the window reports shown, apart from the outer light (L5, Q04)", 
       panes: { sessionIds: ["pty-x"], activeSessionId: "pty-x" },
       previewSelectedId: "b",
     };
-    expect([...windowShown(input, true)]).toEqual(["b"]);
-    expect([...windowShown(input, false)]).toEqual(["b"]);
+    expect([...windowShown(input, true, healthy)]).toEqual(["b"]);
+    expect([...windowShown(input, false, healthy)]).toEqual(["b"]);
     expect([...windowLocal(input).activeIds]).toEqual(["b"]);
-    expect([...windowShown({ ...input, previewSelectedId: undefined }, true)]).toEqual([]);
-    expect([...windowShown({ ...input, panes: { sessionIds: [] } }, true)]).toEqual(["b"]);
+    expect([...windowShown({ ...input, previewSelectedId: undefined }, true, healthy)]).toEqual([]);
+    expect([...windowShown({ ...input, panes: { sessionIds: [] } }, true, healthy)]).toEqual(["b"]);
+  });
+
+  it("never reports a FAILED row the person pointed at: a failure is seen only in its pane, focused with the terminals up (Q06)", () => {
+    const failed = (id: string): boolean => id === "a";
+    const pointed = {
+      ...base,
+      panes: { sessionIds: ["pty-b"], activeSessionId: "pty-b" },
+      previewSelectedId: "a",
+    };
+    // a click on the failed body, its pane in no focused pane (none to mount
+    // into, or a mount that failed): not seen, whatever the terminals do
+    expect([...windowShown(pointed, true, failed)]).toEqual(["b"]);
+    expect([...windowShown(pointed, false, failed)]).toEqual([]);
+    // its light still follows the pointer (O9)
+    expect([...windowLocal(pointed).activeIds]).toEqual(["b", "a"]);
+    // its pane focused with the terminals up is the seeing
+    const focused = { ...pointed, panes: { sessionIds: ["pty-a"], activeSessionId: "pty-a" } };
+    expect([...windowShown(focused, true, failed)]).toEqual(["a"]);
+    expect([...windowShown(focused, false, failed)]).toEqual([]);
   });
 
   it("joins a peer row attached in the focused pane as the light does", () => {
@@ -252,7 +273,7 @@ describe("what the window reports shown, apart from the outer light (L5, Q04)", 
       previewSelectedId: undefined,
     };
     expect([...windowLocal(input).activeIds]).toEqual(["peer-row"]);
-    expect([...windowShown(input, true)]).toEqual(["peer-row"]);
-    expect([...windowShown(input, false)]).toEqual([]);
+    expect([...windowShown(input, true, healthy)]).toEqual(["peer-row"]);
+    expect([...windowShown(input, false, healthy)]).toEqual([]);
   });
 });

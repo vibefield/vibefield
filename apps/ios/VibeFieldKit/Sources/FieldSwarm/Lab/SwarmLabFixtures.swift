@@ -228,11 +228,6 @@ public func stateStages(palette: LabPalette) -> [LabStage] {
           id: "a3", project: "duke", status: .idle, model: "Haiku 4.5", effort: "low", effortIntent: .configured, accent: 6),
         palette: palette)),
     LabStage(
-      id: "idle-stale", title: "Idle, stale evidence", note: "Dimmed and desaturated, never recoloured.",
-      bubble: labAgent(
-        LabAgentSpec(id: "a4", project: "ref", status: .idle, model: "Sonnet 5", effort: "medium", contextPercent: 31, stale: true, accent: 3),
-        palette: palette)),
-    LabStage(
       id: "idle-mounted", title: "Idle, mounted",
       note: "The pane’s colour as a band a thirtieth of the radius wide outside the rim, the gutter, and nothing beyond it; the project’s colour stays the folder before the name.",
       bubble: labAgent(
@@ -272,6 +267,14 @@ public func stateStages(palette: LabPalette) -> [LabStage] {
       note: "No usage, no context, no price: one hollow flame — unread, which is not the same as calm — and both figures rest.",
       bubble: labAgent(
         LabAgentSpec(id: "w4", project: "study", status: .working, model: "Sonnet 5", accent: 8, unpriced: true),
+        palette: palette)),
+    LabStage(
+      id: "working-stale", title: "Working, stale evidence",
+      note: "Mid-reply, nothing heard for 30 s: dimmed and desaturated, never recoloured. An idle body never dims (Q01).",
+      bubble: labAgent(
+        LabAgentSpec(
+          id: "w8", project: "ref", status: .working, model: "Sonnet 5", effort: "medium", contextPercent: 31,
+          burn: .ease, detail: "Writing the reply", stale: true, accent: 3, ratePerMin: 0.08),
         palette: palette)),
     LabStage(
       id: "working-active", title: "Working, the open card",

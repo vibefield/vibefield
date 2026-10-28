@@ -3590,7 +3590,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     /** MV-3a (L5, M20) — the screens, one per product connection that holds a
      * model board: opened with the connection's first model board, forgotten
      * with its last (a window opens one; two share the connection's screen).
-     * A call with no connection id (none a product door mints) has no screen. */
+     * A call with no connection id (none a product door mints) has no screen.
+     * Q06: only this desktop's own window looks for the person, so only its
+     * screen's reports acknowledge a crashed run's failure; a plugin holding
+     * `agent.observe` opens a screen that acknowledges nothing. */
     const screens = new Map<string, { count: number; close: () => void }>();
     const openScreen = (ctx: CallerContext): (() => void) | null => {
       const service = monitor;
@@ -3598,7 +3601,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       if (service === null || id === undefined) return null;
       let held = screens.get(id);
       if (held === undefined) {
-        held = { count: 0, close: service.openScreen(id) };
+        held = { count: 0, close: service.openScreen(id, { acknowledges: ownWindow(ctx) }) };
         screens.set(id, held);
       }
       const screen = held;

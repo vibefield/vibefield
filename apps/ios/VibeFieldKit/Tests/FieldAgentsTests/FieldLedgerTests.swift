@@ -213,7 +213,7 @@ private func row(
     #expect(closed[1].active == false)
   }
 
-  @Test func joinsTheUsageLedgerAndMarksUnreadAndStaleRows() {
+  @Test func joinsTheUsageLedgerAndMarksUnreadRowsAndNeverDimsAnIdleOne() {
     var assembly = FieldAssembly(tint: .light)
     let working = AgentRuntimeState(
       activeTurn: true, usage: AgentUsage(cumulativeTokens: 1_000, costUsd: 1, costCoverage: .complete), statusSince: now,
@@ -233,9 +233,32 @@ private func row(
     #expect(rows[0].agent?.usage?.total == 1.4)
     rows = assembly.fold([agent("a", project: "p", state: done)], cardSubjectID: "a", nowMs: t0 + 32_000)
     #expect(rows[0].unread == false)
-    // Evidence older than the freshness policy dims the body.
+    // Q01 — an idle body never dims, however old its evidence.
     rows = assembly.fold([agent("a", project: "p", state: done)], cardSubjectID: nil, nowMs: t0 + 31_000 + 30_001)
-    #expect(rows[0].stale)
+    #expect(rows[0].stale == false)
+  }
+
+  /// Q01 (James, 2026-10-27) — stale only while the agent should be talking,
+  /// working or blocked: evidence older than the freshness policy dims those
+  /// bodies, and a quiet idle agent is just idle.
+  @Test func onlyAWorkingOrBlockedAgentDimsWhenItsEvidenceIsOld() {
+    var assembly = FieldAssembly(tint: .light)
+    let old = now.addingTimeInterval(-31)
+    let quiet = AgentRuntimeState(statusSince: old, lastEvidenceAt: old)
+    let working = AgentRuntimeState(activeTurn: true, statusSince: old, lastEvidenceAt: old)
+    let waiting = AgentRuntimeState(
+      permissions: [AgentPermission(tool: "Bash")], statusSince: old, lastEvidenceAt: old)
+    let rows = assembly.fold(
+      [
+        agent("idle", project: "p", state: quiet), agent("working", project: "p", state: working),
+        agent("blocked", project: "p", state: waiting),
+      ], cardSubjectID: nil, nowMs: t0)
+    #expect(rows.map(\.status) == [.idle, .working, .blocked])
+    #expect(rows.map(\.stale) == [false, true, true])
+    // Fresh evidence dims nothing.
+    let fresh = AgentRuntimeState(activeTurn: true, statusSince: old, lastEvidenceAt: now)
+    let heard = assembly.fold([agent("working", project: "p", state: fresh)], cardSubjectID: nil, nowMs: t0)
+    #expect(heard[0].stale == false)
   }
 
   /// DS-8 / DS-L8 — a run whose DESKTOP is not live on the home's mesh board

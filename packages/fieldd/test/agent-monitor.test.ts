@@ -626,6 +626,10 @@ function crashed(base: AgentSessionSummary, code = "signal"): AgentSessionSummar
 const kinds = (rows: readonly MonitorAgentRow[]): string[] =>
   rows.map((row) => `${row.kind}:${row.id}`).sort();
 
+/** A screen this desktop's own window opened: it looks for the person (the
+ * daemon's `ownWindow`), so what it shows acknowledges a failure. */
+const WINDOW = { acknowledges: true } as const;
+
 describe("the hosted backend — a crashed run stays until its pane is seen (Q06)", () => {
   it("the failure stays on the row while another pane is shown; once a screen shows its pane, it is acknowledged once and the row leaves the model, the fold's row kept", async () => {
     const live = summary({ runtimeRunId: "run-crashed", status: "working" });
@@ -635,7 +639,7 @@ describe("the hosted backend — a crashed run stays until its pane is seen (Q06
     });
     // born with its PTY listed: the run carries the PTY's id (M22)
     expect(monitor.row("run-crashed").id).toBe("run-crashed-pty");
-    monitor.service.openScreen("win-1");
+    monitor.service.openScreen("win-1", WINDOW);
     // the person works in another pane
     expect(monitor.service.reportShown("win-1", ["pty-bare"])).toBe(true);
     // the agent is killed: the fold stamps the exit, the runtime its failure
@@ -674,7 +678,7 @@ describe("the hosted backend — a crashed run stays until its pane is seen (Q06
     expect(monitor.row("run-focused").id).toBe("run-focused");
     monitor.terminals.observe([floorTerminal({ sessionId: "run-focused-pty", cwd: "/repo" })]);
     monitor.rows();
-    monitor.service.openScreen("win-1");
+    monitor.service.openScreen("win-1", WINDOW);
     // a live run shown is nothing to acknowledge
     monitor.service.reportShown("win-1", ["run-focused-pty"]);
     expect(monitor.runtime.acknowledged).toEqual([]);
@@ -698,7 +702,7 @@ describe("the hosted backend — a crashed run stays until its pane is seen (Q06
       ],
     });
     monitor.rows();
-    const close = monitor.service.openScreen("win-1");
+    const close = monitor.service.openScreen("win-1", WINDOW);
     // the clean exit's pane, shown: a dead row with no failure is not one to take
     monitor.service.reportShown("win-1", ["run-later-pty", "run-exited-pty"]);
     expect(monitor.runtime.acknowledged).toEqual([]);
@@ -711,9 +715,33 @@ describe("the hosted backend — a crashed run stays until its pane is seen (Q06
     expect(monitor.runtime.acknowledged).toEqual([]);
     expect(monitor.row("run-later")).toMatchObject({ alive: false, wait: { kind: "failure" } });
     // the next screen to show its pane sees it
-    monitor.service.openScreen("win-2");
+    monitor.service.openScreen("win-2", WINDOW);
     monitor.service.reportShown("win-2", ["run-later-pty"]);
     expect(monitor.runtime.acknowledged).toEqual([["run-later", "run:runtime"]]);
+    monitor.service.dispose();
+  });
+
+  it("a screen that does not look for the person (a plugin's, under the same agent.observe) acknowledges nothing it reports, its pane and its row included", async () => {
+    const live = summary({ runtimeRunId: "run-crashed", status: "working" });
+    const monitor = await testMonitor({
+      summaries: [live],
+      terminals: [floorTerminal({ sessionId: "run-crashed-pty", cwd: "/repo" })],
+    });
+    expect(monitor.row("run-crashed").id).toBe("run-crashed-pty");
+    monitor.service.openScreen("plugin-screen");
+    const dead = crashed(live);
+    monitor.fold.publish([dead]);
+    monitor.runtime.push(stateOf(dead));
+    monitor.rows();
+    // the report is a screen's like any other: answered, its marks the backend's
+    expect(monitor.service.reportShown("plugin-screen", ["run-crashed-pty"])).toBe(true);
+    monitor.rows();
+    expect(monitor.runtime.acknowledged).toEqual([]);
+    expect(monitor.row("run-crashed")).toMatchObject({ alive: false, wait: { kind: "failure" } });
+    // the person's own window, showing the same pane, is the seeing
+    monitor.service.openScreen("win-1", WINDOW);
+    monitor.service.reportShown("win-1", ["run-crashed-pty"]);
+    expect(monitor.runtime.acknowledged).toEqual([["run-crashed", "run:runtime"]]);
     monitor.service.dispose();
   });
 });

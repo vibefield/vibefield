@@ -2662,6 +2662,12 @@ export const METHODS: MethodDef[] = [
   // (refused without one, forgotten when it closes). The board's scope, because
   // reporting what you look at is part of looking: a reader of the board may
   // say which of its rows it shows, and nothing else.
+  // Correction (2026-10-27, Q06): a report from this desktop's own window is
+  // also the person's look at a crashed run's pane, and fieldd acknowledges
+  // the failure it shows (the backend's M3 `acknowledge`): the model row leaves
+  // for every screen, while the fold's row, the record and the resume verb
+  // stay. Any other caller's screen (a plugin's, under this same scope)
+  // acknowledges nothing (`agent-monitor.ts` `openScreen`).
   defineMethod({
     surface: "product",
     method: "agent.reportShown",

@@ -33,7 +33,6 @@ import {
   type SpawnThroughShimRuntime,
   shellIntegrationEnvironment,
   spawnThroughLayout,
-  spawnThroughRefusalMessage,
   startSpawnThroughGateway,
   writeRendezvous,
   writeTerminals,
@@ -1588,14 +1587,16 @@ export class AgentGatewayService {
     });
   }
 
-  /** The sentence a refused person reads. Synchronous, and never a throw: the
-   * kit would say its own sentence in place of one. */
+  /** The sentence a refused person reads. Synchronous, and never a throw.
+   * With no words of fieldd's own it answers none: the kit then says its own
+   * sentence, with the decline's real reason, and the shim names the command
+   * before it (Q14) — fieldd's stand-in would name neither. */
   private words(refused: SpawnThroughRefusal): string {
     try {
       const label = this.opts.catalog.entry(refused.providerId)?.label ?? refused.command;
       return agentRefusal(refused, label);
     } catch {
-      return spawnThroughRefusalMessage({ reason: "the host has no words for it" });
+      return "";
     }
   }
 

@@ -3451,7 +3451,9 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
     // agent has not saved the conversation yet (a provisional id, or an exact
     // one before the agent's first durable record), signed like any other
     const record = first.records.read(runId);
-    if (record === undefined) throw new Error("the first boot wrote no verified record for its run");
+    if (record === undefined) {
+      throw new Error("the first boot wrote no verified record for its run");
+    }
     first.records.write({ ...record, continuation: { ...record.continuation, resumable: false } });
 
     const second = await setup({ floor: "real", restartOf: first });
