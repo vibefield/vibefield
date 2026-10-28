@@ -1399,6 +1399,16 @@
                         launches, which is what lets the record be durable before there is anything to lose. This is
                         the half AR-4 implements.
                       </p>
+                      <p>
+                        Since puppeteer 0.3.0 (2026-10-28; the re-attach study's Step 1, built on its QW1 attach
+                        branch) the same say carries <code>onAttachRecord</code>: one opaque attach record per session
+                        (<code>{version, state, secret?}</code>, RA-D3 A), reported before launch and again by an
+                        attached run whenever its facts change. fieldd keeps the latest in the signed record's
+                        <code>attach</code> slot, never reads or logs it, and hands it back to
+                        <code>runtime.attach</code> with the run's continuation. A failed attach carries the adapter's
+                        next step (<code>error.next</code>); fieldd acts on <code>retry</code> (G5) and records the
+                        others for the fallback ladder still to come.
+                      </p>
                     </td>
                     <td>
                       <span class="badge tone-built">Built</span>
@@ -2207,7 +2217,11 @@
                     fieldd reads its signed records at the first terminal inventory and attaches by identity — same
                     provider, claim, terminal, native id. Identity is validated <em>before</em> the provider takes the
                     port. A run already managed answers unbound; a stale epoch is refused naming the claim's own epoch.
-                    Only agent-cell PTYs are candidates.
+                    Only agent-cell PTYs are candidates. Since the re-attach study's Step 1 (puppeteer 0.3.0,
+                    2026-10-28) the attach is handed what the launch knew: the continuation, whose codec restores a typed
+                    root's options and whose state and implementation the attached run keeps, and the adapter's attach
+                    record. An attach the adapter calls transient is asked again after 1, 2, 4, 8 and 16 s before its
+                    row rests pending, and resume-when-idle waits for the last attempt.
                   </p>
                 </div>
               </div>
