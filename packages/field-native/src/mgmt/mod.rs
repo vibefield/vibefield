@@ -436,6 +436,14 @@ async fn handle_conn(stream: local_ipc::Stream, state: Arc<DaemonState>, mesh_qu
                 );
             }
             "native.lifecycle.health.subscribe" => {
+                // *Noted 2026-10-28 (item 85, unchanged; its own item):* the
+                // result reads the Sender's value, then `subscribe()` marks
+                // seen whatever the channel holds by then. A send from another
+                // thread between those two statements is never forwarded, the
+                // routes subscription's race in a window with no await in it,
+                // so no current-thread row can drive it. The shape that closes
+                // it is the routes handler's: one receiver, read once with
+                // `borrow_and_update`.
                 let sub_id = state.sub_id();
                 let snapshot = serde_json::to_value(&*state.health_tx.borrow()).unwrap();
                 send(&tx, ok(id, json!({"subId": sub_id, "snapshot": snapshot})));
@@ -533,6 +541,8 @@ async fn handle_conn(stream: local_ipc::Stream, state: Arc<DaemonState>, mesh_qu
                 send(&tx, ok(id, json!(NativeDetachResult { noted: true })));
             }
             "native.lifecycle.observed.subscribe" => {
+                // *Noted 2026-10-28 (item 85, unchanged; its own item):* the
+                // same window as `health.subscribe` above.
                 let sub_id = state.sub_id();
                 let snapshot = serde_json::to_value(&*state.observed_tx.borrow()).unwrap();
                 send(&tx, ok(id, json!({"subId": sub_id, "snapshot": snapshot})));
@@ -569,7 +579,12 @@ async fn handle_conn(stream: local_ipc::Stream, state: Arc<DaemonState>, mesh_qu
                 let published = state.terminal_mesh_published();
                 let mut result = json!({ "subId": sub_id.clone() });
                 let mut sent_at_subscribe = None;
-                if let Some(snapshot) = disclosed_routes(&state.terminal_routes.borrow()) {
+                // Item 85 — the result's reading and the forwarder's baseline
+                // are ONE read: `borrow_and_update` marks seen exactly the
+                // snapshot the result carries, so a route move after it wakes
+                // the forwarder however late its task first runs.
+                let mut routes = state.terminal_routes.clone();
+                if let Some(snapshot) = disclosed_routes(&routes.borrow_and_update()) {
                     result["snapshot"] =
                         serde_json::to_value(routes_stream_payload(snapshot, published)).unwrap();
                     sent_at_subscribe = Some(published);
@@ -577,7 +592,7 @@ async fn handle_conn(stream: local_ipc::Stream, state: Arc<DaemonState>, mesh_qu
                 send(&tx, ok(id, result));
                 spawn_routes_forwarder(
                     tx.clone(),
-                    state.terminal_routes.clone(),
+                    routes,
                     state.terminal_mesh_presence(),
                     state.terminal_mesh,
                     sent_at_subscribe,
@@ -1535,6 +1550,8 @@ fn routes_stream_payload(
 /// card naming a flag that IS set.
 fn spawn_routes_forwarder(
     tx: MgmtOutbox,
+    // Marked seen by the caller at the reading its subscribe result carried,
+    // never later (item 85).
     mut rx: tokio::sync::watch::Receiver<TerminalRouteSnapshot>,
     mut presence: NodePresence,
     plan: MeshPlan,
@@ -1548,16 +1565,21 @@ fn spawn_routes_forwarder(
 ) {
     tokio::spawn(async move {
         // THE BASELINE IS WHAT THE SUBSCRIBE RESULT JUST SENT (T-M2). The
-        // receiver in `DaemonState` is never itself advanced, so a clone of it
-        // arrives here with the channel's INITIAL still marked unseen: the
-        // first `changed()` resolves instantly and the forwarder repeats, as a
-        // delta, the snapshot the result carried a microsecond earlier. That is
-        // harmless under TC-D15's state-transfer law — a full snapshot applied
-        // twice is the same state — which is exactly why it survived unnoticed;
-        // it is still a delta that reports no change, and E-F1's dedupe needs
-        // the baseline to be honest. Marking the current value seen makes the
-        // stream's first word a real one.
-        let _ = rx.borrow_and_update();
+        // receiver in `DaemonState` is never itself advanced, so an unmarked
+        // clone of it would wake at once and repeat, as a delta, the snapshot
+        // the result carried. That is harmless under TC-D15's state-transfer
+        // law, but it is a delta that reports no change, and E-F1's dedupe
+        // needs the baseline to be honest. So the caller marks the value seen
+        // in the read that built the result, and the stream's first word is a
+        // real one.
+        //
+        // *Corrected 2026-10-28 (item 85):* this task used to mark it here, at
+        // its first poll, which is whatever the channel held by then. A route
+        // move between the result's read and that poll (the cells coming up
+        // just after the hello) was marked seen and never sent, and fieldd
+        // held the revision-1 announcement, with no cells, for good: CI run
+        // 40728506315's MF-1f row, "routes heard at revision 1, 0 cell(s)" at
+        // the 30 s endpoint wait, with both cells serving at +219 ms.
         let mut last_sent = sent_at_subscribe;
         loop {
             enum Woke {
@@ -2003,6 +2025,42 @@ mod tests {
         }
     }
 
+    /// One cell of a route snapshot, as the routes forwarder's rows build it.
+    fn route_cell(id: &str) -> TerminalRouteCell {
+        TerminalRouteCell {
+            cell_boot_id: id.to_string(),
+            cell_instance_id: 1,
+            doors: None,
+            endpoints: TerminalEndpoints {
+                auth_token: "ab".repeat(32),
+                control_socket: "/tmp/termctl.1.sock".to_string(),
+                frame_socket: "/tmp/termframe.1.sock".to_string(),
+            },
+            grant_key: None,
+            grant_key_generation: None,
+            pid: 4242,
+            role: None,
+            token_generation: 1,
+            workload_class: None,
+        }
+    }
+
+    /// The routes stream's next delta payload, or `None` when nothing came
+    /// within 400 ms.
+    async fn next_route_payload(
+        outbox: &mut tokio::sync::mpsc::Receiver<OutMsg>,
+    ) -> Option<serde_json::Value> {
+        let msg = tokio::time::timeout(std::time::Duration::from_millis(400), outbox.recv())
+            .await
+            .ok()??;
+        let OutMsg::Line(line) = msg else {
+            panic!("the forwarder never closes the outbox");
+        };
+        let note: Value = serde_json::from_str(&line).expect("a JSON notification");
+        assert_eq!(note["method"], "native.lifecycle.terminal.routes.delta");
+        Some(note["params"]["payload"].clone())
+    }
+
     /// T-M2 / E-F1 — THE ROUTES FORWARDER'S RULE, driven directly.
     ///
     /// The delta path lost its only test when TM-2a retired
@@ -2023,26 +2081,6 @@ mod tests {
     #[tokio::test]
     async fn the_routes_forwarder_withholds_the_initial_and_pushes_a_node_flip_in_place() {
         use crate::services::mesh::NodePresence;
-        use std::time::Duration;
-
-        fn cell(id: &str) -> TerminalRouteCell {
-            TerminalRouteCell {
-                cell_boot_id: id.to_string(),
-                cell_instance_id: 1,
-                doors: None,
-                endpoints: TerminalEndpoints {
-                    auth_token: "ab".repeat(32),
-                    control_socket: "/tmp/termctl.1.sock".to_string(),
-                    frame_socket: "/tmp/termframe.1.sock".to_string(),
-                },
-                grant_key: None,
-                grant_key_generation: None,
-                pid: 4242,
-                role: None,
-                token_generation: 1,
-                workload_class: None,
-            }
-        }
 
         let (routes_tx, routes_rx) = tokio::sync::watch::channel(TerminalRouteSnapshot {
             revision: 0,
@@ -2063,28 +2101,14 @@ mod tests {
             "s-test".to_string(),
         );
 
-        async fn next_payload(
-            outbox: &mut tokio::sync::mpsc::Receiver<OutMsg>,
-        ) -> Option<serde_json::Value> {
-            let msg = tokio::time::timeout(Duration::from_millis(400), outbox.recv())
-                .await
-                .ok()??;
-            let OutMsg::Line(line) = msg else {
-                panic!("the forwarder never closes the outbox");
-            };
-            let note: Value = serde_json::from_str(&line).expect("a JSON notification");
-            assert_eq!(note["method"], "native.lifecycle.terminal.routes.delta");
-            Some(note["params"]["payload"].clone())
-        }
-
         // (1) the INITIAL, moved but still unrevised: rows without a revision
         // are the initial as far as readers go, so nothing may be published.
         routes_tx.send_replace(TerminalRouteSnapshot {
             revision: 0,
-            cells: vec![cell("cb-early")],
+            cells: vec![route_cell("cb-early")],
         });
         assert!(
-            next_payload(&mut outbox).await.is_none(),
+            next_route_payload(&mut outbox).await.is_none(),
             "an unrevised snapshot is not a reading, however many rows it carries"
         );
 
@@ -2092,7 +2116,7 @@ mod tests {
         // no payload to carry a boolean on.
         presence_tx.send_replace(true);
         assert!(
-            next_payload(&mut outbox).await.is_none(),
+            next_route_payload(&mut outbox).await.is_none(),
             "a floor that has said nothing about routes says nothing about the mesh"
         );
 
@@ -2100,9 +2124,9 @@ mod tests {
         // state that flipped silently in (2).
         routes_tx.send_replace(TerminalRouteSnapshot {
             revision: 1,
-            cells: vec![cell("cb-1")],
+            cells: vec![route_cell("cb-1")],
         });
-        let payload = next_payload(&mut outbox)
+        let payload = next_route_payload(&mut outbox)
             .await
             .expect("a revised snapshot publishes");
         assert_eq!(payload["revision"], 1);
@@ -2115,7 +2139,7 @@ mod tests {
         // (4) a node flip IN PLACE: same revision, new boolean. This is the
         // whole of E-F1 — the correction the hello could not make.
         presence_tx.send_replace(false);
-        let payload = next_payload(&mut outbox)
+        let payload = next_route_payload(&mut outbox)
             .await
             .expect("a node flip publishes");
         assert_eq!(
@@ -2133,8 +2157,62 @@ mod tests {
         // value is the one already delivered.
         presence_tx.send_replace(false);
         assert!(
-            next_payload(&mut outbox).await.is_none(),
+            next_route_payload(&mut outbox).await.is_none(),
             "a reading that did not move is not a delta"
+        );
+    }
+
+    /// Item 85 — a route move between the subscribe result's reading and the
+    /// forwarder's first poll is DELIVERED, once. The subscribe reads the
+    /// revision-1 announcement as the handler does (`borrow_and_update` on a
+    /// clone of the state's receiver), and the cells come up before the
+    /// forwarder's task first runs: a current-thread runtime runs a spawned
+    /// task only at the next await, which holds that window open on purpose.
+    /// CI run 40728506315 is this window on the real floor: fieldd held
+    /// revision 1 with no cells while both cells served from +219 ms.
+    #[tokio::test]
+    async fn a_route_move_before_the_forwarder_first_runs_is_delivered_once() {
+        use crate::services::mesh::NodePresence;
+
+        let (routes_tx, routes_rx) = tokio::sync::watch::channel(TerminalRouteSnapshot {
+            revision: 0,
+            cells: vec![],
+        });
+        // the floor's announcement, before anyone subscribes
+        routes_tx.send_replace(TerminalRouteSnapshot {
+            revision: 1,
+            cells: vec![],
+        });
+        let (_presence_tx, presence_rx) = tokio::sync::watch::channel(false);
+        let (tx, mut outbox, _close) = MgmtOutbox::channel();
+
+        // the subscribe: the result's reading marks the stream's baseline
+        let mut routes = routes_rx.clone();
+        let told = disclosed_routes(&routes.borrow_and_update()).map(|routes| routes.revision);
+        assert_eq!(told, Some(1), "the result carries the announcement");
+
+        // the cells come up after that reading, before the forwarder runs
+        routes_tx.send_replace(TerminalRouteSnapshot {
+            revision: 2,
+            cells: vec![route_cell("cb-2")],
+        });
+        spawn_routes_forwarder(
+            tx,
+            routes,
+            NodePresence::for_tests(presence_rx),
+            MeshPlan::Requested,
+            Some(false),
+            "s-test".to_string(),
+        );
+
+        let payload = next_route_payload(&mut outbox)
+            .await
+            .expect("a move after the result's reading reaches the reader");
+        assert_eq!(payload["revision"], 2);
+        assert_eq!(payload["cells"][0]["cellBootId"], "cb-2");
+        assert!(
+            next_route_payload(&mut outbox).await.is_none(),
+            "once: neither the move nor the result's own snapshot is repeated"
         );
     }
 }
