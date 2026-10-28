@@ -431,26 +431,12 @@ enum FieldHomeModel {
 
   // MARK: - Writes
 
-  /// What the card can say about typing BEFORE a tap, which since TM-3
-  /// (2026-09-14) is one fact rather than two.
-  ///
-  /// `sessionSharesWrites` rides in the listing — a broadcast with no
-  /// per-caller context — so it says the session is *shared* for writing, never
-  /// that WE may write. Whether this device may type is decided per attach, and
-  /// it used to depend on a mirror-write key this phone either held or did not:
-  /// a second fact, a sheet to enter it, and an ENTER KEY affordance beside this
-  /// sentence. TM-D3 replaced the key with a claim in the attach grant, so there
-  /// is nothing for a person to obtain and nothing to offer them here.
-  ///
-  /// The remaining unknown is answered where it becomes known rather than
-  /// guessed at here: a desktop that grants `read` without `input` is named by
-  /// the live attachment in its own words (`TerminalAttachment`, "view only —
-  /// this desktop granted read without input").
-  static func writeInvitation(sessionSharesWrites: Bool) -> String {
-    sessionSharesWrites
-      ? "you can type here"
-      : "view only — this session is shared read-only"
-  }
+  // RETIRED 2026-10-28 (James, typed 04:22Z: "all the peer session should be writable, which is the default and
+  // universal setting, so no need to mark things like writable or read only"): the card's pre-attach sentence,
+  // `writeInvitation` ("you can type here" / "view only — this session is shared read-only" from the listing's
+  // `readWrite`), was such a mark. The card says nothing about typing before a tap. The live attachment still names
+  // a desktop that grants `read` without `input` in its own words (`TerminalAttachment`, "view only — this desktop
+  // granted read without input"): that is post-attach truth, and it stays.
 
   // MARK: - The account corner (IOS-8b)
 

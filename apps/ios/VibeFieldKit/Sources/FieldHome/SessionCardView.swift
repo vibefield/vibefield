@@ -496,18 +496,15 @@ struct SessionCardView<Terminal: View>: View {
         .foregroundStyle(FieldPalette.textMuted)
 
       if remote.attachable {
-        // `remote.readWrite` says the SESSION is shared for writing — it rides
-        // in a host advertisement broadcast to the whole mesh and knows
-        // nothing about who is asking. Whether THIS device may type is decided
-        // per attach by the grant in its ticket, and the live attachment says
-        // so in its own words when a desktop grants read without input.
-        Text(
-          statusNote
-            ?? FieldHomeModel.writeInvitation(sessionSharesWrites: remote.readWrite)
-        )
-        .font(FieldType.mono(9))
-        .foregroundStyle(FieldPalette.textMuted)
-        .multilineTextAlignment(.center)
+        // No pre-attach write mark (James, 2026-10-28: a peer is writable by default). Whether THIS device may
+        // type is decided per attach by the grant in its ticket, and the live attachment says so in its own words
+        // when a desktop grants read without input.
+        if let statusNote {
+          Text(statusNote)
+            .font(FieldType.mono(9))
+            .foregroundStyle(FieldPalette.textMuted)
+            .multilineTextAlignment(.center)
+        }
 
         // RETIRED 2026-09-14 (TM-3): the ENTER KEY invitation stood here, the
         // one act that could change the sentence above — the host shares writes

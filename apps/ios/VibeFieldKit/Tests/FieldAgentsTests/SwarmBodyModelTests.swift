@@ -352,23 +352,23 @@ private func model(
         readWrite: hostWritable, cwdLabel: "/Projects/mesh-console"))
   }
 
-  @Test func namesThePeerFirstInTheAccessibleNameThenTheHostWritePolicy() {
-    #expect(
-      model(remoteRow(hostWritable: false)).accessibilityLabel
-        == "on studio-mini, mesh-console, remote session, idle, read-only host")
-    #expect(
-      model(remoteRow(hostWritable: true)).accessibilityLabel
-        == "on studio-mini, mesh-console, remote session, idle, writable host")
+  @Test func namesThePeerFirstInTheAccessibleNameAndNoWritePolicy() {
+    // a peer is writable by default (James, 2026-10-28): the name says no write policy either way
+    for writable in [false, true] {
+      #expect(
+        model(remoteRow(hostWritable: writable)).accessibilityLabel
+          == "on studio-mini, mesh-console, remote session, idle")
+    }
   }
 
-  @Test func wearsTheHostOnTheBodyInBothDirections() {
-    let refusing = model(remoteRow(hostWritable: false)).copy.first { $0.key == "host" }
-    let permitting = model(remoteRow(hostWritable: true)).copy.first { $0.key == "host" }
-    #expect(refusing?.text == "studio-mini · read-only host")
-    #expect(permitting?.text == "studio-mini · writable host")
-    // …and a host property is never upgraded into a promise to the viewer.
-    #expect(permitting?.text.contains("you") == false)
-    #expect(model(remoteRow(hostWritable: true)).title.contains("decided when you attach"))
+  @Test func wearsTheHostOnTheBodyAsTheDeskNameAlone() {
+    // no write mark in the line or the hover, whichever way the host is configured (James, 2026-10-28)
+    for writable in [false, true] {
+      let body = model(remoteRow(hostWritable: writable))
+      #expect(body.copy.first { $0.key == "host" }?.text == "studio-mini")
+      #expect(body.title == "studio-mini · /Projects/mesh-console")
+      #expect(!body.title.contains("host"))
+    }
     // A remote row is a hollow, in the ramp, never a project's colour.
     let body = model(remoteRow(hostWritable: true))
     #expect(body.hollow)
