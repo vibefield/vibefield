@@ -17965,6 +17965,7 @@ render. The class is the same; the window is milliseconds wide.
   test for 27 projects": field-app 2,769 passed, this file 9/9 among them; fieldd 2,575 passed (11 skipped)),
   `pnpm test:rust` 31 suites with 492 passed and 0 failed, and gen:check clean. The verify ran at `63cd8384f`, whose
   body was then amended with the red-first numbers: `68296443f` carries the same tree.
+- **CI** on the pushed `9612ade48` (run 40624603346): GREEN, 03:26Z. *Cited 2026-10-28 with item 85.*
 - Records: `/Volumes/SamsungRed/lanes/records/item84/`.
 
 ## QW1 stack A — fix wave 1's first landing: Q17 (ACP offers no spawn), Q04 (hidden means unread), Q06 (1) (a failed body stays until its pane is seen), Q12's departure in DESIGN.md, re-attach Step 0's VibeField half, and the dev overlay's `workspace:` closure (2026-10-28; `3932cc190` … `6b3d33af6`, lane `qa-w1`; James's rulings of 2026-10-27, the fix waves on his word 22:26Z)
@@ -18236,3 +18237,95 @@ corrections made at landing, each on his word:
 - ROADMAP: §5's Q1 bullet and §6's "same-snapshot edits" item leave (the latter was done in dev-local `3bfc5f604`),
   and §2's EL8 line says CLAUDE.md names no pin.
 - Checks (docs only): nothing reads CLAUDE.md at runtime, so no verify ran.
+
+## FN — item 85: a route move between the routes subscription's reading and its forwarder's first poll reaches fieldd; the design-system page's budget is measured on CI's runner (2026-10-28; `7eda2ee38`, `b60e80398`, lane `fix/item85-routes-baseline`; VF-PM's rulings 18:22Z and 18:33Z)
+
+**What happened:** CI's verify on the pushed `e3a00a07f` (run 40728506315) went red on its two attempts, on two
+different rows, each green on the other attempt and on this Mac:
+- **Attempt 1** (17:23Z): field-app `test/design-system.test.tsx` › "shows the launcher of a pane born under a
+  profile…", "Hook timed out in 60000ms" in the beforeEach that renders the whole `<DesignSystemPage />`.
+- **Attempt 2** (18:08Z): fieldd `test/agent-session.test.ts` › MF-1f/MF-1g "resume hands the pane over…", at its
+  setup's 30 s wait, "the floor's terminal endpoints reaching the daemon did not hold within 30000 ms". Item 68's
+  evidence at the deadline read "fieldd's link: connected; routes heard at revision 1, 0 cell(s)". The floor's own log
+  had both cells serving at +219 ms, 4 ms after the mgmt client authenticated, and nothing moved for 30 s.
+
+VF-PM made both item 85. They are two causes: a field-native race and a thin budget.
+
+**The race, since TM-r13 `8e9cfbb82` (2026-09-14), in `native.lifecycle.terminal.routes.subscribe`
+(`mgmt/mod.rs`):**
+- The handler read the current snapshot for its result (`state.terminal_routes.borrow()`, the revision-1
+  announcement, no cells). It then spawned `spawn_routes_forwarder` with a clone of the state's receiver.
+- At its first poll the forwarder's task marked whatever the channel held THEN as seen (`rx.borrow_and_update()`,
+  added so the stream's first delta would not repeat the result).
+- When the cells came up between the result's read and that poll, revision 2 was marked seen and never sent.
+  TC-D15's "a missed delta is repaired by the next one" did not hold, because a floor whose cells are up has no next
+  one.
+
+**The fix** (`7eda2ee38`, `mgmt/mod.rs` only, +131/−53):
+- The handler marks the baseline in the SAME read that builds the result (`borrow_and_update` on its clone), and hands
+  that receiver to the forwarder, which no longer marks anything.
+- T-M2's dedupe stands: the result's own snapshot is still never repeated. A move after the read wakes the forwarder
+  however late its task first runs.
+- The row: `a_route_move_before_the_forwarder_first_runs_is_delivered_once`. It drives the window on a current-thread
+  runtime, where a spawned task runs only at the next await. The result reads revision 1, revision 2 lands before the
+  forwarder runs, and the reader must hear revision 2, once. T-M2's row's two helpers are hoisted to the module for it,
+  unchanged.
+- **The siblings, noted and left unchanged → ITEM 86** ("health/observed subscribe: subscribe-then-read on one
+  receiver", planned). `native.lifecycle.health.subscribe` and `.observed.subscribe` read the Sender's value, then
+  `subscribe()`, so a send from another thread between those two statements is lost the same way. That window has no
+  await in it, so no current-thread row can drive it, and neither changes blind (VF-PM 18:22Z). Each handler carries a
+  dated note naming the closing shape: the routes handler's, one receiver read once with `borrow_and_update`.
+- **Item 63, likely, not proven.** Item 63's red (the nightly's AR-6-0 row, 2026-10-26) was the same 30 s setup wait
+  for `daemon.native.terminalEndpoints`, and its twin in agent-gateway-floor.ts reddened the same way twice on this
+  Mac. Its floor's log was deleted with the row's temp root, so whether it was this race cannot be shown.
+
+**The budget.** DK-11's 60 s (2026-10-05) was "the worst render measured about twice its time", measured on this Mac.
+CI's runner is the slower host:
+- Attempt 1's runner was slow all through. field-app's test task took 773 s (161–488 s in the eight green runs before
+  it) and fieldd's 1349 s (682–1042 s); this file took 415 s (61–197 s).
+- Nothing in the design-system sources or this test changed in `c903853a1..e3a00a07f`.
+- **Measured** (each row is vitest's own time: render, body and unmount, since its runner starts the clock before
+  beforeEach):
+  - CI, nine green runs of verify (10-27/28, the eight before plus attempt 2): 4.6–47.6 s a row.
+  - CI, attempt 1: 22–84 s a row, and one render past 60 s. Rows of 76 s and 84 s passed there, because the hook and
+    the body each have their own budget.
+  - This Mac, the file alone ×3 at the lane's tip (nice 19, load 15–18, 18:24:53–18:26:10Z): 1.5–2.8 s a row, 24 of
+    24 passed.
+  - DK-11's 10-05 envelope, alone: a 1.3–1.7 s render and a body of at most 0.9 s. **The page did not grow**: the
+    catalog's sources grew 2% by lines (19,617 → 20,003) since 10-05.
+- **The line** (`b60e80398`, the test only, +6/−1): `PAGE_BUDGET_MS = 120_000`, twice the 60 s that render passed.
+  It still bounds the hook, the body and the unmount separately, so a render that hangs still fails. DK-11's claim is
+  corrected at its source, the comment above the constant, with a dated note; the 10-05 numbers stay.
+- Not taken (VF-PM 18:33Z): one render per file is a test-isolation change. If the row reds again at 120 s, that
+  change becomes its own item.
+
+**Validation** (this Mac's SSD lane `/Volumes/SamsungRed/lanes/item85`, guard, nice 19; VF-PM's GRANT 18:22Z, the mark
+18:33Z):
+- **Red-first** (logs/redfirst/, 18:23Z, load 15–27):
+  - the fix with main's one forwarder line restored (`let _ = rx.borrow_and_update();` at the task's head): the new
+    row RED, 1 failed in 0.41 s, "a move after the result's reading reaches the reader";
+  - the fix: the new row 1 passed; T-M2's row 1 passed; the whole `mgmt::` module 30 passed, 0 failed;
+  - the file was restored from HEAD after each, and the tree was clean.
+- **MF-1f ×3 at the fix, on the real floor** (logs/mf1f/, 18:23:50–18:24:53Z, load 17–24): 3/3, 2/3, 3/3.
+  - All 12 setups heard the floor's endpoints, the wait item 85 reddened.
+  - Run 2's third row went red at a DIFFERENT wait → **ITEM 87**. `endedRun`'s 15 s poll for `continuation.exited`
+    after `agent.interrupt` timed out: `terminal_spawned` +271 ms, `session_started` +276, `agents.interrupted` +289,
+    then nothing for 10 s (routes at revision 3, 2 cells; no `session_exited`).
+  - It was found at the fix on a path the fix does not touch: an exit reaches fieldd on the cell's terminal client
+    (`session-exited`), not on the routes stream.
+  - ghosttea's interrupt is a `\x03` written to the PTY. The ^C landed 13 ms into the scripted shell's life (the
+    fixer's lean, unproven). It is read next, at the cause (the PTY's line discipline against the exec'd `cat`), with a
+    witness on main's floor in its own slot. Item 81's `endedRun` bound stays on the lottery list until then.
+- **The light pass** (logs/light/, 18:32:59–19:57:24Z, load 42–572; field-app's typecheck took 53 min of it): cargo
+  fmt --check, clippy `-p field-native --all-targets -D warnings`, typecheck field-app, biome at error level on the
+  test, preflight and check:walls all 0.
+- **`pnpm verify`** at `b60e80398` (logs/verify/verify.log): EXIT 0 (19:57:24Z–20:05:01Z; load 529 armed, 47 at its
+  end). Every stage passed:
+  - the TS test target ("Successfully ran target test for 27 projects"): fieldd 2,588 passed (11 skipped),
+    agent-session among them; field-app 2,780 passed, design-system 8/8 in 41 s (3.2–6.5 s a row);
+  - `pnpm test:rust`: 31 suites with 493 passed and 0 failed, the new row and T-M2's among them;
+  - gen:check clean.
+- Records: `/Volumes/SamsungRed/lanes/records/item85/`.
+- **Errata:** the memory's lottery note said at 18:20Z that "MF-1f was never a lottery row". That holds for the
+  setup's endpoint wait only, and the note carries a dated correction at its source (18:31Z). Item 84's entry above now
+  cites its CI witness.
