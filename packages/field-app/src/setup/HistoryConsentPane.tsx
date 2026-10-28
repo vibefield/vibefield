@@ -44,7 +44,7 @@ export function HistoryConsentPane({
   census: HistoryCensus;
   onDone: (end: HistoryPaneEnd) => void;
   frame: (parts: HistoryPaneParts) => ReactElement;
-  now?: number;
+  now?: number | undefined;
 }): ReactElement {
   const client = useFielddClient();
   const rows = census.kind === "found" ? census.rows : NO_ROWS;

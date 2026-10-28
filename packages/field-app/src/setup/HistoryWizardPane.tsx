@@ -24,9 +24,12 @@ import { useHistoryCensus } from "./use-history-census";
 export function HistoryWizardPane({
   onDone,
   onBack,
+  now,
 }: {
   onDone: (end: HistoryPaneEnd) => void;
   onBack?: (() => void) | undefined;
+  /** the moment "last used" is said against; the pane's own clock when not given */
+  now?: number | undefined;
 }): ReactElement {
   const client = useFielddClient();
   const { census } = useHistoryCensus(client);
@@ -48,6 +51,7 @@ export function HistoryWizardPane({
     <HistoryConsentPane
       census={census}
       onDone={end}
+      now={now}
       frame={(parts) => <HistoryWizardPaneView parts={parts} onBack={onBack} />}
     />
   );

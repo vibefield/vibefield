@@ -168,9 +168,15 @@ async function mountPane(client: FielddClient, onDone = vi.fn()): Promise<typeof
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
+  // The pane says "last used" against the suite's NOW, as the census's fixtures
+  // are, never the wall clock: "today" was true on 2026-10-27 alone (item 84).
   await act(async () => {
     root?.render(
-      createElement(FielddProvider, { client }, createElement(HistoryWizardPane, { onDone })),
+      createElement(
+        FielddProvider,
+        { client },
+        createElement(HistoryWizardPane, { onDone, now: NOW }),
+      ),
     );
   });
   // the census answers
