@@ -17469,7 +17469,9 @@ on James's AO-D11 = A (07:54–07:59Z) and AO-D15 = (a) (15:27:13Z). One commit,
   the tree clean after and no stub left (`lanes/ao1/logs/verify/verify.log`). fieldd's agent-session file, whose
   waits AO-6b1's verify lost at load 290, passed (`50 tests | 2 skipped`) with item 81's fix (`2b8a15c8b`) in the base.
 
-**Not here.** The desk rows (`pnpm smoke`, `pnpm smoke:studio`) on a display, owed with AO-1…6b1's. AO-7 (Get) waits
+**Not here.** The desk rows (`pnpm smoke`, `pnpm smoke:studio`) on a display, owed with AO-1…6b1's.
+*Amended 2026-10-28 (AO-6b3, the review's last finding):* and `pnpm smoke:godview`, the smoke that drives Godview's
+cover, where this moment stands. AO-7 (Get) waits
 on James's puppeteer release; AO-8's petitions are filed (RO-24…RO-28 as vibefield/rosetta#23…#27, PU-19 as
 vibefield/puppeteer#47), each an EL8 event when released.
 
@@ -17848,3 +17850,68 @@ touch this red either: both values are `begun_1`.
   projects": field-app 2,757 passed in 227 files, fieldd 2,575 passed (11 skipped)), `pnpm test:rust` 31 suites with
   492 passed and 0 failed, the row among them, and gen:check clean.
 - Records: `/Volumes/SamsungRed/lanes/records/item83/`.
+
+## AO-6b3 — the limit moment, reviewed: one row on the counts' line that ends above the deck's fill line, speaking for what Agent Profiles shows from the stage's own feeds (2026-10-28; `db8852169`, lane `ao/6b3`; AO-D11; James, 2026-10-27 23:13Z)
+
+**What.** James asked for a review of his unpushed AO-6b2 (2026-10-27 22:15Z, "review your changes so far"); a
+/code-review of `1341c06b7..bb1a2c823` found 21 issues, and he ruled "go ahead and fix, go with your lean" (23:13Z).
+AO-6b2 had been pushed at 21:52Z, so this lands on top. One commit, in field-app, design-kit's tokens and DESIGN.md:
+- **DESIGN.md first.** §2.7 gains a Godview-scoped attention ink (`#B25E00` light, `#FF9F0A` dark; tokens.css's
+  `--vf-godview-{light,dark}-ink-attention`). §8's limit moment is one row, the ruling dated and an amendment note
+  saying what the card did, with the arithmetic: under the counts only 29px remain before the fill line (104), so the
+  row stands on the counts' own line and ends at about 82.
+- **The row**: the plan's badge, "92% · 7 days" in Godview's attention ink, "Another subscription?", Add a profile… ·
+  Not now, and a 2px line along its foot. The voice is the primary act's description, not drawn. The strip widens and
+  wraps only while the row shows (`:has`); the acts hover as the deck fault's Try again does, sharing its rule, so
+  the primary keeps its label; Reduce Motion stills its fade. It waits under the Last Run curtain.
+- **The rule** reads as the plan's card on Agent Profiles reads: a plan with an agent installed on This Mac and an
+  account named; a reading kept after a failed refresh; never an expired sign-in, a budget, a standby allowance or a
+  window past its reset; a model-only window says its part ("95% · Opus only · 7 days"); the percent rounds as the
+  usage column does.
+- **No feeds of its own.** The usage port tees fieldd's rows from the usage column's one subscription
+  (`subscribeRows`), and the monitor lends them with the profile filter's sets (`MonitorAccountFacts`). The moment's
+  only subscription is the setup ledger; it asks the inventory once, only at the line, and fieldd's identities once
+  for a sign-in at the line with no plan.
+- **Settings from inside the cover**: `frame/settings-door.ts` is gone; ChromeLayer hands the cover `openNewProfile`
+  only while Settings is closed. The keyboard goes to the current view's circle before the row leaves, and
+  SettingsPanel reads its opener as it first renders.
+- **Tests**: limit-moment.test rewritten (the rule, the row's stylesheet held to §8 and §2.7, the row, the
+  controller); godview-monitor.test (the vacuous step, the curtain, one usage subscription); panels.test (the
+  opener); the three overlay suites' mocks gain `useSubscription`.
+
+**Validation** (lane ao1, nice 19, the guard and no other run before every step):
+- Restacked, git only, rehearsed with `git merge-tree` first, onto item 83's records tip `9f0ca6378` (00:05Z):
+  clean, the tree `f662e80f1` as rehearsed (DESIGN.md merged beside TS-8b's §9).
+- the light pass:
+  - at `ec8deafdb` (00:06:11–00:08:01Z) EXIT 1 on one row: biome's formatter wanted LimitMoment.tsx's React import
+    on one line (biome ignores every path in the SSD edit lane, so it was wrapped by hand).
+  - at `395986ee3` (00:08:17–00:09:54Z) EXIT 0: the three typechecks, biome on the slice's 19 files, gen:check,
+    contracts `1197 passed`, fieldd's ledger files `8 passed`, field-app's eighteen files `397 passed` with no moment
+    noise in their log, preflight, walls, the words check.
+- red-first by mutation at `395986ee3` (00:10:04–00:11:36Z): 19 of 19 red on exactly their claiming rows, the tree
+  restored. `db8852169` is `395986ee3` with its message amended to say so; the tree is the same.
+- the gate at `db8852169` (00:12:05–00:15:10Z): the field-app typecheck; field-app's whole suite `2766 passed |
+  3 skipped`; the words check exit 0; the limit plate photographed in both themes, scrolled into view and settled,
+  no console errors (`lanes/ao1/logs/gate-db8852169…/shots/`).
+  - The row probe, in both themes: the row on the counts' line from 56 to 85 (the fill line 104); the number
+    `rgb(178, 94, 0)` light and `rgb(255, 159, 10)` dark; the primary 18.88:1 at rest, and hovered through
+    CSS.forcePseudoState 16.87:1 light and 15.52:1 dark (about 1.1:1 before).
+  - Read by eye: the row as §8 draws it, in both themes. The light shot drew the list about 70px lower than the dark
+    one. A DOM probe found its toolbar at 96 in both themes, opaque and on top, so that was the capture, not the page.
+- `pnpm verify` at `db8852169` (00:15:11–00:20:28Z) exit 1, at a load of 240 by its end:
+  - every stage before the tests green: preflight, walls, the typecheck of 27 projects, biome's 2661 files, clippy;
+  - 25 of 26 TypeScript projects green (field-app `2769 passed`, electron-shell `1970 passed | 3 skipped`,
+    contracts `1197 passed`);
+  - fieldd `2 failed | 2573 passed | 11 skipped`: two lower-bound timing floors in files the slice does not touch,
+    DS-5c (`doc-sync-service.test.ts`, 71 against at least 75) and TC-S3 (`terminal-service.test.ts`, 99 against at
+    least 100);
+  - cargo and gen:check were not reached.
+- Once, alone, on VF-PM's word (02:33:34–02:36:10Z; this session's usage limit had paused the chain from 00:20 to
+  02:31Z; `lanes/ao1/logs/alone-db8852169/`):
+  - (a1) doc-sync-service `44 passed`; (a2) terminal-service `107 passed`;
+  - (b) `pnpm test:rust` ok 31, FAILED 0; (c) `pnpm gen:check` EXIT 0;
+  - the tree clean after.
+
+**Not here.** ChromeLayer's `showSettings ? undefined : openNewProfile` has no test that mounts it (frame-owner
+reproduces the glue). The desk rows on a display (`pnpm smoke`, `pnpm smoke:studio`, `pnpm smoke:godview`), owed with
+AO-1…6b2's. AO-7 waits on James's puppeteer release.

@@ -1400,7 +1400,8 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     fill, dropped a kept reading, and could speak for a plan with no card on Agent Profiles. The lean
     was a compact card above the fill line; under the counts that leaves room for one row only (the
     strip stands at the head's reserve, 56, and the counts' line and its gap end at about 75, so 29px
-    remain before 104), and a row on the counts' own line ends at about 82, so the row stands there.
+    remain before 104), and a row on the counts' own line ends at about 85 (56 to 85, measured at AO-6b3's gate),
+    so the row stands there.
 - **The desk's chrome** (Chrome on the Mat MC-1…MC-6, 2026-09-28; MC-D1 ruled through One Frame's
   lock and MC-D10 with DK-D23, 2026-10-02; the orchestrator's Phase 4 rulings R1–R25, 2026-10-03,
   cited below as Rn; built on the desk by DK-11…DK-16): **the mat keeps its marks and the chrome
