@@ -34,7 +34,12 @@ let container: HTMLDivElement | null = null;
 // vitest's 10 s hook and 5 s test defaults, so every gate failed here. 60 s gives the worst render measured about twice
 // its time; a render that hangs still fails. The suite's other page-scale files budget 30–60 s (doc-manager, and
 // history-search until the Peek retired it, 2026-10-08).
-const PAGE_BUDGET_MS = 60_000;
+// *Corrected 2026-10-28 (item 85):* CI's runner is the slower host, and on it a render passed 60 s ("Hook timed out in
+// 60000ms", verify run 40728506315's first attempt). There a row (render, body and unmount: vitest's own time) took
+// 4.6–47.6 s in nine green runs of 10-27/28 and 22–84 s on that attempt. The page had not grown: alone on this Mac a row
+// took 1.5–2.8 s at load 15–18 (×3, 24 rows), against 10-05's 1.3–1.7 s render and 0.9 s body. 120 s is twice the 60 s
+// that render passed.
+const PAGE_BUDGET_MS = 120_000;
 
 beforeEach(async () => {
   window.localStorage.clear();
