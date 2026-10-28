@@ -1581,8 +1581,8 @@
                       open model board, never an id supplied by the caller. No board: <code>PRECONDITION_FAILED
                       {state: "no-screen"}</code>. An empty list clears the report; closing the board forgets its screen.
                       The marks are fieldd's (Q05, James, 2026-10-27): they outlive every screen, so a reload or a closed
-                      Godview keeps them and a turn that ends with no board open is marked, from the puppeteer release
-                      that carries it.
+                      Godview keeps them and a turn that ends with no board open is marked (puppeteer's ledger, since
+                      0.3.0, 2026-10-28).
                       A report is also the person's look at a crashed run's pane (Q06, James, 2026-10-27): a failure
                       a screen shows is acknowledged with the backend's M3 <code>acknowledge</code>, so its model row
                       leaves for every screen, while the fold's row, the record and the frame's resume verb stay. Only
