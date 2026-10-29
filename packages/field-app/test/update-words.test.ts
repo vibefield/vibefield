@@ -11,11 +11,17 @@ import {
   downgradeWords,
   downloadRefusalFallback,
   isDowngrade,
+  type MeUpdateLocal,
+  type MeUpdateRow,
+  meUpdateRow,
+  notAppliedNotice,
   notAppliedWords,
   READY_SINCE_DAYS,
+  readyClause,
   readySince,
   recentInstall,
   refusalFallback,
+  refusalLine,
   restartAsks,
   shortDay,
   UPDATE_CHANNEL_LINES,
@@ -336,5 +342,431 @@ describe("a refusal main sent no words for (a race)", () => {
       const words = downloadRefusalFallback(reason);
       expect(`${words.message} ${words.detail}`).not.toMatch(APOLOGY);
     }
+  });
+});
+
+// AU-2 — the Me menu's update row (DESIGN.md §8 "The Me menu"; renderer.md §2.1 with the lead's calls): one state,
+// the page's verbs, every line whole in the 256px panel, an act wearing "…" only when it asks first (LC-41).
+describe("the Me menu's update row — at rest, in place, and the hold in its ink (AU-2)", () => {
+  const REST: MeUpdateLocal = { kind: "rest" };
+  const CURRENT = "0.1.0-nightly.20261027";
+  const NEXT = "0.1.0-nightly.20261028";
+  const NIGHTLY: UpdateView = {
+    ...BASE,
+    channel: "nightly",
+    buildChannel: "nightly",
+    currentVersion: CURRENT,
+  };
+  const STAGED: UpdateView = { ...NIGHTLY, phase: "staged", version: NEXT, sessions: 0 };
+  const FOUND: UpdateView = { ...NIGHTLY, phase: "available", version: NEXT };
+  type Phase = "checking" | "preparing" | "confirming" | "restarting" | "requested";
+  const at = (kind: Phase): MeUpdateLocal => ({ kind });
+  const answered = (outcome: "up-to-date" | "found" | "held" | "failed"): MeUpdateLocal => ({
+    kind: "answered",
+    outcome,
+  });
+  const CHECK = {
+    glyph: "reset",
+    turn: 0,
+    label: "Check for updates",
+    act: "check",
+    dot: false,
+  } as const;
+  const ON_27 = "You're on the Oct 27 nightly";
+
+  // [row, view, the row's flow, what it says]
+  const ROWS: [string, UpdateView | null, MeUpdateLocal, Partial<MeUpdateRow>][] = [
+    // ── at rest ──
+    [
+      "R1 — no updater: dimmed, no version",
+      null,
+      REST,
+      {
+        glyph: "reset",
+        label: "Check for updates",
+        detail: "This build doesn't update itself",
+        act: "none",
+        dot: false,
+      },
+    ],
+    ["R2 — the version you are on", NIGHTLY, REST, { ...CHECK, detail: ON_27 }],
+    [
+      "R2 — a main that names none: when it last checked",
+      BASE,
+      REST,
+      { ...CHECK, detail: "Not checked yet" },
+    ],
+    [
+      "R3 — off",
+      { ...NIGHTLY, enabled: false },
+      REST,
+      { ...CHECK, detail: "Automatic updates are off" },
+    ],
+    [
+      "R6 — a check that began elsewhere",
+      { ...NIGHTLY, phase: "checking" },
+      REST,
+      { glyph: "reset", label: "Checking for updates…", act: "none", dot: false },
+    ],
+    [
+      "R7 — downloading, on real progress",
+      { ...NIGHTLY, phase: "downloading", version: NEXT, percent: 41.6 },
+      REST,
+      {
+        glyph: "arrow",
+        turn: 180,
+        label: "Downloading update",
+        detail: "42% downloaded",
+        progress: 42,
+        act: "open",
+        dot: false,
+      },
+    ],
+    [
+      "R8 — nothing ends, so nothing asks",
+      STAGED,
+      REST,
+      {
+        glyph: "reset",
+        label: "Restart to update",
+        detail: "Your sessions keep running",
+        act: "restart",
+        dot: true,
+      },
+    ],
+    [
+      "R9 — the cost before the click",
+      { ...STAGED, sessions: 3 },
+      REST,
+      { label: "Restart to update…", detail: "Ends 3 terminal sessions", act: "ask", dot: true },
+    ],
+    [
+      "R9 — one session",
+      { ...STAGED, sessions: 1 },
+      REST,
+      { label: "Restart to update…", detail: "Ends 1 terminal session", act: "ask" },
+    ],
+    [
+      "R10 — the census unread",
+      { ...STAGED, sessions: "unknown" },
+      REST,
+      { label: "Restart to update…", detail: "Checks your sessions first", act: "ask", dot: true },
+    ],
+    [
+      "R11 — downloaded where the apply isn't wired",
+      { ...STAGED, applyWired: false },
+      REST,
+      {
+        glyph: "arrow",
+        turn: 180,
+        label: "Update downloaded",
+        detail: "Installs with a later release",
+        act: "open",
+        dot: false,
+      },
+    ],
+    [
+      "R12 — found, with automatic updates off: Download in place (LC-6)",
+      { ...FOUND, enabled: false },
+      REST,
+      {
+        glyph: "arrow",
+        turn: 180,
+        label: "Download update",
+        detail: "Automatic updates are off",
+        act: "download",
+        dot: false,
+      },
+    ],
+    [
+      "R13 — a skip, the person's own act",
+      { ...FOUND, declined: true },
+      REST,
+      { ...CHECK, detail: "You skipped the Oct 28 nightly" },
+    ],
+    ["R14 — found and held by a lever", FOUND, REST, { ...CHECK, detail: ON_27 }],
+    [
+      "R15 — paused",
+      { ...NIGHTLY, phase: "paused" },
+      REST,
+      { ...CHECK, detail: "Paused by the publisher", detailTone: "attention" },
+    ],
+    [
+      "R16 — unsupported",
+      { ...NIGHTLY, phase: "unsupported" },
+      REST,
+      { ...CHECK, detail: "The update needs a newer macOS", detailTone: "attention" },
+    ],
+    [
+      "R17 — offline, quiet",
+      { ...NIGHTLY, phase: "offline" },
+      REST,
+      { ...CHECK, detail: "Couldn't check — offline", detailTone: "quiet" },
+    ],
+    [
+      "R18 — the last check failed",
+      { ...NIGHTLY, phase: "failed", unavailable: "feed-unverified" },
+      REST,
+      { ...CHECK, detail: "The last check failed", detailTone: "danger" },
+    ],
+    [
+      "LC-31 — a channel with nothing published: quiet",
+      { ...NIGHTLY, channel: "beta", phase: "failed", unavailable: "channel-unresolved" },
+      REST,
+      { ...CHECK, detail: "No beta release yet", detailTone: "quiet" },
+    ],
+    // ── in place: this open's click ──
+    [
+      "P1 — the row's own check",
+      NIGHTLY,
+      at("checking"),
+      { glyph: "reset", label: "Checking for updates…", detail: ON_27, act: "none" },
+    ],
+    [
+      "P2 — up to date, inert until the fold",
+      NIGHTLY,
+      answered("up-to-date"),
+      { label: "VibeField is up to date", detail: ON_27, act: "none" },
+    ],
+    ["P2 — never for a held answer", NIGHTLY, answered("held"), { ...CHECK, detail: ON_27 }],
+    [
+      "P3 — found and downloading: the download row in place",
+      { ...NIGHTLY, phase: "downloading", version: NEXT, percent: 3 },
+      answered("found"),
+      { label: "Downloading update", detail: "3% downloaded", progress: 3, act: "open" },
+    ],
+    [
+      "P4 — a skip, said in line 1",
+      { ...FOUND, declined: true },
+      answered("found"),
+      { label: "You skipped the Oct 28 nightly", detail: "Download it from Settings", act: "open" },
+    ],
+    [
+      "P5 — offline",
+      { ...NIGHTLY, phase: "offline" },
+      answered("failed"),
+      {
+        label: "Couldn't check — offline",
+        detail: "VibeField tries again on its own",
+        act: "none",
+      },
+    ],
+    [
+      "P6 — the check failed",
+      { ...NIGHTLY, phase: "failed", unavailable: "feed-unverified" },
+      answered("failed"),
+      {
+        label: "Couldn't check for updates",
+        labelTone: "danger",
+        detail: "Settings → Updates has more",
+        act: "open",
+      },
+    ],
+    [
+      "LC-31 — a check that finds nothing published answers as the held row",
+      { ...NIGHTLY, channel: "beta", phase: "failed", unavailable: "channel-unresolved" },
+      answered("failed"),
+      { ...CHECK, detail: "No beta release yet", detailTone: "quiet" },
+    ],
+    [
+      "P7 — paused",
+      { ...NIGHTLY, phase: "paused" },
+      answered("held"),
+      {
+        label: "Updates are paused",
+        labelTone: "attention",
+        detail: "Your version keeps running",
+        act: "none",
+      },
+    ],
+    [
+      "P8 — unsupported",
+      { ...NIGHTLY, phase: "unsupported" },
+      answered("held"),
+      {
+        label: "Needs a newer macOS",
+        labelTone: "attention",
+        detail: "Your version keeps running",
+        act: "none",
+      },
+    ],
+    [
+      "P9 — the door itself failed",
+      NIGHTLY,
+      { kind: "unreachable", message: "No handler registered" },
+      {
+        label: "Couldn't reach the updater",
+        labelTone: "danger",
+        detail: "Settings → Updates has more",
+        act: "open",
+      },
+    ],
+    [
+      "P10 — main reads the sessions",
+      { ...STAGED, sessions: 3 },
+      at("preparing"),
+      {
+        label: "Restart to update…",
+        detail: "Reading the running sessions…",
+        act: "none",
+        dot: true,
+      },
+    ],
+    [
+      "P12 — a restart that asked nothing, starting",
+      STAGED,
+      at("confirming"),
+      { label: "Restart to update", detail: "Starting the update…", act: "none", dot: true },
+    ],
+    [
+      "P13 — restarting: the dot goes with the act",
+      STAGED,
+      at("restarting"),
+      { label: "Restarting…", detail: "VibeField opens again", act: "none", dot: false },
+    ],
+    [
+      "P14 — Download asked",
+      { ...FOUND, enabled: false },
+      at("requested"),
+      {
+        glyph: "arrow",
+        turn: 180,
+        label: "Download update",
+        detail: "Starting the download…",
+        act: "none",
+      },
+    ],
+    [
+      "P14 — then the view says downloading",
+      { ...NIGHTLY, enabled: false, phase: "downloading", version: NEXT, percent: 0 },
+      at("requested"),
+      { label: "Downloading update", detail: "0% downloaded", progress: 0, act: "open" },
+    ],
+  ];
+
+  it.each(ROWS)("%s", (_name, view, local, says) => {
+    const row = meUpdateRow({ view, local, now: NOW });
+    expect(row).toMatchObject(says);
+    // a tone the case names is the row's; one it doesn't name, the row has none
+    if (says.labelTone === undefined) expect(row.labelTone).toBeUndefined();
+    if (says.detailTone === undefined) expect(row.detailTone).toBeUndefined();
+    if (says.progress === undefined) expect(row.progress).toBeUndefined();
+    expect(`${row.label} ${row.detail}`).not.toMatch(APOLOGY);
+    // an act wears "…" only when it asks first (LC-41)
+    if (row.act === "check") expect(row.label).toBe("Check for updates");
+    if (row.act === "restart" || row.act === "download") expect(row.label).not.toMatch(/…$/u);
+  });
+
+  it("keeps every line whole in the 256px panel: line 2 at 30 characters, line 1 at 26 (two named exceptions each)", () => {
+    const longer = ["This build doesn't update itself", "VibeField tries again on its own"];
+    for (const [, view, local] of ROWS) {
+      const row = meUpdateRow({ view, local, now: NOW });
+      if (!longer.includes(row.detail)) {
+        expect(row.detail.length, row.detail).toBeLessThanOrEqual(30);
+      }
+      // P4's line 1 names the version it skipped
+      if (row.label.startsWith("You skipped")) continue;
+      expect(row.label.length, row.label).toBeLessThanOrEqual(26);
+    }
+  });
+
+  it("says R4 for a day after an install took, in the no-notes form (LC-7; EL9: AU-1's fixture)", () => {
+    const view = viewFixture("update-view.updated");
+    const installed = view.lastApply?.at ?? 0;
+    expect(meUpdateRow({ view, local: REST, now: installed + 30 * 60 * 1000 })).toMatchObject({
+      glyph: "check",
+      label: "Updated today",
+      detail: "From the Oct 27 nightly",
+      act: "open",
+      dot: false,
+    });
+    // no `from` (an older app's record): the version it is on
+    const last = view.lastApply;
+    if (last === undefined) throw new Error("the fixture carries lastApply");
+    const unknownFrom: UpdateView = {
+      ...view,
+      lastApply: { version: last.version, outcome: "installed", at: installed },
+    };
+    expect(meUpdateRow({ view: unknownFrom, local: REST, now: installed + 60_000 }).detail).toBe(
+      "You're on the Oct 28 nightly",
+    );
+    // a day on, the resting row again
+    expect(meUpdateRow({ view, local: REST, now: installed + DAY })).toMatchObject({
+      ...CHECK,
+      detail: "You're on the Oct 28 nightly",
+    });
+    // the idle fixture: R2 in the version's friendly name
+    const idle = viewFixture("update-view.idle");
+    expect(meUpdateRow({ view: idle, local: REST, now: NOW }).detail).toBe(ON_27);
+  });
+
+  it("adds one third line at most: the floor outranks the ready day, which starts on day 7 (AU-D3)", () => {
+    const view = viewFixture("update-view.staged-since");
+    const stagedAt = view.stagedAt ?? 0;
+    const line3 = (v: UpdateView, now: number) => meUpdateRow({ view: v, local: REST, now }).note;
+    expect(line3(view, stagedAt + (READY_SINCE_DAYS - 1) * DAY)).toBeUndefined();
+    expect(line3(view, stagedAt + READY_SINCE_DAYS * DAY)).toEqual({
+      text: `Ready since ${shortDay(stagedAt)}`,
+    });
+    const floor = { ...view, unsupportedBelow: "0.1.0-nightly.20261028" };
+    expect(line3(floor, stagedAt + READY_SINCE_DAYS * DAY)).toEqual({
+      text: "Your version is unsupported",
+      tone: "attention",
+    });
+    expect(line3(floor, stagedAt + DAY)).toEqual({
+      text: "Your version is unsupported",
+      tone: "attention",
+    });
+    // it never changes the mark, the act or the cost
+    const row = meUpdateRow({ view: floor, local: REST, now: stagedAt + 9 * DAY });
+    expect(row).toMatchObject({
+      label: "Restart to update…",
+      detail: "Ends 3 terminal sessions",
+      dot: true,
+    });
+  });
+
+  it("names the face's ready clause only while an install waits on you (AU-D1)", () => {
+    expect(readyClause(STAGED)).toBe("the Oct 28 nightly is ready");
+    expect(readyClause({ ...STAGED, sessions: 4 })).toBe("the Oct 28 nightly is ready");
+    expect(readyClause({ ...STAGED, applyWired: false })).toBeNull();
+    expect(readyClause({ ...NIGHTLY, phase: "downloading", version: NEXT })).toBeNull();
+    expect(readyClause(null)).toBeNull();
+    expect(readyClause(undefined)).toBeNull();
+  });
+
+  it("says an install that didn't take once, in the menu's words (LC-8; EL9: AU-1's fixture)", () => {
+    const view = viewFixture("update-view.not-applied");
+    expect(notAppliedNotice(view)).toBe(
+      "The Oct 28 nightly didn't install when VibeField restarted. It's ready to try again.",
+    );
+    // not staged again: the page has the details
+    expect(notAppliedNotice({ ...view, phase: "idle" })).toBe(
+      "The Oct 28 nightly didn't install when VibeField restarted. Settings → Updates has the details.",
+    );
+    const last = view.lastApply;
+    if (last === undefined) throw new Error("the fixture carries lastApply");
+    // AU-5's install on quit, said as the record says it
+    expect(notAppliedNotice({ ...view, lastApply: { ...last, trigger: "quit" } })).toBe(
+      "The Oct 28 nightly didn't install when VibeField quit. It's ready to try again.",
+    );
+    // never on a later launch, never while another version is the news, never for one that took
+    expect(notAppliedNotice({ ...view, lastApply: { ...last, thisLaunch: false } })).toBeNull();
+    expect(notAppliedNotice({ ...view, version: "0.1.0-nightly.20261029" })).toBeNull();
+    expect(notAppliedNotice(viewFixture("update-view.updated"))).toBeNull();
+    expect(notAppliedNotice(viewFixture("update-view.idle"))).toBeNull();
+    expect(notAppliedNotice(null)).toBeNull();
+    expect(notAppliedNotice(view)).not.toMatch(APOLOGY);
+    // and the row is the ready row again
+    expect(meUpdateRow({ view, local: REST, now: last.at }).label).toBe("Restart to update");
+  });
+
+  it("says a refusal as one line, in main's words", () => {
+    expect(refusalLine(downloadRefusalFallback("not-available"))).toBe(
+      "VibeField didn't download the update. That version is no longer available.",
+    );
+    expect(refusalLine(refusalFallback("not-staged"))).toBe(
+      "VibeField didn't install the update. Nothing changed (not-staged).",
+    );
   });
 });

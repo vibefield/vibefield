@@ -359,3 +359,367 @@ export function downloadRefusalFallback(reason: string): { message: string; deta
   if (reason === "busy") return { message, detail: "VibeField is busy with another update step." };
   return { message, detail: `Nothing changed (${reason}).` };
 }
+
+// ── AU-2 (the corner; DESIGN.md §8 "The Me menu", AU-D4 B) — the row the menu always carries, nearest the face. One
+// state, the same verbs as the page (AU-L4): the row's line 2 is tertiary unless an ink is named (LC-43), a failed
+// check is the danger ink, the policy's holds the attention ink, offline and a channel with nothing published quiet
+// (LC-3, LC-31). An act wears "…" only when it asks first (LC-41): Check for updates checks in place and wears none. ──
+
+/** A refusal main said (a prepare, a confirm or a Download it would not do), as one line at the menu's top. */
+export function refusalLine(words: { readonly message: string; readonly detail: string }): string {
+  return `${words.message}. ${words.detail}`;
+}
+
+/** The row without its third line and its end dot: what the phase and the click say. */
+type MeUpdateRowBody = Omit<MeUpdateRow, "note" | "dot">;
+
+const CHECK_FOR_UPDATES = "Check for updates";
+const SETTINGS_HAS_MORE = "Settings → Updates has more";
+const KEEPS_RUNNING = "Your version keeps running";
+
+const capitalised = (words: string): string => words.charAt(0).toUpperCase() + words.slice(1);
+
+/** The resting check row, its line 2 in the hold's ink when it names one. */
+const checkRow = (detail: string, detailTone?: MeUpdateRow["detailTone"]): MeUpdateRowBody => ({
+  glyph: "reset",
+  turn: 0,
+  label: CHECK_FOR_UPDATES,
+  detail,
+  ...(detailTone !== undefined ? { detailTone } : {}),
+  act: "check",
+});
+
+/** R2 and R3's line: the version you are on in friendly words — or, from a main that names none, when the last check
+ * ran ("Checked 14:02") — and with automatic updates off, that they are. */
+function idleLine(view: UpdateView, now: number): string {
+  if (!view.enabled) return "Automatic updates are off";
+  return view.currentVersion !== undefined
+    ? youAreOn(view.currentVersion)
+    : capitalised(checkedLabel(view.lastCheckAt, now));
+}
+
+/** The row at rest, read from the view alone (R2–R18; R5, the copy that can't update itself, is AU-7's). */
+function restingRow(view: UpdateView, now: number): MeUpdateRowBody {
+  switch (view.phase) {
+    case "checking":
+      // R6 — a check that began elsewhere reads the same while it runs
+      return {
+        glyph: "reset",
+        turn: 0,
+        label: "Checking for updates…",
+        detail: idleLine(view, now),
+        act: "none",
+      };
+    case "downloading": {
+      // R7 — a bar on real progress only; the page has the rest
+      const percent = Math.round(view.percent ?? 0);
+      return {
+        glyph: "arrow",
+        turn: 180,
+        label: "Downloading update",
+        detail: `${percent}% downloaded`,
+        progress: percent,
+        act: "open",
+      };
+    }
+    case "staged": {
+      // R11 — downloaded where the apply isn't wired yet (Windows, Linux)
+      if (!view.applyWired)
+        return {
+          glyph: "arrow",
+          turn: 180,
+          label: "Update downloaded",
+          detail: "Installs with a later release",
+          act: "open",
+        };
+      // R8 — nothing ends, so nothing asks: the one click restarts
+      if (!restartAsks(view))
+        return {
+          glyph: "reset",
+          turn: 0,
+          label: "Restart to update",
+          detail: "Your sessions keep running",
+          act: "restart",
+        };
+      // R9, R10 — the cost before the click (AU-L2), or the census main reads first
+      const sessions = view.sessions;
+      return {
+        glyph: "reset",
+        turn: 0,
+        label: "Restart to update…",
+        detail:
+          typeof sessions === "number"
+            ? `Ends ${sessions} ${sessionsNoun(sessions)}`
+            : "Checks your sessions first",
+        act: "ask",
+      };
+    }
+    case "available": {
+      // R13 — a skip is the person's own act, said as theirs
+      const name = releaseName(view.version ?? "");
+      if (view.declined === true) return checkRow(`You skipped ${name}`);
+      // R12 (AU-G5) — with automatic updates off, a found update waits for Download, in place (LC-6)
+      if (!view.enabled)
+        return {
+          glyph: "arrow",
+          turn: 180,
+          label: "Download update",
+          detail: "Automatic updates are off",
+          act: "download",
+        };
+      // R14 — found and held by a lever (yanked), or between two views
+      return checkRow(idleLine(view, now));
+    }
+    case "paused":
+      return checkRow("Paused by the publisher", "attention");
+    case "unsupported":
+      return checkRow("The update needs a newer macOS", "attention");
+    case "offline":
+      return checkRow("Couldn't check — offline", "quiet");
+    case "failed":
+      // LC-31 — a channel with nothing published is no failure: quiet, never the danger line
+      if (channelUnresolved(view)) return checkRow(`No ${view.channel} release yet`, "quiet");
+      return checkRow("The last check failed", "danger");
+    default: {
+      // idle — R4 (AU-D11, LC-7): for a day from the first launch that ran it, the no-notes form (AU-6
+      // adds "What's new"); "You're on …" when an older app's record names no version it came from
+      const recent = recentInstall(view, now);
+      if (recent !== null) {
+        const from = recent.from;
+        return {
+          glyph: "check",
+          turn: 0,
+          label: `Updated ${recent.day}`,
+          detail: from !== undefined ? `From ${releaseName(from)}` : youAreOn(recent.version),
+          act: "open",
+        };
+      }
+      // R2, R3
+      return checkRow(idleLine(view, now));
+    }
+  }
+}
+
+/** P1 — the row's own check while it runs: dimmed, its line unchanged. */
+const checkingRow = (rest: MeUpdateRowBody): MeUpdateRowBody => ({
+  glyph: "reset",
+  turn: 0,
+  label: "Checking for updates…",
+  detail: rest.detail,
+  ...(rest.detailTone !== undefined ? { detailTone: rest.detailTone } : {}),
+  act: "none",
+});
+
+/** P2–P8 — the row's check came back (when the CHECK settled, LC-5) and the view says what it found: resolved where
+ * it stands. "VibeField is up to date" only for THIS row's up-to-date answer while the view is idle — never for a held
+ * one. */
+function answeredRow(
+  view: UpdateView,
+  outcome: UpdateCheckResult["outcome"],
+  rest: MeUpdateRowBody,
+): MeUpdateRowBody {
+  switch (view.phase) {
+    case "checking":
+      // P1 — the answer came before the view that says the check runs
+      return checkingRow(rest);
+    case "idle":
+      // P2 — inert until the menu folds; the next open reads the resting row again
+      return outcome === "up-to-date"
+        ? {
+            glyph: "reset",
+            turn: 0,
+            label: "VibeField is up to date",
+            detail: rest.detail,
+            act: "none",
+          }
+        : rest;
+    case "available": {
+      // P3 — the Download row in place (off), or the lever's hold
+      if (view.declined !== true) return rest;
+      // P4 — the hold said in line 1; the page has Download anyway
+      const name = releaseName(view.version ?? "");
+      return {
+        glyph: "reset",
+        turn: 0,
+        label: `You skipped ${name}`,
+        detail: "Download it from Settings",
+        act: "open",
+      };
+    }
+    case "downloading":
+    case "staged":
+      // P3 — the download or the ready row, in place
+      return rest;
+    case "offline":
+      // P5
+      return {
+        glyph: "reset",
+        turn: 0,
+        label: "Couldn't check — offline",
+        detail: "VibeField tries again on its own",
+        act: "none",
+      };
+    case "failed":
+      // LC-31 — a check that finds nothing published answers as the held row does
+      if (channelUnresolved(view)) return rest;
+      // P6
+      return {
+        glyph: "reset",
+        turn: 0,
+        label: "Couldn't check for updates",
+        labelTone: "danger",
+        detail: SETTINGS_HAS_MORE,
+        act: "open",
+      };
+    case "paused":
+      // P7
+      return {
+        glyph: "reset",
+        turn: 0,
+        label: "Updates are paused",
+        labelTone: "attention",
+        detail: KEEPS_RUNNING,
+        act: "none",
+      };
+    case "unsupported":
+      // P8
+      return {
+        glyph: "reset",
+        turn: 0,
+        label: "Needs a newer macOS",
+        labelTone: "attention",
+        detail: KEEPS_RUNNING,
+        act: "none",
+      };
+  }
+}
+
+/** The row in place: the resting row, or what this open's click has made of it (P1–P14). */
+function inPlaceRow(
+  view: UpdateView,
+  local: MeUpdateLocal,
+  rest: MeUpdateRowBody,
+): MeUpdateRowBody {
+  switch (local.kind) {
+    case "rest":
+      return rest;
+    case "checking":
+      // P1 — until the answer, unless the view already moved on to a download (the news on its own)
+      return view.phase === "downloading" || view.phase === "staged" ? rest : checkingRow(rest);
+    case "answered":
+      return answeredRow(view, local.outcome, rest);
+    case "unreachable":
+      // P9 — the door itself failed
+      return {
+        glyph: "reset",
+        turn: 0,
+        label: "Couldn't reach the updater",
+        labelTone: "danger",
+        detail: SETTINGS_HAS_MORE,
+        act: "open",
+      };
+    case "preparing":
+      // P10 — main reads the sessions; line 1 unchanged, dimmed
+      if (view.phase !== "staged") return rest;
+      return {
+        glyph: rest.glyph,
+        turn: rest.turn,
+        label: rest.label,
+        detail: "Reading the running sessions…",
+        act: "none",
+      };
+    case "confirming":
+      // P12 — a restart that asked nothing, starting (one that asked keeps its question, busy)
+      if (view.phase !== "staged") return rest;
+      return {
+        glyph: "reset",
+        turn: 0,
+        label: "Restart to update",
+        detail: "Starting the update…",
+        act: "none",
+      };
+    case "restarting":
+      // P13
+      return {
+        glyph: "reset",
+        turn: 0,
+        label: "Restarting…",
+        detail: "VibeField opens again",
+        act: "none",
+      };
+    case "requested":
+      // P14 — Download asked; the view says downloading next, and the row is R7 by the view alone
+      if (view.phase !== "available") return rest;
+      return {
+        glyph: "arrow",
+        turn: 180,
+        label: "Download update",
+        detail: "Starting the download…",
+        act: "none",
+      };
+  }
+}
+
+/** Line 3 (AU-D3): the publisher's floor, else the ready day from its 7th — one at most; it never changes the mark. */
+function noteOf(view: UpdateView, now: number): NonNullable<MeUpdateRow["note"]> | null {
+  if (view.unsupportedBelow !== undefined)
+    return { text: "Your version is unsupported", tone: "attention" };
+  const since = readySince(view, now);
+  return since === null ? null : { text: since };
+}
+
+/** AU-2 (AU-D4 B) — the Me menu's update row: `view` null where no updater runs (a development build, a browser
+ * harness), `local` the row's flow inside this open, `now` the clock the ready day and a recent install are read
+ * against. */
+export function meUpdateRow({
+  view,
+  local,
+  now,
+}: {
+  view: UpdateView | null;
+  local: MeUpdateLocal;
+  now: number;
+}): MeUpdateRow {
+  // R1 (LC-4) — the row still stands, dimmed, and names no version: this build can't act on it
+  if (view === null)
+    return {
+      glyph: "reset",
+      turn: 0,
+      label: CHECK_FOR_UPDATES,
+      detail: "This build doesn't update itself",
+      dot: false,
+      act: "none",
+    };
+  const body = inPlaceRow(view, local, restingRow(view, now));
+  const note = noteOf(view, now);
+  return {
+    ...body,
+    ...(note !== null ? { note } : {}),
+    // the 6px end dot ties the row to the face's: only while the face wears it
+    dot: updateWaits(view) && local.kind !== "restarting",
+  };
+}
+
+/** AU-2 (AU-D1) — the face's title clause while it wears the dot: "the Oct 28 nightly is ready", else null. */
+export function readyClause(view: UpdateView | null | undefined): string | null {
+  if (!updateWaits(view) || view?.version === undefined) return null;
+  return `${releaseName(view.version)} is ready`;
+}
+
+/** AU-2 (AU-G7; LC-8) — the Me menu's notice for an install that didn't take, said on the launch that judged it
+ * (`lastApply.thisLaunch`), once per window (the controller holds the once). The row is the ready row again when the
+ * same version is staged; never while ANOTHER version is ready (the newer one is the news, as on the page, LC-34). */
+export function notAppliedNotice(view: UpdateView | null | undefined): string | null {
+  if (view === null || view === undefined) return null;
+  const last = view.lastApply;
+  if (last === undefined || last.outcome !== "not-applied" || last.thisLaunch !== true) return null;
+  const staged = view.phase === "staged";
+  if (staged && view.version !== last.version) return null;
+  // the quit's words are AU-5's install on quit; the trigger is AU-1's, so a record that says quit is said truly
+  const when = last.trigger === "quit" ? "quit" : "restarted";
+  const name = releaseName(last.version, { start: true });
+  const lead = `${name} didn't install when VibeField ${when}.`;
+  return staged
+    ? `${lead} It's ready to try again.`
+    : `${lead} Settings → Updates has the details.`;
+}

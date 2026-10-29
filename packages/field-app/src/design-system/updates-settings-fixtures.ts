@@ -9,6 +9,7 @@ import {
 import type { UpdatesDevicesState } from "../panels/UpdatesDevicesSection";
 import type { UpdatesDoctorState, UpdatesFlow } from "../panels/UpdatesSection";
 import { updateDeviceRows } from "../panels/update-devices";
+import { type MeUpdateLocal, refusalLine } from "../panels/update-words";
 
 // Settings → Updates and Settings › Diagnostics' updater block in the catalog (WP12d L3c-ii, build-wp12-updater.md
 // §13 C5; AU-3): the projections main publishes in `desktopState.update`, the answers its doors give, the roster fieldd
@@ -320,3 +321,164 @@ export const UPDATES_DEVICES_FIXTURE: UpdatesDevicesState = {
   rows: updateDeviceRows(FIXTURE_ROSTER, CURRENT),
   alone: false,
 };
+
+// ── AU-2 — the corner in the catalog: the Me menu's update row and the face's dot, over the same projections. The
+// plates mount the shipping `MeMenuView`, its row built by the shipping `meUpdateRow`; what stands in for the
+// controller is only what it holds — the row's flow inside one open, main's question, a refusal's line. ──
+
+/** The face alone, folded: at rest, an install waiting on you (the dot), and a waiting count outranking it (I-5). */
+export const UPDATE_FACE_STATES = ["rest", "ready", "waiting"] as const;
+export type UpdateFaceState = (typeof UPDATE_FACE_STATES)[number];
+
+/** The menu open over each row the corner draws (renderer.md §2.1), in the page's groups: the path, the person's
+ * choices and the third line, the held states, a check's answers in place, and the restart's and download's acts.
+ * R5 (the copy that can't update itself) joins with AU-7, the notes' form of R4 with AU-6. */
+export const UPDATE_CORNER_GROUPS = {
+  path: ["current", "checking", "downloading", "ready", "ends", "census", "updated"],
+  edges: [
+    "off",
+    "found-off",
+    "skipped",
+    "ready-long",
+    "floor",
+    "not-wired",
+    "not-applied",
+    "no-release",
+  ],
+  held: ["paused", "unsupported", "offline", "failed", "absent"],
+  answers: [
+    "checking-here",
+    "up-to-date",
+    "checked-skipped",
+    "checked-offline",
+    "checked-failed",
+    "checked-paused",
+    "checked-unsupported",
+    "unreachable",
+  ],
+  acts: ["preparing", "ask", "confirming", "restarting", "requested", "refused"],
+} as const;
+export type UpdateCornerGroup = keyof typeof UPDATE_CORNER_GROUPS;
+export type UpdateCornerState = (typeof UPDATE_CORNER_GROUPS)[UpdateCornerGroup][number];
+
+export interface UpdateCornerFixture {
+  /** `desktopState.update`; null where no updater runs */
+  view: UpdateView | null;
+  /** the row's flow inside this open: its own check, a restart's phase, a Download asked */
+  local: MeUpdateLocal;
+  /** main's question standing in the menu (busy while its confirm is in flight) */
+  ask?: { words: UpdateConsentWords; busy: boolean };
+  /** a refusal at the menu's top, as the controller says it */
+  refusal?: string;
+}
+
+const AT_REST: MeUpdateLocal = { kind: "rest" };
+const READY: UpdateView = { ...BASE, phase: "staged", version: NEXT, sessions: 0 };
+const ENDS: UpdateView = {
+  ...BASE,
+  phase: "staged",
+  version: NEXT,
+  sessions: 7,
+  blockedBy: "sessions",
+};
+const FOUND_OFF: UpdateView = { ...BASE, enabled: false, phase: "available", version: NEXT };
+const SKIPPED: UpdateView = { ...BASE, phase: "available", version: NEXT, declined: true };
+
+export function updateCornerFixture(state: UpdateCornerState): UpdateCornerFixture {
+  switch (state) {
+    case "current":
+      return { view: BASE, local: AT_REST };
+    case "checking":
+      // R6 — a check that began elsewhere (the status item, the page) reads the same while it runs
+      return { view: { ...BASE, phase: "checking" }, local: AT_REST };
+    case "downloading":
+      return {
+        view: { ...BASE, phase: "downloading", version: NEXT, percent: 42 },
+        local: AT_REST,
+      };
+    case "ready":
+      return { view: READY, local: AT_REST };
+    case "ends":
+      return { view: { ...ENDS, sessions: 3 }, local: AT_REST };
+    case "census":
+      // R10 — the census unread: main reads it, then asks or says why not
+      return { view: { ...READY, sessions: "unknown" }, local: AT_REST };
+    case "updated":
+      // R4 (AU-D11) — three hours after an update landed, in the no-notes form
+      return { view: fixtureOf("updated").view, local: AT_REST };
+    case "off":
+      return { view: { ...BASE, enabled: false }, local: AT_REST };
+    case "found-off":
+      return { view: FOUND_OFF, local: AT_REST };
+    case "skipped":
+      return { view: SKIPPED, local: AT_REST };
+    case "ready-long":
+      // line 3 (AU-D3) — ready eight days and ending sessions: the ready day under the cost
+      return { view: fixtureOf("ready-long").view, local: AT_REST };
+    case "floor":
+      // line 3 — below the publisher's oldest supported version, which outranks the ready day
+      return {
+        view: {
+          ...BASE,
+          phase: "staged",
+          version: NEXT,
+          sessions: 3,
+          stagedAt: UPDATES_FIXTURE_NOW - 8 * DAY,
+          unsupportedBelow: "0.9.0-nightly.20261015",
+        },
+        local: AT_REST,
+      };
+    case "not-wired":
+      // R11 — downloaded where the apply isn't wired yet
+      return { view: { ...READY, applyWired: false }, local: AT_REST };
+    case "not-applied":
+      // AU-G7 — the notice on the launch after, and the ready row again
+      return { view: fixtureOf("not-applied-ready").view, local: AT_REST };
+    case "no-release":
+      return { view: fixtureOf("no-release").view, local: AT_REST };
+    case "paused":
+    case "unsupported":
+    case "offline":
+    case "failed":
+    case "absent":
+      return { view: fixtureOf(state).view, local: AT_REST };
+    case "checking-here":
+      // P1 — the row's own check, running
+      return { view: BASE, local: { kind: "checking" } };
+    case "up-to-date":
+      // P2 — inert until the menu folds
+      return { view: BASE, local: { kind: "answered", outcome: "up-to-date" } };
+    case "checked-skipped":
+      return { view: SKIPPED, local: { kind: "answered", outcome: "found" } };
+    case "checked-offline":
+      return { view: fixtureOf("offline").view, local: { kind: "answered", outcome: "failed" } };
+    case "checked-failed":
+      return { view: fixtureOf("failed").view, local: { kind: "answered", outcome: "failed" } };
+    case "checked-paused":
+      return { view: fixtureOf("paused").view, local: { kind: "answered", outcome: "held" } };
+    case "checked-unsupported":
+      return { view: fixtureOf("unsupported").view, local: { kind: "answered", outcome: "held" } };
+    case "unreachable":
+      // P9 — the door itself failed
+      return { view: BASE, local: { kind: "unreachable", message: "No handler registered" } };
+    case "preparing":
+      return { view: ENDS, local: { kind: "preparing" } };
+    case "ask":
+      // AU-D6 — the panel at 320, in main's words
+      return { view: ENDS, local: AT_REST, ask: { words: CONSENT, busy: false } };
+    case "confirming":
+      return { view: ENDS, local: { kind: "confirming" }, ask: { words: CONSENT, busy: true } };
+    case "restarting":
+      return { view: ENDS, local: { kind: "restarting" } };
+    case "requested":
+      // P14 — Download asked, in place
+      return { view: FOUND_OFF, local: { kind: "requested" } };
+    case "refused":
+      // P15 — main's refusal at the menu's top; the row is the ready row again
+      return {
+        view: { ...ENDS, blockedBy: "policy-unreachable" },
+        local: AT_REST,
+        refusal: refusalLine(UNREACHABLE),
+      };
+  }
+}

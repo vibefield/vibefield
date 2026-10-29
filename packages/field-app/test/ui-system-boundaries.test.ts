@@ -399,6 +399,23 @@ describe("UI system ownership boundaries", () => {
     expect(fixture).not.toContain("setAppTheme");
   });
 
+  it("keeps the update corner's fixture an ADAPTER — main's projections through the shipping row, never the menu's markup (AU-2)", () => {
+    // The catalog stands in for what the controller holds — the row's flow inside one open, main's question, a
+    // refusal's line — and mounts the shipping Me menu over the shipping words: the row by `meUpdateRow`, the dot by
+    // `updateWaits`. Never the menu's own classes, never the host's doors, never the controller.
+    const fixture = source("design-system/UpdateCornerPreview.tsx");
+    expect(fixture).toContain("MeMenuView");
+    expect(fixture).toContain("meUpdateRow");
+    expect(fixture).toContain("updateWaits");
+    expect(fixture).not.toMatch(/className="vf-me/u);
+    expect(fixture).not.toContain("<style");
+    expect(fixture).not.toContain("getHost");
+    expect(fixture).not.toContain("useUpdateRestart");
+    expect(fixture).not.toMatch(/<MeMenu\s/u);
+    const words = source("design-system/updates-settings-fixtures.ts");
+    expect(words).toContain("updateCornerFixture");
+  });
+
   it("keeps the update card's fixture an ADAPTER — main's projections, answers and doctor lines, never the card's markup (WP12d L3c-ii)", () => {
     // The catalog stands in for main: the `desktopState.update` projections, the doors' answers (the consent's words,
     // a refusal's) and the doctor's lines. The specimens mount the shipping views over them — never the card's own
@@ -569,13 +586,14 @@ describe("UI system ownership boundaries", () => {
     const head = source("design-system/HeadPreview.tsx");
     const palette = source("design-system/CommandPalettePreview.tsx");
     const corner = source("design-system/CornerPreview.tsx");
+    const updateCorner = source("design-system/UpdateCornerPreview.tsx");
     const edges = source("design-system/EdgesPreview.tsx");
     const history = source("design-system/HistoryPreview.tsx");
     const bar = source("design-system/SelectionBarPreview.tsx");
     const pegboard = source("design-system/PegboardPreview.tsx");
     const peers = source("design-system/PeersPreview.tsx");
     const peek = source("design-system/PeekPreview.tsx");
-    const catalog = `${peers}\n${pegboard}\n${bar}\n${history}\n${peek}\n${corner}\n${edges}\n${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${paneFrame}\n${paneLauncher}\n${switchScene}\n${viewFrame}\n${line}\n${head}\n${palette}`;
+    const catalog = `${peers}\n${pegboard}\n${bar}\n${history}\n${peek}\n${corner}\n${updateCorner}\n${edges}\n${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${paneFrame}\n${paneLauncher}\n${switchScene}\n${viewFrame}\n${line}\n${head}\n${palette}`;
     for (const productionView of [
       "ArtifactPanelPreview",
       "CommandPalettePreview",
@@ -674,6 +692,10 @@ describe("UI system ownership boundaries", () => {
       "UpdatesSectionView",
       "UpdatesDoctorView",
       "UpdatesDevicesView",
+      // AU-2 — the corner's update: the face's dot and the open menu's row, over the shipping words
+      "UpdateFacePlate",
+      "UpdateMenuPlate",
+      "meUpdateRow",
     ]) {
       expect(catalog).toContain(productionView);
     }
@@ -698,6 +720,9 @@ describe("UI system ownership boundaries", () => {
     expect(page).toMatch(/<UpdatesSectionView\s/u);
     expect(page).toMatch(/<UpdatesDoctorView\s/u);
     expect(page).toMatch(/<UpdatesDevicesView\s/u);
+    // …and the corner's update, the face and the open menu (AU-2)
+    expect(page).toMatch(/<UpdateFacePlate\s/u);
+    expect(page).toMatch(/<UpdateMenuPlate\s/u);
     // …and the board risen behind the line in both scenes that raise Objects (the playground, the view frame's stage)
     expect(page).toMatch(/<StageBoard\s/u);
     expect(viewFrame).toMatch(/<StageBoard\s/u);

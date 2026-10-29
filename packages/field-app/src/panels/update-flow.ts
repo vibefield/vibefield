@@ -13,7 +13,12 @@ export type UpdatesFlow =
   | { readonly kind: "none" }
   | { readonly kind: "preparing" }
   | { readonly kind: "consent"; readonly version: string; readonly words: UpdateConsentWords }
-  | { readonly kind: "confirming" }
+  | {
+      readonly kind: "confirming";
+      /** AU-2 — the question being confirmed, so the Me menu keeps it drawn (busy) until main answers; absent when
+       * nothing ends and nothing was asked */
+      readonly words?: UpdateConsentWords;
+    }
   | { readonly kind: "restarting" }
   | {
       readonly kind: "refused";
@@ -52,6 +57,8 @@ export function useUpdateRestart(
   const [flow, setFlow] = useState<UpdatesFlow>(NO_FLOW);
   const [error, setError] = useState<string | null>(null);
   const token = useRef<string | null>(null);
+  /** the consent's words, beside its token: what a confirm is confirming */
+  const asked = useRef<UpdateConsentWords | null>(null);
 
   // A consent and a refusal belong to the staged version they were about: when that version goes (declined, replaced,
   // applied elsewhere), so do they — main would answer `expired` anyway, but the page never shows a stale list.
@@ -63,12 +70,13 @@ export function useUpdateRestart(
       current.kind === "consent" || current.kind === "refused" ? NO_FLOW : current,
     );
     token.current = null;
+    asked.current = null;
   }, [stagedVersion]);
 
   const confirmWith = useCallback(
-    async (prepared: string): Promise<void> => {
+    async (prepared: string, words?: UpdateConsentWords): Promise<void> => {
       if (host === undefined) return;
-      setFlow({ kind: "confirming" });
+      setFlow(words === undefined ? { kind: "confirming" } : { kind: "confirming", words });
       try {
         const result = await host.confirmRestart(prepared);
         setFlow(
@@ -81,6 +89,7 @@ export function useUpdateRestart(
         setError(errorText(failure));
       } finally {
         token.current = null;
+        asked.current = null;
       }
     },
     [host],
@@ -102,6 +111,7 @@ export function useUpdateRestart(
         return;
       }
       token.current = prepared.token;
+      asked.current = prepared.consent;
       setFlow({ kind: "consent", version: prepared.version, words: prepared.consent });
     } catch (failure) {
       setFlow(NO_FLOW);
@@ -111,11 +121,12 @@ export function useUpdateRestart(
 
   const confirm = useCallback((): void => {
     const prepared = token.current;
-    if (prepared !== null) void confirmWith(prepared);
+    if (prepared !== null) void confirmWith(prepared, asked.current ?? undefined);
   }, [confirmWith]);
 
   const cancel = useCallback((): void => {
     token.current = null;
+    asked.current = null;
     setFlow(NO_FLOW);
   }, []);
 
@@ -125,6 +136,7 @@ export function useUpdateRestart(
 
   const reset = useCallback((): void => {
     token.current = null;
+    asked.current = null;
     setFlow(NO_FLOW);
     setError(null);
   }, []);
