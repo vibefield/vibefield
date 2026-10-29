@@ -76,6 +76,17 @@ import {
 
 const PKG = resolve(import.meta.dirname, "..");
 const TYPES = "/Library/Developer/CoreSimulator/Profiles/DeviceTypes";
+const XCODE_VERSION = "/Applications/Xcode.app/Contents/version.plist";
+/** This host's Xcode build (its version.plist's), or undefined: no Xcode.app. */
+const HOST_XCODE = existsSync(XCODE_VERSION)
+  ? /<key>ProductBuildVersion<\/key>\s*<string>([^<]+)<\/string>/.exec(
+      readFileSync(XCODE_VERSION, "utf8"),
+    )?.[1]
+  : undefined;
+/** The Xcode build the committed catalog was made from — the one its generated header names (make-catalog.ts). */
+const CATALOG_XCODE = /from Xcode [\d.]+ \(([^)]+)\)'s Simulator data/.exec(
+  readFileSync(resolve(PKG, "src/catalog.gen.ts"), "utf8"),
+)?.[1];
 const model = (name: string) => {
   const m = phoneByName(name);
   if (!m) throw new Error(name);
@@ -105,15 +116,23 @@ describe("the catalog — every iPhone the Simulator knows, in Apple's numbers",
     }
     expect(DEFAULT_PHONE.name).toBe("iPhone 17 Pro");
     expect(DEFAULT_PHONE.id).toBe(DEFAULT_MODEL);
+    // the catalog names the Xcode build it was made from: the row below compares only on that build
+    expect(CATALOG_XCODE).toMatch(/^\w+$/);
   });
 
-  it.skipIf(!existsSync(TYPES))("is every iPhone device type installed on this Mac", () => {
-    const installed = readdirSync(TYPES)
-      .filter((d) => d.startsWith("iPhone") && d.endsWith(".simdevicetype"))
-      .map((d) => d.replace(/\.simdevicetype$/, ""))
-      .sort();
-    expect(PHONES.map((m) => m.name).sort()).toEqual(installed);
-  });
+  // The exact comparison holds only on the Xcode build the catalog was made from: another build's Simulator knows other
+  // iPhones (Xcode 27.1 adds the 18 Pro, the 18 Pro Max and the Duo) — that host regenerates the catalog, and its difference
+  // is the host's, not a fault (the same rule as the stills' golden and the committed words, both this Mac's).
+  it.skipIf(!existsSync(TYPES) || HOST_XCODE !== CATALOG_XCODE)(
+    `is every iPhone device type installed on this Mac (the catalog's Xcode ${CATALOG_XCODE}, this host's ${HOST_XCODE ?? "none"})`,
+    () => {
+      const installed = readdirSync(TYPES)
+        .filter((d) => d.startsWith("iPhone") && d.endsWith(".simdevicetype"))
+        .map((d) => d.replace(/\.simdevicetype$/, ""))
+        .sort();
+      expect(PHONES.map((m) => m.name).sort()).toEqual(installed);
+    },
+  );
 
   it("keeps each framebuffer's own geometry: the active area is its pixels at its panel's density", () => {
     for (const m of PHONES) {
