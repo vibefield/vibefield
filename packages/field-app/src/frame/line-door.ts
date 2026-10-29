@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { sizeWords } from "../format/bytes";
 import type { DeckPlaced } from "../godview/deck-placement";
 import type { RoutedInputRefusal } from "../terminal/pool";
 
@@ -433,20 +434,6 @@ export function hearLineSays(hear: (text: string) => void): () => void {
 // the note an act's outcome is said in (DESIGN.md §8 "The line"): what
 // happened, with its numbers — which are what to do instead — in under 70
 // characters beside the pane's name, so it is read before the note fades.
-
-/** A size in the note's words, counted in thousands as Finder counts it
- * (DESIGN.md §9): bytes below a kilobyte, whole KB below a megabyte, then MB
- * and GB to a tenth. `round` says which way — a size is rounded up and what
- * fits of it down, so the two never read as equal. The unit is chosen after
- * the rounding: 999,999 bytes rounded up is "1 MB", never "1000 KB". */
-function sizeWords(bytes: number, round: (value: number) => number): string {
-  if (bytes < 1_000) return bytes === 1 ? "1 byte" : `${bytes} bytes`;
-  const kb = round(bytes / 1_000);
-  if (kb < 1_000) return `${kb} KB`;
-  const mb = round(bytes / 100_000) / 10;
-  if (mb < 1_000) return `${mb} MB`;
-  return `${round(bytes / 100_000_000) / 10} GB`;
-}
 
 /** Why a terminal refused an input, in numbers: its size, and how much of it
  * one paste (or typed text) carries — both the text's own bytes, so "of it":
