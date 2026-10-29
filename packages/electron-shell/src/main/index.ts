@@ -127,7 +127,6 @@ import {
 } from "./resources";
 import { registerShellSchemes } from "./scheme-registration";
 import { withScreenshotScreenBounds } from "./screenshot-bounds";
-import { installScreenshotChord } from "./screenshot-chord";
 import { screenshotHelperSupportsService } from "./screenshot-helper-capabilities";
 import { ScreenshotShortcutController } from "./screenshot-shortcut";
 import {
@@ -1883,15 +1882,14 @@ async function main(
             },
           });
           installDiagnostics(window);
-          // ⌃⌘A — above the page too (SNAP-3): the canvas keymap's ⌘A select-all
-          // swallows the menu accelerator, so the chord is taken here first.
-          if (screenshotHelperAvailable) {
-            installScreenshotChord(window.webContents, takeScreenshot);
-          }
-          // ⌘Q and ⌃⌘F — above the page too (AL-9): a terminal pane's ghosttea
-          // claimed both, so the menu never heard them. ⌘Q is the menu's own
-          // `app.quit()`, so it reaches the census gate.
-          installWindowChords(window, { quit: () => app.quit() });
+          // ⌃⌘A, ⌘Q and ⌃⌘F — above the page (SNAP-3, AL-9): the canvas keymap's
+          // ⌘A select-all swallowed the menu's ⌃⌘A, and a terminal pane's
+          // ghosttea claimed ⌘Q and ⌃⌘F, so the menu never heard them. ⌘Q is the
+          // menu's own `app.quit()`, so it reaches the census gate.
+          installWindowChords(window, {
+            quit: () => app.quit(),
+            ...(screenshotHelperAvailable ? { screenshot: takeScreenshot } : {}),
+          });
           installNavigationPolicy(window, MODE);
           // FR-4: told the theme on every load (a reload included) and change.
           themeOwner?.watch(window.webContents);

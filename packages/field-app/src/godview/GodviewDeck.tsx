@@ -2223,8 +2223,9 @@ export function GodviewDeck({
               // closed its session)
               if (workspaceRef.current?.panes.length === 1) void emptyLastPaneNow.current();
             },
-            // ⌘Q never reaches here: main takes it above the page (AL-D14).
-            // Any other chord bound to Ghostty's `quit`, or its
+            // On the Mac ⌘Q never reaches here, held or not: main takes it
+            // above the page (AL-D14). Any other chord bound to Ghostty's
+            // `quit` (off the Mac its default `ctrl+shift+q`), or its
             // `close_all_windows`, puts the terminals away and swaps no session.
             closeAllWindows: () => void putTerminalsAway(lastPaneClose.current),
             quit: () => void putTerminalsAway(lastPaneClose.current),
