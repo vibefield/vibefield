@@ -17,7 +17,7 @@ import { EMPTY_HOST_MODEL, hostModelOf } from "../history/host-model";
 import { launchActs } from "../history/launch-acts";
 import { NewAgentPastCard } from "../history/NewAgentPast";
 import { FIXTURE_HISTORY_NOW, FIXTURE_NEW_AGENT_PAST } from "./account-fixtures";
-import { FIXTURE_LINE_DOOR, fixtureClipboardStore, fixtureStillUrl } from "./ComposerLinePreview";
+import { FIXTURE_LINE_DOOR } from "./ComposerLinePreview";
 import {
   FIXTURE_CHOSEN_SESSION,
   FIXTURE_UNAVAILABLE_WORDS,
@@ -147,7 +147,6 @@ export function HistoryResumePlate({
   const [openAt] = useState<RoomTarget>({ sessionId: FIXTURE_CHOSEN_SESSION });
   const [selection, setSelection] = useState<RoomSelection | null>(null);
   const [surface, setSurface] = useState<FrameSurface | null>(null);
-  const [clipboard] = useState(fixtureClipboardStore);
   const door = useMemo<HistoryLineDoor>(
     () => ({
       chosen: selection?.sessionId ?? null,
@@ -174,9 +173,7 @@ export function HistoryResumePlate({
         onSurfaceChange={setSurface}
         godview={FIXTURE_LINE_DOOR}
         history={door}
-        clipboard={clipboard}
-        host={{ screenshotStillUrl: fixtureStillUrl }}
-        writeClipboard={async () => undefined}
+        host={{}}
         bindKeys={false}
         track={<ViewsTrackView view="history" keys={keys} />}
       />

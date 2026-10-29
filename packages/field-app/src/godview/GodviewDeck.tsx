@@ -39,6 +39,7 @@ import {
   emitGodviewDirectTerminalMarker,
   type GodviewDeckFacts,
 } from "../development-console";
+import { cardTargets } from "../frame/cards/card-targets";
 import { askGodviewDeckUp } from "../frame/deck-door";
 import { type LinePane, publishGodviewLineDoor, sayOnLine } from "../frame/line-door";
 import { requestView } from "../frame/view-state";
@@ -88,7 +89,7 @@ import {
   resumedPaneSession,
   useLastRun,
 } from "./last-run";
-import { linePanesOf, newTerminalOutcome, pasteIntoPane } from "./line-panes";
+import { linePanesOf, newTerminalOutcome, pasteIntoPane, whenPaneInputOpen } from "./line-panes";
 import type { MonitorFloorRecord } from "./monitor/agents";
 import { RosterFlips, teeDevicesPort } from "./monitor/devices";
 import {
@@ -110,6 +111,7 @@ import type {
   RemoteAttachRequest,
 } from "./monitor/remote-door";
 import type { MonitorPaneFacts } from "./monitor/useMonitorAgents";
+import { paneCardTarget } from "./pane-card-target";
 import { type DeckSession, describePane, type PaneFace } from "./pane-faces";
 import { RemotePaneState } from "./RemotePaneState";
 import { SeatPaneState } from "./SeatPaneState";
@@ -1468,8 +1470,9 @@ export function GodviewDeck({
   // WHAT GODVIEW LENDS THE LINE (One Frame FR-2, `frame/line-door.ts`). The
   // line's New terminal (⌘T, its create in Godview) is this door's
   // `createTerminal` — what the swarm's hold does, without a spot to land on —
-  // and the interim send pastes into a pane through the pane's own input. The
-  // rows are the panes this deck shows, named as the swarm names their bodies.
+  // and a card played from the hand pastes into a pane through the pane's own
+  // input (HN-4). The rows are the panes this deck shows, named as the swarm
+  // names their bodies.
   // History lands here too: its Resume places, its Jump to reveals (P3) — each
   // by the one rule (GV-D4: in the focused pane), and each outcome says how it
   // was placed. Published on change only; the deck going away takes the door
@@ -1487,19 +1490,26 @@ export function GodviewDeck({
         door === null
           ? { state: "refused", reason: "the deck has no connection yet" }
           : newTerminalOutcome(await door.createTerminal()),
-      paste: (sessionId, text) => {
-        const pane = workspaceRef.current?.panes.find((entry) => entry.session.id === sessionId);
+      // HN-4 — a card played from the hand lands in ONE pane, the one it is let go on, by the
+      // pane's own id (two panes may show one session). A pane whose routed input is closed (its
+      // activation still reopening after a change of view, say) drops a paste silently, and its
+      // handler claims the event all the same — so the runtime is asked first, and a paste it
+      // would drop is never handed over. (`door` is rebuilt per runtime, so this is never a
+      // replaced one.)
+      pasteInto: (paneId, text) => {
+        const pane = workspaceRef.current?.panes.find((entry) => entry.id === paneId);
         const root = zoomHostRef.current;
-        // A pane whose routed input is closed (its activation still reopening
-        // after a change of view, say) drops a paste silently, and its handler
-        // claims the event all the same — so the runtime is asked first, and a
-        // paste it would drop is never handed over: the line copies instead.
-        // (`door` is rebuilt per runtime, so this is never a replaced one.)
-        const inputOpen = runtime?.routedActivation(sessionId)?.inputAllowed === true;
-        return (
-          pane !== undefined && root !== null && inputOpen && pasteIntoPane(root, pane.id, text)
-        );
+        const inputOpen =
+          pane !== undefined && runtime?.routedActivation(pane.session.id)?.inputAllowed === true;
+        return root !== null && inputOpen && pasteIntoPane(root, paneId, text);
       },
+      // …and a card spring-loaded into Godview waits, bounded, for that pane's input to reopen
+      whenInputOpen: (paneId, timeoutMs) =>
+        whenPaneInputOpen(
+          runtime,
+          () => workspaceRef.current?.panes.find((entry) => entry.id === paneId)?.session.id,
+          timeoutMs,
+        ),
       // AR-8c — History's Resume: the resumed agent's create ticket, adopted
       // into the pool exactly as the launcher's resume adopts one, and placed
       // by the rule (GV-D4) through the door's serialized mount (AR-4b).
@@ -1524,6 +1534,15 @@ export function GodviewDeck({
     });
   }, [linePanesKey, active, door, asking]);
   useEffect(() => () => publishGodviewLineDoor(null), []);
+
+  // HN-4 — the deck's panes take a card played from the hand (DESIGN.md §8 "The hand", where cards
+  // go): ONE place over the deck's own element while the deck is on screen. It finds the pane under
+  // the point and plays through the door above (`pasteInto`), so a card goes in by the road and
+  // the guard every paste takes.
+  useEffect(() => {
+    if (!active) return;
+    return cardTargets.register(paneCardTarget({ root: () => zoomHostRef.current }));
+  }, [active]);
 
   useCompletedAgentPanes(
     runtime,

@@ -4,7 +4,7 @@
  * Frame §23, GV-D8/D9/D10/D3; built for History 2026-10-08, P1). The shipping
  * composition as ChromeLayer holds it — `FramePeek` over this window's fieldd
  * client, beside the frame (cover + line) with History's controller in the
- * cover, the palette and the clipboard's drawer on FieldView's one owner of
+ * cover, the palette and the hand (track HN) on FieldView's one owner of
  * the open surface, and ChromeLayer's ⌘K glue. The rows: the frame's button
  * at the head's right end in History with ⌘F printed, opening the popup on
  * Everything; ⌘F as a product chord while History is the view (and only
@@ -12,7 +12,7 @@
  * asked of `index.search` unscoped and local, the rows grouped by root with
  * folder · agent and their lines, the matches marked neutral (K1); ↑ ↓ ↵ and
  * a click opening the room AT THE LINE through the room's own `openAt` (the
- * hit's ids, `open-at.ts`); the palette, a drawer and a change of view
+ * hit's ids, `open-at.ts`); the palette, the hand raised and a change of view
  * folding it; the honest empty and unanswered states and an open quote that
  * asks nothing; Live now's words in History (K9); a narrow window folding the
  * peek (K6); the empty transcript naming ⌘F (K2) and ⌘G walking nothing (K3);
@@ -50,6 +50,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { isCommandPaletteChord, listenForProductChord } from "../src/field/product-chords";
 import { onShellPresentationRequest } from "../src/field/shell-presentation";
+import { Cards } from "../src/frame/cards/Cards";
+import { CardStore } from "../src/frame/cards/cards-store";
 import { publishGodviewDeck, resetGodviewDeckDoorForTest } from "../src/frame/deck-door";
 import {
   type GodviewFindDoor,
@@ -78,14 +80,19 @@ import { HistoryView } from "../src/history/HistoryView";
 import { getHistoryOpenAt, resetHistoryOpenAtForTest } from "../src/history/open-at";
 import { type FieldHost, getHost, setHost } from "../src/host";
 import { CommandPalette } from "../src/hud/CommandPalette";
-import { ClipboardStore } from "../src/hud/edge-tray/clipboard-store";
-import { ClipboardTray } from "../src/hud/edge-tray/EdgeTray";
 import { type RendererLogger, setRendererLogger } from "../src/logging";
 import { scriptedModelBoard } from "./model-board-fixture";
 
 vi.mock("../src/plugin-host/plugin-registry-store", () => ({
   usePluginRegistrySnapshot: () => null,
 }));
+// The hand's carried layer (W-play's) carries nothing here: the hand stands on the owner.
+vi.mock("../src/frame/cards/card-drag", () => ({
+  startCardDrag: () => undefined,
+  useCarriedCard: () => null,
+  getCarriedCard: () => null,
+}));
+vi.mock("../src/frame/cards/CarriedCardLayer", () => ({ CarriedCardLayer: () => null }));
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -275,14 +282,14 @@ function fieldd(
 
 /** The window as ChromeLayer holds History and its search: FieldView's one
  * owner of the open surface, the frame with History's controller in the
- * cover, the palette and the clipboard's drawer on the same value, ⌘K's glue,
- * and the frame's Peek over the window's client. */
+ * cover, the palette and the hand on the same value, ⌘K's glue, and the
+ * frame's Peek over the window's client. */
 function mount(
   client: ReturnType<typeof fieldd>,
   opts: { openLiveFeed?: OpenLiveFeed; godview?: ReactElement } = {},
 ): void {
   const engine = createCanvasEngine({});
-  const clipboard = new ClipboardStore(() => 0);
+  const cards = new CardStore(() => 0);
   dispose = () => engine.dispose();
   function Owner(): ReactElement {
     const [surface, setSurface] = useState<FrameSurface | null>(null);
@@ -320,7 +327,7 @@ function mount(
           keys={keys}
           onAct={() => undefined}
         />
-        <ClipboardTray store={clipboard} host={{}} surface={surface} onSurfaceChange={setSurface} />
+        <Cards store={cards} host={{}} surface={surface} onSurfaceChange={setSurface} />
       </FielddProvider>
     );
   }
@@ -579,7 +586,7 @@ describe("Search — the Peek, in History (GV-D8/D9/D10)", () => {
     expect(getHistoryOpenAt()).toBe(before);
   });
 
-  it("one surface at a time: ⌘K over the Peek opens the palette, ⌘F over the palette opens the Peek, a drawer folds it, and a change of view folds it", async () => {
+  it("one surface at a time: ⌘K over the Peek opens the palette, ⌘F over the palette opens the Peek, the hand raised folds it, and a change of view folds it", async () => {
     mount(fieldd());
     await openHistory();
     const input = await openPeek();
@@ -596,17 +603,13 @@ describe("Search — the Peek, in History (GV-D8/D9/D10)", () => {
       () => (host?.querySelector('[role="dialog"][aria-label="Command palette"]') ? null : true),
       "the palette folded by ⌘F",
     );
-    // the clipboard's drawer, pinned open from its notch, folds the Peek
-    act(() => {
-      host
-        ?.querySelector(".vf-edge-tray__nub")
-        ?.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 }));
-    });
-    expect(surfaceNow).toBe("clipboard");
+    // the hand, raised by ⇧⌘V from the Peek's own field, folds the Peek
+    press(document.activeElement ?? document.body, { key: "V", metaKey: true, shiftKey: true });
+    expect(surfaceNow).toBe("cards");
     expect(pop()).toBeNull();
-    // …and opening the Peek folds the drawer, whose Esc then is not in the way
+    // …and opening the Peek lowers the hand, whose Esc then is not in the way
     const again = await openPeek();
-    expect(host?.querySelector<HTMLElement>(".vf-edge-tray")?.dataset.open).toBe("false");
+    expect(host?.querySelector(".vf-cards")?.hasAttribute("data-raised")).toBe(false);
     press(again, { key: "Escape" });
     expect(surfaceNow).toBeNull();
     // a change of view folds it

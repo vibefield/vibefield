@@ -87,7 +87,8 @@
 }
 
 /* The page's §04 plates: the track, one state each — since FR-2 at the line's
-   left end, cropped out of a 1180 window so the line keeps its own width. */
+   left end, cropped out of a 1180 window so the line keeps its own width; since
+   LN-D1 the line stands at 76 in any window, 16 in from the plate's edge here. */
 .vf-ds-views-plates {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -108,14 +109,14 @@
 .vf-ds-line-stage {
   position: absolute;
   bottom: 0;
-  left: -134px;
+  left: -60px;
   width: 1180px;
   height: 100%;
 }
 
-/* One Frame FR-2 — the line's plates (the page's §03): the shipping line at
-   its place at the plate's foot, one state each. The plate is the window, so a
-   narrow one narrows the line as a narrow window does (the draft gives first). */
+/* One Frame FR-2, LN-D1 — the line's plates: the shipping line at its place at
+   the plate's foot, 76 from its left, one state each; the plate is the window's
+   bottom-left, tall enough for the note over the line. */
 .vf-ds-line-plates {
   display: grid;
   gap: 12px;
@@ -130,29 +131,6 @@
   background-color: var(--vf-mat-ground);
   background-image: var(--vf-mat-lattice);
   background-size: var(--vf-mat-lattice-size);
-}
-
-.vf-ds-line-plate[data-state="at"],
-.vf-ds-line-plate[data-state="sent"] {
-  height: 470px;
-}
-
-/* DK-14 — Send to…'s flight, frozen: where the chip left (the selection, a
-   note's box at the plate's upper left), the flier on its way to the caret. */
-.vf-ds-line-plate[data-state="flight"] {
-  height: 260px;
-}
-
-.vf-ds-send-from {
-  position: absolute;
-  top: 34px;
-  left: 104px;
-  width: 72px;
-  height: 72px;
-  border-radius: 6px;
-  outline: 1.5px solid color-mix(in srgb, var(--vf-select) 60%, transparent);
-  outline-offset: 6px;
-  opacity: 0.6;
 }
 
 /* One Frame FR-3 — the head's plates (the page's §05 and §06): the shipping
@@ -193,9 +171,9 @@
   height: 640px;
 }
 
-/* One Frame FR-4 — the edges' plates (the page's edges plates): the window at
-   the drawers' height, the shipping trays at their own places — the notches at
-   mid-edge, the drawers from 64 to 80 above the foot — over the canvas or a
+/* One Frame FR-4 — the edge's plates (the page's edges plates): the window at
+   the drawer's height, the shipping tray at its own place — the notch at
+   mid-edge, the drawer from 64 to 80 above the foot — over the canvas or a
    covered view's own ground. The two whole-window states span the row. */
 .vf-ds-edges-plates {
   display: grid;
@@ -305,24 +283,55 @@
   z-index: 7;
 }
 
-/* The edge trays' stage: the window's two edges brought together, the canvas
-   between them; the shipping tray view mounts with fixture stills. */
-.vf-ds-edge-stage {
+/* HN — the hand's plates: the window's foot at the plate's size over the mat,
+   the shipping fan placed by the product's own model (the line's place at the
+   left left empty; a held card's plate is the window's height). The faces sit
+   twice their size, a row each, the night row in the dark theme's scope. These
+   only stage the hand: its selectors are the product's. */
+.vf-ds-cards-plates {
+  display: grid;
+  gap: 12px;
+  overflow-x: auto;
+}
+
+.vf-ds-cards-plate {
   position: relative;
-  height: 560px;
+  isolation: isolate;
+  width: 900px;
+  height: 360px;
   overflow: hidden;
+  border-radius: 14px;
   background-color: var(--vf-mat-ground);
   background-image: var(--vf-mat-lattice);
   background-size: var(--vf-mat-lattice-size);
 }
 
-.vf-ds-edge-controls {
+.vf-ds-cards-plate[data-state="held"] {
+  height: 640px;
+}
+
+.vf-ds-card-faces {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 18px;
-  border-bottom: 1px solid var(--vf-hairline);
+  flex-wrap: wrap;
+  gap: 24px;
+  margin-top: 12px;
+  padding: 28px;
+  border-radius: 14px;
+  background-color: var(--vf-mat-ground);
+  background-image: var(--vf-mat-lattice);
+  background-size: var(--vf-mat-lattice-size);
+}
+
+.vf-ds-card-2x {
+  width: 208px;
+  height: 292px;
+}
+
+.vf-ds-card-2x-inner {
+  width: 104px;
+  height: 146px;
+  transform: scale(2);
+  transform-origin: 0 0;
 }
 
 .vf-ds-stage-caption {

@@ -136,6 +136,11 @@ declare global {
        * typed error). */
       screenshot: {
         preview(name: string): Promise<ScreenshotPreviewResult>;
+        /** HN-D7 — a retained still's PNG bytes by its basename; null once the
+         * tool no longer keeps it. */
+        stillBytes(name: string): Promise<Uint8Array<ArrayBuffer> | null>;
+        /** HN-4 — whether the tool still keeps a still, by its basename. */
+        stillKept(name: string): Promise<boolean>;
         capture(): Promise<ScreenshotCaptureResult>;
         /** SNAP-3 — the result of a capture MAIN ran (the View menu's item);
          * the latest is retained until the renderer subscribes. */

@@ -13,7 +13,7 @@ import type { ObjectWords } from "../field/desk/desk-object-words";
 // The selection bar's fixture ADAPTER (DK-11; docs/UI_SYSTEM.md): the shipping bar — `SelectionBarView` — over
 // fixture selections, its cells and its grown menu's rows read by the PRODUCT's own model (`barCells`,
 // `menuGroups`, `menuEyebrow`), one plate per state the canon draws: one object with its kind's own act, two
-// ("Send 2 to…"), taped ("Lift the tape"), a missing face ("Clock · plugin off"), a glyph-less act and a name the set
+// (one Copy for both), taped ("Lift the tape"), a missing face ("Clock · plugin off"), a glyph-less act and a name the set
 // lacks, and the bar grown — up under NOTE, down near the top, two with Clean up. What it replaces is only what a host
 // supplies: the desk's anchor (a box on the plate where the brackets would be) and the selection's facts. The
 // brackets themselves are the desk's GPU marks; the plate draws a stand-in outline so the bar has something to stand
@@ -49,7 +49,7 @@ const facts = (over: Partial<SelectionFacts>): SelectionFacts => ({
 
 export const BAR_STATES = [
   "One — the clock's own act",
-  "Two — Send 2 to…",
+  "Two — one Copy for both",
   "Taped — Lift the tape",
   "A missing face",
   "A label, and a name the set lacks",
@@ -84,7 +84,7 @@ const PLATES: Record<BarState, Plate> = {
     box: { x0: 210, y0: 220, x1: 350, y1: 360 },
     open: false,
   },
-  "Two — Send 2 to…": {
+  "Two — one Copy for both": {
     facts: facts({ count: 2, words: [NOTE, PAD] }),
     height: 400,
     box: { x0: 150, y0: 210, x1: 410, y1: 360 },
@@ -351,7 +351,7 @@ const FIT = { top: 116, bottom: 400 - 100 } as const;
 
 /** One plate: the shipping bar as the tools in hand, under the head, over a held object's stand-in. */
 export function HandPlate({ state, dark }: { state: HandState; dark: boolean }): ReactElement {
-  const hand = useMemo(() => handCells(handOf(state, dark)), [state, dark]);
+  const hand = useMemo(() => handCells(handOf(state, dark), "mac"), [state, dark]);
   const anchor = useMemo<PlaceAnchor>(() => ({ box: null, count: 1, view: HAND_VIEW }), []);
   return (
     <div className="vf-ds-bar-plate" data-state={state} style={{ height: HAND_VIEW.height }}>

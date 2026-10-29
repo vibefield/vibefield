@@ -434,8 +434,12 @@ export function defaultBindings(): Map<string, DefaultEntry> {
 
 const DEFAULTS = defaultBindings();
 
+/** The product chord a pane never hears on this chord, if one is. A desk-scoped
+ * chord never is: no pane is on the desk, so in the deck the key stays Ghostty's
+ * (HN-D3's ⌘C, over its copy_to_clipboard). */
 function reservedChord(id: string): ProductChord | null {
-  return PRODUCT_CHORDS.find((chord) => triggerKey(chord.trigger) === id) ?? null;
+  const kept = PRODUCT_CHORDS.filter((chord) => chord.scope !== "desk");
+  return kept.find((chord) => triggerKey(chord.trigger) === id) ?? null;
 }
 
 /** Every chord the deck knows, as rows: Ghostty's defaults (unless a layer

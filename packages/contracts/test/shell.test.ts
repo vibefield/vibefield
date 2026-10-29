@@ -221,7 +221,7 @@ describe("Close protocol — CloseReason / CloseRequest / CloseResult (ESR §6.4
 });
 
 describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => {
-  it("exposes exactly the thirty channel keys, in order", () => {
+  it("exposes exactly the thirty-two channel keys, in order", () => {
     expect(Object.keys(IPC_CHANNELS)).toEqual([
       "windowBootstrap",
       "prepareClose",
@@ -254,6 +254,8 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       "screenshotCapture", // SNAP-D3 — the native screenshot helper, one capture at a time
       "screenshotResult", // SNAP-3 — main → renderer: the View menu's capture, told to the page
       "screenshotPreview",
+      "screenshotStillBytes", // HN-D7 — a retained still's bytes, for the desk's print of a snapshot
+      "screenshotStillKept", // HN-4 — whether a still is kept, before a pane is given its path
       "rendererReplace", // DK-9 — the window's renderer replaced at its own asking (a plugin's kinds)
       "browserDataClear", // BP-D4 — Settings' Clear browsing data: the desk's profile cleared, its pages reloaded
     ]);
@@ -289,6 +291,8 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       screenshotCapture: "vibefield:screenshot:capture",
       screenshotResult: "vibefield:screenshot:result",
       screenshotPreview: "vibefield:screenshot:preview",
+      screenshotStillBytes: "vibefield:screenshot:still-bytes",
+      screenshotStillKept: "vibefield:screenshot:still-kept",
       rendererReplace: "vibefield:shell:renderer-replace",
       browserDataClear: "vibefield:browser:clear-data",
     });

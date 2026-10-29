@@ -108,7 +108,7 @@
   transition: opacity var(--vf-bar-row-ms, 240ms) ease var(--vf-bar-firm-ms, 160ms);
 }
 
-/* ── THE ROW: Send to… · rule · the kind's acts · Duplicate · Tape · More · rule · Delete ─────────────── */
+/* ── THE ROW: Copy · rule · the kind's acts · Duplicate · Tape · More · rule · Delete ─────────────────── */
 
 /* each row stands centred on the element; the one the bar SHOWS (`data-face`) is in, the other out — they cross-fade
    over 120 ms at the travel's end, the glass's width following them (the view's) */
@@ -139,7 +139,7 @@
 }
 
 .vf-bar-cell,
-.vf-bar-send {
+.vf-bar-copy {
   display: inline-flex;
   flex: none;
   height: 32px;
@@ -191,35 +191,25 @@
   background: color-mix(in srgb, var(--vf-red) 12%, transparent);
 }
 
-/* Send to… — the bar's one word: agents 16 and the words at 13/500 on the ready fill, a 32 pill padded 0 12 0
-   10, gap 7; under the pointer 14%, pressed 0.97 (R25). Until DK-14 it opens nothing: it WAITS, faint by ink
-   (the line's mic is the precedent), and its tooltip says "next". */
-.vf-bar-send {
+/* Copy — the bar's one word (HN-D3, where Send to… stood): clipboard 16 and the word at 13/500 on the ready
+   fill, a 32 pill padded 0 12 0 10, gap 7; under the pointer 14%, pressed 0.97 (R25). */
+.vf-bar-copy {
   gap: 7px;
   padding: 0 12px 0 10px;
   color: var(--vf-text-primary);
   background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
 }
 
-.vf-bar-send:hover {
+.vf-bar-copy:hover {
   background: color-mix(in srgb, var(--vf-foreground) 14%, transparent);
 }
 
-.vf-bar-send:active {
+.vf-bar-copy:active {
   transform: scale(0.97);
 }
 
-.vf-bar-send[aria-disabled="true"],
-.vf-bar-send[aria-disabled="true"]:hover,
-.vf-bar-send[aria-disabled="true"]:active {
-  color: color-mix(in srgb, var(--vf-text-faint) 55%, transparent);
-  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
-  transform: none;
-  cursor: default;
-}
-
 .vf-bar-cell:focus-visible,
-.vf-bar-send:focus-visible {
+.vf-bar-copy:focus-visible {
   outline: 2px solid var(--vf-select);
   outline-offset: 2px;
 }
@@ -241,7 +231,7 @@
   cursor: default;
 }
 
-/* ── THE TOOLS IN HAND: Send to… · rule · the kind's tools · the readout · rule · Done ─────────────────── */
+/* ── THE TOOLS IN HAND: Copy · rule · the kind's tools · the readout · rule · Done ───────────────────── */
 
 /* a 6 gap where the run changes between pages, inks and tools (the row's 2 and 4 of its own) */
 .vf-bar-row--hand [data-gap] {

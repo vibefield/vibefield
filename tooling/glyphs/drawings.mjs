@@ -508,7 +508,7 @@ export const DRAWINGS = {
   clipboard: {
     label: "Clipboard",
     group: "objects",
-    role: "The left-edge notch; Clipboard history in the phone's plus menu",
+    role: "Copy on the selection bar and its menu; Clipboard history in the phone's plus menu",
     instrument: {
       s: `${R(8, 3, 8, 4, 1.2)}${P("M16 5h1.5A2.5 2.5 0 0 1 20 7.5v11a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 18.5v-11A2.5 2.5 0 0 1 6.5 5H8M8.5 12h7M8.5 16h4.5")}`,
     },
@@ -528,7 +528,7 @@ export const DRAWINGS = {
   capture: {
     label: "Capture",
     group: "objects",
-    role: "The Snap tile and the empty still",
+    role: "The line's snapshot; a picture card's index, and its face while it is on its way in",
     instrument: { s: `${P(CAMERA)}${C(12, 12.5, 3.5)}` },
     hardware: {
       d: `${rectPath(2.5, 6, 19, 14, 2.5)}${rectPath(6, 3.5, 6, 3.5, 1)}${rectPath(15.5, 3.5, 4, 3.5, 1)}${circlePath(12, 13, 4.2)}${circlePath(12, 13, 2.1)}${rectPath(6, 17.6, 12, 1.1, 0.5)}`,

@@ -165,8 +165,10 @@ describe("the rows", () => {
 
   it("marks exactly the chords VibeField keeps, on the Ghostty defaults they override", () => {
     const reserved = rows.filter((entry) => entry.reserved !== null);
+    // a desk-scoped chord is kept where no pane is, so no pane's row names it (HN-D3's ⌘C, below)
+    const fromPanes = PRODUCT_CHORDS.filter((chord) => chord.scope !== "desk");
     expect(reserved.map((entry) => [entry.id, entry.reserved?.id]).sort()).toEqual(
-      PRODUCT_CHORDS.map((chord) => [triggerKey(chord.trigger), chord.id]).sort(),
+      fromPanes.map((chord) => [triggerKey(chord.trigger), chord.id]).sort(),
     );
     expect(routeWords(row(rows, "super+k"))).toEqual({
       text: "VibeField: Command palette",
@@ -190,6 +192,25 @@ describe("the rows", () => {
     expect(reservedWords(palette.reserved, palette.defaultAction)).toBe(
       "VibeField: Command palette — Ghostty's clear the screen never runs on this chord.",
     );
+  });
+
+  it("leaves ⌘C to Ghostty's copy — the desk's Copy is kept only over the desk, which no pane is on (HN-D3)", () => {
+    const copy = row(rows, "super+c");
+    expect(copy).toMatchObject({
+      defaultAction: "copy_to_clipboard:mixed",
+      route: "terminal",
+      reserved: null,
+    });
+    // Ghostty's copy is a performable default: with nothing selected, the key goes on to the shell
+    expect(routeWords(copy)).toEqual({
+      text: "Runs in the deck when it can — otherwise the key goes to the shell",
+      runs: true,
+    });
+    // the chord is still the table's — the desk's, never a pane's
+    expect(PRODUCT_CHORDS.find((chord) => triggerKey(chord.trigger) === "super+c")).toMatchObject({
+      id: "desk-copy",
+      scope: "desk",
+    });
   });
 
   it("says what a platform action does in the deck, where the window is Godview", () => {

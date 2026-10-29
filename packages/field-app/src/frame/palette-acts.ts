@@ -1,6 +1,6 @@
 import { type FrameView, frameViewBuilt } from "@vibefield/contracts";
 import type { GlyphName } from "@vibefield/design-kit/glyphs";
-import { createActOf } from "./draft";
+import { createActOf } from "./line-model";
 import { FRAME_VIEWS, type ViewKeys, viewKeyLabel } from "./views";
 import { ZOOM_ACTS, type ZoomAct, zoomKeyLabel } from "./zoom";
 
@@ -61,18 +61,22 @@ export function frameActGroups(
     waits: frameViewBuilt(cell.view) ? null : "not built yet",
     run: { kind: "view", view: cell.view },
   }));
-  // The line's create, as the line names and keys it in this view (FC-D3).
+  // The line's create, as the line names and keys it in this view (FC-D3) — no
+  // row where the view has no act on the line (the Assistant's, unbuilt).
   const create = createActOf(view, keys, view === "history" && historyLive);
-  const onView: FrameAct[] = [
-    {
-      id: "create",
-      name: create.name,
-      glyph: create.glyph,
-      key: create.key,
-      waits: view === "history" ? historyWaits : null,
-      run: { kind: "create" },
-    },
-  ];
+  const onView: FrameAct[] =
+    create === null
+      ? []
+      : [
+          {
+            id: "create",
+            name: create.name,
+            glyph: create.glyph,
+            key: create.key,
+            waits: view === "history" ? historyWaits : null,
+            run: { kind: "create" },
+          },
+        ];
   // The zoom is Canvas's instrument (FC-D8): its acts are on Canvas only.
   if (view === "canvas") {
     for (const entry of ZOOM_ACTS) {

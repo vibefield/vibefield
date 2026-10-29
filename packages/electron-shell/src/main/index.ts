@@ -81,6 +81,8 @@ import {
   registerRendererReplace,
   registerScreenshotCapture,
   registerScreenshotPreview,
+  registerScreenshotStillBytes,
+  registerScreenshotStillKept,
   registerThemeSet,
   registerUpdateDoors,
   registerUsersRoster,
@@ -130,6 +132,7 @@ import { registerShellSchemes } from "./scheme-registration";
 import { withScreenshotScreenBounds } from "./screenshot-bounds";
 import { screenshotHelperSupportsService } from "./screenshot-helper-capabilities";
 import { ScreenshotShortcutController } from "./screenshot-shortcut";
+import { checkStill, readStill } from "./screenshot-still-bytes";
 import {
   installCsp,
   installNavigationPolicy,
@@ -141,7 +144,7 @@ import { backfillMigratedSetupVariant } from "./setup-variant";
 import { shellExitNotice } from "./shell-exit-notice";
 import { RecoveringShellProvider } from "./shell-provider";
 import { isolateSmokeProfile } from "./smoke-profile";
-import { installStillProtocol, resolveStillFile } from "./still-protocol";
+import { installStillProtocol, resolveStill, resolveStillFile } from "./still-protocol";
 import { SupportBundleError, SupportBundleService } from "./support-bundle";
 import { fileThemeStore, THEME_FILE, ThemeOwner } from "./theme";
 import { TrayController } from "./tray-controller";
@@ -378,6 +381,12 @@ async function main(
     });
     await handle.client.request("audit.append", record);
   };
+  // HN-3 (R-T 4) — a smoke drives the desk's real Copy, and a run isolates its profile and its
+  // daemons but never the system clipboard, which is the person's (`gate:landing` runs on their
+  // Mac). So in a MARKED run (`VF_SMOKE_RUN`, run-smoke.mjs's mark — testing/smoke-daemons.ts)
+  // the copy door KEEPS the words instead of writing them and answers as it would: the act's own
+  // record (`wrote`) stays the witness, and the canvas smoke reads what arrived here.
+  const harnessCopies: string[] | null = process.env["VF_SMOKE_RUN"] === undefined ? null : [];
   const installDiagnostics = (window: Electron.BrowserWindow): void => {
     let supportDialogOpen = false;
     installLocalDiagnosticsPort({
@@ -447,6 +456,10 @@ async function main(
             throw Object.assign(new Error("expected bounded clipboard text"), {
               kind: "PRECONDITION_FAILED",
             });
+          }
+          if (harnessCopies !== null) {
+            harnessCopies.push(text);
+            return { copied: true };
           }
           clipboard.writeText(text);
           return { copied: true };
@@ -1587,6 +1600,23 @@ async function main(
       }
     },
   );
+  // HN-D7 — a snapshot played onto the desk is printed from its own bytes: asked for by name, found
+  // in the tool's ring (a lookup, not the disk), and judged by the handle it is read from — never
+  // through a symlink, a regular file within the cap (`readStill`, EL7)
+  registerScreenshotStillBytes(
+    registry,
+    (url) => resolveStill(url, screenshotTool?.retainedStills ?? []),
+    readStill,
+    logger.child({ component: "ipc.screenshot" }),
+  );
+  // HN-4 — …and played onto a pane, it pastes the still's path only while that path opens to the
+  // still (`checkStill`: the same lookup and handle check, nothing read)
+  registerScreenshotStillKept(
+    registry,
+    (url) => resolveStill(url, screenshotTool?.retainedStills ?? []),
+    checkStill,
+    logger.child({ component: "ipc.screenshot" }),
+  );
   // A global capture can finish with every product window closed. Keep the
   // latest result for the next field, without revealing it before the freeze.
   let pendingScreenshotResult: ScreenshotCaptureResult | null = null;
@@ -1843,6 +1873,7 @@ async function main(
       preloadPath: PRELOAD_PATH,
       viteUrl: VITE_URL,
       beforeExit: closeEvidence,
+      ...(harnessCopies === null ? {} : { copies: harnessCopies }),
       onWindow: (window) => {
         installLiveSurfaceHost(window, logger);
         installRendererLogging({

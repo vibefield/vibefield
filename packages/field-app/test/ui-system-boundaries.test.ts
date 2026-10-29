@@ -102,7 +102,7 @@ describe("UI system ownership boundaries", () => {
     ].join("\n");
 
     expect(catalogCss).not.toMatch(
-      /^\.vf-(?:artifact|godview\b|widget-tray\b|command-palette\b|palette-|settings-dialog\b|loading-veil\b|terminal-picker\b|deck-zoom\b|me\b|me-|face\b|face-|face-picker|settings-account|edge-tray\b|views\b|views-|cover\b|cover-|history\b|history-|line\b|line-|at-|head\b|head-|menu\b|menu-|ah-|tr-|bar\b|bar-|status-line|stories\b|stories-|story\b|story-)/m,
+      /^\.vf-(?:artifact|godview\b|widget-tray\b|command-palette\b|palette-|settings-dialog\b|loading-veil\b|terminal-picker\b|deck-zoom\b|me\b|me-|face\b|face-|face-picker|settings-account|edge-tray\b|views\b|views-|cover\b|cover-|history\b|history-|line\b|line-|at-|head\b|head-|menu\b|menu-|ah-|tr-|bar\b|bar-|status-line|stories\b|stories-|story\b|story-|card\b|card-|cards\b|cards-)/m,
     );
   });
 
@@ -422,10 +422,11 @@ describe("UI system ownership boundaries", () => {
     expect(page).not.toMatch(/<UpdatesDoctorSection\s/u);
   });
 
-  it("keeps the edges' fixture an ADAPTER — tiles and an open drawer, never the trays' markup (FR-4)", () => {
-    // The catalog stands in for what a host supplies — the stills, which drawer
-    // the owner holds, the view — and mounts the shipping tray view on both
-    // sides, with the Hub through its plugin's own fixture door.
+  it("keeps the edges' fixture an ADAPTER — an open drawer, never the tray's markup (FR-4)", () => {
+    // The catalog stands in for what a host supplies — whether the owner holds
+    // the drawer, the view — and mounts the shipping tray view on the right
+    // edge, with the Hub through its plugin's own fixture door. (The left
+    // edge's clipboard retired into the hand, track HN.)
     const fixture = source("design-system/EdgesPreview.tsx");
     expect(fixture).toContain("EdgeTrayView");
     expect(fixture).toContain("ArtifactPanelPreview");
@@ -433,6 +434,25 @@ describe("UI system ownership boundaries", () => {
     expect(fixture).not.toContain("<style");
     expect(fixture).not.toContain("getHost");
     expect(fixture).not.toContain("useVisiblePluginSurfaces");
+  });
+
+  it("keeps the hand's fixture an ADAPTER — the product's own model over fixture cards, never the hand's markup (HN)", () => {
+    // The catalog stands in for what a host supplies — the cards (a picture it
+    // draws itself), the pointer, the clock, the window — and mounts the
+    // shipping fan and faces, placed by the product's own model. Never the
+    // hand's own classes, never a stylesheet, never the store, the host or the
+    // controller (`<Cards` — never `CardsView`).
+    const fixture = source("design-system/CardsPreview.tsx");
+    expect(fixture).toMatch(/<CardsView\s/u);
+    expect(fixture).toMatch(/<CardFace\s/u);
+    // the CALLS, not the names (an import alone would satisfy a name)
+    for (const model of ["reachLift(", "reachedIndex(", "textCardOf(", "termCardOf("])
+      expect(fixture).toContain(model);
+    expect(fixture).toMatch(/raised \? layoutRaised : layoutCards/u);
+    expect(fixture).not.toMatch(/className="[^"]*vf-cards?(?:-|\b)/u);
+    expect(fixture).not.toContain("<style");
+    for (const door of [/\bgetHost\b/u, /\bcardsStore\b/u, /\buseCards\b/u, /<Cards\s/u])
+      expect(fixture).not.toMatch(door);
   });
 
   it("keeps the selection bar's fixture an ADAPTER — the product's own model over fixture selections, never the bar's markup (DK-11)", () => {
@@ -564,12 +584,13 @@ describe("UI system ownership boundaries", () => {
     const palette = source("design-system/CommandPalettePreview.tsx");
     const corner = source("design-system/CornerPreview.tsx");
     const edges = source("design-system/EdgesPreview.tsx");
+    const cards = source("design-system/CardsPreview.tsx");
     const history = source("design-system/HistoryPreview.tsx");
     const bar = source("design-system/SelectionBarPreview.tsx");
     const pegboard = source("design-system/PegboardPreview.tsx");
     const peers = source("design-system/PeersPreview.tsx");
     const peek = source("design-system/PeekPreview.tsx");
-    const catalog = `${peers}\n${pegboard}\n${bar}\n${history}\n${peek}\n${corner}\n${edges}\n${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${paneFrame}\n${paneLauncher}\n${switchScene}\n${viewFrame}\n${line}\n${head}\n${palette}`;
+    const catalog = `${peers}\n${pegboard}\n${bar}\n${history}\n${peek}\n${corner}\n${edges}\n${cards}\n${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${paneFrame}\n${paneLauncher}\n${switchScene}\n${viewFrame}\n${line}\n${head}\n${palette}`;
     for (const productionView of [
       "ArtifactPanelPreview",
       "CommandPalettePreview",
@@ -624,14 +645,11 @@ describe("UI system ownership boundaries", () => {
       // …and the two faces before the room, as they ship (2026-10-04)
       "HistoryOpeningState",
       "HistoryOpenFailedState",
-      // One Frame FR-2 — the line: its view, @'s list, the plates, and the
-      // live line on its real controller with fixture doors
+      // One Frame FR-2, LN-D1 — the line: its view, the plates (the snapshot's
+      // states among them), and the live line on its real controller with
+      // fixture doors
       "ComposerLinePlate",
       "ComposerLineView",
-      "AtMenuView",
-      // DK-14 — Send to…'s chip faces on the shipping line, and its flier frozen in flight
-      "SendFlightPlate",
-      "ChipFlierView",
       // One Frame FR-3 — the head: its view, a plate per state, and the live
       // head on its real controller over fixture doors (the file pill, the
       // breadcrumbs and the − % + pill retired into it)
@@ -643,10 +661,16 @@ describe("UI system ownership boundaries", () => {
       "CornerPlate",
       "AppearancePlate",
       "AppearanceSectionView",
-      // One Frame FR-4 — the edges: both notches in every view, the slivers,
-      // and Artifacts' drawer holding the Hub (the side panel retired into it)
+      // One Frame FR-4 — the edge: Artifacts' notch in every view, the sliver,
+      // and its drawer holding the Hub (the side panel retired into it)
       "EdgesPlate",
       "ArtifactsDrawer",
+      // HN — the hand: the shipping fan and faces over fixture cards, a plate per
+      // state and the six faces (the left edge's clipboard retired into it)
+      "CardsPlate",
+      "CardsView",
+      "CardFacesPlate",
+      "CardFace",
       // DK-11 — the desk's selection bar over fixture selections, and grown into its menu
       "SelectionBarPlate",
       "SelectionBarView",
@@ -679,13 +703,16 @@ describe("UI system ownership boundaries", () => {
     expect(page).toMatch(/<AppearancePlate\s/u);
     expect(page).toMatch(/<EdgesPlate\s/u);
     expect(page).toMatch(/<ArtifactsDrawer\s/u);
+    // …and the hand's plates and faces (HN)
+    expect(page).toMatch(/<CardsPlate\s/u);
+    expect(page).toMatch(/<CardFacesPlate\s/u);
     // …and the selection bar's plates mounted (DK-11), and the pegboard's (DK-13).
     expect(page).toMatch(/<SelectionBarPlate\s/u);
     expect(page).toMatch(/<PegboardPlate\s/u);
     // …and the peers' plates (DK-16)
     expect(page).toMatch(/<PeersPlate\s/u);
-    // …and Send to…'s flight (DK-14)
-    expect(page).toMatch(/<SendFlightPlate\s/u);
+    // …and the line's plates (LN-D1), the line's own view on each
+    expect(page).toMatch(/<ComposerLinePlate\s/u);
     // …and the update card and the updater block mounted in the shipping dialog (WP12d L3c-ii)
     expect(page).toMatch(/<UpdatesSectionView\s/u);
     expect(page).toMatch(/<UpdatesDoctorView\s/u);
@@ -753,6 +780,9 @@ describe("UI system ownership boundaries", () => {
       "hud/CommandPalette.tsx",
       "hud/edge-tray/EdgeTray.tsx",
       "hud/edge-tray/EdgeTrayView.tsx",
+      "frame/cards/Cards.tsx",
+      "frame/cards/CardsView.tsx",
+      "frame/cards/CardFace.tsx",
       "hud/LoadingVeil.tsx",
       "boot/onboarding/wizard-ui.tsx",
       "godview/GodviewMonitor.tsx",
@@ -764,6 +794,7 @@ describe("UI system ownership boundaries", () => {
       "history/HistoryView.tsx",
       "frame/Peek.tsx",
       "frame/PeekView.tsx",
+      "frame/cards/CarriedCardLayer.tsx",
       "frame/Composer.tsx",
       "frame/ComposerLine.tsx",
       "frame/Head.tsx",
@@ -796,6 +827,7 @@ describe("UI system ownership boundaries", () => {
       "history/history-consent-slot.css",
       "hud/CommandPalette.css",
       "hud/edge-tray/edge-tray.css",
+      "frame/cards/cards.css",
       "hud/LoadingVeil.css",
       "hud/PluginSurfaceSlot.css",
       "panels/devices.css",
@@ -812,6 +844,7 @@ describe("UI system ownership boundaries", () => {
       "frame/menu.css",
       "frame/status-line.css",
       "frame/peek.css",
+      "frame/cards/carried.css",
       "field/desk/bar/selection-bar.css",
       "field/desk/pegboard/pegboard.css",
       "field/desk/peers/peers.css",

@@ -128,7 +128,7 @@ interface Box {
   readonly y1: number;
 }
 
-/** A point of the bare mat — the desk receives it and picks nothing there (smoke-send-to.ts's deselect). */
+/** A point of the bare mat — the desk receives it and picks nothing there (smoke-desk-copy.ts's deselect). */
 const BARE_MAT = `(() => {
   const d = globalThis.__vfDesk; const el = document.querySelector("[data-desk]");
   const r = el.getBoundingClientRect();

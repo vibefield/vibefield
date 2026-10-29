@@ -32,6 +32,11 @@ import { createBootstrapHandler, type WindowRendererBoundary } from "./bootstrap
 import { shellIdentity } from "./login-shell";
 import { createScreenshotDoor } from "./screenshot-door";
 import { createScreenshotPreviewDoor } from "./screenshot-preview";
+import {
+  createScreenshotStillBytesDoor,
+  createScreenshotStillKeptDoor,
+  type StillOpened,
+} from "./screenshot-still-bytes";
 import type { StillResolution } from "./still-protocol";
 import type { ThemeOwner } from "./theme";
 import type { ViewRegistry } from "./view";
@@ -424,5 +429,52 @@ export function registerScreenshotPreview(
   });
   ipcMain.handle(IPC_CHANNELS.screenshotPreview, async (event, raw: unknown) =>
     ScreenshotPreviewResult.parse(await door(event.sender, raw)),
+  );
+}
+
+/** HN-D7 — a retained still's bytes, for the desk's print of a snapshot played onto it: found by
+ * name in the tool's ring, and read from the handle it is judged by (policy in
+ * screenshot-still-bytes.ts; the wiring here). */
+export function registerScreenshotStillBytes(
+  registry: WindowRegistry,
+  find: (url: string) => StillResolution,
+  read: (path: string) => Promise<StillOpened<Uint8Array>>,
+  logger?: Logger,
+): void {
+  const door = createScreenshotStillBytesDoor({
+    owns: (sender: WebContents) => registry.owns(sender),
+    find,
+    read,
+    onRefused: (reason) => {
+      logger?.warn(
+        "desktop.ipc.still_bytes_refused",
+        "A retained still's bytes were not handed to the page",
+        { reason },
+      );
+    },
+  });
+  ipcMain.handle(IPC_CHANNELS.screenshotStillBytes, (event, raw: unknown) =>
+    door(event.sender, raw),
+  );
+}
+
+/** HN-4 — whether a still is still kept, for a snapshot's card played onto a pane: the bytes door's
+ * lookup and handle check above, answered as a boolean (policy in screenshot-still-bytes.ts). */
+export function registerScreenshotStillKept(
+  registry: WindowRegistry,
+  find: (url: string) => StillResolution,
+  check: (path: string) => Promise<StillOpened<true>>,
+  logger?: Logger,
+): void {
+  const door = createScreenshotStillKeptDoor({
+    owns: (sender: WebContents) => registry.owns(sender),
+    find,
+    check,
+    onRefused: (reason) => {
+      logger?.warn("desktop.ipc.still_not_kept", "A still asked about is not kept", { reason });
+    },
+  });
+  ipcMain.handle(IPC_CHANNELS.screenshotStillKept, (event, raw: unknown) =>
+    door(event.sender, raw),
   );
 }

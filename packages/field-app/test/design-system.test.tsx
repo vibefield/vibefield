@@ -243,57 +243,56 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(
       importing?.querySelector('.vf-views-cell[data-view="history"]')?.getAttribute("aria-label"),
     ).toBe("History, importing");
-    // One Frame FR-2: the line — live on its real controller over the frame's
-    // field (the track at its left end), and a plate per state the page's §03
-    // plates draw for it, the last Godview's keys as Windows prints them.
+    // One Frame FR-2, LN-D1: the line — live on its real controller over the
+    // frame's field (the track at its left end), and a plate per state the Cards
+    // in Hand page draws for it, the last Godview's keys as Windows prints them.
     expect(container?.querySelector(".vf-ds-frame-stage .vf-line > .vf-views-line")).not.toBeNull();
+    // …its capture a fixture door whose tool comes up and is let go (ViewFramePreview): the live
+    // snapshot is ready, never the no-door wait the catalog once drew for it
+    const liveSnapshot = container?.querySelector(".vf-ds-frame-stage .vf-line-snapshot");
+    expect(liveSnapshot?.hasAttribute("aria-disabled")).toBe(false);
+    expect(liveSnapshot?.getAttribute("title")).toBe("Snapshot  ⌃⌘A");
     expect(
       [...(container?.querySelectorAll(".vf-ds-line-plate") ?? [])].map(
         (plate) => `${plate.getAttribute("data-state")}:${plate.getAttribute("data-keys")}`,
       ),
     ).toEqual([
       "rest:mac",
-      "typing:mac",
-      "at:mac",
-      "aimed:mac",
+      "snap-hover:mac",
+      "snap-on:mac",
+      "snap-waits:mac",
       "objects:mac",
       "held:mac",
       "gv:mac",
       "hx:mac",
-      "sent:mac",
-      "faces:mac",
-      "sent-aimed:mac",
+      "opened:mac",
       "refused:mac",
       "gv:other",
-      "flight:null",
     ]);
-    // D6 — the failure: a paste too large for its pane, said over send in the
-    // product's own words (`inputRefusalNote` over a fixture refusal)
-    const refused = container?.querySelector(
-      '.vf-ds-line-plate[data-state="refused"] .vf-line-note',
-    );
-    expect(refused?.getAttribute("data-at")).toBe("send");
+    // no draft on any plate, nor on the live line (LN-D3: the typing lives where it is read)
+    expect(container?.querySelector(".vf-line-input, .vf-line-send, .vf-at-menu")).toBeNull();
+    // the snapshot's states on the shipping view: a ghost at rest, under the pointer, filled
+    // while the tool is up, faint where no capture door is
+    const plate = (state: string): Element | null =>
+      container?.querySelector(`.vf-ds-line-plate[data-state="${state}"]`) ?? null;
+    const snap = (state: string): Element | null =>
+      plate(state)?.querySelector(".vf-line-snapshot") ?? null;
+    expect(snap("rest")?.getAttribute("title")).toBe("Snapshot  ⌃⌘A");
+    expect(snap("snap-hover")?.hasAttribute("data-hot")).toBe(true);
+    expect(snap("snap-on")?.getAttribute("data-on")).toBe("true");
+    expect(snap("snap-waits")?.getAttribute("aria-disabled")).toBe("true");
+    expect(snap("snap-waits")?.getAttribute("title")).toBe("Snapshot — no capture here");
+    // the note at its two places, in the product's own words: a new terminal over the create
+    const opened = plate("opened")?.querySelector(".vf-line-note");
+    expect(opened?.getAttribute("data-at")).toBe("create");
+    expect(opened?.textContent).toBe("Terminal opened in the active pane");
+    // D6 — the failure: a paste too large for its pane, said from the line's left edge
+    // (`inputRefusalNote` over a fixture refusal)
+    const refused = plate("refused")?.querySelector(".vf-line-note");
+    expect(refused?.getAttribute("data-at")).toBe("line");
     expect(refused?.textContent).toBe(
       "Not pasted into vibe-field — 300 KB, and one paste carries 261 KB of it",
     );
-    // DK-14 — Send to…: a note's chip in its paper with the @ typed and the list open; the faces by kind; the flight
-    const sent = container?.querySelector('.vf-ds-line-plate[data-state="sent"]');
-    expect(
-      sent?.querySelector('.vf-line-chip[data-chip="desk"][data-paper]')?.textContent,
-    ).toContain("Ship the desk by Friday,…");
-    expect(sent?.querySelector(".vf-at-menu")).not.toBeNull();
-    expect(
-      [
-        ...(container?.querySelectorAll(
-          '.vf-ds-line-plate[data-state="faces"] .vf-line-chip[data-chip="desk"] .vf-line-chip-label',
-        ) ?? []),
-      ].map((el) => el.textContent),
-    ).toEqual(["Clock", "2 objects", "Clock"]);
-    expect(
-      container?.querySelector(
-        '.vf-ds-line-plate[data-state="flight"] .vf-line-flier .vf-line-chip',
-      ),
-    ).not.toBeNull();
     // DK-13 — the pegboard: a plate per state over a fixture tray, the shipping filters placed by the product's model
     const boardPlates = [...(container?.querySelectorAll<HTMLElement>(".vf-ds-board-plate") ?? [])];
     expect(boardPlates.map((p) => p.dataset.state)).toEqual([
@@ -373,11 +372,6 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       headPlate("palette")?.querySelector('[role="dialog"][aria-label="Command palette"]'),
     ).not.toBeNull();
     expect(container?.querySelector(".vf-ds-field-stage .vf-head-zoom")).not.toBeNull();
-    const plate = (state: string): Element | null =>
-      container?.querySelector(`.vf-ds-line-plate[data-state="${state}"]`) ?? null;
-    expect(plate("at")?.querySelector(".vf-at-menu")).not.toBeNull();
-    expect(plate("typing")?.querySelector(".vf-line-chip")).not.toBeNull();
-    expect(plate("aimed")?.querySelector(".vf-line-ph")?.textContent).toBe("Message vibe-field…");
     expect(plate("objects")?.querySelector('.vf-line-create[aria-expanded="true"]')).not.toBeNull();
     // in hand the create is faint — "Put it down first" (R14)
     expect(plate("held")?.querySelector(".vf-line-create")?.getAttribute("title")).toBe(
@@ -467,6 +461,62 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       "seconds ring24 zone-back zone-ahead dial",
     ]);
     expect(hands[0]?.querySelector("[data-readout]")?.textContent).toBe("Page 1");
+    // HN — the hand: a plate per state, each the shipping fan (and the carried card) placed by the
+    // product's own model over fixture cards, and never taking the page's keyboard
+    const cardPlates = [...(container?.querySelectorAll<HTMLElement>(".vf-ds-cards-plate") ?? [])];
+    expect(cardPlates.map((p) => p.dataset.state)).toEqual([
+      "rest",
+      "reached",
+      "raised",
+      "held",
+      "carried",
+    ]);
+    const cardPlate = (state: string): HTMLElement | undefined =>
+      cardPlates.find((p) => p.dataset.state === state);
+    expect(cardPlate("rest")?.querySelectorAll(".vf-cards .vf-card")).toHaveLength(6);
+    expect(cardPlate("rest")?.querySelector(".vf-card-x")).toBeNull();
+    const reached = cardPlate("reached");
+    expect(reached?.querySelectorAll(".vf-card-x")).toHaveLength(1);
+    expect(reached?.querySelector(".vf-cards-label")?.textContent).toBe("Godview · swarm · 5m ago");
+    const raisedFan = cardPlate("raised")?.querySelector(".vf-cards");
+    expect(raisedFan?.getAttribute("role")).toBe("listbox");
+    expect(raisedFan?.querySelector("[data-focus]")?.getAttribute("data-slot")).toBe("fx-term");
+    const heldLayer = cardPlate("held")?.querySelector<HTMLElement>(".vf-cards-held");
+    expect(heldLayer?.dataset.phase).toBe("up");
+    expect(heldLayer?.getAttribute("role")).toBe("dialog");
+    const heldBar = [...(heldLayer?.querySelectorAll(".vf-cards-bar button") ?? [])];
+    expect(heldBar.map((b) => b.textContent)).toEqual(["Remove", "Done"]);
+    expect(document.activeElement?.closest(".vf-ds-cards-plate")).toBeFalsy();
+    const carriedPlate = cardPlate("carried");
+    const keptPlace = carriedPlate?.querySelector('[data-slot="fx-text"]');
+    expect(keptPlace?.getAttribute("data-phase")).toBe("hidden");
+    const carriedCard = carriedPlate?.querySelector(".vf-cards-carried .vf-card");
+    expect(carriedCard?.getAttribute("data-card")).toBe("fx-text");
+    expect(carriedPlate?.querySelector(".vf-cards-carried-ring")).not.toBeNull();
+    const answer = carriedPlate?.querySelector(".vf-cards-carried-label");
+    expect(answer?.textContent).toBe("Paste into vibe-field");
+    // …and the faces on the shipping CardFace: the six kinds by day and by the Moon, a drag's two
+    // waiting faces, and the two the desk's Copy deals (UI_SYSTEM's list)
+    const faceRows = [...(container?.querySelectorAll(".vf-ds-card-faces") ?? [])];
+    const kindsOf = (row: Element): string =>
+      [...row.querySelectorAll<HTMLElement>(".vf-card")].map((card) => card.dataset.kind).join(" ");
+    expect(faceRows.map(kindsOf)).toEqual([
+      "text file agent term msg pict",
+      "text file agent term msg pict",
+      "pict file",
+      "text pict",
+    ]);
+    expect(faceRows.map((row) => row.classList.contains("dark"))).toEqual([
+      false,
+      true,
+      false,
+      false,
+    ]);
+    expect(faceRows[0]?.querySelector('[data-kind="agent"] .vf-card-project i')).not.toBeNull();
+    const copyNote = faceRows[3]?.querySelector('[data-kind="text"] .vf-card-words b');
+    expect(copyNote?.textContent).toBe("Ship the hand on Thursday.");
+    const copyPicture = faceRows[3]?.querySelector('[data-kind="pict"] .vf-card-name');
+    expect(copyPicture?.textContent).toBe("2 objects");
   });
 
   it("exposes theme and representative component-state controls", async () => {

@@ -27,7 +27,6 @@ import type {
   TrayAnchor,
 } from "@vibecook/ice/desk";
 import { type BoardPersistenceState, getBoardStatus } from "../../board-status";
-import { lastSend, type SendRecord } from "../../frame/line-send";
 import { type SaidNotice, statusLineSaid } from "../../frame/status-line";
 import type {
   DeskLiveFaceRow,
@@ -37,6 +36,7 @@ import type {
 import { pageStills } from "../../surfaces/live/page-stills";
 import { setSurfaceGraceForTest, surfaceGraceMs } from "../../surfaces/pool";
 import { type BarStats, readBarStats } from "./bar/bar-stats";
+import { type CopyRecord, lastCopy } from "./copy/copy-record";
 import { type CoverRecord, coverCaptures, coverRecords } from "./cover-still";
 import { DESK_FACE_URLS, deskText } from "./desk-assets";
 import { deskBlobs } from "./desk-blobs";
@@ -362,11 +362,11 @@ export interface VfDeskDoor {
    * `HeldScreenFrame` — the shown extent's centre and half extents, CSS px, its scale, whether the pickup settled), the
    * reading fit's witness; null with nothing held. A read. */
   held(): { readonly entity: number; readonly frame: HeldFrame | null } | null;
-  /** DK-14 — the last Send to… as it went (`frame/line-send.ts`): where it was pressed, the chip's face and what it
-   * carries, the capture's rect and the still's size, the still asked without the selection's marks and the selection
-   * observed standing (ICE I40, DK-17b), whether the draft was aimed, and
-   * each step's time; null before any. A read. */
-  sent(): SendRecord | null;
+  /** HN-D3 — the last Copy as it went (`copy/copy-record.ts`): where it was pressed, the objects and the words the
+   * system clipboard was given, the box the card flew from, the capture's rect and the still's size, the still asked
+   * without the selection's marks and the selection observed standing (ICE I40, DK-17b), the card dealt — its id, kind
+   * and title — or why none was, and each step's time; null before any. A read. */
+  copied(): CopyRecord | null;
   /** DK-15 — the covers this renderer has stood, oldest first (the last 8; `cover-still.ts`): each step in the order taken —
    * capture, blur, swap, hide, freeze, park; a re-capture's thaw and one frame; the lowering's thaw, show, drop — with its
    * time, the still's size and px per CSS px, the blur's px, the face (a still or the mat's ground) and what was said. A read. */
@@ -646,7 +646,7 @@ export function installDeskDoor(desk: MountedDesk, platesSet: () => boolean): ()
       };
     },
     held: () => heldNow(engine),
-    sent: lastSend,
+    copied: lastCopy,
     covers: coverRecords,
     coverCaptures,
     peers: () => ({
