@@ -61,29 +61,50 @@ function openRefusal(cause: unknown): StillBytesRefusal {
   return "unreadable";
 }
 
+/** A retained still opened and judged: its handle, still open and the caller's to close, and the
+ * size it measured; or why not, with nothing left open. */
+export type StillHeld =
+  | { readonly ok: true; readonly handle: FileHandle; readonly size: number }
+  | { readonly ok: false; readonly reason: StillBytesRefusal };
+
 /** Open a retained still's path and judge WHAT WAS OPENED: `fstat` on that handle, a regular file
- * within the cap. `use` is handed the handle and the size it measured; the handle is closed after,
- * whatever happens. Never throws: every failure is a refusal with its reason. */
-export async function withStill<T>(
-  path: string,
-  use: (handle: FileHandle, size: number) => Promise<T>,
-  cap = STILL_BYTES_CAP,
-): Promise<StillOpened<T>> {
+ * within the cap. The handle is handed over open, for its holder to read from and close — the one
+ * opener every reader of a still goes through: this door's bytes, its twin's check, and the still
+ * scheme's stream (LC-17). Never throws: every failure is a refusal with its reason. */
+export async function openStill(path: string, cap = STILL_BYTES_CAP): Promise<StillHeld> {
   let handle: FileHandle;
   try {
     handle = await open(path, STILL_OPEN_FLAGS);
   } catch (cause) {
     return { ok: false, reason: openRefusal(cause) };
   }
+  let reason: StillBytesRefusal;
   try {
     const stat = await handle.stat();
-    if (!stat.isFile()) return { ok: false, reason: "not-a-file" };
-    if (stat.size > cap) return { ok: false, reason: "too-large" };
-    return { ok: true, value: await use(handle, stat.size) };
+    if (stat.isFile() && stat.size <= cap) return { ok: true, handle, size: stat.size };
+    reason = stat.isFile() ? "too-large" : "not-a-file";
+  } catch {
+    reason = "unreadable";
+  }
+  await handle.close().catch(() => undefined);
+  return { ok: false, reason };
+}
+
+/** A retained still opened and judged (`openStill`); `use` is handed the handle and the size it
+ * measured, and the handle is closed after, whatever happens. Never throws. */
+export async function withStill<T>(
+  path: string,
+  use: (handle: FileHandle, size: number) => Promise<T>,
+  cap = STILL_BYTES_CAP,
+): Promise<StillOpened<T>> {
+  const held = await openStill(path, cap);
+  if (!held.ok) return held;
+  try {
+    return { ok: true, value: await use(held.handle, held.size) };
   } catch {
     return { ok: false, reason: "unreadable" };
   } finally {
-    await handle.close().catch(() => undefined);
+    await held.handle.close().catch(() => undefined);
   }
 }
 
