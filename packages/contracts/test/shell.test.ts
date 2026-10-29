@@ -11,6 +11,7 @@ import {
   AppPreferenceSetParams,
   AppPreferences,
   BrowserDataClearResult,
+  ClipboardCopyRefusal,
   ClipboardReadRequest,
   ClipboardReadResult,
   ClipboardWriteImageResult,
@@ -271,7 +272,8 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       "rendererReplace", // DK-9 — the window's renderer replaced at its own asking (a plugin's kinds)
       "browserDataClear", // BP-D4 — Settings' Clear browsing data: the desk's profile cleared, its pages reloaded
       "clipboardRead", // item 102 — a paste's read through main, for the focused product window
-      "clipboardWriteImage", // HN-5 — a copy's picture written through main, the focused window
+      // HN-5 — a copy's picture written through main, for a registered window (no focus, LC-18)
+      "clipboardWriteImage",
     ]);
   });
 
@@ -417,6 +419,36 @@ describe("the clipboard picture door (HN-5)", () => {
 
   it("bounds the words by the copy door's one bound, 64 KiB of UTF-8 (LC-19)", () => {
     expect(SHELL_CLIPBOARD.WRITE_TEXT_MAX_BYTES).toBe(64 * 1024);
+  });
+});
+
+describe("a copy's refusal, typed for the page (HN-5)", () => {
+  it("names its reason; a size refusal, what it measured, its size and its bound", () => {
+    for (const refusal of [
+      { reason: "too-large", what: "words", bytes: 80_000, max: 65_536 },
+      { reason: "too-large", what: "picture", bytes: 70_000_000, max: 67_108_864 },
+      { reason: "too-large", what: "words-as-sent", bytes: 80_000, max: 65_465 },
+      { reason: "not-an-image" },
+    ])
+      expect(ClipboardCopyRefusal.parse(refusal)).toEqual(refusal);
+    // a tolerant reader: a later field rides through
+    expect(ClipboardCopyRefusal.parse({ reason: "not-an-image", later: 1 })).toMatchObject({
+      reason: "not-an-image",
+    });
+  });
+
+  it("is never a size within its bound, nor an Error — whose terms the bridge would drop", () => {
+    for (const bad of [
+      {},
+      { reason: "unfocused" },
+      { reason: "too-large" },
+      { reason: "too-large", what: "sound", bytes: 2, max: 1 },
+      { reason: "too-large", what: "words", bytes: 1.5, max: 1 },
+      { reason: "too-large", what: "words", bytes: 65_536, max: 65_536 },
+      { reason: "too-large", what: "picture", bytes: 8, max: 67_108_864 },
+    ])
+      expect(ClipboardCopyRefusal.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
+    expect(ClipboardCopyRefusal.safeParse(new Error("the words hold 80 KB")).success).toBe(false);
   });
 });
 
