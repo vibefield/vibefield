@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { AgentProfileId, AgentProviderId } from "./agent-index";
 import { AgentSessionTerminal, AgentStatus, AgentTier } from "./agent-session";
+import type { Principal } from "./envelope";
 import { INDEX_ACTIVITY } from "./registries";
 import {
   MeshScope,
@@ -301,6 +302,27 @@ export const MonitorAgentRow = z
   })
   .passthrough();
 export type MonitorAgentRow = z.infer<typeof MonitorAgentRow>;
+
+/** Item 100 (2026-10-29) — whose cut a caller reads of the model's rows and
+ * of the recorded lanes: by its principal's KIND, never its transport (SP-L4's
+ * rule; this table is its instrument). `window` is the whole row, `project.seq`
+ * included. The sequence is this desktop's own deal (M16), so only callers on
+ * this desktop read it: its windows and local clients (`local-token`) and its
+ * shell (`shell-main`). Every other kind is cut as a peer is: a phone, a guest,
+ * a peer daemon, an agent's MCP session, a plugin. Each kind is named, so a
+ * kind added to `Principal` fails the typecheck here until it is given its
+ * cut, and a doubtful kind's cut is `peer`. A TypeScript constant, server-side
+ * as `Principal` is: no wire shape, nothing generated. */
+export type MonitorAudience = "window" | "peer";
+export const MONITOR_AUDIENCE = {
+  "local-token": "window",
+  "shell-main": "window",
+  tailnet: "peer",
+  "tailnet-guest": "peer",
+  "mcp-agent": "peer",
+  "peer-fieldd": "peer",
+  plugin: "peer",
+} as const satisfies Record<Principal["kind"], MonitorAudience>;
 
 /** The run's latest reply, bounded: puppeteer's `MonitorAssistantMessageState`
  * with its text cut to the registry's bound. `at` and `final` are optional

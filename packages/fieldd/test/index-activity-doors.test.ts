@@ -12,7 +12,7 @@
 // empty day; nothing pages a transcript (only rosetta reads them); an ended run
 // is ONE active band; and a desktop with no index says so in words.
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -393,6 +393,9 @@ function writeRunRecord(
 
 let cleanup: Array<() => void | Promise<void>> = [];
 
+/** The world's identity record: `/work/app`, the lanes' project, dealt sequence 0. */
+const DEALT = { version: 1, next: 1, projects: [{ key: "/work/app", seq: 0 }] };
+
 /** The peer link's dialer: this world has one desktop awake, so nothing answers. */
 class Unreachable extends WebSocket {
   constructor(_url: string) {
@@ -449,6 +452,12 @@ beforeAll(async () => {
   // this runtime ran `today` and `late` (not `stranger`)
   writeRunRecord(dataDir, "today", NOW - 3 * HOUR - MIN, { title: "Split the invoice writer" });
   writeRunRecord(dataDir, "late", NOW - 51 * MIN);
+  // item 100 — `/work/app` was dealt its colour while its runs were live (a
+  // past is only read), so the lanes' `project.seq` is there to be cut:
+  // without it a peer's cut and a window's cannot be told apart
+  const identity = join(dataDir, ...LAYOUT.PROJECT_IDENTITY_FILE);
+  mkdirSync(dirname(identity), { recursive: true });
+  writeFileSync(identity, JSON.stringify(DEALT), { mode: 0o600 });
   const files = {
     sessions: join(dataDir, "sessions.json"),
     projects: join(dataDir, "projects.json"),
@@ -756,28 +765,42 @@ describe("agent.recordedLanes — the backend's lanes over the floor (B-D6 (a), 
       endedAt: NOW - 2 * HOUR,
       spans: [{ kind: "bounds", from: NOW - 3 * HOUR, to: NOW - 2 * HOUR }],
     });
-    // colour is read, never dealt: `/work/app` was never dealt here, so the
-    // lane wears the neutral ramp and the identity file stays unwritten
-    expect(today?.project).not.toHaveProperty("seq");
-    expect(existsSync(world.identityFile)).toBe(false);
+    // colour is read, never dealt: `/work/app` was dealt while its runs were
+    // live, so this desktop's window reads its sequence, and the ask writes no
+    // identity (the record is byte for byte the one the world wrote)
+    expect(today?.project.seq).toBe(0);
+    expect(readFileSync(world.identityFile, "utf8")).toBe(JSON.stringify(DEALT));
     // `self` is the reader's to say
     expect(today?.device).not.toHaveProperty("self");
     expect(today?.device.id).toBe(world.daemon.devices.currentDeviceId());
     expect(world.asked().filter((url) => url.includes("/timeline"))).toEqual([]);
   });
 
+  // Item 100: until the world dealt `/work/app`, no lane had a sequence to
+  // cut, and this row could not have failed.
   it("a peer reads no colour sequence (M16); a bad window is the caller's", async () => {
     const past = AgentRecordedLanesResult.parse(
       await world.peer.call("agent.recordedLanes", day()),
     );
     expect(past.ended.length).toBe(2);
     for (const lane of past.ended) expect(lane.project).not.toHaveProperty("seq");
+    expect(past.ended[0]?.project).toMatchObject({ name: "app" });
     const now = Date.now();
     const refused = await world.window.callErr("agent.recordedLanes", {
       sinceMs: now - DAY - 1,
       untilMs: now,
     });
     expect(refused.data?.kind).toBe("PRECONDITION_FAILED");
+  });
+
+  // Item 100: the cut was every kind's but a peer daemon's, so the phone
+  // read this desktop's deal.
+  it("a phone reads no colour sequence either: only this desktop's own callers read its deal (M16, SP-L4)", async () => {
+    const past = AgentRecordedLanesResult.parse(
+      await world.phone.call("agent.recordedLanes", day()),
+    );
+    expect(past.ended.length).toBe(2);
+    for (const lane of past.ended) expect(lane.project).not.toHaveProperty("seq");
   });
 });
 

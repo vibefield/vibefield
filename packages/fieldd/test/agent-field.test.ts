@@ -5,6 +5,7 @@ import {
   AgentFieldRow,
   type AgentListResult,
   type AgentSessionSummary,
+  type Principal,
 } from "@vibefield/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -22,7 +23,7 @@ import { managedSummary as summary } from "./agent-field-summary";
 // function the handler and the subscription forwarder both ask: every refusal,
 // and the asks that stand, by principal kind.
 describe("refuseBoardAsk — who may ask which board", () => {
-  const refused = (principal: string, ask: Parameters<typeof refuseBoardAsk>[1]) => {
+  const refused = (principal: Principal["kind"], ask: Parameters<typeof refuseBoardAsk>[1]) => {
     const error = refuseBoardAsk(principal, ask);
     return error === null
       ? null
@@ -45,7 +46,7 @@ describe("refuseBoardAsk — who may ask which board", () => {
     );
     expect(refused("local-token", { heartbeatMs: 1_000 })?.kind).toBe("PRECONDITION_FAILED");
     // …and a window, the shell and a plugin read it here as they always have
-    for (const principal of ["local-token", "shell-main", "plugin"])
+    for (const principal of ["local-token", "shell-main", "plugin"] as const)
       expect(refused(principal, {}), principal).toBeNull();
   });
 
@@ -90,7 +91,7 @@ describe("refuseBoardAsk — who may ask which board", () => {
   });
 
   it("lets the content-free field through for everyone who reaches the door", () => {
-    for (const principal of ["tailnet", "local-token", "peer-fieldd", "shell-main"]) {
+    for (const principal of ["tailnet", "local-token", "peer-fieldd", "shell-main"] as const) {
       expect(refused(principal, { projection: "field" }), principal).toBeNull();
       expect(
         refused(principal, { projection: "field", minIntervalMs: 250, heartbeatMs: 1_000 }),

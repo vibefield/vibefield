@@ -14,6 +14,9 @@ import {
   type AgentSessionSummary,
   type AgentSessionTerminal,
   type AgentSubscribeParams,
+  MONITOR_AUDIENCE,
+  type MonitorAudience,
+  type Principal,
   type MonitorAgentRow as WireMonitorRow,
 } from "@vibefield/contracts";
 import type { MonitorAgentRow, MonitorPastSnapshot } from "@vibefield/puppeteer-view-sdk/model";
@@ -51,6 +54,8 @@ export function malformedBoardAsk(): RpcCallError {
  *    for it, and the cadence options it cannot honour are refused (MF-1h);
  *  · `desk` carries content for this person's DESKTOPS — a window, or a self
  *    peer daemon relaying to one; a phone (`tailnet`) reads `field` (SP-L4);
+ *  · `model` is this desktop's own windows' (MV-D18, M16): only a caller whose
+ *    `MONITOR_AUDIENCE` is `window` asks it (item 100);
  *  · `scope: "mesh"` is this desktop's clients' aggregate: a peer reads a
  *    desktop's OWN board (DS-L4), and the mesh states each desktop's liveness
  *    itself, so `heartbeatMs` is refused there.
@@ -59,7 +64,10 @@ export function malformedBoardAsk(): RpcCallError {
  * null) out. Availability (the mesh board not built yet) is not a refusal and
  * stays with the handler.
  */
-export function refuseBoardAsk(principal: string, ask: AgentSubscribeParams): RpcCallError | null {
+export function refuseBoardAsk(
+  principal: Principal["kind"],
+  ask: AgentSubscribeParams,
+): RpcCallError | null {
   const projection = ask.projection ?? "full";
   const scope = ask.scope ?? "local";
   const { minIntervalMs, heartbeatMs } = ask;
@@ -99,13 +107,17 @@ export function refuseBoardAsk(principal: string, ask: AgentSubscribeParams): Rp
   // MV-3a (MV-D18, L8, M16) — the model board is THIS desktop's own windows':
   // it carries the colour sequences this desktop dealt and its bare terminals,
   // neither of which crosses the sync plane. A peer reads `desk`, a phone
-  // `field`; both are refused here as they are refused `full`.
-  if (projection === "model" && (principal === "peer-fieldd" || principal === "tailnet"))
+  // `field`. Item 100: who is a window is `MONITOR_AUDIENCE`'s, the one table
+  // the recorded lanes' cut reads too, so every kind that is not (an agent's
+  // MCP session, a plugin, a guest, a kind not yet written) is refused it.
+  if (projection === "model" && MONITOR_AUDIENCE[principal] !== "window")
     return new RpcCallError(
       "FORBIDDEN_SCOPE",
       principal === "tailnet"
         ? "the model projection is this desktop's windows'; a phone reads field (SP-L4)"
-        : "the model projection is this desktop's windows'; a peer reads desk (M16)",
+        : principal === "peer-fieldd"
+          ? "the model projection is this desktop's windows'; a peer reads desk (M16)"
+          : "the model projection is this desktop's windows'",
       false,
       { projection },
     );
@@ -471,10 +483,11 @@ export function windowMonitorRow(row: MonitorAgentRow): WireMonitorRow {
 /** TL — the backend's past (`readPast`) as `agent.recordedLanes` answers it,
  * cut as the model's rows are: `device.self` never travels, and a PEER reads
  * no colour sequence (M16 — desktop-local, it would collide with the reader's
- * own). The snapshot is the SDK's, field for field (the contract mirrors it). */
+ * own). The snapshot is the SDK's, field for field (the contract mirrors it).
+ * The door names the audience from `MONITOR_AUDIENCE` (item 100). */
 export function wireRecordedLanes(
   past: MonitorPastSnapshot,
-  audience: "window" | "peer",
+  audience: MonitorAudience,
 ): AgentRecordedLanesResult {
   const spans = (list: MonitorPastSnapshot["live"][number]["spans"]) =>
     list.map(({ kind, from, to }) => ({ kind, from, to }));
@@ -623,7 +636,7 @@ export function projectDeskRow(
   summary: AgentSessionSummary,
   chars: number = AGENT_FIELD.DESK_TEXT_CHARS,
   monitorRow?: MonitorAgentRow | undefined,
-  audience: "peer" | "window" = "peer",
+  audience: MonitorAudience = "peer",
 ): ProjectedFieldRow {
   // PJ-7 — the conversation id is the PHONE's (its History row's Jump to): a
   // window reads its own runs' ids from `local`, and no peer's desk asks one

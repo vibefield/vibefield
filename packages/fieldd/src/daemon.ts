@@ -98,6 +98,7 @@ import {
   LOG_STREAMS,
   METHODS,
   type MeshSyncPosture,
+  MONITOR_AUDIENCE,
   NATIVE_SUPERVISION,
   type NativeHealth,
   type NativeLastExit,
@@ -3748,8 +3749,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // lanes' past as the backend beside the runtime derives it from the record,
     // asked by a window only while a mounted view asks (PF6). Read through to
     // rosettad at each ask (the backend's history port) and held nowhere — not
-    // the removed `agent.history`. A peer reads it without colour sequences
-    // (M16), as it reads the model's rows.
+    // the removed `agent.history`. Only this desktop's own callers read the
+    // colour sequences (M16), as only they read the model's rows: the cut is
+    // `MONITOR_AUDIENCE`'s by the caller's kind. Item 100: it was every kind
+    // but a peer daemon's, so a phone read this desktop's deal.
     api.register("agent.recordedLanes", async (ctx, params) => {
       const parsed = AgentRecordedLanesParams.safeParse(params ?? {});
       if (!parsed.success)
@@ -3774,7 +3777,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           service: "agent.monitor",
           state: "no-record",
         });
-      return wireRecordedLanes(past, ctx.principal.kind === "peer-fieldd" ? "peer" : "window");
+      return wireRecordedLanes(past, MONITOR_AUDIENCE[ctx.principal.kind]);
     });
     // AR-5d — the usage column's feed (agent-usage.ts). Both doors answer the
     // PROJECTION and nothing else: percentages, labels, the provider's own

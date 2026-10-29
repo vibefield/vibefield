@@ -210,6 +210,18 @@ describe("who may ask the model board (MV-D18, M16, L8)", () => {
     ).toBe("PRECONDITION_FAILED");
   });
 
+  // Item 100: the gate named the two kinds it refused, so every other kind
+  // was served this desktop's deal.
+  it("is refused to every kind that is not this desktop's own caller: an agent's MCP session, a plugin, a guest", () => {
+    for (const principal of ["mcp-agent", "plugin", "tailnet-guest"] as const) {
+      expect(refuseBoardAsk(principal, ask("model"))?.kind, principal).toBe("FORBIDDEN_SCOPE");
+      expect(refuseBoardAsk(principal, ask("model", "mesh"))?.kind, principal).toBe(
+        "FORBIDDEN_SCOPE",
+      );
+    }
+    expect(refuseBoardAsk("shell-main", ask("model"))).toBeNull();
+  });
+
   it("a model hub asks its peers for their desk boards at the desk's floor", () => {
     expect(upstreamProjection("model")).toBe("desk");
     expect(upstreamProjection("desk")).toBe("desk");

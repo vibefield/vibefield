@@ -20,6 +20,7 @@ import {
   AgentProjection,
   AgentReportShownParams,
   AgentSubscribeParams,
+  MONITOR_AUDIENCE,
   MonitorAgentRow,
 } from "../src/agent-field";
 import { AGENT_FIELD } from "../src/registries";
@@ -552,5 +553,18 @@ describe("MV-3d — the chrome's facts ride this desktop's own rows of the model
       unknown
     >;
     expect(AgentModelDeskRow.parse(bare).local).toBeUndefined();
+  });
+});
+
+describe("item 100 — whose cut a caller reads, by its principal's kind (M16, SP-L4)", () => {
+  it("names every kind, and only this desktop's own callers read the window's whole row", () => {
+    // the typecheck holds the table to `Principal["kind"]`; this row holds what it says
+    expect(Object.keys(MONITOR_AUDIENCE)).toHaveLength(7);
+    const windows = Object.entries(MONITOR_AUDIENCE)
+      .filter(([, audience]) => audience === "window")
+      .map(([kind]) => kind);
+    expect(windows.sort()).toEqual(["local-token", "shell-main"]);
+    expect(MONITOR_AUDIENCE.tailnet).toBe("peer");
+    expect(MONITOR_AUDIENCE["peer-fieldd"]).toBe("peer");
   });
 });
