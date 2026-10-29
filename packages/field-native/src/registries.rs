@@ -124,7 +124,8 @@ pub mod orphan_bound {
 
 /// CP-1a — the floor's door: open doors at once, the bytes held while no fieldd is
 /// attached (per door and in all), the parent walk's links, a pane root's birth
-/// tolerance and the start's resolution. One authority with fieldd; see registries.ts.
+/// tolerance, the start's resolution and the longest line the bridge carries. One
+/// authority with fieldd; see registries.ts.
 pub mod native_door {
     pub const MAX_OPEN: u64 = 64;
     pub const HELD_BYTES_PER_DOOR: u64 = 262144;
@@ -132,6 +133,7 @@ pub mod native_door {
     pub const WALK_MAX_STEPS: u64 = 32;
     pub const ROOT_BIRTH_TOLERANCE_MS: u64 = 60000;
     pub const START_RESOLUTION_MS: u64 = 1000;
+    pub const LINE_MAX_BYTES: u64 = 8388608;
 }
 
 /// TPv3 (terminal-pipeline-v3 §5.1/§8; §20 item 5) — the pipeline's numbers:

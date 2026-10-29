@@ -903,7 +903,10 @@ export const ORPHAN_BOUND = {
  *  - WALK_MAX_STEPS — the parent links the floor follows from the caller to a pane's root process.
  *  - ROOT_BIRTH_TOLERANCE_MS — how far a pane's root process may have started from the pane's `createdAt` and still be
  *    its root (agent-gateway.ts's `SHELL_BIRTH_TOLERANCE_MS`; ghosttea stamps `createdAt` right after the spawn).
- *  - START_RESOLUTION_MS — the resolution two readings of one process's start are compared at (`sameStartSecond`). */
+ *  - START_RESOLUTION_MS — the resolution two readings of one process's start are compared at (`sameStartSecond`).
+ *  - LINE_MAX_BYTES — the longest line a door carries, its newline included: the bridge (`field-native door`) ends
+ *    with exit 4 on a longer one from its agent, and fieldd's line reader holds the same bound. The floor itself
+ *    carries bytes in chunks and splits no lines. */
 export const NATIVE_DOOR = {
   MAX_OPEN: 64,
   HELD_BYTES_PER_DOOR: 256 * 1024,
@@ -911,6 +914,7 @@ export const NATIVE_DOOR = {
   WALK_MAX_STEPS: 32,
   ROOT_BIRTH_TOLERANCE_MS: 60_000,
   START_RESOLUTION_MS: 1_000,
+  LINE_MAX_BYTES: 8 * 1024 * 1024,
 } as const;
 
 /** TPv3 — the terminal pipeline's numbers (terminal-pipeline-v3 §5.1, §8; §20

@@ -9,6 +9,8 @@ pub mod config;
 // doors, a revoke of every client); the file is regenerated, so the lint is answered here.
 #[allow(clippy::derivable_impls)]
 pub mod contracts;
+/// CP-1a — `field-native door --endpoint <path>`: the stdio bridge a spark's agent runs to the floor's door.
+pub mod door_bridge;
 pub mod endpoints;
 /// FW — the freeway host's library (`field-freeway-host`): the link's frame codec first.
 pub mod freeway;

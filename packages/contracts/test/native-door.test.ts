@@ -89,4 +89,8 @@ describe("CP-1a — the floor's door", () => {
       NATIVE_DOOR.MAX_OPEN * NATIVE_DOOR.HELD_BYTES_PER_DOOR,
     );
   });
+
+  it("bounds a line on both line readers, the bridge's and fieldd's", () => {
+    expect(NATIVE_DOOR.LINE_MAX_BYTES).toBe(8 * 1024 * 1024);
+  });
 });
