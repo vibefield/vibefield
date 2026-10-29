@@ -76,6 +76,14 @@ other domains keep their default ATS requirements. The same reasoning is the
 exception's justification for App Store review. See
 [Apple's ATS exception guidance](https://developer.apple.com/documentation/security/preventing-insecure-network-connections).
 
+**Host prerequisite — the Metal Toolchain.** `GhostteaTerminal`'s Metal build-tool plugin (below) and the
+kit's own shaders run `xcrun metal`, which recent Xcodes ship as a separately downloaded component. A host
+without it fails the first build in seconds, before any Swift compiles:
+`error: cannot execute tool 'metal' due to missing Metal Toolchain; use: xcodebuild -downloadComponent MetalToolchain`.
+Probe a new host with `xcrun metal --version` before arming a kit run there; the download is a system change on
+that machine, its owner's to make. *(TS-7a's spike found it on the Mac mini's Xcode 27.1, 2026-10-29 — the
+class of desk-gates row 30's 2026-10-23 finding: a host prerequisite nobody probed.)*
+
 This machine's `xcode-select` points at CommandLineTools, so every invocation
 passes `DEVELOPER_DIR` (the Ghosttea convention). Since IOS-3 the tree also
 links `GhostteaTerminal`, which ships a Metal build-tool plugin — SwiftPM asks
