@@ -18,6 +18,10 @@
 //             (`__vfDesk.held()`), the object staying in hand and the tools under the head;
 //   MISSING — the clock's plugin off, its missing face copied: a picture card titled by its type's name ("Clock");
 //   COUNTERS — the bar's placements ≤ the anchor's publishes through all of it;
+//   DROP    — a card let go on the desk's clear ground is placed THERE as a note of its words (HN-D7; LC-17): dealt and
+//             played through the hand's lab door (`__vfCards.deal`, `playAt` — the place a drop finds at a point, as
+//             the drag finds it; page calls only, no pointer of the system's), the note under the point after, said
+//             "Placed as a note" on the line, then let go of (a play leaves it selected);
 //   EMPTIED — the hand emptied through its lab door (`__vfCards.clear()`, field-app frame/cards/cards-lab.ts): the rows
 //             after these predate any chrome at the window's foot, and a pointer in the reach band lifts a card.
 // These rows hold the act; the hand's own DOM is smoke:godview's (⇧⌘V raising it over a focused pane, `chordHand`, and
@@ -230,6 +234,25 @@ export function copiedToMain(
 ): boolean | null {
   return copies === undefined ? null : copies.slice(from).includes(words);
 }
+
+/** What a play through the hand's lab door came to (field-app's `CardsLabPlay`), as it crosses back. */
+interface LabPlaySeen {
+  readonly at: { readonly x: number; readonly y: number } | null;
+  readonly target: string | null;
+  readonly answer: { readonly ok: boolean; readonly label: string } | null;
+  readonly played: { readonly ok: boolean; readonly note: string } | null;
+  readonly refused: string | null;
+}
+
+/** A clear point of the desk: the window's, and the desk's own (what `pick` reads). */
+interface GroundSeen {
+  readonly x: number;
+  readonly y: number;
+  readonly local: { readonly x: number; readonly y: number };
+}
+
+/** The words of DROP's card — its note must carry exactly these. */
+export const DROP_WORDS = "Dropped on the desk: a card's words, placed as a note.";
 
 /** HN-3's rows (above). Returns the problems, each in words. */
 export async function deskCopyRows(d: CopyRowsDriver): Promise<string[]> {
@@ -594,6 +617,60 @@ export async function deskCopyRows(d: CopyRowsDriver): Promise<string[]> {
   const counters1 = await js<BarCounters>("globalThis.__vfDesk.bar()");
   problems.push(...judgeCounters(counters0, counters1).map((p) => `COUNTERS: ${p}`));
   say(`SMOKE_CANVAS_COPY_COUNTERS ${JSON.stringify({ before: counters0, after: counters1 })}`);
+
+  // ── DROP: a card let go on the desk's clear ground, placed there as a note (HN-D7, LC-17) ───────────────────────
+  {
+    const row = (p: string): string => `DROP: ${p}`;
+    const dealt = await js<string | null>(
+      `globalThis.__vfCards?.deal(${JSON.stringify(DROP_WORDS)}) ?? null`,
+    );
+    // clear ground, found as `deselect` finds the mat, clear of the head above and of the line and
+    // the hand below; `local` is the desk's own point, which its pick reads
+    const ground = await js<GroundSeen | null>(`(() => {
+      const d = globalThis.__vfDesk; const el = document.querySelector("[data-desk]");
+      if (d === undefined || el === null) return null;
+      const r = el.getBoundingClientRect();
+      for (let y = 160; y < r.height - 260; y += 24) for (let x = 120; x < r.width - 120; x += 24) {
+        if (d.pick({ x, y }) !== null) continue;
+        const under = document.elementFromPoint(r.left + x, r.top + y);
+        if (under !== null && el.contains(under)) return { x: r.left + x, y: r.top + y, local: { x, y } };
+      }
+      return null;
+    })()`);
+    if (dealt === null) {
+      problems.push(row("no lab door (window.__vfCards) dealt the card"));
+    } else if (ground === null) {
+      problems.push(row("no clear ground on the desk to let the card go on"));
+    } else {
+      const notes = `globalThis.__vfDesk.objects("desk.note")`;
+      const before = await js<number>(`${notes}.length`);
+      const play = await js<LabPlaySeen>(`globalThis.__vfCards.playAt(${ground.x}, ${ground.y})`);
+      if (play.target !== "desk" || play.played?.ok !== true) {
+        problems.push(row(`the desk did not take the card there (${JSON.stringify(play)})`));
+      } else {
+        if (play.played.note !== "Placed as a note") {
+          problems.push(
+            row(`the line said ${JSON.stringify(play.played.note)}, not "Placed as a note"`),
+          );
+        }
+        await until("the card's note placed", 5_000, `${notes}.length === ${before + 1}`);
+        const note = await js<{ entity: number } | null>(
+          `${notes}.find((o) => o.props.text === ${JSON.stringify(DROP_WORDS)}) ?? null`,
+        );
+        const under = await js<{ entity: number; type: string } | null>(
+          `globalThis.__vfDesk.pick(${JSON.stringify(ground.local)})`,
+        );
+        if (note === null) problems.push(row("no note carries the card's words"));
+        else if (under?.entity !== note.entity) {
+          problems.push(
+            row(`the note is not where the card was let go (${JSON.stringify(under)})`),
+          );
+        }
+      }
+      say(`SMOKE_CANVAS_CARD_DROP ${JSON.stringify({ at: ground, play })}`);
+      await deselect();
+    }
+  }
 
   // ── EMPTIED: the hand emptied, so no card at the foot lifts into the rows after these ───────────────────────────
   const emptied = await js<number | null>("globalThis.__vfCards?.clear() ?? null");
