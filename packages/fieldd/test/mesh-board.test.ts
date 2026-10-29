@@ -759,3 +759,61 @@ describe("PG-1b — the relay reads each row's key alone (PG-L4.1)", () => {
     r2.dispose();
   });
 });
+
+describe("PG-1c — a reader's current open, the door's resync for a phone behind its cap", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(Date.parse("2026-09-30T21:00:00.000Z"));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it("is the open a reader joining now gets, at the owners' revisions, and the next frame chains from it (DS-L2)", async () => {
+    const h = harness([selfRow, desktop("dev-b")]);
+    const r = reader(h);
+    const [attach] = h.upstreams.attaches;
+    if (attach === undefined) throw new Error("no upstream");
+    h.upstreams.answer(attach, peerSnapshot());
+    await tick();
+    attach.emit(
+      {
+        epoch: "boot-dev-b.3",
+        since: 41,
+        revision: 42,
+        upserts: [{ ...row("run-b", "dev-b", 8), status: "blocked" }],
+        removed: [],
+      },
+      "delta",
+    );
+    h.local.emit?.({ since: 1, revision: 2, upserts: [row("run-here", SELF, 2)], removed: [] });
+    const asked = h.upstreams.attaches.length;
+
+    const current = r.current();
+    const late = reader(h);
+    expect(current).toEqual(late.open);
+    // each owner's own epoch and revision, nothing renumbered, no owner re-asked
+    expect(
+      current.devices.map((entry) => [
+        entry.device,
+        entry.snapshot?.epoch,
+        entry.snapshot?.revision,
+      ]),
+    ).toEqual([
+      [SELF, "self-boot.1", 2],
+      ["dev-b", "boot-dev-b.3", 42],
+    ]);
+    expect(h.upstreams.attaches).toHaveLength(asked);
+
+    // the owner's next frame continues from the current open's revision
+    const next = {
+      epoch: "boot-dev-b.3",
+      since: 42,
+      revision: 43,
+      upserts: [row("run-b", "dev-b", 9)],
+      removed: [],
+    };
+    attach.emit(next, "delta");
+    expect(r.frames.at(-1)).toEqual({ device: "dev-b", delta: next });
+    late.dispose();
+    r.dispose();
+  });
+});

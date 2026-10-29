@@ -243,6 +243,14 @@ const REFUSALS = new Set(["INCOMPATIBLE", "FORBIDDEN_SCOPE", "PRECONDITION_FAILE
 
 type Member = (frame: MeshBoardFrame) => void;
 
+/** A reader of the mesh board: its open, the open a reader joining now would
+ * get (PG-1c's resync), and its leaving. */
+export interface MeshBoardReader {
+  readonly open: MeshBoardOpen;
+  readonly current: () => MeshBoardOpen;
+  readonly dispose: () => void;
+}
+
 /** Each desktop's LAST board at one projection, beyond any one hub's life
  * (DS-L8): a reader who arrives after the last one left — Godview reopened
  * while a laptop sleeps — is still answered with that desktop's board, greyed
@@ -297,12 +305,17 @@ class BoardHub {
 
   /** A reader joins: it is answered with every device as the hub holds it,
    * and hears every later frame. */
-  join(member: Member): { open: MeshBoardOpen; dispose: () => void } {
+  join(member: Member): MeshBoardReader {
     const open = this.#openAnswer();
     this.#members.add(member);
     let left = false;
     return {
       open,
+      // PG-1c — the hub applies each frame and broadcasts it in one call, so
+      // this equals the state after the last frame the member was sent, and
+      // the next frame chains from it: owners' epochs and revisions as held,
+      // no owner re-asked (DS-L2)
+      current: () => this.#openAnswer(),
       dispose: () => {
         if (left) return;
         left = true;
@@ -666,7 +679,7 @@ export class MeshBoard {
     projection: BoardProjection,
     minIntervalMs: number,
     emit: (frame: MeshBoardFrame) => void,
-  ): { open: MeshBoardOpen; dispose: () => void } {
+  ): MeshBoardReader {
     if (this.#disposed)
       throw new RpcCallError("UNAVAILABLE", "the mesh board is stopping", true, {
         service: "mesh-board",

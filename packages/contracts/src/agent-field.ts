@@ -499,7 +499,13 @@ export type AgentBoardKeyDelta = z.infer<typeof AgentBoardKeyDelta>;
  * numbered them. A `desk` board's rows are `AgentDeskRow`s, which parse here
  * as field rows with the rest passed through. The ANSWERING desktop is listed
  * first — always present, always `live` — so a reader without a roster still
- * knows which board is its own. */
+ * knows which board is its own.
+ *
+ * The same open also arrives MID-STREAM as the subscription's `.snapshot`: the
+ * client's own replay after a reconnect, and the door's resync of a phone that
+ * fell behind its cap (PG-1c, `PRODUCT_API_LIMITS.TAILNET_QUEUED_BYTES`). The
+ * reader replaces its whole board, each device at its owner's `{epoch,
+ * revision}`, and the next delta continues from there. */
 export const AgentMeshOpen = meshRowsOpen(AgentFieldRow);
 /** One device's entry in the open. Written out rather than inferred: the
  * passthrough inference gives every arm a string index signature, and a

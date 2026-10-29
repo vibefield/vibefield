@@ -3672,12 +3672,14 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
               service: "mesh-board",
               state: "starting",
             });
-          // `.snapshot` carries the whole mesh (the open, and the client's own
-          // replay after a reconnect); `.delta` carries every per-device frame —
-          // a device's delta, a device's reset, a device's state.
+          // `.snapshot` carries the whole mesh (the open, the client's own
+          // replay after a reconnect, and the door's resync of a phone behind
+          // its cap, PG-1c); `.delta` carries every per-device frame — a
+          // device's delta, a device's reset, a device's state.
           const reader = meshBoard.open(projection, floor, (frame) => emit(frame, "delta"));
           return {
             snapshot: reader.open,
+            resync: () => emit(reader.current(), "snapshot"),
             dispose: () => {
               reader.dispose();
               screen?.();

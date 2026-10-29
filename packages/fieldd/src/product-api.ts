@@ -62,6 +62,9 @@ const WS_OPEN = 1;
 const PRODUCT_WS_MAX_INBOUND_BYTES = PRODUCT_API_LIMITS.WS_MAX_INBOUND_BYTES;
 const PRODUCT_WS_MAX_OUTBOUND_BYTES = MESH_CONTROL_LIMITS.PRODUCT_FRAME_BYTES;
 const PRODUCT_WS_MAX_BUFFERED_BYTES = MESH_CONTROL_LIMITS.PRODUCT_QUEUED_BYTES;
+// PG-1c — a phone's subscription that can resync is held past this, and
+// re-snapshotted once its queue drains to half of it
+const TAILNET_QUEUED_BYTES = PRODUCT_API_LIMITS.TAILNET_QUEUED_BYTES;
 const SOURCE_LOCAL_ARTIFACT_METHODS = new Set([
   "artifact.publish",
   "artifact.update",
@@ -79,6 +82,20 @@ export interface SubscriptionInstall {
   /** Called only after ProductAPI installed disposal and sent the subscribe reply. Producers use
    * this to flush events that raced registration without delivering a delta before its subId. */
   readonly start?: () => void;
+  /** PG-1c — re-emit this subscriber's whole current value as ONE `snapshot`
+   * frame, synchronously through the same emit, so the next delta chains from
+   * it. A producer that declares it lets the door stop sending a phone's
+   * deltas once that connection's queue reaches `TAILNET_QUEUED_BYTES`, and
+   * re-snapshot it when the queue drains to half; without it the subscription
+   * keeps the 128 MiB shed. */
+  readonly resync?: () => void;
+}
+
+/** PG-1c — a phone's subscription that can resync: its deltas stop while it is
+ * `behind`, and its producer's resync answers the drain. */
+interface Hold {
+  behind: boolean;
+  readonly resync: () => void;
 }
 
 export type SubscriptionHandler = (
@@ -227,6 +244,8 @@ export class ProductApi extends EventEmitter {
   private readonly shellProvider = new ShellProviderBroker();
   /** live authed connections — the §15.4 revocation path closes by principal */
   private readonly liveConns = new Set<{ ws: WebSocket; state: ConnState }>();
+  /** PG-1c — per connection, its phone subscriptions that can resync */
+  private readonly holds = new WeakMap<WebSocket, Map<string, Hold>>();
 
   /** §15.4 — sever every connection whose principal IS this plugin: leases are
    * already revoked by the caller, so a reconnect dies at hello; live subs die
@@ -600,6 +619,7 @@ export class ProductApi extends EventEmitter {
       this.shellProvider.withdraw(state.shellTransport);
       for (const dispose of state.subs.values()) dispose();
       state.subs.clear();
+      this.holds.delete(ws);
       this.opts.onConnectionClosed?.(state.connectionId);
     });
   }
@@ -1259,17 +1279,40 @@ export class ProductApi extends EventEmitter {
       const subId = `ps-${this.nextSubId++}`;
       const base = method.replace(/\.subscribe$/, "");
       let active = true;
+      let hold: Hold | null = null;
       const emit = (payload: unknown, kind: "delta" | "snapshot" = "delta") => {
-        if (active && ws.readyState === WS_OPEN)
-          this.sendBounded(ws, {
-            jsonrpc: "2.0",
-            method: `${base}.${kind}`,
-            params: { subId, payload },
-          });
+        if (!active || ws.readyState !== WS_OPEN) return;
+        // PG-1c — a phone behind the cap misses deltas, never a snapshot (one
+        // restates everything, and a paged run stays whole). The hold sticks
+        // until the drain's resync, so the phone's chain never breaks.
+        if (hold !== null && kind === "delta") {
+          if (hold.behind) return;
+          if (ws.bufferedAmount >= TAILNET_QUEUED_BYTES) {
+            hold.behind = true;
+            return;
+          }
+        }
+        this.sendBounded(ws, {
+          jsonrpc: "2.0",
+          method: `${base}.${kind}`,
+          params: { subId, payload },
+        });
       };
-      const { snapshot, dispose, start } = await subHandler(ctx, params, emit);
+      const { snapshot, dispose, start, resync } = await subHandler(ctx, params, emit);
+      // the phone alone (the `tailnet` principal, as `tailnet-rows.ts` bounds
+      // it): a peer daemon on the same door keeps the shed and its heartbeats
+      if (resync !== undefined && ctx.principal.kind === "tailnet") {
+        hold = { behind: false, resync };
+        let held = this.holds.get(ws);
+        if (held === undefined) {
+          held = new Map();
+          this.holds.set(ws, held);
+        }
+        held.set(subId, hold);
+      }
       state.subs.set(subId, () => {
         active = false;
+        this.holds.get(ws)?.delete(subId);
         dispose();
       });
       reply({ jsonrpc: "2.0", id, result: { subId, snapshot } });
@@ -1359,8 +1402,33 @@ export class ProductApi extends EventEmitter {
     }
     ws.send(encoded, (error) => {
       if (error) ws.terminate();
+      else this.drained(ws);
     });
     return true;
+  }
+
+  /** PG-1c — after each write. A held connection always has writes pending, so
+   * its last one lands here: once the queue is at half the cap, each
+   * subscription held behind it is re-snapshotted, one at a time, because a
+   * resync's own bytes may fill the queue again (the rest wait for the next
+   * write). The hold clears before the resync, whose snapshot is the chain's
+   * new head. */
+  private drained(ws: WebSocket): void {
+    const held = this.holds.get(ws);
+    if (held === undefined) return;
+    for (const hold of held.values()) {
+      if (ws.bufferedAmount > TAILNET_QUEUED_BYTES / 2) return;
+      if (!hold.behind) continue;
+      hold.behind = false;
+      try {
+        hold.resync();
+      } catch {
+        // a producer that cannot restate its value leaves the phone a gap it
+        // cannot see: the connection goes, and the redial opens fresh
+        ws.terminate();
+        return;
+      }
+    }
   }
 
   /** EL7 — a connection's subscription budget. A subscription is recurring WORK
