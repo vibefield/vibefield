@@ -220,6 +220,10 @@ describe("the fan at rest and the reach (HN: Holding them)", () => {
     expect(lift).not.toContain("transform");
   });
 
+  it("breaks a text card's words anywhere, so a copied path never runs off the card's edge", () => {
+    expect(rule(".vf-card-words")).toContain("overflow-wrap: anywhere;");
+  });
+
   it("steps out of the pegboard's way at once and keeps the gloss still under reduced motion (M6)", () => {
     expect(rule('.vf-cards[data-motion="reduced"]')).toContain("transition: none;");
     // the tuck's rule weighs the same, so the reduced one must come after it to win

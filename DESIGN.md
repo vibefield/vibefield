@@ -1183,8 +1183,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     held no words, picture or file". More than twelve at once bring in the first twelve and say so —
     "12 of 20 brought in — the hand holds twelve" (LC-23). What another app brings in is bounded as
     the frame's own roads are (LC-24): words past what one paste reads (`SHELL_CLIPBOARD.READ_MAX_BYTES`)
-    and a picture past the still's cap are not brought in — "Not brought in — the words hold 30 MB; a
-    card holds at most 4.1 MB". A field that takes the drop shows its own caret: over it the carried
+    are not brought in — "Not brought in — the words hold 30 MB; a card holds at most 4.1 MB" — and a
+    picture past the still's cap comes in as its file, its path and never its pixels (a 200 MB image
+    dropped on a pane pastes its path). A field that takes the drop shows its own caret: over it the carried
     card ducks as it does over the line (LC-25). **Twelve**
     (HN-D8): the thirteenth pushes the oldest off the left end. **This window's session** (HN-D9):
     closing the window or quitting empties the hand; nothing of it is written anywhere.
