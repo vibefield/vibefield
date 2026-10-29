@@ -625,6 +625,33 @@
   font-weight: 700;
 }
 
+/* TS-4b — the approval line's second line, the phone's, in the muted ink. */
+.vf-monitor-moment-line {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+/* × holds the close glyph, square. */
+.vf-monitor-moment-act[data-act="dismiss"] {
+  display: inline-grid;
+  place-items: center;
+  padding: 2px 4px;
+}
+
+/* × sends the line back the way it came (M4): it came by a fade, so it leaves by
+   one, 180ms on ease (§6, the retract's fade). */
+.vf-monitor-moment[data-leaving] {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vf-monitor-moment[data-leaving] {
+    transition: none;
+  }
+}
+
 .vf-monitor-moment-acts {
   display: flex;
   gap: 4px;

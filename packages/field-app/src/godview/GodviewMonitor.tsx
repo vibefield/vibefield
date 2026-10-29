@@ -53,6 +53,7 @@ import { type ChromeRun, NO_RUNS, useChromeKey } from "./monitor/chrome-facts";
 import { choiceNote, type DeviceChoice } from "./monitor/device-filter";
 import { useMonitorFeed } from "./monitor/GodviewAgentsProvider";
 import { setMonitorHoldsKeys } from "./monitor/launcher-keys";
+import { MonitorMomentRowsContext } from "./monitor/moment-rows";
 import { useMonitorHistory } from "./monitor/monitor-history";
 import { openEndedLane } from "./monitor/open-ended-lane";
 import { chosenProfile, showsProfileTabs } from "./monitor/profile-tabs";
@@ -318,12 +319,14 @@ export interface GodviewMonitorProps {
    * curtain over it is the window's one question. The head stays live. */
   still?: boolean;
   /** AO-6b — a moment VibeField says once on its claims strip, after the
-   * counts: the limit moment (`LimitMoment.tsx`), the overlay's controller in
-   * the product and the shipping card in the catalog. Its own boundary, solid
-   * to the swarm as the strip is, and lent the stage's account facts
+   * counts: the limit moment (`LimitMoment.tsx`) and, since TS-4b, the approval
+   * line behind it (`ClaimsStripMoment.tsx`), the overlay's controller in the
+   * product and the shipping card in the catalog. Its own boundary, solid to
+   * the swarm as the strip is, and lent the stage's account facts
    * (`MonitorAccountFacts`: the profile filter's sets, the usage column's
-   * rows), so it opens no feed of its own. Withheld while the stage is still:
-   * the curtain is the window's one question. */
+   * rows) and its rows (`MonitorMomentRowsContext`), so it opens no feed of its
+   * own. Withheld while the stage is still: the curtain is the window's one
+   * question. */
   moment?: ReactNode;
   /** TS-4 (TS-D7) — this Mac is not connected (its owner reads the link: the
    * overlay's `useOffersConnect`): the desktop filter is offered on This Mac
@@ -982,7 +985,9 @@ export function GodviewMonitor({
           </span>
           {still || moment === undefined || moment === null ? null : (
             <MonitorAccountFactsContext.Provider value={accountFacts}>
-              <ChromeBoundary name="Moment">{moment}</ChromeBoundary>
+              <MonitorMomentRowsContext.Provider value={agents}>
+                <ChromeBoundary name="Moment">{moment}</ChromeBoundary>
+              </MonitorMomentRowsContext.Provider>
             </MonitorAccountFactsContext.Provider>
           )}
         </div>

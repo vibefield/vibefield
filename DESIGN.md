@@ -1419,6 +1419,28 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     while not connected: "Suggest connecting where it helps" / "At most once a day, and each place
     once a month." (*draft words, James's to rule*). The approval line is TS-4b; whether the switch
     stops the rows too is TS-D19's, and Publish's choice TS-D21's (both open).
+  - **Erratum** (*2026-10-29, TS-4b's code read*): "on Godview's agent row" above names a host
+    VibeField does not own. Godview's agent rows are drawn by puppeteer's views, and the views SDK
+    lends its host no place on a row. The approval line's words and rules stand; where it sits is
+    TS-D20b's, James's (VF-PM's board, `rule-ts-d20b-host`): the claims strip, in the limit moment's
+    chrome and after it (the lean), a views-SDK seam (an upstream ask and an EL8 event), or the
+    deck's pane frame.
+  - **Ruled** (*2026-10-29, James, "go with your lean": TS-D19, TS-D20b and TS-D21, each A*). Three
+    lines above now read otherwise. **The switch** (TS-D19) stops the nudges, the away notice and the
+    approval line, and not the rows: "one switch … stops them all" means every nudge, and the rows
+    stand, since they are where the door is found once the nudges are off. **The approval line**
+    (TS-D20b) sits on the claims strip, not on the agent's row. **Publish's choice of where to open**
+    (TS-D21) is deferred: only the browser plugin publishes today, always on this Mac, and nothing
+    asks where to open, so the nudge has nowhere to sit until a Publish offers that choice.
+  - **As built** (*TS-4b, 2026-10-29*): the approval line is a moment on the claims strip, in the
+    limit moment's chrome — the agent's own mark and its project, "It waited 14m for you." (minutes,
+    then hours and minutes), "Your phone can show and answer requests like this one." in the muted
+    ink, **Connect your devices** (`open-connect`) and × (*Not now*, which writes nothing more). It
+    is said as an approval that an agent of this Mac's waited on more than ten minutes clears, timed
+    by the backend's own clocks; the strip watches only while Godview is open, and a wait it never
+    saw waiting says nothing. The strip says one moment at a time, the limit moment first: a wait
+    that clears while the limit moment shows is not said, and a line said stands aside while it
+    shows. The line stands until ×, its act, the agent's next state, or the link landing.
 - **Finish setting up** (track AO, AO-D10 and AO-D12 ruled 2026-10-27; AO-L6): a step skipped in the
   Setup Assistant stays findable and never asks. At the head of Settings, under the account card, one
   tile lists what was skipped, each as a row with its glyph and its one line — "Bring in your past

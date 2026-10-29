@@ -1,5 +1,7 @@
 import { type ReactElement, useMemo } from "react";
+import { ApprovalWaitCard } from "../../godview/ApprovalWaitMoment";
 import { LimitMomentCard } from "../../godview/LimitMoment";
+import { FIXTURE_APPROVAL_WAIT } from "../approval-wait-fixtures";
 import { Section, Specimen } from "../catalog-ui";
 import { GodviewPreview } from "../GodviewPreview";
 import { meshBoardDoor } from "../godview-mesh-fixtures";
@@ -92,6 +94,28 @@ export function GodviewSection({ dark = false }: { dark?: boolean } = {}): React
                   fact={FIXTURE_LIMIT_MOMENT}
                   onAddProfile={() => undefined}
                   onNotNow={() => undefined}
+                />
+              )
+            }
+          />
+        </div>
+      </Specimen>
+      <Specimen
+        title="The approval line — once, on the claims strip: an approval that waited more than ten minutes, as it clears, while this Mac is not connected (TS-4b)"
+        source="godview/ApprovalWaitMoment.tsx"
+        bleed
+      >
+        <div data-godview-approval-wait-catalog="">
+          <GodviewPreview
+            door={profilesDoor}
+            theme={theme}
+            moment={
+              // the shipping card over the shipping watch's fixture; a catalog acts on no one
+              FIXTURE_APPROVAL_WAIT === null ? null : (
+                <ApprovalWaitCard
+                  fact={FIXTURE_APPROVAL_WAIT}
+                  onConnect={() => undefined}
+                  onDismiss={() => undefined}
                 />
               )
             }

@@ -199,6 +199,18 @@ export const CONNECT_ROW_LABEL = "Connect your devices…";
  * your other devices would be, and its one act. */
 export const GHOST_ROW_LABEL = "Your other devices";
 export const GHOST_ROW_ACT = "Connect…";
+/** TS-4b (TS-D20, ruled A 2026-10-29) — the line after an approval that waited
+ * more than ten minutes, said as the wait clears (the plate's words, §06). */
+export const APPROVAL_WAIT_LINE = "Your phone can show and answer requests like this one.";
+export const APPROVAL_WAIT_ACT = "Connect your devices";
+export const APPROVAL_WAIT_DISMISS = "Not now";
+
+/** "It waited 14m for you." — whole minutes, and hours past the first. */
+export function approvalWaited(waitedMs: number): string {
+  const minutes = Math.max(0, Math.floor(waitedMs / 60_000));
+  const span = minutes < 60 ? `${minutes}m` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+  return `It waited ${span} for you.`;
+}
 
 /** This desktop in its own platform's words (DESIGN.md §9: "This Mac", "This PC"
  * on Windows; never "This desktop"). */
