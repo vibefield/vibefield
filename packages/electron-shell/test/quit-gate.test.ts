@@ -264,6 +264,90 @@ describe("the quit gate (AL-3)", () => {
   });
 });
 
+// AU-5 (AU-D9 A; LC-24, LC-25, LC-36) — the consent box's last line, only while main will install the ready update as
+// the quit ends. Main decides (`installLine`: null with nothing staged, updates off, a policy that asks first or a move
+// waiting); the gate reads it only for a person's quit whose census box shows.
+describe("AU-5 — the quit box says a ready update installs as you quit", () => {
+  const LINE = "The Oct 28 nightly installs as you quit.";
+
+  function withLine(h: ReturnType<typeof port>, line: string | null) {
+    const installLine = vi.fn(() => line);
+    return { gate: createQuitGate({ ...h.value, installLine }), installLine };
+  }
+
+  it("census > 0: the line is the detail's LAST, after the sessions, and the box keeps its two buttons", async () => {
+    const p = pair("Me", [{ known: true, sessions: [session("a", "zsh", "~/p")] }]);
+    const h = port([p.value], [yes]);
+    const { gate } = withLine(h, LINE);
+    expect(await gate.decide({ unattended: false })).toBe("proceed");
+    expect(h.boxes[0]?.detail.split("\n")).toEqual([
+      "Quitting stops the terminal service, which ends:",
+      "zsh — ~/p",
+      LINE,
+    ]);
+    expect(h.boxes[0]?.message).toBe("Quit VibeField and end 1 terminal session?");
+    expect(h.boxes[0]?.buttons).toEqual(["Cancel", "Quit and end 1 session"]);
+  });
+
+  it("main says nothing installs (null): the box is the AL-3 box, word for word", async () => {
+    const p = pair("Me", [{ known: true, sessions: [session("a", "zsh", "~/p")] }]);
+    const h = port([p.value], [yes]);
+    const { gate, installLine } = withLine(h, null);
+    await gate.decide({ unattended: false });
+    expect(installLine).toHaveBeenCalled();
+    expect(h.boxes).toEqual([quitConsentBox([session("a", "zsh", "~/p")])]);
+  });
+
+  it("never on the unknown-census box: an unknown census leaves a pair running, so nothing installs", async () => {
+    const p = pair("Me", [{ known: false }]);
+    const h = port([p.value], [yes]);
+    const { gate, installLine } = withLine(h, LINE);
+    await gate.decide({ unattended: false });
+    expect(h.boxes).toEqual([unknownCensusBox()]);
+    expect(installLine).not.toHaveBeenCalled();
+  });
+
+  it("never read on a logout (it never asks), at census 0 (no box), or with the box turned off", async () => {
+    const logout = pair("Me", [{ known: true, sessions: [session("a")] }]);
+    const h1 = port([logout.value]);
+    const one = withLine(h1, LINE);
+    await one.gate.decide({ unattended: true });
+    expect(h1.boxes).toEqual([]);
+    expect(one.installLine).not.toHaveBeenCalled();
+
+    const empty = pair("Me", [{ known: true, sessions: [] }]);
+    const h2 = port([empty.value]);
+    const two = withLine(h2, LINE);
+    expect(await two.gate.decide({ unattended: false })).toBe("proceed");
+    expect(h2.boxes).toEqual([]);
+    expect(two.installLine).not.toHaveBeenCalled();
+
+    const quiet = pair("Me", [{ known: true, sessions: [session("a")] }]);
+    const h3 = port([quiet.value], [], false);
+    const three = withLine(h3, LINE);
+    expect(await three.gate.decide({ unattended: false })).toBe("proceed");
+    expect(h3.boxes).toEqual([]);
+    expect(three.installLine).not.toHaveBeenCalled();
+  });
+
+  it("the second box (a session born during the quit) asks about the sessions only", async () => {
+    const p = pair(
+      "Me",
+      [
+        { known: true, sessions: [session("a")] },
+        { known: true, sessions: [session("a"), session("b", "new")] },
+      ],
+      [{ ok: false, reason: "the live sessions differ", live: ["a", "b"] }, { ok: true }],
+    );
+    const h = port([p.value], [yes, yes]);
+    const { gate } = withLine(h, LINE);
+    await gate.decide({ unattended: false });
+    expect(h.boxes[0]?.detail.split("\n").at(-1)).toBe(LINE);
+    expect(await gate.stop()).toEqual({ kind: "done", complete: true, ended: 2 });
+    expect(h.boxes[1]?.detail).not.toContain(LINE);
+  });
+});
+
 describe("the consent box's words (DESIGN.md §9)", () => {
   it("lists five sessions, then counts the rest, and an untitled one says so", () => {
     const box = quitConsentBox(
@@ -282,5 +366,15 @@ describe("the consent box's words (DESIGN.md §9)", () => {
     expect(box.buttons).toEqual(["Cancel", "Quit and end 7 sessions"]);
     expect(box.cancelId).toBe(0);
     expect(box.suppressible).toBe(true);
+  });
+
+  it("AU-5 — the ready update's sentence comes after the count, as the detail's last line (LC-36)", () => {
+    const sessions = Array.from({ length: 6 }, (_, i) => session(`s${i}`, `t${i}`));
+    const box = quitConsentBox(sessions, { installs: "VibeField 0.2.0 installs as you quit." });
+    expect(box.detail.split("\n").slice(-2)).toEqual([
+      "and 1 more",
+      "VibeField 0.2.0 installs as you quit.",
+    ]);
+    expect(box.buttons).toEqual(["Cancel", "Quit and end 6 sessions"]);
   });
 });

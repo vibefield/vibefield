@@ -20,7 +20,8 @@ const QUIT_SIGNALS = ["SIGINT", "SIGTERM", "SIGHUP"] as const;
  * SIGINT and SIGHUP into an ordinary `app.quit()` (before-quit → will-quit → quit), so a production shell with no
  * handler of ours met the census gate on a signal exactly as on a person's ⌘Q, and stopped the pairs. A signal is
  * never a person's quit (ESR §7.3 as amended): the caller marks the quit as the shell's own (`leavePairsOnQuit`)
- * before it quits, so the gate is skipped and the pairs are left for whoever owns them next.
+ * before it quits, so the gate is skipped and the pairs are left for whoever owns them next. AU-5: and nothing installs
+ * (install on quit follows only a person's quit through the gate).
  */
 export function installSignalQuit(source: SignalSource, quit: () => void): () => void {
   let requested = false;

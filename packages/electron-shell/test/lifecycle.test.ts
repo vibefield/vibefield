@@ -211,6 +211,10 @@ describe("the quit gate in the lifecycle (AL-3)", () => {
     /** AU-7 — the decision waits for this (a box still up) */
     hold?: Promise<void>;
     windowOpen?: boolean;
+    /** AU-5 — the sessions a `done` stop ended */
+    ended?: number;
+    /** AU-5 — install on quit; the rig records `install` in the order as it is called */
+    installOnQuit?: (context: { readonly ended: number }) => Promise<void>;
   }) {
     let primaryOpen = options.windowOpen ?? true;
     const close = vi.fn(() => {
@@ -231,9 +235,14 @@ describe("the quit gate in the lifecycle (AL-3)", () => {
         order.push("stop");
         return options.stop === "aborted"
           ? { kind: "aborted" as const }
-          : { kind: "done" as const, complete: options.complete ?? true, ended: 0 };
+          : {
+              kind: "done" as const,
+              complete: options.complete ?? true,
+              ended: options.ended ?? 0,
+            };
       }),
     };
+    const install = options.installOnQuit;
     const onQuitRequested = vi.fn(() => order.push("quit-requested"));
     const onQuitAborted = vi.fn(() => {
       primaryOpen = true;
@@ -249,6 +258,14 @@ describe("the quit gate in the lifecycle (AL-3)", () => {
       closeLogging: async () => {},
       getQuitGate: () => gate,
       onQuitAborted,
+      ...(install !== undefined
+        ? {
+            installOnQuit: async (context: { readonly ended: number }) => {
+              order.push("install");
+              await install(context);
+            },
+          }
+        : {}),
     });
     electron.app.quit.mockImplementation(() => {
       order.push("app.quit");
@@ -601,6 +618,147 @@ describe("the quit gate in the lifecycle (AL-3)", () => {
       electron.emit("window-all-closed");
       await vi.waitFor(() => expect(electron.app.relaunch).toHaveBeenCalledTimes(1));
       expect(after).not.toHaveBeenCalled();
+    });
+  });
+
+  // AU-5 (AU-D9 A; main-process.md §7.1, §7.3) — install on quit is ONE step between a person's complete stop and the
+  // native quit. Never for a quit that is not the person's (a signal, an update's own, the OS ending the session),
+  // never after an incomplete stop, never in place of a waiting move; a hook that throws still quits.
+  describe("install on quit (AU-5)", () => {
+    const deferred = () => {
+      let release: () => void = () => undefined;
+      const promise = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      return { promise, release };
+    };
+    const quits = (order: readonly string[]) => order.filter((s) => s === "app.quit").length;
+
+    /** a person's ⌘Q with the primary window open, through the durable close */
+    async function personQuits(rig: ReturnType<typeof gateRig>): Promise<void> {
+      electron.emit("before-quit", { preventDefault: vi.fn() });
+      await vi.waitFor(() => expect(rig.close).toHaveBeenCalledTimes(1));
+      electron.emit("window-all-closed"); // the durable close finished
+    }
+
+    it("proceed: decide → durable close → stop → the install → the native quit → exit, in that order", async () => {
+      const installOnQuit = vi.fn(async () => {});
+      const rig = gateRig({ ended: 2, installOnQuit });
+      await personQuits(rig);
+      await vi.waitFor(() => expect(quits(rig.order)).toBe(2));
+      expect(rig.order.slice(0, 6)).toEqual([
+        "decide",
+        "app.quit",
+        "quit-requested",
+        "stop",
+        "install",
+        "app.quit",
+      ]);
+      // the sessions the stop ended with consent ride along (the record's `consented`)
+      expect(installOnQuit).toHaveBeenCalledWith({ ended: 2 });
+      electron.emit("will-quit", { preventDefault: vi.fn() });
+      await vi.waitFor(() => expect(electron.app.exit).toHaveBeenCalledWith(0));
+      expect(electron.app.relaunch).not.toHaveBeenCalled();
+    });
+
+    it("an INCOMPLETE stop installs nothing: a pair left running keeps the old bytes in use", async () => {
+      const installOnQuit = vi.fn(async () => {});
+      const rig = gateRig({ complete: false, installOnQuit });
+      await personQuits(rig);
+      await vi.waitFor(() => expect(quits(rig.order)).toBe(2));
+      expect(rig.gate.stop).toHaveBeenCalledTimes(1);
+      expect(installOnQuit).not.toHaveBeenCalled();
+    });
+
+    it("the OS ending the session installs nothing (AL-D6): the gate decides unattended, the stop runs, no install", async () => {
+      const installOnQuit = vi.fn(async () => {});
+      const rig = gateRig({ installOnQuit });
+      rig.flow.noteOsSessionEnding();
+      await personQuits(rig);
+      await vi.waitFor(() => expect(quits(rig.order)).toBe(2));
+      expect(rig.order[0]).toBe("decide:unattended");
+      expect(rig.gate.stop).toHaveBeenCalledTimes(1);
+      expect(installOnQuit).not.toHaveBeenCalled();
+    });
+
+    it("a signal installs nothing: before a person's quit (no gate, no stop) and while its box is up", async () => {
+      const installOnQuit = vi.fn(async () => {});
+      const first = gateRig({ installOnQuit });
+      first.flow.leavePairsOnQuit("signal");
+      await personQuits(first);
+      await settle();
+      expect(first.gate.stop).not.toHaveBeenCalled();
+      expect(installOnQuit).not.toHaveBeenCalled();
+
+      await drain();
+      electron.reset();
+      const box = deferred();
+      const during = gateRig({ hold: box.promise, installOnQuit });
+      electron.emit("before-quit", { preventDefault: vi.fn() });
+      await vi.waitFor(() => expect(during.gate.decide).toHaveBeenCalledTimes(1));
+      during.flow.leavePairsOnQuit("signal");
+      box.release();
+      await vi.waitFor(() => expect(during.close).toHaveBeenCalledTimes(1));
+      electron.emit("window-all-closed");
+      await vi.waitFor(() => expect(quits(during.order)).toBe(2));
+      expect(installOnQuit).not.toHaveBeenCalled();
+    });
+
+    it("an update's own quit never calls it: its consent ran, and its plan installs", async () => {
+      const installOnQuit = vi.fn(async () => {});
+      const rig = gateRig({ installOnQuit });
+      const plan: UpdateQuitPlan = {
+        prepare: async () => ({ kind: "install" }),
+        install: vi.fn(),
+        aborted: vi.fn(),
+        installStalled: vi.fn(async () => {}),
+      };
+      expect(rig.flow.armUpdate(plan)).toBe(true);
+      await personQuits(rig);
+      await settle();
+      expect(rig.gate.decide).not.toHaveBeenCalled();
+      expect(rig.gate.stop).not.toHaveBeenCalled();
+      expect(installOnQuit).not.toHaveBeenCalled();
+    });
+
+    it("a waiting move runs in place of the install (LC-25): the move, then the native quit", async () => {
+      const installOnQuit = vi.fn(async () => {});
+      const rig = gateRig({ installOnQuit });
+      const after = vi.fn(async () => true);
+      expect(await rig.flow.quitThen(after)).toBe("proceed");
+      await vi.waitFor(() => expect(rig.close).toHaveBeenCalledTimes(1));
+      electron.emit("window-all-closed");
+      await vi.waitFor(() => expect(after).toHaveBeenCalledTimes(1));
+      await vi.waitFor(() => expect(quits(rig.order)).toBe(3));
+      expect(installOnQuit).not.toHaveBeenCalled();
+    });
+
+    it("an install that throws is logged and VibeField still quits", async () => {
+      const installOnQuit = vi.fn(async (): Promise<void> => {
+        throw new Error("Squirrel went away");
+      });
+      const rig = gateRig({ installOnQuit });
+      await personQuits(rig);
+      await vi.waitFor(() => expect(quits(rig.order)).toBe(2));
+      expect(installOnQuit).toHaveBeenCalledTimes(1);
+      electron.emit("will-quit", { preventDefault: vi.fn() });
+      await vi.waitFor(() => expect(electron.app.exit).toHaveBeenCalledWith(0));
+    });
+
+    it("a second ⌘Q while Squirrel stages is absorbed: one stop, one install, and the native quit waits for it", async () => {
+      const staging = deferred();
+      const installOnQuit = vi.fn(() => staging.promise);
+      const rig = gateRig({ installOnQuit });
+      await personQuits(rig);
+      await vi.waitFor(() => expect(installOnQuit).toHaveBeenCalledTimes(1));
+      electron.emit("before-quit", { preventDefault: vi.fn() });
+      await settle();
+      expect(rig.gate.stop).toHaveBeenCalledTimes(1);
+      expect(quits(rig.order)).toBe(1);
+      staging.release();
+      await vi.waitFor(() => expect(quits(rig.order)).toBe(2));
+      expect(installOnQuit).toHaveBeenCalledTimes(1);
+      expect(rig.gate.stop).toHaveBeenCalledTimes(1);
     });
   });
 });

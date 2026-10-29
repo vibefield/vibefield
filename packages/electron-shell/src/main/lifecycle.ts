@@ -3,7 +3,7 @@ import type { FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import type { Logger } from "@vibefield/logging";
 import { app } from "electron";
 import { createQuitFlow, type QuitFlow } from "./quit-flow";
-import type { QuitGate } from "./quit-gate";
+import type { QuitGate, QuitStopOutcome } from "./quit-gate";
 import type { WindowRegistry } from "./window-policy";
 
 // Lifecycle in ONE place (ESR §5.2.1): every path out of the process —
@@ -34,6 +34,15 @@ import type { WindowRegistry } from "./window-policy";
 // pair left running would execute from the Trash, and a person who cancels must
 // not be left running from it — so anything less opens VibeField again where it
 // was, logged. A signal or the OS ending the session moves nothing.
+//
+// AU-5 (AU-D9 A; AU-G3; main-process.md §7.1, §7.3) — install on quit: after a
+// person's quit has stopped every pair (a COMPLETE stop), and before the native
+// quit, a ready update is handed to Squirrel (`installOnQuit`, the controller's,
+// bounded there); nothing relaunches. Never on a quit that is not the person's —
+// a signal's, an update's own, the OS ending the session (AL-D6: ShipIt is not
+// proven inside loginwindow's budget) — never on an incomplete stop, and never
+// while a move waits (LC-25: the move runs in its place). A hook that throws is
+// logged and the quit goes on.
 
 /** The quit flow plus WP12c's undo for an update quit that ABORTED after `before-quit` had durable-closed the windows
  * (`build-wp12-updater.md` §10 S4: the daemon's re-check refused, so nothing stopped and the app stays). */
@@ -78,6 +87,10 @@ export function installLifecycle(opts: {
   /** AL-3 — a session was born during the quit and the person kept the app: give it back (the update abort's restore:
    * the registry's shutdown cancelled, the tray's `quitting` cleared, the primary window reopened). */
   onQuitAborted?: () => void;
+  /** AU-5 — after a person's quit stopped every pair, hand a ready update to Squirrel before the native quit (late-bound
+   * by the caller like `getQuitGate`; its own bounds hold it: a 3 s policy read, a 30 s stage). `ended` = the sessions
+   * the stop ended with consent. Absent = nothing installs on a quit. */
+  installOnQuit?: (context: { readonly ended: number }) => Promise<void>;
 }): LifecycleFlow {
   const logger = opts.logger.child({ component: "lifecycle" });
   const flow = createQuitFlow({
@@ -186,6 +199,45 @@ export function installLifecycle(opts: {
     }
     replayQuit();
   };
+  /** AU-5 — a person's quit stopped the pairs: the ready update installs as VibeField quits, then the native quit. Only
+   * after a COMPLETE stop of a quit that is still the person's; `stopping` holds meanwhile, so a second ⌘Q during the
+   * install is absorbed, never a second stop and an early exit. */
+  const installThenQuit = async (
+    outcome: Extract<QuitStopOutcome, { kind: "done" }>,
+  ): Promise<void> => {
+    const install = opts.installOnQuit;
+    if (install !== undefined) {
+      const skip = restarting
+        ? "signal"
+        : flow.updateArmed
+          ? "update"
+          : osSessionEnding
+            ? "os-session-ending"
+            : !outcome.complete
+              ? "incomplete-stop"
+              : null;
+      if (skip !== null) {
+        logger.info(
+          "desktop.update.quit_install_skipped",
+          "The quit was not the person's, or left a pair running: nothing installs",
+          { why: skip },
+        );
+      } else {
+        try {
+          await install({ ended: outcome.ended });
+        } catch (error) {
+          // the quit goes on whatever the hook did: the update waits for the next restart or quit
+          logger.error(
+            "desktop.update.quit_install_failed",
+            "The install on quit failed; VibeField quits and the update waits",
+            error,
+          );
+        }
+      }
+    }
+    stopping = false;
+    replayQuit();
+  };
   /** AU-5a — a signal came while the person's quit was still open to it (its box up, or the gate's re-ask box): it is
    * not the person's quit, whatever the box answers — VibeField quits, the pairs are left, and nothing a waiting move
    * or an install would do runs. Without it the swallowed signal left `restarting` set for the rest of the session: no
@@ -217,19 +269,21 @@ export function installLifecycle(opts: {
     stopping = true;
     void quitGate.stop().then(
       (outcome) => {
-        stopping = false;
         if (outcome.kind === "aborted") {
+          stopping = false;
           resetQuitState();
           // AU-5a — the re-ask box stopped nothing, and a signal during it still quits
           if (quitForSignal()) return;
           opts.onQuitAborted?.();
           return;
         }
+        // AU-7 (LC-25) — a waiting move runs in place of the install: nothing stages Squirrel under it
         if (move !== null) {
+          stopping = false;
           void finishMove(move, outcome.complete ? null : "incomplete-stop");
           return;
         }
-        replayQuit();
+        void installThenQuit(outcome);
       },
       (error: unknown) => {
         stopping = false;

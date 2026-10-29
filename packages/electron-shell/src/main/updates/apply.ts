@@ -155,6 +155,13 @@ export function quitNotice(reason: "squirrel-timeout" | "install-failed"): BoxCo
   };
 }
 
+/** AU-5 (AU-D9 A; LC-36) — the quit box's last line when a person's quit will hand `version` to Squirrel as VibeField
+ * quits: one declarative sentence, its friendly name first ("The Oct 28 nightly installs as you quit." · "VibeField
+ * 0.2.0 installs as you quit."). Said only when main will try (`UpdateController.quitInstallLine`). */
+export function quitInstallWords(version: string): string {
+  return `${releaseName(version, { start: true })} installs as you quit.`;
+}
+
 /** A lever of the signed policy (B1) that refused one version, as the words name it. */
 export type LeverWhy =
   | { readonly kind: "killed"; readonly channel: string }

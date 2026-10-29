@@ -35,8 +35,9 @@ export const UPDATE_CHANNEL_LINES: Readonly<Record<UpdateChannel, string>> = {
   nightly: "Every night's build: the newest, and the least tested.",
 };
 
-/** AU-3 — the Automatic updates switch's line: when installs happen. AU-5 (install on quit) adds "or quit" to `on`;
- * until it lands the sentence never promises it. */
+/** AU-3 — the Automatic updates switch's line: when installs happen. Install on quit (AU-5) adds "or quit" to `on`
+ * in a one-line commit once the physical W row proves it on the mini (LC-49); until then the sentence never promises
+ * it. */
 export const AUTOMATIC_UPDATES_LINES = {
   on: "Download updates in the background. They install when you restart VibeField, or on their own while no window is open and nothing would end.",
   off: "VibeField checks only when you choose Check for updates, and downloads only when you choose Download.",
@@ -257,8 +258,8 @@ export function updateStateWords(view: UpdateView, now: number): UpdateStateWord
     case "downloading":
       return {
         headline: `Downloading ${releaseName(version)} · ${Math.round(view.percent ?? 0)}%`,
-        // AU-3 (LC-45) — when it installs, by the switch: on, AU-5 makes it "…when you restart or quit VibeField.";
-        // until install on quit lands, both say the restart
+        // AU-3 (LC-45) — when it installs, by the switch: on, it becomes "…when you restart or quit VibeField." in
+        // LC-49's one-line commit, once the physical W row proves install on quit (AU-5); until then both say the restart
         detail: "It installs when you restart VibeField.",
         tone: "neutral",
       };
@@ -339,7 +340,8 @@ export function updateStateWords(view: UpdateView, now: number): UpdateStateWord
 /** AU-3 (AU-G7; LC-34) — the page's notice for an install that didn't take, said on the launch right after it only
  * (`lastApply.thisLaunch`), and never while ANOTHER version is ready (a newer staged update is the news then).
  * `ready`: the same version is staged again, so it can be tried again; otherwise the page offers Check for updates.
- * The quit's words ("The last quit…") come with install on quit (AU-5). The Me menu says it its own way (AU-2). */
+ * AU-5 — after install on quit (`trigger: "quit"`) it leads "The last quit…" (DESIGN.md §8). The Me menu says it its
+ * own way (AU-2). */
 export function notAppliedWords(
   view: UpdateView | null | undefined,
 ): { readonly text: string; readonly ready: boolean } | null {
@@ -348,7 +350,8 @@ export function notAppliedWords(
   if (last === undefined || last.outcome !== "not-applied" || last.thisLaunch !== true) return null;
   const staged = view.phase === "staged";
   if (staged && view.version !== last.version) return null;
-  const lead = `The last restart didn't install ${releaseName(last.version)}.`;
+  const which = last.trigger === "quit" ? "quit" : "restart";
+  const lead = `The last ${which} didn't install ${releaseName(last.version)}.`;
   // the version it came back on: the one the apply left, else the one running now (the same app)
   const back = last.from ?? view.currentVersion;
   if (back === undefined)

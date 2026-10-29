@@ -279,7 +279,9 @@ export const UPDATES_AUDIT_ACTIONS = {
    * found a release it may not offer) and on `app.update.apply` (a policy re-read at the click), and
    * `POLICY_UNREACHABLE` / `POLICY_UNVERIFIED` on `app.update.apply`. AU-1: the ATTEMPT row's `trigger` attr is who
    * began it (`person`, `silent`); the next launch's OUTCOME row adds `from` and `began` (`UpdateApplyTrigger`:
-   * `restart`, `silent`, `quit`) from the record, never a second `trigger`. */
+   * `restart`, `silent`, `quit`) from the record, never a second `trigger`. AU-5: a quit-install appends no ATTEMPT
+   * row (fieldd is already down); its OUTCOME row at the next launch carries `began: quit`, and `QUIT_HELD` when the
+   * quit's own policy read held it. */
   APPLY: "app.update.apply",
   /** WP12d (L3c-i) — a person's channel change (EDP §11.6), `from` and `to` in attrs; a lower channel is a downgrade */
   CHANNEL: "app.update.channel",
@@ -310,7 +312,9 @@ const RememberedVersion = z.number().int().min(1).nullable();
  *  - `relaunched`: Squirrel refused the payload (nothing armed) — the app relaunched on the current bytes;
  *  - `exited`: Squirrel timed out, or the install never took over — the app quit WITHOUT relaunch, because Squirrel may
  *    have armed the install (a downloaded update is applied at the next start: `electron.d.ts:2103-2104`).
- * AU-1 adds `from`, `trigger` and `landed`, all tolerant (`.catch`), never a new `branch` or `reason` value. */
+ * AU-1 adds `from`, `trigger` and `landed`, all tolerant (`.catch`), never a new `branch` or `reason` value.
+ * AU-5 (install on quit, `trigger: "quit"`): nothing relaunches on any branch — `installing`, or `exited` with Squirrel's
+ * refusal or timeout, or with no reason when the quit's own policy read held the install. */
 export const UpdateLastApply = z
   .object({
     at: z.number().int().nonnegative(),

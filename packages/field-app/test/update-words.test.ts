@@ -279,6 +279,16 @@ describe("the install, after it — for a day when it took, on its launch when i
     // said once (LC-34): never on a later launch, never while another version is the news, never for one that took
     const last = view.lastApply;
     if (last === undefined) throw new Error("the fixture carries lastApply");
+    // AU-5 — after install on quit, the quit leads (DESIGN.md §8), ready again or not
+    const quit = { ...view, lastApply: { ...last, trigger: "quit" as const } };
+    expect(notAppliedWords(quit)).toEqual({
+      text: "The last quit didn't install the Oct 28 nightly. VibeField came back on the Oct 27 nightly, and the update is ready to try again.",
+      ready: true,
+    });
+    expect(notAppliedWords({ ...quit, phase: "idle" })).toEqual({
+      text: "The last quit didn't install the Oct 28 nightly. VibeField came back on the Oct 27 nightly.",
+      ready: false,
+    });
     expect(notAppliedWords({ ...view, lastApply: { ...last, thisLaunch: false } })).toBeNull();
     expect(notAppliedWords({ ...view, version: "0.1.0-nightly.20261029" })).toBeNull();
     expect(notAppliedWords(viewFixture("update-view.updated"))).toBeNull();

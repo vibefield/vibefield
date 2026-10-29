@@ -233,6 +233,9 @@ let lifecycleFlow: LifecycleFlow | null = null;
  * pairs exist and after teardown, when a person's quit leaves the pairs as before. */
 let quitGate: QuitGate | null = null;
 let restoreAfterAbortedQuit: (() => void) | null = null;
+/** AU-5 — install on quit, the updater's (assigned once it exists); null in a build with no updater and after teardown,
+ * when a person's quit installs nothing. */
+let quitInstaller: ((context: { readonly ended: number }) => Promise<void>) | null = null;
 /** P8b-2 — the live fieldd client the plugin protocol authorizes against. Null
  * until the pair is up, which is the honest state: with no authority reachable,
  * no plugin module is servable. */
@@ -2238,6 +2241,10 @@ async function main(
       release: () => {
         for (const bundle of pairBundles.values()) bundle.handles.releaseHold();
       },
+      // AU-5 (LC-24, LC-25, LC-36) — the box's last line, only when this quit will try to install the ready update; a
+      // move to Applications waiting for this quit installs nothing (the update waits for the copy in Applications)
+      installLine: () =>
+        lifecycleFlow?.movePending === true ? null : (updates?.quitInstallLine() ?? null),
       log: logger,
     });
     restoreAfterAbortedQuit = () => restoreAfterAbort("quit");
@@ -2486,6 +2493,11 @@ async function main(
       },
       logger.child({ component: "ipc.update" }),
     );
+    // AU-5 (AU-D9 A) — a person's quit that stopped every pair hands a ready update to Squirrel (the lifecycle calls it
+    // only then); the controller says what it did (`desktop.update.quit_install`)
+    quitInstaller = async (context) => {
+      await updates.installOnQuit(context);
+    };
     const launchCheck = setTimeout(() => void updates.check("launch"), UPDATE_LAUNCH_DELAY_MS);
     launchCheck.unref?.();
     // L3b-ii (B4) — the silent apply is considered after a resume (once its check settles), and a few seconds after
@@ -2514,6 +2526,7 @@ async function main(
         : null;
     censusWatch?.unref?.();
     shellDisposers.add(() => {
+      quitInstaller = null;
       clearTimeout(launchCheck);
       if (censusWatch !== null) clearInterval(censusWatch);
       powerMonitor.removeListener("resume", onResume);
@@ -2763,6 +2776,9 @@ if (!hasInstanceLock) {
       closeLogging: closeEvidence,
       getQuitGate: () => quitGate,
       onQuitAborted: () => restoreAfterAbortedQuit?.(),
+      installOnQuit: async (context) => {
+        await quitInstaller?.(context);
+      },
     });
     lifecycleFlow = flow;
     // AL-4 — a signal is never a person's quit: dev's runner restarts the shell (the next one adopts the pairs), or

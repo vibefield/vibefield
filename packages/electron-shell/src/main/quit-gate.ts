@@ -18,6 +18,10 @@ import {
 // AU-7 (LC-25; main-process.md §7.2, brought forward from AU-5): the stop says whether it was COMPLETE — every pair
 // read, the attached one among them, and every planned stop answered — because a move to Applications runs only after
 // a complete stop (a pair left running would execute from the Trash).
+// AU-5 (AU-D9 A; LC-24, LC-25, LC-36; main-process.md §7.2): when a person's quit will hand a ready update to Squirrel
+// after the stop, the consent box says so in its LAST line ("The Oct 28 nightly installs as you quit.") — one
+// declarative sentence, no third button. Main decides whether it will try (`installLine`); the unknown-census box and a
+// logout never carry it (an unknown census leaves pairs running, and a logout installs nothing).
 
 /** Why the shell asks the pairs to stop — the `system.shutdown` reasons of a quit (contracts `NativeRestartReason`). */
 export type QuitReason = "quit" | "logout";
@@ -59,6 +63,9 @@ export interface QuitGatePort {
   hold(): void;
   /** … until a quit that ended nothing gives the app back */
   release(): void;
+  /** AU-5 — the consent box's last line when this quit will install a ready update (null: it will not — nothing staged,
+   * updates off, a policy that asks first, a move waiting); read only for a person's quit whose census box shows */
+  installLine?(): string | null;
   readonly log: Pick<Logger, "info" | "warn">;
 }
 
@@ -90,10 +97,11 @@ export interface NamedSession extends CensusSession {
 }
 
 /** AL-D3 — the consent box, in the update consent's shape: the message is the consequence, the detail names the
- * sessions (five at most, then a count), and the button says what it does. */
+ * sessions (five at most, then a count), and the button says what it does. AU-5: `installs`, the ready update's
+ * sentence, is the detail's last line. */
 export function quitConsentBox(
   sessions: readonly NamedSession[],
-  options: { readonly bornDuringQuit?: boolean } = {},
+  options: { readonly bornDuringQuit?: boolean; readonly installs?: string } = {},
 ): QuitBox {
   const n = sessions.length;
   const rows = sessions.slice(0, CONSENT_LISTED_MAX).map((session) => {
@@ -108,7 +116,12 @@ export function quitConsentBox(
     : "Quitting stops the terminal service, which ends:";
   return {
     message: `Quit VibeField and end ${n} ${plural(n, "terminal session", "terminal sessions")}?`,
-    detail: [lead, ...rows, ...(more > 0 ? [`and ${more} more`] : [])].join("\n"),
+    detail: [
+      lead,
+      ...rows,
+      ...(more > 0 ? [`and ${more} more`] : []),
+      ...(options.installs !== undefined ? [options.installs] : []),
+    ].join("\n"),
     buttons: ["Cancel", `Quit and end ${n} ${plural(n, "session", "sessions")}`],
     defaultId: 0,
     cancelId: 0,
@@ -151,6 +164,11 @@ export function createQuitGate(port: QuitGatePort): QuitGate {
     for (const pair of reached) pair.close?.();
     reached = [];
   };
+  /** AU-5 — the consent box, with the ready update's line last when main will install it as the app quits */
+  const consentBoxFor = (named: readonly NamedSession[]): QuitBox => {
+    const installs = port.installLine?.() ?? null;
+    return quitConsentBox(named, installs !== null ? { installs } : {});
+  };
 
   return {
     async decide({ unattended }) {
@@ -189,7 +207,7 @@ export function createQuitGate(port: QuitGatePort): QuitGate {
           unknown.length > 0
             ? unknownCensusBox()
             : named.length > 0 && port.confirmEnabled()
-              ? quitConsentBox(named)
+              ? consentBoxFor(named)
               : null;
         if (box !== null) {
           const answer = await port.confirm(box);

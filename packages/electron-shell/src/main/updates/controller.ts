@@ -17,6 +17,12 @@
 // AU-7 (AU-G8; LC-10): where the bundle runs (`location.ts`), read once here. A copy macOS won't let replace itself
 // (`read-only`) is held by decide, and the apply and a person's Download refuse it BEFORE anything stops, in words that
 // name the way out (Move to Applications, through the quit gate: `lifecycle.ts`'s `quitThen`).
+// AU-5 (AU-D9 A; AU-G3; main-process.md §7): install on quit stays OURS, never electron-updater's
+// `autoInstallOnAppQuit` (it would hand Squirrel the payload at download time, before any stop, and install on ANY
+// quit). A person's quit passes the census gate, the gate stops every pair, and only then `installOnQuit` reads a fresh
+// policy (3 s), stages Squirrel (30 s) and records the apply; the app exits without `quitAndInstall` and without a
+// relaunch. A signal, an update's own quit, the OS ending the session and a waiting move never reach it (the lifecycle
+// decides), and the quit box's last line says it only when main will try (`quitInstallLine`).
 
 import { randomUUID } from "node:crypto";
 import {
@@ -52,6 +58,7 @@ import {
   type LeverWhy,
   locationNotice,
   policyNotice,
+  quitInstallWords,
   quitNotice,
   SQUIRREL_STAGE_MS,
 } from "./apply";
@@ -203,6 +210,12 @@ export type SilentOutcome =
   | { readonly applying: true }
   | { readonly applying: false; readonly reason: string };
 
+/** AU-5 — what install on quit did: Squirrel took the update and it installs as VibeField exits, or why nothing will
+ * (a hold, the fresh policy, a lever, Squirrel's refusal or silence). Main's own; never on a wire. */
+export type QuitInstallOutcome =
+  | { readonly installing: true }
+  | { readonly installing: false; readonly reason: string };
+
 /** What `restartToInstall()` answered. `ok: true` = the update quit is underway (the flow owns the rest). */
 export type RestartOutcome =
   | { readonly ok: true }
@@ -259,6 +272,12 @@ const CHANNEL_RANK: Readonly<Record<UpdateChannel, number>> = { stable: 0, beta:
 const AUDIT_ATTEMPT_BOUND_MS = 2_000;
 /** How long the click's fresh policy check may take before it counts as unreachable (B2). */
 export const FRESH_POLICY_BOUND_MS = 20_000;
+/** AU-5 — install on quit's fresh policy read: the windows are gone and the app is on its way out, so a policy that
+ * has not answered by then is offline or slow, and the update waits for the next restart or quit. */
+export const QUIT_POLICY_BOUND_MS = 3_000;
+/** AU-5 — install on quit's Squirrel stage. W11 measured the whole stop → stage → install → relaunch in 7 s on the mini;
+ * the restart's two minutes (`SQUIRREL_STAGE_MS`) are for a person watching a box, and a quit's windows are gone. */
+export const QUIT_STAGE_MS = 30_000;
 /** B4 — while staged, the silent apply is re-evaluated this often (a timer that lives ONLY while staged). */
 export const SILENT_RECHECK_MS = 30 * 60_000;
 
@@ -409,7 +428,8 @@ export class UpdateController {
     }
     const updater = options.updater;
     updater.autoDownload = false;
-    updater.autoInstallOnAppQuit = false; // WP12c's gate owns the apply; nothing installs on a plain quit
+    // WP12c's gate owns the apply: nothing installs on a plain quit (AU-5's install on quit runs after the gate's stop)
+    updater.autoInstallOnAppQuit = false;
     // EDP-36: only a channel below the running build's own may install an older version — set deliberately (C6)
     updater.allowDowngrade = CHANNEL_RANK[this.channel] < CHANNEL_RANK[options.buildChannel];
     // `allowPrerelease` is left as electron-updater sets it (on for a nightly or beta build, AppUpdater.js:218): the
@@ -1176,6 +1196,123 @@ export class UpdateController {
     return null;
   }
 
+  /** AU-5 (AU-D9 A; LC-24; main-process.md §7.4) — what keeps a person's quit from installing the ready update, read
+   * from what main knows now (no fetch): an apply underway, nothing staged, no apply on this platform, a copy macOS
+   * won't let replace itself, then the silent path's holds — the off switch (AU-D9 A ties install on quit to it), a
+   * decline, a last verified policy that requires confirmation (LC-24). The quit box's line and the install read the
+   * same holds, so the box never promises what main will not try. */
+  private quitInstallHold(): string | null {
+    if (this.restarting || this.applying || this.disposed) return "busy";
+    const state = this.stateValue;
+    if (state.kind !== "staged") return "not-staged";
+    if (this.options.apply?.wired !== true) return "apply-unbuilt";
+    if (this.where === "read-only") return "location";
+    return this.silentHeld(state.version);
+  }
+
+  /** AU-5 (LC-36) — the quit box's last line, "The Oct 28 nightly installs as you quit.", only while a person's quit
+   * would try to install; null otherwise (the wiring also says null while a move to Applications waits, LC-25). The 3 s
+   * policy read may still refuse what the line said (offline, a lever, the confirmation lever turned on since): the
+   * update then stays ready, and the next restart or quit tries again. */
+  quitInstallLine(): string | null {
+    const state = this.stateValue;
+    if (state.kind !== "staged" || this.quitInstallHold() !== null) return null;
+    return quitInstallWords(state.version);
+  }
+
+  /** AU-5 (AU-D9 A; EDP §11.3 "apply on normal quit"; main-process.md §7.4) — a person's quit has stopped every pair:
+   * the gate's COMPLETE stop, after which the lifecycle calls this (never for a signal, an update's own quit, the OS
+   * ending the session or a waiting move). A ready update is handed to Squirrel and installs as VibeField exits;
+   * nothing relaunches. Bounded: a 3 s fresh policy read (B2, no offline allowance; LC-24, a policy that now asks
+   * first holds it), then a 30 s stage. A refusal waits for the next restart or quit. From the first step nothing here
+   * reaches fieldd — the pairs are down, and an audit append would START it — so there is no ATTEMPT row: the next
+   * launch's OUTCOME row carries `began: quit` from the record (`recordLastApply`, the restart's own). Every attempt
+   * past the holds is recorded, the policy's own hold too (LC-14; DESIGN.md §9: "if the policy read at the quit then
+   * holds the install, the next launch says so"): `exited` with no Squirrel reason, as the record's enums never grow. */
+  async installOnQuit(context: { readonly ended: number }): Promise<QuitInstallOutcome> {
+    const held = this.quitInstallHold();
+    const state = this.stateValue;
+    const apply = this.options.apply;
+    if (held !== null || state.kind !== "staged" || apply === undefined)
+      return this.quitInstallAnswer({ installing: false, reason: held ?? "not-staged" });
+    const version = state.version;
+    // the pairs are down: nothing re-evaluates or checks from here, and nothing reaches fieldd (`audit` returns early)
+    this.restarting = true;
+    this.applying = true;
+    this.daemonsStopped = true;
+    this.prepared = null;
+    this.syncSilentTimer();
+    const operationId = randomUUID();
+    const consented = context.ended;
+    const refused = (reason: string): QuitInstallOutcome =>
+      this.quitInstallAnswer({ installing: false, reason, version });
+    // the attempt began and the quit's own policy read held it: the next launch says the quit didn't install it
+    const heldAtQuit = (reason: string): QuitInstallOutcome => {
+      this.recordLastApply({ version, branch: "exited", consented, operationId, trigger: "quit" });
+      return refused(reason);
+    };
+    const fresh = await this.freshPolicy(QUIT_POLICY_BOUND_MS);
+    const after = this.stateValue;
+    if (after.kind !== "staged" || after.version !== version) return refused("not-staged");
+    if (fresh.kind !== "verified")
+      return heldAtQuit(fresh.kind === "unreachable" ? "policy-unreachable" : "policy-unverified");
+    this.lastVerified = fresh.chain;
+    const policy = leversOf(fresh.chain.policy);
+    const lever = leverRefusal(version, policy, this.options.hostOsVersion?.() ?? null);
+    if (lever !== null) {
+      // as at the click: the state says it and a refused payload goes (B6); its audit row is skipped, the pairs are down
+      this.refuseByLever(version, lever, UPDATES_AUDIT_ACTIONS.APPLY);
+      return heldAtQuit(lever);
+    }
+    // LC-24 — the fresh policy's requireUserConfirmation (it is `lastVerified` now) is the policy's hold; the switch or a
+    // decline changed while the policy was read is the person's own, and nothing is said of it at the next launch
+    const late = this.silentHeld(version);
+    if (late === "confirmation-required") return heldAtQuit(late);
+    if (late !== null) return refused(late);
+    const staged = await apply.stage(QUIT_STAGE_MS);
+    if (staged.kind === "staged") {
+      this.recordLastApply({
+        version,
+        branch: "installing",
+        consented,
+        operationId,
+        trigger: "quit",
+      });
+      return this.quitInstallAnswer({ installing: true, version });
+    }
+    // Squirrel refused (nothing armed), or did not answer in the bound (it may still arm: the next launch judges by
+    // version). Either way the app exits as the person asked, with nothing relaunched.
+    const reason = staged.kind === "refused" ? "squirrel-refused" : "squirrel-timeout";
+    this.recordLastApply({
+      version,
+      branch: "exited",
+      reason,
+      consented,
+      operationId,
+      trigger: "quit",
+    });
+    return refused(reason);
+  }
+
+  /** AU-5 — every answer of install on quit leaves one line, with the version once one is staged (the smoke's quit run
+   * reads it from outside the process). */
+  private quitInstallAnswer(
+    answer: QuitInstallOutcome & { readonly version?: string },
+  ): QuitInstallOutcome {
+    this.options.log.info(
+      "desktop.update.quit_install",
+      answer.installing
+        ? "The ready update installs as VibeField quits"
+        : "Nothing installs as VibeField quits",
+      {
+        installing: answer.installing,
+        ...(answer.installing ? {} : { reason: answer.reason }),
+        ...(answer.version !== undefined ? { version: answer.version } : {}),
+      },
+    );
+    return answer.installing ? { installing: true } : { installing: false, reason: answer.reason };
+  }
+
   /** B4 — the re-evaluation timer: alive only while staged, wired and no apply underway; it dies on every exit branch
    * (the stop sets `daemonsStopped`), on a decline or any other leaving of the staged state, and on dispose. */
   private syncSilentTimer(): void {
@@ -1242,8 +1379,11 @@ export class UpdateController {
   }
 
   /** B2 — the chain run again, now, on the click's own fetcher: verified, refused (named), or unreachable (a network
-   * failure, or no answer inside `FRESH_POLICY_BOUND_MS`). */
-  private async freshPolicy(): Promise<
+   * failure, or no answer inside the bound: `FRESH_POLICY_BOUND_MS` at the click, AU-5's `QUIT_POLICY_BOUND_MS` as the
+   * app quits). */
+  private async freshPolicy(
+    boundMs: number = FRESH_POLICY_BOUND_MS,
+  ): Promise<
     | { readonly kind: "verified"; readonly chain: VerifiedChain }
     | { readonly kind: "refused"; readonly state: UpdatesUnavailableState }
     | { readonly kind: "unreachable" }
@@ -1255,7 +1395,7 @@ export class UpdateController {
       const result = await Promise.race([
         this.verify(fetch),
         new Promise<"timeout">((resolve) => {
-          timer = setTimeout(() => resolve("timeout"), FRESH_POLICY_BOUND_MS);
+          timer = setTimeout(() => resolve("timeout"), boundMs);
         }),
       ]);
       if (result === "timeout") return { kind: "unreachable" };
@@ -1510,11 +1650,13 @@ export class UpdateController {
     const append = this.options.appendAudit;
     if (last === null || last.audited || append === undefined) return;
     const installed = last.branch === "installing" && this.options.currentVersion === last.version;
+    // AU-5 — an `exited` quit with no Squirrel reason was held by the quit's own policy read (`installOnQuit`)
+    const why = last.reason ?? (last.trigger === "quit" ? "quit-held" : "unknown");
     const reasonCode = installed
       ? undefined
       : last.branch === "installing"
         ? "INSTALL_NOT_APPLIED"
-        : (last.reason ?? "unknown").toUpperCase().replace(/-/g, "_");
+        : why.toUpperCase().replace(/-/g, "_");
     try {
       await append({
         action: UPDATES_AUDIT_ACTIONS.APPLY,
