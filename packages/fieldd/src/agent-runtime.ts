@@ -61,6 +61,7 @@ import type {
   AgentHost,
   AgentInstallation,
   AgentMonitorState,
+  AgentRunBriefing,
   BoundIngress,
   HostIngress,
 } from "@vibefield/puppeteer-core";
@@ -402,6 +403,8 @@ export interface AgentRuntimeServiceOptions {
   deviceId?: () => string;
   /** test seam: compose providers beside (or instead of) puppeteer's built-ins */
   providers?: (builtin: AgentProvider[]) => AgentProvider[];
+  /** CP-1d — rebuild a spark's briefing for each birth, from its signed record and the current native door. */
+  sparkBriefing?: (spark: SparkId, provider: string) => Promise<AgentRunBriefing>;
   /** AC-3 test seam: the catalog (default: THE table, `AGENT_CATALOG`) — a
    * test composes rows for its scripted provider beside the real ones, which
    * is how the catalog's rules are exercised without a vendor literal */
@@ -912,7 +915,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
    * and its personas. A provider the runtime composes with no visible row is
    * absent; a row the runtime does not compose is listed unavailable. */
   async providers(): Promise<AgentProvidersResult> {
-    const composed = new Set(this.runtime.providers().map((p) => p.id));
+    const composed = new Map(this.runtime.providers().map((p) => [p.id, p]));
     const launch = new Map(this.runtime.launchProviders().map((p) => [p.id, p]));
     let installs: readonly AgentInstallation[] = [];
     try {
@@ -936,11 +939,13 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       }
       const state = history.get(row.id);
       const lastLaunchedAt = launched.get(row.id);
+      const briefing = composed.get(row.id)?.briefing;
       providers.push({
         id: row.id,
         label: row.label,
         available: composed.has(row.id) && installs.some((install) => install.provider === row.id),
         resumable: row.offers.resume && launch.get(row.id)?.resume === true,
+        ...(briefing === undefined ? {} : { briefing: { ...briefing } }),
         personas,
         status: row.status,
         offers: this.offersHere(row),
@@ -1195,9 +1200,11 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     const cwd = place?.path ?? params.cwd ?? this.home;
     const identity = this.identity();
     const entry = await this.creation(params.profileId ?? null, async () => {
+      const briefing = await this.briefingForSpark(compose?.spark, params.provider);
       const result = await this.runtime.spawn({
         agent: params.provider,
         cwd,
+        ...briefing,
         ...(params.title !== undefined ? { title: params.title } : {}),
         ...(params.profileId !== undefined ? { profile: params.profileId } : {}),
         // AR-S5 — that profile's sign-in for the agent; puppeteer refuses a
@@ -1440,9 +1447,14 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     const identity = this.identity();
     // PJ-6 (Q4) — a conversation a run of ours launched at a model resumes at
     // it, in the account the index files it under
-    const launched = this.launchedSelection(params.provider, params.nativeSessionId, profileId);
+    const { record: previous, modelSelection: launched } = this.launchedContext(
+      params.provider,
+      params.nativeSessionId,
+      profileId,
+    );
     const selection = this.resumeSelection(params.provider, launched);
     const entry = await this.creation(profileId ?? null, async () => {
+      const briefing = await this.briefingForSpark(previous?.spark, params.provider);
       const result = await this.runtime.resume({
         continuation: {
           providerId: params.provider,
@@ -1450,6 +1462,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
           implementation: "native",
         },
         cwd,
+        ...briefing,
         ...(params.title !== undefined ? { title: params.title } : {}),
         ...(profileId !== undefined ? { profile: profileId } : {}),
         creationRequestId: identity.creationRequestId,
@@ -1463,6 +1476,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         title: params.title,
         ...identity.launched(),
         ...(launched !== undefined ? { modelSelection: launched } : {}),
+        ...(previous?.spark !== undefined ? { spark: previous.spark } : {}),
+        ...(previous?.origin !== undefined ? { origin: previous.origin } : {}),
       });
     });
     return {
@@ -2776,6 +2791,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     record: AgentSessionRecord,
     cwdOverride: string | undefined,
     replaced: string | undefined,
+    preparedBriefing?: AgentRunBriefing,
   ): Promise<ManagedEntry> {
     const continuation = continuationOf(record);
     const cwd = cwdOverride ?? record.cwd;
@@ -2784,9 +2800,12 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     // the account it was launched in rides with it (discovery runs there)
     const selection = this.resumeSelection(record.provider, record.modelSelection);
     return this.creation(record.profileId ?? null, async () => {
+      const briefing =
+        preparedBriefing ?? (await this.briefingForSpark(record.spark, record.provider));
       const result = await this.runtime.resume({
         continuation,
         cwd,
+        ...briefing,
         ...(record.title !== undefined ? { title: record.title } : {}),
         ...(record.profileId !== undefined ? { profile: record.profileId } : {}),
         workspace: restoredWorkspaceRequest(record.workspace, record.cwd),
@@ -2809,6 +2828,19 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         ...(record.spark !== undefined ? { spark: record.spark } : {}),
       });
     });
+  }
+
+  private async briefingForSpark(
+    spark: SparkId | undefined,
+    provider: string,
+  ): Promise<AgentRunBriefing> {
+    if (spark === undefined) return {};
+    if (!this.opts.sparkBriefing)
+      throw new RpcCallError("UNAVAILABLE", "the spark's briefing is unavailable", true, {
+        service: "compose",
+        state: "briefing-unavailable",
+      });
+    return this.opts.sparkBriefing(spark, provider);
   }
 
   /** PJ-6 (Q4) — what a resume of a session launched at `launched` passes and
@@ -2837,32 +2869,39 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     };
   }
 
-  /** PJ-6 (Q4) — the model a conversation's newest run of ours was launched
-   * at, in the account the resume names: a native resume of a session fieldd
-   * launched starts where its record says it did. Verified records only. */
-  private launchedSelection(
+  /** The newest verified record keeps the native conversation's origin and spark identity. PJ-6's existing model
+   * rule remains the most recent recorded selection, including when a later record has none. */
+  private launchedContext(
     provider: string,
     nativeSessionId: string,
     profileId: string | undefined,
-  ): AgentModelSelection | undefined {
+  ): {
+    record: AgentSessionRecord | undefined;
+    modelSelection: AgentModelSelection | undefined;
+  } {
     let records: AgentSessionRecord[];
     try {
       records = this.records.list();
     } catch {
-      return undefined;
+      return { record: undefined, modelSelection: undefined };
     }
     let newest: AgentSessionRecord | undefined;
+    let selected: AgentSessionRecord | undefined;
     for (const record of records) {
       if (
         record.continuation.providerId !== provider ||
         record.continuation.nativeSessionId !== nativeSessionId ||
-        record.profileId !== profileId ||
-        record.modelSelection === undefined
+        record.profileId !== profileId
       )
         continue;
       if (newest === undefined || record.createdAt > newest.createdAt) newest = record;
+      if (
+        record.modelSelection !== undefined &&
+        (selected === undefined || record.createdAt > selected.createdAt)
+      )
+        selected = record;
     }
-    return newest?.modelSelection;
+    return { record: newest, modelSelection: selected?.modelSelection };
   }
 
   // ── internals: the re-attach (AR-4) ──
@@ -3611,6 +3650,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     };
     const oldId = record.terminalSessionId;
     const work = async (): Promise<ManagedEntry> => {
+      let briefing: AgentRunBriefing;
       // ── before the point of no return: every throw restores the entry ──
       try {
         const terminals = this.requireTerminals();
@@ -3624,6 +3664,9 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
           how === "manual" ? "agent.resume" : "resume-when-idle",
         );
         if (stale !== undefined) throw stale;
+        // CP-1d — an unreadable spark record/brief or unsupported door must not cost the pending run its PTY.
+        // Keep this one prepared briefing for the replacement; never perform a second read after ending it.
+        briefing = await this.briefingForSpark(record.spark, record.provider);
         if (oldId !== undefined) {
           const row = this.listed(terminals, oldId) ? terminals.get(oldId) : undefined;
           if (row !== undefined) {
@@ -3675,7 +3718,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       // 2. the new run: the vendor's own conversation continued in a new PTY
       let next: ManagedEntry;
       try {
-        next = await this.resumeFromRecord(record, cwdOverride, oldId);
+        next = await this.resumeFromRecord(record, cwdOverride, oldId, briefing);
       } catch (error) {
         // the old PTY is gone; the resume did not happen — the record says
         // exactly that, and the door's ordinary resume takes it next

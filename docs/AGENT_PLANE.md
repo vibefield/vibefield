@@ -34,6 +34,8 @@ control host remains source-based, so this does not replace an installed-app or 
 
 ## The ownership law
 
+CP-1d's spark launch/resume handoff is documented in [Spark briefings](agent-plane/spark-briefings.md): the typed runtime fields, refreshed native door, capability projection, and the terminal-ancestry requirement. The upstream API is owned by [Puppeteer's per-run briefing guide](https://github.com/vibefield/puppeteer/blob/main/docs/guides/run-briefings.md).
+
 Stated at `draft/thinking-ar-agent-plane.md` §1. Read the middle column as hard as the left one.
 
 | Repo | Owns | Must never know |
