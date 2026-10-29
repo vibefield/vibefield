@@ -597,6 +597,19 @@ const RULES = [
         s.startsWith("../")
       ),
   },
+  {
+    id: "R29",
+    // CP-1b (the compose plane, version 2; CO): fieldd's compose code composes fieldd's own services (the runtime's
+    // runs, the index, the projects, the audit) and reaches past none of them: no puppeteer package and no rosetta
+    // package, so a spark's verbs cannot branch on a vendor (AR-L1) or read a vendor's transcript. R20 already keeps
+    // the adapters out of all of fieldd; this keeps even the runtime door out of compose/. The flow host (CP-4) gets
+    // its own rule.
+    enforce: true,
+    description:
+      "packages/fieldd/src/compose imports no @vibefield/puppeteer-* and no @vibefield/rosetta-* package: it composes fieldd's own services",
+    applies: (p) => SOURCE_EXT.test(p) && under(p, "packages/fieldd/src/compose"),
+    importTest: (s) => s.startsWith("@vibefield/puppeteer-") || s.startsWith("@vibefield/rosetta-"),
+  },
 ];
 
 // P2 (R26) — the Peek's watch-only pane, by its directory or its module names.
@@ -1205,6 +1218,16 @@ function runSelfTest() {
       id: "R28",
       file: "packages/trust/src/uses-kit.ts",
       body: 'import { canonicalJson } from "@vibefield/plugin-build";\nexport const c = canonicalJson;\n',
+    },
+    {
+      id: "R29",
+      file: "packages/fieldd/src/compose/uses-runtime.ts",
+      body: 'import { createRuntime } from "@vibefield/puppeteer-runtime";\nexport const r = createRuntime;\n',
+    },
+    {
+      id: "R29",
+      file: "packages/fieldd/src/compose/uses-rosetta.ts",
+      body: 'import { RosettaClient } from "@vibefield/rosetta-protocol";\nexport const c = RosettaClient;\n',
     },
   ];
   const cleans = [

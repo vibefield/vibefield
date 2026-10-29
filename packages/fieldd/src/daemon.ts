@@ -219,6 +219,7 @@ import {
 import { ArtifactService, type ArtifactServiceHealth } from "./artifact-service";
 import { AuditService, type AuditWriterTestHooks } from "./audit-service";
 import { nativeAlive, nativeEndpoint, nativeMgmtEndpoint } from "./boot-env";
+import { ComposeService, composeProjects } from "./compose";
 import { DeviceService, localDeviceIdAt } from "./device-service";
 import { DiagnosticsService } from "./diagnostics-service";
 import { DocLane } from "./doc-lane";
@@ -1195,6 +1196,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // optional the whole way down — with the mesh off (the default) `docSync`
     // stays null and every commit takes the same path it always did.
     let docSync: DocSyncService | null = null;
+    let compose: ComposeService | null = null;
     let presenceRooms: PresenceRoomRouter | null = null;
     // DS-5 (DS-D6) — the holders slice, bound once DeviceService exists below.
     let docHolders: DocHoldersService | null = null;
@@ -2633,6 +2635,56 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
               }),
       },
     });
+    // CP-1b (the compose plane, version 2; compose/) — the `vibefield` door. A spark's MCP calls arrive through the
+    // floor's door (native.door.subscribe; the bytes on the meshdata lane link) and are answered with its verbs, each
+    // held to its Agent Profiles and audited before it acts. No spark is kept before CP-1c's store, so every caller is
+    // served no tools yet, and each door leaves its one audit line.
+    compose = new ComposeService({
+      native,
+      lanes: laneLink,
+      runForTerminal: (terminalSessionId) => agents.runForTerminal(terminalSessionId),
+      spark: () => undefined,
+      verbs: {
+        profileSets: async () => (await agents.profiles.sets()).sets,
+        agentLabel: (provider) =>
+          (config.agentCatalog ?? AGENT_CATALOG).find((entry) => entry.id === provider)?.label,
+        models: (provider, profileSet) => agents.models({ provider, profileSet }),
+        runs: () => agents.list().sessions,
+        runFacts: (runtimeRunId) => {
+          const row = monitor?.rowForRun(runtimeRunId);
+          if (!row) return undefined;
+          return {
+            ...(row.cost?.usd !== undefined ? { usd: row.cost.usd } : {}),
+            ...(row.effort?.value ? { effort: row.effort.value } : {}),
+          };
+        },
+        projects: () =>
+          composeProjects(
+            projectDoors.list(
+              {},
+              { paths: true, tailnet: false },
+              PROJECT_DOORS.PAGE_DEFAULT_LIMIT,
+            ),
+          ),
+        indexSessionFor: async (nativeSessionId) =>
+          (await index.sessionByNativeId(nativeSessionId))?.id,
+        indexSessionProfile: async (sessionId) => ({
+          profileId: (await index.session(sessionId)).session.profileId,
+        }),
+        timeline: (sessionId, cursor, limit) =>
+          index.timeline({ sessionId, cursor, limit, boundedBelow: true }),
+        search: (q, runtime, limit, afterMs) =>
+          index.search({ q, runtime, limit, ...(afterMs !== undefined ? { afterMs } : {}) }),
+      },
+      audit,
+      version: FIELDD_VERSION,
+      logger: logger.child({ component: "compose" }),
+    });
+    {
+      const door = compose;
+      native.on("connected", () => void door.ensureStarted());
+      void door.ensureStarted();
+    }
     const projectPage = (ctx: { principal: Principal }, asked: number | undefined): number =>
       tailnetRowLimit(ctx.principal, asked, PROJECT_DOORS.PAGE_DEFAULT_LIMIT) ??
       PROJECT_DOORS.PAGE_DEFAULT_LIMIT;
@@ -6444,6 +6496,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         detachHealthSources?.();
         links.stop();
         await presenceRooms?.stop();
+        compose?.stop();
         docSync?.stop();
         laneLink.close();
         docs.dispose();
@@ -6494,6 +6547,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       await updateManager.dispose();
       runtimeDiagnostics.dispose();
       await presenceRooms?.stop();
+      compose?.stop();
       docSync?.stop();
       laneLink.close();
       docs.dispose();
@@ -6946,6 +7000,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           api.close();
           docLane.close();
           await presenceRooms?.stop();
+          compose?.stop();
           docSync?.stop();
           laneLink.close();
           docs.dispose();

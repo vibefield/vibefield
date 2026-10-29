@@ -293,6 +293,7 @@ export const COMPOSE_VERBS: readonly ComposeVerbDef[] = [
 // ── CP-1's verbs: inputs and outputs (the MCP tools' schemas; fieldd projects them to JSON Schema) ──
 
 export const ComposeAgentsAvailableInput = z.object({}).passthrough();
+export type ComposeAgentsAvailableInput = z.infer<typeof ComposeAgentsAvailableInput>;
 
 /** A model an agent offers, as `agent_spawn` takes it (opaque ids, AR-L1). */
 export const ComposeModel = z
@@ -328,6 +329,7 @@ export const ComposeAgentsAvailableOutput = z
 export type ComposeAgentsAvailableOutput = z.infer<typeof ComposeAgentsAvailableOutput>;
 
 export const ComposeProjectsListInput = z.object({}).passthrough();
+export type ComposeProjectsListInput = z.infer<typeof ComposeProjectsListInput>;
 
 export const ComposeProject = z
   .object({
@@ -357,6 +359,7 @@ export const ComposeAgentsListInput = z
     ended: z.boolean().optional(),
   })
   .passthrough();
+export type ComposeAgentsListInput = z.infer<typeof ComposeAgentsListInput>;
 
 export const ComposeSession = z
   .object({

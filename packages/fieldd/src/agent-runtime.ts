@@ -48,6 +48,7 @@ import {
   isAgentResumeRun,
   LAYOUT,
   type PlaceRef,
+  type SparkId,
   type TerminalInfo,
 } from "@vibefield/contracts";
 import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/logging";
@@ -1870,6 +1871,18 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       })),
     ].sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0));
     return { sessions: rows.map((r) => r.row) };
+  }
+
+  /** CP-1b (the compose plane, version 2; CP-D1) — the run a pane holds, for the `vibefield` door. The floor walks a
+   * caller to its pane; fieldd maps the pane to its run here and never walks itself. Managed and pending runs only:
+   * an exited run's pane holds no process that could have called. `spark` is set when the run is a spark's own
+   * session, as its record says (CP-1c writes it at hatch). */
+  runForTerminal(terminalSessionId: string): { runtimeRunId: string; spark?: SparkId } | undefined {
+    const runtimeRunId = this.byTerminal.get(terminalSessionId);
+    if (runtimeRunId === undefined) return undefined;
+    if (!this.managed.has(runtimeRunId) && !this.pending.has(runtimeRunId)) return undefined;
+    const spark = this.records.read(runtimeRunId)?.spark;
+    return { runtimeRunId, ...(spark ? { spark } : {}) };
   }
 
   /** `agent.subscribe`: full snapshots, at most one per tick. */
