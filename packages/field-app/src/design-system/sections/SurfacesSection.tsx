@@ -298,6 +298,8 @@ function DevicesSpecimenPage({ state }: { state: DevicesFixtureState }): ReactEl
   const fixture = devicesFixture(state);
   // the sheets open and close in place, as they do on the shipping page
   const [sheet, setSheet] = useState<DevicesSheet>(fixture.sheet);
+  // ...and so does the switch for asking again (TS-4)
+  const [connectAsks, setConnectAsks] = useState(fixture.connectAsks ?? true);
   const noop = (): void => undefined;
   return (
     <DevicesSectionView
@@ -321,6 +323,8 @@ function DevicesSpecimenPage({ state }: { state: DevicesFixtureState }): ReactEl
       signOutMissed={fixture.signOutMissed ?? null}
       onRename={async () => null}
       onNewUser={noop}
+      connectAsks={connectAsks}
+      onConnectAsks={setConnectAsks}
     />
   );
 }

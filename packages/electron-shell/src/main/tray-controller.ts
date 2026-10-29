@@ -80,6 +80,8 @@ export interface TrayControllerActions {
   /** UA-5 — optional like the update pair: absent hides the submenu. */
   switchUser?: (userId: string) => Promise<void>;
   newUser?: () => Promise<void>;
+  /** TS-4 — Connect Your Devices…: absent hides the row. */
+  connectDevices?: () => Promise<void>;
   quit(): void;
 }
 
@@ -425,6 +427,12 @@ export class TrayController {
       ...(this.options.actions.newUser !== undefined
         ? {
             newUser: () => this.runAction("newUser", this.options.actions.newUser!),
+          }
+        : {}),
+      ...(this.options.actions.connectDevices !== undefined
+        ? {
+            connectDevices: () =>
+              this.runAction("connectDevices", this.options.actions.connectDevices!),
           }
         : {}),
       setBackgroundShell: (enabled) =>

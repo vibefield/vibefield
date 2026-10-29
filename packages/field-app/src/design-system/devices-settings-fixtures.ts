@@ -10,6 +10,7 @@ export const DEVICES_FIXTURE_STATES = [
   "connected",
   "renamed",
   "this Mac only",
+  "asks off",
   "signing in",
   "approval",
   "expired",
@@ -66,6 +67,8 @@ export function devicesFixture(state: DevicesFixtureState): {
   devices: readonly DevicesRow[];
   /** TS-D14 — the console a missed sign-out left this Mac in, said once */
   signOutMissed?: { readonly adminUrl: string };
+  /** TS-4 — the switch for asking again (`mesh.connectAsks`); absent, on */
+  connectAsks?: boolean;
 } {
   const connected = linkFace("live", {
     ...QUIET,
@@ -152,6 +155,14 @@ export function devicesFixture(state: DevicesFixtureState): {
         face: linkFace("live", { ...QUIET, linkState: "offline" }),
         sheet: "none",
         devices: ROSTER.slice(0, 1),
+      };
+    case "asks off":
+      // TS-4 — the person turned off asking again: the switch says so
+      return {
+        face: linkFace("live", { ...QUIET, linkState: "offline" }),
+        sheet: "none",
+        devices: ROSTER.slice(0, 1),
+        connectAsks: false,
       };
     case "signing in":
       return {

@@ -55,9 +55,13 @@ export class SetupLedgerStore {
 
   /** AO-6b (AO-D15) — record one moment's answer beside the steps (Not now
    * retires it for good). Declarative, and a newer build's row for it is
-   * replaced, as `answer` does. Returns whether the ledger changed. */
+   * replaced, as `answer` does — except `asked` (TS-4), whose answer is its
+   * time: each saying is written, and it never replaces `retired`, which is for
+   * good. Returns whether the ledger changed. */
   moment(moment: SetupMomentKey, state: SetupMomentState): boolean {
-    if (setupMomentState(this.ledger, moment) === state) return false;
+    const held = setupMomentState(this.ledger, moment);
+    if (held === "retired" && state === "asked") return false;
+    if (held === state && state !== "asked") return false;
     this.ledger.moments = {
       ...(this.ledger.moments ?? {}),
       [moment]: { state, at: this.now().toISOString() },

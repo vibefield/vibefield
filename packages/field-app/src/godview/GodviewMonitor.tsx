@@ -325,6 +325,10 @@ export interface GodviewMonitorProps {
    * rows), so it opens no feed of its own. Withheld while the stage is still:
    * the curtain is the window's one question. */
   moment?: ReactNode;
+  /** TS-4 (TS-D7) — this Mac is not connected (its owner reads the link: the
+   * overlay's `useOffersConnect`): the desktop filter is offered on This Mac
+   * alone and ends on the ghost row. Default false: a catalog's stage. */
+  offersConnect?: boolean;
 }
 
 /** LR — a still stage's verbs: nothing is selected or born on a picture. The
@@ -349,6 +353,7 @@ export function GodviewMonitor({
   onSelectView,
   still = false,
   moment,
+  offersConnect = false,
 }: GodviewMonitorProps): ReactElement {
   const stageRef = useRef<HTMLElement>(null);
   // The palette reads THIS stage's Godview root, never the document's first:
@@ -799,10 +804,12 @@ export function GodviewMonitor({
   }, []);
   // SB-3: read at event time — a view's report lands between renders
   const readViewHoldsKeys = useCallback(() => viewHoldsKeysRef.current, []);
+  // TS-4 (TS-D7) — not connected: the filter is offered on This Mac alone, so
+  // its ghost row, Your other devices · Connect…, has somewhere to be
   const liveFilters = useHeldWhileSame<LiveFilters>(
     {
       desks:
-        devices.length > 1
+        devices.length > 1 || (offersConnect && devices.length === 1)
           ? devices.map((device) => ({
               id: device.id,
               name: device.name,
@@ -815,8 +822,15 @@ export function GodviewMonitor({
       desk: deviceChosen,
       profiles: showTabs ? tabs : [],
       profile: chosenId ?? null,
+      connect: offersConnect,
     },
-    JSON.stringify([devices, deviceChosen, showTabs ? tabs : null, chosenId ?? null]),
+    JSON.stringify([
+      devices,
+      deviceChosen,
+      showTabs ? tabs : null,
+      chosenId ?? null,
+      offersConnect,
+    ]),
   );
   const transcripts = door?.transcripts ?? NO_TRANSCRIPTS;
   const findDoor = useMemo<GodviewFindDoor>(

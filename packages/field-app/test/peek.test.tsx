@@ -34,6 +34,7 @@ import type {
   AgentProfileSet,
   FrameView,
   FrameViewState,
+  ShellCommand,
   ShellPlatform,
 } from "@vibefield/contracts";
 import type { FielddClient } from "@vibefield/fieldd-client";
@@ -48,6 +49,7 @@ import { act, type ReactElement, useEffect, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { isCommandPaletteChord, listenForProductChord } from "../src/field/product-chords";
+import { onShellPresentationRequest } from "../src/field/shell-presentation";
 import { publishGodviewDeck, resetGodviewDeckDoorForTest } from "../src/frame/deck-door";
 import {
   type GodviewFindDoor,
@@ -987,7 +989,7 @@ const everythingTab = (): void => scopeTab("Everything");
 /** Godview's monitor, as it publishes Live now's door: its rows, rosetta's
  * port, its select, and the two filters — which republish the door as the
  * monitor would. */
-function godviewDoor(): {
+function godviewDoor(patch: Partial<LiveFilters> = {}): {
   door: () => GodviewFindDoor;
   select: ReturnType<typeof vi.fn>;
   searched: Array<Record<string, unknown>>;
@@ -1009,6 +1011,7 @@ function godviewDoor(): {
       { id: "work", label: "Work", kind: "managed", glyph: "briefcase", blocked: true },
     ],
     profile: null,
+    ...patch,
   };
   let current: GodviewFindDoor;
   const rowListeners = new Set<() => void>();
@@ -1126,6 +1129,8 @@ describe("Search — the Peek, in Godview: Live now (P2)", () => {
         row.textContent?.trim(),
       ),
     ).toEqual(["All desktops", "MacBook Pro · here1 agent", "studio1 agent"]);
+    // connected: no ghost row (TS-4)
+    expect(pop()?.querySelector(".vf-peek-menu [data-ghost]")).toBeNull();
     act(() => menuRow("studio")?.click());
     expect(godview.door().filters.desk).toBe("studio");
     expect(liveDropdown("desk")?.textContent).toBe("studio");
@@ -1148,6 +1153,41 @@ describe("Search — the Peek, in Godview: Live now (P2)", () => {
     act(() => godview.door().setDesk("studio"));
     await openHistory();
     expect(host?.querySelector(".vf-peek-token")).toBeNull();
+  });
+
+  it("ends the desktop filter on the ghost row while this Mac is not connected (TS-4): This Mac alone, then Your other devices · Connect…", async () => {
+    const godview = godviewDoor({
+      desks: [
+        { id: "here", name: "MacBook Pro", os: "macos", here: true, note: "1 agent", quiet: false },
+      ],
+      connect: true,
+    });
+    const asked: ShellCommand[] = [];
+    const stop = onShellPresentationRequest((command) => asked.push(command));
+    try {
+      mount(fieldd());
+      to("godview");
+      await openPeek();
+      // This Mac alone is every desktop: it wears the filter, and no token
+      expect(liveDropdown("desk")?.textContent).toBe("MacBook Pro");
+      expect(host?.querySelector(".vf-peek-token")).toBeNull();
+      act(() => liveDropdown("desk")?.click());
+      const rows = [
+        ...(pop()?.querySelectorAll<HTMLButtonElement>(".vf-peek-menu .vf-menu-row") ?? []),
+      ];
+      expect(rows.map((row) => [row.getAttribute("role"), row.textContent?.trim()])).toEqual([
+        ["menuitemradio", "MacBook Pro · here1 agent"],
+        ["menuitem", "Your other devicesConnect…"],
+      ]);
+      expect(rows[0]?.getAttribute("aria-checked")).toBe("true");
+      expect(pop()?.querySelector(".vf-peek-menu hr.vf-peek-menu-rule")).not.toBeNull();
+      // its one act opens the Connect door, as the status item's row does
+      act(() => rows[1]?.click());
+      expect(asked).toEqual(["open-connect"]);
+      expect(godview.door().filters.desk).toBeNull();
+    } finally {
+      stop();
+    }
   });
 
   it("wears the filter again when Godview opens after a close: the monitor keeps the choice for the run (docket N4 (a))", async () => {

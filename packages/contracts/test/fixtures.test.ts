@@ -557,6 +557,9 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // AO-6b (AO-D15) — the moments beside the steps, and one moment's answer
   "setup-ledger-moments": SetupLedger,
   "setup-moment-params": SetupMomentParams,
+  // TS-4 (TS-D7) — the asks to connect after Not now, each said `asked` with its
+  // time beside AO's retired moments (setup-moment-params.asked is one saying)
+  "setup-ledger-connect-ask": SetupLedger,
   "agent-persona": AgentPersona,
   "agent-distribution": AgentDistributionRecord,
   "agents-installs": AgentsInstallsResult,

@@ -46,6 +46,10 @@ export interface TraySnapshot {
   readonly showTray: boolean;
   readonly windowOpen: boolean;
   readonly quitting: boolean;
+  /** TS-4 (TS-D7) — the attached user's Mac is not connected: offer Connect Your
+   * Devices…. Absent or false hides the row (older callers, tests, a link not
+   * read yet). */
+  readonly connectDevices?: boolean;
 }
 
 export type TrayPlatform = "darwin" | "win32" | "linux" | "other";
@@ -54,6 +58,8 @@ export interface TrayActions {
   openPrimaryWindow(): void;
   openSettings(): void;
   openDiagnostics(): void;
+  /** TS-4 — the Connect door the face menu's row opens */
+  connectDevices?: () => void;
   takeScreenshot?: () => void;
   checkForUpdates?: () => void;
   restartToUpdate?: () => void;
@@ -260,6 +266,18 @@ export function buildTrayMenu(
       label: serviceStatus(snapshot),
       ...availability(platform, false),
     },
+    // TS-4 (TS-D7; DESIGN.md §8 "Asking again") — a row, never a badge, in title
+    // case as macOS menus are; gone the moment the link lands
+    ...(snapshot.connectDevices === true && actions.connectDevices !== undefined
+      ? [
+          {
+            id: "connect-devices",
+            label: "Connect Your Devices…",
+            ...availability(platform, actionable),
+            ...(actionable ? { click: actions.connectDevices } : {}),
+          },
+        ]
+      : []),
     {
       id: "settings",
       label: "Settings…",

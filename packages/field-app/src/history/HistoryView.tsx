@@ -18,6 +18,8 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import { useOffersConnect } from "../account/use-link-door";
+import { requestShellPresentation } from "../field/shell-presentation";
 import {
   type JumpOutcome,
   jumpNote,
@@ -318,6 +320,7 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
     },
     [fieldd],
   );
+  const offersConnect = useOffersConnect();
   const acts = useMemo<HistoryHostActs>(
     () => ({
       setDesktop: (desktop) => setHostState((state) => ({ ...state, desktop })),
@@ -376,8 +379,10 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
         launch.recipeShown(modelRef.current.projects.get(project));
       },
       page: (next) => launch.page(next),
+      // TS-4 — the desktop chip's ghost row: the chrome opens the Connect door
+      ...(offersConnect ? { connect: () => requestShellPresentation("open-connect") } : {}),
     }),
-    [deps, fieldd, noteRun, showSuggestions, failed, launch],
+    [deps, fieldd, noteRun, showSuggestions, failed, launch, offersConnect],
   );
   const inputs = useMemo(() => historyHostInputs(model, hostState, acts), [model, hostState, acts]);
 

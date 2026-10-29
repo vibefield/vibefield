@@ -5561,7 +5561,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       if (!parsed.success) {
         throw new RpcCallError(
           "PRECONDITION_FAILED",
-          "expected { key: desktop.showTray|desktop.backgroundShell|desktop.screenshotHotkey|desktop.confirmQuit (boolean) | mesh.syncPosture (automatic|opt-in) }",
+          "expected { key: desktop.showTray|desktop.backgroundShell|desktop.screenshotHotkey|desktop.confirmQuit|mesh.connectAsks (boolean) | mesh.syncPosture (automatic|opt-in) }",
           false,
         );
       }
@@ -5634,7 +5634,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       if (!parsed.success) {
         throw new RpcCallError(
           "PRECONDITION_FAILED",
-          "expected { moment: <name> or <name>:<key>, state: retired }",
+          "expected { moment: <name> or <name>:<key>, state: retired|asked }",
           false,
         );
       }

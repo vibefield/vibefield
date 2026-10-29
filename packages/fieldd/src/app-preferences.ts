@@ -17,6 +17,9 @@ export const DEFAULT_APP_PREFERENCES: Readonly<AppPreferences> = {
   syncPosture: "automatic",
   // AL-3 — a quit that would end sessions asks first, until the person says not to
   confirmQuit: true,
+  // TS-4 (TS-D7) — after Not now, VibeField asks again where it helps, until the
+  // person turns that off in Settings → Devices
+  connectAsks: true,
 };
 
 export function effectiveAppPreferences(values: Readonly<Record<string, unknown>>): AppPreferences {
@@ -25,6 +28,7 @@ export function effectiveAppPreferences(values: Readonly<Record<string, unknown>
   const screenshotHotkey = values[APP_PREFERENCE_KEYS.SCREENSHOT_HOTKEY];
   const posture = MeshSyncPosture.safeParse(values[APP_PREFERENCE_KEYS.MESH_SYNC_POSTURE]);
   const confirmQuit = values[APP_PREFERENCE_KEYS.CONFIRM_QUIT];
+  const connectAsks = values[APP_PREFERENCE_KEYS.CONNECT_ASKS];
   return {
     showTray: typeof showTray === "boolean" ? showTray : DEFAULT_APP_PREFERENCES.showTray,
     backgroundShell:
@@ -38,6 +42,8 @@ export function effectiveAppPreferences(values: Readonly<Record<string, unknown>
         : DEFAULT_APP_PREFERENCES.screenshotHotkey,
     confirmQuit:
       typeof confirmQuit === "boolean" ? confirmQuit : DEFAULT_APP_PREFERENCES.confirmQuit,
+    connectAsks:
+      typeof connectAsks === "boolean" ? connectAsks : DEFAULT_APP_PREFERENCES.connectAsks,
   };
 }
 

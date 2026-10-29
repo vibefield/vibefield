@@ -169,6 +169,41 @@ describe("buildTrayMenu", () => {
   });
 });
 
+describe("Connect Your Devices… (TS-4; TS-D7)", () => {
+  it("is a row under the status while this Mac is not connected, and opens the Connect door", () => {
+    const connectDevices = vi.fn();
+    const menu = buildTrayMenu(
+      snapshot({ connectDevices: true }),
+      { ...actions(), connectDevices },
+      "darwin",
+    );
+    expect(menu.map((item) => item.id ?? item.type).slice(0, 4)).toEqual([
+      "open",
+      "status",
+      "connect-devices",
+      "settings",
+    ]);
+    byId(menu, "connect-devices").click?.();
+    expect(connectDevices).toHaveBeenCalledTimes(1);
+    expect(byId(menu, "connect-devices").label).toBe("Connect Your Devices…");
+  });
+
+  it("is gone once connected, and from older callers without the act", () => {
+    const connectDevices = vi.fn();
+    const has = (menu: ReturnType<typeof buildTrayMenu>) =>
+      menu.some((item) => item.id === "connect-devices");
+    expect(has(buildTrayMenu(snapshot(), { ...actions(), connectDevices }, "darwin"))).toBe(false);
+    expect(has(buildTrayMenu(snapshot({ connectDevices: true }), actions(), "darwin"))).toBe(false);
+  });
+
+  it("is released while quitting", () => {
+    const a = { ...actions(), connectDevices: vi.fn() };
+    const snap = snapshot({ connectDevices: true, quitting: true });
+    expect(byId(buildTrayMenu(snap, a, "darwin"), "connect-devices").click).toBeUndefined();
+    expect(byId(buildTrayMenu(snap, a, "win32"), "connect-devices").enabled).toBe(false);
+  });
+});
+
 describe("the Switch User submenu (UA-5)", () => {
   const users = [
     { userId: "01AAA", name: "James", attached: true },

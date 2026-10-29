@@ -1,4 +1,4 @@
-import type { DeviceInfo } from "@vibefield/contracts";
+import { APP_PREFERENCE_KEYS, type AppPreferences, type DeviceInfo } from "@vibefield/contracts";
 import { SegmentedControl } from "@vibefield/design-kit";
 import { useFielddClient, useSubscription } from "@vibefield/fieldd-client/react";
 import { type ReactElement, type ReactNode, useEffect, useRef, useState } from "react";
@@ -21,7 +21,14 @@ import type { MonitorDeviceFacet } from "../godview/monitor/types";
 import { OsMark } from "../godview/os-marks";
 import { getHost } from "../host";
 import { MeshSection } from "./MeshSection";
-import { buttonCls, fieldCls, labelCls, SettingsSection, SettingsSwitch } from "./settings-ui";
+import {
+  buttonCls,
+  fieldCls,
+  labelCls,
+  SettingsRow,
+  SettingsSection,
+  SettingsSwitch,
+} from "./settings-ui";
 import "./devices.css";
 
 // Settings → Devices (track TS, TS-3a; DESIGN.md §8 "Settings → Devices",
@@ -94,7 +101,16 @@ export interface DevicesSectionViewProps {
   onRename: (name: string | null) => Promise<string | null>;
   /** TS-D12 — a second account is a second user; absent where none can be made */
   onNewUser?: (() => void) | undefined;
+  /** TS-4 (TS-D7) — the one switch that stops the asks to connect after Not
+   * now (`mesh.connectAsks`): shown while this Mac is not connected; null while
+   * the preferences are read, absent where no controller lends it */
+  connectAsks?: boolean | null | undefined;
+  onConnectAsks?: ((on: boolean) => void) | undefined;
 }
+
+/** TS-4 — the switch's words (DESIGN.md §9, "Asking again"). */
+export const CONNECT_ASKS_TITLE = "Suggest connecting where it helps";
+export const CONNECT_ASKS_LINE = "At most once a day, and each place once a month.";
 
 /** "2 Nov": the renewal's day, in the person's own calendar words. */
 function dueDay(at: number): string {
@@ -416,6 +432,18 @@ function TailscaleCard(props: DevicesSectionViewProps): ReactElement {
             )}
         </div>
       </div>
+      {face.kind === "offline" &&
+        props.connectAsks !== null &&
+        props.connectAsks !== undefined &&
+        props.onConnectAsks !== undefined && (
+          <SettingsRow title={CONNECT_ASKS_TITLE} description={CONNECT_ASKS_LINE}>
+            <SettingsSwitch
+              label={CONNECT_ASKS_TITLE}
+              checked={props.connectAsks}
+              onChange={props.onConnectAsks}
+            />
+          </SettingsRow>
+        )}
     </SettingsSection>
   );
 }
@@ -753,12 +781,22 @@ function rowsOf(roster: readonly DeviceInfo[] | null): DevicesRow[] {
 
 export function DevicesSection({
   onSettingsChanged,
+  connectPending = false,
+  onConnectTaken,
 }: {
   onSettingsChanged?: ((undoable: boolean) => void) | undefined;
+  /** TS-4 — Connect Your Devices… from outside the window: begin the link here,
+   * once the link can be read, as the card's own Connect does */
+  connectPending?: boolean;
+  onConnectTaken?: (() => void) | undefined;
 } = {}): ReactElement {
   const client = useFielddClient();
   const door = useLinkDoor();
   const roster = useSubscription<DeviceInfo[]>("device.subscribe");
+  const preferences = useSubscription<AppPreferences>("storage.appPreferences.subscribe");
+  // an older daemon says nothing of the switch: its silence is on, as the contract reads it
+  const connectAsks =
+    preferences.status === "live" ? (preferences.data?.connectAsks ?? true) : null;
   const account = useAccountSnapshot();
   const host = getHost();
   const [sheet, setSheet] = useState<DevicesSheet>("none");
@@ -786,6 +824,30 @@ export function DevicesSection({
           reason: cause instanceof Error ? cause.message : String(cause),
         }),
     );
+  };
+  const faceKind = door.face.kind;
+  // one request, one begin: the chrome clears it once taken
+  const connectTaken = useRef(false);
+  useEffect(() => {
+    if (!connectPending) {
+      connectTaken.current = false;
+      return;
+    }
+    if (connectTaken.current || faceKind === "loading") return;
+    connectTaken.current = true;
+    onConnectTaken?.();
+    // only the ordinary unconnected state begins: a capture already running, a
+    // link, or a refusal keeps its own act on the card
+    if (faceKind === "offline") void door.begin();
+  }, [connectPending, faceKind, onConnectTaken, door]);
+  // a refused write leaves the switch where the preference still stands
+  const onConnectAsks = (on: boolean): void => {
+    void client
+      .request("storage.appPreferences.set", { key: APP_PREFERENCE_KEYS.CONNECT_ASKS, value: on })
+      .then(
+        () => onSettingsChanged?.(true),
+        () => undefined,
+      );
   };
   const usersCreate = host.usersCreate;
   const onNewUser =
@@ -824,6 +886,8 @@ export function DevicesSection({
       }}
       onDisconnect={onDisconnect}
       onSendLogs={(send) => void door.sendLogs(send)}
+      connectAsks={connectAsks}
+      onConnectAsks={onConnectAsks}
       signOutMissed={signOutMissed}
       onRename={async (name) => {
         try {

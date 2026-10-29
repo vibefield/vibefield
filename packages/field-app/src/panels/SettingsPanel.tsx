@@ -69,6 +69,9 @@ interface SettingsPanelProps {
   desktopState?: DesktopShellState | null;
   diagnosticsRequest?: number;
   diagnosticsInitiallyOpen?: boolean;
+  /** TS-4 — Connect Your Devices… from outside the window: Devices begins the link */
+  connectPending?: boolean;
+  onConnectTaken?: () => void;
   /** The page to open on when diagnostics was not asked for — the Me menu
    * opens Account from its name row (UA-D19). */
   initialPage?: SettingsPage;
@@ -171,6 +174,8 @@ export function SettingsPanel({
   desktopState = null,
   diagnosticsRequest = 0,
   diagnosticsInitiallyOpen = false,
+  connectPending = false,
+  onConnectTaken,
   initialPage = "general",
   initialProfiles,
   devtools,
@@ -336,6 +341,11 @@ export function SettingsPanel({
     handledDiagnosticsRequest.current = diagnosticsRequest;
     setActivePage("diagnostics");
   }, [diagnosticsRequest]);
+
+  // TS-4 — an open Settings moves to Devices, where the link begins
+  useEffect(() => {
+    if (connectPending) setActivePage("devices");
+  }, [connectPending]);
 
   // What had the keyboard as Settings opened, read as it first renders: a page
   // that moves the focus as it mounts (Agent Profiles' New profile…, AO-6b3)
@@ -614,7 +624,13 @@ export function SettingsPanel({
       <PluginsSection settingsRevision={settingsRevision} onSettingsChanged={markSettingsChanged} />
     );
   } else if (activePage === "devices") {
-    pageContent = <DevicesSection onSettingsChanged={markSettingsChanged} />;
+    pageContent = (
+      <DevicesSection
+        onSettingsChanged={markSettingsChanged}
+        connectPending={connectPending}
+        onConnectTaken={onConnectTaken}
+      />
+    );
   } else if (activePage === "terminal") {
     // GT-7: one page over two owners — this window's look and this Mac's
     // config.ghostty — each section saying which it is (GT-D18).

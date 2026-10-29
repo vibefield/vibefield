@@ -106,6 +106,13 @@ export function GodviewSection({ dark = false }: { dark?: boolean } = {}): React
         <PeekPlate state="live" />
       </Specimen>
       <Specimen
+        title="Search in Godview, this Mac not connected — This Mac alone, and the desktop filter ends on Your other devices · Connect… (TS-4)"
+        source="frame/PeekView.tsx"
+        bleed
+      >
+        <PeekPlate state="unconnected" />
+      </Specimen>
+      <Specimen
         title="Mesh board — every self desktop's agents on one stage, an asleep one greyed"
         source="godview/monitor/mesh-field.ts"
         bleed

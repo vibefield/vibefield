@@ -194,6 +194,11 @@ export const LINK_ACT_LABEL = "Continue with Tailscale";
 export const LINK_ACT_PENDING_LABEL = "Opening Tailscale…";
 /** The place that holds the act: the face menu's row, a section's title. */
 export const CONNECT_ROW_LABEL = "Connect your devices…";
+/** TS-4 (TS-D7; DESIGN.md §8 "Asking again") — the ghost row that ends the
+ * device filters (Godview's, History's) while this Mac is not connected: where
+ * your other devices would be, and its one act. */
+export const GHOST_ROW_LABEL = "Your other devices";
+export const GHOST_ROW_ACT = "Connect…";
 
 /** This desktop in its own platform's words (DESIGN.md §9: "This Mac", "This PC"
  * on Windows; never "This desktop"). */

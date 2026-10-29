@@ -61,7 +61,7 @@ export interface LimitMomentInput {
  * null before the feeds and the ledger have each answered. */
 function onlyThisMac({ sets, usage, ledger }: LimitMomentInput): AgentProfileSet | null {
   if (sets === null || usage === null || ledger === null) return null;
-  if (setupMomentState(ledger, LIMIT_MOMENT) !== undefined) return null;
+  if (setupMomentState(ledger, LIMIT_MOMENT) === "retired") return null;
   const [thisMac, ...others] = sets;
   if (thisMac === undefined || others.length > 0 || thisMac.kind !== "native") return null;
   return thisMac;

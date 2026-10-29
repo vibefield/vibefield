@@ -414,7 +414,7 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       [...(container?.querySelectorAll(".vf-ds-peek-plate") ?? [])].map((plate) =>
         plate.getAttribute("data-state"),
       ),
-    ).toEqual(["peek-live", "peek-closed", "peek-open"]);
+    ).toEqual(["peek-live", "peek-unconnected", "peek-closed", "peek-open"]);
     expect(history("peek-closed")?.querySelector(".vf-peek-button kbd")?.textContent).toBe("⌘F");
     expect(history("peek-closed")?.querySelector(".vf-peek-pop")).toBeNull();
     // P2 — Godview's Live now, the same controller over the monitor's door as a
@@ -429,6 +429,19 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(
       [...(live?.querySelectorAll(".vf-peek-dd-label") ?? [])].map((label) => label.textContent),
     ).toEqual(["All desktops", "Every profile"]);
+    // TS-4 — this Mac not connected: its runs alone, This Mac wears the filter,
+    // and the filter's menu ends on the ghost row
+    const unconnected = history("peek-unconnected");
+    expect(unconnected?.querySelector(".vf-peek-row .vf-peek-os")).toBeNull();
+    expect(unconnected?.querySelector('[data-peek-dd="desk"] .vf-peek-dd-label')?.textContent).toBe(
+      "MacBook Pro",
+    );
+    act(() =>
+      unconnected?.querySelector<HTMLButtonElement>('[data-peek-dd="desk"] .vf-peek-dd')?.click(),
+    );
+    expect(unconnected?.querySelector(".vf-peek-menu [data-ghost]")?.textContent).toBe(
+      "Your other devicesConnect…",
+    );
     expect(
       history("peek-open")?.querySelector<HTMLInputElement>(".vf-peek-pop .vf-peek-field input")
         ?.value,

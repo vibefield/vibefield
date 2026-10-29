@@ -1393,12 +1393,32 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   before they had a reason, so the offer returns only where a connected device would do the job —
   the face menu's row (always, while not connected); a ghost row, "Your other devices", in
   Godview's and History's device filters; Publish's choice of where to open; the status item's
-  **Connect Your Devices…** (title case, as macOS menus are); a card after an approval that waited
-  more than ten minutes, only once it is answered and never beside Allow and Deny; and a
-  once-only notice when the window closes with agents running. The rules: never on launch; each
-  place at most once per 30 days after Not now, and at most one a day across them; each has ×,
-  and one switch in Settings → Devices stops them all; each retires the moment the link lands. ×
-  sends a nudge back the way it came (M4, the retract, 180ms).
+  **Connect Your Devices…** (title case, as macOS menus are); a line after an approval that waited
+  more than ten minutes, only once it is answered and never beside Allow and Deny — on Godview's
+  agent row, as the wait clears: "It waited 14m for you." (TS-D20, ruled A 2026-10-29; the ruling
+  placed what said "a card" here); and a once-only notice when the window closes with agents
+  running. The rules: never on launch; each place at most once per 30 days after Not now, and at
+  most one a day across them; each has ×, and one switch in Settings → Devices stops them all;
+  each retires the moment the link lands. × sends a nudge back the way it came (M4, the retract,
+  180ms).
+  - **As built** (*TS-4a, 2026-10-29*): two kinds of place. **Rows** stand while this Mac is in the
+    ordinary unconnected state (the link face's `offline`; a capture, a refusal or a lapsed sign-in
+    says its own words instead) and keep no ledger: the face menu's row (TS-2), the status item's
+    **Connect Your Devices…** under the service's status line, and the ghost row that ends Godview's
+    and History's desktop filters — a hairline, a plus, "Your other devices" in the tertiary ink and
+    **Connect…** at the row's end in the secondary. Not connected, Godview offers its filter on This
+    Mac alone, which wears it, so the ghost row has somewhere to be. Every row opens Settings →
+    Devices and begins the link there once the link can be read (`open-connect`), as the card's own
+    Continue does. **Nudges** keep the rules above in the setup ledger: a saying is written
+    `connect-ask:<place>` *asked*, its time re-stamped each time and never over a retired one, and
+    `connectAskOpen` decides from those times alone (devices put off, the place's 30 days, the day).
+    The away notice — "VibeField keeps running" / "2 agents are still working. Connect your phone to
+    check on them from there.", with **Connect…** and **Not now** — is said when the last window
+    closes and VibeField stays, never in main's first minute. The switch is the app preference
+    `mesh.connectAsks` (on by default; an older daemon's silence reads on), a row under the card
+    while not connected: "Suggest connecting where it helps" / "At most once a day, and each place
+    once a month." (*draft words, James's to rule*). The approval line is TS-4b; whether the switch
+    stops the rows too is TS-D19's, and Publish's choice TS-D21's (both open).
 - **Finish setting up** (track AO, AO-D10 and AO-D12 ruled 2026-10-27; AO-L6): a step skipped in the
   Setup Assistant stays findable and never asks. At the head of Settings, under the account card, one
   tile lists what was skipped, each as a row with its glyph and its one line — "Bring in your past
