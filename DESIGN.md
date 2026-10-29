@@ -1012,7 +1012,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     not mounted or gone says so in New agent's words while the window stays. Resume and Jump to are
     the chosen session's acts — its row, ④'s head and the palette (§8 "History"). Between views the
     glyph cross-fades in place, 200ms `ease` (One Frame §12); the tooltip says the act and its key
-    ("Objects  B", "New terminal ⌘T", "New terminal in vibe-field ⌘T"), open it says "Close  Esc".
+    ("Objects  B", "New terminal  ⌘T", "New terminal in vibe-field  ⌘T"), open it says "Close  Esc".
     *Was 32 round, 6 clear of the track, until HN-2. History's create was Resume (AR-8c), and Jump
     to while the chosen session ran here (P3, 2026-10-08), until HN-7.*
   **The note** — the frame's voice at the foot: solid chrome, 12/500 in secondary ink, rising 4px as
@@ -2930,8 +2930,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     in the folder of the project the room shows — its place on this desktop, found as New agent finds
     it (the folder the room shows, else the project's usual place) — placed as Godview's create places
     one (GV-D4: in the focused pane), and the window moves to Godview to show it; the note says
-    Godview's words. With no project shown it opens as Godview's does; a project on another desktop,
-    or a folder not mounted or gone, says so in New agent's words and the window stays in History.
+    Godview's words ("Terminal opened in the active pane"). With no project shown it opens as
+    Godview's does; a project on another desktop, or a folder not mounted or gone, says so in New
+    agent's words — "Terminal could not be opened — the folder is gone" — and the window stays in
+    History; a deck that never answers says "Terminal could not be opened — no pane took it in 20 s",
+    and a press before the room has lent its door, "Terminal could not be opened — History is still
+    opening" (as the palette says "Godview is still opening").
   - **Resume** (`resume`, §13), the chosen session's act — the line's create until HN-7, now the
     palette's History row, each session row's and ④'s head's: waiting, faint by ink, until the room
     has a session chosen ("Resume this session — choose a session first"), and waiting with the empty pane
