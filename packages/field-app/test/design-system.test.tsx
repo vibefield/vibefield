@@ -380,8 +380,13 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(plate("held")?.querySelector(".vf-line-create")?.getAttribute("aria-disabled")).toBe(
       "true",
     );
-    expect(plate("hx")?.querySelector(".vf-line-create")?.getAttribute("aria-disabled")).toBe(
-      "true",
+    // HN-7 (LN-D2): History's create is New terminal in the project the room shows — never
+    // waiting on a chosen session (its Resume is the palette's row: the History plates below)
+    const hx = plate("hx")?.querySelector(".vf-line-create");
+    expect(hx?.hasAttribute("aria-disabled")).toBe(false);
+    expect(hx?.getAttribute("title")).toBe("New terminal in vibe-field  ⌘T");
+    expect(hx?.querySelector("[data-shown] [data-glyph]")?.getAttribute("data-glyph")).toBe(
+      "start",
     );
     // History's search is the frame's Peek (2026-10-08): no History plate
     // draws the room's own search, the empty transcript names ⌘F (K2), and the
@@ -395,6 +400,15 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     );
     // PJ-4 — History by project's plate (its rows: history-projects-plate.test.tsx)
     expect(history("projects")?.querySelector(".vf-history .ah-frame")).not.toBeNull();
+    // HN-7 — Resume's plates draw it where it lives now: the palette's History row, after New
+    // terminal (the line's create there, the project shown in its tooltip)
+    for (const state of ["chosen", "running"]) {
+      const rows = [...(history(state)?.querySelectorAll(".vf-command-palette [data-row]") ?? [])];
+      expect(rows.map((row) => row.getAttribute("data-row"))).toContain("chosen-session");
+      expect(history(state)?.querySelector(".vf-line-create")?.getAttribute("title")).toBe(
+        "New terminal in vibe-field  ⌘T",
+      );
+    }
     // AO-6b — a new agent with a past: the shipping row at the room's head
     const head = history("new-agent")?.querySelector(".vf-history .vf-history-new-agent");
     expect(head?.querySelector(".vf-history-new-agent-words")?.textContent).toMatch(
