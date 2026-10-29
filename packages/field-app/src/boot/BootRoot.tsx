@@ -7,6 +7,7 @@ import {
 } from "react";
 import type { AppearanceOverrideSource } from "../appearance";
 import type { ProductPresentationContextReporter } from "../presentation-context";
+import { FieldLayer } from "./FieldLayer";
 import type { BootMachine } from "./machine";
 import { OnboardingWizard } from "./onboarding/OnboardingWizard";
 import { SwitchLayer } from "./SwitchScene";
@@ -15,14 +16,15 @@ import { isSwitchCovering, SWITCH_MOTION, useSwitchState } from "./switch";
 import "./boot.css";
 
 // BootRoot (ESR §5.4.2): the splash is the app's first face (DESIGN.md §8 —
-// the canvas ground waking, the veil's thin bar, real stage labels); the
+// the field waking, the veil's thin bar, real stage labels); the
 // workspace mounts UNDERNEATH it as soon as the module + document exist, and
 // the reveal (240ms fade + a 560ms island-ease settle) plays only when the
 // machine reaches `interactive` — fully warm, frame-stable, never mid-hitch.
 //
 // UA-3w borrows that first face once per install: from the machine's
 // `onboarding` hold the Setup Assistant takes the splash's layer and ground,
-// and the splash's own face (wordmark, bar, stage line) stands down. Since
+// and the splash's own face (bar, stage line) stands down and the field's
+// mark goes under the glass. Since
 // AO-D2 it keeps them to the end: its answers recorded, the document opens,
 // warms and settles behind its glass while Setting up reports those stages,
 // and at `interactive` the glass leaves exactly as the splash would — the
@@ -123,7 +125,7 @@ export function BootRoot({
         </div>
       )}
       {machine.client !== null && machine.onboarding !== null ? (
-        <LeavingGround revealed={revealed} inert={covered}>
+        <LeavingGround revealed={revealed} inert={covered} glass>
           <OnboardingWizard
             client={machine.client}
             onboarding={machine.onboarding}
@@ -147,18 +149,22 @@ export function BootRoot({
   );
 }
 
-/** The first face's ground: the canvas itself at rest (DESIGN.md §8 — the field
- * waking, not a logo card). Shared by the splash and the Setup Assistant so
- * handing one to the other changes the content and never the floor. */
+/** The first face's ground: the field (track FG; DESIGN.md §2.1, §8 — the
+ * website's splash, not a logo card). Shared by the splash and the Setup
+ * Assistant so handing one to the other changes the content and never the
+ * floor: one node, so one field runs from the first paint to the reveal, its
+ * mark gone while the Setup Assistant's glass stands on it. */
 function BootGround({
   className = "",
   ariaHidden = false,
   inert = false,
+  glass,
   children,
 }: {
   className?: string;
   ariaHidden?: boolean;
   inert?: boolean;
+  glass: boolean;
   children: ReactNode;
 }): ReactElement {
   return (
@@ -167,6 +173,7 @@ function BootGround({
       aria-hidden={ariaHidden}
       inert={inert}
     >
+      <FieldLayer mark={!glass} />
       {children}
     </div>
   );
@@ -178,10 +185,13 @@ function BootGround({
 function LeavingGround({
   revealed,
   inert = false,
+  glass = false,
   children,
 }: {
   revealed: boolean;
   inert?: boolean;
+  /** the Setup Assistant's glass stands on the ground */
+  glass?: boolean;
   children: ReactNode;
 }): ReactElement | null {
   const [mounted, setMounted] = useState(true);
@@ -199,6 +209,7 @@ function LeavingGround({
       }`}
       ariaHidden={revealed}
       inert={inert}
+      glass={glass}
     >
       {children}
     </BootGround>

@@ -100,7 +100,7 @@ pegboard at DK-13 (2026-10-06). The island's law outlives it as M1 (§6): one el
 |---|---|---|
 | `--vf-canvas-bg` | `#FAFAFA` | `#171717` |
 | the cutting mat (`glyph: "mat"`, `draft/ground/MAT.md`) — sage `#86A078`, cream lines `#E8DCBE`, a material carried across both themes | lit by the **Sun**: the tree-shadow reference's chain — the sage shows `#3D5A30` | lit by the **Moon**: 4100 K through the Purkinje shift — `#313C40` in the dapples, `#1C2027` in the palm's shadow, Eigengrau `#16161D` under all; half the sunlit luminance |
-| `--vf-field-ground` — the first face's ground (track FG): the website's splash, the field of Wormhole · edited, before its first frame and under its still | `#04050F` | `#04050F` — the field is the dark in both themes |
+| `--vf-field-ground` — the first face's ground (track FG): the website's splash, the field of Wormhole · edited, before its first frame and under its still; the window's pre-paint projects it (`electron-shell/src/main/windows.ts` — main can't read CSS, UI_SYSTEM.md) | `#04050F` | `#04050F` — the field is the dark in both themes |
 
 *Retired 2026-10-07 (DK-17; DK-0d's erratum of 2026-10-03, executed — DK-D2, R22):* the ground this
 section described until then was ICE 0.11's — a world grid (`spacings: [25, 50, 100]` and its fades)
@@ -130,15 +130,15 @@ ground alone (§8), and so does the kit's placeholder face, whose one consumer i
 for the field — the chrome's plates, the switch's and the Setup Assistant's floor — wear the mat in
 CSS, as the field they stand for does.
 *Amended 2026-10-29 (track FG, FG-D1…FG-D24 ruled by James; the record is
-`draft/thinking-first-run-glass.md`; to be built at FG-1, FG-2 and FG-6):* the first face's ground is
-the **field** — the website's own splash (vibefield-dotdev, Wormhole · edited), live on WebGPU from
-boot's first frame to the desk (§8 "The boot splash") — and the mat begins at the desk.
-`--vf-field-ground` is the window's colour before the field's first frame and the ground under its
-still; it is one value in both themes because the tunnel is the dark in both. The splash and the Setup
-Assistant leave the mat in CSS for the field, and the catalog's Setup Assistant stands on the field's
-still; the switch's floor, the loading veil, the explorer's tiles and the terminal preview's miniature
-field keep the mat (DK-16). The words on the field are in `--vf-field-ink`, white at 56% (its contrast
-measured as DK-16 measured the mat's: FG-O2).
+`draft/thinking-first-run-glass.md`; built at FG-1, its tear to the desk at FG-2 and the catalog's still
+at FG-6):* the first face's ground is the **field** — the website's own splash (vibefield-dotdev,
+Wormhole · edited), live on WebGPU from boot's first frame to the desk (§8 "The boot splash") — and the
+mat begins at the desk. `--vf-field-ground` is the window's colour before the field's first frame and
+the ground under its still; it is one value in both themes because the tunnel is the dark in both. The
+splash and the Setup Assistant leave the mat in CSS for the field, and the catalog's Setup Assistant
+stands on the field's still; the switch's floor, the loading veil, the explorer's tiles and the terminal
+preview's miniature field keep the mat (DK-16). The words on the field are in `--vf-field-ink`, white at
+56% (its contrast measured as DK-16 measured the mat's: FG-O2).
 *Erratum 2026-10-03 (DK-0d — DK-D2, R22) — the cursor's halo, which this file never described:* the
 field above answered a pointer VibeField drew itself (`cursor/`: a DOM halo over the canvas that hid
 the OS cursor, became a dot over a widget's controls and fed this field its poles — the `reach`
@@ -2034,7 +2034,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   and `--vf-mat-lattice`), not the canvas and its dots — the floor the Setup Assistant and the switch
   share with it — and its words are in the mat's ink (white at 60 %: 4.0:1 by day, 5.2:1 by night,
   where `/50` read 3.9:1 on the canvas), the bar white/15 under white/80, the ghost Retry white.
-  *Amended 2026-10-29 (track FG; FG-L1, FG-D14 B; to be built at FG-1 and FG-2):* the ground is the
+  *Amended 2026-10-29 (track FG; FG-L1, FG-D14 B; built at FG-1, the tear at FG-2):* the ground is the
   **field** (§2.1): the website's splash, vendored (`boot/splash/`, generated from vibefield-dotdev's
   `lib/splash/` at a pinned hash, never edited), drawing at 60 fps in a worker on an OffscreenCanvas — on
   the main thread where a worker can't, as the still where there is no WebGPU — from the first frame to
@@ -2042,8 +2042,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   `--vf-field-ground`), and the live field fades in over it (500ms `ease`). The wordmark retires: the mark
   is the name. The bar keeps its size and its ink (white/15 under white/80) and stands 40 under the mark's
   centre, and the stage line 55 under it (11px, 500) in `--vf-field-ink` (§2.1), as the website sets them;
-  their contrast over the field is measured as DK-16 measured the mat's (FG-O2). Without WebGPU the field
-  is its still (`splash-still`, cover-fitted) and the opening is a fade.
+  their contrast over the field is measured as DK-16 measured the mat's (FG-O2). Behind them a soft shade of
+  the field's ground keeps them readable over the field: 400 × 120, centred 54 under the mark's centre, the
+  ground at 55% at its heart, 30% at 55% of the way out and gone at its edge. Without WebGPU the field is its
+  still (`splash-still`, cover-fitted) and the opening is a fade.
 - **The Setup Assistant's glass** (track FG, FG-D1…FG-D24 ruled by James 2026-10-29; the record is
   `draft/thinking-first-run-glass.md`, the page *First run on the field*). The Setup Assistant stands on
   the field as one glass, **880 × 640 on every step** (FG-D3 A): centred, never scrolling, and below a

@@ -189,6 +189,7 @@ describe("BootRoot and the switch (DESIGN.md §8)", () => {
     expect(scene()?.textContent).toContain("Switching to");
     expect(scene()?.textContent).toContain("waking the daemon");
     // The plain splash stands down while the switch's scene is this boot's splash,
+    expect(host?.querySelector(".vf-splash")).toBeNull();
     expect(host?.textContent).not.toContain("VibeField");
     // and the corner hides its own face until the traveller lands on it.
     expect(document.documentElement.hasAttribute("data-vf-switch-landing")).toBe(true);

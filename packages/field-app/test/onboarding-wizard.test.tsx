@@ -1527,8 +1527,12 @@ describe("Setup Assistant", () => {
 
 describe("BootRoot during onboarding", () => {
   /** A hand-driven machine: its view moves when the test says, and it holds the
-   * wizard (client live, the onboarding input set) from the start. */
-  function heldMachine(initial: BootView = bootAt("onboarding")): {
+   * wizard (client live, the onboarding input set) from the start — or from
+   * when `holds` says so. */
+  function heldMachine(
+    initial: BootView = bootAt("onboarding"),
+    holds: () => boolean = () => true,
+  ): {
     machine: BootMachine;
     set: (next: BootView) => Promise<void>;
   } {
@@ -1549,7 +1553,7 @@ describe("BootRoot during onboarding", () => {
         return fieldd;
       },
       get onboarding() {
-        return input;
+        return holds() ? input : null;
       },
       start: () => {},
       retry: () => {},
@@ -1584,11 +1588,33 @@ describe("BootRoot during onboarding", () => {
     const ground = container?.querySelector(".vf-splash");
     expect(ground).not.toBeNull();
     expect(ground?.className).toContain("absolute inset-0");
-    // ...without the splash's own face: no bar, no stage line.
+    // ...without the splash's own face: no bar, no stage line, and the field's
+    // mark gone under the glass (track FG).
     expect(container?.querySelector('[role="progressbar"]')).toBeNull();
+    expect(ground?.querySelector(".vf-field")?.getAttribute("data-mark")).toBe("hidden");
     expect(text()).toContain(
       "Manage all your agents and compose your agentic workflow in one place.",
     );
+  });
+
+  it("stands the glass on the splash's own field: one node from the first paint, its mark gone under the glass (track FG)", async () => {
+    host(vi.fn(async () => FRESH));
+    let holding = false;
+    const { machine, set } = heldMachine(
+      bootAt("connecting-fieldd", { stage: "waking the daemon" }),
+      () => holding,
+    );
+    await mountBoot(machine);
+    const field = container?.querySelector(".vf-splash .vf-field");
+    expect(field?.getAttribute("data-mark")).toBe("shown");
+    expect(container?.querySelector('[role="progressbar"]')).not.toBeNull();
+
+    holding = true;
+    await set(bootAt("onboarding"));
+    expect(container?.querySelector(".vf-splash .vf-field")).toBe(field);
+    expect(field?.getAttribute("data-mark")).toBe("hidden");
+    expect(container?.querySelector('[role="progressbar"]')).toBeNull();
+    expect(container?.querySelector(".vf-wizard-shell")).not.toBeNull();
   });
 
   it("keeps the wizard's glass while the desk opens beneath it, then leaves as the splash would (AO-D2)", async () => {
@@ -1596,12 +1622,15 @@ describe("BootRoot during onboarding", () => {
     const { machine, set } = heldMachine();
     await mountBoot(machine);
     const ground = container?.querySelector(".vf-splash");
+    const field = ground?.querySelector(".vf-field");
 
     // Past the hold the document opens, warms, settles and waits — and the
-    // wizard keeps the window the whole way: the splash never comes back.
+    // wizard keeps the window the whole way: the splash never comes back, and
+    // the field under the glass is the one it stood on.
     for (const phase of ["opening-document", "warming", "stabilizing", "handing-over"] as const) {
       await set(bootAt(phase, { stage: phase === "warming" ? "drawing the board" : "" }));
       expect(container?.querySelector(".vf-splash")).toBe(ground);
+      expect(ground?.querySelector(".vf-field")).toBe(field);
       expect(container?.querySelector(".vf-wizard-shell")).not.toBeNull();
       expect(container?.querySelector('[role="progressbar"]')).toBeNull();
       expect(ground?.className).toContain("opacity-100");
