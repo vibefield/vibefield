@@ -62,19 +62,23 @@ type Widen<T> = T extends number
 const PHONE_SPEC = {
   /**
    * The EYE. `k` and `min` are the desk eye's (the kit's `eyeOf`: over the view's centre, `k` view-diagonals up, never
-   * nearer than `min` — PHONE.md's). The LOCAL eye a phone is drawn and picked from stands over its own centre as high as
-   * the desk eye stands over a view that frames it — `frame` times the phone's own diagonal (the pane's 1.7) — so a phone
-   * is seen from the floor, 1250 up, as the prototype saw one at zoom 1.
+   * nearer than `min` — PHONE.md §1's desk eye, at the prototype's numbers). The LOCAL eye a phone is drawn and picked from
+   * stands over its own centre as high as the desk eye stands over a view that frames it — `frame` times the phone's own
+   * diagonal (the pane's 1.7, its PT-1 law; the PT-S design §1, choice 3) — so a phone is seen from the floor, 1250 up, as
+   * the prototype saw one at zoom 1.
    */
   eye: { k: 1.15, min: 1250, frame: 1.7 },
   /** The LIFT — the desk's flux, a phone's numbers (PHONE.md §7: it rises 26 in the hand, 1.2 under the pointer). */
   lift: { height: 26, hover: 1.2 },
-  /** How far the phone rests on its camera: 1 = lying as a real one does (its top lifted by the bump), 0 = flat (PHONE.md Q-3). */
+  /**
+   * How far the phone rests on its camera: 1 = lying as a real one does (its top lifted by the bump), 0 = flat (PHONE.md
+   * §1; kept by its Q-3).
+   */
   rest: 1,
   /**
-   * The shadow: the desk's one law (the kit's penumbra at contact and its slope's cap; the print's growth per unit of height,
-   * 0.36), swept down the slab's height in `steps` like the whiteboard's, with the slab's contact term at its base; the cast
-   * colour by day (the palette's `cast`), Eigengrau by night.
+   * The shadow (PHONE.md §4, its numbers): the desk's one law (the kit's penumbra at contact and its slope's cap; the print's
+   * growth per unit of height, 0.36), swept down the slab's height in `steps` like the whiteboard's, with the slab's contact
+   * term at its base; the cast colour by day (the palette's `cast`), Eigengrau by night.
    */
   shadow: {
     sigma0: PHYSICS.shadow.sigma,
@@ -124,7 +128,10 @@ const PHONE_SPEC = {
    * unseen 0, the last frame held. A rung is held through a wobbling zoom.
    */
   stream: { texelsPerPx: 1, rungs: 3, fps: { focused: 60, near: 30, far: 12 }, nearPx: 240 },
-  /** The side buttons stand this far proud of the band and are this tall (mm). */
+  /**
+   * The side buttons stand this far proud of the band and are this tall (mm): PHONE.md §1's buttons "standing proud of" the
+   * band, at the prototype's numbers; where each sits and how long it is are the chrome's (§2).
+   */
   button: { proud: 0.55, height: 2 },
   /** The lamp on a face — the kit's one physics (`PHYSICS.light`): the fill a face turned away keeps, how far past flat one turned toward it brightens. */
   lamp: PHYSICS.light,
