@@ -682,3 +682,51 @@ export function releaseName(version: string, options: { readonly start?: boolean
   if (beta !== null) return `VibeField ${beta[1]} beta ${Number(beta[2])}`;
   return `VibeField ${version}`;
 }
+
+// ── AU-3a (X24) — one version order, read by main's decision and the window's devices alike ──
+// Moved verbatim from main's `updates/decide.ts` (`compareDotted`, `compareSemver`), renamed, with no alias left
+// behind, so the window can say a desktop's version is older or newer (AU-3's devices) by the order main decides by.
+// A string compare would put 0.10.0 below 0.9.0.
+
+/** Dotted numeric versions (`15.1.0` against `14.0`): <0, 0 or >0, and NaN when either has a part that is not a
+ * number — which the floor reads as unmet (fail closed). */
+export function compareDottedVersions(a: string, b: string): number {
+  const parts = (v: string) =>
+    v.split(".").map((part) => (/^\d+$/.test(part) ? Number(part) : Number.NaN));
+  const left = parts(a);
+  const right = parts(b);
+  for (let i = 0; i < Math.max(left.length, right.length); i++) {
+    const l = left[i] ?? 0;
+    const r = right[i] ?? 0;
+    if (Number.isNaN(l) || Number.isNaN(r)) return Number.NaN;
+    if (l !== r) return l - r;
+  }
+  return 0;
+}
+
+/** Semver precedence, enough for the advisory `minSupported` line: the dotted core first, then a prerelease sorts
+ * below its release, identifiers compared numerically when both are numbers. NaN when a core part is not a number.
+ * Across channels the order means nothing (`beta` sorts below `nightly`), so the window compares within one. */
+export function compareReleaseVersions(a: string, b: string): number {
+  const [aCore = "", ...aPre] = a.split("-");
+  const [bCore = "", ...bPre] = b.split("-");
+  const core = compareDottedVersions(aCore, bCore);
+  if (Number.isNaN(core) || core !== 0) return core;
+  const ap = aPre.join("-");
+  const bp = bPre.join("-");
+  if (ap === bp) return 0;
+  if (ap === "") return 1;
+  if (bp === "") return -1;
+  const ai = ap.split(".");
+  const bi = bp.split(".");
+  for (let i = 0; i < Math.max(ai.length, bi.length); i++) {
+    const x = ai[i];
+    const y = bi[i];
+    if (x === undefined) return -1;
+    if (y === undefined) return 1;
+    if (x === y) continue;
+    const numeric = /^\d+$/.test(x) && /^\d+$/.test(y);
+    return numeric ? Number(x) - Number(y) : x < y ? -1 : 1;
+  }
+  return 0;
+}

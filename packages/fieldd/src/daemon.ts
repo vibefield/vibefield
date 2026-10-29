@@ -52,6 +52,7 @@ import {
   ArtifactRefreshPreviewParams,
   ArtifactUnpublishParams,
   ArtifactUpdateParams,
+  appVersionOfBuildId,
   type CallerContext,
   CONTRACTS_VERSION,
   createAgentCatalogReaders,
@@ -4144,12 +4145,17 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
 
     // -- DeviceService (C4, design-04 D31): the device directory --
     // (also the tailnet door's node-id correlator via devicesRef, assigned below)
+    // AU-3a (AU-D13 A) — the app version this desktop says on its slice, from
+    // the build id its launcher gave (`FIELDD_BUILD_ID`, the staged identity's
+    // `<appVersion>+<commit7>`). A dev runner's id names none, so dev says none.
+    const appVersion = appVersionOfBuildId(config.buildId);
     const devices = new DeviceService({
       dataDir: config.dataDir,
       mesh,
       bootId,
       fielddVersion: FIELDD_VERSION,
       contractsVersion: CONTRACTS_VERSION,
+      ...(appVersion !== undefined ? { appVersion } : {}),
       // NF-3: honest capability — true iff the pairing hello delivered the
       // floor's endpoints (D31; re-synced on the terminal-endpoints event).
       terminalHost: () => native.terminalEndpoints !== undefined,

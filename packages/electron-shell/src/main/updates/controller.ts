@@ -17,6 +17,7 @@
 
 import { randomUUID } from "node:crypto";
 import {
+  compareReleaseVersions,
   UPDATE_CHANNELS,
   UPDATE_PLANES,
   UPDATES_AUDIT_ACTIONS,
@@ -51,7 +52,6 @@ import {
 } from "./apply";
 import {
   type CensusCount,
-  compareSemver,
   decideUpdate,
   type LeverRefusal,
   leverRefusal,
@@ -776,7 +776,7 @@ export class UpdateController {
   private unsupportedBelow(): { unsupportedBelow?: string } {
     const min = this.lastVerified?.policy.minSupported;
     const current = this.options.currentVersion;
-    return min !== undefined && current !== undefined && compareSemver(current, min) < 0
+    return min !== undefined && current !== undefined && compareReleaseVersions(current, min) < 0
       ? { unsupportedBelow: min }
       : {};
   }
@@ -823,7 +823,7 @@ export class UpdateController {
       if (
         current !== undefined &&
         policy.minSupported !== undefined &&
-        compareSemver(current, policy.minSupported) < 0
+        compareReleaseVersions(current, policy.minSupported) < 0
       ) {
         lines.push(
           `UNSUPPORTED: ${current} is below the minimum supported ${policy.minSupported} (advisory, never a block)`,

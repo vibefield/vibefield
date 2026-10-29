@@ -8,6 +8,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
+  compareDottedVersions,
+  compareReleaseVersions,
   releaseName,
   UpdateCheckResult,
   UpdateClientStateFile,
@@ -178,5 +180,28 @@ describe("AU-1 (LC-2) — releaseName: one friendly name for a version", () => {
     expect(releaseName("0.2.0")).toBe("VibeField 0.2.0");
     expect(releaseName("0.2.0", { start: true })).toBe("VibeField 0.2.0");
     expect(releaseName("dev")).toBe("VibeField dev");
+  });
+});
+
+// AU-3a (X24) — the rows moved here from electron-shell's decide.test.ts with the two orders themselves.
+describe("AU-3a (X24) — one version order, main's and the window's", () => {
+  it("compares dotted versions, failing closed on a part that is not a number", () => {
+    expect(compareDottedVersions("15.1.0", "15.0")).toBeGreaterThan(0);
+    expect(compareDottedVersions("14.6.1", "15")).toBeLessThan(0);
+    expect(compareDottedVersions("15", "15.0.0")).toBe(0);
+    expect(compareDottedVersions("15.x", "15")).toBeNaN();
+  });
+
+  it("orders release versions by semver precedence, never as strings", () => {
+    expect(compareReleaseVersions("0.9.0", "0.10.0")).toBeLessThan(0);
+    expect(compareReleaseVersions("0.10.0", "0.9.0")).toBeGreaterThan(0);
+    expect(compareReleaseVersions("1.0.0-beta.2", "1.0.0")).toBeLessThan(0);
+    expect(compareReleaseVersions("1.0.0-beta.10", "1.0.0-beta.2")).toBeGreaterThan(0);
+    expect(
+      compareReleaseVersions("1.0.0-nightly.20261016", "1.0.0-nightly.20261015"),
+    ).toBeGreaterThan(0);
+    expect(compareReleaseVersions(NEXT, CUR)).toBeGreaterThan(0);
+    expect(compareReleaseVersions("1.0.0", "1.0.0")).toBe(0);
+    expect(compareReleaseVersions("1.x.0", "1.0.0")).toBeNaN();
   });
 });

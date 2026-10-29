@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   type CensusCount,
-  compareDotted,
-  compareSemver,
   type DecideContext,
   type DecideState,
   decideUpdate,
@@ -264,16 +262,5 @@ describe("the levers (B1) and the native plane (B3)", () => {
       reason: "census-unknown",
     });
   });
-
-  it("compares dotted and semver versions, failing closed on a part that is not a number", () => {
-    expect(compareDotted("15.1.0", "15.0")).toBeGreaterThan(0);
-    expect(compareDotted("14.6.1", "15")).toBeLessThan(0);
-    expect(compareDotted("15", "15.0.0")).toBe(0);
-    expect(compareDotted("15.x", "15")).toBeNaN();
-    expect(compareSemver("0.9.0", "0.10.0")).toBeLessThan(0);
-    expect(compareSemver("1.0.0-beta.2", "1.0.0")).toBeLessThan(0);
-    expect(compareSemver("1.0.0-beta.10", "1.0.0-beta.2")).toBeGreaterThan(0);
-    expect(compareSemver("1.0.0-nightly.20261016", "1.0.0-nightly.20261015")).toBeGreaterThan(0);
-    expect(compareSemver("1.0.0", "1.0.0")).toBe(0);
-  });
+  // AU-3a (X24): the version orders' rows moved with them, to contracts' update-view.test.ts.
 });
