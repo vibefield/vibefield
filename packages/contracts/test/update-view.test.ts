@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import {
   compareDottedVersions,
   compareReleaseVersions,
+  releaseChannelOf,
   releaseName,
   UpdateCheckResult,
   UpdateClientStateFile,
@@ -203,5 +204,17 @@ describe("AU-3a (X24) — one version order, main's and the window's", () => {
     expect(compareReleaseVersions(NEXT, CUR)).toBeGreaterThan(0);
     expect(compareReleaseVersions("1.0.0", "1.0.0")).toBe(0);
     expect(compareReleaseVersions("1.x.0", "1.0.0")).toBeNaN();
+  });
+});
+
+// AU-3 (LC-20) — a version's channel by its shape: the window says older or newer only within one channel.
+describe("AU-3 (LC-20) — releaseChannelOf: a version's channel by its shape", () => {
+  it("names the three shapes release-plan.mjs writes, and null for anything else", () => {
+    expect(releaseChannelOf(CUR)).toBe("nightly");
+    expect(releaseChannelOf("0.2.0-beta.3")).toBe("beta");
+    expect(releaseChannelOf("0.2.0")).toBe("stable");
+    expect(releaseChannelOf("dev")).toBeNull();
+    expect(releaseChannelOf("0.2.0-rc.1")).toBeNull();
+    expect(releaseChannelOf("0.1.0-nightly.2026102")).toBeNull();
   });
 });

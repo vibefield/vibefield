@@ -1,9 +1,18 @@
-import type { UpdateChannel, UpdateView } from "@vibefield/contracts";
+import {
+  releaseName,
+  UPDATES_SERVICE,
+  type UpdateChannel,
+  type UpdateCheckResult,
+  type UpdateView,
+} from "@vibefield/contracts";
 
 // WP12d (L3c-ii; build-wp12-updater.md §13 C3) — the Settings update card's own words, in DESIGN.md §9's voice:
 // sentence case, states told with their numbers and provenance ("checked 14:02"), errors that say what happened and
 // what to do next. Main's sentences — the consent, a refusal, an expired snapshot — arrive on the wire with the answer
 // that needs them and are never composed here, so the card and the tray's box cannot say different things.
+// AU-3 (AU-L4, AU-L6) — the update's words for every surface the window draws: Settings → Updates and the Me menu's
+// row (AU-2) read one state in the same words, and a version in a sentence is its friendly name (`releaseName`,
+// contracts — the one main's boxes say too).
 
 /** The channels lowest first, as the segmented control lays them out (EDP-36: a lower one is a downgrade). */
 export const UPDATE_CHANNEL_OPTIONS: readonly { id: UpdateChannel; label: string }[] = [
@@ -11,6 +20,25 @@ export const UPDATE_CHANNEL_OPTIONS: readonly { id: UpdateChannel; label: string
   { id: "beta", label: "Beta" },
   { id: "nightly", label: "Nightly" },
 ];
+
+/** AU-3 — the channel's word: the head's line under the version ("Nightly"), and the segmented control's labels. */
+export function channelLabel(channel: UpdateChannel): string {
+  return UPDATE_CHANNEL_OPTIONS.find((option) => option.id === channel)?.label ?? channel;
+}
+
+/** AU-3 — the Channel row's line, following the choice (DESIGN.md §8 "Settings → Updates"). */
+export const UPDATE_CHANNEL_LINES: Readonly<Record<UpdateChannel, string>> = {
+  stable: "Tested releases.",
+  beta: "Early releases, mostly stable.",
+  nightly: "Every night's build: the newest, and the least tested.",
+};
+
+/** AU-3 — the Automatic updates switch's line: when installs happen. AU-5 (install on quit) adds "or quit" to `on`;
+ * until it lands the sentence never promises it. */
+export const AUTOMATIC_UPDATES_LINES = {
+  on: "Download updates in the background. They install when you restart VibeField, or on their own while no window is open and nothing would end.",
+  off: "VibeField checks only when you choose Check for updates, and downloads only when you choose Download.",
+} as const;
 
 const RANK: Record<UpdateChannel, number> = { stable: 0, beta: 1, nightly: 2 };
 
@@ -34,71 +62,198 @@ export function downgradeWords(channel: UpdateChannel): {
 
 const pad = (n: number): string => String(n).padStart(2, "0");
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Two instants on one calendar day, in the person's own time zone. */
+const sameDay = (a: number, b: number): boolean => {
+  const left = new Date(a);
+  const right = new Date(b);
+  return (
+    left.getFullYear() === right.getFullYear() &&
+    left.getMonth() === right.getMonth() &&
+    left.getDate() === right.getDate()
+  );
+};
+
 /** The freshness claim: when the last check ran, never implied fresh (DESIGN.md's updates flow). Today reads as the
  * clock alone; an older check names its day. */
 export function checkedLabel(lastCheckAt: number | null, now: number): string {
   if (lastCheckAt === null) return "not checked yet";
   const at = new Date(lastCheckAt);
-  const today = new Date(now);
   const clock = `${pad(at.getHours())}:${pad(at.getMinutes())}`;
-  const sameDay =
-    at.getFullYear() === today.getFullYear() &&
-    at.getMonth() === today.getMonth() &&
-    at.getDate() === today.getDate();
-  if (sameDay) return `checked ${clock}`;
+  if (sameDay(lastCheckAt, now)) return `checked ${clock}`;
   return `checked ${at.toLocaleDateString(undefined, { month: "short", day: "numeric" })}, ${clock}`;
 }
 
+/** AU-3 (AU-L3) — a day in the update's words: "Oct 19", the person's own calendar day in fixed English months (the
+ * voice is English, as `releaseName`'s nightly days are). */
+export function shortDay(at: number): string {
+  return new Date(at).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+/** AU-3 (AU-L6) — the version you are on, in friendly words: "You're on the Oct 28 nightly", "You're on VibeField
+ * 0.2.0" (§9: one name everywhere). */
+export function youAreOn(version: string): string {
+  return `You're on ${releaseName(version)}`;
+}
+
+/** AU-3 (AU-L1; AU-D1 A, AU-D2 A) — an install waits on you: an update ready and its apply wired, including one that
+ * would end sessions. The face's dot, the Updates nav row's dot and the page's ready line all read THIS; never a
+ * check, a download or a held state. */
+export function updateWaits(view: UpdateView | null | undefined): boolean {
+  return view?.phase === "staged" && view.applyWired;
+}
+
+/** AU-3 (AU-L2) — Restart to update asks first ("…"): it ends sessions, or must read them before it can (the census
+ * unknown, or not read yet). A release that leaves the floor alone, or ends nothing, restarts on the one click. */
+export function restartAsks(view: UpdateView): boolean {
+  if (view.keepsSessions === true) return false;
+  const sessions = view.sessions;
+  return sessions === undefined || sessions === "unknown" || sessions > 0;
+}
+
+/** AU-3 (AU-D3 A) — time grows the words, never the mark: from a ready update's 7th day. */
+export const READY_SINCE_DAYS = 7;
+
+/** "Ready since Oct 19" once a staged update has waited `READY_SINCE_DAYS` (by `stagedAt`, the day it FIRST became
+ * ready on this Mac), else null. The page leads its cost with it; the Me row says it as its third line (AU-2). */
+export function readySince(view: UpdateView | null | undefined, now: number): string | null {
+  if (view?.phase !== "staged" || view.stagedAt === undefined) return null;
+  return now - view.stagedAt >= READY_SINCE_DAYS * DAY_MS
+    ? `Ready since ${shortDay(view.stagedAt)}`
+    : null;
+}
+
+/** AU-3 (AU-D11 A) — an install that took, for a day from the first launch that ran it (`lastApply.at`): "today",
+ * then "yesterday" once the date turns. */
+export interface RecentInstall {
+  readonly day: "today" | "yesterday";
+  readonly version: string;
+  /** the version it left; absent when an older app wrote the record */
+  readonly from?: string;
+}
+
+export function recentInstall(
+  view: UpdateView | null | undefined,
+  now: number,
+): RecentInstall | null {
+  const last = view?.lastApply;
+  if (view?.phase !== "idle" || last === undefined || last.outcome !== "installed") return null;
+  const age = now - last.at;
+  if (age < 0 || age >= DAY_MS) return null;
+  return {
+    day: sameDay(last.at, now) ? "today" : "yesterday",
+    version: last.version,
+    ...(last.from !== undefined ? { from: last.from } : {}),
+  };
+}
+
+// ── AU-2 (the corner, DESIGN.md §8 "The Me menu") reads these: the row's own flow, its acts and its shape. They land
+// with the page (LC-30: the page is the window's first AU slice), so the row is built on the words the page says. ──
+
+/** The row's flow inside one open of the menu; the next open reads the resting row again. `checking`: a check started
+ * from this row, in this open; `answered`: that check came back (LC-5: when the CHECK settles) and the view says what
+ * it found; `unreachable`: `check()` rejected, the bridge failed; `requested`: Download asked, not yet downloading. */
+export type MeUpdateLocal =
+  | { readonly kind: "rest" }
+  | { readonly kind: "checking" }
+  | { readonly kind: "answered"; readonly outcome: UpdateCheckResult["outcome"] }
+  | { readonly kind: "unreachable"; readonly message: string }
+  | { readonly kind: "preparing" }
+  | { readonly kind: "confirming" }
+  | { readonly kind: "restarting" }
+  | { readonly kind: "requested" };
+
+/** What a click on the row does: `open` folds the menu and opens Settings → Updates; `none` is `aria-disabled`. */
+export type MeUpdateAct = "check" | "restart" | "ask" | "download" | "open" | "none";
+
+/** The update row as the menu draws it: plain data, so the catalog builds it with the shipping words. */
+export interface MeUpdateRow {
+  readonly glyph: "reset" | "arrow" | "check";
+  /** 180: `arrow` turned down, a download (§13) */
+  readonly turn: 0 | 180;
+  /** line 1, the act (13/500) */
+  readonly label: string;
+  readonly labelTone?: "attention" | "danger";
+  /** line 2, the act's line (11.5/400, tertiary unless an ink is named) */
+  readonly detail: string;
+  readonly detailTone?: "attention" | "danger" | "quiet";
+  /** line 3: the publisher's floor or the ready day, one at most (AU-D3) */
+  readonly note?: { readonly text: string; readonly tone?: "attention" };
+  /** 0–100: the 2px bar, on real progress only */
+  readonly progress?: number;
+  /** the 6px cyan end dot, only while the face wears the mark */
+  readonly dot: boolean;
+  readonly act: MeUpdateAct;
+}
+
 const sessionsNoun = (n: number): string => (n === 1 ? "terminal session" : "terminal sessions");
+
+/** AU-3 (LC-31) — the check found no release on the chosen channel (`channel-unresolved`): nothing is published there
+ * yet, which is no failure — quiet on every surface, never the danger line. */
+export function channelUnresolved(view: UpdateView): boolean {
+  return view.phase === "failed" && view.unavailable === UPDATES_SERVICE.STATE_CHANNEL_UNRESOLVED;
+}
 
 export interface UpdateStateWords {
   headline: string;
   /** absent (or undefined) when the headline says it all */
   detail?: string | undefined;
-  /** `attention` for the policy's own answers (paused, an OS below the floor); `error` for a check that failed */
-  tone: "neutral" | "attention" | "error";
+  /** `attention` for the policy's own answers (paused, an OS below the floor); `error` for a check that failed;
+   * `quiet` for a channel with nothing published yet (LC-31: no failure, the tertiary ink) */
+  tone: "neutral" | "attention" | "error" | "quiet";
 }
 
-/** The card's state line: what the updater is doing, in words, with its number. */
-export function updateStateWords(view: UpdateView): UpdateStateWords {
+/** The page's state line: what the updater is doing, in words, with its number. `now` is the clock the ready day and
+ * a recent install are read against. */
+export function updateStateWords(view: UpdateView, now: number): UpdateStateWords {
   const version = view.version ?? "";
   switch (view.phase) {
     case "checking":
       return { headline: "Checking for updates…", tone: "neutral" };
     case "available":
+      // AU-3 (AU-G6) — a skip is the person's own act, said as theirs; (AU-G5) with updates off a found update waits
+      // for Download
+      if (view.declined === true)
+        return {
+          headline: `You skipped ${releaseName(version)}`,
+          detail: "The next one downloads on its own.",
+          tone: "neutral",
+        };
       return {
-        headline: `VibeField ${version} is available`,
-        detail:
-          view.declined === true
-            ? "You skipped this version. The next one downloads on its own."
-            : !view.enabled
-              ? "Automatic updates are off, so VibeField didn't download it. Turn them on to download it."
-              : undefined,
+        headline: `${releaseName(version, { start: true })} is available`,
+        detail: !view.enabled ? "Automatic updates are off, so it waits for you." : undefined,
         tone: "neutral",
       };
     case "downloading":
       return {
-        headline: `Downloading VibeField ${version} · ${Math.round(view.percent ?? 0)}%`,
+        headline: `Downloading ${releaseName(version)} · ${Math.round(view.percent ?? 0)}%`,
+        // AU-3 (LC-45) — when it installs, by the switch: on, AU-5 makes it "…when you restart or quit VibeField.";
+        // until install on quit lands, both say the restart
+        detail: "It installs when you restart VibeField.",
         tone: "neutral",
       };
     case "staged": {
       if (!view.applyWired)
         return {
-          headline: `VibeField ${version} is downloaded`,
+          headline: `${releaseName(version, { start: true })} is downloaded`,
           detail: "Installing it from here comes with a later release on this platform.",
           tone: "neutral",
         };
       const sessions = view.sessions;
+      const cost =
+        view.keepsSessions === true
+          ? "Your terminal sessions keep running."
+          : sessions === "unknown"
+            ? "VibeField couldn't read which terminal sessions are running; it asks again when you restart."
+            : typeof sessions === "number" && sessions > 0
+              ? `Restarting ends ${sessions} ${sessionsNoun(sessions)}. You choose when.`
+              : undefined;
+      // AU-3 (AU-D3 A) — from the 7th day the ready day leads the cost; the mark never changes
+      const since = readySince(view, now);
       return {
-        headline: `VibeField ${version} is ready — restart to finish updating`,
-        detail:
-          view.keepsSessions === true
-            ? "Your terminal sessions keep running."
-            : sessions === "unknown"
-              ? "VibeField couldn't read which terminal sessions are running; it asks again when you restart."
-              : typeof sessions === "number" && sessions > 0
-                ? `Restarting ends ${sessions} ${sessionsNoun(sessions)}. You choose when.`
-                : undefined,
+        headline: `${releaseName(version, { start: true })} is ready — restart to finish updating`,
+        detail: since === null ? cost : cost === undefined ? `${since}.` : `${since}. ${cost}`,
         tone: "neutral",
       };
     }
@@ -121,20 +276,61 @@ export function updateStateWords(view: UpdateView): UpdateStateWords {
         tone: "neutral",
       };
     case "failed":
+      // AU-3 (LC-31) — a channel with nothing published is no failure: quiet, never the danger line
+      if (channelUnresolved(view))
+        return { headline: `No ${view.channel} release yet`, tone: "quiet" };
       return {
         headline: "Couldn't check for updates",
         detail: `Updates are unavailable (${view.unavailable ?? "failed"}). Check again, or see Diagnostics for the details.`,
         tone: "error",
       };
-    default:
-      return view.enabled
-        ? { headline: "VibeField is up to date", tone: "neutral" }
-        : {
-            headline: "Automatic updates are off",
-            detail: "VibeField checks only when you choose Check for updates.",
-            tone: "neutral",
-          };
+    default: {
+      if (!view.enabled)
+        return {
+          headline: "Automatic updates are off",
+          detail: "VibeField checks only when you choose Check for updates.",
+          tone: "neutral",
+        };
+      // AU-3 (AU-D11 A) — for a day after an update, where it came from
+      const recent = recentInstall(view, now);
+      return {
+        headline: "VibeField is up to date",
+        detail:
+          recent === null
+            ? undefined
+            : recent.from === undefined
+              ? `Updated ${recent.day}.`
+              : `Updated ${recent.day} from ${releaseName(recent.from)}.`,
+        tone: "neutral",
+      };
+    }
   }
+}
+
+/** AU-3 (AU-G7; LC-34) — the page's notice for an install that didn't take, said on the launch right after it only
+ * (`lastApply.thisLaunch`), and never while ANOTHER version is ready (a newer staged update is the news then).
+ * `ready`: the same version is staged again, so it can be tried again; otherwise the page offers Check for updates.
+ * The quit's words ("The last quit…") come with install on quit (AU-5). The Me menu says it its own way (AU-2). */
+export function notAppliedWords(
+  view: UpdateView | null | undefined,
+): { readonly text: string; readonly ready: boolean } | null {
+  if (view === null || view === undefined) return null;
+  const last = view.lastApply;
+  if (last === undefined || last.outcome !== "not-applied" || last.thisLaunch !== true) return null;
+  const staged = view.phase === "staged";
+  if (staged && view.version !== last.version) return null;
+  const lead = `The last restart didn't install ${releaseName(last.version)}.`;
+  // the version it came back on: the one the apply left, else the one running now (the same app)
+  const back = last.from ?? view.currentVersion;
+  if (back === undefined)
+    return { text: staged ? `${lead} The update is ready to try again.` : lead, ready: staged };
+  const cameBack = `VibeField came back on ${releaseName(back)}`;
+  return {
+    text: staged
+      ? `${lead} ${cameBack}, and the update is ready to try again.`
+      : `${lead} ${cameBack}.`,
+    ready: staged,
+  };
 }
 
 /** The advisory UNSUPPORTED line (EDP §11.6): the running version is older than the oldest the publisher supports.
@@ -152,4 +348,14 @@ export function refusalFallback(reason: string): { message: string; detail: stri
         detail: "It finishes the update it started; nothing else changed.",
       }
     : { message: "VibeField didn't install the update", detail: `Nothing changed (${reason}).` };
+}
+
+/** AU-3 (LC-38) — a Download main refused without words of its own: the step that didn't happen, then why. Main's
+ * words win whenever it sends them (a lever, a read-only location). */
+export function downloadRefusalFallback(reason: string): { message: string; detail: string } {
+  const message = "VibeField didn't download the update";
+  if (reason === "not-available")
+    return { message, detail: "That version is no longer available." };
+  if (reason === "busy") return { message, detail: "VibeField is busy with another update step." };
+  return { message, detail: `Nothing changed (${reason}).` };
 }

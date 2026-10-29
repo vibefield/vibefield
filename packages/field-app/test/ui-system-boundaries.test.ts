@@ -420,6 +420,12 @@ describe("UI system ownership boundaries", () => {
     );
     expect(page).not.toMatch(/<UpdatesSection\s/u);
     expect(page).not.toMatch(/<UpdatesDoctorSection\s/u);
+    // AU-3 (AU-D8 A) — the page of its own, in the shipping dialog; Your devices over the SHIPPING rows' builder,
+    // never its controller (the roster is fieldd's, and the catalog has none)
+    expect(page).toMatch(/activePage="updates"/u);
+    expect(fixture).toContain("updateDeviceRows(");
+    expect(fixture).not.toMatch(/import \{[^}]*\} from "\.\.\/panels\/UpdatesDevicesSection"/u);
+    expect(page).not.toMatch(/<UpdatesDevicesSection\s/u);
   });
 
   it("keeps the edges' fixture an ADAPTER — tiles and an open drawer, never the trays' markup (FR-4)", () => {
@@ -663,9 +669,11 @@ describe("UI system ownership boundaries", () => {
       "PeerCursorView",
       "arrowBoxAt",
       "peerLabel",
-      // WP12d (L3c-ii) — Settings › General's update card and Settings › Diagnostics' updater block, over fixtures
+      // WP12d (L3c-ii) — Settings › General's update card and Settings › Diagnostics' updater block, over fixtures;
+      // AU-3 — the card became Settings → Updates, Your devices under it
       "UpdatesSectionView",
       "UpdatesDoctorView",
+      "UpdatesDevicesView",
     ]) {
       expect(catalog).toContain(productionView);
     }
@@ -689,6 +697,7 @@ describe("UI system ownership boundaries", () => {
     // …and the update card and the updater block mounted in the shipping dialog (WP12d L3c-ii)
     expect(page).toMatch(/<UpdatesSectionView\s/u);
     expect(page).toMatch(/<UpdatesDoctorView\s/u);
+    expect(page).toMatch(/<UpdatesDevicesView\s/u);
     // …and the board risen behind the line in both scenes that raise Objects (the playground, the view frame's stage)
     expect(page).toMatch(/<StageBoard\s/u);
     expect(viewFrame).toMatch(/<StageBoard\s/u);
@@ -771,6 +780,7 @@ describe("UI system ownership boundaries", () => {
       "account/MeMenu.tsx",
       "panels/AppearanceSection.tsx",
       "panels/UpdatesSection.tsx",
+      "panels/UpdatesDevicesSection.tsx",
       "field/desk/bar/SelectionBar.tsx",
       "field/desk/bar/SelectionBarView.tsx",
       "field/desk/bar/KindGlyph.tsx",

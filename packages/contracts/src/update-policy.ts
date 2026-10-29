@@ -730,3 +730,11 @@ export function compareReleaseVersions(a: string, b: string): number {
   }
   return 0;
 }
+
+/** AU-3 (LC-20) — a release version's channel by its shape (`release-plan.mjs`'s naming), or null for anything else.
+ * Older and newer are said only within one channel: semver orders `beta` below `nightly`. */
+export function releaseChannelOf(version: string): UpdateChannel | null {
+  if (NIGHTLY_VERSION_PATTERN.test(version)) return "nightly";
+  if (BETA_VERSION_PATTERN.test(version)) return "beta";
+  return /^\d+\.\d+\.\d+$/.test(version) ? "stable" : null;
+}

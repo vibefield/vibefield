@@ -23,6 +23,7 @@ export type SettingsPage =
   | "plugins"
   | "devices"
   | "terminal"
+  | "updates"
   | "diagnostics"
   | "advanced";
 
@@ -41,6 +42,7 @@ interface PageMeta {
     | "plugin"
     | "mesh"
     | "terminal"
+    | "reset"
     | "pulse"
     | "code";
 }
@@ -111,6 +113,13 @@ const PAGES: readonly PageMeta[] = [
     icon: "terminal",
   },
   {
+    // AU-3 (AU-D8 A, AU-D7 A) — the updater's own page, first in Support, wearing `reset`
+    id: "updates",
+    label: "Updates",
+    description: "Which version you're running, what's next, and how VibeField installs it.",
+    icon: "reset",
+  },
+  {
     id: "diagnostics",
     label: "Diagnostics",
     description: "System health, logs, and support tooling.",
@@ -128,7 +137,7 @@ const NAV_GROUPS: ReadonlyArray<{ label: string; pages: readonly SettingsPage[] 
   { label: "Account", pages: ["account", "devices"] },
   { label: "Preferences", pages: ["general", "appearance", "canvas"] },
   { label: "Workspace", pages: ["agents", "history", "plugins", "terminal"] },
-  { label: "Support", pages: ["diagnostics", "advanced"] },
+  { label: "Support", pages: ["updates", "diagnostics", "advanced"] },
 ];
 
 const PAGE_BY_ID = new Map(PAGES.map((page) => [page.id, page]));
@@ -372,6 +381,7 @@ const PAGE_GLYPH: Record<PageMeta["icon"], GlyphName> = {
   plugin: "plugin",
   mesh: "mesh",
   terminal: "terminal",
+  reset: "reset",
   pulse: "pulse",
   code: "code",
 };
@@ -400,6 +410,7 @@ export function SettingsDialog({
   profiles,
   head = null,
   subpage = null,
+  pageMarks,
   dialogRef,
   className = "",
   children,
@@ -423,6 +434,9 @@ export function SettingsDialog({
   head?: { title: string; description: ReactNode } | null | undefined;
   /** A page below the active one (see `SettingsSubpage`); null at the page itself. */
   subpage?: SettingsSubpage | null | undefined;
+  /** AU-3 (AU-D2 A) — a page that waits on you wears the 6px cyan mark at its nav row's end; the value is the mark's
+   * accessible words ("an update is ready to install"). */
+  pageMarks?: Partial<Record<SettingsPage, string>> | undefined;
   dialogRef?: RefObject<HTMLDivElement | null>;
   className?: string;
   children: ReactNode;
@@ -480,12 +494,14 @@ export function SettingsDialog({
                     const page = PAGE_BY_ID.get(pageId);
                     if (page === undefined) return null;
                     const selected = page.id === activePage;
+                    const mark = pageMarks?.[page.id];
+                    const label = `${page.label} settings${mark === undefined ? "" : `, ${mark}`}`;
                     return (
                       <button
                         key={page.id}
                         type="button"
                         aria-current={selected ? "page" : undefined}
-                        aria-label={`${page.label} settings`}
+                        aria-label={label}
                         className={`vf-settings-nav-item flex h-9 w-full items-center gap-2.5 rounded-[10px] px-3 text-left text-[12px] font-medium transition-[background-color,color,transform] active:scale-[0.98] ${
                           selected
                             ? "bg-black/[0.075] text-black dark:bg-white/[0.12] dark:text-white"
@@ -497,6 +513,9 @@ export function SettingsDialog({
                           <PageIcon name={page.icon} />
                         </span>
                         <span className="vf-settings-nav-label truncate">{page.label}</span>
+                        {mark !== undefined && (
+                          <span className="vf-settings-nav-mark" aria-hidden="true" />
+                        )}
                       </button>
                     );
                   })}

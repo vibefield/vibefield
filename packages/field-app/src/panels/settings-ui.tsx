@@ -1,5 +1,5 @@
 import { UiPill, UiSwitch, uiButtonClass, uiFieldClass, uiLabelClass } from "@vibefield/design-kit";
-import type { ReactElement, ReactNode } from "react";
+import { type ReactElement, type ReactNode, useEffect, useState } from "react";
 
 /** Shared settings-surface vocabulary. These are app chrome, so hierarchy is
  * expressed through the light/dark text-opacity ramp rather than fixed greys. */
@@ -96,4 +96,26 @@ export function SettingsSwitch({
 
 export function SettingsPill({ children }: { children: ReactNode }): ReactElement {
   return <UiPill>{children}</UiPill>;
+}
+
+/** A button that says it worked, for two seconds, in its own words ("Copied", "Couldn't copy"). Moved from
+ * Settings → Devices (AU-3, LC-22): Settings → Updates' head copies the exact version with it too. */
+export function CopyButton({
+  label,
+  copy,
+}: {
+  label: string;
+  copy: () => Promise<boolean>;
+}): ReactElement {
+  const [done, setDone] = useState<null | boolean>(null);
+  useEffect(() => {
+    if (done === null) return;
+    const timer = setTimeout(() => setDone(null), 2000);
+    return () => clearTimeout(timer);
+  }, [done]);
+  return (
+    <button type="button" className={buttonCls} onClick={() => void copy().then(setDone)}>
+      {done === true ? "Copied" : done === false ? "Couldn't copy" : label}
+    </button>
+  );
 }
