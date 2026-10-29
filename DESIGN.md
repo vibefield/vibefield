@@ -1135,7 +1135,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     (the window's bottom 214, the fan's ends ± 70) the cards near the pointer rise by a smoothstep on
     their distance — up to **86** within **120** of it, 240ms on the island curve — and straighten as
     they come, the nearest in front. The card under the pointer rises whole, says where it came from
-    above itself — "Godview · claude·2 · 2m ago", "Canvas · snapshot · just now", on solid chrome at
+    above itself — "Godview · claude·2 · 2m ago", "Canvas · snapshot · just now", a copy made in
+    Settings or the Setup Assistant by the view under it ("Canvas · Settings · just now"), one History's
+    room made by the view alone ("History · just now") — on solid chrome at
     12/500 in secondary ink — and shows its **×** inside its top right corner, across from the index:
     18 round on the card's ink at 8%, `--vf-red` with a white × under the pointer, "Remove  ⌫". Above
     the fan's rest line the card the pointer is on holds the reach while the pointer moves across it,
@@ -1935,6 +1937,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   writes would clobber each other). The selection is **never cleared or put back**: no
   selection write during Copy, and nothing a peer could see blink. ⌘C copies only on Canvas, with a
   selection, outside any field — a note being written copies its own text — and never under a cover.
+  **A copy the clipboard refuses deals nothing** — the card is dealt only once its contents are on
+  the clipboard — and the note says why, in Copy's voice: "Not copied — the clipboard did not take
+  the picture", "Not copied — the picture could not be read", or its size against the clipboard's
+  bound, counted as §9 counts ("Not copied — the words hold 80 KB; the clipboard takes at most
+  64 KB"). Settings' and History's copies keep their buttons' own "Copied" and "Couldn't copy".
   Reduced motion (M6): the card fades into its place.
   *History:* **Send to…** (DK-0d…DK-17b, 2026-10-03…10-07) flew a chip of the object's face from the
   selection to the line's caret (1.25 → 0.86, 560ms) and typed the @ 180ms after it landed, so @'s
