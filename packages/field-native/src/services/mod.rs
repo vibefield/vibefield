@@ -1,3 +1,5 @@
+/// CP-1a — the floor's door.
+pub mod door;
 pub mod freeway;
 pub mod lane_transport;
 mod lossy_lane;
