@@ -18805,3 +18805,59 @@ place on a row. The place went back to James as TS-D20b (02:38Z, `rule-ts-d20b-h
 - The approval line on a desk (James's display word), with TS-4a's rows and away notice.
 - **Publish's nudge** (TS-D21 = A): deferred until a Publish offers where to open.
 - **The switch's words** (James's to rule).
+
+## FG-0 — the first run on the field is ruled, and DESIGN.md says it first: the field's ground, the Setup Assistant's glass and its tier, the first run's motions, the tear and the living mark (2026-10-29; records only, lane `fg/build`)
+
+**What.** James ruled the eleven marks of *First run on the field*
+(https://claude.ai/artifact/MsuRkX9y7DmPvxz1TjqJHh) on the page between 09:29 and 09:35Z, round 4: the lean on eight,
+against it on three (D15 C, D10 B, D14 B), then "all ruled" (09:36Z). His words in rounds 1–3 had settled D1, D2,
+D5…D8, D12, D13, D16, D18, D20 and D21. After the picks, his words on version 6 ("can we just render the glass with
+webgpu too so we only do one field render so it is more performant?") became FG-D24: the field draws the glass and
+the logo in its own frame. His word to build (10:55Z): "meanwhile, start planning and land all these properly in our
+desktop app". This entry lands the records before any code, because a visual change is written in DESIGN.md first
+(docs/UI_SYSTEM.md):
+- **§2.1**: the first face's ground is the field, the website's splash, and the mat begins at the desk.
+  `--vf-field-ground` is `#04050F` in both themes, and the words on the field are in `--vf-field-ink` (white at 56%).
+  The switch, the loading veil, the explorer's tiles and the terminal preview keep the mat (DK-16).
+- **§5** writes down the Setup Assistant's material tier, which had shipped since UA-3w in `tokens.css` alone:
+  `--vf-wizard-surface` over `blur(32px) saturate(1.12)`, at the island radius. On the field it gains a 1px edge
+  with a top light, a shadow in the field's own ground and a 3% grain.
+- **§6** gives the first run's motions:
+  - the glass forming, and the logo that only fades;
+  - the hand-over: the welcome holds 1.6s, the logo stands alone for 640ms, and the frost clears over 600ms;
+  - the tear: 1.9s on t², with the theme's light on its walls, while the desk settles from .985 and its exposure
+    comes down from 1.16;
+  - a returning boot's 700ms floor;
+  - reduced motion.
+- **§8**:
+  - "The boot splash" is amended: the field draws at 60 fps from a worker, with its still where there is no WebGPU;
+    the wordmark retires, and the bar and the stage stand under the mark.
+  - A new canon entry, "The Setup Assistant's glass": 880 × 640 with the fit, the steps, the one frame, a load, the
+    logo, and the glass drawn by the field (FG-D24).
+  - "The reveal" is amended: the tear.
+  - The switch's line: it keeps the mat.
+- **§13**: the living mark joins "Kept exact".
+- **DECISIONS** gains the FG row (FG-D1…D24, FG-L1…L7). **ROADMAP** gains the FG track, its table row and FG-O7 among
+  James's open questions.
+
+**Not in this entry.** No code. Every amendment names the packet that builds it ("to be built at FG-n"). Each token
+reaches `tokens.css` with its first consumer, as TS-0's did:
+- `--vf-field-ground` with FG-1 (the field, and the window's pre-paint as a stated projection of it);
+- `--vf-field-ink` with FG-2 (the boot's face);
+- the glass's edge, top light, shadow and grain with FG-3.
+
+FG-1 (the field) is next, in lane `fg/build` on VF-PM's word. FG-3 follows TS-6's landing and FG-4 follows TS-7's
+(VF-PM, 11:17Z).
+
+**Records.** The design record is `draft/thinking-first-run-glass.md` (§3 the laws, §4 the rulings, §5 the design as
+ruled, §7 the build ladder FG-0…FG-6, §8 FG-O1…O12); it rides VF-PM's next draft queue. Version 7 of the page
+(`1793272198-5057`) measured FG-D24's glass against version 6's CSS glass:
+- on a frozen frame, |Δ| is about 1/255 inside the glass;
+- the glass's GPU time is within the A/A noise;
+- on a hold, the GPU process's CPU is about 18 ms/s lower now that the second splash is gone.
+
+**Validation.** Docs only, so verify executes nothing new. Six field-app tests read DESIGN.md: `browser-data-section`,
+`godview-head`, `limit-moment`, `godview-deck-edge`, `line-model` and `project-ink`. The diff adds lines and rewrites
+two, the switch's parenthesis in §8 and §13's "Kept exact" sentence, and none of the six reads either. In the lane the
+six ran green, each alone at nice 19 (11:26:26–11:26:43Z, load 10), with 5, 24, 22, 58, 20 and 10 tests, and
+`git diff --check` is clean. Verify runs on the Mac mini, in VF-PM's queue after CP-0.
