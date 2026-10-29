@@ -42,11 +42,16 @@
 **TS — the Tailscale door** · vibe-field-d0 · law `draft/thinking-tailscale-onboarding.md` §10, DESIGN.md §6/§8/§9/§13
 - Landed 10-27: TS-0, 1, 2, 3a (+ erratum `067d4895c`), 3b, 5, 8a (`d48e131fc`, the floor's facts on truffle 0.7.24),
   8b (`adf3d972f`, the faces and James's words). T9–T11 consumed with truffle 0.7.24.
-- Next: **TS-4** (asking again) → TS-6 (the sync question, D13) → TS-7 (the phone) → TS-8c (T8, after its live probe)
-  → TS-9. The slice names are the doc's: the board's "TS-6" was TS-8a.
+- Landed 10-29: TS-4a (`776eae4d3`, asking again: the status item's Connect Your Devices…, the filters' ghost rows,
+  the away notice and the one switch).
+- Next: **TS-4b** (D20's line on Godview's agent row, the `approval-wait` place) → TS-6 (the sync question, D13) →
+  TS-7 (the phone) → TS-8c (T8, after its live probe) → TS-9. The slice names are the doc's: the board's "TS-6" was
+  TS-8a.
+- James's (thinking doc §14): TS-D19 (what the one switch stops) and TS-D21 (Publish's option) are open; the switch's
+  words are drafts.
 - Owed on James's display word: §5 (TS-2's photographs and desk rows, renew's live half, TS-5's real notice, TS-8a's
-  live tailnet rows). `specs/users-and-accounts.md` §6/§7 owes TS's fold (the housekeeping pass added its first dated
-  notes there).
+  live tailnet rows, TS-4a's rows and away notice). `specs/users-and-accounts.md` §6/§7 owes TS's fold (the
+  housekeeping pass added its first dated notes there).
 
 **AO — Bring Your Agents** · vibe-field-de · law `draft/thinking-agent-onboarding.md` §8 (page sources `draft/agent-onboarding/`)
 - Landed: AO-0…AO-6b2, **AO-6b3** (`db8852169`, the limit moment reviewed, AO-D11), items 82 (`714ecbaae`,
@@ -146,7 +151,7 @@
    `c0581e952`, branch `focus/agent-probe-env`); item 39 (the swarm's physics at the display's rate, ruled (i) 10-19);
    the tuck row (`384e933f`). The puppeteer halves of the last three sit on `vf/item-39` / `vf/after-a` in James's local
    `../puppeteer` only (not on GitHub, not on puppeteer main, not in a release): push them first, then merge.
-4. TS-4 → TS-6 → TS-7 → TS-8c → TS-9.
+4. TS-4b → TS-6 → TS-7 → TS-8c → TS-9.
 5. AL-6, "Last exit", the relaunch cap; the Behavior words.
 6. **The ruled small slices** (James, 2026-10-28, the housekeeping page), each a lane when one is free:
    - Q4: the explorer thumbnail follows an edit by ≈22 s (ICE's ambient wind, design-015 D-D9): pass a shorter
@@ -238,8 +243,9 @@
   §UA-P-4d witness; the S1 live probe PAID 10-20) · the switch kill-matrix row (a live session survives
   switch-away-and-back) · the user switcher and the new first-run wizard (TS/AO) in both themes.
 - TS: TS-2's photographs and desk rows · renew's live half (a key expired in the admin console) · TS-5's real notice
-  on the desk · TS-8a on a real tailnet (no connection to log.tailscale.com while uploads are off; a tailnet with flow
-  logs; Disconnect leaving the admin console; Tailnet Lock signed) · a phone run on the new TailscaleKit (with TS-7).
+  on the desk · TS-4a's status-item row, a ghost row and the away notice on the desk · TS-8a on a real tailnet (no
+  connection to log.tailscale.com while uploads are off; a tailnet with flow logs; Disconnect leaving the admin
+  console; Tailnet Lock signed) · a phone run on the new TailscaleKit (with TS-7).
 - Item 78's two-pairs-both-logging row on the mini · item 79's promotion row (his device identity) · F1's device round.
 - The phone: rebuild from main (truffle Swift 0.7.23, ghosttea 0.13.7; until then a restarted desktop needs a phone
   relaunch) → TestFlight build 4 → the device checks: shader compile at first launch, 7 pt type, VoiceOver per body,
@@ -415,7 +421,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 
 | Track | State | Law lives in | Next |
 |---|---|---|---|
-| TS — the Tailscale door | ACTIVE; TS-0…3b, 5, 8a, 8b landed | `thinking-tailscale-onboarding.md`; DESIGN.md §6/§8/§9/§13 | TS-4 |
+| TS — the Tailscale door | ACTIVE; TS-0…3b, 4a, 5, 8a, 8b landed | `thinking-tailscale-onboarding.md`; DESIGN.md §6/§8/§9/§13 | TS-4b |
 | AO — Bring Your Agents | ACTIVE; AO-0…6b3 landed | `thinking-agent-onboarding.md` | AO-7 on a puppeteer release after 0.3.0 (`installRecipe`) |
 | AL — app lifecycle | ACTIVE; AL-1…3, 5, 7, 8a, 9 landed | `thinking-app-lifecycle.md`; ESR §7.3 | AL-6, Last exit, relaunch cap |
 | QW1 — Godview swarm QA, fix wave 1 | ACTIVE; stacks A and B landed 10-28, B on puppeteer 0.3.0's EL8 pin | `godview-swarm-qa-plan.md`; `thinking-ar-reattach.md` | QA wave 1 |

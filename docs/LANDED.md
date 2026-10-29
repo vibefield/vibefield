@@ -18508,3 +18508,88 @@ puppeteer tests):
 - Records: `/Volumes/SamsungRed/lanes/records/item89/`.
 - **Item 85's CI witness** is cited in its entry above (run 40764016907, green at its first attempt), owed since 10-28
   21:23Z.
+
+## TS-4a — asking again after Not now (TS-D7, TS-L6; TS-D20 = A): the status item's Connect Your Devices…, the filters' ghost rows, the away notice and the one switch (2026-10-29; `776eae4d3`, lane `ts/4-asking-again`)
+
+**What.** TS-4 is the ladder's rung for asking again (thinking doc §10, D7; §14 for its marks). Someone who said Not
+now said it before they had a reason, so the offer returns only where a connected device would do the job. The plan
+(`lanes/ts3/drafts/ts4-plan.md`, a code read on `3e6c941a8`) split D7's places in two:
+- **rows**, which stand while this Mac is not connected and keep no ledger;
+- **nudges**, which keep D7's rules in the setup ledger (D18 = d).
+- **contracts:**
+  - the setup ledger's moments gain `asked` (`SETUP_MOMENT_STATES`); `setupMomentRecord` reads a moment's state and
+    time, and `setupMomentState` delegates to it;
+  - `connectAskOpen(ledger, place, now)` is the one decider for a nudge: only someone who put Devices off (`later`);
+    a place's own `retired` for good; its own 30 days after a saying; any other place's saying spends the day; an
+    unreadable time keeps the quiet (`CONNECT_ASK_PLACES` = away, approval-wait);
+  - `ShellCommand` "open-connect" (TS-only, no gen); `AppPreferences.connectAsks` (`mesh.connectAsks`, default
+    true — an older daemon's silence reads on);
+  - EL9: `setup-ledger-connect-ask.valid.json` and `setup-moment-params.asked.json`, parsed by contracts' fixtures
+    test and read from disk by fieldd's store test. AO's lead read the seam first (bb, 00:59Z: no collision; both
+    notes taken).
+- **fieldd:** an `asked` write re-stamps its time on every saying and never lands over a `retired` row; the
+  preference's default and effective read; the refusal texts name the new key and state.
+- **AO's readers** (bb's note): the limit moment and a new agent with a past compare with `retired`, so an `asked`
+  row never silences them.
+- **electron-shell main** (`connect-asks.ts`): `ConnectAsks`, fed the link, the ledger and the preferences by TS-5's
+  observer (one subscription each, `storage.appPreferences.subscribe` new).
+  - The status item's **Connect Your Devices…**, a row under the service's status line while this Mac is in the
+    link face's `offline` state. `offersConnectFor` mirrors field-app's `linkFace` (the word, or a linked, expired or
+    removed word over no record), so the row and the ghost rows never disagree. The tray's first snapshot asks the
+    live wiring; the tray controller's actions gain the optional `connectDevices`.
+  - **The away notice** ("VibeField keeps running" / "N agents are still working. Connect your phone to check on them
+    from there.", Connect… / Not now) on window-all-closed while VibeField stays: never in main's first minute,
+    counted from `agent.list`, written `connect-ask:away` asked before it shows; a refused write keeps this session's
+    quiet. A smoke never shows it.
+- **field-app:**
+  - the ghost row ends Godview's Peek desktop filter (a hairline, a plus, "Your other devices", Connect…; not
+    connected, This Mac alone is offered and wears the filter) and History's desktop chip (its own group). Both ask
+    `open-connect` through a renderer request bus (`requestShellPresentation`) the chrome answers with the native
+    command's reducer;
+  - the overlay reads the link (`useOffersConnect`, which reads only a link-shaped snapshot) and hands the monitor a
+    plain `offersConnect` prop;
+  - Settings → Devices begins the link once per request, once the link can be read, only from `offline`; the switch
+    row sits under the card while not connected (its words are drafts, James's to rule).
+- **Catalog:** Godview's "Search in Godview, this Mac not connected" plate (`peek-unconnected`) and the Devices state
+  "asks off", the shipping views over fixtures.
+- **DESIGN.md** §8 "Asking again": TS-D20's placement folded at its source (the line on Godview's agent row as a wait
+  over ten minutes clears, "It waited 14m for you.", ruled A 2026-10-29 01:01:59.983Z), and an as-built sub-bullet.
+- **Not in it:** TS-4b (D20's line, the `approval-wait` place, next on the same branch); Publish's option (TS-D21,
+  open); whether the switch stops the rows too (TS-D19, open); the switch's words.
+
+**Found:**
+- **Godview's monitor never reads fieldd.** The catalog mounts it with no provider, and `useFielddClient` throws
+  there, so a fieldd fact reaches the monitor as a prop from the overlay, never a hook inside it.
+- **The status item is made after several awaits**, by which time the link may already have been read: its first
+  snapshot asks the wiring, not the next change.
+- **The two deciders write through each other's door** (`ConnectAsks` asks through the observer; the observer feeds
+  `ConnectAsks`): annotated, or TypeScript infers each from the other (TS7022).
+- **A component whose props parameter is optional** is inferred with `undefined` (`ComponentProps`, `Parameters`),
+  which fails `createElement`'s `P extends {}`: the Devices test names a `NonNullable` props type.
+- **DESIGN.md is a runtime test input** (five field-app readers): the §8 hunk was read against them and they ran in
+  the light pass.
+
+**Validation.**
+- **The lane:** the edits in `/Volumes/SamsungRed/lanes/ts4` (no install), the runs in ts3's run lane detached at the
+  sha (its own target `rust/ts3`, rosetta-pin and mille-pin at the lock's pins), at nice 19 under the guard. Built on
+  `3e6c941a8` and rebased onto item 89's records `9ca1f63e9` after a merge-tree rehearsal (`53bd2b305` =
+  `b7ca3ec90`; the one shared file, main/index.ts, met AL-9b in separate hunks).
+- **The light pass** (02:10–02:17Z, five runs, every red this slice's and amended into its one commit: biome's
+  layout ×2; typecheck ×4 — the deciders' inference, `wireAttachment`'s return type, the tray controller's actions,
+  the test's props; the test's `createElement` props; a test row whose clock never left the first minute). Green on
+  `776eae4d3`: preflight (the standing R23 acp WARN), walls, biome, four typechecks; contracts 541/541, fieldd 17/17,
+  electron-shell 64/64, field-app 16 files 388/388 (the five DESIGN.md readers and the Godview/History suites).
+- **`pnpm verify`** at `776eae4d3`, twice (VF-PM's rule tonight: one verbatim rerun on a quiet host, never an alone
+  set in its place):
+  - the first (ts3/logs/ts4-verify/verify.log, 02:17:45–02:22:41Z, start load 15.82, end load 438.86): EXIT 1. Every
+    stage before the tests passed, and `@vibefield/fieldd:test` was the only failed task (1 failed | 2590 passed |
+    11 skipped). The row is rosettad-supervisor's "item 65 — a mismatch whose words trail the exit is REBUILT, never
+    retried as a crash first" (`restarting` before `rebuilding`), in a file TS-4a does not touch, the row TS-8b's
+    load-394 verify lost. The load was Spotlight indexing the run lane's fresh install (mds_stores, fseventsd; VF-PM
+    read it at 02:24Z), not a swarm;
+  - verify2-quiet (ts3/logs/ts4-verify2-quiet/verify.log, 02:26:33–02:34:02Z, start load 19.44): EXIT 0. Every
+    stage passed: the test target for all 27 projects (9683 vitest rows, 0 failed; rosettad-supervisor 32/32, item
+    65's row among them), cargo 31 suites (493 passed, 0 failed) and gen freshness; the tree clean, no stub left.
+
+**Owed.** The status item's row, a ghost row and the away notice on a desk (James's display word), with TS-2/3a/3b's
+photographs and desk rows.
