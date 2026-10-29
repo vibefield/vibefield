@@ -71,6 +71,10 @@ The catalog currently mounts these shipping views directly:
 - shared controls/states and every onboarding pane, alternate entry, and completion failure
 - the account's face (UA-7): the Me menu open, closed, waiting and offline, the Settings head,
   both face frames at every size, and the face picker
+- a spark's face (SP-1a, DESIGN.md §2.10): the shipping `SparkFace` in Foundations beside the
+  account's face — the nineteen statuses at Chat's row size, both forms on the sizes §2.10's
+  surfaces wear, a live `SparkStage`, and the flat star through the face's one adapter
+  (`SparkFaceRenderer`), all on fixed seeds (`spark-fixtures.ts`)
 - the view frame (One Frame FR-1): the views track in every state the design's plates show — at
   rest, ⌘ held, Godview, History, the Assistant's note, Windows' keys — and the cover rising,
   swapping and lowering over a field with Godview's stage and History's room, on fixture state

@@ -443,6 +443,46 @@
   align-items: start;
 }
 
+/* DESIGN.md §2.10 — a spark's nineteen statuses, one face, its word under it. */
+.vf-ds-spark-statuses {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 18px 12px;
+}
+
+.vf-ds-spark-statuses figcaption {
+  text-align: center;
+}
+
+/* DESIGN.md §2.10 — one stage's live faces, rows as a list would hold them. */
+.vf-ds-spark-stage {
+  border-radius: 12px;
+  background: var(--vf-fill);
+}
+
+.vf-ds-spark-rows {
+  display: grid;
+  margin: 0;
+  padding: 8px;
+  list-style: none;
+}
+
+.vf-ds-spark-rows li {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.vf-ds-spark-word {
+  color: var(--vf-ds-faint);
+  font-size: 12px;
+  font-weight: 400;
+}
+
 /* DESIGN.md §2.8 — both frames on the size ladder, every threshold between
    two rungs. */
 .vf-ds-face-ladders {
