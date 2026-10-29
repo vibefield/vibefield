@@ -44,6 +44,7 @@ import { type LinePane, publishGodviewLineDoor, sayOnLine } from "../frame/line-
 import { requestView } from "../frame/view-state";
 import { getHost } from "../host";
 import { getRendererLogger } from "../logging";
+import { readClipboardText } from "../terminal/clipboard";
 import {
   adoptCreatedTerminal,
   adoptRemoteTerminalSession,
@@ -2198,7 +2199,8 @@ export function GodviewDeck({
             // placeholder for a path we then never took, and it was what James
             // actually saw in a pane.
             defaultShell: shell.defaultShell,
-            readClipboard: () => navigator.clipboard?.readText() ?? "",
+            // Item 102: through main's door — the web's read is denied in the app
+            readClipboard: readClipboardText,
             showContextMenu: () => undefined,
             toggleFullscreen: () => undefined,
             // The deck's "window" is Godview. Ghosttea calls this when the

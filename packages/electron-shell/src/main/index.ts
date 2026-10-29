@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { accessSync, constants as fsConstants, readFileSync } from "node:fs";
 import { homedir, release, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -77,6 +77,7 @@ import { buildSupervisor, dataRoot } from "./fieldd";
 import { FielddDaemonBootFence, FielddHandleCoordinator } from "./fieldd-handle-coordinator";
 import {
   registerBrowserDataClear,
+  registerClipboardRead,
   registerDeckSet,
   registerRendererReplace,
   registerScreenshotCapture,
@@ -1507,6 +1508,28 @@ async function main(
     registry,
     async () => liveSurfaceSupport?.clearBrowsingData() ?? { profiles: 0, pages: 0 },
     logger.child({ component: "ipc.browser-data" }),
+  );
+  // Item 102: a paste in the deck or the sign-in terminal reads the clipboard here,
+  // for a registered product window while it and its page hold the focus; the
+  // grant set stays empty (ESP §7.4). Audited, best-effort: a paste never waits on
+  // fieldd.
+  const clipboardLogger = logger.child({ component: "ipc.clipboard" });
+  registerClipboardRead(
+    registry,
+    {
+      focused: (sender) =>
+        BrowserWindow.fromWebContents(sender)?.isFocused() === true && sender.isFocused(),
+      read: () => clipboard.readText(),
+      audit: (record) => appendShellAudit(record),
+      operationId: () => randomUUID(),
+      onAuditFailed: (error) =>
+        clipboardLogger.warn(
+          "desktop.clipboard.audit_unavailable",
+          "A clipboard read was answered, and its audit record could not be appended",
+          { error: error instanceof Error ? error.message : String(error) },
+        ),
+    },
+    clipboardLogger,
   );
 
   // FR-4: main owns the app's one theme (FC-D5) — Light · Dark · Auto, kept in

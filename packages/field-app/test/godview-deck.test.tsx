@@ -2962,3 +2962,31 @@ describe("the remote attach rides the routed host (DS-4e)", () => {
     await dispose();
   });
 });
+
+// Item 102: ⌘V into a pane pasted nothing. ghosttea, given `readClipboard`,
+// performs the paste chord itself, and the deck handed it the web's read, which
+// the shell's empty grant set denies (ESP §7.4). The deck's reader is the host's
+// door now; the web's read stands only where no host door exists.
+describe("the deck's paste reads the clipboard through the host's door (item 102)", () => {
+  it("hands ghosttea the host's read, never the web's", async () => {
+    const readText = vi.fn(async () => "make test\n");
+    setHost({ ...getHost(), clipboard: { readText } } as unknown as FieldHost);
+    const web = vi.fn(async () => "denied by policy");
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { readText: web },
+    });
+    try {
+      await mountDeck();
+      const platform = workspaceMounts[workspaceMounts.length - 1]?.["platform"] as
+        | { readClipboard: () => string | Promise<string> }
+        | undefined;
+      if (platform === undefined) throw new Error("no workspace was mounted");
+      await expect(Promise.resolve(platform.readClipboard())).resolves.toBe("make test\n");
+      expect(readText).toHaveBeenCalledOnce();
+      expect(web).not.toHaveBeenCalled();
+    } finally {
+      Reflect.deleteProperty(navigator, "clipboard");
+    }
+  });
+});
