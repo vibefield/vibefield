@@ -30,6 +30,7 @@ pub mod sockets {
     pub const MESHDATA: &str = "meshdata.sock";
     pub const TERMINAL_CONTROL: &str = "termctl.sock";
     pub const TERMINAL_FRAME: &str = "termframe.sock";
+    pub const DOOR: &str = "door.sock";
 }
 
 pub mod stores {
@@ -119,6 +120,18 @@ pub mod terminal_inventory {
 pub mod orphan_bound {
     pub const IDLE_EXIT_MS: u64 = 600000;
     pub const IDLE_POLL_MS: u64 = 30000;
+}
+
+/// CP-1a — the floor's door: open doors at once, the bytes held while no fieldd is
+/// attached (per door and in all), the parent walk's links, a pane root's birth
+/// tolerance and the start's resolution. One authority with fieldd; see registries.ts.
+pub mod native_door {
+    pub const MAX_OPEN: u64 = 64;
+    pub const HELD_BYTES_PER_DOOR: u64 = 262144;
+    pub const HELD_BYTES_TOTAL: u64 = 4194304;
+    pub const WALK_MAX_STEPS: u64 = 32;
+    pub const ROOT_BIRTH_TOLERANCE_MS: u64 = 60000;
+    pub const START_RESOLUTION_MS: u64 = 1000;
 }
 
 /// TPv3 (terminal-pipeline-v3 §5.1/§8; §20 item 5) — the pipeline's numbers:
@@ -264,6 +277,7 @@ pub mod layout {
     pub const MESHDATA_SOCKET: &[&str] = &["native", "run", "meshdata.sock"];
     pub const TERMINAL_CONTROL_SOCKET: &[&str] = &["native", "run", "termctl.sock"];
     pub const TERMINAL_FRAME_SOCKET: &[&str] = &["native", "run", "termframe.sock"];
+    pub const DOOR_SOCKET: &[&str] = &["native", "run", "door.sock"];
     pub const CRASH_DIR: &[&str] = &["crash"];
     pub const EXPORTS_STAGING_DIR: &[&str] = &["exports", ".staging"];
     pub const BROWSER_PROFILES_DIR: &[&str] = &["browser", "profiles"];
@@ -329,6 +343,7 @@ pub mod layout {
         ("MESHDATA_SOCKET", MESHDATA_SOCKET),
         ("TERMINAL_CONTROL_SOCKET", TERMINAL_CONTROL_SOCKET),
         ("TERMINAL_FRAME_SOCKET", TERMINAL_FRAME_SOCKET),
+        ("DOOR_SOCKET", DOOR_SOCKET),
         ("CRASH_DIR", CRASH_DIR),
         ("EXPORTS_STAGING_DIR", EXPORTS_STAGING_DIR),
         ("BROWSER_PROFILES_DIR", BROWSER_PROFILES_DIR),

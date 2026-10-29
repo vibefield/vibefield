@@ -893,6 +893,26 @@ export const ORPHAN_BOUND = {
   IDLE_POLL_MS: 30_000,
 } as const;
 
+/** CP-1a (`thinking-roled-agents.md` §16; CP-L3, CP-D1) — the floor's door, ONE authority for the floor (by generation)
+ * and fieldd (by import). The shapes are mgmt.ts's `NativeDoor*`.
+ *  - MAX_OPEN — open doors at once; one past it is refused at accept (`limit`, logged, never announced).
+ *  - HELD_BYTES_PER_DOOR — what a door holds of its caller's bytes while no fieldd is attached (a door outlives
+ *    fieldd: the two planes). Past it the door closes, `held-too-long`.
+ *  - HELD_BYTES_TOTAL — what every door holds together, so 64 full doors cannot pin 16 MiB of the floor; the door
+ *    whose bytes would pass it closes, `held-too-long`.
+ *  - WALK_MAX_STEPS — the parent links the floor follows from the caller to a pane's root process.
+ *  - ROOT_BIRTH_TOLERANCE_MS — how far a pane's root process may have started from the pane's `createdAt` and still be
+ *    its root (agent-gateway.ts's `SHELL_BIRTH_TOLERANCE_MS`; ghosttea stamps `createdAt` right after the spawn).
+ *  - START_RESOLUTION_MS — the resolution two readings of one process's start are compared at (`sameStartSecond`). */
+export const NATIVE_DOOR = {
+  MAX_OPEN: 64,
+  HELD_BYTES_PER_DOOR: 256 * 1024,
+  HELD_BYTES_TOTAL: 4 * 1024 * 1024,
+  WALK_MAX_STEPS: 32,
+  ROOT_BIRTH_TOLERANCE_MS: 60_000,
+  START_RESOLUTION_MS: 1_000,
+} as const;
+
 /** TPv3 — the terminal pipeline's numbers (terminal-pipeline-v3 §5.1, §8; §20
  * item 5 "numeric limits with owners"). ONE authority for the cell (Rust, by
  * generation), fieldd (the grant TTLs) and the renderer. Every value is
@@ -1361,6 +1381,10 @@ export const SOCKETS = {
    * path budget in the product; keep them ≤ 14 chars (registry lint). */
   TERMINAL_CONTROL: "termctl.sock",
   TERMINAL_FRAME: "termframe.sock",
+  /** CP-1a (`thinking-roled-agents.md` §16; CP-L3, CP-D1) — the floor's door under native/run/: bound by field-native,
+   * 0600 in the 0700 run dir, dialed by `field-native door --endpoint <path>` from a spark's Claude Code. No token: the
+   * kernel names the caller. */
+  DOOR: "door.sock",
 } as const;
 
 /** P8b (ESP §8.4) — the URL scheme staged plugin modules are served on.
@@ -1559,6 +1583,9 @@ export const LAYOUT = {
   MESHDATA_SOCKET: ["native", "run", SOCKETS.MESHDATA],
   TERMINAL_CONTROL_SOCKET: ["native", "run", SOCKETS.TERMINAL_CONTROL],
   TERMINAL_FRAME_SOCKET: ["native", "run", SOCKETS.TERMINAL_FRAME],
+  /** CP-1a — the floor's door (`SOCKETS.DOOR`): a spark's MCP bridge dials it, and the floor names the caller by
+   * the kernel's word. The floor binds it and answers its endpoint (`native.door.info`); nothing else spells it. */
+  DOOR_SOCKET: ["native", "run", SOCKETS.DOOR],
   CRASH_DIR: ["crash"],
   EXPORTS_STAGING_DIR: ["exports", ".staging"],
   /** PT-4 (PORTALS ruling 3) — this user's BROWSER PROFILES: the persistent sessions of live-surface browser pages

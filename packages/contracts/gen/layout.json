@@ -114,6 +114,11 @@
     "run",
     "termframe.sock"
   ],
+  "DOOR_SOCKET": [
+    "native",
+    "run",
+    "door.sock"
+  ],
   "CRASH_DIR": [
     "crash"
   ],

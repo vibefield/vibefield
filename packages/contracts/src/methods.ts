@@ -748,6 +748,32 @@ export const METHODS: MethodDef[] = [
     subscription: true,
   }),
 
+  // CP-1a — the floor's DOOR (`thinking-roled-agents.md` §16; shapes in mgmt.ts `NativeDoor*`). CONTROL only, like
+  // lanes: who called and which pane holds them. The bytes ride the door's meshdata lane.
+  defineMethod({
+    surface: "mgmt",
+    method: "native.door.subscribe",
+    scope: null,
+    idempotent: true,
+    locality: "local",
+    subscription: true,
+  }),
+  defineMethod({
+    surface: "mgmt",
+    method: "native.door.close",
+    scope: null,
+    // a door already gone answers `closed: false`, never an error
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "mgmt",
+    method: "native.door.info",
+    scope: null,
+    idempotent: true,
+    locality: "local",
+  }),
+
   // DS-1 — EGRESS (design-02 §2.4's egress bullet; shapes in mgmt.ts). The
   // mirror image of `serve`: a desktop reaches a peer THROUGH its own node, so
   // no desktop-to-desktop path needs the OS Tailscale app (DS-L5). CONTROL

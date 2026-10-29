@@ -177,6 +177,13 @@ import {
   MeshSelfIdentity,
   NativeDetachParams,
   NativeDetachResult,
+  NativeDoorClosed,
+  NativeDoorCloseParams,
+  NativeDoorCloseResult,
+  NativeDoorInfoResult,
+  NativeDoorOpen,
+  NativeDoorSnapshot,
+  NativeDoorSubscribeResult,
   NativeHealth,
   NativeLinkHealth,
   NativePrepareRestartParams,
@@ -364,6 +371,17 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "mesh-lane-close-request": MeshLaneCloseRequest,
   "mesh-lane-peer-opened": MeshLanePeerOpened,
   "mesh-lane-closed": MeshLaneClosed,
+  // CP-1a — the floor's door (mgmt.ts `NativeDoor*`). An open door in a pane and one outside every pane (`pane`
+  // absent), a close the floor says and one past the hold, the snapshot with both doors and the EMPTY one a fresh
+  // floor answers, the subscribe answer, fieldd's close and its answer, and the bridge command. Parsed on both sides:
+  // fixture_parity.rs's `native_door_fixtures`; the door's own rows: native-door.test.ts.
+  "native-door-open": NativeDoorOpen,
+  "native-door-closed": NativeDoorClosed,
+  "native-door-snapshot": NativeDoorSnapshot,
+  "native-door-subscribe-result": NativeDoorSubscribeResult,
+  "native-door-close-params": NativeDoorCloseParams,
+  "native-door-close-result": NativeDoorCloseResult,
+  "native-door-info": NativeDoorInfoResult,
   // DS-1 — the egress facade (mgmt.ts). The table has TWO fixtures on purpose:
   // a bound table (a MagicDNS target and a bracketed IPv6 one) and the EMPTY
   // snapshot a node teardown pushes, which is the facade's reset.

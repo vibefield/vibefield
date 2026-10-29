@@ -140,6 +140,15 @@ import {
   MeshStopResult,
   NativeDetachParams,
   NativeDetachResult,
+  NativeDoorCaller,
+  NativeDoorClosed,
+  NativeDoorCloseParams,
+  NativeDoorCloseResult,
+  NativeDoorInfoResult,
+  NativeDoorOpen,
+  NativeDoorPane,
+  NativeDoorSnapshot,
+  NativeDoorSubscribeResult,
   NativeHealth,
   NativePrepareRestartParams,
   NativePrepareRestartResult,
@@ -237,6 +246,17 @@ const BASE_SHARED = {
   MeshLaneCloseRequest,
   MeshLanePeerOpened,
   MeshLaneClosed,
+  // CP-1a — the floor's door. The caller and the pane are named: both are embedded by the open door, which the
+  // snapshot embeds in turn.
+  NativeDoorCaller,
+  NativeDoorPane,
+  NativeDoorOpen,
+  NativeDoorClosed,
+  NativeDoorSnapshot,
+  NativeDoorSubscribeResult,
+  NativeDoorCloseParams,
+  NativeDoorCloseResult,
+  NativeDoorInfoResult,
   // DS-1 — egress. The three constrained strings are embedded by several
   // shapes each (the loopback address by the proxy answer, the bound route and
   // the table row), so every one is named for the usual typify reason; the

@@ -6866,7 +6866,8 @@ impl MeshLanePeerOpened {
 #[doc = "  \"type\": \"string\","]
 #[doc = "  \"enum\": ["]
 #[doc = "    \"doc-sync\","]
-#[doc = "    \"presence\""]
+#[doc = "    \"presence\","]
+#[doc = "    \"mcp\""]
 #[doc = "  ]"]
 #[doc = "}"]
 #[doc = r" ```"]
@@ -6888,12 +6889,15 @@ pub enum MeshLaneProtocol {
     DocSync,
     #[serde(rename = "presence")]
     Presence,
+    #[serde(rename = "mcp")]
+    Mcp,
 }
 impl ::std::fmt::Display for MeshLaneProtocol {
     fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         match *self {
             Self::DocSync => f.write_str("doc-sync"),
             Self::Presence => f.write_str("presence"),
+            Self::Mcp => f.write_str("mcp"),
         }
     }
 }
@@ -6903,6 +6907,7 @@ impl ::std::str::FromStr for MeshLaneProtocol {
         match value {
             "doc-sync" => Ok(Self::DocSync),
             "presence" => Ok(Self::Presence),
+            "mcp" => Ok(Self::Mcp),
             _ => Err("invalid value".into()),
         }
     }
@@ -7610,6 +7615,751 @@ pub struct NativeDetachResult {
 }
 impl NativeDetachResult {
     pub fn builder() -> builder::NativeDetachResult {
+        Default::default()
+    }
+}
+#[doc = "`NativeDoorCaller`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"pid\","]
+#[doc = "    \"startedAtMs\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"pid\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"exclusiveMinimum\": 0.0"]
+#[doc = "    },"]
+#[doc = "    \"startedAtMs\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"minimum\": 0.0"]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct NativeDoorCaller {
+    pub pid: ::std::num::NonZeroU64,
+    #[serde(rename = "startedAtMs")]
+    pub started_at_ms: u64,
+}
+impl NativeDoorCaller {
+    pub fn builder() -> builder::NativeDoorCaller {
+        Default::default()
+    }
+}
+#[doc = "`NativeDoorCloseParams`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"connId\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"connId\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"minLength\": 1"]
+#[doc = "    },"]
+#[doc = "    \"reason\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct NativeDoorCloseParams {
+    #[serde(rename = "connId")]
+    pub conn_id: NativeDoorCloseParamsConnId,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub reason: ::std::option::Option<::std::string::String>,
+}
+impl NativeDoorCloseParams {
+    pub fn builder() -> builder::NativeDoorCloseParams {
+        Default::default()
+    }
+}
+#[doc = "`NativeDoorCloseParamsConnId`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"minLength\": 1"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct NativeDoorCloseParamsConnId(::std::string::String);
+impl ::std::ops::Deref for NativeDoorCloseParamsConnId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<NativeDoorCloseParamsConnId> for ::std::string::String {
+    fn from(value: NativeDoorCloseParamsConnId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for NativeDoorCloseParamsConnId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for NativeDoorCloseParamsConnId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for NativeDoorCloseParamsConnId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for NativeDoorCloseParamsConnId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for NativeDoorCloseParamsConnId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`NativeDoorCloseResult`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"closed\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"closed\": {"]
+#[doc = "      \"type\": \"boolean\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct NativeDoorCloseResult {
+    pub closed: bool,
+}
+impl NativeDoorCloseResult {
+    pub fn builder() -> builder::NativeDoorCloseResult {
+        Default::default()
+    }
+}
+#[doc = "`NativeDoorClosed`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"connId\","]
+#[doc = "    \"reason\","]
+#[doc = "    \"state\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"connId\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"minLength\": 1"]
+#[doc = "    },"]
+#[doc = "    \"reason\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"state\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"const\": \"closed\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct NativeDoorClosed {
+    #[serde(rename = "connId")]
+    pub conn_id: NativeDoorClosedConnId,
+    pub reason: ::std::string::String,
+    pub state: ::std::string::String,
+}
+impl NativeDoorClosed {
+    pub fn builder() -> builder::NativeDoorClosed {
+        Default::default()
+    }
+}
+#[doc = "`NativeDoorClosedConnId`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"minLength\": 1"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct NativeDoorClosedConnId(::std::string::String);
+impl ::std::ops::Deref for NativeDoorClosedConnId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<NativeDoorClosedConnId> for ::std::string::String {
+    fn from(value: NativeDoorClosedConnId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for NativeDoorClosedConnId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for NativeDoorClosedConnId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for NativeDoorClosedConnId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for NativeDoorClosedConnId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for NativeDoorClosedConnId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`NativeDoorInfoResult`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"args\","]
+#[doc = "    \"command\","]
+#[doc = "    \"endpoint\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"args\": {"]
+#[doc = "      \"type\": \"array\","]
+#[doc = "      \"items\": {"]
+#[doc = "        \"type\": \"string\""]
+#[doc = "      }"]
+#[doc = "    },"]
+#[doc = "    \"command\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"minLength\": 1"]
+#[doc = "    },"]
+#[doc = "    \"endpoint\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"minLength\": 1"]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct NativeDoorInfoResult {
+    pub args: ::std::vec::Vec<::std::string::String>,
+    pub command: NativeDoorInfoResultCommand,
+    pub endpoint: NativeDoorInfoResultEndpoint,
+}
+impl NativeDoorInfoResult {
+    pub fn builder() -> builder::NativeDoorInfoResult {
+        Default::default()
+    }
+}
+#[doc = "`NativeDoorInfoResultCommand`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"minLength\": 1"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct NativeDoorInfoResultCommand(::std::string::String);
+impl ::std::ops::Deref for NativeDoorInfoResultCommand {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<NativeDoorInfoResultCommand> for ::std::string::String {
+    fn from(value: NativeDoorInfoResultCommand) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for NativeDoorInfoResultCommand {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for NativeDoorInfoResultCommand {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for NativeDoorInfoResultCommand {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for NativeDoorInfoResultCommand {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for NativeDoorInfoResultCommand {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`NativeDoorInfoResultEndpoint`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"minLength\": 1"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct NativeDoorInfoResultEndpoint(::std::string::String);
+impl ::std::ops::Deref for NativeDoorInfoResultEndpoint {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<NativeDoorInfoResultEndpoint> for ::std::string::String {
+    fn from(value: NativeDoorInfoResultEndpoint) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for NativeDoorInfoResultEndpoint {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for NativeDoorInfoResultEndpoint {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for NativeDoorInfoResultEndpoint {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for NativeDoorInfoResultEndpoint {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for NativeDoorInfoResultEndpoint {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`NativeDoorOpen`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"caller\","]
+#[doc = "    \"connId\","]
+#[doc = "    \"laneId\","]
+#[doc = "    \"state\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"caller\": {"]
+#[doc = "      \"$ref\": \"#/definitions/NativeDoorCaller\""]
+#[doc = "    },"]
+#[doc = "    \"connId\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"minLength\": 1"]
+#[doc = "    },"]
+#[doc = "    \"laneId\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"minimum\": 0.0"]
+#[doc = "    },"]
+#[doc = "    \"pane\": {"]
+#[doc = "      \"$ref\": \"#/definitions/NativeDoorPane\""]
+#[doc = "    },"]
+#[doc = "    \"state\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"const\": \"open\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct NativeDoorOpen {
+    pub caller: NativeDoorCaller,
+    #[serde(rename = "connId")]
+    pub conn_id: NativeDoorOpenConnId,
+    #[serde(rename = "laneId")]
+    pub lane_id: u64,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub pane: ::std::option::Option<NativeDoorPane>,
+    pub state: ::std::string::String,
+}
+impl NativeDoorOpen {
+    pub fn builder() -> builder::NativeDoorOpen {
+        Default::default()
+    }
+}
+#[doc = "`NativeDoorOpenConnId`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"minLength\": 1"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct NativeDoorOpenConnId(::std::string::String);
+impl ::std::ops::Deref for NativeDoorOpenConnId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<NativeDoorOpenConnId> for ::std::string::String {
+    fn from(value: NativeDoorOpenConnId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for NativeDoorOpenConnId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for NativeDoorOpenConnId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for NativeDoorOpenConnId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for NativeDoorOpenConnId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for NativeDoorOpenConnId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`NativeDoorPane`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"depth\","]
+#[doc = "    \"terminalSessionId\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"depth\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"minimum\": 0.0"]
+#[doc = "    },"]
+#[doc = "    \"terminalSessionId\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"minLength\": 1"]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct NativeDoorPane {
+    pub depth: u64,
+    #[serde(rename = "terminalSessionId")]
+    pub terminal_session_id: NativeDoorPaneTerminalSessionId,
+}
+impl NativeDoorPane {
+    pub fn builder() -> builder::NativeDoorPane {
+        Default::default()
+    }
+}
+#[doc = "`NativeDoorPaneTerminalSessionId`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"minLength\": 1"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct NativeDoorPaneTerminalSessionId(::std::string::String);
+impl ::std::ops::Deref for NativeDoorPaneTerminalSessionId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<NativeDoorPaneTerminalSessionId> for ::std::string::String {
+    fn from(value: NativeDoorPaneTerminalSessionId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for NativeDoorPaneTerminalSessionId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for NativeDoorPaneTerminalSessionId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for NativeDoorPaneTerminalSessionId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for NativeDoorPaneTerminalSessionId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for NativeDoorPaneTerminalSessionId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`NativeDoorSnapshot`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"doors\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"doors\": {"]
+#[doc = "      \"type\": \"array\","]
+#[doc = "      \"items\": {"]
+#[doc = "        \"$ref\": \"#/definitions/NativeDoorOpen\""]
+#[doc = "      }"]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct NativeDoorSnapshot {
+    pub doors: ::std::vec::Vec<NativeDoorOpen>,
+}
+impl NativeDoorSnapshot {
+    pub fn builder() -> builder::NativeDoorSnapshot {
+        Default::default()
+    }
+}
+#[doc = "`NativeDoorSubscribeResult`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"snapshot\","]
+#[doc = "    \"subId\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"snapshot\": {"]
+#[doc = "      \"$ref\": \"#/definitions/NativeDoorSnapshot\""]
+#[doc = "    },"]
+#[doc = "    \"subId\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct NativeDoorSubscribeResult {
+    pub snapshot: NativeDoorSnapshot,
+    #[serde(rename = "subId")]
+    pub sub_id: ::std::string::String,
+}
+impl NativeDoorSubscribeResult {
+    pub fn builder() -> builder::NativeDoorSubscribeResult {
         Default::default()
     }
 }
@@ -15762,6 +16512,541 @@ pub mod builder {
         fn from(value: super::NativeDetachResult) -> Self {
             Self {
                 noted: Ok(value.noted),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct NativeDoorCaller {
+        pid: ::std::result::Result<::std::num::NonZeroU64, ::std::string::String>,
+        started_at_ms: ::std::result::Result<u64, ::std::string::String>,
+    }
+    impl ::std::default::Default for NativeDoorCaller {
+        fn default() -> Self {
+            Self {
+                pid: Err("no value supplied for pid".to_string()),
+                started_at_ms: Err("no value supplied for started_at_ms".to_string()),
+            }
+        }
+    }
+    impl NativeDoorCaller {
+        pub fn pid<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::num::NonZeroU64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.pid = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for pid: {e}"));
+            self
+        }
+        pub fn started_at_ms<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<u64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.started_at_ms = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for started_at_ms: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<NativeDoorCaller> for super::NativeDoorCaller {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: NativeDoorCaller,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                pid: value.pid?,
+                started_at_ms: value.started_at_ms?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::NativeDoorCaller> for NativeDoorCaller {
+        fn from(value: super::NativeDoorCaller) -> Self {
+            Self {
+                pid: Ok(value.pid),
+                started_at_ms: Ok(value.started_at_ms),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct NativeDoorCloseParams {
+        conn_id: ::std::result::Result<super::NativeDoorCloseParamsConnId, ::std::string::String>,
+        reason: ::std::result::Result<
+            ::std::option::Option<::std::string::String>,
+            ::std::string::String,
+        >,
+    }
+    impl ::std::default::Default for NativeDoorCloseParams {
+        fn default() -> Self {
+            Self {
+                conn_id: Err("no value supplied for conn_id".to_string()),
+                reason: Ok(Default::default()),
+            }
+        }
+    }
+    impl NativeDoorCloseParams {
+        pub fn conn_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::NativeDoorCloseParamsConnId>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.conn_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for conn_id: {e}"));
+            self
+        }
+        pub fn reason<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.reason = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for reason: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<NativeDoorCloseParams> for super::NativeDoorCloseParams {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: NativeDoorCloseParams,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                conn_id: value.conn_id?,
+                reason: value.reason?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::NativeDoorCloseParams> for NativeDoorCloseParams {
+        fn from(value: super::NativeDoorCloseParams) -> Self {
+            Self {
+                conn_id: Ok(value.conn_id),
+                reason: Ok(value.reason),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct NativeDoorCloseResult {
+        closed: ::std::result::Result<bool, ::std::string::String>,
+    }
+    impl ::std::default::Default for NativeDoorCloseResult {
+        fn default() -> Self {
+            Self {
+                closed: Err("no value supplied for closed".to_string()),
+            }
+        }
+    }
+    impl NativeDoorCloseResult {
+        pub fn closed<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<bool>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.closed = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for closed: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<NativeDoorCloseResult> for super::NativeDoorCloseResult {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: NativeDoorCloseResult,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                closed: value.closed?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::NativeDoorCloseResult> for NativeDoorCloseResult {
+        fn from(value: super::NativeDoorCloseResult) -> Self {
+            Self {
+                closed: Ok(value.closed),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct NativeDoorClosed {
+        conn_id: ::std::result::Result<super::NativeDoorClosedConnId, ::std::string::String>,
+        reason: ::std::result::Result<::std::string::String, ::std::string::String>,
+        state: ::std::result::Result<::std::string::String, ::std::string::String>,
+    }
+    impl ::std::default::Default for NativeDoorClosed {
+        fn default() -> Self {
+            Self {
+                conn_id: Err("no value supplied for conn_id".to_string()),
+                reason: Err("no value supplied for reason".to_string()),
+                state: Err("no value supplied for state".to_string()),
+            }
+        }
+    }
+    impl NativeDoorClosed {
+        pub fn conn_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::NativeDoorClosedConnId>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.conn_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for conn_id: {e}"));
+            self
+        }
+        pub fn reason<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::string::String>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.reason = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for reason: {e}"));
+            self
+        }
+        pub fn state<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::string::String>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.state = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for state: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<NativeDoorClosed> for super::NativeDoorClosed {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: NativeDoorClosed,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                conn_id: value.conn_id?,
+                reason: value.reason?,
+                state: value.state?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::NativeDoorClosed> for NativeDoorClosed {
+        fn from(value: super::NativeDoorClosed) -> Self {
+            Self {
+                conn_id: Ok(value.conn_id),
+                reason: Ok(value.reason),
+                state: Ok(value.state),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct NativeDoorInfoResult {
+        args: ::std::result::Result<::std::vec::Vec<::std::string::String>, ::std::string::String>,
+        command: ::std::result::Result<super::NativeDoorInfoResultCommand, ::std::string::String>,
+        endpoint: ::std::result::Result<super::NativeDoorInfoResultEndpoint, ::std::string::String>,
+    }
+    impl ::std::default::Default for NativeDoorInfoResult {
+        fn default() -> Self {
+            Self {
+                args: Err("no value supplied for args".to_string()),
+                command: Err("no value supplied for command".to_string()),
+                endpoint: Err("no value supplied for endpoint".to_string()),
+            }
+        }
+    }
+    impl NativeDoorInfoResult {
+        pub fn args<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::vec::Vec<::std::string::String>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.args = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for args: {e}"));
+            self
+        }
+        pub fn command<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::NativeDoorInfoResultCommand>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.command = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for command: {e}"));
+            self
+        }
+        pub fn endpoint<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::NativeDoorInfoResultEndpoint>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.endpoint = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for endpoint: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<NativeDoorInfoResult> for super::NativeDoorInfoResult {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: NativeDoorInfoResult,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                args: value.args?,
+                command: value.command?,
+                endpoint: value.endpoint?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::NativeDoorInfoResult> for NativeDoorInfoResult {
+        fn from(value: super::NativeDoorInfoResult) -> Self {
+            Self {
+                args: Ok(value.args),
+                command: Ok(value.command),
+                endpoint: Ok(value.endpoint),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct NativeDoorOpen {
+        caller: ::std::result::Result<super::NativeDoorCaller, ::std::string::String>,
+        conn_id: ::std::result::Result<super::NativeDoorOpenConnId, ::std::string::String>,
+        lane_id: ::std::result::Result<u64, ::std::string::String>,
+        pane: ::std::result::Result<
+            ::std::option::Option<super::NativeDoorPane>,
+            ::std::string::String,
+        >,
+        state: ::std::result::Result<::std::string::String, ::std::string::String>,
+    }
+    impl ::std::default::Default for NativeDoorOpen {
+        fn default() -> Self {
+            Self {
+                caller: Err("no value supplied for caller".to_string()),
+                conn_id: Err("no value supplied for conn_id".to_string()),
+                lane_id: Err("no value supplied for lane_id".to_string()),
+                pane: Ok(Default::default()),
+                state: Err("no value supplied for state".to_string()),
+            }
+        }
+    }
+    impl NativeDoorOpen {
+        pub fn caller<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::NativeDoorCaller>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.caller = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for caller: {e}"));
+            self
+        }
+        pub fn conn_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::NativeDoorOpenConnId>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.conn_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for conn_id: {e}"));
+            self
+        }
+        pub fn lane_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<u64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.lane_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for lane_id: {e}"));
+            self
+        }
+        pub fn pane<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::NativeDoorPane>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.pane = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for pane: {e}"));
+            self
+        }
+        pub fn state<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::string::String>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.state = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for state: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<NativeDoorOpen> for super::NativeDoorOpen {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: NativeDoorOpen,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                caller: value.caller?,
+                conn_id: value.conn_id?,
+                lane_id: value.lane_id?,
+                pane: value.pane?,
+                state: value.state?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::NativeDoorOpen> for NativeDoorOpen {
+        fn from(value: super::NativeDoorOpen) -> Self {
+            Self {
+                caller: Ok(value.caller),
+                conn_id: Ok(value.conn_id),
+                lane_id: Ok(value.lane_id),
+                pane: Ok(value.pane),
+                state: Ok(value.state),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct NativeDoorPane {
+        depth: ::std::result::Result<u64, ::std::string::String>,
+        terminal_session_id:
+            ::std::result::Result<super::NativeDoorPaneTerminalSessionId, ::std::string::String>,
+    }
+    impl ::std::default::Default for NativeDoorPane {
+        fn default() -> Self {
+            Self {
+                depth: Err("no value supplied for depth".to_string()),
+                terminal_session_id: Err("no value supplied for terminal_session_id".to_string()),
+            }
+        }
+    }
+    impl NativeDoorPane {
+        pub fn depth<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<u64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.depth = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for depth: {e}"));
+            self
+        }
+        pub fn terminal_session_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::NativeDoorPaneTerminalSessionId>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.terminal_session_id = value.try_into().map_err(|e| {
+                format!("error converting supplied value for terminal_session_id: {e}")
+            });
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<NativeDoorPane> for super::NativeDoorPane {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: NativeDoorPane,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                depth: value.depth?,
+                terminal_session_id: value.terminal_session_id?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::NativeDoorPane> for NativeDoorPane {
+        fn from(value: super::NativeDoorPane) -> Self {
+            Self {
+                depth: Ok(value.depth),
+                terminal_session_id: Ok(value.terminal_session_id),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct NativeDoorSnapshot {
+        doors: ::std::result::Result<::std::vec::Vec<super::NativeDoorOpen>, ::std::string::String>,
+    }
+    impl ::std::default::Default for NativeDoorSnapshot {
+        fn default() -> Self {
+            Self {
+                doors: Err("no value supplied for doors".to_string()),
+            }
+        }
+    }
+    impl NativeDoorSnapshot {
+        pub fn doors<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::vec::Vec<super::NativeDoorOpen>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.doors = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for doors: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<NativeDoorSnapshot> for super::NativeDoorSnapshot {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: NativeDoorSnapshot,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                doors: value.doors?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::NativeDoorSnapshot> for NativeDoorSnapshot {
+        fn from(value: super::NativeDoorSnapshot) -> Self {
+            Self {
+                doors: Ok(value.doors),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct NativeDoorSubscribeResult {
+        snapshot: ::std::result::Result<super::NativeDoorSnapshot, ::std::string::String>,
+        sub_id: ::std::result::Result<::std::string::String, ::std::string::String>,
+    }
+    impl ::std::default::Default for NativeDoorSubscribeResult {
+        fn default() -> Self {
+            Self {
+                snapshot: Err("no value supplied for snapshot".to_string()),
+                sub_id: Err("no value supplied for sub_id".to_string()),
+            }
+        }
+    }
+    impl NativeDoorSubscribeResult {
+        pub fn snapshot<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::NativeDoorSnapshot>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.snapshot = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for snapshot: {e}"));
+            self
+        }
+        pub fn sub_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::string::String>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.sub_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for sub_id: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<NativeDoorSubscribeResult> for super::NativeDoorSubscribeResult {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: NativeDoorSubscribeResult,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                snapshot: value.snapshot?,
+                sub_id: value.sub_id?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::NativeDoorSubscribeResult> for NativeDoorSubscribeResult {
+        fn from(value: super::NativeDoorSubscribeResult) -> Self {
+            Self {
+                snapshot: Ok(value.snapshot),
+                sub_id: Ok(value.sub_id),
             }
         }
     }

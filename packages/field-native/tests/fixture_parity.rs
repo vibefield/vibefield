@@ -10,7 +10,9 @@ use field_native::contracts::{
     LoggingHealthV1, MeshEgressProxy, MeshEgressRouteAddParams, MeshEgressRouteBound,
     MeshEgressRouteRef, MeshEgressRouteTable, MeshLaneCloseRequest, MeshLaneClosed,
     MeshLaneOpenRequest, MeshLanePeerOpened, MeshNotUpDetails, MeshSelfIdentity,
-    NativeDetachParams, NativeDetachResult, NativeHealth, NativePrepareRestartParams,
+    NativeDetachParams, NativeDetachResult, NativeDoorCloseParams, NativeDoorCloseResult,
+    NativeDoorClosed, NativeDoorInfoResult, NativeDoorOpen, NativeDoorSnapshot,
+    NativeDoorSubscribeResult, NativeHealth, NativePrepareRestartParams,
     NativePrepareRestartResult, NativeShutdownParams, NativeShutdownResult, NativeTickParams,
     ObservedState, PeerInfo, PingAck, RpcNotification, RpcRequest, RpcResponse, ServeConfig,
     ServeEntry, StoreSnapshot, TerminalRouteSnapshot, TerminalRoutesStreamPayload,
@@ -308,6 +310,44 @@ fn mesh_lane_fixtures() {
     roundtrip::<MeshLaneCloseRequest>("mesh-lane-close-request.valid.json", true);
     roundtrip::<MeshLanePeerOpened>("mesh-lane-peer-opened.valid.json", true);
     roundtrip::<MeshLaneClosed>("mesh-lane-closed.valid.json", true);
+}
+
+#[test]
+fn native_door_fixtures() {
+    // CP-1a — the floor's door. What the floor EMITS (the open and closed door, the snapshot, the subscribe answer,
+    // the close answer, the bridge command) is strict; fieldd's close is inbound, so a tolerant parse is the whole
+    // obligation.
+    for name in [
+        "native-door-open.valid.json",
+        "native-door-open.outside.json",
+    ] {
+        roundtrip::<NativeDoorOpen>(name, true);
+    }
+    for name in [
+        "native-door-closed.valid.json",
+        "native-door-closed.held-too-long.json",
+    ] {
+        roundtrip::<NativeDoorClosed>(name, true);
+    }
+    for name in [
+        "native-door-snapshot.valid.json",
+        "native-door-snapshot.empty.json",
+    ] {
+        roundtrip::<NativeDoorSnapshot>(name, true);
+    }
+    roundtrip::<NativeDoorSubscribeResult>("native-door-subscribe-result.valid.json", true);
+    roundtrip::<NativeDoorCloseResult>("native-door-close-result.valid.json", true);
+    roundtrip::<NativeDoorInfoResult>("native-door-info.valid.json", true);
+    roundtrip::<NativeDoorCloseParams>("native-door-close-params.valid.json", false);
+
+    // a caller outside every pane has no `pane`, and the floor writes none back
+    let outside: NativeDoorOpen =
+        serde_json::from_value(load("native-door-open.outside.json")).expect("outside");
+    assert!(outside.pane.is_none());
+    assert!(serde_json::to_value(&outside)
+        .unwrap()
+        .get("pane")
+        .is_none());
 }
 
 #[test]
