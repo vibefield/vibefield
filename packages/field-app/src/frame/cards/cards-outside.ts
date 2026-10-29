@@ -35,10 +35,11 @@ import { OUTSIDE_WORDS, WAITING_WORDS } from "./cards-words";
 //   card already is lifts that card instead (HN-D10), and deals none.
 // - A drag from another app is a card the moment it enters the window: the drag machine's waiting
 //   card (`card-drag.ts`), its kind's index alone until the drop says what it holds. The window's
-//   capture phase takes every one of its events, so a file let go is never opened in the page's
-//   place and a pane's own text drop never pastes it a second time. Let go on a pane or Chat's
-//   prompt it plays straight in, once; anywhere else it settles into the hand; carried back out
-//   of the window, or lost by the system, it is gone.
+//   capture phase takes its events, so a file let go is never opened in the page's place and a
+//   pane's own text drop never pastes it a second time. Let go on a pane or Chat's prompt it plays
+//   straight in, once; on a field the field takes it, as a paste goes where the caret is (HN-L3),
+//   and the card is gone; anywhere else it settles into the hand; carried back out of the window,
+//   or lost by the system, it is gone.
 // A file is what its path says (the preload's `pathForFile`; none in the catalog) and a picture
 // what its pixels are, read from the bytes the person handed over and kept in memory only, with
 // the card (LC-7, HN-D9).
@@ -278,11 +279,15 @@ function whenUncarried(run: () => void): void {
   });
 }
 
-/** Whose a paste is when it is not the hand's (HN-L3): a field holding the caret, or a Godview
- * pane — its own paste handling takes it. */
-function caretOwns(target: EventTarget | null): boolean {
-  if (!(target instanceof Element)) return false;
-  if (target.closest(GHOSTTEA_PANE_SELECTOR) !== null) return true;
+/** Inside a Godview pane: its own paste handling takes a paste there; a drop there is the hand's,
+ * played through the deck's door, once. */
+function inPane(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest(GHOSTTEA_PANE_SELECTOR) !== null;
+}
+
+/** A field, where the caret is: an input, a text area, a select, anything editable. A paste or a
+ * drop there is the field's (HN-L3). */
+function isField(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   return (
     target.tagName === "INPUT" ||
@@ -450,7 +455,7 @@ export function listenForOtherApps(options: OtherAppsOptions = {}): () => void {
   };
   const onPaste = (event: ClipboardEvent): void => {
     if (!event.isTrusted || event.defaultPrevented || busy()) return;
-    if (caretOwns(event.target)) return;
+    if (inPane(event.target) || isField(event.target)) return;
     const things = broughtIn(event.clipboardData);
     if (things.length === 0) return;
     event.preventDefault();
@@ -495,8 +500,14 @@ export function listenForOtherApps(options: OtherAppsOptions = {}): () => void {
   const onDrop = (event: DragEvent): void => {
     const transfer = event.dataTransfer;
     if (inner || !carriesCards(transfer)) return;
-    // the hand's, whatever is under it: a pane's own text drop would paste it a second time, and a
-    // file let go is never opened in the page's place
+    // a field's, as a paste there is (HN-L3): it inserts what it holds itself, and the card carried
+    // in is gone, with nothing said — a pane's own text area is the hand's still
+    if (isField(event.target) && !inPane(event.target)) {
+      cancel();
+      return;
+    }
+    // the hand's, whatever else is under it: a pane's own text drop would paste it a second time,
+    // and a file let go is never opened in the page's place
     event.preventDefault();
     event.stopPropagation();
     const at = { x: event.clientX, y: event.clientY };

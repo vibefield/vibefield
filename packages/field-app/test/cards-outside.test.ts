@@ -499,6 +499,47 @@ describe("a drag from another app (HN-6, HN-D2)", () => {
     expect(store.snapshot().cards, "played straight in, it stays nowhere").toEqual([]);
   });
 
+  it("leaves a drop on a field to the field, as a paste is (HN-L3): not prevented, its card gone, nothing played, dealt or said — a pane's own text area is the hand's still", async () => {
+    listen();
+    const { played } = place({ kind: "pane", box: new DOMRect(0, 0, 600, 400) });
+    const field = document.createElement("textarea");
+    const own = vi.fn();
+    field.addEventListener("drop", own);
+    document.body.append(field);
+    const kinds = transfer({ text: "git status", kindsOnly: true });
+    const dropped = transfer({ text: "git status" });
+    drag("dragenter", kinds, { x: 300, y: 200 });
+    drag("dragover", kinds, { x: 300, y: 200 });
+
+    const drop = drag("drop", dropped, { x: 300, y: 200 }, { target: field });
+    expect(drop.defaultPrevented, "the field inserts it itself").toBe(false);
+    expect(own, "the field hears its own drop").toHaveBeenCalledTimes(1);
+    expect(getCarriedCard()).toMatchObject({ phase: "home", home: null });
+    await settled();
+    await vi.advanceTimersByTimeAsync(PLAY_HOME_MS + 40);
+    expect(getCarriedCard()).toBeNull();
+    expect(played).toEqual([]);
+    expect(store.snapshot().cards).toEqual([]);
+    expect(said).toEqual([]);
+
+    // the text area a pane types through is a field too, and a drop there is still the hand's: it
+    // plays through the deck's door, once
+    const pane = document.createElement("div");
+    pane.className = "ghostty-pane";
+    pane.dataset.paneId = "pane-1";
+    const input = document.createElement("textarea");
+    pane.append(input);
+    document.body.append(pane);
+    drag("dragenter", kinds, { x: 300, y: 200 });
+    const onPane = drag("drop", dropped, { x: 300, y: 200 }, { target: input });
+    expect(onPane.defaultPrevented).toBe(true);
+    await settled();
+    await vi.advanceTimersByTimeAsync(PLAY_SHRINK_MS);
+    await settled();
+    expect(played).toHaveLength(1);
+    expect(said).toEqual(["Pasted into vibe-field"]);
+  });
+
   it("settles a drop where nothing takes it straight into the hand — the desk included — from the box it hung in; the rest follow it", async () => {
     listen();
     place({ kind: "desk", box: new DOMRect(0, 0, 1024, 768) });
