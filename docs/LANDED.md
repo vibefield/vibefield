@@ -18627,3 +18627,101 @@ failed with ENOTEMPTY on its own mkdtemp root at the afterEach `rmSync` (:26). T
     `shell-lease.test.ts` 15/15; field-app 2,788 passed.
   - `pnpm test:rust`: 31 suites, 493 passed, 0 failed. gen:check clean.
 - Records: `/Volumes/SamsungRed/lanes/records/shell-lease/`.
+
+## FN — item 87: a run's exit is published before its workspace cleanup, and a resume during the cleanup waits a bound then says finalizing (2026-10-29; `8d56b2bd8`, lane `fix/item87-exit-cleanup`; VF-PM's rulings 02:16Z, 02:50Z, 02:58Z and 03:13Z)
+
+**What happened:** `agent-session.test.ts`'s MF-1f/MF-1g rows interrupt a scripted run (`endedRun`) and wait 15 s for
+`continuation.exited`. That wait timed out twice, and each time the log stopped at `fieldd.agents.interrupted`:
+- item 85's MF-1f run 2 (10-28 18:24Z, load 18);
+- item 89's verify run 1 (10-29 01:55Z, load ~215).
+
+**The witnesses** (records `logs/witness`, `logs/witness2`, VF-PM's GO 02:35Z and 02:43Z):
+- `endedRun`'s steps ran ×30 on one warm floor, then ×30 on a fresh floor per pass (routes rev 3, 2 cells, the lost
+  shape). 60 of 60 exited, at loads 13.8 and 14.4.
+- The interrupt answered in 10–40 ms. fieldd's `onSessionExited` heard the pane 5–27 ms after it, and the row read
+  exited 112–194 ms after it.
+- So on a quiet floor the ^C, the PTY and the floor's `session-exited` all work. The ~110 ms between heard and
+  exited is `closeRun`.
+
+**The read:**
+- `closeRun` awaited puppeteer's `handleProcessExit` before it stamped the record, held the exited row, logged
+  `session_exited` and published.
+- puppeteer-runtime 0.3.0's `closeManaged` (`runtime.ts:1941` at `d0aa1224e`) does its synchronous part first: it
+  dispatches `process:exited` and marks the run terminal. Then it awaits, with no bound:
+  - the controller's dispose;
+  - the terminal claim;
+  - `finalizeWorkspace`. Its git calls, `diff`, `rev-parse`, `status` and the rest, are each
+    `execFile("git", …)` with no timeout (`packages/workspaces/src/git.ts:23-24`).
+- On this Mac `git` is `/usr/bin/git`, the xcrun shim: 12.3 ms a call against 4.8 ms for the CLT binary. That is the
+  ~110 ms, and it puts no rosettad ingest on the path. A loaded host can hold those forks far longer.
+
+**Red-first** (records `logs/row-A-2b01c8144`, `logs/row-B-dac1c5bac`, `logs/diag`; VF-PM's GO 02:58Z and 03:02Z):
+- **Scaffold A** (main's runtime): a row puts a `git` that sleeps on PATH after `joinedRow` and before the interrupt.
+  RED in 7630 ms: no exited within 5 s, and the log ends `+2517 fieldd.agents.interrupted`. This is the lost shape
+  exactly.
+- **Scaffold B** (the honest state): `fieldd.agents.exit_heard` at the exit handler's entry, and
+  `fieldd.agents.exit_cleanup_slow` while a cleanup is still pending past `AGENT_EXIT.CLEANUP_WARN_MS` (2 s). RED in
+  7678 ms at the same assertion. Its log ends `+2532 interrupted · +2533 exit_heard reason="signaled" · +4533
+  exit_cleanup_slow`: **C3**.
+- **The diagnostic** (lane-only, at B): the in-process `onSessionExited` heard the pane at +7 ms. `exit_heard` came
+  at +7, `exit_cleanup_slow` at +2007, and `session_exited` at +5071, just after the row killed the stalled git.
+  fieldd hears the exit at once, and the close is held exactly as long as the cleanup.
+
+**The fix** (`8d56b2bd8`, the lane's A+B+C+D squashed, rebased onto `db12d0939` as an identical patch):
+- `closeRun` starts `handleProcessExit` and publishes the exit fact without waiting for the cleanup.
+- The cleanup's promise is kept in `exitCleanups`, keyed by run. A paneless run's cleanup still gates a resume.
+- The row reads `resumable: false` until the cleanup ends, because the old run's lease covers the final git
+  observation (`runtime.ts:1875`). The cleanup's end publishes.
+- `agent.resume` waits for the cleanup at most `AGENT_EXIT.RESUME_CLEANUP_WAIT_MS` (5 s; `registries.ts`, contracts
+  first). Then it refuses PRECONDITION_FAILED, retryable, `{runtimeRunId, state: "finalizing"}`.
+- The AR-D25 persona sweep runs at the cleanup's end.
+- `closeRun`'s callers still await the cleanup.
+- **Rows:**
+  - the stall row: exited at once, not resumable, heard, warned;
+  - the resume row: waits, `finalizing`, then goes through once the stall ends;
+  - MF-1f's held-pane row polls for `resumable`.
+  - floorEvidence names `pendingMs`.
+- **Unchanged:** `runContinuing` skips exiting entries, so a resume of the same conversation through another record
+  is not held by the old cleanup.
+
+**Upstream:** PU-G (drafted, not filed; records `PU-G-puppeteer-bounded-exit-finalization.md`) asks for three things:
+- a bound on each workspace git call (`GIT_TIMEOUT`);
+- a bound on the exit's finalization as a whole, or a split close;
+- an observable release of the lease.
+It moves to `draft/petitions/` in the next draft queue. The workaround retires when PU-G lands in an EL8.
+
+**Design delta (dated 2026-10-29, folded at the next draft queue):**
+- `draft/thinking-ar-agent-plane.md` §16: :477–478 (`agent.resume`'s refusals gain `finalizing`, retryable, beside
+  `terminal-alive`), :481 ("stamped at exit" now holds before the cleanup), :519 and :546.
+- `draft/thinking-ar-reattach.md` §2: a restarted fieldd re-lists the row resumable at once.
+- The refusal states are not a contract enum, so this is a tolerant-reader addition.
+
+**Validation** (this Mac's SSD lane `/Volumes/SamsungRed/lanes/item87`, guard, nice 19; VF-PM's GO 03:13Z and 03:16Z):
+- **The light pass** at the lane's C (03:12:32Z, load 10.4): typecheck contracts and fieldd exit 0; biome exit 0.
+- **The targeted rows** (the two item 87 rows and MF-1f's held-pane row):
+  - **At C `e2cd12c58`** (03:13:49Z): 2 passed, 1 failed. The stall row failed in 405 ms, "the cleanup really
+    reached the stalled git: expected false to be true". The fault was the row's order, not the fix: with the fix
+    the row reads exited before the cleanup's first git call, and the row checked `git.called()` in that instant.
+  - **D `7c409b46d`** (the test only) polls `git.called()` for up to 2 s, then re-reads the row: still exited, still
+    not resumable.
+  - **At D** (03:14:58–15:20Z, load 9.2): 3/3 passed, in 9181, 2457 and 5714 ms.
+- **`pnpm verify`, verbatim, at `8d56b2bd8` on `db12d0939`.** Three runs. The two reds are the host's, and each is
+  out of item 87's reach and read at its cause (VF-PM 03:38Z, 03:50Z):
+  - **Run 1** (03:29:19–03:35:54Z; armed at a 1-min load of 12.5, ended at {257, 270, 170}): EXIT 1 on two rows.
+    - `agent-session.test.ts:2835`, MF-1's field projection: "a settled board sent a frame". It fails before the
+      row's interrupt, while its run is live. Filed as **item 91**.
+    - `rosettad-supervisor.test.ts:342`, item 65's row: `handed` was 3, not 1. Filed as **item 92**, the same row as
+      TS-4a's red.
+  - **Run 2**, the one rerun (03:39:43–03:46:42Z; armed at 17.7, ended at {254, 267, 197} with PORTALS paused from
+    03:40Z): EXIT 1 on electron-shell `smoke-profile.test.ts:114`, DK-18's launcher row: "Test timed out in
+    5000ms". Filed as **item 93**.
+    - fieldd was all green: 2,593 passed, including item 87's rows and run 1's two reds.
+    - After the run fseventsd was at 66% and Finder at 59%, with James's Chrome and bun.
+  - **Run 3**, on VF-PM's settled turn: 1-min under 20 AND 5-min under 60, every swarm paused (03:55:02–04:03:34Z;
+    armed at {9.3, 57.4, 113.2}, ended at {73.5, 190.0, 167.7}). **EXIT 0.**
+    - "Successfully ran target test for 27 projects": fieldd 2,593 passed (11 skipped), with `agent-session.test.ts`
+      56 (2 skipped) and `rosettad-supervisor.test.ts` 32; field-app 2,788; electron-shell 1,983 (3 skipped), with
+      `smoke-profile.test.ts` 8/8.
+    - `pnpm test:rust`: 31 suites, 493 passed, 0 failed. gen:check clean.
+- Records: `/Volumes/SamsungRed/lanes/records/item87/`. They hold the plan, the witness and diagnostic patches (lane
+  only, never committed), the slot logs, PU-G and the dated delta.
