@@ -1002,14 +1002,15 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     New terminal** (`start`, ⌘T): a fresh shell, which shows its launcher, placed as a session with
     no pane is (the deck, below; GV-D4) — in the focused pane, whose session runs on (*corrected
     2026-10-18*, GV-D4 re-ruled: it opened beside the focused pane while fewer than three panes
-    showed); **History — Resume** (`resume`): waiting, faint by ink as the Assistant's cell is, until
-    a session is chosen — and **Jump to** (`jump`) while the chosen session runs on this desktop (§8
-    "History", 2026-10-08), until LN-D2's New terminal in the project History shows replaces them
-    here (HN-7; Resume and Jump to stay on the room's rows). Between views the glyph cross-fades in
-    place, 200ms `ease` (One Frame §12), and so does History's between Resume and Jump to; the
-    tooltip says the act and its key ("Objects  B", "New terminal ⌘T", "Resume this session —
-    choose a session first", "Jump to this session"), open it says "Close  Esc". *Was 32 round, 6
-    clear of the track, until HN-2.*
+    showed); **History — New terminal** (`start`, ⌘T; LN-D2, HN-7): a fresh shell in the folder of
+    the project History shows, placed as Godview's is, the window going to Godview as Resume does;
+    with no project shown it opens as Godview's, and a project whose folder is on another desktop,
+    not mounted or gone says so in New agent's words while the window stays. Resume and Jump to are
+    the chosen session's acts — its row, ④'s head and the palette (§8 "History"). Between views the
+    glyph cross-fades in place, 200ms `ease` (One Frame §12); the tooltip says the act and its key
+    ("Objects  B", "New terminal ⌘T", "New terminal in vibe-field ⌘T"), open it says "Close  Esc".
+    *Was 32 round, 6 clear of the track, until HN-2. History's create was Resume (AR-8c), and Jump
+    to while the chosen session ran here (P3, 2026-10-08), until HN-7.*
   **The note** — the frame's voice at the foot: solid chrome, 12/500 in secondary ink, rising 4px as
   it fades in, for 2.4s. Create's outcomes and what History's acts say stand **centred over create**
   ("Terminal opened in the active pane": it takes the focused pane, GV-D4 — "… in a new pane"
@@ -1122,9 +1123,18 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     History and in Chat's thread, and another app's copy brought in — ⌘V with no caret anywhere, or a
     drag let go away from a pane and the prompt — deal as their doors arrive (*as built*, below).
     Another app's clipboard is never read on its own: what is copied elsewhere, passwords included,
-    stays out. **Twelve** (HN-D8): the thirteenth pushes the oldest off the left end. **This window's
-    session** (HN-D9): closing the window or quitting empties the hand; nothing of it is written
-    anywhere.
+    stays out. Every other copy VibeField makes deals the same way, as a text card — Settings' (a
+    sign-in link, a device's name, a diagnostics record) from the button pressed, and the copies
+    History's room makes through its workspace port — and what a card holds goes on the system
+    clipboard too, its words or its picture (§8 "Copy"). **A program's write is not a copy**: a terminal's OSC 52 reaches the system clipboard
+    through the same door and deals no card — the hand holds what you copied (HN-L1). **Brought in**
+    (HN-6): ⌘V with no caret deals one card for each thing the clipboard holds — its words, its
+    picture, a file as its path — from the pointer; a drag from another app becomes a card the moment
+    it enters the window, carried as one from the hand is, its kind's index alone until the drop says
+    what it holds; let go on a pane or Chat's prompt it plays straight in, only once; anywhere else it
+    settles into the hand; carried back out of the window, it is gone. **Twelve**
+    (HN-D8): the thirteenth pushes the oldest off the left end. **This window's session** (HN-D9):
+    closing the window or quitting empties the hand; nothing of it is written anywhere.
   - **Where cards go** (HN-D4, HN-D6, HN-D7, HN-L5): drag a card out of the hand and every place that
     takes it answers under the pointer — its 1.5px `--vf-select` ring (a selection, §2.3) and, over
     the card, what letting go will do: "Paste into claude·2", "Place as a note", "Place as a print";
@@ -1153,11 +1163,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     line (z 63; the line 62), a card picked up above it (64), a carried card above both (66). The label
     over a carried card is the line note's voice — solid chrome, secondary ink — never the select blue
     the page drew.
-  - *As built (HN-1, HN-2, HN-4, 2026-10-29):* the snapshot's cards, the desk's Copy, and the plays
-    into a pane, onto the desk and through a view's cell. ⌘C in a pane waits on ghosttea's routed
-    selection text (petition G30: its routed `copySelection` answers nothing at 0.13.7); Copy in
-    History on a copy port in rosetta's room (petition RO-31); another app's paste and drag, and
-    picture cards on the system clipboard, are HN-5 and HN-6 (ROADMAP).
+  - *As built (HN-1, HN-2, HN-4, 2026-10-29; HN-5 and HN-6, B2):* the snapshot's cards, the desk's
+    Copy with both halves on the system clipboard, Settings' and History's workspace copies, the plays
+    into a pane, onto the desk and through a view's cell, and another app's paste and drag. ⌘C in a
+    pane waits on ghosttea's routed selection text (petition G30: its routed `copySelection` answers
+    nothing at 0.13.7, and its clipboard write carries no reason to tell ⌘C from a program's); Copy
+    in History's room on a copy port in rosetta's room (petition RO-31).
 - **Pills** (`UiPill`; the settings rows' `SettingsPill`): full-round, padded 2 × 8, 10px
   medium in tertiary ink on the foreground at 5% — a label, never a control: a plugin's source
   (below), a fact beside a name.
@@ -1257,8 +1268,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     the page drew 15, F15) under the strong hairline — "Type a command or a view…". Below it every
     act, **its key at the row's end**: **Views** — Canvas ⌘1 · Godview ⌘2 · History ⌘3 ·
     Assistant ⌘4, which waits ("not built yet"); **On this view** — the line's create (Objects B
-    on Canvas, New terminal ⌘T in Godview, Resume this session in History, waiting until a session
-    is chosen — Jump to this session while it runs here, by the line's own reading), on Canvas
+    on Canvas, New terminal ⌘T in Godview and in History), in History the chosen session's **Resume
+    this session**, waiting until a session is chosen — **Jump to this session** while it runs here,
+    by the room's reading (the line's own until HN-7), on Canvas
     the four zoom acts, and in Godview **System control**, the one act with no key (GV-D1,
     2026-10-11: it left the instrument bar for the palette — §8 "Godview's head — Stories");
     **App** — Settings… ⌘,; then each enabled
@@ -1873,15 +1885,16 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   the brackets' 6 / 10 outset (`handle.capture({ rect, marks: false })`, ICE I23, I40), drawn
   without the selection's marks and taken at once, of the last presented frame (R15), titled by its
   face's name ("Clock", "2 objects", a missing face's type). The card leaves from the selection's
-  box and arcs into the hand's right end in 560ms on the island curve (§6); the text half also goes
-  on the system clipboard (the host's copy door). The selection is **never cleared or put back**: no
+  box and arcs into the hand's right end in 560ms on the island curve (§6); what it copied goes on
+  the system clipboard too — the words through the host's copy door, the picture through the
+  clipboard's picture door (HN-5). The selection is **never cleared or put back**: no
   selection write during Copy, and nothing a peer could see blink. ⌘C copies only on Canvas, with a
   selection, outside any field — a note being written copies its own text — and never under a cover.
   Reduced motion (M6): the card fades into its place.
   *History:* **Send to…** (DK-0d…DK-17b, 2026-10-03…10-07) flew a chip of the object's face from the
   selection to the line's caret (1.25 → 0.86, 560ms) and typed the @ 180ms after it landed, so @'s
   list opened; the bar stepped aside from the press while the chip flew. It left with the line's
-  draft (LN-D3, HN-2). A picture on the system clipboard waits for its door (HN-5).
+  draft (LN-D3, HN-2). *Until HN-5* only the text half reached the system clipboard.
 - **The missing face** (DK-D18 as amended 2026-10-03: no VibeField kind; ICE I24; R11, R12, R24):
   an object the desk cannot draw — its type has **no kind** on this desk (a plugin off or gone, a
   type this build never registered — ghost stubs register faceless types only — or one registered
@@ -2876,8 +2889,15 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     room's sheet left with it. The band holds the window's lights and, at its right end, **the
     frame's search button** (GV-D10); the room's layer still starts at the band's foot, so no dialog
     ever covers the band or the button.
-  - **Its create is Resume** (`resume`, §13): waiting, faint by ink, until the room has a session
-    chosen ("Resume this session — choose a session first"), and waiting with the empty pane
+  - **Its create is New terminal** (`start`, ⌘T; LN-D2 ruled by James 2026-10-29, HN-7): a fresh shell
+    in the folder of the project the room shows — its place on this desktop, found as New agent finds
+    it (the folder the room shows, else the project's usual place) — placed as Godview's create places
+    one (GV-D4: in the focused pane), and the window moves to Godview to show it; the note says
+    Godview's words. With no project shown it opens as Godview's does; a project on another desktop,
+    or a folder not mounted or gone, says so in New agent's words and the window stays in History.
+  - **Resume** (`resume`, §13), the chosen session's act — the line's create until HN-7, now the
+    palette's History row, each session row's and ④'s head's: waiting, faint by ink, until the room
+    has a session chosen ("Resume this session — choose a session first"), and waiting with the empty pane
     launcher's own words for one it would not resume ("its folder is gone", "not offered here", "not
     installed"). Pressed, it continues the conversation in its own agent and persona (`agent.resume`,
     the native form, as the launcher asks it), placed as the swarm's open places a session with no
@@ -2887,7 +2907,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     placed beside the focused pane while fewer than three panes showed, and said **"Resumed in a
     new pane"** there. Jump to, for a session still running, is owed.
     *Corrected 2026-10-08 (P3):* Jump to is built — the next entry.
-  - **Its create is Jump to while the session runs here** (`jump`, §13; AR-D43, K11 — built
+    *Moved 2026-10-29 (HN-7):* Resume and Jump to were the line's create in History until HN-7; in
+    this entry and the two after it, "the create" is the act where it stands now — the same reading,
+    the same words, the same refusals.
+  - **Jump to while the session runs here** (`jump`, §13; AR-D43, K11 — built
     2026-10-08, P3; the room's own row footer, PJ-D9 (a), waits for PJ-4's slot). Whether the
     chosen session runs is read by **one plain `agent.list`** — no subscription, so a closed Godview
     still asks nothing (PF6) — joined on the room's native id: a run continuing that conversation,
@@ -2999,7 +3022,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       word) or, while it runs here, **Jump to** (`jump`) — or, quiet in the reason's place, why
       neither, in the empty pane launcher's own words: "folder is gone", "not installed", "not
       offered here", "can’t resume" — and "its volume is not connected". ④'s head carries the same act as a pill, or the same reason after the range. Pressed,
-      each does what the line's create does, and the note on the line says what came of it.
+      each does what Resume and Jump to do (above; the line's create until HN-7), and the note on the
+      line says what came of it.
     - **New agent** is ②'s head's one primary — the `start` glyph on the room's primary fill — and
       opens the room's rows: **Starts in** names the folder ③ shows (its mark, its path, its
       branch, "1 agent is already working there"; or, dimmed, why it cannot start there: another
@@ -3693,8 +3717,9 @@ their place". "Fullscreen" stays the pane's word (§8).
   capture phase before a focused pane can see them, printed on the views track's cells (§8) and
   said in the View menu. **The line's own keys** (One Frame §11) belong to its create and are SAID,
   never printed (FR-5): **B** toggles Objects on Canvas — never while typing (a note, any field) and never
-  under a cover; **⌘T** (Ctrl+T) is Godview's New terminal, a product chord taken on the capture
-  phase in Godview so a focused pane never sees it (ghostty's new_tab). **⇧⌘V** raises the hand in
+  under a cover; **⌘T** (Ctrl+T) is New terminal in Godview and in History (HN-7: there, in the
+  project it shows), a product chord taken on the capture phase in those two views so a focused pane
+  never sees it (ghostty's new_tab). **⇧⌘V** raises the hand in
   every view (§8 "The hand"), a product chord taken on the capture phase; **⌘C** on Canvas is the
   desk's Copy while something is selected and no field holds the caret (§8 "Copy") — the desk's
   chord, never the product's: a pane never sees the desk's ⌘C (the cover hides the desk's bar), so
@@ -3909,7 +3934,8 @@ turns it. **`importing`** (2026-10-27, AO-4b) is History's arc (§6, the arc; §
 that dial, from twelve o'clock, drawn only over the History cell's glyph while History imports and turned by the
 host, which says the turn and the rest; it is never drawn alone.
 **`start`** and **`resume`** (2026-10-03, One Frame §13; Session Glyphs' picks of 30 Sep, spawn-T3
-and resume-play-T3) are the composer's create in Godview and in History (§8, the line): `terminal`'s
+and resume-play-T3) are the line's create in Godview and in History — `start` in both since HN-7,
+`resume` History's until then and the chosen session's act since (§8, the line; §8 "History"): `terminal`'s
 window with its chevron, the frame opened at the lower right to hold the verb — a plus for a session
 started, play for one resumed — so the noun travels with the verb (One Frame FR-3: only Canvas's
 create is a bare plus). Their Hardware records are the page's T4 column, drawn and not shipped.
@@ -3923,7 +3949,9 @@ having left with the clipboard's tray (HN-1).
 live row in History, a link in running text: `terminal`'s window with its wall opened on the left for
 the arrow going in, since a box with an arrow leaving it is already `outward`; its Hardware record is
 the page's T4. Since 2026-10-08 (P3) it is also History's create while the chosen session runs here
-(§8, the line; §8 "History"), cross-fading with `resume` in the create's one place. **The desk's seven** (2026-10-03, Chrome on the Mat §5; MC-D8 ruled 2026-10-02) are
+(§8, the line; §8 "History"), cross-fading with `resume` in the create's one place — until HN-7, since
+which it is the chosen session's act, cross-fading with `resume` in its row's place and on ④'s head.
+**The desk's seven** (2026-10-03, Chrome on the Mat §5; MC-D8 ruled 2026-10-02) are
 ICE's selection glyphs redrawn in the Instrument construction for the desk's chrome (§8):
 `duplicate` · `tape` · `lift` · `trash` on the selection bar — `tape` and `lift` are one padlock, shut
 and opened — and `pen` · `eraser` · `today`, the modes and the act the held kinds declare; their
