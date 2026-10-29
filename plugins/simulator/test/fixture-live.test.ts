@@ -1,14 +1,15 @@
 // THE SEAM'S FIRST SOURCE (src/fixture-live.ts — James's choice 4, ruled 2026-10-29): the fixture behind ICE's `LIVE`, the one
 // seam a phone's screen is fed through. A face per key, `starting` until a demand asks; a live demand wakes it at once on the
 // host's timer and its take presents ONE frame at the demanded raster into the HOST's writer, its logical size the screen's
-// points; then it is woken only when a frame is due (the minute's turn, the rate's slot); paused, never; closed, its writer
-// destroyed and its timer cancelled. A device the catalog lacks says `no-device` and draws nothing. The phone's own faces
-// (live.ts) run over it unchanged — and nothing the plugin ships names a way of making frames.
+// points; then it is woken only when a frame is due (the minute's turn, the rate's slot); paused, it says it rests (its last
+// frame a still: `paused`, at-rest) and is woken once to say so, then never; closed, its writer destroyed and its timer
+// cancelled. A device the catalog lacks says `no-device` and draws nothing. The phone's own faces (live.ts) run over it
+// unchanged — and nothing the plugin ships names a way of making frames.
 import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { type Entity, type LiveDemand, liveSimulatorFace } from "@vibefield/plugin-sdk/desk";
 import { describe, expect, it } from "vitest";
-import { createPhoneFaces, facePlan, fixtureSources, modelOf, simulatorSpec } from "../src";
+import { createPhoneFaces, facePlan, fixtureSources, modelOf, PHONE, simulatorSpec } from "../src";
 import { fakeClock, fakeHost, fakeWriters, TYPE } from "./fakes";
 
 const AT = Date.UTC(2026, 9, 18, 10, 8);
@@ -110,23 +111,49 @@ describe("the fixture as a live source — the frame-source seam's first", () =>
     expect(t.made[0]?.face.epoch).toBe(1);
   });
 
-  it("is never woken while paused, and a live demand again asks once more", () => {
+  it("paused, says it RESTS — its last frame held as a still, `paused` and at-rest, never live — woken once to say so, then never; a live demand again streams", () => {
     const t = setup();
     t.face.demand(live([603, 1311]));
     t.run(AT);
     t.face.take();
     t.face.demand(PAUSED);
+    // what it says moved: woken at once, on the host's timer (outside the frame that sent the demand)
+    expect(t.pending()).toEqual([AT]);
+    t.run(AT);
+    expect(t.woke()).toBe(2);
+    // the take presents nothing and says the look changed: the last frame holds, as a STILL (ICE's `paused`, the words
+    // at-rest — as the product's host says a paused face), and the phone draws it at 0.7 with the rest mark
+    expect(t.face.take()).toBe(true);
+    expect(t.made[0]?.presents).toHaveLength(1);
+    expect(t.face.texture()).toBe(t.made[0]?.face);
+    expect(t.face.state()).toEqual({ is: "paused" });
+    expect(liveSimulatorFace(t.face.info())).toEqual({ is: "at-rest" });
+    expect(facePlan(t.face.info(), t.face.state(), "iPhone 17 Pro", true)).toMatchObject({
+      state: "at-rest",
+      frame: true,
+      brightness: PHONE.display.still,
+      mark: "rest",
+    });
+    // then it is never woken while it rests, and a take says nothing new
     expect(t.pending()).toEqual([]);
     t.run(AT + 10 * 60_000);
-    expect(t.woke()).toBe(1);
+    expect(t.woke()).toBe(2);
     expect(t.face.take()).toBe(false);
-    // the last frame holds: still live, its texture kept
-    expect(t.face.state()).toEqual({ is: "live" });
-    expect(t.face.texture()).toBe(t.made[0]?.face);
+    // a live demand again: woken at once, it streams and says so
     t.face.demand(live([603, 1311]));
     t.run(AT + 10 * 60_000);
-    expect(t.woke()).toBe(2);
+    expect(t.woke()).toBe(3);
     expect(t.face.take()).toBe(true);
+    expect(t.made[0]?.presents).toHaveLength(2);
+    expect(t.face.state()).toEqual({ is: "live" });
+    expect(liveSimulatorFace(t.face.info())).toEqual({ is: "live" });
+    // a pause before any frame says nothing: it holds no still (`starting`), and nothing wakes it
+    const fresh = t.sources.open("k9", SPEC, () => {});
+    fresh.demand(PAUSED);
+    expect(fresh.state()).toEqual({ is: "starting" });
+    expect(fresh.info()).toEqual({});
+    expect(fresh.take()).toBe(false);
+    expect(t.pending()).toEqual([]);
   });
 
   it("closes whole: its writer destroyed, its timer cancelled, its state closed — and the key may open again", () => {

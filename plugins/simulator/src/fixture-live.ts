@@ -9,8 +9,12 @@
 // and rate, none while nothing changed. It presents into a writer the HOST makes — a kind never makes a texture (PA-22; ICE
 // I51 put `createLiveTexture` on the host's half, `@vibecook/ice/desk`, off the kit): `FixtureWriter` names the part of ICE's
 // `LiveWriter` it uses, so a host passes `createLiveTexture`'s writer as it is.
-//  - Its face is WOKEN only when a frame is due (`FixtureFeed.next`: the rate's slot, the minute's turn), on the host's timer
-//    and outside a frame, as `LiveSources.open` asks; a face asked for nothing (paused) is never woken.
+//  - Its face is WOKEN only when a frame is due (`FixtureFeed.next`: the rate's slot, the minute's turn) or what it says has
+//    moved, on the host's timer and outside a frame, as `LiveSources.open` asks; a face asked for nothing (paused) is woken
+//    once, to say it rests, and then never.
+//  - PAUSED with a frame held, it says what it shows: a STILL — ICE's `paused` ("the last frame holds") and the words
+//    `at-rest` — as the product's host says a paused face, so the phone draws it at 0.7 with the rest mark (the PT-S design
+//    §3: "a still never claims to be live"); a live demand again streams, and says `live`.
 //  - Its frames follow the scheme the spec named at the open (the desk's then); a real Simulator keeps its own (the PT-S
 //    design §6 Q-4), so the seam carries no re-spec — a face opened before the desk changed its light keeps the old one.
 //  - A device the fixture's catalog lacks is said honestly — `no-device`, nothing drawn — and a spec that is not a simulator's
@@ -64,8 +68,9 @@ export interface FixtureSourceStats {
   readonly wakes: number;
 }
 
-/** The words of a face that streams. */
+/** The words of a face that streams, and of one whose last frame holds as a still (asked for nothing: paused). */
 const STREAMING: { readonly simulator: LiveSimulatorFace } = { simulator: { is: "live" } };
+const RESTING: { readonly simulator: LiveSimulatorFace } = { simulator: { is: "at-rest" } };
 /** The words of a device the fixture's catalog lacks. */
 const NO_DEVICE: { readonly simulator: LiveSimulatorFace } = { simulator: { is: "no-device" } };
 /** A spec that is not a simulator's device: the kind sent what this source cannot read. */
@@ -112,13 +117,28 @@ export function fixtureSources(
       const feed = new FixtureFeed(feedScreenOf(shapeOf(model)), model.screen.px, device.scheme);
       let writer: FixtureWriter | undefined;
       let closed = false;
+      /** Asked for nothing (the feed's own start: paused until a demand asks). */
+      let paused = true;
+      /** What the face says moved since the last take (a pause, a resume): the take answers true for it. */
+      let told = false;
       let cancel: (() => void) | undefined;
-      /** Wake the face when its next frame is due — the one timer it holds, moved at every take and demand. */
+      // `starting` until its first frame (the kind draws no still it does not have); then `live`, or `paused` while the
+      // last frame holds as a still
+      const stateNow = (): LiveState =>
+        closed
+          ? { is: "closed" }
+          : writer === undefined
+            ? { is: "starting" }
+            : paused
+              ? { is: "paused" }
+              : { is: "live" };
+      /** Wake the face when its next frame is due, or at once when what it says moved — the one timer it holds, moved at every take and demand. */
       const schedule = (): void => {
         cancel?.();
         cancel = undefined;
         if (closed) return;
-        const at = feed.next(o.clock.now());
+        const now = o.clock.now();
+        const at = told ? now : feed.next(now);
         if (at === Number.POSITIVE_INFINITY) return;
         cancel = o.clock.at(at, () => {
           cancel = undefined;
@@ -138,15 +158,19 @@ export function fixtureSources(
             writer.presentBytes(f.bytes, f.width, f.height, f.logical);
             counts.frames += 1;
           }
+          const moved = told;
+          told = false;
           schedule();
-          return f !== undefined;
+          return f !== undefined || moved;
         },
-        // `starting` until its first frame: the kind draws no still it does not have
-        state: () =>
-          closed ? { is: "closed" } : writer === undefined ? { is: "starting" } : { is: "live" },
-        info: () => (writer === undefined ? {} : { extra: STREAMING }),
+        state: stateNow,
+        info: () => (writer === undefined ? {} : { extra: paused ? RESTING : STREAMING }),
         demand(d: LiveDemand) {
+          const was = stateNow().is;
+          paused = d.mode === "paused";
           feed.demand(d);
+          // a pause or a resume with a frame held is news: the phone draws a still for a stream, or the stream again
+          if (stateNow().is !== was) told = true;
           schedule();
         },
         close() {
