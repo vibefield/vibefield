@@ -436,6 +436,17 @@ export const AgentProviderSummary = z
     label: z.string().min(1),
     available: z.boolean(),
     resumable: z.boolean(),
+    /** CP-1d — the runtime's optional per-run briefing declaration. Missing fields claim no support; an unknown
+     * process topology must not be treated as terminal ancestry by a spark picker. Older daemons omit the field. */
+    briefing: z
+      .object({
+        mcpServers: z.boolean().optional(),
+        allowTools: z.boolean().optional(),
+        instructions: z.boolean().optional(),
+        mcpServerProcess: z.string().min(1).max(32).optional(),
+      })
+      .passthrough()
+      .optional(),
     personas: z.array(AgentPersona),
     // AC-1/AC-3 (thinking-ar-agent-catalog.md) — the row's decision and its
     // claims, so a picker badges `preview`/`deprecated` and hides verbs the

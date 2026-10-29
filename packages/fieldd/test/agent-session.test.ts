@@ -59,9 +59,11 @@ import {
   type AgentsProfilesDeleteResult,
   type AgentsProfilesListResult,
   type AgentsProfilesLoginResult,
+  type ComposeSparksHatchResult,
   LAYOUT,
   type PlaceFacts,
   SOCKETS,
+  type SparkRecord,
   TERMINAL_INVENTORY,
   type TerminalInfo,
 } from "@vibefield/contracts";
@@ -71,9 +73,11 @@ import {
   type AgentAttachNext,
   type AgentAttachRecord,
   AgentAttachRefusedError,
+  type AgentBriefingCapabilities,
   type AgentHost,
   type AgentModelService,
   type AgentProfile,
+  type AgentRunBriefing,
   type AgentTurnStopService,
   type BoundIngress,
   defineModelService,
@@ -89,6 +93,7 @@ import type {
 import { afterEach, describe, expect, it, vi } from "vitest";
 import WebSocket from "ws";
 import { EXIT_GRACE_MS } from "../src/agent-runtime";
+import { SparkStore } from "../src/compose/sparks";
 import { bootstrap, type FielddDaemon, SessionRecordStore } from "../src/index";
 import { RpcCallError } from "../src/native-link";
 import type { SecretStore } from "../src/plugin-settings";
@@ -176,6 +181,7 @@ interface ScriptedSession {
   bornAt: number;
   /** where this run's `cat` writes whatever is typed into its PTY */
   typedOut: string;
+  briefing: AgentRunBriefing;
 }
 /** AR-4 — what the scripted adapter was asked to attach to. */
 interface ScriptedAttach {
@@ -191,6 +197,36 @@ interface ScriptedAttach {
 /** Step 1 — what the scripted codec captures for every launch (`facts`): a
  * stand-in for a typed root an attach must hand back */
 const SCRIPTED_STATE = JSON.stringify({ root: "scripted-root" });
+const SPARK_BRIEFING: AgentBriefingCapabilities = {
+  mcpServers: true,
+  allowTools: true,
+  instructions: true,
+  mcpServerProcess: "terminal",
+};
+
+/** An older CP-1c run already belonged to a spark but was born before the briefing shipped. */
+function keepLegacySpark(box: Box, runId: string): SparkRecord {
+  const spark: SparkRecord = {
+    format: 1,
+    id: "sp-7k2m9q4x",
+    name: "Vela",
+    face: { seed: 7 },
+    agent: "scripted",
+    profiles: ["native"],
+    thinksUnder: "native",
+    folder: box.envOut,
+    createdAt: "2026-10-29T12:00:00.000Z",
+    updatedAt: "2026-10-29T12:00:00.000Z",
+  };
+  const store = new SparkStore({
+    dir: join(box.dataDir, ...LAYOUT.SPARKS_DIR),
+    keyPath: join(box.dataDir, ...LAYOUT.SPARKS_KEY_FILE),
+  });
+  store.write(spark);
+  writeFileSync(join(spark.folder, "CLAUDE.md"), "The legacy spark's fresh briefing.");
+  box.records.write({ ...readRecord(box.dataDir, runId), spark: spark.id, origin: { by: "you" } });
+  return spark;
+}
 
 /** The text the scripted turn stop types: a line, because the PTY's `cat`
  * reads in canonical mode and a lone key byte would never reach its file. */
@@ -409,11 +445,17 @@ function scriptedProvider(
      * captures `SCRIPTED_STATE`) and an attach record, reported before the
      * launch (`endpoint-<n>`) and again by each attach (`<handed>-attached`) */
     facts?: boolean;
+    briefing?: AgentBriefingCapabilities;
+    exerciseDoor?: boolean;
   } = {},
 ): AgentProvider {
   let counter = 0;
   return {
-    descriptor: { id: "scripted", label: "Scripted" },
+    descriptor: {
+      id: "scripted",
+      label: "Scripted",
+      ...(extra.briefing === undefined ? {} : { briefing: extra.briefing }),
+    },
     ...(extra.facts === true
       ? {
           launch: {
@@ -451,6 +493,13 @@ function scriptedProvider(
           secret: `nonce-${n}`,
         });
       }
+      const doorRecipe = extra.exerciseDoor && options.mcpServers?.vibefield;
+      const briefingFile = join(envOut, `session-${n}.briefing.json`);
+      if (doorRecipe)
+        writeFileSync(
+          briefingFile,
+          JSON.stringify({ server: doorRecipe, output: join(envOut, `session-${n}.tools.json`) }),
+        );
       const { runtimeSessionId } = await options.host.spawnTerminal({
         command: "/bin/sh",
         // the environment lands ATOMICALLY (written beside, then renamed): the
@@ -461,6 +510,12 @@ function scriptedProvider(
           extra.program ??
             `env > "$SCRIPTED_ENV_OUT.part" && mv "$SCRIPTED_ENV_OUT.part" "$SCRIPTED_ENV_OUT"; exec /bin/cat >> "$SCRIPTED_TYPED_OUT"`,
         ],
+        ...(doorRecipe
+          ? {
+              command: process.execPath,
+              args: [join(FIXTURES, "spark-mcp-client.mjs"), briefingFile],
+            }
+          : {}),
         cwd: options.cwd,
         env: {
           // AR-S4d — a host's launch values, beneath the adapter's own, as the built-ins merge them
@@ -482,6 +537,11 @@ function scriptedProvider(
         ingress,
         bornAt,
         typedOut,
+        briefing: {
+          ...(options.mcpServers === undefined ? {} : { mcpServers: options.mcpServers }),
+          ...(options.allowTools === undefined ? {} : { allowTools: options.allowTools }),
+          ...(options.instructions === undefined ? {} : { instructions: options.instructions }),
+        },
       });
       return scriptedBinding(options.host, runtimeSessionId, sessionId, extra.turnStops);
     },
@@ -551,6 +611,8 @@ interface Box {
 
 interface SetupConfig {
   floor: "mock" | "real";
+  briefing?: AgentBriefingCapabilities;
+  exerciseDoor?: boolean;
   /** AR-S4d — the keychain fieldd keeps server values in (default: a map; never the machine's) */
   secretStore?: SecretStore;
   realAgent?: boolean;
@@ -702,6 +764,8 @@ async function setup(config: SetupConfig): Promise<Box> {
             : undefined,
           {
             profiles: config.profiles === true,
+            ...(config.briefing === undefined ? {} : { briefing: config.briefing }),
+            ...(config.exerciseDoor === undefined ? {} : { exerciseDoor: config.exerciseDoor }),
             seen,
             ...(config.extensions === true ? { signInMark: join(root, "scripted-signed-in") } : {}),
             models,
@@ -1407,6 +1471,76 @@ describe("agent.* without a floor (the mock mgmt server)", () => {
 });
 
 describe("managed sessions over the REAL floor (field-native)", () => {
+  it("CP-1d — hatch and run-id resume carry a fresh briefing, while ordinary runs carry none", async () => {
+    const briefing: AgentBriefingCapabilities = {
+      mcpServers: true,
+      allowTools: true,
+      instructions: true,
+      mcpServerProcess: "terminal",
+    };
+    const box = await setup({ floor: "real", profiles: true, briefing, exerciseDoor: true });
+    const { daemon, dataDir, sessions } = box;
+    const win = await window(daemon, [...DECK, "agents.manage"], "cp1d");
+    await win.call("agents.profiles.verify", { profileId: "scripted:native-default" });
+    const providers = (await win.call("agent.providers", {})) as AgentProvidersResult;
+    expect(providers.providers.find((p) => p.id === "scripted")?.briefing).toEqual(briefing);
+    const { spark } = (await win.call("compose.sparks.hatch", {
+      name: "Vela",
+      face: { seed: 7 },
+      agent: "scripted",
+      profiles: ["native"],
+      thinksUnder: "native",
+    })) as ComposeSparksHatchResult;
+    const runId = spark.session!.runtimeRunId;
+    const first = sessions[0]!;
+    expect(first.briefing.allowTools).toEqual(["vibefield/*"]);
+    expect(first.briefing.instructions).toContain("You are Vela");
+    expect(first.briefing.mcpServers?.vibefield?.command).toBe(BIN);
+    expect(first.briefing.mcpServers?.vibefield?.args).toContain("door");
+    expect(first.briefing.mcpServers?.vibefield).not.toHaveProperty("env");
+    expect(existsSync(join(spark.folder, ".mcp.json"))).toBe(false);
+    expect(readRecord(dataDir, runId).spark).toBe(spark.id);
+    const doorProof = await poll(async () => {
+      const path = join(box.envOut, "session-1.tools.json");
+      return existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : undefined;
+    }, 25_000);
+    expect(doorProof.error).toBeUndefined();
+    expect(doorProof.listed.tools.map((tool: { name: string }) => tool.name)).toContain(
+      "agents_list",
+    );
+    expect(doorProof.called.isError).not.toBe(true);
+
+    await win.call("terminal.terminate", { sessionId: first.runtimeSessionId });
+    await poll(async () => (readRecord(dataDir, runId).exited ? true : undefined), 15_000);
+    const revised = "CP1d edited brief, supplied anew on resume.";
+    writeFileSync(join(spark.folder, "CLAUDE.md"), revised);
+    const resumed = (await born(win, "agent.resume", { runtimeRunId: runId })) as AgentSpawnResult;
+    expect(sessions[1]?.briefing.instructions).toBe(revised);
+    expect(sessions[1]?.briefing.allowTools).toEqual(["vibefield/*"]);
+    expect(sessions[1]?.resume).toBe(first.sessionId);
+    const resumedProof = await poll(async () => {
+      const path = join(box.envOut, "session-2.tools.json");
+      return existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : undefined;
+    }, 25_000);
+    expect(resumedProof.error).toBeUndefined();
+    expect(resumedProof.listed.tools.map((tool: { name: string }) => tool.name)).toContain(
+      "agents_list",
+    );
+    const record = readRecord(dataDir, resumed.session.runtimeRunId);
+    expect(record.spark).toBe(spark.id);
+    expect(record.origin).toEqual({ by: "you" });
+    expect(JSON.stringify(record)).not.toContain(revised);
+    expect(JSON.stringify(record)).not.toContain("mcpServers");
+    await win.call("terminal.terminate", { sessionId: resumed.terminal.sessionId });
+
+    const ordinary = (await born(win, "agent.spawn", {
+      provider: "scripted",
+      cwd: box.envOut,
+    })) as AgentSpawnResult;
+    expect(sessions[2]?.briefing).toEqual({});
+    await win.call("terminal.terminate", { sessionId: ordinary.terminal.sessionId });
+  }, 90_000);
+
   it("spawn: a PTY on the agent cell with a CLEAN environment; the fold's row, the record (0600), the ticket, the audit; automation through the host; exit withdraws the row and stamps the record; resume continues from the record; a live run refuses to be resumed", async () => {
     const { daemon, dataDir, envOut, sessions } = await setup({ floor: "real" });
     const win = await window(daemon, DECK, "r1");
@@ -1613,7 +1747,7 @@ describe("managed sessions over the REAL floor (field-native)", () => {
   }, 90_000);
 
   it("QL-D10 — a conversation resumed by its native id: refused while a run continues it; then a new run on puppeteer's continuation, recorded and audited, answered like a spawn; the exited record no longer resumes beside it", async () => {
-    const box = await setup({ floor: "real", catalog: FILED_CATALOG });
+    const box = await setup({ floor: "real", catalog: FILED_CATALOG, briefing: SPARK_BRIEFING });
     const { daemon, dataDir, envOut, sessions, records } = box;
     const win = await window(daemon, DECK, "qn3");
     const spawned = (await born(win, "agent.spawn", {
@@ -1652,6 +1786,7 @@ describe("managed sessions over the REAL floor (field-native)", () => {
       15_000,
     );
 
+    const spark = keepLegacySpark(box, spawned.session.runtimeRunId);
     const resumed = (await born(win, "agent.resume", {
       provider: "scripted",
       nativeSessionId: conversation,
@@ -1665,6 +1800,9 @@ describe("managed sessions over the REAL floor (field-native)", () => {
     // the adapter was asked to CONTINUE the conversation, in the folder named
     expect(sessions).toHaveLength(2);
     expect(sessions[1]?.resume).toBe(conversation);
+    expect(sessions[1]?.briefing.instructions).toBe("The legacy spark's fresh briefing.");
+    expect(readRecord(dataDir, resumed.session.runtimeRunId).spark).toBe(spark.id);
+    expect(readRecord(dataDir, resumed.session.runtimeRunId).origin).toEqual({ by: "you" });
     // the same routed ticket a spawn answers: the pane mounts it the same way
     expect(resumed.terminal.endpoints.controlUrl).toMatch(/^ws:/);
     expect(resumed.terminal).toHaveProperty("attachGrant");
@@ -3961,8 +4099,9 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
     const nativeId = spawned.session.sessionId;
     await joinedRow(win1, runId);
     await first.daemon.stop();
+    const spark = keepLegacySpark(first, runId);
 
-    const second = await setup({ floor: "real", restartOf: first });
+    const second = await setup({ floor: "real", restartOf: first, briefing: SPARK_BRIEFING });
     const win2 = await window(second.daemon, DECK, "pe2");
     const pending = await poll(async () => {
       const { sessions } = (await win2.call("agent.list", {})) as AgentListResult;
@@ -4012,6 +4151,15 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
     expect((blind.data?.details as { state?: string } | undefined)?.state).toBe("not-alive");
     expect(await listed(win2, ptyId)).toBe(true); // and the PTY is untouched
 
+    // CP-1d: preparation must finish before the pending process is terminated.
+    rmSync(join(spark.folder, "CLAUDE.md"));
+    await expect(
+      second.daemon.agents.resume({ runtimeRunId: runId }, { kind: "local-token" }),
+    ).rejects.toMatchObject({ details: { reason: "spark-brief-unavailable" } });
+    expect(await listed(win2, ptyId)).toBe(true);
+    expect(first.sessions).toHaveLength(1);
+    writeFileSync(join(spark.folder, "CLAUDE.md"), "Ready for the pending replacement.");
+
     // ── the replacement by hand ──
     // A second window watches the floor's listing for the whole of the resume:
     // the claim ("the old PTY leaves FIRST, and is gone before the new run is
@@ -4038,6 +4186,8 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
     expect(resumed.session.continuation).toEqual({ persisted: true, resumable: false });
     expect(first.sessions).toHaveLength(2);
     expect(first.sessions[1]?.resume).toBe(nativeId);
+    expect(first.sessions[1]?.briefing.instructions).toBe("Ready for the pending replacement.");
+    expect(readRecord(first.dataDir, resumed.session.runtimeRunId).spark).toBe(spark.id);
     // the old PTY is gone before the new run was born; the records say what happened
     await untilListed(win2, ptyId, false);
     const old = readRecord(first.dataDir, runId);
