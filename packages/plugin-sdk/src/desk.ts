@@ -409,10 +409,12 @@ export function liveSimulatorSpec(
 
 /**
  * THE SIMULATOR'S HONEST FACE (PT-S1; the PT-S design §3) — which of its nine states a simulator face is in, as the HOST knows
- * it (its producer sets it: `xcrun simctl` and the capture). A kind shows each in a person's words (DESIGN.md §9) and never
- * passes a still off as live:
- *  - `no-simulator` — no Simulator on this Mac (no `xcrun simctl`). No act;
- *  - `no-permission` — the capture was refused (Screen Recording). The act opens the system's settings;
+ * it (whichever source feeds the face sets it: a kind never learns how its frames are made, so a host may change its source
+ * and no kind changes — James's choice 4, 2026-10-29). A kind shows each in a person's words (DESIGN.md §9) and never passes a
+ * still off as live. A source says only the states it can reach (one that needs no consent never says `no-permission`):
+ *  - `no-simulator` — no Simulator on this Mac. No act;
+ *  - `no-permission` — the system refused the host the Simulator's screen (Screen Recording). The act opens the
+ *    system's settings;
  *  - `no-device` — no device of the bound type on this Mac. The act creates one;
  *  - `off` — the device is shut down: its last still, dimmed. The act boots it;
  *  - `booting` — from its boot to the window's first frame: the still, with a boot mark. No act;
