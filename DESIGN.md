@@ -3800,9 +3800,9 @@ their place". "Fullscreen" stays the pane's word (§8).
   Settings → Terminal → Keyboard says Ghostty's ⌘C runs in the deck. @ is never a
   shortcut: it is typed in Chat's composer (§8). **Search's key** (§8 "Search — the Peek",
   2026-10-08) is PRINTED under the frame's search button: **⌘F** (Ctrl+F) opens the Peek, a product
-  chord taken on the capture phase while History or Godview is the view (Godview's own Find left
+  chord taken on the capture phase while Godview or History is the view (Godview's own Find left
   with P2, 2026-10-09) — so Settings → Terminal → Keyboard says Ghostty's find never reaches a pane
-  while History or Godview is the view. **⌥0–⌥9 are nobody's** (docket PK4 (a), 2026-10-09): they
+  while Godview or History is the view (the track's order, as ⌘T's row says it; HN-7). **⌥0–⌥9 are nobody's** (docket PK4 (a), 2026-10-09): they
   chose Godview's profile tabs, and the tabs left the bar for search's scope row (GV-D3), so ⌥ and
   every digit reach the pane — a fresh pane's launcher keeps its own ⌥n there (QL-D2); nothing
   prints them. **The head's keys** (DK-D24; One Frame §6) are
