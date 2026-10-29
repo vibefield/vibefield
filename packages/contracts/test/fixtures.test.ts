@@ -260,9 +260,11 @@ import {
   RestartScheduled,
   SystemShutdownParams,
   SystemShutdownResult,
+  UpdateCheckResult,
   UpdateClientStateFile,
   UpdatePolicy,
   UpdatePolicySource,
+  UpdateView,
 } from "../src/update-policy";
 import {
   WorkspaceCloseTicketParams,
@@ -426,6 +428,10 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "channel-heads": ChannelHeads,
   // WP12b: the updater's persisted client state (Electron main's `updates/state.json`).
   "update-client-state": UpdateClientStateFile,
+  // AU-1: the updater's one projection (`UpdateController.view()`, through `desktopState.update`) and a person's
+  // check answered when the check settles. `update-view.pre-au1.json` is today's shape: the tolerant-reader witness.
+  "update-view": UpdateView,
+  "update-check-result": UpdateCheckResult,
   // WP8a: the packaged app's signed bundled-plugin index (refusals in plugin-distribution.test.ts).
   "bundled-plugin-index": BundledPluginIndex,
   // WP8b: the stage's public identity (Resources/identity/release-identity.json).
