@@ -24,7 +24,12 @@
 //    blessed once by the named flag — it reads none of the desk's hand (its head is its own lent service's, and a Node still
 //    draws the committed heads); and a PHONE-SIZE pane, drawn at a phone's cut, judged by its face's colour count and
 //    contrast, never a hash: its page the phone's own 66.59 mm display across, light with contrast by day and dark by night,
-//    its head frosted.
+//    its head frosted;
+//  - the iOS Simulator's phone (plugins/simulator — PT-S1, PORTALS' second kind): held to ITS golden over its twelve playground
+//    states — three unbound phones, and the nine honest faces, each a bound phone the plugin's FIXTURE answers (its
+//    playground/live.ts — the synthetic screen, no Apple artwork) — blessed ONCE at the first gated run, never by hand; and a
+//    phone MID-MORPH, pinned through the desk's asset door (an iPhone 8 a quarter of the way into an X), judged by its drawn
+//    height between the two models', never a hash.
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -50,6 +55,7 @@ const FIXTURE = join(HERE, "fixtures", "still-kinds");
 const CLOCK = join(REPO, "examples", "plugins", "desk-clock");
 const PAD = join(REPO, "plugins", "comment-pad");
 const PANE = join(REPO, "plugins", "browser-pane");
+const SIMULATOR = join(REPO, "plugins", "simulator");
 
 interface Ran {
   readonly code: number;
@@ -575,6 +581,125 @@ describe("the browser pane — PORTALS' first kind (PT-1)", () => {
       } finally {
         day.dispose();
         night.dispose();
+      }
+    } finally {
+      gpu.destroy();
+    }
+  });
+});
+
+describe("the iOS Simulator's phone — PORTALS' second kind (PT-S1)", () => {
+  const STATES = [
+    "default",
+    "silver",
+    "iphone-8",
+    "no-simulator",
+    "no-permission",
+    "no-device",
+    "off",
+    "booting",
+    "no-window",
+    "live",
+    "at-rest",
+    "stopped",
+  ];
+  const UNBOUND = ["default", "silver", "iphone-8"];
+  let ran: Ran;
+  beforeAll(async () => {
+    ran = await still(SIMULATOR);
+  });
+
+  it("is held to its golden: its twelve playground states by day and by night — blessed ONCE at the first gated run, never by hand", () => {
+    expect(ran.code).toBe(0);
+    expect(ran.stills.map((s) => `${s.state} · ${s.theme}: ${s.code}`)).toEqual([
+      ...STATES.map((state) => `${state} · day: ok`),
+      ...STATES.map((state) => `${state} · night: ok`),
+    ]);
+    for (const s of ran.stills) expect(s.detail).toContain("held to its golden");
+  });
+
+  it("reads the faces lent where it is bound (the fixture's) and nothing where it is not — and every state is its own", () => {
+    for (const s of ran.stills)
+      expect(s.lent, `${s.state} · ${s.theme}`).toEqual(
+        UNBOUND.includes(s.state) ? undefined : ["live"],
+      );
+    for (const theme of ["day", "night"]) {
+      const shas = ran.stills.filter((s) => s.theme === theme).map((s) => s.sha256);
+      expect(new Set(shas).size, theme).toBe(STATES.length);
+    }
+  });
+
+  it("a phone MID-MORPH — an iPhone 8 a quarter of the way into an X, pinned through the desk's asset door — is drawn between the two, never either", async () => {
+    const gpu: StillGpu = await stillGpu();
+    try {
+      const mod = (await import(/* @vite-ignore */ join(SIMULATOR, "src", "index.ts"))) as {
+        readonly simulator: ObjectBinding;
+        readonly simulatorManifest: {
+          readonly contributes?: { readonly objects?: readonly ObjectContribution[] };
+        };
+      };
+      const row = mod.simulatorManifest.contributes?.objects?.[0] as ObjectContribution;
+      const type: WidgetType = buildObjectType({ ...row, behaviors: [] }, mod.simulator);
+      const frame = stillFrame(row.size, kindOfBinding(mod.simulator)?.reach ?? 0);
+      const EIGHT = "com.apple.CoreSimulator.SimDeviceType.iPhone-8";
+      const X = "com.apple.CoreSimulator.SimDeviceType.iPhone-X";
+      const draw = (model: string | undefined, asset?: unknown) =>
+        createStill({
+          device: gpu.device,
+          format: "rgba8unorm",
+          size: frame.size,
+          dpr: 2,
+          objects: [type],
+          theme: "light",
+          palette: productPalette.light,
+          stage: ({ engine, pinAsset }) => {
+            if (model === undefined) return; // the bare mat
+            const e = engine.ops.spawnWidget(row.type, {
+              x: frame.at.x,
+              y: frame.at.y,
+              w: row.size.w,
+              h: row.size.h,
+              props: { model },
+              undoable: false,
+            });
+            if (asset !== undefined) pinAsset(e, asset);
+          },
+        });
+      const bare = await draw(undefined);
+      /** The rows the phone (its body, its shadow) moves off the bare mat in the still's middle column: its drawn extent. */
+      const extent = (shot: {
+        readonly width: number;
+        readonly height: number;
+        readonly rgba: Uint8Array;
+      }) => {
+        const x = Math.round(shot.width / 2);
+        let first = -1;
+        let last = -1;
+        for (let y = 0; y < shot.height; y++) {
+          const i = (y * shot.width + x) * 4;
+          let moved = false;
+          for (let c = 0; c < 3; c++)
+            if (Math.abs((shot.rgba[i + c] ?? 0) - (bare.rgba[i + c] ?? 0)) > 8) moved = true;
+          if (!moved) continue;
+          if (first < 0) first = y;
+          last = y;
+        }
+        return last - first + 1;
+      };
+      const eight = await draw(EIGHT);
+      const x = await draw(X);
+      const mid = await draw(X, { morph: { from: EIGHT, t: 0.25 } });
+      try {
+        const [a, m, b] = [extent(eight), extent(mid), extent(x)];
+        expect(a, "the 8 is shorter than the X").toBeLessThan(b);
+        expect(m, `mid-morph ${m} px between the 8's ${a} and the X's ${b}`).toBeGreaterThan(a);
+        expect(m).toBeLessThan(b);
+        const sha = (shot: { readonly rgba: Uint8Array }) =>
+          createHash("sha256").update(shot.rgba).digest("hex");
+        expect(sha(mid)).not.toBe(sha(eight));
+        expect(sha(mid)).not.toBe(sha(x));
+      } finally {
+        for (const shot of [bare, eight, x, mid]) shot.dispose();
       }
     } finally {
       gpu.destroy();
