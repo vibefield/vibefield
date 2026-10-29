@@ -1,6 +1,7 @@
 #if DEBUG
   import FieldDesign
   import FieldMesh
+  import Foundation
 
   /// `-vf-demo-account=<state>` (IOS-8e, AP-D8): the corner's inputs, stamped,
   /// so a screenshot run can photograph every state in both themes with no
@@ -60,9 +61,24 @@
       case "none-found":
         // The beat, held: the row filled by the first desktop to list.
         return make(.up, login: login, found: .init(name: "studio", platform: "darwin"))
+      // TS-7b — a Mac's code: the welcome that knows the account to pick, and
+      // "Another account?" for a code scanned in the app and for a link.
+      case "expecting":
+        return make(.off, expected: expectation(.scanned))
+      case "another":
+        return make(.up, login: otherLogin, face: fox, desktops: [ready("studio")], hearing: true, expected: expectation(.scanned))
+      case "another-link":
+        return make(.up, login: otherLogin, face: fox, desktops: [ready("studio")], hearing: true, expected: expectation(.link))
       default:
         return nil
       }
+    }
+
+    /// The account the page's "Another account?" finds signed in (A:723).
+    static let otherLogin = "james@acme.dev"
+
+    private static func expectation(_ arrival: PhoneCodeExpectation.Arrival) -> PhoneCodeExpectation {
+      PhoneCodeExpectation(login: login, from: "Studio", arrival: arrival, at: Date(timeIntervalSince1970: 1_798_502_400))
     }
 
     private static func ready(_ name: String) -> FieldDesktop {
@@ -72,7 +88,7 @@
     private static func make(
       _ state: MeshModel.State, remembered: String? = nil, login: String? = nil, face: UserFace? = nil,
       desktops: [FieldDesktop] = [], asleep: [(String, String)] = [], foreign: Int = 0, hearing: Bool = false,
-      found: FieldHomeModel.FoundDesktop? = nil
+      found: FieldHomeModel.FoundDesktop? = nil, expected: PhoneCodeExpectation? = nil
     ) -> Demo {
       Demo(
         face: FieldHomeModel.accountFace(
@@ -98,7 +114,8 @@
           machineName: machine,
           adminConsole: FieldTruffleRuntime.machinesAdminURL(controlURL: nil),
           signInNote: nil,
-          found: found))
+          found: found,
+          expected: expected))
     }
   }
 #endif

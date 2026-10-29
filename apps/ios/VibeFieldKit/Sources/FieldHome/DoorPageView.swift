@@ -15,6 +15,11 @@ struct DoorPageView: View {
   let onSignIn: () -> Void
   /// Room for the bar under the page.
   let bottomClearance: CGFloat
+  /// TS-7b — Scan the code on your Mac: the reader.
+  var onScan: () -> Void = {}
+  /// TS-7b — "Another account?"'s two acts: sign out and in, or keep this one.
+  var onSwitchAccount: () -> Void = {}
+  var onKeepAccount: () -> Void = {}
 
   @Environment(\.openURL) private var openURL
   @State private var copied = false
@@ -22,7 +27,9 @@ struct DoorPageView: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
       switch page {
-      case .welcome(let failure): welcome(failure: failure)
+      case .welcome(let failure, let expecting): welcome(failure: failure, expecting: expecting)
+      case .anotherAccount(let current, let expected, let from, let byLink):
+        anotherAccount(current: current, expected: expected, from: from, byLink: byLink)
       case .approval(let machine, let console): approval(machine: machine, console: console)
       case .signInAgain(let note): signInAgain(note: note)
       case .noDesktops(let login, let found): noDesktops(login: login, found: found)
@@ -37,7 +44,7 @@ struct DoorPageView: View {
   // MARK: The pages
 
   @ViewBuilder
-  private func welcome(failure: String?) -> some View {
+  private func welcome(failure: String?, expecting: String?) -> some View {
     title("Your field, in your pocket.")
     line("Approve agents, watch sessions and type into them, from anywhere your Mac is.")
     HStack(alignment: .center, spacing: 14) {
@@ -50,8 +57,39 @@ struct DoorPageView: View {
     .accessibilityElement(children: .combine)
     .padding(.top, 28)
     act("Continue with Tailscale")
+    Button("Scan the code on your Mac", action: onScan)
+      .buttonStyle(ChromePillStyle(.secondary))
+      .padding(.top, 10)
     footnote("Next, iOS asks to use tailscale.com to sign in.")
+    if let expecting { footnote("At Tailscale, pick \(expecting).") }
     if let failure { footnote(failure) }
+  }
+
+  /// TS-7b (A:723) — presentation only: nothing here touches the gate or the
+  /// login. A code that came by a LINK may be anyone's (any page can open the
+  /// scheme), and Sign in again's sweep is destructive, so there Keep this
+  /// account is the primary act (EL7). Both logins are named; the Mac's name
+  /// is drawn as plain text.
+  @ViewBuilder
+  private func anotherAccount(current: String, expected: String, from: String, byLink: Bool) -> some View {
+    title("Another account?")
+    Text(Self.anotherAccountLine(current: current, expected: expected, from: from, byLink: byLink))
+      .font(ChromeType.sans(15))
+      .foregroundStyle(ChromePalette.inkSecondary)
+      .fixedSize(horizontal: false, vertical: true)
+      .padding(.top, 10)
+    Button("Sign in again", action: onSwitchAccount)
+      .buttonStyle(ChromePillStyle(byLink ? .secondary : .primary))
+      .padding(.top, 28)
+    footnote("At Tailscale, pick \(expected).")
+    Button("Keep this account", action: onKeepAccount)
+      .buttonStyle(ChromePillStyle(byLink ? .primary : .secondary))
+      .padding(.top, 16)
+  }
+
+  static func anotherAccountLine(current: String, expected: String, from: String, byLink: Bool) -> String {
+    let came = byLink ? "the link you opened" : "the code you scanned"
+    return "This phone is signed in as \(current), but \(came) came from \(from), signed in as \(expected)."
   }
 
   @ViewBuilder

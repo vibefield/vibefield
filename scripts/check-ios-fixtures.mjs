@@ -154,6 +154,8 @@ const requiredMirrors = [
   ["launch", launchFixtures, ["Tests/FieldProductTests"]],
   ["launch", sheetFixtures, ["Tests/FieldWorkspaceTests"]],
   ["launch", sheetFixtures.slice(0, 2), ["Sources/FieldWorkspace"]],
+  // TS-7b — the phone code's vector: the Swift parser reads the bytes the TypeScript one does
+  ["phone-code", ["phone-code.vector.json"], ["Tests/FieldMeshTests"]],
 ];
 for (const [set, fixtures, folders] of requiredMirrors) {
   for (const folder of folders) {
@@ -466,6 +468,33 @@ const pins = [
       label: "FieldMeshContract.appID",
     },
   },
+  // TS-7b — the phone code's prefix: the Mac writes it, the phone reads it and registers the scheme.
+  ...["SCHEME", "HOST"].map((part) => ({
+    name: `phoneCode${part}`,
+    origin: {
+      file: "packages/contracts/src/phone-code.ts",
+      pattern: new RegExp(`^export const PHONE_CODE_${part} = "([^"]*)"`, "m"),
+      label: `PHONE_CODE_${part}`,
+    },
+    copy: {
+      file: "apps/ios/VibeFieldKit/Sources/FieldMesh/PhoneCode.swift",
+      pattern: new RegExp(`^ {2}public static let ${part.toLowerCase()} = "([^"]*)"`, "m"),
+      label: `PhoneCode.${part.toLowerCase()}`,
+    },
+  })),
+  {
+    name: "phoneCodeAppScheme",
+    origin: {
+      file: "packages/contracts/src/phone-code.ts",
+      pattern: /^export const PHONE_CODE_SCHEME = "([^"]*)"/m,
+      label: "PHONE_CODE_SCHEME",
+    },
+    copy: {
+      file: "apps/ios/App/Info.plist",
+      pattern: /<key>CFBundleURLSchemes<\/key>\s*<array>\s*<string>([^<]*)<\/string>/,
+      label: "the app's CFBundleURLSchemes",
+    },
+  },
   // The handshake the phone offers and the liveness it keeps.
   tpPin("PROTOCOL_MAJOR", "protocolMajor"),
   tpPin("PROTOCOL_MINOR", "protocolMinor"),
@@ -704,6 +733,6 @@ if (problems.length > 0 || pinProblems.length > 0) {
 const values = pins.length === 1 ? "contract value" : "contract values";
 console.log(`ios fixtures: ${checked} copies identical to packages/contracts/fixtures`);
 console.log(
-  `ios pins: ${pins.length} ${values} identical to packages/contracts/src (registries.ts and the terminal word lists)`,
+  `ios pins: ${pins.length} ${values} identical to packages/contracts/src (registries.ts, the terminal word lists and the phone code)`,
 );
 for (const notice of notices) console.log(`ios pins: NOTICE — ${notice}`);

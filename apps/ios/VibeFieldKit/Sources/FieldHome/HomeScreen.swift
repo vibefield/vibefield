@@ -42,6 +42,9 @@ public struct HomeScreen: View {
   @State private var signInSheet = TailscaleSignInSession()
   /// TS-7 (Q1-f) — the desktop filling "No desktops yet"'s row for the beat.
   @State private var foundDesktop: FieldHomeModel.FoundDesktop?
+  /// TS-7b — the account a Mac's code said to expect, and its reader.
+  private let expectationMemory = ExpectationMemory()
+  @State private var macCodeReaderOpen = false
   @State private var remoteField = RemoteSessionField(source: nil)
   /// IOS-4b — the live field: the devices store, the doors it names, and the
   /// boards behind them. Built when the mesh comes up and void when it goes,
@@ -290,8 +293,21 @@ public struct HomeScreen: View {
       if let door {
         DoorPageView(
           page: door, onSignIn: performSignIn,
-          bottomClearance: AppBar.clearance(homeInset: homeInset, stepper: false))
+          bottomClearance: AppBar.clearance(homeInset: homeInset, stepper: false),
+          onScan: { macCodeReaderOpen = true },
+          onSwitchAccount: switchAccount,
+          onKeepAccount: keepAccount)
         .transition(.opacity)
+        // On the page rather than the stage: the stage already presents the
+        // swarm lab's cover, and one view presents one cover.
+        .fullScreenCover(isPresented: $macCodeReaderOpen) {
+          MacCodeReader(
+            onCode: { code in
+              macCodeReaderOpen = false
+              receive(code, arrival: .scanned)
+            },
+            onClose: { macCodeReaderOpen = false })
+        }
       }
     }
     .animation(FieldMotion.ease(0.24), value: doorPage)
@@ -344,7 +360,12 @@ public struct HomeScreen: View {
       "Sign out of \(accountLogin ?? "this account")?", isPresented: $signOutPending,
       titleVisibility: .visible
     ) {
-      Button("Sign out", role: .destructive) { signOut() }
+      Button("Sign out", role: .destructive) {
+        // TS-7b — the person's own Sign out settles a Mac's code too; the
+        // sweep alone keeps it, for "Another account?"'s Sign in again.
+        expectationMemory.forget()
+        signOut()
+      }
       Button("Cancel", role: .cancel) {}
     } message: {
       Text(
@@ -1524,6 +1545,13 @@ public struct HomeScreen: View {
     // held a `SafariView`, which shared no cookies and was never closed when
     // the node came up.
     .onChange(of: mesh.loginPage) { syncSignInSheet() }
+    // TS-7b — the expected login arriving settles the Mac's code; a link to
+    // the scheme is a code too, from wherever it came (EL7: drawn as such).
+    .onChange(of: mesh.loginName) { settleExpectation() }
+    .onOpenURL { url in
+      guard case .success(let code) = PhoneCode.parse(url.absoluteString) else { return }
+      receive(code, arrival: .link)
+    }
   }
 
   /// One presenter, at root: an arriving page folds the account menu first,
@@ -2098,7 +2126,48 @@ public struct HomeScreen: View {
       machineName: mesh.machineName,
       adminConsole: mesh.adminConsoleURL,
       signInNote: mesh.signInNote,
-      found: foundDesktop)
+      found: foundDesktop,
+      expected: expectationMemory.expected())
+  }
+
+  /// TS-7b — a Mac's code arrived: remember the account it names. Scanned in
+  /// the app on a phone with no account, it goes on to the sign-in — the code
+  /// was the step before it; by a link it does not (any page can open the
+  /// scheme, so the person's own Continue starts it).
+  private func receive(_ code: PhoneCode, arrival: PhoneCodeExpectation.Arrival) {
+    #if DEBUG
+      if demoAccount != nil || mock != nil { return }
+    #endif
+    expectationMemory.record(code, arrival: arrival)
+    identityEpoch += 1
+    settleExpectation()
+    if arrival == .scanned, accountLogin == nil { performSignIn() }
+  }
+
+  private func settleExpectation() {
+    guard FieldHomeModel.expectationSettles(expectationMemory.expected(), login: mesh.loginName) else { return }
+    expectationMemory.forget()
+    identityEpoch += 1
+  }
+
+  /// "Another account?"'s Sign in again: the full sign-out (its sweep keeps
+  /// the expectation), then a fresh sign-in, which waits for the sweep.
+  private func switchAccount() {
+    #if DEBUG
+      // A stamped page is a photograph: its acts reach no mesh and no memory.
+      if demoAccount != nil || mock != nil { return }
+    #endif
+    signOut()
+    performSignIn()
+  }
+
+  /// "Another account?"'s Keep this account: the code is set aside.
+  private func keepAccount() {
+    #if DEBUG
+      if demoAccount != nil || mock != nil { return }
+    #endif
+    expectationMemory.forget()
+    identityEpoch += 1
   }
 
   #if DEBUG
@@ -2181,6 +2250,9 @@ public struct HomeScreen: View {
         setAccountMenu(open: false)
         return
       }
+      // TS-7 — a stamped corner is a photograph: its Sign out sweeps nothing,
+      // as its Sign in starts no node (`performSignIn`).
+      if demoAccount != nil { return }
     #endif
     selection = nil
     closeCard()

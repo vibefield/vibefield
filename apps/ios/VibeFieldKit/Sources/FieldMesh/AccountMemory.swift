@@ -155,3 +155,66 @@ public struct AccountFaceStore {
     defaults.removeObject(forKey: Self.key(for: login))
   }
 }
+
+/// TS-7b — the account a Mac's code told this phone to EXPECT (`PhoneCode`):
+/// what "Another account?" compares the live login with. One at a time, never
+/// keyed by login — it is the account the phone does not have yet.
+///
+/// It survives `SignOutSweep` on purpose: "Another account?"'s Sign in again
+/// runs that sweep and then signs in, and the expectation is what the next
+/// sign-in is checked against. It goes only when the person settles it — Keep
+/// this account, their own Sign out from the menu — or when the expected
+/// login arrives.
+public struct PhoneCodeExpectation: Codable, Equatable, Sendable {
+  /// How the code reached the phone. A LINK can be anyone's — any page can
+  /// open the scheme — so a link-delivered mismatch makes Keep this account
+  /// the primary act (EL7); a code scanned in the app was the person's own.
+  public enum Arrival: String, Codable, Sendable {
+    case scanned
+    case link
+  }
+
+  public let login: String
+  public let from: String
+  public let arrival: Arrival
+  public let at: Date
+
+  public init(login: String, from: String, arrival: Arrival, at: Date) {
+    self.login = login
+    self.from = from
+    self.arrival = arrival
+    self.at = at
+  }
+
+  /// Whether `login` is the account expected. Tailscale's login names are
+  /// compared as `DesktopMemory` keys them, without regard to case.
+  public func matches(_ login: String) -> Bool {
+    self.login.lowercased() == login.lowercased()
+  }
+}
+
+public struct ExpectationMemory {
+  private let defaults: UserDefaults
+  static let key = "vf.account.expected"
+
+  public init(defaults: UserDefaults = .standard) {
+    self.defaults = defaults
+  }
+
+  public func expected() -> PhoneCodeExpectation? {
+    guard let data = defaults.data(forKey: Self.key) else { return nil }
+    return try? JSONDecoder().decode(PhoneCodeExpectation.self, from: data)
+  }
+
+  /// A newer code replaces an older one: the last Mac to say is the one meant.
+  public func record(_ code: PhoneCode, arrival: PhoneCodeExpectation.Arrival, at now: Date = Date()) {
+    let expectation = PhoneCodeExpectation(login: code.login, from: code.from, arrival: arrival, at: now)
+    if let data = try? JSONEncoder().encode(expectation) {
+      defaults.set(data, forKey: Self.key)
+    }
+  }
+
+  public func forget() {
+    defaults.removeObject(forKey: Self.key)
+  }
+}

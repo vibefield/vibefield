@@ -34,6 +34,8 @@
 // state stream, the joins, revoke — which field-native reads and writes. Its LINK wire (frames, the
 // stream-0 messages, the open kinds) is the freeway host's, hand-written in Rust as the cell's TPv3
 // wire is (`tp/wire.rs`), and pinned to these schemas by the `freeway-*` fixtures on both sides.
+// The phone code (TS-7b, src/phone-code.ts) has no schema at all: a hand-written parser the Mac and the phone share
+// through `phone-code.vector.json`, which field-native never reads.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";

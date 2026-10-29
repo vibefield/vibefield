@@ -130,6 +130,67 @@ struct DoorPageTests {
     )
   }
 
+  // MARK: TS-7b — the Mac's code
+
+  private func expecting(_ login: String = "me@example.com", _ arrival: PhoneCodeExpectation.Arrival = .scanned)
+    -> PhoneCodeExpectation
+  {
+    PhoneCodeExpectation(login: login, from: "Studio", arrival: arrival, at: Date(timeIntervalSince1970: 0))
+  }
+
+  private func expected(
+    _ state: MeshModel.State, remembered: String? = nil, login: String? = nil, _ expectation: PhoneCodeExpectation
+  ) -> FieldHomeModel.DoorPage? {
+    FieldHomeModel.doorPage(
+      fixtureOwnsTheField: false, meshState: state, rememberedLogin: remembered, login: login, isGated: true,
+      hasListed: true, listed: 1, remembered: 1, machineName: nil, adminConsole: console, signInNote: nil, found: nil,
+      expected: expectation)
+  }
+
+  @Test("another account than the code named: Another account?, at once and over any other page")
+  func anotherAccount() {
+    let page = FieldHomeModel.DoorPage.anotherAccount(
+      current: "james@acme.dev", expected: "me@example.com", from: "Studio", byLink: false)
+    #expect(expected(.up, login: "james@acme.dev", expecting()) == page)
+    #expect(expected(.needsMachineAuth, login: "james@acme.dev", expecting()) == page)
+    // A remembered account counts: the phone is that account until it signs out.
+    #expect(expected(.off, remembered: "james@acme.dev", expecting()) == page)
+    // By a link, Keep this account leads (EL7).
+    #expect(
+      expected(.up, login: "james@acme.dev", expecting("me@example.com", .link))
+        == .anotherAccount(current: "james@acme.dev", expected: "me@example.com", from: "Studio", byLink: true))
+  }
+
+  @Test("the account the code named, in any case, is no mismatch")
+  func sameAccount() {
+    #expect(expected(.up, login: "Me@Example.com", expecting()) == nil)
+  }
+
+  @Test("no account yet: the welcome says which account to pick at Tailscale")
+  func welcomeExpecting() {
+    #expect(expected(.off, expecting()) == .welcome(failure: nil, expecting: "me@example.com"))
+    #expect(expected(.needsLogin, expecting()) == .welcome(failure: nil, expecting: "me@example.com"))
+  }
+
+  @Test("only the node's own login settles the code, in any case")
+  func settles() {
+    #expect(FieldHomeModel.expectationSettles(expecting(), login: "ME@example.com"))
+    #expect(!FieldHomeModel.expectationSettles(expecting(), login: "james@acme.dev"))
+    #expect(!FieldHomeModel.expectationSettles(expecting(), login: nil))
+    #expect(!FieldHomeModel.expectationSettles(expecting(), login: ""))
+    #expect(!FieldHomeModel.expectationSettles(nil, login: "me@example.com"))
+  }
+
+  @Test("Another account? names both logins and how the code came")
+  func anotherAccountLine() {
+    #expect(
+      DoorPageView.anotherAccountLine(current: "james@acme.dev", expected: "me@example.com", from: "Studio", byLink: false)
+        == "This phone is signed in as james@acme.dev, but the code you scanned came from Studio, signed in as me@example.com.")
+    #expect(
+      DoorPageView.anotherAccountLine(current: "a@b", expected: "c@d", from: "Mini", byLink: true)
+        == "This phone is signed in as a@b, but the link you opened came from Mini, signed in as c@d.")
+  }
+
   @Test("every stamped account state stamps the page the phone would draw beside its corner")
   func fixtures() {
     let me = AccountFixtures.login
@@ -141,6 +202,9 @@ struct DoorPageTests {
       "approval": .approval(machine: AccountFixtures.machine, adminConsole: console),
       "none": .noDesktops(login: me, found: nil),
       "none-found": .noDesktops(login: me, found: .init(name: "studio", platform: "darwin")),
+      "expecting": .welcome(failure: nil, expecting: me),
+      "another": .anotherAccount(current: AccountFixtures.otherLogin, expected: me, from: "Studio", byLink: false),
+      "another-link": .anotherAccount(current: AccountFixtures.otherLogin, expected: me, from: "Studio", byLink: true),
     ]
     for (name, door) in expected {
       let demo = AccountFixtures.demo(named: name)

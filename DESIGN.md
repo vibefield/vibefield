@@ -1366,7 +1366,14 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   request for your admin (the machine name and the Machines page); Use another account; the
   console's link for admins. **Arrival** (TS-D8): "Connected.", the account in mono, "Not this
   account? Sign in again", and the account's devices arrive around your face (§6, the arrival).
-  When this Mac is alone, **Add your phone** is the primary act. **Not now** lands on the same
+  When this Mac is alone, **Add your phone** is the primary act. *Added 2026-10-29 (track TS, TS-7b;
+  James's Q2 A, 05:29:23Z):* **Add your phone** — here, and in Settings → Devices' Add a device → Phone —
+  draws a code of `vibefield://add-phone` carrying the account and this Mac's name — the roster's own
+  name for it, else Tailscale's machine name, whichever the phone will read back (never a code its own
+  phone refuses; with neither, the code waits) — at Sign in on your phone's size and inks, with
+  **Scan with VibeField on your iPhone.** · "Get VibeField from TestFlight first, then open it and choose
+  **Scan the code on your Mac**. The same code tells it to expect ‹login›." — the page's words
+  (A:277-288) adapted to there being no install link yet. **Not now** lands on the same
   Ready pane; the face menu keeps Connect your devices… and nothing else asks until a moment where
   it helps (§8 "Asking again"). The refusals keep the daemon's sentence and gain a person's words
   and a way forward: "`<login>` already has a field here" with **Switch to `<user>`** and **Use
@@ -3482,7 +3489,14 @@ under the name "waiting for approval", "couldn’t connect", "signing out"; its 
 Tailscale again to reach your desktops.", "An admin of your Tailscale network approves new devices.",
 "Couldn’t connect — ‹reason›."; its menu row **Continue with Tailscale** with no account and **Sign in
 again** with one; its desktops each wear their OS mark. While the welcome stands, the corner steps
-aside on the Field tab, so its one act is said once. *Named deviation:* the corner's circle on History
+aside on the Field tab, so its one act is said once. *Added with TS-7b (Q2 A):* the welcome also offers
+**Scan the code on your Mac** — the phone's reader for the Mac's Add your phone code, which tells it the
+account to expect; scanned on a phone with no account it goes straight on to the sign-in, and the welcome
+then says "At Tailscale, pick ‹login›." A phone signed in as another account than the code named says, at
+once, **Another account?** · "This phone is signed in as ‹x›, but the code you scanned came from Studio,
+signed in as ‹login›." · **Sign in again** · "At Tailscale, pick ‹login›." · **Keep this account** — and
+for a code that arrived as a link ("the link you opened"), which any page can open, **Keep this account**
+is the primary act. It changes nothing about who may reach what. *Named deviation:* the corner's circle on History
 still reads "Sign in" — three words do not fit its 10 pt label — and its spoken name is "Sign in,
 Continue with Tailscale".
 

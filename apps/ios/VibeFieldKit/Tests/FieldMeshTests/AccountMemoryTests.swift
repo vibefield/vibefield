@@ -55,6 +55,29 @@ struct AccountMemoryTests {
     #expect(rows.first?.platform == nil)
   }
 
+  @Test("TS-7b: a Mac's code is remembered once, the newest replacing the last, and forgotten when settled")
+  func expectation() throws {
+    let memory = ExpectationMemory(defaults: scratch())
+    #expect(memory.expected() == nil)
+    let t0 = Date(timeIntervalSince1970: 1_000)
+    memory.record(PhoneCode(login: "me@example.com", from: "Studio"), arrival: .scanned, at: t0)
+    #expect(memory.expected() == PhoneCodeExpectation(login: "me@example.com", from: "Studio", arrival: .scanned, at: t0))
+    memory.record(PhoneCode(login: "you@example.com", from: "Mini"), arrival: .link, at: t0)
+    #expect(memory.expected()?.login == "you@example.com")
+    #expect(memory.expected()?.arrival == .link)
+    memory.forget()
+    #expect(memory.expected() == nil)
+  }
+
+  @Test("TS-7b: the sign-out sweep keeps the Mac's code — Sign in again is checked against it")
+  func sweepKeepsTheExpectation() {
+    let defaults = scratch()
+    let memory = ExpectationMemory(defaults: defaults)
+    memory.record(PhoneCode(login: "me@example.com", from: "Studio"), arrival: .scanned)
+    SignOutSweep(login: "james@acme.dev", stateDirectory: nil).run(defaults: defaults)
+    #expect(memory.expected()?.login == "me@example.com")
+  }
+
   @Test("an absent desktop stays remembered until the account is forgotten")
   func staysUntilForgotten() {
     let memory = DesktopMemory(defaults: scratch())

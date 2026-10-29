@@ -596,13 +596,19 @@ enum FieldHomeModel {
     /// No account: nothing remembered and no login live — before a first
     /// sign-in, while it is under way, after a Cancel and after Sign out. It
     /// yields only to approval and to a login. `failure` is a first sign-in's
-    /// reason, or why the sheet could not be shown.
-    case welcome(failure: String?)
+    /// reason, or why the sheet could not be shown; `expecting` is the login a
+    /// Mac's code said to expect (TS-7b), said as "At Tailscale, pick ‹login›."
+    case welcome(failure: String?, expecting: String? = nil)
     /// Signed in; an admin of the network approves new devices.
     case approval(machine: String?, adminConsole: URL?)
     /// The tailnet asks a remembered account to sign in again. Expired and
     /// removed are one page: the Swift node says neither (TS-7 Q1-b).
     case signInAgain(note: String?)
+    /// TS-7b (A:723) — signed in as one account while a Mac's code said to
+    /// expect another. Presentation only: the gate and the login are
+    /// untouched. `byLink` — the code came by a link any page could have
+    /// opened, so Keep this account is the primary act (EL7).
+    case anotherAccount(current: String, expected: String, from: String, byLink: Bool)
     /// Up, the first listing answered, nothing online and nothing remembered.
     /// `found` is the beat when the first desktop arrives: the placeholder row
     /// becomes it, then the page yields (Q1-f).
@@ -629,7 +635,8 @@ enum FieldHomeModel {
     machineName: String?,
     adminConsole: URL?,
     signInNote: String?,
-    found: FoundDesktop?
+    found: FoundDesktop?,
+    expected: PhoneCodeExpectation? = nil
   ) -> DoorPage? {
     // A fixture's photograph is of the field it stages; a door page over it
     // would be this decision's, not the fixture's (it stamps its own).
@@ -637,15 +644,22 @@ enum FieldHomeModel {
     let live = (login?.isEmpty ?? true) ? nil : login
     let kept = (rememberedLogin?.isEmpty ?? true) ? nil : rememberedLogin
     let account = live ?? kept
+    // TS-7b — a mismatch is caught at once, over any other page: the phone's
+    // account is not the one the Mac's code named.
+    if let expected, let account, !expected.matches(account) {
+      return .anotherAccount(
+        current: account, expected: expected.login, from: expected.from, byLink: expected.arrival == .link)
+    }
+    let expecting = expected?.login
     switch meshState {
     case .needsMachineAuth:
       return .approval(machine: machineName, adminConsole: adminConsole)
     case .needsLogin:
-      return account == nil ? .welcome(failure: signInNote) : .signInAgain(note: signInNote)
+      return account == nil ? .welcome(failure: signInNote, expecting: expecting) : .signInAgain(note: signInNote)
     case .off, .starting, .stopping:
-      return account == nil ? .welcome(failure: signInNote) : nil
+      return account == nil ? .welcome(failure: signInNote, expecting: expecting) : nil
     case .failed(let reason):
-      return account == nil ? .welcome(failure: reason) : nil
+      return account == nil ? .welcome(failure: reason, expecting: expecting) : nil
     case .reconnecting:
       return nil
     case .up:
@@ -664,5 +678,13 @@ enum FieldHomeModel {
   static func foundDesktop(previous: DoorPage?, next: DoorPage?, desktops: [FieldDesktop]) -> FoundDesktop? {
     guard case .noDesktops(_, nil) = previous, next == nil, let first = desktops.first else { return nil }
     return FoundDesktop(name: first.name, platform: first.platform)
+  }
+
+  /// TS-7b — whether the expectation is met and goes: the node reports the
+  /// login the Mac's code named. Only the node's own report settles it — a
+  /// remembered login is what the phone had, not what it signed in as.
+  static func expectationSettles(_ expected: PhoneCodeExpectation?, login: String?) -> Bool {
+    guard let expected, let login, !login.isEmpty else { return false }
+    return expected.matches(login)
   }
 }
