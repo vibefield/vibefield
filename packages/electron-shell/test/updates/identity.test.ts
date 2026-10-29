@@ -95,6 +95,22 @@ describe("readUpdateIdentity (D9)", () => {
     );
   });
 
+  it("reads when the build was made, as epoch ms, and none from a stage cut before AU-6 (LC-18)", () => {
+    const at = (builtAt: string) => JSON.stringify({ ...JSON.parse(identity("release")), builtAt });
+    const BUILT = "2026-10-28T09:00:00.000Z";
+    expect(readUpdateIdentity(resources, {}, () => at(BUILT))?.builtAt).toBe(Date.parse(BUILT));
+    // exactOptionalPropertyTypes: absent, never an explicit undefined
+    expect(readUpdateIdentity(resources, {}, () => identity("release"))).not.toHaveProperty(
+      "builtAt",
+    );
+    // an instant before 1970 is no time the view can carry: left out, and the identity still reads
+    const early = readUpdateIdentity(resources, {}, () => at("1969-12-31T00:00:00.000Z"));
+    expect(early).not.toBeNull();
+    expect(early).not.toHaveProperty("builtAt");
+    // a malformed one refuses the identity whole (the schema is strict on it, X8): no updater, as for any broken stage
+    expect(readUpdateIdentity(resources, {}, () => at("Oct 28, 2026"))).toBeNull();
+  });
+
   it("has no updater in the development layout, or without a readable identity", () => {
     expect(
       readUpdateIdentity({ packaged: false, identity: null }, {}, () => identity("dev")),

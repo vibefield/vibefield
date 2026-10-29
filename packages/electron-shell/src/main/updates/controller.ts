@@ -23,10 +23,21 @@
 // policy (3 s), stages Squirrel (30 s) and records the apply; the app exits without `quitAndInstall` and without a
 // relaunch. A signal, an update's own quit, the OS ending the session and a waiting move never reach it (the lifecycle
 // decides), and the quit box's last line says it only when main will try (`quitInstallLine`).
+// AU-6 (AU-D10 A; AU-G10; LC-18, LC-19): a release's signed notes (verify-chain's step 6c) are kept with the staged
+// clock when its head IS the staged version, so a later check that finds a newer head never swaps them; the apply's
+// record copies them, so "What's new" reads offline after the relaunch. The one link, the comparison, is composed HERE
+// from the frozen origin and two release tags (`compareUrlOf`), never read from the manifest (X18; EDP-38). Notes that
+// did not parse are dropped and said once per head, never a refusal. The view also says when this build was made.
 
 import { randomUUID } from "node:crypto";
 import {
+  BETA_TAG_PATTERN,
   compareReleaseVersions,
+  NIGHTLY_TAG_PATTERN,
+  type ReleaseNotes,
+  type ReleaseNotesView,
+  releaseTagOf,
+  STABLE_TAG_PATTERN,
   UPDATE_CHANNELS,
   UPDATE_PLANES,
   UPDATES_AUDIT_ACTIONS,
@@ -170,6 +181,8 @@ export interface UpdateControllerOptions {
   readonly apply?: ApplyPort;
   /** The running app's version: the outcome of a handed-off install is judged against it at the next launch. */
   readonly currentVersion?: string;
+  /** AU-6 (LC-18) — when this build was made (the staged identity's `builtAt`), epoch ms; absent on an older stage */
+  readonly builtAt?: number;
   /** WP12c (§10 S7) — EDP-34's context minus the census and the planes (the controller holds both: the planes are
    * B3's verdict); doctor names the failing clause */
   readonly safeWindowContext?: () => Omit<
@@ -374,6 +387,8 @@ export class UpdateController {
   private collecting: Promise<void> | null = null;
   /** AU-7 — where the bundle runs, read once: a bundle does not move under a running app (the move relaunches) */
   private readonly where: UpdateAppLocation | undefined;
+  /** AU-6 (LC-19) — the last head whose dropped notes were said: one log line per head, however often it verifies */
+  private notesDroppedHead: string | null = null;
   private readonly now: () => number;
   private readonly onProgress = (progress: { percent: number }): void => {
     if (this.stateValue.kind === "downloading") {
@@ -753,20 +768,30 @@ export class UpdateController {
       ...this.lastApplyView(),
       // AU-7 (AU-G8) — where the app runs (macOS): the Me row's R5 and the page's location line
       ...(this.where !== undefined ? { location: this.where } : {}),
+      // AU-6 (LC-18) — when this build was made: the Updates head's "Nightly · built Oct 27, 2026"
+      ...(this.options.builtAt !== undefined ? { builtAt: this.options.builtAt } : {}),
     };
     switch (state.kind) {
       case "checking":
         return { phase: "checking", ...common };
       // L3c-ii — found and held (skipped, or updates off): never "checking", which would never end
+      // AU-6 (AU-G10) — found, downloading or staged: what's in it, when its manifest says
       case "available":
         return {
           phase: "available",
           version: state.version,
           ...(this.client.declined.includes(state.version) ? { declined: true } : {}),
+          ...this.notesFor(state.version),
           ...common,
         };
       case "downloading":
-        return { phase: "downloading", version: state.version, percent: state.percent, ...common };
+        return {
+          phase: "downloading",
+          version: state.version,
+          percent: state.percent,
+          ...this.notesFor(state.version),
+          ...common,
+        };
       case "staged":
         return {
           phase: "staged",
@@ -776,6 +801,7 @@ export class UpdateController {
           ...(state.blockedBy !== undefined ? { blockedBy: state.blockedBy } : {}),
           // AU-1 (AU-D3 A) — when this version FIRST became ready here, across launches
           stagedAt: state.stagedAt,
+          ...this.notesFor(state.version),
           ...common,
         };
       case "error": {
@@ -815,8 +841,34 @@ export class UpdateController {
         at: landed.at,
         ...(last.trigger !== undefined ? { trigger: last.trigger } : {}),
         ...(this.judgedThisLaunch ? { thisLaunch: true } : {}),
+        // AU-6 (LC-7) — installed only: what's new in the version that runs, from the record's own copy (offline)
+        ...(landed.outcome === "installed" && last.notes !== undefined
+          ? { notes: this.notesView(last.version, last.notes) }
+          : {}),
       },
     };
+  }
+
+  /** AU-6 (AU-D10 A) — the view's notes of `version`, when this Mac holds verified ones (`notesOf`). */
+  private notesFor(version: string): { notes?: ReleaseNotesView } {
+    const body = this.notesOf(version);
+    return body === null ? {} : { notes: this.notesView(version, body) };
+  }
+
+  /** AU-6 — the verified notes of `version`: the staged clock's (kept at the staged transition) first, else the last
+   * verified head's when that head IS `version`. A head that moved past the staged version never lends it its notes. */
+  private notesOf(version: string): ReleaseNotes | null {
+    const staged = this.client.staged;
+    if (staged !== null && staged.version === version && staged.notes !== undefined)
+      return staged.notes;
+    const head = this.lastVerified;
+    return head !== null && head.headVersion === version ? head.notes : null;
+  }
+
+  /** AU-6 (X18) — the notes as the window reads them, with main's comparison when the origin is GitHub's. */
+  private notesView(version: string, body: ReleaseNotes): ReleaseNotesView {
+    const compareUrl = compareUrlOf(this.options.origin, body, version);
+    return { version, body, ...(compareUrl !== null ? { compareUrl } : {}) };
   }
 
   private unsupportedBelow(): { unsupportedBelow?: string } {
@@ -880,6 +932,8 @@ export class UpdateController {
           `UNSUPPORTED: ${current} is below the minimum supported ${policy.minSupported} (advisory, never a block)`,
         );
       }
+      // AU-6 (LC-19) — the head's notes as the chain read them; a dropped block is never a refusal, so it is said here
+      lines.push(`release notes: ${verified.head} — ${notesState(verified)}`);
     }
     if (state.kind === "staged") {
       lines.push(
@@ -1610,14 +1664,27 @@ export class UpdateController {
     return at;
   }
 
+  /** AU-6 (AU-D10 A) — at the staged transition, the verified head's notes join the staged clock, but only when that
+   * head IS `version`: a later check that finds a newer head never swaps them (`notesOf` reads these first), and the
+   * apply's record copies them (`recordLastApply`). A head without notes leaves what the clock holds. */
+  private keepStagedNotes(version: string): void {
+    const staged = this.client.staged;
+    const head = this.lastVerified;
+    if (staged === null || staged.version !== version) return;
+    if (head === null || head.headVersion !== version || head.notes === null) return;
+    this.persist({ ...this.client, staged: { ...staged, notes: head.notes } });
+  }
+
   /** AU-1 (AU-D3 A) — the staged payload is collected (declined, a channel change, a lever, a check that found
-   * nothing): its clock goes with it. */
+   * nothing): its clock goes with it (AU-6: and its notes). */
   private forgetStaged(): void {
     if (this.client.staged !== null) this.persist({ ...this.client, staged: null });
   }
 
   /** WP12c — synchronous, before every exit the apply takes (the store writes atomically and at once). AU-1: with the
-   * version it leaves (`from`) and how it began (`trigger`); its `landed` is the next launch's to judge. */
+   * version it leaves (`from`) and how it began (`trigger`); its `landed` is the next launch's to judge. AU-6: with the
+   * verified notes of the version it installs (`notesOf`: the staged clock's), so "What's new" reads offline after the
+   * relaunch — every caller (the restart's branches, the silent apply, AU-5's quit) writes through here. */
   private recordLastApply(entry: {
     version: string;
     branch: "installing" | "relaunched" | "exited";
@@ -1627,6 +1694,7 @@ export class UpdateController {
     trigger: UpdateApplyTrigger;
   }): void {
     const from = this.options.currentVersion;
+    const notes = this.notesOf(entry.version);
     this.persist({
       ...this.client,
       lastApply: {
@@ -1639,6 +1707,7 @@ export class UpdateController {
         audited: false,
         ...(from !== undefined ? { from } : {}),
         trigger: entry.trigger,
+        ...(notes !== null ? { notes } : {}),
       },
     });
   }
@@ -1789,6 +1858,16 @@ export class UpdateController {
       }
     }
     this.persist({ ...this.client, remembered: result.remembered, trustRoots });
+    // AU-6 (LC-19) — notes the chain dropped are said once per head: the check and the click's fresh read verify the
+    // same head again and again, and the update goes on without them either way
+    if (result.ok && result.notesDropped !== null && result.head !== this.notesDroppedHead) {
+      this.notesDroppedHead = result.head;
+      this.options.log.warn(
+        "desktop.update.notes_dropped",
+        "The release's notes did not parse; the update goes on without them",
+        { head: result.head, version: result.headVersion, reason: result.notesDropped },
+      );
+    }
     return result;
   }
 
@@ -1813,7 +1892,9 @@ export class UpdateController {
     }
     if (this.download !== token) return;
     this.download = null;
-    this.setState({ kind: "staged", version, stagedAt: this.stagedSince(version) });
+    const stagedAt = this.stagedSince(version);
+    this.keepStagedNotes(version);
+    this.setState({ kind: "staged", version, stagedAt });
     // WP12 L4 (R4) — a staged update leaves a line: what is staged, and the sha512 its payload was checked against (the
     // signed feed's). Before this, nothing outside the process said "staged" — a doctor gap of its own.
     const sha512 = feedSha512Of(this.lastVerified?.feedText ?? "");
@@ -1944,6 +2025,38 @@ export function wordsBox(words: { readonly message: string; readonly detail: str
     defaultId: 0,
     cancelId: 0,
   };
+}
+
+/** AU-6 (X18; EDP-38) — the GitHub releases origin a comparison can be composed from: `https://github.com/<owner>/
+ * <repo>/releases`, nothing else (a dev-keyed fixture origin, `VIBEFIELD_UPDATE_ORIGIN`, gives none). */
+const GITHUB_RELEASES = /^https:\/\/github\.com\/([A-Za-z0-9-]+)\/([A-Za-z0-9._-]+)\/releases\/?$/;
+
+const isReleaseTag = (tag: string): boolean =>
+  NIGHTLY_TAG_PATTERN.test(tag) || BETA_TAG_PATTERN.test(tag) || STABLE_TAG_PATTERN.test(tag);
+
+/** AU-6 (X18; EDP-38) — the notes' one link, composed by MAIN from the frozen update origin and two release tags, never
+ * read from the manifest: `https://github.com/<owner>/<repo>/compare/<since>...<tag>`. The since tag is the one its
+ * version was published under (`releaseTagOf`), else the signed `since.tag` when it is a release tag. Null for any
+ * other origin, notes that count from no release (a first release's written notes), or a version that names no tag. */
+export function compareUrlOf(origin: string, notes: ReleaseNotes, version: string): string | null {
+  const repo = GITHUB_RELEASES.exec(origin);
+  if (repo === null || repo[2] === "." || repo[2] === "..") return null;
+  const since = notes.since;
+  if (since === null) return null;
+  const from = releaseTagOf(since.version) ?? (isReleaseTag(since.tag) ? since.tag : null);
+  const to = releaseTagOf(version);
+  if (from === null || to === null) return null;
+  return `https://github.com/${repo[1]}/${repo[2]}/compare/${from}...${to}`;
+}
+
+/** AU-6 — doctor's word on a verified head's notes: present (their kind and count), dropped (why), or absent. */
+function notesState(chain: VerifiedChain): string {
+  const notes = chain.notes;
+  if (notes !== null) {
+    const count = notes.lines.length;
+    return `present (${notes.kind}, ${count} line${count === 1 ? "" : "s"})`;
+  }
+  return chain.notesDropped !== null ? `dropped (${chain.notesDropped})` : "absent";
 }
 
 /** The verified feed's top-level `sha512:` (electron-builder writes it unquoted or quoted), the payload's checked hash. */

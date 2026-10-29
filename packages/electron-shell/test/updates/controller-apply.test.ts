@@ -1,4 +1,4 @@
-import type { UpdateAppLocation } from "@vibefield/contracts";
+import type { ReleaseNotes, UpdateAppLocation } from "@vibefield/contracts";
 import type { AuditAppendV1 } from "@vibefield/contracts/diagnostics";
 import { describe, expect, it, vi } from "vitest";
 import type { UpdatePrepared, UpdateQuitPlan } from "../../src/main/quit-flow";
@@ -16,6 +16,7 @@ import {
 } from "../../src/main/updates/apply";
 import {
   type CancellationLike,
+  compareUrlOf,
   FRESH_POLICY_BOUND_MS,
   PREPARE_TTL_MS,
   QUIT_POLICY_BOUND_MS,
@@ -38,6 +39,8 @@ import { currentList, terminalList } from "./terminal-list-fixture";
 
 const NIGHTLY = "nightly-20261016";
 const STAGED_VERSION = "0.9.0-nightly.20261016";
+/** AU-6 — the native plane a manifest names when a row gives it notes and no plane of its own (no plane is wired) */
+const SOME_PLANE: NativePlane = { digest: "f".repeat(64), members: ["bin/field-native"] };
 
 function memoryStore(initial: string | null = null) {
   const files = new Map<string, string>();
@@ -169,17 +172,26 @@ async function stagedController(
     clock?: { now: number };
     /** AU-7 — where the bundle runs (absent = not macOS's answer: nothing held) */
     location?: UpdateAppLocation;
+    /** AU-6 — the head's manifest carries these notes, as given (well-formed or not) */
+    notes?: unknown;
+    /** AU-6 — the origin the release is served under and the controller frozen to (GitHub's by default) */
+    origin?: string;
+    /** AU-6 (LC-18) — when this build was made, as the identity hands it to the controller */
+    builtAt?: number;
   } = {},
 ) {
-  const fx = new FixtureOrigin();
+  const origin = opts.origin ?? ORIGIN;
+  const fx = new FixtureOrigin(origin);
   fx.setReleases([NIGHTLY]);
   fx.putRelease(NIGHTLY, {
     heads: { nightly: NIGHTLY, beta: null, stable: null },
     ...(opts.levers !== undefined ? { levers: { nightly: opts.levers } } : {}),
   });
   fx.putFeed(NIGHTLY, STAGED_VERSION);
-  if (opts.manifestNative !== undefined)
-    fx.putManifest(NIGHTLY, STAGED_VERSION, opts.manifestNative);
+  if (opts.manifestNative !== undefined || opts.notes !== undefined)
+    fx.putManifest(NIGHTLY, STAGED_VERSION, opts.manifestNative ?? SOME_PLANE, {
+      notes: opts.notes,
+    });
   const timeline: string[] = [];
   const apply = new FakeApply(timeline);
   const audits: AuditAppendV1[] = [];
@@ -191,7 +203,7 @@ async function stagedController(
     updater,
     feedOptions: (context) => ({ provider: "custom", vibefield: context }),
     newCancellationToken: (): CancellationLike => ({ cancel: () => undefined }),
-    origin: ORIGIN,
+    origin,
     rootKeys: fx.rootKeys,
     buildChannel: "nightly",
     feedFile: "latest-mac.yml",
@@ -221,6 +233,7 @@ async function stagedController(
       : {}),
     ...(opts.cache !== undefined ? { stagedCache: opts.cache } : {}),
     ...(opts.location !== undefined ? { location: () => opts.location } : {}),
+    ...(opts.builtAt !== undefined ? { builtAt: opts.builtAt } : {}),
   });
   return { controller, apply, timeline, audits, files, fx, updater, gates };
 }
@@ -2103,5 +2116,261 @@ describe("AU-5 — install on quit", () => {
       trigger: "quit",
       thisLaunch: true,
     });
+  });
+});
+
+// AU-6 (AU-D10 A; AU-G10; LC-7, LC-18, LC-19; X18) — the release's signed notes on the Updates page and in "What's
+// new": the staged clock keeps the staged version's own (a newer head never swaps them), the apply's record copies
+// them for the relaunch, the one link is main's, and notes that do not parse are dropped and said, never a refusal.
+// And when this build was made.
+describe("AU-6 — the release's notes and the build time", () => {
+  const OFF = JSON.stringify({ schemaVersion: 1, enabled: false });
+  const NOTES_A = {
+    kind: "log",
+    since: { version: "0.9.0-nightly.20261015", tag: "nightly-20261015" },
+    commits: 12,
+    product: 7,
+    lines: [
+      { track: "AU-6", text: "the notes ride the signed manifest" },
+      { track: "QW1", text: "hidden means unread" },
+    ],
+  };
+  const COMPARE =
+    "https://github.com/vibefield/vibefield/compare/nightly-20261015...nightly-20261016";
+  const NOTES_VIEW = { version: STAGED_VERSION, body: NOTES_A, compareUrl: COMPARE };
+  const holdDownload = (updater: { holdDownload: Promise<void> | null }) => {
+    let release: () => void = () => {};
+    updater.holdDownload = new Promise((resolve) => {
+      release = resolve;
+    });
+    return () => release();
+  };
+  type Logged = { options: { log: { warn: ReturnType<typeof vi.fn> } } };
+  const warnLog = (controller: UpdateController) =>
+    (controller as unknown as Logged).options.log.warn;
+
+  it("staged: the view carries the head's notes with main's comparison, and the staged clock keeps them", async () => {
+    const r = await stagedController({ notes: NOTES_A });
+    await r.controller.check("manual");
+    expect(r.controller.view()).toMatchObject({
+      phase: "staged",
+      version: STAGED_VERSION,
+      notes: NOTES_VIEW,
+    });
+    expect(stagedClockOf(r.files)).toEqual({ version: STAGED_VERSION, at: NOW, notes: NOTES_A });
+    expect(r.controller.doctorLines()).toContain(
+      `release notes: ${NIGHTLY} — present (log, 2 lines)`,
+    );
+  });
+
+  it("found and downloading (automatic updates off): the notes show before anything is staged", async () => {
+    const r = await stagedController({ initial: OFF, notes: NOTES_A });
+    await r.controller.check("manual");
+    expect(r.controller.view()).toMatchObject({
+      phase: "available",
+      version: STAGED_VERSION,
+      notes: NOTES_VIEW,
+    });
+    expect(r.updater.downloads).toBe(0);
+    const release = holdDownload(r.updater);
+    expect(await r.controller.downloadForPerson(STAGED_VERSION)).toEqual({ ok: true });
+    await vi.waitFor(() =>
+      expect(r.controller.view()).toMatchObject({ phase: "downloading", notes: NOTES_VIEW }),
+    );
+    release();
+    await vi.waitFor(() => expect(r.controller.state.kind).toBe("staged"));
+    expect(r.controller.view()).toMatchObject({ phase: "staged", notes: NOTES_VIEW });
+  });
+
+  it("a newer head never swaps the staged version's notes; the apply's record copies them for the relaunch", async () => {
+    const FROM = "0.9.0-nightly.20261015";
+    const r = await stagedController({ notes: NOTES_A, currentVersion: FROM });
+    await r.controller.check("manual");
+    // a newer nightly is published after the download, with notes of its own
+    const NEXT = "nightly-20261017";
+    const NEXT_VERSION = "0.9.0-nightly.20261017";
+    const NOTES_B = {
+      ...NOTES_A,
+      since: { version: STAGED_VERSION, tag: NIGHTLY },
+      lines: [{ track: "TS-6", text: "the newer head's own line" }],
+    };
+    r.fx.setReleases([NEXT, NIGHTLY]);
+    r.fx.putRelease(NEXT, {
+      heads: { nightly: NEXT, beta: null, stable: null },
+      headsVersion: 11,
+      policyVersion: { nightly: 4 },
+    });
+    r.fx.putFeed(NEXT, NEXT_VERSION);
+    r.fx.putManifest(NEXT, NEXT_VERSION, SOME_PLANE, { notes: NOTES_B });
+    // the click's fresh read verified the newer head: the staged version still says its own
+    const prepared = await r.controller.prepareRestart();
+    if (!prepared.ok) throw new Error("prepare refused");
+    expect(r.controller.verified?.headVersion).toBe(NEXT_VERSION);
+    expect(r.controller.verified?.notes).toEqual(NOTES_B);
+    expect(r.controller.view()).toMatchObject({ phase: "staged", notes: NOTES_VIEW });
+    expect(await r.controller.confirmRestart(prepared.token)).toEqual({ ok: true });
+    await r.apply.plan!.prepare();
+    expect(lastApplyOf(r.files)).toMatchObject({
+      version: STAGED_VERSION,
+      branch: "installing",
+      notes: NOTES_A,
+    });
+    // this launch says nothing of the apply it wrote
+    expect(r.controller.view().lastApply).toBeUndefined();
+
+    // the next launch runs the version it installed: "What's new" from the record, offline, with the comparison
+    const installed = await stagedController({
+      initial: r.files.get("/state.json")!,
+      currentVersion: STAGED_VERSION,
+      fetch: null,
+    });
+    expect(installed.controller.view().lastApply).toMatchObject({
+      version: STAGED_VERSION,
+      outcome: "installed",
+      thisLaunch: true,
+      notes: NOTES_VIEW,
+    });
+    // the old version still runs: nothing installed, so nothing is new
+    const notApplied = await stagedController({
+      initial: r.files.get("/state.json")!,
+      currentVersion: FROM,
+    });
+    expect(notApplied.controller.view().lastApply).toMatchObject({ outcome: "not-applied" });
+    expect(notApplied.controller.view().lastApply).not.toHaveProperty("notes");
+  });
+
+  it("a dev-keyed fixture origin gives the notes and no comparison: the link is GitHub's alone", async () => {
+    const r = await stagedController({
+      origin: "http://127.0.0.1:47123/vibefield/vibefield/releases",
+      notes: NOTES_A,
+    });
+    await r.controller.check("manual");
+    expect(r.controller.view().notes).toEqual({ version: STAGED_VERSION, body: NOTES_A });
+  });
+
+  it("a head without notes gives none, and doctor says absent", async () => {
+    const r = await stagedController({ manifestNative: SOME_PLANE });
+    await r.controller.check("manual");
+    expect(r.controller.view()).toMatchObject({ phase: "staged", version: STAGED_VERSION });
+    expect(r.controller.view()).not.toHaveProperty("notes");
+    expect(stagedClockOf(r.files)).toEqual({ version: STAGED_VERSION, at: NOW });
+    expect(r.controller.doctorLines()).toContain(`release notes: ${NIGHTLY} — absent`);
+  });
+
+  it("notes that do not parse: still staged, no notes, said once per head in the log and in doctor", async () => {
+    const r = await stagedController({
+      notes: { ...NOTES_A, lines: [{ track: "AU-6", text: "two\nlines" }] },
+    });
+    await r.controller.check("manual");
+    expect(r.controller.view()).toMatchObject({ phase: "staged", version: STAGED_VERSION });
+    expect(r.controller.view()).not.toHaveProperty("notes");
+    expect(stagedClockOf(r.files)).toEqual({ version: STAGED_VERSION, at: NOW });
+    const warn = warnLog(r.controller);
+    const said = () =>
+      warn.mock.calls.filter(([event]) => event === "desktop.update.notes_dropped");
+    expect(said()).toEqual([
+      [
+        "desktop.update.notes_dropped",
+        "The release's notes did not parse; the update goes on without them",
+        { head: NIGHTLY, version: STAGED_VERSION, reason: "lines.0.text: one line of plain text" },
+      ],
+    ]);
+    // the same head verified again (a check, the click's fresh read): never said twice
+    await r.controller.check("manual");
+    const prepared = await r.controller.prepareRestart();
+    expect(prepared.ok).toBe(true);
+    expect(said()).toHaveLength(1);
+    expect(r.controller.doctorLines()).toContain(
+      `release notes: ${NIGHTLY} — dropped (lines.0.text: one line of plain text)`,
+    );
+  });
+
+  it("persisted notes that no longer parse are dropped alone: the staged clock and its day stand", async () => {
+    const DAY = 86_400_000;
+    const r = await stagedController({
+      initial: JSON.stringify({
+        schemaVersion: 1,
+        staged: { version: STAGED_VERSION, at: NOW - DAY, notes: { kind: "html", body: "<b>" } },
+      }),
+    });
+    await r.controller.check("manual");
+    expect(r.controller.view()).toMatchObject({ phase: "staged", stagedAt: NOW - DAY });
+    expect(r.controller.view()).not.toHaveProperty("notes");
+  });
+
+  it("the build time rides every phase's view when the identity names it, and is absent otherwise", async () => {
+    const BUILT = Date.parse("2026-10-15T09:00:00.000Z");
+    const r = await stagedController({ builtAt: BUILT });
+    expect(r.controller.view()).toMatchObject({ phase: "idle", builtAt: BUILT });
+    await r.controller.check("manual");
+    expect(r.controller.view()).toMatchObject({ phase: "staged", builtAt: BUILT });
+    const bare = await stagedController();
+    expect(bare.controller.view()).not.toHaveProperty("builtAt");
+  });
+});
+
+// AU-6 (X18; EDP-38) — the notes' one link: composed by main from the frozen origin and two release tags, or nothing.
+describe("AU-6 — compareUrlOf", () => {
+  const GITHUB = "https://github.com/vibefield/vibefield/releases";
+  const log = (since: { version: string; tag: string }): ReleaseNotes => ({
+    kind: "log",
+    since,
+    commits: 3,
+    product: 1,
+    lines: [],
+  });
+  const NIGHTLY_SINCE = { version: "0.1.0-nightly.20261027", tag: "nightly-20261027" };
+
+  it("composes GitHub's comparison from the two release tags, for every channel's shape", () => {
+    expect(compareUrlOf(GITHUB, log(NIGHTLY_SINCE), "0.1.0-nightly.20261028")).toBe(
+      "https://github.com/vibefield/vibefield/compare/nightly-20261027...nightly-20261028",
+    );
+    expect(compareUrlOf(`${GITHUB}/`, log(NIGHTLY_SINCE), "0.1.0-nightly.20261028")).toBe(
+      "https://github.com/vibefield/vibefield/compare/nightly-20261027...nightly-20261028",
+    );
+    const beta = log({ version: "0.2.0-beta.1", tag: "v0.2.0-beta.1" });
+    expect(compareUrlOf(GITHUB, beta, "0.2.0-beta.2")).toBe(
+      "https://github.com/vibefield/vibefield/compare/v0.2.0-beta.1...v0.2.0-beta.2",
+    );
+    const stable = log({ version: "0.1.0", tag: "v0.1.0" });
+    expect(compareUrlOf(GITHUB, stable, "0.2.0")).toBe(
+      "https://github.com/vibefield/vibefield/compare/v0.1.0...v0.2.0",
+    );
+    const dotted = "https://github.com/vibe-field/vibe.field/releases";
+    expect(compareUrlOf(dotted, stable, "0.2.0")).toBe(
+      "https://github.com/vibe-field/vibe.field/compare/v0.1.0...v0.2.0",
+    );
+  });
+
+  it("the since tag is its version's own; a version with no tag shape falls back to a signed release tag", () => {
+    // the version names the tag, whatever the signed `tag` says
+    const named = log({ version: "0.1.0-nightly.20261027", tag: "something-else" });
+    expect(compareUrlOf(GITHUB, named, "0.1.0-nightly.20261028")).toBe(
+      "https://github.com/vibefield/vibefield/compare/nightly-20261027...nightly-20261028",
+    );
+    const fallback = log({ version: "0.1.0-local.1", tag: "nightly-20261027" });
+    expect(compareUrlOf(GITHUB, fallback, "0.1.0-nightly.20261028")).toBe(
+      "https://github.com/vibefield/vibefield/compare/nightly-20261027...nightly-20261028",
+    );
+    const neither = log({ version: "0.1.0-local.1", tag: "main" });
+    expect(compareUrlOf(GITHUB, neither, "0.1.0-nightly.20261028")).toBeNull();
+  });
+
+  it("nothing for notes from no release, a version with no tag, or any origin but GitHub's releases", () => {
+    const written: ReleaseNotes = { kind: "written", since: null, lines: ["The first release."] };
+    expect(compareUrlOf(GITHUB, written, "0.1.0")).toBeNull();
+    expect(compareUrlOf(GITHUB, log(NIGHTLY_SINCE), "0.1.0-local.2")).toBeNull();
+    for (const origin of [
+      "http://127.0.0.1:47123/vibefield/vibefield/releases",
+      "http://github.com/vibefield/vibefield/releases",
+      "https://github.com/vibefield/vibefield/releases/download",
+      "https://github.com/vibefield/../releases",
+      "https://github.com/vibefield/./releases",
+      "https://github.com.example/vibefield/vibefield/releases",
+      "https://example.com/github.com/vibefield/vibefield/releases",
+      "https://github.com/vibefield/vibefield/releases?x=1",
+    ]) {
+      expect(compareUrlOf(origin, log(NIGHTLY_SINCE), "0.1.0-nightly.20261028"), origin).toBeNull();
+    }
   });
 });

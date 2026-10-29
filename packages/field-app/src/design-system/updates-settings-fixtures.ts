@@ -1,5 +1,6 @@
 import {
   type DeviceInfo,
+  type ReleaseNotesView,
   releaseName,
   type UpdateChannel,
   type UpdateConsentWords,
@@ -15,29 +16,33 @@ import { type MeUpdateLocal, refusalLine } from "../panels/update-words";
 // §13 C5; AU-3): the projections main publishes in `desktopState.update`, the answers its doors give, the roster fieldd
 // publishes and the doctor's lines, written out — never a copy of the page's markup. The specimens mount the shipping
 // `UpdatesSectionView`, `UpdatesDevicesView` and `UpdatesDoctorView` over them, the devices' rows built by the shipping
-// `updateDeviceRows` (docs/UI_SYSTEM.md's fixture-adapter rule). AU-3 (LC-33) — only states whose fields exist now:
-// the build's day and the notes join with their slice (AU-6). AU-7 — where the app runs joined with the Move door: a
-// writable copy outside Applications, and one macOS won't let replace itself.
+// `updateDeviceRows` (docs/UI_SYSTEM.md's fixture-adapter rule). AU-3 (LC-33) — only states whose fields exist now.
+// AU-7 — where the app runs joined with the Move door: a writable copy outside Applications, and one macOS won't let
+// replace itself. AU-6 (AU-D10 A; LC-7, LC-18) — the build's day on every head, and the release's notes as main
+// projects them: a ready nightly's log (before), an install's (after, What's new), a found release's written lines.
 
-/** The update's own path: up to date, found, fetched, ready (and long ready), the consent its Restart opens, a
- * refusal. */
+/** The update's own path: up to date, found, fetched, ready (and long ready, and ready with its notes), the consent
+ * its Restart opens, a refusal, and a day after an install with and without notes. */
 export const UPDATES_PATH_STATES = [
   "current",
   "updated",
+  "updated-notes",
   "checking",
   "downloading",
   "ready",
+  "ready-notes",
   "ready-long",
   "consent",
   "refused",
 ] as const;
 export type UpdatesPathState = (typeof UPDATES_PATH_STATES)[number];
 
-/** The person's own choices and what they leave: updates off with one found, a skipped version, a channel lowered,
- * a channel with nothing published yet, the install that didn't take (AU-G5, AU-G6, AU-G7), and where the app runs
- * (AU-G8: a copy outside Applications, one that can't replace itself). */
+/** The person's own choices and what they leave: updates off with one found (and a release found with its written
+ * notes), a skipped version, a channel lowered, a channel with nothing published yet, the install that didn't take
+ * (AU-G5, AU-G6, AU-G7), and where the app runs (AU-G8: a copy outside Applications, one that can't replace itself). */
 export const UPDATES_EDGE_STATES = [
   "found-off",
+  "release-notes",
   "skipped",
   "downgrade",
   "no-release",
@@ -72,6 +77,8 @@ const NEXT = "0.9.0-nightly.20261016";
 /** AU-3 (AU-G4) — the exact version this Mac runs, the page's head */
 const CURRENT = "0.9.0-nightly.20261014";
 const PREVIOUS = "0.9.0-nightly.20261013";
+/** AU-6 (LC-18) — when CURRENT was built, in its night: the head's "Nightly · built Oct 14, 2026" */
+const BUILT_AT = new Date(2026, 9, 14, 2, 41).getTime();
 
 const BASE: UpdateView = {
   phase: "idle",
@@ -81,6 +88,67 @@ const BASE: UpdateView = {
   lastCheckAt: CHECKED_AT,
   applyWired: true,
   currentVersion: CURRENT,
+  builtAt: BUILT_AT,
+};
+
+/** AU-6 (AU-D10 A) — the Oct 16 nightly's notes as main projects them: the log since the Oct 14 nightly (its count,
+ * how many are outside the docs, the newest subject of four tracks) and the comparison main composed from its GitHub
+ * releases origin. */
+const NEXT_NOTES: ReleaseNotesView = {
+  version: NEXT,
+  body: {
+    kind: "log",
+    since: { version: CURRENT, tag: "nightly-20261014" },
+    commits: 87,
+    product: 41,
+    lines: [
+      { track: "AU-6", text: "Settings → Updates says what's in a release before you restart" },
+      { track: "TS-4b", text: "the approval line on the claims strip, behind the limit moment" },
+      { track: "FN", text: "a run's exit is published before its workspace cleanup (item 87)" },
+      { track: "QW1 unread", text: "hidden means unread" },
+    ],
+  },
+  compareUrl: "https://github.com/vibefield/vibefield/compare/nightly-20261014...nightly-20261016",
+};
+
+/** AU-6 (LC-7) — the notes CURRENT carried, copied into the install's record: what's new, for a day after it. */
+const CURRENT_NOTES: ReleaseNotesView = {
+  version: CURRENT,
+  body: {
+    kind: "log",
+    since: { version: PREVIOUS, tag: "nightly-20261013" },
+    commits: 103,
+    product: 58,
+    lines: [
+      {
+        track: "AO",
+        text: 'the History pane says "last used" against the clock it is given (item 84)',
+      },
+      {
+        track: "QW1 attach",
+        text: "a resume of a conversation the agent has not saved is refused before its live PTY is touched",
+      },
+      { track: "TS-3a", text: "the Setup Assistant's Not now hint points at Settings → Devices" },
+      { track: "TS-4", text: "the status item's Connect Your Devices… begins the link" },
+    ],
+  },
+  compareUrl: "https://github.com/vibefield/vibefield/compare/nightly-20261013...nightly-20261014",
+};
+
+/** AU-6 (AU-D10 A, LC-19) — a release's hand-written lines (`apps/desktop/packaging/notes/0.2.0.txt`): no count, and
+ * no comparison — the first release counts from none. */
+const RELEASE = "0.2.0";
+const RELEASE_NOTES: ReleaseNotesView = {
+  version: RELEASE,
+  body: {
+    kind: "written",
+    since: null,
+    lines: [
+      "Updates wait for you: VibeField downloads them in the background and installs when you restart or quit.",
+      "Settings → Updates says what's in a release before you restart, and what's new after.",
+      "Your devices say which version of VibeField each one runs.",
+    ],
+  },
 };
 
 /** AU-3 (AU-G7; LC-34) — the restart into NEXT didn't take, judged by this launch, which runs the version it left. */
@@ -148,6 +216,22 @@ function fixtureOf(state: UpdatesFixtureState): UpdatesFixture {
           },
         },
       };
+    case "updated-notes":
+      // AU-6 (LC-7) — the same day after an install that carried notes: What's new beside "Updated today from …",
+      // and the card says what's new in it, from the record's own copy
+      return {
+        view: {
+          ...BASE,
+          lastApply: {
+            version: CURRENT,
+            from: PREVIOUS,
+            outcome: "installed",
+            at: UPDATES_FIXTURE_NOW - 3 * HOUR,
+            trigger: "restart",
+            notes: CURRENT_NOTES,
+          },
+        },
+      };
     case "checking":
       return { view: { ...BASE, phase: "checking" } };
     case "downloading":
@@ -155,6 +239,11 @@ function fixtureOf(state: UpdatesFixtureState): UpdatesFixture {
     case "ready":
       return {
         view: { ...BASE, phase: "staged", version: NEXT, sessions: 0 },
+      };
+    case "ready-notes":
+      // AU-6 (AU-D10 A) — ready, and what's in it before the restart: the log's count, four tracks' lines, the link
+      return {
+        view: { ...BASE, phase: "staged", version: NEXT, sessions: 0, notes: NEXT_NOTES },
       };
     case "ready-long":
       // AU-3 (AU-D3 A) — ready eight days and ending sessions: the ready day leads the cost, the act asks first
@@ -188,6 +277,21 @@ function fixtureOf(state: UpdatesFixtureState): UpdatesFixture {
     case "found-off":
       // AU-3 (AU-G5) — with automatic updates off, a found update waits for Download
       return { view: { ...BASE, enabled: false, phase: "available", version: NEXT } };
+    case "release-notes":
+      // AU-6 (AU-D10 A) — a stable build that found the next release, waiting for Download: its hand-written lines,
+      // no count, no link
+      return {
+        view: {
+          ...BASE,
+          channel: "stable",
+          buildChannel: "stable",
+          currentVersion: "0.1.0",
+          enabled: false,
+          phase: "available",
+          version: RELEASE,
+          notes: RELEASE_NOTES,
+        },
+      };
     case "no-release":
       // AU-3 (LC-31) — the beta channel has published nothing yet: quiet, never the danger line
       return {
@@ -345,9 +449,18 @@ export type UpdateFaceState = (typeof UPDATE_FACE_STATES)[number];
 
 /** The menu open over each row the corner draws (renderer.md §2.1), in the page's groups: the path, the person's
  * choices and the third line, the held states, a check's answers in place, and the restart's and download's acts.
- * R5 (the copy that can't update itself) is AU-7's; the notes' form of R4 joins with AU-6. */
+ * R5 (the copy that can't update itself) is AU-7's; R4's notes form (What's new, LC-7) is AU-6's. */
 export const UPDATE_CORNER_GROUPS = {
-  path: ["current", "checking", "downloading", "ready", "ends", "census", "updated"],
+  path: [
+    "current",
+    "checking",
+    "downloading",
+    "ready",
+    "ends",
+    "census",
+    "updated",
+    "updated-notes",
+  ],
   edges: [
     "off",
     "found-off",
@@ -420,6 +533,9 @@ export function updateCornerFixture(state: UpdateCornerState): UpdateCornerFixtu
     case "updated":
       // R4 (AU-D11) — three hours after an update landed, in the no-notes form
       return { view: fixtureOf("updated").view, local: AT_REST };
+    case "updated-notes":
+      // R4 (LC-7) — after an install that carried notes: What's new · Updated today, opening the page at them
+      return { view: fixtureOf("updated-notes").view, local: AT_REST };
     case "off":
       return { view: { ...BASE, enabled: false }, local: AT_REST };
     case "found-off":

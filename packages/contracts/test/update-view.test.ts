@@ -7,11 +7,20 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
+import { StagedReleaseIdentity } from "../src/release-identity";
 import {
+  BETA_TAG_PATTERN,
   compareDottedVersions,
   compareReleaseVersions,
+  NIGHTLY_TAG_PATTERN,
+  RELEASE_NOTES_LIMITS,
+  ReleaseManifest,
+  ReleaseNotes,
   releaseChannelOf,
   releaseName,
+  releaseTagOf,
+  STABLE_TAG_PATTERN,
   UpdateCheckResult,
   UpdateClientStateFile,
   UpdateDownloadRequest,
@@ -248,5 +257,266 @@ describe("AU-7 — the view's location and the Move door", () => {
     expect(UpdateMoveResult.safeParse({ ok: true }).success).toBe(false);
     expect(UpdateMoveResult.safeParse({ ok: true, outcome: "moved" }).success).toBe(false);
     expect(UpdateMoveResult.safeParse({ ok: false }).success).toBe(false);
+  });
+});
+
+// AU-6 (AU-D10 A; LC-19; EDP §11.1 as amended) — a release's notes are signed plain text inside its manifest: a line is
+// one line of text, never markup; the manifest declares them loosely so an installed client's chain never refuses on
+// them; the persisted copies are tolerant; the one link is main's, composed from two tags (`releaseTagOf`).
+describe("AU-6 — releaseTagOf: the tag a release version was published under", () => {
+  it("inverts release-plan.mjs's three shapes, and is null for anything else", () => {
+    expect(releaseTagOf(NEXT)).toBe("nightly-20261028");
+    expect(releaseTagOf("0.2.0-beta.3")).toBe("v0.2.0-beta.3");
+    expect(releaseTagOf("0.2.0")).toBe("v0.2.0");
+    expect(releaseTagOf("dev")).toBeNull();
+    expect(releaseTagOf("0.2.0-rc.1")).toBeNull();
+    expect(releaseTagOf("0.1.0-nightly.2026102")).toBeNull();
+    expect(releaseTagOf("v0.2.0")).toBeNull();
+  });
+
+  it("names a tag the channel heads' own patterns accept", () => {
+    expect(NIGHTLY_TAG_PATTERN.test(releaseTagOf(CUR) ?? "")).toBe(true);
+    expect(BETA_TAG_PATTERN.test(releaseTagOf("0.2.0-beta.3") ?? "")).toBe(true);
+    expect(STABLE_TAG_PATTERN.test(releaseTagOf("0.2.0") ?? "")).toBe(true);
+  });
+});
+
+describe("AU-6 — ReleaseNotes: signed plain text, bounded", () => {
+  const LOG = golden("release-manifest.notes-log.json")["notes"] as Record<string, unknown>;
+  const WRITTEN = golden("release-manifest.notes-written.json")["notes"] as Record<string, unknown>;
+  const written = (lines: unknown[]) => ReleaseNotes.safeParse({ ...WRITTEN, lines }).success;
+  const log = (patch: Record<string, unknown>) =>
+    ReleaseNotes.safeParse({ ...LOG, ...patch }).success;
+  const changes = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({ track: `T${i + 1}`, text: "a change" }));
+
+  it("holds the limits LC-19 rules", () => {
+    expect(RELEASE_NOTES_LIMITS).toEqual({
+      WRITTEN_LINES: 8,
+      LOG_LINES: 4,
+      LINE_CHARS: 200,
+      TRACK_CHARS: 24,
+    });
+  });
+
+  it("reads both manifest fixtures' notes", () => {
+    const fromLog = ReleaseNotes.parse(LOG);
+    expect(fromLog.kind).toBe("log");
+    expect(fromLog).toMatchObject({
+      since: { version: CUR, tag: "nightly-20261027" },
+      commits: 103,
+      product: 58,
+    });
+    expect(fromLog.lines).toHaveLength(4);
+    const fromWritten = ReleaseNotes.parse(WRITTEN);
+    expect(fromWritten.kind).toBe("written");
+    expect(fromWritten.since).toBeNull();
+    expect(fromWritten.lines).toHaveLength(3);
+  });
+
+  it("refuses a ninth written line and a fifth log line, and takes exactly the limit", () => {
+    const eight = Array.from({ length: 8 }, (_, i) => `line ${i + 1}`);
+    expect(written(eight)).toBe(true);
+    expect(written([...eight, "line 9"])).toBe(false);
+    expect(written([])).toBe(false);
+    expect(log({ lines: changes(4) })).toBe(true);
+    expect(log({ lines: changes(5) })).toBe(false);
+    // a night whose subjects are all docs says its count alone
+    expect(log({ lines: [] })).toBe(true);
+  });
+
+  it("refuses a line over 200 characters, and a track over 24", () => {
+    expect(written(["x".repeat(200)])).toBe(true);
+    expect(written(["x".repeat(201)])).toBe(false);
+    expect(log({ lines: [{ track: "T".repeat(24), text: "a change" }] })).toBe(true);
+    expect(log({ lines: [{ track: "T".repeat(25), text: "a change" }] })).toBe(false);
+  });
+
+  it("refuses a second line, a control character and a format character (bidi override, zero width)", () => {
+    for (const text of [
+      "two\nlines",
+      "a\ttab",
+      "a line separator",
+      "reversed \u202etxt.exe",
+      "zero\u200bwidth",
+    ]) {
+      expect(written([text]), JSON.stringify(text)).toBe(false);
+      expect(log({ lines: [{ track: "AU", text }] }), JSON.stringify(text)).toBe(false);
+    }
+    // plain text that is not ASCII is still plain text
+    expect(written(["Settings → Updates says what's new"])).toBe(true);
+  });
+
+  it("refuses a log whose product count exceeds its commits, and a log with no since", () => {
+    expect(log({ product: 103 })).toBe(true);
+    expect(log({ product: 104 })).toBe(false);
+    expect(log({ since: null })).toBe(false);
+    expect(ReleaseNotes.safeParse({ ...LOG, kind: "markdown" }).success).toBe(false);
+  });
+});
+
+// The release manifest exactly as every app through `dba4e1d6e` parses it (`update-policy.ts`), frozen HERE and never
+// imported: it is what an installed client already runs, and a new manifest's notes must ride past it.
+const SHIPPED_PLANES = ["shell", "fieldd", "field-native"] as const;
+const SHIPPED_V1 = z
+  .object({
+    schemaVersion: z.literal(1),
+    version: z.string().regex(/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/),
+    tag: z.string().min(1).max(128),
+    channel: z.enum(["nightly", "beta", "stable"]),
+    commit: z.string().regex(/^[0-9a-f]{40}$/),
+    builds: z.record(
+      z.string().min(1).max(32),
+      z.record(
+        z.enum(SHIPPED_PLANES),
+        z.object({
+          digest: z.string().regex(/^[0-9a-f]{64}$/),
+          files: z.number().int().nonnegative(),
+          members: z.array(z.string().min(1).max(256)).max(64).optional(),
+        }),
+      ),
+    ),
+    touched: z.array(z.enum(SHIPPED_PLANES)),
+    previous: z.string().min(1).max(128).nullable(),
+  })
+  .passthrough()
+  .superRefine((manifest, ctx) => {
+    for (const [platform, planes] of Object.entries(manifest.builds)) {
+      const native = planes["field-native"];
+      if (native === undefined) continue;
+      const members = native.members;
+      if (members === undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["builds", platform, "field-native", "members"],
+          message: "the field-native plane names its members",
+        });
+        continue;
+      }
+      const sorted = [...new Set(members)].sort();
+      if (sorted.length !== members.length || sorted.some((m, i) => m !== members[i]))
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["builds", platform, "field-native", "members"],
+          message: "members are sorted and unique",
+        });
+      if (members.length !== native.files)
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["builds", platform, "field-native", "files"],
+          message: "files counts the members",
+        });
+    }
+  });
+
+describe("AU-6 — the manifest carries the notes additively, at schemaVersion 1", () => {
+  const NOTES_MANIFESTS = [
+    "release-manifest.notes-log.json",
+    "release-manifest.notes-written.json",
+  ];
+
+  it("SHIPPED_V1: an app already installed reads a manifest with notes, and keeps them", () => {
+    for (const name of NOTES_MANIFESTS) {
+      const doc = golden(name);
+      const parsed = SHIPPED_V1.safeParse(doc);
+      expect(parsed.success, name).toBe(true);
+      expect(parsed.data?.["notes"], name).toEqual(doc["notes"]);
+    }
+  });
+
+  it("this app's schema reads them too, and the notes inside read as ReleaseNotes", () => {
+    for (const name of NOTES_MANIFESTS) {
+      const manifest = ReleaseManifest.parse(golden(name));
+      expect(ReleaseNotes.safeParse(manifest.notes).success, name).toBe(true);
+    }
+    // the manifest without notes is unchanged
+    expect(ReleaseManifest.parse(golden("release-manifest.valid.json")).notes).toBeUndefined();
+  });
+
+  it("declares them loosely: notes this client cannot read never refuse the manifest (verify-chain drops them)", () => {
+    const manifest = {
+      ...golden("release-manifest.notes-log.json"),
+      notes: { kind: "markdown", html: "<b>What's new</b>" },
+    };
+    const parsed = ReleaseManifest.safeParse(manifest);
+    expect(parsed.success).toBe(true);
+    expect(ReleaseNotes.safeParse(parsed.data?.notes).success).toBe(false);
+  });
+});
+
+describe("AU-6 — the persisted notes (tolerant) and the view's", () => {
+  it("keeps the staged version's notes and the apply's copy in the state file", () => {
+    const state = UpdateClientStateFile.parse(golden("update-client-state.notes.json"));
+    expect(state.staged?.notes).toMatchObject({ kind: "log", commits: 103, product: 58 });
+    expect(state.lastApply?.notes).toEqual(state.staged?.notes);
+    // a state an AU-1 app wrote has none
+    const older = UpdateClientStateFile.parse(golden("update-client-state.landed.json"));
+    expect(older.staged?.notes).toBeUndefined();
+    expect(older.lastApply?.notes).toBeUndefined();
+  });
+
+  it("drops malformed notes alone: the staged clock, the record and the file stay", () => {
+    const doc = golden("update-client-state.notes.json");
+    const staged = doc["staged"] as Record<string, unknown>;
+    const lastApply = doc["lastApply"] as Record<string, unknown>;
+    const bad = { kind: "log", since: null, commits: 1, product: 9, lines: ["<b>x</b>"] };
+    const parsed = UpdateClientStateFile.safeParse({
+      ...doc,
+      staged: { ...staged, notes: bad },
+      lastApply: { ...lastApply, notes: bad },
+    });
+    expect(parsed.success).toBe(true);
+    expect(parsed.data?.staged).toMatchObject({ version: NEXT, at: 1792400400000 });
+    expect(parsed.data?.staged?.notes).toBeUndefined();
+    expect(parsed.data?.lastApply?.notes).toBeUndefined();
+    expect(parsed.data?.lastApply?.landed).toEqual({ at: 1793178007000, outcome: "installed" });
+  });
+
+  it("carries the staged version's notes with main's comparison, and when this build was made", () => {
+    const view = UpdateView.parse(golden("update-view.staged-notes.json"));
+    expect(view.notes?.version).toBe(NEXT);
+    expect(view.notes?.body.kind).toBe("log");
+    expect(view.notes?.compareUrl).toBe(
+      "https://github.com/vibefield/vibefield/compare/nightly-20261027...nightly-20261028",
+    );
+    expect(view.builtAt).toBe(1793091600000);
+    const updated = UpdateView.parse(golden("update-view.updated-notes.json"));
+    expect(updated.lastApply?.notes?.version).toBe(NEXT);
+    expect(updated.lastApply?.notes?.body.kind).toBe("log");
+    // the views before AU-6 have neither
+    const before = UpdateView.parse(golden("update-view.staged-since.json"));
+    expect(before.notes).toBeUndefined();
+    expect(before.builtAt).toBeUndefined();
+  });
+
+  it("refuses a comparison that is not a URL, bad notes and a bad build time (main and the preload are one build)", () => {
+    const view = golden("update-view.staged-notes.json");
+    const notes = view["notes"] as Record<string, unknown>;
+    expect(
+      UpdateView.safeParse({ ...view, notes: { ...notes, compareUrl: "compare/a...b" } }).success,
+    ).toBe(false);
+    expect(
+      UpdateView.safeParse({ ...view, notes: { ...notes, body: { kind: "html" } } }).success,
+    ).toBe(false);
+    expect(UpdateView.safeParse({ ...view, builtAt: -1 }).success).toBe(false);
+    expect(UpdateView.safeParse({ ...view, builtAt: 1.5 }).success).toBe(false);
+  });
+});
+
+describe("AU-6 (LC-18; X8) — the staged identity's build time", () => {
+  it("reads builtAt as a UTC instant, and none from a stage cut before AU-6", () => {
+    const built = StagedReleaseIdentity.parse(golden("staged-release-identity.built-at.json"));
+    expect(built.builtAt).toBe("2026-10-28T09:00:00.000Z");
+    const older = StagedReleaseIdentity.parse(golden("staged-release-identity.valid.json"));
+    expect(older.builtAt).toBeUndefined();
+  });
+
+  it("refuses a time with an offset (git's %cI): the stager writes UTC, strictly", () => {
+    const identity = golden("staged-release-identity.built-at.json");
+    const parses = (builtAt: string) =>
+      StagedReleaseIdentity.safeParse({ ...identity, builtAt }).success;
+    expect(parses("2026-10-28T02:00:00-07:00")).toBe(false);
+    expect(parses("Oct 28")).toBe(false);
+    expect(parses("2026-10-28T09:00:00Z")).toBe(true);
   });
 });

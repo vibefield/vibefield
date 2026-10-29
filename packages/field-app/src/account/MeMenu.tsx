@@ -122,8 +122,9 @@ export interface MeMenuViewProps {
   /** AU-2 (AU-D4 B) — the update's row, the face's dot and the in-menu
    * question. Absent: no row (the window doesn't know the desktop's state yet). */
   update?: MeMenuUpdate | undefined;
-  /** A row act: `open` arrives after the menu folds (Settings → Updates); the
-   * rest keep it open — the check, the restart and the download happen in place. */
+  /** A row act: `open` and `notes` arrive after the menu folds (Settings →
+   * Updates; AU-6: at the release's notes); the rest keep it open — the
+   * check, the restart and the download happen in place. */
   onUpdate?: ((act: Exclude<MeUpdateAct, "none">) => void) | undefined;
   /** The question's act, on the snapshot it shows. */
   onUpdateConfirm?: (() => void) | undefined;
@@ -629,9 +630,10 @@ export function MeMenuView({
           onClick={() => {
             // a second press while the rows fade into the question asks nothing twice
             if (rowAct === "none" || busy || leaving !== null) return;
-            // Settings → Updates folds the menu first; the check, the restart
-            // and the download happen where the row stands
-            if (rowAct === "open") act(() => onUpdate?.("open"));
+            // Settings → Updates folds the menu first (What's new too: it
+            // opens the page at the notes); the check, the restart and the
+            // download happen where the row stands
+            if (rowAct === "open" || rowAct === "notes") act(() => onUpdate?.(rowAct));
             else onUpdate?.(rowAct);
           }}
         >
@@ -876,7 +878,8 @@ export function MeMenu({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onOpenSettings: (page: "general" | "account" | "updates") => void;
+  /** `whats-new` (AU-6, LC-7): Settings → Updates, at the release's notes */
+  onOpenSettings: (page: "general" | "account" | "updates" | "whats-new") => void;
   /** AU-2 — the desktop's update projection (`desktopState.update`): `null`
    * where no updater runs, absent until the window knows the desktop's state
    * (no row then). */
@@ -1028,12 +1031,13 @@ export function MeMenu({
     });
   };
 
-  /** AU-2 — the update row's acts. `open` arrives folded (Settings → Updates);
-   * the check, the download and the restart happen where the row stands, and
-   * whatever comes back for an open that has since folded is dropped. */
+  /** AU-2 — the update row's acts. `open` arrives folded (Settings → Updates),
+   * and `notes` the same, at the release's notes (AU-6, LC-7); the check, the
+   * download and the restart happen where the row stands, and whatever comes
+   * back for an open that has since folded is dropped. */
   const onUpdate = (act: Exclude<MeUpdateAct, "none">): void => {
-    if (act === "open") {
-      onOpenSettings("updates");
+    if (act === "open" || act === "notes") {
+      onOpenSettings(act === "notes" ? "whats-new" : "updates");
       return;
     }
     if (updates === undefined) return;
