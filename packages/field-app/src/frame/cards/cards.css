@@ -629,6 +629,21 @@
   transition: opacity 120ms ease-out;
 }
 
+/* the hand's own step down out of the pegboard's way, and back, is at once too, and the gloss stays
+   where a card's turn leaves it: equal in weight to the tuck's rule above, this one wins by coming
+   after it */
+.vf-cards[data-motion="reduced"] {
+  transition: none;
+}
+
+.vf-cards[data-motion="reduced"] .vf-card-gloss {
+  transition: none;
+}
+
+.vf-cards-held[data-motion="reduced"] .vf-card-gloss {
+  transition: none;
+}
+
 /* ── A CARD PICKED UP (HN-D5) ──────────────────────────────────────────────────────────────────
    As the desk opens a notebook: the card at reading size in the middle, the window behind it out
    of focus (blurred 14, dimmed 8%), and a bar under the head at the tools in hand's place (y 64)

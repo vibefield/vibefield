@@ -220,6 +220,19 @@ describe("the fan at rest and the reach (HN: Holding them)", () => {
     expect(lift).not.toContain("transform");
   });
 
+  it("steps out of the pegboard's way at once and keeps the gloss still under reduced motion (M6)", () => {
+    expect(rule('.vf-cards[data-motion="reduced"]')).toContain("transition: none;");
+    // the tuck's rule weighs the same, so the reduced one must come after it to win
+    expect(CARDS_CSS.indexOf(".vf-cards[data-tucked] {")).toBeGreaterThan(-1);
+    expect(CARDS_CSS.indexOf('.vf-cards[data-motion="reduced"] {')).toBeGreaterThan(
+      CARDS_CSS.indexOf(".vf-cards[data-tucked] {"),
+    );
+    expect(rule('.vf-cards[data-motion="reduced"] .vf-card-gloss')).toContain("transition: none;");
+    expect(rule('.vf-cards-held[data-motion="reduced"] .vf-card-gloss')).toContain(
+      "transition: none;",
+    );
+  });
+
   it("says so when the hand raised holds nothing", () => {
     const layout = layoutRaised(0, WIN, CARDS_LINE_RIGHT);
     const el = mount(<CardsView {...props({ cards: [], layout, lifts: [], raised: true })} />);
