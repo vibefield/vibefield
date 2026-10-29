@@ -7057,6 +7057,10 @@ export async function runSmokeGodview(opts: {
   /** GT-8b: what main's OS opener was handed — a harness records instead of
    * opening (main's `harnessShellOpens`). The link row reads it. */
   shellOpens?: { readonly opened: readonly string[]; readonly revealed: readonly string[] };
+  /** HN-5 (R-T 4) — the words main's copy door KEPT in place of the system clipboard, a
+   * marked run's (main's `harnessCopies`); absent in an unmarked run, whose door writes the
+   * person's clipboard. The OSC 52 row reads a program's write here. */
+  copies?: readonly string[];
   /** AR-7: what main staged for the typed-agent rows before the pair booted
    * (`stageTypedAgent`); absent when it staged nothing — an injected root. */
   typedAgent?: StagedTypedAgent;
@@ -9051,6 +9055,52 @@ export async function runSmokeGodview(opts: {
       );
     }
     verdict["fileLinkNotAsked"] = `${fileHovered} found; the deck asked nothing (GT-8b)`;
+
+    // 11j. A PROGRAM'S CLIPBOARD WRITE (HN-5, LC-14). A program in a pane writes the
+    //      clipboard by OSC 52; ghosttea hands its runtime platform's `writeClipboard`
+    //      the words, and the window hands them main's copy door — never the web's own
+    //      write, which the empty grant set denies — and deals NO card: a program's
+    //      write is not the person's copy. A marked run's door KEEPS the words instead
+    //      of writing them (main's `harnessCopies`, R-T 4), and this row reads them
+    //      there. GATED on that mark (`VF_SMOKE_RUN`, run-smoke.mjs): an unmarked
+    //      run's door writes the person's clipboard, so there the row prints nothing
+    //      and says it was skipped. The printf is written into a script and only
+    //      `sh <script>` is typed, as 11f's loop is; `\033` and `\007`, never `\e`
+    //      and `\a`, because dash's printf knows only the octal forms.
+    const copies = opts.copies;
+    if (copies === undefined) {
+      verdict["osc52"] = "skipped: an unmarked run's copy door writes the real clipboard";
+    } else {
+      const osc52Script = join(scratch, `hn5-osc52-${nonce}.sh`);
+      writeFileSync(
+        osc52Script,
+        `printf '\\033]52;c;%s\\007' "$(printf 'hn5-osc52' | base64)"\n`,
+      );
+      const HAND_CARDS = `document.querySelectorAll(".vf-cards .vf-card").length`;
+      const cardsBefore = (await win.webContents.executeJavaScript(HAND_CARDS)) as number;
+      const keptBefore = copies.length;
+      await focusDeck(win);
+      await runInPane(win, join(scratch, "osc52.txt"), `sh ${osc52Script}`);
+      const osc52Deadline = Date.now() + 15_000;
+      while (Date.now() < osc52Deadline && !copies.slice(keptBefore).includes("hn5-osc52")) {
+        await sleep(100);
+      }
+      if (!copies.slice(keptBefore).includes("hn5-osc52")) {
+        throw new Error(
+          `a pane's OSC 52 never reached main's copy door (it kept ${JSON.stringify(copies.slice(keptBefore))})`,
+        );
+      }
+      // an absence, given the deal's flight (560 ms) and more to be wrong in
+      await sleep(1_000);
+      const cardsAfter = (await win.webContents.executeJavaScript(HAND_CARDS)) as number;
+      if (cardsAfter !== cardsBefore) {
+        throw new Error(
+          `a program's OSC 52 dealt a card: ${cardsBefore} → ${cardsAfter} in the hand`,
+        );
+      }
+      verdict["osc52"] =
+        "OSC 52 in a pane → writeClipboard → main's copy door (kept, not written); no card";
+    }
 
     // 12. RETIRED AT TP-S3e. This row SIGKILLed the ghosttea bridge utility
     //    and watched the deck rebuild — a failure mode that no longer has a
