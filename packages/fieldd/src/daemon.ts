@@ -1400,6 +1400,34 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         { error: String(error) },
       );
     }
+    // CP-1b — the lane link redials. It was dialed once per boot, so after a floor restart (NativeLink's "connected")
+    // or a dropped socket ("disconnected") every lane's bytes went nowhere until fieldd restarted: doc sync's, and now
+    // the compose plane's doors, whose bridges redial a restarted floor on their own (CP-1a). One dial at a time; a
+    // link this boot closed (doc sync's boot failure above, a shutdown) stays closed.
+    let laneDial: Promise<void> | null = null;
+    const redialLanes = (why: "floor" | "dropped"): void => {
+      if (laneDial !== null || laneLink.connected || laneLink.closed) return;
+      laneDial = laneLink
+        .connect()
+        .then(() => logger.info("fieldd.mesh_lane.redialed", "The MeshData link is back", { why }))
+        .catch((error: unknown) =>
+          logger.warn(
+            "fieldd.mesh_lane.redial_failed",
+            "The MeshData link could not be dialed again",
+            {
+              why,
+              error: String(error),
+            },
+          ),
+        )
+        .finally(() => {
+          laneDial = null;
+        });
+    };
+    native.on("connected", () => redialLanes("floor"));
+    laneLink.on("disconnected", () => {
+      setTimeout(() => redialLanes("dropped"), 1_000).unref?.();
+    });
     // P7 §5.3.1 — fetch/verify/install (user-initiated only; no phone-home)
     const installer = new RegistryInstallService({
       dataDir: config.dataDir,
