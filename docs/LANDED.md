@@ -18325,6 +18325,8 @@ CI's runner is the slower host:
     agent-session among them; field-app 2,780 passed, design-system 8/8 in 41 s (3.2–6.5 s a row);
   - `pnpm test:rust`: 31 suites with 493 passed and 0 failed, the new row and T-M2's among them;
   - gen:check clean.
+- **CI** on the pushed `3e6c941a8` (run 40764016907): GREEN at its first attempt, 21:22Z. *Cited 2026-10-29 with
+  item 89.*
 - Records: `/Volumes/SamsungRed/lanes/records/item85/`.
 - **Errata:** the memory's lottery note said at 18:20Z that "MF-1f was never a lottery row". That holds for the
   setup's endpoint wait only, and the note carries a dated correction at its source (18:31Z). Item 84's entry above now
@@ -18417,3 +18419,92 @@ retired).
 - The AL-9c candidates, on his word.
 - Item 89 (the fixer).
 - The draft's §9.4 gains AL-9b's deltas at the next opening of the draft queue.
+
+## GV — item 89: the GV-D1 swarm row's budget is 15 s, measured on CI's runner and in this Mac's full suites; the crowd is still only from frame 593, so the frames stay (2026-10-29; `238a960bc`, lane `fix/item89-gvd1-budget`; VF-PM's rulings 01:34Z, 01:37Z and 01:58Z)
+
+**What happened:** AL-9b's verifies at its lane tip `fa9744e` (landed as `cc37d2d8e`) went red twice on one row
+(01:14Z at load ~607, 01:22Z at load 418). The row is field-app `test/godview-monitor.test.tsx`:589, "keeps the swarm's
+bodies below the head's reserve … (GV-D1)". Each time it failed with "Test timed out in 5000ms", at 6220 ms and 5507 ms.
+Nothing in AL-9b reaches SwarmPhysics. Its third verify, on a quiet host, was green with this row at 678 ms, and AL-9b
+landed.
+
+**The read:**
+- **What GV-D1 asserts.** It checks the state at frame 600 only. The stage is the one MV-D19's row pins: 900 × 396,
+  with the reserve {0, 0, 900, 56}, the column and the strip.
+  - With the reserve, every body's top (the frame's y − radius) must be ≥ 56.
+  - Without it, the same crowd must have at least one top < 56.
+  - The reserve's matter body is padded 7 (`CHROME_OBSTACLE_PADDING`), so a body resting on it has its top at
+    63 + 4 (`PHYSICAL_GAP`) = 67.
+- **Where the time goes.** The row runs two settles of 600 frames on the swarm's own physics (puppeteer-views 0.3.0,
+  matter 0.19): 23 circles beside 4 walls and 3 obstacles, in one synchronous loop.
+  - One settle alone takes 116–136 ms on this Mac.
+  - The render in `measuredStage` is under 300 ms. MV-D19's row renders the same stage, and CI never lists it among
+    its slow rows.
+- **Why the reds' times are the row's own.** vitest 3.2.7 fails a row whose work outran its timer when the row resolves
+  (`@vitest/runner` chunk-hooks.js:1880–1886, vitest#2920). The settles are synchronous, so the timer cannot fire during
+  them, and the printed duration is when the row finished.
+
+**The trace** (records `trace-settle.mjs`: the row's two settles replayed frame by frame on main's physics, one node
+process at nice 19, VF-PM's GO 01:34Z; 600 frames, then 1800):
+- **Held** (with the reserve):
+  - Every top is ≥ 56 from frame 11; frames 1–10 are the born-in-the-reserve body being pushed out (highest top 47.5).
+  - Frames 11–600: highest top 59.7–62.5.
+  - The crowd jostles at 0.3–1.5 px a step until about frame 570. It is still (every body under 0.01 px a step) from
+    frame 593, with one blip at 648, and from 649 through 1800 (highest top 62.11–62.16).
+- **Loose** (without it): some top is < 56 at every frame (highest top −6.4 to −0.3); still at 0.01 from frame 521.
+- **So 600 frames is barely settled.** The row's read lands 7 frames after the held crowd comes to rest, and any frame
+  count below about 650 would read a crowd still in motion. The row's comment, "long past settling", was never
+  measured, and it carries a dated correction at its source.
+- **The loop solves 599 steps, not 600:** the float sum of `1000 / 30` loses one. The comment says so, and the frame
+  numbers here are the loop's frames as the trace counted them. Counting frames instead of summing time is
+  **ITEM 90**, for a quiet day.
+
+**The budget** (`238a960bc`, the test only, +23/−2): `SWARM_SETTLE_BUDGET_MS = 15_000`, given to the row as vitest's
+options (`{ timeout: … }`, item 85's `PAGE_BUDGET_MS` shape). A third argument that is not a number literal makes biome
+break the call and re-indent the whole body. Measured in a parallel suite:
+- **CI's runner:** 35 attempts, 10-23 → 10-28 (records `times-ci.tsv`), all green, 845–4645 ms, median 2085 ms. The
+  worst was `b8a31d139` on 10-23, at 93% of the 5 s default.
+- **This Mac's full verifies:** 46 green, 10-26 → 10-28 (records `times-mac.tsv`), 531–3964 ms. Then came 6220 and
+  5507 ms on 10-29, and 678 ms on the quiet host after them.
+- 15 s is more than twice the worst it has taken anywhere. The assertion, the 600 frames, the crowd, the seed and the
+  stage are unchanged.
+
+**Validation** (this Mac's SSD lane `/Volumes/SamsungRed/lanes/item89`, guard, nice 19; VF-PM's slot after AO-7's
+puppeteer tests):
+- **Measure** (logs/measure/, 01:46:41–01:47:30Z, load 12–14):
+  - the row alone ×3 passed, at 553, 536 and 533 ms;
+  - `godview-monitor.test.tsx` alone ×3 passed 89/89 each time, with the row at 496, 517 and 507 ms (the file's rows
+    sum to 7.7–7.8 s).
+- **The light pass** (logs/light/, 01:47:42–01:48:23Z, load 11.7): field-app's typecheck, biome at error level on
+  the file, preflight and check:walls all exited 0. vitest on godview-monitor-lifetime, godview-monitor and
+  godview-overlay-boundaries passed 4/4, 89/89 and 6/6, with the row at 636 ms.
+- **`pnpm verify`, run 1**, at `238a960bc` (logs/verify/verify.log, 01:48:33–01:55:44Z): EXIT 1, red on two fieldd rows.
+  The load was 21.9 at the start and 215.8 at the end, with the PORTALS review running beside it.
+  - Every stage through `bundle:assert` passed, and typecheck was green for 27 projects. The test target failed:
+    fieldd 2 failed, 2586 passed, 11 skipped. `test:rust` and `gen:check` never ran, because the chain stops at a red.
+  - **GV-D1 under the full suite passed in 2121 ms**, 14% of the new 15 s (godview-monitor 89/89, the file 20.1 s).
+  - `agent-inventory-age.test.ts:268` (IL-D5 (a), the mock floor) expected `inventory_stale` from the terminal and
+    got `UNAVAILABLE {service: "native", state: "unresponsive"}`. fieldd's heartbeat (`NATIVE_SUPERVISION`: 100 ms
+    interval, 100 ms deadline, a 50 ms probe after a first miss, 2 misses) set the link `unresponsive` under the
+    loaded loop. The mock floor shares the test's process, so a pong waiting unread in the socket while the deadline
+    timer fires first counts as the floor's silence. WG-E1's own-stall rule only covers a timer late by its whole
+    deadline. Filed in **ITEM 86**'s family (VF-PM 01:58Z).
+  - `agent-session.test.ts` MF-1f/MF-1g, "a restart finds the dead pane and re-lists the row from the record alone":
+    the row's condition did not hold within 15000 ms. `terminal_spawned` came at +746 ms, `session_started` at +761
+    and `agents.interrupted` at +902, then no exit. It is `endedRun`'s bound after `agent.interrupt`, **ITEM 87**'s
+    second witness, after item 85's run 2.
+  - Neither row can be reached from this change, which is one field-app test file. Before VF-PM's ruling they were
+    run alone and stopped part-way (logs/rest/; they do not stand in for a verify): agent-inventory-age 7/7 at load
+    68; MF-1f 3/3 twice at load 33–45.
+- **`pnpm verify`, run 2 (`verify2-quiet`), the one rerun the rule allows** (VF-PM 01:58Z: armed on a 1-min load under
+  20 with the swarms paused), at `238a960bc` (logs/verify2-quiet/verify.log): **EXIT 0**. It was armed at
+  01:58:40Z, when the 1-min load was 19.6, and ran 01:58:41–02:06:56Z (load 18.3 at the start, 25.2 at the end).
+  Every stage passed:
+  - the TS test target ("Successfully ran target test for 27 projects"): fieldd 2,588 passed (11 skipped),
+    agent-inventory-age and MF-1f/MF-1g among them; field-app 2,780 passed;
+  - **GV-D1 passed in 1460 ms**, 10% of the 15 s (godview-monitor 89/89, the file 17.1 s);
+  - `pnpm test:rust`: 31 suites with 493 passed and 0 failed;
+  - gen:check clean.
+- Records: `/Volumes/SamsungRed/lanes/records/item89/`.
+- **Item 85's CI witness** is cited in its entry above (run 40764016907, green at its first attempt), owed since 10-28
+  21:23Z.
