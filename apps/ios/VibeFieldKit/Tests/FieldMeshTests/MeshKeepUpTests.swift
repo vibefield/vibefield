@@ -30,17 +30,25 @@ struct MeshKeepUpTests {
 
   @Test("TS-7: a sign-in while a sign-out is still stopping its node waits for the sweep, whatever else stands")
   func signInWaitsForASignOut() {
-    for hasRuntime in [false, true] {
-      for regating in [false, true] {
-        #expect(
-          MeshModel.signInStep(signingOut: true, hasRuntime: hasRuntime, regating: regating) == .afterSignOut,
-          "runtime \(hasRuntime), regating \(regating)")
+    for starting in [false, true] {
+      for hasRuntime in [false, true] {
+        for regating in [false, true] {
+          #expect(
+            MeshModel.signInStep(signingOut: true, starting: starting, hasRuntime: hasRuntime, regating: regating)
+              == .afterSignOut,
+            "starting \(starting), runtime \(hasRuntime), regating \(regating)")
+        }
       }
     }
-    // no sign-out in flight: no node starts one; a node, or a re-gate's beat, re-surfaces the page
-    #expect(MeshModel.signInStep(signingOut: false, hasRuntime: false, regating: false) == .start)
-    #expect(MeshModel.signInStep(signingOut: false, hasRuntime: true, regating: false) == .requestLogin)
-    #expect(MeshModel.signInStep(signingOut: false, hasRuntime: false, regating: true) == .requestLogin)
+  }
+
+  @Test("TS-7: only a phone with no node, no start under way and no re-gate starts one; any of those asks for its page")
+  func signInStartsOneNode() {
+    #expect(MeshModel.signInStep(signingOut: false, starting: false, hasRuntime: false, regating: false) == .start)
+    // the welcome's Continue tapped again while the first node is still coming up
+    #expect(MeshModel.signInStep(signingOut: false, starting: true, hasRuntime: false, regating: false) == .requestLogin)
+    #expect(MeshModel.signInStep(signingOut: false, starting: false, hasRuntime: true, regating: false) == .requestLogin)
+    #expect(MeshModel.signInStep(signingOut: false, starting: false, hasRuntime: false, regating: true) == .requestLogin)
   }
 
   @Test("signed out, or in the middle of a re-gate, nothing moves: the first sign-in is the person's")

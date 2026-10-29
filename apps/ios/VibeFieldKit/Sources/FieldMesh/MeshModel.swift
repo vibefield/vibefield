@@ -129,6 +129,16 @@ public final class MeshModel {
   /// for it: a new node started over the state directory the sweep is about
   /// to remove would lose its keys under it.
   @ObservationIgnored private var signOutTask: Task<Void, Never>?
+  /// One sign-in waits behind a sign-out at most: two taps on the welcome's
+  /// Continue during `.stopping` are one sign-in.
+  @ObservationIgnored private var signInQueued = false
+  /// A node coming up (`launch`), from the moment it is asked for until it is
+  /// running or has failed — `runtime` is nil all that while, so this is what
+  /// says a start is under way. Each start has a generation; a sign-out moves
+  /// the generation on, and a start that finds itself superseded stops the
+  /// node it brought up instead of keeping it.
+  @ObservationIgnored private var startTask: Task<Void, Never>?
+  @ObservationIgnored private var startGeneration = 0
   /// The network coming back is a reason to retry at once rather than at the
   /// end of the backoff.
   @ObservationIgnored private var pathMonitor: NWPathMonitor?
@@ -298,23 +308,32 @@ public final class MeshModel {
   /// (`regating` too: UA-P-5's restart has a beat with no runtime in hand, and
   /// a tap landing in it would start a second node); a node re-surfaces its
   /// page.
+  /// A start already under way is a node standing: the person's second tap
+  /// asks for its page rather than starting another (the welcome's Continue
+  /// is live through `.starting`).
   enum SignInStep: Equatable, Sendable {
     case afterSignOut, start, requestLogin
   }
 
-  nonisolated static func signInStep(signingOut: Bool, hasRuntime: Bool, regating: Bool) -> SignInStep {
+  nonisolated static func signInStep(
+    signingOut: Bool, starting: Bool, hasRuntime: Bool, regating: Bool
+  ) -> SignInStep {
     if signingOut { return .afterSignOut }
-    return !hasRuntime && !regating ? .start : .requestLogin
+    return !hasRuntime && !starting && !regating ? .start : .requestLogin
   }
 
   /// The person's SIGN IN: the first sign-in starts a node and puts its login
   /// page in front of them; a node already standing re-surfaces the page.
   public func signIn() {
-    switch Self.signInStep(signingOut: signOutTask != nil, hasRuntime: runtime != nil, regating: regating) {
+    switch Self.signInStep(
+      signingOut: signOutTask != nil, starting: startTask != nil, hasRuntime: runtime != nil, regating: regating)
+    {
     case .afterSignOut:
-      guard let pending = signOutTask else { return }
+      guard !signInQueued, let pending = signOutTask else { return }
+      signInQueued = true
       Task {
         await pending.value
+        signInQueued = false
         signIn()
       }
     case .start:
@@ -340,7 +359,7 @@ public final class MeshModel {
     loginSheet.apply(.runtimeGone)
     if presentingLogin { personAsked() }
     state = .starting
-    Task { await startRuntime() }
+    launch()
   }
 
   /// A node that stopped or failed still holds its runtime: stop it for good,
@@ -360,7 +379,7 @@ public final class MeshModel {
       await old.stop()
       guard self.runtime === old, state == .starting else { return }
       self.runtime = nil
-      await startRuntime()
+      await launch().value
     }
   }
 
@@ -423,7 +442,23 @@ public final class MeshModel {
     isGatedOnAccount = false
     accountNote = nil
     peers = []
+    // Whatever start is under way is superseded now (`launch`).
+    startGeneration &+= 1
     guard let runtime else {
+      if let starting = startTask {
+        // A node is still coming up: it stops itself when it arrives, and the
+        // sweep waits for that — never a state directory removed under a
+        // starting node, nor a superseded start restoring this account.
+        startTask = nil
+        state = .stopping
+        signOutTask = Task {
+          await starting.value
+          sweep.run()
+          if state == .stopping { state = .off }
+          signOutTask = nil
+        }
+        return
+      }
       sweep.run()
       state = .off
       return
@@ -486,18 +521,40 @@ public final class MeshModel {
 
   // MARK: - Runtime plumbing
 
-  private func startRuntime() async {
+  /// Every node starts here — the person's start, a restart, a re-gate — and
+  /// is held as `startTask` from this call until it is up or has failed.
+  @discardableResult
+  private func launch() -> Task<Void, Never> {
+    startGeneration &+= 1
+    let generation = startGeneration
+    let task = Task {
+      await bringUp(generation)
+      if startGeneration == generation { startTask = nil }
+    }
+    startTask = task
+    return task
+  }
+
+  private func bringUp(_ generation: Int) async {
     do {
       let runtime = try await FieldTruffleRuntime.start(
         deviceName: UIDevice.current.name,
         stateDirectory: stateDirectory,
         onAuthRequired: { [weak self] url in
-          self?.loginSheet.apply(.urlArrived(url))
+          // A superseded start's page is nobody's.
+          guard let self, self.startGeneration == generation else { return }
+          self.loginSheet.apply(.urlArrived(url))
         })
+      guard generation == startGeneration else {
+        // A sign-out superseded this start while the node came up.
+        await runtime.stop()
+        return
+      }
       self.runtime = runtime
       if let gated = runtime.gatedLogin { rememberedLogin = gated }
       await applyCurrentPhase()
       await refreshPeers()
+      guard generation == startGeneration, self.runtime === runtime else { return }
       eventsTask = Task { [weak self] in
         guard let stream = await self?.runtime?.events() else { return }
         for await event in stream {
@@ -533,6 +590,7 @@ public final class MeshModel {
         await self.lost(runtime, reason: "the mesh runtime stopped")
       }
     } catch {
+      guard generation == startGeneration else { return }
       runtime = nil
       loginSheet.apply(.runtimeGone)
       dropped(Self.shortReason(error))
@@ -643,7 +701,7 @@ public final class MeshModel {
     await runtime.stop()
     guard self.runtime === runtime, state == .starting else { return }
     self.runtime = nil
-    await startRuntime()
+    await launch().value
   }
 
   private func refreshPeers() async {

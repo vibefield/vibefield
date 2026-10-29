@@ -266,17 +266,40 @@ const OS_MARKS_IOS = join(
   };
   for (const [label, origin, copy] of [
     ["box", /viewBox="0 0 (\d+) \d+"/, /^ {2}static let box: CGFloat = (\d+)$/m],
-    ["dot centres", /^const AT = \[([^\]]+)\] as const;$/m, /^ {2}static let at: \[CGFloat\] = \[([^\]]+)\]$/m],
+    [
+      "dot centres",
+      /^const AT = \[([^\]]+)\] as const;$/m,
+      /^ {2}static let at: \[CGFloat\] = \[([^\]]+)\]$/m,
+    ],
     ["dot radius", /\br=\{(\d+)\}/, /^ {2}static let radius: CGFloat = (\d+)$/m],
-    ["solid dots", /^const SOLID = new Set\(\[([^\]]+)\]\);$/m, /^ {2}static let solid: Set<String> = \[([^\]]+)\]$/m],
-    ["faint opacity", /fillOpacity: ([0-9.]+)/, /^ {2}static let faintOpacity: Double = ([0-9.]+)$/m],
-    ["floor", /^export const TAILSCALE_MARK_MIN = (\d+);$/m, /^ {2}public static let minimum: CGFloat = (\d+)$/m],
+    [
+      "solid dots",
+      /^const SOLID = new Set\(\[([^\]]+)\]\);$/m,
+      /^ {2}static let solid: Set<String> = \[([^\]]+)\]$/m,
+    ],
+    [
+      "faint opacity",
+      /fillOpacity: ([0-9.]+)/,
+      /^ {2}static let faintOpacity: Double = ([0-9.]+)$/m,
+    ],
+    [
+      "floor",
+      /^export const TAILSCALE_MARK_MIN = (\d+);$/m,
+      /^ {2}public static let minimum: CGFloat = (\d+)$/m,
+    ],
   ]) {
-    compare(`Tailscale mark ${label}`, field(tsx, origin), field(swift, copy), MARK_TSX, MARK_SWIFT);
+    compare(
+      `Tailscale mark ${label}`,
+      field(tsx, origin),
+      field(swift, copy),
+      MARK_TSX,
+      MARK_SWIFT,
+    );
   }
-  const inkCopy = /public static let tailscaleInk = dynamic\(light: 0x([0-9A-Fa-f]{6}), dark: 0x([0-9A-Fa-f]{6})\)/.exec(
-    palette,
-  );
+  const inkCopy =
+    /public static let tailscaleInk = dynamic\(light: 0x([0-9A-Fa-f]{6}), dark: 0x([0-9A-Fa-f]{6})\)/.exec(
+      palette,
+    );
   compare(
     "Tailscale ink (light)",
     field(tokens, /--vf-tailscale-ink: #([0-9a-fA-F]{6});/),
@@ -286,7 +309,10 @@ const OS_MARKS_IOS = join(
   );
   compare(
     "Tailscale ink (dark)",
-    field(tokens, /--vf-tailscale-ink: #[0-9a-fA-F]{6};[\s\S]*?--vf-tailscale-ink: #([0-9a-fA-F]{6});/),
+    field(
+      tokens,
+      /--vf-tailscale-ink: #[0-9a-fA-F]{6};[\s\S]*?--vf-tailscale-ink: #([0-9a-fA-F]{6});/,
+    ),
     inkCopy?.[2]?.toLowerCase() ?? null,
     TOKENS,
     PALETTE_SWIFT,
