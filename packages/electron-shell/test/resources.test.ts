@@ -253,8 +253,9 @@ describe("resolvePackagedResources", () => {
     ).toBeNull();
   });
 
-  it("carries all three tray states and preserves the macOS Template suffix", () => {
-    for (const kind of ["base", "attention", "offline"] as const) {
+  it("carries all four tray states and preserves the macOS Template suffix", () => {
+    // AU-4 (AU-G14): `update` joins — an install that waits wears its own image, never the attention badge
+    for (const kind of ["base", "attention", "update", "offline"] as const) {
       const set = pkg.tray[kind];
       // The suffix is what makes macOS tint the glyph for light/dark menu bars;
       // losing it to a rename or a bundler hash is a silent visual bug.
@@ -263,11 +264,17 @@ describe("resolvePackagedResources", () => {
       expect(set.windowsIco.endsWith(".ico")).toBe(true);
       expect(set.linuxPng.endsWith(".png")).toBe(true);
     }
-    // distinct art per state — not one file reused three times
+    // distinct art per state — not one file reused four times
     const ones = new Set(
-      (["base", "attention", "offline"] as const).map((k) => pkg.tray[k].macTemplate1x),
+      (["base", "attention", "update", "offline"] as const).map((k) => pkg.tray[k].macTemplate1x),
     );
-    expect(ones.size).toBe(3);
+    expect(ones.size).toBe(4);
+    expect(pkg.tray.update).toEqual({
+      macTemplate1x: expect.stringMatching(/[\\/]fieldUpdateTemplate\.png$/),
+      macTemplate2x: expect.stringMatching(/[\\/]fieldUpdateTemplate@2x\.png$/),
+      windowsIco: expect.stringMatching(/[\\/]field-update\.ico$/),
+      linuxPng: expect.stringMatching(/[\\/]field-linux-update\.png$/),
+    });
   });
 });
 

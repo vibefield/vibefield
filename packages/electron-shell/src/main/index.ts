@@ -6,6 +6,7 @@ import {
   APP_PREFERENCE_KEYS,
   AppPreferences,
   CONTRACTS_VERSION,
+  commitOfBuildId,
   DESKTOP_APP_ID,
   type DesktopShellState,
   DesktopShellState as DesktopShellStateSchema,
@@ -146,8 +147,16 @@ import { SupportBundleError, SupportBundleService } from "./support-bundle";
 import { fileThemeStore, THEME_FILE, ThemeOwner } from "./theme";
 import { TrayController } from "./tray-controller";
 import { TrayEvidenceMonitor } from "./tray-evidence";
-import { type TrayLinkState, type TraySnapshot, trayUpdateOf } from "./tray-model";
+import {
+  type TrayLinkState,
+  type TraySnapshot,
+  type TrayUpdateState,
+  trayUpdateOf,
+  type UpdateMenuActs,
+  updateMenuEntry,
+} from "./tray-model";
 import { createElectronTrayRuntime } from "./tray-native";
+import { wordsBox } from "./updates/controller";
 import { readUpdateIdentity } from "./updates/identity";
 import { createElectronApplyPort, installUpdateController } from "./updates/install";
 import { applyProfileUpdate, dealOwedFace } from "./users-profile";
@@ -235,6 +244,10 @@ let supportBundles: SupportBundleService | null = null;
 /** WP12d (L3c-i, §13 C4) — the updater's doctor lines for the support bundle; null where no updater runs */
 let updateDoctorLines: (() => readonly string[]) | null = null;
 let trayController: TrayController | null = null;
+/** AU-4 — the app menu's update item, redrawn from the updater's current view (assigned once the updater exists). Its
+ * acts stop while the app quits, and `quitting` flips outside any update, so a quit's start and its abort redraw it;
+ * null in a build with no updater and after teardown. */
+let redrawUpdateMenu: (() => void) | null = null;
 /** Closing the last window leaves VibeField running: on macOS always, elsewhere
  * while the status item keeps it (the lifecycle's rule, and TS-4's away notice). */
 function staysResident(): boolean {
@@ -1475,7 +1488,10 @@ async function main(
   // frame's four), the menu names it, the renderer mirrors it. `redrawMenu` is
   // assigned below for the modes that have a menu; the states exist in every
   // windowed mode because the renderer needs its truth either way.
-  let redrawMenu: (state: AppMenuState) => void = () => undefined;
+  let redrawMenu: (patch: Partial<AppMenuState>) => void = () => undefined;
+  // AU-4 (AU-G9) — the app menu's Settings…, late-bound: the menu is installed
+  // long before the window's reveal exists (a click before then does nothing)
+  let openSettingsFromMenu: (() => void) | null = null;
   const views = new ViewRegistry({
     logger: logger.child({ component: "view" }),
     onChanged: (state, target) => {
@@ -1708,6 +1724,7 @@ async function main(
       zoom,
       // SNAP-D5: no helper for this platform ⇒ the item stays, disabled.
       ...(screenshotHelperAvailable ? { takeScreenshot } : {}),
+      openSettings: () => openSettingsFromMenu?.(),
     });
   }
 
@@ -2001,6 +2018,13 @@ async function main(
       window.webContents.send(IPC_CHANNELS.shellCommand, ShellCommandRequest.parse({ command }));
     }
   };
+  // AU-4 (AU-G9) — the app menu's Settings… is the status item's: the same command, which REVEALS Settings (the
+  // page's ⌘, toggles it; this never closes it)
+  openSettingsFromMenu = (): void => {
+    void revealSurface("open-settings").catch((error: unknown) => {
+      logger.error("desktop.app_menu.reveal_failed", "Settings… could not open Settings", error);
+    });
+  };
   const setAppPreference = async (
     key: (typeof APP_PREFERENCE_KEYS)[keyof typeof APP_PREFERENCE_KEYS],
     value: boolean,
@@ -2028,6 +2052,17 @@ async function main(
   // delay and a resume checks when the last check is stale (EDP §11.2, no interval stays alive). The apply waits for
   // WP12c's gate — nothing installs on a quit.
   const updateIdentity = readUpdateIdentity(resources);
+  // AU-4 (AU-G9) — About names the version and the commit its build id records: "Version 0.1.0-nightly.20261027
+  // (84509d6)". With no staged build id (development, a stage before WP12c) the commit is left to macOS. macOS only:
+  // the one app menu that carries About.
+  if (process.platform === "darwin") {
+    const commit = commitOfBuildId(updateIdentity?.buildId);
+    app.setAboutPanelOptions({
+      applicationName: "VibeField",
+      applicationVersion: app.getVersion(),
+      ...(commit !== undefined ? { version: commit } : {}),
+    });
+  }
   // WP12c (L2b-ii, build-wp12-updater.md §10) — the apply's port: the census and the consented stop through the held
   // coordinator (from the stop on, nothing may start fieldd), Squirrel staged only after the stop, the quit flow's
   // update mode. macOS only; elsewhere a staged update stays `apply-unbuilt`.
@@ -2038,6 +2073,7 @@ async function main(
     registry.cancelShutdown();
     if (what === "update") lifecycleFlow?.resetAfterAbortedQuit();
     trayController?.update({ quitting: false });
+    redrawUpdateMenu?.();
     void revealPrimaryWindow().catch((error: unknown) => {
       logger.error(
         what === "update" ? "desktop.update.restore_failed" : "desktop.quit.restore_failed",
@@ -2214,6 +2250,37 @@ async function main(
       restoreAfterAbortedQuit = null;
     });
   }
+  // AU-4 (AU-L4) — the update's acts, ONE set: the status item's update item and the app menu's run the same three
+  // through the same doors — the check, a person's Download, the restart with its native consent
+  const updateActs =
+    updates === null
+      ? null
+      : {
+          check: async (): Promise<void> => {
+            await updates.check("manual");
+          },
+          download: async (version: string): Promise<void> => {
+            const outcome = await updates.downloadForPerson(version);
+            logger.info("desktop.update.download_requested", "Download Update was chosen", {
+              ok: outcome.ok,
+              reason: outcome.ok ? null : outcome.reason,
+            });
+            // a menu has no page to say a refusal on: main's own words, in its box, as a restart's refusal is said
+            if (!outcome.ok && outcome.words !== undefined) {
+              await applyPort?.notify(wordsBox(outcome.words));
+            }
+          },
+          restart:
+            applyPort?.wired === true
+              ? async (): Promise<void> => {
+                  const outcome = await updates.restartToInstall();
+                  logger.info("desktop.update.restart_requested", "Restart to Update was chosen", {
+                    ok: outcome.ok,
+                    reason: outcome.ok ? null : outcome.reason,
+                  });
+                }
+              : null,
+        };
   trayController = new TrayController({
     runtime: createElectronTrayRuntime(resources),
     initial: {
@@ -2237,23 +2304,11 @@ async function main(
       openSettings: () => revealSurface("open-settings"),
       openDiagnostics: () => revealSurface("open-diagnostics"),
       connectDevices: () => revealSurface("open-connect"),
-      ...(updates !== null
-        ? {
-            checkForUpdates: async () => {
-              await updates.check("manual");
-            },
-          }
+      ...(updateActs !== null
+        ? { checkForUpdates: updateActs.check, downloadUpdate: updateActs.download }
         : {}),
-      ...(updates !== null && applyPort?.wired === true
-        ? {
-            restartToUpdate: async () => {
-              const outcome = await updates.restartToInstall();
-              logger.info("desktop.update.restart_requested", "Restart to Update was chosen", {
-                ok: outcome.ok,
-                reason: outcome.ok ? null : outcome.reason,
-              });
-            },
-          }
+      ...(updateActs !== null && updateActs.restart !== null
+        ? { restartToUpdate: updateActs.restart }
         : {}),
       ...(screenshotHelperAvailable ? { takeScreenshot: async () => takeScreenshot() } : {}),
       setBackgroundShell: (enabled) =>
@@ -2303,15 +2358,67 @@ async function main(
     onDesktopState: publishDesktopState,
   });
   if (updates !== null) {
-    // C6 — ONE projection feeds the tray's item and the Settings card (through desktopState), so they cannot drift
+    // AU-4 (AU-G9; AU-L4) — the app menu's update item runs the status item's acts; a failed act is logged as the
+    // tray's are, never thrown into Electron's menu
+    const menuActFailed = (act: string) => (error: unknown) => {
+      logger.error(
+        "desktop.app_menu.update_failed",
+        "The app menu's update item could not act",
+        error,
+        { act },
+      );
+    };
+    // guarded as the status item's are (`TrayController.runAction`): none runs while the app quits, so a click that
+    // lands before the redraw has disabled the item does nothing
+    const menuAct = (act: string, run: () => Promise<void>): void => {
+      if (trayController?.current().quitting === true) return;
+      void run().catch(menuActFailed(act));
+    };
+    const restartFromMenu = updateActs?.restart ?? null;
+    const menuUpdateActs: UpdateMenuActs = {
+      ...(updateActs !== null
+        ? {
+            check: () => menuAct("check", updateActs.check),
+            download: (version: string) => menuAct("download", () => updateActs.download(version)),
+          }
+        : {}),
+      ...(restartFromMenu !== null ? { restart: () => menuAct("restart", restartFromMenu) } : {}),
+    };
+    let menuUpdateKey = "";
+    // C6 — ONE projection feeds the tray's item and the Settings card (through desktopState), so they cannot drift.
+    // AU-4: and the app menu's update item, the status item's entry (`updateMenuEntry`). Download progress emits often,
+    // so the menu is rebuilt only when what the item says or does changes: its label, whether it acts, the version a
+    // Download names.
+    const projectUpdateMenu = (update: TrayUpdateState): void => {
+      const entry = updateMenuEntry(
+        update,
+        menuUpdateActs,
+        trayController?.current().quitting !== true,
+      );
+      const key = JSON.stringify([
+        entry.label,
+        entry.enabled,
+        update.kind === "available" ? update.version : null,
+      ]);
+      if (key !== menuUpdateKey) {
+        menuUpdateKey = key;
+        redrawMenu({ update: entry });
+      }
+    };
     const projectUpdate = (): void => {
       const view = updates.view();
       latestUpdateView = view;
-      trayController?.update({ update: trayUpdateOf(view) });
+      const update = trayUpdateOf(view);
+      trayController?.update({ update });
+      projectUpdateMenu(update);
       if (latestDesktopRaw !== null) publishDesktopState(latestDesktopRaw);
     };
     projectUpdate();
     shellDisposers.add(updates.subscribe(() => projectUpdate()));
+    redrawUpdateMenu = () => projectUpdateMenu(trayUpdateOf(updates.view()));
+    shellDisposers.add(() => {
+      redrawUpdateMenu = null;
+    });
     updateDoctorLines = () => updates.doctorLines();
     // C1 — the Settings card's host doors (the narrow preload set; no path, no URL)
     registerUpdateDoors(
@@ -2624,6 +2731,7 @@ if (!hasInstanceLock) {
       onQuitRequested: () => {
         registry.beginShutdown();
         trayController?.update({ quitting: true });
+        redrawUpdateMenu?.();
       },
       disposeShell: disposeShellState,
       logger,

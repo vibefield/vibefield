@@ -38,16 +38,22 @@ function template(items: readonly AppMenuItem[]): MenuItemConstructorOptions[] {
  * A redraw rather than a mutation: the accelerator on the close item exists or
  * does not exist depending on the view, and Electron binds accelerators when
  * the menu is SET. Rebuilding is how the binding actually changes; poking
- * `menuItem.checked` alone would leave ⌘W wherever it was. */
+ * `menuItem.checked` alone would leave ⌘W wherever it was.
+ *
+ * AU-4: the redraw takes a PATCH and keeps the last state, because the state
+ * has three owners now — the view and the deck (one window's facts) and the
+ * update item (the updater's) — and none of them may wipe another's part. */
 export function installAppMenu(
   platform: MenuPlatform,
   actions: AppMenuActions,
-): (state: AppMenuState) => void {
-  const apply = (state: AppMenuState): void => {
+): (patch: Partial<AppMenuState>) => void {
+  let state: AppMenuState = { view: "canvas" };
+  const apply = (patch: Partial<AppMenuState>): void => {
+    state = { ...state, ...patch };
     Menu.setApplicationMenu(
       Menu.buildFromTemplate(template(buildAppMenu(platform, state, actions))),
     );
   };
-  apply({ view: "canvas" });
+  apply({});
   return apply;
 }

@@ -1756,8 +1756,8 @@ function wordsOf(box: BoxContent): { message: string; detail: string } {
   return { message: box.message, detail: box.detail };
 }
 
-/** The tray's native box for those words. */
-function wordsBox(words: { readonly message: string; readonly detail: string }): BoxContent {
+/** The tray's native box for those words. AU-4: the menus' Download Update says a refusal in it too (`index.ts`). */
+export function wordsBox(words: { readonly message: string; readonly detail: string }): BoxContent {
   return {
     message: words.message,
     detail: words.detail,

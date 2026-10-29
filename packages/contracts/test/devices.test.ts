@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { DEVICE_LIMITS, DeviceInfo, DeviceSlice } from "../src/devices";
 import { PORTS } from "../src/registries";
-import { appVersionOfBuildId } from "../src/release-identity";
+import { appVersionOfBuildId, commitOfBuildId } from "../src/release-identity";
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures");
 const golden = (name: string): Record<string, unknown> =>
@@ -150,5 +150,18 @@ describe("AU-3a — appVersionOfBuildId: the version a build id carries", () => 
       undefined,
     ];
     for (const id of others) expect(appVersionOfBuildId(id), String(id)).toBeUndefined();
+  });
+});
+
+describe("AU-4 — commitOfBuildId: the commit About names beside the version", () => {
+  it("reads the commit from WP12 D10's `<appVersion>+<commit7>`, as the stager recorded it", () => {
+    expect(commitOfBuildId("0.1.0-nightly.20261027+84509d6")).toBe("84509d6");
+    expect(commitOfBuildId("0.2.0-beta.3+84509d6a1")).toBe("84509d6a1");
+    expect(commitOfBuildId("0.2.0+84509d6")).toBe("84509d6");
+  });
+
+  it("says none for a shape that names no release build", () => {
+    const others = ["dev-4f3a91c07b2e5d68a1c40b93", "0.1.0+84509d", "0.1.0", "", null, undefined];
+    for (const id of others) expect(commitOfBuildId(id), String(id)).toBeUndefined();
   });
 });
