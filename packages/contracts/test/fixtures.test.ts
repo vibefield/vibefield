@@ -345,7 +345,8 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // with every cell fresh (`observed-state.fresh`: `inventoryBoundMs` alone), one with a stale
   // cell (`observed-state.stale-cell`: `staleCells` beside it), and an older floor that cannot
   // say (`observed-state.valid`, neither field). Generated for field-native and parity-checked
-  // strict in fixture_parity.rs; their own rows: terminal-inventory.test.ts.
+  // strict in fixture_parity.rs; their own rows: terminal-inventory.test.ts. Item 97 adds a
+  // fourth: a husk listed `exited` beside a live row (`observed-state.exited-husk`).
   "observed-state": ObservedState,
   "peer-info": PeerInfo,
   "store-snapshot": StoreSnapshot,

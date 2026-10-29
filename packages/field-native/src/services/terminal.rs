@@ -3852,7 +3852,10 @@ fn is_governed_here(session: &SessionSummary) -> bool {
 /// the mgmt seam (NF-L2), never invented here. `persistence` is opaque
 /// passthrough — it has an upstream source since G9 (absence 2 in the module
 /// note, RETIRED), and `is_governed_here` has already established that this row
-/// carries one.
+/// carries one. Item 97 (2026-10-29): `exited` is the summary's own fact, said
+/// only once true. A `keep-until-explicit-close` husk stays listed after its
+/// process ends, and no event will say it again, so the row is where fieldd
+/// reads it when the floor's `session-exited` never reached it.
 fn observed_row(session: &SessionSummary) -> ObservedTerminal {
     ObservedTerminal {
         session_id: session.id.clone(),
@@ -3861,6 +3864,7 @@ fn observed_row(session: &SessionSummary) -> ObservedTerminal {
         persistence: session.persistence.clone(),
         title: session.title.clone(),
         cwd: session.cwd.clone(),
+        exited: session.exited.then_some(true),
         // CORRECTED 2026-09-14 (N-L7). This used to read "the legacy in-process
         // serve has no cell", which named a caller TM-1 deleted — there is no
         // cell-less shape on this floor any more. What is true is narrower and
@@ -4001,6 +4005,37 @@ mod tests {
             "a replica reports no class because claiming one would assert a governance \
              this host does not hold; that absence is what keeps a peer's session out of \
              an inventory with no device field to put it in"
+        );
+    }
+
+    /// Item 97 — a husk's row says its process ended, and saying so changes the
+    /// inventory: the reconcile publishes on a changed snapshot
+    /// (`inventory_value`), so a row turning `exited` reaches fieldd by itself,
+    /// with no event to carry it. A live row says nothing, so its bytes are as
+    /// they were before the field existed.
+    #[test]
+    fn a_husk_row_says_its_process_ended_and_a_live_row_says_nothing() {
+        let live = observed_row(&summary(json!({"persistence": FLOOR_LIFETIME})));
+        assert_eq!(live.exited, None);
+        assert!(
+            serde_json::to_value(&live)
+                .expect("a row")
+                .get("exited")
+                .is_none(),
+            "a live row carries no exit fact at all"
+        );
+        // only an explicit-close session is still listed once its process ends
+        let husk = observed_row(&summary(json!({
+            "persistence": "keep-until-explicit-close",
+            "exited": true,
+            "exitCode": 0,
+            "exitOutcome": "exited",
+        })));
+        assert_eq!(husk.exited, Some(true));
+        assert_ne!(
+            inventory_value(&[live]),
+            inventory_value(&[husk]),
+            "the same session listed after its exit is a changed inventory"
         );
     }
 

@@ -162,7 +162,16 @@ import { bornWithoutTicket, type TerminalService } from "./terminal-service";
 // continuation beside the launch facts (`agents/sessions/<run>.json`) so an
 // exited session resumes from the record (`agent.resume`) and AR-4 can
 // re-attach across a fieldd restart. The floor's `session-exited` is
-// puppeteer's `handleProcessExit`; the inventory diff is the backstop.
+// puppeteer's `handleProcessExit`; the inventory is the backstop (a row that
+// left it, or one it lists `exited`).
+//
+// CORRECTED 2026-10-29 (item 97): this said "the inventory diff is the
+// backstop", a row that LEAVES the inventory. MF-1g keeps an agent's pane
+// (`keep-until-explicit-close`), so its PTY stays listed after the process
+// ends, and a run whose `session-exited` never reached fieldd stayed live for
+// good: AR-6-0 reddened that way three times after item 87. The floor now
+// lists such a husk `exited` (ObservedTerminal.exited), and the backstop reads
+// that as it reads a row's leaving.
 //
 // STABLE INGRESS (AR-4; PU-1 upstream as landed 2026-09-12; AR-D6 as
 // amended): a managed session OUTLIVES fieldd. Every birth names a creation
@@ -254,11 +263,12 @@ export function noTerminalHost(): AgentHost {
  * registry's number, so `agent.subscribe`'s descriptor (methods.ts) and this
  * tick cannot drift apart. */
 const PUBLISH_TICK_MS = AGENT_FIELD.FULL_TICK_MS;
-/** The inventory backstop's grace: a PTY that left the inventory is closed
- * as an unknown exit only after the floor's own `session-exited` — which
- * carries the real outcome and code — has had one bounded turn to arrive
- * (puppeteer's Godview keeps the same grace for its PID poller). */
-const EXIT_GRACE_MS = 1_500;
+/** The inventory backstop's grace: a PTY that left the inventory, or that it
+ * lists `exited` (item 97), is closed as an unknown exit only after the
+ * floor's own `session-exited` — which carries the real outcome and code — has
+ * had one bounded turn to arrive (puppeteer's Godview keeps the same grace for
+ * its PID poller). Exported for the rows that wait on the backstop. */
+export const EXIT_GRACE_MS = 1_500;
 /** Item 59 — the floor's termination ladder, upstream's own (native-floor
  * §4.4; `TerminalService.terminate`): an interrupt, 2 s, SIGTERM to the process
  * group, 2 s, SIGKILL, and the reap. A shell that ignores SIGTERM, as an
@@ -1947,7 +1957,10 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
 
   /** The floor's inventory (TerminalService `onInventory`): the join for the
    * row's cell, and the exit backstop — a terminal the inventory carried and
-   * no longer does is gone, whether or not its cell's connection said so. */
+   * no longer does is gone, whether or not its cell's connection said so, and
+   * so is one it still lists `exited` (item 97: a kept pane whose process
+   * ended, from which no exit event will come again). A husk's row still
+   * joins its cell; only its liveness is read as ended. */
   handleInventory(terminals: readonly TerminalInfo[]): void {
     const rows = new Map(terminals.map((row) => [row.sessionId, row]));
     // AR-4 — the FIRST inventory of a boot is the re-attach: the records left
@@ -1967,13 +1980,15 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
           changed = true;
         entry.seenInInventory = true;
         entry.terminal = row;
+      }
+      if (row !== undefined && row.exited !== true) {
         if (entry.backstop !== undefined) {
           clearTimeout(entry.backstop);
           entry.backstop = undefined;
         }
       } else if (entry.seenInInventory && !entry.resuming && entry.backstop === undefined) {
-        // a pending PTY that left: the process ended on its own — stamped
-        // after the same grace the attached runs get
+        // a pending PTY that left, or is listed exited: the process ended on
+        // its own — stamped after the same grace the attached runs get
         entry.backstop = setTimeout(() => {
           entry.backstop = undefined;
           this.closePending(runtimeRunId, { exitCode: null, signal: null, reason: "unknown" });
@@ -1988,12 +2003,16 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
           changed = true;
         entry.seenInInventory = true;
         entry.terminal = row;
+      }
+      if (row !== undefined && row.exited !== true) {
         if (entry.backstop !== undefined) {
           // listed again: a reading that briefly lacked it, not an exit
           clearTimeout(entry.backstop);
           entry.backstop = undefined;
         }
       } else if (entry.seenInInventory && !entry.exiting && entry.backstop === undefined) {
+        // left, or listed exited (item 97): the floor's own exit gets the
+        // grace to carry the real outcome first
         entry.backstop = setTimeout(() => {
           entry.backstop = undefined;
           void this.closeRun(runtimeRunId, { exitCode: null, signal: null, reason: "unknown" });

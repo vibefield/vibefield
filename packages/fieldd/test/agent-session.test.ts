@@ -62,6 +62,7 @@ import {
   LAYOUT,
   type PlaceFacts,
   SOCKETS,
+  TERMINAL_INVENTORY,
   type TerminalInfo,
 } from "@vibefield/contracts";
 import {
@@ -87,6 +88,7 @@ import type {
 } from "@vibefield/puppeteer-runtime";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import WebSocket from "ws";
+import { EXIT_GRACE_MS } from "../src/agent-runtime";
 import { bootstrap, type FielddDaemon, SessionRecordStore } from "../src/index";
 import { RpcCallError } from "../src/native-link";
 import type { SecretStore } from "../src/plugin-settings";
@@ -806,6 +808,16 @@ async function poll<T>(
 ): Promise<T> {
   return await waitWithEvidence(what, fn, ms, () => scene, 100, witness);
 }
+
+/** What an interrupted run's HEARD exit has to read exited in (AR-6-0, MF-1g's `endedRun`): the floor's
+ * interrupt, `cat`'s end, the floor's `session-exited` and the fold, on a loaded host. */
+const INTERRUPTED_EXIT_MS = 15_000;
+
+/** Item 97 — the same exit, never heard. On top of the heard budget, two things:
+ * - the floor's next reconcile lists the kept pane `exited`: the exit itself asks for one at once, and the
+ *   backstop period bounds it;
+ * - fieldd's backstop then waits its grace for an exit event that will not come. */
+const LOST_EXIT_MS = INTERRUPTED_EXIT_MS + TERMINAL_INVENTORY.BACKSTOP_MS + EXIT_GRACE_MS;
 
 /** Item 97 — what a lost exit leaves, for an exit wait's deadline (`poll`'s witness). Three things:
  * - the floor's own row for the pane: its cell's list, through `runtimeSessions`, listed or not, and whether it
@@ -2988,7 +3000,7 @@ describe("MF-1f/MF-1g — an agent pane outlives its run, and the fold keeps its
         const row = sessions.find((r) => r.runtimeRunId === runId);
         return row?.continuation?.exited === true ? row : undefined;
       },
-      15_000,
+      INTERRUPTED_EXIT_MS,
       "the interrupted run read as exited",
       exitWitness(box, spawned.terminal.sessionId),
     );
@@ -3459,7 +3471,7 @@ describe("AR-6-0 — the stop verb (agent.interrupt)", () => {
         const row = rows.find((r) => r.runtimeRunId === runId);
         return row?.continuation?.exited === true ? row : undefined;
       },
-      15_000,
+      INTERRUPTED_EXIT_MS,
       "the interrupted run read as exited",
       exitWitness(box, spawned.terminal.sessionId),
     );
@@ -3554,6 +3566,55 @@ describe("AR-6-0 — the stop verb (agent.interrupt)", () => {
     );
     expect(act.outcome.outcome).toBe("succeeded");
     expect(act.outcome.attrs?.["accepted"]).toBe(true);
+  }, 120_000);
+});
+
+// Item 97 — an exit fieldd never heard. AR-6-0 reddened three times after item 87 with its run never
+// reading exited and no `fieldd.agents.exit_heard` in the log. The floor's `session-exited` is the one
+// word of an exit fieldd hears, and MF-1g keeps an agent's pane, so the husk stays listed and the old
+// backstop (a row that LEAVES the inventory) never fired. The floor now lists the husk `exited`, and the
+// backstop reads that as an exit after its grace. This row drops the exit at fieldd's own door, for one
+// pane, on the real floor: the Rust half (the floor's row) and fieldd's half (the backstop) end to end.
+describe("item 97 — an exit fieldd never heard (the real floor)", () => {
+  it("a run whose session-exited is lost still reads exited: the floor lists its kept pane exited, and the backstop closes the run after its grace", async () => {
+    const box = await setup({ floor: "real" });
+    const { daemon, dataDir, envOut } = box;
+    const win = await window(daemon, [...DECK, "agent.control"], "i97");
+    const spawned = (await born(win, "agent.spawn", {
+      provider: "scripted",
+      cwd: envOut,
+    })) as AgentSpawnResult;
+    const runId = spawned.session.runtimeRunId;
+    const paneId = spawned.terminal.sessionId;
+    await joinedRow(win, runId);
+
+    // fieldd deaf at its own door, for this pane alone: daemon.ts hands each `session-exited` to the
+    // runtime by this property, so the floor's exit is dropped where fieldd would have heard it
+    const heard = daemon.agents.handleTerminalExit.bind(daemon.agents);
+    vi.spyOn(daemon.agents, "handleTerminalExit").mockImplementation(async (event) => {
+      if (event.sessionId !== paneId) await heard(event);
+    });
+
+    expect(await win.call("agent.interrupt", { runtimeRunId: runId })).toEqual({ accepted: true });
+    await poll(
+      async () => {
+        const { sessions } = (await win.call("agent.list", {})) as AgentListResult;
+        const row = sessions.find((r) => r.runtimeRunId === runId);
+        return row?.continuation?.exited === true ? row : undefined;
+      },
+      LOST_EXIT_MS,
+      "the run whose exit was lost read as exited",
+      exitWitness(box, paneId),
+    );
+    // the backstop's word, never the floor's outcome: nothing carried the exit but the row
+    const record = await poll(async () => {
+      const read = readRecord(dataDir, runId);
+      return read.exited !== undefined ? read : undefined;
+    }, 10_000);
+    expect(record.exited).toMatchObject({ exitCode: null, signal: null, reason: "unknown" });
+    // the pane is kept, and the floor's own row for it says the process ended
+    expect(daemon.terminals.get(paneId)?.exited).toBe(true);
+    expect(await listed(win, paneId)).toBe(true);
   }, 120_000);
 });
 
