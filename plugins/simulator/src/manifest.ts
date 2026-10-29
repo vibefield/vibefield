@@ -61,6 +61,9 @@ export const simulatorManifest: PluginManifestV1 = {
         interaction: { selectable: true, movable: true, resizable: false, snap: "both" },
         // the SDK's DESK_OBJECT (test/manifest.test.ts holds it equal): it lies on the desk, by what it provides (K8a)
         provides: [SIMULATOR_TYPE, "desk.object"],
+        // the props in ONE cell: the model, its finish and the binding are each a desk edit, an undo step, and nothing writes
+        // one outside the undo stack — no prop needs a cell of its own (the pane's url does, PT-3 ruling 9)
+        groups: {},
         props: {
           [PROP.model]: { kind: "string", default: DEFAULT_MODEL, maxLength: MODEL_ID_MAX },
           [PROP.finish]: {

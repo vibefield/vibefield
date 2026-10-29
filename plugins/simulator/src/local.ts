@@ -73,6 +73,8 @@ export interface SimulatorLocal extends KindLocal {
   lines(e: Entity): number | undefined;
   /** The act `e`'s face offers now (the record says it) — what a release over its capsule in hand runs. */
   offer(e: Entity, act: (() => void) | undefined): void;
+  /** The kind's tick, always there (KindLocal's is optional): steps the morphs and the faces' clocks; true while a morph runs. */
+  tick(now: number): boolean;
   /** Phones mid-morph, and morphs begun (a test's witness). */
   morphs(): { readonly running: number; readonly begun: number };
   /** What the faces did (a test's and a smoke's witness). */

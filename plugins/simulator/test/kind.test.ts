@@ -192,10 +192,15 @@ describe("the phone's world half", () => {
     );
     kind.record(kind.resolve(cell), cell);
     expect(t.opened).toHaveLength(1);
-    // bound to ANOTHER device: the old face closes and a new one opens (the host resolves another simulator)
+    // bound to ANOTHER device: the old face closes and a new one opens (the host resolves another simulator) — under the SAME
+    // durable key, so the host's map now holds the new face: the old one is read from before the rebind
+    const first = t.faces.get("13918995204487956201-1");
     const other = ctxOf(boundTo(`${TYPE}iPhone-15-Pro`), { local });
     kind.record(kind.resolve(other), other);
-    expect(t.faces.get("13918995204487956201-1")?.closed()).toBe(1);
+    expect(first?.closed()).toBe(1);
+    const second = t.faces.get("13918995204487956201-1");
+    expect(second).not.toBe(first);
+    expect(second?.closed()).toBe(0);
     expect(t.opened.map((o) => o.spec.deviceType)).toEqual([
       `${TYPE}iPhone-16-Pro`,
       `${TYPE}iPhone-15-Pro`,

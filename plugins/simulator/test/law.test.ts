@@ -371,7 +371,7 @@ describe("the pose — resting on its camera, carried by core's drag on the desk
   it("rises by the desk's flux to its lift's height — the pitch let go, square to the mat, over its rect — and a hair under the pointer", () => {
     const { S } = rest("iPhone 8");
     const rect = { cx: 300, cy: 200 };
-    const G = resolvePhone(rect, { lift: 1, hover: 0, ring: 0, fade: 1 }, S);
+    const G = resolvePhone(rect, { lift: 1, hover: 0, fade: 1 }, S);
     expect(G.centre[2]).toBeCloseTo(PHONE.lift.height + S.thick, 9);
     for (const [i, v] of G.n.entries()) expect(v).toBeCloseTo([0, 0, 1][i] ?? 0, 12);
     for (const [i, v] of G.ex.entries()) expect(v).toBeCloseTo([1, 0, 0][i] ?? 0, 12);
@@ -379,7 +379,7 @@ describe("the pose — resting on its camera, carried by core's drag on the desk
     expect(G.centre[1]).toBeCloseTo(rect.cy, 9);
     // a lifted phone grows toward the eye over it
     expect(silhouetteOf(G).hx).toBeGreaterThan(silhouetteOf(resolvePhone(rect, FLUX_REST, S)).hx);
-    const hover = resolvePhone(rect, { lift: 0, hover: 1, ring: 0, fade: 1 }, S, undefined, {
+    const hover = resolvePhone(rect, { lift: 0, hover: 1, fade: 1 }, S, undefined, {
       ...PHONE,
       rest: 0,
     });
@@ -407,7 +407,7 @@ describe("the pose — resting on its camera, carried by core's drag on the desk
     expect(overhang()).toBeCloseTo(((163.4 - 150) / 2) * MM, 6);
     const G = resolvePhone(
       { cx: 0, cy: 0 },
-      { lift: 1, hover: 0, ring: 0, fade: 1 },
+      { lift: 1, hover: 0, fade: 1 },
       shapeOf(model("iPhone 17 Pro Max")),
       undefined,
       PHONE,

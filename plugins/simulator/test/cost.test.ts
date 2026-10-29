@@ -91,7 +91,9 @@ describe("PHONE.md §10 — what makes the phone cheap, held by units", () => {
         face.take();
       },
     );
-    face.demand({ mode: "live", fps: 30, raster: [603, 1311], interactive: false });
+    // the law counts wakes and frames, not pixels: a 17 Pro's raster quartered across (its aspect kept), since a full-size
+    // fixture frame is some 90 ms of JS shading at load, and 61 of them outran vitest's 5 s at the first run (2026-10-29)
+    face.demand({ mode: "live", fps: 30, raster: [151, 328], interactive: false });
     c.run(AT + 60 * 60_000);
     expect(woke).toBe(61);
     expect(sources.stats().frames).toBe(61);
