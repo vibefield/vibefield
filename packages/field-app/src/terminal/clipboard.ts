@@ -29,10 +29,11 @@ export function readClipboardText(): string | Promise<string> {
 }
 
 /** A runtime's `writeClipboard`: a program's words onto the system clipboard, and no
- * card. ghosttea's hook returns nothing, so a refusal (past the host door's 64 KiB, a
+ * card. ghosttea's hook returns nothing, so a refusal (past the copy door's 64 KiB, a
  * door that did not answer) never throws into it: it is logged once for a run of
- * refusals, by its size and never its words, which may carry a token; a write that
- * lands lets the next refusal speak. `host` is for a test: the window's by default. */
+ * refusals, by its size and what the door was told, never its words, which may carry a
+ * token; a write that lands lets the next refusal speak. `host` is for a test: the
+ * window's by default. */
 export function programClipboardWriter(host?: CopyHost | null): (text: string) => void {
   let refusing = false;
   return (text) => {
@@ -48,7 +49,7 @@ export function programClipboardWriter(host?: CopyHost | null): (text: string) =
         .warn(
           "renderer.terminal.clipboard_write_refused",
           "A program's clipboard write did not reach the clipboard",
-          { bytes: utf8ByteLength(text), reason: written.reason },
+          { bytes: utf8ByteLength(text), reason: written.reason, error: written.error },
         );
     });
   };

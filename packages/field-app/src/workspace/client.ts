@@ -10,6 +10,7 @@ import {
   WorkspaceSearchResult,
 } from "@vibefield/contracts";
 import type { WorktreeHostEvent, WorktreeHostPort } from "@vibefield/rosetta-room";
+import { COPY_DOOR_WORDS } from "../frame/cards/cards-words";
 import { writeClipboard } from "../frame/cards/copy-door";
 
 export interface WorkspaceDoor {
@@ -21,10 +22,11 @@ export interface WorkspaceClientOptions {
 }
 
 /** A copied path's words onto the system clipboard alone, through the one copy door (HN-5):
- * the client's own way when its owner lends it no copy port. A refusal throws its words. */
+ * the client's own way when its owner lends it no copy port. A refusal throws Copy's whole
+ * sentence, which the room says as the file action's receipt, as History's port does. */
 async function writeWords(text: string): Promise<void> {
   const written = await writeClipboard({ text });
-  if (!written.ok) throw new Error(written.reason);
+  if (!written.ok) throw new Error(COPY_DOOR_WORDS.refused(written.reason));
 }
 
 export interface WorkspaceLease {
