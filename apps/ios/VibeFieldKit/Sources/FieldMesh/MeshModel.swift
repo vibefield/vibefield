@@ -290,26 +290,38 @@ public final class MeshModel {
     }
   }
 
+  /// What `signIn()` does, pure (pinned by tests). A sign-out still stopping
+  /// its node comes first: TS-7's welcome stands through `.stopping`, so its
+  /// Continue can land before the old node has stopped, and TS-7b's Sign in
+  /// again signs out and in at once — a node started then would run over the
+  /// state directory the sweep is about to remove. Then: no node starts one
+  /// (`regating` too: UA-P-5's restart has a beat with no runtime in hand, and
+  /// a tap landing in it would start a second node); a node re-surfaces its
+  /// page.
+  enum SignInStep: Equatable, Sendable {
+    case afterSignOut, start, requestLogin
+  }
+
+  nonisolated static func signInStep(signingOut: Bool, hasRuntime: Bool, regating: Bool) -> SignInStep {
+    if signingOut { return .afterSignOut }
+    return !hasRuntime && !regating ? .start : .requestLogin
+  }
+
   /// The person's SIGN IN: the first sign-in starts a node and puts its login
   /// page in front of them; a node already standing re-surfaces the page.
   public func signIn() {
-    // TS-7 — the welcome stands through a sign-out (`.stopping`), so its
-    // Continue can land before the old node has stopped; and TS-7b's Sign in
-    // again signs out and in at once. Either waits for the sweep.
-    if let pending = signOutTask {
+    switch Self.signInStep(signingOut: signOutTask != nil, hasRuntime: runtime != nil, regating: regating) {
+    case .afterSignOut:
+      guard let pending = signOutTask else { return }
       Task {
         await pending.value
         signIn()
       }
-      return
-    }
-    // `regating` as well as the runtime: UA-P-5's restart has a beat with no
-    // runtime in hand, and a tap landing in it would start a second node.
-    if runtime == nil, !regating {
+    case .start:
       retryTask?.cancel()
       retryTask = nil
       start(presentingLogin: true)
-    } else {
+    case .requestLogin:
       requestLogin()
     }
   }
