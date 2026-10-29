@@ -65,8 +65,9 @@ import { isField } from "./caret";
  *   a failure is said on the line's note, and every result tells the line's snapshot whether it
  *   waits (`capture-state.ts`).
  * - What another app hands over comes in while the hand is here (HN-6, `cards-outside.ts`): ⌘V
- *   with no caret deals a card for each thing the paste holds, and a drag into the window is a
- *   card carried until it is let go — a file named by its path through the shell's file door.
+ *   with no caret deals a card for each thing the paste holds (never while a card is picked up
+ *   or Settings is open), and a drag into the window is a card carried until it is let go — a
+ *   file named by its path through the shell's file door.
  */
 
 /** A press that moves this far is a drag; less, a click (HN-D5). */
@@ -268,6 +269,7 @@ export function Cards({
     surface,
     onSurfaceChange,
     win,
+    settingsOpen,
   };
   const live = useRef(latest);
   live.current = latest;
@@ -640,7 +642,11 @@ export function Cards({
 
   // What another app hands over comes in as cards only when it is brought (HN-6, HN-L1): ⌘V with
   // no caret, a drag into the window — a file named by its path through the shell's file door.
-  useEffect(() => listenForOtherApps({ store, host }), [host, store]);
+  // Settings' sheet over the window, read at each paste, keeps a paste's cards from landing unseen.
+  useEffect(
+    () => listenForOtherApps({ store, host, settingsOpen: () => live.current.settingsOpen }),
+    [host, store],
+  );
 
   return (
     <>

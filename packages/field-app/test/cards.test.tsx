@@ -939,4 +939,34 @@ describe("the twelve (HN-D8) and the mount", () => {
     root = null;
     expect(paste().defaultPrevented, "a hand gone hears no paste").toBe(false);
   });
+
+  it("deals no paste with no caret while Settings is open over it — its card would land unseen under the sheet — and deals again once it has closed", async () => {
+    const store = new CardStore(() => NOW);
+    const host = fakeHost();
+    const paste = (): ClipboardEvent => {
+      const data = {
+        types: ["text/plain"],
+        items: [{ kind: "string", type: "text/plain", getAsFile: () => null }],
+        files: [],
+        getData: (format: string) => (format === "text/plain" ? "From Notes." : ""),
+      } as unknown as DataTransfer;
+      const event = new ClipboardEvent("paste", {
+        bubbles: true,
+        cancelable: true,
+        clipboardData: data,
+      });
+      Object.defineProperty(event, "isTrusted", { value: true });
+      document.body.dispatchEvent(event);
+      return event;
+    };
+    mount(<Owned store={store} host={host} settingsOpen />);
+    expect(paste().defaultPrevented, "Settings stands over the hand").toBe(false);
+    // the same hand, its sheet closed: read at the paste, never when it began to listen
+    act(() => root?.render(<Owned store={store} host={host} settingsOpen={false} />));
+    await act(async () => {
+      expect(paste().defaultPrevented).toBe(true);
+      await vi.waitFor(() => expect(ids(store)).toHaveLength(1));
+    });
+    expect(store.snapshot().cards[0]).toMatchObject({ kind: "text", paste: "From Notes." });
+  });
 });

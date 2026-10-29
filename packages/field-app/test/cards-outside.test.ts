@@ -7,8 +7,11 @@
  * drop, which fills it — into a pane once (the pane's own drop never runs), anywhere else into the
  * hand. The transfers take the browser's own shape (`types` says "Files"; during a drag only the
  * kinds can be read); the shell's file door and a picture's decoder are fixtures; the clock is
- * faked: the watchdog, the play, the fade.
+ * faked: the watchdog, the play, the fade. What comes in is bounded (LC-24) and twelve at most
+ * (LC-23); a play refused in a pane leaves its card in the hand (HN-L5); the one field test
+ * (`caret.ts`) decides what a field takes.
  */
+import { SCREENSHOT_STILL, SHELL_CLIPBOARD } from "@vibefield/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { carriedLabel } from "../src/frame/cards/CarriedCardLayer";
 import {
@@ -33,12 +36,14 @@ import {
   textCardOf,
 } from "../src/frame/cards/cards-model";
 import {
+  type Brought,
   FIRST_LINES_BYTES,
   folderOf,
   listenForOtherApps,
   type OtherAppsOptions,
   OUTSIDE_WATCH_MS,
   type Pixels,
+  takenOf,
   waitingCardOf,
 } from "../src/frame/cards/cards-outside";
 import { CardStore } from "../src/frame/cards/cards-store";
@@ -147,6 +152,16 @@ const hits = (under: (x: number, y: number) => Element[]): void => {
 const settled = async (): Promise<void> => {
   await vi.advanceTimersByTimeAsync(0);
 };
+
+/** A file that says it weighs this much, with none of those bytes made: only its size is read. */
+function weighing(file: File, bytes: number): File {
+  Object.defineProperty(file, "size", { value: bytes });
+  return file;
+}
+
+/** A file card's name, any other card's kind: what came in, in its order. */
+const namesOf = (cards: readonly Card[]): string[] =>
+  cards.map((card) => (card.kind === "file" ? card.name : card.kind));
 
 /** Hear another app as the mounted hand does: the shell's door and the decoder, unless told. */
 function listen(options: OtherAppsOptions = {}): void {
@@ -393,6 +408,18 @@ describe("⌘V with no caret (HN-6, HN-L3)", () => {
     expect(folderOf("/report.pdf")).toBeNull();
   });
 
+  it("says a file's size as §9 counts it, a size alone to the nearest: one byte as one, and never 1000 KB", async () => {
+    listen();
+    const flag = new File(["x"], "flag.bin");
+    const deck = weighing(new File(["%PDF"], "deck.pdf", { type: "application/pdf" }), 999_600);
+    paste(document.body, transfer({ files: [flag, deck] }));
+    await settled();
+    expect(store.snapshot().cards.map((card) => (card as FileCard).facts)).toEqual([
+      "BIN · 1 byte",
+      "PDF · 1 MB",
+    ]);
+  });
+
   it("takes a paste on a control that holds no caret — a checkbox, a select — as the hand's; an input for text keeps its own (the one field test, caret.ts)", async () => {
     listen();
     const box = document.createElement("input");
@@ -406,6 +433,81 @@ describe("⌘V with no caret (HN-6, HN-L3)", () => {
     expect(paste(menu, transfer({ text: "Chosen." })).defaultPrevented).toBe(true);
     await settled();
     expect(store.snapshot().cards.map((card) => card.paste)).toEqual(["Ticked.", "Chosen."]);
+  });
+
+  it("deals nothing while a card is picked up or Settings stands over the window — its card would land unseen — and leaves that paste alone", async () => {
+    let settings = false;
+    listen({ settingsOpen: () => settings });
+    const held = textCardOf("Held.", { id: "card-held", origin: DRAGGED, at: 0 });
+    store.deal(held);
+    store.pickUp(held.id);
+    const scrim = paste(document.body, transfer({ text: "Under the scrim." }));
+    expect(scrim.defaultPrevented, "a card picked up is a modal").toBe(false);
+    store.pickUp(null);
+    settings = true;
+    const sheet = paste(document.body, transfer({ text: "Under the sheet." }));
+    expect(sheet.defaultPrevented, "Settings stands over the hand").toBe(false);
+    await settled();
+    expect(store.snapshot().cards.map((card) => card.id)).toEqual([held.id]);
+    expect(said).toEqual([]);
+    settings = false;
+    expect(paste(document.body, transfer({ text: "In view." })).defaultPrevented).toBe(true);
+    await settled();
+    expect(store.snapshot().cards.map((card) => card.paste)).toEqual(["Held.", "In view."]);
+  });
+
+  it("brings in nothing past what a card holds (LC-24) — words past one paste's read, a picture past the still's cap, its size read and never decoded — says so in sizes, and brings in the rest", async () => {
+    const decoded: Blob[] = [];
+    listen({
+      measure: async (picture) => {
+        decoded.push(picture);
+        return sizes.get(picture) ?? null;
+      },
+    });
+    const words = "x".repeat(SHELL_CLIPBOARD.READ_MAX_BYTES + 1);
+    const refused = paste(document.body, transfer({ text: words }));
+    expect(refused.defaultPrevented, "the hand's: it answers in words").toBe(true);
+    await settled();
+    expect(store.snapshot().cards).toEqual([]);
+    expect(said).toEqual(["Not brought in — the words hold 4.2 MB; a card holds at most 4.1 MB"]);
+
+    const scan = new File([PNG], "scan.png", { type: "image/png" });
+    const huge = weighing(scan, SCREENSHOT_STILL.MAX_BYTES + 1);
+    sizes.set(huge, { width: 20_000, height: 20_000 });
+    const notes = new File(["one\n"], "notes.txt", { type: "text/plain" });
+    paste(document.body, transfer({ files: [huge, notes] }));
+    await settled();
+    expect(decoded, "a picture is never decoded to be refused").toEqual([]);
+    expect(namesOf(store.snapshot().cards), "the rest still comes in").toEqual(["notes.txt"]);
+    expect(said.at(-1)).toBe(
+      "Not brought in — the picture holds 67.2 MB; a card holds at most 67.1 MB",
+    );
+    // the page's example (DESIGN.md §8 "The hand", brought in)
+    expect(OUTSIDE_WORDS.tooLarge("words", 30_000_000, SHELL_CLIPBOARD.READ_MAX_BYTES)).toBe(
+      "Not brought in — the words hold 30 MB; a card holds at most 4.1 MB",
+    );
+  });
+
+  it("brings in the first twelve of more — as many as the hand holds — and says so (HN-D8, LC-23)", async () => {
+    listen();
+    const files = Array.from({ length: 20 }, (_, n) => new File(["x"], `part-${n + 1}.bin`));
+    paste(document.body, transfer({ files }));
+    await settled();
+    const twelve = Array.from({ length: 12 }, (_, n) => `part-${n + 1}.bin`);
+    expect(namesOf(store.snapshot().cards)).toEqual(twelve);
+    expect(said).toEqual(["12 of 20 brought in — the hand holds twelve"]);
+  });
+
+  it("says that only twelve came in over a thing too large, which is left out first; a folder is its path, never a picture too large (PURE)", () => {
+    const fileOf = (file: File, folder = false): Brought => ({ kind: "file", file, folder });
+    const things = Array.from({ length: 13 }, (_, n) => fileOf(new File(["x"], `${n + 1}.bin`)));
+    const scan = weighing(new File([PNG], "scan.png", { type: "image/png" }), 70_000_000);
+    const { taken, left } = takenOf([fileOf(scan), ...things]);
+    expect(taken).toEqual(things.slice(0, 12));
+    expect(left).toBe("12 of 14 brought in — the hand holds twelve");
+    expect(takenOf(things.slice(0, 3))).toEqual({ taken: things.slice(0, 3), left: null });
+    const shots = weighing(new File([], "shots.png", { type: "image/png" }), 90_000_000);
+    expect(takenOf([fileOf(shots, true)]).left).toBeNull();
   });
 });
 
@@ -662,6 +764,34 @@ describe("a drag from another app (HN-6, HN-D2)", () => {
     ]);
   });
 
+  it("settles a card whose play the pane refused into the hand, from where it hung — never lost — the pane's refusal said once (HN-L5)", async () => {
+    listen();
+    const refusal = "Not pasted — vibe-field's pane is not taking input";
+    const { played } = place({
+      kind: "pane",
+      box: new DOMRect(0, 0, 600, 400),
+      played: { ok: false, note: refusal },
+    });
+    const kinds = transfer({ text: "git status", kindsOnly: true });
+    drag("dragenter", kinds, { x: 300, y: 200 });
+    drag("dragover", kinds, { x: 300, y: 200 });
+    drag("drop", transfer({ text: "git status" }), { x: 300, y: 200 });
+    await settled();
+    await vi.advanceTimersByTimeAsync(PLAY_SHRINK_MS);
+    await settled();
+    expect(played).toHaveLength(1);
+    expect(said).toEqual([refusal]);
+    expect(getCarriedCard(), "the hand deals it: no fade beside its deal").toBeNull();
+    const [card] = store.snapshot().cards;
+    expect(card).toMatchObject({ kind: "text", paste: "git status", origin: DRAGGED });
+    expect(store.snapshot().arriving.get(card?.id ?? "")).toEqual({
+      left: 248,
+      top: 188,
+      width: 104,
+      height: 146,
+    });
+  });
+
   it("ducks over a field that takes the drop, so its own caret shows (LC-25); a read-only or disabled field takes none — over it the card is the hand's, and it settles there", async () => {
     listen();
     const field = document.createElement("textarea");
@@ -688,6 +818,26 @@ describe("a drag from another app (HN-6, HN-D2)", () => {
     await settled();
     expect(store.snapshot().cards).toHaveLength(1);
     expect(store.snapshot().cards[0]).toMatchObject({ kind: "text", paste: "git status" });
+  });
+
+  it("brings in a drop's first twelve and says what was left out last; a drop of words past what a card holds is gone, said in sizes (LC-23, LC-24)", async () => {
+    listen();
+    const files = Array.from({ length: 14 }, (_, n) => new File(["x"], `part-${n + 1}.bin`));
+    drag("dragenter", transfer({ files, kindsOnly: true }), { x: 500, y: 300 });
+    drag("drop", transfer({ files }), { x: 500, y: 300 });
+    await settled();
+    const twelve = Array.from({ length: 12 }, (_, n) => `part-${n + 1}.bin`);
+    expect(namesOf(store.snapshot().cards)).toEqual(twelve);
+    expect(said).toEqual(["12 of 14 brought in — the hand holds twelve"]);
+
+    const words = "x".repeat(SHELL_CLIPBOARD.READ_MAX_BYTES + 1);
+    drag("dragenter", transfer({ text: words, kindsOnly: true }), { x: 300, y: 300 });
+    drag("drop", transfer({ text: words }), { x: 300, y: 300 });
+    await settled();
+    const refusal = "Not brought in — the words hold 4.2 MB; a card holds at most 4.1 MB";
+    expect(said.at(-1)).toBe(refusal);
+    expect(getCarriedCard()).toMatchObject({ phase: "home", home: null });
+    expect(namesOf(store.snapshot().cards)).toEqual(twelve);
   });
 
   it("cancels a drop that held nothing a card can be — a file another app only promised — and says so on the line", async () => {
