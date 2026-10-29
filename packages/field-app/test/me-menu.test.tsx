@@ -1115,6 +1115,7 @@ describe("MeMenu (controller)", () => {
         })),
         confirmRestart: vi.fn(async () => ({ ok: true })),
         doctor: vi.fn(async () => ({ lines: [] })),
+        moveToApplications: vi.fn(async () => ({ ok: true, outcome: "proceed" })),
         ...over,
       } as never;
     }

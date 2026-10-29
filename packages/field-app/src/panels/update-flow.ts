@@ -20,6 +20,8 @@ export type UpdatesFlow =
       readonly words?: UpdateConsentWords;
     }
   | { readonly kind: "restarting" }
+  /** AU-7 — Move to Applications asked; the quit gate answers (a Cancel brings the page back to rest) */
+  | { readonly kind: "moving" }
   | {
       readonly kind: "refused";
       readonly words: { readonly message: string; readonly detail: string };

@@ -25,6 +25,14 @@ import type { WindowRegistry } from "./window-policy";
 // the gate and leaves the pairs, and a mode with no gate is unchanged. Every
 // re-issued `app.quit()` runs from a macrotask: a quit re-issued inside a promise
 // continuation can leave the process alive on macOS (electron #55208).
+//
+// AU-7 (AU-G8; LC-25, LC-37; main-process.md §8.4) — Move to Applications is a
+// person's quit through the same gate (`quitThen`), with the move in place of the
+// plain native quit: Electron's mover copies the bundle, trashes this one and
+// opens the copy once this process exits. It runs only after a COMPLETE stop — a
+// pair left running would execute from the Trash, and a person who cancels must
+// not be left running from it — so anything less opens VibeField again where it
+// was, logged. A signal or the OS ending the session moves nothing.
 
 /** The quit flow plus WP12c's undo for an update quit that ABORTED after `before-quit` had durable-closed the windows
  * (`build-wp12-updater.md` §10 S4: the daemon's re-check refused, so nothing stopped and the app stays). */
@@ -45,6 +53,12 @@ export interface LifecycleFlow extends QuitFlow {
    * quit whose census could not be read a `quit`. undefined = nothing planned to say: the pairs were stopped, or the
    * shell is simply going (then the pair records the exit unplanned, which is true). */
   readonly leaveReason: ShellLeaveReason | undefined;
+  /** AU-7 — quit through the gate, then run `after` (the move: true when it moved) in place of the plain native quit.
+   * Resolves when the gate decides: `proceed` (the windows close), `cancel` (nothing changed), or at once `busy` (a
+   * quit, an update's quit or another move is underway; the OS is ending the session). */
+  quitThen(after: () => Promise<boolean>): Promise<"proceed" | "cancel" | "busy">;
+  /** AU-7 (LC-25) — a move waits for the quit: nothing stages an install while it does (an update's quit is refused) */
+  readonly movePending: boolean;
 }
 
 export function installLifecycle(opts: {
@@ -110,6 +124,11 @@ export function installLifecycle(opts: {
   let restarting = false;
   let osSessionEnding = false;
   let stopping = false;
+  /** AU-7 — a move to Applications waiting for its quit; `answer` until the gate decides */
+  let move: {
+    readonly after: () => Promise<boolean>;
+    answer: ((decision: "proceed" | "cancel") => void) | null;
+  } | null = null;
   const leaveReason = (): ShellLeaveReason | undefined =>
     restarting ? "restart" : flow.updateArmed ? "update" : gate === "decided" ? "quit" : undefined;
   const replayQuit = (): void => {
@@ -121,11 +140,59 @@ export function installLifecycle(opts: {
     replayingNativeQuit = false;
     quitObserved = false;
     gate = "open";
+    move = null;
+  };
+  /** AU-7 — the gate decided a move's quit (or there was no gate to ask): its door answers now; a Cancel drops it. */
+  const answerMove = (decision: "proceed" | "cancel"): void => {
+    if (move === null) return;
+    move.answer?.(decision);
+    move.answer = null;
+    if (decision === "cancel") move = null;
+  };
+  /** AU-7 (LC-25) — the windows are closed and the stop has run: the move, only after a COMPLETE stop; anything less
+   * opens VibeField again where it was (the person is never left with no app). Then the native quit, as ever. */
+  const finishMove = async (
+    pending: { readonly after: () => Promise<boolean> },
+    skip: string | null,
+  ): Promise<void> => {
+    replayingNativeQuit = true;
+    if (restarting || osSessionEnding) {
+      logger.info("desktop.update.move_skipped", "The quit was not the person's: nothing moved", {
+        why: restarting ? "signal" : "os-session-ending",
+      });
+      replayQuit();
+      return;
+    }
+    let why = skip;
+    let error: string | undefined;
+    if (why === null) {
+      try {
+        // false: the mover refused (an authorization Cancel, another VibeField running there, LC-37)
+        if (!(await pending.after())) why = "move-refused";
+      } catch (thrown) {
+        why = "move-threw";
+        error = String(thrown);
+      }
+    }
+    if (why !== null) {
+      logger.warn(
+        "desktop.update.move_failed",
+        "VibeField did not move to Applications; it opens again where it was",
+        { why, ...(error !== undefined ? { error } : {}) },
+      );
+      app.relaunch();
+    }
+    replayQuit();
   };
   /** The windows are closed: a decided gate stops the pairs first; then the native quit is replayed. */
   const afterWindowsClosed = (): void => {
     const quitGate = opts.getQuitGate?.() ?? null;
     if (gate !== "decided" || quitGate === null) {
+      // AU-7 — no gate stopped anything (a mode without one, a signal's quit): a move would leave the pairs running
+      if (move !== null) {
+        void finishMove(move, "no-stop");
+        return;
+      }
       replayingNativeQuit = true;
       app.quit();
       return;
@@ -135,9 +202,13 @@ export function installLifecycle(opts: {
     void quitGate.stop().then(
       (outcome) => {
         stopping = false;
-        if (outcome === "aborted") {
+        if (outcome.kind === "aborted") {
           resetQuitState();
           opts.onQuitAborted?.();
+          return;
+        }
+        if (move !== null) {
+          void finishMove(move, outcome.complete ? null : "incomplete-stop");
           return;
         }
         replayQuit();
@@ -149,6 +220,10 @@ export function installLifecycle(opts: {
           "The quit's stop failed; the pairs it named may still run",
           error,
         );
+        if (move !== null) {
+          void finishMove(move, "stop-failed");
+          return;
+        }
         replayQuit();
       },
     );
@@ -180,6 +255,7 @@ export function installLifecycle(opts: {
       void quitGate.decide({ unattended: osSessionEnding }).then(
         (decision) => {
           gate = decision === "proceed" ? "decided" : "open";
+          answerMove(decision);
           if (decision === "proceed") setImmediate(() => app.quit());
         },
         (error: unknown) => {
@@ -190,16 +266,20 @@ export function installLifecycle(opts: {
             error,
           );
           gate = "decided";
+          answerMove("proceed");
           setImmediate(() => app.quit());
         },
       );
       return;
     }
+    // AU-7 — no gate to ask (a mode without one, a signal's quit): a move's quit goes on, and moves nothing
+    answerMove("proceed");
     opts.onQuitRequested();
     if (replayingNativeQuit) return;
     const primary = opts.registry.primary();
     if (primary === null) {
-      if (gate !== "decided") return; // no window, no gate: nothing to defer
+      // no window, no gate: nothing to defer — unless a move waits, which opens VibeField again where it was
+      if (gate !== "decided" && move === null) return;
       event.preventDefault();
       quitAfterPrimaryCloses = true;
       afterWindowsClosed();
@@ -226,6 +306,35 @@ export function installLifecycle(opts: {
     ...flow,
     get updateArmed() {
       return flow.updateArmed;
+    },
+    armUpdate(plan) {
+      // AU-7 (LC-25) — a move waits for its quit: no update's quit (and so no Squirrel staging) starts under it
+      if (move !== null) return false;
+      return flow.armUpdate(plan);
+    },
+    quitThen(after) {
+      if (
+        gate !== "open" ||
+        flow.updateArmed ||
+        restarting ||
+        osSessionEnding ||
+        stopping ||
+        quitAfterPrimaryCloses ||
+        replayingNativeQuit ||
+        move !== null
+      )
+        return Promise.resolve("busy" as const);
+      return new Promise<"proceed" | "cancel" | "busy">((resolve) => {
+        move = { after, answer: resolve };
+        logger.info(
+          "desktop.update.move_requested",
+          "Move to Applications: the quit asks first, then VibeField moves",
+        );
+        setImmediate(() => app.quit());
+      });
+    },
+    get movePending() {
+      return move !== null;
     },
     resetAfterAbortedQuit() {
       resetQuitState();

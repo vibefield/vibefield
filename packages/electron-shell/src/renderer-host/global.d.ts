@@ -16,6 +16,7 @@ import type {
   UpdateConfirmResult,
   UpdateDoctorResult,
   UpdateDownloadResult,
+  UpdateMoveResult,
   UpdatePrepareResult,
   WindowConnection,
   WindowLightsState,
@@ -125,6 +126,8 @@ declare global {
         prepareRestart(): Promise<UpdatePrepareResult>;
         confirmRestart(token: string): Promise<UpdateConfirmResult>;
         doctor(): Promise<UpdateDoctorResult>;
+        /** AU-7 (AU-G8) — Move to Applications through the quit gate */
+        moveToApplications(): Promise<UpdateMoveResult>;
       };
       /** BP-D4 — Settings' Clear browsing data (counts only; main owns the profiles). */
       browserData: {

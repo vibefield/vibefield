@@ -2458,6 +2458,31 @@ async function main(
         },
         confirmRestart: (token) => updates.confirmRestart(token),
         doctor: () => updates.doctorLines(),
+        // AU-7 (AU-G8; LC-10, LC-25, LC-37; main-process.md §8.4) — Move to Applications: a person's quit through the
+        // gate, with the move after a COMPLETE stop (`quitThen`). A copy already in Applications needs none; a quit,
+        // an update's quit or another move underway is busy. An existing copy in Applications goes to the Trash; one
+        // that is running refuses the mover, and this one opens again where it was (logged, no words: the
+        // single-instance lock makes it near-unreachable).
+        moveToApplications: async () => {
+          const where = updates.location;
+          if (where !== "read-only" && where !== "elsewhere")
+            return { ok: false, reason: "not-needed" };
+          const flow = lifecycleFlow;
+          if (flow === null) return { ok: false, reason: "busy" };
+          const outcome = await flow.quitThen(async () =>
+            app.moveToApplicationsFolder({
+              conflictHandler: (conflict) => {
+                logger.warn(
+                  "desktop.update.move_conflict",
+                  "A VibeField is already in Applications",
+                  { conflict, replaced: conflict === "exists" },
+                );
+                return conflict === "exists";
+              },
+            }),
+          );
+          return outcome === "busy" ? { ok: false, reason: "busy" } : { ok: true, outcome };
+        },
       },
       logger.child({ component: "ipc.update" }),
     );

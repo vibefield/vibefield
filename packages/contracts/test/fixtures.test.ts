@@ -262,6 +262,7 @@ import {
   SystemShutdownResult,
   UpdateCheckResult,
   UpdateClientStateFile,
+  UpdateMoveResult,
   UpdatePolicy,
   UpdatePolicySource,
   UpdateView,
@@ -432,6 +433,8 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // check answered when the check settles. `update-view.pre-au1.json` is today's shape: the tolerant-reader witness.
   "update-view": UpdateView,
   "update-check-result": UpdateCheckResult,
+  // AU-7: the Move door's answer (`update-view.read-only` / `.elsewhere` ride the view's prefix above).
+  "update-move-result": UpdateMoveResult,
   // WP8a: the packaged app's signed bundled-plugin index (refusals in plugin-distribution.test.ts).
   "bundled-plugin-index": BundledPluginIndex,
   // WP8b: the stage's public identity (Resources/identity/release-identity.json).

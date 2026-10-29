@@ -16,6 +16,7 @@ import {
   UpdateClientStateFile,
   UpdateDownloadRequest,
   UpdateDownloadResult,
+  UpdateMoveResult,
   UpdateView,
 } from "../src/update-policy";
 
@@ -216,5 +217,36 @@ describe("AU-3 (LC-20) — releaseChannelOf: a version's channel by its shape", 
     expect(releaseChannelOf("dev")).toBeNull();
     expect(releaseChannelOf("0.2.0-rc.1")).toBeNull();
     expect(releaseChannelOf("0.1.0-nightly.2026102")).toBeNull();
+  });
+});
+
+// AU-7 (AU-G8; LC-10, LC-37) — where the app runs, and the Move door's answer.
+describe("AU-7 — the view's location and the Move door", () => {
+  it("carries the three locations, absent off macOS (today's views have none)", () => {
+    expect(UpdateView.parse(golden("update-view.read-only.json")).location).toBe("read-only");
+    expect(UpdateView.parse(golden("update-view.elsewhere.json")).location).toBe("elsewhere");
+    expect(UpdateView.parse(golden("update-view.idle.json")).location).toBeUndefined();
+    const view = golden("update-view.idle.json");
+    expect(UpdateView.parse({ ...view, location: "applications" }).location).toBe("applications");
+    // main and the preload are one build: a location it does not know is a wire error, never a guess
+    expect(UpdateView.safeParse({ ...view, location: "downloads" }).success).toBe(false);
+  });
+
+  it("answers proceed or cancel, or a refusal before anything stops", () => {
+    expect(UpdateMoveResult.parse(golden("update-move-result.proceed.json"))).toEqual({
+      ok: true,
+      outcome: "proceed",
+    });
+    expect(UpdateMoveResult.parse(golden("update-move-result.busy.json"))).toEqual({
+      ok: false,
+      reason: "busy",
+    });
+    expect(UpdateMoveResult.parse({ ok: true, outcome: "cancel" })).toEqual({
+      ok: true,
+      outcome: "cancel",
+    });
+    expect(UpdateMoveResult.safeParse({ ok: true }).success).toBe(false);
+    expect(UpdateMoveResult.safeParse({ ok: true, outcome: "moved" }).success).toBe(false);
+    expect(UpdateMoveResult.safeParse({ ok: false }).success).toBe(false);
   });
 });

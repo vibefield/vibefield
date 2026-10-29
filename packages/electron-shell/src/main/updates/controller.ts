@@ -14,6 +14,9 @@
 // on the last window's close, on resume, and on a 30-minute timer that lives only while staged); the root keys anchor
 // on the adopted rotation chain, persisted as signed documents and re-verified from the embedded keys at every load;
 // and a staged payload the person or the policy turns away is deleted from electron-updater's cache.
+// AU-7 (AU-G8; LC-10): where the bundle runs (`location.ts`), read once here. A copy macOS won't let replace itself
+// (`read-only`) is held by decide, and the apply and a person's Download refuse it BEFORE anything stops, in words that
+// name the way out (Move to Applications, through the quit gate: `lifecycle.ts`'s `quitThen`).
 
 import { randomUUID } from "node:crypto";
 import {
@@ -22,6 +25,7 @@ import {
   UPDATE_PLANES,
   UPDATES_AUDIT_ACTIONS,
   UPDATES_SERVICE,
+  type UpdateAppLocation,
   type UpdateApplyTrigger,
   type UpdateChannel,
   type UpdateCheckResult,
@@ -46,6 +50,7 @@ import {
   downloadNotice,
   expiredNotice,
   type LeverWhy,
+  locationNotice,
   policyNotice,
   quitNotice,
   SQUIRREL_STAGE_MS,
@@ -89,7 +94,9 @@ export type UpdateState =
         | "census-unknown"
         | "apply-unbuilt"
         | "policy-unreachable"
-        | "policy-unverified";
+        | "policy-unverified"
+        // AU-7 — a read-only copy: staged before it got there, never installed from there
+        | "location";
       /** WP12c — the live sessions the last census read (the tray's verb says them); absent where unwired */
       readonly sessions?: number | "unknown";
       /** L3b-i (B3) — the release leaves the native plane's bytes alone: the floor and its sessions live on */
@@ -177,6 +184,9 @@ export interface UpdateControllerOptions {
    * the release manifest (`releasePlatformKey`). Either absent, every release counts as touching the floor. */
   readonly nativePlane?: () => Promise<NativePlane>;
   readonly platformKey?: string;
+  /** AU-7 (AU-G8) — where the bundle runs (`readAppLocation`), read ONCE at construction; absent (or `undefined`, off
+   * macOS) = it can replace itself */
+  readonly location?: () => UpdateAppLocation | undefined;
 }
 
 /** L3b-ii (B6) — the staged-update cache, as the controller drives it (`install.ts` builds it over electron-updater's
@@ -214,6 +224,8 @@ export type RestartOutcome =
         | "sessions"
         // C2 (L3c-i): the prepared snapshot went stale before the answer — a fresh prepare, never a silent proceed
         | "expired"
+        // AU-7 — a read-only copy: refused before anything stops
+        | "location"
         | LeverRefusal;
       /** L3c-ii — what the person reads, where the card needs main's sentence (an expired snapshot) */
       readonly words?: { readonly message: string; readonly detail: string };
@@ -341,6 +353,8 @@ export class UpdateController {
   /** B6 — the staged cache's last measured size, and a collection in flight (a download waits for it) */
   private cacheBytes: number | null = null;
   private collecting: Promise<void> | null = null;
+  /** AU-7 — where the bundle runs, read once: a bundle does not move under a running app (the move relaunches) */
+  private readonly where: UpdateAppLocation | undefined;
   private readonly now: () => number;
   private readonly onProgress = (progress: { percent: number }): void => {
     if (this.stateValue.kind === "downloading") {
@@ -357,6 +371,7 @@ export class UpdateController {
 
   constructor(private readonly options: UpdateControllerOptions) {
     this.now = options.now ?? Date.now;
+    this.where = options.location?.();
     const loaded = options.store.load();
     this.client = loaded.state;
     if (loaded.recovered !== null) {
@@ -462,6 +477,11 @@ export class UpdateController {
     return this.lastVerified;
   }
 
+  /** AU-7 — where the bundle runs (the Move door reads it); undefined off macOS */
+  get location(): UpdateAppLocation | undefined {
+    return this.where;
+  }
+
   subscribe(listener: (state: UpdateState) => void): () => void {
     this.listeners.add(listener);
     return () => {
@@ -481,6 +501,7 @@ export class UpdateController {
       policy: this.lastVerified === null ? null : leversOf(this.lastVerified.policy),
       hostOs: this.options.hostOsVersion?.() ?? null,
       nativeTouched: this.native.touched,
+      ...(this.where !== undefined ? { location: this.where } : {}),
     });
   }
 
@@ -605,6 +626,9 @@ export class UpdateController {
       return { ok: true };
     if (state.kind !== "available" || state.version !== version)
       return { ok: false, reason: "not-available" };
+    // AU-7 — nothing a read-only copy downloads could install: said before a byte comes, in the words of the way out
+    if (this.where === "read-only")
+      return { ok: false, reason: "location", words: wordsOf(locationNotice()) };
     const policy = this.lastVerified === null ? null : leversOf(this.lastVerified.policy);
     const lever = leverRefusal(version, policy, this.options.hostOsVersion?.() ?? null);
     if (lever !== null) {
@@ -707,6 +731,8 @@ export class UpdateController {
         ? { currentVersion: this.options.currentVersion }
         : {}),
       ...this.lastApplyView(),
+      // AU-7 (AU-G8) — where the app runs (macOS): the Me row's R5 and the page's location line
+      ...(this.where !== undefined ? { location: this.where } : {}),
     };
     switch (state.kind) {
       case "checking":
@@ -805,6 +831,11 @@ export class UpdateController {
     }
     if (this.cacheBytes !== null)
       lines.push(`update cache: ${(this.cacheBytes / 1_048_576).toFixed(1)} MB`);
+    // AU-7 — where the bundle runs; `read-only` says why nothing here installs
+    if (this.where !== undefined)
+      lines.push(
+        `app location: ${this.where}${this.where === "read-only" ? " — macOS won't let it replace itself" : ""}`,
+      );
     const verified = this.lastVerified;
     if (verified !== null) {
       const policy = verified.policy;
@@ -1016,6 +1047,10 @@ export class UpdateController {
     this.prepared = null;
     const state = this.stateValue;
     if (state.kind !== "staged") return { ok: false, reason: "not-staged" };
+    // AU-7 (main-process.md §8.3) — FIRST, before the fresh policy read, the census and any stop: a copy macOS won't
+    // let replace itself would stop the pairs, end the sessions and come back on the same version
+    if (this.where === "read-only")
+      return { ok: false, reason: "location", words: wordsOf(locationNotice()) };
     const apply = this.options.apply;
     if (apply === undefined || !apply.wired) return { ok: false, reason: "apply-unbuilt" };
     if (this.client.declined.includes(state.version)) return { ok: false, reason: "declined" };
@@ -1102,6 +1137,8 @@ export class UpdateController {
     const state = this.stateValue;
     if (state.kind !== "staged") return { applying: false, reason: "not-staged" };
     if (this.options.apply?.wired !== true) return no("apply-unbuilt");
+    // AU-7 — decide holds it already (`location`); no reading of the display for an apply that would refuse
+    if (this.where === "read-only") return no("location");
     const held = this.silentHeld(state.version);
     if (held !== null) return no(held);
     const windowContext = this.options.safeWindowContext;

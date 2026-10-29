@@ -11,6 +11,8 @@ const electron = vi.hoisted(() => {
     }),
     quit: vi.fn(),
     exit: vi.fn(),
+    // AU-7 — a move that did not happen opens VibeField again where it was
+    relaunch: vi.fn(),
   };
   return {
     app,
@@ -22,11 +24,18 @@ const electron = vi.hoisted(() => {
       app.on.mockClear();
       app.quit.mockClear();
       app.exit.mockClear();
+      app.relaunch.mockClear();
     },
   };
 });
 
 vi.mock("electron", () => ({ app: electron.app }));
+
+/** Every rig shares the one `app.quit`, and the lifecycle queues its quits (`setImmediate`): a test that ends with one
+ * still queued would fire it into the next rig, past that rig's own reset. Drain the queue before any reset. */
+async function drain(): Promise<void> {
+  for (let turn = 0; turn < 8; turn += 1) await new Promise((resolve) => setImmediate(resolve));
+}
 
 import { installLifecycle } from "../src/main/lifecycle";
 import type { UpdateQuitPlan } from "../src/main/quit-flow";
@@ -189,11 +198,18 @@ describe("Electron lifecycle routing", () => {
 // (electron #55208); an aborted stop gives the app back; the update's and the runner's own quits skip the gate.
 describe("the quit gate in the lifecycle (AL-3)", () => {
   beforeEach(() => electron.reset());
-  afterEach(() => electron.app.quit.mockReset());
+  afterEach(async () => {
+    await drain();
+    electron.app.quit.mockReset();
+  });
 
   function gateRig(options: {
     decide?: "proceed" | "cancel";
     stop?: "done" | "aborted";
+    /** AU-7 — a `done` stop that left a pair running (`complete: false`) */
+    complete?: boolean;
+    /** AU-7 — the decision waits for this (a box still up) */
+    hold?: Promise<void>;
     windowOpen?: boolean;
   }) {
     let primaryOpen = options.windowOpen ?? true;
@@ -208,11 +224,14 @@ describe("the quit gate in the lifecycle (AL-3)", () => {
     const gate: QuitGate = {
       decide: vi.fn(async ({ unattended }) => {
         order.push(unattended ? "decide:unattended" : "decide");
+        await options.hold;
         return options.decide ?? "proceed";
       }),
       stop: vi.fn(async () => {
         order.push("stop");
-        return options.stop ?? "done";
+        return options.stop === "aborted"
+          ? { kind: "aborted" as const }
+          : { kind: "done" as const, complete: options.complete ?? true, ended: 0 };
       }),
     };
     const onQuitRequested = vi.fn(() => order.push("quit-requested"));
@@ -323,12 +342,14 @@ describe("the quit gate in the lifecycle (AL-3)", () => {
     idle.flow.leavePairsOnQuit("signal");
     expect(idle.flow.leaveReason).toBe("restart");
 
+    await drain();
     electron.reset();
     const quitting = gateRig({});
     electron.emit("before-quit", { preventDefault: vi.fn() });
     await vi.waitFor(() => expect(quitting.close).toHaveBeenCalledTimes(1));
     expect(quitting.flow.leaveReason).toBe("quit");
 
+    await drain();
     electron.reset();
     const updating = gateRig({});
     updating.flow.armUpdate({
@@ -352,5 +373,182 @@ describe("the quit gate in the lifecycle (AL-3)", () => {
     electron.emit("before-quit", { preventDefault: vi.fn() });
     expect(rig.gate.decide).not.toHaveBeenCalled();
     expect(rig.close).toHaveBeenCalledTimes(1);
+  });
+
+  // AU-7 (AU-G8; LC-25, LC-37; main-process.md §8.4) — Move to Applications is a person's quit through the gate with
+  // the move in place of the plain native quit, and only after a COMPLETE stop; anything less opens VibeField again
+  // where it was. The mover's own relaunch (Electron opens the moved copy once this process exits) is Electron's.
+  describe("quitThen — the move to Applications (AU-7)", () => {
+    const deferred = () => {
+      let release: () => void = () => undefined;
+      const promise = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      return { promise, release };
+    };
+
+    it("Cancel answers cancel: nothing closes, nothing moves, and the next move may ask again", async () => {
+      const rig = gateRig({ decide: "cancel" });
+      const after = vi.fn(async () => true);
+      expect(await rig.flow.quitThen(after)).toBe("cancel");
+      await settle();
+      expect(rig.close).not.toHaveBeenCalled();
+      expect(rig.gate.stop).not.toHaveBeenCalled();
+      expect(after).not.toHaveBeenCalled();
+      expect(rig.flow.movePending).toBe(false);
+      expect(rig.gate.decide).toHaveBeenCalledTimes(1);
+      void rig.flow.quitThen(after);
+      await vi.waitFor(() => expect(rig.gate.decide).toHaveBeenCalledTimes(2));
+    });
+
+    it("proceed: decide → durable close → stop → the move → the native quit, in that order", async () => {
+      const rig = gateRig({});
+      const after = vi.fn(async () => {
+        rig.order.push("move");
+        return true;
+      });
+      expect(await rig.flow.quitThen(after)).toBe("proceed");
+      await vi.waitFor(() => expect(rig.close).toHaveBeenCalledTimes(1));
+      expect(rig.flow.movePending).toBe(true);
+      electron.emit("window-all-closed"); // the durable close finished
+      await vi.waitFor(() => expect(after).toHaveBeenCalledTimes(1));
+      await vi.waitFor(() => expect(rig.order.filter((s) => s === "app.quit")).toHaveLength(3));
+      expect(rig.order.slice(0, 7)).toEqual([
+        "app.quit",
+        "decide",
+        "app.quit",
+        "quit-requested",
+        "stop",
+        "move",
+        "app.quit",
+      ]);
+      expect(electron.app.relaunch).not.toHaveBeenCalled(); // the mover opens the moved copy itself
+      electron.emit("will-quit", { preventDefault: vi.fn() });
+      await vi.waitFor(() => expect(electron.app.exit).toHaveBeenCalledWith(0));
+    });
+
+    it("a move that fails or throws opens VibeField again where it was, then quits", async () => {
+      const refuses = vi.fn(async () => false);
+      const throws = vi.fn(async (): Promise<boolean> => {
+        throw new Error("the copy failed");
+      });
+      for (const after of [refuses, throws]) {
+        await drain();
+        electron.reset();
+        const rig = gateRig({});
+        expect(await rig.flow.quitThen(after)).toBe("proceed");
+        await vi.waitFor(() => expect(rig.close).toHaveBeenCalledTimes(1));
+        electron.emit("window-all-closed");
+        await vi.waitFor(() => expect(electron.app.relaunch).toHaveBeenCalledTimes(1));
+        expect(after).toHaveBeenCalledTimes(1);
+        await vi.waitFor(() => expect(rig.order.filter((s) => s === "app.quit")).toHaveLength(3));
+        electron.app.quit.mockReset();
+      }
+    });
+
+    it("an INCOMPLETE stop moves nothing: a pair left running would run from the Trash (LC-25)", async () => {
+      const rig = gateRig({ complete: false });
+      const after = vi.fn(async () => true);
+      expect(await rig.flow.quitThen(after)).toBe("proceed");
+      await vi.waitFor(() => expect(rig.close).toHaveBeenCalledTimes(1));
+      electron.emit("window-all-closed");
+      await vi.waitFor(() => expect(electron.app.relaunch).toHaveBeenCalledTimes(1));
+      expect(after).not.toHaveBeenCalled();
+      await vi.waitFor(() => expect(rig.order.filter((s) => s === "app.quit")).toHaveLength(3));
+    });
+
+    it("an ABORTED stop gives the app back and drops the move", async () => {
+      const rig = gateRig({ stop: "aborted" });
+      const after = vi.fn(async () => true);
+      expect(await rig.flow.quitThen(after)).toBe("proceed");
+      await vi.waitFor(() => expect(rig.close).toHaveBeenCalledTimes(1));
+      electron.emit("window-all-closed");
+      await vi.waitFor(() => expect(rig.onQuitAborted).toHaveBeenCalledTimes(1));
+      expect(after).not.toHaveBeenCalled();
+      expect(electron.app.relaunch).not.toHaveBeenCalled();
+      expect(rig.flow.movePending).toBe(false);
+    });
+
+    it("busy while a quit decides, while an update's quit is armed, and while a move waits — and a move refuses an update's quit", async () => {
+      const box = deferred();
+      const deciding = gateRig({ hold: box.promise });
+      electron.emit("before-quit", { preventDefault: vi.fn() });
+      expect(await deciding.flow.quitThen(vi.fn(async () => true))).toBe("busy");
+
+      await drain();
+      electron.reset();
+      const updating = gateRig({});
+      const plan: UpdateQuitPlan = {
+        prepare: async () => ({ kind: "install" }),
+        install: vi.fn(),
+        aborted: vi.fn(),
+        installStalled: vi.fn(async () => {}),
+      };
+      expect(updating.flow.armUpdate(plan)).toBe(true);
+      expect(await updating.flow.quitThen(vi.fn(async () => true))).toBe("busy");
+
+      await drain();
+      electron.reset();
+      const held = deferred();
+      const moving = gateRig({ hold: held.promise });
+      const first = moving.flow.quitThen(vi.fn(async () => true));
+      await vi.waitFor(() => expect(moving.gate.decide).toHaveBeenCalledTimes(1));
+      expect(await moving.flow.quitThen(vi.fn(async () => true))).toBe("busy");
+      expect(moving.flow.armUpdate(plan)).toBe(false);
+      held.release();
+      expect(await first).toBe("proceed");
+    });
+
+    it("a signal during the move's quit moves nothing and relaunches nothing; the OS ending the session refuses it", async () => {
+      const box = deferred();
+      const rig = gateRig({ hold: box.promise });
+      const after = vi.fn(async () => true);
+      const answer = rig.flow.quitThen(after);
+      await vi.waitFor(() => expect(rig.gate.decide).toHaveBeenCalledTimes(1));
+      rig.flow.leavePairsOnQuit("signal");
+      box.release();
+      expect(await answer).toBe("proceed");
+      await vi.waitFor(() => expect(rig.close).toHaveBeenCalledTimes(1));
+      electron.emit("window-all-closed");
+      await vi.waitFor(() => expect(rig.order.filter((s) => s === "app.quit")).toHaveLength(3));
+      expect(after).not.toHaveBeenCalled();
+      expect(electron.app.relaunch).not.toHaveBeenCalled();
+
+      await drain();
+      electron.reset();
+      const ending = gateRig({});
+      ending.flow.noteOsSessionEnding();
+      expect(await ending.flow.quitThen(vi.fn(async () => true))).toBe("busy");
+      expect(ending.gate.decide).not.toHaveBeenCalled();
+    });
+
+    it("with no gate to ask (a mode without one) the quit goes on and opens VibeField again where it was", async () => {
+      let primaryOpen = true;
+      const close = vi.fn(() => {
+        primaryOpen = false;
+      });
+      const flow = installLifecycle({
+        registry: {
+          primary: () => (primaryOpen ? { close } : null),
+          disposeAll: vi.fn(),
+        } as unknown as WindowRegistry,
+        getSupervisor: () => null,
+        openPrimaryWindow: vi.fn(async () => {}),
+        keepAliveWithoutWindows: () => true,
+        onQuitRequested: vi.fn(),
+        disposeShell: vi.fn(),
+        logger: logger(),
+        closeLogging: async () => {},
+      });
+      electron.app.quit.mockImplementation(() =>
+        electron.emit("before-quit", { preventDefault: vi.fn() }),
+      );
+      const after = vi.fn(async () => true);
+      expect(await flow.quitThen(after)).toBe("proceed");
+      expect(close).toHaveBeenCalledTimes(1);
+      electron.emit("window-all-closed");
+      await vi.waitFor(() => expect(electron.app.relaunch).toHaveBeenCalledTimes(1));
+      expect(after).not.toHaveBeenCalled();
+    });
   });
 });

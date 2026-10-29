@@ -481,6 +481,13 @@ export const UpdateViewLastApply = z
   .passthrough();
 export type UpdateViewLastApply = z.infer<typeof UpdateViewLastApply>;
 
+/** AU-7 (AU-G8; LC-10) — macOS: where this bundle runs. `read-only` (App Translocation, a mounted disk image, an
+ * unwritable parent folder) cannot update itself: decide holds it and the apply refuses before anything stops.
+ * `elsewhere` is writable and updates as usual. */
+export const UPDATE_APP_LOCATIONS = ["applications", "elsewhere", "read-only"] as const;
+export const UpdateAppLocation = z.enum(UPDATE_APP_LOCATIONS);
+export type UpdateAppLocation = z.infer<typeof UpdateAppLocation>;
+
 /** The updater as the person sees it: the tray's item and the Settings card both render THIS. */
 export const UpdateView = z
   .object({
@@ -525,6 +532,8 @@ export const UpdateView = z
     stagedAt: z.number().int().nonnegative().optional(),
     /** AU-1 (AU-D11 A; AU-G7) — the last apply, once a launch has judged it */
     lastApply: UpdateViewLastApply.optional(),
+    /** AU-7 (AU-G8) — macOS only: where the app runs; absent elsewhere */
+    location: UpdateAppLocation.optional(),
   })
   .passthrough();
 export type UpdateView = z.infer<typeof UpdateView>;
@@ -635,6 +644,23 @@ export const UpdateDownloadResult = z.discriminatedUnion("ok", [
     .passthrough(),
 ]);
 export type UpdateDownloadResult = z.infer<typeof UpdateDownloadResult>;
+
+/** AU-7 (LC-10, LC-25, LC-37) — Move to Applications, through the quit gate. `proceed`: the person's quit is underway;
+ * the app moves itself once the pairs have stopped and opens again from Applications. `cancel`: the quit box's
+ * Cancel, nothing changed. A refusal comes back BEFORE anything stops: `not-needed` (it already runs from
+ * Applications), `busy` (a quit or an apply is underway). Another VibeField running in Applications is no refusal
+ * (LC-37): the move fails after the stop and the app opens again where it was. */
+export const UpdateMoveResult = z.discriminatedUnion("ok", [
+  z.object({ ok: z.literal(true), outcome: z.enum(["proceed", "cancel"]) }).passthrough(),
+  z
+    .object({
+      ok: z.literal(false),
+      reason: z.string().min(1).max(64),
+      words: UpdateWords.optional(),
+    })
+    .passthrough(),
+]);
+export type UpdateMoveResult = z.infer<typeof UpdateMoveResult>;
 
 /** C4 — the doctor's lines (EDP §11.6), as `doctorLines()` says them. */
 export const UpdateDoctorResult = z

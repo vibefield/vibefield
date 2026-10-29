@@ -71,7 +71,7 @@ describe("the quit gate (AL-3)", () => {
     expect(await gate.decide({ unattended: false })).toBe("proceed");
     expect(h.boxes).toEqual([]);
     expect(h.calls.hold).toBe(1);
-    expect(await gate.stop()).toBe("done");
+    expect(await gate.stop()).toEqual({ kind: "done", complete: true, ended: 0 });
     expect(p.stops).toEqual([{ sessions: [], reason: "quit" }]);
   });
 
@@ -84,7 +84,8 @@ describe("the quit gate (AL-3)", () => {
     expect(h.boxes[0]?.message).toBe("Quit VibeField and end 1 terminal session?");
     expect(h.boxes[0]?.buttons).toEqual(["Cancel", "Quit and end 1 session"]);
     expect(h.calls.hold).toBe(0);
-    expect(await gate.stop()).toBe("done");
+    // no decision proved a stop
+    expect(await gate.stop()).toEqual({ kind: "done", complete: false, ended: 0 });
     expect(p.stops).toEqual([]);
   });
 
@@ -93,7 +94,7 @@ describe("the quit gate (AL-3)", () => {
     const h = port([p.value], [yes]);
     const gate = createQuitGate(h.value);
     expect(await gate.decide({ unattended: false })).toBe("proceed");
-    expect(await gate.stop()).toBe("done");
+    expect(await gate.stop()).toEqual({ kind: "done", complete: true, ended: 2 });
     expect(p.stops).toEqual([{ sessions: ["a", "b"], reason: "quit" }]);
   });
 
@@ -118,7 +119,7 @@ describe("the quit gate (AL-3)", () => {
     const gate = createQuitGate(h.value);
     expect(await gate.decide({ unattended: false })).toBe("proceed");
     expect(h.boxes[0]).toEqual(unknownCensusBox());
-    expect(await gate.stop()).toBe("done");
+    expect(await gate.stop()).toEqual({ kind: "done", complete: false, ended: 0 });
     expect(p.stops).toEqual([]);
   });
 
@@ -136,7 +137,7 @@ describe("the quit gate (AL-3)", () => {
     expect(await gate.decide({ unattended: false })).toBe("proceed");
     expect(h.boxes).toEqual([unknownCensusBox()]);
     expect(h.boxes[0]?.buttons).toEqual(["Cancel", "Quit and leave it running"]);
-    expect(await gate.stop()).toBe("done");
+    expect(await gate.stop()).toEqual({ kind: "done", complete: false, ended: 0 });
     expect(busy.stops).toEqual([]);
     expect(unknownPair.stops).toEqual([]);
     expect(empty.stops).toEqual([{ sessions: [], reason: "quit" }]);
@@ -195,7 +196,7 @@ describe("the quit gate (AL-3)", () => {
     const h = port([p.value], [yes, no]);
     const gate = createQuitGate(h.value);
     await gate.decide({ unattended: false });
-    expect(await gate.stop()).toBe("aborted");
+    expect(await gate.stop()).toEqual({ kind: "aborted" });
     expect(h.boxes[1]?.detail).toContain("A session started while VibeField was quitting");
     expect(h.boxes[1]?.suppressible).toBe(false);
     expect(h.calls.release).toBe(1);
@@ -214,7 +215,7 @@ describe("the quit gate (AL-3)", () => {
     const h = port([p.value], [yes, yes]);
     const gate = createQuitGate(h.value);
     await gate.decide({ unattended: false });
-    expect(await gate.stop()).toBe("done");
+    expect(await gate.stop()).toEqual({ kind: "done", complete: true, ended: 2 });
     expect(p.stops.map((s) => s.sessions)).toEqual([["a"], ["a", "b"]]);
   });
 
@@ -227,12 +228,39 @@ describe("the quit gate (AL-3)", () => {
     const h = port([p.value]);
     const gate = createQuitGate(h.value);
     await gate.decide({ unattended: false });
-    expect(await gate.stop()).toBe("done");
+    expect(await gate.stop()).toEqual({ kind: "done", complete: false, ended: 0 });
     expect(h.value.log.warn).toHaveBeenCalledWith(
       "desktop.quit.pair_left_running",
       expect.any(String),
       expect.objectContaining({ reason: "fieldd did not stop" }),
     );
+  });
+
+  // AU-7 (LC-25; main-process.md §7.2) — a move to Applications runs only after a COMPLETE stop: every census read,
+  // the attached pair among them, and every planned stop answered.
+  it("complete counts what the stopped pairs ended, and is false when the attached pair was never reached", async () => {
+    const mine = pair("Me", [{ known: true, sessions: [session("m")] }], [{ ok: true }], true);
+    const theirs = pair("Kid", [{ known: true, sessions: [session("k")] }], [{ ok: true }], false);
+    const both = createQuitGate(port([mine.value, theirs.value]).value);
+    await both.decide({ unattended: true });
+    expect(await both.stop()).toEqual({ kind: "done", complete: true, ended: 2 });
+
+    const orphan = pair("Kid", [{ known: true, sessions: [] }], [{ ok: true }], false);
+    const gate = createQuitGate(port([orphan.value]).value);
+    expect(await gate.decide({ unattended: false })).toBe("proceed");
+    expect(await gate.stop()).toEqual({ kind: "done", complete: false, ended: 0 });
+    expect(orphan.stops).toEqual([{ sessions: [], reason: "quit" }]);
+  });
+
+  it("a pair whose changed sessions cannot be read again is left running: incomplete", async () => {
+    const p = pair(
+      "Me",
+      [{ known: true, sessions: [session("a")] }, { known: false }],
+      [{ ok: false, reason: "differ", live: ["a", "b"] }],
+    );
+    const gate = createQuitGate(port([p.value], [yes]).value);
+    await gate.decide({ unattended: false });
+    expect(await gate.stop()).toEqual({ kind: "done", complete: false, ended: 0 });
   });
 });
 

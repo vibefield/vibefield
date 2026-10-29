@@ -1,3 +1,4 @@
+import type { UpdateAppLocation } from "@vibefield/contracts";
 import type { AuditAppendV1 } from "@vibefield/contracts/diagnostics";
 import { describe, expect, it, vi } from "vitest";
 import type { UpdatePrepared, UpdateQuitPlan } from "../../src/main/quit-flow";
@@ -8,6 +9,7 @@ import {
   censusNotice,
   censusOf,
   consentWords,
+  locationNotice,
   type StageOutcome,
   type StopOutcome,
 } from "../../src/main/updates/apply";
@@ -162,6 +164,8 @@ async function stagedController(
     levers?: Record<string, unknown>;
     /** L3c-i — a clock the test moves (a prepared snapshot's two minutes) */
     clock?: { now: number };
+    /** AU-7 — where the bundle runs (absent = not macOS's answer: nothing held) */
+    location?: UpdateAppLocation;
   } = {},
 ) {
   const fx = new FixtureOrigin();
@@ -213,6 +217,7 @@ async function stagedController(
         }
       : {}),
     ...(opts.cache !== undefined ? { stagedCache: opts.cache } : {}),
+    ...(opts.location !== undefined ? { location: () => opts.location } : {}),
   });
   return { controller, apply, timeline, audits, files, fx, updater, gates };
 }
@@ -1778,5 +1783,78 @@ describe("the two-phase apply (C2) and the one projection (C6)", () => {
       "An update is downloaded; it installs at the next restart",
       { version: STAGED_VERSION, sha512: "AAAA" },
     );
+  });
+});
+
+// AU-7 (AU-G8; LC-10; main-process.md §8.2, §8.3) — a copy macOS won't let replace itself (App Translocation, a disk
+// image, a folder it can't write): a person's check still sees what exists, nothing downloads, and an apply refuses
+// FIRST — before the fresh policy, the census and any stop — in the words of the way out.
+describe("AU-7 — a copy macOS won't let replace itself", () => {
+  const WORDS = { message: locationNotice().message, detail: locationNotice().detail };
+
+  it("a person's check sees the release; nothing downloads, and Download refuses in the move's words", async () => {
+    const r = await stagedController({ location: "read-only" });
+    expect(await r.controller.checkForPerson()).toEqual({
+      outcome: "held",
+      version: STAGED_VERSION,
+    });
+    expect(r.updater.downloads).toBe(0);
+    expect(r.controller.view()).toMatchObject({
+      phase: "available",
+      version: STAGED_VERSION,
+      location: "read-only",
+    });
+    expect(await r.controller.downloadForPerson(STAGED_VERSION)).toEqual({
+      ok: false,
+      reason: "location",
+      words: WORDS,
+    });
+    expect(r.updater.downloads).toBe(0);
+    expect(r.controller.doctorLines()).toContain(
+      "app location: read-only — macOS won't let it replace itself",
+    );
+  });
+
+  it("nothing checks on its own: a launch and a resume start nothing", async () => {
+    const r = await stagedController({ location: "read-only" });
+    const asked = vi.spyOn(r.updater, "checkForUpdates");
+    expect(await r.controller.check("launch")).toEqual({ kind: "none", reason: "location" });
+    expect(await r.controller.check("resume")).toEqual({ kind: "none", reason: "location" });
+    expect(asked).not.toHaveBeenCalled();
+    expect(r.controller.view().phase).toBe("idle");
+  });
+
+  it("a staged update's Restart refuses `location` BEFORE anything stops: no census, no ATTEMPT row, no stop", async () => {
+    // staged where it could replace itself, then read as read-only — the guard behind decide's hold (a read-only copy
+    // never downloads, so the doors cannot stage one; a payload a relaunch finds in the cache is the case it covers)
+    const r = await staged(LIVE);
+    (r.controller as unknown as { where: UpdateAppLocation | undefined }).where = "read-only";
+    expect(await r.controller.prepareRestart()).toEqual({
+      ok: false,
+      reason: "location",
+      words: WORDS,
+    });
+    expect(await r.controller.restartToInstall()).toEqual({ ok: false, reason: "location" });
+    // the tray's Restart says it in the native box; the census, the audit and the stop never ran
+    expect(r.apply.notices).toEqual([locationNotice()]);
+    expect(r.timeline).toEqual(["notify"]);
+    expect(r.timeline).not.toContain("fieldd:stop");
+    expect(r.audits).toEqual([]);
+    expect(r.apply.plan).toBeNull();
+    expect(await r.controller.considerSilentApply("timer")).toEqual({
+      applying: false,
+      reason: "location",
+    });
+    expect(r.timeline).toEqual(["notify"]);
+  });
+
+  it("a writable copy outside Applications updates as usual, and the view says where it runs", async () => {
+    const r = await stagedController({ location: "elsewhere" });
+    await r.controller.check("manual");
+    expect(r.controller.view()).toMatchObject({ phase: "staged", location: "elsewhere" });
+    r.timeline.length = 0;
+    expect(await r.controller.restartToInstall()).toEqual({ ok: true });
+    expect(r.timeline).toEqual(["fieldd:census", "fieldd:audit:attempt", "quit"]);
+    expect(r.controller.doctorLines()).toContain("app location: elsewhere");
   });
 });

@@ -15,6 +15,9 @@ import {
 // refuses the stop and the box asks again. Pure: the pairs, the box and the preference arrive through the port, and
 // the tests drive it with plain fakes (quit-flow.ts's shape). The words are DESIGN.md §9's and the update consent's
 // (`consentWords`): the button says what it does, the numbers are counted.
+// AU-7 (LC-25; main-process.md §7.2, brought forward from AU-5): the stop says whether it was COMPLETE — every pair
+// read, the attached one among them, and every planned stop answered — because a move to Applications runs only after
+// a complete stop (a pair left running would execute from the Trash).
 
 /** Why the shell asks the pairs to stop — the `system.shutdown` reasons of a quit (contracts `NativeRestartReason`). */
 export type QuitReason = "quit" | "logout";
@@ -59,13 +62,21 @@ export interface QuitGatePort {
   readonly log: Pick<Logger, "info" | "warn">;
 }
 
+/** AU-7 (main-process.md §7.2) — how the stop went. `done`: the quit goes on; `complete` = no pair's census was
+ * unknown at the decision, the attached user's pair was among those reached, and every planned stop answered (a pair
+ * left running, or no decision at all, is incomplete); `ended` = the sessions the stopped pairs ended with consent.
+ * `aborted`: a session was born after the census and the person kept the app. */
+export type QuitStopOutcome =
+  | { readonly kind: "done"; readonly complete: boolean; readonly ended: number }
+  | { readonly kind: "aborted" };
+
 export interface QuitGate {
   /** The census and, when it has to, the box. `unattended` (an OS logout) never asks. "cancel" changed nothing. */
   decide(options: { readonly unattended: boolean }): Promise<"proceed" | "cancel">;
   /** After the durable close: the consented stop of every pair the decision named, the attached one last.
    * "aborted" = a session was born after the census and the person cancelled the second ask: the attached pair
    * stopped nothing, and the caller gives the app back. */
-  stop(): Promise<"done" | "aborted">;
+  stop(): Promise<QuitStopOutcome>;
 }
 
 /** How many times a stop that a birth refused is asked again before the pair is left (and said). */
@@ -129,6 +140,8 @@ interface PlannedStop {
 interface QuitPlan {
   readonly reason: QuitReason;
   readonly stops: readonly PlannedStop[];
+  /** AU-7 — every census was read and the attached pair was among them (the stops must still answer) */
+  readonly whole: boolean;
 }
 
 export function createQuitGate(port: QuitGatePort): QuitGate {
@@ -192,7 +205,11 @@ export function createQuitGate(port: QuitGatePort): QuitGate {
         }
       }
       port.hold();
-      plan = { reason: unattended ? "logout" : "quit", stops: planned };
+      plan = {
+        reason: unattended ? "logout" : "quit",
+        stops: planned,
+        whole: unknown.length === 0 && pairs.some((pair) => pair.attached),
+      };
       port.log.info("desktop.quit.consented", "The quit will stop the pairs it read", {
         reason: plan.reason,
         pairs: planned.length,
@@ -207,7 +224,8 @@ export function createQuitGate(port: QuitGatePort): QuitGate {
       plan = null;
       if (current === null) {
         closeReached();
-        return "done";
+        // no decision proved anything stopped
+        return { kind: "done", complete: false, ended: 0 };
       }
       try {
         return await stopPlanned(current);
@@ -217,7 +235,9 @@ export function createQuitGate(port: QuitGatePort): QuitGate {
     },
   };
 
-  async function stopPlanned(current: QuitPlan): Promise<"done" | "aborted"> {
+  async function stopPlanned(current: QuitPlan): Promise<QuitStopOutcome> {
+    let complete = current.whole;
+    let ended = 0;
     for (const planned of current.stops) {
       let sessions = planned.sessions;
       for (let attempt = 1; ; attempt++) {
@@ -228,6 +248,7 @@ export function createQuitGate(port: QuitGatePort): QuitGate {
             sessions: sessions.length,
             attempt,
           });
+          ended += sessions.length;
           break;
         }
         if (outcome.live === undefined || attempt >= MAX_STOP_ATTEMPTS) {
@@ -236,6 +257,7 @@ export function createQuitGate(port: QuitGatePort): QuitGate {
             "A daemon pair did not stop for the quit; it keeps running",
             { attached: planned.pair.attached, reason: outcome.reason, attempt },
           );
+          complete = false;
           break;
         }
         // the re-check refused: the live set is not the consented one (a session was born after the census)
@@ -250,6 +272,7 @@ export function createQuitGate(port: QuitGatePort): QuitGate {
             "A daemon pair's sessions changed during the quit and could not be read again; it keeps running",
             { attached: planned.pair.attached, attempt },
           );
+          complete = false;
           break;
         }
         const answer = await port.confirm(
@@ -262,11 +285,11 @@ export function createQuitGate(port: QuitGatePort): QuitGate {
             "A session started during the quit and the person kept the app",
             { attached: planned.pair.attached, sessions: census.sessions.length },
           );
-          return "aborted";
+          return { kind: "aborted" };
         }
         sessions = census.sessions.map((s) => s.sessionId);
       }
     }
-    return "done";
+    return { kind: "done", complete, ended };
   }
 }

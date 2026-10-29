@@ -11,9 +11,11 @@ import {
   downgradeWords,
   downloadRefusalFallback,
   isDowngrade,
+  LOCATION_WORDS,
   type MeUpdateLocal,
   type MeUpdateRow,
   meUpdateRow,
+  moveRefusalFallback,
   notAppliedNotice,
   notAppliedWords,
   READY_SINCE_DAYS,
@@ -136,6 +138,20 @@ describe("the card's state line", () => {
       "Couldn't check for updates",
       "Updates are unavailable (feed-unverified). Check again, or see Diagnostics for the details.",
     ],
+    // AU-7 (LC-40) — a copy macOS won't let replace itself says so over every resting state; a writable copy elsewhere
+    // changes nothing; motion outranks it
+    [
+      { phase: "idle", location: "read-only" },
+      "VibeField can't update itself from here",
+      "macOS won't let VibeField replace itself where it is. Move it to Applications and it updates as usual.",
+    ],
+    [
+      { phase: "available", version: "1.2.0", location: "read-only" },
+      "VibeField can't update itself from here",
+      "macOS won't let VibeField replace itself where it is. Move it to Applications and it updates as usual.",
+    ],
+    [{ phase: "idle", location: "elsewhere" }, "VibeField is up to date", undefined],
+    [{ phase: "checking", location: "read-only" }, "Checking for updates…", undefined],
   ] as const)("%o", (view, headline, detail) => {
     const words = updateStateWords({ ...BASE, ...view }, NOW);
     expect(words.headline).toBe(headline);
@@ -148,6 +164,8 @@ describe("the card's state line", () => {
     expect(updateStateWords({ ...BASE, phase: "unsupported" }, NOW).tone).toBe("attention");
     expect(updateStateWords({ ...BASE, phase: "failed" }, NOW).tone).toBe("error");
     expect(updateStateWords({ ...BASE, phase: "offline" }, NOW).tone).toBe("neutral");
+    // AU-7 — a copy that can't replace itself is the attention ink, as the publisher's holds are
+    expect(updateStateWords({ ...BASE, location: "read-only" }, NOW).tone).toBe("attention");
   });
 
   it("says a version by its friendly name: a nightly by its day, a beta by its number (AU-L6)", () => {
@@ -189,6 +207,9 @@ describe("the ready update — the dot's one reading, and the words time grows (
     expect(updateWaits({ ...staged, phase: "available" })).toBe(false);
     expect(updateWaits(null)).toBe(false);
     expect(updateWaits(undefined)).toBe(false);
+    // AU-7 — never a copy that can't replace itself (its Restart refuses); a writable one elsewhere waits as ever
+    expect(updateWaits({ ...staged, location: "read-only" })).toBe(false);
+    expect(updateWaits({ ...staged, location: "elsewhere" })).toBe(true);
   });
 
   it('asks first ("…") when the restart ends sessions or must read them first', () => {
@@ -343,6 +364,19 @@ describe("a refusal main sent no words for (a race)", () => {
       expect(`${words.message} ${words.detail}`).not.toMatch(APOLOGY);
     }
   });
+
+  it("says a Move main refused: the step that didn't happen, then why (AU-7)", () => {
+    expect(moveRefusalFallback("busy")).toEqual({
+      message: "VibeField didn't move to Applications",
+      detail: "VibeField is already quitting or updating.",
+    });
+    expect(moveRefusalFallback("not-needed").detail).toBe("It already runs from Applications.");
+    expect(moveRefusalFallback("gone").detail).toBe("Nothing changed (gone).");
+    for (const reason of ["not-needed", "busy", "gone"]) {
+      const words = moveRefusalFallback(reason);
+      expect(`${words.message} ${words.detail}`).not.toMatch(APOLOGY);
+    }
+  });
 });
 
 // AU-2 — the Me menu's update row (DESIGN.md §8 "The Me menu"; renderer.md §2.1 with the lead's calls): one state,
@@ -401,6 +435,51 @@ describe("the Me menu's update row — at rest, in place, and the hold in its in
       { ...NIGHTLY, enabled: false },
       REST,
       { ...CHECK, detail: "Automatic updates are off" },
+    ],
+    // AU-7 (LC-10, LC-40) — the one hold that changes the act: it opens Settings → Updates, where the move is
+    [
+      "R5 — a copy macOS won't let replace itself",
+      { ...NIGHTLY, location: "read-only" },
+      REST,
+      {
+        glyph: "reset",
+        turn: 0,
+        label: "Move to Applications…",
+        detail: "Can't update from here",
+        detailTone: "attention",
+        act: "open",
+        dot: false,
+      },
+    ],
+    [
+      "R5 — over a ready update it can't install: no dot, no restart",
+      { ...STAGED, location: "read-only" },
+      REST,
+      {
+        label: "Move to Applications…",
+        detail: "Can't update from here",
+        detailTone: "attention",
+        act: "open",
+        dot: false,
+      },
+    ],
+    [
+      "R5 — over the publisher's hold",
+      { ...NIGHTLY, phase: "paused", location: "read-only" },
+      REST,
+      { label: "Move to Applications…", detailTone: "attention", act: "open" },
+    ],
+    [
+      "R5 — a writable copy elsewhere changes nothing",
+      { ...NIGHTLY, location: "elsewhere" },
+      REST,
+      { ...CHECK, detail: ON_27 },
+    ],
+    [
+      "R5 — motion outranks it: a check the status item began",
+      { ...NIGHTLY, phase: "checking", location: "read-only" },
+      REST,
+      { glyph: "reset", label: "Checking for updates…", act: "none", dot: false },
     ],
     [
       "R6 — a check that began elsewhere",
@@ -708,6 +787,10 @@ describe("the Me menu's update row — at rest, in place, and the hold in its in
     expect(line3(view, stagedAt + READY_SINCE_DAYS * DAY)).toEqual({
       text: `Ready since ${shortDay(stagedAt)}`,
     });
+    // AU-7 — never under a copy that can't install it (R5): the move is the news
+    const readOnly: UpdateView = { ...view, location: "read-only" };
+    expect(line3(readOnly, stagedAt + READY_SINCE_DAYS * DAY)).toBeUndefined();
+    expect(readySince(readOnly, stagedAt + READY_SINCE_DAYS * DAY)).toBeNull();
     const floor = { ...view, unsupportedBelow: "0.1.0-nightly.20261028" };
     expect(line3(floor, stagedAt + READY_SINCE_DAYS * DAY)).toEqual({
       text: "Your version is unsupported",
@@ -724,6 +807,23 @@ describe("the Me menu's update row — at rest, in place, and the hold in its in
       detail: "Ends 3 terminal sessions",
       dot: true,
     });
+  });
+
+  it("reads main's location fixtures: R5 for a read-only copy, the resting row for one elsewhere (AU-7)", () => {
+    expect(
+      meUpdateRow({ view: viewFixture("update-view.read-only"), local: REST, now: NOW }),
+    ).toMatchObject({
+      label: "Move to Applications…",
+      detail: "Can't update from here",
+      detailTone: "attention",
+      act: "open",
+      dot: false,
+    });
+    expect(
+      meUpdateRow({ view: viewFixture("update-view.elsewhere"), local: REST, now: NOW }),
+    ).toMatchObject({ label: "Check for updates", act: "check" });
+    // the face's clause, like its dot, never names an update the copy can't install
+    expect(readyClause({ ...STAGED, location: "read-only" })).toBeNull();
   });
 
   it("names the face's ready clause only while an install waits on you (AU-D1)", () => {
@@ -768,5 +868,16 @@ describe("the Me menu's update row — at rest, in place, and the hold in its in
     expect(refusalLine(refusalFallback("not-staged"))).toBe(
       "VibeField didn't install the update. Nothing changed (not-staged).",
     );
+  });
+
+  it('says where the app runs in its own words, the act wearing "…" on both surfaces (AU-7; LC-41)', () => {
+    expect(LOCATION_WORDS.move).toBe("Move to Applications…");
+    expect(LOCATION_WORDS.moving).toBe("Moving VibeField to Applications…");
+    expect(LOCATION_WORDS.elsewhere).toBe("VibeField runs outside Applications");
+    for (const said of Object.values(LOCATION_WORDS)) {
+      expect(said).not.toMatch(APOLOGY);
+      // straight apostrophes, as the product writes them
+      expect(said).not.toMatch(/[\u2018\u2019]/u);
+    }
   });
 });

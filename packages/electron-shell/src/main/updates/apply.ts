@@ -228,6 +228,20 @@ export function censusNotice(): BoxContent {
   };
 }
 
+/** AU-7 (AU-G8; LC-10) — macOS won't let a bundle that runs read-only (App Translocation, a mounted disk image, an
+ * unwritable folder) replace itself: said before anything stops, by the Restart that would lead nowhere and by a
+ * person's Download alike, so the one sentence names the way out. */
+export function locationNotice(): BoxContent {
+  return {
+    message: "VibeField can't update itself from here",
+    detail:
+      "macOS won't let VibeField replace itself where it runs now. Move it to Applications and it updates as usual.",
+    buttons: ["OK"],
+    defaultId: 0,
+    cancelId: 0,
+  };
+}
+
 /** C2 (L3c-i) — the consent's snapshot went stale before the answer (two minutes, or the update changed): nothing
  * changed, and the next Restart takes a fresh one. Never a silent proceed on an old list. */
 export function expiredNotice(): BoxContent {

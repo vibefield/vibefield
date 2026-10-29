@@ -28,12 +28,15 @@ import {
 import { errorText, NO_FLOW, type UpdatesFlow, useUpdateRestart } from "./update-flow";
 import {
   AUTOMATIC_UPDATES_LINES,
+  cannotUpdateHere,
   channelLabel,
   channelUnresolved,
   checkedLabel,
   downgradeWords,
   downloadRefusalFallback,
   isDowngrade,
+  LOCATION_WORDS,
+  moveRefusalFallback,
   notAppliedWords,
   restartAsks,
   UPDATE_CHANNEL_LINES,
@@ -52,6 +55,9 @@ import {
 // AU-3 (AU-D8 A; DESIGN.md §8 "Settings → Updates") — the card became a page of its own, first in Support: headed by
 // the exact version with Copy (AU-G4), one primary act per state, Download and Download anyway (AU-G5, AU-G6), the
 // install that didn't take (AU-G7), and the restart's two phases shared with the Me menu (`update-flow.ts`).
+// AU-7 (AU-G8; LC-10, LC-40) — where the app runs: a copy macOS won't let replace itself says so in the attention ink
+// with Move to Applications… as its primary; a writable copy elsewhere carries one quiet line with the move beside it.
+// The move goes through main's quit gate (`moveToApplications`): its Cancel brings the page back to rest.
 
 // Colour (DESIGN.md §2.5): a state word that has to be READ takes its ink (`--vf-ink-attention`, `--vf-ink-danger`),
 // never the fill; a channel with nothing published is quiet (the tertiary ink, LC-31); the notices stay neutral and
@@ -69,10 +75,11 @@ const HEADLINE_INK: Record<UpdateStateWords["tone"], string> = {
 
 /** The state's ONE primary act, at the head's end (DESIGN.md §8): none while downloading. Paused and a newer macOS
  * keep Check for updates, so a lifted pause has a door (LC-22); a channel with nothing published is no failure, so it
- * says Check for updates, not Check again (LC-31). */
+ * says Check for updates, not Check again (LC-31). AU-7: a copy that can't replace itself moves first (LC-10). */
 function primaryAct(
   view: UpdateView,
-): { readonly act: "check" | "restart" | "download"; readonly label: string } | null {
+): { readonly act: "check" | "restart" | "download" | "move"; readonly label: string } | null {
+  if (cannotUpdateHere(view)) return { act: "move", label: LOCATION_WORDS.move };
   switch (view.phase) {
     case "downloading":
       return null;
@@ -116,6 +123,7 @@ export function UpdatesSectionView({
   onConfirmRestart,
   onCancelRestart,
   onDownload,
+  onMoveToApplications,
   onOpenDiagnostics,
   onCopyVersion,
 }: {
@@ -141,6 +149,9 @@ export function UpdatesSectionView({
   onCancelRestart?: () => void;
   /** AU-3 (AU-G5, AU-G6) — Download (found with updates off) and Download anyway (skipped), through AU-1's door */
   onDownload?: () => void;
+  /** AU-7 (AU-G8) — Move to Applications, through main's quit gate: the read-only copy's primary, elsewhere a
+   * secondary act */
+  onMoveToApplications?: () => void;
   /** the foot's Updater diagnostics →, a failed check's and a failed install's Diagnostics → (`| undefined`: the
    * controller forwards its own optional prop) */
   onOpenDiagnostics?: (() => void) | undefined;
@@ -172,9 +183,13 @@ export function UpdatesSectionView({
   const words = updateStateWords(view, now);
   const inFlight = flow.kind === "preparing" || flow.kind === "confirming";
   const restarting = flow.kind === "restarting";
-  const held = busy || inFlight || restarting;
+  // AU-7 — the move asked; the quit gate answers
+  const moving = flow.kind === "moving";
+  const held = busy || inFlight || restarting || moving;
+  const elsewhere = view.location === "elsewhere";
   const percent = Math.round(view.percent ?? 0);
-  const staged = view.phase === "staged" && view.applyWired;
+  // AU-7 — a ready update the copy can't install has no Skip: the move is the act
+  const staged = view.phase === "staged" && view.applyWired && !cannotUpdateHere(view);
   const primary = primaryAct(view);
   const notApplied = notAppliedWords(view);
   const currentVersion = view.currentVersion;
@@ -219,7 +234,9 @@ export function UpdatesSectionView({
                   ? onRestart
                   : primary.act === "download"
                     ? onDownload
-                    : onCheck
+                    : primary.act === "move"
+                      ? onMoveToApplications
+                      : onCheck
               }
             >
               {primary.label}
@@ -274,6 +291,23 @@ export function UpdatesSectionView({
           </div>
         )}
 
+        {(elsewhere || moving) && (
+          // AU-7 (LC-10) — a writable copy outside Applications updates as usual: one quiet line, the move beside it;
+          // while the move asks, its words (the read-only copy's move is the head's primary)
+          <div
+            className="flex flex-wrap items-center gap-2 pt-3"
+            data-updates-location={view.location ?? ""}
+          >
+            {elsewhere && <span className={labelCls}>{LOCATION_WORDS.elsewhere}</span>}
+            {elsewhere && (
+              <UiButton disabled={held} onClick={onMoveToApplications}>
+                {LOCATION_WORDS.move}
+              </UiButton>
+            )}
+            {moving && <span className={labelCls}>{LOCATION_WORDS.moving}</span>}
+          </div>
+        )}
+
         {words.tone === "error" && (
           <div className="flex flex-wrap items-center gap-2 pt-3">
             <UiButton onClick={onOpenDiagnostics}>Diagnostics →</UiButton>
@@ -325,7 +359,7 @@ export function UpdatesSectionView({
           <SettingsSwitch
             label="Automatic updates"
             checked={view.enabled}
-            disabled={busy || restarting}
+            disabled={busy || restarting || moving}
             onChange={(checked) => onSetEnabled?.(checked)}
           />
         </SettingsRow>
@@ -563,6 +597,28 @@ export function UpdatesSection({
               words: result.words ?? downloadRefusalFallback(result.reason),
             });
         });
+      }}
+      // AU-7 (AU-G8) — through main's quit gate: a proceed closes the window (the app moves and opens again from
+      // Applications), its Cancel brings the page back to rest, a refusal says main's words or the step that didn't
+      // happen
+      onMoveToApplications={() => {
+        if (host === undefined) return;
+        setError(null);
+        setFlow({ kind: "moving" });
+        void (async () => {
+          try {
+            const result = await host.moveToApplications();
+            if (!result.ok)
+              setFlow({
+                kind: "refused",
+                words: result.words ?? moveRefusalFallback(result.reason),
+              });
+            else if (result.outcome === "cancel") setFlow(NO_FLOW);
+          } catch (failure) {
+            setFlow(NO_FLOW);
+            setError(errorText(failure));
+          }
+        })();
       }}
       onOpenDiagnostics={onOpenDiagnostics}
       onCopyVersion={async (version) => {
