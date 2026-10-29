@@ -280,8 +280,8 @@ export interface HistoryLineDoor {
    * project the room shows, found as New agent finds it, placed as Godview's
    * create places one (GV-D4: in the focused pane), the frame moving to Godview
    * to show it; with no project shown, as Godview's create opens one. A folder
-   * on another desktop, not mounted or gone is refused in New agent's words,
-   * and the frame stays. */
+   * not mounted or gone is refused in New agent's words, one on another desktop
+   * by the desktop it is on ("vibe-field is on Mac mini"), and the frame stays. */
   newTerminal(): Promise<NewTerminalOutcome>;
 }
 

@@ -66,6 +66,7 @@ import {
   type HistoryHostActs,
   historyHostInputs,
   NO_HOST_STATE,
+  newTerminalWhy,
   projectSectionsOf,
   resumeWaits,
   sessionSectionsOf,
@@ -1318,6 +1319,24 @@ describe("where something new of a project starts — New agent's, and History's
       path: null,
       why: "no folder of this project is here to start in",
     });
+  });
+
+  // the design lens's 9 (DESIGN.md §8 "History"): History's New terminal names another desktop in
+  // its own words — never New agent's track code — and keeps New agent's for the rest
+  it("History's New terminal says another desktop's folder by the desktop it is on, the rest in New agent's words", () => {
+    const vibe = of("p1:vibe");
+    const why = (project: ProjectSummary, folder: string | null) =>
+      newTerminalWhy(project, startPlaceOf(MODEL, project, folder));
+    expect(why(vibe, `${LAPTOP}\u001fpl_lap`)).toBe("vibe-field is on Laptop");
+    const unmounted = {
+      ...vibe,
+      places: vibe.places.map((place) => ({ ...place, mounted: false })),
+    };
+    expect(why(unmounted, null)).toBe("its volume is not connected");
+    expect(why(of("p1:notes"), null)).toBe("the folder is gone");
+    expect(why(of("p1:away"), null)).toBe("no folder of this project is here to start in");
+    // a folder here that is there to start in: nothing to say
+    expect(why(vibe, null)).toBeNull();
   });
 });
 

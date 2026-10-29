@@ -531,9 +531,9 @@ describe("a regroup keeps the chosen session chosen (PJ-4)", () => {
 // asked of Godview's deck, the window moved there as Resume moves it; with no
 // project shown, as Godview's create opens one — and so in a project the room
 // shows with no folders of fieldd's (rosetta's unassigned bucket); a folder it
-// cannot open in is said in New agent's words, and the window stays. (The
-// other refusals — another desktop's folder, none here — are `startPlaceOf`'s,
-// history-host.)
+// cannot open in is said in New agent's words, one on another desktop in
+// History's own, and the window stays. (The other refusal — none here — is
+// `startPlaceOf`'s, history-host.)
 describe("History's create: New terminal in the project the room shows (HN-7)", () => {
   const VIBE = PROJECTS.rows[0] as Record<string, unknown> & {
     places: Array<Record<string, unknown>>;
@@ -713,6 +713,43 @@ describe("History's create: New terminal in the project the room shows (HN-7)", 
 
   it("a folder whose volume is not connected is said the same way, and the window stays", async () => {
     await refusedIn({ mounted: false }, "its volume is not connected");
+  }, 20_000);
+
+  // the design lens's 9: History's own reason names the desktop, never New agent's track code
+  // ("— not from here until routed acts (DS-2)": ~100 characters for a 2.4 s note that asks
+  // under 70)
+  it("a folder on another desktop names the desktop in History's own words, the deck asked nothing, and the window stays", async () => {
+    const newTerminal = vi.fn<LineViewDoor["newTerminal"]>(async () => ({ state: "opened" }));
+    publishGodviewLineDoor(deck(newTerminal));
+    // the one session ran in vibe-field's folder on the laptop: ③ follows it there once chosen
+    const onLaptop = {
+      rows: [{ ...SESSION, cwd: ELSEWHERE["path"], place: ELSEWHERE["ref"] }],
+      sources: KEYED.sources,
+    };
+    mount(
+      fieldd(
+        () => SPAWNED,
+        () => ({ sessions: [] }),
+        (method) =>
+          method === "project.list"
+            ? listed([HERE, ELSEWHERE])
+            : method === "index.sessions"
+              ? onLaptop
+              : undefined,
+      ),
+    );
+    to("history");
+    await showProject();
+    await until(namesProject, "the create to name the project ③ shows");
+    await chooseSession();
+    await act(async () => {
+      create().click();
+    });
+    expect(await until(noteNow, "the line's note")).toBe(
+      "Terminal could not be opened — vibe-field is on laptop",
+    );
+    expect(newTerminal).not.toHaveBeenCalled();
+    expect(asked).not.toContain("godview");
   }, 20_000);
 });
 

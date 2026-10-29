@@ -51,6 +51,7 @@ import {
   type HistoryHostState,
   historyHostInputs,
   NO_HOST_STATE,
+  newTerminalWhy,
   startPlaceOf,
 } from "./host-inputs";
 import { deviceOf, EMPTY_HOST_MODEL, type HistoryHostModel, hostModelOf } from "./host-model";
@@ -314,9 +315,10 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
     let cwd: string | undefined;
     if (now !== null && project !== undefined) {
       const start = startPlaceOf(modelRef.current, project, now.folder);
-      // another desktop's folder, one not mounted or gone, or none here: said
-      // in New agent's words, and the window stays in History
-      if (start.why !== null) return { state: "refused", reason: start.why };
+      // a folder not mounted or gone, or none here, said in New agent's words;
+      // another desktop's in History's own — and the window stays in History
+      const why = newTerminalWhy(project, start);
+      if (why !== null) return { state: "refused", reason: why };
       if (start.path !== null) cwd = start.path;
     }
     try {
