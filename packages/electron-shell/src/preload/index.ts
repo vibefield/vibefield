@@ -1,6 +1,7 @@
 import {
   type BrowserDataClearResult,
   BrowserDataClearResult as BrowserDataClearResultSchema,
+  ClipboardCopyRefusal,
   ClipboardReadRequest,
   ClipboardReadResult,
   ClipboardWriteImageResult,
@@ -55,7 +56,11 @@ import {
 } from "@vibefield/contracts";
 import { contextBridge, ipcRenderer, sharedTexture, webUtils } from "electron";
 import { PreloadDesktopStateBridge } from "./desktop-state";
-import { type DiagnosticsRendererPort, PreloadDiagnosticsBridge } from "./diagnostics";
+import {
+  clipboardTooLarge,
+  type DiagnosticsRendererPort,
+  PreloadDiagnosticsBridge,
+} from "./diagnostics";
 import {
   PreloadLiveSurfaceFrameMux,
   type PreloadLiveSurfacePort,
@@ -260,14 +265,31 @@ const isStillBytes = (value: unknown): value is Uint8Array<ArrayBuffer> =>
   Object.prototype.toString.call(value) === "[object Uint8Array]" &&
   Object.prototype.toString.call(value.buffer) === "[object ArrayBuffer]";
 
-/** HN-5 — a copy's picture, or the words beside it, past its bound, in words, the read's voice
- * (item 102): the clause a copy says after "Not copied —". Null when both are within. */
-function pastBound(png: number, words: number): string | null {
+/** HN-5 — a copy's picture, or the words beside it, past its bound: the typed refusal the page
+ * says in Copy's voice (`clipboardTooLarge`), never a sentence. Null when both are within. */
+function pastBound(png: number, words: number): ClipboardCopyRefusal | null {
   const picture = SHELL_CLIPBOARD.WRITE_IMAGE_MAX_BYTES;
   const text = SHELL_CLIPBOARD.WRITE_TEXT_MAX_BYTES;
-  if (png > picture) return `the picture holds ${png} bytes; the clipboard takes at most ${picture}`;
-  if (words > text) return `the words hold ${words} bytes; the clipboard takes at most ${text}`;
+  if (png > picture) return clipboardTooLarge("picture", png, picture);
+  if (words > text) return clipboardTooLarge("words", words, text);
   return null;
+}
+
+/** HN-5 — main's own too-large answer, typed as the page reads it: main measures the picture
+ * before the words and answers the size it refused. Checked against the same bounds here first,
+ * it refuses neither while the two agree; a size within its bound would make a refusal that reads
+ * false, so that crosses as an error, which the page logs and says in its door's own words. */
+function mainTooLarge(png: number, bytes: number | undefined): ClipboardCopyRefusal | Error {
+  const picture = bytes === png;
+  const refusal = ClipboardCopyRefusal.safeParse({
+    reason: "too-large",
+    what: picture ? "picture" : "words",
+    bytes,
+    max: picture ? SHELL_CLIPBOARD.WRITE_IMAGE_MAX_BYTES : SHELL_CLIPBOARD.WRITE_TEXT_MAX_BYTES,
+  });
+  if (refusal.success) return refusal.data;
+  const size = bytes === undefined ? "no size" : `${bytes} bytes`;
+  return new Error(`main refused a copy as too large, within its bound (${size})`);
 }
 
 const platform = ShellPlatform.parse(
@@ -403,25 +425,25 @@ contextBridge.exposeInMainWorld("vibefield", {
      * when it has any: main decodes the PNG and writes both formats in one write (LC-19),
      * for this window, asking no focus (LC-18). The bytes, the words and their bounds are
      * checked here first, so nothing past them crosses; the answer is parsed, and a
-     * refusal rejects with its reason in words, so the copy deals no card. */
+     * refusal rejects typed (`ClipboardCopyRefusal`), never in a sentence, so the copy deals
+     * no card and the page says why in Copy's voice. */
     writeImage: async (png: Uint8Array, text?: string): Promise<void> => {
       if (!isStillBytes(png)) throw new Error("a picture is written from its PNG's bytes");
       if (text !== undefined && typeof text !== "string") {
         throw new Error("the words written beside a picture are text");
       }
       const past = pastBound(png.byteLength, text === undefined ? 0 : utf8ByteLength(text));
-      if (past !== null) throw new Error(past);
+      if (past !== null) throw past;
       const answer: unknown =
         text === undefined
           ? await ipcRenderer.invoke(IPC_CHANNELS.clipboardWriteImage, png)
           : await ipcRenderer.invoke(IPC_CHANNELS.clipboardWriteImage, png, text);
       const result = ClipboardWriteImageResult.parse(answer);
       if (result.status === "written") return;
-      throw new Error(
-        result.reason === "not-an-image"
-          ? "the picture could not be read"
-          : `it holds ${result.bytes ?? "more"} bytes, more than the clipboard takes`,
-      );
+      if (result.reason === "not-an-image") {
+        throw ClipboardCopyRefusal.parse({ reason: "not-an-image" });
+      }
+      throw mainTooLarge(png.byteLength, result.bytes);
     },
   },
   onPrepareClose: (handler: (requestId: string) => void): (() => void) => {
