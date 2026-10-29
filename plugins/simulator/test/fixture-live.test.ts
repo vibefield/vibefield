@@ -147,13 +147,16 @@ describe("the fixture as a live source — the frame-source seam's first", () =>
     expect(t.made[0]?.presents).toHaveLength(2);
     expect(t.face.state()).toEqual({ is: "live" });
     expect(liveSimulatorFace(t.face.info())).toEqual({ is: "live" });
-    // a pause before any frame says nothing: it holds no still (`starting`), and nothing wakes it
+    // streaming again, it holds one timer: its next minute's turn
+    expect(t.pending()).toEqual([AT + 11 * 60_000]);
+    // a pause before any frame says nothing: it holds no still (`starting`), and nothing wakes it — no timer of its own
+    // beside the streaming face's
     const fresh = t.sources.open("k9", SPEC, () => {});
     fresh.demand(PAUSED);
     expect(fresh.state()).toEqual({ is: "starting" });
     expect(fresh.info()).toEqual({});
     expect(fresh.take()).toBe(false);
-    expect(t.pending()).toEqual([]);
+    expect(t.pending()).toEqual([AT + 11 * 60_000]);
   });
 
   it("closes whole: its writer destroyed, its timer cancelled, its state closed — and the key may open again", () => {
