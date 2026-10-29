@@ -68,6 +68,8 @@ jobs:
       prerelease: ${{ steps.plan.outputs.prerelease }}
       makeLatest: ${{ steps.plan.outputs.makeLatest }}
       commit: ${{ steps.plan.outputs.commit }}
+      # AU-6 (LC-18): the plan time, ISO UTC; the stage steps write it into the identity as `builtAt`
+      builtAt: ${{ steps.plan.outputs.builtAt }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -224,6 +226,7 @@ jobs:
         working-directory: apps/desktop
         env:
           VIBEFIELD_RELEASE_CHANNEL: ${{ needs.plan.outputs.channel }}
+          VIBEFIELD_BUILT_AT: ${{ needs.plan.outputs.builtAt }}
           VIBEFIELD_BUNDLED_INDEX_SECRET: ${{ secrets.VIBEFIELD_BUNDLED_INDEX_SECRET }}
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
@@ -240,6 +243,7 @@ jobs:
         working-directory: apps/desktop
         env:
           VIBEFIELD_RELEASE_CHANNEL: ${{ needs.plan.outputs.channel }}
+          VIBEFIELD_BUILT_AT: ${{ needs.plan.outputs.builtAt }}
           VIBEFIELD_BUNDLED_INDEX_SECRET: ${{ secrets.VIBEFIELD_BUNDLED_INDEX_SECRET }}
         run: |
           pnpm run package:stage
@@ -309,9 +313,12 @@ jobs:
     permissions:
       contents: read
     steps:
+      # AU-6: the whole history, so the notes step can read the log since the channel's previous release. History is
+      # data, not code: this job still runs no lifecycle script beside the release key (below).
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ needs.plan.outputs.commit }}
+          fetch-depth: 0
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -362,6 +369,19 @@ jobs:
           for dir in builds/*/; do
             find "$dir" -maxdepth 1 -type f ! -name 'hashes-*.json' -exec cp {} release-out/ \;
           done
+      # AU-6 (AU-D10 A; LC-19): the notes, from the SAME previous manifest Merge names in `previous`, written beside the
+      # release (never an asset of their own) and merged INTO the manifest, so they ride under its one release
+      # signature. A stable refuses here without apps/desktop/packaging/notes/<X.Y.Z>.txt; a first release of its
+      # channel writes none. No secret: git's history and the committed notes are all it reads.
+      - name: The notes (AU-6 — signed with the manifest)
+        env:
+          TAG: ${{ needs.plan.outputs.tag }}
+          CHANNEL: ${{ needs.plan.outputs.channel }}
+          VERSION: ${{ needs.plan.outputs.version }}
+          COMMIT: ${{ needs.plan.outputs.commit }}
+        run: |
+          node scripts/release-notes.mjs --channel "$CHANNEL" --version "$VERSION" --commit "$COMMIT" --tag "$TAG" \
+            --previous previous-channel/release-manifest.json --out notes.json
       - name: Merge the planes (D11)
         env:
           TAG: ${{ needs.plan.outputs.tag }}
@@ -372,7 +392,7 @@ jobs:
           hashes=$(find builds -name 'hashes-*.json' | sort | paste -sd, -)
           node scripts/release-manifest.mjs merge --hashes "$hashes" --version "$VERSION" --tag "$TAG" \
             --channel "$CHANNEL" --commit "$COMMIT" --previous previous-channel/release-manifest.json \
-            --out release-out/release-manifest.json
+            --notes notes.json --out release-out/release-manifest.json
       - name: Sign (TD-3, D8 — the release key, in this step alone)
         env:
           VIBEFIELD_RELEASE_SECRET: ${{ secrets.VIBEFIELD_RELEASE_SECRET }}
