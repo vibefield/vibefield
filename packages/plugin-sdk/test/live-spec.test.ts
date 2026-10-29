@@ -227,6 +227,10 @@ describe("PT-S1 — liveSimulatorFace: the simulator's honest face, the host's w
       { is: "live", device: 17 },
       { is: "off", act: "boot" },
       { is: "off", act: {} },
+      // shaped like an Object property: the closed set's own test, never a lookup (the pane's BP-D1 lesson)
+      { is: "toString" },
+      { is: "constructor" },
+      { is: "__proto__" },
     ])
       expect(
         liveSimulatorFace({ extra: { simulator } }),

@@ -3622,7 +3622,7 @@ Inside History the room's own words stand as rosetta wrote them, and the Setup A
 - One row stands by decision. An agent that never says who keeps Settings' "Doesn't say who is signed in" over the
   page's "Signed in · doesn't say which account": VibeField cannot know it is signed in.
 
-**The simulator's honest faces** (PT-S1; the PT-S design §3, ruled 2026-10-18) — what the phone's
+**The simulator's honest faces** (track PT, PT-S1; the PT-S design §3, ruled 2026-10-18) — what the phone's
 screen says of its device, in the voice's words, quoted exactly by the plugin (`plugins/simulator`'s
 `face.ts`; its design test reads this table). `iPhone 17 Pro` stands for the device's name: the host's
 word for it, else the phone's model's. A face with words shows them light over the dark panel, or over

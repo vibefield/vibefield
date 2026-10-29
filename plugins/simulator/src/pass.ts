@@ -18,6 +18,9 @@
 //  - its face's WORDS — their own texture (the words' block alone, made the first time a face says something and let go when
 //    it is silent again), its mips made with the kit's `mipsInto`. The kind's local is told its bytes (`onNotice`) — it charges
 //    them to the desk's budget, and `unnotice` lets the texture go at an eviction.
+// It SUBMITS nothing of its own: every mip pass is recorded into the frame's encoder, and the writes are uploads. Were it ever
+// to submit a buffer, it would label it at `finish({ label: "simulator/<what>" })`, or main's smoke:canvas IDLE row (PT-3,
+// which names each submit by its label) would blame ICE for it.
 
 import {
   bindGroup,
