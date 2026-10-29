@@ -58,7 +58,7 @@ public struct FieldDesktop: Identifiable, Sendable, Equatable {
   /// IOS-8c — the user this desktop serves, as its door said at hello
   /// (`HelloAck.userId`, UA-2's ULID). Nil until the door has answered, or
   /// from a daemon that names none. It is the seed the corner's face is
-  /// dealt from until the door carries the face itself (AP-D3).
+  /// dealt from until the home answers with the face itself (`person`, IOS-8f).
   public let userId: String?
   /// IOS-8f — who this desktop's person is, in its own words (`user.me`): the
   /// face its windows show and the name, asked of the HOME once per

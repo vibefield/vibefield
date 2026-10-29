@@ -101,15 +101,19 @@ public struct HomeMemory {
   }
 }
 
-/// The face this phone wears for an account.
+/// The face this phone wears for an account, and the name the desktop calls
+/// its person.
 ///
-/// Until the door carries the desktop's own face (IOS-8f, `user.me`), the
-/// phone DEALS one from the same deck with the same hash as the desktop, from
-/// the user ULID the first self desktop reports at hello (`HelloAck.userId`)
-/// — which is that desktop's own dealt face wherever its user has not changed
-/// it. Dealt once per login and kept: a later desktop of the same login with
-/// another ULID does not move it, because a face that moved would be the
-/// opposite of an identity.
+/// The desktop's own word comes first (IOS-8f, `user.me`): the HOME's answer —
+/// the face its windows show, the name its user row holds — is adopted as it
+/// arrives, replacing a deal and an earlier home's word (VF-PM 2026-10-29, the
+/// lean recorded: between two self desktops the home's answer wins, and the
+/// home is sticky per login, DS-8). Until a home answers — a desktop older than
+/// the door, one that serves no user — the phone DEALS a face from the same deck
+/// with the same hash as the desktop, from the user ULID the first self desktop
+/// reports at hello (`HelloAck.userId`), held to `face-deal.vector.json`. A deal
+/// is made once per login and kept: a later desktop's deal never moves it,
+/// because a face that moved on a guess would be the opposite of an identity.
 public struct AccountFaceStore {
   private let defaults: UserDefaults
 
@@ -119,6 +123,17 @@ public struct AccountFaceStore {
 
   static func key(for login: String) -> String {
     "vf.account.face." + login.lowercased()
+  }
+
+  static func nameKey(for login: String) -> String {
+    "vf.account.name." + login.lowercased()
+  }
+
+  /// The name the home desktop calls this person, once one has said it; nil
+  /// until then, and the corner's login stands in.
+  public func name(for login: String) -> String? {
+    let name = defaults.string(forKey: Self.nameKey(for: login))
+    return name?.isEmpty == false ? name : nil
   }
 
   public func face(for login: String) -> UserFace? {
@@ -142,7 +157,34 @@ public struct AccountFaceStore {
     defaults.set(data, forKey: Self.key(for: login))
   }
 
+  /// IOS-8f — the home's answer to `user.me`, adopted: its face replaces what is
+  /// kept, and its name is kept when it has one (a desktop with no user row
+  /// names nobody, and an earlier name is not unsaid by it). True when either
+  /// moved, so the corner redraws once.
+  @discardableResult
+  public func adopt(_ person: DesktopPerson, login: String) -> Bool {
+    guard !login.isEmpty else { return false }
+    var moved = false
+    let face = Self.face(of: person)
+    if self.face(for: login) != face {
+      set(face, for: login)
+      moved = true
+    }
+    if let name = person.name, !name.isEmpty, self.name(for: login) != name {
+      defaults.set(name, forKey: Self.nameKey(for: login))
+      moved = true
+    }
+    return moved
+  }
+
+  /// The wire's face as the kit draws it: an absent or unknown frame is a
+  /// sticker (UA-D17).
+  static func face(of person: DesktopPerson) -> UserFace {
+    UserFace(emoji: person.emoji, frame: person.frame.flatMap(FaceFrame.init(rawValue:)) ?? .sticker)
+  }
+
   public func forget(login: String) {
     defaults.removeObject(forKey: Self.key(for: login))
+    defaults.removeObject(forKey: Self.nameKey(for: login))
   }
 }

@@ -32,6 +32,40 @@ struct AccountMemoryTests {
     #expect(memory.remembered(for: "me@example.com").allSatisfy { $0.lastSeen == t1 })
   }
 
+  @Test("IOS-8f: the home's own word replaces a deal, keeps its name, and a later deal never moves it")
+  func adoptsTheHomesPerson() {
+    let store = AccountFaceStore(defaults: scratch())
+    let login = "me@example.com"
+    store.dealIfNeeded(login: login, userId: "01J8F2ZQ9K3M4N5P6Q7R8S9T0V")
+    #expect(store.face(for: login) == UserFace(emoji: "🐳", frame: .sticker))
+    #expect(store.name(for: login) == nil)
+
+    let written = DesktopPerson(name: "James", emoji: "🐙", frame: "coin", dealt: false)
+    #expect(store.adopt(written, login: login))
+    #expect(store.face(for: login) == UserFace(emoji: "🐙", frame: .coin))
+    #expect(store.name(for: "ME@example.com") == "James")
+    // the same answer again moves nothing, so the corner redraws once
+    #expect(!store.adopt(written, login: login))
+    // a later desktop's deal never moves the desktop's own word
+    store.dealIfNeeded(login: login, userId: "01J9AAAAAAAAAAAAAAAAAAAAAA")
+    #expect(store.face(for: login)?.emoji == "🐙")
+  }
+
+  @Test("IOS-8f: a nameless answer keeps the name; an unknown frame is a sticker; sign out forgets both")
+  func adoptEdges() {
+    let defaults = scratch()
+    let store = AccountFaceStore(defaults: defaults)
+    let login = "me@example.com"
+    store.adopt(DesktopPerson(name: "James", emoji: "🐙", frame: "coin", dealt: false), login: login)
+    #expect(store.adopt(DesktopPerson(name: nil, emoji: "🦊", frame: "hologram", dealt: true), login: login))
+    #expect(store.face(for: login) == UserFace(emoji: "🦊", frame: .sticker))
+    #expect(store.name(for: login) == "James")
+    #expect(!store.adopt(DesktopPerson(name: "Nobody", emoji: "🦊", frame: nil, dealt: true), login: ""))
+    SignOutSweep(login: login, stateDirectory: nil).run(defaults: defaults)
+    #expect(store.face(for: login) == nil)
+    #expect(store.name(for: login) == nil)
+  }
+
   @Test("an absent desktop stays remembered until the account is forgotten")
   func staysUntilForgotten() {
     let memory = DesktopMemory(defaults: scratch())
