@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { METHODS } from "../src/methods";
-import { IPC_CHANNELS } from "../src/registries";
+import { IPC_CHANNELS, SHELL_CLIPBOARD, TERMINAL_PIPELINE } from "../src/registries";
 import {
   APP_PREFERENCE_KEYS,
   AppPreferenceSetParams,
   AppPreferences,
   BrowserDataClearResult,
+  ClipboardReadRequest,
+  ClipboardReadResult,
   CloseReason,
   CloseRequest,
   CloseResult,
@@ -221,7 +223,11 @@ describe("Close protocol — CloseReason / CloseRequest / CloseResult (ESR §6.4
 });
 
 describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => {
-  it("exposes exactly the thirty-two channel keys, in order", () => {
+  // The count lives here alone, in the literal: two lines that each add a channel
+  // meet at it in a merge and conflict out loud, where a number in the title
+  // went stale in silence (item 102, found at HN's rebase rehearsal).
+  it("exposes exactly its channel keys, in order", () => {
+    expect(Object.keys(IPC_CHANNELS)).toHaveLength(33);
     expect(Object.keys(IPC_CHANNELS)).toEqual([
       "windowBootstrap",
       "prepareClose",
@@ -258,6 +264,7 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       "screenshotStillKept", // HN-4 — whether a still is kept, before a pane is given its path
       "rendererReplace", // DK-9 — the window's renderer replaced at its own asking (a plugin's kinds)
       "browserDataClear", // BP-D4 — Settings' Clear browsing data: the desk's profile cleared, its pages reloaded
+      "clipboardRead", // item 102 — a paste's read through main, for the focused product window
     ]);
   });
 
@@ -295,6 +302,7 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       screenshotStillKept: "vibefield:screenshot:still-kept",
       rendererReplace: "vibefield:shell:renderer-replace",
       browserDataClear: "vibefield:browser:clear-data",
+      clipboardRead: "vibefield:clipboard:read",
     });
   });
 
@@ -325,6 +333,45 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       { profiles: 65, pages: 0 },
     ])
       expect(BrowserDataClearResult.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
+  });
+});
+
+describe("the clipboard read door (item 102)", () => {
+  it("asks with nothing, and answers the text or an honest refusal", () => {
+    expect(ClipboardReadRequest.parse({})).toEqual({});
+    expect(ClipboardReadResult.parse({ status: "read", text: "ls\n" })).toEqual({
+      status: "read",
+      text: "ls\n",
+    });
+    expect(ClipboardReadResult.parse({ status: "refused", reason: "unfocused" })).toEqual({
+      status: "refused",
+      reason: "unfocused",
+    });
+    expect(
+      ClipboardReadResult.parse({ status: "refused", reason: "too-large", bytes: 5_000_000 }),
+    ).toMatchObject({ reason: "too-large", bytes: 5_000_000 });
+    for (const bad of [
+      {},
+      { status: "read" },
+      { status: "read", text: 1 },
+      { status: "refused" },
+      { status: "refused", reason: "because" },
+      { status: "refused", reason: "too-large", bytes: -1 },
+    ])
+      expect(ClipboardReadResult.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
+  });
+
+  it("reads the cell's paste ceiling by reference, never a number of its own, in UTF-8 bytes", () => {
+    expect(SHELL_CLIPBOARD.READ_MAX_BYTES).toBe(TERMINAL_PIPELINE.MAX_PASTE_BYTES);
+    // the pane's own carry is smaller, and D6 refuses past it in the line's words
+    expect(TERMINAL_PIPELINE.MAX_CONTROL_MESSAGE_BYTES).toBeLessThan(
+      SHELL_CLIPBOARD.READ_MAX_BYTES,
+    );
+    const atBound = "é".repeat(SHELL_CLIPBOARD.READ_MAX_BYTES / 2);
+    expect(ClipboardReadResult.safeParse({ status: "read", text: atBound }).success).toBe(true);
+    expect(ClipboardReadResult.safeParse({ status: "read", text: `${atBound}x` }).success).toBe(
+      false,
+    );
   });
 });
 

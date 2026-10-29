@@ -81,6 +81,15 @@ export interface FieldBrowserDataHost {
   clear(): Promise<BrowserDataClearResult>;
 }
 
+/** Item 102 — the clipboard's read through main (design-03 §5.1's `shell.clipboard.*`):
+ * the shell session grants no Chromium permission (ESP §7.4), so the web's own read is
+ * denied in the desktop app. Main answers only the focused product window, and a
+ * refusal rejects. Absent in browser harnesses (the catalog), where the web's read
+ * stands. */
+export interface FieldClipboardHost {
+  readText(): Promise<string>;
+}
+
 export interface FieldDiagnosticsHost {
   query(query: DiagnosticLogQueryV1): Promise<DiagnosticLogSnapshotV1>;
   subscribe(
@@ -209,6 +218,8 @@ export interface FieldHost {
   readonly updates?: FieldUpdatesHost;
   /** BP-D4 — the desk browser's data (`FieldBrowserDataHost`); absent where main owns no browser profile. */
   readonly browserData?: FieldBrowserDataHost;
+  /** Item 102 — the clipboard's read (`FieldClipboardHost`); absent where no main reads it. */
+  readonly clipboard?: FieldClipboardHost;
   readonly platform?: ShellPlatform;
   readonly view?: FieldViewHost;
   /** Optional like `view`: a browser harness has no main to own the theme, and

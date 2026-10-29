@@ -29,6 +29,7 @@ import type { FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import type { Logger } from "@vibefield/logging";
 import { ipcMain, type WebContents } from "electron";
 import { createBootstrapHandler, type WindowRendererBoundary } from "./bootstrap";
+import { type ClipboardDoorOptions, createClipboardDoor } from "./clipboard-door";
 import { shellIdentity } from "./login-shell";
 import { createScreenshotDoor } from "./screenshot-door";
 import { createScreenshotPreviewDoor } from "./screenshot-preview";
@@ -272,6 +273,29 @@ export function registerBrowserDataClear(
     }
     return BrowserDataClearResult.parse(await clear());
   });
+}
+
+/** Item 102 — the clipboard read door (design-03 §5.1's `shell.clipboard.*`, the
+ * product window's read half). Policy in clipboard-door.ts; this is the ipcMain
+ * wiring only. The registered-sender gate is `registry.owns`, as at every door
+ * here, and the focus fact is the caller's: the sender's window and its page. */
+export function registerClipboardRead(
+  registry: WindowRegistry,
+  options: Omit<ClipboardDoorOptions<WebContents>, "owns" | "onRefused">,
+  logger?: Logger,
+): void {
+  const door = createClipboardDoor<WebContents>({
+    ...options,
+    owns: (sender) => registry.owns(sender),
+    onRefused: (sender, reason, bytes) => {
+      logger?.warn("desktop.ipc.clipboard_read_refused", "Electron refused a clipboard read", {
+        webContentsId: sender.id,
+        reason,
+        ...(bytes === undefined ? {} : { bytes }),
+      });
+    },
+  });
+  ipcMain.handle(IPC_CHANNELS.clipboardRead, (event, raw: unknown) => door(event.sender, raw));
 }
 
 /** WP12d (L3c-i; `build-wp12-updater.md` §13 C1, the PM's ruling 2026-10-15 18:17Z) — the updater's host doors. The
