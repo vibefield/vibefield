@@ -1355,9 +1355,9 @@ export async function runSmokeCanvas(opts: {
         // HN-D3: the desk's Copy — the bar's pill, the grown menu's row, the tools in hand's pill and ⌘C each dealing ONE
         // card: a note's writing a text card, anything else a picture of the objects without the marks, the selection
         // never blinking, the bar never stepping aside, what each card holds handed to main first — a note's words to
-        // the copy door, a picture to the picture door (HN-5) — kept there, never on the person's clipboard (R-T 4),
-        // the hand emptied after (testing/smoke-desk-copy.ts) — still at the arrival fit, before the pad row moves the
-        // camera
+        // the copy door, a picture and the words its objects keep to the picture door in one write (HN-5, LC-19) —
+        // kept there, never on the person's clipboard (R-T 4), the hand emptied after (testing/smoke-desk-copy.ts) —
+        // still at the arrival fit, before the pad row moves the camera
         try {
           problems.push(
             ...(await deskCopyRows({
