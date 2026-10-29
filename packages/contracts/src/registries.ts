@@ -1573,6 +1573,14 @@ export const LAYOUT = {
    * has kept yet (`AgentProfileDraftsFile`, 0600, written whole). fieldd's; per
    * user, since a profile is one person's. */
   AGENT_PROFILE_DRAFTS_FILE: ["fieldd", "profile-drafts.json"],
+  /** CP-1c (the compose plane, version 2) — the sparks fieldd keeps, one `SparkRecord` per file, 0600 in a 0700
+   * directory, each signed with SPARKS_KEY_FILE's secret (0600, made once, never overwritten), so an agent that edits
+   * one cannot widen its own profiles: an unsigned or forged record is set aside, never served. */
+  SPARKS_DIR: ["fieldd", "sparks"],
+  SPARKS_KEY_FILE: ["fieldd", "sparks.key"],
+  /** CP-1c — each spark's own folder, `sparks/<slug>/`, made when it hatches: where its session works, with the
+   * CLAUDE.md written for it. The person's, to open in Finder; fieldd's records never live in it. */
+  SPARK_HOMES_DIR: ["sparks"],
   TERMINAL_CONFIG_FILE: ["native", FILES.TERMINAL_CONFIG],
   RESTART_INTENT_FILE: ["native", FILES.RESTART_INTENT],
   // RETIRED 2026-09-14 (TM-3, `thinking-terminal-mesh-cells.md` §7 / TM-D3):

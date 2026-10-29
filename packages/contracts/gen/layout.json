@@ -86,6 +86,17 @@
     "fieldd",
     "profile-drafts.json"
   ],
+  "SPARKS_DIR": [
+    "fieldd",
+    "sparks"
+  ],
+  "SPARKS_KEY_FILE": [
+    "fieldd",
+    "sparks.key"
+  ],
+  "SPARK_HOMES_DIR": [
+    "sparks"
+  ],
   "TERMINAL_CONFIG_FILE": [
     "native",
     "config.ghostty"

@@ -54,6 +54,8 @@ import {
   ArtifactUpdateParams,
   type CallerContext,
   CONTRACTS_VERSION,
+  ComposeSparksHatchParams,
+  ComposeSparksOpenParams,
   createAgentCatalogReaders,
   DEVICE_LIMITS,
   DeviceGetParams,
@@ -220,6 +222,7 @@ import { ArtifactService, type ArtifactServiceHealth } from "./artifact-service"
 import { AuditService, type AuditWriterTestHooks } from "./audit-service";
 import { nativeAlive, nativeEndpoint, nativeMgmtEndpoint } from "./boot-env";
 import { ComposeService, composeProjects } from "./compose";
+import { LAUNCH_ROUTE, SparkService, SparkStore } from "./compose/sparks";
 import { DeviceService, localDeviceIdAt } from "./device-service";
 import { DiagnosticsService } from "./diagnostics-service";
 import { DocLane } from "./doc-lane";
@@ -2665,13 +2668,61 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     });
     // CP-1b (the compose plane, version 2; compose/) — the `vibefield` door. A spark's MCP calls arrive through the
     // floor's door (native.door.subscribe; the bytes on the meshdata lane link) and are answered with its verbs, each
-    // held to its Agent Profiles and audited before it acts. No spark is kept before CP-1c's store, so every caller is
-    // served no tools yet, and each door leaves its one audit line.
+    // held to its Agent Profiles and audited before it acts. A spark's own session is known by its record (CP-1c,
+    // just below); any other caller is served no tools and leaves its door's one audit line.
+    // CP-1c (compose/sparks.ts) — the sparks: their signed records under LAYOUT.SPARKS_DIR, each one's folder under
+    // LAYOUT.SPARK_HOMES_DIR, and the window's three doors (below, beside setup's). The route is A, the lean on the
+    // board's co-spark-door-route: until PU-F carries the server at launch, a spark hatches and thinks without tools.
+    const sparks = new SparkService({
+      store: new SparkStore({
+        dir: join(config.dataDir, ...LAYOUT.SPARKS_DIR),
+        keyPath: join(config.dataDir, ...LAYOUT.SPARKS_KEY_FILE),
+        logger: logger.child({ component: "compose.sparks" }),
+      }),
+      homes: join(config.dataDir, ...LAYOUT.SPARK_HOMES_DIR),
+      route: LAUNCH_ROUTE,
+      profileSets: async () => (await agents.profiles.sets()).sets,
+      runs: () => agents.list().sessions,
+      spawn: async (launch, spark, principal) => {
+        const result = await agents.spawn(
+          {
+            provider: launch.provider,
+            cwd: launch.cwd,
+            profileSet: launch.profileSet,
+            title: launch.title,
+            ...(launch.modelSelection !== undefined
+              ? { modelSelection: launch.modelSelection }
+              : {}),
+          },
+          principal,
+          undefined,
+          { origin: { by: "you" }, spark },
+        );
+        return { runtimeRunId: result.session.runtimeRunId };
+      },
+      resume: async (runtimeRunId, principal) => {
+        try {
+          return {
+            runtimeRunId: (await agents.resume({ runtimeRunId }, principal)).session.runtimeRunId,
+          };
+        } catch (error) {
+          // a session that cannot be resumed (gone, never resumable) is started again in the spark's folder
+          if (
+            error instanceof RpcCallError &&
+            (error.kind === "PRECONDITION_FAILED" || error.kind === "NOT_FOUND")
+          )
+            return undefined;
+          throw error;
+        }
+      },
+      now: () => new Date(),
+      logger: logger.child({ component: "compose.sparks" }),
+    });
     compose = new ComposeService({
       native,
       lanes: laneLink,
       runForTerminal: (terminalSessionId) => agents.runForTerminal(terminalSessionId),
-      spark: () => undefined,
+      spark: (id) => sparks.get(id),
       verbs: {
         profileSets: async () => (await agents.profiles.sets()).sets,
         agentLabel: (provider) =>
@@ -5707,6 +5758,49 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       }
       setupLedger.answer(parsed.data.step, parsed.data.state);
       return setupLedger.snapshot();
+    });
+    // CP-1c — the sparks' doors (compose.ts; METHODS rows under agents.manage, local): the window's, and audited.
+    api.register("compose.sparks.list", (ctx) => {
+      requireDesktopCaller(ctx);
+      return { sparks: sparks.list() };
+    });
+    api.register("compose.sparks.hatch", async (ctx, params) => {
+      requireDesktopCaller(ctx);
+      const parsed = ComposeSparksHatchParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { name, face: { seed }, agent, modelSelection?, profiles, thinksUnder }, thinking under one of its profiles",
+          false,
+        );
+      const ask = parsed.data;
+      return await audit.required(
+        ctx,
+        {
+          action: "compose.spark.hatch",
+          target: { kind: "spark", id: "pending" },
+          attrs: {
+            agent: ask.agent,
+            profiles: ask.profiles.join(","),
+            thinksUnder: ask.thinksUnder,
+          },
+        },
+        async () => ({ spark: await sparks.hatch(ask, ctx.principal) }),
+        (result) => ({ outcome: "succeeded", attrs: { spark: result.spark.id } }),
+      );
+    });
+    api.register("compose.sparks.open", async (ctx, params) => {
+      requireDesktopCaller(ctx);
+      const parsed = ComposeSparksOpenParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { spark }", false);
+      const id = parsed.data.spark;
+      return await audit.required(
+        ctx,
+        { action: "compose.spark.open", target: { kind: "spark", id } },
+        async () => ({ spark: await sparks.open(id, ctx.principal) }),
+        () => ({ outcome: "succeeded" }),
+      );
     });
     api.register("setup.moment", (ctx, params) => {
       requireDesktopCaller(ctx);

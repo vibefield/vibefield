@@ -273,6 +273,9 @@ pub mod layout {
     pub const SETUP_LEDGER_FILE: &[&str] = &["fieldd", "setup.json"];
     pub const DEVICE_NAME_FILE: &[&str] = &["fieldd", "device-name.json"];
     pub const AGENT_PROFILE_DRAFTS_FILE: &[&str] = &["fieldd", "profile-drafts.json"];
+    pub const SPARKS_DIR: &[&str] = &["fieldd", "sparks"];
+    pub const SPARKS_KEY_FILE: &[&str] = &["fieldd", "sparks.key"];
+    pub const SPARK_HOMES_DIR: &[&str] = &["sparks"];
     pub const TERMINAL_CONFIG_FILE: &[&str] = &["native", "config.ghostty"];
     pub const RESTART_INTENT_FILE: &[&str] = &["native", "restart-intent.json"];
     pub const MGMT_SOCKET: &[&str] = &["native", "run", "mgmt.sock"];
@@ -339,6 +342,9 @@ pub mod layout {
         ("SETUP_LEDGER_FILE", SETUP_LEDGER_FILE),
         ("DEVICE_NAME_FILE", DEVICE_NAME_FILE),
         ("AGENT_PROFILE_DRAFTS_FILE", AGENT_PROFILE_DRAFTS_FILE),
+        ("SPARKS_DIR", SPARKS_DIR),
+        ("SPARKS_KEY_FILE", SPARKS_KEY_FILE),
+        ("SPARK_HOMES_DIR", SPARK_HOMES_DIR),
         ("TERMINAL_CONFIG_FILE", TERMINAL_CONFIG_FILE),
         ("RESTART_INTENT_FILE", RESTART_INTENT_FILE),
         ("MGMT_SOCKET", MGMT_SOCKET),
