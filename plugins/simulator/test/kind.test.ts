@@ -373,19 +373,27 @@ describe("the phone's world half", () => {
     expect(r.geometry.shape.model.name).toBe("iPhone 8");
   });
 
-  it("by night a lit screen's glow grows its quad; by day, or with the screen off, it does not", () => {
+  it("by night a BOUND phone holds its glow's reach from its FIRST resolve — before any face is open — so a stream that lands is never clipped; by day, or unbound, it does not", () => {
     const t = fakeHost();
     const local = createSimulatorLocal(t.host);
     const night = ctxOf(boundTo(`${TYPE}iPhone-17-Pro`), { local, night: true });
-    kind.record(kind.resolve(night), night);
+    // the first resolve runs before the record opens a face: the quad is sized from the props alone (the pane's `lit`)
+    const first = kind.resolve(night);
+    expect(t.opened).toHaveLength(0);
+    // its screen dark until a frame lands: the larger quad lights nothing (the shader and the spill gate on `on`)
+    expect(kind.record(first, night).screen.on).toBe(0);
+    expect(t.opened).toHaveLength(1);
     const face = t.faces.get("13918995204487956201-1");
     face?.land();
     face?.is({ is: "live" });
     local.tick(16);
     const lit = kind.resolve(night);
+    // the stream landed and the quad did not move: it held the glow's reach already
+    expect(lit.bounds).toEqual(first.bounds);
+    expect(kind.record(lit, night).screen.on).toBe(1);
     const day = kind.resolve(ctxOf(boundTo(`${TYPE}iPhone-17-Pro`), { local }));
     const dark = kind.resolve(ctxOf({}, { night: true }));
-    expect(lit.bounds.x1 - lit.bounds.x0).toBeGreaterThan(day.bounds.x1 - day.bounds.x0 + 100);
+    expect(first.bounds.x1 - first.bounds.x0).toBeGreaterThan(day.bounds.x1 - day.bounds.x0 + 100);
     expect(dark.bounds.x1 - dark.bounds.x0).toBeCloseTo(day.bounds.x1 - day.bounds.x0, 6);
     // the ray still finds the glass where it is drawn, lit or not
     const [cx, cy] = seen(lit.eye, pointAt(lit, 0, 0));

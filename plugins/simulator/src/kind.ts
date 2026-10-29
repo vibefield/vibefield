@@ -220,8 +220,10 @@ export function simulatorKind(
         binding === undefined
           ? NO_FACE
           : planOf(local, ctx.entity, deviceName(binding, model), law);
-      // by night a lit screen's glow reaches round the phone: the quad grows to hold it
-      const glow = ctx.theme.name === "dark" && plan.frame ? glowReach(law) : 0;
+      // by night a BOUND phone's glow may reach round it: the quad grows to hold it, read from the props alone (the pane's `lit`).
+      // Not from the face: the first resolve runs before the record has opened one, and a quad sized then would clip the glow
+      // when the stream lands. A screen that is off or stilled draws no glow in the larger quad (the shader scales it by `on`).
+      const glow = ctx.theme.name === "dark" && binding !== undefined ? glowReach(law) : 0;
       const held = ctx.held !== undefined;
       const G = resolvePhone(ctx.rect, ctx.flux, S, ctx.lamp, law, glow, held);
       // in hand, its face's act is a part where its words are drawn (the capsule lies under their lines)
