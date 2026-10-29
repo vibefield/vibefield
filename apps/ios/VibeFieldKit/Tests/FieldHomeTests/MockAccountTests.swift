@@ -1,4 +1,5 @@
 import FieldDesign
+import Foundation
 import Testing
 
 @testable import FieldHome
@@ -53,5 +54,28 @@ struct MockAccountTests {
     mock.signIn()
     #expect(mock.standing == .up)
     #expect(mock.face.control == .face(AccountFixtures.fox))
+  }
+
+  @Test("TS-7: the Field page's door follows the standing — the welcome signed out, the field signed in")
+  func door() {
+    let mock = MockAccount()
+    #expect(mock.door == nil)
+    mock.standing = .reconnecting
+    #expect(mock.door == nil)
+    mock.signOut()
+    #expect(mock.door == .welcome(failure: nil))
+  }
+
+  @Test("TS-7: waiting for approval — the dot, the line, and the approval page with the console")
+  func approval() {
+    let mock = MockAccount()
+    mock.standing = .approval
+    #expect(mock.face.wantsAttention)
+    #expect(mock.face.detail == "waiting for approval")
+    #expect(mock.face.notice == "An admin of your Tailscale network approves new devices.")
+    #expect(
+      mock.door
+        == .approval(
+          machine: AccountFixtures.machine, adminConsole: URL(string: "https://login.tailscale.com/admin/machines")))
   }
 }

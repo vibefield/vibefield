@@ -3459,6 +3459,33 @@ Device logs' two readings, Disconnect's sentences and Tailnet Lock's. While Tail
 Mac, the Me menu keeps the login line (23:08:59Z). The words for a network that requires logs are the
 thinking doc's §11, ruled with TS-D16.*
 
+**The phone's door** (track TS, TS-7; TS-D11 A, and James's TS-7 picks "all six A — the leans",
+2026-10-29 05:29:27Z). The phone signs in through iOS's own sign-in sheet, which first asks to use
+tailscale.com; the app closes the sheet itself once the phone is signed in — at approval as well as at
+Connected, a departure from TS-D11 A's "when the node is Running" — and a Cancel leaves the page as it
+was. In place of the field's own empty words, the Field page says, with the tabs and search kept: while
+the phone has no account, the welcome — **Your field, in your pocket.** · "Approve agents, watch
+sessions and type into them, from anywhere your Mac is." · Tailscale's mark beside "Private network by
+Tailscale. Use the same account as VibeField on your Mac." · **Continue with Tailscale** · "Next, iOS
+asks to use tailscale.com to sign in." (a first sign-in's failure is one line under it), and no app
+mark; at approval, **Waiting for approval.** · "You’re signed in. An admin of your Tailscale network
+approves new devices." with one row — "This phone", its machine name in mono as it asked Tailscale for
+it, Copy — and **Open the admin console** (none on a custom control server); for an account the
+network asks again, **Sign in to Tailscale again.** · "This phone can’t reach your desktops until you
+do. Nothing here is lost." · **Sign in again** (expired and removed are one page until the phone's
+Tailscale says which); and, signed in with no desktop listed or remembered, **No desktops yet.** ·
+"Signed in as ‹login›. On your Mac, open VibeField, click your face, then **Connect your devices…**
+with this same account." with one row, the macOS mark and "Your Mac appears here", which the first
+desktop to list fills (its mark, its name) for 1.2 s before the page yields to the field — there is no
+Found toast. Under any of them the field drifts and takes no acts. The corner moves with the pages:
+under the name "waiting for approval", "couldn’t connect", "signing out"; its notices "Sign in to
+Tailscale again to reach your desktops.", "An admin of your Tailscale network approves new devices.",
+"Couldn’t connect — ‹reason›."; its menu row **Continue with Tailscale** with no account and **Sign in
+again** with one; its desktops each wear their OS mark. While the welcome stands, the corner steps
+aside on the Field tab, so its one act is said once. *Named deviation:* the corner's circle on History
+still reads "Sign in" — three words do not fit its 10 pt label — and its spoken name is "Sign in,
+Continue with Tailscale".
+
 **The agents' words** (track AO, ruled 2026-10-27; AO-L8, no machinery on screen). One word per thing,
 in the Setup Assistant, Settings, History and the launcher alike. An **agent** is named by the
 catalog's label (Claude Code, Codex, Grok). **This Mac** is the profile that uses the agents' own
@@ -3843,7 +3870,10 @@ row and the bottom centre solid, the other five at 40% — never in one colour, 
 where trust is decided — the Connect pane's partner line, Settings → Devices' card, the phone's
 sign-in — and every button stays words. It is drawn inline in `account/tailscale-mark.tsx`, the
 glyph test's allow-list naming it, and About carries "Tailscale is a registered trademark of
-Tailscale Inc.". On the
+Tailscale Inc.". The phone's copy (TS-7) is FieldDesign's `TailscaleMark` in
+`ChromePalette.tailscaleInk`, drawn from the same constants and held to them by
+`pnpm check:ios-fixtures`; having no About, the phone carries the trademark line at the foot of its
+settings sheet. On the
 phone (PJ-7) the OS marks are template SVGs in FieldDesign's `OSMarks.xcassets` (`DeviceMark`),
 copies of `os-marks.tsx`'s paths that `pnpm check:ios-fixtures` holds to them; and `start`,
 `resume` and `jump` join the phone's picks, so History's New agent, Resume and Jump to draw the

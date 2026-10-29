@@ -15,8 +15,8 @@ struct AccountMemoryTests {
     return defaults
   }
 
-  private func desktop(id: String, name: String) -> FieldDesktop {
-    FieldDesktop(deviceId: id, name: name, platform: "darwin", state: .ready, feed: .door)
+  private func desktop(id: String, name: String, platform: String? = "darwin") -> FieldDesktop {
+    FieldDesktop(deviceId: id, name: name, platform: platform, state: .ready, feed: .door)
   }
 
   @Test("a listed desktop is remembered, by device id, with the name it reports now")
@@ -24,12 +24,35 @@ struct AccountMemoryTests {
     let memory = DesktopMemory(defaults: scratch())
     let t0 = Date(timeIntervalSince1970: 1_000)
     memory.record([desktop(id: "a", name: "studio")], login: "Me@Example.com", at: t0)
-    #expect(memory.remembered(for: "me@example.com") == [.init(deviceId: "a", name: "studio", lastSeen: t0)])
+    #expect(
+      memory.remembered(for: "me@example.com") == [
+        .init(deviceId: "a", name: "studio", lastSeen: t0, platform: "darwin")
+      ])
     // Seen again under a new name: the same row, renamed, re-dated.
     let t1 = Date(timeIntervalSince1970: 2_000)
     memory.record([desktop(id: "a", name: "studio-2"), desktop(id: "b", name: "mini")], login: "me@example.com", at: t1)
     #expect(memory.remembered(for: "me@example.com").map(\.name) == ["studio-2", "mini"])
     #expect(memory.remembered(for: "me@example.com").allSatisfy { $0.lastSeen == t1 })
+  }
+
+  @Test("TS-7: a listing that has not said its platform keeps the one remembered, and a new one replaces it")
+  func platformMerges() {
+    let memory = DesktopMemory(defaults: scratch())
+    memory.record([desktop(id: "a", name: "studio")], login: "me@example.com")
+    memory.record([desktop(id: "a", name: "studio", platform: nil)], login: "me@example.com")
+    #expect(memory.remembered(for: "me@example.com").map(\.platform) == ["darwin"])
+    memory.record([desktop(id: "a", name: "studio", platform: "linux")], login: "me@example.com")
+    #expect(memory.remembered(for: "me@example.com").map(\.platform) == ["linux"])
+  }
+
+  @Test("TS-7: a record written before the platform decodes, and says none")
+  func oldRecordDecodes() throws {
+    let defaults = scratch()
+    let old = #"[{"deviceId":"a","name":"studio","lastSeen":0}]"#
+    defaults.set(Data(old.utf8), forKey: DesktopMemory.key(for: "me@example.com"))
+    let rows = DesktopMemory(defaults: defaults).remembered(for: "me@example.com")
+    #expect(rows.map(\.deviceId) == ["a"])
+    #expect(rows.first?.platform == nil)
   }
 
   @Test("an absent desktop stays remembered until the account is forgotten")

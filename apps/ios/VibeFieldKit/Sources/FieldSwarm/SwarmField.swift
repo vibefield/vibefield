@@ -18,10 +18,14 @@ import UIKit
 /// the finger reaches a desktop, then a profile, and letting go hands the
 /// choice to `onBloom` — the launch sheet opens on it, never a terminal (Q4).
 /// No real choice: the hold creates through `onCreate`, as before.
+///
+/// TS-7 — `showsEmptyState: false` keeps the field's own empty words off while
+/// a page of the account's door stands over the field and says what to do.
 public struct SwarmField<Chrome: View>: View {
   private let bubbles: [FieldBubble]
   private let parameters: SwarmParameters
   private let isActive: Bool
+  private let showsEmptyState: Bool
   private let onSelect: (FieldBubble) -> Void
   private let onCreate: ((SIMD2<Double>) -> String?)?
   private let bloom: BloomMenu?
@@ -39,6 +43,7 @@ public struct SwarmField<Chrome: View>: View {
     bubbles: [FieldBubble],
     parameters: SwarmParameters = .phone,
     isActive: Bool = true,
+    showsEmptyState: Bool = true,
     onSelect: @escaping (FieldBubble) -> Void,
     onCreate: ((SIMD2<Double>) -> String?)? = nil,
     bloom: BloomMenu? = nil,
@@ -48,6 +53,7 @@ public struct SwarmField<Chrome: View>: View {
     self.bubbles = bubbles
     self.parameters = parameters
     self.isActive = isActive
+    self.showsEmptyState = showsEmptyState
     self.onSelect = onSelect
     self.onCreate = onCreate
     self.bloom = bloom
@@ -71,7 +77,7 @@ public struct SwarmField<Chrome: View>: View {
 
         if let failure {
           UnavailableFieldView(reason: failure)
-        } else if bubbles.isEmpty {
+        } else if bubbles.isEmpty, showsEmptyState {
           EmptyFieldView()
         }
 
@@ -158,11 +164,12 @@ extension SwarmField where Chrome == EmptyView {
     bubbles: [FieldBubble],
     parameters: SwarmParameters = .phone,
     isActive: Bool = true,
+    showsEmptyState: Bool = true,
     onSelect: @escaping (FieldBubble) -> Void,
     onCreate: ((SIMD2<Double>) -> String?)? = nil
   ) {
     self.init(
-      bubbles: bubbles, parameters: parameters, isActive: isActive,
+      bubbles: bubbles, parameters: parameters, isActive: isActive, showsEmptyState: showsEmptyState,
       onSelect: onSelect, onCreate: onCreate
     ) { EmptyView() }
   }

@@ -237,6 +237,13 @@ public enum ChromePalette {
   /// glass (251 → 233) and white/14% over the dark (22 → 55).
   public static let tabPill = dynamic(light: 0x000000, lightAlpha: 0.07, dark: 0xFFFFFF, darkAlpha: 0.14)
 
+  // MARK: - Vendor marks (§13)
+
+  /// `--vf-tailscale-ink`: Tailscale's own two inks for its logomark, and for
+  /// nothing else (TS-7, `TailscaleMark`). Held to the token by
+  /// `pnpm check:ios-fixtures`.
+  public static let tailscaleInk = dynamic(light: 0x1E1E1F, dark: 0xFFFFFF)
+
   // MARK: - Construction
 
   private static func dynamic(

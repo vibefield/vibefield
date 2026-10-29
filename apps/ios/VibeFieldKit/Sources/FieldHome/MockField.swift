@@ -28,6 +28,9 @@
       case up
       /// Signed in, the mesh lost and re-dialling: both desktops asleep.
       case reconnecting
+      /// TS-7 — signed in, and an admin of the network approves new devices
+      /// (`-vf-mock-approval`).
+      case approval
     }
 
     var standing: Standing = .up
@@ -40,8 +43,8 @@
 
     private static let studio = FieldDesktop(
       deviceId: "dev-1", name: "studio", platform: "darwin", state: .ready, feed: .door, userId: userId)
-    private static let mini = FieldHomeModel.AsleepDesktop(deviceId: "dev-2", name: "mini")
-    private static let studioAsleep = FieldHomeModel.AsleepDesktop(deviceId: "dev-1", name: "studio")
+    private static let mini = FieldHomeModel.AsleepDesktop(deviceId: "dev-2", name: "mini", platform: "darwin")
+    private static let studioAsleep = FieldHomeModel.AsleepDesktop(deviceId: "dev-1", name: "studio", platform: "darwin")
 
     /// The corner's answer, through the real decision.
     var face: FieldHomeModel.AccountFace {
@@ -54,11 +57,32 @@
         return FieldHomeModel.accountFace(
           meshState: .up, rememberedLogin: Self.login, login: Self.login, domain: Self.domain, name: Self.name,
           face: Self.face, desktops: [Self.studio], asleep: [Self.mini], foreignDoors: 0, isHearing: true)
+      case .approval:
+        return FieldHomeModel.accountFace(
+          meshState: .needsMachineAuth, rememberedLogin: nil, login: Self.login, domain: Self.domain, name: Self.name,
+          face: nil, desktops: [], asleep: [], foreignDoors: 0, isHearing: false)
       case .reconnecting:
         return FieldHomeModel.accountFace(
           meshState: .reconnecting("the network went away"), rememberedLogin: Self.login, login: nil, domain: nil, name: Self.name, face: Self.face,
           desktops: [], asleep: [Self.studioAsleep, Self.mini], foreignDoors: 0, isHearing: false)
       }
+    }
+
+    /// TS-7 — the Field page's door, through the real decision: the welcome
+    /// signed out, the approval page waiting, the field otherwise.
+    var door: FieldHomeModel.DoorPage? {
+      let state: MeshModel.State =
+        switch standing {
+        case .signedOut: .off
+        case .up: .up
+        case .reconnecting: .reconnecting("the network went away")
+        case .approval: .needsMachineAuth
+        }
+      return FieldHomeModel.doorPage(
+        fixtureOwnsTheField: false, meshState: state, rememberedLogin: nil, login: login, isGated: true,
+        hasListed: true, listed: standing == .up ? 1 : 0, remembered: standing == .signedOut ? 0 : 2,
+        machineName: AccountFixtures.machine, adminConsole: FieldTruffleRuntime.machinesAdminURL(controlURL: nil),
+        signInNote: nil, found: nil)
     }
 
     /// Whether History's desktop answers: the mock's studio is up exactly

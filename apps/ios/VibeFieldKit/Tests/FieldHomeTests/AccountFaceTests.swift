@@ -100,7 +100,7 @@ struct AccountFaceTests {
     let corner = face(meshState: .needsLogin, remembered: login, face: fox)
     #expect(corner.control == .face(fox))
     #expect(corner.wantsAttention)
-    #expect(corner.notice == "Sign in to your tailnet to reach your desktops.")
+    #expect(corner.notice == "Sign in to Tailscale again to reach your desktops.")
     #expect(corner.detail == "sign in again")
     #expect(corner.detailWantsAttention)
     #expect(corner.offersSignIn)

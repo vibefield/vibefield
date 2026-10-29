@@ -11,11 +11,16 @@ public struct RememberedDesktop: Codable, Equatable, Sendable {
   public let deviceId: String
   public let name: String
   public let lastSeen: Date
+  /// TS-7 — the desktop's `process.platform` as it last said it, for its OS
+  /// mark on an asleep row. A record written before this decodes as nil, and
+  /// nil draws the plain screen.
+  public let platform: String?
 
-  public init(deviceId: String, name: String, lastSeen: Date) {
+  public init(deviceId: String, name: String, lastSeen: Date, platform: String? = nil) {
     self.deviceId = deviceId
     self.name = name
     self.lastSeen = lastSeen
+    self.platform = platform
   }
 }
 
@@ -41,18 +46,22 @@ public struct DesktopMemory {
   }
 
   /// Record the desktops the link lists, by device id: a known desktop keeps
-  /// its place and takes the name it reports now; a new one is appended.
+  /// its place and takes the name it reports now; a new one is appended. A
+  /// platform not said yet keeps the one remembered: a listing carries nil
+  /// until the home's `device.list` answers, and that is not a change of OS.
   /// Nothing is ever dropped here — a desktop leaves this memory only with
   /// the account (sign out).
   public func record(_ desktops: [FieldDesktop], login: String, at now: Date = Date()) {
     guard !login.isEmpty, !desktops.isEmpty else { return }
     var rows = remembered(for: login)
     for desktop in desktops {
-      let row = RememberedDesktop(deviceId: desktop.deviceId, name: desktop.name, lastSeen: now)
       if let index = rows.firstIndex(where: { $0.deviceId == desktop.deviceId }) {
-        rows[index] = row
+        rows[index] = RememberedDesktop(
+          deviceId: desktop.deviceId, name: desktop.name, lastSeen: now,
+          platform: desktop.platform ?? rows[index].platform)
       } else {
-        rows.append(row)
+        rows.append(
+          RememberedDesktop(deviceId: desktop.deviceId, name: desktop.name, lastSeen: now, platform: desktop.platform))
       }
     }
     if let data = try? JSONEncoder().encode(rows) {

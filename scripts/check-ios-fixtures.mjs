@@ -230,6 +230,76 @@ const OS_MARKS_IOS = join(
   }
 }
 
+// TS-7 — Tailscale's logomark and its ink on the phone's sign-in (DESIGN.md
+// §13, TS-D4: kept exact, in its own ink). The phone draws the desktop's
+// `tailscale-mark.tsx` from the same constants, so each constant is read from
+// both files and compared; and the approval page's admin console is
+// truffle-core's own literal, which field-native's tests pin and the Swift
+// node does not expose.
+{
+  const MARK_TSX = "packages/field-app/src/account/tailscale-mark.tsx";
+  const MARK_SWIFT = "apps/ios/VibeFieldKit/Sources/FieldDesign/TailscaleMark.swift";
+  const TOKENS = "packages/design-kit/src/tokens.css";
+  const PALETTE_SWIFT = "apps/ios/VibeFieldKit/Sources/FieldDesign/ChromePalette.swift";
+  const ADMIN_ORIGIN = "packages/field-native/tests/mesh_unit.rs";
+  const ADMIN_SWIFT = "apps/ios/VibeFieldKit/Sources/FieldMesh/FieldTruffleRuntime.swift";
+  const read = (file) => {
+    try {
+      return readFileSync(join(root, file), "utf8");
+    } catch {
+      return "";
+    }
+  };
+  const tsx = read(MARK_TSX);
+  const swift = read(MARK_SWIFT);
+  const tokens = read(TOKENS);
+  const palette = read(PALETTE_SWIFT);
+  const field = (text, pattern) => pattern.exec(text)?.[1]?.trim().toLowerCase() ?? null;
+  const compare = (label, origin, copy, originFile, copyFile) => {
+    checked += 1;
+    if (origin === null || copy === null || origin !== copy) {
+      problems.push(
+        `${copyFile}'s ${label} is ${copy ?? "unreadable"} but ${originFile}'s is ${origin ?? "unreadable"}\n` +
+          "  fix: copy the desktop's value exactly (or move this script's pattern with the declaration)",
+      );
+    }
+  };
+  for (const [label, origin, copy] of [
+    ["box", /viewBox="0 0 (\d+) \d+"/, /^ {2}static let box: CGFloat = (\d+)$/m],
+    ["dot centres", /^const AT = \[([^\]]+)\] as const;$/m, /^ {2}static let at: \[CGFloat\] = \[([^\]]+)\]$/m],
+    ["dot radius", /\br=\{(\d+)\}/, /^ {2}static let radius: CGFloat = (\d+)$/m],
+    ["solid dots", /^const SOLID = new Set\(\[([^\]]+)\]\);$/m, /^ {2}static let solid: Set<String> = \[([^\]]+)\]$/m],
+    ["faint opacity", /fillOpacity: ([0-9.]+)/, /^ {2}static let faintOpacity: Double = ([0-9.]+)$/m],
+    ["floor", /^export const TAILSCALE_MARK_MIN = (\d+);$/m, /^ {2}public static let minimum: CGFloat = (\d+)$/m],
+  ]) {
+    compare(`Tailscale mark ${label}`, field(tsx, origin), field(swift, copy), MARK_TSX, MARK_SWIFT);
+  }
+  const inkCopy = /public static let tailscaleInk = dynamic\(light: 0x([0-9A-Fa-f]{6}), dark: 0x([0-9A-Fa-f]{6})\)/.exec(
+    palette,
+  );
+  compare(
+    "Tailscale ink (light)",
+    field(tokens, /--vf-tailscale-ink: #([0-9a-fA-F]{6});/),
+    inkCopy?.[1]?.toLowerCase() ?? null,
+    TOKENS,
+    PALETTE_SWIFT,
+  );
+  compare(
+    "Tailscale ink (dark)",
+    field(tokens, /--vf-tailscale-ink: #[0-9a-fA-F]{6};[\s\S]*?--vf-tailscale-ink: #([0-9a-fA-F]{6});/),
+    inkCopy?.[2]?.toLowerCase() ?? null,
+    TOKENS,
+    PALETTE_SWIFT,
+  );
+  compare(
+    "machines admin URL",
+    field(read(ADMIN_ORIGIN), /facts\.admin_url\.as_deref\(\),\s*Some\("([^"]+)"\)/),
+    field(read(ADMIN_SWIFT), /^ {2}static let tailscaleMachinesAdminURL = "([^"]+)"$/m),
+    ADMIN_ORIGIN,
+    ADMIN_SWIFT,
+  );
+}
+
 // The same argument one level up: the REGISTRY VALUES the phone speaks.
 //
 // `registries.ts` says ports, scopes, stores and the app id exist there and
