@@ -6,14 +6,16 @@
  * anything else as a PICTURE card, its still the anchor's box less the brackets' outset, taken WITHOUT the selection's
  * marks by ICE's own capture (`capture({ rect, marks: false })`, I40 — the act writes no selection at all), in hand
  * the object's DRAWN box; and no picture to take, no card, said. HN-5: what the card holds goes on the system clipboard
- * FIRST, through the one copy door — the note's words through the host's copy door, a picture's PNG through the
- * clipboard's picture door — and a copy the clipboard refused deals nothing, the line saying why.
+ * FIRST, through the one copy door — a note's words through the host's copy door, a picture's PNG through the
+ * clipboard's picture door with the words the objects keep beside it in the same one write (LC-19) — and a copy the
+ * clipboard refused deals nothing, the line saying why.
  */
 import { type CanvasEngine, type Entity, selectedEntities, setWidgetProps } from "@vibecook/ice";
 import type { SelectionAnchor } from "@vibecook/ice/desk";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   type CopiedObject,
+  copiedWords,
   copyName,
   firstChars,
   NAME_CHARS,
@@ -102,6 +104,14 @@ describe("what a copy is called, and the words it keeps (copy-face.ts)", () => {
     expect(firstChars(`${"🙂".repeat(30)}`)).toBe(`${"🙂".repeat(24)}…`);
     expect(firstChars("   ")).toBeNull();
   });
+
+  it("gives the system clipboard the words the objects keep, in selection order — none from a kind that keeps none", () => {
+    expect(copiedWords([note({ text: "hello", seeds: "x" }), clock, note({ text: "again" })])).toBe(
+      "hello\n\nagain",
+    );
+    expect(copiedWords([clock])).toBeNull();
+    expect(copiedWords([note({ text: "   " })])).toBeNull();
+  });
 });
 
 // ── THE ACT, over a real engine ───────────────────────────────────────────────────────────────────────────────────
@@ -121,9 +131,10 @@ let gives: "still" | "none";
 /** A capture held open by a test (the act's tail waits on it), released by `answer()`. */
 let holdCapture: Promise<void> | null;
 let store: CardStore;
-/** What the system clipboard's doors were given — the words, the pictures — and whether they take them. */
+/** What the system clipboard's doors were given — the words alone, the pictures and the words beside each — and
+ * whether they take them. */
 let clipboard: string[];
-let pictures: Uint8Array[];
+let pictures: { png: Uint8Array; text: string | undefined }[];
 let clipboardTakes: boolean;
 /** Why the picture door refuses, when it does (main's words); null: it takes it. */
 let pictureRefusal: string | null;
@@ -225,8 +236,8 @@ const seams = () => ({
       },
     },
     clipboard: {
-      writeImage: async (png: Uint8Array) => {
-        pictures.push(png);
+      writeImage: async (png: Uint8Array, text?: string) => {
+        pictures.push({ png, text });
         if (pictureRefusal !== null) throw new Error(pictureRefusal);
       },
     },
@@ -307,9 +318,10 @@ describe("THE DESK'S COPY — the act (copy-to-hand.ts)", () => {
     expect(card.path).toBeUndefined();
     expect(arriving.get(card.id)).toEqual({ left: 406, top: 306, width: 188, height: 138 });
     // its picture went on the system clipboard first, through the picture door — the same PNG the card keeps
-    // (HN-5, LC-9) — and no words
+    // (HN-5, LC-9) — and a pad that keeps no words gives none beside it
     expect(pictures).toHaveLength(1);
-    expect(pictures[0]?.byteLength).toBe(321);
+    expect(pictures[0]?.png.byteLength).toBe(321);
+    expect(pictures[0]?.text).toBeUndefined();
     expect(clipboard).toEqual([]);
     expect(lastCopy()).toMatchObject({
       from: "bar",
@@ -339,7 +351,7 @@ describe("THE DESK'S COPY — the act (copy-to-hand.ts)", () => {
     expect(lastCopy()?.marks).toBe(false);
   });
 
-  it('several: the union\'s 10 off, ONE picture card "2 objects" — its picture on the system clipboard, not the words', async () => {
+  it('several: the union\'s 10 off, ONE picture card "2 objects" — its picture and the words they keep in one write', async () => {
     write(noteE, WRITING);
     ce.ops.setSelection([noteE, padE]);
     calls = [];
@@ -355,11 +367,12 @@ describe("THE DESK'S COPY — the act (copy-to-hand.ts)", () => {
     expect(ce.ops.setSelection).not.toHaveBeenCalled();
     expect(store.snapshot().cards).toHaveLength(1);
     expect(store.snapshot().cards[0]).toMatchObject({ kind: "pict", title: "2 objects" });
-    // the card is their picture, and so is the system clipboard: one write, so the note's words are not on it too
-    // (HN-5 — a second write would replace the first)
+    // the note's writing is the words they keep (the pad keeps none): on the system clipboard beside their picture, in
+    // the picture door's ONE write (LC-19) — never a second write through the copy door, which would replace the first
     expect(pictures).toHaveLength(1);
+    expect(pictures[0]?.text).toBe(WRITING);
     expect(clipboard).toEqual([]);
-    expect(lastCopy()).toMatchObject({ from: "menu", kept: true, words: null, wrote: true });
+    expect(lastCopy()).toMatchObject({ from: "menu", kept: true, words: WRITING, wrote: true });
     expect(
       lastCopy()
         ?.objects.map((o) => o.name)
@@ -457,18 +470,18 @@ describe("THE DESK'S COPY — the act (copy-to-hand.ts)", () => {
   });
 
   it("deals NO card when the picture door refuses the picture — main's words on the line", async () => {
-    pictureRefusal = "the clipboard is written only for the focused window";
+    pictureRefusal = "the picture could not be read";
     expect(copySelection(desk, "bar", seams())).toBe(true);
     await flush();
     expect(pictures).toHaveLength(1);
     expect(store.snapshot().cards).toEqual([]);
-    expect(said).toEqual(["Not copied — the clipboard is written only for the focused window"]);
+    expect(said).toEqual(["Not copied — the picture could not be read"]);
     // the still was taken; it went nowhere
     expect(lastCopy()).toMatchObject({
       still: { width: 376, height: 276, bytes: 321 },
       wrote: false,
       card: null,
-      refused: "Not copied — the clipboard is written only for the focused window",
+      refused: "Not copied — the picture could not be read",
     });
   });
 

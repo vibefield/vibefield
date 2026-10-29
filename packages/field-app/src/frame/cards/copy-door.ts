@@ -13,9 +13,10 @@ import { COPY_DOOR_WORDS } from "./cards-words";
  * once the write was taken, so the newest card is what the clipboard holds. A refusal deals
  * nothing and comes back in words, for the source to say where it says things (the desk's
  * line; a Settings button keeps its own failure). The words go through the host's copy door
- * (`copyText`: main's `clipboard.writeText`, 64 KiB, the smokes' `harnessCopies`), a picture
- * through the clipboard's picture door (`writeImage`: design-03 §5.1's write half, beside
- * item 102's read). With no host — the browser catalog — the web's own write stands, as
+ * (`copyText`: main's `clipboard.writeText`, `SHELL_CLIPBOARD.WRITE_TEXT_MAX_BYTES`, the
+ * smokes' `harnessCopies`), a picture through the clipboard's picture door (`writeImage`:
+ * design-03 §5.1's write half, beside item 102's read), the copy's words beside it in that
+ * same one write (LC-19). With no host — the browser catalog — the web's own write stands, as
  * item 102 keeps the web's read there; nothing else in the product writes
  * `navigator.clipboard`. A program's write (a terminal's OSC 52) is not a copy: it takes
  * `writeClipboard` alone and deals no card (terminal/clipboard.ts).
@@ -34,11 +35,12 @@ export interface CopyDeps {
   readonly store?: CardStore;
 }
 
-/** What the system clipboard is given: a copy's words, or its picture's PNG — one, never both, for
- * a second write would replace the first. */
+/** What the system clipboard is given: a copy's words, or its picture's PNG with the copy's
+ * words beside it when it has any — the picture's in ONE write, both formats of one item, for a
+ * second write would replace the first (LC-19). */
 export type ClipboardContent =
   | { readonly text: string; readonly png?: undefined }
-  | { readonly png: Uint8Array<ArrayBuffer>; readonly text?: undefined };
+  | { readonly png: Uint8Array<ArrayBuffer>; readonly text?: string };
 
 /** A copy: what the clipboard is given, the card the hand gets, and the box it leaves from. */
 export type CopyRequest = ClipboardContent & {
@@ -63,10 +65,12 @@ export async function writeClipboard(
     const pictureDoor = host?.clipboard;
     try {
       if (pictureDoor !== undefined) {
-        await pictureDoor.writeImage(what.png);
+        await pictureDoor.writeImage(what.png, what.text);
       } else {
+        // the page's own write: one item of both formats, as main's is
         const png = new Blob([what.png], { type: "image/png" });
-        await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
+        const words = what.text === undefined ? {} : { "text/plain": what.text };
+        await navigator.clipboard.write([new ClipboardItem({ "image/png": png, ...words })]);
       }
       return { ok: true };
     } catch (error) {

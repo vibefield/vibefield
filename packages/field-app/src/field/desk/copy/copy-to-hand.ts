@@ -7,7 +7,7 @@ import { type CopyDeps, type CopyHost, copyToHand } from "../../../frame/cards/c
 import { sayOnLine } from "../../../frame/line-door";
 import { heldNow, type MountedDesk, plainWords } from "../desk-door";
 import { encodePng, type PngEncoder } from "../desk-stills";
-import { type CopiedObject, copyName, noteWords } from "./copy-face";
+import { type CopiedObject, copiedWords, copyName, noteWords } from "./copy-face";
 import { beginCopyRecord, type CopyFrom, noteCopy, type ViewBox } from "./copy-record";
 
 // THE DESK'S COPY — THE ACT (HN-D3, HN-D2; DESIGN.md §8 "The desk's Copy"; R15, DK-D26; plan addendum (50); ICE I23,
@@ -21,10 +21,11 @@ import { beginCopyRecord, type CopyFrom, noteCopy, type ViewBox } from "./copy-r
 //   several), taken of the last presented frame at once;
 //   IN HAND — the object STAYS in hand (addendum (50)): the card flies from where the desk DRAWS it (the held pose
 //   seam's frame, `__vfDesk.held()`), and the still is that drawn box — the hand is drawn out of the marks (D4b).
-// What the card holds goes on the system clipboard FIRST (HN-5, LC-9): the note's words through the host's copy door,
-// the picture's PNG through the clipboard's picture door — its words or its picture, one write, for a second would
-// replace the first. The card is dealt only once the clipboard took it, so the newest card is what the clipboard
-// holds; a refusal deals nothing, and the line says why. The picture card keeps its PNG too (LC-7): a Blob in this
+// What the card holds goes on the system clipboard FIRST (HN-5, LC-9): a note's words through the host's copy door; a
+// picture's PNG through the clipboard's picture door, with the words the objects keep beside it in the SAME one write
+// (LC-19) — two writes would leave only the second — so a paste takes the words or the picture, whichever its place
+// reads. The card is dealt only once the clipboard took it, so the newest card is what the clipboard holds; a refusal
+// deals nothing, and the line says why. The picture card keeps its PNG too (LC-7): a Blob in this
 // renderer, shown through a `blob:` URL (the packaged `img-src` admits `blob:` — DK-4), with no file on disk for a
 // pane to take. Where no picture can be taken — nothing of the box on the view, a desk that cannot draw — no card is
 // dealt, and the line says why.
@@ -175,8 +176,9 @@ export function copySelection(desk: MountedDesk, from: CopyFrom, seams: CopySeam
     width: box.x1 - box.x0,
     height: box.y1 - box.y0,
   };
-  // a lone note's words are its card; anything else is its picture, and gives the clipboard no words
-  const writing = noteWords(objects);
+  // the words the objects keep go on the system clipboard — a lone note's as its own card, anything else's beside its
+  // picture (HN-D2: what you copy here is on it too)
+  const words = copiedWords(objects);
   const record = beginCopyRecord({
     from,
     objects: objects.map((o) => ({ type: o.type, name: o.words.title })),
@@ -185,7 +187,7 @@ export function copySelection(desk: MountedDesk, from: CopyFrom, seams: CopySeam
       rect === null
         ? null
         : { x0: rect.x, y0: rect.y, x1: rect.x + rect.width, y1: rect.y + rect.height },
-    words: writing,
+    words,
   });
   const store = seams.store ?? cardsStore;
   const deps: CopyDeps = { store, ...(seams.host === undefined ? {} : { host: seams.host }) };
@@ -198,6 +200,7 @@ export function copySelection(desk: MountedDesk, from: CopyFrom, seams: CopySeam
   };
 
   // a lone note: its writing, a text card once the clipboard holds its words
+  const writing = noteWords(objects);
   if (writing !== null) {
     const card = textCardOf(writing, {
       id: store.nextId("text"),
@@ -266,8 +269,11 @@ export function copySelection(desk: MountedDesk, from: CopyFrom, seams: CopySeam
       // no file on disk to paste, nor words of its own: a pane says a picture with no file can't be pasted yet
       paste: "",
     };
-    // its PNG on the system clipboard first, then the card (HN-5)
-    const copied = await copyToHand({ card, from: fromBox, png: picture.bytes }, deps);
+    // its PNG on the system clipboard first, the words the objects keep beside it in the one write, then the card
+    const copied = await copyToHand(
+      { card, from: fromBox, png: picture.bytes, ...(words === null ? {} : { text: words }) },
+      deps,
+    );
     if (!copied.ok) {
       URL.revokeObjectURL(card.src); // never dealt: its face is shown nowhere
       refuse(copied.reason);

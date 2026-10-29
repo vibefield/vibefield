@@ -27,7 +27,7 @@ const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 /** The two doors, each recording what it was given and answering as told. */
 function doors(over: { words?: () => Promise<void>; picture?: () => Promise<void> } = {}) {
   const copied: string[] = [];
-  const pictures: Uint8Array[] = [];
+  const pictures: Array<{ png: Uint8Array; text: string | undefined }> = [];
   const host: CopyHost = {
     diagnostics: {
       copyText: async (text: string) => {
@@ -36,8 +36,8 @@ function doors(over: { words?: () => Promise<void>; picture?: () => Promise<void
       },
     },
     clipboard: {
-      writeImage: async (png: Uint8Array) => {
-        pictures.push(png);
+      writeImage: async (png: Uint8Array, text?: string) => {
+        pictures.push({ png, text });
         await over.picture?.();
       },
     },
@@ -125,23 +125,34 @@ describe("the copy door (HN-5)", () => {
     await expect(copyToHand({ card, from: FROM, png: PNG }, { host, store })).resolves.toEqual({
       ok: true,
     });
-    expect(pictures).toEqual([PNG]);
+    expect(pictures).toEqual([{ png: PNG, text: undefined }]);
     expect(copied).toEqual([]);
     expect(store.snapshot().cards).toEqual([card]);
     expect(store.snapshot().arriving.get(card.id)).toEqual(FROM);
   });
 
+  it("writes a picture's words beside it in the picture door's one write (LC-19)", async () => {
+    const { host, copied, pictures } = doors();
+    const store = new CardStore(() => 7_000);
+    const card = pictCard(store);
+    const copy = { card, from: FROM, png: PNG, text: "Ship the desk by Friday." };
+    await expect(copyToHand(copy, { host, store })).resolves.toEqual({ ok: true });
+    expect(pictures).toEqual([{ png: PNG, text: "Ship the desk by Friday." }]);
+    expect(copied).toEqual([]);
+    expect(store.snapshot().cards).toEqual([card]);
+  });
+
   it("a refusal deals nothing and says why: main's words, else the door's", async () => {
     const store = new CardStore(() => 7_000);
-    const BEHIND = "the clipboard is written only for the focused window";
+    const UNREAD = "the picture could not be read";
     const timedOut = doors({ words: () => Promise.reject(new Error("request timed out")) });
     const words = await copyWords("words", ORIGIN, FROM, { host: timedOut.host, store });
     expect(words).toEqual({ ok: false, reason: COPY_DOOR_WORDS.words });
-    const behind = doors({ picture: () => Promise.reject(new Error(BEHIND)) });
+    const unread = doors({ picture: () => Promise.reject(new Error(UNREAD)) });
     const picture = { card: pictCard(store), from: FROM, png: PNG };
-    expect(await copyToHand(picture, { host: behind.host, store })).toEqual({
+    expect(await copyToHand(picture, { host: unread.host, store })).toEqual({
       ok: false,
-      reason: BEHIND,
+      reason: UNREAD,
     });
     // a refusal with no words of its own says the door's
     const mute = doors({ picture: () => Promise.reject(new Error("")) });
@@ -164,10 +175,13 @@ describe("the copy door (HN-5)", () => {
     expect(web.writeText).toHaveBeenCalledWith("hello");
     const card = pictCard(store);
     await expect(
-      copyToHand({ card, from: null, png: PNG }, { host: null, store }),
+      copyToHand({ card, from: null, png: PNG, text: "two objects" }, { host: null, store }),
     ).resolves.toEqual({ ok: true });
     expect(web.write).toHaveBeenCalledOnce();
-    expect(web.write.mock.calls[0]?.[0]).toEqual([{ items: { "image/png": expect.any(Blob) } }]);
+    // one item of both formats, as main's one write is
+    expect(web.write.mock.calls[0]?.[0]).toEqual([
+      { items: { "image/png": expect.any(Blob), "text/plain": "two objects" } },
+    ]);
     expect(store.snapshot().cards.map((c) => c.kind)).toEqual(["text", "pict"]);
     // no box to leave from: it rises into its place
     expect(store.snapshot().arriving.get(card.id)).toBeNull();
