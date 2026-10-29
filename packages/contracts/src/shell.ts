@@ -327,6 +327,33 @@ export const ClipboardReadResult = z.discriminatedUnion("status", [
 export type ClipboardReadResult = z.infer<typeof ClipboardReadResult>;
 export type ClipboardReadRefusal = Extract<ClipboardReadResult, { status: "refused" }>["reason"];
 
+/** main → renderer: a copy's picture put on the system clipboard
+ * (`IPC_CHANNELS.clipboardWriteImage`; HN-5), or why it was not. The request is the
+ * PNG's bytes themselves, the invoke's one argument, checked in main: bytes are never
+ * a field here. Each refusal is an honest state of a product window's copy:
+ *  · `unfocused` — the window or its page is not the one in front of the person, so
+ *    nothing was written for it (the read's rule, item 102);
+ *  · `too-large` — the bytes are over `SHELL_CLIPBOARD.WRITE_IMAGE_MAX_BYTES`;
+ *    refused whole with their size, never cut;
+ *  · `not-an-image` — they decode to no picture.
+ * A sender this shell did not register, or a request that is not bytes, is no state
+ * of a product window: main throws for it and writes nothing. */
+export const ClipboardWriteImageResult = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("written") }).passthrough(),
+  z
+    .object({
+      status: z.literal("refused"),
+      reason: z.enum(["unfocused", "too-large", "not-an-image"]),
+      bytes: z.number().int().min(0).optional(),
+    })
+    .passthrough(),
+]);
+export type ClipboardWriteImageResult = z.infer<typeof ClipboardWriteImageResult>;
+export type ClipboardWriteImageRefusal = Extract<
+  ClipboardWriteImageResult,
+  { status: "refused" }
+>["reason"];
+
 /** Item 102 — the read door's audit action, appended by main through fieldd's
  * `audit.append` (wall R17), which admits only registered shell-owned actions. One
  * outcome for every answer and every refusal, with the bytes and the asking page's
