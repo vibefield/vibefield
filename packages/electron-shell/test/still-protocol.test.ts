@@ -154,8 +154,9 @@ describe("serveStillRequest — the answer, over a seam", () => {
 // LC-17 (1): the scheme is the third reader of the retained stills, and it goes through B1's one
 // opener (screenshot-still-bytes.ts `openStill`): what is OPENED is judged (its handle fstat'ed, a
 // regular file within the cap) and streamed, never a path checked and then opened again. Real
-// files: each refusal here answered 200 when the scheme realpath-checked a path and then streamed
-// it by name.
+// files: the directory, the FIFO and the file past the cap answered 200 when the scheme
+// realpath-checked a path and then streamed it by name; the planted symlink and the plain still
+// hold what the realpath check already held.
 describe("serveStillRequest — the still judged by the handle it opened (LC-17)", () => {
   const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
   const roots: string[] = [];
