@@ -21,6 +21,7 @@ import { Cards } from "../frame/cards/Cards";
 import { type FrameSurface, foldSurface } from "../frame/frame-surface";
 import { Head } from "../frame/Head";
 import { canvasHead } from "../frame/head-canvas";
+import { runChosenSession } from "../frame/line-door";
 import { FramePeek } from "../frame/Peek";
 import type { FrameActRun } from "../frame/palette-acts";
 import { StatusLine } from "../frame/StatusLine";
@@ -226,7 +227,8 @@ export function ChromeLayer({
   );
 
   // The palette's frame acts, run through the frame's own doors: the view's
-  // one owner, the line's create, the head's zoom, Settings.
+  // one owner, the line's create, History's door for its chosen session (HN-7),
+  // the head's zoom, Settings.
   const runFrameAct = useCallback(
     (run: FrameActRun) => {
       switch (run.kind) {
@@ -235,6 +237,9 @@ export function ChromeLayer({
           return;
         case "create":
           lineActs.current?.create();
+          return;
+        case "chosen-session":
+          void runChosenSession();
           return;
         case "zoom":
           runZoom(head, run.act);

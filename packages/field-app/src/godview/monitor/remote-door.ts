@@ -42,7 +42,9 @@ export interface MonitorUsagePort extends AccountUsagePort {
  * shell is born under — a set id, a noun of fieldd's, never a binding. DS-3 is
  * the fourth: the mesh board replaced GT-D17's host poll (`listHosts`, retired
  * 2026-09-30 — under the routed runtime it threw on every ask), and the roster
- * came in beside it, so a row can say which desktop it lives on.
+ * came in beside it, so a row can say which desktop it lives on. History's New
+ * terminal (HN-7, LN-D2) is the fifth: `createTerminal` takes the folder a
+ * shell is born in — a plain path, never a session.
  */
 export interface MonitorDoor {
   /** DS-3 — the roster (`device.subscribe`): names and platforms, so a row
@@ -56,9 +58,10 @@ export interface MonitorDoor {
    * verb stays for that slice to rewire. */
   attach(request: RemoteAttachRequest): Promise<RemoteAttachOutcome>;
   /** Create an empty shell through the workspace's normal birth path — under
-   * an Agent Profile when the request names one (SB-3) — placed by the same
-   * rule (GV-D4): in the focused pane, whose session runs on. A refusal is an
-   * outcome (`failed`, in fieldd's own words), never a throw. */
+   * an Agent Profile when the request names one (SB-3), in the folder it names
+   * (HN-7) — placed by the same rule (GV-D4): in the focused pane, whose
+   * session runs on. A refusal is an outcome (`failed`, in fieldd's own words),
+   * never a throw. */
   createTerminal(request?: TerminalBirthRequest): Promise<LocalMountOutcome>;
   /** AR-3 — bring a LOCAL floor session (a managed agent's PTY, an unclaimed
    * terminal) into the terminals, by the rule (GV-D4): in the focused pane,
@@ -139,11 +142,15 @@ export interface DevicesPort {
   subscribe(listener: (devices: readonly DeviceInfo[]) => void): () => void;
 }
 
-/** SB-3 — what a new terminal is born under. */
+/** SB-3 — what a new terminal is born under (and, since HN-7, where). */
 export interface TerminalBirthRequest {
   /** An Agent Profile SET id (`"native"` is This Mac, still a bound birth):
    * fieldd binds the shell to it (SB-2). Absent: an unbound shell, as before. */
   profileSet?: string;
+  /** HN-7 (LN-D2) — the folder the shell is born in: History's New terminal
+   * asks for the folder of the project the room shows. Absent: the focused
+   * pane's, as a new terminal's always was. */
+  cwd?: string;
 }
 
 /** AR-4 — a mount that takes a PTY's place: the run was resumed into a new
