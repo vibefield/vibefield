@@ -145,7 +145,8 @@ export function wordsBytes(
 
 /**
  * THE WORDS' RASTER the DOM half lends (`WORDS_RASTER`): one reused OffscreenCanvas (read back each time words change), the
- * platform's fonts; undefined where the platform has no OffscreenCanvas (Node — a still's faces say nothing in words).
+ * platform's fonts; undefined where the platform has no OffscreenCanvas (Node — a still's faces draw the committed words,
+ * face-words.ts).
  */
 export function wordsRaster(): WordsRaster | undefined {
   if (typeof OffscreenCanvas === "undefined") return undefined;

@@ -4,9 +4,11 @@
 // entries, never a workspace-internal `@ice/*` name, and above all never `/desk/objects` (a kind never imports a built-in;
 // it names another only by its registry name). What it may name: the SDK's root and `/desk`, the contracts (the manifest's
 // types and the binding's schema — the ONE reader it shares with PT-S2's resolver), and its own modules — its `.wgsl` files
-// among them. No widening: unlike the pane it writes no `Position` or `Size` (a phone is never resized), so `/canvas` is
-// refused everywhere. Its authoring-time trees (scripts/, test/, playground/) may add the build kit, the SDK's testing door,
-// the runner and Node's builtins.
+// among them. Unlike the pane it writes no `Position` or `Size` (a phone is never resized), so `/canvas` is refused
+// everywhere. Its authoring-time trees (scripts/, test/, playground/) may add the build kit, the SDK's testing door, the runner
+// and Node's builtins — and ONE widening, held to the one file that needs it, as the pane's is:
+//  - `@napi-rs/canvas` in scripts/make-face-words.ts alone (authoring time, never shipped): the committed words a Node still
+//    draws are made with the product's own `drawWords` on a Node canvas (the orchestrator's R2 Q1, 2026-10-29).
 import {
   existsSync,
   mkdirSync,
@@ -31,6 +33,10 @@ const SHIPPED = new Set([
 /** What the authoring-time trees may add. */
 const AUTHORING =
   /^(vitest(\/config)?|node:[a-z/_]+|@vibefield\/plugin-build(\/wgsl)?|@vibefield\/plugin-sdk\/testing)$/;
+/** The one widening, to the one file that needs it (package-relative path → the specifier it may name). */
+const WIDENED: Readonly<Record<string, string>> = {
+  "scripts/make-face-words.ts": "@napi-rs/canvas",
+};
 
 function walk(dir: string): string[] {
   if (!existsSync(dir)) return [];
@@ -69,6 +75,7 @@ function violation(file: string, spec: string, authoring: boolean): string | nul
     return `"${spec}" is ICE itself — a plugin reaches ICE through @vibefield/plugin-sdk/desk (K-L1)`;
   if (spec.startsWith("@ice/")) return `"${spec}" is ICE's workspace-internal name`;
   if (SHIPPED.has(spec)) return null;
+  if (WIDENED[relative(PKG, file)] === spec) return null;
   if (authoring && AUTHORING.test(spec)) return null;
   return `"${spec}" is not the SDK's door (${[...SHIPPED].join(", ")})`;
 }
@@ -165,6 +172,18 @@ describe("the phone reaches ICE through the SDK's doors alone (K-L1)", () => {
       "./phone.wgsl",
     ])
       expect(violation(f, spec, false), spec).toBeNull();
+  });
+
+  it("the widening is the one file's: a Node canvas in what ships, in a test or in another script is refused", () => {
+    expect(violation(join(PKG, "scripts/make-face-words.ts"), "@napi-rs/canvas", true)).toBeNull();
+    expect(violation(join(PKG, "src/notice-canvas.ts"), "@napi-rs/canvas", false)).not.toBeNull();
+    expect(violation(join(PKG, "src/face-words.ts"), "@napi-rs/canvas", false)).not.toBeNull();
+    expect(violation(join(PKG, "test/face-words.test.ts"), "@napi-rs/canvas", true)).not.toBeNull();
+    expect(violation(join(PKG, "scripts/make-catalog.ts"), "@napi-rs/canvas", true)).not.toBeNull();
+    // and the maker names it: the widening is used, not left standing
+    expect(specifiersOf(readFileSync(join(PKG, "scripts/make-face-words.ts"), "utf8"))).toContain(
+      "@napi-rs/canvas",
+    );
   });
 
   it("reads type-only, re-export, side-effect and dynamic specifiers alike", () => {

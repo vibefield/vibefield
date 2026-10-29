@@ -27,7 +27,8 @@
 //    its head frosted;
 //  - the iOS Simulator's phone (plugins/simulator — PT-S1, PORTALS' second kind): held to ITS golden over its twelve playground
 //    states — three unbound phones, and the nine honest faces, each a bound phone the plugin's FIXTURE answers (its
-//    playground/live.ts — the synthetic screen, no Apple artwork) — blessed ONCE at the first gated run, never by hand; and a
+//    playground/live.ts — the synthetic screen, no Apple artwork; its words the committed ones, as the pane's heads are) —
+//    blessed ONCE at the first gated run, never by hand; and a
 //    phone MID-MORPH, pinned through the desk's asset door (an iPhone 8 a quarter of the way into an X), judged by its drawn
 //    height between the two models', never a hash.
 import { execFile } from "node:child_process";
@@ -618,10 +619,11 @@ describe("the iOS Simulator's phone — PORTALS' second kind (PT-S1)", () => {
     for (const s of ran.stills) expect(s.detail).toContain("held to its golden");
   });
 
-  // "Its own" is by DEVICE here: a Node still lends no words' raster (the phone's DOM half draws words with an OffscreenCanvas,
-  // which Node lacks), so the faces that differ only by their words — the three with no still, the three dimmed under words —
-  // are told apart by the device each is staged on (playground/fixture-mac.ts), never by what they say. The words are held by
-  // the plugin's units (face.test.ts, design.test.ts); a still that draws them waits on the PT-S1 hand-back's question.
+  // "Its own" by device AND by words: a Node still lends no words' raster (the phone's DOM half draws words with an
+  // OffscreenCanvas, which Node lacks), so the phone draws the COMMITTED words (its src/face-words.gen.ts — the product's own
+  // `drawWords` on a Node canvas, as the pane's committed heads are; the PT-S1 brief's R2 Q1), and each face is staged on its
+  // own device (playground/fixture-mac.ts). The plugin's units hold the words (design.test.ts quotes DESIGN.md §9;
+  // face-words.test.ts holds every staged face's raster committed under the key the phone asks).
   it("reads the faces lent where it is bound (the fixture's) and nothing where it is not — and every state is its own still", () => {
     for (const s of ran.stills)
       expect(s.lent, `${s.state} · ${s.theme}`).toEqual(

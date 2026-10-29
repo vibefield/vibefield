@@ -4,9 +4,10 @@
 //    says something arrived, asked of by the phone's demand law over the desk's SIGHT;
 //  - each phone's MORPH clock (morph.ts): a change of its `model` morphs it over 0.72 s, the records remade every frame while
 //    one runs (the kind is due at once), never on its own;
-//  - each face's WORDS (notice.ts): drawn by the words' raster its DOM half lends (`WORDS_RASTER`), cached by what they say,
-//    their texture charged to the desk's raster budget under the kind's name (`notice <key>`) and let go at its eviction —
-//    laid again from its record when the phone is next drawn;
+//  - each face's WORDS (notice.ts): drawn by the words' raster its DOM half lends (`WORDS_RASTER`) — where none is lent (a
+//    Node still), the committed raster their key names (face-words.ts), else none — cached by what they say, their texture
+//    charged to the desk's raster budget under the kind's name (`notice <key>`) and let go at its eviction — laid again from
+//    its record when the phone is next drawn;
 //  - IN HAND (used — the open binding): the hand's press on the face's act's capsule runs the act on its release over it
 //    (the host's — it manages the device, never iOS); every other press is the desk's (view-only until PT-S4's touch
 //    lands).
@@ -24,6 +25,7 @@ import type {
   LiveTexture,
   Sight,
 } from "@vibefield/plugin-sdk/desk";
+import { stillWords } from "./face-words";
 import { SIMULATOR_KIND } from "./ids";
 import type { FinishValues, NoticePlan } from "./layout";
 import { createPhoneFaces, type PhoneFaceStats } from "./live";
@@ -61,8 +63,9 @@ export interface SimulatorLocal extends KindLocal {
   /** What `e` shows now for its model and its finish's colours: its model's shape, or mid-morph a blend (morph.ts). */
   shown(e: Entity, model: PhoneModel, finish: FinishValues): Shown;
   /**
-   * `e`'s face's words as the pass lays them (drawn by the lent raster — once a line, a size and an ink), or undefined: no
-   * raster lent on this desk — the face carries no words.
+   * `e`'s face's words as the pass lays them (drawn by the lent raster — once a line, a size and an ink; none lent, the
+   * committed raster that says exactly them), or undefined: no raster lent on this desk and none committed says them — the
+   * face carries no words.
    */
   notice(
     e: Entity,
@@ -165,7 +168,9 @@ export function createSimulatorLocal(host: KindHost | undefined): SimulatorLocal
       const key = noticeKey(spec);
       const had = noticed.get(e);
       if (had?.key === key) return had;
-      const drawn = host?.use?.(WORDS_RASTER)?.notice(spec);
+      // the lent raster draws them; none lent (a Node still: no platform Canvas 2D), the committed one that says exactly them
+      const raster = host?.use?.(WORDS_RASTER);
+      const drawn = raster !== undefined ? raster.notice(spec) : stillWords(key);
       if (drawn === undefined) return undefined;
       const plan = {
         key,

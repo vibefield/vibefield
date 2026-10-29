@@ -4,7 +4,8 @@
 // is a device type in one of the nine states. The two Mac-wide states — no Simulator, no permission — answer every device of a
 // real Mac alike; here each is given a device of its own, as if that row's device were on such a Mac. The runtime is the one
 // this Mac had when PT-S1 was written (`xcrun simctl list --json runtimes`: iOS 26.1, 26.5); the iPhone 8's, an iOS it runs.
-import type { LiveSimulatorState } from "@vibefield/plugin-sdk/desk";
+import type { LiveSimulatorFace, LiveSimulatorState } from "@vibefield/plugin-sdk/desk";
+import { FACE_ACTS } from "../src/face";
 
 const TYPE = "com.apple.CoreSimulator.SimDeviceType.";
 const IOS_26_1 = "com.apple.CoreSimulator.SimRuntime.iOS-26-1";
@@ -33,6 +34,14 @@ export const FIXTURE_MAC: readonly FixtureDevice[] = [
 /** The device the fixture answers for a bound device type, or undefined: a device the fixture's Mac does not hold. */
 export const fixtureDevice = (deviceType: string): FixtureDevice | undefined =>
   FIXTURE_MAC.find((d) => d.deviceType === deviceType);
+
+/**
+ * What the fixture's Mac SAYS of a staged face (`LiveInfo.extra.simulator`): its state, and an act where the state offers one
+ * (a still's act runs nothing) — what a still's face says (live.ts), and what the committed words are drawn from
+ * (scripts/make-face-words.ts).
+ */
+export const stagedWords = (is: LiveSimulatorState): LiveSimulatorFace =>
+  FACE_ACTS[is] === null ? { is } : { is, act: () => {} };
 
 /** The clock a still's screens show: 2026-10-18 10:08 UTC (the fixture's clock reads UTC — a still never reads a host's zone). */
 export const FIXTURE_TIME = Date.UTC(2026, 9, 18, 10, 8);

@@ -17,7 +17,8 @@ import { wordsRaster } from "./notice-canvas";
 export const simulator: ObjectBinding<SimulatorGeometry, PhoneInstance, PhoneLookValues> = {
   kind: simulatorKind(),
   host: {
-    // where the platform draws Canvas 2D (the product's renderer); a Node still lends nothing (its faces say nothing in words)
+    // where the platform draws Canvas 2D (the product's renderer); a Node still lends nothing (its faces draw the committed
+    // words, face-words.ts)
     lend: () => {
       const raster = wordsRaster();
       return raster === undefined ? [] : [service(WORDS_RASTER, raster)];

@@ -12,8 +12,11 @@ import {
   type LiveState,
   liveSimulatorFace,
 } from "@vibefield/plugin-sdk/desk";
-import { PHONE, type PhoneLaw } from "./law";
-import type { MarkName } from "./layout";
+import type { Binding } from "./binding";
+import { PHONE, type PhoneLaw, phoneById } from "./law";
+import type { MarkName, PhoneLookValues } from "./layout";
+import type { PhoneModel } from "./model";
+import type { NoticeWords } from "./notice";
 
 /** Each state's line (DESIGN.md §9, verbatim) — `device` the device's name; null: the state says nothing. */
 export const FACE_LINES: Readonly<Record<LiveSimulatorState, ((device: string) => string) | null>> =
@@ -145,5 +148,36 @@ export function facePlan(
     mark: frame ? FACE_MARKS[is] : "none",
     line,
     act: label !== null && run !== undefined ? { label, run } : null,
+  };
+}
+
+/** A device type's name as a person reads it, for one this build's catalog lacks (a newer Xcode's): its id's own words. */
+const nameOfType = (deviceType: string): string =>
+  deviceType
+    .slice(deviceType.lastIndexOf(".") + 1)
+    .split("-")
+    .filter((w) => w !== "")
+    .join(" ");
+
+/** The device's name the phone says: its bound type's (the catalog's name, else its id's words), else its model's. */
+export function deviceName(binding: Binding | undefined, model: PhoneModel): string {
+  if (binding === undefined) return model.name;
+  return phoneById(binding.deviceType)?.name ?? nameOfType(binding.deviceType);
+}
+
+/**
+ * What a face's plan SAYS, as its words' raster is asked for it (notice.ts `NoticeSpec`): its line and its act's word, in the
+ * look's words' ink as a CSS colour — or undefined: the face says nothing. The one home of both, so the record (kind.ts) and
+ * the committed words' maker (scripts/make-face-words.ts) key a raster alike.
+ */
+export function faceWords(
+  plan: FacePlan,
+  look: Pick<PhoneLookValues, "words">,
+): { readonly words: NoticeWords; readonly ink: string } | undefined {
+  if (plan.line === null) return undefined;
+  const [r, g, b] = look.words;
+  return {
+    words: { line: plan.line, act: plan.act?.label ?? null },
+    ink: `rgb(${Math.round(r * 255)} ${Math.round(g * 255)} ${Math.round(b * 255)})`,
   };
 }

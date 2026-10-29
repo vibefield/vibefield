@@ -8,21 +8,17 @@
 //
 // Authoring-time only, as states.ts is: this directory never enters a `.vfplugin`.
 import { liveSimulatorSpec } from "@vibefield/plugin-sdk/desk";
-import { FACE_ACTS, FACE_SHOWS } from "../src/face";
+import { FACE_SHOWS } from "../src/face";
 import { feedScreenOf, fixtureFrame } from "../src/fixture";
 import { phoneById, shapeOf } from "../src/law";
-import { FIXTURE_TIME, fixtureDevice } from "./fixture-mac";
+import { FIXTURE_TIME, fixtureDevice, stagedWords } from "./fixture-mac";
 
 export default (_key: string, spec: Readonly<Record<string, unknown>>) => {
   const device = liveSimulatorSpec(spec);
   const model = device === undefined ? undefined : phoneById(device.deviceType);
   const staged = device === undefined ? undefined : fixtureDevice(device.deviceType);
   if (device === undefined || model === undefined || staged === undefined) return undefined;
-  const words = {
-    is: staged.is,
-    ...(FACE_ACTS[staged.is] === null ? {} : { act: () => {} }),
-  };
-  const info = { extra: { simulator: words } };
+  const info = { extra: { simulator: stagedWords(staged.is) } };
   if (FACE_SHOWS[staged.is] === "none")
     return { width: 1, height: 1, bytes: new Uint8Array([0, 0, 0, 255]), info };
   const screen = feedScreenOf(shapeOf(model));

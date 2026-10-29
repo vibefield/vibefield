@@ -141,6 +141,7 @@ export interface WordsRaster {
 
 /**
  * THE SERVICE'S KEY (ICE K8a): the plugin's DOM half lends it wherever the platform's Canvas 2D is (the product's renderer);
- * where none is lent (a Node still), a face says nothing in words — its dims and its marks still say it.
+ * where none is lent (a Node still), a face draws the committed raster that says exactly its words (face-words.ts), and
+ * words nothing committed says are not drawn — its dims and its marks still say it.
  */
 export const WORDS_RASTER = serviceKey<WordsRaster>("vibefield.simulator.words");

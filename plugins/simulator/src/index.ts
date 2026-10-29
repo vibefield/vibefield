@@ -4,6 +4,7 @@
 export * from "./binding";
 export { PHONES } from "./catalog.gen";
 export * from "./face";
+export { packWords, type StillWords, stillWords, unpackWords } from "./face-words";
 export * from "./fixture";
 export * from "./fixture-live";
 export * from "./ids";

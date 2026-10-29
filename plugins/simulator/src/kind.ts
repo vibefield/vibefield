@@ -26,7 +26,7 @@ import {
   stringProp,
 } from "@vibefield/plugin-sdk/desk";
 import { type Binding, bindingOf } from "./binding";
-import { type FacePlan, facePlan, NO_FACE, VIEW_ONLY } from "./face";
+import { deviceName, type FacePlan, facePlan, faceWords, NO_FACE, VIEW_ONLY } from "./face";
 import { DEFAULT_MODEL, PROP, SIMULATOR_KIND } from "./ids";
 import {
   castPhone,
@@ -74,20 +74,6 @@ export const modelPropOf = (props: Readonly<Record<string, unknown>>): string =>
 /** The phone's `finish` prop ("" where none: its model's first). */
 export const finishPropOf = (props: Readonly<Record<string, unknown>>): string =>
   stringProp(props, PROP.finish, "");
-
-/** A device type's name as a person reads it, for one this build's catalog lacks (a newer Xcode's): its id's own words. */
-const nameOfType = (deviceType: string): string =>
-  deviceType
-    .slice(deviceType.lastIndexOf(".") + 1)
-    .split("-")
-    .filter((w) => w !== "")
-    .join(" ");
-
-/** The device's name the phone says: its bound type's (the catalog's name, else its id's words), else its model's. */
-export function deviceName(binding: Binding | undefined, model: PhoneModel): string {
-  if (binding === undefined) return model.name;
-  return phoneById(binding.deviceType)?.name ?? nameOfType(binding.deviceType);
-}
 
 /** The spec a bound phone opens its face with (the SDK's `LiveSimulatorSpec`): its binding, its device's name, the desk's scheme. */
 export const simulatorSpec = (
@@ -259,17 +245,13 @@ export function simulatorKind(
       const plan = face === undefined ? NO_FACE : planOf(local, ctx.entity, name, law);
       local?.offer(ctx.entity, plan.act?.run);
       const t = face?.texture();
-      // the face's words, light over the screen (drawn by the lent raster — none lent, no words)
-      const [wr, wg, wb] = look.words;
+      // the face's words, light over the screen (drawn by the lent raster; none lent — a Node still — the committed raster
+      // its key names, else no words)
+      const said = faceWords(plan, look);
       const notice =
-        plan.line === null
+        said === undefined
           ? undefined
-          : local?.notice(
-              ctx.entity,
-              G.shape.points,
-              { line: plan.line, act: plan.act?.label ?? null },
-              `rgb(${Math.round(wr * 255)} ${Math.round(wg * 255)} ${Math.round(wb * 255)})`,
-            );
+          : local?.notice(ctx.entity, G.shape.points, said.words, said.ink);
       return {
         geometry: G,
         finish: G.finish,
