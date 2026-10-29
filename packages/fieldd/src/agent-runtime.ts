@@ -577,6 +577,17 @@ interface AwaitingBoot {
  * (which an adapter's CLI would read as a flag). */
 const NATIVE_SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/;
 
+/** Item 97 — the row of a PTY whose process still runs, or none: a row the
+ * floor lists `exited` is a kept pane's husk, which the boot reads as it reads
+ * a PTY that did not survive (`reattach`, `sweepAwaiting`). */
+function runningRowOf(
+  rows: ReadonlyMap<string, TerminalInfo>,
+  terminalId: string | undefined,
+): TerminalInfo | undefined {
+  const row = terminalId === undefined ? undefined : rows.get(terminalId);
+  return row?.exited === true ? undefined : row;
+}
+
 function isDirectory(path: string): boolean {
   try {
     return statSync(path).isDirectory();
@@ -2895,7 +2906,10 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       }
       if (this.managed.has(record.runtimeRunId) || this.pending.has(record.runtimeRunId)) continue;
       const terminalId = record.terminalSessionId;
-      const row = terminalId === undefined ? undefined : rows.get(terminalId);
+      // item 97 — a pane listed `exited` is a husk: its process ended while no
+      // fieldd was here, and no exit event will come for it, so it waits the
+      // boot's grace as a PTY that did not survive does
+      const row = runningRowOf(rows, terminalId);
       if (row === undefined || terminalId === undefined) {
         this.awaitBoot(record);
         continue;
@@ -2958,7 +2972,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     for (const [runtimeRunId, waiting] of [...this.awaitingBoot]) {
       const { record } = waiting;
       const terminalId = record.terminalSessionId;
-      const row = terminalId === undefined ? undefined : rows.get(terminalId);
+      const row = runningRowOf(rows, terminalId);
       if (row !== undefined && terminalId !== undefined) {
         this.awaitingBoot.delete(runtimeRunId);
         void this.attachRecord(record, row, terminalId).catch((error: unknown) => {
@@ -2977,19 +2991,45 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       }
       this.awaitingBoot.delete(runtimeRunId);
       // the PTY did not outlive the gap (the floor restarted too, or the
-      // process ended while no fieldd was there to see it): an unknown exit —
-      // the record resumes from the door like any other
+      // process ended while no fieldd was there to see it, its pane kept and
+      // listed `exited` — item 97): an unknown exit — the record resumes from
+      // the door like any other
       this.records.stampExit(runtimeRunId, {
         at: this.now().toISOString(),
         exitCode: null,
         signal: null,
         reason: "unknown",
       });
+      // item 97 — the pane survived and its process did not
+      const husk = terminalId === undefined ? undefined : rows.get(terminalId);
       this.logger.info(
         "fieldd.agents.session_gone",
         "A managed session's PTY did not survive the restart; its record is stamped",
-        { runtimeRunId, provider: record.provider },
+        {
+          runtimeRunId,
+          provider: record.provider,
+          ...(husk !== undefined ? { pane: "listed-exited" } : {}),
+        },
       );
+      // MF-1f — a husk is a dead pane the deck still shows, so its row comes
+      // back exited on THIS boot, the resume verb over its final screen, as
+      // `reattach` returns a stamped record's row on the next one
+      const stamped = husk === undefined ? undefined : this.records.read(runtimeRunId);
+      // (AR-7 — never a typed run's: the terminal it names is the person's shell)
+      if (
+        husk !== undefined &&
+        terminalId !== undefined &&
+        stamped !== undefined &&
+        !isTypedRun(stamped)
+      ) {
+        this.exited.set(runtimeRunId, {
+          record: stamped,
+          terminalSessionId: terminalId,
+          terminal: husk,
+          since: this.now().toISOString(),
+        });
+        this.publish();
+      }
       if (record.profileId !== undefined) void this.profiles.sweep();
     }
     // one line as the sweep begins to wait, none while it goes on waiting

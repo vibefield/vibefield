@@ -543,4 +543,28 @@ describe("a husk the floor lists exited (item 97; the mock floor)", () => {
       reason: "unknown",
     });
   });
+
+  it("a restart across the exit: a record whose pane the FIRST inventory lists exited is stamped after the boot's grace, never held as running", async () => {
+    // fieldd was down while the agent ended; the floor kept its pane, listed `exited`, and has no exit event to give
+    const run = "run-ended-while-fieldd-was-down";
+    const { daemon, records } = await agentDaemonOn(
+      fixture("observed-state.exited-husk.json"),
+      (dataDir) => [runRecord(run, HUSK, dataDir)],
+    );
+    await until(
+      () => records.read(run)?.exited !== undefined,
+      STAMPED_WITHIN_MS,
+      "stamped by the boot sweep",
+    );
+    expect(records.read(run)?.exited).toMatchObject({
+      exitCode: null,
+      signal: null,
+      reason: "unknown",
+    });
+    expect(records.read(run)?.reattach, "never held: no attach was tried").toBeUndefined();
+    await until(() => daemon.agents.reattachSettled(), 5_000, "the re-attach settled");
+    // MF-1f — on THIS boot, the row is back over the kept pane, exited (never a blank until the next)
+    const row = daemon.agents.list().sessions.find((r) => r.runtimeRunId === run);
+    expect(row?.continuation?.exited).toBe(true);
+  });
 });
