@@ -12,6 +12,8 @@ import type {
 import type { LogLevelNameV1, LogRecordV1, LogStreamV1 } from "@vibefield/contracts/logging";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { COPY_PLACES } from "../frame/cards/cards-words";
+import { copyWords, dealFromElement, sheetOrigin } from "../frame/cards/copy-door";
 import { getHost } from "../host";
 
 const ALL_SOURCES: readonly LogStreamV1[] = [
@@ -799,7 +801,12 @@ export function DiagnosticsSection(): ReactElement {
                       onClick={(event) => {
                         event.preventDefault();
                         event.stopPropagation();
-                        void host?.copyText(JSON.stringify(record, null, 2));
+                        // HN-5: a record copied is a text card too, dealt from this button
+                        void copyWords(
+                          JSON.stringify(record, null, 2),
+                          sheetOrigin(COPY_PLACES.settings),
+                          dealFromElement(event.currentTarget),
+                        );
                       }}
                     >
                       copy

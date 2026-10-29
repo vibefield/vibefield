@@ -10,6 +10,7 @@ import { FielddProvider } from "@vibefield/fieldd-client/react";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { cardsStore } from "../src/frame/cards/cards-store";
 import { type FieldHost, setHost } from "../src/host";
 import {
   applyDiagnosticDelta,
@@ -140,7 +141,7 @@ describe("diagnostics viewer folds", () => {
       warnings: ["Support bundles can contain sensitive context."],
     };
     const previewSupport = vi.fn(async (_selection: unknown) => preview);
-    const copyText = vi.fn(async () => undefined);
+    const copyText = vi.fn(async (_text: string) => undefined);
     const host: FieldHost = {
       logger: noopLogger,
       diagnostics: {
@@ -205,8 +206,32 @@ describe("diagnostics viewer folds", () => {
     const copy = Array.from(container.querySelectorAll("button")).find(
       (button) => button.textContent === "copy",
     );
-    await act(async () => copy?.click());
+    if (copy === undefined) throw new Error("no copy button on the record");
+    vi.spyOn(copy, "getBoundingClientRect").mockReturnValue({
+      left: 900,
+      top: 210,
+      width: 30,
+      height: 16,
+    } as DOMRect);
+    await act(async () => copy.click());
     expect(copyText).toHaveBeenCalledOnce();
+    // HN-5: the record on the clipboard first, then a text card of it, dealt from this button
+    await act(async () => {
+      for (let turn = 0; turn < 20; turn += 1) await Promise.resolve();
+    });
+    const dealt = cardsStore.snapshot().cards.at(-1);
+    expect(dealt).toMatchObject({
+      kind: "text",
+      paste: copyText.mock.calls[0]?.[0],
+      origin: { view: "canvas", place: "Settings", how: "copy" },
+    });
+    expect(cardsStore.snapshot().arriving.get(dealt?.id ?? "")).toEqual({
+      left: 900,
+      top: 210,
+      width: 30,
+      height: 16,
+    });
+    if (dealt !== undefined) cardsStore.remove(dealt.id);
 
     const previewButton = Array.from(container.querySelectorAll("button")).find(
       (button) => button.textContent === "Preview",

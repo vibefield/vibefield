@@ -1,5 +1,6 @@
 import { type FieldClipboardHost, type FieldDiagnosticsHost, peekHost } from "../../host";
 import { getRendererLogger } from "../../logging";
+import { getActiveView } from "../view-state";
 import { type Card, type CardOrigin, textCardOf } from "./cards-model";
 import { dealCard } from "./cards-sources";
 import { type CardStore, cardsStore, type DealFrom } from "./cards-store";
@@ -111,6 +112,12 @@ export function copyWords(
   const store = deps.store ?? cardsStore;
   const card = textCardOf(text, { id: store.nextId("text"), origin, at: store.now() });
   return copyToHand({ card, from, text }, { ...deps, store });
+}
+
+/** Where a copy made on a sheet over the view comes from (Settings, the Setup Assistant): the
+ * view under the sheet, then the sheet's place — "Canvas · Settings · just now". */
+export function sheetOrigin(place: string): CardOrigin {
+  return { view: getActiveView(), place, how: "copy" };
 }
 
 /** Where a pressed control's card leaves from: its box, window px — null with none to measure. */

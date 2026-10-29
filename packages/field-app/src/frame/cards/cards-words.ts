@@ -185,3 +185,11 @@ export const COPY_DOOR_WORDS = {
   /** a refusal as the line says it */
   refused: (reason: string) => `Not copied — ${reason}`,
 } as const;
+
+/** HN-5 — the place a copy was made when it is a sheet over the view, not the view's own
+ * surface: its card's provenance names it after the view under it ("Canvas · Settings · just
+ * now"). History's own copies name History alone. */
+export const COPY_PLACES = {
+  settings: "Settings",
+  setup: "Setup Assistant",
+} as const;

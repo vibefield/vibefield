@@ -1,6 +1,8 @@
 import { useFielddClient, useSubscription } from "@vibefield/fieldd-client/react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getHost } from "../host";
+import type { DealFrom } from "../frame/cards/cards-store";
+import { COPY_PLACES } from "../frame/cards/cards-words";
+import { copyWords, sheetOrigin } from "../frame/cards/copy-door";
 import { type LinkBeginStep, type LinkFace, linkFace, type UserLinkStatus } from "./link";
 
 // TS-2 (track TS) — the link's one machinery, for every surface that starts it
@@ -36,12 +38,18 @@ export function openSignIn(url: string): void {
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
-/** The host's clipboard door when there is one, the web's otherwise — the
- * History room's way (window-ports.ts). */
-export async function copyText(text: string): Promise<void> {
-  const diagnostics = getHost().diagnostics;
-  if (diagnostics) await diagnostics.copyText(text);
-  else await navigator.clipboard.writeText(text);
+/** HN-5 — words copied here go on the system clipboard through the one copy door and deal a
+ * text card (DESIGN.md §8 "The hand": Settings' copies deal text cards from the button pressed),
+ * leaving from `from` — the button's box, under the sheet — or rising into place without one;
+ * its provenance names the view under the sheet and `place`. False when the clipboard did not
+ * take them: no card is dealt, and the button says so in its own words. */
+export async function copyText(
+  text: string,
+  place: string,
+  from: DealFrom | null = null,
+): Promise<boolean> {
+  const copied = await copyWords(text, sheetOrigin(place), from);
+  return copied.ok;
 }
 
 export interface LinkDoor {
@@ -71,11 +79,17 @@ export interface LinkDoor {
   startOver(): Promise<string | null>;
   /** The live address, opened again (the browser did not open, or was closed). */
   openAgain(): void;
-  /** The live address on the clipboard; false when there is none to copy. */
-  copyLink(): Promise<boolean>;
+  /** The live address on the clipboard, dealt as a card from the button's box (HN-5); false
+   * when there is none to copy, or the clipboard did not take it. */
+  copyLink(from?: DealFrom | null): Promise<boolean>;
 }
 
-export function useLinkDoor(open: (url: string) => void = openSignIn): LinkDoor {
+/** `place` names the surface its copies are made in, on their cards (Settings, or the Setup
+ * Assistant's Connect pane). */
+export function useLinkDoor(
+  open: (url: string) => void = openSignIn,
+  place: string = COPY_PLACES.settings,
+): LinkDoor {
   const client = useFielddClient();
   const sub = useSubscription<UserLinkStatus>("user.link.subscribe");
   const status = sub.status === "live" ? (sub.data ?? null) : null;
@@ -151,14 +165,9 @@ export function useLinkDoor(open: (url: string) => void = openSignIn): LinkDoor 
     openAgain: () => {
       if (authUrl !== null) open(authUrl);
     },
-    copyLink: async () => {
+    copyLink: async (from = null) => {
       if (authUrl === null) return false;
-      try {
-        await copyText(authUrl);
-        return true;
-      } catch {
-        return false;
-      }
+      return copyText(authUrl, place, from);
     },
   };
 }
