@@ -8,8 +8,8 @@
  * the carried layer, and a carry's keys its own; the reach's × and ⌫ — only for the card the
  * pointer is on, never under Settings, once per press; the frame's one owner folding it, the card
  * flying home; the thirteenth pushing the first off, a held or a carried one included; a twin's
- * lift and settle; and its mount. The carried layer is W-play's (`card-drag.ts`): it stands in
- * here as a recorder.
+ * lift and settle; and its mount, which hears another app's paste only while it stands (HN-6). The
+ * carried layer is W-play's (`card-drag.ts`): it stands in here as a recorder.
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -877,5 +877,46 @@ describe("the twelve (HN-D8) and the mount", () => {
     expect(CHROME).toMatch(
       /<ArtifactsTray\s+surface=\{surface\}\s+onSurfaceChange=\{onSurfaceChange\}\s+sliver=\{covered\}/u,
     );
+  });
+
+  it("hears another app while it is here (HN-6): a paste with no caret deals into its hand, a file named through its host's door — and once it is gone, nothing", async () => {
+    const store = new CardStore(() => NOW);
+    const notes = new File(["one\n"], "notes.md", { type: "text/markdown" });
+    const host: CardsHost = {
+      ...fakeHost(),
+      pathForFile: (file) => (file === notes ? "/Users/me/notes.md" : null),
+    };
+    mount(<Owned store={store} host={host} />);
+    const paste = (): ClipboardEvent => {
+      const data = {
+        types: ["Files"],
+        items: [{ kind: "file", type: notes.type, getAsFile: () => notes }],
+        files: [notes],
+        getData: () => "",
+      } as unknown as DataTransfer;
+      const event = new ClipboardEvent("paste", {
+        bubbles: true,
+        cancelable: true,
+        clipboardData: data,
+      });
+      // the person's own ⌘V, as the app menu sends it: trusted, as no test's event is
+      Object.defineProperty(event, "isTrusted", { value: true });
+      document.body.dispatchEvent(event);
+      return event;
+    };
+
+    await act(async () => {
+      expect(paste().defaultPrevented).toBe(true);
+      await vi.waitFor(() => expect(ids(store)).toHaveLength(1));
+    });
+    expect(store.snapshot().cards[0]).toMatchObject({
+      kind: "file",
+      name: "notes.md",
+      paste: "/Users/me/notes.md",
+      origin: { view: "outside", how: "paste" },
+    });
+    act(() => root?.unmount());
+    root = null;
+    expect(paste().defaultPrevented, "a hand gone hears no paste").toBe(false);
   });
 });
