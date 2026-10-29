@@ -9,6 +9,7 @@ import {
 } from "@vibefield/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  attachableRows,
   createFieldSubscription,
   diffFieldRows,
   FieldProjection,
@@ -418,6 +419,56 @@ describe("FieldProjection — the revision that makes an idle board free (§10.2
     snapshot.rows[0]!.status = "blocked";
     expect(projection.snapshot().rows[0]?.status).toBe("idle");
     expect(projection.apply(board(summary()))).toBeNull();
+  });
+});
+
+describe("attachableRows — F-M4 on the model's promise (PG-1a)", () => {
+  // a desk row's two attach promises: the `terminal` join, and the backend's
+  // own word on its model row, which knows nothing of this device's doors
+  const promise = {
+    id: "m-1",
+    kind: "agent",
+    status: "idle",
+    attachable: true,
+    writable: true,
+    device: "desk-a",
+  };
+  const deskRow = (monitorRow?: Record<string, unknown>): AgentFieldRow =>
+    ({
+      ...projectFieldRow(summary({ status: "idle" })),
+      revision: 3,
+      ...(monitorRow !== undefined ? { monitorRow } : {}),
+    }) as AgentFieldRow;
+
+  it("withdraws the model row's attach and write promise with the join while the doors are down", () => {
+    expect(deskRow(promise).terminal, "the row promised a join").toBeDefined();
+    const [held] = attachableRows([deskRow(promise)], false);
+    expect(held?.terminal).toBeUndefined();
+    expect(held?.["monitorRow"]).toEqual({ ...promise, attachable: false, writable: false });
+    // the keys keep their order, so a frame's bytes move by the two values alone
+    expect(Object.keys(held?.["monitorRow"] as object)).toEqual(Object.keys(promise));
+    // the ROW survives: an agent nothing can attach to is still working
+    expect(held).toMatchObject({ kind: "claude", revision: 3 });
+  });
+
+  it("leaves both promises whole while the doors are up", () => {
+    const [open] = attachableRows([deskRow(promise)], true);
+    expect(open?.terminal).toBeDefined();
+    expect(open?.["monitorRow"]).toEqual(promise);
+  });
+
+  it("adds no `writable` the backend did not declare, and leaves a row with no model row as it was", () => {
+    const { writable: _undeclared, ...attachOnly } = promise;
+    const [held] = attachableRows([deskRow(attachOnly)], false);
+    expect(held?.["monitorRow"]).toEqual({ ...attachOnly, attachable: false });
+    expect(held?.["monitorRow"]).not.toHaveProperty("writable");
+    const plain = deskRow();
+    const [bare] = attachableRows([plain], false);
+    expect("monitorRow" in (bare as object)).toBe(false);
+    // a model row that promised nothing is returned as the same object
+    const quiet = deskRow({ ...promise, attachable: false, writable: false });
+    const [same] = attachableRows([quiet], false);
+    expect(same?.["monitorRow"]).toBe((quiet as Record<string, unknown>)["monitorRow"]);
   });
 });
 

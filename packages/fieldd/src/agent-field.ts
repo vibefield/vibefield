@@ -773,6 +773,14 @@ export class FieldProjection {
  * `alive` is computed from the SUMMARY before this runs, so a pending row
  * (AR-4: a PTY on this device with nothing driving it) keeps reading alive here
  * rather than flipping to "gone" because the mesh is off.
+ *
+ * *2026-10-29 (PG-1a):* the store carrier retired at DS-D14, so the door is the
+ * field's one carrier. A desk row carries a SECOND attach promise beside the
+ * join: its `monitorRow.attachable`/`.writable`, which the backend computes
+ * without knowing this device's doors. It is withdrawn with the join
+ * (`withholdAttachPromise`). Before, a peer window read `attachable: true` with
+ * no join, fell back to the run id, raised the deck and asked the owner for a
+ * session its floor may not hold.
  */
 export function attachableRows(
   rows: readonly AgentFieldRow[],
@@ -780,10 +788,32 @@ export function attachableRows(
 ): AgentFieldRow[] {
   if (terminalPublished) return [...rows];
   return rows.map((row) => {
-    if (row.terminal === undefined) return row;
-    const { terminal: _unreachable, ...rest } = row;
-    return rest;
+    let held = row;
+    if (held.terminal !== undefined) {
+      const { terminal: _unreachable, ...rest } = held;
+      held = rest;
+    }
+    return withholdAttachPromise(held);
   });
+}
+
+/** F-M4 on the model's promise (PG-1a): a row's `monitorRow` that says it can be
+ * attached or written says so no longer while this device's doors are down.
+ * Its keys keep their order, so a frame's bytes move by the two values alone;
+ * a row with no `monitorRow`, or one that promised nothing, is returned as is. */
+function withholdAttachPromise(row: AgentFieldRow): AgentFieldRow {
+  const monitorRow = (row as { monitorRow?: unknown }).monitorRow;
+  if (typeof monitorRow !== "object" || monitorRow === null) return row;
+  const promise = monitorRow as { attachable?: unknown; writable?: unknown };
+  if (promise.attachable !== true && promise.writable !== true) return row;
+  return {
+    ...row,
+    monitorRow: {
+      ...monitorRow,
+      attachable: false,
+      ...(promise.writable !== undefined ? { writable: false } : {}),
+    },
+  };
 }
 
 export interface FieldSubscriptionOptions {
@@ -830,6 +860,11 @@ export interface FieldSubscriptionOptions {
    * is precisely what the store carrier's design forbids (MF-1h: the rows'
    * own facts have not moved). The safe direction is already safe — a gate
    * that OPENS late only withholds a true join for a while.
+   *
+   * *2026-10-29 (PG-1a):* the gate withholds the join AND the desk row's
+   * `monitorRow.attachable`/`.writable` (`attachableRows`). The store carrier
+   * retired at DS-D14, so the door is the one carrier the gate keeps honest.
+   * The residual above is PG-1d's (a re-present on a gate flip).
    */
   terminalPublished?: () => boolean;
   onError?: (error: unknown) => void;

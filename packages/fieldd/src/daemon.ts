@@ -3573,10 +3573,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
             : projectFieldRow,
         minIntervalMs,
         ...(heartbeatMs !== undefined ? { heartbeatMs } : {}),
-        // TM-2 (F-M4) — the SAME gate the store publisher applies below. The
-        // two carriers serve one board, and a row that promises a tap over one
-        // leg while refusing it over the other is the false positive MF-1l
-        // exists to prevent — the phone folds both legs into one card.
+        // TM-2 (F-M4) — the gate on every attach promise a row makes: the
+        // `terminal` join and, on a desk row, `monitorRow.attachable`/
+        // `.writable` (PG-1a). The store publisher it once matched retired at
+        // DS-D14; a promise of a tap the owner refuses is the false positive
+        // MF-1l exists to prevent.
         terminalPublished: () => native.terminalMeshPublished(),
         onError: (error) =>
           logger.warn("fieldd.agents.field_frame_failed", "A field subscriber's frame failed", {
