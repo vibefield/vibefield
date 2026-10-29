@@ -125,6 +125,8 @@ export function mountProductHost(
         window.vibefield.screenshot.stillBytes(screenshotStillBasename(path)),
       screenshotStillKept: (path) =>
         window.vibefield.screenshot.stillKept(screenshotStillBasename(path)),
+      // HN-6 — a file brought in from another app, by its path: the preload's own read
+      pathForFile: (file) => window.vibefield.pathForFile(file),
       onPrepareClose: (handler) => window.vibefield.onPrepareClose(handler),
       completeClose: (result) => window.vibefield.completeClose(result),
       onShellCommand: (handler) => window.vibefield.onShellCommand(handler),

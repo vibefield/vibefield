@@ -308,6 +308,11 @@ export interface FieldHost {
    * is never handed a path the ring has let go. Optional like its neighbours:
    * a harness without the shell has no stills to ask about. */
   readonly screenshotStillKept?: (path: string) => Promise<boolean>;
+  /** HN-6 — a file another app handed over (a paste's, a drop's) as its path on disk, which a
+   * pane is given for it (HN-L5); null for one not on disk. The preload's own read, no IPC.
+   * Optional like its neighbours: a harness without the shell (the catalog) has no paths, and a
+   * file card brought in there says it can't be pasted yet. */
+  readonly pathForFile?: (file: File) => string | null;
   getConnection(): Promise<FieldConnection>;
   onPrepareClose(handler: (requestId: string) => void): () => void;
   completeClose(result: { requestId: string; ok: boolean; error?: string }): void;

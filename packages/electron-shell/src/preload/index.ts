@@ -51,7 +51,7 @@ import {
   type WindowLightsState,
   WindowLightsState as WindowLightsStateSchema,
 } from "@vibefield/contracts";
-import { contextBridge, ipcRenderer, sharedTexture } from "electron";
+import { contextBridge, ipcRenderer, sharedTexture, webUtils } from "electron";
 import { PreloadDesktopStateBridge } from "./desktop-state";
 import { type DiagnosticsRendererPort, PreloadDiagnosticsBridge } from "./diagnostics";
 import {
@@ -352,6 +352,19 @@ contextBridge.exposeInMainWorld("vibefield", {
         RendererReplaceRequest.parse({ reason }),
       ),
     ),
+  /** HN-6 — a file another app handed over (a paste's, a drop's) as its path on disk: what a pane
+   * is given for it, the road a Finder drop takes into a terminal. Electron 43 gives a File no
+   * `path`; `webUtils` reads it here in the sandboxed preload, so no IPC channel and no main
+   * handler — the channel table is unchanged. A File not backed by a file on disk (one a page
+   * made) has none, nor does anything that is not a File: null. */
+  pathForFile: (file: File): string | null => {
+    try {
+      const path = webUtils.getPathForFile(file);
+      return path === "" ? null : path;
+    } catch {
+      return null;
+    }
+  },
   /** BP-D4 — Settings' Clear browsing data: main clears this shell's browser profiles and reloads their open pages; the
    * answer is counts only (no path, no site, no size), parsed here before it crosses. */
   browserData: {

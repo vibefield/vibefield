@@ -18,6 +18,8 @@ import { TARGET_WORDS } from "./cards-words";
  * go on a place that took it, and a COPY plays in: the card shrinks into the point, the outcome
  * is said once on the line, and the card springs back to its slot (HN-D4, HN-L2: never spent).
  * Let go anywhere else, or press Esc, or let the window lose focus, and it flies straight home.
+ * A card from another app (B2, HN-6) waits — its kind alone — until the drop says what it holds:
+ * filled then, it plays straight into a pane or the prompt, and anywhere else it is the hand's.
  * A hand drag holds its pointer for the carry — captured on the hand, the cursor grabbing (§7) —
  * so nothing under the card hears a move or an up it never saw pressed. Otherwise there is no DOM
  * here: the layer draws the card, and the clock is the tests' to fake.
@@ -76,6 +78,12 @@ export interface CarriedCard {
   readonly home: CardBox | null;
 }
 
+/** What became of a card let go (`endCardDrag`): a place took it and a copy `played`, its outcome
+ * said; it went `home`, nothing played; or — a card from another app let go where nothing takes it
+ * straight — it is for the `hand`: its carry is over, and its source deals it from where it was
+ * let go (DESIGN.md §8 "The hand", brought in). `none`: nothing was being carried. */
+export type CardLetGo = "played" | "home" | "hand" | "none";
+
 /** HN-D6 — how long a card is held over a view's cell before that view opens under it. */
 export const SPRING_LOAD_MS = 520;
 /** The play (M4): the card shrinks into the point it is let go on, then flies home on the island
@@ -118,6 +126,8 @@ interface Spring {
 interface LiveDrag {
   readonly start: CardDragStart;
   readonly drag: number;
+  /** the card carried: the start's, or — from another app — the one its drop filled (B2) */
+  card: Card;
   phase: CarriedCard["phase"];
   x: number;
   y: number;
@@ -167,7 +177,7 @@ function snapshot(drag: LiveDrag): CarriedCard {
   const carrying = drag.phase === "carry";
   const spring = carrying && drag.spring !== null && !drag.spring.done ? drag.spring : null;
   return {
-    card: drag.start.card,
+    card: drag.card,
     source: drag.start.source,
     x: drag.x,
     y: drag.y,
@@ -284,7 +294,7 @@ function hitTest(drag: LiveDrag): void {
     return;
   }
   const target = cardTargets.at(x, y, top);
-  const said = target === null ? null : answerOf(target, drag.start.card, { x, y });
+  const said = target === null ? null : answerOf(target, drag.card, { x, y });
   // from another app only a live input takes a card straight (a pane, the prompt); anywhere
   // else, the desk included, it settles into the hand (DESIGN.md §8 "The hand", from another app)
   if (
@@ -435,6 +445,7 @@ export function startCardDrag(start: CardDragStart): void {
   const drag: LiveDrag = {
     start,
     drag: drags,
+    card: start.card,
     phase: "carry",
     x: start.at.x,
     y: start.at.y,
@@ -463,25 +474,36 @@ export function moveCardDrag(x: number, y: number): void {
 
 /** Let go at this window point. A place that took the card plays a copy in, its outcome said
  * once on the line, and the card springs back; a refusal, or nothing under it, sends it straight
- * home. Resolves once the outcome is said. */
-export async function endCardDrag(x: number, y: number): Promise<void> {
+ * home. A card from another app (B2) is `filled` here — the drop says what it holds, so the filled
+ * card takes the waiting one's place and the place under it is asked again — and anywhere but a
+ * place that takes it straight it is the hand's; a place that refuses what it turned out to hold
+ * says so on the line, since under the pointer it answered only the waiting card. Resolves once
+ * the outcome is said. */
+export async function endCardDrag(x: number, y: number, filled?: Card): Promise<CardLetGo> {
   const drag = live;
-  if (drag === null || drag.phase !== "carry") return;
+  if (drag === null || drag.phase !== "carry") return "none";
+  if (filled !== undefined) drag.card = filled;
   moveTo(drag, x, y);
-  const target = drag.target;
-  if (target === null || drag.answer === null || !drag.answer.ok) {
-    turnHome(drag);
-    return;
+  const { target, answer } = drag;
+  if (target === null || answer === null || !answer.ok) {
+    if (drag.start.source === "hand") {
+      turnHome(drag);
+      return "home";
+    }
+    if (target !== null && answer !== null) sayOnLine(answer.label);
+    finish(drag);
+    return "hand";
   }
   drag.detach();
   stopSpring(drag);
   drag.phase = "play";
   publish(snapshot(drag));
-  const played = playOf(target, drag.start.card, { x: drag.x, y: drag.y });
+  const played = playOf(target, drag.card, { x: drag.x, y: drag.y });
   await wait(playTimings().shrinkMs);
   if (live === drag) turnHome(drag);
   const outcome = await played;
   if (outcome.note !== "") sayOnLine(outcome.note);
+  return "played";
 }
 
 /** Esc, a lost pointer, the window's blur: home at once, nothing played. */

@@ -118,6 +118,21 @@ export const WAITING_WORDS = {
   letGo: "Let go to see it",
 } as const;
 
+/** What another app hands over, once it is brought in (HN-6; DESIGN.md §8 "The hand", brought
+ * in): a file's facts when its first lines are not words, the kind's own name for a thing that
+ * came with none, what a pane says to a file with no path, and the line's note for a drop that
+ * held nothing a card can be. */
+export const OUTSIDE_WORDS = {
+  /** "PDF · 2.4 MB": the kind its name says, then its size as Finder counts it */
+  facts: (kind: string | null, size: string) => (kind === null ? size : `${kind} · ${size}`),
+  picture: "Picture",
+  file: "File",
+  /** HN-L5 — a file plays into a pane as its path; one with none (a file a page made) has
+   * nothing to give */
+  fileNoPath: "A file with no path can't be pasted yet",
+  nothing: "Not brought in — it held no words, picture or file",
+} as const;
+
 /** The raised hand and a card picked up (HN-D5). */
 export const HAND_WORDS = {
   raise: "Your hand  ⇧⌘V",

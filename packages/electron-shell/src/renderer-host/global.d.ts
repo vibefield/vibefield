@@ -97,6 +97,9 @@ declare global {
        * its own board with a plugin's new kinds. The page saves its board first.
        * RELOAD RACE — see `usersSwitch`. */
       replaceRenderer(reason: "plugin-kinds"): Promise<{ replacing: true }>;
+      /** HN-6 — a file another app handed over, by its path on disk; null for one not on disk.
+       * The preload reads it itself (`webUtils`): no IPC. */
+      pathForFile(file: File): string | null;
       onPrepareClose(handler: (requestId: string) => void): () => void;
       completeClose(result: { requestId: string; ok: boolean; error?: string }): void;
       onShellCommand(handler: (command: ShellCommand) => void): () => void;

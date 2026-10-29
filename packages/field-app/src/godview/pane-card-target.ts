@@ -1,7 +1,7 @@
 import { GHOSTTEA_PANE_SELECTOR } from "@vibefield/puppeteer-views";
 import { type CardTarget, TARGET_LAYER } from "../frame/cards/card-targets";
 import type { Card } from "../frame/cards/cards-model";
-import { OUTCOME_WORDS, TARGET_WORDS } from "../frame/cards/cards-words";
+import { OUTCOME_WORDS, OUTSIDE_WORDS, TARGET_WORDS } from "../frame/cards/cards-words";
 import {
   claimingRefusals,
   getGodviewLineDoor,
@@ -43,7 +43,8 @@ export function shellPath(path: string): string {
 }
 
 /** What each kind gives a pane, as it is: its words; a file its path; a picture its file's path,
- * the road a Finder drop takes (null with no file: nothing to give); an agent its handle. PURE. */
+ * the road a Finder drop takes (null with no file — or a file with no path, one a page made
+ * (HN-6): nothing to give); an agent its handle. PURE. */
 function givenBy(card: Card): string | null {
   switch (card.kind) {
     case "text":
@@ -51,7 +52,7 @@ function givenBy(card: Card): string | null {
     case "term":
       return card.paste;
     case "file":
-      return shellPath(card.paste);
+      return card.paste === "" ? null : shellPath(card.paste);
     case "pict":
       return card.path === undefined ? null : shellPath(card.path);
     case "agent":
@@ -69,6 +70,12 @@ export function paneTextOf(card: Card): string | null {
   let end = given.length;
   while (end > 0 && (given[end - 1] === "\n" || given[end - 1] === "\r")) end -= 1;
   return given.slice(0, end);
+}
+
+/** Why a card gives a pane nothing, in the hand's words: a file with no path, else a picture with
+ * no file (HN-L5). PURE. */
+function nothingToGive(card: Card): string {
+  return card.kind === "file" ? OUTSIDE_WORDS.fileNoPath : TARGET_WORDS.pictureNoFile;
 }
 
 /** The pane under a window point: the deck's panes as ghosttea lays them out (their chrome is
@@ -124,7 +131,7 @@ export function paneCardTarget(deps: PaneCardTargetDeps): CardTarget {
       const ring = under.element.getBoundingClientRect();
       // a card from another app says what it holds only once it is let go (B2)
       return card.waiting !== true && paneTextOf(card) === null
-        ? { ok: false, label: TARGET_WORDS.pictureNoFile, ring }
+        ? { ok: false, label: nothingToGive(card), ring }
         : { ok: true, label: TARGET_WORDS.pane(under.pane.name), ring };
     },
     play: async (card, at) => {
@@ -133,10 +140,16 @@ export function paneCardTarget(deps: PaneCardTargetDeps): CardTarget {
       if (door === null || under === null) return { ok: false, note: OUTCOME_WORDS.paneGone };
       const { pane } = under;
       const text = paneTextOf(card);
-      if (text === null) return { ok: false, note: TARGET_WORDS.pictureNoFile };
+      if (text === null) return { ok: false, note: nothingToGive(card) };
       // a snapshot's path names its still only while main keeps it — the ring every window shares
-      // moves on under the others' captures, and a pane is never handed a path to nothing
-      if (card.kind === "pict" && card.path !== undefined && !(await stillKept(card.path))) {
+      // moves on under the others' captures, and a pane is never handed a path to nothing. A
+      // picture brought in from another app names the person's own file, never a still (HN-6)
+      if (
+        card.kind === "pict" &&
+        card.origin.how === "snapshot" &&
+        card.path !== undefined &&
+        !(await stillKept(card.path))
+      ) {
         return { ok: false, note: OUTCOME_WORDS.pasteGone };
       }
       if (!(await door.whenInputOpen(pane.paneId, PANE_INPUT_WAIT_MS))) {
