@@ -19,7 +19,8 @@
  *     desktop holds (the host key);
  *   · HN-7 — where something new of a project starts (`startPlaceOf`, New
  *     agent's reading, and History's New terminal's), and New terminal's act:
- *     Godview's deck asked for a shell in that folder, the window moved there;
+ *     Godview's deck asked for a shell in that folder — first when it is up,
+ *     the window moved there once it opened; raised by the move when not;
  *   · an act never ending in silence (2026-10-11): a deck that never answers,
  *     an answer that cannot be read and a throw are each refused in words;
  *   · and never refused for the person's time (W7): while the deck asks the
@@ -716,7 +717,7 @@ describe("the acts", () => {
   // HN-7 (LN-D2): History's create, the act behind it — Resume's road to Godview's deck, which
   // births the shell in the folder asked for (godview-deck.test.tsx), or as its own create with
   // none.
-  it("New terminal asks Godview's deck for a shell in the folder, or as Godview's create with none — the window moved there first", async () => {
+  it("New terminal asks Godview's deck for a shell in the folder, or as Godview's create with none — the window moved there to show it", async () => {
     const { door } = deck();
     const opened = { state: "opened", placement: "replace" } as const;
     const newTerminal = vi.fn<LineViewDoor["newTerminal"]>(async () => opened);
@@ -727,12 +728,89 @@ describe("the acts", () => {
     expect(shown).toHaveBeenCalledWith("godview");
     expect(await newTerminalIn(deps, undefined)).toEqual(opened);
     expect(newTerminal).toHaveBeenLastCalledWith();
-    // the deck's own refusal is the act's, in its words
+    // the deck's own refusal is the act's, in its words — and the window, moved for the two
+    // that opened, stays for it
     newTerminal.mockResolvedValueOnce({ state: "refused", reason: "no pane to open it in" });
     expect(await newTerminalIn(deps, "/w")).toEqual({
       state: "refused",
       reason: "no pane to open it in",
     });
+    expect(shown).toHaveBeenCalledTimes(2);
+  });
+
+  // DESIGN.md §8 "History" (the behaviour lens's 5): a deck that is up is asked where it stands,
+  // and the window moves only once the terminal opened — a refusal is said in History, where the
+  // person is; a deck not up yet is raised by the move first, and what it answers is said there.
+  it("New terminal asks a deck that is up first, the window moving to Godview only once it opened", async () => {
+    const { door } = deck();
+    const order: string[] = [];
+    let answer: NewTerminalOutcome = { state: "opened" };
+    const deps: HistoryActsDeps = {
+      ...depsOf(resumeClient(true), {
+        ...door,
+        newTerminal: async () => {
+          order.push("asked");
+          return answer;
+        },
+      }),
+      showView: (view) => {
+        order.push(`moved to ${view}`);
+      },
+    };
+    expect(await newTerminalIn(deps, "/w")).toEqual({ state: "opened" });
+    expect(order).toEqual(["asked", "moved to godview"]);
+    // refused where it stands: the window never moved
+    order.length = 0;
+    answer = { state: "refused", reason: "no pane to open it in" };
+    expect(await newTerminalIn(deps, "/w")).toEqual(answer);
+    expect(order).toEqual(["asked"]);
+  });
+
+  it("New terminal with no deck up moves the window to Godview to raise one, then asks it — what it answers said there", async () => {
+    const { door } = deck();
+    const order: string[] = [];
+    const refused = { state: "refused", reason: "no pane to open it in" } as const;
+    const raised: LineViewDoor = {
+      ...door,
+      newTerminal: async () => {
+        order.push("asked");
+        return refused;
+      },
+    };
+    let moved = false;
+    const deps: HistoryActsDeps = {
+      ...depsOf(resumeClient(true), raised),
+      // the deck mounts on Godview's first open: none can place before the window moves
+      deck: async () => (moved ? raised : null),
+      showView: (view) => {
+        moved = true;
+        order.push(`moved to ${view}`);
+      },
+    };
+    expect(await newTerminalIn(deps, "/w")).toEqual(refused);
+    expect(order).toEqual(["moved to godview", "asked"]);
+  });
+
+  // W7: the restore question is drawn in Godview — a deck asking it is raised there, never asked
+  // from History, where the person would wait on a question no one can see
+  it("New terminal raises a deck that is asking the person the restore question before asking it", async () => {
+    const { door } = deck();
+    const order: string[] = [];
+    const deps: HistoryActsDeps = {
+      ...depsOf(resumeClient(true), {
+        ...door,
+        waitsOnPerson: true,
+        newTerminal: async () => {
+          order.push("asked");
+          return { state: "opened" };
+        },
+      }),
+      showView: (view) => {
+        order.push(`moved to ${view}`);
+      },
+    };
+    expect(await newTerminalIn(deps, "/w")).toEqual({ state: "opened" });
+    expect(order).toEqual(["moved to godview", "asked"]);
   });
 
   it("New terminal whose deck never opens, throws or never answers is refused in words, and logged", async () => {

@@ -11,9 +11,10 @@
  * launcher's own facts, placed through Godview's door, the window moved there
  * to show it, a refusal said on the line in the launcher's words; and the
  * line's create is New terminal in the project the room shows (HN-7, LN-D2):
- * the folder ③ shows, asked of Godview's deck, the window moved there — with
- * no project, as Godview's — and a folder it cannot open in said in New
- * agent's words, the window staying. And the room's host knows the window's
+ * the folder ③ shows, asked of Godview's deck, the window moved there once it
+ * opened — with no project, as Godview's — and a folder it cannot open in said
+ * in New agent's words (another desktop's in History's own), the window
+ * staying. And the room's host knows the window's
  * home (AR-8 L2): a project rooted under it reads `~/…`, one outside it in
  * full.
  */
@@ -528,12 +529,14 @@ describe("a regroup keeps the chosen session chosen (PJ-4)", () => {
 // HN-7 (LN-D2; DESIGN.md §8 "History" — its create is New terminal): the line's
 // create opens a fresh shell in the folder of the project the room shows — the
 // folder ③ shows, kept as the room reports it and found as New agent finds it —
-// asked of Godview's deck, the window moved there as Resume moves it; with no
-// project shown, as Godview's create opens one — and so in a project the room
-// shows with no folders of fieldd's (rosetta's unassigned bucket); a folder it
-// cannot open in is said in New agent's words, one on another desktop in
-// History's own, and the window stays. (The other refusal — none here — is
-// `startPlaceOf`'s, history-host.)
+// asked of Godview's deck, which is up, the window moving there once it opened;
+// with no project shown, as Godview's create opens one — and so in a project
+// the room shows with no folders of fieldd's (rosetta's unassigned bucket); a
+// folder it cannot open in is said in New agent's words, one on another
+// desktop in History's own, the deck's own refusal in the deck's — each said
+// in History, the window staying. (The other refusal — none here — is
+// `startPlaceOf`'s, and a deck not up yet, raised by the move first, is
+// `newTerminalIn`'s: history-host.)
 describe("History's create: New terminal in the project the room shows (HN-7)", () => {
   const VIBE = PROJECTS.rows[0] as Record<string, unknown> & {
     places: Array<Record<string, unknown>>;
@@ -749,6 +752,35 @@ describe("History's create: New terminal in the project the room shows (HN-7)", 
       "Terminal could not be opened — vibe-field is on laptop",
     );
     expect(newTerminal).not.toHaveBeenCalled();
+    expect(asked).not.toContain("godview");
+  }, 20_000);
+
+  // the behaviour lens's 5 (DESIGN.md §8 "History"): a deck that is up is asked where it stands,
+  // and the window moves only once the terminal opened — its refusal is said in History, where
+  // the person is (a deck not up is raised by the move first: history-host's rows)
+  it("a deck that is up is asked first: its refusal is said in History, and the window stays", async () => {
+    const newTerminal = vi.fn<LineViewDoor["newTerminal"]>(async () => ({
+      state: "refused",
+      reason: "no pane to open it in — open one in the deck first",
+    }));
+    publishGodviewLineDoor(deck(newTerminal));
+    mount(
+      fieldd(
+        () => SPAWNED,
+        () => ({ sessions: [] }),
+        (method) => (method === "project.list" ? listed([HERE]) : undefined),
+      ),
+    );
+    to("history");
+    await showProject();
+    await until(namesProject, "the create to name the project ③ shows");
+    await act(async () => {
+      create().click();
+    });
+    expect(await until(noteNow, "the line's note")).toBe(
+      "Terminal could not be opened — no pane to open it in — open one in the deck first",
+    );
+    expect(newTerminal).toHaveBeenCalledExactlyOnceWith({ cwd: "/Users/me/Projects/vibe-field" });
     expect(asked).not.toContain("godview");
   }, 20_000);
 });
