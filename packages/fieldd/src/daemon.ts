@@ -328,6 +328,7 @@ import {
   TerminalService,
 } from "./terminal-service";
 import { TokenService } from "./token-service";
+import { userMe } from "./user-me";
 import type { BrowseFacts } from "./workspace/browse-exports";
 import type { FilesHostLaunch } from "./workspace/launch";
 import { WorkspacePicker } from "./workspace/picker";
@@ -4331,6 +4332,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       );
     }
     api.register("device.list", () => ({ devices: devices.list() }));
+    // IOS-8f — this desktop's person, read from its own user row at each ask (`user-me.ts`)
+    api.register("user.me", () =>
+      userMe({ userId: config.userId, root: config.vibefieldRoot, logger }),
+    );
     api.register("device.get", (_ctx, params) => {
       const parsed = DeviceGetParams.safeParse(params);
       if (!parsed.success)
