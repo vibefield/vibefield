@@ -7,6 +7,7 @@ import {
   CARD_W,
   CARDS_CAP,
   type Card,
+  type CardOrigin,
   FAN_LINE_CLEAR,
   FAN_MAX_PITCH,
   FAN_MAX_TILT,
@@ -179,8 +180,16 @@ describe("the provenance line and the targets", () => {
       at: 0,
     });
     expect(provenance(card, 120_000)).toBe("Godview · claude·2 · 2m ago");
-    const pasted = textCardOf("Hi.", { id: "q", origin: { view: "outside", how: "paste" }, at: 0 });
-    expect(provenance(pasted, 1_000)).toBe("Another app · ⌘V · just now");
+    const from = (origin: CardOrigin): string =>
+      provenance(textCardOf("Hi.", { id: "q", origin, at: 0 }), 1_000);
+    // a paste with no caret says its act alone: where its words were copied is not known (LC-21)
+    expect(from({ view: "outside", how: "paste" })).toBe("⌘V · just now");
+    expect(from({ view: "outside", how: "drag" })).toBe("Another app · dragged in · just now");
+    // a copy on a sheet by the view under it; one History's room made by History alone
+    expect(from({ view: "canvas", place: "Settings", how: "copy" })).toBe(
+      "Canvas · Settings · just now",
+    );
+    expect(from({ view: "history", how: "copy" })).toBe("History · just now");
     expect(TARGET_WORDS.pane("claude·2")).toBe("Paste into claude·2");
   });
 

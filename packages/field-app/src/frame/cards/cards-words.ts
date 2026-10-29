@@ -30,10 +30,14 @@ export function viewName(view: FrameView | "outside"): string {
 }
 
 /** Where a card came from, as the line over it says: "Godview · claude·2 ·
- * 2m ago", "Canvas · snapshot · just now", "Another app · ⌘V · just now". */
+ * 2m ago", "Canvas · snapshot · just now", "Another app · dragged in · just
+ * now" — and a paste with no caret by its act alone, "⌘V · just now": where
+ * its words were copied is not known, since a pane's and a field's own copies
+ * and a program's OSC 52 reach the clipboard with no card (LC-21). */
 export function provenance(card: Card, now: number): string {
-  const how = HOW_WORDS[card.origin.how];
-  return [viewName(card.origin.view), card.origin.place ?? how, relativeTime(card.at, now)]
+  const { origin } = card;
+  const view = origin.how === "paste" ? null : viewName(origin.view);
+  return [view, origin.place ?? HOW_WORDS[origin.how], relativeTime(card.at, now)]
     .filter((part): part is string => part !== null && part !== undefined && part !== "")
     .join(" · ");
 }
