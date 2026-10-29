@@ -172,3 +172,16 @@ export const COPY_WORDS = {
   offScreen: "Not copied — it is off the screen",
   notDrawn: "Not copied — the desk could not draw it",
 } as const;
+
+/** HN-5 — a copy the system clipboard did not take deals no card (copy-door.ts), and says why
+ * after "Not copied —", as the desk's Copy says its own. A refusal of main's picture door comes
+ * in main's words, the clipboard read's voice (item 102), "the clipboard is written only for the
+ * focused window"; these are the rest. */
+export const COPY_DOOR_WORDS = {
+  /** the host's copy door, or the page's own clipboard, did not take the words */
+  words: "the clipboard did not take the words",
+  /** the page's own clipboard did not take the picture (no host: the browser catalog) */
+  picture: "the clipboard did not take the picture",
+  /** a refusal as the line says it */
+  refused: (reason: string) => `Not copied — ${reason}`,
+} as const;
