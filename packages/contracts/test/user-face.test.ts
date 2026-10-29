@@ -101,7 +101,7 @@ describe("faceProblem", () => {
   });
 
   it("refuses the faces that already mean something, whatever selector they carry", () => {
-    for (const emoji of ["🔥", "📁", "🔗", "✅", "⚠️", "!", "❤️", "❤", "🟢"]) {
+    for (const emoji of ["🔥", "📁", "🔗", "✅", "⚠️", "\u26A0", "❤️", "❤", "🟢"]) {
       expect(faceProblem({ emoji }, "me", roster), emoji).toMatch(/already means something/);
     }
   });

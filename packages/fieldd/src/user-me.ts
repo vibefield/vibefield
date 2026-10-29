@@ -49,5 +49,7 @@ export function userMe(opts: {
   const row = users?.users.find((user) => user.userId === userId);
   const shown = users === null ? undefined : effectiveFaces(users.users).get(userId);
   if (row === undefined || shown === undefined) return dealt();
-  return { userId, name: row.name, face: shown.face, dealt: shown.dealt };
+  // A copy, as Electron main's `applyOwedFace` makes: `FaceLike` is an interface, and the wire's passthrough shape
+  // wants the index signature only an object literal carries.
+  return { userId, name: row.name, face: { ...shown.face }, dealt: shown.dealt };
 }
