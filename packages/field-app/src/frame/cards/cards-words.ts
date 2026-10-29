@@ -180,7 +180,8 @@ export const COPY_WORDS = {
 export const COPY_DOOR_WORDS = {
   /** the host's copy door, or the page's own clipboard, did not take the words */
   words: "the clipboard did not take the words",
-  /** the page's own clipboard did not take the picture (no host: the browser catalog) */
+  /** the page's own clipboard (the browser catalog's) did not take the picture, or main's
+   * picture door refused it with no words of its own */
   picture: "the clipboard did not take the picture",
   /** a refusal as the line says it */
   refused: (reason: string) => `Not copied — ${reason}`,
