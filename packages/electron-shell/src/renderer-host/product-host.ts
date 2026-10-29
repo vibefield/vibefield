@@ -148,6 +148,8 @@ export function mountProductHost(
       // Item 102 — a terminal's paste reads through main's door; the web's read is denied here
       clipboard: {
         readText: () => window.vibefield.clipboard.readText(),
+        // HN-5 — a copy's picture is written through main's door; the web's write is denied too
+        writeImage: (png) => window.vibefield.clipboard.writeImage(png),
       },
       // DT-2a: the claimed transport reaches the product instead of only being
       // parked here. The promise is handed over as-is — the pool behind the seam

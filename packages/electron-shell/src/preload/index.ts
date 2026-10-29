@@ -3,6 +3,8 @@ import {
   BrowserDataClearResult as BrowserDataClearResultSchema,
   ClipboardReadRequest,
   ClipboardReadResult,
+  type ClipboardWriteImageRefusal,
+  ClipboardWriteImageResult,
   CloseRequest,
   CloseResult,
   type DesktopShellState,
@@ -258,6 +260,19 @@ const isStillBytes = (value: unknown): value is Uint8Array<ArrayBuffer> =>
   Object.prototype.toString.call(value) === "[object Uint8Array]" &&
   Object.prototype.toString.call(value.buffer) === "[object ArrayBuffer]";
 
+/** HN-5 — why a copy's picture was not written, in words, the read's voice (item 102): the
+ * clause a copy says after "Not copied —". */
+function pictureRefused(reason: ClipboardWriteImageRefusal, bytes: number | undefined): string {
+  switch (reason) {
+    case "unfocused":
+      return "the clipboard is written only for the focused window";
+    case "too-large":
+      return `the picture holds ${bytes ?? "more than"} bytes; the clipboard takes at most ${SHELL_CLIPBOARD.WRITE_IMAGE_MAX_BYTES}`;
+    case "not-an-image":
+      return "the picture could not be read";
+  }
+}
+
 const platform = ShellPlatform.parse(
   process.platform === "darwin" || process.platform === "win32" || process.platform === "linux"
     ? process.platform
@@ -373,6 +388,21 @@ contextBridge.exposeInMainWorld("vibefield", {
           ? `the clipboard holds ${result.bytes ?? "more than"} bytes; a paste reads at most ${SHELL_CLIPBOARD.READ_MAX_BYTES}`
           : "the clipboard is read only for the focused window",
       );
+    },
+    /** HN-5 — a copy's picture onto the system clipboard: main decodes and writes the PNG
+     * for this window while it and its page are focused. Its bytes and their bound are
+     * checked here first, so a picture past it never crosses; the answer is parsed, and a
+     * refusal rejects with its reason in words, so the copy deals no card. */
+    writeImage: async (png: Uint8Array): Promise<void> => {
+      if (!isStillBytes(png)) throw new Error("a picture is written from its PNG's bytes");
+      if (png.byteLength > SHELL_CLIPBOARD.WRITE_IMAGE_MAX_BYTES) {
+        throw new Error(pictureRefused("too-large", png.byteLength));
+      }
+      const result = ClipboardWriteImageResult.parse(
+        await ipcRenderer.invoke(IPC_CHANNELS.clipboardWriteImage, png),
+      );
+      if (result.status === "written") return;
+      throw new Error(pictureRefused(result.reason, result.bytes));
     },
   },
   onPrepareClose: (handler: (requestId: string) => void): (() => void) => {

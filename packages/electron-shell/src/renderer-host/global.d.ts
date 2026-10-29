@@ -130,6 +130,9 @@ declare global {
        * `shell.clipboard.*`): the focused product window only; a refusal rejects. */
       clipboard: {
         readText(): Promise<string>;
+        /** HN-5 — a copy's picture written through main, the read's other half: a PNG's
+         * bytes, the focused product window only; a refusal rejects in words. */
+        writeImage(png: Uint8Array): Promise<void>;
       };
       /** Godview round 3 — the deck's state said by name; main owns the
        * window's lights (GV-D11) and lends ⌘W by the same word. */

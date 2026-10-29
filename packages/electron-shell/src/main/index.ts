@@ -78,6 +78,7 @@ import { FielddDaemonBootFence, FielddHandleCoordinator } from "./fieldd-handle-
 import {
   registerBrowserDataClear,
   registerClipboardRead,
+  registerClipboardWriteImage,
   registerDeckSet,
   registerRendererReplace,
   registerScreenshotCapture,
@@ -388,6 +389,9 @@ async function main(
   // the copy door KEEPS the words instead of writing them and answers as it would: the act's own
   // record (`wrote`) stays the witness, and the canvas smoke reads what arrived here.
   const harnessCopies: string[] | null = process.env["VF_SMOKE_RUN"] === undefined ? null : [];
+  // HN-5 — the same for a copy's picture: the clipboard's picture door keeps its PNG's size in a
+  // marked run instead of writing it, and answers as it would.
+  const harnessPictures: number[] | null = process.env["VF_SMOKE_RUN"] === undefined ? null : [];
   const installDiagnostics = (window: Electron.BrowserWindow): void => {
     let supportDialogOpen = false;
     installLocalDiagnosticsPort({
@@ -1527,11 +1531,14 @@ async function main(
   // grant set stays empty (ESP §7.4). Audited, best-effort: a paste never waits on
   // fieldd.
   const clipboardLogger = logger.child({ component: "ipc.clipboard" });
+  // the clipboard doors' one focus fact, the read's rule for both halves (HN-5): the sender's
+  // window is the key window AND its page holds the focus
+  const clipboardFocused = (sender: Electron.WebContents): boolean =>
+    BrowserWindow.fromWebContents(sender)?.isFocused() === true && sender.isFocused();
   registerClipboardRead(
     registry,
     {
-      focused: (sender) =>
-        BrowserWindow.fromWebContents(sender)?.isFocused() === true && sender.isFocused(),
+      focused: clipboardFocused,
       read: () => clipboard.readText(),
       audit: (record) => appendShellAudit(record),
       operationId: () => randomUUID(),
@@ -1541,6 +1548,31 @@ async function main(
           "A clipboard read was answered, and its audit record could not be appended",
           { error: error instanceof Error ? error.message : String(error) },
         ),
+    },
+    clipboardLogger,
+  );
+  // HN-5: a copy's picture is written here, the read's other half — for a registered product
+  // window while it and its page hold the focus, its PNG decoded first and refused when it
+  // holds no picture. No audit row: the words' copy door keeps none (LC-13). A marked run
+  // keeps the picture's size instead of writing it (R-T 4, as `harnessCopies`).
+  registerClipboardWriteImage(
+    registry,
+    {
+      focused: clipboardFocused,
+      decode: (png) => {
+        const image = nativeImage.createFromBuffer(
+          Buffer.from(png.buffer, png.byteOffset, png.byteLength),
+        );
+        return image.isEmpty() ? null : image;
+      },
+      write: (image) => clipboard.writeImage(image),
+      ...(harnessPictures === null
+        ? {}
+        : {
+            keep: (bytes: number) => {
+              harnessPictures.push(bytes);
+            },
+          }),
     },
     clipboardLogger,
   );

@@ -1,11 +1,14 @@
-import { IPC_CHANNELS } from "@vibefield/contracts";
+import { IPC_CHANNELS, SHELL_CLIPBOARD } from "@vibefield/contracts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Item 102 — the clipboard read door as the PAGE sees it, and main's wiring of it:
 // one door that asks its own channel with nothing, a refusal that rejects in words
 // (so the terminal pastes nothing rather than part), an answer outside the contract
 // that never reaches the page, and a stranger that never reads. Captured from
-// `exposeInMainWorld`, preload-browser-data's pattern.
+// `exposeInMainWorld`, preload-browser-data's pattern. HN-5 — the picture write beside
+// it: the bytes and their bound checked before anything crosses, a refusal rejected
+// in words (so the copy deals no card), and main's half writing for the focused
+// window alone.
 
 const handlers = new Map<string, (event: unknown, raw?: unknown) => unknown>();
 const stub = vi.hoisted(() => ({
@@ -38,7 +41,7 @@ vi.mock("@vibecook/ghosttea-electron/preload", () => ({
   forwardGhostteaRendererPorts: vi.fn(),
 }));
 
-const { registerClipboardRead } = await import("../src/main/ipc");
+const { registerClipboardRead, registerClipboardWriteImage } = await import("../src/main/ipc");
 await import("../src/preload/index");
 
 type Doors = Record<string, (...args: unknown[]) => Promise<unknown>>;
@@ -53,8 +56,8 @@ beforeEach(() => {
 });
 
 describe("the preload's clipboard read door (item 102)", () => {
-  it("exposes exactly one door, which asks its own channel with nothing and answers the text", async () => {
-    expect(Object.keys(clipboard())).toEqual(["readText"]);
+  it("exposes two doors; the read asks its channel with nothing and answers the text", async () => {
+    expect(Object.keys(clipboard())).toEqual(["readText", "writeImage"]);
     stub.invoke.mockResolvedValueOnce({ status: "read", text: "ls -la\n" });
     await expect(clipboard().readText!()).resolves.toBe("ls -la\n");
     expect(stub.invoke.mock.calls).toEqual([[IPC_CHANNELS.clipboardRead, {}]]);
@@ -117,6 +120,84 @@ describe("the clipboard read door, main's half (item 102)", () => {
     expect(warn.mock.calls.map((call) => call[2])).toEqual([
       { webContentsId: 9, reason: "unregistered" },
       { webContentsId: 4, reason: "unfocused" },
+    ]);
+  });
+});
+
+/** A PNG's signature: what crosses is the page's own bytes, never JSON. */
+const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+describe("the preload's clipboard picture door (HN-5)", () => {
+  it("sends the PNG's bytes as the invoke's one argument, on its own channel", async () => {
+    stub.invoke.mockResolvedValueOnce({ status: "written" });
+    await expect(clipboard().writeImage!(PNG)).resolves.toBeUndefined();
+    expect(stub.invoke.mock.calls).toEqual([[IPC_CHANNELS.clipboardWriteImage, PNG]]);
+    expect(stub.invoke.mock.calls[0]?.[1]).toBe(PNG);
+  });
+
+  it("checks the bytes and their bound before sending: nothing past it crosses", async () => {
+    const past = SHELL_CLIPBOARD.WRITE_IMAGE_MAX_BYTES + 1;
+    await expect(clipboard().writeImage!(new Uint8Array(past))).rejects.toThrow(
+      `the picture holds ${past} bytes; the clipboard takes at most`,
+    );
+    for (const raw of ["png", [0x89, 0x50], new Uint16Array(4), null])
+      await expect(clipboard().writeImage!(raw)).rejects.toThrow(/PNG's bytes/);
+    expect(stub.invoke).not.toHaveBeenCalled();
+  });
+
+  it("a refusal rejects in words, and a malformed answer never reaches the page", async () => {
+    stub.invoke.mockResolvedValueOnce({ status: "refused", reason: "unfocused" });
+    await expect(clipboard().writeImage!(PNG)).rejects.toThrow(
+      "the clipboard is written only for the focused window",
+    );
+    stub.invoke.mockResolvedValueOnce({ status: "refused", reason: "not-an-image", bytes: 8 });
+    await expect(clipboard().writeImage!(PNG)).rejects.toThrow("the picture could not be read");
+    stub.invoke.mockResolvedValueOnce({ status: "refused", reason: "too-large", bytes: 9_000_000 });
+    await expect(clipboard().writeImage!(PNG)).rejects.toThrow(/holds 9000000 bytes/);
+    for (const answer of [undefined, "written", { status: "wrote" }, { status: "refused" }]) {
+      stub.invoke.mockResolvedValueOnce(answer);
+      await expect(clipboard().writeImage!(PNG), JSON.stringify(answer)).rejects.toThrow();
+    }
+  });
+});
+
+describe("the clipboard picture door, main's half (HN-5)", () => {
+  it("decodes and writes for a registered, focused window", async () => {
+    const sender = { id: 5 };
+    const write = vi.fn();
+    registerClipboardWriteImage({ owns: (s: unknown) => s === sender } as never, {
+      focused: () => true,
+      decode: (png) => ({ png }),
+      write,
+    });
+    const handle = handlers.get(IPC_CHANNELS.clipboardWriteImage);
+    expect(await handle?.({ sender }, PNG)).toEqual({ status: "written" });
+    expect(write).toHaveBeenCalledWith({ png: PNG });
+  });
+
+  it("refuses a stranger and a window behind without decoding; the refusal is logged", async () => {
+    const sender = { id: 6 };
+    const decode = vi.fn((png: Uint8Array) => ({ png }));
+    const write = vi.fn();
+    const warn = vi.fn();
+    let focused = true;
+    registerClipboardWriteImage(
+      { owns: (s: unknown) => s === sender } as never,
+      { focused: () => focused, decode, write },
+      { warn } as never,
+    );
+    const handle = handlers.get(IPC_CHANNELS.clipboardWriteImage);
+    await expect(handle?.({ sender: { id: 9 } }, PNG)).rejects.toThrow(/unregistered sender/);
+    focused = false;
+    await expect(handle?.({ sender }, PNG)).resolves.toEqual({
+      status: "refused",
+      reason: "unfocused",
+    });
+    expect(decode).not.toHaveBeenCalled();
+    expect(write).not.toHaveBeenCalled();
+    expect(warn.mock.calls.map((call) => [call[0], call[2]])).toEqual([
+      ["desktop.ipc.clipboard_write_refused", { webContentsId: 9, reason: "unregistered" }],
+      ["desktop.ipc.clipboard_write_refused", { webContentsId: 6, reason: "unfocused" }],
     ]);
   });
 });

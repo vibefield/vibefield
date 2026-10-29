@@ -3,6 +3,9 @@ import {
   ClipboardReadRequest,
   type ClipboardReadResult,
   ClipboardReadResult as ClipboardReadResultSchema,
+  type ClipboardWriteImageRefusal,
+  type ClipboardWriteImageResult,
+  ClipboardWriteImageResult as ClipboardWriteImageResultSchema,
   SHELL_CLIPBOARD,
   SHELL_CLIPBOARD_AUDIT_ACTIONS,
   utf8ByteLength,
@@ -105,5 +108,95 @@ export function createClipboardDoor<Sender extends { readonly id: number }>(
     const result = ClipboardReadResultSchema.parse({ status: "read", text });
     audit(sender, null, bytes);
     return result;
+  };
+}
+
+// HN-5 (2026-10-29) — the clipboard's PICTURE WRITE, the read's other half: a copy's
+// picture (the desk's Copy of a selection) goes on the system clipboard HERE, for the
+// read's reason — the shell session grants no Chromium permission (ESP §7.4), so the
+// page's own `navigator.clipboard.write` is denied by law. A copy's words keep the
+// host's copy door (`copyText`, main/index.ts), a program's OSC 52 among them.
+//
+// Pure, and the read's shape:
+//  · only a window THIS shell registered may write: a stranger is warned and thrown at,
+//    and nothing is decoded; a request that is not a picture's bytes throws the same
+//    way, as the read's malformed request does (no product window sends one: the
+//    preload checks before it sends);
+//  · only while that window and its page are focused, the read's rule: a page writing
+//    from behind would replace what the person copied in another app;
+//  · bytes over `SHELL_CLIPBOARD.WRITE_IMAGE_MAX_BYTES` are refused whole with their
+//    size and never decoded; bytes that decode to no picture are refused, and nothing
+//    is written;
+//  · no audit row: a copy is the person's own act on their own clipboard, and the
+//    words' door keeps none either (LC-13).
+
+export interface ClipboardImageDoorOptions<Sender extends { readonly id: number }, Picture> {
+  readonly owns: (sender: Sender) => boolean;
+  /** the sender's window AND its page hold the focus */
+  readonly focused: (sender: Sender) => boolean;
+  /** the PNG as a picture (main: `nativeImage.createFromBuffer`), null when it holds none */
+  readonly decode: (png: Uint8Array) => Picture | null;
+  /** the picture onto the system clipboard (main: `clipboard.writeImage`) */
+  readonly write: (image: Picture) => void;
+  /** A marked smoke run's record (R-T 4, main's `harnessPictures`): the picture's size kept IN
+   * PLACE of the write — the pasteboard is the person's — after every check a write passes. */
+  readonly keep?: (bytes: number) => void;
+  readonly onRefused?: (
+    sender: Sender,
+    reason: ClipboardWriteImageRefusal | "unregistered",
+    bytes?: number,
+  ) => void;
+}
+
+export type ClipboardImageDoor<Sender extends { readonly id: number }> = (
+  sender: Sender,
+  raw: unknown,
+) => Promise<ClipboardWriteImageResult>;
+
+/** A picture's bytes as the page sends them: a Uint8Array (a Buffer is one) over a plain
+ * ArrayBuffer — told by its tag, never `instanceof`, as the preload tells a still's bytes
+ * (`isStillBytes`), so they read the same whichever realm made them. */
+function isPngBytes(value: unknown): value is Uint8Array {
+  return (
+    ArrayBuffer.isView(value) &&
+    Object.prototype.toString.call(value) === "[object Uint8Array]" &&
+    Object.prototype.toString.call(value.buffer) === "[object ArrayBuffer]"
+  );
+}
+
+export function createClipboardImageDoor<Sender extends { readonly id: number }, Picture>(
+  options: ClipboardImageDoorOptions<Sender, Picture>,
+): ClipboardImageDoor<Sender> {
+  const refuse = (
+    sender: Sender,
+    reason: ClipboardWriteImageRefusal,
+    bytes?: number,
+  ): ClipboardWriteImageResult => {
+    options.onRefused?.(sender, reason, bytes);
+    return ClipboardWriteImageResultSchema.parse({
+      status: "refused",
+      reason,
+      ...(bytes === undefined ? {} : { bytes }),
+    });
+  };
+  return async (sender, raw) => {
+    if (!options.owns(sender)) {
+      options.onRefused?.(sender, "unregistered");
+      throw new Error("clipboard write refused: unregistered sender");
+    }
+    if (!isPngBytes(raw)) throw new Error("clipboard write refused: not a picture's bytes");
+    if (!options.focused(sender)) return refuse(sender, "unfocused");
+    const bytes = raw.byteLength;
+    if (bytes > SHELL_CLIPBOARD.WRITE_IMAGE_MAX_BYTES) return refuse(sender, "too-large", bytes);
+    let image: Picture | null;
+    try {
+      image = options.decode(raw);
+    } catch {
+      image = null; // a decoder that throws on these bytes found no picture in them
+    }
+    if (image === null) return refuse(sender, "not-an-image", bytes);
+    if (options.keep !== undefined) options.keep(bytes);
+    else options.write(image);
+    return ClipboardWriteImageResultSchema.parse({ status: "written" });
   };
 }
