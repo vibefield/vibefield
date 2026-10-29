@@ -1054,7 +1054,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   hover 1.03 / active 0.95 like its neighbours. The empty explorer says "No fields yet" in words
   beside it, never "⊕ creates one". *(The pill became the head's name pill the same day: its place,
   `top-4` and 280 wide, its single-click rename, the separate breadcrumbs beside it and its own
-  560ms curve, F14, retired.)*
+  560ms curve, F14, retired.)* *TS-6 (2026-10-29):* while a link owes the sync question, New field
+  asks it first, in the explorer in place of the tiles (§8 "The sync question").
   *History of the tiles' face:* a mini empty field — canvas-bg and the §2.1 CSS-fallback dots, the
   ground motif as the doc's face until real thumbnails (B4); the board's still since DK-4 (2026-10-03,
   DK-D27); a mini mat under it since DK-16 (2026-10-07, §2.1's erratum); the still without the
@@ -1389,6 +1390,24 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   (TS-D14; on truffle 0.7.24 it signs out first, and only a sign-out that could not reach
   Tailscale leaves the record in the admin console, which the page then says once) · **Add a
   device** (Phone | Computer) · **Use another account** → New user… (TS-D12).
+- **The sync question** (track TS, TS-D13 ruled A 2026-10-27; built at TS-6, 2026-10-29): a privacy
+  choice, asked where it applies — once, at the first **New field** after this Mac connects, never on
+  the success screen and no longer in the Setup Assistant. The moment a sign-in lands, before
+  anything reaches the tailnet, every field with no answer of its own stays on this Mac (`local`,
+  the explorer's own "local"), so connecting never carries an earlier field away unasked. New field
+  then asks in the fields explorer, in place of its tiles: the title, a voice line, the posture's
+  two cards (Settings → Devices' **New projects**, the same words, the current one chosen), the
+  fields from before the link, each with its time and a box to add it (none ticked), and two acts —
+  **Cancel** (no field is made; the question waits for the next New field) and the primary, which
+  sends the fields added, keeps the posture chosen, and makes the field. A Mac whose link was
+  captured before TS-6 keeps what it syncs and is never asked (VF-PM, 2026-10-29, derived from
+  TS-D13: "made before you connected" is a connection's, not an upgrade's).
+  *The words (ruled by James 2026-10-29, `ts6-sync-question-words` 05:37:09Z, "all four as
+  drafted"):* the title "Sync new projects to your other computers?", the voice "This Mac is
+  connected. You can change this in Settings → Devices.", the list's label "Projects from before you
+  connected" over "They stay on this Mac unless you add them.", and the acts **Cancel** and **New
+  field**. *The noun (`ts6-sync-question-noun` 05:37:06Z):* "projects", the cards' word — the sheet
+  speaks it throughout; **New field** is the head's own act and stays as ruled.
 - **Asking again** (track TS, TS-D7 ruled 2026-10-27; TS-L6): someone who said Not now said it
   before they had a reason, so the offer returns only where a connected device would do the job —
   the face menu's row (always, while not connected); a ghost row, "Your other devices", in
