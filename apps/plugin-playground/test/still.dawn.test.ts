@@ -618,7 +618,11 @@ describe("the iOS Simulator's phone — PORTALS' second kind (PT-S1)", () => {
     for (const s of ran.stills) expect(s.detail).toContain("held to its golden");
   });
 
-  it("reads the faces lent where it is bound (the fixture's) and nothing where it is not — and every state is its own", () => {
+  // "Its own" is by DEVICE here: a Node still lends no words' raster (the phone's DOM half draws words with an OffscreenCanvas,
+  // which Node lacks), so the faces that differ only by their words — the three with no still, the three dimmed under words —
+  // are told apart by the device each is staged on (playground/fixture-mac.ts), never by what they say. The words are held by
+  // the plugin's units (face.test.ts, design.test.ts); a still that draws them waits on the PT-S1 hand-back's question.
+  it("reads the faces lent where it is bound (the fixture's) and nothing where it is not — and every state is its own still", () => {
     for (const s of ran.stills)
       expect(s.lent, `${s.state} · ${s.theme}`).toEqual(
         UNBOUND.includes(s.state) ? undefined : ["live"],
