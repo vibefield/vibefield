@@ -412,6 +412,10 @@ export interface AgentRuntimeServiceOptions {
   home?: string;
   /** test seam: the PATH the install inventory searches (default: the process PATH) */
   searchPath?: string;
+  /** test seam: the home the install inventory searches each provider's install
+   * directories under (default: os.homedir()); the daemon isolates it whenever
+   * it isolates the search path */
+  installHome?: string;
   /** test seam: the fetch release detectors use (default: global fetch) */
   fetchFn?: typeof fetch;
   /** Show in Finder: the shell provider's internal door, LATE-BOUND (the
@@ -778,6 +782,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
           : {}),
         ...(opts.fetchFn !== undefined ? { fetch: opts.fetchFn } : {}),
         ...(opts.searchPath !== undefined ? { searchPath: opts.searchPath } : {}),
+        ...(opts.installHome !== undefined ? { home: opts.installHome } : {}),
       },
       // PF5's tick: the fold publishes one frame per tick anyway, so the
       // runtime's own coalescing matches it rather than adding a 100 ms stage
