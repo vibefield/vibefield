@@ -335,6 +335,16 @@ describe("the snapshot (HN-D2; SNAP's door on the line)", () => {
     expect(used.cards.snapshot().cards[0]?.origin).toEqual({ view: "godview", how: "snapshot" });
   });
 
+  it("fills for its own press only: a capture main ran (⌃⌘A, the View menu) is heard as its result and fills nothing (LC-17)", () => {
+    const tool = captureDoor();
+    mount("canvas", { host: { screenshotCapture: tool.capture } });
+    // the hand's subscription hears main's capture when it is over — its result, never its start —
+    // so the tool's own overlay is that capture's signal, and the line's snapshot stays a ghost
+    act(() => noteCapture(KEPT));
+    expect(snapshot().hasAttribute("data-on")).toBe(false);
+    expect(tool.asked()).toBe(0);
+  });
+
   it("says a capture that failed on the line, from its left — and nothing at all of a cancel", async () => {
     const tool = captureDoor();
     const used = mount("canvas", { host: { screenshotCapture: tool.capture } });
