@@ -29,8 +29,9 @@
 //    states — three unbound phones, and the nine honest faces, each a bound phone the plugin's FIXTURE answers (its
 //    playground/live.ts — the synthetic screen, no Apple artwork; its words the committed ones, as the pane's heads are) —
 //    blessed ONCE at the first gated run, never by hand; and a
-//    phone MID-MORPH, pinned through the desk's asset door (an iPhone 8 a quarter of the way into an X), judged by its drawn
-//    height between the two models', never a hash.
+//    phone MID-MORPH, pinned through the desk's asset door (an iPhone 8 a quarter of the way into an X, by day and by night),
+//    judged by its drawn height between the two models', never a hash — and at the halfway, where the morph's size track
+//    has landed (PHONE.md §13), drawn at the X's height while the picture is neither model's (the PT-S1 brief's R5 Q7 (b)).
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -635,7 +636,23 @@ describe("the iOS Simulator's phone — PORTALS' second kind (PT-S1)", () => {
     }
   });
 
-  it("a phone MID-MORPH — an iPhone 8 a quarter of the way into an X, pinned through the desk's asset door — is drawn between the two, never either", async () => {
+  /**
+   * The asset door's morph drawn by `theme` (the PT-S1 brief's R5 Q7 (b): by day and by night, at a quarter and at the
+   * halfway): the bare mat, an iPhone 8, an X, and the X pinned as a morph from the 8 at `t`. Each phone's drawn EXTENT —
+   * the rows it (its body, its shadow) moves off the bare mat in the still's middle column — whether the morph's still is
+   * either model's, byte for byte, and the law's size track at `t`: the share of the 8-to-X size it has travelled.
+   */
+  async function drawMorph(
+    theme: "light" | "dark",
+    t: number,
+  ): Promise<{
+    readonly eight: number;
+    readonly mid: number;
+    readonly x: number;
+    readonly isEight: boolean;
+    readonly isX: boolean;
+    readonly size: number;
+  }> {
     const gpu: StillGpu = await stillGpu();
     try {
       const mod = (await import(/* @vite-ignore */ join(SIMULATOR, "src", "index.ts"))) as {
@@ -643,6 +660,8 @@ describe("the iOS Simulator's phone — PORTALS' second kind (PT-S1)", () => {
         readonly simulatorManifest: {
           readonly contributes?: { readonly objects?: readonly ObjectContribution[] };
         };
+        readonly PHONE: { readonly morph: { readonly staged: boolean } };
+        readonly morphTracks: (t: number, staged?: boolean) => { readonly size: number };
       };
       const row = mod.simulatorManifest.contributes?.objects?.[0] as ObjectContribution;
       const type: WidgetType = buildObjectType({ ...row, behaviors: [] }, mod.simulator);
@@ -656,8 +675,8 @@ describe("the iOS Simulator's phone — PORTALS' second kind (PT-S1)", () => {
           size: frame.size,
           dpr: 2,
           objects: [type],
-          theme: "light",
-          palette: productPalette.light,
+          theme,
+          palette: productPalette[theme],
           stage: ({ engine, pinAsset }) => {
             if (model === undefined) return; // the bare mat
             const e = engine.ops.spawnWidget(row.type, {
@@ -694,21 +713,58 @@ describe("the iOS Simulator's phone — PORTALS' second kind (PT-S1)", () => {
       };
       const eight = await draw(EIGHT);
       const x = await draw(X);
-      const mid = await draw(X, { morph: { from: EIGHT, t: 0.25 } });
+      const mid = await draw(X, { morph: { from: EIGHT, t } });
       try {
-        const [a, m, b] = [extent(eight), extent(mid), extent(x)];
-        expect(a, "the 8 is shorter than the X").toBeLessThan(b);
-        expect(m, `mid-morph ${m} px between the 8's ${a} and the X's ${b}`).toBeGreaterThan(a);
-        expect(m).toBeLessThan(b);
         const sha = (shot: { readonly rgba: Uint8Array }) =>
           createHash("sha256").update(shot.rgba).digest("hex");
-        expect(sha(mid)).not.toBe(sha(eight));
-        expect(sha(mid)).not.toBe(sha(x));
+        return {
+          eight: extent(eight),
+          mid: extent(mid),
+          x: extent(x),
+          isEight: sha(mid) === sha(eight),
+          isX: sha(mid) === sha(x),
+          size: mod.morphTracks(t, mod.PHONE.morph.staged).size,
+        };
       } finally {
         for (const shot of [bare, eight, x, mid]) shot.dispose();
       }
     } finally {
       gpu.destroy();
     }
+  }
+
+  it("a phone MID-MORPH — an iPhone 8 a quarter of the way into an X, pinned through the desk's asset door — is drawn between the two, never either", async () => {
+    const { eight: a, mid: m, x: b, isEight, isX } = await drawMorph("light", 0.25);
+    expect(a, "the 8 is shorter than the X").toBeLessThan(b);
+    expect(m, `mid-morph ${m} px between the 8's ${a} and the X's ${b}`).toBeGreaterThan(a);
+    expect(m).toBeLessThan(b);
+    expect(isEight, "the mid-morph still is the 8's").toBe(false);
+    expect(isX, "the mid-morph still is the X's").toBe(false);
+  });
+
+  it("the same quarter BY NIGHT — the body under the Moon, its cast in Eigengrau — is drawn between the two, never either", async () => {
+    const { eight: a, mid: m, x: b, isEight, isX } = await drawMorph("dark", 0.25);
+    expect(a, "the 8 is shorter than the X by night").toBeLessThan(b);
+    expect(m, `mid-morph ${m} px between the 8's ${a} and the X's ${b}`).toBeGreaterThan(a);
+    expect(m).toBeLessThan(b);
+    expect(isEight, "the mid-morph still is the 8's").toBe(false);
+    expect(isX, "the mid-morph still is the X's").toBe(false);
+  });
+
+  it("at the HALFWAY its size has landed — the size track is the morph's first half (PHONE.md §13) — so it is drawn at the X's height, while the picture is neither model's", async () => {
+    const { eight: a, mid: m, x: b, isEight, isX, size } = await drawMorph("light", 0.5);
+    expect(size, "the law's size track at the halfway").toBe(1);
+    expect(a, "the 8 is shorter than the X").toBeLessThan(b);
+    // at size 1 the body's half-size, thickness and camera bump are the X's to the bit (`mixShape`), so its height and its
+    // cast are the X's. What still moves at its edges is a pixel or two: the rim (the form track, 0.3–0.8, a third of the
+    // way; the X's falls 0.18 mm deeper than the 8's) and the band's colour (the material track, 0.55–1, not begun). So it is
+    // held within a quarter of the 8-to-X gap of where the size track puts it, and never "between" (that was the quarter's).
+    const at = a + size * (b - a);
+    expect(
+      Math.abs(m - at),
+      `the halfway ${m} px vs the X's ${b} (the 8's ${a})`,
+    ).toBeLessThanOrEqual((b - a) / 4);
+    expect(isEight, "the halfway still is the 8's").toBe(false);
+    expect(isX, "the halfway still is the X's").toBe(false);
   });
 });
