@@ -3630,7 +3630,8 @@ screen says of its device, in the voice's words, quoted exactly by the plugin (`
 word for it, else the phone's model's. A face with words shows them light over the dark panel, or over
 the device's last still dimmed to 0.16; one with a mark shows its still at 0.7. The act is a capsule
 under the words, offered only where the host can run it; it manages the device and never reaches
-inside iOS. In hand the tools say **View only** — the phone takes no tap, key or button in v1.
+inside iOS. In hand the tools say **View only**, in words beside the device's name — the phone takes no
+tap, key or button until PT-S4's touch lands.
 
 | State | The face says | Its act |
 |---|---|---|

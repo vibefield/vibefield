@@ -8,7 +8,8 @@
 //    their texture charged to the desk's raster budget under the kind's name (`notice <key>`) and let go at its eviction —
 //    laid again from its record when the phone is next drawn;
 //  - IN HAND (used — the open binding): the hand's press on the face's act's capsule runs the act on its release over it
-//    (the host's — it manages the device, never iOS); every other press is the desk's (v1 is view-only).
+//    (the host's — it manages the device, never iOS); every other press is the desk's (view-only until PT-S4's touch
+//    lands).
 // A loop at rest ticks the kind only when it is due: nothing is polled.
 
 import type {
@@ -214,7 +215,8 @@ export function createSimulatorLocal(host: KindHost | undefined): SimulatorLocal
     due: (now) => (morphs.running() ? now : live.due(now)),
     // words laid after their record change how the phone looks with no fact of its own moving
     landed: (e) => doors()?.made(e as number) ?? 0,
-    // THE HAND (v1 is view-only): a press on the act's capsule is the act's, run on its release over it; nothing else is the kind's
+    // THE HAND (view-only until PT-S4's touch lands): a press on the act's capsule is the act's, run on its release over
+    // it; nothing else is the kind's
     held(e, events: readonly HeldEvent[]) {
       for (const ev of events) {
         if (ev.type !== "pointer") continue;

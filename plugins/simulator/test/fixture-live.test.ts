@@ -42,7 +42,7 @@ describe("the fixture as a live source — the frame-source seam's first", () =>
     expect(t.face.texture()).toBeUndefined();
     expect(t.face.state()).toEqual({ is: "starting" });
     expect(t.face.info()).toEqual({});
-    // view-only, v1
+    // view-only until PT-S4's touch lands
     expect(t.face.input).toBeUndefined();
     expect(t.pending()).toEqual([]);
     t.run(AT + 5 * 60_000);

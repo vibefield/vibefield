@@ -356,10 +356,15 @@ describe("the phone's world half", () => {
     expect(deviceName({ deviceType: `${TYPE}iPhone-18-Pro`, runtime: "x" }, modelOf(""))).toBe(
       "iPhone 18 Pro",
     );
-    // the one tool: touch, declared and DISABLED, saying View only (ICE I49)
+    // the one tool: touch, declared and DISABLED, saying View only (ICE I49) — IN WORDS: neither it nor its state names a
+    // glyph, so the bar draws the state's label as the slot's text (field-app's bar, R3), never a pictogram with "View only"
+    // only in its tooltip
     expect(SIMULATOR_TOOLS.map((tool) => tool.id)).toEqual(["touch"]);
-    const state = SIMULATOR_TOOLS[0]?.state?.({} as HeldToolStateContext);
+    const tool = SIMULATOR_TOOLS[0];
+    const state = tool?.state?.({} as HeldToolStateContext);
     expect(state).toEqual({ enabled: false, label: VIEW_ONLY });
+    expect(tool?.glyph).toBeUndefined();
+    expect(state?.glyph).toBeUndefined();
     expect(VIEW_ONLY).toBe("View only");
   });
 

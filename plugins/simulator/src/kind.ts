@@ -7,8 +7,9 @@
 // point of it is the phone, so a drag anywhere on it carries it), the frame the desk's marks go round (its silhouette as its
 // eye sees it), its look from the palette (theme.ts), its desk state (local.ts) and its OPENING: USE — double-click or ⏎, as
 // the notebook, the board and the pane open (the PT-S design §6 Q-2) — picked up into the hand at the reading size, its
-// stream asked native at 60 there. View-only (v1): in hand no tap, key or button reaches iOS; the held bar says "View only"
-// beside the device's name (its one tool's state, ICE I49), and the only press the kind takes is its face's act.
+// stream asked native at 60 there. View-only until PT-S4's touch lands: in hand no tap, key or button reaches iOS; the held
+// bar says "View only", in words, beside the device's name (its one tool's state, ICE I49), and the only press the kind takes
+// is its face's act.
 
 import {
   type HeldToolDef,
@@ -105,23 +106,20 @@ export const simulatorSpec = (
 export const nativeOf = (binding: Binding, model: PhoneModel): readonly [number, number] =>
   (phoneById(binding.deviceType) ?? model).screen.px;
 
-/** A finger's touch point — two rings (DESIGN.md §13: the bar's 24-unit box, one 2-unit stroke): the tool the phone does not take yet. */
-export const TOUCH_GLYPH = {
-  path: "M12 9 A3 3 0 1 1 12 15 A3 3 0 1 1 12 9 Z M12 4 A8 8 0 1 1 12 20 A8 8 0 1 1 12 4 Z",
-} as const;
-
 /**
- * The held bar's tools — ONE, and it SAYS "View only" (ICE I49: its state, read with the anchor): touch, declared as the act it
- * will be with the control plane (v2) and disabled now, so the bar says beside the device's name why a tap reaches nothing.
+ * The held bar's tools — ONE, and it SAYS "View only" in words (ICE I49: its state, read with the anchor): touch, declared as
+ * the act it will be when PT-S4's touch lands and disabled now, so the bar says beside the device's name why a tap reaches
+ * nothing. It declares NO glyph, and its state none: the bar draws a slot with neither glyph nor swatch as its label, in
+ * text (field-app's bar, R3) — so the state's label "View only" is what the bar SHOWS, not a tooltip under a pictogram
+ * (DESIGN.md §9: "In hand the tools say **View only**").
  */
 export const SIMULATOR_TOOLS: readonly HeldToolDef[] = [
   {
     id: "touch",
     label: "Touch",
     kind: "action",
-    glyph: TOUCH_GLYPH,
     run: () => {
-      // v1 is view-only: the control plane is v2's (the PT-S design §4) — a disabled tool's press does nothing
+      // view-only until PT-S4's touch lands (the PT-S design §4) — a disabled tool's press does nothing
     },
     state: () => ({ enabled: false, label: VIEW_ONLY }),
   },

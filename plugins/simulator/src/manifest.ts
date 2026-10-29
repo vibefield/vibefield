@@ -25,8 +25,8 @@ const HANG = 0.4;
 
 /**
  * THE iOS SIMULATOR ON THE DESK (PT-S1, PORTALS — the PT-S design, ruled 2026-10-18): a phone lying face up at its true
- * size, its screen a Simulator's, view-only in v1 — a plugin kind built exactly as a third party builds one (the browser
- * pane's shape).
+ * size, its screen a Simulator's, view-only until PT-S4's touch lands — a plugin kind built exactly as a third party builds
+ * one (the browser pane's shape).
  *
  * This manifest is the phone's DURABLE half: its `model` (the CoreSimulator device type it IS — a free string: Xcode's set
  * grows and drops, and an enum may only grow), its `finish` (one of its model's launch colours) and its `binding` (the device

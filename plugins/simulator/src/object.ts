@@ -4,8 +4,8 @@
 // kind, whole (kind.ts), and its DOM HALF, declared — the face's words' raster, LENT as a keyed service (`WORDS_RASTER`,
 // notice-canvas.ts: the platform's Canvas 2D, where there is one). Static, never registered from `activate`: the desk creates
 // every kind's pass together at its mount, so the host reads this export by name. Core's drag carries it on the desk's springs
-// (the one physics — no driver of its own); in hand it takes nothing but its face's act (view-only, v1). No menu: the model's
-// writer is PT-S2's attach (the hand-back asks whether S1 owes a Model or a Finish act).
+// (the one physics — no driver of its own); in hand it takes nothing but its face's act (view-only until PT-S4's touch
+// lands). No menu: the model's writer is PT-S2's attach (the hand-back asks whether S1 owes a Model or a Finish act).
 
 import { type ObjectBinding, service } from "@vibefield/plugin-sdk/desk";
 import { type SimulatorGeometry, simulatorKind } from "./kind";
