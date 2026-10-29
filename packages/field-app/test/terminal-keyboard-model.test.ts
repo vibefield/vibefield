@@ -176,7 +176,7 @@ describe("the rows", () => {
     });
   });
 
-  it("says WHEN a chord is kept when it is kept only sometimes — the Peek's ⌘F, in History and Godview (K4)", () => {
+  it("says WHEN a chord is kept when it is kept only sometimes — the Peek's ⌘F, in Godview and History (K4)", () => {
     const find = row(rows, "super+f");
     expect(find.reserved?.id).toBe("search");
     expect(find.defaultAction).toBe("start_search");
@@ -184,7 +184,7 @@ describe("the rows", () => {
     const kept = find.reserved;
     if (kept === null) throw new Error("⌘F is not kept");
     expect(reservedWords(kept, find.defaultAction)).toBe(
-      "VibeField: Search, while History or Godview is the view — Ghostty's find never runs on this chord then.",
+      "VibeField: Search, while Godview or History is the view — Ghostty's find never runs on this chord then.",
     );
     // an always-kept chord says no when
     const palette = row(rows, "super+k");
