@@ -18725,3 +18725,83 @@ It moves to `draft/petitions/` in the next draft queue. The workaround retires w
     - `pnpm test:rust`: 31 suites, 493 passed, 0 failed. gen:check clean.
 - Records: `/Volumes/SamsungRed/lanes/records/item87/`. They hold the plan, the witness and diagnostic patches (lane
   only, never committed), the slot logs, PU-G and the dated delta.
+
+## TS-4b — the approval line on the claims strip (TS-D20 = A, TS-D20b = A): "It waited 14m for you." as a long approval clears, behind the limit moment (2026-10-29; `257af5f6f`, lane `ts/4-asking-again`)
+
+**What.** TS-4b is TS-4's second packet: D20's line after an approval that waited more than ten minutes, the
+`approval-wait` place of TS-4a's ledger. D20 (ruled A 01:01:59.983Z) put it "on Godview's agent row". TS-4b's code
+read found that row is puppeteer's: the views draw it through `MonitorViewHost`, and the views SDK lends its host no
+place on a row. The place went back to James as TS-D20b (02:38Z, `rule-ts-d20b-host`). He ruled it, D19 and D21 at
+03:57:49Z, typed in TS's session: "ok, go with your lean". VF-PM recorded them on the board as his.
+- **The watch** (`account/approval-wait.ts`):
+  - `ApprovalWaits.observe(rows)` remembers each approval (`wait.kind: "permission"`) that an agent of this Mac's is
+    blocked on. It answers the ones that cleared after more than ten minutes, timed by the backend's own clocks (the
+    wait's `since`, then the next state's `statusSince`, or a new wait's own start).
+  - A wait it never saw waiting says nothing, so a launch is never the moment. A run that ended while it waited, or a
+    row that left, says nothing. The longest is first.
+  - `approvalWaitOpen` is the nudge's gate: this Mac in the ordinary unconnected state, the switch read and on, and
+    TS-4a's `connectAskOpen(ledger, "approval-wait", now)`. `approvalWaitStands` keeps the line until its row moves
+    or leaves.
+- **The row** (`godview/ApprovalWaitMoment.tsx`, `ApprovalWaitCard` controller-free), in the limit moment's chrome:
+  - the agent's own mark (`AgentIcon`, as the views draw an agent) and its project;
+  - "It waited 14m for you." (1h 12m past the hour);
+  - "Your phone can show and answer requests like this one." in the muted ink;
+  - **Connect your devices** (`open-connect`) and × (Not now, which writes nothing more and leaves by the retract's
+    fade, 180 ms; none under Reduce Motion).
+  - Its controller says it once per window, written `connect-ask:approval-wait` asked before it shows. A refused
+    write keeps the window's quiet.
+- **The strip says one moment, the limit moment first** (`godview/ClaimsStripMoment.tsx`, the overlay's `moment`):
+  - the limit moment tells it whether it shows (`onShown`, a layout effect, before paint);
+  - while it shows, the approval line is `held`: a wait that clears then is not said, and a line already said stands
+    aside until the strip is free;
+  - the monitor lends the moment its unfiltered rows (`MonitorMomentRowsContext`, beside the account facts), so the
+    moment opens no feed of its own.
+- **TS-D19 = A needs no code.** TS-4a's rows (the status item's, the ghost rows) never read the switch; the away
+  notice and the approval line do.
+- **Catalog:** Godview's "The approval line" specimen, the shipping card over the shipping watch's fixture (its agent
+  the catalog's first, `AGENT_CATALOG[0]`). The limit fixture exports its 92% reading for the strip's test.
+- **DESIGN.md** §8 "Asking again", at its source:
+  - the D20 erratum (the agent's row is puppeteer's);
+  - James's three rulings as a dated sub-bullet: the switch stops the nudges and not the rows; the line sits on the
+    claims strip; Publish's choice of where to open is deferred until a Publish offers one;
+  - an as-built sub-bullet.
+
+**Found:**
+- **D20's host was named before it was read.** "On Godview's agent row" assumed a slot the views SDK does not lend.
+  The correction is dated at both sources (DESIGN.md §8, the thinking doc §14).
+- **The strip watches only while Godview is open** (the monitor mounts with it), so an approval answered with Godview
+  closed is never said: the same rule that keeps a launch from being the moment.
+- **R23b reads catalog fixtures too.** The fixture's first draft named its agent by a literal id, and preflight
+  refused it (`approval-wait-fixtures.ts`). It reads `AGENT_CATALOG[0]` now; tests may name ids.
+
+**Validation.**
+- **The lane:** the edits in `/Volumes/SamsungRed/lanes/ts4`, the runs in ts3's run lane detached at the sha (its own
+  target `rust/ts3`, rosetta-pin and mille-pin at the lock's pins), at nice 19 under the guard. Rebased onto item 87's
+  records `dba4e1d6e` (one commit, a clean replay).
+- **The light pass**, at nice 19 under the guard:
+  `lanes/ts4/ts4b-light.sh` (04:06–04:09Z, three runs, both reds this slice's and amended into its one commit:
+  preflight's R23b refused the fixture's literal agent id, so it reads `AGENT_CATALOG[0]`; limit-moment's stylesheet
+  test reads the Reduce Motion block as `.vf-monitor-moment {` alone, so the leave has its own `@media` rule). Green on
+  `257af5f6f`: preflight (the standing R23 acp WARN), walls, biome, the field-app and electron-shell typechecks;
+  field-app 19 files 455/455 (TS-4b's two, the catalog's two, the five DESIGN.md readers, and the Godview monitor,
+  overlay, deck and Peek suites).
+- **`pnpm verify`** at `257af5f6f`, at nice 19 on the settled gate (the 1-min load under 20, the 5-min under 60):
+  three runs, the third the landing's:
+  - the first (ts3/logs/ts4b-verify-1-load663, 04:12:47–04:20:06Z, start load 19.62, end 663.87): EXIT 1, 27 rows,
+    every one timing-shaped (24 timeouts, the History room's until-rows, rosettad's ready bound, item 65's row), none in
+    TS-4b's files. The load was James's own Chrome (91 runnable renderers of 270), not a swarm;
+  - the one rerun (ts3/logs/ts4b-verify2, 04:36:05–04:42:26Z, start load 18.42, end 217.16): EXIT 1 on ONE fieldd row,
+    terminal-kill-matrix's AL-8a-4 (`lastManagerExit` `{sessions: null}` for `{sessions: 1}`), outside TS-4b's diff.
+    VF-PM ruled no landing on a red and filed it as **item 94** (the fixer's: "AL-8a-4's null under load") with both
+    logs as its evidence; the next verify waited for PORTALS' first run, on the same settled gate with every swarm
+    paused;
+  - the third (ts3/logs/ts4b-verify3, 04:59:05–05:07:13Z, start load 13.22, end 79.16): EXIT 0. The test target for
+    all 27 projects (9699 vitest rows, 0 failed, 17 skipped; field-app 2802/2802, fieldd 2593 and 11 skipped,
+    AL-8a-4 among them), cargo 31 suites (493 passed, 0 failed) and gen freshness; the tree clean, no stub left.
+
+**Owed.**
+- **The line while Godview is closed** (TS-4c, or a later rung): an approval answered with Godview closed is never
+  said. A watch that outlives the window belongs in main or fieldd, beside `ConnectAsks`.
+- The approval line on a desk (James's display word), with TS-4a's rows and away notice.
+- **Publish's nudge** (TS-D21 = A): deferred until a Publish offers where to open.
+- **The switch's words** (James's to rule).
