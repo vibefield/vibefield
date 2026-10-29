@@ -20,6 +20,7 @@ import {
   releasePlatformKey,
   type ScreenshotCaptureResult,
   SHELL_BACKGROUND_RELAUNCH_ARG,
+  SHELL_CLIPBOARD,
   type ShellCommand,
   ShellCommandRequest,
   type ShellExitRecord,
@@ -389,8 +390,9 @@ async function main(
   // the copy door KEEPS the words instead of writing them and answers as it would: the act's own
   // record (`wrote`) stays the witness, and the canvas smoke reads what arrived here.
   const harnessCopies: string[] | null = process.env["VF_SMOKE_RUN"] === undefined ? null : [];
-  // HN-5 — the same for a copy's picture: the clipboard's picture door keeps its PNG's size in a
-  // marked run instead of writing it, and answers as it would.
+  // HN-5 — the same for a copy's picture: the clipboard's picture door keeps its PNG's size here
+  // in a marked run, and the words written beside it in `harnessCopies`, instead of writing them,
+  // and answers as it would.
   const harnessPictures: number[] | null = process.env["VF_SMOKE_RUN"] === undefined ? null : [];
   const installDiagnostics = (window: Electron.BrowserWindow): void => {
     let supportDialogOpen = false;
@@ -457,7 +459,11 @@ async function main(
         copyText: (raw) => {
           const text =
             typeof raw === "object" && raw !== null && "text" in raw ? raw.text : undefined;
-          if (typeof text !== "string" || Buffer.byteLength(text, "utf8") > 64 * 1024) {
+          // the copy door's bound, by reference since HN-5: the picture door's words read it too
+          if (
+            typeof text !== "string" ||
+            Buffer.byteLength(text, "utf8") > SHELL_CLIPBOARD.WRITE_TEXT_MAX_BYTES
+          ) {
             throw Object.assign(new Error("expected bounded clipboard text"), {
               kind: "PRECONDITION_FAILED",
             });
@@ -1531,14 +1537,11 @@ async function main(
   // grant set stays empty (ESP §7.4). Audited, best-effort: a paste never waits on
   // fieldd.
   const clipboardLogger = logger.child({ component: "ipc.clipboard" });
-  // the clipboard doors' one focus fact, the read's rule for both halves (HN-5): the sender's
-  // window is the key window AND its page holds the focus
-  const clipboardFocused = (sender: Electron.WebContents): boolean =>
-    BrowserWindow.fromWebContents(sender)?.isFocused() === true && sender.isFocused();
   registerClipboardRead(
     registry,
     {
-      focused: clipboardFocused,
+      focused: (sender) =>
+        BrowserWindow.fromWebContents(sender)?.isFocused() === true && sender.isFocused(),
       read: () => clipboard.readText(),
       audit: (record) => appendShellAudit(record),
       operationId: () => randomUUID(),
@@ -1552,27 +1555,27 @@ async function main(
     clipboardLogger,
   );
   // HN-5: a copy's picture is written here, the read's other half — for a registered product
-  // window while it and its page hold the focus, its PNG decoded first and refused when it
-  // holds no picture. No audit row: the words' copy door keeps none (LC-13). A marked run
-  // keeps the picture's size instead of writing it (R-T 4, as `harnessCopies`) — and since it
-  // writes nothing of the person's, the focus that guards their clipboard is not asked of it:
-  // smoke:canvas's window is shown inactive and never focused by a row (DK-18).
+  // window, the text copy's rule with no focus asked (LC-18, VF-PM 16:10Z) — its PNG decoded
+  // first and refused when it holds no picture, and the copy's words written beside it in the
+  // same one write, so neither replaces the other (LC-19). No audit row: the words' copy door
+  // keeps none (LC-13). A marked run keeps the picture's size and the words instead of writing
+  // them (R-T 4, as `harnessCopies`), after every check a write passes.
   registerClipboardWriteImage(
     registry,
     {
-      focused: harnessPictures === null ? clipboardFocused : () => true,
       decode: (png: Uint8Array) => {
         const image = nativeImage.createFromBuffer(
           Buffer.from(png.buffer, png.byteOffset, png.byteLength),
         );
         return image.isEmpty() ? null : image;
       },
-      write: (image) => clipboard.writeImage(image),
-      ...(harnessPictures === null
+      write: (image, text) => clipboard.write(text === undefined ? { image } : { image, text }),
+      ...(harnessPictures === null || harnessCopies === null
         ? {}
         : {
-            keep: (bytes: number) => {
+            keep: (bytes: number, text: string | undefined) => {
               harnessPictures.push(bytes);
+              if (text !== undefined) harnessCopies.push(text);
             },
           }),
     },

@@ -124,31 +124,31 @@ describe("createClipboardDoor (item 102)", () => {
   });
 });
 
-// HN-5 — the write half's promises: a registered sender sending a picture's bytes, or a
-// throw; only while its window and page are focused; bytes over the bound refused whole
-// and never decoded; bytes that hold no picture refused, nothing written; a marked run's
-// record kept in place of the write, after every check a write passes.
+// HN-5 — the write half's promises: a registered sender sending a picture's bytes, and
+// words beside them only as text, or a throw; no focus asked (LC-18); bytes or words over
+// their bounds refused whole and never decoded; bytes that hold no picture refused, nothing
+// written; the picture and the words in ONE write (LC-19); a marked run's record kept in
+// place of the write, after every check a write passes.
 
 /** A PNG's signature: the door never reads the bytes, its decoder does. */
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
-function picture(over: { focused?: boolean; decoded?: "empty" | "throws"; keep?: boolean } = {}) {
+function picture(over: { decoded?: "empty" | "throws"; keep?: boolean } = {}) {
   const decode = vi.fn((png: Uint8Array) => {
     if (over.decoded === "throws") throw new Error("not a PNG");
     return over.decoded === "empty" ? null : { png };
   });
   const write = vi.fn();
-  const kept: number[] = [];
+  const kept: Array<{ bytes: number; text: string | undefined }> = [];
   const onRefused = vi.fn();
   const door = createClipboardImageDoor({
     owns: (sender) => sender.id === registered.id,
-    focused: () => over.focused ?? true,
     decode,
     write,
     ...(over.keep === true
       ? {
-          keep: (bytes: number) => {
-            kept.push(bytes);
+          keep: (bytes: number, text: string | undefined) => {
+            kept.push({ bytes, text });
           },
         }
       : {}),
@@ -158,12 +158,20 @@ function picture(over: { focused?: boolean; decoded?: "empty" | "throws"; keep?:
 }
 
 describe("createClipboardImageDoor (HN-5)", () => {
-  it("decodes and writes a picture for a focused registered window", async () => {
+  it("decodes and writes a picture for a registered window, asking no focus (LC-18)", async () => {
     const { door, decode, write, onRefused } = picture();
     await expect(door(registered, PNG)).resolves.toEqual({ status: "written" });
     expect(decode).toHaveBeenCalledWith(PNG);
-    expect(write).toHaveBeenCalledWith({ png: PNG });
+    expect(write.mock.calls).toEqual([[{ png: PNG }, undefined]]);
     expect(onRefused).not.toHaveBeenCalled();
+  });
+
+  it("writes the copy's words beside the picture in the same one write (LC-19)", async () => {
+    const { door, write } = picture();
+    await expect(door(registered, PNG, "Ship the desk by Friday.")).resolves.toEqual({
+      status: "written",
+    });
+    expect(write.mock.calls).toEqual([[{ png: PNG }, "Ship the desk by Friday."]]);
   });
 
   it("refuses a stranger before decoding anything", async () => {
@@ -188,18 +196,32 @@ describe("createClipboardImageDoor (HN-5)", () => {
     ];
     for (const raw of notBytes)
       await expect(door(registered, raw)).rejects.toThrow(/not a picture's bytes/);
+    // words beside the picture are text, or nothing
+    for (const words of [42, null, { text: "x" }, new Uint8Array(2)])
+      await expect(door(registered, PNG, words)).rejects.toThrow(/the words are not text/);
     expect(decode).not.toHaveBeenCalled();
   });
 
-  it("never decodes or writes for a window that is not focused: an honest refusal", async () => {
-    const { door, decode, write, onRefused } = picture({ focused: false });
-    await expect(door(registered, PNG)).resolves.toEqual({
+  it("refuses words past the copy door's bound whole, with their UTF-8 size", async () => {
+    const half = SHELL_CLIPBOARD.WRITE_TEXT_MAX_BYTES / 2;
+    const { door, decode, write, onRefused } = picture();
+    await expect(door(registered, PNG, "é".repeat(half + 1))).resolves.toEqual({
       status: "refused",
-      reason: "unfocused",
+      reason: "too-large",
+      bytes: SHELL_CLIPBOARD.WRITE_TEXT_MAX_BYTES + 2,
     });
     expect(decode).not.toHaveBeenCalled();
     expect(write).not.toHaveBeenCalled();
-    expect(onRefused).toHaveBeenCalledWith(registered, "unfocused", undefined);
+    expect(onRefused).toHaveBeenCalledWith(
+      registered,
+      "too-large",
+      SHELL_CLIPBOARD.WRITE_TEXT_MAX_BYTES + 2,
+    );
+    // exactly the bound is words the clipboard takes
+    const at = picture();
+    await expect(at.door(registered, PNG, "é".repeat(half))).resolves.toEqual({
+      status: "written",
+    });
   });
 
   it("refuses bytes over the bound whole, with their size, and never decodes them", async () => {
@@ -232,17 +254,22 @@ describe("createClipboardImageDoor (HN-5)", () => {
     }
   });
 
-  it("a marked run keeps the size in place of the write, after every check", async () => {
+  it("a marked run keeps the size and the words in place of the write", async () => {
     const marked = picture({ keep: true });
     await expect(marked.door(registered, PNG)).resolves.toEqual({ status: "written" });
-    expect(marked.kept).toEqual([PNG.byteLength]);
-    expect(marked.decode).toHaveBeenCalledOnce();
+    await expect(marked.door(registered, PNG, "hello")).resolves.toEqual({ status: "written" });
+    expect(marked.kept).toEqual([
+      { bytes: PNG.byteLength, text: undefined },
+      { bytes: PNG.byteLength, text: "hello" },
+    ]);
+    expect(marked.decode).toHaveBeenCalledTimes(2);
     expect(marked.write).not.toHaveBeenCalled();
-    // its checks stand in a marked run too: a window behind keeps nothing, an empty decode neither
-    const behind = picture({ keep: true, focused: false });
-    await expect(behind.door(registered, PNG)).resolves.toMatchObject({ reason: "unfocused" });
+    // after every check: an empty decode keeps nothing, words past the bound neither
     const empty = picture({ keep: true, decoded: "empty" });
     await expect(empty.door(registered, PNG)).resolves.toMatchObject({ reason: "not-an-image" });
-    expect([...behind.kept, ...empty.kept]).toEqual([]);
+    const wordy = picture({ keep: true });
+    const past = "x".repeat(SHELL_CLIPBOARD.WRITE_TEXT_MAX_BYTES + 1);
+    await expect(wordy.door(registered, PNG, past)).resolves.toMatchObject({ reason: "too-large" });
+    expect([...empty.kept, ...wordy.kept]).toEqual([]);
   });
 });

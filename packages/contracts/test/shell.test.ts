@@ -386,11 +386,9 @@ describe("the clipboard read door (item 102)", () => {
 describe("the clipboard picture door (HN-5)", () => {
   it("answers written, or an honest refusal with the size it refused", () => {
     expect(ClipboardWriteImageResult.parse({ status: "written" })).toEqual({ status: "written" });
-    for (const reason of ["unfocused", "not-an-image"] as const)
-      expect(ClipboardWriteImageResult.parse({ status: "refused", reason })).toEqual({
-        status: "refused",
-        reason,
-      });
+    expect(
+      ClipboardWriteImageResult.parse({ status: "refused", reason: "not-an-image" }),
+    ).toEqual({ status: "refused", reason: "not-an-image" });
     const past = SHELL_CLIPBOARD.WRITE_IMAGE_MAX_BYTES + 1;
     expect(
       ClipboardWriteImageResult.parse({ status: "refused", reason: "too-large", bytes: past }),
@@ -406,6 +404,8 @@ describe("the clipboard picture door (HN-5)", () => {
       { status: "refused", reason: "because" },
       { status: "refused", reason: "too-large", bytes: -1 },
       { status: "refused", reason: "too-large", bytes: 1.5 },
+      // LC-18: the write asks no focus, so a window behind is no refusal of it
+      { status: "refused", reason: "unfocused" },
     ])
       expect(ClipboardWriteImageResult.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
   });
@@ -413,6 +413,10 @@ describe("the clipboard picture door (HN-5)", () => {
   it("bounds a picture by the kept still's cap, by reference — never a number of its own", () => {
     expect(SHELL_CLIPBOARD.WRITE_IMAGE_MAX_BYTES).toBe(SCREENSHOT_STILL.MAX_BYTES);
     expect(SCREENSHOT_STILL.MAX_BYTES).toBe(64 * 1024 * 1024);
+  });
+
+  it("bounds the words by the copy door's one bound, 64 KiB of UTF-8 (LC-19)", () => {
+    expect(SHELL_CLIPBOARD.WRITE_TEXT_MAX_BYTES).toBe(64 * 1024);
   });
 });
 

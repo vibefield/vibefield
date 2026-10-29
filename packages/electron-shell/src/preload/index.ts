@@ -3,7 +3,6 @@ import {
   BrowserDataClearResult as BrowserDataClearResultSchema,
   ClipboardReadRequest,
   ClipboardReadResult,
-  type ClipboardWriteImageRefusal,
   ClipboardWriteImageResult,
   CloseRequest,
   CloseResult,
@@ -49,6 +48,7 @@ import {
   UsersListSnapshot,
   UsersSwitchParams,
   UsersUpdateParams,
+  utf8ByteLength,
   WindowConnection,
   type WindowLightsState,
   WindowLightsState as WindowLightsStateSchema,
@@ -260,17 +260,14 @@ const isStillBytes = (value: unknown): value is Uint8Array<ArrayBuffer> =>
   Object.prototype.toString.call(value) === "[object Uint8Array]" &&
   Object.prototype.toString.call(value.buffer) === "[object ArrayBuffer]";
 
-/** HN-5 — why a copy's picture was not written, in words, the read's voice (item 102): the
- * clause a copy says after "Not copied —". */
-function pictureRefused(reason: ClipboardWriteImageRefusal, bytes: number | undefined): string {
-  switch (reason) {
-    case "unfocused":
-      return "the clipboard is written only for the focused window";
-    case "too-large":
-      return `the picture holds ${bytes ?? "more than"} bytes; the clipboard takes at most ${SHELL_CLIPBOARD.WRITE_IMAGE_MAX_BYTES}`;
-    case "not-an-image":
-      return "the picture could not be read";
-  }
+/** HN-5 — a copy's picture, or the words beside it, past its bound, in words, the read's voice
+ * (item 102): the clause a copy says after "Not copied —". Null when both are within. */
+function pastBound(png: number, words: number): string | null {
+  const picture = SHELL_CLIPBOARD.WRITE_IMAGE_MAX_BYTES;
+  const text = SHELL_CLIPBOARD.WRITE_TEXT_MAX_BYTES;
+  if (png > picture) return `the picture holds ${png} bytes; the clipboard takes at most ${picture}`;
+  if (words > text) return `the words hold ${words} bytes; the clipboard takes at most ${text}`;
+  return null;
 }
 
 const platform = ShellPlatform.parse(
@@ -389,20 +386,29 @@ contextBridge.exposeInMainWorld("vibefield", {
           : "the clipboard is read only for the focused window",
       );
     },
-    /** HN-5 — a copy's picture onto the system clipboard: main decodes and writes the PNG
-     * for this window while it and its page are focused. Its bytes and their bound are
-     * checked here first, so a picture past it never crosses; the answer is parsed, and a
+    /** HN-5 — a copy's picture onto the system clipboard, with the copy's words beside it
+     * when it has any: main decodes the PNG and writes both formats in one write (LC-19),
+     * for this window, asking no focus (LC-18). The bytes, the words and their bounds are
+     * checked here first, so nothing past them crosses; the answer is parsed, and a
      * refusal rejects with its reason in words, so the copy deals no card. */
-    writeImage: async (png: Uint8Array): Promise<void> => {
+    writeImage: async (png: Uint8Array, text?: string): Promise<void> => {
       if (!isStillBytes(png)) throw new Error("a picture is written from its PNG's bytes");
-      if (png.byteLength > SHELL_CLIPBOARD.WRITE_IMAGE_MAX_BYTES) {
-        throw new Error(pictureRefused("too-large", png.byteLength));
+      if (text !== undefined && typeof text !== "string") {
+        throw new Error("the words written beside a picture are text");
       }
-      const result = ClipboardWriteImageResult.parse(
-        await ipcRenderer.invoke(IPC_CHANNELS.clipboardWriteImage, png),
-      );
+      const past = pastBound(png.byteLength, text === undefined ? 0 : utf8ByteLength(text));
+      if (past !== null) throw new Error(past);
+      const answer: unknown =
+        text === undefined
+          ? await ipcRenderer.invoke(IPC_CHANNELS.clipboardWriteImage, png)
+          : await ipcRenderer.invoke(IPC_CHANNELS.clipboardWriteImage, png, text);
+      const result = ClipboardWriteImageResult.parse(answer);
       if (result.status === "written") return;
-      throw new Error(pictureRefused(result.reason, result.bytes));
+      throw new Error(
+        result.reason === "not-an-image"
+          ? "the picture could not be read"
+          : `it holds ${result.bytes ?? "more"} bytes, more than the clipboard takes`,
+      );
     },
   },
   onPrepareClose: (handler: (requestId: string) => void): (() => void) => {

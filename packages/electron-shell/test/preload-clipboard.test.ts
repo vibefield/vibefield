@@ -6,11 +6,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // (so the terminal pastes nothing rather than part), an answer outside the contract
 // that never reaches the page, and a stranger that never reads. Captured from
 // `exposeInMainWorld`, preload-browser-data's pattern. HN-5 — the picture write beside
-// it: the bytes and their bound checked before anything crosses, a refusal rejected
-// in words (so the copy deals no card), and main's half writing for the focused
-// window alone.
+// it: the bytes, the words and their bounds checked before anything crosses, a refusal
+// rejected in words (so the copy deals no card), and main's half writing both in one
+// write for a registered window, asking no focus (LC-18, LC-19).
 
-const handlers = new Map<string, (event: unknown, raw?: unknown) => unknown>();
+const handlers = new Map<string, (event: unknown, raw?: unknown, text?: unknown) => unknown>();
 const stub = vi.hoisted(() => ({
   exposed: undefined as Record<string, unknown> | undefined,
   invoke: vi.fn(),
@@ -18,7 +18,10 @@ const stub = vi.hoisted(() => ({
 
 vi.mock("electron", () => ({
   ipcMain: {
-    handle: (channel: string, handler: (event: unknown, raw?: unknown) => unknown) => {
+    handle: (
+      channel: string,
+      handler: (event: unknown, raw?: unknown, text?: unknown) => unknown,
+    ) => {
       handlers.set(channel, handler);
     },
   },
@@ -128,33 +131,47 @@ describe("the clipboard read door, main's half (item 102)", () => {
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 describe("the preload's clipboard picture door (HN-5)", () => {
-  it("sends the PNG's bytes as the invoke's one argument, on its own channel", async () => {
+  it("sends the PNG's bytes, and the words beside them only when there are any", async () => {
     stub.invoke.mockResolvedValueOnce({ status: "written" });
     await expect(clipboard().writeImage!(PNG)).resolves.toBeUndefined();
-    expect(stub.invoke.mock.calls).toEqual([[IPC_CHANNELS.clipboardWriteImage, PNG]]);
+    stub.invoke.mockResolvedValueOnce({ status: "written" });
+    await expect(clipboard().writeImage!(PNG, "Ship it.")).resolves.toBeUndefined();
+    // the picture's bytes as they are, never JSON; no words, no second argument at all
+    expect(stub.invoke.mock.calls).toEqual([
+      [IPC_CHANNELS.clipboardWriteImage, PNG],
+      [IPC_CHANNELS.clipboardWriteImage, PNG, "Ship it."],
+    ]);
     expect(stub.invoke.mock.calls[0]?.[1]).toBe(PNG);
   });
 
-  it("checks the bytes and their bound before sending: nothing past it crosses", async () => {
+  it("checks the bytes, the words and both bounds before sending", async () => {
     const past = SHELL_CLIPBOARD.WRITE_IMAGE_MAX_BYTES + 1;
     await expect(clipboard().writeImage!(new Uint8Array(past))).rejects.toThrow(
       `the picture holds ${past} bytes; the clipboard takes at most`,
     );
+    const over = SHELL_CLIPBOARD.WRITE_TEXT_MAX_BYTES + 1;
+    await expect(clipboard().writeImage!(PNG, "x".repeat(over))).rejects.toThrow(
+      `the words hold ${over} bytes; the clipboard takes at most`,
+    );
     for (const raw of ["png", [0x89, 0x50], new Uint16Array(4), null])
       await expect(clipboard().writeImage!(raw)).rejects.toThrow(/PNG's bytes/);
+    await expect(clipboard().writeImage!(PNG, 42)).rejects.toThrow(/are text/);
     expect(stub.invoke).not.toHaveBeenCalled();
   });
 
   it("a refusal rejects in words, and a malformed answer never reaches the page", async () => {
-    stub.invoke.mockResolvedValueOnce({ status: "refused", reason: "unfocused" });
-    await expect(clipboard().writeImage!(PNG)).rejects.toThrow(
-      "the clipboard is written only for the focused window",
-    );
     stub.invoke.mockResolvedValueOnce({ status: "refused", reason: "not-an-image", bytes: 8 });
     await expect(clipboard().writeImage!(PNG)).rejects.toThrow("the picture could not be read");
     stub.invoke.mockResolvedValueOnce({ status: "refused", reason: "too-large", bytes: 9_000_000 });
     await expect(clipboard().writeImage!(PNG)).rejects.toThrow(/holds 9000000 bytes/);
-    for (const answer of [undefined, "written", { status: "wrote" }, { status: "refused" }]) {
+    for (const answer of [
+      undefined,
+      "written",
+      { status: "wrote" },
+      { status: "refused" },
+      // LC-18: no focus is asked of a write, so this is no answer of main's
+      { status: "refused", reason: "unfocused" },
+    ]) {
       stub.invoke.mockResolvedValueOnce(answer);
       await expect(clipboard().writeImage!(PNG), JSON.stringify(answer)).rejects.toThrow();
     }
@@ -162,42 +179,38 @@ describe("the preload's clipboard picture door (HN-5)", () => {
 });
 
 describe("the clipboard picture door, main's half (HN-5)", () => {
-  it("decodes and writes for a registered, focused window", async () => {
+  it("writes the picture and the words for a registered window, asking no focus", async () => {
     const sender = { id: 5 };
     const write = vi.fn();
     registerClipboardWriteImage({ owns: (s: unknown) => s === sender } as never, {
-      focused: () => true,
       decode: (png) => ({ png }),
       write,
     });
     const handle = handlers.get(IPC_CHANNELS.clipboardWriteImage);
     expect(await handle?.({ sender }, PNG)).toEqual({ status: "written" });
-    expect(write).toHaveBeenCalledWith({ png: PNG });
+    expect(await handle?.({ sender }, PNG, "two objects")).toEqual({ status: "written" });
+    expect(write.mock.calls).toEqual([
+      [{ png: PNG }, undefined],
+      [{ png: PNG }, "two objects"],
+    ]);
   });
 
-  it("refuses a stranger and a window behind without decoding; the refusal is logged", async () => {
+  it("refuses a stranger without decoding, and logs it", async () => {
     const sender = { id: 6 };
     const decode = vi.fn((png: Uint8Array) => ({ png }));
     const write = vi.fn();
     const warn = vi.fn();
-    let focused = true;
     registerClipboardWriteImage(
       { owns: (s: unknown) => s === sender } as never,
-      { focused: () => focused, decode, write },
+      { decode, write },
       { warn } as never,
     );
     const handle = handlers.get(IPC_CHANNELS.clipboardWriteImage);
     await expect(handle?.({ sender: { id: 9 } }, PNG)).rejects.toThrow(/unregistered sender/);
-    focused = false;
-    await expect(handle?.({ sender }, PNG)).resolves.toEqual({
-      status: "refused",
-      reason: "unfocused",
-    });
     expect(decode).not.toHaveBeenCalled();
     expect(write).not.toHaveBeenCalled();
     expect(warn.mock.calls.map((call) => [call[0], call[2]])).toEqual([
       ["desktop.ipc.clipboard_write_refused", { webContentsId: 9, reason: "unregistered" }],
-      ["desktop.ipc.clipboard_write_refused", { webContentsId: 6, reason: "unfocused" }],
     ]);
   });
 });

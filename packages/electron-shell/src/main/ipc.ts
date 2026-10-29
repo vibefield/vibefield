@@ -304,9 +304,10 @@ export function registerClipboardRead(
 }
 
 /** HN-5 — the clipboard's picture write (design-03 §5.1's `shell.clipboard.*`, the product
- * window's write half beside item 102's read). Policy in clipboard-door.ts; this is the
- * ipcMain wiring only. The registered-sender gate is `registry.owns`, as at every door
- * here; the focus fact, the decode and the write are the caller's. */
+ * window's write half beside item 102's read): the PNG's bytes and the copy's words, the
+ * invoke's two arguments. Policy in clipboard-door.ts; this is the ipcMain wiring only. The
+ * registered-sender gate is `registry.owns`, as at every door here — the text copy's rule,
+ * no focus asked (LC-18); the decode and the one write are the caller's. */
 export function registerClipboardWriteImage<Picture>(
   registry: WindowRegistry,
   options: Omit<ClipboardImageDoorOptions<WebContents, Picture>, "owns" | "onRefused">,
@@ -323,8 +324,8 @@ export function registerClipboardWriteImage<Picture>(
       );
     },
   });
-  ipcMain.handle(IPC_CHANNELS.clipboardWriteImage, (event, raw: unknown) =>
-    door(event.sender, raw),
+  ipcMain.handle(IPC_CHANNELS.clipboardWriteImage, (event, raw: unknown, text?: unknown) =>
+    door(event.sender, raw, text),
   );
 }
 

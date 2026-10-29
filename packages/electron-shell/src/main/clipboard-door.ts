@@ -114,33 +114,36 @@ export function createClipboardDoor<Sender extends { readonly id: number }>(
 // HN-5 (2026-10-29) — the clipboard's PICTURE WRITE, the read's other half: a copy's
 // picture (the desk's Copy of a selection) goes on the system clipboard HERE, for the
 // read's reason — the shell session grants no Chromium permission (ESP §7.4), so the
-// page's own `navigator.clipboard.write` is denied by law. A copy's words keep the
-// host's copy door (`copyText`, main/index.ts), a program's OSC 52 among them.
+// page's own `navigator.clipboard.write` is denied by law. A copy's words alone keep
+// the host's copy door (`copyText`, main/index.ts), a program's OSC 52 among them.
 //
-// Pure, and the read's shape:
+// Pure, and the shape of the text copy's rule (LC-18, VF-PM 16:10Z):
 //  · only a window THIS shell registered may write: a stranger is warned and thrown at,
-//    and nothing is decoded; a request that is not a picture's bytes throws the same
-//    way, as the read's malformed request does (no product window sends one: the
-//    preload checks before it sends);
-//  · only while that window and its page are focused, the read's rule: a page writing
-//    from behind would replace what the person copied in another app;
-//  · bytes over `SHELL_CLIPBOARD.WRITE_IMAGE_MAX_BYTES` are refused whole with their
-//    size and never decoded; bytes that decode to no picture are refused, and nothing
-//    is written;
+//    and nothing is decoded; a request that is not a picture's bytes, or words that are
+//    not a string, throws the same way, as the read's malformed request does (no
+//    product window sends one: the preload checks before it sends);
+//  · NO focus is asked, unlike the read: a write reads nothing, the words' copy door
+//    asks none, and a same-uid process (EL7) can write the pasteboard without us;
+//  · bytes over `SHELL_CLIPBOARD.WRITE_IMAGE_MAX_BYTES`, or words over
+//    `SHELL_CLIPBOARD.WRITE_TEXT_MAX_BYTES`, are refused whole with their size and
+//    never decoded; bytes that decode to no picture are refused, and nothing is written;
+//  · the picture and the copy's words go in ONE write (LC-19), both formats of one
+//    item: two writes would leave only the second, and a paste then takes the words or
+//    the picture, whichever its place reads;
 //  · no audit row: a copy is the person's own act on their own clipboard, and the
 //    words' door keeps none either (LC-13).
 
 export interface ClipboardImageDoorOptions<Sender extends { readonly id: number }, Picture> {
   readonly owns: (sender: Sender) => boolean;
-  /** the sender's window AND its page hold the focus */
-  readonly focused: (sender: Sender) => boolean;
   /** the PNG as a picture (main: `nativeImage.createFromBuffer`), null when it holds none */
   readonly decode: (png: Uint8Array) => Picture | null;
-  /** the picture onto the system clipboard (main: `clipboard.writeImage`) */
-  readonly write: (image: Picture) => void;
-  /** A marked smoke run's record (R-T 4, main's `harnessPictures`): the picture's size kept IN
-   * PLACE of the write — the pasteboard is the person's — after every check a write passes. */
-  readonly keep?: (bytes: number) => void;
+  /** the picture, and the copy's words when it has any, onto the system clipboard in one
+   * write (main: `clipboard.write({ image, text })`) */
+  readonly write: (picture: Picture, text: string | undefined) => void;
+  /** A marked smoke run's record (R-T 4, main's `harnessPictures` and `harnessCopies`): the
+   * picture's size and the words kept IN PLACE of the write — the pasteboard is the
+   * person's — after every check a write passes. */
+  readonly keep?: (bytes: number, text: string | undefined) => void;
   readonly onRefused?: (
     sender: Sender,
     reason: ClipboardWriteImageRefusal | "unregistered",
@@ -151,6 +154,7 @@ export interface ClipboardImageDoorOptions<Sender extends { readonly id: number 
 export type ClipboardImageDoor<Sender extends { readonly id: number }> = (
   sender: Sender,
   raw: unknown,
+  rawText?: unknown,
 ) => Promise<ClipboardWriteImageResult>;
 
 /** A picture's bytes as the page sends them: a Uint8Array (a Buffer is one) over a plain
@@ -179,24 +183,29 @@ export function createClipboardImageDoor<Sender extends { readonly id: number },
       ...(bytes === undefined ? {} : { bytes }),
     });
   };
-  return async (sender, raw) => {
+  return async (sender, raw, rawText) => {
     if (!options.owns(sender)) {
       options.onRefused?.(sender, "unregistered");
       throw new Error("clipboard write refused: unregistered sender");
     }
     if (!isPngBytes(raw)) throw new Error("clipboard write refused: not a picture's bytes");
-    if (!options.focused(sender)) return refuse(sender, "unfocused");
+    const text = rawText === undefined ? undefined : typeof rawText === "string" ? rawText : null;
+    if (text === null) throw new Error("clipboard write refused: the words are not text");
     const bytes = raw.byteLength;
     if (bytes > SHELL_CLIPBOARD.WRITE_IMAGE_MAX_BYTES) return refuse(sender, "too-large", bytes);
-    let image: Picture | null;
-    try {
-      image = options.decode(raw);
-    } catch {
-      image = null; // a decoder that throws on these bytes found no picture in them
+    const textBytes = text === undefined ? 0 : utf8ByteLength(text);
+    if (textBytes > SHELL_CLIPBOARD.WRITE_TEXT_MAX_BYTES) {
+      return refuse(sender, "too-large", textBytes);
     }
-    if (image === null) return refuse(sender, "not-an-image", bytes);
-    if (options.keep !== undefined) options.keep(bytes);
-    else options.write(image);
+    let picture: Picture | null;
+    try {
+      picture = options.decode(raw);
+    } catch {
+      picture = null; // a decoder that throws on these bytes found no picture in them
+    }
+    if (picture === null) return refuse(sender, "not-an-image", bytes);
+    if (options.keep !== undefined) options.keep(bytes, text);
+    else options.write(picture, text);
     return ClipboardWriteImageResultSchema.parse({ status: "written" });
   };
 }

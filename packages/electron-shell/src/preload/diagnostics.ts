@@ -1,4 +1,4 @@
-import { LOG_TRANSPORT_LIMITS } from "@vibefield/contracts";
+import { LOG_TRANSPORT_LIMITS, SHELL_CLIPBOARD, utf8ByteLength } from "@vibefield/contracts";
 import {
   type CrashArtifactListV1 as CrashArtifactList,
   CrashArtifactListV1,
@@ -271,7 +271,8 @@ export class PreloadDiagnosticsBridge {
   }
 
   async copyText(text: unknown): Promise<void> {
-    if (typeof text !== "string" || new TextEncoder().encode(text).byteLength > 64 * 1024) {
+    // main's bound, by reference (HN-5): the copy door's one number
+    if (typeof text !== "string" || utf8ByteLength(text) > SHELL_CLIPBOARD.WRITE_TEXT_MAX_BYTES) {
       throw new DiagnosticsBridgeError(
         "PRECONDITION_FAILED",
         "clipboard text is invalid or too large",
