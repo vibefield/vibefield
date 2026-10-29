@@ -29,7 +29,7 @@ import { isSettingsChord } from "./me-menu-wiring";
 // from a pane.
 //
 // ⌘F (the Peek, GV-D8/D10, 2026-10-08) is search's, printed under the frame's
-// button: the Peek claims it while History or Godview is the view (Godview's
+// button: the Peek claims it while Godview or History is the view (Godview's
 // own Find left with P2, 2026-10-09). So Ghostty's start_search reaches a pane
 // in neither — the row says WHEN, so Settings says it honestly rather than as
 // an always.
@@ -158,7 +158,7 @@ export const PRODUCT_CHORDS: readonly ProductChord[] = [
     id: "search",
     trigger: "super+f",
     label: "Search",
-    when: "while History or Godview is the view",
+    when: "while Godview or History is the view",
     matches: (event) => isSearchChord(event, viewKeysOf(getHost().platform)),
   },
   {

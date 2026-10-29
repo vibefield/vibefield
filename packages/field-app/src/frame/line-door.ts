@@ -205,7 +205,8 @@ export function lateReason(verb: "took" | "showed", timeoutMs: number): string {
 
 /** Wait (bounded) for a deck that can place — History's Resume (and Jump to)
  * asks the frame for Godview, whose deck mounts on its first open and
- * publishes its door a moment later. Null when none came in `timeoutMs`. */
+ * publishes its door a moment later. Null when none came in `timeoutMs`; 0
+ * reads the deck up now (History's New terminal asks it first, HN-7). */
 export function whenGodviewCanPlace(timeoutMs: number): Promise<LineViewDoor | null> {
   const ready = (): LineViewDoor | null => (godview?.canPlace === true ? godview : null);
   const now = ready();
@@ -279,9 +280,10 @@ export interface HistoryLineDoor {
   /** HN-7 (LN-D2) — History's create: a fresh shell in the folder of the
    * project the room shows, found as New agent finds it, placed as Godview's
    * create places one (GV-D4: in the focused pane), the frame moving to Godview
-   * to show it; with no project shown, as Godview's create opens one. A folder
-   * on another desktop, not mounted or gone is refused in New agent's words,
-   * and the frame stays. */
+   * to show it — once it opened, when the deck was up and asked first; with no
+   * project shown, as Godview's create opens one. A folder not mounted or gone
+   * is refused in New agent's words, one on another desktop by the desktop it
+   * is on ("vibe-field is on Mac mini"), and the frame stays. */
   newTerminal(): Promise<NewTerminalOutcome>;
 }
 

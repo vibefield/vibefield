@@ -151,7 +151,8 @@ describe("the product chords (GT-D21)", () => {
     expect(search).toMatchObject({
       trigger: "super+f",
       label: "Search",
-      when: "while History or Godview is the view",
+      // the design lens's 16: the two rows the views share name them in one order, ⌘T's
+      when: "while Godview or History is the view",
     });
     // the chords kept always say no when
     expect(PRODUCT_CHORDS.filter((chord) => chord.when !== undefined).map((c) => c.id)).toEqual([

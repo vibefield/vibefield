@@ -293,6 +293,15 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(refused?.textContent).toBe(
       "Not pasted into vibe-field — 300 KB, and one paste carries 261 KB of it",
     );
+    // HN-7 — History's plate: its create is New terminal, named for the project the room shows,
+    // and the caption under the plates says what they draw (the design lens's 14: it said
+    // "History's Resume waiting")
+    expect(plate("hx")?.querySelector(".vf-line-create")?.getAttribute("title")).toBe(
+      "New terminal in vibe-field  ⌘T",
+    );
+    const lineCaption = plate("hx")?.parentElement?.nextElementSibling?.textContent ?? "";
+    expect(lineCaption).toContain("History's New terminal in the project the room shows");
+    expect(lineCaption).not.toContain("History's Resume");
     // DK-13 — the pegboard: a plate per state over a fixture tray, the shipping filters placed by the product's model
     const boardPlates = [...(container?.querySelectorAll<HTMLElement>(".vf-ds-board-plate") ?? [])];
     expect(boardPlates.map((p) => p.dataset.state)).toEqual([
