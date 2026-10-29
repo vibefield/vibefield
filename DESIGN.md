@@ -824,7 +824,8 @@ flies home in 440ms on the island curve. **Raised:** every card to its raised pl
 curve. **A twin paste** (HN-D10): the card rises 12 on the pop curve (280ms), holds 1.2s under its words,
 and settles on the retract curve. Reduced motion (M6): nothing travels — a dealt card fades into its place
 over 120ms, the reach and the raise move at once, a card pushed off fades, a played card's place rings
-once (its fade halved to 60ms), and a card picked up fades in at the centre over a scrim that fades with it (120ms).
+once (its fade halved to 60ms), and a card picked up fades in at the centre over a scrim that fades with it (120ms);
+the hand's step out of the pegboard's way, and back, is at once, and a card's gloss stays where its turn leaves it.
 
 One more curve, with its reason — **the arc** (Cards in Hand, 2026-10-29; the ruled page's own toss):
 `cubic-bezier(0.45, -0.3, 0.7, 1)`, the deal's vertical travel alone. Its negative start lifts the card a
@@ -980,7 +981,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   - **the snapshot** — 40 round, 6 after the track, `capture` 18 in secondary ink: a ghost, no fill,
     until the pointer comes, so create stays the line's one solid button; under the pointer the
     ready fill (the foreground at 8%) and primary ink, and it stays filled while the snapshot tool is
-    up for its own press. It opens the snapshot tool (SNAP; the shell's capture door, the one ⌃⌘A and the View menu's
+    up for its own press. A capture main starts — ⌃⌘A, the View menu's Take Screenshot — fills nothing
+    here: the tool's own overlay is that capture's signal (*corrected 2026-10-29, LC-17:* the line hears
+    a capture's result, never its start; a start from main would be a new channel, and the fill is not
+    worth one). It opens the snapshot tool (SNAP; the shell's capture door, the one ⌃⌘A and the View menu's
     Take Screenshot open): the screen freezes, you drag a region or click for a window, mark it up,
     and Return or Done keeps it; what you kept leaves its region as a picture card and arcs into the
     hand (§8 "The hand", §6), the still on the system clipboard as the tool has always put it. A
