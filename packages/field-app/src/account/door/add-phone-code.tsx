@@ -3,8 +3,8 @@ import type { ReactElement } from "react";
 import { SignInQr } from "./sign-in-qr";
 
 // TS-7b (DESIGN.md §8 "The Connect pane", Add your phone; James's Q2 A, 2026-10-29) — the code that tells a phone
-// which account to expect: `vibefield://add-phone` with the account and this Mac's name (`@vibefield/contracts/
-// phone-code`, a leaf: the Connect pane is boot-reachable). One drawing for both places that offer it, the Connect
+// which account to expect: the add-phone link (`PHONE_CODE_SCHEME`, `PHONE_CODE_HOST`) with the account and this
+// Mac's name (`@vibefield/contracts/phone-code`, a leaf: the Connect pane is boot-reachable). One drawing for both places that offer it, the Connect
 // pane's Connected aside and Settings → Devices' Add a device → Phone, so the two never say it differently.
 //
 // It carries no secret, and it installs nothing: there is no install link yet, so the words send the person to

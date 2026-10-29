@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { PHONE_CODE_HOST, PHONE_CODE_SCHEME } from "@vibefield/contracts/phone-code";
 import type { FielddClient } from "@vibefield/fieldd-client";
 import { FielddProvider } from "@vibefield/fieldd-client/react";
 import { act, type ComponentProps, createElement } from "react";
@@ -28,6 +29,9 @@ afterEach(() => {
   container?.remove();
   container = null;
 });
+
+// TS-7b — the add-phone code as the Mac draws it; its scheme and host are contracts' (wall R6), the query is pinned here.
+const phoneCode = (query: string) => `${PHONE_CODE_SCHEME}://${PHONE_CODE_HOST}?${query}`;
 
 const noopLogger: FieldHost["logger"] = {
   child: () => noopLogger,
@@ -420,7 +424,7 @@ describe("Settings → Devices: This Mac and your devices (TS-D3, TS-D9)", () =>
     expect(text()).toContain("james@example.com");
     // no roster yet: this Mac is named as Tailscale names it
     expect(container?.querySelector("[data-code]")?.getAttribute("data-code")).toBe(
-      "vibefield://add-phone?login=james%40example.com&from=truffle-vibefield-studio",
+      phoneCode("login=james%40example.com&from=truffle-vibefield-studio"),
     );
     expect(
       container?.querySelector('canvas[aria-label="Scan with VibeField on your iPhone"]'),
@@ -446,7 +450,7 @@ describe("Settings → Devices: This Mac and your devices (TS-D3, TS-D9)", () =>
     );
     await act(async () => button("Add a device")?.click());
     expect(container?.querySelector("[data-code]")?.getAttribute("data-code")).toBe(
-      "vibefield://add-phone?login=james%40example.com&from=Studio",
+      phoneCode("login=james%40example.com&from=Studio"),
     );
   });
 
@@ -469,7 +473,7 @@ describe("Settings → Devices: This Mac and your devices (TS-D3, TS-D9)", () =>
     );
     await act(async () => button("Add a device")?.click());
     expect(container?.querySelector("[data-code]")?.getAttribute("data-code")).toBe(
-      "vibefield://add-phone?login=james%40example.com&from=truffle-vibefield-studio",
+      phoneCode("login=james%40example.com&from=truffle-vibefield-studio"),
     );
   });
 
