@@ -1130,8 +1130,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     stays out. Every other copy VibeField makes deals the same way, as a text card — Settings' (a
     sign-in link, a device's name, a diagnostics record) from the button pressed, and the copies
     History's room makes through its workspace port — and what a card holds goes on the system
-    clipboard too, its words or its picture (§8 "Copy"). **A program's write is not a copy**: a terminal's OSC 52 reaches the system clipboard
-    through the same door and deals no card — the hand holds what you copied (HN-L1). **Brought in**
+    clipboard too — its words, its picture, or both in one write (§8 "Copy"). **A program's write
+    is not a copy**: a terminal's OSC 52 reaches the system clipboard through the same door and
+    deals no card — the hand holds what you copied (HN-L1). **Brought in**
     (HN-6): ⌘V with no caret deals one card for each thing the clipboard holds — its words, its
     picture, a file as its path — from the pointer; a drag from another app becomes a card the moment
     it enters the window, carried as one from the hand is, its kind's index alone until the drop says
@@ -1890,8 +1891,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   without the selection's marks and taken at once, of the last presented frame (R15), titled by its
   face's name ("Clock", "2 objects", a missing face's type). The card leaves from the selection's
   box and arcs into the hand's right end in 560ms on the island curve (§6); what it copied goes on
-  the system clipboard too — the words through the host's copy door, the picture through the
-  clipboard's picture door (HN-5). The selection is **never cleared or put back**: no
+  the system clipboard too, in ONE write — one note's words through the host's copy door; a picture
+  through the clipboard's picture door with the selection's words beside it on the same item, so a
+  paste into words takes the words and a paste into a picture takes the picture (HN-5; LC-19: two
+  writes would clobber each other). The selection is **never cleared or put back**: no
   selection write during Copy, and nothing a peer could see blink. ⌘C copies only on Canvas, with a
   selection, outside any field — a note being written copies its own text — and never under a cover.
   Reduced motion (M6): the card fades into its place.
