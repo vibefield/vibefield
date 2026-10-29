@@ -7,6 +7,7 @@ import { getActiveView, requestView } from "../view-state";
 import { type CardAnswer, type CardPlayed, type CardTarget, cardTargets } from "./card-targets";
 import type { Card } from "./cards-model";
 import { TARGET_WORDS } from "./cards-words";
+import { isField } from "./caret";
 
 /**
  * THE ONE DRAG MACHINE (track HN, HN-4; DESIGN.md §8 "The hand", where cards go). A card
@@ -19,7 +20,8 @@ import { TARGET_WORDS } from "./cards-words";
  * is said once on the line, and the card springs back to its slot (HN-D4, HN-L2: never spent).
  * Let go anywhere else, or press Esc, or let the window lose focus, and it flies straight home.
  * A card from another app (B2, HN-6) waits — its kind alone — until the drop says what it holds:
- * filled then, it plays straight into a pane or the prompt, and anywhere else it is the hand's.
+ * filled then, it plays straight into a pane or the prompt, and anywhere else it is the hand's —
+ * but over a field no place answers for it says nothing, since that field takes the drop (HN-L3).
  * A hand drag holds its pointer for the carry — captured on the hand, the cursor grabbing (§7) —
  * so nothing under the card hears a move or an up it never saw pressed. Otherwise there is no DOM
  * here: the layer draws the card, and the clock is the tests' to fake.
@@ -212,6 +214,13 @@ function elementsAt(x: number, y: number): readonly Element[] | null {
   return stack.filter((element) => element.closest(`.${CARRIED_LAYER_CLASS}`) === null);
 }
 
+/** The element on top at a point, past the carried card — what the places and the cells answer
+ * by; null for nothing, undefined in a DOM with no layout. */
+function topAt(x: number, y: number): Element | null | undefined {
+  const stack = elementsAt(x, y);
+  return stack === null ? undefined : (stack[0] ?? null);
+}
+
 /** Over the line (its box read from the DOM, never a constant): the card ducks small there. */
 function overLine(x: number, y: number): boolean {
   const line = typeof document === "undefined" ? null : document.querySelector(".vf-line");
@@ -278,8 +287,7 @@ function answerOf(
 /** What is under the pointer now: the line's cell, or the place on top and what it says. */
 function hitTest(drag: LiveDrag): void {
   const { x, y } = drag;
-  const stack = elementsAt(x, y);
-  const top = stack === null ? undefined : (stack[0] ?? null);
+  const top = topAt(x, y);
   drag.ducked = overLine(x, y);
   const cell = viewCellAt(top ?? null);
   springAt(drag, cell);
@@ -309,8 +317,22 @@ function hitTest(drag: LiveDrag): void {
   }
   drag.target = null;
   drag.ring = null;
+  // …but a field no place answers for takes a drop itself (HN-L3): over it the card says nothing,
+  // since letting go there will not put it in the hand
   drag.answer =
-    drag.start.source === "outside" ? { kind: "hand", ok: true, label: TARGET_WORDS.hand } : null;
+    drag.start.source === "outside" && !(said === null && isField(top))
+      ? { kind: "hand", ok: true, label: TARGET_WORDS.hand }
+      : null;
+}
+
+/** Whether a card let go at this window point is a field's (HN-L3): a field on top there — read
+ * as the drag reads what is under the pointer — that no registered place answers for. A place
+ * registered for cards outranks the field: a pane's own text area, Chat's prompt. */
+export function fieldTakesDrop(x: number, y: number, card: Card): boolean {
+  const top = topAt(x, y);
+  if (!isField(top)) return false;
+  const target = cardTargets.at(x, y, top);
+  return target === null || answerOf(target, card, { x, y }) === null;
 }
 
 function moveTo(drag: LiveDrag, x: number, y: number): void {
