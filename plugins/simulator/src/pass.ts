@@ -13,7 +13,7 @@
 // changed — a pan writes nothing). Each phone's SURFACE is its group 1, shared by every slot spawned from the root's (a phone
 // drawn in the hand and on the desk behind it is one surface), and goes with the root:
 //  - its SCREEN — its live face's texture (the host's `LIVE` service fills it — the pass never sees a frame), its mips made as
-//    deep as this slot reads them (`liveDepth`; by night the glow's coarse level too) into the frame's encoder, the face's
+//    deep as this slot reads them (layout.ts `screenMips`; by night the glow's coarse level too) into the frame's encoder, the face's
 //    SIGHT told what this slot drew of the display; a blank texel where it has none (unbound, a specimen, no `LIVE` lent);
 //  - its face's WORDS — their own texture (the words' block alone, made the first time a face says something and let go when
 //    it is silent again), its mips made with the kit's `mipsInto`. The kind's local is told its bytes (`onNotice`) — it charges
@@ -33,7 +33,6 @@ import {
   type KindPass,
   type LiveTexture,
   litByOwn,
-  liveDepth,
   type MatPass,
   mipsInto,
   type RecordStore,
@@ -43,7 +42,6 @@ import {
 } from "@vibefield/plugin-sdk/desk";
 import { displayRect, PHONE, type PhoneLaw } from "./law";
 import {
-  glowLevel,
   levelsOf,
   MAX_PHONES,
   type NoticePlan,
@@ -53,6 +51,8 @@ import {
   PhoneUniforms,
   phoneUniformValues,
   phoneValues,
+  screenMips,
+  spills,
 } from "./layout";
 
 /** Premultiplied "source over" — every desk object's blend. */
@@ -434,8 +434,7 @@ export class PhonePass implements KindPass<PhoneInstance> {
     const t = live.face.texture();
     surface.live = t;
     if (t === undefined) return;
-    const depth = liveDepth(t, px);
-    t.prepare(encoder, s.light.night > 0 ? Math.max(depth, Math.ceil(glowLevel(t.width))) : depth);
+    t.prepare(encoder, screenMips(t, px, s.light.night > 0));
   }
 
   /** A face's WORDS: their texture laid when what they say moved (the local is told its bytes), its mips made as deep as this slot reads its block; let go when the record carries none. */
@@ -504,7 +503,7 @@ export class PhonePass implements KindPass<PhoneInstance> {
       const surface = this.surfaceFor(key);
       this.show(key, surface, r, encoder, s);
       this.drawn.push(surface);
-      this.glows.push(night && r.screen.on > 0);
+      this.glows.push(spills(r.screen, night));
     }
     this.rebind(); // after: the store's buffers may have grown
     this.litElsewhere = !litByOwn(s.view, s.lit);

@@ -1,7 +1,8 @@
 // The phone's units' FAKES (the browser pane's live.test.ts is their model): a face the test fills (its texture — ONE object
 // for the face's life, as ICE's writer keeps it: a present moves its revision, a resize its epoch — its state, its words, the
 // demands it was sent), a host lending `LIVE` and the words' raster (or not) and counting its doors (the durable key, wake,
-// redraw, remake, the desk's frames), the root pass's words doors, a raster budget the test reads, and an object's context.
+// redraw, remake, the desk's frames), the root pass's words doors, a raster budget the test reads, and an object's context;
+// and for the fixture's live source (fixture-live.ts): the host's clock and timer, and its writers.
 import {
   DEFAULT_GRID,
   type Entity,
@@ -21,6 +22,8 @@ import {
 } from "@vibefield/plugin-sdk/desk";
 import { productPalette } from "@vibefield/plugin-sdk/testing";
 import {
+  type FixtureClock,
+  type FixtureWriter,
   type NoticeSpec,
   PHONE_SIZE,
   phoneLook,
@@ -270,3 +273,87 @@ export const boundTo = (deviceType: string): Partial<SimulatorProps> => ({
   binding: { deviceType, runtime: "com.apple.CoreSimulator.SimRuntime.iOS-26-1" },
 });
 export const TYPE = "com.apple.CoreSimulator.SimDeviceType.";
+
+/** The host's clock and timer: time moves only when the test runs it, firing each live timer due by then, in order. */
+export function fakeClock(start: number) {
+  let t = start;
+  const timers: { at: number; fn: () => void; live: boolean }[] = [];
+  const clock: FixtureClock = {
+    now: () => t,
+    at(at, fn) {
+      const timer = { at, fn, live: true };
+      timers.push(timer);
+      return () => {
+        timer.live = false;
+      };
+    },
+  };
+  return {
+    clock,
+    run(to: number) {
+      for (;;) {
+        const due = timers.filter((x) => x.live && x.at <= to).sort((a, b) => a.at - b.at)[0];
+        if (due === undefined) break;
+        due.live = false;
+        t = Math.max(t, due.at);
+        due.fn();
+      }
+      t = to;
+    },
+    pending: () => timers.filter((x) => x.live).map((x) => x.at),
+  };
+}
+
+/** The host's writers: each made at its first frame's size; a present of another size resizes it (its epoch moves), as ICE's does. */
+export function fakeWriters() {
+  const made: {
+    key: string;
+    size: readonly [number, number];
+    presents: { w: number; h: number; logical: readonly [number, number] | undefined }[];
+    destroyed: boolean;
+    face: LiveTexture;
+  }[] = [];
+  const writer = (key: string, width: number, height: number): FixtureWriter => {
+    const face: { -readonly [K in keyof LiveTexture]: LiveTexture[K] } = {
+      width,
+      height,
+      format: "rgba8unorm-srgb",
+      revision: 0,
+      epoch: 0,
+      logical: [width, height],
+      view: () => {
+        throw new Error("no device in a unit");
+      },
+      prepare: () => {},
+      bytes: width * height * 4,
+    };
+    const entry = {
+      key,
+      size: [width, height] as const,
+      presents: [] as { w: number; h: number; logical: readonly [number, number] | undefined }[],
+      destroyed: false,
+      face,
+    };
+    made.push(entry);
+    return {
+      face,
+      presentBytes(bytes, w, h, logical) {
+        if (entry.destroyed) return;
+        if (bytes.length !== w * h * 4)
+          throw new Error(`a frame of ${bytes.length} bytes is not ${w}×${h} rgba8`);
+        if (w !== face.width || h !== face.height) {
+          face.width = w;
+          face.height = h;
+          face.epoch += 1;
+        }
+        face.revision += 1;
+        face.logical = logical ?? [w, h];
+        entry.presents.push({ w, h, logical });
+      },
+      destroy() {
+        entry.destroyed = true;
+      },
+    };
+  };
+  return { writer, made };
+}

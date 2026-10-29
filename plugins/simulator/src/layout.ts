@@ -15,6 +15,7 @@ import {
   type Entity,
   type LiveFace,
   type LiveTexture,
+  liveDepth,
   type RGB,
   type Sight,
 } from "@vibefield/plugin-sdk/desk";
@@ -204,6 +205,24 @@ export const levelsOf = (w: number, h: number): number =>
 
 /** The level the glow's colour is read at: the frame some 8 texels across (PHONE.md §5 — the screen's colour near each edge). */
 export const glowLevel = (width: number): number => Math.max(Math.log2(Math.max(width, 1) / 8), 0);
+
+/**
+ * How deep a live screen's mips are made for one slot (PHONE.md §10: "re-mipped only on a new frame and only as deep as it is
+ * read" — the once-per-revision half is the texture's own `prepare`): the levels its display's device px read (`liveDepth`),
+ * and by night down to the glow's coarse level too, which its colour is read at.
+ */
+export const screenMips = (
+  t: Pick<LiveTexture, "width" | "height">,
+  px: readonly [number, number],
+  night: boolean,
+): number => {
+  const depth = liveDepth(t, px);
+  return night ? Math.max(depth, Math.ceil(glowLevel(t.width))) : depth;
+};
+
+/** Whether a phone's screen lights what lies below it this slot (the spill pass, PHONE.md §10's night cost): by night, a screen that is on. */
+export const spills = (screen: Pick<ScreenPlan, "on">, night: boolean): boolean =>
+  night && screen.on > 0;
 
 /** A live face's screen as its texture stands: its size and levels (a new size remakes the record — the shader's level reads it). */
 export function liveScreen(

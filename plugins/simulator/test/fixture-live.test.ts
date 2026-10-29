@@ -6,23 +6,10 @@
 // (live.ts) run over it unchanged — and nothing the plugin ships names a way of making frames.
 import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import {
-  type Entity,
-  type LiveDemand,
-  type LiveTexture,
-  liveSimulatorFace,
-} from "@vibefield/plugin-sdk/desk";
+import { type Entity, type LiveDemand, liveSimulatorFace } from "@vibefield/plugin-sdk/desk";
 import { describe, expect, it } from "vitest";
-import {
-  createPhoneFaces,
-  type FixtureClock,
-  type FixtureWriter,
-  facePlan,
-  fixtureSources,
-  modelOf,
-  simulatorSpec,
-} from "../src";
-import { fakeHost, TYPE } from "./fakes";
+import { createPhoneFaces, facePlan, fixtureSources, modelOf, simulatorSpec } from "../src";
+import { fakeClock, fakeHost, fakeWriters, TYPE } from "./fakes";
 
 const AT = Date.UTC(2026, 9, 18, 10, 8);
 const PRO = `${TYPE}iPhone-17-Pro`;
@@ -35,89 +22,6 @@ const live = (raster: readonly [number, number], fps = 30): LiveDemand => ({
   interactive: false,
 });
 const PAUSED: LiveDemand = { mode: "paused", fps: 0, raster: [0, 0], interactive: false };
-
-/** The host's clock and timer: time moves only when the test runs it, firing each live timer due by then, in order. */
-function fakeClock(start: number) {
-  let t = start;
-  const timers: { at: number; fn: () => void; live: boolean }[] = [];
-  const clock: FixtureClock = {
-    now: () => t,
-    at(at, fn) {
-      const timer = { at, fn, live: true };
-      timers.push(timer);
-      return () => {
-        timer.live = false;
-      };
-    },
-  };
-  return {
-    clock,
-    run(to: number) {
-      for (;;) {
-        const due = timers.filter((x) => x.live && x.at <= to).sort((a, b) => a.at - b.at)[0];
-        if (due === undefined) break;
-        due.live = false;
-        t = Math.max(t, due.at);
-        due.fn();
-      }
-      t = to;
-    },
-    pending: () => timers.filter((x) => x.live).map((x) => x.at),
-  };
-}
-
-/** The host's writers: each made at its first frame's size; a present of another size resizes it (its epoch moves), as ICE's does. */
-function fakeWriters() {
-  const made: {
-    key: string;
-    size: readonly [number, number];
-    presents: { w: number; h: number; logical: readonly [number, number] | undefined }[];
-    destroyed: boolean;
-    face: LiveTexture;
-  }[] = [];
-  const writer = (key: string, width: number, height: number): FixtureWriter => {
-    const face: { -readonly [K in keyof LiveTexture]: LiveTexture[K] } = {
-      width,
-      height,
-      format: "rgba8unorm-srgb",
-      revision: 0,
-      epoch: 0,
-      logical: [width, height],
-      view: () => {
-        throw new Error("no device in a unit");
-      },
-      prepare: () => {},
-      bytes: width * height * 4,
-    };
-    const entry = {
-      key,
-      size: [width, height] as const,
-      presents: [] as { w: number; h: number; logical: readonly [number, number] | undefined }[],
-      destroyed: false,
-      face,
-    };
-    made.push(entry);
-    return {
-      face,
-      presentBytes(bytes, w, h, logical) {
-        if (entry.destroyed) return;
-        expect(bytes.length).toBe(w * h * 4);
-        if (w !== face.width || h !== face.height) {
-          face.width = w;
-          face.height = h;
-          face.epoch += 1;
-        }
-        face.revision += 1;
-        face.logical = logical ?? [w, h];
-        entry.presents.push({ w, h, logical });
-      },
-      destroy() {
-        entry.destroyed = true;
-      },
-    };
-  };
-  return { writer, made };
-}
 
 const setup = () => {
   const c = fakeClock(AT);
