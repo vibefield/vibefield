@@ -1121,7 +1121,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     9.5px face, so a card picked up sets the same design finer and reads more of itself. **Text**
     (`snippets`): its first sentence run in bold, then its words, seven lines at most. **Picture**
     (`capture`): the print at its own proportion across the column, then its name and its size in
-    mono. **File** (`code`): its name, its folder in mono, its first lines fading out. **Agent**
+    mono. **File** (`code`): its name, its folder in mono, its first lines fading out — or, for a file
+    that is not words, its kind and size in mono ("PDF · 12 KB"). **Agent**
     (`agents`): the one dark card, in the session card's stock — its handle with the project's dot on
     top (so it shows at rest), the agent's mark, the state dot. **Terminal** (`terminal`): the first
     line in mono 500, the rest cut by a right fade, a pass line in the card's pass ink. **Message**
@@ -1164,10 +1165,16 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     is not a copy**: a terminal's OSC 52 reaches the system clipboard through the same door and
     deals no card — the hand holds what you copied (HN-L1). **Brought in**
     (HN-6): ⌘V with no caret deals one card for each thing the clipboard holds — its words, its
-    picture, a file as its path — from the pointer; a drag from another app becomes a card the moment
-    it enters the window, carried as one from the hand is, its kind's index alone until the drop says
-    what it holds; let go on a pane or Chat's prompt it plays straight in, only once; anywhere else it
-    settles into the hand; carried back out of the window, it is gone. **Twelve**
+    picture, a file as its path — from the pointer (files first: a copy whose words come with a
+    picture of them, a spreadsheet's cells, is one thing, its picture); a drag from another app
+    becomes a card the moment it enters the window, carried as one from the hand is, its kind's index
+    alone until the drop says what it holds; let go on a pane or Chat's prompt it plays straight in,
+    only once, and a place that refuses what it turned out to be says so on the note while the card
+    settles into the hand; let go on a field, the field takes it as it always has; anywhere else it
+    settles into the hand — several things at once, the first where it was let go and the rest in the
+    hand (several files on a pane paste the first one's path: a play of several cards is not built);
+    carried back out of the window, it is gone; a drop that held nothing says "Not brought in — it
+    held no words, picture or file". **Twelve**
     (HN-D8): the thirteenth pushes the oldest off the left end. **This window's session** (HN-D9):
     closing the window or quitting empties the hand; nothing of it is written anywhere.
   - **Where cards go** (HN-D4, HN-D6, HN-D7, HN-L5): drag a card out of the hand and every place that
@@ -1180,7 +1187,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     pasted at its prompt — bracketed when its program asked, Return never pressed for you (a trailing
     line break is never given), the paste's size refusal included (the note's own sentence, §8 "The
     line"); a file pastes its path and a picture its file's path, the road Finder's drop takes; a
-    picture with no file says it can't be pasted yet, and a snapshot whose still main no longer keeps
+    picture with no file says it can't be pasted yet, and so does a file with no path ("A file with
+    no path can't be pasted yet"), and a snapshot whose still main no longer keeps
     says "Not pasted — that snapshot is no longer kept". **The desk** (Canvas) takes text as a note and a picture as a print, where you let go
     (HN-D7); a file or an agent says the desk can't hold it yet. **Chat's composer** takes a card as a
     chip (§8 "Chat's composer"). Over the line the carried card ducks to 0.55; **held over a view's
