@@ -529,9 +529,11 @@ describe("a regroup keeps the chosen session chosen (PJ-4)", () => {
 // create opens a fresh shell in the folder of the project the room shows — the
 // folder ③ shows, kept as the room reports it and found as New agent finds it —
 // asked of Godview's deck, the window moved there as Resume moves it; with no
-// project shown, as Godview's create opens one; a folder it cannot open in is
-// said in New agent's words, and the window stays. (The other refusals —
-// another desktop's folder, none here — are `startPlaceOf`'s, history-host.)
+// project shown, as Godview's create opens one — and so in a project the room
+// shows with no folders of fieldd's (rosetta's unassigned bucket); a folder it
+// cannot open in is said in New agent's words, and the window stays. (The
+// other refusals — another desktop's folder, none here — are `startPlaceOf`'s,
+// history-host.)
 describe("History's create: New terminal in the project the room shows (HN-7)", () => {
   const VIBE = PROJECTS.rows[0] as Record<string, unknown> & {
     places: Array<Record<string, unknown>>;
@@ -568,6 +570,20 @@ describe("History's create: New terminal in the project the room shows (HN-7)", 
     host?.querySelector(".vf-line-note")?.textContent;
   /** the create's tooltip names the project ③ shows (DESIGN.md §8 "The line") */
   const namesProject = () => (create().title === "New terminal in vibe-field  ⌘T" ? true : null);
+  /** Show the project the room lists as `name`, the way a person does: its row (the room names
+   * the row's selection by the project's name first). */
+  async function showNamed(name: string): Promise<void> {
+    const rows = (): HTMLButtonElement[] => [
+      ...(historySlot()?.querySelectorAll<HTMLButtonElement>(
+        ".ah-project-list-item__hit, button.ah-project-list-item",
+      ) ?? []),
+    ];
+    const row = await until(
+      () => rows().find((button) => button.getAttribute("aria-label")?.startsWith(`${name} · `)),
+      `the room's ${name} row`,
+    );
+    act(() => row.click());
+  }
 
   it("opens in the folder ③ shows — the usual one, then the chosen session's own — asked of Godview's deck, the window moved there", async () => {
     const newTerminal = vi.fn<LineViewDoor["newTerminal"]>(async () => ({ state: "opened" }));
@@ -626,6 +642,45 @@ describe("History's create: New terminal in the project the room shows (HN-7)", 
     expect(newTerminal).toHaveBeenCalledExactlyOnceWith();
     expect(asked).toContain("godview");
   });
+
+  // the behaviour lens's 4: the room tells its host what ③ shows only while the host lists the
+  // project's folders, and fieldd lists none for rosetta's own bucket — the create kept the last
+  // project's name and opened there
+  it("follows the room to a project with no folders of fieldd's — rosetta's unassigned bucket — and opens there as Godview's create does", async () => {
+    const newTerminal = vi.fn<LineViewDoor["newTerminal"]>(async () => ({ state: "opened" }));
+    publishGodviewLineDoor(deck(newTerminal));
+    // a second session no place holds yet (the fixture's third): the room files it in its own
+    // bucket, which is no project of fieldd's
+    const client = fieldd(
+      () => SPAWNED,
+      () => ({ sessions: [] }),
+      (method) =>
+        method === "index.sessions"
+          ? { rows: [KEYED.rows[0], KEYED.rows[2]], sources: KEYED.sources }
+          : undefined,
+    );
+    mount(client);
+    to("history");
+    await showNamed("vibe-field");
+    await until(namesProject, "the create to name vibe-field");
+    await showNamed("Unassigned sessions");
+    await until(
+      () => (create().title === "New terminal  ⌘T" ? true : null),
+      "the create to name no project",
+    );
+    await act(async () => {
+      create().click();
+    });
+    expect(await until(noteNow, "the line's note")).toBe("Terminal opened in the active pane");
+    // no folder asked: the bucket reads as no project shown
+    expect(newTerminal).toHaveBeenCalledExactlyOnceWith();
+    expect(asked).toContain("godview");
+    // fieldd is asked a project's suggestions for vibe-field alone, never for the bucket
+    const suggested = client.calls
+      .filter((call) => call.method === "project.get")
+      .map((call) => call.params["key"]);
+    expect(new Set(suggested)).toEqual(new Set([VIBE["key"]]));
+  }, 20_000);
 
   /** ③ showing vibe-field's one folder here, with `fact` true of it: a press is refused in
    * `words` — New agent's — before anything moves. */

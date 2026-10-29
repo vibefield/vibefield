@@ -1364,6 +1364,20 @@ describe("R6: ③'s folders", () => {
     expect(text(notes?.groups[0]?.folders[0]?.elsewhere)).toBe("This folder is gone");
     expect(notes?.groups[0]?.folders[0]?.caption).toBe("notes");
   });
+
+  // HN-7 (the behaviour lens's 4): the room calls `onShow` only while its host lists a project's
+  // folders, and History's create follows the project the room shows — so a project the model
+  // lacks lists none, and ③ still says it shows none of the host's.
+  it("a project the model lacks — rosetta's own unassigned bucket — lists no folders, and ③ still says what it shows", () => {
+    const acts = spyActs();
+    /** the room's bucket for sessions no project holds: no project of fieldd's */
+    const bucket = "__rosetta_unassigned__";
+    const folders = historyHostInputs(MODEL, NO_HOST_STATE, acts).folders?.(bucket);
+    expect(folders?.groups).toEqual([]);
+    expect(folders?.initial).toBeUndefined();
+    folders?.onShow?.(null);
+    expect(acts.shown).toHaveBeenCalledExactlyOnceWith(bucket, null);
+  });
 });
 
 describe("R7: the chips", () => {

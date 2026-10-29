@@ -300,8 +300,11 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
 
   // LN-D2 (HN-7) — ③ says which folder of which project it shows (R6's
   // `onShow`, the host's `shown`), and both are kept: a press finds the folder
-  // as New agent finds it (`startPlaceOf`). The room says nothing when it stops
-  // showing a project, so one no longer listed reads as none shown.
+  // as New agent finds it (`startPlaceOf`). ③ says it of every project the room
+  // shows, one with no folders too (`host-inputs.tsx`), so the create follows
+  // the room's choice; a project the model lacks — rosetta's unassigned bucket,
+  // or one no longer listed (the room says nothing when it stops showing one) —
+  // reads as none shown.
   const [shown, setShown] = useState<ShownFolder | null>(null);
   const shownRef = useRef(shown);
   shownRef.current = shown;
@@ -423,13 +426,17 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
         sayOnHistoryLine(`Renamed to ${name}`);
       },
       shown: (project, folder) => {
-        // HN-7 — where the line's create opens: the project and the folder ③ shows
+        // HN-7 — where the line's create opens: the project and the folder ③
+        // shows, kept for one the model lacks too (rosetta's unassigned bucket)
         setShown((now) =>
           now?.project === project && now.folder === folder ? now : { project, folder },
         );
+        // what only a project of fieldd's has: its suggestions and its recipe
+        const found = modelRef.current.projects.get(project);
+        if (found === undefined) return;
         showSuggestions(project);
         // PJ-6 — the recipe row says its model and effort in the picker's words
-        launch.recipeShown(modelRef.current.projects.get(project));
+        launch.recipeShown(found);
       },
       page: (next) => launch.page(next),
       // TS-4 — the desktop chip's ghost row: the chrome opens the Connect door

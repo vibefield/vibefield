@@ -358,6 +358,15 @@ function foldersOf(
   };
 }
 
+/** HN-7 — ③ for a project the model lacks (rosetta's own unassigned bucket,
+ * which is no project of fieldd's): no folders, but ③ says it shows none. The
+ * room calls `onShow` only while its host lists a project's folders, and the
+ * line's create follows every project the room shows; this one reads as none
+ * (`HistoryView`). */
+function noFoldersOf(project: string, acts: HistoryHostActs): RoomFolders {
+  return { groups: [], onShow: (key) => acts.shown(project, key) };
+}
+
 /* ── R5 ②: New agent and the project's acts ────────────────────────────── */
 
 /** Where something new of a project starts on this desktop. */
@@ -957,7 +966,7 @@ export function historyHostInputs(
     },
     folders: (key) => {
       const found = project(key);
-      return found === undefined ? null : foldersOf(model, found, state, acts);
+      return found === undefined ? noFoldersOf(key, acts) : foldersOf(model, found, state, acts);
     },
     projectFilters: [
       desktopChip(
