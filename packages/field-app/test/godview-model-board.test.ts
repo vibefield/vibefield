@@ -384,6 +384,52 @@ describe("createGodviewMonitorFeed — the one door, re-asked on a gap, the scre
     expect(door.unsubscribed).toBe(3);
   });
 
+  it("PG-1b — a peer row this build cannot read reads that desktop as another version, and the Godview stands", async () => {
+    // a newer peer's row: a tier this build has no word for (the relay passes it since PG-1b)
+    const open = structuredClone(golden("agent-model-mesh-open.valid.json")) as {
+      devices: Array<{ device: string; snapshot?: { rows: Array<Record<string, unknown>> } }>;
+    };
+    const rows = open.devices.find((entry) => entry.device === PEER)?.snapshot?.rows;
+    const sample = rows?.[0];
+    if (rows === undefined || sample === undefined)
+      throw new Error("the golden's peer runs one agent");
+    const newer = (id: string, tier = "hosted") => ({
+      ...sample,
+      runtimeRunId: id,
+      tier,
+      monitorRow: { ...(sample["monitorRow"] as Record<string, unknown>), id },
+    });
+    rows.push(newer("run-newer"));
+    const door = fakeBoard(open);
+    const frame = manualFrame();
+    const feed = createGodviewMonitorFeed({ board: door, scheduler: frame });
+    await settle();
+    // whole before PG-1b this open was unreadable: the Godview unavailable, not retryable
+    expect(feed.state()).toEqual({ state: "live", here: HERE });
+    expect(feed.devices().find((entry) => entry.device === PEER)?.state).toBe("incompatible");
+    frame.flush();
+    const model = feed.replica.getSnapshot().model;
+    expect(model.byId.has("run-loft-w"), "its readable rows stand").toBe(true);
+    expect(model.byId.has("run-newer")).toBe(false);
+    // a later delta on the peer's chain applies, and no reopen is asked
+    door.push({
+      device: PEER,
+      delta: {
+        epoch: "fieldd-5d2c8f1a0b7e4c93.2",
+        since: 17,
+        revision: 18,
+        upserts: [newer("run-newer", "managed")],
+        removed: [],
+      },
+    });
+    await settle();
+    expect(door.opens).toBe(1);
+    expect(feed.devices().find((entry) => entry.device === PEER)?.state).toBe("live");
+    frame.flush();
+    expect(feed.replica.getSnapshot().model.byId.has("run-newer")).toBe(true);
+    feed.dispose();
+  });
+
   it("MV-3d — publishes this desktop's runs as the chrome, and tells its listeners when, and only when, they move", async () => {
     const door = fakeBoard();
     const feed = createGodviewMonitorFeed({ board: door, scheduler: manualFrame() });

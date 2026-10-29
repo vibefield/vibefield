@@ -633,3 +633,129 @@ describe("the mesh board — one door for every self desktop (DS-D4)", () => {
     });
   });
 });
+
+// PG-1b (PG-L4.1) — the relay reads each peer row's KEY alone. It used to hold
+// a peer's frames to the whole field row, so one row this build could not read
+// refused the whole desktop (a sticky `incompatible`) or resynced it, and a desk
+// row had to carry the field row beside its model row to be relayed at all.
+describe("PG-1b — the relay reads each row's key alone (PG-L4.1)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(Date.parse("2026-09-30T21:00:00.000Z"));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const live = { device: "dev-b", state: "live", asOf: "2026-09-30T21:00:00.000Z" };
+  /** an attached reader's upstream to dev-b */
+  const attached = (h: Harness): Attach => {
+    const [attach] = h.upstreams.attaches;
+    if (attach === undefined) throw new Error("no upstream");
+    return attach;
+  };
+  /** contracts' AgentDeskTerminalRow shape: a bare terminal, no label, tier or status */
+  const terminalRow = {
+    runtimeRunId: "term-b",
+    revision: 3,
+    kind: "terminal",
+    device: "dev-b",
+    terminal: { hosted: "local", runtimeSessionId: "pty-b", workloadClass: "shell" },
+    monitorRow: { id: "t-b", kind: "terminal" },
+  };
+
+  it("relays a peer board carrying a bare terminal row, verbatim (PG-D5)", async () => {
+    const h = harness([selfRow, desktop("dev-b")]);
+    const r = reader(h);
+    const board = {
+      epoch: "boot-dev-b.3",
+      revision: 41,
+      rows: [row("run-b", "dev-b", 7), terminalRow],
+    };
+    h.upstreams.answer(attached(h), board);
+    await tick();
+    expect(r.frames).toEqual([{ device: "dev-b", snapshot: board }, live]);
+    r.dispose();
+  });
+
+  it("relays a slim row the owner cut, in a delta, and answers a late reader from the held copy", async () => {
+    const h = harness([selfRow, desktop("dev-b")]);
+    const r = reader(h);
+    const attach = attached(h);
+    h.upstreams.answer(attach, peerSnapshot());
+    await tick();
+    // PG-2's remote row: the key, the owner's stamp, the device and the model row
+    const slim = {
+      runtimeRunId: "run-b",
+      revision: 8,
+      device: "dev-b",
+      monitorRow: { id: "m-b", kind: "agent", status: "blocked" },
+    };
+    const delta = { epoch: "boot-dev-b.3", since: 41, revision: 42, upserts: [slim], removed: [] };
+    attach.emit(delta, "delta");
+    expect(r.frames.at(-1)).toEqual({ device: "dev-b", delta });
+    expect(attach.disposed, "no resync: the chain held").toBe(false);
+    const late = reader(h);
+    expect(late.open.devices.find((entry) => entry.device === "dev-b")?.snapshot).toEqual({
+      epoch: "boot-dev-b.3",
+      revision: 42,
+      rows: [slim],
+    });
+    late.dispose();
+    r.dispose();
+  });
+
+  it("on the phone's field hub, a peer row with a word this build does not know still reaches the reader", async () => {
+    const h = harness([selfRow, desktop("dev-b")]);
+    const r = reader(h, "field", 250);
+    // a newer peer's tier: the relay is no judge of it; the reader drops what it cannot read
+    const board = {
+      epoch: "boot-dev-b.3",
+      revision: 41,
+      rows: [{ ...row("run-b", "dev-b", 7), tier: "hosted" }],
+    };
+    h.upstreams.answer(attached(h), board);
+    await tick();
+    expect(r.frames).toEqual([{ device: "dev-b", snapshot: board }, live]);
+    r.dispose();
+  });
+
+  it("still refuses a board whose row has no key: no run id is incompatible", async () => {
+    const h = harness([selfRow, desktop("dev-b")]);
+    const r = reader(h);
+    const { runtimeRunId: _none, ...keyless } = row("run-b", "dev-b", 7);
+    h.upstreams.answer(attached(h), { epoch: "boot-dev-b.3", revision: 41, rows: [keyless] });
+    await tick();
+    expect(r.frames.at(-1)).toMatchObject({ device: "dev-b", state: "incompatible" });
+    r.dispose();
+  });
+
+  it("still refuses a row stamp that is no integer, and resyncs a delta whose row has an empty key", async () => {
+    const h = harness([selfRow, desktop("dev-b")]);
+    const r = reader(h);
+    h.upstreams.answer(attached(h), {
+      epoch: "boot-dev-b.3",
+      revision: 41,
+      rows: [{ ...row("run-b", "dev-b"), revision: 7.5 }],
+    });
+    await tick();
+    expect(r.frames.at(-1)).toMatchObject({ device: "dev-b", state: "incompatible" });
+    r.dispose();
+
+    const h2 = harness([selfRow, desktop("dev-b")]);
+    const r2 = reader(h2);
+    const attach = attached(h2);
+    h2.upstreams.answer(attach, peerSnapshot());
+    await tick();
+    attach.emit(
+      {
+        epoch: "boot-dev-b.3",
+        since: 41,
+        revision: 42,
+        upserts: [row("", "dev-b", 8)],
+        removed: [],
+      },
+      "delta",
+    );
+    expect(attach.disposed, "an unreadable delta resyncs").toBe(true);
+    r2.dispose();
+  });
+});

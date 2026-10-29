@@ -1,7 +1,7 @@
 import {
   AGENT_FIELD,
-  AgentFieldDelta,
-  AgentFieldSnapshot,
+  AgentBoardKeyDelta,
+  AgentBoardKeySnapshot,
   type DeviceInfo,
   type RowsDeviceState,
 } from "@vibefield/contracts";
@@ -74,7 +74,12 @@ export function upstreamFloor(projection: BoardProjection, floor: number): numbe
 /** A row as the board holds it: keyed, and otherwise the owner's. A field or
  * desk row (a peer's), or a model-board row (this desktop's own — an
  * `AgentDeskTerminalRow` is no field row, which is why the hub reads nothing
- * but the key). */
+ * but the key). PG-1b: a peer's frames are now PARSED by the key alone too
+ * (`AgentBoardKeySnapshot`/`AgentBoardKeyDelta`), where they used to be held to
+ * the whole field row. That refused a whole desktop for one row this build
+ * could not read, and it was what forced a desk row to carry the field row
+ * beside its model row. The relay logs no unknown fields: it is no business
+ * reader, and every fact past the key is the owner's, for each reader to judge. */
 export type BoardRow = { runtimeRunId: string } & Record<string, unknown>;
 export type BoardSnapshot = { epoch: string; revision: number; rows: BoardRow[] };
 export type BoardDelta = {
@@ -582,7 +587,7 @@ class BoardHub {
     if (this.#disposed || generation !== peer.generation) return;
     const now = this.opts.now();
     if (kind === "snapshot") {
-      const parsed = AgentFieldSnapshot.safeParse(payload);
+      const parsed = AgentBoardKeySnapshot.safeParse(payload);
       if (!parsed.success) {
         this.#refuse(peer, `an unreadable board: ${parsed.error.issues[0]?.message ?? "invalid"}`);
         return;
@@ -602,7 +607,7 @@ class BoardHub {
       this.#setState(peer, "live");
       return;
     }
-    const parsed = AgentFieldDelta.safeParse(payload);
+    const parsed = AgentBoardKeyDelta.safeParse(payload);
     if (!parsed.success) {
       this.#resync(peer, `an unreadable delta: ${parsed.error.issues[0]?.message ?? "invalid"}`);
       return;
