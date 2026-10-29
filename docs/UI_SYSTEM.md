@@ -76,10 +76,10 @@ The catalog currently mounts these shipping views directly:
   swapping and lowering over a field with Godview's stage and History's room, on fixture state
 - the line (One Frame FR-2; shortened by Cards in Hand, HN-2): `ComposerLineView` in every state the
   Cards in Hand page's line plates draw — at rest, the snapshot under the pointer, in flight and
-  waiting with no capture door, Objects out, Godview's New terminal, History's Resume, Windows' keys
-  — and the live line on its real controller (`Composer`) over the frame's field, with fixture doors
-  for what Godview lends it and the capture. @'s `AtMenuView` and the draft's plates left with the
-  draft (LN-D3)
+  waiting with no capture door, Objects out, Godview's New terminal, History's New terminal in the
+  project the room shows (HN-7), Windows' keys — and the live line on its real controller
+  (`Composer`) over the frame's field, with fixture doors for what Godview lends it and the
+  capture. @'s `AtMenuView` and the draft's plates left with the draft (LN-D3)
 - the hand (Cards in Hand, HN-1): the shipping `CardsView` and `CardFace` over fixture cards
   (`CardsPreview`) — the six faces in both lights, the fan at rest, a card reached with its ×, the
   hand raised with a card in the keyboard's focus, a card picked up over its scrim, and a card from

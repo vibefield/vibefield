@@ -198,10 +198,11 @@ export function ChromeSection({
           The line, 300 wide at 76 from the left (LN-D1): the views track, the snapshot and the
           view's one act. The snapshot is a ghost until the pointer comes, filled while the tool is
           up, and faint where there is no capture door. The create: Canvas's Objects — faint while
-          an object is in hand, "Put it down first" (R14) — Godview's New terminal, History's Resume
-          waiting; Godview's keys as Windows prints them last. The note at its two places: a new
-          terminal said over the create, and a paste too large for its pane's terminal (D6) said
-          from the line's left edge, its size and how much of it one paste carries.
+          an object is in hand, "Put it down first" (R14) — Godview's New terminal, History's New
+          terminal in the project the room shows (HN-7); Godview's keys as Windows prints them
+          last. The note at its two places: a new terminal said over the create, and a paste too
+          large for its pane's terminal (D6) said from the line's left edge, its size and how much
+          of it one paste carries.
         </p>
       </Specimen>
 
