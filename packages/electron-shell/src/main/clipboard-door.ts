@@ -137,9 +137,10 @@ export interface ClipboardImageDoorOptions<Sender extends { readonly id: number 
   readonly owns: (sender: Sender) => boolean;
   /** the PNG as a picture (main: `nativeImage.createFromBuffer`), null when it holds none */
   readonly decode: (png: Uint8Array) => Picture | null;
-  /** the picture, and the copy's words when it has any, onto the system clipboard in one
-   * write (main: `clipboard.write({ image, text })`) */
-  readonly write: (picture: Picture, text: string | undefined) => void;
+  /** the picture, with the copy's words beside it when it has any, onto the system clipboard
+   * as ONE item (main: `clipboard.write(item)`) — never two writes, each of which replaces the
+   * pasteboard */
+  readonly write: (item: { readonly image: Picture; readonly text?: string }) => void;
   /** A marked smoke run's record (R-T 4, main's `harnessPictures` and `harnessCopies`): the
    * picture's size and the words kept IN PLACE of the write — the pasteboard is the
    * person's — after every check a write passes. */
@@ -205,7 +206,7 @@ export function createClipboardImageDoor<Sender extends { readonly id: number },
     }
     if (picture === null) return refuse(sender, "not-an-image", bytes);
     if (options.keep !== undefined) options.keep(bytes, text);
-    else options.write(picture, text);
+    else options.write(text === undefined ? { image: picture } : { image: picture, text });
     return ClipboardWriteImageResultSchema.parse({ status: "written" });
   };
 }

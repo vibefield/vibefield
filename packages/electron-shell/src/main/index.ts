@@ -1555,11 +1555,13 @@ async function main(
     clipboardLogger,
   );
   // HN-5: a copy's picture is written here, the read's other half — for a registered product
-  // window, the text copy's rule with no focus asked (LC-18, VF-PM 16:10Z) — its PNG decoded
-  // first and refused when it holds no picture, and the copy's words written beside it in the
-  // same one write, so neither replaces the other (LC-19). No audit row: the words' copy door
-  // keeps none (LC-13). A marked run keeps the picture's size and the words instead of writing
-  // them (R-T 4, as `harnessCopies`), after every check a write passes.
+  // window, the text copy's rule, and NO focus gate (LC-18, VF-PM 16:10Z): a write leaks
+  // nothing, where the read's gate is EL7's exposure rule (a page behind must not read what was
+  // copied elsewhere). Its PNG is decoded first and refused when it holds no picture, and the
+  // copy's words go beside it on the same item in ONE write, so neither replaces the other
+  // (LC-19). No audit row: the words' copy door keeps none (LC-13). A marked run keeps the
+  // picture's size and the words instead of writing them (R-T 4, as `harnessCopies`), after
+  // every check a write passes.
   registerClipboardWriteImage(
     registry,
     {
@@ -1569,7 +1571,7 @@ async function main(
         );
         return image.isEmpty() ? null : image;
       },
-      write: (image, text) => clipboard.write(text === undefined ? { image } : { image, text }),
+      write: (item) => clipboard.write(item),
       ...(harnessPictures === null || harnessCopies === null
         ? {}
         : {
