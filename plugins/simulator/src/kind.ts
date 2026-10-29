@@ -208,7 +208,10 @@ export function simulatorKind(
       const local = ctx.local as SimulatorLocal | undefined;
       const model = modelOf(modelPropOf(ctx.props));
       const finish = phoneFinish(look, finishOf(model, finishPropOf(ctx.props)));
-      // the shape it shows: a morph a still pinned; else its desk's morph clock (a change of model morphs it); else its model's
+      // the shape it shows: a morph a still pinned; else its desk's morph clock (a change of model morphs it); else its model's.
+      // The clock sees a change of model only here, when the phone is resolved — and the desk resolves only what lies within
+      // a slot's reach — so a change that landed while the phone was culled morphs when the phone is next drawn, not when it
+      // landed: the reveal shows what changed (accepted for v1, the orchestrator's R2 Q2, 2026-10-29; no ICE ask)
       const pin = pinnedMorph(ctx.asset);
       const shown =
         pin !== undefined
@@ -222,7 +225,9 @@ export function simulatorKind(
           : planOf(local, ctx.entity, deviceName(binding, model), law);
       // by night a BOUND phone's glow may reach round it: the quad grows to hold it, read from the props alone (the pane's `lit`).
       // Not from the face: the first resolve runs before the record has opened one, and a quad sized then would clip the glow
-      // when the stream lands. A screen that is off or stilled draws no glow in the larger quad (the shader scales it by `on`).
+      // when the stream lands. A screen that is off draws no glow in the larger quad (the shader scales it by `on`); a still
+      // glows and spills at its brightness (0.7, or 0.16 under words — the shader scales it by that too), so the reach holds
+      // for a still as for the stream.
       const glow = ctx.theme.name === "dark" && binding !== undefined ? glowReach(law) : 0;
       const held = ctx.held !== undefined;
       const G = resolvePhone(ctx.rect, ctx.flux, S, ctx.lamp, law, glow, held);
