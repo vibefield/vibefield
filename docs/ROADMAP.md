@@ -110,7 +110,8 @@
 
 **Fixer** · fixer · law the LANDED item entries
 - Landed since the audit: items 82 (`714ecbaae`, `8828601ed`), 83 (`f0b5342ac`), 84 (`68296443f`), 85 (`7eda2ee38`,
-  `b60e80398`), 89 (`238a960bc`) and 87 (`8d56b2bd8`), and the shell lease's cleanup race (`2422bdf5c`).
+  `b60e80398`), 89 (`238a960bc`), 87 (`8d56b2bd8`) and 113 (`218dc3d9e`), and the shell lease's cleanup race
+  (`2422bdf5c`).
 - Queue: item 80 (DS-5c's wall-clock gap margin, `doc-sync-service.test.ts`, shaped with the DS owner) with its
   sibling TC-S3 (`terminal-service.test.ts`, 99 against ≥100, red at AO-6b3's verify) · item 71 (persona refresh
   window) · item 73 (`unregistered_webcontents` false positive on every factory window) · item 74 (the generation-1
@@ -120,7 +121,10 @@
   settled from one pair of 750 ms readings, `agent-session.test.ts:2835`; red in item 87's first verify at load 257) ·
   item 92 (item 65's rosettad-supervisor row retried as a crash under load, `rosettad-supervisor.test.ts:342`; red
   there and in TS-4a's verify) · item 93 (DK-18's smoke-profile launcher row overruns the 5 s default under load,
-  `smoke-profile.test.ts:114`; red in item 87's rerun).
+  `smoke-profile.test.ts:114`; red in item 87's rerun) · item 111 (the Artifact panel's Copy does nothing in the app:
+  a plugin's web clipboard write under the empty grant set, item 102's class; an SDK clipboard-write door over HN B2's
+  host copy door, after HN B2 unless HN B3 claims it) · item 112 (main decodes a clipboard PNG of up to 64 MiB with no
+  pixel bound; an IHDR read before decoding against one new contracts constant, its literal ruled alone; after HN B2).
 - **Item 77b**, FieldTerminalTests' 60 s block. The 5 s shape is fixed: (d) `b1e9bf53d` runs AttachDeadlineTests
   `.serialized`, because each row's 1 s deadline covers the dial too and rows started together stampeded the loopback
   dial under load. k1 is separate: `test-without-building` cold-boots a Shutdown simulator, and pre-booting it

@@ -18805,3 +18805,45 @@ place on a row. The place went back to James as TS-D20b (02:38Z, `rule-ts-d20b-h
 - The approval line on a desk (James's display word), with TS-4a's rows and away notice.
 - **Publish's nudge** (TS-D21 = A): deferred until a Publish offers where to open.
 - **The switch's words** (James's to rule).
+
+## WP8 — item 113: the packaged-resources guard reads the test's own disk, never the host's installed app (2026-10-29; `218dc3d9e`, lane `fix/item113-resources-readers`; VF-PM's slot 18:04Z)
+
+**What happened:** TS-6's verify on the Mac mini went red at 17:59:53Z on one row, with everything else green:
+`packages/electron-shell/test/resources.test.ts` "never silently falls back to a development path when packaged". It
+blocked every mini run, so it was the queue's first landing.
+
+**The cause:**
+- The row called `assertPackagedResources(pkg)` with no readers, so the defaults (`headOf`, `textOf` in
+  `src/main/resources.ts`) read the HOST's `/Applications/VibeField.app/Contents/Resources`.
+- Where no VibeField is installed (James's Mac), nothing was there and the row threw, as it claims. On the mini, where
+  it is installed, fieldd and field-native were there for its architecture, the assertion accepted, and the row's
+  `toThrow` failed.
+- The row's premise, "nothing on disk at those paths", was the host's installation rather than the test's.
+
+**The fix, test only** (one file, +18/−1):
+- The row injects `nodeArch`, `readHead` and `readText`, in the neighbours' shape. Nothing is at the packaged paths,
+  and a whole development tree is under REPO (heads and texts present), so a search into the checkout would find one.
+- It asserts the refusal it means: a `ResourceError` with `fieldd-bundle-missing` at `pkg.fielddCommand`, rather than
+  any ResourceError.
+- Read and unchanged: the development-layout row (`assertPackagedResources(dev)`, no readers) touches no disk, because
+  `resources.ts:378` returns before any read when `!resources.packaged`. Were that early return to regress, the
+  defaults would read `/Users/dev/…` paths no host has, and the row would go red on every host.
+
+**Validation:**
+- James's Mac (no installed app), each row alone at nice 19: biome on the file, the electron-shell typecheck, and the
+  resources suite 30/30, all exit 0.
+- The control, since this Mac cannot show the red: the row's readers mutated to report present binaries and a valid
+  identity at every path. The assertion then runs the neighbours' checks through (rosettad, the capture pair, the
+  trust anchor) and accepts, so exactly 1 of 30 went red, this row, for "expected a ResourceError". The mutation was
+  restored and sha-checked.
+- The mini, the red-first host (the row as on main red there at 17:59:53Z): run 0 at `218dc3d9e`, `pnpm verify` exit 0
+  at 18:15:04Z through the Rust tests and gen:check, the resources suite 30 passed with the installed app present (the
+  mini's log :1351, read by VF-PM).
+
+**Landed:** main fast-forwarded `e23fa8a1f` → `218dc3d9e` at 18:17:43Z on VF-PM's GO (18:17Z), after the four checks;
+the porcelain empty after. Not pushed (James's click).
+
+**Lesson:** a test that claims "nothing on disk" injects its disk. A default reader makes the host's installation the
+premise, and the row passes or fails by machine.
+
+- Records: `/Volumes/SamsungRed/lanes/records/item113/`.
