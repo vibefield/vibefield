@@ -194,6 +194,18 @@ describe("the rows", () => {
     );
   });
 
+  it("says when ⌘T is kept: New terminal, in Godview and History (HN-7) — Ghostty's new tab then", () => {
+    const tab = row(rows, "super+t");
+    expect(tab.reserved?.id).toBe("new-terminal");
+    expect(tab.defaultAction).toBe("new_tab");
+    expect(routeWords(tab)).toEqual({ text: "VibeField: New terminal", runs: false });
+    const kept = tab.reserved;
+    if (kept === null) throw new Error("⌘T is not kept");
+    expect(reservedWords(kept, tab.defaultAction)).toBe(
+      "VibeField: New terminal, while Godview or History is the view — Ghostty's new tab never runs on this chord then.",
+    );
+  });
+
   it("leaves ⌘C to Ghostty's copy — the desk's Copy is kept only over the desk, which no pane is on (HN-D3)", () => {
     const copy = row(rows, "super+c");
     expect(copy).toMatchObject({

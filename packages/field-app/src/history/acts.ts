@@ -11,6 +11,7 @@ import {
   type JumpOutcome,
   type LineViewDoor,
   lateReason,
+  type NewTerminalOutcome,
   type ResumeOutcome,
   whenGodviewCanPlace,
 } from "../frame/line-door";
@@ -20,14 +21,16 @@ import { readLiveRun } from "./jump";
 import { type ResumeReading, readResume, resumeNative } from "./resume";
 
 // HISTORY'S ACTS (AR-8c's Resume, P3's Jump to, PJ-4's New agent and the
-// project's acts). The line's create acts on the room's chosen session; since
-// PJ-4 the room also holds acts of its own — a session row's Resume or Jump
-// to (R4), ④'s head (R5), ②'s New agent (H6) and the project's acts (H4) —
-// pressed on ANY session or project the room draws. They are one set of acts,
-// here, over the window's fieldd client: what each asks of fieldd, and how its
-// outcome reads. Where the act shows what it did, the window moves to Godview
-// and its deck places the session as the swarm's open does (GV-D4: in the
-// focused pane), as the line's Resume always has.
+// project's acts, HN-7's New terminal). The chosen session's act — the line's
+// create until HN-7, the palette's History row since — acts on the room's
+// chosen session; since PJ-4 the room also holds acts of its own — a session
+// row's Resume or Jump to (R4), ④'s head (R5), ②'s New agent (H6) and the
+// project's acts (H4) — pressed on ANY session or project the room draws; and
+// the line's create is New terminal, in the project the room shows (LN-D2).
+// They are one set of acts, here, over the window's fieldd client: what each
+// asks of fieldd, and how its outcome reads. Where the act shows what it did,
+// the window moves to Godview and its deck places the session as the swarm's
+// open does (GV-D4: in the focused pane), as Resume always has.
 //
 // An act never ends in silence (2026-10-11; two `smoke:godview` reds where New
 // agent started a run, moved the window and said nothing for 60 s). Once fieldd
@@ -184,6 +187,36 @@ export async function jumpTarget(
     return { state: "refused", reason };
   } catch (cause) {
     deps.unplaced?.("jump", thrownMessage(cause));
+    return { state: "refused", reason: thrownReason(cause) };
+  }
+}
+
+/** HN-7 (LN-D2) — History's create: a fresh shell born by Godview's deck — in
+ * `cwd`, the folder of the project the room shows, or with none where
+ * Godview's own create opens one — placed as any session is (GV-D4: in the
+ * focused pane), the window moved to Godview to show it as Resume moves it.
+ * The deck's outcome is the act's, in Godview's words; a deck that never
+ * answers is said once its bound has passed, as Resume's is. */
+export async function newTerminalIn(
+  deps: HistoryActsDeps,
+  cwd: string | undefined,
+): Promise<NewTerminalOutcome> {
+  try {
+    const deck = await deckOf(deps);
+    if (deck === null) {
+      deps.unplaced?.("terminal");
+      return { state: "refused", reason: "the deck is not connected yet" };
+    }
+    const opened = await deckAnswerWithin(
+      cwd === undefined ? deck.newTerminal() : deck.newTerminal({ cwd }),
+      HISTORY_DECK_WAIT_MS,
+    );
+    if (opened.state !== "late") return opened;
+    const late = lateReason("took", HISTORY_DECK_WAIT_MS);
+    deps.unplaced?.("terminal", late);
+    return { state: "refused", reason: late };
+  } catch (cause) {
+    deps.unplaced?.("terminal", thrownMessage(cause));
     return { state: "refused", reason: thrownReason(cause) };
   }
 }

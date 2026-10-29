@@ -37,8 +37,9 @@ export interface ComposerLineViewProps {
   readonly createHeld?: boolean;
   /** Why the create act waits, said in its tooltip; null when it can act. */
   readonly createWaits?: string | null;
-  /** History's chosen session runs here: its create is Jump to (P3). */
-  readonly createLive?: boolean;
+  /** The project History's room shows (its name): History's create — New terminal, in its folder
+   * (LN-D2, HN-7) — names it in its tooltip. Null: none shown. */
+  readonly createProject?: string | null;
   /** Why the snapshot waits — the host lends no capture door, or the tool said no helper is here
    * (`capture-state.ts`) — faint by ink, said in its tooltip; null when it can act. */
   readonly snapshotWaits?: string | null;
@@ -57,7 +58,9 @@ export interface ComposerLineViewProps {
   readonly onSnapshot?: () => void;
 }
 
-const CREATE_GLYPHS = ["plus", "start", "resume", "jump"] as const;
+/** Canvas's plus, and New terminal's start in Godview and History (HN-7): the two cross-fade in
+ * the create's one place. */
+const CREATE_GLYPHS = ["plus", "start"] as const;
 
 /** R14 — the create's word while an object is in hand: the desk refuses the board. */
 export const PUT_IT_DOWN_FIRST = "Put it down first";
@@ -65,8 +68,9 @@ export const PUT_IT_DOWN_FIRST = "Put it down first";
 function createTitle(act: CreateAct, open: boolean, waits: string | null, held: boolean): string {
   if (open) return "Close  Esc";
   if (held) return PUT_IT_DOWN_FIRST;
-  if (waits !== null) return `${act.name} — ${waits}`;
-  return act.key === null ? act.name : `${act.name}  ${act.key}`;
+  const name = act.title ?? act.name;
+  if (waits !== null) return `${name} — ${waits}`;
+  return act.key === null ? name : `${name}  ${act.key}`;
 }
 
 /** The create's key as `aria-keyshortcuts` spells it — read off the act's own key, never a letter of its own. */
@@ -81,7 +85,7 @@ export function ComposerLineView({
   objectsOpen = false,
   createHeld = false,
   createWaits = null,
-  createLive = false,
+  createProject = null,
   snapshotWaits = null,
   snapshotWhy = null,
   snapshotOn = false,
@@ -91,7 +95,7 @@ export function ComposerLineView({
   onCreate,
   onSnapshot,
 }: ComposerLineViewProps): ReactElement {
-  const act = createActOf(view, keys, createLive);
+  const act = createActOf(view, keys, createProject);
   const open = view === "canvas" && objectsOpen;
   const held = view === "canvas" && !open && createHeld;
   const waits = open ? null : createWaits;

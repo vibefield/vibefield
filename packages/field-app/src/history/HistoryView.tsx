@@ -23,6 +23,7 @@ import { requestShellPresentation } from "../field/shell-presentation";
 import {
   type JumpOutcome,
   jumpNote,
+  type NewTerminalOutcome,
   publishHistoryLineDoor,
   type ResumeOutcome,
   resumeNote,
@@ -38,6 +39,7 @@ import {
   jumpTarget,
   newAgent,
   newAgentNote,
+  newTerminalIn,
   projectIntent,
   resumeTarget,
   type SessionTarget,
@@ -49,6 +51,7 @@ import {
   type HistoryHostState,
   historyHostInputs,
   NO_HOST_STATE,
+  startPlaceOf,
 } from "./host-inputs";
 import { deviceOf, EMPTY_HOST_MODEL, type HistoryHostModel, hostModelOf } from "./host-model";
 import { HistoryIndexRestart } from "./index-restart";
@@ -63,12 +66,14 @@ import { productHistoryPorts } from "./window-ports";
 // HISTORY'S CONTROLLER (AR-8c). It holds the room's ports — the WINDOW's
 // (`window-ports.ts`, PJ-4: the Peek's reader reads the same) — tells the
 // catalog when the view shows, says the index's state in the frame's words,
-// and lends the line History's create: Resume, for the session the room has
-// chosen. The room itself is its own chunk (`room-chunk.tsx`, 2026-10-04):
-// this controller rides the canvas's chunk and mounts the room through it,
-// "Opening History" saying so while it arrives.
+// and lends the frame History's door: the line's create, New terminal in the
+// project the room shows (LN-D2, HN-7), and the chosen session's act, Resume —
+// the line's create until HN-7, the palette's History row since. The room
+// itself is its own chunk (`room-chunk.tsx`, 2026-10-04): this controller
+// rides the canvas's chunk and mounts the room through it, "Opening History"
+// saying so while it arrives.
 //
-// While the chosen session runs on this desktop the create is Jump to (P3,
+// While the chosen session runs on this desktop its act is Jump to (P3,
 // `jump.ts`): the pane it runs in, revealed by Godview's deck — and Resume
 // refuses it in Jump to's words, asking `agent.resume` nothing.
 //
@@ -91,6 +96,13 @@ import { productHistoryPorts } from "./window-ports";
 
 function log() {
   return getRendererLogger().child({ component: "history" });
+}
+
+/** HN-7 — what ③ shows: a project, by its key, and a folder of it, by ③'s
+ * key (null: none of the host's). */
+interface ShownFolder {
+  readonly project: string;
+  readonly folder: string | null;
 }
 
 /** The room's selection as an act names it. */
@@ -176,7 +188,7 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
     if (active) void gather();
   }, [active, gather]);
 
-  /* ── the chosen session and the line's create ────────────────────────── */
+  /* ── the chosen session and its act ──────────────────────────────────── */
 
   const [selection, setSelection] = useState<RoomSelection | null>(null);
   const [reading, setReading] = useState<{
@@ -201,7 +213,7 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
 
   // P3 — whether the chosen session runs here: one plain `agent.list`, asked
   // on a new choice and when History shows again (a press asks once more). The
-  // LAST answer stands until the next arrives, so the create never flickers
+  // LAST answer stands until the next arrives, so its act never flickers
   // through Resume on its way to Jump to.
   const [live, setLive] = useState(false);
   useEffect(() => {
@@ -245,7 +257,7 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
     );
     return thrownReason(error);
   }, []);
-  /** A press's own answer moves the create, as the line's reading would. */
+  /** A press's own answer moves the chosen session's act, as its reading would. */
   const noteRun = useCallback(
     async (target: SessionTarget) => {
       if (selectionRef.current?.sessionId !== target.sessionId) return;
@@ -284,11 +296,48 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
     return outcome;
   }, [deps, noteRun, failed]);
 
+  /* ── the line's create: New terminal, in the project the room shows ──── */
+
+  // LN-D2 (HN-7) — ③ says which folder of which project it shows (R6's
+  // `onShow`, the host's `shown`), and both are kept: a press finds the folder
+  // as New agent finds it (`startPlaceOf`). The room says nothing when it stops
+  // showing a project, so one no longer listed reads as none shown.
+  const [shown, setShown] = useState<ShownFolder | null>(null);
+  const shownRef = useRef(shown);
+  shownRef.current = shown;
+  const newTerminal = useCallback(async (): Promise<NewTerminalOutcome> => {
+    const now = shownRef.current;
+    const project = now === null ? undefined : modelRef.current.projects.get(now.project);
+    let cwd: string | undefined;
+    if (now !== null && project !== undefined) {
+      const start = startPlaceOf(modelRef.current, project, now.folder);
+      // another desktop's folder, one not mounted or gone, or none here: said
+      // in New agent's words, and the window stays in History
+      if (start.why !== null) return { state: "refused", reason: start.why };
+      if (start.path !== null) cwd = start.path;
+    }
+    try {
+      return await newTerminalIn(deps, cwd);
+    } catch (error) {
+      return { state: "refused", reason: failed("newTerminal", error) };
+    }
+  }, [deps, failed]);
+
   const chosen = selection?.sessionId ?? null;
   const waits = current?.state === "waits" ? current.why : null;
+  // HN-7 — the create's tooltip names the project the room shows
+  const shownName = shown === null ? null : (model.projects.get(shown.project)?.name ?? null);
   useEffect(() => {
-    publishHistoryLineDoor({ chosen, waits, live: chosen !== null && live, resume, jump });
-  }, [chosen, waits, live, resume, jump]);
+    publishHistoryLineDoor({
+      chosen,
+      waits,
+      live: chosen !== null && live,
+      resume,
+      jump,
+      project: shownName,
+      newTerminal,
+    });
+  }, [chosen, waits, live, resume, jump, shownName, newTerminal]);
   useEffect(() => () => publishHistoryLineDoor(null), []);
 
   /* ── the host's state and acts (PJ-4) ────────────────────────────────── */
@@ -373,7 +422,11 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
         if (outcome.state === "refused") throw new Error(outcome.reason);
         sayOnHistoryLine(`Renamed to ${name}`);
       },
-      shown: (project) => {
+      shown: (project, folder) => {
+        // HN-7 — where the line's create opens: the project and the folder ③ shows
+        setShown((now) =>
+          now?.project === project && now.folder === folder ? now : { project, folder },
+        );
         showSuggestions(project);
         // PJ-6 — the recipe row says its model and effort in the picker's words
         launch.recipeShown(modelRef.current.projects.get(project));
