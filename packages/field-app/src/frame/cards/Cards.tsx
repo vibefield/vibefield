@@ -37,6 +37,7 @@ import { listenForOtherApps } from "./cards-outside";
 import { dealCapture } from "./cards-sources";
 import { type CardStore, cardsStore, useCards } from "./cards-store";
 import { captureRefusal } from "./cards-words";
+import { isField } from "./caret";
 
 /**
  * The hand's controller (track HN, HN-1; DESIGN.md §8 "The hand", §10): it holds the window's
@@ -143,11 +144,6 @@ function cardUnder(target: EventTarget | null): string | null {
 function cardAt(pointer: Pointer): string | null {
   const hit = document.elementFromPoint(pointer.x, pointer.y);
   return hit === null ? pointer.over : cardUnder(hit);
-}
-
-function isEditable(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  return target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable;
 }
 
 /** Is a key's target inside this element? */
@@ -505,7 +501,7 @@ export function Cards({
         }
         case "rest": {
           if (!deletes(event) || modified(event) || event.repeat) return;
-          if (isEditable(event.target)) return;
+          if (isField(event.target)) return;
           const card = cur.state.cards[cur.reached];
           if (card === undefined || cur.at === null || cardAt(cur.at) !== card.id) return;
           act(event, () => remove(card.id));

@@ -392,6 +392,21 @@ describe("⌘V with no caret (HN-6, HN-L3)", () => {
     expect(folderOf("C:\\Users\\me\\Desktop\\report.pdf")).toBe("me/Desktop");
     expect(folderOf("/report.pdf")).toBeNull();
   });
+
+  it("takes a paste on a control that holds no caret — a checkbox, a select — as the hand's; an input for text keeps its own (the one field test, caret.ts)", async () => {
+    listen();
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    const menu = document.createElement("select");
+    const search = document.createElement("input");
+    search.type = "search";
+    document.body.append(box, menu, search);
+    expect(paste(search, transfer({ text: "routes" })).defaultPrevented, "a field's").toBe(false);
+    expect(paste(box, transfer({ text: "Ticked." })).defaultPrevented).toBe(true);
+    expect(paste(menu, transfer({ text: "Chosen." })).defaultPrevented).toBe(true);
+    await settled();
+    expect(store.snapshot().cards.map((card) => card.paste)).toEqual(["Ticked.", "Chosen."]);
+  });
 });
 
 describe("a drag from another app (HN-6, HN-D2)", () => {
@@ -526,6 +541,7 @@ describe("a drag from another app (HN-6, HN-D2)", () => {
     const carried = getCarriedCard();
     expect(carried?.phase).toBe("carry");
     expect(carried?.answer, "letting go there will not put it in the hand").toBeNull();
+    expect(carried?.ducked, "the field's own caret shows where it goes (LC-25)").toBe(true);
     expect(carriedLabel(carried!, { width: 1024 }), "nothing under the pointer").toBeNull();
 
     const dropped = transfer({ text: "git status" });
@@ -644,6 +660,34 @@ describe("a drag from another app (HN-6, HN-D2)", () => {
       { left: 448, top: 288, width: 104, height: 146 },
       { left: 462, top: 288, width: 104, height: 146 },
     ]);
+  });
+
+  it("ducks over a field that takes the drop, so its own caret shows (LC-25); a read-only or disabled field takes none — over it the card is the hand's, and it settles there", async () => {
+    listen();
+    const field = document.createElement("textarea");
+    const shut = document.createElement("textarea");
+    shut.readOnly = true;
+    const off = document.createElement("input");
+    off.disabled = true;
+    document.body.append(field, shut, off);
+    let over: Element = field;
+    hits(() => [over, document.body]);
+    const kinds = transfer({ text: "git status", kindsOnly: true });
+    drag("dragenter", kinds, { x: 300, y: 200 });
+    drag("dragover", kinds, { x: 300, y: 200 });
+    expect(getCarriedCard()).toMatchObject({ ducked: true, answer: null });
+    for (const closed of [shut, off]) {
+      over = closed;
+      drag("dragover", kinds, { x: 300, y: 210 });
+      expect(getCarriedCard()?.ducked, closed.nodeName).toBe(false);
+      expect(getCarriedCard()?.answer?.label).toBe(TARGET_WORDS.hand);
+    }
+    const dropped = transfer({ text: "git status" });
+    const drop = drag("drop", dropped, { x: 300, y: 210 }, { target: off });
+    expect(drop.defaultPrevented, "the hand's, not the field's").toBe(true);
+    await settled();
+    expect(store.snapshot().cards).toHaveLength(1);
+    expect(store.snapshot().cards[0]).toMatchObject({ kind: "text", paste: "git status" });
   });
 
   it("cancels a drop that held nothing a card can be — a file another app only promised — and says so on the line", async () => {

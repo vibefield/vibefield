@@ -20,6 +20,7 @@ import { installCardsLab } from "./cards/cards-lab";
 import { dealCapture } from "./cards/cards-sources";
 import type { CardStore } from "./cards/cards-store";
 import { CAPTURE_WORDS, captureRefusal } from "./cards/cards-words";
+import { isField } from "./cards/caret";
 import { type FrameSurface, foldSurface } from "./frame-surface";
 import {
   type HistoryLineDoor,
@@ -90,18 +91,6 @@ export interface ComposerProps {
   /** Whether the line binds its window keys (B, ⌘T). The catalog's live line
    * does not: its page is not a window the line owns. */
   readonly bindKeys?: boolean;
-}
-
-function isEditable(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  const tag = target.tagName;
-  return (
-    tag === "INPUT" ||
-    tag === "TEXTAREA" ||
-    tag === "SELECT" ||
-    target.isContentEditable ||
-    target.closest("[contenteditable='true']") !== null
-  );
 }
 
 export function Composer({
@@ -278,17 +267,18 @@ export function Composer({
     };
   }, [actsRef, create]);
 
-  // B — Objects, on Canvas only, never while typing, never under a cover
-  // (DESIGN.md §8 "The pegboard", §10), and refused while an object is in hand
-  // (R14). Heard on the window's bubble phase, so a focused pane or a note being
-  // typed in keeps its own b. A board B raises takes the focus (the keyboard
-  // asked for it): its specimens are the arrows' at once.
+  // B — Objects, on Canvas only, never while typing (a field holds the caret:
+  // the frame's one test, `cards/caret.ts`), never under a cover (DESIGN.md §8
+  // "The pegboard", §10), and refused while an object is in hand (R14). Heard
+  // on the window's bubble phase, so a focused pane or a note being typed in
+  // keeps its own b. A board B raises takes the focus (the keyboard asked for
+  // it): its specimens are the arrows' at once.
   useEffect(() => {
     if (!bindKeys) return;
     const onKey = (event: globalThis.KeyboardEvent): void => {
       if (event.key !== "b" && event.key !== "B") return;
       if (event.metaKey || event.ctrlKey || event.altKey || event.repeat) return;
-      if (view !== "canvas" || isEditable(event.target)) return;
+      if (view !== "canvas" || isField(event.target)) return;
       if (boardRefused) {
         emitLineKeyMarker({ key: "B", view, outcome: "refused" });
         return;

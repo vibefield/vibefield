@@ -698,6 +698,26 @@ describe("the reach, the press and the drag", () => {
     expect(ids(store)).toEqual(["a"]);
   });
 
+  it("takes ⌫ from a control that holds no caret — a checkbox — and leaves it to what is editable (the one field test, caret.ts)", () => {
+    const store = handOf("a", "b", "c");
+    const el = mount(<Owned store={store} host={fakeHost()} />);
+    point("pointermove", faceOf(el, "c"), restSlot(3, 2).x + CARD_W / 2, FOOT);
+    const editor = document.createElement("div");
+    editor.contentEditable = "true";
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    document.body.append(editor, box);
+    try {
+      expect(press(editor, { key: "Backspace" }).defaultPrevented, "the editor's").toBe(false);
+      expect(ids(store)).toEqual(["a", "b", "c"]);
+      expect(press(box, { key: "Backspace" }).defaultPrevented, "the hand's").toBe(true);
+      expect(ids(store)).toEqual(["a", "b"]);
+    } finally {
+      editor.remove();
+      box.remove();
+    }
+  });
+
   it("keeps a carried card's place, hidden, and answers nothing while a drag carries", () => {
     drag.carried = { card: { id: "b" } };
     const store = handOf("a", "b", "c");

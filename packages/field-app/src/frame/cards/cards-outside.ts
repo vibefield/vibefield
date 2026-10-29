@@ -490,9 +490,10 @@ export function listenForOtherApps(options: OtherAppsOptions = {}): () => void {
     const transfer = event.dataTransfer;
     if (inner || !carriesCards(transfer)) return;
     const at = { x: event.clientX, y: event.clientY };
-    // a field no registered place answers for takes the drop itself, as a paste there (HN-L3): it
-    // inserts what it holds, and the card carried in is gone, with nothing said. The place is
-    // asked of the card carried — or, its enter unheard, of the card it would have been
+    // a field that takes an insert, and that no registered place answers for, takes the drop
+    // itself, as a paste there (HN-L3): it inserts what it holds, and the card carried in is gone,
+    // with nothing said. The place is asked of the card carried — or, its enter unheard, of the
+    // card it would have been
     const carried = ours() ? getCarriedCard()?.card : undefined;
     if (fieldTakesDrop(at.x, at.y, carried ?? waitingCardOf(transfer, store))) {
       cancel();

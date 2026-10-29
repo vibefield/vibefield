@@ -640,6 +640,17 @@ describe("the create's keys (DESIGN.md §10; One Frame §11)", () => {
     press(field, { key: "b" });
     expect(surfaceNow).toBeNull();
     field.remove();
+    // …but a control a person does not type in holds no caret: B is Objects' (the one field
+    // test, cards/caret.ts)
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    document.body.appendChild(box);
+    box.focus();
+    press(box, { key: "b" });
+    expect(surfaceNow).toBe("objects");
+    press(box, { key: "b" });
+    expect(surfaceNow).toBeNull();
+    box.remove();
     act(() => setViewNow?.("godview"));
     press(document.body, { key: "b" });
     expect(surfaceNow).toBeNull();
