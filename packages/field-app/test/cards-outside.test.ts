@@ -794,4 +794,40 @@ describe("the drag machine's filled card (HN-6, B2)", () => {
     await expect(endCardDrag(900, 600)).resolves.toBe("home");
     await expect(endCardDrag(900, 600), "nothing is carried now").resolves.toBe("none");
   });
+
+  it("answers a play the place refused once it was in it: refused, said once — a card from another app's carry over at once, for its source to deal; a card from the hand still flies home", async () => {
+    place({
+      kind: "pane",
+      box: new DOMRect(0, 0, 600, 400),
+      played: { ok: false, note: "Not pasted — that pane has closed" },
+    });
+    startCardDrag({
+      card: waitingCardOf(transfer({ text: "x", kindsOnly: true }), store),
+      source: "outside",
+      pointerId: null,
+      at: { x: 100, y: 100 },
+      grab: { x: 52, y: 12 },
+      home: () => null,
+    });
+    const filled = textCardOf("make test", { id: "card-text-filled", origin: DRAGGED, at: 0 });
+    const going = endCardDrag(100, 100, filled);
+    await vi.advanceTimersByTimeAsync(PLAY_SHRINK_MS);
+    await expect(going).resolves.toBe("refused");
+    expect(said).toEqual(["Not pasted — that pane has closed"]);
+    expect(getCarriedCard(), "no fade left where it went in").toBeNull();
+
+    const slot = { left: 540, top: 712, width: 104, height: 146 };
+    startCardDrag({
+      card: filled,
+      source: "hand",
+      pointerId: 7,
+      at: { x: 100, y: 100 },
+      grab: { x: 52, y: 20 },
+      home: () => slot,
+    });
+    const back = endCardDrag(100, 100);
+    await vi.advanceTimersByTimeAsync(PLAY_SHRINK_MS);
+    await expect(back).resolves.toBe("refused");
+    expect(getCarriedCard()).toMatchObject({ phase: "home", home: slot });
+  });
 });
