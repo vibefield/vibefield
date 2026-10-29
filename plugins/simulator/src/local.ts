@@ -73,7 +73,10 @@ export interface SimulatorLocal extends KindLocal {
   lines(e: Entity): number | undefined;
   /** The act `e`'s face offers now (the record says it) — what a release over its capsule in hand runs. */
   offer(e: Entity, act: (() => void) | undefined): void;
-  /** The kind's tick, always there (KindLocal's is optional): steps the morphs and the faces' clocks; true while a morph runs. */
+  /**
+   * The kind's tick, always there (KindLocal's is optional): steps the morphs and the faces' clocks; true while a morph runs
+   * and on the frame it lands (the last record drawn was a blend: it is remade at the new model exactly).
+   */
   tick(now: number): boolean;
   /** Phones mid-morph, and morphs begun (a test's witness). */
   morphs(): { readonly running: number; readonly begun: number };
@@ -198,11 +201,15 @@ export function createSimulatorLocal(host: KindHost | undefined): SimulatorLocal
       return e !== undefined && live.shown(e);
     },
     // the faces' takes and asks answer nothing of their own (a landed frame asks a redraw, new words a remake); a running
-    // morph remakes every record of the kind, frame after frame, until it lands
+    // morph remakes every record of the kind, frame after frame — AND on the frame it lands: the record drawn last was a
+    // blend (t < 1), and the desk remakes a record only on a frame its kind's tick answered true, so "nothing runs now" there
+    // would leave the phone a hair (after a long last frame, visibly) short of its new model (PHONE.md §13: "it ends the X
+    // exactly")
     tick(now) {
+      const drawnMid = morphs.running();
       morphs.step(now);
       live.tick(now);
-      return morphs.running();
+      return drawnMid || morphs.running();
     },
     due: (now) => (morphs.running() ? now : live.due(now)),
     // words laid after their record change how the phone looks with no fact of its own moving

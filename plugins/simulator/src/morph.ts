@@ -65,7 +65,10 @@ export interface Morphs {
    * changes, the morph into it from what it showed. `finish` is the finish's colours under the record's look.
    */
   shown(e: Entity, model: PhoneModel, finish: FinishValues): Shown;
-  /** Is any phone mid-morph at the last step's clock? (Its records are remade every frame while one is.) */
+  /**
+   * Is any phone mid-morph at the last step's clock? (Its records are remade every frame while one is, and on the frame it
+   * lands — the kind's tick asks this before it steps: local.ts.)
+   */
   running(): boolean;
   /** Phones mid-morph now (a test's witness), and morphs begun since the desk was made. */
   stats(): { readonly running: number; readonly begun: number };

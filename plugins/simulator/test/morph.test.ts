@@ -136,11 +136,39 @@ describe("the morph's clocks — a change of model, and nothing else", () => {
     const mid = kind.resolve(at("iPhone-X"));
     expect(mid.shape).not.toBe(shapeOf(PRO));
     expect(local.morphs().running).toBe(1);
-    // it lands: the new model's shape, the tick quiet, nothing due
-    local.tick?.(32 + MS);
+    // it lands: the tick answers true ONCE MORE — the record drawn last was a blend, and the desk remakes a record only on a
+    // frame its kind's tick answered true — and that record is the new model's shape exactly; then quiet, nothing due
+    expect(local.tick?.(32 + MS)).toBe(true);
+    expect(local.morphs().running).toBe(0);
     expect(kind.resolve(at("iPhone-X")).shape).toBe(shapeOf(X));
     expect(local.tick?.(32 + MS + 16)).toBe(false);
     expect(local.due?.(32 + MS + 16)).toBe(Number.POSITIVE_INFINITY);
+  });
+
+  it("through the kind: a long last frame (a stall, a window hidden mid-morph) still lands it exactly — the landing frame is remade", () => {
+    const kind = simulatorKind();
+    const t = fakeHost();
+    const local = createSimulatorLocal(t.host);
+    const at = (name: string) => ctxOf({ model: `${TYPE}${name}` }, { local });
+    local.tick?.(0);
+    kind.resolve(at("iPhone-8"));
+    // the change: the morph begins at 32; one frame at 0.6 of it — a blend, visibly mid-morph (the size track done, the
+    // housing and the material not)
+    local.tick?.(32);
+    kind.resolve(at("iPhone-X"));
+    expect(local.tick?.(32 + MS * 0.6)).toBe(true);
+    const blend = kind.resolve(at("iPhone-X")).shape;
+    expect(blend).not.toBe(shapeOf(EIGHT));
+    expect(blend).not.toBe(shapeOf(X));
+    // then a stall: the next frame comes long past the end — it is still remade, and it is the X itself, not the blend
+    expect(local.tick?.(32 + MS * 3)).toBe(true);
+    expect(kind.resolve(at("iPhone-X")).shape).toBe(shapeOf(X));
+    expect(local.tick?.(32 + MS * 3 + 16)).toBe(false);
+    // and a morph whose very next frame is past its end (the window hidden as it began) lands on that frame too
+    kind.resolve(at("iPhone-17-Pro"));
+    expect(local.tick?.(32 + MS * 10)).toBe(true);
+    expect(kind.resolve(at("iPhone-17-Pro")).shape).toBe(shapeOf(PRO));
+    expect(local.tick?.(32 + MS * 10 + 16)).toBe(false);
   });
 });
 
