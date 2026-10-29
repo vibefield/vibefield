@@ -1554,12 +1554,14 @@ async function main(
   // HN-5: a copy's picture is written here, the read's other half — for a registered product
   // window while it and its page hold the focus, its PNG decoded first and refused when it
   // holds no picture. No audit row: the words' copy door keeps none (LC-13). A marked run
-  // keeps the picture's size instead of writing it (R-T 4, as `harnessCopies`).
+  // keeps the picture's size instead of writing it (R-T 4, as `harnessCopies`) — and since it
+  // writes nothing of the person's, the focus that guards their clipboard is not asked of it:
+  // smoke:canvas's window is shown inactive and never focused by a row (DK-18).
   registerClipboardWriteImage(
     registry,
     {
-      focused: clipboardFocused,
-      decode: (png) => {
+      focused: harnessPictures === null ? clipboardFocused : () => true,
+      decode: (png: Uint8Array) => {
         const image = nativeImage.createFromBuffer(
           Buffer.from(png.buffer, png.byteOffset, png.byteLength),
         );
@@ -1930,6 +1932,7 @@ async function main(
       viteUrl: VITE_URL,
       beforeExit: closeEvidence,
       ...(harnessCopies === null ? {} : { copies: harnessCopies }),
+      ...(harnessPictures === null ? {} : { pictures: harnessPictures }),
       onWindow: (window) => {
         installLiveSurfaceHost(window, logger);
         installRendererLogging({

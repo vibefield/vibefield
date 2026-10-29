@@ -11,9 +11,10 @@
 //   KEY     — ⌘C over the note, nothing focused: the same act from the key; ⌘C while the note's writing holds the
 //             keyboard: the desk's editor keeps it, and no card is dealt;
 //   CLOCK   — any other kind: a PICTURE card titled by its name ("Clock"), its still the anchor's box less the brackets'
-//             6 at the view's device px, drawn WITHOUT the selection's marks by ICE's capture (`marks: false`, I40);
+//             6 at the view's device px, drawn WITHOUT the selection's marks by ICE's capture (`marks: false`, I40),
+//             its PNG handed to main's picture door before the card is dealt (HN-5);
 //   TWO     — the clock and the note, copied from the bar grown into its MENU: ONE picture card, "2 objects", the union's
-//             10 off; the note's words on the system clipboard;
+//             10 off; its picture on the system clipboard, and not the note's words (one write: HN-5);
 //   HAND    — the notebook IN HAND, copied from the tools in hand: a picture card "Notebook" of where the desk DRAWS it
 //             (`__vfDesk.held()`), the object staying in hand and the tools under the head;
 //   MISSING — the clock's plugin off, its missing face copied: a picture card titled by its type's name ("Clock");
@@ -21,10 +22,10 @@
 //   EMPTIED — the hand emptied through its lab door (`__vfCards.clear()`, field-app frame/cards/cards-lab.ts): the rows
 //             after these predate any chrome at the window's foot, and a pointer in the reach band lifts a card.
 // These rows hold the act; the hand's own DOM is smoke:godview's (⇧⌘V raising it over a focused pane, `chordHand`, and
-// 11h's card played into a pane). NOTE, KEY and TWO hand the note's words to main's copy door, which a marked run KEEPS
-// instead of writing (R-T 4 — the pasteboard is the person's; main/index.ts) and answers as it would: the door's answer
-// (`wrote`) is the act's witness, and main's record (`copies`) says the words arrived. The still: hn-3-copy.png (the
-// window, the note's card dealt).
+// 11h's card played into a pane). NOTE and KEY hand the note's words to main's copy door, CLOCK and TWO their picture to
+// main's picture door (HN-5); a marked run KEEPS each instead of writing it (R-T 4 — the pasteboard is the person's;
+// main/index.ts) and answers as it would: the door's answer (`wrote`) is the act's witness, and main's records (`copies`,
+// `pictures` — a PNG's size) say what arrived. The still: hn-3-copy.png (the window, the note's card dealt).
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -220,6 +221,8 @@ export interface CopyRowsDriver {
   /** The words main's copy door kept in place of the system clipboard — a marked run's (R-T 4); absent in an unmarked
    * run, whose door writes the real one and leaves nothing to read back. */
   readonly copies?: readonly string[];
+  /** HN-5 — the PNG sizes main's picture door kept in place of the system clipboard, a marked run's; absent unmarked. */
+  readonly pictures?: readonly number[];
 }
 
 /** Whether main's copy door received `words` since its record held `from` entries — null with no record to read. */
@@ -229,6 +232,18 @@ export function copiedToMain(
   words: string,
 ): boolean | null {
   return copies === undefined ? null : copies.slice(from).includes(words);
+}
+
+/** HN-5 — whether main's picture door received a PNG of `bytes` since its record held `from` entries — null with no
+ * record to read, or no still to measure. */
+export function picturedToMain(
+  pictures: readonly number[] | undefined,
+  from: number,
+  bytes: number | undefined,
+): boolean | null {
+  return pictures === undefined || bytes === undefined
+    ? null
+    : pictures.slice(from).includes(bytes);
 }
 
 /** HN-3's rows (above). Returns the problems, each in words. */
@@ -438,6 +453,7 @@ export async function deskCopyRows(d: CopyRowsDriver): Promise<string[]> {
     await barShown("the bar over the clock", `globalThis.__vfDesk.anchor()?.count === 1`);
     const box = await js<Box | null>("globalThis.__vfDesk.anchor()?.box ?? null");
     const seq = await seqNow();
+    const handedPictures = d.pictures?.length ?? 0;
     await pressCopy(BAR_COPY);
     const record = await dealt("the clock's card dealt", seq);
     await sleep(400);
@@ -448,6 +464,11 @@ export async function deskCopyRows(d: CopyRowsDriver): Promise<string[]> {
       ...judgeSelectionKept(rec).map(row),
       ...judgeBarStayed(rec, record.at.pressed).map(row),
     );
+    // HN-5: its PNG went to main's picture door, and the door took it, before the card
+    if (record.wrote !== true)
+      problems.push(row(`the picture door did not take the clock's picture (${record.refused})`));
+    if (picturedToMain(d.pictures, handedPictures, record.still?.bytes) === false)
+      problems.push(row("main's picture door never received the clock's picture"));
     say(`SMOKE_CANVAS_COPY_CLOCK ${JSON.stringify({ copied: record, box })}`);
   }
 
@@ -466,6 +487,7 @@ export async function deskCopyRows(d: CopyRowsDriver): Promise<string[]> {
     await sleep(700); // the grow and the rows' stagger
     const seq = await seqNow();
     const handed = d.copies?.length ?? 0;
+    const handedPictures = d.pictures?.length ?? 0;
     await pressCopy('[data-selection-bar] .vf-bar-list [data-row="copy"]');
     const record = await dealt("the two's card dealt", seq);
     // the union's 10 out, where the judge takes the one's 6
@@ -481,10 +503,16 @@ export async function deskCopyRows(d: CopyRowsDriver): Promise<string[]> {
     const types = record.objects.map((o) => o.type).sort();
     if (JSON.stringify(types) !== JSON.stringify(["desk.note", CLOCK].sort()))
       problems.push(row(`the copy carried ${JSON.stringify(types)}, not the note and the clock`));
-    if (record.words !== NOTE_LINE)
-      problems.push(row(`the words given the clipboard were ${JSON.stringify(record.words)}`));
-    if (copiedToMain(d.copies, handed, NOTE_LINE) === false)
-      problems.push(row("main's copy door never received the note's words"));
+    // HN-5: a picture card's picture is what the clipboard is given — one write, so never the note's words too
+    if (record.words !== null)
+      problems.push(row(`words were given the clipboard too: ${JSON.stringify(record.words)}`));
+    if (copiedToMain(d.copies, handed, NOTE_LINE) === true)
+      problems.push(row("main's copy door received the note's words for a picture card"));
+    if (
+      record.wrote !== true ||
+      picturedToMain(d.pictures, handedPictures, record.still?.bytes) === false
+    )
+      problems.push(row(`main's picture door never took the two's picture (${record.refused})`));
     const count = await js<number>("globalThis.__vfDesk.anchor()?.count ?? 0");
     if (count !== 2)
       problems.push(row(`the two did not stand selected after the still (${count})`));

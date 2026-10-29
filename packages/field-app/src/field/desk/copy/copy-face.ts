@@ -9,8 +9,8 @@ import type { ObjectWords } from "../desk-object-words";
 //   says why it is missing); AN OBJECT SHOWING A LIVE PAGE (a browser pane) what its page is CALLED — the page's title,
 //   else its address as its kind prints it (the mount's LIVE service says it, by the object's durable key) — its first
 //   24 characters, as the chip cut a note's writing.
-//   ITS WORDS — the durable text the objects keep (a note's writing, a pad's lines): a lone note's are its TEXT card,
-//   and any copy's are what the system clipboard is given.
+//   ITS WORDS — the durable text a lone NOTE keeps (its writing): its TEXT card, and what the system clipboard is given.
+//   Anything else gives the clipboard its picture (HN-5): one write, never words and picture both.
 
 /** How much of a live page's name a copy carries (DK-14's chip cut: "its first 24 characters"). */
 export const NAME_CHARS = 24;
@@ -46,16 +46,6 @@ export function noteWords(objects: readonly CopiedObject[]): string | null {
   const [one, ...rest] = objects;
   if (one === undefined || rest.length > 0 || one.type !== NOTE_TYPE) return null;
   return durableText(one.props);
-}
-
-/** The words a copy gives the system clipboard: the durable text the objects keep, in selection order, a blank line
- * between two; null when none keeps any (a clock, a print — its picture alone, the image door being B2's). */
-export function copiedWords(objects: readonly CopiedObject[]): string | null {
-  const texts = objects.flatMap((o) => {
-    const text = durableText(o.props);
-    return text === null ? [] : [text];
-  });
-  return texts.length === 0 ? null : texts.join("\n\n");
 }
 
 /** What a copy is called — its picture card's title (§8, R15's names, above). */

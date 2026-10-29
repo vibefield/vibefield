@@ -1,7 +1,7 @@
 import type { DealFrom } from "../../../frame/cards/cards-store";
 
 // THE DESK'S COPY, AS IT WENT — a witness (`window.__vfDesk.copied()`; HN-D3). The act (copy-to-hand.ts) begins a record
-// at the press and notes each step into it: the card it dealt, the words it gave the system clipboard, the still. Kept
+// at the press and notes each step into it: the card it dealt, what it gave the system clipboard, the still. Kept
 // apart from the act so the desk's door reads it without importing the act, which reads the door. Plain data only: a
 // harness carries it across `executeJavaScript`, so the card is named, never handed over (its bytes would not cross).
 
@@ -25,7 +25,9 @@ export interface CopyRecord {
    * (null when nothing of the box is on the view). */
   readonly fromBox: DealFrom;
   readonly rect: ViewBox | null;
-  /** The words given the system clipboard, null with none; whether its door took them, null until it answered. */
+  /** The words given the system clipboard — a lone note's — null with none (a picture card gives its PNG instead);
+   * whether the clipboard's door took what the card holds, its words or its picture (HN-5), null until it answered and
+   * when nothing was offered. */
   readonly words: string | null;
   readonly wrote: boolean | null;
   /** The marks the still was asked with, as the capture door was HANDED them — `false`, the

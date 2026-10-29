@@ -1047,6 +1047,9 @@ export async function runSmokeCanvas(opts: {
   /** HN-3 (R-T 4) — the words main's copy door KEPT in place of the system clipboard, a marked run's (main/index.ts);
    * absent in an unmarked run, whose copy door writes the real one. */
   copies?: readonly string[];
+  /** HN-5 (R-T 4) — the PNG sizes main's picture door KEPT in place of the system clipboard, a marked run's; absent in
+   * an unmarked run. */
+  pictures?: readonly number[];
 }): Promise<void> {
   const gpu = !process.argv.includes("--disable-gpu");
   // DK-16: the GPU kept and the page given no `navigator.gpu` (`--smoke-no-webgpu`, as a remote desktop has none —
@@ -1351,9 +1354,10 @@ export async function runSmokeCanvas(opts: {
         }
         // HN-D3: the desk's Copy — the bar's pill, the grown menu's row, the tools in hand's pill and ⌘C each dealing ONE
         // card: a note's writing a text card, anything else a picture of the objects without the marks, the selection
-        // never blinking, the bar never stepping aside, the words handed to main's copy door (kept there, never on the
-        // person's clipboard: R-T 4), the hand emptied after (testing/smoke-desk-copy.ts) — still at the arrival fit,
-        // before the pad row moves the camera
+        // never blinking, the bar never stepping aside, what each card holds handed to main first — a note's words to
+        // the copy door, a picture to the picture door (HN-5) — kept there, never on the person's clipboard (R-T 4),
+        // the hand emptied after (testing/smoke-desk-copy.ts) — still at the arrival fit, before the pad row moves the
+        // camera
         try {
           problems.push(
             ...(await deskCopyRows({
@@ -1365,6 +1369,7 @@ export async function runSmokeCanvas(opts: {
               shotDir,
               say: (line) => console.log(line),
               ...(opts.copies === undefined ? {} : { copies: opts.copies }),
+              ...(opts.pictures === undefined ? {} : { pictures: opts.pictures }),
             })),
           );
         } catch (error) {
@@ -9087,7 +9092,7 @@ export async function runSmokeGodview(opts: {
       }
       if (!copies.slice(keptBefore).includes("hn5-osc52")) {
         throw new Error(
-          `a pane's OSC 52 never reached main's copy door (it kept ${JSON.stringify(copies.slice(keptBefore))})`,
+          `OSC 52 never reached the copy door (it kept ${JSON.stringify(copies.slice(keptBefore))})`,
         );
       }
       // an absence, given the deal's flight (560 ms) and more to be wrong in
