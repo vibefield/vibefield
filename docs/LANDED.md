@@ -18329,3 +18329,91 @@ CI's runner is the slower host:
 - **Errata:** the memory's lottery note said at 18:20Z that "MF-1f was never a lottery row". That holds for the
   setup's endpoint wait only, and the note carries a dated correction at its source (18:31Z). Item 84's entry above now
   cites its CI witness.
+
+## AL-9b — one chord table in main: a held ⌘Q, ⌃⌘F or ⌃⌘A acts once and its repeats reach no page or menu, a non-Latin layout's chord names the physical key's letter, and ⌃⌘A joins ⌘Q and ⌃⌘F in one listener (2026-10-29; `cc37d2d8e`, lane `al/chords-2`; James's "do the follow ups"; VF-PM's GO)
+
+**Why:** James asked for a review of AL-9 (`933d2fba3`) on 2026-10-27, then for its follow-ups on 10-29. The review
+found two gaps that could bring AL-9's symptom back, and two cleanups:
+- **Repeats passed through.** `windowChordOf` returned null for an auto-repeat, so a held chord's repeats reached the
+  page and the menu. ghosttea's workspace keydown (`Workspace.js:632`) does not skip repeats. A held ⌘Q over a pane
+  therefore ran the deck's `quit` hook and put the terminals away behind the quit box. A held ⌃⌘F reached the menu's
+  `togglefullscreen` and flipped it back. A held ⌃⌘A (SNAP-3's chord, the same rule) reached the canvas's select-all.
+- **The letter came from `key` alone.** ghosttea's matcher also reads the physical key (`unicodeCandidates`,
+  ghostty-triggers.js), and macOS's key equivalents fall back to the Latin letter on a non-Latin layout. A layout
+  that reports ⌘ and the Q key as its own letter (Russian "й") would leave ⌘Q to the pane, AL-9's bug again.
+- `WindowChordInput` was a field-for-field copy of `ScreenshotChordInput`, with two `before-input-event` listeners per
+  product window.
+- `ProductChord`'s `matches?` and `takenBy?` were coupled by a rule that only a test row held.
+
+**What landed** (electron-shell · field-app):
+- `window-chords.ts` is the one table: ⌃⌘A (SNAP-3; Alt+A off the Mac, SNAP-D3), ⌘Q and ⌃⌘F (AL-9; darwin only).
+  - `installWindowChords(target, { quit, screenshot? })`. The screenshot act is absent where no capture can run (no
+    helper, Studio's window), and ⌃⌘A is then left to the page and the menu, as before.
+  - `screenshot-chord.ts` and its test are gone, and their rows are in window-chords.test.ts. main's index.ts installs
+    one listener.
+- A matched chord's repeats are swallowed and act on nothing; the act runs once, on the first press. A keyUp is still
+  not swallowed.
+- `chordLetterOf` decides the letter:
+  - the key's own letter when it is a Latin letter;
+  - the physical key's (`KeyQ` → q) only when the key's character is not ASCII;
+  - an ASCII key the layout sends (Dvorak's `'` on the Q key) is the layout's own and names no chord, as macOS's menus
+    do.
+- `ProductChord = PageChord | ShellChord`: a page chord has its matcher, a shell chord has none, and the compiler holds
+  the rule. The runtime row that held it is retired.
+- GodviewDeck's `quit` hook comment now reads true: ⌘Q never reaches it on the Mac, held or not; off the Mac Ghostty's
+  `ctrl+shift+q` does.
+
+**Not in it** (AL-9c candidates for James's word, on VF-PM's board):
+- a person's own Ghostty `quit` chord quitting the app (a page→main door);
+- the deck's no-op `toggleFullscreen` (the same door);
+- Settings' words off the Mac;
+- the deck's last-pane count (the upstream "last pane closed" hook).
+
+**What a test reaches, and what only a hand does:**
+- Tests:
+  - the predicate: each chord, each modifier mix, keyUp, repeats named, the Russian and Dvorak layouts, off the Mac;
+  - the installer: each act once; the repeats swallowed and inert for all three; ⌃⌘A left alone with no capture;
+    every other key untouched.
+- By hand only: whether macOS delivers a chord to `before-input-event`, and what Electron's `key` reads on a Russian
+  input source. ROADMAP §5's witnesses gain AL-9b's two rows beside AL-9's ten: a held ⌘Q over a focused pane, and
+  ⌘Q under a Russian input source.
+
+**Rows:** window-chords.test.ts 13 (was AL-9's 7 plus screenshot-chord's 5); product-chords.test.tsx (the coupling row
+retired).
+
+**Gates** (lane al2, nice 19, the guard before each step; VF-PM's slot from 01:07Z):
+- The light pass (01:07:35–01:08:40Z, load 9→17) EXIT 0:
+  - typecheck electron-shell and field-app; biome; check:walls;
+  - preflight, with 2 WARN, both main's: the lane's unused puppeteer checkout, and R23's acp candidate;
+  - window-chords 13/13; product-chords, terminal-keyboard-model and godview-deck 103/103.
+- `pnpm verify` 1 (01:08:55–01:14:56Z, load 19 → 607) **EXIT 1**:
+  - Every stage before `pnpm test` was green (typecheck 27/27, cache 0/27). electron-shell: 1972 + 2 skipped.
+  - field-app: 2 failed of 2780, both "Test timed out in 5000ms": doc-manager.test.ts › B4's first run (:113) and
+    godview-monitor.test.tsx › GV-D1's swarm row (:589).
+  - vitest's own setup took 403 s, and fseventsd and Finder were at ~95% CPU each. The two files alone: 108/108 twice
+    (load 420, then 177).
+- The one lottery rerun (VF-PM's rule), verbatim, gated on load < 40 (01:19:11–01:22:27Z, load 37 → 419) **EXIT 1**:
+  - field-app: 1 failed of 2780, GV-D1's swarm row again, at 5507 ms against 5000.
+  - That row alone: 554–610 ms, three runs at load 236–270. It drives two 600-frame physics settles of 23 bodies, and
+    under the suite it starves about ninefold.
+- Neither row is reachable from this diff: field-app's change is a type and a comment.
+- The chain stopped at `pnpm test` both times. Its last two stages, run alone on this tree: `pnpm test:rust` EXIT 0
+  (31 binaries, every one ok) and `pnpm gen:check` EXIT 0.
+- VF-PM would not land a tree red twice on precedent. The host was quieted (the swarms paused ~20 min), and a third
+  verbatim run on `cc37d2d8e` was taken as the quiet-host measurement, started once the 1-min load was under 20
+  (01:34:14–01:38:24Z, load 16 → 33): **EXIT 0**.
+  - Nx replayed the 26 test tasks already green on this tree and ran field-app fresh: 2777 passed and 3 skipped of
+    2780, 0 failed. godview-monitor took 9.6 s for its 89, and doc-manager 67.7 s for its 19.
+  - test:rust (31 binaries ok, 0 failed) and gen:check were green.
+  - For one minute (01:36:55–01:37:57Z, load 65–76) the fixer's item-89 lane setup ran beside it before VF-PM's hold
+    reached it. No row failed, inside that window or outside it.
+- Item 89 was filed for the fixer: GV-D1's budget (two 600-frame settles under the 5 s default; 554–610 ms alone,
+  about ninefold starvation at load ~400).
+- Logs (the session scratchpad, `al57/`): `verify-fa9744e.log`, `verify2-fa9744e.log`, `verify3-quiet-cc37d2d.log`,
+  `alone-fa9744e.log`, `tail-stages-fa9744e.log`.
+
+**Owed:**
+- James's AL-9 rows, plus a held ⌘Q and a Russian input source.
+- The AL-9c candidates, on his word.
+- Item 89 (the fixer).
+- The draft's §9.4 gains AL-9b's deltas at the next opening of the draft queue.

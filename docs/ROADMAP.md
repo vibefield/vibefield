@@ -57,9 +57,14 @@
   #47 (PU-19).
 - Owed: the desk rows (`pnpm smoke`, `smoke:studio`, `smoke:godview` on a display); the first-run spike (`thinking-agent-onboarding.md` §9).
 
-**AL — what Quit means** · better-quit (lanes `al2`, `al/chords`) · law `draft/thinking-app-lifecycle.md` v0.2 §8, ESR §7.3 (amended), design-00 EL1
+**AL — what Quit means** · better-quit (lanes `al2`, `al/chords`, `al/chords-2`) · law `draft/thinking-app-lifecycle.md` v0.2 §8, ESR §7.3 (amended), design-00 EL1
 - Landed: AL-1…AL-3 (`7ebb1eeda` · `5eea4b2d5` · `697beb199`; AL-4 folded in), AL-5, AL-7, AL-8a, **AL-9** (`933d2fba3`,
-  records `d9e5eb119`; AL-D14 "A", D15…D18). AL-8b RETIRED (AL-D10 "A": no LaunchAgent, not with AL-6 either).
+  records `d9e5eb119`; AL-D14 "A", D15…D18), **AL-9b** (`cc37d2d8e`, 10-29; LANDED §AL-9b: one chord table in main for
+  ⌃⌘A, ⌘Q and ⌃⌘F, a held chord acting once, a non-Latin layout's chord read from the physical key). AL-8b RETIRED
+  (AL-D10 "A": no LaunchAgent, not with AL-6 either).
+- AL-9c candidates, on James's word (VF-PM's board): a person's own Ghostty `quit` chord quitting the app, and the
+  deck's no-op `toggleFullscreen`, through one page→main door · Settings' chord words off the Mac · the deck's
+  last-pane count (with ghosttea's "last pane closed" hook).
 - Next: **AL-6** background mode (AL-D2's "Keep running when VibeField quits", a Dock-hidden resident shell, a status
   item) · Settings → Diagnostics' "Last exit" · AL-5's relaunch cap persisted · Settings → Terminal → Behavior's "How
   long a terminal lives" (`BehaviorTab.tsx:154` promises a terminal outlives quitting, false since AL-3; DESIGN.md §9
@@ -216,7 +221,9 @@
 
 **Witnesses (his hands, his devices)**
 - AL-9's ten chord rows (row 1 first: a physical ⌘Q over a focused pane brings up the census box and sends no
-  `deck_changed`; a miss on ⌘H or ⌘M puts that chord on D15's list) · the quit gate's two rows the 10-27 acceptance run
+  `deck_changed`; a miss on ⌘H or ⌘M puts that chord on D15's list) and AL-9b's two (⌘Q held over a focused pane: one
+  box, and Cancel leaves both panes on their sessions; ⌘Q with a Russian input source selected brings up the same box)
+  · the quit gate's two rows the 10-27 acceptance run
   left (Dock → Quit; a logout with a session open; LANDED §AL-7 "The quit gate's acceptance run") · the notice after a
   `kill -9` of a packaged build's shell and of its fieldd.
 - Mesh (board `rm-c-witnesses`, the one home): the two-desktop run with the Tailscale app QUIT, in one sitting with the
