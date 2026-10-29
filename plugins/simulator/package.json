@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "PORTALS' iOS Simulator (PT-S1): a phone lying face up on the desk at its true size — any of the 42 iPhones Xcode's Simulator knows — its screen a Simulator's, view-only in v1; a plugin kind through @vibefield/plugin-sdk/desk alone.",
+  "description": "PORTALS' iOS Simulator (PT-S1): a phone lying face up on the desk at its true size — any of the 42 iPhones Xcode's Simulator knows — its screen a Simulator's, view-only until PT-S4's touch lands; a plugin kind through @vibefield/plugin-sdk/desk alone.",
   "exports": {
     ".": "./src/index.ts"
   },

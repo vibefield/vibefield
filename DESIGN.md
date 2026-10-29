@@ -614,8 +614,8 @@ metals, the screen's light and its dims, the night's glow, the marks — hold no
 lacks (`plugins/simulator/test/design.test.ts` reads them). The law's other numbers — how the phone
 lies, lifts and casts on the desk (its rest on its camera, its lift and hover, the eye's frame, its
 shadow and contact, its buttons' proud), what its stream is asked for and how long its morph takes —
-are its object's grammar, each cited in the law to the PHONE.md section it comes from (§1, §4, §6,
-§7, §13): kept in the law, not recipes this section holds. What each material means under the
+are its object's grammar, each cited in the law to the PHONE.md section it comes from (§5, §6, §7,
+§13): kept in the law, not recipes this section holds. What each material means under the
 guardrails:
 
 - **The cover glass** is the **portals** row's glass: the window the Simulator's screen is seen
