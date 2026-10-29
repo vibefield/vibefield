@@ -10,6 +10,7 @@ import {
   WorkspaceSearchResult,
 } from "@vibefield/contracts";
 import type { WorktreeHostEvent, WorktreeHostPort } from "@vibefield/rosetta-room";
+import { writeClipboard } from "../frame/cards/copy-door";
 
 export interface WorkspaceDoor {
   request(method: string, params: Record<string, unknown>): Promise<unknown>;
@@ -17,6 +18,13 @@ export interface WorkspaceDoor {
 export interface WorkspaceClientOptions {
   worker?: () => Worker;
   copyText?: (text: string) => Promise<void>;
+}
+
+/** A copied path's words onto the system clipboard alone, through the one copy door (HN-5):
+ * the client's own way when its owner lends it no copy port. A refusal throws its words. */
+async function writeWords(text: string): Promise<void> {
+  const written = await writeClipboard({ text });
+  if (!written.ok) throw new Error(written.reason);
 }
 
 export interface WorkspaceLease {
@@ -292,11 +300,8 @@ export class WorkspaceClient implements WorktreeHostPort {
         );
         paths.push(answer.path);
       }
-      if (request.action === "copyPath") {
-        const copy = this.#options.copyText;
-        if (copy) await copy(paths.join("\n"));
-        else await navigator.clipboard.writeText(paths.join("\n"));
-      }
+      if (request.action === "copyPath")
+        await (this.#options.copyText ?? writeWords)(paths.join("\n"));
       return { ok: true as const };
     } catch (error) {
       return {

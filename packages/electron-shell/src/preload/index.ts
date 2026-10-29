@@ -3,6 +3,7 @@ import {
   BrowserDataClearResult as BrowserDataClearResultSchema,
   ClipboardReadRequest,
   ClipboardReadResult,
+  ClipboardWriteImageResult,
   CloseRequest,
   CloseResult,
   type DesktopShellState,
@@ -47,6 +48,7 @@ import {
   UsersListSnapshot,
   UsersSwitchParams,
   UsersUpdateParams,
+  utf8ByteLength,
   WindowConnection,
   type WindowLightsState,
   WindowLightsState as WindowLightsStateSchema,
@@ -258,6 +260,16 @@ const isStillBytes = (value: unknown): value is Uint8Array<ArrayBuffer> =>
   Object.prototype.toString.call(value) === "[object Uint8Array]" &&
   Object.prototype.toString.call(value.buffer) === "[object ArrayBuffer]";
 
+/** HN-5 — a copy's picture, or the words beside it, past its bound, in words, the read's voice
+ * (item 102): the clause a copy says after "Not copied —". Null when both are within. */
+function pastBound(png: number, words: number): string | null {
+  const picture = SHELL_CLIPBOARD.WRITE_IMAGE_MAX_BYTES;
+  const text = SHELL_CLIPBOARD.WRITE_TEXT_MAX_BYTES;
+  if (png > picture) return `the picture holds ${png} bytes; the clipboard takes at most ${picture}`;
+  if (words > text) return `the words hold ${words} bytes; the clipboard takes at most ${text}`;
+  return null;
+}
+
 const platform = ShellPlatform.parse(
   process.platform === "darwin" || process.platform === "win32" || process.platform === "linux"
     ? process.platform
@@ -385,6 +397,30 @@ contextBridge.exposeInMainWorld("vibefield", {
         result.reason === "too-large"
           ? `the clipboard holds ${result.bytes ?? "more than"} bytes; a paste reads at most ${SHELL_CLIPBOARD.READ_MAX_BYTES}`
           : "the clipboard is read only for the focused window",
+      );
+    },
+    /** HN-5 — a copy's picture onto the system clipboard, with the copy's words beside it
+     * when it has any: main decodes the PNG and writes both formats in one write (LC-19),
+     * for this window, asking no focus (LC-18). The bytes, the words and their bounds are
+     * checked here first, so nothing past them crosses; the answer is parsed, and a
+     * refusal rejects with its reason in words, so the copy deals no card. */
+    writeImage: async (png: Uint8Array, text?: string): Promise<void> => {
+      if (!isStillBytes(png)) throw new Error("a picture is written from its PNG's bytes");
+      if (text !== undefined && typeof text !== "string") {
+        throw new Error("the words written beside a picture are text");
+      }
+      const past = pastBound(png.byteLength, text === undefined ? 0 : utf8ByteLength(text));
+      if (past !== null) throw new Error(past);
+      const answer: unknown =
+        text === undefined
+          ? await ipcRenderer.invoke(IPC_CHANNELS.clipboardWriteImage, png)
+          : await ipcRenderer.invoke(IPC_CHANNELS.clipboardWriteImage, png, text);
+      const result = ClipboardWriteImageResult.parse(answer);
+      if (result.status === "written") return;
+      throw new Error(
+        result.reason === "not-an-image"
+          ? "the picture could not be read"
+          : `it holds ${result.bytes ?? "more"} bytes, more than the clipboard takes`,
       );
     },
   },

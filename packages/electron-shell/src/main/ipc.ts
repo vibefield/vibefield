@@ -29,7 +29,12 @@ import type { FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import type { Logger } from "@vibefield/logging";
 import { ipcMain, type WebContents } from "electron";
 import { createBootstrapHandler, type WindowRendererBoundary } from "./bootstrap";
-import { type ClipboardDoorOptions, createClipboardDoor } from "./clipboard-door";
+import {
+  type ClipboardDoorOptions,
+  type ClipboardImageDoorOptions,
+  createClipboardDoor,
+  createClipboardImageDoor,
+} from "./clipboard-door";
 import { shellIdentity } from "./login-shell";
 import { createScreenshotDoor } from "./screenshot-door";
 import { createScreenshotPreviewDoor } from "./screenshot-preview";
@@ -296,6 +301,32 @@ export function registerClipboardRead(
     },
   });
   ipcMain.handle(IPC_CHANNELS.clipboardRead, (event, raw: unknown) => door(event.sender, raw));
+}
+
+/** HN-5 — the clipboard's picture write (design-03 §5.1's `shell.clipboard.*`, the product
+ * window's write half beside item 102's read): the PNG's bytes and the copy's words, the
+ * invoke's two arguments. Policy in clipboard-door.ts; this is the ipcMain wiring only. The
+ * registered-sender gate is `registry.owns`, as at every door here — the text copy's rule,
+ * no focus asked (LC-18); the decode and the one write are the caller's. */
+export function registerClipboardWriteImage<Picture>(
+  registry: WindowRegistry,
+  options: Omit<ClipboardImageDoorOptions<WebContents, Picture>, "owns" | "onRefused">,
+  logger?: Logger,
+): void {
+  const door = createClipboardImageDoor<WebContents, Picture>({
+    ...options,
+    owns: (sender) => registry.owns(sender),
+    onRefused: (sender, reason, bytes) => {
+      logger?.warn(
+        "desktop.ipc.clipboard_write_refused",
+        "Electron refused a clipboard picture write",
+        { webContentsId: sender.id, reason, ...(bytes === undefined ? {} : { bytes }) },
+      );
+    },
+  });
+  ipcMain.handle(IPC_CHANNELS.clipboardWriteImage, (event, raw: unknown, text?: unknown) =>
+    door(event.sender, raw, text),
+  );
 }
 
 /** WP12d (L3c-i; `build-wp12-updater.md` §13 C1, the PM's ruling 2026-10-15 18:17Z) — the updater's host doors. The

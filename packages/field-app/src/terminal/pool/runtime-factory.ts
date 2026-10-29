@@ -5,6 +5,7 @@ import {
   waitForGhostteaRendererPorts,
 } from "@vibecook/ghosttea-react";
 import TerminalRenderWorker from "@vibecook/ghosttea-react/terminal-render.worker.js?worker";
+import { programClipboardWriter } from "../clipboard";
 import { ROUTED_CLIENT_CAPABILITIES } from "../routed/host";
 
 // THE ONE RUNTIME PER WINDOW (TP-D5, §9.1) — built here and nowhere else.
@@ -61,7 +62,9 @@ export function createTerminalRuntime(
     // its own module URL, which under Vite means an asset inside node_modules.
     workerFactory: () => new TerminalRenderWorker(),
     platform: {
-      writeClipboard: (text: string) => void navigator.clipboard?.writeText(text),
+      // HN-5: a program's write (OSC 52) through the host's copy door — the web's own is
+      // denied in the app — and no card: a program's write is not a copy (LC-14)
+      writeClipboard: programClipboardWriter(),
       ...(options.openLink !== undefined ? { openExternal: options.openLink } : {}),
       forceCanvasFallback: () => false,
       setForceCanvasFallback: () => undefined,

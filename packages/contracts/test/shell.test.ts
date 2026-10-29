@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { METHODS } from "../src/methods";
-import { IPC_CHANNELS, SHELL_CLIPBOARD, TERMINAL_PIPELINE } from "../src/registries";
+import {
+  IPC_CHANNELS,
+  SCREENSHOT_STILL,
+  SHELL_CLIPBOARD,
+  TERMINAL_PIPELINE,
+} from "../src/registries";
 import {
   APP_PREFERENCE_KEYS,
   AppPreferenceSetParams,
@@ -8,6 +13,7 @@ import {
   BrowserDataClearResult,
   ClipboardReadRequest,
   ClipboardReadResult,
+  ClipboardWriteImageResult,
   CloseReason,
   CloseRequest,
   CloseResult,
@@ -227,7 +233,7 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
   // meet at it in a merge and conflict out loud, where a number in the title
   // went stale in silence (item 102, found at HN's rebase rehearsal).
   it("exposes exactly its channel keys, in order", () => {
-    expect(Object.keys(IPC_CHANNELS)).toHaveLength(33);
+    expect(Object.keys(IPC_CHANNELS)).toHaveLength(34);
     expect(Object.keys(IPC_CHANNELS)).toEqual([
       "windowBootstrap",
       "prepareClose",
@@ -265,6 +271,7 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       "rendererReplace", // DK-9 — the window's renderer replaced at its own asking (a plugin's kinds)
       "browserDataClear", // BP-D4 — Settings' Clear browsing data: the desk's profile cleared, its pages reloaded
       "clipboardRead", // item 102 — a paste's read through main, for the focused product window
+      "clipboardWriteImage", // HN-5 — a copy's picture written through main, the focused window
     ]);
   });
 
@@ -303,6 +310,7 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       rendererReplace: "vibefield:shell:renderer-replace",
       browserDataClear: "vibefield:browser:clear-data",
       clipboardRead: "vibefield:clipboard:read",
+      clipboardWriteImage: "vibefield:clipboard:write-image",
     });
   });
 
@@ -372,6 +380,43 @@ describe("the clipboard read door (item 102)", () => {
     expect(ClipboardReadResult.safeParse({ status: "read", text: `${atBound}x` }).success).toBe(
       false,
     );
+  });
+});
+
+describe("the clipboard picture door (HN-5)", () => {
+  it("answers written, or an honest refusal with the size it refused", () => {
+    expect(ClipboardWriteImageResult.parse({ status: "written" })).toEqual({ status: "written" });
+    expect(
+      ClipboardWriteImageResult.parse({ status: "refused", reason: "not-an-image" }),
+    ).toEqual({ status: "refused", reason: "not-an-image" });
+    const past = SHELL_CLIPBOARD.WRITE_IMAGE_MAX_BYTES + 1;
+    expect(
+      ClipboardWriteImageResult.parse({ status: "refused", reason: "too-large", bytes: past }),
+    ).toMatchObject({ reason: "too-large", bytes: past });
+    // a tolerant reader: a later field rides through
+    expect(ClipboardWriteImageResult.parse({ status: "written", later: 1 })).toMatchObject({
+      status: "written",
+    });
+    for (const bad of [
+      {},
+      { status: "wrote" },
+      { status: "refused" },
+      { status: "refused", reason: "because" },
+      { status: "refused", reason: "too-large", bytes: -1 },
+      { status: "refused", reason: "too-large", bytes: 1.5 },
+      // LC-18: the write asks no focus, so a window behind is no refusal of it
+      { status: "refused", reason: "unfocused" },
+    ])
+      expect(ClipboardWriteImageResult.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
+  });
+
+  it("bounds a picture by the kept still's cap, by reference — never a number of its own", () => {
+    expect(SHELL_CLIPBOARD.WRITE_IMAGE_MAX_BYTES).toBe(SCREENSHOT_STILL.MAX_BYTES);
+    expect(SCREENSHOT_STILL.MAX_BYTES).toBe(64 * 1024 * 1024);
+  });
+
+  it("bounds the words by the copy door's one bound, 64 KiB of UTF-8 (LC-19)", () => {
+    expect(SHELL_CLIPBOARD.WRITE_TEXT_MAX_BYTES).toBe(64 * 1024);
   });
 });
 

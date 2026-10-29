@@ -187,3 +187,25 @@ export const COPY_WORDS = {
   offScreen: "Not copied — it is off the screen",
   notDrawn: "Not copied — the desk could not draw it",
 } as const;
+
+/** HN-5 — a copy the system clipboard did not take deals no card (copy-door.ts), and says why
+ * after "Not copied —", as the desk's Copy says its own. A refusal of main's picture door comes
+ * in main's words, the clipboard read's voice (item 102) — "the picture could not be read", "the
+ * words hold N bytes; the clipboard takes at most M"; these are the rest. */
+export const COPY_DOOR_WORDS = {
+  /** the host's copy door, or the page's own clipboard, did not take the words */
+  words: "the clipboard did not take the words",
+  /** the page's own clipboard (the browser catalog's) did not take the picture, or main's
+   * picture door refused it with no words of its own */
+  picture: "the clipboard did not take the picture",
+  /** a refusal as the line says it */
+  refused: (reason: string) => `Not copied — ${reason}`,
+} as const;
+
+/** HN-5 — the place a copy was made when it is a sheet over the view, not the view's own
+ * surface: its card's provenance names it after the view under it ("Canvas · Settings · just
+ * now"). History's own copies name History alone. */
+export const COPY_PLACES = {
+  settings: "Settings",
+  setup: "Setup Assistant",
+} as const;

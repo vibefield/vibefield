@@ -16,6 +16,9 @@ import { TailscaleMark } from "../account/tailscale-mark";
 import { useAccountSnapshot } from "../account/use-account";
 import { copyText, useLinkDoor } from "../account/use-link-door";
 import { leaveFor } from "../boot/switch";
+import type { DealFrom } from "../frame/cards/cards-store";
+import { COPY_PLACES } from "../frame/cards/cards-words";
+import { dealFromElement } from "../frame/cards/copy-door";
 import { osOf } from "../godview/monitor/devices";
 import type { MonitorDeviceFacet } from "../godview/monitor/types";
 import { OsMark } from "../godview/os-marks";
@@ -84,8 +87,9 @@ export interface DevicesSectionViewProps {
   onCancel: () => void;
   onRenew: () => void;
   onOpenAgain: () => void;
-  onCopyLink: () => Promise<boolean>;
-  onCopyText: (text: string) => Promise<boolean>;
+  /** HN-5 — a copy deals a card from the button pressed: `from` is its box */
+  onCopyLink: (from: DealFrom | null) => Promise<boolean>;
+  onCopyText: (text: string, from: DealFrom | null) => Promise<boolean>;
   /** "Use another account" on a refusal: unlink first, then sign in afresh */
   onStartOver: () => void;
   onSheet: (sheet: DevicesSheet) => void;
@@ -117,13 +121,14 @@ function dueDay(at: number): string {
   return new Date(at).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 }
 
-/** A button that says it worked, for two seconds, in its own words. */
+/** A button that says it worked, for two seconds, in its own words. What it copied is dealt
+ * into the hand from the button's own box (HN-5), the sheet over the frame. */
 function CopyButton({
   label,
   copy,
 }: {
   label: string;
-  copy: () => Promise<boolean>;
+  copy: (from: DealFrom | null) => Promise<boolean>;
 }): ReactElement {
   const [done, setDone] = useState<null | boolean>(null);
   useEffect(() => {
@@ -132,7 +137,11 @@ function CopyButton({
     return () => clearTimeout(timer);
   }, [done]);
   return (
-    <button type="button" className={buttonCls} onClick={() => void copy().then(setDone)}>
+    <button
+      type="button"
+      className={buttonCls}
+      onClick={(event) => void copy(dealFromElement(event.currentTarget)).then(setDone)}
+    >
       {done === true ? "Copied" : done === false ? "Couldn't copy" : label}
     </button>
   );
@@ -564,7 +573,10 @@ function ThisMac(props: DevicesSectionViewProps): ReactElement {
             <span className={labelCls}>In Tailscale</span>
             <span className="vf-devices-fact-act">
               <span className="vf-ui-mono">{tailscale.machineName}</span>
-              <CopyButton label="Copy" copy={() => props.onCopyText(tailscale.machineName ?? "")} />
+              <CopyButton
+                label="Copy"
+                copy={(from) => props.onCopyText(tailscale.machineName ?? "", from)}
+              />
             </span>
           </>
         )}
@@ -871,14 +883,7 @@ export function DevicesSection({
       onRenew={() => void door.renew()}
       onOpenAgain={door.openAgain}
       onCopyLink={door.copyLink}
-      onCopyText={async (text) => {
-        try {
-          await copyText(text);
-          return true;
-        } catch {
-          return false;
-        }
-      }}
+      onCopyText={(text, from) => copyText(text, COPY_PLACES.settings, from)}
       onStartOver={() => void door.startOver()}
       onSheet={(next) => {
         setDisconnect({ kind: "idle" });

@@ -88,6 +88,12 @@ export interface FieldBrowserDataHost {
  * stands. */
 export interface FieldClipboardHost {
   readText(): Promise<string>;
+  /** HN-5 — a copy's picture onto the system clipboard, its PNG's bytes written through
+   * main (the web's write is denied in the app as its read is), with the copy's words
+   * beside it when it has any: ONE write, both formats, so neither replaces the other
+   * (LC-19). No focus is asked, the words' rule (LC-18); a refusal rejects in words, and
+   * the copy then deals no card. Words alone keep `FieldDiagnosticsHost.copyText`. */
+  writeImage(png: Uint8Array, text?: string): Promise<void>;
 }
 
 export interface FieldDiagnosticsHost {

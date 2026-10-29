@@ -1,6 +1,7 @@
 import { constants } from "node:fs";
 import { type FileHandle, open } from "node:fs/promises";
 import {
+  SCREENSHOT_STILL,
   ScreenshotStillBytesRequest,
   ScreenshotStillKeptRequest,
   screenshotStillUrl,
@@ -40,8 +41,9 @@ export type StillOpened<T> =
   | { readonly ok: false; readonly reason: StillBytesRefusal };
 
 /** The most a still may weigh. One screen's PNG is far below it, so a file past it is not the
- * still the helper wrote — and main never holds it whole to find out. */
-export const STILL_BYTES_CAP = 64 * 1024 * 1024;
+ * still the helper wrote — and main never holds it whole to find out. The contracts' number
+ * (HN-5): the clipboard's picture door is bounded by the same still. */
+export const STILL_BYTES_CAP = SCREENSHOT_STILL.MAX_BYTES;
 
 /** Read only; never through a symlink at the path (O_NOFOLLOW); never waiting on a FIFO's writer
  * (O_NONBLOCK opens one at once, and the regular-file check then refuses it). Windows defines

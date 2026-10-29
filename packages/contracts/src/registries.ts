@@ -1834,6 +1834,23 @@ export const IPC_CHANNELS = {
    * the shell session grants no Chromium permission (ESP §7.4), so the web's own
    * read is denied there by law. */
   clipboardRead: "vibefield:clipboard:read",
+  /** renderer → main invoke: a PNG's bytes, and the copy's words when it has any →
+   * ClipboardWriteImageResult — a copy's picture put on the system clipboard (HN-5;
+   * design-03 §5.1's `shell.clipboard.*`, the product window's picture write, beside
+   * the read). The bytes are the invoke's first argument and the words its second,
+   * never JSON, and ONE write carries both formats (LC-19). Main decodes and writes
+   * them for a registered product window — the text copy's rule, no focus asked
+   * (LC-18): the shell session grants no Chromium permission (ESP §7.4), so the
+   * web's own write is denied there by law. */
+  clipboardWriteImage: "vibefield:clipboard:write-image",
+} as const;
+
+/** HN-4 (2026-10-29) — a retained still's read cap: the most a still may weigh when
+ * main reads it for the desk's print (`IPC_CHANNELS.screenshotStillBytes`) or judges
+ * it kept (`screenshotStillKept`). One screen's PNG is far below it, so a file past it
+ * is not the still the helper wrote, and main never holds it whole to find out. */
+export const SCREENSHOT_STILL = {
+  MAX_BYTES: 64 * 1024 * 1024,
 } as const;
 
 /** Item 102 (2026-10-29) — the clipboard read door's bound (`IPC_CHANNELS.clipboardRead`).
@@ -1849,4 +1866,15 @@ export const IPC_CHANNELS = {
  * measure D6 states. */
 export const SHELL_CLIPBOARD = {
   READ_MAX_BYTES: TERMINAL_PIPELINE.MAX_PASTE_BYTES,
+  /** HN-5 — the picture write's bound (`IPC_CHANNELS.clipboardWriteImage`), not a
+   * number of its own either: the largest picture the hand holds is a still the tool
+   * keeps, so the clipboard takes whole any picture the still door would read whole.
+   * Past it the write is refused with its size, never cut. PNG bytes. */
+  WRITE_IMAGE_MAX_BYTES: SCREENSHOT_STILL.MAX_BYTES,
+  /** HN-5 (LC-19) — the copy door's bound: the most words a copy puts on the system
+   * clipboard, through the host's copy door (`copyText`, main's `clipboard.writeText`)
+   * or beside a picture through the picture door. Main's one literal until HN-5, now
+   * read by both doors' checks. Past it the words are refused whole with their size,
+   * never cut. UTF-8 bytes. */
+  WRITE_TEXT_MAX_BYTES: 64 * 1024,
 } as const;
