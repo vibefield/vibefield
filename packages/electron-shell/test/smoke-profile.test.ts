@@ -110,9 +110,23 @@ describe("the smoke launcher (apps/desktop/packaging/run-smoke.mjs)", () => {
       return false;
     }
   };
+  // *Measured 2026-10-29 (item 93):* each row below resolves Electron's binary in a node child (37 ms here), then runs
+  // the launcher as a smoke does. The launcher and the stand-in are node starts (34 ms each), with one more node in two
+  // of the rows. The stand-in waits 300 ms in the LEFT row. Then the census runs (`smoke-daemons.mjs`): 124 ms with
+  // nothing left and 239 ms with a daemon left, alone on a quiet host. The census is the part a loaded host stretches.
+  // Its read of the whole process table, every environment with it, grows with the host. Before item 93 it made two of
+  // those reads per look, four or more in the LEFT row.
+  // In this Mac's logged suites since 10-20 (121 runs), the LEFT row took a median 2201 ms (p90 3568, the greens' worst
+  // 4991) and was red four times past 5 s, at up to 9144 ms. The other two rows' medians were 1.2 and 1.1 s, and their
+  // worst were 3598 and 6432 ms (the one red). Alone ×5 at load 13–16 the three took 879–979, 505–597 and 477–689 ms
+  // (main's census: 1191–1311, 580–687, 556–665). The rows are synchronous (`spawnSync`), so vitest's timer fires only
+  // when one resolves (`@vitest/runner` 3.2.7, chunk-hooks.js:1880–1886).
+  // 15 s is more than 1.6 times the worst any of them took here, with the census as it was.
+  const LAUNCHER_ROW_BUDGET_MS = 15_000;
 
   it.skipIf(process.platform === "win32")(
     "DK-18 (39): marks the run, and a daemon the smoke LEFT is found by the mark, reaped, and makes the run red",
+    { timeout: LAUNCHER_ROW_BUDGET_MS },
     () => {
       // the stand-in starts a DETACHED daemon (it inherits the run's mark, as fieldd and field-native do) and exits 0
       const dist = mkdtempSync(join(tmpdir(), "dk-18-fake-electron-"));
@@ -161,6 +175,7 @@ describe("the smoke launcher (apps/desktop/packaging/run-smoke.mjs)", () => {
 
   it.skipIf(process.platform === "win32")(
     "DK-18 (39): a run whose processes all went with it keeps Electron's code — the row finds nothing",
+    { timeout: LAUNCHER_ROW_BUDGET_MS },
     () => {
       const dist = mkdtempSync(join(tmpdir(), "dk-18-fake-electron-"));
       try {
@@ -188,6 +203,7 @@ describe("the smoke launcher (apps/desktop/packaging/run-smoke.mjs)", () => {
 
   it.skipIf(process.platform === "win32")(
     "hands Electron a fresh profile, removes it after, and exits with Electron's own code",
+    { timeout: LAUNCHER_ROW_BUDGET_MS },
     () => {
       // Electron's own seam for its binary (`ELECTRON_OVERRIDE_DIST_PATH`): a stand-in that
       // writes into the profile it was handed, says what it saw, and exits 3.
