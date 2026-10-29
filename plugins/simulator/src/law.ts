@@ -1211,3 +1211,53 @@ export function mixShape(A: PhoneShape, B: PhoneShape, k: Tracks): PhoneShape {
     buttons: mixButtons(A.buttons, B.buttons, k.size, k.t),
   };
 }
+
+/**
+ * Where `x` models along the history is (0 the first, `models.length − 1` the newest): between two, their morph at the fraction,
+ * UNSTAGED (every track is the fraction — the prototype's scrubber, where the hand is the clock). The desk has no scrubber: this
+ * is the morph's witness over the whole catalog (PHONE.md §13 — at each whole step the very model, between two their blend).
+ */
+export function historyShape(
+  x: number,
+  models: readonly PhoneModel[] = PHONES,
+): { shape: PhoneShape; from: PhoneModel; to: PhoneModel; f: number } {
+  const c = Math.min(Math.max(x, 0), models.length - 1);
+  const i = Math.max(Math.min(Math.floor(c), models.length - 2), 0);
+  const f = c - i;
+  const from = models[i] ?? DEFAULT_PHONE;
+  const to = models[i + 1] ?? from;
+  return { shape: mixShape(shapeOf(from), shapeOf(to), morphTracks(f, false)), from, to, f };
+}
+
+// ---------------------------------------------------------------- the family photo
+
+/**
+ * Every model laid out at its true size, oldest first, in rows `across` wide, `gap` apart (world) — the lineup (PHONE.md's family
+ * photo). The desk lays no lineup out (each phone is an object a person places): this is the catalog's witness that every body
+ * is its own size and none overlaps another laid beside it.
+ */
+export function lineup(
+  models: readonly PhoneModel[],
+  x0: number,
+  y0: number,
+  across = 11,
+  gap = 36,
+): { model: PhoneModel; x: number; y: number }[] {
+  const out: { model: PhoneModel; x: number; y: number }[] = [];
+  let y = y0;
+  let rowH = 0;
+  let x = x0;
+  models.forEach((m, i) => {
+    if (i > 0 && i % across === 0) {
+      y += rowH + gap * 1.6;
+      rowH = 0;
+      x = x0;
+    }
+    const w = m.body.mm[0] * MM;
+    const h = m.body.mm[1] * MM;
+    out.push({ model: m, x: x + w / 2, y: y + h / 2 });
+    x += w + gap;
+    rowH = Math.max(rowH, h);
+  });
+  return out;
+}

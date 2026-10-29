@@ -7,8 +7,9 @@
 //    desk's flux, square to the mat" — core's drag carries a plugin kind (the browser pane's PT-1 ruling 4);
 //  - the ray's and the side's tests take their eye EXPLICITLY (an off-centre desk eye): a phone is drawn from its own eye
 //    (the pane's ruling 3), and the ray must find the drawn point from any eye; tilt is gone (a phone is never turned);
-//  - "the lineup's 42 bodies never touch" and "walks the history" are left with the lab (no lineup or scrubber on the desk);
-//    the lineup's second half — true relative size — stands as a catalog row;
+//  - "lays every model out with no two touching" and "walks the history in order" stand over the law's `lineup` and
+//    `historyShape`, ported as witnesses (the desk lays no lineup out and has no scrubber): the catalog's true sizes, and the
+//    morph's continuity over the whole history;
 //  - added: the one scale constant, an unknown model drawn as the default, a finish kept to its model's own, the demand over
 //    the SIGHT agreeing with the desk eye's, the reach holding the largest model's overhang.
 import { existsSync, readdirSync, readFileSync } from "node:fs";
@@ -33,6 +34,8 @@ import {
   glassOf,
   glassPoint,
   HOUSING_FADE,
+  historyShape,
+  lineup,
   MM,
   mixFinish,
   mixShape,
@@ -212,7 +215,28 @@ describe("the catalog — every iPhone the Simulator knows, in Apple's numbers",
     expect(look.finishes["cosmic-orange"]?.white).toBe(0);
   });
 
-  it("keeps true relative size: the Pro Max a third longer than the first SE (the lineup's half that stands)", () => {
+  it("lays every model out with no two touching — each at its true size: the Pro Max a third longer than the first SE", () => {
+    const spots = lineup(PHONES, 0, 0, 11, 40);
+    expect(spots).toHaveLength(42);
+    const box = (s: (typeof spots)[number]) => ({
+      x0: s.x - (s.model.body.mm[0] * MM) / 2,
+      x1: s.x + (s.model.body.mm[0] * MM) / 2,
+      y0: s.y - (s.model.body.mm[1] * MM) / 2,
+      y1: s.y + (s.model.body.mm[1] * MM) / 2,
+    });
+    const boxes = spots.map(box);
+    for (let i = 0; i < boxes.length; i++)
+      for (let j = i + 1; j < boxes.length; j++) {
+        const a = boxes[i];
+        const c = boxes[j];
+        if (a === undefined || c === undefined) throw new Error("a spot went missing");
+        expect(
+          a.x1 <= c.x0 || c.x1 <= a.x0 || a.y1 <= c.y0 || c.y1 <= a.y0,
+          `${spots[i]?.model.name} · ${spots[j]?.model.name}`,
+        ).toBe(true);
+      }
+    // oldest first, as the catalog keeps them
+    expect(spots.map((s) => s.model)).toEqual([...PHONES]);
     expect(sdBody(shapeOf(model("iPhone 17 Pro Max")), 0, 0)).toBeLessThan(
       sdBody(shapeOf(model("iPhone SE (1st generation)")), 0, 0),
     );
@@ -757,6 +781,20 @@ describe("the morph — any model into any other, and nothing pops (PHONE.md §1
         }
       }
     }
+  });
+
+  it("walks the history in order: at each whole step it is that model; between two, their blend", () => {
+    PHONES.forEach((m, i) => {
+      expect(historyShape(i).shape, m.name).toBe(shapeOf(m));
+    });
+    const h = historyShape(5.5);
+    expect(h.from.name).toBe("iPhone 8");
+    expect(h.to.name).toBe("iPhone X");
+    expect(h.f).toBeCloseTo(0.5, 12);
+    expect(h.shape.half[1]).toBeGreaterThan(S("iPhone 8").half[1]);
+    expect(h.shape.half[1]).toBeLessThan(S("iPhone X").half[1]);
+    expect(historyShape(-3).shape).toBe(shapeOf(PHONES[0] ?? DEFAULT_PHONE));
+    expect(historyShape(99).shape).toBe(shapeOf(PHONES[PHONES.length - 1] ?? DEFAULT_PHONE));
   });
 
   it("fills the display with a frame of another aspect — cropped evenly, never stretched — and blends two finishes along the material track", () => {
