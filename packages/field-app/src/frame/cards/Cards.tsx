@@ -33,6 +33,7 @@ import {
   reachLift,
   reachX,
 } from "./cards-model";
+import { listenForOtherApps } from "./cards-outside";
 import { dealCapture } from "./cards-sources";
 import { type CardStore, cardsStore, useCards } from "./cards-store";
 import { captureRefusal } from "./cards-words";
@@ -62,6 +63,9 @@ import { captureRefusal } from "./cards-words";
  *   a capture main ran (⌃⌘A, View ▸ Take Screenshot) is dealt from its region as a picture card,
  *   a failure is said on the line's note, and every result tells the line's snapshot whether it
  *   waits (`capture-state.ts`).
+ * - What another app hands over comes in while the hand is here (HN-6, `cards-outside.ts`): ⌘V
+ *   with no caret deals a card for each thing the paste holds, and a drag into the window is a
+ *   card carried until it is let go — a file named by its path through the shell's file door.
  */
 
 /** A press that moves this far is a drag; less, a click (HN-D5). */
@@ -77,7 +81,10 @@ const LEAVE_MS = 240 + 40;
 const NUDGE_MS = 1200;
 const SETTLE_MS = 280;
 
-export type CardsHost = Pick<FieldHost, "onScreenshotResult" | "screenshotStillUrl">;
+export type CardsHost = Pick<
+  FieldHost,
+  "onScreenshotResult" | "screenshotStillUrl" | "pathForFile"
+>;
 
 export interface CardsProps {
   /** The frame's open surface, from its one owner (`frame-surface.ts`). */
@@ -634,6 +641,10 @@ export function Cards({
       }
     });
   }, [host, store]);
+
+  // What another app hands over comes in as cards only when it is brought (HN-6, HN-L1): ⌘V with
+  // no caret, a drag into the window — a file named by its path through the shell's file door.
+  useEffect(() => listenForOtherApps({ store, host }), [host, store]);
 
   return (
     <>
