@@ -5,6 +5,7 @@ export * from "./binding";
 export { PHONES } from "./catalog.gen";
 export * from "./face";
 export * from "./fixture";
+export * from "./fixture-live";
 export * from "./ids";
 export * from "./kind";
 export * from "./law";

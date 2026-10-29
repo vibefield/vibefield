@@ -12,6 +12,7 @@ import {
   type LiveFace,
   type LiveInfo,
   type LiveSimulatorFace,
+  type LiveSources,
   type LiveState,
   type LiveTexture,
   lampOf,
@@ -120,10 +121,11 @@ export function fakeWords() {
   return { raster, asked };
 }
 
-/** A host lending `LIVE` and the words' raster (or not), its doors counted; the desk's frames moved by the test. */
+/** A host lending `LIVE` (its own fake faces, or the `sources` a test hands it) and the words' raster (or not), its doors counted; the desk's frames moved by the test. */
 export function fakeHost(
   opts: {
     live?: boolean;
+    sources?: LiveSources;
     keys?: Record<number, string>;
     holds?: boolean;
     words?: WordsRaster;
@@ -191,7 +193,7 @@ export function fakeHost(
     pass: () => (opts.pass === true ? (pass as never) : undefined),
     use: <T>(key: { name: string }) =>
       opts.live !== false && key.name === LIVE.name
-        ? (sources as T)
+        ? ((opts.sources ?? sources) as T)
         : opts.words !== undefined && key.name === WORDS_RASTER.name
           ? (opts.words as T)
           : undefined,
@@ -218,7 +220,7 @@ export function fakeHost(
     evict,
     pass,
     /** A frame drawn: the slot's view tells the sight what it drew of `e`'s display (a 66.6 × 144.6 mm one at `zoom`), then the count moves. */
-    draw(local: SimulatorLocal, e: Entity, zoom: number, target?: "hand") {
+    draw(local: Pick<SimulatorLocal, "sight">, e: Entity, zoom: number, target?: "hand") {
       const [width, height] = [4000, 4000];
       const slot = {
         view: { camX: -width / 2 / zoom, camY: -height / 2 / zoom, zoom, width, height, dpr: 2 },

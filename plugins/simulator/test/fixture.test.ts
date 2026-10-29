@@ -1,7 +1,7 @@
 // THE FIXTURE FEED (src/fixture.ts — PHONE.md §6.3's contract, its picture redrawn): the screen iOS lays out on each model's
 // shape (its island, its notch's ears, a home-button phone's bar; mid-morph the in-between one); a frame made from arithmetic
 // alone — the same bytes for the same arguments, opaque, light and dark, its clock turning only with its minute; and the
-// STREAM'S CONTRACT: paused until asked, frames at the demanded size and rate, none while nothing changed.
+// STREAM'S CONTRACT: paused until asked, frames at the demanded size and rate, none while nothing changed — and when one is due.
 import { describe, expect, it } from "vitest";
 import {
   FixtureFeed,
@@ -134,6 +134,30 @@ describe("the stream's contract — frames at the size and rate asked, none whil
     feed.follow("dark");
     expect(feed.frame(AT + 65_000)).toBeUndefined();
     expect(feed.frames).toBe(5);
+  });
+
+  it("says WHEN a frame is next due — now on a change, the rate's slot, the minute's turn, never while paused — and is due from then on", () => {
+    const feed = new FixtureFeed(PRO, [1206, 2622], "light");
+    expect(feed.next(AT)).toBe(Number.POSITIVE_INFINITY);
+    feed.demand({ mode: "live", fps: 10, raster: [302, 656] });
+    expect(feed.next(AT)).toBe(AT);
+    feed.frame(AT);
+    // nothing told: the minute's turn (AT is on one)
+    expect(feed.next(AT + 5)).toBe(AT + 60_000);
+    expect(feed.due(AT + 59_999)).toBe(false);
+    expect(feed.due(AT + 60_000)).toBe(true);
+    // a change inside the rate's interval: its slot (100 ms after the last frame, less the 1 ms grace)
+    feed.follow("dark");
+    expect(feed.next(AT + 5)).toBe(AT + 99);
+    expect(feed.due(AT + 98)).toBe(false);
+    expect(feed.due(AT + 99)).toBe(true);
+    // past the slot: now
+    expect(feed.next(AT + 300)).toBe(AT + 300);
+    // the minute already turned under a feed nothing told: now
+    feed.frame(AT + 300);
+    expect(feed.next(AT + 61_000)).toBe(AT + 61_000);
+    feed.demand({ mode: "paused", fps: 0, raster: [0, 0] });
+    expect(feed.next(AT + 61_000)).toBe(Number.POSITIVE_INFINITY);
   });
 
   it("never sends faster than the rate asked — a change within its interval waits for the next", () => {

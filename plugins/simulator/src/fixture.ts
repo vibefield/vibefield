@@ -1,6 +1,7 @@
-// THE FIXTURE FEED (PHONE.md §6.3; the prototype's lab/ios-feed.ts — its CONTRACT kept, its picture redrawn): what a phone's
+// THE FIXTURE FEED (PHONE.md §6.3; the prototype's lab/ios-feed.ts — its CONTRACT kept, its picture redrawn; James's choice 5,
+// ruled 2026-10-29: this redrawn fixture serves the product's stills and faces, and ios-feed.ts stays the lab's): what a phone's
 // screen shows where no Simulator streams to it — the plugin's own frame source, so a still is deterministic and every host
-// draws the same bytes (the playground's stills over playground/live.ts; PT-S2 may lend it as a dev source). A stand-in for
+// draws the same bytes (the playground's stills over playground/live.ts; a live desk's through fixture-live.ts). A stand-in for
 // the stream, not an emulator, and NO APPLE ARTWORK, ever (PHONE.md Q-9): synthetic shapes alone — a wallpaper of soft light,
 // a grid of tiles each marked with a plain figure, a dock, a status bar whose clock is drawn as segment digits (the fixture's
 // own figures, no font) — laid out for the model's own screen (its island drawn into the frame as iOS draws its own, its
@@ -477,6 +478,19 @@ export class FixtureFeed {
     if (this.fps <= 0) return false;
     if (now - this.last < 1000 / this.fps - 1) return false;
     return this.dirty || Math.floor(now / 60_000) !== this.shownMinute;
+  }
+
+  /**
+   * WHEN a frame is next due, ms on the caller's clock — what a live source wakes its face at (fixture-live.ts): `now` when one is
+   * due already; else the rate's next slot after the next change — and with nothing told, the only change the feed makes by
+   * itself is its clock's minute turning; never while paused. `due(t)` is true at every `t` from this on (until a frame is taken).
+   */
+  next(now: number): number {
+    if (this.fps <= 0) return Number.POSITIVE_INFINITY;
+    const slot = this.last + 1000 / this.fps - 1;
+    const minute = Math.floor(now / 60_000);
+    const changed = this.dirty || minute !== this.shownMinute ? now : (minute + 1) * 60_000;
+    return Math.max(changed, slot);
   }
 
   /** The frame for `now` when one is due, else undefined (nothing changed, or the rate holds it back, or paused). */

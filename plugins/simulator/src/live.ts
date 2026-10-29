@@ -1,8 +1,10 @@
 // THE PHONE'S LIVE SCREEN (ICE design-019 §3.3–§3.5, as the browser pane uses them — its live.ts is this one's model): a phone
 // BOUND to a device (binding.ts) holds a LIVE FACE that the host's `LIVE` service opens for it, by the object's DURABLE key
 // (`KindHost.keyOf` — so a reload re-attaches the same stream, never a new one), and its pass draws the face's texture. The
-// kind holds a view and words, never a frame (PA-22: the host fills the texture). PT-S1 has no host of its own: a still's
-// faces are the plugin's FIXTURE (playground/live.ts over fixture.ts); PT-S2's producer is the product's.
+// kind holds a view and words, never a frame (PA-22: the host fills the texture). `LIVE` is the ONE seam the screen is fed
+// through (James's choice 4, 2026-10-29): this file reads the spec it sends and the words it is told, never how the frames
+// are made, so a host may change its source and nothing here changes. The seam's first source is the plugin's FIXTURE — a
+// still's faces (playground/live.ts over fixture.ts) and a live desk's (fixture-live.ts); PT-S2's producer is the product's.
 //  - OPENED at the phone's record (a runtime entity — a tray's specimen, a ghost — has no durable key and gets no face; an
 //    unbound phone opens none), TAKEN once at the open; closed when the phone leaves, or when its binding moves (a new device
 //    is a new face: the host resolves another simulator);
