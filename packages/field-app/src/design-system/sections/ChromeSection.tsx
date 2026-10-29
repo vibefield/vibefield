@@ -21,8 +21,11 @@ import {
   CARD_FIXTURES,
   CARDS_STATES,
   CardFacesPlate,
+  CardsFromPlate,
   CardsPlate,
   COPY_FIXTURES,
+  FROM_FIXTURES,
+  FROM_REACHED,
   WAITING_FIXTURES,
 } from "../CardsPreview";
 import { ComposerLinePlate, LINE_STATES } from "../ComposerLinePreview";
@@ -276,6 +279,9 @@ export function ChromeSection({
           {CARDS_STATES.map((state) => (
             <CardsPlate key={`${state}-${dark ? "dark" : "light"}`} state={state} />
           ))}
+          {FROM_REACHED.map((id) => (
+            <CardsFromPlate key={`${id}-${dark ? "dark" : "light"}`} reach={id} />
+          ))}
         </div>
         <p className="vf-ds-stage-caption">
           The shipping fan over fixture cards, placed by the product's own model: at rest, the top
@@ -283,21 +289,26 @@ export function ChromeSection({
           reach on the third card — up whole and straight, its × inside its top right and where it
           came from above it; raised (⇧⌘V), every card up and straight, the keyboard's card ringed;
           a card picked up, at reading size in the middle over the window out of focus, the bar
-          under the head saying where it came from, with Remove and Done; and a card carried out of
-          the hand over a pane, its place kept in the fan, the pane ringed and saying "Paste into
-          vibe-field" over the card.
+          under the head saying where it came from, with Remove and Done; a card carried out of the
+          hand over a pane, its place kept in the fan, the pane ringed and saying "Paste into
+          vibe-field" over the card; and where cards came from, each reached in turn — a paste with
+          no caret by its act alone, a copy made in Settings by the view under it, and one History's
+          room made by History alone.
         </p>
         <CardFacesPlate cards={CARD_FIXTURES} />
         <CardFacesPlate cards={CARD_FIXTURES} night />
         <CardFacesPlate cards={WAITING_FIXTURES} />
         <CardFacesPlate cards={COPY_FIXTURES} />
+        <CardFacesPlate cards={FROM_FIXTURES} />
         <p className="vf-ds-stage-caption">
           One stock, six faces (HN-D1), twice their size: text, a file, an agent (the one dark card,
           its project's dot before its project), a terminal's output, a message and a picture — each
           its glyph in two corners and its name first; by this page's light, then by the Moon's
           (86%, its shadow deeper); a drag from another app before it is let go, saying only its
-          kind; and what the desk's Copy deals — one note's words as a text card, two objects as a
-          picture called "2 objects".
+          kind; what the desk's Copy deals — one note's words as a text card, two objects as a
+          picture called "2 objects"; and what another app, Settings and History deal — a file that
+          is not words, its kind and size; a paste's words; a device's name copied in Settings; a
+          path copied in History.
         </p>
       </Specimen>
 

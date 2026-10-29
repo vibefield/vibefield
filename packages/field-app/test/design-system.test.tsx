@@ -484,6 +484,9 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       "raised",
       "held",
       "carried",
+      "from",
+      "from",
+      "from",
     ]);
     const cardPlate = (state: string): HTMLElement | undefined =>
       cardPlates.find((p) => p.dataset.state === state);
@@ -509,8 +512,19 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(carriedPlate?.querySelector(".vf-cards-carried-ring")).not.toBeNull();
     const answer = carriedPlate?.querySelector(".vf-cards-carried-label");
     expect(answer?.textContent).toBe("Paste into vibe-field");
+    // …where a paste, a copy in Settings and one in History came from, each card reached on its
+    // own plate, the product's own provenance above it (LC-21: a paste says its act alone)
+    const fromPlates = cardPlates.filter((p) => p.dataset.state === "from");
+    expect(fromPlates.map((p) => p.dataset.reach)).toEqual([
+      "fx-from-paste",
+      "fx-from-settings",
+      "fx-from-history",
+    ]);
+    const over = fromPlates.map((p) => p.querySelector(".vf-cards-label")?.textContent);
+    expect(over).toEqual(["⌘V · just now", "Canvas · Settings · just now", "History · just now"]);
     // …and the faces on the shipping CardFace: the six kinds by day and by the Moon, a drag's two
-    // waiting faces, and the two the desk's Copy deals (UI_SYSTEM's list)
+    // waiting faces, the two the desk's Copy deals (UI_SYSTEM's list), and what another app,
+    // Settings and History deal — a file that is not words by its kind and size (§9)
     const faceRows = [...(container?.querySelectorAll(".vf-ds-card-faces") ?? [])];
     const kindsOf = (row: Element): string =>
       [...row.querySelectorAll<HTMLElement>(".vf-card")].map((card) => card.dataset.kind).join(" ");
@@ -519,10 +533,12 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       "text file agent term msg pict",
       "pict file",
       "text pict",
+      "file text text text",
     ]);
     expect(faceRows.map((row) => row.classList.contains("dark"))).toEqual([
       false,
       true,
+      false,
       false,
       false,
     ]);
@@ -531,6 +547,8 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(copyNote?.textContent).toBe("Ship the hand on Thursday.");
     const copyPicture = faceRows[3]?.querySelector('[data-kind="pict"] .vf-card-name');
     expect(copyPicture?.textContent).toBe("2 objects");
+    const facts = faceRows[4]?.querySelector('[data-kind="file"] [data-facts]');
+    expect(facts?.textContent).toBe("PDF · 2.4 MB");
   });
 
   it("exposes theme and representative component-state controls", async () => {
