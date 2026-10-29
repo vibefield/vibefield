@@ -18593,3 +18593,37 @@ now said it before they had a reason, so the offer returns only where a connecte
 
 **Owed.** The status item's row, a ghost row and the away notice on a desk (James's display word), with TS-2/3a/3b's
 photographs and desk rows.
+
+## AL — the shell lease's rows settle every lease's writes before their root goes: "only the LAST holder's close" raced its own temp root's removal (2026-10-29; `2422bdf5c`, lane `fix/shell-lease-enotempty`; VF-PM's word 03:08Z and 03:13Z)
+
+**What happened:** `shell-lease.test.ts` "only the LAST holder's close vacates it; a second holder keeps it held"
+failed with ENOTEMPTY on its own mkdtemp root at the afterEach `rmSync` (:26). This is a 4 ms row.
+- **Witnesses:**
+  - CI run 40807651886, attempt 1, on the pushed `77322a501`: 2590 passed and this one failed. Nothing pushed touches
+    the lease.
+  - Earlier: QW1 stack B's verify at load 236, green alone (VF-PM 10-28 09:39Z, the Fixer queue's "the shell lease's
+    cleanup race").
+
+**The cause, read:**
+- `ShellLease.closed()` (fieldd `src/shell-lease.ts`), for the last holder, chains the record's write onto `writes`
+  and returns at once. The write is a mkdir of `fieldd/`, a temp file opened, written and fsynced, then
+  `durableRename` onto `LAYOUT.SHELL_EXIT`.
+- Every other row that vacates the lease awaits `flush()`. This one ends right after its second close, so its
+  write was still in flight when the cleanup's recursive `rmSync` listed the root. The directory or temp file the
+  write made after that listing left the root not empty.
+
+**The fix** (`2422bdf5c`, the test only):
+- The `lease()` helper pushes `value.flush()` onto the cleanup list after `tempRoot()`'s `rmSync`. The list runs in
+  reverse, so every lease's writes settle before its root is removed. That includes a later row that ends without a
+  flush.
+- `flush()` never rejects: its chain catches and logs. Nothing tolerates the error and nothing retries.
+- The daemon rows were already covered, since the daemon's stop awaits the lease's flush (`daemon.ts`:6913).
+
+**Validation** (this Mac's SSD lane `/Volumes/SamsungRed/lanes/item87`, guard, nice 19; VF-PM's GO 03:13Z and 03:16Z):
+- **The file alone** at `2422bdf5c` (03:14:11–16Z, load 11.1): 15/15 passed. The row passed in 11 ms.
+- **`pnpm verify`, verbatim**, at `2422bdf5c` on `77322a501` (03:17:50–03:27:39Z; armed at a 1-min load of 17.4
+  after PORTALS' drain; the 5-min load was 128 at the end): **EXIT 0**.
+  - The test target: "Successfully ran target test for 27 projects". fieldd 2,591 passed (11 skipped), with
+    `shell-lease.test.ts` 15/15; field-app 2,788 passed.
+  - `pnpm test:rust`: 31 suites, 493 passed, 0 failed. gen:check clean.
+- Records: `/Volumes/SamsungRed/lanes/records/shell-lease/`.
