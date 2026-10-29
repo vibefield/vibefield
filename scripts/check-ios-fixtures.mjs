@@ -156,6 +156,8 @@ const requiredMirrors = [
   ["launch", sheetFixtures.slice(0, 2), ["Sources/FieldWorkspace"]],
   // IOS-8f — the face deal's vector: the phone deals from the desktop's own deck and hash
   ["face", ["face-deal.vector.json"], ["Tests/FieldDesignTests"]],
+  // IOS-8f — `user.me`'s answers, read by the kit's own `UserMeResult`
+  ["user-me", ["user-me.valid.json", "user-me.dealt.json"], ["Tests/FieldProductTests"]],
 ];
 for (const [set, fixtures, folders] of requiredMirrors) {
   for (const folder of folders) {
