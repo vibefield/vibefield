@@ -194,6 +194,7 @@ import { projectPluginAuthority } from "@vibefield/plugin-runtime";
 import { PROTOCOL_VERSION as ROSETTA_PROTOCOL_VERSION } from "@vibefield/rosetta-protocol/protocol-version";
 import {
   agentListFor,
+  clipRecordedLanes,
   createFieldSubscription,
   deskProjector,
   malformedBoardAsk,
@@ -3752,7 +3753,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // the removed `agent.history`. Only this desktop's own callers read the
     // colour sequences (M16), as only they read the model's rows: the cut is
     // `MONITOR_AUDIENCE`'s by the caller's kind. Item 100: it was every kind
-    // but a peer daemon's, so a phone read this desktop's deal.
+    // but a peer daemon's, so a phone read this desktop's deal. SP-D13-bounded
+    // for a tailnet caller by `index.activity`'s rule (item 105): the newest
+    // MAX_ROWS ended lanes by their end, `clipped` saying so; a window and a
+    // peer daemon read the whole day.
     api.register("agent.recordedLanes", async (ctx, params) => {
       const parsed = AgentRecordedLanesParams.safeParse(params ?? {});
       if (!parsed.success)
@@ -3777,7 +3781,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           service: "agent.monitor",
           state: "no-record",
         });
-      return wireRecordedLanes(past, MONITOR_AUDIENCE[ctx.principal.kind]);
+      return clipRecordedLanes(
+        wireRecordedLanes(past, MONITOR_AUDIENCE[ctx.principal.kind]),
+        tailnetRowLimit(ctx.principal, undefined, Number.MAX_SAFE_INTEGER),
+      );
     });
     // AR-5d — the usage column's feed (agent-usage.ts). Both doors answer the
     // PROJECTION and nothing else: percentages, labels, the provider's own

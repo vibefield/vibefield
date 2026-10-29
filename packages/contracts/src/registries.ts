@@ -261,7 +261,14 @@ export const PRODUCT_API_LIMITS = {
  *
  * AR-8b (2026-10-03): the same bound holds `index.project`'s one per-session
  * list, its contribution rows, which says `clipped` when it cut; the door's
- * other figures are bounded by the window the caller asked for (`sinceMs`). */
+ * other figures are bounded by the window the caller asked for (`sinceMs`).
+ *
+ * Item 105 (2026-10-29): the two DAY doors over the record hold it too, by one
+ * rule (`tailnetRowLimit(principal, undefined, MAX_SAFE_INTEGER)`): `index.activity`
+ * keeps the newest MAX_ROWS sessions and `agent.recordedLanes` the MAX_ROWS ended
+ * lanes that ended last, each saying `clipped`. The first has held it since TL
+ * and was never listed here; the second had no bound. A day door pages by its
+ * window, never by a cursor. */
 export const INDEX_TAILNET_LIMITS = {
   MAX_ROWS: 100,
 } as const;

@@ -802,8 +802,16 @@ export type MonitorEndedRow = z.infer<typeof MonitorEndedRow>;
  * `unavailable` with `detail` when a record should be here and cannot be read
  * now (rosettad starting, a peer asleep), `partial` when some of it was not.
  * A desktop that keeps no record at all refuses the door NOT_FOUND {state:
- * "no-record"}: its window lends no past and draws today's floor. No cap, no
- * `truncated`: dropped sessions are `partial` with a detail. */
+ * "no-record"}: its window lends no past and draws today's floor. Dropped
+ * sessions are `partial` with a detail. `clipped` is SP-D13's word, as
+ * `index.activity`'s is: a `tailnet` caller's `ended` keeps the newest
+ * `INDEX_TAILNET_LIMITS.MAX_ROWS` lanes by their end and says so, while its
+ * `live` lanes (the model's rows, read whole over the board) stay whole; a window
+ * and a peer daemon read the whole day and are never told. A bound is not
+ * `partial`, which says the record could not be read. A peer reads each ended
+ * title at the desk's bound (M21), as it reads the model's rows.
+ * *Corrected 2026-10-29 (item 105): this said "No cap, no `truncated`", and a
+ * phone's day of ended lanes and their titles was unbounded.* */
 export const AgentRecordedLanesResult = z
   .object({
     sinceMs: z.number().int(),
@@ -814,6 +822,7 @@ export const AgentRecordedLanesResult = z
     detail: z.string().optional(),
     live: z.array(MonitorLivePast),
     ended: z.array(MonitorEndedRow),
+    clipped: z.boolean().optional(),
   })
   .passthrough();
 export type AgentRecordedLanesResult = z.infer<typeof AgentRecordedLanesResult>;
