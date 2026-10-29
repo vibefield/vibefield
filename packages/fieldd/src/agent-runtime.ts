@@ -35,6 +35,7 @@ import {
   type AgentResumeParams,
   type AgentResumeRunParams,
   AgentSessionAttach,
+  type AgentSessionOrigin,
   type AgentSessionRecord,
   type AgentSessionSummary,
   type AgentSpawnParams,
@@ -499,6 +500,10 @@ interface ManagedEntry {
   typed?: { pid: number; startedAt: string } | undefined;
   /** AR-7 — stops the watch on that pid */
   unwatch?: (() => void) | undefined;
+  /** CP-D15 — who started the run, as its record says (absent reads `you`) */
+  origin?: AgentSessionOrigin | undefined;
+  /** CP-1c — the spark this run is the own session of */
+  spark?: SparkId | undefined;
 }
 
 /** AR-4 — a run whose PTY outlived a fieldd that could NOT re-attach to it:
@@ -1173,6 +1178,9 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     /** D2 — who a FORWARDED birth is for (the owner's `ctx.onBehalfOf`): the
      * ticket's rights follow it (`rightsFor`). */
     forwardedFor?: ForwardedFor,
+    /** CP-1c — the compose plane's own facts about the run, never a door's params: who started it (CP-D15) and the
+     * spark it is the own session of. Both go on the record, under its signature. */
+    compose?: { readonly origin?: AgentSessionOrigin; readonly spark?: SparkId },
   ): Promise<AgentSpawnResult> {
     this.requireOffered(params.provider, "spawn");
     // PJ-7 — a place by ref is resolved here, before the floor is asked
@@ -1219,6 +1227,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
               },
             }
           : {}),
+        ...(compose?.origin !== undefined ? { origin: compose.origin } : {}),
+        ...(compose?.spark !== undefined ? { spark: compose.spark } : {}),
       });
     });
     return this.ticketed(entry, principal, terminals, forwardedFor);
@@ -2444,6 +2454,10 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       recipe?: LaunchRecipe | undefined;
       /** PJ-7 — the place a launch by place resolved (its placeId) */
       place?: string | undefined;
+      /** CP-D15 — who started it (a spark's `agent_spawn`, a flow's step); kept on the record */
+      origin?: AgentSessionOrigin | undefined;
+      /** CP-1c — the spark it is the own session of; kept on the record, and a resume keeps it */
+      spark?: SparkId | undefined;
     },
   ): ManagedEntry {
     const info = agent.info;
@@ -2461,6 +2475,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
           replaced: launch.replaced,
           adopted: launch.adopted?.process,
           modelSelection: launch.modelSelection,
+          origin: launch.origin,
+          spark: launch.spark,
         }),
       );
     } else {
@@ -2509,6 +2525,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         (launch.reattached !== undefined && isTypedRun(launch.reattached.record)
           ? launch.reattached.record.process
           : undefined),
+      origin: launch.origin ?? launch.reattached?.record.origin,
+      spark: launch.spark ?? launch.reattached?.record.spark,
     };
     if (this.disposed) {
       // the service stopped while this run was being born or attached: the
@@ -2781,6 +2799,9 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         // the successor keeps the session's launch model, so its own resume
         // starts there too
         ...(record.modelSelection !== undefined ? { modelSelection: record.modelSelection } : {}),
+        // CP-1c — and who started it, and the spark it is: a spark woken in its last session is still that spark
+        ...(record.origin !== undefined ? { origin: record.origin } : {}),
+        ...(record.spark !== undefined ? { spark: record.spark } : {}),
       });
     });
   }
@@ -4177,6 +4198,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         },
         replaced: entry.replaced,
         ...(entry.typed !== undefined ? { spawnedBy: SPAWNED_BY_SHELL } : {}),
+        origin: entry.origin,
+        spark: entry.spark,
         stopKey: stopKeyOf(entry.agent.turnStop),
         createdAt: entry.createdAt,
         stateChangedAt: entry.stateChangedAt,
