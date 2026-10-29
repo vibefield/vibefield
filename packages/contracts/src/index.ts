@@ -9,6 +9,7 @@ export * from "./agent-index";
 export * from "./agent-session";
 export * from "./agent-usage";
 export * from "./artifacts";
+export * from "./compose";
 export * from "./devices";
 export * from "./doclane";
 export * from "./docs";

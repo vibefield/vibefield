@@ -1,0 +1,46 @@
+{
+  "sessions": [
+    {
+      "id": "run-13",
+      "agent": "grok",
+      "title": "Research ACP",
+      "state": "working",
+      "folder": "/Users/you/code/acp-notes",
+      "profile": "work",
+      "model": "grok-4.7",
+      "effort": "high",
+      "usd": 0.31,
+      "startedAt": "2026-10-29T11:05:00.000Z",
+      "origin": {
+        "by": "spark",
+        "spark": "sp-7k2m9q4x"
+      }
+    },
+    {
+      "id": "run-7",
+      "agent": "claude",
+      "title": "Fix the pump",
+      "state": "asking",
+      "asking": "Bash",
+      "folder": "/Users/you/code/vibe-field",
+      "profile": "work",
+      "model": "claude-opus-5-5",
+      "usd": 2.4,
+      "startedAt": "2026-10-29T09:40:00.000Z",
+      "origin": {
+        "by": "you"
+      }
+    },
+    {
+      "id": "run-12",
+      "agent": "claude",
+      "state": "idle",
+      "folder": "/Users/you/Library/Application Support/VibeField/users/u-1f3a/sparks/vela",
+      "profile": "work",
+      "spark": "sp-7k2m9q4x",
+      "origin": {
+        "by": "you"
+      }
+    }
+  ]
+}

@@ -108,6 +108,15 @@ import {
   ArtifactView,
   LocalArtifactIntent,
 } from "../src/artifacts";
+import {
+  ComposeAgentsAvailableOutput,
+  ComposeAgentsListOutput,
+  ComposeHistorySearchOutput,
+  ComposeReadOutput,
+  ComposeSparksHatchParams,
+  ComposeSparksListResult,
+  SparkRecord,
+} from "../src/compose";
 import { DeviceInfo, DeviceNameFile, DeviceRenameParams, DeviceSlice } from "../src/devices";
 import {
   AuditRecordV1,
@@ -776,6 +785,14 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "project-figures": ProjectFiguresResult,
   "project-figures-day-params": ProjectFiguresDayParams,
   "project-figures-day": ProjectFiguresDayResult,
+  // CO — the compose plane, version 2 (compose.ts): a spark, its doors, and CP-1's verbs
+  "compose-spark-record": SparkRecord,
+  "compose-sparks-list": ComposeSparksListResult,
+  "compose-sparks-hatch-params": ComposeSparksHatchParams,
+  "compose-agents-available": ComposeAgentsAvailableOutput,
+  "compose-agents-list": ComposeAgentsListOutput,
+  "compose-agent-read": ComposeReadOutput,
+  "compose-history-search": ComposeHistorySearchOutput,
 };
 
 // *.vector.json = cross-language crypto vectors, not wire shapes — pinned by their own tests.

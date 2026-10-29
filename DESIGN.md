@@ -449,6 +449,91 @@ and per-room deals (D-i13, AR5-D3; the History room's own 333° wheel and puppet
   project's colour (A-D2) once the room takes a host colour (PJ-4's second half, the room's R1);
   until then the room still deals its own.
 
+### 2.10 A spark's face — the star (CO)
+
+**A spark is known by a face James drew.** A spark is the agent VibeField starts to run other agents
+(the compose plane, version 2, ruled 2026-10-29; Sparks and Chat, round 2). It wears one face from
+James's star set, Agent Sparks (Sparklings v2): a glowing star with eyes, drawn in WebGL2. It is the
+**mouthless** set (James, 2026-10-29). A spark is neither a person nor a project, so §2.8's sticker and
+coin are not its frame and §2.9's ink is not its colour. Its colour is its face's own palette, and the
+colour stays inside the face.
+
+| Rule | Law |
+|---|---|
+| **S-1 Dealt, then kept** | NS-D2 (ruled B): the New spark sheet deals a face apart from the name, ↻ deals another, and Create keeps it. The record holds the face's seed (`SparkFace.seed`), and the engine's `agentDNA(seed)` draws it: five, six or seven points, its body, its eyes, and one of the first twelve palettes. A spark that is renamed keeps its face. |
+| **S-2 Its hue stays in the face** | A palette colours the star and its disc, nothing else. No row, ring, badge, line or wash takes a spark's colour; state keeps §2.5's colours and projects keep §2.9's ink. |
+| **S-3 The face expresses; the word certifies** | CH-D3 (ruled A), §2.8 I-5: the face shows the spark's state live, as one of the nineteen statuses below, and the status's word sits beside it wherever there is room, and in the accessible name where there isn't. A face can be missed; a word can be read, searched and spoken by VoiceOver. |
+| **S-4 Needs you is the attention ink, in words** | CH-D4 (ruled A): Asking you, Needs your OK, Stuck and Rate limited turn the row's word to the attention ink (§2.5), Chat's cell takes the orange dot, and in another view a note says so for 2.4 s. The face itself never turns orange. |
+| **S-5 The name makes it certain** | §2.8 I-4: the face is an index. The name sits beside it, and @ finds a spark by its name. |
+
+**The nineteen statuses.** These are a spark's. Coding and Debugging are an agent's work and never a
+spark's face.
+
+| Status | Word | It means |
+|---|---|---|
+| `hello` | Hello | Just hatched |
+| `ready` | Ready | Awake, nothing running |
+| `listening` | Listening | You are typing to it |
+| `thinking` | Thinking | Working out what to do |
+| `planning` | Planning | Splitting a job between agents |
+| `searching` | Searching | Looking through History |
+| `reviewing` | Reading | Reading what its agents wrote |
+| `running` | Running | Its agents are at work |
+| `focus` | Watching | Keeping an eye on a project |
+| `asking` | Asking you | Has a question for you (needs you) |
+| `approval` | Needs your OK | Passing on an agent's request (needs you) |
+| `stuck` | Stuck | An agent is looping or out of room (needs you) |
+| `limited` | Rate limited | Waiting out a limit (needs you) |
+| `success` | Done | The job is finished |
+| `shipped` | Shipped | Pushed or merged |
+| `failed` | Failed | Something went wrong |
+| `thanked` | Thanked | You said thanks |
+| `sleeping` | Asleep | Quiet for 15 minutes, or its session ended (CP-D14); a message wakes it |
+| `offline` | Offline | Its agent can't start |
+
+**Framed and free.** *Framed* is the star on its disc, the palette's deep ground: the disc's radius is
+1.26 of the star's, and the star sits 6% of its radius below the centre. At 32 px and below its eyes
+are drawn 1.25× larger and set a little wider, and up to 48 px 1.12×, so that they still read. A framed face's
+cut ring takes the surface behind it (the chrome, the inset fill, a selected row, the mat's glass, a
+desk object's paper, each read from its token in both themes), so a badge beside it sits clean. *Free*
+is the star alone, with no disc.
+
+**Where it appears, at what size** (round 2's plates; the rows marked *proposed* wait on their marks):
+
+| Surface | Size | Form |
+|---|---|---|
+| Chat's list row (CH-D1) | 40 px | framed, live while it works |
+| A thread's head | 40 px | framed, live |
+| A message's lead, in its thread | 28 px | framed |
+| @'s menu row · a chip in the line | 24 px · 18 px | framed |
+| The New spark sheet's hatch | 104 px | free |
+| Its profile card | 64 px | free |
+| Godview: its own bubble · its agents' rims · their panes' chips (EW-D1, *proposed*) | 20 px · 20 px · 16 px | free · framed · free |
+| History's rows · "Lyra started this" (EW-D1, *proposed*) | 20 px · 18 px | framed · framed |
+| A flow's board head · its byline (FL-D2, *proposed*) | 26 px · 18 px | framed on paper |
+
+**Still and live.** A face that is not moving is a *still*: one small WebGL2 canvas draws it once and
+keeps the picture, cached by its seed, status, size, frame, ground and theme. A *live* face moves
+(blinks, gaze, its status's motion), drawn by one layer over the window only while a live face is
+on screen. Without WebGL2, a face is the **flat star**: its own points and palette in SVG, on its
+disc when framed, two pill eyes, no glow. It is never a blank.
+
+**Motion.** Reduced motion keeps the faces, their blinks and their status changes, and drops the hops,
+the shakes and the falling star (M6).
+
+**The hatch.** The sheet's sky: a star falls at an angle, lands, bursts, and the face is born where it
+hit; Create flies the face to its row in Chat. *When it plays is NS-D3, not yet ruled: its lean, "on open,
+and when the name settles", lost its second trigger when NS-D2 ruled B, and the reading put to James is
+"on open, and on each reroll".* Reduced motion: no falling star; the face fades in where it lands.
+
+**Where it lives in code.** The engine is vendored from James's `research/spark`
+(`agent-sparks/sparks.js` at `025b495`, and `star-spark.js` beside it), byte for byte: a newer version
+is copied over the file, never edited in place, and a change to `agentDNA` changes every spark's face,
+so it is a design event, said here first. SP-1 moves it into the design kit as a primitive, the face
+by seed, status, size, frame and ground, with a fixture in the catalog (UI_SYSTEM's order). Its
+palettes are the engine's art, carried as data inside the vendored files. That is the one place a hex
+outside `tokens.css` is allowed, the way an emoji's bitmap is a user's face's (§2.8).
+
 ---
 
 ## 3. Typography
