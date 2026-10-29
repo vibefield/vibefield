@@ -232,7 +232,11 @@ public struct HomeScreen: View {
       // The lab and the demo arguments own the field while they are up: what
       // they show is our own pixels, and a daemon arriving mid-screenshot
       // would be the fixture lying about what it is.
-      if mockActive { return feed.agents }
+      if mockActive {
+        // TS-7 — the mock's fleet is the field only while no door stands.
+        if let mock, !mock.fieldIsLive { return [] }
+        return feed.agents
+      }
     #endif
     return link?.agents ?? []
   }
@@ -534,6 +538,9 @@ public struct HomeScreen: View {
     .onChange(of: history.path) { history.barMinimized = false }
     #if DEBUG
       .onChange(of: mockDesktopIsUp) { syncMockHistory() }
+      .onChange(of: mockFieldIsLive) { _, live in
+        if live == true { feed.start() } else { feed.stop() }
+      }
     #endif
   }
 
@@ -951,6 +958,9 @@ public struct HomeScreen: View {
     /// The mock's standing as History reads it (`-vf-mock`: Disconnect puts
     /// studio to sleep, Connect wakes it).
     private var mockDesktopIsUp: Bool? { mock?.desktopIsUp }
+    /// TS-7 — the mock's fleet ticks only while its field is live: the mock's
+    /// own Sign in starts it, its Sign out stops it.
+    private var mockFieldIsLive: Bool? { mock?.fieldIsLive }
 
     private func syncMockHistory() {
       guard let mock else { return }
@@ -994,7 +1004,7 @@ public struct HomeScreen: View {
           if ProcessInfo.processInfo.arguments.contains("-vf-mock-approval") { account.standing = .approval }
           mock = account
           mockActive = true
-          feed.start()
+          if account.fieldIsLive { feed.start() }
           syncMockHistory()
           if let search = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-vf-mock-search=") }) {
             searchQuery = String(search.dropFirst("-vf-mock-search=".count))

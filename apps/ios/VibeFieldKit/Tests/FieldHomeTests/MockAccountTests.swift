@@ -78,4 +78,18 @@ struct MockAccountTests {
         == .approval(
           machine: AccountFixtures.machine, adminConsole: URL(string: "https://login.tailscale.com/admin/machines")))
   }
+
+  @Test("TS-7: the scripted fleet is the field only while no door stands — none under the welcome or the approval")
+  func fleetOnlyWithoutADoor() {
+    let mock = MockAccount()
+    #expect(mock.fieldIsLive)
+    mock.standing = .reconnecting
+    #expect(mock.fieldIsLive)
+    mock.standing = .approval
+    #expect(!mock.fieldIsLive)
+    mock.signOut()
+    #expect(!mock.fieldIsLive)
+    mock.signIn()
+    #expect(mock.fieldIsLive)
+  }
 }

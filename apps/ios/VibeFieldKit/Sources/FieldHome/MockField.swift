@@ -85,6 +85,11 @@
         signInNote: nil, found: nil)
     }
 
+    /// TS-7 — whether the scripted fleet is the field: only while no door
+    /// stands. A phone signed out, or waiting on an admin, reaches no desktop,
+    /// so a fleet under its welcome photographs agents it cannot have.
+    var fieldIsLive: Bool { door == nil }
+
     /// Whether History's desktop answers: the mock's studio is up exactly
     /// while the account is.
     var desktopIsUp: Bool { standing == .up }
