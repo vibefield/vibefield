@@ -14,8 +14,8 @@
 //  - THE DEMAND: the sight (`createSight(host.frames)`, told by the pass's prepares) feeds the phone's law (`phoneDemand` —
 //    paused unseen; native at 60 and interactive in the hand; at rest the halving of native that covers the display, its rung
 //    held through a wobble), sent CHANGE-ONLY. The kind is due NOW while a frame was drawn its sight has not stepped over.
-//  - VIEW-ONLY (v1): nothing is ever SENT to a face — a simulator's has no input lane (`LiveFace.input` absent), and the
-//    phone never asks for one.
+//  - VIEW-ONLY (until PT-S4's touch lands): nothing is ever SENT to a face — a simulator's has no input lane
+//    (`LiveFace.input` absent), and the phone never asks for one.
 //  - MEMORY: the face's texture is the HOST's to keep and let go (the cap shared with panes is PT-S2's); the kind charges
 //    only what it makes itself (local.ts — its words' texture).
 

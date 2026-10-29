@@ -581,7 +581,7 @@ rect, its props, its stratum (pads · sheets · things), taped or not — is ICE
 | **stickers** (tape) | an attachment, a label | tags, Fieldmarks (§11) — the masking and label tape are already marks | not yet, as objects |
 | **tools** (metal) | a tool | rulers, clips, scissors | the mat's rulers and its lamp |
 | **instruments** (panel, plastic) | an instrument | the packs — shader, 8-bit, arduino: a panel, controls, screens, cables | not yet — the OBJECT KIT |
-| **portals** (glass) | a window onto something live | artifacts, pages, terminals, captures, a simulator's screen | drawn — the browser pane (`vibefield.browser-pane`, PT-1 … PT-6): a slab of clear glass cut to its page; and the phone's cover glass (`vibefield.simulator`, PT-S1 — its recipes below) |
+| **portals** (glass) | a window onto something live | artifacts, pages, terminals, captures, a simulator's screen | drawn — the browser pane (`vibefield.browser-pane`, PT-1 … PT-6): a slab of clear glass cut to its page, its recipe its plugin's own and not yet named here (BROWSER.md Q-10); and the phone's, the recipe **cover glass** (`vibefield.simulator`, PT-S1 — its numbers below) |
 
 **The five guardrails** (thinking-the-desk §6): **no material without a meaning** — no ornament
 that does not inform (a glass portal that refracts the mat passes; the stitched-leather calendar
@@ -591,21 +591,32 @@ form loses, the flat form wins · **legibility rules the camera** — text at ev
 every material, in both lights · **one physics** — one light, one spring set, one mass; no object
 keeps private motion rules · **the agent test** — a material must make working with an agent
 better: the agent sees the same objects by the same names, and a material only the eye can read
-is decoration. *A stub:* the recipes are ICE's (its `theme.ts` names them, each kind's pass draws
-them), and a material's row gains its recipe's name when a VibeField surface first wears it. Not
-yet drawn: string, stickers as objects and instruments — each the desk migration's follow-on
-program, never a half-port.
+is decoration. *A stub:* the desk's own recipes are ICE's (its `theme.ts` names them, each kind's
+pass draws them); a plugin kind's are its plugin's own, held to this book; and a material's row
+gains its recipe's name when a VibeField surface first wears it. Not yet drawn: string, stickers
+as objects and instruments — each the desk migration's follow-on program, never a half-port.
 *Corrected 2026-10-18 (PT-S1, at its source):* the portals row read "not yet — PORTALS (DK-D19,
 DK-D20)" and this paragraph listed portals as not yet drawn, after the browser pane landed wearing
-glass (PT-6, 2026-10-14). Portals are drawn; the phone's cover glass is their second wearer.
+glass (PT-6, 2026-10-14). Portals are drawn; the phone's cover glass is their second wearer. And
+this stub said every recipe is ICE's: a plugin kind's are its plugin's own `theme.ts` — the pane's
+glass in `plugins/browser-pane/src/theme.ts` (none a DESIGN.md token yet, BROWSER.md Q-10), the
+phone's in `plugins/simulator/src/theme.ts` and its law, held to the section below by its design
+test — and the portals row names the phone's recipe, **cover glass** (corrected 2026-10-29, PT-S1's
+review).
 
 #### The phone's materials — cover glass, border ink, three metals (PT-S1)
 
 The iOS Simulator on the desk is a phone lying face up at its true size (the note's scale: `MM` =
 2.6247 world units a millimetre — a 17 Pro is 189 × 394), its screen a live Simulator (the PT-S
-design, ruled 2026-10-18). It wears four recipes, written here before any of its drawing code
-(James's Q-6), and its plugin's `theme.ts` and law hold no number this section lacks
-(`plugins/simulator/test/design.test.ts` reads it). What each means under the guardrails:
+design, ruled 2026-10-18). Its recipes are written here before any of its drawing code (James's
+Q-6): its plugin's `theme.ts` colours and its law's material knobs — the cover glass, the three
+metals, the screen's light and its dims, the night's glow, the marks — hold no number this section
+lacks (`plugins/simulator/test/design.test.ts` reads them). The law's other numbers — how the phone
+lies, lifts and casts on the desk (its rest on its camera, its lift and hover, the eye's frame, its
+shadow and contact, its buttons' proud), what its stream is asked for and how long its morph takes —
+are its object's grammar, each cited in the law to the PHONE.md section it comes from (§1, §4, §6,
+§7, §13): kept in the law, not recipes this section holds. What each material means under the
+guardrails:
 
 - **The cover glass** is the **portals** row's glass: the window the Simulator's screen is seen
   through. It mirrors the one sky over the desk (the pane's, value for value) by Fresnel, its veil
@@ -614,8 +625,9 @@ design, ruled 2026-10-18). It wears four recipes, written here before any of its
   surface ends and the device's own frame begins. Black on every phone but the silver, gold and rose
   gold home-button phones and the 7's red, whose fronts were white.
 - **The three metals** (aluminium, steel, titanium) are the band, and **their meaning is the
-  device's likeness: which iPhone the object stands for** — the bound device type's own band, read
-  with its size and its sensor housing (the PT-S design §1: "42 models read from Xcode's own data").
+  device's likeness: which iPhone the object stands for** — the model's own band (the `model` prop,
+  which an unbound phone wears too), read with its size and its sensor housing (the PT-S design §1:
+  "42 models read from Xcode's own data").
   Under the first guardrail that is their meaning — they inform: they say which device — and they
   carry no other. *Ruled 2026-10-29 (James, the PT-S gap note §6, choice 6).* The finishes below
   carry the same meaning.
@@ -3627,8 +3639,9 @@ Inside History the room's own words stand as rosetta wrote them, and the Setup A
 **The simulator's honest faces** (track PT, PT-S1; the PT-S design §3, ruled 2026-10-18) — what the phone's
 screen says of its device, in the voice's words, quoted exactly by the plugin (`plugins/simulator`'s
 `face.ts`; its design test reads this table). `iPhone 17 Pro` stands for the device's name: the host's
-word for it, else the phone's model's. A face with words shows them light over the dark panel, or over
-the device's last still dimmed to 0.16; one with a mark shows its still at 0.7. The act is a capsule
+word for it, else the bound device type's name (a face is drawn only for a phone bound to a device;
+the model's name is the unbound phone's, in hand). A face with words shows them light over the dark
+panel, or over the device's last still dimmed to 0.16; one with a mark shows its still at 0.7. The act is a capsule
 under the words, offered only where the host can run it; it manages the device and never reaches
 inside iOS. In hand the tools say **View only**, in words beside the device's name — the phone takes no
 tap, key or button until PT-S4's touch lands.

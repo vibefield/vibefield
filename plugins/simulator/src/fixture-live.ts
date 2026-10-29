@@ -19,7 +19,7 @@
 //    design §6 Q-4), so the seam carries no re-spec — a face opened before the desk changed its light keeps the old one.
 //  - A device the fixture's catalog lacks is said honestly — `no-device`, nothing drawn — and a spec that is not a simulator's
 //    device fails with its reason: neither is ever a guess.
-//  - View-only, as every simulator face in v1: no `input`.
+//  - View-only, as every simulator face is until PT-S4's touch lands: no `input`.
 
 import {
   type LiveDemand,

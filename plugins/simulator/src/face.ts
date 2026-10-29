@@ -68,7 +68,7 @@ export const FACE_MARKS: Readonly<Record<LiveSimulatorState, MarkName>> = {
   stopped: "none",
 };
 
-/** The VIEW-ONLY word the held bar says (DESIGN.md §9): the phone takes no tap, key or button in v1. */
+/** The VIEW-ONLY word the held bar says (DESIGN.md §9): the phone takes no tap, key or button until PT-S4's touch lands. */
 export const VIEW_ONLY = "View only";
 
 /** How the screen draws a face: its state, whether the texture shows, how bright, its mark, its words and its act. */
@@ -117,8 +117,9 @@ export function faceState(
 
 /**
  * How the screen draws a face (the PT-S design §3, the pane's laws): `device` the name to say (the host's word for it, else
- * the phone's model's), `texture` whether the face holds a frame to show. A still shows only where the face holds one; words
- * over a still dim it to 0.16, a mark over it to 0.7; the act is offered only where it can be run.
+ * the bound device type's name — a face is planned only for a bound phone), `texture` whether the face holds a frame to
+ * show. A still shows only where the face holds one; words over a still dim it to 0.16, a mark over it to 0.7; the act is
+ * offered only where it can be run.
  */
 export function facePlan(
   info: Pick<LiveInfo, "extra"> | undefined,

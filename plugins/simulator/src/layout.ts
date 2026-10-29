@@ -7,8 +7,8 @@
 //
 // What moved since the prototype: the EYE is the phone's own (`Phone.eye` — the local eye, the pane's PT-1 ruling 3), no
 // longer the knobs' one desk eye; the screen's mip LEVEL is the shader's, from the slot's zoom (the record is camera-free);
-// the selection RING is gone (ICE D4a: the desk's marks draw the selection); the finger's touch disc is gone (v1 is
-// view-only); and the screen carries its HONEST FACE — a still's dim, its mark, and its words (their own texture).
+// the selection RING is gone (ICE D4a: the desk's marks draw the selection); the finger's touch disc is gone (view-only
+// until PT-S4's touch lands); and the screen carries its HONEST FACE — a still's dim, its mark, and its words (their own texture).
 
 import {
   defineStruct,
