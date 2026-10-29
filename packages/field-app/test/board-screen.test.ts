@@ -75,7 +75,8 @@ describe("BoardScreen — the model board read one desktop at a time (PG-1b)", (
     screen.open(openWith());
     const frames = screen.frame(delta(17, [readable("run-ok"), newer()], ["run-gone"]));
     expect(frames).toHaveLength(2);
-    expect(frames[0]).toEqual(delta(17, [readable("run-ok")], ["run-gone"]));
+    // the unreadable key leaves the board with the frame's own removals; the chain is the frame's
+    expect(frames[0]).toEqual(delta(17, [readable("run-ok")], ["run-gone", "run-newer"]));
     expect(frames[1]).toMatchObject({ device: PEER, state: "incompatible" });
     for (const frame of frames) expect(AgentModelMeshFrame.safeParse(frame).success).toBe(true);
     // while it holds one, the wire's own word on its standing reads as another version
@@ -94,6 +95,14 @@ describe("BoardScreen — the model board read one desktop at a time (PG-1b)", (
     const back = screen.frame(delta(19, [], ["run-b"]));
     expect(back[0]).toEqual(delta(19, [], ["run-b"]));
     expect(back[1]).toMatchObject({ device: PEER, state: "live" });
+  });
+
+  it("a row the window shows that turns unreadable leaves it, as an open would drop it, never frozen", () => {
+    const screen = new BoardScreen();
+    screen.open(openWith());
+    const frames = screen.frame(delta(17, [newer("run-loft-w")]));
+    expect(frames[0]).toEqual(delta(17, [], ["run-loft-w"]));
+    expect(frames[1]).toMatchObject({ device: PEER, state: "incompatible" });
   });
 
   it("a desktop's snapshot frame replaces what it held unreadable", () => {

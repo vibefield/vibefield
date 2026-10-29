@@ -577,7 +577,7 @@ describe("item 100 — whose cut a caller reads, by its principal's kind (M16, S
 // model board's rows alike, and the key reading copies every other fact
 // through untouched (DS-L2).
 describe("AgentBoardRowKey — the relay reads each row's key alone", () => {
-  type Board = { revision: number; rows: unknown[]; epoch?: string };
+  type Board = { revision: number; rows: unknown[]; epoch?: string | undefined };
   const boards = (): Board[] => {
     const found: Board[] = [AgentFieldSnapshot.parse(golden("agent-field-snapshot.valid.json"))];
     for (const name of ["agent-mesh-open.valid.json", "agent-model-mesh-open.valid.json"]) {

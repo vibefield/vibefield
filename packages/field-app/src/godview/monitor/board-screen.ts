@@ -44,7 +44,12 @@ export class BoardScreen {
         const { readable, unreadable } = split(snapshot["rows"]);
         if (unreadable.size === 0) return entry;
         this.#unreadable.set(device, unreadable);
-        return { ...entry, state: "incompatible", snapshot: { ...snapshot, rows: readable } };
+        return {
+          ...entry,
+          state: "incompatible",
+          asOf: new Date().toISOString(),
+          snapshot: { ...snapshot, rows: readable },
+        };
       }),
     };
   }
@@ -76,14 +81,25 @@ export class BoardScreen {
         for (const key of delta["removed"]) if (typeof key === "string") held.delete(key);
       }
       this.#unreadable.set(device, held);
-      if (unreadable.size > 0) screened = { ...payload, delta: { ...delta, upserts: readable } };
+      if (unreadable.size > 0) {
+        // a row this build cannot read is no row, here as in an open: a key the
+        // fold holds from before leaves it rather than standing frozen at its
+        // last readable version (the fold ignores a removal it does not hold)
+        const removed = Array.isArray(delta["removed"]) ? delta["removed"] : [];
+        const gone = [...unreadable].filter((key) => key !== NO_KEY && !removed.includes(key));
+        screened = {
+          ...payload,
+          delta: { ...delta, upserts: readable, removed: [...removed, ...gone] },
+        };
+      }
     } else {
       return [payload];
     }
     const after = this.#holds(device);
     if (before === after) return [screened];
     const said = this.#said.get(device);
-    const asOf = said?.asOf ?? new Date().toISOString();
+    // "another version" is established now; coming back is the wire's own word
+    const asOf = after ? new Date().toISOString() : (said?.asOf ?? new Date().toISOString());
     const state: RowsDeviceState = after ? "incompatible" : (said?.state ?? "live");
     return [screened, { device, state, asOf }];
   }
@@ -105,9 +121,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/** A row's key as the relay read it, or a stand-in that is never a real key. */
+/** The stand-in key of a row with none: never a real key (the relay refuses a keyless row). */
+const NO_KEY = "\u0000";
+
+/** A row's key as the relay read it, or the stand-in. */
 function keyOf(row: unknown): string {
-  return isRecord(row) && typeof row["runtimeRunId"] === "string" ? row["runtimeRunId"] : "\u0000";
+  return isRecord(row) && typeof row["runtimeRunId"] === "string" ? row["runtimeRunId"] : NO_KEY;
 }
 
 function split(rows: readonly unknown[]): { readable: unknown[]; unreadable: Set<string> } {
