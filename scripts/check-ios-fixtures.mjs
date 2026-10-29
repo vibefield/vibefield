@@ -319,6 +319,32 @@ const OS_MARKS_IOS = join(
     TOKENS,
     PALETTE_SWIFT,
   );
+  // TS-D22 — the Peek's scrim on the phone: `ChromePalette.searchScrim` is `--vf-search-scrim`'s
+  // two alphas, black on both sides.
+  const scrimCopy =
+    /public static let searchScrim = dynamic\(\s*light: 0x000000, lightAlpha: ([0-9.]+), dark: 0x000000, darkAlpha: ([0-9.]+)\)/.exec(
+      palette,
+    );
+  const alpha = (percent) => (percent === null ? null : (Number(percent) / 100).toFixed(2));
+  compare(
+    "search scrim (light)",
+    alpha(field(tokens, /--vf-search-scrim: rgb\(0 0 0 \/ (\d+)%\);/)),
+    scrimCopy?.[1] ?? null,
+    TOKENS,
+    PALETTE_SWIFT,
+  );
+  compare(
+    "search scrim (dark)",
+    alpha(
+      field(
+        tokens,
+        /--vf-search-scrim: rgb\(0 0 0 \/ \d+%\);[\s\S]*?--vf-search-scrim: rgb\(0 0 0 \/ (\d+)%\);/,
+      ),
+    ),
+    scrimCopy?.[2] ?? null,
+    TOKENS,
+    PALETTE_SWIFT,
+  );
   compare(
     "machines admin URL",
     field(read(ADMIN_ORIGIN), /facts\.admin_url\.as_deref\(\),\s*Some\("([^"]+)"\)/),

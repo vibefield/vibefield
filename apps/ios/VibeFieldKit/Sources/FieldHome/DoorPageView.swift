@@ -8,7 +8,9 @@ import UIKit
 /// words the page ruled (TS-D11, the phone frames A:719-722; James, Q1 all A).
 ///
 /// It stands over a field that keeps drifting and takes no acts (the hold
-/// and the bloom are off while it does, `HomeScreen.stage`).
+/// and the bloom are off while it does, `HomeScreen.stage`); over a live field
+/// the field drifts dimmed under the Peek's scrim, laid by `SwarmField` under
+/// the bar (TS-D22).
 struct DoorPageView: View {
   let page: FieldHomeModel.DoorPage
   /// Continue with Tailscale, and Sign in again: the one act, `mesh.signIn()`.

@@ -278,9 +278,15 @@ public struct HomeScreen: View {
         // TS-7 — under a door page the field drifts and takes no acts: a hold
         // would open a launch sheet with no desktop to launch on.
         showsEmptyState: door == nil,
-        onSelect: { bubble in openCard(on: bubble) },
-        onCreate: door == nil ? fieldHold : nil,
-        bloom: door == nil ? bloomMenu : nil,
+        // TS-D22 — over a live field the door's page stands on the Peek's dim.
+        scrim: FieldHomeModel.doorDimsField(door, liveBodies: bubbles.count) ? ChromePalette.searchScrim : nil,
+        // TS-7c — no card opens under a door either. Read at the tap, not at
+        // this render: the stage keeps the closure it was first handed.
+        onSelect: { bubble in
+          if FieldHomeModel.fieldTakesActs(under: doorPage) { openCard(on: bubble) }
+        },
+        onCreate: FieldHomeModel.fieldTakesActs(under: door) ? fieldHold : nil,
+        bloom: FieldHomeModel.fieldTakesActs(under: door) ? bloomMenu : nil,
         onBloom: { choice in
           // Q4 (a): the bloom opens the launch sheet on that desktop and profile
           beginCreate(fieldContext(desktop: choice.desktop, profileSet: choice.profile))

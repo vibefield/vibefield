@@ -537,7 +537,7 @@ claim it.
 | Sheet | surface `/90` + `backdrop-blur-3xl` | the fields explorer grown from the head's pill (FR-3); the open tray left at DK-13 |
 | Overlay chip | surface `/90–95` + `backdrop-blur-xl` | no wearer today: the put-back affordance and the HUD's toasts retired (DK-13, DK-17); the peers' chips wear the line's glass and the status line solid chrome (§8) |
 | Backdrop dim | `black/10` light · `black/40` dark | behind open sheets; canvas recedes to `scale(0.98)` |
-| Search scrim (GV-D8; K7, 2026-10-08) | `black/16` light · `black/46` dark, over a backdrop blur of 18 and `saturate(0.9)` | behind the Peek only (§8 "Search"): the window blurred and dimmed, the view and the frame receding to `scale(0.98)` under it. Darker than the backdrop dim so it reads as dimmed (One Frame §23); the backdrop dim stays the sheets' until James rules otherwise (docket PK1) |
+| Search scrim (GV-D8; K7, 2026-10-08) | `black/16` light · `black/46` dark, over a backdrop blur of 18 and `saturate(0.9)` | behind the Peek (§8 "Search"): the window blurred and dimmed, the view and the frame receding to `scale(0.98)` under it. Darker than the backdrop dim so it reads as dimmed (One Frame §23); the backdrop dim stays the sheets' until James rules otherwise (docket PK1). *Since TS-D22 A (2026-10-29):* the phone wears its dim alone, with no blur, under a door that stands over a live field, between the field and the bar (§9) |
 
 **Menus are solid, floating controls are glass** (One Frame FR-7, FC-D14 ruled 2026-10-01): a menu
 is rows to be read, so it is `--vf-chrome-solid` — opaque — ringed by `--vf-hairline-strong`, with
@@ -3484,7 +3484,11 @@ Tailscale says which); and, signed in with no desktop listed or remembered, **No
 "Signed in as ‹login›. On your Mac, open VibeField, click your face, then **Connect your devices…**
 with this same account." with one row, the macOS mark and "Your Mac appears here", which the first
 desktop to list fills (its mark, its name) for 1.2 s before the page yields to the field — there is no
-Found toast. Under any of them the field drifts and takes no acts. The corner moves with the pages:
+Found toast. Under any of them the field drifts and takes no acts (no hold, no bloom, and a tap on a body
+opens no card; TS-7c); over a live field (agents on it, as under **Another account?**) it drifts dimmed,
+under the Peek's scrim (§5, *Search scrim*): its dim alone, no blur, laid between the field and the bar,
+so the page's words stand clear and the tabs and search it keeps are not dimmed (TS-D22 A, James
+2026-10-29 10:51:56Z). The corner moves with the pages:
 under the name "waiting for approval", "couldn’t connect", "signing out"; its notices "Sign in to
 Tailscale again to reach your desktops.", "An admin of your Tailscale network approves new devices.",
 "Couldn’t connect — ‹reason›."; its menu row **Continue with Tailscale** with no account and **Sign in

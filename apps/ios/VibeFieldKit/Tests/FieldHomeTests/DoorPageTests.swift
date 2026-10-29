@@ -213,4 +213,25 @@ struct DoorPageTests {
     }
     #expect(AccountFixtures.demo(named: "nonsense") == nil)
   }
+
+  @Test("TS-D22: a door over a live field dims it; the field alone, or a door over an empty one, keeps its ground")
+  func dimsOnlyALiveField() {
+    let another = FieldHomeModel.DoorPage.anotherAccount(
+      current: AccountFixtures.otherLogin, expected: AccountFixtures.login, from: "Studio", byLink: false)
+    #expect(FieldHomeModel.doorDimsField(another, liveBodies: 3))
+    #expect(FieldHomeModel.doorDimsField(.welcome(failure: nil), liveBodies: 1))
+    #expect(!FieldHomeModel.doorDimsField(.welcome(failure: nil), liveBodies: 0))
+    #expect(!FieldHomeModel.doorDimsField(nil, liveBodies: 3))
+  }
+
+  @Test("TS-7c: the field takes no acts under any door — no hold, no bloom, no card — and every act with none")
+  func noActsUnderADoor() {
+    let doors: [FieldHomeModel.DoorPage] = [
+      .welcome(failure: nil), .approval(machine: nil, adminConsole: nil), .signInAgain(note: nil),
+      .noDesktops(login: login, found: nil),
+      .anotherAccount(current: AccountFixtures.otherLogin, expected: login, from: "Studio", byLink: true),
+    ]
+    for door in doors { #expect(!FieldHomeModel.fieldTakesActs(under: door), "\(door)") }
+    #expect(FieldHomeModel.fieldTakesActs(under: nil))
+  }
 }
