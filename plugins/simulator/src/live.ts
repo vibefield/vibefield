@@ -89,11 +89,19 @@ export interface PhoneFaces {
   stats(): PhoneFaceStats;
 }
 
-/** What a face says that the record reads, as one string — its state and its info's words (never a frame). */
+/**
+ * What a face says that the record reads, as one string — its state and its info's words (never a frame). A host's ACT (a
+ * function: the simulator words' `act`, a failure's `retry`) is in it by its PRESENCE: JSON drops a function, and an act that
+ * appears or goes is a capsule drawn or gone — new words, the record remade (DESIGN.md §9: "offered only where the host can
+ * run it").
+ */
 const wordsOf = (face: LiveFace): string => {
   const s = face.state();
   const { cursor: _cursor, ...said } = face.info();
-  return JSON.stringify([s.is, s.is === "failed" ? s.reason : null, said]);
+  return JSON.stringify(
+    [s.is, s.is === "failed" ? [s.reason, s.retry !== undefined] : null, said],
+    (_key: string, value: unknown) => (typeof value === "function" ? true : value),
+  );
 };
 
 /** The device a spec names, as one string (its binding and the name it says). */

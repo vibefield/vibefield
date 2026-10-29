@@ -72,6 +72,38 @@ describe("the phone's live screen — its faces", () => {
     expect(local.faces()).toMatchObject({ opened: 1, landed: 4, redraws: 1, remakes: 3 });
   });
 
+  it("an ACT that appears or goes — the host's word that it can run one, a failure's retry — is new words: the phone remade, never only redrawn", () => {
+    const t = fakeHost();
+    const local = createSimulatorLocal(t.host);
+    local.face(e1, SPEC, NATIVE);
+    const face = t.faces.get(KEY);
+    if (face === undefined) throw new Error("no face");
+    face.land();
+    face.is({ is: "off" });
+    local.tick?.(16);
+    const remakes = () => t.n.remake.length;
+    const before = remakes();
+    // the host can boot it now: its capsule is drawn — remade (a function says nothing in JSON: its presence must)
+    face.is({ is: "off", act: () => {} });
+    local.tick?.(32);
+    expect(remakes()).toBe(before + 1);
+    // the same act said again (another closure, the same word): nothing new to draw — a redraw
+    face.is({ is: "off", act: () => {} });
+    local.tick?.(48);
+    expect(remakes()).toBe(before + 1);
+    // the act goes (the host is making the device): its capsule goes — remade
+    face.is({ is: "off" });
+    local.tick?.(64);
+    expect(remakes()).toBe(before + 2);
+    // a failure with no way to try again, then the same failure with one: remade at the retry's arrival too
+    face.say({ state: { is: "failed", reason: "stopped" }, info: {} });
+    local.tick?.(80);
+    expect(remakes()).toBe(before + 3);
+    face.say({ state: { is: "failed", reason: "stopped", retry: () => {} } });
+    local.tick?.(96);
+    expect(remakes()).toBe(before + 4);
+  });
+
   it("asks the law's demand over the SIGHT, change-only: at rest its rung and rate, held native at 60, unseen paused", () => {
     const t = fakeHost();
     const local = createSimulatorLocal(t.host);

@@ -269,7 +269,9 @@ describe("the phone's world half", () => {
     local.tick(16);
     kind.record(kind.resolve(at({ held })), at({ held }));
     expect(words.asked.at(-1)?.words).toEqual({ line: "iPhone 17 Pro is off", act: null });
-    // "off" with its act: the capsule says "Boot"; the phone is resolved again once its words are drawn
+    // "off" with its act: the TICK asks the phone remade (the desk re-records a phone at rest only then) — the capsule says
+    // "Boot"; the phone is resolved again once its words are drawn
+    const remakes = t.n.remake.length;
     face.is({
       is: "off",
       act: () => {
@@ -277,6 +279,7 @@ describe("the phone's world half", () => {
       },
     });
     local.tick(32);
+    expect(t.n.remake.length).toBe(remakes + 1);
     kind.record(kind.resolve(at({ held })), at({ held }));
     expect(words.asked.at(-1)?.words).toEqual({ line: "iPhone 17 Pro is off", act: "Boot" });
     expect(local.lines(1 as Entity)).toBe(1);
@@ -318,6 +321,18 @@ describe("the phone's world half", () => {
     ]);
     expect(booted).toBe(1);
     expect(local.acts).toBe(1);
+    // the host can no longer run it (it is making the device): the tick asks the phone remade again, its words say no act,
+    // and a press and release on where the capsule was runs nothing
+    face.is({ is: "off" });
+    local.tick(48);
+    expect(t.n.remake.length).toBe(remakes + 2);
+    kind.record(kind.resolve(at()), at());
+    expect(words.asked.at(-1)?.words).toEqual({ line: "iPhone 17 Pro is off", act: null });
+    local.held?.(1 as Entity, [
+      { type: "pointer", phase: "down", x: 0, y: 0, part: "act", button: 0, buttons: 1, count: 1 },
+      { type: "pointer", phase: "up", x: 0, y: 0, part: "act", button: 0, buttons: 0, count: 1 },
+    ]);
+    expect(booted).toBe(1);
   });
 
   it("in hand its bar says the device's name — the host's word for it, else its catalog's — and its one tool says View only", () => {
