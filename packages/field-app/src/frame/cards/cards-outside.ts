@@ -5,6 +5,7 @@ import { sayOnLine } from "../line-door";
 import {
   cancelCardDrag,
   endCardDrag,
+  fieldTakesDrop,
   getCarriedCard,
   moveCardDrag,
   startCardDrag,
@@ -22,6 +23,7 @@ import {
 import { dealCard } from "./cards-sources";
 import { type CardStore, cardsStore, type DealFrom } from "./cards-store";
 import { OUTSIDE_WORDS, WAITING_WORDS } from "./cards-words";
+import { isField } from "./caret";
 
 // WHAT ANOTHER APP HANDS OVER (track HN, HN-6; DESIGN.md §8 "The hand", where cards come from —
 // brought in; HN-D2, HN-D10, HN-L1, HN-L3; LC-7, LC-8). Another app's copy comes in as cards only
@@ -35,10 +37,12 @@ import { OUTSIDE_WORDS, WAITING_WORDS } from "./cards-words";
 //   card already is lifts that card instead (HN-D10), and deals none.
 // - A drag from another app is a card the moment it enters the window: the drag machine's waiting
 //   card (`card-drag.ts`), its kind's index alone until the drop says what it holds. The window's
-//   capture phase takes every one of its events, so a file let go is never opened in the page's
-//   place and a pane's own text drop never pastes it a second time. Let go on a pane or Chat's
-//   prompt it plays straight in, once; anywhere else it settles into the hand; carried back out
-//   of the window, or lost by the system, it is gone.
+//   capture phase takes its events, so a file let go is never opened in the page's place and a
+//   pane's own text drop never pastes it a second time. Let go on a pane or Chat's prompt it plays
+//   straight in, once — a place registered for cards outranks the field it holds; on a field no
+//   place answers for, the field takes it, as a paste goes where the caret is (HN-L3), and the
+//   card is gone; anywhere else it settles into the hand; carried back out of the window, or lost
+//   by the system, it is gone.
 // A file is what its path says (the preload's `pathForFile`; none in the catalog) and a picture
 // what its pixels are, read from the bytes the person handed over and kept in memory only, with
 // the card (LC-7, HN-D9).
@@ -278,19 +282,9 @@ function whenUncarried(run: () => void): void {
   });
 }
 
-/** Whose a paste is when it is not the hand's (HN-L3): a field holding the caret, or a Godview
- * pane — its own paste handling takes it. */
-function caretOwns(target: EventTarget | null): boolean {
-  if (!(target instanceof Element)) return false;
-  if (target.closest(GHOSTTEA_PANE_SELECTOR) !== null) return true;
-  if (!(target instanceof HTMLElement)) return false;
-  return (
-    target.tagName === "INPUT" ||
-    target.tagName === "TEXTAREA" ||
-    target.tagName === "SELECT" ||
-    target.isContentEditable ||
-    target.closest("[contenteditable='true']") !== null
-  );
+/** Inside a Godview pane: its own paste handling takes a paste there (HN-L3), as a field's does. */
+function inPane(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest(GHOSTTEA_PANE_SELECTOR) !== null;
 }
 
 /** Is a point on or past the window's edge — where the system reports a drag that left it? */
@@ -450,7 +444,7 @@ export function listenForOtherApps(options: OtherAppsOptions = {}): () => void {
   };
   const onPaste = (event: ClipboardEvent): void => {
     if (!event.isTrusted || event.defaultPrevented || busy()) return;
-    if (caretOwns(event.target)) return;
+    if (inPane(event.target) || isField(event.target)) return;
     const things = broughtIn(event.clipboardData);
     if (things.length === 0) return;
     event.preventDefault();
@@ -495,11 +489,19 @@ export function listenForOtherApps(options: OtherAppsOptions = {}): () => void {
   const onDrop = (event: DragEvent): void => {
     const transfer = event.dataTransfer;
     if (inner || !carriesCards(transfer)) return;
-    // the hand's, whatever is under it: a pane's own text drop would paste it a second time, and a
-    // file let go is never opened in the page's place
+    const at = { x: event.clientX, y: event.clientY };
+    // a field no registered place answers for takes the drop itself, as a paste there (HN-L3): it
+    // inserts what it holds, and the card carried in is gone, with nothing said. The place is
+    // asked of the card carried — or, its enter unheard, of the card it would have been
+    const carried = ours() ? getCarriedCard()?.card : undefined;
+    if (fieldTakesDrop(at.x, at.y, carried ?? waitingCardOf(transfer, store))) {
+      cancel();
+      return;
+    }
+    // the hand's, whatever else is under it: a pane's own text drop would paste it a second time,
+    // and a file let go is never opened in the page's place
     event.preventDefault();
     event.stopPropagation();
-    const at = { x: event.clientX, y: event.clientY };
     const things = broughtIn(transfer);
     if (!ours()) {
       if (busy()) return;

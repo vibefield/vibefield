@@ -10,6 +10,7 @@
  * faked: the watchdog, the play, the fade.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { carriedLabel } from "../src/frame/cards/CarriedCardLayer";
 import {
   endCardDrag,
   getCarriedCard,
@@ -136,6 +137,12 @@ const pointerAt = (x: number, y: number): void => {
   );
 };
 
+/** A DOM that hit-tests, as the drag reads what is under the pointer: what lies under each point,
+ * topmost first (happy-dom draws nothing). */
+const hits = (under: (x: number, y: number) => Element[]): void => {
+  Object.defineProperty(document, "elementsFromPoint", { configurable: true, value: under });
+};
+
 /** What another app handed over is read through promises: let them all come back. */
 const settled = async (): Promise<void> => {
   await vi.advanceTimersByTimeAsync(0);
@@ -157,6 +164,8 @@ function listen(options: OtherAppsOptions = {}): void {
 function place(options: {
   readonly kind: CardTarget["kind"];
   readonly box: DOMRect;
+  /** its own element: it answers only where the element on top lies inside it */
+  readonly element?: Element;
   readonly answer?: (card: Card) => CardAnswer | null;
   readonly played?: CardPlayed;
 }): { readonly played: Card[]; readonly asked: Card[] } {
@@ -168,6 +177,7 @@ function place(options: {
     kind: options.kind,
     layer: TARGET_LAYER[options.kind],
     rect: () => options.box,
+    ...(options.element === undefined ? {} : { element: () => options.element ?? null }),
     answer: (card) => {
       asked.push(card);
       return options.answer === undefined
@@ -197,6 +207,7 @@ afterEach(() => {
   for (const off of offs.splice(0)) off();
   resetCardDragForTest();
   document.body.innerHTML = "";
+  delete (document as unknown as Record<string, unknown>)["elementsFromPoint"];
   vi.useRealTimers();
 });
 
@@ -497,6 +508,104 @@ describe("a drag from another app (HN-6, HN-D2)", () => {
     expect(played[0]?.waiting, "the waiting card was played").toBeUndefined();
     expect(said).toEqual(["Pasted into vibe-field"]);
     expect(store.snapshot().cards, "played straight in, it stays nowhere").toEqual([]);
+  });
+
+  it("leaves a drop on a field no place answers for to the field (HN-L3): no label over it while carried; let go, not prevented, its card gone, nothing played, dealt or said", async () => {
+    listen();
+    // a deck lies under the point, but the field is on top of it: the deck answers nothing there
+    const deck = document.createElement("section");
+    const field = document.createElement("textarea");
+    const own = vi.fn();
+    field.addEventListener("drop", own);
+    document.body.append(deck, field);
+    const { played } = place({ kind: "pane", box: new DOMRect(0, 0, 600, 400), element: deck });
+    hits(() => [field, deck, document.body]);
+    const kinds = transfer({ text: "git status", kindsOnly: true });
+    drag("dragenter", kinds, { x: 300, y: 200 });
+    drag("dragover", kinds, { x: 300, y: 200 });
+    const carried = getCarriedCard();
+    expect(carried?.phase).toBe("carry");
+    expect(carried?.answer, "letting go there will not put it in the hand").toBeNull();
+    expect(carriedLabel(carried!, { width: 1024 }), "nothing under the pointer").toBeNull();
+
+    const dropped = transfer({ text: "git status" });
+    const drop = drag("drop", dropped, { x: 300, y: 200 }, { target: field });
+    expect(drop.defaultPrevented, "the field inserts it itself").toBe(false);
+    expect(own, "the field hears its own drop").toHaveBeenCalledTimes(1);
+    expect(getCarriedCard()).toMatchObject({ phase: "home", home: null });
+    await settled();
+    await vi.advanceTimersByTimeAsync(PLAY_HOME_MS + 40);
+    expect(getCarriedCard()).toBeNull();
+    expect(played).toEqual([]);
+    expect(store.snapshot().cards).toEqual([]);
+    expect(said).toEqual([]);
+  });
+
+  it("gives a drop on a field a registered place answers for to that place — a place for cards outranks the field: Chat's prompt takes it, prevented and played once", async () => {
+    listen();
+    const prompt = document.createElement("div");
+    const field = document.createElement("textarea");
+    const own = vi.fn();
+    field.addEventListener("drop", own);
+    prompt.append(field);
+    document.body.append(prompt);
+    const { played } = place({
+      kind: "prompt",
+      box: new DOMRect(0, 400, 600, 200),
+      element: prompt,
+    });
+    hits(() => [field, prompt, document.body]);
+    const kinds = transfer({ text: "make test", kindsOnly: true });
+    drag("dragenter", kinds, { x: 300, y: 500 });
+    drag("dragover", kinds, { x: 300, y: 500 });
+    expect(getCarriedCard()?.answer).toEqual({
+      kind: "prompt",
+      ok: true,
+      label: "Paste into vibe-field",
+    });
+
+    const dropped = transfer({ text: "make test" });
+    const drop = drag("drop", dropped, { x: 300, y: 500 }, { target: field });
+    expect(drop.defaultPrevented).toBe(true);
+    expect(own, "the field's own drop would insert it a second time").not.toHaveBeenCalled();
+    await settled();
+    await vi.advanceTimersByTimeAsync(PLAY_SHRINK_MS);
+    await settled();
+    expect(played).toHaveLength(1);
+    expect(played[0]).toMatchObject({ kind: "text", paste: "make test", origin: DRAGGED });
+    expect(said).toEqual(["Pasted into vibe-field"]);
+    expect(store.snapshot().cards).toEqual([]);
+  });
+
+  it("leaves a drop on a field the desk holds — a note being written — to the field: the desk takes no card from another app, so no label over it; let go, not prevented, nothing played or dealt", async () => {
+    listen();
+    const desk = document.createElement("div");
+    const note = document.createElement("div");
+    note.contentEditable = "true";
+    const own = vi.fn();
+    note.addEventListener("drop", own);
+    desk.append(note);
+    document.body.append(desk);
+    const { played } = place({ kind: "desk", box: new DOMRect(0, 0, 1024, 768), element: desk });
+    hits(() => [note, desk, document.body]);
+    const kinds = transfer({ text: "One more line.", kindsOnly: true });
+    drag("dragenter", kinds, { x: 400, y: 300 });
+    drag("dragover", kinds, { x: 400, y: 300 });
+    const carried = getCarriedCard();
+    expect(carried?.phase).toBe("carry");
+    expect(carried?.answer, "neither the desk's nor the hand's").toBeNull();
+    expect(carriedLabel(carried!, { width: 1024 }), "nothing under the pointer").toBeNull();
+
+    const dropped = transfer({ text: "One more line." });
+    const drop = drag("drop", dropped, { x: 400, y: 300 }, { target: note });
+    expect(drop.defaultPrevented, "the note's own editor inserts it").toBe(false);
+    expect(own, "the note hears its own drop").toHaveBeenCalledTimes(1);
+    await settled();
+    await vi.advanceTimersByTimeAsync(PLAY_HOME_MS + 40);
+    expect(getCarriedCard()).toBeNull();
+    expect(played).toEqual([]);
+    expect(store.snapshot().cards).toEqual([]);
+    expect(said).toEqual([]);
   });
 
   it("settles a drop where nothing takes it straight into the hand — the desk included — from the box it hung in; the rest follow it", async () => {
