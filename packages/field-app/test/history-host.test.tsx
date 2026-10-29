@@ -17,6 +17,9 @@
  *   · R7 the chips; H4 each act's intent;
  *   · Resume refusing a gone folder with the reason, and a session another
  *     desktop holds (the host key);
+ *   · HN-7 — where something new of a project starts (`startPlaceOf`, New
+ *     agent's reading, and History's New terminal's), and New terminal's act:
+ *     Godview's deck asked for a shell in that folder, the window moved there;
  *   · an act never ending in silence (2026-10-11): a deck that never answers,
  *     an answer that cannot be read and a throw are each refused in words;
  *   · and never refused for the person's time (W7): while the deck asks the
@@ -54,6 +57,7 @@ import {
   jumpTarget,
   newAgent,
   newAgentNote,
+  newTerminalIn,
   projectIntent,
   resumeTarget,
   spawnParamsOf,
@@ -65,6 +69,7 @@ import {
   projectSectionsOf,
   resumeWaits,
   sessionSectionsOf,
+  startPlaceOf,
 } from "../src/history/host-inputs";
 import { type HistoryListing, hostModelOf } from "../src/history/host-model";
 import { FIRST_PAGE, type HeldModels, type LaunchPage, modelsKey } from "../src/history/launch";
@@ -707,6 +712,70 @@ describe("the acts", () => {
     }
   });
 
+  // HN-7 (LN-D2): History's create, the act behind it — Resume's road to Godview's deck, which
+  // births the shell in the folder asked for (godview-deck.test.tsx), or as its own create with
+  // none.
+  it("New terminal asks Godview's deck for a shell in the folder, or as Godview's create with none — the window moved there first", async () => {
+    const { door } = deck();
+    const opened = { state: "opened", placement: "replace" } as const;
+    const newTerminal = vi.fn<LineViewDoor["newTerminal"]>(async () => opened);
+    const shown = vi.fn();
+    const deps = { ...depsOf(resumeClient(true), { ...door, newTerminal }), showView: shown };
+    expect(await newTerminalIn(deps, "/Users/me/Projects/vibe-field")).toEqual(opened);
+    expect(newTerminal).toHaveBeenLastCalledWith({ cwd: "/Users/me/Projects/vibe-field" });
+    expect(shown).toHaveBeenCalledWith("godview");
+    expect(await newTerminalIn(deps, undefined)).toEqual(opened);
+    expect(newTerminal).toHaveBeenLastCalledWith();
+    // the deck's own refusal is the act's, in its words
+    newTerminal.mockResolvedValueOnce({ state: "refused", reason: "no pane to open it in" });
+    expect(await newTerminalIn(deps, "/w")).toEqual({
+      state: "refused",
+      reason: "no pane to open it in",
+    });
+  });
+
+  it("New terminal whose deck never opens, throws or never answers is refused in words, and logged", async () => {
+    const { door } = deck();
+    const unplaced = vi.fn();
+    const client = resumeClient(true);
+    // no deck came in the bound
+    expect(
+      await newTerminalIn({ ...depsOf(client, door), deck: async () => null, unplaced }, "/w"),
+    ).toEqual({ state: "refused", reason: "the deck is not connected yet" });
+    expect(unplaced).toHaveBeenLastCalledWith("terminal");
+    // a deck that throws as it births
+    const throwing = {
+      ...door,
+      newTerminal: async (): Promise<never> => {
+        throw new Error("the routed terminal runtime has no fieldd client");
+      },
+    };
+    expect(await newTerminalIn({ ...depsOf(client, throwing), unplaced }, "/w")).toEqual({
+      state: "refused",
+      reason: "the routed terminal runtime has no fieldd client",
+    });
+    expect(unplaced).toHaveBeenLastCalledWith(
+      "terminal",
+      "the routed terminal runtime has no fieldd client",
+    );
+    // a deck that never answers: said once its bound has passed, as Resume's is
+    vi.useFakeTimers();
+    try {
+      const pending = newTerminalIn(
+        { ...depsOf(client, { ...door, newTerminal: neverAnswers }), unplaced },
+        "/w",
+      );
+      await vi.advanceTimersByTimeAsync(HISTORY_DECK_WAIT_MS + 1_000);
+      expect(await settledBy(pending)).toEqual({
+        state: "refused",
+        reason: "no pane took it in 20 s",
+      });
+      expect(unplaced).toHaveBeenLastCalledWith("terminal", "no pane took it in 20 s");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   // W7 (GV-D5, N14 (a)): a launch opens Godview on the monitor alone, so an
   // act's call can be the one that brings last time's panes back — and with
   // some of them ended, the deck asks the person first. Their time is never
@@ -1206,6 +1275,49 @@ describe("R5: New agent and the project's acts", () => {
       acts,
     );
     expect(isValidElement(suggested.projectCard?.("p1:vibe"))).toBe(true);
+  });
+});
+
+// PJ-D8, HN-7 — one reading of where something new of a project starts: New agent's rows draw it,
+// and History's New terminal opens there (or says why not, in the same words).
+describe("where something new of a project starts — New agent's, and History's New terminal's (HN-7)", () => {
+  const of = (key: string): ProjectSummary => {
+    const found = MODEL.projects.get(key);
+    if (found === undefined) throw new Error(`no project ${key}`);
+    return found;
+  };
+
+  it("is the folder ③ shows, else the project's usual place here", () => {
+    const vibe = of("p1:vibe");
+    // no folder shown: the usual place — the newest here that is there to start in
+    expect(startPlaceOf(MODEL, vibe, null)).toMatchObject({
+      path: "/Users/me/Projects/vibe-field",
+      why: null,
+    });
+    // ③ showing the worktree: there, whatever the usual place
+    expect(startPlaceOf(MODEL, vibe, `${STUDIO}\u001fpl_wt`)).toMatchObject({
+      path: "/Users/me/wt/feature",
+      why: null,
+    });
+  });
+
+  it("says why nothing can start there in New agent's words: another desktop's, not connected, gone, none here", () => {
+    expect(startPlaceOf(MODEL, of("p1:vibe"), `${LAPTOP}\u001fpl_lap`).why).toBe(
+      "it starts on Laptop — not from here until routed acts (DS-2)",
+    );
+    const vibe = of("p1:vibe");
+    const unmounted = {
+      ...vibe,
+      places: vibe.places.map((place) => ({ ...place, mounted: false })),
+    };
+    expect(startPlaceOf(MODEL, unmounted, null).why).toBe("its volume is not connected");
+    expect(startPlaceOf(MODEL, of("p1:notes"), null).why).toBe("the folder is gone");
+    expect(startPlaceOf(MODEL, of("p1:away"), null)).toEqual({
+      place: undefined,
+      device: undefined,
+      path: null,
+      why: "no folder of this project is here to start in",
+    });
   });
 });
 

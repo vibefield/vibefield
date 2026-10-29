@@ -4,9 +4,10 @@
  * shipping composition `[views] snapshot create` on its real controller, its ONE
  * owner of the open surface (a stateful harness stands where FieldView does),
  * the snapshot's act on a fixture host dealing into a fixture hand, the frame's
- * note at its two places, and the create's keys. The model is
- * `line-model.test.ts`'s; the delivery of B and ⌘T from a focused pane in a live
- * window is the godview smoke's row 11h.
+ * note at its two places, the create's keys, and History's create — New
+ * terminal through History's door (HN-7). The model is `line-model.test.ts`'s;
+ * the delivery of B and ⌘T from a focused pane in a live window is the godview
+ * smoke's row 11h.
  */
 import type { FrameView, ScreenshotCaptureResult } from "@vibefield/contracts";
 import { act, useState } from "react";
@@ -19,8 +20,10 @@ import { CardStore } from "../src/frame/cards/cards-store";
 import type { FrameSurface } from "../src/frame/frame-surface";
 import {
   claimingRefusals,
+  type HistoryLineDoor,
   type LineViewDoor,
   resetHistoryLineDoorForTest,
+  runChosenSession,
   sayOnHistoryLine,
   sayOnLine,
 } from "../src/frame/line-door";
@@ -81,6 +84,20 @@ function door(overrides: Partial<LineViewDoor> = {}): LineViewDoor {
   };
 }
 
+/** What History lends the line (HN-7): the room shows vibe-field, and its New terminal opens. */
+function historyDoor(overrides: Partial<HistoryLineDoor> = {}): HistoryLineDoor {
+  return {
+    chosen: null,
+    waits: null,
+    live: false,
+    resume: vi.fn(async () => ({ state: "resumed" as const })),
+    jump: vi.fn(async () => ({ state: "jumped" as const })),
+    project: "vibe-field",
+    newTerminal: vi.fn(async () => ({ state: "opened" as const })),
+    ...overrides,
+  };
+}
+
 /** What the snapshot tool kept: a region of the window, on disk and on the clipboard. */
 const KEPT: ScreenshotCaptureResult = {
   status: "ok",
@@ -117,6 +134,8 @@ function captureDoor(): {
 
 interface Mount {
   door: LineViewDoor | null;
+  /** History's door (HN-7): a fixture door when given; undefined, the published one (none). */
+  history?: HistoryLineDoor;
   /** The board's door (DK-13): a fixture board when given — undefined, the published one (no desk here: none). */
   board?: { held: boolean; open?: boolean };
   host: ComposerHost;
@@ -129,6 +148,7 @@ interface Mount {
 function mount(view: FrameView, options: Partial<Mount> = {}): Mount {
   const used: Mount = {
     door: options.door === undefined ? door() : options.door,
+    ...(options.history === undefined ? {} : { history: options.history }),
     // a capture door that never answers unless a row hands its own: the snapshot at rest is
     // ready ("Snapshot  ⌃⌘A"); a row that wants no door says `host: {}`
     host: options.host ?? {
@@ -171,6 +191,7 @@ function mount(view: FrameView, options: Partial<Mount> = {}): Mount {
         surface={surface}
         onSurfaceChange={setSurface}
         godview={used.door}
+        {...(used.history === undefined ? {} : { history: used.history })}
         {...(objects === undefined ? {} : { objects })}
         host={used.host}
         cards={used.cards}
@@ -267,11 +288,14 @@ describe("the line's composition (DESIGN.md §8; LN-D1)", () => {
     expect(create().getAttribute("title")).toBe("New terminal  ⌘T");
     expect(create().getAttribute("aria-keyshortcuts")).toBe("Meta+T");
     expect(create().hasAttribute("aria-expanded")).toBe(false);
+    // HN-7 (LN-D2): History's create is Godview's act — no longer Resume, waiting on a choice
+    // (the chosen session's Resume is the palette's row now: command-palette.test.tsx)
     act(() => setViewNow?.("history"));
-    expect(shownGlyph()).toBe("resume");
-    expect(create().getAttribute("aria-disabled")).toBe("true");
-    expect(create().getAttribute("title")).toBe("Resume this session — choose a session first");
-    expect(create().hasAttribute("aria-keyshortcuts")).toBe(false);
+    expect(shownGlyph()).toBe("start");
+    expect(create().getAttribute("aria-label")).toBe("New terminal");
+    expect(create().hasAttribute("aria-disabled")).toBe(false);
+    expect(create().getAttribute("title")).toBe("New terminal  ⌘T");
+    expect(create().getAttribute("aria-keyshortcuts")).toBe("Meta+T");
   });
 
   it("reads each key off the act it names, the platform's way — never a letter hard-coded", () => {
@@ -637,12 +661,41 @@ describe("the create's keys (DESIGN.md §10; One Frame §11)", () => {
     expect(q(".vf-line-note").getAttribute("data-at")).toBe("create");
   });
 
-  it("leaves ⌘T alone outside Godview, and Ctrl+T on the Mac", () => {
-    const used = mount("canvas");
+  it("⌘T in History asks History's door from a focused pane, which never hears it (HN-7)", async () => {
+    const history = historyDoor();
+    const used = mount("history", { history });
+    const heard: string[] = [];
+    pane = document.createElement("div");
+    pane.tabIndex = 0;
+    pane.addEventListener("keydown", (event) => {
+      heard.push(event.key);
+      event.stopPropagation();
+    });
+    document.body.appendChild(pane);
+    pane.focus();
+    let event: KeyboardEvent | null = null;
+    await act(async () => {
+      event = press(pane as HTMLElement, { key: "t", code: "KeyT", metaKey: true });
+    });
+    expect((event as KeyboardEvent | null)?.defaultPrevented).toBe(true);
+    // History's own door — never Godview's deck asked directly from History
+    expect(history.newTerminal).toHaveBeenCalledTimes(1);
+    expect(used.door?.newTerminal).not.toHaveBeenCalled();
+    expect(heard).toEqual([]);
+    expect(q(".vf-line-note").textContent).toBe("Terminal opened in the active pane");
+    expect(q(".vf-line-note").getAttribute("data-at")).toBe("create");
+  });
+
+  it("leaves ⌘T alone on Canvas, and Ctrl+T on the Mac in Godview and History", () => {
+    const history = historyDoor();
+    const used = mount("canvas", { history });
     expect(press(document.body, { key: "t", metaKey: true }).defaultPrevented).toBe(false);
     act(() => setViewNow?.("godview"));
     expect(press(document.body, { key: "t", ctrlKey: true }).defaultPrevented).toBe(false);
+    act(() => setViewNow?.("history"));
+    expect(press(document.body, { key: "t", ctrlKey: true }).defaultPrevented).toBe(false);
     expect(used.door?.newTerminal).not.toHaveBeenCalled();
+    expect(history.newTerminal).not.toHaveBeenCalled();
   });
 
   it("says a new terminal cannot open while the deck has no connection", async () => {
@@ -655,6 +708,112 @@ describe("the create's keys (DESIGN.md §10; One Frame §11)", () => {
     expect(q(".vf-line-note").textContent).toBe(
       "Terminal could not be opened — the deck is not connected yet",
     );
+  });
+});
+
+// HN-7 (LN-D2; DESIGN.md §8 "The line", §8 "History"): History's create is New terminal in the
+// project the room shows. The line asks History's door, which finds the folder as New agent does
+// and moves the window to Godview (history-view.test.tsx, history-host.test.tsx); the line names
+// the project in its tooltip and says what came of it in Godview's words.
+describe("History's create: New terminal in the project the room shows (HN-7)", () => {
+  it("names the project in its tooltip, and a press asks History's door — the note in Godview's words, over the create", async () => {
+    const history = historyDoor();
+    const used = mount("history", { history });
+    expect(shownGlyph()).toBe("start");
+    expect(create().getAttribute("aria-label")).toBe("New terminal");
+    expect(create().getAttribute("title")).toBe("New terminal in vibe-field  ⌘T");
+    expect(create().hasAttribute("aria-disabled")).toBe(false);
+    await act(async () => {
+      create().click();
+    });
+    expect(history.newTerminal).toHaveBeenCalledTimes(1);
+    expect(used.door?.newTerminal).not.toHaveBeenCalled();
+    // the chosen session's acts are not the create's any more
+    expect(history.resume).not.toHaveBeenCalled();
+    expect(history.jump).not.toHaveBeenCalled();
+    expect(q(".vf-line-note").textContent).toBe("Terminal opened in the active pane");
+    expect(q(".vf-line-note").getAttribute("data-at")).toBe("create");
+  });
+
+  it("says a folder it could not open in, in the words History's door refused it with", async () => {
+    const history = historyDoor({
+      newTerminal: vi.fn(async () => ({
+        state: "refused" as const,
+        reason: "its volume is not connected",
+      })),
+    });
+    mount("history", { history });
+    await act(async () => {
+      create().click();
+    });
+    expect(q(".vf-line-note").textContent).toBe(
+      "Terminal could not be opened — its volume is not connected",
+    );
+  });
+
+  it("names no project while the room shows none: its tooltip is Godview's create's", () => {
+    mount("history", { history: historyDoor({ project: null }) });
+    expect(create().getAttribute("title")).toBe("New terminal  ⌘T");
+  });
+
+  it("says so, rather than nothing, when pressed before History has lent its door", async () => {
+    // History publishes its door as it mounts; a press in the moment before is said in words
+    mount("history");
+    expect(create().getAttribute("title")).toBe("New terminal  ⌘T");
+    expect(create().hasAttribute("aria-disabled")).toBe(false);
+    await act(async () => {
+      create().click();
+    });
+    expect(q(".vf-line-note").textContent).toBe(
+      "Terminal could not be opened — History is still opening",
+    );
+  });
+});
+
+// The chosen session's act — Resume, or Jump to while it runs here (P3) — was the line's create
+// until HN-7; the palette's History row runs it since (`runChosenSession`, ChromeLayer's glue), and
+// what it comes to is said where it always was: over the create, in the same words.
+describe("History's chosen session, as the palette's row runs it (HN-7)", () => {
+  it("resumes it, or jumps to it while it runs here, and says what came of it over the create", async () => {
+    mount("history", { history: historyDoor() });
+    const chosen = historyDoor({ chosen: "ses-1" });
+    await act(async () => {
+      await runChosenSession(chosen);
+    });
+    expect(chosen.resume).toHaveBeenCalledTimes(1);
+    expect(chosen.newTerminal).not.toHaveBeenCalled();
+    expect(q(".vf-line-note").textContent).toBe("Resumed in the active pane");
+    expect(q(".vf-line-note").getAttribute("data-at")).toBe("create");
+    // running here it is Jump to, whatever the launcher read of a resume (P3)
+    const live = historyDoor({ chosen: "ses-1", live: true, waits: "its folder is gone" });
+    await act(async () => {
+      await runChosenSession(live);
+    });
+    expect(live.jump).toHaveBeenCalledTimes(1);
+    expect(live.resume).not.toHaveBeenCalled();
+    expect(q(".vf-line-note").textContent).toBe("Jumped to its pane");
+  });
+
+  it("says why it waits in Resume's words, and asks nothing — no choice, or the launcher's reason", async () => {
+    mount("history", { history: historyDoor() });
+    const none = historyDoor();
+    await act(async () => {
+      await runChosenSession(none);
+    });
+    expect(none.resume).not.toHaveBeenCalled();
+    expect(q(".vf-line-note").textContent).toBe("Could not resume — choose a session first");
+    const waits = historyDoor({ chosen: "ses-1", waits: "its folder is gone" });
+    await act(async () => {
+      await runChosenSession(waits);
+    });
+    expect(waits.resume).not.toHaveBeenCalled();
+    expect(waits.jump).not.toHaveBeenCalled();
+    expect(q(".vf-line-note").textContent).toBe("Could not resume — its folder is gone");
+    // History's door not lent at all (the published one, none here): the same words
+    await act(async () => {
+      await runChosenSession();
+    });
+    expect(q(".vf-line-note").textContent).toBe("Could not resume — choose a session first");
   });
 });
 
