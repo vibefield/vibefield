@@ -560,6 +560,9 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // TS-4 (TS-D7) — the asks to connect after Not now, each said `asked` with its
   // time beside AO's retired moments (setup-moment-params.asked is one saying)
   "setup-ledger-connect-ask": SetupLedger,
+  // TS-6 (TS-D13) — a link landed during setup: the sync question owed beside
+  // AO's retired moment and TS-4's saying (fieldd's store reads it from disk)
+  "setup-ledger-sync-question": SetupLedger,
   "agent-persona": AgentPersona,
   "agent-distribution": AgentDistributionRecord,
   "agents-installs": AgentsInstallsResult,

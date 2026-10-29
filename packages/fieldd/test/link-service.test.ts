@@ -1312,3 +1312,64 @@ describe("TS-D14/D15/D16 and T11 — on truffle 0.7.24's surface", () => {
     }
   });
 });
+
+describe("TS-6 — what a new link waits for (TS-D13)", () => {
+  it("is awaited once by a new link, before link.json is written, and not by the re-verify", async () => {
+    const root = mkRoot();
+    const written: boolean[] = [];
+    const { svc } = build(root, floorWithLogin(), {
+      beforeLinked: async () => {
+        written.push(existsSync(linkPath(root)));
+      },
+    });
+    await svc.begin();
+    expect(written).toEqual([false]);
+    expect(svc.status().linkState).toBe("linked");
+    await probe(svc);
+    expect(written).toEqual([false]);
+    svc.stop();
+  });
+
+  it("never runs on a linked boot or a renewal: a link already held is no new link", async () => {
+    let ran = 0;
+    let signedOut = true;
+    const { svc } = build(
+      linkedRoot(),
+      (method) => {
+        if (method === "native.mesh.start")
+          return Promise.resolve({ mode: "linked", started: true });
+        return Promise.resolve({
+          deviceId: "01DEVICE",
+          login: "james@github",
+          loginAllow: ["james@github"],
+          ...(signedOut ? { needsLogin: true, keyExpiresAt: NOW - 1 } : {}),
+        });
+      },
+      {
+        beforeLinked: async () => {
+          ran += 1;
+        },
+      },
+    );
+    svc.start();
+    await askLanded(svc);
+    await probe(svc);
+    expect(svc.status().linkState).toBe("expired");
+    signedOut = false;
+    await probe(svc);
+    expect(svc.status().linkState).toBe("linked");
+    expect(ran).toBe(0);
+    svc.stop();
+  });
+
+  it("a failure is logged and never refuses the link", async () => {
+    const root = mkRoot();
+    const { svc } = build(root, floorWithLogin(), {
+      beforeLinked: () => Promise.reject(new Error("the registry could not be written")),
+    });
+    await svc.begin();
+    expect(svc.status().linkState).toBe("linked");
+    expect(JSON.parse(readFileSync(linkPath(root), "utf8")).login).toBe("james@github");
+    svc.stop();
+  });
+});
