@@ -1137,7 +1137,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     they come, the nearest in front. The card under the pointer rises whole, says where it came from
     above itself — "Godview · claude·2 · 2m ago", "Canvas · snapshot · just now", a copy made in
     Settings or the Setup Assistant by the view under it ("Canvas · Settings · just now"), one History's
-    room made by the view alone ("History · just now") — on solid chrome at
+    room made by the view alone ("History · just now"), a paste with no caret by its act alone
+    ("⌘V · just now" — where it was copied is not known: a pane's ⌘C or copy-on-select, a field's own
+    copy and a program's OSC 52 reach the clipboard with no card until G30; LC-21), a drag by where it
+    came from ("Another app · dragged in · just now") — on solid chrome at
     12/500 in secondary ink — and shows its **×** inside its top right corner, across from the index:
     18 round on the card's ink at 8%, `--vf-red` with a white × under the pointer, "Remove  ⌫". Above
     the fan's rest line the card the pointer is on holds the reach while the pointer moves across it,
@@ -1169,14 +1172,20 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     (HN-6): ⌘V with no caret deals one card for each thing the clipboard holds — its words, its
     picture, a file as its path — from the pointer (files first: a copy whose words come with a
     picture of them, a spreadsheet's cells, is one thing, its picture); a drag from another app
-    becomes a card the moment it enters the window, carried as one from the hand is, its kind's index
-    alone until the drop says what it holds; let go on a pane or Chat's prompt it plays straight in,
+    becomes a card the moment it enters the window, carried as one from the hand is, showing only its
+    kind — its index and its kind's name ("Text from another app", "An image", "3 files"; "Let go to
+    see it") — until the drop says what it holds; let go on a pane or Chat's prompt it plays straight in,
     only once, and a place that refuses what it turned out to be says so on the note while the card
     settles into the hand; let go on a field, the field takes it as it always has; anywhere else it
     settles into the hand — several things at once, the first where it was let go and the rest in the
     hand (several files on a pane paste the first one's path: a play of several cards is not built);
     carried back out of the window, it is gone; a drop that held nothing says "Not brought in — it
-    held no words, picture or file". **Twelve**
+    held no words, picture or file". More than twelve at once bring in the first twelve and say so —
+    "12 of 20 brought in — the hand holds twelve" (LC-23). What another app brings in is bounded as
+    the frame's own roads are (LC-24): words past what one paste reads (`SHELL_CLIPBOARD.READ_MAX_BYTES`)
+    and a picture past the still's cap are not brought in — "Not brought in — the words hold 30 MB; a
+    card holds at most 4.1 MB". A field that takes the drop shows its own caret: over it the carried
+    card ducks as it does over the line (LC-25). **Twelve**
     (HN-D8): the thirteenth pushes the oldest off the left end. **This window's session** (HN-D9):
     closing the window or quitting empties the hand; nothing of it is written anywhere.
   - **Where cards go** (HN-D4, HN-D6, HN-D7, HN-L5): drag a card out of the hand and every place that
@@ -1213,7 +1222,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     into a pane, onto the desk and through a view's cell, and another app's paste and drag. ⌘C in a
     pane waits on ghosttea's routed selection text (petition G30: its routed `copySelection` answers
     nothing at 0.13.7, and its clipboard write carries no reason to tell ⌘C from a program's); Copy
-    in History's room on a copy port in rosetta's room (petition RO-31).
+    in History's room on a copy port in rosetta's room (petition RO-31); the Artifacts drawer's copy
+    of a URL on an SDK copy door (item 111: a plugin cannot reach the host's, R10, and the page's own
+    write is denied by the empty grant set).
 - **Pills** (`UiPill`; the settings rows' `SettingsPill`): full-round, padded 2 × 8, 10px
   medium in tertiary ink on the foreground at 5% — a label, never a control: a plugin's source
   (below), a fact beside a name.
@@ -1940,8 +1951,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   **A copy the clipboard refuses deals nothing** — the card is dealt only once its contents are on
   the clipboard — and the note says why, in Copy's voice: "Not copied — the clipboard did not take
   the picture", "Not copied — the picture could not be read", or its size against the clipboard's
-  bound, counted as §9 counts ("Not copied — the words hold 80 KB; the clipboard takes at most
-  64 KB"). Settings' and History's copies keep their buttons' own "Copied" and "Couldn't copy".
+  bound, counted as §9 counts — the size rounded up, the bound down ("Not copied — the words hold
+  80 KB; the clipboard takes at most 65 KB"); a refusal never repeats a bridge's error. Settings' copies
+  keep their buttons' own "Copied" and "Couldn't copy", and History's room its own receipts ("Path
+  copied"), its refusal said in Copy's voice. **A copy made under a sheet** (Settings, the Setup
+  Assistant) is dealt into the hand under it, seen when the sheet closes; the button's "Copied" is its
+  sign while the sheet stands (§10: the sheet is above the frame; LC-22).
   Reduced motion (M6): the card fades into its place.
   *History:* **Send to…** (DK-0d…DK-17b, 2026-10-03…10-07) flew a chip of the object's face from the
   selection to the line's caret (1.25 → 0.86, 560ms) and typed the @ 180ms after it landed, so @'s
@@ -2946,9 +2961,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     it (the folder the room shows, else the project's usual place) — placed as Godview's create places
     one (GV-D4: in the focused pane), and the window moves to Godview to show it; the note says
     Godview's words ("Terminal opened in the active pane"). With no project shown it opens as
-    Godview's does; a project on another desktop, or a folder not mounted or gone, says so in New
-    agent's words — "Terminal could not be opened — the folder is gone" — and the window stays in
-    History; a deck that never answers says "Terminal could not be opened — no pane took it in 20 s",
+    Godview's does; a folder not mounted or gone says so in New agent's words — "Terminal could not
+    be opened — the folder is gone" — and a project on another desktop names it ("Terminal could not
+    be opened — vibe-field is on Mac mini"), and the window stays in History. When Godview's deck is
+    up it is asked first and the window moves only once the terminal opened; when it is not, the
+    window moves to raise it, and a refusal that comes after is said there. A deck that never answers
+    says "Terminal could not be opened — no pane took it in 20 s",
     and a press before the room has lent its door, "Terminal could not be opened — History is still
     opening" (as the palette says "Godview is still opening").
   - **Resume** (`resume`, §13), the chosen session's act — the line's create until HN-7, now the
