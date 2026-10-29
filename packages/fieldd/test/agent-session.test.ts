@@ -3233,6 +3233,11 @@ describe("item 81 — an exit that comes before its pane is registered", () => {
 });
 
 describe("item 87 — a run's exit is not held by its workspace's cleanup", () => {
+  /** How long the stalled git holds the cleanup: the bound of what these rows prove. An exit read
+   * inside it was published before the cleanup ended, and the rows stop the git long before it
+   * ends by itself. */
+  const STALLED_GIT_MS = 30_000;
+
   /** A `git` that does not answer: puppeteer finalizes a run's workspace when its process exits, and
    * every git call there is unbounded (puppeteer-workspaces 0.3.0, `git.js`). First on the
    * in-process fieldd's PATH, it stalls that cleanup the way a loaded host can. Each call leaves its
@@ -3241,9 +3246,11 @@ describe("item 87 — a run's exit is not held by its workspace's cleanup", () =
     const dir = join(root, "stalled-git");
     const pids = join(dir, "pids");
     mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, "git"), `#!/bin/sh\necho $$ >> "${pids}"\nexec sleep 30\n`, {
-      mode: 0o755,
-    });
+    writeFileSync(
+      join(dir, "git"),
+      `#!/bin/sh\necho $$ >> "${pids}"\nexec sleep ${STALLED_GIT_MS / 1000}\n`,
+      { mode: 0o755 },
+    );
     return {
       dir,
       called: () => existsSync(pids),
@@ -3302,8 +3309,10 @@ describe("item 87 — a run's exit is not held by its workspace's cleanup", () =
           seen({ continuation: found?.continuation ?? null, gitCalled: git.called() });
           return found?.continuation?.exited === true ? found : undefined;
         },
-        5_000,
+        // item 101 — the heard exit's own budget, as AR-6-0's: the cleanup's stall is STALLED_GIT_MS
+        INTERRUPTED_EXIT_MS,
         "the exited row of a run whose workspace cleanup is stalled",
+        exitWitness(box, spawned.terminal.sessionId),
       );
       // exited at once, and not yet resumable: the cleanup still holds the old run's workspace
       expect(row.continuation).toMatchObject({ persisted: true, exited: true, resumable: false });
@@ -3385,8 +3394,10 @@ describe("item 87 — a run's exit is not held by its workspace's cleanup", () =
           seen(found?.continuation ?? null);
           return found?.continuation?.exited === true ? found : undefined;
         },
-        5_000,
+        // item 101 — the heard exit's own budget, as AR-6-0's: the cleanup's stall is STALLED_GIT_MS
+        INTERRUPTED_EXIT_MS,
         "the exited row of a run whose workspace cleanup is stalled",
+        exitWitness(box, spawned.terminal.sessionId),
       );
       const askedAt = Date.now();
       const refused = await win.callErr("agent.resume", { runtimeRunId: runId });
