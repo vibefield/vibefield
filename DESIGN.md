@@ -1048,9 +1048,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   *Since FR-3 (2026-10-03) the owner is the frame's, not the line's (the head, below); @'s list, the
   line's other surface, left with the draft at HN-2.*
 - **Chat's composer — the line's draft, moved into the thread** (LN-D3 ruled by James 2026-10-29,
-  Cards in Hand; **not built**: CO's SP-1 builds it, with the Assistant's cell becoming Chat — CO's
-  rulings, `draft/compose-plane/`, decide what this entry does not): a composer at the foot of
-  Chat's open thread, scoped to the spark that thread is — the draft, @, the mic and send, as the
+  Cards in Hand; **not built — CO's SP-1d builds it**, with the Assistant's cell becoming Chat. The
+  lane that deleted the line's composer carries its canon here (VF-PM 2026-10-29 16:23Z); SP-1b and
+  SP-1d link to this entry, and CO's rulings, `draft/compose-plane/`, decide what it does not): a
+  composer at the foot of Chat's open thread, scoped to the spark that thread is — the draft, @, the
+  mic and send, as the
   line drew them from FR-2 to HN-2. The line's code for them left main at HN-2 and stays in git for
   SP-1 to take what it wants. Until SP-1 draws it anew, the line's canon stands for it:
   - **the draft** — an editor, not a field: 14px body (§3) in primary ink, padded 10, one line that
@@ -1076,6 +1078,34 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   13, padded 0 8 0 6, ringed 1px; it never splits a word, Backspace takes it as one character and ×
   on hover removes it. A picture wears `capture` on the select blue at 14%; a card's chip wears its
   kind's index glyph (§8 "The hand").
+  **The line's canon as HN-2 deleted it** (DESIGN.md at `e23fa8a1f`, kept whole here for SP-1d —
+  what Chat keeps of it, CO's rulings keep; what they re-rule, they rule there):
+  - **@'s list's rows** — read bottom-up, nearest first: **Send to** nearest the line ("Send to a
+    pane" in Godview, where the panes lead) — what the deck shows, each named by its folder as the
+    swarm names its body, with what runs there and its state word; above it **Add** — From the
+    clipboard (its three newest as 34px thumbnails, corners 8), File…, Capture…, Past session….
+    Send to's rows are 46 tall, a name over a small line. Typing after the @ filters both groups. A
+    row with no door behind it says why and cannot be taken — File… "no file door on the desktop
+    yet", Past session… "no past-session door on the line yet" (AR-8c: History is wired, but a past
+    session still has no door into a message).
+  - **The aim** — a Send to row taken — is the chip that leads the draft (`@vibe-field`, the fill,
+    primary ink): the target is always named (CB-1), and it stays across sends until changed or
+    removed; the placeholder then says who it goes to, **"Message vibe-field…"**.
+  - **Send, until the agent seam** (thinking-four-views §11, the interim send): aimed at a pane the
+    deck is showing, the draft is PASTED into that pane's input — the road ⌘V takes, bracketed,
+    Return never pressed for you — and the note says "Pasted into vibe-field"; otherwise it goes to
+    the clipboard, and the note says that and why: "Copied — no agent takes a message from here
+    yet". When the aimed pane cannot take it, the draft is copied all the same and the note names
+    the pane and its reason: "Copied — vibe-field's pane is not on screen" while another view is up,
+    "Copied — vibe-field's pane is not taking input" while its input is closed; a draft too large for
+    the pane is copied too: "Copied — too large for vibe-field: 300 KB, and one paste carries 261 KB
+    of it". "Pasted into" is never said for a paste the pane did not take. Sending clears the
+    draft's words and chips and keeps the aim.
+  - **One surface**: @'s list and the objects were one owner's two surfaces at the line (FR-4,
+    F11) — opening either folded the other; in Chat, @'s list is one of the frame's open surfaces
+    (§10).
+  - **The rule** — 1 × 18 in the strong hairline, 8 after create and 6 before the draft — was the
+    line's own, and left with it.
 - **The hand — the clipboard you can see** (Cards in Hand: HN-D1…HN-D10 ruled by James 2026-10-29,
   all at their leans — HN-D1 his own pick on the page; the record is `thinking-cards-in-hand.md`;
   built at HN-1, HN-2 and HN-4; it replaced the clipboard's edge tray): every copy made in VibeField,
