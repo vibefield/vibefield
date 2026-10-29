@@ -43,12 +43,14 @@
 - Landed 10-27: TS-0, 1, 2, 3a (+ erratum `067d4895c`), 3b, 5, 8a (`d48e131fc`, the floor's facts on truffle 0.7.24),
   8b (`adf3d972f`, the faces and James's words). T9–T11 consumed with truffle 0.7.24.
 - Landed 10-29: TS-4a (`776eae4d3`, asking again: the status item's Connect Your Devices…, the filters' ghost rows,
-  the away notice and the one switch) and TS-4b (`257af5f6f`, the approval line on the claims strip, behind the limit
-  moment).
-- Next: **TS-6** (the sync question, D13) → TS-7 (the phone) → TS-8c (T8, after its live probe) → TS-9. The slice
-  names are the doc's: the board's "TS-6" was TS-8a.
+  the away notice and the one switch), TS-4b (`257af5f6f`, the approval line on the claims strip, behind the limit
+  moment) and TS-6 (`26b331dbc`, landed as the merge `14c74f980`: the sync question at the first new field; setup's
+  posture pane retired).
+- Next: **TS-7** (the phone; fd's lane, 7a and 7b) → TS-8c (T8, after its live probe) → TS-9. The slice names are the
+  doc's: the board's "TS-6" was TS-8a.
 - James ruled TS-D19, TS-D20b and TS-D21 A (10-29 03:57:49Z). Owed: the approval line while Godview is closed (TS-4c
-  or a later rung); Publish's nudge, until a Publish offers where to open; the switch's words (drafts).
+  or a later rung); Publish's nudge, until a Publish offers where to open; the switch's words (drafts); a field made
+  while the sync question is owed by a path other than New field follows the posture (TS-6's finding).
 - Owed on James's display word: §5 (TS-2's photographs and desk rows, renew's live half, TS-5's real notice, TS-8a's
   live tailnet rows, TS-4a's rows and away notice, TS-4b's approval line). `specs/users-and-accounts.md` §6/§7 owes
   TS's fold (the housekeeping pass added its first dated notes there).
@@ -156,7 +158,7 @@
    `c0581e952`, branch `focus/agent-probe-env`); item 39 (the swarm's physics at the display's rate, ruled (i) 10-19);
    the tuck row (`384e933f`). The puppeteer halves of the last three sit on `vf/item-39` / `vf/after-a` in James's local
    `../puppeteer` only (not on GitHub, not on puppeteer main, not in a release): push them first, then merge.
-4. TS-6 → TS-7 → TS-8c → TS-9.
+4. TS-7 → TS-8c → TS-9.
 5. AL-6, "Last exit", the relaunch cap; the Behavior words.
 6. **The ruled small slices** (James, 2026-10-28, the housekeeping page), each a lane when one is free:
    - Q4: the explorer thumbnail follows an edit by ≈22 s (ICE's ambient wind, design-015 D-D9): pass a shorter
@@ -426,7 +428,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 
 | Track | State | Law lives in | Next |
 |---|---|---|---|
-| TS — the Tailscale door | ACTIVE; TS-0…3b, 4a, 4b, 5, 8a, 8b landed | `thinking-tailscale-onboarding.md`; DESIGN.md §6/§8/§9/§13 | TS-6 |
+| TS — the Tailscale door | ACTIVE; TS-0…3b, 4a, 4b, 5, 6, 8a, 8b landed | `thinking-tailscale-onboarding.md`; DESIGN.md §6/§8/§9/§13 | TS-7 |
 | AO — Bring Your Agents | ACTIVE; AO-0…6b3 landed | `thinking-agent-onboarding.md` | AO-7 on a puppeteer release after 0.3.0 (`installRecipe`) |
 | AL — app lifecycle | ACTIVE; AL-1…3, 5, 7, 8a, 9 landed | `thinking-app-lifecycle.md`; ESR §7.3 | AL-6, Last exit, relaunch cap |
 | QW1 — Godview swarm QA, fix wave 1 | ACTIVE; stacks A and B landed 10-28, B on puppeteer 0.3.0's EL8 pin | `godview-swarm-qa-plan.md`; `thinking-ar-reattach.md` | QA wave 1 |

@@ -18847,3 +18847,95 @@ the porcelain empty after. Not pushed (James's click).
 premise, and the row passes or fails by machine.
 
 - Records: `/Volumes/SamsungRed/lanes/records/item113/`.
+
+## TS-6 — the sync question at the first new field (TS-D13): a new link keeps the fields made before it on this Mac, and New field asks once in the explorer (2026-10-29; `14c74f980`, the merge of main `218dc3d9e` (item 113) into `26b331dbc` on `93916c1c6` and `a58d96a4f`, lane `ts/6-sync-question`)
+
+**What.** D13 moved the sync question out of the Setup Assistant to the first new project after connecting. Taking it out
+of setup alone would have synced every field made before the link the moment the link landed, under the default
+posture (`automatic`). So TS-6 is two halves: fieldd keeps those fields on this Mac when a sign-in lands, and the head
+asks the question when New field is next pressed.
+- **The keep** (fieldd):
+  - `LinkService`'s `beforeLinked` is awaited at a NEW link only (no login held), after the capture is verified and
+    before link.json is written and the linked remount seeds the library. A linked boot, a renewal (expired → linked)
+    and a re-verify never run it. A failure is logged and never refuses the link.
+  - `oweSyncQuestion` (`sync-question.ts`) owes `sync-question` in the setup ledger first (`SetupLedgerStore.owe`,
+    only where no row stands), then sets every field with no answer of its own (`syncIntent` undefined) to `local`
+    through the catalog's own `setSyncIntent`. A field sent or kept already is left alone, and so is a system
+    document. A refusal on one field is logged and the others are still kept. Nothing is kept once the question is
+    answered, and an unreadable newer row stops it.
+  - **Contracts:** `owed` joins `SETUP_MOMENT_STATES`. A window's `setup.moment` takes `SetupMomentAnswer` (retired |
+    asked), so `owed` is fieldd's alone (PRECONDITION_FAILED). `SYNC_QUESTION_MOMENT`, and the EL9 golden
+    `setup-ledger-sync-question.valid.json` (the kit mirrors no setup fixture, so there are no Swift copies). AO's
+    lead read the seam first.
+- **The question** (field-app):
+  - `account/sync-question.ts`: `syncQuestionOwed` (the ledger says `owed`, never a guess), `earlierFields` (the
+    fields staying on this Mac), and `useSyncQuestion`, the door ChromeLayer hands to Head. Head itself runs without a
+    provider in its tests and the catalog, and there New field never asks.
+  - `frame/Head.tsx`: New field asks while the question is owed. The answer runs in order: the fields added are sent
+    through the manager, then the posture is set and the moment retired, then the field is made. A posture that does
+    not land keeps the question and makes nothing. Cancel makes nothing and leaves it owed. Closing the explorer, or an
+    answer from elsewhere, closes it.
+  - `frame/SyncQuestionView.tsx` is controller-free, behind HeadView's new `question` prop, with the tiles `hidden`
+    beneath it. One `account/PostureCards.tsx` serves both places: the question and Settings → Devices' New projects.
+  - **Setup's posture pane is retired** (`panes/PosturePane.tsx`, `views/posture.tsx`, the catalog's frame 07). A
+    linked user goes from the name to Setting up, and Connect goes to Setting up either way.
+  - **Catalog:** the head's plate "The sync question" (Design System → Chrome → the head), the shipping HeadView on
+    fixture props.
+- **DESIGN.md** §8, at its source: the bullet "The sync question" (between Settings → Devices and Asking again), and one
+  dated line in the explorer's New field paragraph.
+- **The rulings:**
+  - VF-PM 05:13Z, derived from D13, with James told and free to overrule: a Mac whose link was captured before TS-6
+    keeps what it syncs and is never asked;
+  - James on VF-PM's board, `ts6-sync-question-words` 05:37:09Z, "all four as drafted" (the title, the voice, the
+    list's label, the acts Cancel and New field);
+  - and `ts6-sync-question-noun` 05:37:06Z, "projects (the cards word)", the sheet's voice throughout. New field is the
+    head's act and stays.
+
+**Found:**
+- **Retiring the pane alone would have been a privacy regression.** Every field made before the link had no intent of
+  its own and followed the `automatic` default, so connecting would have carried it away unasked. The keep has to run
+  before the linked remount seeds the library (`daemon.ts`'s linked change), so it hangs on the capture, not on a
+  ledger read later.
+- **"New link" is "no login held".** The first guard (`state !== "linked"`) would have run on a renewal (expired →
+  linked) and kept fields a person had already been asked about.
+- **A field made while owed by a path other than New field** (a paste, a template, a plugin's create) follows the
+  posture until the question is answered. Owed on TS's list.
+- **biome's stdin route** (VF-PM 08:07Z, from the iOS lane): `ts6-light.sh` now checks that every non-ASCII character a
+  modified file held at the base is still there. The one deliberate removal is named: the retired specimen's arrow.
+
+**Validation.**
+- **The lane:** the edits in `/Volumes/SamsungRed/lanes/ts6` (worktree off `e23fa8a1f`, which was still main's head, so
+  there was no rebase). The runs were in ts3's run lane, detached at each sha (its own target `rust/ts3`, rosetta-pin
+  and mille-pin at the lock's pins), at nice 19 under the guard.
+- **Red first** (`ts6-light.sh red`, 08:29:34–08:30:06Z) at `a58d96a4f`: fieldd's `sync-question.integration` file 1
+  failed and 4 passed, the keep row alone.
+- **The light pass** (`ts6-light.sh green`): the first run at `4b51c069e` (08:30:06–08:31:50Z) was red on two rows of the
+  slice's own, both from retiring the pane: the catalog's per-frame counts were 14, and the linked-root wizard row
+  clicked the retired pane's Continue. They were amended into the field-app commit. Green at `26b331dbc`
+  (08:32:55–08:34:48Z):
+  - non-ASCII kept in 26 files, walls, biome, and the contracts, fieldd, field-app and electron-shell typechecks;
+  - contracts 489/489, fieldd 74/74 (7 files), field-app 390/390 (15 files);
+  - the tree clean, no stub left.
+- **`pnpm verify` on this Mac** at `26b331dbc`, at nice 19 on the settled gate, was red twice on filed timing rows
+  outside the diff (items 101 and 91; the load 17 → 460, then 18 → 471 with James away). VF-PM read the reds as the
+  verify's own fan-out on this host (08:58Z), and James picked the Mac mini's verify lane (09:05:11Z). The lane started
+  on his typed "go" (17:50:20Z).
+- **The gate host (a deviation, said here):** jaspers-Mac-mini, Apple M4, 16 GiB, macOS 26.7.2 (25G332), node v26.5.0,
+  pnpm 11.13.1, rustc 1.99.1, TMPDIR=/tmp, the lane `~/vf-lanes/verify` (`ts6-mini.sh`; setup 17:51:19–17:54:45Z, a
+  blobless clone, rosetta-pin `434854583`, mille-pin `c8160d585`; preflight green with one R23 candidate warning).
+- **The mini, run one (`ts6-1`) at `26b331dbc`** (17:55:55–17:59:53Z): exit 1 on ONE row outside the diff —
+  electron-shell's `resources.test.ts` "never silently falls back to a development path when packaged". It asserted
+  against the real `/Applications/VibeField.app/Contents/Resources`, and the mini has VibeField installed there. Every
+  other stage was green, TS-6's own files among them. The two stages the chain never reached, run alone at the same tip:
+  `pnpm test:rust` exit 0 (493 passed, 0 failed, 14 ignored) and `pnpm gen:check` exit 0 (no diff).
+- **Item 113** (`218dc3d9e`, the fixer's) made the row inject its readers. It verified whole on the mini as run zero
+  (18:10:38–18:15:04Z, exit 0, the row green with the installed app present) and landed first (18:17:43Z).
+- **The landed tip** is `14c74f980`: main `218dc3d9e` merged into `26b331dbc` here (`git merge --no-ff`; it differs
+  from `26b331dbc` in the resources test alone), carried to the mini as a one-commit bundle (sha256 `2d9cc77a…`), and
+  verified there whole:
+  `pnpm verify` exit 0, armed 18:19:57Z, done 18:24:24Z (load 2.04 → 8.86), whole: preflight through `gen:check`;
+  `pnpm test` ran 27 projects with no failed summary (field-app 2807, fieldd 2608 + 11 skipped, electron-shell 1983 + 3
+  skipped, contracts 1210); `link-notices.test.ts` 9 ✓ and `resources.test.ts` 30 ✓ with the installed app present;
+  `pnpm test:rust` 31 ok, 0 failed; the tree clean after. Logs: `lanes/ts6/logs/mini/ts6-2/`.
+- **Landed:** main fast-forwarded `218dc3d9e` → `14c74f980` at 18:32:48Z on VF-PM's GO; not pushed. The draft's Status
+  flip and §10's TS-6 LANDED ride the next draft queue.
