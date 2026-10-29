@@ -1934,7 +1934,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       requestedTermination: event.requestedTermination,
     };
     if (this.pending.has(runtimeRunId)) {
-      this.closePending(runtimeRunId, exit);
+      this.closePending(runtimeRunId, exit, "exit");
       return;
     }
     await this.closeRun(runtimeRunId, exit);
@@ -2002,7 +2002,11 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         // its own — stamped after the same grace the attached runs get
         entry.backstop = setTimeout(() => {
           entry.backstop = undefined;
-          this.closePending(runtimeRunId, { exitCode: null, signal: null, reason: "unknown" });
+          this.closePending(
+            runtimeRunId,
+            { exitCode: null, signal: null, reason: "unknown" },
+            "exit",
+          );
         }, this.exitGraceMs(id));
         entry.backstop.unref();
       }
@@ -3014,21 +3018,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       // MF-1f — a husk is a dead pane the deck still shows, so its row comes
       // back exited on THIS boot, the resume verb over its final screen, as
       // `reattach` returns a stamped record's row on the next one
-      const stamped = husk === undefined ? undefined : this.records.read(runtimeRunId);
-      // (AR-7 — never a typed run's: the terminal it names is the person's shell)
-      if (
-        husk !== undefined &&
-        terminalId !== undefined &&
-        stamped !== undefined &&
-        !isTypedRun(stamped)
-      ) {
-        this.exited.set(runtimeRunId, {
-          record: stamped,
-          terminalSessionId: terminalId,
-          terminal: husk,
-          since: this.now().toISOString(),
-        });
-        this.publish();
+      if (husk !== undefined && terminalId !== undefined) {
+        if (this.keepExitedRow(runtimeRunId, terminalId, husk)) this.publish();
       }
       if (record.profileId !== undefined) void this.profiles.sweep();
     }
@@ -3757,9 +3748,13 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     }));
   }
 
+  /** A pending run leaves, its record stamped with `exit`. `after` says why: an `exit` of its
+   * process (the floor's, heard, or the inventory's backstop) keeps the row exited over the pane
+   * while the floor lists it (MF-1f, item 97); a withdrawal or a supersession never does. */
   private closePending(
     runtimeRunId: string,
     exit: { exitCode: number | null; signal: string | null; reason: string },
+    after: "exit" | "withdrawn" = "withdrawn",
   ): void {
     const entry = this.pending.get(runtimeRunId);
     if (entry === undefined || entry.resuming) return;
@@ -3772,6 +3767,14 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     if (entry.record.terminalSessionId !== undefined)
       this.byTerminal.delete(entry.record.terminalSessionId);
     this.records.stampExit(runtimeRunId, { at: this.now().toISOString(), ...exit });
+    // MF-1f — the pane is kept (MF-1g), so the row stays over it, exited: the floor's own
+    // listing is the evidence, as `holdExited` reads it for an attached run
+    const pane = entry.record.terminalSessionId;
+    const terminals = this.opts.terminals?.() ?? null;
+    if (after === "exit" && pane !== undefined && terminals?.observation() !== undefined) {
+      const row = terminals.get(pane);
+      if (row !== undefined) this.keepExitedRow(runtimeRunId, pane, row);
+    }
     if (entry.record.profileId !== undefined) void this.profiles.sweep();
     this.logger.info("fieldd.agents.session_exited", "Pending managed session's PTY exited", {
       runtimeRunId,
@@ -3864,6 +3867,27 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       terminal: entry.terminal,
       since: this.now().toISOString(),
     });
+  }
+
+  /** MF-1f for a run this fieldd did not hold attached (item 97): a record stamped with its exit
+   * while the floor lists its pane gets its exited row from the record, as `reattach` builds one.
+   * Never a typed run's (AR-7: its pane is the person's live shell), never a record gone. Answers
+   * whether the row was kept. */
+  private keepExitedRow(
+    runtimeRunId: string,
+    terminalSessionId: string,
+    terminal: TerminalInfo,
+  ): boolean {
+    if (this.disposed) return false;
+    const record = this.records.read(runtimeRunId);
+    if (record === undefined || isTypedRun(record)) return false;
+    this.exited.set(runtimeRunId, {
+      record,
+      terminalSessionId,
+      terminal,
+      since: this.now().toISOString(),
+    });
+    return true;
   }
 
   /** Withdraw an exited row and say why. Answers whether it was there. */

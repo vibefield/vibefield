@@ -514,7 +514,7 @@ describe("a husk the floor lists exited (item 97; the mock floor)", () => {
   /** The grace, and the 5 s every row here gives an observation to land. */
   const STAMPED_WITHIN_MS = EXIT_GRACE_MS + 5_000;
 
-  it("a pending run whose PTY is listed exited is stamped exited after the grace, with no exit event", async () => {
+  it("a pending run whose PTY is listed exited is stamped exited after the grace, with no exit event, and its row stays over the kept pane", async () => {
     const run = "run-pending-husk";
     const { mock, daemon, records } = await agentDaemonOn(beforeTheExit(), (dataDir) => [
       runRecord(run, HUSK, dataDir),
@@ -542,6 +542,9 @@ describe("a husk the floor lists exited (item 97; the mock floor)", () => {
       signal: null,
       reason: "unknown",
     });
+    // MF-1f — the pane is kept, so the row stays over it, exited (`closePending`'s hold)
+    const row = daemon.agents.list().sessions.find((r) => r.runtimeRunId === run);
+    expect(row?.continuation?.exited).toBe(true);
   });
 
   it("a restart across the exit: a record whose pane the FIRST inventory lists exited is stamped after the boot's grace, never held as running", async () => {
