@@ -137,7 +137,10 @@ describe("the nine faces, drawn as the pane's laws say", () => {
     // the pane's BP-D1 lesson: a word shaped like an Object property is no state, and never indexes the tables
     for (const is of ["toString", "constructor", "__proto__", "hasOwnProperty"]) {
       expect(faceState({ extra: { simulator: { is } } }, { is: "live" })?.face.is, is).toBe("live");
-      expect(facePlan({ extra: { simulator: { is } } }, LIVE, "iPhone 8", true).line, is).toBeNull();
+      expect(
+        facePlan({ extra: { simulator: { is } } }, LIVE, "iPhone 8", true).line,
+        is,
+      ).toBeNull();
     }
   });
 });
