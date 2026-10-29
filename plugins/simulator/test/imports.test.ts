@@ -7,7 +7,16 @@
 // among them. No widening: unlike the pane it writes no `Position` or `Size` (a phone is never resized), so `/canvas` is
 // refused everywhere. Its authoring-time trees (scripts/, test/, playground/) may add the build kit, the SDK's testing door,
 // the runner and Node's builtins.
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -62,6 +71,28 @@ function violation(file: string, spec: string, authoring: boolean): string | nul
   if (SHIPPED.has(spec)) return null;
   if (authoring && AUTHORING.test(spec)) return null;
   return `"${spec}" is not the SDK's door (${[...SHIPPED].join(", ")})`;
+}
+
+/**
+ * Every image in a package's own trees (package-relative, sorted): never under `node_modules`, and never under a dot-directory —
+ * a tool's output, ignored in this repository and never shipped (the playground's `.vibefield-still/`, a try's `.vibefield-try/`:
+ * their PNGs are stills of what the phone draws, written beside it by `pnpm still`).
+ */
+function imagesIn(pkg: string): string[] {
+  const all = (dir: string): string[] =>
+    existsSync(dir)
+      ? readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+          e.name === "node_modules" || (e.isDirectory() && e.name.startsWith("."))
+            ? []
+            : e.isDirectory()
+              ? all(join(dir, e.name))
+              : [join(dir, e.name)],
+        )
+      : [];
+  return all(pkg)
+    .filter((f) => /\.(png|jpe?g|gif|webp|heic|pdf|svg)$/i.test(f))
+    .map((f) => relative(pkg, f))
+    .sort();
 }
 
 const shipped = walk(join(PKG, "src"));
@@ -155,20 +186,29 @@ describe("the phone reaches ICE through the SDK's doors alone (K-L1)", () => {
   });
 
   it("ships no Apple artwork (PHONE.md Q-9): no image of any kind in the package, and the fixture draws from arithmetic", () => {
-    const all = (dir: string): string[] =>
-      existsSync(dir)
-        ? readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
-            e.name === "node_modules"
-              ? []
-              : e.isDirectory()
-                ? all(join(dir, e.name))
-                : [join(dir, e.name)],
-          )
-        : [];
-    const images = all(PKG).filter((f) => /\.(png|jpe?g|gif|webp|heic|pdf|svg)$/i.test(f));
-    expect(images.map((f) => relative(PKG, f))).toEqual([]);
+    expect(imagesIn(PKG)).toEqual([]);
     expect(readFileSync(join(PKG, "src/fixture.ts"), "utf8")).not.toMatch(
       /ios-home|\.png|OffscreenCanvas|drawImage/,
     );
+  });
+
+  it("…reading the package's own trees, never a tool's output: the playground's stills and a try's are pictures OF the phone, not artwork it carries", () => {
+    const dir = mkdtempSync(join(tmpdir(), "pts1-artwork-"));
+    try {
+      for (const f of [
+        "src/home.png",
+        "assets/frame.svg",
+        ".vibefield-still/vibefield.simulator--live--day.png",
+        ".vibefield-try/still.png",
+        "node_modules/x/icon.png",
+        "src/law.ts",
+      ]) {
+        mkdirSync(dirname(join(dir, f)), { recursive: true });
+        writeFileSync(join(dir, f), "");
+      }
+      expect(imagesIn(dir)).toEqual(["assets/frame.svg", "src/home.png"]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
