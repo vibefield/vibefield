@@ -104,10 +104,34 @@ impl MgmtOutbox {
     /// otherwise fill the outbox, and the next delta would close the
     /// connection. Refused only when the connection is closing.
     pub fn offer(&self, line: String) -> Result<Offered, MgmtOutboxClosed> {
+        self.offer_within(line, self.tx.max_capacity(), MGMT_MAX_QUEUED_BYTES)
+    }
+
+    /// CP-1a — `send` for a line whose state a later line rebuilds: the door
+    /// stream's deltas, and the snapshot that repairs them (`mgmt/door.rs`).
+    /// It is queued while the outbox keeps half its slots and half its bytes
+    /// free, and otherwise dropped with the connection kept; the caller then
+    /// owes its reader a snapshot. `send` would close the connection on
+    /// saturation, and a door's caller is a same-uid process that can open
+    /// and close doors as fast as it can connect: that must never reach the
+    /// one channel fieldd manages this floor on (EL7; the CO lead's ruling,
+    /// 2026-10-29). Half, so the lines that carry no repair keep the rest.
+    pub fn offer_rebuildable(&self, line: String) -> Result<Offered, MgmtOutboxClosed> {
+        self.offer_within(line, self.tx.max_capacity() / 2, MGMT_MAX_QUEUED_BYTES / 2)
+    }
+
+    /// Queue `line` only while at least `free_slots` message slots are free and
+    /// the queued bytes stay within `max_queued`; otherwise skip it.
+    fn offer_within(
+        &self,
+        line: String,
+        free_slots: usize,
+        max_queued: usize,
+    ) -> Result<Offered, MgmtOutboxClosed> {
         if self.is_closed() {
             return Err(MgmtOutboxClosed);
         }
-        if self.tx.capacity() < self.tx.max_capacity() {
+        if self.tx.capacity() < free_slots {
             return Ok(Offered::Skipped);
         }
         let bytes = line.len() + 1;
@@ -117,7 +141,7 @@ impl MgmtOutbox {
                 .try_update(Ordering::AcqRel, Ordering::Acquire, |current| {
                     current
                         .checked_add(bytes)
-                        .filter(|next| *next <= MGMT_MAX_QUEUED_BYTES)
+                        .filter(|next| *next <= max_queued)
                 })
                 .is_err()
         {
@@ -145,6 +169,19 @@ impl MgmtOutbox {
 
     pub fn is_closed(&self) -> bool {
         self.closing.load(Ordering::Acquire) || *self.close.borrow() || self.tx.is_closed()
+    }
+
+    /// CP-1a — resolves once this connection is closed or its writer is gone, so
+    /// a forwarder waiting on its source alone still learns its reader left,
+    /// without sending into it. A door subscription decides whether fieldd is
+    /// sent doors' bytes, so it must end with its connection, not at its next
+    /// event.
+    pub async fn closed(&self) {
+        let mut close = self.close.subscribe();
+        tokio::select! {
+            _ = self.tx.closed() => {}
+            _ = close.wait_for(|closed| *closed) => {}
+        }
     }
 
     /// Wake a reader blocked on the same connection so it stops and drops its
@@ -199,6 +236,8 @@ pub struct DaemonState {
     pub terminal_mesh: MeshPlan,
     /// F1 — the freeway unit's door: `native.freeway.*` reach it.
     pub freeway: crate::services::freeway::FreewayHandle,
+    /// CP-1a — the floor's door unit: `native.door.*` reach it.
+    pub door: crate::services::door::DoorHandle,
     /// Process-owned native diagnostic producer. Embedded unit tests omit it;
     /// the production main installs it before service composition.
     pub logging: Option<NativeLogging>,
@@ -226,6 +265,7 @@ impl DaemonState {
         terminal_routes: watch::Receiver<TerminalRouteSnapshot>,
         terminal_mesh: MeshPlan,
         freeway: crate::services::freeway::FreewayHandle,
+        door: crate::services::door::DoorHandle,
         logging: Option<NativeLogging>,
     ) -> Arc<Self> {
         // The first receivers are dropped here, so neither channel keeps one
@@ -246,6 +286,7 @@ impl DaemonState {
             terminal_routes,
             terminal_mesh,
             freeway,
+            door,
             logging,
             restart: crate::restart::RestartControl::default(),
             manager: crate::orphan::ManagerPresence::new(std::time::Instant::now()),
@@ -423,6 +464,9 @@ mod tests {
         // tests build it: the unit binds a loopback listener on port 0 and never declares, so
         // no host starts.
         let terminal = crate::services::terminal::TerminalUnit::new(&config, ping.clone());
+        // CP-1a's door seam, built the way bootstrap builds it; never started here.
+        let door =
+            crate::services::door::DoorUnit::new(&config, ping.clone(), bridge.clone()).handle();
         let freeway = crate::services::freeway::FreewayUnit::new(
             &config,
             "boot-under-test",
@@ -455,6 +499,7 @@ mod tests {
             .1,
             MeshPlan::resolve(&config),
             freeway,
+            door,
             None,
         )
     }

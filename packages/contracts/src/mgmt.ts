@@ -18,7 +18,7 @@ export type UnitState = z.infer<typeof UnitState>;
 
 export const UnitHealth = z
   .object({
-    /** "mgmt" | "mesh-gateway" | "terminal" | "mesh-bridge" | "freeway" | "process" */
+    /** "mgmt" | "mesh-gateway" | "terminal" | "mesh-bridge" | "freeway" | "door" | "process" */
     unit: z.string(),
     state: UnitState,
     detail: z.string().optional(),

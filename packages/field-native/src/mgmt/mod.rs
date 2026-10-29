@@ -24,6 +24,8 @@
 //! and not run.
 
 mod diagnostics;
+/// CP-1a — `native.door.*`, the floor's door.
+mod door;
 /// T-M4 — PUBLIC so an integration test can build a serve config through the
 /// PRODUCTION mapping rather than a copy of it (`build_serve_config`; the
 /// `terminal_cell_route_probe` row that dials a cell route). Nothing else in
@@ -611,6 +613,10 @@ async fn handle_conn(stream: local_ipc::Stream, state: Arc<DaemonState>, mesh_qu
             // no verb on this channel carries a durable secret for it. A
             // pre-TM-3 caller falls through to METHOD_NOT_FOUND below, which is
             // the honest answer: the door is gone, not temporarily unavailable.
+            // CP-1a — the floor's door (`services/door`, `mgmt/door.rs`).
+            m if m.starts_with("native.door.") => {
+                door::handle(&state, &tx, method.as_str(), params, id);
+            }
             "native.diagnostics.query" => {
                 send(&tx, diagnostics::query(&state, &params, id));
             }
