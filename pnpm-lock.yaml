@@ -870,6 +870,9 @@ importers:
         specifier: workspace:*
         version: link:../../packages/plugin-sdk
     devDependencies:
+      '@napi-rs/canvas':
+        specifier: 1.0.10
+        version: 1.0.10
       '@types/node':
         specifier: 'catalog:'
         version: 24.13.3

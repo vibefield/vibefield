@@ -19,6 +19,7 @@
     "@vibefield/plugin-sdk": "workspace:*"
   },
   "devDependencies": {
+    "@napi-rs/canvas": "1.0.10",
     "@types/node": "catalog:",
     "@vibefield/plugin-build": "workspace:*",
     "@webgpu/types": "^0.1.74",
