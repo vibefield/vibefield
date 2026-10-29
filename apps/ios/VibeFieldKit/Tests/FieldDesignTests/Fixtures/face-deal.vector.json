@@ -1,0 +1,240 @@
+{
+  "note": "IOS-8f — the face deal's cross-plane vector (UA-D17's policy, packages/contracts/src/user-face.ts): the deck in order, FNV-1a over UTF-16 code units, `dealFace(seed, taken)` and `effectiveFaces(roster)` (written faces first, then each face-less user by fuid against every face held so far). The contracts (test/user-face.test.ts), fieldd's `user.me` (test/user-me.test.ts) and the iOS kit (FieldDesignTests/FaceDealVectorTests, reading a copy check:ios-fixtures holds byte-identical) are all held to it. A `taken` face spelled with a presentation selector is the same face (`faceKey`). A deliberate change to the deal edits this file in the same commit.",
+  "deck": [
+    "🦊",
+    "🐙",
+    "🐼",
+    "🐧",
+    "🦉",
+    "🐢",
+    "🦁",
+    "🐯",
+    "🐨",
+    "🐸",
+    "🦄",
+    "🐝",
+    "🐳",
+    "🦋",
+    "🐻",
+    "🐰",
+    "🦔",
+    "🦜",
+    "🐞",
+    "🦩",
+    "🐬",
+    "🦖",
+    "🐺",
+    "🦝",
+    "🦦",
+    "🐌",
+    "🦀",
+    "🐡",
+    "🦭",
+    "🐿️",
+    "🐑",
+    "🐘",
+    "🦒",
+    "🦓",
+    "🐫",
+    "🦥",
+    "🌵",
+    "🍄",
+    "🌻",
+    "🍋",
+    "🍉",
+    "🥑",
+    "🍩",
+    "🚀",
+    "🎈",
+    "🪐",
+    "🌙",
+    "🧪"
+  ],
+  "hashes": [
+    {
+      "value": "",
+      "fnv1a32": 2166136261
+    },
+    {
+      "value": "a",
+      "fnv1a32": 3826002220
+    },
+    {
+      "value": "james",
+      "fnv1a32": 2953518059
+    },
+    {
+      "value": "01J8F2ZQ9K3M4N5P6Q7R8S9T0V",
+      "fnv1a32": 3299098956
+    },
+    {
+      "value": "me@jamesyong42.com",
+      "fnv1a32": 4207535017
+    }
+  ],
+  "deals": [
+    {
+      "seed": "01J8F2ZQ9K3M4N5P6Q7R8S9T0V",
+      "taken": [],
+      "face": "🐳"
+    },
+    {
+      "seed": "01J8F2ZQ9K3M4N5P6Q7R8S9T0V",
+      "taken": ["🐳"],
+      "face": "🦋"
+    },
+    {
+      "seed": "01J8F2ZQ9K3M4N5P6Q7R8S9T0V",
+      "taken": [
+        "🦊",
+        "🐙",
+        "🐼",
+        "🐧",
+        "🦉",
+        "🐢",
+        "🦁",
+        "🐯",
+        "🐨",
+        "🐸",
+        "🦄",
+        "🐝",
+        "🐳",
+        "🦋",
+        "🐻",
+        "🐰",
+        "🦔",
+        "🦜",
+        "🐞",
+        "🦩",
+        "🐬",
+        "🦖",
+        "🐺",
+        "🦝",
+        "🦦",
+        "🐌",
+        "🦀",
+        "🐡",
+        "🦭",
+        "🐿️",
+        "🐑",
+        "🐘",
+        "🦒",
+        "🦓",
+        "🐫",
+        "🦥",
+        "🌵",
+        "🍄",
+        "🌻",
+        "🍋",
+        "🍉",
+        "🥑",
+        "🍩",
+        "🚀",
+        "🎈",
+        "🪐",
+        "🌙",
+        "🧪"
+      ],
+      "face": "🐳"
+    },
+    {
+      "seed": "me@jamesyong42.com",
+      "taken": [],
+      "face": "🐌"
+    },
+    {
+      "seed": "01J9AAAAAAAAAAAAAAAAAAAAAA",
+      "taken": [],
+      "face": "🐙"
+    },
+    {
+      "seed": "seed-16",
+      "taken": ["🦊️"],
+      "face": "🐙"
+    }
+  ],
+  "rosters": [
+    {
+      "users": [
+        {
+          "userId": "01J8F2ZQ9K3M4N5P6Q7R8S9T0V",
+          "fuid": 501,
+          "face": {
+            "emoji": "🐙",
+            "frame": "coin"
+          }
+        },
+        {
+          "userId": "01J9AAAAAAAAAAAAAAAAAAAAAA",
+          "fuid": 502
+        }
+      ],
+      "shown": [
+        {
+          "userId": "01J8F2ZQ9K3M4N5P6Q7R8S9T0V",
+          "face": {
+            "emoji": "🐙",
+            "frame": "coin"
+          },
+          "dealt": false
+        },
+        {
+          "userId": "01J9AAAAAAAAAAAAAAAAAAAAAA",
+          "face": {
+            "emoji": "🐼",
+            "frame": "sticker"
+          },
+          "dealt": true
+        }
+      ]
+    },
+    {
+      "users": [
+        {
+          "userId": "01J9COLLIDE000000000000009",
+          "fuid": 503
+        },
+        {
+          "userId": "01J8Z3K6W9QX2M4N7P5R8T1V3B",
+          "fuid": 502
+        }
+      ],
+      "shown": [
+        {
+          "userId": "01J9COLLIDE000000000000009",
+          "face": {
+            "emoji": "🐝",
+            "frame": "sticker"
+          },
+          "dealt": true
+        },
+        {
+          "userId": "01J8Z3K6W9QX2M4N7P5R8T1V3B",
+          "face": {
+            "emoji": "🦄",
+            "frame": "sticker"
+          },
+          "dealt": true
+        }
+      ]
+    },
+    {
+      "users": [
+        {
+          "userId": "01J8F2ZQ9K3M4N5P6Q7R8S9T0V",
+          "fuid": 501
+        }
+      ],
+      "shown": [
+        {
+          "userId": "01J8F2ZQ9K3M4N5P6Q7R8S9T0V",
+          "face": {
+            "emoji": "🐳",
+            "frame": "sticker"
+          },
+          "dealt": true
+        }
+      ]
+    }
+  ]
+}

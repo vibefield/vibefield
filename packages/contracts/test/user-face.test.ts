@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   dealFace,
@@ -98,7 +101,7 @@ describe("faceProblem", () => {
   });
 
   it("refuses the faces that already mean something, whatever selector they carry", () => {
-    for (const emoji of ["🔥", "📁", "🔗", "✅", "⚠️", "⚠", "❤️", "❤", "🟢"]) {
+    for (const emoji of ["🔥", "📁", "🔗", "✅", "⚠️", "!", "❤️", "❤", "🟢"]) {
       expect(faceProblem({ emoji }, "me", roster), emoji).toMatch(/already means something/);
     }
   });
@@ -186,5 +189,42 @@ describe("the wire shapes", () => {
     const params = UsersUpdateParams.parse({ face: { emoji: "🐙", frame: "coin" } });
     expect(params.face).toEqual({ emoji: "🐙", frame: "coin" });
     expect("color" in UsersUpdateParams.shape).toBe(false);
+  });
+});
+
+// IOS-8f — the deal's cross-plane vector: fieldd's `user.me` and the iOS kit read the same file
+// (the kit through a copy check:ios-fixtures holds byte-identical), so a drift on any plane is a red.
+const VECTOR = JSON.parse(
+  readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "face-deal.vector.json"),
+    "utf8",
+  ),
+) as {
+  deck: string[];
+  hashes: { value: string; fnv1a32: number }[];
+  deals: { seed: string; taken: string[]; face: string }[];
+  rosters: {
+    users: { userId: string; fuid: number; face?: { emoji: string; frame?: "sticker" | "coin" } }[];
+    shown: { userId: string; face: { emoji: string; frame?: string }; dealt: boolean }[];
+  }[];
+};
+
+describe("IOS-8f — the face deal (golden vector)", () => {
+  it("is this deck, in this order", () => {
+    expect(VECTOR.deck).toEqual([...FACE_DECK]);
+  });
+  it("hashes as the vector says", () => {
+    for (const row of VECTOR.hashes) expect(fnv1a32(row.value), row.value).toBe(row.fnv1a32);
+  });
+  it("deals as the vector says", () => {
+    for (const row of VECTOR.deals) expect(dealFace(row.seed, row.taken), row.seed).toBe(row.face);
+  });
+  it("shows a roster as the vector says", () => {
+    for (const roster of VECTOR.rosters) {
+      const shown = effectiveFaces(roster.users);
+      for (const row of roster.shown) {
+        expect(shown.get(row.userId), row.userId).toEqual({ face: row.face, dealt: row.dealt });
+      }
+    }
   });
 });
