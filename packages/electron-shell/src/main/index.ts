@@ -71,7 +71,6 @@ import { runAuditedSupportExport } from "./audited-support-export";
 import { installDurableClose } from "./close";
 import { ConnectAsks, workingAgents } from "./connect-asks";
 import { CrashArtifactManager, startLocalCrashReporter } from "./crash-artifacts";
-import { installDevSignalQuit } from "./dev-signals";
 import { desktopDevelopmentExtension } from "./development-extension";
 import { installLocalDiagnosticsPort } from "./diagnostics-port";
 import { buildSupervisor, dataRoot } from "./fieldd";
@@ -141,6 +140,7 @@ import { buildCsp, importMapHashesFromHtml } from "./security-policy";
 import { backfillMigratedSetupVariant } from "./setup-variant";
 import { shellExitNotice } from "./shell-exit-notice";
 import { RecoveringShellProvider } from "./shell-provider";
+import { installSignalQuit } from "./signal-quit";
 import { isolateSmokeProfile } from "./smoke-profile";
 import { installStillProtocol, resolveStillFile } from "./still-protocol";
 import { SupportBundleError, SupportBundleService } from "./support-bundle";
@@ -2765,14 +2765,14 @@ if (!hasInstanceLock) {
       onQuitAborted: () => restoreAfterAbortedQuit?.(),
     });
     lifecycleFlow = flow;
-    if (MODE === "dev") {
-      // AL-4 — a signal is never a person's quit: the runner restarts the shell (the next one adopts the pairs), or
-      // ends its session and stops the daemons itself. Only ⌘Q, the Dock, the tray and the menu meet the gate.
-      installDevSignalQuit(process, () => {
-        flow.leavePairsOnQuit("signal");
-        app.quit();
-      });
-    }
+    // AL-4 — a signal is never a person's quit: dev's runner restarts the shell (the next one adopts the pairs), or
+    // ends its session and stops the daemons itself. Only ⌘Q, the Dock, the tray and the menu meet the gate.
+    // AU-5a (LC-26's read) — production too, and every other build: Electron 43 turns SIGTERM, SIGINT and SIGHUP into
+    // an ordinary quit, which met the census gate and stopped the pairs while only dev installed this handler.
+    installSignalQuit(process, () => {
+      flow.leavePairsOnQuit("signal");
+      app.quit();
+    });
     try {
       await main(userRoot, logRoot, logging, localDiagnostics, crashArtifacts, supportBundles, {
         userId: ensured.user.userId,

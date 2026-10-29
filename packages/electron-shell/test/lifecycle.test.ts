@@ -323,7 +323,7 @@ describe("the quit gate in the lifecycle (AL-3)", () => {
     expect(rig.order[0]).toBe("decide:unattended");
   });
 
-  it("a signal's quit (dev's runner) skips the gate: the pairs are left", async () => {
+  it("a signal's quit (dev's runner; since AU-5a any build's) skips the gate: the pairs are left", async () => {
     const rig = gateRig({});
     rig.flow.leavePairsOnQuit("signal");
     const event = { preventDefault: vi.fn() };
@@ -333,6 +333,58 @@ describe("the quit gate in the lifecycle (AL-3)", () => {
     expect(rig.close).toHaveBeenCalledTimes(1); // the durable close, as ever
     electron.emit("window-all-closed");
     expect(rig.gate.stop).not.toHaveBeenCalled();
+  });
+
+  // AU-5a (B3's quit-seam review) — a signal that lands while the person's quit is still open to it is not the
+  // person's quit: before the fix, the box swallowed it, Cancel left `restarting` set for good (the handler's latch
+  // ignored every later signal, and the person's next ⌘Q skipped the gate), and "Quit and end sessions" stopped the pairs
+  it("AU-5a — a signal while the box is up quits whatever the box answers, and stops nothing", async () => {
+    for (const decide of ["cancel", "proceed"] as const) {
+      await drain();
+      electron.reset();
+      let release: () => void = () => undefined;
+      const hold = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const rig = gateRig({ decide, hold });
+      electron.emit("before-quit", { preventDefault: vi.fn() });
+      await vi.waitFor(() => expect(rig.gate.decide).toHaveBeenCalledTimes(1));
+      rig.flow.leavePairsOnQuit("signal");
+      const signalled = { preventDefault: vi.fn() };
+      electron.emit("before-quit", signalled); // the signal's own app.quit(), held by the box
+      expect(signalled.preventDefault).toHaveBeenCalledTimes(1);
+      release();
+      // the signal's quit again, past the gate: the durable close, as ever
+      await vi.waitFor(() => expect(rig.close).toHaveBeenCalledTimes(1));
+      electron.emit("window-all-closed");
+      await vi.waitFor(() => expect(rig.order.filter((s) => s === "app.quit")).toHaveLength(2));
+      expect(rig.gate.decide).toHaveBeenCalledTimes(1);
+      expect(rig.gate.stop).not.toHaveBeenCalled();
+      expect(rig.flow.leaveReason).toBe("restart");
+    }
+  });
+
+  it("AU-5a — a signal after the gate decided, before its stop began: the stop never runs", async () => {
+    const rig = gateRig({});
+    electron.emit("before-quit", { preventDefault: vi.fn() });
+    await vi.waitFor(() => expect(rig.close).toHaveBeenCalledTimes(1)); // decided; the durable close runs
+    rig.flow.leavePairsOnQuit("signal");
+    electron.emit("window-all-closed");
+    await vi.waitFor(() => expect(rig.order.filter((s) => s === "app.quit")).toHaveLength(2));
+    expect(rig.gate.stop).not.toHaveBeenCalled();
+  });
+
+  it("AU-5a — a signal while the stop's re-ask box is up: Cancel stops nothing, and VibeField still quits", async () => {
+    const rig = gateRig({ stop: "aborted" });
+    electron.emit("before-quit", { preventDefault: vi.fn() });
+    await vi.waitFor(() => expect(rig.close).toHaveBeenCalledTimes(1));
+    electron.emit("window-all-closed"); // the stop begins: a session born during the quit asks again
+    rig.flow.leavePairsOnQuit("signal"); // before that box answers
+    await vi.waitFor(() => expect(rig.order.filter((s) => s === "app.quit")).toHaveLength(2));
+    await settle();
+    expect(rig.gate.stop).toHaveBeenCalledTimes(1);
+    expect(rig.onQuitAborted).not.toHaveBeenCalled(); // no window comes back
+    expect(rig.open()).toBe(false);
   });
 
   // AL-7 — why the shell leaves the pairs it holds running, said by each supervisor's dispose

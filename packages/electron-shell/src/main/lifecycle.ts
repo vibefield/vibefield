@@ -20,9 +20,10 @@ import type { WindowRegistry } from "./window-policy";
 // first (`quit-gate.ts`): before anything closes, the census and, when it has to,
 // the consent box; after the durable close, the consented stop of every pair;
 // only then the native quit. A quit the shell performs itself — an update
-// (QuitFlow's update mode), a signal from outside (`leavePairsOnQuit`: dev's
-// SIGTERM/SIGINT, the runner's restart and its own shutdown alike, AL-4) — skips
-// the gate and leaves the pairs, and a mode with no gate is unchanged. Every
+// (QuitFlow's update mode), a signal from outside (`leavePairsOnQuit`: SIGTERM,
+// SIGINT or SIGHUP — dev's runner restarting the shell or ending its session,
+// AL-4, and since AU-5a the same signals in production and every other build) —
+// skips the gate and leaves the pairs, and a mode with no gate is unchanged. Every
 // re-issued `app.quit()` runs from a macrotask: a quit re-issued inside a promise
 // continuation can leave the process alive on macOS (electron #55208).
 //
@@ -42,7 +43,8 @@ export interface LifecycleFlow extends QuitFlow {
    * tray's `quitting`, then reopens the primary window. */
   resetAfterAbortedQuit(): void;
   /** AL-4 — the next quit is not a person's (a signal from outside: the dev runner's restart, or its own shutdown, which
-   * stops the daemons itself): no gate, and the pairs are left for whoever owns them next. */
+   * stops the daemons itself; AU-5a: any signal, in every build): no gate, and the pairs are left for whoever owns
+   * them next. */
   leavePairsOnQuit(cause: "signal"): void;
   /** AL-D6 — the OS is ending the session (powerMonitor `shutdown`: logout, restart, power off): from here the gate
    * never asks, and the durable close never waits on a person. */
@@ -184,10 +186,25 @@ export function installLifecycle(opts: {
     }
     replayQuit();
   };
+  /** AU-5a — a signal came while the person's quit was still open to it (its box up, or the gate's re-ask box): it is
+   * not the person's quit, whatever the box answers — VibeField quits, the pairs are left, and nothing a waiting move
+   * or an install would do runs. Without it the swallowed signal left `restarting` set for the rest of the session: no
+   * later signal acted (the handler's latch) and the person's next ⌘Q skipped the gate. */
+  const quitForSignal = (): boolean => {
+    if (!restarting) return false;
+    gate = "open";
+    answerMove("proceed");
+    // the signal's own quit again, as it would have run: past the gate, through the durable close if a window is open
+    setImmediate(() => app.quit());
+    return true;
+  };
   /** The windows are closed: a decided gate stops the pairs first; then the native quit is replayed. */
   const afterWindowsClosed = (): void => {
     const quitGate = opts.getQuitGate?.() ?? null;
-    if (gate !== "decided" || quitGate === null) {
+    // a quit already stopping (a second ⌘Q, or a signal, during the stop) waits for that stop's answer
+    if (stopping) return;
+    // AU-5a — a signal's quit stops nothing, even one that came after the gate decided
+    if (gate !== "decided" || quitGate === null || restarting) {
       // AU-7 — no gate stopped anything (a mode without one, a signal's quit): a move would leave the pairs running
       if (move !== null) {
         void finishMove(move, "no-stop");
@@ -197,13 +214,14 @@ export function installLifecycle(opts: {
       app.quit();
       return;
     }
-    if (stopping) return;
     stopping = true;
     void quitGate.stop().then(
       (outcome) => {
         stopping = false;
         if (outcome.kind === "aborted") {
           resetQuitState();
+          // AU-5a — the re-ask box stopped nothing, and a signal during it still quits
+          if (quitForSignal()) return;
           opts.onQuitAborted?.();
           return;
         }
@@ -254,6 +272,7 @@ export function installLifecycle(opts: {
       gate = "deciding";
       void quitGate.decide({ unattended: osSessionEnding }).then(
         (decision) => {
+          if (quitForSignal()) return;
           gate = decision === "proceed" ? "decided" : "open";
           answerMove(decision);
           if (decision === "proceed") setImmediate(() => app.quit());
@@ -265,6 +284,7 @@ export function installLifecycle(opts: {
             "The quit gate failed; the quit goes on and leaves the pairs running",
             error,
           );
+          if (quitForSignal()) return;
           gate = "decided";
           answerMove("proceed");
           setImmediate(() => app.quit());
