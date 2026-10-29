@@ -3676,12 +3676,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           // replay after a reconnect, and the door's resync of a phone behind
           // its cap, PG-1c); `.delta` carries every per-device frame — a
           // device's delta, a device's reset, a device's state.
-          const reader = meshBoard.open(projection, floor, (frame) => emit(frame, "delta"));
+          const install = meshBoard.subscribe(projection, floor, emit);
           return {
-            snapshot: reader.open,
-            resync: () => emit(reader.current(), "snapshot"),
+            ...install,
             dispose: () => {
-              reader.dispose();
+              install.dispose();
               screen?.();
             },
           };

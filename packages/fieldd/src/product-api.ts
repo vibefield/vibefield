@@ -92,10 +92,32 @@ export interface SubscriptionInstall {
 }
 
 /** PG-1c — a phone's subscription that can resync: its deltas stop while it is
- * `behind`, and its producer's resync answers the drain. */
+ * `behind`, and its producer's resync answers the drain. `inflight` is the
+ * bytes of its own snapshots (its open, each resync) still queued: they never
+ * count toward holding it, or a board past the cap would hold itself again with
+ * every snapshot and never come back to deltas. */
 interface Hold {
   behind: boolean;
+  inflight: number;
   readonly resync: () => void;
+}
+
+/** PG-1c — a write its caller counts: its bytes as queued, and as landed. */
+interface WriteTrack {
+  sent(bytes: number): void;
+  landed(bytes: number): void;
+}
+
+/** A hold's own snapshots, counted while they are queued. */
+function ownSnapshots(hold: Hold): WriteTrack {
+  return {
+    sent: (bytes) => {
+      hold.inflight += bytes;
+    },
+    landed: (bytes) => {
+      hold.inflight -= bytes;
+    },
+  };
 }
 
 export type SubscriptionHandler = (
@@ -669,8 +691,8 @@ export class ProductApi extends EventEmitter {
     const id = msg["id"];
     const method = String(msg["method"] ?? "");
     const params = msg["params"];
-    const reply = (v: unknown) => {
-      if (id !== undefined && id !== null) this.sendBounded(ws, v);
+    const reply = (v: unknown, track?: WriteTrack) => {
+      if (id !== undefined && id !== null) this.sendBounded(ws, v, track);
     };
 
     if (method === "system.hello") {
@@ -1260,7 +1282,7 @@ export class ProductApi extends EventEmitter {
     params: unknown,
     handler: Handler | undefined,
     subHandler: SubscriptionHandler | undefined,
-    reply: (v: unknown) => void,
+    reply: (v: unknown, track?: WriteTrack) => void,
     // DS-2 — this CALL's context (a peer's recorded provenance rides it; the
     // connection's own context otherwise) and, for a peer's keyed mutation,
     // the key its receipt is journaled under. Trailing, so the positional
@@ -1287,22 +1309,22 @@ export class ProductApi extends EventEmitter {
         // until the drain's resync, so the phone's chain never breaks.
         if (hold !== null && kind === "delta") {
           if (hold.behind) return;
-          if (ws.bufferedAmount >= TAILNET_QUEUED_BYTES) {
+          if (ws.bufferedAmount - hold.inflight >= TAILNET_QUEUED_BYTES) {
             hold.behind = true;
             return;
           }
         }
-        this.sendBounded(ws, {
-          jsonrpc: "2.0",
-          method: `${base}.${kind}`,
-          params: { subId, payload },
-        });
+        this.sendBounded(
+          ws,
+          { jsonrpc: "2.0", method: `${base}.${kind}`, params: { subId, payload } },
+          hold !== null && kind === "snapshot" ? ownSnapshots(hold) : undefined,
+        );
       };
       const { snapshot, dispose, start, resync } = await subHandler(ctx, params, emit);
       // the phone alone (the `tailnet` principal, as `tailnet-rows.ts` bounds
       // it): a peer daemon on the same door keeps the shed and its heartbeats
       if (resync !== undefined && ctx.principal.kind === "tailnet") {
-        hold = { behind: false, resync };
+        hold = { behind: false, inflight: 0, resync };
         let held = this.holds.get(ws);
         if (held === undefined) {
           held = new Map();
@@ -1315,7 +1337,11 @@ export class ProductApi extends EventEmitter {
         this.holds.get(ws)?.delete(subId);
         dispose();
       });
-      reply({ jsonrpc: "2.0", id, result: { subId, snapshot } });
+      // the open is the hold's own snapshot too
+      reply(
+        { jsonrpc: "2.0", id, result: { subId, snapshot } },
+        hold !== null ? ownSnapshots(hold) : undefined,
+      );
       try {
         start?.();
       } catch {
@@ -1382,8 +1408,9 @@ export class ProductApi extends EventEmitter {
 
   /** Bound both a single projection and the ws library's queued bytes. On
    * overload the connection is shed; reconnect gives state subscriptions a
-   * fresh authoritative snapshot instead of retaining an unbounded delta tail. */
-  private sendBounded(ws: WebSocket, value: unknown): boolean {
+   * fresh authoritative snapshot instead of retaining an unbounded delta tail.
+   * A `track` counts this write's bytes as queued and again as landed (PG-1c). */
+  private sendBounded(ws: WebSocket, value: unknown, track?: WriteTrack): boolean {
     if (ws.readyState !== WS_OPEN) return false;
     let encoded: string;
     try {
@@ -1400,19 +1427,23 @@ export class ProductApi extends EventEmitter {
       ws.close(1013, "client is not keeping up");
       return false;
     }
+    track?.sent(bytes);
     ws.send(encoded, (error) => {
-      if (error) ws.terminate();
-      else this.drained(ws);
+      if (error) {
+        ws.terminate();
+        return;
+      }
+      track?.landed(bytes);
+      this.drained(ws);
     });
     return true;
   }
 
   /** PG-1c — after each write. A held connection always has writes pending, so
    * its last one lands here: once the queue is at half the cap, each
-   * subscription held behind it is re-snapshotted, one at a time, because a
-   * resync's own bytes may fill the queue again (the rest wait for the next
-   * write). The hold clears before the resync, whose snapshot is the chain's
-   * new head. */
+   * subscription held behind it is re-snapshotted, one at a time, re-reading
+   * the queue between them (the rest wait for the next write). The hold clears
+   * before the resync, whose snapshot is the chain's new head. */
   private drained(ws: WebSocket): void {
     const held = this.holds.get(ws);
     if (held === undefined) return;

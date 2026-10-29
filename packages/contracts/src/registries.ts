@@ -217,8 +217,10 @@ export const PRODUCT_API_LIMITS = {
   /** The largest frame the product door accepts INBOUND, in bytes (`ws`'s
    * `maxPayload`); a larger one closes the connection 1009. The outbound pair
    * lives in `MESH_CONTROL_LIMITS` (`PRODUCT_FRAME_BYTES`, `PRODUCT_QUEUED_BYTES`,
-   * the shed); a phone's queue is held short of it by `TAILNET_QUEUED_BYTES`
-   * below (PG-1c).
+   * the shed). A phone's subscriptions that can resync (today the mesh board)
+   * stop sending deltas at `TAILNET_QUEUED_BYTES` below (PG-1c); the rest of its
+   * connection (snapshots, replies, the History tail, project.subscribe) keeps
+   * the shed.
    * DS wave 3 landing (2026-10-01): it was a fieldd literal (`product-api.ts:62`)
    * that the corpus cited as a registry number — now it is one.
    * *Errata (2026-10-26, item 60): this said "closes the connection 1013";
@@ -247,7 +249,9 @@ export const PRODUCT_API_LIMITS = {
    * (`ws.bufferedAmount`) reach this, and ONE fresh snapshot when the queue
    * drains to half of it: a phone that fell behind gets the board as it is,
    * never the backlog of what it was. Its snapshots are never held (each
-   * restates everything) and stay under the connection's shed
+   * restates everything), never count toward holding it while they are
+   * queued (a board past the cap would hold itself again with each one), and
+   * stay under the connection's shed
    * (`MESH_CONTROL_LIMITS.PRODUCT_QUEUED_BYTES`, 128 MiB). Every other caller,
    * a peer daemon on the same door included, and every subscription without a
    * resync keep that shed alone. The queue it reads is fieldd's own: the

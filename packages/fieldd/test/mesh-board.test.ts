@@ -816,4 +816,27 @@ describe("PG-1c — a reader's current open, the door's resync for a phone behin
     late.dispose();
     r.dispose();
   });
+
+  it("the door's install answers the open, relays every frame as a delta, and resyncs with ONE whole-mesh snapshot", async () => {
+    const h = harness([selfRow, desktop("dev-b")]);
+    const sent: Array<[unknown, string | undefined]> = [];
+    const install = h.board.subscribe("desk", 100, (payload, kind) => sent.push([payload, kind]));
+    const [attach] = h.upstreams.attaches;
+    if (attach === undefined) throw new Error("no upstream");
+    h.upstreams.answer(attach, peerSnapshot());
+    await tick();
+    expect(sent.length).toBeGreaterThan(0);
+    expect(sent.every(([, kind]) => kind === "delta")).toBe(true);
+
+    const before = sent.length;
+    install.resync();
+    expect(sent).toHaveLength(before + 1);
+    const late = reader(h);
+    expect(sent.at(-1)).toEqual([late.open, "snapshot"]);
+    // the open the install answered is the one a reader joining then got
+    expect(install.snapshot.devices.map((entry) => entry.device)).toEqual([SELF, "dev-b"]);
+    late.dispose();
+    install.dispose();
+    expect(h.board.size).toBe(0);
+  });
 });

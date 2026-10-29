@@ -712,6 +712,23 @@ export class MeshBoard {
     return hub.join(emit);
   }
 
+  /** The door's install for `agent.subscribe {scope: "mesh"}`: the open as its
+   * snapshot, every per-device frame (a device's delta, reset or state) a
+   * `.delta`, and PG-1c's resync, the whole mesh as it stands now as ONE
+   * `.snapshot`, which the next frame continues. */
+  subscribe(
+    projection: BoardProjection,
+    minIntervalMs: number,
+    emit: (payload: unknown, kind?: "delta" | "snapshot") => void,
+  ): { snapshot: MeshBoardOpen; resync: () => void; dispose: () => void } {
+    const reader = this.open(projection, minIntervalMs, (frame) => emit(frame, "delta"));
+    return {
+      snapshot: reader.open,
+      resync: () => emit(reader.current(), "snapshot"),
+      dispose: reader.dispose,
+    };
+  }
+
   /** How many hubs are standing — each one is a set of open upstreams. */
   get size(): number {
     return this.#hubs.size;
