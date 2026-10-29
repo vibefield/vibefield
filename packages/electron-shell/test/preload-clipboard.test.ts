@@ -189,9 +189,10 @@ describe("the clipboard picture door, main's half (HN-5)", () => {
     const handle = handlers.get(IPC_CHANNELS.clipboardWriteImage);
     expect(await handle?.({ sender }, PNG)).toEqual({ status: "written" });
     expect(await handle?.({ sender }, PNG, "two objects")).toEqual({ status: "written" });
+    // one call each, one item: the picture, and the words beside it when there are any
     expect(write.mock.calls).toEqual([
-      [{ png: PNG }, undefined],
-      [{ png: PNG }, "two objects"],
+      [{ image: { png: PNG } }],
+      [{ image: { png: PNG }, text: "two objects" }],
     ]);
   });
 

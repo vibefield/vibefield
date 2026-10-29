@@ -162,16 +162,19 @@ describe("createClipboardImageDoor (HN-5)", () => {
     const { door, decode, write, onRefused } = picture();
     await expect(door(registered, PNG)).resolves.toEqual({ status: "written" });
     expect(decode).toHaveBeenCalledWith(PNG);
-    expect(write.mock.calls).toEqual([[{ png: PNG }, undefined]]);
+    // the picture alone, one item
+    expect(write.mock.calls).toEqual([[{ image: { png: PNG } }]]);
+    expect(write.mock.calls[0]?.[0]).not.toHaveProperty("text");
     expect(onRefused).not.toHaveBeenCalled();
   });
 
-  it("writes the copy's words beside the picture in the same one write (LC-19)", async () => {
+  it("writes the copy's words beside the picture as ONE item, in one call (LC-19)", async () => {
     const { door, write } = picture();
     await expect(door(registered, PNG, "Ship the desk by Friday.")).resolves.toEqual({
       status: "written",
     });
-    expect(write.mock.calls).toEqual([[{ png: PNG }, "Ship the desk by Friday."]]);
+    expect(write).toHaveBeenCalledOnce();
+    expect(write.mock.calls).toEqual([[{ image: { png: PNG }, text: "Ship the desk by Friday." }]]);
   });
 
   it("refuses a stranger before decoding anything", async () => {
