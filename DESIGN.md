@@ -130,7 +130,7 @@ ground alone (§8), and so does the kit's placeholder face, whose one consumer i
 for the field — the chrome's plates, the switch's and the Setup Assistant's floor — wear the mat in
 CSS, as the field they stand for does.
 *Amended 2026-10-29 (track FG, FG-D1…FG-D24 ruled by James; the record is
-`draft/thinking-first-run-glass.md`; built at FG-1, its tear to the desk at FG-2 and the catalog's still
+`draft/thinking-first-run-glass.md`; built at FG-1, its tear to the desk at FG-2 (the first run's at FG-5) and the catalog's still
 at FG-6):* the first face's ground is the **field** — the website's own splash (vibefield-dotdev,
 Wormhole · edited), live on WebGPU from boot's first frame to the desk (§8 "The boot splash") — and the
 mat begins at the desk. `--vf-field-ground` is the window's colour before the field's first frame and
@@ -661,7 +661,8 @@ percentage names its step, never an invented whole). *Amended 2026-10-27 (AO-4b,
 the travel, and the arc rests at the top of the circle, a fifth of it from twelve o'clock, until the archive is ready;
 the glyph stays at a third of its ink.
 *Amended 2026-10-29 (track FG; FG-D9 A, FG-D10 B, FG-D11 A and FG-D17 A ruled by James; §8 "The Setup Assistant's
-glass"; to be built at FG-2, FG-3 and FG-5):* the first run happens on the field, and these are its motions. **The
+glass"; a returning boot's tear built at FG-2, the rest to be at FG-3 and FG-5):* the first run happens on the field,
+and these are its motions. **The
 glass forms** where the splash stood: the bar and the stage fade (240ms `ease`), and the frost condenses over the
 whole glass as its layers rise `.985 → 1` (560ms island); the field's mark fades under it while the logo fades in
 on the same spot (400ms), so the mark never moves. **The logo** only fades — in over 400ms once the last words are
@@ -2034,7 +2035,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   and `--vf-mat-lattice`), not the canvas and its dots — the floor the Setup Assistant and the switch
   share with it — and its words are in the mat's ink (white at 60 %: 4.0:1 by day, 5.2:1 by night,
   where `/50` read 3.9:1 on the canvas), the bar white/15 under white/80, the ghost Retry white.
-  *Amended 2026-10-29 (track FG; FG-L1, FG-D14 B; built at FG-1, the tear at FG-2):* the ground is the
+  *Amended 2026-10-29 (track FG; FG-L1, FG-D14 B; built at FG-1, a returning boot's tear at FG-2):* the ground is the
   **field** (§2.1): the website's splash, vendored (`boot/splash/`, generated from vibefield-dotdev's
   `lib/splash/` at a pinned hash, never edited), drawing at 60 fps in a worker on an OffscreenCanvas — on
   the main thread where a worker can't, as the still where there is no WebGPU — from the first frame to
@@ -2084,11 +2085,19 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   desk composes behind, never the splash: the wizard keeps the window from its last question until
   its Ready beat ends, and then leaves with the splash's fade and the desk's settle (§6, the
   hand-over). The splash never returns between the wizard and the desk.
-  *Amended 2026-10-29 (track FG; FG-D9 A, FG-D10 B, FG-D11 A; to be built at FG-2 and FG-5):* the reveal
+  *Amended 2026-10-29 (track FG; FG-D9 A, FG-D10 B, FG-D11 A; built at FG-2, the first run's at FG-5):* the reveal
   is the website's **tear** (§6): the field opens from its centre over 1.9s with the theme's light on its
   walls, and the desk settles in from `.985`, its exposure coming down from 1.16. A first run reaches it
   through the hand-over; a returning boot plays it once the desk is frame-stable and the splash has stood
   700ms. Without WebGPU the still fades in place (240ms), and under reduced motion the field does (120ms).
+  *As built at FG-2:* the splash's words go first (240ms `ease`, the website's `wordsOut`) and the ground's
+  own colour with them, unseen under the live field; then the tear. It is chosen once, as the boot hands
+  over: the tear when the field is live, motion is allowed and the window is seen, else the base reveal
+  above, so a hidden window and a field still waking fade too. The desk keeps `0.99` under the splash and
+  steps to `.985` and 1.16 only at the tear's words, unseen, so the fade, the first run and the switch
+  keep their reveal. A tear is bounded at its length and a second (a hidden window draws no frames); a
+  field that never opened leaves with the splash's fade, never a pop, and one that opened stops drawing
+  at once. Every boot now holds until its ground has opened, so the desk is never handed over mid-tear.
 - **The switch** (UA-D15's reload, dressed; 2026-09-22): changing users reloads the window,
   so the transition is two halves that meet on one frame — the boot splash wearing the face of
   the user you are going to. **Leaving.** The face you clicked lifts out of its row (held,

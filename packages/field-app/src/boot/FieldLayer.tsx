@@ -1,5 +1,12 @@
-import { type ReactElement, useEffect, useRef, useState } from "react";
-import { type FieldDoor, fieldPlan, openFieldDoor } from "./splash/field-door";
+import {
+  type ReactElement,
+  type Ref,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
+import { type FieldDoor, fieldPlan, openFieldDoor, TEAR, tearLook } from "./splash/field-door";
 
 // The field under the boot's first face (track FG; DESIGN.md §2.1, §8 "The boot splash"): the
 // website's splash, one for the window's whole first face — BootGround is one node from the splash
@@ -10,6 +17,20 @@ import { type FieldDoor, fieldPlan, openFieldDoor } from "./splash/field-door";
 
 type FieldState = "waking" | "live" | "still";
 
+/** What the boot asks of the field at the reveal (FG-2). */
+export interface FieldHandle {
+  /** The field is drawing (its door open on the GPU), so it can tear. */
+  readonly live: boolean;
+  /** The tear (DESIGN.md §6) onto what lies under the ground, in the theme's light: true once it is
+   * open, false at once when the field can't tear, and false past its bound — a hidden window
+   * draws no frames, and a tear never holds the boot. Open, the field stops drawing at once; not
+   * open, it stays to leave with the ground's fade (the website's `.is-fading`). */
+  tear(dark: boolean): Promise<boolean>;
+}
+
+/** The tear's bound: its length, and a second for frames that come late. */
+const TEAR_BOUND_MS = TEAR.duration + 1_000;
+
 function prefersReducedMotion(): boolean {
   return (
     typeof window !== "undefined" &&
@@ -19,8 +40,14 @@ function prefersReducedMotion(): boolean {
 }
 
 /** `mark`: the field's mark shows; under the Setup Assistant's glass it goes (DESIGN.md §6, the
- * glass forming). */
-export function FieldLayer({ mark }: { mark: boolean }): ReactElement {
+ * glass forming). `handleRef`: the boot's hold on the field at the reveal. */
+export function FieldLayer({
+  mark,
+  handleRef,
+}: {
+  mark: boolean;
+  handleRef?: Ref<FieldHandle>;
+}): ReactElement {
   const ref = useRef<HTMLDivElement>(null);
   const still = useRef<HTMLDivElement>(null);
   const door = useRef<FieldDoor | null>(null);
@@ -57,6 +84,35 @@ export function FieldLayer({ mark }: { mark: boolean }): ReactElement {
     shown.current = mark;
     door.current?.mark(mark ? 1 : 0, prefersReducedMotion() ? 200 : 400);
   }, [mark]);
+
+  useImperativeHandle(
+    handleRef,
+    () => ({
+      get live() {
+        return door.current !== null && door.current.mode !== "still";
+      },
+      tear(dark) {
+        const opened = door.current;
+        if (opened === null || opened.mode === "still") return Promise.resolve(false);
+        return new Promise<boolean>((resolve) => {
+          const bound = setTimeout(() => resolve(false), TEAR_BOUND_MS);
+          const settle = (done: boolean): void => {
+            clearTimeout(bound);
+            resolve(done);
+          };
+          // A reveal that fails (a lost device) is a tear that did not open.
+          void opened.reveal(tearLook(dark)).then(settle, () => settle(false));
+        }).then((done) => {
+          if (done) {
+            opened.destroy(); // open: nothing left to draw
+            if (door.current === opened) door.current = null;
+          }
+          return done;
+        });
+      },
+    }),
+    [],
+  );
 
   return (
     <div

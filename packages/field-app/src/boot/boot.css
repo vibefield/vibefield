@@ -88,6 +88,22 @@
   gap: 12px;
 }
 
+/* The tear (FG-2; the website's `[data-status='revealing']`): the words and their shade go first (240ms), and the
+   ground's own colour with them — unseen while the live field covers it — so the field opens onto the desk. */
+.vf-field-shade,
+.vf-field-words {
+  transition: opacity 240ms ease;
+}
+
+.vf-splash[data-opening="tear"] {
+  background-color: transparent;
+}
+
+.vf-splash[data-opening="tear"] .vf-field-shade,
+.vf-splash[data-opening="tear"] .vf-field-words {
+  opacity: 0;
+}
+
 /* The desk's cutting mat in CSS (DK-16; DESIGN.md §2.1's erratum): its sage as the theme lights it and its lattice in
    its lit cream. The boot's first face moved to the field (track FG); the switch keeps the mat (§8 "The switch"). */
 .vf-mat-floor {

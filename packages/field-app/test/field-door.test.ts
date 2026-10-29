@@ -6,11 +6,14 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  DAYLIGHT,
   FIELD_BUDGET,
   type FieldFromWorker,
   type FieldToWorker,
   fieldPlan,
   openFieldDoor,
+  TEAR,
+  tearLook,
 } from "../src/boot/splash/field-door";
 import { ease, markFade } from "../src/boot/splash/field-mark";
 import type * as SplashModule from "../src/boot/splash/vibefield-splash.js";
@@ -348,6 +351,17 @@ describe("the field's door", () => {
     expect(door.mode).toBe("still");
     expect(door.reason).toBe("error");
     expect(container.querySelector("canvas")).toBeNull();
+  });
+});
+
+describe("the tear's look (FG-2; the website's SPLASH and REVEAL_LOOK)", () => {
+  it("opens over 1.9s, its mark gone in the first quarter, in the sun's warm white by day and the look's own light by night", () => {
+    expect(TEAR).toEqual({ duration: 1900, markFade: 0.24, rim: 0.5, tear: 0.3 });
+    expect(DAYLIGHT).toEqual([1, 0.955, 0.87]);
+    expect(tearLook(false)).toEqual({ ...TEAR, ink: DAYLIGHT });
+    // By night no ink at all: the splash keeps its own centre light (FG-D11 A).
+    expect(tearLook(true)).toEqual(TEAR);
+    expect("ink" in tearLook(true)).toBe(false);
   });
 });
 

@@ -1,13 +1,16 @@
 import {
   type ReactElement,
   type ReactNode,
+  type RefObject,
   useEffect,
+  useRef,
   useState,
   useSyncExternalStore,
 } from "react";
 import type { AppearanceOverrideSource } from "../appearance";
 import type { ProductPresentationContextReporter } from "../presentation-context";
-import { FieldLayer } from "./FieldLayer";
+import { getAppTheme } from "../theme";
+import { type FieldHandle, FieldLayer } from "./FieldLayer";
 import type { BootMachine } from "./machine";
 import { OnboardingWizard } from "./onboarding/OnboardingWizard";
 import { SwitchLayer } from "./SwitchScene";
@@ -18,8 +21,13 @@ import "./boot.css";
 // BootRoot (ESR §5.4.2): the splash is the app's first face (DESIGN.md §8 —
 // the field waking, the veil's thin bar, real stage labels); the
 // workspace mounts UNDERNEATH it as soon as the module + document exist, and
-// the reveal (240ms fade + a 560ms island-ease settle) plays only when the
-// machine reaches `interactive` — fully warm, frame-stable, never mid-hitch.
+// the reveal plays only once the machine hands the desk over — fully warm,
+// frame-stable, never mid-hitch. Since FG-2 a returning boot's splash opens
+// onto it: its words go (240ms), then the field tears from its centre (1.9s)
+// as the desk settles in from .985 and its exposure comes down from 1.16, and
+// only then is it `interactive`. Without a live field, under Reduce Motion or
+// in a hidden window, the reveal is the base one: a 240ms fade over a 560ms
+// island-ease settle, at `interactive`.
 //
 // UA-3w borrows that first face once per install: from the machine's
 // `onboarding` hold the Setup Assistant takes the splash's layer and ground,
@@ -39,6 +47,10 @@ import "./boot.css";
 // down until its reveal sends the face home.
 
 const EASE = "cubic-bezier(0.25, 1, 0.3, 1)"; // --vf-ease-island
+const WORDS_OUT_MS = 240; // the website's `SPLASH.wordsOut`: the bar and the stage go first
+
+/** How a returning boot's first face opens (FG-2): the field's tear, or the base reveal's fade. */
+type Opening = "tear" | "fade";
 
 function prefersReducedMotion(): boolean {
   return (
@@ -79,6 +91,46 @@ export function BootRoot({
     return () => clearTimeout(t);
   }, [revealed]);
 
+  // FG-2 — the hand-over (DESIGN.md §6, §8 "The reveal"). A returning boot's
+  // splash opens onto the desk once the machine is at `handing-over`: the tear
+  // when the field is live, motion is allowed and the window is seen, else the
+  // base reveal's fade, handed over at once. The Setup Assistant hands over at
+  // its own last beat (`onReveal`; FG-5 brings it to the tear), and a switch's
+  // arrival at once: its scene was this boot's splash, on the mat. Decided once,
+  // and never cancelled by a later render — a hand-over that never came would
+  // hold the boot.
+  const field = useRef<FieldHandle>(null);
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  const [opening, setOpening] = useState<Opening | null>(null);
+  const [tearing, setTearing] = useState(false);
+  const handing = view.phase === "handing-over";
+  const wizard = machine.client !== null && machine.onboarding !== null;
+  const splashShown = !wizard && switching.kind !== "arriving" && !splashRetired;
+  useEffect(() => {
+    if (!handing || wizard || opening !== null) return;
+    const tear =
+      splashShown && !document.hidden && !prefersReducedMotion() && field.current?.live === true;
+    setOpening(tear ? "tear" : "fade");
+    if (!tear) {
+      machine.revealDesk();
+      return;
+    }
+    setTimeout(() => {
+      if (!mounted.current) return;
+      setTearing(true);
+      const torn = field.current?.tear(getAppTheme().resolved === "dark") ?? Promise.resolve(false);
+      void torn.then(() => {
+        if (mounted.current) machine.revealDesk();
+      });
+    }, WORDS_OUT_MS);
+  }, [handing, wizard, opening, splashShown, machine]);
+
   // The stage recedes under a switch it is leaving (M5), and comes forward
   // again while a refused one plays back; the transform lives only that long,
   // for the settle's reason below.
@@ -99,10 +151,20 @@ export function BootRoot({
           // through the drag strip again.
           style={
             !settled
-              ? {
-                  transform: revealed ? "scale(1)" : "scale(0.99)",
-                  transition: `transform 560ms ${EASE}`,
-                }
+              ? tearing
+                ? // the tear's settle: in from .985 as the exposure comes down (DESIGN.md §6)
+                  {
+                    transform: "scale(1)",
+                    filter: "brightness(1)",
+                    transition: `transform 1900ms ${EASE}, filter 1500ms ease-out`,
+                  }
+                : opening === "tear"
+                  ? // the words' beat: the desk waits under the field, small and bright
+                    { transform: "scale(0.985)", filter: "brightness(1.16)" }
+                  : {
+                      transform: revealed ? "scale(1)" : "scale(0.99)",
+                      transition: `transform 560ms ${EASE}`,
+                    }
               : recede
                 ? {
                     transform: covered ? `scale(${SWITCH_MOTION.recede})` : "scale(1)",
@@ -125,7 +187,7 @@ export function BootRoot({
         </div>
       )}
       {machine.client !== null && machine.onboarding !== null ? (
-        <LeavingGround revealed={revealed} inert={covered} glass>
+        <LeavingGround revealed={revealed} inert={covered} glass field={field}>
           <OnboardingWizard
             client={machine.client}
             onboarding={machine.onboarding}
@@ -136,7 +198,7 @@ export function BootRoot({
           />
         </LeavingGround>
       ) : switching.kind === "arriving" || splashRetired ? null : (
-        <LeavingGround revealed={revealed}>
+        <LeavingGround revealed={revealed} opening={opening} field={field}>
           <SplashFace status={view} onRetry={machine.retry} />
         </LeavingGround>
       )}
@@ -153,27 +215,33 @@ export function BootRoot({
  * website's splash, not a logo card). Shared by the splash and the Setup
  * Assistant so handing one to the other changes the content and never the
  * floor: one node, so one field runs from the first paint to the reveal, its
- * mark gone while the Setup Assistant's glass stands on it. */
+ * mark gone while the Setup Assistant's glass stands on it. `opening` (FG-2):
+ * at the tear the words go and the ground's own colour with them (boot.css). */
 function BootGround({
   className = "",
   ariaHidden = false,
   inert = false,
   glass,
+  opening,
+  field,
   children,
 }: {
   className?: string;
   ariaHidden?: boolean;
   inert?: boolean;
   glass: boolean;
+  opening: Opening | null;
+  field: RefObject<FieldHandle | null>;
   children: ReactNode;
 }): ReactElement {
   return (
     <div
       className={`vf-splash absolute inset-0 z-[120] flex items-center justify-center ${className}`}
+      data-opening={opening ?? undefined}
       aria-hidden={ariaHidden}
       inert={inert}
     >
-      <FieldLayer mark={!glass} />
+      <FieldLayer mark={!glass} handleRef={field} />
       {children}
     </div>
   );
@@ -181,17 +249,26 @@ function BootGround({
 
 /** The first face — the splash, or the Setup Assistant that kept the window
  * (AO-D2) — leaves on the reveal: a 240ms fade over the desk's settle, then it
- * unmounts. One leaving for both, so the two can never part differently. */
+ * unmounts. One leaving for both, so the two can never part differently. Since
+ * FG-2 a returning boot's field may have torn open first, leaving the fade
+ * nothing to fade but a field that never opened (the Setup Assistant's comes to
+ * the tear at FG-5). */
 function LeavingGround({
   revealed,
   inert = false,
   glass = false,
+  opening = null,
+  field,
   children,
 }: {
   revealed: boolean;
   inert?: boolean;
   /** the Setup Assistant's glass stands on the ground */
   glass?: boolean;
+  /** how a returning boot's splash is opening (FG-2) */
+  opening?: Opening | null;
+  /** the field's handle, for the reveal (FG-2) */
+  field: RefObject<FieldHandle | null>;
   children: ReactNode;
 }): ReactElement | null {
   const [mounted, setMounted] = useState(true);
@@ -210,6 +287,8 @@ function LeavingGround({
       ariaHidden={revealed}
       inert={inert}
       glass={glass}
+      opening={opening}
+      field={field}
     >
       {children}
     </BootGround>

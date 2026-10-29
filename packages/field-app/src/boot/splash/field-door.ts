@@ -21,6 +21,21 @@ const POWER: GPUPowerPreference = "high-performance";
 /** The reveal's options as they cross to a worker: numbers only, its pace the splash's own (t²). */
 export type FieldRevealOptions = Omit<SplashRevealOptions, "ease">;
 
+/** The tear (DESIGN.md §6; the website's `SPLASH` and `REVEAL_LOOK`, components/experience.tsx and
+ * lib/loading-window.js): the field opens from its centre over 1.9s, its mark gone in the first
+ * quarter, the light on its walls held back and the edge torn by the noise. */
+export const TEAR = { duration: 1900, markFade: 0.24, rim: 0.5, tear: 0.3 } as const;
+
+/** The website's daylight on the tear's walls (REVEAL_LOOK.ink): the sun's warm white, display
+ * encoded. */
+export const DAYLIGHT: readonly [number, number, number] = [1, 0.955, 0.87];
+
+/** The tear as the theme lights it (FG-D11 A): daylight by day; by night no ink, so the splash
+ * keeps the look's own centre light. */
+export function tearLook(dark: boolean): FieldRevealOptions {
+  return dark ? { ...TEAR } : { ...TEAR, ink: DAYLIGHT };
+}
+
 export interface FieldDoor {
   readonly mode: "worker" | "main" | "still";
   /** Why the field is its still: "forced", "no-webgpu", "no-adapter" or "error". */
