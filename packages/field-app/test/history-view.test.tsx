@@ -14,9 +14,8 @@
  * the folder ③ shows, asked of Godview's deck, the window moved there once it
  * opened — with no project, as Godview's — and a folder it cannot open in said
  * in New agent's words (another desktop's in History's own), the window
- * staying. And the room's host knows the window's
- * home (AR-8 L2): a project rooted under it reads `~/…`, one outside it in
- * full.
+ * staying. And the room's host knows the window's home (AR-8 L2): a project
+ * rooted under it reads `~/…`, one outside it in full.
  */
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
