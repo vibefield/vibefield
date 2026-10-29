@@ -13,6 +13,7 @@ import { dirname, isAbsolute, join } from "node:path";
 import type { SessionExitedEvent } from "@vibecook/ghosttea-client";
 import {
   AGENT_CATALOG,
+  AGENT_EXIT,
   AGENT_FIELD,
   type AgentCapability,
   type AgentCatalogEntry,
@@ -622,6 +623,9 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   private readonly pending = new Map<string, PendingEntry>();
   /** MF-1f — runs whose process ended while the floor still lists their PTY */
   private readonly exited = new Map<string, ExitedEntry>();
+  /** Item 87 — runs whose exit cleanup (puppeteer's `handleProcessExit`) has
+   * not ended yet, held or not: the old run's workspace lease is still taken */
+  private readonly exitCleanups = new Map<string, Promise<void>>();
   private readonly byTerminal = new Map<string, string>();
   /** the FIRST inventory of this boot is the re-attach; once */
   private reattachStarted = false;
@@ -1538,6 +1542,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     forwardedFor?: ForwardedFor,
   ): Promise<AgentSpawnResult> {
     const terminals = this.requireTerminals();
+    // Item 87 — first, so everything below reads the record as it stands after
+    await this.awaitExitCleanup(params.runtimeRunId);
     const record = this.records.read(params.runtimeRunId);
     if (record === undefined) {
       throw new RpcCallError("NOT_FOUND", `no managed session ${params.runtimeRunId}`, false, {
@@ -1876,6 +1882,15 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
    * run's PTY ended → puppeteer's `handleProcessExit`, the record stamped, the
    * row withdrawn; a login pane ended → the persona is verified. */
   async handleTerminalExit(event: SessionExitedEvent): Promise<void> {
+    // Item 87 — the exit as heard, before anything here awaits: a run whose
+    // exit never surfaces then says whether fieldd heard it at all
+    const heardRun = this.byTerminal.get(event.sessionId);
+    this.logger.info("fieldd.agents.exit_heard", "The floor said a terminal exited", {
+      sessionId: event.sessionId,
+      held: heardRun !== undefined,
+      ...(heardRun !== undefined ? { runtimeRunId: heardRun } : {}),
+      reason: event.exitOutcome,
+    });
     // AR-S4c — a server's sign-in pane: its receipt, then the profile read again
     if (await this.extensions.handleTerminalExit(event)) return;
     if (this.logins.has(event.sessionId)) {
@@ -3836,13 +3851,46 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     );
   }
 
-  /** Whether `agent.resume` would take this record right now: it exists and no
-   * successor has already continued its conversation (AR-4b's one-run law).
+  /** Whether `agent.resume` would take this record right now: it exists, no
+   * successor has already continued its conversation (AR-4b's one-run law),
+   * and its exit cleanup has ended (item 87: until then the old run holds its
+   * workspace's lease, and a resume would wait for it, `awaitExitCleanup`).
    * A record that is gone — its persona signed out or its profile deleted
    * (AR-D25), so its root is gone too — resumes nothing, whatever the pane. */
   private resumableNow(record: AgentSessionRecord): boolean {
     const current = this.records.read(record.runtimeRunId);
-    return current !== undefined && current.reattach?.state !== "resumed";
+    return (
+      current !== undefined &&
+      current.reattach?.state !== "resumed" &&
+      !this.exitCleanups.has(record.runtimeRunId)
+    );
+  }
+
+  /** Item 87 — a resume of a run whose exit cleanup has not ended waits for it,
+   * at most AGENT_EXIT.RESUME_CLEANUP_WAIT_MS. puppeteer reads the old run's
+   * final git state under its workspace lease, and a resume in the same
+   * workspace before that ends would race the reading (a direct workspace) or
+   * meet the lease (an exclusive one). Past the bound the resume is refused,
+   * retryably, saying so. */
+  private async awaitExitCleanup(runtimeRunId: string): Promise<void> {
+    const cleanup = this.exitCleanups.get(runtimeRunId);
+    if (cleanup === undefined) return;
+    let timer: NodeJS.Timeout | undefined;
+    const ended = await Promise.race([
+      cleanup.then(() => true),
+      new Promise<boolean>((resolve) => {
+        timer = setTimeout(() => resolve(false), AGENT_EXIT.RESUME_CLEANUP_WAIT_MS);
+        timer.unref?.();
+      }),
+    ]);
+    clearTimeout(timer);
+    if (ended) return;
+    throw new RpcCallError(
+      "PRECONDITION_FAILED",
+      "the run has exited and its workspace is still being read; resume it again in a moment",
+      true,
+      { runtimeRunId, state: "finalizing" },
+    );
   }
 
   private summarizePending(entry: PendingEntry): AgentSessionSummary {
@@ -3947,21 +3995,53 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     }
     entry.unwatch?.();
     entry.unwatch = undefined;
-    try {
-      await this.runtime.handleProcessExit(entry.info.terminalSessionId, {
+    // Item 87 — puppeteer's cleanup is unbounded (its workspace finalization
+    // runs git), and the exit does not wait for it. Its synchronous part has
+    // run when the call returns (`process:exited` dispatched, the run marked
+    // terminal), so the record is stamped and the row held at once. A resume
+    // waits instead: the cleanup holds the old run's workspace lease while it
+    // reads the final git state (`resumableNow`, `awaitExitCleanup`). One
+    // still pending past the bound is said while it waits, not after.
+    const cleanupStartedAt = Date.now();
+    const slow = setTimeout(() => {
+      this.logger.warn("fieldd.agents.exit_cleanup_slow", "Agent exit cleanup is still pending", {
+        runtimeRunId,
+        pendingMs: Date.now() - cleanupStartedAt,
+      });
+    }, AGENT_EXIT.CLEANUP_WARN_MS);
+    slow.unref?.();
+    const cleanup = this.runtime
+      .handleProcessExit(entry.info.terminalSessionId, {
         exitCode: exit.exitCode,
         signal: exit.signal,
         reason: exit.reason,
         ...(exit.requestedTermination !== undefined
           ? { requestedTermination: exit.requestedTermination }
           : {}),
+      })
+      .then(
+        () => undefined,
+        (error: unknown) => {
+          this.logger.warn("fieldd.agents.exit_cleanup_failed", "Agent exit cleanup failed", {
+            runtimeRunId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        },
+      )
+      .finally(() => {
+        clearTimeout(slow);
+        this.exitCleanups.delete(runtimeRunId);
+        this.logger.debug("fieldd.agents.exit_cleanup", "Agent exit cleanup ended", {
+          runtimeRunId,
+          durationMs: Date.now() - cleanupStartedAt,
+        });
+        // AR-D25 — the last session of a signed-out persona lets it be
+        // finished, once nothing of the run is still being cleaned up
+        if (entry.info.profileId !== undefined) void this.profiles.sweep();
+        // the exited row's resume verb was waiting on it
+        this.publish();
       });
-    } catch (error) {
-      this.logger.warn("fieldd.agents.exit_cleanup_failed", "Agent exit cleanup failed", {
-        runtimeRunId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
+    this.exitCleanups.set(runtimeRunId, cleanup);
     this.records.stampExit(runtimeRunId, {
       at: this.now().toISOString(),
       exitCode: exit.exitCode,
@@ -3975,8 +4055,6 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     // still lists this PTY the deck is showing it, so the row stays (carrying
     // the mirror's last state and the resume verb) until the pane goes.
     this.holdExited(entry);
-    // AR-D25 — the last session of a signed-out persona lets it be finished
-    if (entry.info.profileId !== undefined) void this.profiles.sweep();
     this.logger.info("fieldd.agents.session_exited", "Managed agent session exited", {
       runtimeRunId,
       provider: entry.info.provider.id,
@@ -3985,6 +4063,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       ...(exit.signal !== null ? { signal: exit.signal } : {}),
     });
     this.publish();
+    // a caller that awaits the close still has the cleanup behind it
+    await cleanup;
   }
 
   private async finishLogin(sessionId: string, how: "exited" | "timeout"): Promise<void> {

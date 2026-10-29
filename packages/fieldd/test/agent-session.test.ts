@@ -40,6 +40,7 @@ import {
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  AGENT_EXIT,
   AGENT_FIELD,
   AGENT_MONITOR_SCHEMA_VERSION,
   type AgentAccountUsageBatch,
@@ -2943,8 +2944,18 @@ describe("MF-1f/MF-1g — an agent pane outlives its run, and the fold keeps its
     await new Promise((resolve) => setTimeout(resolve, 2_000));
     expect(await listed(win, paneId)).toBe(true);
 
-    const { sessions } = (await win.call("agent.list", {})) as AgentListResult;
-    const row = sessions.find((r) => r.runtimeRunId === runId);
+    // item 87 — the row reads exited at once, and resumable once the run's exit
+    // cleanup (its workspace's final git reading) has ended
+    const row = await poll(
+      async (seen) => {
+        const { sessions } = (await win.call("agent.list", {})) as AgentListResult;
+        const found = sessions.find((r) => r.runtimeRunId === runId);
+        seen(found?.continuation ?? null);
+        return found?.continuation?.resumable === true ? found : undefined;
+      },
+      15_000,
+      "the exited row reading resumable once its exit cleanup ended",
+    );
     expect(row?.continuation).toMatchObject({ persisted: true, resumable: true, exited: true });
     expect(row?.continuation?.pending, "an exited row is not a pending one").toBeUndefined();
     expect(row?.terminal).toMatchObject({ hosted: "local", runtimeSessionId: paneId });
@@ -3145,6 +3156,192 @@ describe("item 81 — an exit that comes before its pane is registered", () => {
     );
     expect(exited.reason, "the floor's word, never the backstop's unknown").toBe("completed");
     expect(exited.exitCode).toBe(0);
+  }, 60_000);
+});
+
+describe("item 87 — a run's exit is not held by its workspace's cleanup", () => {
+  /** A `git` that does not answer: puppeteer finalizes a run's workspace when its process exits, and
+   * every git call there is unbounded (puppeteer-workspaces 0.3.0, `git.js`). First on the
+   * in-process fieldd's PATH, it stalls that cleanup the way a loaded host can. Each call leaves its
+   * pid, and the row stops them by pid. */
+  function stalledGit(root: string): { dir: string; called: () => boolean; stop: () => void } {
+    const dir = join(root, "stalled-git");
+    const pids = join(dir, "pids");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "git"), `#!/bin/sh\necho $$ >> "${pids}"\nexec sleep 30\n`, {
+      mode: 0o755,
+    });
+    return {
+      dir,
+      called: () => existsSync(pids),
+      stop: () => {
+        if (!existsSync(pids)) return;
+        for (const pid of readFileSync(pids, "utf8").split("\n")) {
+          if (!/^\d+$/.test(pid)) continue;
+          try {
+            process.kill(Number(pid), "SIGKILL");
+          } catch {
+            /* already gone */
+          }
+        }
+      },
+    };
+  }
+
+  /** The events this row's own fieldd logged, in order. */
+  const fielddEvents = (box: Box): Array<{ event: string; attrs: Record<string, unknown> }> => {
+    const file = join(box.dataDir, "logs", "system", "fieldd.ndjson");
+    if (!existsSync(file)) return [];
+    return readFileSync(file, "utf8")
+      .split("\n")
+      .filter((line) => line.trim() !== "")
+      .map((line) => JSON.parse(line) as { event: string; attrs?: Record<string, unknown> })
+      .map((record) => ({ event: record.event, attrs: record.attrs ?? {} }));
+  };
+
+  // *Witnessed 2026-10-29:* in a loaded verify the row's own `endedRun` interrupted a run, and the
+  // log stopped at `fieldd.agents.interrupted`: no exit for 15 s. Quiet, 60 runs of the same steps
+  // all exited, the exit heard 5–27 ms after the interrupt and the row reading it 112–194 ms after.
+  // The gap between the two is the run's close awaiting puppeteer's cleanup, whose git calls go
+  // through the xcrun shim at 12 ms each. This row stalls that cleanup on purpose.
+  it("a run whose workspace cleanup stalls still reads exited, and says the exit was heard and the cleanup is pending", async () => {
+    const box = await setup({ floor: "real" });
+    const win = await window(box.daemon, [...DECK, "agent.control"], "i87");
+    const spawned = (await born(win, "agent.spawn", {
+      provider: "scripted",
+      cwd: box.envOut,
+      title: "a stalled cleanup",
+    })) as AgentSpawnResult;
+    const runId = spawned.session.runtimeRunId;
+    await joinedRow(win, runId);
+    // only now: the launch's own git calls (the workspace's baseline) are behind it
+    const git = stalledGit(box.root);
+    const path = process.env["PATH"];
+    process.env["PATH"] = `${git.dir}:${path ?? ""}`;
+    try {
+      expect(await win.call("agent.interrupt", { runtimeRunId: runId })).toEqual({
+        accepted: true,
+      });
+      const row = await poll(
+        async (seen) => {
+          const { sessions } = (await win.call("agent.list", {})) as AgentListResult;
+          const found = sessions.find((r) => r.runtimeRunId === runId);
+          seen({ continuation: found?.continuation ?? null, gitCalled: git.called() });
+          return found?.continuation?.exited === true ? found : undefined;
+        },
+        5_000,
+        "the exited row of a run whose workspace cleanup is stalled",
+      );
+      // exited at once, and not yet resumable: the cleanup still holds the old run's workspace
+      expect(row.continuation).toMatchObject({ persisted: true, exited: true, resumable: false });
+      // the row no longer waits for the cleanup, so its git is reached after the exit is published
+      await poll(
+        async (seen) => {
+          seen({ gitCalled: git.called() });
+          return git.called() ? true : undefined;
+        },
+        2_000,
+        "the run's exit cleanup reaching the stalled git",
+      );
+      const { sessions: held } = (await win.call("agent.list", {})) as AgentListResult;
+      expect(
+        held.find((r) => r.runtimeRunId === runId)?.continuation,
+        "the stalled cleanup holds the resume verb, not the exit",
+      ).toMatchObject({ persisted: true, exited: true, resumable: false });
+      const heard = await poll(
+        async (seen) => {
+          seen(
+            fielddEvents(box)
+              .map((e) => e.event)
+              .filter((e) => e.startsWith("fieldd.agents.")),
+          );
+          return fielddEvents(box).find(
+            (e) => e.event === "fieldd.agents.exit_heard" && e.attrs["runtimeRunId"] === runId,
+          );
+        },
+        2_000,
+        "the exit as heard, in the row's own log",
+      );
+      expect(heard.attrs, "the exit as heard, before the cleanup").toMatchObject({
+        sessionId: spawned.terminal.sessionId,
+        held: true,
+      });
+      const pending = await poll(
+        async (seen) => {
+          seen(
+            fielddEvents(box)
+              .map((e) => e.event)
+              .filter((e) => e.startsWith("fieldd.agents.")),
+          );
+          return fielddEvents(box).find(
+            (e) =>
+              e.event === "fieldd.agents.exit_cleanup_slow" && e.attrs["runtimeRunId"] === runId,
+          );
+        },
+        AGENT_EXIT.CLEANUP_WARN_MS + 3_000,
+        "the warning that the run's exit cleanup is still pending",
+      );
+      expect(pending.attrs["pendingMs"]).toBeGreaterThanOrEqual(AGENT_EXIT.CLEANUP_WARN_MS);
+    } finally {
+      process.env["PATH"] = path;
+      git.stop();
+    }
+  }, 60_000);
+
+  it("a resume while the cleanup is pending waits for it, is refused retryably as finalizing past the bound, and goes through once the cleanup ends", async () => {
+    const box = await setup({ floor: "real" });
+    const win = await window(box.daemon, [...DECK, "agent.control"], "i87r");
+    const spawned = (await born(win, "agent.spawn", {
+      provider: "scripted",
+      cwd: box.envOut,
+      title: "a stalled cleanup",
+    })) as AgentSpawnResult;
+    const runId = spawned.session.runtimeRunId;
+    await joinedRow(win, runId);
+    const git = stalledGit(box.root);
+    const path = process.env["PATH"];
+    process.env["PATH"] = `${git.dir}:${path ?? ""}`;
+    try {
+      expect(await win.call("agent.interrupt", { runtimeRunId: runId })).toEqual({
+        accepted: true,
+      });
+      await poll(
+        async (seen) => {
+          const { sessions } = (await win.call("agent.list", {})) as AgentListResult;
+          const found = sessions.find((r) => r.runtimeRunId === runId);
+          seen(found?.continuation ?? null);
+          return found?.continuation?.exited === true ? found : undefined;
+        },
+        5_000,
+        "the exited row of a run whose workspace cleanup is stalled",
+      );
+      const askedAt = Date.now();
+      const refused = await win.callErr("agent.resume", { runtimeRunId: runId });
+      const waited = Date.now() - askedAt;
+      expect(refused.data?.retryable, "a cleanup that ends is worth asking again").toBe(true);
+      expect(refused.data?.details).toMatchObject({ runtimeRunId: runId, state: "finalizing" });
+      expect(waited, "the resume waited for the cleanup first").toBeGreaterThanOrEqual(
+        AGENT_EXIT.RESUME_CLEANUP_WAIT_MS - 100,
+      );
+      expect(git.called(), "the cleanup the resume waited for is the stalled git").toBe(true);
+    } finally {
+      process.env["PATH"] = path;
+      git.stop();
+    }
+    // the stall ends: the cleanup settles, the row reads resumable, and the resume goes through
+    await poll(
+      async (seen) => {
+        const { sessions } = (await win.call("agent.list", {})) as AgentListResult;
+        const found = sessions.find((r) => r.runtimeRunId === runId);
+        seen(found?.continuation ?? null);
+        return found?.continuation?.resumable === true ? found : undefined;
+      },
+      5_000,
+      "the exited row reading resumable once its cleanup ended",
+    );
+    const resumed = (await born(win, "agent.resume", { runtimeRunId: runId })) as AgentSpawnResult;
+    expect(resumed.session.runtimeRunId).not.toBe(runId);
+    expect(resumed.session.sessionId).toBe(spawned.session.sessionId);
   }, 60_000);
 });
 

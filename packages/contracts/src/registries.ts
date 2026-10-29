@@ -377,6 +377,19 @@ export const AGENT_FIELD = {
   FULL_TICK_MS: 16,
 } as const;
 
+/** Item 87 (2026-10-29) — a managed run's exit, as fieldd closes it. puppeteer's `handleProcessExit`
+ * finalizes the run's workspace, and that runs `git` with no bound (puppeteer-workspaces 0.3.0,
+ * `git.js`). Quiet, the cleanup takes about 110 ms on James's Mac: a handful of git calls through the
+ * xcrun shim at 12 ms each. The exit does not wait for it: the record is stamped and the row held at
+ * once. A cleanup still pending CLEANUP_WARN_MS after it began is warned WHILE it waits. What waits is
+ * a resume, because the cleanup holds the old run's workspace lease while it reads the final git
+ * state: `agent.resume` waits for it at most RESUME_CLEANUP_WAIT_MS, then refuses retryably,
+ * `{state: "finalizing"}`. */
+export const AGENT_EXIT = {
+  CLEANUP_WARN_MS: 2_000,
+  RESUME_CLEANUP_WAIT_MS: 5_000,
+} as const;
+
 /** DS-L3 — the rows protocol's numbers (`rows.ts`; design-06 §8). A snapshot
  * above SNAPSHOT_PAGE_BYTES is paged with `more: true`; a source keeps a
  * journal of JOURNAL_DEPTH changed-key frames per table, below which a kept
