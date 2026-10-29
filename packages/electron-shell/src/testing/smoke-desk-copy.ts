@@ -11,21 +11,23 @@
 //   KEY     — ⌘C over the note, nothing focused: the same act from the key; ⌘C while the note's writing holds the
 //             keyboard: the desk's editor keeps it, and no card is dealt;
 //   CLOCK   — any other kind: a PICTURE card titled by its name ("Clock"), its still the anchor's box less the brackets'
-//             6 at the view's device px, drawn WITHOUT the selection's marks by ICE's capture (`marks: false`, I40),
-//             its PNG handed to main's picture door before the card is dealt (HN-5);
+//             6 at the view's device px, drawn WITHOUT the selection's marks by ICE's capture (`marks: false`, I40);
 //   TWO     — the clock and the note, copied from the bar grown into its MENU: ONE picture card, "2 objects", the union's
-//             10 off; its picture on the system clipboard, and not the note's words (one write: HN-5);
+//             10 off; the note's words on the system clipboard, beside the picture in its one write (LC-19);
 //   HAND    — the notebook IN HAND, copied from the tools in hand: a picture card "Notebook" of where the desk DRAWS it
 //             (`__vfDesk.held()`), the object staying in hand and the tools under the head;
 //   MISSING — the clock's plugin off, its missing face copied: a picture card titled by its type's name ("Clock");
+//             and each picture row's PNG handed to main's picture door, and taken, before its card was dealt (HN-5);
 //   COUNTERS — the bar's placements ≤ the anchor's publishes through all of it;
 //   EMPTIED — the hand emptied through its lab door (`__vfCards.clear()`, field-app frame/cards/cards-lab.ts): the rows
 //             after these predate any chrome at the window's foot, and a pointer in the reach band lifts a card.
 // These rows hold the act; the hand's own DOM is smoke:godview's (⇧⌘V raising it over a focused pane, `chordHand`, and
-// 11h's card played into a pane). NOTE and KEY hand the note's words to main's copy door, CLOCK and TWO their picture to
-// main's picture door (HN-5); a marked run KEEPS each instead of writing it (R-T 4 — the pasteboard is the person's;
-// main/index.ts) and answers as it would: the door's answer (`wrote`) is the act's witness, and main's records (`copies`,
-// `pictures` — a PNG's size) say what arrived. The still: hn-3-copy.png (the window, the note's card dealt).
+// 11h's card played into a pane). NOTE and KEY hand the note's words to main's copy door; CLOCK, TWO, HAND and MISSING
+// their picture to main's picture door, TWO with the note's words beside it (HN-5, LC-19). A marked run KEEPS each
+// instead of writing it (R-T 4 — the pasteboard is the person's; main/index.ts) and answers as it would: the door's
+// answer (`wrote`) is the act's witness, and main's records (`copies` the words, `pictures` a PNG's size) say what
+// arrived. The picture door asks no focus (LC-18), so the shown-inactive window's copies run the product's own road.
+// The still: hn-3-copy.png (the window, the note's card dealt).
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -246,6 +248,24 @@ export function picturedToMain(
     : pictures.slice(from).includes(bytes);
 }
 
+/** HN-5 — a picture card's PNG reached main's picture door, which took it, before the card was dealt: the door's answer
+ * (`wrote`) and, in a marked run, main's record of the still's size since `from`. */
+export function judgePictured(
+  copied: CopiedSeen | null,
+  pictures: readonly number[] | undefined,
+  from: number,
+): string[] {
+  if (copied === null) return ["no Copy was recorded"];
+  const problems: string[] = [];
+  if (copied.wrote !== true)
+    problems.push(
+      `the picture door did not take the picture (${copied.refused ?? "and no reason was said"})`,
+    );
+  if (picturedToMain(pictures, from, copied.still?.bytes) === false)
+    problems.push("main's picture door never received the picture");
+  return problems;
+}
+
 /** HN-3's rows (above). Returns the problems, each in words. */
 export async function deskCopyRows(d: CopyRowsDriver): Promise<string[]> {
   const { win, say } = d;
@@ -463,12 +483,8 @@ export async function deskCopyRows(d: CopyRowsDriver): Promise<string[]> {
       ...judgeStill(record, box, dpr).map(row),
       ...judgeSelectionKept(rec).map(row),
       ...judgeBarStayed(rec, record.at.pressed).map(row),
+      ...judgePictured(record, d.pictures, handedPictures).map(row),
     );
-    // HN-5: its PNG went to main's picture door, and the door took it, before the card
-    if (record.wrote !== true)
-      problems.push(row(`the picture door did not take the clock's picture (${record.refused})`));
-    if (picturedToMain(d.pictures, handedPictures, record.still?.bytes) === false)
-      problems.push(row("main's picture door never received the clock's picture"));
     say(`SMOKE_CANVAS_COPY_CLOCK ${JSON.stringify({ copied: record, box })}`);
   }
 
@@ -497,22 +513,18 @@ export async function deskCopyRows(d: CopyRowsDriver): Promise<string[]> {
       ...judgeCard(record, { kind: "pict", title: "2 objects" }).map(row),
       ...judgeStill(record, union, dpr).map(row),
       ...judgeSelectionKept(await recorded()).map(row),
+      ...judgePictured(record, d.pictures, handedPictures).map(row),
     );
     if (record.from !== "menu")
       problems.push(row(`the act was recorded from ${record.from}, not the menu`));
     const types = record.objects.map((o) => o.type).sort();
     if (JSON.stringify(types) !== JSON.stringify(["desk.note", CLOCK].sort()))
       problems.push(row(`the copy carried ${JSON.stringify(types)}, not the note and the clock`));
-    // HN-5: a picture card's picture is what the clipboard is given — one write, so never the note's words too
-    if (record.words !== null)
-      problems.push(row(`words were given the clipboard too: ${JSON.stringify(record.words)}`));
-    if (copiedToMain(d.copies, handed, NOTE_LINE) === true)
-      problems.push(row("main's copy door received the note's words for a picture card"));
-    if (
-      record.wrote !== true ||
-      picturedToMain(d.pictures, handedPictures, record.still?.bytes) === false
-    )
-      problems.push(row(`main's picture door never took the two's picture (${record.refused})`));
+    // the note's words beside the picture, in its one write (LC-19): main's record keeps them as the copy door's does
+    if (record.words !== NOTE_LINE)
+      problems.push(row(`the words given the clipboard were ${JSON.stringify(record.words)}`));
+    if (copiedToMain(d.copies, handed, NOTE_LINE) === false)
+      problems.push(row("main's picture door never received the note's words"));
     const count = await js<number>("globalThis.__vfDesk.anchor()?.count ?? 0");
     if (count !== 2)
       problems.push(row(`the two did not stand selected after the still (${count})`));
@@ -537,11 +549,13 @@ export async function deskCopyRows(d: CopyRowsDriver): Promise<string[]> {
       frame: { cx: number; cy: number; hx: number; hy: number } | null;
     } | null>("globalThis.__vfDesk.held()");
     const seq = await seqNow();
+    const handedPictures = d.pictures?.length ?? 0;
     await pressCopy('[data-selection-bar] [data-face-row="hand"] [data-act="copy"]');
     const record = await dealt("the notebook's card dealt", seq);
     problems.push(
       ...judgeCard(record, { kind: "pict", title: "Notebook" }).map(row),
       ...judgeStill(record, null, dpr, true).map(row),
+      ...judgePictured(record, d.pictures, handedPictures).map(row),
     );
     const f = held?.frame ?? null;
     if (f !== null && record.rect !== null) {
@@ -600,12 +614,14 @@ export async function deskCopyRows(d: CopyRowsDriver): Promise<string[]> {
     );
     const box = await js<Box | null>("globalThis.__vfDesk.anchor()?.box ?? null");
     const seq = await seqNow();
+    const handedPictures = d.pictures?.length ?? 0;
     await pressCopy(BAR_COPY);
     const record = await dealt("the missing face's card dealt", seq);
     problems.push(
       ...judgeCard(record, { kind: "pict", title: "Clock" }).map(row),
       ...judgeStill(record, box, dpr).map(row),
       ...judgeSelectionKept(await recorded()).map(row),
+      ...judgePictured(record, d.pictures, handedPictures).map(row),
     );
     say(`SMOKE_CANVAS_COPY_MISSING ${JSON.stringify({ copied: record })}`);
     await deselect();

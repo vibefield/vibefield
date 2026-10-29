@@ -10,6 +10,7 @@ import {
   copiedToMain,
   judgeBarStayed,
   judgeCard,
+  judgePictured,
   judgeSelectionKept,
   judgeStill,
   NOTE_LINE,
@@ -122,6 +123,25 @@ describe("a picture reaches main's picture door, and only its record (HN-5, R-T 
   it("has nothing to read in an unmarked run, or with no still to measure", () => {
     expect(picturedToMain(undefined, 0, 9000)).toBeNull();
     expect(picturedToMain([9000], 0, undefined)).toBeNull();
+  });
+
+  it("passes a picture the door took and main kept, and names any other", () => {
+    expect(judgePictured(copiedSeen({ wrote: true }), [4100, 9000], 1)).toEqual([]);
+    // an unmarked run keeps nothing to read: the door's answer alone is the witness
+    expect(judgePictured(copiedSeen({ wrote: true }), undefined, 0)).toEqual([]);
+    const refused = copiedSeen({
+      wrote: false,
+      card: null,
+      refused: "Not copied — the picture could not be read",
+    });
+    expect(judgePictured(refused, [], 0)).toEqual([
+      "the picture door did not take the picture (Not copied — the picture could not be read)",
+      "main's picture door never received the picture",
+    ]);
+    expect(judgePictured(copiedSeen({ wrote: true }), [9000], 1)).toEqual([
+      "main's picture door never received the picture",
+    ]);
+    expect(judgePictured(null, [], 0)).toEqual(["no Copy was recorded"]);
   });
 });
 
