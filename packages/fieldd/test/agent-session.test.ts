@@ -26,7 +26,7 @@
 // parsed rather than grepped, a window in which nothing changed also carries
 // the poller's own request count, and the index is asked with a canonical row
 // and a decoy beside it.
-import { type ChildProcess, spawn } from "node:child_process";
+import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import {
   copyFileSync,
   existsSync,
@@ -796,13 +796,69 @@ const DECK = ["agent.spawn", "agent.observe", "terminal.attach", "index.read"];
 const FIELD_ROW_KEYS = Object.keys(AgentFieldRow.shape);
 
 /** Every wait in this suite (item 68): at its deadline it says what was awaited, what the row last `seen`, and the
- * row's floor and fieldd logs with the link view (`waitWithEvidence`). The budgets are the rows' own. */
+ * row's floor and fieldd logs with the link view (`waitWithEvidence`), and a `witness`'s word when one is given
+ * (item 97: asked once, at the deadline). The budgets are the rows' own. */
 async function poll<T>(
   fn: (seen: (value: unknown) => void) => Promise<T | undefined>,
   ms: number,
   what = "the row's condition",
+  witness?: () => Promise<string>,
 ): Promise<T> {
-  return await waitWithEvidence(what, fn, ms, () => scene);
+  return await waitWithEvidence(what, fn, ms, () => scene, 100, witness);
+}
+
+/** Item 97 — what a lost exit leaves, for an exit wait's deadline (`poll`'s witness). Three things:
+ * - the floor's own row for the pane: its cell's list, through `runtimeSessions`, listed or not, and whether it
+ *   says the process exited;
+ * - whether fieldd's terminal service heard the floor's `session-exited` (`exitOf`);
+ * - what still holds the run's typed-out file (`lsof -t`, each holder with its `ps` state). That is the scripted
+ *   `cat` the interrupt should have ended.
+ *
+ * Between them they name the case: the interrupt never ended `cat` (it still holds the file); `cat` ended and the
+ * floor never saw it (its row is not `exited`); or the floor saw it and fieldd never heard. */
+function exitWitness(box: Box, paneId: string): () => Promise<string> {
+  return async () => {
+    const floorRow = await box.daemon.terminals.runtimeSessions().then(
+      ({ sessions }) => {
+        const row = sessions.find((session) => session.id === paneId);
+        if (row === undefined) return "not listed";
+        const { exited, exitOutcome, exitCode, exitSignal, pid } = row;
+        return JSON.stringify({ exited, exitOutcome, exitCode, exitSignal, pid });
+      },
+      (error: unknown) => `unread (${error instanceof Error ? error.message : String(error)})`,
+    );
+    const heard = box.daemon.terminals.exitOf(paneId);
+    const typedOut = box.sessions.find((s) => s.runtimeSessionId === paneId)?.typedOut;
+    return [
+      `the floor's row for pane ${paneId}: ${floorRow}`,
+      `fieldd heard its exit: ${heard === undefined ? "no" : JSON.stringify({ exitOutcome: heard.exitOutcome, exitCode: heard.exitCode })}`,
+      typedOut === undefined
+        ? "no typed-out file names this pane"
+        : `holding ${typedOut}: ${holdersOf(typedOut)}`,
+    ].join("\n");
+  };
+}
+
+/** The processes holding `path` open (`lsof -t`, which exits 1 when none does), each with its `ps` state. */
+function holdersOf(path: string): string {
+  let pids: string[];
+  try {
+    pids = execFileSync("lsof", ["-t", path], { encoding: "utf8" }).split("\n").filter(Boolean);
+  } catch (error) {
+    if ((error as { status?: number }).status === 1) return "nothing";
+    return `unread (${error instanceof Error ? error.message : String(error)})`;
+  }
+  return pids
+    .map((pid) => {
+      try {
+        return execFileSync("ps", ["-o", "pid=,stat=,command=", "-p", pid], {
+          encoding: "utf8",
+        }).trim();
+      } catch {
+        return `${pid} (gone)`;
+      }
+    })
+    .join("; ");
 }
 
 const mode = (path: string) => statSync(path).mode & 0o777;
@@ -2926,11 +2982,16 @@ describe("MF-1f/MF-1g — an agent pane outlives its run, and the fold keeps its
     await joinedRow(win, runId);
     // the scripted PTY's `cat` dies of the floor's own interrupt
     expect(await win.call("agent.interrupt", { runtimeRunId: runId })).toEqual({ accepted: true });
-    await poll(async () => {
-      const { sessions } = (await win.call("agent.list", {})) as AgentListResult;
-      const row = sessions.find((r) => r.runtimeRunId === runId);
-      return row?.continuation?.exited === true ? row : undefined;
-    }, 15_000);
+    await poll(
+      async () => {
+        const { sessions } = (await win.call("agent.list", {})) as AgentListResult;
+        const row = sessions.find((r) => r.runtimeRunId === runId);
+        return row?.continuation?.exited === true ? row : undefined;
+      },
+      15_000,
+      "the interrupted run read as exited",
+      exitWitness(box, spawned.terminal.sessionId),
+    );
     return { runId, paneId: spawned.terminal.sessionId };
   }
 
@@ -3347,7 +3408,8 @@ describe("item 87 — a run's exit is not held by its workspace's cleanup", () =
 
 describe("AR-6-0 — the stop verb (agent.interrupt)", () => {
   it("interrupts a live run through the floor, is refused for an exited or unknown one, needs agent.control, and lands in the ledger", async () => {
-    const { daemon, dataDir, envOut } = await setup({ floor: "real" });
+    const box = await setup({ floor: "real" });
+    const { daemon, dataDir, envOut } = box;
     // the deck's own scopes do NOT include agent.control — the fold's reader
     // is not, by that fact, allowed to steer what it is watching
     const watcher = await window(daemon, DECK, "i0");
@@ -3391,11 +3453,16 @@ describe("AR-6-0 — the stop verb (agent.interrupt)", () => {
 
     // MF-1g — the row does not leave: the agent is over, its PANE is not, and
     // the card keeps the resume verb over its final screen.
-    await poll(async () => {
-      const { sessions: rows } = (await win.call("agent.list", {})) as AgentListResult;
-      const row = rows.find((r) => r.runtimeRunId === runId);
-      return row?.continuation?.exited === true ? row : undefined;
-    }, 15_000);
+    await poll(
+      async () => {
+        const { sessions: rows } = (await win.call("agent.list", {})) as AgentListResult;
+        const row = rows.find((r) => r.runtimeRunId === runId);
+        return row?.continuation?.exited === true ? row : undefined;
+      },
+      15_000,
+      "the interrupted run read as exited",
+      exitWitness(box, spawned.terminal.sessionId),
+    );
     const exited = await poll(async () => {
       const record = readRecord(dataDir, runId);
       return record.exited !== undefined ? record : undefined;
