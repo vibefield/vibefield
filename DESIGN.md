@@ -613,11 +613,12 @@ design, ruled 2026-10-18). It wears four recipes, written here before any of its
 - **The border ink** under the glass round the display is the window's edge — where the live
   surface ends and the device's own frame begins. Black on every phone but the silver, gold and rose
   gold home-button phones and the 7's red, whose fronts were white.
-- **The three metals** (aluminium, steel, titanium) are the band. **They carry no meaning of their
-  own on the desk:** they are the device's likeness — which iPhone the phone stands for, the bound
-  device type's own band — which its size and its sensor housing already say. Kept for that likeness
-  (the PT-S design §1: "42 models read from Xcode's own data"); whether likeness passes the first
-  guardrail is asked of James (the PT-S1 hand-back), and the finishes below stand or fall with it.
+- **The three metals** (aluminium, steel, titanium) are the band, and **their meaning is the
+  device's likeness: which iPhone the object stands for** — the bound device type's own band, read
+  with its size and its sensor housing (the PT-S design §1: "42 models read from Xcode's own data").
+  Under the first guardrail that is their meaning — they inform: they say which device — and they
+  carry no other. *Ruled 2026-10-29 (James, the PT-S gap note §6, choice 6).* The finishes below
+  carry the same meaning.
 - **The screen's own light** is not a material: it is the stream's, added after the desk's chain —
   by day the byte is the drawn byte; by night it stays bright to an eye adapted to the Moon and glows
   (PHONE.md §5; James's Q-4). A still of it is never passed off as live: it is dimmed (the pane's
@@ -629,9 +630,9 @@ design, ruled 2026-10-18). It wears four recipes, written here before any of its
 | border ink | black `#0b0c0e` · white `#f0efeb` |
 | panel, off | OLED `#050507` · LCD `#0e1014` (the backlight's grey-blue: the home-button phones, the Xʀ and the 11) |
 | sensor housing | `#1a191a` (the Simulator's own sensor-bar fill, 0.102 · 0.098 · 0.102) · a lens `#0a0f1c` in a ring `#2a2c33` · an earpiece's mesh `#1e1f22` |
-| aluminium (anodised) | diffuse 0.6 · roughness 0.36 · glint 1.8 |
-| steel (polished) | diffuse 0.12 · roughness 0.07 · glint 2.6 |
-| titanium (brushed) | diffuse 0.34 · roughness 0.24 · glint 2 |
+| aluminium (anodised) | diffuse 0.6 · roughness 0.36 · glint 1.8 — meaning: likeness, the band of the iPhones made in it |
+| steel (polished) | diffuse 0.12 · roughness 0.07 · glint 2.6 — meaning: likeness, the band of the iPhones made in it |
+| titanium (brushed) | diffuse 0.34 · roughness 0.24 · glint 2 — meaning: likeness, the band of the iPhones made in it |
 | the sky the glass mirrors | day: sky `#dfe7ee` · leaves `#26331d` · room `#6b7075`; night: sky `#0f1726` · canopy `#040605` |
 | the screen's light | by day 1 of its bytes · by night 0.8 · the panel's scatter 0.006 · a still 0.7 · a still under words 0.16 |
 | the night's glow | glare 3.5 mm and 16 mm at 0.06 and 0.04 · spill 24 mm at 0.55 · edge 0.45 |
@@ -640,7 +641,8 @@ design, ruled 2026-10-18). It wears four recipes, written here before any of its
 
 **The finishes** — each model's launch colours, its first the default: the band's colour (its metal's
 reflectance), the front's ink, and a mirror polish where the metal was finished to one. Approximated
-from product imagery; likeness, as the metals are.
+from product imagery. Their meaning is the metals': the device's likeness, which iPhone the object
+stands for, in the colour it was bought in.
 
 | Finish | Launched on | Band | Front | Polish |
 |---|---|---|---|---|

@@ -3,8 +3,10 @@
 // faces table — and holds theme.ts (every finish, every ink, the sky the glass mirrors, the words' ink), the law's material
 // knobs (the cover glass, the three metals, the screen's light and its dims, the night's glow, the marks), the one scale and
 // face.ts's lines and acts to it, value for value. A number changed in the code alone, or in the book alone, is red here.
+// It holds the metals' MEANING too (James's choice 6, ruled 2026-10-29: the device's likeness), and one faces row per state.
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { LIVE_SIMULATOR_STATES, type LiveSimulatorState } from "@vibefield/plugin-sdk/desk";
 import { describe, expect, it } from "vitest";
 import {
   FACE_ACTS,
@@ -130,20 +132,61 @@ describe("DESIGN.md §5.1 holds every number the phone's look and law carry", ()
   });
 });
 
+describe("DESIGN.md §5.1 states what the metals mean (James's choice 6, ruled 2026-10-29)", () => {
+  it("says their meaning is the device's likeness — which iPhone the object stands for — and asks nothing of it", () => {
+    const bullet = MATERIALS.split("\n- ").find((b) => b.startsWith("**The three metals**"));
+    expect(bullet).toBeDefined();
+    const said = (bullet ?? "").replace(/\s+/g, " ");
+    expect(said).toContain(
+      "their meaning is the device's likeness: which iPhone the object stands for",
+    );
+    // the question it once put to James is answered: nothing left asked
+    expect(said).not.toMatch(/asked of James|stand or fall/);
+    for (const first of ["aluminium", "steel", "titanium"])
+      expect(row(MATERIALS, first), first).toContain("meaning: likeness");
+  });
+});
+
+/** The faces table's first cell for each state: the state's words as the table writes them. */
+const STATE_CELL: Readonly<Record<LiveSimulatorState, string>> = {
+  "no-simulator": "no Simulator",
+  "no-permission": "no permission",
+  "no-device": "no device",
+  off: "off",
+  booting: "booting",
+  "no-window": "no window",
+  live: "live",
+  "at-rest": "at rest",
+  stopped: "stopped",
+};
+
+/** The faces table's row whose first cell IS `cell` — exactly, never a prefix. */
+const stateRow = (cell: string): string => {
+  const line = VOICE.split("\n").find((l) => l.split("|")[1]?.trim() === cell);
+  if (line === undefined) throw new Error(`no faces row "${cell}"`);
+  return line;
+};
+
 describe("DESIGN.md §9 says the faces' words, and the code quotes them exactly", () => {
   const NAME = "iPhone 17 Pro";
 
+  it("holds one row per state of the SDK's nine — no row the states lack", () => {
+    const rows = VOICE.split("\n").filter((l) => l.startsWith("| ") && !l.startsWith("| State"));
+    expect(rows).toHaveLength(LIVE_SIMULATOR_STATES.length);
+    for (const is of LIVE_SIMULATOR_STATES)
+      expect(() => stateRow(STATE_CELL[is]), is).not.toThrow();
+  });
+
   it("quotes every line and every act from the faces table, row by row", () => {
-    for (const [state, line] of Object.entries(FACE_LINES)) {
-      const act = FACE_ACTS[state as keyof typeof FACE_ACTS];
-      const first = state
-        .replace("-", " ")
-        .replace("no simulator", "no Simulator")
-        .replace("at rest", "at rest");
-      const r = row(VOICE, first);
-      if (line !== null) expect(r, state).toContain(`"${line(NAME)}"`);
-      if (act !== null) expect(r, state).toContain(`"${act}"`);
-      else expect(r, state).toMatch(/\| — \|$/);
+    for (const is of LIVE_SIMULATOR_STATES) {
+      const line = FACE_LINES[is];
+      const act = FACE_ACTS[is];
+      const r = stateRow(STATE_CELL[is]);
+      if (line !== null) expect(r, is).toContain(`"${line(NAME)}"`);
+      if (act !== null) expect(r, is).toContain(`"${act}"`);
+      else expect(r, is).toMatch(/\| — \|$/);
+      // a state with neither says no quoted words at all: what it shows is described, never said
+      if (line === null && act === null) expect(r, is).not.toContain('"');
     }
   });
 

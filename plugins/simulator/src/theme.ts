@@ -7,7 +7,8 @@
 // A FINISH is a model's launch colour: the band's colour from above (its metal's own — which metal is the model's,
 // catalog.gen.ts) and the colour of the glass's border ink (white on the silver, gold and rose gold home-button phones and
 // the 7's red, black on every other), with a mirror polish where the metal was finished to one. Approximated from product
-// imagery: the device's likeness, as the metals are (DESIGN.md §5.1 asks whether likeness passes the first guardrail).
+// imagery. What a finish and a metal MEAN is the device's likeness — which iPhone the object stands for (DESIGN.md §5.1,
+// James's choice 6, ruled 2026-10-29): they say which device, and nothing else.
 //
 // The same colours by day and by night: the LIGHT changes (the Moon, the night's chain — the kit's).
 
