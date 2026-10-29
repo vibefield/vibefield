@@ -732,6 +732,13 @@ export const PLACE_FACTS = {
  * JOURNAL_MOVES_MAX, the oldest dropped first), persisted at
  * `LAYOUT.PROJECT_KEYS_FILE`; a `movedTo` follows at most MOVE_HOPS_MAX moves.
  * TS-only: no native reader. */
+/** IOS-8f — `user.me`'s honest UNAVAILABLE: a daemon that knows no user id (an embedded one) has no person to
+ * name, and says so rather than answer a face for nobody. TS-only: no native reader. */
+export const USER_ME = {
+  SERVICE: "user",
+  STATE_NO_USER: "no-user",
+} as const;
+
 export const PROJECT_DOORS = {
   SERVICE: "projects",
   STATE_GROUPING: "grouping",

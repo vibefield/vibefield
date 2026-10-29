@@ -264,6 +264,7 @@ import {
   UpdatePolicy,
   UpdatePolicySource,
 } from "../src/update-policy";
+import { UserMeResult } from "../src/users";
 import {
   WorkspaceCloseTicketParams,
   WorkspaceCloseTicketResult,
@@ -776,6 +777,8 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "project-figures": ProjectFiguresResult,
   "project-figures-day-params": ProjectFiguresDayParams,
   "project-figures-day": ProjectFiguresDayResult,
+  // IOS-8f — who this desktop's person is: a written face with a name, and the deal with none
+  "user-me": UserMeResult,
 };
 
 // *.vector.json = cross-language crypto vectors, not wire shapes — pinned by their own tests.
