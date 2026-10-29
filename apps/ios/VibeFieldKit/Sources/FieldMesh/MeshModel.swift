@@ -125,6 +125,10 @@ public final class MeshModel {
   /// before it since the mesh was last up.
   @ObservationIgnored private var retryTask: Task<Void, Never>?
   @ObservationIgnored private var retryAttempt = 0
+  /// A sign-out's stop and sweep, while they run (`signOut`). A sign-in waits
+  /// for it: a new node started over the state directory the sweep is about
+  /// to remove would lose its keys under it.
+  @ObservationIgnored private var signOutTask: Task<Void, Never>?
   /// The network coming back is a reason to retry at once rather than at the
   /// end of the backoff.
   @ObservationIgnored private var pathMonitor: NWPathMonitor?
@@ -289,6 +293,16 @@ public final class MeshModel {
   /// The person's SIGN IN: the first sign-in starts a node and puts its login
   /// page in front of them; a node already standing re-surfaces the page.
   public func signIn() {
+    // TS-7 — the welcome stands through a sign-out (`.stopping`), so its
+    // Continue can land before the old node has stopped; and TS-7b's Sign in
+    // again signs out and in at once. Either waits for the sweep.
+    if let pending = signOutTask {
+      Task {
+        await pending.value
+        signIn()
+      }
+      return
+    }
     // `regating` as well as the runtime: UA-P-5's restart has a beat with no
     // runtime in hand, and a tap landing in it would start a second node.
     if runtime == nil, !regating {
@@ -406,10 +420,11 @@ public final class MeshModel {
     eventsTask?.cancel()
     eventsTask = nil
     self.runtime = nil
-    Task {
+    signOutTask = Task {
       await runtime.stop()
       sweep.run()
       if state == .stopping { state = .off }
+      signOutTask = nil
     }
   }
 
