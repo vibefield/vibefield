@@ -577,6 +577,37 @@ describe("a drag from another app (HN-6, HN-D2)", () => {
     expect(store.snapshot().cards).toEqual([]);
   });
 
+  it("leaves a drop on a field the desk holds — a note being written — to the field: the desk takes no card from another app, so no label over it; let go, not prevented, nothing played or dealt", async () => {
+    listen();
+    const desk = document.createElement("div");
+    const note = document.createElement("div");
+    note.contentEditable = "true";
+    const own = vi.fn();
+    note.addEventListener("drop", own);
+    desk.append(note);
+    document.body.append(desk);
+    const { played } = place({ kind: "desk", box: new DOMRect(0, 0, 1024, 768), element: desk });
+    hits(() => [note, desk, document.body]);
+    const kinds = transfer({ text: "One more line.", kindsOnly: true });
+    drag("dragenter", kinds, { x: 400, y: 300 });
+    drag("dragover", kinds, { x: 400, y: 300 });
+    const carried = getCarriedCard();
+    expect(carried?.phase).toBe("carry");
+    expect(carried?.answer, "neither the desk's nor the hand's").toBeNull();
+    expect(carriedLabel(carried!, { width: 1024 }), "nothing under the pointer").toBeNull();
+
+    const dropped = transfer({ text: "One more line." });
+    const drop = drag("drop", dropped, { x: 400, y: 300 }, { target: note });
+    expect(drop.defaultPrevented, "the note's own editor inserts it").toBe(false);
+    expect(own, "the note hears its own drop").toHaveBeenCalledTimes(1);
+    await settled();
+    await vi.advanceTimersByTimeAsync(PLAY_HOME_MS + 40);
+    expect(getCarriedCard()).toBeNull();
+    expect(played).toEqual([]);
+    expect(store.snapshot().cards).toEqual([]);
+    expect(said).toEqual([]);
+  });
+
   it("settles a drop where nothing takes it straight into the hand — the desk included — from the box it hung in; the rest follow it", async () => {
     listen();
     place({ kind: "desk", box: new DOMRect(0, 0, 1024, 768) });

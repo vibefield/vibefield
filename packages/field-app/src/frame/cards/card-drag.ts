@@ -284,6 +284,22 @@ function answerOf(
   }
 }
 
+/** The place a card from this source plays into at a point, and what it says: the topmost place
+ * there that answers it — except that from another app only a live input takes a card straight
+ * (a pane, the prompt); anywhere else, the desk included, it settles into the hand (DESIGN.md §8
+ * "The hand", from another app). Null for none. The hit test and the drop's field ask this one. */
+function placeFor(
+  source: CardDragStart["source"],
+  card: Card,
+  at: { readonly x: number; readonly y: number },
+  top: Element | null | undefined,
+): { readonly target: CardTarget; readonly said: CardAnswer } | null {
+  const target = cardTargets.at(at.x, at.y, top);
+  if (target === null || (source === "outside" && target.kind === "desk")) return null;
+  const said = answerOf(target, card, at);
+  return said === null ? null : { target, said };
+}
+
 /** What is under the pointer now: the line's cell, or the place on top and what it says. */
 function hitTest(drag: LiveDrag): void {
   const { x, y } = drag;
@@ -301,15 +317,9 @@ function hitTest(drag: LiveDrag): void {
         : { kind: "cell", ok: true, label: TARGET_WORDS.opening(spring.view) };
     return;
   }
-  const target = cardTargets.at(x, y, top);
-  const said = target === null ? null : answerOf(target, drag.card, { x, y });
-  // from another app only a live input takes a card straight (a pane, the prompt); anywhere
-  // else, the desk included, it settles into the hand (DESIGN.md §8 "The hand", from another app)
-  if (
-    target !== null &&
-    said !== null &&
-    !(drag.start.source === "outside" && target.kind === "desk")
-  ) {
+  const place = placeFor(drag.start.source, drag.card, { x, y }, top);
+  if (place !== null) {
+    const { target, said } = place;
     drag.target = target;
     drag.answer = { kind: target.kind, ok: said.ok, label: said.label };
     drag.ring = said.ok ? boxOf(said.ring ?? target.rect()) : null;
@@ -317,22 +327,21 @@ function hitTest(drag: LiveDrag): void {
   }
   drag.target = null;
   drag.ring = null;
-  // …but a field no place answers for takes a drop itself (HN-L3): over it the card says nothing,
-  // since letting go there will not put it in the hand
+  // …but a field no place takes it at — the desk's own note included — takes a drop itself
+  // (HN-L3): over it the card says nothing, since letting go there will not put it in the hand
   drag.answer =
-    drag.start.source === "outside" && !(said === null && isField(top))
+    drag.start.source === "outside" && !isField(top)
       ? { kind: "hand", ok: true, label: TARGET_WORDS.hand }
       : null;
 }
 
-/** Whether a card let go at this window point is a field's (HN-L3): a field on top there — read
- * as the drag reads what is under the pointer — that no registered place answers for. A place
- * registered for cards outranks the field: a pane's own text area, Chat's prompt. */
+/** Whether a card from another app let go at this window point is a field's (HN-L3): a field on
+ * top there — read as the drag reads what is under the pointer — that no place takes the card at,
+ * by the drag's own rule (`placeFor`). A pane's own text area and Chat's prompt outrank the field;
+ * the desk, which takes no card from another app, does not. */
 export function fieldTakesDrop(x: number, y: number, card: Card): boolean {
   const top = topAt(x, y);
-  if (!isField(top)) return false;
-  const target = cardTargets.at(x, y, top);
-  return target === null || answerOf(target, card, { x, y }) === null;
+  return isField(top) && placeFor("outside", card, { x, y }, top) === null;
 }
 
 function moveTo(drag: LiveDrag, x: number, y: number): void {
