@@ -1,9 +1,9 @@
 import type { FrameView } from "@vibefield/contracts";
 import { type ReactElement, useCallback, useEffect, useRef } from "react";
 import { useReducedMotion } from "../field/desk/bar/bar-motion";
-import { artifactsWords, useArtifactsStanding } from "./artifacts-standing";
 import { useGodviewDeckMaximized } from "./deck-door";
 import { type FrameSurface, foldSurface } from "./frame-surface";
+import { useArtifactsDot } from "./head-artifacts";
 import { PackageCircleView } from "./PackageCircleView";
 import { useFindStep } from "./Peek";
 
@@ -16,25 +16,24 @@ import { useFindStep } from "./Peek";
 // it grows is NOT its own: it is the pill's (`Head.tsx`), on its Artifacts
 // shelf, and which shelf shows is the frame's one value (`frame-surface.ts`,
 // `artifacts`), which this reads and asks — so under a cover the sheet holds
-// Artifacts alone, and opening it folds whatever else was open.
+// Artifacts alone, and opening it folds whatever else was open. Its dot is the
+// head's reading of the catalog (`head-artifacts.ts`), the pill's package's
+// own, so the two never say different things.
 
 export interface PackageCircleProps {
   readonly view: FrameView;
   /** The frame's open surface, from its one owner. */
   readonly surface: FrameSurface | null;
   readonly onSurfaceChange: (next: FrameSurface | null) => void;
-  /** The titles of the artifacts whose source is unavailable: the head's own
-   * reading of the catalog, which the pill's package wears too. */
-  readonly unavailable: readonly string[];
 }
 
 export function PackageCircle({
   view,
   surface,
   onSurfaceChange,
-  unavailable,
 }: PackageCircleProps): ReactElement | null {
   const open = surface === "artifacts";
+  const dot = useArtifactsDot();
   // GV-D11 with PL-D2: while Godview's terminals are maximized the same button
   // stands at their title bar's left end, and it steps out of the bar and back
   // to the head on search's own two steps, so the two never step apart
@@ -71,32 +70,11 @@ export function PackageCircle({
   return (
     <PackageCircleView
       open={open}
-      words={artifactsWords(unavailable)}
-      dot={unavailable.length > 0}
+      dot={dot}
       onPress={press}
       buttonRef={buttonRef}
       bar={place.bar}
       step={place.step}
-    />
-  );
-}
-
-/** The circle as the frame holds it (ChromeLayer): its dot and its words from
- * the head's reading of the catalog over this window's fieldd client
- * (`artifacts-standing.ts`), so the dot stands while the sheet is shut and
- * whether the Hub is running or not. */
-export function FramePackageCircle({
-  view,
-  surface,
-  onSurfaceChange,
-}: Omit<PackageCircleProps, "unavailable">): ReactElement | null {
-  const standing = useArtifactsStanding();
-  return (
-    <PackageCircle
-      view={view}
-      surface={surface}
-      onSurfaceChange={onSurfaceChange}
-      unavailable={standing.unavailable}
     />
   );
 }

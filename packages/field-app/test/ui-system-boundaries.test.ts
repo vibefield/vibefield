@@ -394,12 +394,13 @@ describe("UI system ownership boundaries", () => {
     // stylesheet, never the reading's own door or the host.
     const fixture = source("design-system/PackageCirclePreview.tsx");
     expect(fixture).toMatch(/<PackageCircleView\s/u);
-    expect(fixture).toContain("artifactsWords(");
+    expect(fixture).toContain("artifactsDotWords(");
     expect(fixture).not.toMatch(/className="vf-package/);
     expect(fixture).not.toContain("<style");
     expect(fixture).not.toContain("getHost");
     expect(fixture).not.toContain("useFielddClient");
-    expect(fixture).not.toContain("useArtifactsStanding");
+    expect(fixture).not.toContain("useArtifactsDot");
+    expect(fixture).not.toContain("setArtifactCatalog");
     // …and its plates MOUNTED on the page, not merely defined
     expect(catalogPageSources()).toMatch(/<PackageCirclePlate\s/u);
   });

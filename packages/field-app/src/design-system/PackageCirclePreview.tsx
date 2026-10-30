@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
-import { artifactsWords } from "../frame/artifacts-standing";
+import { artifactsDotWords } from "../frame/head-artifacts";
 import { PackageCircleView } from "../frame/PackageCircleView";
 import { GodviewPreview } from "./GodviewPreview";
 import { HistoryPreview } from "./HistoryPreview";
@@ -12,8 +12,8 @@ import { HistoryPreview } from "./HistoryPreview";
 // while they are maximized, folded there as search is. What it replaces is
 // only what a host supplies: the window's view, the deck's state and the
 // head's reading of the catalog (the titles whose source is unavailable); its
-// words are the head's own (`artifactsWords`). The markup and the CSS are the
-// product's. The sheet it grows is the pill's, drawn by the head's plates.
+// words are the head's own (`artifactsDotWords`). The markup and the CSS are
+// the product's. The sheet it grows is the pill's, drawn by the head's plates.
 
 /** The package circle's plates, in the page's order. */
 export const PACKAGE_CIRCLE_STATES = ["godview", "history", "bar"] as const;
@@ -34,7 +34,6 @@ export function PackageCirclePlate({
   readonly state: PackageCircleState;
   readonly dark: boolean;
 }): ReactElement {
-  const unavailable = UNAVAILABLE[state];
   return (
     <div className="vf-ds-package-plate" data-state={state}>
       <div className="vf-ds-package-ground">
@@ -49,8 +48,7 @@ export function PackageCirclePlate({
       </div>
       <PackageCircleView
         open={false}
-        words={artifactsWords(unavailable)}
-        dot={unavailable.length > 0}
+        dot={artifactsDotWords(UNAVAILABLE[state])}
         bar={state === "bar"}
       />
     </div>

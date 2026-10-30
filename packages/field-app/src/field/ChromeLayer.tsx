@@ -23,7 +23,7 @@ import { type FrameSurface, foldSurface } from "../frame/frame-surface";
 import { Head } from "../frame/Head";
 import { canvasHead } from "../frame/head-canvas";
 import { runChosenSession } from "../frame/line-door";
-import { FramePackageCircle } from "../frame/PackageCircle";
+import { PackageCircle } from "../frame/PackageCircle";
 import { FramePeek } from "../frame/Peek";
 import type { FrameActRun } from "../frame/palette-acts";
 import { StatusLine } from "../frame/StatusLine";
@@ -313,7 +313,7 @@ export function ChromeLayer({
           maximized. It grows the pill's sheet on its Artifacts shelf, the
           frame's `artifacts`. Before the head in the document: the sheet stands
           at the same 62 and grows over the circle it came from (M1). */}
-      <FramePackageCircle view={view} surface={surface} onSurfaceChange={onSurfaceChange} />
+      <PackageCircle view={view} surface={surface} onSurfaceChange={onSurfaceChange} />
 
       {/* THE HEAD (One Frame FR-3, DESIGN.md §8 "The head"): the field's name
           pill with the crumbs folded in, which grows the fields explorer, and

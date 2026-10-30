@@ -3,13 +3,14 @@
  * The package circle (DESIGN.md §8 "The head" — the package circle; PL-D2 ruled by James
  * 2026-10-29, Cards in Hand; HN-8). The shipping controller, `PackageCircle`, on a harness that
  * stands where FieldView does — the frame's one owner of the open surface — and holds the window's
- * view as main would, with a stand-in for the pill's sheet beside it (a section holding a button,
- * inert while it is folded, as the head's sheet is). The rows: the circle stands under a cover
- * only; it grows the sheet on Artifacts through the one value (`artifacts`) and folds it; it wears
- * the head's dot and words; the keyboard comes back to it when the sheet it grew folds; and while
- * Godview's terminals are maximized it stands in their title bar, stepping out and back on search's
- * own two steps (GV-D11), never apart from search. Its stylesheet is held to the entry's numbers,
- * and the frame mounts it before the head, so the sheet grows over it.
+ * view as main would, the head's reading of the catalog fed as `artifact.subscribe` feeds it
+ * (`head-artifacts.ts`), and a stand-in for the pill's sheet beside it (a section holding a
+ * button, inert while it is folded, as the head's sheet is). The rows: the circle stands under a
+ * cover only; it grows the sheet on Artifacts through the one value (`artifacts`) and folds it; it
+ * wears the head's dot and words; the keyboard comes back to it when the sheet it grew folds; and
+ * while Godview's terminals are maximized it stands in their title bar, stepping out and back on
+ * search's own two steps (GV-D11), never apart from search. Its stylesheet is held to the entry's
+ * numbers, and the frame mounts it before the head, so the sheet grows over it.
  */
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -20,13 +21,15 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { publishGodviewDeck, resetGodviewDeckDoorForTest } from "../src/frame/deck-door";
 import { type FrameSurface, foldSurface } from "../src/frame/frame-surface";
+import { resetArtifactCatalog, setArtifactCatalog } from "../src/frame/head-artifacts";
 import { PackageCircle } from "../src/frame/PackageCircle";
 import { Peek } from "../src/frame/Peek";
 import type { PeekPort } from "../src/frame/peek-port";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const SRC = join(dirname(fileURLToPath(import.meta.url)), "..", "src");
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = join(HERE, "..", "src");
 const sheet = readFileSync(join(SRC, "frame", "package-circle.css"), "utf8");
 const escaped = (selector: string): string => selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 /** One rule's declarations, by its exact selector. */
@@ -43,15 +46,32 @@ const QUIET_PORT: PeekPort = {
   projects: async () => [],
 };
 
+const FIXTURES = join(HERE, "..", "..", "contracts", "fixtures");
+const fixture = (name: string): Record<string, unknown> =>
+  JSON.parse(readFileSync(join(FIXTURES, name), "utf8"));
+/** One artifact, as the catalog's projection carries it (the contract's own fixture). */
+const VIEW = fixture("artifact-view.valid.json");
+/** The whole list `artifact.subscribe` sends: one live artifact, and these titles' sources
+ * unavailable. */
+const catalog = (...unavailable: readonly string[]): unknown[] => [
+  VIEW,
+  ...unavailable.map((title) => ({
+    ...VIEW,
+    title,
+    advertisedAvailability: "source-unavailable",
+    availability: "source-unavailable",
+  })),
+];
+
 let root: Root | null = null;
 let host: HTMLElement | null = null;
 let surfaceNow: FrameSurface | null = null;
 let setSurfaceNow: ((next: FrameSurface | null) => void) | null = null;
 let setViewNow: ((view: FrameView) => void) | null = null;
-let setUnavailableNow: ((titles: readonly string[]) => void) | null = null;
 
 beforeEach(() => {
   resetGodviewDeckDoorForTest();
+  resetArtifactCatalog();
 });
 
 afterEach(() => {
@@ -61,29 +81,21 @@ afterEach(() => {
   host = null;
   surfaceNow = null;
   resetGodviewDeckDoorForTest();
+  resetArtifactCatalog();
 });
 
-/** FieldView's place: the frame's one owner, the window's view, the head's reading of the catalog —
- * and the sheet's stand-in. `search` stands the Peek's own controller beside the circle, closed. */
-function mount(
-  opts: { view?: FrameView; unavailable?: readonly string[]; search?: boolean } = {},
-): void {
+/** FieldView's place: the frame's one owner and the window's view — and the sheet's stand-in.
+ * `search` stands the Peek's own controller beside the circle, closed. */
+function mount(opts: { view?: FrameView; search?: boolean } = {}): void {
   function Owner(): ReactElement {
     const [surface, setSurface] = useState<FrameSurface | null>(null);
     const [view, setView] = useState<FrameView>(opts.view ?? "canvas");
-    const [unavailable, setUnavailable] = useState<readonly string[]>(opts.unavailable ?? []);
     surfaceNow = surface;
     setSurfaceNow = setSurface;
     setViewNow = setView;
-    setUnavailableNow = setUnavailable;
     return (
       <>
-        <PackageCircle
-          view={view}
-          surface={surface}
-          onSurfaceChange={setSurface}
-          unavailable={unavailable}
-        />
+        <PackageCircle view={view} surface={surface} onSurfaceChange={setSurface} />
         <section data-sheet="" inert={surface !== "artifacts"}>
           <button type="button" data-in-sheet="">
             Publish…
@@ -100,7 +112,6 @@ function mount(
             onOpenPast={() => undefined}
             bindKeys={false}
             takeFocus={false}
-            container={host}
           />
         ) : null}
       </>
@@ -150,7 +161,7 @@ describe("the package circle (PL-D2; DESIGN.md §8, the head)", () => {
     // the button whose shelf shows is on, and says what pressing it again does
     expect(button()?.getAttribute("aria-expanded")).toBe("true");
     expect(button()?.getAttribute("title")).toBe("Close  Esc");
-    expect(button()?.getAttribute("aria-label")).toBe("Close Artifacts");
+    expect(button()?.getAttribute("aria-label")).toBe("Close the artifacts");
     act(() => button()?.click());
     expect(surfaceNow).toBeNull();
     expect(button()?.getAttribute("aria-expanded")).toBe("false");
@@ -162,9 +173,13 @@ describe("the package circle (PL-D2; DESIGN.md §8, the head)", () => {
     expect(button()?.getAttribute("aria-expanded")).toBe("false");
   });
 
-  it("wears the head's dot while an artifact's source is unavailable, and its words say which, or how many", () => {
-    mount({ view: "history", unavailable: ["vibe-field"] });
+  it("wears the head's dot while an artifact's source is unavailable, with the sheet shut, and its words say which, or how many", () => {
+    mount({ view: "history" });
     const dot = (): Element | null => button()?.querySelector(".vf-package-dot") ?? null;
+    expect(dot()).toBeNull();
+    // the head reads the catalog itself: the circle wears what it read, the Hub or no Hub
+    act(() => setArtifactCatalog(catalog("vibe-field")));
+    expect(surfaceNow).toBeNull();
     expect(dot()).not.toBeNull();
     // the words are the button's name; the dot only shows them
     expect(dot()?.getAttribute("aria-hidden")).toBe("true");
@@ -172,10 +187,10 @@ describe("the package circle (PL-D2; DESIGN.md §8, the head)", () => {
     expect(button()?.getAttribute("aria-label")).toBe(
       "Artifacts — vibe-field's source is unavailable",
     );
-    act(() => setUnavailableNow?.(["vibe-field", "sketchbook"]));
+    act(() => setArtifactCatalog(catalog("vibe-field", "sketchbook")));
     expect(button()?.getAttribute("title")).toBe("Artifacts — 2 sources unavailable");
     // a standing state only: nothing at all once the sources are back
-    act(() => setUnavailableNow?.([]));
+    act(() => setArtifactCatalog(catalog()));
     expect(dot()).toBeNull();
     expect(button()?.getAttribute("title")).toBe("Artifacts");
   });
@@ -280,7 +295,7 @@ describe("the package circle (PL-D2; DESIGN.md §8, the head)", () => {
   it("is the frame's: ChromeLayer mounts it on the window's view and the one owner, before the head, so the sheet grows over the circle it came from (M1)", () => {
     const layer = readFileSync(join(SRC, "field", "ChromeLayer.tsx"), "utf8");
     const mounted =
-      "<FramePackageCircle view={view} surface={surface} onSurfaceChange={onSurfaceChange} />";
+      "<PackageCircle view={view} surface={surface} onSurfaceChange={onSurfaceChange} />";
     expect(layer).toContain(mounted);
     expect(layer.indexOf(mounted)).toBeLessThan(layer.search(/<Head\s/u));
   });
@@ -310,7 +325,9 @@ describe("the circle's stylesheet, held to DESIGN.md's entry", () => {
     expect(night).toContain("inset 0 1px 0 rgb(255 255 255 / 6%)");
     // `package` in secondary ink, primary under the pointer and while its sheet shows
     expect(rule(".vf-package-button")).toContain("color: var(--vf-text-secondary);");
-    expect(sheet).toContain('.vf-package-button:hover,\n.vf-package-button[aria-expanded="true"] {');
+    expect(sheet).toContain(
+      '.vf-package-button:hover,\n.vf-package-button[aria-expanded="true"] {',
+    );
     expect(ruleFrom(".vf-package-button:hover")).toContain("color: var(--vf-text-primary);");
   });
 

@@ -1,5 +1,6 @@
 import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import type { ReactElement, Ref } from "react";
+import { ARTIFACTS } from "./head-artifacts";
 import type { PeekStep } from "./PeekView";
 import "./package-circle.css";
 
@@ -16,11 +17,9 @@ import "./package-circle.css";
 export interface PackageCircleViewProps {
   /** Its sheet shows: the frame's one owner holds `artifacts`. */
   readonly open: boolean;
-  /** What its tooltip and its name say at rest — "Artifacts", or with the dot
-   * on which source is unavailable, or how many. */
-  readonly words: string;
-  /** The standing dot: an artifact's source is unavailable. */
-  readonly dot: boolean;
+  /** The standing dot (PL-D1): the words its tooltip and its name say while
+   * an artifact's source is unavailable — which, or how many; null, no dot. */
+  readonly dot: string | null;
   readonly onPress?: () => void;
   readonly buttonRef?: Ref<HTMLButtonElement>;
   /** Godview's terminals are maximized: the same button stands at their title
@@ -33,16 +32,17 @@ export interface PackageCircleViewProps {
 
 /** The covered views' package circle: `package` 18 on the line's glass at x
  * 96, which grows the pill's sheet on its Artifacts shelf. While the sheet
- * shows the button is on, and says "Close  Esc", as the pill's buttons do. */
+ * shows the button is on, and says what pressing it again does, as the pill's
+ * package does. */
 export function PackageCircleView({
   open,
-  words,
   dot,
   onPress,
   buttonRef,
   bar = false,
   step = null,
 }: PackageCircleViewProps): ReactElement {
+  const name = dot ?? ARTIFACTS;
   return (
     <div
       className="vf-package-circle no-drag"
@@ -53,13 +53,13 @@ export function PackageCircleView({
         ref={buttonRef}
         type="button"
         className="vf-package-button"
-        aria-label={open ? "Close Artifacts" : words}
+        aria-label={open ? "Close the artifacts" : name}
         aria-expanded={open}
-        title={open ? "Close  Esc" : words}
+        title={open ? "Close  Esc" : name}
         onClick={onPress}
       >
         <FieldGlyph name="package" size={18} />
-        {dot ? <span className="vf-package-dot" aria-hidden="true" /> : null}
+        {dot === null ? null : <span className="vf-package-dot" aria-hidden="true" />}
       </button>
     </div>
   );
