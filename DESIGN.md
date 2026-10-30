@@ -922,7 +922,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   is the first tile, in words** — the Add act, which was a round plus (FR-3: one plus on screen) —
   wearing New field's face (the fill inside a dashed strong hairline, 12/500 in secondary ink at its
   centre), and **Publish… changes the shelf in place to the Hub's two choices**, Proxy and Folder,
-  and their steps, with room the 152 column never had; a publish returns the shelf to its tiles.
+  and their steps, with room the 152 column never had; a publish returns the shelf to its tiles. An
+  empty catalog shows the Hub's own quiet state — "No artifacts yet", "Add a proxy or folder" and its one
+  Add — in place of a lone Publish… tile, so one Add is on screen.
   Above the tiles the header stays the Hub's: “Artifacts” and its quiet count ("4 shared"). It keeps
   its words and its acts — open, Copy URL, and for the owner Refresh preview, Rename and Remove —
   its copy waiting on an SDK copy door (item 111, the fixer's; B3 keeps the button as it is). In the
@@ -1352,7 +1354,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     clear each side, as the selection bar's — then **the package button**, 28 round like the
     chevron, `package` 15 in tertiary ink (the ready fill and primary under the pointer), which grows
     the same sheet on its **Artifacts** shelf (below; §8 "Artifacts — the Artifacts shelf's
-    contents"). Its tooltip and its accessible name say **"Artifacts"**. **Its dot** is for STANDING
+    contents"). Its tooltip and its accessible name say **"Artifacts"** ("Close the artifacts" while its
+    shelf shows, as the chevron's says "Close the fields"). **Its dot** is for STANDING
     states only, as the sync dot is (C6-4): 6px, 3 in from the button's top right, ringed 1.5 in the
     solid chrome so it reads on the glass — `--vf-orange` while an artifact's source is unavailable
     (the catalog's `source-unavailable`, §2.5's attention), and nothing at all otherwise; every other
