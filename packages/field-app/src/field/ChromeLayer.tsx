@@ -110,7 +110,8 @@ export function ChromeLayer({
   // TS-6 (TS-D13) — the sync question New field asks while a link owes it.
   const syncQuestion = useSyncQuestion();
   const boardOut = surface === "objects" || board?.open === true;
-  // The pill's sheet, on either shelf (HN-8): the field recedes behind it on Canvas.
+  // The pill's sheet, on either shelf (HN-8): the desk's gestures stop and the
+  // selection bar steps out behind it, as they did behind the explorer.
   const docsOpen = sheetShelf(surface) !== null;
   const paletteOpen = surface === "palette";
   // UA-D19 — the Me menu: one of the frame's open surfaces since FR-4, so the
