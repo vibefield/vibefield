@@ -14,6 +14,7 @@ import { noteCapture } from "../capture-state";
 import { type FrameSurface, foldSurface } from "../frame-surface";
 import { sayOnLine } from "../line-door";
 import { useActiveView } from "../view-state";
+import { viewKeysOf } from "../views";
 import { CardsView, type HeldCard, type LeavingCard } from "./CardsView";
 import { CarriedCardLayer } from "./CarriedCardLayer";
 import { type CardBox, getCarriedCard, startCardDrag, useCarriedCard } from "./card-drag";
@@ -37,6 +38,7 @@ import { listenForOtherApps } from "./cards-outside";
 import { dealCapture } from "./cards-sources";
 import { type CardStore, cardsStore, useCards } from "./cards-store";
 import { captureRefusal } from "./cards-words";
+import { isField } from "./caret";
 
 /**
  * The hand's controller (track HN, HN-1; DESIGN.md §8 "The hand", §10): it holds the window's
@@ -64,8 +66,9 @@ import { captureRefusal } from "./cards-words";
  *   a failure is said on the line's note, and every result tells the line's snapshot whether it
  *   waits (`capture-state.ts`).
  * - What another app hands over comes in while the hand is here (HN-6, `cards-outside.ts`): ⌘V
- *   with no caret deals a card for each thing the paste holds, and a drag into the window is a
- *   card carried until it is let go — a file named by its path through the shell's file door.
+ *   with no caret deals a card for each thing the paste holds (never while a card is picked up
+ *   or Settings is open), and a drag into the window is a card carried until it is let go — a
+ *   file named by its path through the shell's file door.
  */
 
 /** A press that moves this far is a drag; less, a click (HN-D5). */
@@ -83,7 +86,7 @@ const SETTLE_MS = 280;
 
 export type CardsHost = Pick<
   FieldHost,
-  "onScreenshotResult" | "screenshotStillUrl" | "pathForFile"
+  "onScreenshotResult" | "screenshotStillUrl" | "pathForFile" | "platform"
 >;
 
 export interface CardsProps {
@@ -97,7 +100,7 @@ export interface CardsProps {
   readonly settingsOpen?: boolean;
   /** The window's hand; a test hands its own. */
   readonly store?: CardStore;
-  /** The shell's doors; a test hands a fixture. */
+  /** The shell's doors and its platform; a test hands a fixture. */
   readonly host?: CardsHost;
   readonly now?: () => number;
 }
@@ -145,11 +148,6 @@ function cardAt(pointer: Pointer): string | null {
   return hit === null ? pointer.over : cardUnder(hit);
 }
 
-function isEditable(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  return target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable;
-}
-
 /** Is a key's target inside this element? */
 function within(el: Element | null, target: EventTarget | null): boolean {
   return el !== null && target instanceof Node && el.contains(target);
@@ -189,6 +187,9 @@ export function Cards({
   const host = hostProp ?? getHost();
   const state = useCards(store);
   const view = useActiveView();
+  // a paste's key in where a card came from, as the frame spells its keys (`views.ts`): the
+  // host's platform, the page's where a fixture host names none
+  const [keys] = useState(() => viewKeysOf(host.platform));
   const reducedMotion = useReducedMotion();
   const carriedId = useCarriedCard()?.card.id ?? null;
   const [win, setWin] = useState<CardWindow>(readWindow);
@@ -272,6 +273,7 @@ export function Cards({
     surface,
     onSurfaceChange,
     win,
+    settingsOpen,
   };
   const live = useRef(latest);
   live.current = latest;
@@ -505,7 +507,7 @@ export function Cards({
         }
         case "rest": {
           if (!deletes(event) || modified(event) || event.repeat) return;
-          if (isEditable(event.target)) return;
+          if (isField(event.target)) return;
           const card = cur.state.cards[cur.reached];
           if (card === undefined || cur.at === null || cardAt(cur.at) !== card.id) return;
           act(event, () => remove(card.id));
@@ -644,7 +646,11 @@ export function Cards({
 
   // What another app hands over comes in as cards only when it is brought (HN-6, HN-L1): ⌘V with
   // no caret, a drag into the window — a file named by its path through the shell's file door.
-  useEffect(() => listenForOtherApps({ store, host }), [host, store]);
+  // Settings' sheet over the window, read at each paste, keeps a paste's cards from landing unseen.
+  useEffect(
+    () => listenForOtherApps({ store, host, settingsOpen: () => live.current.settingsOpen }),
+    [host, store],
+  );
 
   return (
     <>
@@ -663,6 +669,7 @@ export function Cards({
         leaving={leaving}
         tucked={tucked}
         now={now()}
+        keys={keys}
         reducedMotion={reducedMotion}
         win={win}
         onRemove={remove}

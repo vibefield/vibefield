@@ -13,7 +13,11 @@
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { ScreenshotCaptureOk, ScreenshotCaptureResult } from "@vibefield/contracts";
+import type {
+  ScreenshotCaptureOk,
+  ScreenshotCaptureResult,
+  ShellPlatform,
+} from "@vibefield/contracts";
 import { act, type ReactElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -550,6 +554,26 @@ describe("the raised hand, for a reader (R-D 11)", () => {
     expect(document.activeElement).toBe(under.el);
     expect(under.keys).toEqual([]);
   });
+
+  it("names a pasted card by the key its host's platform spells, as the frame spells its keys — ⌘V on a Mac, Ctrl+V on Windows", () => {
+    const rows: ReadonlyArray<readonly [ShellPlatform, string]> = [
+      ["darwin", "Pasted — ⌘V · just now"],
+      ["win32", "Pasted — Ctrl+V · just now"],
+    ];
+    for (const [platform, said] of rows) {
+      const store = new CardStore(() => NOW);
+      store.deal(pasted("p1"));
+      store.landed("p1");
+      const el = mount(<Owned store={store} host={{ ...fakeHost(), platform }} />);
+      press(document.body, { key: "V", metaKey: true, shiftKey: true });
+      const option = el.querySelector('[role="option"]');
+      expect(option?.getAttribute("aria-label"), platform).toBe(said);
+      act(() => root?.unmount());
+      root = null;
+      container?.remove();
+      container = null;
+    }
+  });
 });
 
 describe("whose key it is (the one scope rule; R-B 2, 3, 14)", () => {
@@ -696,6 +720,26 @@ describe("the reach, the press and the drag", () => {
     }
     expect(press(document.body, { key: "Backspace" }).defaultPrevented).toBe(true);
     expect(ids(store)).toEqual(["a"]);
+  });
+
+  it("takes ⌫ from a control that holds no caret — a checkbox — and leaves it to what is editable (the one field test, caret.ts)", () => {
+    const store = handOf("a", "b", "c");
+    const el = mount(<Owned store={store} host={fakeHost()} />);
+    point("pointermove", faceOf(el, "c"), restSlot(3, 2).x + CARD_W / 2, FOOT);
+    const editor = document.createElement("div");
+    editor.contentEditable = "true";
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    document.body.append(editor, box);
+    try {
+      expect(press(editor, { key: "Backspace" }).defaultPrevented, "the editor's").toBe(false);
+      expect(ids(store)).toEqual(["a", "b", "c"]);
+      expect(press(box, { key: "Backspace" }).defaultPrevented, "the hand's").toBe(true);
+      expect(ids(store)).toEqual(["a", "b"]);
+    } finally {
+      editor.remove();
+      box.remove();
+    }
   });
 
   it("keeps a carried card's place, hidden, and answers nothing while a drag carries", () => {
@@ -918,5 +962,35 @@ describe("the twelve (HN-D8) and the mount", () => {
     act(() => root?.unmount());
     root = null;
     expect(paste().defaultPrevented, "a hand gone hears no paste").toBe(false);
+  });
+
+  it("deals no paste with no caret while Settings is open over it — its card would land unseen under the sheet — and deals again once it has closed", async () => {
+    const store = new CardStore(() => NOW);
+    const host = fakeHost();
+    const paste = (): ClipboardEvent => {
+      const data = {
+        types: ["text/plain"],
+        items: [{ kind: "string", type: "text/plain", getAsFile: () => null }],
+        files: [],
+        getData: (format: string) => (format === "text/plain" ? "From Notes." : ""),
+      } as unknown as DataTransfer;
+      const event = new ClipboardEvent("paste", {
+        bubbles: true,
+        cancelable: true,
+        clipboardData: data,
+      });
+      Object.defineProperty(event, "isTrusted", { value: true });
+      document.body.dispatchEvent(event);
+      return event;
+    };
+    mount(<Owned store={store} host={host} settingsOpen />);
+    expect(paste().defaultPrevented, "Settings stands over the hand").toBe(false);
+    // the same hand, its sheet closed: read at the paste, never when it began to listen
+    act(() => root?.render(<Owned store={store} host={host} settingsOpen={false} />));
+    await act(async () => {
+      expect(paste().defaultPrevented).toBe(true);
+      await vi.waitFor(() => expect(ids(store)).toHaveLength(1));
+    });
+    expect(store.snapshot().cards[0]).toMatchObject({ kind: "text", paste: "From Notes." });
   });
 });

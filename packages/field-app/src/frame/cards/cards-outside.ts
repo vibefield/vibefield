@@ -1,5 +1,5 @@
+import { SCREENSHOT_STILL, SHELL_CLIPBOARD, utf8ByteLength } from "@vibefield/contracts";
 import { GHOSTTEA_PANE_SELECTOR } from "@vibefield/puppeteer-views";
-import { formatBytes } from "../../format/bytes";
 import type { FieldHost } from "../../host";
 import { sayOnLine } from "../line-door";
 import {
@@ -34,18 +34,24 @@ import { isField } from "./caret";
 //   the caret's owner takes it first (HN-L3) — a field, a Godview pane, anything that took it. One
 //   listener on the document's bubble phase hears only what none of them took: one card for each
 //   thing the clipboard holds, dealt from the pointer's last place; a paste of what the newest
-//   card already is lifts that card instead (HN-D10), and deals none.
+//   card already is lifts that card instead (HN-D10), and deals none. While a card is picked up,
+//   or Settings stands over the window, it is not the hand's: its card would land unseen.
 // - A drag from another app is a card the moment it enters the window: the drag machine's waiting
 //   card (`card-drag.ts`), its kind's index alone until the drop says what it holds. The window's
 //   capture phase takes its events, so a file let go is never opened in the page's place and a
 //   pane's own text drop never pastes it a second time. Let go on a pane or Chat's prompt it plays
 //   straight in, once — a place registered for cards outranks the field it holds; on a field no
-//   place answers for, the field takes it, as a paste goes where the caret is (HN-L3), and the
-//   card is gone; anywhere else it settles into the hand; carried back out of the window, or lost
-//   by the system, it is gone.
+//   place answers for, one that takes an insert (`caret.ts`), the field takes it, as a paste goes
+//   where the caret is (HN-L3), and the card is gone; anywhere else — or on a place that refused
+//   what it held once it played — it settles into the hand; carried back out of the window, or
+//   lost by the system, it is gone.
 // A file is what its path says (the preload's `pathForFile`; none in the catalog) and a picture
 // what its pixels are, read from the bytes the person handed over and kept in memory only, with
-// the card (LC-7, HN-D9).
+// the card (LC-7, HN-D9). What comes in is bounded as the frame's own roads are (LC-24): words
+// past what one paste reads are not brought in, and a picture past the still's cap comes in as
+// its file — its path, never its pixels: the bound is on pixels held in memory, and a path holds
+// none. Pixels past it with no path (an image another app copied) are not brought in either. Of
+// the rest the first twelve are (HN-D8, LC-23); the line says what was left out (§9).
 
 /** A text file's first lines are read from this much of it, and no more. */
 export const FIRST_LINES_BYTES = 640;
@@ -97,8 +103,8 @@ function wordsOf(transfer: DataTransfer): string {
     .join("\n");
 }
 
-/** What a paste or a drop holds, read NOW: each file — twelve at most, as many as the hand holds
- * (HN-D8) — else its words; nothing when it holds neither. */
+/** What a paste or a drop holds, read NOW: each file, else its words; nothing when it holds
+ * neither. All of it — what the hand takes of it is `takenOf`'s. */
 export function broughtIn(transfer: DataTransfer | null): readonly Brought[] {
   if (transfer === null) return [];
   const files: Brought[] = [];
@@ -113,9 +119,63 @@ export function broughtIn(transfer: DataTransfer | null): readonly Brought[] {
       files.push({ kind: "file", file, folder: false });
     }
   }
-  if (files.length > 0) return files.slice(0, CARDS_CAP);
+  if (files.length > 0) return files;
   const words = wordsOf(transfer);
   return words.trim() === "" ? [] : [{ kind: "text", text: words }];
+}
+
+/** An image file, as its type says — a folder never is. PURE. */
+function isImage(file: File, folder: boolean): boolean {
+  return !folder && file.type.startsWith("image/");
+}
+
+/** Is this file one a picture card would hold — its bytes kept, its pixels drawn — when this
+ * renderer can draw it? An image within the still's cap (`SCREENSHOT_STILL.MAX_BYTES`, LC-24):
+ * that bound is on pixels held in memory, and a path holds none, so one past it comes in as its
+ * file — a 200 MB image dropped on a pane pastes its path — or, with no path, not at all
+ * (`refusalOf`). Only its size is read: it is never decoded to be sent there. PURE. */
+function isPicture(file: File, folder: boolean): boolean {
+  return isImage(file, folder) && file.size <= SCREENSHOT_STILL.MAX_BYTES;
+}
+
+/** Why a thing is not brought in, as the line says it — or null for one a card can hold (LC-24):
+ * words past what one paste reads (`SHELL_CLIPBOARD.READ_MAX_BYTES`), or pixels past the still's
+ * cap with no path to come in as (an image another app copied): a file card of those could never
+ * be played. One past the cap with a path comes in as its file (`isPicture`). Only sizes and the
+ * file door are read: a picture is never decoded to be refused. PURE. */
+function refusalOf(thing: Brought, pathOf: (file: File) => string | null): string | null {
+  if (thing.kind === "text") {
+    const bytes = utf8ByteLength(thing.text);
+    const bound = SHELL_CLIPBOARD.READ_MAX_BYTES;
+    return bytes > bound ? OUTSIDE_WORDS.tooLarge("words", bytes, bound) : null;
+  }
+  const { file, folder } = thing;
+  const bound = SCREENSHOT_STILL.MAX_BYTES;
+  if (!isImage(file, folder) || file.size <= bound || pathOf(file) !== null) return null;
+  return OUTSIDE_WORDS.tooLarge("picture", file.size, bound);
+}
+
+/** What the hand takes of what was handed over (DESIGN.md §8 "The hand", brought in): of what a
+ * card can hold, the first twelve, as many as the hand holds (HN-D8, LC-23); and what the line
+ * says of the rest — that only twelve came in, else the first thing too large and why — or null
+ * when all of it came in. `pathOf` is the shell's file door: a picture past the still's cap comes
+ * in as its file only when it has a path. PURE. */
+export function takenOf(things: readonly Brought[], pathOf: (file: File) => string | null): {
+  readonly taken: readonly Brought[];
+  readonly left: string | null;
+} {
+  const holdable: Brought[] = [];
+  let refused: string | null = null;
+  for (const thing of things) {
+    const refusal = refusalOf(thing, pathOf);
+    if (refusal === null) holdable.push(thing);
+    else refused ??= refusal;
+  }
+  const taken = holdable.slice(0, CARDS_CAP);
+  if (holdable.length > taken.length) {
+    return { taken, left: OUTSIDE_WORDS.capped(taken.length, things.length) };
+  }
+  return { taken, left: refused };
 }
 
 /** Does a paste or a drag carry what a card can be? */
@@ -163,7 +223,7 @@ function kindOf(name: string): string | null {
 
 /** What a file is and its size, as its card says when it shows no lines: "PDF · 2.4 MB". */
 function factsOf(file: File): string {
-  return OUTSIDE_WORDS.facts(kindOf(file.name), formatBytes(file.size));
+  return OUTSIDE_WORDS.facts(kindOf(file.name), file.size);
 }
 
 /** Whether a file's first lines are words: by its type, or by its name's kind. PURE. */
@@ -218,8 +278,9 @@ interface Bringing {
 /** One thing brought in as the card it is (DESIGN.md §8 "The hand", brought in): words a text
  * card; a picture this renderer can draw a picture card — its bytes kept as the card's own and
  * shown through an object URL, its pixels measured (LC-7) — with its file's path when it has one;
- * any other file (a picture it cannot draw included) a file card: its path, the folder it lives
- * in, its first lines when they are words, else what it is and its size. */
+ * any other file (a picture it cannot draw, or one past the still's cap, included) a file card:
+ * its path, the folder it lives in, its first lines when they are words, else what it is and its
+ * size. */
 async function cardOf(thing: Brought, bringing: Bringing): Promise<Card> {
   const { store } = bringing;
   const origin: CardOrigin = { view: "outside", how: bringing.how };
@@ -228,7 +289,7 @@ async function cardOf(thing: Brought, bringing: Bringing): Promise<Card> {
   }
   const { file, folder } = thing;
   const path = bringing.pathOf(file);
-  if (!folder && file.type.startsWith("image/")) {
+  if (isPicture(file, folder)) {
     const size = await bringing.measure(file).catch(() => null);
     if (size !== null) {
       return {
@@ -320,6 +381,9 @@ export interface OtherAppsOptions {
   readonly host?: Pick<FieldHost, "pathForFile">;
   /** A picture's pixel size (left out: decoded here); a test hands its own. */
   readonly measure?: PictureSize;
+  /** Whether Settings stands over the window now, read at each paste (left out: never) — it is
+   * not one of the frame's surfaces, so the hand's mount says (`Cards`' `settingsOpen`). */
+  readonly settingsOpen?: () => boolean;
 }
 
 /** Hear what another app hands over — ⌘V with no caret, and a drag into the window — while the
@@ -405,36 +469,40 @@ export function listenForOtherApps(options: OtherAppsOptions = {}): () => void {
       store.nudge(newest.id);
       return;
     }
-    cards.forEach((card, index) => dealCard(card, fromPoint(from, index), store));
+    for (const [index, card] of cards.entries()) dealCard(card, fromPoint(from, index), store);
   };
 
-  /** The drop says what the drag held: the first thing fills the carried card, which plays straight
-   * into the pane or the prompt under it, else settles into the hand from where it hung; the rest
-   * follow it into the hand. A drop that held nothing a card can be is gone, and the line says
-   * so. */
+  /** The drop says what the drag held: the first thing the hand takes fills the carried card,
+   * which plays straight into the pane or the prompt under it — or, refused there once it played,
+   * or let go anywhere else, settles into the hand from where it hung; the rest follow it into the
+   * hand. A drop that held nothing a card can be is gone, and the line says so; what it held past
+   * what the hand takes is said last, once the first card's own outcome has been. */
   const land = async (things: readonly Brought[], at: Point): Promise<void> => {
     const drag = carrying;
-    const cards = await cardsOf(things, "drag");
+    const { taken, left } = takenOf(things, pathOf);
+    const cards = await cardsOf(taken, "drag");
     if (carrying !== drag || !ours()) {
       // let go of while the drop was read (the listener undone): nothing comes in
-      cards.forEach(release);
+      for (const card of cards) release(card);
       return;
     }
     carrying = null;
     const [first, ...rest] = cards;
     if (first === undefined) {
       cancelCardDrag();
-      sayOnLine(OUTSIDE_WORDS.nothing);
+      sayOnLine(left ?? OUTSIDE_WORDS.nothing);
       return;
     }
     const went = await endCardDrag(at.x, at.y, first);
     if (went === "none") {
-      cards.forEach(release);
+      for (const card of cards) release(card);
       return;
     }
-    if (went === "hand") dealCard(first, fromHung(at, 0), store);
+    // a place that refused it once it played has said so (HN-L5: once); the card is the hand's
+    if (went === "hand" || went === "refused") dealCard(first, fromHung(at, 0), store);
     else whenUncarried(() => release(first));
-    rest.forEach((card, index) => dealCard(card, fromHung(at, index + 1), store));
+    for (const [index, card] of rest.entries()) dealCard(card, fromHung(at, index + 1), store);
+    if (left !== null) sayOnLine(left);
   };
 
   const onPointer = (event: PointerEvent): void => {
@@ -445,10 +513,15 @@ export function listenForOtherApps(options: OtherAppsOptions = {}): () => void {
   const onPaste = (event: ClipboardEvent): void => {
     if (!event.isTrusted || event.defaultPrevented || busy()) return;
     if (inPane(event.target) || isField(event.target)) return;
+    // a card picked up is a modal, and Settings' sheet stands over the hand: a card dealt now
+    // would land unseen under either
+    if (store.snapshot().held !== null || options.settingsOpen?.() === true) return;
     const things = broughtIn(event.clipboardData);
     if (things.length === 0) return;
     event.preventDefault();
-    void dealPasted(things, pointer);
+    const { taken, left } = takenOf(things, pathOf);
+    if (left !== null) sayOnLine(left);
+    if (taken.length > 0) void dealPasted(taken, pointer);
   };
   const onDragStart = (): void => {
     inner = true;
@@ -490,9 +563,10 @@ export function listenForOtherApps(options: OtherAppsOptions = {}): () => void {
     const transfer = event.dataTransfer;
     if (inner || !carriesCards(transfer)) return;
     const at = { x: event.clientX, y: event.clientY };
-    // a field no registered place answers for takes the drop itself, as a paste there (HN-L3): it
-    // inserts what it holds, and the card carried in is gone, with nothing said. The place is
-    // asked of the card carried — or, its enter unheard, of the card it would have been
+    // a field that takes an insert, and that no registered place answers for, takes the drop
+    // itself, as a paste there (HN-L3): it inserts what it holds, and the card carried in is gone,
+    // with nothing said. The place is asked of the card carried — or, its enter unheard, of the
+    // card it would have been
     const carried = ours() ? getCarriedCard()?.card : undefined;
     if (fieldTakesDrop(at.x, at.y, carried ?? waitingCardOf(transfer, store))) {
       cancel();
