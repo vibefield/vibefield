@@ -333,14 +333,16 @@ describe("the link's copies deal cards (HN-5)", () => {
     expect(cardsStore.snapshot().cards).toEqual([]);
   });
 
-  it("names the Setup Assistant on the card of a word it copies, rising into place", async () => {
+  it("names the Setup Assistant on a word's card, dealt from the button's box", async () => {
     copyHost();
-    await expect(copyText("truffle-vibefield-studio", COPY_PLACES.setup)).resolves.toBe(true);
+    const from = { left: 300, top: 420, width: 48, height: 28 };
+    const copied = copyText("truffle-vibefield-studio", COPY_PLACES.setup, from);
+    await expect(copied).resolves.toBe(true);
     const card = cardsStore.snapshot().cards.at(-1);
     expect(card).toMatchObject({
       paste: "truffle-vibefield-studio",
       origin: { place: "Setup Assistant", how: "copy" },
     });
-    expect(cardsStore.snapshot().arriving.get(card?.id ?? "")).toBeNull();
+    expect(cardsStore.snapshot().arriving.get(card?.id ?? "")).toEqual(from);
   });
 });

@@ -50,7 +50,7 @@ export function ConnectPane({
   /** Esc is Not now — the Setup Assistant's; a sheet that closes on Esc leaves it off */
   escapeIsNotNow?: boolean;
 }): ReactElement {
-  // HN-5: a copy made here is the Setup Assistant's on its card
+  // HN-5: a copy made here is the Setup Assistant's on its card, dealt from the button pressed
   const door = useLinkDoor(openSignIn, COPY_PLACES.setup);
   // C4 (D31): the roster wholesale on every delta — self ⋈ the account's peers
   const roster = useSubscription<RosterRow[]>("device.subscribe");
@@ -86,7 +86,7 @@ export function ConnectPane({
       onCancel={() => void door.cancel()}
       onOpenAgain={door.openAgain}
       onCopyLink={door.copyLink}
-      onCopyText={(text) => copyText(text, COPY_PLACES.setup)}
+      onCopyText={(text, from) => copyText(text, COPY_PLACES.setup, from)}
       onSignInAgain={() => void door.startOver()}
       onNewUser={onNewUser}
       onContinue={onContinue}
