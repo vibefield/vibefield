@@ -178,6 +178,15 @@ export function over(
   ) as [number, number, number];
 }
 
+/**
+ * The strip of the rim the RIM row reads, window CSS px: x 1–7, y 4–24 — the head band, left of the window's lights,
+ * inside the 1 % a still receded to 0.98 leaves bare at the window's left (~12 px at 1180). No view draws there: the
+ * band is the head's, and its left holds only the lights (none in the page at all under a smoke's default title bar).
+ * Until HN-8 the strip stood at mid-height (y 150–174) in the 8 a covered view kept clear for the notch's sliver; the
+ * gutters left with the edges, and History's rows now run to x 6 there (B9).
+ */
+export const RIM_STRIP = { x: 1, y: 4, width: 6, height: 20 } as const;
+
 /** The rim as read: the still's ring and the mean of the window's pixels in a strip of the rim. */
 export interface RimSeen {
   readonly ring: string;
@@ -660,8 +669,9 @@ export async function coverRows(d: CoverRowsDriver): Promise<string[]> {
       facts,
     };
   };
-  /** THE RIM (DK-16): the still receded — its ring, and a strip of the window's left rim (clear of the notch's sliver at
-   * mid-height) as the compositor laid it under the cover's tint; the pixels judged where the tint is plain (History). */
+  /** THE RIM (DK-16): the still receded — its ring, and a strip of the window's left rim (`RIM_STRIP`, in the head band
+   * left of the lights) as the compositor laid it under the cover's tint; the pixels judged where the tint is plain
+   * (History). */
   const rimRow = async (name: "godview" | "history", theme: "light" | "dark"): Promise<void> => {
     await until(
       "the still receded",
@@ -671,7 +681,7 @@ export async function coverRows(d: CoverRowsDriver): Promise<string[]> {
     const ring = await js<string>(
       `getComputedStyle(document.querySelector(".field-still")).boxShadow`,
     );
-    const strip = await win.capturePage({ x: 1, y: 150, width: 6, height: 24 });
+    const strip = await win.capturePage(RIM_STRIP);
     const bgra = strip.toBitmap();
     let sum: [number, number, number] = [0, 0, 0];
     let n = 0;
