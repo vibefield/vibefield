@@ -1079,8 +1079,13 @@ describe("UI system ownership boundaries", () => {
     expect(chrome.indexOf("<Pegboard")).toBeGreaterThan(chrome.indexOf("<SelectionBar"));
     // the selection bar hides while the board is out; the selection persists under it
     expect(chrome).toMatch(/hidden=\{covered \|\| boardOut \|\| docsOpen \|\| showSettings\}/u);
-    // the stage neither recedes nor dims for Objects: only the explorer and Settings recede it
-    expect(field).toContain("const sheetOpen = docsOpen || chrome.showSettings;");
+    // the stage neither recedes nor dims for Objects: only the pill's sheet on Canvas — the
+    // owner's one reading of the shelf it shows, the head's and the circle's (HN-8) — and
+    // Settings recede it
+    expect(field).toContain("const shelf = useShownShelf(surface, view);");
+    expect(field).toContain(
+      "const sheetOpen = (shelf !== null && !covered) || chrome.showSettings;",
+    );
     expect(field).not.toMatch(/surface === "objects"/u);
     // chrome does not dim by night: the anchor's night is never read, nor the night's dimming
     expect(source("field/desk/pegboard/Pegboard.tsx")).not.toMatch(/\.night\b/u);

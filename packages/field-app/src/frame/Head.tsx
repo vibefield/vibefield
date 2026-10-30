@@ -20,14 +20,24 @@ import { earlierFields, type SyncQuestionDoor } from "../account/sync-question";
 import { emitZoomKeyMarker, emitZoomMenuMarker } from "../development-console";
 import type { DocManagerApi } from "../doc-manager";
 import { useDocSyncStatuses } from "../doc-sync-store";
+import { useReducedMotion } from "../field/desk/bar/bar-motion";
 import { relativeTime } from "../format/relative-time";
 import { PluginSurfaceHost, useVisiblePluginSurfaces } from "../hud/PluginSurfaceSlot";
 import { getRendererLogger } from "../logging";
 import { usePluginRegistrySnapshot } from "../plugin-host/plugin-registry-store";
+import { useGodviewDeckMaximized } from "./deck-door";
 import { type FrameSurface, foldSurface, type SheetShelf, sheetShelf } from "./frame-surface";
-import { type HeadArtifacts, type HeadDocTile, type HeadDot, HeadView } from "./HeadView";
-import { hubWaits, useArtifactsDot } from "./head-artifacts";
+import {
+  type HeadArtifacts,
+  type HeadDocTile,
+  type HeadDot,
+  HeadView,
+  SHEET_FOLD_MS,
+  useLingering,
+} from "./HeadView";
+import { useArtifactsDot, useHubWaits } from "./head-artifacts";
 import type { HeadCanvas } from "./head-canvas";
+import { useFindStep } from "./Peek";
 import type { ViewKeys } from "./views";
 import {
   runZoom,
@@ -44,15 +54,14 @@ import {
 // sheet's two shelves and the Hub its Artifacts shelf hosts — and nothing it
 // shows, which is `HeadView`'s. Which of the frame's surfaces is open is NOT
 // its own: that has one owner (FieldView, `frame-surface.ts`), and this asks
-// it. What it reads comes through two doors — the document manager (the
-// field, the fields) and the head's canvas door (the path, the zoom) — so the
-// catalog runs this exact controller on fixtures; the package's dot
-// (`head-artifacts.ts`) and the Hub's binding (the plugin surfaces) are the
-// window's own stores, which a catalog without a daemon reads empty.
-
-/** The sheet's fold back into the pill or the circle (§8: 600ms on the island
- * curve): a shelf's contents stay through it, so it never folds away empty. */
-const SHEET_FOLD_MS = 600;
+// it — and which shelf of the sheet shows is that owner's one reading of it
+// (`useShownShelf`, below), handed in as it is to the package circle. What it
+// reads comes through two doors — the document manager (the field, the
+// fields) and the head's canvas door (the path, the zoom) — so the catalog
+// runs this exact controller on fixtures; the package's dot
+// (`head-artifacts.ts`), the Hub's binding (the plugin surfaces) and the
+// terminals' state (`deck-door.ts`) are the window's own stores, which a
+// catalog without a daemon reads empty.
 
 /** C6-4 — the pill's sync dot says STANDING states only (pending, a peer
  * offline, declined, epoch-stale): transient syncing lives in Settings and the
@@ -125,6 +134,10 @@ export interface HeadProps {
   keys: ViewKeys;
   /** The frame's open surface, from its one owner. */
   surface: FrameSurface | null;
+  /** The shelf the sheet shows, or null: the owner's one reading of `surface`
+   * for the view (`useShownShelf`), the same the package circle and the
+   * field's recede read. */
+  shelf: SheetShelf | null;
   onSurfaceChange: (next: FrameSurface | null) => void;
   /** Whether the head binds the zoom's keys on the window. The catalog's live
    * head does not: its page is not a window the head owns. */
@@ -148,29 +161,20 @@ interface Asking {
   added: ReadonlySet<string>;
 }
 
-/** The shelf the sheet shows (HN-8), or null while it is shut: the owner's, in
- * the view that opened it. A change of view folds the sheet — the line asks
- * the owner, in an effect — and until the owner hears, the sheet is drawn shut,
- * so it never starts to grow over the next view for the frame between. Under a
- * cover it shows Artifacts alone: Fields are the desk's and stay with the pill. */
-function useShownShelf(surface: FrameSurface | null, view: FrameView): SheetShelf | null {
+/** The shelf the pill's sheet shows (HN-8), or null while it is shut: the
+ * owner's value, in the view that opened it. A change of view folds the sheet
+ * — the line asks the owner, in an effect — and until the owner hears, the
+ * sheet is drawn shut, so it never starts to grow over the next view for the
+ * frame between. Under a cover it shows Artifacts alone: Fields are the
+ * desk's and stay with the pill. Read ONCE, by the owner (FieldView), and
+ * handed to the head, the package circle and the field's recede alike, so the
+ * three never part over that frame (DESIGN.md §8 "The head"). */
+export function useShownShelf(surface: FrameSurface | null, view: FrameView): SheetShelf | null {
   const shelf = sheetShelf(surface);
   const [opened, setOpened] = useState({ shelf, view });
   if (opened.shelf !== shelf) setOpened({ shelf, view });
   if (shelf === null || opened.view !== view) return null;
   return view !== "canvas" && shelf === "fields" ? null : shelf;
-}
-
-/** True while `on`, and for `ms` after it goes off: what a fold carries away. */
-function useLingering(on: boolean, ms: number): boolean {
-  const [lingering, setLingering] = useState(on);
-  if (on && !lingering) setLingering(true);
-  useEffect(() => {
-    if (on) return;
-    const timer = window.setTimeout(() => setLingering(false), ms);
-    return () => window.clearTimeout(timer);
-  }, [on, ms]);
-  return on || lingering;
 }
 
 export function Head({
@@ -179,6 +183,7 @@ export function Head({
   view,
   keys,
   surface,
+  shelf,
   onSurfaceChange,
   bindKeys = true,
   menuZoom,
@@ -191,17 +196,22 @@ export function Head({
   // C6-4 — per-field sync standing (absent: sync has nothing to say).
   const syncStatuses = useDocSyncStatuses() ?? [];
   const busy = state.phase === "loading";
-  // HN-8 — the pill's sheet is ONE surface on two shelves (PL-D1): which shows.
-  const shelf = useShownShelf(surface, view);
+  // HN-8 — the pill's sheet is ONE surface on two shelves (PL-D1): `shelf` says which shows.
   const fieldsOpen = shelf === "fields";
   const zoomOpen = surface === "zoom";
   // PL-D1 — the package's standing dot, read from the catalog by the head itself.
   const packageDot = useArtifactsDot();
   // The Hub the Artifacts shelf hosts — the side panel's one contribution — and,
-  // while none is bound, whether its plugin is off or starting.
+  // while none is bound, why: its plugin off or unable to run, the Hub opening,
+  // or still opening after 10 s and not starting.
   const hub = useVisiblePluginSurfaces("hud.side-panel")[0] ?? null;
-  const registry = usePluginRegistrySnapshot();
+  const waits = useHubWaits(usePluginRegistrySnapshot(), hub !== null);
   const artifactsHeld = useLingering(shelf === "artifacts", SHEET_FOLD_MS);
+  // PL-D2 with GV-D11 — while Godview's terminals are maximized the package stands in their
+  // title bar, and the covered sheet is shut into that control: read as the circle reads it,
+  // step for step, so the sheet always grows from where the control stands.
+  const deckMaximized = useGodviewDeckMaximized();
+  const circleIn = useFindStep(view === "godview", deckMaximized, useReducedMotion());
   const [renaming, setRenaming] = useState<string | null>(null);
   // Leaving a rename is said twice when Return commits (the input then
   // blurs as it goes); only the first is heard.
@@ -263,18 +273,22 @@ export function Head({
     if (fieldsOpen) void manager.refreshDocs().catch(() => {});
   }, [fieldsOpen, manager]);
 
-  // What held the keyboard as a shelf came to show — the button that opened the
-  // sheet or turned it, or under a cover the circle — for Esc to give it back.
+  // What held the keyboard as the pill's sheet came to show — the button that
+  // opened it or turned it — for Esc to give it back. Under a cover nothing is
+  // kept: the package circle is the covered sheet's one door, and it takes the
+  // keyboard back on every fold, Esc's included (`PackageCircle`) — a keyboard's
+  // open has by then taken the keyboard into the sheet, to its own package.
   const opener = useRef<HTMLElement | null>(null);
   useEffect(() => {
     const focused = document.activeElement;
-    opener.current = shelf !== null && focused instanceof HTMLElement ? focused : null;
-  }, [shelf]);
+    opener.current =
+      shelf !== null && view === "canvas" && focused instanceof HTMLElement ? focused : null;
+  }, [shelf, view]);
 
   // Esc shuts the sheet, on either shelf — on the capture phase, so the canvas
   // keymap's Esc (which would go up a folder) and a covered view's own never
-  // also fire; a rename keeps its own — and, if the keyboard was in the sheet,
-  // gives it back to the button that opened it (DESIGN.md §8 "Artifacts").
+  // also fire; a rename keeps its own — and, if the keyboard was in the pill's
+  // sheet, gives it back to the button that opened it (DESIGN.md §8 "Artifacts").
   useEffect(() => {
     if (shelf === null) return;
     const onEsc = (event: globalThis.KeyboardEvent): void => {
@@ -484,7 +498,7 @@ export function Head({
   const artifacts: HeadArtifacts | null = !artifactsHeld
     ? null
     : hub === null
-      ? { state: hubWaits(registry) }
+      ? { state: waits }
       : {
           state: "hub",
           hub: (
@@ -500,6 +514,7 @@ export function Head({
   return (
     <HeadView
       covered={view !== "canvas"}
+      bar={circleIn.bar}
       place={{
         name: held !== undefined ? IN_MEMORY_NAME : (state.doc?.name ?? "…"),
         path,

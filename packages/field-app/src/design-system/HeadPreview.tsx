@@ -4,7 +4,7 @@ import { ArtifactPanelPreview } from "@vibefield/plugin-browser/design-system";
 import { type ReactElement, useState } from "react";
 import type { DocManagerApi, DocManagerState } from "../doc-manager";
 import type { FrameSurface, SheetShelf } from "../frame/frame-surface";
-import { Head } from "../frame/Head";
+import { Head, useShownShelf } from "../frame/Head";
 import { type HeadArtifacts, type HeadDocTile, HeadView } from "../frame/HeadView";
 import { artifactsDotWords } from "../frame/head-artifacts";
 import type { HeadCanvas, HeadCrumb } from "../frame/head-canvas";
@@ -256,7 +256,8 @@ export function HeadPlate({
 /** The live head on its real controller over fixture doors — the playground's.
  * The frame's one owner of the open surface is the caller's (it shares it with
  * the playground's Objects); keys are unbound: the catalog is not a window the
- * head owns, and no plugin host runs in it, so its Artifacts shelf waits. */
+ * head owns, and no plugin host runs in it, so its Artifacts shelf waits — and
+ * past 10 s says the Hub isn't starting, as a window's would. */
 export function HeadLive({
   surface,
   onSurfaceChange,
@@ -266,6 +267,8 @@ export function HeadLive({
 }): ReactElement {
   const [manager] = useState(fixtureHeadManager);
   const [canvas] = useState(() => fixtureHeadCanvas({ path: IN_A_FOLDER }));
+  // the shelf the sheet shows, read as the window's owner reads it (FieldView)
+  const shelf = useShownShelf(surface, "canvas");
   return (
     <Head
       manager={manager}
@@ -273,6 +276,7 @@ export function HeadLive({
       view="canvas"
       keys="mac"
       surface={surface}
+      shelf={shelf}
       onSurfaceChange={onSurfaceChange}
       bindKeys={false}
       windowId="design-system"

@@ -1,6 +1,6 @@
 import { ArtifactView, type PluginRegistrySnapshot } from "@vibefield/contracts";
 import { useSubscription } from "@vibefield/fieldd-client/react";
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { getRendererLogger } from "../logging";
 
 // THE HEAD'S ARTIFACTS (HN-8; PL-D1, PL-D2 ruled by James 2026-10-29; DESIGN.md §8 "The head",
@@ -12,7 +12,8 @@ import { getRendererLogger } from "../logging";
 //   module store (the sync dot's pattern, `doc-sync-store.ts`): FED once inside FielddProvider
 //   (FieldView), READ by the pill's package and the covered views' circle, so neither subscribes
 //   twice, and a head with no daemon to ask (the catalog, the tests) reads no dot.
-// - WHY THE SHELF HAS NO HUB: the plugin that offers it is off, or it is starting.
+// - WHY THE SHELF HAS NO HUB, in one of four states: the plugin that offers it is off, it can't
+//   run, it is opening — or, still opening after 10 s, it isn't starting.
 
 /** The package's name at rest — the pill's button and the covered views' circle. */
 export const ARTIFACTS = "Artifacts";
@@ -86,16 +87,47 @@ export function useArtifactsDot(): string | null {
   return useSyncExternalStore(subscribeArtifactsDot, readArtifactsDot);
 }
 
-/** Why the Artifacts shelf holds no Hub (DESIGN.md §8 "Artifacts"): "off" while the plugin that
- * offers it — the one contributing `hud.side-panel` — is not on, or none offers it; otherwise
- * "opening": it is starting or restarting. With no registry yet (booting, the daemon away)
- * nothing says it is off, so the shelf waits as it would for a start. */
-export function hubWaits(registry: PluginRegistrySnapshot | null): "off" | "opening" {
+/** Why the Artifacts shelf holds no Hub (DESIGN.md §8 "Artifacts"): its plugin is off, it can't
+ * run, it is opening, or it isn't starting. */
+export type HubWait = "off" | "cant-run" | "opening" | "not-starting";
+
+/** How long the shelf says "Opening Artifacts…" before it says the Hub isn't starting (§8
+ * "Artifacts": still opening after 10 s). Nothing in the registry says a Hub failed, so the wait
+ * itself is bounded. */
+export const HUB_START_BOUND_MS = 10_000;
+
+/** Why the Artifacts shelf holds no Hub, by the registry's `state` of the plugin that offers it —
+ * the one contributing `hud.side-panel`, the Browser plugin. "opening" while it is `enabled` and
+ * its Hub not yet bound, and before any registry has answered (booting, the daemon away: nothing
+ * says it is off). "off" while it is `disabled`, the one state turning it on would help. Otherwise
+ * — `invalid` or `incompatible`, on or off, or no plugin offering it at all — "cant-run". Should
+ * two offer it, the likelier to bring a Hub speaks. */
+export function hubWaits(
+  registry: PluginRegistrySnapshot | null,
+): Exclude<HubWait, "not-starting"> {
   if (registry === null) return "opening";
-  const offered = registry.plugins.some(
-    (plugin) =>
-      plugin.state === "enabled" &&
-      plugin.contributions.surfaces.some((surface) => surface.slot === "hud.side-panel"),
+  const offering = registry.plugins.filter((plugin) =>
+    plugin.contributions.surfaces.some((surface) => surface.slot === "hud.side-panel"),
   );
-  return offered ? "opening" : "off";
+  if (offering.some((plugin) => plugin.state === "enabled")) return "opening";
+  if (offering.some((plugin) => plugin.state === "disabled")) return "off";
+  return "cant-run";
+}
+
+/** The shelf's wait with the start bounded: an opening that has lasted `HUB_START_BOUND_MS` with
+ * no Hub bound says the Hub isn't starting. The clock runs from the moment the wait became
+ * "opening", whether or not the shelf shows — a shelf opened onto a long wait says so at once —
+ * and starts again with every new opening: a Hub that binds, or a plugin turned off, ends it.
+ * `bound`: a Hub is bound, so nothing waits. */
+export function useHubWaits(registry: PluginRegistrySnapshot | null, bound: boolean): HubWait {
+  const waits = hubWaits(registry);
+  const opening = !bound && waits === "opening";
+  const [stalled, setStalled] = useState(false);
+  if (stalled && !opening) setStalled(false);
+  useEffect(() => {
+    if (!opening) return;
+    const timer = window.setTimeout(() => setStalled(true), HUB_START_BOUND_MS);
+    return () => window.clearTimeout(timer);
+  }, [opening]);
+  return opening && stalled ? "not-starting" : waits;
 }

@@ -2,12 +2,14 @@
 /**
  * The package circle (DESIGN.md §8 "The head" — the package circle; PL-D2 ruled by James
  * 2026-10-29, Cards in Hand; HN-8). The shipping controller, `PackageCircle`, on a harness that
- * stands where FieldView does — the frame's one owner of the open surface — and holds the window's
- * view as main would, the head's reading of the catalog fed as `artifact.subscribe` feeds it
- * (`head-artifacts.ts`), and a stand-in for the pill's sheet beside it (a section holding a
- * button, inert while it is folded, as the head's sheet is). The rows: the circle stands under a
- * cover only; it grows the sheet on Artifacts through the one value (`artifacts`) and folds it; it
- * wears the head's dot and words; the keyboard comes back to it when the sheet it grew folds; and
+ * stands where FieldView does — the frame's one owner of the open surface and its one reading of
+ * the shelf the sheet shows (`useShownShelf`) — and holds the window's view as main would, the
+ * head's reading of the catalog fed as `artifact.subscribe` feeds it (`head-artifacts.ts`), and a
+ * stand-in for the pill's sheet beside it (a section holding a button, inert while it is folded,
+ * as the head's sheet is). The rows: the circle stands under a cover only; it grows the sheet on
+ * Artifacts through the one value (`artifacts`) and folds it, stepping aside exactly while the
+ * sheet shows; it wears the head's dot and words; the keyboard comes back to it when the sheet it
+ * grew folds (the keyboard's way into the real sheet is head.test's, beside the head); and
  * while Godview's terminals are maximized it stands in their title bar, stepping out and back on
  * search's own two steps (GV-D11), never apart from search. Its stylesheet is held to the entry's
  * numbers, and the frame mounts it before the head, so the sheet grows over it.
@@ -21,6 +23,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { publishGodviewDeck, resetGodviewDeckDoorForTest } from "../src/frame/deck-door";
 import { type FrameSurface, foldSurface } from "../src/frame/frame-surface";
+import { useShownShelf } from "../src/frame/Head";
 import { resetArtifactCatalog, setArtifactCatalog } from "../src/frame/head-artifacts";
 import { PackageCircle } from "../src/frame/PackageCircle";
 import { Peek } from "../src/frame/Peek";
@@ -84,19 +87,21 @@ afterEach(() => {
   resetArtifactCatalog();
 });
 
-/** FieldView's place: the frame's one owner and the window's view — and the sheet's stand-in.
- * `search` stands the Peek's own controller beside the circle, closed. */
+/** FieldView's place: the frame's one owner, the window's view and its one reading of the shelf
+ * the sheet shows — and the sheet's stand-in. `search` stands the Peek's own controller beside
+ * the circle, closed. */
 function mount(opts: { view?: FrameView; search?: boolean } = {}): void {
   function Owner(): ReactElement {
     const [surface, setSurface] = useState<FrameSurface | null>(null);
     const [view, setView] = useState<FrameView>(opts.view ?? "canvas");
+    const shelf = useShownShelf(surface, view);
     surfaceNow = surface;
     setSurfaceNow = setSurface;
     setViewNow = setView;
     return (
       <>
-        <PackageCircle view={view} surface={surface} onSurfaceChange={setSurface} />
-        <section data-sheet="" inert={surface !== "artifacts"}>
+        <PackageCircle view={view} surface={surface} shelf={shelf} onSurfaceChange={setSurface} />
+        <section data-sheet="" inert={shelf !== "artifacts"}>
           <button type="button" data-in-sheet="">
             Publish…
           </button>
@@ -295,12 +300,45 @@ describe("the package circle (PL-D2; DESIGN.md §8, the head)", () => {
     }
   });
 
-  it("is the frame's: ChromeLayer mounts it on the window's view and the one owner, before the head, so the sheet grows over the circle it came from (M1)", () => {
+  it("steps aside only while its sheet shows — the owner's one reading of the shelf — never for the frame between a change of view and the line's fold (ruling 6)", () => {
+    mount();
+    // the pill's sheet, open on Artifacts on Canvas…
+    act(() => setSurfaceNow?.("artifacts"));
+    // …as a cover rises: the owner holds `artifacts` until the line folds it, but no sheet shows
+    act(() => setViewNow?.("godview"));
+    expect(surfaceNow).toBe("artifacts");
+    expect(circle()?.hasAttribute("data-open")).toBe(false);
+    expect(button()?.getAttribute("aria-expanded")).toBe("false");
+    // the same between two covers, the covered sheet folding as the view changes
+    act(() => setSurfaceNow?.(null));
+    act(() => button()?.click());
+    expect(circle()?.getAttribute("data-open")).toBe("true");
+    act(() => setViewNow?.("history"));
+    expect(surfaceNow).toBe("artifacts");
+    expect(circle()?.hasAttribute("data-open")).toBe(false);
+  });
+
+  it("is the frame's: ChromeLayer mounts it on the window's view, the one owner and its one reading of the shelf, before the head, so the sheet grows over the circle it came from (M1)", () => {
     const layer = readFileSync(join(SRC, "field", "ChromeLayer.tsx"), "utf8");
-    const mounted =
-      "<PackageCircle view={view} surface={surface} onSurfaceChange={onSurfaceChange} />";
-    expect(layer).toContain(mounted);
-    expect(layer.indexOf(mounted)).toBeLessThan(layer.search(/<Head\s/u));
+    /** An element's opening tag in the layer, its props one word each, however it is wrapped. */
+    const tag = (name: string): { at: number; words: string[] } => {
+      const at = layer.search(new RegExp(`<${name}\\s`, "u"));
+      return { at, words: layer.slice(at, layer.indexOf("/>", at)).trim().split(/\s+/u) };
+    };
+    const circleTag = tag("PackageCircle");
+    expect(circleTag.words).toEqual([
+      "<PackageCircle",
+      "view={view}",
+      "surface={surface}",
+      "shelf={shelf}",
+      "onSurfaceChange={onSurfaceChange}",
+    ]);
+    const headTag = tag("Head");
+    expect(circleTag.at).toBeGreaterThan(-1);
+    expect(circleTag.at).toBeLessThan(headTag.at);
+    // the head is handed the same reading, so the two never part (ruling 6)
+    expect(headTag.words).toContain("shelf={shelf}");
+    expect(headTag.words).toContain("surface={surface}");
   });
 });
 

@@ -20,7 +20,9 @@ export interface PackageCircleViewProps {
   /** The standing dot (PL-D1): the words its tooltip and its name say while
    * an artifact's source is unavailable — which, or how many; null, no dot. */
   readonly dot: string | null;
-  readonly onPress?: () => void;
+  /** A press, and whether the keyboard made it — a click the keyboard makes
+   * (Return, Space) has no count. */
+  readonly onPress?: (keyboard: boolean) => void;
   readonly buttonRef?: Ref<HTMLButtonElement>;
   /** Godview's terminals are maximized: the same button stands at their title
    * bar's left end, folded to it, as search stands at its right (GV-D11). */
@@ -33,8 +35,9 @@ export interface PackageCircleViewProps {
 /** The covered views' package circle: `package` 18 on the line's glass at x
  * 96, which grows the pill's sheet on its Artifacts shelf. While the sheet
  * shows, the sheet stands in its place, its head row the circle's own, so the
- * circle steps aside — unseen, still the keyboard's — and its button is on,
- * saying what pressing it again does, as the pill's package does. */
+ * circle steps aside — unseen, but where the keyboard comes back to — and its
+ * button is on, saying what pressing it again does, as the pill's package
+ * does. */
 export function PackageCircleView({
   open,
   dot,
@@ -58,7 +61,7 @@ export function PackageCircleView({
         aria-label={open ? "Close the artifacts" : name}
         aria-expanded={open}
         title={open ? "Close  Esc" : name}
-        onClick={onPress}
+        onClick={(event) => onPress?.(event.detail === 0)}
       >
         <FieldGlyph name="package" size={18} />
         {dot === null ? null : <span className="vf-package-dot" aria-hidden="true" />}

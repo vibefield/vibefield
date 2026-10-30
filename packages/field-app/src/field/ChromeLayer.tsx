@@ -19,7 +19,12 @@ import { isSwitchCovering, useSwitchState } from "../boot/switch";
 import type { DocManager, DocManagerState } from "../doc-manager";
 import type { LineActs } from "../frame/Composer";
 import { Cards } from "../frame/cards/Cards";
-import { type FrameSurface, foldSurface, sheetShelf } from "../frame/frame-surface";
+import {
+  type FrameSurface,
+  foldSurface,
+  type SheetShelf,
+  sheetShelf,
+} from "../frame/frame-surface";
 import { Head } from "../frame/Head";
 import { canvasHead } from "../frame/head-canvas";
 import { runChosenSession } from "../frame/line-door";
@@ -89,6 +94,7 @@ export function ChromeLayer({
   hudMotion,
   docState,
   surface,
+  shelf,
   onSurfaceChange,
   chrome,
 }: {
@@ -99,6 +105,10 @@ export function ChromeLayer({
   /** The frame's open surface (One Frame FR-2/FR-3/FR-4) and its one owner's
    * setter — FieldView's, where the explorer's recede is computed. */
   surface: FrameSurface | null;
+  /** The shelf the pill's sheet shows: FieldView's one reading of `surface`
+   * for the view (`useShownShelf`), handed on to the head and the package
+   * circle as the recede reads it (HN-8). */
+  shelf: SheetShelf | null;
   onSurfaceChange: (next: FrameSurface | null) => void;
   chrome: ChromeState;
 }): ReactElement {
@@ -312,7 +322,12 @@ export function ChromeLayer({
           frame's `artifacts`, and steps aside while the sheet stands in its
           place (M1). Before the head in the document, so the sheet, at the same
           62, is the one on top as the two hand over. */}
-      <PackageCircle view={view} surface={surface} onSurfaceChange={onSurfaceChange} />
+      <PackageCircle
+        view={view}
+        surface={surface}
+        shelf={shelf}
+        onSurfaceChange={onSurfaceChange}
+      />
 
       {/* THE HEAD (One Frame FR-3, DESIGN.md §8 "The head"): the field's name
           pill with the crumbs folded in, the chevron and the package (HN-8,
@@ -327,6 +342,7 @@ export function ChromeLayer({
         view={view}
         keys={keys}
         surface={surface}
+        shelf={shelf}
         onSurfaceChange={onSurfaceChange}
         menuZoom={subscribeMenuZoom}
         syncQuestion={syncQuestion}

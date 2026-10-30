@@ -16,6 +16,7 @@ import {
   useState,
 } from "react";
 import type { SheetShelf } from "./frame-surface";
+import type { HubWait } from "./head-artifacts";
 import type { HeadCrumb } from "./head-canvas";
 import { SyncQuestionView, type SyncQuestionViewProps } from "./SyncQuestionView";
 import type { ViewKeys } from "./views";
@@ -52,10 +53,27 @@ export interface HeadDocTile {
 
 /** What the sheet's Artifacts shelf holds (HN-8; DESIGN.md §8 "Artifacts — the Artifacts
  * shelf's contents"): the Hub's own surface, hosted, while one is bound; with none bound, why
- * not — its plugin off, or starting — in words, so the shelf is never blank. */
+ * not — its plugin off or unable to run, the Hub opening or not starting — in words, so the
+ * shelf is never blank. */
 export type HeadArtifacts =
   | { readonly state: "hub"; readonly hub: ReactNode }
-  | { readonly state: "off" | "opening" };
+  | { readonly state: HubWait };
+
+/** The sheet's fold back into the pill, the circle or the bar (§8: 600ms on the island curve):
+ * what it holds stays through it, so it never folds away empty. */
+export const SHEET_FOLD_MS = 600;
+
+/** True while `on`, and for `ms` after it goes off: what a fold carries away. */
+export function useLingering(on: boolean, ms: number): boolean {
+  const [lingering, setLingering] = useState(on);
+  if (on && !lingering) setLingering(true);
+  useEffect(() => {
+    if (on) return;
+    const timer = window.setTimeout(() => setLingering(false), ms);
+    return () => window.clearTimeout(timer);
+  }, [on, ms]);
+  return on || lingering;
+}
 
 export interface HeadPlaceViewProps {
   /** The field's name — the top of the path. */
@@ -149,15 +167,19 @@ function DocThumbnail({ src }: { src: string }): ReactElement {
   );
 }
 
-/** The package (PL-D1): 28 round like the chevron, `package` 15, on while its shelf shows. Its
- * dot says a STANDING state only, and its words are the button's own tooltip and name. */
+/** The package (PL-D1): 28 round like the chevron, on while its shelf shows — `package` 15 in the
+ * pill's row, and the circle's 18 in the covered sheet's, which stands in the circle's place (§8
+ * "The head"). Its dot says a STANDING state only, and its words are the button's own tooltip and
+ * name. */
 function PackageButton({
   on,
   dot,
+  glyph,
   onPress,
 }: {
   readonly on: boolean;
   readonly dot: string | null;
+  readonly glyph: 15 | 18;
   readonly onPress: () => void;
 }): ReactElement {
   const name = dot ?? "Artifacts";
@@ -170,31 +192,89 @@ function PackageButton({
       title={on ? "Close  Esc" : name}
       onClick={onPress}
     >
-      <FieldGlyph name="package" size={15} />
+      <FieldGlyph name="package" size={glyph} />
       {dot === null ? null : <span className="vf-head-pack-dot" aria-hidden="true" />}
     </button>
   );
 }
 
-/** With no Hub bound the shelf says why (DESIGN.md §8 "Artifacts"): its plugin is off, or it
- * is starting — said late, as History's opening words are, so a quick restart never flashes. */
-function HubWaits({ waits }: { readonly waits: "off" | "opening" }): ReactElement {
-  return waits === "off" ? (
-    <div className="vf-head-waits" role="status">
-      <EmptyState
-        title="Artifacts are off"
-        description="Turn on the Browser plugin in Settings › Plugins."
-      />
-    </div>
-  ) : (
-    <div className="vf-head-waits" data-late="" role="status">
-      <EmptyState title="Opening Artifacts…" />
+/** What the shelf says with no Hub bound, and under it, where there is one, what to do. */
+interface WaitWords {
+  readonly title: string;
+  readonly description?: string;
+}
+
+/** The words of each wait (DESIGN.md §8 "Artifacts"). */
+const HUB_WAIT_WORDS: Record<HubWait, WaitWords> = {
+  off: {
+    title: "Artifacts are off",
+    description: "Turn on the Browser plugin in Settings › Plugins.",
+  },
+  "cant-run": {
+    title: "Artifacts can't run",
+    description: "The Browser plugin can't run in this VibeField — see Settings › Plugins.",
+  },
+  opening: { title: "Opening Artifacts…" },
+  "not-starting": {
+    title: "Artifacts aren't starting",
+    description: "Turn the Browser plugin off and on in Settings › Plugins.",
+  },
+};
+
+/** How long the words a wait leaves stay while they fade out under the new ones (head.css: the
+ * turn's 180ms `ease`). */
+const HUB_WAIT_TURN_MS = 180;
+
+/** With no Hub bound the shelf says why (DESIGN.md §8 "Artifacts"): its plugin is off or can't
+ * run, the Hub is opening — said late, as History's opening words are, so a quick restart never
+ * flashes it — or, still opening after 10 s, it isn't starting. That last turn is made in place:
+ * the words it leaves fade out as the new ones fade in, and then go; every other change of words
+ * is at once, and the Hub, binding, takes the shelf the moment it does. */
+function HubWaits({ waits }: { readonly waits: HubWait }): ReactElement {
+  const [said, setSaid] = useState(waits);
+  const [leaving, setLeaving] = useState<HubWait | null>(null);
+  if (said !== waits) {
+    setSaid(waits);
+    setLeaving(said === "opening" && waits === "not-starting" ? said : null);
+  }
+  useEffect(() => {
+    if (leaving === null) return;
+    const timer = window.setTimeout(() => setLeaving(null), HUB_WAIT_TURN_MS);
+    return () => window.clearTimeout(timer);
+  }, [leaving]);
+  const face = (wait: HubWait, left: boolean): ReactElement => {
+    const words = HUB_WAIT_WORDS[wait];
+    return (
+      <div
+        key={wait}
+        className="vf-head-waits-face"
+        {...(left ? { "data-leaving": "", "aria-hidden": true } : {})}
+      >
+        <EmptyState
+          title={words.title}
+          {...(words.description === undefined ? {} : { description: words.description })}
+        />
+      </div>
+    );
+  };
+  return (
+    <div
+      className="vf-head-waits"
+      {...(waits === "opening" ? { "data-late": "" } : {})}
+      {...(leaving === null ? {} : { "data-turning": "" })}
+      role="status"
+    >
+      {leaving === null ? null : face(leaving, true)}
+      {face(waits, false)}
     </div>
   );
 }
 
-/** The Artifacts shelf: the Hub's, hosted at the sheet's width — a container, so the Hub's own
- * stylesheet answers it with its tiles (PL-D3) — or why it is not there. */
+/** The Artifacts shelf: the Hub's, hosted in a box pinned at the OPEN sheet's inner width — a
+ * container, so the Hub's own stylesheet answers it with its tiles (PL-D3), and one the sheet's
+ * morph clips rather than narrows, so the Hub never reflows while the sheet grows or folds — or
+ * why it is not there. Unlike Fields it has no fade at its foot: the Hub's buttons are never
+ * faded (§8 "The head"). */
 function ArtifactsShelf({
   shown,
   artifacts,
@@ -204,17 +284,19 @@ function ArtifactsShelf({
 }): ReactElement {
   return (
     <section
-      className="vf-head-shelf vf-no-scrollbar vf-mask-fade-bottom"
+      className="vf-head-shelf vf-no-scrollbar"
       data-shelf="artifacts"
       {...(shown ? { "data-shown": "" } : {})}
       aria-label="Artifacts"
       inert={!shown}
     >
-      {artifacts === null ? null : artifacts.state === "hub" ? (
-        artifacts.hub
-      ) : (
-        <HubWaits waits={artifacts.state} />
-      )}
+      <div className="vf-head-hub">
+        {artifacts === null ? null : artifacts.state === "hub" ? (
+          artifacts.hub
+        ) : (
+          <HubWaits waits={artifacts.state} />
+        )}
+      </div>
     </section>
   );
 }
@@ -248,8 +330,16 @@ export function HeadPlaceView({
   const open = shelf !== null;
   // Turned while open (§6): the shelves change in place and the sheet never regrows — said to
   // the CSS for that change, and forgotten as the sheet shuts, so the next opening rises in.
-  const [turn, setTurn] = useState({ shelf, turned: false });
-  if (turn.shelf !== shelf) setTurn({ shelf, turned: turn.shelf !== null && shelf !== null });
+  // Folded, once it shuts: reduced motion fades the sheet out at its size before it is the pill
+  // again (M6), which a pill that was never a sheet — the first paint — must not do.
+  const [turn, setTurn] = useState({ shelf, turned: false, folded: false });
+  if (turn.shelf !== shelf) {
+    setTurn({
+      shelf,
+      turned: turn.shelf !== null && shelf !== null,
+      folded: turn.shelf !== null && shelf === null,
+    });
+  }
   // Open, the row heads the sheet with the field's name alone (One Frame §7).
   const names = open ? [name] : [name, ...path.map((crumb) => crumb.label)];
   const depths = open ? [0] : [0, ...path.map((crumb) => crumb.depth)];
@@ -335,6 +425,7 @@ export function HeadPlaceView({
       data-head-sheet=""
       data-open={open ? "true" : "false"}
       {...(turn.turned ? { "data-turned": "" } : {})}
+      {...(turn.folded ? { "data-folded": "" } : {})}
       role="group"
       aria-label="Where you are"
       {...(side === undefined ? {} : { style: { "--vf-head-side": `${side}px` } as CSSProperties })}
@@ -397,6 +488,7 @@ export function HeadPlaceView({
         <PackageButton
           on={shelf === "artifacts"}
           dot={packageDot}
+          glyph={15}
           onPress={() => onShelf?.(shelf === "artifacts" ? null : "artifacts")}
         />
       </div>
@@ -492,30 +584,37 @@ export function HeadPlaceView({
 }
 
 /** The same sheet under a cover (HN-8, PL-D2; DESIGN.md §8 "The head"), grown from the package
- * circle at the head's left, on Artifacts alone — Fields are the desk's and stay with the pill.
- * Its head row is the circle's own: the package, now a 28 round button and on, its glyph where
- * the circle's stood, then the shelf's name. Shut, it is the circle's own box, and unseen: the
- * circle, the frame's, stands there. */
+ * circle at the head's left — or, while Godview's terminals are maximized, from the bar's own
+ * control — on Artifacts alone: Fields are the desk's and stay with the pill. Its head row is the
+ * circle's own: the package, now a 28 round button, holding the circle's 18 where the circle held
+ * it, its dot where the circle's is, then the shelf's name. The package is on ("Close  Esc") until
+ * the fold ends, so nothing in the row changes while the sheet folds back into the circle. Shut,
+ * it is the circle's own box (the bar control's, `bar`), and unseen: the circle, the frame's,
+ * stands there. */
 function HeadCircleSheetView({
   open,
+  bar,
   packageDot,
   artifacts,
   onShut,
 }: {
   readonly open: boolean;
+  readonly bar: boolean;
   readonly packageDot: string | null;
   readonly artifacts: HeadArtifacts | null;
   readonly onShut: () => void;
 }): ReactElement {
+  const on = useLingering(open, SHEET_FOLD_MS);
   return (
     <div
       className="vf-head-sheet no-drag"
       data-head-sheet=""
       data-open={open ? "true" : "false"}
+      {...(bar ? { "data-bar": "" } : {})}
       inert={!open}
     >
       <div className="vf-head-sheet-row">
-        <PackageButton on={open} dot={packageDot} onPress={onShut} />
+        <PackageButton on={on} dot={packageDot} glyph={18} onPress={onShut} />
         <span className="vf-head-sheet-name">Artifacts</span>
       </div>
       <ArtifactsShelf shown={open} artifacts={artifacts} />
@@ -614,13 +713,23 @@ export interface HeadViewProps {
    * still, so the cover's tint alone would leave the pill and the readout sharp.
    * The sheet does not (HN-8): under a cover it grows from the package circle. */
   covered?: boolean;
+  /** Godview's terminals are maximized and the package stands in their title
+   * bar (PL-D2 with GV-D11): the covered sheet is shut into the bar's own
+   * control, so it grows out of it and folds back into it (§8 "The head"). */
+  bar?: boolean;
 }
 
 /** The whole head: the sheet's dim, the name pill at the centre, the right
  * slot — the readout alone since FR-4 (the theme went into the Me menu, and
  * Artifacts, behind the right notch until HN-8, into the pill's package) —
- * and, under a cover, the sheet the package circle grows. */
-export function HeadView({ place, zoom, covered = false }: HeadViewProps): ReactElement {
+ * and, under a cover and through its fold after one, the sheet the package
+ * circle grows. */
+export function HeadView({
+  place,
+  zoom,
+  covered = false,
+  bar = false,
+}: HeadViewProps): ReactElement {
   const toolsRef = useRef<HTMLDivElement>(null);
   // The pill stays centred on the window, so it gives up the WIDER side's
   // slot on both sides: the lights' 96 on the left, the right slot as wide as
@@ -641,16 +750,24 @@ export function HeadView({ place, zoom, covered = false }: HeadViewProps): React
   const artifacts = place.artifacts ?? null;
   // Under a cover the sheet holds Artifacts alone, grown from the package circle; the pill's
   // own sheet stays shut, as the pill is the desk's and hides with it.
-  const sheet = covered && shelf !== "artifacts" ? null : shelf;
+  const pillOpen = !covered && shelf !== null;
+  const circleOpen = covered && shelf === "artifacts";
+  // The Hub stays in the sheet that showed it — through that sheet's fold, also when a change
+  // of view folds it — and never moves to the other, where it would mount afresh (§8 "The head").
+  const showsIn = shelf !== "artifacts" ? null : covered ? "circle" : "pill";
+  const [hubIn, setHubIn] = useState<"pill" | "circle">(showsIn ?? "pill");
+  if (showsIn !== null && showsIn !== hubIn) setHubIn(showsIn);
+  // The covered sheet folds over its 600ms also as the cover lowers, so it stays for its fold.
+  const circleSheet = useLingering(covered, SHEET_FOLD_MS);
   return (
     <>
-      {/* The sheet's dim (§5 backdrop dim): outside the canvas's head, so it stands over a
-          cover too — over the cover and under the frame (§10) — and a click on it shuts the
-          sheet. */}
+      {/* The sheet's dim (§5 backdrop dim): outside the canvas's head, so it can stand over a
+          cover — over the cover and under the frame (§10), and only while the covered sheet
+          shows: it follows the sheet it dims — and a click on it shuts the sheet. */}
       <div
         className="vf-head-dim"
-        data-open={sheet !== null ? "true" : "false"}
-        {...(covered ? { "data-covered": "" } : {})}
+        data-open={pillOpen || circleOpen ? "true" : "false"}
+        {...(circleOpen ? { "data-covered": "" } : {})}
         aria-hidden="true"
         onClick={() => place.onShelf?.(null)}
       />
@@ -660,7 +777,7 @@ export function HeadView({ place, zoom, covered = false }: HeadViewProps): React
         <HeadPlaceView
           {...place}
           shelf={covered ? null : shelf}
-          artifacts={covered ? null : artifacts}
+          artifacts={hubIn === "pill" ? artifacts : null}
           side={side}
         />
         <div
@@ -671,11 +788,12 @@ export function HeadView({ place, zoom, covered = false }: HeadViewProps): React
           <HeadZoomView {...zoom} />
         </div>
       </div>
-      {covered ? (
+      {circleSheet ? (
         <HeadCircleSheetView
-          open={sheet === "artifacts"}
+          open={circleOpen}
+          bar={bar}
           packageDot={place.packageDot ?? null}
-          artifacts={artifacts}
+          artifacts={hubIn === "circle" ? artifacts : null}
           onShut={() => place.onShelf?.(null)}
         />
       ) : null}
