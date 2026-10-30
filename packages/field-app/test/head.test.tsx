@@ -1787,6 +1787,7 @@ describe("under a cover — the same sheet, grown from the package circle (PL-D2
     // one rule for the sheet shut — by day, by night and into the bar
     const shared = '.vf-head-sheet[data-bar][data-open="false"]';
     const at = REDUCED_CSS.indexOf(`${shared} {`);
+    expect(at).toBeGreaterThan(-1);
     expect(REDUCED_CSS.slice(0, at)).toMatch(/\.vf-head-sheet,\s*\.dark \.vf-head-sheet,\s*$/u);
     const shut = ruleIn(REDUCED_CSS, shared);
     const open = ruleIn(HEAD_CSS, '.vf-head-sheet[data-open="true"]');
