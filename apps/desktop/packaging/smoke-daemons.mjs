@@ -39,8 +39,8 @@ export function processName(command) {
   return first.slice(first.lastIndexOf("/") + 1) || "?";
 }
 
-/** The run's processes from two `ps -axww -o pid=,ppid=,command=` tables — one with `-E` (the environment after each line's
- * arguments: the mark is looked for there, as a whole word) and one without (the command alone, to name each by). */
+/** The run's processes from two `ps … -o pid=,ppid=,command=` tables (`psTables`) — one with the environment after each line's
+ * arguments (the mark is looked for there, as a whole word) and one without (the command alone, to name each by). */
 export function runProcesses(withEnv, plain, mark) {
   const quoted = mark.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
   const carries = new RegExp(`(^|\\s)${SMOKE_RUN_ENV}=${quoted}(\\s|$)`, "u");
@@ -62,15 +62,24 @@ export function runProcesses(withEnv, plain, mark) {
   return found;
 }
 
+/**
+ * `ps`'s two tables in the platform's own spelling. macOS's (BSD) is `-axww` and `-E` for the environment. Linux's procps
+ * refuses `-x` ("must set personality") and has no `-E`; its BSD-style `axww` lists the same processes and `e` appends the
+ * same environment after the command — never on macOS, where `e` means every process, not the environment.
+ */
+export function psTables(platform = process.platform) {
+  const columns = ["-o", "pid=,ppid=,command="];
+  return platform === "linux"
+    ? { withEnv: ["axwwe", ...columns], plain: ["axww", ...columns] }
+    : { withEnv: ["-axww", "-E", ...columns], plain: ["-axww", ...columns] };
+}
+
 /** The run's processes now; none where `ps` cannot say (Windows). */
 export function listRunProcesses(mark) {
   if (process.platform === "win32") return [];
   const ps = (args) => execFileSync("ps", args, { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
-  return runProcesses(
-    ps(["-axww", "-E", "-o", "pid=,ppid=,command="]),
-    ps(["-axww", "-o", "pid=,ppid=,command="]),
-    mark,
-  );
+  const tables = psTables();
+  return runProcesses(ps(tables.withEnv), ps(tables.plain), mark);
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

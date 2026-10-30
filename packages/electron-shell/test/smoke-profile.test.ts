@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   isolateSmokeProfile,
@@ -110,6 +110,22 @@ describe("the smoke launcher (apps/desktop/packaging/run-smoke.mjs)", () => {
       return false;
     }
   };
+
+  it("DK-18 (39): asks `ps` in the platform's own spelling — macOS's BSD flags as ever, procps's on Linux", async () => {
+    // procps refuses `-axww` ("must set personality to get -x option") and has no `-E`; macOS reads a bare `e` as every
+    // process, never the environment — so neither spelling serves both (the affected job, ubuntu-latest, 2026-10-29)
+    const { psTables } = (await import(
+      pathToFileURL(join(desktopRoot, "packaging", "smoke-daemons.mjs")).href
+    )) as { psTables: (platform: string) => { withEnv: string[]; plain: string[] } };
+    expect(psTables("darwin")).toEqual({
+      withEnv: ["-axww", "-E", "-o", "pid=,ppid=,command="],
+      plain: ["-axww", "-o", "pid=,ppid=,command="],
+    });
+    expect(psTables("linux")).toEqual({
+      withEnv: ["axwwe", "-o", "pid=,ppid=,command="],
+      plain: ["axww", "-o", "pid=,ppid=,command="],
+    });
+  });
 
   it.skipIf(process.platform === "win32")(
     "DK-18 (39): marks the run, and a daemon the smoke LEFT is found by the mark, reaped, and makes the run red",
