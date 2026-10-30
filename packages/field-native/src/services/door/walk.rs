@@ -10,8 +10,13 @@
 //! PTY child is spawned (ghosttea 0.13.7 `session.rs:1462`), so a root and its row are milliseconds apart, and a
 //! reused pid is minutes to days later.
 //!
-//! *On this base the rows do not say whether a pane has exited.* The `exited` mark arrives with AR-6 (`a3f403ecc`,
-//! not on this base). Until it does, the birth rule is the only guard against a husk's pid, as it is agent-gateway's.
+//! A row the floor lists `exited` (AR-6, `a3f403ecc`) names no pane: its root has ended, and its pid may already
+//! belong to a process born inside the tolerance. The birth rule still guards a husk the floor has not marked yet,
+//! and every row from an older floor, which carries no mark.
+//! CORRECTED 2026-10-30 (CP-1a onto main `0b4cb2ff0`): this said "On this base the rows do not say whether a pane has
+//! exited. The `exited` mark arrives with AR-6 (`a3f403ecc`, not on this base). Until it does, the birth rule is the
+//! only guard against a husk's pid, as it is agent-gateway's." That was true on CP-0's base and false from the merge
+//! of main, which carries AR-6.
 
 use super::peer::ProcessTable;
 use crate::contracts::ObservedState;
@@ -33,11 +38,13 @@ pub struct Found {
     pub depth: u32,
 }
 
-/// The panes of the floor's observed inventory that name a root: a row with no pid or no birth names none.
+/// The panes of the floor's observed inventory that name a root: a row with no pid or no birth names none, and
+/// neither does a row listed `exited`. Absence says nothing (AR-6's contract), so an unmarked row is still a root.
 pub fn pane_roots(observed: &ObservedState) -> Vec<PaneRoot> {
     observed
         .terminals
         .iter()
+        .filter(|terminal| terminal.exited != Some(true))
         .filter_map(|terminal| {
             Some(PaneRoot {
                 terminal_session_id: terminal.session_id.clone(),
@@ -210,5 +217,30 @@ mod tests {
         }))
         .unwrap();
         assert_eq!(pane_roots(&observed), vec![pane("rooted", 500, BIRTH)]);
+    }
+
+    #[test]
+    fn a_row_listed_exited_names_no_pane_even_when_its_pid_is_reused_within_the_birth_rule() {
+        // AR-6 (a3f403ecc): a kept pane whose process ended stays listed, marked `exited`. The system can hand its
+        // root's pid to a new process inside the birth rule's tolerance, and the rule alone would then give that
+        // process, and every agent under it, the dead pane.
+        let observed: ObservedState = serde_json::from_value(serde_json::json!({
+            "generation": 1,
+            "bootId": "b",
+            "terminals": [
+                { "sessionId": "rooted", "pid": 500, "createdAt": BIRTH },
+                { "sessionId": "husk", "pid": 600, "createdAt": BIRTH, "exited": true }
+            ],
+            "workers": []
+        }))
+        .unwrap();
+        let panes = pane_roots(&observed);
+        assert_eq!(panes, vec![pane("rooted", 500, BIRTH)]);
+        let reused = Tree::new(&[
+            (1, 0, 0),
+            (600, 1, BIRTH + 5_000),
+            (610, 600, BIRTH + 6_000),
+        ]);
+        assert_eq!(walk(&reused, 610, &panes), None);
     }
 }
