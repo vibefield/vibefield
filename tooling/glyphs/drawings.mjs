@@ -132,7 +132,7 @@ export const DRAWINGS = {
   plus: {
     label: "Plus",
     group: "actions",
-    role: "Objects — the line's create on Canvas, the one bare plus on screen; New profile and Add artifact inside their sheets",
+    role: "Objects — the line's create on Canvas, the one bare plus on screen; New profile inside its sheet",
     instrument: { s: P("M12 5v14M5 12h14") },
     hardware: { d: "M10.5 4h3v6.5H20v3h-6.5V20h-3v-6.5H4v-3h6.5Z" },
   },
@@ -582,7 +582,7 @@ export const DRAWINGS = {
   globe: {
     label: "Proxy",
     group: "objects",
-    role: "The Add-artifact choice: a local port, served on the tailnet",
+    role: "The Publish step's Proxy: a local port, served on the tailnet",
     instrument: {
       s: `${C(12, 12, 8.5)}${P("M3.5 12h17M12 3.5a13 13 0 0 1 0 17M12 3.5a13 13 0 0 0 0 17")}`,
     },

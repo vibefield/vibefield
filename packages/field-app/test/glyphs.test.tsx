@@ -208,7 +208,7 @@ describe("the glyph set", () => {
       start: GLYPH_META.start.role,
       resume: GLYPH_META.resume.role,
     }).toEqual({
-      plus: "Objects — the line's create on Canvas, the one bare plus on screen; New profile and Add artifact inside their sheets",
+      plus: "Objects — the line's create on Canvas, the one bare plus on screen; New profile inside its sheet",
       close: "Close settings, stop loading; the line's plus turned 135°",
       return: "Enter on the phone's composer and keypad; a snippet that sends Enter",
       start:
