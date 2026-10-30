@@ -102,6 +102,34 @@ describe("the floor's carrier — ObservedState.inventoryBoundMs and staleCells 
   });
 });
 
+describe("a husk on the list — ObservedTerminal.exited (item 97)", () => {
+  it("says a listed pane's process has ended, on that row alone, and stays absent on a live one", () => {
+    const husk = ObservedState.parse(fixture("observed-state.exited-husk.json"));
+    const [live, ended] = husk.terminals;
+    expect(live?.exited).toBeUndefined();
+    expect(ended?.exited).toBe(true);
+    // the husk stays listed: its pane is kept (`keep-until-explicit-close`), so leaving the list
+    // is not how its end is told
+    expect(ended?.persistence).toBe("keep-until-explicit-close");
+  });
+
+  it("keeps every older floor's row parsing, its silence never a word that the process lives", () => {
+    for (const name of ["observed-state.valid.json", "observed-state.fresh.json"])
+      for (const row of ObservedState.parse(fixture(name)).terminals)
+        expect(row.exited, name).toBeUndefined();
+  });
+
+  it("refuses an exit fact that is not a boolean", () => {
+    const base = ObservedState.parse(fixture("observed-state.exited-husk.json"));
+    const [, ended] = base.terminals;
+    for (const exited of ["true", 1, null])
+      expect(
+        ObservedState.safeParse({ ...base, terminals: [{ ...ended, exited }] }).success,
+        String(exited),
+      ).toBe(false);
+  });
+});
+
 describe("fieldd's composed view — TerminalObservation.boundMs and staleCells (IL-D4, IL-D5 (a))", () => {
   it("answers every row with its age: one stale cell never hides another cell's rows", () => {
     const list = TerminalListResult.parse(fixture("terminal-list.stale-cell.json"));

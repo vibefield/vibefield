@@ -29,7 +29,9 @@ import {
 // are deliberately separate — there is no shared "find it somehow" helper for a
 // packaged build to fall into.
 
-export type TrayImageKind = "base" | "attention" | "offline";
+/** AU-4 (AU-G14) — `update`: an install waits on the person (the mark with one plain dot); `attention` is a degraded
+ * service or a failed check alone. */
+export type TrayImageKind = "base" | "attention" | "update" | "offline";
 
 export interface TrayImageSet {
   readonly macTemplate1x: string;
@@ -88,7 +90,7 @@ export interface DesktopResources {
   readonly tray: Readonly<Record<TrayImageKind, TrayImageSet>>;
 }
 
-const TRAY_KINDS: readonly TrayImageKind[] = ["base", "attention", "offline"];
+const TRAY_KINDS: readonly TrayImageKind[] = ["base", "attention", "update", "offline"];
 
 /** Tray asset basenames are a release constant (icons:check pins them); the
  * `Template` suffix is load-bearing on macOS and must survive bundler hashing. */
@@ -104,6 +106,12 @@ const TRAY_BASENAMES: Readonly<Record<TrayImageKind, TrayImageSet>> = {
     macTemplate2x: "fieldAttentionTemplate@2x.png",
     windowsIco: "field-attention.ico",
     linuxPng: "field-linux-attention.png",
+  },
+  update: {
+    macTemplate1x: "fieldUpdateTemplate.png",
+    macTemplate2x: "fieldUpdateTemplate@2x.png",
+    windowsIco: "field-update.ico",
+    linuxPng: "field-linux-update.png",
   },
   offline: {
     macTemplate1x: "fieldOfflineTemplate.png",

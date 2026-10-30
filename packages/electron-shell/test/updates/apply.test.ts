@@ -6,6 +6,7 @@ import {
   censusOf,
   consentBox,
   consentWords,
+  downloadNotice,
   policyNotice,
   quitNotice,
   stagedTrayLabel,
@@ -63,6 +64,16 @@ describe("the consent box (EDP-35, DESIGN.md §9)", () => {
     // Cancel is the default AND the cancel: nothing ends by accident
     expect(box.defaultId).toBe(0);
     expect(box.cancelId).toBe(0);
+  });
+
+  it("AU-1 (LC-2) — names the version as the window does: a nightly by its day, a beta by its number", () => {
+    const nightly = consentBox("0.1.0-nightly.20261028", sessions(1));
+    expect(nightly.detail.split("\n")[0]).toBe(
+      "The Oct 28 nightly replaces the terminal service, which ends:",
+    );
+    expect(consentWords("0.2.0-beta.3", sessions(1)).lead).toBe(
+      "VibeField 0.2.0 beta 3 replaces the terminal service, which ends:",
+    );
   });
 
   it("is singular for one session and counts the sessions past the listed few", () => {
@@ -148,7 +159,41 @@ describe("the policy notices (L3b-i, B1/B2; DESIGN.md §9: what happened, what h
       "VibeField checks the update policy before installing and couldn't reach it; try again when online.",
     );
     expect(boxes[2]?.detail).toContain("the beta channel");
+    expect(boxes[3]?.detail).toMatch(/^VibeField 1\.2\.0 was withdrawn/);
     expect(boxes[4]?.detail).toContain("needs macOS 15.0 or later");
+  });
+
+  it("AU-1 (LC-2) — a nightly's withdrawal and floor are said by the nightly's name", () => {
+    const NIGHTLY = "0.1.0-nightly.20261028";
+    expect(policyNotice({ kind: "yanked", version: NIGHTLY }).detail).toBe(
+      "The Oct 28 nightly was withdrawn after it downloaded, so it won't install. Nothing changed; the next update replaces it.",
+    );
+    expect(policyNotice({ kind: "floor-unmet", version: NIGHTLY, floor: "26.0" }).detail).toBe(
+      "The Oct 28 nightly needs macOS 26.0 or later. Nothing changed; your current version keeps running.",
+    );
+  });
+
+  it("AU-1 (AU-G5, AU-G6) — a lever that refuses a person's Download says the download, never the install", () => {
+    const NIGHTLY = "0.1.0-nightly.20261028";
+    const boxes = [
+      downloadNotice({ kind: "killed", channel: "beta" }),
+      downloadNotice({ kind: "yanked", version: NIGHTLY }),
+      downloadNotice({ kind: "floor-unmet", version: NIGHTLY, floor: "26.0" }),
+    ];
+    for (const box of boxes) {
+      expect(box.message).toBe("VibeField didn't download the update");
+      expect(box.buttons).toEqual(["OK"]);
+      // nothing downloaded: no word of an install, or of a download that happened
+      expect(box.detail).not.toMatch(/install|after it downloaded/);
+    }
+    // a paused channel and an OS floor read as the apply's notice reads them
+    expect(boxes[0]?.detail).toBe(policyNotice({ kind: "killed", channel: "beta" }).detail);
+    expect(boxes[1]?.detail).toBe(
+      "The Oct 28 nightly was withdrawn, so it won't download. Nothing changed; the next update replaces it.",
+    );
+    expect(boxes[2]?.detail).toBe(
+      policyNotice({ kind: "floor-unmet", version: NIGHTLY, floor: "26.0" }).detail,
+    );
   });
 });
 

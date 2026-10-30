@@ -446,6 +446,9 @@
         "cwd": {
           "type": "string"
         },
+        "exited": {
+          "type": "boolean"
+        },
         "cell": {
           "$ref": "#/definitions/ObservedTerminalCell"
         }

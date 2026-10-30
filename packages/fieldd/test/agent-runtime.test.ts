@@ -1578,6 +1578,26 @@ describe("distribution (AR-2) — native evidence in, the one machine-scope reco
     expect((await denied.callErr("agents.installs", {})).data?.kind).toBe("FORBIDDEN_SCOPE");
   }, 20_000);
 
+  it("the harness's search path isolates the home too: an install in its installer's own directory under the path's first directory is found and never active, and the machine owner's home is never read (puppeteer 0.3.1)", async () => {
+    const { bin, daemon } = await setup();
+    await ready(daemon);
+    // where Claude's installer leaves it (`~/.local/bin`), under the home the daemon chose
+    const installed = join(bin, ".local", "bin", "claude");
+    mkdirSync(dirname(installed), { recursive: true });
+    copyFileSync(FAKE_CLAUDE, installed);
+    const win = await window(daemon, ["agents.manage"], "d1c");
+    const { installs } = (await win.call("agents.installs", {
+      provider: "claude",
+      refresh: true,
+    })) as AgentsInstallsResult;
+    expect(installs.find((i) => i.executable === installed)).toMatchObject({ active: false });
+    expect(installs.find((i) => i.executable === join(bin, "claude"))).toMatchObject({
+      active: true,
+    });
+    // the stub and its installed twin, and no claude of the developer's ~/.local/bin
+    expect(installs.filter((i) => i.provider === "claude")).toHaveLength(2);
+  }, 20_000);
+
   it("agents.setActive records the choice in machine/agents/distribution.json (0600, under the root lock); installs reflects it; an unknown executable is NOT_FOUND; the same choice again changes nothing", async () => {
     const { root, bin, dataDir, daemon } = await setup();
     await ready(daemon);

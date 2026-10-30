@@ -230,59 +230,59 @@ const PIN_EXPECTATIONS = [
   // to the line's end like ice's row, so a prerelease never passes for the release.
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/rosetta-protocol":\s*0\.1\.1\s*$/m,
-    label: '"@vibefield/rosetta-protocol": 0.1.1',
+    re: /"@vibefield\/rosetta-protocol":\s*0\.1\.2\s*$/m,
+    label: '"@vibefield/rosetta-protocol": 0.1.2',
     package: "@vibefield/rosetta-protocol",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/rosetta-room":\s*0\.1\.1\s*$/m,
-    label: '"@vibefield/rosetta-room": 0.1.1',
+    re: /"@vibefield\/rosetta-room":\s*0\.1\.2\s*$/m,
+    label: '"@vibefield/rosetta-room": 0.1.2',
     package: "@vibefield/rosetta-room",
   },
   // RD-5's exit for puppeteer's npm plane (2026-10-26, 0.2.3): the seven rows are exact `@vibefield/puppeteer-*`,
-  // 0.3.0 since 2026-10-28 (the EL8 to QA fix wave 1's puppeteer half), published from the tag v0.3.0 (d0aa1224), the
+  // 0.3.2 since 2026-10-29 (CP-1d's per-run briefing prerequisite), published from the tag v0.3.2 (95a70aa7), the
   // revision the lock pins. Anchored to the line's end like rosetta's.
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/puppeteer-runtime":\s*0\.3\.0\s*$/m,
-    label: '"@vibefield/puppeteer-runtime": 0.3.0',
+    re: /"@vibefield\/puppeteer-runtime":\s*0\.3\.2\s*$/m,
+    label: '"@vibefield/puppeteer-runtime": 0.3.2',
     package: "@vibefield/puppeteer-runtime",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/puppeteer-builtin-providers":\s*0\.3\.0\s*$/m,
-    label: '"@vibefield/puppeteer-builtin-providers": 0.3.0',
+    re: /"@vibefield\/puppeteer-builtin-providers":\s*0\.3\.2\s*$/m,
+    label: '"@vibefield/puppeteer-builtin-providers": 0.3.2',
     package: "@vibefield/puppeteer-builtin-providers",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/puppeteer-core":\s*0\.3\.0\s*$/m,
-    label: '"@vibefield/puppeteer-core": 0.3.0',
+    re: /"@vibefield\/puppeteer-core":\s*0\.3\.2\s*$/m,
+    label: '"@vibefield/puppeteer-core": 0.3.2',
     package: "@vibefield/puppeteer-core",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/puppeteer-record":\s*0\.3\.0\s*$/m,
-    label: '"@vibefield/puppeteer-record": 0.3.0',
+    re: /"@vibefield\/puppeteer-record":\s*0\.3\.2\s*$/m,
+    label: '"@vibefield/puppeteer-record": 0.3.2',
     package: "@vibefield/puppeteer-record",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/puppeteer-monitor":\s*0\.3\.0\s*$/m,
-    label: '"@vibefield/puppeteer-monitor": 0.3.0',
+    re: /"@vibefield\/puppeteer-monitor":\s*0\.3\.2\s*$/m,
+    label: '"@vibefield/puppeteer-monitor": 0.3.2',
     package: "@vibefield/puppeteer-monitor",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/puppeteer-view-sdk":\s*0\.3\.0\s*$/m,
-    label: '"@vibefield/puppeteer-view-sdk": 0.3.0',
+    re: /"@vibefield\/puppeteer-view-sdk":\s*0\.3\.2\s*$/m,
+    label: '"@vibefield/puppeteer-view-sdk": 0.3.2',
     package: "@vibefield/puppeteer-view-sdk",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/puppeteer-views":\s*0\.3\.0\s*$/m,
-    label: '"@vibefield/puppeteer-views": 0.3.0',
+    re: /"@vibefield\/puppeteer-views":\s*0\.3\.2\s*$/m,
+    label: '"@vibefield/puppeteer-views": 0.3.2',
     package: "@vibefield/puppeteer-views",
   },
 ];
