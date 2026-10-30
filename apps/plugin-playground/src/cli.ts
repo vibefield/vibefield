@@ -135,7 +135,7 @@ export async function main(argv: readonly string[], loader: Loader): Promise<num
     try {
       text = await stillTextRaster();
     } catch (error) {
-      gpu.destroy();
+      await gpu.destroy();
       process.stderr.write(
         `plugin-playground: --still lends the kinds the desk's hand, and this host's Node canvas could not draw it: ${messageOf(error)}\n`,
       );
@@ -154,6 +154,6 @@ export async function main(argv: readonly string[], loader: Loader): Promise<num
     process.stdout.write(render(result, args.json));
     return result.summary.exit;
   } finally {
-    gpu?.destroy();
+    await gpu?.destroy();
   }
 }

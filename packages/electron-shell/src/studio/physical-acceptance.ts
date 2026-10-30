@@ -63,6 +63,12 @@ export async function runStudioPhysicalAcceptance(opts: {
         true,
       ),
     );
+    // IPC must progress even when Studio stops painting. A frame-only publisher
+    // looked live and connected but stranded its snapshot indefinitely while hidden.
+    opts.studioWindow.hide();
+    await waitFor("Studio to become hidden", PREVIEW_TIMEOUT_MS, async () =>
+      opts.studioWindow.webContents.executeJavaScript('document.visibilityState === "hidden"'),
+    );
     await enableStudioLive(opts.studioWindow);
     await waitFor(
       "Studio to enter Live mode",
@@ -91,6 +97,7 @@ export async function runStudioPhysicalAcceptance(opts: {
       );
     }
 
+    opts.studioWindow.showInactive();
     opts.productWindow.webContents.reload();
     await waitForProduct(opts.productWindow);
     await waitFor(
@@ -123,6 +130,7 @@ export async function runStudioPhysicalAcceptance(opts: {
         ok: true,
         distinctSessions: true,
         distinctPreloads: true,
+        publishedWhileHidden: true,
         appliedRevision: Number(applied.appearanceRevision),
         replayed: true,
         restored: true,

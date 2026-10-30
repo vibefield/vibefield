@@ -30,6 +30,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
+import { setImmediate as nextTurn } from "node:timers/promises";
 import { crc32, deflateSync } from "node:zlib";
 import type { WidgetType } from "@vibecook/ice";
 import {
@@ -77,7 +78,8 @@ export interface StillGpu {
   readonly device: GPUDevice;
   /** the adapter, the platform and this CLI's Dawn — what a golden's bytes belong to */
   readonly host: string;
-  destroy(): void;
+  /** Destroy the device and drain Dawn's queued callbacks before releasing its instance. */
+  destroy(): Promise<void>;
 }
 
 /** This CLI's Dawn: the `webgpu` package's version, read off its manifest. */
@@ -100,12 +102,31 @@ export async function stillGpu(): Promise<StillGpu> {
   // GPUBufferUsage, GPUTextureUsage, GPUShaderStage, … — what a browser has for free and a kind's pass names
   Object.assign(globalThis, globals);
   const { acquire } = await import("@vibecook/ice/desk/engine");
-  const gpu = await acquire({ gpu: create([]), label: "plugin-playground still" });
+  // A device does not own node-webgpu's instance. Keep it through device loss AND the
+  // queued ProcessEvents turn; releasing it at loss alone can leave a native dangling pointer.
+  const lifetime: { instance: GPU | null } = { instance: create([]) };
+  let gpu: Awaited<ReturnType<typeof acquire>>;
+  try {
+    gpu = await acquire({ gpu: lifetime.instance as GPU, label: "plugin-playground still" });
+  } catch (error) {
+    await nextTurn();
+    lifetime.instance = null;
+    throw error;
+  }
+  let destroying: Promise<void> | undefined;
   const { description, vendor, architecture } = gpu.info;
   return {
     device: gpu.device,
     host: `${description || vendor} (${vendor} ${architecture}) · ${process.platform}-${process.arch} · webgpu ${dawnVersion()}`,
-    destroy: () => gpu.device.destroy(),
+    destroy: () => {
+      destroying ??= (async () => {
+        gpu.device.destroy();
+        await gpu.device.lost;
+        await nextTurn();
+        lifetime.instance = null;
+      })();
+      return destroying;
+    },
   };
 }
 
