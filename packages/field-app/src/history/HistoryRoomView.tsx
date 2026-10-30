@@ -18,7 +18,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { COVER_EDGE_CLEAR_PX, COVER_RESERVE_PX, HEAD_BAND_PX } from "../frame/frame-geometry";
+import { COVER_RESERVE_PX, HEAD_BAND_PX } from "../frame/frame-geometry";
 import { type ViewKeys, viewKeysOf } from "../frame/views";
 // The room's own sheet enters HERE, with the room — one row, the package's own
 // bundle, never a copy — so it rides the room's chunk, not the first paint, and
@@ -38,8 +38,9 @@ import "./history-room-glass.css";
 // room's place in the frame: the glass (the room paints no ground of its own
 // on a host surface, and its paper fades are the cover's tint, never frost —
 // `history-room-glass.css`, DK-15), the
-// edges (its columns end at the reserve, its top band is the head's, 8 px stay
-// clear at each side for the notches' slivers), where its dialogs land (a
+// edges (its columns end at the reserve and run to the window's sides, and its
+// top band is the head's — the 8 px it kept clear at each side for the notches'
+// slivers left with the edges at HN-8), where its dialogs land (a
 // layer that ends at the reserve, so a dialog never sits under the line, and
 // starts at the head band's foot, so a dialog never covers the band or the
 // frame's search button in it), the prefix it keeps its preferences under, the
@@ -173,7 +174,7 @@ export function HistoryRoomView({
           assets={ports.assets}
           host={ports.host ?? null}
           surface="host"
-          edgeInset={{ top: HEAD_BAND_PX, right: COVER_EDGE_CLEAR_PX, left: COVER_EDGE_CLEAR_PX }}
+          edgeInset={{ top: HEAD_BAND_PX }}
           portalContainer={layers}
           storagePrefix={HISTORY_STORAGE_PREFIX}
           storage={store}

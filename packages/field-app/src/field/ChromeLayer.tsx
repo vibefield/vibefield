@@ -38,7 +38,6 @@ import { HistoryView } from "../history/HistoryView";
 import { prefetchHistoryRoomWhenIdle } from "../history/room-chunk";
 import { getHost } from "../host";
 import { CommandPalette } from "../hud/CommandPalette";
-import { ArtifactsTray } from "../hud/edge-tray/EdgeTray";
 import { LoadingVeil } from "../hud/LoadingVeil";
 import { PluginSurfaceHost } from "../hud/PluginSurfaceSlot";
 import { SettingsPanel } from "../panels";
@@ -56,7 +55,7 @@ import {
 } from "./shell-presentation";
 
 // ChromeLayer (§5.4.3): the head, the pegboard's chrome (Objects, behind the
-// line — the board itself is the desk's), the edges, the corner, settings, and
+// line — the board itself is the desk's), the hand, the corner, settings, and
 // overlays — WITHOUT owning document or engine lifetime. All the chrome-scoped
 // effects live here too: the two keyboard additions, the hud-flight dock
 // choreography, the devtools attach, and the switch's freeze. Sheet
@@ -121,9 +120,6 @@ export function ChromeLayer({
   const [shellPresentation, setShellPresentation] = useState(INITIAL_SHELL_PRESENTATION);
   const opening = settingsOpening(shellPresentation.target);
   const [desktopState, setDesktopState] = useState<DesktopShellState | null>(null);
-  // Artifacts' drawer is open (One Frame FR-4): the attention stack steps
-  // clear of it, as it stepped clear of the side panel.
-  const artifactsOpen = surface === "artifacts";
   // Whether a view covers the field (One Frame FR-1): every view but the
   // canvas. The window's view is main's (one owner); this is its mirror.
   const view = useActiveView();
@@ -367,26 +363,12 @@ export function ChromeLayer({
         settingsOpen={showSettings}
       />
 
-      {/* THE RIGHT EDGE (One Frame FR-4, DESIGN.md §8 edge trays, §10):
-          Artifacts' notch — its drawer the Artifact Hub, the side panel's
-          contents — at mid-edge with its drawer behind it. The frame's: it
-          stands above the cover in every view, resting there as a sliver,
-          and its drawer is one of the frame's open surfaces. */}
-      <ArtifactsTray
-        surface={surface}
-        onSurfaceChange={onSurfaceChange}
-        sliver={covered}
-        windowId={FIELD_WINDOW_ID}
-      />
-
       {/* hud.attention (§8.4): the top-right attention stack, under the head.
           pointer-events-none wrapper so an empty slot never blocks the
-          canvas; the host restores pointer-events on its own content. It
-          steps clear of Artifacts' drawer while that is open. */}
+          canvas; the host restores pointer-events on its own content. */}
       <div
         data-hud-flight="top-right"
-        className="hud-flight pointer-events-none absolute top-16 z-40 flex w-72 max-w-[80vw] flex-col transition-[right] duration-300"
-        style={{ right: artifactsOpen ? "calc(152px + 1rem)" : "1rem" }}
+        className="hud-flight pointer-events-none absolute top-16 right-4 z-40 flex w-72 max-w-[80vw] flex-col"
       >
         <PluginSurfaceHost slot="hud.attention" windowId={FIELD_WINDOW_ID} />
       </div>

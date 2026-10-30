@@ -31,7 +31,6 @@ import {
 import { ComposerLinePlate, LINE_STATES } from "../ComposerLinePreview";
 import { AppearancePlate, CORNER_PICKS, CornerPlate } from "../CornerPreview";
 import { DeskPreview } from "../DeskPreview";
-import { EDGE_STATES, EdgesPlate } from "../EdgesPreview";
 import { HEAD_STATES, HeadLive, HeadPlate } from "../HeadPreview";
 import { PACKAGE_CIRCLE_STATES, PackageCirclePlate } from "../PackageCirclePreview";
 import { PEERS_STATES, PeersPlate } from "../PeersPreview";
@@ -282,24 +281,6 @@ export function ChromeSection({
           it, the face first, then the name — never the person's colour. Placed every frame through
           the camera; hidden after 8 s idle, when the pointer leaves its window or its canvas, under
           a cover and while the board is out. The plates lay the lit mat where the desk draws it.
-        </p>
-      </Specimen>
-
-      <Specimen
-        title="The edge — Artifacts' notch in every view, a sliver over a covered view"
-        source="hud/edge-tray/* · DESIGN.md §8, §10, §6"
-        bleed
-      >
-        <div className="vf-ds-edges-plates">
-          {EDGE_STATES.map((state) => (
-            <EdgesPlate key={`${state}-${dark ? "dark" : "light"}`} state={state} dark={dark} />
-          ))}
-        </div>
-        <p className="vf-ds-stage-caption">
-          The page's edges plates: Artifacts' notch on the right, whole on Canvas; over a covered
-          view it rests as its 7 × 96 sliver in the 8 px the view keeps clear — point at it and it
-          grows into the notch (240 ms) — the notch it grows into over History; and its drawer open
-          with the Artifact Hub in its 152 column. The left edge's clipboard is the hand now.
         </p>
       </Specimen>
 

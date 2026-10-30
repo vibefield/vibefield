@@ -258,9 +258,10 @@ describe("the glyph set", () => {
 
   it("refuses an inline <svg> icon in product code (the silhouettes are the allowlist)", () => {
     // Product code draws icons through FieldGlyph. What may still be an inline
-    // <svg> is geometry that is not an icon: the edge tray's notch and drawer
-    // are chrome silhouettes drawn from the wall (DESIGN.md §8), and the OS
-    // marks are their owners' marks, kept exact like the vendor marks (§13).
+    // <svg> is geometry that is not an icon: the OS marks are their owners'
+    // marks, kept exact like the vendor marks (§13). The edge tray's notch and
+    // drawer, chrome silhouettes drawn from the wall, left with the edges at
+    // HN-8 (DESIGN.md §8 "Edge trays", retired), and their two with them.
     // The catalog (design-system/) is a harness and keeps its own fixtures.
     // DK-11 (R2): the desk bar's ONE path renderer for a kind's own drawing —
     // one component, one <svg> — and no other file of the bar's. DK-16 (R17):
@@ -271,7 +272,6 @@ describe("the glyph set", () => {
       ["field/desk/bar/KindGlyph.tsx", 1],
       ["field/desk/peers/PeersView.tsx", 1],
       ["godview/os-marks.tsx", 1],
-      ["hud/edge-tray/EdgeTrayView.tsx", 2],
     ]);
     const found = new Map<string, number>();
     const visit = (base: string, relativeDir: string, skip: (rel: string) => boolean): void => {

@@ -42,8 +42,8 @@ export function GlyphsSection(): ReactElement {
             <UiIconButton title="Godview">
               <FieldGlyph name="panes" size={20} />
             </UiIconButton>
-            <UiIconButton title="Artifacts" active>
-              <FieldGlyph name="sidepanel" size={20} />
+            <UiIconButton title="Artifacts">
+              <FieldGlyph name="package" size={20} />
             </UiIconButton>
           </div>
         </div>
