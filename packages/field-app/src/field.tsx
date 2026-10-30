@@ -25,7 +25,8 @@ import { ChromeLayer, useChromeState } from "./field/ChromeLayer";
 import { CoverStill } from "./field/desk/CoverStill";
 import { BEFORE_THE_DESK } from "./field/desk/desk-words";
 import { useWorkspaceSession } from "./field/use-workspace-session";
-import { type FrameSurface, sheetShelf } from "./frame/frame-surface";
+import type { FrameSurface } from "./frame/frame-surface";
+import { useShownShelf } from "./frame/Head";
 import { useArtifactCatalogFeed } from "./frame/head-artifacts";
 import { useActiveView } from "./frame/view-state";
 import { type FieldUserProfile, peekHost } from "./host";
@@ -286,8 +287,6 @@ export function FieldView({
   // since DK-13 — recedes nothing: the stage behind it neither recedes nor dims
   // (R14), the desk dimming under the board itself.
   const [surface, setSurfaceRaw] = useState<FrameSurface | null>(null);
-  // The pill's sheet, on either shelf (HN-8): Fields or Artifacts.
-  const docsOpen = sheetShelf(surface) !== null;
   const chrome = useChromeState();
   const appearanceSource = appearanceOverrideSource ?? EMPTY_APPEARANCE_SOURCE;
   const appearanceOverride = useSyncExternalStore(
@@ -308,10 +307,16 @@ export function FieldView({
   // the still recedes, the desk never does).
   const view = useActiveView();
   const covered = view !== "canvas";
+  // THE SHOWN SHELF (HN-8; DESIGN.md §8 "The head"): which shelf of the pill's
+  // sheet shows — Fields or Artifacts, Artifacts alone under a cover, and none
+  // the moment the view changes — read ONCE here and handed to the head, the
+  // package circle and the recede below alike, so the three never part over
+  // the frame between a change of view and the line's fold of the owner.
+  const shelf = useShownShelf(surface, view);
   // The pill's sheet recedes the field on Canvas alone (DESIGN.md §8 "The
   // head"): under a cover the package circle grows it over the cover, and
   // nothing transforms the desk's own box there (DK-15).
-  const sheetOpen = (docsOpen && !covered) || chrome.showSettings;
+  const sheetOpen = (shelf !== null && !covered) || chrome.showSettings;
 
   const [hudReturning, setHudReturning] = useState(false);
   const hudWasLoading = useRef(docState.phase === "loading");
@@ -413,6 +418,7 @@ export function FieldView({
           hudMotion={hudMotion}
           docState={docState}
           surface={surface}
+          shelf={shelf}
           onSurfaceChange={setSurface}
           chrome={chrome}
         />
