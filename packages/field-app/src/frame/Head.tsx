@@ -451,7 +451,7 @@ export function Head({
                   .map((entry) => ({
                     docId: entry.docId,
                     name: entry.name,
-                    caption: fmtRelative(entry.updatedAt),
+                    caption: relativeTime(entry.updatedAt),
                   })),
                 added: asking.added,
                 error: answerError ?? syncQuestion.posture.writeError,
