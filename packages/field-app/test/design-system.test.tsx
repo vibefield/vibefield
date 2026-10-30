@@ -343,10 +343,15 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       ),
     ).toEqual([
       "top:mac",
+      "package-dot:mac",
       "folder:mac",
       "narrow:mac",
       "renaming:mac",
       "explorer:mac",
+      "artifacts:mac",
+      "artifacts-off:mac",
+      "artifacts-opening:mac",
+      "covered:mac",
       "zoom:mac",
       "palette:mac",
       "sync-question:mac",
@@ -383,6 +388,38 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(question?.querySelector('form[aria-label="Sync question"]')).not.toBeNull();
     expect(question?.querySelector(".vf-head-docs")?.hasAttribute("hidden")).toBe(true);
     expect(question?.querySelectorAll('input[type="checkbox"]')).toHaveLength(3);
+    // HN-8 (PL-D1, PL-D2) — the package after the chevron's rule, with its standing dot in its
+    // own plate; the sheet on Artifacts holding the Hub's own adapter, the plugin off, the Hub
+    // opening; and under a cover the same sheet, grown from the package circle, on Artifacts alone
+    const pack = headPlate("top")?.querySelector<HTMLButtonElement>(".vf-head-pack");
+    expect(pack?.previousElementSibling?.className).toBe("vf-head-rule");
+    expect(pack?.previousElementSibling?.previousElementSibling?.className).toBe("vf-head-chev");
+    expect(pack?.title).toBe("Artifacts");
+    expect(pack?.querySelector(".vf-head-pack-dot")).toBeNull();
+    const dotted = headPlate("package-dot")?.querySelector<HTMLButtonElement>(".vf-head-pack");
+    expect(dotted?.querySelector(".vf-head-pack-dot")).not.toBeNull();
+    expect(dotted?.title).toBe("Artifacts — vibe-field's source is unavailable");
+    const artifacts = headPlate("artifacts");
+    const on = artifacts?.querySelector<HTMLButtonElement>('.vf-head-pack[aria-expanded="true"]');
+    expect(on?.title).toBe("Close  Esc");
+    expect(artifacts?.querySelector(".vf-head-chev")?.getAttribute("title")).toBe("Fields");
+    expect(
+      artifacts?.querySelector('[data-shelf="artifacts"][data-shown] .vf-artifact-panel'),
+    ).not.toBeNull();
+    const off = headPlate("artifacts-off")?.querySelector('[data-shelf="artifacts"]');
+    expect(off?.textContent).toContain("Artifacts are off");
+    expect(off?.textContent).toContain("Turn on the Browser plugin in Settings › Plugins.");
+    expect(
+      headPlate("artifacts-opening")?.querySelector(".vf-head-waits[data-late]")?.textContent,
+    ).toBe("Opening Artifacts…");
+    const covered = headPlate("covered");
+    expect(covered?.querySelector(".vf-head")?.hasAttribute("data-covered")).toBe(true);
+    expect(covered?.querySelector('[data-head-place][data-open="true"]')).toBeNull();
+    const circleSheet = covered?.querySelector('.vf-head-sheet[data-open="true"]');
+    expect(circleSheet?.querySelector(".vf-head-sheet-name")?.textContent).toBe("Artifacts");
+    expect(
+      circleSheet?.querySelector('[data-shelf="artifacts"] .vf-artifact-panel'),
+    ).not.toBeNull();
     expect(
       headPlate("palette")?.querySelector('[role="dialog"][aria-label="Command palette"]'),
     ).not.toBeNull();
@@ -591,6 +628,13 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       place?.querySelector<HTMLButtonElement>('button[aria-label="Fields"]')?.click(),
     );
     expect(place?.dataset.open).toBe("true");
+    // HN-8: its package turns the same sheet to Artifacts in place — which waits here, with no
+    // plugin host in the catalog to bind the Hub, as a window's does at boot
+    await act(async () => place?.querySelector<HTMLButtonElement>(".vf-head-pack")?.click());
+    expect(place?.dataset.open).toBe("true");
+    expect(place?.querySelector('[data-shelf="artifacts"][data-shown]')?.textContent).toBe(
+      "Opening Artifacts…",
+    );
 
     expect(container?.querySelector(".vf-godview .vf-monitor-list")).not.toBeNull();
     // GV-D1: the head in the other theme too — the page is dark, so the frame's

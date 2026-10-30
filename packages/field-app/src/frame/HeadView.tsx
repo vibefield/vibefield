@@ -1,10 +1,12 @@
 import type { DocRegistryEntry } from "@vibefield/contracts";
 import { FieldGlyph } from "@vibefield/design-kit/glyphs";
+import { EmptyState } from "@vibefield/design-kit/primitives";
 import {
   type CSSProperties,
   Fragment,
   type KeyboardEvent,
   type ReactElement,
+  type ReactNode,
   type Ref,
   useCallback,
   useEffect,
@@ -13,6 +15,7 @@ import {
   useRef,
   useState,
 } from "react";
+import type { SheetShelf } from "./frame-surface";
 import type { HeadCrumb } from "./head-canvas";
 import { SyncQuestionView, type SyncQuestionViewProps } from "./SyncQuestionView";
 import type { ViewKeys } from "./views";
@@ -23,9 +26,12 @@ import "./head.css";
 // THE HEAD (DESIGN.md §8 "The head", §10; One Frame FR-2, FR-6, §4, §6, §7;
 // FC-D8, FC-D9) — controller-free, so the catalog mounts this exact markup on
 // fixtures. On Canvas: the name pill centred on the window — the field's name
-// and, inside a folder, the crumbs folded in — which grows into the fields
-// explorer; the zoom readout at the right, which grows its menu. What the head
-// DOES lives in `Head.tsx`; what it shows is all props.
+// and, inside a folder, the crumbs folded in, then the chevron and, after a
+// rule, the package (HN-8, PL-D1) — which grows into its sheet on two
+// shelves, Fields and Artifacts; the zoom readout at the right, which grows
+// its menu. Under a cover the pill is the desk's and hides with it, and the
+// same sheet grows on Artifacts from the package circle (PL-D2). What the
+// head DOES lives in `Head.tsx`; what it shows is all props.
 
 /** The sync dot after the name (C6-4): a standing fact, or none. */
 export interface HeadDot {
@@ -44,6 +50,13 @@ export interface HeadDocTile {
   readonly beforeTheDesk?: boolean;
 }
 
+/** What the sheet's Artifacts shelf holds (HN-8; DESIGN.md §8 "Artifacts — the Artifacts
+ * shelf's contents"): the Hub's own surface, hosted, while one is bound; with none bound, why
+ * not — its plugin off, or starting — in words, so the shelf is never blank. */
+export type HeadArtifacts =
+  | { readonly state: "hub"; readonly hub: ReactNode }
+  | { readonly state: "off" | "opening" };
+
 export interface HeadPlaceViewProps {
   /** The field's name — the top of the path. */
   name: string;
@@ -54,13 +67,20 @@ export interface HeadPlaceViewProps {
   renaming?: string | null;
   /** The rename input, so the controller can put the caret in it. */
   renameRef?: Ref<HTMLInputElement>;
-  /** The explorer is out: the pill has grown into the sheet. */
-  open?: boolean;
+  /** The sheet is out on this shelf (HN-8): the pill has grown into it. Null: the pill. */
+  shelf?: SheetShelf | null;
   /** A field is loading: renaming and New field wait. */
   busy?: boolean;
   docs?: readonly HeadDocTile[];
   currentId?: string | null;
-  onToggle?: (open: boolean) => void;
+  /** The chevron and the package ask for their shelf, or null to shut the sheet: the button
+   * that is on shuts it, the other opens it on its shelf or turns it there in place. */
+  onShelf?: (shelf: SheetShelf | null) => void;
+  /** The package's standing dot (PL-D1): the words its tooltip and name say while an artifact's
+   * source is unavailable; null, no dot. */
+  packageDot?: string | null;
+  /** What the Artifacts shelf holds while it shows, and through its fold; null while shut. */
+  artifacts?: HeadArtifacts | null;
   /** Go up to a depth (0: the field's top). */
   onJump?: (depth: number) => void;
   onRename?: () => void;
@@ -129,18 +149,90 @@ function DocThumbnail({ src }: { src: string }): ReactElement {
   );
 }
 
-/** The name pill, and the explorer it grows into (M1: one element). */
+/** The package (PL-D1): 28 round like the chevron, `package` 15, on while its shelf shows. Its
+ * dot says a STANDING state only, and its words are the button's own tooltip and name. */
+function PackageButton({
+  on,
+  dot,
+  onPress,
+}: {
+  readonly on: boolean;
+  readonly dot: string | null;
+  readonly onPress: () => void;
+}): ReactElement {
+  const name = dot ?? "Artifacts";
+  return (
+    <button
+      type="button"
+      className="vf-head-pack"
+      aria-label={on ? "Close the artifacts" : name}
+      aria-expanded={on}
+      title={on ? "Close  Esc" : name}
+      onClick={onPress}
+    >
+      <FieldGlyph name="package" size={15} />
+      {dot === null ? null : <span className="vf-head-pack-dot" aria-hidden="true" />}
+    </button>
+  );
+}
+
+/** With no Hub bound the shelf says why (DESIGN.md §8 "Artifacts"): its plugin is off, or it
+ * is starting — said late, as History's opening words are, so a quick restart never flashes. */
+function HubWaits({ waits }: { readonly waits: "off" | "opening" }): ReactElement {
+  return waits === "off" ? (
+    <div className="vf-head-waits" role="status">
+      <EmptyState
+        title="Artifacts are off"
+        description="Turn on the Browser plugin in Settings › Plugins."
+      />
+    </div>
+  ) : (
+    <div className="vf-head-waits" data-late="" role="status">
+      <EmptyState title="Opening Artifacts…" />
+    </div>
+  );
+}
+
+/** The Artifacts shelf: the Hub's, hosted at the sheet's width — a container, so the Hub's own
+ * stylesheet answers it with its tiles (PL-D3) — or why it is not there. */
+function ArtifactsShelf({
+  shown,
+  artifacts,
+}: {
+  readonly shown: boolean;
+  readonly artifacts: HeadArtifacts | null;
+}): ReactElement {
+  return (
+    <section
+      className="vf-head-shelf vf-no-scrollbar vf-mask-fade-bottom"
+      data-shelf="artifacts"
+      {...(shown ? { "data-shown": "" } : {})}
+      aria-label="Artifacts"
+      inert={!shown}
+    >
+      {artifacts === null ? null : artifacts.state === "hub" ? (
+        artifacts.hub
+      ) : (
+        <HubWaits waits={artifacts.state} />
+      )}
+    </section>
+  );
+}
+
+/** The name pill, and the sheet it grows into on two shelves (M1: one element). */
 export function HeadPlaceView({
   name,
   path = [],
   dot = null,
   renaming = null,
   renameRef,
-  open = false,
+  shelf = null,
   busy = false,
   docs = [],
   currentId = null,
-  onToggle,
+  onShelf,
+  packageDot = null,
+  artifacts = null,
   onJump,
   onRename,
   onRenameDraft,
@@ -153,6 +245,11 @@ export function HeadPlaceView({
   side,
 }: HeadPlaceViewProps): ReactElement {
   const pathRef = useRef<HTMLDivElement>(null);
+  const open = shelf !== null;
+  // Turned while open (§6): the shelves change in place and the sheet never regrows — said to
+  // the CSS for that change, and forgotten as the sheet shuts, so the next opening rises in.
+  const [turn, setTurn] = useState({ shelf, turned: false });
+  if (turn.shelf !== shelf) setTurn({ shelf, turned: turn.shelf !== null && shelf !== null });
   // Open, the row heads the sheet with the field's name alone (One Frame §7).
   const names = open ? [name] : [name, ...path.map((crumb) => crumb.label)];
   const depths = open ? [0] : [0, ...path.map((crumb) => crumb.depth)];
@@ -235,7 +332,9 @@ export function HeadPlaceView({
     <div
       className="vf-head-place no-drag"
       data-head-place=""
+      data-head-sheet=""
       data-open={open ? "true" : "false"}
+      {...(turn.turned ? { "data-turned": "" } : {})}
       role="group"
       aria-label="Where you are"
       {...(side === undefined ? {} : { style: { "--vf-head-side": `${side}px` } as CSSProperties })}
@@ -287,18 +386,26 @@ export function HeadPlaceView({
         <button
           type="button"
           className="vf-head-chev"
-          aria-label={open ? "Close the fields" : "Fields"}
-          aria-expanded={open}
-          title={open ? "Close  Esc" : "Fields"}
-          onClick={() => onToggle?.(!open)}
+          aria-label={shelf === "fields" ? "Close the fields" : "Fields"}
+          aria-expanded={shelf === "fields"}
+          title={shelf === "fields" ? "Close  Esc" : "Fields"}
+          onClick={() => onShelf?.(shelf === "fields" ? null : "fields")}
         >
           <FieldGlyph name="chevron" size={12} turn={90} />
         </button>
+        <span className="vf-head-rule" aria-hidden="true" />
+        <PackageButton
+          on={shelf === "artifacts"}
+          dot={packageDot}
+          onPress={() => onShelf?.(shelf === "artifacts" ? null : "artifacts")}
+        />
       </div>
       <section
-        className="vf-head-explorer vf-no-scrollbar vf-mask-fade-bottom"
+        className="vf-head-shelf vf-head-explorer vf-no-scrollbar vf-mask-fade-bottom"
+        data-shelf="fields"
+        {...(shelf === "fields" ? { "data-shown": "" } : {})}
         aria-label="Fields"
-        inert={!open}
+        inert={shelf !== "fields"}
       >
         {question !== null ? <SyncQuestionView {...question} /> : null}
         <div className="vf-head-docs" hidden={question !== null}>
@@ -379,6 +486,39 @@ export function HeadPlaceView({
           })}
         </div>
       </section>
+      <ArtifactsShelf shown={shelf === "artifacts"} artifacts={artifacts} />
+    </div>
+  );
+}
+
+/** The same sheet under a cover (HN-8, PL-D2; DESIGN.md §8 "The head"), grown from the package
+ * circle at the head's left, on Artifacts alone — Fields are the desk's and stay with the pill.
+ * Its head row is the circle's own: the package, now a 28 round button and on, its glyph where
+ * the circle's stood, then the shelf's name. Shut, it is the circle's own box, and unseen: the
+ * circle, the frame's, stands there. */
+function HeadCircleSheetView({
+  open,
+  packageDot,
+  artifacts,
+  onShut,
+}: {
+  readonly open: boolean;
+  readonly packageDot: string | null;
+  readonly artifacts: HeadArtifacts | null;
+  readonly onShut: () => void;
+}): ReactElement {
+  return (
+    <div
+      className="vf-head-sheet no-drag"
+      data-head-sheet=""
+      data-open={open ? "true" : "false"}
+      inert={!open}
+    >
+      <div className="vf-head-sheet-row">
+        <PackageButton on={open} dot={packageDot} onPress={onShut} />
+        <span className="vf-head-sheet-name">Artifacts</span>
+      </div>
+      <ArtifactsShelf shown={open} artifacts={artifacts} />
     </div>
   );
 }
@@ -471,13 +611,15 @@ export interface HeadViewProps {
   zoom: HeadZoomViewProps;
   /** A view covers the canvas, and the head goes with it (DESIGN.md §8 "The
    * covers over the desk"): it is DOM over the desk, never in the desk's blurred
-   * still, so the cover's tint alone would leave the pill and the readout sharp. */
+   * still, so the cover's tint alone would leave the pill and the readout sharp.
+   * The sheet does not (HN-8): under a cover it grows from the package circle. */
   covered?: boolean;
 }
 
-/** The whole head: the explorer's dim, the name pill at the centre, and the
- * right slot — the readout alone since FR-4 (the theme went into the Me menu,
- * Artifacts behind the right notch). */
+/** The whole head: the sheet's dim, the name pill at the centre, the right
+ * slot — the readout alone since FR-4 (the theme went into the Me menu, and
+ * Artifacts, behind the right notch until HN-8, into the pill's package) —
+ * and, under a cover, the sheet the package circle grows. */
 export function HeadView({ place, zoom, covered = false }: HeadViewProps): ReactElement {
   const toolsRef = useRef<HTMLDivElement>(null);
   // The pill stays centred on the window, so it gives up the WIDER side's
@@ -495,20 +637,48 @@ export function HeadView({ place, zoom, covered = false }: HeadViewProps): React
     return () => observer.disconnect();
   }, []);
   const side = Math.max(96, right + 16 + 12);
+  const shelf = place.shelf ?? null;
+  const artifacts = place.artifacts ?? null;
+  // Under a cover the sheet holds Artifacts alone, grown from the package circle; the pill's
+  // own sheet stays shut, as the pill is the desk's and hides with it.
+  const sheet = covered && shelf !== "artifacts" ? null : shelf;
   return (
-    // `display: contents`: no box, so every piece keeps its place. It carries only
-    // the visibility the pieces inherit while a view covers the canvas.
-    <div className="vf-head" {...(covered ? { "data-covered": "" } : {})}>
+    <>
+      {/* The sheet's dim (§5 backdrop dim): outside the canvas's head, so it stands over a
+          cover too — over the cover and under the frame (§10) — and a click on it shuts the
+          sheet. */}
       <div
         className="vf-head-dim"
-        data-open={place.open === true ? "true" : "false"}
+        data-open={sheet !== null ? "true" : "false"}
+        {...(covered ? { "data-covered": "" } : {})}
         aria-hidden="true"
-        onClick={() => place.onToggle?.(false)}
+        onClick={() => place.onShelf?.(null)}
       />
-      <HeadPlaceView {...place} side={side} />
-      <div ref={toolsRef} className="vf-head-tools no-drag hud-flight" data-hud-flight="top-right">
-        <HeadZoomView {...zoom} />
+      {/* `display: contents`: no box, so every piece keeps its place. It carries only the
+          visibility the pieces inherit while a view covers the canvas. */}
+      <div className="vf-head" {...(covered ? { "data-covered": "" } : {})}>
+        <HeadPlaceView
+          {...place}
+          shelf={covered ? null : shelf}
+          artifacts={covered ? null : artifacts}
+          side={side}
+        />
+        <div
+          ref={toolsRef}
+          className="vf-head-tools no-drag hud-flight"
+          data-hud-flight="top-right"
+        >
+          <HeadZoomView {...zoom} />
+        </div>
       </div>
-    </div>
+      {covered ? (
+        <HeadCircleSheetView
+          open={sheet === "artifacts"}
+          packageDot={place.packageDot ?? null}
+          artifacts={artifacts}
+          onShut={() => place.onShelf?.(null)}
+        />
+      ) : null}
+    </>
   );
 }

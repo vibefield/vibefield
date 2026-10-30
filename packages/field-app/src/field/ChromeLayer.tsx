@@ -19,7 +19,7 @@ import { isSwitchCovering, useSwitchState } from "../boot/switch";
 import type { DocManager, DocManagerState } from "../doc-manager";
 import type { LineActs } from "../frame/Composer";
 import { Cards } from "../frame/cards/Cards";
-import { type FrameSurface, foldSurface } from "../frame/frame-surface";
+import { type FrameSurface, foldSurface, sheetShelf } from "../frame/frame-surface";
 import { Head } from "../frame/Head";
 import { canvasHead } from "../frame/head-canvas";
 import { runChosenSession } from "../frame/line-door";
@@ -110,7 +110,9 @@ export function ChromeLayer({
   // TS-6 (TS-D13) — the sync question New field asks while a link owes it.
   const syncQuestion = useSyncQuestion();
   const boardOut = surface === "objects" || board?.open === true;
-  const docsOpen = surface === "fields";
+  // The pill's sheet, on either shelf (HN-8): the desk's gestures stop and the
+  // selection bar steps out behind it, as they did behind the explorer.
+  const docsOpen = sheetShelf(surface) !== null;
   const paletteOpen = surface === "palette";
   // UA-D19 — the Me menu: one of the frame's open surfaces since FR-4, so the
   // one owner folds it when any other opens, and it folds them (DESIGN.md §10).
@@ -306,10 +308,12 @@ export function ChromeLayer({
           scale with the desk. Under the Peek they recede with the cover and the
           still, in field.tsx's `.field-recede` (DESIGN.md §6). */}
       {/* THE HEAD (One Frame FR-3, DESIGN.md §8 "The head"): the field's name
-          pill with the crumbs folded in, which grows the fields explorer, and
-          the zoom readout — alone at the right since FR-4 took the theme into
-          the Me menu and Artifacts behind the right notch. Still the canvas's
-          chrome: under the cover. */}
+          pill with the crumbs folded in, the chevron and the package (HN-8,
+          PL-D1), which grow its sheet on Fields or Artifacts — the Hub's, hosted
+          on that shelf — and the zoom readout, alone at the right since FR-4
+          took the theme into the Me menu. The pill is still the canvas's chrome,
+          under the cover; its sheet stands with the frame (62), so under a
+          cover the package circle grows it on Artifacts (PL-D2). */}
       <Head
         manager={manager}
         canvas={head}
@@ -319,6 +323,7 @@ export function ChromeLayer({
         onSurfaceChange={onSurfaceChange}
         menuZoom={subscribeMenuZoom}
         syncQuestion={syncQuestion}
+        windowId={FIELD_WINDOW_ID}
       />
 
       {/* SEARCH — THE PEEK (GV-D8/D9/D10, 2026-10-08; DESIGN.md §8 "Search — the

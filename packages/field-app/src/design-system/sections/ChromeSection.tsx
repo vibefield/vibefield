@@ -3,7 +3,7 @@ import { SegmentedControl } from "@vibefield/design-kit/primitives";
 import { type ReactElement, useState } from "react";
 import { MeMenuView } from "../../account/MeMenu";
 import { ComposerLineView } from "../../frame/ComposerLine";
-import type { FrameSurface } from "../../frame/frame-surface";
+import { type FrameSurface, sheetShelf } from "../../frame/frame-surface";
 import { SNAPSHOT_NO_DOOR } from "../../frame/line-model";
 import { ViewsTrackView } from "../../frame/ViewsTrack";
 import {
@@ -81,7 +81,7 @@ export function ChromeSection({
       <Specimen title="Field chrome playground" source="frame/* · hud/*" bleed>
         <div
           className="vf-ds-field-stage"
-          data-docs-open={surface === "fields"}
+          data-docs-open={sheetShelf(surface) !== null}
           data-board-open={trayOpen}
         >
           <DeskPreview
@@ -95,7 +95,9 @@ export function ChromeSection({
           <div className="vf-ds-stage-card card-b" />
           {/* The head on its real controller (One Frame FR-3), in a folder —
               the readout alone at its right since FR-4 (the theme went into
-              the Me menu, Artifacts behind the right notch). */}
+              the Me menu), and Artifacts in the pill since HN-8: its package
+              grows the sheet on that shelf, which waits here, with no plugin
+              host to bind the Hub. */}
           <HeadLive surface={surface} onSurfaceChange={changeSurface} />
 
           {/* Objects: the board risen behind the line (DK-13) — the desk's own drawer in the
@@ -135,16 +137,17 @@ export function ChromeSection({
           </div>
         </div>
         <p className="vf-ds-stage-caption">
-          The head — the field's name pill with its crumbs, which grows the fields explorer, and the
-          zoom readout, which grows its menu — the line's Objects and your face are interactive.
+          The head — the field's name pill with its crumbs, whose chevron and package grow its sheet
+          on Fields or Artifacts, and the zoom readout, which grows its menu — the line's Objects
+          and your face are interactive.
           Open one to inspect its motion and the rule that only one of them is open at a time. Your
           menu's Theme sets this page's theme, as it sets the app's.
         </p>
       </Specimen>
 
       <Specimen
-        title="The head — the name pill, the zoom readout, the palette"
-        source="frame/HeadView.tsx · hud/CommandPalette.tsx · DESIGN.md §8, §5, §10"
+        title="The head — the name pill, its sheet's two shelves, the zoom readout, the palette"
+        source="frame/HeadView.tsx · hud/CommandPalette.tsx · DESIGN.md §8, §5, §6, §10"
         bleed
       >
         <div className="vf-ds-head-plates">
@@ -154,11 +157,13 @@ export function ChromeSection({
           <HeadPlate state="zoom" keys="other" />
         </div>
         <p className="vf-ds-stage-caption">
-          Every state the page's head plates draw — the field's top as one name, the crumbs folded
-          into the pill inside a folder, a long path in a narrow window dropping whole leading
-          names, renaming in place, the fields explorer grown from the pill, the zoom's solid menu
-          with its keys, and the palette under the head — then the zoom's keys as Windows says them,
-          in this page's theme. No keycaps and no plus in the head.
+          Every state the page's head plates draw — the field's top as one name, the package after
+          its rule and with its dot while a source is unavailable, the crumbs folded into the pill
+          inside a folder, a long path in a narrow window dropping whole leading names, renaming in
+          place, the sheet grown from the pill on Fields and on Artifacts (the Hub's tiles, the
+          plugin off, the Hub opening), the same sheet under a cover grown from the package circle,
+          the zoom's solid menu with its keys, and the palette under the head — then the zoom's
+          keys as Windows says them, in this page's theme. No keycaps and no plus in the head.
         </p>
       </Specimen>
 

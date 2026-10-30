@@ -25,7 +25,8 @@ import { ChromeLayer, useChromeState } from "./field/ChromeLayer";
 import { CoverStill } from "./field/desk/CoverStill";
 import { BEFORE_THE_DESK } from "./field/desk/desk-words";
 import { useWorkspaceSession } from "./field/use-workspace-session";
-import type { FrameSurface } from "./frame/frame-surface";
+import { type FrameSurface, sheetShelf } from "./frame/frame-surface";
+import { useArtifactCatalogFeed } from "./frame/head-artifacts";
 import { useActiveView } from "./frame/view-state";
 import { type FieldUserProfile, peekHost } from "./host";
 import { useReactiveResource } from "./hud/use-reactive";
@@ -98,6 +99,10 @@ export function FieldView({
   // C6-4: stream per-doc sync standing into its store (the file pill and the
   // Settings Mesh section read it; empty = sync has nothing to say).
   useDocSyncFeed();
+  // HN-8 (PL-D1): stream the artifact catalog into the package's dot (the
+  // pill's package and the covered views' circle read it; no dot = every
+  // source is there).
+  useArtifactCatalogFeed();
   // PLUG-P3b: hand the plugin-client module its backend — plugin-bound leases
   // dial the same daemon this window reached (cleared on unmount, honestly).
   const fielddClient = useFielddClient();
@@ -274,14 +279,15 @@ export function FieldView({
   }, [ce, registry]);
 
   // THE FRAME'S OPEN SURFACE (One Frame FR-2/FR-3/FR-4, `frame/frame-surface.ts`):
-  // its one owner. Objects, the fields explorer, the zoom's menu, the palette,
-  // the hand raised and the rest of the frame's surfaces are one value, so any
-  // one folds the rest; held here because the recede derives from the explorer
-  // in this render. Objects — the desk's pegboard since DK-13 — recedes nothing:
-  // the stage behind it neither recedes nor dims (R14), the desk dimming under
-  // the board itself.
+  // its one owner. Objects, the pill's sheet (Fields or Artifacts, HN-8), the
+  // zoom's menu, the palette, the hand raised and the rest of the frame's
+  // surfaces are one value, so any one folds the rest; held here because the
+  // recede derives from the sheet in this render. Objects — the desk's pegboard
+  // since DK-13 — recedes nothing: the stage behind it neither recedes nor dims
+  // (R14), the desk dimming under the board itself.
   const [surface, setSurfaceRaw] = useState<FrameSurface | null>(null);
-  const docsOpen = surface === "fields";
+  // The pill's sheet, on either shelf (HN-8): Fields or Artifacts.
+  const docsOpen = sheetShelf(surface) !== null;
   const chrome = useChromeState();
   const appearanceSource = appearanceOverrideSource ?? EMPTY_APPEARANCE_SOURCE;
   const appearanceOverride = useSyncExternalStore(
@@ -297,12 +303,15 @@ export function FieldView({
     },
     [chrome.setShowSettings],
   );
-  const sheetOpen = docsOpen || chrome.showSettings;
   // A covered view (One Frame FR-1): the field goes out of reach under it, and
   // the desk becomes a STILL that costs nothing (DK-15, `CoverStill` below —
   // the still recedes, the desk never does).
   const view = useActiveView();
   const covered = view !== "canvas";
+  // The pill's sheet recedes the field on Canvas alone (DESIGN.md §8 "The
+  // head"): under a cover the package circle grows it over the cover, and
+  // nothing transforms the desk's own box there (DK-15).
+  const sheetOpen = (docsOpen && !covered) || chrome.showSettings;
 
   const [hudReturning, setHudReturning] = useState(false);
   const hudWasLoading = useRef(docState.phase === "loading");

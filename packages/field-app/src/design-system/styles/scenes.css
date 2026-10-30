@@ -162,7 +162,17 @@
   height: 248px;
 }
 
-.vf-ds-head-plate:is([data-state="explorer"], [data-state="palette"]) {
+/* The sheet's plates, a whole row each: the 420 it grows to under the plate's top (HN-8 — its two
+   shelves, and the circle's sheet under a cover; the sync question's, which TS-6 left at 72). */
+.vf-ds-head-plate:is(
+  [data-state="explorer"],
+  [data-state="artifacts"],
+  [data-state="artifacts-off"],
+  [data-state="artifacts-opening"],
+  [data-state="covered"],
+  [data-state="sync-question"],
+  [data-state="palette"]
+) {
   grid-column: 1 / -1;
   height: 520px;
 }

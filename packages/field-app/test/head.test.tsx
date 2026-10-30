@@ -7,13 +7,25 @@
  * the open surface. The name pill (one name at the top, the crumbs folded in
  * a folder, FitPath, renaming on a double-click, the sync dot), the fields
  * explorer it grows into (the old file pill's cases, carried over), the zoom
- * readout and its solid menu, and the zoom's keys. The model is
- * head-model.test's; delivery from a focused pane is the godview smoke's 11i.
+ * readout and its solid menu, and the zoom's keys. HN-8 (PL-D1, PL-D2): the
+ * package and its standing dot, the sheet's two shelves, the Hub hosted on
+ * Artifacts as the right edge's drawer hosted it (edge-tray.test's hosting
+ * cases, moved here with the tray's retirement; its fold on an unbind retired
+ * with it, and the shelf's two words stand in its place), and the same sheet
+ * under a cover, grown from the package circle. The model is head-model.test's;
+ * delivery from a focused pane is the godview smoke's 11i.
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { DocSyncStatus, FrameView, FrameZoomAct } from "@vibefield/contracts";
-import { act, useState } from "react";
+import type {
+  ArtifactAvailability,
+  ArtifactView,
+  DocSyncStatus,
+  FrameView,
+  FrameZoomAct,
+} from "@vibefield/contracts";
+import type { PluginSurfaceProps } from "@vibefield/plugin-sdk";
+import { act, type ReactElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SyncQuestionDoor } from "../src/account/sync-question";
@@ -21,8 +33,17 @@ import type { DocManagerApi, DocManagerState } from "../src/doc-manager";
 import { resetDocSyncStatuses, setDocSyncStatuses } from "../src/doc-sync-store";
 import type { FrameSurface } from "../src/frame/frame-surface";
 import { Head } from "../src/frame/Head";
+import { resetArtifactCatalog, setArtifactCatalog } from "../src/frame/head-artifacts";
 import type { HeadCanvas, HeadCrumb } from "../src/frame/head-canvas";
 import type { ViewKeys } from "../src/frame/views";
+import { register } from "../src/plugin-host/surface-registry";
+
+// The plugin registry as the window's feed sets it: none until a test says
+// otherwise (no daemon has answered).
+const registry = vi.hoisted(() => ({ snapshot: null as unknown }));
+vi.mock("../src/plugin-host/plugin-registry-store", () => ({
+  usePluginRegistrySnapshot: () => registry.snapshot,
+}));
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -143,10 +164,89 @@ function syncStatus(overrides: Partial<DocSyncStatus> & { docId: string }): DocS
   };
 }
 
+/** One catalog row as `artifact.subscribe` sends it whole, its source there or not. */
+function artifact(title: string, availability: ArtifactAvailability, index = 0): ArtifactView {
+  const artifactId = `01J3QH5XX6M8QPK7R2B4F9C1T${index}`;
+  return {
+    artifactId,
+    artifactKey: `device-a:${artifactId}`,
+    title,
+    kind: "proxy",
+    originDeviceId: "device-a",
+    originDeviceName: "Studio Mac",
+    originBootId: "boot-a",
+    originOnline: availability !== "offline",
+    advertisedAvailability:
+      availability === "offline" || availability === "unknown" ? "active" : availability,
+    availability,
+    availabilityAt: 1_722_000_000_000,
+    publishedAt: 1_722_000_000_000,
+    updatedAt: 1_722_000_000_000,
+    openable: availability === "active",
+    editable: true,
+  };
+}
+
+/** The registry as fieldd would say it: the Browser plugin — the one that contributes the side
+ * panel, the Hub — on or off. Only the fields the head and the surface host read. */
+function browserRegistry(on: boolean): unknown {
+  return {
+    generation: 1,
+    problems: [],
+    plugins: [
+      {
+        id: "vibefield.browser",
+        state: on ? "enabled" : "disabled",
+        enabled: on,
+        contributions: {
+          surfaces: [
+            { id: "vibefield.browser.artifacts", title: "Artifacts", slot: "hud.side-panel" },
+          ],
+        },
+      },
+    ],
+  };
+}
+
+/** The Artifact Hub's stand-in: the side panel's contribution, whose button closes it, and a
+ * field as its Add step has. */
+function HubSurface(props: PluginSurfaceProps): ReactElement {
+  return (
+    <div>
+      <button
+        type="button"
+        className="hub-close"
+        onClick={props.slot === "hud.side-panel" ? props.requestClose : undefined}
+      >
+        The Hub
+      </button>
+      <input className="hub-field" aria-label="Local port" />
+    </div>
+  );
+}
+
+/** Bind the Hub as the Browser plugin binds it; unbound after the test, or sooner by the
+ * returned hand (a disable or a restart). */
+function bindHub(): () => void {
+  const bound = register(
+    "vibefield.browser",
+    "vibefield.browser.artifacts",
+    "hud.side-panel",
+    HubSurface,
+    100,
+    "Artifacts",
+  );
+  const unbind = (): void => bound.dispose();
+  unbinds.push(unbind);
+  return unbind;
+}
+
 let root: Root | null = null;
 let host: HTMLElement | null = null;
 let pane: HTMLElement | null = null;
 let surfaceNow: FrameSurface | null = null;
+let setViewNow: ((view: FrameView) => void) | null = null;
+const unbinds: Array<() => void> = [];
 
 afterEach(() => {
   act(() => root?.unmount());
@@ -156,8 +256,13 @@ afterEach(() => {
   host = null;
   pane = null;
   surfaceNow = null;
+  setViewNow = null;
   document.body.innerHTML = "";
   act(() => resetDocSyncStatuses());
+  act(() => resetArtifactCatalog());
+  for (const unbind of unbinds.splice(0).reverse()) unbind();
+  registry.snapshot = null;
+  vi.useRealTimers();
 });
 
 interface Mounted {
@@ -181,19 +286,23 @@ function mount(
     canvas: options.canvas ?? fakeCanvas(),
   };
   function Owner(): React.ReactElement {
-    // FieldView's place: the frame's one owner of the open surface.
+    // FieldView's place: the frame's one owner of the open surface — and the
+    // window's view, which nothing here folds the owner on (the line does).
     const [surface, setSurface] = useState<FrameSurface | null>(options.open ?? null);
+    const [view, setView] = useState<FrameView>(options.view ?? "canvas");
     surfaceNow = surface;
+    setViewNow = setView;
     return (
       <Head
         manager={used.manager}
         canvas={used.canvas}
-        view={options.view ?? "canvas"}
+        view={view}
         keys={options.keys ?? "mac"}
         surface={surface}
         onSurfaceChange={setSurface}
         {...(options.menuZoom !== undefined ? { menuZoom: options.menuZoom } : {})}
         {...(options.syncQuestion !== undefined ? { syncQuestion: options.syncQuestion } : {})}
+        windowId="field"
       />
     );
   }
@@ -1006,5 +1115,373 @@ describe("TS-6 — New field asks the sync question while a link owes it (TS-D13
     expect($(".vf-head-docs")?.hasAttribute("hidden")).toBe(false);
     expect(manager.createDoc).not.toHaveBeenCalled();
     expect(door.answer).not.toHaveBeenCalled();
+  });
+});
+
+/** HN-8 — the pill's package, and a shelf of the pill's sheet. */
+const pack = (): HTMLButtonElement => $("[data-head-place] .vf-head-pack") as HTMLButtonElement;
+const shelf = (which: "fields" | "artifacts"): HTMLElement | null =>
+  $(`[data-head-place] [data-shelf="${which}"]`);
+const HEAD_CSS = readFileSync(join(process.cwd(), "src/frame/head.css"), "utf8");
+
+/** A rule's body in a stylesheet: from its selector to its first close. */
+function ruleIn(css: string, selector: string): string {
+  const from = css.indexOf(`${selector} {`);
+  return from < 0 ? "" : css.slice(from, css.indexOf("}", from));
+}
+
+describe("the package (PL-D1) — the pill's second button", () => {
+  it("stands after the chevron and a 1 × 18 rule: `package`, named Artifacts", () => {
+    mount();
+    const rule = $(".vf-head-chev")?.nextElementSibling;
+    expect(rule?.className).toBe("vf-head-rule");
+    expect(rule?.getAttribute("aria-hidden")).toBe("true");
+    expect(rule?.nextElementSibling).toBe(pack());
+    expect(pack().querySelector("[data-glyph]")?.getAttribute("data-glyph")).toBe("package");
+    expect(pack().getAttribute("aria-label")).toBe("Artifacts");
+    expect(pack().title).toBe("Artifacts");
+    expect(pack().getAttribute("aria-expanded")).toBe("false");
+    const drawn = ruleIn(HEAD_CSS, ".vf-head-rule");
+    expect(drawn).toContain("width: 1px;");
+    expect(drawn).toContain("height: 18px;");
+    expect(drawn).toContain("background: var(--vf-hairline-strong);");
+  });
+});
+
+describe("the package's dot (PL-D1) — standing states only, read from the catalog by the head", () => {
+  it("stands while a source is unavailable, its words the package's — the sheet shut, no Hub bound", () => {
+    mount();
+    expect($(".vf-head-pack-dot")).toBeNull();
+    act(() =>
+      setArtifactCatalog([
+        artifact("vibe-field", "source-unavailable", 0),
+        artifact("Docs", "active", 1),
+      ]),
+    );
+    expect(pack().querySelector(".vf-head-pack-dot")).not.toBeNull();
+    expect(pack().title).toBe("Artifacts — vibe-field's source is unavailable");
+    expect(pack().getAttribute("aria-label")).toBe(pack().title);
+    act(() =>
+      setArtifactCatalog([
+        artifact("vibe-field", "source-unavailable", 0),
+        artifact("Docs", "source-unavailable", 1),
+      ]),
+    );
+    expect(pack().title).toBe("Artifacts — 2 sources unavailable");
+    act(() => setArtifactCatalog([artifact("vibe-field", "active", 0)]));
+    expect($(".vf-head-pack-dot")).toBeNull();
+    expect(pack().title).toBe("Artifacts");
+    // orange, ringed in the solid chrome so it reads on the glass (§2.5: attention, never red)
+    const dot = ruleIn(HEAD_CSS, ".vf-head-pack-dot");
+    expect(dot).toContain("background: var(--vf-orange);");
+    expect(dot).toContain("box-shadow: 0 0 0 1.5px var(--vf-chrome-solid);");
+  });
+
+  it("leaves every other state to the shelf: starting, removing, error, offline, unknown", () => {
+    mount();
+    act(() =>
+      setArtifactCatalog(
+        (["starting", "removing", "error", "offline", "unknown"] as const).map((state, index) =>
+          artifact(state, state, index),
+        ),
+      ),
+    );
+    expect($(".vf-head-pack-dot")).toBeNull();
+  });
+
+  it("keeps the last good reading when a list cannot be read — a tolerant reader", () => {
+    mount();
+    act(() => setArtifactCatalog([artifact("vibe-field", "source-unavailable")]));
+    act(() => setArtifactCatalog({ artifacts: "not a list" }));
+    expect(pack().title).toBe("Artifacts — vibe-field's source is unavailable");
+  });
+
+  it("stands on the package while its shelf shows, the button saying Close there", () => {
+    act(() => setArtifactCatalog([artifact("vibe-field", "source-unavailable")]));
+    mount({ open: "artifacts" });
+    expect(pack().querySelector(".vf-head-pack-dot")).not.toBeNull();
+    expect(pack().title).toBe("Close  Esc");
+  });
+});
+
+describe("the sheet's two shelves (PL-D1) — one surface, the button pressed shown on", () => {
+  it("opens on Artifacts from the package: it is on and says Close, the chevron names its shelf", () => {
+    mount();
+    act(() => pack().click());
+    expect(surfaceNow).toBe("artifacts");
+    expect($("[data-head-place]")?.dataset.open).toBe("true");
+    expect(pack().getAttribute("aria-expanded")).toBe("true");
+    expect(pack().getAttribute("aria-label")).toBe("Close the artifacts");
+    expect(pack().title).toBe("Close  Esc");
+    const chevron = button("Fields");
+    expect(chevron.title).toBe("Fields");
+    expect(chevron.getAttribute("aria-expanded")).toBe("false");
+    expect(shelf("artifacts")?.hasAttribute("data-shown")).toBe(true);
+    expect(shelf("artifacts")?.hasAttribute("inert")).toBe(false);
+    expect(shelf("fields")?.hasAttribute("data-shown")).toBe(false);
+    expect(shelf("fields")?.hasAttribute("inert")).toBe(true);
+    // the button that is on shuts it
+    act(() => pack().click());
+    expect(surfaceNow).toBeNull();
+    expect($("[data-head-place]")?.dataset.open).toBe("false");
+  });
+
+  it("turns in place: the other button changes the shelf, the sheet stays out, the turn forgotten once shut", () => {
+    mount({ open: "fields" });
+    const place = $("[data-head-place]");
+    expect(place?.hasAttribute("data-turned")).toBe(false);
+    act(() => pack().click());
+    expect(surfaceNow).toBe("artifacts");
+    expect(place?.dataset.open).toBe("true");
+    expect(place?.hasAttribute("data-turned")).toBe(true);
+    expect(shelf("fields")?.hasAttribute("data-shown")).toBe(false);
+    expect(shelf("artifacts")?.hasAttribute("data-shown")).toBe(true);
+    act(() => button("Fields").click());
+    expect(surfaceNow).toBe("fields");
+    expect(button("Close the fields").title).toBe("Close  Esc");
+    expect(pack().title).toBe("Artifacts");
+    act(() => button("Close the fields").click());
+    expect(surfaceNow).toBeNull();
+    // the next opening rises in behind the morph again
+    expect(place?.hasAttribute("data-turned")).toBe(false);
+  });
+
+  it("changes its shelves in 180ms `ease`, in place, and at once under reduced motion (§6)", () => {
+    expect(ruleIn(HEAD_CSS, ".vf-head-place[data-turned] .vf-head-shelf[data-shown]")).toMatch(
+      /opacity 180ms ease,\s*visibility 0s;/,
+    );
+    expect(ruleIn(HEAD_CSS, ".vf-head-place[data-turned] .vf-head-shelf")).toContain(
+      "transform: none;",
+    );
+    const reduced = HEAD_CSS.slice(HEAD_CSS.lastIndexOf("@media (prefers-reduced-motion: reduce)"));
+    expect(ruleIn(reduced, ".vf-head-place[data-turned] .vf-head-shelf[data-shown]")).toContain(
+      "transition: none;",
+    );
+  });
+
+  it("grows to 544 × 420, never ending nearer the line than 8, and stands with the frame", () => {
+    const open = ruleIn(HEAD_CSS, '.vf-head-place[data-open="true"]');
+    expect(open).toContain("z-index: 62;");
+    expect(open).toContain("width: min(56%, 34rem);");
+    expect(open).toContain("height: min(420px, calc(100% - 88px));");
+    expect(open).toContain("border-radius: 22px 22px 40px 40px;");
+  });
+
+  it("is one of the frame's surfaces: opening it on either shelf folds the zoom's menu", () => {
+    mount();
+    clickTimes($(".vf-head-zoom") as HTMLButtonElement, 1);
+    expect(surfaceNow).toBe("zoom");
+    act(() => pack().click());
+    expect(surfaceNow).toBe("artifacts");
+    expect($(".vf-head-zoom-menu")).toBeNull();
+  });
+
+  it("shuts on the dim from Artifacts too", () => {
+    mount({ open: "artifacts" });
+    act(() => ($(".vf-head-dim") as HTMLElement).click());
+    expect(surfaceNow).toBeNull();
+  });
+
+  it("shuts on Esc from a field in the Hub, and gives the keyboard back to the button that opened it", () => {
+    bindHub();
+    mount();
+    act(() => pack().focus());
+    act(() => pack().click());
+    const field = shelf("artifacts")?.querySelector<HTMLInputElement>(".hub-field");
+    act(() => field?.focus());
+    expect(document.activeElement).toBe(field);
+    const viewEsc = vi.fn();
+    window.addEventListener("keydown", viewEsc);
+    try {
+      press(field as HTMLInputElement, { key: "Escape" });
+    } finally {
+      window.removeEventListener("keydown", viewEsc);
+    }
+    expect(surfaceNow).toBeNull();
+    expect(viewEsc).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(pack());
+  });
+
+  it("leaves a rename its own Esc while the sheet is out: the name stands, and so does the sheet", () => {
+    mount({ open: "fields" });
+    clickTimes($(".vf-head-name") as HTMLButtonElement, 2);
+    const input = $(".vf-head-rename") as HTMLInputElement;
+    act(() => setInputValue(input, "Nope"));
+    press(input, { key: "Escape" });
+    expect(pathNames()).toEqual(["Field"]);
+    expect(surfaceNow).toBe("fields");
+  });
+});
+
+describe('the Artifacts shelf hosts the Hub (DESIGN.md §8 "Artifacts — the Artifacts shelf\'s contents")', () => {
+  it("mounts the side panel's one contribution there, in its plugin's scope; the Hub's own close shuts the sheet", () => {
+    bindHub();
+    mount();
+    // only while the shelf shows: a shut sheet holds no Hub
+    expect(host?.textContent).not.toContain("The Hub");
+    act(() => pack().click());
+    const scope = shelf("artifacts")?.querySelector<HTMLElement>(
+      '[data-vf-plugin="vibefield.browser"]',
+    );
+    expect(scope?.querySelector(".hub-close")?.textContent).toBe("The Hub");
+    act(() => (scope?.querySelector(".hub-close") as HTMLButtonElement).click());
+    expect(surfaceNow).toBeNull();
+  });
+
+  it("keeps the Hub through the sheet's 600ms fold, so it never folds away empty", async () => {
+    vi.useFakeTimers();
+    bindHub();
+    mount({ open: "artifacts" });
+    act(() => pack().click());
+    expect(surfaceNow).toBeNull();
+    expect(shelf("artifacts")?.textContent).toContain("The Hub");
+    await act(async () => vi.advanceTimersByTimeAsync(599));
+    expect(shelf("artifacts")?.textContent).toContain("The Hub");
+    await act(async () => vi.advanceTimersByTimeAsync(1));
+    expect(shelf("artifacts")?.textContent).not.toContain("The Hub");
+  });
+
+  it("is a container at the sheet's width, so the Hub's own stylesheet answers it with tiles (PL-D3)", () => {
+    expect(ruleIn(HEAD_CSS, '.vf-head-shelf[data-shelf="artifacts"]')).toContain(
+      "container-type: inline-size;",
+    );
+  });
+
+  it("says the Hub is off, in words, while its plugin is off — never a blank shelf", () => {
+    registry.snapshot = browserRegistry(false);
+    // bound, but its plugin turned off: the host shows it nowhere
+    bindHub();
+    mount({ open: "artifacts" });
+    const words = shelf("artifacts")?.querySelector(".vf-head-waits");
+    expect(words?.querySelector("strong")?.textContent).toBe("Artifacts are off");
+    expect(words?.textContent).toContain("Turn on the Browser plugin in Settings › Plugins.");
+    expect(words?.hasAttribute("data-late")).toBe(false);
+    expect(shelf("artifacts")?.textContent).not.toContain("The Hub");
+  });
+
+  it("says it is opening, late, while the Hub starts — its plugin on and not yet bound, or no registry yet", () => {
+    for (const snapshot of [browserRegistry(true), null]) {
+      registry.snapshot = snapshot;
+      mount({ open: "artifacts" });
+      const words = shelf("artifacts")?.querySelector(".vf-head-waits");
+      expect(words?.textContent).toBe("Opening Artifacts…");
+      expect(words?.hasAttribute("data-late")).toBe(true);
+      act(() => root?.unmount());
+      root = null;
+      host?.remove();
+    }
+  });
+
+  it("times those words as History's opening words: nothing for 120ms, then a 180ms `ease`", () => {
+    const history = readFileSync(join(process.cwd(), "src/history/history-room-view.css"), "utf8");
+    const timing = (css: string, selector: string): string | undefined =>
+      ruleIn(css, selector).match(/animation: [\w-]+ ([^;]+);/u)?.[1];
+    expect(timing(HEAD_CSS, ".vf-head-waits[data-late]")).toBe("180ms ease 120ms both");
+    expect(timing(HEAD_CSS, ".vf-head-waits[data-late]")).toBe(
+      timing(history, ".vf-history-face[data-late]"),
+    );
+  });
+
+  it("stays open through the Hub's restart — an unbind never folds it — and takes the Hub back", () => {
+    registry.snapshot = browserRegistry(true);
+    const unbind = bindHub();
+    mount({ open: "artifacts" });
+    expect(shelf("artifacts")?.textContent).toContain("The Hub");
+    act(() => unbind());
+    expect(surfaceNow).toBe("artifacts");
+    expect($("[data-head-place]")?.dataset.open).toBe("true");
+    expect(shelf("artifacts")?.textContent).toBe("Opening Artifacts…");
+    act(() => {
+      bindHub();
+    });
+    expect(shelf("artifacts")?.textContent).toContain("The Hub");
+  });
+});
+
+describe("under a cover — the same sheet, grown from the package circle (PL-D2)", () => {
+  const circleSheet = (): HTMLElement | null => $(".vf-head-sheet");
+
+  it("holds Artifacts alone above the cover, its head row the circle's own, outside the canvas's head", () => {
+    bindHub();
+    mount({ view: "godview", open: "artifacts" });
+    const sheet = circleSheet();
+    expect(sheet?.dataset.open).toBe("true");
+    expect(sheet?.hasAttribute("inert")).toBe(false);
+    expect($(".vf-head")?.contains(sheet ?? null)).toBe(false);
+    // the pill is the desk's and hides with it: its own sheet stays shut
+    expect($("[data-head-place]")?.dataset.open).toBe("false");
+    const own = sheet?.querySelector<HTMLButtonElement>(".vf-head-pack");
+    expect(own?.getAttribute("aria-expanded")).toBe("true");
+    expect(own?.title).toBe("Close  Esc");
+    expect(sheet?.querySelector(".vf-head-sheet-name")?.textContent).toBe("Artifacts");
+    expect(sheet?.querySelector('[data-shelf="fields"]')).toBeNull();
+    const hub = sheet?.querySelector('[data-shelf="artifacts"] [data-vf-plugin]');
+    expect(hub?.textContent).toContain("The Hub");
+    // its dim over the cover, outside the head too
+    const dim = $(".vf-head-dim");
+    expect(dim?.dataset.open).toBe("true");
+    expect(dim?.hasAttribute("data-covered")).toBe(true);
+    expect($(".vf-head")?.contains(dim ?? null)).toBe(false);
+    act(() => own?.click());
+    expect(surfaceNow).toBeNull();
+    expect(circleSheet()?.dataset.open).toBe("false");
+    expect(circleSheet()?.hasAttribute("inert")).toBe(true);
+  });
+
+  it("keeps Fields with the pill: no covered sheet opens on them", () => {
+    mount({ view: "history", open: "fields" });
+    expect(circleSheet()?.dataset.open).toBe("false");
+    expect($("[data-head-place]")?.dataset.open).toBe("false");
+    expect($(".vf-head-dim")?.dataset.open).toBe("false");
+  });
+
+  it("is not drawn on Canvas, where the pill holds the package", () => {
+    mount({ open: "artifacts" });
+    expect(circleSheet()).toBeNull();
+    expect($("[data-head-place]")?.dataset.open).toBe("true");
+  });
+
+  it("shuts on its dim", () => {
+    mount({ view: "godview", open: "artifacts" });
+    act(() => ($(".vf-head-dim") as HTMLElement).click());
+    expect(surfaceNow).toBeNull();
+  });
+
+  it("is drawn shut the moment the view changes, before the line's fold reaches the owner", () => {
+    mount({ open: "artifacts" });
+    act(() => setViewNow?.("godview"));
+    // nothing here folds the owner on a change of view: the line does, in an effect
+    expect(surfaceNow).toBe("artifacts");
+    expect($("[data-head-place]")?.dataset.open).toBe("false");
+    expect(circleSheet()?.dataset.open).toBe("false");
+    expect($(".vf-head-dim")?.dataset.open).toBe("false");
+  });
+
+  it("grows from the circle's own box — 40 at x 96, top 8 — to the pill's sheet's size, at 62, its dim at 61", () => {
+    const shut = ruleIn(HEAD_CSS, ".vf-head-sheet");
+    for (const measure of [
+      "z-index: 62;",
+      "top: 8px;",
+      "left: 96px;",
+      "width: 40px;",
+      "height: 40px;",
+      "border-radius: 20px;",
+      "visibility: hidden;",
+      "width 600ms var(--vf-ease-island)",
+    ]) {
+      expect(shut).toContain(measure);
+    }
+    const open = ruleIn(HEAD_CSS, '.vf-head-sheet[data-open="true"]');
+    expect(open).toContain("width: min(56%, 34rem);");
+    expect(open).toContain("height: min(420px, calc(100% - 88px));");
+    expect(open).toContain("border-radius: 22px 22px 40px 40px;");
+    expect(ruleIn(HEAD_CSS, ".vf-head-dim[data-covered]")).toContain("z-index: 61;");
+    // its head row: the package 6 in, the shelf's name 8 after it, at 13/600
+    const row = ruleIn(HEAD_CSS, ".vf-head-sheet-row");
+    expect(row).toContain("padding: 0 16px 0 6px;");
+    expect(row).toContain("gap: 8px;");
+    const name = ruleIn(HEAD_CSS, ".vf-head-sheet-name");
+    expect(name).toContain("font-size: 13px;");
+    expect(name).toContain("font-weight: 600;");
   });
 });
