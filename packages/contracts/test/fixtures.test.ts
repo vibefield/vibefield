@@ -108,6 +108,15 @@ import {
   ArtifactView,
   LocalArtifactIntent,
 } from "../src/artifacts";
+import {
+  ComposeAgentsAvailableOutput,
+  ComposeAgentsListOutput,
+  ComposeHistorySearchOutput,
+  ComposeReadOutput,
+  ComposeSparksHatchParams,
+  ComposeSparksListResult,
+  SparkRecord,
+} from "../src/compose";
 import { DeviceInfo, DeviceNameFile, DeviceRenameParams, DeviceSlice } from "../src/devices";
 import {
   AuditRecordV1,
@@ -347,7 +356,8 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // with every cell fresh (`observed-state.fresh`: `inventoryBoundMs` alone), one with a stale
   // cell (`observed-state.stale-cell`: `staleCells` beside it), and an older floor that cannot
   // say (`observed-state.valid`, neither field). Generated for field-native and parity-checked
-  // strict in fixture_parity.rs; their own rows: terminal-inventory.test.ts.
+  // strict in fixture_parity.rs; their own rows: terminal-inventory.test.ts. Item 97 adds a
+  // fourth: a husk listed `exited` beside a live row (`observed-state.exited-husk`).
   "observed-state": ObservedState,
   "peer-info": PeerInfo,
   "store-snapshot": StoreSnapshot,
@@ -566,6 +576,9 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // TS-4 (TS-D7) — the asks to connect after Not now, each said `asked` with its
   // time beside AO's retired moments (setup-moment-params.asked is one saying)
   "setup-ledger-connect-ask": SetupLedger,
+  // TS-6 (TS-D13) — a link landed during setup: the sync question owed beside
+  // AO's retired moment and TS-4's saying (fieldd's store reads it from disk)
+  "setup-ledger-sync-question": SetupLedger,
   "agent-persona": AgentPersona,
   "agent-distribution": AgentDistributionRecord,
   "agents-installs": AgentsInstallsResult,
@@ -782,6 +795,14 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "project-figures": ProjectFiguresResult,
   "project-figures-day-params": ProjectFiguresDayParams,
   "project-figures-day": ProjectFiguresDayResult,
+  // CO — the compose plane, version 2 (compose.ts): a spark, its doors, and CP-1's verbs
+  "compose-spark-record": SparkRecord,
+  "compose-sparks-list": ComposeSparksListResult,
+  "compose-sparks-hatch-params": ComposeSparksHatchParams,
+  "compose-agents-available": ComposeAgentsAvailableOutput,
+  "compose-agents-list": ComposeAgentsListOutput,
+  "compose-agent-read": ComposeReadOutput,
+  "compose-history-search": ComposeHistorySearchOutput,
 };
 
 // *.vector.json = cross-language crypto vectors, not wire shapes — pinned by their own tests.
