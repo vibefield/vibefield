@@ -43,12 +43,14 @@
 - Landed 10-27: TS-0, 1, 2, 3a (+ erratum `067d4895c`), 3b, 5, 8a (`d48e131fc`, the floor's facts on truffle 0.7.24),
   8b (`adf3d972f`, the faces and James's words). T9–T11 consumed with truffle 0.7.24.
 - Landed 10-29: TS-4a (`776eae4d3`, asking again: the status item's Connect Your Devices…, the filters' ghost rows,
-  the away notice and the one switch) and TS-4b (`257af5f6f`, the approval line on the claims strip, behind the limit
-  moment).
-- Next: **TS-6** (the sync question, D13) → TS-7 (the phone) → TS-8c (T8, after its live probe) → TS-9. The slice
-  names are the doc's: the board's "TS-6" was TS-8a.
+  the away notice and the one switch), TS-4b (`257af5f6f`, the approval line on the claims strip, behind the limit
+  moment) and TS-6 (`26b331dbc`, landed as the merge `14c74f980`: the sync question at the first new field; setup's
+  posture pane retired).
+- Next: **TS-7** (the phone; fd's lane, 7a and 7b) → TS-8c (T8, after its live probe) → TS-9. The slice names are the
+  doc's: the board's "TS-6" was TS-8a.
 - James ruled TS-D19, TS-D20b and TS-D21 A (10-29 03:57:49Z). Owed: the approval line while Godview is closed (TS-4c
-  or a later rung); Publish's nudge, until a Publish offers where to open; the switch's words (drafts).
+  or a later rung); Publish's nudge, until a Publish offers where to open; the switch's words (drafts); a field made
+  while the sync question is owed by a path other than New field follows the posture (TS-6's finding).
 - Owed on James's display word: §5 (TS-2's photographs and desk rows, renew's live half, TS-5's real notice, TS-8a's
   live tailnet rows, TS-4a's rows and away notice, TS-4b's approval line). `specs/users-and-accounts.md` §6/§7 owes
   TS's fold (the housekeeping pass added its first dated notes there).
@@ -58,8 +60,8 @@
   `8828601ed`) and 84 (`68296443f`).
 - Next: **AO-7 (Get)** waits on James's puppeteer release with `installRecipe`. 0.3.0 (PUBLISHED 10-28 08:19Z, #48
   alone) does not carry it, read at its tag (`d0aa1224`), so AO-7 waits on a later release (0.3.x or 0.4.0; §3 item
-  3). AO-8 FILED 10-27: rosetta #23–#27 (RO-24…RO-28), puppeteer
-  #47 (PU-19).
+  3). AO-8: rosetta #23–#26 (RO-24…RO-27) shipped in 0.1.2 and are pinned at `3948bcf` (10-29);
+  their VibeField RPC/UI wiring remains follow-on work. Rosetta #27 (RO-28) and puppeteer #47 (PU-19) remain filed.
 - Owed: the desk rows (`pnpm smoke`, `smoke:studio`, `smoke:godview` on a display); the first-run spike (`thinking-agent-onboarding.md` §9).
 
 **AL — what Quit means** · better-quit (lanes `al2`, `al/chords`, `al/chords-2`) · law `draft/thinking-app-lifecycle.md` v0.2 §8, ESR §7.3 (amended), design-00 EL1
@@ -110,7 +112,8 @@
 
 **Fixer** · fixer · law the LANDED item entries
 - Landed since the audit: items 82 (`714ecbaae`, `8828601ed`), 83 (`f0b5342ac`), 84 (`68296443f`), 85 (`7eda2ee38`,
-  `b60e80398`), 89 (`238a960bc`) and 87 (`8d56b2bd8`), and the shell lease's cleanup race (`2422bdf5c`).
+  `b60e80398`), 89 (`238a960bc`), 87 (`8d56b2bd8`) and 113 (`218dc3d9e`), and the shell lease's cleanup race
+  (`2422bdf5c`).
 - Queue: item 80 (DS-5c's wall-clock gap margin, `doc-sync-service.test.ts`, shaped with the DS owner) with its
   sibling TC-S3 (`terminal-service.test.ts`, 99 against ≥100, red at AO-6b3's verify) · item 71 (persona refresh
   window) · item 73 (`unregistered_webcontents` false positive on every factory window) · item 74 (the generation-1
@@ -120,7 +123,10 @@
   settled from one pair of 750 ms readings, `agent-session.test.ts:2835`; red in item 87's first verify at load 257) ·
   item 92 (item 65's rosettad-supervisor row retried as a crash under load, `rosettad-supervisor.test.ts:342`; red
   there and in TS-4a's verify) · item 93 (DK-18's smoke-profile launcher row overruns the 5 s default under load,
-  `smoke-profile.test.ts:114`; red in item 87's rerun).
+  `smoke-profile.test.ts:114`; red in item 87's rerun) · item 111 (the Artifact panel's Copy does nothing in the app:
+  a plugin's web clipboard write under the empty grant set, item 102's class; an SDK clipboard-write door over HN B2's
+  host copy door, after HN B2 unless HN B3 claims it) · item 112 (main decodes a clipboard PNG of up to 64 MiB with no
+  pixel bound; an IHDR read before decoding against one new contracts constant, its literal ruled alone; after HN B2).
 - **Item 77b**, FieldTerminalTests' 60 s block. The 5 s shape is fixed: (d) `b1e9bf53d` runs AttachDeadlineTests
   `.serialized`, because each row's 1 s deadline covers the dial too and rows started together stampeded the loopback
   dial under load. k1 is separate: `test-without-building` cold-boots a Shutdown simulator, and pre-booting it
@@ -152,7 +158,7 @@
    `c0581e952`, branch `focus/agent-probe-env`); item 39 (the swarm's physics at the display's rate, ruled (i) 10-19);
    the tuck row (`384e933f`). The puppeteer halves of the last three sit on `vf/item-39` / `vf/after-a` in James's local
    `../puppeteer` only (not on GitHub, not on puppeteer main, not in a release): push them first, then merge.
-4. TS-6 → TS-7 → TS-8c → TS-9.
+4. TS-7 → TS-8c → TS-9.
 5. AL-6, "Last exit", the relaunch cap; the Behavior words.
 6. **The ruled small slices** (James, 2026-10-28, the housekeeping page), each a lane when one is free:
    - Q4: the explorer thumbnail follows an edit by ≈22 s (ICE's ambient wind, design-015 D-D9): pass a shorter
@@ -160,10 +166,6 @@
    - Q5: a note held longer than 2.4 s shows its advice again.
    - Q13: fieldd projects `costRatePerMin` on the desk row (`costUsd`/`costCoverage` since DS-3); the phone reads
      `desk` (D-i18), and D-i20 is re-checked in the same slice.
-   - Q19: retire Fieldmarks in code: design-kit's `icons` and `face-stickers` leaves
-     (`packages/design-kit/src/icons`, `packages/design-kit/src/face-stickers`), their catalog sections and reports,
-     `tooling/fieldmarks` and `tooling/face-stickers`. DESIGN.md first: §11/§11.1 retire, and §12's icon line names the
-     plain mark (`b51154f91`). The sheets archive to `draft/archive/retired/design-fieldmarks/`.
    - Q20: "Settings on demand" (replaces ESR's follow-on): SettingsPanel (`packages/field-app/src/panels/SettingsPanel.tsx`)
      becomes a lazy chunk, measured before and after.
    - Q21: TP-S3f's stated limit (a deliberate own kill never gets an event-driven face), verified after item 59
@@ -174,8 +176,8 @@
    - D11's signing-only measurement (two nightlies sharing an unchanged plane; W11's PTY-survival clause rides it).
    - The build job's image to `macos-26` (the Xcode 26.3 pin stands until then) · EDP-22's universal macOS build
      (`release.yml:171` builds mac-arm64 alone).
-   - RD-6, CI in prod shape only: mille's first npm release (no tag past v0.3.4; release PR #44) and rosettad as a
-     release asset (RD-D7; RO-4's remainder).
+   - RD-6, CI in prod shape only: mille's first npm release (no tag past v0.3.4; release PR #44) and adopting the published
+     rosettad archives (RD-D7; RO-4's remainder).
    - AR-7j, the launcher runtime in a packaged build (`agent-gateway.ts:310` still refuses a strict packaged fieldd).
    - LOG-39's packaged checks in `release.yml`'s verify · `allow-jit` on every shipped Rust daemon · shipped binaries
      embedding `~/.cargo/registry` paths · `package-census --assert --strict` red on MV's renderer chunks.
@@ -271,7 +273,7 @@
 - Releases: puppeteer 0.3.0 PUBLISHED 10-28 08:19Z and pinned (`1469639a6`, with QW1 stack B) · a later puppeteer
   release (0.3.x or 0.4.0) for AO-7's `installRecipe`, item 50's env seam, item 39 and the tuck (push and merge
   `vf/item-39`, `vf/after-a` first) · mille's first
-  npm release · rosettad as a release asset (RD-D7) · RD-4's pipelines (who runs them is open, §9).
+  npm release · adopt rosettad's published archives (RD-D7) · RD-4's pipelines (who runs them is open, §9).
 - The Mac mini (Q24): full Xcode 26 there is DEFERRED (James, 2026-10-28 08:46Z: "not able to install xcode on mini
   right now, please run those test on this mac instead"), so row 30 (`smoke:update`), the one gate row that needs it,
   runs on James's Mac. Claude lists the mini's leftovers, read-only, for his hand (`/tmp/vf-smoke-*`, `~/vf-lanes`
@@ -397,7 +399,7 @@
 | ghosttea | 0.13.7 on cargo (`=0.13.7`), npm and Swift | `5ba36785b`; no checkout needed; `../ghosttea-0.11.2` is only the overlay's coordinate |
 | ICE | `@vibecook/ice` 0.16.0 exact (overrides row) · strata 0.13.0 via ICE · `loro-crdt` ^1.13.8, one resolution | EL8 |
 | puppeteer | `@vibefield/puppeteer-*` 0.3.0 exact (tag v0.3.0 = `d0aa1224`) | the EL8 `1469639a6` (10-28; RD-5a-2 `a04850e29` took it exact at 0.2.3); `../puppeteer` is the overlay's coordinate |
-| rosetta | `@vibefield/rosetta-protocol` / `-room` 0.1.1 exact · rosettad built from `../rosetta-pin` at `4348545` | RD-5a `fe01ac797`; RD-D7 (no release asset) |
+| rosetta | `@vibefield/rosetta-protocol` / `-room` 0.1.2 exact · rosettad built from `../rosetta-pin` at `3948bcf` | EL8 10-29; matching npm and daemon releases; adopting daemon archives remains RD-D7 |
 | mille | `link:../mille-pin` at `c8160d5` (`@vibecook/mille`, `mille-ui`) | FS-1b; no release past v0.3.4; exit RD-6 |
 | rustc | 1.99.1 (`rust-toolchain.toml`) | EL8 |
 
@@ -409,8 +411,9 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 - **truffle:** T8 (the app-chosen hostname prefix; TS-8c, probe first) · T12 (a typed start refusal; held; a PR when
   James says) · T13, the one T row for T7's route-name pinning (Q22; owed, not drafted); T7's other follow-ups (the per-direction idle reap, a held
   route id's refusal, loopback pages) are recorded as accepted.
-- **rosetta:** RO-8 (retire/forget a runtime; RO-27 depends on it) · RO-11 (with DS-7) · RO-17…RO-23 · RO-24…RO-28
-  filed as #23–#27 (AO-8) · RO-10's follow-ups need a row · RO-4's remainder is RD-D7.
+- **rosetta:** RO-24…RO-27 (#23–#26) shipped in 0.1.2; VibeField RPC/UI adoption remains follow-on work.
+  RO-28 (#27, AO-8) remains filed, with RO-8 (retire/forget a runtime), RO-11 (with DS-7), RO-17…RO-23,
+  and RO-10's follow-ups. RO-4's remainder is adopting the released daemon archives (RD-D7).
 - **puppeteer:** 0.3.0 PUBLISHED and pinned 10-28 (`1469639a6`) · a later release for AO-7's `installRecipe`,
   item 50's env seam, item 39 and the tuck · PU-12 (verify first) · PU-19 filed as #47 (AO-8) · PU-15
   (with AR-6).
@@ -422,7 +425,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 
 | Track | State | Law lives in | Next |
 |---|---|---|---|
-| TS — the Tailscale door | ACTIVE; TS-0…3b, 4a, 4b, 5, 8a, 8b landed | `thinking-tailscale-onboarding.md`; DESIGN.md §6/§8/§9/§13 | TS-6 |
+| TS — the Tailscale door | ACTIVE; TS-0…3b, 4a, 4b, 5, 6, 8a, 8b landed | `thinking-tailscale-onboarding.md`; DESIGN.md §6/§8/§9/§13 | TS-7 |
 | AO — Bring Your Agents | ACTIVE; AO-0…6b3 landed | `thinking-agent-onboarding.md` | AO-7 on a puppeteer release after 0.3.0 (`installRecipe`) |
 | AL — app lifecycle | ACTIVE; AL-1…3, 5, 7, 8a, 9 landed | `thinking-app-lifecycle.md`; ESR §7.3 | AL-6, Last exit, relaunch cap |
 | QW1 — Godview swarm QA, fix wave 1 | ACTIVE; stacks A and B landed 10-28, B on puppeteer 0.3.0's EL8 pin | `godview-swarm-qa-plan.md`; `thinking-ar-reattach.md` | QA wave 1 |
@@ -445,7 +448,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | UA — users and accounts | COMPLETE except witnesses | `specs/users-and-accounts.md`, `thinking-ua-phone-account.md` | the phone's second-account witness |
 | NF — native floor | COMPLETE; one owed line | `specs/native-floor.md` | item 52 (b)'s phone half |
 | LOG — logging and audit | PARKED; item 78 landed | `specs/logging-and-diagnostics.md` | LOG-39 for the beta |
-| UI — design system | COMPLETE; owed slices | `DESIGN.md`, `docs/UI_SYSTEM.md` | the Fieldmarks retirement (Q19); InlineNotice tones; the desk sweep |
+| UI — design system | COMPLETE; owed slices | `DESIGN.md`, `docs/UI_SYSTEM.md` | InlineNotice tones; the desk sweep |
 | SNAP — screenshot tool | PARKED; SNAP-0/1/1a/3/3a/3b landed | `thinking-screenshot-tool.md`, `draft/composer/build-edge-trays.md` | live checks; the still as `desk.photo` |
 | SD — sound | PARKED (James's lab, Q27) | `draft/sound/design-sound.md` | James's call |
 | WIN — Windows port | PARKED since 08-24 (`c16e618f4`) | `thinking-windows-port.md`, `docs/WINDOWS_PORT_STATUS.md` | a Windows leg on the rails |
@@ -474,7 +477,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | The magnet grid; the Wormhole lab | DK-17's retire table; James 10-25, and his archive ruling (Q27) | the desk; `vf-splash` | `draft/archive/retired/magnet-grid/`, `draft/archive/superseded/wormhole/` |
 | The four dogfood packs | Q9 (James, 2026-10-28) | Desk Phase 6 | `draft/archive/superseded/thinking-prod-dogfood-packs.md` |
 | The device facet in puppeteer (PU-17's puppeteer half) | Q17 B (dropped; `feat/device-dimension` kept locally, not deleted) | VibeField's DS-3 filter (`6e62011e9`) | DECISIONS' HK row |
-| Fieldmarks and Face Club (DESIGN.md §11/§11.1) | Q19 C (retired) | the plain mark (`b51154f91`); DESIGN.md §13's glyphs | `draft/archive/retired/design-fieldmarks/`; the code slice is §3 item 6 |
+| Fieldmarks and Face Club (DESIGN.md §11/§11.1) | Q19 C (retired); code removed 2026-10-29 | the plain mark (`b51154f91`); DESIGN.md §13's glyphs | `draft/archive/retired/design-fieldmarks/`; kit leaves, assets, catalog sections/reports and generators removed |
 | James's labs: AV avatars, identity, logo studio, mark, research, system atlas | Q27 (archive each) | CO (avatars); the plain mark and `vf-splash` (identity, logo studio, mark); the desk (system atlas) | `draft/archive/retired/agent-avatars/`, `draft/archive/superseded/identity/`, `draft/archive/retired/logo-studio/`, `draft/archive/superseded/mark/`, `draft/archive/evidence/research/`, `draft/archive/superseded/system-atlas/` |
 | The LSF-3C agent-browser spike | Q12 (executed) | LSF §17 and DECISIONS hold its law | `draft/archive/executed/specs/live-surfaces-agent-browser-spike.md` |
 

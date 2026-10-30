@@ -10,6 +10,7 @@ import {
   DEFAULT_GRID,
   defineObject,
   type Entity,
+  type HeldEvent,
   isObjectKind,
   kindPalette,
   lampOf,
@@ -17,7 +18,7 @@ import {
   objectKindOf,
 } from "@vibefield/plugin-sdk/desk";
 import { type KindReport, productPalette, runKindConformance } from "@vibefield/plugin-sdk/testing";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import states from "../playground/states";
 import {
   bandFor,
@@ -139,6 +140,37 @@ const ctxOf = (props: Record<string, unknown>, extra: Partial<ObjectContext> = {
 
 describe("the browser pane's world half", () => {
   const k = browserPaneKind();
+
+  it.each([{}, { url: "about:blank" }, { url: "https://example.com/" }])(
+    "can press the address before a live face exists (%j), even across a redraw",
+    (props) => {
+      const local = createPaneLocal(undefined);
+      const address = vi.fn();
+      local.bind({ address });
+      const ctx = ctxOf(props, {
+        local,
+        held: { e: 1, open: true, grow: 1, snap: true } as NonNullable<ObjectContext["held"]>,
+      });
+      const G = k.resolve(ctx) as PaneGeometry;
+      k.record(G, ctx);
+      const press = (phase: "down" | "up"): HeldEvent => ({
+        type: "pointer",
+        phase,
+        part: "address",
+        x: 0,
+        y: 0,
+        button: 0,
+        buttons: phase === "down" ? 1 : 0,
+        count: 1,
+      });
+      local.held?.(ctx.entity, [press("down")]);
+      k.record(G, ctx);
+      local.held?.(ctx.entity, [press("up")]);
+      expect(address).toHaveBeenCalledExactlyOnceWith(ctx.entity);
+      expect(local.layout(ctx.entity)?.G).toBe(G);
+      local.dispose?.();
+    },
+  );
 
   it("is PICKED BY ITS SLAB as drawn — `content` everywhere on it at rest (a drag on its head moves it), past its silhouette nothing", () => {
     const G = k.resolve(ctxOf({})) as PaneGeometry;

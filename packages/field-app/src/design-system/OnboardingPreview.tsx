@@ -4,11 +4,9 @@ import { createContext, type ReactElement, type ReactNode, useContext, useState 
 import type { DoorDevice } from "../account/door/door-parts";
 import { faceKey } from "../account/faces";
 import { type LinkBeginStep, type LinkFace, linkFace, type UserLinkStatus } from "../account/link";
-import type { SyncPosture, SyncPostureControl } from "../account/posture";
 import { historySetupPhase } from "../boot/onboarding/history-line";
 import { type ConnectAside, OnboardingConnectPaneView } from "../boot/onboarding/views/connect";
 import { OnboardingFieldPaneView } from "../boot/onboarding/views/field";
-import { OnboardingPosturePaneView } from "../boot/onboarding/views/posture";
 import {
   OnboardingSettingUpPaneView,
   type OnboardingSetupPhase,
@@ -99,9 +97,6 @@ function connectAside(state: ConnectState, variant: string): ConnectAside {
   if (state === "sign in" && variant === "phone") return "phone";
   return "constellation";
 }
-
-const POSTURE_STATES = ["automatic", "opt-in", "loading", "unavailable", "write error"] as const;
-type PostureState = (typeof POSTURE_STATES)[number];
 
 const FIELD_STATES = ["fresh", "second user", "saving", "error"] as const;
 type FieldState = (typeof FIELD_STATES)[number];
@@ -296,7 +291,6 @@ export function OnboardingPreview({
           <ProfilesPreview />
           <HistoryPreview />
           <ConnectPreview />
-          <PosturePreview />
           <SettingUpPreview />
         </OnboardingGroup>
 
@@ -690,49 +684,6 @@ function ConnectPreview(): ReactElement {
         onContinue={noop}
         onSkip={noop}
         onBack={noop}
-      />
-    </OnboardingFrame>
-  );
-}
-
-function PosturePreview(): ReactElement {
-  const [state, setState] = useState<PostureState>("automatic");
-  const [posture, setPosture] = useState<SyncPosture>("automatic");
-  const visiblePosture =
-    state === "opt-in" ? "opt-in" : state === "automatic" ? "automatic" : posture;
-  const control: SyncPostureControl = {
-    posture: visiblePosture,
-    status: state === "loading" ? "loading" : state === "unavailable" ? "error" : "live",
-    unavailable: state === "loading" || state === "unavailable",
-    pending: false,
-    writeError: state === "write error" ? "The preference write was refused. Try again." : null,
-    set: async (next) => {
-      setPosture(next);
-      setState(next);
-      return true;
-    },
-  };
-
-  return (
-    <OnboardingFrame
-      index="07"
-      label="Project default"
-      note="Shared with Settings → Account"
-      state="posture"
-      controls={
-        <SegmentedControl
-          options={POSTURE_STATES}
-          value={state}
-          onChange={setState}
-          label="Project-default pane state"
-        />
-      }
-    >
-      <OnboardingPosturePaneView
-        posture={control}
-        onDone={noop}
-        onBack={noop}
-        radioName="vf-design-onboarding-posture"
       />
     </OnboardingFrame>
   );

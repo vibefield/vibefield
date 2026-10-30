@@ -49,6 +49,22 @@ const T: Partial<RosettadTimings> = {
   RESTART_WINDOW_MS: 5_000,
 };
 
+/** Item 92 — the bounds every row whose words trail the exit runs under (FAKE_ROSETTAD_LATE_STDERR_MS). The words
+ * trail the exit by the delay plus the fake's helper waking after it, and at nice 19 under a load of 362 that wake ran
+ * past the product's 1 s (`STDERR_DRAIN_MS`): the crash row read "its stderr still open after 1000 ms", and the old
+ * binary was retried. What those rows prove is that the exit is composed when stderr ENDS, so they test what the
+ * words classify, never a bound, and both bounds a trail can meet stand wide of any wake:
+ * - the drain (5 s);
+ * - the startup bound, counted from the spawn (6 s). The rig's 1.5 s answered "did not become ready in time" first
+ *   once the wake passed ~1.2 s. It stays above the drain, so a stderr held past the drain still reads as the drain's
+ *   answer.
+ * What happens AT a bound is its own row, on `T` (the drain's: 200 ms against a 3 s trail). */
+const LATE_DRAIN: Partial<RosettadTimings> = {
+  ...T,
+  STDERR_DRAIN_MS: 5_000,
+  STARTUP_TIMEOUT_MS: 6_000,
+};
+
 let sups: RosettadSupervisor[] = [];
 let dirs: string[] = [];
 let strays: ChildProcess[] = [];
@@ -319,6 +335,7 @@ describe("RosettadSupervisor — the index daemon's kill matrix (AR-0 S2)", () =
   it("item 65 — a crash whose last words reach stderr AFTER its exit still carries them in the detail", async () => {
     const { sup, transitions } = rig("crash-on-start", {
       spawnProcess: fakeSpawner("crash-on-start", LATE),
+      timings: LATE_DRAIN,
     });
     expect(await sup.start()).toBeNull();
     await until(() => sup.state().phase === "restarting", 4_000);
@@ -332,6 +349,7 @@ describe("RosettadSupervisor — the index daemon's kill matrix (AR-0 S2)", () =
     const handed: Handed[] = [];
     const { sup, phases } = rig("old-binary", {
       spawnProcess: handingSpawner("old-binary", handed, LATE),
+      timings: LATE_DRAIN,
     });
     expect(await sup.start()).toBeNull();
     await until(() => sup.state().phase === "failed", 4_000, "failed");
@@ -781,6 +799,7 @@ describe("RosettadSupervisor — a projection of another schema is rebuilt, not 
   it("item 65 — a mismatch whose words trail the exit is REBUILT, never retried as a crash first", async () => {
     const { sup, phases, rebuilds } = upgradeRig("ok", {
       env: { FAKE_ROSETTAD_LATE_STDERR_MS: "300" },
+      timings: LATE_DRAIN,
     });
     expect(await sup.start()).toBeNull();
     await until(() => sup.state().phase === "ready", 6_000, "served after the rebuild");

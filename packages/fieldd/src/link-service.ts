@@ -101,6 +101,14 @@ export interface LinkServiceOptions {
    * law. Injected so the enumeration stays testable and so this service never
    * has to know how the user directory is laid out. */
   otherUserLinks?: () => Array<{ label: string; login: string }>;
+  /** TS-6 (TS-D13) — awaited when a NEW link lands, before link.json is written
+   * and before the floor is told: what must hold before this Mac reaches its
+   * tailnet (the sync question's keep, `sync-question.ts`). A stop between the
+   * two leaves no link, so the next sign-in runs it again. A new link is one
+   * with no login held: never a linked boot, a renewal, a re-verify or a login
+   * that moved under a live link. A failure is logged; it never refuses the
+   * link. */
+  beforeLinked?: () => Promise<unknown>;
 }
 
 const PROBE_MS = 15_000;
@@ -820,6 +828,18 @@ export class LinkService extends EventEmitter {
         `the local user "${held.label}" is already linked to this tailscale account; unlink it first`,
       );
       return true;
+    }
+
+    if ((this.link?.login ?? null) === null && this.opts.beforeLinked !== undefined) {
+      try {
+        await this.opts.beforeLinked();
+      } catch (error) {
+        this.logger.error(
+          "fieldd.link.before_linked_failed",
+          "What a new link waits for failed; the link lands anyway",
+          error,
+        );
+      }
     }
 
     const at = new Date(this.now()).toISOString();

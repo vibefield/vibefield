@@ -15,6 +15,8 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import type { SyncPosture } from "../account/posture";
+import { earlierFields, type SyncQuestionDoor } from "../account/sync-question";
 import { emitZoomKeyMarker, emitZoomMenuMarker } from "../development-console";
 import type { DocManagerApi } from "../doc-manager";
 import { useDocSyncStatuses } from "../doc-sync-store";
@@ -121,6 +123,16 @@ export interface HeadProps {
    * the item's ACT through this door, and the head answers it as it answers
    * the keys. Absent where there is no menu bar (the catalog). */
   menuZoom?: (handler: (act: FrameZoomAct) => void) => () => void;
+  /** TS-6 (TS-D13) — the sync question's door: while a link owes it, New field
+   * asks it before the field is made. Absent where the head has no daemon (the
+   * catalog, its own tests): New field never asks. */
+  syncQuestion?: SyncQuestionDoor | undefined;
+}
+
+/** The question while it is open: the posture chosen, the fields added. */
+interface Asking {
+  choice: SyncPosture;
+  added: ReadonlySet<string>;
 }
 
 export function Head({
@@ -132,6 +144,7 @@ export function Head({
   onSurfaceChange,
   bindKeys = true,
   menuZoom,
+  syncQuestion,
 }: HeadProps): ReactElement {
   const state = useSyncExternalStore(manager.subscribe, manager.getState);
   const path = useSyncExternalStore(canvas.subscribePath, canvas.path, canvas.path);
@@ -153,6 +166,49 @@ export function Head({
     (closing: FrameSurface) => onSurfaceChange(foldSurface(surface, closing)),
     [onSurfaceChange, surface],
   );
+
+  // TS-6 (TS-D13) — the sync question, while New field waits on it. It closes
+  // with the explorer, and when nothing owes it any more (answered elsewhere).
+  const [asking, setAsking] = useState<Asking | null>(null);
+  const [answering, setAnswering] = useState(false);
+  const [answerError, setAnswerError] = useState<string | null>(null);
+  const owed = syncQuestion?.owed === true;
+  useEffect(() => {
+    if (!fieldsOpen || !owed) setAsking(null);
+  }, [fieldsOpen, owed]);
+
+  const newField = useCallback(() => {
+    if (syncQuestion?.owed) {
+      setAnswerError(null);
+      setAsking({ choice: syncQuestion.posture.posture, added: new Set() });
+      return;
+    }
+    fold("fields");
+    void manager.createDoc();
+  }, [fold, manager, syncQuestion]);
+
+  /** The answer, in its order: the fields added are sent (the head's own act,
+   * so their tiles flip), then the posture and the question's retiring, then
+   * the field is made. A refused write keeps the question, in its words. */
+  const answerQuestion = useCallback(async () => {
+    if (asking === null || syncQuestion === undefined) return;
+    setAnswering(true);
+    setAnswerError(null);
+    try {
+      for (const docId of asking.added) await manager.setSyncIntent(docId, "sync");
+      if (!(await syncQuestion.answer(asking.choice))) return;
+      setAsking(null);
+      fold("fields");
+      void manager.createDoc();
+    } catch (error) {
+      setAnswerError(error instanceof Error ? error.message : String(error));
+      getRendererLogger()
+        .child({ component: "docs.head" })
+        .error("renderer.sync_question.answer_failed", "The sync question's answer failed", error);
+    } finally {
+      setAnswering(false);
+    }
+  }, [asking, fold, manager, syncQuestion]);
 
   // A fresh registry every time the explorer opens: never a stale catalog.
   useEffect(() => {
@@ -381,12 +437,35 @@ export function Head({
           fold("fields");
           if (docId !== currentId) void manager.switchTo(docId);
         },
-        onNewField: () => {
-          fold("fields");
-          void manager.createDoc();
-        },
+        onNewField: newField,
         onToggleSync: toggleSync,
         onDeleteDoc: deleteDoc,
+        question:
+          asking === null || syncQuestion === undefined
+            ? null
+            : {
+                choice: asking.choice,
+                locked: answering || syncQuestion.posture.unavailable,
+                earlier: earlierFields(state.docs)
+                  .filter((entry) => !(state.beforeTheDesk ?? []).includes(entry.docId))
+                  .map((entry) => ({
+                    docId: entry.docId,
+                    name: entry.name,
+                    caption: fmtRelative(entry.updatedAt),
+                  })),
+                added: asking.added,
+                error: answerError ?? syncQuestion.posture.writeError,
+                onChoose: (choice) => setAsking((open) => open && { ...open, choice }),
+                onToggle: (docId) =>
+                  setAsking((open) => {
+                    if (open === null) return null;
+                    const added = new Set(open.added);
+                    if (!added.delete(docId)) added.add(docId);
+                    return { ...open, added };
+                  }),
+                onAnswer: () => void answerQuestion(),
+                onCancel: () => setAsking(null),
+              },
       }}
       zoom={{
         percent,
