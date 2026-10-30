@@ -1,7 +1,9 @@
 # Fast PR feedback from the Nx project graph. This complements — and never
 # replaces — verify.yml's full macOS gate. It intentionally runs only the
-# affected JavaScript/desktop targets; Rust format, clippy, tests, codegen
-# freshness, and the external truffle checkout remain owned by `pnpm verify`.
+# affected JavaScript/desktop targets. fieldd's tests build field-native in global
+# setup; Ghosttea's current release has no Linux VT artifact, so those tests run
+# in the full macOS verify gate. Rust format, clippy, tests and codegen freshness
+# stay there too. fieldd's JavaScript build and typecheck still run here.
 name: affected
 
 on:
@@ -44,6 +46,11 @@ jobs:
       - uses: ./.github/actions/prepare-mille
 
       # No Nx Cloud connection or token: local deterministic caching only.
-      # The full verify workflow still runs on every PR and on main.
-      - name: Build, test, and typecheck affected projects
-        run: pnpm exec nx affected -t build,test,typecheck --outputStyle=stream
+      - name: Build and typecheck affected projects
+        run: pnpm exec nx affected -t build,typecheck --outputStyle=stream
+
+      # fieldd's globalSetup builds field-native before any test starts. Ghosttea 0.13.7 has no
+      # x86_64 Linux VT artifact, so that suite cannot start on this runner. verify.yml runs the
+      # complete suite on macOS on every PR and main push; keep its build/typecheck above.
+      - name: Test affected projects supported on Linux
+        run: pnpm exec nx affected -t test --exclude=@vibefield/fieldd --outputStyle=stream
