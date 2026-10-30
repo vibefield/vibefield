@@ -3846,6 +3846,16 @@ tap, key or button until PT-S4's touch lands.
 | at rest | its last frame, with the rest mark | — |
 | stopped | "The Simulator stopped", over its still | "Try again" |
 
+**The phone's two acts on the selection menu** (track PT, PT-S2; R11, ruled 2026-10-30) — said for the phones selected, each
+one undo step, quoted exactly by the plugin (`plugins/simulator`'s `attach.ts`). **Attach** binds each phone to a Simulator
+of this Mac's own: the booted device of the phone's own model, else the first booted iPhone (the phone morphs into its
+model), else the phone's own model on the newest iOS this Mac has, whose face then says what is true of it — off, with
+"Boot", or no device, with "Create it". **Finish** turns each phone to its model's next finish, in the order they launched,
+and round to the first. There is no Model act: a bound phone's model is its device's, and only Attach sets it — a model
+unlike its device would show another iPhone's screen in its frame. A binding names a model and an iOS, never one Mac's
+device, so on another Mac the same phone shows that Mac's own Simulator of its model. Attach changes nothing on a Mac that
+has no Simulator device to offer, or before VibeField has read this Mac's devices.
+
 **The update's words** (track AU, AU-L2, AU-L3, AU-L6; ruled 2026-10-29). **A version is said two ways:** exactly
 where it can be copied — `0.1.0-nightly.20261027` in mono on Settings → Updates' head — and in friendly words in a
 sentence: a nightly is "the Oct 27 nightly" (its day, from `-nightly.YYYYMMDD`; "The Oct 27 nightly" at a sentence's
