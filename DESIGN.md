@@ -1973,7 +1973,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   the clipboard — and the note says why, in Copy's voice: "Not copied — the clipboard did not take
   the picture", "Not copied — the picture could not be read", or its size against the clipboard's
   bound, counted as §9 counts — the size rounded up, the bound down ("Not copied — the words hold
-  80 KB; the clipboard takes at most 65 KB"); a refusal never repeats a bridge's error. Settings' copies
+  80 KB; the clipboard takes at most 65 KB"); words that fit the clipboard but not the one request a
+  copy sends say that bound instead ("Not copied — the words hold 66 KB as sent; a copy sends at most
+  65 KB"); a refusal never repeats a bridge's error. Settings' copies
   keep their buttons' own "Copied" and "Couldn't copy", and History's room its own receipts ("Path
   copied"), its refusal said in Copy's voice. **A copy made under a sheet** (Settings, the Setup
   Assistant) is dealt into the hand under it, seen when the sheet closes; the button's "Copied" is its
