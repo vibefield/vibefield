@@ -69,10 +69,11 @@
 **FG — the first run on the field** · vibe-field-a5 (lane `fg/build`) · law `draft/thinking-first-run-glass.md` §7, DESIGN.md §2.1/§5/§6/§8/§13 (page sources `draft/first-run-glass/`)
 - Ruled 10-29 09:29–09:35Z (James on *First run on the field*: the lean on eight, D15 C, D10 B, D14 B), and FG-D24 in
   his words on version 6 (the field draws the glass).
-- Built, to land as one: **FG-0** (records only: DESIGN.md first), **FG-1** (`88457494e`, the field: the website's
-  splash vendored with its door, the boot's ground) and **FG-2** (`07618ca61`, the returning tear; every boot handed
-  over before it is interactive), merged with main as `fg/land`. It verifies on the Mac mini in VF-PM's queue.
-- Next: **FG-3** (the glass, the steps, the frame: 3a the glass's DOM, applied once FG lands; then 3b, the field
+- Landed 10-30: **FG-0** (records only: DESIGN.md first), **FG-1** (`88457494e`, the field: the website's splash
+  vendored with its door, the boot's ground) and **FG-2** (`07618ca61`, the returning tear; every boot handed over
+  before it is interactive), as the merge `ffe9d9b40`, run 7 on the Mac mini: verify green, smoke:canvas:no-webgpu
+  green, and smoke:canvas red only on item 117's class (LANDED "FG-1", "FG-2").
+- Next: **FG-3** (the glass, the steps, the frame: 3a the glass's DOM, applied over `ffe9d9b40`; then 3b, the field
   drawing the glass, FG-D24) → FG-4 (the panes in the frame, and the logo) → FG-5 (the hand-over) → FG-6 (the gates:
   the catalog, a `smoke:first-run` row, contrast). Each verifies on the Mac mini.
 - Owed: FG-O7 (§9) at FG-4.
@@ -150,13 +151,14 @@
   board settled from one pair of 750 ms readings, `agent-session.test.ts:2835`; red in item 87's first verify at load
   257; its red-first inverted on 10-29, so a read comes first) · item 116 (item 93's twin: electron-shell's
   `stopRunDaemons`, `src/testing/smoke-daemons.ts`, reads the whole process table twice per 100 ms poll, in macOS's `ps`
-  spelling alone, so a Linux smoke reads nothing; one census, after PR #8) · item 96's own half (the parts alone ×N and
-  on CI; which of the 13 bare `30_000` rows keep a named constant; the one row still past a second) · item 111 (the
-  Artifact panel's Copy does nothing in the app: a plugin's web clipboard write under the empty grant set, item 102's
-  class; an SDK clipboard-write door over HN B2's host copy door, after HN B2 unless HN B3 claims it) · item 112 (main
-  decodes a clipboard PNG of up to 64 MiB with no pixel bound; an IHDR read before decoding against one new contracts
-  constant, its literal ruled alone; after HN B2) · item 115 (`pnpm dev`'s nx watcher outlives a runner that ends
-  without `shutdown()`: a watcher host on a stdin pipe, and a SIGHUP handler; after 111 and 112).
+  spelling alone, so a Linux smoke reads nothing; one census, after PR #8) · item 117 (the smoke:canvas HAND bar-return
+  class on the mini, 250 ms vs 200 ± 40; filed from FG's run 7, `lanes/records/item117`; after 116) · item 96's own half
+  (the parts alone ×N and on CI; which of the 13 bare `30_000` rows keep a named constant; the one row still past a
+  second) · item 111 (the Artifact panel's Copy does nothing in the app: a plugin's web clipboard write under the empty
+  grant set, item 102's class; an SDK clipboard-write door over HN B2's host copy door, after HN B2 unless HN B3 claims
+  it) · item 112 (main decodes a clipboard PNG of up to 64 MiB with no pixel bound; an IHDR read before decoding against
+  one new contracts constant, its literal ruled alone; after HN B2) · item 115 (`pnpm dev`'s nx watcher outlives a
+  runner that ends without `shutdown()`: a watcher host on a stdin pipe, and a SIGHUP handler; after 111 and 112).
 - **Item 77b**, FieldTerminalTests' 60 s block. The 5 s shape is fixed: (d) `b1e9bf53d` runs AttachDeadlineTests
   `.serialized`, because each row's 1 s deadline covers the dial too and rows started together stampeded the loopback
   dial under load. k1 is separate: `test-without-building` cold-boots a Shutdown simulator, and pre-booting it
@@ -460,7 +462,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 |---|---|---|---|
 | TS — the Tailscale door | ACTIVE; TS-0…3b, 4a, 4b, 5, 6, 8a, 8b landed | `thinking-tailscale-onboarding.md`; DESIGN.md §6/§8/§9/§13 | TS-7 |
 | AO — Bring Your Agents | ACTIVE; AO-0…6b3 landed | `thinking-agent-onboarding.md` | AO-7 on a puppeteer release after 0.3.0 (`installRecipe`) |
-| FG — the first run on the field | ACTIVE; FG-0…2 built, to land as one (`fg/land`) | `thinking-first-run-glass.md`; DESIGN.md §2.1/§5/§6/§8/§13 | FG's landing, then FG-3 |
+| FG — the first run on the field | ACTIVE; FG-0…2 landed 10-30 | `thinking-first-run-glass.md`; DESIGN.md §2.1/§5/§6/§8/§13 | FG-3 (3a, then 3b) |
 | AL — app lifecycle | ACTIVE; AL-1…3, 5, 7, 8a, 9 landed | `thinking-app-lifecycle.md`; ESR §7.3 | AL-6, Last exit, relaunch cap |
 | AU — Updates That Wait | ACTIVE; B1 (AU-0, AU-1) landed 10-30 | `thinking-update-ux.md` §7 (page sources `draft/update-ux/`); DESIGN.md §2.5/§2.8/§6/§8/§9/§13; EDP §5.2/§6.4/§11; ESR §7.3 | B2 (AU-3a, AU-3, AU-2) |
 | QW1 — Godview swarm QA, fix wave 1 | ACTIVE; stacks A and B landed 10-28, B on puppeteer 0.3.0's EL8 pin | `godview-swarm-qa-plan.md`; `thinking-ar-reattach.md` | QA wave 1 |

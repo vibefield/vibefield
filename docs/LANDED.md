@@ -19409,7 +19409,8 @@ desktop app". This entry lands the records before any code, because a visual cha
 **Not in this entry.** No code. Every amendment names the packet that builds it ("to be built at FG-n"). Each token
 reaches `tokens.css` with its first consumer, as TS-0's did:
 - `--vf-field-ground` with FG-1 (the field, and the window's pre-paint as a stated projection of it);
-- `--vf-field-ink` with FG-2 (the boot's face);
+- `--vf-field-ink` with FG-2 (the boot's face) *(corrected 2026-10-30, at FG-1's landing: it came with FG-1, which
+  moved the boot's face (`SplashFace`) forward from FG-2 (VF-PM, 11:24Z), so FG-2 brought the tear alone)*;
 - the glass's edge, top light, shadow and grain with FG-3.
 
 FG-1 (the field) is next, in lane `fg/build` on VF-PM's word. FG-3 follows TS-6's landing and FG-4 follows TS-7's
@@ -19430,3 +19431,175 @@ six ran green, each alone at nice 19 (11:26:26–11:26:43Z, load 10), with 5, 24
 *Corrected 2026-10-30 (at `fg/land`'s merge of main `ac5dd87d3`; VF-PM, 18:43Z): CP-0 landed first, as the mini's
 run 5 (`b9ca35824`). FG-0 never verified alone. It verifies with FG-1 and FG-2 as FG's one landing (`fg/land`), in
 VF-PM's queue, and the landing's records name its run.*
+
+## FG-1 — the boot wakes on the field: the website's splash, vendored at its pinned bytes, runs from the first frame into the Setup Assistant, one field, its mark gone under the glass (FG-L1, FG-D14 B, FG-D25) (2026-10-29; `88457494e`, lane `fg/build`, in `fg/land`'s merge `ffe9d9b40`)
+
+**What.** FG-0's field, built: the boot's first face is the website's splash.
+- **The vendor** (`tooling/splash/vendor.mjs`) copies vibefield-dotdev's splash module and three pictures (the white
+  mark, the wide still, the tall still) into `field-app/src/boot/splash/`, at the website's `37eb2c3`.
+  - It refuses a source whose sha256 is not its pin.
+  - It heads the module with five GENERATED lines naming every pin.
+  - `--check` compares bytes.
+- **The door** (`boot/splash/field-door.ts`) ports the website's loading window. The field runs in a worker through
+  `transferControlToOffscreen`, else on the main thread, else as the still. It uses the desktop budget (3.2e6 device
+  px) and `high-performance`.
+  - The PAGE's `navigator.gpu` is read first, because the no-webgpu smoke deletes it from each document.
+  - `?field=still` and `?field=main` force the still and the main thread.
+  - It never rejects: a field that can't start is the still, and it says why.
+- **The worker** (`field-worker.ts`) carries the website's shims and imports the module statically. Its messages are
+  typed: start · resize · visibility · mark · reveal · destroy. It releases its device before it is ended.
+- **The mark** (`field-mark.ts`) runs CSS's `ease` on the splash's own `setReveal(0, { mark })`, so it fades under
+  Reduce Motion too.
+- **`FieldLayer` sits in `BootGround`**, one node from the splash's first paint into the Setup Assistant, so ONE field
+  runs from the first paint to the reveal.
+  - `data-field` goes waking → live | still.
+  - The still mark stands over the canvas while the canvas fades in.
+  - Under the Setup Assistant's glass the field's mark goes (§6).
+- **`boot.css`**: `.vf-splash` stands on `--vf-field-ground`, with the stills, the canvas's fade, and the words on the
+  website's shade.
+- **Moved forward from FG-2**: `SplashFace` is the field's face, with the bar and the stage under the mark and the
+  wordmark retired. The switch keeps the mat (`.vf-mat-floor`, `MatSplashFace`; FG-O6).
+- **Tokens**: `--vf-field-ground: #04050f` and `--vf-field-ink` (white at 56%) are in `tokens.css`.
+- **The pre-paint** (`electron-shell/src/main/windows.ts`) is `#04050f`, the NAMED PROJECTION of `--vf-field-ground`
+  (FG-D25). Main can't read CSS, so the literal names its token, DESIGN.md §2.1's row names `windows.ts`, and
+  `wearing-the-mat.test.tsx` holds the two equal. `docs/UI_SYSTEM.md` gains the rule.
+- **DESIGN.md**: §8 "The boot splash" gains the shade's numbers, and the marks read "built at FG-1".
+
+**Found:**
+- UI_SYSTEM.md had no main-process exception. The pre-paint before FG-1, `#171717`, was a bare literal whose comment
+  named `--vf-canvas-bg`, which nothing held → FG-D25.
+- The splash's `reveal()` fades the mark from 1, whatever it stood at. So the first run's hand-over brings the mark
+  back before the tear (§5.8's order; FG-5).
+- Until FG-3, the Setup Assistant's DOM glass blurs the live field behind it. FG-D24's field-drawn glass retires that
+  pass.
+- A worker that never answers is never ended, as on the website. The window keeps the ground and the still mark, an
+  honest state.
+
+**Validation.**
+- **The lane** is `/Volumes/SamsungRed/lanes/fg/vibe-field`, a worktree of the main checkout's repo on the SSD
+  (`fg/build`; `fg/land` for the merges).
+- **The light pass** (`lanes/fg/fg1-light.sh`; each row alone at nice 19 under the guard, the vitest rows on the
+  settled gate) was GREEN 12:26–12:30Z on VF-PM's word, all 26 rows rc 0:
+  - the vendor check;
+  - both typechecks;
+  - 19 test files, 407 tests;
+  - biome (41 files), `check:walls`, `check:retired`;
+  - `build:renderer` (the production UI boundary OK, 78 files);
+  - `git diff --check`.
+- **No verify on this Mac** (James, 2026-10-29 09:05Z: the Mac mini's verify lane). FG-0, FG-1 and FG-2 were verified
+  together as the mini's run 7 on 10-30 (VF-PM, 10-29 12:46Z: one run).
+- **The landed tip** is `ffe9d9b40`. `fg/land` is FG-0 (`ac2fc7453`), FG-1 and FG-2 over main `e23fa8a1f`, merged
+  with main twice: `0b4cb2ff0` (the item 94 stack) as `202876da2`, then `ac5dd87d3` as `ffe9d9b40` (10-30 18:54Z).
+  - Both merges were resolved in place: DESIGN.md, LANDED and ROADMAP, the appends keeping both sides.
+  - FG-0's "after CP-0" line got its dated correction there.
+  - It went to the mini as a bundle of its five commits (sha256 `b2b63687…`).
+  - The mini's `next` ran 19:02:33–19:02:43Z. It re-installed (a lock had moved) and built field-native, and preflight
+    exited 0 with one R23 candidate warning.
+- **The mini, run 7, `pnpm verify` at `ffe9d9b40`:** exit 0, armed 19:03:39Z, done 19:08:09Z (load 1.05 → 9.45),
+  whole: preflight through `gen:check`.
+  - `pnpm test` ran 27 projects with no failed summary: vitest 9,895 passed, 0 failed, 17 skipped.
+  - `pnpm test:rust`: 499 passed, 0 failed, 14 ignored, over 31 binaries.
+  - `gen:check` was clean, and so was the tree after, with no stub left.
+  Logs: `lanes/ts6/logs/mini/run7/`.
+- **The smokes ran on the mini's M4 over ssh**, each alone. They arm only when its console is unlocked and nobody is at
+  it (VF-PM, 10-29 12:39Z). Its HID idle stood at 208 s at the first arm and 1,147 s at the second.
+  - `smoke:canvas:no-webgpu` (the still) was green: exit 0 at 19:26:20Z. It said DESK_UNAVAILABLE once, then CARD_WORDS
+    and CARD_COVER (the face `ground`, `cardUnder` true).
+  - `smoke:canvas` (GPU on: the field at boot, and since FG-2 the tear) was red on item 117's class ALONE: armed
+    19:10:13Z, exit 2 at 19:25:52Z.
+    - Two rows were red. HAND_WHITEBOARD's bar came back 251 ms after the landing and HAND_CALENDAR's 250 ms, against
+      200 ± 40. HAND_NOTEBOOK (232.5) and HAND_CLOCK (217.1) were inside.
+    - The judge is the bar-return row of `smoke-tools-in-hand.ts`, last changed by DK-12 (`8546cb91b`). Since 10-15 it
+      has been red six times on main's own controls, each on a tree that changed no hand file. A seventh came 24
+      minutes after this run, at main's control on the same host (`ac5dd87d3`, `ctl117/`): HAND_CALENDAR 251 ms.
+    - FG changes no hand file.
+    - Item 117 (VF-PM, 19:31Z, `lanes/records/item117/`) asks which is wrong first, the product or the observer.
+    - Every other row passed, including the HAND rows' own cells and travels.
+    - The desk mounted once, beside the boot's field (DK-9's row).
+    - Observed, not a red: the desk's first boot was slow. It read device 206 ms, compiled 3,338 ms and presented
+      3,435 ms (5 frames). Main's control 24 minutes later read 19 / 122 / 164 ms (3 frames).
+      - a9 told the two causes apart with a warm re-run at `ffe9d9b40` (`run7b/`, 19:55:27Z): 23 / 133 / 178 ms
+        (3 frames).
+      - So the 3.3 s was a cold first boot on the mini, its Metal shader cache by a9's read, not FG's field.
+      - Warm, the field's own adapter and device (`field-worker.ts`, `field-door.ts`) do not slow the desk's compile,
+        and FG owes no time-to-interactive fix.
+      - No cold boot of main was measured beside it. Whether the field adds to a cold first boot is open.
+  - desk-gates.md's rows 17 and 19 carry the host, corrected at their source in this commit.
+- **Landed:** main fast-forwarded `ac5dd87d3` → `ffe9d9b40` at 20:27:26Z on VF-PM's GO (19:30Z). The fixer's
+  `land-stack.sh` waited at the guard for a dev runner until it cleared. Main was pushed at 20:28:54Z.
+
+**Owed.**
+- FG-O2: the contrast reading of the field's ink (FG-6).
+- The glass (FG-3: 3a its DOM, then 3b drawn by the field, FG-D24).
+- The panes in the frame, and the logo (FG-4).
+- The first run's hand-over through the tear (FG-5).
+- The catalog's still and `smoke:first-run` (FG-6).
+
+## FG-2 — the returning tear: a returning boot's splash stands its floor, its words go, and the field tears open onto the desk as it settles in; every boot is handed over before it is interactive (FG-D9 A, FG-D10 B, FG-D11 A, FG-L6) (2026-10-29; `07618ca61`, lane `fg/build`, in `fg/land`'s merge `ffe9d9b40`)
+
+**What.**
+- **The machine** (`boot/machine.ts`): once the desk is frame-stable, EVERY boot holds at `handing-over` until its
+  first face hands it over (`revealDesk`). So `interactive` still means revealed, and AO-D2's `revealHeld` retires.
+  - A hand-over given early is kept.
+  - The release exists before the patch that notifies.
+  - Before the hold comes the floor: the splash stands 700ms from `start()` (the website's `SPLASH.again`). A hidden
+    window skips it.
+- **BootRoot is the one decider.** A returning boot's splash opens by the TEAR where the field is live, motion is
+  allowed and the window is seen. Otherwise it opens by the base reveal's FADE, at once.
+  - The choice is made once and never cancelled by a later render.
+  - The Setup Assistant hands over at its own last beat (FG-5 brings it to the tear).
+  - A switch's arrival hands over at once.
+- **The tear**, in order:
+  - The words go first (240ms, the website's `wordsOut`), taking the ground's colour with them under the live canvas.
+  - Then `FieldHandle.tear(dark)` (`FieldLayer`'s `handleRef`) reveals the website's look: `TEAR = { duration: 1900,
+    markFade: .24, rim: .5, tear: .3 }`, with the daylight `[1, .955, .87]` by day and no ink by night.
+  - It is bounded at 2.9 s, and a failed reveal settles at once.
+  - Once open, the door is destroyed at once. Not open, the field leaves with the ground's fade (the website's
+    `.is-fading`).
+- **The desk** stays at `.99` under the splash, as before. At the tear's words it goes, unseen, to `.985` and
+  `brightness(1.16)`, then settles with the tear (1900ms island, 1500ms `ease-out`) and is still as the tear resolves.
+  The fade, the first run and the switch keep the base reveal byte for byte.
+- **The smokes** (`electron-shell/src/testing/smoke.ts`): `bootRevealed` waits for `vf:renderer:interactive` after
+  DESK_READY in the twelve places that press or shoot (below).
+- **DESIGN.md** §8 "The reveal" gains its as-built paragraph.
+
+**Found:**
+- **The smokes pressed on the splash.** VF-PM's condition had every smoke's boot wait read before the commit.
+  - Every smoke's boot is a returning one.
+  - Against FG-1, a tearing boot's `interactive` comes later by the floor's excess (0–700ms) plus about 2.14 s, and
+    by at most 3.84 s at the bound. A fading boot's comes later by the floor's excess alone.
+  - CANVAS_READY and DESK_READY are said before the reveal, so no marker wait moved. But DESK_READY is said beneath
+    the splash.
+  - smoke:canvas pressed inside the new window in three places: first-load's TIDY and DOWN-GONE (`select()`, about
+    1–2 s after a reload's DESK_READY); PT-1's pegboard after the retry row's reload; and the two peer openers
+    (DESK_READY + 800ms).
+  - The fix is the harness's, at the cause: wait for the reveal law's own mark, bounded at 30 s with the marks seen in
+    its diagnosis, never a sleep.
+  - The per-smoke reading is in the commit body. smoke:plugin-restart reads only doors and counters. The GPU-less
+    smokes and no-webgpu take the fade. The godview smokes' first act after a boot is a key, which the splash never
+    held. studio, update and profile wait on DOM presence or on main.
+- `mount.tsx` is the machine's only host and BootRoot its only face. So no path waits at `handing-over` for a
+  hand-over nobody gives.
+
+**Validation.**
+- **The light pass** (`lanes/fg/fg2-light.sh`) was GREEN 12:45:52–12:51:06Z in VF-PM's 12:46Z host slot, all 26 rows
+  rc 0:
+  - both typechecks;
+  - 13 test files, 303 tests, on the settled gate;
+  - biome (34 files), `check:walls`, `check:retired`;
+  - `build:renderer` (boundary OK, 78 files);
+  - `git diff --check`.
+- **The smoke file came after the pass.** `lanes/fg/fg2-rerun.sh` ran 13:06:16–13:06:43Z on VF-PM's 13:06Z word:
+  electron-shell's typecheck, `check:walls` and biome on the file, all rc 0.
+- **`pnpm verify` and the smokes** ran in run 7 with FG-0 and FG-1 (above).
+- **`smoke:canvas` is FG-2's witness.** Every boot in it is a returning one held at `handing-over`: its first boot, its
+  seven reloads, the retry and both peers.
+  - Every `bootRevealed` wait returned. "did not happen" appears 0 times in the 91 KB log.
+  - Every row that presses or shoots after a boot passed. The only reds were item 117's two bar-return times, which no
+    boot wait reaches.
+  - So the reveal law's own mark holds the race FG-2 found, and the boot-wait line stays retired from ROADMAP.
+  - No row says whether a boot opened by the tear or by the fade. The tear's look is the eye's.
+
+**Owed.**
+- FG-5 routes the first run's hand-over through the tear.
+- FG-6: the catalog's still and `smoke:first-run`.
