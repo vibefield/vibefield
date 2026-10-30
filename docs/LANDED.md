@@ -18805,3 +18805,251 @@ place on a row. The place went back to James as TS-D20b (02:38Z, `rule-ts-d20b-h
 - The approval line on a desk (James's display word), with TS-4a's rows and away notice.
 - **Publish's nudge** (TS-D21 = A): deferred until a Publish offers where to open.
 - **The switch's words** (James's to rule).
+
+## WP8 — item 113: the packaged-resources guard reads the test's own disk, never the host's installed app (2026-10-29; `218dc3d9e`, lane `fix/item113-resources-readers`; VF-PM's slot 18:04Z)
+
+**What happened:** TS-6's verify on the Mac mini went red at 17:59:53Z on one row, with everything else green:
+`packages/electron-shell/test/resources.test.ts` "never silently falls back to a development path when packaged". It
+blocked every mini run, so it was the queue's first landing.
+
+**The cause:**
+- The row called `assertPackagedResources(pkg)` with no readers, so the defaults (`headOf`, `textOf` in
+  `src/main/resources.ts`) read the HOST's `/Applications/VibeField.app/Contents/Resources`.
+- Where no VibeField is installed (James's Mac), nothing was there and the row threw, as it claims. On the mini, where
+  it is installed, fieldd and field-native were there for its architecture, the assertion accepted, and the row's
+  `toThrow` failed.
+- The row's premise, "nothing on disk at those paths", was the host's installation rather than the test's.
+
+**The fix, test only** (one file, +18/−1):
+- The row injects `nodeArch`, `readHead` and `readText`, in the neighbours' shape. Nothing is at the packaged paths,
+  and a whole development tree is under REPO (heads and texts present), so a search into the checkout would find one.
+- It asserts the refusal it means: a `ResourceError` with `fieldd-bundle-missing` at `pkg.fielddCommand`, rather than
+  any ResourceError.
+- Read and unchanged: the development-layout row (`assertPackagedResources(dev)`, no readers) touches no disk, because
+  `resources.ts:378` returns before any read when `!resources.packaged`. Were that early return to regress, the
+  defaults would read `/Users/dev/…` paths no host has, and the row would go red on every host.
+
+**Validation:**
+- James's Mac (no installed app), each row alone at nice 19: biome on the file, the electron-shell typecheck, and the
+  resources suite 30/30, all exit 0.
+- The control, since this Mac cannot show the red: the row's readers mutated to report present binaries and a valid
+  identity at every path. The assertion then runs the neighbours' checks through (rosettad, the capture pair, the
+  trust anchor) and accepts, so exactly 1 of 30 went red, this row, for "expected a ResourceError". The mutation was
+  restored and sha-checked.
+- The mini, the red-first host (the row as on main red there at 17:59:53Z): run 0 at `218dc3d9e`, `pnpm verify` exit 0
+  at 18:15:04Z through the Rust tests and gen:check, the resources suite 30 passed with the installed app present (the
+  mini's log :1351, read by VF-PM).
+
+**Landed:** main fast-forwarded `e23fa8a1f` → `218dc3d9e` at 18:17:43Z on VF-PM's GO (18:17Z), after the four checks;
+the porcelain empty after. Not pushed (James's click).
+
+**Lesson:** a test that claims "nothing on disk" injects its disk. A default reader makes the host's installation the
+premise, and the row passes or fails by machine.
+
+- Records: `/Volumes/SamsungRed/lanes/records/item113/`.
+
+## TS-6 — the sync question at the first new field (TS-D13): a new link keeps the fields made before it on this Mac, and New field asks once in the explorer (2026-10-29; `14c74f980`, the merge of main `218dc3d9e` (item 113) into `26b331dbc` on `93916c1c6` and `a58d96a4f`, lane `ts/6-sync-question`)
+
+**What.** D13 moved the sync question out of the Setup Assistant to the first new project after connecting. Taking it out
+of setup alone would have synced every field made before the link the moment the link landed, under the default
+posture (`automatic`). So TS-6 is two halves: fieldd keeps those fields on this Mac when a sign-in lands, and the head
+asks the question when New field is next pressed.
+- **The keep** (fieldd):
+  - `LinkService`'s `beforeLinked` is awaited at a NEW link only (no login held), after the capture is verified and
+    before link.json is written and the linked remount seeds the library. A linked boot, a renewal (expired → linked)
+    and a re-verify never run it. A failure is logged and never refuses the link.
+  - `oweSyncQuestion` (`sync-question.ts`) owes `sync-question` in the setup ledger first (`SetupLedgerStore.owe`,
+    only where no row stands), then sets every field with no answer of its own (`syncIntent` undefined) to `local`
+    through the catalog's own `setSyncIntent`. A field sent or kept already is left alone, and so is a system
+    document. A refusal on one field is logged and the others are still kept. Nothing is kept once the question is
+    answered, and an unreadable newer row stops it.
+  - **Contracts:** `owed` joins `SETUP_MOMENT_STATES`. A window's `setup.moment` takes `SetupMomentAnswer` (retired |
+    asked), so `owed` is fieldd's alone (PRECONDITION_FAILED). `SYNC_QUESTION_MOMENT`, and the EL9 golden
+    `setup-ledger-sync-question.valid.json` (the kit mirrors no setup fixture, so there are no Swift copies). AO's
+    lead read the seam first.
+- **The question** (field-app):
+  - `account/sync-question.ts`: `syncQuestionOwed` (the ledger says `owed`, never a guess), `earlierFields` (the
+    fields staying on this Mac), and `useSyncQuestion`, the door ChromeLayer hands to Head. Head itself runs without a
+    provider in its tests and the catalog, and there New field never asks.
+  - `frame/Head.tsx`: New field asks while the question is owed. The answer runs in order: the fields added are sent
+    through the manager, then the posture is set and the moment retired, then the field is made. A posture that does
+    not land keeps the question and makes nothing. Cancel makes nothing and leaves it owed. Closing the explorer, or an
+    answer from elsewhere, closes it.
+  - `frame/SyncQuestionView.tsx` is controller-free, behind HeadView's new `question` prop, with the tiles `hidden`
+    beneath it. One `account/PostureCards.tsx` serves both places: the question and Settings → Devices' New projects.
+  - **Setup's posture pane is retired** (`panes/PosturePane.tsx`, `views/posture.tsx`, the catalog's frame 07). A
+    linked user goes from the name to Setting up, and Connect goes to Setting up either way.
+  - **Catalog:** the head's plate "The sync question" (Design System → Chrome → the head), the shipping HeadView on
+    fixture props.
+- **DESIGN.md** §8, at its source: the bullet "The sync question" (between Settings → Devices and Asking again), and one
+  dated line in the explorer's New field paragraph.
+- **The rulings:**
+  - VF-PM 05:13Z, derived from D13, with James told and free to overrule: a Mac whose link was captured before TS-6
+    keeps what it syncs and is never asked;
+  - James on VF-PM's board, `ts6-sync-question-words` 05:37:09Z, "all four as drafted" (the title, the voice, the
+    list's label, the acts Cancel and New field);
+  - and `ts6-sync-question-noun` 05:37:06Z, "projects (the cards word)", the sheet's voice throughout. New field is the
+    head's act and stays.
+
+**Found:**
+- **Retiring the pane alone would have been a privacy regression.** Every field made before the link had no intent of
+  its own and followed the `automatic` default, so connecting would have carried it away unasked. The keep has to run
+  before the linked remount seeds the library (`daemon.ts`'s linked change), so it hangs on the capture, not on a
+  ledger read later.
+- **"New link" is "no login held".** The first guard (`state !== "linked"`) would have run on a renewal (expired →
+  linked) and kept fields a person had already been asked about.
+- **A field made while owed by a path other than New field** (a paste, a template, a plugin's create) follows the
+  posture until the question is answered. Owed on TS's list.
+- **biome's stdin route** (VF-PM 08:07Z, from the iOS lane): `ts6-light.sh` now checks that every non-ASCII character a
+  modified file held at the base is still there. The one deliberate removal is named: the retired specimen's arrow.
+
+**Validation.**
+- **The lane:** the edits in `/Volumes/SamsungRed/lanes/ts6` (worktree off `e23fa8a1f`, which was still main's head, so
+  there was no rebase). The runs were in ts3's run lane, detached at each sha (its own target `rust/ts3`, rosetta-pin
+  and mille-pin at the lock's pins), at nice 19 under the guard.
+- **Red first** (`ts6-light.sh red`, 08:29:34–08:30:06Z) at `a58d96a4f`: fieldd's `sync-question.integration` file 1
+  failed and 4 passed, the keep row alone.
+- **The light pass** (`ts6-light.sh green`): the first run at `4b51c069e` (08:30:06–08:31:50Z) was red on two rows of the
+  slice's own, both from retiring the pane: the catalog's per-frame counts were 14, and the linked-root wizard row
+  clicked the retired pane's Continue. They were amended into the field-app commit. Green at `26b331dbc`
+  (08:32:55–08:34:48Z):
+  - non-ASCII kept in 26 files, walls, biome, and the contracts, fieldd, field-app and electron-shell typechecks;
+  - contracts 489/489, fieldd 74/74 (7 files), field-app 390/390 (15 files);
+  - the tree clean, no stub left.
+- **`pnpm verify` on this Mac** at `26b331dbc`, at nice 19 on the settled gate, was red twice on filed timing rows
+  outside the diff (items 101 and 91; the load 17 → 460, then 18 → 471 with James away). VF-PM read the reds as the
+  verify's own fan-out on this host (08:58Z), and James picked the Mac mini's verify lane (09:05:11Z). The lane started
+  on his typed "go" (17:50:20Z).
+- **The gate host (a deviation, said here):** jaspers-Mac-mini, Apple M4, 16 GiB, macOS 26.7.2 (25G332), node v26.5.0,
+  pnpm 11.13.1, rustc 1.99.1, TMPDIR=/tmp, the lane `~/vf-lanes/verify` (`ts6-mini.sh`; setup 17:51:19–17:54:45Z, a
+  blobless clone, rosetta-pin `434854583`, mille-pin `c8160d585`; preflight green with one R23 candidate warning).
+- **The mini, run one (`ts6-1`) at `26b331dbc`** (17:55:55–17:59:53Z): exit 1 on ONE row outside the diff —
+  electron-shell's `resources.test.ts` "never silently falls back to a development path when packaged". It asserted
+  against the real `/Applications/VibeField.app/Contents/Resources`, and the mini has VibeField installed there. Every
+  other stage was green, TS-6's own files among them. The two stages the chain never reached, run alone at the same tip:
+  `pnpm test:rust` exit 0 (493 passed, 0 failed, 14 ignored) and `pnpm gen:check` exit 0 (no diff).
+- **Item 113** (`218dc3d9e`, the fixer's) made the row inject its readers. It verified whole on the mini as run zero
+  (18:10:38–18:15:04Z, exit 0, the row green with the installed app present) and landed first (18:17:43Z).
+- **The landed tip** is `14c74f980`: main `218dc3d9e` merged into `26b331dbc` here (`git merge --no-ff`; it differs
+  from `26b331dbc` in the resources test alone), carried to the mini as a one-commit bundle (sha256 `2d9cc77a…`), and
+  verified there whole:
+  `pnpm verify` exit 0, armed 18:19:57Z, done 18:24:24Z (load 2.04 → 8.86), whole: preflight through `gen:check`;
+  `pnpm test` ran 27 projects with no failed summary (field-app 2807, fieldd 2608 + 11 skipped, electron-shell 1983 + 3
+  skipped, contracts 1210); `link-notices.test.ts` 9 ✓ and `resources.test.ts` 30 ✓ with the installed app present;
+  `pnpm test:rust` 31 ok, 0 failed; the tree clean after. Logs: `lanes/ts6/logs/mini/ts6-2/`.
+- **Landed:** main fast-forwarded `218dc3d9e` → `14c74f980` at 18:32:48Z on VF-PM's GO; not pushed. The draft's Status
+  flip and §10's TS-6 LANDED ride the next draft queue.
+
+
+## EL8 — Rosetta 0.1.2: census estimates, first-pass stamp, exclusions, and cold pause/resume (2026-10-29)
+
+The Rosetta pin moves from `43485458392d263f9c32214d6c22bc9b44362369` to
+`3948bcf595bc54b7e9ac04894eba84de69a022e6`, the source of both `npm-v0.1.2` and `v0.1.2`.
+The exact `@vibefield/rosetta-protocol` and `@vibefield/rosetta-room` overrides, preflight expectations,
+sibling release coordinate, and pnpm lock move together. Wire protocol 27 stays unchanged.
+
+Upstream PRs #29, #30, #31, and #32 merged in that order; issues #23–#26 are closed. The release carries
+file-based census session estimates, a sticky metadata-ready timestamp, folder exclusions before admission
+and capture, and durable pause/resume for unfinished cold imports. The exclusion review fix reads only
+the affected metadata dependencies on ordinary appends and rechecks siblings and ancestors before capture.
+
+VibeField keeps its existing RPC/UI adapters in this pin event. Consuming the new census, stamp, exclusion,
+and control fields in those adapters is follow-on work. Daemon archives now exist for Linux x64/ARM64 and
+macOS Intel/Apple Silicon; this host still builds from the same pinned release source. Archive installation
+remains RD-D7. No other dependency pin moves.
+
+Release proof: CI passed before all protected-main merges. Both npm tarballs match the CI artifacts,
+and their provenance names `3948bcf`. All four daemon archive checksums and build metadata passed.
+The Apple Silicon archive passed 54 VibeField compatibility checks. The pin tool passed the catalog,
+consumer typechecks, and generated-file checks.
+
+Verification: `pnpm verify` passed in the isolated SSD worktree: all 27 TypeScript projects,
+including fieldd's 2,608 passed / 11 skipped tests, plus Rust tests and generated-file freshness.
+All 13 desktop landing gates passed, with the eight affected or unfinished after system sleep
+rerun while the Mac stayed awake. No golden was re-blessed. The final full run used the ordinary
+test setup and the daemon built from the pinned release source.
+
+Evidence: `/Volumes/SamsungRed/lanes/rosetta-release-20261029/logs/verify-final.log`,
+`landing-combined-result.json`, and `archive-consumer-tests.log` in the same logs directory.
+
+## Q19 — retire Fieldmarks / After Hours and Face Club (2026-10-29)
+
+**At the code commit:** retirement committed locally after full verification. The final desktop
+landing run will execute on this commit; its completion is recorded separately below. This closes
+the code queue from James's housekeeping Q19 C ruling (2026-10-28); the earlier archive and
+records pass was `88e8289ea`.
+
+**Changed:**
+- DESIGN.md first: §11/§11.1 are a retirement record, §12 names the plain packaged mark
+  (`b51154f91`), and §5.1/§13 no longer grant the retired artwork a role in product UI.
+- Removed design-kit's `icons` and `face-stickers` exports, sources and SVG asset copies;
+  both generators under `tooling/`; the catalog's two sections, reports, entries and CSS.
+  Glyphs now follows Foundations as 02a. The generated-art Biome exclusion is gone.
+- Kept the History styling regression check by discovering every remaining catalog sheet
+  and checking that none styles the shipping room's classes. ROADMAP, DECISIONS, UI_SYSTEM
+  and README now describe the completed retirement.
+
+**Preserved:** the archived sheets and ZIPs at `draft/archive/retired/design-fieldmarks/`.
+Every removed SVG matched its archive member byte for byte: 157 Fieldmarks and 194 Face Club
+drawings. The packaged mark, functional glyphs and account `UserFaceView` remain active.
+Local-only `dev-local` commit `304eb60c4` snapshots exactly the two Q19 record updates
+(`draft/archive/INDEX.md` and the housekeeping thinking page); it was not pushed.
+
+**Final code verification:** `pnpm verify` completed with exit 0 on `347c912dd` plus the Q19
+patch (`verify-final-tip.log`). This includes all prechecks, 27 typecheck projects, Biome
+(2,661 files), rustfmt/clippy, the production bundle, **9,964 JavaScript tests passed / 38
+skipped across 27 projects**, **493 Rust tests passed / 14 ignored across 31 suites**, and
+unchanged generated files. The normal Nx cache policy reused 23 JavaScript project results;
+the changed consumers ran again. Concurrency was bounded to one Nx project, two Vitest workers
+and two Rust test threads; no assertion or deadline was changed.
+
+The patch was first isolated on `e259f1fe3`. While it was being verified, main advanced through
+Rosetta 0.1.2 (`599f202f6`) and the browser-pane address fix (`347c912dd`). Q19 was carried over
+both; only the append-only ledger needed reconciliation. A complete `pnpm verify` also passed
+on the Rosetta base (`verify-integration.log`, 9,958 JavaScript tests / 38 skipped and the same
+493 Rust tests / 14 ignored). Uncommitted runtime work in the shared checkout was excluded.
+
+**Earlier desktop evidence:** all 13 landing gates passed on the original isolated Q19 patch,
+across the initial run and unchanged focused reruns. The initial run passed stills (13 tests),
+smoke, kind-faults, plugin-restart, plugin try, godview, terminal-door, terminal-direct, Studio
+and bundled. Its canvas modes were red under heavy load. The no-GPU and no-WebGPU reruns passed
+in 17 s and 15 s with normal local temporary profiles. A GPU retry hit a 15-minute cap; the
+standard 30-minute run passed in 909 s with clean teardown (`landing-canvas-standard-summary.log`).
+Timed-out launchers reaped their own helpers and removed their profiles; those earlier attempts
+are not recorded as clean application teardown. The final run on the code commit follows.
+
+Studio's earlier physical witness passed: separate sessions and preloads, an edit applied,
+replayed after reload and restored (`STUDIO_PHYSICAL`, `landing-1/12-smoke_studio.log`). Scoped
+field-app tests (61 across five suites), Studio unit tests (16), `build:design`, `build:renderer`,
+import walls and diff checks passed. The production verifier confirmed Studio, the catalog and
+perf lab are absent from the production renderer. A browser review in light and dark confirmed
+that the retired collections are gone while current glyphs and account faces render.
+
+**Earlier environment findings:** conflicting Node color variables polluted three fake-daemon
+stderr fixtures; all enabled cases passed with those variables unset. Load-sensitive fieldd
+and Rust teardown cases passed unchanged in isolated controls and the later complete runs.
+A one-thread Rust attempt stalled because libtest prefixed a helper's `vf-admitted:` line;
+a direct one-versus-two-thread control reproduced that protocol difference, and the complete
+two-thread runs passed. Those earlier failures remain in the logs rather than being called
+uninterrupted green verification.
+
+Evidence, the exact path manifest and source fingerprints are under `.vibefield/q19-landing/`.
+The validation checkout and build/cache storage moved to SamsungRed to relieve disk pressure;
+the Q19 source was unchanged by that move. Smoke profiles use the normal local temporary path.
+
+### Landing completion — 2026-10-29
+
+**LANDED locally:** Q19 code commit `7aaa9cace` passed the complete `pnpm gate:landing` in one
+uninterrupted serial run on a clean checkout of that commit (exit 0, completed
+2026-10-30 06:07:34 UTC). All 13 gates passed: stills, smoke, GPU canvas, no-GPU canvas,
+no-WebGPU canvas, kind-faults, plugin-restart, plugin try, godview, terminal-door,
+terminal-direct, Studio and bundled plugins. No golden was re-blessed.
+
+Studio's physical witness confirmed distinct sessions and preloads, an edit applied,
+replayed after reload and restored. Every reported smoke daemon row was clean, with no
+leftover or reaped helpers. The checkout remained unchanged after the run. Together with
+the complete `pnpm verify` above, this closes Q19's code and landing checks.
+
+The exact gate verdicts are in `.vibefield/q19-landing/landing-code-commit-summary.log`,
+with per-gate logs in `landing-code-commit/` beside it. The artwork archive and local-only
+draft snapshot `304eb60c4` remain preserved. Neither main nor dev-local was pushed.

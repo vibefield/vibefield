@@ -1,5 +1,5 @@
 // PT-3 — THE PAGE IN USE IN THE PRODUCT (smoke:canvas; the PORTALS brief PT-3 §2): a browser pane laid as PT-1's rows lay it,
-// pointed at the smoke's own fixture page (testing/live-fixture.ts), PICKED UP (⏎) and used as a page is used. Judged by what
+// PICKED UP (⏎), its first address typed through the capsule, then used as a page is used. Judged by what
 // the PAGE says it saw (the fixture's report with each ask: its address, scroll, selection, field and focus), the door's props
 // and face rows, the desk's own counters and the cursor the window shows — never a hash:
 //   HELD-CLICK — a click on the fixture's link navigates: the page at `/next`, the face's address and the `url` prop with it —
@@ -462,7 +462,7 @@ export async function usePaneRows(d: UseRowsDriver): Promise<string[]> {
   };
 
   try {
-    // ── the pane laid alone on clear ground, at actual size, brought to the middle, pointed at the fixture, live ───────
+    // ── first use: the default sample, picked up, its capsule clicked and its first real address visibly typed ──────
     const at = await layPane(h, before, (e) => {
       pane = e;
     });
@@ -473,12 +473,35 @@ export async function usePaneRows(d: UseRowsDriver): Promise<string[]> {
     const paneKey = (await rows()).find((r) => r.entity === e)?.key;
     if (paneKey === undefined || paneKey === null)
       throw new Error("the door gives the pane no durable key");
-    if (
-      !(await js<boolean>(
-        `globalThis.__vfDesk.writeProps(${e}, { url: ${JSON.stringify(d.fixture.url)} })`,
-      ))
-    )
-      throw new Error("the door could not point the pane at the fixture");
+    await pickUp(e);
+    const firstFrame = await heldFrame();
+    if (firstFrame === null) throw new Error("the new pane is not in hand");
+    const firstDesk = await h.deskAt();
+    await press({
+      x: firstDesk.left + firstFrame.cx,
+      y: firstDesk.top + firstFrame.cy - firstFrame.hy + (PANE.head * PANE.mm * firstFrame.s) / 2,
+    });
+    await until(
+      "the new pane's visible address editor",
+      5_000,
+      `(() => {
+        const el = document.querySelector("textarea[data-browser-pane-address]");
+        if (el === null || el.hidden || document.activeElement !== el) return false;
+        const r = el.getBoundingClientRect();
+        const s = getComputedStyle(el);
+        return r.width > 0 && r.height > 0 && s.color !== "transparent" && s.color !== "rgba(0, 0, 0, 0)" && s.caretColor !== "transparent";
+      })()`,
+    );
+    for (const ch of d.fixture.url) {
+      win.webContents.sendInputEvent({ type: "char", keyCode: ch });
+      await sleep(8);
+    }
+    await until(
+      "the first address retained while typing",
+      5_000,
+      `document.querySelector("textarea[data-browser-pane-address]")?.value === ${JSON.stringify(d.fixture.url)}`,
+    );
+    await key("Return");
     try {
       await until(
         "the page live on the face",
@@ -494,6 +517,7 @@ export async function usePaneRows(d: UseRowsDriver): Promise<string[]> {
     }
     if ((await hear("the page's first word", (r) => r.path === "/page"))?.path !== "/page")
       throw new Error("the fixture page never spoke");
+    await done();
     // the desk's LAST EDIT before the page is used — the finish, its own undo step (HELD-CLICK's ⌘Z takes it back)
     if (
       !(await js<boolean>(

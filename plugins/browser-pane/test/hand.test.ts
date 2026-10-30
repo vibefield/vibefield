@@ -100,6 +100,7 @@ function fakeEditor() {
   const element = {
     value: "",
     selected: 0,
+    toggleAttribute() {},
     addEventListener: (type: string, fn: (ev: KeyboardEvent) => void) => listeners.set(type, fn),
     removeEventListener: (type: string) => listeners.delete(type),
     select() {
@@ -190,6 +191,8 @@ function setup(opts: { inHand?: boolean; readOnly?: boolean; now?: () => number 
   const downs: ((ev: PointerEvent) => void)[] = [];
   const dom = {
     container: {
+      ownerDocument: { createElement: () => ({ textContent: "", remove() {} }) },
+      appendChild() {},
       addEventListener: (_t: string, fn: (ev: PointerEvent) => void) => downs.push(fn),
       removeEventListener: () => downs.splice(0),
       getBoundingClientRect: () => ({ left: 10, top: 20 }),

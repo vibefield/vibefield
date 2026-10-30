@@ -326,10 +326,11 @@ export function createPaneLocal(host: KindHost | undefined): PaneLocal {
       return notices;
     },
     drop(e) {
+      // A sample is recorded with no face every time. Only losing an actual page cancels an in-flight press.
+      if (live.opened(e) !== undefined) pressing.delete(e);
       live.drop(e);
       urls.delete(e);
       specs.delete(e);
-      pressing.delete(e);
       noticed.delete(e);
       releaseNotice(e);
     },
