@@ -162,8 +162,9 @@ Each plane is committed in one of two shapes, by `thinking-release-deps.md` (RD-
 - A **released** plane is committed EXACT: puppeteer's `@vibefield/puppeteer-*` rows (RD-5a-2, 2026-10-26), rosetta's
   `@vibefield/rosetta-protocol` and `-room` (RD-5a, 2026-10-14, published from the revision the lock pins), ghosttea
   and truffle on every plane. Its lock entry stays as the dev overlay's coordinate.
-- An **unreleased** plane is committed as `link:`/path rows: mille's npm plane (FS-1b, below). rosettad is still
-  built from `../rosetta-pin` until it ships as a release asset (RD-D7).
+- An **unreleased** plane is committed as `link:`/path rows: mille's npm plane (FS-1b, below).
+- Rosetta publishes daemon archives. This host still builds rosettad from the same pinned release source
+  in `../rosetta-pin`; adopting the published archives remains RD-D7.
 - Only directly imported packages are rows; adapters never are (walls R20–R22).
 
 The tools:
