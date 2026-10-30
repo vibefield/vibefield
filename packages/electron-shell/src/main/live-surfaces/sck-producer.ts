@@ -94,8 +94,26 @@ export interface SckCaptureClient {
   startSession(request: SckCaptureClientStartRequest): Promise<SckCaptureSession>;
 }
 
+/**
+ * PT-S2 — WHY a source resolver could not find what it captures, typed so no caller parses a message: the bound
+ * simulator's conditions are read from it (`ios-simulator-device-runtime.ts`). `not-booted` — no booted device of the
+ * UDID; `no-window` — booted, and Simulator.app shows no window of it; `ambiguous` — windows of its name that nothing
+ * tells apart; `stale` — the window reference no longer names a window; `viewport` — the crop no longer fits the window
+ * it was proven in.
+ */
+export type SckCaptureUnresolvedReason =
+  | "not-booted"
+  | "no-window"
+  | "ambiguous"
+  | "stale"
+  | "viewport";
+
 export class SckCaptureClientError extends Error {
-  constructor(readonly surfaceError: LiveSurfaceErrorV1) {
+  constructor(
+    readonly surfaceError: LiveSurfaceErrorV1,
+    /** PT-S2 — set by a source resolver's own refusals; absent everywhere else */
+    readonly reason?: SckCaptureUnresolvedReason,
+  ) {
     super(surfaceError.message);
     this.name = "SckCaptureClientError";
   }
