@@ -22,7 +22,7 @@ import { Composer, type LineActs } from "../src/frame/Composer";
 import { Cards } from "../src/frame/cards/Cards";
 import { CardStore } from "../src/frame/cards/cards-store";
 import { type FrameSurface, foldSurface } from "../src/frame/frame-surface";
-import { Head } from "../src/frame/Head";
+import { Head, useShownShelf } from "../src/frame/Head";
 import type { HeadCanvas, HeadCrumb } from "../src/frame/head-canvas";
 import {
   type HistoryLineDoor,
@@ -118,6 +118,8 @@ function mount(door: LineViewDoor | null = null): void {
     // FieldView's place: the frame's one owner of the open surface.
     const [surface, setSurface] = useState<FrameSurface | null>(null);
     const [view, setView] = useState<FrameView>("canvas");
+    // …and its one reading of the shelf the pill's sheet shows (HN-8), handed to the head
+    const shelf = useShownShelf(surface, view);
     const lineActs = useRef<LineActs | null>(null);
     const [cards] = useState(() => new CardStore(() => 0));
     surfaceNow = surface;
@@ -137,6 +139,7 @@ function mount(door: LineViewDoor | null = null): void {
           view={view}
           keys="mac"
           surface={surface}
+          shelf={shelf}
           onSurfaceChange={setSurface}
           bindKeys={false}
           windowId="field"
