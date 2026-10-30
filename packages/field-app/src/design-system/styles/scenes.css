@@ -649,11 +649,6 @@
   background-size: var(--vf-mat-lattice-size);
 }
 
-.vf-ds-onboarding-production .vf-wizard-shell {
-  width: min(calc(100% - 32px), 44rem);
-  height: min(calc(100% - 32px), 32rem);
-}
-
 .vf-ds-godview-frame {
   position: relative;
   height: min(72vh, 680px);
