@@ -931,7 +931,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   computer should share." — whose two choices, Proxy and Folder, are two cards side by side in the
   tile form (the ruled page's drawing), and then to their steps, with room the 152 column never
   had; a publish returns the shelf to its tiles. An empty catalog shows the Hub's own quiet state —
-  "No artifacts yet", "Add a proxy or folder" and its one button, **"Publish…"** — in place of a
+  "No artifacts yet", "Publish a proxy or a folder" and its one button, **"Publish…"** — in place of a
   lone Publish… tile, so one Publish… is on screen.
   Above the tiles the header stays the Hub's: “Artifacts” and its quiet count ("4 shared"). It keeps
   its words and its acts — open, Copy URL, and for the owner Refresh preview, Rename and Remove —
