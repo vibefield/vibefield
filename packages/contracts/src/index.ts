@@ -22,6 +22,7 @@ export * from "./live-surfaces";
 export * from "./meshdata";
 export * from "./methods";
 export * from "./mgmt";
+export * from "./phone-code";
 export * from "./plugin-diagnostics";
 export * from "./plugin-distribution";
 export * from "./plugin-registry";

@@ -272,6 +272,13 @@ public final class FieldLink {
   /// device id, or nil while it has none.
   public private(set) var home: String?
 
+  /// TS-7 — whether a sweep has ANSWERED since this link started: the online
+  /// peers were read, and every one had finished its hello and was filed.
+  /// `desktops` empty before this is "not asked yet"; after it, "none" — the
+  /// difference between the phone's "No desktops yet" and a flash of it. Not
+  /// `refreshDesktops()`'s: that runs from `start()` before any sweep has.
+  public private(set) var hasListed = false
+
   /// Whether anything at all is being heard. `false` with `desktops` non-empty
   /// is the honest "they are there and saying nothing" that a blank field must
   /// never be mistaken for.
@@ -538,6 +545,7 @@ public final class FieldLink {
     catalog = .empty
     devices.unsubscribe()
     desktops = []
+    hasListed = false
     agents = []
     endpointRefusals = [:]
     foreignDoors = [:]
@@ -910,6 +918,11 @@ public final class FieldLink {
     }
 
     refreshDesktops()
+    // TS-7 — the first listing has answered once every online peer is filed: a
+    // peer still mid-hello has no id yet, and is a desktop on its way.
+    if !hasListed, !peers.contains(where: { $0.online && ($0.deviceId ?? "").isEmpty }) {
+      hasListed = true
+    }
     // A desktop that dropped off the online list (a sleep: truffle says
     // `online: false`, never `left`) was forgotten — its catalog with it — and
     // the field must follow NOW.

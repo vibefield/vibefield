@@ -559,7 +559,14 @@ export class TerminalService {
   /** AR-3 — the floor's `session-exited` news, fanned out from every cell
    * control connection fieldd holds (the agent host turns it into puppeteer's
    * `handleProcessExit`; a login pane's end verifies its persona). Only cells
-   * fieldd has dialed report here — the inventory diff is the backstop. */
+   * fieldd has dialed report here — the inventory is the backstop: a row that
+   * left it, or one it lists `exited`.
+   *
+   * CORRECTED 2026-10-29 (item 97): this said "the inventory diff is the
+   * backstop", a row that leaves. A kept pane (`keep-until-explicit-close`,
+   * MF-1g's agent panes) stays listed after its process ends, so an exit lost
+   * on its way here was never backstopped; the floor now says `exited` on the
+   * husk's row (ObservedTerminal.exited). */
   private readonly exitListeners = new Set<(event: SessionExitedEvent) => void>();
   /** Item 59 — the terminations fieldd itself asked for, by session, at the
    * moment each ask was issued (`terminate`, the ONE method every ask goes
@@ -571,7 +578,9 @@ export class TerminalService {
    * arrives, the ask fails, or TERMINATION_ASK_TTL_MS passes. */
   private readonly terminationAsks = new Map<string, number>();
   /** AR-3 — every applied inventory, for consumers that diff it (the managed-
-   * session backstop: a PTY that left the inventory has exited). */
+   * session backstop: a PTY that left the inventory, or that it lists
+   * `exited`, has exited). CORRECTED 2026-10-29 (item 97): this said only "a
+   * PTY that left the inventory"; a kept pane's husk never leaves it. */
   private readonly inventoryListeners = new Set<(terminals: readonly TerminalInfo[]) => void>();
   /** AR-7 — every birth this service made, at the moment the floor answered
    * it: the inventory lists a session one reconcile tick later, and whoever

@@ -300,14 +300,14 @@ overrides:
   # dials nothing — VibeField's adapters (field-app `history/doors.ts`) are its
   # ports. Its react/react-dom are PEERS (>=19 <20) and resolve to this tree's
   # copy; its `@vibecook/mille*` dependencies take the mille rows below. Both were
-  # published from rosetta 43485458 (tag npm-v0.1.1; the npm provenance names that
-  # commit), the revision siblings.lock.json still pins, because rosettad is built
-  # from that checkout until it ships as a release asset (RD-D7). A bump is ONE
+  # published from the same revision siblings.lock.json pins (tag npm-v0.1.2,
+  # EL8 2026-10-29). rosettad uses that release source; installing its published
+  # daemon archives remains RD-D7. A bump is ONE
   # EL8 commit: these rows, preflight's PIN_EXPECTATIONS, the lock's rosetta sha
   # (`pnpm siblings:pin rosetta`), and minimumReleaseAgeExclude for a version
   # published this week.
-  "@vibefield/rosetta-protocol": 0.1.1
-  "@vibefield/rosetta-room": 0.1.1
+  "@vibefield/rosetta-protocol": 0.1.2
+  "@vibefield/rosetta-room": 0.1.2
   # puppeteer — EXACT registry pins since 2026-10-26 (RD-5's exit for its npm
   # plane; packages ask for "*"). 0.2.3 was published from the tag v0.2.3
   # (ee785ec1, the commit npm's SLSA provenance names for every package) under
@@ -417,11 +417,9 @@ minimumReleaseAgeExclude:
   - '@vibecook/ghosttea-react@0.13.7'
   - '@vibecook/ghosttea-frame@0.13.7'
   - '@vibecook/ghosttea@0.13.7'
-  # RD-5a (2026-10-14): rosetta's first `@vibefield` release, published
-  # 2026-10-13T23:36Z — inside the release-age window on the day the pin went
-  # exact; our own packages, reviewed as an EL8 pin.
-  - '@vibefield/rosetta-protocol@0.1.1'
-  - '@vibefield/rosetta-room@0.1.1'
+  # EL8 2026-10-29: reviewed Rosetta 0.1.2 release, inside the age window.
+  - '@vibefield/rosetta-protocol@0.1.2'
+  - '@vibefield/rosetta-room@0.1.2'
   # puppeteer (RD-5's exit for its npm plane, 0.2.3 on 2026-10-26): our own packages, reviewed as an EL8 pin.
   # Every `@vibefield/puppeteer-*` package the seven rows reach is here, the adapters included: they are the
   # rows' dependencies, and the window applies to each.

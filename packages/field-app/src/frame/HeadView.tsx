@@ -14,6 +14,7 @@ import {
   useState,
 } from "react";
 import type { HeadCrumb } from "./head-canvas";
+import { SyncQuestionView, type SyncQuestionViewProps } from "./SyncQuestionView";
 import type { ViewKeys } from "./views";
 import { formatZoomPercent, ZOOM_ACTS, type ZoomAct, zoomKeyLabel } from "./zoom";
 import "./menu.css";
@@ -71,6 +72,10 @@ export interface HeadPlaceViewProps {
   onToggleSync?: (entry: DocRegistryEntry) => void;
   /** Delete a board (DS-5's tombstone) — offered on a board from before the desk. */
   onDeleteDoc?: (entry: DocRegistryEntry) => void;
+  /** TS-6 (TS-D13) — the sync question, asked by New field while a link owes
+   * it: drawn in the explorer in place of its tiles until it is answered or
+   * cancelled. Null: the tiles. */
+  question?: SyncQuestionViewProps | null;
   /** The slot the pill leaves free on EACH side, so it stays centred on the
    * window: the wider of the two sides (HeadView measures it). */
   side?: number;
@@ -144,6 +149,7 @@ export function HeadPlaceView({
   onNewField,
   onToggleSync,
   onDeleteDoc,
+  question = null,
   side,
 }: HeadPlaceViewProps): ReactElement {
   const pathRef = useRef<HTMLDivElement>(null);
@@ -294,7 +300,8 @@ export function HeadPlaceView({
         aria-label="Fields"
         inert={!open}
       >
-        <div className="vf-head-docs">
+        {question !== null ? <SyncQuestionView {...question} /> : null}
+        <div className="vf-head-docs" hidden={question !== null}>
           {/* New field — the explorer's first tile, in words (FR-3: every
               create but Canvas's carries its noun). */}
           <div className="vf-head-doc-tile">

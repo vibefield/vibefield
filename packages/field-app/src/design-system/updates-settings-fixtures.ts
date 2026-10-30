@@ -1,4 +1,9 @@
-import type { UpdateChannel, UpdateConsentWords, UpdateView } from "@vibefield/contracts";
+import {
+  releaseName,
+  type UpdateChannel,
+  type UpdateConsentWords,
+  type UpdateView,
+} from "@vibefield/contracts";
 import type { UpdatesDoctorState, UpdatesFlow } from "../panels/UpdatesSection";
 
 // Settings › General's update card and Settings › Diagnostics' updater block in the catalog (WP12d L3c-ii,
@@ -50,7 +55,8 @@ const BASE: UpdateView = {
 /** The consent's words as main composes them (`consentWords`) for seven live sessions. */
 const CONSENT: UpdateConsentWords = {
   message: "Updating ends 7 terminal sessions",
-  lead: `VibeField ${NEXT} replaces the terminal service, which ends:`,
+  // AU-1 (LC-2) — main names the version by its friendly name: "The Oct 16 nightly replaces…"
+  lead: `${releaseName(NEXT, { start: true })} replaces the terminal service, which ends:`,
   listed: [
     "claude — ~/Projects/vibe-field",
     "codex — ~/Projects/puppeteer",
