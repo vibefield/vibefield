@@ -213,7 +213,7 @@ export function ChromeLayer({
   // ⌘K / Ctrl+K toggles the command palette (§8.3; One Frame §7). ⌘K is free —
   // the ICE keymap, the line's B and the tray's Esc never claim it. The palette
   // is one of the frame's surfaces, so opening it folds whichever was open —
-  // the drawers and the Me menu included — and the owner folds Settings.
+  // the pill's sheet and the Me menu included — and the owner folds Settings.
   // GT-D21: caught in the window's capture phase, so a focused Godview pane
   // (whose Ghostty default for ⌘K is clear_screen) never sees it.
   useEffect(

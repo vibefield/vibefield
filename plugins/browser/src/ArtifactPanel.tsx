@@ -194,8 +194,9 @@ export function ArtifactPanel({ client }: { client: PluginProductClient }): Reac
     setScreen({ kind: "catalog" });
   }, []);
 
-  // The Add act, from the header's round plus or, in the tile form, the Publish… tile: the panel's
-  // content changes in place to the two choices.
+  // The Add act, under its one name (HN-8, ruling 11): the Publish… tile in the tile form, the
+  // empty catalog's Publish… and the list form's round plus all change the panel in place to its
+  // step, "Publish", and the two choices.
   const beginAdd = useCallback(() => {
     setMutationError(null);
     setConfirmRemove(null);
@@ -405,17 +406,17 @@ export function ArtifactPanel({ client }: { client: PluginProductClient }): Reac
       );
     }
     if (artifacts.length === 0) {
+      // The empty catalog draws no Publish… tile, so its one button is the act, in the act's name:
+      // one Publish… on screen (VibeField DESIGN.md §8 "Artifacts").
       return (
-        <QuietState title="No artifacts yet" detail="Add a proxy or folder">
+        <QuietState title="No artifacts yet" detail="Publish a proxy or a folder">
           <UiButton
             variant="primary"
             className="vf-artifact-button"
-            onClick={() => {
-              setConfirmRemove(null);
-              setScreen({ kind: "choose" });
-            }}
+            disabled={pending !== null}
+            onClick={beginAdd}
           >
-            Add artifact
+            Publish…
           </UiButton>
         </QuietState>
       );
@@ -536,27 +537,31 @@ function AddChoice({
   return (
     <div className="vf-artifact-flow">
       <FlowHeading
-        title="Add artifact"
+        title="Publish"
         detail="Choose what this computer should share."
         onBack={onBack}
         disabled={pending}
       />
-      <button type="button" className="vf-artifact-choice" onClick={onProxy} disabled={pending}>
-        <ChoiceIcon kind="proxy" />
-        <span>
-          <strong>Proxy</strong>
-          <small>Share a local site already running on this computer.</small>
-        </span>
-        <Chevron />
-      </button>
-      <button type="button" className="vf-artifact-choice" onClick={onFolder} disabled={pending}>
-        <ChoiceIcon kind="folder" />
-        <span>
-          <strong>Folder</strong>
-          <small>Serve a folder as a website with Truffle.</small>
-        </span>
-        <Chevron />
-      </button>
+      {/* Proxy and Folder: two rows in the list form, two cards side by side in the tile form
+          (the ruled page's drawing; VibeField DESIGN.md §8 "Artifacts"). */}
+      <div className="vf-artifact-choices">
+        <button type="button" className="vf-artifact-choice" onClick={onProxy} disabled={pending}>
+          <ChoiceIcon kind="proxy" />
+          <span>
+            <strong>Proxy</strong>
+            <small>Share a local site already running on this computer.</small>
+          </span>
+          <Chevron />
+        </button>
+        <button type="button" className="vf-artifact-choice" onClick={onFolder} disabled={pending}>
+          <ChoiceIcon kind="folder" />
+          <span>
+            <strong>Folder</strong>
+            <small>Serve a folder as a website with Truffle.</small>
+          </span>
+          <Chevron />
+        </button>
+      </div>
       {pending && <p className="vf-artifact-pending">Waiting for folder…</p>}
     </div>
   );

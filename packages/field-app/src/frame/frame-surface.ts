@@ -9,9 +9,9 @@
 // the FRAME's when the head's three surfaces joined; FR-4 added the corner's
 // Me menu and the two edges' drawers, so every surface the frame opens is in
 // this one value (DESIGN.md §10). The Peek (2026-10-08, GV-D8) is in it too —
-// search, the frame's popup — so the palette, a drawer, the Me menu, Settings
-// and a change of view fold it, and opening it folds them; it replaced the
-// search interim's `history-search`, the room's own sheet, which left with it.
+// search, the frame's popup — so the palette, the pill's sheet, the Me menu,
+// Settings and a change of view fold it, and opening it folds them; it replaced
+// the search interim's `history-search`, the room's own sheet, which left with it.
 // DK-11: the selection bar's grown menu joins them — the canon's ninth
 // (DESIGN.md §10 "The mat's places", R5), the tenth value beside the Peek's.
 // HN (Cards in Hand, 2026-10-29): @'s list left with the line's draft (LN-D3)

@@ -37,14 +37,14 @@ describe("the bar's place, judged (R7)", () => {
       "the bar's top is 260, not 250 (its foot 10 off the brackets)",
     ]);
     expect(judgeBarPlace(anchor(box), { x0: 300, y0: 250, x1: 560, y1: 290 })).toEqual([
-      "the bar's left is 300, not 370 (centred, 42 from the sides)",
+      "the bar's left is 300, not 370 (centred, 16 from the sides)",
     ]);
     expect(judgeBarPlace(anchor(box), { x0: 370, y0: 250, x1: 630, y1: 302 })[0]).toContain(
       "tall, not 40",
     );
   });
 
-  it("wants it 10 BELOW the brackets under the safe top — at least 94 — and 42 from a side", () => {
+  it("wants it 10 BELOW the brackets under the safe top — at least 94 — and 16 from a side", () => {
     expect(
       judgeBarPlace(anchor({ x0: 400, y0: 120, x1: 600, y1: 200 }), {
         x0: 370,
@@ -61,6 +61,15 @@ describe("the bar's place, judged (R7)", () => {
         y1: 134,
       }),
     ).toEqual([]);
+    // 16 since the edges left (HN-8; the product's `BAR.sides`) — the notch's 42 until then
+    expect(
+      judgeBarPlace(anchor({ x0: 0, y0: 300, x1: 100, y1: 400 }), {
+        x0: 16,
+        y0: 250,
+        x1: 276,
+        y1: 290,
+      }),
+    ).toEqual([]);
     expect(
       judgeBarPlace(anchor({ x0: 0, y0: 300, x1: 100, y1: 400 }), {
         x0: 42,
@@ -68,7 +77,7 @@ describe("the bar's place, judged (R7)", () => {
         x1: 302,
         y1: 290,
       }),
-    ).toEqual([]);
+    ).toEqual(["the bar's left is 42, not 16 (centred, 16 from the sides)"]);
   });
 
   it("names no box and no bar", () => {
@@ -129,6 +138,17 @@ describe("the grown menu's place, judged (R6, R20)", () => {
     expect(judgeMenuPlace(view, row, seen({ open: false }))).toEqual([
       "the bar did not grow into its menu",
     ]);
+  });
+
+  it("keeps it 16 from the sides since the edges left the frame (HN-8)", () => {
+    const left = { x0: 16, y0: 250, x1: 276, y1: 290 };
+    expect(
+      judgeMenuPlace(view, left, seen({ row: left, panel: { x0: 16, y0: 100, x1: 276, y1: 290 } })),
+    ).toEqual([]);
+    const over = { x0: 10, y0: 250, x1: 270, y1: 290 };
+    expect(
+      judgeMenuPlace(view, over, seen({ row: over, panel: { x0: 10, y0: 100, x1: 270, y1: 290 } })),
+    ).toEqual(["the menu leaves the 16 at the sides (10…270)"]);
   });
 });
 

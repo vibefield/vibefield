@@ -218,6 +218,23 @@ describe("the glyph set", () => {
     });
   });
 
+  // HN-8 (§13; the design lens's D13): `package` is Artifacts' — the pill's button and the covered
+  // views' circle, folded into the terminals' title bar with search — and `sidepanel`, the Hub
+  // side panel's toggle until FR-4, is drawn nowhere now; the catalog's name and tooltip for each
+  // say so. Read from the kit's data, which tooling/glyphs/build.mjs writes from drawings.mjs.
+  it("names `package` Artifacts' where the head draws it, and `sidepanel` drawn nowhere (HN-8)", () => {
+    expect(GLYPH_META.package).toEqual({
+      label: "Artifacts",
+      group: "objects",
+      role: "Artifacts: the pill's package button and the covered views' circle, folded into the terminals' title bar with search",
+    });
+    expect(GLYPH_META.sidepanel).toEqual({
+      label: "Side panel",
+      group: "objects",
+      role: "Drawn nowhere in the product: the Hub side panel's toggle until FR-4, kept in the set until a glyph pass retires it",
+    });
+  });
+
   it("keeps the committed drawings and the phone's template assets fresh", () => {
     // The generator is the source; data.ts and FieldGlyphs.xcassets are its
     // outputs. A drawing edited by hand in either place fails here.

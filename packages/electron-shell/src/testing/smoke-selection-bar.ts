@@ -6,7 +6,7 @@
 // each row read back off the DOM the chrome drew and off the desk's door (`window.__vfDesk`: the anchor it published,
 // the bar's counters, the status line's said notices):
 //   ONE      — the clock selected: the bar over its brackets (centred, its foot 10 above them, or 10 below under the
-//              safe top; 42 from the sides; 40 tall), in the canon's order with the clock's own act drawn by the bar's
+//              safe top; 16 from the sides; 40 tall), in the canon's order with the clock's own act drawn by the bar's
 //              ONE path renderer and no key printed for it; "Tape it down  ⇧⌘L" and "Copy  ⌘C" printed (R23
 //              reversed; HN-D3);
 //   TWO      — ⇧ and the note: one Copy for both (never counted), and More grows "Clean up" under "2 OBJECTS";
@@ -73,12 +73,14 @@ export interface BarCounters {
   readonly renders: number;
 }
 
-/** The numbers the canon places the bar by (DESIGN.md §8 "The selection bar" — Place; §10). */
+/** The numbers the canon places the bar by (DESIGN.md §8 "The selection bar" — Place; §10) — restated, as field-app's
+ * `BAR` (`field/desk/bar/bar-geometry.ts`) holds them, because the shell imports no field-app. */
 const PLACE = {
   above: 10,
   height: 40,
   safeTop: 94,
-  sides: 42,
+  /** kept from each side: 16 since the edges left (HN-8) — the notch's 26 + 16 until then */
+  sides: 16,
   lowest: 120,
   foot: 80,
   minWidth: 244,
@@ -86,7 +88,7 @@ const PLACE = {
 const near = (a: number, b: number, eps = 1.5): boolean => Math.abs(a - b) <= eps;
 
 /**
- * Is the bar where the canon puts it over this anchor? Centred over the brackets (or held 42 from a side), its foot
+ * Is the bar where the canon puts it over this anchor? Centred over the brackets (or held 16 from a side), its foot
  * 10 above them — or its top 10 below them, at least 94, when above would cross the safe top — its top never below
  * the window's foot less 120, 40 tall. Returns what is wrong, in words.
  */
@@ -102,7 +104,7 @@ export function judgeBarPlace(anchor: DoorAnchor, row: ScreenRect | null): strin
   const centred = (box.x0 + box.x1) / 2 - w / 2;
   const x = Math.min(Math.max(centred, PLACE.sides), W - PLACE.sides - w);
   if (!near(row.x0, x))
-    problems.push(`the bar's left is ${row.x0}, not ${x} (centred, 42 from the sides)`);
+    problems.push(`the bar's left is ${row.x0}, not ${x} (centred, 16 from the sides)`);
   const above = box.y0 - PLACE.above - PLACE.height;
   const lowest = H - PLACE.lowest;
   const y = Math.min(
@@ -116,7 +118,7 @@ export function judgeBarPlace(anchor: DoorAnchor, row: ScreenRect | null): strin
   return problems;
 }
 
-/** Is the grown menu where the canon grows it from this bar? ≥ 244 wide (the bar's when wider), 42 from the sides,
+/** Is the grown menu where the canon grows it from this bar? ≥ 244 wide (the bar's when wider), 16 from the sides,
  * inside the safe top and the line's reserve, and the bar's own row where it stood. */
 export function judgeMenuPlace(
   view: { readonly width: number; readonly height: number },
@@ -133,7 +135,7 @@ export function judgeMenuPlace(
   if (!near(width, Math.max(PLACE.minWidth, barWidth)))
     problems.push(`the menu is ${width} wide, not ${Math.max(PLACE.minWidth, barWidth)}`);
   if (panel.x0 < PLACE.sides - 0.5 || panel.x1 > view.width - PLACE.sides + 0.5)
-    problems.push(`the menu leaves the 42 at the sides (${panel.x0}…${panel.x1})`);
+    problems.push(`the menu leaves the 16 at the sides (${panel.x0}…${panel.x1})`);
   if (panel.y0 < PLACE.safeTop - 0.5)
     problems.push(`the menu's top ${panel.y0} crosses the safe top (94)`);
   if (panel.y1 > view.height - PLACE.foot + 0.5)

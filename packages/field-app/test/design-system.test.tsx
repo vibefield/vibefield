@@ -226,10 +226,15 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       expect(tile?.querySelector("small")?.textContent, name).toBe("instrument");
     }
     // HN-8 (§13): Artifacts' glyph in a button is `package`, the pill's button's and the covered
-    // views' circle's, at rest — never `sidepanel`, the retired side panel's toggle, inverted.
-    const artifacts = container?.querySelector<HTMLElement>('#glyphs button[title="Artifacts"]');
-    expect(artifacts?.querySelector("[data-glyph]")?.getAttribute("data-glyph")).toBe("package");
-    expect(artifacts?.dataset.active).toBe("false");
+    // views' circle's, at rest and at the circle's 18 — never `sidepanel`, the retired side
+    // panel's toggle, inverted. (Named for the button: the head's `artifacts` plate is below.)
+    const artifactsButton = container?.querySelector<HTMLElement>(
+      '#glyphs button[title="Artifacts"]',
+    );
+    const packageGlyph = artifactsButton?.querySelector("[data-glyph]");
+    expect(packageGlyph?.getAttribute("data-glyph")).toBe("package");
+    expect(packageGlyph?.getAttribute("width")).toBe("18");
+    expect(artifactsButton?.dataset.active).toBe("false");
     // One Frame FR-1: the view frame on fixtures — the shipping track and cover
     // over a field, and a plate per state the page's Chrome & Composer plates
     // show for the frame (the last the keys as Windows prints them).
