@@ -2108,7 +2108,7 @@ public struct HomeScreen: View {
       rememberedLogin: mesh.rememberedLogin,
       login: mesh.loginName,
       domain: mesh.tailnetDomain,
-      name: nil,
+      name: account.flatMap { faceStore.name(for: $0) },
       face: account.flatMap { faceStore.face(for: $0) },
       desktops: linkDesktops,
       asleep: account.map { login in
@@ -2236,6 +2236,13 @@ public struct HomeScreen: View {
     let listed = linkDesktops
     if !listed.isEmpty {
       desktopMemory.record(listed, login: login)
+      identityEpoch += 1
+    }
+    // IOS-8f — the home's own word on its person (`user.me`) replaces the deal
+    // and an earlier home's word; until a home answers, the deal below stands.
+    if let person = listed.first(where: { $0.deviceId == link?.home })?.person,
+      faceStore.adopt(person, login: login)
+    {
       identityEpoch += 1
     }
     if faceStore.face(for: login) == nil, let userId = listed.compactMap(\.userId).first {

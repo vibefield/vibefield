@@ -747,6 +747,13 @@ export const PROJECT_DOORS = {
   MOVE_HOPS_MAX: 16,
 } as const;
 
+/** IOS-8f — `user.me`'s honest UNAVAILABLE: a daemon that knows no user id (an embedded one) has no person to
+ * name, and says so rather than answer a face for nobody. TS-only: no native reader. */
+export const USER_ME = {
+  SERVICE: "user",
+  STATE_NO_USER: "no-user",
+} as const;
+
 /** DS-D15 / DS-2 — forwarded mutations (`forwarding.ts`). The owner journals
  * one receipt per idempotency key for RECEIPT_TTL_MS, at most
  * RECEIPT_JOURNAL_DEPTH of them; a forward cut mid-flight is recorded

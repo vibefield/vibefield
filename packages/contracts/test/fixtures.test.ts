@@ -276,6 +276,7 @@ import {
   UpdatePolicySource,
   UpdateView,
 } from "../src/update-policy";
+import { UserMeResult } from "../src/users";
 import {
   WorkspaceCloseTicketParams,
   WorkspaceCloseTicketResult,
@@ -808,6 +809,8 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "compose-agents-list": ComposeAgentsListOutput,
   "compose-agent-read": ComposeReadOutput,
   "compose-history-search": ComposeHistorySearchOutput,
+  // IOS-8f — who this desktop's person is: a written face with a name, and the deal with none
+  "user-me": UserMeResult,
 };
 
 // *.vector.json = cross-language crypto vectors, not wire shapes — pinned by their own tests.
