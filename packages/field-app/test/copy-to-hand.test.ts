@@ -12,7 +12,7 @@
  */
 import { type CanvasEngine, type Entity, selectedEntities, setWidgetProps } from "@vibecook/ice";
 import type { SelectionAnchor } from "@vibecook/ice/desk";
-import type { ClipboardCopyRefusal } from "@vibefield/contracts";
+import { type ClipboardCopyRefusal, IPC_CHANNELS } from "@vibefield/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   type CopiedObject,
@@ -488,7 +488,8 @@ describe("THE DESK'S COPY — the act (copy-to-hand.ts)", () => {
   });
 
   it("never says a bridge's error on the line: the door's own words stand for it", async () => {
-    const remote = "Error invoking remote method 'vibefield:clipboard:write-image': Error: x";
+    const remote =
+      `Error invoking remote method '${IPC_CHANNELS.clipboardWriteImage}': Error: x`;
     pictureRefusal = new Error(remote);
     expect(copySelection(desk, "bar", seams())).toBe(true);
     await flush();

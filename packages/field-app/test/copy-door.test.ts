@@ -9,7 +9,7 @@
  * host (the browser catalog) the web's own write stands; and the write alone, a program's,
  * deals nothing at all.
  */
-import { SHELL_CLIPBOARD } from "@vibefield/contracts";
+import { IPC_CHANNELS, SHELL_CLIPBOARD } from "@vibefield/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CardOrigin, PictCard } from "../src/frame/cards/cards-model";
 import { CardStore, cardsStore, type DealFrom } from "../src/frame/cards/cards-store";
@@ -29,7 +29,8 @@ const ORIGIN: CardOrigin = { view: "godview", place: "Settings", how: "copy" };
 const FROM: DealFrom = { left: 600, top: 320, width: 64, height: 24 };
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 /** Electron's own words for a handler that threw, as the page receives them (invoke rewraps). */
-const REMOTE = "Error invoking remote method 'vibefield:clipboard:write-image': Error: refused";
+const REMOTE =
+  `Error invoking remote method '${IPC_CHANNELS.clipboardWriteImage}': Error: refused`;
 
 /** The renderer's log, as the cards' lines reach it. */
 function hearLog(): Array<{ event: string; attrs: unknown }> {
