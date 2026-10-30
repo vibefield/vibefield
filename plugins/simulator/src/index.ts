@@ -1,6 +1,7 @@
 // `@vibefield/plugin-simulator` — VibeField's iOS Simulator as a plugin: the MANIFEST (host-read, authoring-emitted), the
 // renderer MODULE, and the kind's own surface for tests and the playground. The host builds the object from the manifest
 // (§12.2) and the kind from the export the manifest names — never from anything else exported here.
+export * from "./attach";
 export * from "./binding";
 export { PHONES } from "./catalog.gen";
 export * from "./face";

@@ -34,9 +34,11 @@ const HANG = 0.4;
  * its size — the default model's body — and NO angle: a phone is never turned; its interaction (selectable, carried by core's
  * drag on the desk's springs, never resized: a phone is its model's size); what it PROVIDES (it lies on the desk; it goes into
  * no mini mat yet — no chip); and its tray entry — a phone on a shelf under a NEW category, `devices`, its specimen drawn by
- * its own pass with the screen off (a specimen is bound to nothing). NO capability: `surface.attach` and `surface.capture`
- * arrive with PT-S2's producer (capture is the Screen Recording consent class). The code half is the export `binding.kind`
- * names (object.ts). Emitted to `vibefield.plugin.json` by `pnpm gen:manifest`.
+ * its own pass with the screen off (a specimen is bound to nothing). Its CAPABILITIES (PT-S2): `surface.attach` and
+ * `surface.capture` — a bound phone's live device: the desk's `LIVE` service opens a Simulator only for an object whose
+ * plugin is granted both (capture is the Screen Recording consent class), and the host reads this Mac's devices for the
+ * attach only while such an object stands. The code half is the export `binding.kind` names (object.ts). Emitted to
+ * `vibefield.plugin.json` by `pnpm gen:manifest`.
  */
 export const simulatorManifest: PluginManifestV1 = {
   manifestVersion: 1,
@@ -48,7 +50,7 @@ export const simulatorManifest: PluginManifestV1 = {
   engines: { app: ">=0.0.0", contracts: "^0.1.0" },
   entries: { renderer: "./dist/renderer.js" },
   activation: [`onObject:${SIMULATOR_TYPE}`],
-  capabilities: [],
+  capabilities: ["surface.attach", "surface.capture"],
   contributes: {
     objects: [
       {
