@@ -1,7 +1,7 @@
 import {
   SetupLedger,
+  type SetupMomentAnswer,
   type SetupMomentKey,
-  type SetupMomentState,
   setupMomentState,
 } from "@vibefield/contracts";
 import type { FielddHandle } from "@vibefield/fieldd-supervisor";
@@ -267,7 +267,7 @@ export class LinkNoticeObserver {
   }
 
   /** `setup.moment` on the attached user's fieldd; nothing while none is attached. */
-  async setupMoment(moment: SetupMomentKey, state: SetupMomentState): Promise<void> {
+  async setupMoment(moment: SetupMomentKey, state: SetupMomentAnswer): Promise<void> {
     const handle = this.handle;
     if (handle === null) return;
     await handle.client.request("setup.moment", { moment, state });
