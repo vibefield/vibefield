@@ -3,7 +3,8 @@
  * One Frame FR-3 (FR-4, "one surface at a time") — the frame's ONE owner of the
  * open surface, renamed from the line's when the head's three joined: Objects,
  * the fields explorer, the zoom's menu and the palette are one value,
- * so opening any one folds the rest by construction. A stateful harness stands
+ * so opening any one folds the rest by construction — and since HN-8 the pill's
+ * sheet is one of them on two shelves, Fields and Artifacts. A stateful harness stands
  * where FieldView does and mounts the shipping head, line and palette on it,
  * with ChromeLayer's glue — the palette's create row run through the line's
  * own create (`LineActs`), so the two doors to one act are one implementation
@@ -138,6 +139,7 @@ function mount(door: LineViewDoor | null = null): void {
           surface={surface}
           onSurfaceChange={setSurface}
           bindKeys={false}
+          windowId="field"
         />
         <Composer
           view={view}
@@ -256,6 +258,33 @@ describe("the frame's one owner of the open surface", () => {
     click(".vf-me-face");
     expect(surfaceNow).toBe("me");
     expect($(".vf-head-zoom-menu")).toBeNull();
+  });
+
+  it("holds the pill's sheet as ONE surface on two shelves — turning it folds nothing, and it folds and is folded by the rest (HN-8)", () => {
+    mount();
+    click(".vf-head-zoom");
+    expect(surfaceNow).toBe("zoom");
+    // the package opens the sheet on Artifacts, folding the zoom's menu
+    click(".vf-head-pack");
+    expect(surfaceNow).toBe("artifacts");
+    expect($(".vf-head-zoom-menu")).toBeNull();
+    expect($("[data-head-place]")?.dataset.open).toBe("true");
+    // the chevron turns the same sheet to Fields: one value, still open
+    click('.vf-head-chev[aria-label="Fields"]');
+    expect(surfaceNow).toBe("fields");
+    expect($("[data-head-place]")?.dataset.open).toBe("true");
+    click(".vf-me-face");
+    expect(surfaceNow).toBe("me");
+    expect($("[data-head-place]")?.dataset.open).toBe("false");
+    click(".vf-head-pack");
+    expect(surfaceNow).toBe("artifacts");
+    expect($(".vf-me")?.hasAttribute("data-open")).toBe(false);
+    click(".vf-line-create");
+    expect(surfaceNow).toBe("objects");
+    expect($("[data-head-place]")?.dataset.open).toBe("false");
+    act(() => setSurfaceNow?.("artifacts"));
+    act(() => setViewNow?.("godview"));
+    expect(surfaceNow).toBeNull();
   });
 
   it("folds whatever is open when the view changes — a change of place", () => {
