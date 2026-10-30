@@ -218,7 +218,7 @@ import {
 } from "./app-preferences";
 import { ArtifactService, type ArtifactServiceHealth } from "./artifact-service";
 import { AuditService, type AuditWriterTestHooks } from "./audit-service";
-import { nativeAlive, nativeEndpoint, nativeMgmtEndpoint } from "./boot-env";
+import { nativeAlive, nativeEndpoint, nativeMgmtEndpoint, splitPathList } from "./boot-env";
 import { DeviceService, localDeviceIdAt } from "./device-service";
 import { DiagnosticsService } from "./diagnostics-service";
 import { DocLane } from "./doc-lane";
@@ -472,7 +472,9 @@ export interface FielddConfig {
    * refuse honestly. bin.ts derives it from the layout (`rootAboveUserRoot`). */
   vibefieldRoot?: string;
   /** AR-2 test seams: the PATH the agent install inventory searches, and the
-   * fetch the release detectors use. Production: the process PATH, global fetch. */
+   * fetch the release detectors use. Production: the process PATH, global fetch.
+   * Setting the search path also isolates the home the inventory searches each
+   * provider's install directories under (`agentInstallHome`, puppeteer 0.3.1). */
   agentSearchPath?: string;
   agentFetch?: typeof fetch;
   /** AR-S1c — read the agents' installs in the background once boot has
@@ -1091,7 +1093,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     },
     ...(config.agentProviders !== undefined ? { providers: config.agentProviders } : {}),
     ...(config.agentCatalog !== undefined ? { catalog: config.agentCatalog } : {}),
-    ...(config.agentSearchPath !== undefined ? { searchPath: config.agentSearchPath } : {}),
+    ...(config.agentSearchPath !== undefined
+      ? {
+          searchPath: config.agentSearchPath,
+          installHome: agentInstallHome(config.agentSearchPath, config.dataDir),
+        }
+      : {}),
     ...(config.agentFetch !== undefined ? { fetchFn: config.agentFetch } : {}),
     ...(config.agentResumeWhenIdle !== undefined
       ? { resumeWhenIdle: config.agentResumeWhenIdle }
@@ -7078,6 +7085,16 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     }
     throw e;
   }
+}
+
+/** AO-7 — the home puppeteer searches each provider's install directories under
+ * (`distribution.home`, 0.3.1) when a harness isolates the search path: the
+ * path's first directory, the stub's own in every harness, so the machine
+ * owner's `~/.local/bin` and the like are never read. An empty list falls to the
+ * user root, which here is fieldd's data directory, never $HOME. Production
+ * passes no search path, so its inventory reads the person's own home. */
+function agentInstallHome(searchPath: string, userRoot: string): string {
+  return splitPathList(searchPath)[0] ?? userRoot;
 }
 
 /** TC-D6(a) — Node's diagnostic report is the only stdlib window onto rlimits.

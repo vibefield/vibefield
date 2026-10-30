@@ -326,21 +326,21 @@ overrides:
   # `release.npm`), preflight's PIN_EXPECTATIONS, the lock's sha (`pnpm
   # siblings:pin puppeteer` at the tag), and minimumReleaseAgeExclude for a
   # version published this week.
-  # 0.2.3 → 0.3.0 (2026-10-28, the EL8 to QA fix wave 1's puppeteer half, #48):
-  # published from the tag v0.3.0 (d0aa1224, the commit npm's provenance names).
-  # A minor, not a patch: #48 merged as `feat(views)!`, which removes four exports
-  # (`hostWriteWord`, `hostWriteTitle`, `remoteWriteLabel`, `remoteWriteTitle`),
-  # none imported here. No package manifest moved beyond its version.
-  "@vibefield/puppeteer-runtime": 0.3.0
-  "@vibefield/puppeteer-builtin-providers": 0.3.0
-  "@vibefield/puppeteer-core": 0.3.0
-  "@vibefield/puppeteer-record": 0.3.0
-  "@vibefield/puppeteer-monitor": 0.3.0
+  # 0.3.0 → 0.3.2 (2026-10-29, CP-1d's upstream prerequisite, #52/#53):
+  # published from v0.3.2 (95a70aa7). Per-run MCP servers, tool allowances and
+  # instructions work beside modelSelection on spawn and resume. Includes
+  # 0.3.1's native install recipes and home-relative installation discovery;
+  # the isolated inventory test seam supplies its own discovery home too.
+  "@vibefield/puppeteer-runtime": 0.3.2
+  "@vibefield/puppeteer-builtin-providers": 0.3.2
+  "@vibefield/puppeteer-core": 0.3.2
+  "@vibefield/puppeteer-record": 0.3.2
+  "@vibefield/puppeteer-monitor": 0.3.2
   # MV-3a (2026-10-03): the monitor-view contract (`/model` is the model fieldd's
   # backend emits and the desk row mirrors; the renderer's adapter and replica
   # read it too). Types for fieldd; the replica's scheduler type for field-app.
-  "@vibefield/puppeteer-view-sdk": 0.3.0
-  "@vibefield/puppeteer-views": 0.3.0
+  "@vibefield/puppeteer-view-sdk": 0.3.2
+  "@vibefield/puppeteer-views": 0.3.2
   # FS-1a (2026-10-05, FS-D10 RULED (a) with its exit at once — 0.3.4 is on npm):
   # mille, the file explorer engine behind the files service, entered as an
   # EXACT registry pin (EL8; ice's shape — packages ask for "*"). Since FS-1b
@@ -425,29 +425,29 @@ minimumReleaseAgeExclude:
   # puppeteer (RD-5's exit for its npm plane, 0.2.3 on 2026-10-26): our own packages, reviewed as an EL8 pin.
   # Every `@vibefield/puppeteer-*` package the seven rows reach is here, the adapters included: they are the
   # rows' dependencies, and the window applies to each.
-  # 0.2.3 → 0.3.0 (2026-10-28, QA fix wave 1's puppeteer half): published 2026-10-28 08:27–08:35Z by the tag's
-  # release run (v0.3.0 = d0aa1224), inside the release-age window on the day the pin moves. The same 20 packages
-  # as 0.2.3. The 0.2.3 rows went after the one install.
-  - '@vibefield/puppeteer-adapter-acp@0.3.0'
-  - '@vibefield/puppeteer-adapter-antigravity@0.3.0'
-  - '@vibefield/puppeteer-adapter-claude@0.3.0'
-  - '@vibefield/puppeteer-adapter-codex@0.3.0'
-  - '@vibefield/puppeteer-adapter-copilot@0.3.0'
-  - '@vibefield/puppeteer-adapter-grok@0.3.0'
-  - '@vibefield/puppeteer-adapter-hermes@0.3.0'
-  - '@vibefield/puppeteer-adapter-kimi@0.3.0'
-  - '@vibefield/puppeteer-adapter-opencode@0.3.0'
-  - '@vibefield/puppeteer-adapter-pi@0.3.0'
-  - '@vibefield/puppeteer-builtin-providers@0.3.0'
-  - '@vibefield/puppeteer-core@0.3.0'
-  - '@vibefield/puppeteer-monitor@0.3.0'
-  - '@vibefield/puppeteer-native-observation@0.3.0'
-  - '@vibefield/puppeteer-react@0.3.0'
-  - '@vibefield/puppeteer-record@0.3.0'
-  - '@vibefield/puppeteer-runtime@0.3.0'
-  - '@vibefield/puppeteer-view-sdk@0.3.0'
-  - '@vibefield/puppeteer-views@0.3.0'
-  - '@vibefield/puppeteer-workspaces@0.3.0'
+  # 0.3.0 → 0.3.2 (2026-10-29, CP-1d): the tag's publication and clean npm consumer check passed
+  # (v0.3.2 = 95a70aa7). These 20 transitive packages are inside the release-age window.
+  # The old 0.3.0 rows were removed after the install that regenerated the lock.
+  - '@vibefield/puppeteer-adapter-acp@0.3.2'
+  - '@vibefield/puppeteer-adapter-antigravity@0.3.2'
+  - '@vibefield/puppeteer-adapter-claude@0.3.2'
+  - '@vibefield/puppeteer-adapter-codex@0.3.2'
+  - '@vibefield/puppeteer-adapter-copilot@0.3.2'
+  - '@vibefield/puppeteer-adapter-grok@0.3.2'
+  - '@vibefield/puppeteer-adapter-hermes@0.3.2'
+  - '@vibefield/puppeteer-adapter-kimi@0.3.2'
+  - '@vibefield/puppeteer-adapter-opencode@0.3.2'
+  - '@vibefield/puppeteer-adapter-pi@0.3.2'
+  - '@vibefield/puppeteer-builtin-providers@0.3.2'
+  - '@vibefield/puppeteer-core@0.3.2'
+  - '@vibefield/puppeteer-monitor@0.3.2'
+  - '@vibefield/puppeteer-native-observation@0.3.2'
+  - '@vibefield/puppeteer-react@0.3.2'
+  - '@vibefield/puppeteer-record@0.3.2'
+  - '@vibefield/puppeteer-runtime@0.3.2'
+  - '@vibefield/puppeteer-view-sdk@0.3.2'
+  - '@vibefield/puppeteer-views@0.3.2'
+  - '@vibefield/puppeteer-workspaces@0.3.2'
   # The truffle pins are exact and move together as one EL8 commit across the three places.
   # 0.7.19 → 0.7.22 (2026-10-25, with ghosttea 0.13.4): published 2026-10-25
   # 10:58Z, inside the release-age window on the day the pin moves. Sidecar
