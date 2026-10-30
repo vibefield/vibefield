@@ -1,12 +1,16 @@
 import type { FrameView, FrameZoomAct, GodviewDeckState } from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
 import {
+  type AppMenuActions,
   type AppMenuItem,
+  type AppMenuState,
   buildAppMenu,
   CLOSE_WINDOW_ITEM_ID,
   type MenuPlatform,
   SCREENSHOT_ITEM_ID,
+  SETTINGS_ITEM_ID,
   screenshotAccelerator,
+  UPDATE_ITEM_ID,
   VIEW_ITEM_IDS,
   viewAccelerator,
   ZOOM_ITEM_IDS,
@@ -280,7 +284,99 @@ describe("buildAppMenu", () => {
     expect(roles.has("minimize")).toBe(true);
     expect(roles.has("togglefullscreen")).toBe(true);
     // Quit lives in the app menu on darwin and in File everywhere else.
-    expect(roles.has(platform === "darwin" ? "appMenu" : "quit")).toBe(true);
+    expect(roles.has("quit")).toBe(true);
+    // AU-4: the darwin app menu is spelled out, the `appMenu` role's own
+    // items by role — losing Hide or Services would be the regression this
+    // test exists for.
+    expect(roles.has("appMenu")).toBe(false);
+    if (platform === "darwin") {
+      const app = buildAppMenu(platform, { view: "canvas" }, actions)[0];
+      const appRoles = (app?.submenu ?? []).flatMap((item) => (item.role ? [item.role] : []));
+      expect(appRoles).toEqual(["about", "services", "hide", "hideOthers", "unhide", "quit"]);
+    }
+  });
+});
+
+describe("the app menu (AU-4; AU-D12, AU-G9)", () => {
+  const openSettings = () => undefined;
+  const withSettings = { ...actions, openSettings };
+  const appMenu = (
+    state: AppMenuState = { view: "canvas" },
+    acts: AppMenuActions = withSettings,
+  ): readonly AppMenuItem[] => buildAppMenu("darwin", state, acts)[0]?.submenu ?? [];
+
+  it("is the HIG's order: About, Settings…, the update item, Services, Hide, Quit", () => {
+    expect(appMenu().map((item) => item.id ?? item.role ?? item.type)).toEqual([
+      "about",
+      "separator",
+      SETTINGS_ITEM_ID,
+      UPDATE_ITEM_ID,
+      "separator",
+      "services",
+      "separator",
+      "hide",
+      "hideOthers",
+      "unhide",
+      "separator",
+      "quit",
+    ]);
+  });
+
+  it("says ⌘, on Settings… and registers it: the page answers first (LC-28)", () => {
+    // On darwin a shown key equivalent is a registered one. The page claims
+    // ⌘, in its capture phase (GT-D21), so the menu hears it only where no
+    // page does, and its click reveals Settings — never a toggle.
+    const item = find(appMenu(), SETTINGS_ITEM_ID);
+    expect(item).toMatchObject({
+      label: "Settings…",
+      accelerator: "CommandOrControl+,",
+      enabled: true,
+    });
+    expect(item?.registerAccelerator).toBeUndefined();
+    expect(item?.role).toBeUndefined();
+    expect(item?.click).toBe(openSettings);
+  });
+
+  it("keeps Settings… present-but-disabled where nothing can open it", () => {
+    const item = find(appMenu({ view: "canvas" }, actions), SETTINGS_ITEM_ID);
+    expect(item).toMatchObject({ enabled: false, accelerator: "CommandOrControl+," });
+    expect(item?.click).toBeUndefined();
+  });
+
+  it("claims ⌘, exactly once, in every view", () => {
+    for (const view of VIEWS) {
+      const items = flatten(buildAppMenu("darwin", { view }, withSettings));
+      expect(items.filter((item) => item.accelerator === "CommandOrControl+,")).toHaveLength(1);
+    }
+  });
+
+  it("wears the update item's live label and act, as the status item says it (AU-L4)", () => {
+    const restart = () => undefined;
+    const update = { label: "Restart to Update", enabled: true, click: restart };
+    const item = find(appMenu({ view: "godview", update }), UPDATE_ITEM_ID);
+    expect(item).toMatchObject({ label: "Restart to Update", enabled: true });
+    expect(item?.click).toBe(restart);
+    expect(item?.role).toBeUndefined();
+    const downloading = find(
+      appMenu({ view: "canvas", update: { label: "Downloading Update… 42%", enabled: false } }),
+      UPDATE_ITEM_ID,
+    );
+    expect(downloading).toMatchObject({ label: "Downloading Update… 42%", enabled: false });
+    expect(downloading?.click).toBeUndefined();
+  });
+
+  it("says Check for Updates…, disabled, in a build with no updater", () => {
+    const item = find(appMenu(), UPDATE_ITEM_ID);
+    expect(item).toMatchObject({ label: "Check for Updates…", enabled: false });
+    expect(item?.click).toBeUndefined();
+  });
+
+  it("adds neither item off the Mac, where the menus stay as they were", () => {
+    const update = { label: "Check for Updates…", enabled: true };
+    const items = flatten(buildAppMenu("other", { view: "canvas", update }, withSettings));
+    const ids = [SETTINGS_ITEM_ID, UPDATE_ITEM_ID];
+    expect(items.filter((item) => ids.includes(item.id ?? ""))).toEqual([]);
+    expect(items.some((item) => item.role === "about")).toBe(false);
   });
 });
 

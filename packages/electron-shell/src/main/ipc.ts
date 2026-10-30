@@ -18,6 +18,7 @@ import {
   UpdateDoctorResult,
   UpdateDownloadRequest,
   UpdateDownloadResult,
+  UpdateMoveResult,
   UpdatePrepareResult,
   UpdateSetChannelRequest,
   UpdateSetEnabledRequest,
@@ -287,6 +288,9 @@ export interface UpdateDoorHandlers {
   prepareRestart(): Promise<UpdatePrepareResult>;
   confirmRestart(token: string): Promise<{ ok: true } | { ok: false; reason: string }>;
   doctor(): string[];
+  /** AU-7 (AU-G8) — Move to Applications through the quit gate: answered when the gate decides, or a refusal before
+   * anything stops */
+  moveToApplications(): Promise<UpdateMoveResult>;
 }
 
 export function registerUpdateDoors(
@@ -341,6 +345,10 @@ export function registerUpdateDoors(
   ipcMain.handle(IPC_CHANNELS.updateDoctor, async (event) => {
     gate("doctor", event.sender);
     return UpdateDoctorResult.parse({ lines: handlers.doctor() });
+  });
+  ipcMain.handle(IPC_CHANNELS.updateMoveToApplications, async (event) => {
+    gate("move-to-applications", event.sender);
+    return UpdateMoveResult.parse(await handlers.moveToApplications());
   });
 }
 

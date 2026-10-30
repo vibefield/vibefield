@@ -16,7 +16,8 @@ import { type MeUpdateLocal, refusalLine } from "../panels/update-words";
 // publishes and the doctor's lines, written out — never a copy of the page's markup. The specimens mount the shipping
 // `UpdatesSectionView`, `UpdatesDevicesView` and `UpdatesDoctorView` over them, the devices' rows built by the shipping
 // `updateDeviceRows` (docs/UI_SYSTEM.md's fixture-adapter rule). AU-3 (LC-33) — only states whose fields exist now:
-// the build's day, the notes and the Move door join with their slices (AU-6, AU-7).
+// the build's day and the notes join with their slice (AU-6). AU-7 — where the app runs joined with the Move door: a
+// writable copy outside Applications, and one macOS won't let replace itself.
 
 /** The update's own path: up to date, found, fetched, ready (and long ready), the consent its Restart opens, a
  * refusal. */
@@ -33,7 +34,8 @@ export const UPDATES_PATH_STATES = [
 export type UpdatesPathState = (typeof UPDATES_PATH_STATES)[number];
 
 /** The person's own choices and what they leave: updates off with one found, a skipped version, a channel lowered,
- * a channel with nothing published yet, and the install that didn't take (AU-G5, AU-G6, AU-G7). */
+ * a channel with nothing published yet, the install that didn't take (AU-G5, AU-G6, AU-G7), and where the app runs
+ * (AU-G8: a copy outside Applications, one that can't replace itself). */
 export const UPDATES_EDGE_STATES = [
   "found-off",
   "skipped",
@@ -41,6 +43,8 @@ export const UPDATES_EDGE_STATES = [
   "no-release",
   "not-applied",
   "not-applied-ready",
+  "elsewhere",
+  "read-only",
 ] as const;
 export type UpdatesEdgeState = (typeof UPDATES_EDGE_STATES)[number];
 
@@ -195,6 +199,15 @@ function fixtureOf(state: UpdatesFixtureState): UpdatesFixture {
       return {
         view: { ...BASE, phase: "staged", version: NEXT, sessions: 0, lastApply: NOT_APPLIED },
       };
+    case "elsewhere":
+      // AU-7 (LC-10) — a writable copy outside Applications updates as usual: one quiet line, the move beside it
+      return { view: { ...BASE, location: "elsewhere" } };
+    case "read-only":
+      // AU-7 (LC-10, LC-40) — opened where it was downloaded (App Translocation), with an update ready it can't
+      // install: the attention line, Move to Applications… its primary, no dot
+      return {
+        view: { ...BASE, phase: "staged", version: NEXT, sessions: 0, location: "read-only" },
+      };
     case "paused":
       return { view: { ...BASE, phase: "paused" } };
     case "unsupported":
@@ -332,7 +345,7 @@ export type UpdateFaceState = (typeof UPDATE_FACE_STATES)[number];
 
 /** The menu open over each row the corner draws (renderer.md §2.1), in the page's groups: the path, the person's
  * choices and the third line, the held states, a check's answers in place, and the restart's and download's acts.
- * R5 (the copy that can't update itself) joins with AU-7, the notes' form of R4 with AU-6. */
+ * R5 (the copy that can't update itself) is AU-7's; the notes' form of R4 joins with AU-6. */
 export const UPDATE_CORNER_GROUPS = {
   path: ["current", "checking", "downloading", "ready", "ends", "census", "updated"],
   edges: [
@@ -344,6 +357,7 @@ export const UPDATE_CORNER_GROUPS = {
     "not-wired",
     "not-applied",
     "no-release",
+    "read-only",
   ],
   held: ["paused", "unsupported", "offline", "failed", "absent"],
   answers: [
@@ -436,6 +450,9 @@ export function updateCornerFixture(state: UpdateCornerState): UpdateCornerFixtu
       return { view: fixtureOf("not-applied-ready").view, local: AT_REST };
     case "no-release":
       return { view: fixtureOf("no-release").view, local: AT_REST };
+    case "read-only":
+      // R5 (AU-7) — the copy macOS won't let replace itself: the row opens Settings → Updates, where the move is
+      return { view: fixtureOf("read-only").view, local: AT_REST };
     case "paused":
     case "unsupported":
     case "offline":

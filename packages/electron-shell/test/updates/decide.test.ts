@@ -264,3 +264,68 @@ describe("the levers (B1) and the native plane (B3)", () => {
   });
   // AU-3a (X24): the version orders' rows moved with them, to contracts' update-view.test.ts.
 });
+
+// AU-7 (AU-G8; LC-10; main-process.md §8.2) — a copy macOS won't let replace itself: nothing starts on its own, nothing
+// downloads, and a payload staged before is held, never offered — before the census is read. A writable copy outside
+// Applications changes nothing.
+describe("the app's location (AU-7)", () => {
+  const V = "0.9.0-nightly.20261016";
+  const at = (
+    trigger: DecideContext["trigger"],
+    state: DecideState,
+    extra: Partial<DecideContext> = {},
+    census: CensusCount = 0,
+  ) => decideUpdate(state, census, { ...base, applyWired: true, trigger, ...extra });
+
+  it("a read-only copy checks only when a person asks, downloads nothing, and holds what was staged", () => {
+    const readOnly = { location: "read-only" } as const;
+    for (const trigger of ["launch", "resume"] as const)
+      expect(at(trigger, { kind: "idle" }, readOnly)).toEqual({ kind: "none", reason: "location" });
+    expect(at("manual", { kind: "idle" }, readOnly)).toEqual({ kind: "check" });
+    expect(at("available", { kind: "available", version: V }, readOnly)).toEqual({
+      kind: "none",
+      reason: "location",
+    });
+    // held before the census: the sessions never come into it
+    for (const census of [0, 3, "unknown"] as const)
+      expect(at("downloaded", { kind: "staged", version: V }, readOnly, census)).toEqual({
+        kind: "hold",
+        version: V,
+        reason: "location",
+      });
+  });
+
+  it("the levers and the person's choices still outrank it", () => {
+    const readOnly = { location: "read-only" } as const;
+    expect(
+      at("downloaded", { kind: "staged", version: V }, { ...readOnly, declined: [V] }),
+    ).toEqual({ kind: "none", reason: "declined" });
+    const killed: Partial<DecideContext> = {
+      ...readOnly,
+      policy: { killSwitch: true, yanked: [], floors: {}, requireUserConfirmation: false },
+    };
+    expect(at("downloaded", { kind: "staged", version: V }, killed)).toEqual({
+      kind: "discard",
+      version: V,
+      reason: "killed",
+    });
+    expect(at("launch", { kind: "checking" }, readOnly)).toEqual({
+      kind: "none",
+      reason: "in-flight",
+    });
+  });
+
+  it("a writable copy outside Applications, or one in it, updates as usual", () => {
+    for (const location of ["elsewhere", "applications"] as const) {
+      expect(at("launch", { kind: "idle" }, { location })).toEqual({ kind: "check" });
+      expect(at("available", { kind: "available", version: V }, { location })).toEqual({
+        kind: "download",
+        version: V,
+      });
+      expect(at("downloaded", { kind: "staged", version: V }, { location })).toEqual({
+        kind: "offer-restart",
+        version: V,
+      });
+    }
+  });
+});

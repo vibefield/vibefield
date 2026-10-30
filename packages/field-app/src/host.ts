@@ -26,6 +26,7 @@ import type {
   UpdateConfirmResult,
   UpdateDoctorResult,
   UpdateDownloadResult,
+  UpdateMoveResult,
   UpdatePrepareResult,
   WindowLightsState,
   WindowTerminalBootstrap,
@@ -79,6 +80,9 @@ export interface FieldUpdatesHost {
   confirmRestart(token: string): Promise<UpdateConfirmResult>;
   /** C4 — the doctor's lines */
   doctor(): Promise<UpdateDoctorResult>;
+  /** AU-7 (AU-G8) — move the app into Applications through the quit gate (it opens again from there); answered when
+   * the gate decides, or a refusal before anything stops */
+  moveToApplications(): Promise<UpdateMoveResult>;
 }
 
 /** BP-D4 (thinking-browser-profile.md §3·3) — Settings › General's "Clear browsing data": main clears this shell's browser

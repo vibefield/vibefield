@@ -106,6 +106,7 @@ export function mountProductHost(
         prepareRestart: () => window.vibefield.update.prepareRestart(),
         confirmRestart: (token) => window.vibefield.update.confirmRestart(token),
         doctor: () => window.vibefield.update.doctor(),
+        moveToApplications: () => window.vibefield.update.moveToApplications(),
       },
       getConnection: async () => {
         const connection = await window.vibefield.getConnection();

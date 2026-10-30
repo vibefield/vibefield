@@ -61,10 +61,13 @@ blue), an unrounded macOS rendition or one without its plain ground, and an iOS 
 transparency. It also enforces a development-Dock safe-area inset, preventing a full-canvas Icon
 Composer export from being wired into the Dock again.
 
-The attention and offline tray states are deterministic monochrome badge treatments derived from
-the tray master. macOS receives black-plus-alpha template images. Windows and Linux receive a
-dark glyph with a light keyline because those platforms do not reliably tint notification-area
-images for the current theme.
+The attention, update and offline tray states are deterministic monochrome badge treatments derived
+from the tray master. Attention and offline merge a disk into the band and cut their glyph out of it
+(a bang, a bar). Update (AU-4, 2026-10-29: an install waits on the person) is the mark with one plain
+dot, no bang: a ring is cut from the mark alone around the same centre and the dot is drawn whole
+inside it, so it never reads as a bump on the band. macOS receives black-plus-alpha template images.
+Windows and Linux receive a dark glyph with a light keyline because those platforms do not reliably
+tint notification-area images for the current theme.
 
 `pnpm dev` runs Electron's own unsigned application bundle, so electron-builder cannot embed the
 VibeField bundle icon in that loop. After Electron is ready, the shell applies

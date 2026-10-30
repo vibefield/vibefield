@@ -267,7 +267,8 @@ describe("the Canvas stage mounts the desk", () => {
     expect(opts.text).toBeDefined();
     expect(opts.blobs).toBeDefined();
     expect(opts.grid?.mat.ruler.on).toBe(true);
-    expect(opts.grid?.mat.ruler.margin).toBe(60);
+    // the rulers' frame on the window's edges — no bare mat around it (DESIGN.md §10 "The mat's places", 2026-10-29)
+    expect(opts.grid?.mat.ruler.margin).toBe(0);
     // DK-16 (I26): VibeField draws the room's people itself, so the host mounts none of ICE's — nobody drawn twice
     expect(opts.cursors).toBe(false);
     // DK-12 — the hand's reserves (I20): the reading fit keeps 116 under the top (the tools in hand stand at y 64, 40

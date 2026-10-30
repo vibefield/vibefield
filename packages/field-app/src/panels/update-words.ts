@@ -13,6 +13,8 @@ import {
 // AU-3 (AU-L4, AU-L6) — the update's words for every surface the window draws: Settings → Updates and the Me menu's
 // row (AU-2) read one state in the same words, and a version in a sentence is its friendly name (`releaseName`,
 // contracts — the one main's boxes say too).
+// AU-7 (AU-G8; LC-10, LC-40) — where the app runs: a copy macOS won't let replace itself says so on every surface,
+// with Move to Applications… as its act; a writable copy outside Applications holds nothing.
 
 /** The channels lowest first, as the segmented control lays them out (EDP-36: a lower one is a downgrade). */
 export const UPDATE_CHANNEL_OPTIONS: readonly { id: UpdateChannel; label: string }[] = [
@@ -33,8 +35,9 @@ export const UPDATE_CHANNEL_LINES: Readonly<Record<UpdateChannel, string>> = {
   nightly: "Every night's build: the newest, and the least tested.",
 };
 
-/** AU-3 — the Automatic updates switch's line: when installs happen. AU-5 (install on quit) adds "or quit" to `on`;
- * until it lands the sentence never promises it. */
+/** AU-3 — the Automatic updates switch's line: when installs happen. Install on quit (AU-5) adds "or quit" to `on`
+ * in a one-line commit once the physical W row proves it on the mini (LC-49); until then the sentence never promises
+ * it. */
 export const AUTOMATIC_UPDATES_LINES = {
   on: "Download updates in the background. They install when you restart VibeField, or on their own while no window is open and nothing would end.",
   off: "VibeField checks only when you choose Check for updates, and downloads only when you choose Download.",
@@ -97,11 +100,33 @@ export function youAreOn(version: string): string {
   return `You're on ${releaseName(version)}`;
 }
 
+/** AU-7 (AU-G8; LC-10, LC-40, LC-41) — the location's words (DESIGN.md §8 "Settings → Updates", "The Me menu"). The
+ * act wears "…": the Me row opens Settings → Updates, and the page's move may ask through the quit gate. */
+export const LOCATION_WORDS = {
+  headline: "VibeField can't update itself from here",
+  detail:
+    "macOS won't let VibeField replace itself where it is. Move it to Applications and it updates as usual.",
+  elsewhere: "VibeField runs outside Applications",
+  move: "Move to Applications…",
+  moving: "Moving VibeField to Applications…",
+  /** the Me row's line 2 (R5), in the attention ink */
+  row: "Can't update from here",
+} as const;
+
+/** AU-7 (AU-G8; LC-10) — a copy macOS won't let replace itself (App Translocation, a mounted disk image, a folder it
+ * can't write): the one hold that changes the act, on the page and the Me row alike. Only motion outranks it — a
+ * person's check from the status item runs (nothing it finds downloads). */
+export function cannotUpdateHere(view: UpdateView | null | undefined): boolean {
+  return (
+    view?.location === "read-only" && view.phase !== "checking" && view.phase !== "downloading"
+  );
+}
+
 /** AU-3 (AU-L1; AU-D1 A, AU-D2 A) — an install waits on you: an update ready and its apply wired, including one that
  * would end sessions. The face's dot, the Updates nav row's dot and the page's ready line all read THIS; never a
- * check, a download or a held state. */
+ * check, a download or a held state. AU-7: never a copy that can't replace itself (its Restart refuses). */
 export function updateWaits(view: UpdateView | null | undefined): boolean {
-  return view?.phase === "staged" && view.applyWired;
+  return view?.phase === "staged" && view.applyWired && view.location !== "read-only";
 }
 
 /** AU-3 (AU-L2) — Restart to update asks first ("…"): it ends sessions, or must read them before it can (the census
@@ -119,6 +144,8 @@ export const READY_SINCE_DAYS = 7;
  * ready on this Mac), else null. The page leads its cost with it; the Me row says it as its third line (AU-2). */
 export function readySince(view: UpdateView | null | undefined, now: number): string | null {
   if (view?.phase !== "staged" || view.stagedAt === undefined) return null;
+  // AU-7 — never under a copy that can't install it: the move is the news
+  if (cannotUpdateHere(view)) return null;
   return now - view.stagedAt >= READY_SINCE_DAYS * DAY_MS
     ? `Ready since ${shortDay(view.stagedAt)}`
     : null;
@@ -207,6 +234,9 @@ export interface UpdateStateWords {
 /** The page's state line: what the updater is doing, in words, with its number. `now` is the clock the ready day and
  * a recent install are read against. */
 export function updateStateWords(view: UpdateView, now: number): UpdateStateWords {
+  // AU-7 (LC-40) — the copy can't replace itself: every resting state says so, in the attention ink
+  if (cannotUpdateHere(view))
+    return { headline: LOCATION_WORDS.headline, detail: LOCATION_WORDS.detail, tone: "attention" };
   const version = view.version ?? "";
   switch (view.phase) {
     case "checking":
@@ -228,8 +258,8 @@ export function updateStateWords(view: UpdateView, now: number): UpdateStateWord
     case "downloading":
       return {
         headline: `Downloading ${releaseName(version)} · ${Math.round(view.percent ?? 0)}%`,
-        // AU-3 (LC-45) — when it installs, by the switch: on, AU-5 makes it "…when you restart or quit VibeField.";
-        // until install on quit lands, both say the restart
+        // AU-3 (LC-45) — when it installs, by the switch: on, it becomes "…when you restart or quit VibeField." in
+        // LC-49's one-line commit, once the physical W row proves install on quit (AU-5); until then both say the restart
         detail: "It installs when you restart VibeField.",
         tone: "neutral",
       };
@@ -310,7 +340,8 @@ export function updateStateWords(view: UpdateView, now: number): UpdateStateWord
 /** AU-3 (AU-G7; LC-34) — the page's notice for an install that didn't take, said on the launch right after it only
  * (`lastApply.thisLaunch`), and never while ANOTHER version is ready (a newer staged update is the news then).
  * `ready`: the same version is staged again, so it can be tried again; otherwise the page offers Check for updates.
- * The quit's words ("The last quit…") come with install on quit (AU-5). The Me menu says it its own way (AU-2). */
+ * AU-5 — after install on quit (`trigger: "quit"`) it leads "The last quit…" (DESIGN.md §8). The Me menu says it its
+ * own way (AU-2). */
 export function notAppliedWords(
   view: UpdateView | null | undefined,
 ): { readonly text: string; readonly ready: boolean } | null {
@@ -319,7 +350,8 @@ export function notAppliedWords(
   if (last === undefined || last.outcome !== "not-applied" || last.thisLaunch !== true) return null;
   const staged = view.phase === "staged";
   if (staged && view.version !== last.version) return null;
-  const lead = `The last restart didn't install ${releaseName(last.version)}.`;
+  const which = last.trigger === "quit" ? "quit" : "restart";
+  const lead = `The last ${which} didn't install ${releaseName(last.version)}.`;
   // the version it came back on: the one the apply left, else the one running now (the same app)
   const back = last.from ?? view.currentVersion;
   if (back === undefined)
@@ -348,6 +380,15 @@ export function refusalFallback(reason: string): { message: string; detail: stri
         detail: "It finishes the update it started; nothing else changed.",
       }
     : { message: "VibeField didn't install the update", detail: `Nothing changed (${reason}).` };
+}
+
+/** AU-7 (AU-G8) — a Move main refused without words of its own (it sends none: a refusal comes before the quit gate
+ * asks anything): the step that didn't happen, then why. */
+export function moveRefusalFallback(reason: string): { message: string; detail: string } {
+  const message = "VibeField didn't move to Applications";
+  if (reason === "not-needed") return { message, detail: "It already runs from Applications." };
+  if (reason === "busy") return { message, detail: "VibeField is already quitting or updating." };
+  return { message, detail: `Nothing changed (${reason}).` };
 }
 
 /** AU-3 (LC-38) — a Download main refused without words of its own: the step that didn't happen, then why. Main's
@@ -398,8 +439,18 @@ function idleLine(view: UpdateView, now: number): string {
     : capitalised(checkedLabel(view.lastCheckAt, now));
 }
 
-/** The row at rest, read from the view alone (R2–R18; R5, the copy that can't update itself, is AU-7's). */
+/** The row at rest, read from the view alone (R2–R18). */
 function restingRow(view: UpdateView, now: number): MeUpdateRowBody {
+  // R5 (AU-7, LC-10) — the one hold that changes the act: it opens Settings → Updates, where the move is
+  if (cannotUpdateHere(view))
+    return {
+      glyph: "reset",
+      turn: 0,
+      label: LOCATION_WORDS.move,
+      detail: LOCATION_WORDS.row,
+      detailTone: "attention",
+      act: "open",
+    };
   switch (view.phase) {
     case "checking":
       // R6 — a check that began elsewhere reads the same while it runs

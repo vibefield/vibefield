@@ -14,8 +14,11 @@
 // downloads it again. And the census gates only a release
 // that touches the native plane (B3): one that leaves the floor's bytes alone keeps its sessions, so it needs neither.
 // AU-3a (X24): the two version orders moved to @vibefield/contracts, so the window compares by the same ones.
+// AU-7 (AU-G8; LC-10; main-process.md §8.2): a copy macOS won't let replace itself (`read-only`: App Translocation, a
+// mounted image, an unwritable folder) checks only when a person asks, downloads nothing, and holds what it staged
+// before it got there. `elsewhere` (writable) changes nothing.
 
-import { compareDottedVersions } from "@vibefield/contracts";
+import { compareDottedVersions, type UpdateAppLocation } from "@vibefield/contracts";
 
 export type UpdateTrigger = "launch" | "manual" | "resume" | "available" | "downloaded";
 
@@ -57,6 +60,8 @@ export interface DecideContext {
   readonly hostOs?: string | null;
   /** L3b-i (B3) — the staged release touches the native plane; absent = touched (the fail-safe) */
   readonly nativeTouched?: boolean;
+  /** AU-7 — where the bundle runs (macOS; `location.ts`); absent = it can replace itself */
+  readonly location?: UpdateAppLocation;
 }
 
 export type UpdateAction =
@@ -66,7 +71,7 @@ export type UpdateAction =
   | {
       readonly kind: "hold";
       readonly version: string;
-      readonly reason: "sessions" | "census-unknown" | "apply-unbuilt";
+      readonly reason: "sessions" | "census-unknown" | "apply-unbuilt" | "location";
     }
   /** a staged version the policy now forbids (killed, yanked, or above this host's floor): its payload deleted (B6) */
   | {
@@ -82,6 +87,8 @@ export type UpdateAction =
         | "fresh"
         | "declined"
         | "nothing-to-do"
+        // AU-7 — a read-only copy: nothing it downloads could install
+        | "location"
         | LeverRefusal;
     };
 
@@ -113,9 +120,12 @@ export function decideUpdate(
   context: DecideContext,
 ): UpdateAction {
   const { trigger } = context;
+  const readOnly = context.location === "read-only";
   if (trigger === "launch" || trigger === "manual" || trigger === "resume") {
     if (state.kind === "checking" || state.kind === "downloading")
       return { kind: "none", reason: "in-flight" };
+    // AU-7 — a check that can lead nowhere never starts on its own; a person's check runs (they see what exists)
+    if (readOnly && trigger !== "manual") return { kind: "none", reason: "location" };
     // the off switch stops automatic checks; a person's explicit check still runs (and then downloads nothing)
     if (!context.enabled && trigger !== "manual") return { kind: "none", reason: "disabled" };
     if (
@@ -132,6 +142,7 @@ export function decideUpdate(
     if (context.declined.includes(state.version)) return { kind: "none", reason: "declined" };
     const lever = leverRefusal(state.version, context.policy, context.hostOs);
     if (lever !== null) return { kind: "none", reason: lever };
+    if (readOnly) return { kind: "none", reason: "location" };
     if (!context.enabled) return { kind: "none", reason: "disabled" };
     return { kind: "download", version: state.version };
   }
@@ -140,6 +151,8 @@ export function decideUpdate(
   if (context.declined.includes(state.version)) return { kind: "none", reason: "declined" };
   const lever = leverRefusal(state.version, context.policy, context.hostOs);
   if (lever !== null) return { kind: "discard", version: state.version, reason: lever };
+  // AU-7 — a payload staged before the bundle landed where it cannot replace itself stays held, never installed
+  if (readOnly) return { kind: "hold", version: state.version, reason: "location" };
   // the census gates only a release that touches the floor: an untouched one keeps its sessions (B3)
   if (context.nativeTouched !== false) {
     if (census === "unknown")

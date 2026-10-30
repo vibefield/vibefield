@@ -36,6 +36,7 @@ import {
   UpdateDoctorResult,
   UpdateDownloadRequest,
   UpdateDownloadResult,
+  UpdateMoveResult,
   UpdatePrepareResult,
   UpdateSetChannelRequest,
   UpdateSetEnabledRequest,
@@ -448,6 +449,9 @@ contextBridge.exposeInMainWorld("vibefield", {
       ),
     doctor: async (): Promise<UpdateDoctorResult> =>
       UpdateDoctorResult.parse(await ipcRenderer.invoke(IPC_CHANNELS.updateDoctor)),
+    /** AU-7 (AU-G8) — Move to Applications through the quit gate; answered when the gate decides */
+    moveToApplications: async (): Promise<UpdateMoveResult> =>
+      UpdateMoveResult.parse(await ipcRenderer.invoke(IPC_CHANNELS.updateMoveToApplications)),
   },
   deck: {
     /** Say Godview's deck state by name — or null for none — never a position

@@ -4,6 +4,7 @@ import type {
   DesktopShellState,
   UpdateConfirmResult,
   UpdateDownloadResult,
+  UpdateMoveResult,
   UpdatePrepareResult,
   UpdateView,
 } from "@vibefield/contracts";
@@ -19,6 +20,8 @@ import { UpdatesDoctorSection, UpdatesSection } from "../src/panels/UpdatesSecti
 // A lower channel says EDP-36's sentence before it takes.
 // AU-3 — the card became Settings → Updates: the head's exact version and its Copy, one primary act per state,
 // Download and Download anyway through AU-1's door, the install that didn't take, and the foot's diagnostics.
+// AU-7 — where the app runs: a copy macOS won't let replace itself moves first, through main's quit gate; a writable
+// copy elsewhere carries one quiet line with the move beside it.
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -68,6 +71,7 @@ function fakeUpdates(
     confirm?: UpdateConfirmResult;
     download?: UpdateDownloadResult;
     doctor?: () => Promise<{ lines: string[] }>;
+    move?: () => Promise<UpdateMoveResult>;
   } = {},
 ): FieldUpdatesHost & { [K in keyof FieldUpdatesHost]: ReturnType<typeof vi.fn> } {
   return {
@@ -94,6 +98,8 @@ function fakeUpdates(
     ),
     confirmRestart: vi.fn(async () => answers.confirm ?? { ok: true }),
     doctor: vi.fn(answers.doctor ?? (async () => ({ lines: ["updates: idle · channel nightly"] }))),
+    // AU-7 — the quit gate's answer: proceed (the app quits and moves) unless a test says otherwise
+    moveToApplications: vi.fn(answers.move ?? (async () => ({ ok: true, outcome: "proceed" }))),
   } as never;
 }
 
@@ -490,6 +496,124 @@ describe("Settings → Updates", () => {
     host(fakeUpdates());
     await mount({ ...STAGED, applyWired: false });
     expect(container?.querySelector(".vf-updates-dot")).toBeNull();
+  });
+});
+
+describe("Settings → Updates — where the app runs (AU-7; AU-G8, LC-10, LC-40)", () => {
+  it("says a copy macOS won't let replace itself in the attention ink, with Move to Applications… its primary", async () => {
+    let answer: (result: UpdateMoveResult) => void = () => undefined;
+    const updates = fakeUpdates({
+      move: () =>
+        new Promise<UpdateMoveResult>((resolve) => {
+          answer = resolve;
+        }),
+    });
+    host(updates);
+    await mount({ ...STAGED, sessions: 0, location: "read-only" });
+    expect(text()).toContain("VibeField can't update itself from here");
+    expect(text()).toContain(
+      "macOS won't let VibeField replace itself where it is. Move it to Applications and it updates as usual.",
+    );
+    // the ready update it can't install: no dot, no Restart, no Skip
+    expect(container?.querySelector(".vf-updates-dot")).toBeNull();
+    expect(() => button("Restart to update")).toThrow();
+    expect(() => button("Skip this version")).toThrow();
+    expect(button("Move to Applications…").dataset.variant).toBe("primary");
+
+    await click("Move to Applications…");
+    expect(updates.moveToApplications).toHaveBeenCalledTimes(1);
+    expect(updates.prepareRestart).not.toHaveBeenCalled();
+    expect(text()).toContain("Moving VibeField to Applications…");
+    expect(button("Move to Applications…").disabled).toBe(true);
+
+    // the quit gate's Cancel: the page comes back to rest
+    await act(async () => {
+      answer({ ok: true, outcome: "cancel" });
+    });
+    expect(text()).not.toContain("Moving VibeField to Applications…");
+    expect(button("Move to Applications…").disabled).toBe(false);
+  });
+
+  it("keeps the moving line while the quit proceeds — the window closes under it", async () => {
+    const updates = fakeUpdates();
+    host(updates);
+    await mount({ ...BASE, location: "read-only" });
+    await click("Move to Applications…");
+    expect(text()).toContain("Moving VibeField to Applications…");
+  });
+
+  it("says main's words when the move is refused, and its own when main sent none", async () => {
+    host(
+      fakeUpdates({
+        move: async () => ({
+          ok: false,
+          reason: "busy",
+          words: { message: "VibeField is restarting", detail: "Move it once it opens again." },
+        }),
+      }),
+    );
+    await mount({ ...BASE, location: "read-only" });
+    await click("Move to Applications…");
+    expect(container?.querySelector('[role="alert"]')?.textContent).toBe(
+      "VibeField is restarting. Move it once it opens again.",
+    );
+    expect(text()).not.toContain("Moving VibeField to Applications…");
+    act(() => root?.unmount());
+    root = null;
+    container?.remove();
+
+    host(fakeUpdates({ move: async () => ({ ok: false, reason: "busy" }) }));
+    await mount({ ...BASE, location: "read-only" });
+    await click("Move to Applications…");
+    expect(container?.querySelector('[role="alert"]')?.textContent).toBe(
+      "VibeField didn't move to Applications. VibeField is already quitting or updating.",
+    );
+  });
+
+  it("says the bridge's failure under the page and comes back to rest", async () => {
+    host(
+      fakeUpdates({
+        move: async () => {
+          throw new Error("No handler registered");
+        },
+      }),
+    );
+    await mount({ ...BASE, location: "read-only" });
+    await click("Move to Applications…");
+    expect(text()).toContain("VibeField couldn't reach its updater: No handler registered.");
+    expect(text()).not.toContain("Moving VibeField to Applications…");
+  });
+
+  it("a writable copy outside Applications updates as usual: one quiet line, the move beside it", async () => {
+    const updates = fakeUpdates();
+    host(updates);
+    await mount({ ...STAGED, location: "elsewhere" });
+    // the state's own act and words stand; the dot still marks the ready line
+    expect(button("Restart to update…").dataset.variant).toBe("primary");
+    expect(container?.querySelector(".vf-updates-dot")).not.toBeNull();
+    expect(text()).not.toContain("can't update itself");
+    const line = container?.querySelector('[data-updates-location="elsewhere"]');
+    expect(line?.textContent).toContain("VibeField runs outside Applications");
+    expect(button("Move to Applications…").dataset.variant).not.toBe("primary");
+
+    await click("Move to Applications…");
+    expect(updates.moveToApplications).toHaveBeenCalledTimes(1);
+    expect(text()).toContain("Moving VibeField to Applications…");
+  });
+
+  it("says nothing of the location in Applications, or where main doesn't say", async () => {
+    host(fakeUpdates());
+    await mount({ ...BASE, location: "applications" });
+    expect(container?.querySelector("[data-updates-location]")).toBeNull();
+    expect(() => button("Move to Applications…")).toThrow();
+    act(() => root?.unmount());
+    root = null;
+    container?.remove();
+
+    host(fakeUpdates());
+    await mount(BASE);
+    expect(container?.querySelector("[data-updates-location]")).toBeNull();
+    expect(() => button("Move to Applications…")).toThrow();
   });
 });
 

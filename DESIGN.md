@@ -107,7 +107,8 @@ section described until then was ICE 0.11's — a world grid (`spacings: [25, 50
 and the magnet grid tuned through ICE's `GridMagnetConfig` (a dot or needle glyph, `reach: 60`, …),
 inked `#A6A6A6` by day and `#8A8A8A` by night (a classic alternate's `#1C1C1C` recorded beside it).
 ICE retired the magnet grid with the cards and the dot and needle grids on 2026-09-25, and on the
-desk (DK-3) the ground is the cutting mat below — its sage and cream, its rulers at a margin of 60,
+desk (DK-3) the ground is the cutting mat below — its sage and cream, its rulers printed at the
+window's edges (a margin of 0 since 2026-10-29; 60 before, §10 "The mat's places"),
 its lattice's fade-in (`GridConfig { fadeIn, mat }`). So the grid's projection, the magnet's tuning
 and its inks, Canvas Settings' Dot/Needle preference, Studio's grid controls and the appearance
 document's grid half left with the old ground: the document is v4, the plain ground alone
@@ -690,7 +691,7 @@ rect, its props, its stratum (pads · sheets · things), taped or not — is ICE
 | **stickers** (tape) | an attachment, a label | tags — the masking and label tape are already marks | not yet, as objects |
 | **tools** (metal) | a tool | rulers, clips, scissors | the mat's rulers and its lamp |
 | **instruments** (panel, plastic) | an instrument | the packs — shader, 8-bit, arduino: a panel, controls, screens, cables | not yet — the OBJECT KIT |
-| **portals** (glass) | a window onto something live | artifacts, pages, terminals, captures | not yet — PORTALS (DK-D19, DK-D20) |
+| **portals** (glass) | a window onto something live | artifacts, pages, terminals, captures, a simulator's screen | drawn — the browser pane (`vibefield.browser-pane`, PT-1 … PT-6): a slab of clear glass cut to its page, its recipe its plugin's own and not yet named here (BROWSER.md Q-10); and the phone's, the recipe **cover glass** (`vibefield.simulator`, PT-S1 — its numbers below) |
 
 **The five guardrails** (thinking-the-desk §6): **no material without a meaning** — no ornament
 that does not inform (a glass portal that refracts the mat passes; the stitched-leather calendar
@@ -700,10 +701,157 @@ form loses, the flat form wins · **legibility rules the camera** — text at ev
 every material, in both lights · **one physics** — one light, one spring set, one mass; no object
 keeps private motion rules · **the agent test** — a material must make working with an agent
 better: the agent sees the same objects by the same names, and a material only the eye can read
-is decoration. *A stub:* the recipes are ICE's (its `theme.ts` names them, each kind's pass draws
-them), and a material's row gains its recipe's name when a VibeField surface first wears it. Not
-yet drawn: string, stickers as objects, instruments and portals — each the desk migration's
-follow-on program, never a half-port.
+is decoration. *A stub:* the desk's own recipes are ICE's (its `theme.ts` names them, each kind's
+pass draws them); a plugin kind's are its plugin's own, held to this book; and a material's row
+gains its recipe's name when a VibeField surface first wears it. Not yet drawn: string, stickers
+as objects and instruments — each the desk migration's follow-on program, never a half-port.
+*Corrected 2026-10-18 (PT-S1, at its source):* the portals row read "not yet — PORTALS (DK-D19,
+DK-D20)" and this paragraph listed portals as not yet drawn, after the browser pane landed wearing
+glass (PT-6, 2026-10-14). Portals are drawn; the phone's cover glass is their second wearer. And
+this stub said every recipe is ICE's: a plugin kind's are its plugin's own `theme.ts` — the pane's
+glass in `plugins/browser-pane/src/theme.ts` (none a DESIGN.md token yet, BROWSER.md Q-10), the
+phone's in `plugins/simulator/src/theme.ts` and its law, held to the section below by its design
+test — and the portals row names the phone's recipe, **cover glass** (corrected 2026-10-29, PT-S1's
+review).
+
+#### The phone's materials — cover glass, border ink, three metals (PT-S1)
+
+The iOS Simulator on the desk is a phone lying face up at its true size (the note's scale: `MM` =
+2.6247 world units a millimetre — a 17 Pro is 189 × 394), its screen a live Simulator (the PT-S
+design, ruled 2026-10-18). Its recipes are written here before any of its drawing code (James's
+Q-6): its plugin's `theme.ts` colours and its law's material knobs — the cover glass, the three
+metals, the screen's light and its dims, the night's glow, the marks — hold no number this section
+lacks (`plugins/simulator/test/design.test.ts` reads them). The law's other numbers — how the phone
+lies, lifts and casts on the desk (its rest on its camera, its lift and hover, the eye's frame, its
+shadow and contact, its buttons' proud), what its stream is asked for and how long its morph takes —
+are its object's grammar, each cited in the law to where it comes from (PHONE.md §1, §4, §6, §7 and
+§13, and its Q-3; the eye's frame is the pane's): kept in the law, not recipes this section holds.
+What each material means under the guardrails:
+
+- **The cover glass** is the **portals** row's glass: the window the Simulator's screen is seen
+  through. It mirrors the one sky over the desk (the pane's, value for value) by Fresnel, its veil
+  kept to 0.28 of the physics so a screen stays legible (guardrail 3); the lamp's glint is sharp.
+- **The border ink** under the glass round the display is the window's edge — where the live
+  surface ends and the device's own frame begins. Black on every phone but the silver, gold and rose
+  gold home-button phones and the 7's red, whose fronts were white.
+- **The three metals** (aluminium, steel, titanium) are the band, and **their meaning is the
+  device's likeness: which iPhone the object stands for** — the model's own band (the `model` prop,
+  which an unbound phone wears too), read with its size and its sensor housing (the PT-S design §1:
+  "42 models read from Xcode's own data").
+  Under the first guardrail that is their meaning — they inform: they say which device — and they
+  carry no other. *Ruled 2026-10-29 (James, the PT-S gap note §6, choice 6).* The finishes below
+  carry the same meaning.
+- **The screen's own light** is not a material: it is the stream's, added after the desk's chain —
+  by day the byte is the drawn byte; by night it stays bright to an eye adapted to the Moon and glows
+  (PHONE.md §5; James's Q-4). A still of it is never passed off as live: it is dimmed (the pane's
+  two dims) and marked.
+
+| Recipe | Numbers |
+|---|---|
+| cover glass | Fresnel 0.04 head on · glint 2.6 · shininess 1400 · canopy 240 · veil 0.28 · window 3.2 (by night 0.05 of it) |
+| border ink | black `#0b0c0e` · white `#f0efeb` |
+| panel, off | OLED `#050507` · LCD `#0e1014` (the backlight's grey-blue: the home-button phones, the Xʀ and the 11) |
+| sensor housing | `#1a191a` (the Simulator's own sensor-bar fill, 0.102 · 0.098 · 0.102) · a lens `#0a0f1c` in a ring `#2a2c33` · an earpiece's mesh `#1e1f22` |
+| aluminium (anodised) | diffuse 0.6 · roughness 0.36 · glint 1.8 — meaning: likeness, the band of the iPhones made in it |
+| steel (polished) | diffuse 0.12 · roughness 0.07 · glint 2.6 — meaning: likeness, the band of the iPhones made in it |
+| titanium (brushed) | diffuse 0.34 · roughness 0.24 · glint 2 — meaning: likeness, the band of the iPhones made in it |
+| the sky the glass mirrors | day: sky `#dfe7ee` · leaves `#26331d` · room `#6b7075`; night: sky `#0f1726` · canopy `#040605` |
+| the screen's light | by day 1 of its bytes · by night 0.8 · the panel's scatter 0.006 · a still 0.7 · a still under words 0.16 |
+| the night's glow | glare 3.5 mm and 16 mm at 0.06 and 0.04 · spill 24 mm at 0.55 · edge 0.45 |
+| the words on a face | `#e6e8ea` (light, added over the dark panel or a dimmed still, in both lights) |
+| the marks on a still | the rest mark: two bars 1.4 mm wide and 6 mm tall, 2.4 mm apart centre to centre (the pane's two bars) · the boot mark: a ring 7 mm across and 1.4 mm thick, open 60° at its top · each in the words' ink at 0.9, at the display's centre |
+
+**The finishes** — each model's launch colours, its first the default: the band's colour (its metal's
+reflectance), the front's ink, and a mirror polish where the metal was finished to one. Approximated
+from product imagery. Their meaning is the metals': the device's likeness, which iPhone the object
+stands for, in the colour it was bought in.
+
+| Finish | Launched on | Band | Front | Polish |
+|---|---|---|---|---|
+| `space-gray-6s` | 6s · SE · Space Gray | `#86878b` | black | — |
+| `silver-6s` | 6s · SE · 7 · Silver | `#d9dadc` | white | — |
+| `gold-6s` | 6s · SE · 7 · Gold | `#e3cdb0` | white | — |
+| `rose-gold-6s` | 6s · SE · 7 · Rose Gold | `#e7c5bd` | white | — |
+| `black-7` | 7 · Black | `#2a2b2e` | black | — |
+| `jet-black` | 7 · Jet Black | `#0c0c0e` | black | mirror |
+| `red-7` | 7 · (PRODUCT)RED | `#b0121f` | white | — |
+| `space-gray-8` | 8 · Space Gray | `#707174` | black | — |
+| `silver-8` | 8 · Silver | `#dcdcde` | white | — |
+| `gold-8` | 8 · Gold | `#e9d4bd` | white | — |
+| `red-8` | 8 · (PRODUCT)RED | `#a5061a` | black | — |
+| `space-gray-x` | X · Xs · Space Gray (steel) | `#4a4a4d` | black | — |
+| `silver-x` | X · Xs · Silver (steel) | `#d6d6d8` | black | — |
+| `gold-xs` | Xs · Gold (steel) | `#e6c8a0` | black | — |
+| `black-xr` | Xʀ · Black | `#28292c` | black | — |
+| `white-xr` | Xʀ · White | `#e9e9ea` | black | — |
+| `blue-xr` | Xʀ · Blue | `#3e84c6` | black | — |
+| `yellow-xr` | Xʀ · Yellow | `#f6c93f` | black | — |
+| `coral-xr` | Xʀ · Coral | `#f36b5a` | black | — |
+| `red-xr` | Xʀ · 11 · (PRODUCT)RED | `#b2091c` | black | — |
+| `black-11` | 11 · Black | `#2b2c2f` | black | — |
+| `white-11` | 11 · White | `#eaeaea` | black | — |
+| `green-11` | 11 · Green | `#b3d5c2` | black | — |
+| `yellow-11` | 11 · Yellow | `#f7e5a0` | black | — |
+| `purple-11` | 11 · Purple | `#d2cce2` | black | — |
+| `midnight-green` | 11 Pro · Midnight Green (steel) | `#4d5a52` | black | — |
+| `space-gray-11p` | 11 Pro · Space Gray (steel) | `#52504e` | black | — |
+| `silver-11p` | 11 Pro · Silver (steel) | `#dcdcd9` | black | — |
+| `gold-11p` | 11 Pro · Gold (steel) | `#e5cdb0` | black | — |
+| `black-se` | SE (2nd) · Black | `#2a2a2d` | black | — |
+| `white-se` | SE (2nd) · White | `#e5e5e6` | black | — |
+| `red-se` | SE · (PRODUCT)RED | `#b3001d` | black | — |
+| `black-12` | 12 · Black | `#232427` | black | — |
+| `white-12` | 12 · White | `#efefee` | black | — |
+| `blue-12` | 12 · Blue | `#1f4f80` | black | — |
+| `green-12` | 12 · Green | `#c7e2cd` | black | — |
+| `purple-12` | 12 · Purple | `#bab1e5` | black | — |
+| `red-12` | 12 · 13 · 14 · (PRODUCT)RED | `#b10a21` | black | — |
+| `pacific-blue` | 12 Pro · Pacific Blue (steel) | `#2e4d5b` | black | — |
+| `graphite` | 12 Pro · 13 Pro · Graphite (steel) | `#4f4e4b` | black | — |
+| `silver-steel` | 12 Pro · 13 Pro · 14 Pro · Silver (steel) | `#dcdcd8` | black | — |
+| `gold-steel` | 12 Pro · 13 Pro · Gold (steel) | `#eed8b6` | black | — |
+| `midnight` | 13 · 14 · SE (3rd) · Midnight | `#232a31` | black | — |
+| `starlight` | 13 · 14 · SE (3rd) · Starlight | `#eeeae2` | black | — |
+| `blue-13` | 13 · Blue | `#2b5c86` | black | — |
+| `pink-13` | 13 · Pink | `#f4d7d4` | black | — |
+| `green-13` | 13 · Green | `#3c4d3a` | black | — |
+| `sierra-blue` | 13 Pro · Sierra Blue (steel) | `#9fb7cf` | black | — |
+| `alpine-green` | 13 Pro · Alpine Green (steel) | `#56695a` | black | — |
+| `blue-14` | 14 · Blue | `#a1b5c8` | black | — |
+| `purple-14` | 14 · Purple | `#e1d8e8` | black | — |
+| `yellow-14` | 14 · Yellow | `#f7e27b` | black | — |
+| `deep-purple` | 14 Pro · Deep Purple (steel) | `#5a4f64` | black | — |
+| `space-black` | 14 Pro · Space Black (steel) | `#3f3d3c` | black | — |
+| `gold-14p` | 14 Pro · Gold (steel) | `#f3e5cb` | black | — |
+| `pink-15` | 15 · Pink | `#f3cfd3` | black | — |
+| `black-15` | 15 · Black | `#34383a` | black | — |
+| `blue-15` | 15 · Blue | `#cbdbe5` | black | — |
+| `green-15` | 15 · Green | `#d8e3d3` | black | — |
+| `yellow-15` | 15 · Yellow | `#f6ebbf` | black | — |
+| `natural-titanium` | 15 Pro · 16 Pro · Natural Titanium | `#b4ada3` | black | — |
+| `blue-titanium` | 15 Pro · Blue Titanium | `#3e4855` | black | — |
+| `white-titanium` | 15 Pro · 16 Pro · White Titanium | `#dddbd6` | black | — |
+| `black-titanium` | 15 Pro · 16 Pro · Black Titanium | `#3a3938` | black | — |
+| `ultramarine` | 16 · Ultramarine | `#5a6fe0` | black | — |
+| `teal-16` | 16 · Teal | `#98cbc4` | black | — |
+| `pink-16` | 16 · Pink | `#efabc4` | black | — |
+| `white-16` | 16 · White | `#f1f1f1` | black | — |
+| `black-16` | 16 · Black | `#3b3c3e` | black | — |
+| `desert-titanium` | 16 Pro · Desert Titanium | `#c4ab94` | black | — |
+| `black-16e` | 16e · Black | `#2b2c2e` | black | — |
+| `white-16e` | 16e · White | `#ebe9e5` | black | — |
+| `lavender` | 17 · Lavender | `#cfc3e3` | black | — |
+| `mist-blue` | 17 · Mist Blue | `#a7bbd2` | black | — |
+| `sage-17` | 17 · Sage | `#b3bea3` | black | — |
+| `white-17` | 17 · White | `#f0f0ee` | black | — |
+| `black-17` | 17 · Black | `#2b2c2e` | black | — |
+| `cosmic-orange` | 17 Pro · Cosmic Orange | `#e0692a` | black | — |
+| `deep-blue` | 17 Pro · Deep Blue | `#2b3c5c` | black | — |
+| `silver-17p` | 17 Pro · Silver | `#dededb` | black | — |
+| `sky-blue` | Air · Sky Blue (titanium) | `#cadcec` | black | — |
+| `light-gold` | Air · Light Gold (titanium) | `#eddcc0` | black | — |
+| `cloud-white` | Air · Cloud White (titanium) | `#f2f1ed` | black | — |
+| `space-black-air` | Air · Space Black (titanium) | `#28292b` | black | — |
 
 ---
 
@@ -3900,6 +4048,28 @@ Inside History the room's own words stand as rosetta wrote them, and the Setup A
 - One row stands by decision. An agent that never says who keeps Settings' "Doesn't say who is signed in" over the
   page's "Signed in · doesn't say which account": VibeField cannot know it is signed in.
 
+**The simulator's honest faces** (track PT, PT-S1; the PT-S design §3, ruled 2026-10-18) — what the phone's
+screen says of its device, in the voice's words, quoted exactly by the plugin (`plugins/simulator`'s
+`face.ts`; its design test reads this table). `iPhone 17 Pro` stands for the device's name: the host's
+word for it, else the bound device type's name (a face is drawn only for a phone bound to a device;
+the model's name is the unbound phone's, in hand). A face with words shows them light over the dark
+panel, or over the device's last still dimmed to 0.16; one with a mark shows its still at 0.7. The act is a capsule
+under the words, offered only where the host can run it; it manages the device and never reaches
+inside iOS. In hand the tools say **View only**, in words beside the device's name — the phone takes no
+tap, key or button until PT-S4's touch lands.
+
+| State | The face says | Its act |
+|---|---|---|
+| no Simulator | "The iOS Simulator isn't on this Mac" | — |
+| no permission | "VibeField needs Screen Recording to show the Simulator" | "Open Settings" |
+| no device | "There's no iPhone 17 Pro on this Mac" | "Create it" |
+| off | "iPhone 17 Pro is off", over its last still | "Boot" |
+| booting | its still, with the boot mark | — |
+| no window | "The Simulator's window is closed", over its still | "Show it" |
+| live | the stream | — |
+| at rest | its last frame, with the rest mark | — |
+| stopped | "The Simulator stopped", over its still | "Try again" |
+
 **The update's words** (track AU, AU-L2, AU-L3, AU-L6; ruled 2026-10-29). **A version is said two ways:** exactly
 where it can be copied — `0.1.0-nightly.20261027` in mono on Settings → Updates' head — and in friendly words in a
 sentence: a nightly is "the Oct 27 nightly" (its day, from `-nightly.YYYYMMDD`; "The Oct 27 nightly" at a sentence's
@@ -4057,9 +4227,12 @@ their place". "Fullscreen" stays the pane's word (§8).
   brackets, under them near the top — and travels with it into the hand; **the tools in hand sit
   under the head** (top y 64, 16 under the name pill), still the object's chrome and not the head's;
   **the pegboard rises behind the line**, whose create is its door (§8). **The desk keeps two
-  reserves:** the **safe top, 94** — the rulers' band plus 8: the rulers move in to a margin of 60
-  (DK-3), so the top ruler starts below the head strip and the left ruler clears the notch, and
-  their band ends at 86 — above which the bar goes under its object; and **the foot, 88** — the
+  reserves:** the **safe top, 94** — above which the bar goes under its object. It was the rulers'
+  band plus 8 while the rulers were printed at a margin of 60 (DK-3: the top ruler below the head
+  strip, the left one clear of the notch, their band ending at 86). *Since 2026-10-29 the rulers are
+  printed at the window's edges* — a margin of 0, the frame on the window's four edges and the
+  band 0–26, under the head's controls and the notch, which stand over it — and the safe top keeps
+  its 94, still clear of the head's controls (their foot at 48); and **the foot, 88** — the
   line's reserve, the same 88 a covered view keeps (692): the board's lay ends 88 above the window's
   foot (I21) so its last row clears the line, and the bar's top never sits below 660 (its foot 8
   above the line's 708). Between them the bar keeps **42** from each side (the notch's 26 + 16), and
