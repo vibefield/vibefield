@@ -33,6 +33,7 @@ import { AppearancePlate, CORNER_PICKS, CornerPlate } from "../CornerPreview";
 import { DeskPreview } from "../DeskPreview";
 import { EDGE_STATES, EdgesPlate } from "../EdgesPreview";
 import { HEAD_STATES, HeadLive, HeadPlate } from "../HeadPreview";
+import { PACKAGE_CIRCLE_STATES, PackageCirclePlate } from "../PackageCirclePreview";
 import { PEERS_STATES, PeersPlate } from "../PeersPreview";
 import { PEGBOARD_STATES, PegboardPlate, StageBoard } from "../PegboardPreview";
 import { BAR_STATES, HAND_STATES, HandPlate, SelectionBarPlate } from "../SelectionBarPreview";
@@ -188,6 +189,32 @@ export function ChromeSection({
         <p className="vf-ds-stage-caption">
           Every state the page's plates show for the track — at rest, ⌘ held, Godview, History, ⌘4's
           note, and the keys as Windows prints them — in this page's theme.
+        </p>
+      </Specimen>
+
+      <Specimen
+        title="The package circle — Artifacts under a cover"
+        source="frame/PackageCircleView.tsx · DESIGN.md §8, §10, §6"
+        bleed
+      >
+        <div className="vf-ds-package-plates">
+          {PACKAGE_CIRCLE_STATES.map((state) => (
+            <PackageCirclePlate
+              key={`${state}-${dark ? "dark" : "light"}`}
+              state={state}
+              dark={dark}
+            />
+          ))}
+        </div>
+        <p className="vf-ds-stage-caption">
+          Under a cover the pill is the desk's and hides with it, and Artifacts' door stands alone
+          at the head's left: the package circle, 40 on the line's glass at x 96, search's mirror.
+          Over Godview the Stories row keeps one head gap from it, a side of 148; over History its
+          dot says an artifact's source is unavailable, and its tooltip which — "Artifacts —
+          vibe-field's source is unavailable"; while the terminals are maximized it stands at the
+          left end of their title bar, 30 × 24 in the deck's ink, as search stands at the right, its
+          tooltip saying how many — "Artifacts — 2 sources unavailable". It grows the pill's sheet
+          on its Artifacts shelf, which the head's plates draw.
         </p>
       </Specimen>
 

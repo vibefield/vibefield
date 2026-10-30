@@ -104,6 +104,8 @@ describe("UI system ownership boundaries", () => {
     expect(catalogCss).not.toMatch(
       /^\.vf-(?:artifact|godview\b|widget-tray\b|command-palette\b|palette-|settings-dialog\b|loading-veil\b|terminal-picker\b|deck-zoom\b|me\b|me-|face\b|face-|face-picker|settings-account|edge-tray\b|views\b|views-|cover\b|cover-|history\b|history-|line\b|line-|at-|head\b|head-|menu\b|menu-|ah-|tr-|bar\b|bar-|status-line|stories\b|stories-|story\b|story-|card\b|card-|cards\b|cards-)/m,
     );
+    // HN-8 (PL-D2): the package circle's plates stage it, and never restyle it
+    expect(catalogCss).not.toMatch(/^\.vf-package-/m);
   });
 
   it("keeps the face's own styling free of colour literals of any spelling (UA-7)", () => {
@@ -383,6 +385,24 @@ describe("UI system ownership boundaries", () => {
       expect(source(module), module).not.toMatch(/vf-stor(?:y|ies)/);
       expect(source(module), module).not.toMatch(/from "[^"]*\/GodviewHeadView"/);
     }
+  });
+
+  it("keeps the package circle's fixture an ADAPTER — fixture titles in the head's own words, never the circle's markup (HN-8, PL-D2)", () => {
+    // The catalog stands in for what a host supplies — the window's view, the deck's state and
+    // the head's reading of the catalog (the titles whose source is unavailable) — and mounts the
+    // shipping circle over them, in the words the head says. Never the circle's classes, never a
+    // stylesheet, never the reading's own door or the host.
+    const fixture = source("design-system/PackageCirclePreview.tsx");
+    expect(fixture).toMatch(/<PackageCircleView\s/u);
+    expect(fixture).toContain("artifactsDotWords(");
+    expect(fixture).not.toMatch(/className="vf-package/);
+    expect(fixture).not.toContain("<style");
+    expect(fixture).not.toContain("getHost");
+    expect(fixture).not.toContain("useFielddClient");
+    expect(fixture).not.toContain("useArtifactsDot");
+    expect(fixture).not.toContain("setArtifactCatalog");
+    // …and its plates MOUNTED on the page, not merely defined
+    expect(catalogPageSources()).toMatch(/<PackageCirclePlate\s/u);
   });
 
   it("keeps the corner's fixture an ADAPTER — the account's and the theme's facts, never the menu's markup (FR-4)", () => {
@@ -793,6 +813,8 @@ describe("UI system ownership boundaries", () => {
       "history/HistoryView.tsx",
       "frame/Peek.tsx",
       "frame/PeekView.tsx",
+      "frame/PackageCircle.tsx",
+      "frame/PackageCircleView.tsx",
       "frame/cards/CarriedCardLayer.tsx",
       "frame/Composer.tsx",
       "frame/ComposerLine.tsx",
@@ -843,6 +865,7 @@ describe("UI system ownership boundaries", () => {
       "frame/menu.css",
       "frame/status-line.css",
       "frame/peek.css",
+      "frame/package-circle.css",
       "frame/cards/carried.css",
       "field/desk/bar/selection-bar.css",
       "field/desk/pegboard/pegboard.css",

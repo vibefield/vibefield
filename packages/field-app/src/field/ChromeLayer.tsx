@@ -23,6 +23,7 @@ import { type FrameSurface, foldSurface, sheetShelf } from "../frame/frame-surfa
 import { Head } from "../frame/Head";
 import { canvasHead } from "../frame/head-canvas";
 import { runChosenSession } from "../frame/line-door";
+import { PackageCircle } from "../frame/PackageCircle";
 import { FramePeek } from "../frame/Peek";
 import type { FrameActRun } from "../frame/palette-acts";
 import { StatusLine } from "../frame/StatusLine";
@@ -307,6 +308,16 @@ export function ChromeLayer({
       {/* Chrome overlays sit OUTSIDE the scene's recede (a sheet's) — they never
           scale with the desk. Under the Peek they recede with the cover and the
           still, in field.tsx's `.field-recede` (DESIGN.md §6). */}
+      {/* THE PACKAGE CIRCLE (PL-D2, HN-8; DESIGN.md §8 "The head"): under a
+          cover the pill is the desk's and hides, and Artifacts' door stands
+          alone at the head's left, at 96 — search's mirror, above the cover
+          (62), folded into the terminals' title bar with search while they are
+          maximized. It grows the pill's sheet on its Artifacts shelf, the
+          frame's `artifacts`, and steps aside while the sheet stands in its
+          place (M1). Before the head in the document, so the sheet, at the same
+          62, is the one on top as the two hand over. */}
+      <PackageCircle view={view} surface={surface} onSurfaceChange={onSurfaceChange} />
+
       {/* THE HEAD (One Frame FR-3, DESIGN.md §8 "The head"): the field's name
           pill with the crumbs folded in, the chevron and the package (HN-8,
           PL-D1), which grow its sheet on Fields or Artifacts — the Hub's, hosted
