@@ -1094,13 +1094,16 @@ describe("Setup Assistant", () => {
     // DESIGN.md §8 "Copy" (LC-22): a copy made under a sheet is dealt into the hand under it,
     // from the button pressed, and the button's "Copied" is its sign while the sheet stands
     const copied: string[] = [];
-    host(vi.fn(async () => ({ ...FRESH, color: "accent-2" }) as FieldUserProfile), {
-      diagnostics: {
-        copyText: async (words: string) => {
-          copied.push(words);
-        },
-      } as unknown as NonNullable<FieldHost["diagnostics"]>,
-    });
+    host(
+      vi.fn(async () => ({ ...FRESH, color: "accent-2" }) as FieldUserProfile),
+      {
+        diagnostics: {
+          copyText: async (words: string) => {
+            copied.push(words);
+          },
+        } as unknown as NonNullable<FieldHost["diagnostics"]>,
+      },
+    );
     const admin = "https://login.tailscale.com/admin/machines";
     await mount({
       fieldd: client({

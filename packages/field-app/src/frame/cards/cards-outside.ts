@@ -160,7 +160,10 @@ function refusalOf(thing: Brought, pathOf: (file: File) => string | null): strin
  * says of the rest — that only twelve came in, else the first thing too large and why — or null
  * when all of it came in. `pathOf` is the shell's file door: a picture past the still's cap comes
  * in as its file only when it has a path. PURE. */
-export function takenOf(things: readonly Brought[], pathOf: (file: File) => string | null): {
+export function takenOf(
+  things: readonly Brought[],
+  pathOf: (file: File) => string | null,
+): {
   readonly taken: readonly Brought[];
   readonly left: string | null;
 } {

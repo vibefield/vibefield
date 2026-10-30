@@ -173,7 +173,10 @@ describe("the palette's table of the frame's acts (One Frame §7)", () => {
     expect(frameActGroups("godview", "mac", null, true)[1]?.acts[0]?.glyph).toBe("start");
     for (const view of ["canvas", "godview", "assistant"] as const) {
       const acts = frameActGroups(view, "mac", null, true).flatMap((group) => group.acts);
-      expect(acts.map((act) => act.id), view).not.toContain("chosen-session");
+      expect(
+        acts.map((act) => act.id),
+        view,
+      ).not.toContain("chosen-session");
     }
   });
 

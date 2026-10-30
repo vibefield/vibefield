@@ -488,8 +488,7 @@ describe("THE DESK'S COPY — the act (copy-to-hand.ts)", () => {
   });
 
   it("never says a bridge's error on the line: the door's own words stand for it", async () => {
-    const remote =
-      `Error invoking remote method '${IPC_CHANNELS.clipboardWriteImage}': Error: x`;
+    const remote = `Error invoking remote method '${IPC_CHANNELS.clipboardWriteImage}': Error: x`;
     pictureRefusal = new Error(remote);
     expect(copySelection(desk, "bar", seams())).toBe(true);
     await flush();

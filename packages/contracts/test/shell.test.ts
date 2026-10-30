@@ -388,9 +388,10 @@ describe("the clipboard read door (item 102)", () => {
 describe("the clipboard picture door (HN-5)", () => {
   it("answers written, or an honest refusal with the size it refused", () => {
     expect(ClipboardWriteImageResult.parse({ status: "written" })).toEqual({ status: "written" });
-    expect(
-      ClipboardWriteImageResult.parse({ status: "refused", reason: "not-an-image" }),
-    ).toEqual({ status: "refused", reason: "not-an-image" });
+    expect(ClipboardWriteImageResult.parse({ status: "refused", reason: "not-an-image" })).toEqual({
+      status: "refused",
+      reason: "not-an-image",
+    });
     const past = SHELL_CLIPBOARD.WRITE_IMAGE_MAX_BYTES + 1;
     expect(
       ClipboardWriteImageResult.parse({ status: "refused", reason: "too-large", bytes: past }),

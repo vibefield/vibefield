@@ -29,8 +29,7 @@ const ORIGIN: CardOrigin = { view: "godview", place: "Settings", how: "copy" };
 const FROM: DealFrom = { left: 600, top: 320, width: 64, height: 24 };
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 /** Electron's own words for a handler that threw, as the page receives them (invoke rewraps). */
-const REMOTE =
-  `Error invoking remote method '${IPC_CHANNELS.clipboardWriteImage}': Error: refused`;
+const REMOTE = `Error invoking remote method '${IPC_CHANNELS.clipboardWriteImage}': Error: refused`;
 
 /** The renderer's log, as the cards' lines reach it. */
 function hearLog(): Array<{ event: string; attrs: unknown }> {

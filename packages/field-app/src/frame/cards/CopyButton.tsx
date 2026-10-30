@@ -40,5 +40,9 @@ export function CopyButton({
     void copy(dealFromElement(event.currentTarget)).then(setDone);
   };
   const said = done === null ? label : done ? COPY_BUTTON_WORDS.copied : COPY_BUTTON_WORDS.refused;
-  return <button type="button" className={className} onClick={press}>{said}</button>;
+  return (
+    <button type="button" className={className} onClick={press}>
+      {said}
+    </button>
+  );
 }
