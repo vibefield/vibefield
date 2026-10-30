@@ -17,7 +17,8 @@
 - **Direction.** "A personal programmable field for agentic computing" (design-00 §1). The canvas is ICE's desk of GPU
   object kinds since DK-D11 (cut over 2026-10-09); live surfaces return as PORTALS. Since the Release Docket
   (2026-10-12, RL1–RL8) the goal is a real 1.0: signed desktop and iOS on nightly/beta/stable (RL4 (a)). Since 10-27
-  the build front is the first run, so someone other than James can install it: **TS, AO, AL**. The engineering bar
+  the build front is the first run, so someone other than James can install it: **TS, AO, AL**, and since 10-29
+  **FG**, the first run on the website's field. The engineering bar
   stays the P0 exit: real daily agent work, sessions surviving app restarts (board `rm-ar-p0`).
 - **Release posture.** `nightly-20261026` (run 40398570391, `d9eea75e0`) and `nightly-20261027` (run 40426614625,
   `84509d642`) are published: Developer ID signed, notarized, immutable, the tag made at plan time. W10 and W11 passed
@@ -34,8 +35,9 @@
   fixed it). `nightly-20261028` may dispatch on the green head (`scripts/release-plan.mjs:62`: never from a red trunk).
   Since the audit's base (`bb1a2c823`): AL-9, items 82–84, TS-8a/8b, the TS-3a erratum, AO-6b3 and QW1 stack A landed;
   then HK, the EL8 to puppeteer 0.3.0 (`1469639a6`) and QW1 stack B (10-28).
-- **The live program.** §2: TS, AO, AL, QW1 (the Godview swarm's fix wave 1), the release rails, the EL8 watch, the
-  fixer, upstream. The first-beta blockers are §3 item 7. Everything valid but unscheduled is §4.
+- **The live program.** §2: TS, AO, FG, AL, **AU (updates that wait)**, QW1 (the Godview swarm's fix wave 1), the
+  release rails, the EL8 watch, the fixer, upstream. The first-beta blockers are §3 item 7. Everything valid but
+  unscheduled is §4.
 
 ## 2 Now — the active tracks
 
@@ -64,6 +66,17 @@
   their VibeField RPC/UI wiring remains follow-on work. Rosetta #27 (RO-28) and puppeteer #47 (PU-19) remain filed.
 - Owed: the desk rows (`pnpm smoke`, `smoke:studio`, `smoke:godview` on a display); the first-run spike (`thinking-agent-onboarding.md` §9).
 
+**FG — the first run on the field** · vibe-field-a5 (lane `fg/build`) · law `draft/thinking-first-run-glass.md` §7, DESIGN.md §2.1/§5/§6/§8/§13 (page sources `draft/first-run-glass/`)
+- Ruled 10-29 09:29–09:35Z (James on *First run on the field*: the lean on eight, D15 C, D10 B, D14 B), and FG-D24 in
+  his words on version 6 (the field draws the glass).
+- Built, to land as one: **FG-0** (records only: DESIGN.md first), **FG-1** (`88457494e`, the field: the website's
+  splash vendored with its door, the boot's ground) and **FG-2** (`07618ca61`, the returning tear; every boot handed
+  over before it is interactive), merged with main as `fg/land`. It verifies on the Mac mini in VF-PM's queue.
+- Next: **FG-3** (the glass, the steps, the frame: 3a the glass's DOM, applied once FG lands; then 3b, the field
+  drawing the glass, FG-D24) → FG-4 (the panes in the frame, and the logo) → FG-5 (the hand-over) → FG-6 (the gates:
+  the catalog, a `smoke:first-run` row, contrast). Each verifies on the Mac mini.
+- Owed: FG-O7 (§9) at FG-4.
+
 **AL — what Quit means** · better-quit (lanes `al2`, `al/chords`, `al/chords-2`) · law `draft/thinking-app-lifecycle.md` v0.2 §8, ESR §7.3 (amended), design-00 EL1
 - Landed: AL-1…AL-3 (`7ebb1eeda` · `5eea4b2d5` · `697beb199`; AL-4 folded in), AL-5, AL-7, AL-8a, **AL-9** (`933d2fba3`,
   records `d9e5eb119`; AL-D14 "A", D15…D18), **AL-9b** (`cc37d2d8e`, 10-29; LANDED §AL-9b: one chord table in main for
@@ -79,6 +92,22 @@
 - Owed: AL-5's relaunch witness on a packaged build; Windows/Linux relaunch; a fieldd no shell ever claimed is
   unbounded; the clean `smoke:canvas` on this Mac (unattended); ghosttea's "last pane closed" hook (an upstream ask);
   James's hand rows (§5).
+
+**AU — Updates That Wait** · vibe-field-1b (lane `lanes/au`) · law `draft/thinking-update-ux.md` §7 (page sources `draft/update-ux/`), DESIGN.md §2.5/§2.8/§6/§8/§9/§13, EDP §5.2/§6.4/§11, ESR §7.3
+- Ruled 10-29 02:01–02:16Z (James, on the page KY3q9U2e): A on thirteen, **B on AU-D4**, so the Me menu always
+  carries an update row ("Check for updates" at rest, checking in place). The lead's calls LC-1…LC-57 (seven rounds)
+  settle the blueprints' questions and what the builds found (the record's §10); James ruled LC-53 at the leans.
+- Landed 10-30: **B1** — AU-0 (`db22ddb2e`: DESIGN.md first; its EDP/ESR/WP12 notes at source in dev-local
+  `a0a7f7bdb`) and AU-1 (`380fb4d81`: the view grows, and a person's two doors, the check's answer and
+  `download(version)`), as the merge `aa2be72c9`, run 3 green on the Mac mini (LANDED "AU B1").
+- Next, each built and light-green, verified on the mini and landed in turn: **B2** (AU-3a `appVersion` in the device
+  slice → AU-3 Settings → Updates and Your devices → AU-2 the corner: the dot, the always-row, the question) → **B3**
+  (AU-4 the app menu and the status item's update image → AU-7 Move to Applications → AU-5a a signal never meets the
+  quit gate, in every build → AU-5 install on quit) → **B4** (AU-6 signed notes and the build time, every
+  `release.yml` edit; after HN B1 lands, rebased over it).
+- Owed: the row, the dot and the question on a desk in both themes (James's display word) after B2; ⌘, through the
+  app menu (AU-4's eyeball); AU-5's install-on-quit and Move rows on the mini between two signed nightlies, then its
+  logout probe; LC-52 ("Check for Updates…" keeps its ellipsis, though the item does not open a box) is James's.
 
 **QW1 — the Godview swarm QA, fix wave 1** · vibe-field-d4 · law `draft/testing/godview-swarm-qa-plan.md` v0.3 §12.1, `draft/thinking-ar-reattach.md` §6
 - Ruled: the plan (A01–A27, X01–X26, Q01–Q21; page 3ZrkUWG4) and re-attach's RA-D1…RA-D9 (10-27, every pick at the
@@ -112,21 +141,22 @@
 
 **Fixer** · fixer · law the LANDED item entries
 - Landed since the audit: items 82 (`714ecbaae`, `8828601ed`), 83 (`f0b5342ac`), 84 (`68296443f`), 85 (`7eda2ee38`,
-  `b60e80398`), 89 (`238a960bc`), 87 (`8d56b2bd8`) and 113 (`218dc3d9e`), and the shell lease's cleanup race
-  (`2422bdf5c`).
-- Queue: item 80 (DS-5c's wall-clock gap margin, `doc-sync-service.test.ts`, shaped with the DS owner) with its
-  sibling TC-S3 (`terminal-service.test.ts`, 99 against ≥100, red at AO-6b3's verify) · item 71 (persona refresh
-  window) · item 73 (`unregistered_webcontents` false positive on every factory window) · item 74 (the generation-1
-  port forward before the main world, live-surfaces) · the sibling 5 s waits (§6 Gates) · item 86 (field-native's
-  health/observed subscribe: subscribe-then-read on one receiver) · item 90 (GV-D1's loop counts frames instead of
-  summing `1000 / 30`, which solves 599 steps; a quiet day) · item 91 (MF-1's field-projection row judges a board
-  settled from one pair of 750 ms readings, `agent-session.test.ts:2835`; red in item 87's first verify at load 257) ·
-  item 92 (item 65's rosettad-supervisor row retried as a crash under load, `rosettad-supervisor.test.ts:342`; red
-  there and in TS-4a's verify) · item 93 (DK-18's smoke-profile launcher row overruns the 5 s default under load,
-  `smoke-profile.test.ts:114`; red in item 87's rerun) · item 111 (the Artifact panel's Copy does nothing in the app:
-  a plugin's web clipboard write under the empty grant set, item 102's class; an SDK clipboard-write door over HN B2's
-  host copy door, after HN B2 unless HN B3 claims it) · item 112 (main decodes a clipboard PNG of up to 64 MiB with no
-  pixel bound; an IHDR read before decoding against one new contracts constant, its literal ruled alone; after HN B2).
+  `b60e80398`), 89 (`238a960bc`), 87 (`8d56b2bd8`) and 113 (`218dc3d9e`); the stack's eight, landed as the merge
+  `0b4cb2ff0`: 94, 86, 90, 96's first half, 93, 97, 92 and 101; and the shell lease's cleanup race (`2422bdf5c`).
+- Queue: item 80 (DS-5c's wall-clock gap margin, `doc-sync-service.test.ts`, shaped with the DS owner) with its sibling
+  TC-S3 (`terminal-service.test.ts`, 99 against ≥100, red at AO-6b3's verify) · item 71 (persona refresh window) · item
+  73 (`unregistered_webcontents` false positive on every factory window) · item 74 (the generation-1 port forward before
+  the main world, live-surfaces) · the sibling 5 s waits (§6 Gates) · item 91 (MF-1's field-projection row judges a
+  board settled from one pair of 750 ms readings, `agent-session.test.ts:2835`; red in item 87's first verify at load
+  257; its red-first inverted on 10-29, so a read comes first) · item 116 (item 93's twin: electron-shell's
+  `stopRunDaemons`, `src/testing/smoke-daemons.ts`, reads the whole process table twice per 100 ms poll, in macOS's `ps`
+  spelling alone, so a Linux smoke reads nothing; one census, after PR #8) · item 96's own half (the parts alone ×N and
+  on CI; which of the 13 bare `30_000` rows keep a named constant; the one row still past a second) · item 111 (the
+  Artifact panel's Copy does nothing in the app: a plugin's web clipboard write under the empty grant set, item 102's
+  class; an SDK clipboard-write door over HN B2's host copy door, after HN B2 unless HN B3 claims it) · item 112 (main
+  decodes a clipboard PNG of up to 64 MiB with no pixel bound; an IHDR read before decoding against one new contracts
+  constant, its literal ruled alone; after HN B2) · item 115 (`pnpm dev`'s nx watcher outlives a runner that ends
+  without `shutdown()`: a watcher host on a stdin pipe, and a SIGHUP handler; after 111 and 112).
 - **Item 77b**, FieldTerminalTests' 60 s block. The 5 s shape is fixed: (d) `b1e9bf53d` runs AttachDeadlineTests
   `.serialized`, because each row's 1 s deadline covers the dial too and rows started together stampeded the loopback
   dial under load. k1 is separate: `test-without-building` cold-boots a Shutdown simulator, and pre-booting it
@@ -208,7 +238,7 @@
 | The bare mat's menu | "Paste here", "New note here": unbuilt | a desk lane | DESIGN.md §8, ICE design-015 §7 |
 | PT — PORTALS | PT-S STOPPED by James 10-18 21:51Z (`portals/pt-s`: 4 PT-S1 commits, tip `85a21b86e`, plus uncommitted `plugins/simulator/` in the `pts` lane); the capture bake-off GO'd 10-19 20:13Z, unrun · then PT-C, PT-T (form ruled last, PT-D10) · James's 10-14 A2, B4, the 5 s wind tail, unbuilt | James on `draft/portals-maps/PT-S-vs-PHONE.md` §5's seven choices | `thinking-portals.md`, `draft/portals-maps/`, ICE design-019 |
 | AH | AH-4's runtime on main since `cce684ce3` (08-03), unledgered by its own rule until review + witnesses · AH-1 two-client proof · AH-3 physical closeout · AH-5 the phone list · device-retirement GC | an owner; GC with TS's "forget a device" | `specs/artifact-hub.md` |
-| PLUG | the KIT slice · third-party listing (P8e: TD registry + R2 process host; PA-24, §20.5, §21.8) · sideload · R2 `host:"process"` · PRC-6c2b and PRC-5's power loss (§6) · PRC residual policies (§14–§15) · per-section undo/⌘Z/timeline (D29′, P7) | first-party publishing; third-party plugins; a Settings history design | `specs/plugin-architecture.md`, `thinking-p8-loadable-artifact.md` |
+| PLUG follow-ups | the KIT slice · third-party listing (P8e: TD registry + R2 process host; PA-24, §20.5, §21.8) · sideload · R2 `host:"process"` · PRC-5's power loss (§6) · PRC residual policies (§14–§15) · per-section undo/⌘Z/timeline (D29′, P7) | first-party publishing; third-party plugins; a Settings history design; runtime validation is tracked separately in §6 | `specs/plugin-architecture.md`, `thinking-p8-loadable-artifact.md` |
 | TP / TC | D6's cell half, C5, D5, the lineage break (§6) · TC RATIFIED as built (Q6: TC-D1/D2 as amended by WG-D1, D3, D15, L1c at TM-1); TC-S4…S8 (vault, broker, replay, drain-migrate, warm tiers) parked · TP-S4…S6 (S4's typeable mirror struck) | a TP lane · a ghosttea next-major or a P0 witness across a floor restart · measured demand | `specs/terminal-pipeline-v3*.md`, `specs/terminal-custody.md` |
 | GT | G29 upstream (then GT-D22's file half) · GT-D22 (§5) · smoke row 13b: attach through DS-4e to a second staged desktop · no kill control in Godview (Q2): a session ends by the agent's quit, ⌘Q (AL-3) or reaping | G29's release · the two-desktop run | `specs/godview-terminal.md` |
 | IOS | the rebuild and TestFlight (§5) · phone Settings ("Settings in a Pocket", 7 marks, page VCfkfxMp) · IOS-8f `user.me` · K-D5's ghosttea `customInputView` petition (unfiled) | James rebuilds; external TestFlight; TS-7 | `thinking-ios-app.md`, `thinking-ios-swarm.md`, `apps/ios/TESTFLIGHT.md` |
@@ -258,7 +288,8 @@
 - AR-7: his daily dogfood · AR7-D2's 8 s kit wait, measured on a pair bounce.
 
 **Eyeballs (both themes)**
-- The update card on the current nightly (Settings › General, WP12d L3c-ii).
+- The update card on the current nightly (Settings › General, WP12d L3c-ii) — moves to Settings → Updates with B2
+  (AU-3, AU-D8); the pass is the page's then, with the Me row and the dot (AU-2).
 - History by project (PJ-4 phase B): the list's order and folds, a row's marks, "n live".
 - Settings → Plugins (object rows since DK-8 `244263f8c`): enable, disable, update, a faulted plugin's state.
 - Settings → Devices → Network details' sync rows and the head's name-pill sync dot (C6-4); could join TS's photographs.
@@ -359,6 +390,8 @@
 **Desk, UI and design**
 - With no desk, B and the line's ⊕ still flip the Objects surface — DK-18 follow-up (b).
 - InlineNotice's attention/error tones to DESIGN.md §2.5's inks (a design-kit slice) — WP12 L3c-ii.
+- The Me menu's notice row is in `--vf-orange`, the fill, not the attention ink (§2.5; `MeMenu.css:272-277`, since
+  UA-7). AU-2 (B2) fixes it with the not-installed notice — DESIGN.md §8 the Me menu (AU-0).
 - `prefers-reduced-transparency`: a DESIGN.md stance first (`440b04e`'s proposal: glass falls back to the §5 tint), for the cover glass (FC-D13/D16) and the deck's glass v2 (GT-D19), then tokens.css.
 
 **Files, phone, accounts**
@@ -367,7 +400,7 @@
 - UA-P-6: fold UA-P-D1…D8 into a governing spec (`specs/users-and-accounts.md` names none) — `thinking-ua-phone-account.md` §7 UA-P-6.
 
 **Plugins**
-- PRC-6c2b: run 1 (08-18/19, 1,535 samples (cycles 0–1534)) ended `verdict: fail`, `claimSatisfied: false` (`draft/plugin-runtime-spike/evidence-runs/plugin-runtime-soak-2026-08-18T07-11-50-175Z.jsonl`: an unexplained log drop from cycle 1109, a 61-minute gap at 1121). Root-caused first (Q8), then re-baselined on the desk (DK-9's kinds), then run 2 on the mini; it gates a release only if a release cites plugin-architecture §24.6.
+- PRC-6c2b: evidence triage and diagnostics are in draft [PR #7](https://github.com/vibefield/vibefield/pull/7) (implementation `8bcdab786`, CI fixes `60b49ce25`); **verification and landing remain open** as of 2026-10-30. Run 1 (08-18/19, 1,535 samples) remains `fail`, `claimSatisfied: false`: one persistent aggregate drop increment from cycle 1109 and seven observation gaps above five minutes (maximum 61 minutes). Per-stream counters, phase/power events, 15-second resource-probe deadlines, durable diagnostic records and all-gap reporting are implemented with targeted regressions. Linux affected CI passes build, tests and typecheck; full macOS verify is running. Next: finish verification, then the guarded 32-cycle DK-9 desk calibration and listener negative control. Historical root causes remain open. A literal 24-hour witness is required only for a release claiming plugin-architecture §24.6's endurance guarantee; ordinary plugin work is not gated by it. Scope and evidence: `draft/thinking-prc6c2-physical-soak.md` §9–10.
 - PRC-5's literal power-loss witness (the Windows filesystem half parks with WIN) — `thinking-prc5-update-coordinator.md` :789.
 - ICE declarations are not strict-NodeNext portable (still 0.16.0); matters only if the KIT slice's out-of-tree typecheck admits NodeNext — petitions README I18.
 
@@ -427,7 +460,9 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 |---|---|---|---|
 | TS — the Tailscale door | ACTIVE; TS-0…3b, 4a, 4b, 5, 6, 8a, 8b landed | `thinking-tailscale-onboarding.md`; DESIGN.md §6/§8/§9/§13 | TS-7 |
 | AO — Bring Your Agents | ACTIVE; AO-0…6b3 landed | `thinking-agent-onboarding.md` | AO-7 on a puppeteer release after 0.3.0 (`installRecipe`) |
+| FG — the first run on the field | ACTIVE; FG-0…2 built, to land as one (`fg/land`) | `thinking-first-run-glass.md`; DESIGN.md §2.1/§5/§6/§8/§13 | FG's landing, then FG-3 |
 | AL — app lifecycle | ACTIVE; AL-1…3, 5, 7, 8a, 9 landed | `thinking-app-lifecycle.md`; ESR §7.3 | AL-6, Last exit, relaunch cap |
+| AU — Updates That Wait | ACTIVE; B1 (AU-0, AU-1) landed 10-30 | `thinking-update-ux.md` §7 (page sources `draft/update-ux/`); DESIGN.md §2.5/§2.8/§6/§8/§9/§13; EDP §5.2/§6.4/§11; ESR §7.3 | B2 (AU-3a, AU-3, AU-2) |
 | QW1 — Godview swarm QA, fix wave 1 | ACTIVE; stacks A and B landed 10-28, B on puppeteer 0.3.0's EL8 pin | `godview-swarm-qa-plan.md`; `thinking-ar-reattach.md` | QA wave 1 |
 | Release rails (EDP/ESP, WP12, TD, BP, RD, RM) | ACTIVE; nightlies live, W10/W11 passed | the release specs; `thinking-browser-profile.md`, `thinking-release-deps.md`, `thinking-release-management.md` | round 3; the first-beta list |
 | EL8 — pins | ACTIVE (watch) | DECISIONS TB; the manifests | puppeteer 0.3.0 pinned 10-28 (`1469639a6`); Swift rejoin; mille's release |
@@ -443,7 +478,9 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | GT — Godview terminal | PARKED; the deck's ladder done (GT-0…GT-8) | `specs/godview-terminal.md` | G29; GT-D22; row 13b |
 | TP / TC — terminal pipeline and custody | PARKED; TC RATIFIED 10-28 (Q6) | `specs/terminal-pipeline-v3*.md`, `specs/terminal-custody.md`, `thinking-terminal-mesh-cells.md`, `thinking-floor-wedge.md`, `thinking-inventory-latency.md` | D6's cell half |
 | AH — Artifact Hub | PARKED; AH-1…3 landed, AH-4 unledgered | `specs/artifact-hub.md` | an owner: AH-4's review + witnesses |
-| PLUG — plugins (P0–P8, PRC) | PARKED; PRC-4/5 complete | `specs/plugin-architecture.md`, `thinking-p8-loadable-artifact.md`, `thinking-prc6*.md` | PRC-6c2b root cause; first-party publishing |
+| PLUG — shipped core | COMPLETE: P0–P7, P8b–d (P8c via WP8), PRC-4/5; later publishing/validation work is separate | `specs/plugin-architecture.md`, `thinking-p8-loadable-artifact.md` | existing product gates; no blanket 24-hour prerequisite |
+| PRC-6 — plugin runtime validation | OPEN; diagnostics in draft [PR #7](https://github.com/vibefield/vibefield/pull/7); Linux CI passed, full verification and calibration pending | `thinking-prc6c2-physical-soak.md` §9–10 | full verify → guarded 32-cycle current-desk calibration + listener control; historical failures stay open; literal 24h only for that claim |
+| PLUG — publishing | PARKED: KIT/P8e | `thinking-p8-loadable-artifact.md`, `specs/trust-and-distribution.md` | publishing scope; TD registry + R2 process host |
 | IOS — companion | PARKED | `thinking-ios-app.md`, `thinking-ios-swarm.md`, `thinking-ios-account.md`, `thinking-ios-history.md`, `apps/ios/TESTFLIGHT.md` | the rebuild; TestFlight build 4 |
 | UA — users and accounts | COMPLETE except witnesses | `specs/users-and-accounts.md`, `thinking-ua-phone-account.md` | the phone's second-account witness |
 | NF — native floor | COMPLETE; one owed line | `specs/native-floor.md` | item 52 (b)'s phone half |
@@ -490,3 +527,6 @@ D-1 and D-10, he ruled A the same morning (DECISIONS' compact row). What stays o
 1. **`draft/work/`** (the plans of record for DS waves 1–3, all landed): never asked. Lean (the archive ledger's):
    keep it in place; archive only with its 14 living pointers rewritten and its two Status headers flipped first.
 2. **Who runs RD-4's pipelines** (`draft/handover/2026-10-15-rd4-james-pipelines.md`). No lean.
+3. **FG-O7, the way out of a long load** (`draft/thinking-first-run-glass.md` §8): Opening Tailscale's Cancel shows
+   only after 6 s, where TS shows it beside its pill from the start. Lean (the page's): after 6 s, by James's round-3
+   words on loads ("nothing more"). Asked at FG-4.

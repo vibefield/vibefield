@@ -63,9 +63,9 @@ struct AccountDisplayTests {
 
   @Test("the notice speaks only when the mesh needs the person")
   func notice() {
-    #expect(AccountDisplay.notice(state: .needsLogin) == "Sign in to your tailnet to reach your desktops.")
-    #expect(AccountDisplay.notice(state: .needsMachineAuth) == "This device awaits machine authorization on the tailnet.")
-    #expect(AccountDisplay.notice(state: .failed("boom")) == "The mesh failed — boom.")
+    #expect(AccountDisplay.notice(state: .needsLogin) == "Sign in to Tailscale again to reach your desktops.")
+    #expect(AccountDisplay.notice(state: .needsMachineAuth) == "An admin of your Tailscale network approves new devices.")
+    #expect(AccountDisplay.notice(state: .failed("boom")) == "Couldn’t connect — boom.")
     for state: MeshModel.State in [.off, .starting, .up, .stopping, .reconnecting("x")] {
       #expect(AccountDisplay.notice(state: state) == nil)
     }
@@ -76,6 +76,9 @@ struct AccountDisplayTests {
     #expect(AccountDisplay.connectionDetail(state: .off) == "not connected")
     #expect(AccountDisplay.connectionDetail(state: .starting) == "connecting…")
     #expect(AccountDisplay.connectionDetail(state: .needsLogin) == "sign in again")
+    #expect(AccountDisplay.connectionDetail(state: .needsMachineAuth) == "waiting for approval")
+    #expect(AccountDisplay.connectionDetail(state: .stopping) == "signing out")
+    #expect(AccountDisplay.connectionDetail(state: .failed("x")) == "couldn’t connect")
     #expect(AccountDisplay.connectionDetail(state: .reconnecting("x")) == "reconnecting…")
     #expect(AccountDisplay.connectionDetail(state: .up) == nil)
   }

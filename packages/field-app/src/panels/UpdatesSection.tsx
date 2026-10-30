@@ -433,7 +433,12 @@ export function UpdatesSection({
       pendingChannel={pendingChannel}
       busy={busy}
       error={error}
-      onCheck={() => void act(async () => host?.check())}
+      // AU-1 (LC-5) — the check answers when it settles, so `busy` ends there; the card does not read the answer
+      onCheck={() =>
+        void act(async () => {
+          await host?.check();
+        })
+      }
       onSetEnabled={(enabled) => void act(async () => host?.setEnabled(enabled))}
       onChooseChannel={(channel) => {
         if (view === null || channel === view.channel) {

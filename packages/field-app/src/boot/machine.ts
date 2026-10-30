@@ -23,6 +23,13 @@ import type { PreparedRendererPlugins } from "../plugin-host/staged-loader";
 // holds once more, after the frame-stability gate and before `interactive`
 // (`handing-over`), until the wizard's last beat ends. `interactive` keeps
 // meaning revealed: the glass leaves exactly when the splash would have.
+//
+// Track FG (FG-2, 2026-10-29) makes that last hold every boot's: the first
+// face's ground opens onto the desk — the field's tear (DESIGN.md §6, §8 "The
+// reveal") — and the machine waits at `handing-over` until it has
+// (`revealDesk`), so `interactive` still means revealed. Before it, a returning
+// boot's splash stands at least 700ms from its first frame: the website's floor
+// for a repeat visit, a floor and never a stage (FG-L6, FG-D10 B).
 
 export type WorkspaceModule = typeof import("../workspace");
 
@@ -33,8 +40,10 @@ export type BootPhase =
   | "opening-document"
   | "warming"
   | "stabilizing"
-  /** AO-D2 — the desk is warm and stable behind the Setup Assistant's glass,
-   * and the machine waits for the wizard to hand it over (`revealDesk`). */
+  /** The desk is warm and stable behind the first face, and the machine waits
+   * for the face to hand it over (`revealDesk`): the ground's opening on a
+   * returning boot (FG-2), the Setup Assistant's last beat on a first run
+   * (AO-D2). */
   | "handing-over"
   | "interactive";
 
@@ -93,6 +102,9 @@ export interface BootMachineDeps {
   /** hidden windows have no frames to judge — the reveal proceeds unwatched
    * (PF6; with background throttling restored, rAF may not tick at all) */
   isHidden?: () => boolean;
+  /** the first face stands at least this long from `start()` (its first frame)
+   * before it is handed over — the website's floor for a repeat visit (FG-L6) */
+  floorMs?: number;
   mark?: (name: string) => void;
 }
 
@@ -118,12 +130,13 @@ export interface BootMachine {
    * nothing is holding. The wizard calls it only after the durable `onboarded`
    * write lands (or on the person's "Continue anyway"), so a later retry()
    * re-reads a record that skips the phase on its own — no "already shown" bit
-   * is kept anywhere. AO-D2: a released hold also holds the reveal, at
-   * `handing-over`, until `revealDesk()`. */
+   * is kept anywhere. AO-D2: the wizard then keeps the window, the desk opening
+   * behind its glass, until its last beat hands the desk over (`revealDesk()`). */
   completeOnboarding(profile?: FieldUserProfile): void;
-  /** AO-D2 — the wizard's last beat is over: reveal the desk it opened, at once
-   * if the desk is already waiting at `handing-over`, else the moment it is
-   * stable. Idempotent, and inert when no wizard holds the reveal. */
+  /** The first face has gone (AO-D2; FG-2): the ground has opened onto the
+   * desk, or the Setup Assistant's last beat is over. Reveals at once if the
+   * desk is waiting at `handing-over`, else the moment it is stable — a hand-over
+   * given early is kept. Idempotent. */
   revealDesk(): void;
 }
 
@@ -134,11 +147,13 @@ export const FIRST_STAGE = "waking the daemon";
 const FRAME_BUDGET_MS = 24; // 60Hz + scheduling slack
 const STABLE_FRAMES = 10;
 const STABILITY_CAP_MS = 1_000;
+const FLOOR_MS = 700; // the website's `SPLASH.again` (components/experience.tsx)
 
 export function createBootMachine(deps: BootMachineDeps): BootMachine {
   const raf = deps.raf ?? ((cb: () => void) => requestAnimationFrame(() => cb()));
   const now = deps.now ?? (() => performance.now());
   const mark = deps.mark ?? ((name: string) => performance.mark(name));
+  const hidden = deps.isHidden ?? (() => typeof document !== "undefined" && document.hidden);
 
   const listeners = new Set<() => void>();
   let view: BootView = {
@@ -162,11 +177,12 @@ export function createBootMachine(deps: BootMachineDeps): BootMachine {
   let ready: BootReady | null = null;
   let running = false;
   let started = false;
+  let startedAt: number | null = null;
   let onboarding: BootOnboarding | null = null;
   let releaseOnboarding: (() => void) | null = null;
-  // AO-D2 — the wizard's second hold: set when its questions release the first,
-  // cleared by `revealDesk()`; `releaseReveal` exists only while `handing-over`.
-  let revealHeld = false;
+  // The hand-over (AO-D2; FG-2): `revealDesk()` gives it, early or at
+  // `handing-over`; `releaseReveal` exists only while the machine waits there.
+  let handedOver = false;
   let releaseReveal: (() => void) | null = null;
   let pluginCloseRequested = false;
   let pluginCloseTask: Promise<void> | null = null;
@@ -369,13 +385,22 @@ export function createBootMachine(deps: BootMachineDeps): BootMachine {
           );
       }
 
-      // AO-D2 — handing over: the desk is ready behind the Setup Assistant's
-      // glass, and the wizard says when its last beat is over.
-      if (revealHeld) {
-        patch({ phase: "handing-over", stage: "" });
-        await new Promise<void>((resolve) => {
+      // FG-L6 — the floor: the splash stands its 700ms from its first frame,
+      // whatever the desk's pace. A hidden window has no splash to stand.
+      const floor = (startedAt ?? now()) + (deps.floorMs ?? FLOOR_MS) - now();
+      if (floor > 0 && !hidden()) await new Promise<void>((resolve) => setTimeout(resolve, floor));
+
+      // Handing over (AO-D2; FG-2, every boot): the desk is ready behind the
+      // first face, and the face says when it has gone — the ground opened onto
+      // the desk, or the Setup Assistant's last beat over. The release exists
+      // BEFORE the patch that notifies, so a face that hands over at once is
+      // heard (the `onboarding` precedent).
+      if (!handedOver) {
+        const handed = new Promise<void>((resolve) => {
           releaseReveal = resolve;
         });
+        patch({ phase: "handing-over", stage: "" });
+        await handed;
         releaseReveal = null;
       }
 
@@ -395,7 +420,6 @@ export function createBootMachine(deps: BootMachineDeps): BootMachine {
   }
 
   function stabilize(): Promise<boolean> {
-    const hidden = deps.isHidden ?? (() => typeof document !== "undefined" && document.hidden);
     if (hidden()) return Promise.resolve(false); // nothing to judge; not degraded
     return new Promise((resolve) => {
       const budget = deps.frameBudgetMs ?? FRAME_BUDGET_MS;
@@ -443,11 +467,10 @@ export function createBootMachine(deps: BootMachineDeps): BootMachine {
       if (profile !== undefined) currentProfile = profile;
       if (releaseOnboarding === null) return;
       // The wizard keeps the window while the desk opens behind it (AO-D2).
-      revealHeld = true;
       releaseOnboarding();
     },
     revealDesk: () => {
-      revealHeld = false;
+      handedOver = true;
       releaseReveal?.();
     },
     closePlugins: () => {
@@ -462,6 +485,7 @@ export function createBootMachine(deps: BootMachineDeps): BootMachine {
     start: () => {
       if (started) return;
       started = true;
+      startedAt = now();
       void run();
     },
     retry: () => {
