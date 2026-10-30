@@ -44,6 +44,10 @@ const CONNECT_ASK_GOLDEN = join(
   "fixtures",
   "setup-ledger-connect-ask.valid.json",
 );
+const SYNC_QUESTION_GOLDEN = join(
+  dirname(CONNECT_ASK_GOLDEN),
+  "setup-ledger-sync-question.valid.json",
+);
 
 describe("the setup ledger store (AO-2)", () => {
   it("starts empty with no file, and writes nothing until a step is answered", () => {
@@ -183,5 +187,56 @@ describe("the setup ledger store (AO-2)", () => {
     expect(aside).toHaveLength(1);
     expect(readFileSync(join(dirname(path), aside[0] ?? ""), "utf8")).toBe("{ not json");
     expect(existsSync(path)).toBe(false);
+  });
+});
+
+describe("TS-6 — a moment fieldd owes (TS-D13)", () => {
+  it("owes a moment only where it has no row, and the answer or a saying replaces it", () => {
+    const path = ledgerPath();
+    const store = new SetupLedgerStore({ path, now: at("2026-10-29T08:03:21.000Z") });
+    expect(store.owe("sync-question")).toBe(true);
+    expect(store.owe("sync-question")).toBe(false);
+    expect(new SetupLedgerStore({ path }).snapshot().moments?.["sync-question"]).toEqual({
+      state: "owed",
+      at: "2026-10-29T08:03:21.000Z",
+    });
+    expect(store.moment("sync-question", "retired")).toBe(true);
+    // answered is for good: a later link owes nothing
+    expect(store.owe("sync-question")).toBe(false);
+    expect(store.snapshot().moments?.["sync-question"]).toMatchObject({ state: "retired" });
+    // a saying replaces it too, and is never owed over
+    expect(store.owe("connect-ask:away")).toBe(true);
+    expect(store.moment("connect-ask:away", "asked")).toBe(true);
+    expect(store.owe("connect-ask:away")).toBe(false);
+  });
+
+  it("never owes over a row it cannot read: a newer build's answer is carried", () => {
+    const path = ledgerPath();
+    mkdirSync(dirname(path), { recursive: true });
+    const newer = { state: "snoozed", at: "2026-10-29T08:00:00.000Z" };
+    writeFileSync(
+      path,
+      JSON.stringify({ format: 1, steps: {}, hidden: false, moments: { "sync-question": newer } }),
+    );
+    const store = new SetupLedgerStore({ path });
+    expect(store.owe("sync-question")).toBe(false);
+    expect(store.snapshot().moments?.["sync-question"]).toEqual(newer);
+  });
+
+  it("reads the golden sync-question ledger from disk and retires it beside the others (EL9)", () => {
+    const path = ledgerPath();
+    mkdirSync(dirname(path), { recursive: true });
+    const golden = readFileSync(SYNC_QUESTION_GOLDEN, "utf8");
+    writeFileSync(path, golden);
+    const store = new SetupLedgerStore({ path, now: at("2026-10-29T08:05:00.000Z") });
+    expect(store.snapshot()).toEqual(JSON.parse(golden));
+    expect(store.owe("sync-question")).toBe(false);
+    expect(store.moment("sync-question", "retired")).toBe(true);
+    const written = SetupLedger.parse(JSON.parse(readFileSync(path, "utf8")));
+    expect(written.moments).toEqual({
+      limit: { state: "retired", at: "2026-10-28T16:10:00.000Z" },
+      "connect-ask:away": { state: "asked", at: "2026-10-28T22:40:05.000Z" },
+      "sync-question": { state: "retired", at: "2026-10-29T08:05:00.000Z" },
+    });
   });
 });

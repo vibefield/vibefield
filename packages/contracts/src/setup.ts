@@ -50,10 +50,24 @@ export type SetupMomentKey = z.infer<typeof SetupMomentKey>;
 /** `retired` — the person said Not now (or acted on it): it never shows again.
  * `asked` (TS-4, TS-D7) — said, and it may be said again: its `at` is when it was
  * last said, and the reader keeps its own quiet from there (each place once per
- * 30 days, one a day across them). It never replaces `retired`. */
-export const SETUP_MOMENT_STATES = ["retired", "asked"] as const;
+ * 30 days, one a day across them). It never replaces `retired`.
+ * `owed` (TS-6, TS-D13) — not said yet, and due: fieldd writes it when a link
+ * lands, on a moment with no row at all, and only fieldd writes it (a window's
+ * answers are `SetupMomentAnswer`). The answer replaces it. */
+export const SETUP_MOMENT_STATES = ["retired", "asked", "owed"] as const;
 export const SetupMomentState = z.enum(SETUP_MOMENT_STATES);
 export type SetupMomentState = z.infer<typeof SetupMomentState>;
+
+/** What a window may answer a moment with (`setup.moment`): `owed` is fieldd's. */
+export const SETUP_MOMENT_ANSWERS = ["retired", "asked"] as const;
+export const SetupMomentAnswer = z.enum(SETUP_MOMENT_ANSWERS);
+export type SetupMomentAnswer = z.infer<typeof SetupMomentAnswer>;
+
+/** TS-6 (TS-D13 = A; DESIGN.md §8 "The sync question") — the question a link
+ * owes: asked once, at the first new field after connecting. A link that lands
+ * keeps each field with no answer of its own on this Mac and writes this moment
+ * `owed`; the question's answer retires it. */
+export const SYNC_QUESTION_MOMENT = "sync-question";
 
 export const SetupMomentRecord = z
   .object({ state: SetupMomentState, at: z.string().min(1) })
@@ -88,9 +102,10 @@ export type SetupHideParams = z.infer<typeof SetupHideParams>;
 
 /** `setup.moment` (AO-D15) — one moment's answer, beside the steps: Not now
  * retires it for good. Declarative: the same answer twice is written once —
- * except `asked`, whose answer is its time, so each saying is written. */
+ * except `asked`, whose answer is its time, so each saying is written. A window
+ * never owes a moment (TS-6): `owed` is refused here. */
 export const SetupMomentParams = z
-  .object({ moment: SetupMomentKey, state: SetupMomentState })
+  .object({ moment: SetupMomentKey, state: SetupMomentAnswer })
   .passthrough();
 export type SetupMomentParams = z.infer<typeof SetupMomentParams>;
 
