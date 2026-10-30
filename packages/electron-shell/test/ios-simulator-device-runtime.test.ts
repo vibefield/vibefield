@@ -836,4 +836,66 @@ describe("IosSimulatorDeviceLiveSurfaceRuntime — never a UDID, one stream a de
     expectMonotonic(again.all(), SURFACE_B);
     expectNoUdid([a.all(), b.all(), again.all()]);
   });
+
+  it("R3 picks by a binding a member HOLDS: the phone that opened a shared session leaving, the one left follows its OWN binding — a device the leaver's would pick moves nothing under its face", async () => {
+    const { simctl, capture, sessions } = setup({
+      raw: listJson({ [IOS_26_1]: [rawDevice(UDID, "Booted")] }),
+    });
+    // neither binding has a 17 Pro of its own runtime here: both fall back to the one booted 26.1 device, and share it
+    const first = open(sessions, SURFACE_A, PHONE);
+    const a = attach(first, "attachment_simdev_000a");
+    await settle();
+    const second = open(sessions, SURFACE_B, { deviceType: PRO, runtime: IOS_27_0 });
+    const b = attach(second, "attachment_simdev_000b");
+    await settle();
+    expect(sessions.size).toBe(1);
+    a.attachment.setDemand(demand(1));
+    b.attachment.setDemand(demand(1));
+    await settle();
+    expect(capture!.client.requests).toHaveLength(1);
+    const request = capture!.client.requests[0]!;
+    request.onFrame(captureFrame(request.producerEpoch));
+    expect(b.latest()).toMatchObject({
+      state: "live",
+      simulator: { condition: "streaming", runtime: IOS_26_1 },
+    });
+
+    // the first phone is deleted: its surface leaves, and the session lives on for the second
+    first.dispose();
+    await settle();
+    expect(sessions.size).toBe(1);
+    // a 17 Pro on the first phone's own runtime is made outside the app, shut down: the leaver's binding would pick it
+    simctl.raw = listJson({
+      [IOS_26_1]: [rawDevice(UDID, "Booted")],
+      [IOS_26_5]: [rawDevice(UDID_2, "Shutdown")],
+    });
+    await vi.advanceTimersByTimeAsync(10_000);
+    await settle();
+    // the second phone's own binding still picks the booted 26.1 device: its face keeps streaming it, and offers no Boot
+    expect(b.latest()).toMatchObject({
+      state: "live",
+      simulator: { condition: "streaming", runtime: IOS_26_1 },
+    });
+    expect(b.all().map((summary) => summary.simulator?.condition)).not.toContain("off");
+    b.act("boot");
+    await settle();
+    expect(simctl.calls).not.toContain(`boot ${UDID_2}`);
+    expect(simctl.calls).toEqual([]);
+    expect(capture!.resolved).not.toContain(UDID_2);
+    expect(capture!.client.requests).toHaveLength(1);
+    request.onFrame(captureFrame(request.producerEpoch, 2n));
+    expect(b.frames.map((frame) => frame.metadata.surfaceId)).toEqual([SURFACE_B, SURFACE_B]);
+
+    // its face detached, it stays (the session's binding is its own); attached again, it is its own binding's device
+    b.attachment.dispose();
+    expect(sessions.size).toBe(1);
+    const again = attach(second, "attachment_simdev_000c");
+    await settle();
+    expect(again.latest().simulator).toMatchObject({ condition: "streaming", runtime: IOS_26_1 });
+    expect(simctl.calls).toEqual([]);
+    expectMonotonic(a.all(), SURFACE_A);
+    expectMonotonic(b.all(), SURFACE_B);
+    expectMonotonic(again.all(), SURFACE_B);
+    expectNoUdid([a.all(), b.all(), again.all()]);
+  });
 });

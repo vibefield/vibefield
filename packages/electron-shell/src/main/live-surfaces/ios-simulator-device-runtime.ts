@@ -53,7 +53,9 @@ import type { LiveSurfaceProducerTextureFrame } from "./texture-forwarder";
 // lasts while the bindings agree: each surface keeps its OWN binding, and one whose binding comes to pick another device
 // (it reached this one by a fallback tier, and the devices moved under it) leaves for a session of its own at its next
 // idle — at once with no face attached, else when its last face detaches; never under a face (a fresh inner would move
-// that face's summaries backwards).
+// that face's summaries backwards). The session itself picks by a binding one of its members HOLDS: the opener's, and
+// when that surface leaves, a remaining member's (one that agreed at the last look first) — never a binding no member
+// holds any more. The device then moves at the next look, by the resolver, under the same inner.
 
 /** The inner's own source never reaches a capture: its resolver is the session's closure. Contract-valid, never a UDID. */
 const PLACEHOLDER_UDID = "bound-simulator";
@@ -174,6 +176,14 @@ function sameUdid(left: string | undefined, right: string | undefined): boolean 
   return left !== undefined && right !== undefined && left.toUpperCase() === right.toUpperCase();
 }
 
+/** One binding, by what `pickDevice` reads of it. */
+function sameBinding(
+  left: LiveSurfaceIosSimulatorBindingV1,
+  right: LiveSurfaceIosSimulatorBindingV1,
+): boolean {
+  return left.deviceType === right.deviceType && left.runtime === right.runtime;
+}
+
 /** Two picks land in one place: the same device — or, with none, the same one "Create it" would make. */
 function samePlace(left: SimctlDevicePick, right: SimctlDevicePick): boolean {
   if (left.device !== undefined || right.device !== undefined) {
@@ -205,7 +215,8 @@ class DeviceSession {
   readonly records = new Set<DeviceAttachmentRecord>();
   readonly #pool: SessionPool;
   readonly #options: SimulatorDeviceSessionsOptions;
-  readonly #binding: LiveSurfaceIosSimulatorBindingV1;
+  /** what every look picks by: a member's own binding — the opener's, re-keyed when its holder leaves (`rekey`) */
+  #binding: LiveSurfaceIosSimulatorBindingV1;
   readonly #crop: LiveSurfaceCropV1;
   readonly #now: () => number;
   readonly #inner: IosSimulatorLiveSurfaceRuntime;
@@ -419,6 +430,28 @@ class DeviceSession {
       this.release(record);
     }
     if (this.members.size === 0) this.dispose();
+    else this.rekey();
+  }
+
+  /** R3: the binding the session picks by is one a member holds. When its holder has left, a remaining member's is
+   * taken — one that agreed with the session at the last look first, so the pick moves as little as it can. Only the
+   * binding moves here: no member changes session and no face changes inner, so the next look moves the device under
+   * the SAME inner by the resolver (R7), and no summary moves backwards. Every `strayed` was measured against the old
+   * binding's pick: cleared, and re-swept by that look — at once while a face is attached, else at the next face's
+   * attach (a face-less session never looks). At once even mid-act: the act runs on the device it began with (`run`
+   * reads the pick once), nothing is offered nor joined while `acting`, and `settle` then picks by a binding a member
+   * holds. */
+  private rekey(): void {
+    if (this.#disposed) return;
+    let heir: SessionMember | undefined;
+    for (const member of this.members) {
+      if (sameBinding(member.source.binding, this.#binding)) return;
+      if (heir === undefined || (heir.strayed && !member.strayed)) heir = member;
+    }
+    if (heir === undefined) return;
+    this.#binding = heir.source.binding;
+    for (const member of this.members) member.strayed = false;
+    if (this.records.size > 0) void this.look();
   }
 
   dispose(): void {
