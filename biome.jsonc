@@ -68,11 +68,6 @@
       // contracts fixture is kept in the same canonical form (its test holds it so).
       "!**/trust-root.json",
       "!packages/contracts/fixtures/trust-root.valid.json",
-      // design-kit/assets/ is GENERATED art (tooling/fieldmarks/generate.py and
-      // tooling/face-stickers/generate.py, DESIGN.md §11): the generators own its
-      // bytes. Its sprite sheets are containers of <symbol>s that a <use> names, so
-      // the sheet's root <svg> is never an image that needs a <title> of its own.
-      "!packages/design-kit/assets",
       // spark-face/vendor/sparks.js is James's Agent Sparks engine, vendored BYTE FOR BYTE
       // (DESIGN.md §2.10): spark-face.test.tsx holds its SHA-256, so nothing formats or lints it,
       // and a newer version is copied over it, never edited in place.

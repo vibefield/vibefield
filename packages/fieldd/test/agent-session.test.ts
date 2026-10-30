@@ -26,7 +26,7 @@
 // parsed rather than grepped, a window in which nothing changed also carries
 // the poller's own request count, and the index is asked with a canonical row
 // and a decoy beside it.
-import { type ChildProcess, spawn } from "node:child_process";
+import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import {
   copyFileSync,
   existsSync,
@@ -62,6 +62,7 @@ import {
   LAYOUT,
   type PlaceFacts,
   SOCKETS,
+  TERMINAL_INVENTORY,
   type TerminalInfo,
 } from "@vibefield/contracts";
 import {
@@ -87,6 +88,7 @@ import type {
 } from "@vibefield/puppeteer-runtime";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import WebSocket from "ws";
+import { EXIT_GRACE_MS } from "../src/agent-runtime";
 import { bootstrap, type FielddDaemon, SessionRecordStore } from "../src/index";
 import { RpcCallError } from "../src/native-link";
 import type { SecretStore } from "../src/plugin-settings";
@@ -796,13 +798,79 @@ const DECK = ["agent.spawn", "agent.observe", "terminal.attach", "index.read"];
 const FIELD_ROW_KEYS = Object.keys(AgentFieldRow.shape);
 
 /** Every wait in this suite (item 68): at its deadline it says what was awaited, what the row last `seen`, and the
- * row's floor and fieldd logs with the link view (`waitWithEvidence`). The budgets are the rows' own. */
+ * row's floor and fieldd logs with the link view (`waitWithEvidence`), and a `witness`'s word when one is given
+ * (item 97: asked once, at the deadline). The budgets are the rows' own. */
 async function poll<T>(
   fn: (seen: (value: unknown) => void) => Promise<T | undefined>,
   ms: number,
   what = "the row's condition",
+  witness?: () => Promise<string>,
 ): Promise<T> {
-  return await waitWithEvidence(what, fn, ms, () => scene);
+  return await waitWithEvidence(what, fn, ms, () => scene, 100, witness);
+}
+
+/** What an interrupted run's HEARD exit has to read exited in (AR-6-0, MF-1g's `endedRun`): the floor's
+ * interrupt, `cat`'s end, the floor's `session-exited` and the fold, on a loaded host. */
+const INTERRUPTED_EXIT_MS = 15_000;
+
+/** Item 97 — the same exit, never heard. On top of the heard budget, two things:
+ * - the floor's next reconcile lists the kept pane `exited`: the exit itself asks for one at once, and the
+ *   backstop period bounds it;
+ * - fieldd's backstop then waits its grace for an exit event that will not come. */
+const LOST_EXIT_MS = INTERRUPTED_EXIT_MS + TERMINAL_INVENTORY.BACKSTOP_MS + EXIT_GRACE_MS;
+
+/** Item 97 — what a lost exit leaves, for an exit wait's deadline (`poll`'s witness). Three things:
+ * - the floor's own row for the pane: its cell's list, through `runtimeSessions`, listed or not, and whether it
+ *   says the process exited;
+ * - whether fieldd's terminal service heard the floor's `session-exited` (`exitOf`);
+ * - what still holds the run's typed-out file (`lsof -t`, each holder with its `ps` state). That is the scripted
+ *   `cat` the interrupt should have ended.
+ *
+ * Between them they name the case: the interrupt never ended `cat` (it still holds the file); `cat` ended and the
+ * floor never saw it (its row is not `exited`); or the floor saw it and fieldd never heard. */
+function exitWitness(box: Box, paneId: string): () => Promise<string> {
+  return async () => {
+    const floorRow = await box.daemon.terminals.runtimeSessions().then(
+      ({ sessions }) => {
+        const row = sessions.find((session) => session.id === paneId);
+        if (row === undefined) return "not listed";
+        const { exited, exitOutcome, exitCode, exitSignal, pid } = row;
+        return JSON.stringify({ exited, exitOutcome, exitCode, exitSignal, pid });
+      },
+      (error: unknown) => `unread (${error instanceof Error ? error.message : String(error)})`,
+    );
+    const heard = box.daemon.terminals.exitOf(paneId);
+    const typedOut = box.sessions.find((s) => s.runtimeSessionId === paneId)?.typedOut;
+    return [
+      `the floor's row for pane ${paneId}: ${floorRow}`,
+      `fieldd heard its exit: ${heard === undefined ? "no" : JSON.stringify({ exitOutcome: heard.exitOutcome, exitCode: heard.exitCode })}`,
+      typedOut === undefined
+        ? "no typed-out file names this pane"
+        : `holding ${typedOut}: ${holdersOf(typedOut)}`,
+    ].join("\n");
+  };
+}
+
+/** The processes holding `path` open (`lsof -t`, which exits 1 when none does), each with its `ps` state. */
+function holdersOf(path: string): string {
+  let pids: string[];
+  try {
+    pids = execFileSync("lsof", ["-t", path], { encoding: "utf8" }).split("\n").filter(Boolean);
+  } catch (error) {
+    if ((error as { status?: number }).status === 1) return "nothing";
+    return `unread (${error instanceof Error ? error.message : String(error)})`;
+  }
+  return pids
+    .map((pid) => {
+      try {
+        return execFileSync("ps", ["-o", "pid=,stat=,command=", "-p", pid], {
+          encoding: "utf8",
+        }).trim();
+      } catch {
+        return `${pid} (gone)`;
+      }
+    })
+    .join("; ");
 }
 
 const mode = (path: string) => statSync(path).mode & 0o777;
@@ -2926,11 +2994,16 @@ describe("MF-1f/MF-1g — an agent pane outlives its run, and the fold keeps its
     await joinedRow(win, runId);
     // the scripted PTY's `cat` dies of the floor's own interrupt
     expect(await win.call("agent.interrupt", { runtimeRunId: runId })).toEqual({ accepted: true });
-    await poll(async () => {
-      const { sessions } = (await win.call("agent.list", {})) as AgentListResult;
-      const row = sessions.find((r) => r.runtimeRunId === runId);
-      return row?.continuation?.exited === true ? row : undefined;
-    }, 15_000);
+    await poll(
+      async () => {
+        const { sessions } = (await win.call("agent.list", {})) as AgentListResult;
+        const row = sessions.find((r) => r.runtimeRunId === runId);
+        return row?.continuation?.exited === true ? row : undefined;
+      },
+      INTERRUPTED_EXIT_MS,
+      "the interrupted run read as exited",
+      exitWitness(box, spawned.terminal.sessionId),
+    );
     return { runId, paneId: spawned.terminal.sessionId };
   }
 
@@ -3160,6 +3233,11 @@ describe("item 81 — an exit that comes before its pane is registered", () => {
 });
 
 describe("item 87 — a run's exit is not held by its workspace's cleanup", () => {
+  /** How long the stalled git holds the cleanup: the bound of what these rows prove. An exit read
+   * inside it was published before the cleanup ended, and the rows stop the git long before it
+   * ends by itself. */
+  const STALLED_GIT_MS = 30_000;
+
   /** A `git` that does not answer: puppeteer finalizes a run's workspace when its process exits, and
    * every git call there is unbounded (puppeteer-workspaces 0.3.0, `git.js`). First on the
    * in-process fieldd's PATH, it stalls that cleanup the way a loaded host can. Each call leaves its
@@ -3168,9 +3246,11 @@ describe("item 87 — a run's exit is not held by its workspace's cleanup", () =
     const dir = join(root, "stalled-git");
     const pids = join(dir, "pids");
     mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, "git"), `#!/bin/sh\necho $$ >> "${pids}"\nexec sleep 30\n`, {
-      mode: 0o755,
-    });
+    writeFileSync(
+      join(dir, "git"),
+      `#!/bin/sh\necho $$ >> "${pids}"\nexec sleep ${STALLED_GIT_MS / 1000}\n`,
+      { mode: 0o755 },
+    );
     return {
       dir,
       called: () => existsSync(pids),
@@ -3229,8 +3309,10 @@ describe("item 87 — a run's exit is not held by its workspace's cleanup", () =
           seen({ continuation: found?.continuation ?? null, gitCalled: git.called() });
           return found?.continuation?.exited === true ? found : undefined;
         },
-        5_000,
+        // item 101 — the heard exit's own budget, as AR-6-0's: the cleanup's stall is STALLED_GIT_MS
+        INTERRUPTED_EXIT_MS,
         "the exited row of a run whose workspace cleanup is stalled",
+        exitWitness(box, spawned.terminal.sessionId),
       );
       // exited at once, and not yet resumable: the cleanup still holds the old run's workspace
       expect(row.continuation).toMatchObject({ persisted: true, exited: true, resumable: false });
@@ -3312,8 +3394,10 @@ describe("item 87 — a run's exit is not held by its workspace's cleanup", () =
           seen(found?.continuation ?? null);
           return found?.continuation?.exited === true ? found : undefined;
         },
-        5_000,
+        // item 101 — the heard exit's own budget, as AR-6-0's: the cleanup's stall is STALLED_GIT_MS
+        INTERRUPTED_EXIT_MS,
         "the exited row of a run whose workspace cleanup is stalled",
+        exitWitness(box, spawned.terminal.sessionId),
       );
       const askedAt = Date.now();
       const refused = await win.callErr("agent.resume", { runtimeRunId: runId });
@@ -3347,7 +3431,8 @@ describe("item 87 — a run's exit is not held by its workspace's cleanup", () =
 
 describe("AR-6-0 — the stop verb (agent.interrupt)", () => {
   it("interrupts a live run through the floor, is refused for an exited or unknown one, needs agent.control, and lands in the ledger", async () => {
-    const { daemon, dataDir, envOut } = await setup({ floor: "real" });
+    const box = await setup({ floor: "real" });
+    const { daemon, dataDir, envOut } = box;
     // the deck's own scopes do NOT include agent.control — the fold's reader
     // is not, by that fact, allowed to steer what it is watching
     const watcher = await window(daemon, DECK, "i0");
@@ -3391,11 +3476,16 @@ describe("AR-6-0 — the stop verb (agent.interrupt)", () => {
 
     // MF-1g — the row does not leave: the agent is over, its PANE is not, and
     // the card keeps the resume verb over its final screen.
-    await poll(async () => {
-      const { sessions: rows } = (await win.call("agent.list", {})) as AgentListResult;
-      const row = rows.find((r) => r.runtimeRunId === runId);
-      return row?.continuation?.exited === true ? row : undefined;
-    }, 15_000);
+    await poll(
+      async () => {
+        const { sessions: rows } = (await win.call("agent.list", {})) as AgentListResult;
+        const row = rows.find((r) => r.runtimeRunId === runId);
+        return row?.continuation?.exited === true ? row : undefined;
+      },
+      INTERRUPTED_EXIT_MS,
+      "the interrupted run read as exited",
+      exitWitness(box, spawned.terminal.sessionId),
+    );
     const exited = await poll(async () => {
       const record = readRecord(dataDir, runId);
       return record.exited !== undefined ? record : undefined;
@@ -3487,6 +3577,55 @@ describe("AR-6-0 — the stop verb (agent.interrupt)", () => {
     );
     expect(act.outcome.outcome).toBe("succeeded");
     expect(act.outcome.attrs?.["accepted"]).toBe(true);
+  }, 120_000);
+});
+
+// Item 97 — an exit fieldd never heard. AR-6-0 reddened three times after item 87 with its run never
+// reading exited and no `fieldd.agents.exit_heard` in the log. The floor's `session-exited` is the one
+// word of an exit fieldd hears, and MF-1g keeps an agent's pane, so the husk stays listed and the old
+// backstop (a row that LEAVES the inventory) never fired. The floor now lists the husk `exited`, and the
+// backstop reads that as an exit after its grace. This row drops the exit at fieldd's own door, for one
+// pane, on the real floor: the Rust half (the floor's row) and fieldd's half (the backstop) end to end.
+describe("item 97 — an exit fieldd never heard (the real floor)", () => {
+  it("a run whose session-exited is lost still reads exited: the floor lists its kept pane exited, and the backstop closes the run after its grace", async () => {
+    const box = await setup({ floor: "real" });
+    const { daemon, dataDir, envOut } = box;
+    const win = await window(daemon, [...DECK, "agent.control"], "i97");
+    const spawned = (await born(win, "agent.spawn", {
+      provider: "scripted",
+      cwd: envOut,
+    })) as AgentSpawnResult;
+    const runId = spawned.session.runtimeRunId;
+    const paneId = spawned.terminal.sessionId;
+    await joinedRow(win, runId);
+
+    // fieldd deaf at its own door, for this pane alone: daemon.ts hands each `session-exited` to the
+    // runtime by this property, so the floor's exit is dropped where fieldd would have heard it
+    const heard = daemon.agents.handleTerminalExit.bind(daemon.agents);
+    vi.spyOn(daemon.agents, "handleTerminalExit").mockImplementation(async (event) => {
+      if (event.sessionId !== paneId) await heard(event);
+    });
+
+    expect(await win.call("agent.interrupt", { runtimeRunId: runId })).toEqual({ accepted: true });
+    await poll(
+      async () => {
+        const { sessions } = (await win.call("agent.list", {})) as AgentListResult;
+        const row = sessions.find((r) => r.runtimeRunId === runId);
+        return row?.continuation?.exited === true ? row : undefined;
+      },
+      LOST_EXIT_MS,
+      "the run whose exit was lost read as exited",
+      exitWitness(box, paneId),
+    );
+    // the backstop's word, never the floor's outcome: nothing carried the exit but the row
+    const record = await poll(async () => {
+      const read = readRecord(dataDir, runId);
+      return read.exited !== undefined ? read : undefined;
+    }, 10_000);
+    expect(record.exited).toMatchObject({ exitCode: null, signal: null, reason: "unknown" });
+    // the pane is kept, and the floor's own row for it says the process ended
+    expect(daemon.terminals.get(paneId)?.exited).toBe(true);
+    expect(await listed(win, paneId)).toBe(true);
   }, 120_000);
 });
 

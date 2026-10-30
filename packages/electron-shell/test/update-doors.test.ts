@@ -1,4 +1,4 @@
-import { IPC_CHANNELS } from "@vibefield/contracts";
+import { IPC_CHANNELS, type UpdateCheckResult } from "@vibefield/contracts";
 import { describe, expect, it, vi } from "vitest";
 
 // WP12d (L3c-i; build-wp12-updater.md §13 C1, the PM's ruling 2026-10-15 18:17Z) — the updater's host doors, main side.
@@ -23,9 +23,10 @@ const DOORS = [
   IPC_CHANNELS.updatePrepareRestart,
   IPC_CHANNELS.updateConfirmRestart,
   IPC_CHANNELS.updateDoctor,
+  IPC_CHANNELS.updateDownload,
 ];
 
-function wire() {
+function wire(answers: { check?: unknown } = {}) {
   handlers.clear();
   const calls: unknown[][] = [];
   const window = { id: 7 };
@@ -33,10 +34,21 @@ function wire() {
   registerUpdateDoors({ owns: (sender: unknown) => sender === window } as never, {
     check: async () => {
       calls.push(["check"]);
+      return (answers.check ?? { outcome: "up-to-date" }) as UpdateCheckResult;
     },
     setEnabled: (enabled) => calls.push(["setEnabled", enabled]),
     setChannel: (channel) => calls.push(["setChannel", channel]),
     decline: (version) => calls.push(["decline", version]),
+    download: async (version) => {
+      calls.push(["download", version]);
+      return version === "1.2.0"
+        ? { ok: true }
+        : {
+            ok: false,
+            reason: "not-available",
+            words: { message: "VibeField didn't download the update", detail: "Nothing changed." },
+          };
+    },
     prepareRestart: async () => ({
       ok: true,
       token: "t".repeat(32),
@@ -57,7 +69,7 @@ function wire() {
 }
 
 describe("the updater's host doors (C1)", () => {
-  it("registers exactly the seven doors", () => {
+  it("registers exactly the eight doors", () => {
     wire();
     expect([...handlers.keys()].sort()).toEqual([...DOORS].sort());
   });
@@ -76,6 +88,11 @@ describe("the updater's host doors (C1)", () => {
     ).rejects.toThrow();
     await expect(call(IPC_CHANNELS.updateSetEnabled, window, { enabled: "yes" })).rejects.toThrow();
     await expect(call(IPC_CHANNELS.updateDecline, window, { version: "" })).rejects.toThrow();
+    // AU-1 — the download door takes one version, and nothing else
+    await expect(call(IPC_CHANNELS.updateDownload, window, { version: "" })).rejects.toThrow();
+    await expect(
+      call(IPC_CHANNELS.updateDownload, window, { version: "1.2.0", path: "/tmp/x.zip" }),
+    ).rejects.toThrow();
     await expect(
       call(IPC_CHANNELS.updateConfirmRestart, window, { token: "short" }),
     ).rejects.toThrow();
@@ -88,10 +105,19 @@ describe("the updater's host doors (C1)", () => {
 
   it("well-formed calls reach the updater, and its answers cross parsed", async () => {
     const { window, call, calls } = wire();
-    await call(IPC_CHANNELS.updateCheck, window);
+    // AU-1 (LC-5) — the check answers when it settles
+    expect(await call(IPC_CHANNELS.updateCheck, window)).toEqual({ outcome: "up-to-date" });
     await call(IPC_CHANNELS.updateSetEnabled, window, { enabled: false });
     await call(IPC_CHANNELS.updateSetChannel, window, { channel: "beta" });
     await call(IPC_CHANNELS.updateDecline, window, { version: "1.2.0" });
+    expect(await call(IPC_CHANNELS.updateDownload, window, { version: "1.2.0" })).toEqual({
+      ok: true,
+    });
+    expect(await call(IPC_CHANNELS.updateDownload, window, { version: "1.2.1" })).toEqual({
+      ok: false,
+      reason: "not-available",
+      words: { message: "VibeField didn't download the update", detail: "Nothing changed." },
+    });
     expect(await call(IPC_CHANNELS.updatePrepareRestart, window)).toMatchObject({
       ok: true,
       version: "1.2.0",
@@ -108,7 +134,14 @@ describe("the updater's host doors (C1)", () => {
       ["setEnabled", false],
       ["setChannel", "beta"],
       ["decline", "1.2.0"],
+      ["download", "1.2.0"],
+      ["download", "1.2.1"],
       ["confirm", "t".repeat(32)],
     ]);
+  });
+
+  it("AU-1 — a check answer main's contract does not take never crosses", async () => {
+    const { window, call } = wire({ check: { outcome: "maybe" } });
+    await expect(call(IPC_CHANNELS.updateCheck, window)).rejects.toThrow();
   });
 });

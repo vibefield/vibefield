@@ -195,6 +195,18 @@ inks ARE the fills (`.dark` maps each to its fill — 5.0–9.0:1 on `#1C1C1E`),
 names one meaning in both themes. The meanings are the table's; an ink is never decorative
 either.
 
+*Amended 2026-10-29 (track AU, AU-0; AU-D1 and AU-D2 ruled A by James on the page *Updates That Wait*):*
+`--vf-cyan`'s info also marks **an update that waits on you**: the 10px dot beside your face (§2.8 I-5, §8 the Me
+menu), the 6px dot that ends the Me menu's update row, the 6px dot on Settings' Updates nav row, and the 6px dot
+leading Settings → Updates' ready line. New, nothing wrong: never orange (a person waiting) and never red (a
+failure). Of an update, no other mark is cyan; the rest are words in their inks, one state in one ink on every
+surface that says it: a failed check in `--vf-ink-danger`; paused by the publisher, a newer macOS, below the
+publisher's floor and a copy that can't replace itself where it runs in `--vf-ink-attention`; the Me menu's notice
+row (an install that didn't take, a refusal) in `--vf-ink-attention`; and the destructive act, "End 3 sessions and
+update", in `--vf-red` text (§8's two-step destructive confirm). Offline adds no ink: the Me row says it in its
+tertiary line, and the page stays in its neutral words, as shipped (§8 "Settings → Updates"). A channel with no
+release yet is quiet: "No stable release yet" ("No beta release yet") is tertiary on the row and on the page.
+
 ### 2.6 Organizational accents (containers, comments, tags)
 
 Curated set, assigned per object, used as *tint*: `#6366F1 · #EC4899 · #22C55E · #F59E0B ·
@@ -324,7 +336,7 @@ decide every surface a user appears on:
 | **I-2 The field, not the person** | Two users of one person must never look alike: a machine never deals one emoji to two of its users — the emoji is the guarantee — and a sticker's own angle is a second, softer cue (one user in eight shares an angle, and below 40px every sticker sits straight). |
 | **I-3 A neutral ground** | The face sits on the chrome's own materials — no disc, no plate, no wash taken from the emoji. |
 | **I-4 The name makes it certain** | The face is an index. The name sits beside it wherever there is room, and in the accessible name where there isn't. |
-| **I-5 State stays in words** | Linked, offline and "2 waiting" are written beside the face (a count badge at most), never painted onto it. |
+| **I-5 State stays in words** | Linked, offline and "2 waiting" are written beside the face (one badge at most), never painted onto it. The badge's one slot holds the waiting count or, when nothing waits, the update's dot (AU-D1, 2026-10-29): a waiting count outranks the dot, and the face never wears two. The dot is the app's state, not the person's, so I-1 stands. |
 
 **The sticker** (default): the emoji is its own frame. Figure at 86% of the box. A die-cut
 border in paper white **in both themes** (`--vf-sticker-edge`) — the white edge is what reads
@@ -696,7 +708,7 @@ rect, its props, its stratum (pads · sheets · things), taped or not — is ICE
 | **pictures** | a captured image | prints | drawn — device-local until the upload plane (DK-D21) |
 | **string** | a relation | wires, mind-map edges, patch cables | not yet — STRING |
 | **boards** (the mat) | a place: it holds a desk | the mat itself, the ground (§2.1); the mini mat, a desk inside the desk | drawn |
-| **stickers** (tape) | an attachment, a label | tags, Fieldmarks (§11) — the masking and label tape are already marks | not yet, as objects |
+| **stickers** (tape) | an attachment, a label | tags — the masking and label tape are already marks | not yet, as objects |
 | **tools** (metal) | a tool | rulers, clips, scissors | the mat's rulers and its lamp |
 | **instruments** (panel, plastic) | an instrument | the packs — shader, 8-bit, arduino: a panel, controls, screens, cables | not yet — the OBJECT KIT |
 | **portals** (glass) | a window onto something live | artifacts, pages, terminals, captures | not yet — PORTALS (DK-D19, DK-D20) |
@@ -724,7 +736,7 @@ Three easings, by name — new curves require a reason recorded here:
 |---|---|---|---|
 | `--vf-ease-island` | `cubic-bezier(0.25, 1, 0.3, 1)` | 600ms morph · 240ms glide · 560ms flow-in | morphs (the name pill into the fields explorer, the Me menu, the create's plus into ✕), the sliver into the notch, the capture's fly-in, the segmented thumb (300ms), anything that *travels* |
 | `--vf-ease-lift` | `cubic-bezier(0.2, 0.9, 0.3, 1.2)` | 180ms | a lift (slight overshoot = "held"): the face lifting, the clipboard's tiles, the views track's 1px dip (240ms) |
-| `--vf-ease-pop` | `cubic-bezier(0.34, 1.45, 0.64, 1)` | 280ms | spring pops: the arrival's OS marks, the notch's bump on a capture, the line's create growing under the pointer |
+| `--vf-ease-pop` | `cubic-bezier(0.34, 1.45, 0.64, 1)` | 280ms | spring pops: the arrival's OS marks, the notch's bump on a capture, the line's create growing under the pointer, the update's dot beside the face (once, from 0.4×; AU-D1) |
 | plain `ease` / `ease-out` | — | 120–240ms | opacity, color, shadow (shadow 220ms, ring 120ms) |
 
 *Corrected 2026-10-28 (the housekeeping pass):* the Use column named the island morph, the drag
@@ -884,9 +896,15 @@ only once it IS the notch: its hover delay is the growth plus the notch's own (2
 Canvas the notch rests whole and nothing grows. **The Me menu** grows upward on the island curve
 (600ms) from a seed the size of the face's circle at its own foot, above the face, the surface
 fading in over 160ms and the rows rising nearest-first as before (§8); folding reverses it, and the
-face, which never moves, stays lifted while it is open. Reduced motion (M6): no growth anywhere —
-the sliver becomes the notch at once, its glyph and count fading in over 120ms, and the Me menu
-fades in whole over 120ms.
+face, which never moves, stays lifted while it is open. When the update row's restart would end
+sessions, its click grows the open panel on the same curve (600ms) from 256 to 320 wide into the
+update's question, its rows fading out over 120ms plain `ease` and the question's lines rising 4px
+nearest-first behind it; Esc reverses it (AU-D6, §8 the Me menu). The update's dot pops in once on
+`--vf-ease-pop` (280ms, from 0.4×) and never pulses; returning after a waiting count clears, it comes
+back without a pop.
+Reduced motion (M6): no growth anywhere — the sliver becomes the notch at once, its glyph and count
+fading in over 120ms, and the Me menu fades in whole over 120ms; the question replaces the rows in a
+120ms fade at 320 wide, and the dot fades in over 120ms.
 
 **Search (the Peek; One Frame §23, GV-D8; built 2026-10-08).** The popup pops in over **260ms on
 the island curve** from 2% above its place at 0.97 (`translate(-50%, -48%) scale(0.97)`), fading in
@@ -1172,7 +1190,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   hover 1.03 / active 0.95 like its neighbours. The empty explorer says "No fields yet" in words
   beside it, never "⊕ creates one". *(The pill became the head's name pill the same day: its place,
   `top-4` and 280 wide, its single-click rename, the separate breadcrumbs beside it and its own
-  560ms curve, F14, retired.)*
+  560ms curve, F14, retired.)* *TS-6 (2026-10-29):* while a link owes the sync question, New field
+  asks it first, in the explorer in place of the tiles (§8 "The sync question").
   *History of the tiles' face:* a mini empty field — canvas-bg and the §2.1 CSS-fallback dots, the
   ground motif as the doc's face until real thumbnails (B4); the board's still since DK-4 (2026-10-03,
   DK-D27); a mini mat under it since DK-16 (2026-10-07, §2.1's erratum); the still without the
@@ -1384,7 +1403,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   fade and rise 4px nearest-first, 160ms + 26ms per row (cap 400ms); the face stays lifted
   while open. **Closing reverses it** (M4): the content goes in 120ms, the shape folds from
   80ms over 600ms, and the surface fades as it reaches the face. Return/Space opens it with
-  focus on Settings…, the nearest act; arrows move. Esc or a second click folds it and returns
+  focus on Settings… — never the update row nearer it (AU-D5), so a double Return never restarts
+  the app; arrows move. Esc or a second click folds it and returns
   focus to the face, as does anything else that folds it while focus is inside (`⌘,`, the tray's
   Settings…); a click outside folds it and leaves focus where the click put it, and Tab folds it
   on its way out. It is a menu, not a sheet — no dim, no recede — but it is one of
@@ -1403,13 +1423,19 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   user", bottom-aligned with the faces it names.
   **Waiting, offline.** A resident user's waiting agents (UA-D3) show as a §2.5 orange count
   *beside* the owner's face (top-right, ringed 2px in the ground), never on it (I-5); it fades
-  as the menu opens and the words take over in that user's row. An unlinked user reads
+  as the menu opens and the words take over in that user's row. The count holds the badge's one
+  slot (I-5): the update's dot steps aside for it (below). An unlinked user reads
   "offline · not linked" in words — the ordinary first-run state, never red (UA-P-D1).
   **Discoverability**, because a face does not say "settings": the tooltip ("James ·
   Account"), `⌘,`, the tray's Settings…, and the Setup Assistant's last pane saying it once
   ("Your face in the bottom-left corner opens Settings — so does ⌘,.").
   *As built (UA-7, 2026-09-22):* `⌘,` did not exist before this — the app menu's `appMenu`
-  role carries no Settings item — so it is bound where `⌘K` is, and toggles (a held chord's repeats do nothing). The waiting
+  role carries no Settings item — so it is bound where `⌘K` is, and toggles (a held chord's repeats do nothing).
+  *AU-D12 (2026-10-29) puts Settings… `⌘,` in the app menu (AU-4). On macOS a key equivalent the menu shows
+  is one it registers (`registerAccelerator: false` holds only off macOS), so the chord keeps ONE owner the
+  way the view keys do: the page answers `⌘,` first, this capture (GT-D21), and the menu hears it only
+  when the page doesn't. The menu item's click REVEALS Settings, where the chord toggles it, so nothing
+  fires twice.* The waiting
   count has no feed yet (main does not watch other users' pairs; spec v0.3 §12): the view
   draws it when handed one. A window with no account door (a browser harness) keeps the
   plain Settings button, so the corner is never a dead end. The rows name no tailnet: nothing
@@ -1429,7 +1455,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   solid chrome, corners 28, padded 8, its left at 8 and its foot 8 above the line (y 700 at the
   default window), grown upward on the island curve from its own foot (§6) while **the face stays
   put beneath it, lifted**. Nearest first, from the foot: **you** (the name 13/600 over the login in
-  11px mono, under a strong hairline; it opens Settings → Account) · **Settings…** `⌘,` · **Theme**
+  11px mono, under a strong hairline; it opens Settings → Account) · **the update row** (since AU-D4,
+  always once the window knows the desktop's state; below) · **Settings…** `⌘,` · **Theme**
   — a row whose `sun` (or `moon`, by night) heads a **small segmented control, Light · Dark · Auto**
   (§8's small size): the app's ONE theme control (FC-D5, F3) · **Link Tailscale account…** (only
   while unlinked) — which **starts the link itself** (F16: it no longer opens Account, which the name
@@ -1454,6 +1481,81 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   in 6 days" (in `--vf-ink-attention` from 14 days out), "Sign-in expired · this Mac only"
   (attention ink). Connected, the login replaces them all. The row is the menu's one standing
   ask (§8 "Asking again"): never badged, never on the face.
+  *Amended 2026-10-29 (track AU, AU-0; AU-D1…D3, D5…D7, D11 and D14 ruled A and AU-D4 ruled B, by James on the page
+  *Updates That Wait*; the record is `draft/thinking-update-ux.md`):* **the update row.** The menu carries one row
+  about the app itself always, once the window knows the desktop's state or that it has no updater (AU-D4 B; until
+  then it carries none), and
+  it stands **nearest the face** (AU-D5): directly above **you**, under **Settings…**. It is the app's own act, never
+  an ask: the Connect row stays the menu's one standing ask, and the update row never nudges. Two lines in the 256px
+  panel — the act (13/500, primary) over its line (11.5px, tertiary unless an ink is named) — and the act's glyph at
+  18 in the 44px column (AU-D7, §13): `reset`; `arrow` turned 180 for a download; `check` once an update has
+  installed. Every line fits the panel whole and wraps rather than cuts: the cost is never cut. A row that can't act
+  now is dimmed (`aria-disabled`), keeps its place in the arrows' walk, and never drops focus. An act wears "…" only
+  when it asks or opens a window before it completes (§9). Below, "act · line" is line 1 over line 2.
+  **At rest** it reads **Check for updates** over the version you are on, in friendly words: "You're on the Oct 28
+  nightly", "You're on VibeField 0.2.0" (§9). Clicking it checks **in place**: the menu stays open, the row reads
+  "Checking for updates…" (dimmed; a check started elsewhere reads the same while it runs), and the check's answer
+  resolves it where it stands — "VibeField is up to date" (inert until the menu folds; its line unchanged), the
+  download or the ready row below, or the hold, said in line 1 in the hold's ink: "You skipped the Oct 28 nightly ·
+  Download it from Settings"; "Couldn't check — offline · VibeField tries again on its own"; "Couldn't check for
+  updates · Settings → Updates has more" (`--vf-ink-danger`); "Updates are paused · Your version keeps running" or
+  "Needs a newer macOS · Your version keeps running" (`--vf-ink-attention`); "Couldn't reach the updater · Settings
+  → Updates has more" (danger) when the door itself fails. The ones that name Settings open it. The next open reads
+  the resting row again.
+  **A held state keeps the act and says the hold in line 2**, one state in one ink on every surface (§2.5): Check
+  for updates over "Automatic updates are off" · "You skipped the Oct 28 nightly" · "Couldn't check — offline" (no
+  ink: quiet) · "No stable release yet" ("No beta release yet"; a channel with nothing published is quiet, never a
+  failure, and a check that finds it so answers the same) · "Paused by the publisher" or "The update needs a newer
+  macOS" (`--vf-ink-attention`) · "The last check failed" (`--vf-ink-danger`). One hold changes the act: a copy
+  macOS won't let replace itself (App Translocation, a mounted disk image, a folder it can't write) reads **Move to
+  Applications… · Can't update from here** (line 2 in the attention ink) and opens Settings → Updates, where the
+  move is: the window it opens first is its "…". A writable copy outside Applications updates as usual and changes
+  nothing here (AU-7).
+  **In motion** the row is the act itself, and its line the cost: **Downloading update · 42% downloaded**, over a
+  2px bar that moves on real progress only (it opens Settings → Updates) · **Download update · Automatic updates are
+  off** (it downloads in place — "Starting the download…" — and becomes the download row; the menu stays open) ·
+  **Restart to update · Your sessions keep running** (it restarts on the one click: nothing ends, so nothing asks) ·
+  **Restart to update… · Ends 3 terminal sessions** ("Ends 1 terminal session"; it asks, below) · **Restart to
+  update… · Checks your sessions first** (the census unread: main reads it, then asks or says why not) · **Update
+  downloaded · Installs with a later release** (where the apply isn't wired yet; it opens Settings → Updates) ·
+  **Restarting… · VibeField opens again**. While a restart is prepared the line reads "Reading the running
+  sessions…", then "Starting the update…", the row dimmed. **After an update** (AU-D11), for a day from the first
+  launch that runs it (`lastApply.at`), it wears `check`: **What's new · Updated today** ("Updated yesterday" once
+  the date turns), opening Settings → Updates at its notes; an install that carried no notes (every release before
+  AU-6) reads **Updated today · From the Oct 27 nightly** (Updated yesterday once the date turns; "You're on the Oct
+  28 nightly" when the version it came from is unknown), opening the page. A third line adds time and the
+  publisher's floor and never changes the mark (AU-D3): "Ready since Oct 19" from a ready update's 7th day; "Your
+  version is unsupported" in `--vf-ink-attention` below the publisher's `minSupported`, which outranks it — one
+  third line at most. **A window with no updater** (a development build, or a browser harness) still shows the row,
+  dimmed: **Check for updates · This build doesn't update itself**. It names no version, and Settings → Updates
+  keeps the card's sentence.
+  **The dot** (AU-D1, AU-D2): 10px of `--vf-cyan`, ringed 2px in `--vf-canvas-bg`, centred where the one-digit count
+  badge centres (the face's top right: top 1, right −3 of the 44px button) — only while an install waits on you (an
+  update ready and its apply wired, including one that would end sessions), never for a check, a download or a held
+  state. It pops in once on `--vf-ease-pop` (280ms, from 0.4×; under reduced motion a 120ms fade, M6) and never
+  pulses. It cannot be hidden (AU-D14): it leaves when the update installs — a restart, a quit, the safe window — or
+  is skipped. **One slot** (I-5): a waiting count outranks it; while a count shows the dot steps aside, and it
+  returns without a pop when the count clears. Opening the menu fades it with the badge (`.vf-me[data-open]`) and
+  its words take over in the row, which ends in a 6px cyan dot that ties it to the face. **Keyboard:** Return still
+  lands on Settings… (`data-me-nearest`); ↓ reaches the update row. **The question** (AU-D6): a release that ends
+  sessions grows the panel (§6) into main's own consent words, the ones the status item's box and Settings →
+  Updates say (`UpdateConsentWords`): "Updating ends 3 terminal sessions", "The Oct 28 nightly replaces the terminal
+  service, which ends:", what ends listed (five at most, then "and 2 more"), then its two acts: **Cancel** leading
+  and focused, **End 3 sessions and update** trailing, in the danger text (§8's two-step destructive confirm;
+  Settings → Updates orders its two the same way). Esc goes back to the rows, focus on the update row; a second Esc
+  folds the menu. One snapshot, valid two minutes, as the page's (C2); no apply asks twice. **The notice**
+  (AU-D11): an install that didn't take is said once per window, in the notice row at the menu's top, the first time
+  the menu opens on the launch right after it — "The Oct 28 nightly didn't install when VibeField restarted. It's
+  ready to try again." (after a quit's install, AU-5: "The Oct 28 nightly didn't install when VibeField quit. It's
+  ready to try again.") — and the row is the ready row again. When the update isn't ready again, the second sentence
+  is "Settings → Updates has the details." A refusal outranks it (it answers what you just did): one notice row at
+  most. A refusal says main's words; a download main refused without any says "That version is no longer
+  available" or "VibeField is busy with another update step". The notice row reads in `--vf-ink-attention` (§2.5;
+  *it wore the orange fill from UA-7 until AU-2*). **Its names:** the face's title gains " · the Oct 28 nightly is
+  ready" and its accessible name ", an update is ready to install". *To be built by AU-2, after AU-3's page (so
+  every row that names Settings → Updates has it to open), on AU-1's view (the version you are on, the ready day,
+  the last install's outcome) and its doors (the check's answer, the download); the What's new form waits on AU-6,
+  and the copy that can't update itself on AU-7.*
 - **The Connect pane** (Setup pane 4, and every surface that starts the link; track TS, ruled
   2026-10-27 — TS-D1…TS-D8, TS-D12, TS-D13; the record is `draft/thinking-tailscale-onboarding.md`,
   the page *Your Devices, One Field*). The pane keeps its place, the wizard's glass and its fixed
@@ -1507,6 +1609,24 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   (TS-D14; on truffle 0.7.24 it signs out first, and only a sign-out that could not reach
   Tailscale leaves the record in the admin console, which the page then says once) · **Add a
   device** (Phone | Computer) · **Use another account** → New user… (TS-D12).
+- **The sync question** (track TS, TS-D13 ruled A 2026-10-27; built at TS-6, 2026-10-29): a privacy
+  choice, asked where it applies — once, at the first **New field** after this Mac connects, never on
+  the success screen and no longer in the Setup Assistant. The moment a sign-in lands, before
+  anything reaches the tailnet, every field with no answer of its own stays on this Mac (`local`,
+  the explorer's own "local"), so connecting never carries an earlier field away unasked. New field
+  then asks in the fields explorer, in place of its tiles: the title, a voice line, the posture's
+  two cards (Settings → Devices' **New projects**, the same words, the current one chosen), the
+  fields from before the link, each with its time and a box to add it (none ticked), and two acts —
+  **Cancel** (no field is made; the question waits for the next New field) and the primary, which
+  sends the fields added, keeps the posture chosen, and makes the field. A Mac whose link was
+  captured before TS-6 keeps what it syncs and is never asked (VF-PM, 2026-10-29, derived from
+  TS-D13: "made before you connected" is a connection's, not an upgrade's).
+  *The words (ruled by James 2026-10-29, `ts6-sync-question-words` 05:37:09Z, "all four as
+  drafted"):* the title "Sync new projects to your other computers?", the voice "This Mac is
+  connected. You can change this in Settings → Devices.", the list's label "Projects from before you
+  connected" over "They stay on this Mac unless you add them.", and the acts **Cancel** and **New
+  field**. *The noun (`ts6-sync-question-noun` 05:37:06Z):* "projects", the cards' word — the sheet
+  speaks it throughout; **New field** is the head's own act and stays as ruled.
 - **Asking again** (track TS, TS-D7 ruled 2026-10-27; TS-L6): someone who said Not now said it
   before they had a reason, so the offer returns only where a connected device would do the job —
   the face menu's row (always, while not connected); a ghost row, "Your other devices", in
@@ -2207,27 +2327,95 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   ("needs app X · contracts Y"), no action; a vanished entry lists "dropped from
   registry"; an all-clear reads "everything current". The checked time is stated
   ("checked HH:MM:SS"), never implied fresh.
-- **The desktop update card** (WP12d L3c-ii, 2026-10-15; `build-wp12-updater.md` §13; Settings › General after
-  Desktop): the app's own updater, main's, over the host bridge.
+- **Settings → Updates** (track AU, AU-D8 ruled A 2026-10-29; until then **the desktop update card**, WP12d L3c-ii,
+  2026-10-15, on Settings → General after Desktop — `build-wp12-updater.md` §13 C3's "for now"): the app's own
+  updater, main's, over the host bridge, on a page of its own, **first in Support** (Updates · Diagnostics ·
+  Advanced), wearing `reset` on the rail (§13), with a 6px `--vf-cyan` dot at its nav row's end while an install
+  waits on you (its accessible name "Updates settings, an update is ready to install"). Its title and line:
+  "Updates" · "Which version you're running, what's next, and how VibeField installs it." *To be built by AU-3, the
+  window's first AU slice (the corner, AU-2, follows it). Until then the card stands in General, saying "VibeField
+  X" and "Turn them on to download it", its Cancel after the act; AU-3 brings it here with the friendly names, the
+  updates-off line below and Cancel leading.*
+  - **The head says exactly what you run** (AU-L6, AU-G4): "VibeField", the version string in mono —
+    `0.1.0-nightly.20261027` — with **Copy** (it says "Copied"), over the channel's word, "Nightly" (the nightly's
+    name already carries its day; AU-6 adds "built Oct 27, 2026"). No app mark. The state's one primary act stands
+    at the head's end: Check for updates (idle, paused, a newer macOS; dimmed while checking) · Check again
+    (offline, failed) · Restart to update, or Restart to update… when it ends sessions or must read them first (the
+    census unknown) · Download (found with automatic updates off) · Download anyway (skipped) · Move to
+    Applications… (a copy that can't replace itself; it may ask through the quit gate) · none while downloading.
+    Sentences elsewhere name the version in friendly words (§9).
   - **One state line**, in words, with its number and its provenance:
-    - "VibeField is up to date · checked 14:02";
-    - "Downloading VibeField X · 42%", over a 3px bar that moves on real progress only (no spinner);
-    - "VibeField X is ready — restart to finish updating" (never "installed": macOS stages, EDP-34).
+    - "VibeField is up to date · checked 14:02"; for a day after an update, "Updated today from the Oct 27
+      nightly.", with **What's new** once the release carries notes (AU-D11, AU-6);
+    - "Downloading the Oct 28 nightly · 42%", over a 3px bar that moves on real progress only (no spinner), and
+      under it when it installs, by the Automatic updates switch: on, "It installs when you restart or quit
+      VibeField."; off, "It installs when you restart VibeField." (both say the second until AU-5);
+    - "The Oct 28 nightly is ready — restart to finish updating" (never "installed": macOS stages, EDP-34), led by
+      a 6px `--vf-cyan` dot, its cost under it ("Your terminal sessions keep running." · "Restarting ends 3
+      terminal sessions. You choose when." · "VibeField couldn't read which terminal sessions are running; it asks
+      again when you restart."), and from the 7th day "Ready since Oct 19." before the cost (AU-D3);
+    - "The Oct 28 nightly is available" with **Download**; with automatic updates off, "Automatic updates are off,
+      so it waits for you." (AU-G5);
+    - "You skipped the Oct 28 nightly" · "The next one downloads on its own." with **Download anyway** (AU-G6);
+    - a copy macOS won't let replace itself (AU-7, AU-G8): "VibeField can't update itself from here" in
+      `--vf-ink-attention`, "macOS won't let VibeField replace itself where it is. Move it to Applications and it
+      updates as usual.", with **Move to Applications…** as the primary ("Moving VibeField to Applications…"). It
+      quits through the quit gate, installs nothing on the way (a ready update waits for the copy in Applications),
+      moves the app only once every pair has stopped, and opens it again; a stop that doesn't complete opens
+      VibeField again where it was. A copy already in Applications goes to the Trash, where it can be restored; if
+      that copy is running, nothing moves and VibeField opens again where it was, logged and unsaid (one VibeField
+      runs at a time, so it is all but unreachable). A writable copy outside Applications updates as usual, so it
+      holds nothing: one quiet line, "VibeField runs outside Applications", with Move to Applications… as a
+      secondary act.
   - **The policy's answers** read in `--vf-ink-attention` ("Updates are paused by VibeField's publisher", "This update
-    needs a newer macOS"). A failed check reads in `--vf-ink-danger` with "Check again". These are the inks, because a
-    state word is read (§2.5). Offline is quiet: "Couldn't check — offline · VibeField tries again on its own".
-  - **The notices** (a refusal, the advisory line, a bridge that didn't answer) are the kit's neutral `InlineNotice`,
-    and their words carry the meaning.
-  - **The card IS the consent** (C2):
+    needs a newer macOS"), over "Your current version keeps running."; Check for updates stays their primary, so a
+    lifted pause has a door. A failed check reads in `--vf-ink-danger` with "Check again" and **Diagnostics →**.
+    These are the inks, because a state word is read (§2.5). Offline is quiet, in the page's neutral words:
+    "Couldn't check — offline · VibeField tries again on its own". A channel with nothing published is no failure:
+    "No stable release yet" ("No beta release yet"), quiet in the tertiary ink, never the danger line.
+  - **The notices** (a refusal, the advisory line, a bridge that didn't answer, and an install that didn't take)
+    are the kit's neutral `InlineNotice`, and their words carry the meaning. A refusal says main's words; a download
+    main refused without any says "That version is no longer available" or "VibeField is busy with another update
+    step". An install that didn't take is said on the launch right after it only (AU-G7): "The last restart didn't
+    install the Oct 28 nightly. VibeField came back on the Oct 27 nightly, and the update is ready to try again."
+    ("The last quit…" after a quit's install), with **Diagnostics →** beside it. When the update isn't ready
+    again, it ends at "…came back on the Oct 27 nightly." and its act is **Check for updates** beside Diagnostics →
+    (the Me menu's "Settings → Updates has the details." is the menu's alone).
+  - **The page IS the consent** (C2):
     - "Restart to update…" takes ONE snapshot. The consent names what ends in main's own words, the very words the
-      tray's box joins.
-    - It is the two-step destructive confirm below: "End N sessions and update" in `--vf-red` text, with Cancel focused
-      (the tray box's default).
+      status item's box and the Me menu's question join.
+    - It is the two-step destructive confirm below: Cancel leading and focused, the act trailing, "End N sessions
+      and update" in `--vf-red` text, as the Me menu's question orders them (the card's Cancel stood after the act
+      until AU-3).
     - A release that ends nothing restarts on the one click. No apply asks twice.
+  - **What's in it** (AU-D10; AU-6): while an update is found or ready, and for a day after it installs, the page
+    shows its signed plain-text notes — "What's in the Oct 28 nightly" before, "What's new in the Oct 28 nightly"
+    after. A nightly says its count ("103 changes since the Oct 27 nightly, 58 of them outside the docs. Four of
+    them:"), the newest subject of up to four tracks, each led by its track in mono, and "See all 103 on GitHub ↗";
+    a release says up to 8 hand-written lines and no count. Text only, never markup (EDP §11.1 as amended); the one
+    link opens in the browser. A release that carries none shows none.
+  - **Automatic updates** is one switch whose line says when installs happen: on, "Download updates in the
+    background. They install when you restart or quit VibeField, or on their own while no window is open and nothing
+    would end." ("or quit" from AU-5); off, "VibeField checks only when you choose Check for updates, and downloads
+    only when you choose Download." **Channel** is the kit's segmented control (Stable · Beta · Nightly), its line
+    following the choice: "Tested releases." · "Early releases, mostly stable." · "Every night's build: the newest,
+    and the least tested."
   - **A lower channel** says EDP-36's sentence before it takes ("Return to stable — reinstalls the latest stable
     release").
+  - **Your devices** (AU-D13): "Each desktop updates itself. This is where they stand." Each linked desktop: its OS
+    mark (§13's set, as Settings → Devices draws it), its name in mono as Tailscale names it, its version in
+    friendly words (`appVersion`, AU-3a — never `fielddVersion`, which every build says alike), and one word: "This
+    Mac" · "Same as this Mac" · "Older than this Mac" · "Newer than this Mac" (only between versions of one channel;
+    across channels the name stands alone, with no relation) · "Version not shared" (a desktop that doesn't say
+    it). One whose version keeps it from connecting (`incompatible`, a contracts major apart) says what to do, in
+    the attention ink: "Update VibeField there to connect" (it is behind), "Update this Mac to connect" (this Mac
+    is), "Can't connect: another version" (not known which). The section reads the devices apart from the updater,
+    so the page still works with the daemon down.
+  - **The foot:** "Updater diagnostics →" and "Plugins update from Settings → Plugins."
   - **The advisory UNSUPPORTED line** is a sentence, never a block.
-  - **Settings › Diagnostics' "Updater" block** renders the doctor's lines as `SystemSection`'s key/value rows. A support
+  - **A build with no updater** keeps its sentence under the head: "This build doesn't update itself: only release
+    builds carry the identity updates need."
+  - **Settings → Diagnostics' "Updater" block** renders the doctor's lines as `SystemSection`'s key/value rows. A support
     bundle's `doctor/status.json` carries the same lines.
 - **The destructive uninstall affordance** (P7; spec §16.5): registry and sideloaded rows
   carry a **More +** disclosure revealing two buttons — **Uninstall** (keeps data) and **Remove
@@ -3607,6 +3795,33 @@ Inside History the room's own words stand as rosetta wrote them, and the Setup A
 - One row stands by decision. An agent that never says who keeps Settings' "Doesn't say who is signed in" over the
   page's "Signed in · doesn't say which account": VibeField cannot know it is signed in.
 
+**The update's words** (track AU, AU-L2, AU-L3, AU-L6; ruled 2026-10-29). **A version is said two ways:** exactly
+where it can be copied — `0.1.0-nightly.20261027` in mono on Settings → Updates' head — and in friendly words in a
+sentence: a nightly is "the Oct 27 nightly" (its day, from `-nightly.YYYYMMDD`; "The Oct 27 nightly" at a sentence's
+start), a beta "VibeField 0.9.0 beta 1", a release "VibeField 0.2.0", anything else "VibeField" and the string as it
+is — "You're on VibeField 0.2.0" too. One function says it for main and the window alike (`releaseName`,
+contracts), so the status item's box, the quit box, the Me row and the page never name one version two ways. **The
+verbs:** Check for updates · Download update (the Me row) and Download (the page) · Restart to update · Download
+anyway · Move to Applications… · What's new. **An act wears "…" only when it asks a question or opens a window
+before it completes** (the HIG): the Me row's Check for updates checks in place and wears none; Restart to update…
+only when it asks first, or must read the sessions before it can (the census unknown); Move to Applications… on the
+Me row because it opens Settings → Updates, and on the page because the quit gate may ask. The status item and the
+app menu say them in title case, as macOS menus do: Check for Updates… (it answers in a box), Download Update,
+Restart to Update, Update Ends 3 Sessions…. **"Installed" is said only once it is true** (macOS stages, EDP-34):
+before, an update is downloaded, ready, or ready since. **A refusal names the step that didn't happen**
+(`downloadNotice`, AU-1): a Download the publisher's policy refuses says "VibeField didn't download the update"
+(an install it refuses, "VibeField didn't install the update"), and a withdrawn version "The Oct 28 nightly was
+withdrawn, so it won't download. Nothing changed; the next update replaces it."; a pause and a newer macOS say the
+same detail either way. **The cost comes before the click** (AU-L2): "Your sessions keep running" or "Ends 3
+terminal sessions", on every way in. **Time grows the words, never the mark** (AU-L3): "Ready since Oct 19". **The
+quit box gains one line** (AU-D9), its last, while a ready update will install as the quit ends: "The Oct 28 nightly
+installs as you quit." ("VibeField 0.2.0 installs as you quit."). It never shows while the publisher requires a
+person's confirmation (`requireUserConfirmation`) or while a Move to Applications is pending: that quit installs
+nothing, and the update waits for Restart to update (after a move, for the copy in Applications). It says what will
+happen, not what might: if the policy read at the quit then holds the install, the next launch says so in the Me
+menu's notice ("…didn't install when VibeField quit. …"). No third button: the box is the quit's (ESR §7.3). The
+product writes these with straight apostrophes, as `update-words.ts` does.
+
 *(Godview round 3, built 2026-10-12; its status is §8 the deck's.)*
 **The terminals' wrapper says the window's own words** (Godview, §8, the deck; One Frame §23.2 —
 "for close button, replace it with a minimize - button … for fill button, replace it with a
@@ -3758,92 +3973,22 @@ their place". "Fullscreen" stays the pane's word (§8).
 
 ---
 
-## 11. Fieldmarks / AFTER HOURS — sticker edition
+## 11. Fieldmarks / After Hours and Face Club — retired
 
-**Edition 02, 2026-09-22.** The requested direction is retro sticker illustration: expressive,
-specific, and collectible. AFTER HOURS replaces edition 01's minimalist geometry with 77 new
-drawings plus the exact existing logo. The cultural vocabulary comes from VibeField: a personal
-field, physical cards, agent work, old computers, private connections, and accumulated creations.
-
-The collection has three related drawing registers:
-
-| Register | Artboard | Recommended floor | Typical subjects |
-|---|---|---|---|
-| Character / brand sticker | 112 units (logo retains 480) | 48px (logo 32px) | skewed CRTs, rubber gloves, floppy creatures, cassette workers, odd personal characters |
-| Desk object | 72 units | 32px | hardware, folders, paper, patch leads, crates, layered windows |
-| Action stamp / state signal | 48 / 50 units | 24 / 28px | heavy positive/negative shapes, cut-paper arrows, glove, sun, speech flag, radio |
-
-Contours are deliberately unequal; black side planes, hatching, scratched highlights, bitmap
-lettering, and offset eyes carry character. There is no single nominal line weight. Detailed
-characters are not reduced to tiny toolbar glyphs; functional controls have their own simpler
-geometry. Actual controls keep §4's hit areas and explicit accessible names.
-
-Two exports share the same original drawing: **sticker** adds a white backing and die-cut
-keyline; **artwork** omits that outer keyline. Both have an ink layer (`currentColor`) and an
-interior paper layer (`--vf-sticker-paper`, falling back to the canvas and then white). Paper
-is intentionally opaque inside the illustrations; empty space outside is transparent. This
-supersedes edition 01's all-transparent knockout claim. No raster or generated-image texture
-is required; every shape is an editable vector.
-
-The catalogue is a **committed editorial art surface**, not a new product chrome recipe. Its
-print palette is ink `#171815`, stock `#F1EDDF`, acid-yellow sheet `#E5E549`, and proof inks
-cobalt `#214ACC` / vermilion `#C53D25`; the night wall is `#232720`. Sticker backing stays white
-in both themes. These inks are presentation choices and never encode account identity or state.
-The sheet can use hard borders, pasted rotations, checker fields, and condensed display type.
-Other product surfaces continue to follow the existing quiet-chrome rules.
-
-Identity, assigned role, provider, and observed state stay independent. §2.8's emoji sticker/coin
-account face remains current; the new vector alter egos are an additional identity-art study.
-The agent characters are role proposals, not vendor marks or asserted capabilities. §2.5 still
-governs product-state color, and state words remain visible. Existing Godview bodies and the
-upstream file-tree icon family are unchanged.
-
-The packaged app, tray, and Icon Composer masters remain exact. `@vibefield/design-kit/icons`
-exports the shared `FieldIcon`, typed names, metadata, and `fieldIconSvg(name, finish)`.
-`finish="sticker"` adds the paper cut; the component defaults to `"artwork"` and decorative
-semantics inside labelled controls. The drawing source is `tooling/fieldmarks/generate.py`.
-Studio and the offline `draft/design/fieldmarks.html` mount the same `IconsSection`. The HTML
-bundles its CSS, React, vectors, and downloadable archive without network dependencies.
-
-
-### 11.1 Face Club — the account deck, drawn in After Hours ink
-
-**Account artwork study, 2026-09-22.** The 48 selected emoji in contracts' `FACE_DECK`
-receive 48 original black-and-white sticker interpretations. This is a complete one-to-one
-artwork proposal, preserving the exact deck order and the stored emoji. §2.8 remains the
-shipping face policy and renderer; adoption of vector art is a separate integration step.
-
-Each subject has two authored optical masters: **112 units, detailed, from 40px** and
-**56 units, simplified, at 16–39px**. Small masters enlarge distinguishing features and
-remove hatching, fine fur, and secondary marks. They are separate geometry, not a filter or
-an automatically shrunk full illustration. The switch aligns with the face's existing 40px
-tilt threshold. The neutral ink is `#171815`, paper is explicit white, and the surrounding
-wall uses §11's print palette. The sticker finish grows a white cut edge; artwork omits it.
-Interior paper remains opaque, including the doughnut's central knockout.
-
-Animal anatomy and object silhouette precede expression: fox wedge, raccoon mask, wolf
-profile, panda patches, two camel humps, snail spiral, and ringed planet. Color never deals
-or disambiguates users. The drawings contain no system emoji glyphs, traced reference paths,
-fonts, filters, or embedded raster art. The original emoji appears only as a comparison,
-through the shipping `UserFaceView`.
-
-`@vibefield/design-kit/face-stickers` owns `FaceSticker`, typed ids and metadata,
-`findFaceSticker(emoji)`, and portable `faceStickerSvg` export. The mapping ignores only
-text/emoji variation selectors, like `faceKey`. Unknown/custom emoji return `undefined`
-and retain native rendering when integrated. Account dealing, collision validation,
-per-user tilt, coin choice, and persistence remain in their existing owners.
-
-`tooling/face-stickers/art.py` is the editable drawing source. Its generator verifies all
-48 emoji against the current policy before producing 192 SVG exports and two sprites.
-Studio and the self-contained `draft/design/face-stickers.html` mount the same
-`FaceStickersSection`, with all emoji/sticker pairs, an inspector, actual-size light/dark
-proofs, and downloads. Recognition at tiny sizes is an explicit design review concern,
-not a claim established by a bounds test.
+**Retired 2026-10-28 (James, housekeeping Q19 C); code retirement 2026-10-29.** The
+Fieldmarks / After Hours collection and §11.1's Face Club account-art study are retired from
+the design kit and Studio. Their sheets, SVG archives and review evidence are preserved at
+`draft/archive/retired/design-fieldmarks/` on `dev-local`; git retains their source history.
+The former illustration recipes no longer govern product UI. Account faces follow §2.8,
+functional glyphs follow §13, and the packaged mark follows §12.
 
 ## 12. Logo studies — draft only
 
 Logo experiments live in local, uncommitted `draft/` studies. They are not part of the
-design kit or the production design system. Packaged icon masters remain governed by §11.
+design kit or the production design system. The packaged app uses the plain mark chosen on
+2026-10-09 (`b51154f91`): black ink on pure white, white ink on pure black, with no patterns.
+`apps/desktop/packaging/icons/app.icon` is the source; its exact vectors and the immutable tray
+master are governed by `apps/desktop/packaging/icons/README.md`.
 
 ---
 
@@ -3888,6 +4033,11 @@ started, play for one resumed — so the noun travels with the verb (One Frame F
 create is a bare plus). Their Hardware records are the page's T4 column, drawn and not shipped.
 **Send** needs no glyph of its own: it is `arrow`, as drawn (up). No `attach`: the line has no attach
 button (FC-D1 ruled type @).
+**The update** (track AU, AU-D7 ruled A 2026-10-29) needs no glyph of its own either: a download is `arrow` turned
+180 (down), the restart and Settings → Updates' rail are `reset`, an update that has installed is `check`. The dot
+beside the face is not a glyph: it is the badge slot's state (§2.8 I-5, §2.5). The status item's update image — the
+mark with one plain dot, no bang (EDP §6.4, AU-D12) — is generated from the tray master (`tray-master.svg`, by
+`generate-icons.mjs`, as its siblings are), kept exact outside this set (below).
 **`jump`** (2026-10-03, One Frame §13; Session Glyphs' jump-T3) goes to a session that is running — a
 live row in History, a link in running text: `terminal`'s window with its wall opened on the left for
 the arrow going in, since a box with an arrow leaving it is already `outward`; its Hardware record is
@@ -3952,7 +4102,7 @@ stills — and, on the desk, two named exceptions: the bar's ONE path renderer f
 the OS marks the device chip wears (Simple Icons, drawn inline in `os-marks.tsx` — the test's one
 other allowed file; a phone, wherever a surface marks one, wears the mark macOS wears, Apple's,
 since iOS's own is a word — James, DS-3: "do not use texts, use OS icons instead" — and no surface
-marks one today), the Face Club and AFTER HOURS art (§11), the file-tree family (§8), and
+marks one today), the file-tree family (§8), and
 **Tailscale's logomark** (track TS, TS-D4 ruled 2026-10-27), held to the rules of Tailscale's Brand
 Toolkit (its press and media kit, 10-2025): the nine dots exactly as its file draws them — the middle
 row and the bottom centre solid, the other five at 40% — never in one colour, never smaller than

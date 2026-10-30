@@ -3,8 +3,8 @@ import { dirname } from "node:path";
 import {
   emptySetupLedger,
   SetupLedger,
+  type SetupMomentAnswer,
   type SetupMomentKey,
-  type SetupMomentState,
   type SetupStep,
   type SetupStepState,
   setupMomentState,
@@ -57,14 +57,29 @@ export class SetupLedgerStore {
    * retires it for good). Declarative, and a newer build's row for it is
    * replaced, as `answer` does — except `asked` (TS-4), whose answer is its
    * time: each saying is written, and it never replaces `retired`, which is for
-   * good. Returns whether the ledger changed. */
-  moment(moment: SetupMomentKey, state: SetupMomentState): boolean {
+   * good. An `owed` moment (TS-6) is replaced by either. Returns whether the
+   * ledger changed. */
+  moment(moment: SetupMomentKey, state: SetupMomentAnswer): boolean {
     const held = setupMomentState(this.ledger, moment);
     if (held === "retired" && state === "asked") return false;
     if (held === state && state !== "asked") return false;
     this.ledger.moments = {
       ...(this.ledger.moments ?? {}),
       [moment]: { state, at: this.now().toISOString() },
+    };
+    this.commit();
+    return true;
+  }
+
+  /** TS-6 (TS-D13) — owe a moment: fieldd's alone (a window answers through
+   * `moment`), and written only on a moment with no row at all, readable or not,
+   * so an answer, a saying or a newer build's row is never replaced. The answer
+   * replaces it. Returns whether the ledger changed. */
+  owe(moment: SetupMomentKey): boolean {
+    if (this.ledger.moments?.[moment] !== undefined) return false;
+    this.ledger.moments = {
+      ...(this.ledger.moments ?? {}),
+      [moment]: { state: "owed", at: this.now().toISOString() },
     };
     this.commit();
     return true;

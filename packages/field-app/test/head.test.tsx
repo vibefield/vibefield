@@ -16,6 +16,7 @@ import type { DocSyncStatus, FrameView, FrameZoomAct } from "@vibefield/contract
 import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { SyncQuestionDoor } from "../src/account/sync-question";
 import type { DocManagerApi, DocManagerState } from "../src/doc-manager";
 import { resetDocSyncStatuses, setDocSyncStatuses } from "../src/doc-sync-store";
 import type { FrameSurface } from "../src/frame/frame-surface";
@@ -172,6 +173,7 @@ function mount(
     keys?: ViewKeys;
     open?: FrameSurface | null;
     menuZoom?: (handler: (act: FrameZoomAct) => void) => () => void;
+    syncQuestion?: SyncQuestionDoor;
   } = {},
 ): Mounted {
   const used: Mounted = {
@@ -191,6 +193,7 @@ function mount(
         surface={surface}
         onSurfaceChange={setSurface}
         {...(options.menuZoom !== undefined ? { menuZoom: options.menuZoom } : {})}
+        {...(options.syncQuestion !== undefined ? { syncQuestion: options.syncQuestion } : {})}
       />
     );
   }
@@ -906,5 +909,102 @@ describe("the View menu's zoom (FR-4, 3b) — an act the head answers, never a p
   it("is handed the host's door by the chrome", () => {
     const chrome = readFileSync(join(process.cwd(), "src/field/ChromeLayer.tsx"), "utf8");
     expect(chrome).toContain("menuZoom={subscribeMenuZoom}");
+  });
+});
+
+/** TS-6 — the question's door as ChromeLayer hands it over, on a live posture. */
+function fakeQuestion(options: { owed?: boolean; lands?: boolean } = {}): SyncQuestionDoor {
+  return {
+    owed: options.owed ?? true,
+    posture: {
+      posture: "automatic",
+      status: "live",
+      unavailable: false,
+      pending: false,
+      writeError: null,
+      set: vi.fn(async () => true),
+    },
+    answer: vi.fn(async () => options.lands ?? true),
+  };
+}
+
+/** A field made before the link (kept on this Mac by it) and one already sent. */
+function linkedManager(): DocManagerApi {
+  const manager = fakeManager();
+  const [field, studio] = manager.getState().docs;
+  return fakeManager({
+    docs: [
+      { ...(field as DocManagerState["docs"][number]), syncIntent: "local" },
+      { ...(studio as DocManagerState["docs"][number]), syncIntent: "sync" },
+    ],
+  });
+}
+
+const questionForm = (): HTMLFormElement | null =>
+  $<HTMLFormElement>('form[aria-label="Sync question"]');
+
+describe("TS-6 — New field asks the sync question while a link owes it (TS-D13)", () => {
+  it("asks in the explorer, lists the fields kept here, and sends, answers, then makes the field", async () => {
+    const manager = linkedManager();
+    const door = fakeQuestion();
+    mount({ manager, open: "fields", syncQuestion: door });
+    act(() => $<HTMLButtonElement>("[data-new]")?.click());
+    expect(questionForm()).not.toBeNull();
+    expect($(".vf-head-docs")?.hasAttribute("hidden")).toBe(true);
+    expect(manager.createDoc).not.toHaveBeenCalled();
+    // the field kept on this Mac is listed, unticked; the one already sent is not
+    const listed = $$(".vf-head-question-field");
+    expect(listed.map((row) => row.querySelector(".vf-head-question-name")?.textContent)).toEqual([
+      "Field",
+    ]);
+    expect(listed[0]?.querySelector<HTMLInputElement>("input")?.checked).toBe(false);
+
+    act(() => listed[0]?.querySelector<HTMLInputElement>("input")?.click());
+    const cards = $$('[role="radiogroup"] input[type="radio"]') as HTMLInputElement[];
+    expect(cards.map((card) => card.checked)).toEqual([true, false]);
+    act(() => cards[1]?.click());
+    await act(async () => {
+      questionForm()?.querySelector<HTMLButtonElement>('button[type="submit"]')?.click();
+    });
+    await act(async () => {});
+
+    expect(manager.setSyncIntent).toHaveBeenCalledWith(DOC_A, "sync");
+    expect(door.answer).toHaveBeenCalledWith("opt-in");
+    expect(manager.createDoc).toHaveBeenCalledTimes(1);
+    const order = (fn: unknown) => vi.mocked(fn as () => void).mock.invocationCallOrder[0] ?? 0;
+    expect(order(manager.setSyncIntent)).toBeLessThan(order(door.answer));
+    expect(order(door.answer)).toBeLessThan(order(manager.createDoc));
+    expect(questionForm()).toBeNull();
+  });
+
+  it("makes the field at once when nothing owes the question", () => {
+    const manager = linkedManager();
+    mount({ manager, open: "fields", syncQuestion: fakeQuestion({ owed: false }) });
+    act(() => $<HTMLButtonElement>("[data-new]")?.click());
+    expect(questionForm()).toBeNull();
+    expect(manager.createDoc).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the question and makes no field when the posture does not land", async () => {
+    const manager = linkedManager();
+    mount({ manager, open: "fields", syncQuestion: fakeQuestion({ lands: false }) });
+    act(() => $<HTMLButtonElement>("[data-new]")?.click());
+    await act(async () => {
+      questionForm()?.querySelector<HTMLButtonElement>('button[type="submit"]')?.click();
+    });
+    expect(questionForm()).not.toBeNull();
+    expect(manager.createDoc).not.toHaveBeenCalled();
+  });
+
+  it("Cancel makes nothing and gives the tiles back; the question is still owed", () => {
+    const manager = linkedManager();
+    const door = fakeQuestion();
+    mount({ manager, open: "fields", syncQuestion: door });
+    act(() => $<HTMLButtonElement>("[data-new]")?.click());
+    act(() => button("Cancel").click());
+    expect(questionForm()).toBeNull();
+    expect($(".vf-head-docs")?.hasAttribute("hidden")).toBe(false);
+    expect(manager.createDoc).not.toHaveBeenCalled();
+    expect(door.answer).not.toHaveBeenCalled();
   });
 });

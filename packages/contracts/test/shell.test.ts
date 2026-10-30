@@ -1,3 +1,6 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { METHODS } from "../src/methods";
 import { IPC_CHANNELS } from "../src/registries";
@@ -221,7 +224,7 @@ describe("Close protocol — CloseReason / CloseRequest / CloseResult (ESR §6.4
 });
 
 describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => {
-  it("exposes exactly the thirty channel keys, in order", () => {
+  it("exposes exactly the thirty-one channel keys, in order", () => {
     expect(Object.keys(IPC_CHANNELS)).toEqual([
       "windowBootstrap",
       "prepareClose",
@@ -239,6 +242,7 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       "updatePrepareRestart",
       "updateConfirmRestart",
       "updateDoctor",
+      "updateDownload", // AU-1 — a person's download of one found version (AU-G5, AU-G6)
       // TP-S3e: terminalConnect + terminalStatus retired with the bridge —
       // the renderer dials the cells' T1 doors itself.
       "viewState", // FR-1 — the window's active view (GT-D2's Godview bit, grown into four)
@@ -276,6 +280,7 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       updatePrepareRestart: "vibefield:update:prepare-restart",
       updateConfirmRestart: "vibefield:update:confirm-restart",
       updateDoctor: "vibefield:update:doctor",
+      updateDownload: "vibefield:update:download",
       viewState: "vibefield:view:state",
       viewSet: "vibefield:view:set",
       viewZoom: "vibefield:view:zoom",
@@ -485,6 +490,20 @@ describe("tray shell commands and app preferences", () => {
         },
       }).success,
     ).toBe(false);
+  });
+
+  it("AU-1 — every update-view fixture parses as the desktop state's update", () => {
+    // the preload drops the WHOLE desktop state when it fails to parse (`preload/desktop-state.ts`): a view field the
+    // contract does not take blanks the tray facts and the Settings card together
+    const fixtures = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures");
+    const views = readdirSync(fixtures).filter((f) => f.startsWith("update-view."));
+    expect(views.length).toBeGreaterThanOrEqual(5);
+    for (const f of views) {
+      const raw: unknown = JSON.parse(readFileSync(join(fixtures, f), "utf8"));
+      const parsed = DesktopShellState.shape.update.safeParse(raw);
+      const issues = parsed.success ? "" : JSON.stringify(parsed.error.issues);
+      expect(parsed.success, `${f}: ${issues}`).toBe(true);
+    }
   });
 
   it("keeps the renderer command set closed", () => {

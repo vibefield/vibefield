@@ -102,6 +102,7 @@ export function mountProductHost(
         setEnabled: (enabled) => window.vibefield.update.setEnabled(enabled),
         setChannel: (channel) => window.vibefield.update.setChannel(channel),
         decline: (version) => window.vibefield.update.decline(version),
+        download: (version) => window.vibefield.update.download(version),
         prepareRestart: () => window.vibefield.update.prepareRestart(),
         confirmRestart: (token) => window.vibefield.update.confirmRestart(token),
         doctor: () => window.vibefield.update.doctor(),

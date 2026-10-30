@@ -6,6 +6,7 @@ import type { FrameSurface } from "../frame/frame-surface";
 import { Head } from "../frame/Head";
 import { type HeadDocTile, HeadView } from "../frame/HeadView";
 import type { HeadCanvas, HeadCrumb } from "../frame/head-canvas";
+import type { SyncQuestionViewProps } from "../frame/SyncQuestionView";
 import type { ViewKeys } from "../frame/views";
 import { zoomPercent } from "../frame/zoom";
 import { CommandPalettePreview } from "./CommandPalettePreview";
@@ -153,6 +154,7 @@ export const HEAD_STATES = [
   "explorer",
   "zoom",
   "palette",
+  "sync-question",
 ] as const;
 export type HeadState = (typeof HEAD_STATES)[number];
 
@@ -164,6 +166,21 @@ export const HEAD_STATE_LABEL: Record<HeadState, string> = {
   explorer: "The fields",
   zoom: "The zoom's menu",
   palette: "The palette, ⌘K",
+  "sync-question": "The sync question",
+};
+
+/** TS-6 (TS-D13) — the question New field asks while a link owes it: the
+ * posture as it stands, three fields from before the link, one added. */
+const FIXTURE_QUESTION: SyncQuestionViewProps = {
+  choice: "automatic",
+  locked: false,
+  earlier: FIXTURE_FIELDS.slice(1, 4).map((entry, index) => ({
+    docId: entry.docId,
+    name: entry.name,
+    caption: ["2h ago", "1d ago", "3d ago"][index] ?? "",
+  })),
+  added: new Set([FIXTURE_FIELDS[1]?.docId ?? ""]),
+  error: null,
 };
 
 /** One state of the head, at its place at a plate's top. The plate is the
@@ -183,9 +200,10 @@ export function HeadPlate({
           name: CURRENT?.name ?? "…",
           path,
           renaming: state === "renaming" ? (CURRENT?.name ?? "") : null,
-          open: state === "explorer",
+          open: state === "explorer" || state === "sync-question",
           docs: FIXTURE_TILES,
           currentId: CURRENT?.docId ?? null,
+          question: state === "sync-question" ? FIXTURE_QUESTION : null,
         }}
         zoom={{ percent: 100, keys, open: state === "zoom", hot: 0 }}
       />
