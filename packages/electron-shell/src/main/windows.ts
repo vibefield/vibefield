@@ -30,7 +30,9 @@ export function createMainWindow(opts: {
     height: 780,
     show: opts.show,
     title: "VibeField",
-    backgroundColor: "#171717", // pre-paint = the dark canvas token (--vf-canvas-bg)
+    // The pre-paint is `--vf-field-ground` (DESIGN.md §2.1, #04050F), the first face's ground (track FG); main
+    // can't read CSS, so this is its named projection (FG-D25, UI_SYSTEM.md), held equal by wearing-the-mat.
+    backgroundColor: "#04050f",
     // DK-11: a mode that counts a covered window's frames keeps its page visible when covered (window-policy.ts);
     // MV-3c: a lab window that is never shown renders offscreen
     webPreferences: assertSecurePreferences({

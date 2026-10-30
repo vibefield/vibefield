@@ -402,3 +402,43 @@
   font-size: 12px;
   line-height: 18px;
 }
+
+/* Settings → Updates (track AU, AU-3; DESIGN.md §2.5, §8 "Settings → Updates"): an
+   update that waits on you is the one cyan mark — 6px at the Updates nav row's
+   end, and leading the page's ready line. A fill, never a word's ink; it never
+   pulses. A desktop its version keeps from connecting says what to do in the
+   attention ink. */
+.vf-settings-nav-mark {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  margin-left: auto;
+  border-radius: 50%;
+  background: var(--vf-cyan);
+}
+
+.vf-updates-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--vf-cyan);
+}
+
+.vf-updates-devices [data-tone="attention"] {
+  color: var(--vf-ink-attention);
+}
+
+/* The rail folds to its icons: the mark rides the icon's top right. */
+@media (max-width: 760px) {
+  .vf-settings-nav-item {
+    position: relative;
+  }
+
+  .vf-settings-nav-mark {
+    position: absolute;
+    top: 7px;
+    right: 12px;
+    margin-left: 0;
+  }
+}

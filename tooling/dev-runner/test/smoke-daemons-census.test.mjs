@@ -8,6 +8,8 @@ import { once } from "node:events";
 import { test } from "node:test";
 import {
   leftByRun,
+  listRunProcesses,
+  psTables,
   SMOKE_RUN_ENV,
   stillRunning,
 } from "../../../apps/desktop/packaging/smoke-daemons.mjs";
@@ -70,4 +72,31 @@ test("a re-look judges each pid by its own environment: a live pid without the m
   } finally {
     if (daemon.exitCode === null && daemon.signalCode === null) daemon.kill("SIGKILL");
   }
+});
+
+test("on Linux each of the census's three reads is asked in procps's spelling: `axwwe` for the table, `-ww` and `wwe` for one pid", {
+  skip,
+}, () => {
+  // procps refuses `-axww` and has no `-E` (the affected job on ubuntu-latest, 2026-10-29), so a census asking in macOS's
+  // flags finds no run there. A stand-in `ps` answers each read as either platform would; the rows above, on the real
+  // `ps`, are each platform's witness.
+  const mark = "vf-smoke-profile-census-linux";
+  const line = `  41     1 node -e x ${SMOKE_RUN_ENV}=${mark}\n`;
+  const reads = [];
+  const ps = (args) => {
+    reads.push(args);
+    return args.includes("-p") ? line : `${line}  42     1 node -e y\n`;
+  };
+  const linux = psTables("linux");
+  assert.deepEqual(
+    listRunProcesses(mark, ps, linux).map((p) => p.pid),
+    [41],
+  );
+  assert.deepEqual(stillRunning(mark, [41], ps, linux), [41]);
+  const columns = ["-o", "pid=,ppid=,command="];
+  assert.deepEqual(reads, [
+    ["axwwe", ...columns],
+    ["-ww", ...columns, "-p", "41"],
+    ["wwe", ...columns, "-p", "41"],
+  ]);
 });

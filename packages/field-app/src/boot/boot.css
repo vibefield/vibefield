@@ -1,14 +1,133 @@
-/* First-paint ground shared by the splash, the Setup Assistant and the switch: since DK-16 the desk's cutting mat in CSS
-   (DESIGN.md §2.1's erratum, §8 "The boot splash") — its sage as the theme lights it and its lattice in its lit cream —
-   the ground the desk itself draws, so the reveal changes what stands on the floor and never the floor. */
+/* The first face's ground, the splash's and the Setup Assistant's (track FG; DESIGN.md §2.1, §8 "The boot splash"):
+   the field. The website's splash: its ground before its first frame, its mark as a still at first paint, the live
+   field fading in over them — and without WebGPU the field's still, its mark included. FieldLayer.tsx holds the canvas
+   and the still mark; the face's words stand 40px under the mark's centre on a soft shade, as the website sets them. */
 .vf-splash {
+  background-color: var(--vf-field-ground);
+}
+
+.vf-field {
+  position: absolute;
+  inset: 0;
+  /* over the ground, under the face and the glass */
+  z-index: -1;
+  pointer-events: none;
+}
+
+.vf-field[data-field="still"] {
+  background: url("./splash/assets/splash-still-wide.avif") center / cover no-repeat;
+}
+
+@media (max-aspect-ratio: 1 / 1) {
+  .vf-field[data-field="still"] {
+    background-image: url("./splash/assets/splash-still-tall.avif");
+  }
+}
+
+.vf-field-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 500ms ease;
+}
+
+.vf-field[data-field="live"] .vf-field-canvas {
+  opacity: 1;
+}
+
+.vf-field-mark {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 96px;
+  height: 40px;
+  transform: translate(-50%, -50%);
+  background: url("./splash/assets/mark-white.webp") center / contain no-repeat;
+  transition: opacity 400ms ease;
+}
+
+/* The live field draws its own mark: the still one goes once the canvas has faded in over it. */
+.vf-field[data-field="live"] .vf-field-mark {
+  visibility: hidden;
+  transition: visibility 0s linear 500ms;
+}
+
+/* The still's picture carries its own mark; under the Setup Assistant's glass the mark goes (DESIGN.md §6). */
+.vf-field[data-field="still"] .vf-field-mark,
+.vf-field[data-mark="hidden"] .vf-field-mark {
+  opacity: 0;
+}
+
+/* The words' shade: the field's ground, soft, so the bar and the stage read over the field. */
+.vf-field-shade {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + 54px);
+  width: 400px;
+  height: 120px;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--vf-field-ground) 55%, transparent),
+    color-mix(in srgb, var(--vf-field-ground) 30%, transparent) 55%,
+    transparent
+  );
+  pointer-events: none;
+}
+
+.vf-field-words {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(50% + 40px);
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+}
+
+/* The tear (FG-2; the website's `[data-status='revealing']`): the words and their shade go first (240ms), and the
+   ground's own colour with them — unseen while the live field covers it — so the field opens onto the desk. */
+.vf-field-shade,
+.vf-field-words {
+  transition: opacity 240ms ease;
+}
+
+.vf-splash[data-opening="tear"] {
+  background-color: transparent;
+}
+
+.vf-splash[data-opening="tear"] .vf-field-shade,
+.vf-splash[data-opening="tear"] .vf-field-words {
+  opacity: 0;
+}
+
+/* The desk's cutting mat in CSS (DK-16; DESIGN.md §2.1's erratum): its sage as the theme lights it and its lattice in
+   its lit cream. The boot's first face moved to the field (track FG); the switch keeps the mat (§8 "The switch"). */
+.vf-mat-floor {
   background-color: var(--vf-mat-ground);
   background-image: var(--vf-mat-lattice);
   background-size: var(--vf-mat-lattice-size);
 }
 
+/* Fades only, halved (DESIGN.md §6). */
 @media (prefers-reduced-motion: reduce) {
-  .vf-splash {
+  .vf-splash,
+  .vf-mat-floor {
     transition-duration: 120ms;
+  }
+
+  .vf-field-canvas {
+    transition-duration: 250ms;
+  }
+
+  .vf-field-mark {
+    transition-duration: 200ms;
+  }
+
+  .vf-field[data-field="live"] .vf-field-mark {
+    transition-delay: 250ms;
   }
 }

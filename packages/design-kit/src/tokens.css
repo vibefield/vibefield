@@ -43,6 +43,10 @@
     );
   --vf-mat-lattice-size: 100px 100px, 100px 100px, 25px 25px, 25px 25px;
   --vf-mat-ink: rgb(255 255 255 / 60%);
+  /* §2.1 the field (track FG): the first face's ground — the website's splash, before its first frame and under its
+     still — and the words that stand on it. One value in both themes: the field is the dark in both. */
+  --vf-field-ground: #04050f;
+  --vf-field-ink: rgb(255 255 255 / 56%);
   /* §2.2 Surfaces */
   --vf-card: #1c1c1e;
   --vf-card-deep: #000000;
@@ -70,7 +74,8 @@
   --vf-wizard-surface: rgb(255 255 255 / 55%);
   --vf-backdrop-dim: rgb(0 0 0 / 10%);
   /* §5 the search scrim (the Peek, §8 "Search"; K7): darker than the backdrop
-     dim, under a blur of 18 — the window blurred and dimmed */
+     dim, under a blur of 18 — the window blurred and dimmed. The phone wears its
+     dim alone under a door over a live field (§9, TS-D22; ChromePalette.searchScrim) */
   --vf-search-scrim: rgb(0 0 0 / 16%);
 
   /* §2.5 State & system color */
