@@ -3,7 +3,7 @@
 // real loopback socket — this file needs Node's undici WebSocket end to end)
 //
 // The B4 launch pipeline against a REAL fieldd (mock mgmt, no cargo), playing
-// FieldView's role by hand (apply pending → contentApplied): the first-run
+// FieldView's role by hand (apply pending → contentApplied → canvasPresented): the first-run
 // seed decision, rename, create/switch with the lane-drain law, the restart
 // path honoring vf-last-doc, and the stale-last-doc fallback. Supersedes B3's
 // board-daemon.test — the byte-identical restart survival lives in here now.
@@ -79,7 +79,16 @@ function managerFor(daemon: FielddDaemon): DocManager {
   return new DocManager(client, { timeoutMs: 5_000 });
 }
 
-/** Play FieldView: apply the pending session to a real engine, report applied. */
+/** Play FieldView's two reports for an applied board: `contentApplied` at the end of its attach
+ * effect, then `canvasPresented` once the desk has framed it (use-workspace-session.ts, one frame
+ * later). Item 96: with the first alone, every wait for ready sat out the manager's 2.5 s fallback
+ * for a desk that never presents (`CANVAS_PRESENT_TIMEOUT_MS`), which is not what any desk does. */
+function presented(manager: DocManager, generation: number): void {
+  manager.contentApplied(generation);
+  manager.canvasPresented(generation);
+}
+
+/** Play FieldView: apply the pending session to a real engine, report applied and presented. */
 async function applyPending(manager: DocManager): Promise<ReturnType<typeof createFieldEngine>> {
   const pending = manager.getState().pending;
   if (pending === null) throw new Error("no pending session");
@@ -96,7 +105,7 @@ async function applyPending(manager: DocManager): Promise<ReturnType<typeof crea
     if (pending.seed) await seedField(ce, session, createDeskBlobStore());
     else ce.world.sync();
   }
-  manager.contentApplied(pending.generation);
+  presented(manager, pending.generation);
   return ce;
 }
 
@@ -122,7 +131,10 @@ describe("DocManager launch pipeline (B4)", () => {
     expect(pending?.lane).not.toBeNull();
 
     const ce = await applyPending(manager);
-    await until(() => manager.getState().phase === "ready");
+    // ready on the desk's present, in the same turn: never on the fallback timer the veil keeps for
+    // a desk that does not present (item 96)
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(manager.getState().phase).toBe("ready");
     expect(localStorage.getItem("vf-last-doc")).toBe(pending?.docId);
     await putCurrent(manager, ce);
     expect(daemon.docs.list()).toHaveLength(1);
@@ -433,7 +445,7 @@ describe("DK-9 — the same board on a NEW generation (DocManager.remount)", () 
     if (!res.ok) throw new Error(res.reason);
     reopened.world.sync();
     expect(deskCensus(reopened)["desk.note"]).toBe(before); // the edit came along
-    manager.contentApplied(next?.generation ?? 0);
+    presented(manager, next?.generation ?? 0);
     await until(() => manager.getState().phase === "ready");
     // the lane the board kept takes the new generation's saves
     await putCurrent(manager, reopened);

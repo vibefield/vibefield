@@ -261,9 +261,11 @@ import {
   RestartScheduled,
   SystemShutdownParams,
   SystemShutdownResult,
+  UpdateCheckResult,
   UpdateClientStateFile,
   UpdatePolicy,
   UpdatePolicySource,
+  UpdateView,
 } from "../src/update-policy";
 import {
   WorkspaceCloseTicketParams,
@@ -346,7 +348,8 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // with every cell fresh (`observed-state.fresh`: `inventoryBoundMs` alone), one with a stale
   // cell (`observed-state.stale-cell`: `staleCells` beside it), and an older floor that cannot
   // say (`observed-state.valid`, neither field). Generated for field-native and parity-checked
-  // strict in fixture_parity.rs; their own rows: terminal-inventory.test.ts.
+  // strict in fixture_parity.rs; their own rows: terminal-inventory.test.ts. Item 97 adds a
+  // fourth: a husk listed `exited` beside a live row (`observed-state.exited-husk`).
   "observed-state": ObservedState,
   "peer-info": PeerInfo,
   "store-snapshot": StoreSnapshot,
@@ -427,6 +430,10 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "channel-heads": ChannelHeads,
   // WP12b: the updater's persisted client state (Electron main's `updates/state.json`).
   "update-client-state": UpdateClientStateFile,
+  // AU-1: the updater's one projection (`UpdateController.view()`, through `desktopState.update`) and a person's
+  // check answered when the check settles. `update-view.pre-au1.json` is today's shape: the tolerant-reader witness.
+  "update-view": UpdateView,
+  "update-check-result": UpdateCheckResult,
   // WP8a: the packaged app's signed bundled-plugin index (refusals in plugin-distribution.test.ts).
   "bundled-plugin-index": BundledPluginIndex,
   // WP8b: the stage's public identity (Resources/identity/release-identity.json).
@@ -565,6 +572,9 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // TS-4 (TS-D7) — the asks to connect after Not now, each said `asked` with its
   // time beside AO's retired moments (setup-moment-params.asked is one saying)
   "setup-ledger-connect-ask": SetupLedger,
+  // TS-6 (TS-D13) — a link landed during setup: the sync question owed beside
+  // AO's retired moment and TS-4's saying (fieldd's store reads it from disk)
+  "setup-ledger-sync-question": SetupLedger,
   "agent-persona": AgentPersona,
   "agent-distribution": AgentDistributionRecord,
   "agents-installs": AgentsInstallsResult,
