@@ -228,6 +228,32 @@
   inset: 0;
 }
 
+/* HN-8 (PL-D2) — the package circle's plates: the window's top over a covered
+   view's own ground (Godview's stage, History's room, the terminals
+   maximized), the shipping circle at its own place, x 96 at the head's left.
+   These only stage it: its selectors are the product's. */
+.vf-ds-package-plates {
+  display: grid;
+  gap: 12px;
+}
+
+.vf-ds-package-plate {
+  position: relative;
+  isolation: isolate;
+  height: 300px;
+  overflow: hidden;
+  border-radius: 14px;
+  background-color: var(--vf-mat-ground);
+  background-image: var(--vf-mat-lattice);
+  background-size: var(--vf-mat-lattice-size);
+}
+
+.vf-ds-package-ground {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
 /* One Frame FR-4 — the corner's plates (the page's "Your face" plates): the
    window's bottom-left — the line at its own place, your face where the
    corner holds it (16 from the left, 24 from the foot), its menu open above
@@ -645,6 +671,13 @@
 
 .vf-ds-godview-frame > .vf-godview {
   position: absolute;
+}
+
+/* In a package circle's plate (HN-8) the stage is the covered view's ground:
+   it fills it. */
+.vf-ds-package-ground .vf-ds-godview-frame {
+  height: 100%;
+  min-height: 0;
 }
 
 /* The specimen's own staging row above the stage: the catalog's button for the

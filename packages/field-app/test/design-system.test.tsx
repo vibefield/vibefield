@@ -470,6 +470,38 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
         ?.value,
     ).toBe("plus");
     expect(document.activeElement?.closest(".vf-peek-pop")).toBeFalsy();
+    // HN-8 (PL-D2) — the package circle: the shipping view at the head's left over each covered
+    // view's own ground, in the head's own words — over Godview's stage, its Stories row there to
+    // keep its side from it; over History's band, a source unavailable; and in the terminals'
+    // title bar while they are maximized, folded there, two sources unavailable
+    const packagePlates = [
+      ...(container?.querySelectorAll<HTMLElement>(".vf-ds-package-plate") ?? []),
+    ];
+    expect(packagePlates.map((p) => p.dataset.state)).toEqual(["godview", "history", "bar"]);
+    const packagePlate = (state: string): HTMLElement | undefined =>
+      packagePlates.find((p) => p.dataset.state === state);
+    const overGodview = packagePlate("godview");
+    expect(overGodview?.querySelector(".vf-godview .vf-stories")).not.toBeNull();
+    expect(overGodview?.querySelector(".vf-package-circle")?.hasAttribute("data-bar")).toBe(false);
+    expect(overGodview?.querySelector(".vf-package-dot")).toBeNull();
+    expect(overGodview?.querySelector(".vf-package-button")?.getAttribute("title")).toBe(
+      "Artifacts",
+    );
+    const overHistory = packagePlate("history");
+    expect(overHistory?.querySelector(".vf-history")).not.toBeNull();
+    expect(overHistory?.querySelector(".vf-package-circle .vf-package-dot")).not.toBeNull();
+    expect(overHistory?.querySelector(".vf-package-button")?.getAttribute("title")).toBe(
+      "Artifacts — vibe-field's source is unavailable",
+    );
+    const inTheBar = packagePlate("bar");
+    expect(inTheBar?.querySelector(".vf-godview")?.getAttribute("data-godview-deck")).toBe(
+      "maximized",
+    );
+    expect(inTheBar?.querySelector(".vf-package-circle")?.getAttribute("data-bar")).toBe("true");
+    expect(inTheBar?.querySelector(".vf-package-circle .vf-package-dot")).not.toBeNull();
+    expect(inTheBar?.querySelector(".vf-package-button")?.getAttribute("aria-label")).toBe(
+      "Artifacts — 2 sources unavailable",
+    );
     // DK-12 — the tools in hand: a plate per specimen, the shipping bar in its hand's role, its tools in their order
     const hands = [...(container?.querySelectorAll(".vf-ds-bar-plate") ?? [])].filter((p) =>
       p.getAttribute("data-state")?.startsWith("In hand"),
