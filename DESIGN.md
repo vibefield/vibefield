@@ -578,7 +578,7 @@ rect, its props, its stratum (pads · sheets · things), taped or not — is ICE
 | **pictures** | a captured image | prints | drawn — device-local until the upload plane (DK-D21) |
 | **string** | a relation | wires, mind-map edges, patch cables | not yet — STRING |
 | **boards** (the mat) | a place: it holds a desk | the mat itself, the ground (§2.1); the mini mat, a desk inside the desk | drawn |
-| **stickers** (tape) | an attachment, a label | tags, Fieldmarks (§11) — the masking and label tape are already marks | not yet, as objects |
+| **stickers** (tape) | an attachment, a label | tags — the masking and label tape are already marks | not yet, as objects |
 | **tools** (metal) | a tool | rulers, clips, scissors | the mat's rulers and its lamp |
 | **instruments** (panel, plastic) | an instrument | the packs — shader, 8-bit, arduino: a panel, controls, screens, cables | not yet — the OBJECT KIT |
 | **portals** (glass) | a window onto something live | artifacts, pages, terminals, captures | not yet — PORTALS (DK-D19, DK-D20) |
@@ -3659,92 +3659,22 @@ their place". "Fullscreen" stays the pane's word (§8).
 
 ---
 
-## 11. Fieldmarks / AFTER HOURS — sticker edition
+## 11. Fieldmarks / After Hours and Face Club — retired
 
-**Edition 02, 2026-09-22.** The requested direction is retro sticker illustration: expressive,
-specific, and collectible. AFTER HOURS replaces edition 01's minimalist geometry with 77 new
-drawings plus the exact existing logo. The cultural vocabulary comes from VibeField: a personal
-field, physical cards, agent work, old computers, private connections, and accumulated creations.
-
-The collection has three related drawing registers:
-
-| Register | Artboard | Recommended floor | Typical subjects |
-|---|---|---|---|
-| Character / brand sticker | 112 units (logo retains 480) | 48px (logo 32px) | skewed CRTs, rubber gloves, floppy creatures, cassette workers, odd personal characters |
-| Desk object | 72 units | 32px | hardware, folders, paper, patch leads, crates, layered windows |
-| Action stamp / state signal | 48 / 50 units | 24 / 28px | heavy positive/negative shapes, cut-paper arrows, glove, sun, speech flag, radio |
-
-Contours are deliberately unequal; black side planes, hatching, scratched highlights, bitmap
-lettering, and offset eyes carry character. There is no single nominal line weight. Detailed
-characters are not reduced to tiny toolbar glyphs; functional controls have their own simpler
-geometry. Actual controls keep §4's hit areas and explicit accessible names.
-
-Two exports share the same original drawing: **sticker** adds a white backing and die-cut
-keyline; **artwork** omits that outer keyline. Both have an ink layer (`currentColor`) and an
-interior paper layer (`--vf-sticker-paper`, falling back to the canvas and then white). Paper
-is intentionally opaque inside the illustrations; empty space outside is transparent. This
-supersedes edition 01's all-transparent knockout claim. No raster or generated-image texture
-is required; every shape is an editable vector.
-
-The catalogue is a **committed editorial art surface**, not a new product chrome recipe. Its
-print palette is ink `#171815`, stock `#F1EDDF`, acid-yellow sheet `#E5E549`, and proof inks
-cobalt `#214ACC` / vermilion `#C53D25`; the night wall is `#232720`. Sticker backing stays white
-in both themes. These inks are presentation choices and never encode account identity or state.
-The sheet can use hard borders, pasted rotations, checker fields, and condensed display type.
-Other product surfaces continue to follow the existing quiet-chrome rules.
-
-Identity, assigned role, provider, and observed state stay independent. §2.8's emoji sticker/coin
-account face remains current; the new vector alter egos are an additional identity-art study.
-The agent characters are role proposals, not vendor marks or asserted capabilities. §2.5 still
-governs product-state color, and state words remain visible. Existing Godview bodies and the
-upstream file-tree icon family are unchanged.
-
-The packaged app, tray, and Icon Composer masters remain exact. `@vibefield/design-kit/icons`
-exports the shared `FieldIcon`, typed names, metadata, and `fieldIconSvg(name, finish)`.
-`finish="sticker"` adds the paper cut; the component defaults to `"artwork"` and decorative
-semantics inside labelled controls. The drawing source is `tooling/fieldmarks/generate.py`.
-Studio and the offline `draft/design/fieldmarks.html` mount the same `IconsSection`. The HTML
-bundles its CSS, React, vectors, and downloadable archive without network dependencies.
-
-
-### 11.1 Face Club — the account deck, drawn in After Hours ink
-
-**Account artwork study, 2026-09-22.** The 48 selected emoji in contracts' `FACE_DECK`
-receive 48 original black-and-white sticker interpretations. This is a complete one-to-one
-artwork proposal, preserving the exact deck order and the stored emoji. §2.8 remains the
-shipping face policy and renderer; adoption of vector art is a separate integration step.
-
-Each subject has two authored optical masters: **112 units, detailed, from 40px** and
-**56 units, simplified, at 16–39px**. Small masters enlarge distinguishing features and
-remove hatching, fine fur, and secondary marks. They are separate geometry, not a filter or
-an automatically shrunk full illustration. The switch aligns with the face's existing 40px
-tilt threshold. The neutral ink is `#171815`, paper is explicit white, and the surrounding
-wall uses §11's print palette. The sticker finish grows a white cut edge; artwork omits it.
-Interior paper remains opaque, including the doughnut's central knockout.
-
-Animal anatomy and object silhouette precede expression: fox wedge, raccoon mask, wolf
-profile, panda patches, two camel humps, snail spiral, and ringed planet. Color never deals
-or disambiguates users. The drawings contain no system emoji glyphs, traced reference paths,
-fonts, filters, or embedded raster art. The original emoji appears only as a comparison,
-through the shipping `UserFaceView`.
-
-`@vibefield/design-kit/face-stickers` owns `FaceSticker`, typed ids and metadata,
-`findFaceSticker(emoji)`, and portable `faceStickerSvg` export. The mapping ignores only
-text/emoji variation selectors, like `faceKey`. Unknown/custom emoji return `undefined`
-and retain native rendering when integrated. Account dealing, collision validation,
-per-user tilt, coin choice, and persistence remain in their existing owners.
-
-`tooling/face-stickers/art.py` is the editable drawing source. Its generator verifies all
-48 emoji against the current policy before producing 192 SVG exports and two sprites.
-Studio and the self-contained `draft/design/face-stickers.html` mount the same
-`FaceStickersSection`, with all emoji/sticker pairs, an inspector, actual-size light/dark
-proofs, and downloads. Recognition at tiny sizes is an explicit design review concern,
-not a claim established by a bounds test.
+**Retired 2026-10-28 (James, housekeeping Q19 C); code retirement 2026-10-29.** The
+Fieldmarks / After Hours collection and §11.1's Face Club account-art study are retired from
+the design kit and Studio. Their sheets, SVG archives and review evidence are preserved at
+`draft/archive/retired/design-fieldmarks/` on `dev-local`; git retains their source history.
+The former illustration recipes no longer govern product UI. Account faces follow §2.8,
+functional glyphs follow §13, and the packaged mark follows §12.
 
 ## 12. Logo studies — draft only
 
 Logo experiments live in local, uncommitted `draft/` studies. They are not part of the
-design kit or the production design system. Packaged icon masters remain governed by §11.
+design kit or the production design system. The packaged app uses the plain mark chosen on
+2026-10-09 (`b51154f91`): black ink on pure white, white ink on pure black, with no patterns.
+`apps/desktop/packaging/icons/app.icon` is the source; its exact vectors and the immutable tray
+master are governed by `apps/desktop/packaging/icons/README.md`.
 
 ---
 
@@ -3853,7 +3783,7 @@ stills — and, on the desk, two named exceptions: the bar's ONE path renderer f
 the OS marks the device chip wears (Simple Icons, drawn inline in `os-marks.tsx` — the test's one
 other allowed file; a phone, wherever a surface marks one, wears the mark macOS wears, Apple's,
 since iOS's own is a word — James, DS-3: "do not use texts, use OS icons instead" — and no surface
-marks one today), the Face Club and AFTER HOURS art (§11), the file-tree family (§8), and
+marks one today), the file-tree family (§8), and
 **Tailscale's logomark** (track TS, TS-D4 ruled 2026-10-27), held to the rules of Tailscale's Brand
 Toolkit (its press and media kit, 10-2025): the nine dots exactly as its file draws them — the middle
 row and the bottom centre solid, the other five at 40% — never in one colour, never smaller than

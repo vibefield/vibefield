@@ -166,10 +166,6 @@
    - Q5: a note held longer than 2.4 s shows its advice again.
    - Q13: fieldd projects `costRatePerMin` on the desk row (`costUsd`/`costCoverage` since DS-3); the phone reads
      `desk` (D-i18), and D-i20 is re-checked in the same slice.
-   - Q19: retire Fieldmarks in code: design-kit's `icons` and `face-stickers` leaves
-     (`packages/design-kit/src/icons`, `packages/design-kit/src/face-stickers`), their catalog sections and reports,
-     `tooling/fieldmarks` and `tooling/face-stickers`. DESIGN.md first: §11/§11.1 retire, and §12's icon line names the
-     plain mark (`b51154f91`). The sheets archive to `draft/archive/retired/design-fieldmarks/`.
    - Q20: "Settings on demand" (replaces ESR's follow-on): SettingsPanel (`packages/field-app/src/panels/SettingsPanel.tsx`)
      becomes a lazy chunk, measured before and after.
    - Q21: TP-S3f's stated limit (a deliberate own kill never gets an event-driven face), verified after item 59
@@ -452,7 +448,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | UA — users and accounts | COMPLETE except witnesses | `specs/users-and-accounts.md`, `thinking-ua-phone-account.md` | the phone's second-account witness |
 | NF — native floor | COMPLETE; one owed line | `specs/native-floor.md` | item 52 (b)'s phone half |
 | LOG — logging and audit | PARKED; item 78 landed | `specs/logging-and-diagnostics.md` | LOG-39 for the beta |
-| UI — design system | COMPLETE; owed slices | `DESIGN.md`, `docs/UI_SYSTEM.md` | the Fieldmarks retirement (Q19); InlineNotice tones; the desk sweep |
+| UI — design system | COMPLETE; owed slices | `DESIGN.md`, `docs/UI_SYSTEM.md` | InlineNotice tones; the desk sweep |
 | SNAP — screenshot tool | PARKED; SNAP-0/1/1a/3/3a/3b landed | `thinking-screenshot-tool.md`, `draft/composer/build-edge-trays.md` | live checks; the still as `desk.photo` |
 | SD — sound | PARKED (James's lab, Q27) | `draft/sound/design-sound.md` | James's call |
 | WIN — Windows port | PARKED since 08-24 (`c16e618f4`) | `thinking-windows-port.md`, `docs/WINDOWS_PORT_STATUS.md` | a Windows leg on the rails |
@@ -481,7 +477,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | The magnet grid; the Wormhole lab | DK-17's retire table; James 10-25, and his archive ruling (Q27) | the desk; `vf-splash` | `draft/archive/retired/magnet-grid/`, `draft/archive/superseded/wormhole/` |
 | The four dogfood packs | Q9 (James, 2026-10-28) | Desk Phase 6 | `draft/archive/superseded/thinking-prod-dogfood-packs.md` |
 | The device facet in puppeteer (PU-17's puppeteer half) | Q17 B (dropped; `feat/device-dimension` kept locally, not deleted) | VibeField's DS-3 filter (`6e62011e9`) | DECISIONS' HK row |
-| Fieldmarks and Face Club (DESIGN.md §11/§11.1) | Q19 C (retired) | the plain mark (`b51154f91`); DESIGN.md §13's glyphs | `draft/archive/retired/design-fieldmarks/`; the code slice is §3 item 6 |
+| Fieldmarks and Face Club (DESIGN.md §11/§11.1) | Q19 C (retired); code removed 2026-10-29 | the plain mark (`b51154f91`); DESIGN.md §13's glyphs | `draft/archive/retired/design-fieldmarks/`; kit leaves, assets, catalog sections/reports and generators removed |
 | James's labs: AV avatars, identity, logo studio, mark, research, system atlas | Q27 (archive each) | CO (avatars); the plain mark and `vf-splash` (identity, logo studio, mark); the desk (system atlas) | `draft/archive/retired/agent-avatars/`, `draft/archive/superseded/identity/`, `draft/archive/retired/logo-studio/`, `draft/archive/superseded/mark/`, `draft/archive/evidence/research/`, `draft/archive/superseded/system-atlas/` |
 | The LSF-3C agent-browser spike | Q12 (executed) | LSF §17 and DECISIONS hold its law | `draft/archive/executed/specs/live-surfaces-agent-browser-spike.md` |
 

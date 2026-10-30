@@ -18971,3 +18971,68 @@ test setup and the daemon built from the pinned release source.
 
 Evidence: `/Volumes/SamsungRed/lanes/rosetta-release-20261029/logs/verify-final.log`,
 `landing-combined-result.json`, and `archive-consumer-tests.log` in the same logs directory.
+
+## Q19 — retire Fieldmarks / After Hours and Face Club (2026-10-29)
+
+**At the code commit:** retirement committed locally after full verification. The final desktop
+landing run will execute on this commit; its completion is recorded separately below. This closes
+the code queue from James's housekeeping Q19 C ruling (2026-10-28); the earlier archive and
+records pass was `88e8289ea`.
+
+**Changed:**
+- DESIGN.md first: §11/§11.1 are a retirement record, §12 names the plain packaged mark
+  (`b51154f91`), and §5.1/§13 no longer grant the retired artwork a role in product UI.
+- Removed design-kit's `icons` and `face-stickers` exports, sources and SVG asset copies;
+  both generators under `tooling/`; the catalog's two sections, reports, entries and CSS.
+  Glyphs now follows Foundations as 02a. The generated-art Biome exclusion is gone.
+- Kept the History styling regression check by discovering every remaining catalog sheet
+  and checking that none styles the shipping room's classes. ROADMAP, DECISIONS, UI_SYSTEM
+  and README now describe the completed retirement.
+
+**Preserved:** the archived sheets and ZIPs at `draft/archive/retired/design-fieldmarks/`.
+Every removed SVG matched its archive member byte for byte: 157 Fieldmarks and 194 Face Club
+drawings. The packaged mark, functional glyphs and account `UserFaceView` remain active.
+Local-only `dev-local` commit `304eb60c4` snapshots exactly the two Q19 record updates
+(`draft/archive/INDEX.md` and the housekeeping thinking page); it was not pushed.
+
+**Final code verification:** `pnpm verify` completed with exit 0 on `347c912dd` plus the Q19
+patch (`verify-final-tip.log`). This includes all prechecks, 27 typecheck projects, Biome
+(2,661 files), rustfmt/clippy, the production bundle, **9,964 JavaScript tests passed / 38
+skipped across 27 projects**, **493 Rust tests passed / 14 ignored across 31 suites**, and
+unchanged generated files. The normal Nx cache policy reused 23 JavaScript project results;
+the changed consumers ran again. Concurrency was bounded to one Nx project, two Vitest workers
+and two Rust test threads; no assertion or deadline was changed.
+
+The patch was first isolated on `e259f1fe3`. While it was being verified, main advanced through
+Rosetta 0.1.2 (`599f202f6`) and the browser-pane address fix (`347c912dd`). Q19 was carried over
+both; only the append-only ledger needed reconciliation. A complete `pnpm verify` also passed
+on the Rosetta base (`verify-integration.log`, 9,958 JavaScript tests / 38 skipped and the same
+493 Rust tests / 14 ignored). Uncommitted runtime work in the shared checkout was excluded.
+
+**Earlier desktop evidence:** all 13 landing gates passed on the original isolated Q19 patch,
+across the initial run and unchanged focused reruns. The initial run passed stills (13 tests),
+smoke, kind-faults, plugin-restart, plugin try, godview, terminal-door, terminal-direct, Studio
+and bundled. Its canvas modes were red under heavy load. The no-GPU and no-WebGPU reruns passed
+in 17 s and 15 s with normal local temporary profiles. A GPU retry hit a 15-minute cap; the
+standard 30-minute run passed in 909 s with clean teardown (`landing-canvas-standard-summary.log`).
+Timed-out launchers reaped their own helpers and removed their profiles; those earlier attempts
+are not recorded as clean application teardown. The final run on the code commit follows.
+
+Studio's earlier physical witness passed: separate sessions and preloads, an edit applied,
+replayed after reload and restored (`STUDIO_PHYSICAL`, `landing-1/12-smoke_studio.log`). Scoped
+field-app tests (61 across five suites), Studio unit tests (16), `build:design`, `build:renderer`,
+import walls and diff checks passed. The production verifier confirmed Studio, the catalog and
+perf lab are absent from the production renderer. A browser review in light and dark confirmed
+that the retired collections are gone while current glyphs and account faces render.
+
+**Earlier environment findings:** conflicting Node color variables polluted three fake-daemon
+stderr fixtures; all enabled cases passed with those variables unset. Load-sensitive fieldd
+and Rust teardown cases passed unchanged in isolated controls and the later complete runs.
+A one-thread Rust attempt stalled because libtest prefixed a helper's `vf-admitted:` line;
+a direct one-versus-two-thread control reproduced that protocol difference, and the complete
+two-thread runs passed. Those earlier failures remain in the logs rather than being called
+uninterrupted green verification.
+
+Evidence, the exact path manifest and source fingerprints are under `.vibefield/q19-landing/`.
+The validation checkout and build/cache storage moved to SamsungRed to relieve disk pressure;
+the Q19 source was unchanged by that move. Smoke profiles use the normal local temporary path.

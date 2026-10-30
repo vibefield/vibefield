@@ -234,11 +234,10 @@ describe("History by project — the catalog's plate (PJ-4)", () => {
     expect(host?.querySelector(".ah-meta__head button.ah-rename")?.textContent).toBe("vibe-field");
   }, 30_000);
 
-  it("the catalog's own sheets never style the room's classes — After Hours' shared `ah-` names are scoped to its surface", () => {
-    // Electron's photographs (PJ-4) found Live now's head 146px tall in the
-    // catalog: the After Hours sheet's bare `.ah-section` (padding 66px 0) is
-    // also the room's section head. A class both sheets name is scoped with
-    // `:where(.ah)` in the illustration sheet, so the plates draw the room's own.
+  it("the catalog's own sheets never style the room's classes", () => {
+    // A shared class once made Live now's head 146px tall in the catalog.
+    // Discover every catalog sheet so new specimens keep the room's styling
+    // in its owner, even when their own names would otherwise collide.
     const classes = (css: string): Set<string> =>
       new Set([...css.matchAll(/\.(ah-[A-Za-z0-9_-]+)/gu)].map((match) => match[1] ?? ""));
     // The published room ships its sheets under dist/ (RD-5a; the sibling link read src/).
@@ -256,14 +255,18 @@ describe("History by project — the catalog's plate (PJ-4)", () => {
         .filter((name) => name.endsWith(".css"))
         .flatMap((name) => [...classes(readFileSync(join(roomStyles, name), "utf8"))]),
     );
-    const sheet = readFileSync(
-      join(HERE, "..", "src", "design-system", "styles", "fieldmarks.css"),
-      "utf8",
-    );
-    const bare = sheet
-      .replace(/\/\*[\s\S]*?\*\//gu, "")
-      .replace(/:where\(\.ah\) \.ah-[A-Za-z0-9_-]+/gu, "");
-    expect([...classes(bare)].filter((name) => room.has(name))).toEqual([]);
+    const catalogRoot = join(HERE, "..", "src", "design-system");
+    const sheets = readdirSync(catalogRoot, { recursive: true })
+      .map(String)
+      .filter((name) => name.endsWith(".css"));
+    expect(sheets.length).toBeGreaterThan(0);
+    for (const name of sheets) {
+      const sheet = readFileSync(join(catalogRoot, name), "utf8").replace(/\/\*[\s\S]*?\*\//gu, "");
+      expect(
+        [...classes(sheet)].filter((name) => room.has(name)),
+        name,
+      ).toEqual([]);
+    }
     expect(room.has("ah-section")).toBe(true);
   });
 });
