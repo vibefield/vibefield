@@ -76,10 +76,12 @@
 - Landed 10-30: **FG-0** (records only: DESIGN.md first), **FG-1** (`88457494e`, the field: the website's splash
   vendored with its door, the boot's ground) and **FG-2** (`07618ca61`, the returning tear; every boot handed over
   before it is interactive), as the merge `ffe9d9b40`, run 7 on the Mac mini: verify green, smoke:canvas:no-webgpu
-  green, and smoke:canvas red only on item 117's class (LANDED "FG-1", "FG-2").
-- Next: **FG-3** (the glass, the steps, the frame: 3a the glass's DOM, applied over `ffe9d9b40`; then 3b, the field
-  drawing the glass, FG-D24) → FG-4 (the panes in the frame, and the logo) → FG-5 (the hand-over) → FG-6 (the gates:
-  the catalog, a `smoke:first-run` row, contrast). Each verifies on the Mac mini.
+  green, and smoke:canvas red only on item 117's class; **FG-3a** (`e012d1f50`, the glass's DOM: 880 × 640 with the
+  fit, its layers, the steps' band, the frame), as the mint `5cc2d1108`, run 13 on the Mac mini: verify green, and
+  `smoke:canvas` (on run 12's mint) red only on items 117 and 119 and a hand at the mini (LANDED "FG-1", "FG-2",
+  "FG-3a").
+- Next: **FG-3b** (the field drawing the glass, FG-D24) → FG-4 (the panes in the frame, and the logo) → FG-5 (the
+  hand-over) → FG-6 (the gates: the catalog, a `smoke:first-run` row, contrast). Each verifies on the Mac mini.
 - Owed: FG-O7 (§9) at FG-4.
 
 **AL — what Quit means** · better-quit (lanes `al2`, `al/chords`, `al/chords-2`) · law `draft/thinking-app-lifecycle.md` v0.2 §8, ESR §7.3 (amended), design-00 EL1
@@ -345,6 +347,8 @@
   stack): Animate effects only where it means something; licences visible.
 - Godview round 3 on a real window: the lights' move, a real fling, launch's first call, ⌘W on the last pane (re-read
   after AL-9), other heights. Fold into QA wave 1 if the plan covers it.
+- The Setup Assistant's glass on the field (FG-3a): the forming, the fit in a small window, the steps' band; the
+  sheet's scrim close by hand (FG-D27).
 
 **Releases, edits and chores**
 - Releases: puppeteer 0.3.0 PUBLISHED 10-28 08:19Z and pinned (`1469639a6`, with QW1 stack B) · a later puppeteer
@@ -506,7 +510,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 |---|---|---|---|
 | TS — the Tailscale door | ACTIVE; TS-0…3b, 4a, 4b, 5, 6, 7, 8a, 8b landed | `thinking-tailscale-onboarding.md`; DESIGN.md §5/§6/§8/§9/§13 | TS-8c (T8, after its live probe) |
 | AO — Bring Your Agents | ACTIVE; AO-0…6b3 landed | `thinking-agent-onboarding.md` | AO-7 on a puppeteer release after 0.3.0 (`installRecipe`) |
-| FG — the first run on the field | ACTIVE; FG-0…2 landed 10-30 | `thinking-first-run-glass.md`; DESIGN.md §2.1/§5/§6/§8/§13 | FG-3 (3a, then 3b) |
+| FG — the first run on the field | ACTIVE; FG-0…3a landed 10-30 | `thinking-first-run-glass.md`; DESIGN.md §2.1/§5/§6/§8/§13 | FG-3b |
 | AL — app lifecycle | ACTIVE; AL-1…3, 5, 7, 8a, 9 landed | `thinking-app-lifecycle.md`; ESR §7.3 | AL-6, Last exit, relaunch cap |
 | AU — Updates That Wait | ACTIVE; B1–B3 (AU-0…AU-5, AU-7) landed 10-30 | `thinking-update-ux.md` §7 (page sources `draft/update-ux/`); DESIGN.md §2.5/§2.8/§6/§8/§9/§13; EDP §5.2/§6.4/§11; ESR §7.3 | B4 (AU-6a, AU-6b), after HN B1 |
 | QW1 — Godview swarm QA, fix wave 1 | ACTIVE; stacks A and B landed 10-28, B on puppeteer 0.3.0's EL8 pin | `godview-swarm-qa-plan.md`; `thinking-ar-reattach.md` | QA wave 1 |

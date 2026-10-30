@@ -20432,3 +20432,103 @@ desk-gates row 30's quit run.
   answers"; during the stop's re-ask box, "Quit and end N sessions" finishes the stop already under way.
 - LC-52 ("Check for Updates…" keeps its ellipsis) is James's.
 - B4 (AU-6a `4c25147bf`, AU-6b `2b1cfff6f`, their pre-rebase shas of 2026-10-29) waits for HN B1 and is rebased over it.
+
+## FG-3a — the Setup Assistant stands in one glass on the field: 880 × 640, fitted as one picture, its material in layers, its steps along its top from TS-6's order alone (FG-L2, FG-L3, FG-D3 A, FG-D22 A, FG-D23 A, FG-D26, FG-D27) (2026-10-30; `e012d1f50`, lane `fg/build`, in the mini's mint `5cc2d1108` over main `12a9a4e4b`)
+
+**What.** FG-3 split at VF-PM's word (13:17Z): 3a is the glass's DOM; 3b, the field drawing it (FG-D24), follows.
+- **The glass** (`boot/onboarding/wizard-ui.tsx` + `.css`) is 880 × 640 on every step.
+  - It is centred on its ground and scaled as one picture by `glassFit` = min(1, (w − 96)/880, (h − 96)/640), never
+    reflowed.
+  - Its material is four layers under its contents: shadow, frost, grain and edge.
+  - On the field it wears `--vf-wizard-edge`, `--vf-wizard-edge-light`, `--vf-shadow-wizard-field` and the grain.
+    The tokens are in `tokens.css`, from DESIGN.md §5.
+  - It forms where the splash stood: `--vf-glass-frost` 0 → 1 and `--vf-glass-rise` .985 → 1, 560ms island,
+    registered with `@property`. Under reduced motion it is the frost alone, 280ms.
+  - Nothing that holds the frost sets opacity, filter or mask (a backdrop root), and a test row holds that.
+- **The steps** (FG-D22 A, FG-D23 A) have ONE source, TS-6's `order.ts`.
+  - `STEP_OF` maps each pane to its step or none, total by `satisfies Record<Pane, …>`.
+  - `stepsOf(variant)` walks `nextPane`, and `topOf(variant)` is the one "top".
+  - The band: You · Agents · Profiles · History · Devices · Setting up, done/now/next, `aria-current="step"`. It is
+    absent on the welcomes and the chooser, fades in with You (240ms), and fills as you arrive (480ms island).
+- **The frame** (FG-L3) is 96/160/40, 560 wide. A pane centres in it, scrolling downward only, until FG-4 lays its
+  head, body and foot.
+- **Finish setting up's sheet is unchanged** (FG-D26, VF-PM's lean): one size prop on the shell, `glass` | `sheet`.
+  The sheet's is today's exact geometry, never fitted, with no band.
+- **Moved to FG-4** (VF-PM 13:45Z): the logo and the words' fade at the forming; Setting up's progress fill; the
+  panes in the frame, including the fade in place of the rise; the eyebrows' retirement; "never scrolling".
+
+**Found.**
+- **The sheet's scrim close was never reachable** (FG-D27). It was found on AO's surface and fixed at the cause by
+  the ground's `pointer-events`.
+  - The close (`SetupSheet.tsx`, on a press of the sheet itself) was designed but no hand could reach it: the shell's
+    full-size wrapper took every press beside the glass.
+  - The glass's ground now takes no press (`pointer-events: none`; the fit inherits it) and only the glass does.
+  - Witness: `setup-sheet.test.tsx`'s rule row (its DOM does no hit-testing); the physical press is the hand's.
+- **The sheet's 200ms opacity fade-in sits above the frost** (FG-D28). For those frames the frost samples nothing
+  behind the sheet. Noted for AO and left unchanged.
+- **Main moved twice under the apply**, each time on VF-PM's word, and the light ran over each base.
+  - PRs #8 and #5 (`78ed1d946`) touch no file of FG's. `fg/build` fast-forwarded with the apply carried, and the light
+    was green. FG-3a was committed there as `e56aea503`, now parked on `fg/3a-over-78ed1d946`.
+  - AU B2 (`0ce140178`) touches `scenes.css`. `fg/build` was reset to main and the drafts were re-applied three ways.
+    Ten files came out byte-equal to `e56aea503`, and `scenes.css` takes FG's same −5 over AU B2's version.
+  - `lanes/fg/fg3ab-rehearsal.sh` was clean over each base.
+  - Before the light could read main's packages, the lane's were brought to the lock, offline (rosetta 0.1.2, then
+    puppeteer 0.3.2).
+
+**Validation.**
+- The landing light (`lanes/fg/fg3a-light.sh`, each row alone at nice 19 under the guard, read once) was GREEN over main
+  `0ce140178`, 20:50:33–21:01:35Z, all 29 rows rc 0:
+  - typecheck for field-app (44 s) and electron-shell (37 s);
+  - 23 vitest files, 453 tests: the new `wizard-steps.test.ts` (4), `onboarding-wizard` 48, `setup-sheet` 5, and the
+    four tokens.css readers the rehearsal's 19 lacked (`peers-on-the-mat`, `document-presence`, `godview-monitor`,
+    `godview-stage-rule`). AU B2's rows ran among them: `settings-dialog-account` 14, `ui-system-boundaries` 35;
+  - biome (23 files), check:walls, check:retired, build:renderer (the production UI boundary OK, 78 files),
+    diff --check.
+  - Over `ffe9d9b40` (20:34:08–20:37:30Z) and `78ed1d946` (20:38:48–20:47:48Z) the same rows were green, with 449
+    tests each.
+  Logs: `lanes/fg/logs/fg3a-light-0ce140178.out`; the earlier bases' runs are in `fg3a-light-ffe9d9b40/` and
+  `fg3a-light-78ed1d946/`.
+- **No verify on this Mac** (James, 2026-10-29 09:05Z: the Mac mini's verify lane). FG-3a went to the mini as the
+  bundle `fg3a-e012d1f50.bundle` (sha256 `de03f621…`, requiring `6a41ba1d8` only). At each turn, a9 minted
+  `e012d1f50` × the then-main there (mint-main), as PORTALS was minted.
+- **Run 12: the mint `1669134bf` over main `097edb32c`.** DESIGN.md was the one file both sides touch, and it merged
+  clean. a9's `next` ran from 21:27:01Z: no re-install (the locks stand), field-native built, and preflight exited 0
+  with R23's one known warning.
+  - `pnpm verify` armed at 21:27:11Z (load 1.48) and exited 1 at 21:29:59Z (load 36). It was red on ONE row, fieldd's
+    `agent-session` MF-1f/MF-1g: "the interrupted run read as exited did not hold within 15000 ms". fieldd's other
+    2,620 tests passed. FG-3a touches no fieldd file.
+  - The row's evidence reads as cause A of item 87's three: the floor's row says exited:false, and its `/bin/cat` is
+    still alive at 15 s. Item 87 landed C3, so its fix cannot touch this shape. It is filed as item 118, the fixer's
+    (VF-PM, 21:34Z; `lanes/records/item118/item.md`).
+  - Run 12b, a full verify on the same tree, was green. It armed at 23:12:18Z (load 1.19) and exited 0 at 23:16:42Z:
+    28 projects; vitest 10,306 (10,288 passed, 0 failed, 18 skipped); rust 499 / 0 / 14 over 31 binaries; gen and the
+    tree clean.
+- **`smoke:canvas` on run 12's mint** (21:32:48–21:49:06Z, exit 2) was red on four judges, none of them FG-3a's. The
+  control on main alone (ctl119, `bef070265`, 23:17:36–23:33:35Z) decided them (VF-PM, 23:38Z):
+  - HAND is item 117's class: the notebook 267, the whiteboard 250 and the calendar 250 ms, against 200 ± 40. The
+    control repeats it (the whiteboard and the calendar, 250 ms).
+  - KEYS ("→ moved the focus to vibefield.simulator, not the next specimen desk.note") and IDLE (the desk submitted
+    3 times for a still page in hand) are item 119, main's. The control repeats both. KEYS is field-app's row key
+    under PT-S1's shelf hang, and IDLE is ICE's held-pane blur, the 10-26 class.
+  - REST ACT ("with the wind the desk never rested after the act") was a hand at the mini during the row.
+  - The control was also red on PEERS CONTRAST ("no chip to measure by night"), which run 12's row was not.
+  - The desk's boot compiled its pipelines in 578 ms on run 12's row and in 140 ms on the control after it (presented
+    at 605 and 166 ms, 3 frames each). The retry's remount compiled in 62 and 67 ms. FG-3a touches no pipeline.
+    VF-PM reads the 578 as the cache compiling across the two rows, and FG owes nothing.
+- **Run 13: the mint `5cc2d1108` over main `12a9a4e4b`** (PR #3's rulers and AU's records). DESIGN.md was again the
+  one file both sides touch; it merged clean, with no markers. Run 13 is verify only: FG-3a's smoke evidence is run
+  12's row (VF-PM, 23:38Z). `pnpm verify` armed at 23:35:06Z (load 1.52) and exited 0 at 23:39:35Z (load 7.70):
+  28 projects; vitest 10,306 (10,288 passed, 0 failed, 18 skipped); rust 499 / 0 / 14 over 31 binaries; gen and the
+  tree clean. Logs: `lanes/ts6/logs/mini/` `run12/`, `run12b/`, `ctl119/` and `run13/`.
+- No smoke reaches the Setup Assistant until FG-6's `smoke:first-run`. The glass by eye is James's, and so is the
+  sheet's scrim close by hand (§5's Eyeballs).
+- **Landed:** main fast-forwarded `12a9a4e4b` → `5cc2d1108` at 23:41:18Z, and was pushed at 23:41:41Z.
+- The 13:50Z rehearsal (a dangling commit over the merge-tree base, in a fresh detached worktree removed after) was an
+  early read only.
+
+**Owed.**
+- FG-3b: the field draws the glass (FG-D24). The vendor patches go in the vendor check, and the look posted to the
+  worker is the CSS layers' computed style.
+- FG-4 (the panes in the frame and the logo), FG-5 (the hand-over), FG-6 (the gates; the catalog over the field's
+  still).
+- AO: rule D26 (the sheet's size) and D28 (its fade above the frost).
