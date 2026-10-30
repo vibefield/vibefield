@@ -922,6 +922,16 @@ describe("Copy — four doors deal ONE card (HN-D3)", () => {
     await vi.waitFor(() => expect(lastCopy()?.kept).not.toBeNull(), { timeout: 2_000 });
   };
 
+  /** The card is dealt once the clipboard took the words — a copy the clipboard refuses deals nothing (HN-5, DESIGN.md
+   * §8 "Copy") — so a press is followed by the clipboard's turn before the hand holds ONE card. */
+  const dealt = async (): Promise<void> => {
+    await act(async () => {
+      await vi.waitFor(() => expect(cardsStore.snapshot().cards).toHaveLength(1), {
+        timeout: 2_000,
+      });
+    });
+  };
+
   it("the BAR's pill — Copy, clipboard 16, its key said — deals the selection as ONE card, and the bar stays", async () => {
     mount();
     const pill = cell("copy");
@@ -929,8 +939,8 @@ describe("Copy — four doors deal ONE card (HN-D3)", () => {
     expect(pill.getAttribute("title")).toBe("Copy  ⌘C");
     expect(pill.querySelector("[data-glyph]")?.getAttribute("data-glyph")).toBe("clipboard");
     act(() => pill.click());
+    await dealt();
     const cards = cardsStore.snapshot().cards;
-    expect(cards).toHaveLength(1);
     expect(cards[0]).toMatchObject({
       kind: "text",
       title: "Ship the desk by Friday.",
@@ -953,7 +963,7 @@ describe("Copy — four doors deal ONE card (HN-D3)", () => {
     act(() => row?.click());
     expect(surfaceNow).toBeNull();
     expect(lastCopy()?.from).toBe("menu");
-    expect(cardsStore.snapshot().cards).toHaveLength(1);
+    await dealt();
     await settled();
   });
 
@@ -973,7 +983,7 @@ describe("Copy — four doors deal ONE card (HN-D3)", () => {
     };
     expect(chord(document.body).defaultPrevented).toBe(true);
     expect(lastCopy()?.from).toBe("key");
-    expect(cardsStore.snapshot().cards).toHaveLength(1);
+    await dealt();
     expect(keymapHeard).not.toContain("c");
     await settled();
     const seq = lastCopy()?.seq;
