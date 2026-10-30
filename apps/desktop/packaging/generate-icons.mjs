@@ -87,6 +87,14 @@ const TRAY_STATES = [
     windows: "field-attention.ico",
     linux: "field-linux-attention.png",
   },
+  // AU-4 (AU-D12, AU-G14): an install waits on the person — the mark with one plain dot, no bang
+  {
+    kind: "update",
+    mac1x: "fieldUpdateTemplate.png",
+    mac2x: "fieldUpdateTemplate@2x.png",
+    windows: "field-update.ico",
+    linux: "field-linux-update.png",
+  },
   {
     kind: "offline",
     mac1x: "fieldOfflineTemplate.png",
@@ -142,7 +150,7 @@ await validateGeneratedTree({
   sourceFiles: new Set([...STATIC_SOURCE_FILES, ...appleIconSource.sourceFiles]),
 });
 console.log(
-  `icons ${checkOnly ? "current" : "generated"}: ${generated.outputs.size} files, app ${APP_RENDER_SIZES.length} conventional raster sizes, macOS light + dark renditions and the official ICNS fallback, iOS light/dark/tinted, tray 3 states`,
+  `icons ${checkOnly ? "current" : "generated"}: ${generated.outputs.size} files, app ${APP_RENDER_SIZES.length} conventional raster sizes, macOS light + dark renditions and the official ICNS fallback, iOS light/dark/tinted, tray ${TRAY_STATES.length} states`,
 );
 
 function generateAssets({
@@ -495,8 +503,11 @@ function traySvg(path, state, style) {
   const base = template
     ? `<path d="${path}" fill="#000000" stroke="#000000" stroke-width="24" stroke-linejoin="round"/>`
     : `<path d="${path}" fill="#ffffff" stroke="#ffffff" stroke-width="64" stroke-linejoin="round"/><path d="${path}" fill="#202124" stroke="#202124" stroke-width="24" stroke-linejoin="round"/>`;
+  // The attention and offline badges are a disk merged into the band, their glyph cut out of it. The update's is a
+  // plain dot (AU-4, AU-D12): merged, it would read as a bump on the mark, so it stands apart instead — a ring is cut
+  // from the mark alone around the badge's centre, and the dot is drawn whole inside it, after the mask.
   const badge =
-    state === "base"
+    state === "base" || state === "update"
       ? ""
       : template
         ? '<circle cx="374" cy="318" r="66" fill="#000000" stroke="#000000" stroke-width="24"/>'
@@ -506,13 +517,21 @@ function traySvg(path, state, style) {
       ? '<rect x="365" y="275" width="18" height="51" rx="9" fill="black"/><circle cx="374" cy="346" r="11" fill="black"/>'
       : state === "offline"
         ? '<rect x="341" y="309" width="66" height="18" rx="9" fill="black"/>'
-        : "";
+        : state === "update"
+          ? '<circle cx="374" cy="318" r="96" fill="black"/>'
+          : "";
+  const dot =
+    state !== "update"
+      ? ""
+      : template
+        ? '<circle cx="374" cy="318" r="58" fill="#000000"/>'
+        : '<circle cx="374" cy="318" r="78" fill="#ffffff"/><circle cx="374" cy="318" r="58" fill="#202124"/>';
   const mask =
     state === "base"
       ? ""
       : `<mask id="status-cutout" maskUnits="userSpaceOnUse" x="0" y="0" width="480" height="480"><rect width="480" height="480" fill="white"/>${cutout}</mask>`;
   const maskAttribute = state === "base" ? "" : ' mask="url(#status-cutout)"';
-  return `<svg width="480" height="480" viewBox="0 0 480 480" xmlns="http://www.w3.org/2000/svg"><defs>${mask}</defs><g${maskAttribute}>${base}${badge}</g></svg>`;
+  return `<svg width="480" height="480" viewBox="0 0 480 480" xmlns="http://www.w3.org/2000/svg"><defs>${mask}</defs><g${maskAttribute}>${base}${badge}</g>${dot}</svg>`;
 }
 
 function encodeIco(images) {

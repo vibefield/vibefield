@@ -155,6 +155,13 @@ export function quitNotice(reason: "squirrel-timeout" | "install-failed"): BoxCo
   };
 }
 
+/** AU-5 (AU-D9 A; LC-36) — the quit box's last line when a person's quit will hand `version` to Squirrel as VibeField
+ * quits: one declarative sentence, its friendly name first ("The Oct 28 nightly installs as you quit." · "VibeField
+ * 0.2.0 installs as you quit."). Said only when main will try (`UpdateController.quitInstallLine`). */
+export function quitInstallWords(version: string): string {
+  return `${releaseName(version, { start: true })} installs as you quit.`;
+}
+
 /** A lever of the signed policy (B1) that refused one version, as the words name it. */
 export type LeverWhy =
   | { readonly kind: "killed"; readonly channel: string }
@@ -222,6 +229,20 @@ export function censusNotice(): BoxContent {
     message: "VibeField didn't install the update",
     detail:
       "VibeField couldn't read which terminal sessions are running, so it ended none. Nothing changed; try again in a moment.",
+    buttons: ["OK"],
+    defaultId: 0,
+    cancelId: 0,
+  };
+}
+
+/** AU-7 (AU-G8; LC-10) — macOS won't let a bundle that runs read-only (App Translocation, a mounted disk image, an
+ * unwritable folder) replace itself: said before anything stops, by the Restart that would lead nowhere and by a
+ * person's Download alike, so the one sentence names the way out. */
+export function locationNotice(): BoxContent {
+  return {
+    message: "VibeField can't update itself from here",
+    detail:
+      "macOS won't let VibeField replace itself where it runs now. Move it to Applications and it updates as usual.",
     buttons: ["OK"],
     defaultId: 0,
     cancelId: 0,

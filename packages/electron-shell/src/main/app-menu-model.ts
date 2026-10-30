@@ -13,6 +13,7 @@
 // without us restating them.
 
 import type { FrameView, FrameZoomAct, GodviewDeckState } from "@vibefield/contracts";
+import type { UpdateMenuEntry } from "./tray-model";
 
 export type MenuPlatform = "darwin" | "other";
 
@@ -53,6 +54,11 @@ export interface AppMenuActions {
    * answers it on Canvas. Undefined in modes with no window: the three items
    * stay, disabled, the same honest face. */
   zoom?: (act: FrameZoomAct) => void;
+  /** AU-4 (AU-G9) — Settings…: REVEAL Settings in the primary window, through
+   * the same door the status item's Settings… uses (it never toggles; the
+   * page's ⌘, does). Undefined in modes with no window: the item stays,
+   * disabled, its key still said. */
+  openSettings?: () => void;
 }
 
 export interface AppMenuState {
@@ -64,6 +70,11 @@ export interface AppMenuState {
    * said" — a page that has no deck to speak of, and every page before the
    * deck's state slices. */
   deck?: GodviewDeckState | null;
+  /** AU-4 (AU-G9; AU-L4) — the update item, as the status item says it
+   * (`updateMenuEntry`): the view, the deck and the update are three owners
+   * of this state, each redrawing its own part. Absent is a build with no
+   * updater: Check for Updates…, disabled. */
+  update?: UpdateMenuEntry;
 }
 
 /** THE ROAD TO THE VIEW KEYS (FC-D4, ruled 2026-10-01), so nobody re-walks it.
@@ -267,9 +278,64 @@ function closeWindowItem(state: AppMenuState, actions: AppMenuActions): AppMenuI
   };
 }
 
+export const SETTINGS_ITEM_ID = "app-settings";
+export const UPDATE_ITEM_ID = "app-update";
+
+/** THE APP MENU, spelled out (AU-4; AU-D12 A, AU-G9). Until AU-4 it was the
+ * `appMenu` role, which carries no Settings… and no Check for Updates…. It is
+ * the role's own items in the HIG's order, with the two this shell owns after
+ * About: About · Settings… ⌘, · the update item · Services · Hide, Hide Others,
+ * Show All · Quit. The label is the product's; macOS shows the bundle's name
+ * there regardless.
+ *
+ * ⌘, KEEPS ONE OWNER, the page (LC-28). On darwin a shown key equivalent is a
+ * registered one (`registerAccelerator` holds only off the Mac), so the item
+ * says ⌘, the way the View menu says ⌘1–⌘4 (VIEW_KEYS_ROAD): the page answers
+ * the chord first in its capture phase (GT-D21) and toggles Settings, and a
+ * chord the page claims never reaches the menu — a held chord's repeats
+ * included, which the page claims and ignores (`useSettingsChord`), or the
+ * menu would reopen what the first press closed. The menu hears it only where
+ * no page claims it (no window, a document still loading), and its click
+ * REVEALS Settings — never a toggle — so nothing can fire twice into a close.
+ *
+ * The update item is the status item's (`updateMenuEntry`, AU-L4): its label
+ * live, Check for Updates… at rest, disabled in a build with no updater. */
+function appMenuSection(state: AppMenuState, actions: AppMenuActions): AppMenuItem {
+  const openSettings = actions.openSettings;
+  const update = state.update;
+  return {
+    label: "VibeField",
+    submenu: [
+      { role: "about" },
+      { type: "separator" },
+      {
+        id: SETTINGS_ITEM_ID,
+        label: "Settings…",
+        accelerator: "CommandOrControl+,",
+        enabled: openSettings !== undefined,
+        ...(openSettings !== undefined ? { click: openSettings } : {}),
+      },
+      {
+        id: UPDATE_ITEM_ID,
+        label: update?.label ?? "Check for Updates…",
+        enabled: update?.enabled ?? false,
+        ...(update?.click !== undefined ? { click: update.click } : {}),
+      },
+      { type: "separator" },
+      { role: "services" },
+      { type: "separator" },
+      { role: "hide" },
+      { role: "hideOthers" },
+      { role: "unhide" },
+      { type: "separator" },
+      { role: "quit" },
+    ],
+  };
+}
+
 /** The whole template. Roles carry every standard section; the items this
- * shell owns are the four views, Take Screenshot, the zoom's three and the
- * conditional close. */
+ * shell owns are the app menu's Settings… and update item (darwin), the four
+ * views, Take Screenshot, the zoom's three and the conditional close. */
 export function buildAppMenu(
   platform: MenuPlatform,
   state: AppMenuState,
@@ -279,7 +345,8 @@ export function buildAppMenu(
   // IS `close` on darwin and `quit` elsewhere — taking it would plant a second
   // Close Window holding an unconditional ⌘W beside the conditional one, and
   // the deck would lose the gesture to whichever fired first.
-  const appSection: readonly AppMenuItem[] = platform === "darwin" ? [{ role: "appMenu" }] : [];
+  const appSection: readonly AppMenuItem[] =
+    platform === "darwin" ? [appMenuSection(state, actions)] : [];
   const fileSubmenu: readonly AppMenuItem[] =
     platform === "darwin" ? [closeWindowItem(state, actions)] : [{ role: "quit" }];
   return [

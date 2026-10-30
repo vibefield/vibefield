@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   isolateSmokeProfile,
@@ -123,6 +123,22 @@ describe("the smoke launcher (apps/desktop/packaging/run-smoke.mjs)", () => {
   // when one resolves (`@vitest/runner` 3.2.7, chunk-hooks.js:1880–1886).
   // 15 s is more than 1.6 times the worst any of them took here, with the census as it was.
   const LAUNCHER_ROW_BUDGET_MS = 15_000;
+
+  it("DK-18 (39): asks `ps` in the platform's own spelling — macOS's BSD flags as ever, procps's on Linux", async () => {
+    // procps refuses `-axww` ("must set personality to get -x option") and has no `-E`; macOS reads a bare `e` as every
+    // process, never the environment — so neither spelling serves both (the affected job, ubuntu-latest, 2026-10-29).
+    // The census's three reads (item 93): the whole table with the environment once, then one pid at a time
+    type Spelling = { table: string[]; one: string[]; oneWithEnv: string[] };
+    const { psTables } = (await import(
+      pathToFileURL(join(desktopRoot, "packaging", "smoke-daemons.mjs")).href
+    )) as { psTables: (platform: string) => Spelling };
+    expect(psTables("darwin")).toEqual({
+      table: ["-axww", "-E"],
+      one: ["-ww"],
+      oneWithEnv: ["-ww", "-E"],
+    });
+    expect(psTables("linux")).toEqual({ table: ["axwwe"], one: ["-ww"], oneWithEnv: ["wwe"] });
+  });
 
   it.skipIf(process.platform === "win32")(
     "DK-18 (39): marks the run, and a daemon the smoke LEFT is found by the mark, reaped, and makes the run red",

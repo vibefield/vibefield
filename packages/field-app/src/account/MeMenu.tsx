@@ -1,7 +1,12 @@
-import type { ThemeName, ThemePreference } from "@vibefield/contracts";
+import type {
+  ThemeName,
+  ThemePreference,
+  UpdateConsentWords,
+  UpdateView,
+} from "@vibefield/contracts";
 import { faceLiftHostClass, UserFaceView } from "@vibefield/design-kit/face";
 import { FieldGlyph } from "@vibefield/design-kit/glyphs";
-import { SegmentedControl } from "@vibefield/design-kit/primitives";
+import { SegmentedControl, UiButton } from "@vibefield/design-kit/primitives";
 import {
   type CSSProperties,
   Fragment,
@@ -9,6 +14,7 @@ import {
   type ReactElement,
   useCallback,
   useEffect,
+  useId,
   useLayoutEffect,
   useRef,
   useState,
@@ -16,6 +22,18 @@ import {
 import { leaveFor } from "../boot/switch";
 import { roundButtonCls } from "../field/theme-constants";
 import { getHost } from "../host";
+import { errorText, NO_FLOW, type UpdatesFlow, useUpdateRestart } from "../panels/update-flow";
+import {
+  downloadRefusalFallback,
+  type MeUpdateAct,
+  type MeUpdateLocal,
+  type MeUpdateRow,
+  meUpdateRow,
+  notAppliedNotice,
+  readyClause,
+  refusalLine,
+  updateWaits,
+} from "../panels/update-words";
 import { setAppTheme, THEME_LABELS, themeChoice, themeLabel, useAppTheme } from "../theme";
 import { CONNECT_ROW_LABEL } from "./link";
 import {
@@ -35,8 +53,14 @@ import "./MeMenu.css";
 // FR-4 the menu opens ABOVE the line, never around the face (FC-D14 — a menu
 // never covers the frame): one panel, grown upward on the island's curve from
 // a seed at its own foot, above the face (M1). It reads bottom-up, nearest
-// first: you · Settings… · Theme (the app's one theme control, FC-D5) · Link…
-// (unlinked only) · New user… · then the other users.
+// first: you · the update row (AU-2) · Settings… · Theme (the app's one theme
+// control, FC-D5) · Link… (unlinked only) · New user… · then the other users.
+//
+// AU-2 (AU-D1…D7, D11, D14; DESIGN.md §8 "The Me menu") — the menu always
+// carries one row about the app itself, nearest the face: it checks, downloads
+// and restarts IN PLACE, a restart that ends sessions grows the panel into
+// main's own question, and while an install waits on you the face wears a cyan
+// dot beside it (never on it, I-5) that pops in once and never pulses.
 //
 // Split like every runtime-bound view (UI_SYSTEM.md): `MeMenuView` owns the
 // DOM, motion, keyboard and focus and takes plain data; `MeMenu` is the
@@ -47,6 +71,24 @@ import "./MeMenu.css";
 export interface MeMenuTheme {
   readonly preference: ThemePreference;
   readonly resolved: ThemeName;
+}
+
+/** AU-2 — the update as the menu draws it: plain data, so the catalog builds it
+ * with the shipping words (`meUpdateRow`). */
+export interface MeMenuUpdate {
+  readonly row: MeUpdateRow;
+  /** an install waits on you (`updateWaits`): the dot beside the face
+   * (AU-D1, AU-D2) — a waiting count outranks it in the badge's one slot */
+  readonly mark: boolean;
+  /** the face's title clause while it wears the dot: "the Oct 28 nightly is ready" */
+  readonly markTitle?: string;
+  /** the install that didn't take, said once (shown only while no refusal is) */
+  readonly notice?: string | null;
+  /** AU-D6 — the question, in main's words, while it stands; `busy` while the
+   * confirm is in flight */
+  readonly ask?: { readonly words: UpdateConsentWords; readonly busy: boolean } | null;
+  /** said to assistive tech when an in-place check answers */
+  readonly announce?: string | null;
 }
 
 export interface MeMenuViewProps {
@@ -77,10 +119,23 @@ export interface MeMenuViewProps {
   /** A switch, a new user or a link main or the daemon refused, in its words:
    * said at the top of the menu (and to assistive tech) until it next folds. */
   notice?: string | null;
+  /** AU-2 (AU-D4 B) — the update's row, the face's dot and the in-menu
+   * question. Absent: no row (the window doesn't know the desktop's state yet). */
+  update?: MeMenuUpdate | undefined;
+  /** A row act: `open` arrives after the menu folds (Settings → Updates); the
+   * rest keep it open — the check, the restart and the download happen in place. */
+  onUpdate?: ((act: Exclude<MeUpdateAct, "none">) => void) | undefined;
+  /** The question's act, on the snapshot it shows. */
+  onUpdateConfirm?: (() => void) | undefined;
+  /** The question's Cancel (or Esc): back to the rows. */
+  onUpdateCancel?: (() => void) | undefined;
   className?: string;
 }
 
 const MENU_WIDTH = 256;
+/** AU-D6 — the panel grows to this on the island curve for the update's
+ * question (§6), and back on Cancel or Esc. */
+const ASK_WIDTH = 320;
 /** The seed: the face's 44px plus the 6px it sits inside on every side — the
  * size the panel grows from, at its own foot. */
 const SEED = 56;
@@ -92,6 +147,36 @@ function MenuIcon({ name }: { name: "gear" | "person" | "link" | "sun" | "moon" 
 /** One row's reveal delay: nearest first, 160ms + 26ms per row, capped at
  * 400ms (§6's stagger constants). `fromNearest` counts up from the bottom. */
 const revealDelay = (fromNearest: number): number => 160 + Math.min(fromNearest * 26, 400);
+
+/** The question's lines, and the rows coming back from it, rise nearest-first
+ * once the face they replace has faded, at the rows' 26ms stagger and its cap
+ * (DESIGN.md §6, AU-D6). */
+const riseDelay = (fromNearest: number): number => Math.min(fromNearest * 26, 400);
+
+/** AU-D6 (§6) — the beat the face going out takes: the rows fade over it
+ * before the question is drawn, and the question before the rows come back. */
+const SWAP_MS = 120;
+
+/** The question as the menu draws it. */
+type MeMenuAsk = NonNullable<MeMenuUpdate["ask"]>;
+
+const AT_REST: MeUpdateLocal = { kind: "rest" };
+/** A folded menu's question stays drawn while the panel folds, then goes. */
+const FOLD_MS = 700;
+
+/** The row's flow: main's restart phases outrank the row's own click. */
+function rowLocalOf(flow: UpdatesFlow, local: MeUpdateLocal): MeUpdateLocal {
+  switch (flow.kind) {
+    case "preparing":
+      return { kind: "preparing" };
+    case "confirming":
+      return { kind: "confirming" };
+    case "restarting":
+      return { kind: "restarting" };
+    default:
+      return local;
+  }
+}
 
 export function MeMenuView({
   me,
@@ -108,11 +193,18 @@ export function MeMenuView({
   busy = false,
   shortcut = "⌘,",
   notice = null,
+  update,
+  onUpdate,
+  onUpdateConfirm,
+  onUpdateCancel,
   className = "",
 }: MeMenuViewProps): ReactElement {
   const rootRef = useRef<HTMLDivElement>(null);
   const faceRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  const questionId = useId();
+  const leadId = useId();
   const [panelHeight, setPanelHeight] = useState(SEED);
   /** Opened from the keyboard: land focus on the nearest item once it shows. */
   const focusOnOpen = useRef(false);
@@ -120,6 +212,83 @@ export function MeMenuView({
   const tabbingOut = useRef(false);
   const wasOpen = useRef(open);
   const waiting = others.reduce((sum, person) => sum + person.waiting, 0);
+  // AU-D6 — the update's question replaces the rows while it stands
+  const ask = update?.ask ?? null;
+  const asking = ask !== null;
+  const askBusy = ask?.busy === true;
+
+  // AU-D6 (DESIGN.md §6) — what the list draws: the rows, or the question in
+  // the words it last stood in. Inside a menu that was already open, the face
+  // going out fades for one beat (`leaving`) before the other is drawn: the
+  // rows before the question's lines rise, the question before the rows rise
+  // back (`returning`) — Esc reverses it. A folded or just-opened menu swaps at
+  // once, so a question never lingers into an open. Adjusted while rendering
+  // (React's "information from previous renders"), so the commit that opens
+  // the menu already draws what it lands focus on.
+  const [drawn, setDrawn] = useState<MeMenuAsk | null>(ask);
+  const [leaving, setLeaving] = useState<"fading" | "done" | null>(null);
+  const [returning, setReturning] = useState(false);
+  const [openBefore, setOpenBefore] = useState(open);
+  if (openBefore !== open) setOpenBefore(open);
+  if (asking === (drawn !== null)) {
+    // the same face: the question keeps main's latest (a confirm going busy),
+    // and a beat toward the other face is called off (Esc while the rows fade)
+    if (ask !== null && (ask.words !== drawn?.words || ask.busy !== drawn?.busy)) setDrawn(ask);
+    if (leaving !== null) setLeaving(null);
+  } else if (open && openBefore) {
+    if (leaving === null) {
+      setLeaving("fading");
+      if (returning) setReturning(false);
+    } else if (leaving === "done") {
+      setDrawn(ask);
+      setLeaving(null);
+      setReturning(ask === null);
+    }
+  } else {
+    setDrawn(ask);
+    if (leaving !== null) setLeaving(null);
+  }
+  if (!open && returning) setReturning(false);
+  useEffect(() => {
+    if (leaving !== "fading") return;
+    const timer = setTimeout(() => setLeaving((now) => (now === "fading" ? "done" : now)), SWAP_MS);
+    return () => clearTimeout(timer);
+  }, [leaving]);
+  const drawnAsking = drawn !== null;
+
+  // AU-D1 (I-5) — one slot, one badge: a waiting count outranks the update's
+  // dot. The dot pops in once, only when the slot goes from empty to the dot
+  // after the first render that knows the update — the desktop's state can
+  // land after the account, and a dot already waiting then never pops;
+  // returning after a count clears, it comes back without a pop (and it never
+  // pulses, AU-L3).
+  const markShown = update?.mark === true && waiting === 0;
+  const badge = waiting > 0 ? "count" : markShown ? "dot" : null;
+  const known = update !== undefined;
+  const lastBadge = useRef<typeof badge | "unknown">(known ? badge : "unknown");
+  const [pop, setPop] = useState(false);
+  useLayoutEffect(() => {
+    if (!known) return;
+    if (badge === "dot" && lastBadge.current === null) setPop(true);
+    else if (badge !== "dot") setPop(false);
+    lastBadge.current = badge;
+  }, [badge, known]);
+
+  // The question takes focus on Cancel the moment it is drawn (nothing ends
+  // by accident); when it goes — Cancel, Esc, main's answer — focus comes back
+  // to the update row, never dropped (DESIGN.md §8 "The question"). Only in a
+  // menu that stayed open: a fold gives focus to the face, and an open lands
+  // where it always does, on Settings… (AU-D5).
+  const focusSeen = useRef({ asking: drawnAsking, open });
+  useLayoutEffect(() => {
+    const was = focusSeen.current;
+    focusSeen.current = { asking: drawnAsking, open };
+    if (was.asking === drawnAsking || !open || !was.open) return;
+    const target = drawnAsking
+      ? cancelRef.current
+      : rootRef.current?.querySelector<HTMLElement>("[data-me-update]");
+    target?.focus({ preventScroll: true });
+  }, [drawnAsking, open]);
 
   // The panel's open height is its content's, measured — the rows are real
   // DOM at rest (invisible, inert), so the grow always has a true target.
@@ -172,6 +341,12 @@ export function MeMenuView({
       if (event.key !== "Escape") return;
       event.preventDefault();
       event.stopImmediatePropagation();
+      // AU-D6 — Esc goes back from the question to the rows first (a confirm
+      // in flight holds it); the next Esc folds the menu
+      if (asking) {
+        if (!askBusy) onUpdateCancel?.();
+        return;
+      }
       onOpenChange(false);
       faceRef.current?.focus({ preventScroll: true });
     };
@@ -181,7 +356,7 @@ export function MeMenuView({
       window.removeEventListener("pointerdown", onPointerDown, true);
       window.removeEventListener("keydown", onEscape, true);
     };
-  }, [open, onOpenChange]);
+  }, [open, onOpenChange, asking, askBusy, onUpdateCancel]);
 
   // Folded from OUTSIDE while focus was on a row — ⌘, or another of the
   // frame's surfaces — the rows go inert, so focus comes back to the face
@@ -212,10 +387,32 @@ export function MeMenuView({
     // On Theme, ← → choose — the kit's segmented control's own keys since R19 (DK-13: it chooses, the focus with
     // the choice, as a radio's does, and claims the key), so a key it took is not the menu's to walk with.
     if (event.defaultPrevented) return;
+    // AU-D6 — a face on its way out takes no keys: focus waits where it is for
+    // the beat, and Tab never leaves an open menu mid-swap
+    if (leaving !== null) {
+      if (event.key === "Tab") event.preventDefault();
+      return;
+    }
     const active = document.activeElement as HTMLElement | null;
+    if (drawnAsking && event.key === "Tab") {
+      // AU-D6 — the question holds Tab: it walks Cancel ↔ the act, and the
+      // menu stays open
+      const acts = Array.from(
+        rootRef.current?.querySelectorAll<HTMLButtonElement>(".vf-me-ask-acts button") ?? [],
+      ).filter((button) => !button.disabled);
+      const first = acts[0];
+      const last = acts[acts.length - 1];
+      if (event.shiftKey ? active === first : active === last) {
+        event.preventDefault();
+        (event.shiftKey ? last : first)?.focus({ preventScroll: true });
+      }
+      return;
+    }
     const list = items();
     const index = list.indexOf(active as HTMLElement);
     const move = (to: number): void => {
+      // the question has no rows to walk
+      if (list.length === 0) return;
       event.preventDefault();
       list[(to + list.length) % list.length]?.focus({ preventScroll: true });
     };
@@ -244,7 +441,10 @@ export function MeMenuView({
   // bottom (nearest first), so they are assigned after the list is known.
   type Row = { key: string; node: (delay: number) => ReactElement };
   const rows: Row[] = [];
-  if (notice !== null) {
+  // One notice row at most: a refusal answers what you just did, so it
+  // outranks the install that didn't take (AU-D11).
+  const shownNotice = notice ?? update?.notice ?? null;
+  if (shownNotice !== null) {
     rows.push({
       key: "notice",
       node: (delay) => (
@@ -253,7 +453,7 @@ export function MeMenuView({
           role="presentation"
           style={{ "--vf-me-delay": `${delay}ms` } as CSSProperties}
         >
-          {notice}
+          {shownNotice}
         </div>
       ),
     });
@@ -406,6 +606,67 @@ export function MeMenuView({
       </button>
     ),
   });
+  if (update !== undefined) {
+    // AU-2 (AU-D4 B, AU-D5) — the app's own row, always, nearest the face:
+    // directly above you, under Settings… — which keeps `data-me-nearest`, so
+    // Return lands there and a double Return never restarts. A row that can't
+    // act now is `aria-disabled`, never `disabled`: it keeps its place in the
+    // arrows' walk and never drops focus.
+    const row = update.row;
+    const rowAct = row.act;
+    const inert = rowAct === "none" || busy;
+    rows.push({
+      key: "update",
+      node: (delay) => (
+        <button
+          type="button"
+          role="menuitem"
+          className="vf-me-row vf-me-row--update"
+          data-me-update=""
+          aria-disabled={inert ? true : undefined}
+          tabIndex={-1}
+          style={{ "--vf-me-delay": `${delay}ms` } as CSSProperties}
+          onClick={() => {
+            // a second press while the rows fade into the question asks nothing twice
+            if (rowAct === "none" || busy || leaving !== null) return;
+            // Settings → Updates folds the menu first; the check, the restart
+            // and the download happen where the row stands
+            if (rowAct === "open") act(() => onUpdate?.("open"));
+            else onUpdate?.(rowAct);
+          }}
+        >
+          <span className="vf-me-slot vf-me-icon">
+            <FieldGlyph name={row.glyph} size={18} turn={row.turn} />
+          </span>
+          <span className="vf-me-update-lines">
+            <span className="vf-me-update-label" data-tone={row.labelTone}>
+              {row.label}
+            </span>
+            <span className="vf-me-update-detail" data-tone={row.detailTone}>
+              {row.detail}
+            </span>
+            {row.note !== undefined && (
+              <span className="vf-me-update-note" data-tone={row.note.tone}>
+                {row.note.text}
+              </span>
+            )}
+          </span>
+          {row.dot && (
+            <span className="vf-me-row-end">
+              <span className="vf-me-update-dot" aria-hidden="true" />
+            </span>
+          )}
+          {/* The 2px bar moves on real progress only, never a loop; its width is
+              the one inline style (UI_SYSTEM "Rules for new UI"). */}
+          {row.progress !== undefined && (
+            <span className="vf-me-update-bar" aria-hidden="true">
+              <span style={{ width: `${Math.round(row.progress)}%` }} />
+            </span>
+          )}
+        </button>
+      ),
+    });
+  }
   rows.push({
     key: "you",
     node: (delay) => (
@@ -432,9 +693,21 @@ export function MeMenuView({
   });
 
   const panelStyle = {
-    "--vf-me-width": `${MENU_WIDTH}px`,
+    "--vf-me-width": `${asking ? ASK_WIDTH : MENU_WIDTH}px`,
     "--vf-me-height": `${panelHeight}px`,
   } as CSSProperties;
+  // The face the list draws keeps its own width while the panel grows or
+  // shrinks to the other's, so nothing reflows as it fades (AU-D6).
+  const listStyle = {
+    "--vf-me-width": `${drawnAsking ? ASK_WIDTH : MENU_WIDTH}px`,
+  } as CSSProperties;
+
+  // The face's names (AU-D1): its title and its accessible name say the dot
+  // in words — the waiting clause first.
+  const waitingLabel = waiting > 0 ? `, ${waiting} waiting in another user` : "";
+  const markLabel = update?.mark === true ? ", an update is ready to install" : "";
+  const markTitle =
+    update?.mark === true && update.markTitle !== undefined ? ` · ${update.markTitle}` : "";
 
   return (
     <div
@@ -451,8 +724,8 @@ export function MeMenuView({
         data-vf-switch-home={me.userId}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={`${me.name}: account menu${waiting > 0 ? `, ${waiting} waiting in another user` : ""}`}
-        title={`${me.name} · Account`}
+        aria-label={`${me.name}: account menu${waitingLabel}${markLabel}`}
+        title={`${me.name} · Account${markTitle}`}
         onClick={(event) => {
           // A keyboard click (Enter/Space) arrives with no pointer detail.
           focusOnOpen.current = !open && event.detail === 0;
@@ -481,17 +754,91 @@ export function MeMenuView({
       </button>
 
       <div className="vf-me-panel" style={panelStyle}>
+        {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: the role is menu or group (a menu holding an alertdialog is no menu: a group while the question stands), both named; the rule reads an expression role as none */}
         <div
-          role="menu"
+          role={drawnAsking ? "group" : "menu"}
           aria-label={`${me.name}'s account`}
           className="vf-me-menu"
           inert={!open}
           onKeyDown={onMenuKeyDown}
         >
-          <div ref={listRef} className="vf-me-list">
-            {rows.map((row, index) => (
-              <Fragment key={row.key}>{row.node(revealDelay(rows.length - 1 - index))}</Fragment>
-            ))}
+          <div
+            ref={listRef}
+            className="vf-me-list"
+            data-leaving={leaving !== null ? "" : undefined}
+            data-returning={returning ? "" : undefined}
+            style={listStyle}
+          >
+            {drawn !== null ? (
+              // AU-D6 — the question, in main's own consent words (the status
+              // item's box and Settings → Updates say the same): what ends,
+              // five at most, then Cancel leading and focused, the act trailing
+              // in the danger text. Its lines rise nearest-first.
+              <div
+                className="vf-me-ask"
+                role="alertdialog"
+                aria-labelledby={questionId}
+                aria-describedby={leadId}
+              >
+                <p
+                  id={questionId}
+                  className="vf-me-ask-question"
+                  style={{ "--vf-me-delay": `${riseDelay(3)}ms` } as CSSProperties}
+                >
+                  {drawn.words.message}
+                </p>
+                <p
+                  id={leadId}
+                  className="vf-me-ask-lead"
+                  style={{ "--vf-me-delay": `${riseDelay(2)}ms` } as CSSProperties}
+                >
+                  {drawn.words.lead}
+                </p>
+                <ul
+                  className="vf-me-ask-list"
+                  aria-label="The sessions it ends"
+                  style={{ "--vf-me-delay": `${riseDelay(1)}ms` } as CSSProperties}
+                >
+                  {drawn.words.listed.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                  {drawn.words.more > 0 && <li>and {drawn.words.more} more</li>}
+                </ul>
+                <div
+                  className="vf-me-ask-acts"
+                  style={{ "--vf-me-delay": `${riseDelay(0)}ms` } as CSSProperties}
+                >
+                  {/* a question on its way out acts no more: the menu is going back to its rows */}
+                  <UiButton
+                    ref={cancelRef}
+                    disabled={drawn.busy}
+                    onClick={() => {
+                      if (leaving === null) onUpdateCancel?.();
+                    }}
+                  >
+                    Cancel
+                  </UiButton>
+                  <UiButton
+                    variant="danger"
+                    disabled={drawn.busy}
+                    onClick={() => {
+                      if (leaving === null) onUpdateConfirm?.();
+                    }}
+                  >
+                    {drawn.words.confirm}
+                  </UiButton>
+                </div>
+              </div>
+            ) : (
+              rows.map((row, index) => {
+                const fromNearest = rows.length - 1 - index;
+                return (
+                  <Fragment key={row.key}>
+                    {row.node(returning ? riseDelay(fromNearest) : revealDelay(fromNearest))}
+                  </Fragment>
+                );
+              })
+            )}
           </div>
         </div>
       </div>
@@ -501,9 +848,14 @@ export function MeMenuView({
           {waiting}
         </span>
       )}
+      {/* AU-D1, AU-D2 — an install waits on you: the dot BESIDE the face,
+          never on it (I-5), in the badge's one slot. */}
+      {markShown && (
+        <span className="vf-me-mark" data-pop={pop ? "" : undefined} aria-hidden="true" />
+      )}
       {/* The notice row is presentation inside a menu; this says it aloud. */}
       <span className="sr-only" role="status">
-        {notice ?? ""}
+        {notice ?? update?.announce ?? update?.notice ?? ""}
       </span>
     </div>
   );
@@ -518,12 +870,17 @@ export function MeMenu({
   open,
   onOpenChange,
   onOpenSettings,
+  update,
   shortcut,
   className,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onOpenSettings: (page: "general" | "account") => void;
+  onOpenSettings: (page: "general" | "account" | "updates") => void;
+  /** AU-2 — the desktop's update projection (`desktopState.update`): `null`
+   * where no updater runs, absent until the window knows the desktop's state
+   * (no row then). */
+  update?: UpdateView | null | undefined;
   shortcut?: string;
   className?: string;
 }): ReactElement | null {
@@ -544,6 +901,88 @@ export function MeMenu({
     },
     [onOpenChange],
   );
+
+  // AU-2 — the update row's doors and its flow inside one open. A host with no
+  // updater doors reads as a build that doesn't update itself (R1), whatever
+  // the state says.
+  const updates = host.updates;
+  const view = update === undefined ? undefined : updates === undefined ? null : update;
+  const stagedVersion = view?.phase === "staged" ? view.version : undefined;
+  // the SAME prepare and confirm Settings → Updates runs (AU-3, AU-L4)
+  const restart = useUpdateRestart(updates, stagedVersion);
+  const { flow, error, reset, dropToken, setFlow, setError } = restart;
+  const [local, setLocal] = useState<MeUpdateLocal>(AT_REST);
+  /** the not-applied record already said (its `lastApply.at`): once per window */
+  const [saidNotApplied, setSaidNotApplied] = useState<number | null>(null);
+  /** bumped at every fold: an answer for a folded open is dropped, never flashed
+   * on the next one */
+  const openGen = useRef(0);
+  /** the open a restart was asked in */
+  const askedGen = useRef(0);
+  const foldReset = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const notAppliedAt = view?.lastApply?.at ?? null;
+  const notAppliedWords = notAppliedNotice(view);
+  const unsaidNotice =
+    notAppliedWords !== null && notAppliedAt !== saidNotApplied ? notAppliedWords : null;
+  // what the fold reads: the flow, and the notice it is folding away
+  const flowNow = useRef<UpdatesFlow>(flow);
+  const shownNotApplied = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    flowNow.current = flow;
+    shownNotApplied.current = unsaidNotice !== null ? notAppliedAt : null;
+  });
+
+  // The fold, however it comes (the face, Esc, a click away, the shell): this
+  // open's flow ends. The token goes at once, so nothing confirms a question no
+  // longer shown; its words stay drawn while the panel folds, then go — unless
+  // a restart is already underway.
+  const wasOpen = useRef(open);
+  useEffect(() => {
+    const was = wasOpen.current;
+    wasOpen.current = open;
+    if (was === open) return;
+    if (foldReset.current !== null) {
+      // reopened inside the fold: the last open's question goes now
+      clearTimeout(foldReset.current);
+      foldReset.current = null;
+      reset();
+    }
+    if (open) return;
+    openGen.current += 1;
+    setLocal(AT_REST);
+    setRefusal(null);
+    dropToken();
+    const said = shownNotApplied.current;
+    if (said !== null) setSaidNotApplied(said);
+    const kind = flowNow.current.kind;
+    if (kind === "confirming" || kind === "restarting") return;
+    foldReset.current = setTimeout(() => {
+      foldReset.current = null;
+      reset();
+    }, FOLD_MS);
+  }, [open, reset, dropToken]);
+  useEffect(
+    () => () => {
+      if (foldReset.current !== null) clearTimeout(foldReset.current);
+    },
+    [],
+  );
+
+  // What main said back to a restart: a refusal is one line at the top of the
+  // menu, in its words (P15); a bridge that threw says so. Both only in the
+  // open that asked; a question that comes back after the fold is dropped.
+  useEffect(() => {
+    if (flow.kind === "consent" && askedGen.current !== openGen.current) reset();
+    if (flow.kind !== "refused") return;
+    if (askedGen.current === openGen.current) setRefusal(refusalLine(flow.words));
+    setFlow(NO_FLOW);
+  }, [flow, reset, setFlow]);
+  useEffect(() => {
+    if (error === null) return;
+    if (askedGen.current === openGen.current)
+      setRefusal(refusalSentence("Couldn't restart to update", error));
+    setError(null);
+  }, [error, setError]);
 
   if (account.me === null) {
     if (account.status === "loading") return null;
@@ -589,6 +1028,86 @@ export function MeMenu({
     });
   };
 
+  /** AU-2 — the update row's acts. `open` arrives folded (Settings → Updates);
+   * the check, the download and the restart happen where the row stands, and
+   * whatever comes back for an open that has since folded is dropped. */
+  const onUpdate = (act: Exclude<MeUpdateAct, "none">): void => {
+    if (act === "open") {
+      onOpenSettings("updates");
+      return;
+    }
+    if (updates === undefined) return;
+    const gen = openGen.current;
+    setRefusal(null);
+    if (act === "check") {
+      // P1, then P2–P9 in place, answered when the CHECK settles (LC-5)
+      setLocal({ kind: "checking" });
+      void updates.check().then(
+        (result) => {
+          if (gen !== openGen.current) return;
+          setLocal({ kind: "answered", outcome: result.outcome });
+        },
+        (failure: unknown) => {
+          if (gen !== openGen.current) return;
+          setLocal({ kind: "unreachable", message: errorText(failure) });
+        },
+      );
+      return;
+    }
+    if (act === "download") {
+      // AU-G5 — automatic updates off: Download in place; the view says
+      // downloading next, and a refusal comes back in main's words (LC-38)
+      const version = view?.version;
+      if (version === undefined) return;
+      setLocal({ kind: "requested" });
+      void updates.download(version).then(
+        (result) => {
+          if (gen !== openGen.current || result.ok) return;
+          setLocal(AT_REST);
+          setRefusal(refusalLine(result.words ?? downloadRefusalFallback(result.reason)));
+        },
+        (failure: unknown) => {
+          if (gen !== openGen.current) return;
+          setLocal(AT_REST);
+          setRefusal(refusalSentence("Couldn't download the update", failure));
+        },
+      );
+      return;
+    }
+    // restart, ask — ONE snapshot of what ends (C2); nothing ends without the
+    // question's second, red click
+    askedGen.current = gen;
+    void restart.restart();
+  };
+
+  const row =
+    view === undefined
+      ? null
+      : meUpdateRow({ view, local: rowLocalOf(flow, local), now: Date.now() });
+  const markTitle = readyClause(view);
+  const menuUpdate: MeMenuUpdate | undefined =
+    row === null || view === undefined
+      ? undefined
+      : {
+          row,
+          mark: updateWaits(view) && flow.kind !== "restarting",
+          ...(markTitle !== null ? { markTitle } : {}),
+          notice: unsaidNotice,
+          // AU-D6 — main's question while it stands, in the open that asked it:
+          // a menu reopened inside the fold draws its rows, never the last
+          // open's question (AU-D5); busy while its confirm is in flight (a
+          // restart that asked nothing confirms on the row, P12)
+          ask:
+            open && askedGen.current !== openGen.current
+              ? null
+              : flow.kind === "consent"
+                ? { words: flow.words, busy: false }
+                : flow.kind === "confirming" && flow.words !== undefined
+                  ? { words: flow.words, busy: true }
+                  : null,
+          announce: local.kind === "answered" || local.kind === "unreachable" ? row.label : null,
+        };
+
   return (
     <MeMenuView
       me={account.me}
@@ -632,6 +1151,10 @@ export function MeMenu({
       onThemeChange={setAppTheme}
       busy={busy}
       notice={refusal}
+      update={menuUpdate}
+      onUpdate={onUpdate}
+      onUpdateConfirm={restart.confirm}
+      onUpdateCancel={restart.cancel}
       {...(shortcut !== undefined ? { shortcut } : {})}
       {...(className !== undefined ? { className } : {})}
     />

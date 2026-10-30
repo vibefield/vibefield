@@ -108,6 +108,15 @@ import {
   ArtifactView,
   LocalArtifactIntent,
 } from "../src/artifacts";
+import {
+  ComposeAgentsAvailableOutput,
+  ComposeAgentsListOutput,
+  ComposeHistorySearchOutput,
+  ComposeReadOutput,
+  ComposeSparksHatchParams,
+  ComposeSparksListResult,
+  SparkRecord,
+} from "../src/compose";
 import { DeviceInfo, DeviceNameFile, DeviceRenameParams, DeviceSlice } from "../src/devices";
 import {
   AuditRecordV1,
@@ -263,10 +272,12 @@ import {
   SystemShutdownResult,
   UpdateCheckResult,
   UpdateClientStateFile,
+  UpdateMoveResult,
   UpdatePolicy,
   UpdatePolicySource,
   UpdateView,
 } from "../src/update-policy";
+import { UserMeResult } from "../src/users";
 import {
   WorkspaceCloseTicketParams,
   WorkspaceCloseTicketResult,
@@ -434,6 +445,8 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // check answered when the check settles. `update-view.pre-au1.json` is today's shape: the tolerant-reader witness.
   "update-view": UpdateView,
   "update-check-result": UpdateCheckResult,
+  // AU-7: the Move door's answer (`update-view.read-only` / `.elsewhere` ride the view's prefix above).
+  "update-move-result": UpdateMoveResult,
   // WP8a: the packaged app's signed bundled-plugin index (refusals in plugin-distribution.test.ts).
   "bundled-plugin-index": BundledPluginIndex,
   // WP8b: the stage's public identity (Resources/identity/release-identity.json).
@@ -791,6 +804,16 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "project-figures": ProjectFiguresResult,
   "project-figures-day-params": ProjectFiguresDayParams,
   "project-figures-day": ProjectFiguresDayResult,
+  // CO — the compose plane, version 2 (compose.ts): a spark, its doors, and CP-1's verbs
+  "compose-spark-record": SparkRecord,
+  "compose-sparks-list": ComposeSparksListResult,
+  "compose-sparks-hatch-params": ComposeSparksHatchParams,
+  "compose-agents-available": ComposeAgentsAvailableOutput,
+  "compose-agents-list": ComposeAgentsListOutput,
+  "compose-agent-read": ComposeReadOutput,
+  "compose-history-search": ComposeHistorySearchOutput,
+  // IOS-8f — who this desktop's person is: a written face with a name, and the deal with none
+  "user-me": UserMeResult,
 };
 
 // *.vector.json = cross-language crypto vectors, not wire shapes — pinned by their own tests.

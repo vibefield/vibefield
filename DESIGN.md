@@ -100,6 +100,7 @@ pegboard at DK-13 (2026-10-06). The island's law outlives it as M1 (§6): one el
 |---|---|---|
 | `--vf-canvas-bg` | `#FAFAFA` | `#171717` |
 | the cutting mat (`glyph: "mat"`, `draft/ground/MAT.md`) — sage `#86A078`, cream lines `#E8DCBE`, a material carried across both themes | lit by the **Sun**: the tree-shadow reference's chain — the sage shows `#3D5A30` | lit by the **Moon**: 4100 K through the Purkinje shift — `#313C40` in the dapples, `#1C2027` in the palm's shadow, Eigengrau `#16161D` under all; half the sunlit luminance |
+| `--vf-field-ground` — the first face's ground (track FG): the website's splash, the field of Wormhole · edited, before its first frame and under its still; the window's pre-paint projects it (`electron-shell/src/main/windows.ts` — main can't read CSS, UI_SYSTEM.md) | `#04050F` | `#04050F` — the field is the dark in both themes |
 
 *Retired 2026-10-07 (DK-17; DK-0d's erratum of 2026-10-03, executed — DK-D2, R22):* the ground this
 section described until then was ICE 0.11's — a world grid (`spacings: [25, 50, 100]` and its fades)
@@ -128,6 +129,16 @@ ground alone (§8), and so does the kit's placeholder face, whose one consumer i
 (a page or an app not yet pictured is not a board, so not the mat). The design catalog's stand-ins
 for the field — the chrome's plates, the switch's and the Setup Assistant's floor — wear the mat in
 CSS, as the field they stand for does.
+*Amended 2026-10-29 (track FG, FG-D1…FG-D24 ruled by James; the record is
+`draft/thinking-first-run-glass.md`; built at FG-1, its tear to the desk at FG-2 (the first run's at FG-5) and the catalog's still
+at FG-6):* the first face's ground is the **field** — the website's own splash (vibefield-dotdev,
+Wormhole · edited), live on WebGPU from boot's first frame to the desk (§8 "The boot splash") — and the
+mat begins at the desk. `--vf-field-ground` is the window's colour before the field's first frame and
+the ground under its still; it is one value in both themes because the tunnel is the dark in both. The
+splash and the Setup Assistant leave the mat in CSS for the field, and the catalog's Setup Assistant
+stands on the field's still; the switch's floor, the loading veil, the explorer's tiles and the terminal
+preview's miniature field keep the mat (DK-16). The words on the field are in `--vf-field-ink`, white at
+56% (its contrast measured as DK-16 measured the mat's: FG-O2).
 *Erratum 2026-10-03 (DK-0d — DK-D2, R22) — the cursor's halo, which this file never described:* the
 field above answered a pointer VibeField drew itself (`cursor/`: a DOM halo over the canvas that hid
 the OS cursor, became a dot over a widget's controls and fed this field its poles — the `reach`
@@ -461,6 +472,91 @@ and per-room deals (D-i13, AR5-D3; the History room's own 333° wheel and puppet
   project's colour (A-D2) once the room takes a host colour (PJ-4's second half, the room's R1);
   until then the room still deals its own.
 
+### 2.10 A spark's face — the star (CO)
+
+**A spark is known by a face James drew.** A spark is the agent VibeField starts to run other agents
+(the compose plane, version 2, ruled 2026-10-29; Sparks and Chat, round 2). It wears one face from
+James's star set, Agent Sparks (Sparklings v2): a glowing star with eyes, drawn in WebGL2. It is the
+**mouthless** set (James, 2026-10-29). A spark is neither a person nor a project, so §2.8's sticker and
+coin are not its frame and §2.9's ink is not its colour. Its colour is its face's own palette, and the
+colour stays inside the face.
+
+| Rule | Law |
+|---|---|
+| **S-1 Dealt, then kept** | NS-D2 (ruled B): the New spark sheet deals a face apart from the name, ↻ deals another, and Create keeps it. The record holds the face's seed (`SparkFace.seed`), and the engine's `agentDNA(seed)` draws it: five, six or seven points, its body, its eyes, and one of the first twelve palettes. A spark that is renamed keeps its face. |
+| **S-2 Its hue stays in the face** | A palette colours the star and its disc, nothing else. No row, ring, badge, line or wash takes a spark's colour; state keeps §2.5's colours and projects keep §2.9's ink. |
+| **S-3 The face expresses; the word certifies** | CH-D3 (ruled A), §2.8 I-5: the face shows the spark's state live, as one of the nineteen statuses below, and the status's word sits beside it wherever there is room, and in the accessible name where there isn't. A face can be missed; a word can be read, searched and spoken by VoiceOver. |
+| **S-4 Needs you is the attention ink, in words** | CH-D4 (ruled A): Asking you, Needs your OK, Stuck and Rate limited turn the row's word to the attention ink (§2.5), Chat's cell takes the orange dot, and in another view a note says so for 2.4 s. The face itself never turns orange. |
+| **S-5 The name makes it certain** | §2.8 I-4: the face is an index. The name sits beside it, and @ finds a spark by its name. |
+
+**The nineteen statuses.** These are a spark's. Coding and Debugging are an agent's work and never a
+spark's face.
+
+| Status | Word | It means |
+|---|---|---|
+| `hello` | Hello | Just hatched |
+| `ready` | Ready | Awake, nothing running |
+| `listening` | Listening | You are typing to it |
+| `thinking` | Thinking | Working out what to do |
+| `planning` | Planning | Splitting a job between agents |
+| `searching` | Searching | Looking through History |
+| `reviewing` | Reading | Reading what its agents wrote |
+| `running` | Running | Its agents are at work |
+| `focus` | Watching | Keeping an eye on a project |
+| `asking` | Asking you | Has a question for you (needs you) |
+| `approval` | Needs your OK | Passing on an agent's request (needs you) |
+| `stuck` | Stuck | An agent is looping or out of room (needs you) |
+| `limited` | Rate limited | Waiting out a limit (needs you) |
+| `success` | Done | The job is finished |
+| `shipped` | Shipped | Pushed or merged |
+| `failed` | Failed | Something went wrong |
+| `thanked` | Thanked | You said thanks |
+| `sleeping` | Asleep | Quiet for 15 minutes, or its session ended (CP-D14); a message wakes it |
+| `offline` | Offline | Its agent can't start |
+
+**Framed and free.** *Framed* is the star on its disc, the palette's deep ground: the disc's radius is
+1.26 of the star's, and the star sits 6% of its radius below the centre. At 32 px and below its eyes
+are drawn 1.25× larger and set a little wider, and up to 48 px 1.12×, so that they still read. A framed face's
+cut ring takes the surface behind it (the chrome, the inset fill, a selected row, the mat's glass, a
+desk object's paper, each read from its token in both themes), so a badge beside it sits clean. *Free*
+is the star alone, with no disc.
+
+**Where it appears, at what size** (round 2's plates; the rows marked *proposed* wait on their marks):
+
+| Surface | Size | Form |
+|---|---|---|
+| Chat's list row (CH-D1) | 40 px | framed, live while it works |
+| A thread's head | 40 px | framed, live |
+| A message's lead, in its thread | 28 px | framed |
+| @'s menu row · a chip in the line | 24 px · 18 px | framed |
+| The New spark sheet's hatch | 104 px | free |
+| Its profile card | 64 px | free |
+| Godview: its own bubble · its agents' rims · their panes' chips (EW-D1, *proposed*) | 20 px · 20 px · 16 px | free · framed · free |
+| History's rows · "Lyra started this" (EW-D1, *proposed*) | 20 px · 18 px | framed · framed |
+| A flow's board head · its byline (FL-D2, *proposed*) | 26 px · 18 px | framed on paper |
+
+**Still and live.** A face that is not moving is a *still*: one small WebGL2 canvas draws it once and
+keeps the picture, cached by its seed, status, size, frame, ground and theme. A *live* face moves
+(blinks, gaze, its status's motion), drawn by one layer over the window only while a live face is
+on screen. Without WebGL2, a face is the **flat star**: its own points and palette in SVG, on its
+disc when framed, two pill eyes, no glow. It is never a blank.
+
+**Motion.** Reduced motion keeps the faces, their blinks and their status changes, and drops the hops,
+the shakes and the falling star (M6).
+
+**The hatch.** The sheet's sky: a star falls at an angle, lands, bursts, and the face is born where it
+hit; Create flies the face to its row in Chat. *When it plays is NS-D3, not yet ruled: its lean, "on open,
+and when the name settles", lost its second trigger when NS-D2 ruled B, and the reading put to James is
+"on open, and on each reroll".* Reduced motion: no falling star; the face fades in where it lands.
+
+**Where it lives in code.** The engine is vendored from James's `research/spark`
+(`agent-sparks/sparks.js` at `025b495`, and `star-spark.js` beside it), byte for byte: a newer version
+is copied over the file, never edited in place, and a change to `agentDNA` changes every spark's face,
+so it is a design event, said here first. SP-1 moves it into the design kit as a primitive, the face
+by seed, status, size, frame and ground, with a fixture in the catalog (UI_SYSTEM's order). Its
+palettes are the engine's art, carried as data inside the vendored files. That is the one place a hex
+outside `tokens.css` is allowed, the way an emoji's bitmap is a user's face's (§2.8).
+
 ---
 
 ## 3. Typography
@@ -549,7 +645,8 @@ claim it.
 | Sheet | surface `/90` + `backdrop-blur-3xl` | the fields explorer grown from the head's pill (FR-3); the open tray left at DK-13 |
 | Overlay chip | surface `/90–95` + `backdrop-blur-xl` | no wearer today: the put-back affordance and the HUD's toasts retired (DK-13, DK-17); the peers' chips wear the line's glass and the status line solid chrome (§8) |
 | Backdrop dim | `black/10` light · `black/40` dark | behind open sheets; canvas recedes to `scale(0.98)` |
-| Search scrim (GV-D8; K7, 2026-10-08) | `black/16` light · `black/46` dark, over a backdrop blur of 18 and `saturate(0.9)` | behind the Peek only (§8 "Search"): the window blurred and dimmed, the view and the frame receding to `scale(0.98)` under it. Darker than the backdrop dim so it reads as dimmed (One Frame §23); the backdrop dim stays the sheets' until James rules otherwise (docket PK1) |
+| Search scrim (GV-D8; K7, 2026-10-08) | `black/16` light · `black/46` dark, over a backdrop blur of 18 and `saturate(0.9)` | behind the Peek (§8 "Search"): the window blurred and dimmed, the view and the frame receding to `scale(0.98)` under it. Darker than the backdrop dim so it reads as dimmed (One Frame §23); the backdrop dim stays the sheets' until James rules otherwise (docket PK1). *Since TS-D22 A (2026-10-29):* the phone wears its dim alone, with no blur, under a door that stands over a live field, between the field and the bar (§9) |
+| Setup Assistant (as built since UA-3w; written down 2026-10-29, track FG; on the field, to be built at FG-3) | `--vf-wizard-surface` (white 55% by day, `rgb(28 28 30)` 55% by night) over `blur(32px) saturate(1.12)`, the island radius (32). On the field (FG): a 1px edge, `--vf-wizard-edge` (white 60% by day, 12% by night) with a top light, `--vf-wizard-edge-light` (white 75%, 8%); the field's shadow, `--vf-shadow-wizard-field` (`0 40px 120px` and `0 12px 32px` in the field's ground at 55% and 28%); and a grain at `--vf-wizard-grain` (3%), so the blur never bands | the Setup Assistant's glass (§8): on the field its frost lets the tunnel's rings through softly (FG-D15 C). Over the live field the field draws this recipe itself, in its own frame and from these tokens (FG-D24); over the field's still the backdrop filter draws it |
 
 **Menus are solid, floating controls are glass** (One Frame FR-7, FC-D14 ruled 2026-10-01): a menu
 is rows to be read, so it is `--vf-chrome-solid` — opaque — ringed by `--vf-hairline-strong`, with
@@ -807,6 +904,23 @@ archive is ready. It is the import's only sign outside History, so it carries no
 percentage names its step, never an invented whole). *Amended 2026-10-27 (AO-4b, built):* reduced motion (M6) stops
 the travel, and the arc rests at the top of the circle, a fifth of it from twelve o'clock, until the archive is ready;
 the glyph stays at a third of its ink.
+*Amended 2026-10-29 (track FG; FG-D9 A, FG-D10 B, FG-D11 A and FG-D17 A ruled by James; §8 "The Setup Assistant's
+glass"; a returning boot's tear built at FG-2, the rest to be at FG-3 and FG-5):* the first run happens on the field,
+and these are its motions. **The
+glass forms** where the splash stood: the bar and the stage fade (240ms `ease`), and the frost condenses over the
+whole glass as its layers rise `.985 → 1` (560ms island); the field's mark fades under it while the logo fades in
+on the same spot (400ms), so the mark never moves. **The logo** only fades — in over 400ms once the last words are
+out, out over 280ms before the next words come, never longer than 160ms under reduced motion — and never travels,
+scales or takes a second place; it stays out of the rise. **The hand-over** becomes: the welcome arrives on the
+line under the logo and holds **1.6s**; the line and the steps go (240ms); the logo holds alone (640ms); the frost
+clears over 600ms on the island curve, the edge and its shadow going in its last 240ms, as the field's mark takes
+over from the logo in place; then **the tear** — the field opens from its centre over **1.9s** on `t²`, the mark
+gone in its first quarter, the theme's light on its walls (the website's warm white by day, the look's own cool
+centre light by night) — while the desk settles in from `.985` (1.9s island) and its exposure comes down from 1.16
+(1.5s `ease-out`), an eye coming out of the dark. A returning boot plays the same tear once the desk is
+frame-stable and never before the splash has stood **700ms**, the website's floor for a repeat visit (FG-L6): a
+floor, never a stage. Reduced motion: fades only, halved; no rise; the field at rest, and a 120ms fade in place of
+the tear.
 
 *(Godview round 3, built 2026-10-12; its status is §8 the deck's.)*
 **The terminals rise and fall** (Godview's deck, §8; One Frame §22 "Shared mechanics" and §23 —
@@ -1615,7 +1729,14 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   request for your admin (the machine name and the Machines page); Use another account; the
   console's link for admins. **Arrival** (TS-D8): "Connected.", the account in mono, "Not this
   account? Sign in again", and the account's devices arrive around your face (§6, the arrival).
-  When this Mac is alone, **Add your phone** is the primary act. **Not now** lands on the same
+  When this Mac is alone, **Add your phone** is the primary act. *Added 2026-10-29 (track TS, TS-7b;
+  James's Q2 A, 05:29:23Z):* **Add your phone** — here, and in Settings → Devices' Add a device → Phone —
+  draws a code of `vibefield://add-phone` carrying the account and this Mac's name — the roster's own
+  name for it, else Tailscale's machine name, whichever the phone will read back (never a code its own
+  phone refuses; with neither, the code waits) — at Sign in on your phone's size and inks, with
+  **Scan with VibeField on your iPhone.** · "Get VibeField from TestFlight first, then open it and choose
+  **Scan the code on your Mac**. The same code tells it to expect ‹login›." — the page's words
+  (A:277-288) adapted to there being no install link yet. **Not now** lands on the same
   Ready pane; the face menu keeps Connect your devices… and nothing else asks until a moment where
   it helps (§8 "Asking again"). The refusals keep the daemon's sentence and gain a person's words
   and a way forward: "`<login>` already has a field here" with **Switch to `<user>`** and **Use
@@ -2273,6 +2394,46 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   and `--vf-mat-lattice`), not the canvas and its dots — the floor the Setup Assistant and the switch
   share with it — and its words are in the mat's ink (white at 60 %: 4.0:1 by day, 5.2:1 by night,
   where `/50` read 3.9:1 on the canvas), the bar white/15 under white/80, the ghost Retry white.
+  *Amended 2026-10-29 (track FG; FG-L1, FG-D14 B; built at FG-1, a returning boot's tear at FG-2):* the ground is the
+  **field** (§2.1): the website's splash, vendored (`boot/splash/`, generated from vibefield-dotdev's
+  `lib/splash/` at a pinned hash, never edited), drawing at 60 fps in a worker on an OffscreenCanvas — on
+  the main thread where a worker can't, as the still where there is no WebGPU — from the first frame to
+  the tear. The first frame is the field's ground with its mark as a still (the window's pre-paint is
+  `--vf-field-ground`), and the live field fades in over it (500ms `ease`). The wordmark retires: the mark
+  is the name. The bar keeps its size and its ink (white/15 under white/80) and stands 40 under the mark's
+  centre, and the stage line 55 under it (11px, 500) in `--vf-field-ink` (§2.1), as the website sets them;
+  their contrast over the field is measured as DK-16 measured the mat's (FG-O2). Behind them a soft shade of
+  the field's ground keeps them readable over the field: 400 × 120, centred 54 under the mark's centre, the
+  ground at 55% at its heart, 30% at 55% of the way out and gone at its edge. Without WebGPU the field is its
+  still (`splash-still`, cover-fitted) and the opening is a fade.
+- **The Setup Assistant's glass** (track FG, FG-D1…FG-D24 ruled by James 2026-10-29; the record is
+  `draft/thinking-first-run-glass.md`, the page *First run on the field*). The Setup Assistant stands on
+  the field as one glass, **880 × 640 on every step** (FG-D3 A): centred, never scrolling, and below a
+  976 × 736 window scaled as one picture (fit = min(1, (w − 96)/880, (h − 96)/640)), never reflowed. Its
+  material is §5's Setup Assistant tier (FG-D15 C: the tunnel's rings come through softly), milk by day
+  and smoke by night while the field stays the dark in both (FG-D4 A), and nothing see-through is ever cut
+  into it (FG-L2). **The steps** (FG-D22 A, FG-D23 A): a band along the glass's top 72, one segment per
+  step of the chapter's order — You · Agents · Profiles · History · Devices · Setting up — 76 × 3 with a
+  gap of 8, its label in small capitals 9 under it (500, 10px, .08em): done in grey (t3), the current in
+  ink (`aria-current="step"`), the rest a hairline (t4). A segment fills as you arrive (480ms island),
+  Setting up's with the work's own progress. The band is absent on the welcome, fades in with You (240ms)
+  and stays over a load and over Setting up. **One frame** (FG-L3): every pane stands between 96 and 600,
+  560 wide — its head at the top, its body 20 under it, its foot on the bottom (the actions, and the line
+  under them, whose room is always kept) — so the actions stand at one height on every step. A pane only
+  fades in (240ms `ease`, 160ms reduced), the old one out first (120ms); nothing rises, slides or
+  recentres. AO's and TS's panes keep their markup and words without their eyebrows (FG-L7). **A load**
+  (FG-L5, FG-D20) is the logo and one line: the glass's rows `1fr | the logo | 1fr`, the line 26 under the
+  logo (400, 14px/1.4, t2, tabular figures) with its sub (12px, t3), and no buttons; a way out shows only
+  when it runs long (Setting up's Start now after 8 s, AO-D4). Setting up is one such line from its first
+  phase to the welcome (FG-D21 B). **The logo** (FG-D1, FG-D2, FG-D16, FG-D17 A, FG-D18): one living mark,
+  the field's own, at the field's mark's spot and size, only ever fading (§6); white on smoke, inverted on
+  milk (`invert(1) hue-rotate(180deg)`, its colours kept). **Drawn by the field** (FG-D24): over the live
+  field the glass's shadow, frost, tint, grain and logo are a pass of the field's own frame, read from
+  §5's tokens, so the window draws the field once; the two hairlines stay the browser's, at the screen's
+  own pixels; over the still the browser draws the whole glass. *Status 2026-10-29: ruled, to be built —
+  the glass, the steps, the frame and the logo at FG-3, the panes in the frame at FG-4 (after TS-6 and
+  TS-7 land), the hand-over at FG-5, the gates at FG-6 (the record's §7). Until each lands, the Setup
+  Assistant ships as "The Setup Assistant's agent chapter" and the Connect pane describe it.*
 - **The reveal** (boot-exclusive motion): the canvas composes and stabilizes BEHIND
   the splash (the frame-stability gate — never reveal mid-hitch), then the splash
   fades 240ms plain `ease` while the canvas settles `scale(0.99) → 1` over 560ms
@@ -2283,6 +2444,19 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   desk composes behind, never the splash: the wizard keeps the window from its last question until
   its Ready beat ends, and then leaves with the splash's fade and the desk's settle (§6, the
   hand-over). The splash never returns between the wizard and the desk.
+  *Amended 2026-10-29 (track FG; FG-D9 A, FG-D10 B, FG-D11 A; built at FG-2, the first run's at FG-5):* the reveal
+  is the website's **tear** (§6): the field opens from its centre over 1.9s with the theme's light on its
+  walls, and the desk settles in from `.985`, its exposure coming down from 1.16. A first run reaches it
+  through the hand-over; a returning boot plays it once the desk is frame-stable and the splash has stood
+  700ms. Without WebGPU the still fades in place (240ms), and under reduced motion the field does (120ms).
+  *As built at FG-2:* the splash's words go first (240ms `ease`, the website's `wordsOut`) and the ground's
+  own colour with them, unseen under the live field; then the tear. It is chosen once, as the boot hands
+  over: the tear when the field is live, motion is allowed and the window is seen, else the base reveal
+  above, so a hidden window and a field still waking fade too. The desk keeps `0.99` under the splash and
+  steps to `.985` and 1.16 only at the tear's words, unseen, so the fade, the first run and the switch
+  keep their reveal. A tear is bounded at its length and a second (a hidden window draws no frames); a
+  field that never opened leaves with the splash's fade, never a pop, and one that opened stops drawing
+  at once. Every boot now holds until its ground has opened, so the desk is never handed over mid-tear.
 - **The switch** (UA-D15's reload, dressed; 2026-09-22): changing users reloads the window,
   so the transition is two halves that meet on one frame — the boot splash wearing the face of
   the user you are going to. **Leaving.** The face you clicked lifts out of its row (held,
@@ -2292,7 +2466,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   to `scale(0.98)` on the island curve (M5 — the engine freezes, since this covers the window),
   and from 120ms the splash's own ground — the mat in CSS, `--vf-mat-ground` and
   `--vf-mat-lattice` (DK-16; *corrected 2026-10-28:* this said `--vf-canvas-bg` and the §2.1 dots,
-  which left at DK-17; the switch's ground wears `.vf-splash`, `boot/boot.css`) — rises over it
+  which left at DK-17; the switch's ground wears `.vf-splash`, `boot/boot.css`; *amended 2026-10-29 (track
+  FG):* the boot's first face moves to the field, §8 "The boot splash", and the switch keeps the mat) —
+  rises over it
   in 360ms `ease` until the field is gone. The words follow 200ms behind the face (240ms
   `ease`, rising 6px): the eyebrow "Switching to", the name in the Setup headline's type (28px
   light), and the splash's bar and stage line as the splash begins them — "waking the daemon",
@@ -3794,6 +3970,44 @@ Device logs' two readings, Disconnect's sentences and Tailnet Lock's. While Tail
 Mac, the Me menu keeps the login line (23:08:59Z). The words for a network that requires logs are the
 thinking doc's §11, ruled with TS-D16.*
 
+**The phone's door** (track TS, TS-7; TS-D11 A, and James's TS-7 picks "all six A — the leans",
+2026-10-29 05:29:27Z). The phone signs in through iOS's own sign-in sheet, which first asks to use
+tailscale.com; the app closes the sheet itself once the phone is signed in — at approval as well as at
+Connected, a departure from TS-D11 A's "when the node is Running" — and a Cancel leaves the page as it
+was. In place of the field's own empty words, the Field page says, with the tabs and search kept: while
+the phone has no account, the welcome — **Your field, in your pocket.** · "Approve agents, watch
+sessions and type into them, from anywhere your Mac is." · Tailscale's mark beside "Private network by
+Tailscale. Use the same account as VibeField on your Mac." · **Continue with Tailscale** · "Next, iOS
+asks to use tailscale.com to sign in." (a first sign-in's failure is one line under it), and no app
+mark; at approval, **Waiting for approval.** · "You’re signed in. An admin of your Tailscale network
+approves new devices." with one row — "This phone", its machine name in mono as it asked Tailscale for
+it, Copy — and **Open the admin console** (none on a custom control server); for an account the
+network asks again, **Sign in to Tailscale again.** · "This phone can’t reach your desktops until you
+do. Nothing here is lost." · **Sign in again** (expired and removed are one page until the phone's
+Tailscale says which); and, signed in with no desktop listed or remembered, **No desktops yet.** ·
+"Signed in as ‹login›. On your Mac, open VibeField, click your face, then **Connect your devices…**
+with this same account." with one row, the macOS mark and "Your Mac appears here", which the first
+desktop to list fills (its mark, its name) for 1.2 s before the page yields to the field — there is no
+Found toast. Under any of them the field drifts and takes no acts (no hold, no bloom, and a tap on a body
+opens no card; TS-7c); over a live field (agents on it, as under **Another account?**) it drifts dimmed,
+under the Peek's scrim (§5, *Search scrim*): its dim alone, no blur, laid between the field and the bar,
+so the page's words stand clear and the tabs and search it keeps are not dimmed (TS-D22 A, James
+2026-10-29 10:51:56Z). The corner moves with the pages:
+under the name "waiting for approval", "couldn’t connect", "signing out"; its notices "Sign in to
+Tailscale again to reach your desktops.", "An admin of your Tailscale network approves new devices.",
+"Couldn’t connect — ‹reason›."; its menu row **Continue with Tailscale** with no account and **Sign in
+again** with one; its desktops each wear their OS mark. While the welcome stands, the corner steps
+aside on the Field tab, so its one act is said once. *Added with TS-7b (Q2 A):* the welcome also offers
+**Scan the code on your Mac** — the phone's reader for the Mac's Add your phone code, which tells it the
+account to expect; scanned on a phone with no account it goes straight on to the sign-in, and the welcome
+then says "At Tailscale, pick ‹login›." A phone signed in as another account than the code named says, at
+once, **Another account?** · "This phone is signed in as ‹x›, but the code you scanned came from Studio,
+signed in as ‹login›." · **Sign in again** · "At Tailscale, pick ‹login›." · **Keep this account** — and
+for a code that arrived as a link ("the link you opened"), which any page can open, **Keep this account**
+is the primary act. It changes nothing about who may reach what. *Named deviation:* the corner's circle on History
+still reads "Sign in" — three words do not fit its 10 pt label — and its spoken name is "Sign in,
+Continue with Tailscale".
+
 **The agents' words** (track AO, ruled 2026-10-27; AO-L8, no machinery on screen). One word per thing,
 in the Setup Assistant, Settings, History and the launcher alike. An **agent** is named by the
 catalog's label (Claude Code, Codex, Grok). **This Mac** is the profile that uses the agents' own
@@ -4165,7 +4379,10 @@ stills — and, on the desk, two named exceptions: the bar's ONE path renderer f
 the OS marks the device chip wears (Simple Icons, drawn inline in `os-marks.tsx` — the test's one
 other allowed file; a phone, wherever a surface marks one, wears the mark macOS wears, Apple's,
 since iOS's own is a word — James, DS-3: "do not use texts, use OS icons instead" — and no surface
-marks one today), the file-tree family (§8), and
+marks one today), the file-tree family (§8), **the living mark**
+(track FG, 2026-10-29: the website's splash's own mark, drawn by the field at its centre and over the
+Setup Assistant's glass as its logo — white on smoke, inverted on milk with its colours kept; its still is
+the website's `mark-white.webp`), and
 **Tailscale's logomark** (track TS, TS-D4 ruled 2026-10-27), held to the rules of Tailscale's Brand
 Toolkit (its press and media kit, 10-2025): the nine dots exactly as its file draws them — the middle
 row and the bottom centre solid, the other five at 40% — never in one colour, never smaller than
@@ -4174,7 +4391,10 @@ row and the bottom centre solid, the other five at 40% — never in one colour, 
 where trust is decided — the Connect pane's partner line, Settings → Devices' card, the phone's
 sign-in — and every button stays words. It is drawn inline in `account/tailscale-mark.tsx`, the
 glyph test's allow-list naming it, and About carries "Tailscale is a registered trademark of
-Tailscale Inc.". On the
+Tailscale Inc.". The phone's copy (TS-7) is FieldDesign's `TailscaleMark` in
+`ChromePalette.tailscaleInk`, drawn from the same constants and held to them by
+`pnpm check:ios-fixtures`; having no About, the phone carries the trademark line at the foot of its
+settings sheet. On the
 phone (PJ-7) the OS marks are template SVGs in FieldDesign's `OSMarks.xcassets` (`DeviceMark`),
 copies of `os-marks.tsx`'s paths that `pnpm check:ios-fixtures` holds to them; and `start`,
 `resume` and `jump` join the phone's picks, so History's New agent, Resume and Jump to draw the

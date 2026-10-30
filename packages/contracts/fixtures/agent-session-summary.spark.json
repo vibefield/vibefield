@@ -1,0 +1,35 @@
+{
+  "sessionId": "native-13",
+  "sessionIdBasis": "observed",
+  "kind": "grok",
+  "label": "Grok",
+  "device": "dev-3c4d",
+  "tier": "managed",
+  "runtimeRunId": "run-13",
+  "runtimeEpoch": 1,
+  "terminal": {
+    "hosted": "local",
+    "runtimeSessionId": "sess-01JB7Q3A",
+    "cellBootId": "cb-2b8e41d0-2026",
+    "workloadClass": "interactive"
+  },
+  "workspace": {
+    "mode": "direct",
+    "root": "/Users/you/code/acp-notes"
+  },
+  "status": "working",
+  "observationLevel": "native-hooks",
+  "createdAt": "2026-09-27T10:00:00.500Z",
+  "stateChangedAt": "2026-09-27T10:00:05.000Z",
+  "lastActivityAt": "2026-09-27T10:00:05.000Z",
+  "continuation": {
+    "persisted": true,
+    "resumable": false
+  },
+  "spawnedBy": "app",
+  "profileSet": "work",
+  "origin": {
+    "by": "spark",
+    "spark": "sp-7k2m9q4x"
+  }
+}

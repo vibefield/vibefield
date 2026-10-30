@@ -228,7 +228,7 @@ describe("Close protocol — CloseReason / CloseRequest / CloseResult (ESR §6.4
 });
 
 describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => {
-  it("exposes exactly the thirty-one channel keys, in order", () => {
+  it("exposes exactly the thirty-two channel keys, in order", () => {
     expect(Object.keys(IPC_CHANNELS)).toEqual([
       "windowBootstrap",
       "prepareClose",
@@ -247,6 +247,7 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       "updateConfirmRestart",
       "updateDoctor",
       "updateDownload", // AU-1 — a person's download of one found version (AU-G5, AU-G6)
+      "updateMoveToApplications", // AU-7 — Move to Applications through the quit gate (AU-G8)
       // TP-S3e: terminalConnect + terminalStatus retired with the bridge —
       // the renderer dials the cells' T1 doors itself.
       "viewState", // FR-1 — the window's active view (GT-D2's Godview bit, grown into four)
@@ -285,6 +286,7 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       updateConfirmRestart: "vibefield:update:confirm-restart",
       updateDoctor: "vibefield:update:doctor",
       updateDownload: "vibefield:update:download",
+      updateMoveToApplications: "vibefield:update:move-to-applications",
       viewState: "vibefield:view:state",
       viewSet: "vibefield:view:set",
       viewZoom: "vibefield:view:zoom",

@@ -46,6 +46,7 @@ async function mount(
   account: SettingsAccountHead | undefined,
   activePage: SettingsPage = "general",
   finish?: SettingsFinishSetup,
+  pageMarks?: Partial<Record<SettingsPage, string>>,
 ): Promise<ReturnType<typeof vi.fn>> {
   const onSelectPage = vi.fn();
   container = document.createElement("div");
@@ -64,6 +65,7 @@ async function mount(
         redoAvailable: false,
         account,
         finish,
+        pageMarks,
         children: createElement("p", null, "page"),
       }),
     ),
@@ -217,5 +219,50 @@ describe("Finish setting up (AO-D10)", () => {
   it("draws nothing when nothing was put off", async () => {
     await mount(ACCOUNT(), "general", { rows: [], onContinue: vi.fn(), onHide: vi.fn() });
     expect(container?.querySelector(".vf-settings-finish")).toBeNull();
+  });
+});
+
+// AU-3 (AU-D8 A, AU-D7 A, AU-D2 A) — Settings → Updates: first in Support, wearing `reset`, and the one cyan mark at
+// its nav row's end while an install waits — said to assistive tech in words, never a count.
+describe("the Updates page in the nav (AU-3)", () => {
+  const supportPages = (): string[] => {
+    const group = Array.from(container?.querySelectorAll(".vf-settings-nav-group") ?? []).find(
+      (node) => node.textContent === "Support",
+    );
+    return Array.from(group?.nextElementSibling?.querySelectorAll("button") ?? []).map(
+      (button) => button.textContent ?? "",
+    );
+  };
+
+  it("stands first in Support, wearing reset", async () => {
+    const onSelectPage = await mount(ACCOUNT());
+    expect(supportPages()).toEqual(["Updates", "Diagnostics", "Advanced"]);
+    const item = container?.querySelector<HTMLButtonElement>(
+      'button[aria-label="Updates settings"]',
+    );
+    expect(item?.querySelector('[data-glyph="reset"]')).not.toBeNull();
+    expect(item?.querySelector(".vf-settings-nav-mark")).toBeNull();
+    await act(async () => item?.click());
+    expect(onSelectPage).toHaveBeenCalledWith("updates");
+  });
+
+  it("wears the mark while an install waits, and says it in words", async () => {
+    await mount(ACCOUNT(), "general", undefined, { updates: "an update is ready to install" });
+    const item = container?.querySelector<HTMLButtonElement>(
+      'button[aria-label="Updates settings, an update is ready to install"]',
+    );
+    const mark = item?.querySelector(".vf-settings-nav-mark");
+    expect(mark).not.toBeNull();
+    expect(mark?.getAttribute("aria-hidden")).toBe("true");
+    expect(mark?.textContent).toBe("");
+    // the mark is the Updates row's alone
+    expect(container?.querySelectorAll(".vf-settings-nav-mark")).toHaveLength(1);
+  });
+
+  it("names the page in its head", async () => {
+    await mount(ACCOUNT(), "updates");
+    expect(container?.textContent).toContain(
+      "Which version you're running, what's next, and how VibeField installs it.",
+    );
   });
 });
