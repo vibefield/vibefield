@@ -19679,3 +19679,201 @@ procps takes `wwe` beside `-p` and `-o`, and exits 1 for a gone pid — witnesse
 
 **Landed:** with PR #8's merge, local main fast-forwarded to `78ed1d946` at 20:35:49Z.
 - A checkout installed before it is a lock behind until its next `pnpm install`.
+
+## TS-7 — the phone's door: iOS's own sign-in sheet the app closes, the Field page's doors and one node per sign-in (7a); the code from the Mac, read by a scan or a link (7b); a door dims a live field and the field takes no acts under it (7c) (TS-D11 A; Q1 all A, Q2 A, TS-D22 A) (2026-10-30; `648719bb2`, the merge of main `aa2be72c9` (AU B1) into `59d0ada65` on `e23fa8a1f`, lane `ios/ts7b-code`)
+
+**What.** James ruled TS-7's two questions on VF-PM's board on 2026-10-29: Q1, "all six A — the leans", at 05:29:27Z
+(`ts7-q1-phone-door-leans`), and Q2 A at 05:29:23Z (`ts7-q2-code-payload`). He ruled TS-D22 A by click at 10:51:56Z
+(`ts7-door-scrim`). VF-PM split the slice at 05:26Z into 7a (the door) and 7b (the code); 7c came out of the sweep.
+Nine commits on `e23fa8a1f`, 50 files, +3233 −159:
+- **TS-7a (`ca241feeb`, `3b3b10b64`, `45a2d3ec1`, `b076b6a1a`, `d3983bcbf`): the door.**
+  - iOS's own sheet: `ASWebAuthenticationSession` (Safari's cookies, no callback scheme) replaces
+    `SFSafariViewController`, and the app closes it at approval or Connected (Q1 (c), a named departure from TS-D11
+    A's "Running"). A person's Cancel is told apart from the app's close. `LoginPresentation` fixes a Cancel that
+    re-opened the sheet and a sheet that never closed.
+  - The Field page's doors (`FieldHomeModel.doorPage`): the welcome; Waiting for approval (the machine's name, Copy,
+    Open the admin console); Sign in to Tailscale again (expired and removed as one, Q1 (b)); No desktops yet; and a
+    1.2 s found beat instead of a toast (Q1 (f)). Under any door the field drifts and takes no acts.
+  - The corner: notices in the link's words (TS-L2), Continue with Tailscale or Sign in again in the menu, OS marks on
+    desktop rows. The Tailscale mark and ink come to the phone, with the trademark line at the settings foot (Q1 (d)),
+    pinned by `check:ios-fixtures` to `tailscale-mark.tsx`, `tokens.css` and field-native's admin URL.
+  - One node per sign-in: a sign-in during a sign-out waits for its sweep (`3b3b10b64`); `MeshModel.signInStep` makes
+    the decision pure and pinned (`b076b6a1a`); every start goes through `launch()` and carries a generation, and a
+    sign-out supersedes a start under way (`d3983bcbf`).
+  - `apps/ios/README.md` names the Metal Toolchain as a kit host's prerequisite (`45a2d3ec1`).
+  - DESIGN.md §9 "The phone's door" and §13's phone copy of the mark.
+- **The mock's fleet (`428f43556`):** the `-vf-mock` signed-out and approval states drew the scripted fleet under the
+  door. `MockAccount.fieldIsLive` keeps it to a field with no door. DEBUG only.
+- **TS-7b (`7fe1d8a35`, `59d0ada65`): the code from the Mac.**
+  - `@vibefield/contracts/phone-code`, a leaf with no runtime imports: `vibefield://add-phone?login=…&from=…`,
+    written and parsed by hand (Unicode scalars, ASCII case folding, the C0/C1, line-separator and Bidi_Control sets
+    refused, bounded). One vector, `phone-code.vector.json` (9 codes, 28 refusals), is read by contracts and the kit
+    alike (EL9) and mirrored by `check:ios-fixtures`. No schema and no Rust.
+  - The Mac: Add your phone, in the Connect pane's Connected aside and in Settings → Devices → Add a device → Phone. The
+    QR and its words name the Mac by the roster's self name, else Tailscale's machine name.
+  - The phone: Scan the code on your Mac (VisionKit; an honest absence on the simulator), the `vibefield` URL scheme,
+    `ExpectationMemory`, "At Tailscale, pick ‹login›." and "Another account?" when the account is not the one the code
+    named. A LINK code starts nothing by itself (EL7).
+  - `59d0ada65`: field-app's four raw `vibefield:` literals now come from contracts' constants (wall R6).
+  - DESIGN.md §8 (the Mac's words) and §9 (the phone's).
+- **TS-7c (`0491ca1ad`, TS-D22 A): the door's scrim.** DESIGN.md first: §5's Search scrim row gains the phone, and §9
+  says the field takes no acts under a door. `ChromePalette.searchScrim` projects `--vf-search-scrim` (black/16 light,
+  black/46 dark) under a new `check:ios-fixtures` pin. `SwarmField(scrim:)` lays it over the bodies and under the
+  chrome, the dim alone. `FieldHomeModel.fieldTakesActs(under:)` is the one rule for the hold, the bloom and the tap.
+
+**Found:**
+- TS-7a's hold gate was frozen at the stage's first appearance (`SwarmField` handed `onCreate` only in `.onAppear`): a
+  phone that opened on the welcome never held after signing in, until a relaunch. 7c fixes it
+  (`onChange(of: onCreate == nil)`).
+- A tap on a body under a door opened its card, against §9. 7c gates it.
+- 7b's pre-compile review (`wf_c761ae16-206`) found five, all folded into `7fe1d8a35`: the writer could draw a code its
+  own phone refuses, a trim threw on a long text, U+061C was missing from the bidi set, a test was bound to the wrong
+  parameter, and the scanner could hand one code over twice.
+- Wall R6 was red under every TS-7 bundle before `59d0ada65` and went unseen, because full verifies had moved to the
+  mini. VF-PM's rule since, on 10-29: every mini bundle has its light half green here first.
+- The Mac mini's kit build dies at ghosttea's Metal compiler plugin: it has no Metal Toolchain. James ruled no install
+  there (10-29 06:34:12Z), so every kit run is on this Mac.
+- CoreSimulator cannot write the external SSD (error 513), so stills go to /tmp first.
+
+**Validation.**
+- **The lane:** `/Volumes/SamsungRed/lanes/ios` (the worktree `vibe-field`, branch `ios/ts7b-code` off `e23fa8a1f`).
+- **The kit, on this Mac** (Xcode 26.6, the iPhone 17 Pro simulator; kit builds stay off the mini), at `0491ca1ad`:
+  - both app schemes, build-for-testing and the whole suite, 13 runs and 1,359 tests, red on one row,
+    `LanesOverTheDoorTests.swift:262` "the demand to come back" (armed at load 86.93; item 103);
+  - re-run 11:55–12:01Z: that file alone 7 of 7, and the suite 13 runs, 1,359 tests, 0 issues;
+  - the sweep: 32 stills, read, all green (the live fleet dimmed under its door, the chrome bright, the no-agent doors
+    undimmed).
+  Logs: `lanes/ios/logs/kit-0491ca1ad/`.
+- **The D11 spike**, at `7fe1d8a35` (10:11–10:59Z): the app closed iOS's sheet in both modes, ephemeral and shared
+  (shared in the fourth run, 10:55:43Z). Logs: `lanes/ios/logs/kit-7fe1d8a35/spike.out`.
+- **The light half** at `59d0ada65` (10-29, 11:54:16–11:54:57Z, at nice 19 under the guard): preflight, the walls,
+  `check:ios-fixtures` (182 copies, 63 pins), biome on the touched files, the typechecks, and vitest: contracts 513
+  (2 files), field-app 247 (8 files). The light at `0491ca1ad` had stopped at preflight on R6 (11:51:14Z), hence
+  `59d0ada65`. Logs: `lanes/ios/logs/light7-59d0ada65/`.
+- **No verify on this Mac** (James, 2026-10-29 09:05Z: the Mac mini's verify lane). TS-7 was the mini's run five in
+  10-29's queue, and run 4 after VF-PM's re-order on 10-30 (17:54Z).
+- **The landed tip** is `648719bb2`: main `aa2be72c9` (AU B1, run 3) merged into `59d0ada65` at 17:59:05Z. Both sides
+  touch DESIGN.md (TS-7's §5, §8, §9 and §13 rows beside AU-0's, TS-6's and Q19's), `DevicesSection.tsx` and
+  `ui-system-boundaries.test.ts`; git merged all three with no markers. Its tree `d5a055017` is a9's rehearsal. It went
+  to the mini as `mrun4.bundle` (sha256 `213c405c…`). The mini's `next` ran 18:05:24–18:05:33Z: the locks stood,
+  field-native was built, and preflight exited 0 with one R23 candidate warning.
+- **The mini, run 4, `pnpm verify` at `648719bb2`:** exit 0, armed 18:06:25Z, done 18:10:51Z (load 1.82 → 8.62),
+  whole: preflight through `gen:check`.
+  - `pnpm test` ran 27 projects: vitest 9,839 passed, 0 failed, 17 skipped. Contracts 1277 (phone-code's rows among
+    them), field-app 2813, fieldd 2612 + 11 skipped, electron-shell 2020 + 3 skipped.
+  - `pnpm test:rust`: 499 passed, 0 failed, 14 ignored, over 31 binaries. The tree was clean after, with no stub left.
+  Logs: `lanes/ts6/logs/mini/run4/`.
+- **Landed:** main fast-forwarded `aa2be72c9` → `648719bb2` at 18:14:57Z on VF-PM's GO, and was pushed at 18:16:19Z.
+  Its record was not written then; it is written here, with IOS-8f's.
+
+**Records.** The design record is `draft/thinking-tailscale-onboarding.md` §10's TS-7 (Q1 and Q2; TS-D22 in §14). Its
+"Built … NOT LANDED" and "the mini's run five" are corrected at their source, and its Status flipped, at the next
+draft queue.
+
+**Owed.**
+- On James's phone at the build-4 sitting: a live sign-in (shared cookies, the consent alert's real copy, an approval
+  tailnet), the live sign-out → Continue row and its supersede path, and a live scan and a live link of the add-phone
+  code. The hold and tap gates under a door are witnessed by the rule's tests and a code read only.
+- Q2's later half: the store link with the same parameters, once a public install link exists.
+- The five truffle Swift petitions (logout, key expiry and its reason, the admin URL, the log opt-out, Tailnet Lock's
+  state), with ids after T13, at the next draft queue.
+- Item 103, the kit's `:262` race in `attachToLive` (`dc0f1dce0` on `ios/item103-lanes-race`, not on main): its
+  witness on a slot. Item 104: one shared kit test-support target for the poll helpers.
+- For James, a fact and not an ask: by day, at black/16, the bubbles still cross the door's words. A heavier day dim
+  would be a §5 value change, on his word.
+- TS-8c (T8, after its live probe), then TS-9.
+
+## IOS-8f — the corner wears the home desktop's own face and name: `user.me` from contracts through fieldd to the phone, the face deal pinned on every plane, and the deal only until a home answers (AP-D3's end state) (2026-10-30; `f250e8971`, `d3f566322` on `e23fa8a1f` with main merged in four times, lane `ios/8f-land`)
+
+**What.** AP-D3 (the phone's face) was built on 2026-09-23 as a lean, "the face dealt once per login from the first
+self desktop's user ULID until `user.me` (IOS-8f)", and ruled at it on 2026-10-28 (the housekeeping page, Q14).
+IOS-8f builds its end state. VF-PM took its seven leans on 2026-10-29 at 07:26Z. Eight commits on `e23fa8a1f`, 26
+files, +1154 −15:
+- **(a) `44d649776`: the face deal, pinned on every plane.** `packages/contracts/fixtures/face-deal.vector.json` holds
+  the 48 faces in order, five hashes, six deals and three rosters, generated from the TypeScript and checked back.
+  Contracts' `user-face.test.ts` and the kit's `FaceDealVectorTests` read it. A `check:ios-fixtures` row holds the
+  kit's copy byte-identical (`FieldDesignTests` gains `resources: [.copy("Fixtures")]`).
+- **(b) `94c59122f`: contracts' `user.me`.** A product method: scope `workspace.read` (the roster's), idempotent,
+  local. Its result is `UserMeResult {userId, name?, face, dealt}`, with two goldens (a written coin with a name; the
+  deal with none) and the TS-only `USER_ME` UNAVAILABLE {service: "user", state: "no-user"}. `pnpm gen` regenerates
+  nothing, because `users.ts` is TS-only.
+- **(c) `35cb5e360`: fieldd answers from its own user row.** `user-me.ts` reads `users.json` at each ask from
+  `config.vibefieldRoot` and answers the row as Electron main's roster shows it (`effectiveFaces`). With no row, file
+  or root, it answers the phone's own deal, `dealFace(userId, [])`, with no name. An unreadable file is warned, never
+  thrown; no user is an honest UNAVAILABLE. It is registered beside `device.list`.
+- **(d) `933a22c82`: the kit reads it.** A tolerant `UserMeResult` in `ProductShapes.swift`, tested over the
+  contracts' own goldens (mirrored by a `check:ios-fixtures` row).
+- **(e) `3c68ed542`: the phone asks its home.** `FieldLink.askHomeForPerson()` asks the HOME once per connection,
+  beside the catalog ask and never of an owner door, and the answer rides the home's row (`FieldDesktop.person`).
+  NOT_FOUND (a desktop older than the door) and UNAVAILABLE leave the deal standing; a retryable failure is asked
+  again on the sweep's clock.
+- **(f) `b9de1bd47`: the corner wears it.** `AccountFaceStore.adopt` lets the home's answer replace a deal or an
+  earlier home's word, and keeps the name per login, forgotten at sign-out. A nameless answer keeps the name, an
+  unknown frame is a sticker (UA-D17), and a deal still never moves a kept face. The deal is now only the fallback
+  until a home answers.
+- **`0e004bafe`, the pre-compile review's two:** a bare ⚠ that biome's stdin had turned into "!" in
+  `user-face.test.ts` is a ⚠ again, now written as an escape, and fieldd's face is copied to its wire type
+  (TS2322). **`d3f566322`:** `USER_ME` moves below `PROJECT_DOORS`, whose doc block it had taken.
+
+**Found:**
+- biome 2.5.4's stdin route rewrites a bare U+26A0 to "!", and it never lints: it is a formatter only.
+- As built, against the record's plan (`thinking-ios-account.md` §3): the result carries `dealt`, and its name is
+  absent without a row; the phone asks only its HOME, latched once per connection as the catalog ask is (at the
+  home's hello and on the sweep, beside `device.list` and the catalog), where the plan read it through
+  `askForDeviceRow`; fieldd reads `config.vibefieldRoot`.
+- TS-7 and IOS-8f were siblings on `e23fa8a1f` sharing six files, so `d3f566322` could not be minted over main once
+  TS-7 landed. Main was merged into it instead.
+
+**Validation.**
+- **The lane:** `/Volumes/SamsungRed/lanes/ios8f` (the worktree `vibe-field`, branch `ios/8f-user-me` off
+  `e23fa8a1f`, then `ios/8f-land`).
+- **At the slice's tip** `d3f566322` (10-29): the light pass green at 10:09:40Z (contracts 1215, fieldd's `user-me`
+  4, field-app 116); the kit on this Mac green at 10:24:26Z (13 runs, 1,319 tests, 0 issues, armed at load 214).
+- **The landed tip** is `f250e8971`: `d3f566322` with main merged in four times as main moved under it, each
+  `git merge --no-ff`, so IOS-8f's eight commits land as they were reviewed.
+  - `1b41a2f29` over `ac5dd87d3`, everything since `e23fa8a1f` (TS-6, item 113, Rosetta 0.1.2, PT, Q19, the item 94
+    stack, AU B1, TS-7, CP-0, PR #2, PRC-6's docs and their records): four content conflicts, one hunk each, both
+    sides adding lines at the same spot, kept whole with main's lines first by `lanes/ios8f/resolve-main.py`.
+    `AccountMemoryTests.swift` holds TS-7's four tests, then IOS-8f's two; `gen-jsonschema.ts`; contracts'
+    `fixtures.test.ts` holds CP-0's seven compose rows, then user-me's; `check-ios-fixtures.mjs` holds the phone-code
+    mirror, then the face and user-me rows. `lanes/ios8f/prove-both-sides.py` proved each both ways: the file is
+    main's plus IOS-8f's added and removed lines, and IOS-8f's plus main's.
+  - `1eb77c597` over `ffe9d9b40` (FG-0…2): clean, with no shared file.
+  - `1ee39cc4a` over `78ed1d946` (PR #8, PR #5): git merged `daemon.ts` (puppeteer 0.3.1's install home beside
+    `user.me`).
+  - `f250e8971` over `0ce140178` (AU B2, FG's records, the PR ledger): `daemon.ts` again (AU-3a's `appVersion` beside
+    `user.me`; neither reads the other).
+  - Each later merge was proven both ways by diff equality: IOS-8f's diff over the new main equals its diff over the
+    old, and the merge adds exactly main's range. A file both sides touched was proven line by line. Over main,
+    IOS-8f is 26 files, +1154 −15, at every merge.
+- **The light pass** at every merge, each row alone at nice 19 under the guard: preflight, the walls,
+  `check:ios-fixtures` (185 copies, 63 pins), biome on the merge's files, the contracts, fieldd and field-app
+  typechecks, `gen:schema` unchanged, contracts' whole suite, fieldd's `user-me` and field-app's four face readers.
+  Green at 19:08:06Z (contracts 1307, field-app 115), 20:33:53Z (field-app 116), 20:39:09Z (after a frozen install at
+  puppeteer 0.3.2's lock) and 20:50:53Z (contracts 1317, field-app 142, AU's tests in the same files). Logs:
+  `lanes/ios8f/logs/land-*.out`.
+- **The kit, on this Mac**, at `1b41a2f29`: VibeField and VibeField-Mock built, build-for-testing, and the whole suite
+  on the iPhone 17 Pro simulator (Xcode 26.6): 13 runs, 1,370 tests, 0 issues, 20:24:48–20:28:23Z (load 7.7 at the
+  start, 87 when the tests armed, 114 at the end). Its first try stopped at the dev-app guard (19:09Z, James's own
+  `pnpm dev`, 0 tests) and ran when he quit it. It was not re-run on the later merges: none of their ranges touched
+  `apps/ios` or a fixture the kit mirrors (AU-3a's two new device fixtures are not mirrored).
+- **The mini, run 9, `pnpm verify` at `f250e8971`:** the bundle was cut at the mini's main `6a41ba1d8` (sha256
+  `b1dcea53…`). `next` ran 20:52:40–20:52:49Z: the locks stood, field-native was built, and preflight exited 0 with
+  the R23 candidate warning. Verify: exit 0, armed 20:53:02Z, done 20:57:28Z (load 1.99 → 8.28), whole: preflight
+  through `gen:check`.
+  - `pnpm test` ran 27 projects: vitest 10,023 passed, 0 failed, 17 skipped. Contracts 1317, field-app 2948, fieldd
+    2621 + 11 skipped (`user-me` 4 among them), electron-shell 2020 + 3 skipped.
+  - `pnpm test:rust`: 499 passed, 0 failed, 14 ignored, over 31 binaries. The tree was clean after, with no stub left.
+  Logs: `lanes/ts6/logs/mini/run9/`.
+- **Landed:** main fast-forwarded `0ce140178` → `f250e8971` at 20:58:43Z on VF-PM's GO, and was pushed at 20:59:16Z.
+
+**Records.** The design record is `draft/thinking-ios-account.md`. Its Status ("Owed: IOS-8f … no `user.me` method
+exists"), AP-D3's "Until then" and §3's IOS-8f plan are corrected at their source, with the as-built deltas above, at
+the next draft queue.
+
+**Owed.**
+- James's word on two of the seven leans, flagged 10-29 07:26Z: `user.me` on `workspace.read` (so plugin-eligible,
+  as device names already are), and the home's answer winning between two self desktops.
+- Not witnessed: a real phone reading `user.me` from a live desktop, or a still of the corner wearing a desktop's
+  name. Both are owed at the build-4 sitting.
+- AP-D7's third cause, the protocol mismatch, stays owed.

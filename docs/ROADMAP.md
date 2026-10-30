@@ -41,21 +41,25 @@
 
 ## 2 Now — the active tracks
 
-**TS — the Tailscale door** · vibe-field-d0 · law `draft/thinking-tailscale-onboarding.md` §10, DESIGN.md §6/§8/§9/§13
+**TS — the Tailscale door** · vibe-field-d0 · law `draft/thinking-tailscale-onboarding.md` §10, DESIGN.md §5/§6/§8/§9/§13
 - Landed 10-27: TS-0, 1, 2, 3a (+ erratum `067d4895c`), 3b, 5, 8a (`d48e131fc`, the floor's facts on truffle 0.7.24),
   8b (`adf3d972f`, the faces and James's words). T9–T11 consumed with truffle 0.7.24.
 - Landed 10-29: TS-4a (`776eae4d3`, asking again: the status item's Connect Your Devices…, the filters' ghost rows,
   the away notice and the one switch), TS-4b (`257af5f6f`, the approval line on the claims strip, behind the limit
   moment) and TS-6 (`26b331dbc`, landed as the merge `14c74f980`: the sync question at the first new field; setup's
   posture pane retired).
-- Next: **TS-7** (the phone; fd's lane, 7a and 7b) → TS-8c (T8, after its live probe) → TS-9. The slice names are the
-  doc's: the board's "TS-6" was TS-8a.
+- Landed 10-30: TS-7 (`59d0ada65`, landed as the merge `648719bb2`, the mini's run 4: the phone's door, the code from
+  the Mac, and the door's scrim, TS-D22 A).
+- Next: TS-8c (T8, after its live probe) → TS-9. The slice names are the doc's: the board's "TS-6" was TS-8a.
 - James ruled TS-D19, TS-D20b and TS-D21 A (10-29 03:57:49Z). Owed: the approval line while Godview is closed (TS-4c
   or a later rung); Publish's nudge, until a Publish offers where to open; the switch's words (drafts); a field made
   while the sync question is owed by a path other than New field follows the posture (TS-6's finding).
+- James ruled TS-7's Q1 (all six A) and Q2 A (10-29 05:29Z) and TS-D22 A (10:51:56Z). Owed from TS-7: Q2's later half
+  (the store link, once a public install link exists); the five truffle Swift petitions (ids after T13, at the next
+  draft queue); item 103's witness (`dc0f1dce0`, the kit's `:262` race).
 - Owed on James's display word: §5 (TS-2's photographs and desk rows, renew's live half, TS-5's real notice, TS-8a's
-  live tailnet rows, TS-4a's rows and away notice, TS-4b's approval line). `specs/users-and-accounts.md` §6/§7 owes
-  TS's fold (the housekeeping pass added its first dated notes there).
+  live tailnet rows, TS-4a's rows and away notice, TS-4b's approval line, TS-7's phone rows at the build-4 sitting).
+  `specs/users-and-accounts.md` §6/§7 owes TS's fold (the housekeeping pass added its first dated notes there).
 
 **AO — Bring Your Agents** · vibe-field-de · law `draft/thinking-agent-onboarding.md` §8 (page sources `draft/agent-onboarding/`)
 - Landed: AO-0…AO-6b2, **AO-6b3** (`db8852169`, the limit moment reviewed, AO-D11), items 82 (`714ecbaae`,
@@ -190,7 +194,7 @@
    `c0581e952`, branch `focus/agent-probe-env`); item 39 (the swarm's physics at the display's rate, ruled (i) 10-19);
    the tuck row (`384e933f`). The puppeteer halves of the last three sit on `vf/item-39` / `vf/after-a` in James's local
    `../puppeteer` only (not on GitHub, not on puppeteer main, not in a release): push them first, then merge.
-4. TS-7 → TS-8c → TS-9.
+4. TS-8c → TS-9.
 5. AL-6, "Last exit", the relaunch cap; the Behavior words.
 6. **The ruled small slices** (James, 2026-10-28, the housekeeping page), each a lane when one is free:
    - Q4: the explorer thumbnail follows an edit by ≈22 s (ICE's ambient wind, design-015 D-D9): pass a shorter
@@ -243,7 +247,7 @@
 | PLUG follow-ups | the KIT slice · third-party listing (P8e: TD registry + R2 process host; PA-24, §20.5, §21.8) · sideload · R2 `host:"process"` · PRC-5's power loss (§6) · PRC residual policies (§14–§15) · per-section undo/⌘Z/timeline (D29′, P7) | first-party publishing; third-party plugins; a Settings history design; runtime validation is tracked separately in §6 | `specs/plugin-architecture.md`, `thinking-p8-loadable-artifact.md` |
 | TP / TC | D6's cell half, C5, D5, the lineage break (§6) · TC RATIFIED as built (Q6: TC-D1/D2 as amended by WG-D1, D3, D15, L1c at TM-1); TC-S4…S8 (vault, broker, replay, drain-migrate, warm tiers) parked · TP-S4…S6 (S4's typeable mirror struck) | a TP lane · a ghosttea next-major or a P0 witness across a floor restart · measured demand | `specs/terminal-pipeline-v3*.md`, `specs/terminal-custody.md` |
 | GT | G29 upstream (then GT-D22's file half) · GT-D22 (§5) · smoke row 13b: attach through DS-4e to a second staged desktop · no kill control in Godview (Q2): a session ends by the agent's quit, ⌘Q (AL-3) or reaping | G29's release · the two-desktop run | `specs/godview-terminal.md` |
-| IOS | the rebuild and TestFlight (§5) · phone Settings ("Settings in a Pocket", 7 marks, page VCfkfxMp) · IOS-8f `user.me` · K-D5's ghosttea `customInputView` petition (unfiled) | James rebuilds; external TestFlight; TS-7 | `thinking-ios-app.md`, `thinking-ios-swarm.md`, `apps/ios/TESTFLIGHT.md` |
+| IOS | the rebuild and TestFlight (§5) · phone Settings ("Settings in a Pocket", 7 marks, page VCfkfxMp) · K-D5's ghosttea `customInputView` petition (unfiled) | James rebuilds; external TestFlight | `thinking-ios-app.md`, `thinking-ios-swarm.md`, `apps/ios/TESTFLIGHT.md` |
 | NF | COMPLETE; owed: item 52 (b)'s phone half (its routed ghosttea client) · headless floor-on-tailnet rows over TS-1's authKey path (`029af0e6f`) if wanted · native-floor §7 into the T posture | an NF lane | `specs/native-floor.md` |
 | Native push (APNs) | SP-D8: the relay after AR-6; pairing is the account; README's `services/push-relay` row is deferred | AR-6 | `thinking-native-push.md`, design-06 L4 |
 | LOG | LOG-39 (beta list) · LOG-V5 (rides Windows) · LOG-V8 retention (James's product call) · LOG-V7 optional | the beta checklist | `specs/logging-and-diagnostics.md` |
@@ -280,13 +284,15 @@
 - TS: TS-2's photographs and desk rows · renew's live half (a key expired in the admin console) · TS-5's real notice
   on the desk · TS-4a's status-item row, a ghost row and the away notice on the desk · TS-4b's approval line on the
   claims strip · TS-8a on a real tailnet (no connection to log.tailscale.com while uploads are off; a tailnet with flow
-  logs; Disconnect leaving the admin console; Tailnet Lock signed) · a phone run on the new TailscaleKit (with TS-7).
+  logs; Disconnect leaving the admin console; Tailnet Lock signed) · a phone run on the new TailscaleKit with TS-7's
+  rows: a live sign-in (the consent alert, an approval tailnet), sign-out → Continue, and a scan and a link of the
+  add-phone code.
 - Item 78's two-pairs-both-logging row on the mini · item 79's promotion row (his device identity) · F1's device round.
 - The phone: rebuild from main (truffle Swift 0.7.23, ghosttea 0.13.7; until then a restarted desktop needs a phone
   relaunch) → TestFlight build 4 → the device checks: shader compile at first launch, 7 pt type, VoiceOver per body,
   the tab bar as an obstacle, the reconnect banner across a fieldd bounce, the attached-but-unlisted card, an overload
-  refusal said in the connecting face, C1's swipe after a reopen (and PJ-7 run 3's n/a cases, if 10-19's round missed
-  them).
+  refusal said in the connecting face, C1's swipe after a reopen, the corner wearing its home desktop's face and name
+  (IOS-8f) (and PJ-7 run 3's n/a cases, if 10-19's round missed them).
 - AR-7: his daily dogfood · AR7-D2's 8 s kit wait, measured on a pair bounce.
 
 **Eyeballs (both themes)**
@@ -460,7 +466,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 
 | Track | State | Law lives in | Next |
 |---|---|---|---|
-| TS — the Tailscale door | ACTIVE; TS-0…3b, 4a, 4b, 5, 6, 8a, 8b landed | `thinking-tailscale-onboarding.md`; DESIGN.md §6/§8/§9/§13 | TS-7 |
+| TS — the Tailscale door | ACTIVE; TS-0…3b, 4a, 4b, 5, 6, 7, 8a, 8b landed | `thinking-tailscale-onboarding.md`; DESIGN.md §5/§6/§8/§9/§13 | TS-8c (T8, after its live probe) |
 | AO — Bring Your Agents | ACTIVE; AO-0…6b3 landed | `thinking-agent-onboarding.md` | AO-7 on a puppeteer release after 0.3.0 (`installRecipe`) |
 | FG — the first run on the field | ACTIVE; FG-0…2 landed 10-30 | `thinking-first-run-glass.md`; DESIGN.md §2.1/§5/§6/§8/§13 | FG-3 (3a, then 3b) |
 | AL — app lifecycle | ACTIVE; AL-1…3, 5, 7, 8a, 9 landed | `thinking-app-lifecycle.md`; ESR §7.3 | AL-6, Last exit, relaunch cap |
@@ -483,7 +489,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | PLUG — shipped core | COMPLETE: P0–P7, P8b–d (P8c via WP8), PRC-4/5; later publishing/validation work is separate | `specs/plugin-architecture.md`, `thinking-p8-loadable-artifact.md` | existing product gates; no blanket 24-hour prerequisite |
 | PRC-6 — plugin runtime validation | OPEN; diagnostics in draft [PR #7](https://github.com/vibefield/vibefield/pull/7); Linux CI passed, full verification and calibration pending | `thinking-prc6c2-physical-soak.md` §9–10 | full verify → guarded 32-cycle current-desk calibration + listener control; historical failures stay open; literal 24h only for that claim |
 | PLUG — publishing | PARKED: KIT/P8e | `thinking-p8-loadable-artifact.md`, `specs/trust-and-distribution.md` | publishing scope; TD registry + R2 process host |
-| IOS — companion | PARKED | `thinking-ios-app.md`, `thinking-ios-swarm.md`, `thinking-ios-account.md`, `thinking-ios-history.md`, `apps/ios/TESTFLIGHT.md` | the rebuild; TestFlight build 4 |
+| IOS — companion | PARKED; IOS-8f landed 10-30 (`user.me`: the corner wears its home desktop's face and name) | `thinking-ios-app.md`, `thinking-ios-swarm.md`, `thinking-ios-account.md`, `thinking-ios-history.md`, `apps/ios/TESTFLIGHT.md` | the rebuild; TestFlight build 4 |
 | UA — users and accounts | COMPLETE except witnesses | `specs/users-and-accounts.md`, `thinking-ua-phone-account.md` | the phone's second-account witness |
 | NF — native floor | COMPLETE; one owed line | `specs/native-floor.md` | item 52 (b)'s phone half |
 | LOG — logging and audit | PARKED; item 78 landed | `specs/logging-and-diagnostics.md` | LOG-39 for the beta |
