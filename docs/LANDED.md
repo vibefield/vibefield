@@ -16038,6 +16038,24 @@ stderr write.
   - an OS logout (powerMonitor `shutdown`): no box, and the durable close never shows its modal.
 - **Which quits skip the gate:** an update's armed quit and a signal's quit. AL-4 is folded in: dev's SIGTERM/SIGINT
   is never a person's quit, and ⌘Q in dev meets the gate (AL-D7).
+  > **Correction (2026-10-30, AU B3's AU-5a `cbd6e15e5`):**
+  > - **Production:** "Which quits skip the gate: … a signal's quit" held only for dev's SIGTERM and SIGINT (AL-4),
+  >   and so did this entry's heading, "a signal still leaves them". AL-4's handler (`installDevSignalQuit`) ran only
+  >   under `MODE === "dev"` and caught only those two, and a bare Electron 43.1.1 turns SIGTERM, SIGINT and SIGHUP
+  >   into an ordinary `app.quit()` (before-quit → will-quit → quit; LC-26's read, 2026-10-29 09:18:57Z). So a
+  >   production signal, and a SIGHUP in dev, met this gate as a person's ⌘Q would and could stop the pairs, against
+  >   ESR §7.3 as amended. AU-5a installs the handler (`installSignalQuit`, `signal-quit.ts`) in every build and adds
+  >   SIGHUP.
+  > - **Dev, since AL-4:** a signal that landed while the gate's box was up was swallowed. The box absorbed the
+  >   signal's `app.quit()`, and Cancel then left the shell's `restarting` flag set for the session, with the handler's
+  >   own latch already tripped, so every later SIGINT or SIGTERM was ignored and the person's next ⌘Q skipped the
+  >   gate and stopped nothing; and "Quit and end N sessions" stopped the pairs under a signal. AU-5a's
+  >   `quitForSignal` makes a signal during the box quit whatever the box answers and stop nothing; during the stop's
+  >   re-ask box, a signal still quits on its Cancel, while "Quit and end N sessions" finishes the stop already under
+  >   way; three red-first rows in `lifecycle.test.ts`.
+  >
+  > The design source was corrected on 2026-10-29 (`draft/thinking-app-lifecycle.md` AL-F11 and §5.7, dev-local
+  > `1d91b1bbd`). LANDED "AU B3" has the read and the fix.
 - **The preference:** `desktop.confirmQuit`, default on; Settings → Desktop behavior → "Ask before quitting".
 - **One copy, shared:** `pair-stop.ts` holds the census and the stop, and the update's apply port uses it too.
   `awaitDeparture` is the replace path's poll, and a quit waits for the run files to go.
@@ -20178,3 +20196,339 @@ the pegboard under Devices. At 10:02Z he typed "works, close and continue". No n
   - `src/face-words.gen.ts` (~339 KB, accepted for v1) is this Mac's fonts, so a regen diff on another host means another
     host.
 - **No downstream petition.** None was filed or numbered for PT-S1.
+
+## AU B2 — Settings → Updates and the corner: a desktop says which VibeField it runs (AU-3a), the update card becomes a page of its own headed by the exact version (AU-3), and the Me menu always carries the update row, with a cyan dot beside your face while an install waits (AU-2) (AU-D1…D8, D11, D13, D14; AU-G1, G2, G4, G5, G6, G7, G11, G12, G13, G15) (2026-10-30; `6a41ba1d8`, the merge of main `78ed1d946` into `066e20473` on `0706b1b76` on `571d81079`, lane `au/b2`)
+
+**What.** B2 is the first batch the window shows. Its order is LC-30's, so no commit names a page that does not
+exist yet.
+- **AU-3a (`571d81079`): a desktop says which VibeField it runs.**
+  - contracts: `DeviceSlice` and `DeviceInfo` gain an optional, tolerant `appVersion` (`.optional().catch(undefined)`,
+    the VERSION_CHARS bound). An older peer says none, and a malformed one drops alone, never the slice (LC-20).
+    `appVersionOfBuildId` reads WP12 D10's `<appVersion>+<commit7>`; a dev build id names none.
+  - fieldd: `selfSlice()` publishes it, the roster row carries it, and `narrowDeviceSlice` copies it (without that,
+    intake strips every peer's). `emitRoster`'s change signature includes it, so a desktop that updates in place
+    reaches an open page.
+  - `compareDotted` and `compareSemver` move from decide.ts into contracts' `update-policy.ts` as
+    `compareDottedVersions` and `compareReleaseVersions`, with no alias (X24).
+  - New fixtures `device-slice.app-version.json` and `device-info.app-version.json`. The iOS-mirrored goldens are
+    untouched, so the kit owes no copy, and gen does not run.
+- **AU-3 (`0706b1b76`): Settings → Updates** (AU-D8).
+  - The card leaves General for a page of its own, first in Support (Updates · Diagnostics · Advanced), wearing
+    `reset`. Its nav row wears a 6 px cyan mark while an install waits, with words for assistive tech.
+  - The head: "VibeField", the exact version in mono with Copy, and the channel's word.
+  - One primary act per state: Check for updates · Check again · Restart to update · Download (found, with updates
+    off) · Download anyway (skipped). Download goes through AU-1's door, and a refusal says main's words or a composed
+    fallback (LC-38).
+  - The state line: "Ready since …" from the 7th day, "Updated today from the … nightly.", and a channel with nothing
+    published quiet (LC-31). The not-applied notice shows only on the launch that judged it (LC-34). The consent leads
+    with Cancel, focused (LC-9).
+  - Your devices (AU-D13): desktops, self first, each with its version. Older or newer is said only within one channel,
+    and `incompatible` (by contracts major) in its direction, which is fixture-driven and unreachable today (LC-21). Its
+    controller stands apart, so the updater half works with fieldd down.
+  - Shared with AU-2 (LC-30): `update-words.ts` and `update-flow.ts` (one restart hook for the page and the menu).
+    `CopyButton` moved to `settings-ui.tsx` (LC-22), and contracts gains `releaseChannelOf` for Your devices (LC-20).
+- **AU-2 (`066e20473`): the corner** (AU-D1…D7, D11, D14).
+  - The Me menu's update row, always once the window knows the desktop's state, between Settings… and you,
+    aria-disabled when it cannot act; Return still lands on Settings…. `meUpdateRow` builds every row of the renderer
+    spec (R1–R18 but R5, which is AU-7's, and P1–P14 but P11, the question, which `MeMenuView` draws) on AU-3's words,
+    so the row and the page cannot drift. At rest after an update without notes, the row says "Updated today" (R4,
+    D11).
+  - The face's dot `.vf-me-mark` sits in the badge's slot: a waiting count outranks it, and it pops once, never pulses.
+  - The check and the download run in place. A release that ends sessions asks in the menu, the panel grown to 320 on
+    the island curve, in main's words, Cancel first and focused; the menu stays drawn until main answers.
+  - The not-applied notice shows once per window, in the attention ink: `.vf-me-notice` is off `--vf-orange` (the orange
+    fill it wore since UA-7).
+  - `ChromeLayer` hands `desktopState.update` down, one subscription.
+  - The catalog's `UpdateCornerPreview` mounts the shipping `MeMenuView` over `updateCornerFixture` (5 groups, 34
+    states), and the boundary test pins it.
+- Each commit's body says its tests were written, not run: B2 was built code-only in a second worktree while B1 waited.
+  They ran at the light pass and on the mini (below).
+
+**Found while building** (B2's three review lenses, before its light pass; the record's §11.3). Seven defects were
+fixed and squashed into their commits; the lead's calls from that read are LC-46…48. Among them:
+- `emitRoster`'s change signature omitted `appVersion`, so a desktop that updated in place, with `online` and `state`
+  unchanged, moved nothing a subscriber hears. AU-3a adds it, with a delta row.
+- The Me menu's question was drawn into an empty panel for 120 ms with nothing reversing on Cancel. A reopen inside the
+  fold put focus on the update row, so a second Return could restart. The dot's launch pop depended on which snapshot
+  arrived first. Settings → Updates dropped focus to `<body>` after the consent.
+
+Not a defect, and left as it was: AU-3a's own reading (its body's "found along the way") noted that `narrowDeviceSlice`
+drops `nameSource` too (TS-3b), and that mesh-board's `refusalKey` does not key on `appVersion` (the spec's optional
+row).
+
+**Validation.**
+- **The lane:** branch `au/b2` on B1's `380fb4d81`, built in the worktree `/Volumes/SamsungRed/lanes/au/b2`; its last
+  fixups and the light pass ran in `lanes/au/vibe-field`. Committed 2026-10-29 09:12:22–09:18:39Z.
+- **The light pass** (09:15:44–09:24:01Z, at nice 19 under the guard, over `379a2724e` → `a67dcfdae` → `066e20473`) was
+  green on its third run, at `066e20473`. Each
+  red was fixed at its cause and squashed, so B2's shas are the fixed ones:
+  - run 1 (09:15:51Z), red at biome: MeMenu's role set by an expression read as no role (a reasoned ignore, the house
+    form), and a test title's quoting;
+  - run 2 (09:17:56Z), red at typecheck: a type made by indexing an optional property carried `undefined`
+    (`update-words.ts`, `NonNullable` now);
+  - run 3, green: preflight, the walls, the iOS fixtures, biome on 41 files by path, the non-ASCII scan, the contracts,
+    electron-shell, field-app and fieldd typechecks, and vitest: contracts 576 (5 files), electron-shell 228 (12),
+    field-app 524 (23), fieldd 28 (`device-service`).
+  Logs: `lanes/au/logs/light-066e20473/`.
+- **The landed tip** is `6a41ba1d8`: main `78ed1d946` merged into `066e20473` at 20:36:51Z. Since B2's base, main had
+  gained, among them, FG-0…2, PR #8 and PR #5 over the item 94 stack, TS-6, TS-7, AU B1's landing, CP-0, PRC-6, PR #2,
+  PT, Q19, item 113 and the EL8 to Rosetta 0.1.2. Git auto-merged `ChromeLayer.tsx`, `DevicesSection.tsx`,
+  `ui-system-boundaries.test.ts` and fieldd's `daemon.ts` with no markers (TS-6's and TS-7b's edits, and for `daemon.ts`
+  PR #5's). A read-only rehearsal over FG's `ffe9d9b40` had been clean on the same four files; FG's own commits touch
+  none of B2's. The bundle's sha256 is `615f7dac…`.
+- **The mini's `next`** ran 20:37:32–20:37:36Z. It re-installed (+20 −20, 1.6 s) because main's lock had moved since
+  the mini last stood (PR #5, the EL8 to puppeteer 0.3.2); B2 moves no lock. Field-native was current, and preflight
+  exited 0 with one R23 candidate warning.
+- **The mini, run 8, `pnpm verify` at `6a41ba1d8`:** exit 0, armed 20:38:08Z, done 20:42:39Z (load 2.70 → 8.84),
+  whole: preflight through `gen:check`, biome over 2,704 files.
+  - `pnpm test` ran 27 projects, and its 26 vitest summaries hold 10,011 passed, 0 failed and 17 skipped: contracts
+    1309, electron-shell 2020 + 3 skipped, field-app 2948, fieldd 2617 + 11 skipped.
+  - B2's files were among them: contracts `devices` 9 and `update-view` 16; electron-shell `updates/decide` 23;
+    field-app `update-words` 73, `me-menu` 54, `updates-section` 20, `update-devices` 7, `updates-devices` 4,
+    `settings-dialog-account` 14 and `ui-system-boundaries` 35; fieldd `device-service` 28.
+  - `pnpm test:rust`: 31 results, 499 passed, 0 failed, 14 ignored. The tree was clean after, with no stub left.
+  Logs: `lanes/ts6/logs/mini/run8/`.
+- **Landed:** main fast-forwarded `78ed1d946` → `6a41ba1d8` at 20:45:17Z on VF-PM's GO (41 files, +4923 −422), and was
+  pushed at 20:47:13Z with FG's records and the PR ledger (`78ed1d946..0ce140178`).
+
+**Records.** `draft/thinking-update-ux.md` §7 has B2 as built and §11.3 what it found. This entry rides B3's records
+commit (AU B3, below).
+
+**Owed.** The row, the dot, the question and the page on a desk in both themes (James's display word); the catalog's
+plates are the shipping views over fixtures.
+
+## AU B3 — the menus, the move and the quit: the app menu's About, Settings… ⌘, and its update item, and the status item's update image (AU-4); Move to Applications through the quit gate (AU-7); a signal skips the quit gate in every build, a fault older than AU (AU-5a); and a person's quit installs a staged update after the gate's stop (AU-5) (AU-D9, AU-D12; AU-G3, AU-G8, AU-G9, AU-G14) (2026-10-30; `20783c656`, the merge of main `1de84540b` into `a4688b7c9` on `cbd6e15e5` on `2cfaa1f96` on `7b2cd0db6`, lane `au/b3`)
+
+**What.** The order is LC-27's: install on quit is born with the read-only and pending-move guards beneath it.
+- **AU-4 (`7b2cd0db6`): the menus say it too** (AU-D12).
+  - The status item: `updateMenuEntry` is the one update item both menus wear (AU-L4). A found update that was not
+    skipped, with automatic updates off, reads "Download Update" (no ellipsis: it asks nothing, LC-41) and downloads
+    that version through AU-1's door. Check for Updates… keeps its ellipsis for now (LC-52, the lead's call; whether to
+    drop it is open for James).
+  - Its image: `trayImageKind` gains `update` for a staged update with an apply wired. Attention keeps one meaning, a
+    degraded service or a failed check, and outranks it. A staged update with no apply wears the base image (it wore
+    attention).
+  - The art: four images (`fieldUpdateTemplate.png` and `@2x`, `field-update.ico`, `field-linux-update.png`) generated
+    from `tray-master.svg` by `generate-icons.mjs`: the mark with one plain dot, no bang. The lead generated them in
+    B3's slot at 12:03:40Z, looked at them at 16 px on a light and a dark bar (LC-32), and folded them into AU-4;
+    `b3-slot.log` checks that the committed bytes are the ones looked at. No image of the look is kept.
+  - The app menu (darwin) is spelled out: About · Settings… ⌘, · the update item · Services · Hide, Hide Others, Show
+    All · Quit. Settings… registers ⌘,, but the page answers it first in its capture phase (GT-D21), so the chord keeps
+    one owner, and the item's click reveals Settings, never toggles. The update item wears the status item's entry.
+    About names the version and the commit (`commitOfBuildId`). The Windows and Linux menus are unchanged.
+  - No ⌘, smoke row (LC-28): `sendInputEvent` enters below AppKit's key-equivalent dispatch, so a synthesized ⌘, never
+    reaches a menu item. ⌘, through the menu is an owed eyeball.
+- **AU-7 (`2cfaa1f96`): Move to Applications** (AU-G8).
+  - contracts: `UpdateView.location` (`applications` · `elsewhere` · `read-only`; optional, absent off macOS, and a
+    location it does not know is a wire error),
+    `UpdateMoveResult`, and `IPC_CHANNELS.updateMoveToApplications`, the ninth update door; four EL9 fixtures.
+  - main: `updates/location.ts` classifies once per process (App Translocation, then `isInApplicationsFolder`, then
+    the parent's W_OK). A read-only copy checks only when a person asks, downloads nothing, and refuses a staged
+    Restart as `location` before the census, so it no longer ends sessions for nothing before Squirrel refuses.
+  - The move goes through the quit gate (`quitThen`): `app.moveToApplicationsFolder` runs only after the durable close
+    and a COMPLETE stop, and an existing copy in Applications goes to the Trash. An incomplete or failed stop, a quit
+    with no gate, or a mover that refuses or throws relaunches in place, logged `desktop.update.move_failed` (LC-25).
+    `QuitGate.stop()` now answers `{kind: done, complete, ended}` or `{kind: aborted}`.
+  - The window: the Me row's R5 ("Move to Applications…", "Can't update from here") only for read-only; the page's
+    read-only state in the attention ink, with the move as its primary; "elsewhere" is one quiet line with the move as a
+    secondary act.
+- **AU-5a (`cbd6e15e5`): a signal skips the quit gate in every build. The fault is older than AU.**
+  - LC-26's read (2026-10-29 09:18:57Z, a bare Electron 43.1.1 with no handler of ours, `lanes/au/lc26/`): Electron's
+    own POSIX handler turns SIGTERM, SIGINT and SIGHUP each into an ordinary `app.quit()` (before-quit → will-quit →
+    quit). AL-4's handler ran only under `MODE === "dev"`, so in production a signal met the census gate as ⌘Q would and
+    could stop the pairs, against ESR §7.3 as amended.
+  - AU-5a moves `dev-signals.ts` to `signal-quit.ts`: a mode-free `installSignalQuit`, installed beside the lifecycle in
+    every build, with SIGHUP added.
+  - Folded in from B3's quit-seam review (`quitForSignal`, LC-50): a signal that lands while the gate's box is up is
+    not the person's quit, whatever the box answers, and stops nothing. During the stop's re-ask box, a signal still
+    quits on its Cancel, while "Quit and end N sessions" finishes the stop already under way. Before, the box swallowed
+    the signal's quit: Cancel left `restarting` set for the session, with the handler's own latch already tripped, so
+    every later SIGINT or SIGTERM was ignored (the handler caught only those two) and the person's next ⌘Q skipped the
+    gate and stopped nothing; and "Quit and end N sessions" stopped the pairs under a signal. Dev had this since AL-4.
+  - AL's own LANDED entry ("Which quits skip the gate") now carries both faults as a dated correction; their design
+    source, `thinking-app-lifecycle.md` AL-F11 and §5.7, was corrected on 2026-10-29 (dev-local `1d91b1bbd`).
+- **AU-5 (`a4688b7c9`): install on quit** (AU-D9, AU-G3).
+  - One step between the gate's stop and the native quit (`installThenQuit`): after a COMPLETE stop of a quit that is
+    still the person's, `installOnQuit` stages the update (`apply.stage`, bounded at 30 s), with no relaunch and no
+    `quitAndInstall`. `autoInstallOnAppQuit` stays forced off.
+  - It is skipped, logged `desktop.update.quit_install_skipped {why}`, on a signal, an update's armed quit, the OS
+    ending the session (AL-D6) and an incomplete stop. A waiting move runs in its place (LC-25). A second ⌘Q or a signal
+    during the stage is absorbed: one stop, one install.
+  - One hold list, in order: busy, not staged, no apply built, `location`, then the silent holds (disabled, declined,
+    confirmation-required, LC-24). Then a fresh policy read bounded at 3 s, and the levers.
+  - The quit box's last line, "The Oct 28 nightly installs as you quit." (LC-36), shows only for a person's quit whose
+    census box shows, and never while a move pends.
+  - A policy hold at the quit is said by the next launch's OUTCOME row (`QUIT_HELD`, LC-14), with no new enum value.
+    field-app's not-applied words lead "The last quit didn't install …" for a quit.
+  - `smoke:update` gains a sixth run, quit, which is OPT-IN (`--runs quit`, LC-29). desk-gates row 30 says so.
+
+**Found while building** (the record's §11.2, §11.4–§11.6):
+- The two faults AU-5a corrects (above).
+- A queued quit leaked between tests (B3's light pass, run 2; the harness's fault, not the product's). The lifecycle
+  queues its quits (`setImmediate(() => app.quit())`), and every rig in `lifecycle.test.ts` shares one mocked
+  `app.quit`. Vitest's step between tests yields no macrotask, so a quit still queued fired into the next test's rig,
+  past its `mockReset`. The fix is the harness's: `drain()` in the quit-gate block's `afterEach` and before each
+  mid-test `electron.reset()`. The rule: drain the queue the code under test feeds before a shared mock is reset.
+- biome's `noThenProperty` refuses a `then` key even in a fixture, so the smoke's step key is `next`. A long signature
+  wraps as the formatter prints it.
+- The commit bodies are stale in two ways. AU-4's still says "GENERATOR ONLY: no PNG/ICO bytes are in this commit" and
+  that `icons:check` stays red until they are; the images were folded into AU-4 before its light pass, and run 11's
+  verify, with `icons:check` in its chain, was green. And each body says its tests were written, not run: they ran at
+  the light pass and on the mini (below).
+
+**Validation.**
+- **The lane:** the worktree `/Volumes/SamsungRed/lanes/au/b2`, branch `au/b3` on B2's `066e20473`, committed
+  2026-10-29 12:04:14Z (AU-4) and 12:11:48Z (AU-7, AU-5a, AU-5).
+- **The light pass** (`b3-slot`, 12:12:00–12:15:52Z, at nice 19 under the guard) was green on its third run. Each red
+  was fixed at its cause and folded into the commit that owns it (the harness's `drain()` into AU-7, one call each into
+  AU-5a and AU-5):
+  - run 1 (12:04:22Z), red at biome: `noThenProperty` in `update-fixture.mjs` and `update-fixture.test.ts`, and
+    `controller.ts`'s format (the fresh-policy read's signature);
+  - run 2 (12:06:28Z), red at electron-shell's vitest: the queued-quit leak above;
+  - run 3, green: preflight, the walls, the iOS fixtures, biome on 61 files by path, the non-ASCII scan, the
+    contracts, electron-shell and field-app typechecks, and vitest: contracts 1247 (50 files), electron-shell 2119 + 3
+    skipped (147 files), field-app 353 (12 files); then `icons:check` (35 files) and the update smoke's node rows, 8
+    of 8;
+  - AU-5a's red-first: on the parent's source with the module rename alone, five rows were red (two in
+    `signal-quit.test.ts`, three in `lifecycle.test.ts`) and 25 passed; at AU-5a, 30 of 30 passed.
+  Logs: `lanes/au/logs/b3-slot.log` and `light-a4688b7c9/`.
+- **The landed tip** is `20783c656`: main `1de84540b` (AU B2's landing, FG's and the PRs' records, IOS-8f and PT-S1)
+  merged into `a4688b7c9` at
+  21:09:00Z. Git auto-merged contracts' `registries.ts` and `fixtures.test.ts` and electron-shell's `resources.test.ts`
+  with no markers. The bundle's sha256 is `2d141ec2…`.
+- **The mini's `next`** ran 21:09:13–21:09:23Z: the locks stood (no re-install), field-native was built, and
+  preflight exited 0 with one R23 candidate warning.
+- **The mini, run 11, `pnpm verify` at `20783c656`:** exit 0, armed 21:09:23Z, done 21:13:56Z (load 1.70 → 9.66),
+  whole: preflight through `gen:check`, biome over 2,766 files.
+  - `pnpm test` ran 28 projects, and its 27 vitest summaries hold 10,278 passed, 0 failed and 18 skipped: contracts
+    1328, electron-shell 2120 + 3 skipped, field-app 2967, fieldd 2621 + 11 skipped. The dev runner's node tests
+    passed 262 of 262, the quit run's two rows (`judgeQuit`, `readLastApply`) among them.
+  - B3's files were among them: electron-shell `lifecycle` 34, `signal-quit` 4, `quit-gate` 20,
+    `updates/controller-apply` 86, `updates/location` 12, `updates/decide` 26, `app-menu-model` 55, `app-menu` 3,
+    `tray-model` 66, `tray-controller` 20, `resources` 30, `update-doors` 6 and `preload-update` 4; contracts
+    `fixtures` 502, `update-view` 18 and `devices` 11; field-app `update-words` 85, `me-menu` 54, `me-menu-wiring` 6
+    and `updates-section` 26.
+  - `pnpm test:rust`: 31 results, 499 passed, 0 failed, 14 ignored. The tree was clean after, with no stub left.
+  Logs: `lanes/ts6/logs/mini/run11/`.
+- **Landed:** main fast-forwarded `1de84540b` → `20783c656` at 21:16:01Z on VF-PM's GO (69 files, +3335 −270), and
+  was pushed at 21:16:44Z.
+
+**Records.** `draft/thinking-update-ux.md` §7 has AU-5a's and AU-5's as built (AU-4's and AU-7's bullets still read as
+planned) and §11 what B3 found. This commit adds AU B2's entry
+(above), this one, the dated correction at AL's entry, ROADMAP's AU track, DECISIONS' AU, AL, EDP and WP12 rows, and
+desk-gates row 30's quit run.
+
+**Owed.**
+- ⌘, through the app menu, an owed eyeball (LC-28).
+- The physical install-on-quit and Move rows on the mini, between two signed nightlies (⌘Q with N+1 staged: the bundle
+  becomes N+1 without a launch). LC-49's "or quit" words follow that row in a one-line commit. Also the TCC probe for
+  the quit run's trigger, and the logout probe.
+- At the next draft queue: EDP §11.3/§11.5's and ESR §7.3's as-built notes, `thinking-app-lifecycle.md` §4's table,
+  AU-4's and AU-7's as built in the record's §7, and dated corrections at the record's source: its Status (B1's run 3
+  time; B2 was run 8 and B3 run 11, not 9 and 10; B2 and B3 landed), §11.4 ("stopping and installing nothing": install
+  on quit came with AU-5, above AU-5a; and a signal during the stop's re-ask box stops nothing only on its Cancel) and
+  §11.5 (run 2's two red rows were one AU-5a row and one AU-5 row).
+- In code, in a later commit: `quitForSignal`'s doc comment in `lifecycle.ts` says the pairs are left "whatever the box
+  answers"; during the stop's re-ask box, "Quit and end N sessions" finishes the stop already under way.
+- LC-52 ("Check for Updates…" keeps its ellipsis) is James's.
+- B4 (AU-6a `4c25147bf`, AU-6b `2b1cfff6f`, their pre-rebase shas of 2026-10-29) waits for HN B1 and is rebased over it.
+
+## FG-3a — the Setup Assistant stands in one glass on the field: 880 × 640, fitted as one picture, its material in layers, its steps along its top from TS-6's order alone (FG-L2, FG-L3, FG-D3 A, FG-D22 A, FG-D23 A, FG-D26, FG-D27) (2026-10-30; `e012d1f50`, lane `fg/build`, in the mini's mint `5cc2d1108` over main `12a9a4e4b`)
+
+**What.** FG-3 split at VF-PM's word (13:17Z): 3a is the glass's DOM; 3b, the field drawing it (FG-D24), follows.
+- **The glass** (`boot/onboarding/wizard-ui.tsx` + `.css`) is 880 × 640 on every step.
+  - It is centred on its ground and scaled as one picture by `glassFit` = min(1, (w − 96)/880, (h − 96)/640), never
+    reflowed.
+  - Its material is four layers under its contents: shadow, frost, grain and edge.
+  - On the field it wears `--vf-wizard-edge`, `--vf-wizard-edge-light`, `--vf-shadow-wizard-field` and the grain.
+    The tokens are in `tokens.css`, from DESIGN.md §5.
+  - It forms where the splash stood: `--vf-glass-frost` 0 → 1 and `--vf-glass-rise` .985 → 1, 560ms island,
+    registered with `@property`. Under reduced motion it is the frost alone, 280ms.
+  - Nothing that holds the frost sets opacity, filter or mask (a backdrop root), and a test row holds that.
+- **The steps** (FG-D22 A, FG-D23 A) have ONE source, TS-6's `order.ts`.
+  - `STEP_OF` maps each pane to its step or none, total by `satisfies Record<Pane, …>`.
+  - `stepsOf(variant)` walks `nextPane`, and `topOf(variant)` is the one "top".
+  - The band: You · Agents · Profiles · History · Devices · Setting up, done/now/next, `aria-current="step"`. It is
+    absent on the welcomes and the chooser, fades in with You (240ms), and fills as you arrive (480ms island).
+- **The frame** (FG-L3) is 96/160/40, 560 wide. A pane centres in it, scrolling downward only, until FG-4 lays its
+  head, body and foot.
+- **Finish setting up's sheet is unchanged** (FG-D26, VF-PM's lean): one size prop on the shell, `glass` | `sheet`.
+  The sheet's is today's exact geometry, never fitted, with no band.
+- **Moved to FG-4** (VF-PM 13:45Z): the logo and the words' fade at the forming; Setting up's progress fill; the
+  panes in the frame, including the fade in place of the rise; the eyebrows' retirement; "never scrolling".
+
+**Found.**
+- **The sheet's scrim close was never reachable** (FG-D27). It was found on AO's surface and fixed at the cause by
+  the ground's `pointer-events`.
+  - The close (`SetupSheet.tsx`, on a press of the sheet itself) was designed but no hand could reach it: the shell's
+    full-size wrapper took every press beside the glass.
+  - The glass's ground now takes no press (`pointer-events: none`; the fit inherits it) and only the glass does.
+  - Witness: `setup-sheet.test.tsx`'s rule row (its DOM does no hit-testing); the physical press is the hand's.
+- **The sheet's 200ms opacity fade-in sits above the frost** (FG-D28). For those frames the frost samples nothing
+  behind the sheet. Noted for AO and left unchanged.
+- **Main moved twice under the apply**, each time on VF-PM's word, and the light ran over each base.
+  - PRs #8 and #5 (`78ed1d946`) touch no file of FG's. `fg/build` fast-forwarded with the apply carried, and the light
+    was green. FG-3a was committed there as `e56aea503`, now parked on `fg/3a-over-78ed1d946`.
+  - AU B2 (`0ce140178`) touches `scenes.css`. `fg/build` was reset to main and the drafts were re-applied three ways.
+    Ten files came out byte-equal to `e56aea503`, and `scenes.css` takes FG's same −5 over AU B2's version.
+  - `lanes/fg/fg3ab-rehearsal.sh` was clean over each base.
+  - Before the light could read main's packages, the lane's were brought to the lock, offline (rosetta 0.1.2, then
+    puppeteer 0.3.2).
+
+**Validation.**
+- The landing light (`lanes/fg/fg3a-light.sh`, each row alone at nice 19 under the guard, read once) was GREEN over main
+  `0ce140178`, 20:50:33–21:01:35Z, all 29 rows rc 0:
+  - typecheck for field-app (44 s) and electron-shell (37 s);
+  - 23 vitest files, 453 tests: the new `wizard-steps.test.ts` (4), `onboarding-wizard` 48, `setup-sheet` 5, and the
+    four tokens.css readers the rehearsal's 19 lacked (`peers-on-the-mat`, `document-presence`, `godview-monitor`,
+    `godview-stage-rule`). AU B2's rows ran among them: `settings-dialog-account` 14, `ui-system-boundaries` 35;
+  - biome (23 files), check:walls, check:retired, build:renderer (the production UI boundary OK, 78 files),
+    diff --check.
+  - Over `ffe9d9b40` (20:34:08–20:37:30Z) and `78ed1d946` (20:38:48–20:47:48Z) the same rows were green, with 449
+    tests each.
+  Logs: `lanes/fg/logs/fg3a-light-0ce140178.out`; the earlier bases' runs are in `fg3a-light-ffe9d9b40/` and
+  `fg3a-light-78ed1d946/`.
+- **No verify on this Mac** (James, 2026-10-29 09:05Z: the Mac mini's verify lane). FG-3a went to the mini as the
+  bundle `fg3a-e012d1f50.bundle` (sha256 `de03f621…`, requiring `6a41ba1d8` only). At each turn, a9 minted
+  `e012d1f50` × the then-main there (mint-main), as PORTALS was minted.
+- **Run 12: the mint `1669134bf` over main `097edb32c`.** DESIGN.md was the one file both sides touch, and it merged
+  clean. a9's `next` ran from 21:27:01Z: no re-install (the locks stand), field-native built, and preflight exited 0
+  with R23's one known warning.
+  - `pnpm verify` armed at 21:27:11Z (load 1.48) and exited 1 at 21:29:59Z (load 36). It was red on ONE row, fieldd's
+    `agent-session` MF-1f/MF-1g: "the interrupted run read as exited did not hold within 15000 ms". fieldd's other
+    2,620 tests passed. FG-3a touches no fieldd file.
+  - The row's evidence reads as cause A of item 87's three: the floor's row says exited:false, and its `/bin/cat` is
+    still alive at 15 s. Item 87 landed C3, so its fix cannot touch this shape. It is filed as item 118, the fixer's
+    (VF-PM, 21:34Z; `lanes/records/item118/item.md`).
+  - Run 12b, a full verify on the same tree, was green. It armed at 23:12:18Z (load 1.19) and exited 0 at 23:16:42Z:
+    28 projects; vitest 10,306 (10,288 passed, 0 failed, 18 skipped); rust 499 / 0 / 14 over 31 binaries; gen and the
+    tree clean.
+- **`smoke:canvas` on run 12's mint** (21:32:48–21:49:06Z, exit 2) was red on four judges, none of them FG-3a's. The
+  control on main alone (ctl119, `bef070265`, 23:17:36–23:33:35Z) decided them (VF-PM, 23:38Z):
+  - HAND is item 117's class: the notebook 267, the whiteboard 250 and the calendar 250 ms, against 200 ± 40. The
+    control repeats it (the whiteboard and the calendar, 250 ms).
+  - KEYS ("→ moved the focus to vibefield.simulator, not the next specimen desk.note") and IDLE (the desk submitted
+    3 times for a still page in hand) are item 119, main's. The control repeats both. KEYS is field-app's row key
+    under PT-S1's shelf hang, and IDLE is ICE's held-pane blur, the 10-26 class.
+  - REST ACT ("with the wind the desk never rested after the act") was a hand at the mini during the row.
+  - The control was also red on PEERS CONTRAST ("no chip to measure by night"), which run 12's row was not.
+  - The desk's boot compiled its pipelines in 578 ms on run 12's row and in 140 ms on the control after it (presented
+    at 605 and 166 ms, 3 frames each). The retry's remount compiled in 62 and 67 ms. FG-3a touches no pipeline.
+    VF-PM reads the 578 as the cache compiling across the two rows, and FG owes nothing.
+- **Run 13: the mint `5cc2d1108` over main `12a9a4e4b`** (PR #3's rulers and AU's records). DESIGN.md was again the
+  one file both sides touch; it merged clean, with no markers. Run 13 is verify only: FG-3a's smoke evidence is run
+  12's row (VF-PM, 23:38Z). `pnpm verify` armed at 23:35:06Z (load 1.52) and exited 0 at 23:39:35Z (load 7.70):
+  28 projects; vitest 10,306 (10,288 passed, 0 failed, 18 skipped); rust 499 / 0 / 14 over 31 binaries; gen and the
+  tree clean. Logs: `lanes/ts6/logs/mini/` `run12/`, `run12b/`, `ctl119/` and `run13/`.
+- No smoke reaches the Setup Assistant until FG-6's `smoke:first-run`. The glass by eye is James's, and so is the
+  sheet's scrim close by hand (§5's Eyeballs).
+- **Landed:** main fast-forwarded `12a9a4e4b` → `5cc2d1108` at 23:41:18Z, and was pushed at 23:41:41Z.
+- The 13:50Z rehearsal (a dangling commit over the merge-tree base, in a fresh detached worktree removed after) was an
+  early read only.
+
+**Owed.**
+- FG-3b: the field draws the glass (FG-D24). The vendor patches go in the vendor check, and the look posted to the
+  worker is the CSS layers' computed style.
+- FG-4 (the panes in the frame and the logo), FG-5 (the hand-over), FG-6 (the gates; the catalog over the field's
+  still).
+- AO: rule D26 (the sheet's size) and D28 (its fade above the frost).

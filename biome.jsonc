@@ -71,7 +71,11 @@
       // would break every signature on the embedded copy, so only the keygen formats it; the
       // contracts fixture is kept in the same canonical form (its test holds it so).
       "!**/trust-root.json",
-      "!packages/contracts/fixtures/trust-root.valid.json"
+      "!packages/contracts/fixtures/trust-root.valid.json",
+      // spark-face/vendor/sparks.js is James's Agent Sparks engine, vendored BYTE FOR BYTE
+      // (DESIGN.md §2.10): spark-face.test.tsx holds its SHA-256, so nothing formats or lints it,
+      // and a newer version is copied over it, never edited in place.
+      "!packages/design-kit/src/spark-face/vendor/sparks.js"
     ]
   },
   "formatter": {

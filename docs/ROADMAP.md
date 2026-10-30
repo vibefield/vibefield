@@ -76,10 +76,12 @@
 - Landed 10-30: **FG-0** (records only: DESIGN.md first), **FG-1** (`88457494e`, the field: the website's splash
   vendored with its door, the boot's ground) and **FG-2** (`07618ca61`, the returning tear; every boot handed over
   before it is interactive), as the merge `ffe9d9b40`, run 7 on the Mac mini: verify green, smoke:canvas:no-webgpu
-  green, and smoke:canvas red only on item 117's class (LANDED "FG-1", "FG-2").
-- Next: **FG-3** (the glass, the steps, the frame: 3a the glass's DOM, applied over `ffe9d9b40`; then 3b, the field
-  drawing the glass, FG-D24) → FG-4 (the panes in the frame, and the logo) → FG-5 (the hand-over) → FG-6 (the gates:
-  the catalog, a `smoke:first-run` row, contrast). Each verifies on the Mac mini.
+  green, and smoke:canvas red only on item 117's class; **FG-3a** (`e012d1f50`, the glass's DOM: 880 × 640 with the
+  fit, its layers, the steps' band, the frame), as the mint `5cc2d1108`, run 13 on the Mac mini: verify green, and
+  `smoke:canvas` (on run 12's mint) red only on items 117 and 119 and a hand at the mini (LANDED "FG-1", "FG-2",
+  "FG-3a").
+- Next: **FG-3b** (the field drawing the glass, FG-D24) → FG-4 (the panes in the frame, and the logo) → FG-5 (the
+  hand-over) → FG-6 (the gates: the catalog, a `smoke:first-run` row, contrast). Each verifies on the Mac mini.
 - Owed: FG-O7 (§9) at FG-4.
 
 **AL — what Quit means** · better-quit (lanes `al2`, `al/chords`, `al/chords-2`) · law `draft/thinking-app-lifecycle.md` v0.2 §8, ESR §7.3 (amended), design-00 EL1
@@ -104,15 +106,20 @@
   settle the blueprints' questions and what the builds found (the record's §10); James ruled LC-53 at the leans.
 - Landed 10-30: **B1** — AU-0 (`db22ddb2e`: DESIGN.md first; its EDP/ESR/WP12 notes at source in dev-local
   `a0a7f7bdb`) and AU-1 (`380fb4d81`: the view grows, and a person's two doors, the check's answer and
-  `download(version)`), as the merge `aa2be72c9`, run 3 green on the Mac mini (LANDED "AU B1").
-- Next, each built and light-green, verified on the mini and landed in turn: **B2** (AU-3a `appVersion` in the device
-  slice → AU-3 Settings → Updates and Your devices → AU-2 the corner: the dot, the always-row, the question) → **B3**
-  (AU-4 the app menu and the status item's update image → AU-7 Move to Applications → AU-5a a signal never meets the
-  quit gate, in every build → AU-5 install on quit) → **B4** (AU-6 signed notes and the build time, every
-  `release.yml` edit; after HN B1 lands, rebased over it).
-- Owed: the row, the dot and the question on a desk in both themes (James's display word) after B2; ⌘, through the
-  app menu (AU-4's eyeball); AU-5's install-on-quit and Move rows on the mini between two signed nightlies, then its
-  logout probe; LC-52 ("Check for Updates…" keeps its ellipsis, though the item does not open a box) is James's.
+  `download(version)`), as the merge `aa2be72c9`, run 3. **B2** — AU-3a (`571d81079`: `appVersion` in the device
+  slice), AU-3 (`0706b1b76`: Settings → Updates and Your devices) and AU-2 (`066e20473`: the corner, the dot, the
+  always-row, the question), as the merge `6a41ba1d8`, run 8. **B3** — AU-4 (`7b2cd0db6`: the app menu's Settings… ⌘,
+  and update item, the status item's update image), AU-7 (`2cfaa1f96`: Move to Applications), AU-5a (`cbd6e15e5`: a
+  signal skips the quit gate in every build, a fault older than AU, corrected at AL's LANDED entry) and AU-5
+  (`a4688b7c9`: install on quit), as the merge `20783c656`, run 11. Each green on the Mac mini (LANDED "AU B1", "AU
+  B2", "AU B3").
+- Next: **B4** — AU-6a (`4c25147bf`) and AU-6b (`2b1cfff6f`), the pre-rebase shas: signed notes and the build time,
+  every `release.yml` edit; built and light-green, after HN B1 lands, rebased over it. At its landing, EDP §11.1's
+  note says built and `build-wp12-updater.md`'s B3 paragraph gains step 6c.
+- Owed: Settings → Updates, the row, the dot and the question on a desk in both themes (James's display word); ⌘,
+  through the app menu (AU-4's eyeball, LC-28); AU-5's install-on-quit and AU-7's Move rows on the mini between two
+  signed nightlies, then LC-49's "or quit" words in one line; the quit run's TCC probe; the logout probe; LC-52
+  ("Check for Updates…" keeps its ellipsis, though the item does not open a box) is James's.
 
 **QW1 — the Godview swarm QA, fix wave 1** · vibe-field-d4 · law `draft/testing/godview-swarm-qa-plan.md` v0.3 §12.1, `draft/thinking-ar-reattach.md` §6
 - Ruled: the plan (A01–A27, X01–X26, Q01–Q21; page 3ZrkUWG4) and re-attach's RA-D1…RA-D9 (10-27, every pick at the
@@ -328,8 +335,9 @@
 - AR-7: his daily dogfood · AR7-D2's 8 s kit wait, measured on a pair bounce.
 
 **Eyeballs (both themes)**
-- The update card on the current nightly (Settings › General, WP12d L3c-ii) — moves to Settings → Updates with B2
-  (AU-3, AU-D8); the pass is the page's then, with the Me row and the dot (AU-2).
+- Settings → Updates (AU-3; the update card left General with B2) with the Me menu's update row, the dot and the
+  question (AU-2), and since B3 the status item's update image and the app menu's update item (AU-4); ⌘, through the
+  app menu has no smoke (LC-28).
 - History by project (PJ-4 phase B): the list's order and folds, a row's marks, "n live".
 - Settings → Plugins (object rows since DK-8 `244263f8c`): enable, disable, update, a faulted plugin's state.
 - Settings → Devices → Network details' sync rows and the head's name-pill sync dot (C6-4); could join TS's photographs.
@@ -339,6 +347,8 @@
   stack): Animate effects only where it means something; licences visible.
 - Godview round 3 on a real window: the lights' move, a real fling, launch's first call, ⌘W on the last pane (re-read
   after AL-9), other heights. Fold into QA wave 1 if the plan covers it.
+- The Setup Assistant's glass on the field (FG-3a): the forming, the fit in a small window, the steps' band; the
+  sheet's scrim close by hand (FG-D27).
 
 **Releases, edits and chores**
 - Releases: puppeteer 0.3.0 PUBLISHED 10-28 08:19Z and pinned (`1469639a6`, with QW1 stack B) · a later puppeteer
@@ -432,8 +442,6 @@
 **Desk, UI and design**
 - With no desk, B and the line's ⊕ still flip the Objects surface — DK-18 follow-up (b).
 - InlineNotice's attention/error tones to DESIGN.md §2.5's inks (a design-kit slice) — WP12 L3c-ii.
-- The Me menu's notice row is in `--vf-orange`, the fill, not the attention ink (§2.5; `MeMenu.css:272-277`, since
-  UA-7). AU-2 (B2) fixes it with the not-installed notice — DESIGN.md §8 the Me menu (AU-0).
 - `prefers-reduced-transparency`: a DESIGN.md stance first (`440b04e`'s proposal: glass falls back to the §5 tint), for the cover glass (FC-D13/D16) and the deck's glass v2 (GT-D19), then tokens.css.
 
 **Files, phone, accounts**
@@ -502,9 +510,9 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 |---|---|---|---|
 | TS — the Tailscale door | ACTIVE; TS-0…3b, 4a, 4b, 5, 6, 7, 8a, 8b landed | `thinking-tailscale-onboarding.md`; DESIGN.md §5/§6/§8/§9/§13 | TS-8c (T8, after its live probe) |
 | AO — Bring Your Agents | ACTIVE; AO-0…6b3 landed | `thinking-agent-onboarding.md` | AO-7 on a puppeteer release after 0.3.0 (`installRecipe`) |
-| FG — the first run on the field | ACTIVE; FG-0…2 landed 10-30 | `thinking-first-run-glass.md`; DESIGN.md §2.1/§5/§6/§8/§13 | FG-3 (3a, then 3b) |
+| FG — the first run on the field | ACTIVE; FG-0…3a landed 10-30 | `thinking-first-run-glass.md`; DESIGN.md §2.1/§5/§6/§8/§13 | FG-3b |
 | AL — app lifecycle | ACTIVE; AL-1…3, 5, 7, 8a, 9 landed | `thinking-app-lifecycle.md`; ESR §7.3 | AL-6, Last exit, relaunch cap |
-| AU — Updates That Wait | ACTIVE; B1 (AU-0, AU-1) landed 10-30 | `thinking-update-ux.md` §7 (page sources `draft/update-ux/`); DESIGN.md §2.5/§2.8/§6/§8/§9/§13; EDP §5.2/§6.4/§11; ESR §7.3 | B2 (AU-3a, AU-3, AU-2) |
+| AU — Updates That Wait | ACTIVE; B1–B3 (AU-0…AU-5, AU-7) landed 10-30 | `thinking-update-ux.md` §7 (page sources `draft/update-ux/`); DESIGN.md §2.5/§2.8/§6/§8/§9/§13; EDP §5.2/§6.4/§11; ESR §7.3 | B4 (AU-6a, AU-6b), after HN B1 |
 | QW1 — Godview swarm QA, fix wave 1 | ACTIVE; stacks A and B landed 10-28, B on puppeteer 0.3.0's EL8 pin | `godview-swarm-qa-plan.md`; `thinking-ar-reattach.md` | QA wave 1 |
 | Release rails (EDP/ESP, WP12, TD, BP, RD, RM) | ACTIVE; nightlies live, W10/W11 passed | the release specs; `thinking-browser-profile.md`, `thinking-release-deps.md`, `thinking-release-management.md` | round 3; the first-beta list |
 | EL8 — pins | ACTIVE (watch) | DECISIONS TB; the manifests | puppeteer 0.3.0 pinned 10-28 (`1469639a6`); Swift rejoin; mille's release |
