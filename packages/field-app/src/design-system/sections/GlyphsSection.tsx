@@ -42,8 +42,9 @@ export function GlyphsSection(): ReactElement {
             <UiIconButton title="Godview">
               <FieldGlyph name="panes" size={20} />
             </UiIconButton>
+            {/* Artifacts' button is the package circle: `package` at 18 (§13 sizes, HN-8) */}
             <UiIconButton title="Artifacts">
-              <FieldGlyph name="package" size={20} />
+              <FieldGlyph name="package" size={18} />
             </UiIconButton>
           </div>
         </div>
