@@ -137,8 +137,8 @@ export const WAITING_WORDS = {
 /** What another app hands over, once it is brought in (HN-6; DESIGN.md §8 "The hand", brought
  * in): a file's facts when its first lines are not words, the kind's own name for a thing that
  * came with none, what a pane says to a file with no path, and the line's notes for a drop that
- * held nothing a card can be, for words past what a card holds, and for more than the hand
- * holds. Sizes as §9 counts them (`sizeWords`). */
+ * held nothing a card can be, for words or pixels past what a card holds, and for more than the
+ * hand holds. Sizes as §9 counts them (`sizeWords`). */
 export const OUTSIDE_WORDS = {
   /** "PDF · 2.4 MB": the kind its name says, then its size as Finder counts it — a size alone,
    * so to the nearest: "BIN · 1 byte", and never "1000 KB" */
@@ -152,13 +152,14 @@ export const OUTSIDE_WORDS = {
    * nothing to give */
   fileNoPath: "A file with no path can't be pasted yet",
   nothing: "Not brought in — it held no words, picture or file",
-  /** LC-24 — words past what one paste reads: their size rounded up and the bound down, so the
-   * two never read as equal (§9). A picture past the still's cap is never refused: it comes in
-   * as its file, its path and never its pixels. */
-  tooLarge: (bytes: number, bound: number) => {
+  /** LC-24 — words past what one paste reads, or pixels past the still's cap with no path to
+   * come in as (one with a path comes in as its file): its size rounded up and the bound down,
+   * so the two never read as equal (§9) */
+  tooLarge: (what: "words" | "picture", bytes: number, bound: number) => {
+    const holds = what === "words" ? "the words hold" : "the picture holds";
     const size = sizeWords(bytes, Math.ceil);
     const most = sizeWords(bound, Math.floor);
-    return `Not brought in — the words hold ${size}; a card holds at most ${most}`;
+    return `Not brought in — ${holds} ${size}; a card holds at most ${most}`;
   },
   /** LC-23 — more at once than the hand holds: the first twelve came in (HN-D8) */
   capped: (kept: number, of: number) => `${kept} of ${of} brought in — the hand holds twelve`,

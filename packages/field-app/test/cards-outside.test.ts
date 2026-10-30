@@ -8,8 +8,9 @@
  * hand. The transfers take the browser's own shape (`types` says "Files"; during a drag only the
  * kinds can be read); the shell's file door and a picture's decoder are fixtures; the clock is
  * faked: the watchdog, the play, the fade. What comes in is bounded (LC-24) — a picture past the
- * still's cap as its file — and twelve at most (LC-23); a play refused in a pane leaves its card
- * in the hand (HN-L5); the one field test (`caret.ts`) decides what a field takes.
+ * still's cap as its file, when it has a path — and twelve at most (LC-23); a play refused in a
+ * pane leaves its card in the hand (HN-L5); the one field test (`caret.ts`) decides what a field
+ * takes.
  */
 import { SCREENSHOT_STILL, SHELL_CLIPBOARD } from "@vibefield/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -456,7 +457,7 @@ describe("⌘V with no caret (HN-6, HN-L3)", () => {
     expect(store.snapshot().cards.map((card) => card.paste)).toEqual(["Held.", "In view."]);
   });
 
-  it("brings in no words past one paste's read (LC-24), said in sizes; a picture past the still's cap comes in as its file — its path and its facts, never its pixels, and never decoded", async () => {
+  it("brings in no words past one paste's read (LC-24), said in sizes; a picture past the still's cap with a path comes in as its file — its path and its facts, never its pixels, and never decoded", async () => {
     const decoded: Blob[] = [];
     listen({
       measure: async (picture) => {
@@ -471,12 +472,12 @@ describe("⌘V with no caret (HN-6, HN-L3)", () => {
     expect(store.snapshot().cards).toEqual([]);
     expect(said).toEqual(["Not brought in — the words hold 4.2 MB; a card holds at most 4.1 MB"]);
     // the page's example (DESIGN.md §8 "The hand", brought in)
-    expect(OUTSIDE_WORDS.tooLarge(30_000_000, SHELL_CLIPBOARD.READ_MAX_BYTES)).toBe(
+    expect(OUTSIDE_WORDS.tooLarge("words", 30_000_000, SHELL_CLIPBOARD.READ_MAX_BYTES)).toBe(
       "Not brought in — the words hold 30 MB; a card holds at most 4.1 MB",
     );
 
-    // the cap bounds pixels held in memory, and a path holds none: past it, a picture this
-    // renderer could draw is its file; one under it, beside it, is still a picture
+    // the cap bounds pixels held in memory, and a path holds none: past it, a picture with a path
+    // is its file, even one this renderer could draw; one under it, beside it, is still a picture
     const scan = new File([PNG], "scan.png", { type: "image/png" });
     weighing(scan, SCREENSHOT_STILL.MAX_BYTES + 1);
     sizes.set(scan, { width: 20_000, height: 20_000 });
@@ -501,6 +502,30 @@ describe("⌘V with no caret (HN-6, HN-L3)", () => {
     expect(said, "nothing was left out, so nothing more is said").toHaveLength(1);
   });
 
+  it("brings in no pixels past the still's cap with no path to come in as — an image another app copied — said in sizes and never decoded; the rest still comes in (LC-24)", async () => {
+    const decoded: Blob[] = [];
+    listen({
+      measure: async (picture) => {
+        decoded.push(picture);
+        return sizes.get(picture) ?? null;
+      },
+    });
+    // the shell's file door knows no path for it: a card of it could never be played
+    const copied = new File([PNG], "image.png", { type: "image/png" });
+    weighing(copied, 70_000_000);
+    sizes.set(copied, { width: 20_000, height: 20_000 });
+    const notes = new File(["one\n"], "notes.txt", { type: "text/plain" });
+    paths.set(notes, "/Users/me/notes.txt");
+    const event = paste(document.body, transfer({ files: [copied, notes] }));
+    expect(event.defaultPrevented, "the hand's: it answers in words").toBe(true);
+    await settled();
+    expect(decoded, "never decoded to be refused").toEqual([]);
+    expect(namesOf(store.snapshot().cards), "the rest still comes in").toEqual(["notes.txt"]);
+    expect(said).toEqual([
+      "Not brought in — the picture holds 70 MB; a card holds at most 67.1 MB",
+    ]);
+  });
+
   it("brings in the first twelve of more — as many as the hand holds — and says so (HN-D8, LC-23)", async () => {
     listen();
     const files = Array.from({ length: 20 }, (_, n) => new File(["x"], `part-${n + 1}.bin`));
@@ -511,18 +536,26 @@ describe("⌘V with no caret (HN-6, HN-L3)", () => {
     expect(said).toEqual(["12 of 20 brought in — the hand holds twelve"]);
   });
 
-  it("says that only twelve came in over words too large, which are left out first; a picture past the still's cap is taken — as its file — and never left out (PURE)", () => {
-    const fileOf = (file: File): Brought => ({ kind: "file", file, folder: false });
+  it("says that only twelve came in over a thing too large, which is left out first; a picture past the still's cap is taken as its file only with a path, and a folder is never one (PURE)", () => {
+    const fileOf = (file: File, folder = false): Brought => ({ kind: "file", file, folder });
+    const noPath = (): null => null;
     const things = Array.from({ length: 13 }, (_, n) => fileOf(new File(["x"], `${n + 1}.bin`)));
     const long = "x".repeat(SHELL_CLIPBOARD.READ_MAX_BYTES + 1);
     const words: Brought = { kind: "text", text: long };
-    const { taken, left } = takenOf([words, ...things]);
+    const { taken, left } = takenOf([words, ...things], noPath);
     expect(taken).toEqual(things.slice(0, 12));
     expect(left).toBe("12 of 14 brought in — the hand holds twelve");
-    expect(takenOf(things.slice(0, 3))).toEqual({ taken: things.slice(0, 3), left: null });
+    const three = things.slice(0, 3);
+    expect(takenOf(three, noPath)).toEqual({ taken: three, left: null });
     const png = new File([PNG], "scan.png", { type: "image/png" });
-    const scan = fileOf(weighing(png, SCREENSHOT_STILL.MAX_BYTES + 1));
-    expect(takenOf([scan])).toEqual({ taken: [scan], left: null });
+    const scan = fileOf(weighing(png, 70_000_000));
+    expect(takenOf([scan], () => "/Users/me/scan.png")).toEqual({ taken: [scan], left: null });
+    expect(takenOf([scan], noPath)).toEqual({
+      taken: [],
+      left: "Not brought in — the picture holds 70 MB; a card holds at most 67.1 MB",
+    });
+    const shots = weighing(new File([], "shots.png", { type: "image/png" }), 90_000_000);
+    expect(takenOf([fileOf(shots, true)], noPath).left, "a folder is its path").toBeNull();
   });
 });
 
