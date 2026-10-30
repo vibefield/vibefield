@@ -19877,3 +19877,304 @@ the next draft queue.
 - Not witnessed: a real phone reading `user.me` from a live desktop, or a still of the corner wearing a desktop's
   name. Both are owed at the build-4 sitting.
 - AP-D7's third cause, the protocol mismatch, stays owed.
+
+## PT-S1 — the phone as a kind: PHONE.md's iPhone folded into the plugin `vibefield.simulator` — any of the 42 iPhones Xcode 26.6's Simulator knows, lying face up at its true size, its nine honest faces in DESIGN.md's words, morphing only on a change of model, view-only until PT-S4 (2026-10-30; `1de84540b`; lane `portals/pt-s`, 31 commits on `e23fa8a1f` to `839f93242`, main `aa2be72c9` merged into them as `f21d45cfa`, the fix `b72c46dfd` after run 6's red, main `0ce140178` merged as `0295b0663`, minted as the mini's run 10; James's "Go with your leans" 2026-10-29 00:25Z and his look 10:02Z; the brief's R1–R6)
+
+**Why:** PORTALS' second kind (track PT), after the browser pane (LANDED §PT, `fb9efdb3`). The design
+`draft/portals-maps/PT-S-the-simulator.md` (RULED 2026-10-18 20:08Z at the lean, re-ruled 2026-10-29) moves PHONE.md's
+prototype (`draft/ground/PHONE.md`, built in draft/ground 2026-09-27) into the product. Its §5 ladder: PT-S1 the kind,
+PT-S2 the producer, PT-S3 the gates, PT-S4 touch.
+- James stopped the track 2026-10-18 21:51Z ("stop the phone emulator track"), four commits in, with 43 `plugins/simulator/`
+  files uncommitted. It parked on `PT-S-vs-PHONE.md` §5's seven choices.
+- It RESUMED 2026-10-29 00:25Z on James's typed "Go with your leans" (`PT-S-vs-PHONE.md` §6 records each):
+  - resume as the fold; retitle the design (1);
+  - a VibeField plugin, never ICE (2);
+  - the pane's eye and hand, the prototype's losses accepted for v1 (3);
+  - one frame-source seam: the pixels LSF-5's ScreenCaptureKit producer, touch serve-sim's in PT-S4 (4, re-leaned because
+    the bake-off never ran);
+  - the redrawn fixture (5); the metals mean the device's likeness (6); the kept work committed (7).
+- The PT-S design (its title, status, §1, §2, §4, §5 and §6 Q1), PHONE.md §12 and the brief were amended in place, each
+  amendment dated. Brief: `draft/portals-maps/briefs/PT-S1-the-phone-as-a-kind.md`. Its runs, grades and rulings: the
+  landing log's PT-S1 entries.
+
+**What landed** (by commit subject; 62 files, +14,194 −7; on ICE `0.16.0`'s live face, ICE design-019 §13):
+- **Contracts first** ("PT-S1 (contracts)"): `packages/contracts/src/live-surfaces.ts` gains
+  `LiveSurfaceIosSimulatorBindingV1` `{ deviceType, runtime }`, over `CoreSimulatorDeviceTypeIdV1` and
+  `CoreSimulatorRuntimeIdV1` (CoreSimulator's ids, at most 128 characters, pattern-checked), beside the UDID-keyed source
+  spec.
+  - Never a UDID: a UDID names one simulator on one Mac, so each Mac attaches its own simulator of the bound type.
+  - Fixtures `ios-simulator-binding.{valid,apple-spelling}.json` (the 17 Pro on iOS 26.1; the 2nd-generation SE's id with
+    Apple's dashes kept), their row in `fixtures.test.ts`, and `live-surfaces.test.ts`.
+  - TS-only, as all of Live Surfaces is: not in the JSON-schema generator's list, so gen:check does not move.
+- **The SDK door, widened in its own commit** ("PT-S1 (door, SDK)"; "(door, words)" is a doc comment):
+  - `@vibefield/plugin-sdk/desk` gains `LiveSimulatorSpec`/`liveSimulatorSpec`, `LIVE_SIMULATOR_STATES` (the nine) and
+    `LiveSimulatorFace`/`liveSimulatorFace` (`LiveInfo.extra.simulator`: the state, the device's name, its one act).
+  - They are read closed-set, destructured as unknown, as main's BP-D1 reads the pane's refusal. The wall row is in
+    `desk-door.test.ts`, the units in `live-spec.test.ts`.
+  - The face's doc names no capture technology: a source says only the states it can reach.
+- **DESIGN.md before any drawing code** (James's Q-6):
+  - §5.1, the portals row, corrected at its source (2026-10-18 and 2026-10-29). It read "not yet" after the pane landed
+    in glass on 2026-10-14, and the stub said every recipe is ICE's. Portals are drawn; the phone's **cover glass** is the
+    row's second wearer, and a plugin kind's recipes are its plugin's own.
+  - `#### The phone's materials — cover glass, border ink, three metals (PT-S1)`: what each material means under the
+    guardrails, and the recipes' numbers. They cover the glass, the border inks, the panel, the sensor housing, the three
+    metals, the sky the glass mirrors, the screen's light and its dims, the night's glow, the words' ink and the marks.
+  - The finishes: 84 launch colours, value for value from PHONE.md §3/§5 and the lab's theme.
+  - The metals (aluminium, steel, titanium) and the finishes mean **the device's likeness: which iPhone the object stands
+    for** (choice 6), and nothing else.
+  - The plugin's `theme.ts` and its law's material knobs hold no number the section lacks (`design.test.ts` reads them).
+  - §9, **The simulator's honest faces**: the nine states' lines and acts in the voice, quoted exactly by `face.ts` (the
+    design test reads the table), and "View only" in hand.
+- **The plugin** `plugins/simulator` (`@vibefield/plugin-simulator`, id `vibefield.simulator`). It has the pane's package
+  shape, and reaches nothing but the SDK's doors (its root `@vibefield/plugin-sdk` for the renderer entry, `/desk` for the
+  rest) and the contracts:
+  - **The catalog.** `scripts/make-catalog.ts`, a port of the prototype's `make-iphone-catalog.mjs`, reads Xcode's own data
+    (the CoreSimulator device types, the DeviceKit chrome, and Apple's published bodies). It writes the committed
+    `src/catalog.gen.ts`: 42 iPhones from Xcode 26.6 (17F113), oldest first, the prototype's 42 exactly. Its header names
+    its source and its command (`gen:catalog`, then biome).
+  - **The law** (`law.ts`, pure):
+    - `MM` = 200/76.2 = 2.6247 world units a millimetre, ONE named constant (PT-S §6 Q-1). Every model lies at its true
+      size; the default 17 Pro is 188.71 × 393.7.
+    - The continuous `PhoneShape`, `resolvePhone` (resting on its camera), the pick and the glass point.
+    - The stream's demand: `screenLod`, `screenDemand`, and `phoneDemand` over the SIGHT.
+    - The glow's reach, and the morph's `morphTracks`/`mixShape`.
+    - `lineup` and `historyShape`, ported as witnesses and wired into nothing.
+  - **The pass** (`pass.ts`, `phone.wgsl`, `phone-pass.wgsl`, through `kitWgsl`):
+    - the phone and its spill, each lit at home and from elsewhere;
+    - one draw a phone;
+    - the live texture's mips into the frame's encoder (it submits nothing of its own);
+    - the glow by night at PHONE.md §5's numbers.
+  - **The kind and the object** (`kind.ts`, `local.ts`, `object.ts`, `manifest.ts`):
+    - The props `model`, `finish` and `binding` are declared once (`ids.ts`), all in ONE cell (`groups: {}`). Each is a
+      desk edit and an undo step, and nothing writes one outside the undo stack.
+    - NO angle (a phone is never turned), and it is not resizable. Core's drag carries it on the desk's springs.
+    - Use is the open binding on double-click or ⏎, as the notebook, the board and the pane open.
+    - In hand, its one held tool says "View only" in words beside the device's name (ICE I49's state, with no glyph).
+    - No capability: `surface.attach` and `surface.capture` arrive with PT-S2.
+  - **The pegboard.** A phone on a shelf under a new category, `devices`. Its specimen is drawn by its own pass, with the
+    screen off.
+  - **The morph** (`morph.ts`). It runs only on an explicit change of `model`: 0.72 s, staged in five tracks (size,
+    bezels, form, housing, material). A phone first seen settles at once, and a change mid-morph morphs on from the blend.
+    - Its clock is local state, so a collaborator sees the same morph from the same prop change.
+    - A change that landed while the phone was culled plays at the reveal (R2 Q2, accepted for v1, said beside the clock).
+    - A still pins a morph through the desk's asset door.
+  - **The faces** (`live.ts`, `face.ts`, `notice.ts`, `notice-canvas.ts`):
+    - each of the nine over `LIVE`, by durable key, with a change-only demand over the sight;
+    - the words on the pane's notice path;
+    - a still never passed off as live: 0.7 with its rest or boot mark, 0.16 under words.
+  - **One frame-source seam** (choice 4). `fixture-live.ts`'s `fixtureSources` is the fixture as a `LiveSources`, the
+    seam's first source, and it is wired into nothing. Nothing in the plugin names a capture technology.
+    - `fixture.ts` keeps the synthetic iOS feed's contract: frames at the demanded size and rate, and none while nothing
+      changed.
+    - It redraws the picture from arithmetic: no canvas, no font, no Apple artwork (choice 5; PHONE.md Q-9).
+  - **The words for Node stills** (R2 Q1 (b)). `scripts/make-face-words.ts` draws the six faces that say words (one ink by
+    day and by night) with the product's own `drawWords` on `@napi-rs/canvas` 1.0.10. That is the pane's exact pin, and
+    the plugin's one new devDependency (the lockfile gains the plugin's importer alone).
+    - It writes the committed `src/face-words.gen.ts`, 339,375 bytes, which a Node still draws as the pane's
+      `head-still.gen.ts` heads are drawn.
+    - ACCEPTED for v1 (R5); revisit only if a plugin size budget appears.
+  - **The stills.**
+    - `playground/states.ts` stages twelve states: default, silver, iphone-8, and the nine faces, each on the device
+      `playground/fixture-mac.ts` answers it for.
+    - `apps/plugin-playground/test/still.dawn.test.ts` holds their 24 stills, by day and by night, to
+      `plugins/simulator/test/still.golden.json`.
+    - Three mid-morph rows go through the asset door: an iPhone 8 a quarter of the way into an X, by day and by night,
+      and at the halfway. They are judged by extent, never a hash (R5 Q7 (b), R6).
+    - The phone has no DOM or CSS view, so UI_SYSTEM.md's catalog rule does not bind it. Its catalog is the playground,
+      fed by the fixture.
+  - **Units: 12 files, 120 rows.**
+    - `law`: 32 rows. PHONE.md's 28 law tests are ported whole; the photo's grab is replaced by core's drag (choice 3).
+    - `kind`, through the SDK's kind-conformance harness.
+    - `face`, `face-words`, `fixture`, `fixture-live`, `live` and `morph`.
+    - `cost`: PHONE.md §10, as far as a unit can witness it.
+    - `manifest`.
+    - `imports`: the door, and no Apple artwork in the package's own trees.
+    - `design`: DESIGN.md, quoted exactly.
+    - The orchestrator's hand-back (`scratchpad/pts1-handback.md`, dev-local, §6) maps each of PHONE.md's witnesses (the
+      28, §13's continuity, §10's cost table) to its unit.
+
+**Found:**
+- **The first gated run's reds were the never-compiled code's and the run script's.**
+  - The plugin's typecheck: 11 errors.
+  - Its units: 109 of 111.
+  - The full typecheck: red on the plugin alone.
+  - The catalog and lint: red because the script left out the biome pass the catalog's header names. Formatted, the
+    regenerated catalog is byte-identical.
+  - The fixes are one commit ("PT-S1 (first run)").
+- **`PluginManifestV1` is the schema's OUTPUT type,** in which zod's default makes `groups` required. The asset-door still
+  read the AUTHORED manifest unparsed, so `build-widget.ts:126`'s `Object.keys(row.groups)` threw. The source now states
+  `groups: {}`, the value the default emitted, so `vibefield.plugin.json` did not move.
+- **The halfway still is not "between".** The size track is the morph's first half (PHONE.md §13), exactly 1 at t = 0.5.
+  So the row holds the extent at the X's, and the picture as neither model's (R6).
+- **Three things are host-bound:**
+  - the stills' golden (this Mac's Metal);
+  - the face words (this Mac's fonts; a regen diff on another host means another host, and is never committed over);
+  - the catalog row "is every iPhone device type installed on this Mac".
+- **The mini's Xcode 27.1 knows 45 iPhones:** the catalog's 42, plus iPhone 18 Pro, iPhone 18 Pro Max and iPhone Duo.
+  - After the second run, one commit ("PT-S1 (law, test)", on VF-PM's GO) changed that row. It compares exactly only
+    when the host's Xcode build (`version.plist`'s ProductBuildVersion) equals the build the catalog's header names
+    (17F113). Otherwise it skips, naming both builds.
+  - The catalog row now asserts that the header names a build, so the skip can never pass silently.
+- **A correction at its source.** The first run's report said "Xcode 27.1, more iPhones". 27.1 is the mini's; this Mac's
+  is 26.6. VF-PM caught it, and the landing log says so.
+- **Left out of the prototype, by ruling:**
+  - the lab's panel and its keys;
+  - `x`'s sim-bridge (the seam supersedes it);
+  - its `screen.ts` (ICE's live texture supersedes it);
+  - taps, swipes and the side buttons (PT-S4);
+  - choice 3's losses: the band's parallax toward the view's centre, the tip to the fingers, the eye-pinned grab;
+  - Apple's artwork, ever.
+- **ICE: no ask.** No petition is numbered. Two candidates are named in the hand-back (§2, dev-local), not filed:
+  - a per-frame "drawn" fact for every record a kind prepared, so a morph changed off view could settle;
+  - a desk-eye record and a body driver for every kind, to return choice 3's losses.
+
+**Validation** (this Mac; the lane on the SSD, behind the guard, at nice 19):
+- **The first gated run** (VF-PM's grant 04:45Z; fired 04:50:51Z at a load of 17.73 / 55.57 / 100.17, on main
+  `3e6c941a8`; logs `/Volumes/SamsungRed/lanes/pts/firstrun/20261029T044704Z/`): its reds are under Found.
+- **The rebases.** R1.2 replayed the kept work onto main `3e6c941a8` (main's tip at 00:32Z). For the second run the
+  lane rebased onto main `e23fa8a1f` at 09:21Z:
+  - no conflicts, and all 29 commits `=` in range-diff;
+  - the two shared files hold the line-count union: DESIGN.md 3856 + 3983 − 3814 = 4025, and fixtures.test.ts
+    935 + 937 − 932 = 940.
+- **The second gated run** (fired 09:35:45Z at a load of 8.66 / 25.74 / 45.71; logs
+  `/Volumes/SamsungRed/lanes/pts/firstrun/20261029T093545Z/`, whose `driver.log` has every step's exit). It was green on
+  every step but the expected unblessed still:
+  - the frozen install;
+  - gen:manifest, with no diff;
+  - gen:catalog with its biome pass: 42 iPhones from Xcode 26.6 (17F113), no diff;
+  - the face words' maker: six faces, no diff;
+  - the plugin's typecheck: its ~6k lines compile for the first time;
+  - its units: 12 files, 120/120;
+  - contracts: typecheck, and 49 files, 1,210 rows;
+  - the SDK: typecheck, and 10 files, 86 rows;
+  - `pnpm lint`, check:walls, check:retired and gen:check;
+  - the full `pnpm typecheck`: "Successfully ran target typecheck for 28 projects".
+- **`pnpm still`: 17 of 18.** The 18th was the simulator's golden row, 24 × `still-unblessed`, as expected. The three
+  mid-morph rows ran green on Dawn for the first time.
+- **The bless.**
+  - The PNGs were looked at first (the day and night sheets, and a zoom of six), against DESIGN.md's honest-faces table.
+  - They were blessed ONCE with `pnpm playground plugins/simulator --still --bless`, a deliberate event said in its
+    commit ("PT-S1 (stills, BLESSED)"). The host: "Metal driver on macOS Version 26.5.2 (Build 25F84) (apple metal-3) ·
+    darwin-arm64 · webgpu 0.4.0".
+  - `pnpm still` again: **18/18**.
+  - **This run is the stills' witness for the landing.** A golden is host-bound, and `pnpm still` is a gate:landing row
+    outside the verify script.
+- **After the run:** the law.test commit above. `law.test.ts` alone on this Mac: 32/32, with the row run ("the catalog's
+  Xcode 17F113, this host's 17F113").
+- **The landing (2026-10-30).** Main had moved on from the lane's base, so the mint queue merged main into the
+  lane, as it had for the stack (`0b4cb2ff0`), AU B1 (`aa2be72c9`) and CP-0 (`b9ca35824`) that day (VF-PM,
+  17:53Z). The lane was not rebased again.
+  - `portals/pt-s1-main` = `f21d45cfa`: main `aa2be72c9` (AU B1) into `839f93242`.
+  - Its one conflict was DESIGN.md: both sides added at the same place, and the base side was empty. Both were
+    kept whole: §9's "The simulator's honest faces", then AU-0's "The update's words" (the order of AU's own
+    keep-both). 4175 lines = main's 4006 + PT-S1's 169.
+  - AU's keep-both check (`lanes/au/keepboth/check.py`) passed 9 of 9. Its rows include the simulator design
+    test's faces and materials tables, equal to the lane's.
+  - The resolution touched docs only, so no new light pass.
+- **Run 6, RED (2026-10-30).** The first mint, M6 `dcabd7b9e` (main `ac5dd87d3` merged into `f21d45cfa` with no
+  conflict), failed `pnpm verify` on the mini at 18:50:15Z, in its test stage, on ONE row: field-app's
+  `test/build-edges.test.ts:65` (DK-8, ruling 2) found `plugins/simulator (@vibefield/plugin-simulator)` unbuilt.
+  - The cause was PT-S1's own, present since `839f93242`. The plugin's manifest declares a renderer entry, and
+    field-app named no edge to it, so `build:all` never built it.
+  - Everything else was green at M6:
+    - typecheck: 28 projects, the simulator the 28th;
+    - vitest: 9,988 passed, 1 failed, 18 skipped (the simulator's own suite: 119 passed, 1 skipped);
+    - a9's post-mortem of the two stages the red stopped: test:rust 499 passed, 0 failed, 14 ignored, and
+      gen:check clean.
+  - Fixed at the cause in `b72c46dfd`: the simulator became a field-app devDependency. The dev fallback does not
+    import it, and whether it ships among `BUNDLED_PLUGINS` is James's call. The lock's field-app importer gains
+    the link.
+  - Its light pass, on this Mac at nice 19: the red row green (1 file, 2 tests) and the walls clean.
+    `check:deps` was red in the lane alone: the lane borrows the main checkout's `../mille-pin`, whose React links
+    lead to a second tree at the same versions. The same check in that checkout was green, and the mini's
+    verify, on its own tree, is the witness.
+- **Main moved on while the fix waited.** Each time, on VF-PM's word, the queue merged the new main into the fixed
+  tip.
+  - Over `ffe9d9b40` (FG) and over `78ed1d946` (PRs #8 and #5, the EL8 to Puppeteer 0.3.2), each merge went stale
+    before its run. They are kept at `stale-pts1-main-9a339d48e` and `stale-pts1-main-e0379ac27`.
+  - Over `0ce140178` (AU B2 and the records after it), the merge is `0295b0663`, with no conflict. The lock
+    auto-merged: against main's, it adds 34 lines (the simulator's importer and field-app's link) and removes none.
+  - On each merged line, on this Mac at nice 19, the frozen offline install left the lock unchanged and
+    `pnpm typecheck` ran green on 28 projects.
+- **The mint, run 10,** merged IOS-8f's landed main `f250e8971` into `0295b0663`, as `1de84540b`. It
+  fast-forwarded onto main at 21:07:27Z and was pushed at 21:07:56Z.
+  - `pnpm verify` on the mini, its lines verbatim (`lanes/ts6/logs/mini/run10/`):
+    - "ts6-mini verify ARMED 21:00:50Z; load {{ 1.59 6.92 6.73 }}; df 97 GiB; HEAD 1de84540";
+    - "verify exit 0 21:05:29Z; load {{ 10.31 15.05 10.79 }}";
+    - "test target:  NX   Successfully ran target test for 28 projects";
+    - "cargo test results: ok 31, FAILED 0";
+    - "tree clean after verify" and "stubs left: 0";
+    - "== ts6-mini verify done (verify 0) 21:05:30Z; HEAD 1de84540b5a97f718bce9de34aa03329088ca92c".
+  - Its strict counts (VF-PM): typecheck 28 projects; vitest 10,151 passed, 0 failed, 18 skipped (27 summaries;
+    +128 PT-S1 rows); rust 499 passed, 0 failed, 14 ignored; 0 FAIL rows; build-edges green.
+  - The law.test row skips there, by the rule above (the mini's Xcode 27.1).
+  - The landing's lock change is all under `importers` (33 lines and a blank: the simulator's importer and
+    field-app's link), with no `packages` or `snapshots` hunk. It is a workspace-graph addition, not an EL8.
+
+**The reviews:**
+- **Round 1:** six lenses (law, morph, seam, design, types, walls), each with its skeptic, confirmed 16 findings. All 16
+  were addressed:
+  - 12 by commits:
+    - the landing frame is remade, so a morph ends its new model exactly;
+    - an act or a retry that appears or goes is new words;
+    - the fixture says it rests when paused;
+    - the bar shows "View only" as text;
+    - DESIGN.md claims only what its test holds;
+    - the artwork wall reads the package's own trees, never a tool's output;
+    - the Node canvas is the wall's one widening, the words' maker alone;
+  - 3 in the second run's list: the catalog step's biome pass, and the bless command;
+  - 1, the mid-morph still that no playground state can stage, as a question that R5 answered (Q7 (b)).
+- **Round 2:** a read-only re-review, under VF-PM's host bar, confirmed 2 text findings: the package's description, and
+  DESIGN.md's list of the PHONE.md sections the law cites. They were fixed in "PT-S1 (review round 2)", and completed at
+  the root in "PT-S1 (review round 2, law)" (comments only).
+
+**James's look:** on his typed "launch it and show me" (09:48Z), the dev app was launched from the lane, the phone on
+the pegboard under Devices. At 10:02Z he typed "works, close and continue". No notes.
+
+**The rulings that governed** (the brief's "Ruled mid-slice"; CODE-ONLY until VF-PM's grants):
+- **R1 (00:30Z), the resume.**
+  - The kept work went in ONE pathspec commit: "PT-S1 (wip): the plugin as stopped 2026-10-18 21:51Z — uncompiled".
+  - `git rebase main`, never a merge (VF-PM's landing law, corrected 00:33Z), through the build. The landing itself
+    took the mint queue's merge (Validation, 2026-10-30).
+  - Choices 2–7, as above.
+  - The slice is graded against PHONE.md's witnesses: the 28 law units, §13's continuity, and §10's cost table as far as a
+    unit can witness it.
+- **R2 (01:23Z), the six questions.**
+  - Q1 (b): the committed words.
+  - Q2: the culled morph, accepted.
+  - Q3: a fixture face keeps its scheme.
+  - Q4: `no-permission` and `no-window` stay while SCK is the ruled path.
+  - Q5: a Model or Finish act is PT-S2's.
+  - Q6: the SDK's type stays as it is.
+- **R3 (01:24Z):** HOLD on any install while AL-9b's verify ran.
+- **R4 (01:45Z):** the HOLD lifted for Q1 alone. VF-PM said GO at 01:41Z; the orchestrator's one `pnpm install --offline`
+  ran at 01:42:20Z, 0 downloaded.
+- **R5 (07:21Z):**
+  - the first run's four real reds fixed;
+  - round 1 closed;
+  - Q7 (b);
+  - the words' 339,375 bytes accepted for v1.
+- **R6 (09:20Z):** round 2 closes as built, and the halfway is judged against the landed size track.
+
+**Owed:**
+- **PT-S2, the producer.**
+  - LSF-5's ScreenCaptureKit producer on main (`ios-simulator-producer.ts`, `sck-producer.ts`), wired behind the
+    frame-source seam.
+  - Then `simctl`, the demand on a real stream, and the nine states' transitions.
+  - `surface.attach` and `surface.capture` in the manifest.
+  - The cap, shared with panes.
+  - A Model or Finish act (R2 Q5).
+  - Today only the fixture feeds a face: `fixtureSources` in the units, and the fixture's frames in the playground's
+    stills. desk-live routes no simulator spec yet.
+- **PT-S3, the gates.** A booted simulator streams to the desk; at rest it is a still; each honest face is witnessed; and
+  the cost is measured at the cap, with a pane beside it. PHONE.md §10's milliseconds and the render counts are a rig's.
+- **PT-S4, touch,** through serve-sim's input. It is an EL8 pin event, after serve-sim's `killPortHolder` is fixed. It
+  runs on loopback only, and never with `--allow-exec`.
+- **The capture bake-off** (PT-S-B1) stays queued for the mini. Its result decides whether serve-sim's stream later
+  replaces SCK's.
+- **`BUNDLED_PLUGINS` is untouched.** Whether the phone ships among the bundled plugins is James's call.
+- **Named, host-bound:**
+  - the stills' golden is this Mac's;
+  - `src/face-words.gen.ts` (~339 KB, accepted for v1) is this Mac's fonts, so a regen diff on another host means another
+    host.
+- **No downstream petition.** None was filed or numbered for PT-S1.
