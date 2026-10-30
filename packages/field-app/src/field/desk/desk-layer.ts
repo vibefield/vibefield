@@ -20,8 +20,10 @@ import { deskBlobs } from "./desk-blobs";
 
 /**
  * THE GRID (DESIGN.md §2.1 as DK-0d wrote it, §10): the engine's own fade-in law and mat, with the
- * rulers PRINTED at a margin of 60 — the mat's unprinted margin between the window's edge and the
- * rulers' frame, so the top ruler starts below the head's strip and the left one clears the notch.
+ * rulers PRINTED at a margin of 0 — no unprinted mat between the window's edge and the rulers' frame:
+ * the frame stands on the window's four edges, and the head's controls and the notch stand over the
+ * bands (2026-10-29; the margin was 60, which kept the top ruler below the head's strip and the left
+ * one clear of the notch, and left a gap of bare mat around the frame).
  */
 /**
  * THE HAND'S RESERVES (DESIGN.md §8 "Tools in hand"; ICE I20 — `deskLayer({ hold })`): the held object's reading fit
@@ -40,7 +42,7 @@ export const DESK_TRAY = { foot: 88 } as const;
 
 export const DESK_GRID: GridConfig = {
   fadeIn: GRID.fadeIn,
-  mat: { ...DEFAULT_MAT_CONFIG, ruler: { ...DEFAULT_MAT_CONFIG.ruler, on: true, margin: 60 } },
+  mat: { ...DEFAULT_MAT_CONFIG, ruler: { ...DEFAULT_MAT_CONFIG.ruler, on: true, margin: 0 } },
 };
 
 /** The desk dressed for one of the app's two themes: ICE's shipped theme and palette (D7), the

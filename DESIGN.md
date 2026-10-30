@@ -107,7 +107,8 @@ section described until then was ICE 0.11's — a world grid (`spacings: [25, 50
 and the magnet grid tuned through ICE's `GridMagnetConfig` (a dot or needle glyph, `reach: 60`, …),
 inked `#A6A6A6` by day and `#8A8A8A` by night (a classic alternate's `#1C1C1C` recorded beside it).
 ICE retired the magnet grid with the cards and the dot and needle grids on 2026-09-25, and on the
-desk (DK-3) the ground is the cutting mat below — its sage and cream, its rulers at a margin of 60,
+desk (DK-3) the ground is the cutting mat below — its sage and cream, its rulers printed at the
+window's edges (a margin of 0 since 2026-10-29; 60 before, §10 "The mat's places"),
 its lattice's fade-in (`GridConfig { fadeIn, mat }`). So the grid's projection, the magnet's tuning
 and its inks, Canvas Settings' Dot/Needle preference, Studio's grid controls and the appearance
 document's grid half left with the old ground: the document is v4, the plain ground alone
@@ -4217,9 +4218,12 @@ their place". "Fullscreen" stays the pane's word (§8).
   brackets, under them near the top — and travels with it into the hand; **the tools in hand sit
   under the head** (top y 64, 16 under the name pill), still the object's chrome and not the head's;
   **the pegboard rises behind the line**, whose create is its door (§8). **The desk keeps two
-  reserves:** the **safe top, 94** — the rulers' band plus 8: the rulers move in to a margin of 60
-  (DK-3), so the top ruler starts below the head strip and the left ruler clears the notch, and
-  their band ends at 86 — above which the bar goes under its object; and **the foot, 88** — the
+  reserves:** the **safe top, 94** — above which the bar goes under its object. It was the rulers'
+  band plus 8 while the rulers were printed at a margin of 60 (DK-3: the top ruler below the head
+  strip, the left one clear of the notch, their band ending at 86). *Since 2026-10-29 the rulers are
+  printed at the window's edges* — a margin of 0, the frame on the window's four edges and the
+  band 0–26, under the head's controls and the notch, which stand over it — and the safe top keeps
+  its 94, still clear of the head's controls (their foot at 48); and **the foot, 88** — the
   line's reserve, the same 88 a covered view keeps (692): the board's lay ends 88 above the window's
   foot (I21) so its last row clears the line, and the bar's top never sits below 660 (its foot 8
   above the line's 708). Between them the bar keeps **42** from each side (the notch's 26 + 16), and
