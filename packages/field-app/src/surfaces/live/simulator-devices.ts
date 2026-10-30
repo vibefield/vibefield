@@ -118,7 +118,7 @@ export function simulatorObjectsStand(deps: {
       if (was !== undefined) return was;
       const id = deps.registry.ownerOf(type);
       const plugin = id === undefined ? undefined : deps.registry.plugin(id);
-      const held = plugin !== undefined ? grantsOf(plugin) : [];
+      const held: readonly string[] = plugin !== undefined ? grantsOf(plugin) : [];
       const yes = SIMULATOR_SCOPES.every((scope) => held.includes(scope));
       granted.set(type, yes);
       return yes;
@@ -207,7 +207,13 @@ export function createSimulatorDevices(deps: DeskSimulatorDevicesDeps): DeskSimu
 
   const look = async (): Promise<void> => {
     counts.looks += 1;
-    if (!deps.wanted()) return;
+    let wanted = false;
+    try {
+      wanted = deps.wanted();
+    } catch {
+      wanted = false; // a board going away under the look: nothing stands
+    }
+    if (!wanted) return;
     if (snapshot !== undefined && now() - snapshot.at < SIMULATOR_DEVICES_READ_MS) return;
     await read();
   };
