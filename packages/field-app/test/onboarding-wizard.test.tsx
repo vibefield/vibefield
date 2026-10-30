@@ -888,7 +888,7 @@ describe("Setup Assistant", () => {
     expect(text()).toContain("Your field, on every device.");
   });
 
-  it("does not re-ask a root that is already linked — it moves on to the posture question", async () => {
+  it("does not re-ask a root that is already linked, and asks no sync question (TS-6, TS-D13)", async () => {
     host(vi.fn(async () => ({ ...FRESH, color: "accent-2" }) as FieldUserProfile));
     await mount({
       fieldd: client({ link: LINKED }),
@@ -896,27 +896,10 @@ describe("Setup Assistant", () => {
       onComplete: vi.fn(),
     });
 
-    expect(text()).toContain("What should new projects do?");
-    expect(
-      container?.querySelectorAll('[role="radiogroup"][aria-label="Sync posture"] input'),
-    ).toHaveLength(2);
-  });
-
-  it("writes the posture through the same key and words as Settings → Account", async () => {
-    host(vi.fn(async () => ({ ...FRESH, color: "accent-2" }) as FieldUserProfile));
-    const fieldd = client({ link: LINKED });
-    await mount({ fieldd, onboarding: onboarding({ color: "accent-2" }), onComplete: vi.fn() });
-
-    expect(text()).toContain("Sync new projects automatically");
-    expect(text()).toContain("Ask per project");
-    const cards = container?.querySelectorAll<HTMLInputElement>(
-      '[role="radiogroup"][aria-label="Sync posture"] input[type="radio"]',
-    );
-    await act(async () => cards?.[1]?.click());
-    expect(fieldd.request).toHaveBeenCalledWith("storage.appPreferences.set", {
-      key: "mesh.syncPosture",
-      value: "opt-in",
-    });
+    // straight to Setting up: the first new field after connecting asks it
+    expect(container?.querySelector('ul[aria-label="Setting up"]')).not.toBeNull();
+    expect(text()).not.toContain("Your field, on every device.");
+    expect(container?.querySelector('[role="radiogroup"][aria-label="Sync posture"]')).toBeNull();
   });
 
   // TS-2 — the Connect pane (DESIGN.md §8): the payoff asked once,
@@ -1351,7 +1334,8 @@ describe("Setup Assistant", () => {
     host(vi.fn(async () => ({ ...FRESH, color: "accent-2" }) as FieldUserProfile));
     const fieldd = client({ link: LINKED });
     await mount({ fieldd, onboarding: onboarding({ color: "accent-2" }), onComplete: vi.fn() });
-    await click("Continue"); // the sync question → Setting up
+    // straight to Setting up: the sync question left setup at TS-6 (TS-D13)
+    expect(container?.querySelector('ul[aria-label="Setting up"]')).not.toBeNull();
     expect(fieldd.request).not.toHaveBeenCalledWith("setup.answer", expect.anything());
   });
 

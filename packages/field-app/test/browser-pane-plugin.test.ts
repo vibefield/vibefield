@@ -17,9 +17,27 @@ import {
   Specimen,
   setWidgetProps,
 } from "@vibecook/ice";
-import { CONTAINABLE, DESK_OBJECT, driversOf, hostOf, objectKindOf } from "@vibecook/ice/desk";
+import {
+  CONTAINABLE,
+  createDeskEditor,
+  DEFAULT_GRID,
+  DESK_OBJECT,
+  driversOf,
+  type HeldEvent,
+  hostOf,
+  type KindDriverHost,
+  type KindHost,
+  kindPalette,
+  LIVE,
+  type LiveFace,
+  lampOf,
+  type ObjectContext,
+  type ObjectDomHost,
+  objectKindOf,
+} from "@vibecook/ice/desk";
 import * as pane from "@vibefield/plugin-browser-pane";
-import { describe, expect, it } from "vitest";
+import { productPalette } from "@vibefield/plugin-sdk/testing";
+import { describe, expect, it, vi } from "vitest";
 import { buildDevRegistry, buildRegistry, createFieldEngine } from "../src/field-engine";
 import { objectBindingsFrom } from "../src/plugin-host/build-widget";
 
@@ -41,6 +59,171 @@ const withPane = () =>
   });
 
 const objectsQ = defineQuery([Position, Size, PrefabId, Not(Specimen)]);
+
+/** A fresh pane on a real document with ICE's real editor. Only the live-page producer is a test double. */
+function firstUse() {
+  const registry = withPane();
+  const widget = registry.allWidgets().get(BROWSER_PANE_TYPE);
+  if (widget === undefined) throw new Error("the pane is not registered");
+  const ce = createFieldEngine(registry);
+  ce.docs.create();
+  ce.ops.spawnWidget(BROWSER_PANE_TYPE, { x: 0, y: 0, ...pane.PANE_SIZE, props: {} });
+  ce.world.sync();
+  let entity: ObjectContext["entity"] | undefined;
+  ce.world.query(objectsQ).each((batch) => {
+    for (const row of batch) {
+      const e = batch.entity(row);
+      if (ce.world.get(e, PrefabId)?.id === BROWSER_PANE_TYPE) entity = e;
+    }
+  });
+  if (entity === undefined) throw new Error("no pane was laid");
+  const e = entity;
+  const props = (): Record<string, unknown> =>
+    Object.assign({}, ...widget.groups.map((g) => ce.world.get(e, g.component) ?? {}));
+  const opened = vi.fn(
+    (key: string): LiveFace => ({
+      key,
+      state: () => ({ is: "starting" }),
+      info: () => ({}),
+      texture: () => undefined,
+      take: () => false,
+      demand() {},
+      close() {},
+    }),
+  );
+  const local = pane.createPaneLocal({
+    use: (key) => (key.name === LIVE.name ? { open: opened } : undefined),
+    keyOf: () => "first-use-pane",
+    pass: () => undefined,
+    wake() {},
+    redraw() {},
+    remake() {},
+    frames: () => 0,
+  } as KindHost);
+  const container = document.createElement("div");
+  // The product's semantic colors, made concrete so computed styles can expose an invisible editor.
+  container.style.setProperty("--vf-text-primary", "black");
+  container.style.setProperty("--vf-chrome-solid", "white");
+  document.body.append(container);
+  const editor = createDeskEditor({ container, world: ce.world, parts: () => [], wake() {} });
+  const hand = pane.createPaneHand({
+    world: ce.world,
+    docs: ce.docs,
+    local,
+    hand: () => ({ entity: e, landing: false, frame: { cx: 600, cy: 400, s: 0.8 } }),
+    isKind: (at: typeof e) => at === e,
+  } as unknown as KindDriverHost);
+  hand.join({ container, editor, driver: hand } as unknown as ObjectDomHost);
+  const record = () => {
+    const ctx = {
+      entity: e,
+      rect: { cx: 0, cy: 0, ...pane.PANE_SIZE },
+      props: props(),
+      flux: { lift: 1, hover: 0, ring: 0, fade: 1 },
+      look: pane.paneLook(kindPalette(productPalette.light)),
+      theme: { name: "light" },
+      lamp: lampOf(DEFAULT_GRID.mat.plane),
+      grid: DEFAULT_GRID,
+      view: { camX: 0, camY: 0, zoom: 0.8, width: 1200, height: 800, dpr: 2 },
+      held: { e, open: true, grow: 1, snap: true },
+      local,
+      dt: 0,
+    } as unknown as ObjectContext;
+    pane.browserPane.kind.record(pane.browserPane.kind.resolve(ctx), ctx);
+  };
+  const pressAddress = () => {
+    const press = (phase: "down" | "up"): HeldEvent => ({
+      type: "pointer",
+      phase,
+      part: "address",
+      x: 0,
+      y: 0,
+      button: 0,
+      buttons: phase === "down" ? 1 : 0,
+      count: 1,
+    });
+    local.held?.(e, [press("down")]);
+    record();
+    local.held?.(e, [press("up")]);
+  };
+  const key = (value: string, metaKey = false) =>
+    editor.element.dispatchEvent(
+      new KeyboardEvent("keydown", { key: value, metaKey, cancelable: true }),
+    );
+  record();
+  hand.follow?.(0);
+  return {
+    props,
+    opened,
+    editor,
+    hand,
+    record,
+    pressAddress,
+    key,
+    sync: () => ce.world.sync(),
+    dispose() {
+      hand.dispose?.();
+      editor.dispose();
+      local.dispose?.();
+      container.remove();
+      ce.dispose();
+    },
+  };
+}
+
+describe("a new browser pane's first address", () => {
+  it.each(["click", "shortcut"])(
+    "opens its first real page through a visible editor (%s)",
+    (way) => {
+      const t = firstUse();
+      try {
+        expect(t.props().url).toBe(pane.SAMPLE_URL);
+        expect(t.opened).not.toHaveBeenCalled();
+        if (way === "click") t.pressAddress();
+        else t.key("l", true);
+        expect(t.editor.lease()?.part).toBe("vibefield.browser-pane.address");
+        expect(t.editor.placement()?.w).toBeGreaterThan(0);
+        expect(getComputedStyle(t.editor.element).color).toBe("black");
+        expect(getComputedStyle(t.editor.element).caretColor).toBe("black");
+        t.editor.element.value = "http://127.0.0.1:4321/first-page";
+        t.editor.element.dispatchEvent(new Event("input"));
+        t.editor.follow();
+        expect(t.editor.element.value).toBe("http://127.0.0.1:4321/first-page");
+        t.key("Enter");
+        t.sync();
+        t.record();
+        expect(t.props().url).toBe("http://127.0.0.1:4321/first-page");
+        expect(t.opened).toHaveBeenCalledExactlyOnceWith(
+          "first-use-pane",
+          expect.objectContaining({ url: t.props().url }),
+          expect.any(Function),
+        );
+        expect(t.editor.lease()?.part).toBe("vibefield.browser-pane.page");
+        expect(getComputedStyle(t.editor.element).color).toBe("transparent");
+      } finally {
+        t.dispose();
+      }
+    },
+  );
+
+  it("cancels the address and restores the shared editor after Escape and release", () => {
+    const t = firstUse();
+    try {
+      t.pressAddress();
+      t.editor.element.value = "https://cancelled.example/";
+      t.key("Escape");
+      expect(t.props().url).toBe(pane.SAMPLE_URL);
+      expect(t.opened).not.toHaveBeenCalled();
+      expect(getComputedStyle(t.editor.element).color).toBe("transparent");
+      t.pressAddress();
+      expect(getComputedStyle(t.editor.element).color).toBe("black");
+      t.editor.release();
+      expect(getComputedStyle(t.editor.element).color).toBe("transparent");
+    } finally {
+      t.dispose();
+    }
+  });
+});
 
 describe("the host compiles VibeField's browser pane as ICE compiles a built-in (K-L2)", () => {
   it("reads the export the row names, and the desk finds the kind by its OBJECT — things, a laptop's page in size, its floor the smallest viewport", () => {
