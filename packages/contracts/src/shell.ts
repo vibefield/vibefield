@@ -688,8 +688,9 @@ export const SURFACE_AUTHORITY_LIMITS = {
   ENUMERATE_DEADLINE_MS: 5_000,
   MINT_DEADLINE_MS: 10_000,
   RELEASE_DEADLINE_MS: 5_000,
-  /** PT-S2: one `simctl list --json` (main's own bound is 8 s), after the Xcode probe that precedes every simctl. */
-  SIMULATOR_DEVICES_DEADLINE_MS: 10_000,
+  /** PT-S2: one `simctl list --json` (main's own bound is 8 s), after the Xcode probe that precedes every simctl (5 s, on a
+   * cold service) — above main's worst case, 13 s, by an IPC margin, so a slow CoreSimulator's answer is never discarded. */
+  SIMULATOR_DEVICES_DEADLINE_MS: 15_000,
 } as const;
 
 export const ShellSurfacesEnumerateParams = z

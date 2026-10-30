@@ -733,7 +733,8 @@ describe("AH-3/AH-4 static shell provider", () => {
     expect(METHODS.some((method) => method.method === "shell.surfaces.simulatorDevices")).toBe(
       false,
     );
-    expect(SURFACE_AUTHORITY_LIMITS.SIMULATOR_DEVICES_DEADLINE_MS).toBe(10_000);
+    // above main's own worst case for the call: the Xcode probe (5 s) and the list (8 s)
+    expect(SURFACE_AUTHORITY_LIMITS.SIMULATOR_DEVICES_DEADLINE_MS).toBe(15_000);
     expect(ShellSurfacesSimulatorDevicesParams.parse({})).toEqual({});
     const row = {
       deviceType: "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro",
