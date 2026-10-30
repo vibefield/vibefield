@@ -1,7 +1,9 @@
 // THE DESK'S LIVE SERVICE under a test's hand (desk-live.test.ts, desk-live-stills.test.ts, desk-live-cap.test.ts): a FAKE pool
 // (each acquire a handle whose state the test sets; its snapshot says each key's holders, as the window's pool does), a fake
 // presentation (frames LAND), a fake writer (ICE's, its presents recorded) — and, PT-5b, a clock with its timers, a shelf of
-// stills, and the host's two hands on a page's pixels as fakes.
+// stills, and the host's two hands on a page's pixels as fakes. PT-S2 (desk-live-simulator.test.ts): a phone's spec and its
+// law's asks, each handle's device acts recorded, and main's facts of a bound Simulator said on its summary (`simSays`; a
+// staged page's `sim`), standing through its producer's state.
 import type { LiveTextureOptions, LiveWriter } from "@vibecook/ice/desk";
 import type { LiveDemand } from "@vibecook/ice/desk/kit";
 import type { LiveSurfaceFrameMetadataV1, LiveSurfaceRuntimeSummaryV1 } from "@vibefield/contracts";
@@ -77,6 +79,37 @@ export const UNSEEN: LiveDemand = {
   fps: 0,
   raster: [0, 0],
   viewport: [1280, 800],
+  interactive: false,
+};
+
+/** PT-S2 — a phone's spec as its kind hands it (the SDK's `LiveSimulatorSpec`): bound to an iPhone 17 Pro on iOS 26.1. */
+export const SIM = {
+  source: "ios-simulator",
+  deviceType: "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro",
+  runtime: "com.apple.CoreSimulator.SimRuntime.iOS-26-1",
+  label: "iPhone 17 Pro",
+  scheme: "light",
+};
+/** …the same phone bound anew: the same type on another runtime. */
+export const SIM_OTHER = { ...SIM, runtime: "com.apple.CoreSimulator.SimRuntime.iOS-18-6" };
+/** The phone's law (plugins/simulator `phoneDemand`): in the hand — 60, its native raster, interactive; at rest — 12 (the
+ * buckets give 10), the rung that covers its display; unseen — paused. Never a viewport: a device is its own size. */
+export const PHONE_HELD: LiveDemand = {
+  mode: "live",
+  fps: 60,
+  raster: [1206, 2622],
+  interactive: true,
+};
+export const PHONE_REST: LiveDemand = {
+  mode: "live",
+  fps: 12,
+  raster: [603, 1311],
+  interactive: false,
+};
+export const PHONE_UNSEEN: LiveDemand = {
+  mode: "paused",
+  fps: 0,
+  raster: [0, 0],
   interactive: false,
 };
 
@@ -211,6 +244,13 @@ export function fakeHandle(key: string, opts: SurfaceAcquireOptions) {
         h.emulations.push(command.emulation);
         h.order.push("emulate");
       } else h.navigations.push(command);
+      return true;
+    },
+    /** PT-S2: the device acts sent down a bound Simulator's lane (as `navigate`: only while its lane is live). */
+    devices: [] as unknown[],
+    device(command: { verb: string }) {
+      if (!h.lane || state.status !== "live") return false;
+      h.devices.push(command);
       return true;
     },
     retry() {
@@ -492,9 +532,12 @@ export function stage(over: Partial<DeskLiveDeps> = {}) {
   };
   /** The producer's state said again (the same presentation: its frames still land), to every holder. */
   const sayOf = (page: Staged, state: LiveSurfaceRuntimeSummaryV1["state"]): void => {
+    // (PT-S2: a bound Simulator's facts stand through its producer's state — main says them on the one summary)
+    const simulator = page.presentation.summary.simulator;
     page.presentation.summary = {
       state,
       transport: "shared-texture",
+      ...(simulator === undefined ? {} : { simulator }),
     } as LiveSurfaceRuntimeSummaryV1;
     for (const h of page.handles) if (h.released === 0) h.set({});
   };
@@ -587,7 +630,16 @@ export function stage(over: Partial<DeskLiveDeps> = {}) {
     const deaf = (): void => {
       staged.deaf = true;
     };
-    return { key, face, handle, presentation, arrived, attach, frame, say, wire, deaf };
+    /** PT-S2: main's facts of a bound Simulator said on its summary (null: none), its producer's state as it stands. */
+    const sim = (simulator: Record<string, unknown> | null): void => {
+      const { simulator: _was, ...summary } = presentation.summary;
+      presentation.summary = {
+        ...summary,
+        ...(simulator === null ? {} : { simulator }),
+      } as LiveSurfaceRuntimeSummaryV1;
+      for (const h of staged.handles) if (h.released === 0) h.set({});
+    };
+    return { key, face, handle, presentation, arrived, attach, frame, say, wire, deaf, sim };
   };
   /** What the service has in flight that CAN finish does (every fake answers within a few turns of the microtask queue). */
   const turns = async (): Promise<void> => {
@@ -605,6 +657,23 @@ export function stage(over: Partial<DeskLiveDeps> = {}) {
     throw new Error("the producers never went quiet");
   };
   return { ...t, clock, shelf, log, exists, open, pump };
+}
+
+/** PT-S2 — main's facts of a bound Simulator said on its summary (`summary.simulator`; null: none) with its producer's
+ * state, the presentation kept (its frames still land); the handle told. */
+export function simSays(
+  presentation: { summary: LiveSurfaceRuntimeSummaryV1 },
+  handle: { set(next: Record<string, unknown>): void },
+  simulator: Record<string, unknown> | null,
+  state: LiveSurfaceRuntimeSummaryV1["state"] = "live",
+): void {
+  const { simulator: _was, ...summary } = presentation.summary;
+  presentation.summary = {
+    ...summary,
+    state,
+    ...(simulator === null ? {} : { simulator }),
+  } as LiveSurfaceRuntimeSummaryV1;
+  handle.set({});
 }
 
 /** The page's summary said again (a producer that failed, hibernated…), its browser state with it. */
