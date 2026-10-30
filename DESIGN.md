@@ -89,8 +89,7 @@ Godview's mode (As the app · Light · Dark), saved with the rest of this viewer
    *Amended 2026-10-30 (HN-8; PL-D1 and PL-D2 ruled by James 2026-10-29, Cards in Hand):* this said
    "one head, one line, two edges and a corner". The left edge's clipboard became the hand at HN-1,
    and the right edge's Artifacts moved into the head — the pill's package and, under a cover, the
-   package circle (§8 "The head") — so the two edges left the frame. **Not built — HN-8 (B3) builds
-   it.**
+   package circle (§8 "The head") — so the two edges left the frame. Built at HN-8.
 
 *History (2026-10-28, Q18):* until this ruling the signatures were **the living card** — CardShell
 physics: lift-on-grab, hot-point glow and rim on overlap, the sole-selection ring; "a VibeField card
@@ -539,7 +538,7 @@ because they belonged to the window's edge rather than floating over the field �
 control; a hardware notch, not a pane of glass. The left's left at HN-1 and the right's at HN-8, so
 the exception has no wearer: what chrome draws solid is solid by its own rule (the menus, below;
 the 40px round buttons), never as a fixture of the window's edge, and nothing may claim the notch's
-exception again. **Still in the code — HN-8 (B3) retires it.**
+exception again.
 
 **Material tiers** (translucency + backdrop blur — chrome is glass, cards are opaque):
 
@@ -797,13 +796,16 @@ head's menus grow from their control on the island curve in 240ms (the zoom's fr
 palette from the head); the zoom's folds at once, as @'s list does, and the palette fades out over
 200ms `ease`. Reduced motion fades them in over 120ms at full size.
 
-**The pill's sheet, on two shelves (HN-8; PL-D1, PL-D2; not built — HN-8 (B3) builds it).** The
-explorer is the pill's sheet now, and it grows as it did: 600ms on the island curve from the pill —
-or, under a cover, from the package circle, the circle's own glyph never moving (M1, M2; §8 "The
-head") — and folds back the same way. Its shelves change in place: pressing the other button while
-it is open fades one shelf out and the other in over 180ms `ease`, the sheet itself never regrowing
-(as a covered view's content changes under a cover that stays, One Frame §12). Reduced motion (M6):
-fades only, halved, as the explorer's always were (90ms), and the shelves change at once.
+**The pill's sheet, on two shelves (PL-D1, PL-D2; built at HN-8).** The explorer is the pill's
+sheet now, and it grows as it did: 600ms on the island curve from the pill — or, under a cover,
+from the package circle, the circle's own glyph and dot never moving (M1, M2; §8 "The head"), and
+out of the bar's own control while Godview's terminals are maximized — and folds back the same
+way, also when a change of view folds it (§8 "The head"). Its shelves change in place: pressing the
+other button while it is open fades one shelf out and the other in over 180ms `ease`, the sheet
+itself never regrowing (as a covered view's content changes under a cover that stays, One Frame
+§12). Reduced motion (M6: morphs become fades): the sheet never changes size — from the pill, the
+circle or the bar, it appears at its size at once and fades in over 90ms, and out the same way
+(until HN-8 the explorer halved its morph to 90ms instead) — and the shelves change at once.
 
 **The corner (One Frame §10, §12; FR-4, 2026-10-03).** **The Me menu** grows upward on the island
 curve (600ms) from a seed the size of the face's circle at its own foot, above the face, the surface
@@ -817,7 +819,6 @@ approach (the pointer reaching the 8px it rested in, or the keyboard's focus) be
 26 × 116, its glyph and count fading in over 160ms plain `ease` — and opened its drawer only once
 it was the notch (240 + 120ms); under reduced motion it became the notch at once. The edges left the
 frame (§8 "Edge trays", retired), and nothing at the window's sides grows on approach now.
-**Still in the code — HN-8 (B3) retires it.**
 
 **Search (the Peek; One Frame §23, GV-D8; built 2026-10-08).** The popup pops in over **260ms on
 the island curve** from 2% above its place at 0.97 (`translate(-50%, -48%) scale(0.97)`), fading in
@@ -908,33 +909,46 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   by stacking each row into a 128-wide card, the preview on top (16:10, full width), the title, the
   fact line and the status below, the overflow on a chip over the preview, the Add step's choices
   stacked; plugin disable or hot-reload folded it, and Escape gave focus back to the notch.
-  *Moved into the head 2026-10-30 (HN-8; PL-D1…PL-D3 ruled by James 2026-10-29, Cards in Hand —
-  "Artifacts are what your desks make, so they sit with your fields"; **not built — HN-8 (B3) builds
-  it**):* **its doors are the pill's package button and, under a cover, the package circle** (§8
-  "The head"), and **its host is the pill's sheet, on its Artifacts shelf** — the SAME
-  `hud.side-panel` contribution, mounted in the shelf at the sheet's width (504 inside the sheet's
-  padding at 544). There the plugin's own stylesheet answers the shelf with **its tile form**
-  (PL-D3, "Tiles, like your fields"): a container query at the shelf's width lays the catalog out
-  three across, as the fields' tiles are (16 between rows, 14 between columns) — each tile the
-  preview (16:10, corners 10, the hairline ring), the name (12/500 in primary ink), where it runs
-  (the fact line, `origin · proxy|folder`, as the list draws it below) and its state (the status
-  dot and word, §2.5), its overflow (•••) on a chip over the preview as the narrow form put it. **Publish…
-  is the first tile, in words** — the Add act, which was a round plus (FR-3: one plus on screen) —
-  wearing New field's face (the fill inside a dashed strong hairline, 12/500 in secondary ink at its
-  centre), and **Publish… changes the shelf in place to the Hub's two choices**, Proxy and Folder,
-  and their steps, with room the 152 column never had; a publish returns the shelf to its tiles. An
-  empty catalog shows the Hub's own quiet state — "No artifacts yet", "Add a proxy or folder" and its one
-  Add — in place of a lone Publish… tile, so one Add is on screen.
+  *Moved into the head 2026-10-30 (PL-D1…PL-D3 ruled by James 2026-10-29, Cards in Hand —
+  "Artifacts are what your desks make, so they sit with your fields"; built at HN-8):* **its doors
+  are the pill's package button and, under a cover, the package circle** (§8 "The head"), and **its
+  host is the pill's sheet, on its Artifacts shelf** — the SAME `hud.side-panel` contribution,
+  mounted in the shelf at the open sheet's width (504 inside the sheet's padding at 544), a width
+  it keeps while the sheet grows and folds, clipped by the sheet, so the Hub never reflows
+  mid-morph. There the plugin's own stylesheet answers the shelf with **its tile form** (PL-D3,
+  "Tiles, like your fields"): a container query at the shelf's width lays the catalog out three
+  across, as the fields' tiles are (16 between rows, 14 between columns) — each tile the preview
+  (16:10, corners 10, the hairline ring), the name (12/500 in primary ink), where it runs (the fact
+  line, `origin · proxy|folder`, as the list draws it below) and its state (the status dot and
+  word, §2.5), its overflow (•••) on a chip over the preview as the narrow form put it, the chip's
+  menu hanging under it from the tile's right — from the tile's left in the first column — so it
+  never leaves the shelf. **The tiles move as the fields' do** (§7): 1.03 under the pointer, 0.95
+  pressed, over 200ms `ease`, and not at all under reduced motion; the tile under the pointer or
+  the focus stands above its neighbours, so its menu does too. **Publish… is the first tile, in
+  words** — the Add act, which was a round plus (FR-3: one plus on screen) — wearing New field's
+  face (the fill inside a dashed strong hairline, 12/500 in secondary ink at its centre), and
+  **Publish… changes the shelf in place to its step, headed "Publish"** — "Choose what this
+  computer should share." — whose two choices, Proxy and Folder, are two cards side by side in the
+  tile form (the ruled page's drawing), and then to their steps, with room the 152 column never
+  had; a publish returns the shelf to its tiles. An empty catalog shows the Hub's own quiet state —
+  "No artifacts yet", "Add a proxy or folder" and its one button, **"Publish…"** — in place of a
+  lone Publish… tile, so one Publish… is on screen.
   Above the tiles the header stays the Hub's: “Artifacts” and its quiet count ("4 shared"). It keeps
   its words and its acts — open, Copy URL, and for the owner Refresh preview, Rename and Remove —
   its copy waiting on an SDK copy door (item 111, the fixer's; B3 keeps the button as it is). In the
   shelf it draws no close of its own ("Close panel" was the side panel's and the drawer's): Escape,
   the dim and the button that is on close the sheet, and Escape gives the keyboard back to the
-  button that opened it. **With no Hub bound the shelf is never blank:** while the Browser plugin is
-  off it says **"Artifacts are off"** over "Turn on the Browser plugin in Settings › Plugins."; while
-  it starts or restarts, **"Opening Artifacts…"**, late as History's opening words are (nothing for
-  120ms, then a 180ms `ease` fade), so a quick restart never flashes them; the Hub takes the shelf
-  when it binds, and an open shelf stays open through a restart. *(Until HN-8 no Hub meant no notch
+  button that opened it. **With no Hub bound the shelf is never blank** — it says why, in one of
+  four states. **Off** (the Browser plugin present and `enabled: false`, its state `disabled`):
+  **"Artifacts are off"** over "Turn on the Browser plugin in Settings › Plugins." **Can't run**
+  (its state `invalid` or `incompatible`, on or off — turning it on would not help — or the plugin
+  absent from the registry): **"Artifacts can't run"** over "The Browser plugin can't run in this
+  VibeField — see Settings › Plugins." **Opening** (the plugin enabled and its Hub not yet bound,
+  or the registry not yet answered): **"Opening Artifacts…"**, late as History's opening words are
+  (nothing for 120ms, then a 180ms `ease` fade), so a quick restart never flashes them. **Not
+  starting** (still opening after **10 s**): **"Artifacts aren't starting"** over "Turn the Browser
+  plugin off and on in Settings › Plugins." Whichever it says, the Hub takes the shelf the moment
+  it binds, and an open shelf stays open through a restart. *(Until HN-8 no Hub meant no notch
   — a door to nothing would lie — and an open drawer folded with it; the package is the head's own
   now, and its shelf says why it is empty.)* The narrow form retires with the 152 column it
   answered; the spine's arbitration is the frame's one owner (§10), and M6 stands.
@@ -942,7 +956,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   fixed `top-16 right-0 bottom-0 w-[min(92vw,26rem)]`, `rounded-l-[2.5rem]`, sheet material, the
   left-cast side-panel shadow, translating from the right on the 600ms island curve, its focus
   returning to the toggle. The recipes below are the contents', in whatever host holds them; in the
-  shelf the tile form stands for the list and Publish… for the round Add (above), and the rest holds.
+  shelf the tile form stands for the list, Publish… for the round Add and the "Publish" step's two
+  cards for the two-choice step's rows (above), and the rest holds.
   Header = “Artifacts” + quiet count + one round Add action. The catalog is a single-column
   list; each row uses a left `w-28 aspect-[16/10] rounded-[10px]` clipped preview, then title at
   12px medium, one 11px `/50` fact line (`origin · proxy|folder`), and an honest status dot +
@@ -958,9 +973,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   carries one `/50` factual line: “Opens on devices connected to this tailnet with Tailscale”;
   it is not a warning banner or a green reachability promise.
 - **Edge trays — the notch and its drawer** — *retired 2026-10-30 (HN-8; PL-D1…PL-D3 ruled by James
-  2026-10-29, Cards in Hand; HN-L7: the edges' drawers retire with the edges).* **Still in the code —
-  HN-8 (B3) retires it.** What it was (2026-09-23, James; the record is `draft/composer/compact.html`
-  §15–19 and `compact.md` Parts II–IV): a spine-owned tray on the window's edge — a **notch** (N1) at
+  2026-10-29, Cards in Hand; HN-L7: the edges' drawers retire with the edges).* What it was
+  (2026-09-23, James; the record is `draft/composer/compact.html` §15–19 and `compact.md` Parts
+  II–IV): a spine-owned tray on the window's edge — a **notch** (N1) at
   the edge's mid-height, 26 × 116, one path drawn FROM the wall (a concave fillet of 12, a convex
   face of 14) in opaque solid chrome, §5's one exception to "chrome is glass", and its **drawer**
   (P4), the same path at 152 wide from `top-16` to `bottom-20`, the edge shadow cast by the whole.
@@ -1349,9 +1364,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     whole leading names, one at a time, behind a `…` that is itself a button (it goes to the
     nearest name it hides, and its tooltip names them all) — never a name cut mid-word (F13). Only
     the last name, if even it alone cannot fit, ends in an ellipsis.
-  - **The package** (PL-D1 — "You can see Artifacts are there without opening anything"; **not
-    built — HN-8 (B3) builds it**): after the chevron, **a rule** — 1 × 18 in the strong hairline, 5
-    clear each side, as the selection bar's — then **the package button**, 28 round like the
+  - **The package** (PL-D1 — "You can see Artifacts are there without opening anything"; built at
+    HN-8): after the chevron, **a rule** — 1 × 18 in the strong hairline, 5 clear each side, as the
+    selection bar's — then **the package button**, 28 round like the
     chevron, `package` 15 in tertiary ink (the ready fill and primary under the pointer), which grows
     the same sheet on its **Artifacts** shelf (below; §8 "Artifacts — the Artifacts shelf's
     contents"). Its tooltip and its accessible name say **"Artifacts"** ("Close the artifacts" while its
@@ -1363,48 +1378,55 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     **"Artifacts — vibe-field's source is unavailable"** — or, past one, how many — **"Artifacts — 2
     sources unavailable"**. The head reads the catalog itself, over the window's fieldd client, so
     the dot stands while the sheet is shut and whether the Hub is running or not.
-  - **The pill's sheet** — the fields explorer, grown to two shelves (PL-D1; **not built — HN-8 (B3)
-    builds it**) — grows FROM the pill (M1): one element, 600ms on the island curve, still at
-    `top-2`, to **544 × 420** — `min(56%, 34rem)` wide, as before, and 420 tall, never ending nearer
-    the line than 8 on a window too short for it — corners 22 22 40 40, the sheet tier (§5) ringed
-    by the strong hairline with the top sheet's shadow; the backdrop dim behind it and, on Canvas,
-    the field's recede, as before (no stage hold since DK-17 — M5: the desk keeps its own idle).
-    **It stands above the cover** — with the frame at 62, its dim over the cover and under the frame
-    (§10) — so a covered view can open it (the package circle, below). It holds **two shelves,
-    Fields and Artifacts**: the chevron opens it on Fields, the package on Artifacts, and **the
-    button whose shelf shows is on** — the ready fill and primary ink, held while it shows; the
-    chevron turns up only on Fields. Its head row is the pill's own — the field's name, the chevron,
-    the rule and the package — where the button that is on says "Close  Esc" and the other names its
-    shelf ("Fields", "Artifacts"). Pressing the other turns the sheet to its shelf in place (§6);
-    pressing the one that is on, Esc or the dim closes it. **Fields** is the explorer as it was: the
-    doc tiles (the fields explorer, above) in three columns, **New field** first, in words, the
-    current field ringed. **Artifacts** is the Hub's, hosted there (§8 "Artifacts — the Artifacts
-    shelf's contents"): its tiles three across, as the fields' are, **Publish…** first, in words, and
-    Publish… changing the shelf in place to the Hub's two choices. *(Until HN-8 it was the fields
-    explorer alone, `min(46vh, 420px)` tall — about 359 at the default 780 — and the canvas's chrome
-    at 50, under the cover.)*
+  - **The pill's sheet** — the fields explorer, grown to two shelves (PL-D1; built at HN-8) — grows
+    FROM the pill (M1): one element, 600ms on the island curve, still at `top-2`, to **544 × 420** —
+    `min(56%, 34rem)` wide, as before, and 420 tall, never ending nearer the line than 8 on a
+    window too short for it — corners 22 22 40 40, the sheet tier (§5) ringed by the strong hairline
+    with the top sheet's shadow; the backdrop dim behind it and, on Canvas, the field's recede, as
+    before (no stage hold since DK-17 — M5: the desk keeps its own idle). **It stands above the
+    cover** — with the frame at 62 and, while the covered sheet shows, its dim over the cover and
+    under the frame (§10) — so a covered view can open it (the package circle, below). It holds
+    **two shelves, Fields and Artifacts**: the chevron opens it on Fields, the package on Artifacts,
+    and **the button whose shelf shows is on** — the ready fill and primary ink, held while it
+    shows; the chevron turns up only on Fields. Its head row is the pill's own — the field's name,
+    the chevron, the rule and the package — where the button that is on says "Close  Esc" and the
+    other names its shelf ("Fields", "Artifacts"). Pressing the other turns the sheet to its shelf
+    in place (§6); pressing the one that is on, Esc or the dim closes it. **Fields** is the explorer
+    as it was: the doc tiles (the fields explorer, above) in three columns, **New field** first, in
+    words, the current field ringed, under the explorer's fade at the shelf's foot. **Artifacts**
+    is the Hub's, hosted there (§8 "Artifacts — the Artifacts shelf's contents"): its tiles three
+    across, as the fields' are, **Publish…** first, in words, and Publish… changing the shelf in
+    place to its step, "Publish" — Proxy and Folder, two cards side by side. It has **no fade at
+    its foot**, so the Hub's buttons are never faded. *(Until HN-8 it was the fields explorer
+    alone, `min(46vh, 420px)` tall — about 359 at the default 780 — and the canvas's chrome at 50,
+    under the cover.)*
   - **The package circle** (PL-D2 — "Agents start their servers in Godview. Publishing one shouldn't
-    need a trip to the desk."; **not built — HN-8 (B3) builds it**): under a cover — Godview, History
-    and, once it is built, Chat (the Assistant's cell) — **a lone package circle** stands at the
-    head's left: a 40 glass
-    circle (the line's glass, §5) **at x 96**, `top-2`, on the lights' axis — the left slot's start,
-    mirroring search's circle at the right end (§8 "Search — the Peek") — holding `package` 18 in
-    secondary ink (primary under the pointer), above the cover with the line and the corner (62).
-    Its tooltip, its name and its dot are the pill's package's (the dot 7 in from the circle's top
-    right). **It grows the same sheet, on Artifacts** — 600ms on the island curve, the sheet's left
-    on the circle's (x 96–640 at the default window), 544 × 420, corners 22 22 40 40 — and the
-    sheet's head row is the circle's own: the package, now a 28 round button 6 in and on, its glyph
-    (15) staying where it stood ("Close  Esc"), and 8 after it the shelf's name, **"Artifacts"**, at
-    13/600 in primary ink. Fields are the desk's and stay with the pill: under a cover the sheet holds
-    Artifacts alone. On Canvas there is no circle — the pill holds the package. **Godview's
-    Stories** keep one head gap (12) from it: their side is 96 + 40 + 12 = **148** (§8 "Godview's
-    head — Stories"). **While Godview's terminals are maximized** it folds as search does (§8 "Search
-    — the Peek"; §10's one exception): the head's circle is not drawn, and the same button stands in
-    the terminals' title bar at its left end, at 96, clear of the lights — 30 × 24, corners 8, the
-    bar's own controls' box, `package` 13 in the terminal's ink at 64%, the full ink on a 10% fill
-    of it under the pointer, its dot on it — stepping out and back with search (the bar's fades over
-    120ms, then the head's circle over 200ms), so it is never in two places. From the bar it grows
-    the same sheet, where the circle would.
+    need a trip to the desk."; built at HN-8): under a cover — Godview, History and, once it is
+    built, Chat (the Assistant's cell) — **a lone package circle** stands at the head's left: a 40
+    glass circle (the line's glass, §5) **at x 96**, `top-2`, on the lights' axis — the left slot's
+    start, mirroring search's circle at the right end (§8 "Search — the Peek") — holding `package`
+    18 in secondary ink (primary under the pointer), above the cover with the line and the corner
+    (62). Its tooltip, its name and its dot are the pill's package's (the dot 7 in from the
+    circle's top right). **It grows the same sheet, on Artifacts** — 600ms on the island curve, the
+    sheet's left on the circle's (x 96–640 at the default window), 544 × 420, corners 22 22 40 40 —
+    and the sheet's head row is the circle's own: the package, now a 28 round button 6 in, on
+    ("Close  Esc") until the fold ends, holding `package` at the circle's 18 with its dot where the
+    circle's is (7 in from the circle's top right), so neither moves; 8 after it, the shelf's name,
+    **"Artifacts"**, at 13/600 in primary ink. **Opened from the keyboard**, the sheet takes the
+    keyboard's focus to that package, and Esc or the fold gives it back to the circle. Fields are
+    the desk's and stay with the pill: under a cover the sheet holds Artifacts alone. On Canvas
+    there is no circle — the pill holds the package. **Godview's Stories** keep one head gap (12)
+    from it: their side is 96 + 40 + 12 = **148** (§8 "Godview's head — Stories"). **While
+    Godview's terminals are maximized** it folds as search does (§8 "Search — the Peek"; §10's one
+    exception): the head's circle is not drawn, and the same button stands in the terminals' title
+    bar at its left end, at 96, clear of the lights — 30 × 24, corners 8, the bar's own controls'
+    box, `package` 13 in the terminal's ink at 64%, the full ink on a 10% fill of it under the
+    pointer, its dot on it, 3 in from the box's top right as on the pill's 28 button, and
+    **unringed**: the ring is there so the dot reads on glass, and the bar is the deck's own ground.
+    It steps out and back with search (the bar's fades over 120ms, then the head's circle over
+    200ms), so it is never in two places. From the bar it grows the same sheet from where it
+    stands: while the terminals are maximized the sheet's shut box is the bar control's — top 3,
+    30 × 24, corners 8, no glass — so the sheet grows out of the control and folds back into it.
   - **The zoom readout** (FC-D8; Canvas's one instrument): at least 66 wide, the line's glass,
     corners 20, the zoom as one number at 13/500 `tabular-nums` in secondary ink (primary under
     the pointer or while its menu is open). **A click grows its menu** (FC-D14, §5: solid), 4
@@ -1441,7 +1463,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     construction; Settings folds them and is folded by them. Since FR-4 the Me menu is in the same
     value (§10), and since HN-8 the pill's sheet is one surface on two shelves — the value is
     `fields` or `artifacts`, naming the shelf that shows (`artifacts` was the right edge's drawer
-    from FR-4 until then). A change of view folds whichever is open.
+    from FR-4 until then). A change of view folds whichever is open. A sheet folds over its 600ms
+    with its shelf still in it — the pill's as a cover rises, the Hub still on its Artifacts shelf,
+    and the covered sheet back into the circle's place, also as the cover lowers — and the Hub
+    stays in the sheet that showed it, never moving to the other.
   - **The right slot is the zoom readout alone**, 16 in, and the pill gives up only the wider of
     the lights' 96 and that slot (FR-4, 2026-10-03: the theme went into the Me menu, FC-D5, F3, and
     Artifacts behind the right notch, FC-D10, F10 — into the pill itself since HN-8, PL-D1).
@@ -1478,9 +1503,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   - **The row never crowds the head's ends.** It keeps one head gap (12) from the package circle
     at the left slot (§8 "The head": 96 + 40 + 12, a side of **148**) and from the search button
     (§8 "Search — the Peek": 16 + its glass + 12), also while a filter's token widens that glass —
-    both sides the wider of the two, so the row stays centred. *(Amended 2026-10-30, HN-8, PL-D2;
-    **not built — HN-8 (B3) builds it**: it kept the gap from the lights' slot itself, a side of
-    108, until the package circle came to stand there.)* It shows as many WHOLE circles as fit, nine at most. Past that it **pages by
+    both sides the wider of the two, so the row stays centred. *(Amended 2026-10-30, PL-D2; built
+    at HN-8: it kept the gap from the lights' slot itself, a side of 108, until the package circle
+    came to stand there.)* It shows as many WHOLE circles as fit, nine at most. Past that it **pages by
     whole circles**, three at a time, in 320ms on the island curve, with a 28 glass chevron on the
     same axis outside each end that has more. 700ms after the pointer leaves the head it comes
     back to the page that holds the current view.
@@ -1901,8 +1926,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   - **Place** — centred over the selection's brackets (the anchor's `box`: 6 out for one object,
     the union's 10 out for several), its foot **10** above them; when its top would cross the
     **safe top, 94** (§10) it stands 10 below them instead, and a bar flipped below clamps at 94
-    (R7); kept **16** from each side (42 — the notch's 26 + 16 — until the edges left the frame at
-    HN-8; **not built — HN-8 (B3) builds it**); its top never lower than **660** (its
+    (R7); kept **16** from each side (built at HN-8; 42 — the notch's 26 + 16 — until the edges
+    left the frame); its top never lower than **660** (its
     foot 8 above the line's top, 708). A selection wholly off-screen hides the bar (R7).
   - **Size and material** — **40** tall (the top chrome's height), padding 4, gap 2, corners 20, on
     the line's glass (§5) with its hairline and the island shadow; cells **32** × 32, corners 16,
@@ -2731,7 +2756,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   button at the bar's height (§8 "Search — the Peek"); the hairline is 1 × 14, the terminal's
   ink at 16%; **restore** — the square behind a square — stands where maximize stood, and the
   terminals fall back to where their edge was left. **At its left end, at 96, clear of the
-  lights: the package** (PL-D2, HN-8; **not built — HN-8 (B3) builds it**) — the frame's package
+  lights: the package** (PL-D2; built at HN-8) — the frame's package
   circle at the bar's height, folded as search is (§8 "The head"). **On Windows and Linux** there
   are no lights: the bar is drawn the same, with nothing at its left but the package.
   **Dragging the grip out turns it back into the sheet AT ONCE** — from the start of the drag
@@ -3072,9 +3097,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     above; **the transcript's top fade is the cover's tint** (`--vf-chrome-solid`, feathered by the
     room's mask), never a frost.
   - **Its edges are the frame's.** The columns end at **692** — the reserve of 88 above the window's
-    foot (FC-D15) — and run to the window's sides (they kept **8** clear at each side for the
-    notches' slivers until HN-8, 2026-10-30, when the edges left the frame; **not built — HN-8 (B3)
-    builds it**); the top band, 0–52, is
+    foot (FC-D15) — and run to the window's sides (built at HN-8, 2026-10-30: they kept **8** clear
+    at each side for the notches' slivers until the edges left the frame); the top band, 0–52, is
     the head's (FC-D6), holding only the window's lights: the strip's search pill left for the frame's
     button (GV-D10) and the Peek is not built, so History has no search yet. Its dialogs (a file, an
     image's gallery) land in a layer that ends at the reserve too, so a dialog is never under the line.
@@ -3382,7 +3406,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     reduced motion, it changes its place at once. The head's row starts its fade back as the deck
     leaves maximized, so the circle starts 154ms after it. The deck's ink it wears is lent by
     Godview's stage on the document (`--vf-godview-bar-ink`) while the terminals are maximized.
-    **The package circle folds with it** (PL-D2, HN-8; **not built — HN-8 (B3) builds it**): the
+    **The package circle folds with it** (PL-D2; built at HN-8): the
     same fold at the bar's other end — its left, at 96, clear of the lights — 30 × 24, corners 8,
     `package` 13 alone (no key), in the same ink, stepping out and back on the same two steps (§8
     "The head").
@@ -3909,9 +3933,9 @@ their place". "Fullscreen" stays the pane's word (§8).
   right end to 24 from the window's right: the cards' tips on y 712, §8; HN-1), **the corner**
   (your face, centred on the foot axis), or **on its own
   object** (the desk's selection bar, the tools in hand, a pane's band; object chrome stays with its object,
-  even where it stands under the head). *Retired 2026-10-30 (HN-8; PL-D1…PL-D3, Cards in Hand;
-  **not built — HN-8 (B3) builds it**):* **the two edges** — the notches and their drawers (§8
-  "Edge trays", retired), one of the five places, built at FR-4 — left the frame: the left's clipboard became
+  even where it stands under the head). *Retired 2026-10-30 (PL-D1…PL-D3, Cards in Hand; built at
+  HN-8):* **the two edges** — the notches and their drawers (§8 "Edge trays", retired), one of the
+  five places, built at FR-4 — left the frame: the left's clipboard became
   the hand at HN-1, and the right's Artifacts moved into the head at HN-8 (the pill's package, the
   covered views' circle and the sheet's Artifacts shelf, §8 "The head"). **Two axes:** everything in the head centres on y 28, the
   traffic lights' centre; everything at the foot on y 734, the line's centre. **The frame stands
@@ -3923,10 +3947,15 @@ their place". "Fullscreen" stays the pane's word (§8).
   under the line, and only the canvas runs content
   under it. *(Covered views kept 8px clear at each edge for the notches' slivers — FC-D15's
   `COVER_EDGE_CLEAR_PX`, the left's kept after HN-1 so a view kept one margin — until the right
-  notch left too at HN-8, 2026-10-30, and the gutters went with it; **not built — HN-8 (B3) builds
-  it**. Godview's deck keeps its well's own 8 at its sides, which is the deck's own frame, not a
-  gutter.)* **The pill's sheet stands with the frame** (62; HN-8), so a covered view can open it
-  from the package circle, its dim over the cover and under the frame. Above the frame stand only Settings, the palette, the Peek's scrim and popup (64, §8
+  notch left too and the gutters went with it, built at HN-8, 2026-10-30. Godview's deck keeps its
+  well's own 8 at its sides, which is the deck's own frame, not a gutter.)* **The pill's sheet
+  stands with the frame** (62; HN-8), so a covered view can open it from the package circle, and
+  the pill's own keeps 62 until its fold ends, only then going back to the canvas's chrome at 50,
+  so a status line never pops over a sheet still folding. **Its dim follows the sheet it dims:**
+  over the cover and under the frame (61) only while the covered sheet shows, and otherwise at 40,
+  under the pill's sheet, as it always lay. **The status line stands over the sheet's dim** — the
+  same 61, later in the document — so an honest state stays readable and clickable while a sheet
+  is open. Above the frame stand only Settings, the palette, the Peek's scrim and popup (64, §8
   "Search — the Peek", 2026-10-08), the hand's own card picked up and its scrim (64) and the card
   being carried (66) — the hand itself stands with the frame, just above the line (63; §8 "The
   hand") — and the loading veil (and, until
@@ -3984,8 +4013,8 @@ their place". "Fullscreen" stays the pane's word (§8).
   Hand (2026-10-29, HN-1 and HN-2) @'s list has left with the line's draft and the clipboard's drawer
   with the left edge, and **`cards`** — the hand raised, or a card picked up — is one of them (§8 "The
   hand"; HN-L7): `objects · fields · zoom · palette · me · cards · artifacts · search · selection`.*
-  *Since HN-8 (2026-10-30; PL-D1, PL-D2; **not built — HN-8 (B3) builds it**) the right edge's
-  drawer has left with the edge, and the pill's sheet is ONE surface on two shelves — `fields` or
+  *Since HN-8 (2026-10-30; PL-D1, PL-D2) the right edge's drawer has left with the edge, and the
+  pill's sheet is ONE surface on two shelves — `fields` or
   `artifacts`, the value naming the shelf that shows (§8 "The head"):
   `objects · fields | artifacts · zoom · palette · me · cards · selection · search`, so opening the
   sheet on either shelf folds the rest, and turning it to its other shelf folds nothing.* **The
@@ -4024,8 +4053,8 @@ their place". "Fullscreen" stays the pane's word (§8).
   their band ends at 86 — above which the bar goes under its object; and **the foot, 88** — the
   line's reserve, the same 88 a covered view keeps (692): the board's lay ends 88 above the window's
   foot (I21) so its last row clears the line, and the bar's top never sits below 660 (its foot 8
-  above the line's 708). Between them the bar keeps **16** from each side (42 — the notch's 26 +
-  16 — until the edges left the frame at HN-8, 2026-10-30; **not built — HN-8 (B3) builds it**), and
+  above the line's 708). Between them the bar keeps **16** from each side (built at HN-8,
+  2026-10-30; 42 — the notch's 26 + 16 — until the edges left the frame), and
   a held object's reading fit keeps **116** above it (the held bar's foot, 104, + 12) and **100**
   below (the line's 88 + 12, I20). The reserves are measured from the window's edges and hold at
   every size; the y values here are the default window's (1180 × 780). A selection wholly off-screen
@@ -4080,8 +4109,8 @@ I-5) and never a colour of its own. Two constructions, one set:
 | **Hardware** (10) | close · check · search · rename (pencil) · return · backspace · more (ellipsis) · arrow · general (sliders) · keyboard | one solid silhouette as a single `evenodd` path — bodies and their holes, no masks, no filters — so the same geometry is a template asset on iOS |
 
 **Sizes** are the host's, by CSS: 12 (captions) · 13–16 (row controls; the pill's package at 15) ·
-18 (the Settings rail, the line's snapshot, the package circle, the Me menu) · 20 (the 40px round
-buttons) · 22 (the artifact choices) ·
+18 (the Settings rail, the line's snapshot, the package circle and its sheet's row, the Me menu) ·
+20 (the 40px round buttons) · 22 (the artifact choices) ·
 28 (the Agents head). *(Corrected 2026-10-28, the housekeeping pass: the consumers above named the
 HUD's round buttons, the file pill and the tray's plus at 22, which retired with the island, the
 pill and the tray — FR-2, FR-3, DK-13; the line's create draws its glyph at 16, §8 "The line".)* Instrument's stroke therefore renders 1 px at 12 and 1.67 px at 20 — one
@@ -4110,10 +4139,10 @@ glyph twice, as a playing card prints its rank — `snippets` (text) · `capture
 snapshot wears it too) · `code` (a file) · `agents` (an agent) · `terminal` · `message` — in the card's
 index ink, never a colour of its own (§5). `clipboard` is the selection bar's Copy (HN-D3), its notch
 having left with the clipboard's tray (HN-1).
-**`package`** is Artifacts' (PL-D1, PL-D2; HN-8, **not built — HN-8 (B3) builds it**): the pill's
-button and the covered views' circle (§8 "The head"), folded into the terminals' title bar with
-search. It was the right notch's from FR-4 (2026-10-03) to HN-8, and its role in the drawings,
-"reserved for the Artifacts twin", is out of date. **`sidepanel`** is no longer Artifacts' — it was
+**`package`** is Artifacts' (PL-D1, PL-D2; built at HN-8): the pill's button and the covered views'
+circle (§8 "The head"), folded into the terminals' title bar with search. It was the right notch's
+from FR-4 (2026-10-03) to HN-8, when its role in the drawings ("reserved for the Artifacts twin")
+was rewritten, as `sidepanel`'s was. **`sidepanel`** is no longer Artifacts' — it was
 the Hub side panel's toggle until FR-4 — and nothing in the product draws it; it stays in the set
 (the 64) until a glyph pass retires it, doc first.
 **`jump`** (2026-10-03, One Frame §13; Session Glyphs' jump-T3) goes to a session that is running — a
