@@ -284,8 +284,10 @@ describe("PT-S2 — a bound Simulator's lane on the desk's LIVE service", () => 
       // its act exactly where the state has one
       expect(said?.act === undefined).toBe(SIMULATOR_ACTS[condition] === null);
       expect(face.state().is).toBe(coarse);
-      // a device that cannot stream holds no slot: its wire paused
-      expect(handle.demands.at(-1)).toEqual(PHONE_PAUSED);
+      // a device that cannot stream holds no slot — yet its wire carries the kind's own ask: main withholds it there, and
+      // looks for the window (or restarts the stream) only under a live one
+      expect(handle.demands.at(-1)).toEqual(liveDemandIntent(PHONE_REST));
+      expect(live.faces()[0]?.alive).toBe(false);
     }
     // streaming again and seen: woken into a free slot, its frames flowing — `live`
     simSays(presentation, handle, STREAMING);
@@ -354,6 +356,34 @@ describe("PT-S2 — a bound Simulator's lane on the desk's LIVE service", () => 
     stopped?.act?.();
     expect(handle.devices).toHaveLength(2);
     expect(live.stats().acts).toBe(2);
+  });
+
+  it("a device MAIN HOLDS (it cannot stream) holds no slot, yet its wire carries the kind's own ask — main looks for the window only under a live one, so Show it comes back; unseen, or on a parked desk, paused", () => {
+    const { face, handle, presentation, live } = phone();
+    face.demand(PHONE_REST);
+    expect(handle.demands.at(-1)).toEqual(liveDemandIntent(PHONE_REST));
+    simSays(presentation, handle, { condition: "no-window", name: "iPhone 17 Pro" });
+    expect(handle.demands.at(-1)).toEqual(liveDemandIntent(PHONE_REST));
+    expect(live.faces()[0]).toMatchObject({ alive: false, simulator: { is: "no-window" } });
+    liveSimulatorFace(face.info())?.act?.();
+    expect(handle.devices).toEqual([{ verb: "show" }]);
+    expect(handle.demands.at(-1)).toEqual(liveDemandIntent(PHONE_REST));
+    // picked up: the hand's ask goes down at once; unseen: nothing to look for
+    face.demand(PHONE_HELD);
+    expect(handle.demands.at(-1)).toEqual(liveDemandIntent(PHONE_HELD));
+    face.demand(PHONE_UNSEEN);
+    expect(handle.demands.at(-1)).toEqual(PHONE_PAUSED);
+    face.demand(PHONE_REST);
+    expect(handle.demands.at(-1)).toEqual(liveDemandIntent(PHONE_REST));
+    live.park(true);
+    expect(handle.demands.at(-1)).toEqual(PHONE_PAUSED);
+    live.park(false);
+    expect(handle.demands.at(-1)).toEqual(liveDemandIntent(PHONE_REST));
+    // main found the window under it: streaming, and the plan wakes it into its free slot
+    simSays(presentation, handle, STREAMING);
+    expect(liveSimulatorFace(face.info())?.is).toBe("live");
+    expect(live.faces()[0]).toMatchObject({ alive: true, simulator: { is: "live" } });
+    expect(handle.demands.at(-1)).toEqual(liveDemandIntent(PHONE_REST));
   });
 
   it("a lane LOST is `stopped` — its act mints the lane again (the pool's retry), no device verb", () => {
@@ -482,13 +512,17 @@ describe("PT-S2 — a bound Simulator shares the pages' cap and their stills", (
     await s.pump();
     expect(a.wire()).toBe("hibernated");
     p.sim({ condition: "no-window", name: "iPhone 17 Pro" });
-    expect(p.wire()).toBe("paused");
+    // no slot held — but the kind's own ask stays on its wire: main withholds the device, and looks for its window under it
+    expect(p.wire()).toBe("live");
+    expect(s.live.faces().find((f) => f.key === PHONE)?.alive).toBe(false);
     const said = liveSimulatorFace(p.face.info());
     expect(said).toMatchObject({ is: "no-window", device: "iPhone 17 Pro" });
     said?.act?.();
     expect(p.handle.devices).toEqual([{ verb: "show" }]);
     await s.pump();
     expect(a.wire()).toBe("live");
+    // Show it ran: the live ask main looks for the window under is still the kind's
+    expect(p.handle.demands.at(-1)).toEqual(liveDemandIntent(PHONE_HELD));
     p.sim(STREAMING);
     await s.pump();
     expect(p.handle.demands.at(-1)).toEqual(liveDemandIntent(PHONE_HELD));

@@ -1420,7 +1420,10 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
    *    closure MEMOIZED by its verb (so the words do not churn), resolved by the face's KEY when it RUNS (the lane open then,
    *    its words still offering it: a press on a face that moved on is nothing). Never `extra.still` (R14).
    *  - A DEVICE THAT CANNOT STREAM (off, booting, no window, none, refused, stopped) is stopped as the cap reads it: it gives
-   *    back its slot when it stops, and coming back it waits for the plan's wake — as a page that stops (PT-6a M14).
+   *    back its slot when it stops, and coming back it waits for the plan's wake — as a page that stops (PT-6a M14). Its
+   *    WIRE still carries the kind's own live ask: main withholds that device itself (brief Part 2) and looks for its window,
+   *    or restarts its stream, only under a live ask — so Show it, Try again and a Screen Recording grant come back by it.
+   *    Streaming again, the stream comes up unasked: the plan wakes it into a free slot or puts it to rest (PT-6a M15).
    *  - ITS STILL is filed under its binding (R15): one taken of another device is never laid into its face.
    */
   const openSimulator = (key: string, bound: LiveSimulatorSpec, arrived: () => void): LiveFace => {
@@ -1638,7 +1641,8 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
     const offState = handle.onState((state) => {
       if (state.presentation !== presentation) listen(state.presentation);
       // PT-6a (M14, R1), as a page: a device that STOPS streaming gives back the cap's permission — its slot is another's,
-      // and coming back (booted, its window shown, tried again) it waits for the plan's wake; its wire says so at once
+      // and coming back (booted, its window shown, tried again) it waits for the plan's wake; its wire is written at once
+      // (the kind's live ask stays on it while main holds the device: `send`)
       const stops = stoppedOf(state);
       if (stops && !wasStopping) {
         seat.stop();
@@ -1838,7 +1842,17 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
       label: () => facts()?.name ?? bound.label,
       send() {
         if (closed) return;
-        handle.setDemand(seat.intent(undefined, false));
+        // MAIN HOLDS a device that cannot stream (its demand hibernated there) and looks for its window, or restarts it,
+        // only under a LIVE ask: the kind's own goes down while main says so — never withheld a second time here, or Show
+        // it, Try again and a grant would never come back. The seat stays stopped (no slot is held); streaming again, the
+        // stream comes up unasked and the plan wakes it or rests it (PT-6a M15)
+        const state = handle.state;
+        const mainHolds = state.status === "live" && stoppedOf(state) && !seat.rested;
+        handle.setDemand(
+          mainHolds && !parked && asked?.mode === "live"
+            ? liveDemandIntent(asked)
+            : seat.intent(undefined, false),
+        );
         // woken, made to wait, put to rest: the words may say so
         retell();
       },
