@@ -978,6 +978,8 @@ export const SURFACE_LIMITS = {
   /** PT-S2: the attach's device rows — main lists the booted ones first, so a bound that bites drops only devices at
    * rest. */
   MAX_SIMULATOR_DEVICES: 256,
+  /** PT-S2: the attach's installed runtimes — main lists the newest first, so a bound that bites drops only the oldest. */
+  MAX_SIMULATOR_RUNTIMES: 64,
 } as const;
 
 /** One redacted picker row. `sourceRef` is the producer boundary's opaque
@@ -1026,10 +1028,17 @@ export type LiveSurfaceSimulatorDeviceRowV1 = z.infer<typeof LiveSurfaceSimulato
 export const SurfaceSimulatorDevicesParamsV1 = z.object({}).passthrough();
 export type SurfaceSimulatorDevicesParamsV1 = z.infer<typeof SurfaceSimulatorDevicesParamsV1>;
 
-/** PT-S2 (R11): this Mac's simulator devices, the booted first. Empty: no Simulator here, or none of its devices. */
+/** PT-S2 (R11): this Mac's simulator devices, the booted first. Empty: no Simulator here, or none of its devices. With
+ * them the RUNTIMES installed here, the newest first — ids only, never a UDID — what the attach's third pick binds to
+ * (the model on the newest installed iOS, whether or not a device runs it yet). Absent: unsaid — the attach falls back
+ * to the newest runtime a device row is on. */
 export const SurfaceSimulatorDevicesResultV1 = z
   .object({
     devices: z.array(LiveSurfaceSimulatorDeviceRowV1).max(SURFACE_LIMITS.MAX_SIMULATOR_DEVICES),
+    runtimes: z
+      .array(CoreSimulatorRuntimeIdV1)
+      .max(SURFACE_LIMITS.MAX_SIMULATOR_RUNTIMES)
+      .optional(),
   })
   .passthrough();
 export type SurfaceSimulatorDevicesResultV1 = z.infer<typeof SurfaceSimulatorDevicesResultV1>;

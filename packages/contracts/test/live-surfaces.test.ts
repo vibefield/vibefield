@@ -478,6 +478,26 @@ describe("LSF-1 Live Surfaces contracts", () => {
       SurfaceSimulatorDevicesResultV1.safeParse({ devices: [row, { ...rested, udid: UDID }] })
         .success,
     ).toBe(false);
+    // with them the runtimes installed here, the newest first — CoreSimulator's ids, never a UDID, bounded — the attach's
+    // third pick, even where no device runs one yet
+    const runtimes = [
+      "com.apple.CoreSimulator.SimRuntime.iOS-26-1",
+      "com.apple.CoreSimulator.SimRuntime.iOS-18-6",
+    ];
+    expect(SurfaceSimulatorDevicesResultV1.parse({ devices: [], runtimes })).toEqual({
+      devices: [],
+      runtimes,
+    });
+    expect(SURFACE_LIMITS.MAX_SIMULATOR_RUNTIMES).toBe(64);
+    for (const bad of [
+      [UDID],
+      ["iOS 26.1"],
+      Array.from({ length: SURFACE_LIMITS.MAX_SIMULATOR_RUNTIMES + 1 }, () => runtimes[0]),
+    ])
+      expect(
+        SurfaceSimulatorDevicesResultV1.safeParse({ devices: [], runtimes: bad }).success,
+        JSON.stringify(bad),
+      ).toBe(false);
   });
 
   it("PT-3: the input lane carries an IME composition and the buttons a move holds; the browser state says the page's cursor", () => {

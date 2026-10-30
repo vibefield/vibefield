@@ -757,6 +757,18 @@ describe("AH-3/AH-4 static shell provider", () => {
         devices: Array.from({ length: SURFACE_LIMITS.MAX_SIMULATOR_DEVICES + 1 }, () => row),
       }).success,
     ).toBe(false);
+    // the runtimes installed here ride with them (the attach's third pick): CoreSimulator's ids, never a UDID
+    const runtimes = ["com.apple.CoreSimulator.SimRuntime.iOS-26-1"];
+    expect(ShellSurfacesSimulatorDevicesResult.parse({ devices: [], runtimes })).toEqual({
+      devices: [],
+      runtimes,
+    });
+    expect(
+      ShellSurfacesSimulatorDevicesResult.safeParse({
+        devices: [],
+        runtimes: ["F93EABF3-4281-4EB5-A5F6-A550FBE95CDC"],
+      }).success,
+    ).toBe(false);
   });
 
   it("requires a unique registered static method set and exactly one outcome arm", () => {

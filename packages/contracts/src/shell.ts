@@ -3,6 +3,7 @@ import { ARTIFACT_LIMITS, ArtifactId, ArtifactTitle } from "./artifacts";
 import { ClientKind, SemverString } from "./envelope";
 import { ErrorKind } from "./errors";
 import {
+  CoreSimulatorRuntimeIdV1,
   LiveSurfaceAttachTicketV1,
   LiveSurfaceIdV1,
   LiveSurfaceSimulatorDeviceRowV1,
@@ -737,10 +738,14 @@ export type ShellSurfacesSimulatorDevicesParams = z.infer<
 
 /** PT-S2 (R11) — this Mac's simulator devices, the booted first, REDACTED at main's boundary to the row (a UDID on a
  * row is refused here too: it can never reach fieldd, let alone a window). Empty: no Simulator here, or none of its
- * devices. */
+ * devices. With them the runtimes installed here, the newest first (ids only): the attach's third pick. */
 export const ShellSurfacesSimulatorDevicesResult = z
   .object({
     devices: z.array(LiveSurfaceSimulatorDeviceRowV1).max(SURFACE_LIMITS.MAX_SIMULATOR_DEVICES),
+    runtimes: z
+      .array(CoreSimulatorRuntimeIdV1)
+      .max(SURFACE_LIMITS.MAX_SIMULATOR_RUNTIMES)
+      .optional(),
   })
   .passthrough();
 export type ShellSurfacesSimulatorDevicesResult = z.infer<
