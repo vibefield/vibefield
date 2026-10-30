@@ -18,10 +18,17 @@ import UIKit
 /// the finger reaches a desktop, then a profile, and letting go hands the
 /// choice to `onBloom` — the launch sheet opens on it, never a terminal (Q4).
 /// No real choice: the hold creates through `onCreate`, as before.
+///
+/// TS-7 — `showsEmptyState: false` keeps the field's own empty words off while
+/// a page of the account's door stands over the field and says what to do.
+/// `scrim` (TS-D22) dims the field under such a page: laid over the bodies and
+/// under the chrome, so the bar stays as bright as ever, and never a target.
 public struct SwarmField<Chrome: View>: View {
   private let bubbles: [FieldBubble]
   private let parameters: SwarmParameters
   private let isActive: Bool
+  private let showsEmptyState: Bool
+  private let scrim: Color?
   private let onSelect: (FieldBubble) -> Void
   private let onCreate: ((SIMD2<Double>) -> String?)?
   private let bloom: BloomMenu?
@@ -39,6 +46,8 @@ public struct SwarmField<Chrome: View>: View {
     bubbles: [FieldBubble],
     parameters: SwarmParameters = .phone,
     isActive: Bool = true,
+    showsEmptyState: Bool = true,
+    scrim: Color? = nil,
     onSelect: @escaping (FieldBubble) -> Void,
     onCreate: ((SIMD2<Double>) -> String?)? = nil,
     bloom: BloomMenu? = nil,
@@ -48,6 +57,8 @@ public struct SwarmField<Chrome: View>: View {
     self.bubbles = bubbles
     self.parameters = parameters
     self.isActive = isActive
+    self.showsEmptyState = showsEmptyState
+    self.scrim = scrim
     self.onSelect = onSelect
     self.onCreate = onCreate
     self.bloom = bloom
@@ -71,8 +82,15 @@ public struct SwarmField<Chrome: View>: View {
 
         if let failure {
           UnavailableFieldView(reason: failure)
-        } else if bubbles.isEmpty {
+        } else if bubbles.isEmpty, showsEmptyState {
           EmptyFieldView()
+        }
+
+        if let scrim {
+          scrim
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+            .transition(.opacity)
         }
 
         chrome
@@ -108,6 +126,10 @@ public struct SwarmField<Chrome: View>: View {
       }
     }
     .onChange(of: bloom) { bloomHost.menu = bloom }
+    // TS-7c — the hold comes and goes with the account's door: the stage is
+    // handed its act again whenever it does, not only at the first appearance
+    // (a phone that opened on the welcome otherwise never held after signing in).
+    .onChange(of: onCreate == nil) { stage.onCreate = holdCompleted }
     .onChange(of: bubbles) { stage.update(bubbles: bubbles, time: CACurrentMediaTime()) }
     .onChange(of: parameters) { stage.parameters = parameters }
     .onChange(of: reduceMotion) { stage.reducedMotion = reduceMotion }
@@ -158,11 +180,12 @@ extension SwarmField where Chrome == EmptyView {
     bubbles: [FieldBubble],
     parameters: SwarmParameters = .phone,
     isActive: Bool = true,
+    showsEmptyState: Bool = true,
     onSelect: @escaping (FieldBubble) -> Void,
     onCreate: ((SIMD2<Double>) -> String?)? = nil
   ) {
     self.init(
-      bubbles: bubbles, parameters: parameters, isActive: isActive,
+      bubbles: bubbles, parameters: parameters, isActive: isActive, showsEmptyState: showsEmptyState,
       onSelect: onSelect, onCreate: onCreate
     ) { EmptyView() }
   }

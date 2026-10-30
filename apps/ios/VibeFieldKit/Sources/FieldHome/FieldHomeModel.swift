@@ -459,6 +459,9 @@ enum FieldHomeModel {
       let name: String
       let word: String?
       let wantsTheUser: Bool
+      /// TS-7 — the desktop's own `process.platform`, for its OS mark. Nil is
+      /// "not said yet", and draws the plain screen, never a guess.
+      var platform: String? = nil
     }
 
     var control: Control
@@ -479,6 +482,9 @@ enum FieldHomeModel {
     /// connect and no disconnect — the phone stays on the mesh by itself while
     /// it is signed in (James, 2026-10-18).
     var offersSignIn: Bool
+    /// TS-7 — that row's words: the act's own on a first sign-in, the
+    /// desktop's "Sign in again" for an account the tailnet asks for again.
+    var signInWord: String
     var canSignOut: Bool
   }
 
@@ -487,6 +493,8 @@ enum FieldHomeModel {
   struct AsleepDesktop: Equatable {
     let deviceId: String
     let name: String
+    /// TS-7 — the platform the account remembers it saying, for its mark.
+    var platform: String? = nil
   }
 
   static func accountFace(
@@ -551,13 +559,17 @@ enum FieldHomeModel {
     // remembers and the tailnet does not list — asleep, by name.
     var rows: [AccountFace.DesktopRow] = desktops.map { desktop in
       let word = AccountDisplay.desktopWord(desktop, isHearing: isHearing)
-      return .init(id: desktop.deviceId, name: desktop.name, word: word.word, wantsTheUser: word.wantsTheUser)
+      return .init(
+        id: desktop.deviceId, name: desktop.name, word: word.word, wantsTheUser: word.wantsTheUser,
+        platform: desktop.platform)
     }
     let listed = Set(desktops.map(\.deviceId))
     rows += asleep
       .filter { !listed.contains($0.deviceId) }
       .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-      .map { .init(id: $0.deviceId, name: $0.name, word: AccountDisplay.asleep, wantsTheUser: false) }
+      .map {
+        .init(id: $0.deviceId, name: $0.name, word: AccountDisplay.asleep, wantsTheUser: false, platform: $0.platform)
+      }
 
     return AccountFace(
       control: control,
@@ -570,6 +582,122 @@ enum FieldHomeModel {
       desktops: rows,
       othersLine: AccountDisplay.othersLine(count: foreignDoors),
       offersSignIn: meshState == .needsLogin,
+      signInWord: AccountDisplay.signInWord(hasAccount: account != nil),
       canSignOut: account != nil)
+  }
+
+  // MARK: - The phone's door (TS-7)
+
+  /// What stands on the Field page in place of the field's own empty words,
+  /// when the account's door has something to say (TS-7, DESIGN.md §9 "The
+  /// phone's door"). Nil is the field. Every word is `DoorPageView`'s; this
+  /// decides WHICH page, and is the one place that does.
+  enum DoorPage: Equatable {
+    /// No account: nothing remembered and no login live — before a first
+    /// sign-in, while it is under way, after a Cancel and after Sign out. It
+    /// yields only to approval and to a login. `failure` is a first sign-in's
+    /// reason, or why the sheet could not be shown; `expecting` is the login a
+    /// Mac's code said to expect (TS-7b), said as "At Tailscale, pick ‹login›."
+    case welcome(failure: String?, expecting: String? = nil)
+    /// Signed in; an admin of the network approves new devices.
+    case approval(machine: String?, adminConsole: URL?)
+    /// The tailnet asks a remembered account to sign in again. Expired and
+    /// removed are one page: the Swift node says neither (TS-7 Q1-b).
+    case signInAgain(note: String?)
+    /// TS-7b (A:723) — signed in as one account while a Mac's code said to
+    /// expect another. Presentation only: the gate and the login are
+    /// untouched. `byLink` — the code came by a link any page could have
+    /// opened, so Keep this account is the primary act (EL7).
+    case anotherAccount(current: String, expected: String, from: String, byLink: Bool)
+    /// Up, the first listing answered, nothing online and nothing remembered.
+    /// `found` is the beat when the first desktop arrives: the placeholder row
+    /// becomes it, then the page yields (Q1-f).
+    case noDesktops(login: String, found: FoundDesktop?)
+  }
+
+  struct FoundDesktop: Equatable {
+    let name: String
+    let platform: String?
+  }
+
+  /// How long the found beat holds before the page yields to the field.
+  static let foundBeatHold: Duration = .milliseconds(1200)
+
+  static func doorPage(
+    fixtureOwnsTheField: Bool,
+    meshState: MeshModel.State,
+    rememberedLogin: String?,
+    login: String?,
+    isGated: Bool,
+    hasListed: Bool,
+    listed: Int,
+    remembered: Int,
+    machineName: String?,
+    adminConsole: URL?,
+    signInNote: String?,
+    found: FoundDesktop?,
+    expected: PhoneCodeExpectation? = nil
+  ) -> DoorPage? {
+    // A fixture's photograph is of the field it stages; a door page over it
+    // would be this decision's, not the fixture's (it stamps its own).
+    if fixtureOwnsTheField { return nil }
+    let live = (login?.isEmpty ?? true) ? nil : login
+    let kept = (rememberedLogin?.isEmpty ?? true) ? nil : rememberedLogin
+    let account = live ?? kept
+    // TS-7b — a mismatch is caught at once, over any other page: the phone's
+    // account is not the one the Mac's code named.
+    if let expected, let account, !expected.matches(account) {
+      return .anotherAccount(
+        current: account, expected: expected.login, from: expected.from, byLink: expected.arrival == .link)
+    }
+    let expecting = expected?.login
+    switch meshState {
+    case .needsMachineAuth:
+      return .approval(machine: machineName, adminConsole: adminConsole)
+    case .needsLogin:
+      return account == nil ? .welcome(failure: signInNote, expecting: expecting) : .signInAgain(note: signInNote)
+    case .off, .starting, .stopping:
+      return account == nil ? .welcome(failure: signInNote, expecting: expecting) : nil
+    case .failed(let reason):
+      return account == nil ? .welcome(failure: reason, expecting: expecting) : nil
+    case .reconnecting:
+      return nil
+    case .up:
+      // Up with no login yet is the beat before the re-gate (or a status
+      // overlay that cannot name one): the field, never a page that would
+      // stand over a working mesh.
+      guard let account else { return nil }
+      if let found { return .noDesktops(login: account, found: found) }
+      guard isGated, hasListed, listed == 0, remembered == 0 else { return nil }
+      return .noDesktops(login: account, found: nil)
+    }
+  }
+
+  /// The found beat's subject: the first desktop listed as "No desktops yet"
+  /// yields to the field, or nil for any other change of page.
+  static func foundDesktop(previous: DoorPage?, next: DoorPage?, desktops: [FieldDesktop]) -> FoundDesktop? {
+    guard case .noDesktops(_, nil) = previous, next == nil, let first = desktops.first else { return nil }
+    return FoundDesktop(name: first.name, platform: first.platform)
+  }
+
+  /// TS-7c (DESIGN.md §9) — whether the field takes acts: none under a door.
+  /// No hold, no bloom, and a tap on a body opens no card.
+  static func fieldTakesActs(under door: DoorPage?) -> Bool {
+    door == nil
+  }
+
+  /// TS-D22 (James, 2026-10-29) — whether the field drifts dimmed under the
+  /// door: only a page that stands over a live field, one with bodies on it.
+  /// An empty field under the welcome keeps its own ground.
+  static func doorDimsField(_ door: DoorPage?, liveBodies: Int) -> Bool {
+    door != nil && liveBodies > 0
+  }
+
+  /// TS-7b — whether the expectation is met and goes: the node reports the
+  /// login the Mac's code named. Only the node's own report settles it — a
+  /// remembered login is what the phone had, not what it signed in as.
+  static func expectationSettles(_ expected: PhoneCodeExpectation?, login: String?) -> Bool {
+    guard let expected, let login, !login.isEmpty else { return false }
+    return expected.matches(login)
   }
 }

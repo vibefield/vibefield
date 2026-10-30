@@ -341,13 +341,16 @@ function rendered(value: unknown): string {
  * until it answers a value; it may call `seen(value)` with what it last observed (the persona, the row, the
  * screen — never a credential), and at the deadline the error says what was awaited, what the row last saw, and
  * `floorEvidence` of the row's `scene` (read at the deadline, so a row that re-booted its floor is read where it now
- * runs). The budget is the caller's; nothing here changes how long anything waits. */
+ * runs). The budget is the caller's; nothing here changes how long anything waits. Item 97 — `witness`, when
+ * given, is asked ONCE, at the deadline, and its word follows what the row saw: what only the deadline may ask
+ * (an `lsof`, a cell's own list), never asked per poll on the loaded hosts these waits fail on. */
 export async function waitWithEvidence<T>(
   what: string,
   fn: (seen: (value: unknown) => void) => T | undefined | Promise<T | undefined>,
   ms: number,
   scene: () => FloorScene | undefined,
   intervalMs = 100,
+  witness?: () => Promise<string>,
 ): Promise<T> {
   const deadline = Date.now() + ms;
   let last: unknown;
@@ -360,11 +363,21 @@ export async function waitWithEvidence<T>(
     const value = await fn(seen);
     if (value !== undefined) return value;
     if (Date.now() > deadline) {
+      const witnessed =
+        witness === undefined
+          ? []
+          : [
+              await witness().catch(
+                (error: unknown) =>
+                  `the row's witness failed: ${error instanceof Error ? error.message : String(error)}`,
+              ),
+            ];
       const now = scene();
       throw new Error(
         [
           `${what} did not hold within ${ms} ms`,
           saw ? `the row last saw: ${rendered(last)}` : "the row reported nothing it saw",
+          ...witnessed,
           now === undefined ? "no floor scene was recorded for this row" : floorEvidence(now),
         ].join("\n"),
       );

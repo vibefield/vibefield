@@ -67,10 +67,12 @@ function fakeUpdates(
   } = {},
 ): FieldUpdatesHost & { [K in keyof FieldUpdatesHost]: ReturnType<typeof vi.fn> } {
   return {
-    check: vi.fn(async () => undefined),
+    // AU-1 — the check answers when it settles; the card does not read the answer
+    check: vi.fn(async () => ({ outcome: "up-to-date" })),
     setEnabled: vi.fn(async () => undefined),
     setChannel: vi.fn(async () => undefined),
     decline: vi.fn(async () => undefined),
+    download: vi.fn(async () => ({ ok: true })),
     prepareRestart: vi.fn(
       async () =>
         answers.prepare ?? {
