@@ -73,15 +73,10 @@ describe("the product chords (GT-D21)", () => {
       "super+ctrl+f",
     ]);
     // a chord main takes above the page is heard by no page listener, so it
-    // carries no matcher; every other chord carries one
+    // carries no matcher (`ProductChord`'s two shapes hold that for the compiler)
     expect(
       PRODUCT_CHORDS.filter((chord) => chord.takenBy === "shell").map((chord) => chord.id),
     ).toEqual(["quit", "full-screen"]);
-    expect(
-      PRODUCT_CHORDS.every(
-        (chord) => (chord.takenBy === "shell") === (chord.matches === undefined),
-      ),
-    ).toBe(true);
     expect(
       isCommandPaletteChord({
         key: "k",

@@ -279,20 +279,6 @@ public func formatElapsed(since: Date?, now: Date) -> String? {
   return String(format: "%d:%02d", minutes, seconds % 60)
 }
 
-/// How a row may say who can type on a peer's session (the reference's
-/// `remote-write.ts`). What a mesh advertises is one boolean PER HOST, and the
-/// per-viewer answer is decided at ATTACH; so the only honest pre-attach
-/// sentence is a sentence about the host, said in BOTH directions on purpose:
-/// marking only a refusing host made silence mean "you can type".
-public func remoteWriteLabel(hostWritable: Bool) -> String {
-  hostWritable ? "writable host" : "read-only host"
-}
-
-public func remoteWriteTitle(hostWritable: Bool) -> String {
-  hostWritable
-    ? "this host allows writes — whether yours arrive is decided when you attach"
-    : "this host shares read-only — no viewer may type here"
-}
 
 /// What a body needs from the user, in the name's place: its words, the mark
 /// before them, and how a screen reader says it.
@@ -333,13 +319,14 @@ public func bodyModel(_ input: BodyModelInput) -> SwarmBodyModel {
           key: "elapsed", text: elapsed, style: SwarmCopyStyle.labelStacked, opacity: SwarmWeight.supporting,
           tone: .ink, gapBefore: 3))
     }
-    // A peer's session wears its host on the body — the name and the host's
-    // write policy, in both directions — so it cannot be read as one of this
-    // machine's terminals.
+    // A peer's session wears its host on the body, the desk's name alone, so it
+    // cannot be read as one of this machine's terminals. No write mark: a peer is
+    // writable by default (James, 2026-10-28); whether your keys arrive is the
+    // pane's to say at attach.
     if let remote {
       copy.append(
         CopyLine(
-          key: "host", text: "\(remote.deviceName) · \(remoteWriteLabel(hostWritable: remote.readWrite))",
+          key: "host", text: remote.deviceName,
           style: SwarmCopyStyle.labelStacked, opacity: SwarmWeight.supporting, tone: .ink, gapBefore: 3))
     }
     let status = bubble.status.rawValue
@@ -364,10 +351,10 @@ public func bodyModel(_ input: BodyModelInput) -> SwarmBodyModel {
       watermark: nil,
       blockerKind: nil,
       accessibilityLabel: remote.map {
-        "on \($0.deviceName), \(bubble.project), remote session, \(status), \(remoteWriteLabel(hostWritable: $0.readWrite))"
+        "on \($0.deviceName), \(bubble.project), remote session, \(status)"
       } ?? "\(bubble.project), unassigned terminal, \(status)",
-      title: remote.map { "\($0.deviceName) · \(remoteWriteTitle(hostWritable: $0.readWrite)) · \(bubble.detail)" }
-        ?? bubble.detail)
+      // a peer row's detail already leads with its desk (FieldBubble's remote detail), so the hover is that line
+      title: bubble.detail)
   }
 
   let appearance = bubble.status

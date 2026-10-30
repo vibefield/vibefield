@@ -41,15 +41,33 @@ export const SETUP_LEDGER_FORMAT = 1;
  * device id's bound, DEVICE_LIMITS.DEVICE_ID_CHARS). `limit` is the limit moment
  * (AO-D11); `agent-past:<agent>` is a new agent with a past, one per agent (the
  * catalog id); track TS's notices are `device-joined:<deviceId>` and
- * `renewal-notice:<YYYY-MM-DD>` (TS-D18, ruled (d) by James 2026-10-27). Open, so
- * a newer build's moment rides through. */
+ * `renewal-notice:<YYYY-MM-DD>` (TS-D18, ruled (d) by James 2026-10-27), and its
+ * asks to connect are `connect-ask:<place>` (TS-4, TS-D7). Open, so a newer
+ * build's moment rides through. */
 export const SetupMomentKey = z.string().regex(/^[a-z][a-z0-9-]{0,31}(?::[\x21-\x7E]{1,256})?$/);
 export type SetupMomentKey = z.infer<typeof SetupMomentKey>;
 
-/** `retired` — the person said Not now (or acted on it): it never shows again. */
-export const SETUP_MOMENT_STATES = ["retired"] as const;
+/** `retired` — the person said Not now (or acted on it): it never shows again.
+ * `asked` (TS-4, TS-D7) — said, and it may be said again: its `at` is when it was
+ * last said, and the reader keeps its own quiet from there (each place once per
+ * 30 days, one a day across them). It never replaces `retired`.
+ * `owed` (TS-6, TS-D13) — not said yet, and due: fieldd writes it when a link
+ * lands, on a moment with no row at all, and only fieldd writes it (a window's
+ * answers are `SetupMomentAnswer`). The answer replaces it. */
+export const SETUP_MOMENT_STATES = ["retired", "asked", "owed"] as const;
 export const SetupMomentState = z.enum(SETUP_MOMENT_STATES);
 export type SetupMomentState = z.infer<typeof SetupMomentState>;
+
+/** What a window may answer a moment with (`setup.moment`): `owed` is fieldd's. */
+export const SETUP_MOMENT_ANSWERS = ["retired", "asked"] as const;
+export const SetupMomentAnswer = z.enum(SETUP_MOMENT_ANSWERS);
+export type SetupMomentAnswer = z.infer<typeof SetupMomentAnswer>;
+
+/** TS-6 (TS-D13 = A; DESIGN.md §8 "The sync question") — the question a link
+ * owes: asked once, at the first new field after connecting. A link that lands
+ * keeps each field with no answer of its own on this Mac and writes this moment
+ * `owed`; the question's answer retires it. */
+export const SYNC_QUESTION_MOMENT = "sync-question";
 
 export const SetupMomentRecord = z
   .object({ state: SetupMomentState, at: z.string().min(1) })
@@ -83,9 +101,11 @@ export const SetupHideParams = z.object({ hidden: z.boolean() }).passthrough();
 export type SetupHideParams = z.infer<typeof SetupHideParams>;
 
 /** `setup.moment` (AO-D15) — one moment's answer, beside the steps: Not now
- * retires it for good. Declarative: the same answer twice is written once. */
+ * retires it for good. Declarative: the same answer twice is written once —
+ * except `asked`, whose answer is its time, so each saying is written. A window
+ * never owes a moment (TS-6): `owed` is refused here. */
 export const SetupMomentParams = z
-  .object({ moment: SetupMomentKey, state: SetupMomentState })
+  .object({ moment: SetupMomentKey, state: SetupMomentAnswer })
   .passthrough();
 export type SetupMomentParams = z.infer<typeof SetupMomentParams>;
 
@@ -106,6 +126,60 @@ export function setupMomentState(
   ledger: SetupLedger,
   moment: SetupMomentKey,
 ): SetupMomentState | undefined {
+  return setupMomentRecord(ledger, moment)?.state;
+}
+
+/** A moment's record, with when it was answered (TS-4 keeps its quiet from an
+ * `asked` row's `at`); undefined while it has no row it can read. */
+export function setupMomentRecord(
+  ledger: SetupLedger,
+  moment: SetupMomentKey,
+): SetupMomentRecord | undefined {
   const row = SetupMomentRecord.safeParse(ledger.moments?.[moment]);
-  return row.success ? row.data.state : undefined;
+  return row.success ? row.data : undefined;
+}
+
+/** TS-4 (TS-D7, TS-L6; DESIGN.md §8 "Asking again") — the places that ask to
+ * connect again after Not now, each a moment `connect-ask:<place>` written
+ * `asked` each time it is said: the notice when the window closes with agents
+ * running, and the line after a wait that outlasted ten minutes. The rows that
+ * offer it (the face menu's, the status item's, the filters' ghost rows) are not
+ * moments: they are there while this Mac is not connected. */
+export const CONNECT_ASK_PLACES = ["away", "approval-wait"] as const;
+export type ConnectAskPlace = (typeof CONNECT_ASK_PLACES)[number];
+
+export const CONNECT_ASK = {
+  /** each place is said at most once in this long */
+  PLACE_QUIET_MS: 30 * 86_400_000,
+  /** and at most one place is said in this long, across them */
+  DAY_MS: 86_400_000,
+} as const;
+
+export function connectAskMoment(place: ConnectAskPlace): SetupMomentKey {
+  return `connect-ask:${place}`;
+}
+
+/** Whether the ledger lets a place ask now: the person put Devices off (Not
+ * now — never someone the assistant has not asked, and never a no), the place
+ * was not said in the last 30 days, and no place was said in the last day. A
+ * place retired is quiet for good (AO-D15), and only an `asked` time is a saying,
+ * so another place's retired row spends no day. The link and the switch
+ * (`mesh.connectAsks`) are the caller's to read. A row whose time cannot be read
+ * keeps the quiet: asking less is the safe mistake. */
+export function connectAskOpen(ledger: SetupLedger, place: ConnectAskPlace, now: number): boolean {
+  if (setupStepState(ledger, "devices") !== "later") return false;
+  for (const moment of Object.keys(ledger.moments ?? {})) {
+    if (!moment.startsWith("connect-ask:")) continue;
+    const row = setupMomentRecord(ledger, moment);
+    if (row === undefined) continue;
+    const own = moment === connectAskMoment(place);
+    if (row.state === "retired") {
+      if (own) return false;
+      continue;
+    }
+    const at = Date.parse(row.at);
+    if (!Number.isFinite(at)) return false;
+    if (now - at < (own ? CONNECT_ASK.PLACE_QUIET_MS : CONNECT_ASK.DAY_MS)) return false;
+  }
+  return true;
 }

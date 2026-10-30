@@ -117,13 +117,24 @@ export const LIVE_FIXTURE_FILTERS: LiveFilters = {
   profile: null,
 };
 
-/** Godview's door over the fixture, its filters the caller's to hold. */
+/** TS-4 (TS-D7) — this Mac not connected: the desktop filter holds This Mac
+ * alone, and ends on the ghost row that offers the rest. */
+export const LIVE_FIXTURE_FILTERS_UNCONNECTED: LiveFilters = {
+  ...LIVE_FIXTURE_FILTERS,
+  desks: LIVE_FIXTURE_FILTERS.desks.filter((desk) => desk.here),
+  connect: true,
+};
+
+/** Godview's door over the fixture, its filters the caller's to hold: the
+ * runs of the desktops it offers (not connected, this Mac's alone). */
 export function peekLiveFixtureDoor(
   filters: LiveFilters,
   onFilters: (next: LiveFilters) => void,
 ): GodviewFindDoor {
   const rows = LIVE_FIXTURE_RUNS.filter(
-    (row) => filters.desk === null || row.desk.id === filters.desk,
+    (row) =>
+      (filters.desk === null || row.desk.id === filters.desk) &&
+      (filters.connect !== true || row.desk.self),
   );
   return {
     rows: () => rows,

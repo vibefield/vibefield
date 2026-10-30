@@ -2636,6 +2636,12 @@ export const METHODS: MethodDef[] = [
   // first. locality "local" like the rest of agent.*: the params name a RUN,
   // and fieldd reaches its PTY through the record it minted for it — a peer's
   // run is stopped by ROUTING the call (D35), never by federating this one.
+  // *Correction 2026-10-27 (Q08, ruled C):* it was never ⎋. It sent the
+  // floor's interrupt, ⌃C (`\x03`), to every agent, and ⌃C clears one agent's
+  // input and quits another when idle. It sends the run's own turn stop now,
+  // the one its adapter names (a key, or the agent's own control), and ⌃C only
+  // while the adapter names none; the run's row says which key
+  // (`AgentSessionSummary.stopKey`).
   // *Correction 2026-09-30 (SB §9):* since AR-4b (2026-09-13) the product API REFUSES a foreign
   // `device` on every `local` method before the forwarder (product-api.ts, D36), so nothing here is
   // reached by routing today; a routable birth is the sync plane's to add (DS-2, the spawn bloom's SB-6).

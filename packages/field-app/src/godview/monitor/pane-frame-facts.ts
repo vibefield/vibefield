@@ -105,6 +105,10 @@ export function paneFrameAgentFacts(run: ChromeRun): PaneFrameAgent | undefined 
   const model = run.model === undefined ? undefined : (run.model.displayName ?? run.model.id);
   const effort = readEffort(run);
   const contextPercent = readContextPercent(run);
+  // Q08 — the key the stop verb presses, fieldd's word for the run (its
+  // adapter's own, or the floor's ⌃C while the adapter names none): the frame's
+  // stop title names it, and names none when the stop presses no key
+  const stopKey = run.local?.stopKey ?? "";
   return {
     providerId: run.kind,
     providerLabel: run.label,
@@ -119,6 +123,7 @@ export function paneFrameAgentFacts(run: ChromeRun): PaneFrameAgent | undefined 
     ...(model === undefined || model === "" ? {} : { model }),
     ...(effort === undefined ? {} : { effort }),
     ...(contextPercent === undefined ? {} : { contextPercent }),
+    ...(stopKey === "" ? {} : { stopKey }),
   };
 }
 
@@ -201,6 +206,7 @@ export function paneFrameFactsKey(
         // The meter is drawn to the whole percent, so a mirror revising the
         // share by a fraction of one is not news to a frame.
         facts?.contextPercent === undefined ? "" : Math.floor(facts.contextPercent),
+        facts?.stopKey ?? "",
       ].join("\u0001"),
     );
   }

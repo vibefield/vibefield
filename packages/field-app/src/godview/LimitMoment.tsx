@@ -1,7 +1,15 @@
 import { AgentsInstallsResult } from "@vibefield/contracts";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import { ServiceMark } from "@vibefield/puppeteer-views";
-import { type CSSProperties, type ReactElement, useEffect, useId, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  type ReactElement,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { retireSetupMoment, useSetupLedger } from "../setup/ledger";
 import {
   LIMIT_MOMENT,
@@ -102,12 +110,16 @@ function handFocusHome(from: HTMLElement): void {
 export function LimitMoment({
   openNewProfile,
   now,
+  onShown,
 }: {
   /** opens Settings on Agent Profiles' New profile… form; absent while
    * Settings is open, where a new page cannot be asked of it */
   openNewProfile?: (() => void) | undefined;
   /** the time a window's reset is read against; the clock's unless pinned (tests) */
   now?: Date | undefined;
+  /** TS-4b — told whether the row shows, before the strip paints, so a moment
+   * behind it stands aside (`ClaimsStripMoment.tsx`) */
+  onShown?: ((shown: boolean) => void) | undefined;
 }): ReactElement | null {
   const client = useFielddClient();
   const ledger = useSetupLedger();
@@ -146,6 +158,8 @@ export function LimitMoment({
   // good if its write is refused
   const [answered, setAnswered] = useState(false);
   const fact = answered ? null : limitMoment(candidates, installed);
+  const shown = fact !== null;
+  useLayoutEffect(() => onShown?.(shown), [onShown, shown]);
   if (fact === null) return null;
   const retire = (): void => {
     setAnswered(true);

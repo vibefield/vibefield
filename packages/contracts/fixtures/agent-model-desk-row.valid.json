@@ -121,6 +121,7 @@
     "nativeSessionId": "5f0d2c4e-8a1b-4e6f-9c3d-2b7a1e0f4d68",
     "cwd": "/Users/james/Projects/project100/vibe-field",
     "spawnedBy": "user-shell",
+    "stopKey": "escape",
     "mirror": {
       "alive": true,
       "startedAt": "2026-09-30T20:51:42.000Z",

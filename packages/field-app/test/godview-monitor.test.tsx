@@ -586,7 +586,20 @@ describe("the monitor stage", () => {
     });
   });
 
-  it("keeps the swarm's bodies below the head's reserve: on the stage as handed, every body settles under y 56, where without the reserve the same crowd stands in it (GV-D1)", async () => {
+  // *Measured 2026-10-29 (item 89):* the row below is CPU-bound. Its two
+  // settles are one synchronous loop of the swarm's own physics, so a loaded
+  // host stretches all of it. In a parallel suite it took 845–4645 ms on CI's
+  // runner (35 green runs, 10-23 to 10-28) and 531–3964 ms in this Mac's full
+  // verifies (46 green, 10-26 to 10-28), then 6220 and 5507 ms here at load
+  // 607 and 418 (10-29), red against vitest's 5 s default. Those two are its
+  // true run times: vitest fails a row whose synchronous work outran its timer
+  // when the row resolves (`@vitest/runner` 3.2.7, chunk-hooks.js:1880–1886).
+  // One settle alone takes 116–136 ms. 15 s is more than twice the worst.
+  const SWARM_SETTLE_BUDGET_MS = 15_000;
+
+  it("keeps the swarm's bodies below the head's reserve: on the stage as handed, every body settles under y 56, where without the reserve the same crowd stands in it (GV-D1)", {
+    timeout: SWARM_SETTLE_BUDGET_MS,
+  }, async () => {
     // The swarm steers by `stage.obstacles` alone (the SDK: insets are
     // advisory), so the 56 a flow view reads as its top inset reaches the swarm
     // only as this rectangle. Its own physics is driven here — the package's
@@ -614,7 +627,15 @@ describe("the monitor stage", () => {
           return seed / 4294967296;
         },
       });
-      // twenty seconds at the swarm's own rate: long past settling
+      // twenty seconds at the swarm's own rate. *Corrected 2026-10-29 (item
+      // 89):* not "long past settling", as this said. Traced frame by frame,
+      // the crowd under the reserve jostles at 0.3–1.5 px a step until about
+      // frame 570 and is still (every body under 0.01 px a step) from frame
+      // 593; without the reserve, from frame 521. Fewer frames would read a
+      // crowd still moving, so the 600 stay and the budget above pays for
+      // them. The loop solves 599 steps, not 600: the float sum of `1000 / 30`
+      // loses one (counting frames instead of summing time is item 90). The
+      // frame numbers here are the loop's frames, as the trace counted them.
       let now = 0;
       physics.seed(now);
       for (let frame = 0; frame < 600; frame += 1) {

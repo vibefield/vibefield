@@ -68,6 +68,7 @@ import { installAppProtocol } from "./app-protocol";
 import { ArtifactPreviewCapture, isArtifactPreviewSession } from "./artifact-preview-capture";
 import { runAuditedSupportExport } from "./audited-support-export";
 import { installDurableClose } from "./close";
+import { ConnectAsks, workingAgents } from "./connect-asks";
 import { CrashArtifactManager, startLocalCrashReporter } from "./crash-artifacts";
 import { installDevSignalQuit } from "./dev-signals";
 import { desktopDevelopmentExtension } from "./development-extension";
@@ -127,7 +128,6 @@ import {
 } from "./resources";
 import { registerShellSchemes } from "./scheme-registration";
 import { withScreenshotScreenBounds } from "./screenshot-bounds";
-import { installScreenshotChord } from "./screenshot-chord";
 import { screenshotHelperSupportsService } from "./screenshot-helper-capabilities";
 import { ScreenshotShortcutController } from "./screenshot-shortcut";
 import {
@@ -235,6 +235,11 @@ let supportBundles: SupportBundleService | null = null;
 /** WP12d (L3c-i, §13 C4) — the updater's doctor lines for the support bundle; null where no updater runs */
 let updateDoctorLines: (() => readonly string[]) | null = null;
 let trayController: TrayController | null = null;
+/** Closing the last window leaves VibeField running: on macOS always, elsewhere
+ * while the status item keeps it (the lifecycle's rule, and TS-4's away notice). */
+function staysResident(): boolean {
+  return process.platform === "darwin" || (trayController?.keepsAliveWithoutWindows() ?? false);
+}
 let viewStates: ViewRegistry | null = null;
 // Godview round 3 — each window's lights and the deck word they follow
 // (GV-D11); null outside the windowed modes.
@@ -986,7 +991,10 @@ async function main(
   const harnessShellOpens: { opened: string[]; revealed: string[] } | null = isSmokeLike(MODE)
     ? { opened: [], revealed: [] }
     : null;
-  const wireAttachment = (bundle: PairBundle, userRoot: string): { dispose(): void } => {
+  const wireAttachment = (
+    bundle: PairBundle,
+    userRoot: string,
+  ): { offersConnect(): boolean; dispose(): void } => {
     const observers = new RecoveringFielddObservers(bundle.handles, {
       onStatus: (status) => {
         if (status !== "ready") pluginProvenance.invalidate();
@@ -1142,10 +1150,28 @@ async function main(
       },
       logger.child({ component: "shell.provider" }),
     );
+    // TS-4 (TS-D7) — after Not now: the status item's Connect Your Devices…
+    // while this Mac is not connected, and the away notice when the last window
+    // closes with agents running, once per 30 days (`connect-asks.ts`). Each
+    // opens the Connect door the face menu's row opens.
+    // the two deciders write through each other's door: typed, so neither infers the other
+    const connectAsks: ConnectAsks = new ConnectAsks({
+      now: () => Date.now(),
+      ask: (moment): Promise<void> => linkNotices.setupMoment(moment, "asked"),
+    });
+    const openConnect = (): void => {
+      void revealSurface("open-connect").catch((error: unknown) => {
+        logger.error(
+          "desktop.connect_ask.reveal_failed",
+          "Connect Your Devices… could not open the Connect door",
+          error,
+        );
+      });
+    };
     // TS-5 (TS-D9; TS-D18 d) — the link's notices, said outside the app once:
     // connected, a device joined, the renewal 3 days out. A click opens
     // Settings → Devices. A smoke never puts one on the person's screen.
-    const linkNotices = new LinkNoticeObserver(
+    const linkNotices: LinkNoticeObserver = new LinkNoticeObserver(
       bundle.handles,
       {
         now: () => Date.now(),
@@ -1165,6 +1191,7 @@ async function main(
           notice.show();
         },
       },
+      connectAsks,
       (error) =>
         logger.error(
           "desktop.link_notice.observe_failed",
@@ -1172,9 +1199,46 @@ async function main(
           error,
         ),
     );
+    const offerConnect = (): void => {
+      trayController?.update({ connectDevices: connectAsks.offersConnect() });
+    };
+    const stopOffer = connectAsks.onChange(offerConnect);
+    offerConnect();
+    const onAway = (): void => {
+      if (!staysResident() || isSmokeLike(MODE) || !Notification.isSupported()) return;
+      const handle = bundle.handles.currentHandle;
+      if (handle === null) return;
+      void handle.client.request("agent.list", {}).then(
+        (list) => {
+          const words = connectAsks.away(workingAgents(list));
+          if (words === null) return;
+          const notice = new Notification({
+            title: words.title,
+            body: words.body,
+            actions: [{ type: "button", text: "Connect…" }],
+            closeButtonText: "Not now",
+          });
+          notice.on("click", openConnect);
+          notice.on("action", openConnect);
+          notice.show();
+        },
+        (error: unknown) =>
+          logger.warn(
+            "desktop.connect_ask.census_failed",
+            "The away notice could not count agents",
+            { reason: error instanceof Error ? error.message : String(error) },
+          ),
+      );
+    };
+    app.on("window-all-closed", onAway);
     return {
+      // the status item may be made after the link was first read
+      offersConnect: () => connectAsks.offersConnect(),
       dispose: () => {
         observers.dispose();
+        app.off("window-all-closed", onAway);
+        stopOffer();
+        trayController?.update({ connectDevices: false });
         linkNotices.dispose();
         shellProvider.dispose();
         stopDaemonBootFence();
@@ -1883,15 +1947,14 @@ async function main(
             },
           });
           installDiagnostics(window);
-          // ⌃⌘A — above the page too (SNAP-3): the canvas keymap's ⌘A select-all
-          // swallows the menu accelerator, so the chord is taken here first.
-          if (screenshotHelperAvailable) {
-            installScreenshotChord(window.webContents, takeScreenshot);
-          }
-          // ⌘Q and ⌃⌘F — above the page too (AL-9): a terminal pane's ghosttea
-          // claimed both, so the menu never heard them. ⌘Q is the menu's own
-          // `app.quit()`, so it reaches the census gate.
-          installWindowChords(window, { quit: () => app.quit() });
+          // ⌃⌘A, ⌘Q and ⌃⌘F — above the page (SNAP-3, AL-9): the canvas keymap's
+          // ⌘A select-all swallowed the menu's ⌃⌘A, and a terminal pane's
+          // ghosttea claimed ⌘Q and ⌃⌘F, so the menu never heard them. ⌘Q is the
+          // menu's own `app.quit()`, so it reaches the census gate.
+          installWindowChords(window, {
+            quit: () => app.quit(),
+            ...(screenshotHelperAvailable ? { screenshot: takeScreenshot } : {}),
+          });
           installNavigationPolicy(window, MODE);
           // FR-4: told the theme on every load (a reload included) and change.
           themeOwner?.watch(window.webContents);
@@ -2165,6 +2228,7 @@ async function main(
       showTray: false,
       windowOpen: registry.primary() !== null,
       quitting: false,
+      connectDevices: attachmentWiring.offersConnect(),
     },
     actions: {
       openPrimaryWindow: async () => {
@@ -2172,6 +2236,7 @@ async function main(
       },
       openSettings: () => revealSurface("open-settings"),
       openDiagnostics: () => revealSurface("open-diagnostics"),
+      connectDevices: () => revealSurface("open-connect"),
       ...(updates !== null
         ? {
             checkForUpdates: async () => {
@@ -2555,8 +2620,7 @@ if (!hasInstanceLock) {
       openPrimaryWindow: async () => {
         await revealPrimaryWindow();
       },
-      keepAliveWithoutWindows: () =>
-        process.platform === "darwin" || (trayController?.keepsAliveWithoutWindows() ?? false),
+      keepAliveWithoutWindows: staysResident,
       onQuitRequested: () => {
         registry.beginShutdown();
         trayController?.update({ quitting: true });

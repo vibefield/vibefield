@@ -492,6 +492,8 @@ describe("tray shell commands and app preferences", () => {
     expect(ShellCommandRequest.parse({ command: "open-diagnostics" }).command).toBe(
       "open-diagnostics",
     );
+    // TS-4 — the status item's Connect Your Devices… and the away notice's Connect…
+    expect(ShellCommandRequest.parse({ command: "open-connect" }).command).toBe("open-connect");
     expect(ShellCommandRequest.safeParse({ command: "run-plugin-code" }).success).toBe(false);
   });
 
@@ -505,6 +507,8 @@ describe("tray shell commands and app preferences", () => {
       syncPosture: "opt-in",
       // AL-3: an older daemon's snapshot has no confirmQuit; the default is to ask
       confirmQuit: true,
+      // TS-4: nor connectAsks; the asks to connect stay on until the person turns them off
+      connectAsks: true,
     });
     expect(AppPreferences.safeParse({ showTray: true }).success).toBe(false);
     // UA-6: the posture is part of the EFFECTIVE snapshot, so a caller can
@@ -513,6 +517,14 @@ describe("tray shell commands and app preferences", () => {
   });
 
   it("accepts the boolean preference mutations, and the posture's own word", () => {
+    expect(
+      AppPreferenceSetParams.safeParse({ key: APP_PREFERENCE_KEYS.CONNECT_ASKS, value: false })
+        .success,
+    ).toBe(true);
+    expect(
+      AppPreferenceSetParams.safeParse({ key: APP_PREFERENCE_KEYS.CONNECT_ASKS, value: "opt-in" })
+        .success,
+    ).toBe(false);
     expect(
       AppPreferenceSetParams.safeParse({ key: APP_PREFERENCE_KEYS.SCREENSHOT_HOTKEY, value: false })
         .success,

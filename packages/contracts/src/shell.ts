@@ -128,8 +128,15 @@ export type CloseResult = z.infer<typeof CloseResult>;
 /** Presentation commands the native shell may route into the one field
  * renderer. They carry no authority: the renderer decides how to reveal its
  * existing Settings surface. */
-/** TS-5 — `open-devices` is a link notice's click: Settings → Devices. */
-export const ShellCommand = z.enum(["open-settings", "open-diagnostics", "open-devices"]);
+/** TS-5 — `open-devices` is a link notice's click: Settings → Devices. TS-4 —
+ * `open-connect` is the status item's Connect Your Devices… and the away notice's
+ * Connect…: the Connect door the face menu's row opens. */
+export const ShellCommand = z.enum([
+  "open-settings",
+  "open-diagnostics",
+  "open-devices",
+  "open-connect",
+]);
 export type ShellCommand = z.infer<typeof ShellCommand>;
 
 export const ShellCommandRequest = z
@@ -326,6 +333,9 @@ export const APP_PREFERENCE_KEYS = {
   /** AL-3 — a quit that would end terminal sessions asks first (`quit-gate.ts`); the box's "Do not ask again" turns it
    * off, Settings turns it back on */
   CONFIRM_QUIT: "desktop.confirmQuit",
+  /** TS-4 (TS-D7) — the one switch in Settings → Devices that stops the asks to
+   * connect after Not now; on until the person turns it off */
+  CONNECT_ASKS: "mesh.connectAsks",
 } as const;
 
 export const AppPreferenceKey = z.enum([
@@ -334,6 +344,7 @@ export const AppPreferenceKey = z.enum([
   APP_PREFERENCE_KEYS.SCREENSHOT_HOTKEY,
   APP_PREFERENCE_KEYS.MESH_SYNC_POSTURE,
   APP_PREFERENCE_KEYS.CONFIRM_QUIT,
+  APP_PREFERENCE_KEYS.CONNECT_ASKS,
 ]);
 export type AppPreferenceKey = z.infer<typeof AppPreferenceKey>;
 
@@ -353,6 +364,8 @@ export const AppPreferences = z
     syncPosture: MeshSyncPosture,
     // AL-3: on by default, including snapshots from an older daemon.
     confirmQuit: z.boolean().default(true),
+    // TS-4: on by default, including snapshots from an older daemon.
+    connectAsks: z.boolean().default(true),
   })
   .passthrough();
 export type AppPreferences = z.infer<typeof AppPreferences>;

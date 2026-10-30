@@ -490,6 +490,7 @@ describe("MV-3d — the chrome's facts ride this desktop's own rows of the model
       nativeSessionId: "5f0d2c4e-8a1b-4e6f-9c3d-2b7a1e0f4d68",
       cwd: "/Users/james/Projects/project100/vibe-field",
       spawnedBy: "user-shell",
+      stopKey: "escape",
       mirror: {
         alive: true,
         startedAt: "2026-09-30T20:51:42.000Z",
@@ -542,6 +543,9 @@ describe("MV-3d — the chrome's facts ride this desktop's own rows of the model
     expect(AgentModelLocalFacts.safeParse({ nativeSessionId: "" }).success).toBe(false);
     expect(AgentModelLocalFacts.safeParse({ exited: "yes" }).success).toBe(false);
     expect(AgentModelLocalFacts.safeParse({ mirror: { alive: "true" } }).success).toBe(false);
+    // Q08 — the stop's key is open (puppeteer's word): one this build never heard still parses
+    expect(AgentModelLocalFacts.parse({ stopKey: "ctrl-g" })).toEqual({ stopKey: "ctrl-g" });
+    expect(AgentModelLocalFacts.safeParse({ stopKey: 27 }).success).toBe(false);
     // and a row with no facts at all is a row fieldd said nothing more about
     const { local: _none, ...bare } = golden("agent-model-desk-row.valid.json") as Record<
       string,

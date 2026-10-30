@@ -11,6 +11,7 @@ import {
   type Ref,
   useId,
 } from "react";
+import { GHOST_ROW_ACT, GHOST_ROW_LABEL } from "../account/link";
 import { OS_LABEL, OsMark } from "../godview/os-marks";
 import type { LiveDeskChoice, LiveFilters, LiveProfileChoice } from "./find-door";
 import { isLiveRow, type PeekListRow, type PeekLiveRow } from "./peek-live";
@@ -294,6 +295,8 @@ interface MenuChoice {
   readonly note?: string;
   /** a desktop that is not answering: drawn quiet */
   readonly quiet?: boolean;
+  /** TS-4 — not a choice but an offer, under a hairline: the ghost row */
+  readonly ghost?: boolean;
 }
 
 function Dropdown({
@@ -329,24 +332,45 @@ function Dropdown({
       </button>
       {open && (
         <div id={menuId} className="vf-menu vf-peek-menu" role="menu" aria-label={label}>
-          {choices.map((choice) => (
-            <button
-              key={choice.key}
-              type="button"
-              role="menuitemradio"
-              aria-checked={choice.on}
-              className="vf-menu-row"
-              data-hot={choice.on ? "" : undefined}
-              data-quiet={choice.quiet === true ? "" : undefined}
-              onClick={choice.pick}
-            >
-              {choice.lead !== undefined && (
-                <span className="vf-peek-menu-lead">{choice.lead}</span>
-              )}
-              <span className="vf-menu-label">{choice.label}</span>
-              {choice.note !== undefined && <em className="vf-peek-menu-note">{choice.note}</em>}
-            </button>
-          ))}
+          {choices.map((choice) =>
+            choice.ghost === true ? (
+              <Fragment key={choice.key}>
+                <hr className="vf-peek-menu-rule" />
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="vf-menu-row"
+                  data-ghost=""
+                  onClick={choice.pick}
+                >
+                  {choice.lead !== undefined && (
+                    <span className="vf-peek-menu-lead">{choice.lead}</span>
+                  )}
+                  <span className="vf-menu-label">{choice.label}</span>
+                  {choice.note !== undefined && (
+                    <em className="vf-peek-menu-note">{choice.note}</em>
+                  )}
+                </button>
+              </Fragment>
+            ) : (
+              <button
+                key={choice.key}
+                type="button"
+                role="menuitemradio"
+                aria-checked={choice.on}
+                className="vf-menu-row"
+                data-hot={choice.on ? "" : undefined}
+                data-quiet={choice.quiet === true ? "" : undefined}
+                onClick={choice.pick}
+              >
+                {choice.lead !== undefined && (
+                  <span className="vf-peek-menu-lead">{choice.lead}</span>
+                )}
+                <span className="vf-menu-label">{choice.label}</span>
+                {choice.note !== undefined && <em className="vf-peek-menu-note">{choice.note}</em>}
+              </button>
+            ),
+          )}
         </div>
       )}
     </span>
@@ -367,6 +391,8 @@ export interface PeekViewProps {
   /** Live now's dropdowns (GV-D3, Godview's): null where the view has none */
   liveFilters?: LiveFilters | null;
   onLiveDesk?: (id: string | null) => void;
+  /** TS-4 — the ghost row's Connect…: the Connect door, as the status item's */
+  onConnect?: () => void;
   onLiveProfile?: (id: string | null) => void;
   rows: readonly PeekListRow[];
   /** the hot row's index (−1 for none) */
@@ -438,6 +464,7 @@ export function PeekView(props: PeekViewProps): ReactElement {
     agents,
     liveFilters = null,
     onLiveDesk,
+    onConnect,
     onLiveProfile,
     rows,
     hot,
@@ -608,6 +635,11 @@ export function PeekView(props: PeekViewProps): ReactElement {
     // filter the view too; each offered only when there is a choice to make
     const desk = liveFilters.desks.find((entry) => entry.id === liveFilters.desk);
     const profile = liveFilters.profiles.find((entry) => entry.id === liveFilters.profile);
+    // TS-4 — not connected, the filter holds This Mac alone (all of them), then
+    // the ghost row that offers the rest
+    const offer = liveFilters.connect === true && onConnect !== undefined;
+    const only = offer && liveFilters.desks.length === 1 ? liveFilters.desks[0] : undefined;
+    const shown = desk ?? only;
     dropdowns = (
       // MV-8b: the scope row's filters are a chrome piece of their own, tried
       // again for the filters they draw (held by content by the monitor)
@@ -617,31 +649,48 @@ export function PeekView(props: PeekViewProps): ReactElement {
             <Dropdown
               id="desk"
               lead={
-                desk === undefined ? (
+                shown === undefined ? (
                   deskMarks(liveFilters.desks)
                 ) : (
-                  <OsMark os={desk.os} size={12} />
+                  <OsMark os={shown.os} size={12} />
                 )
               }
-              label={desk?.name ?? "All desktops"}
+              label={shown?.name ?? "All desktops"}
               open={menu === "desk"}
               onToggle={toggle("desk")}
               choices={[
-                {
-                  key: "all",
-                  label: "All desktops",
-                  on: liveFilters.desk === null,
-                  pick: () => onLiveDesk?.(null),
-                },
+                ...(only === undefined
+                  ? [
+                      {
+                        key: "all",
+                        label: "All desktops",
+                        on: liveFilters.desk === null,
+                        pick: () => onLiveDesk?.(null),
+                      },
+                    ]
+                  : []),
                 ...liveFilters.desks.map((entry) => ({
                   key: entry.id,
                   label: entry.here ? `${entry.name} · here` : entry.name,
-                  on: liveFilters.desk === entry.id,
-                  pick: () => onLiveDesk?.(entry.id),
+                  on: liveFilters.desk === entry.id || entry === only,
+                  pick: () => onLiveDesk?.(entry === only ? null : entry.id),
                   lead: <OsMark os={entry.os} size={11} />,
                   note: entry.note,
                   quiet: entry.quiet,
                 })),
+                ...(offer
+                  ? [
+                      {
+                        key: "connect",
+                        label: GHOST_ROW_LABEL,
+                        on: false,
+                        pick: () => onConnect?.(),
+                        lead: <FieldGlyph name="plus" size={11} />,
+                        note: GHOST_ROW_ACT,
+                        ghost: true,
+                      },
+                    ]
+                  : []),
               ]}
             />
           )}

@@ -4,11 +4,16 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { LAYOUT } from "../src/registries";
 import {
+  CONNECT_ASK,
+  connectAskMoment,
+  connectAskOpen,
   emptySetupLedger,
   SETUP_STEPS,
   SetupAnswerParams,
   SetupLedger,
   SetupMomentParams,
+  SYNC_QUESTION_MOMENT,
+  setupMomentRecord,
   setupMomentState,
   setupStepState,
 } from "../src/setup";
@@ -84,6 +89,10 @@ describe("the moments beside the steps (AO-6b; AO-D15)", () => {
       false,
     );
     expect(SetupMomentParams.safeParse({ moment: "limit", state: "later" }).success).toBe(false);
+    // TS-4 — said, and it may be said again
+    expect(
+      SetupMomentParams.safeParse({ moment: "connect-ask:away", state: "asked" }).success,
+    ).toBe(true);
   });
 
   it("keys a moment by anything a device id or a date is, up to a device id's bound (TS-D18)", () => {
@@ -100,5 +109,113 @@ describe("the moments beside the steps (AO-6b; AO-D15)", () => {
     expect(answers("device-joined:two words")).toBe(false);
     expect(answers("device-joined:café")).toBe(false);
     expect(answers("Device-joined:01JB8ZQ4N7M2X5K9T3V6W8Y0RC")).toBe(false);
+  });
+});
+
+describe("asking again after Not now (TS-4; TS-D7)", () => {
+  const NOW = Date.parse("2026-11-20T12:00:00.000Z");
+  const ago = (ms: number): string => new Date(NOW - ms).toISOString();
+  const putOff = (moments: Record<string, unknown> = {}): SetupLedger => ({
+    ...emptySetupLedger(),
+    steps: { devices: { state: "later", at: "2026-10-28T09:00:00.000Z" } },
+    moments,
+  });
+
+  it("reads the golden ledger: each place keeps its own month, and the day is shared", () => {
+    const ledger = SetupLedger.parse(fixture("setup-ledger-connect-ask.valid"));
+    expect(setupMomentRecord(ledger, "connect-ask:away")).toEqual({
+      state: "asked",
+      at: "2026-10-28T22:40:05.000Z",
+    });
+    // the next day: away is in its month, and its saying spent the day
+    const next = Date.parse("2026-10-29T12:00:00.000Z");
+    expect(connectAskOpen(ledger, "away", next)).toBe(false);
+    expect(connectAskOpen(ledger, "approval-wait", next)).toBe(false);
+    // a month on: the approval's month (from 10-27) is out, away's (from 10-28) is not
+    const monthOn = Date.parse("2026-11-27T00:00:00.000Z");
+    expect(connectAskOpen(ledger, "approval-wait", monthOn)).toBe(true);
+    expect(connectAskOpen(ledger, "away", monthOn)).toBe(false);
+    expect(SetupMomentParams.parse(fixture("setup-moment-params.asked"))).toEqual({
+      moment: "connect-ask:away",
+      state: "asked",
+    });
+  });
+
+  it("reads an asked moment's time beside its state", () => {
+    const ledger = putOff({ "connect-ask:away": { state: "asked", at: ago(1_000) } });
+    expect(setupMomentState(ledger, "connect-ask:away")).toBe("asked");
+    expect(setupMomentRecord(ledger, "connect-ask:away")).toEqual({
+      state: "asked",
+      at: ago(1_000),
+    });
+    expect(setupMomentRecord(ledger, "connect-ask:approval-wait")).toBeUndefined();
+    expect(connectAskMoment("approval-wait")).toBe("connect-ask:approval-wait");
+  });
+
+  it("asks only someone who put Devices off", () => {
+    expect(connectAskOpen(putOff(), "away", NOW)).toBe(true);
+    // never asked (AO-D12, or mid-wizard), and a step answered elsewhere
+    expect(connectAskOpen(emptySetupLedger(), "away", NOW)).toBe(false);
+    expect(
+      connectAskOpen(
+        { ...emptySetupLedger(), steps: { devices: { state: "answered", at: ago(1_000) } } },
+        "away",
+        NOW,
+      ),
+    ).toBe(false);
+  });
+
+  it("says each place once in 30 days, and one place a day across them", () => {
+    const away = (at: string) => putOff({ "connect-ask:away": { state: "asked", at } });
+    expect(connectAskOpen(away(ago(CONNECT_ASK.PLACE_QUIET_MS - 1)), "away", NOW)).toBe(false);
+    expect(connectAskOpen(away(ago(CONNECT_ASK.PLACE_QUIET_MS)), "away", NOW)).toBe(true);
+    // another place waits out the day, not the month
+    expect(connectAskOpen(away(ago(CONNECT_ASK.DAY_MS - 1)), "approval-wait", NOW)).toBe(false);
+    expect(connectAskOpen(away(ago(CONNECT_ASK.DAY_MS)), "approval-wait", NOW)).toBe(true);
+  });
+
+  it("reads only its own moments, and keeps the quiet over a time it cannot read", () => {
+    const others = putOff({
+      limit: { state: "retired", at: ago(1_000) },
+      "renewal-notice:2026-11-21": { state: "retired", at: ago(1_000) },
+    });
+    expect(connectAskOpen(others, "away", NOW)).toBe(true);
+    const unreadable = putOff({ "connect-ask:approval-wait": { state: "asked", at: "soon" } });
+    expect(connectAskOpen(unreadable, "away", NOW)).toBe(false);
+    // a newer build's row it cannot read is carried, never counted
+    const newer = putOff({ "connect-ask:away": { state: "snoozed", at: ago(1_000) } });
+    expect(connectAskOpen(newer, "away", NOW)).toBe(true);
+  });
+
+  it("keeps a retired place quiet for good, and counts no other place's retiring as a saying", () => {
+    const year = 365 * CONNECT_ASK.DAY_MS;
+    const retired = putOff({ "connect-ask:away": { state: "retired", at: ago(year) } });
+    expect(connectAskOpen(retired, "away", NOW)).toBe(false);
+    const retiredNow = putOff({
+      "connect-ask:approval-wait": { state: "retired", at: ago(1_000) },
+    });
+    expect(connectAskOpen(retiredNow, "away", NOW)).toBe(true);
+  });
+});
+
+describe("TS-6 — the sync question a link owes (TS-D13)", () => {
+  it("reads the golden ledger: the question owed beside AO's and TS-4's rows", () => {
+    const ledger = SetupLedger.parse(fixture("setup-ledger-sync-question.valid"));
+    expect(setupMomentRecord(ledger, SYNC_QUESTION_MOMENT)).toEqual({
+      state: "owed",
+      at: "2026-10-29T08:03:21.000Z",
+    });
+    expect(setupMomentState(ledger, "limit")).toBe("retired");
+    expect(setupMomentState(ledger, "connect-ask:away")).toBe("asked");
+  });
+
+  it("is fieldd's to owe: a window answers it, and never owes it", () => {
+    expect(SetupMomentParams.parse({ moment: SYNC_QUESTION_MOMENT, state: "retired" })).toEqual({
+      moment: SYNC_QUESTION_MOMENT,
+      state: "retired",
+    });
+    expect(
+      SetupMomentParams.safeParse({ moment: SYNC_QUESTION_MOMENT, state: "owed" }).success,
+    ).toBe(false);
   });
 });

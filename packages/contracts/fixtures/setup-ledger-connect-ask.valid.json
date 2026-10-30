@@ -1,0 +1,13 @@
+{
+  "format": 1,
+  "steps": {
+    "agents": { "state": "answered", "at": "2026-10-28T09:00:00.000Z" },
+    "devices": { "state": "later", "at": "2026-10-28T09:01:12.000Z" }
+  },
+  "hidden": false,
+  "moments": {
+    "limit": { "state": "retired", "at": "2026-10-28T16:10:00.000Z" },
+    "connect-ask:away": { "state": "asked", "at": "2026-10-28T22:40:05.000Z" },
+    "connect-ask:approval-wait": { "state": "asked", "at": "2026-10-27T18:02:41.000Z" }
+  }
+}

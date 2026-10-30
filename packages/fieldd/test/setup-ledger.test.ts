@@ -10,6 +10,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { SetupLedger, setupStepState } from "@vibefield/contracts";
 import { createNoopLogger } from "@vibefield/logging";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -33,6 +34,20 @@ function ledgerPath(): string {
 }
 
 const at = (iso: string) => () => new Date(iso);
+
+// EL9 — the golden ledger the contracts test parses, read here from disk by the store
+const CONNECT_ASK_GOLDEN = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "..",
+  "contracts",
+  "fixtures",
+  "setup-ledger-connect-ask.valid.json",
+);
+const SYNC_QUESTION_GOLDEN = join(
+  dirname(CONNECT_ASK_GOLDEN),
+  "setup-ledger-sync-question.valid.json",
+);
 
 describe("the setup ledger store (AO-2)", () => {
   it("starts empty with no file, and writes nothing until a step is answered", () => {
@@ -74,6 +89,43 @@ describe("the setup ledger store (AO-2)", () => {
       steps: { history: { state: "answered" } },
       moments: { limit: { state: "retired" } },
     });
+  });
+
+  it("writes each saying of an asked moment with its time, and never over a retired one (TS-4)", () => {
+    const path = ledgerPath();
+    let now = "2026-10-29T01:00:00.000Z";
+    const store = new SetupLedgerStore({ path, now: () => new Date(now) });
+    expect(store.moment("connect-ask:away", "asked")).toBe(true);
+    now = "2026-11-29T01:00:00.000Z";
+    // the time is the answer: the same state, said again, is written again
+    expect(store.moment("connect-ask:away", "asked")).toBe(true);
+    expect(new SetupLedgerStore({ path }).snapshot().moments?.["connect-ask:away"]).toEqual({
+      state: "asked",
+      at: "2026-11-29T01:00:00.000Z",
+    });
+    // retired is for good: an ask never brings it back
+    expect(store.moment("limit", "retired")).toBe(true);
+    expect(store.moment("limit", "asked")).toBe(false);
+    expect(store.snapshot().moments?.limit).toMatchObject({ state: "retired" });
+    // and a moment that was asked can still be retired
+    expect(store.moment("connect-ask:away", "retired")).toBe(true);
+  });
+
+  it("reads the golden connect-ask ledger from disk and writes a saying beside AO's rows (EL9)", () => {
+    const path = ledgerPath();
+    mkdirSync(dirname(path), { recursive: true });
+    const golden = readFileSync(CONNECT_ASK_GOLDEN, "utf8");
+    writeFileSync(path, golden);
+    const store = new SetupLedgerStore({ path, now: at("2026-11-27T00:00:00.000Z") });
+    expect(store.snapshot()).toEqual(JSON.parse(golden));
+    expect(store.moment("connect-ask:approval-wait", "asked")).toBe(true);
+    const written = SetupLedger.parse(JSON.parse(readFileSync(path, "utf8")));
+    expect(written.moments).toEqual({
+      limit: { state: "retired", at: "2026-10-28T16:10:00.000Z" },
+      "connect-ask:away": { state: "asked", at: "2026-10-28T22:40:05.000Z" },
+      "connect-ask:approval-wait": { state: "asked", at: "2026-11-27T00:00:00.000Z" },
+    });
+    expect(setupStepState(written, "devices")).toBe("later");
   });
 
   it("hides Finish setting up, and says each change to its listeners as a snapshot", () => {
@@ -135,5 +187,56 @@ describe("the setup ledger store (AO-2)", () => {
     expect(aside).toHaveLength(1);
     expect(readFileSync(join(dirname(path), aside[0] ?? ""), "utf8")).toBe("{ not json");
     expect(existsSync(path)).toBe(false);
+  });
+});
+
+describe("TS-6 — a moment fieldd owes (TS-D13)", () => {
+  it("owes a moment only where it has no row, and the answer or a saying replaces it", () => {
+    const path = ledgerPath();
+    const store = new SetupLedgerStore({ path, now: at("2026-10-29T08:03:21.000Z") });
+    expect(store.owe("sync-question")).toBe(true);
+    expect(store.owe("sync-question")).toBe(false);
+    expect(new SetupLedgerStore({ path }).snapshot().moments?.["sync-question"]).toEqual({
+      state: "owed",
+      at: "2026-10-29T08:03:21.000Z",
+    });
+    expect(store.moment("sync-question", "retired")).toBe(true);
+    // answered is for good: a later link owes nothing
+    expect(store.owe("sync-question")).toBe(false);
+    expect(store.snapshot().moments?.["sync-question"]).toMatchObject({ state: "retired" });
+    // a saying replaces it too, and is never owed over
+    expect(store.owe("connect-ask:away")).toBe(true);
+    expect(store.moment("connect-ask:away", "asked")).toBe(true);
+    expect(store.owe("connect-ask:away")).toBe(false);
+  });
+
+  it("never owes over a row it cannot read: a newer build's answer is carried", () => {
+    const path = ledgerPath();
+    mkdirSync(dirname(path), { recursive: true });
+    const newer = { state: "snoozed", at: "2026-10-29T08:00:00.000Z" };
+    writeFileSync(
+      path,
+      JSON.stringify({ format: 1, steps: {}, hidden: false, moments: { "sync-question": newer } }),
+    );
+    const store = new SetupLedgerStore({ path });
+    expect(store.owe("sync-question")).toBe(false);
+    expect(store.snapshot().moments?.["sync-question"]).toEqual(newer);
+  });
+
+  it("reads the golden sync-question ledger from disk and retires it beside the others (EL9)", () => {
+    const path = ledgerPath();
+    mkdirSync(dirname(path), { recursive: true });
+    const golden = readFileSync(SYNC_QUESTION_GOLDEN, "utf8");
+    writeFileSync(path, golden);
+    const store = new SetupLedgerStore({ path, now: at("2026-10-29T08:05:00.000Z") });
+    expect(store.snapshot()).toEqual(JSON.parse(golden));
+    expect(store.owe("sync-question")).toBe(false);
+    expect(store.moment("sync-question", "retired")).toBe(true);
+    const written = SetupLedger.parse(JSON.parse(readFileSync(path, "utf8")));
+    expect(written.moments).toEqual({
+      limit: { state: "retired", at: "2026-10-28T16:10:00.000Z" },
+      "connect-ask:away": { state: "asked", at: "2026-10-28T22:40:05.000Z" },
+      "sync-question": { state: "retired", at: "2026-10-29T08:05:00.000Z" },
+    });
   });
 });

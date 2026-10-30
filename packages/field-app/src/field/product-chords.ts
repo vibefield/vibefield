@@ -81,7 +81,7 @@ export function isSearchChord(event: ChordKey, keys: ViewKeys): boolean {
   return event.key === "f" || event.key === "F";
 }
 
-export interface ProductChord {
+interface ProductChordRow {
   readonly id:
     | "palette"
     | "settings"
@@ -100,12 +100,23 @@ export interface ProductChord {
   readonly label: string;
   /** When VibeField keeps the chord, if not always — said beside the label. */
   readonly when?: string;
-  /** How the page knows the chord; absent for a chord the shell takes above
-   * the page (`takenBy: "shell"`), which no page listener ever hears. */
-  readonly matches?: (event: ChordKey) => boolean;
-  /** "shell": main takes the chord in `before-input-event` (AL-9). */
-  readonly takenBy?: "shell";
 }
+
+/** A chord the page catches on the window's capture phase (the head of this
+ * file): `matches` is how it knows the key. */
+interface PageChord extends ProductChordRow {
+  readonly matches: (event: ChordKey) => boolean;
+  readonly takenBy?: never;
+}
+
+/** A chord main takes in `before-input-event`, above every page (AL-9). No page
+ * listener ever hears it, so it has no matcher. */
+interface ShellChord extends ProductChordRow {
+  readonly takenBy: "shell";
+  readonly matches?: never;
+}
+
+export type ProductChord = PageChord | ShellChord;
 
 export const PRODUCT_CHORDS: readonly ProductChord[] = [
   { id: "palette", trigger: "super+k", label: "Command palette", matches: isCommandPaletteChord },

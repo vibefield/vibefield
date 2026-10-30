@@ -1,5 +1,7 @@
 import { type ReactElement, useMemo } from "react";
+import { ApprovalWaitCard } from "../../godview/ApprovalWaitMoment";
 import { LimitMomentCard } from "../../godview/LimitMoment";
+import { FIXTURE_APPROVAL_WAIT } from "../approval-wait-fixtures";
 import { Section, Specimen } from "../catalog-ui";
 import { GodviewPreview } from "../GodviewPreview";
 import { meshBoardDoor } from "../godview-mesh-fixtures";
@@ -99,11 +101,40 @@ export function GodviewSection({ dark = false }: { dark?: boolean } = {}): React
         </div>
       </Specimen>
       <Specimen
+        title="The approval line — once, on the claims strip: an approval that waited more than ten minutes, as it clears, while this Mac is not connected (TS-4b)"
+        source="godview/ApprovalWaitMoment.tsx"
+        bleed
+      >
+        <div data-godview-approval-wait-catalog="">
+          <GodviewPreview
+            door={profilesDoor}
+            theme={theme}
+            moment={
+              // the shipping card over the shipping watch's fixture; a catalog acts on no one
+              FIXTURE_APPROVAL_WAIT === null ? null : (
+                <ApprovalWaitCard
+                  fact={FIXTURE_APPROVAL_WAIT}
+                  onConnect={() => undefined}
+                  onDismiss={() => undefined}
+                />
+              )
+            }
+          />
+        </div>
+      </Specimen>
+      <Specimen
         title="Search in Godview — Live now over the monitor's runs, waiting first; the desktops and profiles in its scope row (GV-D3, P2)"
         source="frame/Peek.tsx"
         bleed
       >
         <PeekPlate state="live" />
+      </Specimen>
+      <Specimen
+        title="Search in Godview, this Mac not connected — This Mac alone, and the desktop filter ends on Your other devices · Connect… (TS-4)"
+        source="frame/PeekView.tsx"
+        bleed
+      >
+        <PeekPlate state="unconnected" />
       </Specimen>
       <Specimen
         title="Mesh board — every self desktop's agents on one stage, an asleep one greyed"

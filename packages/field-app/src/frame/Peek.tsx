@@ -21,6 +21,7 @@ import {
 import { createPortal } from "react-dom";
 import { useReducedMotion } from "../field/desk/bar/bar-motion";
 import { isSearchChord, listenForProductChord } from "../field/product-chords";
+import { requestShellPresentation } from "../field/shell-presentation";
 import { DECK_TRAVEL_GRACE_MS } from "../godview/deck-state";
 import { openHistoryAt } from "../history/open-at";
 import { PeekReaderMount } from "../history/room-chunk";
@@ -648,6 +649,12 @@ export function Peek({
     },
     [godview],
   );
+  // TS-4 — the ghost row's Connect…: the chrome opens the Connect door, as for
+  // the status item's Connect Your Devices…
+  const connect = useCallback(() => {
+    setMenu(null);
+    requestShellPresentation("open-connect");
+  }, []);
 
   const target = container === undefined ? document.body : container;
   return (
@@ -679,6 +686,7 @@ export function Peek({
             agents={agents}
             liveFilters={liveFilters}
             onLiveDesk={pickDesk}
+            onConnect={connect}
             onLiveProfile={pickProfile}
             rows={rows}
             hot={hotIndex}

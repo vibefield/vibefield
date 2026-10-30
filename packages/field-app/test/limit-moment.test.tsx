@@ -207,6 +207,13 @@ describe("whether the limit moment speaks (the rule)", () => {
     expect(speaks([FIXTURE_NATIVE, FIXTURE_WORK], usage)).toBeNull();
     expect(speaks([FIXTURE_WORK], usage)).toBeNull();
     expect(speaks([FIXTURE_NATIVE], usage, retired())).toBeNull();
+    // only retired silences it: a moment's other state (TS-4's `asked`) is no answer here
+    expect(
+      speaks([FIXTURE_NATIVE], usage, {
+        ...emptySetupLedger(),
+        moments: { limit: { state: "asked", at: "2026-10-27T16:00:00.000Z" } },
+      }),
+    ).not.toBeNull();
     expect(speaks(null, usage)).toBeNull();
     expect(speaks([FIXTURE_NATIVE], null)).toBeNull();
     expect(speaks([FIXTURE_NATIVE], usage, null)).toBeNull();

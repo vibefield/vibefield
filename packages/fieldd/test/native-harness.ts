@@ -234,6 +234,8 @@ const EVIDENCE_ATTRS = [
   "how",
   "outcome",
   "terminated",
+  // item 87 — how long a run's exit cleanup had been pending when it was warned
+  "pendingMs",
 ] as const;
 
 /** The streams a real-floor row's evidence reads, under `<dataDir>/logs/system/`: the floor's (the suites set

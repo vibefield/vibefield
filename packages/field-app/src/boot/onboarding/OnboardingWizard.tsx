@@ -12,7 +12,6 @@ import { AgentsPane } from "./panes/AgentsPane";
 import { ConnectPane } from "./panes/ConnectPane";
 import { FieldPane } from "./panes/FieldPane";
 import { HistoryPane } from "./panes/HistoryPane";
-import { PosturePane } from "./panes/PosturePane";
 import { ProfilesPane } from "./panes/ProfilesPane";
 import { SettingUpPane } from "./panes/SettingUpPane";
 import { UsersPane } from "./panes/UsersPane";
@@ -250,13 +249,10 @@ function WizardBody({
           }}
           onSkip={() => {
             putOffDevices();
-            go(nextPane("connect", facts, "skip"));
+            go(nextPane("connect", facts));
           }}
         />,
       );
-
-    case "posture":
-      return shell(<PosturePane onBack={onBack} onDone={() => go(nextPane("posture", facts))} />);
 
     case "users":
       return shell(<UsersPane profile={profile} onContinue={back} />);

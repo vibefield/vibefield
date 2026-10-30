@@ -312,6 +312,7 @@ import { SetupLedgerStore } from "./setup-ledger";
 import { appBundleOf, relaunchFromBundle, type SHELL_ABSENCE, ShellAbsence } from "./shell-absence";
 import { ShellLease } from "./shell-lease";
 import { createSurfaceService } from "./surface-service";
+import { oweSyncQuestion } from "./sync-question";
 import { peerAnswerBytes, tailnetRowLimit } from "./tailnet-rows";
 import { runtimeProfileBinding, TerminalBindingStore } from "./terminal-bindings";
 import { createTerminalLinkDoor } from "./terminal-links";
@@ -1184,6 +1185,16 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       // is resident (UA-D3 — background pairs keep running), and the answer
       // that matters is the one true at the moment a login enters this tree.
       otherUserLinks: () => otherUserLinks(config.dataDir, linkLogger),
+      // TS-6 (TS-D13) — a new link keeps the fields made before it on this Mac
+      // and owes the sync question, before link.json is written. `docs` is
+      // declared below with no await between; a capture lands only after the
+      // floor answers, so the binding is live by then.
+      beforeLinked: () =>
+        oweSyncQuestion({
+          ledger: setupLedger,
+          docs,
+          logger: logger.child({ component: "sync-question" }),
+        }),
     });
     links.start();
     // UA-P-0j — the first dial already happened above, so this hears only the
@@ -3591,6 +3602,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
      * model board: opened with the connection's first model board, forgotten
      * with its last (a window opens one; two share the connection's screen).
      * A call with no connection id (none a product door mints) has no screen.
+     * Q05: forgetting a screen keeps the unread marks — a reload's new
+     * connection and a Godview opened again find them (`agent-monitor.ts`).
      * Q06: only this desktop's own window looks for the person, so only its
      * screen's reports acknowledge a crashed run's failure; a plugin holding
      * `agent.observe` opens a screen that acknowledges nothing. */
@@ -5559,7 +5572,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       if (!parsed.success) {
         throw new RpcCallError(
           "PRECONDITION_FAILED",
-          "expected { key: desktop.showTray|desktop.backgroundShell|desktop.screenshotHotkey|desktop.confirmQuit (boolean) | mesh.syncPosture (automatic|opt-in) }",
+          "expected { key: desktop.showTray|desktop.backgroundShell|desktop.screenshotHotkey|desktop.confirmQuit|mesh.connectAsks (boolean) | mesh.syncPosture (automatic|opt-in) }",
           false,
         );
       }
@@ -5632,7 +5645,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       if (!parsed.success) {
         throw new RpcCallError(
           "PRECONDITION_FAILED",
-          "expected { moment: <name> or <name>:<key>, state: retired }",
+          "expected { moment: <name> or <name>:<key>, state: retired|asked }",
           false,
         );
       }

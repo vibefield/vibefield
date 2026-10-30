@@ -9,11 +9,16 @@ export interface ShellPresentationState {
    * notice's click (TS-5); `new-profile` is the limit moment's Add a profile…
    * (AO-6b): Agent Profiles on its New profile… form. */
   readonly target: "general" | "diagnostics" | "account" | "devices" | "new-profile";
+  /** TS-4 (TS-D7) — the status item's Connect Your Devices… and the away
+   * notice's Connect…: Settings → Devices begins the link once it can read it,
+   * as its own Connect does, and says it has (`connect` back to false). */
+  readonly connect: boolean;
 }
 
 export const INITIAL_SHELL_PRESENTATION: ShellPresentationState = {
   diagnosticsRequest: 0,
   target: "general",
+  connect: false,
 };
 
 /** Diagnostics requests are a monotonic sequence. General Settings changes
@@ -24,9 +29,26 @@ export function reduceShellPresentation(
   command: ShellCommand,
 ): ShellPresentationState {
   if (command === "open-diagnostics") {
-    return { diagnosticsRequest: state.diagnosticsRequest + 1, target: "diagnostics" };
+    return { ...state, diagnosticsRequest: state.diagnosticsRequest + 1, target: "diagnostics" };
   }
+  if (command === "open-connect") return { ...state, target: "devices", connect: true };
   return { ...state, target: command === "open-devices" ? "devices" : "general" };
+}
+
+const requests = new Set<(command: ShellCommand) => void>();
+
+/** TS-4 — a renderer surface asks for what a native command asks for: the
+ * filters' ghost row's Connect… opens the same Connect door as the status
+ * item's Connect Your Devices…, and the chrome answers both the same way. */
+export function requestShellPresentation(command: ShellCommand): void {
+  for (const listener of [...requests]) listener(command);
+}
+
+export function onShellPresentationRequest(listener: (command: ShellCommand) => void): () => void {
+  requests.add(listener);
+  return () => {
+    requests.delete(listener);
+  };
 }
 
 /** Where Settings opens for its target: the page, and — for the limit moment's

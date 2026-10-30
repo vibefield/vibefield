@@ -17965,6 +17965,7 @@ render. The class is the same; the window is milliseconds wide.
   test for 27 projects": field-app 2,769 passed, this file 9/9 among them; fieldd 2,575 passed (11 skipped)),
   `pnpm test:rust` 31 suites with 492 passed and 0 failed, and gen:check clean. The verify ran at `63cd8384f`, whose
   body was then amended with the red-first numbers: `68296443f` carries the same tree.
+- **CI** on the pushed `9612ade48` (run 40624603346): GREEN, 03:26Z. *Cited 2026-10-28 with item 85.*
 - Records: `/Volumes/SamsungRed/lanes/records/item84/`.
 
 ## QW1 stack A — fix wave 1's first landing: Q17 (ACP offers no spawn), Q04 (hidden means unread), Q06 (1) (a failed body stays until its pane is seen), Q12's departure in DESIGN.md, re-attach Step 0's VibeField half, and the dev overlay's `workspace:` closure (2026-10-28; `3932cc190` … `6b3d33af6`, lane `qa-w1`; James's rulings of 2026-10-27, the fix waves on his word 22:26Z)
@@ -17978,7 +17979,7 @@ render. The class is the same; the window is milliseconds wide.
 - `d4d1e3650`, Q06 (1): a crashed agent keeps its body until a screen has shown its pane, then fieldd acknowledges the
   failure, and only from the person's own window (`43c613ba2`). Q06 (2), telling a typed crash from a clean quit,
   was WITHDRAWN in review: it was a consumer with no producer, and its test passed only on a widened grace.
-- `2d50c5ddb`, Q12: DESIGN.md §6 specifies the departure. The swarm draws it in puppeteer's half, with 0.2.4.
+- `2d50c5ddb`, Q12: DESIGN.md §6 specifies the departure. The swarm draws it in puppeteer's half, with ~~0.2.4~~ *(Corrected 2026-10-28, the EL8 to puppeteer 0.3.0: FALSE as a version. The release is 0.3.0. James squash-merged #48 as `feat(views)!`, a breaking change by the letter (four exports removed, none imported here), so release-please cut a minor.)*
 - `4c54f20c7`, `fc00e34c3`, `94029a3c5`, re-attach Step 0:
   - an adapter's helper is born with the agent's environment, never fieldd's (EL7, item 50's class), once the
     pinned puppeteer asks;
@@ -17996,7 +17997,7 @@ render. The class is the same; the window is milliseconds wide.
 
 **What waits** is stack B (`qa-w1/linear`, on A): Q05 (the marks fieldd keeps), Q08 (the adapter-named stop),
 re-attach Step 1, the write-word ruling (James, typed 2026-10-28 04:22Z) and the gate fixes for B. It waits with
-puppeteer's half of every lane (`qa-w1/integration` in puppeteer) for puppeteer 0.2.4 and the EL8 pin.
+puppeteer's half of every lane (`qa-w1/integration` in puppeteer) for puppeteer ~~0.2.4~~ *(Corrected 2026-10-28, the EL8 to puppeteer 0.3.0: FALSE as a version. The release is 0.3.0. James squash-merged #48 as `feat(views)!`, a breaking change by the letter (four exports removed, none imported here), so release-please cut a minor.)* and the EL8 pin.
 
 **The gates** ran on lanes/qa-w1, this Mac, at nice 19, with the guard before each, in VF-PM's slot from 03:32Z.
 - **(a) puppeteer at `582361e5`:** `pnpm test` and format:check EXIT 0 on run 3.
@@ -18101,3 +18102,954 @@ is stale (his example: the widgetlab port, retired by the desk). The record is
 - VF-PM verified the packet read-only at 08:56Z.
 - Cost: about 14.1M subagent tokens for the audit (the account's usage limit paused it 00:14Z–02:31Z) and about 2.24M
   for the records pass.
+
+## EL8 — puppeteer 0.3.0: QA fix wave 1's puppeteer half from the registry, `@vibefield/puppeteer-*` 0.3.0 published from the tag v0.3.0 = `d0aa1224`; the lock's header rewritten to today's planes (2026-10-28; `1469639a6`, lane qa-w1, landed with QW1 stack B)
+
+**What landed** (one commit on `88e8289ea`, 7 files; RD-5a-2's shape, `a04850e29`, without its rename):
+- The lock's puppeteer entry records `release.npm` "0.3.0", and its checkout coordinate moves `ee785ec1` → `d0aa1224`
+  (`pnpm siblings:pin puppeteer` at the tag). `render --prod` writes the seven override rows; the overrides comment
+  carries a dated 0.3.0 line; preflight's seven PIN_EXPECTATIONS move to 0.3.0, still anchored to the line's end.
+- minimumReleaseAgeExclude: the 20 rows the seven reach move to @0.3.0 (published today). The 0.2.3 rows stayed for the
+  one install and went after it (`af3f3078f`'s shape); a frozen offline install after the drop left the lock
+  byte-identical.
+- pnpm-lock.yaml: the 20 `@vibefield/puppeteer-*` entries 0.2.3 → 0.3.0 (specifiers, versions, integrity) and nothing
+  else.
+- siblings.lock.json's `//` header is REWRITTEN to today's planes (VF-PM 08:37Z, from HK's audit). It had kept ghosttea
+  0.13.1 and truffle 0.7.19 on every plane. Each number was read from its manifest: Cargo.toml's `truffle-core =
+  "=0.7.24"` and `ghosttea = "=0.13.7"`, apps/desktop's five sidecars 0.7.24, Package.resolved (ghosttea 0.13.7 at
+  `3eee581`, truffle 0.7.23 at `0b83a2c`), and the lock's release blocks.
+- The three agent-plane lines stack A wrote as "not in the 0.2.3 pin" (`AgentHost.helperEnvironment` in api.html,
+  architecture.html and system.html) say "since puppeteer 0.3.0".
+
+**What 0.3.0 is** (read 2026-10-28 09:16–09:18Z):
+- Release PR #49 (`d0aa1224`) on #48 (`e79fc53d`, QA fix wave 1's puppeteer half, squash-merged as `feat(views)!`) and
+  #46 (a Grok conformance test in packages/imposter, which no row reaches). The tree is the wave's tip `ca52eddb` plus
+  #46 plus release-please's version lines.
+- A minor, not a patch: `feat(views)!` removes four exports (`hostWriteWord`, `hostWriteTitle` from the view-sdk's
+  toolkit; `remoteWriteLabel`, `remoteWriteTitle` from the views), none imported here.
+- The same 23 packages as 0.2.3, all public; no package manifest moved beyond its version, so the seven rows reach the
+  same 20.
+- npm: all 20 at 0.3.0 and `latest`, published 08:27:35–08:35:28Z; the SLSA provenance of core, runtime and views names
+  refs/tags/v0.3.0 @ `d0aa1224`, built by release.yml; `git ls-remote` gives the same tag (lightweight).
+
+**Gates on this commit alone** (VF-PM's ruling 08:16Z: one verify, at stack B's tip, because the tests 0.3.0 moves
+ride B):
+- `pnpm siblings:pin puppeteer` exit 0: rosettad fresh; wall R23 pass (10 catalog rows honoured by both pins, self-test
+  28/28, one warning, "`acp` could offer `spawn` — the pin implements `createSession`", Q17's own ruling, present in
+  stack A's and B's gate logs before this pin); the consumers' `pnpm typecheck` green; gen:check clean.
+- `render --prod --check` green; `pnpm preflight` OK (that one warning); no overlay.
+- The lane's truffle checkout sat at 0.7.22 (`f7e3900`), which `siblings:pin` refuses (it checks every present
+  checkout); it was moved to main's pin `0b83a2c` first.
+
+**Found, not new:** `@vibefield/puppeteer-view-sdk` declares an OPTIONAL peer `vitest >=4.1.11 <5` against this tree's
+vitest 3.2.7. 0.2.3 declared the same (npm view); the frozen installs never printed it.
+
+**Owed:** verify.yml's stale step name ("…and the Ghosttea renderer…"), the fixer's one line (ROADMAP §6). CLAUDE.md's
+pin lines ride James's dated CLAUDE.md pass.
+
+## QW1 stack B — fix wave 1's second landing: Q05 (the marks fieldd keeps), Q08 (the adapter-named stop), re-attach Step 1 and the write-word ruling, on puppeteer 0.3.0 (2026-10-28; `b540fca8e` … `9d7e99fbb`, lane qa-w1, on the EL8 pin `1469639a6`)
+
+**What landed** (8 commits on `1469639a6`, linear; B's eight from `ffdfe4808`, rebased; with puppeteer 0.3.0, fix
+wave 1 is complete):
+- `b540fca8e`, Q05: the marks are fieldd's. No reload or closed Godview drops a mark; a turn that ends with no board
+  open is marked, through puppeteer's ledger and its host seed/read seam.
+- `f86588d43`, Q08: the stop verb sends the run's own turn stop as its adapter names it (Pi and Claude: Esc; Hermes:
+  its gateway's interrupt), the frame's title names it, and an observed idle agent's stop presses nothing. The rest
+  send ⌃C until QA wave 1's census.
+- `08dc31b18` and `4548615e8`, re-attach Step 1: an attach is handed what the launch knew, the continuation and the
+  adapter's opaque attach record (RA-D3 A), kept in the signed record's `attach` slot; a failed attach carries the
+  adapter's next step, and fieldd retries a transient one after 1, 2, 4, 8 and 16 s; the agent-plane pages.
+- `51369a8a8`, the review fixes on B: api.html's reportShown row says Q05's ledger is puppeteer's, since 0.3.0.
+- `e5fdadb43`, a gate fix: the stop-key row parses the desk row as the board publishes it, with its revision.
+- `ca738b9f6`, the write-word ruling (James, typed 2026-10-28 04:22Z): a peer is writable by default, so no surface
+  marks writable or read-only. field-app's `remote-write.ts` is deleted; the phone's swarm body says the desk's name
+  alone and its write invitation retires; DECISIONS' Q16 clause and GT row.
+- `9d7e99fbb`, a gate fix: the model-stream fixtures as the wave's puppeteer writes them, a peer's ended turn keeping
+  its unread mark (Q05). Written under the dev overlay at the wave's tree; they hold against the registry 0.3.0.
+
+**The rebase onto the pin** (`git range-diff a7498883f..ffdfe4808 1469639a6..9d7e99fbb`, in
+`/Volumes/SamsungRed/lanes/qa-w1/records/range-diff-B-Bprime.txt`):
+- Five commits are `=`.
+- `4548615e8` carries a fixup: architecture.html's two lines say "since puppeteer 0.3.0", not "on puppeteer's QW1
+  attach branch … not in the 0.2.3 pin".
+- `51369a8a8` is reworded by an amend!: its one hunk, the reportShown row's Q05 qualifier, names the release, and its
+  subject and body say so.
+- `ca738b9f6` differs in context only: HK rewrote DECISIONS' rows around its hunks, whose own lines are
+  byte-identical.
+- merge-tree onto `88e8289ea` was clean (HK's own check and this lane's).
+
+**The gates** ran on lanes/qa-w1, this Mac, at nice 19, with the guard before each, in VF-PM's slot (the grant 09:17Z;
+"A VERIFY RUNS" from 09:29Z). There was no overlay: `.pnpmfile.cjs` was absent and preflight names no linked puppeteer.
+- **The light pass at `9d7e99fbb`** (09:25–09:28Z), all green:
+  - typecheck for contracts, field-app and fieldd; preflight OK (Q17's one R23 warning); the walls; biome (19 files);
+  - vitest: contracts 2 files / 60 tests; field-app 30 files / 512 tests (B's touched suites, plus every field-app
+    suite that imports puppeteer's views, view-sdk or monitor, the model-stream fixtures among them, against the
+    registry 0.3.0); fieldd agent-model-board, agent-monitor, agent-session and agent-stop-key, 91 passed / 2 skipped.
+- **`pnpm verify` at `9d7e99fbb`** (09:29:08–09:34:08Z) EXIT 1, by two loaded-host rows (load 236 at its end):
+  - Preflight through bundle:assert were green. In `pnpm test`, 26 of 27 projects were green: field-app 227 files
+    (1 skipped), electron-shell 145, contracts 49 / 1,199.
+  - fieldd had 2 failed, 201 passed and 3 skipped (2,568 tests):
+    - agent-session.test.ts:2904, MF-1's "a settled board kept sending frames" (3 frames, not 2): the known MF-1
+      lottery family. Rerun once alone at 09:34:52Z (load 236 → 79): 52 passed / 2 skipped.
+    - shell-lease.test.ts:26, AL-7's ENOTEMPTY on its own temp dir's `rmSync` at cleanup: a cleanup race that reads
+      nothing from puppeteer. Rerun once alone at 09:36:00Z: 15/15. It goes to the fixer as its own item (the cleanup
+      waits for the holders or tolerates ENOTEMPTY, fixed at the cause).
+  - The verify never reached its last two stages, so they ran alone at clean `9d7e99fbb`: `pnpm test:rust`
+    (09:36:22–09:38:24Z), 492 passed / 0 failed / 14 ignored in 31 suites; `pnpm gen:check`, EXIT 0, with the tree
+    clean.
+  - VF-PM ACCEPTED this record at 09:39Z, on `a04850e29`'s precedent, with no whole re-run.
+  - Logs: `/Volumes/SamsungRed/lanes/qa-w1/logs/bprime-verify-9d7e99fbb/` (verify.log, alone-*.log).
+- **The kit at `9d7e99fbb`:** `kit.sh` on the lane's own simulator (09:38:46–09:39:58Z): EXIT 0, `** TEST SUCCEEDED **`,
+  1,308 tests in 238 suites over 13 runs, none failed, no recorded issue. That is B's count at `ffdfe4808`; B's Swift half has
+  no puppeteer edge, so this run is the rebase's. Log: `/Volumes/SamsungRed/lanes/qa-w1/logs/kit-9d7e99fbb/kit-bprime.log`.
+- Records: `/Volumes/SamsungRed/lanes/qa-w1/` (el8-pin.sh, el8-bprime.sh, kit.sh, the logs, records/).
+
+**Owed after this landing:**
+- The draft turn (VF-PM's queue opens on the ff): the QA plan's §12.1 rows this landing flips (Q05, Q08, Q16's write
+  word, puppeteer's half in 0.3.0) and the re-attach study's Status (Step 1 landed; Step 0's puppeteer half in 0.3.0).
+- design-02 §2.6's fold is owed at Step 3's custody slice (design-02:13; its erratum stands since 10-27), not here
+  (VF-PM 09:04Z).
+- Step 1's two parts stay owed to fix wave 2 (the provisional record before the PTY is spawned; Claude's open
+  permission at an attach), with Q06 (2), Q08's census and the rest the RA and Q rows name.
+- QA wave 1, the plan's run on this main.
+
+## HK — the CLAUDE.md pass (Q1): Machine setup names no pin, the errata fold into one note, and the checkout count is two (2026-10-28; James's typed approval "approve CLAUDE.md", 16:44Z)
+
+The housekeeping page's Q1 "A" (one dated pass, number-free where a manifest holds the number), HELD in LANDED "HK"
+until James approved the text. The text is the one he approved (`owed/CLAUDE.md.proposed`, the five points), plus two
+corrections made at landing, each on his word:
+- It said `smoke:profile --app`, but row 31 has no root script, so it now reads
+  `pnpm --filter @vibefield/desktop smoke:profile --app` (desk-gates row 31's own correction).
+- It said to copy `fixtures/agent-catalog.valid.json` to "the kit's three mirrors". There are five:
+  `Sources/FieldWorkspace/Fixtures`, and the `Tests/*/Fixtures` of FieldMesh, FieldProduct, FieldSwarm and
+  FieldWorkspace. `2ac789293` wrote all five; VF-PM found the line at its verification, 2026-10-28 16:48Z.
+- The opener drops the retired "A · B · C" track names and points at `docs/ROADMAP.md`.
+- `design-06-sync-planes` joins the authority order. There is no design-05.
+- The taxonomy names `live-surfaces` and the plugin authoring kit (`tooling/plugin-cli`, `tooling/create-plugin`).
+- **Machine setup names no pin.** It points at the manifests that hold them: Cargo.toml/Cargo.lock, the pnpm-workspace
+  overrides, apps/desktop's five sidecar rows, Package.swift/Package.resolved, siblings.lock.json, rust-toolchain.toml
+  and preflight's `PIN_EXPECTATIONS`. The four errata blocks (08-07, 09-16, 10-24 ×2) fold into one dated note.
+  truffle and ghosttea are stated as released on every plane, and the sibling model and the dev overlay become bullets.
+- **The checkout count is two:** `../rosetta-pin` and `../mille-pin`. `needsCheckout` is true for rosetta and mille
+  alone, read again at main `e3a00a07f`, after the EL8 to puppeteer 0.3.0. The 10-22/23 mini measurement of three is
+  kept as the last measurement. LANDED "QW1 stack A" had named the "three" stale.
+- The commands name the packaged rows 29–31.
+- ROADMAP: §5's Q1 bullet and §6's "same-snapshot edits" item leave (the latter was done in dev-local `3bfc5f604`),
+  and §2's EL8 line says CLAUDE.md names no pin.
+- Checks (docs only): nothing reads CLAUDE.md at runtime, so no verify ran.
+
+## FN — item 85: a route move between the routes subscription's reading and its forwarder's first poll reaches fieldd; the design-system page's budget is measured on CI's runner (2026-10-28; `7eda2ee38`, `b60e80398`, lane `fix/item85-routes-baseline`; VF-PM's rulings 18:22Z and 18:33Z)
+
+**What happened:** CI's verify on the pushed `e3a00a07f` (run 40728506315) went red on its two attempts, on two
+different rows, each green on the other attempt and on this Mac:
+- **Attempt 1** (17:23Z): field-app `test/design-system.test.tsx` › "shows the launcher of a pane born under a
+  profile…", "Hook timed out in 60000ms" in the beforeEach that renders the whole `<DesignSystemPage />`.
+- **Attempt 2** (18:08Z): fieldd `test/agent-session.test.ts` › MF-1f/MF-1g "resume hands the pane over…", at its
+  setup's 30 s wait, "the floor's terminal endpoints reaching the daemon did not hold within 30000 ms". Item 68's
+  evidence at the deadline read "fieldd's link: connected; routes heard at revision 1, 0 cell(s)". The floor's own log
+  had both cells serving at +219 ms, 4 ms after the mgmt client authenticated, and nothing moved for 30 s.
+
+VF-PM made both item 85. They are two causes: a field-native race and a thin budget.
+
+**The race, since TM-r13 `8e9cfbb82` (2026-09-14), in `native.lifecycle.terminal.routes.subscribe`
+(`mgmt/mod.rs`):**
+- The handler read the current snapshot for its result (`state.terminal_routes.borrow()`, the revision-1
+  announcement, no cells). It then spawned `spawn_routes_forwarder` with a clone of the state's receiver.
+- At its first poll the forwarder's task marked whatever the channel held THEN as seen (`rx.borrow_and_update()`,
+  added so the stream's first delta would not repeat the result).
+- When the cells came up between the result's read and that poll, revision 2 was marked seen and never sent.
+  TC-D15's "a missed delta is repaired by the next one" did not hold, because a floor whose cells are up has no next
+  one.
+
+**The fix** (`7eda2ee38`, `mgmt/mod.rs` only, +131/−53):
+- The handler marks the baseline in the SAME read that builds the result (`borrow_and_update` on its clone), and hands
+  that receiver to the forwarder, which no longer marks anything.
+- T-M2's dedupe stands: the result's own snapshot is still never repeated. A move after the read wakes the forwarder
+  however late its task first runs.
+- The row: `a_route_move_before_the_forwarder_first_runs_is_delivered_once`. It drives the window on a current-thread
+  runtime, where a spawned task runs only at the next await. The result reads revision 1, revision 2 lands before the
+  forwarder runs, and the reader must hear revision 2, once. T-M2's row's two helpers are hoisted to the module for it,
+  unchanged.
+- **The siblings, noted and left unchanged → ITEM 86** ("health/observed subscribe: subscribe-then-read on one
+  receiver", planned). `native.lifecycle.health.subscribe` and `.observed.subscribe` read the Sender's value, then
+  `subscribe()`, so a send from another thread between those two statements is lost the same way. That window has no
+  await in it, so no current-thread row can drive it, and neither changes blind (VF-PM 18:22Z). Each handler carries a
+  dated note naming the closing shape: the routes handler's, one receiver read once with `borrow_and_update`.
+- **Item 63, likely, not proven.** Item 63's red (the nightly's AR-6-0 row, 2026-10-26) was the same 30 s setup wait
+  for `daemon.native.terminalEndpoints`, and its twin in agent-gateway-floor.ts reddened the same way twice on this
+  Mac. Its floor's log was deleted with the row's temp root, so whether it was this race cannot be shown.
+
+**The budget.** DK-11's 60 s (2026-10-05) was "the worst render measured about twice its time", measured on this Mac.
+CI's runner is the slower host:
+- Attempt 1's runner was slow all through. field-app's test task took 773 s (161–488 s in the eight green runs before
+  it) and fieldd's 1349 s (682–1042 s); this file took 415 s (61–197 s).
+- Nothing in the design-system sources or this test changed in `c903853a1..e3a00a07f`.
+- **Measured** (each row is vitest's own time: render, body and unmount, since its runner starts the clock before
+  beforeEach):
+  - CI, nine green runs of verify (10-27/28, the eight before plus attempt 2): 4.6–47.6 s a row.
+  - CI, attempt 1: 22–84 s a row, and one render past 60 s. Rows of 76 s and 84 s passed there, because the hook and
+    the body each have their own budget.
+  - This Mac, the file alone ×3 at the lane's tip (nice 19, load 15–18, 18:24:53–18:26:10Z): 1.5–2.8 s a row, 24 of
+    24 passed.
+  - DK-11's 10-05 envelope, alone: a 1.3–1.7 s render and a body of at most 0.9 s. **The page did not grow**: the
+    catalog's sources grew 2% by lines (19,617 → 20,003) since 10-05.
+- **The line** (`b60e80398`, the test only, +6/−1): `PAGE_BUDGET_MS = 120_000`, twice the 60 s that render passed.
+  It still bounds the hook, the body and the unmount separately, so a render that hangs still fails. DK-11's claim is
+  corrected at its source, the comment above the constant, with a dated note; the 10-05 numbers stay.
+- Not taken (VF-PM 18:33Z): one render per file is a test-isolation change. If the row reds again at 120 s, that
+  change becomes its own item.
+
+**Validation** (this Mac's SSD lane `/Volumes/SamsungRed/lanes/item85`, guard, nice 19; VF-PM's GRANT 18:22Z, the mark
+18:33Z):
+- **Red-first** (logs/redfirst/, 18:23Z, load 15–27):
+  - the fix with main's one forwarder line restored (`let _ = rx.borrow_and_update();` at the task's head): the new
+    row RED, 1 failed in 0.41 s, "a move after the result's reading reaches the reader";
+  - the fix: the new row 1 passed; T-M2's row 1 passed; the whole `mgmt::` module 30 passed, 0 failed;
+  - the file was restored from HEAD after each, and the tree was clean.
+- **MF-1f ×3 at the fix, on the real floor** (logs/mf1f/, 18:23:50–18:24:53Z, load 17–24): 3/3, 2/3, 3/3.
+  - All 12 setups heard the floor's endpoints, the wait item 85 reddened.
+  - Run 2's third row went red at a DIFFERENT wait → **ITEM 87**. `endedRun`'s 15 s poll for `continuation.exited`
+    after `agent.interrupt` timed out: `terminal_spawned` +271 ms, `session_started` +276, `agents.interrupted` +289,
+    then nothing for 10 s (routes at revision 3, 2 cells; no `session_exited`).
+  - It was found at the fix on a path the fix does not touch: an exit reaches fieldd on the cell's terminal client
+    (`session-exited`), not on the routes stream.
+  - ghosttea's interrupt is a `\x03` written to the PTY. The ^C landed 13 ms into the scripted shell's life (the
+    fixer's lean, unproven). It is read next, at the cause (the PTY's line discipline against the exec'd `cat`), with a
+    witness on main's floor in its own slot. Item 81's `endedRun` bound stays on the lottery list until then.
+- **The light pass** (logs/light/, 18:32:59–19:57:24Z, load 42–572; field-app's typecheck took 53 min of it): cargo
+  fmt --check, clippy `-p field-native --all-targets -D warnings`, typecheck field-app, biome at error level on the
+  test, preflight and check:walls all 0.
+- **`pnpm verify`** at `b60e80398` (logs/verify/verify.log): EXIT 0 (19:57:24Z–20:05:01Z; load 529 armed, 47 at its
+  end). Every stage passed:
+  - the TS test target ("Successfully ran target test for 27 projects"): fieldd 2,588 passed (11 skipped),
+    agent-session among them; field-app 2,780 passed, design-system 8/8 in 41 s (3.2–6.5 s a row);
+  - `pnpm test:rust`: 31 suites with 493 passed and 0 failed, the new row and T-M2's among them;
+  - gen:check clean.
+- **CI** on the pushed `3e6c941a8` (run 40764016907): GREEN at its first attempt, 21:22Z. *Cited 2026-10-29 with
+  item 89.*
+- Records: `/Volumes/SamsungRed/lanes/records/item85/`.
+- **Errata:** the memory's lottery note said at 18:20Z that "MF-1f was never a lottery row". That holds for the
+  setup's endpoint wait only, and the note carries a dated correction at its source (18:31Z). Item 84's entry above now
+  cites its CI witness.
+
+## AL-9b — one chord table in main: a held ⌘Q, ⌃⌘F or ⌃⌘A acts once and its repeats reach no page or menu, a non-Latin layout's chord names the physical key's letter, and ⌃⌘A joins ⌘Q and ⌃⌘F in one listener (2026-10-29; `cc37d2d8e`, lane `al/chords-2`; James's "do the follow ups"; VF-PM's GO)
+
+**Why:** James asked for a review of AL-9 (`933d2fba3`) on 2026-10-27, then for its follow-ups on 10-29. The review
+found two gaps that could bring AL-9's symptom back, and two cleanups:
+- **Repeats passed through.** `windowChordOf` returned null for an auto-repeat, so a held chord's repeats reached the
+  page and the menu. ghosttea's workspace keydown (`Workspace.js:632`) does not skip repeats. A held ⌘Q over a pane
+  therefore ran the deck's `quit` hook and put the terminals away behind the quit box. A held ⌃⌘F reached the menu's
+  `togglefullscreen` and flipped it back. A held ⌃⌘A (SNAP-3's chord, the same rule) reached the canvas's select-all.
+- **The letter came from `key` alone.** ghosttea's matcher also reads the physical key (`unicodeCandidates`,
+  ghostty-triggers.js), and macOS's key equivalents fall back to the Latin letter on a non-Latin layout. A layout
+  that reports ⌘ and the Q key as its own letter (Russian "й") would leave ⌘Q to the pane, AL-9's bug again.
+- `WindowChordInput` was a field-for-field copy of `ScreenshotChordInput`, with two `before-input-event` listeners per
+  product window.
+- `ProductChord`'s `matches?` and `takenBy?` were coupled by a rule that only a test row held.
+
+**What landed** (electron-shell · field-app):
+- `window-chords.ts` is the one table: ⌃⌘A (SNAP-3; Alt+A off the Mac, SNAP-D3), ⌘Q and ⌃⌘F (AL-9; darwin only).
+  - `installWindowChords(target, { quit, screenshot? })`. The screenshot act is absent where no capture can run (no
+    helper, Studio's window), and ⌃⌘A is then left to the page and the menu, as before.
+  - `screenshot-chord.ts` and its test are gone, and their rows are in window-chords.test.ts. main's index.ts installs
+    one listener.
+- A matched chord's repeats are swallowed and act on nothing; the act runs once, on the first press. A keyUp is still
+  not swallowed.
+- `chordLetterOf` decides the letter:
+  - the key's own letter when it is a Latin letter;
+  - the physical key's (`KeyQ` → q) only when the key's character is not ASCII;
+  - an ASCII key the layout sends (Dvorak's `'` on the Q key) is the layout's own and names no chord, as macOS's menus
+    do.
+- `ProductChord = PageChord | ShellChord`: a page chord has its matcher, a shell chord has none, and the compiler holds
+  the rule. The runtime row that held it is retired.
+- GodviewDeck's `quit` hook comment now reads true: ⌘Q never reaches it on the Mac, held or not; off the Mac Ghostty's
+  `ctrl+shift+q` does.
+
+**Not in it** (AL-9c candidates for James's word, on VF-PM's board):
+- a person's own Ghostty `quit` chord quitting the app (a page→main door);
+- the deck's no-op `toggleFullscreen` (the same door);
+- Settings' words off the Mac;
+- the deck's last-pane count (the upstream "last pane closed" hook).
+
+**What a test reaches, and what only a hand does:**
+- Tests:
+  - the predicate: each chord, each modifier mix, keyUp, repeats named, the Russian and Dvorak layouts, off the Mac;
+  - the installer: each act once; the repeats swallowed and inert for all three; ⌃⌘A left alone with no capture;
+    every other key untouched.
+- By hand only: whether macOS delivers a chord to `before-input-event`, and what Electron's `key` reads on a Russian
+  input source. ROADMAP §5's witnesses gain AL-9b's two rows beside AL-9's ten: a held ⌘Q over a focused pane, and
+  ⌘Q under a Russian input source.
+
+**Rows:** window-chords.test.ts 13 (was AL-9's 7 plus screenshot-chord's 5); product-chords.test.tsx (the coupling row
+retired).
+
+**Gates** (lane al2, nice 19, the guard before each step; VF-PM's slot from 01:07Z):
+- The light pass (01:07:35–01:08:40Z, load 9→17) EXIT 0:
+  - typecheck electron-shell and field-app; biome; check:walls;
+  - preflight, with 2 WARN, both main's: the lane's unused puppeteer checkout, and R23's acp candidate;
+  - window-chords 13/13; product-chords, terminal-keyboard-model and godview-deck 103/103.
+- `pnpm verify` 1 (01:08:55–01:14:56Z, load 19 → 607) **EXIT 1**:
+  - Every stage before `pnpm test` was green (typecheck 27/27, cache 0/27). electron-shell: 1972 + 2 skipped.
+  - field-app: 2 failed of 2780, both "Test timed out in 5000ms": doc-manager.test.ts › B4's first run (:113) and
+    godview-monitor.test.tsx › GV-D1's swarm row (:589).
+  - vitest's own setup took 403 s, and fseventsd and Finder were at ~95% CPU each. The two files alone: 108/108 twice
+    (load 420, then 177).
+- The one lottery rerun (VF-PM's rule), verbatim, gated on load < 40 (01:19:11–01:22:27Z, load 37 → 419) **EXIT 1**:
+  - field-app: 1 failed of 2780, GV-D1's swarm row again, at 5507 ms against 5000.
+  - That row alone: 554–610 ms, three runs at load 236–270. It drives two 600-frame physics settles of 23 bodies, and
+    under the suite it starves about ninefold.
+- Neither row is reachable from this diff: field-app's change is a type and a comment.
+- The chain stopped at `pnpm test` both times. Its last two stages, run alone on this tree: `pnpm test:rust` EXIT 0
+  (31 binaries, every one ok) and `pnpm gen:check` EXIT 0.
+- VF-PM would not land a tree red twice on precedent. The host was quieted (the swarms paused ~20 min), and a third
+  verbatim run on `cc37d2d8e` was taken as the quiet-host measurement, started once the 1-min load was under 20
+  (01:34:14–01:38:24Z, load 16 → 33): **EXIT 0**.
+  - Nx replayed the 26 test tasks already green on this tree and ran field-app fresh: 2777 passed and 3 skipped of
+    2780, 0 failed. godview-monitor took 9.6 s for its 89, and doc-manager 67.7 s for its 19.
+  - test:rust (31 binaries ok, 0 failed) and gen:check were green.
+  - For one minute (01:36:55–01:37:57Z, load 65–76) the fixer's item-89 lane setup ran beside it before VF-PM's hold
+    reached it. No row failed, inside that window or outside it.
+- Item 89 was filed for the fixer: GV-D1's budget (two 600-frame settles under the 5 s default; 554–610 ms alone,
+  about ninefold starvation at load ~400).
+- Logs (the session scratchpad, `al57/`): `verify-fa9744e.log`, `verify2-fa9744e.log`, `verify3-quiet-cc37d2d.log`,
+  `alone-fa9744e.log`, `tail-stages-fa9744e.log`.
+
+**Owed:**
+- James's AL-9 rows, plus a held ⌘Q and a Russian input source.
+- The AL-9c candidates, on his word.
+- Item 89 (the fixer).
+- The draft's §9.4 gains AL-9b's deltas at the next opening of the draft queue.
+
+## GV — item 89: the GV-D1 swarm row's budget is 15 s, measured on CI's runner and in this Mac's full suites; the crowd is still only from frame 593, so the frames stay (2026-10-29; `238a960bc`, lane `fix/item89-gvd1-budget`; VF-PM's rulings 01:34Z, 01:37Z and 01:58Z)
+
+**What happened:** AL-9b's verifies at its lane tip `fa9744e` (landed as `cc37d2d8e`) went red twice on one row
+(01:14Z at load ~607, 01:22Z at load 418). The row is field-app `test/godview-monitor.test.tsx`:589, "keeps the swarm's
+bodies below the head's reserve … (GV-D1)". Each time it failed with "Test timed out in 5000ms", at 6220 ms and 5507 ms.
+Nothing in AL-9b reaches SwarmPhysics. Its third verify, on a quiet host, was green with this row at 678 ms, and AL-9b
+landed.
+
+**The read:**
+- **What GV-D1 asserts.** It checks the state at frame 600 only. The stage is the one MV-D19's row pins: 900 × 396,
+  with the reserve {0, 0, 900, 56}, the column and the strip.
+  - With the reserve, every body's top (the frame's y − radius) must be ≥ 56.
+  - Without it, the same crowd must have at least one top < 56.
+  - The reserve's matter body is padded 7 (`CHROME_OBSTACLE_PADDING`), so a body resting on it has its top at
+    63 + 4 (`PHYSICAL_GAP`) = 67.
+- **Where the time goes.** The row runs two settles of 600 frames on the swarm's own physics (puppeteer-views 0.3.0,
+  matter 0.19): 23 circles beside 4 walls and 3 obstacles, in one synchronous loop.
+  - One settle alone takes 116–136 ms on this Mac.
+  - The render in `measuredStage` is under 300 ms. MV-D19's row renders the same stage, and CI never lists it among
+    its slow rows.
+- **Why the reds' times are the row's own.** vitest 3.2.7 fails a row whose work outran its timer when the row resolves
+  (`@vitest/runner` chunk-hooks.js:1880–1886, vitest#2920). The settles are synchronous, so the timer cannot fire during
+  them, and the printed duration is when the row finished.
+
+**The trace** (records `trace-settle.mjs`: the row's two settles replayed frame by frame on main's physics, one node
+process at nice 19, VF-PM's GO 01:34Z; 600 frames, then 1800):
+- **Held** (with the reserve):
+  - Every top is ≥ 56 from frame 11; frames 1–10 are the born-in-the-reserve body being pushed out (highest top 47.5).
+  - Frames 11–600: highest top 59.7–62.5.
+  - The crowd jostles at 0.3–1.5 px a step until about frame 570. It is still (every body under 0.01 px a step) from
+    frame 593, with one blip at 648, and from 649 through 1800 (highest top 62.11–62.16).
+- **Loose** (without it): some top is < 56 at every frame (highest top −6.4 to −0.3); still at 0.01 from frame 521.
+- **So 600 frames is barely settled.** The row's read lands 7 frames after the held crowd comes to rest, and any frame
+  count below about 650 would read a crowd still in motion. The row's comment, "long past settling", was never
+  measured, and it carries a dated correction at its source.
+- **The loop solves 599 steps, not 600:** the float sum of `1000 / 30` loses one. The comment says so, and the frame
+  numbers here are the loop's frames as the trace counted them. Counting frames instead of summing time is
+  **ITEM 90**, for a quiet day.
+
+**The budget** (`238a960bc`, the test only, +23/−2): `SWARM_SETTLE_BUDGET_MS = 15_000`, given to the row as vitest's
+options (`{ timeout: … }`, item 85's `PAGE_BUDGET_MS` shape). A third argument that is not a number literal makes biome
+break the call and re-indent the whole body. Measured in a parallel suite:
+- **CI's runner:** 35 attempts, 10-23 → 10-28 (records `times-ci.tsv`), all green, 845–4645 ms, median 2085 ms. The
+  worst was `b8a31d139` on 10-23, at 93% of the 5 s default.
+- **This Mac's full verifies:** 46 green, 10-26 → 10-28 (records `times-mac.tsv`), 531–3964 ms. Then came 6220 and
+  5507 ms on 10-29, and 678 ms on the quiet host after them.
+- 15 s is more than twice the worst it has taken anywhere. The assertion, the 600 frames, the crowd, the seed and the
+  stage are unchanged.
+
+**Validation** (this Mac's SSD lane `/Volumes/SamsungRed/lanes/item89`, guard, nice 19; VF-PM's slot after AO-7's
+puppeteer tests):
+- **Measure** (logs/measure/, 01:46:41–01:47:30Z, load 12–14):
+  - the row alone ×3 passed, at 553, 536 and 533 ms;
+  - `godview-monitor.test.tsx` alone ×3 passed 89/89 each time, with the row at 496, 517 and 507 ms (the file's rows
+    sum to 7.7–7.8 s).
+- **The light pass** (logs/light/, 01:47:42–01:48:23Z, load 11.7): field-app's typecheck, biome at error level on
+  the file, preflight and check:walls all exited 0. vitest on godview-monitor-lifetime, godview-monitor and
+  godview-overlay-boundaries passed 4/4, 89/89 and 6/6, with the row at 636 ms.
+- **`pnpm verify`, run 1**, at `238a960bc` (logs/verify/verify.log, 01:48:33–01:55:44Z): EXIT 1, red on two fieldd rows.
+  The load was 21.9 at the start and 215.8 at the end, with the PORTALS review running beside it.
+  - Every stage through `bundle:assert` passed, and typecheck was green for 27 projects. The test target failed:
+    fieldd 2 failed, 2586 passed, 11 skipped. `test:rust` and `gen:check` never ran, because the chain stops at a red.
+  - **GV-D1 under the full suite passed in 2121 ms**, 14% of the new 15 s (godview-monitor 89/89, the file 20.1 s).
+  - `agent-inventory-age.test.ts:268` (IL-D5 (a), the mock floor) expected `inventory_stale` from the terminal and
+    got `UNAVAILABLE {service: "native", state: "unresponsive"}`. fieldd's heartbeat (`NATIVE_SUPERVISION`: 100 ms
+    interval, 100 ms deadline, a 50 ms probe after a first miss, 2 misses) set the link `unresponsive` under the
+    loaded loop. The mock floor shares the test's process, so a pong waiting unread in the socket while the deadline
+    timer fires first counts as the floor's silence. WG-E1's own-stall rule only covers a timer late by its whole
+    deadline. Filed in **ITEM 86**'s family (VF-PM 01:58Z).
+  - `agent-session.test.ts` MF-1f/MF-1g, "a restart finds the dead pane and re-lists the row from the record alone":
+    the row's condition did not hold within 15000 ms. `terminal_spawned` came at +746 ms, `session_started` at +761
+    and `agents.interrupted` at +902, then no exit. It is `endedRun`'s bound after `agent.interrupt`, **ITEM 87**'s
+    second witness, after item 85's run 2.
+  - Neither row can be reached from this change, which is one field-app test file. Before VF-PM's ruling they were
+    run alone and stopped part-way (logs/rest/; they do not stand in for a verify): agent-inventory-age 7/7 at load
+    68; MF-1f 3/3 twice at load 33–45.
+- **`pnpm verify`, run 2 (`verify2-quiet`), the one rerun the rule allows** (VF-PM 01:58Z: armed on a 1-min load under
+  20 with the swarms paused), at `238a960bc` (logs/verify2-quiet/verify.log): **EXIT 0**. It was armed at
+  01:58:40Z, when the 1-min load was 19.6, and ran 01:58:41–02:06:56Z (load 18.3 at the start, 25.2 at the end).
+  Every stage passed:
+  - the TS test target ("Successfully ran target test for 27 projects"): fieldd 2,588 passed (11 skipped),
+    agent-inventory-age and MF-1f/MF-1g among them; field-app 2,780 passed;
+  - **GV-D1 passed in 1460 ms**, 10% of the 15 s (godview-monitor 89/89, the file 17.1 s);
+  - `pnpm test:rust`: 31 suites with 493 passed and 0 failed;
+  - gen:check clean.
+- Records: `/Volumes/SamsungRed/lanes/records/item89/`.
+- **Item 85's CI witness** is cited in its entry above (run 40764016907, green at its first attempt), owed since 10-28
+  21:23Z.
+
+## TS-4a — asking again after Not now (TS-D7, TS-L6; TS-D20 = A): the status item's Connect Your Devices…, the filters' ghost rows, the away notice and the one switch (2026-10-29; `776eae4d3`, lane `ts/4-asking-again`)
+
+**What.** TS-4 is the ladder's rung for asking again (thinking doc §10, D7; §14 for its marks). Someone who said Not
+now said it before they had a reason, so the offer returns only where a connected device would do the job. The plan
+(`lanes/ts3/drafts/ts4-plan.md`, a code read on `3e6c941a8`) split D7's places in two:
+- **rows**, which stand while this Mac is not connected and keep no ledger;
+- **nudges**, which keep D7's rules in the setup ledger (D18 = d).
+- **contracts:**
+  - the setup ledger's moments gain `asked` (`SETUP_MOMENT_STATES`); `setupMomentRecord` reads a moment's state and
+    time, and `setupMomentState` delegates to it;
+  - `connectAskOpen(ledger, place, now)` is the one decider for a nudge: only someone who put Devices off (`later`);
+    a place's own `retired` for good; its own 30 days after a saying; any other place's saying spends the day; an
+    unreadable time keeps the quiet (`CONNECT_ASK_PLACES` = away, approval-wait);
+  - `ShellCommand` "open-connect" (TS-only, no gen); `AppPreferences.connectAsks` (`mesh.connectAsks`, default
+    true — an older daemon's silence reads on);
+  - EL9: `setup-ledger-connect-ask.valid.json` and `setup-moment-params.asked.json`, parsed by contracts' fixtures
+    test and read from disk by fieldd's store test. AO's lead read the seam first (bb, 00:59Z: no collision; both
+    notes taken).
+- **fieldd:** an `asked` write re-stamps its time on every saying and never lands over a `retired` row; the
+  preference's default and effective read; the refusal texts name the new key and state.
+- **AO's readers** (bb's note): the limit moment and a new agent with a past compare with `retired`, so an `asked`
+  row never silences them.
+- **electron-shell main** (`connect-asks.ts`): `ConnectAsks`, fed the link, the ledger and the preferences by TS-5's
+  observer (one subscription each, `storage.appPreferences.subscribe` new).
+  - The status item's **Connect Your Devices…**, a row under the service's status line while this Mac is in the
+    link face's `offline` state. `offersConnectFor` mirrors field-app's `linkFace` (the word, or a linked, expired or
+    removed word over no record), so the row and the ghost rows never disagree. The tray's first snapshot asks the
+    live wiring; the tray controller's actions gain the optional `connectDevices`.
+  - **The away notice** ("VibeField keeps running" / "N agents are still working. Connect your phone to check on them
+    from there.", Connect… / Not now) on window-all-closed while VibeField stays: never in main's first minute,
+    counted from `agent.list`, written `connect-ask:away` asked before it shows; a refused write keeps this session's
+    quiet. A smoke never shows it.
+- **field-app:**
+  - the ghost row ends Godview's Peek desktop filter (a hairline, a plus, "Your other devices", Connect…; not
+    connected, This Mac alone is offered and wears the filter) and History's desktop chip (its own group). Both ask
+    `open-connect` through a renderer request bus (`requestShellPresentation`) the chrome answers with the native
+    command's reducer;
+  - the overlay reads the link (`useOffersConnect`, which reads only a link-shaped snapshot) and hands the monitor a
+    plain `offersConnect` prop;
+  - Settings → Devices begins the link once per request, once the link can be read, only from `offline`; the switch
+    row sits under the card while not connected (its words are drafts, James's to rule).
+- **Catalog:** Godview's "Search in Godview, this Mac not connected" plate (`peek-unconnected`) and the Devices state
+  "asks off", the shipping views over fixtures.
+- **DESIGN.md** §8 "Asking again": TS-D20's placement folded at its source (the line on Godview's agent row as a wait
+  over ten minutes clears, "It waited 14m for you.", ruled A 2026-10-29 01:01:59.983Z), and an as-built sub-bullet.
+- **Not in it:** TS-4b (D20's line, the `approval-wait` place, next on the same branch); Publish's option (TS-D21,
+  open); whether the switch stops the rows too (TS-D19, open); the switch's words.
+
+**Found:**
+- **Godview's monitor never reads fieldd.** The catalog mounts it with no provider, and `useFielddClient` throws
+  there, so a fieldd fact reaches the monitor as a prop from the overlay, never a hook inside it.
+- **The status item is made after several awaits**, by which time the link may already have been read: its first
+  snapshot asks the wiring, not the next change.
+- **The two deciders write through each other's door** (`ConnectAsks` asks through the observer; the observer feeds
+  `ConnectAsks`): annotated, or TypeScript infers each from the other (TS7022).
+- **A component whose props parameter is optional** is inferred with `undefined` (`ComponentProps`, `Parameters`),
+  which fails `createElement`'s `P extends {}`: the Devices test names a `NonNullable` props type.
+- **DESIGN.md is a runtime test input** (five field-app readers): the §8 hunk was read against them and they ran in
+  the light pass.
+
+**Validation.**
+- **The lane:** the edits in `/Volumes/SamsungRed/lanes/ts4` (no install), the runs in ts3's run lane detached at the
+  sha (its own target `rust/ts3`, rosetta-pin and mille-pin at the lock's pins), at nice 19 under the guard. Built on
+  `3e6c941a8` and rebased onto item 89's records `9ca1f63e9` after a merge-tree rehearsal (`53bd2b305` =
+  `b7ca3ec90`; the one shared file, main/index.ts, met AL-9b in separate hunks).
+- **The light pass** (02:10–02:17Z, five runs, every red this slice's and amended into its one commit: biome's
+  layout ×2; typecheck ×4 — the deciders' inference, `wireAttachment`'s return type, the tray controller's actions,
+  the test's props; the test's `createElement` props; a test row whose clock never left the first minute). Green on
+  `776eae4d3`: preflight (the standing R23 acp WARN), walls, biome, four typechecks; contracts 541/541, fieldd 17/17,
+  electron-shell 64/64, field-app 16 files 388/388 (the five DESIGN.md readers and the Godview/History suites).
+- **`pnpm verify`** at `776eae4d3`, twice (VF-PM's rule tonight: one verbatim rerun on a quiet host, never an alone
+  set in its place):
+  - the first (ts3/logs/ts4-verify/verify.log, 02:17:45–02:22:41Z, start load 15.82, end load 438.86): EXIT 1. Every
+    stage before the tests passed, and `@vibefield/fieldd:test` was the only failed task (1 failed | 2590 passed |
+    11 skipped). The row is rosettad-supervisor's "item 65 — a mismatch whose words trail the exit is REBUILT, never
+    retried as a crash first" (`restarting` before `rebuilding`), in a file TS-4a does not touch, the row TS-8b's
+    load-394 verify lost. The load was Spotlight indexing the run lane's fresh install (mds_stores, fseventsd; VF-PM
+    read it at 02:24Z), not a swarm;
+  - verify2-quiet (ts3/logs/ts4-verify2-quiet/verify.log, 02:26:33–02:34:02Z, start load 19.44): EXIT 0. Every
+    stage passed: the test target for all 27 projects (9683 vitest rows, 0 failed; rosettad-supervisor 32/32, item
+    65's row among them), cargo 31 suites (493 passed, 0 failed) and gen freshness; the tree clean, no stub left.
+
+**Owed.** The status item's row, a ghost row and the away notice on a desk (James's display word), with TS-2/3a/3b's
+photographs and desk rows.
+
+## AL — the shell lease's rows settle every lease's writes before their root goes: "only the LAST holder's close" raced its own temp root's removal (2026-10-29; `2422bdf5c`, lane `fix/shell-lease-enotempty`; VF-PM's word 03:08Z and 03:13Z)
+
+**What happened:** `shell-lease.test.ts` "only the LAST holder's close vacates it; a second holder keeps it held"
+failed with ENOTEMPTY on its own mkdtemp root at the afterEach `rmSync` (:26). This is a 4 ms row.
+- **Witnesses:**
+  - CI run 40807651886, attempt 1, on the pushed `77322a501`: 2590 passed and this one failed. Nothing pushed touches
+    the lease.
+  - Earlier: QW1 stack B's verify at load 236, green alone (VF-PM 10-28 09:39Z, the Fixer queue's "the shell lease's
+    cleanup race").
+
+**The cause, read:**
+- `ShellLease.closed()` (fieldd `src/shell-lease.ts`), for the last holder, chains the record's write onto `writes`
+  and returns at once. The write is a mkdir of `fieldd/`, a temp file opened, written and fsynced, then
+  `durableRename` onto `LAYOUT.SHELL_EXIT`.
+- Every other row that vacates the lease awaits `flush()`. This one ends right after its second close, so its
+  write was still in flight when the cleanup's recursive `rmSync` listed the root. The directory or temp file the
+  write made after that listing left the root not empty.
+
+**The fix** (`2422bdf5c`, the test only):
+- The `lease()` helper pushes `value.flush()` onto the cleanup list after `tempRoot()`'s `rmSync`. The list runs in
+  reverse, so every lease's writes settle before its root is removed. That includes a later row that ends without a
+  flush.
+- `flush()` never rejects: its chain catches and logs. Nothing tolerates the error and nothing retries.
+- The daemon rows were already covered, since the daemon's stop awaits the lease's flush (`daemon.ts`:6913).
+
+**Validation** (this Mac's SSD lane `/Volumes/SamsungRed/lanes/item87`, guard, nice 19; VF-PM's GO 03:13Z and 03:16Z):
+- **The file alone** at `2422bdf5c` (03:14:11–16Z, load 11.1): 15/15 passed. The row passed in 11 ms.
+- **`pnpm verify`, verbatim**, at `2422bdf5c` on `77322a501` (03:17:50–03:27:39Z; armed at a 1-min load of 17.4
+  after PORTALS' drain; the 5-min load was 128 at the end): **EXIT 0**.
+  - The test target: "Successfully ran target test for 27 projects". fieldd 2,591 passed (11 skipped), with
+    `shell-lease.test.ts` 15/15; field-app 2,788 passed.
+  - `pnpm test:rust`: 31 suites, 493 passed, 0 failed. gen:check clean.
+- Records: `/Volumes/SamsungRed/lanes/records/shell-lease/`.
+
+## FN — item 87: a run's exit is published before its workspace cleanup, and a resume during the cleanup waits a bound then says finalizing (2026-10-29; `8d56b2bd8`, lane `fix/item87-exit-cleanup`; VF-PM's rulings 02:16Z, 02:50Z, 02:58Z and 03:13Z)
+
+**What happened:** `agent-session.test.ts`'s MF-1f/MF-1g rows interrupt a scripted run (`endedRun`) and wait 15 s for
+`continuation.exited`. That wait timed out twice, and each time the log stopped at `fieldd.agents.interrupted`:
+- item 85's MF-1f run 2 (10-28 18:24Z, load 18);
+- item 89's verify run 1 (10-29 01:55Z, load ~215).
+
+**The witnesses** (records `logs/witness`, `logs/witness2`, VF-PM's GO 02:35Z and 02:43Z):
+- `endedRun`'s steps ran ×30 on one warm floor, then ×30 on a fresh floor per pass (routes rev 3, 2 cells, the lost
+  shape). 60 of 60 exited, at loads 13.8 and 14.4.
+- The interrupt answered in 10–40 ms. fieldd's `onSessionExited` heard the pane 5–27 ms after it, and the row read
+  exited 112–194 ms after it.
+- So on a quiet floor the ^C, the PTY and the floor's `session-exited` all work. The ~110 ms between heard and
+  exited is `closeRun`.
+
+**The read:**
+- `closeRun` awaited puppeteer's `handleProcessExit` before it stamped the record, held the exited row, logged
+  `session_exited` and published.
+- puppeteer-runtime 0.3.0's `closeManaged` (`runtime.ts:1941` at `d0aa1224e`) does its synchronous part first: it
+  dispatches `process:exited` and marks the run terminal. Then it awaits, with no bound:
+  - the controller's dispose;
+  - the terminal claim;
+  - `finalizeWorkspace`. Its git calls, `diff`, `rev-parse`, `status` and the rest, are each
+    `execFile("git", …)` with no timeout (`packages/workspaces/src/git.ts:23-24`).
+- On this Mac `git` is `/usr/bin/git`, the xcrun shim: 12.3 ms a call against 4.8 ms for the CLT binary. That is the
+  ~110 ms, and it puts no rosettad ingest on the path. A loaded host can hold those forks far longer.
+
+**Red-first** (records `logs/row-A-2b01c8144`, `logs/row-B-dac1c5bac`, `logs/diag`; VF-PM's GO 02:58Z and 03:02Z):
+- **Scaffold A** (main's runtime): a row puts a `git` that sleeps on PATH after `joinedRow` and before the interrupt.
+  RED in 7630 ms: no exited within 5 s, and the log ends `+2517 fieldd.agents.interrupted`. This is the lost shape
+  exactly.
+- **Scaffold B** (the honest state): `fieldd.agents.exit_heard` at the exit handler's entry, and
+  `fieldd.agents.exit_cleanup_slow` while a cleanup is still pending past `AGENT_EXIT.CLEANUP_WARN_MS` (2 s). RED in
+  7678 ms at the same assertion. Its log ends `+2532 interrupted · +2533 exit_heard reason="signaled" · +4533
+  exit_cleanup_slow`: **C3**.
+- **The diagnostic** (lane-only, at B): the in-process `onSessionExited` heard the pane at +7 ms. `exit_heard` came
+  at +7, `exit_cleanup_slow` at +2007, and `session_exited` at +5071, just after the row killed the stalled git.
+  fieldd hears the exit at once, and the close is held exactly as long as the cleanup.
+
+**The fix** (`8d56b2bd8`, the lane's A+B+C+D squashed, rebased onto `db12d0939` as an identical patch):
+- `closeRun` starts `handleProcessExit` and publishes the exit fact without waiting for the cleanup.
+- The cleanup's promise is kept in `exitCleanups`, keyed by run. A paneless run's cleanup still gates a resume.
+- The row reads `resumable: false` until the cleanup ends, because the old run's lease covers the final git
+  observation (`runtime.ts:1875`). The cleanup's end publishes.
+- `agent.resume` waits for the cleanup at most `AGENT_EXIT.RESUME_CLEANUP_WAIT_MS` (5 s; `registries.ts`, contracts
+  first). Then it refuses PRECONDITION_FAILED, retryable, `{runtimeRunId, state: "finalizing"}`.
+- The AR-D25 persona sweep runs at the cleanup's end.
+- `closeRun`'s callers still await the cleanup.
+- **Rows:**
+  - the stall row: exited at once, not resumable, heard, warned;
+  - the resume row: waits, `finalizing`, then goes through once the stall ends;
+  - MF-1f's held-pane row polls for `resumable`.
+  - floorEvidence names `pendingMs`.
+- **Unchanged:** `runContinuing` skips exiting entries, so a resume of the same conversation through another record
+  is not held by the old cleanup.
+
+**Upstream:** PU-G (drafted, not filed; records `PU-G-puppeteer-bounded-exit-finalization.md`) asks for three things:
+- a bound on each workspace git call (`GIT_TIMEOUT`);
+- a bound on the exit's finalization as a whole, or a split close;
+- an observable release of the lease.
+It moves to `draft/petitions/` in the next draft queue. The workaround retires when PU-G lands in an EL8.
+
+**Design delta (dated 2026-10-29, folded at the next draft queue):**
+- `draft/thinking-ar-agent-plane.md` §16: :477–478 (`agent.resume`'s refusals gain `finalizing`, retryable, beside
+  `terminal-alive`), :481 ("stamped at exit" now holds before the cleanup), :519 and :546.
+- `draft/thinking-ar-reattach.md` §2: a restarted fieldd re-lists the row resumable at once.
+- The refusal states are not a contract enum, so this is a tolerant-reader addition.
+
+**Validation** (this Mac's SSD lane `/Volumes/SamsungRed/lanes/item87`, guard, nice 19; VF-PM's GO 03:13Z and 03:16Z):
+- **The light pass** at the lane's C (03:12:32Z, load 10.4): typecheck contracts and fieldd exit 0; biome exit 0.
+- **The targeted rows** (the two item 87 rows and MF-1f's held-pane row):
+  - **At C `e2cd12c58`** (03:13:49Z): 2 passed, 1 failed. The stall row failed in 405 ms, "the cleanup really
+    reached the stalled git: expected false to be true". The fault was the row's order, not the fix: with the fix
+    the row reads exited before the cleanup's first git call, and the row checked `git.called()` in that instant.
+  - **D `7c409b46d`** (the test only) polls `git.called()` for up to 2 s, then re-reads the row: still exited, still
+    not resumable.
+  - **At D** (03:14:58–15:20Z, load 9.2): 3/3 passed, in 9181, 2457 and 5714 ms.
+- **`pnpm verify`, verbatim, at `8d56b2bd8` on `db12d0939`.** Three runs. The two reds are the host's, and each is
+  out of item 87's reach and read at its cause (VF-PM 03:38Z, 03:50Z):
+  - **Run 1** (03:29:19–03:35:54Z; armed at a 1-min load of 12.5, ended at {257, 270, 170}): EXIT 1 on two rows.
+    - `agent-session.test.ts:2835`, MF-1's field projection: "a settled board sent a frame". It fails before the
+      row's interrupt, while its run is live. Filed as **item 91**.
+    - `rosettad-supervisor.test.ts:342`, item 65's row: `handed` was 3, not 1. Filed as **item 92**, the same row as
+      TS-4a's red.
+  - **Run 2**, the one rerun (03:39:43–03:46:42Z; armed at 17.7, ended at {254, 267, 197} with PORTALS paused from
+    03:40Z): EXIT 1 on electron-shell `smoke-profile.test.ts:114`, DK-18's launcher row: "Test timed out in
+    5000ms". Filed as **item 93**.
+    - fieldd was all green: 2,593 passed, including item 87's rows and run 1's two reds.
+    - After the run fseventsd was at 66% and Finder at 59%, with James's Chrome and bun.
+  - **Run 3**, on VF-PM's settled turn: 1-min under 20 AND 5-min under 60, every swarm paused (03:55:02–04:03:34Z;
+    armed at {9.3, 57.4, 113.2}, ended at {73.5, 190.0, 167.7}). **EXIT 0.**
+    - "Successfully ran target test for 27 projects": fieldd 2,593 passed (11 skipped), with `agent-session.test.ts`
+      56 (2 skipped) and `rosettad-supervisor.test.ts` 32; field-app 2,788; electron-shell 1,983 (3 skipped), with
+      `smoke-profile.test.ts` 8/8.
+    - `pnpm test:rust`: 31 suites, 493 passed, 0 failed. gen:check clean.
+- Records: `/Volumes/SamsungRed/lanes/records/item87/`. They hold the plan, the witness and diagnostic patches (lane
+  only, never committed), the slot logs, PU-G and the dated delta.
+
+## TS-4b — the approval line on the claims strip (TS-D20 = A, TS-D20b = A): "It waited 14m for you." as a long approval clears, behind the limit moment (2026-10-29; `257af5f6f`, lane `ts/4-asking-again`)
+
+**What.** TS-4b is TS-4's second packet: D20's line after an approval that waited more than ten minutes, the
+`approval-wait` place of TS-4a's ledger. D20 (ruled A 01:01:59.983Z) put it "on Godview's agent row". TS-4b's code
+read found that row is puppeteer's: the views draw it through `MonitorViewHost`, and the views SDK lends its host no
+place on a row. The place went back to James as TS-D20b (02:38Z, `rule-ts-d20b-host`). He ruled it, D19 and D21 at
+03:57:49Z, typed in TS's session: "ok, go with your lean". VF-PM recorded them on the board as his.
+- **The watch** (`account/approval-wait.ts`):
+  - `ApprovalWaits.observe(rows)` remembers each approval (`wait.kind: "permission"`) that an agent of this Mac's is
+    blocked on. It answers the ones that cleared after more than ten minutes, timed by the backend's own clocks (the
+    wait's `since`, then the next state's `statusSince`, or a new wait's own start).
+  - A wait it never saw waiting says nothing, so a launch is never the moment. A run that ended while it waited, or a
+    row that left, says nothing. The longest is first.
+  - `approvalWaitOpen` is the nudge's gate: this Mac in the ordinary unconnected state, the switch read and on, and
+    TS-4a's `connectAskOpen(ledger, "approval-wait", now)`. `approvalWaitStands` keeps the line until its row moves
+    or leaves.
+- **The row** (`godview/ApprovalWaitMoment.tsx`, `ApprovalWaitCard` controller-free), in the limit moment's chrome:
+  - the agent's own mark (`AgentIcon`, as the views draw an agent) and its project;
+  - "It waited 14m for you." (1h 12m past the hour);
+  - "Your phone can show and answer requests like this one." in the muted ink;
+  - **Connect your devices** (`open-connect`) and × (Not now, which writes nothing more and leaves by the retract's
+    fade, 180 ms; none under Reduce Motion).
+  - Its controller says it once per window, written `connect-ask:approval-wait` asked before it shows. A refused
+    write keeps the window's quiet.
+- **The strip says one moment, the limit moment first** (`godview/ClaimsStripMoment.tsx`, the overlay's `moment`):
+  - the limit moment tells it whether it shows (`onShown`, a layout effect, before paint);
+  - while it shows, the approval line is `held`: a wait that clears then is not said, and a line already said stands
+    aside until the strip is free;
+  - the monitor lends the moment its unfiltered rows (`MonitorMomentRowsContext`, beside the account facts), so the
+    moment opens no feed of its own.
+- **TS-D19 = A needs no code.** TS-4a's rows (the status item's, the ghost rows) never read the switch; the away
+  notice and the approval line do.
+- **Catalog:** Godview's "The approval line" specimen, the shipping card over the shipping watch's fixture (its agent
+  the catalog's first, `AGENT_CATALOG[0]`). The limit fixture exports its 92% reading for the strip's test.
+- **DESIGN.md** §8 "Asking again", at its source:
+  - the D20 erratum (the agent's row is puppeteer's);
+  - James's three rulings as a dated sub-bullet: the switch stops the nudges and not the rows; the line sits on the
+    claims strip; Publish's choice of where to open is deferred until a Publish offers one;
+  - an as-built sub-bullet.
+
+**Found:**
+- **D20's host was named before it was read.** "On Godview's agent row" assumed a slot the views SDK does not lend.
+  The correction is dated at both sources (DESIGN.md §8, the thinking doc §14).
+- **The strip watches only while Godview is open** (the monitor mounts with it), so an approval answered with Godview
+  closed is never said: the same rule that keeps a launch from being the moment.
+- **R23b reads catalog fixtures too.** The fixture's first draft named its agent by a literal id, and preflight
+  refused it (`approval-wait-fixtures.ts`). It reads `AGENT_CATALOG[0]` now; tests may name ids.
+
+**Validation.**
+- **The lane:** the edits in `/Volumes/SamsungRed/lanes/ts4`, the runs in ts3's run lane detached at the sha (its own
+  target `rust/ts3`, rosetta-pin and mille-pin at the lock's pins), at nice 19 under the guard. Rebased onto item 87's
+  records `dba4e1d6e` (one commit, a clean replay).
+- **The light pass**, at nice 19 under the guard:
+  `lanes/ts4/ts4b-light.sh` (04:06–04:09Z, three runs, both reds this slice's and amended into its one commit:
+  preflight's R23b refused the fixture's literal agent id, so it reads `AGENT_CATALOG[0]`; limit-moment's stylesheet
+  test reads the Reduce Motion block as `.vf-monitor-moment {` alone, so the leave has its own `@media` rule). Green on
+  `257af5f6f`: preflight (the standing R23 acp WARN), walls, biome, the field-app and electron-shell typechecks;
+  field-app 19 files 455/455 (TS-4b's two, the catalog's two, the five DESIGN.md readers, and the Godview monitor,
+  overlay, deck and Peek suites).
+- **`pnpm verify`** at `257af5f6f`, at nice 19 on the settled gate (the 1-min load under 20, the 5-min under 60):
+  three runs, the third the landing's:
+  - the first (ts3/logs/ts4b-verify-1-load663, 04:12:47–04:20:06Z, start load 19.62, end 663.87): EXIT 1, 27 rows,
+    every one timing-shaped (24 timeouts, the History room's until-rows, rosettad's ready bound, item 65's row), none in
+    TS-4b's files. The load was James's own Chrome (91 runnable renderers of 270), not a swarm;
+  - the one rerun (ts3/logs/ts4b-verify2, 04:36:05–04:42:26Z, start load 18.42, end 217.16): EXIT 1 on ONE fieldd row,
+    terminal-kill-matrix's AL-8a-4 (`lastManagerExit` `{sessions: null}` for `{sessions: 1}`), outside TS-4b's diff.
+    VF-PM ruled no landing on a red and filed it as **item 94** (the fixer's: "AL-8a-4's null under load") with both
+    logs as its evidence; the next verify waited for PORTALS' first run, on the same settled gate with every swarm
+    paused;
+  - the third (ts3/logs/ts4b-verify3, 04:59:05–05:07:13Z, start load 13.22, end 79.16): EXIT 0. The test target for
+    all 27 projects (9699 vitest rows, 0 failed, 17 skipped; field-app 2802/2802, fieldd 2593 and 11 skipped,
+    AL-8a-4 among them), cargo 31 suites (493 passed, 0 failed) and gen freshness; the tree clean, no stub left.
+
+**Owed.**
+- **The line while Godview is closed** (TS-4c, or a later rung): an approval answered with Godview closed is never
+  said. A watch that outlives the window belongs in main or fieldd, beside `ConnectAsks`.
+- The approval line on a desk (James's display word), with TS-4a's rows and away notice.
+- **Publish's nudge** (TS-D21 = A): deferred until a Publish offers where to open.
+- **The switch's words** (James's to rule).
+
+## WP8 — item 113: the packaged-resources guard reads the test's own disk, never the host's installed app (2026-10-29; `218dc3d9e`, lane `fix/item113-resources-readers`; VF-PM's slot 18:04Z)
+
+**What happened:** TS-6's verify on the Mac mini went red at 17:59:53Z on one row, with everything else green:
+`packages/electron-shell/test/resources.test.ts` "never silently falls back to a development path when packaged". It
+blocked every mini run, so it was the queue's first landing.
+
+**The cause:**
+- The row called `assertPackagedResources(pkg)` with no readers, so the defaults (`headOf`, `textOf` in
+  `src/main/resources.ts`) read the HOST's `/Applications/VibeField.app/Contents/Resources`.
+- Where no VibeField is installed (James's Mac), nothing was there and the row threw, as it claims. On the mini, where
+  it is installed, fieldd and field-native were there for its architecture, the assertion accepted, and the row's
+  `toThrow` failed.
+- The row's premise, "nothing on disk at those paths", was the host's installation rather than the test's.
+
+**The fix, test only** (one file, +18/−1):
+- The row injects `nodeArch`, `readHead` and `readText`, in the neighbours' shape. Nothing is at the packaged paths,
+  and a whole development tree is under REPO (heads and texts present), so a search into the checkout would find one.
+- It asserts the refusal it means: a `ResourceError` with `fieldd-bundle-missing` at `pkg.fielddCommand`, rather than
+  any ResourceError.
+- Read and unchanged: the development-layout row (`assertPackagedResources(dev)`, no readers) touches no disk, because
+  `resources.ts:378` returns before any read when `!resources.packaged`. Were that early return to regress, the
+  defaults would read `/Users/dev/…` paths no host has, and the row would go red on every host.
+
+**Validation:**
+- James's Mac (no installed app), each row alone at nice 19: biome on the file, the electron-shell typecheck, and the
+  resources suite 30/30, all exit 0.
+- The control, since this Mac cannot show the red: the row's readers mutated to report present binaries and a valid
+  identity at every path. The assertion then runs the neighbours' checks through (rosettad, the capture pair, the
+  trust anchor) and accepts, so exactly 1 of 30 went red, this row, for "expected a ResourceError". The mutation was
+  restored and sha-checked.
+- The mini, the red-first host (the row as on main red there at 17:59:53Z): run 0 at `218dc3d9e`, `pnpm verify` exit 0
+  at 18:15:04Z through the Rust tests and gen:check, the resources suite 30 passed with the installed app present (the
+  mini's log :1351, read by VF-PM).
+
+**Landed:** main fast-forwarded `e23fa8a1f` → `218dc3d9e` at 18:17:43Z on VF-PM's GO (18:17Z), after the four checks;
+the porcelain empty after. Not pushed (James's click).
+
+**Lesson:** a test that claims "nothing on disk" injects its disk. A default reader makes the host's installation the
+premise, and the row passes or fails by machine.
+
+- Records: `/Volumes/SamsungRed/lanes/records/item113/`.
+
+## TS-6 — the sync question at the first new field (TS-D13): a new link keeps the fields made before it on this Mac, and New field asks once in the explorer (2026-10-29; `14c74f980`, the merge of main `218dc3d9e` (item 113) into `26b331dbc` on `93916c1c6` and `a58d96a4f`, lane `ts/6-sync-question`)
+
+**What.** D13 moved the sync question out of the Setup Assistant to the first new project after connecting. Taking it out
+of setup alone would have synced every field made before the link the moment the link landed, under the default
+posture (`automatic`). So TS-6 is two halves: fieldd keeps those fields on this Mac when a sign-in lands, and the head
+asks the question when New field is next pressed.
+- **The keep** (fieldd):
+  - `LinkService`'s `beforeLinked` is awaited at a NEW link only (no login held), after the capture is verified and
+    before link.json is written and the linked remount seeds the library. A linked boot, a renewal (expired → linked)
+    and a re-verify never run it. A failure is logged and never refuses the link.
+  - `oweSyncQuestion` (`sync-question.ts`) owes `sync-question` in the setup ledger first (`SetupLedgerStore.owe`,
+    only where no row stands), then sets every field with no answer of its own (`syncIntent` undefined) to `local`
+    through the catalog's own `setSyncIntent`. A field sent or kept already is left alone, and so is a system
+    document. A refusal on one field is logged and the others are still kept. Nothing is kept once the question is
+    answered, and an unreadable newer row stops it.
+  - **Contracts:** `owed` joins `SETUP_MOMENT_STATES`. A window's `setup.moment` takes `SetupMomentAnswer` (retired |
+    asked), so `owed` is fieldd's alone (PRECONDITION_FAILED). `SYNC_QUESTION_MOMENT`, and the EL9 golden
+    `setup-ledger-sync-question.valid.json` (the kit mirrors no setup fixture, so there are no Swift copies). AO's
+    lead read the seam first.
+- **The question** (field-app):
+  - `account/sync-question.ts`: `syncQuestionOwed` (the ledger says `owed`, never a guess), `earlierFields` (the
+    fields staying on this Mac), and `useSyncQuestion`, the door ChromeLayer hands to Head. Head itself runs without a
+    provider in its tests and the catalog, and there New field never asks.
+  - `frame/Head.tsx`: New field asks while the question is owed. The answer runs in order: the fields added are sent
+    through the manager, then the posture is set and the moment retired, then the field is made. A posture that does
+    not land keeps the question and makes nothing. Cancel makes nothing and leaves it owed. Closing the explorer, or an
+    answer from elsewhere, closes it.
+  - `frame/SyncQuestionView.tsx` is controller-free, behind HeadView's new `question` prop, with the tiles `hidden`
+    beneath it. One `account/PostureCards.tsx` serves both places: the question and Settings → Devices' New projects.
+  - **Setup's posture pane is retired** (`panes/PosturePane.tsx`, `views/posture.tsx`, the catalog's frame 07). A
+    linked user goes from the name to Setting up, and Connect goes to Setting up either way.
+  - **Catalog:** the head's plate "The sync question" (Design System → Chrome → the head), the shipping HeadView on
+    fixture props.
+- **DESIGN.md** §8, at its source: the bullet "The sync question" (between Settings → Devices and Asking again), and one
+  dated line in the explorer's New field paragraph.
+- **The rulings:**
+  - VF-PM 05:13Z, derived from D13, with James told and free to overrule: a Mac whose link was captured before TS-6
+    keeps what it syncs and is never asked;
+  - James on VF-PM's board, `ts6-sync-question-words` 05:37:09Z, "all four as drafted" (the title, the voice, the
+    list's label, the acts Cancel and New field);
+  - and `ts6-sync-question-noun` 05:37:06Z, "projects (the cards word)", the sheet's voice throughout. New field is the
+    head's act and stays.
+
+**Found:**
+- **Retiring the pane alone would have been a privacy regression.** Every field made before the link had no intent of
+  its own and followed the `automatic` default, so connecting would have carried it away unasked. The keep has to run
+  before the linked remount seeds the library (`daemon.ts`'s linked change), so it hangs on the capture, not on a
+  ledger read later.
+- **"New link" is "no login held".** The first guard (`state !== "linked"`) would have run on a renewal (expired →
+  linked) and kept fields a person had already been asked about.
+- **A field made while owed by a path other than New field** (a paste, a template, a plugin's create) follows the
+  posture until the question is answered. Owed on TS's list.
+- **biome's stdin route** (VF-PM 08:07Z, from the iOS lane): `ts6-light.sh` now checks that every non-ASCII character a
+  modified file held at the base is still there. The one deliberate removal is named: the retired specimen's arrow.
+
+**Validation.**
+- **The lane:** the edits in `/Volumes/SamsungRed/lanes/ts6` (worktree off `e23fa8a1f`, which was still main's head, so
+  there was no rebase). The runs were in ts3's run lane, detached at each sha (its own target `rust/ts3`, rosetta-pin
+  and mille-pin at the lock's pins), at nice 19 under the guard.
+- **Red first** (`ts6-light.sh red`, 08:29:34–08:30:06Z) at `a58d96a4f`: fieldd's `sync-question.integration` file 1
+  failed and 4 passed, the keep row alone.
+- **The light pass** (`ts6-light.sh green`): the first run at `4b51c069e` (08:30:06–08:31:50Z) was red on two rows of the
+  slice's own, both from retiring the pane: the catalog's per-frame counts were 14, and the linked-root wizard row
+  clicked the retired pane's Continue. They were amended into the field-app commit. Green at `26b331dbc`
+  (08:32:55–08:34:48Z):
+  - non-ASCII kept in 26 files, walls, biome, and the contracts, fieldd, field-app and electron-shell typechecks;
+  - contracts 489/489, fieldd 74/74 (7 files), field-app 390/390 (15 files);
+  - the tree clean, no stub left.
+- **`pnpm verify` on this Mac** at `26b331dbc`, at nice 19 on the settled gate, was red twice on filed timing rows
+  outside the diff (items 101 and 91; the load 17 → 460, then 18 → 471 with James away). VF-PM read the reds as the
+  verify's own fan-out on this host (08:58Z), and James picked the Mac mini's verify lane (09:05:11Z). The lane started
+  on his typed "go" (17:50:20Z).
+- **The gate host (a deviation, said here):** jaspers-Mac-mini, Apple M4, 16 GiB, macOS 26.7.2 (25G332), node v26.5.0,
+  pnpm 11.13.1, rustc 1.99.1, TMPDIR=/tmp, the lane `~/vf-lanes/verify` (`ts6-mini.sh`; setup 17:51:19–17:54:45Z, a
+  blobless clone, rosetta-pin `434854583`, mille-pin `c8160d585`; preflight green with one R23 candidate warning).
+- **The mini, run one (`ts6-1`) at `26b331dbc`** (17:55:55–17:59:53Z): exit 1 on ONE row outside the diff —
+  electron-shell's `resources.test.ts` "never silently falls back to a development path when packaged". It asserted
+  against the real `/Applications/VibeField.app/Contents/Resources`, and the mini has VibeField installed there. Every
+  other stage was green, TS-6's own files among them. The two stages the chain never reached, run alone at the same tip:
+  `pnpm test:rust` exit 0 (493 passed, 0 failed, 14 ignored) and `pnpm gen:check` exit 0 (no diff).
+- **Item 113** (`218dc3d9e`, the fixer's) made the row inject its readers. It verified whole on the mini as run zero
+  (18:10:38–18:15:04Z, exit 0, the row green with the installed app present) and landed first (18:17:43Z).
+- **The landed tip** is `14c74f980`: main `218dc3d9e` merged into `26b331dbc` here (`git merge --no-ff`; it differs
+  from `26b331dbc` in the resources test alone), carried to the mini as a one-commit bundle (sha256 `2d9cc77a…`), and
+  verified there whole:
+  `pnpm verify` exit 0, armed 18:19:57Z, done 18:24:24Z (load 2.04 → 8.86), whole: preflight through `gen:check`;
+  `pnpm test` ran 27 projects with no failed summary (field-app 2807, fieldd 2608 + 11 skipped, electron-shell 1983 + 3
+  skipped, contracts 1210); `link-notices.test.ts` 9 ✓ and `resources.test.ts` 30 ✓ with the installed app present;
+  `pnpm test:rust` 31 ok, 0 failed; the tree clean after. Logs: `lanes/ts6/logs/mini/ts6-2/`.
+- **Landed:** main fast-forwarded `218dc3d9e` → `14c74f980` at 18:32:48Z on VF-PM's GO; not pushed. The draft's Status
+  flip and §10's TS-6 LANDED ride the next draft queue.
+
+
+## EL8 — Rosetta 0.1.2: census estimates, first-pass stamp, exclusions, and cold pause/resume (2026-10-29)
+
+The Rosetta pin moves from `43485458392d263f9c32214d6c22bc9b44362369` to
+`3948bcf595bc54b7e9ac04894eba84de69a022e6`, the source of both `npm-v0.1.2` and `v0.1.2`.
+The exact `@vibefield/rosetta-protocol` and `@vibefield/rosetta-room` overrides, preflight expectations,
+sibling release coordinate, and pnpm lock move together. Wire protocol 27 stays unchanged.
+
+Upstream PRs #29, #30, #31, and #32 merged in that order; issues #23–#26 are closed. The release carries
+file-based census session estimates, a sticky metadata-ready timestamp, folder exclusions before admission
+and capture, and durable pause/resume for unfinished cold imports. The exclusion review fix reads only
+the affected metadata dependencies on ordinary appends and rechecks siblings and ancestors before capture.
+
+VibeField keeps its existing RPC/UI adapters in this pin event. Consuming the new census, stamp, exclusion,
+and control fields in those adapters is follow-on work. Daemon archives now exist for Linux x64/ARM64 and
+macOS Intel/Apple Silicon; this host still builds from the same pinned release source. Archive installation
+remains RD-D7. No other dependency pin moves.
+
+Release proof: CI passed before all protected-main merges. Both npm tarballs match the CI artifacts,
+and their provenance names `3948bcf`. All four daemon archive checksums and build metadata passed.
+The Apple Silicon archive passed 54 VibeField compatibility checks. The pin tool passed the catalog,
+consumer typechecks, and generated-file checks.
+
+Verification: `pnpm verify` passed in the isolated SSD worktree: all 27 TypeScript projects,
+including fieldd's 2,608 passed / 11 skipped tests, plus Rust tests and generated-file freshness.
+All 13 desktop landing gates passed, with the eight affected or unfinished after system sleep
+rerun while the Mac stayed awake. No golden was re-blessed. The final full run used the ordinary
+test setup and the daemon built from the pinned release source.
+
+Evidence: `/Volumes/SamsungRed/lanes/rosetta-release-20261029/logs/verify-final.log`,
+`landing-combined-result.json`, and `archive-consumer-tests.log` in the same logs directory.
+
+## Q19 — retire Fieldmarks / After Hours and Face Club (2026-10-29)
+
+**At the code commit:** retirement committed locally after full verification. The final desktop
+landing run will execute on this commit; its completion is recorded separately below. This closes
+the code queue from James's housekeeping Q19 C ruling (2026-10-28); the earlier archive and
+records pass was `88e8289ea`.
+
+**Changed:**
+- DESIGN.md first: §11/§11.1 are a retirement record, §12 names the plain packaged mark
+  (`b51154f91`), and §5.1/§13 no longer grant the retired artwork a role in product UI.
+- Removed design-kit's `icons` and `face-stickers` exports, sources and SVG asset copies;
+  both generators under `tooling/`; the catalog's two sections, reports, entries and CSS.
+  Glyphs now follows Foundations as 02a. The generated-art Biome exclusion is gone.
+- Kept the History styling regression check by discovering every remaining catalog sheet
+  and checking that none styles the shipping room's classes. ROADMAP, DECISIONS, UI_SYSTEM
+  and README now describe the completed retirement.
+
+**Preserved:** the archived sheets and ZIPs at `draft/archive/retired/design-fieldmarks/`.
+Every removed SVG matched its archive member byte for byte: 157 Fieldmarks and 194 Face Club
+drawings. The packaged mark, functional glyphs and account `UserFaceView` remain active.
+Local-only `dev-local` commit `304eb60c4` snapshots exactly the two Q19 record updates
+(`draft/archive/INDEX.md` and the housekeeping thinking page); it was not pushed.
+
+**Final code verification:** `pnpm verify` completed with exit 0 on `347c912dd` plus the Q19
+patch (`verify-final-tip.log`). This includes all prechecks, 27 typecheck projects, Biome
+(2,661 files), rustfmt/clippy, the production bundle, **9,964 JavaScript tests passed / 38
+skipped across 27 projects**, **493 Rust tests passed / 14 ignored across 31 suites**, and
+unchanged generated files. The normal Nx cache policy reused 23 JavaScript project results;
+the changed consumers ran again. Concurrency was bounded to one Nx project, two Vitest workers
+and two Rust test threads; no assertion or deadline was changed.
+
+The patch was first isolated on `e259f1fe3`. While it was being verified, main advanced through
+Rosetta 0.1.2 (`599f202f6`) and the browser-pane address fix (`347c912dd`). Q19 was carried over
+both; only the append-only ledger needed reconciliation. A complete `pnpm verify` also passed
+on the Rosetta base (`verify-integration.log`, 9,958 JavaScript tests / 38 skipped and the same
+493 Rust tests / 14 ignored). Uncommitted runtime work in the shared checkout was excluded.
+
+**Earlier desktop evidence:** all 13 landing gates passed on the original isolated Q19 patch,
+across the initial run and unchanged focused reruns. The initial run passed stills (13 tests),
+smoke, kind-faults, plugin-restart, plugin try, godview, terminal-door, terminal-direct, Studio
+and bundled. Its canvas modes were red under heavy load. The no-GPU and no-WebGPU reruns passed
+in 17 s and 15 s with normal local temporary profiles. A GPU retry hit a 15-minute cap; the
+standard 30-minute run passed in 909 s with clean teardown (`landing-canvas-standard-summary.log`).
+Timed-out launchers reaped their own helpers and removed their profiles; those earlier attempts
+are not recorded as clean application teardown. The final run on the code commit follows.
+
+Studio's earlier physical witness passed: separate sessions and preloads, an edit applied,
+replayed after reload and restored (`STUDIO_PHYSICAL`, `landing-1/12-smoke_studio.log`). Scoped
+field-app tests (61 across five suites), Studio unit tests (16), `build:design`, `build:renderer`,
+import walls and diff checks passed. The production verifier confirmed Studio, the catalog and
+perf lab are absent from the production renderer. A browser review in light and dark confirmed
+that the retired collections are gone while current glyphs and account faces render.
+
+**Earlier environment findings:** conflicting Node color variables polluted three fake-daemon
+stderr fixtures; all enabled cases passed with those variables unset. Load-sensitive fieldd
+and Rust teardown cases passed unchanged in isolated controls and the later complete runs.
+A one-thread Rust attempt stalled because libtest prefixed a helper's `vf-admitted:` line;
+a direct one-versus-two-thread control reproduced that protocol difference, and the complete
+two-thread runs passed. Those earlier failures remain in the logs rather than being called
+uninterrupted green verification.
+
+Evidence, the exact path manifest and source fingerprints are under `.vibefield/q19-landing/`.
+The validation checkout and build/cache storage moved to SamsungRed to relieve disk pressure;
+the Q19 source was unchanged by that move. Smoke profiles use the normal local temporary path.
+
+### Landing completion — 2026-10-29
+
+**LANDED locally:** Q19 code commit `7aaa9cace` passed the complete `pnpm gate:landing` in one
+uninterrupted serial run on a clean checkout of that commit (exit 0, completed
+2026-10-30 06:07:34 UTC). All 13 gates passed: stills, smoke, GPU canvas, no-GPU canvas,
+no-WebGPU canvas, kind-faults, plugin-restart, plugin try, godview, terminal-door,
+terminal-direct, Studio and bundled plugins. No golden was re-blessed.
+
+Studio's physical witness confirmed distinct sessions and preloads, an edit applied,
+replayed after reload and restored. Every reported smoke daemon row was clean, with no
+leftover or reaped helpers. The checkout remained unchanged after the run. Together with
+the complete `pnpm verify` above, this closes Q19's code and landing checks.
+
+The exact gate verdicts are in `.vibefield/q19-landing/landing-code-commit-summary.log`,
+with per-gate logs in `landing-code-commit/` beside it. The artwork archive and local-only
+draft snapshot `304eb60c4` remain preserved. Neither main nor dev-local was pushed.

@@ -461,6 +461,21 @@ describe("MV-3d — the chrome's facts ride the window's own run rows (M35, M42)
     expect(localFactsOf(odd).mirror).not.toHaveProperty("contextSource");
   });
 
+  it("Q08 — the run's stop key rides the window's cut for the frame's title; a stop that presses no key says none, and no peer or phone row carries it", () => {
+    const keyed: AgentSessionSummary = { ...summary({ runtimeRunId: "run-k" }), stopKey: "escape" };
+    expect(localFactsOf(keyed).stopKey).toBe("escape");
+    // the row as it rides the window's board: the board stamps the revision when it publishes
+    const cut = AgentModelDeskRow.parse({
+      ...projectDeskRow(keyed, undefined, undefined, "window"),
+      revision: 1,
+    });
+    expect(cut.local?.stopKey).toBe("escape");
+    expect(localFactsOf(summary({ runtimeRunId: "run-n" }))).not.toHaveProperty("stopKey");
+    // the key is the window's chrome alone: the peer's desk cut and the phone's row carry none
+    expect(JSON.stringify(projectDeskRow(keyed))).not.toContain("stopKey");
+    expect(JSON.stringify(projectFieldRow(keyed))).not.toContain("stopKey");
+  });
+
   it("a moved fact upserts the run's row in the board's next delta; a republish that moves none sends nothing", async () => {
     vi.useFakeTimers();
     const base = spoken("run-a", "/Users/me/src/vibe-field");

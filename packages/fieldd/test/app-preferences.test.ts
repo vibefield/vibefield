@@ -24,6 +24,7 @@ describe("app preferences", () => {
       screenshotHotkey: true,
       syncPosture: "automatic",
       confirmQuit: true,
+      connectAsks: true,
     });
   });
 
@@ -33,6 +34,16 @@ describe("app preferences", () => {
       false,
     );
     expect(effectiveAppPreferences({ [APP_PREFERENCE_KEYS.CONFIRM_QUIT]: "no" }).confirmQuit).toBe(
+      true,
+    );
+  });
+
+  it("asks again after Not now by default, until the switch is turned off (TS-4)", () => {
+    expect(effectiveAppPreferences({}).connectAsks).toBe(true);
+    expect(effectiveAppPreferences({ [APP_PREFERENCE_KEYS.CONNECT_ASKS]: false }).connectAsks).toBe(
+      false,
+    );
+    expect(effectiveAppPreferences({ [APP_PREFERENCE_KEYS.CONNECT_ASKS]: "no" }).connectAsks).toBe(
       true,
     );
   });

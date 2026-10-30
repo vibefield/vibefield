@@ -10,10 +10,12 @@ import {
   useRef,
   useState,
 } from "react";
+import { useOffersConnect } from "../account/use-link-door";
 import { answerGodviewDeckUp, type GodviewDeckState } from "../frame/deck-door";
 import { publishSystemControlDoor } from "../frame/system-control-door";
 import { useActiveView } from "../frame/view-state";
 import { prewarmTerminalPool, terminalPoolConfigured } from "../terminal/pool";
+import { ClaimsStripMoment } from "./ClaimsStripMoment";
 import { godviewColdOpen } from "./cold-open";
 import { useDeckAppearance } from "./deck-appearance";
 import { deckAfter, installGodviewDeckLab, storeDeckState, storedDeckState } from "./deck-state";
@@ -29,7 +31,6 @@ import {
 } from "./GodviewTuningPanel";
 import { useGodviewTheme } from "./godview-theme";
 import { LastRunCurtain } from "./LastRunCurtain";
-import { LimitMoment } from "./LimitMoment";
 import { useLabSwitches } from "./lab-switches";
 import {
   askLastRun,
@@ -124,6 +125,7 @@ export function GodviewOverlay({
   const appearance = useDeckAppearance();
   const monitor = useMonitorTuning();
   const fieldd = useFielddClient();
+  const offersConnect = useOffersConnect();
   const labSwitches = useLabSwitches();
   /** GT-3f's residual, closed: the lab can say which renderer is actually
    * drawing, because the deck tells it. Null until a deck has existed — the
@@ -357,8 +359,16 @@ export function GodviewOverlay({
                 publishesFind
                 onSelectView={monitor.selectView}
                 still={question !== null}
-                // AO-6b — the limit moment, once, on the claims strip
-                moment={<LimitMoment openNewProfile={openNewProfile} />}
+                // AO-6b — the limit moment, once, on the claims strip; TS-4b —
+                // the approval line behind it (TS-D20b)
+                moment={
+                  <ClaimsStripMoment
+                    openNewProfile={openNewProfile}
+                    offersConnect={offersConnect}
+                  />
+                }
+                // TS-4 — not connected: the desktop filter's ghost row
+                offersConnect={offersConnect}
               />
             </MonitorFeedOverride>
           ) : undefined

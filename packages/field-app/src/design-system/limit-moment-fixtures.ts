@@ -16,7 +16,7 @@ const plan = FIXTURE_NATIVE.plans?.[0];
 const namer = FIXTURE_NATIVE.personas.find((persona) => persona.profileId === plan?.namedBy);
 
 /** This Mac's first plan, its week's window at 92% (every other reading as fixed). */
-const usage = FIXTURE_PROFILES_CONTEXT.usage.map((entry) =>
+export const FIXTURE_LIMIT_USAGE = FIXTURE_PROFILES_CONTEXT.usage.map((entry) =>
   namer !== undefined && entry.provider === namer.provider && entry.profileId === undefined
     ? {
         ...entry,
@@ -32,7 +32,7 @@ const usage = FIXTURE_PROFILES_CONTEXT.usage.map((entry) =>
 export const FIXTURE_LIMIT_MOMENT: LimitMomentFact | null = limitMoment(
   limitCandidates({
     sets: [FIXTURE_NATIVE],
-    usage,
+    usage: FIXTURE_LIMIT_USAGE,
     ledger: emptySetupLedger(),
     now: FIXTURE_PROFILES_NOW,
   }),

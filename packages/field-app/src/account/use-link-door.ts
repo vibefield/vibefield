@@ -18,6 +18,20 @@ import { type LinkBeginStep, type LinkFace, linkFace, type UserLinkStatus } from
 /** Open a sign-in address in the person's own browser: the shell denies the
  * window and hands the URL to the OS (design-03 §5.1); a browser harness opens
  * a tab. Never an embedded view (RFC 8252). */
+/** TS-4 (TS-D7; DESIGN.md §8 "Asking again") — this Mac is in the ordinary
+ * unconnected state, where the rows that offer the link again show: the device
+ * filters' ghost rows (main's status item reads the same face, `offersConnectFor`).
+ * A capture, a refusal or a lapsed sign-in says its own words where the link
+ * is decided. Surfaces far from the account mount this, so a snapshot that is
+ * not the link's own shape offers nothing rather than throwing. */
+export function useOffersConnect(): boolean {
+  const sub = useSubscription<UserLinkStatus>("user.link.subscribe");
+  const data: unknown = sub.status === "live" ? sub.data : undefined;
+  if (typeof data !== "object" || data === null || !("link" in data) || !("authUrl" in data))
+    return false;
+  return linkFace("live", data as UserLinkStatus).kind === "offline";
+}
+
 export function openSignIn(url: string): void {
   window.open(url, "_blank", "noopener,noreferrer");
 }

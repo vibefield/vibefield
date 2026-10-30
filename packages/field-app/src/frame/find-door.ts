@@ -63,6 +63,9 @@ export interface LiveFilters {
   readonly profiles: readonly LiveProfileChoice[];
   /** the chosen profile's id; null is every profile */
   readonly profile: string | null;
+  /** TS-4 (TS-D7) — this Mac is not connected: the desktop filter ends on a
+   * ghost row, Your other devices · Connect…; absent or false, no row */
+  readonly connect?: boolean;
 }
 
 export const NO_LIVE_FILTERS: LiveFilters = Object.freeze({

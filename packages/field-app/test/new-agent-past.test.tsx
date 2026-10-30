@@ -100,6 +100,11 @@ describe("which agent History's head offers (the rule)", () => {
       newAgentWithAPast(census, retired, new Set(["grok"])),
       "every agent is brought in or asked about",
     ).toBeNull();
+    // only retired skips it: a moment's other state (TS-4's `asked`) is no answer here
+    const asked = ledger("answered", {
+      "agent-past:codex": { state: "asked", at: "2026-10-27T15:00:00.000Z" },
+    });
+    expect(newAgentWithAPast(census, asked)?.agent).toBe("codex");
   });
 
   it("waits for History's own question: answered, and something brought in", () => {

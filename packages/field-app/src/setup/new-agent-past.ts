@@ -28,7 +28,7 @@ export function newAgentWithAPast(
         !row.consented &&
         row.agent !== null &&
         !answered.has(row.agent) &&
-        setupMomentState(ledger, agentPastMoment(row.agent)) === undefined,
+        setupMomentState(ledger, agentPastMoment(row.agent)) !== "retired",
     ) ?? null
   );
 }

@@ -281,46 +281,8 @@ struct CardFaceTests {
 
 // MARK: - Writes
 
-/// The bug this suite was written for: the card read the LISTING's `readWrite`
-/// and promised "you can type here". That boolean rides in a host advertisement
-/// broadcast to the whole mesh — no per-caller context — so it says the session
-/// is shared for writing, never that WE may write.
-///
-/// TM-3 (2026-09-14) removed the second half of the answer rather than fixing
-/// it again: whether this device may type was a mirror-write key it held or did
-/// not, and there is no key. The right to type is a claim in the attach grant,
-/// so the pre-tap sentence is a function of the ONE fact the listing carries,
-/// and the case it cannot know is named by the live attachment instead of
-/// guessed at here. `viewOnlyReason` (never called by shipping code) and
-/// `keyEntryOffered` (whose only caller was the card's ENTER KEY invitation)
-/// went with the key.
-@Suite("write claims")
-struct WriteCopyTests {
-  @Test("a read-only session is named as the read-only thing it is")
-  func readOnlySessionNamesTheSession() {
-    #expect(
-      FieldHomeModel.writeInvitation(sessionSharesWrites: false)
-        == "view only — this session is shared read-only")
-  }
-
-  @Test("a session shared for writing invites typing, with nothing to obtain first")
-  func sharedSessionInvitesTyping() {
-    #expect(FieldHomeModel.writeInvitation(sessionSharesWrites: true) == "you can type here")
-  }
-
-  /// A total function of one boolean, asserted as one: the sentence names the
-  /// SESSION's sharing in both directions and never blames the host for
-  /// something this device was missing, which is what the old third arm did.
-  @Test("the sentence is decided by the listing alone, and says nothing else")
-  func theInvitationIsTotal() {
-    for shared in [true, false] {
-      let copy = FieldHomeModel.writeInvitation(sessionSharesWrites: shared)
-      #expect(!copy.isEmpty)
-      #expect(!copy.contains("write key"))
-      #expect(copy.hasPrefix("view only") == !shared)
-    }
-  }
-}
+// RETIRED 2026-10-28 with `FieldHomeModel.writeInvitation` (James: no pre-attach write mark; a peer is writable by
+// default). The card's status note alone stands before a tap; the live attachment's "view only" stays its own.
 
 
 // MARK: - The input card's face

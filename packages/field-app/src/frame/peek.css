@@ -481,6 +481,25 @@
   color: var(--vf-text-tertiary);
 }
 
+/* TS-4 (TS-D7; DESIGN.md §8 "Asking again") — the ghost row: where your other
+   devices would be while this Mac is not connected. A hairline sets it apart
+   from the desktops; its name is quiet and its one word is the act. */
+.vf-peek-menu-rule {
+  height: 1px;
+  flex: none;
+  margin: 4px 10px;
+  border: 0;
+  background: var(--vf-hairline-strong);
+}
+
+.vf-peek-menu [data-ghost] .vf-menu-label {
+  color: var(--vf-text-tertiary);
+}
+
+.vf-peek-menu [data-ghost] .vf-peek-menu-note {
+  color: var(--vf-text-secondary);
+}
+
 .vf-peek-dd-label {
   overflow: hidden;
   text-overflow: ellipsis;

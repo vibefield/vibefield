@@ -1282,4 +1282,21 @@ describe("R7: the chips", () => {
       set: true,
     });
   });
+
+  it("① ends on the ghost row while this Mac is not connected (TS-4): Your other devices · Connect…", () => {
+    const connected = historyHostInputs(MODEL, NO_HOST_STATE, spyActs());
+    expect(connected.projectFilters?.[0]?.menu?.groups.map((group) => group.key)).toEqual([
+      "any",
+      "desktops",
+    ]);
+    const connect = vi.fn();
+    const inputs = historyHostInputs(MODEL, NO_HOST_STATE, { ...spyActs(), connect });
+    const groups = inputs.projectFilters?.[0]?.menu?.groups ?? [];
+    expect(groups.map((group) => group.key)).toEqual(["any", "desktops", "connect"]);
+    const [ghost] = groups[2]?.items ?? [];
+    expect(ghost).toMatchObject({ label: "Your other devices", aside: "Connect…" });
+    expect(ghost?.checked).toBeUndefined();
+    ghost?.onSelect?.();
+    expect(connect).toHaveBeenCalledTimes(1);
+  });
 });

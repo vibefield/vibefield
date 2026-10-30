@@ -25,6 +25,7 @@ import type {
   RoomSessionRow,
 } from "@vibefield/rosetta-room";
 import { type ReactElement, type ReactNode, useLayoutEffect, useRef, useState } from "react";
+import { GHOST_ROW_ACT, GHOST_ROW_LABEL } from "../account/link";
 import { FOLDER_GONE } from "../godview/launcher-doors";
 import { OS_LABEL, OsMark } from "../godview/os-marks";
 import { hostKeyOf, type NewAgentAsk, type SessionTarget } from "./acts";
@@ -127,6 +128,10 @@ export interface HistoryHostActs {
   /** PJ-6 — turn New agent's rows to `page` (the controller asks the picker a
    * models page needs, and opens the rows again on it) */
   page(page: LaunchPage): void;
+  /** TS-4 (TS-D7) — offered while this Mac is not connected: the desktop chip
+   * ends on a ghost row, Your other devices · Connect…, that opens the Connect
+   * door; absent otherwise */
+  connect?: (() => void) | undefined;
 }
 
 /* ── small parts the room draws where it is told ──────────────────────── */
@@ -612,6 +617,7 @@ function desktopChip(
   counts: (device: HostDevice) => number,
   onChoose: (desktop: string | null) => void,
   why: (device: HostDevice) => string | null,
+  connect: (() => void) | undefined,
 ): RoomFilter {
   const device = chosen === null ? undefined : deviceOf(model, chosen);
   return {
@@ -660,6 +666,22 @@ function desktopChip(
             };
           }),
         },
+        ...(connect !== undefined
+          ? [
+              {
+                key: "connect",
+                items: [
+                  {
+                    key: "connect",
+                    mark: <FieldGlyph name="plus" size={13} />,
+                    label: GHOST_ROW_LABEL,
+                    aside: GHOST_ROW_ACT,
+                    onSelect: connect,
+                  },
+                ],
+              },
+            ]
+          : []),
       ],
     },
   };
@@ -932,6 +954,7 @@ export function historyHostInputs(
           )
             ? null
             : "none of the projects here lives on it",
+        acts.connect,
       ),
     ],
     sessionFilters: (key) => {

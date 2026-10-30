@@ -2,11 +2,15 @@
 
 import type { FielddClient } from "@vibefield/fieldd-client";
 import { FielddProvider } from "@vibefield/fieldd-client/react";
-import { act, createElement } from "react";
+import { act, type ComponentProps, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { type FieldHost, setHost } from "../src/host";
-import { DevicesSection } from "../src/panels/DevicesSection";
+import {
+  CONNECT_ASKS_LINE,
+  CONNECT_ASKS_TITLE,
+  DevicesSection,
+} from "../src/panels/DevicesSection";
 
 // TS-3a (track TS, TS-D3): Settings → Devices, the account's reach — the link
 // (moved from Account, on the shared door), This Mac, the account's devices,
@@ -125,12 +129,21 @@ function client(options: {
   } as unknown as FielddClient;
 }
 
-async function mount(fieldd: FielddClient): Promise<void> {
+/** The page's props; its parameter is optional, so they are inferred with undefined. */
+type DevicesProps = NonNullable<ComponentProps<typeof DevicesSection>>;
+
+async function mount(fieldd: FielddClient, props: DevicesProps = {}): Promise<void> {
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
   await act(async () => {
-    root?.render(createElement(FielddProvider, { client: fieldd }, createElement(DevicesSection)));
+    root?.render(
+      createElement(
+        FielddProvider,
+        { client: fieldd },
+        createElement<DevicesProps>(DevicesSection, props),
+      ),
+    );
     await Promise.resolve();
     await Promise.resolve();
   });
@@ -652,5 +665,74 @@ describe("Settings → Devices on truffle 0.7.24 (TS-8b; TS-D14, D15, D16 A, T11
     await push(OFFLINE);
     expect(container?.querySelector(".vf-devices-state")?.textContent).toBe("This Mac only");
     expect(text()).not.toContain("couldn't reach Tailscale");
+  });
+});
+
+describe("Settings → Devices: asking again after Not now (TS-4; TS-D7)", () => {
+  const asksSwitch = (): HTMLButtonElement | null | undefined =>
+    container?.querySelector<HTMLButtonElement>(
+      `[role="switch"][aria-label="${CONNECT_ASKS_TITLE}"]`,
+    );
+
+  it("offers the one switch while this Mac is not connected, on by default, and writes it", async () => {
+    host(null);
+    const fieldd = client({ link: OFFLINE });
+    await mount(fieldd);
+    expect(text()).toContain(CONNECT_ASKS_LINE);
+    // an older daemon says nothing of it: on, as the contract reads its silence
+    expect(asksSwitch()?.getAttribute("aria-checked")).toBe("true");
+    await act(async () => asksSwitch()?.click());
+    expect(fieldd.request).toHaveBeenCalledWith("storage.appPreferences.set", {
+      key: "mesh.connectAsks",
+      value: false,
+    });
+  });
+
+  it("reads the stored switch, and is gone once connected", async () => {
+    host(null);
+    await mount(
+      client({
+        link: OFFLINE,
+        preferences: {
+          showTray: true,
+          backgroundShell: true,
+          syncPosture: "automatic",
+          connectAsks: false,
+        },
+      }),
+    );
+    expect(asksSwitch()?.getAttribute("aria-checked")).toBe("false");
+    act(() => root?.unmount());
+    root = null;
+    container?.remove();
+    await mount(client({ link: LINKED() }));
+    expect(asksSwitch()).toBeNull();
+    expect(text()).not.toContain(CONNECT_ASKS_LINE);
+  });
+
+  it("begins the link once for Connect Your Devices…, and says the request was taken", async () => {
+    host(null);
+    const fieldd = client({ link: OFFLINE });
+    const taken = vi.fn();
+    await mount(fieldd, { connectPending: true, onConnectTaken: taken });
+    await flush();
+    expect(taken).toHaveBeenCalledTimes(1);
+    expect(fieldd.request).toHaveBeenCalledTimes(1);
+    expect(fieldd.request).toHaveBeenCalledWith("user.link.begin", {});
+  });
+
+  it("begins nothing over a link that already stands or a sign-in already waiting", async () => {
+    host(null);
+    for (const link of [LINKED(), { ...OFFLINE, linkState: "capturing", authUrl: "https://x" }]) {
+      const fieldd = client({ link });
+      const taken = vi.fn();
+      await mount(fieldd, { connectPending: true, onConnectTaken: taken });
+      await flush();
+      expect(taken).toHaveBeenCalledTimes(1);
+      expect(fieldd.request).not.toHaveBeenCalledWith("user.link.begin", {});
+      act(() => root?.unmount());
+      root = null;
+      container?.remove();
+    }
   });
 });

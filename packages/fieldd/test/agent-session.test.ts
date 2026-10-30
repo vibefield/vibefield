@@ -40,6 +40,7 @@ import {
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  AGENT_EXIT,
   AGENT_FIELD,
   AGENT_MONITOR_SCHEMA_VERSION,
   type AgentAccountUsageBatch,
@@ -66,9 +67,13 @@ import {
 import {
   type AccountUsageService,
   type AgentAdapterBinding,
+  type AgentAttachNext,
+  type AgentAttachRecord,
+  AgentAttachRefusedError,
   type AgentHost,
   type AgentModelService,
   type AgentProfile,
+  type AgentTurnStopService,
   type BoundIngress,
   defineModelService,
   type ExtensionService,
@@ -175,12 +180,45 @@ interface ScriptedAttach {
   runtimeSessionId: string;
   sessionId: string;
   ingress: AttachProviderSessionOptions["ingress"];
+  /** the re-attach study's Step 1 — the launch options the codec restored,
+   * and the attach record the host handed back */
+  agentOptions: unknown;
+  attachRecord: AgentAttachRecord | undefined;
 }
+
+/** Step 1 — what the scripted codec captures for every launch (`facts`): a
+ * stand-in for a typed root an attach must hand back */
+const SCRIPTED_STATE = JSON.stringify({ root: "scripted-root" });
+
+/** The text the scripted turn stop types: a line, because the PTY's `cat`
+ * reads in canonical mode and a lone key byte would never reach its file. */
+const SCRIPTED_TURN_STOP_TEXT = "scripted-turn-stop\n";
+
+/** `turnStops` — Q08: the binding names a turn stop (an `escape` key, by
+ * declaration) and records each press, by its terminal; absent, the binding
+ * names none, as an adapter that has not been censused yet. */
 function scriptedBinding(
   host: AgentHost,
   runtimeSessionId: string,
   sessionId: string,
+  turnStops?: string[],
 ): AgentAdapterBinding {
+  const turnStop: AgentTurnStopService | undefined =
+    turnStops === undefined
+      ? undefined
+      : {
+          stop: { kind: "key", key: "escape" },
+          async submit() {
+            turnStops.push(runtimeSessionId);
+            const result = await host.automateTerminal(runtimeSessionId, {
+              kind: "text",
+              text: SCRIPTED_TURN_STOP_TEXT,
+            });
+            return result.accepted
+              ? { accepted: true }
+              : { accepted: false, reason: result.reason };
+          },
+        };
   return {
     sessionId,
     runtimeSessionId,
@@ -199,6 +237,7 @@ function scriptedBinding(
             : { status: "rejected", reason: result.reason };
         },
       },
+      turnStop,
     },
     async dispose() {},
   };
@@ -350,7 +389,9 @@ function scriptedModels(state: ScriptedModels): AgentModelService {
 function scriptedProvider(
   envOut: string,
   sessions: ScriptedSession[],
-  attach: { records: ScriptedAttach[] } | undefined,
+  /** `refusals` — G5: the attaches this provider refuses first, each with its
+   * next step, in order */
+  attach: { records: ScriptedAttach[]; refusals?: AgentAttachNext[] } | undefined,
   extra: {
     profiles?: boolean;
     seen?: Array<AgentProfile | undefined>;
@@ -360,11 +401,29 @@ function scriptedProvider(
     afterBirth?: (runtimeSessionId: string) => Promise<void>;
     /** item 81 — the PTY's own `sh -c` program (default: the environment written, then the PTY held by `cat`) */
     program?: string;
+    /** Q08 — each binding names a turn stop, and each press lands here (absent: none named) */
+    turnStops?: string[];
+    /** the re-attach study's Step 1 — a continuation codec (every launch
+     * captures `SCRIPTED_STATE`) and an attach record, reported before the
+     * launch (`endpoint-<n>`) and again by each attach (`<handed>-attached`) */
+    facts?: boolean;
   } = {},
 ): AgentProvider {
   let counter = 0;
   return {
     descriptor: { id: "scripted", label: "Scripted" },
+    ...(extra.facts === true
+      ? {
+          launch: {
+            provider: { id: "scripted", label: "Scripted", resume: true },
+            continuation: {
+              capture: () => SCRIPTED_STATE,
+              restore: (state: string | undefined) =>
+                state === undefined ? undefined : (JSON.parse(state) as unknown),
+            },
+          },
+        }
+      : {}),
     ...(extra.profiles === true ? { profiles: scriptedProfiles() } : {}),
     ...(extra.signInMark !== undefined ? { extensions: scriptedExtensions(extra.signInMark) } : {}),
     ...(extra.models !== undefined ? { models: scriptedModels(extra.models) } : {}),
@@ -383,6 +442,13 @@ function scriptedProvider(
       // listener is ever really bound, and nothing here assumes uniqueness.)
       const ingress: BoundIngress = { port: 40_000 + n, token: `bearer-${n}` };
       options.ingress?.onBound?.(ingress);
+      if (extra.facts === true) {
+        options.ingress?.onAttachRecord?.({
+          version: 1,
+          state: `endpoint-${n}`,
+          secret: `nonce-${n}`,
+        });
+      }
       const { runtimeSessionId } = await options.host.spawnTerminal({
         command: "/bin/sh",
         // the environment lands ATOMICALLY (written beside, then renamed): the
@@ -415,7 +481,7 @@ function scriptedProvider(
         bornAt,
         typedOut,
       });
-      return scriptedBinding(options.host, runtimeSessionId, sessionId);
+      return scriptedBinding(options.host, runtimeSessionId, sessionId, extra.turnStops);
     },
     // AR-4 — an adapter that can re-attach to its running process: it records
     // what it was handed and binds the same terminal and native session
@@ -427,8 +493,25 @@ function scriptedProvider(
               runtimeSessionId: options.runtimeSessionId,
               sessionId: options.sessionId,
               ingress: options.ingress,
+              agentOptions: options.agentOptions,
+              attachRecord: options.attachRecord,
             });
-            return scriptedBinding(options.host, options.runtimeSessionId, options.sessionId);
+            const next = attach.refusals?.shift();
+            if (next !== undefined) throw new AgentAttachRefusedError(next, `scripted: ${next}`);
+            // the attached run's facts moved (a helper reborn): the next restart must read these
+            if (extra.facts === true) {
+              options.onAttachRecord?.({
+                version: 1,
+                state: `${options.attachRecord?.state ?? "none"}-attached`,
+                secret: "nonce-attached",
+              });
+            }
+            return scriptedBinding(
+              options.host,
+              options.runtimeSessionId,
+              options.sessionId,
+              extra.turnStops,
+            );
           },
         }),
   };
@@ -460,6 +543,8 @@ interface Box {
   seen: Array<AgentProfile | undefined>;
   /** PJ-6 — the scripted agent's model picker and what each launch started at */
   models: ScriptedModels;
+  /** Q08 — each press of the scripted turn stop, by terminal (`turnStop: true`) */
+  turnStops: string[];
 }
 
 interface SetupConfig {
@@ -469,6 +554,10 @@ interface SetupConfig {
   realAgent?: boolean;
   /** AR-4 — give the scripted provider an `attachSession` */
   attach?: boolean;
+  /** G5 — the attaches THIS boot's scripted provider refuses first, in order */
+  attachRefusals?: AgentAttachNext[];
+  /** the re-attach study's Step 1 — the scripted codec and attach record */
+  facts?: boolean;
   /** AR-4 — boot a SECOND fieldd on this box's root, its field-native still
    * running and its records on disk: the restart */
   restartOf?: Box;
@@ -490,6 +579,8 @@ interface SetupConfig {
   afterBirth?: (runtimeSessionId: string) => Promise<void>;
   /** item 81 — the scripted agent's own `sh -c` program */
   program?: string;
+  /** Q08 — the scripted adapter names a turn stop (default: it names none) */
+  turnStop?: boolean;
 }
 
 /** Boot fieldd: over the mock mgmt server (no floor) or the REAL field-native. */
@@ -561,6 +652,7 @@ async function setup(config: SetupConfig): Promise<Box> {
   const sessions: ScriptedSession[] = restart?.sessions ?? [];
   const seen: Array<AgentProfile | undefined> = restart?.seen ?? [];
   const attached: ScriptedAttach[] = restart?.attached ?? [];
+  const turnStops: string[] = restart?.turnStops ?? [];
   const models: ScriptedModels = restart?.models ?? {
     fail: false,
     reads: 0,
@@ -595,14 +687,28 @@ async function setup(config: SetupConfig): Promise<Box> {
             );
       return [
         ...(config.extensions === true ? providers.map(withoutExtensionReads) : providers),
-        scriptedProvider(envOut, sessions, config.attach ? { records: attached } : undefined, {
-          profiles: config.profiles === true,
-          seen,
-          ...(config.extensions === true ? { signInMark: join(root, "scripted-signed-in") } : {}),
-          models,
-          ...(config.afterBirth !== undefined ? { afterBirth: config.afterBirth } : {}),
-          ...(config.program !== undefined ? { program: config.program } : {}),
-        }),
+        scriptedProvider(
+          envOut,
+          sessions,
+          config.attach
+            ? {
+                records: attached,
+                ...(config.attachRefusals !== undefined
+                  ? { refusals: [...config.attachRefusals] }
+                  : {}),
+              }
+            : undefined,
+          {
+            profiles: config.profiles === true,
+            seen,
+            ...(config.extensions === true ? { signInMark: join(root, "scripted-signed-in") } : {}),
+            models,
+            ...(config.afterBirth !== undefined ? { afterBirth: config.afterBirth } : {}),
+            ...(config.program !== undefined ? { program: config.program } : {}),
+            ...(config.turnStop === true ? { turnStops } : {}),
+            ...(config.facts === true ? { facts: true } : {}),
+          },
+        ),
       ];
     },
     ...(config.resumeWhenIdle !== undefined ? { agentResumeWhenIdle: config.resumeWhenIdle } : {}),
@@ -655,6 +761,7 @@ async function setup(config: SetupConfig): Promise<Box> {
     records,
     seen,
     models,
+    turnStops,
   };
 }
 
@@ -2837,8 +2944,18 @@ describe("MF-1f/MF-1g — an agent pane outlives its run, and the fold keeps its
     await new Promise((resolve) => setTimeout(resolve, 2_000));
     expect(await listed(win, paneId)).toBe(true);
 
-    const { sessions } = (await win.call("agent.list", {})) as AgentListResult;
-    const row = sessions.find((r) => r.runtimeRunId === runId);
+    // item 87 — the row reads exited at once, and resumable once the run's exit
+    // cleanup (its workspace's final git reading) has ended
+    const row = await poll(
+      async (seen) => {
+        const { sessions } = (await win.call("agent.list", {})) as AgentListResult;
+        const found = sessions.find((r) => r.runtimeRunId === runId);
+        seen(found?.continuation ?? null);
+        return found?.continuation?.resumable === true ? found : undefined;
+      },
+      15_000,
+      "the exited row reading resumable once its exit cleanup ended",
+    );
     expect(row?.continuation).toMatchObject({ persisted: true, resumable: true, exited: true });
     expect(row?.continuation?.pending, "an exited row is not a pending one").toBeUndefined();
     expect(row?.terminal).toMatchObject({ hosted: "local", runtimeSessionId: paneId });
@@ -3042,6 +3159,192 @@ describe("item 81 — an exit that comes before its pane is registered", () => {
   }, 60_000);
 });
 
+describe("item 87 — a run's exit is not held by its workspace's cleanup", () => {
+  /** A `git` that does not answer: puppeteer finalizes a run's workspace when its process exits, and
+   * every git call there is unbounded (puppeteer-workspaces 0.3.0, `git.js`). First on the
+   * in-process fieldd's PATH, it stalls that cleanup the way a loaded host can. Each call leaves its
+   * pid, and the row stops them by pid. */
+  function stalledGit(root: string): { dir: string; called: () => boolean; stop: () => void } {
+    const dir = join(root, "stalled-git");
+    const pids = join(dir, "pids");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "git"), `#!/bin/sh\necho $$ >> "${pids}"\nexec sleep 30\n`, {
+      mode: 0o755,
+    });
+    return {
+      dir,
+      called: () => existsSync(pids),
+      stop: () => {
+        if (!existsSync(pids)) return;
+        for (const pid of readFileSync(pids, "utf8").split("\n")) {
+          if (!/^\d+$/.test(pid)) continue;
+          try {
+            process.kill(Number(pid), "SIGKILL");
+          } catch {
+            /* already gone */
+          }
+        }
+      },
+    };
+  }
+
+  /** The events this row's own fieldd logged, in order. */
+  const fielddEvents = (box: Box): Array<{ event: string; attrs: Record<string, unknown> }> => {
+    const file = join(box.dataDir, "logs", "system", "fieldd.ndjson");
+    if (!existsSync(file)) return [];
+    return readFileSync(file, "utf8")
+      .split("\n")
+      .filter((line) => line.trim() !== "")
+      .map((line) => JSON.parse(line) as { event: string; attrs?: Record<string, unknown> })
+      .map((record) => ({ event: record.event, attrs: record.attrs ?? {} }));
+  };
+
+  // *Witnessed 2026-10-29:* in a loaded verify the row's own `endedRun` interrupted a run, and the
+  // log stopped at `fieldd.agents.interrupted`: no exit for 15 s. Quiet, 60 runs of the same steps
+  // all exited, the exit heard 5–27 ms after the interrupt and the row reading it 112–194 ms after.
+  // The gap between the two is the run's close awaiting puppeteer's cleanup, whose git calls go
+  // through the xcrun shim at 12 ms each. This row stalls that cleanup on purpose.
+  it("a run whose workspace cleanup stalls still reads exited, and says the exit was heard and the cleanup is pending", async () => {
+    const box = await setup({ floor: "real" });
+    const win = await window(box.daemon, [...DECK, "agent.control"], "i87");
+    const spawned = (await born(win, "agent.spawn", {
+      provider: "scripted",
+      cwd: box.envOut,
+      title: "a stalled cleanup",
+    })) as AgentSpawnResult;
+    const runId = spawned.session.runtimeRunId;
+    await joinedRow(win, runId);
+    // only now: the launch's own git calls (the workspace's baseline) are behind it
+    const git = stalledGit(box.root);
+    const path = process.env["PATH"];
+    process.env["PATH"] = `${git.dir}:${path ?? ""}`;
+    try {
+      expect(await win.call("agent.interrupt", { runtimeRunId: runId })).toEqual({
+        accepted: true,
+      });
+      const row = await poll(
+        async (seen) => {
+          const { sessions } = (await win.call("agent.list", {})) as AgentListResult;
+          const found = sessions.find((r) => r.runtimeRunId === runId);
+          seen({ continuation: found?.continuation ?? null, gitCalled: git.called() });
+          return found?.continuation?.exited === true ? found : undefined;
+        },
+        5_000,
+        "the exited row of a run whose workspace cleanup is stalled",
+      );
+      // exited at once, and not yet resumable: the cleanup still holds the old run's workspace
+      expect(row.continuation).toMatchObject({ persisted: true, exited: true, resumable: false });
+      // the row no longer waits for the cleanup, so its git is reached after the exit is published
+      await poll(
+        async (seen) => {
+          seen({ gitCalled: git.called() });
+          return git.called() ? true : undefined;
+        },
+        2_000,
+        "the run's exit cleanup reaching the stalled git",
+      );
+      const { sessions: held } = (await win.call("agent.list", {})) as AgentListResult;
+      expect(
+        held.find((r) => r.runtimeRunId === runId)?.continuation,
+        "the stalled cleanup holds the resume verb, not the exit",
+      ).toMatchObject({ persisted: true, exited: true, resumable: false });
+      const heard = await poll(
+        async (seen) => {
+          seen(
+            fielddEvents(box)
+              .map((e) => e.event)
+              .filter((e) => e.startsWith("fieldd.agents.")),
+          );
+          return fielddEvents(box).find(
+            (e) => e.event === "fieldd.agents.exit_heard" && e.attrs["runtimeRunId"] === runId,
+          );
+        },
+        2_000,
+        "the exit as heard, in the row's own log",
+      );
+      expect(heard.attrs, "the exit as heard, before the cleanup").toMatchObject({
+        sessionId: spawned.terminal.sessionId,
+        held: true,
+      });
+      const pending = await poll(
+        async (seen) => {
+          seen(
+            fielddEvents(box)
+              .map((e) => e.event)
+              .filter((e) => e.startsWith("fieldd.agents.")),
+          );
+          return fielddEvents(box).find(
+            (e) =>
+              e.event === "fieldd.agents.exit_cleanup_slow" && e.attrs["runtimeRunId"] === runId,
+          );
+        },
+        AGENT_EXIT.CLEANUP_WARN_MS + 3_000,
+        "the warning that the run's exit cleanup is still pending",
+      );
+      expect(pending.attrs["pendingMs"]).toBeGreaterThanOrEqual(AGENT_EXIT.CLEANUP_WARN_MS);
+    } finally {
+      process.env["PATH"] = path;
+      git.stop();
+    }
+  }, 60_000);
+
+  it("a resume while the cleanup is pending waits for it, is refused retryably as finalizing past the bound, and goes through once the cleanup ends", async () => {
+    const box = await setup({ floor: "real" });
+    const win = await window(box.daemon, [...DECK, "agent.control"], "i87r");
+    const spawned = (await born(win, "agent.spawn", {
+      provider: "scripted",
+      cwd: box.envOut,
+      title: "a stalled cleanup",
+    })) as AgentSpawnResult;
+    const runId = spawned.session.runtimeRunId;
+    await joinedRow(win, runId);
+    const git = stalledGit(box.root);
+    const path = process.env["PATH"];
+    process.env["PATH"] = `${git.dir}:${path ?? ""}`;
+    try {
+      expect(await win.call("agent.interrupt", { runtimeRunId: runId })).toEqual({
+        accepted: true,
+      });
+      await poll(
+        async (seen) => {
+          const { sessions } = (await win.call("agent.list", {})) as AgentListResult;
+          const found = sessions.find((r) => r.runtimeRunId === runId);
+          seen(found?.continuation ?? null);
+          return found?.continuation?.exited === true ? found : undefined;
+        },
+        5_000,
+        "the exited row of a run whose workspace cleanup is stalled",
+      );
+      const askedAt = Date.now();
+      const refused = await win.callErr("agent.resume", { runtimeRunId: runId });
+      const waited = Date.now() - askedAt;
+      expect(refused.data?.retryable, "a cleanup that ends is worth asking again").toBe(true);
+      expect(refused.data?.details).toMatchObject({ runtimeRunId: runId, state: "finalizing" });
+      expect(waited, "the resume waited for the cleanup first").toBeGreaterThanOrEqual(
+        AGENT_EXIT.RESUME_CLEANUP_WAIT_MS - 100,
+      );
+      expect(git.called(), "the cleanup the resume waited for is the stalled git").toBe(true);
+    } finally {
+      process.env["PATH"] = path;
+      git.stop();
+    }
+    // the stall ends: the cleanup settles, the row reads resumable, and the resume goes through
+    await poll(
+      async (seen) => {
+        const { sessions } = (await win.call("agent.list", {})) as AgentListResult;
+        const found = sessions.find((r) => r.runtimeRunId === runId);
+        seen(found?.continuation ?? null);
+        return found?.continuation?.resumable === true ? found : undefined;
+      },
+      5_000,
+      "the exited row reading resumable once its cleanup ended",
+    );
+    const resumed = (await born(win, "agent.resume", { runtimeRunId: runId })) as AgentSpawnResult;
+    expect(resumed.session.runtimeRunId).not.toBe(runId);
+    expect(resumed.session.sessionId).toBe(spawned.session.sessionId);
+  }, 60_000);
+});
+
 describe("AR-6-0 — the stop verb (agent.interrupt)", () => {
   it("interrupts a live run through the floor, is refused for an exited or unknown one, needs agent.control, and lands in the ledger", async () => {
     const { daemon, dataDir, envOut } = await setup({ floor: "real" });
@@ -3071,11 +3374,14 @@ describe("AR-6-0 — the stop verb (agent.interrupt)", () => {
     // where the floor answers "unknown or remote session" and TerminalService
     // raises INTERNAL (terminal-service.ts:645-660 — the pre-existing shape for
     // paste and text too, not something this door introduced).
-    await poll(async () => {
+    const tagged = await poll(async () => {
       const { sessions: rows } = (await win.call("agent.list", {})) as AgentListResult;
       const row = rows.find((r) => r.runtimeRunId === runId);
       return row?.terminal?.cellBootId !== undefined ? row : undefined;
     }, 10_000);
+    // Q08 — this adapter names no turn stop, so the verb is still the floor's
+    // ⌃C, and the row says that key rather than none
+    expect(tagged.stopKey).toBe("ctrl-c");
 
     // ── the act: the floor takes it, and the scripted PTY's `cat` dies of it ──
     // `accepted` is the FLOOR's word — that the interrupt reached the PTY's
@@ -3132,6 +3438,55 @@ describe("AR-6-0 — the stop verb (agent.interrupt)", () => {
     expect(missed.outcome.reasonCode).toBe("NOT_FOUND");
     // (a real floor, two spawns' worth of ladders and an explicit reap: this
     // row outgrew the 5 s default the day MF-1g gave it a pane to close)
+  }, 120_000);
+
+  it("Q08 — sends the run's own turn stop, as its adapter names it, never the floor's ⌃C; the row names the key", async () => {
+    const { daemon, dataDir, envOut, sessions, turnStops } = await setup({
+      floor: "real",
+      turnStop: true,
+    });
+    const win = await window(daemon, [...DECK, "agent.control"], "q8");
+    const spawned = (await born(win, "agent.spawn", {
+      provider: "scripted",
+      cwd: envOut,
+    })) as AgentSpawnResult;
+    const runId = spawned.session.runtimeRunId;
+    // the cell's tag first, as above: the stop's key rides the same automate
+    const tagged = await poll(async () => {
+      const { sessions: rows } = (await win.call("agent.list", {})) as AgentListResult;
+      const row = rows.find((r) => r.runtimeRunId === runId);
+      return row?.terminal?.cellBootId !== undefined ? row : undefined;
+    }, 10_000);
+    // the adapter's word, repeated: fieldd names no agent and picks no key
+    expect(tagged.stopKey).toBe("escape");
+
+    // ── the act: the adapter's stop, once, on the run's own PTY ──
+    expect(await win.call("agent.interrupt", { runtimeRunId: runId })).toEqual({ accepted: true });
+    expect(turnStops).toEqual([spawned.terminal.sessionId]);
+    const typedOut = sessions[0]?.typedOut;
+    if (typedOut === undefined) throw new Error("the scripted run was not born");
+    const typed = (marker: string) =>
+      poll(async () => {
+        if (!existsSync(typedOut)) return undefined;
+        const text = readFileSync(typedOut, "utf8");
+        return text.includes(marker) ? text : undefined;
+      }, 10_000);
+    // it went through the floor's epoch path to the process ...
+    expect(await typed(SCRIPTED_TURN_STOP_TEXT.trim())).toContain(SCRIPTED_TURN_STOP_TEXT.trim());
+    // ... and no ⌃C went with it: the `cat` a ⌃C kills still takes a prompt
+    const agent = daemon.agents.runtime.agent(spawned.terminal.sessionId);
+    expect((await agent?.submitPrompt({ text: "still-running" }))?.status).toBe("confirmed");
+    expect(await typed("still-running")).toContain("still-running");
+    const { sessions: rows } = (await win.call("agent.list", {})) as AgentListResult;
+    expect(rows.find((r) => r.runtimeRunId === runId)?.continuation?.exited).not.toBe(true);
+
+    // ── the ledger: the same act, the same outcome ──
+    const act = await auditAct(
+      dataDir,
+      (entry) => entry.action === "agent.session.interrupt" && entry.target.id === runId,
+    );
+    expect(act.outcome.outcome).toBe("succeeded");
+    expect(act.outcome.attrs?.["accepted"]).toBe(true);
   }, 120_000);
 });
 
@@ -3298,6 +3653,121 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
     // left no record of what it did — the session record is the resume's, and
     // the status ledger's directory is never made
     expect(existsSync(join(first.dataDir, "agents", "history"))).toBe(false);
+  }, 150_000);
+
+  it("the re-attach study's Step 1 — an attach is handed what the launch knew: the codec's launch options come back, the record keeps its state, and the attach record an attach reports reaches the next restart", async () => {
+    const first = await setup({ floor: "real", attach: true, facts: true });
+    const win1 = await window(first.daemon, DECK, "rf1");
+    const spawned = (await born(win1, "agent.spawn", {
+      provider: "scripted",
+      cwd: first.envOut,
+      title: "facts",
+    })) as AgentSpawnResult;
+    const runId = spawned.session.runtimeRunId;
+    const ptyId = spawned.terminal.sessionId;
+    // what the launch knew, persisted: the codec's state and the attach record
+    // the adapter reported before its process launched
+    const record = readRecord(first.dataDir, runId);
+    expect(record.continuation.state).toBe(SCRIPTED_STATE);
+    expect(record.attach).toEqual({ version: 1, state: "endpoint-1", secret: "nonce-1" });
+    expect(mode(join(first.dataDir, ...LAYOUT.AGENT_SESSIONS_DIR, `${runId}.json`))).toBe(0o600);
+    await joinedRow(win1, runId);
+    const reattachedAt = async (win: WsRpc, epoch: number) =>
+      await poll(async () => {
+        const { sessions } = (await win.call("agent.list", {})) as AgentListResult;
+        const found = sessions.find((r) => r.runtimeRunId === runId);
+        return found?.continuation?.reattached === true && found.runtimeEpoch === epoch
+          ? found
+          : undefined;
+      }, 20_000);
+
+    // ── the first restart: the adapter is handed the launch's facts ──
+    await first.daemon.stop();
+    const second = await setup({ floor: "real", attach: true, facts: true, restartOf: first });
+    const win2 = await window(second.daemon, DECK, "rf2");
+    await reattachedAt(win2, 2);
+    expect(first.attached).toHaveLength(1);
+    expect(first.attached[0]).toMatchObject({
+      runtimeSessionId: ptyId,
+      // puppeteer's codec restored them from the continuation fieldd handed back
+      agentOptions: { root: "scripted-root" },
+      attachRecord: { version: 1, state: "endpoint-1", secret: "nonce-1" },
+    });
+    const after = readRecord(first.dataDir, runId);
+    // one attach no longer drops what a later resume needs
+    expect(after.continuation).toMatchObject({ state: SCRIPTED_STATE, implementation: "native" });
+    expect(after.reattach).toMatchObject({ state: "attached" });
+    // the record the attach reported is the one kept (the boot's copy did not
+    // write over it)
+    expect(after.attach).toEqual({
+      version: 1,
+      state: "endpoint-1-attached",
+      secret: "nonce-attached",
+    });
+
+    // ── the second restart reads the fresh facts, not the launch's ──
+    await second.daemon.stop();
+    const third = await setup({ floor: "real", attach: true, facts: true, restartOf: first });
+    const win3 = await window(third.daemon, DECK, "rf3");
+    await reattachedAt(win3, 3);
+    expect(first.attached).toHaveLength(2);
+    expect(first.attached[1]?.attachRecord).toEqual({
+      version: 1,
+      state: "endpoint-1-attached",
+      secret: "nonce-attached",
+    });
+    expect(readRecord(first.dataDir, runId).continuation.state).toBe(SCRIPTED_STATE);
+  }, 180_000);
+
+  it("G5 — an attach the adapter calls transient is asked again: the row is held meanwhile, nothing replaces it, and the retry takes the run back on the same PTY", async () => {
+    const first = await setup({ floor: "real", attach: true });
+    const win1 = await window(first.daemon, DECK, "rt1");
+    const spawned = (await born(win1, "agent.spawn", {
+      provider: "scripted",
+      cwd: first.envOut,
+      title: "transient",
+    })) as AgentSpawnResult;
+    const runId = spawned.session.runtimeRunId;
+    const ptyId = spawned.terminal.sessionId;
+    const nativeId = spawned.session.sessionId;
+    await joinedRow(win1, runId);
+    await first.daemon.stop();
+    // the index says the conversation has been still for a minute, and
+    // resume-when-idle runs at its quickest: were it armed while the retry
+    // waits (1 s), it would replace the PTY before the retry could attach
+    writeFileSync(first.sessionsFile, JSON.stringify([rosettaRow(nativeId, 60_000)]));
+    const second = await setup({
+      floor: "real",
+      attach: true,
+      restartOf: first,
+      attachRefusals: ["retry"],
+      resumeWhenIdle: { afterMs: 1, pollMs: 50 },
+    });
+    const win2 = await window(second.daemon, DECK, "rt2");
+    const row = await poll(async () => {
+      const { sessions } = (await win2.call("agent.list", {})) as AgentListResult;
+      const found = sessions.find((r) => r.runtimeRunId === runId);
+      return found?.continuation?.reattached === true ? found : undefined;
+    }, 20_000);
+    // the same PTY, the next epoch: the retry attached, nothing replaced it
+    expect(row.runtimeEpoch).toBe(2);
+    expect(row.terminal).toMatchObject({ runtimeSessionId: ptyId });
+    expect(first.attached).toHaveLength(2);
+    expect(first.attached.map((a) => a.runtimeSessionId)).toEqual([ptyId, ptyId]);
+    expect(first.sessions).toHaveLength(1);
+    // the ledger: the refused attempt with the adapter's word, then the retry
+    const outcomes = await poll(async () => {
+      const found = auditEntries(first.dataDir).filter(
+        (entry) =>
+          entry.action === "agent.session.reattach" &&
+          entry.target.id === runId &&
+          entry.phase === "outcome",
+      );
+      return found.length === 2 ? found : undefined;
+    }, 10_000);
+    expect(outcomes.map((entry) => entry.outcome)).toEqual(["failed", "succeeded"]);
+    expect(outcomes[0]?.attrs).toMatchObject({ state: "failed", next: "retry" });
+    expect(readRecord(first.dataDir, runId).reattach).toMatchObject({ state: "attached" });
   }, 150_000);
 
   it("a provider that cannot attach: the run is held PENDING across the restart (live, unobserved, resumable), and agent.resume replaces its PTY by hand — the new row names the PTY it replaced", async () => {

@@ -38,6 +38,11 @@ function lease(dataDir: string, sessions: number | null = 2, now = 1_000) {
     onVacant: (record) => vacancies.push(record),
     onHeld: () => void held++,
   });
+  // The last holder's close starts the record's write (mkdir `fieldd/`, a temp file, a rename) and does not wait
+  // for it. A row that ends without `flush()` left that write racing its root's removal, and the rmSync met a
+  // directory the write had just made: ENOTEMPTY, CI run 40807651886, 2026-10-29. Pushed after the root's own
+  // cleanup, so it runs before it: every lease's writes settle before its root goes.
+  cleanup.push(() => value.flush());
   return { value, vacancies, held: () => held };
 }
 

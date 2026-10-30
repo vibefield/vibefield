@@ -1,5 +1,11 @@
-import { SetupLedger, type SetupMomentKey, setupMomentState } from "@vibefield/contracts";
+import {
+  SetupLedger,
+  type SetupMomentAnswer,
+  type SetupMomentKey,
+  setupMomentState,
+} from "@vibefield/contracts";
 import type { FielddHandle } from "@vibefield/fieldd-supervisor";
+import type { ConnectAsks } from "./connect-asks";
 import type { FielddHandleCoordinator } from "./fieldd-handle-coordinator";
 
 // TS-5 (track TS, P10, TS-D9; TS-D18 = d) — telling the person outside the app.
@@ -194,8 +200,10 @@ export class LinkNotices {
   }
 }
 
-/** Binds the decider to the attached user's fieldd, re-subscribing on every new
- * handle (supervisor recovery), with the hourly renewal look. */
+/** Binds the deciders to the attached user's fieldd, re-subscribing on every
+ * new handle (supervisor recovery), with the hourly renewal look: the link's
+ * notices, and TS-4's asks to connect (`ConnectAsks`, which also reads the
+ * preferences for its switch). */
 export class LinkNoticeObserver {
   private generation = 0;
   private stops: Array<() => void> = [];
@@ -207,15 +215,12 @@ export class LinkNoticeObserver {
   constructor(
     coordinator: Pick<FielddHandleCoordinator, "onHandle">,
     ports: Omit<LinkNoticePorts, "retire">,
+    private readonly asks: ConnectAsks,
     onError: (error: unknown) => void,
   ) {
     this.notices = new LinkNotices({
       ...ports,
-      retire: async (moment) => {
-        const handle = this.handle;
-        if (handle === null) return;
-        await handle.client.request("setup.moment", { moment, state: "retired" });
-      },
+      retire: (moment) => this.setupMoment(moment, "retired"),
     });
     this.timer = setInterval(() => this.notices.tick(), 3_600_000);
     this.timer.unref?.();
@@ -248,10 +253,24 @@ export class LinkNoticeObserver {
           );
       };
       // the ledger first, so the first roster is read against what was said
-      feed("setup.subscribe", (value) => this.notices.onLedger(value));
-      feed("user.link.subscribe", (value) => this.notices.onLink(value));
+      feed("setup.subscribe", (value) => {
+        this.notices.onLedger(value);
+        this.asks.onLedger(value);
+      });
+      feed("user.link.subscribe", (value) => {
+        this.notices.onLink(value);
+        this.asks.onLink(value);
+      });
       feed("device.subscribe", (value) => this.notices.onRoster(value));
+      feed("storage.appPreferences.subscribe", (value) => this.asks.onPreferences(value));
     });
+  }
+
+  /** `setup.moment` on the attached user's fieldd; nothing while none is attached. */
+  async setupMoment(moment: SetupMomentKey, state: SetupMomentAnswer): Promise<void> {
+    const handle = this.handle;
+    if (handle === null) return;
+    await handle.client.request("setup.moment", { moment, state });
   }
 
   dispose(): void {
