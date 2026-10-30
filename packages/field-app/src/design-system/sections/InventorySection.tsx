@@ -50,7 +50,8 @@ const INVENTORY = [
   {
     group: "Field chrome",
     items: [
-      "The head — name pill and zoom readout",
+      "The head — name pill, its package, zoom readout",
+      "Package circle",
       "Document explorer",
       "Document tile",
       "Sync indicator",
