@@ -5,12 +5,10 @@ import { BrandMark } from "./catalog-ui";
 import { CanvasGroundSection } from "./sections/CanvasGroundSection";
 import { ChromeSection } from "./sections/ChromeSection";
 import { ControlsSection } from "./sections/ControlsSection";
-import { FaceStickersSection } from "./sections/FaceStickersSection";
 import { FoundationsSection } from "./sections/FoundationsSection";
 import { GlyphsSection } from "./sections/GlyphsSection";
 import { GodviewSection } from "./sections/GodviewSection";
 import { HistorySection } from "./sections/HistorySection";
-import { IconsSection } from "./sections/IconsSection";
 import { InventorySection } from "./sections/InventorySection";
 import { LiveSurfacesSection } from "./sections/LiveSurfacesSection";
 import { OnboardingSection } from "./sections/OnboardingSection";
@@ -22,9 +20,7 @@ import type { DesignSystemStudioController, DesignSystemStudioState } from "./st
 const NAV_ITEMS = [
   ["overview", "Overview", "01"],
   ["foundations", "Foundations", "02"],
-  ["fieldmarks", "After Hours", "02a"],
-  ["face-stickers", "Face Club", "02b"],
-  ["glyphs", "Glyphs", "02d"],
+  ["glyphs", "Glyphs", "02a"],
   ["canvas-ground", "Canvas ground", "03"],
   ["controls", "Controls", "04"],
   ["status", "Status & feedback", "05"],
@@ -116,8 +112,6 @@ export function DesignSystemPage({
       <main className="vf-ds-main">
         <OverviewSection studio={studio} state={studioState} />
         <FoundationsSection />
-        <IconsSection />
-        <FaceStickersSection />
         <GlyphsSection />
         <CanvasGroundSection
           dark={dark}

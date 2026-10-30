@@ -29,9 +29,9 @@ const SLOW_MS = 20_000;
  * the pane alone draws — the account's devices for the arrival, and the word
  * that the address is slow.
  *
- * The client rather than the view owns it for the same reason `PosturePane`
- * does: `views/` is the Electron-free surface the catalog mounts, and a view
- * that reached for a daemon could not be shown there. */
+ * The client rather than the view owns it: `views/` is the Electron-free
+ * surface the catalog mounts, and a view that reached for a daemon could not
+ * be shown there. */
 export function ConnectPane({
   me,
   onContinue,

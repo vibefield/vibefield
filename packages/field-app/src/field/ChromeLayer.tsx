@@ -14,6 +14,7 @@ import {
   useState,
 } from "react";
 import { MeMenu } from "../account/MeMenu";
+import { useSyncQuestion } from "../account/sync-question";
 import { isSwitchCovering, useSwitchState } from "../boot/switch";
 import type { DocManager, DocManagerState } from "../doc-manager";
 import type { LineActs } from "../frame/Composer";
@@ -106,6 +107,8 @@ export function ChromeLayer({
   // surface says so, or while the desk's tray says it is (its fact leads by a
   // frame either way).
   const board = useBoardFacts();
+  // TS-6 (TS-D13) — the sync question New field asks while a link owes it.
+  const syncQuestion = useSyncQuestion();
   const boardOut = surface === "objects" || board?.open === true;
   const docsOpen = surface === "fields";
   const paletteOpen = surface === "palette";
@@ -315,6 +318,7 @@ export function ChromeLayer({
         surface={surface}
         onSurfaceChange={onSurfaceChange}
         menuZoom={subscribeMenuZoom}
+        syncQuestion={syncQuestion}
       />
 
       {/* SEARCH — THE PEEK (GV-D8/D9/D10, 2026-10-08; DESIGN.md §8 "Search — the

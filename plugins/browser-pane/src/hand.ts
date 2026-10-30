@@ -30,6 +30,7 @@ import {
   writable,
 } from "@vibefield/plugin-sdk/desk";
 import { resolveAddress } from "./address";
+import { mountAddressEditor } from "./address-editor";
 import { urlCell } from "./device";
 import { SAMPLE_URL } from "./ids";
 import { bandLayout, type HeldPart } from "./law";
@@ -113,6 +114,7 @@ export function createPaneHand(h: KindDriverHost, opts: PaneHandOptions = {}): P
   const cellOf = opts.cell ?? urlCell;
   const now = opts.now ?? (() => performance.now());
   let dom: ObjectDomHost | undefined;
+  let addressEditor: ReturnType<typeof mountAddressEditor> | undefined;
   /** The pane the editor is lent for, and the lease holding it — the page's or the address's (two leases: ICE's editor keeps a
    * lease it already holds and never asks its value again, so a switch of mode is a hand-over from one lease to the other). */
   let leased: Entity | undefined;
@@ -169,6 +171,7 @@ export function createPaneHand(h: KindDriverHost, opts: PaneHandOptions = {}): P
     if (lease === addressLease) seed = local()?.page(e)?.info.address ?? "";
     dom.editor.lend(lease, lease === addressLease ? seed.length : undefined);
     if (lease === addressLease) {
+      addressEditor?.show(true);
       counts.addressLeases += 1;
       dom.editor.element.select();
     } else counts.pageLeases += 1;
@@ -207,6 +210,8 @@ export function createPaneHand(h: KindDriverHost, opts: PaneHandOptions = {}): P
 
   /** The lease is over for `lease` — unless another of the hand's took the editor over (then it is that one's). */
   const ended = (lease: EditorLease): void => {
+    // Also on hand-over to the page: `current` already names the new lease then.
+    if (lease === addressLease) addressEditor?.show(false);
     if (current !== lease) return;
     dom?.editor.element.removeEventListener("keyup", onKeyUp);
     current = undefined;
@@ -316,6 +321,7 @@ export function createPaneHand(h: KindDriverHost, opts: PaneHandOptions = {}): P
   const hand: PaneHand = {
     join(d) {
       dom = d;
+      addressEditor = mountAddressEditor(d);
       d.container.addEventListener("pointerdown", onDown, { capture: true });
       local()?.bind({ address: (e) => lend(e, addressLease) });
     },
@@ -355,6 +361,7 @@ export function createPaneHand(h: KindDriverHost, opts: PaneHandOptions = {}): P
       dom?.container.removeEventListener("pointerdown", onDown, { capture: true });
       const holding = dom?.editor.lease();
       if (holding === pageLease || holding === addressLease) dom?.editor.release(holding);
+      addressEditor?.dispose();
       local()?.bind(undefined);
     },
   };

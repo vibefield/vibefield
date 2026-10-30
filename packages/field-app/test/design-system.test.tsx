@@ -349,6 +349,7 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       "explorer:mac",
       "zoom:mac",
       "palette:mac",
+      "sync-question:mac",
       "zoom:other",
     ]);
     const headPlate = (state: string, keys = "mac"): Element | null =>
@@ -377,6 +378,11 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
         ...(headPlate("zoom", "other")?.querySelectorAll(".vf-head-zoom-menu .vf-menu-key") ?? []),
       ].map((key) => key.textContent),
     ).toEqual(["Ctrl+Plus", "Ctrl+Minus", "Shift+1", "Ctrl+0"]);
+    // TS-6 (TS-D13) — the sync question in the explorer, in place of its tiles
+    const question = headPlate("sync-question");
+    expect(question?.querySelector('form[aria-label="Sync question"]')).not.toBeNull();
+    expect(question?.querySelector(".vf-head-docs")?.hasAttribute("hidden")).toBe(true);
+    expect(question?.querySelectorAll('input[type="checkbox"]')).toHaveLength(3);
     expect(
       headPlate("palette")?.querySelector('[role="dialog"][aria-label="Command palette"]'),
     ).not.toBeNull();
@@ -552,12 +558,12 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     // One theme control per onboarding frame: eleven since AO-1 (2026-10-27),
     // when Ready and the second user's finishing folded into Setting up; twelve
     // since AO-3, the agent chapter's History pane; fourteen since AO-5's Agents
-    // and Profiles.
+    // and Profiles; thirteen since TS-6 retired the posture pane (TS-D13).
     expect(
       container?.querySelectorAll(
         '[data-onboarding-preview] button[aria-label="Switch to light mode"]',
       ),
-    ).toHaveLength(14);
+    ).toHaveLength(13);
 
     // One Frame FR-3: the playground's head runs on its real controller — its
     // chevron grows the pill into the fields explorer through the one owner.
@@ -635,7 +641,8 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     // finishing folded into Setting up — the end of every path — whose own
     // refusals (the answers not saved, the desk that could not open) are frames.
     // AO-3 adds the agent chapter's History pane, AO-5 its Agents and Profiles.
-    expect(container?.querySelectorAll("[data-onboarding-preview]")).toHaveLength(14);
+    // TS-6 (TS-D13): the sync question's pane left setup for the first new field.
+    expect(container?.querySelectorAll("[data-onboarding-preview]")).toHaveLength(13);
     for (const state of [
       "welcome",
       "field",
@@ -643,7 +650,6 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       "profiles",
       "history",
       "connect",
-      "posture",
       "setting-up",
       "deriving",
       "welcome-back",
@@ -654,7 +660,7 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     ]) {
       expect(container?.querySelector(`[data-onboarding-preview="${state}"]`)).not.toBeNull();
     }
-    expect(container?.querySelectorAll(".vf-wizard-shell")).toHaveLength(14);
+    expect(container?.querySelectorAll(".vf-wizard-shell")).toHaveLength(13);
     expect(container?.querySelector(".vf-ds-field-stage .vf-head-zoom")).not.toBeNull();
     expect(container?.querySelector("[data-ground-workbench]")).not.toBeNull();
     expect(container?.querySelector("[data-visual-tweak-controls]")).not.toBeNull();
@@ -724,9 +730,6 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     await choose("connect", "devices");
     await choose("connect", "Continue with Tailscale");
     expect(frame("connect").textContent).toContain("Opening Tailscale…");
-
-    await choose("posture", "unavailable");
-    expect(frame("posture").textContent).toContain("This daemon is not reporting preferences");
 
     // AO-1 — Setting up, fed the boot machine's states by hand: the desk's own
     // stage while it opens, then the welcome in place of the title (one cell).
