@@ -60,8 +60,8 @@
   `8828601ed`) and 84 (`68296443f`).
 - Next: **AO-7 (Get)** waits on James's puppeteer release with `installRecipe`. 0.3.0 (PUBLISHED 10-28 08:19Z, #48
   alone) does not carry it, read at its tag (`d0aa1224`), so AO-7 waits on a later release (0.3.x or 0.4.0; §3 item
-  3). AO-8 FILED 10-27: rosetta #23–#27 (RO-24…RO-28), puppeteer
-  #47 (PU-19).
+  3). AO-8: rosetta #23–#26 (RO-24…RO-27) shipped in 0.1.2 and are pinned at `3948bcf` (10-29);
+  their VibeField RPC/UI wiring remains follow-on work. Rosetta #27 (RO-28) and puppeteer #47 (PU-19) remain filed.
 - Owed: the desk rows (`pnpm smoke`, `smoke:studio`, `smoke:godview` on a display); the first-run spike (`thinking-agent-onboarding.md` §9).
 
 **AL — what Quit means** · better-quit (lanes `al2`, `al/chords`, `al/chords-2`) · law `draft/thinking-app-lifecycle.md` v0.2 §8, ESR §7.3 (amended), design-00 EL1
@@ -180,8 +180,8 @@
    - D11's signing-only measurement (two nightlies sharing an unchanged plane; W11's PTY-survival clause rides it).
    - The build job's image to `macos-26` (the Xcode 26.3 pin stands until then) · EDP-22's universal macOS build
      (`release.yml:171` builds mac-arm64 alone).
-   - RD-6, CI in prod shape only: mille's first npm release (no tag past v0.3.4; release PR #44) and rosettad as a
-     release asset (RD-D7; RO-4's remainder).
+   - RD-6, CI in prod shape only: mille's first npm release (no tag past v0.3.4; release PR #44) and adopting the published
+     rosettad archives (RD-D7; RO-4's remainder).
    - AR-7j, the launcher runtime in a packaged build (`agent-gateway.ts:310` still refuses a strict packaged fieldd).
    - LOG-39's packaged checks in `release.yml`'s verify · `allow-jit` on every shipped Rust daemon · shipped binaries
      embedding `~/.cargo/registry` paths · `package-census --assert --strict` red on MV's renderer chunks.
@@ -277,7 +277,7 @@
 - Releases: puppeteer 0.3.0 PUBLISHED 10-28 08:19Z and pinned (`1469639a6`, with QW1 stack B) · a later puppeteer
   release (0.3.x or 0.4.0) for AO-7's `installRecipe`, item 50's env seam, item 39 and the tuck (push and merge
   `vf/item-39`, `vf/after-a` first) · mille's first
-  npm release · rosettad as a release asset (RD-D7) · RD-4's pipelines (who runs them is open, §9).
+  npm release · adopt rosettad's published archives (RD-D7) · RD-4's pipelines (who runs them is open, §9).
 - The Mac mini (Q24): full Xcode 26 there is DEFERRED (James, 2026-10-28 08:46Z: "not able to install xcode on mini
   right now, please run those test on this mac instead"), so row 30 (`smoke:update`), the one gate row that needs it,
   runs on James's Mac. Claude lists the mini's leftovers, read-only, for his hand (`/tmp/vf-smoke-*`, `~/vf-lanes`
@@ -403,7 +403,7 @@
 | ghosttea | 0.13.7 on cargo (`=0.13.7`), npm and Swift | `5ba36785b`; no checkout needed; `../ghosttea-0.11.2` is only the overlay's coordinate |
 | ICE | `@vibecook/ice` 0.16.0 exact (overrides row) · strata 0.13.0 via ICE · `loro-crdt` ^1.13.8, one resolution | EL8 |
 | puppeteer | `@vibefield/puppeteer-*` 0.3.0 exact (tag v0.3.0 = `d0aa1224`) | the EL8 `1469639a6` (10-28; RD-5a-2 `a04850e29` took it exact at 0.2.3); `../puppeteer` is the overlay's coordinate |
-| rosetta | `@vibefield/rosetta-protocol` / `-room` 0.1.1 exact · rosettad built from `../rosetta-pin` at `4348545` | RD-5a `fe01ac797`; RD-D7 (no release asset) |
+| rosetta | `@vibefield/rosetta-protocol` / `-room` 0.1.2 exact · rosettad built from `../rosetta-pin` at `3948bcf` | EL8 10-29; matching npm and daemon releases; adopting daemon archives remains RD-D7 |
 | mille | `link:../mille-pin` at `c8160d5` (`@vibecook/mille`, `mille-ui`) | FS-1b; no release past v0.3.4; exit RD-6 |
 | rustc | 1.99.1 (`rust-toolchain.toml`) | EL8 |
 
@@ -415,8 +415,9 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 - **truffle:** T8 (the app-chosen hostname prefix; TS-8c, probe first) · T12 (a typed start refusal; held; a PR when
   James says) · T13, the one T row for T7's route-name pinning (Q22; owed, not drafted); T7's other follow-ups (the per-direction idle reap, a held
   route id's refusal, loopback pages) are recorded as accepted.
-- **rosetta:** RO-8 (retire/forget a runtime; RO-27 depends on it) · RO-11 (with DS-7) · RO-17…RO-23 · RO-24…RO-28
-  filed as #23–#27 (AO-8) · RO-10's follow-ups need a row · RO-4's remainder is RD-D7.
+- **rosetta:** RO-24…RO-27 (#23–#26) shipped in 0.1.2; VibeField RPC/UI adoption remains follow-on work.
+  RO-28 (#27, AO-8) remains filed, with RO-8 (retire/forget a runtime), RO-11 (with DS-7), RO-17…RO-23,
+  and RO-10's follow-ups. RO-4's remainder is adopting the released daemon archives (RD-D7).
 - **puppeteer:** 0.3.0 PUBLISHED and pinned 10-28 (`1469639a6`) · a later release for AO-7's `installRecipe`,
   item 50's env seam, item 39 and the tuck · PU-12 (verify first) · PU-19 filed as #47 (AO-8) · PU-15
   (with AR-6).

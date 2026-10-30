@@ -18939,3 +18939,35 @@ asks the question when New field is next pressed.
   `pnpm test:rust` 31 ok, 0 failed; the tree clean after. Logs: `lanes/ts6/logs/mini/ts6-2/`.
 - **Landed:** main fast-forwarded `218dc3d9e` → `14c74f980` at 18:32:48Z on VF-PM's GO; not pushed. The draft's Status
   flip and §10's TS-6 LANDED ride the next draft queue.
+
+
+## EL8 — Rosetta 0.1.2: census estimates, first-pass stamp, exclusions, and cold pause/resume (2026-10-29)
+
+The Rosetta pin moves from `43485458392d263f9c32214d6c22bc9b44362369` to
+`3948bcf595bc54b7e9ac04894eba84de69a022e6`, the source of both `npm-v0.1.2` and `v0.1.2`.
+The exact `@vibefield/rosetta-protocol` and `@vibefield/rosetta-room` overrides, preflight expectations,
+sibling release coordinate, and pnpm lock move together. Wire protocol 27 stays unchanged.
+
+Upstream PRs #29, #30, #31, and #32 merged in that order; issues #23–#26 are closed. The release carries
+file-based census session estimates, a sticky metadata-ready timestamp, folder exclusions before admission
+and capture, and durable pause/resume for unfinished cold imports. The exclusion review fix reads only
+the affected metadata dependencies on ordinary appends and rechecks siblings and ancestors before capture.
+
+VibeField keeps its existing RPC/UI adapters in this pin event. Consuming the new census, stamp, exclusion,
+and control fields in those adapters is follow-on work. Daemon archives now exist for Linux x64/ARM64 and
+macOS Intel/Apple Silicon; this host still builds from the same pinned release source. Archive installation
+remains RD-D7. No other dependency pin moves.
+
+Release proof: CI passed before all protected-main merges. Both npm tarballs match the CI artifacts,
+and their provenance names `3948bcf`. All four daemon archive checksums and build metadata passed.
+The Apple Silicon archive passed 54 VibeField compatibility checks. The pin tool passed the catalog,
+consumer typechecks, and generated-file checks.
+
+Verification: `pnpm verify` passed in the isolated SSD worktree: all 27 TypeScript projects,
+including fieldd's 2,608 passed / 11 skipped tests, plus Rust tests and generated-file freshness.
+All 13 desktop landing gates passed, with the eight affected or unfinished after system sleep
+rerun while the Mac stayed awake. No golden was re-blessed. The final full run used the ordinary
+test setup and the daemon built from the pinned release source.
+
+Evidence: `/Volumes/SamsungRed/lanes/rosetta-release-20261029/logs/verify-final.log`,
+`landing-combined-result.json`, and `archive-consumer-tests.log` in the same logs directory.
