@@ -91,8 +91,9 @@ export interface FieldClipboardHost {
   /** HN-5 — a copy's picture onto the system clipboard, its PNG's bytes written through
    * main (the web's write is denied in the app as its read is), with the copy's words
    * beside it when it has any: ONE write, both formats, so neither replaces the other
-   * (LC-19). No focus is asked, the words' rule (LC-18); a refusal rejects in words, and
-   * the copy then deals no card. Words alone keep `FieldDiagnosticsHost.copyText`. */
+   * (LC-19). No focus is asked, the words' rule (LC-18); a refusal rejects typed
+   * (`ClipboardCopyRefusal`, a plain record), and the copy then deals no card. Words alone
+   * keep `FieldDiagnosticsHost.copyText`. */
   writeImage(png: Uint8Array, text?: string): Promise<void>;
 }
 
@@ -113,6 +114,9 @@ export interface FieldDiagnosticsHost {
   markCrashViewed(request: { artifactId: string }): Promise<{ viewed: boolean }>;
   previewSupport(selection: SupportBundleSelectionV1): Promise<SupportBundlePreviewV1>;
   exportSupport(request: { previewId: string }): Promise<SupportBundleExportResultV1>;
+  /** HN-5 — a copy's words onto the system clipboard through main. Past main's bound, or past
+   * what one request carries of them as sent, it rejects typed (`ClipboardCopyRefusal`) and
+   * sends nothing; any other failure is the bridge's own error. */
   copyText(text: string): Promise<void>;
 }
 
