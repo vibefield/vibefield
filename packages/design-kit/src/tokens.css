@@ -74,7 +74,8 @@
   --vf-wizard-surface: rgb(255 255 255 / 55%);
   --vf-backdrop-dim: rgb(0 0 0 / 10%);
   /* §5 the search scrim (the Peek, §8 "Search"; K7): darker than the backdrop
-     dim, under a blur of 18 — the window blurred and dimmed */
+     dim, under a blur of 18 — the window blurred and dimmed. The phone wears its
+     dim alone under a door over a live field (§9, TS-D22; ChromePalette.searchScrim) */
   --vf-search-scrim: rgb(0 0 0 / 16%);
 
   /* §2.5 State & system color */

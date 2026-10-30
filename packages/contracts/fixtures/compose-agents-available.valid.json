@@ -1,0 +1,44 @@
+{
+  "agents": [
+    {
+      "agent": "claude",
+      "label": "Claude Code",
+      "profile": "work",
+      "profileName": "Work",
+      "models": [
+        {
+          "id": "claude-opus-5-5",
+          "label": "Opus 5.5",
+          "efforts": ["low", "medium", "high", "max"],
+          "default": true
+        },
+        {
+          "id": "claude-sonnet-5-5",
+          "label": "Sonnet 5.5",
+          "efforts": ["low", "medium", "high"]
+        }
+      ]
+    },
+    {
+      "agent": "grok",
+      "label": "Grok",
+      "profile": "work",
+      "profileName": "Work",
+      "models": [
+        {
+          "id": "grok-4.7",
+          "label": "Grok 4.7",
+          "efforts": ["low", "high"]
+        }
+      ]
+    },
+    {
+      "agent": "codex",
+      "label": "Codex",
+      "profile": "native",
+      "profileName": "This Mac",
+      "models": [],
+      "modelsNote": "Codex could not list its models just now."
+    }
+  ]
+}

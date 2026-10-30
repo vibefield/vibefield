@@ -108,6 +108,15 @@ import {
   ArtifactView,
   LocalArtifactIntent,
 } from "../src/artifacts";
+import {
+  ComposeAgentsAvailableOutput,
+  ComposeAgentsListOutput,
+  ComposeHistorySearchOutput,
+  ComposeReadOutput,
+  ComposeSparksHatchParams,
+  ComposeSparksListResult,
+  SparkRecord,
+} from "../src/compose";
 import { DeviceInfo, DeviceNameFile, DeviceRenameParams, DeviceSlice } from "../src/devices";
 import {
   AuditRecordV1,
@@ -260,9 +269,11 @@ import {
   RestartScheduled,
   SystemShutdownParams,
   SystemShutdownResult,
+  UpdateCheckResult,
   UpdateClientStateFile,
   UpdatePolicy,
   UpdatePolicySource,
+  UpdateView,
 } from "../src/update-policy";
 import {
   WorkspaceCloseTicketParams,
@@ -427,6 +438,10 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "channel-heads": ChannelHeads,
   // WP12b: the updater's persisted client state (Electron main's `updates/state.json`).
   "update-client-state": UpdateClientStateFile,
+  // AU-1: the updater's one projection (`UpdateController.view()`, through `desktopState.update`) and a person's
+  // check answered when the check settles. `update-view.pre-au1.json` is today's shape: the tolerant-reader witness.
+  "update-view": UpdateView,
+  "update-check-result": UpdateCheckResult,
   // WP8a: the packaged app's signed bundled-plugin index (refusals in plugin-distribution.test.ts).
   "bundled-plugin-index": BundledPluginIndex,
   // WP8b: the stage's public identity (Resources/identity/release-identity.json).
@@ -780,6 +795,14 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "project-figures": ProjectFiguresResult,
   "project-figures-day-params": ProjectFiguresDayParams,
   "project-figures-day": ProjectFiguresDayResult,
+  // CO — the compose plane, version 2 (compose.ts): a spark, its doors, and CP-1's verbs
+  "compose-spark-record": SparkRecord,
+  "compose-sparks-list": ComposeSparksListResult,
+  "compose-sparks-hatch-params": ComposeSparksHatchParams,
+  "compose-agents-available": ComposeAgentsAvailableOutput,
+  "compose-agents-list": ComposeAgentsListOutput,
+  "compose-agent-read": ComposeReadOutput,
+  "compose-history-search": ComposeHistorySearchOutput,
 };
 
 // *.vector.json = cross-language crypto vectors, not wire shapes — pinned by their own tests.

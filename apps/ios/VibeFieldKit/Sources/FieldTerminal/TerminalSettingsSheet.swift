@@ -37,6 +37,14 @@ public struct TerminalSettingsSheet: View {
         transparencySection
         shaderSection
         fontSection
+        // TS-7 (DESIGN.md §13) — the phone wears Tailscale's mark on its
+        // sign-in and has no About, so the line the desktop's About carries
+        // stands at the foot of its one settings page.
+        Text("Tailscale is a registered trademark of Tailscale Inc.")
+          .font(FieldType.mono(10))
+          .foregroundStyle(FieldPalette.textMuted)
+          .fixedSize(horizontal: false, vertical: true)
+          .padding(.top, 32)
         Spacer(minLength: 28)
       }
       .padding(.horizontal, 22)

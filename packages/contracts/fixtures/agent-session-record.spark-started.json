@@ -1,0 +1,36 @@
+{
+  "format": 1,
+  "runtimeRunId": "run-13",
+  "runtimeEpoch": 1,
+  "provider": "grok",
+  "cwd": "/Users/you/code/acp-notes",
+  "terminalSessionId": "sess-01JB7Q3A",
+  "continuation": {
+    "providerId": "grok",
+    "nativeSessionId": "native-13"
+  },
+  "workspace": {
+    "mode": "direct",
+    "root": "/Users/you/code/acp-notes"
+  },
+  "creationRequestId": "req-01JB7Q3A",
+  "ingress": {
+    "port": 53344,
+    "token": "typed-bearer"
+  },
+  "spawnedBy": "app",
+  "createdAt": "2026-09-27T10:00:00.500Z",
+  "updatedAt": "2026-09-27T10:00:05.000Z",
+  "signature": "0000000000000000000000000000000000000000000000000000000000000000",
+  "profileSet": "work",
+  "origin": {
+    "by": "spark",
+    "spark": "sp-7k2m9q4x"
+  },
+  "modelSelection": {
+    "modelId": "grok-4.7",
+    "controls": {
+      "effort": "high"
+    }
+  }
+}
