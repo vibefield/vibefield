@@ -38,6 +38,7 @@ import {
   Menu,
   MessageChannelMain,
   nativeTheme,
+  powerMonitor,
   powerSaveBlocker,
   session,
   type WebContents,
@@ -118,12 +119,18 @@ import {
   peekShotDir,
 } from "./peek-rungs";
 import {
+  type LoggingCensus,
+  type LoggingHealthLike,
+  loggingCensus,
+  PhysicalSoakTrace,
+  type ResourceProbeOptions,
+} from "./plugin-runtime-diagnostics";
+import {
   type CountVector,
   countVector,
   type ElectronProcessSample,
   LOG_CENSUS_CEILINGS,
   logCensus,
-  loggingCensus,
   PLUGIN_RUNTIME_SOAK_EXACT_KEYS,
   type ProcessResourceSample,
   pidAlive,
@@ -2539,8 +2546,8 @@ function waitForReplacementHandle(
 interface PluginRuntimeHealth {
   readonly fieldd: { readonly pid: number };
   readonly nativePid: number | null;
-  readonly logging: Parameters<typeof loggingCensus>[1][number];
-  readonly pluginLogging: Parameters<typeof loggingCensus>[1][number];
+  readonly logging: LoggingHealthLike | null | undefined;
+  readonly pluginLogging: LoggingHealthLike | null | undefined;
   readonly pluginRuntime: unknown;
 }
 
@@ -2666,6 +2673,7 @@ async function samplePhysicalResourceWindow(
   windows: readonly BrowserWindow[],
   fielddPid: number,
   nativePid: number,
+  probe: ResourceProbeOptions,
 ): Promise<SettledPhysicalResources> {
   const deadline = Date.now() + 10_000;
   let observationWindows = 0;
@@ -2675,9 +2683,9 @@ async function samplePhysicalResourceWindow(
     const observations: PhysicalResourceObservation[] = [];
     for (let index = 0; index < 7; index += 1) {
       const [main, fieldd, native, electron] = await Promise.all([
-        sampleProcessResources(process.pid, false),
-        sampleProcessResources(fielddPid, false),
-        sampleProcessResources(nativePid, false),
+        sampleProcessResources(process.pid, false, probe),
+        sampleProcessResources(fielddPid, false, probe),
+        sampleProcessResources(nativePid, false, probe),
         sampleElectronProcesses(windows),
       ]);
       observations.push({ main, fieldd, native, electron });
@@ -3852,6 +3860,16 @@ export async function runSmokePluginRestart(opts: {
     opts.logging.pluginRenderer,
   ] as const;
   const plantedEvents: string[] = [];
+  const trace = new PhysicalSoakTrace((diagnostic) => {
+    if (config.enabled) console.log(`PLUGIN_RUNTIME_SOAK_DIAGNOSTIC ${JSON.stringify(diagnostic)}`);
+  });
+  const probe: ResourceProbeOptions = { onFailure: (failure) => trace.probeFailed(failure) };
+  const onSuspend = () => trace.event("suspend");
+  const onResume = () => trace.event("resume");
+  if (config.enabled) {
+    powerMonitor.on("suspend", onSuspend);
+    powerMonitor.on("resume", onResume);
+  }
   let powerSaveBlockerId: number | null = null;
   if (process.env["VF_SMOKE_DEBUG"]) {
     windows.forEach((win, index) => {
@@ -3990,6 +4008,7 @@ export async function runSmokePluginRestart(opts: {
     const expectedRendererRuntime = rendererRuntimeVector(currentCanvas);
     let currentHandle = opts.handle;
     let currentConnections = await Promise.all(windows.map(rendererConnection));
+    trace.mark(null, "health-settle");
     const initialFieldd = await settlePluginRuntimeHealth(currentHandle);
     const expectedFielddRuntime = initialFieldd.vector;
     /** The fieldd runtime counters a sample disagrees on, by name — the verdict counts them; this says which. */
@@ -4013,6 +4032,7 @@ export async function runSmokePluginRestart(opts: {
     const samples: PluginRuntimePhysicalSample[] = [];
     const oldBootIds: string[] = [];
     let cycle = 0;
+    let previousLogging: LoggingCensus | undefined;
 
     const collectSample = async (
       phase: PluginRuntimePhysicalSample["phase"],
@@ -4020,30 +4040,53 @@ export async function runSmokePluginRestart(opts: {
       oldFielddPids: readonly number[],
       oldRendererPids: readonly number[],
     ): Promise<PluginRuntimePhysicalSample> => {
-      await Promise.all(localLogSinks.map((sink) => sink.flush()));
+      trace.mark(cycle, "logging-flush");
+      const readLogging = () =>
+        loggingCensus(
+          [
+            { source: "desktop", health: opts.logging.desktop.health() },
+            { source: "renderer", health: opts.logging.renderer.health() },
+            { source: "utility", health: opts.logging.utility.health() },
+            { source: "pluginRenderer", health: opts.logging.pluginRenderer.health() },
+            { source: "fieldd", health: settled.health.logging },
+            { source: "pluginService", health: settled.health.pluginLogging },
+          ],
+          previousLogging,
+        );
+      try {
+        await Promise.all(localLogSinks.map((sink) => sink.flush()));
+      } finally {
+        const observed = readLogging();
+        previousLogging = observed;
+        // Preserve the source of a drop even if flushing or the following OS observation fails.
+        trace.logging(observed);
+      }
+      trace.mark(cycle, "os-resources");
       const resources = await samplePhysicalResourceWindow(
         windows,
         settled.health.fieldd.pid,
         nativePid,
+        probe,
       );
+      trace.mark(cycle, "footprint");
       const [mainFootprint, fielddFootprint, nativeFootprint] = await Promise.all([
-        sampleProcessFootprintKb(process.pid, config.footprint),
-        sampleProcessFootprintKb(settled.health.fieldd.pid, config.footprint),
-        sampleProcessFootprintKb(nativePid, config.footprint),
+        sampleProcessFootprintKb(process.pid, config.footprint, probe),
+        sampleProcessFootprintKb(settled.health.fieldd.pid, config.footprint, probe),
+        sampleProcessFootprintKb(nativePid, config.footprint, probe),
       ]);
       const mainResources = { ...resources.main, physicalFootprintKb: mainFootprint };
       const fielddResources = { ...resources.fieldd, physicalFootprintKb: fielddFootprint };
       const nativeResources = { ...resources.native, physicalFootprintKb: nativeFootprint };
       const electron = resources.electron;
       const logs = logCensus(opts.logging.logRoot);
-      const logging = loggingCensus(localLogSinks, [
-        settled.health.logging,
-        settled.health.pluginLogging,
-      ]);
+      // Keep the original post-observation gate: a drop during an OS probe still fails this sample.
+      const logging = readLogging();
+      previousLogging = logging;
       const bootstrap = countVector(opts.rendererBoundary.state(), "bootstrap");
       const rendererRuntime = rendererRuntimeVector(currentCanvas);
       const memory = process.memoryUsage();
       const rendererPids = electron.rendererPids.filter((pid) => pid > 0);
+      trace.mark(cycle, "sample");
       const sample: PluginRuntimePhysicalSample = {
         phase,
         cycle,
@@ -4152,6 +4195,7 @@ export async function runSmokePluginRestart(opts: {
       }
       const oldHandle = currentHandle;
       const oldRendererPids = windows.map((window) => window.webContents.getOSProcessId());
+      trace.mark(cycle, "board-save");
       // DK-5: what the recovered windows must reopen is SAVED before fieldd dies
       if (gpu) {
         await boardsSettledAtFieldd(currentHandle, [
@@ -4164,6 +4208,7 @@ export async function runSmokePluginRestart(opts: {
         oldHandle.info.bootId,
         15_000,
       );
+      trace.mark(cycle, "daemon-replacement");
       process.kill(childPid, "SIGKILL");
       await waitForCondition("owned fieldd handle retirement", 10_000, () => {
         return oldHandle.client.status === "closed";
@@ -4174,6 +4219,7 @@ export async function runSmokePluginRestart(opts: {
       }
       oldBootIds.push(oldHandle.info.bootId);
 
+      trace.mark(cycle, "renderer-ready");
       currentCanvas = (await Promise.all(replacementReady)).map(
         (raw) => JSON.parse(raw) as CanvasFacts,
       );
@@ -4181,6 +4227,7 @@ export async function runSmokePluginRestart(opts: {
       const replacementProblems = currentCanvas.flatMap((facts, index) =>
         censusFailures(facts).map((problem) => `window ${index + 1}: ${problem}`),
       );
+      trace.mark(cycle, "desk-ready");
       if (gpu) {
         // the desk REMOUNTED in each replaced renderer, on the SAME board it drew (its own
         // `vf-window-doc`), every kind it held intact (DK-9: each window's own census — the seed's six and
@@ -4213,6 +4260,7 @@ export async function runSmokePluginRestart(opts: {
           }
         }
         // DK-9 (DK-D25): the desk consumes no render time at rest and under a cover, cycle after cycle
+        trace.mark(cycle, "desk-stillness");
         const stillness: (object | null)[] = [];
         for (const [index, win] of windows.entries()) {
           try {
@@ -4238,6 +4286,7 @@ export async function runSmokePluginRestart(opts: {
         console.log(`SMOKE_PLUGIN_RESTART_RECOVERED_DESK_CARDS ${JSON.stringify(recoveredCards)}`);
       }
       if (replacementProblems.length > 0) throw new Error(replacementProblems.join(" · "));
+      trace.mark(cycle, "identity-and-death");
       const newConnections = await Promise.all(windows.map(rendererConnection));
       for (let index = 0; index < windows.length; index += 1) {
         const oldIdentity = currentConnections[index]?.rendererParticipant;
@@ -4257,6 +4306,7 @@ export async function runSmokePluginRestart(opts: {
       await waitForCondition("old renderer process death", 10_000, () =>
         oldRendererPids.every((pid) => !pidAlive(pid)),
       );
+      trace.mark(cycle, "health-settle");
       const settled = await settlePluginRuntimeHealth(currentHandle, expectedFielddRuntime);
       if (config.injection === "main-listener" && cycle >= config.warmupSamples) {
         const event = `vf:prc6:planted:${cycle}`;
@@ -4265,18 +4315,22 @@ export async function runSmokePluginRestart(opts: {
       }
       await collectSample("restart", settled, [childPid], oldRendererPids);
       if (config.cycleDelayMs > 0) {
+        trace.mark(cycle - 1, "dwell");
         const remaining = deadline === null ? config.cycleDelayMs : deadline - performance.now();
         if (remaining > 0) await sleep(Math.min(config.cycleDelayMs, remaining));
       }
     }
 
     if (deadline !== null && samples.at(-1)!.elapsedMs < config.durationMs!) {
+      trace.mark(cycle, "dwell");
       const remaining = deadline - performance.now();
       if (remaining > 0) await sleep(remaining);
+      trace.mark(cycle, "health-settle");
       const settled = await settlePluginRuntimeHealth(currentHandle, expectedFielddRuntime);
       await collectSample("terminal", settled, [], []);
     }
 
+    trace.mark(cycle, "verdict");
     const verdict = evaluatePhysicalSoak(samples, physicalSoakOptions(config));
     console.log(
       `PLUGIN_RUNTIME_SOAK ${JSON.stringify({
@@ -4304,14 +4358,21 @@ export async function runSmokePluginRestart(opts: {
     );
     ok = verdict.verdict === "pass";
   } catch (error) {
+    trace.event("operation-failed");
     console.error(
       `SMOKE_PLUGIN_RESTART failed: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
   for (const event of plantedEvents) process.removeAllListeners(event);
+  let teardownComplete = false;
+  trace.mark(null, "teardown");
   try {
     await teardown(opts.supervisor, opts.root, opts.beforeExit, ok);
+    teardownComplete = true;
   } finally {
+    powerMonitor.removeListener("suspend", onSuspend);
+    powerMonitor.removeListener("resume", onResume);
+    trace.end(ok && teardownComplete ? "pass" : "fail");
     if (powerSaveBlockerId !== null && powerSaveBlocker.isStarted(powerSaveBlockerId)) {
       powerSaveBlocker.stop(powerSaveBlockerId);
     }

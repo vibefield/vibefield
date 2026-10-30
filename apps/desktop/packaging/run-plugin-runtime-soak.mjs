@@ -13,6 +13,7 @@ const LITERAL_CLAIM_MS = 24 * 60 * 60 * 1_000;
 const MAX_DELAY_MS = 5 * 60 * 1_000;
 const STDERR_TAIL_BYTES = 256 * 1024;
 const SAMPLE_PREFIX = "PLUGIN_RUNTIME_SOAK_SAMPLE ";
+const DIAGNOSTIC_PREFIX = "PLUGIN_RUNTIME_SOAK_DIAGNOSTIC ";
 const VERDICT_PREFIX = "PLUGIN_RUNTIME_SOAK ";
 let activeChild = null;
 
@@ -218,6 +219,11 @@ async function main() {
         samples += 1;
         evidence.write(
           `${JSON.stringify({ type: "sample", observedAt: new Date().toISOString(), sample })}\n`,
+        );
+      } else if (line.startsWith(DIAGNOSTIC_PREFIX)) {
+        const diagnostic = parseLine(line, DIAGNOSTIC_PREFIX, "physical soak diagnostic");
+        evidence.write(
+          `${JSON.stringify({ type: "diagnostic", observedAt: new Date().toISOString(), diagnostic })}\n`,
         );
       } else if (line.startsWith(VERDICT_PREFIX)) {
         verdict = parseLine(line, VERDICT_PREFIX, "physical soak verdict");
