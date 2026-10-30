@@ -312,6 +312,7 @@ import { SetupLedgerStore } from "./setup-ledger";
 import { appBundleOf, relaunchFromBundle, type SHELL_ABSENCE, ShellAbsence } from "./shell-absence";
 import { ShellLease } from "./shell-lease";
 import { createSurfaceService } from "./surface-service";
+import { oweSyncQuestion } from "./sync-question";
 import { peerAnswerBytes, tailnetRowLimit } from "./tailnet-rows";
 import { runtimeProfileBinding, TerminalBindingStore } from "./terminal-bindings";
 import { createTerminalLinkDoor } from "./terminal-links";
@@ -1185,6 +1186,16 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       // is resident (UA-D3 — background pairs keep running), and the answer
       // that matters is the one true at the moment a login enters this tree.
       otherUserLinks: () => otherUserLinks(config.dataDir, linkLogger),
+      // TS-6 (TS-D13) — a new link keeps the fields made before it on this Mac
+      // and owes the sync question, before link.json is written. `docs` is
+      // declared below with no await between; a capture lands only after the
+      // floor answers, so the binding is live by then.
+      beforeLinked: () =>
+        oweSyncQuestion({
+          ledger: setupLedger,
+          docs,
+          logger: logger.child({ component: "sync-question" }),
+        }),
     });
     links.start();
     // UA-P-0j — the first dial already happened above, so this hears only the

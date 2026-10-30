@@ -1,0 +1,17 @@
+{
+  "phase": "idle",
+  "channel": "nightly",
+  "buildChannel": "nightly",
+  "enabled": true,
+  "lastCheckAt": 1793178000000,
+  "applyWired": true,
+  "currentVersion": "0.1.0-nightly.20261028",
+  "lastApply": {
+    "version": "0.1.0-nightly.20261028",
+    "from": "0.1.0-nightly.20261027",
+    "outcome": "installed",
+    "at": 1793178007000,
+    "trigger": "restart",
+    "thisLaunch": true
+  }
+}

@@ -12,6 +12,7 @@ import {
   SetupAnswerParams,
   SetupLedger,
   SetupMomentParams,
+  SYNC_QUESTION_MOMENT,
   setupMomentRecord,
   setupMomentState,
   setupStepState,
@@ -194,5 +195,27 @@ describe("asking again after Not now (TS-4; TS-D7)", () => {
       "connect-ask:approval-wait": { state: "retired", at: ago(1_000) },
     });
     expect(connectAskOpen(retiredNow, "away", NOW)).toBe(true);
+  });
+});
+
+describe("TS-6 — the sync question a link owes (TS-D13)", () => {
+  it("reads the golden ledger: the question owed beside AO's and TS-4's rows", () => {
+    const ledger = SetupLedger.parse(fixture("setup-ledger-sync-question.valid"));
+    expect(setupMomentRecord(ledger, SYNC_QUESTION_MOMENT)).toEqual({
+      state: "owed",
+      at: "2026-10-29T08:03:21.000Z",
+    });
+    expect(setupMomentState(ledger, "limit")).toBe("retired");
+    expect(setupMomentState(ledger, "connect-ask:away")).toBe("asked");
+  });
+
+  it("is fieldd's to owe: a window answers it, and never owes it", () => {
+    expect(SetupMomentParams.parse({ moment: SYNC_QUESTION_MOMENT, state: "retired" })).toEqual({
+      moment: SYNC_QUESTION_MOMENT,
+      state: "retired",
+    });
+    expect(
+      SetupMomentParams.safeParse({ moment: SYNC_QUESTION_MOMENT, state: "owed" }).success,
+    ).toBe(false);
   });
 });

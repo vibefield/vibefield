@@ -12,8 +12,10 @@ import type {
   ThemePreference,
   ThemeState,
   UpdateChannel,
+  UpdateCheckResult,
   UpdateConfirmResult,
   UpdateDoctorResult,
+  UpdateDownloadResult,
   UpdatePrepareResult,
   WindowConnection,
   WindowLightsState,
@@ -114,10 +116,12 @@ declare global {
       };
       /** WP12d (L3c-i) — the desktop updater's host doors (its state rides `onDesktopState`'s `update`). */
       update: {
-        check(): Promise<void>;
+        check(): Promise<UpdateCheckResult>;
         setEnabled(enabled: boolean): Promise<void>;
         setChannel(channel: UpdateChannel): Promise<void>;
         decline(version: string): Promise<void>;
+        /** AU-1 (AU-G5, AU-G6) — download THIS found version; a refusal in main's words */
+        download(version: string): Promise<UpdateDownloadResult>;
         prepareRestart(): Promise<UpdatePrepareResult>;
         confirmRestart(token: string): Promise<UpdateConfirmResult>;
         doctor(): Promise<UpdateDoctorResult>;

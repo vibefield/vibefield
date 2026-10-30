@@ -2,6 +2,7 @@ import { APP_PREFERENCE_KEYS, type AppPreferences, type DeviceInfo } from "@vibe
 import { SegmentedControl } from "@vibefield/design-kit";
 import { useFielddClient, useSubscription } from "@vibefield/fieldd-client/react";
 import { type ReactElement, type ReactNode, useEffect, useRef, useState } from "react";
+import { AddPhoneCode } from "../account/door/add-phone-code";
 import {
   LINK_ACT_LABEL,
   LINK_ACT_PENDING_LABEL,
@@ -11,7 +12,8 @@ import {
   renewalDays,
   unlinkedWord,
 } from "../account/link";
-import { POSTURE_CHOICES, useSyncPosture } from "../account/posture";
+import { PostureCards } from "../account/PostureCards";
+import { useSyncPosture } from "../account/posture";
 import { TailscaleMark } from "../account/tailscale-mark";
 import { useAccountSnapshot } from "../account/use-account";
 import { copyText, useLinkDoor } from "../account/use-link-door";
@@ -682,11 +684,21 @@ function Sheet(props: DevicesSectionViewProps): ReactElement | null {
             label="Device kind"
           />
         </div>
-        <div className={labelCls}>
-          {kind === "phone"
-            ? `On your iPhone, open VibeField and Continue with Tailscale, signing in as ${login ?? "this account"}. It finds this Mac on its own.`
-            : `On your other computer, install VibeField and Continue with Tailscale, signing in as ${login ?? "this account"}. It joins your devices here.`}
-        </div>
+        {kind === "phone" ? (
+          // TS-7b — the code that tells the phone which account to expect (the Connect pane's own drawing)
+          <AddPhoneCode
+            login={props.face.kind === "linked" ? props.face.link.login : null}
+            names={[
+              props.devices.find((device) => device.self)?.name,
+              props.face.kind === "linked" ? props.face.machineName : null,
+            ]}
+            className={labelCls}
+          />
+        ) : (
+          <div className={labelCls}>
+            {`On your other computer, install VibeField and Continue with Tailscale, signing in as ${login ?? "this account"}. It joins your devices here.`}
+          </div>
+        )}
         <div className="vf-devices-acts">
           <button type="button" className={buttonCls} onClick={() => onSheet("none")}>
             Done
@@ -903,7 +915,8 @@ export function DevicesSection({
 }
 
 /** New projects (moved from Account, TS-D3): what a new project does by
- * default — the posture's two cards, the same ones the Setup Assistant asks. */
+ * default — the posture's two cards, the same ones the sync question asks
+ * (TS-6; the Setup Assistant asked them until then). */
 function NewProjectsSection({
   onSettingsChanged,
 }: {
@@ -919,38 +932,16 @@ function NewProjectsSection({
       title="New projects"
       description="What a new document does by default. You can change any single document afterwards."
     >
-      <div role="radiogroup" aria-label="Sync posture" className="grid gap-2 sm:grid-cols-2">
-        {POSTURE_CHOICES.map((card) => {
-          const selected = posture.posture === card.value;
-          return (
-            <label
-              key={card.value}
-              className={`rounded-[14px] border p-3 text-left transition-[background-color,border-color,transform] focus-within:ring-2 focus-within:ring-black/15 dark:focus-within:ring-white/20 ${
-                selected
-                  ? "border-black/25 bg-black/[0.04] dark:border-white/30 dark:bg-white/[0.08]"
-                  : "border-black/10 hover:bg-black/[0.02] dark:border-white/10 dark:hover:bg-white/[0.04]"
-              } ${locked ? "cursor-not-allowed opacity-45" : "cursor-pointer active:scale-[0.99]"}`}
-            >
-              <input
-                type="radio"
-                name="vf-sync-posture"
-                className="sr-only"
-                checked={selected}
-                disabled={locked}
-                onChange={() => {
-                  void posture.set(card.value).then((landed) => {
-                    if (landed) onSettingsChanged?.(true);
-                  });
-                }}
-              />
-              <div className="text-[13px] font-medium leading-5 text-black/80 dark:text-white/80">
-                {card.title}
-              </div>
-              <div className={`mt-0.5 ${labelCls}`}>{card.description}</div>
-            </label>
-          );
-        })}
-      </div>
+      <PostureCards
+        value={posture.posture}
+        locked={locked}
+        name="vf-sync-posture"
+        onChoose={(value) => {
+          void posture.set(value).then((landed) => {
+            if (landed) onSettingsChanged?.(true);
+          });
+        }}
+      />
       {posture.status === "loading" && (
         <div className={`pt-2 ${labelCls}`}>Loading preferences…</div>
       )}

@@ -134,6 +134,8 @@ describe("UI system ownership boundaries", () => {
       "account/FacePicker.tsx",
       "account/faces.ts",
       "account/use-account.ts",
+      // TS-7b — the Connected aside's phone code: connect.tsx mounts it, so it is boot-reachable too
+      "account/door/add-phone-code.tsx",
       ...onboarding,
     ]) {
       expect(source(module), module).not.toMatch(/from "@vibefield\/(?:contracts|design-kit)";/);
@@ -588,7 +590,6 @@ describe("UI system ownership boundaries", () => {
       "OnboardingConnectPaneView",
       "OnboardingDerivingPaneView",
       "OnboardingFieldPaneView",
-      "OnboardingPosturePaneView",
       "OnboardingSettingUpPaneView",
       "OnboardingUsersPaneView",
       "OnboardingWelcomeBackPaneView",

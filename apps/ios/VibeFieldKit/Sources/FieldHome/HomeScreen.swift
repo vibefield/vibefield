@@ -38,6 +38,13 @@ public struct HomeScreen: View {
   /// its profiles: whether History's Resume is offered for an agent there.
   @State private var fieldCatalogs: [String: [AgentCatalogRow]] = [:]
   @State private var mesh = MeshModel()
+  /// TS-7 — the system's sign-in sheet; `syncSignInSheet` opens and closes it.
+  @State private var signInSheet = TailscaleSignInSession()
+  /// TS-7 (Q1-f) — the desktop filling "No desktops yet"'s row for the beat.
+  @State private var foundDesktop: FieldHomeModel.FoundDesktop?
+  /// TS-7b — the account a Mac's code said to expect, and its reader.
+  private let expectationMemory = ExpectationMemory()
+  @State private var macCodeReaderOpen = false
   @State private var remoteField = RemoteSessionField(source: nil)
   /// IOS-4b — the live field: the devices store, the doors it names, and the
   /// boards behind them. Built when the mesh comes up and void when it goes,
@@ -120,8 +127,12 @@ public struct HomeScreen: View {
   #endif
   // --- end IOS-9a/9e -------------------------------------------------------
   #if DEBUG
-    /// `-vf-demo-account=<state>`: the corner's inputs, stamped (IOS-8e).
-    @State private var demoAccount: FieldHomeModel.AccountFace?
+    /// `-vf-demo-account=<state>`: the corner's inputs, stamped (IOS-8e), and
+    /// the Field page's door with them (TS-7).
+    @State private var demoAccount: AccountFixtures.Demo?
+    /// `-vf-demo-signin=<shared|ephemeral>`: the sign-in sheet, presented and
+    /// closed by the app (TS-7's spike).
+    @State private var demoSignIn: TailscaleSignInSession?
   #endif
   @State private var settingsSheetOpen = false
   /// IOS-8g — the same sheet, presented from the session card's `···`: the
@@ -221,7 +232,11 @@ public struct HomeScreen: View {
       // The lab and the demo arguments own the field while they are up: what
       // they show is our own pixels, and a daemon arriving mid-screenshot
       // would be the fixture lying about what it is.
-      if mockActive { return feed.agents }
+      if mockActive {
+        // TS-7 — the mock's fleet is the field only while no door stands.
+        if let mock, !mock.fieldIsLive { return [] }
+        return feed.agents
+      }
     #endif
     return link?.agents ?? []
   }
@@ -253,21 +268,25 @@ public struct HomeScreen: View {
     ZStack {
       // The swarm on Metal (IOS-6c/6d): the reference's renderer over the
       // dressed rows; the chrome slot's obstacles are the field's walls.
+      let door = doorPage
       SwarmField(
         bubbles: bubbles,
         // IOS-9e — the field draws only while it is the page standing: the
         // other two keep it alive under them, and a hidden Metal view
         // rendering at 120 Hz is a battery spent on nobody.
         isActive: scenePhase == .active && selectedTab == .field,
-        onSelect: { bubble in openCard(on: bubble) },
-        onCreate: { _ in
-          #if DEBUG
-            if mockActive { return feed.spawn() }
-          #endif
-          beginCreate(fieldContext())
-          return nil
+        // TS-7 — under a door page the field drifts and takes no acts: a hold
+        // would open a launch sheet with no desktop to launch on.
+        showsEmptyState: door == nil,
+        // TS-D22 — over a live field the door's page stands on the Peek's dim.
+        scrim: FieldHomeModel.doorDimsField(door, liveBodies: bubbles.count) ? ChromePalette.searchScrim : nil,
+        // TS-7c — no card opens under a door either. Read at the tap, not at
+        // this render: the stage keeps the closure it was first handed.
+        onSelect: { bubble in
+          if FieldHomeModel.fieldTakesActs(under: doorPage) { openCard(on: bubble) }
         },
-        bloom: bloomMenu,
+        onCreate: FieldHomeModel.fieldTakesActs(under: door) ? fieldHold : nil,
+        bloom: FieldHomeModel.fieldTakesActs(under: door) ? bloomMenu : nil,
         onBloom: { choice in
           // Q4 (a): the bloom opens the launch sheet on that desktop and profile
           beginCreate(fieldContext(desktop: choice.desktop, profileSet: choice.profile))
@@ -280,6 +299,38 @@ public struct HomeScreen: View {
         .ignoresSafeArea()
       VignetteOverlay()
         .ignoresSafeArea()
+
+      if let door {
+        DoorPageView(
+          page: door, onSignIn: performSignIn,
+          bottomClearance: AppBar.clearance(homeInset: homeInset, stepper: false),
+          onScan: { macCodeReaderOpen = true },
+          onSwitchAccount: switchAccount,
+          onKeepAccount: keepAccount)
+        .transition(.opacity)
+        // On the page rather than the stage: the stage already presents the
+        // swarm lab's cover, and one view presents one cover.
+        .fullScreenCover(isPresented: $macCodeReaderOpen) {
+          MacCodeReader(
+            onCode: { code in
+              macCodeReaderOpen = false
+              receive(code, arrival: .scanned)
+            },
+            onClose: { macCodeReaderOpen = false })
+        }
+      }
+    }
+    .animation(FieldMotion.ease(0.24), value: doorPage)
+    .onChange(of: doorPage) { previous, next in
+      // TS-7 (Q1-f) — "Your Mac appears here" keeps its promise: the first
+      // desktop to list fills the row for the beat, then the page yields.
+      guard let found = FieldHomeModel.foundDesktop(previous: previous, next: next, desktops: linkDesktops)
+      else { return }
+      foundDesktop = found
+      Task {
+        try? await Task.sleep(for: FieldHomeModel.foundBeatHold)
+        foundDesktop = nil
+      }
     }
     // The lab covers the stage (IOS-6c); presented here rather than on the
     // body's chain, which is already at the type-checker's limit.
@@ -319,7 +370,12 @@ public struct HomeScreen: View {
       "Sign out of \(accountLogin ?? "this account")?", isPresented: $signOutPending,
       titleVisibility: .visible
     ) {
-      Button("Sign out", role: .destructive) { signOut() }
+      Button("Sign out", role: .destructive) {
+        // TS-7b — the person's own Sign out settles a Mac's code too; the
+        // sweep alone keeps it, for "Another account?"'s Sign in again.
+        expectationMemory.forget()
+        signOut()
+      }
       Button("Cancel", role: .cancel) {}
     } message: {
       Text(
@@ -488,6 +544,9 @@ public struct HomeScreen: View {
     .onChange(of: history.path) { history.barMinimized = false }
     #if DEBUG
       .onChange(of: mockDesktopIsUp) { syncMockHistory() }
+      .onChange(of: mockFieldIsLive) { _, live in
+        if live == true { feed.start() } else { feed.stop() }
+      }
     #endif
   }
 
@@ -555,7 +614,7 @@ public struct HomeScreen: View {
   @ViewBuilder
   private var barRow: some View {
     ZStack(alignment: .bottom) {
-      if selectedTab != .search && !barFolded {
+      if selectedTab != .search && !barFolded && !welcomeHidesCorner {
         accountCorner
           .padding(.leading, AppBar.margin)
           .frame(maxWidth: .infinity, alignment: .bottomLeading)
@@ -905,6 +964,9 @@ public struct HomeScreen: View {
     /// The mock's standing as History reads it (`-vf-mock`: Disconnect puts
     /// studio to sleep, Connect wakes it).
     private var mockDesktopIsUp: Bool? { mock?.desktopIsUp }
+    /// TS-7 — the mock's fleet ticks only while its field is live: the mock's
+    /// own Sign in starts it, its Sign out stops it.
+    private var mockFieldIsLive: Bool? { mock?.fieldIsLive }
 
     private func syncMockHistory() {
       guard let mock else { return }
@@ -927,9 +989,10 @@ public struct HomeScreen: View {
         // the desktop's grant, which a fixture cannot forge and should not.
         // Headless smoke hooks (the GhostteaApp pattern: opt-in automation,
         // Debug-only): drive flows a simulator run can't tap into.
+        // TS-7 — the welcome's Continue with Tailscale, as a finger would
+        // tap it: the corner's menu is not the way in while the welcome stands.
         if ProcessInfo.processInfo.arguments.contains("-vf-auto-connect") {
-          accountMenuOpen = true
-          mesh.signIn()
+          performSignIn()
         }
         // IOS-9d — `-vf-mock`: the whole phone over invented facts and no
         // tailnet. The account is `MockAccount`'s (signed in, 🦊, studio up
@@ -944,9 +1007,10 @@ public struct HomeScreen: View {
           let account = MockAccount()
           if ProcessInfo.processInfo.arguments.contains("-vf-mock-signed-out") { account.standing = .signedOut }
           if ProcessInfo.processInfo.arguments.contains("-vf-mock-reconnecting") { account.standing = .reconnecting }
+          if ProcessInfo.processInfo.arguments.contains("-vf-mock-approval") { account.standing = .approval }
           mock = account
           mockActive = true
-          feed.start()
+          if account.fieldIsLive { feed.start() }
           syncMockHistory()
           if let search = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-vf-mock-search=") }) {
             searchQuery = String(search.dropFirst("-vf-mock-search=".count))
@@ -1059,10 +1123,34 @@ public struct HomeScreen: View {
         // menu, which a headless run could not tap.
         if let argument = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix(AccountFixtures.argument) }) {
           let state = String(argument.dropFirst(AccountFixtures.argument.count).drop(while: { $0 == "=" }))
-          demoAccount = AccountFixtures.face(named: state)
+          demoAccount = AccountFixtures.demo(named: state)
           if demoAccount == nil { print("unknown account fixture:", state) }
           if ProcessInfo.processInfo.arguments.contains(AccountFixtures.openArgument) {
             accountMenuOpen = true
+          }
+        }
+        // TS-7 — the spike TS-D11 A asked for first: can the app close the
+        // system's sign-in sheet in code, with no callback to end it? The sheet
+        // goes up at Tailscale's page and the app closes it 4 s later, saying
+        // each step on the console. `shared` meets iOS's consent alert first,
+        // `ephemeral` the page itself. No tailnet is involved: the close is the
+        // app's own.
+        if let argument = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-vf-demo-signin=") }),
+          let page = URL(string: "https://login.tailscale.com/start")
+        {
+          let mode = String(argument.dropFirst("-vf-demo-signin=".count))
+          let sheet = TailscaleSignInSession(ephemeral: mode == "ephemeral")
+          sheet.onEnded = { ending in print("[signin] ended: \(ending)") }
+          demoSignIn = sheet
+          Task {
+            try? await Task.sleep(for: .seconds(1))
+            print("[signin] presenting (\(mode))")
+            sheet.present(page)
+            try? await Task.sleep(for: .seconds(4))
+            print("[signin] closing by the app; presented: \(sheet.presented != nil)")
+            sheet.close()
+            try? await Task.sleep(for: .seconds(1))
+            print("[signin] after the close; presented: \(sheet.presented != nil)")
           }
         }
         // `-vf-demo-remote` stands a FAKE peer up so the remote bubble's own
@@ -1358,6 +1446,7 @@ public struct HomeScreen: View {
     .onChange(of: mesh.state) { _, state in
       syncDiscovery(meshIsUp: state == .up, phase: scenePhase)
       if state == .up { wakeFreewayLinks() }
+      syncSignInSheet()
     }
     // RETIRED 2026-09-14 (TM-3): the IOS-4d trigger that asked each desktop for
     // this device's write key the moment it finished hello. There is no door to
@@ -1466,18 +1555,39 @@ public struct HomeScreen: View {
     // capability or asked the desktop for one. Both doors are deleted.
     // RETIRED 2026-09-23 (IOS-8b): the mesh sheet. Its status sentence, its
     // account line, its one act and its roster are the account menu's now.
-    // The Tailscale login page. One presenter at root: an arriving login folds
-    // the account menu first, so the page never rises under an open menu.
-    .onChange(of: mesh.loginPage) {
-      if mesh.loginPage != nil { setAccountMenu(open: false) }
+    // TS-7 — the Tailscale login page, in the system's sign-in sheet, which
+    // the app opens and closes itself: it follows the page and the phase
+    // (`SignInSheet.step`). RETIRED here (TS-D11 A): the `.sheet(item:)` that
+    // held a `SafariView`, which shared no cookies and was never closed when
+    // the node came up.
+    .onChange(of: mesh.loginPage) { syncSignInSheet() }
+    // TS-7b — the expected login arriving settles the Mac's code; a link to
+    // the scheme is a code too, from wherever it came (EL7: drawn as such).
+    .onChange(of: mesh.loginName) { settleExpectation() }
+    .onOpenURL { url in
+      guard case .success(let code) = PhoneCode.parse(url.absoluteString) else { return }
+      receive(code, arrival: .link)
     }
-    .sheet(
-      item: Binding(
-        get: { mesh.loginPage },
-        set: { page in if page == nil { mesh.loginSheetDismissed() } })
-    ) { page in
-      SafariView(url: page.url)
-        .ignoresSafeArea()
+  }
+
+  /// One presenter, at root: an arriving page folds the account menu first,
+  /// so the sheet never rises under an open menu.
+  private func syncSignInSheet() {
+    switch SignInSheet.step(page: mesh.loginPage?.url, presented: signInSheet.presented, state: mesh.state) {
+    case .present(let page), .replace(let page):
+      setAccountMenu(open: false)
+      signInSheet.onEnded = { ending in
+        switch ending {
+        case .personCancelled: mesh.loginCancelled()
+        case .failed(let reason): mesh.loginSheetFailed(reason)
+        case .closedByApp: break
+        }
+      }
+      signInSheet.present(page)
+    case .close:
+      signInSheet.close()
+    case .keep:
+      break
     }
   }
 
@@ -1988,7 +2098,7 @@ public struct HomeScreen: View {
   /// until a door has said who you are.
   private var accountFace: FieldHomeModel.AccountFace {
     #if DEBUG
-      if let demoAccount { return demoAccount }
+      if let demoAccount { return demoAccount.face }
       if let mock { return mock.face }
     #endif
     _ = identityEpoch
@@ -2002,10 +2112,111 @@ public struct HomeScreen: View {
       face: account.flatMap { faceStore.face(for: $0) },
       desktops: linkDesktops,
       asleep: account.map { login in
-        desktopMemory.remembered(for: login).map { .init(deviceId: $0.deviceId, name: $0.name) }
+        desktopMemory.remembered(for: login).map { .init(deviceId: $0.deviceId, name: $0.name, platform: $0.platform) }
       } ?? [],
       foreignDoors: link?.foreignDoors.count ?? 0,
       isHearing: link?.isHearing ?? false)
+  }
+
+  // MARK: - TS-7: the account's door on the Field page
+
+  /// The page standing on the Field tab, or nil for the field — decided in
+  /// `FieldHomeModel.doorPage`, where it is tested without a simulator.
+  private var doorPage: FieldHomeModel.DoorPage? {
+    var fixtureOwnsTheField = false
+    #if DEBUG
+      if let demoAccount { return demoAccount.door }
+      if let mock { return mock.door }
+      fixtureOwnsTheField = Self.fixtureArguments || mockActive || fixtureLink || demoRemoteActive
+    #endif
+    _ = identityEpoch
+    return FieldHomeModel.doorPage(
+      fixtureOwnsTheField: fixtureOwnsTheField,
+      meshState: mesh.state,
+      rememberedLogin: mesh.rememberedLogin,
+      login: mesh.loginName,
+      isGated: mesh.isGatedOnAccount,
+      hasListed: link?.hasListed ?? false,
+      listed: linkDesktops.count,
+      remembered: accountLogin.map { desktopMemory.remembered(for: $0).count } ?? 0,
+      machineName: mesh.machineName,
+      adminConsole: mesh.adminConsoleURL,
+      signInNote: mesh.signInNote,
+      found: foundDesktop,
+      expected: expectationMemory.expected())
+  }
+
+  /// TS-7b — a Mac's code arrived: remember the account it names. Scanned in
+  /// the app on a phone with no account, it goes on to the sign-in — the code
+  /// was the step before it; by a link it does not (any page can open the
+  /// scheme, so the person's own Continue starts it).
+  private func receive(_ code: PhoneCode, arrival: PhoneCodeExpectation.Arrival) {
+    #if DEBUG
+      if demoAccount != nil || mock != nil { return }
+    #endif
+    expectationMemory.record(code, arrival: arrival)
+    identityEpoch += 1
+    settleExpectation()
+    if arrival == .scanned, accountLogin == nil { performSignIn() }
+  }
+
+  private func settleExpectation() {
+    guard FieldHomeModel.expectationSettles(expectationMemory.expected(), login: mesh.loginName) else { return }
+    expectationMemory.forget()
+    identityEpoch += 1
+  }
+
+  /// "Another account?"'s Sign in again: the full sign-out (its sweep keeps
+  /// the expectation), then a fresh sign-in, which waits for the sweep.
+  private func switchAccount() {
+    #if DEBUG
+      // A stamped page is a photograph: its acts reach no mesh and no memory.
+      if demoAccount != nil || mock != nil { return }
+    #endif
+    signOut()
+    performSignIn()
+  }
+
+  /// "Another account?"'s Keep this account: the code is set aside.
+  private func keepAccount() {
+    #if DEBUG
+      if demoAccount != nil || mock != nil { return }
+    #endif
+    expectationMemory.forget()
+    identityEpoch += 1
+  }
+
+  #if DEBUG
+    /// A launch argument that stages this phone's own pixels owns the field
+    /// from the first frame: a door page over its photograph would be the
+    /// simulator's mesh (`.off`, nothing remembered) speaking over the
+    /// fixture. `-vf-demo-signin` is the real welcome under the real sheet.
+    private static let fixtureArguments = ProcessInfo.processInfo.arguments.contains { argument in
+      (argument.hasPrefix("-vf-demo-") && !argument.hasPrefix("-vf-demo-signin"))
+        || argument.hasPrefix("-vf-mock") || argument.hasPrefix("-vf-swarm-lab")
+    }
+  #endif
+
+  /// TS-7 (Q1-e) — while the welcome stands on the Field tab its Continue is
+  /// the one act, said once: the corner steps aside there and stays on
+  /// History.
+  private var welcomeHidesCorner: Bool {
+    // A menu already open keeps its corner: the bar folds its neighbours
+    // under it, and an invisible menu would take the tabs with it.
+    guard selectedTab == .field, !accountMenuOpen, case .welcome = doorPage else { return false }
+    return true
+  }
+
+  /// The field's hold, when no door page stands: the launch sheet on the
+  /// usual place, or the scripted fleet's spawn under the mock.
+  private var fieldHold: (SIMD2<Double>) -> String? {
+    { _ in
+      #if DEBUG
+        if mockActive { return feed.spawn() }
+      #endif
+      beginCreate(fieldContext())
+      return nil
+    }
   }
 
   /// The account this phone is signed in as: the running node's report,
@@ -2062,6 +2273,9 @@ public struct HomeScreen: View {
         setAccountMenu(open: false)
         return
       }
+      // TS-7 — a stamped corner is a photograph: its Sign out sweeps nothing,
+      // as its Sign in starts no node (`performSignIn`).
+      if demoAccount != nil { return }
     #endif
     selection = nil
     closeCard()
@@ -2082,6 +2296,8 @@ public struct HomeScreen: View {
         mock.signIn()
         return
       }
+      // TS-7 — a stamped corner is a photograph: its acts start no node.
+      if demoAccount != nil { return }
     #endif
     mesh.signIn()
   }
