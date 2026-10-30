@@ -1138,7 +1138,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     above itself — "Godview · claude·2 · 2m ago", "Canvas · snapshot · just now", a copy made in
     Settings or the Setup Assistant by the view under it ("Canvas · Settings · just now"), one History's
     room made by the view alone ("History · just now"), a paste with no caret by its act alone
-    ("⌘V · just now" — where it was copied is not known: a pane's ⌘C or copy-on-select, a field's own
+    ("⌘V · just now", "Ctrl+V" off the Mac — where it was copied is not known: a pane's ⌘C or copy-on-select, a field's own
     copy and a program's OSC 52 reach the clipboard with no card until G30; LC-21), a drag by where it
     came from ("Another app · dragged in · just now") — on solid chrome at
     12/500 in secondary ink — and shows its **×** inside its top right corner, across from the index:
@@ -1185,7 +1185,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     the frame's own roads are (LC-24): words past what one paste reads (`SHELL_CLIPBOARD.READ_MAX_BYTES`)
     are not brought in — "Not brought in — the words hold 30 MB; a card holds at most 4.1 MB" — and a
     picture past the still's cap comes in as its file, its path and never its pixels (a 200 MB image
-    dropped on a pane pastes its path). A field that takes the drop shows its own caret: over it the carried
+    dropped on a pane pastes its path); pixels past the cap with no file behind them (an image copied
+    in another app) are not brought in, said the same way. A field that takes the drop shows its own caret: over it the carried
     card ducks as it does over the line (LC-25). **Twelve**
     (HN-D8): the thirteenth pushes the oldest off the left end. **This window's session** (HN-D9):
     closing the window or quitting empties the hand; nothing of it is written anywhere.
