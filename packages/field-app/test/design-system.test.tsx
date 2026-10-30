@@ -225,6 +225,11 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       expect(tile?.querySelector("svg.vf-glyph"), name).not.toBeNull();
       expect(tile?.querySelector("small")?.textContent, name).toBe("instrument");
     }
+    // HN-8 (§13): Artifacts' glyph in a button is `package`, the pill's button's and the covered
+    // views' circle's, at rest — never `sidepanel`, the retired side panel's toggle, inverted.
+    const artifacts = container?.querySelector<HTMLElement>('#glyphs button[title="Artifacts"]');
+    expect(artifacts?.querySelector("[data-glyph]")?.getAttribute("data-glyph")).toBe("package");
+    expect(artifacts?.dataset.active).toBe("false");
     // One Frame FR-1: the view frame on fixtures — the shipping track and cover
     // over a field, and a plate per state the page's Chrome & Composer plates
     // show for the frame (the last the keys as Windows prints them).
@@ -692,6 +697,11 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       await Promise.resolve();
     });
     expect(container?.textContent).toContain("VibeField docs");
+    // HN-8: the Hub's plate gives it the Artifacts shelf's width, a container its tile form
+    // answers — the plugin's own panel, Publish… first in its catalog
+    const shelf = container?.querySelector(".vf-ds-shelf-stage");
+    expect(shelf?.firstElementChild?.className).toBe("vf-artifact-panel");
+    expect(shelf?.querySelector(".vf-artifact-list > li")?.className).toBe("vf-artifact-publish");
   });
 
   it("keeps every onboarding state lab interactive", async () => {
