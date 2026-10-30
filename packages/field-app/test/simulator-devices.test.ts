@@ -1,9 +1,10 @@
 // @vitest-environment node
 // PT-S2 (R11) — THE DEVICES A PHONE MAY ATTACH (surfaces/live/simulator-devices.ts): what the host lends under the SDK's
-// `SIMULATOR_DEVICES`. The PICK, pure, over main's redacted rows: the booted device of the phone's own model, else the first
-// booted iPhone, else the model on the newest iOS runtime here — a binding, never a UDID. The SERVICE: synchronous, from the
-// host's last read — cold, it answers undefined; it reads `surface.simulator.devices` only while a phone stands, at most once
-// a read's span, one read in flight; a failed or malformed read leaves the last standing; its looks are the window's timers.
+// `SIMULATOR_DEVICES`. The PICK, pure, over main's redacted rows and installed runtimes: the booted device of the phone's own
+// model, else the first booted iPhone, else the model on the newest iOS runtime INSTALLED here — a binding, never a UDID.
+// The SERVICE: synchronous, from the host's last read — cold, it answers undefined; it reads `surface.simulator.devices` only
+// while a phone stands, at most once a read's span, one read in flight; a failed or malformed read leaves the last standing;
+// its looks are the window's timers.
 // And the WANT, on a REAL engine and document: an object whose plugin holds the Simulator's scopes (the phone's, since PT-S2's
 // manifest) stands — a pane or a pad does not, and no document says nothing stands.
 import type { LiveSurfaceSimulatorDeviceRowV1 } from "@vibefield/contracts";
@@ -57,7 +58,24 @@ describe("PT-S2 (R11) — the attach's pick, over this Mac's rows", () => {
     expect(attachableOf(rows, PRO)).toEqual({ deviceType: SIXTEEN, runtime: IOS_18_6 });
   });
 
-  it("3. else the phone's OWN model on the newest iOS runtime this Mac's devices are on — never a watch's runtime", () => {
+  it("3. else the phone's OWN model on the newest iOS runtime INSTALLED here — whether or not a device runs it yet, never a watch's", () => {
+    const rows = [row(SIXTEEN, IOS_18_6, false, "iPhone 16"), row(PRO, IOS_26, false)];
+    // 26.1 is installed with no device on it: the phone binds there all the same (main attaches the model's 26.0 device —
+    // off, with Boot — or, with none, says no device, with Create it)
+    const runtimes = [WATCH_OS, IOS_18_6, IOS_26_1, IOS_26];
+    expect(attachableOf(rows, PRO, runtimes)).toEqual({ deviceType: PRO, runtime: IOS_26_1 });
+    // a Mac with runtimes and NO device at all still binds the phone (its face then offers Create it)
+    expect(attachableOf([], PRO, runtimes)).toEqual({ deviceType: PRO, runtime: IOS_26_1 });
+    // a booted device still comes first
+    expect(attachableOf([row(PRO, IOS_18_6, true)], PRO, runtimes)).toEqual({
+      deviceType: PRO,
+      runtime: IOS_18_6,
+    });
+    // installed runtimes with none on iOS bind nothing
+    expect(attachableOf([], PRO, [WATCH_OS])).toBeUndefined();
+  });
+
+  it("3, with no runtimes said: the phone's OWN model on the newest iOS runtime this Mac's devices are on — never a watch's runtime", () => {
     const rows = [
       row(WATCH, WATCH_OS, true, "Apple Watch"),
       row(SIXTEEN, IOS_18_6, false, "iPhone 16"),
@@ -169,6 +187,14 @@ describe("PT-S2 (R11) — the host's devices: synchronous, from its last read, r
     expect(s.requests()).toHaveLength(0);
     expect(s.devices.stats()).toMatchObject({ looks: 2, reads: 0 });
     expect(s.devices.attachable(PRO)).toBeUndefined();
+  });
+
+  it("the runtimes main says are installed ride the read: a Mac with no device yet binds the model on its newest iOS", async () => {
+    const s = service();
+    s.answer({ devices: [], runtimes: [IOS_18_6, IOS_26_1] });
+    await s.devices.look();
+    expect(s.devices.attachable(PRO)).toEqual({ deviceType: PRO, runtime: IOS_26_1 });
+    expect(s.devices.stats()).toEqual({ looks: 1, reads: 1, failures: 0, rows: 0 });
   });
 
   it("a phone stands: main's list is read on the window's connection, and the pick answers from it", async () => {

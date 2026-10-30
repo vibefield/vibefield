@@ -2,17 +2,19 @@
 // beside `LIVE` (desk-layer.ts) — the phone's ATTACH reads it, and binds by what it answers.
 //  - SYNCHRONOUS, from a SNAPSHOT: a menu act runs once, outside the tick, and writes in its own transaction, so `attachable`
 //    answers from what the host last read of this Mac's devices — main's redacted rows (`surface.simulator.devices`, the
-//    window's product connection, under `surface.capture`: `{ deviceType, runtime, name, booted }`, never a UDID). Before
-//    the first read it answers undefined (the act writes nothing).
+//    window's product connection, under `surface.capture`: `{ deviceType, runtime, name, booted }`, never a UDID) and the
+//    runtimes installed here (ids only, the newest first). Before the first read it answers undefined (the act writes
+//    nothing).
 //  - READ WHILE A PHONE STANDS: the host looks every `SIMULATOR_DEVICES_LOOK_MS` whether an object that may show a Simulator
 //    stands on the open board — one whose plugin is granted the Simulator's scopes (live-gate.ts `SIMULATOR_SCOPES`: the host
 //    names no plugin's type, as the gate names none) — and while one does, reads the list again at most every
 //    `SIMULATOR_DEVICES_READ_MS` (main's one list a tick serves it: R8). No phone, no read. A read that fails leaves the last
 //    one standing. The looks are the window's timers, never the desk's loop: a desk at rest is never woken by them.
 //  - THE PICK (`attachableOf`, pure): the booted device of the phone's own model; else the first booted iPhone (the phone
-//    takes its model); else the phone's own model on the newest iOS runtime this Mac's devices are on — main's R3 attaches
-//    the model's device on any runtime, a booted one first, and its face then says honestly that it is off, or that there is
-//    none. Always a BINDING the contracts accept, never a UDID.
+//    takes its model); else the phone's own model on the newest iOS runtime INSTALLED here, whether or not a device runs it
+//    yet (DESIGN.md §9) — main's R3 attaches the model's device on any runtime, a booted one first, and its face then says
+//    honestly that it is off, or that there is none (and "Create it" makes one). Always a BINDING the contracts accept,
+//    never a UDID.
 
 import {
   type CanvasEngine,
@@ -71,6 +73,17 @@ function newestOf(
   return best?.row;
 }
 
+/** The newest iOS runtime of `runtimes` (CoreSimulator's ids: main's installed list) — undefined: none on iOS. */
+function newestIos(runtimes: readonly string[]): string | undefined {
+  let best: { runtime: string; version: readonly number[] } | undefined;
+  for (const runtime of runtimes) {
+    const version = iosVersion(runtime);
+    if (version === undefined) continue;
+    if (best === undefined || newer(version, best.version) < 0) best = { runtime, version };
+  }
+  return best?.runtime;
+}
+
 /** A binding the contracts accept, or undefined (a `prefer` that is no device type's id binds nothing). */
 function bindingOf(deviceType: string, runtime: string): LiveSimulatorBinding | undefined {
   const parsed = LiveSurfaceIosSimulatorBindingV1.safeParse({ deviceType, runtime });
@@ -80,23 +93,26 @@ function bindingOf(deviceType: string, runtime: string): LiveSimulatorBinding | 
 }
 
 /**
- * THE ATTACH'S PICK (R11), pure, over this Mac's device rows: the device a phone of model `prefer` binds to here.
+ * THE ATTACH'S PICK (R11), pure, over this Mac's device rows and its installed runtimes: the device a phone of model
+ * `prefer` binds to here.
  *  1. the BOOTED device of the phone's own model (on the newest runtime, where two are booted);
  *  2. else the first booted iPhone — its model and runtime (the phone morphs into it);
- *  3. else the phone's own model on the newest iOS runtime this Mac's devices are on (main attaches the model's device on any
- *     runtime — its face says `off`, and boots it — or says `no-device`, and creates one).
- * Undefined: no iOS row to pick from, or no binding the contracts accept (a `prefer` that is no device type's id).
+ *  3. else the phone's own model on the newest iOS runtime INSTALLED here, whether or not a device runs it yet (main attaches
+ *     the model's device on any runtime — its face says `off`, and boots it — or says `no-device`, and creates one). With
+ *     no runtimes said (`runtimes` empty), the newest a device row is on.
+ * Undefined: no iOS runtime to pick from, or no binding the contracts accept (a `prefer` that is no device type's id).
  */
 export function attachableOf(
   rows: readonly LiveSurfaceSimulatorDeviceRowV1[],
   prefer: string,
+  runtimes: readonly string[] = [],
 ): LiveSimulatorBinding | undefined {
   const own = newestOf(rows.filter((row) => row.booted && row.deviceType === prefer));
   if (own !== undefined) return bindingOf(own.deviceType, own.runtime);
   const iphone = rows.find((row) => row.booted && IPHONE.test(row.deviceType));
   if (iphone !== undefined) return bindingOf(iphone.deviceType, iphone.runtime);
-  const newest = newestOf(rows);
-  return newest === undefined ? undefined : bindingOf(prefer, newest.runtime);
+  const runtime = newestIos(runtimes) ?? newestOf(rows)?.runtime;
+  return runtime === undefined ? undefined : bindingOf(prefer, runtime);
 }
 
 /** The board's objects (never a pegboard's specimen) — the desk door's own query (live-eyes.ts). */
@@ -175,9 +191,13 @@ export function createSimulatorDevices(deps: DeskSimulatorDevicesDeps): DeskSimu
     set: (fn: () => void, ms: number): unknown => setTimeout(fn, ms),
     clear: (h: unknown): void => clearTimeout(h as ReturnType<typeof setTimeout>),
   };
-  /** The last read: its rows and when it landed — undefined: cold. */
+  /** The last read: its rows, the runtimes installed here, and when it landed — undefined: cold. */
   let snapshot:
-    | { readonly rows: readonly LiveSurfaceSimulatorDeviceRowV1[]; readonly at: number }
+    | {
+        readonly rows: readonly LiveSurfaceSimulatorDeviceRowV1[];
+        readonly runtimes: readonly string[];
+        readonly at: number;
+      }
     | undefined;
   let reading: Promise<void> | null = null;
   let timer: unknown = null;
@@ -192,7 +212,8 @@ export function createSimulatorDevices(deps: DeskSimulatorDevicesDeps): DeskSimu
     const run = (async () => {
       try {
         const raw = await client.request("surface.simulator.devices", {});
-        snapshot = { rows: SurfaceSimulatorDevicesResultV1.parse(raw).devices, at: now() };
+        const listed = SurfaceSimulatorDevicesResultV1.parse(raw);
+        snapshot = { rows: listed.devices, runtimes: listed.runtimes ?? [], at: now() };
       } catch {
         counts.failures += 1; // the last read stands: a phone attaches by type, and its face says what is true
       }
@@ -227,7 +248,7 @@ export function createSimulatorDevices(deps: DeskSimulatorDevicesDeps): DeskSimu
 
   return {
     attachable: (prefer) =>
-      snapshot === undefined ? undefined : attachableOf(snapshot.rows, prefer),
+      snapshot === undefined ? undefined : attachableOf(snapshot.rows, prefer, snapshot.runtimes),
     watch() {
       watching += 1;
       if (watching === 1) step();
