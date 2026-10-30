@@ -16,7 +16,8 @@ export interface LoggingHealthLike {
   readonly bootId?: string;
   readonly instanceId?: string;
   readonly queue?: { readonly records?: number; readonly bytes?: number };
-  readonly counters?: Readonly<Record<string, number>>;
+  // Tolerant logging contracts allow unknown extensions; only these numeric counters are read.
+  readonly counters?: Readonly<Partial<Record<DropCounter, number>>>;
 }
 
 interface LoggingStream {

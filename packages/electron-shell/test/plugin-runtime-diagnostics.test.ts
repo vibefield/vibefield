@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { LoggingHealthV1 } from "@vibefield/contracts/logging";
 import { describe, expect, it } from "vitest";
 import {
   type LoggingHealthLike,
@@ -17,6 +19,23 @@ const health = (rejected = 0, bootId = "boot-a"): LoggingHealthLike => ({
 });
 
 describe("physical soak log attribution", () => {
+  it("accepts the tolerant logging contract while excluding unknown counter payloads", () => {
+    const fixture = JSON.parse(
+      readFileSync(
+        new URL("../../contracts/fixtures/logging-health.valid.json", import.meta.url),
+        "utf8",
+      ),
+    );
+    const input = LoggingHealthV1.parse({
+      ...fixture,
+      counters: { ...fixture.counters, futureCounter: { detail: "private payload" } },
+    });
+    expect(input.counters.futureCounter).toEqual({ detail: "private payload" });
+    const result = loggingCensus([{ source: "fieldd", health: input }]);
+    expect(result).toMatchObject({ queueRecords: 2, queueBytes: 640, unexplainedDrops: 5 });
+    expect(JSON.stringify(result)).not.toMatch(/futureCounter|private payload/u);
+  });
+
   it("identifies one rejection without reporting it as a new loss on every later sample", () => {
     const clean = loggingCensus([{ source: "renderer", health: health() }]);
     const first = loggingCensus([{ source: "renderer", health: health(1) }], clean);

@@ -1,6 +1,5 @@
 import { execFile } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -11,7 +10,6 @@ const execute = promisify(execFile);
 const runner = fileURLToPath(
   new URL("../../../apps/desktop/packaging/run-plugin-runtime-soak.mjs", import.meta.url),
 );
-const requireFromRunner = createRequire(runner);
 // This fixture uses a POSIX executable script as the Electron stand-in. It launches no app/daemon.
 const unixIt = process.platform === "win32" ? it.skip : it;
 
@@ -20,10 +18,20 @@ unixIt.each([false, true])(
   async (earlyFailure) => {
     const root = mkdtempSync(join(tmpdir(), "vf-soak-runner-test-"));
     try {
-      const electronEntry = requireFromRunner.resolve("electron");
-      const executable = readFileSync(join(dirname(electronEntry), "path.txt"), "utf8").trim();
       const fakeDist = join(root, "fake-electron");
-      const fake = join(fakeDist, executable);
+      // Ask Electron under its override: path.txt may not exist before its lazy download.
+      const { stdout: fake } = await execute(
+        process.execPath,
+        [
+          "-e",
+          'process.stdout.write(require("node:module").createRequire(process.argv[1])("electron"))',
+          runner,
+        ],
+        {
+          env: { ...process.env, ELECTRON_OVERRIDE_DIST_PATH: fakeDist },
+          timeout: 10_000,
+        },
+      );
       mkdirSync(dirname(fake), { recursive: true });
       const diagnostic = {
         kind: "phase",
