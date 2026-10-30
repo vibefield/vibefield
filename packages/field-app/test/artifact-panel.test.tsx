@@ -46,12 +46,7 @@ async function mount(productClient: PluginProductClient): Promise<void> {
   document.body.appendChild(container);
   root = createRoot(container);
   await act(async () => {
-    root?.render(
-      <ArtifactPanel
-        client={productClient}
-        surface={{ slot: "hud.side-panel", windowId: "field", requestClose: vi.fn() }}
-      />,
-    );
+    root?.render(<ArtifactPanel client={productClient} />);
     await Promise.resolve();
     await Promise.resolve();
   });
@@ -162,6 +157,28 @@ describe("ArtifactPanel", () => {
     expect(container?.textContent).toContain(
       "That folder cannot be served. Choose another folder.",
     );
+  });
+
+  it("puts Publish… first in the catalog, in words, and turns the panel in place to the two choices (HN-8, PL-D3)", async () => {
+    await mount(client([ARTIFACT]));
+    const tiles = [...(container?.querySelectorAll(".vf-artifact-list > li") ?? [])];
+    expect(tiles.map((tile) => tile.className)).toEqual(["vf-artifact-publish", "vf-artifact-row"]);
+    const publish = tiles[0]?.querySelector("button");
+    expect(publish?.textContent).toBe("Publish…");
+    act(() => publish?.click());
+    expect(container?.querySelector(".vf-artifact-list")).toBeNull();
+    expect(button("Proxy")).not.toBeNull();
+    expect(button("Folder")).not.toBeNull();
+    // the round plus it stands for in the tile form is the same act, the list's
+    act(() => button("Back").click());
+    act(() => button("Add artifact").click());
+    expect(button("Proxy")).not.toBeNull();
+  });
+
+  it("draws no close of its own: the shelf's Escape, its dim and its button close it (HN-8)", async () => {
+    await mount(client([ARTIFACT]));
+    expect(container?.textContent).not.toContain("Close panel");
+    expect(container?.querySelector(".vf-artifact-close")).toBeNull();
   });
 
   it("opens the exact validated catalog URL and renders provider loss honestly", async () => {

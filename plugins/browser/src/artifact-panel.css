@@ -507,26 +507,57 @@
   align-self: stretch;
   margin-top: 3px;
 }
-.vf-artifact-close {
-  display: block;
-  margin: 2rem auto 0;
-  border: 0;
-  background: transparent;
-  color: rgb(128 128 128 / 65%);
-  font-size: 11px;
-}
-.vf-artifact-close:hover {
-  color: inherit;
+
+/* Publish… — the Add act as a tile, in words (FR-3: every create but Canvas's
+   carries its noun), wearing VibeField's New field face: the fill inside a
+   dashed strong hairline, 12/500 in secondary ink at its centre (VibeField
+   DESIGN.md §8 "Artifacts — the Artifacts shelf's contents"). It stands only
+   where the catalog is tiles; the list keeps the header's round plus. */
+.vf-artifact-publish {
+  display: none;
 }
 
-/* One Frame FR-4 — THE NARROW FORM. The Hub's door is the right edge's notch,
-   and its drawer is a 152 column (VibeField DESIGN.md §8, edge trays): the
-   drawer's column is a container, and under 200 wide the panel reads as that
-   column — each row a 128-wide card, the preview full width on top, the title,
-   the fact line and the status under it, the overflow on a chip over the
-   preview; the Add step's choices and fields stacked. The wide form above stays
-   for any host that is wider. */
-@container (max-width: 200px) {
+.vf-artifact-publish > button {
+  display: grid;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  place-items: center;
+  padding: 0;
+  border: 1px dashed var(--vf-hairline-strong);
+  border-radius: 10px;
+  color: var(--vf-text-secondary);
+  background: var(--vf-fill);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 180ms ease;
+}
+
+.vf-artifact-publish > button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.vf-artifact-publish > button:hover:not(:disabled) {
+  background: var(--vf-fill-hover);
+}
+
+/* HN-8 — THE TILE FORM (PL-D3, "Tiles, like your fields"; VibeField DESIGN.md
+   §8 "Artifacts — the Artifacts shelf's contents"). The Hub's host is the
+   pill's sheet, on its Artifacts shelf: 504 wide inside the sheet's 544, a
+   container. There the catalog is laid out as the fields' tiles are — three
+   across, 16 between rows and 14 between columns — each tile the preview
+   (16:10, corners 10, the hairline ring, the strong one under the pointer as
+   the row's border was), the name (12/500 in primary ink), where it runs (the
+   fact line) and its state (the status dot and word), the overflow on a chip
+   over the preview. Publish… is the first tile and stands for the round plus;
+   its two choices take the shelf in place, with the list's room. The sheet is
+   the padding, so the panel takes none, and its header keeps the Hub's words
+   at the sheet's size. From 320 wide, so a narrow window's shelf is tiles too;
+   a host that is no container keeps the list above. The 152 column's narrow
+   form retired with the edges' drawer (HN-8). */
+@container (min-width: 320px) {
   .vf-artifact-panel {
     min-height: 0;
     padding: 0;
@@ -545,38 +576,55 @@
   }
 
   .vf-artifact-add {
-    width: 28px;
-    height: 28px;
-  }
-
-  .vf-artifact-add svg {
-    width: 14px;
+    display: none;
   }
 
   .vf-artifact-list {
-    gap: 10px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px 14px;
+  }
+
+  .vf-artifact-publish {
+    display: block;
   }
 
   .vf-artifact-row {
     grid-template-columns: minmax(0, 1fr);
     gap: 0;
-    overflow: hidden;
     padding: 0;
-    border-radius: 14px;
+    border: 0;
+    border-radius: 0;
+    background: none;
+  }
+
+  .vf-artifact-row:hover {
+    background: none;
   }
 
   .vf-artifact-row__open {
     grid-template-columns: minmax(0, 1fr);
-    gap: 0;
+    gap: 6px;
   }
 
   .vf-artifact-preview {
     width: 100%;
-    border-radius: 0;
+    box-shadow: 0 0 0 1px var(--vf-hairline);
+    transition: box-shadow 180ms ease;
+  }
+
+  .vf-artifact-row:hover .vf-artifact-preview {
+    box-shadow: 0 0 0 1px var(--vf-hairline-strong);
   }
 
   .vf-artifact-row__facts {
-    padding: 8px 10px 10px;
+    padding: 0 2px;
+  }
+
+  .vf-artifact-row__facts strong {
+    color: var(--vf-text-primary);
+    font-weight: 500;
+    line-height: 1.2;
   }
 
   .vf-artifact-menu {
@@ -592,42 +640,21 @@
     box-shadow: 0 0 0 1px var(--vf-hairline);
   }
 
-  .vf-artifact-menu > div {
-    width: 120px;
-  }
-
   .vf-artifact-rename {
     flex-wrap: wrap;
-    padding: 6px 8px 8px;
+    padding: 6px 0 0;
+  }
+
+  .vf-artifact-rename input {
+    flex-basis: 100%;
   }
 
   .vf-artifact-quiet {
     min-height: 0;
-    padding: 20px 0;
-  }
-
-  .vf-artifact-placeholder {
-    width: 100%;
   }
 
   .vf-artifact-flow {
     padding: 0;
-  }
-
-  .vf-artifact-choice,
-  .vf-artifact-folder-picked {
-    grid-template-columns: 28px minmax(0, 1fr);
-    gap: 8px;
-    min-height: 0;
-    padding: 10px;
-  }
-
-  .vf-artifact-choice .vf-artifact-chevron {
-    display: none;
-  }
-
-  .vf-artifact-close {
-    margin-top: 12px;
   }
 }
 

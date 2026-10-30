@@ -3,7 +3,7 @@ import {
   type ArtifactView,
   ArtifactView as ArtifactViewSchema,
 } from "@vibefield/contracts";
-import type { PluginProductClient, PluginSurfaceProps } from "@vibefield/plugin-sdk";
+import type { PluginProductClient } from "@vibefield/plugin-sdk";
 import {
   EmptyState,
   FieldGlyph,
@@ -119,13 +119,10 @@ type CatalogState =
   | { phase: "live"; artifacts: ArtifactView[] }
   | { phase: "error"; message: string };
 
-export function ArtifactPanel({
-  client,
-  surface,
-}: {
-  client: PluginProductClient;
-  surface: PluginSurfaceProps;
-}): ReactElement {
+/** The Artifact Hub, the `hud.side-panel` contribution — hosted since HN-8 on the Artifacts shelf
+ * of VibeField's pill's sheet, whose Escape, dim and button close it: it draws no close of its own
+ * (VibeField DESIGN.md §8 "Artifacts — the Artifacts shelf's contents"). */
+export function ArtifactPanel({ client }: { client: PluginProductClient }): ReactElement {
   const [catalog, setCatalog] = useState<CatalogState>({ phase: "loading" });
   const [subscriptionEpoch, setSubscriptionEpoch] = useState(0);
   const [screen, setScreen] = useState<Screen>({ kind: "catalog" });
@@ -195,6 +192,14 @@ export function ArtifactPanel({
     setMutationError(null);
     setConfirmRemove(null);
     setScreen({ kind: "catalog" });
+  }, []);
+
+  // The Add act, from the header's round plus or, in the tile form, the Publish… tile: the panel's
+  // content changes in place to the two choices.
+  const beginAdd = useCallback(() => {
+    setMutationError(null);
+    setConfirmRemove(null);
+    setScreen({ kind: "choose" });
   }, []);
 
   const publish = useCallback(
@@ -417,6 +422,14 @@ export function ArtifactPanel({
     }
     return (
       <ul className="vf-artifact-list" aria-label="Artifacts">
+        {/* Publish… — the Add act as the first tile, in words, where the shelf lays the catalog
+            out as tiles (PL-D3); the list form keeps the header's round plus, and its stylesheet
+            shows one of the two. */}
+        <li className="vf-artifact-publish">
+          <button type="button" disabled={pending !== null} onClick={beginAdd}>
+            Publish…
+          </button>
+        </li>
         {artifacts.map((artifact) => (
           <ArtifactRow
             key={artifact.artifactKey}
@@ -441,6 +454,7 @@ export function ArtifactPanel({
     );
   }, [
     artifacts,
+    beginAdd,
     catalog,
     chooseFolder,
     confirmRemove,
@@ -470,11 +484,7 @@ export function ArtifactPanel({
             disabled={pending !== null}
             aria-label="Add artifact"
             title="Add artifact"
-            onClick={() => {
-              setMutationError(null);
-              setConfirmRemove(null);
-              setScreen({ kind: "choose" });
-            }}
+            onClick={beginAdd}
           >
             <FieldGlyph name="plus" size={18} />
           </button>
@@ -488,12 +498,6 @@ export function ArtifactPanel({
       )}
 
       {content}
-
-      {surface.slot === "hud.side-panel" && (
-        <button type="button" className="vf-artifact-close" onClick={surface.requestClose}>
-          Close panel
-        </button>
-      )}
     </section>
   );
 }
