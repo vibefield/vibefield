@@ -1,10 +1,12 @@
 import { ZOOM_MAX, ZOOM_MIN } from "@vibecook/ice/desk";
 import type { DocRegistryEntry } from "@vibefield/contracts";
+import { ArtifactPanelPreview } from "@vibefield/plugin-browser/design-system";
 import { type ReactElement, useState } from "react";
 import type { DocManagerApi, DocManagerState } from "../doc-manager";
-import type { FrameSurface } from "../frame/frame-surface";
+import type { FrameSurface, SheetShelf } from "../frame/frame-surface";
 import { Head } from "../frame/Head";
-import { type HeadDocTile, HeadView } from "../frame/HeadView";
+import { type HeadArtifacts, type HeadDocTile, HeadView } from "../frame/HeadView";
+import { artifactsDotWords } from "../frame/head-artifacts";
 import type { HeadCanvas, HeadCrumb } from "../frame/head-canvas";
 import type { SyncQuestionViewProps } from "../frame/SyncQuestionView";
 import type { ViewKeys } from "../frame/views";
@@ -17,7 +19,10 @@ import { CommandPalettePreview } from "./CommandPalettePreview";
 // fixture doors. What it replaces is only what a host supplies: the document
 // manager (the fields), the head's canvas door (the path, the zoom) and the
 // frame's one owner of the open surface (a local value). The markup and the
-// CSS are the product's.
+// CSS are the product's. HN-8: the Artifacts shelf's plates hold the Hub's
+// own fixture adapter (`ArtifactPanelPreview`, the plugin's design-system
+// door), where the product hosts its contributed surface; the live head has
+// no plugin host, so its shelf says it waits, as a window's does at boot.
 
 const NOW = Date.now();
 const MINUTE = 60_000;
@@ -145,13 +150,20 @@ const DEEP: readonly HeadCrumb[] = [
 
 /** The states the page's head plates show (§05 "The head", §06 the palette
  * and the fields), plus the two the brief adds: FitPath in a narrow window,
- * and renaming in place. */
+ * and renaming in place. HN-8 adds the package with its standing dot and the
+ * sheet on its Artifacts shelf — the Hub's, the plugin off, the Hub opening —
+ * and the same sheet under a cover, grown from the package circle. */
 export const HEAD_STATES = [
   "top",
+  "package-dot",
   "folder",
   "narrow",
   "renaming",
   "explorer",
+  "artifacts",
+  "artifacts-off",
+  "artifacts-opening",
+  "covered",
   "zoom",
   "palette",
   "sync-question",
@@ -160,14 +172,33 @@ export type HeadState = (typeof HEAD_STATES)[number];
 
 export const HEAD_STATE_LABEL: Record<HeadState, string> = {
   top: "At the field's top",
+  "package-dot": "A source unavailable",
   folder: "Inside a folder",
   narrow: "Narrow · FitPath",
   renaming: "Renaming",
   explorer: "The fields",
+  artifacts: "The artifacts",
+  "artifacts-off": "Artifacts off",
+  "artifacts-opening": "Opening Artifacts",
+  covered: "Under a cover",
   zoom: "The zoom's menu",
   palette: "The palette, ⌘K",
   "sync-question": "The sync question",
 };
+
+/** The package's dot as the product words it (PL-D1): one source unavailable, by its title. */
+const FIXTURE_DOT = artifactsDotWords(["vibe-field"]);
+
+/** What a plate's Artifacts shelf holds: the Hub's own fixture adapter, populated, or why it is
+ * not there; null for the plates that do not open it. */
+function plateArtifacts(state: HeadState): HeadArtifacts | null {
+  if (state === "artifacts" || state === "covered") {
+    return { state: "hub", hub: <ArtifactPanelPreview state="populated" /> };
+  }
+  if (state === "artifacts-off") return { state: "off" };
+  if (state === "artifacts-opening") return { state: "opening" };
+  return null;
+}
 
 /** TS-6 (TS-D13) — the question New field asks while a link owes it: the
  * posture as it stands, three fields from before the link, one added. */
@@ -193,16 +224,26 @@ export function HeadPlate({
   keys?: ViewKeys;
 }): ReactElement {
   const path = state === "folder" ? IN_A_FOLDER : state === "narrow" ? DEEP : [];
+  const artifacts = plateArtifacts(state);
+  const shelf: SheetShelf | null =
+    state === "explorer" || state === "sync-question"
+      ? "fields"
+      : artifacts === null
+        ? null
+        : "artifacts";
   return (
     <div className="vf-ds-head-plate" data-state={state} data-keys={keys}>
       <HeadView
+        covered={state === "covered"}
         place={{
           name: CURRENT?.name ?? "…",
           path,
           renaming: state === "renaming" ? (CURRENT?.name ?? "") : null,
-          open: state === "explorer" || state === "sync-question",
+          shelf,
           docs: FIXTURE_TILES,
           currentId: CURRENT?.docId ?? null,
+          packageDot: state === "package-dot" ? FIXTURE_DOT : null,
+          artifacts,
           question: state === "sync-question" ? FIXTURE_QUESTION : null,
         }}
         zoom={{ percent: 100, keys, open: state === "zoom", hot: 0 }}
@@ -215,7 +256,7 @@ export function HeadPlate({
 /** The live head on its real controller over fixture doors — the playground's.
  * The frame's one owner of the open surface is the caller's (it shares it with
  * the playground's Objects); keys are unbound: the catalog is not a window the
- * head owns. */
+ * head owns, and no plugin host runs in it, so its Artifacts shelf waits. */
 export function HeadLive({
   surface,
   onSurfaceChange,
@@ -234,6 +275,7 @@ export function HeadLive({
       surface={surface}
       onSurfaceChange={onSurfaceChange}
       bindKeys={false}
+      windowId="design-system"
     />
   );
 }
