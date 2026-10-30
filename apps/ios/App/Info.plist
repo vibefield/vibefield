@@ -7,6 +7,20 @@
          every CADisplayLink and MTKView is held at 60 (2026-10-18). -->
     <key>CADisableMinimumFrameDurationOnPhone</key>
     <true/>
+    <!-- TS-7b (Q2 A) — the Mac's Add your phone code is a vibefield:// link: iOS's camera offers to open the app
+         with it, and `onOpenURL` reads it as a code that came by LINK (drawn as such: any page can open a scheme).
+         The scheme is held to the contracts' PHONE_CODE_SCHEME by `pnpm check:ios-fixtures`. -->
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>com.jamesyong.vibefield.ios.add-phone</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>vibefield</string>
+            </array>
+        </dict>
+    </array>
     <!-- Product and terminal HTTP/WebSocket traffic uses Truffle's embedded,
          authenticated Tailscale transport. ATS does not see that encryption.
          Limit the HTTP exception to MagicDNS hosts; other domains retain ATS. -->

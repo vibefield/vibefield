@@ -63,3 +63,21 @@ export const StagedReleaseIdentity = z
       });
   });
 export type StagedReleaseIdentity = z.infer<typeof StagedReleaseIdentity>;
+
+/** The stager's `stagedBuildId` (`apps/desktop/packaging/bundled-plugins.mjs`): `<appVersion>+<commit7>`. */
+const BUILD_ID_PATTERN = /^(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)\+([0-9a-f]{7,})$/;
+
+/** AU-3a (AU-D13 A; LC-20) — WP12 D10's build id is `<appVersion>+<commit7>`: its app version, or undefined for any
+ * other shape (the dev runner's `dev-<hash>`, an absent id). fieldd learns the version it publishes on its device
+ * slice from the id its launcher handed it, so a dev build says none, which is honest. */
+export function appVersionOfBuildId(buildId: string | null | undefined): string | undefined {
+  if (typeof buildId !== "string") return undefined;
+  return BUILD_ID_PATTERN.exec(buildId)?.[1];
+}
+
+/** AU-4 (AU-G9) — the commit a build id names (`84509d6` of `0.1.0-nightly.20261027+84509d6`), or undefined for any
+ * other shape. About says it beside the version, so a person can name the exact build they run. */
+export function commitOfBuildId(buildId: string | null | undefined): string | undefined {
+  if (typeof buildId !== "string") return undefined;
+  return BUILD_ID_PATTERN.exec(buildId)?.[2];
+}

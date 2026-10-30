@@ -198,6 +198,53 @@ public struct DeviceListResult: Sendable, Equatable, Decodable {
   }
 }
 
+/// IOS-8f — `user.me`'s answer (`users.ts` `UserMeResult`): who the desktop's
+/// person is, as its own windows show them. `name` is nil where the desktop has
+/// no user row to read — the corner keeps the login then, never a guess — and
+/// `dealt` says the face is still the machine's proposal.
+public struct UserMeResult: Sendable, Equatable, Decodable {
+  /// The face, narrowed to what the corner draws. `frame` is the wire's word
+  /// (`sticker` · `coin`), nil when absent, which is a sticker.
+  public struct Face: Sendable, Equatable, Decodable {
+    public let emoji: String
+    public let frame: String?
+    public let unknownFields: [String]
+
+    public init(json: JSONValue) throws {
+      var object = try WireObject(shape: "UserMeResult.face", value: json)
+      emoji = try object.requiredString("emoji")
+      frame = object.string("frame")
+      unknownFields = object.unknownFields
+    }
+
+    public init(from decoder: any Decoder) throws {
+      try self.init(json: try JSONValue(from: decoder))
+    }
+  }
+
+  public let userId: String
+  public let name: String?
+  public let face: Face
+  public let dealt: Bool
+  public let unknownFields: [String]
+
+  public init(json: JSONValue) throws {
+    var object = try WireObject(shape: "UserMeResult", value: json)
+    userId = try object.requiredString("userId")
+    name = object.string("name").flatMap { $0.isEmpty ? nil : $0 }
+    guard let face = try object.decodeObject("face", Face.init(json:)) else {
+      throw WireDecodeError(shape: "UserMeResult", reason: "missing `face`")
+    }
+    self.face = face
+    dealt = try object.requiredBool("dealt")
+    unknownFields = object.unknownFields
+  }
+
+  public init(from decoder: any Decoder) throws {
+    try self.init(json: try JSONValue(from: decoder))
+  }
+}
+
 // MARK: - The full agent row (`agent.list` / `agent.subscribe {projection:"full"}`)
 
 /// A blocker, narrowed to the card's question: what is this agent waiting for,

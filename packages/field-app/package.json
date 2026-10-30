@@ -66,6 +66,7 @@
     "@vibefield/plugin-behavior-conformance": "workspace:*",
     "@vibefield/plugin-build": "workspace:*",
     "@vibefield/plugin-example-desk-clock": "workspace:*",
+    "@vibefield/plugin-simulator": "workspace:*",
     "@vibefield/test-env": "workspace:*",
     "happy-dom": "^20.0.0",
     "typescript": "catalog:",

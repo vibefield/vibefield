@@ -747,6 +747,13 @@ export const PROJECT_DOORS = {
   MOVE_HOPS_MAX: 16,
 } as const;
 
+/** IOS-8f — `user.me`'s honest UNAVAILABLE: a daemon that knows no user id (an embedded one) has no person to
+ * name, and says so rather than answer a face for nobody. TS-only: no native reader. */
+export const USER_ME = {
+  SERVICE: "user",
+  STATE_NO_USER: "no-user",
+} as const;
+
 /** DS-D15 / DS-2 — forwarded mutations (`forwarding.ts`). The owner journals
  * one receipt per idempotency key for RECEIPT_TTL_MS, at most
  * RECEIPT_JOURNAL_DEPTH of them; a forward cut mid-flight is recorded
@@ -1786,6 +1793,10 @@ export const IPC_CHANNELS = {
   updatePrepareRestart: "vibefield:update:prepare-restart",
   updateConfirmRestart: "vibefield:update:confirm-restart",
   updateDoctor: "vibefield:update:doctor",
+  /** AU-1 (AU-G5, AU-G6) — a person's download of ONE found version (renderer → main, invoke) */
+  updateDownload: "vibefield:update:download",
+  /** AU-7 (AU-G8) — Move to Applications through the quit gate (renderer → main, invoke; no payload) */
+  updateMoveToApplications: "vibefield:update:move-to-applications",
   // GT-D3's bridge channels (`vibefield:terminal:connect` invoke,
   // `vibefield:terminal:status` event) RETIRED at TP-S3e: the renderer dials
   // the cells' T1 doors directly and main runs no terminal Backend.

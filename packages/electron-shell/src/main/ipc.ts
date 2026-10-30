@@ -11,10 +11,14 @@ import {
   ThemeSetRequest,
   ThemeState as ThemeStateSchema,
   type UpdateChannel,
+  UpdateCheckResult,
   UpdateConfirmRequest,
   UpdateConfirmResult,
   UpdateDeclineRequest,
   UpdateDoctorResult,
+  UpdateDownloadRequest,
+  UpdateDownloadResult,
+  UpdateMoveResult,
   UpdatePrepareResult,
   UpdateSetChannelRequest,
   UpdateSetEnabledRequest,
@@ -274,13 +278,19 @@ export function registerBrowserDataClear(
  * Same registered-sender gate as every door; every payload parsed by its contract in both directions; no door carries
  * a path or a URL (EDP-38). The state itself rides `desktopState` (`update`, the controller's one projection). */
 export interface UpdateDoorHandlers {
-  check(): Promise<void>;
+  /** AU-1 (LC-5) — answered when the CHECK settles; a found update's download goes on (the view says it) */
+  check(): Promise<UpdateCheckResult>;
   setEnabled(enabled: boolean): void;
   setChannel(channel: UpdateChannel): void;
   decline(version: string): void;
+  /** AU-1 (AU-G5, AU-G6) — a person's download of ONE found version; a refusal in main's words */
+  download(version: string): Promise<UpdateDownloadResult>;
   prepareRestart(): Promise<UpdatePrepareResult>;
   confirmRestart(token: string): Promise<{ ok: true } | { ok: false; reason: string }>;
   doctor(): string[];
+  /** AU-7 (AU-G8) — Move to Applications through the quit gate: answered when the gate decides, or a refusal before
+   * anything stops */
+  moveToApplications(): Promise<UpdateMoveResult>;
 }
 
 export function registerUpdateDoors(
@@ -302,7 +312,7 @@ export function registerUpdateDoors(
   };
   ipcMain.handle(IPC_CHANNELS.updateCheck, async (event) => {
     gate("check", event.sender);
-    await handlers.check();
+    return UpdateCheckResult.parse(await handlers.check());
   });
   ipcMain.handle(IPC_CHANNELS.updateSetEnabled, async (event, raw: unknown) => {
     gate("set-enabled", event.sender);
@@ -315,6 +325,12 @@ export function registerUpdateDoors(
   ipcMain.handle(IPC_CHANNELS.updateDecline, async (event, raw: unknown) => {
     gate("decline", event.sender);
     handlers.decline(UpdateDeclineRequest.parse(raw).version);
+  });
+  ipcMain.handle(IPC_CHANNELS.updateDownload, async (event, raw: unknown) => {
+    gate("download", event.sender);
+    return UpdateDownloadResult.parse(
+      await handlers.download(UpdateDownloadRequest.parse(raw).version),
+    );
   });
   ipcMain.handle(IPC_CHANNELS.updatePrepareRestart, async (event) => {
     gate("prepare-restart", event.sender);
@@ -329,6 +345,10 @@ export function registerUpdateDoors(
   ipcMain.handle(IPC_CHANNELS.updateDoctor, async (event) => {
     gate("doctor", event.sender);
     return UpdateDoctorResult.parse({ lines: handlers.doctor() });
+  });
+  ipcMain.handle(IPC_CHANNELS.updateMoveToApplications, async (event) => {
+    gate("move-to-applications", event.sender);
+    return UpdateMoveResult.parse(await handlers.moveToApplications());
   });
 }
 
