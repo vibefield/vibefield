@@ -279,12 +279,12 @@ export function FieldView({
   }, [ce, registry]);
 
   // THE FRAME'S OPEN SURFACE (One Frame FR-2/FR-3/FR-4, `frame/frame-surface.ts`):
-  // its one owner. Objects, the fields explorer, the zoom's menu, the palette,
-  // the hand raised and the rest of the frame's surfaces are one value, so any
-  // one folds the rest; held here because the recede derives from the explorer
-  // in this render. Objects — the desk's pegboard since DK-13 — recedes nothing:
-  // the stage behind it neither recedes nor dims (R14), the desk dimming under
-  // the board itself.
+  // its one owner. Objects, the pill's sheet (Fields or Artifacts, HN-8), the
+  // zoom's menu, the palette, the hand raised and the rest of the frame's
+  // surfaces are one value, so any one folds the rest; held here because the
+  // recede derives from the sheet in this render. Objects — the desk's pegboard
+  // since DK-13 — recedes nothing: the stage behind it neither recedes nor dims
+  // (R14), the desk dimming under the board itself.
   const [surface, setSurfaceRaw] = useState<FrameSurface | null>(null);
   // The pill's sheet, on either shelf (HN-8): Fields or Artifacts.
   const docsOpen = sheetShelf(surface) !== null;
