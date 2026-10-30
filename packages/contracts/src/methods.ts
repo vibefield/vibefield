@@ -1756,11 +1756,11 @@ export const METHODS: MethodDef[] = [
   // ── surface.* (DT-1 — thinking-devtools-pack.md DT-D2/DT-D3) ──
   // The registry scope is the BASE gate; one row carries one scope, so the
   // SurfaceService additionally enforces the kind→scope matrix on `open`
-  // (browser → surface.browser · sck-window/ios-simulator → surface.capture),
-  // service-level and tested. `sources` lists capture kinds only, hence the
-  // capture scope outright. locality "local": a surface is a window on THIS
-  // device — remote surfaces are not a v1 concept, and none of these rows may
-  // ever gain `guestOk` or enter a tailnet preset.
+  // (browser → surface.browser · sck-window/ios-simulator/ios-simulator-device
+  // → surface.capture), service-level and tested. `sources` lists capture kinds
+  // only, hence the capture scope outright. locality "local": a surface is a
+  // window on THIS device — remote surfaces are not a v1 concept, and none of
+  // these rows may ever gain `guestOk` or enter a tailnet preset.
   defineMethod({
     surface: "product",
     method: "surface.sources",
@@ -1779,6 +1779,19 @@ export const METHODS: MethodDef[] = [
     surface: "product",
     method: "surface.close",
     scope: "surface.attach",
+    idempotent: true,
+    locality: "local",
+  }),
+  // PT-S2 (R11) — the attach's device list: this Mac's simulator devices as
+  // REDACTED rows (`{ deviceType, runtime, name, booted }`, never a UDID), the
+  // booted first, which a phone's one "Attach" act binds from. A capture kind's
+  // catalogue, as `sources` is, hence `surface.capture` outright; it needs no
+  // window, so no matrix adds to it. locality "local": a peer's devices are its
+  // own Mac's, and a phone binds a TYPE, never a device.
+  defineMethod({
+    surface: "product",
+    method: "surface.simulator.devices",
+    scope: "surface.capture",
     idempotent: true,
     locality: "local",
   }),

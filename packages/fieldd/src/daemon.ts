@@ -2020,6 +2020,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     api.register("surface.sources", (ctx, params) => surfaces.sources(ctx, params));
     api.register("surface.open", (ctx, params) => surfaces.open(ctx, params));
     api.register("surface.close", (ctx, params) => surfaces.close(ctx, params));
+    // PT-S2 (R11) — the attach's device list (a phone's "Attach" binds from it)
+    api.register("surface.simulator.devices", (ctx, params) =>
+      surfaces.simulatorDevices(ctx, params),
+    );
 
     api.register("system.health", () => health());
     // WIN-D5 — the stop verb. The response flushes first (setImmediate), then

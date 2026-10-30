@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { SURFACE_LIMITS } from "../src/live-surfaces";
 import { METHODS } from "../src/methods";
 import { IPC_CHANNELS } from "../src/registries";
 import {
@@ -40,8 +41,11 @@ import {
   ShellProviderRegisterResult,
   ShellRendererRequestReplacementParams,
   ShellRendererRequestReplacementResult,
+  ShellSurfacesSimulatorDevicesParams,
+  ShellSurfacesSimulatorDevicesResult,
   ShellWebContentsCaptureArtifactPreviewParams,
   ShellWebContentsCaptureArtifactPreviewResult,
+  SURFACE_AUTHORITY_LIMITS,
   ThemePreference,
   ThemeSetRequest,
   ThemeState,
@@ -714,6 +718,44 @@ describe("AH-3/AH-4 static shell provider", () => {
     expect(SHELL_INTERNAL_PROVIDER_METHODS).toContain("shell.openLink");
     expect(SHELL_PROVIDER_METHODS).toContain("shell.openLink");
     expect(METHODS.some((method) => method.method === "shell.openLink")).toBe(false);
+  });
+
+  it("PT-S2 (R11): the attach's device list is a local `surface.capture` read, carried by an INTERNAL provider verb, and its rows never hold a UDID", () => {
+    expect(METHODS.find((method) => method.method === "surface.simulator.devices")).toEqual({
+      surface: "product",
+      method: "surface.simulator.devices",
+      scope: "surface.capture",
+      idempotent: true,
+      locality: "local",
+    });
+    expect(SHELL_INTERNAL_PROVIDER_METHODS).toContain("shell.surfaces.simulatorDevices");
+    expect(SHELL_PROVIDER_METHODS).toContain("shell.surfaces.simulatorDevices");
+    expect(METHODS.some((method) => method.method === "shell.surfaces.simulatorDevices")).toBe(
+      false,
+    );
+    expect(SURFACE_AUTHORITY_LIMITS.SIMULATOR_DEVICES_DEADLINE_MS).toBe(10_000);
+    expect(ShellSurfacesSimulatorDevicesParams.parse({})).toEqual({});
+    const row = {
+      deviceType: "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro",
+      runtime: "com.apple.CoreSimulator.SimRuntime.iOS-26-1",
+      name: "iPhone 17 Pro",
+      booted: true,
+    };
+    expect(ShellSurfacesSimulatorDevicesResult.parse({ devices: [row] })).toEqual({
+      devices: [row],
+    });
+    expect(ShellSurfacesSimulatorDevicesResult.parse({ devices: [] })).toEqual({ devices: [] });
+    // a UDID anywhere refuses the whole list: main's own parse is the last door before fieldd
+    expect(
+      ShellSurfacesSimulatorDevicesResult.safeParse({
+        devices: [{ ...row, udid: "F93EABF3-4281-4EB5-A5F6-A550FBE95CDC" }],
+      }).success,
+    ).toBe(false);
+    expect(
+      ShellSurfacesSimulatorDevicesResult.safeParse({
+        devices: Array.from({ length: SURFACE_LIMITS.MAX_SIMULATOR_DEVICES + 1 }, () => row),
+      }).success,
+    ).toBe(false);
   });
 
   it("requires a unique registered static method set and exactly one outcome arm", () => {
