@@ -80,8 +80,8 @@ import type { ViewKeys } from "./views";
 // word is typed, the filters, the hot row, the keys, the focus, the window it
 // fits — and nothing it shows, which is `PeekView`'s. Whether it is open is
 // NOT its own: that is the frame's one value (`frame-surface.ts`, `search`),
-// which this reads and asks — so the palette, a drawer, the Me menu, Settings
-// and a change of view fold it, and it folds them. What it reads comes
+// which this reads and asks — so the palette, the pill's sheet, the Me menu,
+// Settings and a change of view fold it, and it folds them. What it reads comes
 // through a port, so the catalog runs this exact controller over a fixture.
 //
 // LIVE NOW (P2): Godview's rows through the door its monitor publishes
