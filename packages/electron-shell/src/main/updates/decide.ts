@@ -13,6 +13,9 @@
 // cache GC (B6) deletes its payload, so a kill no longer holds it: after a later policy lifts the kill, the next check
 // downloads it again. And the census gates only a release
 // that touches the native plane (B3): one that leaves the floor's bytes alone keeps its sessions, so it needs neither.
+// AU-3a (X24): the two version orders moved to @vibefield/contracts, so the window compares by the same ones.
+
+import { compareDottedVersions } from "@vibefield/contracts";
 
 export type UpdateTrigger = "launch" | "manual" | "resume" | "available" | "downloaded";
 
@@ -87,48 +90,6 @@ export type UpdateAction =
  * bound (IL-D5 (a), `censusOf`) — which HOLDS, never reads as zero (§10 S1). */
 export type CensusCount = number | "unknown";
 
-/** Dotted numeric versions (`15.1.0` against `14.0`): <0, 0 or >0, and NaN when either has a part that is not a
- * number — which the floor reads as unmet (fail closed). */
-export function compareDotted(a: string, b: string): number {
-  const parts = (v: string) =>
-    v.split(".").map((part) => (/^\d+$/.test(part) ? Number(part) : Number.NaN));
-  const left = parts(a);
-  const right = parts(b);
-  for (let i = 0; i < Math.max(left.length, right.length); i++) {
-    const l = left[i] ?? 0;
-    const r = right[i] ?? 0;
-    if (Number.isNaN(l) || Number.isNaN(r)) return Number.NaN;
-    if (l !== r) return l - r;
-  }
-  return 0;
-}
-
-/** Semver precedence, enough for the advisory `minSupported` line: the dotted core first, then a prerelease sorts
- * below its release, identifiers compared numerically when both are numbers. NaN when a core part is not a number. */
-export function compareSemver(a: string, b: string): number {
-  const [aCore = "", ...aPre] = a.split("-");
-  const [bCore = "", ...bPre] = b.split("-");
-  const core = compareDotted(aCore, bCore);
-  if (Number.isNaN(core) || core !== 0) return core;
-  const ap = aPre.join("-");
-  const bp = bPre.join("-");
-  if (ap === bp) return 0;
-  if (ap === "") return 1;
-  if (bp === "") return -1;
-  const ai = ap.split(".");
-  const bi = bp.split(".");
-  for (let i = 0; i < Math.max(ai.length, bi.length); i++) {
-    const x = ai[i];
-    const y = bi[i];
-    if (x === undefined) return -1;
-    if (y === undefined) return 1;
-    if (x === y) continue;
-    const numeric = /^\d+$/.test(x) && /^\d+$/.test(y);
-    return numeric ? Number(x) - Number(y) : x < y ? -1 : 1;
-  }
-  return 0;
-}
-
 /** B1 — what the policy says of one version on this host: the first lever that refuses it, or null. */
 export function leverRefusal(
   version: string,
@@ -139,7 +100,7 @@ export function leverRefusal(
   if (policy.killSwitch) return "killed";
   if (policy.yanked.includes(version)) return "yanked";
   const floor = policy.floors.os;
-  if (floor !== undefined && !(hostOs != null && compareDotted(hostOs, floor) >= 0)) {
+  if (floor !== undefined && !(hostOs != null && compareDottedVersions(hostOs, floor) >= 0)) {
     return "floor-unmet";
   }
   return null;

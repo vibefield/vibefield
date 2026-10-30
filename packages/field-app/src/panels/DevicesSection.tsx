@@ -25,6 +25,7 @@ import { getHost } from "../host";
 import { MeshSection } from "./MeshSection";
 import {
   buttonCls,
+  CopyButton,
   fieldCls,
   labelCls,
   SettingsRow,
@@ -117,27 +118,6 @@ export const CONNECT_ASKS_LINE = "At most once a day, and each place once a mont
 /** "2 Nov": the renewal's day, in the person's own calendar words. */
 function dueDay(at: number): string {
   return new Date(at).toLocaleDateString(undefined, { day: "numeric", month: "short" });
-}
-
-/** A button that says it worked, for two seconds, in its own words. */
-function CopyButton({
-  label,
-  copy,
-}: {
-  label: string;
-  copy: () => Promise<boolean>;
-}): ReactElement {
-  const [done, setDone] = useState<null | boolean>(null);
-  useEffect(() => {
-    if (done === null) return;
-    const timer = setTimeout(() => setDone(null), 2000);
-    return () => clearTimeout(timer);
-  }, [done]);
-  return (
-    <button type="button" className={buttonCls} onClick={() => void copy().then(setDone)}>
-      {done === true ? "Copied" : done === false ? "Couldn't copy" : label}
-    </button>
-  );
 }
 
 function Refusal({ reason }: { reason: string }): ReactElement {

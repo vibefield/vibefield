@@ -1024,3 +1024,114 @@ describe("TS-3b — this device's own name (P9, TS-D17 A)", () => {
     expect(existsSync(namePath(dataDir))).toBe(false);
   });
 });
+
+// AU-3a (AU-D13 A; LC-20) — a desktop says which VibeField it runs. Its
+// `fielddVersion` is the daemon package's literal and says the same on every
+// build, so the app's version rides beside it, learned from the build id the
+// launcher hands fieldd (a packaged shell's staged identity, WP12 D10). The
+// roster is a NARROW writer at intake, so a field it does not name is a field
+// every peer's row loses: the last row is the one that guards that.
+describe("AU-3a — the app version a desktop says", () => {
+  const CUR = "0.1.0-nightly.20261027";
+  const NEXT = "0.1.0-nightly.20261028";
+
+  async function selfAfterBoot(buildId: string) {
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    linkTo(dataDir);
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0, buildId });
+    cleanup.push(() => daemon.stop());
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, daemon.shellToken, "shell-main");
+    const self = (await pollDevices(rpc, (d) => d.some((x) => x.self))).find(
+      (x) => x.self,
+    ) as DeviceInfo;
+    await until(() => mock.storeWrites.length > 0, 8000);
+    return { self, published: mock.storeWrites.at(-1) as Record<string, unknown> };
+  }
+
+  it("publishes the version its launcher's build id names, on the slice and the self row", async () => {
+    const { self, published } = await selfAfterBoot(`${CUR}+84509d6`);
+    expect(self.appVersion).toBe(CUR);
+    expect(published["appVersion"]).toBe(CUR);
+  });
+
+  it("says none for a build id that names no version (the dev runner's)", async () => {
+    const { self, published } = await selfAfterBoot("dev-daemon-current");
+    expect(self.appVersion).toBeUndefined();
+    expect(published).not.toHaveProperty("appVersion");
+  });
+
+  it("copies a peer's version into its row at intake; a malformed one drops alone", async () => {
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    linkTo(dataDir);
+    mock.meshPeers = [
+      tailnetPeer({ id: "node-new", deviceId: "dev-new", login: ACCOUNT, name: "new" }),
+      tailnetPeer({ id: "node-old", deviceId: "dev-old", login: ACCOUNT, name: "old" }),
+      tailnetPeer({ id: "node-bad", deviceId: "dev-bad", login: ACCOUNT, name: "bad" }),
+    ];
+    mock.storeSlices.set("dev-new", { ...desktopSlice("dev-new"), appVersion: NEXT });
+    // an older build's slice never says one
+    mock.storeSlices.set("dev-old", desktopSlice("dev-old"));
+    mock.storeSlices.set("dev-bad", { ...desktopSlice("dev-bad"), appVersion: 7 });
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, daemon.shellToken, "shell-main");
+    const described = ["dev-new", "dev-old", "dev-bad"];
+    const roster = await pollDevices(
+      rpc,
+      (d) => described.every((id) => d.find((x) => x.deviceId === id)?.bootId !== undefined),
+      8000,
+    );
+    const row = (id: string) => roster.find((d) => d.deviceId === id) as DeviceInfo;
+
+    expect(row("dev-new").appVersion).toBe(NEXT);
+    expect(row("dev-old").appVersion).toBeUndefined();
+    // the bad version went alone: the slice was adopted, so the device is still described
+    expect(row("dev-bad").appVersion).toBeUndefined();
+    expect(row("dev-bad").bootId).toBe("slice-boot-dev-bad");
+    expect(row("dev-bad").capabilities?.docHost).toBe(true);
+  });
+
+  // A peer that updates in place keeps its node up and its door unasked, so online and state
+  // hold still: the version is the only signed fact that moves, and it must wake a subscriber.
+  it("a peer's new version alone wakes device.subscribe", async () => {
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    linkTo(dataDir);
+    mock.meshPeers = [
+      tailnetPeer({ id: "node-new", deviceId: "dev-new", login: ACCOUNT, name: "new" }),
+    ];
+    mock.storeSlices.set("dev-new", { ...desktopSlice("dev-new"), appVersion: CUR });
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, daemon.shellToken, "shell-main");
+    await pollDevices(
+      rpc,
+      (d) => d.find((x) => x.deviceId === "dev-new")?.appVersion === CUR,
+      8000,
+    );
+
+    const sub = (await rpc.call("device.subscribe", {})) as { subId: string };
+    mock.pushStoreDelta({
+      kind: "peerUpdated",
+      deviceId: "dev-new",
+      data: { ...desktopSlice("dev-new"), appVersion: NEXT, bootId: "slice-boot-2" },
+      version: 2,
+    });
+    await until(() =>
+      rpc.notifications.some(
+        (n) =>
+          n.method === "device.delta" &&
+          n.params.subId === sub.subId &&
+          Array.isArray(n.params.payload) &&
+          (n.params.payload as DeviceInfo[]).some(
+            (d) => d.deviceId === "dev-new" && d.appVersion === NEXT,
+          ),
+      ),
+    );
+  });
+});
