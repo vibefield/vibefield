@@ -21,11 +21,15 @@ import {
   UPDATE_PLANES,
   UPDATES_AUDIT_ACTIONS,
   UPDATES_SERVICE,
+  type UpdateApplyTrigger,
   type UpdateChannel,
+  type UpdateCheckResult,
+  type UpdateDownloadResult,
   type UpdatePlane,
   type UpdatePolicy,
   type UpdatesUnavailableState,
   type UpdateView,
+  type UpdateViewLastApply,
 } from "@vibefield/contracts";
 import type { AuditAppendV1 } from "@vibefield/contracts/diagnostics";
 import type { UpdatePrepared, UpdateQuitPlan } from "../quit-flow";
@@ -38,7 +42,9 @@ import {
   censusNotice,
   consentBox,
   consentWords,
+  downloadNotice,
   expiredNotice,
+  type LeverWhy,
   policyNotice,
   quitNotice,
   SQUIRREL_STAGE_MS,
@@ -196,7 +202,9 @@ export type RestartOutcome =
         | "not-staged"
         | "apply-unbuilt"
         | "declined"
+        // the silent path only (`silentHeld`): the person's off switch, and the policy's `requireUserConfirmation`
         | "disabled"
+        | "confirmation-required"
         | "census-unknown"
         | "consent-declined"
         | "quit-underway"
@@ -322,6 +330,11 @@ export class UpdateController {
   } | null = null;
   /** an apply's quit is underway (from `quitForUpdate` until an abort): nothing re-evaluates */
   private applying = false;
+  /** AU-1 (AU-D11 A) — THIS launch judged the last apply (`landed`): a failed install is said once, by the launch
+   * that found it */
+  private judgedThisLaunch = false;
+  /** bumped by every channel change: a check that began before it answers a channel the person has left */
+  private channelEpoch = 0;
   /** B4 — the display clause's last reading (doctor's), and the last silent evaluation's answer */
   private display: boolean | "unknown" = "unknown";
   private silentNote: string | null = null;
@@ -390,12 +403,38 @@ export class UpdateController {
       options.feedOptions({
         verify: (fetch) => this.verify(fetch),
         verified: (result) => {
+          // a check that began on the channel the person has since left verified THAT channel: its levers never
+          // judge this one's versions (B2, C6)
+          if (result.policy.channel !== this.channel) return;
           this.lastVerified = result;
         },
       }),
     );
     updater.on("download-progress", this.onProgress);
     updater.on("error", this.onError);
+    // AU-1 (AU-D11 A) — what the last apply landed as, judged ONCE by the first launch after it, by version for every
+    // branch (an `exited` that Squirrel did arm comes back on the new version, which is installed). A record an older
+    // app already delivered (`audited`, no `landed`) is history: never judged, never shown. The ledger's own judgement
+    // below is unchanged.
+    const last = this.client.lastApply;
+    if (
+      last !== null &&
+      !last.audited &&
+      last.landed === undefined &&
+      options.currentVersion !== undefined
+    ) {
+      const outcome = options.currentVersion === last.version ? "installed" : "not-applied";
+      // said as THIS launch's own only by the version the apply landed on or left: a third version (installed by hand
+      // after an exit) stamps the judgement, so it is never judged again, and never says "didn't install" of it. A
+      // record with no `from` is an older app's (a packaged app always knows its version), so this launch is a third
+      // version of it too.
+      this.judgedThisLaunch = outcome === "installed" || options.currentVersion === last.from;
+      this.persist({ ...this.client, lastApply: { ...last, landed: { at: this.now(), outcome } } });
+    }
+    // AU-1 (AU-D3 A) — the staged version now runs: it installed, so nothing is staged any more
+    const staged = this.client.staged;
+    if (staged !== null && staged.version === options.currentVersion)
+      this.persist({ ...this.client, staged: null });
     // WP12c — an apply that exited after the daemon stop recorded its outcome here; fieldd is alive again at this
     // launch, so its OUTCOME row reaches the ledger now, once.
     if (this.client.lastApply !== null && !this.client.lastApply.audited)
@@ -445,60 +484,168 @@ export class UpdateController {
     });
   }
 
-  /** One check (launch · manual · resume), single-flight; a found update downloads unless declined or off. */
+  /** One check (launch · manual · resume), single-flight; a found update downloads unless declined or off. Settles
+   * when the download does (the launch and resume paths, the tray and the app menu rely on that). */
   async check(reason: "launch" | "manual" | "resume"): Promise<UpdateAction> {
+    const { action, download } = await this.checkOnce(reason);
+    if (download !== null) await download;
+    return action;
+  }
+
+  /** AU-1 (LC-5) — a person's check from a door: answered when the CHECK settles (the Me menu's in-place row, the
+   * card's busy). A found update's download goes on, and the view says it. */
+  async checkForPerson(): Promise<UpdateCheckResult> {
+    const { result, download } = await this.checkOnce("manual");
+    // the download's own failures become a state (`startDownload`); nothing here waits for it
+    void download?.catch(() => undefined);
+    return result;
+  }
+
+  /** The check alone: settles when the check does; a found update's download is started and handed back, never
+   * awaited here. */
+  private async checkOnce(reason: "launch" | "manual" | "resume"): Promise<{
+    readonly action: UpdateAction;
+    readonly result: UpdateCheckResult;
+    readonly download: Promise<void> | null;
+  }> {
     const action = this.decide(reason);
-    if (action.kind !== "check" || this.disposed) return action;
+    // a check or a download in flight (the view says which); a disposed controller runs nothing either, and nothing
+    // checks once an apply has begun (its payload is the one Squirrel stages)
+    if (action.kind !== "check" || this.disposed || this.applying)
+      return { action, result: { outcome: "busy" }, download: null };
+    const before = this.stateValue;
+    const epoch = this.channelEpoch;
     this.setState({ kind: "checking", reason });
     let found: string | null = null;
     try {
       const result = await this.options.updater.checkForUpdates();
+      if (this.channelEpoch !== epoch) return this.checkOutlived(action);
       this.persist({ ...this.client, lastCheckAt: this.now() });
       found =
         result?.isUpdateAvailable === true && result.updateInfo ? result.updateInfo.version : null;
     } catch (error) {
+      if (this.channelEpoch !== epoch) return this.checkOutlived(action);
       this.persist({ ...this.client, lastCheckAt: this.now() });
       this.fail(error);
-      return action;
+      return { action, result: { outcome: "failed" }, download: null };
     }
-    if (this.disposed) return action;
+    if (this.disposed || this.applying)
+      return { action, result: { outcome: "busy" }, download: null };
     if (found === null) {
       this.setState({ kind: "not-available" });
       // EDP-38: nothing to offer, so nothing staged is kept
       void this.collectStagedCache("not-available");
-      return action;
+      this.forgetStaged();
+      return { action, result: { outcome: "up-to-date" }, download: null };
     }
     this.setState({ kind: "available", version: found });
     const next = this.decide("available");
-    if (next.kind === "download") await this.startDownload(next.version);
-    else if (next.kind === "none" && isLever(next.reason))
+    if (next.kind === "download") {
+      return {
+        action,
+        result: { outcome: "found", version: next.version },
+        download: this.startDownload(next.version),
+      };
+    }
+    // AU-1 (G5, LC-12) — with automatic updates off, the version a person downloaded by hand stays staged: its payload
+    // is in the cache, and the switch governs what downloads without them. Reaching `disabled` means no decline and no
+    // lever refused it; `settleStaged` judges the levers again against the policy this check just verified.
+    if (
+      next.kind === "none" &&
+      next.reason === "disabled" &&
+      before.kind === "staged" &&
+      before.version === found
+    ) {
+      this.setState(before);
+      this.settleStaged();
+      return { action, result: { outcome: "held", version: found }, download: null };
+    }
+    if (next.kind === "none" && isLever(next.reason))
       this.refuseByLever(found, next.reason, UPDATES_AUDIT_ACTIONS.VERIFY);
-    return action;
+    return { action, result: { outcome: "held", version: found }, download: null };
   }
 
-  /** A person declines a version: it stays declined across restarts and a staged download (EDP §11.3). */
+  /** A check the person's channel change outlived answered the channel they left: nothing it found is offered,
+   * staged or judged (`setChannel` already dropped that channel's payload); the next check resolves the new one. */
+  private checkOutlived(action: UpdateAction): {
+    readonly action: UpdateAction;
+    readonly result: UpdateCheckResult;
+    readonly download: null;
+  } {
+    if (this.stateValue.kind === "checking") this.setState({ kind: "idle" });
+    return { action, result: { outcome: "busy" }, download: null };
+  }
+
+  /** A person declines a version: it stays declined across restarts and a staged download (EDP §11.3). AU-1 (LC-13):
+   * the found version stays in view, `available` and declined, so "Download anyway" is one click away. */
   decline(version: string): void {
     if (!this.client.declined.includes(version)) {
       this.persist({ ...this.client, declined: [...this.client.declined, version].slice(-64) });
     }
     this.audit(UPDATES_AUDIT_ACTIONS.DECLINE, "succeeded", undefined, { version });
     this.emit();
+    // an apply already begun installs what the person consented to; the decline governs what comes after
+    if (this.applying) return;
     const state = this.stateValue;
     if ("version" in state && state.version === version) {
       this.cancelDownload();
-      this.setState({ kind: "idle" });
+      this.setState({ kind: "available", version });
       // B6 — the declined payload goes (the timer died with the staged state: `setState`)
       void this.collectStagedCache("declined");
+      this.forgetStaged();
     }
   }
 
-  /** The off switch: honored at every stage boundary — an in-flight download is cancelled now. */
+  /** AU-1 (AU-G5, AU-G6) — a person downloads THIS found version: with automatic updates off, or a skip taken back
+   * (the decline is removed, persisted and audited). Never a version a lever refuses; never while an apply runs. */
+  async downloadForPerson(version: string): Promise<UpdateDownloadResult> {
+    if (this.restarting || this.applying) return { ok: false, reason: "busy" };
+    const state = this.stateValue;
+    if ((state.kind === "downloading" || state.kind === "staged") && state.version === version)
+      return { ok: true };
+    if (state.kind !== "available" || state.version !== version)
+      return { ok: false, reason: "not-available" };
+    const policy = this.lastVerified === null ? null : leversOf(this.lastVerified.policy);
+    const lever = leverRefusal(version, policy, this.options.hostOsVersion?.() ?? null);
+    if (lever !== null) {
+      this.refuseByLever(version, lever, UPDATES_AUDIT_ACTIONS.VERIFY);
+      // nothing downloaded: the words say the download, never the install
+      return {
+        ok: false,
+        reason: lever,
+        words: wordsOf(downloadNotice(this.leverWhy(lever, version, policy?.floors.os))),
+      };
+    }
+    const skipped = this.client.declined.includes(version);
+    if (skipped) {
+      this.persist({
+        ...this.client,
+        declined: this.client.declined.filter((declined) => declined !== version),
+      });
+    }
+    this.audit(UPDATES_AUDIT_ACTIONS.DOWNLOAD, "succeeded", undefined, {
+      version,
+      why: skipped ? "skipped" : "updates-off",
+    });
+    // the view moves to `downloading`; the download's own failures become a state (`startDownload`)
+    void this.startDownload(version).catch(() => undefined);
+    return { ok: true };
+  }
+
+  /** The off switch: honored at every stage boundary — an in-flight download is cancelled now. AU-1 (X13): a found
+   * update waits for you — off mid-download lands on `available`, and on again downloads a found, unskipped version. */
   setEnabled(enabled: boolean): void {
     this.persist({ ...this.client, enabled });
     this.emit();
-    if (!enabled && this.stateValue.kind === "downloading") {
+    const state = this.stateValue;
+    if (!enabled && state.kind === "downloading") {
       this.cancelDownload();
-      this.setState({ kind: "idle" });
+      this.setState({ kind: "available", version: state.version });
+      return;
+    }
+    if (enabled && state.kind === "available") {
+      const next = this.decide("available");
+      if (next.kind === "download") void this.startDownload(next.version).catch(() => undefined);
     }
   }
 
@@ -515,14 +662,27 @@ export class UpdateController {
       to: channel,
       downgrade: String(this.downgrades()),
     });
+    // a check in flight answers the channel just left: it is dropped when it settles (`checkOutlived`)
+    this.channelEpoch += 1;
+    // an apply already begun installs what the person consented to; the channel governs what comes after
+    if (this.applying) {
+      this.emit();
+      return;
+    }
     const state = this.stateValue;
     this.lastVerified = null;
     this.native = { touched: true, why: "no-manifest" };
     this.prepared = null;
     if (state.kind === "downloading") this.cancelDownload();
-    if (state.kind === "downloading" || state.kind === "staged" || state.kind === "available") {
+    // `checking` stays until that check settles (`checkOutlived` lands it on idle): electron-updater hands a second
+    // check the first one's promise, so a check started now would read the old channel's answer
+    if (state.kind === "downloading" || state.kind === "staged" || state.kind === "available")
       this.setState({ kind: "idle" });
-      if (state.kind === "staged") void this.collectStagedCache("channel-changed");
+    // the old channel's payload goes whatever the state shows: a check may have replaced `staged` (AU-1's persisted
+    // clock still names it), or a relaunch left it in the cache behind an idle state
+    if (state.kind === "staged" || this.client.staged !== null) {
+      void this.collectStagedCache("channel-changed");
+      this.forgetStaged();
     }
     this.emit();
   }
@@ -542,6 +702,11 @@ export class UpdateController {
       lastCheckAt: this.client.lastCheckAt,
       applyWired: this.options.apply?.wired === true,
       ...this.unsupportedBelow(),
+      // AU-1 — the running version (the Me row's "You're on …") and the last apply, once a launch judged it
+      ...(this.options.currentVersion !== undefined
+        ? { currentVersion: this.options.currentVersion }
+        : {}),
+      ...this.lastApplyView(),
     };
     switch (state.kind) {
       case "checking":
@@ -563,6 +728,8 @@ export class UpdateController {
           ...(state.sessions !== undefined ? { sessions: state.sessions } : {}),
           ...(state.keepsSessions === true ? { keepsSessions: true } : {}),
           ...(state.blockedBy !== undefined ? { blockedBy: state.blockedBy } : {}),
+          // AU-1 (AU-D3 A) — when this version FIRST became ready here, across launches
+          stagedAt: state.stagedAt,
           ...common,
         };
       case "error": {
@@ -580,6 +747,30 @@ export class UpdateController {
       default:
         return { phase: "idle", ...common };
     }
+  }
+
+  /** AU-1 (AU-D11 A; AU-G7) — the last apply as the window says it, once a launch has judged it (`landed`). A record
+   * this process wrote has no `landed` (it is judged by the next launch), and neither does an older app's history. An
+   * `installed` apply is said only while its version runs: another build on the same state (a hand install, a second
+   * copy) never reads "Updated today" of a version it is not. No time filter here: the window decides "Updated today"
+   * against `at`. */
+  private lastApplyView(): { lastApply?: UpdateViewLastApply } {
+    const last = this.client.lastApply;
+    const landed = last?.landed;
+    if (last === null || landed === undefined) return {};
+    const current = this.options.currentVersion;
+    if (landed.outcome === "installed" && current !== undefined && current !== last.version)
+      return {};
+    return {
+      lastApply: {
+        version: last.version,
+        ...(last.from !== undefined ? { from: last.from } : {}),
+        outcome: landed.outcome,
+        at: landed.at,
+        ...(last.trigger !== undefined ? { trigger: last.trigger } : {}),
+        ...(this.judgedThisLaunch ? { thisLaunch: true } : {}),
+      },
+    };
   }
 
   private unsupportedBelow(): { unsupportedBelow?: string } {
@@ -665,6 +856,14 @@ export class UpdateController {
           last.audited ? "" : "; outcome not yet in the audit ledger"
         }`,
       );
+      // AU-1 — what the first launch after it found, and where it began
+      if (last.landed !== undefined)
+        lines.push(`landed: ${last.landed.outcome} at ${new Date(last.landed.at).toISOString()}`);
+      const began = [
+        last.from !== undefined ? `from: ${last.from}` : null,
+        last.trigger !== undefined ? `trigger: ${last.trigger}` : null,
+      ].filter((part): part is string => part !== null);
+      if (began.length > 0) lines.push(began.join(" · "));
     }
     if (this.recovered !== null) {
       lines.push(
@@ -758,19 +957,53 @@ export class UpdateController {
     }
     const apply = this.options.apply;
     if (apply === undefined || !apply.wired) return { ok: false, reason: "apply-unbuilt" };
+    // the silent path's guards, read again past the prepare's awaits (the fresh policy read, the census) — before the
+    // ATTEMPT row, with no await between, so a hold here writes no row — and once more past the ATTEMPT row, below:
+    // a person who switched updates off, or a policy that now requires confirmation, holds it before anything is torn
+    // down
+    if (trigger === "silent") {
+      const held = this.silentHeld(prepared.version);
+      if (held !== null) return { ok: false, reason: held };
+    }
     const sessions = prepared.sessions.map((session) => session.sessionId);
     const operationId = randomUUID();
+    // AU-1 (X3) — the record says how the apply began; the ATTEMPT row keeps the ledger's own words (`person`)
+    const began: UpdateApplyTrigger = trigger === "silent" ? "silent" : "restart";
     await this.auditAttempt(operationId, {
       version: prepared.version,
       consented: String(sessions.length),
       native: prepared.native ? "stop" : "keep",
       trigger,
     });
+    // AU-1 — the last await-free point before the quit. The ATTEMPT row was awaited (up to AUDIT_ATTEMPT_BOUND_MS) and
+    // nothing serialises the doors against it (`restarting` guards only `restartToInstall` and `prepareRestart`): a
+    // check (the tray, the app menu, a resume, the card), a decline, a channel change, or a census refresh whose lever
+    // discards the payload may have moved the update on, on either path; and on the silent path the switch, a decline
+    // or a policy that now requires confirmation hold it. From here to `quitForUpdate` nothing awaits. A refusal after
+    // the ATTEMPT row is closed by its OUTCOME row, so every ATTEMPT row has exactly one.
+    const late = trigger === "silent" ? this.silentHeld(prepared.version) : null;
+    const current = this.stateValue;
+    if (late !== null || current.kind !== "staged" || current.version !== prepared.version) {
+      this.auditApplyRefused(operationId, late ?? "not-staged", {
+        version: prepared.version,
+        consented: sessions.length,
+        began,
+      });
+      // a moved update is the entry's `expired`: a fresh prepare, never a silent proceed
+      return late !== null
+        ? { ok: false, reason: late }
+        : { ok: false, reason: "expired", words: wordsOf(expiredNotice()) };
+    }
     if (
       !apply.quitForUpdate(
-        this.updatePlan(apply, prepared.version, sessions, operationId, prepared.native),
+        this.updatePlan(apply, prepared.version, sessions, operationId, prepared.native, began),
       )
     ) {
+      this.auditApplyRefused(operationId, "quit-underway", {
+        version: prepared.version,
+        consented: sessions.length,
+        began,
+      });
       return { ok: false, reason: "quit-underway" };
     }
     // the apply's quit is underway: nothing re-evaluates (the timer dies here, and again at the stop)
@@ -786,11 +1019,18 @@ export class UpdateController {
     const apply = this.options.apply;
     if (apply === undefined || !apply.wired) return { ok: false, reason: "apply-unbuilt" };
     if (this.client.declined.includes(state.version)) return { ok: false, reason: "declined" };
-    if (!this.enabled) return { ok: false, reason: "disabled" };
+    // AU-1 (LC-12) — the off switch governs what happens WITHOUT a person (the background download, the silent apply,
+    // install on quit); a person's Restart of a staged version is a person's act, so it is not refused here
     const version = state.version;
 
     // B2 — a fresh verified policy, read now; no offline allowance
     const fresh = await this.freshPolicy();
+    // AU-1 — the read is awaited (up to FRESH_POLICY_BOUND_MS), and a check, a decline or a channel change meanwhile
+    // moved the update on: the path that moved it owns its payload and its clock, so nothing below stages it again
+    // (`stagedOf` would re-persist the clock of a collected payload) or judges a lever on a version the state left
+    const after = this.stateValue;
+    if (after.kind !== "staged" || after.version !== version)
+      return { ok: false, reason: "not-staged" };
     if (fresh.kind !== "verified") {
       const reason = fresh.kind === "unreachable" ? "policy-unreachable" : "policy-unverified";
       this.audit(
@@ -816,15 +1056,7 @@ export class UpdateController {
       return {
         ok: false,
         reason: lever,
-        words: wordsOf(
-          policyNotice(
-            lever === "killed"
-              ? { kind: "killed", channel: this.channel }
-              : lever === "yanked"
-                ? { kind: "yanked", version }
-                : { kind: "floor-unmet", version, floor: policy.floors.os ?? "" },
-          ),
-        ),
+        words: wordsOf(policyNotice(this.leverWhy(lever, version, policy.floors.os))),
       };
     }
 
@@ -870,10 +1102,8 @@ export class UpdateController {
     const state = this.stateValue;
     if (state.kind !== "staged") return { applying: false, reason: "not-staged" };
     if (this.options.apply?.wired !== true) return no("apply-unbuilt");
-    if (!this.enabled) return no("disabled");
-    if (this.client.declined.includes(state.version)) return no("declined");
-    if (this.lastVerified?.policy.requireUserConfirmation === true)
-      return no("the policy requires confirmation");
+    const held = this.silentHeld(state.version);
+    if (held !== null) return no(held);
     const windowContext = this.options.safeWindowContext;
     if (windowContext === undefined) return no("no window context");
     this.silentInFlight = true;
@@ -896,6 +1126,17 @@ export class UpdateController {
     } finally {
       this.silentInFlight = false;
     }
+  }
+
+  /** B4 — what keeps an apply a person's act: the off switch, a decline, the policy's `requireUserConfirmation` (the
+   * last verified one: the apply's fresh read replaces it). Read at the silent path's entry and again inside
+   * `confirmRestart` past each await, so a change while the apply reads never installs. AU-1 (X14) removed
+   * `prepareOnce`'s own `disabled`, so this is the silent path's only reading of the switch. */
+  private silentHeld(version: string): "disabled" | "declined" | "confirmation-required" | null {
+    if (!this.enabled) return "disabled";
+    if (this.client.declined.includes(version)) return "declined";
+    if (this.lastVerified?.policy.requireUserConfirmation === true) return "confirmation-required";
+    return null;
   }
 
   /** B4 — the re-evaluation timer: alive only while staged, wired and no apply underway; it dies on every exit branch
@@ -949,9 +1190,11 @@ export class UpdateController {
       }
       await this.measureCache();
     })();
-    this.collecting = run.finally(() => {
-      if (this.collecting === run) this.collecting = null;
+    // the tracked promise is the one compared: the collection clears itself once done (a download then waits for none)
+    const tracked: Promise<void> = run.finally(() => {
+      if (this.collecting === tracked) this.collecting = null;
     });
+    this.collecting = tracked;
     return run;
   }
 
@@ -991,7 +1234,12 @@ export class UpdateController {
 
   /** A lever refused a version (B1): audited, and the state says it — `killed` or `floor-unmet` (the tray's "Updates
    * Paused" / "Update Needs a Newer macOS"), or nothing to offer for a yank. A STAGED payload any lever refuses is
-   * deleted (B6): a kill no longer holds it, so after a later policy lifts the kill the next check downloads again. */
+   * deleted (B6): a kill no longer holds it, so after a later policy lifts the kill the next check downloads again.
+   * AU-1 — the version staged on this Mac is the state's, or else the persisted clock's: a check has already moved the
+   * state (`checking`, then `available`) when its lever bites, and after a relaunch the payload waits in
+   * electron-updater's cache while the state is idle. Either way the refused payload goes, and its clock with it. Every
+   * caller judges the levers of `lastVerified` (a check's chain, the click's fresh one), so the staged version is
+   * refused when it IS `version`, or when a lever refuses it too (a kill, the OS floor). */
   private refuseByLever(version: string, lever: LeverRefusal, action: string): void {
     this.audit(action, "denied", LEVER_CODE[lever], { version });
     this.options.log.warn("desktop.update.lever", "The update policy refused a version", {
@@ -999,9 +1247,26 @@ export class UpdateController {
       lever,
       channel: this.channel,
     });
-    const wasStaged = this.stateValue.kind === "staged";
+    const state = this.stateValue;
+    const staged = state.kind === "staged" ? state.version : (this.client.staged?.version ?? null);
     this.stateForLever(lever);
-    if (wasStaged) void this.collectStagedCache(lever);
+    if (staged !== null && (staged === version || this.leverOf(staged) !== null)) {
+      void this.collectStagedCache(lever);
+      this.forgetStaged();
+    }
+  }
+
+  /** B1 — the last verified policy's lever on `version` for this host, or null. */
+  private leverOf(version: string): LeverRefusal | null {
+    const policy = this.lastVerified === null ? null : leversOf(this.lastVerified.policy);
+    return leverRefusal(version, policy, this.options.hostOsVersion?.() ?? null);
+  }
+
+  /** A lever's refusal of `version`, as the words name it (the apply's `policyNotice`, a download's `downloadNotice`). */
+  private leverWhy(lever: LeverRefusal, version: string, floor: string | undefined): LeverWhy {
+    if (lever === "killed") return { kind: "killed", channel: this.channel };
+    if (lever === "yanked") return { kind: "yanked", version };
+    return { kind: "floor-unmet", version, floor: floor ?? "" };
   }
 
   private stateForLever(lever: LeverRefusal): void {
@@ -1050,6 +1315,7 @@ export class UpdateController {
     sessions: readonly string[],
     operationId: string,
     native: boolean,
+    trigger: UpdateApplyTrigger,
   ): UpdateQuitPlan {
     const consented = sessions.length;
     return {
@@ -1061,7 +1327,7 @@ export class UpdateController {
         this.syncSilentTimer(); // every exit branch starts here: the re-evaluation timer dies with the stop
         const staged = await apply.stage(SQUIRREL_STAGE_MS);
         if (staged.kind === "staged") {
-          this.recordLastApply({ version, branch: "installing", consented, operationId });
+          this.recordLastApply({ version, branch: "installing", consented, operationId, trigger });
           return { kind: "install" };
         }
         if (staged.kind === "refused") {
@@ -1072,6 +1338,7 @@ export class UpdateController {
             reason: "squirrel-refused",
             consented,
             operationId,
+            trigger,
           });
           return { kind: "exit", relaunch: true, reason: "squirrel-refused" };
         }
@@ -1082,14 +1349,20 @@ export class UpdateController {
           reason: "squirrel-timeout",
           consented,
           operationId,
+          trigger,
         });
         await apply.notify(quitNotice("squirrel-timeout"));
         return { kind: "exit", relaunch: false, reason: "squirrel-timeout" };
       },
       install: () => apply.install(),
       aborted: (reason) => {
-        // before the stop: fieldd lives, so this outcome reaches the ledger now
-        this.audit(UPDATES_AUDIT_ACTIONS.APPLY, "denied", "SESSIONS_CHANGED", { version, reason });
+        // before the stop: fieldd lives, so this outcome reaches the ledger now, as the ATTEMPT row's own OUTCOME row
+        this.auditApplyRefused(operationId, "sessions-changed", {
+          version,
+          consented,
+          began: trigger,
+          reason,
+        });
         this.applying = false; // still staged: the re-evaluation timer comes back with the state below
         this.setState({ ...this.stagedOf(version), blockedBy: "sessions" });
         apply.restore();
@@ -1102,6 +1375,7 @@ export class UpdateController {
           reason: "install-failed",
           consented,
           operationId,
+          trigger,
         });
         await apply.notify(quitNotice("install-failed"));
       },
@@ -1146,17 +1420,36 @@ export class UpdateController {
     const state = this.stateValue;
     return state.kind === "staged" && state.version === version
       ? state
-      : { kind: "staged", version, stagedAt: this.now() };
+      : { kind: "staged", version, stagedAt: this.stagedSince(version) };
   }
 
-  /** WP12c — synchronous, before every exit the apply takes (the store writes atomically and at once). */
+  /** AU-1 (AU-D3 A) — when `version` FIRST became ready on this Mac: the persisted clock when it is this version's (a
+   * relaunch re-stages it from electron-updater's cache), else now, persisted. */
+  private stagedSince(version: string): number {
+    const staged = this.client.staged;
+    if (staged !== null && staged.version === version) return staged.at;
+    const at = this.now();
+    this.persist({ ...this.client, staged: { version, at } });
+    return at;
+  }
+
+  /** AU-1 (AU-D3 A) — the staged payload is collected (declined, a channel change, a lever, a check that found
+   * nothing): its clock goes with it. */
+  private forgetStaged(): void {
+    if (this.client.staged !== null) this.persist({ ...this.client, staged: null });
+  }
+
+  /** WP12c — synchronous, before every exit the apply takes (the store writes atomically and at once). AU-1: with the
+   * version it leaves (`from`) and how it began (`trigger`); its `landed` is the next launch's to judge. */
   private recordLastApply(entry: {
     version: string;
     branch: "installing" | "relaunched" | "exited";
     reason?: "squirrel-refused" | "squirrel-timeout" | "install-failed";
     consented: number;
     operationId: string;
+    trigger: UpdateApplyTrigger;
   }): void {
+    const from = this.options.currentVersion;
     this.persist({
       ...this.client,
       lastApply: {
@@ -1167,6 +1460,8 @@ export class UpdateController {
         consented: entry.consented,
         operationId: entry.operationId,
         audited: false,
+        ...(from !== undefined ? { from } : {}),
+        trigger: entry.trigger,
       },
     });
   }
@@ -1191,7 +1486,16 @@ export class UpdateController {
         outcome: installed ? "succeeded" : "failed",
         ...(reasonCode !== undefined ? { reasonCode } : {}),
         operationId: last.operationId ?? randomUUID(),
-        attrs: { version: last.version, branch: last.branch, consented: String(last.consented) },
+        attrs: {
+          version: last.version,
+          branch: last.branch,
+          consented: String(last.consented),
+          // AU-1 — where the apply began, when the record says it. `began` is the record's word (`restart`, `silent`,
+          // `quit`); the ledger's `trigger` stays the ATTEMPT row's (`person`, `silent`), so one operation never names
+          // its trigger in two vocabularies
+          ...(last.from !== undefined ? { from: last.from } : {}),
+          ...(last.trigger !== undefined ? { began: last.trigger } : {}),
+        },
       });
       this.persist({ ...this.client, lastApply: { ...last, audited: true } });
     } catch (error) {
@@ -1201,6 +1505,36 @@ export class UpdateController {
         { error: String(error) },
       );
     }
+  }
+
+  /** AU-1 — an apply refused AFTER its ATTEMPT row and before anything was torn down (fieldd lives): the ATTEMPT's one
+   * OUTCOME row, `denied`, under its operation id, in `deliverLastApply`'s vocabulary — the reason code is the refusal
+   * in capitals, `began` says how the apply began (the record's word; the ATTEMPT row's `trigger` keeps the ledger's)
+   * and `from` the version it would have left. */
+  private auditApplyRefused(
+    operationId: string,
+    refusal: string,
+    entry: {
+      readonly version: string;
+      readonly consented: number;
+      readonly began: UpdateApplyTrigger;
+      readonly reason?: string;
+    },
+  ): void {
+    const from = this.options.currentVersion;
+    this.audit(
+      UPDATES_AUDIT_ACTIONS.APPLY,
+      "denied",
+      refusal.toUpperCase().replace(/-/g, "_"),
+      {
+        version: entry.version,
+        consented: String(entry.consented),
+        ...(from !== undefined ? { from } : {}),
+        began: entry.began,
+        ...(entry.reason !== undefined ? { reason: entry.reason } : {}),
+      },
+      operationId,
+    );
   }
 
   /** WP12c — the apply's ATTEMPT row, through fieldd while it lives, awaited and bounded. */
@@ -1280,11 +1614,16 @@ export class UpdateController {
   }
 
   private async startDownload(version: string): Promise<void> {
-    // a collection in flight empties the directory the download writes: let it finish first (B6)
-    if (this.collecting !== null) await this.collecting;
+    // the download is the state from the first moment, so a second door call (a double click) finds it underway
     const token = this.options.newCancellationToken();
     this.download = token;
     this.setState({ kind: "downloading", version, percent: 0 });
+    // a collection in flight empties the directory the download writes: let it finish first (B6); a decline, the off
+    // switch or a channel change meanwhile cancelled this download
+    if (this.collecting !== null) {
+      await this.collecting;
+      if (this.download !== token) return;
+    }
     try {
       await this.options.updater.downloadUpdate(token);
     } catch (error) {
@@ -1295,7 +1634,7 @@ export class UpdateController {
     }
     if (this.download !== token) return;
     this.download = null;
-    this.setState({ kind: "staged", version, stagedAt: this.now() });
+    this.setState({ kind: "staged", version, stagedAt: this.stagedSince(version) });
     // WP12 L4 (R4) — a staged update leaves a line: what is staged, and the sha512 its payload was checked against (the
     // signed feed's). Before this, nothing outside the process said "staged" — a doctor gap of its own.
     const sha512 = feedSha512Of(this.lastVerified?.feedText ?? "");
@@ -1353,11 +1692,13 @@ export class UpdateController {
     }
   }
 
+  /** An OUTCOME row, fire and forget; under its own operation id unless it closes an ATTEMPT row (`operationId`). */
   private audit(
     action: string,
     outcome: "denied" | "succeeded" | "failed",
     reasonCode?: string,
     attrs?: Record<string, string>,
+    operationId?: string,
   ): void {
     const append = this.options.appendAudit;
     // after the daemon stop an append would START fieldd (it travels through `ensureFieldd`): never
@@ -1368,7 +1709,7 @@ export class UpdateController {
       phase: "outcome",
       outcome,
       ...(reasonCode !== undefined ? { reasonCode } : {}),
-      operationId: randomUUID(),
+      operationId: operationId ?? randomUUID(),
       ...(attrs !== undefined ? { attrs } : {}),
     };
     append(record).catch((error: unknown) => {

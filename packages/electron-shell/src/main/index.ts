@@ -2317,12 +2317,12 @@ async function main(
     registerUpdateDoors(
       registry,
       {
-        check: async () => {
-          await updates.check("manual");
-        },
+        // AU-1 (LC-5) — a person's check answers when it settles; the tray's and the app menu's stay `check("manual")`
+        check: () => updates.checkForPerson(),
         setEnabled: (enabled) => updates.setEnabled(enabled),
         setChannel: (channel) => updates.setChannel(channel),
         decline: (version) => updates.decline(version),
+        download: (version) => updates.downloadForPerson(version),
         prepareRestart: async () => {
           const prepared = await updates.prepareRestart();
           if (!prepared.ok) return prepared;

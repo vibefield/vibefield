@@ -102,6 +102,13 @@ export const ObservedTerminal = z
     persistence: z.string().optional(),
     title: z.string().optional(),
     cwd: z.string().optional(),
+    /** Item 97 (2026-10-29) — the row's process has ended and its cell still lists the pane: a
+     * `keep-until-explicit-close` husk (MF-1g keeps an agent's), from which no exit event will
+     * come again. `true` only, and only once exited: ABSENT on a live row and from a floor older
+     * than item 97, so absence never says the process lives. fieldd's agent backstop reads a
+     * husk's `true` as an exit, after the grace that lets the floor's own `session-exited`
+     * carry the outcome first (AgentRuntime.handleInventory). */
+    exited: z.boolean().optional(),
     /** TC-S3 — the hosting cell. ABSENT on a pre-TC-S3 floor and in the
      * mesh-flagged in-process serve (there is no cell; tolerant readers fall
      * back to the legacy single-cell reading). */

@@ -1747,6 +1747,8 @@ export const IPC_CHANNELS = {
   updatePrepareRestart: "vibefield:update:prepare-restart",
   updateConfirmRestart: "vibefield:update:confirm-restart",
   updateDoctor: "vibefield:update:doctor",
+  /** AU-1 (AU-G5, AU-G6) — a person's download of ONE found version (renderer → main, invoke) */
+  updateDownload: "vibefield:update:download",
   // GT-D3's bridge channels (`vibefield:terminal:connect` invoke,
   // `vibefield:terminal:status` event) RETIRED at TP-S3e: the renderer dials
   // the cells' T1 doors directly and main runs no terminal Backend.
