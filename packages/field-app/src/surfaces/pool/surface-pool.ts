@@ -48,6 +48,7 @@ import type {
   LiveSurfaceAttachTicketV1,
   LiveSurfaceBrowserStateV1,
   LiveSurfaceDemandV1,
+  LiveSurfaceDeviceCommandV1,
   LiveSurfaceInputEventV1,
   LiveSurfaceNavigationCommandV1,
 } from "@vibefield/contracts";
@@ -184,6 +185,10 @@ export interface SurfaceHandle<TFrame extends LiveSurfaceClosableFrame> {
   sendInput(event: LiveSurfaceInputEventV1, geometryRevision?: number): boolean;
   /** Fire one chrome navigation command. Same soft-fail contract. */
   navigate(command: LiveSurfaceNavigationCommandV1): boolean;
+  /** PT-S2 — fire one device act at a bound Simulator's attachment (its face's boot, create, show, try again, the system's
+   * settings). Same soft-fail contract. Optional, as `faviconArrivals` is: a handle that is not the pool's own need not
+   * carry it (a face whose handle has none offers no act). */
+  device?(command: LiveSurfaceDeviceCommandV1): boolean;
   /** Mint fresh and re-attach after a loss. A no-op in any other state. */
   retry(): void;
   /** Drop this holder's claim. Idempotent. */
@@ -343,6 +348,13 @@ class PoolHandle<TFrame extends LiveSurfaceClosableFrame> implements SurfaceHand
     const attachment = this.entry.attachment;
     if (this.entry.status !== "live" || attachment === null || attachment.closed) return false;
     return attachment.sendNavigation(command);
+  }
+
+  device(command: LiveSurfaceDeviceCommandV1): boolean {
+    if (this.#released) return false;
+    const attachment = this.entry.attachment;
+    if (this.entry.status !== "live" || attachment === null || attachment.closed) return false;
+    return attachment.sendDevice(command);
   }
 
   onState(listener: (state: SurfaceHandleState<TFrame>) => void): () => void {
