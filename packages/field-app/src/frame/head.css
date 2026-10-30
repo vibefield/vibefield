@@ -1,9 +1,11 @@
 /* The head (One Frame FR-2, FR-6, §4, §6, §7; FC-D8, FC-D9): the frame's top
    row on the lights' axis — every control 40 tall at top 8, centred on y 28.
    Every number is DESIGN.md's — §8 "The head", §5 the line's glass, the sheet
-   tier and the solid menu, §6 the island curve, §10 the place. Tokens only;
-   the ready fill is the foreground at 8% (14% where it is pressed), as the
-   line mixes it. The menus' rows are menu.css's. */
+   tier and the solid menu, §6 the island curve and the sheet's shelves, §10
+   the place. Tokens only; the ready fill is the foreground at 8% (14% where it
+   is pressed), as the line mixes it. The menus' rows are menu.css's. Since
+   HN-8 (PL-D1, PL-D2) the pill's sheet holds two shelves, Fields and
+   Artifacts, and under a cover the package circle grows it on Artifacts. */
 
 /* ── UNDER A COVER (§8 "The covers over the desk") ─────────────────────────
    The head is the canvas's chrome, and under any cover the canvas is a still
@@ -29,14 +31,16 @@
   }
 }
 
-/* ── THE NAME PILL ⇄ THE FIELDS EXPLORER — one element (M1) ───────────────
+/* ── THE NAME PILL ⇄ ITS SHEET — one element (M1) ──────────────────────────
    Closed, the pill is as wide as what it says, centred on the window, and
    never wider than the window less the wider side's slot on both sides
    (`--vf-head-side`, measured by the view; the lights' 96 until it is) — past
    that, FitPath drops names.
    Open, the same element grows into the sheet in 600ms on the island curve
-   (the file pill's own 560ms curve retired, F14). Canvas chrome: 50, below
-   the cover (60). */
+   (the file pill's own 560ms curve retired, F14) — on Fields or Artifacts
+   (HN-8). The pill is canvas chrome, 50, below the cover (60), and hides with
+   the desk under one; its sheet stands with the frame (62), as the sheet a
+   cover opens from the package circle does (below). */
 .vf-head-place {
   position: absolute;
   z-index: 50;
@@ -76,11 +80,15 @@
 }
 
 /* Open: the sheet tier, the top sheet's shadow cast down, corners 22 at the
-   top (concentric with the pill it was) and the sheet's 40 at the foot. */
+   top (concentric with the pill it was) and the sheet's 40 at the foot —
+   544 × 420 (HN-8; `min(46vh, 420px)` tall until then), never ending nearer
+   the line than 8 on a window too short for it: its top 8 and the line's 72
+   from the foot, + 8. */
 .vf-head-place[data-open="true"] {
+  z-index: 62;
   width: min(56%, 34rem);
   max-width: calc(100% - 32px);
-  height: min(46vh, 420px);
+  height: min(420px, calc(100% - 88px));
   border-radius: 22px 22px 40px 40px;
   background: var(--vf-chrome-surface);
   backdrop-filter: blur(64px);
@@ -201,8 +209,13 @@
   background: var(--vf-orange);
 }
 
-/* The chevron to the explorer: a 28 round button, turned up while open. */
-.vf-head-chev {
+/* The chevron to Fields and the package to Artifacts (PL-D1): 28 round
+   buttons in tertiary ink, primary on the ready fill under the pointer — and
+   held so while the button's shelf shows: the button pressed is on. The
+   chevron turns up only on Fields; the package holds its dot. */
+.vf-head-chev,
+.vf-head-pack {
+  position: relative;
   display: grid;
   width: 28px;
   height: 28px;
@@ -219,7 +232,8 @@
     color 120ms ease;
 }
 
-.vf-head-chev:hover {
+:is(.vf-head-chev, .vf-head-pack):hover,
+:is(.vf-head-chev, .vf-head-pack)[aria-expanded="true"] {
   color: var(--vf-text-primary);
   background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
 }
@@ -228,14 +242,41 @@
   transition: transform 600ms var(--vf-ease-island);
 }
 
-.vf-head-place[data-open="true"] .vf-head-chev > .vf-glyph {
+.vf-head-chev[aria-expanded="true"] > .vf-glyph {
   transform: rotate(180deg);
+}
+
+/* The rule before the package: 1 × 18 in the strong hairline, 5 clear each
+   side as the selection bar's (the row's 6 gap, less 1 of its own). */
+.vf-head-rule {
+  width: 1px;
+  height: 18px;
+  flex: none;
+  margin: 0 -1px;
+  background: var(--vf-hairline-strong);
+}
+
+/* The package's dot (PL-D1): STANDING states only, as the sync dot's — 6px,
+   3 in from the button's top right, ringed 1.5 in the solid chrome so it
+   reads on the glass; orange while an artifact's source is unavailable (§2.5:
+   attention, never red). */
+.vf-head-pack-dot {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--vf-orange);
+  box-shadow: 0 0 0 1.5px var(--vf-chrome-solid);
+  pointer-events: none;
 }
 
 :is(
   .vf-head-crumb,
   .vf-head-name,
   .vf-head-chev,
+  .vf-head-pack,
   .vf-head-zoom,
   .vf-head-doc,
   .vf-head-doc-sync
@@ -244,9 +285,14 @@
   outline-offset: 2px;
 }
 
-/* ── THE EXPLORER'S BODY — under the pill's row, rising in behind the morph
-   (the content reveal 180ms behind its container, §6). */
-.vf-head-explorer {
+/* ── THE SHEET'S SHELVES (HN-8; §8 "The head", §6) — Fields, the explorer,
+   and Artifacts, the Hub's: one at a time under the head row, each rising in
+   behind the morph as the explorer always did (the content reveal 180ms
+   behind its container). Turned while the sheet is open (`data-turned`),
+   they change IN PLACE — one fades out and the other in over 180ms `ease`,
+   the sheet never regrowing, as a covered view's content changes under a
+   cover that stays. */
+.vf-head-shelf {
   position: absolute;
   top: 40px;
   right: 0;
@@ -263,7 +309,7 @@
     visibility 0s linear 500ms;
 }
 
-.vf-head-place[data-open="true"] .vf-head-explorer {
+:is(.vf-head-place, .vf-head-sheet)[data-open="true"] .vf-head-shelf[data-shown] {
   opacity: 1;
   visibility: visible;
   transform: none;
@@ -271,6 +317,48 @@
     opacity 500ms ease-out 180ms,
     transform 500ms ease-out 180ms,
     visibility 0s;
+}
+
+.vf-head-place[data-turned] .vf-head-shelf {
+  transform: none;
+  transition:
+    opacity 180ms ease,
+    visibility 0s linear 180ms;
+}
+
+.vf-head-place[data-turned] .vf-head-shelf[data-shown] {
+  transition:
+    opacity 180ms ease,
+    visibility 0s;
+}
+
+/* The Artifacts shelf hosts the Hub's own surface (§8 "Artifacts — the
+   Artifacts shelf's contents"), the side panel's contribution, at the sheet's
+   width — 504 inside its padding at 544 — and is a container, so the Hub's
+   own stylesheet answers it with its tiles (PL-D3), as it answered the right
+   drawer's 152 column with its narrow form. */
+.vf-head-shelf[data-shelf="artifacts"] {
+  container-type: inline-size;
+}
+
+/* With no Hub bound the shelf is never blank (§8 "Artifacts"): why, in
+   words, at its centre — and "Opening Artifacts…" LATE, as History's opening
+   words are: nothing for 120ms, then a 180ms plain `ease` fade, so a quick
+   restart never flashes them. */
+.vf-head-waits {
+  display: grid;
+  min-height: 100%;
+  place-items: center;
+}
+
+.vf-head-waits[data-late] {
+  animation: vf-head-late 180ms ease 120ms both;
+}
+
+@keyframes vf-head-late {
+  from {
+    opacity: 0;
+  }
 }
 
 .vf-head-docs {
@@ -540,7 +628,10 @@
   outline-offset: 2px;
 }
 
-/* The explorer's dim (§5 backdrop dim) — a click on it closes the sheet. */
+/* The sheet's dim (§5 backdrop dim) — a click on it closes the sheet. On
+   Canvas it lies under the pill's sheet at 40, as it always has; under a
+   cover it stands over the cover and under the frame (61, §10), behind the
+   sheet the package circle grows. */
 .vf-head-dim {
   position: absolute;
   z-index: 40;
@@ -551,9 +642,98 @@
   transition: opacity 500ms ease;
 }
 
+.vf-head-dim[data-covered] {
+  z-index: 61;
+}
+
 .vf-head-dim[data-open="true"] {
   opacity: 1;
   pointer-events: auto;
+}
+
+/* ── THE SHEET UNDER A COVER (HN-8, PL-D2; §8 "The head") ──────────────────
+   The same sheet, grown from the package circle: the frame's (62), outside
+   the canvas's head, so it stands above the cover the pill hides under. Shut
+   it is the circle's own box at the head's left — 40 round at x 96, on the
+   lights' axis, the line's glass — and unseen: the circle stands there. It
+   grows from that box in 600ms on the island curve to the pill's sheet's
+   size, its left on the circle's, the circle's glyph never moving (M1, M2):
+   its head row is the circle's own — the package a 28 round button 6 in,
+   on, then 8 after it the shelf's name at 13/600. Artifacts alone: Fields
+   are the desk's, and stay with the pill. */
+.vf-head-sheet {
+  position: absolute;
+  z-index: 62;
+  top: 8px;
+  left: 96px;
+  display: flex;
+  width: 40px;
+  height: 40px;
+  flex-direction: column;
+  overflow: hidden;
+  isolation: isolate;
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--vf-chrome-solid) 88%, transparent);
+  backdrop-filter: blur(24px);
+  box-shadow:
+    0 0 0 1px var(--vf-hairline),
+    var(--vf-shadow-island);
+  visibility: hidden;
+  transition:
+    width 600ms var(--vf-ease-island),
+    height 600ms var(--vf-ease-island),
+    border-radius 600ms var(--vf-ease-island),
+    background-color 240ms ease,
+    box-shadow 600ms var(--vf-ease-island),
+    backdrop-filter 600ms var(--vf-ease-island),
+    visibility 0s linear 600ms;
+}
+
+.dark .vf-head-sheet {
+  background: color-mix(in srgb, var(--vf-chrome-solid) 94%, transparent);
+  box-shadow:
+    0 0 0 1px var(--vf-hairline-strong),
+    var(--vf-shadow-island),
+    inset 0 1px 0 rgb(255 255 255 / 6%);
+}
+
+.vf-head-sheet[data-open="true"] {
+  width: min(56%, 34rem);
+  height: min(420px, calc(100% - 88px));
+  border-radius: 22px 22px 40px 40px;
+  background: var(--vf-chrome-surface);
+  backdrop-filter: blur(64px);
+  box-shadow:
+    0 0 0 1px var(--vf-hairline-strong),
+    var(--vf-shadow-top-sheet);
+  visibility: visible;
+  transition:
+    width 600ms var(--vf-ease-island),
+    height 600ms var(--vf-ease-island),
+    border-radius 600ms var(--vf-ease-island),
+    background-color 240ms ease,
+    box-shadow 600ms var(--vf-ease-island),
+    backdrop-filter 600ms var(--vf-ease-island),
+    visibility 0s;
+}
+
+.vf-head-sheet-row {
+  display: flex;
+  height: 40px;
+  min-width: 0;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px 0 6px;
+}
+
+.vf-head-sheet-name {
+  overflow: hidden;
+  color: var(--vf-text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 /* ── THE HEAD'S RIGHT: the zoom readout (FC-D8) — and, until FR-4, the
@@ -628,18 +808,25 @@
   }
 }
 
-/* M6: fades only, halved. */
+/* M6: fades only, halved — and a turn of the sheet's shelves at once (§6). */
 @media (prefers-reduced-motion: reduce) {
   .vf-head-place,
+  .vf-head-sheet,
+  .vf-head-sheet[data-open="true"],
   .vf-head-chev > .vf-glyph,
-  .vf-head-explorer,
-  .vf-head-place[data-open="true"] .vf-head-explorer {
+  .vf-head-shelf,
+  :is(.vf-head-place, .vf-head-sheet)[data-open="true"] .vf-head-shelf[data-shown] {
     transition-duration: 90ms;
     transition-delay: 0ms;
   }
 
-  .vf-head-explorer {
+  .vf-head-shelf {
     transform: none;
+  }
+
+  .vf-head-place[data-turned] .vf-head-shelf,
+  .vf-head-place[data-turned] .vf-head-shelf[data-shown] {
+    transition: none;
   }
 
   .vf-head-doc-tile:hover,

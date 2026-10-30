@@ -16,13 +16,17 @@
 // (DESIGN.md §10 "The mat's places", R5), the tenth value beside the Peek's.
 // HN (Cards in Hand, 2026-10-29): @'s list left with the line's draft (LN-D3)
 // and the left drawer with the clipboard tray; the hand raised, or a card
-// picked up, is `cards` (HN-L7).
+// picked up, is `cards` (HN-L7). HN-8 (PL-D1, PL-D2): the right drawer left
+// with the edge, and the pill's sheet is ONE surface on two shelves —
+// `fields` or `artifacts` names the shelf that shows, so opening the sheet on
+// either folds the rest, and turning it to its other shelf folds nothing.
 
 export type FrameSurface =
   /** Objects — the desk's pegboard behind the line (DK-13): the board out is this surface; the tray's `open` is
    * the truth and this follows it (`field/desk/pegboard/Pegboard.tsx`). */
   | "objects"
-  /** The fields explorer, grown from the head's name pill. */
+  /** The pill's sheet on its Fields shelf — the fields explorer, grown from
+   * the head's name pill by its chevron. */
   | "fields"
   /** The zoom's menu, grown from the head's readout. */
   | "zoom"
@@ -33,7 +37,9 @@ export type FrameSurface =
   /** The hand raised (⇧⌘V), or a card picked up (HN-D5) — the frame's cards
    * (DESIGN.md §8 "The hand"; HN-L7). */
   | "cards"
-  /** The right edge's drawer: Artifacts (the Artifact Hub). */
+  /** The pill's sheet on its Artifacts shelf — the Artifact Hub, opened by the
+   * pill's package or, under a cover, the package circle (HN-8). The right
+   * edge's drawer from FR-4 until then. */
   | "artifacts"
   /** Search — the Peek: the frame's popup over the scrim, opened by its
    * button or ⌘F (`Peek.tsx`; DESIGN.md §8 "Search — the Peek"). */
@@ -50,4 +56,12 @@ export function foldSurface(
   closing: FrameSurface,
 ): FrameSurface | null {
   return current === closing ? null : current;
+}
+
+/** The pill's sheet's two shelves (HN-8; DESIGN.md §8 "The head"). */
+export type SheetShelf = Extract<FrameSurface, "fields" | "artifacts">;
+
+/** The shelf the pill's sheet shows, or null while the sheet is shut. */
+export function sheetShelf(surface: FrameSurface | null): SheetShelf | null {
+  return surface === "fields" || surface === "artifacts" ? surface : null;
 }
