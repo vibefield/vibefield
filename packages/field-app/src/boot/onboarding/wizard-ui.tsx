@@ -112,8 +112,8 @@ export function WizardPane({
 
 /** Every skip names its later home (W3) — the spec's subtitle, unless the pane
  * names its own (the agent chapter's: "Bring it in anytime from History.").
- * The two panes that skip with this default, the link and the posture, live
- * on Settings → Devices since TS-3a (TS-D3). */
+ * The pane that skips with this default, the link, lives on Settings →
+ * Devices since TS-3a (TS-D3), as the posture it was followed by does (TS-6). */
 export function SkipAction({
   label,
   onSkip,
