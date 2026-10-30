@@ -91,12 +91,23 @@ The catalog currently mounts these shipping views directly:
   (`CardsPreview`) — the six faces in both lights, the fan at rest, a card reached with its ×, the
   hand raised with a card in the keyboard's focus, a card picked up over its scrim, and a card from
   another app still waiting
-- the head (One Frame FR-3): `HeadView` in every state the page's head plates draw — the field's
-  name at its top, the crumbs folded in inside a folder, FitPath in a narrow window, renaming in
-  place, the fields explorer grown from the pill, the zoom readout's menu (and Windows' keys), the
-  palette under the head — and the live head on its real controller (`Head`) in the playground,
-  over a fixture document manager and a fixture canvas door (the path, the zoom). It replaced the
-  file pill, the navigation breadcrumbs and the − % + zoom pill
+- the head (One Frame FR-3; its package and the pill's sheet on two shelves since HN-8, PL-D1 and
+  PL-D2): `HeadView` in every state the page's head plates draw — the field's name at its top, the
+  package after the chevron's rule and, in a plate of its own, its standing dot, the crumbs folded
+  in inside a folder, FitPath in a narrow window, renaming in place, the pill's sheet on its Fields
+  shelf (the fields explorer, and the sync question in place of its tiles, TS-6) and on its
+  Artifacts shelf — holding the Hub's own fixture adapter (`ArtifactPanelPreview`, the plugin's
+  design-system door) or, with no Hub bound, the words the shelf waits in — the same sheet under a
+  cover, grown from the package circle, the zoom readout's menu (and Windows' keys), the palette
+  under the head — and the live head on its real controller (`Head`) in the playground, over a
+  fixture document manager and a fixture canvas door (the path, the zoom); the playground hosts no
+  plugin, so its shelf says it waits, as a window's does at boot. It replaced the file pill, the
+  navigation breadcrumbs and the − % + zoom pill
+- the package circle (PL-D2, HN-8): the shipping `PackageCircleView` at its place over each covered
+  view's own ground (`PackageCirclePreview`) — over Godview's stage, its Stories keeping one head
+  gap from it; over History's band with a source unavailable, its dot on; and in the terminals'
+  title bar while they are maximized, folded there as search is — its dot's words the head's own
+  (`artifactsDotWords`). The sheet it grows is the pill's, drawn by the head's plates
 - the corner (One Frame FR-4): `MeMenuView` open above the line over fixture account and theme
   state, a plate per Theme it holds — Light, Dark, and Auto following the page's own theme — and
   Settings → Appearance (`AppearanceSectionView`) in the shipping dialog, the same setting; the
