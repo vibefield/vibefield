@@ -7,18 +7,31 @@ import {
   LiveSurfaceBrowserSourceV1,
   LiveSurfaceBrowserStateV1,
   LiveSurfaceDemandV1,
+  LiveSurfaceDeviceCommandV1,
+  LiveSurfaceDeviceVerbV1,
   LiveSurfaceFrameEnvelopeV1,
   LiveSurfaceFrameMetadataV1,
   LiveSurfaceGeometryV1,
   LiveSurfaceHostControlMessageV1,
   LiveSurfaceInputEventV1,
   LiveSurfaceIosSimulatorBindingV1,
+  LiveSurfaceIosSimulatorDeviceSourceV1,
   LiveSurfaceLoadFailureV1,
   LiveSurfaceNavigationCommandV1,
   LiveSurfacePresentationCapabilitiesV1,
   LiveSurfaceRendererControlMessageV1,
+  LiveSurfaceRuntimeSummaryV1,
   LiveSurfaceSequenceV1,
+  LiveSurfaceSimulatorConditionV1,
+  LiveSurfaceSimulatorDeviceRowV1,
+  LiveSurfaceSimulatorStateV1,
+  LiveSurfaceSourceKindV1,
   LiveSurfaceSourceSpecV1,
+  SURFACE_LIMITS,
+  SurfaceEnumerationKindV1,
+  SurfaceOpenParamsV1,
+  SurfaceSimulatorDevicesParamsV1,
+  SurfaceSimulatorDevicesResultV1,
 } from "../src/live-surfaces";
 
 const geometry = {
@@ -28,6 +41,13 @@ const geometry = {
   logicalSize: { width: 424, height: 868 },
   orientation: 0,
 };
+
+/** PT-S2: a phone's binding, and a UDID — which no shape the renderer sends or reads of a bound phone may carry. */
+const phoneBinding = {
+  deviceType: "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro",
+  runtime: "com.apple.CoreSimulator.SimRuntime.iOS-26-1",
+};
+const UDID = "A1B2C3D4-E5F6-7890-ABCD-EF1234567890";
 
 describe("LSF-1 Live Surfaces contracts", () => {
   it("keeps producer, geometry, and sequence discontinuities distinct", () => {
@@ -258,6 +278,206 @@ describe("LSF-1 Live Surfaces contracts", () => {
       expect(LiveSurfaceIosSimulatorBindingV1.safeParse(bad).success, JSON.stringify(bad)).toBe(
         false,
       );
+  });
+
+  it("PT-S2 (R1): a phone asks main for its device by its BINDING — a source kind of its own beside the UDID-keyed one, its crop the screen's, and never a UDID", () => {
+    const source = { kind: "ios-simulator-device", binding: phoneBinding };
+    expect(LiveSurfaceSourceSpecV1.parse(source)).toEqual({ ...source, crop: { mode: "auto" } });
+    expect(
+      LiveSurfaceIosSimulatorDeviceSourceV1.parse({ ...source, crop: { mode: "none" } }),
+    ).toMatchObject({ crop: { mode: "none" } });
+    // it rides `surface.open` as every source does, under the phone's own reuse key
+    expect(SurfaceOpenParamsV1.parse({ source, reuseKey: "phone:01J9ZQ" })).toMatchObject({
+      source: { kind: "ios-simulator-device", binding: phoneBinding, crop: { mode: "auto" } },
+      reuseKey: "phone:01J9ZQ",
+    });
+    // never a UDID — not beside the binding, not instead of it; and a binding is whole and Xcode's own ids
+    for (const bad of [
+      { ...source, udid: UDID },
+      { kind: "ios-simulator-device", udid: UDID },
+      { kind: "ios-simulator-device" },
+      { kind: "ios-simulator-device", binding: { deviceType: phoneBinding.deviceType } },
+      { kind: "ios-simulator-device", binding: { ...phoneBinding, runtime: UDID } },
+      { kind: "ios-simulator-device", binding: { ...phoneBinding, deviceType: "iPhone 17 Pro" } },
+      { ...source, crop: { mode: "guessed" } },
+    ])
+      expect(LiveSurfaceSourceSpecV1.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
+    // the UDID-keyed source stays as it was, for the lab and main's own resolver — and takes no binding for its UDID
+    expect(LiveSurfaceSourceSpecV1.parse({ kind: "ios-simulator", udid: UDID })).toMatchObject({
+      kind: "ios-simulator",
+      udid: UDID,
+      crop: { mode: "auto" },
+    });
+    expect(
+      LiveSurfaceSourceSpecV1.safeParse({ kind: "ios-simulator", binding: phoneBinding }).success,
+    ).toBe(false);
+    // a kind of its own for policy (fieldd's scope matrix is a Record over it); created, never listed
+    expect(LiveSurfaceSourceKindV1.options).toEqual([
+      "browser",
+      "sck-window",
+      "ios-simulator",
+      "ios-simulator-device",
+    ]);
+    expect(SurfaceEnumerationKindV1.options).toEqual(["sck-window", "ios-simulator"]);
+  });
+
+  it("PT-S2 (R2): a bound simulator's summary says where its device is in the producer's FACT words — never the face's, never a UDID", () => {
+    const summary = {
+      v: 1,
+      surfaceId: "surface_0123456789abcdef",
+      state: "created",
+      producerEpoch: 0,
+      stateRevision: 0,
+      capabilities: {
+        pointer: false,
+        wheel: false,
+        keyboard: false,
+        textInput: false,
+        touch: false,
+        rotateDevice: false,
+        resizeLogicalViewport: false,
+        resizeBackingRaster: true,
+        crop: true,
+      },
+    };
+    expect(LiveSurfaceSimulatorConditionV1.options).toEqual([
+      "no-simulator",
+      "no-permission",
+      "no-device",
+      "off",
+      "booting",
+      "no-window",
+      "streaming",
+      "stopped",
+    ]);
+    const attached = { name: "iPhone 17 Pro", ...phoneBinding };
+    for (const condition of LiveSurfaceSimulatorConditionV1.options)
+      expect(
+        LiveSurfaceRuntimeSummaryV1.parse({ ...summary, simulator: { condition, ...attached } })
+          .simulator,
+      ).toEqual({ condition, ...attached });
+    // nothing to say of a device main has none of
+    expect(LiveSurfaceSimulatorStateV1.parse({ condition: "no-simulator" })).toEqual({
+      condition: "no-simulator",
+    });
+    // the act in flight, and a crop fallen back to the whole window — still streaming
+    for (const acting of LiveSurfaceDeviceVerbV1.options)
+      expect(LiveSurfaceSimulatorStateV1.parse({ condition: "booting", acting })).toMatchObject({
+        acting,
+      });
+    expect(
+      LiveSurfaceSimulatorStateV1.parse({ condition: "streaming", ...attached, degraded: true }),
+    ).toMatchObject({ degraded: true });
+    // a name as long as a face may say it, and no longer
+    expect(
+      LiveSurfaceSimulatorStateV1.parse({ condition: "off", name: "x".repeat(128) }).name,
+    ).toHaveLength(128);
+    // any other source's summary, as before
+    expect(LiveSurfaceRuntimeSummaryV1.parse(summary)).not.toHaveProperty("simulator");
+    // `live` and `at-rest` are the renderer's to say; a UDID is never a fact of the window's
+    for (const bad of [
+      {},
+      { condition: "live" },
+      { condition: "at-rest" },
+      { condition: "ready" },
+      { condition: "shutdown" },
+      { condition: "streaming", udid: UDID },
+      { condition: "streaming", name: "" },
+      { condition: "streaming", name: "x".repeat(129) },
+      { condition: "streaming", name: "iPhone\n17 Pro" },
+      { condition: "streaming", deviceType: "iPhone 17 Pro" },
+      { condition: "streaming", runtime: UDID },
+      { condition: "booting", acting: "shutdown" },
+      { condition: "booting", acting: "install" },
+      { condition: "streaming", degraded: "whole-window" },
+    ])
+      expect(
+        LiveSurfaceRuntimeSummaryV1.safeParse({ ...summary, simulator: bad }).success,
+        JSON.stringify(bad),
+      ).toBe(false);
+  });
+
+  it("PT-S2 (R4): a face's act is a VERB on its own control message beside `navigate` — no argument, and no verb that reaches inside iOS", () => {
+    const attachmentId = "attachment_0123456789abcdef";
+    expect(LiveSurfaceDeviceVerbV1.options).toEqual([
+      "boot",
+      "create",
+      "show",
+      "retry",
+      "open-settings",
+    ]);
+    for (const verb of LiveSurfaceDeviceVerbV1.options) {
+      expect(LiveSurfaceDeviceCommandV1.parse({ verb })).toEqual({ verb });
+      const message = { v: 1, type: "device", attachmentId, command: { verb } };
+      expect(LiveSurfaceRendererControlMessageV1.parse(message)).toEqual(message);
+    }
+    // the verbs are the allow-list: none shuts the person's device down, none reaches inside iOS
+    for (const verb of [
+      "shutdown",
+      "erase",
+      "delete",
+      "ui",
+      "openurl",
+      "install",
+      "launch",
+      "privacy",
+      "push",
+      "settings",
+      "Boot",
+      "",
+    ])
+      expect(LiveSurfaceDeviceCommandV1.safeParse({ verb }).success, verb).toBe(false);
+    for (const bad of [
+      { v: 1, type: "device", attachmentId },
+      { v: 1, type: "device", attachmentId, command: {} },
+      { v: 1, type: "device", attachmentId, command: "boot" },
+      { v: 1, type: "device", attachmentId: "short", command: { verb: "boot" } },
+      { v: 2, type: "device", attachmentId, command: { verb: "boot" } },
+      // a device verb is never a navigation, nor a navigation a device verb
+      { v: 1, type: "navigate", attachmentId, navigation: { action: "boot" } },
+      { v: 1, type: "device", attachmentId, command: { action: "reload" } },
+    ])
+      expect(LiveSurfaceRendererControlMessageV1.safeParse(bad).success, JSON.stringify(bad)).toBe(
+        false,
+      );
+  });
+
+  it("PT-S2 (R11): the attach reads this Mac's devices as REDACTED rows — type, runtime, name, booted — never a UDID, and bounded", () => {
+    const row = { ...phoneBinding, name: "iPhone 17 Pro", booted: true };
+    expect(LiveSurfaceSimulatorDeviceRowV1.parse(row)).toEqual(row);
+    expect(SurfaceSimulatorDevicesParamsV1.parse({})).toEqual({});
+    const rested = {
+      ...row,
+      runtime: "com.apple.CoreSimulator.SimRuntime.iOS-18-6",
+      booted: false,
+    };
+    expect(SurfaceSimulatorDevicesResultV1.parse({ devices: [row, rested] })).toEqual({
+      devices: [row, rested],
+    });
+    // no Simulator here, or none of its devices
+    expect(SurfaceSimulatorDevicesResultV1.parse({ devices: [] })).toEqual({ devices: [] });
+    expect(SURFACE_LIMITS.MAX_SIMULATOR_DEVICES).toBe(256);
+    const full = Array.from({ length: SURFACE_LIMITS.MAX_SIMULATOR_DEVICES }, () => row);
+    expect(SurfaceSimulatorDevicesResultV1.safeParse({ devices: full }).success).toBe(true);
+    expect(SurfaceSimulatorDevicesResultV1.safeParse({ devices: [...full, row] }).success).toBe(
+      false,
+    );
+    for (const bad of [
+      { ...row, udid: UDID },
+      { ...row, booted: "Booted" },
+      { deviceType: row.deviceType, runtime: row.runtime, booted: true },
+      { ...row, name: "" },
+      { ...row, deviceType: UDID },
+      { ...row, runtime: "iOS 26.1" },
+    ])
+      expect(LiveSurfaceSimulatorDeviceRowV1.safeParse(bad).success, JSON.stringify(bad)).toBe(
+        false,
+      );
+    // a list with a UDID anywhere in it is refused whole
+    expect(
+      SurfaceSimulatorDevicesResultV1.safeParse({ devices: [row, { ...rested, udid: UDID }] })
+        .success,
+    ).toBe(false);
   });
 
   it("PT-3: the input lane carries an IME composition and the buttons a move holds; the browser state says the page's cursor", () => {
