@@ -171,37 +171,6 @@
   height: 640px;
 }
 
-/* One Frame FR-4 — the edge's plates (the page's edges plates): the window at
-   the drawer's height, the shipping tray at its own place — the notch at
-   mid-edge, the drawer from 64 to 80 above the foot — over the canvas or a
-   covered view's own ground. The two whole-window states span the row. */
-.vf-ds-edges-plates {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(560px, 1fr));
-  gap: 12px;
-}
-
-.vf-ds-edges-plate {
-  position: relative;
-  isolation: isolate;
-  height: 560px;
-  overflow: hidden;
-  border-radius: 14px;
-  background-color: var(--vf-mat-ground);
-  background-image: var(--vf-mat-lattice);
-  background-size: var(--vf-mat-lattice-size);
-}
-
-.vf-ds-edges-plate:is([data-state="canvas"], [data-state="godview"]) {
-  grid-column: 1 / -1;
-}
-
-.vf-ds-edges-ground {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-}
-
 /* AR-8c — History's plates: a window of the frame's own proportions, the
    canvas's ground under the cover's glass, so the view's own placement (its
    columns ending at the reserve, its edges, its glass) reads as the window
@@ -367,7 +336,7 @@
 }
 
 .vf-ds-palette-stage,
-.vf-ds-side-stage {
+.vf-ds-shelf-plate {
   display: grid;
   min-height: 370px;
   place-items: center;
@@ -378,7 +347,7 @@
 }
 
 .dark .vf-ds-palette-stage,
-.dark .vf-ds-side-stage {
+.dark .vf-ds-shelf-plate {
   background:
     radial-gradient(circle, rgba(255, 255, 255, 0.08) 1px, transparent 1px), var(--vf-ds-stage-dark);
   background-size: 20px 20px;
@@ -390,12 +359,23 @@
   overflow: hidden;
 }
 
-.vf-ds-side-stage {
+/* HN-8 — the Hub at its shelf's width (DESIGN.md §8 "Artifacts — the Artifacts
+   shelf's contents"), its production state chosen in the bar above it. */
+.vf-ds-shelf-plate {
   position: relative;
   display: block;
-  min-height: 650px;
+  min-height: 520px;
   overflow: hidden;
   padding: 0;
+}
+
+/* The shelf's box: 504 wide — the sheet's 544 less its 20 at each side — and a
+   container, as the shelf is, so the plugin's own stylesheet answers it with
+   its tile form. It stands under the state bar. */
+.vf-ds-shelf-stage {
+  width: min(100% - 40px, 504px);
+  margin: 76px auto 24px;
+  container-type: inline-size;
 }
 
 .vf-ds-production-statebar {
@@ -652,12 +632,6 @@
 .vf-ds-godview-controls {
   display: flex;
   padding: 10px 12px;
-}
-
-/* In an edges plate (FR-4) the stage is the covered view's ground: it fills it. */
-.vf-ds-edges-ground .vf-ds-godview-frame {
-  height: 100%;
-  min-height: 0;
 }
 
 /* The swarm's bodies (AR-5): the views package's lab fixtures on the SHIPPING

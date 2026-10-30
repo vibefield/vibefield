@@ -918,9 +918,8 @@ describe("the twelve (HN-D8) and the mount", () => {
       /<Cards\s+surface=\{surface\}\s+onSurfaceChange=\{onSurfaceChange\}\s+tucked=\{boardOut\}\s+settingsOpen=\{showSettings\}\s+\/>/u,
     );
     expect(CHROME).not.toContain("ClipboardTray");
-    expect(CHROME).toMatch(
-      /<ArtifactsTray\s+surface=\{surface\}\s+onSurfaceChange=\{onSurfaceChange\}\s+sliver=\{covered\}/u,
-    );
+    // The right edge's tray, which stood on beside the hand after HN-1, left the frame at HN-8:
+    // its absence is held with the edges' other pieces (`ui-system-boundaries.test.ts`).
   });
 
   it("hears another app while it is here (HN-6): a paste with no caret deals into its hand, a file named through its host's door — and once it is gone, nothing", async () => {
