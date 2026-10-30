@@ -110,6 +110,26 @@ describe("the SDK's /desk door", () => {
     expect(typeof door.liveSimulatorFace).toBe("function");
   });
 
+  it("PT-S2: keys this Mac's attachable devices beside LIVE — a synchronous answer, a binding and never a UDID (R11)", () => {
+    // the phone's second service: its own key, never LIVE's nor a page's navigation
+    expect(door.SIMULATOR_DEVICES.name).toBe("vibefield.simulator.devices");
+    expect(door.SIMULATOR_DEVICES).not.toBe(door.LIVE);
+    expect(door.SIMULATOR_DEVICES.name).not.toBe(door.BROWSER_NAVIGATION.name);
+    // a menu act runs once and writes in its own transaction: the answer is the host's last read, never a promise
+    expectTypeOf<door.SimulatorDevices["attachable"]>().toEqualTypeOf<
+      (prefer: string) => door.LiveSimulatorBinding | undefined
+    >();
+    // the binding's two CoreSimulator ids, and nothing that names one Mac's device
+    expectTypeOf<keyof door.LiveSimulatorBinding>().toEqualTypeOf<"deviceType" | "runtime">();
+    // the door names no capture technology: a kind never learns how its frames are made (James's choice 4)
+    const from = SOURCE.indexOf("export interface LiveSimulatorBinding");
+    const words = SOURCE.slice(from, SOURCE.indexOf("export const SIMULATOR_DEVICES", from));
+    expect(words.length).toBeGreaterThan(0);
+    expect(words).not.toMatch(
+      /ScreenCaptureKit|\bSCK\b|desktopCapturer|getDisplayMedia|serve-sim|IOSurface|simctl|sharedTexture/u,
+    );
+  });
+
   it("hands over the kind contract, the placement keys and the service keys", () => {
     expect(door.defineObject).toBe(iceDesk.defineObject);
     expect(door.isObjectKind).toBe(iceDesk.isObjectKind);
