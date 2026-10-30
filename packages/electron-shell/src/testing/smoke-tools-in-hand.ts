@@ -354,7 +354,8 @@ export async function toolsInHandRows(d: HandRowsDriver): Promise<string[]> {
       button: "left",
       clickCount: 1,
     });
-    await sleep(50);
+    // Keep a tap's down/up in one main-process turn. A timer between them can
+    // stretch past ICE's 250 ms tap limit under load and silently become a hold.
     win.webContents.sendInputEvent({
       type: "mouseUp",
       x: at.x,

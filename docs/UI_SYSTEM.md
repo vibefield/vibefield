@@ -270,6 +270,11 @@ bounded live-appearance preview capability and never receives product preload, u
 plugin, tray, or diagnostic capabilities. Use `pnpm dev:design:web` when a catalog-only browser HMR
 loop with no live-product authority is sufficient.
 
+Appearance proposals coalesce to the latest snapshot on an animation frame, with a timer fallback
+when a covered or hidden Studio stops painting. Transport must keep progressing without a repaint;
+window background throttling remains enabled. The physical Studio gate publishes while hidden,
+then checks replay after the product reloads and restoration when Studio closes.
+
 Use `pnpm --filter @vibefield/field-app test` for DOM and ownership guards, and
 `pnpm --filter @vibefield/electron-shell build:design` for an ignored standalone browser-catalog
 bundle. That build lands under `.vibefield/studio/catalog-renderer/`; it never replaces the
