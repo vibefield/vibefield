@@ -8,7 +8,7 @@
    — the left slot's start, mirroring search's circle at the right end
    (peek.css). Above the cover with the line and the corner (62); no-drag, as
    it stands in the window's drag strip. The pill's sheet grows from it and
-   stands over it while it shows (§8 "The head"). */
+   stands in its place while it shows (§8 "The head"; at the foot). */
 .vf-package-circle {
   position: absolute;
   z-index: 62;
@@ -151,5 +151,28 @@
 @keyframes vf-package-fade {
   from {
     opacity: 0;
+  }
+}
+
+/* ── WHILE ITS SHEET SHOWS (§8 "The head"; M1) ────────────────────────────
+   The sheet grew from the circle and stands in its place, its head row the
+   circle's own (Head's `.vf-head-sheet`, the same 62), so the circle steps
+   aside at once — by opacity, never visibility, so Esc can give the keyboard
+   back to it while the sheet folds. It returns only as the sheet's shut box,
+   which wears the circle's glass at the circle's place, goes: the fold's
+   600ms, 90 under reduced motion (the sheet's M6). The bar's step keeps its
+   own timing. */
+.vf-package-circle[data-open] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.vf-package-circle:not([data-open]):not([data-step]) {
+  transition: opacity 0s linear 600ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vf-package-circle:not([data-open]):not([data-step]) {
+    transition-delay: 90ms;
   }
 }

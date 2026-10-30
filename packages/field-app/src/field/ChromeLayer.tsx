@@ -311,8 +311,9 @@ export function ChromeLayer({
           alone at the head's left, at 96 — search's mirror, above the cover
           (62), folded into the terminals' title bar with search while they are
           maximized. It grows the pill's sheet on its Artifacts shelf, the
-          frame's `artifacts`. Before the head in the document: the sheet stands
-          at the same 62 and grows over the circle it came from (M1). */}
+          frame's `artifacts`, and steps aside while the sheet stands in its
+          place (M1). Before the head in the document, so the sheet, at the same
+          62, is the one on top as the two hand over. */}
       <PackageCircle view={view} surface={surface} onSurfaceChange={onSurfaceChange} />
 
       {/* THE HEAD (One Frame FR-3, DESIGN.md §8 "The head"): the field's name

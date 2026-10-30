@@ -162,10 +162,13 @@ describe("the package circle (PL-D2; DESIGN.md §8, the head)", () => {
     expect(button()?.getAttribute("aria-expanded")).toBe("true");
     expect(button()?.getAttribute("title")).toBe("Close  Esc");
     expect(button()?.getAttribute("aria-label")).toBe("Close the artifacts");
+    // the sheet stands in its place, so it steps aside (its stylesheet's rows below)
+    expect(circle()?.getAttribute("data-open")).toBe("true");
     act(() => button()?.click());
     expect(surfaceNow).toBeNull();
     expect(button()?.getAttribute("aria-expanded")).toBe("false");
     expect(button()?.getAttribute("title")).toBe("Artifacts");
+    expect(circle()?.hasAttribute("data-open")).toBe(false);
     act(() => setSurfaceNow?.("palette"));
     act(() => button()?.click());
     expect(surfaceNow).toBe("artifacts");
@@ -370,6 +373,23 @@ describe("the circle's stylesheet, held to DESIGN.md's entry", () => {
     expect(out).toContain("transition: opacity 120ms ease;");
     expect(rule('.vf-package-circle[data-step="in"]')).toContain(
       "animation: vf-package-fade 200ms ease;",
+    );
+  });
+
+  it("steps aside while its sheet shows — at once, by opacity, so the keyboard can come back to it — and returns as the sheet's fold ends: 600 ms, 90 under reduced motion (M1)", () => {
+    const aside = rule(".vf-package-circle[data-open]");
+    expect(aside).toContain("opacity: 0;");
+    expect(aside).toContain("pointer-events: none;");
+    // never `visibility`: a hidden button cannot take the keyboard back
+    expect(aside).not.toContain("visibility");
+    expect(aside).not.toContain("transition");
+    // back only once the fold is over, and never across the bar's own step
+    expect(rule(".vf-package-circle:not([data-open]):not([data-step])")).toContain(
+      "transition: opacity 0s linear 600ms;",
+    );
+    const reduced = sheet.slice(sheet.lastIndexOf("@media (prefers-reduced-motion: reduce)"));
+    expect(reduced.replace(/\s+/g, " ")).toContain(
+      ".vf-package-circle:not([data-open]):not([data-step]) { transition-delay: 90ms; }",
     );
   });
 

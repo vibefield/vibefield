@@ -32,8 +32,9 @@ export interface PackageCircleViewProps {
 
 /** The covered views' package circle: `package` 18 on the line's glass at x
  * 96, which grows the pill's sheet on its Artifacts shelf. While the sheet
- * shows the button is on, and says what pressing it again does, as the pill's
- * package does. */
+ * shows, the sheet stands in its place, its head row the circle's own, so the
+ * circle steps aside — unseen, still the keyboard's — and its button is on,
+ * saying what pressing it again does, as the pill's package does. */
 export function PackageCircleView({
   open,
   dot,
@@ -46,6 +47,7 @@ export function PackageCircleView({
   return (
     <div
       className="vf-package-circle no-drag"
+      data-open={open ? "true" : undefined}
       data-bar={bar ? "true" : undefined}
       data-step={step ?? undefined}
     >
