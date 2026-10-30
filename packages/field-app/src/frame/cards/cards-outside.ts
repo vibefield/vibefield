@@ -48,8 +48,9 @@ import { isField } from "./caret";
 // A file is what its path says (the preload's `pathForFile`; none in the catalog) and a picture
 // what its pixels are, read from the bytes the person handed over and kept in memory only, with
 // the card (LC-7, HN-D9). What comes in is bounded as the frame's own roads are (LC-24): words
-// past what one paste reads and a picture past the still's cap are not brought in, and of the
-// rest the first twelve are (HN-D8, LC-23) — the line says what was left out, in sizes (§9).
+// past what one paste reads are not brought in, and a picture past the still's cap comes in as
+// its file — its path, never its pixels: the bound is on pixels held in memory, and a path holds
+// none. Of the rest the first twelve are (HN-D8, LC-23); the line says what was left out (§9).
 
 /** A text file's first lines are read from this much of it, and no more. */
 export const FIRST_LINES_BYTES = 640;
@@ -123,32 +124,29 @@ export function broughtIn(transfer: DataTransfer | null): readonly Brought[] {
 }
 
 /** Is this file one a picture card would hold — its bytes kept, its pixels drawn — when this
- * renderer can draw it? A folder never is. PURE. */
+ * renderer can draw it? A folder never is, nor a picture past the still's cap
+ * (`SCREENSHOT_STILL.MAX_BYTES`, LC-24): that bound is on pixels held in memory, and a path holds
+ * none, so it comes in as its file — a 200 MB image dropped on a pane pastes its path. Only its
+ * size is read: it is never decoded to be sent there. PURE. */
 function isPicture(file: File, folder: boolean): boolean {
-  return !folder && file.type.startsWith("image/");
+  return !folder && file.type.startsWith("image/") && file.size <= SCREENSHOT_STILL.MAX_BYTES;
 }
 
 /** Why a thing is not brought in, as the line says it — or null for one a card can hold (LC-24):
- * words past what one paste reads (`SHELL_CLIPBOARD.READ_MAX_BYTES`), or a picture past the
- * still's cap (`SCREENSHOT_STILL.MAX_BYTES`), the bounds of the frame's own roads. Only sizes are
- * read: a picture is never decoded to be refused. PURE. */
+ * words past what one paste reads (`SHELL_CLIPBOARD.READ_MAX_BYTES`), the bound of the frame's
+ * own road for words, which have no path to come in as. A file is never refused: a picture past
+ * the still's cap comes in as its file (`isPicture`). PURE. */
 function refusalOf(thing: Brought): string | null {
-  if (thing.kind === "text") {
-    const bytes = utf8ByteLength(thing.text);
-    const bound = SHELL_CLIPBOARD.READ_MAX_BYTES;
-    return bytes > bound ? OUTSIDE_WORDS.tooLarge("words", bytes, bound) : null;
-  }
-  const { file, folder } = thing;
-  const bound = SCREENSHOT_STILL.MAX_BYTES;
-  return isPicture(file, folder) && file.size > bound
-    ? OUTSIDE_WORDS.tooLarge("picture", file.size, bound)
-    : null;
+  if (thing.kind !== "text") return null;
+  const bytes = utf8ByteLength(thing.text);
+  const bound = SHELL_CLIPBOARD.READ_MAX_BYTES;
+  return bytes > bound ? OUTSIDE_WORDS.tooLarge(bytes, bound) : null;
 }
 
 /** What the hand takes of what was handed over (DESIGN.md §8 "The hand", brought in): of what a
  * card can hold, the first twelve, as many as the hand holds (HN-D8, LC-23); and what the line
- * says of the rest — that only twelve came in, else the first thing too large and why — or null
- * when all of it came in. PURE. */
+ * says of the rest — that only twelve came in, else the words too large and why — or null when
+ * all of it came in. PURE. */
 export function takenOf(things: readonly Brought[]): {
   readonly taken: readonly Brought[];
   readonly left: string | null;
@@ -267,8 +265,9 @@ interface Bringing {
 /** One thing brought in as the card it is (DESIGN.md §8 "The hand", brought in): words a text
  * card; a picture this renderer can draw a picture card — its bytes kept as the card's own and
  * shown through an object URL, its pixels measured (LC-7) — with its file's path when it has one;
- * any other file (a picture it cannot draw included) a file card: its path, the folder it lives
- * in, its first lines when they are words, else what it is and its size. */
+ * any other file (a picture it cannot draw, or one past the still's cap, included) a file card:
+ * its path, the folder it lives in, its first lines when they are words, else what it is and its
+ * size. */
 async function cardOf(thing: Brought, bringing: Bringing): Promise<Card> {
   const { store } = bringing;
   const origin: CardOrigin = { view: "outside", how: bringing.how };
