@@ -63,27 +63,36 @@ public enum AccountDisplay {
 
   /// The orange words at the top of the menu — said where the act is, in
   /// sentences (I-5: state stays in words). `nil` is the ordinary case.
+  ///
+  /// TS-7 — in the link's words (DESIGN.md §9): "tailnet", "node" and "mesh"
+  /// stay in Network details (TS-L2), and approval is approval.
   public static func notice(state: MeshModel.State) -> String? {
     switch state {
-    case .needsLogin: return "Sign in to your tailnet to reach your desktops."
-    case .needsMachineAuth: return "This device awaits machine authorization on the tailnet."
-    case .failed(let reason): return "The mesh failed — \(reason)."
+    case .needsLogin: return "Sign in to Tailscale again to reach your desktops."
+    case .needsMachineAuth: return "An admin of your Tailscale network approves new devices."
+    case .failed(let reason): return "Couldn’t connect — \(reason)."
     case .off, .starting, .up, .stopping, .reconnecting: return nil
     }
   }
 
+  /// TS-7 — the menu's sign-in row: the act's own words on a first sign-in
+  /// (DESIGN.md §9), the desktop's "Sign in again" for an account the tailnet
+  /// asks for again (§9's expired pane).
+  public static func signInWord(hasAccount: Bool) -> String {
+    hasAccount ? "Sign in again" : "Continue with Tailscale"
+  }
+
   /// What the line under the name says while the mesh is not up — lowercase
-  /// facts, the way the mesh has always spoken about itself. Up, the line is
-  /// the account line instead.
+  /// facts, the corner's own voice. Up, the line is the account line instead.
   public static func connectionDetail(state: MeshModel.State) -> String? {
     switch state {
     case .off: return "not connected"
     case .starting: return "connecting…"
     case .needsLogin: return "sign in again"
-    case .needsMachineAuth: return "awaiting authorization"
-    case .stopping: return "leaving the mesh"
+    case .needsMachineAuth: return "waiting for approval"
+    case .stopping: return "signing out"
     case .reconnecting: return "reconnecting…"
-    case .failed: return "mesh failed"
+    case .failed: return "couldn’t connect"
     case .up: return nil
     }
   }

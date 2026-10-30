@@ -278,6 +278,34 @@
   left: 16px;
 }
 
+/* AU-2 — the update in the corner: the face alone, folded, on the field's
+   ground (the dot's 2px ring is the ground's), then the open menu's plate
+   under its two state switches. The menu's own look is MeMenu.css's. */
+.vf-ds-update-faces {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 16px 18px 0;
+}
+
+.vf-ds-update-face {
+  position: relative;
+  display: grid;
+  width: 112px;
+  height: 88px;
+  place-items: center;
+  border-radius: 14px;
+  background-color: var(--vf-canvas-bg);
+}
+
+.vf-ds-update-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 14px 18px;
+}
+
 .vf-ds-me-stage {
   position: relative;
   height: 420px;
@@ -619,11 +647,6 @@
   background-color: var(--vf-mat-ground);
   background-image: var(--vf-mat-lattice);
   background-size: var(--vf-mat-lattice-size);
-}
-
-.vf-ds-onboarding-production .vf-wizard-shell {
-  width: min(calc(100% - 32px), 44rem);
-  height: min(calc(100% - 32px), 32rem);
 }
 
 .vf-ds-godview-frame {

@@ -270,6 +270,21 @@ export const UsersCreateParams = z
   .passthrough();
 export type UsersCreateParams = z.infer<typeof UsersCreateParams>;
 
+/** IOS-8f — `user.me`: this desktop's person, from the daemon's own user row — the face as the machine SHOWS it
+ * (`effectiveFaces`: the written face, or a deal against every face held), and the name when there is a row.
+ * With no row to read (an embedded daemon's injected root, a missing or unreadable `users.json`) the face is
+ * `dealFace(userId, [])` — the deal the phone makes itself — and `name` is absent: a reader keeps the login
+ * rather than draw a guessed name. `dealt` says the face is still the machine's proposal, written by nobody. */
+export const UserMeResult = z
+  .object({
+    userId: z.string().min(1),
+    name: z.string().min(1).optional(),
+    face: UserFace,
+    dealt: z.boolean(),
+  })
+  .passthrough();
+export type UserMeResult = z.infer<typeof UserMeResult>;
+
 /** UA-5 — `users:switch` (UA-D15: attach re-target + window reload). */
 export const UsersSwitchParams = z
   .object({

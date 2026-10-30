@@ -81,6 +81,20 @@ describe("readUpdateIdentity (D9)", () => {
     });
   });
 
+  it("reads the build id About names, and none from a stage cut before WP12c (AU-4)", () => {
+    const built = JSON.stringify({
+      ...JSON.parse(identity("release")),
+      buildId: "0.1.0-nightly.20261027+84509d6",
+    });
+    expect(readUpdateIdentity(resources, {}, () => built)?.buildId).toBe(
+      "0.1.0-nightly.20261027+84509d6",
+    );
+    // exactOptionalPropertyTypes: absent, never an explicit undefined
+    expect(readUpdateIdentity(resources, {}, () => identity("release"))).not.toHaveProperty(
+      "buildId",
+    );
+  });
+
   it("has no updater in the development layout, or without a readable identity", () => {
     expect(
       readUpdateIdentity({ packaged: false, identity: null }, {}, () => identity("dev")),

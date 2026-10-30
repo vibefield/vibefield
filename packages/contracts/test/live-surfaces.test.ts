@@ -12,6 +12,7 @@ import {
   LiveSurfaceGeometryV1,
   LiveSurfaceHostControlMessageV1,
   LiveSurfaceInputEventV1,
+  LiveSurfaceIosSimulatorBindingV1,
   LiveSurfaceLoadFailureV1,
   LiveSurfaceNavigationCommandV1,
   LiveSurfacePresentationCapabilitiesV1,
@@ -209,6 +210,54 @@ describe("LSF-1 Live Surfaces contracts", () => {
         sourceRef: "enumeration-ref-01",
       }).success,
     ).toBe(true);
+  });
+
+  it("PT-S1: binds a phone to a CoreSimulator device type and runtime — bounded, pattern-checked, and never a UDID", () => {
+    const binding = {
+      deviceType: "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro",
+      runtime: "com.apple.CoreSimulator.SimRuntime.iOS-26-1",
+    };
+    expect(LiveSurfaceIosSimulatorBindingV1.parse(binding)).toEqual(binding);
+    // Apple's own spellings keep their dashes (the 2nd-generation SE's trails one)
+    expect(
+      LiveSurfaceIosSimulatorBindingV1.safeParse({
+        ...binding,
+        deviceType: "com.apple.CoreSimulator.SimDeviceType.iPhone-SE--2nd-generation-",
+      }).success,
+    ).toBe(true);
+    // a tolerant reader: a later field rides along
+    expect(LiveSurfaceIosSimulatorBindingV1.parse({ ...binding, later: 1 })).toMatchObject({
+      later: 1,
+    });
+    // never a UDID — a UDID names one simulator on one Mac, and the document travels between Macs
+    for (const udid of ["A1B2C3D4-E5F6-7890-ABCD-EF1234567890", "booted"]) {
+      expect(
+        LiveSurfaceIosSimulatorBindingV1.safeParse({ ...binding, deviceType: udid }).success,
+      ).toBe(false);
+      expect(
+        LiveSurfaceIosSimulatorBindingV1.safeParse({ ...binding, runtime: udid }).success,
+      ).toBe(false);
+    }
+    // the two ids are each other's never, nor a name, nor a path, nor empty, nor past the bound
+    for (const bad of [
+      { ...binding, deviceType: binding.runtime },
+      { ...binding, runtime: binding.deviceType },
+      { ...binding, deviceType: "iPhone 17 Pro" },
+      {
+        ...binding,
+        deviceType:
+          "/Library/Developer/CoreSimulator/Profiles/DeviceTypes/iPhone 17 Pro.simdevicetype",
+      },
+      { ...binding, runtime: "com.apple.CoreSimulator.SimRuntime.iOS 26.1" },
+      { ...binding, deviceType: "" },
+      { ...binding, runtime: "" },
+      { ...binding, deviceType: `com.apple.CoreSimulator.SimDeviceType.${"x".repeat(100)}` },
+      { deviceType: binding.deviceType },
+      { runtime: binding.runtime },
+    ])
+      expect(LiveSurfaceIosSimulatorBindingV1.safeParse(bad).success, JSON.stringify(bad)).toBe(
+        false,
+      );
   });
 
   it("PT-3: the input lane carries an IME composition and the buttons a move holds; the browser state says the page's cursor", () => {

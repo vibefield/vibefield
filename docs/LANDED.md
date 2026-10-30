@@ -16038,6 +16038,24 @@ stderr write.
   - an OS logout (powerMonitor `shutdown`): no box, and the durable close never shows its modal.
 - **Which quits skip the gate:** an update's armed quit and a signal's quit. AL-4 is folded in: dev's SIGTERM/SIGINT
   is never a person's quit, and ⌘Q in dev meets the gate (AL-D7).
+  > **Correction (2026-10-30, AU B3's AU-5a `cbd6e15e5`):**
+  > - **Production:** "Which quits skip the gate: … a signal's quit" held only for dev's SIGTERM and SIGINT (AL-4),
+  >   and so did this entry's heading, "a signal still leaves them". AL-4's handler (`installDevSignalQuit`) ran only
+  >   under `MODE === "dev"` and caught only those two, and a bare Electron 43.1.1 turns SIGTERM, SIGINT and SIGHUP
+  >   into an ordinary `app.quit()` (before-quit → will-quit → quit; LC-26's read, 2026-10-29 09:18:57Z). So a
+  >   production signal, and a SIGHUP in dev, met this gate as a person's ⌘Q would and could stop the pairs, against
+  >   ESR §7.3 as amended. AU-5a installs the handler (`installSignalQuit`, `signal-quit.ts`) in every build and adds
+  >   SIGHUP.
+  > - **Dev, since AL-4:** a signal that landed while the gate's box was up was swallowed. The box absorbed the
+  >   signal's `app.quit()`, and Cancel then left the shell's `restarting` flag set for the session, with the handler's
+  >   own latch already tripped, so every later SIGINT or SIGTERM was ignored and the person's next ⌘Q skipped the
+  >   gate and stopped nothing; and "Quit and end N sessions" stopped the pairs under a signal. AU-5a's
+  >   `quitForSignal` makes a signal during the box quit whatever the box answers and stop nothing; during the stop's
+  >   re-ask box, a signal still quits on its Cancel, while "Quit and end N sessions" finishes the stop already under
+  >   way; three red-first rows in `lifecycle.test.ts`.
+  >
+  > The design source was corrected on 2026-10-29 (`draft/thinking-app-lifecycle.md` AL-F11 and §5.7, dev-local
+  > `1d91b1bbd`). LANDED "AU B3" has the read and the fix.
 - **The preference:** `desktop.confirmQuit`, default on; Settings → Desktop behavior → "Ask before quitting".
 - **One copy, shared:** `pair-stop.ts` holds the census and the stop, and the update's apply port uses it too.
   `awaitDeparture` is the replace path's poll, and a quit waits for the run files to go.
@@ -18458,6 +18476,10 @@ process at nice 19, VF-PM's GO 01:34Z; 600 frames, then 1800):
 - **The loop solves 599 steps, not 600:** the float sum of `1000 / 30` loses one. The comment says so, and the frame
   numbers here are the loop's frames as the trace counted them. Counting frames instead of summing time is
   **ITEM 90**, for a quiet day.
+  *Corrected 2026-10-30 (item 90, `8a1d08d03`, in the stack's merge `0b4cb2ff0`): counting frames would not have
+  worked. `SwarmPhysics.advance` (puppeteer-views 0.3.0, `world.js:327–347`) subtracts a rounded `stepMs` per step and
+  loses the epsilon itself, so a time counted from the frame number solves 599 too (`records/item90/acc90.mjs`). Item
+  90's fix advances until the world says it has solved 600 steps, which takes 601 frames.*
 
 **The budget** (`238a960bc`, the test only, +23/−2): `SWARM_SETTLE_BUDGET_MS = 15_000`, given to the row as vitest's
 options (`{ timeout: … }`, item 85's `PAGE_BUDGET_MS` shape). A third argument that is not a number literal makes biome
@@ -19053,3 +19075,1360 @@ the complete `pnpm verify` above, this closes Q19's code and landing checks.
 The exact gate verdicts are in `.vibefield/q19-landing/landing-code-commit-summary.log`,
 with per-gate logs in `landing-code-commit/` beside it. The artwork archive and local-only
 draft snapshot `304eb60c4` remain preserved. Neither main nor dev-local was pushed.
+
+## Fixer — the stack: items 94, 86, 90, 96 (its first half), 93, 97, 92 and 101, eleven commits landed as one merge (2026-10-29 → 10-30; tip `a2cf1b76a` on `e23fa8a1f`, landed as `0b4cb2ff0`; VF-PM's rulings 10-29 05:23Z–09:36Z and 10-30 13:30Z)
+
+**What landed:** eleven commits and eight items. Each began as a red in a loaded verify on James's Mac and was read to
+its cause. One entry per item follows, in the stack's order.
+- Built in `fix/item97-lost-exit` (lanes/item94), folded by autosquash at 10-29 09:35Z and bundled
+  (`records/item97/stack-a2cf1b76a.bundle`, sha256 `cdab8394…7513`).
+- Item 91 left the stack at 10-29 07:20Z. Its red-first inverted: its settle waited for `project.branch`, the git
+  observer's first answer, which never came in 30 s, and main's file stayed green under the mutation. It stays queued,
+  a read first.
+- Item 96 lands its first half. Its own half stays queued.
+
+**Validation:**
+- Each commit's light pass and red-first ran alone at nice 19 on James's Mac. Each entry names its own.
+- Four full verifies at the stack's earlier tips ran on James's Mac as outside load climbed to 362–398. Every red row
+  became an item here, or was already one:
+  - `ec7899a4f` (10-29 07:32Z): item 91's MF-1 row, item 93's profile row (`smoke-profile.test.ts:189`, 6432 ms) and
+    item 99's AR-1 row;
+  - its one rerun (07:46Z): item 92's crash row alone, "its stderr still open after 1000 ms";
+  - `8d5254747` (08:00Z): item 93's LEFT row alone (`smoke-profile.test.ts:114`, 9144 ms);
+  - `d50b972dd` (08:25Z): item 97's AR-6-0 exit wait alone, out at 15 s with no `exit_heard`.
+- Item 101's two reds were TS-6's verify and its rerun on 10-29.
+- No full verify ran on James's Mac at the tip. The stack verified on the Mac mini as the queue's run 2, the merge of
+  main into `a2cf1b76a` minted by a9. It was green: `pnpm verify` exit 0 at 2026-10-30 13:41:16Z, 27 of 27 projects,
+  rust 499 passed, 0 failed and 14 ignored, and gen:check clean (VF-PM's read).
+
+**Landed:** main fast-forwarded `0765b2fba` → `0b4cb2ff0` at 2026-10-30 17:42:50Z on VF-PM's GO, on James's word.
+- The pre-check was amended for James's uncommitted PRC-6 files: the ff's changed files are disjoint from the dirty
+  set, and the ten paths read the same before and after.
+- The first attempt, at 13:43:35Z, stopped at the guard on James's live dev stack. The app quit at 16:56Z, and its
+  dev runner's orphaned `nx watch` pair still held the landing's new gate (`dev-stack-check.sh`; items 114 and 115)
+  until James stopped it at 17:40Z.
+- Pushed with `648719bb2` at 18:16:19Z.
+
+- Records: `/Volumes/SamsungRed/lanes/records/item94/` (the plan and the red-firsts; the verifies' logs under
+  `lanes/item94/logs/`), `records/item90/`, `records/item93/`, `records/item97/`.
+
+## AL-8a — item 94: a crash's count that does not come in time says why — the floor names each owed cell's pump (2026-10-29; `148f2dff0`, in the stack's merge `0b4cb2ff0`)
+
+**What happened:** TS-4b's second verify (load ~216) read AL-8a-4's record of a crash as `{sessions: null}`. The floor
+had held the hello's ack for its whole bounded wait (`FRESH_COUNT_WAIT`, 2 s, AL-8a's ruling of 2026-10-27) and sent
+unknown, AL-8a's honest answer. But it logged nothing, so the null could not say whether the bound met a slow floor or
+a cell that never heard the ask.
+
+**The fix:**
+- field-native `orphan.rs`: `fresh_count` takes what it counts for (`CountFor`: a departure with the record's `at`, or
+  the bound's confirming read). At its deadline it logs `field_native.lifecycle.manager_count_unknown {count_for,
+  at_ms, waited_ms, why, cells}`. `why` is one word: `slow` when every owed cell was mid-work, `unheard` when a cell
+  sat idle from before the moment without hearing the ask, `dialing` when a cell was being dialed.
+- `terminal.rs`: each cell's stamp records when its pump last heard an ask (`heard`) and last went idle (`settled`).
+  `InventoryStamp::not_fresh` classifies a cell as reconciling, tick_late, dialing or unheard.
+- The bound is unchanged at 2 s, and no contract changes: the record still says `sessions: null`.
+- fieldd's kill matrix: AL-8a-4 and AL-8a-2 hold the law through `expectCountedOrSlow`. `sessions` is 1, or null WITH
+  the floor's own `manager_count_unknown` for this departure saying `slow`. A 0, a bare null and an `unheard` null are
+  red.
+
+**Red-first** by mutation, restored byte-identical (`records/item94/plan.md`): M1 (the ask arm holds the pump 4 s)
+reddens the old rows on a null while the new rows read `slow`; M3 (M1 without the give-up line) is red on a bare null;
+M2 (the record says `Some(0)`) is red under both; MC (an idle cell classified `tick_late`) reddens the two
+`terminal.rs` rows.
+
+## FN — item 86: a health or observed send between a subscription's reading and its baseline reaches fieldd — the receiver is taken first (2026-10-29; `bca8aa778`, in the stack's merge `0b4cb2ff0`)
+
+**The cause:**
+- `native.lifecycle.health.subscribe` and `.observed.subscribe` (`mgmt/mod.rs`) read the Sender's value for the
+  result, sent it, then handed the forwarder `subscribe()`, which marks seen whatever the channel holds by then. A
+  send from another worker thread in between was never forwarded. That window is microseconds, unless a loaded host
+  preempts the thread.
+- Both streams are state transfer, so the next send or a reconnect repaired it. Until then fieldd held the old
+  terminal inventory, or missed a mesh node-up subscribed while the units come up (item 85's timing). Named at item 85
+  (`7eda2ee38`) and left for its own item.
+
+**The fix,** in the shape the file already had three times (routes since item 85, `freeway.state`,
+`diagnostics::subscribe`): one helper, `subscription_reading(&mut rx)`, reads the receiver the forwarder will hold
+with `borrow_and_update` before the result is sent. Health and observed take the receiver first; `freeway.state` goes
+through it with no change. The two "Noted 2026-10-28" comments are dated corrections at their source.
+
+**The row:** `a_send_after_a_subscriptions_reading_is_still_owed_to_its_forwarder`, a plain `#[test]`. Its Probe
+value's `Serialize` sends the next value between the reading and the forwarder's hold. Red-first by mutation (I86, the
+old order): `has_changed` is false, red; restored, green.
+
+## GV — item 90: the GV-D1 swarm row solves the 600 steps it names — its loop counts the world's steps, not the frames (2026-10-29; `8a1d08d03`, in the stack's merge `0b4cb2ff0`)
+
+**The finding (item 89):** the row's settle, 600 frames of `now += 1000 / 30`, solved 599 steps.
+
+**The cause:**
+- It is the world's own accumulator. `SwarmPhysics.advance` (puppeteer-views 0.3.0, `world.js:327–347`) adds the
+  clamped delta and subtracts a rounded `stepMs` per step, so it loses the epsilon itself.
+- Simulated alone (`records/item90/acc90.mjs`): main's sum solves 599, and so does a time counted from the frame
+  number. So item 89's named remedy, "counting frames instead of summing time", would not have worked. Item 89's entry
+  carries a dated correction at its source, in this commit.
+- It is not a product fault: a live driver hands continuous time, and the epsilon is caught up the next frame.
+
+**The fix, test only:** `settleCrowd` advances until the world has solved 600 steps (601 frames) and returns `solved`.
+The row asserts 600 for both settles; the crowd's assertions and the 15 s budget are unchanged.
+
+**Red-first** (I90): main's `frame < 600` loop under the new assertions is red at 599; restored, green. Deterministic:
+float arithmetic, no clock.
+
+## B4 — item 96, its first half: the launch rows play FieldView whole — a board is ready on the desk's present, never on the 2.5 s fallback (2026-10-29; `8d5254747`, in the stack's merge `0b4cb2ff0`)
+
+**What reddened:** `doc-manager.test.ts`'s first-run row ran 2.9–4.8 s in nine full verifies and crossed vitest's 5 s
+default twice: the EL8's r2 at 5257 ms, and TS-4b's verify4b-1 at load 663.
+
+**The cause:** `contentApplied` → `presentStage` → `waitForCanvasPresentation` waits for `canvasPresented` or
+`CANVAS_PRESENT_TIMEOUT_MS` (2500). The harness played `contentApplied` alone, so every wait for ready sat out the
+fallback: one apply ≈ 3 s, three ≈ 8–9.5 s. The product calls `canvasPresented` one frame after the arrival framing
+(`use-workspace-session.ts:493`), so this was harness time, not a product item.
+
+**The fix:** `presented(manager, generation)` plays both reports, and `applyPending` and the remount row use it. The
+refused board's row keeps `contentApplied` alone. The first-run row says ready arrives in the present's own turn,
+never on the timer.
+
+**Red-first** (I96, the helper without `canvasPresented`): red ("loading"); restored, green. Timed alone, the fix
+against main's file: first run 313 against 2825 ms, the field-report flow 712 against 8216, the whole file 14 s
+against 74 s.
+
+**Its own half, queued:** the parts alone ×N and on CI; which of the 13 bare `30_000` rows keep a named constant; and
+the one row still past a second ("a window whose OWN board another window holds", 1667 ms).
+
+## DK-18 — item 93: the launcher's census reads the whole process table once — every later look asks one pid at a time; the launcher rows get their named budget (2026-10-29; `d50b972dd`, in the stack's merge `0b4cb2ff0`)
+
+**What reddened:** `smoke-profile.test.ts`'s launcher rows overran vitest's 5 s default in loaded verifies. The LEFT
+row (:114) went red four times since 10-20 (5126–9144 ms, the last at `8d5254747`, load ~400), and the profile row
+(:189) once (6432 ms at `ec7899a4f`).
+
+**The cause:**
+- The census (`apps/desktop/packaging/smoke-daemons.mjs`) read the WHOLE table twice per look: once with every
+  environment (`ps -axww -E`) and once plain. Every re-look was a whole look, so the LEFT row made four or more whole
+  reads.
+- Measured (10-29 08:05Z, 1244 processes): the `-E` table 152 ms, the plain one 92 ms, `-p <one pid>` 3–4 ms. A `-p`
+  naming two or more pids takes 204–216 ms, because macOS reads the whole table again.
+
+**The fix:**
+- The first look reads the `-E` table ONCE to find the run by its mark and names each found pid by its own command
+  line. Every re-look asks `ps -ww -E -o … -p <pid>` per known pid.
+- The mark guard is kept: a pid counts only while its environment carries the run's mark. `ps`'s exit 1 for its one
+  pid reads as gone.
+- The LEFT row makes one whole read where it made four. `runProcesses` is unchanged for its callers.
+
+**The budget:** `LAUNCHER_ROW_BUDGET_MS` = 15 s for the three rows (item 85's and 89's shape). It is more than 1.6
+times the worst any row took in 121 logged runs since 10-20; the LEFT row's median was 2201 ms, its p90 3568, with
+four reds up to 9144.
+
+**Red-first, a count:** `tooling/dev-runner/test/smoke-daemons-census.test.mjs` counts the reads through an injected
+`ps`. With main's census both rows fail: "the whole table was read 4 times" against 1, and 4 against 0.
+
+**Kept out, its own item:** electron-shell's twin `stopRunDaemons` (`src/testing/smoke-daemons.ts`), which reads the
+whole table twice per 100 ms poll.
+
+## AR-6 — item 97: a run whose session-exited never reached fieldd no longer stays live for good — the witness, the backstop, the restart and the pending hold (2026-10-29; `1d1d19c23`, `a3f403ecc`, `01d71bacd` and `8f238a596`, in the stack's merge `0b4cb2ff0`)
+
+**What reddened:** AR-6-0's `continuation.exited` wait, 15 s after `agent.interrupt`, three times after item 87: the
+EL8's first and third verifies, and the stack's fourth at `d50b972dd` (load ~381). Each log stopped at
+`fieldd.agents.interrupted` with no `fieldd.agents.exit_heard`, so fieldd never heard the floor's `session-exited`.
+MF-1g keeps an agent's pane, so the inventory backstop, which fired only when a row LEFT, never caught it.
+
+**The four commits:**
+1. **The witness** (`1d1d19c23`, test only). `waitWithEvidence` gains an optional `witness`, asked ONCE at the deadline.
+   `exitWitness(box, pane)` answers three things: the floor's own row for the pane, whether fieldd's terminal service
+   heard the exit, and what holds the run's typed-out file. So a red names its case: A, the interrupt never ended
+   `cat`; B, the floor never saw it end; C, the floor saw it and its exit never reached fieldd.
+2. **The backstop** (`a3f403ecc`). ghosttea's `SessionSummary.exited` was on every `list-sessions` row, and
+   `observed_row` dropped it. Contracts first: `ObservedTerminal.exited?: boolean`, `true` only, absent on a live row
+   and from an older floor; `pnpm gen`; the EL9 fixture `observed-state.exited-husk.json`, parsed on both sides.
+   fieldd's `handleInventory` reads a row listed `exited` as gone after `EXIT_GRACE_MS`. The three sources that said
+   "the inventory diff is the backstop" carry dated corrections.
+3. **The restart** (`01d71bacd`). A boot whose first inventory lists the kept pane `exited` reads it as a PTY that did
+   not survive (`runningRowOf` answers no row). It stamps the record `unknown` after the grace and returns its row
+   exited, with the resume verb (MF-1f).
+4. **The pending hold** (`8f238a596`). `closePending` holds MF-1f's exited row, heard or backstopped, as an attached
+   run's is held (`keepExitedRow`). LANDED's MF-1f entry carries a dated correction at its source.
+
+**Red-first** by mutation, each restored byte-identical. I97A (the loops' old clear) is red at 21.5 s on the real
+floor and 6.5 s on the mock; I97B (the husk read as running at boot) is red; I97C (the hold out) is red. As committed,
+all green. Row 2's read from the interrupt to exited, ×5: 1515–1621 ms, the grace and one fold tick. Rust: the husk
+row, and `fixture_parity` 18/18.
+
+**Not covered:** cases A and B, where the floor's own row is not `exited`. The witness names them.
+
+**Its draft deltas** rode the 2026-10-30 17:55Z queue (dev-local `62e16d02c`): the dated correction at
+`thinking-ar-agent-plane.md`'s AR-3 "the inventory diff is the backstop", and `specs/native-floor.md` §4.3's `exited`
+delta.
+
+## AR — item 92: the fake rosettad's late words come from a helper already running, and the rows they trail run under bounds wide of its wake (2026-10-29; `7af99678b`, in the stack's merge `0b4cb2ff0`)
+
+**The reds:** item 87's verify at `8d56b2bd8` and TS-4a's, where "an older binary whose words trail its exit is
+TERMINAL at once" spawned the binary three times; and the stack's rerun at `ec7899a4f` (load 362), where the crash row
+read "its stderr still open after 1000 ms".
+
+**The cause is the fake, not the supervisor:** `sayThenExit` under `FAKE_ROSETTAD_LATE_STDERR_MS` spawned a `node -e`
+at the exit, so a node boot rode the trail. Past `STDERR_DRAIN_MS` the supervisor rightly composes a crash.
+
+**The fix:**
+- A `/bin/sh` helper (`LATE_SH`; Windows keeps a node on the same protocol, `LATE_NODE`) says it is running before the
+  fake exits, takes the exit as its stdin's EOF, and writes the words after.
+- `LATE_DRAIN` (`STDERR_DRAIN_MS` 5 s, `STARTUP_TIMEOUT_MS` 6 s) is named by the three trailing-words rows. The
+  product's bounds are unchanged.
+- The fake's comment carries a dated correction: the 07:41Z rerun falsified "exactly the delay the rows name".
+
+**Red-first found the second bound.** M92 holds the helper's wake 1.5 s. At today's bounds it is red 3/3. With the
+drain raised alone it is still red 3/3, on "did not become ready in time", the startup bound. With `LATE_DRAIN` it is
+green 3/3; as committed, green, the file 32/32.
+
+## AR-6 — item 101: item 87's stall rows wait for the interrupted exit on the heard exit's own budget, its witness beside it (2026-10-29; `a2cf1b76a`, in the stack's merge `0b4cb2ff0`)
+
+**The reds,** both at TS-6 on James's Mac: its verify at `26b331dbc`, and its rerun inside his quiet window, where the
+load still went 18 → 471. The two stalled-cleanup rows ran out "the exited row … did not hold within 5000 ms" (6666
+and 6134 ms), last reading `persisted: true, resumable: false`.
+
+**The read:** it is the same interrupt-to-exited WAIT as AR-6-0's (`INTERRUPTED_EXIT_MS`, 15 s), so one exit had three
+budgets. What the rows prove (item 87) is that the exit is published before the cleanup ends, and the cleanup cannot
+end inside the row: the git sleeps `STALLED_GIT_MS` (30 s, now named). The 5 s was a guess at the heard exit's speed,
+never the property's bound.
+
+**The change, test only:** both waits take `INTERRUPTED_EXIT_MS` and `exitWitness(box, pane)`. The `exit_heard` check
+stays, so a backstopped `unknown` never passes as a heard exit.
+
+**Measured:** across 15 verify logs, the two rows ran 6240–11716 and 2852–6724 ms over 30 row-runs, one red each.
+Alone ×3 at load 37–44, all green.
+
+## AU B1 — updates that wait: DESIGN.md says it first (AU-0), and the update view grows with a person's two doors (AU-1): the running version, the staged clock, the last apply as the window will say it, a check answered when the check settles, and Download (AU-D1…D14, D4 B; AU-G5, AU-G6, AU-G7, AU-G12) (2026-10-30; `aa2be72c9`, the merge of main `0b4cb2ff0` (the item 94 stack) into `380fb4d81` on `db22ddb2e`, lane `au/build`)
+
+**What.** James ruled the fourteen marks of *Updates That Wait* (https://claude.ai/artifact/KY3q9U2eVN5oMqWVxMYj2Q) on
+the page on 2026-10-29, between 02:01:08 and 02:16:53Z, round 1, no notes: A on thirteen, the leans, and **B on
+AU-D4**, so the Me menu always carries an update row. His next word (03:40Z): "all ruled, now plan and land this
+nicely". The track lands in four batches. B1 is the law and the view; nothing new renders yet.
+- **AU-0 (`db22ddb2e`): DESIGN.md says it first.** Docs only, no code and no token, because a visual change is written
+  in DESIGN.md before any code (docs/UI_SYSTEM.md):
+  - §2.5: cyan's info also marks an update that waits on you, and no other mark of an update is cyan.
+  - §2.8 I-5: the badge's one slot holds the waiting count or the update's dot, and the count outranks the dot (AU-D1).
+  - §6: the dot wears `--vf-ease-pop` once; the question grows the panel 256 → 320 on the island curve.
+  - §8 the Me menu: the update row, always, nearest the face (between Settings… and you), Return still landing on
+    Settings…; the question in main's consent words, Cancel leading and focused; the not-installed notice once, in
+    the attention ink; ⌘, keeps one owner.
+  - §8 "Settings → Updates" replaces "The desktop update card" (AU-D8): first in Support, headed by the exact version
+    with Copy, one primary act per state, Your devices.
+  - §9 "The update's words": `releaseName` ("the Oct 28 nightly"), the verbs, the ellipsis rule, the quit box's line.
+  - §13: the update wears `arrow` turned 180°, `reset` and `check`.
+  - The five field-app tests that read DESIGN.md keep their literals.
+- **AU-1 (`380fb4d81`): the view grows, and its doors.** One commit (the record planned three: contracts, main, the
+  doors):
+  - **contracts** (`update-policy.ts`): `UpdateView` gains `currentVersion`, `stagedAt` and the projected `lastApply`
+    {version, from?, outcome, at, trigger?, thisLaunch?}, the outcome `installed` or `not-applied`. The persisted
+    `UpdateLastApply` gains `from`, `trigger` and `landed {at, outcome}`, each `.catch(undefined)`. `trigger` takes all
+    three values now (restart, silent, quit), so no later slice grows an enum an older app reads, and no `branch` or
+    `reason` value grew (EDP-36). The state file gains `staged {version, at}`. Also `UpdateCheckResult`,
+    `UpdateDownloadRequest`/`Result` (a refusal carries main's words), the `app.update.download` audit action,
+    `IPC_CHANNELS.updateDownload`, and `releaseName()`, one friendly name for main's words and the window's. EL9
+    fixtures: update-view ×5 (a pre-AU-1 shape among them), update-client-state.landed, update-check-result ×2. They
+    are TypeScript only: no Rust or Swift side, and gen is untouched.
+  - **electron-shell main** (`controller.ts`): the first launch after an apply judges it once, by version, before its
+    OUTCOME row is delivered, and an older app's audited record is never judged. The staged clock persists, so "Ready
+    since" survives a relaunch. `decline()` and the off switch mid-download land on `available`, and on again
+    downloads it. `prepareOnce` no longer refuses a person's own off switch (LC-12); the publisher's levers still
+    refuse. Every ATTEMPT row gets exactly one OUTCOME row (`auditApplyRefused`); the silent apply re-reads its holds
+    at entry, at the confirm and after the ATTEMPT row; a confirm whose state moved during that row's await refuses
+    `expired`; a channel change outlives a check in flight (`checkOutlived`).
+  - **the doors:** `check` answers when the check settles (`checkForPerson`). `download(version)` fetches one found
+    version (`downloadForPerson`): with updates off, or with a skip taken back; a lever refuses it with words. ipc.ts
+    parses both ways, the preload parses the answers, and field-app's `FieldUpdatesHost` carries them. The tray's
+    check and the launch and resume checks stay fire and forget; the app menu gains its check with AU-4 (B3).
+  - **field-app:** nothing new renders yet (B2 brings AU-3 and AU-2); the card's busy is now the check alone.
+- **The specs, at source** (dev-local `a0a7f7bdb`, the draft queue of 2026-10-29 10:14Z): EDP §5.2, §6.4, §11.1,
+  §11.3, §11.5 and §11.6; ESR §7.3; `build-wp12-updater.md` §13 C3 (superseded by AU-D8).
+- **DECISIONS** gains the AU row (AU-D1…D14, AU-L1…L6), a collision warning (AU-G*, LC-*), and dated notes on the EDP,
+  AL and WP12 rows. **ROADMAP** gains the AU track.
+
+**Found while planning** (read at `db12d0939`):
+- The view's `lastApply` had to be a projection: the persisted `UpdateLastApply` had no outcome, and `UpdateView` had
+  no `lastApply`.
+- The Me menu's notice row wears `--vf-orange`, the fill, not the attention ink (`MeMenu.css:272-277`, since UA-7).
+  DESIGN.md says the ink; AU-2 (B2) fixes the CSS.
+- ⌘, would gain a second owner with the app menu's Settings… (GT-D21's capture in `me-menu-wiring.ts`). AU-4 keeps
+  one.
+- A development build has no updater, no doors and no version on the wire, so the always-row's dev words are its own.
+- The page's gap ids collide with G7 and G28/G29, so they are AU-G1…AU-G15.
+
+**Validation.**
+- **The lane:** `/Volumes/SamsungRed/lanes/au` (the worktree `vibe-field`, branch `au/build` off `e23fa8a1f`, then
+  main's head), committed 2026-10-29 07:12Z.
+- **The light pass** at `380fb4d81` (08:18:42–08:19:58Z, at nice 19 under the guard) was green on its first run:
+  - preflight, the walls, biome on the 31 touched code and fixture files by path, and the non-ASCII scan (DESIGN.md's
+    two `›` became `→`, LC-42);
+  - the contracts, electron-shell and field-app typechecks;
+  - vitest: contracts 575, electron-shell 306 (17 files), field-app 208 (9 files, the five DESIGN.md readers among
+    them).
+  Logs: `lanes/au/logs/light-380fb4d81/`.
+- **No verify on this Mac** (James, 2026-10-29 09:05Z: the Mac mini's verify lane). B1 was the mini's run 3 and
+  waited in the queue overnight.
+- **The landed tip** is `aa2be72c9`: main `0b4cb2ff0` (the item 94 stack, run 2) merged into `380fb4d81` at 17:45Z.
+  Both sides touch DESIGN.md (AU-0's sections beside TS-6's §8 and Q19's retirement) and contracts'
+  `fixtures.test.ts`; git merged both with no markers. It went to the mini as a bundle of its three commits (sha256
+  `9d73674f…`). The mini's `next` ran 17:47:48–17:47:58Z: the locks stood (no re-install), field-native was built, and
+  preflight exited 0 with one R23 candidate warning.
+- **The mini, run 3, `pnpm verify` at `aa2be72c9`:** exit 0, armed 17:48:11Z, done 17:52:37Z (load 2.45 → 8.96),
+  whole: preflight through `gen:check`.
+  - `pnpm test` ran 27 projects with no failed summary: contracts 1236, electron-shell 2020 + 3 skipped, field-app
+    2810, fieldd 2612 + 11 skipped.
+  - AU-1's own files were among them (`controller-apply` 73, `update-view` 13, `update-doors` 5, `preload-update` 4),
+    and so were the five DESIGN.md readers.
+  - `pnpm test:rust`: 31 ok, 0 failed. The tree was clean after, with no stub left.
+  Logs: `lanes/ts6/logs/mini/run3/`.
+- **Landed:** main fast-forwarded `0b4cb2ff0` → `aa2be72c9` at 17:57:24Z on VF-PM's GO, and was pushed at 18:09:19Z.
+
+**Records.** The design record is `draft/thinking-update-ux.md`: §5 the rulings, §6.2 the always-row, §7 the build
+ladder with each batch as built, §8 the gaps, §10 the lead's calls LC-1…LC-57, and §11 what was found while building
+(dev-local `62e16d02c`, the draft queue of 2026-10-30).
+
+**Owed.**
+- B2 (AU-3a → AU-3 → AU-2), B3 (AU-4 → AU-7 → AU-5a → AU-5) and B4 (AU-6) are built and light-green, each queued on
+  the mini. B4 waits for HN B1 and is rebased over it.
+- The record's Status in `62e16d02c` says B1 is "on the mini as run 3 since 2026-10-30 17:55Z", written before the
+  landing was known (run 3 ran 17:48–17:52Z). It is corrected at its source at the next draft queue.
+
+## FG-0 — the first run on the field is ruled, and DESIGN.md says it first: the field's ground, the Setup Assistant's glass and its tier, the first run's motions, the tear and the living mark (2026-10-29; records only, lane `fg/build`)
+
+**What.** James ruled the eleven marks of *First run on the field*
+(https://claude.ai/artifact/MsuRkX9y7DmPvxz1TjqJHh) on the page between 09:29 and 09:35Z, round 4: the lean on eight,
+against it on three (D15 C, D10 B, D14 B), then "all ruled" (09:36Z). His words in rounds 1–3 had settled D1, D2,
+D5…D8, D12, D13, D16, D18, D20 and D21. After the picks, his words on version 6 ("can we just render the glass with
+webgpu too so we only do one field render so it is more performant?") became FG-D24: the field draws the glass and
+the logo in its own frame. His word to build (10:55Z): "meanwhile, start planning and land all these properly in our
+desktop app". This entry lands the records before any code, because a visual change is written in DESIGN.md first
+(docs/UI_SYSTEM.md):
+- **§2.1**: the first face's ground is the field, the website's splash, and the mat begins at the desk.
+  `--vf-field-ground` is `#04050F` in both themes, and the words on the field are in `--vf-field-ink` (white at 56%).
+  The switch, the loading veil, the explorer's tiles and the terminal preview keep the mat (DK-16).
+- **§5** writes down the Setup Assistant's material tier, which had shipped since UA-3w in `tokens.css` alone:
+  `--vf-wizard-surface` over `blur(32px) saturate(1.12)`, at the island radius. On the field it gains a 1px edge
+  with a top light, a shadow in the field's own ground and a 3% grain.
+- **§6** gives the first run's motions:
+  - the glass forming, and the logo that only fades;
+  - the hand-over: the welcome holds 1.6s, the logo stands alone for 640ms, and the frost clears over 600ms;
+  - the tear: 1.9s on t², with the theme's light on its walls, while the desk settles from .985 and its exposure
+    comes down from 1.16;
+  - a returning boot's 700ms floor;
+  - reduced motion.
+- **§8**:
+  - "The boot splash" is amended: the field draws at 60 fps from a worker, with its still where there is no WebGPU;
+    the wordmark retires, and the bar and the stage stand under the mark.
+  - A new canon entry, "The Setup Assistant's glass": 880 × 640 with the fit, the steps, the one frame, a load, the
+    logo, and the glass drawn by the field (FG-D24).
+  - "The reveal" is amended: the tear.
+  - The switch's line: it keeps the mat.
+- **§13**: the living mark joins "Kept exact".
+- **DECISIONS** gains the FG row (FG-D1…D24, FG-L1…L7). **ROADMAP** gains the FG track, its table row and FG-O7 among
+  James's open questions.
+
+**Not in this entry.** No code. Every amendment names the packet that builds it ("to be built at FG-n"). Each token
+reaches `tokens.css` with its first consumer, as TS-0's did:
+- `--vf-field-ground` with FG-1 (the field, and the window's pre-paint as a stated projection of it);
+- `--vf-field-ink` with FG-2 (the boot's face) *(corrected 2026-10-30, at FG-1's landing: it came with FG-1, which
+  moved the boot's face (`SplashFace`) forward from FG-2 (VF-PM, 11:24Z), so FG-2 brought the tear alone)*;
+- the glass's edge, top light, shadow and grain with FG-3.
+
+FG-1 (the field) is next, in lane `fg/build` on VF-PM's word. FG-3 follows TS-6's landing and FG-4 follows TS-7's
+(VF-PM, 11:17Z).
+
+**Records.** The design record is `draft/thinking-first-run-glass.md` (§3 the laws, §4 the rulings, §5 the design as
+ruled, §7 the build ladder FG-0…FG-6, §8 FG-O1…O12); it rides VF-PM's next draft queue. Version 7 of the page
+(`1793272198-5057`) measured FG-D24's glass against version 6's CSS glass:
+- on a frozen frame, |Δ| is about 1/255 inside the glass;
+- the glass's GPU time is within the A/A noise;
+- on a hold, the GPU process's CPU is about 18 ms/s lower now that the second splash is gone.
+
+**Validation.** Docs only, so verify executes nothing new. Six field-app tests read DESIGN.md: `browser-data-section`,
+`godview-head`, `limit-moment`, `godview-deck-edge`, `line-model` and `project-ink`. The diff adds lines and rewrites
+two, the switch's parenthesis in §8 and §13's "Kept exact" sentence, and none of the six reads either. In the lane the
+six ran green, each alone at nice 19 (11:26:26–11:26:43Z, load 10), with 5, 24, 22, 58, 20 and 10 tests, and
+`git diff --check` is clean. Verify runs on the Mac mini, in VF-PM's queue after CP-0.
+*Corrected 2026-10-30 (at `fg/land`'s merge of main `ac5dd87d3`; VF-PM, 18:43Z): CP-0 landed first, as the mini's
+run 5 (`b9ca35824`). FG-0 never verified alone. It verifies with FG-1 and FG-2 as FG's one landing (`fg/land`), in
+VF-PM's queue, and the landing's records name its run.*
+
+## FG-1 — the boot wakes on the field: the website's splash, vendored at its pinned bytes, runs from the first frame into the Setup Assistant, one field, its mark gone under the glass (FG-L1, FG-D14 B, FG-D25) (2026-10-29; `88457494e`, lane `fg/build`, in `fg/land`'s merge `ffe9d9b40`)
+
+**What.** FG-0's field, built: the boot's first face is the website's splash.
+- **The vendor** (`tooling/splash/vendor.mjs`) copies vibefield-dotdev's splash module and three pictures (the white
+  mark, the wide still, the tall still) into `field-app/src/boot/splash/`, at the website's `37eb2c3`.
+  - It refuses a source whose sha256 is not its pin.
+  - It heads the module with five GENERATED lines naming every pin.
+  - `--check` compares bytes.
+- **The door** (`boot/splash/field-door.ts`) ports the website's loading window. The field runs in a worker through
+  `transferControlToOffscreen`, else on the main thread, else as the still. It uses the desktop budget (3.2e6 device
+  px) and `high-performance`.
+  - The PAGE's `navigator.gpu` is read first, because the no-webgpu smoke deletes it from each document.
+  - `?field=still` and `?field=main` force the still and the main thread.
+  - It never rejects: a field that can't start is the still, and it says why.
+- **The worker** (`field-worker.ts`) carries the website's shims and imports the module statically. Its messages are
+  typed: start · resize · visibility · mark · reveal · destroy. It releases its device before it is ended.
+- **The mark** (`field-mark.ts`) runs CSS's `ease` on the splash's own `setReveal(0, { mark })`, so it fades under
+  Reduce Motion too.
+- **`FieldLayer` sits in `BootGround`**, one node from the splash's first paint into the Setup Assistant, so ONE field
+  runs from the first paint to the reveal.
+  - `data-field` goes waking → live | still.
+  - The still mark stands over the canvas while the canvas fades in.
+  - Under the Setup Assistant's glass the field's mark goes (§6).
+- **`boot.css`**: `.vf-splash` stands on `--vf-field-ground`, with the stills, the canvas's fade, and the words on the
+  website's shade.
+- **Moved forward from FG-2**: `SplashFace` is the field's face, with the bar and the stage under the mark and the
+  wordmark retired. The switch keeps the mat (`.vf-mat-floor`, `MatSplashFace`; FG-O6).
+- **Tokens**: `--vf-field-ground: #04050f` and `--vf-field-ink` (white at 56%) are in `tokens.css`.
+- **The pre-paint** (`electron-shell/src/main/windows.ts`) is `#04050f`, the NAMED PROJECTION of `--vf-field-ground`
+  (FG-D25). Main can't read CSS, so the literal names its token, DESIGN.md §2.1's row names `windows.ts`, and
+  `wearing-the-mat.test.tsx` holds the two equal. `docs/UI_SYSTEM.md` gains the rule.
+- **DESIGN.md**: §8 "The boot splash" gains the shade's numbers, and the marks read "built at FG-1".
+
+**Found:**
+- UI_SYSTEM.md had no main-process exception. The pre-paint before FG-1, `#171717`, was a bare literal whose comment
+  named `--vf-canvas-bg`, which nothing held → FG-D25.
+- The splash's `reveal()` fades the mark from 1, whatever it stood at. So the first run's hand-over brings the mark
+  back before the tear (§5.8's order; FG-5).
+- Until FG-3, the Setup Assistant's DOM glass blurs the live field behind it. FG-D24's field-drawn glass retires that
+  pass.
+- A worker that never answers is never ended, as on the website. The window keeps the ground and the still mark, an
+  honest state.
+
+**Validation.**
+- **The lane** is `/Volumes/SamsungRed/lanes/fg/vibe-field`, a worktree of the main checkout's repo on the SSD
+  (`fg/build`; `fg/land` for the merges).
+- **The light pass** (`lanes/fg/fg1-light.sh`; each row alone at nice 19 under the guard, the vitest rows on the
+  settled gate) was GREEN 12:26–12:30Z on VF-PM's word, all 26 rows rc 0:
+  - the vendor check;
+  - both typechecks;
+  - 19 test files, 407 tests;
+  - biome (41 files), `check:walls`, `check:retired`;
+  - `build:renderer` (the production UI boundary OK, 78 files);
+  - `git diff --check`.
+- **No verify on this Mac** (James, 2026-10-29 09:05Z: the Mac mini's verify lane). FG-0, FG-1 and FG-2 were verified
+  together as the mini's run 7 on 10-30 (VF-PM, 10-29 12:46Z: one run).
+- **The landed tip** is `ffe9d9b40`. `fg/land` is FG-0 (`ac2fc7453`), FG-1 and FG-2 over main `e23fa8a1f`, merged
+  with main twice: `0b4cb2ff0` (the item 94 stack) as `202876da2`, then `ac5dd87d3` as `ffe9d9b40` (10-30 18:54Z).
+  - Both merges were resolved in place: DESIGN.md, LANDED and ROADMAP, the appends keeping both sides.
+  - FG-0's "after CP-0" line got its dated correction there.
+  - It went to the mini as a bundle of its five commits (sha256 `b2b63687…`).
+  - The mini's `next` ran 19:02:33–19:02:43Z. It re-installed (a lock had moved) and built field-native, and preflight
+    exited 0 with one R23 candidate warning.
+- **The mini, run 7, `pnpm verify` at `ffe9d9b40`:** exit 0, armed 19:03:39Z, done 19:08:09Z (load 1.05 → 9.45),
+  whole: preflight through `gen:check`.
+  - `pnpm test` ran 27 projects with no failed summary: vitest 9,895 passed, 0 failed, 17 skipped.
+  - `pnpm test:rust`: 499 passed, 0 failed, 14 ignored, over 31 binaries.
+  - `gen:check` was clean, and so was the tree after, with no stub left.
+  Logs: `lanes/ts6/logs/mini/run7/`.
+- **The smokes ran on the mini's M4 over ssh**, each alone. They arm only when its console is unlocked and nobody is at
+  it (VF-PM, 10-29 12:39Z). Its HID idle stood at 208 s at the first arm and 1,147 s at the second.
+  - `smoke:canvas:no-webgpu` (the still) was green: exit 0 at 19:26:20Z. It said DESK_UNAVAILABLE once, then CARD_WORDS
+    and CARD_COVER (the face `ground`, `cardUnder` true).
+  - `smoke:canvas` (GPU on: the field at boot, and since FG-2 the tear) was red on item 117's class ALONE: armed
+    19:10:13Z, exit 2 at 19:25:52Z.
+    - Two rows were red. HAND_WHITEBOARD's bar came back 251 ms after the landing and HAND_CALENDAR's 250 ms, against
+      200 ± 40. HAND_NOTEBOOK (232.5) and HAND_CLOCK (217.1) were inside.
+    - The judge is the bar-return row of `smoke-tools-in-hand.ts`, last changed by DK-12 (`8546cb91b`). Since 10-15 it
+      has been red six times on main's own controls, each on a tree that changed no hand file. A seventh came 24
+      minutes after this run, at main's control on the same host (`ac5dd87d3`, `ctl117/`): HAND_CALENDAR 251 ms.
+    - FG changes no hand file.
+    - Item 117 (VF-PM, 19:31Z, `lanes/records/item117/`) asks which is wrong first, the product or the observer.
+    - Every other row passed, including the HAND rows' own cells and travels.
+    - The desk mounted once, beside the boot's field (DK-9's row).
+    - Observed, not a red: the desk's first boot was slow. It read device 206 ms, compiled 3,338 ms and presented
+      3,435 ms (5 frames). Main's control 24 minutes later read 19 / 122 / 164 ms (3 frames).
+      - a9 told the two causes apart with a warm re-run at `ffe9d9b40` (`run7b/`, 19:55:27Z): 23 / 133 / 178 ms
+        (3 frames).
+      - So the 3.3 s was a cold first boot on the mini, its Metal shader cache by a9's read, not FG's field.
+      - Warm, the field's own adapter and device (`field-worker.ts`, `field-door.ts`) do not slow the desk's compile,
+        and FG owes no time-to-interactive fix.
+      - No cold boot of main was measured beside it. Whether the field adds to a cold first boot is open.
+  - desk-gates.md's rows 17 and 19 carry the host, corrected at their source in this commit.
+- **Landed:** main fast-forwarded `ac5dd87d3` → `ffe9d9b40` at 20:27:26Z on VF-PM's GO (19:30Z). The fixer's
+  `land-stack.sh` waited at the guard for a dev runner until it cleared. Main was pushed at 20:28:54Z.
+
+**Owed.**
+- FG-O2: the contrast reading of the field's ink (FG-6).
+- The glass (FG-3: 3a its DOM, then 3b drawn by the field, FG-D24).
+- The panes in the frame, and the logo (FG-4).
+- The first run's hand-over through the tear (FG-5).
+- The catalog's still and `smoke:first-run` (FG-6).
+
+## FG-2 — the returning tear: a returning boot's splash stands its floor, its words go, and the field tears open onto the desk as it settles in; every boot is handed over before it is interactive (FG-D9 A, FG-D10 B, FG-D11 A, FG-L6) (2026-10-29; `07618ca61`, lane `fg/build`, in `fg/land`'s merge `ffe9d9b40`)
+
+**What.**
+- **The machine** (`boot/machine.ts`): once the desk is frame-stable, EVERY boot holds at `handing-over` until its
+  first face hands it over (`revealDesk`). So `interactive` still means revealed, and AO-D2's `revealHeld` retires.
+  - A hand-over given early is kept.
+  - The release exists before the patch that notifies.
+  - Before the hold comes the floor: the splash stands 700ms from `start()` (the website's `SPLASH.again`). A hidden
+    window skips it.
+- **BootRoot is the one decider.** A returning boot's splash opens by the TEAR where the field is live, motion is
+  allowed and the window is seen. Otherwise it opens by the base reveal's FADE, at once.
+  - The choice is made once and never cancelled by a later render.
+  - The Setup Assistant hands over at its own last beat (FG-5 brings it to the tear).
+  - A switch's arrival hands over at once.
+- **The tear**, in order:
+  - The words go first (240ms, the website's `wordsOut`), taking the ground's colour with them under the live canvas.
+  - Then `FieldHandle.tear(dark)` (`FieldLayer`'s `handleRef`) reveals the website's look: `TEAR = { duration: 1900,
+    markFade: .24, rim: .5, tear: .3 }`, with the daylight `[1, .955, .87]` by day and no ink by night.
+  - It is bounded at 2.9 s, and a failed reveal settles at once.
+  - Once open, the door is destroyed at once. Not open, the field leaves with the ground's fade (the website's
+    `.is-fading`).
+- **The desk** stays at `.99` under the splash, as before. At the tear's words it goes, unseen, to `.985` and
+  `brightness(1.16)`, then settles with the tear (1900ms island, 1500ms `ease-out`) and is still as the tear resolves.
+  The fade, the first run and the switch keep the base reveal byte for byte.
+- **The smokes** (`electron-shell/src/testing/smoke.ts`): `bootRevealed` waits for `vf:renderer:interactive` after
+  DESK_READY in the twelve places that press or shoot (below).
+- **DESIGN.md** §8 "The reveal" gains its as-built paragraph.
+
+**Found:**
+- **The smokes pressed on the splash.** VF-PM's condition had every smoke's boot wait read before the commit.
+  - Every smoke's boot is a returning one.
+  - Against FG-1, a tearing boot's `interactive` comes later by the floor's excess (0–700ms) plus about 2.14 s, and
+    by at most 3.84 s at the bound. A fading boot's comes later by the floor's excess alone.
+  - CANVAS_READY and DESK_READY are said before the reveal, so no marker wait moved. But DESK_READY is said beneath
+    the splash.
+  - smoke:canvas pressed inside the new window in three places: first-load's TIDY and DOWN-GONE (`select()`, about
+    1–2 s after a reload's DESK_READY); PT-1's pegboard after the retry row's reload; and the two peer openers
+    (DESK_READY + 800ms).
+  - The fix is the harness's, at the cause: wait for the reveal law's own mark, bounded at 30 s with the marks seen in
+    its diagnosis, never a sleep.
+  - The per-smoke reading is in the commit body. smoke:plugin-restart reads only doors and counters. The GPU-less
+    smokes and no-webgpu take the fade. The godview smokes' first act after a boot is a key, which the splash never
+    held. studio, update and profile wait on DOM presence or on main.
+- `mount.tsx` is the machine's only host and BootRoot its only face. So no path waits at `handing-over` for a
+  hand-over nobody gives.
+
+**Validation.**
+- **The light pass** (`lanes/fg/fg2-light.sh`) was GREEN 12:45:52–12:51:06Z in VF-PM's 12:46Z host slot, all 26 rows
+  rc 0:
+  - both typechecks;
+  - 13 test files, 303 tests, on the settled gate;
+  - biome (34 files), `check:walls`, `check:retired`;
+  - `build:renderer` (boundary OK, 78 files);
+  - `git diff --check`.
+- **The smoke file came after the pass.** `lanes/fg/fg2-rerun.sh` ran 13:06:16–13:06:43Z on VF-PM's 13:06Z word:
+  electron-shell's typecheck, `check:walls` and biome on the file, all rc 0.
+- **`pnpm verify` and the smokes** ran in run 7 with FG-0 and FG-1 (above).
+- **`smoke:canvas` is FG-2's witness.** Every boot in it is a returning one held at `handing-over`: its first boot, its
+  seven reloads, the retry and both peers.
+  - Every `bootRevealed` wait returned. "did not happen" appears 0 times in the 91 KB log.
+  - Every row that presses or shoots after a boot passed. The only reds were item 117's two bar-return times, which no
+    boot wait reaches.
+  - So the reveal law's own mark holds the race FG-2 found, and the boot-wait line stays retired from ROADMAP.
+  - No row says whether a boot opened by the tear or by the fade. The tear's look is the eye's.
+
+**Owed.**
+- FG-5 routes the first run's hand-over through the tear.
+- FG-6: the catalog's still and `smoke:first-run`.
+
+## DK-18 — PR #8: the affected job on Linux, and item 93's census in each platform's `ps` — `psTables` names the census's three reads (2026-10-30; GitHub's merge `2d455ce1c` of `e898e8d77`)
+
+**What landed:** James's PR #8 (`fix/ci-platform-gates`), merged on GitHub at 20:34:10Z.
+- `72a7145df`: the Ubuntu `affected` job splits build and typecheck from test. It excludes only `fieldd:test` on
+  Linux, because fieldd's global setup builds field-native and the pinned ghosttea 0.13.7 has no Linux VT artifact.
+- In the same commit, the smoke launcher asks `ps` in the platform's own spelling. That fix was reused from PR #3's
+  `f5bfa0c32`, with its regression row. procps refuses `-x` and has no `-E`.
+- GitHub's update-branch merged main `0765b2fba` into the branch (`1637d534d`).
+
+**The conflict and its resolution** (`e898e8d77`, the fixer's merge of main `99a2cdd53`). The stack's item 93
+(`d50b972dd`, landed 17:42:50Z) had rewritten the same functions: the census reads the whole table once, then asks
+one pid at a time. The resolution is item 93's census spelled through `psTables`, which now names the three reads:
+- `table` (darwin `-axww -E`, linux `axwwe`);
+- `one` (`-ww` on both);
+- `oneWithEnv` (darwin `-ww -E`, linux `wwe`).
+
+The whole plain table is no longer read. A new census row, on a stand-in `ps`, was red under the keep-both
+resolution and green wired. The light ran each row alone: biome 0, the electron-shell typecheck 0, vitest 18/18, and
+dev-runner's `node --test` 260/260. The first build of the resolution, `53b34fb98`, stood on a stale remote-tracking
+ref; `e898e8d77` is the same tree (`7ad238579`) on the branch's real head.
+
+**CI:** affected, cargo-audit, microbench, package-preview, pnpm-audit and verify all passed. The Linux witness is
+the `affected` run 41110075290 (ubuntu-24.04, on GitHub's merge ref of `e898e8d77` into `ac5dd87d3`). Its dev-runner
+tests ran 260: 258 passed, 0 failed, and 2 macOS-only rows were skipped. Item 93's two real-`ps` census rows passed
+on procps.
+
+*Corrected 2026-10-30 (at its landing, VF-PM's ruling 19:27Z): the two Linux facts the commit named unmeasured —
+procps takes `wwe` beside `-p` and `-o`, and exits 1 for a gone pid — witnessed by affected run 41110075290,
+2026-10-30 18:52Z.*
+
+**Not here:**
+- item 116, the census's second copy (`packages/electron-shell/src/testing/smoke-daemons.ts`, macOS spelling
+  alone);
+- PR #3, which carries the same ps fix as its own `f5bfa0c32`. Merging main into it re-meets the census in
+  `smoke-daemons.mjs`, and `smoke-profile.test.ts` auto-merges into a silent double (the `psTables` row twice, no
+  marker), so it takes both files from main by hand.
+
+**Landed:** local main fast-forwarded `ffe9d9b40` → `78ed1d946` (this merge and #5's) at 20:35:49Z by
+`land-stack.sh`. The three census files are blob-equal to `e898e8d77`'s.
+
+## EL8 — puppeteer 0.3.2: per-run briefings ship from the registry, on main's Rosetta 0.1.2 (PR #5, James's; GitHub's merge `78ed1d946` of `f6c32b1a9`; 2026-10-29 → 10-30)
+
+**What landed:** James's PR #5 (`chore/puppeteer-0.3.2`), merged on GitHub at 20:34:39Z.
+- `0cfb25c5b` pins the published puppeteer 0.3.2, `95a70aa77` = v0.3.2. The seven direct `@vibefield/puppeteer-*`
+  overrides, preflight's `PIN_EXPECTATIONS`, the sibling lock's revision, twenty release-age exceptions and the
+  pnpm-regenerated lock move together.
+- It also carries AO-7's discovery-home isolation seam and its witness row: 0.3.1 added home-relative install
+  discovery, so a test that isolates PATH isolates that home too.
+- It is the extraction of `8308cb8a4` on `stack/cp1d-prerequisites`: the same seven files, the same changed lines.
+  When that stack takes main, its copy goes empty.
+- `26af57a2d` merged PR #8's Linux fix into the branch.
+
+**The resolution** (`f6c32b1a9`, the fixer's merge of `e898e8d77`, PR #8's resolved head) met main's EL8 to Rosetta
+0.1.2 (`599f202f6`) in the two locks, and they moved together:
+- `siblings.lock.json`: only the "//" comment conflicted, and both revisions auto-merged. The comment now names both
+  EL8s ("Rewritten 2026-10-29 at the EL8 to puppeteer 0.3.2 and again at the EL8 to rosetta 0.1.2") and carries
+  main's rosetta clause verbatim.
+- `pnpm-lock.yaml`: regenerated by pnpm, never by hand. From the branch's own lock, `pnpm install` exited 0 (the
+  supply-chain check passed on 653 entries), then `pnpm install --frozen-lockfile` exited 0.
+- The acceptance, a structural diff of the lock: against main's, only puppeteer differs (107 leaves); against the
+  branch's own, only rosetta (16 leaves).
+- `pnpm-workspace.yaml`'s overrides and release-age rows, and preflight's `PIN_EXPECTATIONS`, carry both pins.
+
+**The light**, each row alone at nice 19:
+- `pnpm siblings render --prod --check`: 0;
+- `pnpm preflight`: 0, with the pre-existing R23 `acp` warning;
+- the fieldd and field-app typechecks: 0.
+- `pnpm check:deps` was red by the lane, not the pin. The lane's `../mille-pin` borrows another lane's, so loro, ICE
+  and strata resolve twice at the same versions. With the same link on main's lock it is red the same way, and in
+  that mille-pin's own lane it is green.
+
+**CI:** affected, cargo-audit, microbench, package-preview, pnpm-audit and verify all passed.
+
+**Landed:** with PR #8's merge, local main fast-forwarded to `78ed1d946` at 20:35:49Z.
+- A checkout installed before it is a lock behind until its next `pnpm install`.
+
+## TS-7 — the phone's door: iOS's own sign-in sheet the app closes, the Field page's doors and one node per sign-in (7a); the code from the Mac, read by a scan or a link (7b); a door dims a live field and the field takes no acts under it (7c) (TS-D11 A; Q1 all A, Q2 A, TS-D22 A) (2026-10-30; `648719bb2`, the merge of main `aa2be72c9` (AU B1) into `59d0ada65` on `e23fa8a1f`, lane `ios/ts7b-code`)
+
+**What.** James ruled TS-7's two questions on VF-PM's board on 2026-10-29: Q1, "all six A — the leans", at 05:29:27Z
+(`ts7-q1-phone-door-leans`), and Q2 A at 05:29:23Z (`ts7-q2-code-payload`). He ruled TS-D22 A by click at 10:51:56Z
+(`ts7-door-scrim`). VF-PM split the slice at 05:26Z into 7a (the door) and 7b (the code); 7c came out of the sweep.
+Nine commits on `e23fa8a1f`, 50 files, +3233 −159:
+- **TS-7a (`ca241feeb`, `3b3b10b64`, `45a2d3ec1`, `b076b6a1a`, `d3983bcbf`): the door.**
+  - iOS's own sheet: `ASWebAuthenticationSession` (Safari's cookies, no callback scheme) replaces
+    `SFSafariViewController`, and the app closes it at approval or Connected (Q1 (c), a named departure from TS-D11
+    A's "Running"). A person's Cancel is told apart from the app's close. `LoginPresentation` fixes a Cancel that
+    re-opened the sheet and a sheet that never closed.
+  - The Field page's doors (`FieldHomeModel.doorPage`): the welcome; Waiting for approval (the machine's name, Copy,
+    Open the admin console); Sign in to Tailscale again (expired and removed as one, Q1 (b)); No desktops yet; and a
+    1.2 s found beat instead of a toast (Q1 (f)). Under any door the field drifts and takes no acts.
+  - The corner: notices in the link's words (TS-L2), Continue with Tailscale or Sign in again in the menu, OS marks on
+    desktop rows. The Tailscale mark and ink come to the phone, with the trademark line at the settings foot (Q1 (d)),
+    pinned by `check:ios-fixtures` to `tailscale-mark.tsx`, `tokens.css` and field-native's admin URL.
+  - One node per sign-in: a sign-in during a sign-out waits for its sweep (`3b3b10b64`); `MeshModel.signInStep` makes
+    the decision pure and pinned (`b076b6a1a`); every start goes through `launch()` and carries a generation, and a
+    sign-out supersedes a start under way (`d3983bcbf`).
+  - `apps/ios/README.md` names the Metal Toolchain as a kit host's prerequisite (`45a2d3ec1`).
+  - DESIGN.md §9 "The phone's door" and §13's phone copy of the mark.
+- **The mock's fleet (`428f43556`):** the `-vf-mock` signed-out and approval states drew the scripted fleet under the
+  door. `MockAccount.fieldIsLive` keeps it to a field with no door. DEBUG only.
+- **TS-7b (`7fe1d8a35`, `59d0ada65`): the code from the Mac.**
+  - `@vibefield/contracts/phone-code`, a leaf with no runtime imports: `vibefield://add-phone?login=…&from=…`,
+    written and parsed by hand (Unicode scalars, ASCII case folding, the C0/C1, line-separator and Bidi_Control sets
+    refused, bounded). One vector, `phone-code.vector.json` (9 codes, 28 refusals), is read by contracts and the kit
+    alike (EL9) and mirrored by `check:ios-fixtures`. No schema and no Rust.
+  - The Mac: Add your phone, in the Connect pane's Connected aside and in Settings → Devices → Add a device → Phone. The
+    QR and its words name the Mac by the roster's self name, else Tailscale's machine name.
+  - The phone: Scan the code on your Mac (VisionKit; an honest absence on the simulator), the `vibefield` URL scheme,
+    `ExpectationMemory`, "At Tailscale, pick ‹login›." and "Another account?" when the account is not the one the code
+    named. A LINK code starts nothing by itself (EL7).
+  - `59d0ada65`: field-app's four raw `vibefield:` literals now come from contracts' constants (wall R6).
+  - DESIGN.md §8 (the Mac's words) and §9 (the phone's).
+- **TS-7c (`0491ca1ad`, TS-D22 A): the door's scrim.** DESIGN.md first: §5's Search scrim row gains the phone, and §9
+  says the field takes no acts under a door. `ChromePalette.searchScrim` projects `--vf-search-scrim` (black/16 light,
+  black/46 dark) under a new `check:ios-fixtures` pin. `SwarmField(scrim:)` lays it over the bodies and under the
+  chrome, the dim alone. `FieldHomeModel.fieldTakesActs(under:)` is the one rule for the hold, the bloom and the tap.
+
+**Found:**
+- TS-7a's hold gate was frozen at the stage's first appearance (`SwarmField` handed `onCreate` only in `.onAppear`): a
+  phone that opened on the welcome never held after signing in, until a relaunch. 7c fixes it
+  (`onChange(of: onCreate == nil)`).
+- A tap on a body under a door opened its card, against §9. 7c gates it.
+- 7b's pre-compile review (`wf_c761ae16-206`) found five, all folded into `7fe1d8a35`: the writer could draw a code its
+  own phone refuses, a trim threw on a long text, U+061C was missing from the bidi set, a test was bound to the wrong
+  parameter, and the scanner could hand one code over twice.
+- Wall R6 was red under every TS-7 bundle before `59d0ada65` and went unseen, because full verifies had moved to the
+  mini. VF-PM's rule since, on 10-29: every mini bundle has its light half green here first.
+- The Mac mini's kit build dies at ghosttea's Metal compiler plugin: it has no Metal Toolchain. James ruled no install
+  there (10-29 06:34:12Z), so every kit run is on this Mac.
+- CoreSimulator cannot write the external SSD (error 513), so stills go to /tmp first.
+
+**Validation.**
+- **The lane:** `/Volumes/SamsungRed/lanes/ios` (the worktree `vibe-field`, branch `ios/ts7b-code` off `e23fa8a1f`).
+- **The kit, on this Mac** (Xcode 26.6, the iPhone 17 Pro simulator; kit builds stay off the mini), at `0491ca1ad`:
+  - both app schemes, build-for-testing and the whole suite, 13 runs and 1,359 tests, red on one row,
+    `LanesOverTheDoorTests.swift:262` "the demand to come back" (armed at load 86.93; item 103);
+  - re-run 11:55–12:01Z: that file alone 7 of 7, and the suite 13 runs, 1,359 tests, 0 issues;
+  - the sweep: 32 stills, read, all green (the live fleet dimmed under its door, the chrome bright, the no-agent doors
+    undimmed).
+  Logs: `lanes/ios/logs/kit-0491ca1ad/`.
+- **The D11 spike**, at `7fe1d8a35` (10:11–10:59Z): the app closed iOS's sheet in both modes, ephemeral and shared
+  (shared in the fourth run, 10:55:43Z). Logs: `lanes/ios/logs/kit-7fe1d8a35/spike.out`.
+- **The light half** at `59d0ada65` (10-29, 11:54:16–11:54:57Z, at nice 19 under the guard): preflight, the walls,
+  `check:ios-fixtures` (182 copies, 63 pins), biome on the touched files, the typechecks, and vitest: contracts 513
+  (2 files), field-app 247 (8 files). The light at `0491ca1ad` had stopped at preflight on R6 (11:51:14Z), hence
+  `59d0ada65`. Logs: `lanes/ios/logs/light7-59d0ada65/`.
+- **No verify on this Mac** (James, 2026-10-29 09:05Z: the Mac mini's verify lane). TS-7 was the mini's run five in
+  10-29's queue, and run 4 after VF-PM's re-order on 10-30 (17:54Z).
+- **The landed tip** is `648719bb2`: main `aa2be72c9` (AU B1, run 3) merged into `59d0ada65` at 17:59:05Z. Both sides
+  touch DESIGN.md (TS-7's §5, §8, §9 and §13 rows beside AU-0's, TS-6's and Q19's), `DevicesSection.tsx` and
+  `ui-system-boundaries.test.ts`; git merged all three with no markers. Its tree `d5a055017` is a9's rehearsal. It went
+  to the mini as `mrun4.bundle` (sha256 `213c405c…`). The mini's `next` ran 18:05:24–18:05:33Z: the locks stood,
+  field-native was built, and preflight exited 0 with one R23 candidate warning.
+- **The mini, run 4, `pnpm verify` at `648719bb2`:** exit 0, armed 18:06:25Z, done 18:10:51Z (load 1.82 → 8.62),
+  whole: preflight through `gen:check`.
+  - `pnpm test` ran 27 projects: vitest 9,839 passed, 0 failed, 17 skipped. Contracts 1277 (phone-code's rows among
+    them), field-app 2813, fieldd 2612 + 11 skipped, electron-shell 2020 + 3 skipped.
+  - `pnpm test:rust`: 499 passed, 0 failed, 14 ignored, over 31 binaries. The tree was clean after, with no stub left.
+  Logs: `lanes/ts6/logs/mini/run4/`.
+- **Landed:** main fast-forwarded `aa2be72c9` → `648719bb2` at 18:14:57Z on VF-PM's GO, and was pushed at 18:16:19Z.
+  Its record was not written then; it is written here, with IOS-8f's.
+
+**Records.** The design record is `draft/thinking-tailscale-onboarding.md` §10's TS-7 (Q1 and Q2; TS-D22 in §14). Its
+"Built … NOT LANDED" and "the mini's run five" are corrected at their source, and its Status flipped, at the next
+draft queue.
+
+**Owed.**
+- On James's phone at the build-4 sitting: a live sign-in (shared cookies, the consent alert's real copy, an approval
+  tailnet), the live sign-out → Continue row and its supersede path, and a live scan and a live link of the add-phone
+  code. The hold and tap gates under a door are witnessed by the rule's tests and a code read only.
+- Q2's later half: the store link with the same parameters, once a public install link exists.
+- The five truffle Swift petitions (logout, key expiry and its reason, the admin URL, the log opt-out, Tailnet Lock's
+  state), with ids after T13, at the next draft queue.
+- Item 103, the kit's `:262` race in `attachToLive` (`dc0f1dce0` on `ios/item103-lanes-race`, not on main): its
+  witness on a slot. Item 104: one shared kit test-support target for the poll helpers.
+- For James, a fact and not an ask: by day, at black/16, the bubbles still cross the door's words. A heavier day dim
+  would be a §5 value change, on his word.
+- TS-8c (T8, after its live probe), then TS-9.
+
+## IOS-8f — the corner wears the home desktop's own face and name: `user.me` from contracts through fieldd to the phone, the face deal pinned on every plane, and the deal only until a home answers (AP-D3's end state) (2026-10-30; `f250e8971`, `d3f566322` on `e23fa8a1f` with main merged in four times, lane `ios/8f-land`)
+
+**What.** AP-D3 (the phone's face) was built on 2026-09-23 as a lean, "the face dealt once per login from the first
+self desktop's user ULID until `user.me` (IOS-8f)", and ruled at it on 2026-10-28 (the housekeeping page, Q14).
+IOS-8f builds its end state. VF-PM took its seven leans on 2026-10-29 at 07:26Z. Eight commits on `e23fa8a1f`, 26
+files, +1154 −15:
+- **(a) `44d649776`: the face deal, pinned on every plane.** `packages/contracts/fixtures/face-deal.vector.json` holds
+  the 48 faces in order, five hashes, six deals and three rosters, generated from the TypeScript and checked back.
+  Contracts' `user-face.test.ts` and the kit's `FaceDealVectorTests` read it. A `check:ios-fixtures` row holds the
+  kit's copy byte-identical (`FieldDesignTests` gains `resources: [.copy("Fixtures")]`).
+- **(b) `94c59122f`: contracts' `user.me`.** A product method: scope `workspace.read` (the roster's), idempotent,
+  local. Its result is `UserMeResult {userId, name?, face, dealt}`, with two goldens (a written coin with a name; the
+  deal with none) and the TS-only `USER_ME` UNAVAILABLE {service: "user", state: "no-user"}. `pnpm gen` regenerates
+  nothing, because `users.ts` is TS-only.
+- **(c) `35cb5e360`: fieldd answers from its own user row.** `user-me.ts` reads `users.json` at each ask from
+  `config.vibefieldRoot` and answers the row as Electron main's roster shows it (`effectiveFaces`). With no row, file
+  or root, it answers the phone's own deal, `dealFace(userId, [])`, with no name. An unreadable file is warned, never
+  thrown; no user is an honest UNAVAILABLE. It is registered beside `device.list`.
+- **(d) `933a22c82`: the kit reads it.** A tolerant `UserMeResult` in `ProductShapes.swift`, tested over the
+  contracts' own goldens (mirrored by a `check:ios-fixtures` row).
+- **(e) `3c68ed542`: the phone asks its home.** `FieldLink.askHomeForPerson()` asks the HOME once per connection,
+  beside the catalog ask and never of an owner door, and the answer rides the home's row (`FieldDesktop.person`).
+  NOT_FOUND (a desktop older than the door) and UNAVAILABLE leave the deal standing; a retryable failure is asked
+  again on the sweep's clock.
+- **(f) `b9de1bd47`: the corner wears it.** `AccountFaceStore.adopt` lets the home's answer replace a deal or an
+  earlier home's word, and keeps the name per login, forgotten at sign-out. A nameless answer keeps the name, an
+  unknown frame is a sticker (UA-D17), and a deal still never moves a kept face. The deal is now only the fallback
+  until a home answers.
+- **`0e004bafe`, the pre-compile review's two:** a bare ⚠ that biome's stdin had turned into "!" in
+  `user-face.test.ts` is a ⚠ again, now written as an escape, and fieldd's face is copied to its wire type
+  (TS2322). **`d3f566322`:** `USER_ME` moves below `PROJECT_DOORS`, whose doc block it had taken.
+
+**Found:**
+- biome 2.5.4's stdin route rewrites a bare U+26A0 to "!", and it never lints: it is a formatter only.
+- As built, against the record's plan (`thinking-ios-account.md` §3): the result carries `dealt`, and its name is
+  absent without a row; the phone asks only its HOME, latched once per connection as the catalog ask is (at the
+  home's hello and on the sweep, beside `device.list` and the catalog), where the plan read it through
+  `askForDeviceRow`; fieldd reads `config.vibefieldRoot`.
+- TS-7 and IOS-8f were siblings on `e23fa8a1f` sharing six files, so `d3f566322` could not be minted over main once
+  TS-7 landed. Main was merged into it instead.
+
+**Validation.**
+- **The lane:** `/Volumes/SamsungRed/lanes/ios8f` (the worktree `vibe-field`, branch `ios/8f-user-me` off
+  `e23fa8a1f`, then `ios/8f-land`).
+- **At the slice's tip** `d3f566322` (10-29): the light pass green at 10:09:40Z (contracts 1215, fieldd's `user-me`
+  4, field-app 116); the kit on this Mac green at 10:24:26Z (13 runs, 1,319 tests, 0 issues, armed at load 214).
+- **The landed tip** is `f250e8971`: `d3f566322` with main merged in four times as main moved under it, each
+  `git merge --no-ff`, so IOS-8f's eight commits land as they were reviewed.
+  - `1b41a2f29` over `ac5dd87d3`, everything since `e23fa8a1f` (TS-6, item 113, Rosetta 0.1.2, PT, Q19, the item 94
+    stack, AU B1, TS-7, CP-0, PR #2, PRC-6's docs and their records): four content conflicts, one hunk each, both
+    sides adding lines at the same spot, kept whole with main's lines first by `lanes/ios8f/resolve-main.py`.
+    `AccountMemoryTests.swift` holds TS-7's four tests, then IOS-8f's two; `gen-jsonschema.ts`; contracts'
+    `fixtures.test.ts` holds CP-0's seven compose rows, then user-me's; `check-ios-fixtures.mjs` holds the phone-code
+    mirror, then the face and user-me rows. `lanes/ios8f/prove-both-sides.py` proved each both ways: the file is
+    main's plus IOS-8f's added and removed lines, and IOS-8f's plus main's.
+  - `1eb77c597` over `ffe9d9b40` (FG-0…2): clean, with no shared file.
+  - `1ee39cc4a` over `78ed1d946` (PR #8, PR #5): git merged `daemon.ts` (puppeteer 0.3.1's install home beside
+    `user.me`).
+  - `f250e8971` over `0ce140178` (AU B2, FG's records, the PR ledger): `daemon.ts` again (AU-3a's `appVersion` beside
+    `user.me`; neither reads the other).
+  - Each later merge was proven both ways by diff equality: IOS-8f's diff over the new main equals its diff over the
+    old, and the merge adds exactly main's range. A file both sides touched was proven line by line. Over main,
+    IOS-8f is 26 files, +1154 −15, at every merge.
+- **The light pass** at every merge, each row alone at nice 19 under the guard: preflight, the walls,
+  `check:ios-fixtures` (185 copies, 63 pins), biome on the merge's files, the contracts, fieldd and field-app
+  typechecks, `gen:schema` unchanged, contracts' whole suite, fieldd's `user-me` and field-app's four face readers.
+  Green at 19:08:06Z (contracts 1307, field-app 115), 20:33:53Z (field-app 116), 20:39:09Z (after a frozen install at
+  puppeteer 0.3.2's lock) and 20:50:53Z (contracts 1317, field-app 142, AU's tests in the same files). Logs:
+  `lanes/ios8f/logs/land-*.out`.
+- **The kit, on this Mac**, at `1b41a2f29`: VibeField and VibeField-Mock built, build-for-testing, and the whole suite
+  on the iPhone 17 Pro simulator (Xcode 26.6): 13 runs, 1,370 tests, 0 issues, 20:24:48–20:28:23Z (load 7.7 at the
+  start, 87 when the tests armed, 114 at the end). Its first try stopped at the dev-app guard (19:09Z, James's own
+  `pnpm dev`, 0 tests) and ran when he quit it. It was not re-run on the later merges: none of their ranges touched
+  `apps/ios` or a fixture the kit mirrors (AU-3a's two new device fixtures are not mirrored).
+- **The mini, run 9, `pnpm verify` at `f250e8971`:** the bundle was cut at the mini's main `6a41ba1d8` (sha256
+  `b1dcea53…`). `next` ran 20:52:40–20:52:49Z: the locks stood, field-native was built, and preflight exited 0 with
+  the R23 candidate warning. Verify: exit 0, armed 20:53:02Z, done 20:57:28Z (load 1.99 → 8.28), whole: preflight
+  through `gen:check`.
+  - `pnpm test` ran 27 projects: vitest 10,023 passed, 0 failed, 17 skipped. Contracts 1317, field-app 2948, fieldd
+    2621 + 11 skipped (`user-me` 4 among them), electron-shell 2020 + 3 skipped.
+  - `pnpm test:rust`: 499 passed, 0 failed, 14 ignored, over 31 binaries. The tree was clean after, with no stub left.
+  Logs: `lanes/ts6/logs/mini/run9/`.
+- **Landed:** main fast-forwarded `0ce140178` → `f250e8971` at 20:58:43Z on VF-PM's GO, and was pushed at 20:59:16Z.
+
+**Records.** The design record is `draft/thinking-ios-account.md`. Its Status ("Owed: IOS-8f … no `user.me` method
+exists"), AP-D3's "Until then" and §3's IOS-8f plan are corrected at their source, with the as-built deltas above, at
+the next draft queue.
+
+**Owed.**
+- James's word on two of the seven leans, flagged 10-29 07:26Z: `user.me` on `workspace.read` (so plugin-eligible,
+  as device names already are), and the home's answer winning between two self desktops.
+- Not witnessed: a real phone reading `user.me` from a live desktop, or a still of the corner wearing a desktop's
+  name. Both are owed at the build-4 sitting.
+- AP-D7's third cause, the protocol mismatch, stays owed.
+
+## PT-S1 — the phone as a kind: PHONE.md's iPhone folded into the plugin `vibefield.simulator` — any of the 42 iPhones Xcode 26.6's Simulator knows, lying face up at its true size, its nine honest faces in DESIGN.md's words, morphing only on a change of model, view-only until PT-S4 (2026-10-30; `1de84540b`; lane `portals/pt-s`, 31 commits on `e23fa8a1f` to `839f93242`, main `aa2be72c9` merged into them as `f21d45cfa`, the fix `b72c46dfd` after run 6's red, main `0ce140178` merged as `0295b0663`, minted as the mini's run 10; James's "Go with your leans" 2026-10-29 00:25Z and his look 10:02Z; the brief's R1–R6)
+
+**Why:** PORTALS' second kind (track PT), after the browser pane (LANDED §PT, `fb9efdb3`). The design
+`draft/portals-maps/PT-S-the-simulator.md` (RULED 2026-10-18 20:08Z at the lean, re-ruled 2026-10-29) moves PHONE.md's
+prototype (`draft/ground/PHONE.md`, built in draft/ground 2026-09-27) into the product. Its §5 ladder: PT-S1 the kind,
+PT-S2 the producer, PT-S3 the gates, PT-S4 touch.
+- James stopped the track 2026-10-18 21:51Z ("stop the phone emulator track"), four commits in, with 43 `plugins/simulator/`
+  files uncommitted. It parked on `PT-S-vs-PHONE.md` §5's seven choices.
+- It RESUMED 2026-10-29 00:25Z on James's typed "Go with your leans" (`PT-S-vs-PHONE.md` §6 records each):
+  - resume as the fold; retitle the design (1);
+  - a VibeField plugin, never ICE (2);
+  - the pane's eye and hand, the prototype's losses accepted for v1 (3);
+  - one frame-source seam: the pixels LSF-5's ScreenCaptureKit producer, touch serve-sim's in PT-S4 (4, re-leaned because
+    the bake-off never ran);
+  - the redrawn fixture (5); the metals mean the device's likeness (6); the kept work committed (7).
+- The PT-S design (its title, status, §1, §2, §4, §5 and §6 Q1), PHONE.md §12 and the brief were amended in place, each
+  amendment dated. Brief: `draft/portals-maps/briefs/PT-S1-the-phone-as-a-kind.md`. Its runs, grades and rulings: the
+  landing log's PT-S1 entries.
+
+**What landed** (by commit subject; 62 files, +14,194 −7; on ICE `0.16.0`'s live face, ICE design-019 §13):
+- **Contracts first** ("PT-S1 (contracts)"): `packages/contracts/src/live-surfaces.ts` gains
+  `LiveSurfaceIosSimulatorBindingV1` `{ deviceType, runtime }`, over `CoreSimulatorDeviceTypeIdV1` and
+  `CoreSimulatorRuntimeIdV1` (CoreSimulator's ids, at most 128 characters, pattern-checked), beside the UDID-keyed source
+  spec.
+  - Never a UDID: a UDID names one simulator on one Mac, so each Mac attaches its own simulator of the bound type.
+  - Fixtures `ios-simulator-binding.{valid,apple-spelling}.json` (the 17 Pro on iOS 26.1; the 2nd-generation SE's id with
+    Apple's dashes kept), their row in `fixtures.test.ts`, and `live-surfaces.test.ts`.
+  - TS-only, as all of Live Surfaces is: not in the JSON-schema generator's list, so gen:check does not move.
+- **The SDK door, widened in its own commit** ("PT-S1 (door, SDK)"; "(door, words)" is a doc comment):
+  - `@vibefield/plugin-sdk/desk` gains `LiveSimulatorSpec`/`liveSimulatorSpec`, `LIVE_SIMULATOR_STATES` (the nine) and
+    `LiveSimulatorFace`/`liveSimulatorFace` (`LiveInfo.extra.simulator`: the state, the device's name, its one act).
+  - They are read closed-set, destructured as unknown, as main's BP-D1 reads the pane's refusal. The wall row is in
+    `desk-door.test.ts`, the units in `live-spec.test.ts`.
+  - The face's doc names no capture technology: a source says only the states it can reach.
+- **DESIGN.md before any drawing code** (James's Q-6):
+  - §5.1, the portals row, corrected at its source (2026-10-18 and 2026-10-29). It read "not yet" after the pane landed
+    in glass on 2026-10-14, and the stub said every recipe is ICE's. Portals are drawn; the phone's **cover glass** is the
+    row's second wearer, and a plugin kind's recipes are its plugin's own.
+  - `#### The phone's materials — cover glass, border ink, three metals (PT-S1)`: what each material means under the
+    guardrails, and the recipes' numbers. They cover the glass, the border inks, the panel, the sensor housing, the three
+    metals, the sky the glass mirrors, the screen's light and its dims, the night's glow, the words' ink and the marks.
+  - The finishes: 84 launch colours, value for value from PHONE.md §3/§5 and the lab's theme.
+  - The metals (aluminium, steel, titanium) and the finishes mean **the device's likeness: which iPhone the object stands
+    for** (choice 6), and nothing else.
+  - The plugin's `theme.ts` and its law's material knobs hold no number the section lacks (`design.test.ts` reads them).
+  - §9, **The simulator's honest faces**: the nine states' lines and acts in the voice, quoted exactly by `face.ts` (the
+    design test reads the table), and "View only" in hand.
+- **The plugin** `plugins/simulator` (`@vibefield/plugin-simulator`, id `vibefield.simulator`). It has the pane's package
+  shape, and reaches nothing but the SDK's doors (its root `@vibefield/plugin-sdk` for the renderer entry, `/desk` for the
+  rest) and the contracts:
+  - **The catalog.** `scripts/make-catalog.ts`, a port of the prototype's `make-iphone-catalog.mjs`, reads Xcode's own data
+    (the CoreSimulator device types, the DeviceKit chrome, and Apple's published bodies). It writes the committed
+    `src/catalog.gen.ts`: 42 iPhones from Xcode 26.6 (17F113), oldest first, the prototype's 42 exactly. Its header names
+    its source and its command (`gen:catalog`, then biome).
+  - **The law** (`law.ts`, pure):
+    - `MM` = 200/76.2 = 2.6247 world units a millimetre, ONE named constant (PT-S §6 Q-1). Every model lies at its true
+      size; the default 17 Pro is 188.71 × 393.7.
+    - The continuous `PhoneShape`, `resolvePhone` (resting on its camera), the pick and the glass point.
+    - The stream's demand: `screenLod`, `screenDemand`, and `phoneDemand` over the SIGHT.
+    - The glow's reach, and the morph's `morphTracks`/`mixShape`.
+    - `lineup` and `historyShape`, ported as witnesses and wired into nothing.
+  - **The pass** (`pass.ts`, `phone.wgsl`, `phone-pass.wgsl`, through `kitWgsl`):
+    - the phone and its spill, each lit at home and from elsewhere;
+    - one draw a phone;
+    - the live texture's mips into the frame's encoder (it submits nothing of its own);
+    - the glow by night at PHONE.md §5's numbers.
+  - **The kind and the object** (`kind.ts`, `local.ts`, `object.ts`, `manifest.ts`):
+    - The props `model`, `finish` and `binding` are declared once (`ids.ts`), all in ONE cell (`groups: {}`). Each is a
+      desk edit and an undo step, and nothing writes one outside the undo stack.
+    - NO angle (a phone is never turned), and it is not resizable. Core's drag carries it on the desk's springs.
+    - Use is the open binding on double-click or ⏎, as the notebook, the board and the pane open.
+    - In hand, its one held tool says "View only" in words beside the device's name (ICE I49's state, with no glyph).
+    - No capability: `surface.attach` and `surface.capture` arrive with PT-S2.
+  - **The pegboard.** A phone on a shelf under a new category, `devices`. Its specimen is drawn by its own pass, with the
+    screen off.
+  - **The morph** (`morph.ts`). It runs only on an explicit change of `model`: 0.72 s, staged in five tracks (size,
+    bezels, form, housing, material). A phone first seen settles at once, and a change mid-morph morphs on from the blend.
+    - Its clock is local state, so a collaborator sees the same morph from the same prop change.
+    - A change that landed while the phone was culled plays at the reveal (R2 Q2, accepted for v1, said beside the clock).
+    - A still pins a morph through the desk's asset door.
+  - **The faces** (`live.ts`, `face.ts`, `notice.ts`, `notice-canvas.ts`):
+    - each of the nine over `LIVE`, by durable key, with a change-only demand over the sight;
+    - the words on the pane's notice path;
+    - a still never passed off as live: 0.7 with its rest or boot mark, 0.16 under words.
+  - **One frame-source seam** (choice 4). `fixture-live.ts`'s `fixtureSources` is the fixture as a `LiveSources`, the
+    seam's first source, and it is wired into nothing. Nothing in the plugin names a capture technology.
+    - `fixture.ts` keeps the synthetic iOS feed's contract: frames at the demanded size and rate, and none while nothing
+      changed.
+    - It redraws the picture from arithmetic: no canvas, no font, no Apple artwork (choice 5; PHONE.md Q-9).
+  - **The words for Node stills** (R2 Q1 (b)). `scripts/make-face-words.ts` draws the six faces that say words (one ink by
+    day and by night) with the product's own `drawWords` on `@napi-rs/canvas` 1.0.10. That is the pane's exact pin, and
+    the plugin's one new devDependency (the lockfile gains the plugin's importer alone).
+    - It writes the committed `src/face-words.gen.ts`, 339,375 bytes, which a Node still draws as the pane's
+      `head-still.gen.ts` heads are drawn.
+    - ACCEPTED for v1 (R5); revisit only if a plugin size budget appears.
+  - **The stills.**
+    - `playground/states.ts` stages twelve states: default, silver, iphone-8, and the nine faces, each on the device
+      `playground/fixture-mac.ts` answers it for.
+    - `apps/plugin-playground/test/still.dawn.test.ts` holds their 24 stills, by day and by night, to
+      `plugins/simulator/test/still.golden.json`.
+    - Three mid-morph rows go through the asset door: an iPhone 8 a quarter of the way into an X, by day and by night,
+      and at the halfway. They are judged by extent, never a hash (R5 Q7 (b), R6).
+    - The phone has no DOM or CSS view, so UI_SYSTEM.md's catalog rule does not bind it. Its catalog is the playground,
+      fed by the fixture.
+  - **Units: 12 files, 120 rows.**
+    - `law`: 32 rows. PHONE.md's 28 law tests are ported whole; the photo's grab is replaced by core's drag (choice 3).
+    - `kind`, through the SDK's kind-conformance harness.
+    - `face`, `face-words`, `fixture`, `fixture-live`, `live` and `morph`.
+    - `cost`: PHONE.md §10, as far as a unit can witness it.
+    - `manifest`.
+    - `imports`: the door, and no Apple artwork in the package's own trees.
+    - `design`: DESIGN.md, quoted exactly.
+    - The orchestrator's hand-back (`scratchpad/pts1-handback.md`, dev-local, §6) maps each of PHONE.md's witnesses (the
+      28, §13's continuity, §10's cost table) to its unit.
+
+**Found:**
+- **The first gated run's reds were the never-compiled code's and the run script's.**
+  - The plugin's typecheck: 11 errors.
+  - Its units: 109 of 111.
+  - The full typecheck: red on the plugin alone.
+  - The catalog and lint: red because the script left out the biome pass the catalog's header names. Formatted, the
+    regenerated catalog is byte-identical.
+  - The fixes are one commit ("PT-S1 (first run)").
+- **`PluginManifestV1` is the schema's OUTPUT type,** in which zod's default makes `groups` required. The asset-door still
+  read the AUTHORED manifest unparsed, so `build-widget.ts:126`'s `Object.keys(row.groups)` threw. The source now states
+  `groups: {}`, the value the default emitted, so `vibefield.plugin.json` did not move.
+- **The halfway still is not "between".** The size track is the morph's first half (PHONE.md §13), exactly 1 at t = 0.5.
+  So the row holds the extent at the X's, and the picture as neither model's (R6).
+- **Three things are host-bound:**
+  - the stills' golden (this Mac's Metal);
+  - the face words (this Mac's fonts; a regen diff on another host means another host, and is never committed over);
+  - the catalog row "is every iPhone device type installed on this Mac".
+- **The mini's Xcode 27.1 knows 45 iPhones:** the catalog's 42, plus iPhone 18 Pro, iPhone 18 Pro Max and iPhone Duo.
+  - After the second run, one commit ("PT-S1 (law, test)", on VF-PM's GO) changed that row. It compares exactly only
+    when the host's Xcode build (`version.plist`'s ProductBuildVersion) equals the build the catalog's header names
+    (17F113). Otherwise it skips, naming both builds.
+  - The catalog row now asserts that the header names a build, so the skip can never pass silently.
+- **A correction at its source.** The first run's report said "Xcode 27.1, more iPhones". 27.1 is the mini's; this Mac's
+  is 26.6. VF-PM caught it, and the landing log says so.
+- **Left out of the prototype, by ruling:**
+  - the lab's panel and its keys;
+  - `x`'s sim-bridge (the seam supersedes it);
+  - its `screen.ts` (ICE's live texture supersedes it);
+  - taps, swipes and the side buttons (PT-S4);
+  - choice 3's losses: the band's parallax toward the view's centre, the tip to the fingers, the eye-pinned grab;
+  - Apple's artwork, ever.
+- **ICE: no ask.** No petition is numbered. Two candidates are named in the hand-back (§2, dev-local), not filed:
+  - a per-frame "drawn" fact for every record a kind prepared, so a morph changed off view could settle;
+  - a desk-eye record and a body driver for every kind, to return choice 3's losses.
+
+**Validation** (this Mac; the lane on the SSD, behind the guard, at nice 19):
+- **The first gated run** (VF-PM's grant 04:45Z; fired 04:50:51Z at a load of 17.73 / 55.57 / 100.17, on main
+  `3e6c941a8`; logs `/Volumes/SamsungRed/lanes/pts/firstrun/20261029T044704Z/`): its reds are under Found.
+- **The rebases.** R1.2 replayed the kept work onto main `3e6c941a8` (main's tip at 00:32Z). For the second run the
+  lane rebased onto main `e23fa8a1f` at 09:21Z:
+  - no conflicts, and all 29 commits `=` in range-diff;
+  - the two shared files hold the line-count union: DESIGN.md 3856 + 3983 − 3814 = 4025, and fixtures.test.ts
+    935 + 937 − 932 = 940.
+- **The second gated run** (fired 09:35:45Z at a load of 8.66 / 25.74 / 45.71; logs
+  `/Volumes/SamsungRed/lanes/pts/firstrun/20261029T093545Z/`, whose `driver.log` has every step's exit). It was green on
+  every step but the expected unblessed still:
+  - the frozen install;
+  - gen:manifest, with no diff;
+  - gen:catalog with its biome pass: 42 iPhones from Xcode 26.6 (17F113), no diff;
+  - the face words' maker: six faces, no diff;
+  - the plugin's typecheck: its ~6k lines compile for the first time;
+  - its units: 12 files, 120/120;
+  - contracts: typecheck, and 49 files, 1,210 rows;
+  - the SDK: typecheck, and 10 files, 86 rows;
+  - `pnpm lint`, check:walls, check:retired and gen:check;
+  - the full `pnpm typecheck`: "Successfully ran target typecheck for 28 projects".
+- **`pnpm still`: 17 of 18.** The 18th was the simulator's golden row, 24 × `still-unblessed`, as expected. The three
+  mid-morph rows ran green on Dawn for the first time.
+- **The bless.**
+  - The PNGs were looked at first (the day and night sheets, and a zoom of six), against DESIGN.md's honest-faces table.
+  - They were blessed ONCE with `pnpm playground plugins/simulator --still --bless`, a deliberate event said in its
+    commit ("PT-S1 (stills, BLESSED)"). The host: "Metal driver on macOS Version 26.5.2 (Build 25F84) (apple metal-3) ·
+    darwin-arm64 · webgpu 0.4.0".
+  - `pnpm still` again: **18/18**.
+  - **This run is the stills' witness for the landing.** A golden is host-bound, and `pnpm still` is a gate:landing row
+    outside the verify script.
+- **After the run:** the law.test commit above. `law.test.ts` alone on this Mac: 32/32, with the row run ("the catalog's
+  Xcode 17F113, this host's 17F113").
+- **The landing (2026-10-30).** Main had moved on from the lane's base, so the mint queue merged main into the
+  lane, as it had for the stack (`0b4cb2ff0`), AU B1 (`aa2be72c9`) and CP-0 (`b9ca35824`) that day (VF-PM,
+  17:53Z). The lane was not rebased again.
+  - `portals/pt-s1-main` = `f21d45cfa`: main `aa2be72c9` (AU B1) into `839f93242`.
+  - Its one conflict was DESIGN.md: both sides added at the same place, and the base side was empty. Both were
+    kept whole: §9's "The simulator's honest faces", then AU-0's "The update's words" (the order of AU's own
+    keep-both). 4175 lines = main's 4006 + PT-S1's 169.
+  - AU's keep-both check (`lanes/au/keepboth/check.py`) passed 9 of 9. Its rows include the simulator design
+    test's faces and materials tables, equal to the lane's.
+  - The resolution touched docs only, so no new light pass.
+- **Run 6, RED (2026-10-30).** The first mint, M6 `dcabd7b9e` (main `ac5dd87d3` merged into `f21d45cfa` with no
+  conflict), failed `pnpm verify` on the mini at 18:50:15Z, in its test stage, on ONE row: field-app's
+  `test/build-edges.test.ts:65` (DK-8, ruling 2) found `plugins/simulator (@vibefield/plugin-simulator)` unbuilt.
+  - The cause was PT-S1's own, present since `839f93242`. The plugin's manifest declares a renderer entry, and
+    field-app named no edge to it, so `build:all` never built it.
+  - Everything else was green at M6:
+    - typecheck: 28 projects, the simulator the 28th;
+    - vitest: 9,988 passed, 1 failed, 18 skipped (the simulator's own suite: 119 passed, 1 skipped);
+    - a9's post-mortem of the two stages the red stopped: test:rust 499 passed, 0 failed, 14 ignored, and
+      gen:check clean.
+  - Fixed at the cause in `b72c46dfd`: the simulator became a field-app devDependency. The dev fallback does not
+    import it, and whether it ships among `BUNDLED_PLUGINS` is James's call. The lock's field-app importer gains
+    the link.
+  - Its light pass, on this Mac at nice 19: the red row green (1 file, 2 tests) and the walls clean.
+    `check:deps` was red in the lane alone: the lane borrows the main checkout's `../mille-pin`, whose React links
+    lead to a second tree at the same versions. The same check in that checkout was green, and the mini's
+    verify, on its own tree, is the witness.
+- **Main moved on while the fix waited.** Each time, on VF-PM's word, the queue merged the new main into the fixed
+  tip.
+  - Over `ffe9d9b40` (FG) and over `78ed1d946` (PRs #8 and #5, the EL8 to Puppeteer 0.3.2), each merge went stale
+    before its run. They are kept at `stale-pts1-main-9a339d48e` and `stale-pts1-main-e0379ac27`.
+  - Over `0ce140178` (AU B2 and the records after it), the merge is `0295b0663`, with no conflict. The lock
+    auto-merged: against main's, it adds 34 lines (the simulator's importer and field-app's link) and removes none.
+  - On each merged line, on this Mac at nice 19, the frozen offline install left the lock unchanged and
+    `pnpm typecheck` ran green on 28 projects.
+- **The mint, run 10,** merged IOS-8f's landed main `f250e8971` into `0295b0663`, as `1de84540b`. It
+  fast-forwarded onto main at 21:07:27Z and was pushed at 21:07:56Z.
+  - `pnpm verify` on the mini, its lines verbatim (`lanes/ts6/logs/mini/run10/`):
+    - "ts6-mini verify ARMED 21:00:50Z; load {{ 1.59 6.92 6.73 }}; df 97 GiB; HEAD 1de84540";
+    - "verify exit 0 21:05:29Z; load {{ 10.31 15.05 10.79 }}";
+    - "test target:  NX   Successfully ran target test for 28 projects";
+    - "cargo test results: ok 31, FAILED 0";
+    - "tree clean after verify" and "stubs left: 0";
+    - "== ts6-mini verify done (verify 0) 21:05:30Z; HEAD 1de84540b5a97f718bce9de34aa03329088ca92c".
+  - Its strict counts (VF-PM): typecheck 28 projects; vitest 10,151 passed, 0 failed, 18 skipped (27 summaries;
+    +128 PT-S1 rows); rust 499 passed, 0 failed, 14 ignored; 0 FAIL rows; build-edges green.
+  - The law.test row skips there, by the rule above (the mini's Xcode 27.1).
+  - The landing's lock change is all under `importers` (33 lines and a blank: the simulator's importer and
+    field-app's link), with no `packages` or `snapshots` hunk. It is a workspace-graph addition, not an EL8.
+
+**The reviews:**
+- **Round 1:** six lenses (law, morph, seam, design, types, walls), each with its skeptic, confirmed 16 findings. All 16
+  were addressed:
+  - 12 by commits:
+    - the landing frame is remade, so a morph ends its new model exactly;
+    - an act or a retry that appears or goes is new words;
+    - the fixture says it rests when paused;
+    - the bar shows "View only" as text;
+    - DESIGN.md claims only what its test holds;
+    - the artwork wall reads the package's own trees, never a tool's output;
+    - the Node canvas is the wall's one widening, the words' maker alone;
+  - 3 in the second run's list: the catalog step's biome pass, and the bless command;
+  - 1, the mid-morph still that no playground state can stage, as a question that R5 answered (Q7 (b)).
+- **Round 2:** a read-only re-review, under VF-PM's host bar, confirmed 2 text findings: the package's description, and
+  DESIGN.md's list of the PHONE.md sections the law cites. They were fixed in "PT-S1 (review round 2)", and completed at
+  the root in "PT-S1 (review round 2, law)" (comments only).
+
+**James's look:** on his typed "launch it and show me" (09:48Z), the dev app was launched from the lane, the phone on
+the pegboard under Devices. At 10:02Z he typed "works, close and continue". No notes.
+
+**The rulings that governed** (the brief's "Ruled mid-slice"; CODE-ONLY until VF-PM's grants):
+- **R1 (00:30Z), the resume.**
+  - The kept work went in ONE pathspec commit: "PT-S1 (wip): the plugin as stopped 2026-10-18 21:51Z — uncompiled".
+  - `git rebase main`, never a merge (VF-PM's landing law, corrected 00:33Z), through the build. The landing itself
+    took the mint queue's merge (Validation, 2026-10-30).
+  - Choices 2–7, as above.
+  - The slice is graded against PHONE.md's witnesses: the 28 law units, §13's continuity, and §10's cost table as far as a
+    unit can witness it.
+- **R2 (01:23Z), the six questions.**
+  - Q1 (b): the committed words.
+  - Q2: the culled morph, accepted.
+  - Q3: a fixture face keeps its scheme.
+  - Q4: `no-permission` and `no-window` stay while SCK is the ruled path.
+  - Q5: a Model or Finish act is PT-S2's.
+  - Q6: the SDK's type stays as it is.
+- **R3 (01:24Z):** HOLD on any install while AL-9b's verify ran.
+- **R4 (01:45Z):** the HOLD lifted for Q1 alone. VF-PM said GO at 01:41Z; the orchestrator's one `pnpm install --offline`
+  ran at 01:42:20Z, 0 downloaded.
+- **R5 (07:21Z):**
+  - the first run's four real reds fixed;
+  - round 1 closed;
+  - Q7 (b);
+  - the words' 339,375 bytes accepted for v1.
+- **R6 (09:20Z):** round 2 closes as built, and the halfway is judged against the landed size track.
+
+**Owed:**
+- **PT-S2, the producer.**
+  - LSF-5's ScreenCaptureKit producer on main (`ios-simulator-producer.ts`, `sck-producer.ts`), wired behind the
+    frame-source seam.
+  - Then `simctl`, the demand on a real stream, and the nine states' transitions.
+  - `surface.attach` and `surface.capture` in the manifest.
+  - The cap, shared with panes.
+  - A Model or Finish act (R2 Q5).
+  - Today only the fixture feeds a face: `fixtureSources` in the units, and the fixture's frames in the playground's
+    stills. desk-live routes no simulator spec yet.
+- **PT-S3, the gates.** A booted simulator streams to the desk; at rest it is a still; each honest face is witnessed; and
+  the cost is measured at the cap, with a pane beside it. PHONE.md §10's milliseconds and the render counts are a rig's.
+- **PT-S4, touch,** through serve-sim's input. It is an EL8 pin event, after serve-sim's `killPortHolder` is fixed. It
+  runs on loopback only, and never with `--allow-exec`.
+- **The capture bake-off** (PT-S-B1) stays queued for the mini. Its result decides whether serve-sim's stream later
+  replaces SCK's.
+- **`BUNDLED_PLUGINS` is untouched.** Whether the phone ships among the bundled plugins is James's call.
+- **Named, host-bound:**
+  - the stills' golden is this Mac's;
+  - `src/face-words.gen.ts` (~339 KB, accepted for v1) is this Mac's fonts, so a regen diff on another host means another
+    host.
+- **No downstream petition.** None was filed or numbered for PT-S1.
+
+## AU B2 — Settings → Updates and the corner: a desktop says which VibeField it runs (AU-3a), the update card becomes a page of its own headed by the exact version (AU-3), and the Me menu always carries the update row, with a cyan dot beside your face while an install waits (AU-2) (AU-D1…D8, D11, D13, D14; AU-G1, G2, G4, G5, G6, G7, G11, G12, G13, G15) (2026-10-30; `6a41ba1d8`, the merge of main `78ed1d946` into `066e20473` on `0706b1b76` on `571d81079`, lane `au/b2`)
+
+**What.** B2 is the first batch the window shows. Its order is LC-30's, so no commit names a page that does not
+exist yet.
+- **AU-3a (`571d81079`): a desktop says which VibeField it runs.**
+  - contracts: `DeviceSlice` and `DeviceInfo` gain an optional, tolerant `appVersion` (`.optional().catch(undefined)`,
+    the VERSION_CHARS bound). An older peer says none, and a malformed one drops alone, never the slice (LC-20).
+    `appVersionOfBuildId` reads WP12 D10's `<appVersion>+<commit7>`; a dev build id names none.
+  - fieldd: `selfSlice()` publishes it, the roster row carries it, and `narrowDeviceSlice` copies it (without that,
+    intake strips every peer's). `emitRoster`'s change signature includes it, so a desktop that updates in place
+    reaches an open page.
+  - `compareDotted` and `compareSemver` move from decide.ts into contracts' `update-policy.ts` as
+    `compareDottedVersions` and `compareReleaseVersions`, with no alias (X24).
+  - New fixtures `device-slice.app-version.json` and `device-info.app-version.json`. The iOS-mirrored goldens are
+    untouched, so the kit owes no copy, and gen does not run.
+- **AU-3 (`0706b1b76`): Settings → Updates** (AU-D8).
+  - The card leaves General for a page of its own, first in Support (Updates · Diagnostics · Advanced), wearing
+    `reset`. Its nav row wears a 6 px cyan mark while an install waits, with words for assistive tech.
+  - The head: "VibeField", the exact version in mono with Copy, and the channel's word.
+  - One primary act per state: Check for updates · Check again · Restart to update · Download (found, with updates
+    off) · Download anyway (skipped). Download goes through AU-1's door, and a refusal says main's words or a composed
+    fallback (LC-38).
+  - The state line: "Ready since …" from the 7th day, "Updated today from the … nightly.", and a channel with nothing
+    published quiet (LC-31). The not-applied notice shows only on the launch that judged it (LC-34). The consent leads
+    with Cancel, focused (LC-9).
+  - Your devices (AU-D13): desktops, self first, each with its version. Older or newer is said only within one channel,
+    and `incompatible` (by contracts major) in its direction, which is fixture-driven and unreachable today (LC-21). Its
+    controller stands apart, so the updater half works with fieldd down.
+  - Shared with AU-2 (LC-30): `update-words.ts` and `update-flow.ts` (one restart hook for the page and the menu).
+    `CopyButton` moved to `settings-ui.tsx` (LC-22), and contracts gains `releaseChannelOf` for Your devices (LC-20).
+- **AU-2 (`066e20473`): the corner** (AU-D1…D7, D11, D14).
+  - The Me menu's update row, always once the window knows the desktop's state, between Settings… and you,
+    aria-disabled when it cannot act; Return still lands on Settings…. `meUpdateRow` builds every row of the renderer
+    spec (R1–R18 but R5, which is AU-7's, and P1–P14 but P11, the question, which `MeMenuView` draws) on AU-3's words,
+    so the row and the page cannot drift. At rest after an update without notes, the row says "Updated today" (R4,
+    D11).
+  - The face's dot `.vf-me-mark` sits in the badge's slot: a waiting count outranks it, and it pops once, never pulses.
+  - The check and the download run in place. A release that ends sessions asks in the menu, the panel grown to 320 on
+    the island curve, in main's words, Cancel first and focused; the menu stays drawn until main answers.
+  - The not-applied notice shows once per window, in the attention ink: `.vf-me-notice` is off `--vf-orange` (the orange
+    fill it wore since UA-7).
+  - `ChromeLayer` hands `desktopState.update` down, one subscription.
+  - The catalog's `UpdateCornerPreview` mounts the shipping `MeMenuView` over `updateCornerFixture` (5 groups, 34
+    states), and the boundary test pins it.
+- Each commit's body says its tests were written, not run: B2 was built code-only in a second worktree while B1 waited.
+  They ran at the light pass and on the mini (below).
+
+**Found while building** (B2's three review lenses, before its light pass; the record's §11.3). Seven defects were
+fixed and squashed into their commits; the lead's calls from that read are LC-46…48. Among them:
+- `emitRoster`'s change signature omitted `appVersion`, so a desktop that updated in place, with `online` and `state`
+  unchanged, moved nothing a subscriber hears. AU-3a adds it, with a delta row.
+- The Me menu's question was drawn into an empty panel for 120 ms with nothing reversing on Cancel. A reopen inside the
+  fold put focus on the update row, so a second Return could restart. The dot's launch pop depended on which snapshot
+  arrived first. Settings → Updates dropped focus to `<body>` after the consent.
+
+Not a defect, and left as it was: AU-3a's own reading (its body's "found along the way") noted that `narrowDeviceSlice`
+drops `nameSource` too (TS-3b), and that mesh-board's `refusalKey` does not key on `appVersion` (the spec's optional
+row).
+
+**Validation.**
+- **The lane:** branch `au/b2` on B1's `380fb4d81`, built in the worktree `/Volumes/SamsungRed/lanes/au/b2`; its last
+  fixups and the light pass ran in `lanes/au/vibe-field`. Committed 2026-10-29 09:12:22–09:18:39Z.
+- **The light pass** (09:15:44–09:24:01Z, at nice 19 under the guard, over `379a2724e` → `a67dcfdae` → `066e20473`) was
+  green on its third run, at `066e20473`. Each
+  red was fixed at its cause and squashed, so B2's shas are the fixed ones:
+  - run 1 (09:15:51Z), red at biome: MeMenu's role set by an expression read as no role (a reasoned ignore, the house
+    form), and a test title's quoting;
+  - run 2 (09:17:56Z), red at typecheck: a type made by indexing an optional property carried `undefined`
+    (`update-words.ts`, `NonNullable` now);
+  - run 3, green: preflight, the walls, the iOS fixtures, biome on 41 files by path, the non-ASCII scan, the contracts,
+    electron-shell, field-app and fieldd typechecks, and vitest: contracts 576 (5 files), electron-shell 228 (12),
+    field-app 524 (23), fieldd 28 (`device-service`).
+  Logs: `lanes/au/logs/light-066e20473/`.
+- **The landed tip** is `6a41ba1d8`: main `78ed1d946` merged into `066e20473` at 20:36:51Z. Since B2's base, main had
+  gained, among them, FG-0…2, PR #8 and PR #5 over the item 94 stack, TS-6, TS-7, AU B1's landing, CP-0, PRC-6, PR #2,
+  PT, Q19, item 113 and the EL8 to Rosetta 0.1.2. Git auto-merged `ChromeLayer.tsx`, `DevicesSection.tsx`,
+  `ui-system-boundaries.test.ts` and fieldd's `daemon.ts` with no markers (TS-6's and TS-7b's edits, and for `daemon.ts`
+  PR #5's). A read-only rehearsal over FG's `ffe9d9b40` had been clean on the same four files; FG's own commits touch
+  none of B2's. The bundle's sha256 is `615f7dac…`.
+- **The mini's `next`** ran 20:37:32–20:37:36Z. It re-installed (+20 −20, 1.6 s) because main's lock had moved since
+  the mini last stood (PR #5, the EL8 to puppeteer 0.3.2); B2 moves no lock. Field-native was current, and preflight
+  exited 0 with one R23 candidate warning.
+- **The mini, run 8, `pnpm verify` at `6a41ba1d8`:** exit 0, armed 20:38:08Z, done 20:42:39Z (load 2.70 → 8.84),
+  whole: preflight through `gen:check`, biome over 2,704 files.
+  - `pnpm test` ran 27 projects, and its 26 vitest summaries hold 10,011 passed, 0 failed and 17 skipped: contracts
+    1309, electron-shell 2020 + 3 skipped, field-app 2948, fieldd 2617 + 11 skipped.
+  - B2's files were among them: contracts `devices` 9 and `update-view` 16; electron-shell `updates/decide` 23;
+    field-app `update-words` 73, `me-menu` 54, `updates-section` 20, `update-devices` 7, `updates-devices` 4,
+    `settings-dialog-account` 14 and `ui-system-boundaries` 35; fieldd `device-service` 28.
+  - `pnpm test:rust`: 31 results, 499 passed, 0 failed, 14 ignored. The tree was clean after, with no stub left.
+  Logs: `lanes/ts6/logs/mini/run8/`.
+- **Landed:** main fast-forwarded `78ed1d946` → `6a41ba1d8` at 20:45:17Z on VF-PM's GO (41 files, +4923 −422), and was
+  pushed at 20:47:13Z with FG's records and the PR ledger (`78ed1d946..0ce140178`).
+
+**Records.** `draft/thinking-update-ux.md` §7 has B2 as built and §11.3 what it found. This entry rides B3's records
+commit (AU B3, below).
+
+**Owed.** The row, the dot, the question and the page on a desk in both themes (James's display word); the catalog's
+plates are the shipping views over fixtures.
+
+## AU B3 — the menus, the move and the quit: the app menu's About, Settings… ⌘, and its update item, and the status item's update image (AU-4); Move to Applications through the quit gate (AU-7); a signal skips the quit gate in every build, a fault older than AU (AU-5a); and a person's quit installs a staged update after the gate's stop (AU-5) (AU-D9, AU-D12; AU-G3, AU-G8, AU-G9, AU-G14) (2026-10-30; `20783c656`, the merge of main `1de84540b` into `a4688b7c9` on `cbd6e15e5` on `2cfaa1f96` on `7b2cd0db6`, lane `au/b3`)
+
+**What.** The order is LC-27's: install on quit is born with the read-only and pending-move guards beneath it.
+- **AU-4 (`7b2cd0db6`): the menus say it too** (AU-D12).
+  - The status item: `updateMenuEntry` is the one update item both menus wear (AU-L4). A found update that was not
+    skipped, with automatic updates off, reads "Download Update" (no ellipsis: it asks nothing, LC-41) and downloads
+    that version through AU-1's door. Check for Updates… keeps its ellipsis for now (LC-52, the lead's call; whether to
+    drop it is open for James).
+  - Its image: `trayImageKind` gains `update` for a staged update with an apply wired. Attention keeps one meaning, a
+    degraded service or a failed check, and outranks it. A staged update with no apply wears the base image (it wore
+    attention).
+  - The art: four images (`fieldUpdateTemplate.png` and `@2x`, `field-update.ico`, `field-linux-update.png`) generated
+    from `tray-master.svg` by `generate-icons.mjs`: the mark with one plain dot, no bang. The lead generated them in
+    B3's slot at 12:03:40Z, looked at them at 16 px on a light and a dark bar (LC-32), and folded them into AU-4;
+    `b3-slot.log` checks that the committed bytes are the ones looked at. No image of the look is kept.
+  - The app menu (darwin) is spelled out: About · Settings… ⌘, · the update item · Services · Hide, Hide Others, Show
+    All · Quit. Settings… registers ⌘,, but the page answers it first in its capture phase (GT-D21), so the chord keeps
+    one owner, and the item's click reveals Settings, never toggles. The update item wears the status item's entry.
+    About names the version and the commit (`commitOfBuildId`). The Windows and Linux menus are unchanged.
+  - No ⌘, smoke row (LC-28): `sendInputEvent` enters below AppKit's key-equivalent dispatch, so a synthesized ⌘, never
+    reaches a menu item. ⌘, through the menu is an owed eyeball.
+- **AU-7 (`2cfaa1f96`): Move to Applications** (AU-G8).
+  - contracts: `UpdateView.location` (`applications` · `elsewhere` · `read-only`; optional, absent off macOS, and a
+    location it does not know is a wire error),
+    `UpdateMoveResult`, and `IPC_CHANNELS.updateMoveToApplications`, the ninth update door; four EL9 fixtures.
+  - main: `updates/location.ts` classifies once per process (App Translocation, then `isInApplicationsFolder`, then
+    the parent's W_OK). A read-only copy checks only when a person asks, downloads nothing, and refuses a staged
+    Restart as `location` before the census, so it no longer ends sessions for nothing before Squirrel refuses.
+  - The move goes through the quit gate (`quitThen`): `app.moveToApplicationsFolder` runs only after the durable close
+    and a COMPLETE stop, and an existing copy in Applications goes to the Trash. An incomplete or failed stop, a quit
+    with no gate, or a mover that refuses or throws relaunches in place, logged `desktop.update.move_failed` (LC-25).
+    `QuitGate.stop()` now answers `{kind: done, complete, ended}` or `{kind: aborted}`.
+  - The window: the Me row's R5 ("Move to Applications…", "Can't update from here") only for read-only; the page's
+    read-only state in the attention ink, with the move as its primary; "elsewhere" is one quiet line with the move as a
+    secondary act.
+- **AU-5a (`cbd6e15e5`): a signal skips the quit gate in every build. The fault is older than AU.**
+  - LC-26's read (2026-10-29 09:18:57Z, a bare Electron 43.1.1 with no handler of ours, `lanes/au/lc26/`): Electron's
+    own POSIX handler turns SIGTERM, SIGINT and SIGHUP each into an ordinary `app.quit()` (before-quit → will-quit →
+    quit). AL-4's handler ran only under `MODE === "dev"`, so in production a signal met the census gate as ⌘Q would and
+    could stop the pairs, against ESR §7.3 as amended.
+  - AU-5a moves `dev-signals.ts` to `signal-quit.ts`: a mode-free `installSignalQuit`, installed beside the lifecycle in
+    every build, with SIGHUP added.
+  - Folded in from B3's quit-seam review (`quitForSignal`, LC-50): a signal that lands while the gate's box is up is
+    not the person's quit, whatever the box answers, and stops nothing. During the stop's re-ask box, a signal still
+    quits on its Cancel, while "Quit and end N sessions" finishes the stop already under way. Before, the box swallowed
+    the signal's quit: Cancel left `restarting` set for the session, with the handler's own latch already tripped, so
+    every later SIGINT or SIGTERM was ignored (the handler caught only those two) and the person's next ⌘Q skipped the
+    gate and stopped nothing; and "Quit and end N sessions" stopped the pairs under a signal. Dev had this since AL-4.
+  - AL's own LANDED entry ("Which quits skip the gate") now carries both faults as a dated correction; their design
+    source, `thinking-app-lifecycle.md` AL-F11 and §5.7, was corrected on 2026-10-29 (dev-local `1d91b1bbd`).
+- **AU-5 (`a4688b7c9`): install on quit** (AU-D9, AU-G3).
+  - One step between the gate's stop and the native quit (`installThenQuit`): after a COMPLETE stop of a quit that is
+    still the person's, `installOnQuit` stages the update (`apply.stage`, bounded at 30 s), with no relaunch and no
+    `quitAndInstall`. `autoInstallOnAppQuit` stays forced off.
+  - It is skipped, logged `desktop.update.quit_install_skipped {why}`, on a signal, an update's armed quit, the OS
+    ending the session (AL-D6) and an incomplete stop. A waiting move runs in its place (LC-25). A second ⌘Q or a signal
+    during the stage is absorbed: one stop, one install.
+  - One hold list, in order: busy, not staged, no apply built, `location`, then the silent holds (disabled, declined,
+    confirmation-required, LC-24). Then a fresh policy read bounded at 3 s, and the levers.
+  - The quit box's last line, "The Oct 28 nightly installs as you quit." (LC-36), shows only for a person's quit whose
+    census box shows, and never while a move pends.
+  - A policy hold at the quit is said by the next launch's OUTCOME row (`QUIT_HELD`, LC-14), with no new enum value.
+    field-app's not-applied words lead "The last quit didn't install …" for a quit.
+  - `smoke:update` gains a sixth run, quit, which is OPT-IN (`--runs quit`, LC-29). desk-gates row 30 says so.
+
+**Found while building** (the record's §11.2, §11.4–§11.6):
+- The two faults AU-5a corrects (above).
+- A queued quit leaked between tests (B3's light pass, run 2; the harness's fault, not the product's). The lifecycle
+  queues its quits (`setImmediate(() => app.quit())`), and every rig in `lifecycle.test.ts` shares one mocked
+  `app.quit`. Vitest's step between tests yields no macrotask, so a quit still queued fired into the next test's rig,
+  past its `mockReset`. The fix is the harness's: `drain()` in the quit-gate block's `afterEach` and before each
+  mid-test `electron.reset()`. The rule: drain the queue the code under test feeds before a shared mock is reset.
+- biome's `noThenProperty` refuses a `then` key even in a fixture, so the smoke's step key is `next`. A long signature
+  wraps as the formatter prints it.
+- The commit bodies are stale in two ways. AU-4's still says "GENERATOR ONLY: no PNG/ICO bytes are in this commit" and
+  that `icons:check` stays red until they are; the images were folded into AU-4 before its light pass, and run 11's
+  verify, with `icons:check` in its chain, was green. And each body says its tests were written, not run: they ran at
+  the light pass and on the mini (below).
+
+**Validation.**
+- **The lane:** the worktree `/Volumes/SamsungRed/lanes/au/b2`, branch `au/b3` on B2's `066e20473`, committed
+  2026-10-29 12:04:14Z (AU-4) and 12:11:48Z (AU-7, AU-5a, AU-5).
+- **The light pass** (`b3-slot`, 12:12:00–12:15:52Z, at nice 19 under the guard) was green on its third run. Each red
+  was fixed at its cause and folded into the commit that owns it (the harness's `drain()` into AU-7, one call each into
+  AU-5a and AU-5):
+  - run 1 (12:04:22Z), red at biome: `noThenProperty` in `update-fixture.mjs` and `update-fixture.test.ts`, and
+    `controller.ts`'s format (the fresh-policy read's signature);
+  - run 2 (12:06:28Z), red at electron-shell's vitest: the queued-quit leak above;
+  - run 3, green: preflight, the walls, the iOS fixtures, biome on 61 files by path, the non-ASCII scan, the
+    contracts, electron-shell and field-app typechecks, and vitest: contracts 1247 (50 files), electron-shell 2119 + 3
+    skipped (147 files), field-app 353 (12 files); then `icons:check` (35 files) and the update smoke's node rows, 8
+    of 8;
+  - AU-5a's red-first: on the parent's source with the module rename alone, five rows were red (two in
+    `signal-quit.test.ts`, three in `lifecycle.test.ts`) and 25 passed; at AU-5a, 30 of 30 passed.
+  Logs: `lanes/au/logs/b3-slot.log` and `light-a4688b7c9/`.
+- **The landed tip** is `20783c656`: main `1de84540b` (AU B2's landing, FG's and the PRs' records, IOS-8f and PT-S1)
+  merged into `a4688b7c9` at
+  21:09:00Z. Git auto-merged contracts' `registries.ts` and `fixtures.test.ts` and electron-shell's `resources.test.ts`
+  with no markers. The bundle's sha256 is `2d141ec2…`.
+- **The mini's `next`** ran 21:09:13–21:09:23Z: the locks stood (no re-install), field-native was built, and
+  preflight exited 0 with one R23 candidate warning.
+- **The mini, run 11, `pnpm verify` at `20783c656`:** exit 0, armed 21:09:23Z, done 21:13:56Z (load 1.70 → 9.66),
+  whole: preflight through `gen:check`, biome over 2,766 files.
+  - `pnpm test` ran 28 projects, and its 27 vitest summaries hold 10,278 passed, 0 failed and 18 skipped: contracts
+    1328, electron-shell 2120 + 3 skipped, field-app 2967, fieldd 2621 + 11 skipped. The dev runner's node tests
+    passed 262 of 262, the quit run's two rows (`judgeQuit`, `readLastApply`) among them.
+  - B3's files were among them: electron-shell `lifecycle` 34, `signal-quit` 4, `quit-gate` 20,
+    `updates/controller-apply` 86, `updates/location` 12, `updates/decide` 26, `app-menu-model` 55, `app-menu` 3,
+    `tray-model` 66, `tray-controller` 20, `resources` 30, `update-doors` 6 and `preload-update` 4; contracts
+    `fixtures` 502, `update-view` 18 and `devices` 11; field-app `update-words` 85, `me-menu` 54, `me-menu-wiring` 6
+    and `updates-section` 26.
+  - `pnpm test:rust`: 31 results, 499 passed, 0 failed, 14 ignored. The tree was clean after, with no stub left.
+  Logs: `lanes/ts6/logs/mini/run11/`.
+- **Landed:** main fast-forwarded `1de84540b` → `20783c656` at 21:16:01Z on VF-PM's GO (69 files, +3335 −270), and
+  was pushed at 21:16:44Z.
+
+**Records.** `draft/thinking-update-ux.md` §7 has AU-5a's and AU-5's as built (AU-4's and AU-7's bullets still read as
+planned) and §11 what B3 found. This commit adds AU B2's entry
+(above), this one, the dated correction at AL's entry, ROADMAP's AU track, DECISIONS' AU, AL, EDP and WP12 rows, and
+desk-gates row 30's quit run.
+
+**Owed.**
+- ⌘, through the app menu, an owed eyeball (LC-28).
+- The physical install-on-quit and Move rows on the mini, between two signed nightlies (⌘Q with N+1 staged: the bundle
+  becomes N+1 without a launch). LC-49's "or quit" words follow that row in a one-line commit. Also the TCC probe for
+  the quit run's trigger, and the logout probe.
+- At the next draft queue: EDP §11.3/§11.5's and ESR §7.3's as-built notes, `thinking-app-lifecycle.md` §4's table,
+  AU-4's and AU-7's as built in the record's §7, and dated corrections at the record's source: its Status (B1's run 3
+  time; B2 was run 8 and B3 run 11, not 9 and 10; B2 and B3 landed), §11.4 ("stopping and installing nothing": install
+  on quit came with AU-5, above AU-5a; and a signal during the stop's re-ask box stops nothing only on its Cancel) and
+  §11.5 (run 2's two red rows were one AU-5a row and one AU-5 row).
+- In code, in a later commit: `quitForSignal`'s doc comment in `lifecycle.ts` says the pairs are left "whatever the box
+  answers"; during the stop's re-ask box, "Quit and end N sessions" finishes the stop already under way.
+- LC-52 ("Check for Updates…" keeps its ellipsis) is James's.
+- B4 (AU-6a `4c25147bf`, AU-6b `2b1cfff6f`, their pre-rebase shas of 2026-10-29) waits for HN B1 and is rebased over it.

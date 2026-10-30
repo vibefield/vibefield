@@ -8,11 +8,15 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
+  compareDottedVersions,
+  compareReleaseVersions,
+  releaseChannelOf,
   releaseName,
   UpdateCheckResult,
   UpdateClientStateFile,
   UpdateDownloadRequest,
   UpdateDownloadResult,
+  UpdateMoveResult,
   UpdateView,
 } from "../src/update-policy";
 
@@ -178,5 +182,71 @@ describe("AU-1 (LC-2) — releaseName: one friendly name for a version", () => {
     expect(releaseName("0.2.0")).toBe("VibeField 0.2.0");
     expect(releaseName("0.2.0", { start: true })).toBe("VibeField 0.2.0");
     expect(releaseName("dev")).toBe("VibeField dev");
+  });
+});
+
+// AU-3a (X24) — the rows moved here from electron-shell's decide.test.ts with the two orders themselves.
+describe("AU-3a (X24) — one version order, main's and the window's", () => {
+  it("compares dotted versions, failing closed on a part that is not a number", () => {
+    expect(compareDottedVersions("15.1.0", "15.0")).toBeGreaterThan(0);
+    expect(compareDottedVersions("14.6.1", "15")).toBeLessThan(0);
+    expect(compareDottedVersions("15", "15.0.0")).toBe(0);
+    expect(compareDottedVersions("15.x", "15")).toBeNaN();
+  });
+
+  it("orders release versions by semver precedence, never as strings", () => {
+    expect(compareReleaseVersions("0.9.0", "0.10.0")).toBeLessThan(0);
+    expect(compareReleaseVersions("0.10.0", "0.9.0")).toBeGreaterThan(0);
+    expect(compareReleaseVersions("1.0.0-beta.2", "1.0.0")).toBeLessThan(0);
+    expect(compareReleaseVersions("1.0.0-beta.10", "1.0.0-beta.2")).toBeGreaterThan(0);
+    expect(
+      compareReleaseVersions("1.0.0-nightly.20261016", "1.0.0-nightly.20261015"),
+    ).toBeGreaterThan(0);
+    expect(compareReleaseVersions(NEXT, CUR)).toBeGreaterThan(0);
+    expect(compareReleaseVersions("1.0.0", "1.0.0")).toBe(0);
+    expect(compareReleaseVersions("1.x.0", "1.0.0")).toBeNaN();
+  });
+});
+
+// AU-3 (LC-20) — a version's channel by its shape: the window says older or newer only within one channel.
+describe("AU-3 (LC-20) — releaseChannelOf: a version's channel by its shape", () => {
+  it("names the three shapes release-plan.mjs writes, and null for anything else", () => {
+    expect(releaseChannelOf(CUR)).toBe("nightly");
+    expect(releaseChannelOf("0.2.0-beta.3")).toBe("beta");
+    expect(releaseChannelOf("0.2.0")).toBe("stable");
+    expect(releaseChannelOf("dev")).toBeNull();
+    expect(releaseChannelOf("0.2.0-rc.1")).toBeNull();
+    expect(releaseChannelOf("0.1.0-nightly.2026102")).toBeNull();
+  });
+});
+
+// AU-7 (AU-G8; LC-10, LC-37) — where the app runs, and the Move door's answer.
+describe("AU-7 — the view's location and the Move door", () => {
+  it("carries the three locations, absent off macOS (today's views have none)", () => {
+    expect(UpdateView.parse(golden("update-view.read-only.json")).location).toBe("read-only");
+    expect(UpdateView.parse(golden("update-view.elsewhere.json")).location).toBe("elsewhere");
+    expect(UpdateView.parse(golden("update-view.idle.json")).location).toBeUndefined();
+    const view = golden("update-view.idle.json");
+    expect(UpdateView.parse({ ...view, location: "applications" }).location).toBe("applications");
+    // main and the preload are one build: a location it does not know is a wire error, never a guess
+    expect(UpdateView.safeParse({ ...view, location: "downloads" }).success).toBe(false);
+  });
+
+  it("answers proceed or cancel, or a refusal before anything stops", () => {
+    expect(UpdateMoveResult.parse(golden("update-move-result.proceed.json"))).toEqual({
+      ok: true,
+      outcome: "proceed",
+    });
+    expect(UpdateMoveResult.parse(golden("update-move-result.busy.json"))).toEqual({
+      ok: false,
+      reason: "busy",
+    });
+    expect(UpdateMoveResult.parse({ ok: true, outcome: "cancel" })).toEqual({
+      ok: true,
+      outcome: "cancel",
+    });
+    expect(UpdateMoveResult.safeParse({ ok: true }).success).toBe(false);
+    expect(UpdateMoveResult.safeParse({ ok: true, outcome: "moved" }).success).toBe(false);
+    expect(UpdateMoveResult.safeParse({ ok: false }).success).toBe(false);
   });
 });

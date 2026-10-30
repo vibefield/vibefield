@@ -99,6 +99,13 @@ export const DeviceSlice = z
     headless: z.boolean(),
     fielddVersion: z.string().min(1).max(DEVICE_LIMITS.VERSION_CHARS),
     contractsVersion: z.string().min(1).max(DEVICE_LIMITS.VERSION_CHARS),
+    /** AU-3a (AU-D13 A; LC-20) — the VibeField app this desktop runs, from
+     * the build id its launcher gave fieldd (`fielddVersion` is the daemon
+     * package's own and never moves between builds). Optional and tolerant: an
+     * older peer does not say it, and a malformed one drops ALONE, never the
+     * slice (a slice that fails `DeviceSlice` is dropped at intake with the
+     * device's capabilities). */
+    appVersion: z.string().min(1).max(DEVICE_LIMITS.VERSION_CHARS).optional().catch(undefined),
     capabilities: DeviceCapabilities,
     productEndpoint: ProductEndpoint.optional(),
     bootId: z.string().min(1).max(DEVICE_LIMITS.BOOT_ID_CHARS),
@@ -158,6 +165,11 @@ export const DeviceInfo = z
     headless: z.boolean().optional(),
     fielddVersion: z.string().min(1).max(DEVICE_LIMITS.VERSION_CHARS).optional(),
     contractsVersion: z.string().min(1).max(DEVICE_LIMITS.VERSION_CHARS).optional(),
+    /** AU-3a (LC-20) — the app version its slice says, copied at intake.
+     * Absent while the device has not said it (an older build, a dev build, a
+     * slice not yet arrived); a malformed one drops alone, so a roster read
+     * from another daemon still parses. */
+    appVersion: z.string().min(1).max(DEVICE_LIMITS.VERSION_CHARS).optional().catch(undefined),
     capabilities: DeviceCapabilities.optional(),
     /** UA-P-0e, kept by UA-P-4 — for a PEER this is a derived LOCATOR
      * (`http://<magicdns>:<the registry's product serve port>`) in preference

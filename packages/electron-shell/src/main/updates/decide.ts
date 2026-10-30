@@ -13,6 +13,12 @@
 // cache GC (B6) deletes its payload, so a kill no longer holds it: after a later policy lifts the kill, the next check
 // downloads it again. And the census gates only a release
 // that touches the native plane (B3): one that leaves the floor's bytes alone keeps its sessions, so it needs neither.
+// AU-3a (X24): the two version orders moved to @vibefield/contracts, so the window compares by the same ones.
+// AU-7 (AU-G8; LC-10; main-process.md §8.2): a copy macOS won't let replace itself (`read-only`: App Translocation, a
+// mounted image, an unwritable folder) checks only when a person asks, downloads nothing, and holds what it staged
+// before it got there. `elsewhere` (writable) changes nothing.
+
+import { compareDottedVersions, type UpdateAppLocation } from "@vibefield/contracts";
 
 export type UpdateTrigger = "launch" | "manual" | "resume" | "available" | "downloaded";
 
@@ -54,6 +60,8 @@ export interface DecideContext {
   readonly hostOs?: string | null;
   /** L3b-i (B3) — the staged release touches the native plane; absent = touched (the fail-safe) */
   readonly nativeTouched?: boolean;
+  /** AU-7 — where the bundle runs (macOS; `location.ts`); absent = it can replace itself */
+  readonly location?: UpdateAppLocation;
 }
 
 export type UpdateAction =
@@ -63,7 +71,7 @@ export type UpdateAction =
   | {
       readonly kind: "hold";
       readonly version: string;
-      readonly reason: "sessions" | "census-unknown" | "apply-unbuilt";
+      readonly reason: "sessions" | "census-unknown" | "apply-unbuilt" | "location";
     }
   /** a staged version the policy now forbids (killed, yanked, or above this host's floor): its payload deleted (B6) */
   | {
@@ -79,6 +87,8 @@ export type UpdateAction =
         | "fresh"
         | "declined"
         | "nothing-to-do"
+        // AU-7 — a read-only copy: nothing it downloads could install
+        | "location"
         | LeverRefusal;
     };
 
@@ -86,48 +96,6 @@ export type UpdateAction =
  * (the inventory unobserved, the link down, no answer in its bound) or a cell's rows are older than the inventory's
  * bound (IL-D5 (a), `censusOf`) — which HOLDS, never reads as zero (§10 S1). */
 export type CensusCount = number | "unknown";
-
-/** Dotted numeric versions (`15.1.0` against `14.0`): <0, 0 or >0, and NaN when either has a part that is not a
- * number — which the floor reads as unmet (fail closed). */
-export function compareDotted(a: string, b: string): number {
-  const parts = (v: string) =>
-    v.split(".").map((part) => (/^\d+$/.test(part) ? Number(part) : Number.NaN));
-  const left = parts(a);
-  const right = parts(b);
-  for (let i = 0; i < Math.max(left.length, right.length); i++) {
-    const l = left[i] ?? 0;
-    const r = right[i] ?? 0;
-    if (Number.isNaN(l) || Number.isNaN(r)) return Number.NaN;
-    if (l !== r) return l - r;
-  }
-  return 0;
-}
-
-/** Semver precedence, enough for the advisory `minSupported` line: the dotted core first, then a prerelease sorts
- * below its release, identifiers compared numerically when both are numbers. NaN when a core part is not a number. */
-export function compareSemver(a: string, b: string): number {
-  const [aCore = "", ...aPre] = a.split("-");
-  const [bCore = "", ...bPre] = b.split("-");
-  const core = compareDotted(aCore, bCore);
-  if (Number.isNaN(core) || core !== 0) return core;
-  const ap = aPre.join("-");
-  const bp = bPre.join("-");
-  if (ap === bp) return 0;
-  if (ap === "") return 1;
-  if (bp === "") return -1;
-  const ai = ap.split(".");
-  const bi = bp.split(".");
-  for (let i = 0; i < Math.max(ai.length, bi.length); i++) {
-    const x = ai[i];
-    const y = bi[i];
-    if (x === undefined) return -1;
-    if (y === undefined) return 1;
-    if (x === y) continue;
-    const numeric = /^\d+$/.test(x) && /^\d+$/.test(y);
-    return numeric ? Number(x) - Number(y) : x < y ? -1 : 1;
-  }
-  return 0;
-}
 
 /** B1 — what the policy says of one version on this host: the first lever that refuses it, or null. */
 export function leverRefusal(
@@ -139,7 +107,7 @@ export function leverRefusal(
   if (policy.killSwitch) return "killed";
   if (policy.yanked.includes(version)) return "yanked";
   const floor = policy.floors.os;
-  if (floor !== undefined && !(hostOs != null && compareDotted(hostOs, floor) >= 0)) {
+  if (floor !== undefined && !(hostOs != null && compareDottedVersions(hostOs, floor) >= 0)) {
     return "floor-unmet";
   }
   return null;
@@ -152,9 +120,12 @@ export function decideUpdate(
   context: DecideContext,
 ): UpdateAction {
   const { trigger } = context;
+  const readOnly = context.location === "read-only";
   if (trigger === "launch" || trigger === "manual" || trigger === "resume") {
     if (state.kind === "checking" || state.kind === "downloading")
       return { kind: "none", reason: "in-flight" };
+    // AU-7 — a check that can lead nowhere never starts on its own; a person's check runs (they see what exists)
+    if (readOnly && trigger !== "manual") return { kind: "none", reason: "location" };
     // the off switch stops automatic checks; a person's explicit check still runs (and then downloads nothing)
     if (!context.enabled && trigger !== "manual") return { kind: "none", reason: "disabled" };
     if (
@@ -171,6 +142,7 @@ export function decideUpdate(
     if (context.declined.includes(state.version)) return { kind: "none", reason: "declined" };
     const lever = leverRefusal(state.version, context.policy, context.hostOs);
     if (lever !== null) return { kind: "none", reason: lever };
+    if (readOnly) return { kind: "none", reason: "location" };
     if (!context.enabled) return { kind: "none", reason: "disabled" };
     return { kind: "download", version: state.version };
   }
@@ -179,6 +151,8 @@ export function decideUpdate(
   if (context.declined.includes(state.version)) return { kind: "none", reason: "declined" };
   const lever = leverRefusal(state.version, context.policy, context.hostOs);
   if (lever !== null) return { kind: "discard", version: state.version, reason: lever };
+  // AU-7 — a payload staged before the bundle landed where it cannot replace itself stays held, never installed
+  if (readOnly) return { kind: "hold", version: state.version, reason: "location" };
   // the census gates only a release that touches the floor: an untouched one keeps its sessions (B3)
   if (context.nativeTouched !== false) {
     if (census === "unknown")

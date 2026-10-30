@@ -100,13 +100,15 @@ pegboard at DK-13 (2026-10-06). The island's law outlives it as M1 (§6): one el
 |---|---|---|
 | `--vf-canvas-bg` | `#FAFAFA` | `#171717` |
 | the cutting mat (`glyph: "mat"`, `draft/ground/MAT.md`) — sage `#86A078`, cream lines `#E8DCBE`, a material carried across both themes | lit by the **Sun**: the tree-shadow reference's chain — the sage shows `#3D5A30` | lit by the **Moon**: 4100 K through the Purkinje shift — `#313C40` in the dapples, `#1C2027` in the palm's shadow, Eigengrau `#16161D` under all; half the sunlit luminance |
+| `--vf-field-ground` — the first face's ground (track FG): the website's splash, the field of Wormhole · edited, before its first frame and under its still; the window's pre-paint projects it (`electron-shell/src/main/windows.ts` — main can't read CSS, UI_SYSTEM.md) | `#04050F` | `#04050F` — the field is the dark in both themes |
 
 *Retired 2026-10-07 (DK-17; DK-0d's erratum of 2026-10-03, executed — DK-D2, R22):* the ground this
 section described until then was ICE 0.11's — a world grid (`spacings: [25, 50, 100]` and its fades)
 and the magnet grid tuned through ICE's `GridMagnetConfig` (a dot or needle glyph, `reach: 60`, …),
 inked `#A6A6A6` by day and `#8A8A8A` by night (a classic alternate's `#1C1C1C` recorded beside it).
 ICE retired the magnet grid with the cards and the dot and needle grids on 2026-09-25, and on the
-desk (DK-3) the ground is the cutting mat below — its sage and cream, its rulers at a margin of 60,
+desk (DK-3) the ground is the cutting mat below — its sage and cream, its rulers printed at the
+window's edges (a margin of 0 since 2026-10-29; 60 before, §10 "The mat's places"),
 its lattice's fade-in (`GridConfig { fadeIn, mat }`). So the grid's projection, the magnet's tuning
 and its inks, Canvas Settings' Dot/Needle preference, Studio's grid controls and the appearance
 document's grid half left with the old ground: the document is v4, the plain ground alone
@@ -128,6 +130,16 @@ ground alone (§8), and so does the kit's placeholder face, whose one consumer i
 (a page or an app not yet pictured is not a board, so not the mat). The design catalog's stand-ins
 for the field — the chrome's plates, the switch's and the Setup Assistant's floor — wear the mat in
 CSS, as the field they stand for does.
+*Amended 2026-10-29 (track FG, FG-D1…FG-D24 ruled by James; the record is
+`draft/thinking-first-run-glass.md`; built at FG-1, its tear to the desk at FG-2 (the first run's at FG-5) and the catalog's still
+at FG-6):* the first face's ground is the **field** — the website's own splash (vibefield-dotdev,
+Wormhole · edited), live on WebGPU from boot's first frame to the desk (§8 "The boot splash") — and the
+mat begins at the desk. `--vf-field-ground` is the window's colour before the field's first frame and
+the ground under its still; it is one value in both themes because the tunnel is the dark in both. The
+splash and the Setup Assistant leave the mat in CSS for the field, and the catalog's Setup Assistant
+stands on the field's still; the switch's floor, the loading veil, the explorer's tiles and the terminal
+preview's miniature field keep the mat (DK-16). The words on the field are in `--vf-field-ink`, white at
+56% (its contrast measured as DK-16 measured the mat's: FG-O2).
 *Erratum 2026-10-03 (DK-0d — DK-D2, R22) — the cursor's halo, which this file never described:* the
 field above answered a pointer VibeField drew itself (`cursor/`: a DOM halo over the canvas that hid
 the OS cursor, became a dot over a widget's controls and fed this field its poles — the `reach`
@@ -667,7 +679,8 @@ claim it.
 | Sheet | surface `/90` + `backdrop-blur-3xl` | the fields explorer grown from the head's pill (FR-3); the open tray left at DK-13 |
 | Overlay chip | surface `/90–95` + `backdrop-blur-xl` | no wearer today: the put-back affordance and the HUD's toasts retired (DK-13, DK-17); the peers' chips wear the line's glass and the status line solid chrome (§8) |
 | Backdrop dim | `black/10` light · `black/40` dark | behind open sheets; canvas recedes to `scale(0.98)` |
-| Search scrim (GV-D8; K7, 2026-10-08) | `black/16` light · `black/46` dark, over a backdrop blur of 18 and `saturate(0.9)` | behind the Peek only (§8 "Search"): the window blurred and dimmed, the view and the frame receding to `scale(0.98)` under it. Darker than the backdrop dim so it reads as dimmed (One Frame §23); the backdrop dim stays the sheets' until James rules otherwise (docket PK1) |
+| Search scrim (GV-D8; K7, 2026-10-08) | `black/16` light · `black/46` dark, over a backdrop blur of 18 and `saturate(0.9)` | behind the Peek (§8 "Search"): the window blurred and dimmed, the view and the frame receding to `scale(0.98)` under it. Darker than the backdrop dim so it reads as dimmed (One Frame §23); the backdrop dim stays the sheets' until James rules otherwise (docket PK1). *Since TS-D22 A (2026-10-29):* the phone wears its dim alone, with no blur, under a door that stands over a live field, between the field and the bar (§9) |
+| Setup Assistant (as built since UA-3w; written down 2026-10-29, track FG; on the field, built at FG-3a as the browser's layers, which draw it over the live field too until the field's own pass at FG-3b) | `--vf-wizard-surface` (white 55% by day, `rgb(28 28 30)` 55% by night) over `blur(32px) saturate(1.12)`, the island radius (32). On the field (FG): a 1px edge, `--vf-wizard-edge` (white 60% by day, 12% by night) with a top light, `--vf-wizard-edge-light` (white 75%, 8%); the field's shadow, `--vf-shadow-wizard-field` (`0 40px 120px` and `0 12px 32px` in the field's ground at 55% and 28%); and a grain at `--vf-wizard-grain` (3%), so the blur never bands | the Setup Assistant's glass (§8): on the field its frost lets the tunnel's rings through softly (FG-D15 C). Over the live field the field draws this recipe itself, in its own frame and from these tokens (FG-D24); over the field's still the backdrop filter draws it |
 
 **Menus are solid, floating controls are glass** (One Frame FR-7, FC-D14 ruled 2026-10-01): a menu
 is rows to be read, so it is `--vf-chrome-solid` — opaque — ringed by `--vf-hairline-strong`, with
@@ -711,7 +724,7 @@ rect, its props, its stratum (pads · sheets · things), taped or not — is ICE
 | **stickers** (tape) | an attachment, a label | tags — the masking and label tape are already marks | not yet, as objects |
 | **tools** (metal) | a tool | rulers, clips, scissors | the mat's rulers and its lamp |
 | **instruments** (panel, plastic) | an instrument | the packs — shader, 8-bit, arduino: a panel, controls, screens, cables | not yet — the OBJECT KIT |
-| **portals** (glass) | a window onto something live | artifacts, pages, terminals, captures | not yet — PORTALS (DK-D19, DK-D20) |
+| **portals** (glass) | a window onto something live | artifacts, pages, terminals, captures, a simulator's screen | drawn — the browser pane (`vibefield.browser-pane`, PT-1 … PT-6): a slab of clear glass cut to its page, its recipe its plugin's own and not yet named here (BROWSER.md Q-10); and the phone's, the recipe **cover glass** (`vibefield.simulator`, PT-S1 — its numbers below) |
 
 **The five guardrails** (thinking-the-desk §6): **no material without a meaning** — no ornament
 that does not inform (a glass portal that refracts the mat passes; the stitched-leather calendar
@@ -721,10 +734,157 @@ form loses, the flat form wins · **legibility rules the camera** — text at ev
 every material, in both lights · **one physics** — one light, one spring set, one mass; no object
 keeps private motion rules · **the agent test** — a material must make working with an agent
 better: the agent sees the same objects by the same names, and a material only the eye can read
-is decoration. *A stub:* the recipes are ICE's (its `theme.ts` names them, each kind's pass draws
-them), and a material's row gains its recipe's name when a VibeField surface first wears it. Not
-yet drawn: string, stickers as objects, instruments and portals — each the desk migration's
-follow-on program, never a half-port.
+is decoration. *A stub:* the desk's own recipes are ICE's (its `theme.ts` names them, each kind's
+pass draws them); a plugin kind's are its plugin's own, held to this book; and a material's row
+gains its recipe's name when a VibeField surface first wears it. Not yet drawn: string, stickers
+as objects and instruments — each the desk migration's follow-on program, never a half-port.
+*Corrected 2026-10-18 (PT-S1, at its source):* the portals row read "not yet — PORTALS (DK-D19,
+DK-D20)" and this paragraph listed portals as not yet drawn, after the browser pane landed wearing
+glass (PT-6, 2026-10-14). Portals are drawn; the phone's cover glass is their second wearer. And
+this stub said every recipe is ICE's: a plugin kind's are its plugin's own `theme.ts` — the pane's
+glass in `plugins/browser-pane/src/theme.ts` (none a DESIGN.md token yet, BROWSER.md Q-10), the
+phone's in `plugins/simulator/src/theme.ts` and its law, held to the section below by its design
+test — and the portals row names the phone's recipe, **cover glass** (corrected 2026-10-29, PT-S1's
+review).
+
+#### The phone's materials — cover glass, border ink, three metals (PT-S1)
+
+The iOS Simulator on the desk is a phone lying face up at its true size (the note's scale: `MM` =
+2.6247 world units a millimetre — a 17 Pro is 189 × 394), its screen a live Simulator (the PT-S
+design, ruled 2026-10-18). Its recipes are written here before any of its drawing code (James's
+Q-6): its plugin's `theme.ts` colours and its law's material knobs — the cover glass, the three
+metals, the screen's light and its dims, the night's glow, the marks — hold no number this section
+lacks (`plugins/simulator/test/design.test.ts` reads them). The law's other numbers — how the phone
+lies, lifts and casts on the desk (its rest on its camera, its lift and hover, the eye's frame, its
+shadow and contact, its buttons' proud), what its stream is asked for and how long its morph takes —
+are its object's grammar, each cited in the law to where it comes from (PHONE.md §1, §4, §6, §7 and
+§13, and its Q-3; the eye's frame is the pane's): kept in the law, not recipes this section holds.
+What each material means under the guardrails:
+
+- **The cover glass** is the **portals** row's glass: the window the Simulator's screen is seen
+  through. It mirrors the one sky over the desk (the pane's, value for value) by Fresnel, its veil
+  kept to 0.28 of the physics so a screen stays legible (guardrail 3); the lamp's glint is sharp.
+- **The border ink** under the glass round the display is the window's edge — where the live
+  surface ends and the device's own frame begins. Black on every phone but the silver, gold and rose
+  gold home-button phones and the 7's red, whose fronts were white.
+- **The three metals** (aluminium, steel, titanium) are the band, and **their meaning is the
+  device's likeness: which iPhone the object stands for** — the model's own band (the `model` prop,
+  which an unbound phone wears too), read with its size and its sensor housing (the PT-S design §1:
+  "42 models read from Xcode's own data").
+  Under the first guardrail that is their meaning — they inform: they say which device — and they
+  carry no other. *Ruled 2026-10-29 (James, the PT-S gap note §6, choice 6).* The finishes below
+  carry the same meaning.
+- **The screen's own light** is not a material: it is the stream's, added after the desk's chain —
+  by day the byte is the drawn byte; by night it stays bright to an eye adapted to the Moon and glows
+  (PHONE.md §5; James's Q-4). A still of it is never passed off as live: it is dimmed (the pane's
+  two dims) and marked.
+
+| Recipe | Numbers |
+|---|---|
+| cover glass | Fresnel 0.04 head on · glint 2.6 · shininess 1400 · canopy 240 · veil 0.28 · window 3.2 (by night 0.05 of it) |
+| border ink | black `#0b0c0e` · white `#f0efeb` |
+| panel, off | OLED `#050507` · LCD `#0e1014` (the backlight's grey-blue: the home-button phones, the Xʀ and the 11) |
+| sensor housing | `#1a191a` (the Simulator's own sensor-bar fill, 0.102 · 0.098 · 0.102) · a lens `#0a0f1c` in a ring `#2a2c33` · an earpiece's mesh `#1e1f22` |
+| aluminium (anodised) | diffuse 0.6 · roughness 0.36 · glint 1.8 — meaning: likeness, the band of the iPhones made in it |
+| steel (polished) | diffuse 0.12 · roughness 0.07 · glint 2.6 — meaning: likeness, the band of the iPhones made in it |
+| titanium (brushed) | diffuse 0.34 · roughness 0.24 · glint 2 — meaning: likeness, the band of the iPhones made in it |
+| the sky the glass mirrors | day: sky `#dfe7ee` · leaves `#26331d` · room `#6b7075`; night: sky `#0f1726` · canopy `#040605` |
+| the screen's light | by day 1 of its bytes · by night 0.8 · the panel's scatter 0.006 · a still 0.7 · a still under words 0.16 |
+| the night's glow | glare 3.5 mm and 16 mm at 0.06 and 0.04 · spill 24 mm at 0.55 · edge 0.45 |
+| the words on a face | `#e6e8ea` (light, added over the dark panel or a dimmed still, in both lights) |
+| the marks on a still | the rest mark: two bars 1.4 mm wide and 6 mm tall, 2.4 mm apart centre to centre (the pane's two bars) · the boot mark: a ring 7 mm across and 1.4 mm thick, open 60° at its top · each in the words' ink at 0.9, at the display's centre |
+
+**The finishes** — each model's launch colours, its first the default: the band's colour (its metal's
+reflectance), the front's ink, and a mirror polish where the metal was finished to one. Approximated
+from product imagery. Their meaning is the metals': the device's likeness, which iPhone the object
+stands for, in the colour it was bought in.
+
+| Finish | Launched on | Band | Front | Polish |
+|---|---|---|---|---|
+| `space-gray-6s` | 6s · SE · Space Gray | `#86878b` | black | — |
+| `silver-6s` | 6s · SE · 7 · Silver | `#d9dadc` | white | — |
+| `gold-6s` | 6s · SE · 7 · Gold | `#e3cdb0` | white | — |
+| `rose-gold-6s` | 6s · SE · 7 · Rose Gold | `#e7c5bd` | white | — |
+| `black-7` | 7 · Black | `#2a2b2e` | black | — |
+| `jet-black` | 7 · Jet Black | `#0c0c0e` | black | mirror |
+| `red-7` | 7 · (PRODUCT)RED | `#b0121f` | white | — |
+| `space-gray-8` | 8 · Space Gray | `#707174` | black | — |
+| `silver-8` | 8 · Silver | `#dcdcde` | white | — |
+| `gold-8` | 8 · Gold | `#e9d4bd` | white | — |
+| `red-8` | 8 · (PRODUCT)RED | `#a5061a` | black | — |
+| `space-gray-x` | X · Xs · Space Gray (steel) | `#4a4a4d` | black | — |
+| `silver-x` | X · Xs · Silver (steel) | `#d6d6d8` | black | — |
+| `gold-xs` | Xs · Gold (steel) | `#e6c8a0` | black | — |
+| `black-xr` | Xʀ · Black | `#28292c` | black | — |
+| `white-xr` | Xʀ · White | `#e9e9ea` | black | — |
+| `blue-xr` | Xʀ · Blue | `#3e84c6` | black | — |
+| `yellow-xr` | Xʀ · Yellow | `#f6c93f` | black | — |
+| `coral-xr` | Xʀ · Coral | `#f36b5a` | black | — |
+| `red-xr` | Xʀ · 11 · (PRODUCT)RED | `#b2091c` | black | — |
+| `black-11` | 11 · Black | `#2b2c2f` | black | — |
+| `white-11` | 11 · White | `#eaeaea` | black | — |
+| `green-11` | 11 · Green | `#b3d5c2` | black | — |
+| `yellow-11` | 11 · Yellow | `#f7e5a0` | black | — |
+| `purple-11` | 11 · Purple | `#d2cce2` | black | — |
+| `midnight-green` | 11 Pro · Midnight Green (steel) | `#4d5a52` | black | — |
+| `space-gray-11p` | 11 Pro · Space Gray (steel) | `#52504e` | black | — |
+| `silver-11p` | 11 Pro · Silver (steel) | `#dcdcd9` | black | — |
+| `gold-11p` | 11 Pro · Gold (steel) | `#e5cdb0` | black | — |
+| `black-se` | SE (2nd) · Black | `#2a2a2d` | black | — |
+| `white-se` | SE (2nd) · White | `#e5e5e6` | black | — |
+| `red-se` | SE · (PRODUCT)RED | `#b3001d` | black | — |
+| `black-12` | 12 · Black | `#232427` | black | — |
+| `white-12` | 12 · White | `#efefee` | black | — |
+| `blue-12` | 12 · Blue | `#1f4f80` | black | — |
+| `green-12` | 12 · Green | `#c7e2cd` | black | — |
+| `purple-12` | 12 · Purple | `#bab1e5` | black | — |
+| `red-12` | 12 · 13 · 14 · (PRODUCT)RED | `#b10a21` | black | — |
+| `pacific-blue` | 12 Pro · Pacific Blue (steel) | `#2e4d5b` | black | — |
+| `graphite` | 12 Pro · 13 Pro · Graphite (steel) | `#4f4e4b` | black | — |
+| `silver-steel` | 12 Pro · 13 Pro · 14 Pro · Silver (steel) | `#dcdcd8` | black | — |
+| `gold-steel` | 12 Pro · 13 Pro · Gold (steel) | `#eed8b6` | black | — |
+| `midnight` | 13 · 14 · SE (3rd) · Midnight | `#232a31` | black | — |
+| `starlight` | 13 · 14 · SE (3rd) · Starlight | `#eeeae2` | black | — |
+| `blue-13` | 13 · Blue | `#2b5c86` | black | — |
+| `pink-13` | 13 · Pink | `#f4d7d4` | black | — |
+| `green-13` | 13 · Green | `#3c4d3a` | black | — |
+| `sierra-blue` | 13 Pro · Sierra Blue (steel) | `#9fb7cf` | black | — |
+| `alpine-green` | 13 Pro · Alpine Green (steel) | `#56695a` | black | — |
+| `blue-14` | 14 · Blue | `#a1b5c8` | black | — |
+| `purple-14` | 14 · Purple | `#e1d8e8` | black | — |
+| `yellow-14` | 14 · Yellow | `#f7e27b` | black | — |
+| `deep-purple` | 14 Pro · Deep Purple (steel) | `#5a4f64` | black | — |
+| `space-black` | 14 Pro · Space Black (steel) | `#3f3d3c` | black | — |
+| `gold-14p` | 14 Pro · Gold (steel) | `#f3e5cb` | black | — |
+| `pink-15` | 15 · Pink | `#f3cfd3` | black | — |
+| `black-15` | 15 · Black | `#34383a` | black | — |
+| `blue-15` | 15 · Blue | `#cbdbe5` | black | — |
+| `green-15` | 15 · Green | `#d8e3d3` | black | — |
+| `yellow-15` | 15 · Yellow | `#f6ebbf` | black | — |
+| `natural-titanium` | 15 Pro · 16 Pro · Natural Titanium | `#b4ada3` | black | — |
+| `blue-titanium` | 15 Pro · Blue Titanium | `#3e4855` | black | — |
+| `white-titanium` | 15 Pro · 16 Pro · White Titanium | `#dddbd6` | black | — |
+| `black-titanium` | 15 Pro · 16 Pro · Black Titanium | `#3a3938` | black | — |
+| `ultramarine` | 16 · Ultramarine | `#5a6fe0` | black | — |
+| `teal-16` | 16 · Teal | `#98cbc4` | black | — |
+| `pink-16` | 16 · Pink | `#efabc4` | black | — |
+| `white-16` | 16 · White | `#f1f1f1` | black | — |
+| `black-16` | 16 · Black | `#3b3c3e` | black | — |
+| `desert-titanium` | 16 Pro · Desert Titanium | `#c4ab94` | black | — |
+| `black-16e` | 16e · Black | `#2b2c2e` | black | — |
+| `white-16e` | 16e · White | `#ebe9e5` | black | — |
+| `lavender` | 17 · Lavender | `#cfc3e3` | black | — |
+| `mist-blue` | 17 · Mist Blue | `#a7bbd2` | black | — |
+| `sage-17` | 17 · Sage | `#b3bea3` | black | — |
+| `white-17` | 17 · White | `#f0f0ee` | black | — |
+| `black-17` | 17 · Black | `#2b2c2e` | black | — |
+| `cosmic-orange` | 17 Pro · Cosmic Orange | `#e0692a` | black | — |
+| `deep-blue` | 17 Pro · Deep Blue | `#2b3c5c` | black | — |
+| `silver-17p` | 17 Pro · Silver | `#dededb` | black | — |
+| `sky-blue` | Air · Sky Blue (titanium) | `#cadcec` | black | — |
+| `light-gold` | Air · Light Gold (titanium) | `#eddcc0` | black | — |
+| `cloud-white` | Air · Cloud White (titanium) | `#f2f1ed` | black | — |
+| `space-black-air` | Air · Space Black (titanium) | `#28292b` | black | — |
 
 ---
 
@@ -778,6 +938,24 @@ archive is ready. It is the import's only sign outside History, so it carries no
 percentage names its step, never an invented whole). *Amended 2026-10-27 (AO-4b, built):* reduced motion (M6) stops
 the travel, and the arc rests at the top of the circle, a fifth of it from twelve o'clock, until the archive is ready;
 the glyph stays at a third of its ink.
+*Amended 2026-10-29 (track FG; FG-D9 A, FG-D10 B, FG-D11 A and FG-D17 A ruled by James; §8 "The Setup Assistant's
+glass"; a returning boot's tear built at FG-2, the glass's forming at FG-3a — its frost and its rise, the words' fade
+and the logo to come with FG-4's holds — the rest at FG-5):* the first run happens on the field,
+and these are its motions. **The
+glass forms** where the splash stood: the bar and the stage fade (240ms `ease`), and the frost condenses over the
+whole glass as its layers rise `.985 → 1` (560ms island); the field's mark fades under it while the logo fades in
+on the same spot (400ms), so the mark never moves. **The logo** only fades — in over 400ms once the last words are
+out, out over 280ms before the next words come, never longer than 160ms under reduced motion — and never travels,
+scales or takes a second place; it stays out of the rise. **The hand-over** becomes: the welcome arrives on the
+line under the logo and holds **1.6s**; the line and the steps go (240ms); the logo holds alone (640ms); the frost
+clears over 600ms on the island curve, the edge and its shadow going in its last 240ms, as the field's mark takes
+over from the logo in place; then **the tear** — the field opens from its centre over **1.9s** on `t²`, the mark
+gone in its first quarter, the theme's light on its walls (the website's warm white by day, the look's own cool
+centre light by night) — while the desk settles in from `.985` (1.9s island) and its exposure comes down from 1.16
+(1.5s `ease-out`), an eye coming out of the dark. A returning boot plays the same tear once the desk is
+frame-stable and never before the splash has stood **700ms**, the website's floor for a repeat visit (FG-L6): a
+floor, never a stage. Reduced motion: fades only, halved; no rise; the field at rest, and a 120ms fade in place of
+the tear.
 
 *(Godview round 3, built 2026-10-12; its status is §8 the deck's.)*
 **The terminals rise and fall** (Godview's deck, §8; One Frame §22 "Shared mechanics" and §23 —
@@ -1586,7 +1764,14 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   request for your admin (the machine name and the Machines page); Use another account; the
   console's link for admins. **Arrival** (TS-D8): "Connected.", the account in mono, "Not this
   account? Sign in again", and the account's devices arrive around your face (§6, the arrival).
-  When this Mac is alone, **Add your phone** is the primary act. **Not now** lands on the same
+  When this Mac is alone, **Add your phone** is the primary act. *Added 2026-10-29 (track TS, TS-7b;
+  James's Q2 A, 05:29:23Z):* **Add your phone** — here, and in Settings → Devices' Add a device → Phone —
+  draws a code of `vibefield://add-phone` carrying the account and this Mac's name — the roster's own
+  name for it, else Tailscale's machine name, whichever the phone will read back (never a code its own
+  phone refuses; with neither, the code waits) — at Sign in on your phone's size and inks, with
+  **Scan with VibeField on your iPhone.** · "Get VibeField from TestFlight first, then open it and choose
+  **Scan the code on your Mac**. The same code tells it to expect ‹login›." — the page's words
+  (A:277-288) adapted to there being no install link yet. **Not now** lands on the same
   Ready pane; the face menu keeps Connect your devices… and nothing else asks until a moment where
   it helps (§8 "Asking again"). The refusals keep the daemon's sentence and gain a person's words
   and a way forward: "`<login>` already has a field here" with **Switch to `<user>`** and **Use
@@ -2244,6 +2429,54 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   and `--vf-mat-lattice`), not the canvas and its dots — the floor the Setup Assistant and the switch
   share with it — and its words are in the mat's ink (white at 60 %: 4.0:1 by day, 5.2:1 by night,
   where `/50` read 3.9:1 on the canvas), the bar white/15 under white/80, the ghost Retry white.
+  *Amended 2026-10-29 (track FG; FG-L1, FG-D14 B; built at FG-1, a returning boot's tear at FG-2):* the ground is the
+  **field** (§2.1): the website's splash, vendored (`boot/splash/`, generated from vibefield-dotdev's
+  `lib/splash/` at a pinned hash, never edited), drawing at 60 fps in a worker on an OffscreenCanvas — on
+  the main thread where a worker can't, as the still where there is no WebGPU — from the first frame to
+  the tear. The first frame is the field's ground with its mark as a still (the window's pre-paint is
+  `--vf-field-ground`), and the live field fades in over it (500ms `ease`). The wordmark retires: the mark
+  is the name. The bar keeps its size and its ink (white/15 under white/80) and stands 40 under the mark's
+  centre, and the stage line 55 under it (11px, 500) in `--vf-field-ink` (§2.1), as the website sets them;
+  their contrast over the field is measured as DK-16 measured the mat's (FG-O2). Behind them a soft shade of
+  the field's ground keeps them readable over the field: 400 × 120, centred 54 under the mark's centre, the
+  ground at 55% at its heart, 30% at 55% of the way out and gone at its edge. Without WebGPU the field is its
+  still (`splash-still`, cover-fitted) and the opening is a fade.
+- **The Setup Assistant's glass** (track FG, FG-D1…FG-D24 ruled by James 2026-10-29; the record is
+  `draft/thinking-first-run-glass.md`, the page *First run on the field*). The Setup Assistant stands on
+  the field as one glass, **880 × 640 on every step** (FG-D3 A): centred, never scrolling, and below a
+  976 × 736 window scaled as one picture (fit = min(1, (w − 96)/880, (h − 96)/640)), never reflowed. Its
+  material is §5's Setup Assistant tier (FG-D15 C: the tunnel's rings come through softly), milk by day
+  and smoke by night while the field stays the dark in both (FG-D4 A), and nothing see-through is ever cut
+  into it (FG-L2). **The steps** (FG-D22 A, FG-D23 A): a band along the glass's top 72, one segment per
+  step of the chapter's order — You · Agents · Profiles · History · Devices · Setting up — 76 × 3 with a
+  gap of 8, its label in small capitals 9 under it (500, 10px, .08em): done in grey (t3), the current in
+  ink (`aria-current="step"`), the rest a hairline (t4). A segment fills as you arrive (480ms island),
+  Setting up's with the work's own progress. The band is absent on the welcome, fades in with You (240ms)
+  and stays over a load and over Setting up. **One frame** (FG-L3): every pane stands between 96 and 600,
+  560 wide — its head at the top, its body 20 under it, its foot on the bottom (the actions, and the line
+  under them, whose room is always kept) — so the actions stand at one height on every step. A pane only
+  fades in (240ms `ease`, 160ms reduced), the old one out first (120ms); nothing rises, slides or
+  recentres. AO's and TS's panes keep their markup and words without their eyebrows (FG-L7). **A load**
+  (FG-L5, FG-D20) is the logo and one line: the glass's rows `1fr | the logo | 1fr`, the line 26 under the
+  logo (400, 14px/1.4, t2, tabular figures) with its sub (12px, t3), and no buttons; a way out shows only
+  when it runs long (Setting up's Start now after 8 s, AO-D4). Setting up is one such line from its first
+  phase to the welcome (FG-D21 B). **The logo** (FG-D1, FG-D2, FG-D16, FG-D17 A, FG-D18): one living mark,
+  the field's own, at the field's mark's spot and size, only ever fading (§6); white on smoke, inverted on
+  milk (`invert(1) hue-rotate(180deg)`, its colours kept). **Drawn by the field** (FG-D24): over the live
+  field the glass's shadow, frost, tint, grain and logo are a pass of the field's own frame, read from
+  §5's tokens, so the window draws the field once; the two hairlines stay the browser's, at the screen's
+  own pixels; over the still the browser draws the whole glass. *Status 2026-10-29: ruled, to be built —
+  the glass, the steps, the frame and the logo at FG-3, the panes in the frame at FG-4 (after TS-6 and
+  TS-7 land), the hand-over at FG-5, the gates at FG-6 (the record's §7). Until each lands, the Setup
+  Assistant ships as "The Setup Assistant's agent chapter" and the Connect pane describe it.*
+  *Status 2026-10-29 (FG-3a, built): the glass at 880 × 640 with the fit, its layers (on the field the edge, its
+  light, the field's shadow and the grain), its forming, the band and the frame. The browser draws every layer,
+  over the live field too, until the field's own pass (FG-3b). The logo comes with the holds at FG-4, since no
+  pane shows it before they do; so do the panes in the frame — the old one's leaving first, the new one's fade in
+  place of its rise, and each one's place — and until then a pane keeps its entrance and centres in the frame,
+  scrolling downward only. Finish setting up's sheet is unchanged (FG-D26, a lean: AO's surface, and no step of
+  the chapter): its own size and padding, never fitted, no band. A press beside its glass now reaches its scrim,
+  which it never could (FG-D27).*
 - **The reveal** (boot-exclusive motion): the canvas composes and stabilizes BEHIND
   the splash (the frame-stability gate — never reveal mid-hitch), then the splash
   fades 240ms plain `ease` while the canvas settles `scale(0.99) → 1` over 560ms
@@ -2254,6 +2487,19 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   desk composes behind, never the splash: the wizard keeps the window from its last question until
   its Ready beat ends, and then leaves with the splash's fade and the desk's settle (§6, the
   hand-over). The splash never returns between the wizard and the desk.
+  *Amended 2026-10-29 (track FG; FG-D9 A, FG-D10 B, FG-D11 A; built at FG-2, the first run's at FG-5):* the reveal
+  is the website's **tear** (§6): the field opens from its centre over 1.9s with the theme's light on its
+  walls, and the desk settles in from `.985`, its exposure coming down from 1.16. A first run reaches it
+  through the hand-over; a returning boot plays it once the desk is frame-stable and the splash has stood
+  700ms. Without WebGPU the still fades in place (240ms), and under reduced motion the field does (120ms).
+  *As built at FG-2:* the splash's words go first (240ms `ease`, the website's `wordsOut`) and the ground's
+  own colour with them, unseen under the live field; then the tear. It is chosen once, as the boot hands
+  over: the tear when the field is live, motion is allowed and the window is seen, else the base reveal
+  above, so a hidden window and a field still waking fade too. The desk keeps `0.99` under the splash and
+  steps to `.985` and 1.16 only at the tear's words, unseen, so the fade, the first run and the switch
+  keep their reveal. A tear is bounded at its length and a second (a hidden window draws no frames); a
+  field that never opened leaves with the splash's fade, never a pop, and one that opened stops drawing
+  at once. Every boot now holds until its ground has opened, so the desk is never handed over mid-tear.
 - **The switch** (UA-D15's reload, dressed; 2026-09-22): changing users reloads the window,
   so the transition is two halves that meet on one frame — the boot splash wearing the face of
   the user you are going to. **Leaving.** The face you clicked lifts out of its row (held,
@@ -2263,7 +2509,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   to `scale(0.98)` on the island curve (M5 — the engine freezes, since this covers the window),
   and from 120ms the splash's own ground — the mat in CSS, `--vf-mat-ground` and
   `--vf-mat-lattice` (DK-16; *corrected 2026-10-28:* this said `--vf-canvas-bg` and the §2.1 dots,
-  which left at DK-17; the switch's ground wears `.vf-splash`, `boot/boot.css`) — rises over it
+  which left at DK-17; the switch's ground wears `.vf-splash`, `boot/boot.css`; *amended 2026-10-29 (track
+  FG):* the boot's first face moves to the field, §8 "The boot splash", and the switch keeps the mat) —
+  rises over it
   in 360ms `ease` until the field is gone. The words follow 200ms behind the face (240ms
   `ease`, rising 6px): the eyebrow "Switching to", the name in the Setup headline's type (28px
   light), and the splash's bar and stage line as the splash begins them — "waking the daemon",
@@ -3765,6 +4013,44 @@ Device logs' two readings, Disconnect's sentences and Tailnet Lock's. While Tail
 Mac, the Me menu keeps the login line (23:08:59Z). The words for a network that requires logs are the
 thinking doc's §11, ruled with TS-D16.*
 
+**The phone's door** (track TS, TS-7; TS-D11 A, and James's TS-7 picks "all six A — the leans",
+2026-10-29 05:29:27Z). The phone signs in through iOS's own sign-in sheet, which first asks to use
+tailscale.com; the app closes the sheet itself once the phone is signed in — at approval as well as at
+Connected, a departure from TS-D11 A's "when the node is Running" — and a Cancel leaves the page as it
+was. In place of the field's own empty words, the Field page says, with the tabs and search kept: while
+the phone has no account, the welcome — **Your field, in your pocket.** · "Approve agents, watch
+sessions and type into them, from anywhere your Mac is." · Tailscale's mark beside "Private network by
+Tailscale. Use the same account as VibeField on your Mac." · **Continue with Tailscale** · "Next, iOS
+asks to use tailscale.com to sign in." (a first sign-in's failure is one line under it), and no app
+mark; at approval, **Waiting for approval.** · "You’re signed in. An admin of your Tailscale network
+approves new devices." with one row — "This phone", its machine name in mono as it asked Tailscale for
+it, Copy — and **Open the admin console** (none on a custom control server); for an account the
+network asks again, **Sign in to Tailscale again.** · "This phone can’t reach your desktops until you
+do. Nothing here is lost." · **Sign in again** (expired and removed are one page until the phone's
+Tailscale says which); and, signed in with no desktop listed or remembered, **No desktops yet.** ·
+"Signed in as ‹login›. On your Mac, open VibeField, click your face, then **Connect your devices…**
+with this same account." with one row, the macOS mark and "Your Mac appears here", which the first
+desktop to list fills (its mark, its name) for 1.2 s before the page yields to the field — there is no
+Found toast. Under any of them the field drifts and takes no acts (no hold, no bloom, and a tap on a body
+opens no card; TS-7c); over a live field (agents on it, as under **Another account?**) it drifts dimmed,
+under the Peek's scrim (§5, *Search scrim*): its dim alone, no blur, laid between the field and the bar,
+so the page's words stand clear and the tabs and search it keeps are not dimmed (TS-D22 A, James
+2026-10-29 10:51:56Z). The corner moves with the pages:
+under the name "waiting for approval", "couldn’t connect", "signing out"; its notices "Sign in to
+Tailscale again to reach your desktops.", "An admin of your Tailscale network approves new devices.",
+"Couldn’t connect — ‹reason›."; its menu row **Continue with Tailscale** with no account and **Sign in
+again** with one; its desktops each wear their OS mark. While the welcome stands, the corner steps
+aside on the Field tab, so its one act is said once. *Added with TS-7b (Q2 A):* the welcome also offers
+**Scan the code on your Mac** — the phone's reader for the Mac's Add your phone code, which tells it the
+account to expect; scanned on a phone with no account it goes straight on to the sign-in, and the welcome
+then says "At Tailscale, pick ‹login›." A phone signed in as another account than the code named says, at
+once, **Another account?** · "This phone is signed in as ‹x›, but the code you scanned came from Studio,
+signed in as ‹login›." · **Sign in again** · "At Tailscale, pick ‹login›." · **Keep this account** — and
+for a code that arrived as a link ("the link you opened"), which any page can open, **Keep this account**
+is the primary act. It changes nothing about who may reach what. *Named deviation:* the corner's circle on History
+still reads "Sign in" — three words do not fit its 10 pt label — and its spoken name is "Sign in,
+Continue with Tailscale".
+
 **The agents' words** (track AO, ruled 2026-10-27; AO-L8, no machinery on screen). One word per thing,
 in the Setup Assistant, Settings, History and the launcher alike. An **agent** is named by the
 catalog's label (Claude Code, Codex, Grok). **This Mac** is the profile that uses the agents' own
@@ -3794,6 +4080,28 @@ Inside History the room's own words stand as rosetta wrote them, and the Setup A
   `ao-states-diff.mjs`; VF-PM 2026-10-27).
 - One row stands by decision. An agent that never says who keeps Settings' "Doesn't say who is signed in" over the
   page's "Signed in · doesn't say which account": VibeField cannot know it is signed in.
+
+**The simulator's honest faces** (track PT, PT-S1; the PT-S design §3, ruled 2026-10-18) — what the phone's
+screen says of its device, in the voice's words, quoted exactly by the plugin (`plugins/simulator`'s
+`face.ts`; its design test reads this table). `iPhone 17 Pro` stands for the device's name: the host's
+word for it, else the bound device type's name (a face is drawn only for a phone bound to a device;
+the model's name is the unbound phone's, in hand). A face with words shows them light over the dark
+panel, or over the device's last still dimmed to 0.16; one with a mark shows its still at 0.7. The act is a capsule
+under the words, offered only where the host can run it; it manages the device and never reaches
+inside iOS. In hand the tools say **View only**, in words beside the device's name — the phone takes no
+tap, key or button until PT-S4's touch lands.
+
+| State | The face says | Its act |
+|---|---|---|
+| no Simulator | "The iOS Simulator isn't on this Mac" | — |
+| no permission | "VibeField needs Screen Recording to show the Simulator" | "Open Settings" |
+| no device | "There's no iPhone 17 Pro on this Mac" | "Create it" |
+| off | "iPhone 17 Pro is off", over its last still | "Boot" |
+| booting | its still, with the boot mark | — |
+| no window | "The Simulator's window is closed", over its still | "Show it" |
+| live | the stream | — |
+| at rest | its last frame, with the rest mark | — |
+| stopped | "The Simulator stopped", over its still | "Try again" |
 
 **The update's words** (track AU, AU-L2, AU-L3, AU-L6; ruled 2026-10-29). **A version is said two ways:** exactly
 where it can be copied — `0.1.0-nightly.20261027` in mono on Settings → Updates' head — and in friendly words in a
@@ -3952,9 +4260,12 @@ their place". "Fullscreen" stays the pane's word (§8).
   brackets, under them near the top — and travels with it into the hand; **the tools in hand sit
   under the head** (top y 64, 16 under the name pill), still the object's chrome and not the head's;
   **the pegboard rises behind the line**, whose create is its door (§8). **The desk keeps two
-  reserves:** the **safe top, 94** — the rulers' band plus 8: the rulers move in to a margin of 60
-  (DK-3), so the top ruler starts below the head strip and the left ruler clears the notch, and
-  their band ends at 86 — above which the bar goes under its object; and **the foot, 88** — the
+  reserves:** the **safe top, 94** — above which the bar goes under its object. It was the rulers'
+  band plus 8 while the rulers were printed at a margin of 60 (DK-3: the top ruler below the head
+  strip, the left one clear of the notch, their band ending at 86). *Since 2026-10-29 the rulers are
+  printed at the window's edges* — a margin of 0, the frame on the window's four edges and the
+  band 0–26, under the head's controls and the notch, which stand over it — and the safe top keeps
+  its 94, still clear of the head's controls (their foot at 48); and **the foot, 88** — the
   line's reserve, the same 88 a covered view keeps (692): the board's lay ends 88 above the window's
   foot (I21) so its last row clears the line, and the bar's top never sits below 660 (its foot 8
   above the line's 708). Between them the bar keeps **42** from each side (the notch's 26 + 16), and
@@ -4102,7 +4413,10 @@ stills — and, on the desk, two named exceptions: the bar's ONE path renderer f
 the OS marks the device chip wears (Simple Icons, drawn inline in `os-marks.tsx` — the test's one
 other allowed file; a phone, wherever a surface marks one, wears the mark macOS wears, Apple's,
 since iOS's own is a word — James, DS-3: "do not use texts, use OS icons instead" — and no surface
-marks one today), the file-tree family (§8), and
+marks one today), the file-tree family (§8), **the living mark**
+(track FG, 2026-10-29: the website's splash's own mark, drawn by the field at its centre and over the
+Setup Assistant's glass as its logo — white on smoke, inverted on milk with its colours kept; its still is
+the website's `mark-white.webp`), and
 **Tailscale's logomark** (track TS, TS-D4 ruled 2026-10-27), held to the rules of Tailscale's Brand
 Toolkit (its press and media kit, 10-2025): the nine dots exactly as its file draws them — the middle
 row and the bottom centre solid, the other five at 40% — never in one colour, never smaller than
@@ -4111,7 +4425,10 @@ row and the bottom centre solid, the other five at 40% — never in one colour, 
 where trust is decided — the Connect pane's partner line, Settings → Devices' card, the phone's
 sign-in — and every button stays words. It is drawn inline in `account/tailscale-mark.tsx`, the
 glyph test's allow-list naming it, and About carries "Tailscale is a registered trademark of
-Tailscale Inc.". On the
+Tailscale Inc.". The phone's copy (TS-7) is FieldDesign's `TailscaleMark` in
+`ChromePalette.tailscaleInk`, drawn from the same constants and held to them by
+`pnpm check:ios-fixtures`; having no About, the phone carries the trademark line at the foot of its
+settings sheet. On the
 phone (PJ-7) the OS marks are template SVGs in FieldDesign's `OSMarks.xcassets` (`DeviceMark`),
 copies of `os-marks.tsx`'s paths that `pnpm check:ios-fixtures` holds to them; and `start`,
 `resume` and `jump` join the phone's picks, so History's New agent, Resume and Jump to draw the

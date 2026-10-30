@@ -62,6 +62,12 @@ export interface DeviceServiceOptions {
   bootId: string;
   fielddVersion: string;
   contractsVersion: string;
+  /** AU-3a (AU-D13 A; LC-20) — the VibeField app this daemon serves, read off
+   * the build id its launcher handed it (`appVersionOfBuildId`): a packaged
+   * shell's staged identity, which WP12 D10 holds equal to the shell's own.
+   * Absent in development (the dev runner's id names no version) and for an
+   * embedded daemon, and then the slice says none — never a guess. */
+  appVersion?: string;
   /** Supplied by the daemon (it owns the serve secret + fused serve state):
    * the current product endpoint; `url` only while the serve is active. */
   productEndpoint: () => ProductEndpoint;
@@ -434,6 +440,8 @@ export class DeviceService extends EventEmitter {
       headless: false, // the shell is the only launcher today
       fielddVersion: this.opts.fielddVersion,
       contractsVersion: this.opts.contractsVersion,
+      // AU-3a — the app's own version, which `fielddVersion` never was
+      ...(this.opts.appVersion !== undefined ? { appVersion: this.opts.appVersion } : {}),
       // honest capabilities (D31): terminalHost follows the NF-D8 hello
       // (true iff the floor delivered endpoints); DocumentService is B3-real.
       // TM-2: `terminalMesh` is the REMOTE half of the same question — this
@@ -691,6 +699,8 @@ export class DeviceService extends EventEmitter {
         headless: slice.headless,
         fielddVersion: slice.fielddVersion,
         contractsVersion: slice.contractsVersion,
+        // AU-3a — absent when the device has not said it (an older build, dev)
+        ...(slice.appVersion !== undefined ? { appVersion: slice.appVersion } : {}),
         capabilities: {
           terminalHost: slice.capabilities.terminalHost,
           // a peer older than TM-2 does not carry it; absence is a no
@@ -803,6 +813,9 @@ export class DeviceService extends EventEmitter {
         // UA-P-0e: absent on a peer row, and absence is itself a fact worth
         // waking a subscriber for (it is how a row says "ask my door").
         d.capabilities ?? null,
+        // AU-3a — the app version a desktop says: Settings → Updates' "Your devices" reads it
+        // live, and a peer that updated in place moves nothing else in this signature
+        d.appVersion ?? null,
       ]),
     );
     if (sig === this.lastRosterSig) return;
@@ -843,6 +856,9 @@ function narrowDeviceSlice(slice: DeviceSlice): DeviceSlice {
     headless: slice.headless,
     fielddVersion: slice.fielddVersion,
     contractsVersion: slice.contractsVersion,
+    // AU-3a — a field this narrow writer does not name is a field every roster
+    // loses at intake, so the version a peer says is copied here or nowhere
+    ...(slice.appVersion !== undefined ? { appVersion: slice.appVersion } : {}),
     capabilities: {
       terminalHost: slice.capabilities.terminalHost,
       terminalMesh: slice.capabilities.terminalMesh ?? false,

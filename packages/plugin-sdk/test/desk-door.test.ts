@@ -93,6 +93,23 @@ describe("the SDK's /desk door", () => {
     }>().toMatchTypeOf<door.LiveBrowserDevice>();
   });
 
+  it("PT-S1: types a simulator face's device and its nine honest states beside the browser's — its words on ICE's own LiveInfo", () => {
+    // the spec names the binding's two CoreSimulator ids — never a UDID — the device's name and the desk's scheme
+    expectTypeOf<door.LiveSimulatorSpec["source"]>().toEqualTypeOf<"ios-simulator">();
+    expectTypeOf<keyof door.LiveSimulatorSpec>().toEqualTypeOf<
+      "source" | "deviceType" | "runtime" | "label" | "scheme"
+    >();
+    expectTypeOf<door.LiveSimulatorSpec["scheme"]>().toEqualTypeOf<"light" | "dark">();
+    // the face's words ride ICE's own `LiveInfo.extra` (the desk never reads them); the act is the host's, run by the kind
+    expectTypeOf<iceKit.LiveInfo>().toMatchTypeOf<Parameters<typeof door.liveSimulatorFace>[0]>();
+    expectTypeOf<door.LiveSimulatorFace["is"]>().toEqualTypeOf<door.LiveSimulatorState>();
+    expectTypeOf<door.LiveSimulatorFace["act"]>().toEqualTypeOf<(() => void) | undefined>();
+    expect(door.LIVE_SIMULATOR_STATES).toHaveLength(9);
+    // a host reads it with no ICE of its own: the door's readers are plain functions
+    expect(typeof door.liveSimulatorSpec).toBe("function");
+    expect(typeof door.liveSimulatorFace).toBe("function");
+  });
+
   it("hands over the kind contract, the placement keys and the service keys", () => {
     expect(door.defineObject).toBe(iceDesk.defineObject);
     expect(door.isObjectKind).toBe(iceDesk.isObjectKind);

@@ -279,7 +279,9 @@ export const UPDATES_AUDIT_ACTIONS = {
    * found a release it may not offer) and on `app.update.apply` (a policy re-read at the click), and
    * `POLICY_UNREACHABLE` / `POLICY_UNVERIFIED` on `app.update.apply`. AU-1: the ATTEMPT row's `trigger` attr is who
    * began it (`person`, `silent`); the next launch's OUTCOME row adds `from` and `began` (`UpdateApplyTrigger`:
-   * `restart`, `silent`, `quit`) from the record, never a second `trigger`. */
+   * `restart`, `silent`, `quit`) from the record, never a second `trigger`. AU-5: a quit-install appends no ATTEMPT
+   * row (fieldd is already down); its OUTCOME row at the next launch carries `began: quit`, and `QUIT_HELD` when the
+   * quit's own policy read held it. */
   APPLY: "app.update.apply",
   /** WP12d (L3c-i) — a person's channel change (EDP §11.6), `from` and `to` in attrs; a lower channel is a downgrade */
   CHANNEL: "app.update.channel",
@@ -310,7 +312,9 @@ const RememberedVersion = z.number().int().min(1).nullable();
  *  - `relaunched`: Squirrel refused the payload (nothing armed) — the app relaunched on the current bytes;
  *  - `exited`: Squirrel timed out, or the install never took over — the app quit WITHOUT relaunch, because Squirrel may
  *    have armed the install (a downloaded update is applied at the next start: `electron.d.ts:2103-2104`).
- * AU-1 adds `from`, `trigger` and `landed`, all tolerant (`.catch`), never a new `branch` or `reason` value. */
+ * AU-1 adds `from`, `trigger` and `landed`, all tolerant (`.catch`), never a new `branch` or `reason` value.
+ * AU-5 (install on quit, `trigger: "quit"`): nothing relaunches on any branch — `installing`, or `exited` with Squirrel's
+ * refusal or timeout, or with no reason when the quit's own policy read held the install. */
 export const UpdateLastApply = z
   .object({
     at: z.number().int().nonnegative(),
@@ -481,6 +485,13 @@ export const UpdateViewLastApply = z
   .passthrough();
 export type UpdateViewLastApply = z.infer<typeof UpdateViewLastApply>;
 
+/** AU-7 (AU-G8; LC-10) — macOS: where this bundle runs. `read-only` (App Translocation, a mounted disk image, an
+ * unwritable parent folder) cannot update itself: decide holds it and the apply refuses before anything stops.
+ * `elsewhere` is writable and updates as usual. */
+export const UPDATE_APP_LOCATIONS = ["applications", "elsewhere", "read-only"] as const;
+export const UpdateAppLocation = z.enum(UPDATE_APP_LOCATIONS);
+export type UpdateAppLocation = z.infer<typeof UpdateAppLocation>;
+
 /** The updater as the person sees it: the tray's item and the Settings card both render THIS. */
 export const UpdateView = z
   .object({
@@ -525,6 +536,8 @@ export const UpdateView = z
     stagedAt: z.number().int().nonnegative().optional(),
     /** AU-1 (AU-D11 A; AU-G7) — the last apply, once a launch has judged it */
     lastApply: UpdateViewLastApply.optional(),
+    /** AU-7 (AU-G8) — macOS only: where the app runs; absent elsewhere */
+    location: UpdateAppLocation.optional(),
   })
   .passthrough();
 export type UpdateView = z.infer<typeof UpdateView>;
@@ -636,6 +649,23 @@ export const UpdateDownloadResult = z.discriminatedUnion("ok", [
 ]);
 export type UpdateDownloadResult = z.infer<typeof UpdateDownloadResult>;
 
+/** AU-7 (LC-10, LC-25, LC-37) — Move to Applications, through the quit gate. `proceed`: the person's quit is underway;
+ * the app moves itself once the pairs have stopped and opens again from Applications. `cancel`: the quit box's
+ * Cancel, nothing changed. A refusal comes back BEFORE anything stops: `not-needed` (it already runs from
+ * Applications), `busy` (a quit or an apply is underway). Another VibeField running in Applications is no refusal
+ * (LC-37): the move fails after the stop and the app opens again where it was. */
+export const UpdateMoveResult = z.discriminatedUnion("ok", [
+  z.object({ ok: z.literal(true), outcome: z.enum(["proceed", "cancel"]) }).passthrough(),
+  z
+    .object({
+      ok: z.literal(false),
+      reason: z.string().min(1).max(64),
+      words: UpdateWords.optional(),
+    })
+    .passthrough(),
+]);
+export type UpdateMoveResult = z.infer<typeof UpdateMoveResult>;
+
 /** C4 — the doctor's lines (EDP §11.6), as `doctorLines()` says them. */
 export const UpdateDoctorResult = z
   .object({ lines: z.array(z.string().max(1024)).max(64) })
@@ -681,4 +711,60 @@ export function releaseName(version: string, options: { readonly start?: boolean
   const beta = BETA_VERSION_PATTERN.exec(version);
   if (beta !== null) return `VibeField ${beta[1]} beta ${Number(beta[2])}`;
   return `VibeField ${version}`;
+}
+
+// ── AU-3a (X24) — one version order, read by main's decision and the window's devices alike ──
+// Moved verbatim from main's `updates/decide.ts` (`compareDotted`, `compareSemver`), renamed, with no alias left
+// behind, so the window can say a desktop's version is older or newer (AU-3's devices) by the order main decides by.
+// A string compare would put 0.10.0 below 0.9.0.
+
+/** Dotted numeric versions (`15.1.0` against `14.0`): <0, 0 or >0, and NaN when either has a part that is not a
+ * number — which the floor reads as unmet (fail closed). */
+export function compareDottedVersions(a: string, b: string): number {
+  const parts = (v: string) =>
+    v.split(".").map((part) => (/^\d+$/.test(part) ? Number(part) : Number.NaN));
+  const left = parts(a);
+  const right = parts(b);
+  for (let i = 0; i < Math.max(left.length, right.length); i++) {
+    const l = left[i] ?? 0;
+    const r = right[i] ?? 0;
+    if (Number.isNaN(l) || Number.isNaN(r)) return Number.NaN;
+    if (l !== r) return l - r;
+  }
+  return 0;
+}
+
+/** Semver precedence, enough for the advisory `minSupported` line: the dotted core first, then a prerelease sorts
+ * below its release, identifiers compared numerically when both are numbers. NaN when a core part is not a number.
+ * Across channels the order means nothing (`beta` sorts below `nightly`), so the window compares within one. */
+export function compareReleaseVersions(a: string, b: string): number {
+  const [aCore = "", ...aPre] = a.split("-");
+  const [bCore = "", ...bPre] = b.split("-");
+  const core = compareDottedVersions(aCore, bCore);
+  if (Number.isNaN(core) || core !== 0) return core;
+  const ap = aPre.join("-");
+  const bp = bPre.join("-");
+  if (ap === bp) return 0;
+  if (ap === "") return 1;
+  if (bp === "") return -1;
+  const ai = ap.split(".");
+  const bi = bp.split(".");
+  for (let i = 0; i < Math.max(ai.length, bi.length); i++) {
+    const x = ai[i];
+    const y = bi[i];
+    if (x === undefined) return -1;
+    if (y === undefined) return 1;
+    if (x === y) continue;
+    const numeric = /^\d+$/.test(x) && /^\d+$/.test(y);
+    return numeric ? Number(x) - Number(y) : x < y ? -1 : 1;
+  }
+  return 0;
+}
+
+/** AU-3 (LC-20) — a release version's channel by its shape (`release-plan.mjs`'s naming), or null for anything else.
+ * Older and newer are said only within one channel: semver orders `beta` below `nightly`. */
+export function releaseChannelOf(version: string): UpdateChannel | null {
+  if (NIGHTLY_VERSION_PATTERN.test(version)) return "nightly";
+  if (BETA_VERSION_PATTERN.test(version)) return "beta";
+  return /^\d+\.\d+\.\d+$/.test(version) ? "stable" : null;
 }

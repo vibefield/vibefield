@@ -39,7 +39,7 @@
 
 import type { MenuActionDef } from "@vibecook/ice";
 import type { DriverFactory, ObjectDef, ObjectHost, ObjectKind } from "@vibecook/ice/desk";
-import { serviceKey } from "@vibecook/ice/desk/kit";
+import { type LiveInfo, serviceKey } from "@vibecook/ice/desk/kit";
 
 export type {
   Entity,
@@ -376,6 +376,102 @@ export interface LiveBrowserStill {
   readonly age: number;
 }
 // docs:end live-browser-failure
+
+// docs:begin live-simulator
+/**
+ * THE DEVICE A SIMULATOR FACE SHOWS (PT-S1) — the `spec` a simulator kind hands the host's `LIVE` service, typed here so the
+ * plugin and the host read one shape (as `LiveBrowserSpec` is): the device the phone is BOUND to, by CoreSimulator's ids — its
+ * device type and its runtime, never a UDID (a UDID names one simulator on one Mac; each Mac attaches its OWN simulator of the
+ * bound type) — the device's name as the phone says it, and the desk's colour scheme. A real Simulator keeps its own
+ * appearance (v1 never switches iOS); a host's fixture follows the desk. The host re-validates the two ids against the
+ * contracts' `LiveSurfaceIosSimulatorBindingV1` before it resolves a device — this reader holds only their shape as words.
+ */
+export interface LiveSimulatorSpec {
+  readonly source: "ios-simulator";
+  readonly deviceType: string;
+  readonly runtime: string;
+  readonly label: string;
+  readonly scheme: "light" | "dark";
+}
+
+/** A `spec` read as a simulator's device (the host's side), or undefined when any field is not what `LiveSimulatorSpec` says. */
+export function liveSimulatorSpec(
+  spec: Readonly<Record<string, unknown>>,
+): LiveSimulatorSpec | undefined {
+  const { source, deviceType, runtime, label, scheme } = spec;
+  if (source !== "ios-simulator") return undefined;
+  if (!told(deviceType, 128) || deviceType.length === 0) return undefined;
+  if (!told(runtime, 128) || runtime.length === 0) return undefined;
+  if (!told(label, 128)) return undefined;
+  if (scheme !== "light" && scheme !== "dark") return undefined;
+  return { source, deviceType, runtime, label, scheme };
+}
+
+/**
+ * THE SIMULATOR'S HONEST FACE (PT-S1; the PT-S design §3) — which of its nine states a simulator face is in, as the HOST knows
+ * it (whichever source feeds the face sets it: a kind never learns how its frames are made, so a host may change its source
+ * and no kind changes — James's choice 4, 2026-10-29). A kind shows each in a person's words (DESIGN.md §9) and never passes a
+ * still off as live. A source says only the states it can reach (one that needs no consent never says `no-permission`):
+ *  - `no-simulator` — no Simulator on this Mac. No act;
+ *  - `no-permission` — the system refused the host the Simulator's screen (Screen Recording). The act opens the
+ *    system's settings;
+ *  - `no-device` — no device of the bound type on this Mac. The act creates one;
+ *  - `off` — the device is shut down: its last still, dimmed. The act boots it;
+ *  - `booting` — from its boot to the window's first frame: the still, with a boot mark. No act;
+ *  - `no-window` — booted, but the Simulator's window is closed: the still. The act shows the window;
+ *  - `live` — frames flowing: the stream. No act;
+ *  - `at-rest` — off view, or the desk's cap rested it: the last frame as a still, with the rest mark. No act;
+ *  - `stopped` — the Simulator quit or crashed mid-stream: the still under the failure's dim. The act tries again.
+ * The acts manage the device and never reach inside iOS (view-only, v1).
+ */
+export const LIVE_SIMULATOR_STATES = [
+  "no-simulator",
+  "no-permission",
+  "no-device",
+  "off",
+  "booting",
+  "no-window",
+  "live",
+  "at-rest",
+  "stopped",
+] as const;
+export type LiveSimulatorState = (typeof LIVE_SIMULATOR_STATES)[number];
+
+/**
+ * `LiveInfo.extra.simulator` on a simulator face: its state, the device's name as the host says it (a simulator's own name,
+ * else its type's — absent: the kind names it from its catalog), and the state's ONE act where it has one and the host can
+ * run it (`act` — absent: no act is offered).
+ */
+export interface LiveSimulatorFace {
+  readonly is: LiveSimulatorState;
+  readonly device?: string;
+  readonly act?: () => void;
+}
+
+const isSimulatorState = (v: unknown): v is LiveSimulatorState =>
+  typeof v === "string" && (LIVE_SIMULATOR_STATES as readonly string[]).includes(v);
+const isAct = (v: unknown): v is () => void => typeof v === "function";
+
+/** What a simulator face's words say of its state (`info.extra.simulator`), or undefined: the host says nothing a kind can read. */
+export function liveSimulatorFace(
+  info: Pick<LiveInfo, "extra"> | undefined,
+): LiveSimulatorFace | undefined {
+  const said = info?.extra?.simulator;
+  if (typeof said !== "object" || said === null) return undefined;
+  const { is, device, act } = said as Readonly<Record<string, unknown>>;
+  if (!isSimulatorState(is)) return undefined;
+  let face: LiveSimulatorFace = { is };
+  if (device !== undefined) {
+    if (!told(device, 128) || device.length === 0) return undefined;
+    face = { ...face, device };
+  }
+  if (act !== undefined) {
+    if (!isAct(act)) return undefined;
+    face = { ...face, act };
+  }
+  return face;
+}
+// docs:end live-simulator
 
 // docs:begin object-binding
 /**

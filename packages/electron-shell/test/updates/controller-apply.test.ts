@@ -1,3 +1,4 @@
+import type { UpdateAppLocation } from "@vibefield/contracts";
 import type { AuditAppendV1 } from "@vibefield/contracts/diagnostics";
 import { describe, expect, it, vi } from "vitest";
 import type { UpdatePrepared, UpdateQuitPlan } from "../../src/main/quit-flow";
@@ -8,6 +9,8 @@ import {
   censusNotice,
   censusOf,
   consentWords,
+  locationNotice,
+  quitInstallWords,
   type StageOutcome,
   type StopOutcome,
 } from "../../src/main/updates/apply";
@@ -15,6 +18,8 @@ import {
   type CancellationLike,
   FRESH_POLICY_BOUND_MS,
   PREPARE_TTL_MS,
+  QUIT_POLICY_BOUND_MS,
+  QUIT_STAGE_MS,
   SILENT_RECHECK_MS,
   UpdateController,
   type UpdaterPort,
@@ -162,6 +167,8 @@ async function stagedController(
     levers?: Record<string, unknown>;
     /** L3c-i — a clock the test moves (a prepared snapshot's two minutes) */
     clock?: { now: number };
+    /** AU-7 — where the bundle runs (absent = not macOS's answer: nothing held) */
+    location?: UpdateAppLocation;
   } = {},
 ) {
   const fx = new FixtureOrigin();
@@ -213,6 +220,7 @@ async function stagedController(
         }
       : {}),
     ...(opts.cache !== undefined ? { stagedCache: opts.cache } : {}),
+    ...(opts.location !== undefined ? { location: () => opts.location } : {}),
   });
   return { controller, apply, timeline, audits, files, fx, updater, gates };
 }
@@ -1778,5 +1786,322 @@ describe("the two-phase apply (C2) and the one projection (C6)", () => {
       "An update is downloaded; it installs at the next restart",
       { version: STAGED_VERSION, sha512: "AAAA" },
     );
+  });
+});
+
+// AU-7 (AU-G8; LC-10; main-process.md §8.2, §8.3) — a copy macOS won't let replace itself (App Translocation, a disk
+// image, a folder it can't write): a person's check still sees what exists, nothing downloads, and an apply refuses
+// FIRST — before the fresh policy, the census and any stop — in the words of the way out.
+describe("AU-7 — a copy macOS won't let replace itself", () => {
+  const WORDS = { message: locationNotice().message, detail: locationNotice().detail };
+
+  it("a person's check sees the release; nothing downloads, and Download refuses in the move's words", async () => {
+    const r = await stagedController({ location: "read-only" });
+    expect(await r.controller.checkForPerson()).toEqual({
+      outcome: "held",
+      version: STAGED_VERSION,
+    });
+    expect(r.updater.downloads).toBe(0);
+    expect(r.controller.view()).toMatchObject({
+      phase: "available",
+      version: STAGED_VERSION,
+      location: "read-only",
+    });
+    expect(await r.controller.downloadForPerson(STAGED_VERSION)).toEqual({
+      ok: false,
+      reason: "location",
+      words: WORDS,
+    });
+    expect(r.updater.downloads).toBe(0);
+    expect(r.controller.doctorLines()).toContain(
+      "app location: read-only — macOS won't let it replace itself",
+    );
+  });
+
+  it("nothing checks on its own: a launch and a resume start nothing", async () => {
+    const r = await stagedController({ location: "read-only" });
+    const asked = vi.spyOn(r.updater, "checkForUpdates");
+    expect(await r.controller.check("launch")).toEqual({ kind: "none", reason: "location" });
+    expect(await r.controller.check("resume")).toEqual({ kind: "none", reason: "location" });
+    expect(asked).not.toHaveBeenCalled();
+    expect(r.controller.view().phase).toBe("idle");
+  });
+
+  it("a staged update's Restart refuses `location` BEFORE anything stops: no census, no ATTEMPT row, no stop", async () => {
+    // staged where it could replace itself, then read as read-only — the guard behind decide's hold (a read-only copy
+    // never downloads, so the doors cannot stage one; a payload a relaunch finds in the cache is the case it covers)
+    const r = await staged(LIVE);
+    (r.controller as unknown as { where: UpdateAppLocation | undefined }).where = "read-only";
+    expect(await r.controller.prepareRestart()).toEqual({
+      ok: false,
+      reason: "location",
+      words: WORDS,
+    });
+    expect(await r.controller.restartToInstall()).toEqual({ ok: false, reason: "location" });
+    // the tray's Restart says it in the native box; the census, the audit and the stop never ran
+    expect(r.apply.notices).toEqual([locationNotice()]);
+    expect(r.timeline).toEqual(["notify"]);
+    expect(r.timeline).not.toContain("fieldd:stop");
+    expect(r.audits).toEqual([]);
+    expect(r.apply.plan).toBeNull();
+    expect(await r.controller.considerSilentApply("timer")).toEqual({
+      applying: false,
+      reason: "location",
+    });
+    expect(r.timeline).toEqual(["notify"]);
+  });
+
+  it("a writable copy outside Applications updates as usual, and the view says where it runs", async () => {
+    const r = await stagedController({ location: "elsewhere" });
+    await r.controller.check("manual");
+    expect(r.controller.view()).toMatchObject({ phase: "staged", location: "elsewhere" });
+    r.timeline.length = 0;
+    expect(await r.controller.restartToInstall()).toEqual({ ok: true });
+    expect(r.timeline).toEqual(["fieldd:census", "fieldd:audit:attempt", "quit"]);
+    expect(r.controller.doctorLines()).toContain("app location: elsewhere");
+  });
+});
+
+// AU-5 (AU-D9 A; LC-14, LC-24, LC-36; main-process.md §7.4) — install on quit. The lifecycle calls it only after a
+// person's quit has stopped every pair (`lifecycle.test.ts` holds that), so from its first step nothing reaches fieldd:
+// an append would START it. The record says the quit began it, and the next launch's OUTCOME row and words carry it.
+describe("AU-5 — install on quit", () => {
+  const FROM = "0.9.0-nightly.20261015";
+  const ENDED = { ended: 2 } as const;
+  const OFFLINE: FetchBytes = async () => {
+    throw new Error("net::ERR_INTERNET_DISCONNECTED");
+  };
+
+  /** staged, with the check's own fieldd calls cleared: what the quit adds is all the timeline holds */
+  async function ready(opts: Parameters<typeof stagedController>[0] = {}) {
+    const rig = await stagedController({ currentVersion: FROM, ...opts });
+    await rig.controller.check("manual");
+    expect(rig.controller.state).toMatchObject({ kind: "staged", version: STAGED_VERSION });
+    rig.timeline.length = 0;
+    rig.audits.length = 0;
+    return rig;
+  }
+
+  /** The policy re-published after the download: a higher version, its levers as given. */
+  function republish(fx: FixtureOrigin, levers: Record<string, unknown>) {
+    fx.putRelease(NIGHTLY, {
+      heads: { nightly: NIGHTLY, beta: null, stable: null },
+      policyVersion: { nightly: 4 },
+      levers: { nightly: levers },
+    });
+  }
+
+  it("ready: the box's line names it, and the quit stages Squirrel in its own bound and records the install", async () => {
+    const r = await ready();
+    expect(r.controller.quitInstallLine()).toBe("The Oct 16 nightly installs as you quit.");
+    expect(r.controller.quitInstallLine()).toBe(quitInstallWords(STAGED_VERSION));
+    const stage = vi.spyOn(r.apply, "stage");
+    const fetched = r.fx.requests.length;
+    expect(await r.controller.installOnQuit(ENDED)).toEqual({ installing: true });
+    // the fresh policy was read, then Squirrel staged in the quit's bound — and nothing reached fieldd
+    expect(r.fx.requests.length).toBeGreaterThan(fetched);
+    expect(stage).toHaveBeenCalledWith(QUIT_STAGE_MS);
+    expect(r.timeline).toEqual(["stage"]);
+    expect(r.audits).toEqual([]);
+    expect(lastApplyOf(r.files)).toMatchObject({
+      version: STAGED_VERSION,
+      branch: "installing",
+      consented: 2,
+      audited: false,
+      from: FROM,
+      trigger: "quit",
+    });
+    expect(lastApplyOf(r.files)).not.toHaveProperty("reason");
+    // the person's quit exits: no update quit, no install hand-off, no relaunch
+    expect(r.apply.plan).toBeNull();
+    expect(r.timeline).not.toContain("install");
+    // one attempt: the line is gone and a second call is busy
+    expect(r.controller.quitInstallLine()).toBeNull();
+    expect(await r.controller.installOnQuit(ENDED)).toEqual({ installing: false, reason: "busy" });
+    expect(r.timeline).toEqual(["stage"]);
+  });
+
+  it("Squirrel refused or timed out: the app still exits, and the record is exited with Squirrel's reason", async () => {
+    for (const [outcome, reason] of [
+      [{ kind: "refused" }, "squirrel-refused"],
+      [{ kind: "timeout" }, "squirrel-timeout"],
+    ] as const) {
+      const r = await ready();
+      r.apply.stageOutcome = outcome;
+      expect(await r.controller.installOnQuit(ENDED)).toEqual({ installing: false, reason });
+      expect(r.timeline, reason).toEqual(["stage"]);
+      expect(r.audits, reason).toEqual([]);
+      expect(lastApplyOf(r.files), reason).toMatchObject({
+        version: STAGED_VERSION,
+        branch: "exited",
+        reason,
+        consented: 2,
+        trigger: "quit",
+      });
+    }
+  });
+
+  it("what holds it says no line on the box and installs nothing, before any fetch or fieldd call", async () => {
+    const cases: [string, () => Promise<Awaited<ReturnType<typeof ready>>>, string][] = [
+      ["nothing staged", () => stagedController({ currentVersion: FROM }), "not-staged"],
+      [
+        "no apply on this platform",
+        async () => {
+          const r = await ready();
+          r.apply.wired = false;
+          return r;
+        },
+        "apply-unbuilt",
+      ],
+      [
+        "automatic updates off (AU-D9 A ties it to the switch)",
+        async () => {
+          const r = await ready();
+          r.controller.setEnabled(false);
+          return r;
+        },
+        "disabled",
+      ],
+      [
+        "a copy macOS won't let replace itself",
+        async () => {
+          const r = await ready();
+          (r.controller as unknown as { where: UpdateAppLocation | undefined }).where = "read-only";
+          return r;
+        },
+        "location",
+      ],
+      [
+        "the last verified policy requires confirmation (LC-24)",
+        () => ready({ levers: { requireUserConfirmation: true } }),
+        "confirmation-required",
+      ],
+    ];
+    for (const [name, make, reason] of cases) {
+      const r = await make();
+      r.timeline.length = 0;
+      r.audits.length = 0;
+      const fetched = r.fx.requests.length;
+      expect(r.controller.quitInstallLine(), name).toBeNull();
+      expect(await r.controller.installOnQuit(ENDED), name).toEqual({ installing: false, reason });
+      expect(r.timeline, name).toEqual([]);
+      expect(r.audits, name).toEqual([]);
+      expect(r.fx.requests.length, name).toBe(fetched);
+      expect(lastApplyOf(r.files) ?? null, name).toBeNull();
+    }
+  });
+
+  it("a declined version is not ready: no line, nothing staged to Squirrel", async () => {
+    const r = await ready();
+    r.controller.decline(STAGED_VERSION);
+    r.timeline.length = 0;
+    expect(r.controller.quitInstallLine()).toBeNull();
+    expect(await r.controller.installOnQuit(ENDED)).toMatchObject({ installing: false });
+    expect(r.timeline).toEqual([]);
+  });
+
+  it("offline at the quit: nothing installs, the update stays ready, and the record says the quit began it (LC-14)", async () => {
+    const r = await ready({ fetch: OFFLINE });
+    // the line reads what main knows now; the 3 s read may still hold what it said
+    expect(r.controller.quitInstallLine()).toBe(quitInstallWords(STAGED_VERSION));
+    expect(await r.controller.installOnQuit(ENDED)).toEqual({
+      installing: false,
+      reason: "policy-unreachable",
+    });
+    expect(r.timeline).toEqual([]);
+    expect(r.audits).toEqual([]);
+    expect(r.controller.state).toMatchObject({ kind: "staged", version: STAGED_VERSION });
+    // exited with no Squirrel reason: the policy held it, and the next launch says the quit didn't install it
+    expect(lastApplyOf(r.files)).toMatchObject({
+      version: STAGED_VERSION,
+      branch: "exited",
+      consented: 2,
+      trigger: "quit",
+    });
+    expect(lastApplyOf(r.files)).not.toHaveProperty("reason");
+  });
+
+  it("a policy read that never answers is unreachable after the quit's 3 s, well inside the click's bound", async () => {
+    expect(QUIT_POLICY_BOUND_MS).toBeLessThan(FRESH_POLICY_BOUND_MS);
+    const r = await ready({ fetch: () => new Promise<never>(() => undefined) });
+    vi.useFakeTimers();
+    try {
+      const outcome = r.controller.installOnQuit(ENDED);
+      await vi.advanceTimersByTimeAsync(QUIT_POLICY_BOUND_MS);
+      expect(await outcome).toEqual({ installing: false, reason: "policy-unreachable" });
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(r.timeline).toEqual([]);
+  });
+
+  it("requireUserConfirmation published after the download holds it at the quit's fresh read (LC-24)", async () => {
+    const r = await ready();
+    expect(r.controller.quitInstallLine()).not.toBeNull();
+    republish(r.fx, { requireUserConfirmation: true });
+    expect(await r.controller.installOnQuit(ENDED)).toEqual({
+      installing: false,
+      reason: "confirmation-required",
+    });
+    expect(r.timeline).toEqual([]);
+    expect(r.audits).toEqual([]);
+    expect(lastApplyOf(r.files)).toMatchObject({ branch: "exited", trigger: "quit" });
+    expect(r.controller.state).toMatchObject({ kind: "staged", version: STAGED_VERSION });
+  });
+
+  it("a kill switch published after the download: refused, the payload deleted, and its audit row skipped", async () => {
+    const cache = new FakeCache();
+    const r = await ready({ cache });
+    republish(r.fx, { killSwitch: true });
+    expect(await r.controller.installOnQuit(ENDED)).toEqual({
+      installing: false,
+      reason: "killed",
+    });
+    // the pairs are down: the lever's row would START fieldd, so it is skipped (B6's deletion still runs)
+    expect(r.timeline).toEqual([]);
+    expect(r.audits).toEqual([]);
+    expect(r.controller.state).toMatchObject({ kind: "error", unavailable: { state: "killed" } });
+    await vi.waitFor(() => expect(cache.cleared).toBe(1));
+    expect(lastApplyOf(r.files)).toMatchObject({ branch: "exited", trigger: "quit" });
+  });
+
+  it("the next launch's OUTCOME row and window carry it: began quit, installed or held", async () => {
+    const took = await ready();
+    expect(await took.controller.installOnQuit(ENDED)).toEqual({ installing: true });
+    const installed = await stagedController({
+      initial: took.files.get("/state.json")!,
+      currentVersion: STAGED_VERSION,
+    });
+    await vi.waitFor(() => expect(installed.audits).toHaveLength(1));
+    expect(installed.audits[0]).toMatchObject({
+      action: "app.update.apply",
+      phase: "outcome",
+      outcome: "succeeded",
+      attrs: expect.objectContaining({ began: "quit", consented: "2", from: FROM }),
+    });
+    expect(installed.controller.view().lastApply).toMatchObject({
+      outcome: "installed",
+      trigger: "quit",
+      thisLaunch: true,
+    });
+
+    const offline = await ready({ fetch: OFFLINE });
+    await offline.controller.installOnQuit(ENDED);
+    const held = await stagedController({
+      initial: offline.files.get("/state.json")!,
+      currentVersion: FROM,
+    });
+    await vi.waitFor(() => expect(held.audits).toHaveLength(1));
+    expect(held.audits[0]).toMatchObject({
+      outcome: "failed",
+      reasonCode: "QUIT_HELD",
+      attrs: expect.objectContaining({ branch: "exited", began: "quit" }),
+    });
+    expect(held.controller.view().lastApply).toMatchObject({
+      version: STAGED_VERSION,
+      outcome: "not-applied",
+      trigger: "quit",
+      thisLaunch: true,
+    });
   });
 });
