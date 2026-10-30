@@ -481,6 +481,9 @@ importers:
       '@vibefield/plugin-example-desk-clock':
         specifier: workspace:*
         version: link:../../examples/plugins/desk-clock
+      '@vibefield/plugin-simulator':
+        specifier: workspace:*
+        version: link:../../plugins/simulator
       '@vibefield/test-env':
         specifier: workspace:*
         version: link:../../tooling/test-env
