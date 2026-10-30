@@ -39,7 +39,8 @@ export function processName(command) {
   return first.slice(first.lastIndexOf("/") + 1) || "?";
 }
 
-/** The run's lines of a `ps -E` table: each whose environment carries the run's mark, as a whole word. */
+/** The run's lines of a table with the environment (`psTables`): each whose environment carries the run's mark, as a whole
+ * word. */
 function markedLines(withEnv, mark) {
   const quoted = mark.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
   const carries = new RegExp(`(^|\\s)${SMOKE_RUN_ENV}=${quoted}(\\s|$)`, "u");
@@ -67,8 +68,9 @@ function namedLines(lines, plain) {
   });
 }
 
-/** The run's processes from two `ps -o pid=,ppid=,command=` tables — one with `-E` (the environment after each line's
- * arguments: the mark is looked for there, as a whole word) and one without (the command alone, to name each by). */
+/** The run's processes from two `ps -o pid=,ppid=,command=` tables — one with the environment after each line's arguments
+ * (`psTables`' spelling: the mark is looked for there, as a whole word) and one without (the command alone, to name each
+ * by). */
 export function runProcesses(withEnv, plain, mark) {
   return namedLines(markedLines(withEnv, mark), plain);
 }
@@ -85,6 +87,20 @@ const runPs = (args) =>
 
 const COLUMNS = ["-o", "pid=,ppid=,command="];
 
+/**
+ * `ps` in the platform's own spelling, for each of the census's three reads (the affected job on ubuntu-latest,
+ * 2026-10-29): `table`, the whole table with the environment; `one`, one pid's command; `oneWithEnv`, one pid's line
+ * with its environment. macOS's (BSD) is `-axww` for every process and `-E` for the environment. Linux's procps refuses
+ * `-x` ("must set personality") and has no `-E`: its BSD-style `axww` lists the same processes, and `e` appends the same
+ * environment after the command — never on macOS, where `e` means every process, not the environment. `-ww` (no width
+ * limit) is both platforms' spelling. Each read names its columns and pid after these (`COLUMNS`, `lineOf`).
+ */
+export function psTables(platform = process.platform) {
+  return platform === "linux"
+    ? { table: ["axwwe"], one: ["-ww"], oneWithEnv: ["wwe"] }
+    : { table: ["-axww", "-E"], one: ["-ww"], oneWithEnv: ["-ww", "-E"] };
+}
+
 /** One process's line, asked of `ps` by its pid alone; `""` once it is gone (`ps` exits 1 when no pid it names lives). */
 function lineOf(ps, flags, pid) {
   try {
@@ -97,17 +113,17 @@ function lineOf(ps, flags, pid) {
 
 /** The run's processes now; none where `ps` cannot say (Windows). The one whole-table read finds them by the mark, and
  * each is named by its own command line, asked by its pid. */
-export function listRunProcesses(mark, ps = runPs) {
+export function listRunProcesses(mark, ps = runPs, spelling = psTables()) {
   if (process.platform === "win32") return [];
-  const run = markedLines(ps(["-axww", "-E", ...COLUMNS]), mark);
-  return namedLines(run, run.map((p) => lineOf(ps, ["-ww"], p.pid)).join("\n"));
+  const run = markedLines(ps([...spelling.table, ...COLUMNS]), mark);
+  return namedLines(run, run.map((p) => lineOf(ps, spelling.one, p.pid)).join("\n"));
 }
 
 /** Which of `pids` are still the run's: each asked by its pid alone and judged by its environment, so a pid the system
  * has since handed to another process is not the run's, and is never signalled. */
-export function stillRunning(mark, pids, ps = runPs) {
+export function stillRunning(mark, pids, ps = runPs, spelling = psTables()) {
   if (process.platform === "win32") return [];
-  const lines = pids.map((pid) => lineOf(ps, ["-ww", "-E"], pid));
+  const lines = pids.map((pid) => lineOf(ps, spelling.oneWithEnv, pid));
   return markedLines(lines.join("\n"), mark).map((p) => p.pid);
 }
 
