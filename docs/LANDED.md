@@ -18458,6 +18458,10 @@ process at nice 19, VF-PM's GO 01:34Z; 600 frames, then 1800):
 - **The loop solves 599 steps, not 600:** the float sum of `1000 / 30` loses one. The comment says so, and the frame
   numbers here are the loop's frames as the trace counted them. Counting frames instead of summing time is
   **ITEM 90**, for a quiet day.
+  *Corrected 2026-10-30 (item 90, `8a1d08d03`, in the stack's merge `0b4cb2ff0`): counting frames would not have
+  worked. `SwarmPhysics.advance` (puppeteer-views 0.3.0, `world.js:327–347`) subtracts a rounded `stepMs` per step and
+  loses the epsilon itself, so a time counted from the frame number solves 599 too (`records/item90/acc90.mjs`). Item
+  90's fix advances until the world says it has solved 600 steps, which takes 601 frames.*
 
 **The budget** (`238a960bc`, the test only, +23/−2): `SWARM_SETTLE_BUDGET_MS = 15_000`, given to the row as vitest's
 options (`{ timeout: … }`, item 85's `PAGE_BUDGET_MS` shape). A third argument that is not a number literal makes biome
@@ -19053,3 +19057,223 @@ the complete `pnpm verify` above, this closes Q19's code and landing checks.
 The exact gate verdicts are in `.vibefield/q19-landing/landing-code-commit-summary.log`,
 with per-gate logs in `landing-code-commit/` beside it. The artwork archive and local-only
 draft snapshot `304eb60c4` remain preserved. Neither main nor dev-local was pushed.
+
+## Fixer — the stack: items 94, 86, 90, 96 (its first half), 93, 97, 92 and 101, eleven commits landed as one merge (2026-10-29 → 10-30; tip `a2cf1b76a` on `e23fa8a1f`, landed as `0b4cb2ff0`; VF-PM's rulings 10-29 05:23Z–09:36Z and 10-30 13:30Z)
+
+**What landed:** eleven commits and eight items. Each began as a red in a loaded verify on James's Mac and was read to
+its cause. One entry per item follows, in the stack's order.
+- Built in `fix/item97-lost-exit` (lanes/item94), folded by autosquash at 10-29 09:35Z and bundled
+  (`records/item97/stack-a2cf1b76a.bundle`, sha256 `cdab8394…7513`).
+- Item 91 left the stack at 10-29 07:20Z. Its red-first inverted: its settle waited for `project.branch`, the git
+  observer's first answer, which never came in 30 s, and main's file stayed green under the mutation. It stays queued,
+  a read first.
+- Item 96 lands its first half. Its own half stays queued.
+
+**Validation:**
+- Each commit's light pass and red-first ran alone at nice 19 on James's Mac. Each entry names its own.
+- Four full verifies at the stack's earlier tips ran on James's Mac as outside load climbed to 362–398. Every red row
+  became an item here, or was already one:
+  - `ec7899a4f` (10-29 07:32Z): item 91's MF-1 row, item 93's profile row (`smoke-profile.test.ts:189`, 6432 ms) and
+    item 99's AR-1 row;
+  - its one rerun (07:46Z): item 92's crash row alone, "its stderr still open after 1000 ms";
+  - `8d5254747` (08:00Z): item 93's LEFT row alone (`smoke-profile.test.ts:114`, 9144 ms);
+  - `d50b972dd` (08:25Z): item 97's AR-6-0 exit wait alone, out at 15 s with no `exit_heard`.
+- Item 101's two reds were TS-6's verify and its rerun on 10-29.
+- No full verify ran on James's Mac at the tip. The stack verified on the Mac mini as the queue's run 2, the merge of
+  main into `a2cf1b76a` minted by a9. It was green: `pnpm verify` exit 0 at 2026-10-30 13:41:16Z, 27 of 27 projects,
+  rust 499 passed, 0 failed and 14 ignored, and gen:check clean (VF-PM's read).
+
+**Landed:** main fast-forwarded `0765b2fba` → `0b4cb2ff0` at 2026-10-30 17:42:50Z on VF-PM's GO, on James's word.
+- The pre-check was amended for James's uncommitted PRC-6 files: the ff's changed files are disjoint from the dirty
+  set, and the ten paths read the same before and after.
+- The first attempt, at 13:43:35Z, stopped at the guard on James's live dev stack. The app quit at 16:56Z, and its
+  dev runner's orphaned `nx watch` pair still held the landing's new gate (`dev-stack-check.sh`; items 114 and 115)
+  until James stopped it at 17:40Z.
+- Pushed with `648719bb2` at 18:16:19Z.
+
+- Records: `/Volumes/SamsungRed/lanes/records/item94/` (the plan and the red-firsts; the verifies' logs under
+  `lanes/item94/logs/`), `records/item90/`, `records/item93/`, `records/item97/`.
+
+## AL-8a — item 94: a crash's count that does not come in time says why — the floor names each owed cell's pump (2026-10-29; `148f2dff0`, in the stack's merge `0b4cb2ff0`)
+
+**What happened:** TS-4b's second verify (load ~216) read AL-8a-4's record of a crash as `{sessions: null}`. The floor
+had held the hello's ack for its whole bounded wait (`FRESH_COUNT_WAIT`, 2 s, AL-8a's ruling of 2026-10-27) and sent
+unknown, AL-8a's honest answer. But it logged nothing, so the null could not say whether the bound met a slow floor or
+a cell that never heard the ask.
+
+**The fix:**
+- field-native `orphan.rs`: `fresh_count` takes what it counts for (`CountFor`: a departure with the record's `at`, or
+  the bound's confirming read). At its deadline it logs `field_native.lifecycle.manager_count_unknown {count_for,
+  at_ms, waited_ms, why, cells}`. `why` is one word: `slow` when every owed cell was mid-work, `unheard` when a cell
+  sat idle from before the moment without hearing the ask, `dialing` when a cell was being dialed.
+- `terminal.rs`: each cell's stamp records when its pump last heard an ask (`heard`) and last went idle (`settled`).
+  `InventoryStamp::not_fresh` classifies a cell as reconciling, tick_late, dialing or unheard.
+- The bound is unchanged at 2 s, and no contract changes: the record still says `sessions: null`.
+- fieldd's kill matrix: AL-8a-4 and AL-8a-2 hold the law through `expectCountedOrSlow`. `sessions` is 1, or null WITH
+  the floor's own `manager_count_unknown` for this departure saying `slow`. A 0, a bare null and an `unheard` null are
+  red.
+
+**Red-first** by mutation, restored byte-identical (`records/item94/plan.md`): M1 (the ask arm holds the pump 4 s)
+reddens the old rows on a null while the new rows read `slow`; M3 (M1 without the give-up line) is red on a bare null;
+M2 (the record says `Some(0)`) is red under both; MC (an idle cell classified `tick_late`) reddens the two
+`terminal.rs` rows.
+
+## FN — item 86: a health or observed send between a subscription's reading and its baseline reaches fieldd — the receiver is taken first (2026-10-29; `bca8aa778`, in the stack's merge `0b4cb2ff0`)
+
+**The cause:**
+- `native.lifecycle.health.subscribe` and `.observed.subscribe` (`mgmt/mod.rs`) read the Sender's value for the
+  result, sent it, then handed the forwarder `subscribe()`, which marks seen whatever the channel holds by then. A
+  send from another worker thread in between was never forwarded. That window is microseconds, unless a loaded host
+  preempts the thread.
+- Both streams are state transfer, so the next send or a reconnect repaired it. Until then fieldd held the old
+  terminal inventory, or missed a mesh node-up subscribed while the units come up (item 85's timing). Named at item 85
+  (`7eda2ee38`) and left for its own item.
+
+**The fix,** in the shape the file already had three times (routes since item 85, `freeway.state`,
+`diagnostics::subscribe`): one helper, `subscription_reading(&mut rx)`, reads the receiver the forwarder will hold
+with `borrow_and_update` before the result is sent. Health and observed take the receiver first; `freeway.state` goes
+through it with no change. The two "Noted 2026-10-28" comments are dated corrections at their source.
+
+**The row:** `a_send_after_a_subscriptions_reading_is_still_owed_to_its_forwarder`, a plain `#[test]`. Its Probe
+value's `Serialize` sends the next value between the reading and the forwarder's hold. Red-first by mutation (I86, the
+old order): `has_changed` is false, red; restored, green.
+
+## GV — item 90: the GV-D1 swarm row solves the 600 steps it names — its loop counts the world's steps, not the frames (2026-10-29; `8a1d08d03`, in the stack's merge `0b4cb2ff0`)
+
+**The finding (item 89):** the row's settle, 600 frames of `now += 1000 / 30`, solved 599 steps.
+
+**The cause:**
+- It is the world's own accumulator. `SwarmPhysics.advance` (puppeteer-views 0.3.0, `world.js:327–347`) adds the
+  clamped delta and subtracts a rounded `stepMs` per step, so it loses the epsilon itself.
+- Simulated alone (`records/item90/acc90.mjs`): main's sum solves 599, and so does a time counted from the frame
+  number. So item 89's named remedy, "counting frames instead of summing time", would not have worked. Item 89's entry
+  carries a dated correction at its source, in this commit.
+- It is not a product fault: a live driver hands continuous time, and the epsilon is caught up the next frame.
+
+**The fix, test only:** `settleCrowd` advances until the world has solved 600 steps (601 frames) and returns `solved`.
+The row asserts 600 for both settles; the crowd's assertions and the 15 s budget are unchanged.
+
+**Red-first** (I90): main's `frame < 600` loop under the new assertions is red at 599; restored, green. Deterministic:
+float arithmetic, no clock.
+
+## B4 — item 96, its first half: the launch rows play FieldView whole — a board is ready on the desk's present, never on the 2.5 s fallback (2026-10-29; `8d5254747`, in the stack's merge `0b4cb2ff0`)
+
+**What reddened:** `doc-manager.test.ts`'s first-run row ran 2.9–4.8 s in nine full verifies and crossed vitest's 5 s
+default twice: the EL8's r2 at 5257 ms, and TS-4b's verify4b-1 at load 663.
+
+**The cause:** `contentApplied` → `presentStage` → `waitForCanvasPresentation` waits for `canvasPresented` or
+`CANVAS_PRESENT_TIMEOUT_MS` (2500). The harness played `contentApplied` alone, so every wait for ready sat out the
+fallback: one apply ≈ 3 s, three ≈ 8–9.5 s. The product calls `canvasPresented` one frame after the arrival framing
+(`use-workspace-session.ts:493`), so this was harness time, not a product item.
+
+**The fix:** `presented(manager, generation)` plays both reports, and `applyPending` and the remount row use it. The
+refused board's row keeps `contentApplied` alone. The first-run row says ready arrives in the present's own turn,
+never on the timer.
+
+**Red-first** (I96, the helper without `canvasPresented`): red ("loading"); restored, green. Timed alone, the fix
+against main's file: first run 313 against 2825 ms, the field-report flow 712 against 8216, the whole file 14 s
+against 74 s.
+
+**Its own half, queued:** the parts alone ×N and on CI; which of the 13 bare `30_000` rows keep a named constant; and
+the one row still past a second ("a window whose OWN board another window holds", 1667 ms).
+
+## DK-18 — item 93: the launcher's census reads the whole process table once — every later look asks one pid at a time; the launcher rows get their named budget (2026-10-29; `d50b972dd`, in the stack's merge `0b4cb2ff0`)
+
+**What reddened:** `smoke-profile.test.ts`'s launcher rows overran vitest's 5 s default in loaded verifies. The LEFT
+row (:114) went red four times since 10-20 (5126–9144 ms, the last at `8d5254747`, load ~400), and the profile row
+(:189) once (6432 ms at `ec7899a4f`).
+
+**The cause:**
+- The census (`apps/desktop/packaging/smoke-daemons.mjs`) read the WHOLE table twice per look: once with every
+  environment (`ps -axww -E`) and once plain. Every re-look was a whole look, so the LEFT row made four or more whole
+  reads.
+- Measured (10-29 08:05Z, 1244 processes): the `-E` table 152 ms, the plain one 92 ms, `-p <one pid>` 3–4 ms. A `-p`
+  naming two or more pids takes 204–216 ms, because macOS reads the whole table again.
+
+**The fix:**
+- The first look reads the `-E` table ONCE to find the run by its mark and names each found pid by its own command
+  line. Every re-look asks `ps -ww -E -o … -p <pid>` per known pid.
+- The mark guard is kept: a pid counts only while its environment carries the run's mark. `ps`'s exit 1 for its one
+  pid reads as gone.
+- The LEFT row makes one whole read where it made four. `runProcesses` is unchanged for its callers.
+
+**The budget:** `LAUNCHER_ROW_BUDGET_MS` = 15 s for the three rows (item 85's and 89's shape). It is more than 1.6
+times the worst any row took in 121 logged runs since 10-20; the LEFT row's median was 2201 ms, its p90 3568, with
+four reds up to 9144.
+
+**Red-first, a count:** `tooling/dev-runner/test/smoke-daemons-census.test.mjs` counts the reads through an injected
+`ps`. With main's census both rows fail: "the whole table was read 4 times" against 1, and 4 against 0.
+
+**Kept out, its own item:** electron-shell's twin `stopRunDaemons` (`src/testing/smoke-daemons.ts`), which reads the
+whole table twice per 100 ms poll.
+
+## AR-6 — item 97: a run whose session-exited never reached fieldd no longer stays live for good — the witness, the backstop, the restart and the pending hold (2026-10-29; `1d1d19c23`, `a3f403ecc`, `01d71bacd` and `8f238a596`, in the stack's merge `0b4cb2ff0`)
+
+**What reddened:** AR-6-0's `continuation.exited` wait, 15 s after `agent.interrupt`, three times after item 87: the
+EL8's first and third verifies, and the stack's fourth at `d50b972dd` (load ~381). Each log stopped at
+`fieldd.agents.interrupted` with no `fieldd.agents.exit_heard`, so fieldd never heard the floor's `session-exited`.
+MF-1g keeps an agent's pane, so the inventory backstop, which fired only when a row LEFT, never caught it.
+
+**The four commits:**
+1. **The witness** (`1d1d19c23`, test only). `waitWithEvidence` gains an optional `witness`, asked ONCE at the deadline.
+   `exitWitness(box, pane)` answers three things: the floor's own row for the pane, whether fieldd's terminal service
+   heard the exit, and what holds the run's typed-out file. So a red names its case: A, the interrupt never ended
+   `cat`; B, the floor never saw it end; C, the floor saw it and its exit never reached fieldd.
+2. **The backstop** (`a3f403ecc`). ghosttea's `SessionSummary.exited` was on every `list-sessions` row, and
+   `observed_row` dropped it. Contracts first: `ObservedTerminal.exited?: boolean`, `true` only, absent on a live row
+   and from an older floor; `pnpm gen`; the EL9 fixture `observed-state.exited-husk.json`, parsed on both sides.
+   fieldd's `handleInventory` reads a row listed `exited` as gone after `EXIT_GRACE_MS`. The three sources that said
+   "the inventory diff is the backstop" carry dated corrections.
+3. **The restart** (`01d71bacd`). A boot whose first inventory lists the kept pane `exited` reads it as a PTY that did
+   not survive (`runningRowOf` answers no row). It stamps the record `unknown` after the grace and returns its row
+   exited, with the resume verb (MF-1f).
+4. **The pending hold** (`8f238a596`). `closePending` holds MF-1f's exited row, heard or backstopped, as an attached
+   run's is held (`keepExitedRow`). LANDED's MF-1f entry carries a dated correction at its source.
+
+**Red-first** by mutation, each restored byte-identical. I97A (the loops' old clear) is red at 21.5 s on the real
+floor and 6.5 s on the mock; I97B (the husk read as running at boot) is red; I97C (the hold out) is red. As committed,
+all green. Row 2's read from the interrupt to exited, ×5: 1515–1621 ms, the grace and one fold tick. Rust: the husk
+row, and `fixture_parity` 18/18.
+
+**Not covered:** cases A and B, where the floor's own row is not `exited`. The witness names them.
+
+**Its draft deltas** rode the 2026-10-30 17:55Z queue (dev-local `62e16d02c`): the dated correction at
+`thinking-ar-agent-plane.md`'s AR-3 "the inventory diff is the backstop", and `specs/native-floor.md` §4.3's `exited`
+delta.
+
+## AR — item 92: the fake rosettad's late words come from a helper already running, and the rows they trail run under bounds wide of its wake (2026-10-29; `7af99678b`, in the stack's merge `0b4cb2ff0`)
+
+**The reds:** item 87's verify at `8d56b2bd8` and TS-4a's, where "an older binary whose words trail its exit is
+TERMINAL at once" spawned the binary three times; and the stack's rerun at `ec7899a4f` (load 362), where the crash row
+read "its stderr still open after 1000 ms".
+
+**The cause is the fake, not the supervisor:** `sayThenExit` under `FAKE_ROSETTAD_LATE_STDERR_MS` spawned a `node -e`
+at the exit, so a node boot rode the trail. Past `STDERR_DRAIN_MS` the supervisor rightly composes a crash.
+
+**The fix:**
+- A `/bin/sh` helper (`LATE_SH`; Windows keeps a node on the same protocol, `LATE_NODE`) says it is running before the
+  fake exits, takes the exit as its stdin's EOF, and writes the words after.
+- `LATE_DRAIN` (`STDERR_DRAIN_MS` 5 s, `STARTUP_TIMEOUT_MS` 6 s) is named by the three trailing-words rows. The
+  product's bounds are unchanged.
+- The fake's comment carries a dated correction: the 07:41Z rerun falsified "exactly the delay the rows name".
+
+**Red-first found the second bound.** M92 holds the helper's wake 1.5 s. At today's bounds it is red 3/3. With the
+drain raised alone it is still red 3/3, on "did not become ready in time", the startup bound. With `LATE_DRAIN` it is
+green 3/3; as committed, green, the file 32/32.
+
+## AR-6 — item 101: item 87's stall rows wait for the interrupted exit on the heard exit's own budget, its witness beside it (2026-10-29; `a2cf1b76a`, in the stack's merge `0b4cb2ff0`)
+
+**The reds,** both at TS-6 on James's Mac: its verify at `26b331dbc`, and its rerun inside his quiet window, where the
+load still went 18 → 471. The two stalled-cleanup rows ran out "the exited row … did not hold within 5000 ms" (6666
+and 6134 ms), last reading `persisted: true, resumable: false`.
+
+**The read:** it is the same interrupt-to-exited WAIT as AR-6-0's (`INTERRUPTED_EXIT_MS`, 15 s), so one exit had three
+budgets. What the rows prove (item 87) is that the exit is published before the cleanup ends, and the cleanup cannot
+end inside the row: the git sleeps `STALLED_GIT_MS` (30 s, now named). The 5 s was a guess at the heard exit's speed,
+never the property's bound.
+
+**The change, test only:** both waits take `INTERRUPTED_EXIT_MS` and `exitWitness(box, pane)`. The `exit_heard` check
+stays, so a backstopped `unknown` never passes as a heard exit.
+
+**Measured:** across 15 verify logs, the two rows ran 6240–11716 and 2852–6724 ms over 30 row-runs, one red each.
+Alone ×3 at load 37–44, all green.
