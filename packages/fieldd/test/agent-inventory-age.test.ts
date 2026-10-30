@@ -32,6 +32,7 @@ import type { AgentProvider, AgentProviderSessionOptions } from "@vibefield/pupp
 import { afterEach, describe, expect, it, vi } from "vitest";
 import WebSocket from "ws";
 import { LAST_RUN_SETTLE_MS } from "../src/agent-last-run";
+import { EXIT_GRACE_MS } from "../src/agent-runtime";
 import { bootstrap, type FielddDaemon, SessionRecordStore } from "../src/index";
 import type { SecretStore } from "../src/plugin-settings";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
@@ -495,4 +496,78 @@ describe("item 59 — a run's exit after a termination fieldd asked for (the moc
     expect(Date.now() - askedAt, "never before the asked bound").toBeGreaterThanOrEqual(6_000);
     expect(records.read(RUN)?.exited?.reason).toBe("unknown");
   }, 30_000);
+});
+
+// Item 97 — a kept pane whose process ended stays listed (MF-1g), so its leaving the inventory is not how its end is
+// told: the floor lists it `exited` (the contracts' husk fixture, ObservedTerminal.exited). The mock floor has no cell,
+// so no `session-exited` exists here at all: the row is the only word. A run's record held pending (it predates the
+// durable identity) is stamped from it, after the grace the floor's own exit would get to carry the outcome first.
+describe("a husk the floor lists exited (item 97; the mock floor)", () => {
+  /** observed-state.exited-husk.json's kept pane, on the agent cell */
+  const HUSK = "5e6f7a8b-9c0d-4e1f-a2b3-c4d5e6f7a8b9";
+  /** the husk fixture as its floor said it before the process ended: no row says `exited` */
+  const beforeTheExit = () => {
+    const husk = fixture("observed-state.exited-husk.json");
+    const rows = husk["terminals"] as Array<Record<string, unknown>>;
+    return { ...husk, terminals: rows.map(({ exited: _exited, ...row }) => row) };
+  };
+  /** The grace, and the 5 s every row here gives an observation to land. */
+  const STAMPED_WITHIN_MS = EXIT_GRACE_MS + 5_000;
+
+  it("a pending run whose PTY is listed exited is stamped exited after the grace, with no exit event, and its row stays over the kept pane", async () => {
+    const run = "run-pending-husk";
+    const { mock, daemon, records } = await agentDaemonOn(beforeTheExit(), (dataDir) => [
+      runRecord(run, HUSK, dataDir),
+    ]);
+    await until(
+      () => daemon.agents.list().sessions.some((row) => row.runtimeRunId === run),
+      5_000,
+      "held pending",
+    );
+    expect(
+      records.read(run)?.reattach?.state,
+      "held: its record predates the durable identity",
+    ).toBe("failed");
+    expect(records.read(run)?.exited).toBeUndefined();
+
+    mock.pushObserved(fixture("observed-state.exited-husk.json"));
+    await until(() => daemon.terminals.get(HUSK)?.exited === true, 5_000, "the husk's row heard");
+    await until(
+      () => records.read(run)?.exited !== undefined,
+      STAMPED_WITHIN_MS,
+      "stamped exited from the husk's row",
+    );
+    expect(records.read(run)?.exited).toMatchObject({
+      exitCode: null,
+      signal: null,
+      reason: "unknown",
+    });
+    // MF-1f — the pane is kept, so the row stays over it, exited (`closePending`'s hold)
+    const row = daemon.agents.list().sessions.find((r) => r.runtimeRunId === run);
+    expect(row?.continuation?.exited).toBe(true);
+  });
+
+  it("a restart across the exit: a record whose pane the FIRST inventory lists exited is stamped after the boot's grace, never held as running", async () => {
+    // fieldd was down while the agent ended; the floor kept its pane, listed `exited`, and has no exit event to give
+    const run = "run-ended-while-fieldd-was-down";
+    const { daemon, records } = await agentDaemonOn(
+      fixture("observed-state.exited-husk.json"),
+      (dataDir) => [runRecord(run, HUSK, dataDir)],
+    );
+    await until(
+      () => records.read(run)?.exited !== undefined,
+      STAMPED_WITHIN_MS,
+      "stamped by the boot sweep",
+    );
+    expect(records.read(run)?.exited).toMatchObject({
+      exitCode: null,
+      signal: null,
+      reason: "unknown",
+    });
+    expect(records.read(run)?.reattach, "never held: no attach was tried").toBeUndefined();
+    await until(() => daemon.agents.reattachSettled(), 5_000, "the re-attach settled");
+    // MF-1f — on THIS boot, the row is back over the kept pane, exited (never a blank until the next)
+    const row = daemon.agents.list().sessions.find((r) => r.runtimeRunId === run);
+    expect(row?.continuation?.exited).toBe(true);
+  });
 });
