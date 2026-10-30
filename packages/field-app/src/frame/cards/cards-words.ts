@@ -1,6 +1,7 @@
 import type { FrameView, ScreenshotCaptureError } from "@vibefield/contracts";
 import { sizeWords } from "../../format/bytes";
 import { relativeTime } from "../../format/relative-time";
+import type { ViewKeys } from "../views";
 import type { AgentCard, Card, CardOrigin } from "./cards-model";
 
 /**
@@ -18,12 +19,21 @@ const VIEW_NAMES: Readonly<Record<FrameView | "outside", string>> = {
   outside: "Another app",
 };
 
-const HOW_WORDS: Readonly<Record<CardOrigin["how"], string | null>> = {
-  copy: null,
-  snapshot: "snapshot",
-  paste: "⌘V",
-  drag: "dragged in",
-};
+/** How a card came in, after its view — a copy says nothing more, its view and place say where.
+ * A paste says its key, spelled as the frame spells its keys for the platform (`views.ts`, the
+ * line's ⌘T): "⌘V" on the Mac, "Ctrl+V" elsewhere. PURE. */
+function howWords(how: CardOrigin["how"], keys: ViewKeys): string | null {
+  switch (how) {
+    case "copy":
+      return null;
+    case "snapshot":
+      return "snapshot";
+    case "paste":
+      return keys === "mac" ? "⌘V" : "Ctrl+V";
+    case "drag":
+      return "dragged in";
+  }
+}
 
 export function viewName(view: FrameView | "outside"): string {
   return VIEW_NAMES[view];
@@ -33,11 +43,12 @@ export function viewName(view: FrameView | "outside"): string {
  * 2m ago", "Canvas · snapshot · just now", "Another app · dragged in · just
  * now" — and a paste with no caret by its act alone, "⌘V · just now": where
  * its words were copied is not known, since a pane's and a field's own copies
- * and a program's OSC 52 reach the clipboard with no card (LC-21). */
-export function provenance(card: Card, now: number): string {
+ * and a program's OSC 52 reach the clipboard with no card (LC-21). The key is
+ * the platform's (`keys`): "Ctrl+V · just now" off the Mac. */
+export function provenance(card: Card, now: number, keys: ViewKeys): string {
   const { origin } = card;
   const view = origin.how === "paste" ? null : viewName(origin.view);
-  return [view, origin.place ?? HOW_WORDS[origin.how], relativeTime(card.at, now)]
+  return [view, origin.place ?? howWords(origin.how, keys), relativeTime(card.at, now)]
     .filter((part): part is string => part !== null && part !== undefined && part !== "")
     .join(" · ");
 }

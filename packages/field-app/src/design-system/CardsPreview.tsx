@@ -37,7 +37,8 @@ import {
 // and provenances), and the shipping `CarriedCardView` over a card carried to
 // a pane. What it replaces is only what a host supplies: the cards (a picture
 // the catalog draws itself, as the edge tray's fixtures did), the pointer, the
-// drag, the clock and the window. The markup and the CSS are the product's.
+// drag, the clock, the window and the keys (the Mac's). The markup and the CSS
+// are the product's.
 
 /** The plates' clock: every card was dealt a few minutes before it. */
 const NOW = Date.UTC(2026, 9, 29, 14, 10);
@@ -290,6 +291,7 @@ export function CardsPlate({ state }: { state: CardsState }): ReactElement {
         carried={carried?.card.id ?? null}
         nudged={null}
         now={NOW}
+        keys="mac"
         reducedMotion={false}
         win={win}
       />
@@ -319,6 +321,7 @@ export function CardsFromPlate({ reach }: { readonly reach: string }): ReactElem
         carried={null}
         nudged={null}
         now={NOW}
+        keys="mac"
         reducedMotion={false}
         win={PLATE}
       />

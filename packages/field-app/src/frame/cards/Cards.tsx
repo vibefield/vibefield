@@ -14,6 +14,7 @@ import { noteCapture } from "../capture-state";
 import { type FrameSurface, foldSurface } from "../frame-surface";
 import { sayOnLine } from "../line-door";
 import { useActiveView } from "../view-state";
+import { viewKeysOf } from "../views";
 import { CardsView, type HeldCard, type LeavingCard } from "./CardsView";
 import { CarriedCardLayer } from "./CarriedCardLayer";
 import { type CardBox, getCarriedCard, startCardDrag, useCarriedCard } from "./card-drag";
@@ -85,7 +86,7 @@ const SETTLE_MS = 280;
 
 export type CardsHost = Pick<
   FieldHost,
-  "onScreenshotResult" | "screenshotStillUrl" | "pathForFile"
+  "onScreenshotResult" | "screenshotStillUrl" | "pathForFile" | "platform"
 >;
 
 export interface CardsProps {
@@ -99,7 +100,7 @@ export interface CardsProps {
   readonly settingsOpen?: boolean;
   /** The window's hand; a test hands its own. */
   readonly store?: CardStore;
-  /** The shell's doors; a test hands a fixture. */
+  /** The shell's doors and its platform; a test hands a fixture. */
   readonly host?: CardsHost;
   readonly now?: () => number;
 }
@@ -186,6 +187,9 @@ export function Cards({
   const host = hostProp ?? getHost();
   const state = useCards(store);
   const view = useActiveView();
+  // a paste's key in where a card came from, as the frame spells its keys (`views.ts`): the
+  // host's platform, the page's where a fixture host names none
+  const [keys] = useState(() => viewKeysOf(host.platform));
   const reducedMotion = useReducedMotion();
   const carriedId = useCarriedCard()?.card.id ?? null;
   const [win, setWin] = useState<CardWindow>(readWindow);
@@ -665,6 +669,7 @@ export function Cards({
         leaving={leaving}
         tucked={tucked}
         now={now()}
+        keys={keys}
         reducedMotion={reducedMotion}
         win={win}
         onRemove={remove}

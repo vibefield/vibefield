@@ -13,7 +13,11 @@
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { ScreenshotCaptureOk, ScreenshotCaptureResult } from "@vibefield/contracts";
+import type {
+  ScreenshotCaptureOk,
+  ScreenshotCaptureResult,
+  ShellPlatform,
+} from "@vibefield/contracts";
 import { act, type ReactElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -549,6 +553,26 @@ describe("the raised hand, for a reader (R-D 11)", () => {
     expect(fan.querySelectorAll('[role="option"]')).toHaveLength(0);
     expect(document.activeElement).toBe(under.el);
     expect(under.keys).toEqual([]);
+  });
+
+  it("names a pasted card by the key its host's platform spells, as the frame spells its keys — ⌘V on a Mac, Ctrl+V on Windows", () => {
+    const rows: ReadonlyArray<readonly [ShellPlatform, string]> = [
+      ["darwin", "Pasted — ⌘V · just now"],
+      ["win32", "Pasted — Ctrl+V · just now"],
+    ];
+    for (const [platform, said] of rows) {
+      const store = new CardStore(() => NOW);
+      store.deal(pasted("p1"));
+      store.landed("p1");
+      const el = mount(<Owned store={store} host={{ ...fakeHost(), platform }} />);
+      press(document.body, { key: "V", metaKey: true, shiftKey: true });
+      const option = el.querySelector('[role="option"]');
+      expect(option?.getAttribute("aria-label"), platform).toBe(said);
+      act(() => root?.unmount());
+      root = null;
+      container?.remove();
+      container = null;
+    }
   });
 });
 

@@ -1,3 +1,4 @@
+import type { ShellPlatform } from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
 import { type CardTarget, CardTargets, cardTargets } from "../src/frame/cards/card-targets";
 import {
@@ -24,6 +25,7 @@ import {
 } from "../src/frame/cards/cards-model";
 import { CardStore } from "../src/frame/cards/cards-store";
 import { provenance, TARGET_WORDS } from "../src/frame/cards/cards-words";
+import { viewKeysOf } from "../src/frame/views";
 
 // The hand's pure half (track HN; DESIGN.md §8 "The hand"): the fan's numbers,
 // the reach, the twelve, what a copy becomes, and the store's order.
@@ -179,9 +181,9 @@ describe("the provenance line and the targets", () => {
       origin: { view: "godview", place: "claude·2", how: "copy" },
       at: 0,
     });
-    expect(provenance(card, 120_000)).toBe("Godview · claude·2 · 2m ago");
+    expect(provenance(card, 120_000, "mac")).toBe("Godview · claude·2 · 2m ago");
     const from = (origin: CardOrigin): string =>
-      provenance(textCardOf("Hi.", { id: "q", origin, at: 0 }), 1_000);
+      provenance(textCardOf("Hi.", { id: "q", origin, at: 0 }), 1_000, "mac");
     // a paste with no caret says its act alone: where its words were copied is not known (LC-21)
     expect(from({ view: "outside", how: "paste" })).toBe("⌘V · just now");
     expect(from({ view: "outside", how: "drag" })).toBe("Another app · dragged in · just now");
@@ -191,6 +193,24 @@ describe("the provenance line and the targets", () => {
     );
     expect(from({ view: "history", how: "copy" })).toBe("History · just now");
     expect(TARGET_WORDS.pane("claude·2")).toBe("Paste into claude·2");
+  });
+
+  it("spells a paste's key as the frame spells its keys for each platform it knows: ⌘V on the Mac, Ctrl+V elsewhere — and only a paste's", () => {
+    const by = (how: CardOrigin["how"]): Card =>
+      textCardOf("Hi.", { id: "k", origin: { view: "outside", how }, at: 0 });
+    const rows: ReadonlyArray<readonly [ShellPlatform, string]> = [
+      ["darwin", "⌘V · just now"],
+      ["win32", "Ctrl+V · just now"],
+      ["linux", "Ctrl+V · just now"],
+      ["other", "Ctrl+V · just now"],
+    ];
+    for (const [platform, said] of rows) {
+      const keys = viewKeysOf(platform);
+      expect(provenance(by("paste"), 1_000, keys), platform).toBe(said);
+      expect(provenance(by("drag"), 1_000, keys), platform).toBe(
+        "Another app · dragged in · just now",
+      );
+    }
   });
 
   it("answers the topmost place under a point, and forgets one unregistered", () => {
