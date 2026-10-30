@@ -8375,6 +8375,9 @@ impl ObservedState {
 #[doc = "    \"cwd\": {"]
 #[doc = "      \"type\": \"string\""]
 #[doc = "    },"]
+#[doc = "    \"exited\": {"]
+#[doc = "      \"type\": \"boolean\""]
+#[doc = "    },"]
 #[doc = "    \"persistence\": {"]
 #[doc = "      \"type\": \"string\""]
 #[doc = "    },"]
@@ -8404,6 +8407,8 @@ pub struct ObservedTerminal {
     pub created_at: ::std::option::Option<i64>,
     #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
     pub cwd: ::std::option::Option<::std::string::String>,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub exited: ::std::option::Option<bool>,
     #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
     pub persistence: ::std::option::Option<::std::string::String>,
     #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
@@ -16342,6 +16347,7 @@ pub mod builder {
             ::std::option::Option<::std::string::String>,
             ::std::string::String,
         >,
+        exited: ::std::result::Result<::std::option::Option<bool>, ::std::string::String>,
         persistence: ::std::result::Result<
             ::std::option::Option<::std::string::String>,
             ::std::string::String,
@@ -16359,6 +16365,7 @@ pub mod builder {
                 cell: Ok(Default::default()),
                 created_at: Ok(Default::default()),
                 cwd: Ok(Default::default()),
+                exited: Ok(Default::default()),
                 persistence: Ok(Default::default()),
                 pid: Ok(Default::default()),
                 session_id: Err("no value supplied for session_id".to_string()),
@@ -16395,6 +16402,16 @@ pub mod builder {
             self.cwd = value
                 .try_into()
                 .map_err(|e| format!("error converting supplied value for cwd: {e}"));
+            self
+        }
+        pub fn exited<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<bool>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.exited = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for exited: {e}"));
             self
         }
         pub fn persistence<T>(mut self, value: T) -> Self
@@ -16447,6 +16464,7 @@ pub mod builder {
                 cell: value.cell?,
                 created_at: value.created_at?,
                 cwd: value.cwd?,
+                exited: value.exited?,
                 persistence: value.persistence?,
                 pid: value.pid?,
                 session_id: value.session_id?,
@@ -16460,6 +16478,7 @@ pub mod builder {
                 cell: Ok(value.cell),
                 created_at: Ok(value.created_at),
                 cwd: Ok(value.cwd),
+                exited: Ok(value.exited),
                 persistence: Ok(value.persistence),
                 pid: Ok(value.pid),
                 session_id: Ok(value.session_id),

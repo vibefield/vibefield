@@ -1,0 +1,14 @@
+{
+  "answered": true,
+  "hits": [
+    {
+      "session": "9a0c1e77-4b2d-4e0a-9f6e-2b8f1f5d3c11",
+      "title": "Re-attach for every agent",
+      "agent": "claude",
+      "profile": "work",
+      "folder": "/Users/you/code/vibe-field",
+      "at": 1793180000000,
+      "snippet": "the [reattach] study ruled RA-D1 to D9"
+    }
+  ]
+}

@@ -888,7 +888,7 @@ describe("Setup Assistant", () => {
     expect(text()).toContain("Your field, on every device.");
   });
 
-  it("does not re-ask a root that is already linked — it moves on to the posture question", async () => {
+  it("does not re-ask a root that is already linked, and asks no sync question (TS-6, TS-D13)", async () => {
     host(vi.fn(async () => ({ ...FRESH, color: "accent-2" }) as FieldUserProfile));
     await mount({
       fieldd: client({ link: LINKED }),
@@ -896,27 +896,10 @@ describe("Setup Assistant", () => {
       onComplete: vi.fn(),
     });
 
-    expect(text()).toContain("What should new projects do?");
-    expect(
-      container?.querySelectorAll('[role="radiogroup"][aria-label="Sync posture"] input'),
-    ).toHaveLength(2);
-  });
-
-  it("writes the posture through the same key and words as Settings → Account", async () => {
-    host(vi.fn(async () => ({ ...FRESH, color: "accent-2" }) as FieldUserProfile));
-    const fieldd = client({ link: LINKED });
-    await mount({ fieldd, onboarding: onboarding({ color: "accent-2" }), onComplete: vi.fn() });
-
-    expect(text()).toContain("Sync new projects automatically");
-    expect(text()).toContain("Ask per project");
-    const cards = container?.querySelectorAll<HTMLInputElement>(
-      '[role="radiogroup"][aria-label="Sync posture"] input[type="radio"]',
-    );
-    await act(async () => cards?.[1]?.click());
-    expect(fieldd.request).toHaveBeenCalledWith("storage.appPreferences.set", {
-      key: "mesh.syncPosture",
-      value: "opt-in",
-    });
+    // straight to Setting up: the first new field after connecting asks it
+    expect(container?.querySelector('ul[aria-label="Setting up"]')).not.toBeNull();
+    expect(text()).not.toContain("Your field, on every device.");
+    expect(container?.querySelector('[role="radiogroup"][aria-label="Sync posture"]')).toBeNull();
   });
 
   // TS-2 — the Connect pane (DESIGN.md §8): the payoff asked once,
@@ -1351,7 +1334,8 @@ describe("Setup Assistant", () => {
     host(vi.fn(async () => ({ ...FRESH, color: "accent-2" }) as FieldUserProfile));
     const fieldd = client({ link: LINKED });
     await mount({ fieldd, onboarding: onboarding({ color: "accent-2" }), onComplete: vi.fn() });
-    await click("Continue"); // the sync question → Setting up
+    // straight to Setting up: the sync question left setup at TS-6 (TS-D13)
+    expect(container?.querySelector('ul[aria-label="Setting up"]')).not.toBeNull();
     expect(fieldd.request).not.toHaveBeenCalledWith("setup.answer", expect.anything());
   });
 
@@ -1527,8 +1511,12 @@ describe("Setup Assistant", () => {
 
 describe("BootRoot during onboarding", () => {
   /** A hand-driven machine: its view moves when the test says, and it holds the
-   * wizard (client live, the onboarding input set) from the start. */
-  function heldMachine(initial: BootView = bootAt("onboarding")): {
+   * wizard (client live, the onboarding input set) from the start — or from
+   * when `holds` says so. */
+  function heldMachine(
+    initial: BootView = bootAt("onboarding"),
+    holds: () => boolean = () => true,
+  ): {
     machine: BootMachine;
     set: (next: BootView) => Promise<void>;
   } {
@@ -1549,7 +1537,7 @@ describe("BootRoot during onboarding", () => {
         return fieldd;
       },
       get onboarding() {
-        return input;
+        return holds() ? input : null;
       },
       start: () => {},
       retry: () => {},
@@ -1584,11 +1572,33 @@ describe("BootRoot during onboarding", () => {
     const ground = container?.querySelector(".vf-splash");
     expect(ground).not.toBeNull();
     expect(ground?.className).toContain("absolute inset-0");
-    // ...without the splash's own face: no bar, no stage line.
+    // ...without the splash's own face: no bar, no stage line, and the field's
+    // mark gone under the glass (track FG).
     expect(container?.querySelector('[role="progressbar"]')).toBeNull();
+    expect(ground?.querySelector(".vf-field")?.getAttribute("data-mark")).toBe("hidden");
     expect(text()).toContain(
       "Manage all your agents and compose your agentic workflow in one place.",
     );
+  });
+
+  it("stands the glass on the splash's own field: one node from the first paint, its mark gone under the glass (track FG)", async () => {
+    host(vi.fn(async () => FRESH));
+    let holding = false;
+    const { machine, set } = heldMachine(
+      bootAt("connecting-fieldd", { stage: "waking the daemon" }),
+      () => holding,
+    );
+    await mountBoot(machine);
+    const field = container?.querySelector(".vf-splash .vf-field");
+    expect(field?.getAttribute("data-mark")).toBe("shown");
+    expect(container?.querySelector('[role="progressbar"]')).not.toBeNull();
+
+    holding = true;
+    await set(bootAt("onboarding"));
+    expect(container?.querySelector(".vf-splash .vf-field")).toBe(field);
+    expect(field?.getAttribute("data-mark")).toBe("hidden");
+    expect(container?.querySelector('[role="progressbar"]')).toBeNull();
+    expect(container?.querySelector(".vf-wizard-shell")).not.toBeNull();
   });
 
   it("keeps the wizard's glass while the desk opens beneath it, then leaves as the splash would (AO-D2)", async () => {
@@ -1596,12 +1606,15 @@ describe("BootRoot during onboarding", () => {
     const { machine, set } = heldMachine();
     await mountBoot(machine);
     const ground = container?.querySelector(".vf-splash");
+    const field = ground?.querySelector(".vf-field");
 
     // Past the hold the document opens, warms, settles and waits — and the
-    // wizard keeps the window the whole way: the splash never comes back.
+    // wizard keeps the window the whole way: the splash never comes back, and
+    // the field under the glass is the one it stood on.
     for (const phase of ["opening-document", "warming", "stabilizing", "handing-over"] as const) {
       await set(bootAt(phase, { stage: phase === "warming" ? "drawing the board" : "" }));
       expect(container?.querySelector(".vf-splash")).toBe(ground);
+      expect(ground?.querySelector(".vf-field")).toBe(field);
       expect(container?.querySelector(".vf-wizard-shell")).not.toBeNull();
       expect(container?.querySelector('[role="progressbar"]')).toBeNull();
       expect(ground?.className).toContain("opacity-100");

@@ -219,6 +219,33 @@ fn inventory_bound_fixtures() {
     assert!(serde_json::from_value::<ObservedState>(negative).is_err());
 }
 
+/// Item 97 — a husk on the inventory: a `keep-until-explicit-close` pane whose
+/// process has ended stays listed, and its row says so. field-native EMITS the
+/// row, so the fixture is strict. The live row beside it pins that a running
+/// session carries no `exited` at all (`None` is skipped), which keeps every
+/// live row's bytes where they were.
+#[test]
+fn exited_husk_fixture() {
+    roundtrip::<ObservedState>("observed-state.exited-husk.json", true);
+    let husk: ObservedState =
+        serde_json::from_value(load("observed-state.exited-husk.json")).expect("husk");
+    assert_eq!(husk.terminals.len(), 2);
+    assert_eq!(husk.terminals[0].exited, None);
+    assert_eq!(husk.terminals[1].exited, Some(true));
+    assert_eq!(
+        husk.terminals[1].persistence.as_deref(),
+        Some("keep-until-explicit-close")
+    );
+    // the older floors' rows carry no exit fact
+    for name in ["observed-state.valid.json", "observed-state.fresh.json"] {
+        let older: ObservedState = serde_json::from_value(load(name)).expect(name);
+        assert!(
+            older.terminals.iter().all(|row| row.exited.is_none()),
+            "{name}"
+        );
+    }
+}
+
 #[test]
 fn mgmt_freeway_fixtures() {
     // FW-D4 (thinking-freeway.md v0.3 §4.3, §5.2) — the freeway's floor seam. The floor EMITS the

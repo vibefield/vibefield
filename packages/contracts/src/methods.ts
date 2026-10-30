@@ -972,6 +972,17 @@ export const METHODS: MethodDef[] = [
     locality: "sync",
     subscription: WHOLE_VALUE_STREAM,
   }),
+  // IOS-8f (AP-D3's end state; `thinking-ios-account.md` §3) — who this desktop's person is: the daemon's own
+  // user row as its windows show it (`UserMeResult`), asked by the phone once per connection beside the roster,
+  // and the answer replaces the face the phone dealt. workspace.read, as the roster is (the same audience reads
+  // device names today); local — a peer daemon has its own person.
+  defineMethod({
+    surface: "product",
+    method: "user.me",
+    scope: "workspace.read",
+    idempotent: true,
+    locality: "local",
+  }),
   // TS-3b (P9, TS-D17 A) — the person's own name for THIS device, or null for
   // the computer's. Local: it edits this device's file and republishes its own
   // slice; a peer is never renamed from here. Desktop callers only.
@@ -2783,5 +2794,33 @@ export const METHODS: MethodDef[] = [
         },
       },
     },
+  }),
+  // CO (the compose plane, version 2, ruled 2026-10-29; compose.ts) — the sparks' doors for the window: Chat's list,
+  // the New spark sheet, and waking one. `agents.manage`, like the other acts on this machine's agents a person takes at
+  // this device (the window holds it; no tailnet preset and no plugin eligibility table does), because a spark is an
+  // agent that may start agents: hatching one is not a plugin's call to make. `local`: a spark lives on the desktop
+  // that hatched it (sparks on the phone are not designed yet). The spark's own tools are not METHODS rows: they are
+  // compose.ts's catalog, served by fieldd's MCP server, and their names are a tool's, not a dotted method's.
+  defineMethod({
+    surface: "product",
+    method: "compose.sparks.list",
+    scope: "agents.manage",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "compose.sparks.hatch",
+    scope: "agents.manage",
+    idempotent: false,
+    locality: "local",
+  }),
+  // Declarative: a second open finds the spark awake and answers it as it is.
+  defineMethod({
+    surface: "product",
+    method: "compose.sparks.open",
+    scope: "agents.manage",
+    idempotent: true,
+    locality: "local",
   }),
 ];

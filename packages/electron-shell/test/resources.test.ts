@@ -436,7 +436,24 @@ describe("assertPackagedResources", () => {
     expect(pkg.fielddCommand).not.toContain(REPO);
     expect(pkg.fieldNativePath).not.toContain(REPO);
     // With nothing on disk at those paths, boot must fail rather than search.
-    expect(() => assertPackagedResources(pkg)).toThrow(ResourceError);
+    // The disk is the test's own (item 113): nothing at the packaged paths and a
+    // whole development tree under REPO, so a search would find one. A default
+    // reader read the HOST's installed app, and on a machine with VibeField in
+    // /Applications the packaged paths were there and nothing threw.
+    const devTreeOnly = (path: string): Uint8Array | null =>
+      path.startsWith(REPO) ? MACHO_ARM64 : null;
+    try {
+      assertPackagedResources(pkg, {
+        nodeArch: "arm64",
+        readHead: devTreeOnly,
+        readText: (path) => (path.startsWith(REPO) ? textReader()(path) : null),
+      });
+      throw new Error("expected a ResourceError");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ResourceError);
+      expect((error as ResourceError).code).toBe("fieldd-bundle-missing");
+      expect((error as ResourceError).path).toBe(pkg.fielddCommand);
+    }
   });
 });
 

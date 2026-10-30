@@ -2,10 +2,12 @@ import { AppPreferences } from "@vibefield/contracts";
 import { useFielddClient, useSubscription } from "@vibefield/fieldd-client/react";
 import { useState } from "react";
 
-// The sync-posture question, asked in two places (UA-3/UA-3w): the Account
-// page's section and the Setup Assistant's pane 4. Same key, same words, same
-// write — a user who answers it in the wizard must not be asked something
-// subtly different in Settings a week later.
+// The sync-posture question, asked in two places: Settings → Devices' New
+// projects (moved from Account at TS-3a) and the sync question at the first new
+// field after connecting (TS-6, TS-D13; the Setup Assistant asked it until
+// then). Same key, same words, same write, one face (`PostureCards.tsx`) — a
+// user who answers it at New field must not be asked something subtly
+// different in Settings a week later.
 
 export type SyncPosture = "automatic" | "opt-in";
 

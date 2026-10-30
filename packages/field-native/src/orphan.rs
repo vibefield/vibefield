@@ -52,6 +52,62 @@ pub trait SessionCensus: Send + Sync {
     /// Asks every live cell for a reconcile now, so a count from after this moment comes within a reconcile tick
     /// rather than at a quiet cell's backstop.
     fn ask(&self);
+    /// Item 94 — each live cell with no reconcile begun after `after` and applied, and what its pump is doing.
+    fn not_fresh(&self, after: Instant) -> Vec<(u32, NotFresh)>;
+}
+
+/// Item 94 (2026-10-29) — why one cell has no count from after a moment yet, as its pump's stamp says it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NotFresh {
+    /// a reconcile in flight (`part`, for `for_ms`): slow, or begun before the moment with the asked one to follow
+    Reconciling { part: &'static str, for_ms: u64 },
+    /// between reconciles and owed one for `waiting_ms` (it heard the ask, or ended a reconcile begun before the
+    /// moment after it, with the ask still to hear): its next tick has not come
+    TickLate { waiting_ms: u64 },
+    /// between reconciles since before the moment and no ask heard since: its count would come only at its backstop
+    Unheard,
+    /// dialing its cell, waiting to dial again, or its pump not yet spawned
+    Dialing,
+}
+
+/// The one word a count that did not come in time is said with (item 94). `slow` when every cell still owed was
+/// mid-work (reconciling, or owed its next tick): the bound met a loaded floor, and the count was coming. `unheard`
+/// when a cell sat between reconciles from before the moment without hearing the ask: that count would not have come
+/// in time on any floor. `dialing` when a cell was being dialed. None owed is `slow` too: the last owed reconcile was
+/// applied between the deadline's census and this read, mid-work to the end.
+pub fn why_not_fresh(cells: &[(u32, NotFresh)]) -> &'static str {
+    if cells.iter().any(|(_, cell)| *cell == NotFresh::Unheard) {
+        "unheard"
+    } else if cells.iter().any(|(_, cell)| *cell == NotFresh::Dialing) {
+        "dialing"
+    } else {
+        "slow"
+    }
+}
+
+/// The cells still owed, for the give-up line: `1:reconciling(round_trip,1840ms) 2:unheard`.
+fn describe_not_fresh(cells: &[(u32, NotFresh)]) -> String {
+    let described: Vec<String> = cells
+        .iter()
+        .map(|(instance, cell)| match cell {
+            NotFresh::Reconciling { part, for_ms } => {
+                format!("{instance}:reconciling({part},{for_ms}ms)")
+            }
+            NotFresh::TickLate { waiting_ms } => format!("{instance}:tick_late({waiting_ms}ms)"),
+            NotFresh::Unheard => format!("{instance}:unheard"),
+            NotFresh::Dialing => format!("{instance}:dialing"),
+        })
+        .collect();
+    described.join(" ")
+}
+
+/// What a fresh count is read for, as its give-up line names it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CountFor {
+    /// the next hello's record of a departure, whose wall-clock instant is the record's `at`
+    Departure { at_ms: u64 },
+    /// the orphan bound's confirming read
+    Bound,
 }
 
 /// How long a fresh count is waited for once asked: twice the slow-reconcile line, 2 × 1 s = 2 s. An asked reconcile
@@ -127,16 +183,60 @@ impl ManagerPresence {
 
     /// The count from reconciles begun after `after`, asked for and waited for up to `wait`: `None` when it cannot be
     /// read or is not fresh in time — unknown, never a stale zero.
-    pub async fn fresh_count(&self, after: Instant, wait: Duration) -> Option<u64> {
+    ///
+    /// *Item 94 (2026-10-29):* a count not fresh in time used to be said only as that `None`. In a loaded verify the
+    /// next hello's record of a crash read `sessions: null` with nothing to say whether the bound met a slow floor or
+    /// a cell that never heard the ask. The give-up now names every cell still owed and what its pump was doing
+    /// (`manager_count_unknown`, `why`).
+    pub async fn fresh_count(
+        &self,
+        after: Instant,
+        wait: Duration,
+        purpose: CountFor,
+    ) -> Option<u64> {
         self.ask();
         let deadline = Instant::now() + wait;
         loop {
             match self.census(Some(after)) {
                 Census::Counted(sessions) => return Some(sessions),
                 Census::Unknown => return None,
-                Census::NotYet if Instant::now() >= deadline => return None,
+                Census::NotYet if Instant::now() >= deadline => {
+                    self.say_not_fresh(after, wait, purpose);
+                    return None;
+                }
                 Census::NotYet => tokio::time::sleep(FRESH_COUNT_POLL).await,
             }
+        }
+    }
+
+    fn say_not_fresh(&self, after: Instant, wait: Duration, purpose: CountFor) {
+        let owed = self
+            .census
+            .get()
+            .map_or_else(Vec::new, |census| census.not_fresh(after));
+        let why = why_not_fresh(&owed);
+        let cells = describe_not_fresh(&owed);
+        let waited_ms = wait.as_millis() as u64;
+        match purpose {
+            CountFor::Departure { at_ms } => tracing::warn!(
+                event = "field_native.lifecycle.manager_count_unknown",
+                component = "lifecycle",
+                count_for = "departure",
+                at_ms,
+                waited_ms,
+                why,
+                cells = %cells,
+                "the sessions that outlived the management client were not counted in time; the record says unknown"
+            ),
+            CountFor::Bound => tracing::warn!(
+                event = "field_native.lifecycle.manager_count_unknown",
+                component = "lifecycle",
+                count_for = "bound",
+                waited_ms,
+                why,
+                cells = %cells,
+                "the orphan bound's confirming count did not come in time; a whole new span must pass"
+            ),
         }
     }
 
@@ -187,7 +287,10 @@ impl ManagerPresence {
         let sessions = if departed.planned {
             self.census(Some(departed.at)).counted()
         } else {
-            self.fresh_count(departed.at, wait).await
+            let purpose = CountFor::Departure {
+                at_ms: departed.at_ms,
+            };
+            self.fresh_count(departed.at, wait, purpose).await
         };
         Some(NativeLastManager {
             planned: departed.planned,
@@ -303,7 +406,10 @@ pub fn spawn(
             }
             // the confirming read: a count asked for and read from reconciles begun after the decision, so a session
             // born since a cell's last reconcile is in it; one not fresh in time is a whole new wait, never a stop
-            let census = state.manager.fresh_count(decided, FRESH_COUNT_WAIT).await;
+            let census = state
+                .manager
+                .fresh_count(decided, FRESH_COUNT_WAIT, CountFor::Bound)
+                .await;
             if state.manager.vacant_since().is_none() || census != Some(0) {
                 bound.refused();
                 tracing::info!(
@@ -441,6 +547,39 @@ mod tests {
             self.0
         }
         fn ask(&self) {}
+        fn not_fresh(&self, _after: Instant) -> Vec<(u32, NotFresh)> {
+            Vec::new()
+        }
+    }
+
+    // Item 94 (2026-10-29): a count not fresh in time is said with one word. Only a floor whose every owed cell was
+    // mid-work says `slow`; a cell idle from before the moment that never heard the ask says `unheard`, whatever else
+    // was slow beside it.
+    #[test]
+    fn a_count_not_fresh_in_time_says_slow_only_when_every_owed_cell_was_mid_work() {
+        let reconciling = NotFresh::Reconciling {
+            part: "round_trip",
+            for_ms: 1_840,
+        };
+        let late = NotFresh::TickLate { waiting_ms: 1_900 };
+        assert_eq!(why_not_fresh(&[(1, reconciling), (2, late)]), "slow");
+        assert_eq!(
+            why_not_fresh(&[]),
+            "slow",
+            "applied just after the deadline"
+        );
+        assert_eq!(
+            why_not_fresh(&[(1, reconciling), (2, NotFresh::Unheard)]),
+            "unheard"
+        );
+        assert_eq!(
+            why_not_fresh(&[(1, late), (2, NotFresh::Dialing)]),
+            "dialing"
+        );
+        assert_eq!(
+            describe_not_fresh(&[(1, reconciling), (2, late), (3, NotFresh::Unheard)]),
+            "1:reconciling(round_trip,1840ms) 2:tick_late(1900ms) 3:unheard"
+        );
     }
 
     #[tokio::test]
@@ -530,6 +669,14 @@ mod tests {
                 // an asked reconcile begins at the pump's next tick, after the ask
                 std::thread::sleep(Duration::from_millis(1));
                 *self.last.lock().unwrap() = (Instant::now(), self.sessions);
+            }
+        }
+
+        /// A mute cell never hears the ask.
+        fn not_fresh(&self, after: Instant) -> Vec<(u32, NotFresh)> {
+            match self.count(Some(after)) {
+                Census::NotYet => vec![(1, NotFresh::Unheard)],
+                Census::Counted(_) | Census::Unknown => Vec::new(),
             }
         }
     }
