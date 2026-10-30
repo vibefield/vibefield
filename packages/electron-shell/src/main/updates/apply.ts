@@ -7,7 +7,7 @@
 // (`electron.d.ts:2103-2104`), so Squirrel is staged only AFTER the daemons have stopped — the one state where an
 // armed install is safe — and from that stop on, the flow always ends in exit and nothing may start a daemon.
 
-import { TerminalListResult } from "@vibefield/contracts";
+import { releaseName, TerminalListResult } from "@vibefield/contracts";
 import type { UpdateQuitPlan } from "../quit-flow";
 
 /** One session the floor holds, as the census read it: the id is what the person consents to and what fieldd
@@ -98,7 +98,8 @@ export const CONSENT_LISTED_MAX = 5;
 const plural = (n: number, one: string, many: string): string => (n === 1 ? one : many);
 
 /** EDP-35's consent, in DESIGN.md §9's voice: the wording IS the consequence. Composed ONCE (L3c-ii): the tray's box
- * joins these words, and the Settings card lays the same words out, so the two cannot say different things. */
+ * joins these words, and the Settings card lays the same words out, so the two cannot say different things. AU-1
+ * (LC-2): the version is said by its friendly name (`releaseName`), as the window says it. */
 export type ConsentWords = {
   readonly message: string;
   readonly lead: string;
@@ -115,7 +116,7 @@ export function consentWords(version: string, sessions: readonly CensusSession[]
   });
   return {
     message: `Updating ends ${n} ${plural(n, "terminal session", "terminal sessions")}`,
-    lead: `VibeField ${version} replaces the terminal service, which ends:`,
+    lead: `${releaseName(version, { start: true })} replaces the terminal service, which ends:`,
     listed,
     more: n - listed.length,
     confirm: `End ${n} ${plural(n, "session", "sessions")} and update`,
@@ -154,15 +155,29 @@ export function quitNotice(reason: "squirrel-timeout" | "install-failed"): BoxCo
   };
 }
 
+/** AU-5 (AU-D9 A; LC-36) — the quit box's last line when a person's quit will hand `version` to Squirrel as VibeField
+ * quits: one declarative sentence, its friendly name first ("The Oct 28 nightly installs as you quit." · "VibeField
+ * 0.2.0 installs as you quit."). Said only when main will try (`UpdateController.quitInstallLine`). */
+export function quitInstallWords(version: string): string {
+  return `${releaseName(version, { start: true })} installs as you quit.`;
+}
+
+/** A lever of the signed policy (B1) that refused one version, as the words name it. */
+export type LeverWhy =
+  | { readonly kind: "killed"; readonly channel: string }
+  | { readonly kind: "yanked"; readonly version: string }
+  | { readonly kind: "floor-unmet"; readonly version: string; readonly floor: string };
+
+/** A paused channel and an OS floor read the same whether they stopped an install or a download. */
+const pausedDetail = (channel: string): string =>
+  `Updates on the ${channel} channel are paused by VibeField's publisher. Nothing changed; your current version keeps running.`;
+const floorDetail = (version: string, floor: string): string =>
+  `${releaseName(version, { start: true })} needs macOS ${floor} or later. Nothing changed; your current version keeps running.`;
+
 /** Why the apply did not start, said before anything is torn down (L3b-i, B1/B2; DESIGN.md §9). The person clicked
  * "Restart to Update"; nothing changed, and the words say what happens next. */
 export function policyNotice(
-  why:
-    | { readonly kind: "unreachable" }
-    | { readonly kind: "unverified" }
-    | { readonly kind: "killed"; readonly channel: string }
-    | { readonly kind: "yanked"; readonly version: string }
-    | { readonly kind: "floor-unmet"; readonly version: string; readonly floor: string },
+  why: { readonly kind: "unreachable" } | { readonly kind: "unverified" } | LeverWhy,
 ): BoxContent {
   const detail = (() => {
     switch (why.kind) {
@@ -172,15 +187,34 @@ export function policyNotice(
       case "unverified":
         return "VibeField checks the update policy before installing, and the policy it found didn't verify. Nothing changed; it checks again next time.";
       case "killed":
-        return `Updates on the ${why.channel} channel are paused by VibeField's publisher. Nothing changed; your current version keeps running.`;
+        return pausedDetail(why.channel);
       case "yanked":
-        return `VibeField ${why.version} was withdrawn after it downloaded, so it won't install. Nothing changed; the next update replaces it.`;
+        return `${releaseName(why.version, { start: true })} was withdrawn after it downloaded, so it won't install. Nothing changed; the next update replaces it.`;
       case "floor-unmet":
-        return `VibeField ${why.version} needs macOS ${why.floor} or later. Nothing changed; your current version keeps running.`;
+        return floorDetail(why.version, why.floor);
     }
   })();
   return {
     message: "VibeField didn't install the update",
+    detail,
+    buttons: ["OK"],
+    defaultId: 0,
+    cancelId: 0,
+  };
+}
+
+/** AU-1 (AU-G5, AU-G6) — why a person's Download did not start: a lever refused the version before any byte came, so
+ * the words say "download", never "install" or "after it downloaded". The message is the one the window says for a
+ * download refusal main sends no words for, so the two never differ on it. */
+export function downloadNotice(why: LeverWhy): BoxContent {
+  const detail =
+    why.kind === "killed"
+      ? pausedDetail(why.channel)
+      : why.kind === "yanked"
+        ? `${releaseName(why.version, { start: true })} was withdrawn, so it won't download. Nothing changed; the next update replaces it.`
+        : floorDetail(why.version, why.floor);
+  return {
+    message: "VibeField didn't download the update",
     detail,
     buttons: ["OK"],
     defaultId: 0,
@@ -195,6 +229,20 @@ export function censusNotice(): BoxContent {
     message: "VibeField didn't install the update",
     detail:
       "VibeField couldn't read which terminal sessions are running, so it ended none. Nothing changed; try again in a moment.",
+    buttons: ["OK"],
+    defaultId: 0,
+    cancelId: 0,
+  };
+}
+
+/** AU-7 (AU-G8; LC-10) — macOS won't let a bundle that runs read-only (App Translocation, a mounted disk image, an
+ * unwritable folder) replace itself: said before anything stops, by the Restart that would lead nowhere and by a
+ * person's Download alike, so the one sentence names the way out. */
+export function locationNotice(): BoxContent {
+  return {
+    message: "VibeField can't update itself from here",
+    detail:
+      "macOS won't let VibeField replace itself where it runs now. Move it to Applications and it updates as usual.",
     buttons: ["OK"],
     defaultId: 0,
     cancelId: 0,

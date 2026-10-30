@@ -15,6 +15,13 @@
 //   5 unresolved  nightly-only heads for the beta build → `channel-unresolved`; the nightly's feed never asked for
 //   every run     the floor's freeway host runs from the app's own `Contents/Resources/bin` (F1): the floor spawns it on
 //                 fieldd's first declaration, which every boot makes — staged, executable, found as the floor's sibling
+//   AU-5, OPT-IN (`--runs quit`, LC-29; never in the default five)
+//   quit          staged as run 1 (no confirmation lever), then a PERSON's quit — a quit Apple Event to the run's pid
+//                 (`NSRunningApplication terminate`), never a signal — judged from outside (`judgeQuit`): the census gate
+//                 ran, a pair stopped, and only then Squirrel took the random bytes and refused them; the fresh policy
+//                 was read at the quit; state.json's lastApply is exited · squirrel-refused · quit; the app exited 0
+//                 and nothing relaunched in 10 s; the zip still asked for once. The trigger is UNVERIFIED unattended:
+//                 macOS may ask a person to allow the Apple Event (Automation), so the run stays opt-in
 //
 // Each run is held inside its temp root (R5): `HOME` (the production log root and electron-updater's cache follow
 // `os.homedir()`), `FIELDD_DATA_DIR`, `--user-data-dir`, `--allow-dev-trust`, a loopback `VIBEFIELD_UPDATE_ORIGIN`.
@@ -23,7 +30,7 @@
 // of the asar. EL7: the run's keys live only in this process (and the stager's environment, for the stage); nothing
 // secret is written; the app's environment carries none.
 //
-// usage: node packaging/run-update-smoke.mjs [--runs staged,forged,…]
+// usage: node packaging/run-update-smoke.mjs [--runs staged,forged,…|quit]
 //   Every invocation builds its own zip: the package must trust THIS run's keys, which exist only in this process. The
 //   build is the row's first ~4 minutes (desk-gates row 30).
 
@@ -46,6 +53,7 @@ import { leftByRun, listRunProcesses, SMOKE_RUN_ENV } from "./smoke-daemons.mjs"
 import {
   buildRun,
   mintKeys,
+  OPT_IN_RUNS,
   serveReleases,
   smokeTrustRoot,
   UPDATE_RUNS,
@@ -67,6 +75,11 @@ export const UPDATER_CACHE_DIR = "@vibefielddesktop-updater";
 export const FREEWAY_HOST_ARGS = "--listener-fd 3";
 /** How long after a run's verdict its freeway host may still be coming up. */
 const HOST_BOUND_MS = 10_000;
+/** AU-5 — a person's quit to its exit: the durable close, the gate's stop, the 3 s policy read, the 30 s stage, the
+ * teardown. */
+export const QUIT_INSTALL_BOUND_MS = 90_000;
+/** AU-5 — how long after the exit a relaunch would show (none may). */
+export const RELAUNCH_WATCH_MS = 10_000;
 /** Secrets that must never reach the app's environment (EL7). */
 const SECRET_ENVS = [
   "VIBEFIELD_SMOKE_BUNDLED_SECRET",
@@ -173,6 +186,62 @@ export function judgeRun(run, { events, requests, cached }, { final = false } = 
   return { ok: problems.length === 0, saw, ...(problems.length > 0 ? { problems } : {}), ...base };
 }
 
+/** AU-5 — the run's persisted update state's `lastApply` (`<profile>/updates/state.json`), or null. */
+export function readLastApply(profile) {
+  try {
+    const state = JSON.parse(readFileSync(join(profile, "updates", "state.json"), "utf8"));
+    return state.lastApply ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * AU-5 — the quit run's verdict, read after a PERSON's quit: the census gate ran and a pair stopped BEFORE Squirrel took
+ * the payload (the random bytes are refused), install on quit said so, the policy was read fresh at the quit
+ * (`afterQuit`: the fixture's requests since the quit), the zip was still asked for once (`zips`), state.json's record
+ * says the quit began it, the app exited 0 (`exit`) and no VibeField of the run came back (`relaunched`).
+ */
+export function judgeQuit({ events, afterQuit, zips, lastApply, exit, relaunched }) {
+  const at = (event) => events.findIndex((record) => record.event === event);
+  const census = at("desktop.quit.census_read");
+  const stopped = at("desktop.quit.pair_stopped");
+  const refused = at("desktop.update.squirrel_refused");
+  const said = events.find((record) => record.event === "desktop.update.quit_install");
+  const problems = [];
+  if (census < 0) problems.push("the quit never read the census: the gate did not run");
+  if (stopped < 0) problems.push("no pair stopped");
+  else if (census >= 0 && stopped < census) problems.push("a pair stopped before the census");
+  if (said === undefined)
+    problems.push("no desktop.update.quit_install line: install on quit never ran");
+  else if (said.attrs?.installing !== false || said.attrs?.reason !== "squirrel-refused")
+    problems.push(`install on quit said ${JSON.stringify(said.attrs ?? null)}`);
+  if (refused < 0) problems.push("Squirrel never refused the payload");
+  else if (stopped >= 0 && refused < stopped)
+    problems.push("Squirrel took the payload BEFORE a pair stopped");
+  if (!afterQuit.some((request) => request.path.endsWith(".atom")))
+    problems.push("no fresh policy read at the quit");
+  if (zips !== 1) problems.push(`the zip was asked for ${zips} times, not once`);
+  if (
+    lastApply?.branch !== "exited" ||
+    lastApply?.reason !== "squirrel-refused" ||
+    lastApply?.trigger !== "quit"
+  )
+    problems.push(`state.json's lastApply is ${JSON.stringify(lastApply ?? null)}`);
+  if (exit === null) problems.push("the app did not exit on the quit");
+  else if (exit.code !== 0) problems.push(`the app exited ${exit.code ?? exit.signal}, not 0`);
+  if (relaunched.length > 0)
+    problems.push(`VibeField came back after the quit (pid ${relaunched.join(", ")}): a relaunch`);
+  return {
+    ok: problems.length === 0,
+    saw:
+      said === undefined
+        ? "no install on quit"
+        : `quit_install ${said.attrs?.reason ?? (said.attrs?.installing ? "installing" : "?")}`,
+    ...(problems.length > 0 ? { problems } : {}),
+  };
+}
+
 /** R5 — what a packaged run could leave in the REAL home, outside its temp root: the paths, and their newest mtimes. */
 export function footprintPaths(home, appId) {
   const lib = join(home, "Library");
@@ -266,6 +335,53 @@ function step(label, command, args, options) {
   say("SMOKE_UPDATE_STEP", { step: label, exit: result.status, ms });
   if (result.status !== 0) throw new Error(`${label} failed (exit ${result.status})`);
   return ms;
+}
+
+/** AU-5 — a PERSON's quit, as the Dock's Quit sends it: a quit Apple Event to this pid alone (`terminate`), so a
+ * person's own VibeField is never touched. UNVERIFIED unattended: macOS may ask to allow the Apple Event. */
+function personQuit(pid) {
+  const app = `$.NSRunningApplication.runningApplicationWithProcessIdentifier(${pid})`;
+  const script = `ObjC.import("AppKit");${app}.terminate`;
+  const result = spawnSync("osascript", ["-l", "JavaScript", "-e", script], {
+    encoding: "utf8",
+    timeout: 15_000,
+  });
+  return {
+    exit: result.status,
+    said: `${result.stdout ?? ""}${result.stderr ?? ""}`.trim().slice(0, 300),
+  };
+}
+
+/** AU-5 — the run's VibeField processes: by its mark, or by its own executable (a relaunch through LaunchServices
+ * would carry no mark). */
+function runApps(exe, mark) {
+  const paths = [exe, realPath(exe)];
+  const marked = listRunProcesses(mark)
+    .filter((p) => p.name === "vibefield")
+    .map((p) => p.pid);
+  const table = execFileSync("ps", ["-axww", "-o", "pid=,command="], {
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  const byPath = [];
+  for (const line of table.split("\n")) {
+    const m = /^\s*(\d+)\s+(.*)$/u.exec(line);
+    const command = m?.[2] ?? "";
+    if (m !== null && paths.some((path) => command === path || command.startsWith(`${path} `)))
+      byPath.push(Number(m[1]));
+  }
+  return [...new Set([...marked, ...byPath])];
+}
+
+/** AU-5 — every VibeField of the run seen within `ms` after the exit: none may appear (no relaunch). */
+async function relaunchesOf(exe, mark, ms) {
+  const seen = new Set();
+  const until = Date.now() + ms;
+  while (Date.now() < until) {
+    for (const pid of runApps(exe, mark)) seen.add(pid);
+    await sleep(500);
+  }
+  return [...seen];
 }
 
 /** R1 + R2: the zip a person downloads, staged on the run's trust-root, and W8's audits on the app inside it. */
@@ -425,7 +541,35 @@ async function oneRun(name, { root, keys, trustRoot, zip, current }) {
       "no field-freeway-host of this run ran from the app's Contents/Resources/bin (F1)",
     ];
   }
+  // AU-5 (LC-29) — the opt-in quit run: once staged, a PERSON's quit, then its verdict from outside (`judgeQuit`)
+  let quit = null;
+  if (run.next === "quit-install") {
+    // a silent apply (the window closed, the display asleep) would exit first: then no person's quit was judged
+    if (exited !== null)
+      quit = { ok: false, saw: `the app exited (${exited.code ?? exited.signal}) before the quit` };
+    else if (!verdict.ok) quit = { ok: false, saw: "not tried: the run was red before the quit" };
+    else {
+      const before = server.requests.length;
+      say("SMOKE_UPDATE_QUIT", { run: name, pid: child.pid, ...personQuit(child.pid) });
+      const until = Date.now() + QUIT_INSTALL_BOUND_MS;
+      while (exited === null && Date.now() < until) await sleep(250);
+      const relaunched = exited === null ? [] : await relaunchesOf(exe, mark, RELAUNCH_WATCH_MS);
+      quit = judgeQuit({
+        events: readEvents(home),
+        afterQuit: server.requests.slice(before),
+        zips: server.requests.filter((request) => request.path.endsWith(".zip")).length,
+        lastApply: readLastApply(profile),
+        exit: exited,
+        relaunched,
+      });
+    }
+    if (!quit.ok) {
+      verdict.ok = false;
+      verdict.problems = [...(verdict.problems ?? []), ...(quit.problems ?? [quit.saw])];
+    }
+  }
   // the shell's graceful quit; production leaves its daemons running by design (`modes.ts:117-126`) — the row reaps them
+  // (since AU-5a a signal leaves the pairs in every build: the gate never runs on it)
   if (exited === null) {
     child.kill("SIGTERM");
     const until = Date.now() + QUIT_BOUND_MS;
@@ -438,7 +582,10 @@ async function oneRun(name, { root, keys, trustRoot, zip, current }) {
   const still = listRunProcesses(mark);
   say("SMOKE_DAEMONS", {
     ...row,
-    expected: "production leaves fieldd and the floor running; the row stops them",
+    expected:
+      quit !== null
+        ? "a person's quit stopped fieldd and the floor; the row stops anything left"
+        : "production leaves fieldd and the floor running; the row stops them",
   });
   if (still.length > 0) {
     verdict.ok = false;
@@ -460,7 +607,8 @@ async function oneRun(name, { root, keys, trustRoot, zip, current }) {
     ...verdict,
     freewayHost:
       host === null ? "absent" : `Contents/Resources/bin/field-freeway-host ${FREEWAY_HOST_ARGS}`,
-    ...(name === "staged" ? { squirrelSays } : {}),
+    ...(name === "staged" || quit !== null ? { squirrelSays } : {}),
+    ...(quit !== null ? { quit: quit.saw } : {}),
   };
   say("SMOKE_UPDATE", result);
   if (result.ok) rmSync(runRoot, { recursive: true, force: true });
@@ -475,10 +623,11 @@ async function main(argv) {
     const i = argv.indexOf(flag);
     return i >= 0 ? argv[i + 1] : undefined;
   };
+  // AU-5 (LC-29) — an opt-in run is named or never run
+  const known = [...UPDATE_RUNS, ...OPT_IN_RUNS];
   const runs = (value("--runs") ?? UPDATE_RUNS.join(",")).split(",");
   for (const name of runs)
-    if (!UPDATE_RUNS.includes(name))
-      throw new Error(`unknown run "${name}" (${UPDATE_RUNS.join(", ")})`);
+    if (!known.includes(name)) throw new Error(`unknown run "${name}" (${known.join(", ")})`);
   if (process.platform !== "darwin") {
     say("SMOKE_UPDATE_SKIPPED", {
       reason: "macOS only: the zip, Squirrel's first touch and the cache are darwin's",

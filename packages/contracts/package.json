@@ -10,6 +10,7 @@
     "./compose-tools": "./gen/compose-tools.ts",
     "./diagnostics": "./src/diagnostics.ts",
     "./logging": "./src/logging.ts",
+    "./phone-code": "./src/phone-code.ts",
     "./registries": "./src/registries.ts",
     "./setup": "./src/setup.ts",
     "./user-face": "./src/user-face.ts"

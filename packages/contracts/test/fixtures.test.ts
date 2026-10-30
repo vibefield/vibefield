@@ -160,6 +160,7 @@ import {
   FreewayState,
   FreewayWelcome,
 } from "../src/freeway";
+import { LiveSurfaceIosSimulatorBindingV1 } from "../src/live-surfaces";
 import { LoggingHealthV1, LogRecordV1 } from "../src/logging";
 import { NativeTickNotification, SystemTickNotification } from "../src/methods";
 import {
@@ -276,10 +277,14 @@ import {
   RestartScheduled,
   SystemShutdownParams,
   SystemShutdownResult,
+  UpdateCheckResult,
   UpdateClientStateFile,
+  UpdateMoveResult,
   UpdatePolicy,
   UpdatePolicySource,
+  UpdateView,
 } from "../src/update-policy";
+import { UserMeResult } from "../src/users";
 import {
   WorkspaceCloseTicketParams,
   WorkspaceCloseTicketResult,
@@ -454,12 +459,22 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "channel-heads": ChannelHeads,
   // WP12b: the updater's persisted client state (Electron main's `updates/state.json`).
   "update-client-state": UpdateClientStateFile,
+  // AU-1: the updater's one projection (`UpdateController.view()`, through `desktopState.update`) and a person's
+  // check answered when the check settles. `update-view.pre-au1.json` is today's shape: the tolerant-reader witness.
+  "update-view": UpdateView,
+  "update-check-result": UpdateCheckResult,
+  // AU-7: the Move door's answer (`update-view.read-only` / `.elsewhere` ride the view's prefix above).
+  "update-move-result": UpdateMoveResult,
   // WP8a: the packaged app's signed bundled-plugin index (refusals in plugin-distribution.test.ts).
   "bundled-plugin-index": BundledPluginIndex,
   // WP8b: the stage's public identity (Resources/identity/release-identity.json).
   "staged-release-identity": StagedReleaseIdentity,
   "log-record": LogRecordV1,
   "logging-health": LoggingHealthV1,
+  // PT-S1 — the device a phone on the desk is bound to: a CoreSimulator device type and runtime, never a UDID
+  // (live-surfaces.ts; TS-only, as all of Live Surfaces is) — the 17 Pro on iOS 26.1, and Apple's own spelling of the
+  // 2nd-generation SE's id (its dashes kept).
+  "ios-simulator-binding": LiveSurfaceIosSimulatorBindingV1,
   "diagnostic-snapshot": DiagnosticLogSnapshotV1,
   "diagnostic-delta": DiagnosticLogDeltaV1,
   "diagnostic-lease": DiagnosticLeaseV1,
@@ -815,6 +830,8 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "compose-agents-list": ComposeAgentsListOutput,
   "compose-agent-read": ComposeReadOutput,
   "compose-history-search": ComposeHistorySearchOutput,
+  // IOS-8f — who this desktop's person is: a written face with a name, and the deal with none
+  "user-me": UserMeResult,
 };
 
 // *.vector.json = cross-language crypto vectors, not wire shapes — pinned by their own tests.

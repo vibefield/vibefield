@@ -5,6 +5,7 @@ import {
   type TraySnapshot,
   type TrayUpdateState,
   trayUpdateOf,
+  updateMenuEntry,
 } from "../src/main/tray-model";
 
 const snapshot = (patch: Partial<TraySnapshot> = {}): TraySnapshot => ({
@@ -25,6 +26,7 @@ function actions(): TrayActions {
     openDiagnostics: vi.fn(),
     checkForUpdates: vi.fn(),
     restartToUpdate: vi.fn(),
+    downloadUpdate: vi.fn(),
     setBackgroundShell: vi.fn(),
     setTrayVisible: vi.fn(),
     quit: vi.fn(),
@@ -91,6 +93,23 @@ describe("buildTrayMenu", () => {
   it.each([
     [{ kind: "idle" }, "Check for Updates…", true],
     [{ kind: "checking" }, "Checking for Updates…", false],
+    // AU-4 (AU-G5; LC-41) — found with updates off, it downloads in place: no "…", it asks nothing. A skip is the
+    // person's own (the page has Download anyway), and a found version on its way down reads as at rest
+    [
+      { kind: "available", version: "2.0.0", declined: false, enabled: false },
+      "Download Update",
+      true,
+    ],
+    [
+      { kind: "available", version: "2.0.0", declined: true, enabled: false },
+      "Check for Updates…",
+      true,
+    ],
+    [
+      { kind: "available", version: "2.0.0", declined: false, enabled: true },
+      "Check for Updates…",
+      true,
+    ],
     [{ kind: "downloading", percent: 41.6 }, "Downloading Update… 42%", false],
     // WP12c (§10 S2) — the verb follows the census: none read yet or unreadable holds the verb; zero is the plain
     // restart; live sessions make the wording the consequence (EDP-35), singular and plural
@@ -132,6 +151,30 @@ describe("buildTrayMenu", () => {
     );
     expect(byId(menu, "update")).toMatchObject({ label: "Update Downloaded", enabled: false });
     expect(byId(menu, "update")?.click).toBeUndefined();
+  });
+
+  it("downloads the found version from Download Update, and checks from a skipped one (AU-4)", () => {
+    const a = actions();
+    const off = { kind: "available", version: "2.0.0", declined: false, enabled: false } as const;
+    byId(buildTrayMenu(snapshot({ update: off }), a, "darwin"), "update").click?.();
+    expect(a.downloadUpdate).toHaveBeenCalledWith("2.0.0");
+    expect(a.checkForUpdates).not.toHaveBeenCalled();
+    const skipped = { ...off, declined: true };
+    byId(buildTrayMenu(snapshot({ update: skipped }), a, "darwin"), "update").click?.();
+    expect(a.checkForUpdates).toHaveBeenCalledTimes(1);
+    expect(a.downloadUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers no Download without the act, and releases it while quitting (AU-4)", () => {
+    const off = { kind: "available", version: "2.0.0", declined: false, enabled: false } as const;
+    const a = actions();
+    delete a.downloadUpdate;
+    expect(byId(buildTrayMenu(snapshot({ update: off }), a, "linux"), "update")).toMatchObject({
+      label: "Download Update",
+      enabled: false,
+    });
+    const quitting = snapshot({ update: off, quitting: true });
+    expect(byId(buildTrayMenu(quitting, actions(), "darwin"), "update").click).toBeUndefined();
   });
 
   it("honestly disables the idle update item when no updater capability exists", () => {
@@ -310,20 +353,84 @@ describe("trayUpdateOf — the tray's half of the one projection", () => {
     [{ phase: "idle" }, { kind: "idle" }],
     [{ phase: "offline" }, { kind: "idle" }],
     [{ phase: "checking" }, { kind: "checking" }],
-    // L3c-ii — a found update held by a skip or the off switch is quiet, never a check that never ends
-    [{ phase: "available", version: "1.2.0", declined: true }, { kind: "idle" }],
+    // AU-4 (X13) — a found update held by a skip or the off switch stays found: the item offers what it can
+    [
+      { phase: "available", version: "1.2.0", declined: true },
+      { kind: "available", version: "1.2.0", declined: true, enabled: true },
+    ],
+    [
+      { phase: "available", version: "1.2.0", enabled: false },
+      { kind: "available", version: "1.2.0", declined: false, enabled: false },
+    ],
     [
       { phase: "downloading", version: "1.2.0", percent: 41 },
       { kind: "downloading", percent: 41 },
     ],
+    // AU-4 (AU-G14) — whether an install waits on the person rides along: it picks the status item's image
     [
       { phase: "staged", version: "1.2.0", sessions: 2, keepsSessions: true },
-      { kind: "staged", version: "1.2.0", sessions: 2, keepsSessions: true },
+      { kind: "staged", version: "1.2.0", sessions: 2, keepsSessions: true, applyWired: true },
+    ],
+    [
+      { phase: "staged", version: "1.2.0", applyWired: false },
+      { kind: "staged", version: "1.2.0", applyWired: false },
     ],
     [{ phase: "paused" }, { kind: "paused" }],
     [{ phase: "unsupported" }, { kind: "unsupported" }],
     [{ phase: "failed", unavailable: "feed-unverified" }, { kind: "failed" }],
   ] as const)("%o → %o", (view, tray) => {
     expect(trayUpdateOf({ ...base, ...view })).toEqual(tray);
+  });
+});
+
+// AU-4 (AU-L4) — the status item and the app menu say the update in ONE entry: same words, same acts.
+describe("updateMenuEntry — the update item both menus wear", () => {
+  const STATES: readonly TrayUpdateState[] = [
+    { kind: "idle" },
+    { kind: "checking" },
+    { kind: "available", version: "2.0.0", declined: false, enabled: false },
+    { kind: "available", version: "2.0.0", declined: true, enabled: false },
+    { kind: "downloading", percent: 7 },
+    { kind: "staged", version: "2.0.0" },
+    { kind: "staged", version: "2.0.0", sessions: 0, applyWired: true },
+    { kind: "staged", version: "2.0.0", sessions: 3, applyWired: true },
+    { kind: "paused" },
+    { kind: "unsupported" },
+    { kind: "failed" },
+  ];
+
+  it.each(STATES)("says what the status item says for $kind", (update) => {
+    const acts = { check: vi.fn(), restart: vi.fn(), download: vi.fn() };
+    const entry = updateMenuEntry(update, acts, true);
+    const item = byId(buildTrayMenu(snapshot({ update }), actions(), "linux"), "update");
+    expect(entry.label).toBe(item.label);
+    expect(entry.enabled).toBe(item.enabled);
+    expect(entry.click === undefined).toBe(item.click === undefined);
+  });
+
+  it("runs the act it names: the restart, the check, this version's Download", () => {
+    const check = vi.fn();
+    const restart = vi.fn();
+    const download = vi.fn();
+    const acts = { check, restart, download };
+    const staged = { kind: "staged", version: "2.0.0", sessions: 0, applyWired: true } as const;
+    expect(updateMenuEntry(staged, acts, true)).toEqual({
+      label: "Restart to Update",
+      enabled: true,
+      click: restart,
+    });
+    expect(updateMenuEntry({ kind: "idle" }, acts, true).click).toBe(check);
+    const off = { kind: "available", version: "2.0.0", declined: false, enabled: false } as const;
+    updateMenuEntry(off, acts, true).click?.();
+    expect(download).toHaveBeenCalledWith("2.0.0");
+  });
+
+  it("acts on nothing while the app quits, nor without the act (an absent click, never undefined)", () => {
+    const acts = { check: vi.fn(), restart: vi.fn(), download: vi.fn() };
+    expect(updateMenuEntry({ kind: "idle" }, acts, false)).toEqual({
+      label: "Check for Updates…",
+      enabled: false,
+    });
+    expect(updateMenuEntry({ kind: "idle" }, {}, true)).not.toHaveProperty("click");
   });
 });

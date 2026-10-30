@@ -57,6 +57,42 @@ import Testing
   }
 }
 
+/// IOS-8f — `user.me`, over the contracts' own goldens (copied in).
+@Suite struct UserMeShapeTests {
+  @Test func aWrittenFaceWithItsName() throws {
+    let me = try UserMeResult(json: try Fixture.json("user-me.valid"))
+    #expect(me.userId == "01J8F2ZQ9K3M4N5P6Q7R8S9T0V")
+    #expect(me.name == "James")
+    #expect(me.face.emoji == "🐙")
+    #expect(me.face.frame == "coin")
+    #expect(!me.dealt)
+    #expect(me.unknownFields.isEmpty)
+  }
+
+  /// No user row on the desktop: the deal, and no name to draw.
+  @Test func theDealWithNoName() throws {
+    let me = try UserMeResult(json: try Fixture.json("user-me.dealt"))
+    #expect(me.name == nil)
+    #expect(me.face.emoji == "🐳")
+    #expect(me.face.frame == "sticker")
+    #expect(me.dealt)
+  }
+
+  @Test func fieldsWeDoNotReadAreNamedAndAFaceIsRequired() throws {
+    let me = try UserMeResult(
+      json: .object([
+        "userId": .string("u"), "face": .object(["emoji": .string("🦊"), "tint": .string("x")]),
+        "dealt": .bool(false), "since": .string("later"),
+      ]))
+    #expect(me.unknownFields == ["since"])
+    #expect(me.face.unknownFields == ["tint"])
+    #expect(me.face.frame == nil)
+    #expect(throws: WireDecodeError.self) {
+      try UserMeResult(json: .object(["userId": .string("u"), "dealt": .bool(true)]))
+    }
+  }
+}
+
 @Suite struct DeviceShapeTests {
   @Test func theGoldenRosterRowReads() throws {
     let device = try DeviceInfo(json: try Fixture.json("device-info.valid"))

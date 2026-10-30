@@ -1,0 +1,125 @@
+{
+  "host": "Metal driver on macOS Version 26.5.2 (Build 25F84) (apple metal-3) · darwin-arm64 · webgpu 0.4.0",
+  "stills": {
+    "vibefield.simulator:at-rest:day": {
+      "width": 2369,
+      "height": 2779,
+      "sha256": "c31dc5c8aef3137e667f2b0ec3466811d936928a6e591c53aaab04f921739d4c"
+    },
+    "vibefield.simulator:at-rest:night": {
+      "width": 2369,
+      "height": 2779,
+      "sha256": "9f087556343841513cdeb3b5ce3585ce76babca0f571027618a2af8fa6380812"
+    },
+    "vibefield.simulator:booting:day": {
+      "width": 2369,
+      "height": 2779,
+      "sha256": "ec3ba3116f5ab7482ab183a33e47b8947c2205f6670d4f6a9fa1e3b623e58dac"
+    },
+    "vibefield.simulator:booting:night": {
+      "width": 2369,
+      "height": 2779,
+      "sha256": "ee8f1fd0dc80b9f78addef4e362f9bffd5a5400a6ab4cd94d7410515bfc8db0a"
+    },
+    "vibefield.simulator:default:day": {
+      "width": 2369,
+      "height": 2779,
+      "sha256": "682c653de50aa8c50e589dd472840ed3335ac36e274f94f76fe24136a2944b62"
+    },
+    "vibefield.simulator:default:night": {
+      "width": 2369,
+      "height": 2779,
+      "sha256": "f2353ee832bd098bf23dda949d32ea6c939f89eb140638bbfc94062007fa3ac9"
+    },
+    "vibefield.simulator:iphone-8:day": {
+      "width": 2369,
+      "height": 2779,
+      "sha256": "26e6e4af0f5043816a7791b31a818be299a470cb9389ad9ed8ac2ec1779f12f4"
+    },
+    "vibefield.simulator:iphone-8:night": {
+      "width": 2369,
+      "height": 2779,
+      "sha256": "73b17391d971df2ec336c03999a5fb93bd208193d3c983df6754c2b1e3ce6b1c"
+    },
+    "vibefield.simulator:live:day": {
+      "width": 2369,
+      "height": 2779,
+      "sha256": "8ffa7182340f37fd7c6ca02241f74e4841f8138fc57fc0c97f95cd7c047d00ee"
+    },
+    "vibefield.simulator:live:night": {
+      "width": 2369,
+      "height": 2779,
+      "sha256": "d4c2f9b769a0866c1060e853d440b0179301397eae035b903f278300da59b9c9"
+    },
+    "vibefield.simulator:no-device:day": {
+      "width": 2369,
+      "height": 2779,
+      "sha256": "c98342ff6cb6069df63a8500c3352813871fe90975f9e37644bd0013cbbb45c6"
+    },
+    "vibefield.simulator:no-device:night": {
+      "width": 2369,
+      "height": 2779,
+      "sha256": "2181e8fbf3ffe0d566be0938b574f1d8dbd99a494d2cd6b0bb250be0c36f1937"
+    },
+    "vibefield.simulator:no-permission:day": {
+      "width": 2369,
+      "height": 2779,
+      "sha256": "40c374f933db70d702ac0f8568adb8a54f632550496fca4fdcc4c29f0dc19789"
+    },
+    "vibefield.simulator:no-permission:night": {
+      "width": 2369,
+      "height": 2779,
+      "sha256": "2ef4e1ea2ac239cf71d58908530034ed4e0dc92b4df6cb909bc36e60cd1f6a14"
+    },
+    "vibefield.simulator:no-simulator:day": {
+      "width": 2369,
+      "height": 2779,
+      "sha256": "802aceaef18e381bbe6e9a9aaba04c8c715d3290838cb7759f0c6e94dfb30af0"
+    },
+    "vibefield.simulator:no-simulator:night": {
+      "width": 2369,
+      "height": 2779,
+      "sha256": "1549ccfe03aa6e204538143c75a2f8e0986bb6115c8e7c5f06fa5ef5055620dc"
+    },
+    "vibefield.simulator:no-window:day": {
+      "width": 2369,
+      "height": 2779,
+      "sha256": "e5d8977c881a8b66fe29c1b1a74f156a1c64db26775329fdfcf672103b6e6e28"
+    },
+    "vibefield.simulator:no-window:night": {
+      "width": 2369,
+      "height": 2779,
+      "sha256": "f2eda39e3c4f79df90b74743c84dd1212e12e9e40acc3d9d145df1c5974e6d2e"
+    },
+    "vibefield.simulator:off:day": {
+      "width": 2369,
+      "height": 2779,
+      "sha256": "cfc8792c9eac1a1c2819a2334623822d90d23363ba04df181fe78f88561ad083"
+    },
+    "vibefield.simulator:off:night": {
+      "width": 2369,
+      "height": 2779,
+      "sha256": "50c8477e42397333ee80a4ee47f8742656d4bc1368069dc55d7c459856277e12"
+    },
+    "vibefield.simulator:silver:day": {
+      "width": 2369,
+      "height": 2779,
+      "sha256": "f131e5ea61d717d2f45060bbdfaa33f3d2fad0dcbc736100310debd891b97781"
+    },
+    "vibefield.simulator:silver:night": {
+      "width": 2369,
+      "height": 2779,
+      "sha256": "14aa741a3cec781b456f299058cc09f962c9709f773798215802490a3920a8cf"
+    },
+    "vibefield.simulator:stopped:day": {
+      "width": 2369,
+      "height": 2779,
+      "sha256": "76798ef815af3047f66f1ad1ad553606bf3a100bcd70b7b5cbb18b187dee88ee"
+    },
+    "vibefield.simulator:stopped:night": {
+      "width": 2369,
+      "height": 2779,
+      "sha256": "bb21d5e3adb33433a5521162815313bb0260c1ce56166b906e504a765733944d"
+    }
+  }
+}

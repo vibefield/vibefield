@@ -258,6 +258,36 @@ export const LiveSurfaceIosSimulatorSourceV1 = z
   .passthrough();
 export type LiveSurfaceIosSimulatorSourceV1 = z.infer<typeof LiveSurfaceIosSimulatorSourceV1>;
 
+/** A CoreSimulator device type, as Xcode names it (`com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro`; Apple's own
+ * spellings keep their dashes — the 2nd-generation SE's is `iPhone-SE--2nd-generation-`). */
+export const CoreSimulatorDeviceTypeIdV1 = z
+  .string()
+  .max(128)
+  .regex(/^com\.apple\.CoreSimulator\.SimDeviceType\.[A-Za-z0-9-]+$/u);
+export type CoreSimulatorDeviceTypeIdV1 = z.infer<typeof CoreSimulatorDeviceTypeIdV1>;
+
+/** A CoreSimulator runtime, as Xcode names it (`com.apple.CoreSimulator.SimRuntime.iOS-26-1`). */
+export const CoreSimulatorRuntimeIdV1 = z
+  .string()
+  .max(128)
+  .regex(/^com\.apple\.CoreSimulator\.SimRuntime\.[A-Za-z0-9-]+$/u);
+export type CoreSimulatorRuntimeIdV1 = z.infer<typeof CoreSimulatorRuntimeIdV1>;
+
+/**
+ * PT-S1 — THE DEVICE A PHONE ON THE DESK IS BOUND TO: a CoreSimulator device type and runtime — the durable half of a
+ * simulator surface, kept in the document as the phone's `binding` prop. Never a UDID: a UDID names one simulator on
+ * one Mac, so each Mac attaches its OWN simulator of the bound type (the resolver in main finds or creates one, then
+ * mints the UDID-keyed `LiveSurfaceIosSimulatorSourceV1` above, which never leaves this machine). The resolver
+ * re-validates a binding it reads, as it does every privileged spec.
+ */
+export const LiveSurfaceIosSimulatorBindingV1 = z
+  .object({
+    deviceType: CoreSimulatorDeviceTypeIdV1,
+    runtime: CoreSimulatorRuntimeIdV1,
+  })
+  .passthrough();
+export type LiveSurfaceIosSimulatorBindingV1 = z.infer<typeof LiveSurfaceIosSimulatorBindingV1>;
+
 export const LiveSurfaceSourceSpecV1 = z.discriminatedUnion("kind", [
   LiveSurfaceBrowserSourceV1,
   LiveSurfaceSckWindowSourceV1,

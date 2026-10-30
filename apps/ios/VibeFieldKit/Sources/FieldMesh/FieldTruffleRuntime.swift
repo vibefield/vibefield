@@ -135,6 +135,37 @@ public actor FieldTruffleRuntime {
       loginAllow: loginAllow)
   }
 
+  // MARK: - Approval (TS-7)
+
+  /// The default control server's machines page: truffle-core's
+  /// `ControlServer::machines_admin_url` for `ControlServer::Tailscale`, which
+  /// the Swift node does not expose (owed back to truffle as a petition). Held
+  /// to field-native's own test literal by `pnpm check:ios-fixtures`.
+  static let tailscaleMachinesAdminURL = "https://login.tailscale.com/admin/machines"
+
+  /// Where an admin approves this phone: Tailscale's console under the default
+  /// control server, none under a custom one — a self-hosted control server
+  /// has no page anyone can name. truffle-core's rule, mirrored.
+  public nonisolated static func machinesAdminURL(controlURL: URL?) -> URL? {
+    controlURL == nil ? URL(string: tailscaleMachinesAdminURL) : nil
+  }
+
+  /// This node's machine name, as the phone can know it: the first label of
+  /// its tailnet name once Layer 3 has one, else the hostname it asked for
+  /// (truffle's own composer). Tailscale de-duplicates a taken name, so before
+  /// the tailnet name arrives this is the name ASKED for — what an admin looks
+  /// for, never a promise of what the console shows.
+  public var machineName: String {
+    get async {
+      Self.machineName(dnsName: await node.dnsName, hostname: await node.localPeer.hostname)
+    }
+  }
+
+  nonisolated static func machineName(dnsName: String?, hostname: String) -> String {
+    let label = dnsName?.split(separator: ".", omittingEmptySubsequences: true).first.map(String.init)
+    return label.flatMap { $0.isEmpty ? nil : $0 } ?? hostname
+  }
+
   // MARK: - The account gate (UA-P-5)
 
   /// This node's own tailnet login, as Layer 3 last reported it. `nil` until

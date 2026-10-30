@@ -303,6 +303,8 @@ describe("where Add a profile… opens Settings", () => {
     expect(settingsOpening("new-profile")).toEqual({ page: "profiles", profiles: { kind: "new" } });
     expect(settingsOpening("account")).toEqual({ page: "account" });
     expect(settingsOpening("devices")).toEqual({ page: "devices" });
+    // AU-3 — Settings → Updates, where the update rows open
+    expect(settingsOpening("updates")).toEqual({ page: "updates" });
     expect(settingsOpening("general")).toEqual({ page: "general" });
     expect(settingsOpening("diagnostics")).toEqual({ page: "general" });
   });
