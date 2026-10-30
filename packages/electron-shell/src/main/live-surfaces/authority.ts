@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import type {
   LiveSurfaceAttachTicketV1,
   LiveSurfaceBrowserSourceV1,
+  LiveSurfaceIosSimulatorDeviceSourceV1,
   LiveSurfaceIosSimulatorSourceV1,
   LiveSurfaceSckWindowSourceV1,
   LiveSurfaceSourceSpecV1,
@@ -12,9 +13,10 @@ import type {
   ShellSurfacesMintResult,
   ShellSurfacesReleaseParams,
   ShellSurfacesReleaseResult,
+  ShellSurfacesSimulatorDevicesResult,
   SurfaceSourceDescriptorV1,
 } from "@vibefield/contracts";
-import { SURFACE_LIMITS } from "@vibefield/contracts";
+import { LiveSurfaceSimulatorDeviceRowV1, SURFACE_LIMITS } from "@vibefield/contracts";
 import type { Logger } from "@vibefield/logging";
 import type { LiveSurfaceRuntimeAuthority } from "./runtime";
 import type { LiveSurfaceWindowHost } from "./window-host";
@@ -64,7 +66,7 @@ export interface LiveSurfaceRuntimeHandle extends LiveSurfaceRuntimeAuthority {
   childSessions?(): number;
 }
 
-/** Injectable producer construction; production binds the three real runtime
+/** Injectable producer construction; production binds the real runtime
  * classes, tests bind fakes. A factory may throw a `.kind` error (capture
  * stack absent → UNAVAILABLE) or a plain Error (invalid source → mapped to
  * PRECONDITION_FAILED here). */
@@ -74,6 +76,12 @@ export interface LiveSurfaceRuntimeFactories {
   iosSimulator(
     surfaceId: string,
     source: LiveSurfaceIosSimulatorSourceV1,
+  ): LiveSurfaceRuntimeHandle;
+  /** PT-S2 — a phone bound by its device type and runtime: main picks this Mac's device and keeps its UDID. MINTS on a
+   * shell with no Simulator or no capture half, and says `no-simulator` (R5): it never throws for want of one. */
+  iosSimulatorDevice(
+    surfaceId: string,
+    source: LiveSurfaceIosSimulatorDeviceSourceV1,
   ): LiveSurfaceRuntimeHandle;
 }
 
@@ -90,11 +98,19 @@ export interface LiveSurfaceEnumerationSources {
   bootedSimulators(): Promise<readonly LiveSurfaceEnumerationRow[]>;
 }
 
+/** PT-S2 (R11) — this Mac's simulator devices, for the attach: redacted rows (the ids a binding is made of), never a
+ * UDID. No Simulator on this Mac is an empty list. */
+export interface LiveSurfaceSimulatorDeviceSource {
+  list(): Promise<readonly LiveSurfaceSimulatorDeviceRowV1[]>;
+}
+
 export interface LiveSurfaceAuthorityDeps {
   resolveWindow(identity: RendererParticipantIdentity): { webContentsId: number } | null;
   hostFor(webContentsId: number): Pick<LiveSurfaceWindowHost, "issue"> | null;
   factories: LiveSurfaceRuntimeFactories;
   enumeration: LiveSurfaceEnumerationSources | null;
+  /** PT-S2 (R11): absent or null — the attach's device list is UNAVAILABLE */
+  simulatorDevices?: LiveSurfaceSimulatorDeviceSource | null;
   logger?: Logger;
   limits?: { maxRuntimes?: number; maxPerParticipant?: number };
   randomId?: () => string;
@@ -137,6 +153,13 @@ function canonicalSourceKey(source: LiveSurfaceSourceSpecV1): string | null {
   }
   if (source.kind === "ios-simulator") {
     return `sim\u0000${source.udid}\u0000${JSON.stringify(source.crop ?? null)}`;
+  }
+  // PT-S2 (R10): a bound phone is keyed by its BINDING — one stream a bound device, whoever asks (and two bindings this
+  // Mac resolves to one device share its inner runtime below this key: R3, `ios-simulator-device-runtime.ts`)
+  if (source.kind === "ios-simulator-device") {
+    return `simdev\u0000${source.binding.deviceType}\u0000${source.binding.runtime}\u0000${JSON.stringify(
+      source.crop ?? null,
+    )}`;
   }
   return null;
 }
@@ -201,8 +224,10 @@ export class LiveSurfaceAuthority {
 
     this.#sweepStaleFor(participant, resolved.webContentsId);
 
+    // PT-S2 (R10): a bound phone dedupes on its canonical key EVEN WITH a reuse key (desk-live always sends one: keyed
+    // by it, every phone would cost its own stream of one window); the reuse key still says it survives a reload
     const dedupeKey =
-      params.reuseKey !== undefined
+      params.reuseKey !== undefined && params.source.kind !== "ios-simulator-device"
         ? `reuse\u0000${participant.participantId}\u0000${params.source.kind}\u0000${params.reuseKey}`
         : canonicalSourceKey(params.source);
 
@@ -230,8 +255,14 @@ export class LiveSurfaceAuthority {
         sourceKind: entry.kind,
         // DT-D6: browser surfaces carry the human interaction ops; capture and
         // Simulator are view-only in v1 and advertise no input capability.
+        // PT-S2: a bound phone adds its face's acts (boot, create, show, retry,
+        // Open Settings) — still no input of any kind.
         operations:
-          entry.kind === "browser" ? ["view", "pointer", "keyboard", "navigate"] : ["view"],
+          entry.kind === "browser"
+            ? ["view", "pointer", "keyboard", "navigate"]
+            : entry.kind === "ios-simulator-device"
+              ? ["view", "device"]
+              : ["view"],
         principalId: params.owner?.pluginId ?? participant.participantId,
         authority: entry.runtime,
       });
@@ -274,6 +305,39 @@ export class LiveSurfaceAuthority {
       },
     );
     return { surfaceId: entry.surfaceId, ticket };
+  }
+
+  /** PT-S2 (R11) — the attach's device list: this Mac's simulator devices, the booted first, bounded, and REDACTED here
+   * too — each row re-parsed (one carrying a UDID is refused) and rebuilt of its four fields, so nothing a source spread
+   * onto a row reaches fieldd. */
+  async simulatorDevices(): Promise<ShellSurfacesSimulatorDevicesResult> {
+    if (this.#disposed) throw kindError("UNAVAILABLE");
+    const source = this.#deps.simulatorDevices ?? null;
+    if (source === null) throw kindError("UNAVAILABLE");
+    let rows: readonly LiveSurfaceSimulatorDeviceRowV1[];
+    try {
+      rows = await source.list();
+    } catch (error) {
+      if (hasKind(error)) throw error;
+      this.#deps.logger?.warn(
+        "desktop.live_surfaces.simulator_devices_failed",
+        "the simulator device list failed",
+      );
+      throw kindError("UNAVAILABLE");
+    }
+    const devices: LiveSurfaceSimulatorDeviceRowV1[] = [];
+    for (const row of rows) {
+      if (devices.length >= SURFACE_LIMITS.MAX_SIMULATOR_DEVICES) break;
+      const parsed = LiveSurfaceSimulatorDeviceRowV1.safeParse(row);
+      if (!parsed.success) continue;
+      devices.push({
+        deviceType: parsed.data.deviceType,
+        runtime: parsed.data.runtime,
+        name: parsed.data.name,
+        booted: parsed.data.booted,
+      });
+    }
+    return { devices };
   }
 
   release(params: ShellSurfacesReleaseParams): ShellSurfacesReleaseResult {
@@ -389,7 +453,10 @@ export class LiveSurfaceAuthority {
     try {
       if (source.kind === "browser") return this.#deps.factories.browser(surfaceId, source);
       if (source.kind === "sck-window") return this.#deps.factories.sckWindow(surfaceId, source);
-      return this.#deps.factories.iosSimulator(surfaceId, source);
+      if (source.kind === "ios-simulator") {
+        return this.#deps.factories.iosSimulator(surfaceId, source);
+      }
+      return this.#deps.factories.iosSimulatorDevice(surfaceId, source);
     } catch (error) {
       if (hasKind(error)) throw error;
       this.#deps.logger?.warn(

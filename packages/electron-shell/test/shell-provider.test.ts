@@ -83,7 +83,8 @@ function call(
     | "shell.openLink"
     | "shell.revealPath"
     | "shell.webcontents.captureArtifactPreview"
-    | "shell.renderer.requestReplacement",
+    | "shell.renderer.requestReplacement"
+    | "shell.surfaces.simulatorDevices",
   params: unknown,
 ) {
   return {
@@ -116,6 +117,7 @@ async function fixture(nativeOverrides?: Partial<ShellProviderNative>) {
       throw { kind: "UNAVAILABLE" };
     }),
     releaseSurface: vi.fn(async () => ({ released: false })),
+    listSimulatorDevices: vi.fn(async () => ({ devices: [] })),
     ...nativeOverrides,
   };
   const provider = new RecoveringShellProvider(coordinator, native, createNoopLogger());
@@ -157,6 +159,7 @@ describe("RecoveringShellProvider", () => {
           throw { kind: "UNAVAILABLE" };
         }),
         releaseSurface: vi.fn(async () => ({ released: false })),
+        listSimulatorDevices: vi.fn(async () => ({ devices: [] })),
       };
       const provider = new RecoveringShellProvider(coordinator, native, createNoopLogger());
 
@@ -288,6 +291,68 @@ describe("RecoveringShellProvider", () => {
       expect(client.requests).toContainEqual({
         method: "shell.provider.resolve",
         params: { callId, outcome: { result: { requested: true } } },
+      }),
+    );
+    provider.dispose();
+  });
+
+  it("PT-S2 (R11): answers the attach's device list from main's authority, re-parsed — a row carrying a UDID fails the call", async () => {
+    const row = {
+      deviceType: "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro",
+      runtime: "com.apple.CoreSimulator.SimRuntime.iOS-26-5",
+      name: "iPhone 17 Pro",
+      booted: true,
+    };
+    const listSimulatorDevices = vi
+      .fn()
+      .mockResolvedValueOnce({ devices: [row] })
+      .mockResolvedValueOnce({
+        devices: [{ ...row, udid: "F93EABF3-4281-4EB5-A5F6-A550FBE95CDC" }],
+      })
+      .mockRejectedValueOnce({ kind: "UNAVAILABLE" });
+    const { client, provider } = await fixture({ listSimulatorDevices });
+
+    client.emit(
+      "shell.provider.call",
+      call("shell-simdevicesaaaaaa", "shell.surfaces.simulatorDevices", {}),
+    );
+    await vi.waitFor(() =>
+      expect(client.requests).toContainEqual({
+        method: "shell.provider.resolve",
+        params: { callId: "shell-simdevicesaaaaaa", outcome: { result: { devices: [row] } } },
+      }),
+    );
+    expect(listSimulatorDevices).toHaveBeenCalledWith({}, expect.any(AbortSignal));
+
+    client.emit(
+      "shell.provider.call",
+      call("shell-simdevicesbbbbbb", "shell.surfaces.simulatorDevices", {}),
+    );
+    await vi.waitFor(() =>
+      expect(client.requests).toContainEqual({
+        method: "shell.provider.resolve",
+        params: { callId: "shell-simdevicesbbbbbb", outcome: { error: expect.anything() } },
+      }),
+    );
+    expect(JSON.stringify(client.requests)).not.toContain("F93EABF3");
+
+    client.emit(
+      "shell.provider.call",
+      call("shell-simdevicescccccc", "shell.surfaces.simulatorDevices", {}),
+    );
+    await vi.waitFor(() =>
+      expect(client.requests).toContainEqual({
+        method: "shell.provider.resolve",
+        params: {
+          callId: "shell-simdevicescccccc",
+          outcome: {
+            error: {
+              kind: "UNAVAILABLE",
+              message: "the live-surface authority is unavailable",
+              retryable: true,
+            },
+          },
+        },
       }),
     );
     provider.dispose();
@@ -655,6 +720,7 @@ describe("RecoveringShellProvider", () => {
         throw { kind: "UNAVAILABLE" };
       }),
       releaseSurface: vi.fn(async () => ({ released: false })),
+      listSimulatorDevices: vi.fn(async () => ({ devices: [] })),
     };
     const provider = new RecoveringShellProvider(coordinator, native, createNoopLogger());
     await coordinator.ensure();

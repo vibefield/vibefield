@@ -1088,6 +1088,14 @@ async function main(
       // BP-D6: a packaged shell's profiles (its cookie store encrypted — ESP-11's fuse) carry their own name, so an
       // unpackaged shell never opens one, whatever data root it was started on
       browserProfilesPackaged: app.isPackaged,
+      // PT-S2 (R4): a bound phone's Open Settings — the fixed Screen Recording address the screenshot door opens, through
+      // the harness's gate: a smoke records it, and System Settings never opens under a test
+      openSettings: () => {
+        const url = "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture";
+        if (harnessShellOpens === null) return shell.openExternal(url);
+        harnessShellOpens.opened.push(url);
+        return Promise.resolve();
+      },
       logger: logger.child({ component: "live-surfaces.capture" }),
     });
     if (!app.isPackaged && process.env["FIELDD_DATA_DIR"] === undefined && !isSmokeLike(MODE)) {
@@ -1110,6 +1118,8 @@ async function main(
       factories: liveSurfaceSupport.factories,
       enumeration:
         resources.macosLiveSurfaceCapture === null ? null : liveSurfaceSupport.enumeration,
+      // PT-S2 (R11): answered everywhere — a shell with no capture half lists no device
+      simulatorDevices: liveSurfaceSupport.simulatorDevices,
       logger: logger.child({ component: "live-surfaces.authority" }),
     });
     const shellProvider = new RecoveringShellProvider(
@@ -1146,6 +1156,11 @@ async function main(
           const authority = liveSurfaceAuthority;
           if (authority === null) throw { kind: "UNAVAILABLE" };
           return authority.release(params);
+        },
+        listSimulatorDevices: async () => {
+          const authority = liveSurfaceAuthority;
+          if (authority === null) throw { kind: "UNAVAILABLE" };
+          return authority.simulatorDevices();
         },
       },
       logger.child({ component: "shell.provider" }),
