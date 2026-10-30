@@ -80,13 +80,17 @@ class FakeSimctl implements SimulatorDeviceSimctl {
   unavailable = false;
   /** when set, every act's verb waits on it (single-flight rows) */
   gate: Promise<void> | null = null;
+  /** when set, every list is read at its call and answered when it opens (a list in flight) */
+  listGate: Promise<void> | null = null;
 
   constructor(public raw: string) {}
 
   async list(): Promise<SimctlSnapshot> {
     this.lists += 1;
     if (this.unavailable) throw new SimctlUnavailableError();
-    return parseSimctlSnapshot(this.raw);
+    const raw = this.raw;
+    if (this.listGate !== null) await this.listGate;
+    return parseSimctlSnapshot(raw);
   }
 
   invalidate(): void {
@@ -623,6 +627,51 @@ describe("IosSimulatorDeviceLiveSurfaceRuntime — the acts (R4)", () => {
     });
   });
 
+  it("an act's flight lasts until CoreSimulator is read afresh: a second Create it while that read is out makes no twin of the phone just made", async () => {
+    const { simctl, sessions } = setup({ raw: listJson({ [IOS_26_5]: [] }) });
+    const face = attach(open(sessions));
+    await settle();
+    expect(face.latest().simulator?.condition).toBe("no-device");
+
+    let release!: () => void;
+    simctl.listGate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    simctl.raw = listJson({ [IOS_26_5]: [rawDevice(NEW_UDID, "Booted")] });
+    const told = face.all().length;
+    face.act("create");
+    await settle();
+    // created, booted and shown — the list after them still out: the act is in flight yet, and offers nothing
+    expect(simctl.calls).toEqual([
+      `create iPhone 17 Pro ${PRO} ${IOS_26_5}`,
+      `boot ${NEW_UDID}`,
+      `show ${NEW_UDID}`,
+    ]);
+    expect(face.latest().simulator).toMatchObject({ condition: "booting", acting: "create" });
+    face.act("create");
+    await settle();
+    expect(simctl.calls).toHaveLength(3);
+
+    release();
+    await settle();
+    expect(face.latest().simulator).toEqual({
+      condition: "streaming",
+      name: "iPhone 17 Pro",
+      deviceType: PRO,
+      runtime: IOS_26_5,
+    });
+    face.act("create");
+    await settle();
+    expect(simctl.calls.filter((call) => call.startsWith("create "))).toHaveLength(1);
+    // from the press on, the face never went back to offering Create it
+    expect(
+      face
+        .all()
+        .slice(told)
+        .map((summary) => summary.simulator?.condition),
+    ).not.toContain("no-device");
+  });
+
   it("show opens the device's window and reads as booting while Simulator.app draws it", async () => {
     const { simctl, capture, sessions } = setup();
     capture!.window = "none";
@@ -750,5 +799,41 @@ describe("IosSimulatorDeviceLiveSurfaceRuntime — never a UDID, one stream a de
     expect(sessions.size).toBe(1);
     request.onFrame(captureFrame(request.producerEpoch, 2n));
     expect(b.frames).toHaveLength(2);
+  });
+
+  it("R3 holds while the bindings agree: a joined phone whose OWN binding comes to pick another device leaves for its own session at its next idle — never under a face", async () => {
+    const { simctl, sessions } = setup();
+    const a = attach(open(sessions, SURFACE_A, PHONE), "attachment_simdev_000a");
+    await settle();
+    // the 26.1 binding has no 17 Pro of its own runtime here: it falls back to the booted 26.5 one, and joins
+    const second = open(sessions, SURFACE_B, { deviceType: PRO, runtime: IOS_26_1 });
+    const b = attach(second, "attachment_simdev_000b");
+    await settle();
+    expect(sessions.size).toBe(1);
+    expect(b.latest().simulator).toMatchObject({ condition: "streaming", runtime: IOS_26_5 });
+
+    // the 26.5 device shuts down and a 17 Pro on the second binding's own runtime boots: the bindings part
+    simctl.raw = listJson({
+      [IOS_26_1]: [rawDevice(UDID_2, "Booted")],
+      [IOS_26_5]: [rawDevice(UDID, "Shutdown")],
+    });
+    await vi.advanceTimersByTimeAsync(5_000);
+    await settle();
+    // under its face it stays (a fresh inner would move that face's summaries backwards)
+    expect(sessions.size).toBe(1);
+    expect(a.latest().simulator).toMatchObject({ condition: "off", runtime: IOS_26_5 });
+    expect(b.latest().simulator).toMatchObject({ condition: "off", runtime: IOS_26_5 });
+
+    // its face detached, it leaves; attached again, it is its own binding's device — the first phone's never moved
+    b.attachment.dispose();
+    expect(sessions.size).toBe(2);
+    const again = attach(second, "attachment_simdev_000c");
+    await settle();
+    expect(again.latest().simulator).toMatchObject({ condition: "streaming", runtime: IOS_26_1 });
+    expect(a.latest().simulator).toMatchObject({ condition: "off", runtime: IOS_26_5 });
+    expectMonotonic(a.all(), SURFACE_A);
+    expectMonotonic(b.all(), SURFACE_B);
+    expectMonotonic(again.all(), SURFACE_B);
+    expectNoUdid([a.all(), b.all(), again.all()]);
   });
 });

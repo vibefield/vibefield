@@ -49,7 +49,11 @@ import type { LiveSurfaceProducerTextureFrame } from "./texture-forwarder";
 // R3, ONE STREAM A DEVICE: two bindings that land on one device share one inner runtime — a session that has published
 // nothing yet (its inner still at its first revision, so its holders can only move forwards) JOINS the session already
 // streaming the device it picked. Sessions that converge after both have published keep their own streams (moving one
-// would move its summaries backwards); the authority's canonical key already gives one binding one surface.
+// would move its summaries backwards); the authority's canonical key already gives one binding one surface. The share
+// lasts while the bindings agree: each surface keeps its OWN binding, and one whose binding comes to pick another device
+// (it reached this one by a fallback tier, and the devices moved under it) leaves for a session of its own at its next
+// idle — at once with no face attached, else when its last face detaches; never under a face (a fresh inner would move
+// that face's summaries backwards).
 
 /** The inner's own source never reaches a capture: its resolver is the session's closure. Contract-valid, never a UDID. */
 const PLACEHOLDER_UDID = "bound-simulator";
@@ -102,17 +106,23 @@ export interface IosSimulatorDeviceLiveSurfaceRuntime extends LiveSurfaceRuntime
   supportSnapshot(): LiveSurfaceRuntimeSupportSnapshot;
 }
 
-/** The pool's half a session reaches: R3's host search, its own leaving, and the inner attachments' ids. */
+/** The pool's half a session reaches: R3's host search, a strayed member's own session, its own leaving, and the inner
+ * attachments' ids. */
 interface SessionPool {
   hostFor(joiner: DeviceSession, udid: string): DeviceSession | undefined;
+  split(member: SessionMember): void;
   forget(session: DeviceSession): void;
   nextAttachmentId(): string;
 }
 
 interface SessionMember {
   readonly surfaceId: string;
-  /** the session serving this surface — moved, once, by an R3 join */
+  /** this surface's own binding and crop — what it follows, even inside a session it joined (R3) */
+  readonly source: SimulatorDeviceSource;
+  /** the session serving this surface — moved by an R3 join, and out again by a split */
   session: DeviceSession;
+  /** its own binding picks another device than its session streams, at the last look: it splits at its next idle */
+  strayed: boolean;
 }
 
 interface DeviceAttachmentRecord {
@@ -164,6 +174,17 @@ function sameUdid(left: string | undefined, right: string | undefined): boolean 
   return left !== undefined && right !== undefined && left.toUpperCase() === right.toUpperCase();
 }
 
+/** Two picks land in one place: the same device — or, with none, the same one "Create it" would make. */
+function samePlace(left: SimctlDevicePick, right: SimctlDevicePick): boolean {
+  if (left.device !== undefined || right.device !== undefined) {
+    return sameUdid(left.device?.udid, right.device?.udid);
+  }
+  return (
+    left.create?.deviceType === right.create?.deviceType &&
+    left.create?.runtime === right.create?.runtime
+  );
+}
+
 /** The inner's frames, as this surface's: the surface id rewritten, every release delegated. */
 function asSurface(
   frame: LiveSurfaceProducerTextureFrame,
@@ -197,6 +218,8 @@ class DeviceSession {
   /** the inner failed with the window found, at a look: `stopped` until a retry (or a device change) */
   #stalled = false;
   #acting: LiveSurfaceDeviceVerbV1 | null = null;
+  /** bumped as each act that changed CoreSimulator settles: a look's list begun before then may predate the change */
+  #settled = 0;
   #graceUntil = 0;
   #condition: LiveSurfaceSimulatorConditionV1 | undefined;
   #facts: LiveSurfaceSimulatorStateV1 | undefined;
@@ -445,6 +468,8 @@ class DeviceSession {
     record.inner?.dispose();
     record.inner = null;
     if (this.records.size === 0) this.clearTimer();
+    // a strayed surface's last face gone: it leaves for its own binding's session now (R3)
+    if (this.members.has(record.member)) this.splitIfIdle(record.member);
   }
 
   // --- the acts (R4) -------------------------------------------------------------------------------------------------
@@ -461,13 +486,34 @@ class DeviceSession {
           { verb },
         );
       })
+      .then(() => this.settle(verb))
       .finally(() => {
         this.#acting = null;
         if (this.#disposed) return;
-        this.#options.simctl.invalidate();
         this.refresh();
         void this.look();
       });
+  }
+
+  /** Still INSIDE the act (`acting` said, nothing else offered): after an act that changed CoreSimulator — failed or not —
+   * its devices are read afresh before the flight ends, so the face it leaves never offers what it already did (a second
+   * "Create it" from the pick before the create would make a twin of the phone just made, its name unique only against
+   * the old list; a Boot would flash back). A look whose list was begun before this read is not kept (`#settled`). */
+  private async settle(verb: LiveSurfaceDeviceVerbV1): Promise<void> {
+    if (this.#disposed || (verb !== "boot" && verb !== "create" && verb !== "show")) return;
+    const simctl = this.#options.simctl;
+    simctl.invalidate();
+    try {
+      const snapshot = await simctl.list();
+      if (this.#disposed) return;
+      this.#unavailable = false;
+      // (`acting` is still set: a pick here never joins another session)
+      this.setPick(pickDevice(snapshot, this.#binding));
+    } catch (error) {
+      if (error instanceof SimctlUnavailableError) this.#unavailable = true;
+    } finally {
+      this.#settled += 1;
+    }
   }
 
   /** The acts each condition offers; any other is the face racing the summary — nothing. */
@@ -558,6 +604,7 @@ class DeviceSession {
   private async lookOnce(): Promise<void> {
     const capture = this.captureOrNull();
     if (capture === null) return;
+    const settled = this.#settled;
     let snapshot: SimctlSnapshot;
     try {
       snapshot = await this.#options.simctl.list();
@@ -567,8 +614,14 @@ class DeviceSession {
       return;
     }
     if (this.#disposed) return;
+    if (settled !== this.#settled) {
+      // an act settled while this list was out: it may predate what the act changed — read again
+      this.#lookAgain = true;
+      return;
+    }
     this.#unavailable = false;
     if (this.setPick(pickDevice(snapshot, this.#binding))) return;
+    if (this.sweepStrays(snapshot)) return;
     // a failure the window does not explain (the helper, the stream): the face's `stopped`, until a retry
     if (
       this.#inner.summary.state === "failed" &&
@@ -591,6 +644,28 @@ class DeviceSession {
     this.#streamed = false;
     this.#stalled = false;
     return after !== undefined && this.joinIfShared(after);
+  }
+
+  /** R3 while the bindings agree: each member's OWN binding picks afresh; one that lands elsewhere than this session has
+   * strayed, and splits at once when no face of it is attached (else at its last face's detach: `release`). True when
+   * every member left and this session is gone. */
+  private sweepStrays(snapshot: SimctlSnapshot): boolean {
+    const pick = this.#pick;
+    if (pick === null) return false;
+    for (const member of [...this.members]) {
+      member.strayed = !samePlace(pickDevice(snapshot, member.source.binding), pick);
+      this.splitIfIdle(member);
+    }
+    return this.#disposed;
+  }
+
+  /** A strayed member with no face attached here leaves for a session of its own binding (the pool's). */
+  private splitIfIdle(member: SessionMember): void {
+    if (this.#disposed || !member.strayed || member.session !== this) return;
+    for (const record of this.records) if (record.member === member) return;
+    this.members.delete(member);
+    this.#pool.split(member);
+    if (this.members.size === 0) this.dispose();
   }
 
   private joinIfShared(udid: string): boolean {
@@ -855,6 +930,14 @@ export class SimulatorDeviceSessions {
       }
       return undefined;
     },
+    split: (member) => {
+      // its own binding's session — pristine, so its first look may join the one streaming what it picks (R3)
+      const session = new DeviceSession(this.#pool, this.#options, member.surfaceId, member.source);
+      this.#sessions.add(session);
+      member.session = session;
+      member.strayed = false;
+      session.members.add(member);
+    },
     forget: (session) => {
       this.#sessions.delete(session);
     },
@@ -887,7 +970,7 @@ export class SimulatorDeviceSessions {
     const source = LiveSurfaceIosSimulatorDeviceSourceV1.parse(rawSource);
     const session = new DeviceSession(this.#pool, this.#options, id, source);
     this.#sessions.add(session);
-    const member: SessionMember = { surfaceId: id, session };
+    const member: SessionMember = { surfaceId: id, source, session, strayed: false };
     session.members.add(member);
     return new BoundSimulatorSurface(id, source, member);
   }
