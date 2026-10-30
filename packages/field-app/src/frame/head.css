@@ -803,14 +803,8 @@
    `package` at the circle's 18 in the 28 round button 6 in, so the glyph
    stands where the circle held it, and its dot where the circle's is — 7 in
    from the circle's top right, so 1 in from the button's — so neither moves
-   as the circle hands over. It is only ever seen while its sheet shows or
-   folds (shut, the sheet is hidden), so it wears the on look throughout: on
-   until the fold ends. */
-.vf-head-sheet-row .vf-head-pack {
-  color: var(--vf-text-primary);
-  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
-}
-
+   as the circle hands over. The button stays on until the fold ends (the
+   view holds it so), as the sheet is only ever seen open or folding. */
 .vf-head-sheet-row .vf-head-pack-dot {
   top: 1px;
   right: 1px;

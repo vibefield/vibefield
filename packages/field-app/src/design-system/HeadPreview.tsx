@@ -256,7 +256,8 @@ export function HeadPlate({
 /** The live head on its real controller over fixture doors — the playground's.
  * The frame's one owner of the open surface is the caller's (it shares it with
  * the playground's Objects); keys are unbound: the catalog is not a window the
- * head owns, and no plugin host runs in it, so its Artifacts shelf waits. */
+ * head owns, and no plugin host runs in it, so its Artifacts shelf waits — and
+ * past 10 s says the Hub isn't starting, as a window's would. */
 export function HeadLive({
   surface,
   onSurfaceChange,

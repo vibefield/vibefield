@@ -250,7 +250,10 @@ function HubWaits({ waits }: { readonly waits: HubWait }): ReactElement {
         className="vf-head-waits-face"
         {...(left ? { "data-leaving": "", "aria-hidden": true } : {})}
       >
-        <EmptyState title={words.title} description={words.description} />
+        <EmptyState
+          title={words.title}
+          {...(words.description === undefined ? {} : { description: words.description })}
+        />
       </div>
     );
   };
@@ -583,9 +586,11 @@ export function HeadPlaceView({
 /** The same sheet under a cover (HN-8, PL-D2; DESIGN.md §8 "The head"), grown from the package
  * circle at the head's left — or, while Godview's terminals are maximized, from the bar's own
  * control — on Artifacts alone: Fields are the desk's and stay with the pill. Its head row is the
- * circle's own: the package, now a 28 round button and on, holding the circle's 18 where the
- * circle held it, its dot where the circle's is, then the shelf's name. Shut, it is the circle's
- * own box (the bar control's, `bar`), and unseen: the circle, the frame's, stands there. */
+ * circle's own: the package, now a 28 round button, holding the circle's 18 where the circle held
+ * it, its dot where the circle's is, then the shelf's name. The package is on ("Close  Esc") until
+ * the fold ends, so nothing in the row changes while the sheet folds back into the circle. Shut,
+ * it is the circle's own box (the bar control's, `bar`), and unseen: the circle, the frame's,
+ * stands there. */
 function HeadCircleSheetView({
   open,
   bar,
@@ -599,6 +604,7 @@ function HeadCircleSheetView({
   readonly artifacts: HeadArtifacts | null;
   readonly onShut: () => void;
 }): ReactElement {
+  const on = useLingering(open, SHEET_FOLD_MS);
   return (
     <div
       className="vf-head-sheet no-drag"
@@ -608,7 +614,7 @@ function HeadCircleSheetView({
       inert={!open}
     >
       <div className="vf-head-sheet-row">
-        <PackageButton on={open} dot={packageDot} glyph={18} onPress={onShut} />
+        <PackageButton on={on} dot={packageDot} glyph={18} onPress={onShut} />
         <span className="vf-head-sheet-name">Artifacts</span>
       </div>
       <ArtifactsShelf shown={open} artifacts={artifacts} />
