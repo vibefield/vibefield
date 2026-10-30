@@ -34,8 +34,9 @@
   fixed it). `nightly-20261028` may dispatch on the green head (`scripts/release-plan.mjs:62`: never from a red trunk).
   Since the audit's base (`bb1a2c823`): AL-9, items 82–84, TS-8a/8b, the TS-3a erratum, AO-6b3 and QW1 stack A landed;
   then HK, the EL8 to puppeteer 0.3.0 (`1469639a6`) and QW1 stack B (10-28).
-- **The live program.** §2: TS, AO, AL, QW1 (the Godview swarm's fix wave 1), the release rails, the EL8 watch, the
-  fixer, upstream. The first-beta blockers are §3 item 7. Everything valid but unscheduled is §4.
+- **The live program.** §2: TS, AO, AL, **AU (updates that wait)**, QW1 (the Godview swarm's fix wave 1), the release
+  rails, the EL8 watch, the fixer, upstream. The first-beta blockers are §3 item 7. Everything valid but unscheduled
+  is §4.
 
 ## 2 Now — the active tracks
 
@@ -79,6 +80,22 @@
 - Owed: AL-5's relaunch witness on a packaged build; Windows/Linux relaunch; a fieldd no shell ever claimed is
   unbounded; the clean `smoke:canvas` on this Mac (unattended); ghosttea's "last pane closed" hook (an upstream ask);
   James's hand rows (§5).
+
+**AU — Updates That Wait** · vibe-field-1b (lane `lanes/au`) · law `draft/thinking-update-ux.md` §7 (page sources `draft/update-ux/`), DESIGN.md §2.5/§2.8/§6/§8/§9/§13, EDP §5.2/§6.4/§11, ESR §7.3
+- Ruled 10-29 02:01–02:16Z (James, on the page KY3q9U2e): A on thirteen, **B on AU-D4**, so the Me menu always
+  carries an update row ("Check for updates" at rest, checking in place). The lead's calls LC-1…LC-57 (seven rounds)
+  settle the blueprints' questions and what the builds found (the record's §10); James ruled LC-53 at the leans.
+- Landed 10-30: **B1** — AU-0 (`db22ddb2e`: DESIGN.md first; its EDP/ESR/WP12 notes at source in dev-local
+  `a0a7f7bdb`) and AU-1 (`380fb4d81`: the view grows, and a person's two doors, the check's answer and
+  `download(version)`), as the merge `aa2be72c9`, run 3 green on the Mac mini (LANDED "AU B1").
+- Next, each built and light-green, verified on the mini and landed in turn: **B2** (AU-3a `appVersion` in the device
+  slice → AU-3 Settings → Updates and Your devices → AU-2 the corner: the dot, the always-row, the question) → **B3**
+  (AU-4 the app menu and the status item's update image → AU-7 Move to Applications → AU-5a a signal never meets the
+  quit gate, in every build → AU-5 install on quit) → **B4** (AU-6 signed notes and the build time, every
+  `release.yml` edit; after HN B1 lands, rebased over it).
+- Owed: the row, the dot and the question on a desk in both themes (James's display word) after B2; ⌘, through the
+  app menu (AU-4's eyeball); AU-5's install-on-quit and Move rows on the mini between two signed nightlies, then its
+  logout probe; LC-52 ("Check for Updates…" keeps its ellipsis, though the item does not open a box) is James's.
 
 **QW1 — the Godview swarm QA, fix wave 1** · vibe-field-d4 · law `draft/testing/godview-swarm-qa-plan.md` v0.3 §12.1, `draft/thinking-ar-reattach.md` §6
 - Ruled: the plan (A01–A27, X01–X26, Q01–Q21; page 3ZrkUWG4) and re-attach's RA-D1…RA-D9 (10-27, every pick at the
@@ -259,7 +276,8 @@
 - AR-7: his daily dogfood · AR7-D2's 8 s kit wait, measured on a pair bounce.
 
 **Eyeballs (both themes)**
-- The update card on the current nightly (Settings › General, WP12d L3c-ii).
+- The update card on the current nightly (Settings › General, WP12d L3c-ii) — moves to Settings → Updates with B2
+  (AU-3, AU-D8); the pass is the page's then, with the Me row and the dot (AU-2).
 - History by project (PJ-4 phase B): the list's order and folds, a row's marks, "n live".
 - Settings → Plugins (object rows since DK-8 `244263f8c`): enable, disable, update, a faulted plugin's state.
 - Settings → Devices → Network details' sync rows and the head's name-pill sync dot (C6-4); could join TS's photographs.
@@ -360,6 +378,8 @@
 **Desk, UI and design**
 - With no desk, B and the line's ⊕ still flip the Objects surface — DK-18 follow-up (b).
 - InlineNotice's attention/error tones to DESIGN.md §2.5's inks (a design-kit slice) — WP12 L3c-ii.
+- The Me menu's notice row is in `--vf-orange`, the fill, not the attention ink (§2.5; `MeMenu.css:272-277`, since
+  UA-7). AU-2 (B2) fixes it with the not-installed notice — DESIGN.md §8 the Me menu (AU-0).
 - `prefers-reduced-transparency`: a DESIGN.md stance first (`440b04e`'s proposal: glass falls back to the §5 tint), for the cover glass (FC-D13/D16) and the deck's glass v2 (GT-D19), then tokens.css.
 
 **Files, phone, accounts**
@@ -429,6 +449,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | TS — the Tailscale door | ACTIVE; TS-0…3b, 4a, 4b, 5, 6, 8a, 8b landed | `thinking-tailscale-onboarding.md`; DESIGN.md §6/§8/§9/§13 | TS-7 |
 | AO — Bring Your Agents | ACTIVE; AO-0…6b3 landed | `thinking-agent-onboarding.md` | AO-7 on a puppeteer release after 0.3.0 (`installRecipe`) |
 | AL — app lifecycle | ACTIVE; AL-1…3, 5, 7, 8a, 9 landed | `thinking-app-lifecycle.md`; ESR §7.3 | AL-6, Last exit, relaunch cap |
+| AU — Updates That Wait | ACTIVE; B1 (AU-0, AU-1) landed 10-30 | `thinking-update-ux.md` §7 (page sources `draft/update-ux/`); DESIGN.md §2.5/§2.8/§6/§8/§9/§13; EDP §5.2/§6.4/§11; ESR §7.3 | B2 (AU-3a, AU-3, AU-2) |
 | QW1 — Godview swarm QA, fix wave 1 | ACTIVE; stacks A and B landed 10-28, B on puppeteer 0.3.0's EL8 pin | `godview-swarm-qa-plan.md`; `thinking-ar-reattach.md` | QA wave 1 |
 | Release rails (EDP/ESP, WP12, TD, BP, RD, RM) | ACTIVE; nightlies live, W10/W11 passed | the release specs; `thinking-browser-profile.md`, `thinking-release-deps.md`, `thinking-release-management.md` | round 3; the first-beta list |
 | EL8 — pins | ACTIVE (watch) | DECISIONS TB; the manifests | puppeteer 0.3.0 pinned 10-28 (`1469639a6`); Swift rejoin; mille's release |

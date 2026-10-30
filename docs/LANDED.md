@@ -19277,3 +19277,97 @@ stays, so a backstopped `unknown` never passes as a heard exit.
 
 **Measured:** across 15 verify logs, the two rows ran 6240–11716 and 2852–6724 ms over 30 row-runs, one red each.
 Alone ×3 at load 37–44, all green.
+
+## AU B1 — updates that wait: DESIGN.md says it first (AU-0), and the update view grows with a person's two doors (AU-1): the running version, the staged clock, the last apply as the window will say it, a check answered when the check settles, and Download (AU-D1…D14, D4 B; AU-G5, AU-G6, AU-G7, AU-G12) (2026-10-30; `aa2be72c9`, the merge of main `0b4cb2ff0` (the item 94 stack) into `380fb4d81` on `db22ddb2e`, lane `au/build`)
+
+**What.** James ruled the fourteen marks of *Updates That Wait* (https://claude.ai/artifact/KY3q9U2eVN5oMqWVxMYj2Q) on
+the page on 2026-10-29, between 02:01:08 and 02:16:53Z, round 1, no notes: A on thirteen, the leans, and **B on
+AU-D4**, so the Me menu always carries an update row. His next word (03:40Z): "all ruled, now plan and land this
+nicely". The track lands in four batches. B1 is the law and the view; nothing new renders yet.
+- **AU-0 (`db22ddb2e`): DESIGN.md says it first.** Docs only, no code and no token, because a visual change is written
+  in DESIGN.md before any code (docs/UI_SYSTEM.md):
+  - §2.5: cyan's info also marks an update that waits on you, and no other mark of an update is cyan.
+  - §2.8 I-5: the badge's one slot holds the waiting count or the update's dot, and the count outranks the dot (AU-D1).
+  - §6: the dot wears `--vf-ease-pop` once; the question grows the panel 256 → 320 on the island curve.
+  - §8 the Me menu: the update row, always, nearest the face (between Settings… and you), Return still landing on
+    Settings…; the question in main's consent words, Cancel leading and focused; the not-installed notice once, in
+    the attention ink; ⌘, keeps one owner.
+  - §8 "Settings → Updates" replaces "The desktop update card" (AU-D8): first in Support, headed by the exact version
+    with Copy, one primary act per state, Your devices.
+  - §9 "The update's words": `releaseName` ("the Oct 28 nightly"), the verbs, the ellipsis rule, the quit box's line.
+  - §13: the update wears `arrow` turned 180°, `reset` and `check`.
+  - The five field-app tests that read DESIGN.md keep their literals.
+- **AU-1 (`380fb4d81`): the view grows, and its doors.** One commit (the record planned three: contracts, main, the
+  doors):
+  - **contracts** (`update-policy.ts`): `UpdateView` gains `currentVersion`, `stagedAt` and the projected `lastApply`
+    {version, from?, outcome, at, trigger?, thisLaunch?}, the outcome `installed` or `not-applied`. The persisted
+    `UpdateLastApply` gains `from`, `trigger` and `landed {at, outcome}`, each `.catch(undefined)`. `trigger` takes all
+    three values now (restart, silent, quit), so no later slice grows an enum an older app reads, and no `branch` or
+    `reason` value grew (EDP-36). The state file gains `staged {version, at}`. Also `UpdateCheckResult`,
+    `UpdateDownloadRequest`/`Result` (a refusal carries main's words), the `app.update.download` audit action,
+    `IPC_CHANNELS.updateDownload`, and `releaseName()`, one friendly name for main's words and the window's. EL9
+    fixtures: update-view ×5 (a pre-AU-1 shape among them), update-client-state.landed, update-check-result ×2. They
+    are TypeScript only: no Rust or Swift side, and gen is untouched.
+  - **electron-shell main** (`controller.ts`): the first launch after an apply judges it once, by version, before its
+    OUTCOME row is delivered, and an older app's audited record is never judged. The staged clock persists, so "Ready
+    since" survives a relaunch. `decline()` and the off switch mid-download land on `available`, and on again
+    downloads it. `prepareOnce` no longer refuses a person's own off switch (LC-12); the publisher's levers still
+    refuse. Every ATTEMPT row gets exactly one OUTCOME row (`auditApplyRefused`); the silent apply re-reads its holds
+    at entry, at the confirm and after the ATTEMPT row; a confirm whose state moved during that row's await refuses
+    `expired`; a channel change outlives a check in flight (`checkOutlived`).
+  - **the doors:** `check` answers when the check settles (`checkForPerson`). `download(version)` fetches one found
+    version (`downloadForPerson`): with updates off, or with a skip taken back; a lever refuses it with words. ipc.ts
+    parses both ways, the preload parses the answers, and field-app's `FieldUpdatesHost` carries them. The tray's
+    check and the launch and resume checks stay fire and forget; the app menu gains its check with AU-4 (B3).
+  - **field-app:** nothing new renders yet (B2 brings AU-3 and AU-2); the card's busy is now the check alone.
+- **The specs, at source** (dev-local `a0a7f7bdb`, the draft queue of 2026-10-29 10:14Z): EDP §5.2, §6.4, §11.1,
+  §11.3, §11.5 and §11.6; ESR §7.3; `build-wp12-updater.md` §13 C3 (superseded by AU-D8).
+- **DECISIONS** gains the AU row (AU-D1…D14, AU-L1…L6), a collision warning (AU-G*, LC-*), and dated notes on the EDP,
+  AL and WP12 rows. **ROADMAP** gains the AU track.
+
+**Found while planning** (read at `db12d0939`):
+- The view's `lastApply` had to be a projection: the persisted `UpdateLastApply` had no outcome, and `UpdateView` had
+  no `lastApply`.
+- The Me menu's notice row wears `--vf-orange`, the fill, not the attention ink (`MeMenu.css:272-277`, since UA-7).
+  DESIGN.md says the ink; AU-2 (B2) fixes the CSS.
+- ⌘, would gain a second owner with the app menu's Settings… (GT-D21's capture in `me-menu-wiring.ts`). AU-4 keeps
+  one.
+- A development build has no updater, no doors and no version on the wire, so the always-row's dev words are its own.
+- The page's gap ids collide with G7 and G28/G29, so they are AU-G1…AU-G15.
+
+**Validation.**
+- **The lane:** `/Volumes/SamsungRed/lanes/au` (the worktree `vibe-field`, branch `au/build` off `e23fa8a1f`, then
+  main's head), committed 2026-10-29 07:12Z.
+- **The light pass** at `380fb4d81` (08:18:42–08:19:58Z, at nice 19 under the guard) was green on its first run:
+  - preflight, the walls, biome on the 31 touched code and fixture files by path, and the non-ASCII scan (DESIGN.md's
+    two `›` became `→`, LC-42);
+  - the contracts, electron-shell and field-app typechecks;
+  - vitest: contracts 575, electron-shell 306 (17 files), field-app 208 (9 files, the five DESIGN.md readers among
+    them).
+  Logs: `lanes/au/logs/light-380fb4d81/`.
+- **No verify on this Mac** (James, 2026-10-29 09:05Z: the Mac mini's verify lane). B1 was the mini's run 3 and
+  waited in the queue overnight.
+- **The landed tip** is `aa2be72c9`: main `0b4cb2ff0` (the item 94 stack, run 2) merged into `380fb4d81` at 17:45Z.
+  Both sides touch DESIGN.md (AU-0's sections beside TS-6's §8 and Q19's retirement) and contracts'
+  `fixtures.test.ts`; git merged both with no markers. It went to the mini as a bundle of its three commits (sha256
+  `9d73674f…`). The mini's `next` ran 17:47:48–17:47:58Z: the locks stood (no re-install), field-native was built, and
+  preflight exited 0 with one R23 candidate warning.
+- **The mini, run 3, `pnpm verify` at `aa2be72c9`:** exit 0, armed 17:48:11Z, done 17:52:37Z (load 2.45 → 8.96),
+  whole: preflight through `gen:check`.
+  - `pnpm test` ran 27 projects with no failed summary: contracts 1236, electron-shell 2020 + 3 skipped, field-app
+    2810, fieldd 2612 + 11 skipped.
+  - AU-1's own files were among them (`controller-apply` 73, `update-view` 13, `update-doors` 5, `preload-update` 4),
+    and so were the five DESIGN.md readers.
+  - `pnpm test:rust`: 31 ok, 0 failed. The tree was clean after, with no stub left.
+  Logs: `lanes/ts6/logs/mini/run3/`.
+- **Landed:** main fast-forwarded `0b4cb2ff0` → `aa2be72c9` at 17:57:24Z on VF-PM's GO, and was pushed at 18:09:19Z.
+
+**Records.** The design record is `draft/thinking-update-ux.md`: §5 the rulings, §6.2 the always-row, §7 the build
+ladder with each batch as built, §8 the gaps, §10 the lead's calls LC-1…LC-57, and §11 what was found while building
+(dev-local `62e16d02c`, the draft queue of 2026-10-30).
+
+**Owed.**
+- B2 (AU-3a → AU-3 → AU-2), B3 (AU-4 → AU-7 → AU-5a → AU-5) and B4 (AU-6) are built and light-green, each queued on
+  the mini. B4 waits for HN B1 and is rebased over it.
+- The record's Status in `62e16d02c` says B1 is "on the mini as run 3 since 2026-10-30 17:55Z", written before the
+  landing was known (run 3 ran 17:48–17:52Z). It is corrected at its source at the next draft queue.
