@@ -3853,8 +3853,10 @@ morphs into its model), else the phone's own model on the newest iOS this Mac ha
 — off, with "Boot", or no device, with "Create it". **Finish** turns each phone to the next of its model's launch colours,
 and round to the first. There is no Model act: a bound phone's model is its device's, and only Attach sets it — a model
 unlike its device would show another iPhone's screen in its frame. A binding names a model and an iOS, never one Mac's
-device, so on another Mac the same phone shows that Mac's own Simulator of its model. Attach changes nothing on a Mac that
-has no Simulator device to offer, or before VibeField has read this Mac's devices.
+device, so on another Mac the same phone shows that Mac's own Simulator of its model. "The newest iOS this Mac has" is its
+newest INSTALLED iOS runtime, whether or not any device runs it yet: the face then shows the model's device on whatever
+runtime has one, or says "no device", with "Create it". Attach changes nothing on a Mac with no iOS runtime installed, or
+before VibeField has read this Mac's devices.
 
 **The update's words** (track AU, AU-L2, AU-L3, AU-L6; ruled 2026-10-29). **A version is said two ways:** exactly
 where it can be copied — `0.1.0-nightly.20261027` in mono on Settings → Updates' head — and in friendly words in a
