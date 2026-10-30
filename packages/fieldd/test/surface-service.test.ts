@@ -179,6 +179,8 @@ interface FakeAuthority extends SurfaceAuthority {
   listed: ShellSurfacesSimulatorDevicesParams[];
   sources: ShellSurfacesEnumerateResult["sources"];
   devices: ShellSurfacesSimulatorDevicesResult["devices"];
+  /** the runtimes main says are installed (undefined: unsaid) */
+  runtimes?: ShellSurfacesSimulatorDevicesResult["runtimes"];
   mintResult: () => Promise<ShellSurfacesMintResult>;
   releaseResult: (params: ShellSurfacesReleaseParams) => Promise<ShellSurfacesReleaseResult>;
 }
@@ -223,7 +225,10 @@ function fakeAuthority(): FakeAuthority {
     async surfacesSimulatorDevices(params) {
       authority.listed.push(params);
       if (!authority.available) throw shellUnavailable();
-      return { devices: authority.devices };
+      return {
+        devices: authority.devices,
+        ...(authority.runtimes === undefined ? {} : { runtimes: authority.runtimes }),
+      };
     },
   };
   return authority;
@@ -385,6 +390,22 @@ describe("SurfaceService.simulatorDevices — PT-S2 (R11), the attach's device l
     // a read: nothing is audited, nothing is minted
     expect(audit.rows).toEqual([]);
     expect(authority.minted).toEqual([]);
+  });
+
+  it("carries main's installed runtimes through, the newest first — the attach's third pick, even with no device here", async () => {
+    const authority = fakeAuthority();
+    authority.runtimes = [
+      "com.apple.CoreSimulator.SimRuntime.iOS-26-1",
+      "com.apple.CoreSimulator.SimRuntime.iOS-18-6",
+    ];
+    const { surfaces } = service(authority);
+    const result = await surfaces.simulatorDevices(windowContext(["surface.capture"]), {});
+    expect(result).toEqual({ devices: [], runtimes: authority.runtimes });
+    // one that is not CoreSimulator's runtime id is refused at this door, as a row with a UDID is
+    authority.runtimes = ["ABCDEF01-2345-6789-ABCD-EF0123456789"];
+    await expect(
+      surfaces.simulatorDevices(windowContext(["surface.capture"]), {}),
+    ).rejects.toThrow();
   });
 
   it("needs no window: a list binds nothing, so a caller with no renderer participant is answered too", async () => {
