@@ -13,9 +13,33 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { BootRoot } from "../src/boot/BootRoot";
 import type { BootMachine, BootReady, BootView } from "../src/boot/machine";
+import { DAYLIGHT, TEAR } from "../src/boot/splash/field-door";
 import { leaveFor, resetSwitchForTests, type SwitchPersona } from "../src/boot/switch";
+import { resetAppThemeForTest, setAppTheme } from "../src/theme";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+/** FG-2's rows hand the field a live door of their own; every other row keeps the real one, which
+ * happy-dom (no WebGPU) opens as the still. */
+const field = vi.hoisted(() => ({
+  door: null as null | {
+    readonly mode: "worker";
+    mark(to: number, ms: number): void;
+    reveal(options?: object): Promise<boolean>;
+    destroy(): void;
+  },
+}));
+
+vi.mock("../src/boot/splash/field-door", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../src/boot/splash/field-door")>();
+  return {
+    ...real,
+    fieldPlan: (env?: Parameters<typeof real.fieldPlan>[0]) =>
+      field.door === null ? real.fieldPlan(env) : { gpu: {} as GPU, mainThread: false },
+    openFieldDoor: async (...args: Parameters<typeof real.openFieldDoor>) =>
+      field.door ?? real.openFieldDoor(...args),
+  };
+});
 
 function fakeMachine() {
   let view: BootView = {
@@ -35,6 +59,7 @@ function fakeMachine() {
       DocManager: class {},
     },
   } as unknown as BootReady;
+  const revealDesk = vi.fn<() => void>();
   const machine: BootMachine = {
     view: () => view,
     subscribe: (fn) => {
@@ -56,13 +81,13 @@ function fakeMachine() {
     retry: () => {},
     closePlugins: async () => undefined,
     completeOnboarding: () => {},
-    revealDesk: () => {},
+    revealDesk,
   };
   const set = (patch: Partial<BootView>): void => {
     view = { ...view, ...patch };
     for (const fn of [...listeners]) fn();
   };
-  return { machine, set };
+  return { machine, set, revealDesk };
 }
 
 let root: Root | null = null;
@@ -73,9 +98,12 @@ afterEach(() => {
   root = null;
   host = null;
   vi.useRealTimers();
+  vi.restoreAllMocks();
   resetSwitchForTests();
+  resetAppThemeForTest();
   sessionStorage.clear();
   document.body.innerHTML = "";
+  field.door = null;
 });
 
 function workspaceWrapper(): HTMLElement | null {
@@ -136,6 +164,193 @@ describe("BootRoot reveal (the top-edge click contract)", () => {
   });
 });
 
+// ---- the hand-over (FG-2; DESIGN.md §6, §8 "The reveal") -------------------
+
+/** A live door whose reveal the row settles by hand. */
+function liveDoor(reveal: () => Promise<boolean>) {
+  const door = {
+    mode: "worker" as const,
+    mark: vi.fn<(to: number, ms: number) => void>(),
+    reveal: vi.fn<(options?: object) => Promise<boolean>>(reveal),
+    destroy: vi.fn<() => void>(),
+  };
+  field.door = door;
+  return door;
+}
+
+/** BootRoot over the fake machine, its field's door opened, the desk mounted under the splash. */
+async function mountWarm(machine: BootMachine, set: (patch: Partial<BootView>) => void) {
+  host = document.createElement("div");
+  document.body.appendChild(host);
+  root = createRoot(host);
+  act(() => root?.render(createElement(BootRoot, { machine })));
+  await act(async () => {}); // the field's door opens
+  act(() => set({ phase: "stabilizing", stage: "settling", progress: 1 }));
+}
+
+const groundStyle = (): string => workspaceWrapper()?.getAttribute("style") ?? "";
+
+/** Lets the tear's promises settle: the door's reveal, its bound, the hand-over. */
+async function settle(): Promise<void> {
+  await act(async () => {
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+  });
+}
+
+describe("BootRoot hands a returning boot's desk over (FG-2)", () => {
+  it("keeps the base reveal when the field can't tear: handed over at once, the splash's fade at `interactive`", async () => {
+    vi.useFakeTimers();
+    const { machine, set, revealDesk } = fakeMachine();
+    await mountWarm(machine, set); // happy-dom: no WebGPU, so the field is its still
+    expect(host?.querySelector(".vf-field")?.getAttribute("data-field")).toBe("still");
+
+    act(() => set({ phase: "handing-over", stage: "" }));
+    expect(revealDesk).toHaveBeenCalledTimes(1);
+    expect(host?.querySelector(".vf-splash")?.getAttribute("data-opening")).toBe("fade");
+    expect(groundStyle()).not.toContain("brightness");
+
+    act(() => set({ phase: "interactive" }));
+    expect(workspaceWrapper()?.style.transform).toBe("scale(1)"); // the base settle
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+    expect(host?.querySelector(".vf-splash")).toBeNull();
+    expect(revealDesk).toHaveBeenCalledTimes(1); // decided once
+  });
+
+  it("tears a live field: the words go, then the field opens in the day's light as the desk settles in, and only then is the desk handed over", async () => {
+    vi.useFakeTimers();
+    let open: (opened: boolean) => void = () => {};
+    const door = liveDoor(
+      () =>
+        new Promise((resolve) => {
+          open = resolve;
+        }),
+    );
+    const { machine, set, revealDesk } = fakeMachine();
+    await mountWarm(machine, set);
+    expect(host?.querySelector(".vf-field")?.getAttribute("data-field")).toBe("live");
+
+    act(() => set({ phase: "handing-over", stage: "" }));
+    // The words' beat (240ms): they go, the ground's own colour with them, and the desk waits
+    // under the field, small and bright.
+    expect(host?.querySelector(".vf-splash")?.getAttribute("data-opening")).toBe("tear");
+    expect(workspaceWrapper()?.style.transform).toBe("scale(0.985)");
+    expect(workspaceWrapper()?.style.filter).toBe("brightness(1.16)");
+    expect(door.reveal).not.toHaveBeenCalled();
+
+    act(() => {
+      vi.advanceTimersByTime(240);
+    });
+    expect(door.reveal).toHaveBeenCalledTimes(1);
+    expect(door.reveal).toHaveBeenCalledWith({ ...TEAR, ink: DAYLIGHT });
+    // The desk settles in from .985 (1.9s island) as its exposure comes down (1.5s ease-out).
+    expect(workspaceWrapper()?.style.transform).toBe("scale(1)");
+    expect(workspaceWrapper()?.style.filter).toBe("brightness(1)");
+    expect(workspaceWrapper()?.style.transition).toContain("1900ms");
+    expect(workspaceWrapper()?.style.transition).toContain("1500ms");
+    expect(revealDesk).not.toHaveBeenCalled(); // `interactive` means revealed
+
+    open(true);
+    await settle();
+    expect(door.destroy).toHaveBeenCalledTimes(1); // open: the field stops drawing at once
+    expect(revealDesk).toHaveBeenCalledTimes(1);
+
+    // Then the click contract as ever: settled, the wrapper carries nothing, and the ground is gone.
+    act(() => set({ phase: "interactive" }));
+    act(() => {
+      vi.advanceTimersByTime(700);
+    });
+    expect(groundStyle()).toBe("");
+    expect(host?.querySelector(".vf-splash")).toBeNull();
+    expect(door.destroy).toHaveBeenCalledTimes(1);
+  });
+
+  it("tears in the look's own light by night", async () => {
+    vi.useFakeTimers();
+    setAppTheme("dark");
+    const door = liveDoor(async () => true);
+    const { machine, set } = fakeMachine();
+    await mountWarm(machine, set);
+    act(() => set({ phase: "handing-over", stage: "" }));
+    act(() => {
+      vi.advanceTimersByTime(240);
+    });
+    expect(door.reveal).toHaveBeenCalledWith({ ...TEAR }); // no ink: the splash keeps its own
+  });
+
+  it("bounds the tear: a field that never opens still hands the desk over, 1.9s and a second on, and leaves with the ground's fade", async () => {
+    vi.useFakeTimers();
+    const door = liveDoor(() => new Promise(() => {}));
+    const { machine, set, revealDesk } = fakeMachine();
+    await mountWarm(machine, set);
+    act(() => set({ phase: "handing-over", stage: "" }));
+    act(() => {
+      vi.advanceTimersByTime(240 + 2_899);
+    });
+    await settle();
+    expect(revealDesk).not.toHaveBeenCalled();
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    await settle();
+    expect(revealDesk).toHaveBeenCalledTimes(1);
+    expect(door.destroy).not.toHaveBeenCalled(); // not open: it stays for the fade
+
+    act(() => set({ phase: "interactive" }));
+    act(() => {
+      vi.advanceTimersByTime(500); // past the 400ms fade hold
+    });
+    expect(host?.querySelector(".vf-splash")).toBeNull();
+    expect(door.destroy).toHaveBeenCalledTimes(1);
+  });
+
+  it("hands the desk over at once when the tear fails (a lost device), the field left for the fade", async () => {
+    vi.useFakeTimers();
+    const door = liveDoor(() => Promise.reject(new Error("device lost")));
+    const { machine, set, revealDesk } = fakeMachine();
+    await mountWarm(machine, set);
+    act(() => set({ phase: "handing-over", stage: "" }));
+    act(() => {
+      vi.advanceTimersByTime(240);
+    });
+    await settle();
+    expect(door.reveal).toHaveBeenCalledTimes(1);
+    expect(revealDesk).toHaveBeenCalledTimes(1); // never the bound's 2.9 s
+    expect(door.destroy).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["a hidden window", () => vi.spyOn(document, "hidden", "get").mockReturnValue(true)],
+    [
+      "Reduce Motion",
+      () =>
+        vi.spyOn(window, "matchMedia").mockImplementation(
+          (query: string) =>
+            ({
+              matches: query === "(prefers-reduced-motion: reduce)",
+              media: query,
+              addEventListener: () => {},
+              removeEventListener: () => {},
+            }) as unknown as MediaQueryList,
+        ),
+    ],
+  ])("never tears in %s: the base reveal, handed over at once", async (_, arrange) => {
+    vi.useFakeTimers();
+    const door = liveDoor(async () => true);
+    const { machine, set, revealDesk } = fakeMachine();
+    await mountWarm(machine, set);
+    arrange();
+    act(() => set({ phase: "handing-over", stage: "" }));
+    expect(revealDesk).toHaveBeenCalledTimes(1);
+    expect(host?.querySelector(".vf-splash")?.getAttribute("data-opening")).toBe("fade");
+    act(() => {
+      vi.advanceTimersByTime(3_000);
+    });
+    expect(door.reveal).not.toHaveBeenCalled();
+  });
+});
+
 // ---- the switch (DESIGN.md §8 "The switch") --------------------------------
 
 const HANDOFF = "vf:switch-arrival";
@@ -189,6 +404,7 @@ describe("BootRoot and the switch (DESIGN.md §8)", () => {
     expect(scene()?.textContent).toContain("Switching to");
     expect(scene()?.textContent).toContain("waking the daemon");
     // The plain splash stands down while the switch's scene is this boot's splash,
+    expect(host?.querySelector(".vf-splash")).toBeNull();
     expect(host?.textContent).not.toContain("VibeField");
     // and the corner hides its own face until the traveller lands on it.
     expect(document.documentElement.hasAttribute("data-vf-switch-landing")).toBe(true);

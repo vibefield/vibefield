@@ -100,6 +100,7 @@ pegboard at DK-13 (2026-10-06). The island's law outlives it as M1 (§6): one el
 |---|---|---|
 | `--vf-canvas-bg` | `#FAFAFA` | `#171717` |
 | the cutting mat (`glyph: "mat"`, `draft/ground/MAT.md`) — sage `#86A078`, cream lines `#E8DCBE`, a material carried across both themes | lit by the **Sun**: the tree-shadow reference's chain — the sage shows `#3D5A30` | lit by the **Moon**: 4100 K through the Purkinje shift — `#313C40` in the dapples, `#1C2027` in the palm's shadow, Eigengrau `#16161D` under all; half the sunlit luminance |
+| `--vf-field-ground` — the first face's ground (track FG): the website's splash, the field of Wormhole · edited, before its first frame and under its still; the window's pre-paint projects it (`electron-shell/src/main/windows.ts` — main can't read CSS, UI_SYSTEM.md) | `#04050F` | `#04050F` — the field is the dark in both themes |
 
 *Retired 2026-10-07 (DK-17; DK-0d's erratum of 2026-10-03, executed — DK-D2, R22):* the ground this
 section described until then was ICE 0.11's — a world grid (`spacings: [25, 50, 100]` and its fades)
@@ -128,6 +129,16 @@ ground alone (§8), and so does the kit's placeholder face, whose one consumer i
 (a page or an app not yet pictured is not a board, so not the mat). The design catalog's stand-ins
 for the field — the chrome's plates, the switch's and the Setup Assistant's floor — wear the mat in
 CSS, as the field they stand for does.
+*Amended 2026-10-29 (track FG, FG-D1…FG-D24 ruled by James; the record is
+`draft/thinking-first-run-glass.md`; built at FG-1, its tear to the desk at FG-2 (the first run's at FG-5) and the catalog's still
+at FG-6):* the first face's ground is the **field** — the website's own splash (vibefield-dotdev,
+Wormhole · edited), live on WebGPU from boot's first frame to the desk (§8 "The boot splash") — and the
+mat begins at the desk. `--vf-field-ground` is the window's colour before the field's first frame and
+the ground under its still; it is one value in both themes because the tunnel is the dark in both. The
+splash and the Setup Assistant leave the mat in CSS for the field, and the catalog's Setup Assistant
+stands on the field's still; the switch's floor, the loading veil, the explorer's tiles and the terminal
+preview's miniature field keep the mat (DK-16). The words on the field are in `--vf-field-ink`, white at
+56% (its contrast measured as DK-16 measured the mat's: FG-O2).
 *Erratum 2026-10-03 (DK-0d — DK-D2, R22) — the cursor's halo, which this file never described:* the
 field above answered a pointer VibeField drew itself (`cursor/`: a DOM halo over the canvas that hid
 the OS cursor, became a dot over a widget's controls and fed this field its poles — the `reach`
@@ -635,6 +646,7 @@ claim it.
 | Overlay chip | surface `/90–95` + `backdrop-blur-xl` | no wearer today: the put-back affordance and the HUD's toasts retired (DK-13, DK-17); the peers' chips wear the line's glass and the status line solid chrome (§8) |
 | Backdrop dim | `black/10` light · `black/40` dark | behind open sheets; canvas recedes to `scale(0.98)` |
 | Search scrim (GV-D8; K7, 2026-10-08) | `black/16` light · `black/46` dark, over a backdrop blur of 18 and `saturate(0.9)` | behind the Peek (§8 "Search"): the window blurred and dimmed, the view and the frame receding to `scale(0.98)` under it. Darker than the backdrop dim so it reads as dimmed (One Frame §23); the backdrop dim stays the sheets' until James rules otherwise (docket PK1). *Since TS-D22 A (2026-10-29):* the phone wears its dim alone, with no blur, under a door that stands over a live field, between the field and the bar (§9) |
+| Setup Assistant (as built since UA-3w; written down 2026-10-29, track FG; on the field, to be built at FG-3) | `--vf-wizard-surface` (white 55% by day, `rgb(28 28 30)` 55% by night) over `blur(32px) saturate(1.12)`, the island radius (32). On the field (FG): a 1px edge, `--vf-wizard-edge` (white 60% by day, 12% by night) with a top light, `--vf-wizard-edge-light` (white 75%, 8%); the field's shadow, `--vf-shadow-wizard-field` (`0 40px 120px` and `0 12px 32px` in the field's ground at 55% and 28%); and a grain at `--vf-wizard-grain` (3%), so the blur never bands | the Setup Assistant's glass (§8): on the field its frost lets the tunnel's rings through softly (FG-D15 C). Over the live field the field draws this recipe itself, in its own frame and from these tokens (FG-D24); over the field's still the backdrop filter draws it |
 
 **Menus are solid, floating controls are glass** (One Frame FR-7, FC-D14 ruled 2026-10-01): a menu
 is rows to be read, so it is `--vf-chrome-solid` — opaque — ringed by `--vf-hairline-strong`, with
@@ -745,6 +757,23 @@ archive is ready. It is the import's only sign outside History, so it carries no
 percentage names its step, never an invented whole). *Amended 2026-10-27 (AO-4b, built):* reduced motion (M6) stops
 the travel, and the arc rests at the top of the circle, a fifth of it from twelve o'clock, until the archive is ready;
 the glyph stays at a third of its ink.
+*Amended 2026-10-29 (track FG; FG-D9 A, FG-D10 B, FG-D11 A and FG-D17 A ruled by James; §8 "The Setup Assistant's
+glass"; a returning boot's tear built at FG-2, the rest to be at FG-3 and FG-5):* the first run happens on the field,
+and these are its motions. **The
+glass forms** where the splash stood: the bar and the stage fade (240ms `ease`), and the frost condenses over the
+whole glass as its layers rise `.985 → 1` (560ms island); the field's mark fades under it while the logo fades in
+on the same spot (400ms), so the mark never moves. **The logo** only fades — in over 400ms once the last words are
+out, out over 280ms before the next words come, never longer than 160ms under reduced motion — and never travels,
+scales or takes a second place; it stays out of the rise. **The hand-over** becomes: the welcome arrives on the
+line under the logo and holds **1.6s**; the line and the steps go (240ms); the logo holds alone (640ms); the frost
+clears over 600ms on the island curve, the edge and its shadow going in its last 240ms, as the field's mark takes
+over from the logo in place; then **the tear** — the field opens from its centre over **1.9s** on `t²`, the mark
+gone in its first quarter, the theme's light on its walls (the website's warm white by day, the look's own cool
+centre light by night) — while the desk settles in from `.985` (1.9s island) and its exposure comes down from 1.16
+(1.5s `ease-out`), an eye coming out of the dark. A returning boot plays the same tear once the desk is
+frame-stable and never before the splash has stood **700ms**, the website's floor for a repeat visit (FG-L6): a
+floor, never a stage. Reduced motion: fades only, halved; no rise; the field at rest, and a 120ms fade in place of
+the tear.
 
 *(Godview round 3, built 2026-10-12; its status is §8 the deck's.)*
 **The terminals rise and fall** (Godview's deck, §8; One Frame §22 "Shared mechanics" and §23 —
@@ -2218,6 +2247,46 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   and `--vf-mat-lattice`), not the canvas and its dots — the floor the Setup Assistant and the switch
   share with it — and its words are in the mat's ink (white at 60 %: 4.0:1 by day, 5.2:1 by night,
   where `/50` read 3.9:1 on the canvas), the bar white/15 under white/80, the ghost Retry white.
+  *Amended 2026-10-29 (track FG; FG-L1, FG-D14 B; built at FG-1, a returning boot's tear at FG-2):* the ground is the
+  **field** (§2.1): the website's splash, vendored (`boot/splash/`, generated from vibefield-dotdev's
+  `lib/splash/` at a pinned hash, never edited), drawing at 60 fps in a worker on an OffscreenCanvas — on
+  the main thread where a worker can't, as the still where there is no WebGPU — from the first frame to
+  the tear. The first frame is the field's ground with its mark as a still (the window's pre-paint is
+  `--vf-field-ground`), and the live field fades in over it (500ms `ease`). The wordmark retires: the mark
+  is the name. The bar keeps its size and its ink (white/15 under white/80) and stands 40 under the mark's
+  centre, and the stage line 55 under it (11px, 500) in `--vf-field-ink` (§2.1), as the website sets them;
+  their contrast over the field is measured as DK-16 measured the mat's (FG-O2). Behind them a soft shade of
+  the field's ground keeps them readable over the field: 400 × 120, centred 54 under the mark's centre, the
+  ground at 55% at its heart, 30% at 55% of the way out and gone at its edge. Without WebGPU the field is its
+  still (`splash-still`, cover-fitted) and the opening is a fade.
+- **The Setup Assistant's glass** (track FG, FG-D1…FG-D24 ruled by James 2026-10-29; the record is
+  `draft/thinking-first-run-glass.md`, the page *First run on the field*). The Setup Assistant stands on
+  the field as one glass, **880 × 640 on every step** (FG-D3 A): centred, never scrolling, and below a
+  976 × 736 window scaled as one picture (fit = min(1, (w − 96)/880, (h − 96)/640)), never reflowed. Its
+  material is §5's Setup Assistant tier (FG-D15 C: the tunnel's rings come through softly), milk by day
+  and smoke by night while the field stays the dark in both (FG-D4 A), and nothing see-through is ever cut
+  into it (FG-L2). **The steps** (FG-D22 A, FG-D23 A): a band along the glass's top 72, one segment per
+  step of the chapter's order — You · Agents · Profiles · History · Devices · Setting up — 76 × 3 with a
+  gap of 8, its label in small capitals 9 under it (500, 10px, .08em): done in grey (t3), the current in
+  ink (`aria-current="step"`), the rest a hairline (t4). A segment fills as you arrive (480ms island),
+  Setting up's with the work's own progress. The band is absent on the welcome, fades in with You (240ms)
+  and stays over a load and over Setting up. **One frame** (FG-L3): every pane stands between 96 and 600,
+  560 wide — its head at the top, its body 20 under it, its foot on the bottom (the actions, and the line
+  under them, whose room is always kept) — so the actions stand at one height on every step. A pane only
+  fades in (240ms `ease`, 160ms reduced), the old one out first (120ms); nothing rises, slides or
+  recentres. AO's and TS's panes keep their markup and words without their eyebrows (FG-L7). **A load**
+  (FG-L5, FG-D20) is the logo and one line: the glass's rows `1fr | the logo | 1fr`, the line 26 under the
+  logo (400, 14px/1.4, t2, tabular figures) with its sub (12px, t3), and no buttons; a way out shows only
+  when it runs long (Setting up's Start now after 8 s, AO-D4). Setting up is one such line from its first
+  phase to the welcome (FG-D21 B). **The logo** (FG-D1, FG-D2, FG-D16, FG-D17 A, FG-D18): one living mark,
+  the field's own, at the field's mark's spot and size, only ever fading (§6); white on smoke, inverted on
+  milk (`invert(1) hue-rotate(180deg)`, its colours kept). **Drawn by the field** (FG-D24): over the live
+  field the glass's shadow, frost, tint, grain and logo are a pass of the field's own frame, read from
+  §5's tokens, so the window draws the field once; the two hairlines stay the browser's, at the screen's
+  own pixels; over the still the browser draws the whole glass. *Status 2026-10-29: ruled, to be built —
+  the glass, the steps, the frame and the logo at FG-3, the panes in the frame at FG-4 (after TS-6 and
+  TS-7 land), the hand-over at FG-5, the gates at FG-6 (the record's §7). Until each lands, the Setup
+  Assistant ships as "The Setup Assistant's agent chapter" and the Connect pane describe it.*
 - **The reveal** (boot-exclusive motion): the canvas composes and stabilizes BEHIND
   the splash (the frame-stability gate — never reveal mid-hitch), then the splash
   fades 240ms plain `ease` while the canvas settles `scale(0.99) → 1` over 560ms
@@ -2228,6 +2297,19 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   desk composes behind, never the splash: the wizard keeps the window from its last question until
   its Ready beat ends, and then leaves with the splash's fade and the desk's settle (§6, the
   hand-over). The splash never returns between the wizard and the desk.
+  *Amended 2026-10-29 (track FG; FG-D9 A, FG-D10 B, FG-D11 A; built at FG-2, the first run's at FG-5):* the reveal
+  is the website's **tear** (§6): the field opens from its centre over 1.9s with the theme's light on its
+  walls, and the desk settles in from `.985`, its exposure coming down from 1.16. A first run reaches it
+  through the hand-over; a returning boot plays it once the desk is frame-stable and the splash has stood
+  700ms. Without WebGPU the still fades in place (240ms), and under reduced motion the field does (120ms).
+  *As built at FG-2:* the splash's words go first (240ms `ease`, the website's `wordsOut`) and the ground's
+  own colour with them, unseen under the live field; then the tear. It is chosen once, as the boot hands
+  over: the tear when the field is live, motion is allowed and the window is seen, else the base reveal
+  above, so a hidden window and a field still waking fade too. The desk keeps `0.99` under the splash and
+  steps to `.985` and 1.16 only at the tear's words, unseen, so the fade, the first run and the switch
+  keep their reveal. A tear is bounded at its length and a second (a hidden window draws no frames); a
+  field that never opened leaves with the splash's fade, never a pop, and one that opened stops drawing
+  at once. Every boot now holds until its ground has opened, so the desk is never handed over mid-tear.
 - **The switch** (UA-D15's reload, dressed; 2026-09-22): changing users reloads the window,
   so the transition is two halves that meet on one frame — the boot splash wearing the face of
   the user you are going to. **Leaving.** The face you clicked lifts out of its row (held,
@@ -2237,7 +2319,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   to `scale(0.98)` on the island curve (M5 — the engine freezes, since this covers the window),
   and from 120ms the splash's own ground — the mat in CSS, `--vf-mat-ground` and
   `--vf-mat-lattice` (DK-16; *corrected 2026-10-28:* this said `--vf-canvas-bg` and the §2.1 dots,
-  which left at DK-17; the switch's ground wears `.vf-splash`, `boot/boot.css`) — rises over it
+  which left at DK-17; the switch's ground wears `.vf-splash`, `boot/boot.css`; *amended 2026-10-29 (track
+  FG):* the boot's first face moves to the field, §8 "The boot splash", and the switch keeps the mat) —
+  rises over it
   in 360ms `ease` until the field is gone. The words follow 200ms behind the face (240ms
   `ease`, rising 6px): the eyebrow "Switching to", the name in the Setup headline's type (28px
   light), and the splash's bar and stage line as the splash begins them — "waking the daemon",
@@ -4114,7 +4198,10 @@ stills — and, on the desk, two named exceptions: the bar's ONE path renderer f
 the OS marks the device chip wears (Simple Icons, drawn inline in `os-marks.tsx` — the test's one
 other allowed file; a phone, wherever a surface marks one, wears the mark macOS wears, Apple's,
 since iOS's own is a word — James, DS-3: "do not use texts, use OS icons instead" — and no surface
-marks one today), the file-tree family (§8), and
+marks one today), the file-tree family (§8), **the living mark**
+(track FG, 2026-10-29: the website's splash's own mark, drawn by the field at its centre and over the
+Setup Assistant's glass as its logo — white on smoke, inverted on milk with its colours kept; its still is
+the website's `mark-white.webp`), and
 **Tailscale's logomark** (track TS, TS-D4 ruled 2026-10-27), held to the rules of Tailscale's Brand
 Toolkit (its press and media kit, 10-2025): the nine dots exactly as its file draws them — the middle
 row and the bottom centre solid, the other five at 40% — never in one colour, never smaller than

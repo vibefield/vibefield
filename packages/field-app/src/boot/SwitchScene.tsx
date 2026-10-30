@@ -8,7 +8,7 @@ import {
   useState,
 } from "react";
 import { FIRST_STAGE } from "./machine";
-import { SplashFace, SplashStatus, type SplashStatusView } from "./splash-parts";
+import { MatSplashFace, SplashStatus, type SplashStatusView } from "./splash-parts";
 import {
   registerSwitchStage,
   revealArrival,
@@ -20,8 +20,9 @@ import {
   switchRevealed,
   useSwitchState,
 } from "./switch";
-// The splash's own ground (`.vf-splash`) — the scene IS the splash in its
-// held frame, so it owns that import rather than borrowing BootRoot's.
+// The mat's floor (`.vf-mat-floor`): the boot's first face moved to the field
+// (track FG) and the switch keeps the mat, so the scene owns that import
+// rather than borrowing BootRoot's.
 import "./boot.css";
 import "./switch-scene.css";
 
@@ -263,13 +264,13 @@ export function SwitchSceneView({
       style={MOTION_VARS}
     >
       <div className="vf-switch-frost" />
-      <div className="vf-switch-ground vf-splash" />
+      <div className="vf-switch-ground vf-mat-floor" />
       <div className="vf-switch-column">
         {persona === null ? (
-          // The plain splash, exactly: no margin of its own, so it stands
-          // where the boot splash stands.
+          // The splash's face as it stood on the mat, with no margin of its
+          // own: the switch's plain frame.
           <div className="vf-switch-status">
-            <SplashFace status={status} onRetry={onRetry} />
+            <MatSplashFace status={status} onRetry={onRetry} />
           </div>
         ) : (
           <div className="vf-switch-stack">
@@ -294,6 +295,7 @@ export function SwitchSceneView({
             <div className="vf-switch-status">
               <SplashStatus
                 status={status}
+                ink="mat"
                 onRetry={onRetry}
                 label={`Switching to ${persona.name}`}
               />

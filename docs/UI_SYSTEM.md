@@ -200,6 +200,11 @@ catalog stays the single composition root without ever owning foreign markup. (A
 ## Rules for new UI
 
 - Add or change visual constants in `DESIGN.md`, then project them into `tokens.css`.
+- Main-process code can't read CSS. A colour Electron needs before the page paints (a window's
+  `backgroundColor`) is a named projection of its token: the literal stands beside a comment naming
+  the token and DESIGN.md's value, DESIGN.md's token row names the file that projects it, and a test
+  holds the two equal. (Added 2026-10-29, FG-D25: `--vf-field-ground` in
+  `electron-shell/src/main/windows.ts`, held by `wearing-the-mat.test.tsx`.)
 - Reuse a shell primitive before creating domain-specific control anatomy.
 - An icon is a `FieldGlyph` from the kit's `/glyphs` leaf (DESIGN.md §13; plugins reach it through
   `@vibefield/plugin-sdk/ui`). An inline `<svg>` that is an icon fails `glyphs.test.tsx`; the

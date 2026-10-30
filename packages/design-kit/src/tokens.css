@@ -43,6 +43,10 @@
     );
   --vf-mat-lattice-size: 100px 100px, 100px 100px, 25px 25px, 25px 25px;
   --vf-mat-ink: rgb(255 255 255 / 60%);
+  /* §2.1 the field (track FG): the first face's ground — the website's splash, before its first frame and under its
+     still — and the words that stand on it. One value in both themes: the field is the dark in both. */
+  --vf-field-ground: #04050f;
+  --vf-field-ink: rgb(255 255 255 / 56%);
   /* §2.2 Surfaces */
   --vf-card: #1c1c1e;
   --vf-card-deep: #000000;

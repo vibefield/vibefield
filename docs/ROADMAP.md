@@ -17,7 +17,8 @@
 - **Direction.** "A personal programmable field for agentic computing" (design-00 §1). The canvas is ICE's desk of GPU
   object kinds since DK-D11 (cut over 2026-10-09); live surfaces return as PORTALS. Since the Release Docket
   (2026-10-12, RL1–RL8) the goal is a real 1.0: signed desktop and iOS on nightly/beta/stable (RL4 (a)). Since 10-27
-  the build front is the first run, so someone other than James can install it: **TS, AO, AL**. The engineering bar
+  the build front is the first run, so someone other than James can install it: **TS, AO, AL**, and since 10-29
+  **FG**, the first run on the website's field. The engineering bar
   stays the P0 exit: real daily agent work, sessions surviving app restarts (board `rm-ar-p0`).
 - **Release posture.** `nightly-20261026` (run 40398570391, `d9eea75e0`) and `nightly-20261027` (run 40426614625,
   `84509d642`) are published: Developer ID signed, notarized, immutable, the tag made at plan time. W10 and W11 passed
@@ -34,9 +35,9 @@
   fixed it). `nightly-20261028` may dispatch on the green head (`scripts/release-plan.mjs:62`: never from a red trunk).
   Since the audit's base (`bb1a2c823`): AL-9, items 82–84, TS-8a/8b, the TS-3a erratum, AO-6b3 and QW1 stack A landed;
   then HK, the EL8 to puppeteer 0.3.0 (`1469639a6`) and QW1 stack B (10-28).
-- **The live program.** §2: TS, AO, AL, **AU (updates that wait)**, QW1 (the Godview swarm's fix wave 1), the release
-  rails, the EL8 watch, the fixer, upstream. The first-beta blockers are §3 item 7. Everything valid but unscheduled
-  is §4.
+- **The live program.** §2: TS, AO, FG, AL, **AU (updates that wait)**, QW1 (the Godview swarm's fix wave 1), the
+  release rails, the EL8 watch, the fixer, upstream. The first-beta blockers are §3 item 7. Everything valid but
+  unscheduled is §4.
 
 ## 2 Now — the active tracks
 
@@ -64,6 +65,17 @@
   3). AO-8: rosetta #23–#26 (RO-24…RO-27) shipped in 0.1.2 and are pinned at `3948bcf` (10-29);
   their VibeField RPC/UI wiring remains follow-on work. Rosetta #27 (RO-28) and puppeteer #47 (PU-19) remain filed.
 - Owed: the desk rows (`pnpm smoke`, `smoke:studio`, `smoke:godview` on a display); the first-run spike (`thinking-agent-onboarding.md` §9).
+
+**FG — the first run on the field** · vibe-field-a5 (lane `fg/build`) · law `draft/thinking-first-run-glass.md` §7, DESIGN.md §2.1/§5/§6/§8/§13 (page sources `draft/first-run-glass/`)
+- Ruled 10-29 09:29–09:35Z (James on *First run on the field*: the lean on eight, D15 C, D10 B, D14 B), and FG-D24 in
+  his words on version 6 (the field draws the glass).
+- Built, to land as one: **FG-0** (records only: DESIGN.md first), **FG-1** (`88457494e`, the field: the website's
+  splash vendored with its door, the boot's ground) and **FG-2** (`07618ca61`, the returning tear; every boot handed
+  over before it is interactive), merged with main as `fg/land`. It verifies on the Mac mini in VF-PM's queue.
+- Next: **FG-3** (the glass, the steps, the frame: 3a the glass's DOM, applied once FG lands; then 3b, the field
+  drawing the glass, FG-D24) → FG-4 (the panes in the frame, and the logo) → FG-5 (the hand-over) → FG-6 (the gates:
+  the catalog, a `smoke:first-run` row, contrast). Each verifies on the Mac mini.
+- Owed: FG-O7 (§9) at FG-4.
 
 **AL — what Quit means** · better-quit (lanes `al2`, `al/chords`, `al/chords-2`) · law `draft/thinking-app-lifecycle.md` v0.2 §8, ESR §7.3 (amended), design-00 EL1
 - Landed: AL-1…AL-3 (`7ebb1eeda` · `5eea4b2d5` · `697beb199`; AL-4 folded in), AL-5, AL-7, AL-8a, **AL-9** (`933d2fba3`,
@@ -448,6 +460,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 |---|---|---|---|
 | TS — the Tailscale door | ACTIVE; TS-0…3b, 4a, 4b, 5, 6, 8a, 8b landed | `thinking-tailscale-onboarding.md`; DESIGN.md §6/§8/§9/§13 | TS-7 |
 | AO — Bring Your Agents | ACTIVE; AO-0…6b3 landed | `thinking-agent-onboarding.md` | AO-7 on a puppeteer release after 0.3.0 (`installRecipe`) |
+| FG — the first run on the field | ACTIVE; FG-0…2 built, to land as one (`fg/land`) | `thinking-first-run-glass.md`; DESIGN.md §2.1/§5/§6/§8/§13 | FG's landing, then FG-3 |
 | AL — app lifecycle | ACTIVE; AL-1…3, 5, 7, 8a, 9 landed | `thinking-app-lifecycle.md`; ESR §7.3 | AL-6, Last exit, relaunch cap |
 | AU — Updates That Wait | ACTIVE; B1 (AU-0, AU-1) landed 10-30 | `thinking-update-ux.md` §7 (page sources `draft/update-ux/`); DESIGN.md §2.5/§2.8/§6/§8/§9/§13; EDP §5.2/§6.4/§11; ESR §7.3 | B2 (AU-3a, AU-3, AU-2) |
 | QW1 — Godview swarm QA, fix wave 1 | ACTIVE; stacks A and B landed 10-28, B on puppeteer 0.3.0's EL8 pin | `godview-swarm-qa-plan.md`; `thinking-ar-reattach.md` | QA wave 1 |
@@ -514,3 +527,6 @@ D-1 and D-10, he ruled A the same morning (DECISIONS' compact row). What stays o
 1. **`draft/work/`** (the plans of record for DS waves 1–3, all landed): never asked. Lean (the archive ledger's):
    keep it in place; archive only with its 14 living pointers rewritten and its two Status headers flipped first.
 2. **Who runs RD-4's pipelines** (`draft/handover/2026-10-15-rd4-james-pipelines.md`). No lean.
+3. **FG-O7, the way out of a long load** (`draft/thinking-first-run-glass.md` §8): Opening Tailscale's Cancel shows
+   only after 6 s, where TS shows it beside its pill from the start. Lean (the page's): after 6 s, by James's round-3
+   words on loads ("nothing more"). Asked at FG-4.
