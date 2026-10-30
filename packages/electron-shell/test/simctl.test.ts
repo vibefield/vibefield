@@ -1,3 +1,4 @@
+import { SURFACE_AUTHORITY_LIMITS } from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
 import {
   parseSimctlSnapshot,
@@ -11,6 +12,7 @@ import {
   SimctlVerbRefusedError,
   simctlArgv,
   simulatorDeviceRows,
+  simulatorRuntimeIds,
 } from "../src/main/live-surfaces/simctl";
 
 // PT-S2 — main's simctl, through its ONE exec seam: nothing here spawns; every request is recorded and scripted.
@@ -349,7 +351,37 @@ describe("simulatorDeviceRows (R11)", () => {
   });
 });
 
+describe("simulatorRuntimeIds (R11)", () => {
+  it("names every installed runtime, the newest first — with no device on any of them, and never an unavailable one", () => {
+    expect(simulatorRuntimeIds(parseSimctlSnapshot(listJson()))).toEqual([
+      IOS_26_5,
+      IOS_26_1,
+      IOS_18_6,
+    ]);
+  });
+
+  it("holds the list's bound, dropping the oldest", () => {
+    const runtimes = Array.from({ length: 70 }, (_, index) => ({
+      identifier: `com.apple.CoreSimulator.SimRuntime.iOS-${index + 1}-0`,
+      name: `iOS ${index + 1}.0`,
+      version: `${index + 1}.0`,
+      isAvailable: true,
+      supportedDeviceTypes: [],
+    }));
+    const ids = simulatorRuntimeIds(parseSimctlSnapshot(JSON.stringify({ runtimes, devices: {} })));
+    expect(ids).toHaveLength(64);
+    expect(ids[0]).toBe("com.apple.CoreSimulator.SimRuntime.iOS-70-0");
+    expect(ids.at(-1)).toBe("com.apple.CoreSimulator.SimRuntime.iOS-7-0");
+  });
+});
+
 describe("SimctlService", () => {
+  it("answers the attach's device list inside fieldd's deadline for it: the probe and the list together, on a cold service", () => {
+    expect(SIMCTL_TIMEOUTS_MS.probe + SIMCTL_TIMEOUTS_MS.list).toBeLessThan(
+      SURFACE_AUTHORITY_LIMITS.SIMULATOR_DEVICES_DEADLINE_MS,
+    );
+  });
+
   it("probes xcode-select and the simctl binary before any xcrun, and runs xcrun under the vetted directory", async () => {
     const { calls, service } = harness();
     await service.list();
@@ -379,6 +411,7 @@ describe("SimctlService", () => {
     await expect(service.boot(UDID_A)).rejects.toBeInstanceOf(SimctlUnavailableError);
     await expect(service.show(UDID_A)).rejects.toBeInstanceOf(SimctlUnavailableError);
     expect(await service.deviceRows()).toEqual([]);
+    expect(await service.runtimeIds()).toEqual([]);
     expect(probes()).toHaveLength(1);
     clock.now += 30_000;
     await expect(service.list()).rejects.toBeInstanceOf(SimctlUnavailableError);
@@ -414,12 +447,14 @@ describe("SimctlService", () => {
         [IOS_26_5]: [rawDevice(UDID_A, PRO, "Booted"), rawDevice(UDID_B, SE, "Shutdown")],
       }),
     });
-    const [snapshot, booted, rows] = await Promise.all([
+    const [snapshot, booted, rows, , runtimes] = await Promise.all([
       service.list(),
       service.enumerateBootedDevices(),
       service.deviceRows(),
       service.list(),
+      service.runtimeIds(),
     ]);
+    expect(runtimes).toEqual([IOS_26_5, IOS_26_1, IOS_18_6]);
     expect(snapshot.devices).toHaveLength(2);
     expect(booted).toEqual([
       {
@@ -565,6 +600,7 @@ describe("SimctlService", () => {
     service.dispose();
     await expect(service.list()).rejects.toBeInstanceOf(SimctlUnavailableError);
     expect(await service.deviceRows()).toEqual([]);
+    expect(await service.runtimeIds()).toEqual([]);
     expect(calls).toEqual([]);
   });
 });

@@ -192,6 +192,11 @@ export function createProductionLiveSurfaceSupport(opts: {
         if (disposed || opts.capture === null) return [];
         return await ensureSimctl().deviceRows();
       },
+      // the attach's third pick: the runtimes installed here, from the same shared list — none where no phone could stream
+      runtimes: async () => {
+        if (disposed || opts.capture === null) return [];
+        return await ensureSimctl().runtimeIds();
+      },
     },
     clearBrowsingData: async () => {
       for (const surface of browserSurfaces)

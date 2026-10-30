@@ -16,7 +16,11 @@ import type {
   ShellSurfacesSimulatorDevicesResult,
   SurfaceSourceDescriptorV1,
 } from "@vibefield/contracts";
-import { LiveSurfaceSimulatorDeviceRowV1, SURFACE_LIMITS } from "@vibefield/contracts";
+import {
+  CoreSimulatorRuntimeIdV1,
+  LiveSurfaceSimulatorDeviceRowV1,
+  SURFACE_LIMITS,
+} from "@vibefield/contracts";
 import type { Logger } from "@vibefield/logging";
 import type { LiveSurfaceRuntimeAuthority } from "./runtime";
 import type { LiveSurfaceWindowHost } from "./window-host";
@@ -102,6 +106,9 @@ export interface LiveSurfaceEnumerationSources {
  * UDID. No Simulator on this Mac is an empty list. */
 export interface LiveSurfaceSimulatorDeviceSource {
   list(): Promise<readonly LiveSurfaceSimulatorDeviceRowV1[]>;
+  /** The runtimes installed here, the newest first (ids only) — the attach's third pick binds to the newest iOS, whether
+   * or not a device runs it yet. Absent: unsaid (the list carries none). */
+  runtimes?(): Promise<readonly string[]>;
 }
 
 export interface LiveSurfaceAuthorityDeps {
@@ -309,14 +316,17 @@ export class LiveSurfaceAuthority {
 
   /** PT-S2 (R11) — the attach's device list: this Mac's simulator devices, the booted first, bounded, and REDACTED here
    * too — each row re-parsed (one carrying a UDID is refused) and rebuilt of its four fields, so nothing a source spread
-   * onto a row reaches fieldd. */
+   * onto a row reaches fieldd. With them the runtimes installed here, the newest first: each id re-parsed (CoreSimulator's
+   * runtime ids only), bounded. */
   async simulatorDevices(): Promise<ShellSurfacesSimulatorDevicesResult> {
     if (this.#disposed) throw kindError("UNAVAILABLE");
     const source = this.#deps.simulatorDevices ?? null;
     if (source === null) throw kindError("UNAVAILABLE");
     let rows: readonly LiveSurfaceSimulatorDeviceRowV1[];
+    let installed: readonly string[] | undefined;
     try {
-      rows = await source.list();
+      // (main's one shared simctl list serves both: R8)
+      [rows, installed] = await Promise.all([source.list(), source.runtimes?.()]);
     } catch (error) {
       if (hasKind(error)) throw error;
       this.#deps.logger?.warn(
@@ -337,7 +347,14 @@ export class LiveSurfaceAuthority {
         booted: parsed.data.booted,
       });
     }
-    return { devices };
+    if (installed === undefined) return { devices };
+    const runtimes: string[] = [];
+    for (const runtime of installed) {
+      if (runtimes.length >= SURFACE_LIMITS.MAX_SIMULATOR_RUNTIMES) break;
+      const parsed = CoreSimulatorRuntimeIdV1.safeParse(runtime);
+      if (parsed.success) runtimes.push(parsed.data);
+    }
+    return { devices, runtimes };
   }
 
   release(params: ShellSurfacesReleaseParams): ShellSurfacesReleaseResult {

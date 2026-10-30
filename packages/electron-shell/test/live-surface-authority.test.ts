@@ -674,6 +674,33 @@ describe("LiveSurfaceAuthority", () => {
     expect(JSON.stringify(result)).not.toContain("/Users/");
   });
 
+  it("PT-S2 (R11): the runtimes installed here ride with the rows, the newest first — each re-parsed (CoreSimulator's ids only) and bounded; a source that says none says none", async () => {
+    const IOS_26_5 = "com.apple.CoreSimulator.SimRuntime.iOS-26-5";
+    const { authority } = fixture({
+      simulatorDevices: {
+        list: async () => [DEVICE_ROW],
+        runtimes: async () => [
+          IOS_26_5,
+          "F93EABF3-4281-4EB5-A5F6-A550FBE95CDC",
+          "iOS 26.1",
+          ...Array.from({ length: SURFACE_LIMITS.MAX_SIMULATOR_RUNTIMES + 10 }, () => IOS_26_5),
+        ],
+      },
+    });
+    const result = await authority.simulatorDevices();
+    expect(result.devices).toEqual([DEVICE_ROW]);
+    expect(result.runtimes).toHaveLength(SURFACE_LIMITS.MAX_SIMULATOR_RUNTIMES);
+    expect(new Set(result.runtimes)).toEqual(new Set([IOS_26_5]));
+    expect(JSON.stringify(result)).not.toContain("F93EABF3");
+    const none = fixture({
+      simulatorDevices: { list: async () => [], runtimes: async () => [] },
+    });
+    await expect(none.authority.simulatorDevices()).resolves.toEqual({
+      devices: [],
+      runtimes: [],
+    });
+  });
+
   it("PT-S2 (R11): the device list is UNAVAILABLE with no source, after dispose, or when the source fails", async () => {
     await expect(fixture().authority.simulatorDevices()).rejects.toEqual(
       expect.objectContaining({ kind: "UNAVAILABLE" }),

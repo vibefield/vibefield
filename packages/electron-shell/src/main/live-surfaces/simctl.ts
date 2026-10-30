@@ -366,6 +366,21 @@ export function simulatorDeviceRows(
   return rows;
 }
 
+/**
+ * PT-S2 (R11) — THE ATTACH'S RUNTIMES: every installed (available) runtime's id, the newest first, bounded — what the
+ * attach's third pick binds a phone's model to (the newest installed iOS, whether or not a device runs it yet: its face
+ * then says "no device", and "Create it" makes one there). Ids only: a runtime names no device.
+ */
+export function simulatorRuntimeIds(snapshot: SimctlSnapshot): readonly string[] {
+  const ids: string[] = [];
+  for (const runtime of snapshot.runtimes) {
+    if (ids.length >= SURFACE_LIMITS.MAX_SIMULATOR_RUNTIMES) break;
+    if (CoreSimulatorRuntimeIdV1.safeParse(runtime.identifier).success)
+      ids.push(runtime.identifier);
+  }
+  return ids;
+}
+
 function defaultExec(request: SimctlExecRequest): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     execFile(
@@ -580,6 +595,16 @@ export class SimctlService implements SimulatorDeviceCatalog {
   async deviceRows(): Promise<readonly LiveSurfaceSimulatorDeviceRowV1[]> {
     try {
       return simulatorDeviceRows(await this.list());
+    } catch (error) {
+      if (error instanceof SimctlUnavailableError) return [];
+      throw error;
+    }
+  }
+
+  /** R11: the attach's runtimes, the newest first, from the same shared list — none when this Mac has no Simulator. */
+  async runtimeIds(): Promise<readonly string[]> {
+    try {
+      return simulatorRuntimeIds(await this.list());
     } catch (error) {
       if (error instanceof SimctlUnavailableError) return [];
       throw error;

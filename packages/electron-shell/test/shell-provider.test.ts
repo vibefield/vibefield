@@ -303,9 +303,10 @@ describe("RecoveringShellProvider", () => {
       name: "iPhone 17 Pro",
       booted: true,
     };
+    const runtimes = ["com.apple.CoreSimulator.SimRuntime.iOS-26-5"];
     const listSimulatorDevices = vi
       .fn()
-      .mockResolvedValueOnce({ devices: [row] })
+      .mockResolvedValueOnce({ devices: [row], runtimes })
       .mockResolvedValueOnce({
         devices: [{ ...row, udid: "F93EABF3-4281-4EB5-A5F6-A550FBE95CDC" }],
       })
@@ -319,7 +320,10 @@ describe("RecoveringShellProvider", () => {
     await vi.waitFor(() =>
       expect(client.requests).toContainEqual({
         method: "shell.provider.resolve",
-        params: { callId: "shell-simdevicesaaaaaa", outcome: { result: { devices: [row] } } },
+        params: {
+          callId: "shell-simdevicesaaaaaa",
+          outcome: { result: { devices: [row], runtimes } },
+        },
       }),
     );
     expect(listSimulatorDevices).toHaveBeenCalledWith({}, expect.any(AbortSignal));
