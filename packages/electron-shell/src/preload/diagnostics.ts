@@ -1,4 +1,10 @@
-import { LOG_TRANSPORT_LIMITS, SHELL_CLIPBOARD, utf8ByteLength } from "@vibefield/contracts";
+import {
+  ClipboardCopyRefusal,
+  type ClipboardCopyTooLarge,
+  LOG_TRANSPORT_LIMITS,
+  SHELL_CLIPBOARD,
+  utf8ByteLength,
+} from "@vibefield/contracts";
 import {
   type CrashArtifactListV1 as CrashArtifactList,
   CrashArtifactListV1,
@@ -85,6 +91,38 @@ export class DiagnosticsBridgeError extends Error {
     super(message);
     this.name = "DiagnosticsBridgeError";
   }
+}
+
+/** A request past the port's cap, refused before it is sent: its size as the port would carry
+ * it, in UTF-8 bytes, for a caller that says the refusal in its own terms (`copyText`). */
+export class DiagnosticsRequestTooLarge extends DiagnosticsBridgeError {
+  constructor(readonly bytes: number) {
+    super("RESOURCE_EXHAUSTED", "diagnostics request is too large");
+  }
+}
+
+/** HN-5 — a copy past its bound, as the copy doors reject it: typed (`ClipboardCopyRefusal`), a
+ * plain record whose terms cross the context bridge whole, for the page to say in Copy's voice. */
+export function clipboardTooLarge(
+  what: ClipboardCopyTooLarge["what"],
+  bytes: number,
+  max: number,
+): ClipboardCopyRefusal {
+  return ClipboardCopyRefusal.parse({ reason: "too-large", what, bytes, max });
+}
+
+/** HN-5 — words within the clipboard's bound whose request is past the port's cap: what the
+ * request spends on them (JSON spends two bytes on a line break, six on a control character)
+ * against what it carries of them, the cap less the envelope around them. Both as sent, so the
+ * two figures are one measure. */
+function wordsPastPort(text: string, requestBytes: number): ClipboardCopyRefusal {
+  const sent = utf8ByteLength(JSON.stringify(text)) - 2; // its two quotes are the envelope's
+  const envelope = requestBytes - sent;
+  return clipboardTooLarge(
+    "words-as-sent",
+    sent,
+    LOG_TRANSPORT_LIMITS.DIAGNOSTIC_PORT_REQUEST_BYTES - envelope,
+  );
 }
 
 function parseIncoming(raw: unknown): ResponseEnvelope | EventEnvelope | null {
@@ -270,15 +308,24 @@ export class PreloadDiagnosticsBridge {
     return SupportBundleExportResultV1.parse(await this.request("support.export", request));
   }
 
+  /** HN-5 — a copy's words onto the system clipboard through main. Its two size refusals reject
+   * typed (`ClipboardCopyRefusal`), never in a sentence: words past main's bound (by reference,
+   * the copy door's one number), and words within it whose request, measured as it would be sent,
+   * is past the port's cap. Nothing past either is sent. */
   async copyText(text: unknown): Promise<void> {
-    // main's bound, by reference (HN-5): the copy door's one number
-    if (typeof text !== "string" || utf8ByteLength(text) > SHELL_CLIPBOARD.WRITE_TEXT_MAX_BYTES) {
-      throw new DiagnosticsBridgeError(
-        "PRECONDITION_FAILED",
-        "clipboard text is invalid or too large",
-      );
+    if (typeof text !== "string") {
+      throw new DiagnosticsBridgeError("PRECONDITION_FAILED", "clipboard text is not a string");
     }
-    const response = await this.request("clipboard.copy", { text });
+    const bytes = utf8ByteLength(text);
+    const max = SHELL_CLIPBOARD.WRITE_TEXT_MAX_BYTES;
+    if (bytes > max) throw clipboardTooLarge("words", bytes, max);
+    let response: unknown;
+    try {
+      response = await this.request("clipboard.copy", { text });
+    } catch (error) {
+      if (!(error instanceof DiagnosticsRequestTooLarge)) throw error;
+      throw wordsPastPort(text, error.bytes);
+    }
     if (
       typeof response !== "object" ||
       response === null ||
@@ -302,12 +349,9 @@ export class PreloadDiagnosticsBridge {
     }
     const id = `preload-${this.nextRequest++}`;
     const raw = JSON.stringify({ v: 1, id, method, ...(params === undefined ? {} : { params }) });
-    if (
-      new TextEncoder().encode(raw).byteLength > LOG_TRANSPORT_LIMITS.DIAGNOSTIC_PORT_REQUEST_BYTES
-    ) {
-      return Promise.reject(
-        new DiagnosticsBridgeError("RESOURCE_EXHAUSTED", "diagnostics request is too large"),
-      );
+    const bytes = new TextEncoder().encode(raw).byteLength;
+    if (bytes > LOG_TRANSPORT_LIMITS.DIAGNOSTIC_PORT_REQUEST_BYTES) {
+      return Promise.reject(new DiagnosticsRequestTooLarge(bytes));
     }
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {

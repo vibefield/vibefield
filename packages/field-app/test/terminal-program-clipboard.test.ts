@@ -4,7 +4,7 @@
  * `writeClipboard`, which the window's runtime hands the host's copy door — never the web's
  * write, which the app's empty grant set denies — and it deals NO card: a program's write is
  * not the person's copy. A refusal never throws into ghosttea and is logged once for a run of
- * refusals, by its size, never its words.
+ * refusals, by its size and what the door was told, never its words.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cardsStore } from "../src/frame/cards/cards-store";
@@ -78,12 +78,12 @@ describe("a program's clipboard write (HN-5, LC-14)", () => {
     expect(cardsStore.snapshot().cards).toHaveLength(before);
   });
 
-  it("never throws into ghosttea, and a run of refusals is said once, by its size", async () => {
+  it("never throws into ghosttea, and logs a run of refusals once, by size and why", async () => {
     let takes = false;
     const host = {
       diagnostics: {
         copyText: async (_text: string) => {
-          if (!takes) throw new Error("clipboard text is invalid or too large");
+          if (!takes) throw new Error("diagnostics request timed out");
         },
       },
     };
@@ -92,21 +92,33 @@ describe("a program's clipboard write (HN-5, LC-14)", () => {
     expect(() => write("tskey-auth-secret")).not.toThrow();
     write("again");
     await settle();
+    // what the door was told is logged beside the door's one sentence (HN-5: never only it)
     expect(heard).toEqual([
       {
         event: "renderer.terminal.clipboard_write_refused",
-        attrs: { bytes: 17, reason: "the clipboard did not take the words" },
+        attrs: {
+          bytes: 17,
+          reason: "the clipboard did not take the words",
+          error: "diagnostics request timed out",
+        },
       },
     ]);
     expect(JSON.stringify(heard)).not.toContain("tskey");
-    // a write that lands lets the next refusal speak
+    // a write that lands lets the next refusal speak: past the copy door's bound, in its terms
     takes = true;
     write("landed");
     await settle();
-    takes = false;
-    write("refused once more");
+    write("x".repeat(70_000));
     await settle();
     expect(heard).toHaveLength(2);
+    expect(heard[1]).toEqual({
+      event: "renderer.terminal.clipboard_write_refused",
+      attrs: {
+        bytes: 70_000,
+        reason: "the words hold 70 KB; the clipboard takes at most 65 KB",
+        error: "too-large: words 70000 bytes, past 65536",
+      },
+    });
   });
 
   it("keeps the web's own write where there is no host (the browser catalog)", async () => {

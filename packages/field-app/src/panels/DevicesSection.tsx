@@ -17,9 +17,9 @@ import { TailscaleMark } from "../account/tailscale-mark";
 import { useAccountSnapshot } from "../account/use-account";
 import { copyText, useLinkDoor } from "../account/use-link-door";
 import { leaveFor } from "../boot/switch";
+import { CopyButton } from "../frame/cards/CopyButton";
 import type { DealFrom } from "../frame/cards/cards-store";
 import { COPY_PLACES } from "../frame/cards/cards-words";
-import { dealFromElement } from "../frame/cards/copy-door";
 import { osOf } from "../godview/monitor/devices";
 import type { MonitorDeviceFacet } from "../godview/monitor/types";
 import { OsMark } from "../godview/os-marks";
@@ -120,32 +120,6 @@ export const CONNECT_ASKS_LINE = "At most once a day, and each place once a mont
 /** "2 Nov": the renewal's day, in the person's own calendar words. */
 function dueDay(at: number): string {
   return new Date(at).toLocaleDateString(undefined, { day: "numeric", month: "short" });
-}
-
-/** A button that says it worked, for two seconds, in its own words. What it copied is dealt
- * into the hand from the button's own box (HN-5), the sheet over the frame. */
-function CopyButton({
-  label,
-  copy,
-}: {
-  label: string;
-  copy: (from: DealFrom | null) => Promise<boolean>;
-}): ReactElement {
-  const [done, setDone] = useState<null | boolean>(null);
-  useEffect(() => {
-    if (done === null) return;
-    const timer = setTimeout(() => setDone(null), 2000);
-    return () => clearTimeout(timer);
-  }, [done]);
-  return (
-    <button
-      type="button"
-      className={buttonCls}
-      onClick={(event) => void copy(dealFromElement(event.currentTarget)).then(setDone)}
-    >
-      {done === true ? "Copied" : done === false ? "Couldn't copy" : label}
-    </button>
-  );
 }
 
 function Refusal({ reason }: { reason: string }): ReactElement {
@@ -277,7 +251,7 @@ function TailscaleCard(props: DevicesSectionViewProps): ReactElement {
             <button type="button" className={buttonCls} onClick={props.onOpenAgain}>
               Open again
             </button>
-            <CopyButton label="Copy link" copy={props.onCopyLink} />
+            <CopyButton label="Copy link" copy={props.onCopyLink} className={buttonCls} />
             <button type="button" className={buttonCls} onClick={props.onCancel}>
               Cancel
             </button>
@@ -577,6 +551,7 @@ function ThisMac(props: DevicesSectionViewProps): ReactElement {
               <CopyButton
                 label="Copy"
                 copy={(from) => props.onCopyText(tailscale.machineName ?? "", from)}
+                className={buttonCls}
               />
             </span>
           </>

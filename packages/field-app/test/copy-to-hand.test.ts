@@ -12,6 +12,7 @@
  */
 import { type CanvasEngine, type Entity, selectedEntities, setWidgetProps } from "@vibecook/ice";
 import type { SelectionAnchor } from "@vibecook/ice/desk";
+import type { ClipboardCopyRefusal } from "@vibefield/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   type CopiedObject,
@@ -136,8 +137,9 @@ let store: CardStore;
 let clipboard: string[];
 let pictures: { png: Uint8Array; text: string | undefined }[];
 let clipboardTakes: boolean;
-/** Why the picture door refuses, when it does (main's words); null: it takes it. */
-let pictureRefusal: string | null;
+/** How the picture door refuses, when it does — typed, as the preload rejects, or with a
+ * bridge's error; null: it takes it. */
+let pictureRefusal: ClipboardCopyRefusal | Error | null;
 /** What the frame said on the line. */
 let said: string[];
 let unhear: () => void;
@@ -238,7 +240,7 @@ const seams = () => ({
     clipboard: {
       writeImage: async (png: Uint8Array, text?: string) => {
         pictures.push({ png, text });
-        if (pictureRefusal !== null) throw new Error(pictureRefusal);
+        if (pictureRefusal !== null) throw pictureRefusal;
       },
     },
   },
@@ -469,8 +471,8 @@ describe("THE DESK'S COPY — the act (copy-to-hand.ts)", () => {
     });
   });
 
-  it("deals NO card when the picture door refuses the picture — main's words on the line", async () => {
-    pictureRefusal = "the picture could not be read";
+  it("deals NO card when the picture door refuses: its typed refusal in Copy's voice", async () => {
+    pictureRefusal = { reason: "not-an-image" };
     expect(copySelection(desk, "bar", seams())).toBe(true);
     await flush();
     expect(pictures).toHaveLength(1);
@@ -483,6 +485,26 @@ describe("THE DESK'S COPY — the act (copy-to-hand.ts)", () => {
       card: null,
       refused: "Not copied — the picture could not be read",
     });
+  });
+
+  it("never says a bridge's error on the line: the door's own words stand for it", async () => {
+    const remote = "Error invoking remote method 'vibefield:clipboard:write-image': Error: x";
+    pictureRefusal = new Error(remote);
+    expect(copySelection(desk, "bar", seams())).toBe(true);
+    await flush();
+    expect(store.snapshot().cards).toEqual([]);
+    expect(said).toEqual(["Not copied — the clipboard did not take the picture"]);
+  });
+
+  it("says a note past the clipboard's bound in sizes as §9 counts, asking no door", async () => {
+    write(noteE, "x".repeat(80_000));
+    ce.ops.setSelection([noteE]);
+    expect(copySelection(desk, "bar", seams())).toBe(true);
+    await flush();
+    expect(clipboard).toEqual([]);
+    expect(store.snapshot().cards).toEqual([]);
+    expect(said).toEqual(["Not copied — the words hold 80 KB; the clipboard takes at most 65 KB"]);
+    expect(lastCopy()).toMatchObject({ wrote: false, card: null });
   });
 
   it("does nothing with nothing selected", () => {

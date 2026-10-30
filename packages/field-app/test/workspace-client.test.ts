@@ -8,6 +8,8 @@ import {
 } from "@vibefield/contracts";
 import type { WorktreeHostEvent } from "@vibefield/rosetta-room";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { COPY_DOOR_WORDS } from "../src/frame/cards/cards-words";
+import { type FieldHost, setHost } from "../src/host";
 import { resolveWorkspaceRoot, WorkspaceClient } from "../src/workspace/client";
 
 const fixtures = join(import.meta.dirname, "../../contracts/fixtures");
@@ -31,7 +33,8 @@ afterEach(() => {
   for (const fn of cleanup.splice(0)) fn();
   vi.useRealTimers();
 });
-function world() {
+/** `lendsCopy` false: no copy port is lent, so the client writes through the copy door. */
+function world(lendsCopy = true) {
   const workers: FakeWorker[] = [];
   const copied = vi.fn(async () => {});
   let count = 0;
@@ -53,7 +56,7 @@ function world() {
   const client = new WorkspaceClient(
     { request },
     {
-      copyText: copied,
+      ...(lendsCopy ? { copyText: copied } : {}),
       worker: () => {
         const worker = new FakeWorker();
         workers.push(worker);
@@ -174,6 +177,30 @@ describe("workspace leases at the Worker boundary", () => {
         action: "copyPath",
       }),
     ).toMatchObject({ ok: false });
+  });
+  it("says a refused copy in Copy's whole sentence when no copy port is lent (HN-5)", async () => {
+    // the room says the action's error as its receipt: a sentence, never the bridge's own error
+    setHost({
+      logger: {},
+      diagnostics: {
+        copyText: async () => {
+          throw new Error("diagnostics request timed out");
+        },
+      },
+    } as unknown as FieldHost);
+    const w = world(false);
+    const opened = await w.client.open(grant.rootPath);
+    await settle();
+    if (!opened.ok) throw new Error(opened.error);
+    expect(
+      await w.client.fileAction({
+        root: grant.rootPath,
+        generation: opened.generation,
+        paths: ["src/main.ts"],
+        action: "copyPath",
+      }),
+    ).toEqual({ ok: false, error: COPY_DOOR_WORDS.refused(COPY_DOOR_WORDS.words) });
+    expect(w.copied).not.toHaveBeenCalled();
   });
   it("reports a refusal without endlessly retrying it", async () => {
     vi.useFakeTimers();

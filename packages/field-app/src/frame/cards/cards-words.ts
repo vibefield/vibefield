@@ -1,4 +1,9 @@
-import type { FrameView, ScreenshotCaptureError } from "@vibefield/contracts";
+import type {
+  ClipboardCopyTooLarge,
+  FrameView,
+  ScreenshotCaptureError,
+} from "@vibefield/contracts";
+import { sizeWords } from "../../format/bytes";
 import { relativeTime } from "../../format/relative-time";
 import type { AgentCard, Card, CardOrigin } from "./cards-model";
 
@@ -189,17 +194,44 @@ export const COPY_WORDS = {
 } as const;
 
 /** HN-5 — a copy the system clipboard did not take deals no card (copy-door.ts), and says why
- * after "Not copied —", as the desk's Copy says its own. A refusal of main's picture door comes
- * in main's words, the clipboard read's voice (item 102) — "the picture could not be read", "the
- * words hold N bytes; the clipboard takes at most M"; these are the rest. */
+ * after "Not copied —", as the desk's Copy says its own (DESIGN.md §8 "Copy"). A refusal a door
+ * typed, and the copy door's own check of both bounds, say their terms: a size against its bound
+ * as §9 counts them, the size rounded up and the bound down, so the two never read as equal.
+ * Anything else is said in the door's one sentence, and the error a bridge threw is only logged:
+ * a refusal never repeats it. */
 export const COPY_DOOR_WORDS = {
-  /** the host's copy door, or the page's own clipboard, did not take the words */
+  /** the words' door, or the page's own clipboard, did not take them, and typed no terms */
   words: "the clipboard did not take the words",
-  /** the page's own clipboard (the browser catalog's) did not take the picture, or main's
-   * picture door refused it with no words of its own */
+  /** the picture's door, or the page's own clipboard (the browser catalog's), did not take it,
+   * and typed no terms */
   picture: "the clipboard did not take the picture",
+  /** main found no picture in the PNG it was given */
+  unread: "the picture could not be read",
+  /** past its bound — "the words hold 80 KB; the clipboard takes at most 65 KB", the picture's
+   * alike — or words within the clipboard's bound whose request the words' door cannot carry,
+   * both figures as sent: "the words hold 66 KB as sent; a copy sends at most 65 KB" */
+  tooLarge: (what: ClipboardCopyTooLarge["what"], bytes: number, max: number): string => {
+    const size = sizeWords(bytes, Math.ceil);
+    const bound = sizeWords(max, Math.floor);
+    switch (what) {
+      case "words":
+        return `the words hold ${size}; the clipboard takes at most ${bound}`;
+      case "picture":
+        return `the picture holds ${size}; the clipboard takes at most ${bound}`;
+      case "words-as-sent":
+        return `the words hold ${size} as sent; a copy sends at most ${bound}`;
+    }
+  },
   /** a refusal as the line says it */
   refused: (reason: string) => `Not copied — ${reason}`,
+} as const;
+
+/** HN-5 — a copy made in Settings or the Setup Assistant keeps its button's own words, said on
+ * the button for two seconds (DESIGN.md §8 "Copy"): under the sheet, "Copied" is the copy's sign
+ * while the sheet stands. */
+export const COPY_BUTTON_WORDS = {
+  copied: "Copied",
+  refused: "Couldn't copy",
 } as const;
 
 /** HN-5 — the place a copy was made when it is a sheet over the view, not the view's own

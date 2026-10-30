@@ -1,3 +1,4 @@
+import { COPY_DOOR_WORDS } from "../frame/cards/cards-words";
 import { copyWords } from "../frame/cards/copy-door";
 import { getHost } from "../host";
 import { terminalBootstrapHome } from "../terminal/pool";
@@ -35,10 +36,11 @@ export function windowHistoryPorts(
  * room or the Peek's reader of it) is a copy like any other: on the system clipboard through
  * the one copy door, then a text card in the hand (DESIGN.md §8 "The hand"). No button's box
  * reaches the port, so the card rises into its place, and it says History, where it came
- * from. A refusal rejects in its words, which the room says as the file action's failure. */
+ * from. The room keeps its own receipts ("Path copied"); a refusal rejects with Copy's whole
+ * sentence, which the room says as the file action's receipt (DESIGN.md §8 "Copy"). */
 export async function copyFromHistory(text: string): Promise<void> {
   const copied = await copyWords(text, { view: "history", how: "copy" }, null);
-  if (!copied.ok) throw new Error(copied.reason);
+  if (!copied.ok) throw new Error(COPY_DOOR_WORDS.refused(copied.reason));
 }
 
 /** The product's ports for this window: the platform from the preload, the

@@ -135,7 +135,7 @@ declare global {
         readText(): Promise<string>;
         /** HN-5 — a copy's picture written through main, the read's other half: a PNG's
          * bytes and the copy's words in one write (LC-19), no focus asked (LC-18); a
-         * refusal rejects in words. */
+         * refusal rejects typed (`ClipboardCopyRefusal`, a plain record), never in words. */
         writeImage(png: Uint8Array, text?: string): Promise<void>;
       };
       /** Godview round 3 — the deck's state said by name; main owns the

@@ -1,4 +1,9 @@
-import { LOG_STREAMS } from "@vibefield/contracts";
+import {
+  LOG_STREAMS,
+  LOG_TRANSPORT_LIMITS,
+  SHELL_CLIPBOARD,
+  utf8ByteLength,
+} from "@vibefield/contracts";
 import { describe, expect, it, vi } from "vitest";
 import { type DiagnosticsRendererPort, PreloadDiagnosticsBridge } from "../src/preload/diagnostics";
 
@@ -128,5 +133,69 @@ describe("preload diagnostics bridge", () => {
     });
     expect(port.closed).toBe(1);
     expect(bridge.health().connected).toBe(false);
+  });
+});
+
+// HN-5 — the words' copy door: words within both bounds go to main; past either, the copy is
+// refused TYPED (`ClipboardCopyRefusal`, a plain record the context bridge carries whole, for the
+// page to say in Copy's voice) and nothing is sent. The port's cap is on the request as it is
+// sent, so words within main's bound that JSON escapes past it are refused in that measure.
+describe("the words' copy door (HN-5)", () => {
+  it("sends words within both bounds, and answers once main took them", async () => {
+    const bridge = new PreloadDiagnosticsBridge();
+    const port = new FakePort();
+    bridge.attach(port);
+    const copied = bridge.copyText("Ship it.");
+    expect(JSON.parse(port.messages[0] ?? "")).toMatchObject({
+      method: "clipboard.copy",
+      params: { text: "Ship it." },
+    });
+    port.respond(0, { copied: true });
+    await expect(copied).resolves.toBeUndefined();
+  });
+
+  it("refuses words past main's bound typed, and sends nothing", async () => {
+    const bridge = new PreloadDiagnosticsBridge();
+    const port = new FakePort();
+    bridge.attach(port);
+    const over = SHELL_CLIPBOARD.WRITE_TEXT_MAX_BYTES + 1;
+    await expect(bridge.copyText("x".repeat(over))).rejects.toEqual({
+      reason: "too-large",
+      what: "words",
+      bytes: over,
+      max: SHELL_CLIPBOARD.WRITE_TEXT_MAX_BYTES,
+    });
+    expect(port.messages).toEqual([]);
+  });
+
+  it("refuses, as sent, words within main's bound that the port cannot carry", async () => {
+    const bridge = new PreloadDiagnosticsBridge();
+    const port = new FakePort();
+    bridge.attach(port);
+    // forty thousand line breaks: 40 000 bytes of words, which JSON sends as 80 000
+    const words = "\n".repeat(40_000);
+    expect(utf8ByteLength(words)).toBeLessThan(SHELL_CLIPBOARD.WRITE_TEXT_MAX_BYTES);
+    const envelope = JSON.stringify({
+      v: 1,
+      id: "preload-1",
+      method: "clipboard.copy",
+      params: { text: "" },
+    }).length;
+    await expect(bridge.copyText(words)).rejects.toEqual({
+      reason: "too-large",
+      what: "words-as-sent",
+      bytes: 80_000,
+      max: LOG_TRANSPORT_LIMITS.DIAGNOSTIC_PORT_REQUEST_BYTES - envelope,
+    });
+    // a record, never an Error: the context bridge would carry an Error's message alone
+    await expect(bridge.copyText(words)).rejects.not.toBeInstanceOf(Error);
+    expect(port.messages).toEqual([]);
+    expect(bridge.health().pendingRequests).toBe(0);
+  });
+
+  it("a closed bridge's failure stays an error, never a refusal of the words", async () => {
+    const bridge = new PreloadDiagnosticsBridge();
+    bridge.close();
+    await expect(bridge.copyText("Ship it.")).rejects.toMatchObject({ kind: "DISCONNECTED" });
   });
 });

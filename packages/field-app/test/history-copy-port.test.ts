@@ -2,8 +2,10 @@
  * HN-5 — HISTORY'S WORKSPACE COPY PORT (history/window-ports.ts; DESIGN.md §8 "The hand", where
  * cards come from): a path History's room copies through its workspace port is a copy like any
  * other — on the system clipboard through the one copy door, then a text card that rises into
- * its place (no button's box reaches the port) and says History; a refusal rejects in its words
- * and deals nothing. The window's ports hand the room that port.
+ * its place (no button's box reaches the port) and says History; a refusal rejects with Copy's
+ * whole sentence — the room shows it as the action's receipt, so never a bare clause and never a
+ * bridge's error (DESIGN.md §8 "Copy") — and deals nothing. The window's ports hand the room that
+ * port.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cardsStore } from "../src/frame/cards/cards-store";
@@ -61,9 +63,14 @@ describe("History's workspace copy port (HN-5)", () => {
     expect(cardsStore.snapshot().arriving.get(card?.id ?? "")).toBeNull();
   });
 
-  it("rejects a refused copy in its words and deals nothing", async () => {
+  it("rejects a refused copy with Copy's whole sentence and deals nothing", async () => {
     copyHost(false);
-    await expect(copyFromHistory("/Users/ada/secret.txt")).rejects.toThrow(COPY_DOOR_WORDS.words);
+    await expect(copyFromHistory("/Users/ada/secret.txt")).rejects.toThrow(
+      /^Not copied — the clipboard did not take the words$/u,
+    );
+    expect(COPY_DOOR_WORDS.refused(COPY_DOOR_WORDS.words)).toBe(
+      "Not copied — the clipboard did not take the words",
+    );
     expect(cardsStore.snapshot().cards).toEqual([]);
   });
 

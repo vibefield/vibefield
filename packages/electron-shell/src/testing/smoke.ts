@@ -9077,10 +9077,7 @@ export async function runSmokeGodview(opts: {
       verdict["osc52"] = "skipped: an unmarked run's copy door writes the real clipboard";
     } else {
       const osc52Script = join(scratch, `hn5-osc52-${nonce}.sh`);
-      writeFileSync(
-        osc52Script,
-        `printf '\\033]52;c;%s\\007' "$(printf 'hn5-osc52' | base64)"\n`,
-      );
+      writeFileSync(osc52Script, `printf '\\033]52;c;%s\\007' "$(printf 'hn5-osc52' | base64)"\n`);
       const HAND_CARDS = `document.querySelectorAll(".vf-cards .vf-card").length`;
       const cardsBefore = (await win.webContents.executeJavaScript(HAND_CARDS)) as number;
       const keptBefore = copies.length;
