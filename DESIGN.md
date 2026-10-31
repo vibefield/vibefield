@@ -513,7 +513,7 @@ spark's face.
 | `running` | Running | Its agents are at work |
 | `focus` | Watching | Keeping an eye on a project |
 | `asking` | Asking you | Has a question for you (needs you) |
-| `approval` | Needs your OK | Passing on an agent's request (needs you) |
+| `approval` | Needs your OK | Passing on an agent's request, or waiting for your OK to send or to start one (needs you) |
 | `stuck` | Stuck | An agent is looping or out of room (needs you) |
 | `limited` | Rate limited | Waiting out a limit (needs you) |
 | `success` | Done | The job is finished |
@@ -1453,12 +1453,22 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     and never takes the thread, nor the keyboard in its pane. *(SP-1d, 2026-10-31: until the thread was the spark's own
     pane, a thread nothing had chosen followed the newest activity.)*
   - **Needs you (S-4):**
-    - Asking you, Needs your OK and Stuck turn the row's word to `--vf-ink-attention`. An 8 dot in `--vf-orange` stands
-      at the row's right, 12 in and 15 up from its foot.
+    - A spark needs you while its own run waits on you (a blocker on its own row), and, since CP-3, while the needs-you
+      queue holds an item for it: its question, its held send or spawn, or an ask from an agent it started (§8 "Chat's
+      thread", the needs-you card). Asking you, Needs your OK and Stuck turn the row's word to `--vf-ink-attention`. An
+      8 dot in `--vf-orange` stands at the row's right, 12 in and 15 up from its foot.
     - Chat's cell in the track takes the same dot, 6, 9 in from the cell's right and 5 down, while a spark needs you
       and the window is in another view.
-    - When a spark starts to need you in another view, the views track's note (above) says so over Chat's cell for
-      2.4 s: its face at 18, framed, then "Vela needs you" in the attention ink.
+    - However many items wait, and whoever asks, the row and the cell each take one dot. The dot says that a thread
+      needs you; the card in the thread says how many things wait ("1 of 3").
+    - When something starts to need you in another view (a spark's own run blocking, or a new item for it in the
+      queue), the views track's note (above) says so over Chat's cell for 2.4 s: its face at 18, framed, then "Vela
+      needs you" in the attention ink. A need the window finds on its first reading of the board, or on its first
+      reading of the queue, is no news: its dot says it.
+      *A reading of CP3-D8 (CP-3, 2026-10-31; recorded for the DECISIONS row, James's to strike):* CH-D4 says the note
+      once, when a spark starts to need you, and CP3-D8 rules that items count. This reads each item as a need of its
+      own, so a second question from Vela, while its first still waits, says the note again. Struck, the note is said
+      once per spark, as CH-D4 says it, and the dot is unchanged.
     - The face itself never turns orange.
     - *At SP-1b a dot lasted while the need did; the thread (SP-1d) was to make it last until you open the thread, with
       unread beside it: until there is a thread there is nothing to read.* *Amended 2026-10-31 (SP-1d):* a needs-you dot
@@ -1471,15 +1481,30 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       dot while a needs-you dot stands, else the cyan one while a thread is unread, its accessible name "Chat, a thread
       is unread". Both are kept for the window's life and written nowhere (HN-D9's rule).
   - **The status, as SP-1b reads it:** from the spark's own run row (`agent.subscribe {projection: "field"}`, by the
-    row's `spark`) and its agents' rows (by their `origin`). The first that holds is the word:
-    - no session yet: Hello;
+    row's `spark`) and its agents' rows (by their `origin`), and since CP-3 from the needs-you queue's items for it
+    (`needs.subscribe`). The first that holds is the word:
+    - no session yet, and nothing waiting on you: Hello;
+    - a blocker on its own row while its session runs: a permission is Needs your OK, a question is Asking you,
+      anything else is Stuck;
+    - an open item in the queue (CP-3), the oldest first: a question, its own or an agent's, is Asking you; a held
+      send, a held spawn, an agent's permission, or a kind this build does not know is Needs your OK (the need is real,
+      and that word is the safe one);
     - its session not running: Asleep (CP-D14);
-    - a blocker on its own row: a permission is Needs your OK, a question is Asking you, anything else is Stuck;
     - an agent it started at work: Running (CH-D3: "Lyra's face is working because its agents are");
     - its own run working: Thinking; idle: Ready; not heard from yet: Hello.
     - The other statuses (Listening, Planning, Searching, Reading, Watching, Done, Shipped, Failed, Thanked, Offline)
       arrive with the slices that report them, never from a guess. *Rate limited has no signal yet: puppeteer 0.3.2's
       blockers are a permission, a question or a failure. The slice that reports a limit brings it.*
+    - *Amended 2026-10-31 (CP-3; CP3-D7 A):* an item comes before Asleep, because an answer wakes the spark. A
+      sleeping spark with a question for you says Asking you, in its word and in its face (S-3: the face and the word
+      say one status). Whether it is awake is read from its session, never from its word: the line under the thread's
+      head still says "Vela is asleep", with Wake (below), and its pane is mounted only while its session runs. Nor
+      does its word say any longer whether the spark has been heard, since an item's word stands over Asleep and over
+      the last rule's Hello. Heard is read from its own run's row, never from its word: that row is on the board,
+      alive, and says how the run stands, at work, idle or waiting on you in its pane (a run fieldd is waiting to
+      resume says nothing yet). Send waits for that before it pastes (§8 "Chat's composer"). A blocker counts only
+      while its session runs, as it always did, since a run that has stopped waits on no one. The queue also lists the
+      asks of the spark's own run; Chat reads each of them once, as its own row's blocker.
   - **The thread's column at SP-1b:** the chosen spark's head, 72 tall (padding 0 18 0 24, the hairline at its foot):
     the face at 40, framed and live, the name 15 semibold, and the status word under it (12, tertiary). Under the head
     is one line in secondary ink with one act:
@@ -1591,7 +1616,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     the pane, so a live agent's screen never reflows under it. The rows it covers are where an agent's own input box
     sits, so each item's entry says what it covers and when it leaves. @'s list stands over the items.
     - At SP-1d the one item is the hello and its starters (below). CP-3's needs-you card (CP3-D8) joins them by the
-      same rule, with its own entry here when its slice draws it, and so do the live cards at SP-1e.
+      same rule, with its own entry here when its slice draws it, and so do the live cards at SP-1e. *Drawn at CP-3
+      (2026-10-31, DESIGN.md first):* the needs-you card, below the hello. One item stands at a time: while a card
+      stands, the hello does not.
     - A question the spark's own agent asks in its pane (a permission, a question) draws no item: the pane shows the
       ask itself, and the row's word says it (Needs your OK, Asking you).
   - **The hello and three starters** (NS-D4 A, "Hello, and three starters"; CH-D5, "Starters show while a thread is
@@ -1630,6 +1657,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       The hello and starters leave the moment the draft holds anything, and come back if it is emptied. The pane
       taking the keyboard, or the first send, takes them away for the window's life. A new window keeps no memory of
       them (HN-D9's rule), so a spark that is still new says hello again.
+      *Amended 2026-10-31 (CP-3):* quiet takes a fifth, that nothing in the thread waits on you. While a needs-you card
+      stands (below), the hello and the starters do not show, and they come back when it leaves if the other four still
+      hold: a thread with something waiting on you is not quiet (NS-D4).
     - **How "new" is read:** from the board, cautiously, so that an idle spark with a transcript shows its pane alone.
       The board counts a run's tokens only as they are spent live: a run that reads its transcript back counts nothing
       from it until its next live turn. Both a woken spark's run (resumed, or started afresh) and a run fieldd
@@ -1650,6 +1680,103 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       motion they fade in over 120ms, and a starter's rise takes 90ms on ease-out (M6).
     - The hello is VibeField's words for what a spark does, drawn in its voice. It is never sent to the session and is
       not in its transcript.
+  - **The needs-you card — what waits on you, in the thread** (CP-3; CP3-D1, CP3-D4 and CP3-D8 ruled A by James
+    2026-10-31 06:31:34Z; its drawing ruled by VF-PM 2026-10-31 16:35Z, James's to overturn, on the Sparks page's plates
+    `qCard` and `askCard`, `sparks/src/kit.js`, and their `.k-card.ask` in `vf.css`). It is the needs-you queue's item
+    for the thread's spark (§9 "The person's queue's words"), drawn by Chat, never by the spark (CP-D12). CP3-D8 named
+    the thread's line at SP-1b for it, then SP-1d's card. CP-3 lands after SP-1d (VF-PM's order, 2026-10-31), so the
+    line never carries an item.
+    - **What it shows:** the items for the thread's spark, the oldest first, one card at a time: its own questions, its
+      held sends and spawns, and the asks of the agents it started. The asks of its own run draw no card, since the
+      thread is that run's pane (above, the thread's items). When more than one waits, "1 of 3" stands at the eyebrow's
+      right, in data small, tertiary.
+    - **Where:** the thread's items' place (above), by their one rule: as wide as the composer, its foot 12 above the
+      composer's top, grown upward over the pane, which it never moves or resizes. @'s list stands over it, and a
+      pointer on it lifts none of the hand's cards (§8 "The hand", while Chat shows).
+    - **The card:** solid chrome, corners 16, padding 14 16 and the island shadow, as the hello's. While it waits on you
+      it is ringed 1.5 in `--vf-orange` at 75%, in place of the strong hairline (the plate's open card). It has no face
+      as its lead: the plates stand it in one of the spark's messages, and this card is Chat's, not the spark's words,
+      so the thread it stands in and its eyebrow say whose it is. Its rows stand 5 apart, from the top:
+      - **the eyebrow:** 10.5 mono capitals, semibold, tracked 0.06em, in `--vf-ink-attention`. It is the word Chat's
+        row says for the item, then " · " and the asker when the asker is not the thread's spark: "Asking you", "Needs
+        your OK", "Needs your OK · claude·2".
+      - **the question:** 14/500 in primary ink at 1.45, what you are asked. That is the spark's own question; "Vela
+        wants to send to claude·2"; "Vela wants another agent: Claude Code in vibe-field" (the catalog's label, then
+        the folder when fieldd names one); "claude·2 asks to run Bash", or "claude·2 asks for your OK" when its
+        permission names no tool; "claude·2 has a question"; "claude·2 needs you" for an ask of a kind this build does
+        not know.
+      - **the words**, for a held send or spawn alone: 13 regular in secondary ink at 1.45, the asker's own words as
+        they will be sent. For a send they are its first held words, then "and 2 more" in tertiary ink when more wait;
+        for a spawn, its first task. Words fieldd cut (past 2,000 characters) end in "…". *The plates have no such
+        row. It is this card's, because a held send is judged by its words ("the item shows the words, to whom and
+        from whom", cp3 §5). Nor do they count: "1 of 3" is this card's too, since one card stands at a time.*
+      - **the sub:** 12.5 regular in tertiary ink at 1.3: "Your yes lasts until claude·2 ends." for a send; "8 of
+        Vela's agents are running, the most a spark may run." for a spawn; "Answer it in its pane." for an agent's ask.
+        A question has none.
+      - The question and the words each show six lines at most. Past that, each scrolls within itself under the scroll
+        fade (§4 `--vf-scroll-fade`), so nothing you answer is hidden from you.
+      - **the acts:** 8 further than the rows' 5, so 13 under the row above them (the plate's `padding-top` 8 on its
+        gap 5), 8 apart, at the card's left; in a thread too narrow for them they wrap to a second row and never
+        shrink. They are the kit's `UiButton` at the plate's size: 28 tall, corners 14, padded 0 12, 12.5/500. The
+        first is `primary` and the rest `quiet`, and Not now is always last: a question's are the spark's own choices,
+        then Not now; a held send's, Allow and Not now; a held spawn's, Allow one more and Not now (§9). An agent's ask
+        has **Show** alone, quiet, which goes to its pane in Godview (History's Jump to). It is answered there, never
+        here (CP-L4, AR-6).
+    - **A kind this build does not know** is drawn, never dropped, because the need is real. The eyebrow says Needs
+      your OK, the question says "Vela needs you", and its words stand when it has them. Its acts are the choices
+      fieldd hands it, answered by their place as every act is (§9); with none, it has Show when it names a session,
+      else no act.
+    - **Answering:** an act is sent by its place among the item's acts (`needs.answer {item, choice}`). While the answer
+      runs, every act waits: the pressed one keeps its look and says its word with an ellipsis ("Allow…"), and the
+      others dim as the kit's disabled buttons do. The card stands from the press until fieldd's answer returns,
+      whatever the queue says meanwhile: the queue drops the item once fieldd has recorded the answer, before it has
+      told the spark, and an Allow one more's start, or a sleeping spark's wake, can take seconds. Refused, the card
+      says so under its words in the attention ink, "Couldn't answer: ‹fieldd's words›", and the acts stay while the
+      item still waits; when it waits no longer (another window answered it first), the card leaves 2.4 s after it
+      says so.
+    - **Answered here, it says what you said** once fieldd's answer returns, for 2.4 s, a note's time, then leaves. The
+      acts and the count give way to one line, 4 further than the rows' 5, so 9 under the row above it (the plate's
+      `.k-done`, its `padding-top` 4): `check` 13, then "You said Allow", 12.5/500 in tertiary ink. The ring returns to
+      the strong hairline, and the eyebrow to tertiary ink. When the act did not go as asked, the line says so after
+      what you said, in fieldd's words, where the act began (as a wake's refusal is said on the line that started it,
+      §8 "Chat's list"):
+      - an act fieldd could not do, in the attention ink with `exclaim` 13 in place of `check`: "You said Allow ·
+        Couldn't send Vela's words to claude·2: ‹reason›"; "You said Allow one more · Couldn't start the agent:
+        ‹reason›"; for any other item, "Couldn't finish it: ‹reason›" after what you said;
+      - an answer the spark has not heard, because it sleeps and could not be woken yet: "You said Yes · Vela hears it
+        when it wakes: ‹fieldd's words›". When both hold, the act's failure is what the line says.
+      When the answer returns and its card is no longer on screen (you left the thread, or Chat is not the view), the
+      line is said on the status line instead (§8 "The status line"), as a plain notice in the same words, so what a
+      failed or unheard answer came to is always said: "You said Allow one more · Couldn't start the agent: ‹reason›".
+      An answer that went as asked says nothing there, since the pane's line of facts says it (§9).
+      *A deviation from the plate, said:* the Sparks page's answered card stays in the thread, "You said Push". Here the
+      thread's items are an overlay, not a transcript. The pane is the spark's transcript, and VibeField's line of facts
+      says the answer there (§9), so the card leaves.
+    - **Answered in another window**, or no longer waiting (its session ended, or the agent was answered in its pane),
+      it leaves here at once and says nothing, because this window did not see the answer. A card this window is
+      answering is none of these: it stands until its answer returns (above).
+    - **Motion.** It rises in over 240ms on `--vf-ease-island`, from 8 below at opacity 0. It leaves in 180ms on plain
+      `ease`, 4 down to 0, `inert` while it goes, so nothing in it is pressed on its way out; the window keeps the
+      leaving card for those 180ms after its item has gone, or, for a card answered here, after its 2.4 s. When another
+      item waits, its card rises in by the same motion once the last has gone, so two cards never stand at once, and the
+      count reads its new place. With reduced motion each way is a 120ms fade in place (M6). A thread you leave takes
+      its card with it at once, as the hello goes; an answer it was running still returns, and when it did not go as
+      asked the status line says so (above).
+    - **The keyboard.** A card that arrives never takes the keyboard, so a key meant for the pane or the draft never
+      answers it. Its acts stand before the composer in the tab order, so ⇧Tab from the draft reaches them, the last
+      act first, each with the kit's focus ring. A pressed act puts the keyboard on the card itself, where "You said …"
+      is then read. When a card leaves holding the keyboard, the keyboard goes to the card that takes its place (the
+      card, never its first act, so a held Return answers nothing), else to the draft.
+    - **What it is named.** The card is a group, named by its eyebrow and its question ("Asking you: Push the fix?",
+      "Needs your OK, claude·2: claude·2 asks to run Bash"), then its place when more wait ("1 of 3"). Its words and
+      its sub describe it. It is announced once, politely, when it arrives, and its "You said …" line is a status,
+      spoken once.
+    - **What it covers.** At 1180 × 780 a card with a one-line question and its acts is about 110 tall, y 502–612, over
+      the pane's last six rows, where an agent's input box sits. The tallest, a held send with six lines of words and
+      its sub, is about 250 tall, about thirteen rows. While it stands, what the agent shows there is under it, and a
+      Send still pastes into the pane (§8 "Chat's composer"). Unlike the hello, it does not leave when you write,
+      because it waits on you. Answer it, and those rows are back.
+    - *Not here: answering an agent's own ask in place (AR-6), Godview's bubble (EW-D1), the phone (PG).*
   - **Listening** (§2.10) is not reported: typing in the draft, or a paste, is not a report (§8 "Chat's list").
 - **Chat's composer — the line's draft, moved into the thread** (LN-D3 ruled by James 2026-10-29, Cards in Hand;
   built at SP-1d from the line's code in git at `0e2ad08bc`, the parent of HN-2's deletion; CH-D5 A and EW-D4 rule @'s
@@ -1759,12 +1886,23 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - **A message wakes it** (§2.10). Asleep or not started, Send wakes the spark first (`compose.sparks.open`; the
       line reads "Waking…"). It waits up to 20 s for the spark to be heard and its pane to appear, then up to 1.5 s for
       the pane's input to open, then pastes. An awake spark whose pane is still being found ("Finding Vela's pane…", §8
-      "Chat's thread"), or that has not been heard yet (Hello, as just after a hatch), is waited for in the same 20 s,
-      with no wake. Nothing is pasted into a spark before it is heard: a program not yet up may not read a paste as
-      one, and a line break inside the message would read as Return.
+      "Chat's thread"), or that has not been heard yet (as just after a hatch, while its word is Hello), is waited for
+      in the same 20 s, with no wake. Nothing is pasted into a spark before it is heard: a program not yet up may not
+      read a paste as one, and a line break inside the message would read as Return. Heard is read from its own run's
+      row, never from its word (§8 "Chat's list", the status): the row is on the board, alive, and says how the run
+      stands. A sleeping spark with a card says Asking you or Needs your OK before Send's wake and after it, so it is
+      heard only once its woken run says so.
     - **While the spark waits on you** (Asking you, Needs your OK, Stuck), Send pastes nothing, because a menu in the
       pane would read the paste as its answer. The note says "Vela is waiting on you — answer it in its pane", and the
       draft stays.
+      *Amended 2026-10-31 (CP-3), a reading of SP-1d's ruled lean ("Send while the spark waits on the person pastes
+      nothing", VF-PM 2026-10-31 16:35Z) for CP-3's wider needs-you, recorded for the DECISIONS row, James's to
+      strike:* that holds while its own run waits on you in its pane, a blocker on its own row. A needs-you card in
+      the thread (§8 "Chat's thread") does not stop Send. The card is answered on the card, and the pane holds no menu
+      for it, so a paste there is not an answer. The cost is said: a paste made while a card stands lies under the
+      card, unseen, until it leaves, and the paste's hazard (below) holds for the answer's facts, which are submitted
+      together with it. Struck, a card stops Send as the blocker does, and the note points at the card, not the pane
+      (its words here first).
     - When the paste is not taken, the draft stays whole and the note says why, in the hand's words where the outcome
       is the hand's own (§8 "The hand"):
       - "Not pasted — Vela's pane is not taking input" (its input did not open within 1.5 s, or a spark that is awake
@@ -2702,6 +2840,18 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   record cannot be read now"**, with the door's own words as its detail; **"Could not open — no
   session is recorded for this run"**; **"Could not open — this run is no longer in the
   timeline"**.
+  *Amended 2026-10-31 (CP-3, CP3-D5 A; §9 "An agent's notify"):* **an agent's notify** is said here
+  too, in every window: "Vela — the build is green". The teller comes first, as Chat or Godview
+  names it, then a dash, then its words; the name is fieldd's, never the agent's own words, so a
+  notice cannot pass as another teller's. It is one line, cut with an ellipsis at the line's width
+  and never wrapped, and it stands 2.4s like any plain notice. At most two of one teller's notices
+  wait their turn, and a third from that teller sheds that teller's oldest waiting one, never the
+  one standing, so one agent's notices never hold back another's (PF4's watermark). The line says
+  only what is told while the window listens: a notice told before it is no news. While no
+  VibeField window is in front, main says it outside the app as well (§9). An answer given on a
+  needs-you card that did not go as asked, or that its spark has not heard, is said here too when
+  it returns after its card has left the screen, as a plain notice in the card's own words ("You
+  said Allow one more · Couldn't start the agent: …"; §8 "Chat's thread", the needs-you card).
 - **The selection bar** (Chrome on the Mat §3.1; MC-D2 the line's glass, ruled 2026-10-01; MC-D1;
   One Frame §7; R1, R2, R3, R7–R10, R23, R25; DK-11): one element over `handle.selection`'s anchor,
   placed imperatively each time the anchor publishes — never a render per frame.
@@ -4879,7 +5029,7 @@ input (CP3-D7 A); a spark that cannot be woken hears it when it next wakes.
 
 **An agent's notify** (CP-3, CP3-D5 A) is said as its teller, named as Chat or Godview names it ("Vela", "claude·2"),
 then its words on one line: each line break or run of spaces is one space, and the words are cut at 140 characters,
-the last of them "…". In every window it is the status line's note (§8 draws it with CP-3's window half). At most two
+the last of them "…". In every window it is the status line's note (§8 "The status line"). At most two
 of one teller's notices wait their turn there, and a third from the same teller sheds that teller's oldest waiting
 one, so one agent's notices never hold back another's (PF4's watermark). Outside the app it is an OS notice, said
 only while no VibeField window is in front, and never in a smoke: its title is the teller, and its body the words. A
@@ -5004,6 +5154,17 @@ Inside History the room's own words stand as rosetta wrote them, and the Setup A
   pane — 300 KB, and one paste carries 261 KB of it" · "Not sent — Vela didn't wake in 20 seconds" · "Not sent — Vela's
   terminal is not on this desktop's floor" · "Not sent — this window has no terminals" · "Couldn't wake Vela: …" ·
   "Couldn't send to Vela: …". A card's: "Add to your message to Vela" · "Added to your message to Vela".
+- The needs-you card (CP-3; §8 "Chat's thread"; its acts' words are "The person's queue's words", above):
+  - its eyebrows, Asking you · Needs your OK · "Needs your OK · claude·2", and "1 of 3";
+  - its questions, "Vela wants to send to claude·2" · "Vela wants another agent: Claude Code in vibe-field" ·
+    "claude·2 asks to run Bash" · "claude·2 asks for your OK" · "claude·2 has a question" · "claude·2 needs you" ·
+    "Vela needs you";
+  - its words' "and 2 more", and its subs, "Your yes lasts until claude·2 ends." · "8 of Vela's agents are running,
+    the most a spark may run." · "Answer it in its pane.";
+  - while it answers, "Allow…"; refused, "Couldn't answer: …";
+  - answered, "You said Allow", and after it "Couldn't send Vela's words to claude·2: …" · "Couldn't start the agent:
+    …" · "Couldn't finish it: …" · "Vela hears it when it wakes: …".
+- A notify on the status line: "Vela — the build is green".
 - A session's handle: its project's name, else its folder's, with @'s ordinal where two share it ("vibe-field·2").
 - Where an outcome is the hand's, the words are the hand's (§8 "The hand"), so one outcome is never said two ways.
 - Each note is under 70 characters beside the spark's name, so it is read in the note's 2.4 s. A refusal from fieldd
