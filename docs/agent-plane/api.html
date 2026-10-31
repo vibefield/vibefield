@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="API design of VibeField's agent plane: door conventions (zod-first contracts, tolerant reader, scopes, locality, errors, subscriptions, tickets, audit), the catalogue of every agent, agents, index and agent-relevant terminal door, the field.agents.v1 mesh store, and each door mapped to the puppeteer or rosetta surface it wraps."
+      content="API design of VibeField's agent plane: door conventions (zod-first contracts, tolerant reader, scopes, locality, errors, subscriptions, tickets, audit), the catalogue of every agent, agents, index and agent-relevant terminal door, the field.agents.v1 mesh store (retired 2026-10-01, DS-D14), and each door mapped to the puppeteer or rosetta surface it wraps."
     />
     <title>The doors — API design of the agent plane</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -1594,7 +1594,12 @@
                       leaves for every screen, while the fold's row, the record and the frame's resume verb stay. Only
                       a screen this desktop's own window opened looks for the person: a plugin's, under the same scope,
                       clears marks and acknowledges nothing. The window reports a failed row only by its pane, focused
-                      with the terminals up, never because it was pointed at.</p></td>
+                      with the terminals up, never because it was pointed at.
+                      <em>Amended 2026-10-29 (James, PG-D6 (a); <code>draft/thinking-phone-godview.md</code> §6 item 8):
+                      the door becomes <code>federate</code>, routed by <code>device</code> through the home with
+                      <code>onBehalfOf</code>, and any connection holding a model-bearing board (local or remote) is a
+                      screen, so the phone is one and unread stays the owner's mark. Not built: as built it is local only,
+                      and a phone holds no <code>model</code> board, so it cannot report until PG-2 and PG-3.</em></p></td>
                     <td><span class="badge tone-built">Built</span></td>
                     <td><p><code>agent-model-daemon.test.ts</code>, <code>agent-monitor.test.ts</code></p></td>
                   </tr>
@@ -1636,6 +1641,14 @@
               complete <code>monitorRow</code>, bare terminals, and the run's optional <code>local</code> facts at the
               16 ms floor, with urgent changes ahead of it. Other desktops contribute their owner's <code>desk</code> cut.
               The model projection is refused to peers and phones; the phone continues to read <code>field</code>.
+              <em>Amended 2026-10-29 (James, PG-D1 (a), PG-D2 (a), PG-D5 (a), PG-D8 (a); <code>draft/thinking-phone-godview.md</code>
+              §6):</em> <code>model</code> stays refused to them, but the phone and a peer desktop's windows will read the
+              model's REMOTE cut — <code>{runtimeRunId, revision, device, terminal?, nativeSessionId?, monitorRow}</code>,
+              cut by the owner: no <code>project.seq</code>, never <code>local</code>, texts bounded at
+              <code>AGENT_FIELD.DESK_TEXT_CHARS</code> (280), bare terminals included. <code>desk</code> slims into it,
+              peer windows keep the 100 ms floor, and the phone's is 1 s with a 250 ms urgent edge. None of it is built:
+              as built a peer's rows still arrive as <code>desk</code> and the phone still reads <code>field</code>,
+              until PG-2 (the cut) and PG-3 (the phone's replica).
             </p>
             <p>
               <code>AgentModelLocalFacts</code> carries only what this window's chrome needs: <code>nativeSessionId</code>,
@@ -2013,6 +2026,9 @@
               tailscale login the account is bound to is what scopes the store and gates the node. A
               desktop that is not linked publishes no agent field and admits no peer. The account surface
               is documented with the account foundation, not here.
+              <em>Corrected 2026-10-29 (PG, C6):</em> no desktop has published the agent field to a store since
+              DS-D14 retired <code>field.agents.v1</code> (2026-10-01); the field rides the door alone, which compares
+              the caller's WhoIs login to the stored link before it answers.
             </p>
           </section>
 
@@ -2022,6 +2038,14 @@
               <code>field.agents.v1</code> is the agent plane's second carrier — the same field rows the
               door serves, replicated by the mesh so a phone gets every desktop's board with no fieldd in
               its read path. One slice per device, keyed by the publisher's authenticated device id.
+              <em>Corrected 2026-10-29 (PG, C6):</em> this carrier is retired. DS-D14 (ruled 2026-09-30) retired it
+              on 2026-10-01 (<code>a6a1bfa1</code>, landed with DS wave 3): no daemon publishes
+              <code>field.agents.v1</code> and no phone reads it. The door is the field's one carrier, and the phone
+              reads it through its home desktop's mesh board
+              (<code>agent.subscribe {projection: "field", scope: "mesh"}</code>, DS-8). The store id and
+              <code>AgentFieldSlice</code> stay in contracts marked RETIRED — the floor's slice cap names the id, and an
+              older desktop may still publish one — so the slice table below is the record of its shape; the revision
+              rule and what the phone never receives still hold for the door's <code>field</code> row.
             </p>
             <div class="table-wrap">
               <table class="reference-table">
@@ -2055,6 +2079,13 @@
               projected yet — the field row's <code>usage</code> is rebuilt from exactly
               <code>cumulativeTokens</code> and <code>burnRatePerMin</code>.
               <span class="badge tone-owed">Owed</span>
+              <em>Amended 2026-10-29 (James, PG-D1 (a), PG-D2 (a); <code>draft/thinking-phone-godview.md</code>
+              §6):</em> this list is the <code>field</code> row's, and binds the phone only while it reads
+              <code>field</code>. Its Godview will read the model's remote cut (<a href="#monitor-model">above</a>),
+              which carries the reply line and a blocker's question bounded at 280 characters, and <code>cost</code>
+              with its series and burn rate — the owed item's answer, superseding Q13's <code>desk</code> door of
+              2026-10-28. The remote cut never carries the mirror, the absolute path, <code>project.seq</code> or
+              <code>local</code>. As built the phone's rows carry none of it until PG-2 and PG-3.
             </p>
             <div class="callout foundation">
               <strong>Login scope is a transport guarantee, and not a licence to stop thinking.</strong>

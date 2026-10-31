@@ -8373,7 +8373,7 @@ Within it sit the contract's 21 marks (MV-D1…D22, D16 marks only), built as `d
 - **The SDK and the one backend.**
   - `@vibecook/puppeteer-view-sdk`: the contract, `/react`, `/host`, `/testing` and `/toolkit`.
   - `@vibecook/puppeteer-monitor` runs beside the runtime, one per desktop: in fieldd, and in Electron main in puppeteer's Godview.
-  - Windows and the phone hold replicas of its model (MV-D22, D18).
+  - Windows ~~and the phone~~ hold replicas of its model (MV-D22, D18). *(Corrected 2026-10-29, PG-0 (C4, `thinking-phone-godview.md` §2): FALSE for the phone. Only the windows held replicas (`createMonitorReplica` over the `model` board), here and still at `e23fa8a1f`; the phone read `field` rows cut from the fold (`projectFieldRow`), never the backend's model. The phone's replica is PG's, the model's remote cut (PG-D1 (a), James, 2026-10-29, on the page The Phone's Godview), not yet built (PG-2, PG-3).)*
 - **Godview's five views are SDK modules:** list, rain, swarm, timeline and spend.
   - Spend is MV-7: the runtime-only watchlist, ported as built (M177 ruling 2). SV-D15…D19 are ruled later.
   - Each view has its own root and its own CSS (L18), keys only while focused (MV-D8), and its mark in the manifest (MV-D16).
