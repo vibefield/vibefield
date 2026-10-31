@@ -1665,6 +1665,12 @@
               cost, spawn choices and model rows once. <code>agent-model-board.ts</code> publishes that model through
               audience cuts. The desktop's <code>model</code> board carries window-only chrome facts beside its rows;
               peers get the <code>desk</code> cut and phones the <code>field</code> cut (as built; <em>Amended 2026-10-29 (James, PG-D1 (a)): both become the model's <code>remote</code> cut at PG-2</em>). No runtime object syncs.
+              <em>Corrected 2026-10-31 (PG-0's re-read):</em> as built, <code>agent-model-board.ts</code> publishes only
+              this desktop's <code>model</code> board. A peer's <code>desk</code> rows and the phone's <code>field</code>
+              rows are <code>agent-field.ts</code>'s cuts: <code>projectDeskRow</code>, the backend's row beside the
+              fold's, and <code>projectFieldRow</code>, the fold's alone, which never reads the backend's model. Only the
+              peers' <code>desk</code> becomes <code>remote</code> at PG-2; the phone reads <code>remote</code> from PG-3,
+              and <code>field</code> stays for an older phone until it retires after one release of skew.
             </p>
             <p>
               <code>GodviewAgentsProvider</code> owns the window's one model subscription and replica. The deck,
