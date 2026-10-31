@@ -1,14 +1,13 @@
 import type { SessionSummary } from "@vibecook/ghosttea-protocol";
 import {
   AGENT_CATALOG,
-  AGENT_FIELD,
-  type AgentDeskRow,
   type AgentListResult,
   type AgentModelBoardRow,
   type AgentModelMeshDevice,
   type AgentModelMeshFrame,
   type AgentModelMeshOpen,
   type AgentProfileSet,
+  type AgentRemoteRow,
   type AgentSessionSummary,
   type AgentsProfileSetsListResult,
   createAgentCatalogReaders,
@@ -21,8 +20,7 @@ import {
   type MonitorRuntimeSource,
   type MonitorScheduler,
 } from "@vibefield/puppeteer-monitor";
-import { projectDeskRow } from "../../fieldd/src/agent-field";
-import { ModelProjection } from "../../fieldd/src/agent-model-board";
+import { ModelProjection, RemoteProjection } from "../../fieldd/src/agent-model-board";
 import {
   type AgentMonitorFold,
   type AgentMonitorProfiles,
@@ -37,8 +35,8 @@ import type { ModelBoardPort } from "../src/godview/monitor/remote-door";
  * (`agent-monitor.ts`) and its board projection (`agent-model-board.ts`), the
  * real ones, on scripted sources — the fold's rows, the floor's inventory, the
  * profiles feed — answering a fake door's model port exactly as the daemon
- * answers a window's: the open (this desktop first, then each peer's desk cut
- * with its model row), then one frame per change on this desktop's chain.
+ * answers a window's: the open (this desktop first, then each peer's remote cut,
+ * PG-2), then one frame per change on this desktop's chain.
  *
  * A test that used to hand the fold rows to a fake `observe` hands the same
  * rows here (`publish`) and gets the backend's rows for them; the pane
@@ -385,21 +383,17 @@ export function scriptedModelBoard(options: ScriptedModelBoardOptions = {}): Scr
   const reports: string[][] = [];
   const asOf = new Date().toISOString();
 
-  const peerRows = (device: string): AgentDeskRow[] => {
+  /** a peer's board as its owner cuts it for this window: fieldd's remote cut (PG-2) */
+  const peerRows = (device: string): AgentRemoteRow[] => {
     const held = peers.get(device);
     if (held === undefined) return [];
     held.hosted.flush();
-    return held.hosted.fold.list().sessions.map(
-      (summary, index) =>
-        ({
-          ...projectDeskRow(
-            summary,
-            AGENT_FIELD.DESK_TEXT_CHARS,
-            held.hosted.service.rowForRun(summary.runtimeRunId),
-          ),
-          revision: index + 1,
-        }) as AgentDeskRow,
-    );
+    const cut = new RemoteProjection();
+    cut.apply({
+      fold: { list: () => held.hosted.fold.list(), subscribe: () => () => undefined },
+      monitor: held.hosted.service,
+    });
+    return cut.snapshot().rows;
   };
   const open = (): AgentModelMeshOpen => {
     const snapshot = projection.snapshot();

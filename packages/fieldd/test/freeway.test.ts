@@ -562,7 +562,12 @@ const ROWS: Record<
 };
 const ROSTER: FreewayApprovalRoster = {
   deviceIdByNodeId: (node) => Object.keys(ROWS).find((deviceId) => ROWS[deviceId]?.node === node),
-  get: (deviceId) => ROWS[deviceId]?.row,
+  // a row names its node, as DeviceService's does — every one but this desktop's own (F1b reads it)
+  get: (deviceId) => {
+    const entry = ROWS[deviceId];
+    if (entry === undefined) return undefined;
+    return entry.row.self ? entry.row : { ...entry.row, tailscaleId: entry.node };
+  },
 };
 
 function caller(principal: CallerContext["principal"]): CallerContext {
@@ -598,6 +603,7 @@ describe("F1 — the phone's approval (`freeway.approve`)", () => {
           freewayKeyHex: VECTOR.keyHex,
         }),
       roster: ROSTER,
+      linkedLogin: () => LOGIN,
       now: () => approval.claims.issuedAt,
       ttlMs: approval.claims.expiresAt - approval.claims.issuedAt,
       nonce: () => approval.claims.nonce,
@@ -621,6 +627,7 @@ describe("F1 — the phone's approval (`freeway.approve`)", () => {
     const approver = new FreewayApprover({
       state: () => floorState(),
       roster: ROSTER,
+      linkedLogin: () => LOGIN,
       now: () => 5_000,
     });
     const ask = approver.check(fromPhone(), {});
@@ -649,18 +656,19 @@ describe("F1 — the phone's approval (`freeway.approve`)", () => {
 
   it("refuses in the order a caller hears them, and the mint reads the host's life again", () => {
     let state: FreewayState | null = floorState();
-    const approver = new FreewayApprover({ state: () => state, roster: ROSTER });
+    const approver = new FreewayApprover({
+      state: () => state,
+      roster: ROSTER,
+      linkedLogin: () => LOGIN,
+    });
     expect(refusal(() => approver.check(fromPhone(), "approve me"))).toEqual({
       kind: "PRECONDITION_FAILED",
       retryable: false,
     });
+    // a peer daemon on its own account holds none (one forwarding for a phone: F1b's rows below)
     expect(
       refusal(() => approver.check(caller({ kind: "peer-fieldd", deviceId: "dev-desk-b" }), {})),
-    ).toEqual({
-      kind: "UNAVAILABLE",
-      retryable: false,
-      state: FREEWAY_APPROVAL.STATE_FORWARDING_UNBUILT,
-    });
+    ).toEqual({ kind: "FORBIDDEN_SCOPE", retryable: false });
     const window = caller({ kind: "local-token", tokenId: "t", scopes: ["terminal.attach"] });
     expect(refusal(() => approver.check(window, {})).kind).toBe("FORBIDDEN_SCOPE");
     const notSelf = caller({ kind: "tailnet", login: LOGIN, tailscaleId: PHONE_NODE });
@@ -688,6 +696,84 @@ describe("F1 — the phone's approval (`freeway.approve`)", () => {
     state = floorState({ revision: 2, up: false });
     delete state.freewayKeyHex;
     expect(refusal(() => approver.mint(ask))).toEqual({
+      kind: "UNAVAILABLE",
+      retryable: true,
+      state: FREEWAY_APPROVAL.STATE_DOWN,
+    });
+  });
+});
+
+/** A self peer daemon's call (`dev-desk-b`, the phone's home) forwarding for the client behind it:
+ * the phone when `clientDeviceId` names one (its home's roster correlation), else a window. */
+function forwardedFor(clientDeviceId?: string): CallerContext {
+  return {
+    ...caller({ kind: "peer-fieldd", deviceId: "dev-desk-b", tailscaleId: "nDESK01" }),
+    onBehalfOf: {
+      clientKind: clientDeviceId !== undefined ? "ios" : "renderer",
+      deviceId: "dev-desk-b",
+      windowId: "conn_7",
+      ...(clientDeviceId !== undefined ? { clientDeviceId } : {}),
+    },
+  };
+}
+
+describe("F1b — the phone's approval forwarded through its home (FW-D5)", () => {
+  it("is minted for the phone the peer names: its node from THIS roster, this desktop's login, the peer's self set", () => {
+    const approver = new FreewayApprover({
+      state: () => floorState(),
+      roster: ROSTER,
+      linkedLogin: () => LOGIN,
+      now: () => 7_000,
+    });
+    const ask = approver.check(forwardedFor("dev-phone"), {});
+    expect(ask).toEqual({
+      deviceId: "dev-phone",
+      login: LOGIN,
+      tailscaleId: PHONE_NODE,
+      rights: ["geometry", "input", "read"],
+    });
+    const { approval } = approver.mint(ask);
+    expect(approval.protected.kid).toEqual({ floorBootId: "fb-1", keyGeneration: 1 });
+    expect(approval.claims).toMatchObject({
+      audienceFloorBootId: "fb-1",
+      clientId: `freeway:${LOGIN}#${PHONE_NODE}`,
+      principal: { kind: "tailnet", login: LOGIN, tailscaleId: PHONE_NODE },
+      expiresAt: 7_000 + FREEWAY.APPROVAL_TTL_MS,
+    });
+    // the very ask the phone's own call makes: the host binds both to the phone's node alike
+    expect(approver.check(fromPhone(), {})).toEqual(ask);
+  });
+
+  it("refuses in the order a forwarding peer hears them — no phone behind it, a desktop named, a phone this roster does not know, the host down", () => {
+    let state: FreewayState | null = floorState();
+    let login: string | null = LOGIN;
+    const approver = new FreewayApprover({
+      state: () => state,
+      roster: ROSTER,
+      linkedLogin: () => login,
+    });
+    const forbidden = { kind: "FORBIDDEN_SCOPE", retryable: false };
+    const uncorrelated = {
+      kind: "UNAVAILABLE",
+      retryable: true,
+      state: FREEWAY_APPROVAL.STATE_UNCORRELATED,
+    };
+    // on its own account, or for a window: no phone behind the peer
+    const own = caller({ kind: "peer-fieldd", deviceId: "dev-desk-b" });
+    expect(refusal(() => approver.check(own, {}))).toEqual(forbidden);
+    expect(refusal(() => approver.check(forwardedFor(), {}))).toEqual(forbidden);
+    // a desktop named — the carrier itself, or this desktop: a desktop's link carries no approval
+    expect(refusal(() => approver.check(forwardedFor("dev-desk-b"), {}))).toEqual(forbidden);
+    expect(refusal(() => approver.check(forwardedFor("dev-a"), {}))).toEqual(forbidden);
+    // a phone this roster does not know yet — or knows under no account, unlinked since the
+    // peer's hello: honest, and retryable
+    expect(refusal(() => approver.check(forwardedFor("dev-stranger"), {}))).toEqual(uncorrelated);
+    login = null;
+    expect(refusal(() => approver.check(forwardedFor("dev-phone"), {}))).toEqual(uncorrelated);
+    login = LOGIN;
+    state = floorState({ revision: 2, up: false });
+    delete state.freewayKeyHex;
+    expect(refusal(() => approver.check(forwardedFor("dev-phone"), {}))).toEqual({
       kind: "UNAVAILABLE",
       retryable: true,
       state: FREEWAY_APPROVAL.STATE_DOWN,

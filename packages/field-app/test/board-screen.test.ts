@@ -31,12 +31,12 @@ const peerRow = (): Row => {
   if (row === undefined) throw new Error("the golden's peer runs one agent");
   return row;
 };
-/** a newer peer's row: a tier this build has no word for */
+/** a newer peer's row: a tier this build has no word for, in the model's row
+ * (a peer's row is its remote cut since PG-2, whose own root is passthrough) */
 const newer = (id = "run-newer"): Row => ({
   ...peerRow(),
   runtimeRunId: id,
-  tier: "hosted",
-  monitorRow: { ...(peerRow()["monitorRow"] as Row), id },
+  monitorRow: { ...(peerRow()["monitorRow"] as Row), id, tier: "hosted" },
 });
 const readable = (id = "run-newer"): Row => ({
   ...peerRow(),
@@ -55,6 +55,27 @@ describe("BoardScreen — the model board read one desktop at a time (PG-1b)", (
     expect(screen.open(open)).toEqual(open);
     const frame = delta(17, [readable()]);
     expect(screen.frame(frame)).toEqual([frame]);
+  });
+
+  // PG-2 (PG-L1) — a peer's board is its owner's remote cut: the model's row and
+  // its joins, no field half. The window reads it as it read the desk row; a
+  // build before PG-2 dropped every one and read the peer as another version.
+  it("PG-2 — a peer's remote rows are readable: the open and every remote frame pass as they came, the desktop as the wire said", () => {
+    const screen = new BoardScreen();
+    const open = openWith();
+    const peer = open.devices.find((entry) => entry.device === PEER);
+    expect(peer?.snapshot?.rows[0]).not.toHaveProperty("status");
+    const screened = screen.open(open) as Open;
+    expect(screened.devices.find((entry) => entry.device === PEER)?.state).toBe("live");
+    expect(screened).toEqual(open);
+    // the phone's door's goldens, every desktop a remote board, a bare terminal among them
+    const remote = golden("agent-remote-mesh-open.valid.json");
+    expect(screen.open(remote)).toEqual(remote);
+    expect(AgentModelMeshOpen.safeParse(remote).success).toBe(true);
+    for (const frame of golden("agent-remote-mesh-frames.valid.json") as unknown[]) {
+      expect(screen.frame(frame)).toEqual([frame]);
+      expect(AgentModelMeshFrame.safeParse(frame).success).toBe(true);
+    }
   });
 
   it("an open: drops the row it cannot read, reads that desktop as another version, and the open parses whole", () => {

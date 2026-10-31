@@ -59,26 +59,29 @@ import { RpcCallError } from "./native-link";
 
 const METHOD = "agent.subscribe";
 
-export type BoardProjection = "field" | "desk" | "model";
+export type BoardProjection = "field" | "model" | "remote";
 
 /** MV-3a — a `model` hub's own board is this desktop's model cut; its
- * UPSTREAMS are the peers' DESK boards (a peer is refused `model`, M16/L8), at
- * the desk's floor however fast the window reads its own rows (L12). */
-export function upstreamProjection(projection: BoardProjection): "field" | "desk" {
-  return projection === "model" ? "desk" : projection;
+ * UPSTREAMS are the peers' REMOTE boards (PG-2; their desk boards before; a
+ * peer is refused `model`, M16), at the remote floor however fast the window
+ * reads its own rows (L12). A `remote` hub (the phone's) asks the same of its
+ * peers at its own floor, so each owner cuts and paces its rows for the phone
+ * (PG-D8: 1 s, the urgent edge at 250 ms), and the home only relays them. */
+export function upstreamProjection(projection: BoardProjection): "field" | "remote" {
+  return projection === "model" ? "remote" : projection;
 }
 export function upstreamFloor(projection: BoardProjection, floor: number): number {
-  return projection === "model" ? Math.max(floor, AGENT_FIELD.DESK_MIN_INTERVAL_MS) : floor;
+  return projection === "model" ? Math.max(floor, AGENT_FIELD.REMOTE_MIN_INTERVAL_MS) : floor;
 }
 
 /** A row as the board holds it: keyed, and otherwise the owner's. A field or
- * desk row (a peer's), or a model-board row (this desktop's own — an
+ * remote row (a peer's), or a model-board row (this desktop's own — an
  * `AgentDeskTerminalRow` is no field row, which is why the hub reads nothing
  * but the key). PG-1b: a peer's frames are now PARSED by the key alone too
  * (`AgentBoardKeySnapshot`/`AgentBoardKeyDelta`), where they used to be held to
  * the whole field row. That refused a whole desktop for one row this build
  * could not read, and it was what forced a desk row to carry the field row
- * beside its model row. The relay logs no unknown fields: it is no business
+ * beside its model row; PG-2's remote row carries the model's row alone. The relay logs no unknown fields: it is no business
  * reader, and every fact past the key is the owner's, for each reader to judge. */
 export type BoardRow = { runtimeRunId: string } & Record<string, unknown>;
 export type BoardSnapshot = { epoch: string; revision: number; rows: BoardRow[] };
@@ -676,7 +679,7 @@ export class MeshBoard {
   readonly #opts: Resolved;
   readonly #hubs = new Map<string, BoardHub>();
   /** each desktop's last board, by projection (`KeptBoards`) */
-  readonly #kept = new Map<"field" | "desk", Map<string, HeldBoard>>();
+  readonly #kept = new Map<"field" | "remote", Map<string, HeldBoard>>();
   #disposed = false;
 
   constructor(opts: MeshBoardOptions) {
@@ -709,8 +712,8 @@ export class MeshBoard {
     const key = `${projection}|${minIntervalMs}`;
     let hub = this.#hubs.get(key);
     if (hub === undefined) {
-      // kept by what the PEERS send: a model hub keeps desk boards, the same
-      // copies a desk hub keeps
+      // kept by what the PEERS send: a model hub keeps remote boards, the same
+      // copies the phone's remote hub keeps
       const upstream = upstreamProjection(projection);
       let boards = this.#kept.get(upstream);
       if (boards === undefined) {

@@ -3,6 +3,7 @@ import { EventEmitter } from "node:events";
 import {
   approvalSigningInput,
   type CallerContext,
+  type ForwardedFor,
   FREEWAY,
   FREEWAY_APPROVAL,
   type FreewayAdmitRow,
@@ -562,18 +563,28 @@ export class FreewayServeDriver extends RouteServeDriver {
   }
 }
 
-/** What `freeway.approve` reads of the roster: the calling node's device, and that device's row. */
+/** What `freeway.approve` reads of the roster: the calling node's device, and a device's row —
+ * whose node (`tailscaleId`, the registry's; absent for this desktop's own row) a forwarded
+ * approval binds to (F1b). */
 export interface FreewayApprovalRoster {
   deviceIdByNodeId(nodeId: string): string | undefined;
-  get(
-    deviceId: string,
-  ): { self: boolean; capabilities?: { docHost?: boolean } | undefined } | undefined;
+  get(deviceId: string):
+    | {
+        self: boolean;
+        capabilities?: { docHost?: boolean } | undefined;
+        tailscaleId?: string | undefined;
+      }
+    | undefined;
 }
 
 export interface FreewayApproverOptions {
   /** the floor's state now (`FreewayFloor.state`): the key, its generation, the audience */
   state: () => FreewayState | null;
   roster: FreewayApprovalRoster;
+  /** this desktop's linked login (`links.status().link?.login`): the login a phone reached through
+   * a peer is approved under (F1b). It is the one that phone's link here will carry — this
+   * roster admits only peers of this login, and the host only links of it. */
+  linkedLogin: () => string | null;
   /** the approval's life (`FREEWAY.APPROVAL_TTL_MS`; a test seam, never longer — the host
    * refuses a longer one) */
   ttlMs?: number;
@@ -597,8 +608,7 @@ export interface FreewayApprovalAsk {
  * F1 (FW-D1) — `freeway.approve {}`: fieldd approves a PHONE's link, once, and the host mints every
  * grant after it. The refusals, in the order a caller hears them:
  *  - a malformed ask: PRECONDITION_FAILED;
- *  - a self peer daemon forwarding for a phone (FW-D5): UNAVAILABLE `forwarding-unbuilt`, retryable
- *    false — F1b's;
+ *  - a self peer daemon forwarding for a phone (FW-D5): its own refusals, below (F1b);
  *  - anyone but this person's own device over the tailnet (a window, the shell, a plugin, an
  *    agent): FORBIDDEN_SCOPE — an approval is the phone's;
  *  - a door whose sidecar injected no node id: PRECONDITION_FAILED — an approval binds to the node
@@ -614,6 +624,24 @@ export interface FreewayApprovalAsk {
  * stream; memory-only, never logged), `principal.tailscaleId` the roster's correlation and never a
  * claim, `rights` by `rightsFor`, a fresh nonce, `FREEWAY.APPROVAL_TTL_MS`. A guest never gets here:
  * its preset holds no `terminal.attach`.
+ *
+ * F1b (FW-D5; §3's "routable", §4.5) — a phone's link to a desktop other than its home is approved
+ * by THAT desktop, the ask riding the home's door: the home forwards `freeway.approve {device}` whole
+ * (the method is `federate`), and this desktop meets a self peer daemon carrying `onBehalfOf`.
+ * Authorized as the peer, recorded as the phone (DS-L7): `onBehalfOf.clientDeviceId` — the device
+ * the home's roster correlated the phone's node to — only PICKS whom the approval is for among THIS
+ * roster's phone rows (restrict-only); the node it binds to is this roster's, the login this
+ * desktop's linked one, the rights the peer's own (`rightsFor`: the self set for a peer naming who
+ * it acts for). The approval is then the very one the phone's own ask here would get: the host
+ * binds both to the phone's node alike. The refusals a forwarding peer hears, in order:
+ *  - no phone behind it (the daemon on its own account, or a window): FORBIDDEN_SCOPE;
+ *  - a desktop named (the carrier itself, another, or this one): FORBIDDEN_SCOPE;
+ *  - a phone this roster does not know, or knows under no account: UNAVAILABLE `uncorrelated`,
+ *    retryable;
+ *  - the floor not read, or the host down: UNAVAILABLE `unread` / `down`, retryable.
+ * A home that cannot reach this desktop answers for it: PeerLink's honest `UNAVAILABLE {service:
+ * "peer-link", device, state}`; and a credential is never replayed from a receipt
+ * (`forward-receipts.ts` CREDENTIAL_MINTS).
  */
 export class FreewayApprover {
   constructor(private readonly opts: FreewayApproverOptions) {}
@@ -623,13 +651,7 @@ export class FreewayApprover {
     if (!FreewayApproveParams.safeParse(params ?? {}).success)
       throw new RpcCallError("PRECONDITION_FAILED", "expected {}", false);
     const principal = ctx.principal;
-    if (principal.kind === "peer-fieldd")
-      throw new RpcCallError(
-        "UNAVAILABLE",
-        "an approval forwarded for a phone on another desktop is not served yet (FW-D5)",
-        false,
-        { service: FREEWAY_APPROVAL.SERVICE, state: FREEWAY_APPROVAL.STATE_FORWARDING_UNBUILT },
-      );
+    if (principal.kind === "peer-fieldd") return this.checkForwarded(principal, ctx.onBehalfOf);
     if (principal.kind !== "tailnet" || principal.self !== true)
       throw new RpcCallError(
         "FORBIDDEN_SCOPE",
@@ -662,6 +684,40 @@ export class FreewayApprover {
       );
     this.live();
     return { deviceId, login: principal.login, tailscaleId, rights: rightsFor(principal) };
+  }
+
+  /** F1b — the ask a self peer daemon forwards for the phone behind it (the class's comment). */
+  private checkForwarded(
+    principal: CallerContext["principal"],
+    forwardedFor: ForwardedFor | undefined,
+  ): FreewayApprovalAsk {
+    const deviceId = forwardedFor?.clientDeviceId;
+    if (deviceId === undefined)
+      throw new RpcCallError(
+        "FORBIDDEN_SCOPE",
+        "an approval is the phone's: a peer daemon forwards one only for the phone behind it",
+        false,
+        { method: "freeway.approve", principal: principal.kind },
+      );
+    const row = this.opts.roster.get(deviceId);
+    if (row !== undefined && (row.self || row.capabilities?.docHost === true))
+      throw new RpcCallError(
+        "FORBIDDEN_SCOPE",
+        "an approval is a phone's; a desktop's link carries none",
+        false,
+        { method: "freeway.approve", principal: "desktop" },
+      );
+    const tailscaleId = row?.tailscaleId;
+    const login = this.opts.linkedLogin();
+    if (tailscaleId === undefined || login === null)
+      throw new RpcCallError(
+        "UNAVAILABLE",
+        "this desktop's roster does not know the phone the peer named yet",
+        true,
+        { service: FREEWAY_APPROVAL.SERVICE, state: FREEWAY_APPROVAL.STATE_UNCORRELATED },
+      );
+    this.live();
+    return { deviceId, login, tailscaleId, rights: rightsFor(principal, forwardedFor) };
   }
 
   /** The mint itself — called inside the audit's attempt (daemon.ts). The key, its generation and

@@ -117,7 +117,7 @@ describe("the projection bench (PG-1e0)", () => {
       await timed(prepared, null);
       for (const cut of BENCH_CUTS) await timed(prepared, cut);
       const baselines: number[] = [];
-      const added: Record<BenchCut, number[]> = { model: [], desk: [], field: [] };
+      const added: Record<BenchCut, number[]> = { model: [], remote: [], field: [] };
       for (let round = 0; round < rounds; round += 1) {
         for (const cut of BENCH_CUTS) {
           const base = await timed(prepared, null);

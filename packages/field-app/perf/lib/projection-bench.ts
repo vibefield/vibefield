@@ -4,20 +4,23 @@ import {
   type AgentFieldSnapshot,
   type AgentListResult,
   type AgentModelDelta,
+  type AgentRemoteDelta,
   type AgentSessionSummary,
 } from "@vibefield/contracts";
 import type { MonitorAgentRow } from "@vibefield/puppeteer-view-sdk/model";
 import {
   createFieldSubscription,
-  deskProjector,
   type ProjectedFieldRow,
   projectDeskRow,
   projectFieldRow,
   projectModelTerminalRow,
+  projectRemoteRow,
+  projectRemoteTerminalRow,
   type RowProjector,
 } from "../../../fieldd/src/agent-field";
 import {
   createModelSubscription,
+  createRemoteSubscription,
   type ModelBoardSources,
 } from "../../../fieldd/src/agent-model-board";
 import {
@@ -48,8 +51,9 @@ import {
 // `openLocalBoard` wires them:
 //   · `model` — its own windows: the model board at `AGENT_FIELD.FULL_TICK_MS`
 //     with the urgent edge, agents and bare terminals;
-//   · `desk` — a peer desktop's hub: the desk board at
-//     `DESK_MIN_INTERVAL_MS`, the mesh heartbeat, woken by the backend too;
+//   · `remote` — a peer desktop's hub (PG-2; the `desk` board until then): the
+//     remote board at `REMOTE_MIN_INTERVAL_MS`, the mesh heartbeat, woken by the
+//     backend too;
 //   · `field` — the phone: the field board at `MIN_INTERVAL_MS`, the fold's
 //     alone.
 // The bench hosts the corpus's own desktop as `model-stream.ts` does and runs
@@ -57,7 +61,7 @@ import {
 //   · COUNTS — the sources a cut reads are wrapped, so every apply, every item
 //     it projects and every stamp it makes is counted; the stamps are re-derived
 //     by the same exported projectors the cut runs (`projectDeskRow` for the
-//     window, `projectModelTerminalRow`, the desk and field projectors), and the
+//     window, `projectModelTerminalRow`, the remote and field projectors), and the
 //     frames it emits are counted as sent. Deterministic: any host serves.
 //   · CPU — the same replay with nothing wrapped, `process.cpuUsage` around the
 //     ticks, beside a pass with no cut at all, interleaved so each cut's pass has
@@ -69,13 +73,13 @@ import {
 // No fieldd line is touched: the cuts are fieldd's own, imported as the model
 // stream imports them.
 
-export type BenchCut = "model" | "desk" | "field";
-export const BENCH_CUTS: readonly BenchCut[] = ["model", "desk", "field"];
+export type BenchCut = "model" | "remote" | "field";
+export const BENCH_CUTS: readonly BenchCut[] = ["model", "remote", "field"];
 
 /** Each cut's floor, as the daemon's askers ask it. */
 export const CUT_FLOOR_MS: Record<BenchCut, number> = {
   model: AGENT_FIELD.FULL_TICK_MS,
-  desk: AGENT_FIELD.DESK_MIN_INTERVAL_MS,
+  remote: AGENT_FIELD.REMOTE_MIN_INTERVAL_MS,
   field: AGENT_FIELD.MIN_INTERVAL_MS,
 };
 
@@ -262,14 +266,16 @@ function runtimeListing(desktop: HostedDesktop): () => AgentListResult {
   };
 }
 
-/** The model board's sources, counted: `itemsOf`'s own reads (the listing, a
- * run's model row, the bare terminals and each one's join), each item's stamp
- * re-derived as `projectItem` derives it. */
+/** A model cut's sources, counted: `itemsOf`'s own reads (the listing, a run's
+ * model row, the bare terminals and each one's join), each item's stamp
+ * re-derived as the cut's projector derives it — the window's (`model`), or the
+ * peer's (`remote`, which projects only the runs the backend has assembled). */
 function countedModelSources(
   desktop: HostedDesktop,
   list: () => AgentListResult,
   meter: Meter,
   chars: number,
+  cut: "model" | "remote",
 ): ModelBoardSources {
   let sessions = new Map<string, AgentSessionSummary>();
   let terminals = new Map<string, MonitorAgentRow>();
@@ -288,8 +294,10 @@ function countedModelSources(
       rowForRun: (runtimeRunId) => {
         const row = desktop.service.rowForRun(runtimeRunId);
         const summary = sessions.get(runtimeRunId);
-        if (summary !== undefined)
-          meter.stamp(runtimeRunId, projectDeskRow(summary, chars, row, "window"));
+        if (summary !== undefined && cut === "model")
+          meter.stamp(runtimeRunId, projectDeskRow(summary, chars, row));
+        if (summary !== undefined && cut === "remote" && row !== undefined)
+          meter.stamp(runtimeRunId, projectRemoteRow(summary, row, chars));
         return row;
       },
       terminalRows: () => {
@@ -300,7 +308,13 @@ function countedModelSources(
       terminalJoin: (sessionId) => {
         const join = desktop.service.terminalJoin(sessionId);
         const row = terminals.get(sessionId);
-        if (row !== undefined) meter.stamp(row.id, projectModelTerminalRow(row, join ?? {}));
+        if (row !== undefined)
+          meter.stamp(
+            row.id,
+            cut === "model"
+              ? projectModelTerminalRow(row, join ?? {})
+              : projectRemoteTerminalRow(row, join ?? {}, chars),
+          );
         return join;
       },
     },
@@ -316,36 +330,41 @@ function countedProjector(project: RowProjector, meter: Meter): RowProjector {
   };
 }
 
-/** The desk board's wake-ups: the fold's publish AND the backend's changes (a
- * peer's cut carries the model row), as `openLocalBoard` subscribes it. */
-function deskWake(desktop: HostedDesktop): (fn: () => void) => () => void {
-  return (fn) => {
-    const offFold = desktop.fold.subscribe(fn);
-    const offModel = desktop.service.subscribe(() => fn());
-    return () => {
-      offFold();
-      offModel();
-    };
-  };
-}
-
 /** A cut attached to a hosted desktop; counted when a meter and a tally are
  * given, bare otherwise (the CPU passes). */
 function attachCut(cut: BenchCut, counted?: { meter: Meter; sent: Sent }): Attach {
   const chars = AGENT_FIELD.DESK_TEXT_CHARS;
   return (desktop) => {
     const list = runtimeListing(desktop);
+    const sources = (modelCut: "model" | "remote"): ModelBoardSources =>
+      counted !== undefined
+        ? countedModelSources(desktop, list, counted.meter, chars, modelCut)
+        : {
+            fold: { list, subscribe: (fn) => desktop.fold.subscribe(fn) },
+            monitor: desktop.service,
+          };
     if (cut === "model") {
       const board = createModelSubscription({
-        ...(counted !== undefined
-          ? countedModelSources(desktop, list, counted.meter, chars)
-          : {
-              fold: { list, subscribe: (fn) => desktop.fold.subscribe(fn) },
-              monitor: desktop.service,
-            }),
+        ...sources("model"),
         emit: (delta: AgentModelDelta) => counted?.sent.delta(delta),
         epoch: "bench-model.1",
         minIntervalMs: CUT_FLOOR_MS.model,
+        chars,
+      });
+      return board.dispose;
+    }
+    if (cut === "remote") {
+      const board = createRemoteSubscription({
+        ...sources("remote"),
+        emit: (frame, kind) => {
+          if (counted === undefined) return;
+          if (kind === "delta") counted.sent.delta(frame as AgentRemoteDelta);
+          else counted.sent.snapshot(frame);
+        },
+        epoch: "bench-remote.1",
+        minIntervalMs: CUT_FLOOR_MS.remote,
+        heartbeatMs: AGENT_FIELD.MESH_HEARTBEAT_MS,
+        terminalPublished: () => true,
         chars,
       });
       return board.dispose;
@@ -356,22 +375,17 @@ function attachCut(cut: BenchCut, counted?: { meter: Meter; sent: Sent }): Attac
       meter?.begin();
       return rows;
     };
-    const project =
-      cut === "desk"
-        ? deskProjector((runtimeRunId) => desktop.service.rowForRun(runtimeRunId), chars)
-        : projectFieldRow;
     const board = createFieldSubscription({
       list: meter !== undefined ? listed : list,
-      subscribe: cut === "desk" ? deskWake(desktop) : (fn) => desktop.fold.subscribe(fn),
+      subscribe: (fn) => desktop.fold.subscribe(fn),
       emit: (frame: AgentFieldDelta | AgentFieldSnapshot, kind) => {
         if (counted === undefined) return;
         if (kind === "delta") counted.sent.delta(frame as AgentFieldDelta);
         else counted.sent.snapshot(frame);
       },
       epoch: `bench-${cut}.1`,
-      project: meter !== undefined ? countedProjector(project, meter) : project,
+      project: meter !== undefined ? countedProjector(projectFieldRow, meter) : projectFieldRow,
       minIntervalMs: CUT_FLOOR_MS[cut],
-      ...(cut === "desk" ? { heartbeatMs: AGENT_FIELD.MESH_HEARTBEAT_MS } : {}),
       terminalPublished: () => true,
     });
     return board.dispose;

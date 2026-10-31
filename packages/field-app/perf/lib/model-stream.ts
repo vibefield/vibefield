@@ -9,8 +9,10 @@ import {
   type TerminalInfo,
 } from "@vibefield/contracts";
 import { createMemoryProjectIdentityStore } from "@vibefield/puppeteer-monitor";
-import { createFieldSubscription, deskProjector } from "../../../fieldd/src/agent-field";
-import { createModelSubscription } from "../../../fieldd/src/agent-model-board";
+import {
+  createModelSubscription,
+  createRemoteSubscription,
+} from "../../../fieldd/src/agent-model-board";
 import {
   type AgentMonitorService,
   createAgentMonitorService,
@@ -55,12 +57,12 @@ import {
 //   · this desktop: `createAgentMonitorService` (the backend and its host port,
 //     `agent-monitor.ts`) under `createModelSubscription` (the model board, its
 //     16 ms floor and its urgent leading edge, L12);
-//   · the peer: its OWN service and backend under its desk cut
-//     (`createFieldSubscription` + `deskProjector`, the 100 ms floor and the
-//     heartbeat a mesh upstream asks for), every frame through JSON as the
-//     federated link carries it;
+//   · the peer: its OWN service and backend under its remote cut
+//     (`createRemoteSubscription`, PG-2; its desk cut before: the 100 ms floor
+//     and the heartbeat a mesh upstream asks for), every frame through JSON as
+//     the federated link carries it;
 //   · the relay: `MeshBoard` itself, `model` projection — this desktop's model
-//     board beside the peer's desk board, multiplexed, never re-folded (DS-D4).
+//     board beside the peer's remote board, multiplexed, never re-folded (DS-D4).
 //
 // TIME is virtual and the caller's (vitest's fake timers, installed at the
 // recipe's `baseWall`): every timer the daemon's code arms — the backend's
@@ -297,30 +299,23 @@ export async function computeModelStream(
       });
       return { snapshot: { ...local.snapshot, epoch }, dispose: local.dispose };
     },
-    // the peer's door: `agent.subscribe {projection: "desk", minIntervalMs,
-    // heartbeatMs}` at ITS local scope, answered by its own fieldd
+    // the peer's door: `agent.subscribe {projection: "remote", minIntervalMs,
+    // heartbeatMs}` at ITS local scope, answered by its own fieldd (PG-2; its
+    // desk cut before)
     upstreams: {
       attach: async (_device, _method, params, emit) => {
         const ask = params as { minIntervalMs: number; heartbeatMs: number };
         const epoch = `${peer.device}-boot.${++epochs.peer}`;
-        const desk = createFieldSubscription({
-          list: () => peer.fold.list(),
-          subscribe: (fn) => {
-            const offFold = peer.fold.subscribe(fn);
-            const offModel = peer.service.subscribe(() => fn());
-            return () => {
-              offFold();
-              offModel();
-            };
-          },
+        const remote = createRemoteSubscription({
+          fold: peer.fold,
+          monitor: peer.service,
           // the kind as sent (PG-1d: a re-present or a repair rides `.snapshot`)
           emit: (frame, kind) => emit(wire(frame), kind),
           epoch,
-          project: deskProjector((runtimeRunId) => peer.service.rowForRun(runtimeRunId)),
           minIntervalMs: ask.minIntervalMs,
           heartbeatMs: ask.heartbeatMs,
         });
-        return { snapshot: wire({ ...desk.snapshot, epoch }), dispose: desk.dispose };
+        return { snapshot: wire({ ...remote.snapshot, epoch }), dispose: remote.dispose };
       },
     },
   });
@@ -414,7 +409,7 @@ export async function computeModelStream(
         here: corpus.meta.here,
         peer: corpus.meta.peer,
         marker: corpus.meta.marker,
-        floors: { model: AGENT_FIELD.FULL_TICK_MS, desk: AGENT_FIELD.DESK_MIN_INTERVAL_MS },
+        floors: { model: AGENT_FIELD.FULL_TICK_MS, remote: AGENT_FIELD.REMOTE_MIN_INTERVAL_MS },
         counts: { open: 1, frames: modelFrames, marks, upserts, bytes },
       },
       frames,
