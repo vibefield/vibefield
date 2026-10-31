@@ -65,6 +65,7 @@ import {
   phoneDoor,
   phoneEnv,
   phoneProblems,
+  quitStaging,
   rowMark,
   type StillSeen,
   stillAddress,
@@ -629,6 +630,16 @@ describe("PT-S3 — the rows' judges", () => {
     expect(judgeGone({ ...gone, after: { ...gone.after, sessions: 2 } }).join(" ")).toMatch(
       /sessions 2 → 2/u,
     );
+  });
+});
+
+describe("PT-S3 — a row staged on Simulator.app NOT running (R7)", () => {
+  it("goes on only after quit-app read `quit` or `not-running`; any other word is STAGING NOT MET, said", () => {
+    expect(quitStaging("quit")).toBeNull();
+    expect(quitStaging("not-running")).toBeNull();
+    for (const word of ["failed", "refused", "stop", "unanswered"])
+      expect(quitStaging(word)).toBe(`quit-app read ${word}: Simulator.app may be running`);
+    expect(rowMark([], { staging: quitStaging("failed") }).mark).toBe("STAGING NOT MET");
   });
 });
 

@@ -930,6 +930,15 @@ export function judgeReload(s: ReloadSeen): string[] {
   return out;
 }
 
+/** A row staged on Simulator.app NOT running (SHOW-FRESH's fresh launch, OFF→BOOT's quit-app, SIM-GONE's Show): the
+ * quit's word must be `quit` or `not-running` — any other (the app outlived SIGTERM, a refusal) leaves it maybe running,
+ * and the row's press would be SIM-SHOW-RUNNING's case: STAGING NOT MET, said (R7). */
+export function quitStaging(quit: string): string | null {
+  return quit === "quit" || quit === "not-running"
+    ? null
+    : `quit-app read ${quit}: Simulator.app may be running`;
+}
+
 /** SIM-STOPPED (P8 amended): the cap's give-back — the quit, the pane's wake — judged in every branch; the word `stopped`
  * expected, with Try again's leg judged; any other word (`off` with P Shutdown: the quit shut P down) is RECORDED as a
  * finding, never green — its stopped face unwitnessed. A red give-back stays red over the word's record. */
@@ -1929,6 +1938,8 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
 
     await row("SIM-SHOW-FRESH", "MUST", async () => {
       const quit = await quitApp();
+      const running = quitStaging(quit);
+      if (running !== null) return { problems: [], staging: running, seen: { quit } };
       const booted = await ensure(3, "Booted");
       if (booted !== null) return { problems: [], staging: booted };
       await openUrl(3, "/motion", nonce());
@@ -1971,6 +1982,8 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
 
     await row("SIM-OFF-BOOT", "MUST", async () => {
       const quit = await quitApp();
+      const running = quitStaging(quit);
+      if (running !== null) return { problems: [], staging: running, seen: { quit } };
       const off = await ensure(1, "Shutdown");
       if (off !== null) return { problems: [], staging: off };
       await view([p]);
@@ -2615,9 +2628,8 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
       if (r === "") return { problems: [], staging: "φR was never laid (SIM-SHOW-FRESH)" };
       // Show on a FRESH launch: SIM-STOPPED's Try again left Simulator.app up, and Show over a running app is
       // SIM-SHOW-RUNNING's may-be-red case, outside this row's Proves (R5)
-      const quit = await quitApp();
-      if (quit !== "quit" && quit !== "not-running")
-        return { problems: [], staging: `quit-app read ${quit}: Simulator.app may be running` };
+      const running = quitStaging(await quitApp());
+      if (running !== null) return { problems: [], staging: running };
       await js("globalThis.__vfDesk.liveGrace(1000)");
       const proof = await bringLive("SIM-GONE", r, 3, nonce());
       const now = (): { runtimes: number; sessions: number; active: number } => ({
