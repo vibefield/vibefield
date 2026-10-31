@@ -43,6 +43,7 @@ const {
   isOwnName,
   launchChecks,
   launchExit,
+  MAX_DEADLINE_MS,
   MODE_ROWS,
   nativeFresh,
   NONE_DEVELOPER_DIR,
@@ -339,6 +340,23 @@ test("readOptions: the run, the HID log, a 30-minute deadline by default, and KE
   });
   assert.equal(bad.errors.length, 4);
   assert.equal(bad.deleteDevices, false);
+});
+
+test("readOptions: the deadline is bounded at 6 h — a timer past 2^31-1 ms fires at once, and caffeinate's adds an hour (S-6)", () => {
+  const at = (ms) =>
+    readOptions({
+      VF_PHONE_RUN: "l2-t1",
+      VF_PHONE_HID_LOG: "/lanes/pts3/logs/l2-t1/l2-t1-hid.log",
+      VF_PHONE_DEADLINE_MS: String(ms),
+    });
+  // Node clamps a setTimeout past 2^31-1 ms to 1 ms: the command would be stopped at its first millisecond
+  for (const over of [2 ** 31, 2 ** 31 - 3_600_000, 6 * 3_600_000 + 1, 1e12])
+    assert.match(at(over).errors.join("\n"), /VF_PHONE_DEADLINE_MS .*≤ 6 h/u, String(over));
+  assert.equal(MAX_DEADLINE_MS, 6 * 3_600_000);
+  assert.deepEqual(at(MAX_DEADLINE_MS).errors, []);
+  assert.equal(at(MAX_DEADLINE_MS).deadlineMs, MAX_DEADLINE_MS);
+  // the bound and caffeinate's extra hour both fit a 32-bit timer
+  assert.ok(MAX_DEADLINE_MS + 3_600_000 <= 2 ** 31 - 1);
 });
 
 test("commandEnv: DEVELOPER_DIR never reaches the command; none points the product at /var/empty; types, never UDIDs", () => {

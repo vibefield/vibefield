@@ -13,7 +13,7 @@
 //   VF_PHONE_RUN               the run's id, `^[a-z0-9]+(-[a-z0-9]+)*$` (its devices are `pts3-<runId>-1..3`)
 //   VF_PHONE_HID_LOG           `<logs>/<run>/<run>-hid.log`: the HID record; `shots/` is made beside it, and ENUM's
 //                              record (`phone-enum.json`) lives in `<logs>`, where every launch reads it
-//   VF_PHONE_DEADLINE_MS       past it the command is stopped and the host restored (default 30 min)
+//   VF_PHONE_DEADLINE_MS       past it the command is stopped and the host restored (default 30 min, at most 6 h)
 //   VF_PHONE_DELETE_DEVICES=1  teardown (and --sweep) DELETES the run's own devices; unset, they are KEPT, shut down and
 //                              named (P5's default; the console runs set it on James's word, brief §13 RM2)
 //   VF_PHONE_GUARD_AWK, VF_PHONE_PERF_LOCK, VF_PHONE_DISK_FLOORS (`<path>:<GiB>[,…]`)
@@ -81,6 +81,9 @@ const ROOT = resolve(import.meta.dirname, "..");
 export const MODES = ["none", "devices", "cost"];
 export const RUN_ID = /^[a-z0-9]+(-[a-z0-9]+)*$/u;
 export const DEFAULT_DEADLINE_MS = 30 * 60_000;
+/** S-6: the deadline's bound. Node fires a timer set past 2^31-1 ms at once, and caffeinate's is the deadline plus an
+ * hour: 6 h keeps both inside a 32-bit timer, far past any run's need. */
+export const MAX_DEADLINE_MS = 6 * 3_600_000;
 export const NOT_ARMED = 75;
 /** P10: a windowed row arms only on an unlocked console nobody has touched for this long. */
 export const HID_IDLE_FLOOR_S = 120;
@@ -211,8 +214,10 @@ export function readOptions(env) {
   const rawDeadline = env.VF_PHONE_DEADLINE_MS;
   const deadlineMs =
     rawDeadline === undefined || rawDeadline === "" ? DEFAULT_DEADLINE_MS : Number(rawDeadline);
-  if (!Number.isInteger(deadlineMs) || deadlineMs <= 0)
-    errors.push("VF_PHONE_DEADLINE_MS must be a positive whole number of ms");
+  if (!Number.isInteger(deadlineMs) || deadlineMs <= 0 || deadlineMs > MAX_DEADLINE_MS)
+    errors.push(
+      `VF_PHONE_DEADLINE_MS must be a whole number of ms, > 0 and ≤ 6 h (${MAX_DEADLINE_MS})`,
+    );
   const del = env.VF_PHONE_DELETE_DEVICES;
   if (del !== undefined && del !== "" && del !== "0" && del !== "1")
     errors.push("VF_PHONE_DELETE_DEVICES is 1 (delete the run's own devices) or unset (keep them)");
