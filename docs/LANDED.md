@@ -20904,3 +20904,105 @@ manifest's scopes and the attach.
 - **PT-S4, touch,** through serve-sim: an EL8 pin event, loopback only, never `--allow-exec`.
 - The lane's records (the light log, the landing log's entries) go to the next draft queue, not main.
 - The lane `/Volumes/SamsungRed/lanes/pts2` holds about 3.7 GB. Reclaiming it is James's.
+
+## PG-1a…1c — the desktop's efficiencies first: the model's attach promise withdrawn with the join (1a); the mesh relay reads each peer row's key alone, and the window screens each desktop (1b); a phone behind the door's 256 KiB cap gets the board as it is (1c) (PG-D9 A, PG-D11 A) (2026-10-31; `1790be95f`, the merge of main `204240a7b` into `83e08f1e1` on item 100's `a025af02e`, lane `pg/1c-tailnet-backpressure`)
+
+**What.** James opened the track in chat on 2026-10-29 (07:24Z and 07:25Z: "full godview experience on phone", over
+the backend model, aligned with the sync-plane design). He ruled the slate on the page *The Phone's Godview*
+(https://claude.ai/artifact/AAYgPk8oLbw7RZkanc4mhF) between 08:17:14Z and 08:30:42Z: all ten (a), nine at their
+leans. PG-D9 (a) puts the audit's efficiencies first, as desktop gains of their own, before any phone replica. He
+ruled PG-D11 A on the PM board at 16:22:36Z. VF-PM sliced PG-1 at the leans (13:16Z, the brief
+`lanes/ios/PG1-BRIEF.md`). Five commits on item 100's `a025af02e`, 17 files, +1312 −37:
+- **PG-1a (`e9a57b4b6`): F-M4 on the model's promise.** While this device's terminal doors were unpublished,
+  `attachableRows` withheld the desk row's `terminal` join but passed the backend's own `monitorRow.attachable` and
+  `.writable`. A peer window read `attachable: true` with no join, fell back to the run id and asked the owner for a
+  session its floor may not hold. `withholdAttachPromise` now says `attachable: false`, and `writable: false` where
+  declared, while the doors are down, with the keys in order. No wire shape, contract, gen or kit change: the values
+  move.
+- **PG-1b (`f2d76f7bf`, `8a3b64ced`): the key-only relay, and the window's screen.**
+  - The mesh relay (PG-L4.1) parsed every peer frame as whole field rows though it reads only the key, so one row this
+    build could not read refused or resynced the whole desktop. It now parses `AgentBoardKeySnapshot` and
+    `AgentBoardKeyDelta`, over contracts' additive, TS-only `AgentBoardRowKey {runtimeRunId, revision}`, and every
+    envelope rule stands. No wire bytes change.
+  - The window (admitted into 1b by VF-PM, 13:16Z): `godview/monitor/board-screen.ts` reads each row alone before the
+    envelope. An unreadable row is dropped, and its desktop reads as another version while it holds one; its readable
+    rows stand, with no gap and no reopen.
+  - The review's three (`8a3b64ced`): the contracts test's optional epoch under `exactOptionalPropertyTypes`; a shown
+    row that turns unreadable leaves the board; "another version" is stamped now.
+- **PG-1c (`2392b0ef8`, `83e08f1e1`): tailnet backpressure (PG-D11 A).**
+  - The number, in one place: `PRODUCT_API_LIMITS.TAILNET_QUEUED_BYTES = 256 * 1024`; the drain point is derived at
+    half.
+  - The door (`product-api.ts`): a `tailnet` principal's subscription that declares a `resync` is held once the
+    connection's queue reaches the cap. Its deltas stop, sticky until a resync; snapshots are never held. Every
+    write's callback is the drain check, and at half the cap ONE fresh snapshot is sent. A resync that throws closes
+    the connection.
+  - Who and what (VF-PM, 14:15Z): the phone alone (the `tailnet` principal) and the mesh board alone
+    (`MeshBoard.subscribe`'s install; its resync is the open a reader joining now would get, at the owners'
+    revisions). A peer daemon on the same door, and loopback, keep the 128 MiB shed.
+  - The review's five (`83e08f1e1`): a board past the cap held itself in a loop, so its own queued snapshots now never
+    count (`Hold.inflight`); the install moved onto the board, so a deleted daemon line fails a row; a red-first row
+    that was green at the parent; the registry's note.
+  - The kit (EL9, one test row): `aMidStreamMeshSnapshotReplacesTheBoardWithoutAskingAgain` pins the phone's routing
+    of a mid-stream snapshot. No kit product change.
+
+**Found:**
+- F-M4's promise gap (1a) and a single unreadable peer row refusing a whole desktop at the relay (1b): the two defects
+  the slices fix.
+- 1c's first cut held a board past the cap in a loop with its own snapshots (the review, from two lenses).
+- The phone's History tail and `project.subscribe` stay on the shed, each its own item, both reachable today: 109 (a
+  tail reset's hole below the newest 100 rows) and 110 (the phone's no-op snapshot).
+- The first kit try (10-29 14:35Z) named the test FILE in `-only-testing`, matched nothing, and exited 0 with
+  "Executed 0 tests": a false green, caught because the script grepped for the row. `pg1c-kit.sh` now names the
+  `@Suite` and requires the named row to run and pass.
+- Main gained PT-S2 (`e4aa3d367`) between the first simulated mint and run 18, touching `daemon.ts` and
+  `product-api.ts` beside PG-1, so the light was run again on the real pairing.
+
+**Validation.**
+- **The lane:** `/Volumes/SamsungRed/lanes/ios` (the worktree `vibe-field`), 1a → 1b → 1c as one line on item 100,
+  tip `83e08f1e1` on `pg/1c-tailnet-backpressure`.
+- **The light and red-first, 10-29, at each slice's tip** (`pg1-light.sh`, at nice 19 under the guard: the green half
+  at the slice's tip, then the slice's tests on its parent, which must go red):
+  - 1a at `e9a57b4b6`: red at `a025af02e` (fieldd, 3 of 52); green 13:39:16Z (contracts 35, fieldd 81 in 5 files,
+    field-app 21).
+  - 1b at its first cut `4d3053fe0` (1b alone on item 100): red in contracts (3 of 38), fieldd (3 of 25) and
+    field-app (1 of 13); green 13:40:14Z (contracts 38, fieldd 82, field-app 29).
+  - 1c at `83e08f1e1`: red at `8a3b64ced` in contracts (1 of 44) and fieldd (9 of 37); green 14:33:50Z (contracts 82,
+    fieldd 104 in 7 files, field-app 29).
+  Logs: `lanes/ios/logs/pg1-light-*`, `pg1-light-run.out`, `pg1c-run.out`.
+- **The kit row at `83e08f1e1`** (Xcode 26.6, the iPhone 17 Pro simulator): build-for-testing, then
+  `FieldLinkHomeFieldTests` 6 of 6 with the named row passed, 14:36:55Z. Logs: `lanes/ios/logs/kit-83e08f1e1/`.
+- **The sim light, 10-31 00:41:19Z,** over a simulated mint: main `265325d09` + item 105 `f948f0088`, then
+  `83e08f1e1` (`pg/sim-run18`, `25ff2105b`, tree `824068067`, never pushed), because item 105 and PG-1 share four
+  files. Preflight, the walls, the iOS fixtures, biome and the three typechecks; contracts 92, fieldd 128 (8 files,
+  item 105's `index-activity-doors` among them), field-app 29. Logs: `lanes/ios/logs/pg1-sim-light-25ff2105b*`.
+- **The light on the real pairing `a3e35579f`, 01:02:30Z** (`204240a7b` + `83e08f1e1`, tree `621b2400f`, M18's): the
+  same rows, green. Its typecheck covers PT-S2's `daemon.ts` and `product-api.ts` beside PG-1's. Logs:
+  `lanes/ios/logs/pg1-sim-light-a3e35579f*`.
+- **Kit row on the real pairing `a3e35579f`, this Mac, 01:04:56Z:** build-for-testing exit 0, then
+  `FieldLinkHomeFieldTests` 6 of 6 with the named row passed. Logs: `lanes/ios/logs/kit-a3e35579f/`.
+- **No verify on this Mac** (James, 2026-10-29 09:05Z: the Mac mini's verify lane).
+- **The landed tip** is `1790be95f` (M18): main `204240a7b` merged into `83e08f1e1` by a9, tree `621b2400f`. Six files
+  sit on both sides (contracts' `agent-field.ts`, `registries.ts` and `registry.test.ts`; fieldd's `agent-field.ts`,
+  `daemon.ts` and `product-api.ts`), each ours + theirs − base exactly, with 0 markers. The bundle
+  `lanes/ios/pg1-83e08f1e1.bundle` (sha256 `1cd7949f…`) requires item 100's `a025af02e` alone.
+- **The mini, run 18, `pnpm verify` at `1790be95f`:** exit 0, armed 01:01:04Z, done 01:05:39Z (load 1.82 → 9.28),
+  whole: preflight through `gen:check`.
+  - `pnpm test` ran 28 projects: vitest 10,464 passed, 0 failed, 18 skipped. Contracts 1340, field-app 3040, fieldd
+    2655 + 11 skipped, electron-shell 2174 + 3 skipped; `tailnet-backpressure` (10) and `board-screen` (7) among them.
+  - `pnpm test:rust`: 499 passed, 0 failed, 14 ignored, over 31 binaries. The tree was clean after, with no stub left.
+  Logs: `lanes/ts6/logs/mini/run18/`.
+- **Landed:** main fast-forwarded `204240a7b` → `1790be95f` at 01:07:32Z on VF-PM's GO, and was pushed at 01:08:04Z.
+
+**Records.** The design record is `draft/thinking-phone-godview.md` (§7 the ruled table, §8 the ladder, each rung as
+built). Its §8 "NOT LANDED" and the PG-D11 clauses at design-06, thinking-sync-planes and thinking-upload-plane ride
+the next draft queue. DECISIONS gains the PG row, and ROADMAP the PG track.
+
+**Owed.**
+- PG-1d (re-present an unchanged row when the doors' gate flips: F-M4's residual), PG-1e0 (the projection bench, then
+  1e1 or 1e2 by the numbers) and PG-1f (the puppeteer-monitor step-idle petition and its pin test). A new reader of an
+  old owner keeps the run-id fallback: a PG-1d candidate, and a design question.
+- PG-0, the records at their sources (`860a2449f`, queued). Then the agent-plane pages' clauses (api.html's
+  subscription byte bound, system.html's "never capped", the model's promise), which follow PG-0's edit of api.html.
+- The cap read on the phone under the Network Link Conditioner (PG-9): `bufferedAmount` is fieldd's own queue, and
+  the sidecar's and tsnet's buffers lie past it.
+- Items 109 and 110.

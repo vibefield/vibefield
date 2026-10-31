@@ -35,9 +35,9 @@
   fixed it). `nightly-20261028` may dispatch on the green head (`scripts/release-plan.mjs:62`: never from a red trunk).
   Since the audit's base (`bb1a2c823`): AL-9, items 82–84, TS-8a/8b, the TS-3a erratum, AO-6b3 and QW1 stack A landed;
   then HK, the EL8 to puppeteer 0.3.0 (`1469639a6`) and QW1 stack B (10-28).
-- **The live program.** §2: TS, AO, FG, AL, **AU (updates that wait)**, QW1 (the Godview swarm's fix wave 1), PT-S
-  (PORTALS' phone, resumed 10-29), the release rails, the EL8 watch, the fixer, upstream. The first-beta blockers
-  are §3 item 7. Everything valid but unscheduled is §4.
+- **The live program.** §2: TS, AO, FG, AL, **AU (updates that wait)**, **PG (the phone's Godview)**, QW1 (the Godview
+  swarm's fix wave 1), PT-S (PORTALS' phone, resumed 10-29), the release rails, the EL8 watch, the fixer, upstream.
+  The first-beta blockers are §3 item 7. Everything valid but unscheduled is §4.
 
 ## 2 Now — the active tracks
 
@@ -120,6 +120,18 @@
   through the app menu (AU-4's eyeball, LC-28); AU-5's install-on-quit and AU-7's Move rows on the mini between two
   signed nightlies, then LC-49's "or quit" words in one line; the quit run's TCC probe; the logout probe; LC-52
   ("Check for Updates…" keeps its ellipsis, though the item does not open a box) is James's.
+
+**PG — the phone's Godview** · vibe-field-fd (lane `lanes/ios`) · law `draft/thinking-phone-godview.md` §7/§8 (the page *The Phone's Godview*, AAYgPk8o), `design-mv.md`, `design-06-sync-planes.md`
+- Ruled 10-29 08:17–08:30Z (James, on the page): all ten (a), nine at their leans; PG-D3 (a), native transcriptions,
+  against the lean. PG-D11 A at 16:22:36Z (the PM board): the phone's queue cap is 256 KiB.
+- Landed 10-31: **PG-1a…1c**, the desktop's efficiencies first (PG-D9): the model's attach promise withdrawn with the
+  join (`e9a57b4b6`), the key-only relay and the window's per-desktop screen (`f2d76f7bf`, `8a3b64ced`), and tailnet
+  backpressure at 256 KiB (`2392b0ef8`, `83e08f1e1`), as the merge `1790be95f`, run 18 (LANDED "PG-1a…1c").
+- Next: PG-0, the records at their sources (`860a2449f`), in the queue after the CP stack, HN B1, item 102, HN B2/B3
+  and AU B4; PG-1d → PG-1e0, with PG-1f in parallel. Then PG-2 (the remote cut) → PG-3 (the phone's replica under the
+  swarm) → PG-5…PG-8 (list, timeline, spend, rain, native) → PG-9 (resume, `agent.get`, the measured rates).
+- Owed: items 109 (the History tail's reset hole) and 110 (`project.subscribe`'s no-op snapshot on the phone), both on
+  the shed; the agent-plane pages' clauses, after PG-0; the cap read on the phone under the link conditioner (PG-9).
 
 **QW1 — the Godview swarm QA, fix wave 1** · vibe-field-d4 · law `draft/testing/godview-swarm-qa-plan.md` v0.3 §12.1, `draft/thinking-ar-reattach.md` §6
 - Ruled: the plan (A01–A27, X01–X26, Q01–Q21; page 3ZrkUWG4) and re-attach's RA-D1…RA-D9 (10-27, every pick at the
@@ -248,8 +260,8 @@
    - Q4: the explorer thumbnail follows an edit by ≈22 s (ICE's ambient wind, design-015 D-D9): pass a shorter
      `deskLayer({ ambientIdleMs })` (ICE 0.16.0's option; VibeField passes none today).
    - Q5: a note held longer than 2.4 s shows its advice again.
-   - Q13: fieldd projects `costRatePerMin` on the desk row (`costUsd`/`costCoverage` since DS-3); the phone reads
-     `desk` (D-i18), and D-i20 is re-checked in the same slice.
+   - Q13 (`costRatePerMin` on the desk row, the phone reading `desk`, D-i18) is superseded by PG-D1 (a), 2026-10-29:
+     the phone reads the model's remote cut (PG-2, PG-3), and `desk` retires into it. D-i18's status flips in PG-0.
    - Q20: "Settings on demand" (replaces ESR's follow-on): SettingsPanel (`packages/field-app/src/panels/SettingsPanel.tsx`)
      becomes a lazy chunk, measured before and after.
    - Q21: TP-S3f's stated limit (a deliberate own kill never gets an event-driven face), verified after item 59
@@ -457,7 +469,8 @@
 
 **Files, phone, accounts**
 - EACCES is not yet honest words (the files service) — `build-hf.md` M3–M5.
-- AP-D7's protocol cause (low) — `thinking-ios-account.md`. (`costRatePerMin` on the desk row is §3 item 6, Q13.)
+- AP-D7's protocol cause (low) — `thinking-ios-account.md`. (Q13's `costRatePerMin` on the desk row is superseded by
+  PG-D1 (a).)
 - UA-P-6: fold UA-P-D1…D8 into a governing spec (`specs/users-and-accounts.md` names none) — `thinking-ua-phone-account.md` §7 UA-P-6.
 
 **Plugins**
@@ -524,6 +537,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | FG — the first run on the field | ACTIVE; FG-0…3a landed 10-30 | `thinking-first-run-glass.md`; DESIGN.md §2.1/§5/§6/§8/§13 | FG-3b |
 | AL — app lifecycle | ACTIVE; AL-1…3, 5, 7, 8a, 9 landed | `thinking-app-lifecycle.md`; ESR §7.3 | AL-6, Last exit, relaunch cap |
 | AU — Updates That Wait | ACTIVE; B1–B3 (AU-0…AU-5, AU-7) landed 10-30 | `thinking-update-ux.md` §7 (page sources `draft/update-ux/`); DESIGN.md §2.5/§2.8/§6/§8/§9/§13; EDP §5.2/§6.4/§11; ESR §7.3 | B4 (AU-6a, AU-6b), after HN B1 |
+| PG — the phone's Godview | ACTIVE; PG-1a…1c landed 10-31 | `thinking-phone-godview.md` §7/§8; `design-mv.md`; `design-06-sync-planes.md` | PG-0 (queued); PG-1d → PG-1e0 |
 | QW1 — Godview swarm QA, fix wave 1 | ACTIVE; stacks A and B landed 10-28, B on puppeteer 0.3.0's EL8 pin | `godview-swarm-qa-plan.md`; `thinking-ar-reattach.md` | QA wave 1 |
 | Release rails (EDP/ESP, WP12, TD, BP, RD, RM) | ACTIVE; nightlies live, W10/W11 passed | the release specs; `thinking-browser-profile.md`, `thinking-release-deps.md`, `thinking-release-management.md` | round 3; the first-beta list |
 | EL8 — pins | ACTIVE (watch) | DECISIONS TB; the manifests | puppeteer 0.3.0 pinned 10-28 (`1469639a6`); Swift rejoin; mille's release |
