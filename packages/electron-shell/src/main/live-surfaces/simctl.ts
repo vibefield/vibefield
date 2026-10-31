@@ -26,8 +26,13 @@ import type { BootedSimulatorDevice, SimulatorDeviceCatalog } from "./ios-simula
 // so nothing runs it until `xcode-select -p` names a developer directory that HOLDS simctl (a Command Line Tools-only
 // directory does not); every xcrun then runs with `DEVELOPER_DIR` set to the directory the probe vetted. A failed probe is
 // `SimctlUnavailableError`: the face's `no-simulator`, never a generic failure.
+// PT-S3 (P1, R5′) — the Command Line Tools selected BESIDE a full Xcode (this Mac's case: `xcode-select -p` names
+// `/Library/Developer/CommandLineTools`): when the answer is a well-formed directory without simctl, the probe tries the
+// default Xcode's — one fixed path, no search — and pins every xcrun to it. A failed or garbage answer has no fallback.
 
 const XCODE_SELECT_PATH = "/usr/bin/xcode-select";
+/** R5′: the default Xcode's developer directory — the ONE place the probe looks when xcode-select names one without simctl */
+const XCODE_DEVELOPER_DIR = "/Applications/Xcode.app/Contents/Developer";
 const XCRUN_PATH = "/usr/bin/xcrun";
 const OPEN_PATH = "/usr/bin/open";
 const MAX_SIMCTL_BYTES = 4 * 1024 * 1024;
@@ -53,6 +58,10 @@ export const SIMCTL_TIMEOUTS_MS = {
 /** THE ALLOW-LIST — the simctl verbs main may run, and no other. */
 export const SIMCTL_VERBS = ["list", "boot", "shutdown", "create"] as const;
 export type SimctlVerb = (typeof SIMCTL_VERBS)[number];
+
+/** PT-S3 (P1) — which answer the probe vetted: xcode-select's own, or the default Xcode's when xcode-select named a
+ * directory without simctl (R5′). */
+export type SimctlVetted = "xcode-select" | "fallback";
 
 /** One spawn of a fixed binary. `developerDir` rides as `DEVELOPER_DIR` (absent only for the probe itself). */
 export interface SimctlExecRequest {
@@ -415,6 +424,16 @@ function hasControlCharacters(value: string): boolean {
   return false;
 }
 
+/** A developer directory as an answer may name one: absolute, bounded, printable — a garbage answer is none. */
+function wellFormedDeveloperDir(value: string): boolean {
+  return (
+    value.length > 0 &&
+    value.length <= MAX_DEVELOPER_DIR_CHARS &&
+    isAbsolute(value) &&
+    !hasControlCharacters(value)
+  );
+}
+
 export interface SimctlServiceOptions {
   /** THE exec seam; production spawns with `execFile` */
   readonly exec?: SimctlExec;
@@ -429,6 +448,8 @@ export class SimctlService implements SimulatorDeviceCatalog {
   readonly #exists: (path: string) => boolean;
   readonly #now: () => number;
   #developerDir: string | null = null;
+  /** which answer vetted `#developerDir` (P1) — meaningful only while it is held */
+  #vettedBy: SimctlVetted | null = null;
   #probeFailedAt: number | null = null;
   #probing: Promise<string> | null = null;
   #snapshot: { readonly at: number; readonly value: SimctlSnapshot } | null = null;
@@ -459,6 +480,12 @@ export class SimctlService implements SimulatorDeviceCatalog {
       this.#probing = probing;
     }
     return await this.#probing;
+  }
+
+  /** PT-S3 (P1) — which answer the held developer directory came from (the census's word); null: none probed yet, the
+   * probe failed, or the directory was since lost (a list that failed re-probes). Reads; never probes. */
+  vetted(): SimctlVetted | null {
+    return this.#disposed || this.#developerDir === null ? null : this.#vettedBy;
   }
 
   /** The shared snapshot: one within a tick is every caller's; one list in flight is joined, never doubled (R8). */
@@ -617,9 +644,26 @@ export class SimctlService implements SimulatorDeviceCatalog {
   }
 
   private async probe(): Promise<string> {
-    let developerDir: string;
+    const vetted = await this.selected();
+    if (vetted === null) {
+      this.#probeFailedAt = this.#now();
+      throw new SimctlUnavailableError();
+    }
+    this.#probeFailedAt = null;
+    this.#developerDir = vetted.developerDir;
+    this.#vettedBy = vetted.by;
+    return vetted.developerDir;
+  }
+
+  /** R5′: xcode-select's answer when it holds simctl; when it is a well-formed directory WITHOUT simctl, the default
+   * Xcode's when THAT holds simctl; else none. A failed spawn or a garbage answer is none — never the fallback. */
+  private async selected(): Promise<{
+    readonly developerDir: string;
+    readonly by: SimctlVetted;
+  } | null> {
+    let answer: string;
     try {
-      developerDir = (
+      answer = (
         await this.#exec({
           file: XCODE_SELECT_PATH,
           args: ["-p"],
@@ -627,23 +671,20 @@ export class SimctlService implements SimulatorDeviceCatalog {
         })
       ).trim();
     } catch {
-      this.#probeFailedAt = this.#now();
-      throw new SimctlUnavailableError();
+      return null;
     }
-    if (
-      developerDir.length === 0 ||
-      developerDir.length > MAX_DEVELOPER_DIR_CHARS ||
-      !isAbsolute(developerDir) ||
-      hasControlCharacters(developerDir) ||
-      !this.#exists(join(developerDir, "usr", "bin", "simctl"))
-    ) {
-      // Command Line Tools alone (`/Library/Developer/CommandLineTools`) have no simctl: no Simulator, no xcrun
-      this.#probeFailedAt = this.#now();
-      throw new SimctlUnavailableError();
+    if (!wellFormedDeveloperDir(answer)) return null;
+    if (this.holdsSimctl(answer)) return { developerDir: answer, by: "xcode-select" };
+    // Command Line Tools alone (`/Library/Developer/CommandLineTools`) have no simctl — the default Xcode beside them may
+    if (this.holdsSimctl(XCODE_DEVELOPER_DIR)) {
+      return { developerDir: XCODE_DEVELOPER_DIR, by: "fallback" };
     }
-    this.#probeFailedAt = null;
-    this.#developerDir = developerDir;
-    return developerDir;
+    // neither: no Simulator, no xcrun
+    return null;
+  }
+
+  private holdsSimctl(developerDir: string): boolean {
+    return this.#exists(join(developerDir, "usr", "bin", "simctl"));
   }
 
   private async readList(): Promise<SimctlSnapshot> {
@@ -652,7 +693,10 @@ export class SimctlService implements SimulatorDeviceCatalog {
       raw = await this.simctl("list", ["--json"], SIMCTL_TIMEOUTS_MS.list);
     } catch (error) {
       // a developer directory that no longer holds simctl (Xcode moved or removed) is probed again next time
-      if (!(error instanceof SimctlUnavailableError)) this.#developerDir = null;
+      if (!(error instanceof SimctlUnavailableError)) {
+        this.#developerDir = null;
+        this.#vettedBy = null;
+      }
       throw error;
     }
     return parseSimctlSnapshot(raw);

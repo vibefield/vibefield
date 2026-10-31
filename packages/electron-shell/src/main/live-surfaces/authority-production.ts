@@ -13,7 +13,7 @@ import { SimulatorDeviceSessions } from "./ios-simulator-device-runtime";
 import {
   IosSimulatorLiveSurfaceRuntime,
   IosSimulatorSourceResolver,
-  SimctlDeviceCatalog,
+  type SimulatorDeviceCatalog,
 } from "./ios-simulator-producer";
 import { MacosCaptureHelperSupervisor } from "./macos-capture-helper";
 import { loadMacosCaptureNativeAdapter } from "./macos-capture-native";
@@ -29,7 +29,8 @@ import { SimctlService } from "./simctl";
 // (`ios-simulator-device`) is the exception — it MINTS everywhere and says
 // `no-simulator` where there is none (R5); its simctl is one lazy service,
 // independent of the capture stack, shared by every phone and the attach's
-// device list (R8).
+// device list (R8). PT-S3 (P1): and by the booted-simulator kind's catalog —
+// main's ONE simctl, so every xcrun main spawns is pinned to the vetted Xcode.
 
 export interface LiveSurfaceCapturePaths {
   readonly helperPath: string;
@@ -50,7 +51,8 @@ export interface ProductionLiveSurfaceSupport {
 interface CaptureStack {
   readonly supervisor: MacosCaptureHelperSupervisor;
   readonly resolver: IosSimulatorSourceResolver;
-  readonly devices: SimctlDeviceCatalog;
+  /** PT-S3 (P1): the shared simctl — never a catalog of its own, whose xcrun ran unpinned */
+  readonly devices: SimulatorDeviceCatalog;
   /** PT-S2: the bound phones' resolver — its devices are the shared simctl's snapshot, never a list of its own (R8) */
   readonly deviceResolver: IosSimulatorSourceResolver;
 }
@@ -99,7 +101,7 @@ export function createProductionLiveSurfaceSupport(opts: {
             { message },
           ),
       });
-      const devices = new SimctlDeviceCatalog({});
+      const devices = ensureSimctl();
       const resolver = new IosSimulatorSourceResolver({
         devices,
         windows: supervisor,

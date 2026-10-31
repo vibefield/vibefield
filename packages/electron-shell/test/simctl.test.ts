@@ -18,6 +18,8 @@ import {
 // PT-S2 — main's simctl, through its ONE exec seam: nothing here spawns; every request is recorded and scripted.
 
 const DEVELOPER_DIR = "/Applications/Xcode.app/Contents/Developer";
+/** PT-S3 (P1): what xcode-select names on a Mac whose Command Line Tools are selected */
+const CLT = "/Library/Developer/CommandLineTools";
 const XCODE_SELECT = "/usr/bin/xcode-select";
 const XCRUN = "/usr/bin/xcrun";
 const PRO = "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro";
@@ -92,12 +94,20 @@ interface HarnessOptions {
   readonly developerDir?: string;
   /** false: the developer directory holds no simctl (Command Line Tools alone) */
   readonly simctlInstalled?: boolean;
+  /** PT-S3 (P1): the developer directories that hold simctl — default: the selected one (none when `simctlInstalled` is
+   * false) */
+  readonly holdsSimctl?: readonly string[];
 }
 
 function harness(options: HarnessOptions = {}) {
   const calls: SimctlExecRequest[] = [];
+  /** every path the probe's file check was asked about */
+  const checked: string[] = [];
   const clock = { now: 50_000 };
   const developerDir = options.developerDir ?? DEVELOPER_DIR;
+  const holding = new Set(
+    options.holdsSimctl ?? (options.simctlInstalled === false ? [] : [developerDir]),
+  );
   let listing = options.list ?? listJson();
   const exec: SimctlExec = async (request) => {
     calls.push(request);
@@ -109,12 +119,15 @@ function harness(options: HarnessOptions = {}) {
   };
   const service = new SimctlService({
     exec,
-    exists: (path) =>
-      options.simctlInstalled !== false && path === `${developerDir}/usr/bin/simctl`,
+    exists: (path) => {
+      checked.push(path);
+      return [...holding].some((dir) => path === `${dir}/usr/bin/simctl`);
+    },
     now: () => clock.now,
   });
   return {
     calls,
+    checked,
     clock,
     service,
     setList(raw: string) {
@@ -384,7 +397,9 @@ describe("SimctlService", () => {
 
   it("probes xcode-select and the simctl binary before any xcrun, and runs xcrun under the vetted directory", async () => {
     const { calls, service } = harness();
+    expect(service.vetted()).toBeNull();
     await service.list();
+    expect(service.vetted()).toBe("xcode-select");
     expect(calls[0]).toEqual({
       file: XCODE_SELECT,
       args: ["-p"],
@@ -419,13 +434,65 @@ describe("SimctlService", () => {
     expect(calls.every((call) => call.file === XCODE_SELECT)).toBe(true);
   });
 
-  it("treats a developer directory without simctl (Command Line Tools alone) as no Simulator", async () => {
-    const { calls, service } = harness({
-      developerDir: "/Library/Developer/CommandLineTools",
+  it("treats a developer directory without simctl (Command Line Tools alone — and no simctl in the default Xcode either) as no Simulator, and runs no xcrun", async () => {
+    const { calls, checked, service } = harness({
+      developerDir: CLT,
       simctlInstalled: false,
     });
     await expect(service.enumerateBootedDevices()).rejects.toBeInstanceOf(SimctlUnavailableError);
     expect(calls.map((call) => call.file)).toEqual([XCODE_SELECT]);
+    // R5′: the fallback was asked, and answered no
+    expect(checked).toEqual([`${CLT}/usr/bin/simctl`, `${DEVELOPER_DIR}/usr/bin/simctl`]);
+    expect(service.vetted()).toBeNull();
+  });
+
+  it("R5′: with the Command Line Tools selected beside the default Xcode, vets Xcode's directory — `fallback` — and pins every xcrun and Show it to it", async () => {
+    const created = "11111111-2222-4333-8444-555555555555";
+    const { calls, service, probes } = harness({
+      developerDir: CLT,
+      holdsSimctl: [DEVELOPER_DIR],
+      answer: (request) => (request.args[1] === "create" ? `${created}\n` : undefined),
+    });
+    await service.list();
+    expect(service.vetted()).toBe("fallback");
+    await service.boot(UDID_A);
+    await service.shutdown(UDID_A);
+    await service.create("iPhone 17 Pro", PRO, IOS_26_5);
+    await service.show(UDID_A);
+    expect(probes()).toEqual([
+      { file: XCODE_SELECT, args: ["-p"], timeoutMs: SIMCTL_TIMEOUTS_MS.probe },
+    ]);
+    const xcruns = calls.filter((call) => call.file === XCRUN);
+    expect(xcruns.map((call) => call.args[1])).toEqual(["list", "boot", "shutdown", "create"]);
+    expect(xcruns.every((call) => call.developerDir === DEVELOPER_DIR)).toBe(true);
+    expect(calls.at(-1)?.args).toEqual([
+      "-a",
+      `${DEVELOPER_DIR}/Applications/Simulator.app`,
+      "--args",
+      "-CurrentDeviceUDID",
+      UDID_A,
+    ]);
+    expect(calls.some((call) => JSON.stringify(call).includes(CLT))).toBe(false);
+  });
+
+  it("R5′: never falls back on a garbage answer or a failed xcode-select — no Simulator, with Xcode right there", async () => {
+    for (const answer of [
+      () => "\n",
+      () => "Applications/Xcode.app/Contents/Developer\n",
+      () => `/${"a".repeat(1_024)}\n`,
+      () => "/Library/Developer/Command\u0007LineTools\n",
+      () =>
+        Promise.reject(new Error("xcode-select: error: unable to get active developer directory")),
+    ]) {
+      const { calls, checked, service } = harness({
+        holdsSimctl: [DEVELOPER_DIR],
+        answer: (request) => (request.file === XCODE_SELECT ? answer() : undefined),
+      });
+      await expect(service.list()).rejects.toBeInstanceOf(SimctlUnavailableError);
+      expect(calls.map((call) => call.file)).toEqual([XCODE_SELECT]);
+      expect(checked).toEqual([]);
+      expect(service.vetted()).toBeNull();
+    }
   });
 
   it("re-probes after a list fails (Xcode moved), and keeps the probe while lists succeed", async () => {
@@ -435,8 +502,10 @@ describe("SimctlService", () => {
         request.file === XCRUN && failing ? Promise.reject(new Error("xcrun: error")) : undefined,
     });
     await expect(service.list()).rejects.toThrow("xcrun: error");
+    expect(service.vetted()).toBeNull();
     failing = false;
     await service.list();
+    expect(service.vetted()).toBe("xcode-select");
     expect(probes()).toHaveLength(2);
     expect(xcrun("list")).toHaveLength(2);
   });
