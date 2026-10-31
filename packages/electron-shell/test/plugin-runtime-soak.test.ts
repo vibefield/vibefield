@@ -122,4 +122,25 @@ describe("physical plugin runtime soak oracle", () => {
       lastMedian: 20,
     });
   });
+
+  it("reports every oversized gap, including the origin and warmup, without weakening the maximum", () => {
+    const gapped = [350_000, 400_000, 800_000, 810_000, 1_200_000].map((elapsedMs, cycle) => ({
+      cycle,
+      elapsedMs,
+      exact: {},
+      series: {},
+    }));
+    const verdict = evaluatePhysicalSoak(gapped, {
+      warmupSamples: 2,
+      minimumGradedSamples: 3,
+      maximumSampleGapMs: 300_000,
+    });
+    expect(verdict.verdict).toBe("fail");
+    expect(verdict.maximumObservedGapMs).toBe(400_000);
+    expect(verdict.failures.map(({ sample, actual }) => ({ sample, actual }))).toEqual([
+      { sample: 0, actual: 350_000 },
+      { sample: 2, actual: 400_000 },
+      { sample: 4, actual: 390_000 },
+    ]);
+  });
 });
