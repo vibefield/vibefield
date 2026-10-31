@@ -304,8 +304,10 @@ export function distFresh({
   return fails;
 }
 
-/** Inside a launch, right before the command: the shot dir set, and the helper ENUM proved. */
-export function launchChecks({ shotDir, helperSha, enumSha }) {
+/** Inside a launch, right before the command: the shot dir set, the helper ENUM proved, and — once the arm has
+ * inferred it (`app` given) — the responsible app ENUM proved (§6: "ENUM by the same app as L1 and L2"; TCC follows
+ * the responsible process, so another app's first ScreenCaptureKit call could raise a prompt on an unattended screen). */
+export function launchChecks({ shotDir, helperSha, enumSha, app, enumApp = null }) {
   const fails = [];
   if (typeof shotDir !== "string" || shotDir.length === 0)
     fails.push({ what: "VF_SMOKE_SHOT_DIR", why: "unset", fix: "set VF_PHONE_HID_LOG" });
@@ -320,6 +322,17 @@ export function launchChecks({ shotDir, helperSha, enumSha }) {
       what: "the helper's ENUM",
       why: "the helper's sha256 is not the one ENUM recorded (rebuilt since: a new cdhash may re-prompt)",
       fix: "run ENUM again: node scripts/stage-simulator-fixture.mjs enum",
+    });
+  if (app !== undefined && enumSha !== null && (app === null || app !== enumApp))
+    fails.push({
+      what: "the responsible app",
+      why:
+        app === null
+          ? "none inferred for this launch (no .app ancestor)"
+          : enumApp === null
+            ? `this launch's is ${app}; ENUM recorded no responsible app`
+            : `this launch's is ${app}, not ${enumApp}, the one ENUM proved`,
+      fix: "launch from the app ENUM ran in, or run ENUM again from this one (L0, James at the screen)",
     });
   return fails;
 }
@@ -2143,6 +2156,8 @@ async function launch(mode, command, opts) {
           shotDir: env.VF_SMOKE_SHOT_DIR,
           helperSha: sha256File(PATHS.helper),
           enumSha: record.sha256,
+          app: armed.app,
+          enumApp: typeof record.responsible === "string" ? record.responsible : null,
         }),
       ];
       if (late.length > 0) {

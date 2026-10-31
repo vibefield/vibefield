@@ -402,6 +402,25 @@ test("launchChecks: in a launch, no shot dir or a helper ENUM never proved is re
   );
 });
 
+test("launchChecks: right before the command, the responsible app is the one ENUM proved — or refused, naming both (S5)", () => {
+  const term = "/System/Applications/Utilities/Terminal.app";
+  const code = "/Applications/Claude.app";
+  const at = { shotDir: SHOTS, helperSha: "ab", enumSha: "ab" };
+  // the arm's app is unknown before the arm: the first preflight never asks
+  assert.deepEqual(launchChecks(at), []);
+  assert.deepEqual(launchChecks({ ...at, app: term, enumApp: term }), []);
+  const [other] = launchChecks({ ...at, app: code, enumApp: term });
+  assert.equal(other.what, "the responsible app");
+  assert.match(other.why, /Claude\.app.*not.*Terminal\.app/u);
+  assert.match(other.fix, /ENUM/u);
+  // an ENUM that recorded no app (none inferred, or a record before the field) proves none
+  assert.match(
+    launchChecks({ ...at, app: code, enumApp: null })[0].why,
+    /recorded no responsible app/u,
+  );
+  assert.match(launchChecks({ ...at, app: null, enumApp: term })[0].why, /none inferred/u);
+});
+
 test("preflightLines: one line per failure, its fix named; ok alone when none", () => {
   assert.deepEqual(preflightLines([]), ["PHONE_PREFLIGHT ok"]);
   assert.deepEqual(preflightLines(nativeFresh({ helper: null, adapter: 9, sources: 1 })), [
