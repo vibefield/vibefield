@@ -849,14 +849,14 @@ test("parseLstart reads ps's local start to the second", () => {
   assert.equal(parseLstart("yesterday"), null);
 });
 
-test("simulatorProof: one Simulator, the vetted Xcode's, started after ARMED, and a launch of the run's — or not the run's", () => {
+test("simulatorProof: one Simulator, the vetted Xcode's, started after ARMED and after the run's launch since its last quit — or not the run's", () => {
   const proof = {
     pids: [4242],
     comm: SIM_EXE,
     lstart: lstartOf(ARMED + 60_000),
     devDir: XCODE_DEVELOPER_DIR,
     armedAt: ARMED,
-    launches: 1,
+    launchedAt: ARMED + 30_000,
   };
   assert.deepEqual(simulatorProof(proof), { running: 1, own: true, pid: 4242 });
   assert.equal(simulatorProof({ ...proof, pids: [] }).running, 0);
@@ -872,7 +872,14 @@ test("simulatorProof: one Simulator, the vetted Xcode's, started after ARMED, an
   // ARMED's own second, before ARMED: lstart's whole second is not after it
   assert.match(why({ lstart: lstartOf(ARMED - 400) }), /started before ARMED/u);
   assert.match(why({ lstart: "" }), /unreadable/u);
-  assert.match(why({ launches: 0 }), /the run launched no Simulator\.app/u);
+  assert.match(
+    why({ launchedAt: null }),
+    /the run launched no Simulator\.app since its last quit/u,
+  );
+  // S7: a Simulator.app started before the run's launch is another's, whatever the run launched before
+  assert.match(why({ launchedAt: ARMED + 120_000 }), /started before the run's launch/u);
+  // lstart keeps whole seconds: a start in the launch's own second is the run's
+  assert.equal(simulatorProof({ ...proof, launchedAt: ARMED + 60_000 }).own, true);
   // the vetted executable by its real path is still the vetted one
   assert.equal(
     simulatorProof({
@@ -1068,6 +1075,7 @@ test("doorAct quit-app: refused and STOPPED for a start before ARMED or a foreig
   assert.deepEqual(unlaunched.killed, []);
   const own = ownRun();
   own.simulator.pressed = 1;
+  own.simulator.launchedAt = ARMED + 30_000;
   const proven = fakeHost({ pgrep: "4242" });
   assert.deepEqual((await doorAct({ verb: "quit-app" }, own, proven.deps)).body, {
     n: null,
@@ -1075,12 +1083,47 @@ test("doorAct quit-app: refused and STOPPED for a start before ARMED or a foreig
   });
   assert.deepEqual(proven.killed, [{ pid: 4242, signal: "SIGTERM" }]);
   assert.equal(own.stopped, null);
+  // its launch is spent with it
+  assert.equal(own.simulator.launchedAt, null);
   // never osascript: every spawn was ps, pgrep or simctl's list
   assert.deepEqual([...new Set(proven.calls.map((c) => c.file))].sort(), [
     "/bin/ps",
     "/usr/bin/pgrep",
     "/usr/bin/xcrun",
   ]);
+});
+
+test("doorAct quit-app: after the run quit its own app, a Simulator.app another tool starts is never the run's (S7)", async () => {
+  const run = ownRun();
+  run.simulator.shown = 1;
+  run.simulator.launchedAt = ARMED + 10_000;
+  const first = fakeHost({ pgrep: "4242", lstart: lstartOf(ARMED + 20_000) });
+  assert.equal((await doorAct({ verb: "quit-app" }, run, first.deps)).body.state, "quit");
+  assert.equal(run.simulator.quits, 1);
+  // 300 s after ARMED another launcher starts the vetted Simulator.app: the run launched nothing since its quit
+  const later = fakeHost({ pgrep: "4243", lstart: lstartOf(ARMED + 300_000) });
+  const r = await doorAct({ verb: "quit-app" }, run, later.deps);
+  assert.equal(r.body.state, "stop");
+  assert.match(run.stopped.why, /launched no Simulator\.app since its last quit/u);
+  assert.deepEqual(later.killed, []);
+  // a press through the gate after the quit is the run's launch again: an app started from it is the run's
+  const again = ownRun();
+  again.simulator.quits = 1;
+  again.last = { at: ARMED, locked: "No", idle: 300 };
+  const host = fakeHost({
+    samples: [{ at: ARMED + 10_000, locked: "No", idle: 310 }],
+    pgrep: null,
+  });
+  await doorRow({ name: "SIM-STOPPED", phase: "begin" }, again, host.deps);
+  await doorRow(
+    { name: "SIM-STOPPED", phase: "press", act: "retry", device: `pts3-${RUN}-1` },
+    again,
+    host.deps,
+  );
+  assert.equal(again.simulator.launchedAt, ARMED + 120_000);
+  host.state.pgrep = "4244";
+  host.state.lstart = lstartOf(ARMED + 125_000);
+  assert.equal((await doorAct({ verb: "quit-app" }, again, host.deps)).body.state, "quit");
 });
 
 test("the door's responses never hold a UDID — own or foreign — whatever is asked", async () => {
@@ -1272,6 +1315,7 @@ test("startDoor: close waits for the act in flight; an act queued behind it is a
 test("simulatorSettled: a run that launched Simulator.app and finds none looks again for its launch on the way (S2)", async () => {
   const run = ownRun();
   run.simulator.shown = 1;
+  run.simulator.launchedAt = ARMED + 30_000;
   const host = fakeHost();
   let looks = 0;
   const exec = host.deps.exec;
@@ -1284,7 +1328,7 @@ test("simulatorSettled: a run that launched Simulator.app and finds none looks a
   };
   assert.deepEqual(await simulatorSettled(run, host.deps), { running: 1, own: true, pid: 4242 });
   assert.equal(looks, 3);
-  // a run that launched none looks once
+  // a run with no launch since its last quit looks once
   const none = ownRun();
   const quiet = fakeHost();
   assert.equal((await simulatorSettled(none, quiet.deps)).running, 0);
@@ -1292,6 +1336,7 @@ test("simulatorSettled: a run that launched Simulator.app and finds none looks a
   // and gives up after its 2 s (eight looks past the first)
   const gone = ownRun();
   gone.simulator.pressed = 1;
+  gone.simulator.launchedAt = ARMED + 30_000;
   const never = fakeHost();
   assert.equal((await simulatorSettled(gone, never.deps)).running, 0);
   assert.equal(never.calls.filter((c) => c.file === "/usr/bin/pgrep").length, 9);

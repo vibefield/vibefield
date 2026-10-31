@@ -747,9 +747,19 @@ export const simulatorExe = (devDir) =>
 
 /** P5: a running Simulator.app is the run's only when `pgrep -x Simulator` finds exactly one, its executable is the vetted
  * Xcode's (`ps -o comm=`, as named or by its real path), it started after ARMED — `lstart` keeps whole seconds, so a
- * start in ARMED's own second is NOT after it — and the run has launched one (`launches`: the door's show-app, a press of
- * Show it, Boot or Try again through the gate). Never a stored pid. */
-export function simulatorProof({ pids, comm, lstart, devDir, realExe = null, armedAt, launches }) {
+ * start in ARMED's own second is NOT after it — and it started no earlier than the run's FIRST launch since its own last
+ * quit (`launchedAt`: the door's show-app, or a press of Show it, Boot or Try again through the gate; null — none since,
+ * so whatever runs now was started by another), within `lstart`'s second. A count never proves it: after the run quits
+ * its app, a Simulator.app another tool starts is not the run's. Never a stored pid. */
+export function simulatorProof({
+  pids,
+  comm,
+  lstart,
+  devDir,
+  realExe = null,
+  armedAt,
+  launchedAt,
+}) {
   if (pids.length === 0) return { running: 0, own: false, why: "Simulator.app is not running" };
   if (pids.length !== 1)
     return { running: pids.length, own: false, why: `${pids.length} Simulator processes run` };
@@ -763,12 +773,25 @@ export function simulatorProof({ pids, comm, lstart, devDir, realExe = null, arm
   const started = parseLstart(lstart);
   if (started === null) return { running: 1, own: false, why: "its start is unreadable" };
   if (started < armedAt) return { running: 1, own: false, why: "it started before ARMED" };
-  if (!(launches > 0)) return { running: 1, own: false, why: "the run launched no Simulator.app" };
+  if (launchedAt === null || launchedAt === undefined)
+    return { running: 1, own: false, why: "the run launched no Simulator.app since its last quit" };
+  if (started < launchedAt - 1_000)
+    return { running: 1, own: false, why: "it started before the run's launch" };
   return { running: 1, own: true, pid: pids[0] };
 }
 
 /** The Simulator.app launches the run may have made. */
 export const launchesOf = (run) => run.simulator.shown + run.simulator.pressed;
+
+/** A launch the run may make (show-app, a press through the gate): the FIRST since its last quit is the one its app's
+ * start is held to. */
+const launching = (run, deps) => {
+  run.simulator.launchedAt ??= deps.now();
+};
+/** The run's app is gone (quit, or found not running when the run asked to quit it): its launch is spent. */
+const launchSpent = (run) => {
+  run.simulator.launchedAt = null;
+};
 
 // ─── the host door (P6) ───────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -928,7 +951,12 @@ export async function simulatorNow(run, deps) {
         ? []
         : null;
   if (pids === null) return { running: null, own: false, why: "pgrep failed" };
-  const proof = { pids, devDir: run.devDir, armedAt: run.armedAt, launches: launchesOf(run) };
+  const proof = {
+    pids,
+    devDir: run.devDir,
+    armedAt: run.armedAt,
+    launchedAt: run.simulator.launchedAt,
+  };
   if (pids.length !== 1) return simulatorProof({ ...proof, comm: "", lstart: "" });
   const c = { env: { ...deps.env, LC_ALL: "C" }, timeoutMs: 10_000 };
   const comm = await deps.exec(PS, ["-o", "comm=", "-p", String(pids[0])], c);
@@ -945,7 +973,7 @@ export async function simulatorNow(run, deps) {
  * again, every 250 ms for `ms`. */
 export async function simulatorSettled(run, deps, ms = 2_000) {
   let app = await simulatorNow(run, deps);
-  for (let i = 0; i < ms / 250 && app.running === 0 && launchesOf(run) > 0; i += 1) {
+  for (let i = 0; i < ms / 250 && app.running === 0 && run.simulator.launchedAt !== null; i += 1) {
     await deps.sleep(250);
     app = await simulatorNow(run, deps);
   }
@@ -970,14 +998,20 @@ export async function quitApp(run, deps, n = null) {
       ? json(409, { n, state: "stop", why: fence.why })
       : refuse(run, "quit-app", 502, { n, state: "refused", why: fence.why });
   const proof = await simulatorNow(run, deps);
-  if (proof.running === 0) return json(200, { n, state: "not-running" });
+  if (proof.running === 0) {
+    launchSpent(run);
+    return json(200, { n, state: "not-running" });
+  }
   if (!proof.own) {
     stopRun(run, deps, `quit-app refused: ${proof.why}`);
     return refuse(run, "quit-app", 409, { n, state: "stop", why: run.stopped.why });
   }
   deps.kill(proof.pid, "SIGTERM");
   run.simulator.quits += 1;
-  if (await waitGone(proof.pid, deps, 10_000)) return json(200, { n, state: "quit" });
+  if (await waitGone(proof.pid, deps, 10_000)) {
+    launchSpent(run);
+    return json(200, { n, state: "quit" });
+  }
   deps.say("stage-simulator-fixture: Simulator.app outlived SIGTERM by 10 s");
   return json(502, { n, state: "failed", why: "Simulator.app outlived SIGTERM by 10 s" });
 }
@@ -1056,6 +1090,7 @@ export async function doorAct(body, run, deps) {
     });
   // counted before the spawn: an `open` that fails late may still have launched it
   run.simulator.shown += 1;
+  launching(run, deps);
   const r = await deps.exec(
     OPEN,
     [
@@ -1125,7 +1160,10 @@ export async function doorRow(body, run, deps) {
     if (app.running > 0 && !app.own)
       return halt(409, `a Simulator.app not proven the run's is running (${app.why})`);
     // Show it, Boot and Try again each may launch Simulator.app (the product's `open -a`); Open Settings never does
-    if (act !== "open-settings") run.simulator.pressed += 1;
+    if (act !== "open-settings") {
+      run.simulator.pressed += 1;
+      launching(run, deps);
+    }
     run.open.pressed = true;
     run.firstPress ??= name;
     deps.say(`PHONE_ROW ${name} PRESS ${act} ${body.device}`);
@@ -1680,7 +1718,7 @@ export function newRun(mode, opts, redactor) {
     voids: [],
     hands: 0,
     ownInput: false,
-    simulator: { shown: 0, pressed: 0, quits: 0 },
+    simulator: { shown: 0, pressed: 0, quits: 0, launchedAt: null },
     refused: {},
     loaded: new Map(),
     inputs: new Map(),
@@ -1898,7 +1936,9 @@ async function quitAppNow(run, deps) {
   if (!proof.own) return `refused: ${proof.why}`;
   deps.kill(proof.pid, "SIGTERM");
   run.simulator.quits += 1;
-  return (await waitGone(proof.pid, deps, 10_000)) ? "quit" : "outlived SIGTERM by 10 s";
+  if (!(await waitGone(proof.pid, deps, 10_000))) return "outlived SIGTERM by 10 s";
+  launchSpent(run);
+  return "quit";
 }
 
 function say(line) {
