@@ -71,19 +71,14 @@ export function HistoryWizardPaneView({
       eyebrow={HISTORY_WORDS.eyebrow}
       title={HISTORY_WORDS.title}
       voice={HISTORY_WORDS.voice}
+      later={parts.choosing ? HISTORY_WORDS.later : undefined}
       onSubmit={parts.onPrimary}
       actions={
         <>
           <button type="submit" className={primaryCls} disabled={parts.primaryBusy}>
             {parts.primaryLabel}
           </button>
-          {parts.choosing && (
-            <SkipAction
-              label={HISTORY_WORDS.notNow}
-              home={HISTORY_WORDS.later}
-              onSkip={parts.onLater}
-            />
-          )}
+          {parts.choosing && <SkipAction label={HISTORY_WORDS.notNow} onSkip={parts.onLater} />}
           <BackAction onBack={onBack} />
         </>
       }

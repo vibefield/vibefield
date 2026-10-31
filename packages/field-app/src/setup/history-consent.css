@@ -12,6 +12,25 @@
   list-style: none;
 }
 
+/* On the Setup Assistant's glass the pane never scrolls (FG-L3, FG-4a): the rows
+   do, within themselves, on the face deck's rule (DESIGN.md §4
+   `--vf-scroll-fade`), and the two sentences stand under them. Nine agents can
+   bring history; with a switch on, six rows are 354 in a body of 322. Only the
+   glass bounds them — History's room, the sheet and Settings keep theirs. */
+.vf-wizard-shell[data-size="glass"] .vf-history-consent-rows {
+  min-height: 0;
+  margin: -4px -4px 0;
+  padding: 4px 4px var(--vf-scroll-fade);
+  overflow-y: auto;
+  scroll-padding-bottom: var(--vf-scroll-fade);
+  mask-image: linear-gradient(to bottom, black calc(100% - var(--vf-scroll-fade)), transparent);
+  scrollbar-width: none;
+}
+
+.vf-wizard-shell[data-size="glass"] .vf-history-consent-rows::-webkit-scrollbar {
+  display: none;
+}
+
 .vf-history-consent-row {
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr) auto;

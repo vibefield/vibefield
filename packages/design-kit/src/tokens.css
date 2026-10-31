@@ -319,6 +319,12 @@
   --vf-radius-island: 32px;
   --vf-radius-sheet: 40px;
   --vf-radius-control: 9px;
+  /* §4 (FG-4a): a list that can outgrow what holds it scrolls within itself, its
+     last 20 faded and 20 of padding under its end — the face deck's rule. */
+  --vf-scroll-fade: 20px;
+  /* §4 (FG-4a): a login's terminal on the Setup Assistant's glass, so its card
+     (the terminal and 79.5 of chrome) stands whole above Profiles' fade. */
+  --vf-glass-signin-height: 190px;
 
   /* §8 The file tree. Geometry only — every COLOR the tree wears is one of
      the tokens above. The theme itself ships upstream
