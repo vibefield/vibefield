@@ -155,7 +155,8 @@
   the Hub in tiles; the edges leave the frame), as the mint `e31e55ecd`, run 28, verify only (LANDED "HN B3"). The
   track is built: all sixteen marks.
 - Next: nothing built is left. The record's as-built lines and its Status flip go to the next draft queue.
-- Owed: B1's, B2's and B3's desk smoke rows on James's console window (§5); D10, one caption style for both of the
+- Owed: HN's smoke:godview rungs on James's console window (§5; smoke:canvas's ran at run 30b, and item 123's
+  four HAND rows wait for the unlock on `aeb2e8712`); D10, one caption style for both of the
   sheet's shelves as the page drew (§9); a card dropped on the desk is not smoke-covered
   in Electron; G30 (⌘C in a pane) and RO-31 (Copy in History) upstream (§7).
 
@@ -266,8 +267,11 @@
 - Landed since the audit: items 82 (`714ecbaae`, `8828601ed`), 83 (`f0b5342ac`), 84 (`68296443f`), 85 (`7eda2ee38`,
   `b60e80398`), 89 (`238a960bc`), 87 (`8d56b2bd8`) and 113 (`218dc3d9e`); the stack's eight, landed as the merge
   `0b4cb2ff0`: 94, 86, 90, 96's first half, 93, 97, 92 and 101; and the shell lease's cleanup race (`2422bdf5c`).
+  Then items 102 (`4e07f0308`, in the mint `cbc376da5`) and 118 (`9e0457b3c`, in `7b143fc51`); and 118's slice 2
+  with item 122 and item 121's evidence (`41f27d8cc`, `e3b70d38b`, `0543de224`), the mint `cf0a2982d`.
 - Queue: item 80 (DS-5c's wall-clock gap margin, `doc-sync-service.test.ts`, shaped with the DS owner) with its sibling
-  TC-S3 (`terminal-service.test.ts`, 99 against ≥100, red at AO-6b3's verify) · item 71 (persona refresh window) · item
+  TC-S3, now item 120 (`terminal-service.test.ts`, 99 against ≥100, red at AO-6b3's verify; studied 10-31: a
+  same-duration probe timer armed before the create, never slack) · item 71 (persona refresh window) · item
   73 (`unregistered_webcontents` false positive on every factory window) · item 74 (the generation-1 port forward before
   the main world, live-surfaces) · the sibling 5 s waits (§6 Gates) · item 91 (MF-1's field-projection row judges a
   board settled from one pair of 750 ms readings, `agent-session.test.ts:2835`; red in item 87's first verify at load
@@ -280,7 +284,10 @@
   grant set, item 102's class; an SDK clipboard-write door over HN B2's host copy door (landed) unless HN B3 claims
   it) · item 112 (main decodes a clipboard PNG of up to 64 MiB with no pixel bound; an IHDR read before decoding against
   one new contracts constant, its literal ruled alone; HN B2 is in) · item 115 (`pnpm dev`'s nx watcher outlives a
-  runner that ends without `shutdown()`: a watcher host on a stdin pipe, and a SIGHUP handler; after 111 and 112).
+  runner that ends without `shutdown()`: a watcher host on a stdin pipe, and a SIGHUP handler; after 111 and 112) ·
+  item 93's zombie half (a `Z <defunct>` answers `kill(pid, 0)`; `alive()` judges Z dead) · item 121's study (RA-D7's
+  refused re-attach: TC-D4's interactive fallback against AR-4b's cell rule, the RA owner's product question) · item
+  122's study (three more real-floor test files with no endpoints wait).
 - **Item 77b**, FieldTerminalTests' 60 s block. The 5 s shape is fixed: (d) `b1e9bf53d` runs AttachDeadlineTests
   `.serialized`, because each row's 1 s deadline covers the dial too and rows started together stampeded the loopback
   dial under load. k1 is separate: `test-without-building` cold-boots a Shutdown simulator, and pre-booting it
@@ -412,10 +419,12 @@
   the tab bar as an obstacle, the reconnect banner across a fieldd bounce, the attached-but-unlisted card, an overload
   refusal said in the connecting face, C1's swipe after a reopen, the corner wearing its home desktop's face and name
   (IOS-8f) (and PJ-7 run 3's n/a cases, if 10-19's round missed them).
-- HN B1's and B2's desk smoke rows on his console window (runs 22 and 26 were verify only, the console locked):
-  smoke:godview's re-aimed 11h rung (a card played into a real pane) and 11j (a program's OSC 52 reaching main's
-  copy door, no card) and the Hub in the head, and smoke:canvas's Copy rows, its picture Copy rows (CLOCK, TWO, HAND,
-  MISSING), DROP, RIM (the head band) and BAR (16 from the sides) (LANDED "HN B1", "HN B2", "HN B3").
+- HN's smoke:godview rungs on his console window (runs 22, 26 and 28 were verify only, the console locked): the
+  re-aimed 11h (a card played into a real pane), 11j (a program's OSC 52 reaching main's copy door, no card) and the
+  Hub in the head (LANDED "HN B1", "HN B2", "HN B3"). smoke:canvas's HN rows ran green at run 30b (M30
+  `c8e4c55eb`), but for the four HAND rows, whose judge still expected Send to… (item 123, fixed in `aeb2e8712`,
+  run 32; its smoke:canvas witness waits for the unlock, 32b skipped). *Corrected
+  2026-10-31 (item 123): this line said "HN B1's and B2's" and "runs 22 and 26" while it listed B3's rows too.*
 - AR-7: his daily dogfood · AR7-D2's 8 s kit wait, measured on a pair bounce.
 
 **Eyeballs (both themes)**

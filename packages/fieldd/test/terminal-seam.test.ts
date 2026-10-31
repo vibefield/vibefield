@@ -78,11 +78,22 @@ async function spawnNative(): Promise<string> {
  * reads. Every row boots through here. */
 async function boot(config: FielddConfig): Promise<FielddDaemon> {
   const daemon = await bootstrap({ logRoot: join(config.dataDir, "logs"), ...config });
+  // a wait that gives up must not leak the daemon (stop is idempotent; the rows push their own as well)
+  cleanup.push(() => daemon.stop());
   scene = {
     dataDir: config.dataDir,
     spawnedAt: spawnedAt.get(config.dataDir),
     link: daemon.native,
   };
+  // Item 122 — the floor's terminal endpoints reach the daemon over the management link AFTER `bootstrap` resolves,
+  // so a row that creates at once is refused UNAVAILABLE "the terminal floor is not available" (run 27b, 2026-10-31,
+  // load 48.7). Wait for them as a window would, and as agent-session's setup and agent-gateway-floor's `floor()` do
+  // (ec0118067): 30 s, inside every row's own budget, so a floor that never sends them fails HERE with its evidence.
+  await poll(
+    async () => (daemon.native.terminalEndpoints !== undefined ? true : undefined),
+    30_000,
+    "the floor's terminal endpoints reaching the daemon",
+  );
   return daemon;
 }
 
