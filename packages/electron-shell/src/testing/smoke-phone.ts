@@ -993,7 +993,9 @@ export interface PhoneRowResult {
 }
 
 /** A row's mark: STAGING NOT MET and VOID say why (never green); RECORDED a row the brief records whatever it read — its
- * problems, an unmet staging or a VOID are findings (SIM-SHOW-RUNNING: "Simulator.app showed every booted device" is one). */
+ * problems or an unmet staging are findings (SIM-SHOW-RUNNING: "Simulator.app showed every booted device" is one). A VOID
+ * wins over RECORDED: a voided row's reads are not judged, so none prints as if it stood (SIM-RATE's numbers are VOID
+ * unless its shots differ, §4; R8). */
 export function rowMark(
   problems: readonly string[],
   o: {
@@ -1004,12 +1006,10 @@ export function rowMark(
 ): { readonly mark: RowMark; readonly why: string | null } {
   const staging = o.staging ?? null;
   const voided = o.void ?? null;
-  if (o.recorded === true)
-    return {
-      mark: "RECORDED",
-      why: staging ?? voided ?? (problems.length === 0 ? null : "a finding"),
-    };
-  if (staging !== null) return { mark: "STAGING NOT MET", why: staging };
+  const recorded = o.recorded === true;
+  if (recorded && voided === null)
+    return { mark: "RECORDED", why: staging ?? (problems.length === 0 ? null : "a finding") };
+  if (!recorded && staging !== null) return { mark: "STAGING NOT MET", why: staging };
   if (voided !== null) return { mark: "VOID", why: voided };
   return { mark: problems.length === 0 ? "green" : "red", why: null };
 }

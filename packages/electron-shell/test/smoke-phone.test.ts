@@ -640,6 +640,13 @@ describe("PT-S3 — the rows' marks, and which are problems", () => {
       why: "Simulator.app showed every booted device",
     });
     expect(rowMark(["x"], { recorded: true })).toEqual({ mark: "RECORDED", why: "a finding" });
+    // a VOID wins over RECORDED: SIM-RATE's numbers do not stand unless its shots differ, nor any read under a hand (R8)
+    const still = "two device screenshots 250 ms apart do not differ";
+    expect(rowMark([], { recorded: true, void: still })).toEqual({ mark: "VOID", why: still });
+    expect(rowMark(["x"], { recorded: true, void: "HID: a hand" })).toEqual({
+      mark: "VOID",
+      why: "HID: a hand",
+    });
   });
 
   it("hands smoke:canvas a MUST red, VOID or unstaged — never SIM-P1 on an Xcode host, a RECORDED row, NICE or OBSERVATION", () => {
