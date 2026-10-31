@@ -23,9 +23,11 @@ export function stopReadable(observationLevel: string): boolean {
   return TURN_OBSERVING_LEVELS.has(observationLevel);
 }
 
-/** What a run's status says to a Stop: whether it can be read, and whether it reads `working`. */
+/** What a run's status says to a Stop: whether it can be read, whether it says anything (`unknown` is no word:
+ * the mirror is gone or not yet heard), and whether it reads `working`. */
 export interface StopFacts {
   readable: boolean;
+  known: boolean;
   working: boolean;
 }
 
@@ -42,13 +44,15 @@ export function nextStopStep(stop: AgentStopState, facts: StopFacts): StopStep {
   return "none";
 }
 
-/** DS — a Stop is heard by the run's status when the status can be read and no longer says `working`. Not while
- * the floor's ladder is ending the run: a dying process's status is no word of its own, and its exit is the fact. A
- * ladder that could not be placed (`unheardAt`) ends nothing, so the status is the run's word again. */
+/** DS — a Stop is heard by the run's status when the status can be read, says something, and no longer says
+ * `working` (idle, or blocked on the person). An `unknown` status is no evidence the turn stopped (the review of
+ * 2026-10-31). Not while the floor's ladder is ending the run: a dying process's status is no word of its own, and
+ * its exit is the fact. A ladder that could not be placed (`unheardAt`) ends nothing, so the status is the run's word
+ * again. */
 export function heardByStatus(stop: AgentStopState, facts: StopFacts): boolean {
   if (stop.stage === "heard") return false;
   if (stop.stage === "terminating" && stop.unheardAt === undefined) return false;
-  return facts.readable && !facts.working;
+  return facts.readable && facts.known && !facts.working;
 }
 
 /** How a Stop's escalation answered: a re-send's delivery answered (accepted or refused), the floor's ladder was

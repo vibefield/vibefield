@@ -1907,12 +1907,19 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     } catch {
       // a disposed adapter's status cannot be read
     }
-    return { readable: stopReadable(observationLevel), working: entry.status === "working" };
+    return {
+      readable: stopReadable(observationLevel),
+      known: entry.status !== "unknown",
+      working: entry.status === "working",
+    };
   }
 
   /** DS — a person's Stop was delivered: it is held as SENT until the run is heard to stop, and its bound is armed. A
    * second press while one is held changes nothing: the first Stop's clock and stage stand. */
   private stopSent(entry: ManagedEntry): void {
+    // the delivery was awaited: a run that exited, was replaced, or a fieldd stopping meanwhile holds no Stop
+    if (this.disposed || entry.exiting || this.managed.get(entry.info.runtimeRunId) !== entry)
+      return;
     if (entry.stop !== undefined && entry.stop.stage !== "heard") return;
     entry.stop = { sentAt: this.now().toISOString(), stage: "sent" };
     if (heardByStatus(entry.stop, this.stopFacts(entry))) this.stopHeard(entry, "status");
@@ -1950,6 +1957,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   /** DS-D2/D3 — a Stop's bound passed and nothing was heard: the one step the rule names, taken. The re-send and
    * the terminate are fieldd's own acts, in the ledger as such (DS-D6), never the person's. */
   private async stopBound(runtimeRunId: string): Promise<void> {
+    // a fieldd stopping ends nothing: its runs outlive it (AR-4)
+    if (this.disposed) return;
     const entry = this.managed.get(runtimeRunId);
     if (entry === undefined || entry.exiting || entry.stop === undefined) return;
     entry.stopTimer = undefined;
@@ -2008,8 +2017,9 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       });
       outcome = "threw";
     }
-    // heard or left while the act was in flight: nothing is left to do
-    if (this.managed.get(runtimeRunId) !== entry || entry.stop?.stage !== stage) return;
+    // heard or left while the act was in flight, or fieldd stopping: nothing is left to do
+    if (this.disposed || this.managed.get(runtimeRunId) !== entry || entry.stop?.stage !== stage)
+      return;
     const next = afterEscalation(stage, outcome);
     if (next === "rearm") this.armStop(entry);
     else if (next === "unheard") this.stopUnheard(entry, afterMs);

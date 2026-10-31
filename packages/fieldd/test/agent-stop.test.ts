@@ -22,9 +22,10 @@ const stop = (overrides: Partial<AgentStopState> = {}): AgentStopState => ({
   ...overrides,
 });
 
-const READABLE_WORKING: StopFacts = { readable: true, working: true };
-const READABLE_IDLE: StopFacts = { readable: true, working: false };
-const UNREADABLE: StopFacts = { readable: false, working: true };
+const READABLE_WORKING: StopFacts = { readable: true, known: true, working: true };
+const READABLE_IDLE: StopFacts = { readable: true, known: true, working: false };
+const READABLE_UNKNOWN: StopFacts = { readable: true, known: false, working: false };
+const UNREADABLE: StopFacts = { readable: false, known: true, working: true };
 
 describe("DS-D3 — which runs fieldd can read", () => {
   it("reads a run whose turns puppeteer witnesses: structured, native hooks or a native log", () => {
@@ -52,9 +53,11 @@ describe("DS-D2/D3 — the one step a Stop takes at its bound", () => {
 
   it("leaves a run whose status cannot be read to the person after the re-send: never ends it", () => {
     expect(nextStopStep(stop({ stage: "resent" }), UNREADABLE)).toBe("unheard");
-    expect(nextStopStep(stop({ stage: "resent" }), { readable: false, working: false })).toBe(
-      "unheard",
-    );
+    expect(
+      nextStopStep(stop({ stage: "resent" }), { readable: false, known: true, working: false }),
+    ).toBe("unheard");
+    // a readable run whose status says nothing is not ended either: no word says it still works
+    expect(nextStopStep(stop({ stage: "resent" }), READABLE_UNKNOWN)).toBe("unheard");
   });
 
   it("takes no step for a Stop heard, terminating, already unheard, or in a stage it does not know", () => {
@@ -75,7 +78,17 @@ describe("DS — a status is the Stop heard", () => {
   });
 
   it("never hears an unreadable status: only the exit can say", () => {
-    expect(heardByStatus(stop(), { readable: false, working: false })).toBe(false);
+    expect(heardByStatus(stop(), { readable: false, known: true, working: false })).toBe(false);
+  });
+
+  it("never hears a status that says nothing: `unknown` is no evidence the turn stopped", () => {
+    // before the review of 2026-10-31 a readable run whose mirror went missing read as heard at once
+    expect(heardByStatus(stop(), READABLE_UNKNOWN)).toBe(false);
+    expect(heardByStatus(stop({ stage: "resent" }), READABLE_UNKNOWN)).toBe(false);
+  });
+
+  it("hears a run blocked on the person: its status left working", () => {
+    expect(heardByStatus(stop(), { readable: true, known: true, working: false })).toBe(true);
   });
 
   it("does not take a dying process's status for its word while the ladder ends it", () => {
