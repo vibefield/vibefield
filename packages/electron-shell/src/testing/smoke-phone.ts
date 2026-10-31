@@ -1202,6 +1202,15 @@ export interface PhoneRowsDriver extends PaneRowsDriver {
 
 /** The rows stop: the door said stop, or the press gate refused. */
 class PhoneStop extends Error {}
+/** The door's `act` as the rows ask it: a stop answer is the run's STOP, thrown — never a state a poll waits past, nor
+ * a read turned red (R14). Every act the rows ask goes through it. */
+export function actOrStop(door: Pick<PhoneDoor, "act">): PhoneDoor["act"] {
+  return async (verb, device, extra) => {
+    const r = await door.act(verb, device, extra);
+    if (r.state === "stop") throw new PhoneStop(r.why ?? "the door stopped the run");
+    return r;
+  };
+}
 /** A face read `no-permission` (TCC): the rule below runs, then the rows stop. */
 class NoPermission extends Error {
   readonly key: string;
@@ -1232,6 +1241,7 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
   }
   const env = parsed;
   const door = phoneDoor(env, d.fetch ?? fetch);
+  const doorAct = actOrStop(door);
   const h: PaneHands = paneHands(d);
   const { js, until, move, press, key: keyPress, undoKey, deskAt } = h;
   const T = JSON.stringify(PHONE.type);
@@ -1571,21 +1581,14 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
   };
   /** A device's state re-staged through the door: Booted or Shutdown, or the row cannot be staged. */
   const ensure = async (n: number, want: "Booted" | "Shutdown"): Promise<string | null> => {
-    const now = await door.act("state", n);
-    if (now.state === "stop") throw new PhoneStop(now.why ?? "the door stopped the run");
+    const now = await doorAct("state", n);
     if (now.state === want) return null;
-    const r = await door.act(want === "Booted" ? "boot" : "shutdown", n);
-    if (r.state === "stop") throw new PhoneStop(r.why ?? "the door stopped the run");
+    const r = await doorAct(want === "Booted" ? "boot" : "shutdown", n);
     return r.state === want ? null : `device ${n} reads ${r.state}, not ${want}`;
   };
-  const quitApp = async (): Promise<string> => {
-    const r = await door.act("quit-app");
-    if (r.state === "stop") throw new PhoneStop(r.why ?? "the door stopped the run");
-    return r.state;
-  };
+  const quitApp = async (): Promise<string> => (await doorAct("quit-app")).state;
   const openUrl = async (n: number, path: "/motion" | "/still", q: string): Promise<boolean> => {
-    const r = await door.act("openurl", n, { url: door.page(path, q) });
-    if (r.state === "stop") throw new PhoneStop(r.why ?? "the door stopped the run");
+    const r = await doorAct("openurl", n, { url: door.page(path, q) });
     await sleep(1_500);
     return r.state === "opened";
   };
@@ -1596,7 +1599,7 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
     band: readonly [number, number, number] | null,
   ): Promise<(Measure & { readonly width: number; readonly height: number }) | null> => {
     if (d.shotDir === undefined) return null;
-    const r = await door.act("screenshot", n, { file });
+    const r = await doorAct("screenshot", n, { file });
     if (r.state !== "written") return null;
     const png = d.pngPixels(join(d.shotDir, file));
     return png === null
@@ -1630,7 +1633,7 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
       await pressAct(row, k, n, act);
       if (act === "boot") {
         const deadline = Date.now() + PHONE_BOUNDS.boot;
-        while (Date.now() < deadline && (await door.act("state", n)).state !== "Booted")
+        while (Date.now() < deadline && (await doorAct("state", n)).state !== "Booted")
           await sleep(1_000);
         await openUrl(n, "/motion", q);
       }
@@ -2039,7 +2042,7 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
       await pressAct("SIM-OFF-BOOT", p, 1, "boot");
       // the page moves once the device is up: LIVE-PROVEN asks frames of a moving screen
       const deadline = t0 + PHONE_BOUNDS.boot;
-      while (Date.now() < deadline && (await door.act("state", 1)).state !== "Booted")
+      while (Date.now() < deadline && (await doorAct("state", 1)).state !== "Booted")
         await sleep(1_000);
       await openUrl(1, "/motion", nonce());
       const proofAt = Date.now();
@@ -2365,7 +2368,7 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
       // motion wakes it: presents and arrivals within 2 s of the page asked to move
       const f0 = await faceOf(p);
       const s0 = (await stats())?.presented ?? 0;
-      await door.act("openurl", 1, { url: door.page("/motion", nonce()) });
+      await doorAct("openurl", 1, { url: door.page("/motion", nonce()) });
       const woke = Date.now();
       let f1 = f0;
       let s1 = s0;
@@ -2471,7 +2474,7 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
         const b1 = await ensure(1, "Booted");
         if (b2 !== null || b1 !== null) return { problems: [], staging: b2 ?? b1, recorded: true };
         await openUrl(2, "/motion", nonce());
-        const shown = await door.act("show-app", 1);
+        const shown = await doorAct("show-app", 1);
         if (shown.state !== "shown")
           return { problems: [], staging: `show-app P read ${shown.state}`, recorded: true };
         await sleep(3_000);
@@ -2539,7 +2542,7 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
         if (wordNow === "stopped" || wordNow === "off") break;
         await sleep(200);
       }
-      const stateP = (await door.act("state", 1)).state;
+      const stateP = (await doorAct("state", 1)).state;
       await sleep(1_500);
       const wakes1 = (await stats())?.wakes ?? 0;
       const paneAlive = (await faceOf(pane))?.alive === true;
@@ -2701,7 +2704,7 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
         closedMs,
         before,
         after,
-        state: (await door.act("state", 3)).state,
+        state: (await doorAct("state", 3)).state,
       };
       return { problems: judgeGone(seen), seen };
     });
@@ -2805,7 +2808,7 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
       const p = await placePhone("φP", 0, typeOf(1));
       const booted = await ensure(1, "Booted");
       if (booted !== null) return { problems: [], staging: booted, recorded: true };
-      const shown = await door.act("show-app", 1);
+      const shown = await doorAct("show-app", 1);
       await sleep(3_000);
       await openUrl(1, "/motion", nonce());
       const pane = await placePane(0);

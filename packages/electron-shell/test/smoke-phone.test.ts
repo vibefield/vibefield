@@ -28,6 +28,7 @@ vi.mock("node:child_process", async (importOriginal) => {
 
 import { dimmed } from "../src/testing/smoke-last-still";
 import {
+  actOrStop,
   actScan,
   BAND_PALETTE,
   BAND_TOL,
@@ -824,6 +825,27 @@ describe("PT-S3 — the host door", () => {
     expect(await door.row("SIM-STAGED", "input")).toEqual({ go: true, void: null, stop: null });
     expect((await door.row("SIM-STAGED", "input")).stop).toMatch(/closing/u);
     expect(asked[0]).toEqual({ name: "SIM-STAGED", phase: "input" });
+  });
+
+  it("every act the rows ask goes through one wrapper that turns a stop answer into the run's STOP (R14)", async () => {
+    const asked: string[] = [];
+    const act = actOrStop({
+      act: async (verb) => {
+        asked.push(verb);
+        return verb === "state"
+          ? { state: "stop", why: "a hand at the Mac before SIM-LIVE" }
+          : verb === "boot"
+            ? { state: "stop", why: null }
+            : { state: "Booted", why: null };
+      },
+    });
+    await expect(act("shutdown", 1)).resolves.toEqual({ state: "Booted", why: null });
+    const stop = await act("state", 1).catch((error: unknown) => error);
+    expect(stop).toBeInstanceOf(Error);
+    expect((stop as Error).constructor.name).toBe("PhoneStop");
+    expect((stop as Error).message).toBe("a hand at the Mac before SIM-LIVE");
+    await expect(act("boot", 1)).rejects.toThrow("the door stopped the run");
+    expect(asked).toEqual(["shutdown", "state", "boot"]);
   });
 
   it("says a door that never answered as a stop, never a go", async () => {
