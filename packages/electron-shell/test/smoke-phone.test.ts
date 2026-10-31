@@ -959,6 +959,59 @@ describe("PT-S3 — SIM-STOPPED's word (P8 amended)", () => {
     });
   });
 
+  /** The row body as the runner's source must hold it (RM7.2b): φP's proof0 taken, then `stoppedBeforeQuit` judged and
+   * its answer RETURNED, all before the body's first quit act (`quitApp()`, or the door's `quit-app` itself) — so a red
+   * proof0 is red with no quit spent. The judge is unit-held above; this holds that the row calls it, and where. */
+  const stoppedHeld = (src: string): void => {
+    const body = rowBodies(src).find((r) => r.name === "SIM-STOPPED")?.body ?? "";
+    const quitAt = body.search(/\bquitApp\(|doorAct\("quit-app"/u);
+    expect(quitAt).toBeGreaterThan(0);
+    const before = body.slice(0, quitAt);
+    const proof = before.indexOf('const proof0 = await bringLive("SIM-STOPPED", p, 1, nonce());');
+    const call = before.indexOf(
+      "const unmet = stoppedBeforeQuit({ proof0, paneRested, phoneAlive });",
+    );
+    expect(proof).toBeGreaterThan(0);
+    expect(call).toBeGreaterThan(proof);
+    expect(before.slice(call)).toMatch(
+      /^const unmet = stoppedBeforeQuit\(\{ proof0, paneRested, phoneAlive \}\);\s*if \(unmet !== null\) \{[\s\S]*?return \{ \.\.\.unmet, seen: \{ proof0, paneRested, phoneAlive \} \};\s*\}/u,
+    );
+    expect(body.match(/\bstoppedBeforeQuit\(/gu)).toHaveLength(1);
+  };
+
+  it("the row calls stoppedBeforeQuit on φP's proof0 and returns its answer BEFORE its first quit (RM7.2b)", () => {
+    stoppedHeld(SOURCE);
+  });
+
+  it("an edit that drops the call, moves it after the quit, judges without it, or drops its answer is caught (RM7.2b)", () => {
+    const from = SOURCE.indexOf("      const unmet = stoppedBeforeQuit(");
+    const block = SOURCE.slice(from, SOURCE.indexOf("      const wakes0 = ", from));
+    expect(block).toMatch(/^ {6}const unmet = stoppedBeforeQuit\([\s\S]*\n {6}\}\n$/u);
+    const dropped = SOURCE.replace(block, "");
+    expect(dropped).not.toBe(SOURCE);
+    expect(() => stoppedHeld(dropped)).toThrow();
+    const quitLine = "      const quit = await quitApp();\n      let wordNow";
+    const moved = dropped.replace(
+      quitLine,
+      `      const quit = await quitApp();\n${block}      let wordNow`,
+    );
+    expect(moved).not.toBe(dropped);
+    expect(() => stoppedHeld(moved)).toThrow();
+    // the check's probe (R-1c): the cap's staging judged by hand, the proof never asked
+    const byHand = SOURCE.replace(
+      "const unmet = stoppedBeforeQuit({ proof0, paneRested, phoneAlive });",
+      'const unmet = !paneRested || !phoneAlive ? { problems: [] as string[], staging: "x" } : null;',
+    );
+    expect(byHand).not.toBe(SOURCE);
+    expect(() => stoppedHeld(byHand)).toThrow();
+    const unanswered = SOURCE.replace(
+      "return { ...unmet, seen: { proof0, paneRested, phoneAlive } };",
+      "void unmet;",
+    );
+    expect(unanswered).not.toBe(SOURCE);
+    expect(() => stoppedHeld(unanswered)).toThrow();
+  });
+
   it("`stopped`: the give-back and Try again's leg judged — green only when both hold", () => {
     expect(mark(seen)).toBe("green");
     expect(judgeStopped({ ...seen, retry: null }).problems.join(" ")).toMatch(/Try again/u);
@@ -1009,6 +1062,63 @@ describe("PT-S3 — SIM-ATTACH's poll: an answer from a read taken after R's boo
     expect(readSince(base, { ...base, reads: 6, failures: 2 })).toBe(false);
     expect(readSince(base, { ...base, reads: 7, failures: 2 })).toBe(true);
     expect(readSince(base, { reads: 9, failures: 1, rows: null })).toBe(false);
+  });
+
+  /** The row body as the runner's source must hold it (RM7.2c): the baseline read taken AFTER R's boot (`ensure(3)`),
+   * and the poll's ONE answer read only once `readSince(base, now)` says a read begun after it has landed. `readSince`
+   * is unit-held above; this holds that the poll decides by it. */
+  const attachPollHeld = (src: string): void => {
+    const body = rowBodies(src).find((r) => r.name === "SIM-ATTACH")?.body ?? "";
+    expect(body).toMatch(
+      /const devicesRead = \(\): Promise<DeviceReads \| null> =>\s*js\("globalThis\.__vfDesk\.simulatorDevices\(\)"\);/u,
+    );
+    const boot = body.indexOf('await ensure(3, "Booted");');
+    const baseAt = body.indexOf("const base = await devicesRead();");
+    expect(boot).toBeGreaterThan(0);
+    expect(baseAt).toBeGreaterThan(boot);
+    const loopAt = body.indexOf("while (Date.now() < deadline && answer === null) {");
+    expect(loopAt).toBeGreaterThan(baseAt);
+    const loop = body.slice(loopAt, body.indexOf("// THE GATE", loopAt));
+    expect(loop).toMatch(
+      /^while \(Date\.now\(\) < deadline && answer === null\) \{\s*const now = await devicesRead\(\);\s*if \(base !== null && now !== null && readSince\(base, now\)\)\s*answer = await js\(/u,
+    );
+    // the poll's assignment is the row's ONE (`=`, `??=`, `||=`, `&&=`): the gate reads no answer taken another way
+    expect(body.match(/\banswer\s*(?:\?\?|\|\||&&)?=(?!=)/gu)).toHaveLength(1);
+  };
+
+  it("SIM-ATTACH's poll decides by readSince over a baseline read after R's boot (RM7.2c)", () => {
+    attachPollHeld(SOURCE);
+  });
+
+  it("an edit whose poll stops asking readSince, reads ungated, or takes its baseline before the boot is caught (RM7.2c)", () => {
+    // the check's probe (R-4b): any rows read, the reads never counted
+    const anyRows = SOURCE.replace(
+      "if (base !== null && now !== null && readSince(base, now))",
+      "if (now !== null && now.rows !== null)",
+    );
+    expect(anyRows).not.toBe(SOURCE);
+    expect(() => attachPollHeld(anyRows)).toThrow();
+    const ungated = SOURCE.replace(
+      /if \(base !== null && now !== null && readSince\(base, now\)\)\s*answer = /u,
+      "answer = ",
+    );
+    expect(ungated).not.toBe(SOURCE);
+    expect(() => attachPollHeld(ungated)).toThrow();
+    const self = SOURCE.replace("readSince(base, now))", "readSince(now, now))");
+    expect(self).not.toBe(SOURCE);
+    expect(() => attachPollHeld(self)).toThrow();
+    const early = SOURCE.replace("      const base = await devicesRead();\n", "").replace(
+      '      const staged0 = await ensure(3, "Booted");',
+      '      const base = await devicesRead();\n      const staged0 = await ensure(3, "Booted");',
+    );
+    expect(early).not.toBe(SOURCE);
+    expect(() => attachPollHeld(early)).toThrow();
+    const twice = SOURCE.replace(
+      "        // THE GATE (§4), its first leg",
+      `        answer ??= await js(\`globalThis.__vfDesk.local(\${T})?.devices?.()?.attachable(\${tr}) ?? null\`);\n        // THE GATE (§4), its first leg`,
+    );
+    expect(twice).not.toBe(SOURCE);
+    expect(() => attachPollHeld(twice)).toThrow();
   });
 });
 
