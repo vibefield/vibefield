@@ -88,7 +88,12 @@ The catalog currently mounts these shipping views directly:
   stage, History's room and Chat, on fixture state
 - Chat (SP-1b, DESIGN.md §8 "Chat's list"): the shipping `ChatPanelView` over the product's own
   reading (`sparkEntriesOf`) of fixture sparks and field rows (`chat-fixtures.ts`) — the list, a
-  spark asleep, no sparks yet, opening and unavailable — on a fixed clock and fixed seeds
+  spark asleep, no sparks yet, opening and unavailable — on a fixed clock and fixed seeds; and,
+  since SP-1d (§8 "Chat's thread"), the thread's pane's place: the shipping `SparkPaneView` in the
+  words a window with no terminals says, and on three plates its words while it is being found,
+  when this desktop's floor does not hold it, and when the floor did not answer. No catalog holds a terminal pool ("a host, never a
+  painter"), so the live pane (`SparkPane`) is never mounted there, and no picture of a terminal
+  stands in for it
 - the line (One Frame FR-2; shortened by Cards in Hand, HN-2): `ComposerLineView` in every state the
   Cards in Hand page's line plates draw — at rest, the snapshot under the pointer, in flight and
   waiting with no capture door, Objects out, Godview's New terminal, History's New terminal in the

@@ -109,9 +109,22 @@ interface FeedState {
   /** the person's live sessions on the board by the persona each runs as (its `profileId`; null for an agent's own
    * folder), or null before the board is read: the New spark sheet's "Sees N sessions" (SP-1c) */
   readonly sessions: ReadonlyMap<string | null, number> | null;
+  /** Wake, through the feed that reads this window's sparks; null while none does, so no act that wakes is drawn */
+  readonly open: SparkOpener | null;
 }
 
-const OPENING: FeedState = { reading: { state: "opening" }, needing: null, sessions: null };
+/** Wake a spark (`compose.sparks.open`): its last session resumes; a live one is answered as it is (CR-D11). It throws
+ * its refusal, in fieldd's words, for the act that asked to say once, where it was asked (DESIGN.md §8 "Chat's list",
+ * the thread's column as SP-1d built it). THE one wake for every act that asks for one: Wake on the thread's line, and
+ * Send. */
+export type SparkOpener = (spark: SparkId) => Promise<void>;
+
+const OPENING: FeedState = {
+  reading: { state: "opening" },
+  needing: null,
+  sessions: null,
+  open: null,
+};
 let state: FeedState = OPENING;
 const listeners = new Set<() => void>();
 
@@ -158,6 +171,15 @@ class RunningFeed {
     this.refresh();
     this.#watch();
   }
+
+  /** The feed's wake: the list is asked again whether it woke or not, since the record says what the door did. */
+  readonly open: SparkOpener = async (spark) => {
+    try {
+      await this.port.open(spark);
+    } finally {
+      refreshSparks();
+    }
+  };
 
   refresh(): void {
     const ask = ++this.#asked;
@@ -224,6 +246,7 @@ class RunningFeed {
             : { state: "unavailable", reason: this.#failed },
         needing: null,
         sessions,
+        open: this.open,
       });
       return;
     }
@@ -233,6 +256,7 @@ class RunningFeed {
       reading: { state: "ready", entries },
       needing: sameNeeds(state.needing, needing) ? state.needing : needing,
       sessions,
+      open: this.open,
     });
   }
 }
@@ -272,18 +296,19 @@ export function useChooseRequest(): { readonly spark: SparkId; readonly seq: num
   );
 }
 
-/** Ask for the list again (after a Wake, which changes the spark's record). */
+/** Ask for the list again (after a hatch or a wake, which change the spark's record). */
 export function refreshSparks(): void {
   running?.refresh();
 }
 
-/** The doors the feed reads through, for Wake; null while no feed runs. */
-export function sparksDoor(): SparksPort | null {
-  return running?.port ?? null;
-}
-
 export function useSparksReading(): SparksReading {
   return useSyncExternalStore(subscribe, () => state.reading);
+}
+
+/** Wake, through the feed that published the reading: null while no feed runs, when no reading is ready and so no act
+ * that wakes is drawn. */
+export function useSparkOpener(): SparkOpener | null {
+  return useSyncExternalStore(subscribe, () => state.open);
 }
 
 /** The sparks that need you (S-4), or null before the first reading. */

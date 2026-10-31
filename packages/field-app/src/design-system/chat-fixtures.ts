@@ -1,6 +1,7 @@
 import { AGENT_CATALOG, type AgentFieldRow, type SparkSummary } from "@vibefield/contracts";
 import { sparkEntriesOf } from "../chat/spark-status";
 import type { SparksReading } from "../chat/sparks-feed";
+import type { SparkPanePlace } from "../chat/thread-pane-door";
 import { FIXTURE_SPARKS } from "./spark-fixtures";
 
 // Chat's fixture ADAPTER (SP-1b; docs/UI_SYSTEM.md): what fieldd would answer — the sparks it keeps and the field
@@ -52,13 +53,18 @@ function row(over: Partial<AgentFieldRow> & Pick<AgentFieldRow, "runtimeRunId">)
   };
 }
 
-const live = (runtimeRunId: string) => ({ runtimeRunId, live: true });
+/** An awake spark's session: its run, and the floor terminal fieldd named for it (SP-1d: the thread's pane). */
+const live = (name: string) => ({
+  runtimeRunId: `run-${name}`,
+  terminalSessionId: `pty-${name}`,
+  live: true,
+});
 
 /** Four sparks, one in each of the words the board can say today. */
 const SPARKS: readonly SparkSummary[] = [
-  spark("sp-vela0001", "Vela", live("run-vela")),
-  spark("sp-lyra0001", "Lyra", live("run-lyra")),
-  spark("sp-juno0001", "Juno", live("run-juno")),
+  spark("sp-vela0001", "Vela", live("vela")),
+  spark("sp-lyra0001", "Lyra", live("lyra")),
+  spark("sp-juno0001", "Juno", live("juno")),
   spark("sp-kiwi0001", "Kiwi", { runtimeRunId: "run-kiwi", live: false }),
 ];
 
@@ -95,20 +101,45 @@ const ROWS: readonly AgentFieldRow[] = [
 ];
 
 /** Chat's plates, one per honest state. */
-export const CHAT_STATES = ["list", "asleep", "empty", "opening", "unavailable"] as const;
+export const CHAT_STATES = [
+  "list",
+  "finding",
+  "gone",
+  "fault",
+  "asleep",
+  "empty",
+  "opening",
+  "unavailable",
+] as const;
 export type ChatState = (typeof CHAT_STATES)[number];
 
 export const CHAT_STATE_LABEL: Record<ChatState, string> = {
   list: "Sparks",
+  finding: "Finding",
+  gone: "Off the floor",
+  fault: "No answer",
   asleep: "Asleep",
   empty: "No sparks",
   opening: "Opening",
   unavailable: "Unavailable",
 };
 
+/** What the shown thread's pane says on a plate (SP-1d). A catalog holds no terminals, so the live pane is never
+ * mounted here: absent, the panel says what a window with no terminals says; else the pane's own words for the place
+ * the product's pane would be in — fieldd has not named the terminal yet, the floor holds no such terminal, or the
+ * floor did not answer (the pool's own words for its lapse). */
+export const CHAT_PANE: Partial<Record<ChatState, SparkPanePlace>> = {
+  finding: { state: "finding" },
+  gone: { state: "gone" },
+  fault: { state: "fault", reason: "the floor did not answer in 10 s" },
+};
+
 export function chatReadingOf(state: ChatState): SparksReading {
   switch (state) {
     case "list":
+    case "finding":
+    case "gone":
+    case "fault":
     case "asleep":
       return { state: "ready", entries: sparkEntriesOf(SPARKS, ROWS) };
     case "empty":
@@ -120,9 +151,12 @@ export function chatReadingOf(state: ChatState): SparksReading {
   }
 }
 
-/** The spark a plate opens on: the newest, or Kiwi asleep. */
+/** The spark a plate opens on: the newest, Juno (awake and Ready) for the pane's words, or Kiwi asleep. */
 export const CHAT_CHOSEN: Record<ChatState, string | null> = {
   list: null,
+  finding: "sp-juno0001",
+  gone: "sp-juno0001",
+  fault: "sp-juno0001",
   asleep: "sp-kiwi0001",
   empty: null,
   opening: null,

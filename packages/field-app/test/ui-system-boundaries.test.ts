@@ -132,6 +132,23 @@ describe("UI system ownership boundaries", () => {
     expect(source("design-system/ViewFramePreview.tsx")).toContain("<ChatPreview");
   });
 
+  it("never mounts the thread's live pane in Chat's catalog — the pane's place is the shipping view's words (SP-1d)", () => {
+    // A catalog holds no terminal pool ("a host, never a painter"): the live pane (`SparkPane`, the controller) and the
+    // pool are never reached from Chat's plates, and no picture of a terminal stands in. The pane's place is the
+    // shipping `SparkPaneView`, in the words the product's pane says for the state a plate shows.
+    const preview = source("design-system/ChatPreview.tsx");
+    const fixtures = source("design-system/chat-fixtures.ts");
+    expect(preview).toMatch(/<SparkPaneView\s/u);
+    for (const file of [preview, fixtures]) {
+      expect(file).not.toMatch(/<SparkPane[\s/>]/u);
+      expect(file).not.toMatch(/from "\.\.\/chat\/SparkPane"/u);
+      expect(file).not.toContain("terminal/pool");
+      expect(file).not.toContain("useTerminalPool");
+      expect(file).not.toContain("terminalPoolRuntime");
+      expect(file).not.toContain("@vibecook/ghosttea-react");
+    }
+  });
+
   it("keeps the New spark sheet's fixture an ADAPTER — the product's sheet over a fixture port, never its markup (SP-1c)", () => {
     // The catalog stands in for what fieldd answers the sheet — the agents, the profiles, a picker, a hatch — behind
     // the product's own port shape, and reads its still states through the product's own helpers; the sheet it mounts
@@ -944,6 +961,10 @@ describe("UI system ownership boundaries", () => {
       // SP-1b — Chat
       "chat/ChatView.tsx",
       "chat/ChatPanelView.tsx",
+      // SP-1d — the thread
+      "chat/SparkPane.tsx",
+      "chat/SparkPaneView.tsx",
+      "chat/ThreadItemsView.tsx",
       // SP-1c — the New spark sheet
       "chat/NewSparkSheet.tsx",
       "chat/NewSparkSheetView.tsx",

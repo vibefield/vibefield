@@ -218,16 +218,19 @@ export function ChromeSection({
       </Specimen>
 
       <Specimen
-        title="Chat — the sparks, newest activity first"
-        source="chat/ChatPanelView.tsx · DESIGN.md §8 “Chat's list”, §2.10"
+        title="Chat — the sparks, newest activity first, and the thread"
+        source="chat/ChatPanelView.tsx · chat/SparkPaneView.tsx · DESIGN.md §8 “Chat's list”, “Chat's thread”, §2.10"
         bleed
       >
         <ChatSpecimen />
         <p className="vf-ds-stage-caption">
           The fourth view (SP-1b): the sparks fieldd keeps, each a face, a name and its status word;
-          Asking you, Needs your OK and Stuck in the attention ink with the orange dot. Until the
-          thread comes (SP-1d) its column holds the chosen spark's head and one honest line with its
-          one act. Fixture sparks and rows, read by the product's own reading.
+          Asking you, Needs your OK and Stuck in the attention ink with the orange dot. The thread
+          (SP-1d) is the spark's own pane under its head. A catalog holds no terminals, so its place
+          says what such a window says, and on three plates what the pane says while it is being
+          found, when this desktop's floor does not hold it, and when the floor did not answer.
+          Asleep or not started, one honest line with its act. Fixture sparks and rows, read by the
+          product's own reading.
         </p>
       </Specimen>
 

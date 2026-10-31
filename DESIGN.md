@@ -1448,6 +1448,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       ("Oct 12").
     - Under the name, the status word, 12 regular in tertiary ink, cut with an ellipsis (S-3).
     - Under the pointer the row takes the foreground at 4%; the chosen row takes the ready fill.
+  - **The thread it shows** is the chosen spark's. Chat opens on the newest spark and keeps it until you choose
+    another: by its row, or by the New spark sheet's hatch (SP-1c). A spark whose activity is newer moves up the list
+    and never takes the thread, nor the keyboard in its pane. *(SP-1d, 2026-10-31: until the thread was the spark's own
+    pane, a thread nothing had chosen followed the newest activity.)*
   - **Needs you (S-4):**
     - Asking you, Needs your OK and Stuck turn the row's word to `--vf-ink-attention`. An 8 dot in `--vf-orange` stands
       at the row's right, 12 in and 15 up from its foot.
@@ -1558,7 +1562,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   - **It takes input.** A click puts the keyboard in it, and keys go to the session as they do in Godview. The pane
     that holds the keyboard sizes the session's terminal (DS-D5). The thread's pane takes the size when it takes the
     keyboard, by a press in it or a send (§8 "Chat's composer"), and keeps it until another pane takes the keyboard.
-    Shown, it takes the size only when no pane holds it. Until then it draws the terminal at the size the last pane
+    Shown, it takes the size only when no pane holds it. Mounted under another view's cover (a wake, a terminal named
+    late) it claims no size at all until Chat shows it. Until then it draws the terminal at the size the last pane
     gave it, cut at its edges where that is larger. ⌘W stays the window's, as in every view but Godview.
   - **It draws only while Chat is the view.** Under another view's cover it stops, as the deck does. Godview's pane on
     the same session stays Godview's: only the one on screen draws, and the keyboard is in at most one of them.
@@ -1566,8 +1571,14 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     why in 13 regular secondary ink, centred, as the line under the head is drawn. It is never a blank:
     - "Finding Vela's pane…" while its terminal is being found: the floor's sessions are being read, or the spark is
       awake and fieldd has not named its terminal yet, as just after a hatch or a wake. It waits up to 20 s.
-    - "Vela's terminal is not on this desktop's floor." when the floor holds no such terminal, or none was named in
-      those 20 s.
+    - "Vela's terminal is not on this desktop's floor." when the floor answers and holds no such terminal, or none was
+      named in those 20 s.
+    - "Couldn't find Vela's pane: …", in the floor's own words, when the floor did not answer ("the floor did not
+      answer in 10 s"), or in the window's own when its terminals could not start. A floor that did not answer is
+      never said not to hold the terminal.
+    - Until its pane is drawn, it is asked again whenever the floor may have moved: when the floor's sessions are read
+      again (the deck reads them), or this window's terminals start or are replaced. So a terminal that appears later
+      is drawn.
     - "This window has no terminals to show it with." in a window with no terminals (the catalog, a browser): the
       Peek's words.
     - Asleep or not started there is no pane. The line under the head says so, with its act (§8 "Chat's list").
@@ -1734,6 +1745,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       - "Not sent — Vela's terminal is not on this desktop's floor", at once when the floor holds no such terminal,
         and after the 20 s for a spark that is awake, or was heard, but whose terminal was not named in them. A spark
         that is awake is never said not to have woken;
+      - "Couldn't find Vela's pane: …", at once, in the floor's or the window's own words, while the pane's place says
+        it (§8 "Chat's thread");
       - "Not sent — this window has no terminals", at once, in a window with no terminals (the catalog, a browser),
         where the pane's place says the Peek's words. Send is still drawn there, so its states can be seen;
       - "Couldn't wake Vela: …", in fieldd's words, as the line says it.
@@ -4907,8 +4920,8 @@ Inside History the room's own words stand as rosetta wrote them, and the Setup A
 - The hello and its starters: "Hi, I'm Vela. I can start agents for you, keep track of the ones you run, and carry
   work between them. What first?" · "Spawn 4 Grok agents to research a topic each" · "Keep track of my agents in
   vibe-field" · "Have Codex review claude·2's work until it's clean".
-- The pane's place: "Finding Vela's pane…" · "Vela's terminal is not on this desktop's floor." · "This window has no
-  terminals to show it with."
+- The pane's place: "Finding Vela's pane…" · "Vela's terminal is not on this desktop's floor." · "Couldn't find Vela's
+  pane: …" (Send's note says it too) · "This window has no terminals to show it with."
 - @: "Running in its profiles" · "Start an agent" · "Reading its agents…" · `Nothing called "cla"` · "Nothing to add
   from Vela's profiles"; a session's word, Working · Idle · Needs you.
 - Send's notes: "Pasted into Vela's pane — Return sends it" · "Vela is waiting on you — answer it in its pane" · "Not

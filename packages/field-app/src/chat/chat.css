@@ -179,7 +179,8 @@
   background: var(--vf-orange);
 }
 
-/* ── the thread's column, at SP-1b: the head and one honest line ── */
+/* ── the thread's column (SP-1b, SP-1d): a fixed box — the head, the pane (or, asleep or not started, one honest
+   line), then the foot ── */
 
 .vf-chat-thread {
   position: relative;
@@ -221,6 +222,82 @@
   font-size: 13px;
   line-height: 1.45;
   color: var(--vf-text-secondary);
+}
+
+/* ── the thread at SP-1d (DESIGN.md §8 "Chat's thread") ── */
+
+/* The pane's place: one column centred under the head, as wide as the composer (640, or the thread less 28 at each
+   side), 16 under the head's hairline and 12 over the foot, taking every height the head and the foot leave. Nothing
+   the thread shows is in its flow, so its size never depends on them. */
+.vf-chat-pane {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: calc(100% - 56px);
+  max-width: 640px;
+  margin: 16px auto 12px;
+  border-radius: var(--vf-godview-deck-well-radius);
+}
+
+/* Live, the well: painted in the terminal's own ground (projected from the theme the pane is handed, as the deck
+   sheet is), so the pane's translucent ground composites to its own colour and the panel never shows through; the
+   hairline drawn over it as a 1px inner ring. */
+.vf-chat-pane[data-pane-state="live"] {
+  background: var(--vf-godview-terminal-bg);
+}
+
+.vf-chat-pane[data-pane-state="live"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px var(--vf-hairline);
+  pointer-events: none;
+}
+
+/* the terminal, 1 in from the well's edge and clipped at 9 */
+.vf-chat-pane-surface {
+  position: absolute;
+  inset: 1px;
+  overflow: hidden;
+  border-radius: calc(var(--vf-godview-deck-well-radius) - 1px);
+  isolation: isolate;
+}
+
+/* No pane to draw: the place's words, without the well, on the panel's chrome — the line's look, centred. */
+.vf-chat-pane:not([data-pane-state="live"]) {
+  display: grid;
+  place-items: center;
+}
+
+.vf-chat-pane-words {
+  margin: 0;
+  padding: 0 24px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--vf-text-secondary);
+  text-align: center;
+}
+
+/* The foot: as wide as the pane, 16 above the panel's foot, at the column's foot whatever stands above it.
+   Positioned, so the thread's items stand over the pane from here. */
+.vf-chat-foot {
+  position: relative;
+  flex: none;
+  width: calc(100% - 56px);
+  max-width: 640px;
+  margin: auto auto 16px;
+}
+
+/* The thread's items: one rule for every item — as wide as the foot, their foot 12 above it, grown upward over the
+   pane's bottom rows, never in the column's flow. */
+.vf-chat-items {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 12px);
+  z-index: 2;
 }
 
 @media (prefers-reduced-motion: reduce) {
