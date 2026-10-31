@@ -25064,3 +25064,107 @@ Then VF-PM re-runs PR #7's verify.
 
 **Landed:** local main fast-forwarded `bd9ecd159` → `2d2f41046` (a5's judge, then this) at 2026-10-31T19:38:05Z by
 `land-stack4.sh`, on VF-PM's GO.
+
+## FG-O2's judge, its fix — one rule for the glass, 5:1 at the thinnest stroke row 32 measured: the glass's own t2 at 80% by day, its healthy and attention inks, and the wizard's error line off Tailwind's amber
+
+**Why.** Row 32 at run59b, the every-word judge's first live run (row 32 alone on M59 `2d2f41046`, exit 1 at 20:43:06Z;
+LANDED "FG-O2's judge", its run's block), put two inks short of DESIGN.md's 4.5:1 on the day's 75% milk, 14 of 180 words
+by day and 10 over the still: t2 at 4.1–4.4:1 ("Your phone" on Connect, "its own updater" on Agents, "· last used" on
+History) and an agent's "Ready" in `--vf-ink-healthy` at 3.4–3.7. The night was green, 180 judged and none short.
+VF-PM's lean (20:46Z), James's to overturn: DESIGN.md first, the glass's t2 at 80% by day as the re-projection's value
+on `.vf-wizard-shell`, the night untouched, and a darker day-glass healthy ink, judged by the row; not the milk, whose
+75% stands (James's "b", 18:25Z). The arithmetic, over run59b's own short chips (`lanes/fg2/fix/coverage.py`, reading
+the run's log):
+- Each chip's stroke coverage, c = (ground − read) / (ground − drawn) per channel: the t2 words 0.898–0.944, and "Ready"
+  (12px at 500) its ink whole on all 12 of its chips (c = 1.000). The ground under the short words reads [200–209,
+  201–213, 210–223], darker than the grounds the judge's model took.
+- t2 at 80%: every short t2 chip at its own coverage comes to 5.25–5.79:1, the most demanding needing 73.9% for 4.5:1
+  and 78.1% for 5:1; at the thinnest stroke (0.898) on the darkest ground under a short word ([200, 201, 210]), 80%
+  holds 5.13.
+- The inks: a5's first picks (20:56Z), `#145725` and `#763C00`, were held at 5:1 as full composites, and at the thinnest
+  stroke they read 4.38 and 4.40. They were re-picked by t2's own rule (21:06Z), the same hues scaled in linear light:
+  healthy `#104C1F` (5.02 at 90%; "Ready", drawn whole, 6.3–6.9:1 on its grounds) and attention `#683400` (5.03).
+- VF-PM's rulings at its leans, James's to overturn: attention in the same slice (20:56Z), WizardError's raw Tailwind
+  amber (`text-amber-600`, under 2:1 on the day glass) being the fault this slice fixes; no danger or info glass ink
+  until a word in them comes onto the glass, as DESIGN.md says; attention judged by arithmetic alone, since the walk
+  stands on no error, with an error pane under the judge named as a judge extension owed; and the one rule (21:07Z): 5:1
+  at the thinnest stroke the row measured, on the darkest ground under a short word, for t2 and both inks.
+
+**What landed** (`06cf3fe3d`, built and lit in lane fg2 on `fg/judge-fix` over `71df8acb5`, the mint M60 itself;
+Checks), in the commit's own order:
+- DESIGN.md first:
+  - §2.5, a dated amendment: on the day glass a state word takes its glass ink, its own hue scaled in linear light until
+    it holds 5:1 at the thinnest stroke the row measured, the rule the glass's t2 follows: `--vf-wizard-ink-healthy`
+    `#104C1F` and `--vf-wizard-ink-attention` `#683400`, re-projected on the glass alone; danger and info take theirs
+    when a word in them first comes onto the glass, DESIGN.md first.
+  - §5's Setup Assistant row: its words at the glass's own t2, `--vf-wizard-text` (80% by day, the ramp's t2 by night),
+    t2, t3 and t4 re-projected to it, and the two inks.
+  - §8's bar, **Its words read**: by day t2 is the glass's own 80%, and a state word takes its glass ink.
+  - §8, a dated correction at its source, after the judge's amendment, whose model said "4.9–5.3:1 by day … until the
+    row measures them": run59b's measured numbers, the darker grounds and the strokes at 90–94%, why 80%, the two inks
+    by the same rule, attention by this arithmetic alone with an error pane under the judge owed, and by day t2 close to
+    t1 (80% against 85%).
+- `tokens.css`: `--vf-wizard-text` `rgb(28 28 30 / 80%)` by day, and by night the ramp's t2 as its value, not a `var()`,
+  which would cycle under a `.dark` on the shell itself; `--vf-wizard-ink-healthy` `#104c1f` and
+  `--vf-wizard-ink-attention` `#683400` by day, and by night `var(--vf-green)` and `var(--vf-orange)`, the fills the
+  inks read.
+- `wizard-ui.css`: `.vf-wizard-shell` re-projects t2, t3 and t4 onto `--vf-wizard-text` (since the judge, t3 and t4 had
+  re-projected onto t2) and `--vf-ink-healthy` and `--vf-ink-attention` onto the glass inks. Settings keeps its ramp and
+  its inks. On the glass the inks colour an agent's "Ready" (AO's agents pane), the profiles pane's ready glyph and the
+  error line.
+- `wizard-ui.tsx`: `errorCls` stands beside the ramp's class inks, and WizardError wears it,
+  `text-[var(--vf-ink-attention)]`, where it wore `text-amber-600 dark:text-amber-400`.
+- Tests (`onboarding-wizard.test.tsx`): the judge's row holds the shell's new re-projection; a new row holds the three
+  tokens by day and by night (the night's t2 read from the ramp itself), the two ink re-projections alone with no danger
+  or info glass ink, and `errorCls` on the ink with no palette colour.
+
+**Checks.**
+- Red first, the code set aside at `71df8acb5`'s text (`tokens.css`, `wizard-ui.css`, `wizard-ui.tsx`) and restored byte
+  for byte (cmp checked; `lanes/fg2/fix/fix-light.zsh`): the two rows 2 failed, the judge's on the shell's re-projection
+  and the new one on `--vf-wizard-text`; then 2 of 2.
+- The lane's light (21:06:07–21:08:47Z, nice 19 under the guard, on the vitest lane cp-landing cleared at 21:05:38Z,
+  RELEASED 21:09Z), on the staged tree `5dc81384e`, the same before and after, all green (`lanes/fg2/fix/light/`):
+  - `git diff --check`; biome over the four files; the typecheck of design-kit, field-app and electron-shell;
+    `check:walls` clean;
+  - electron-shell's whole vitest: 160 files, 2,426 passed, 3 skipped;
+  - field-app's whole vitest: 267 files and 1 skipped, 3,487 passed, 3 skipped (+2 over the judge's light: this row, and
+    item 129's in `head`).
+- VF-PM took the one rule at 21:07Z and sent the mint's GO to a9 at 21:11Z: run 60, M60 = `06cf3fe3d` itself, its parent
+  main `71df8acb5`.
+- **Run 60:**
+  - `pnpm verify` went green at 21:16:57Z (exit 0; armed 21:12:05Z, its load 1.72 at the arming and 9.01 at the end),
+    the mini's tree clean after it and no stubs left.
+  - vitest: 11,373 passed, 0 failed, 18 skipped over its 27 rows (837 files, 3 skipped), +1 over run 59:
+    onboarding-wizard 57 → 58, the fix's row. field-app's row reads 3,490 passed and none skipped there, where the light
+    read 3,487 and 3 skipped on this Mac, the same 3,490 (a9 states no cause).
+  - cargo: 532 passed, 0 failed, 14 ignored, `test result: ok.` × 33; typecheck and test ran for 28 projects; biome
+    checked 2,942 files; MaxListeners 0.
+  - The bundle's assert held at 911.3 KB raw and 240.6 KB gz (911.0 KB raw at run 59; the fix is the one code change
+    since).
+  - Row 32 did not run: the console stayed locked through the mint (HID idle 1,744 s at the arming and 2,036 s at the
+    end). Its chain armed at 21:17:45Z on `06cf3fe3d` with a 4 h window (a9), run60b at James's next unlock.
+- **Landed:** main fast-forwarded `71df8acb5` → `06cf3fe3d` at 2026-10-31 21:19:32Z on VF-PM's GO (the fixer's line:
+  "Updating 71df8acb5..06cf3fe3d", a fast-forward; M60 is the fix itself).
+
+**Found while building.**
+- The first inks were held at 5:1 as full composites while t2's 80% was held at the strokes' coverage; at a 12px regular
+  word's coverage they would read 4.38 and 4.40, under the bar. One rule since: the thinnest stroke the row measured, on
+  the darkest ground under a short word (VF-PM, 21:07Z).
+- WizardError wore Tailwind's amber outside §2.5's inks, under 2:1 on the day glass; the walk shows no error, so the row
+  could not see it.
+- "Ready" (12px at 500) reads its ink whole on every chip, and the t2 words, at 400, read 90–94% of theirs: a word's
+  weight sets how much of its ink the row reads.
+- By day t2 now stands close to t1 on the glass (80% against 85%), so the quiet words are told from the reading ones by
+  their size and place more than by their shade (DESIGN.md §8).
+
+**Owed.**
+- **Row 32 OWED at James's unlock (the console locked through the mint):** row 32 alone on M60 (run60b), the fix's
+  witness: on each walk every pane still's count, its lowest words and any short one; run59b's two classes are answered
+  when "Ready" and the t2 words hold on both day walks. Its counts fold in here as one `  >` block when the row runs.
+- An error pane under the judge, a judge extension not built: the walk stands on no error, so attention's glass ink is
+  judged by arithmetic alone.
+- Not claimed: a state word on the glass in danger or info (none is worn there); a healthy or attention word drawn
+  thinner than the row measured; any word on a pane or in a state the walk does not stand on.
+- FG-6's remaining gates, in the ruled order: the catalog over the field's still (a fixture adapter, never a copy), then
+  the field's glass against the CSS glass on a frozen frame (a test-only seam, ruled on its own). Item 127's list
+  stands.
