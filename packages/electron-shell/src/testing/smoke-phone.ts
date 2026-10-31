@@ -123,6 +123,9 @@ export interface PhoneEnv {
   readonly devices: ReadonlyMap<number, string>;
   /** the run's id (`VF_PHONE_RUN`, inherited): its devices are `pts3-<runId>-n` — null: unsaid, so nothing is pressed */
   readonly runId: string | null;
+  /** the DRIVER's `xcode-select -p` reading (`VF_PHONE_DEVDIR_BY`, a label): `xcode-select` names a dir holding simctl
+   * (an Xcode-selected host), `fallback` the CLT — SIM-P1 VOIDs on this, never on main's word; null: unsaid */
+  readonly selected: "xcode-select" | "fallback" | null;
 }
 
 const RUN_ID = /^[a-z0-9]+(-[a-z0-9]+)*$/u;
@@ -151,6 +154,7 @@ export function phoneEnv(env: Readonly<Record<string, string | undefined>>): Pho
   const want = mode === "none" ? [1] : [1, 2, 3, 4];
   for (const n of want) if (!devices.has(n)) return `VF_PHONE_DEVICES names no device ${n}`;
   const run = env["VF_PHONE_RUN"];
+  const by = env["VF_PHONE_DEVDIR_BY"];
   return {
     mode,
     host,
@@ -158,6 +162,7 @@ export function phoneEnv(env: Readonly<Record<string, string | undefined>>): Pho
     runtime,
     devices,
     runId: run !== undefined && RUN_ID.test(run) ? run : null,
+    selected: by === "xcode-select" || by === "fallback" ? by : null,
   };
 }
 
@@ -678,19 +683,27 @@ export function judgePressed(
   return out;
 }
 
-/** SIM-P1: with xcode-select naming the CLT, the product found Xcode itself — VOID on a host whose xcode-select names Xcode. */
+/** SIM-P1: with xcode-select naming the CLT, the product found Xcode itself. Any `DEVELOPER_DIR` in Electron's env is red
+ * first — it is what makes xcode-select answer Xcode, so main's own `vetted` cannot say whether the row applies. VOID
+ * only on the DRIVER's reading (`selected`, RM4.2) that xcode-select names Xcode; unsaid is red. */
 export function judgeP1(s: {
+  readonly selected: "xcode-select" | "fallback" | null;
   readonly vetted: string | null;
   readonly offBoot: boolean;
   readonly developerDir: string | undefined;
 }): { readonly problems: string[]; readonly void: string | null } {
-  if (s.vetted === "xcode-select") return { problems: [], void: "not a CLT-selected host" };
   const out: string[] = [];
+  if (s.developerDir !== undefined)
+    out.push("SIM-P1: Electron's env carried DEVELOPER_DIR — P1 was not the finder");
+  if (s.selected === null)
+    out.push("SIM-P1: the stage never said its xcode-select reading (VF_PHONE_DEVDIR_BY)");
+  if (s.selected === "xcode-select")
+    return out.length > 0
+      ? { problems: out, void: null }
+      : { problems: [], void: "not a CLT-selected host" };
   if (s.vetted !== "fallback")
     out.push(`SIM-P1: main vetted ${s.vetted ?? "nothing"}, not the fallback`);
   if (!s.offBoot) out.push("SIM-P1: SIM-OFF-BOOT was not green");
-  if (s.developerDir !== undefined)
-    out.push("SIM-P1: Electron's env carried DEVELOPER_DIR — P1 was not the finder");
   return { problems: out, void: null };
 }
 
@@ -1965,11 +1978,16 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
 
     await row("SIM-P1", "MUST", async () => {
       const j = judgeP1({
+        selected: env.selected,
         vetted: census()?.vetted ?? null,
         offBoot: offBootGreen,
         developerDir: d.env["DEVELOPER_DIR"],
       });
-      return { problems: j.problems, void: j.void, seen: { vetted: census()?.vetted ?? null } };
+      return {
+        problems: j.problems,
+        void: j.void,
+        seen: { selected: env.selected, vetted: census()?.vetted ?? null },
+      };
     });
 
     await row("SIM-LIVE", "MUST", async () => {

@@ -82,6 +82,7 @@ const ENV = {
   VF_PHONE_RUNTIME: RUNTIME,
   VF_PHONE_DEVICES: `1:${TP},2:${TQ},3:${TR},4:${TN}`,
   VF_PHONE_RUN: "l2-a",
+  VF_PHONE_DEVDIR_BY: "fallback",
 };
 const UDID = "5F1C2A3B-4D5E-6F70-8192-A3B4C5D6E7F8";
 
@@ -99,6 +100,16 @@ describe("PT-S3 — the stage's word: the env", () => {
       [4, TN],
     ]);
     expect(env.runId).toBe("l2-a");
+    // the driver's own `xcode-select -p` reading, a label (never a path): SIM-P1's VOID is decided by it (M1/R13)
+    expect(env.selected).toBe("fallback");
+    for (const [said, read] of [
+      ["xcode-select", "xcode-select"],
+      [undefined, null],
+      ["/Applications/Xcode.app/Contents/Developer", null],
+    ] as const)
+      expect(
+        (phoneEnv({ ...ENV, VF_PHONE_DEVDIR_BY: said }) as { selected: unknown }).selected,
+      ).toBe(read);
     // none mode: one type, no device exists
     const none = phoneEnv({ ...ENV, VF_PHONE_MODE: "none", VF_PHONE_DEVICES: `1:${TP}` });
     expect(typeof none === "object" && none.mode).toBe("none");
@@ -444,24 +455,42 @@ describe("PT-S3 — the rows' judges", () => {
     );
   });
 
-  it("SIM-P1: VOID on a host whose xcode-select names Xcode; on a CLT host the fallback, with no DEVELOPER_DIR", () => {
-    expect(judgeP1({ vetted: "xcode-select", offBoot: true, developerDir: undefined })).toEqual({
+  it("SIM-P1: VOID only on the DRIVER's word that xcode-select names Xcode; any DEVELOPER_DIR red; on a CLT host the fallback (M1/R13)", () => {
+    const XCODE = "/Applications/Xcode.app/Contents/Developer";
+    const clt = {
+      selected: "fallback",
+      vetted: "fallback",
+      offBoot: true,
+      developerDir: undefined,
+    } as const;
+    expect(judgeP1(clt)).toEqual({ problems: [], void: null });
+    expect(judgeP1({ ...clt, selected: "xcode-select", vetted: "xcode-select" })).toEqual({
       problems: [],
       void: "not a CLT-selected host",
     });
-    expect(
-      judgeP1({ vetted: "fallback", offBoot: true, developerDir: undefined }).problems,
-    ).toEqual([]);
-    expect(
-      judgeP1({
-        vetted: "fallback",
-        offBoot: true,
-        developerDir: "/Applications/Xcode.app/Contents/Developer",
-      }).problems.join(" "),
-    ).toMatch(/DEVELOPER_DIR/u);
-    expect(
-      judgeP1({ vetted: "fallback", offBoot: false, developerDir: undefined }).problems.join(" "),
-    ).toMatch(/OFF-BOOT/u);
+    // THE case it exists for: DEVELOPER_DIR leaked into Electron on a CLT host, so main vetted xcode-select — red
+    const leaked = judgeP1({ ...clt, vetted: "xcode-select", developerDir: XCODE });
+    expect(leaked.void).toBeNull();
+    expect(leaked.problems.join(" ")).toMatch(/DEVELOPER_DIR/u);
+    expect(leaked.problems.join(" ")).toMatch(/main vetted xcode-select, not the fallback/u);
+    // any DEVELOPER_DIR is red, whatever the host
+    const anyHost = judgeP1({
+      ...clt,
+      selected: "xcode-select",
+      vetted: "xcode-select",
+      developerDir: XCODE,
+    });
+    expect(anyHost.void).toBeNull();
+    expect(anyHost.problems.join(" ")).toMatch(/DEVELOPER_DIR/u);
+    // the product's own word never VOIDs it: a CLT host where main says xcode-select is red
+    expect(judgeP1({ ...clt, vetted: "xcode-select" }).problems.join(" ")).toMatch(
+      /not the fallback/u,
+    );
+    // the stage never said: red, never VOID
+    const unsaid = judgeP1({ ...clt, selected: null, vetted: "xcode-select" });
+    expect(unsaid.void).toBeNull();
+    expect(unsaid.problems.join(" ")).toMatch(/VF_PHONE_DEVDIR_BY/u);
+    expect(judgeP1({ ...clt, offBoot: false }).problems.join(" ")).toMatch(/OFF-BOOT/u);
   });
 
   const measure = (over: Partial<Measure> = {}): Measure => ({

@@ -245,7 +245,9 @@ export function withoutDeveloperDir(env) {
 }
 
 /** The command's env: `DEVELOPER_DIR` and any inherited smoke override STRIPPED (the product's own P1 finds Xcode, Q6);
- * `none` mode points the product's probe at an empty directory (P2); the door's words added. */
+ * `none` mode points the product's probe at an empty directory (P2); the door's words added — among them the driver's
+ * own `xcode-select -p` reading as a label (`VF_PHONE_DEVDIR_BY`: xcode-select | fallback, never a path), so SIM-P1
+ * VOIDs on the DRIVER's word, never on the product's (RM4.2). */
 export function commandEnv(mode, env, door) {
   return {
     ...withoutDeveloperDir(env),
@@ -255,6 +257,7 @@ export function commandEnv(mode, env, door) {
     VF_PHONE_MODE: mode,
     VF_PHONE_RUNTIME: door.runtime,
     VF_PHONE_DEVICES: devicesWord(mode, door.types),
+    VF_PHONE_DEVDIR_BY: door.devDirBy,
     VF_SMOKE_SHOT_DIR: door.shotDir,
   };
 }
@@ -2199,9 +2202,10 @@ async function launch(mode, command, opts) {
         runtime: run.runtime,
         types: run.types,
         shotDir: opts.shotDir,
+        devDirBy: armed.developerDir.by,
       });
       deps.say(
-        `PHONE_COMMAND_ENV ${JSON.stringify({ DEVELOPER_DIR: env.DEVELOPER_DIR === undefined ? "absent" : "SET", VF_SMOKE_SIMCTL_DEVELOPER_DIR: env.VF_SMOKE_SIMCTL_DEVELOPER_DIR ?? "absent", VF_PHONE_MODE: mode, VF_PHONE_RUNTIME: run.runtime, VF_PHONE_DEVICES: env.VF_PHONE_DEVICES, VF_SMOKE_SHOT_DIR: env.VF_SMOKE_SHOT_DIR })}`,
+        `PHONE_COMMAND_ENV ${JSON.stringify({ DEVELOPER_DIR: env.DEVELOPER_DIR === undefined ? "absent" : "SET", VF_SMOKE_SIMCTL_DEVELOPER_DIR: env.VF_SMOKE_SIMCTL_DEVELOPER_DIR ?? "absent", VF_PHONE_MODE: mode, VF_PHONE_RUNTIME: run.runtime, VF_PHONE_DEVICES: env.VF_PHONE_DEVICES, VF_PHONE_DEVDIR_BY: env.VF_PHONE_DEVDIR_BY, VF_SMOKE_SHOT_DIR: env.VF_SMOKE_SHOT_DIR })}`,
       );
       // the preflight again, right before the command
       const again = readFiles();

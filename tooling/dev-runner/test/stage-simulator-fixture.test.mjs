@@ -348,6 +348,7 @@ test("commandEnv: DEVELOPER_DIR never reaches the command; none points the produ
     runtime: RT27,
     types: CATALOG.slice(2, 6),
     shotDir: SHOTS,
+    devDirBy: "fallback",
   };
   const env = {
     PATH: "/usr/bin",
@@ -363,6 +364,12 @@ test("commandEnv: DEVELOPER_DIR never reaches the command; none points the produ
   assert.equal(devices.VF_PHONE_HOST, "http://127.0.0.1:51234");
   assert.equal(devices.VF_PHONE_TOKEN, "t0k");
   assert.equal(devices.VF_SMOKE_SHOT_DIR, SHOTS);
+  // the driver's xcode-select reading, a label: SIM-P1 VOIDs on it, never on main's own word (M1/R13)
+  assert.equal(devices.VF_PHONE_DEVDIR_BY, "fallback");
+  assert.equal(
+    commandEnv("devices", env, { ...door, devDirBy: "xcode-select" }).VF_PHONE_DEVDIR_BY,
+    "xcode-select",
+  );
   assert.equal(
     devices.VF_PHONE_DEVICES,
     `1:${T("iPhone-13")},2:${T("iPhone-14")},3:${T("iPhone-15")},4:${T("iPhone-16")}`,
