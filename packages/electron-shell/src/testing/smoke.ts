@@ -37,6 +37,7 @@ import {
   BrowserWindow,
   Menu,
   MessageChannelMain,
+  nativeImage,
   nativeTheme,
   powerSaveBlocker,
   session,
@@ -160,6 +161,7 @@ import { type LastStillDriver, lastStillRows, STILL_FLAG } from "./smoke-last-st
 import { LIVE_FLAG, type LiveRowsDriver, livePaneRows } from "./smoke-live-pane";
 import { faultRows, peersRows } from "./smoke-peers";
 import { pegboardRows } from "./smoke-pegboard";
+import { PHONE_FLAG, type PhoneRowsDriver, phoneRows as phonePaneRows } from "./smoke-phone";
 import { profileSeedRows, profileSeedUrl } from "./smoke-profile-seed";
 import { putDownRow } from "./smoke-put-down";
 import { restRows } from "./smoke-rest";
@@ -1324,6 +1326,11 @@ export async function runSmokeCanvas(opts: {
         } catch (error) {
           problems.push(`PT-1 PANE: ${error instanceof Error ? error.message : String(error)}`);
         }
+      } else if (process.argv.includes(PHONE_FLAG)) {
+        // PT-S3 — the phone's rows ALONE after the boot's, under the phone's stage (`node
+        // ../../scripts/stage-simulator-fixture.mjs devices -- node packaging/run-smoke.mjs --smoke-canvas --phone`, the
+        // `smoke:phone` scripts on smoke:canvas's build): INTERACTION rows, never in smoke:canvas's own order below
+        problems.push(...(await phoneRows(win, shotDir, opts)));
       } else if (faultRun) {
         // DK-9: the fault fixture's run (`smoke:kind-faults`) — the witnesses above ran with the broken kind
         // refused at the boot; the fault rows lay the broken clocks beside a drawn one. The pad's, the retry's
@@ -2406,6 +2413,89 @@ async function framesRows(
     return await framesPaneRows(driver);
   } catch (error) {
     return [`PT-5d FRAMES: ${error instanceof Error ? error.message : String(error)}`];
+  } finally {
+    if (attachedHere && dbg.isAttached()) dbg.detach();
+    await fixture.close();
+  }
+}
+
+/** PT-S3's rows on the phone's stage (testing/smoke-phone.ts): PT-2's driver with the stage's env, main's simulator census
+ * (D1, D2) on its custody, the opener's record (D3), fieldd's plugin row, the shell's page told it is focused (`open -a`
+ * takes the app's focus), a device screenshot's pixels and the app's processes. */
+async function phoneRows(
+  win: BrowserWindow,
+  shotDir: string | undefined,
+  opts: {
+    readonly viteUrl: string;
+    readonly handle: FielddHandle;
+    readonly liveSurfaces?: (() => LiveCensus | null) | undefined;
+    readonly shellOpens?:
+      | { readonly opened: readonly string[]; readonly revealed: readonly string[] }
+      | undefined;
+  },
+): Promise<string[]> {
+  const fixture = await startLiveFixture();
+  const dbg = win.webContents.debugger;
+  let attachedHere = false;
+  try {
+    const driver: PhoneRowsDriver = {
+      win,
+      shotDir,
+      say: (line) => console.log(line),
+      env: process.env,
+      fixture,
+      custody: () => opts.liveSurfaces?.() ?? null,
+      shellOpens: opts.shellOpens,
+      reload: async () => {
+        const ready = waitForConsole(win, "DESK_READY ", 60_000);
+        await loadRenderer(win, "smoke-canvas", opts.viteUrl, {
+          presenceRelay: "1",
+          deskFaults: "1",
+        });
+        try {
+          await ready;
+          await bootRevealed(win, "the reloaded desk revealed");
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      plugin: (id) => opts.handle.client.request("plugins.get", { id }),
+      focused: async () => {
+        if (!dbg.isAttached()) {
+          dbg.attach("1.3");
+          attachedHere = true;
+        }
+        await dbg.sendCommand("Emulation.setFocusEmulationEnabled", { enabled: true });
+      },
+      // a device screenshot: Electron's bitmap is BGRA
+      pngPixels: (file) => {
+        const image = nativeImage.createFromPath(file);
+        if (image.isEmpty()) return null;
+        const { width, height } = image.getSize();
+        const bgra = image.toBitmap();
+        if (bgra.length !== width * height * 4) return null;
+        const rgba = new Uint8Array(bgra.length);
+        for (let i = 0; i < bgra.length; i += 4) {
+          rgba[i] = bgra[i + 2] ?? 0;
+          rgba[i + 1] = bgra[i + 1] ?? 0;
+          rgba[i + 2] = bgra[i] ?? 0;
+          rgba[i + 3] = bgra[i + 3] ?? 0;
+        }
+        return { width, height, rgba };
+      },
+      metrics: () => {
+        const metrics = app.getAppMetrics();
+        return {
+          mb: Math.round(metrics.reduce((sum, m) => sum + m.memory.workingSetSize, 0) / 1024),
+          cpu: Math.round(metrics.reduce((sum, m) => sum + m.cpu.percentCPUUsage, 0)),
+          processes: metrics.length,
+        };
+      },
+    };
+    return await phonePaneRows(driver);
+  } catch (error) {
+    return [`PT-S3 PHONE: ${error instanceof Error ? error.message : String(error)}`];
   } finally {
     if (attachedHere && dbg.isAttached()) dbg.detach();
     await fixture.close();
