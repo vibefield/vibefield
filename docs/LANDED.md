@@ -25255,3 +25255,100 @@ clear it (owed: `clear()` is built, the corner's Sign out does not call it yet)"
   IOS-10a's turn.
 - `HomeScreen`'s one call is read, not driven by a test, because HomeScreen is a View.
 - `thinking-ios-history.md` §7.2's owed line wants a dated note at its source, at the next draft queue.
+
+## FG-6's catalog — the Setup Assistant's frames in the design catalog stand the shipping glass on the shipping field at its still, told the page a window that can't run the field is (`?field=still`), never a copy of its markup or CSS
+
+**Why.** FG-6's ladder entry (the record's §7) opens on the catalog: `design-system/OnboardingPreview.tsx` over a still
+of the field at the glass's fit, every state. Of FG-6's gates it was the first of the last two in the ruled order (VF-PM
+16:04Z), owed since FG-6 (LANDED "FG-6", its owed list) and named next by the fix (LANDED "FG-O2's judge, its fix", its
+Owed). Until this slice the catalog stood the shipping `WizardShellView` on its default ground, the app's, in a box on
+the mat (`scenes.css`: the mat's ground and its lattice), so none of its 13 frames showed the glass as a first run
+stands it. DESIGN.md §2.1's amendment (2026-10-29) already rules the catalog's Setup Assistant onto the field's still,
+so no constant is new and DESIGN.md is unchanged. VF-PM's grant (21:27Z) set the terms: the shipping glass over the
+field's still with a fixture adapter, never a copy of the markup or CSS (`docs/UI_SYSTEM.md`'s rule, which
+`ui-system-boundaries.test.ts` enforces), and DESIGN.md first for any new constant. At a5's lean (VF-PM 21:32Z) the
+catalog's pixels are judged in a slice of their own (Owed).
+
+**What landed** (`aa4d41a3e`, built and lit in lane fg2 on `fg/catalog-still` over `32ac630e6`; Checks), in the commit's
+own order:
+- `FieldLayer.tsx`:
+  - `page`: the page as the field's door reads it (`fieldPlan`'s search and WebGPU, the door's own
+    `Pick<FieldDoorEnv, "search" | "gpu">`), where it is not the window's own. It is read once at the first frame, as
+    the window's is, and the plan and the door both take it. Absent, it is `{}`, which `fieldPlan` and `openFieldDoor`
+    read as the window's own, so the boot is unchanged. VF-PM's list (21:31Z) named it `env`; `page` is what landed
+    (VF-PM took it, 21:57Z).
+  - It imports `boot.css` itself, the stylesheet of the classes it draws (`.vf-field`, its mark and its canvas).
+- `OnboardingPreview.tsx`: each `OnboardingFrame` mounts `<FieldLayer mark={false} page={STILL_PAGE}>` around the
+  shipping `WizardShellView` on `ground="field"`. `STILL_PAGE` is `{ search: "?field=still" }`, the road a window takes
+  when it asks for its still, so no frame opens WebGPU and every state stands on one picture. Each of the 13 frames is
+  the first run as it stands over the still: the field's edge, shadow and grain on the glass, the browser's frost over
+  the picture, the logo at the still's own mark (`useFieldStill`), and the glass at its fit to the box (`useGlassFit`:
+  about 0.74 where the box's 568px height binds). The fresh user path's description says so.
+- `scenes.css`: `.vf-ds-onboarding-production` leaves the mat for `--vf-field-ground`, positioned and isolated, so the
+  field's layer fills the box and stays under the glass inside it. It owns no production selector.
+- `docs/UI_SYSTEM.md`: the catalog's list says every onboarding pane, alternate entry and completion failure stands on
+  the shipping glass over the shipping field at its still.
+- Tests:
+  - `field-glass.test.tsx`, a new row: the page has WebGPU (`navigator.gpu` defined for the row, and `fieldPlan()`
+    reading it) and FieldLayer's `page` asks for the still. From the first frame the field is its still, its mark hidden
+    and no canvas; what stands on it reads the still, and the glass is the browser's (no `data-glass`).
+  - `design-system.test.tsx`: all 13 frames, each with `.vf-field[data-field="still"]` directly in its box and the glass
+    on `data-ground="field"`, with no canvas and no `data-glass`.
+  - `ui-system-boundaries.test.ts`: the catalog's CSS owns no `.vf-field`, `.vf-splash` or `.vf-wizard-` selector and
+    names no still picture; a new row holds OnboardingPreview to its page and the two mounts (no field or glass class,
+    no stylesheet, no door, no context of its own); and "FieldLayer" joins the production views the catalog mounts.
+  - `wearing-the-mat.test.tsx`: the catalog's box stands on the field's ground, never the mat.
+
+**Checks.**
+- Red first, the code set aside at `32ac630e6`'s text (`FieldLayer.tsx`, `OnboardingPreview.tsx`, `scenes.css`) under
+  the new tests and restored byte for byte (cmp checked; `lanes/fg2/catalog/catalog-light.zsh`): the five rows 5 failed,
+  each at its own assertion (ui-system-boundaries with no `STILL_PAGE` and no `FieldLayer` in the preview,
+  wearing-the-mat on the mat's ground, field-glass reading "waking" for "still", design-system finding 0 fields for 13);
+  then 5 of 5.
+- The lane's light (21:51:24–21:54:16Z, nice 19 under the guard, on the shared vitest lane by the HOLD file, taken once
+  fw1b's hold had cleared and released to `released/HOLD-215416`), on the staged tree `6d06b47e2`, the same before and
+  after, all green (`lanes/fg2/catalog/light/`):
+  - biome over the seven files and `git diff --check`; the typecheck of field-app and electron-shell; `check:walls`
+    clean;
+  - electron-shell's whole vitest: 160 files, 2,426 passed, 3 skipped;
+  - field-app's whole vitest: 267 files and 1 skipped, 3,490 passed, 3 skipped (+3 over the fix's light: the three new
+    rows).
+- VF-PM read the tip clean at 21:56Z: its parent in main, the MERGE shape, 8 files +124 −21, no markers, pins or hex
+  literals, DESIGN.md untouched; merge-tree with no conflict against main `88c7d5f5f` and against M61 `6130153f8`.
+- **Run 62** (the mint M62, the merge `48c67b39a`: main `2a1a91d9b` merged into `aa4d41a3e`):
+  - `pnpm verify` went green at 22:07:27Z (exit 0; armed 22:02:33Z, its load 1.31 at the arming and 9.57 at the end),
+    the mini's tree clean after it and no stubs left.
+  - vitest: 11,376 passed, 0 failed, 18 skipped over its 27 rows, +3 over run 61's 11,373: field-glass 14 → 15,
+    ui-system-boundaries 40 → 41 and wearing-the-mat 17 → 18, design-system keeping its 8. field-app's row reads 3,493
+    passed and none skipped (3,490 at run 61), where this Mac's light read 3,490 and 3 skipped, as at the fix's light;
+    electron-shell's 2,426 passed and 3 skipped, unchanged.
+  - cargo: `test result: ok.` × 33, none failed; typecheck and test ran for 28 projects; biome checked 2,942 files;
+    MaxListeners 0; the iOS fixtures' 186 copies and 63 pins identical.
+  - The bundle's assert held at 911.4 KB raw and 240.6 KB gz, +0.1 KB raw over run 61's 911.3.
+  - No console row ran on M62 (VF-PM 22:07Z: the catalog changes no shipping pixels, and FieldLayer's `page` is absent
+    in the boot). The console stayed locked and untouched through the run (HID idle 1,612 s at the arming and 1,907 s at
+    the end).
+- **Landed:** main fast-forwarded `2a1a91d9b` → `48c67b39a` at 2026-10-31 22:13:10Z on VF-PM's GO (the fixer's
+  land-stack4, through VF-PM: 8 files +124 −21, M62's tree `546c085fb`).
+
+**Found while building.**
+- The catalog had `boot.css` only through SwitchScene's import, a dependency nothing named. FieldLayer now imports the
+  stylesheet of the classes it draws. No other stylesheet under `field-app/src` names a boot.css class, so its earlier
+  place in BootRoot's import order changes no cascade.
+- The field's layer stands absolute at inset 0 and z −1, under what it holds, so the box it stands in is the window:
+  unpositioned, the layer would fill the nearest positioned ancestor, and with no stacking context of its own it would
+  fall under the catalog's page.
+- field-glass's row "…nor with no field under it (the catalog)" named the catalog as a glass with no field under it,
+  which this slice makes false. The row's name was corrected at its source.
+- The catalog's two completion failures (A4 "Answers not saved", A5 "The desk could not open") stand the wizard's error
+  line (`WizardError`) on the glass over the still, an error the walk never reaches.
+
+**Owed.**
+- The catalog judged, a slice of its own at a5's lean (VF-PM 21:32Z): an Electron walk of its frames on the Mac mini,
+  each judged by row 32's own measure (`captureWords`, `judgeContrast`). It pays the fix's error pane under the judge,
+  on A4's and A5's error lines.
+- James's look at the catalog in Studio (`pnpm dev:design`).
+- Not claimed: the catalog's frames over the live field (none opens WebGPU, by this slice's design); any frame's pixels
+  or its words' contrast, judged only by the walk owed above.
+- FG-6's last gate, in the ruled order: the field's glass against the CSS glass on a frozen frame (a test-only seam,
+  ruled on its own). Item 127's list stands.
