@@ -25352,3 +25352,123 @@ own order:
   or its words' contrast, judged only by the walk owed above.
 - FG-6's last gate, in the ruled order: the field's glass against the CSS glass on a frozen frame (a test-only seam,
   ruled on its own). Item 127's list stands.
+
+## F1b — the forwarded phone approval: a phone's link to a desktop other than its home is approved by THAT desktop, the ask riding the home's door — `freeway.approve` routable for FW-D5, the desktops' half (2026-10-31; `bc2cf8995` → `e15a058f8`, lane `fw/1b-forwarded-approval`; the mint M63 `599998fdd`, run 63)
+
+**What James asked and ruled:**
+- **FW-D5, 2026-10-16 22:16Z:** "a freeway per desktop": the phone opens a link to each desktop it shows a session
+  of, approved by THAT desktop's fieldd through the home's door (DS-2's forwarding with `onBehalfOf`), the bytes
+  straight to their owner (DS-D13). `draft/thinking-freeway.md` v0.3 §3 made the approval "routable" for it, and
+  §4.5 Note 19 said F1b needs `peer-fieldd` at the owner (B, the truffle bump) and the routable approval, not FD1.
+- **DS-D15, 2026-09-30:** a forwarded call carries who it is for, authorized as the peer and recorded as the
+  client (DS-L7). DS-D5: the self set `[geometry, input, read]` for every self principal.
+- **2026-10-31 21:09Z:** the freeway lands before the Settings track. VF-PM dispatched F1b, every "Needs" of §13 met
+  since the truffle pin (the doc's 2026-10-28 correction).
+
+**The 3 commits, on `06cf3fe3d`:**
+- `bc2cf8995` contracts: `OnBehalfOf.clientDeviceId`, the phone behind its home named by the device the HOME's
+  roster correlated its node to. `ForwardedFor` and the audit's `AuditOnBehalfOfV1` carry it. The golden fixture
+  `forward-envelope.phone.json`.
+- `caa14ddd4` the home's half: `forwardProvenance` restates the phone's roster device from the door's own node
+  correlation; the owner's tolerant reader and the audit actor keep it. `holderFaceFor`'s comment corrected at its
+  source.
+- `e15a058f8` the owner's half: `FreewayApprover` honours a self `peer-fieldd` forwarding for a phone its own roster
+  knows. A forwarded approval is never replayed from a receipt (`CREDENTIAL_MINTS`). `forwarding-unbuilt` retires.
+  The doors page (`docs/agent-plane/api.html`) says the forward as built.
+
+**What is real:**
+- **The ask.** The phone calls `freeway.approve {device: B}` on its home's tailnet door. The method was already
+  `federate` (F1), so the home's door forwards it whole over PeerLink, keyed (DS-D15), with `onBehalfOf` built from
+  the calling context. Its `deviceId` stays the home's (DS-2's contract, which DS-4c's window keys and item 42's face
+  read). The phone is named by `clientDeviceId`, the device the home's roster correlates the phone's
+  sidecar-injected node to. It is a transport fact read at the forward, never the phone's claim.
+- **The mint, at the owner.** Authorized as the peer, recorded as the phone. `clientDeviceId` only picks whom the
+  approval is for among the owner's OWN roster's phone rows (restrict-only). What it binds to is the owner's:
+  - the node is the owner's roster row's `tailscaleId`, the registry's;
+  - the login is the owner's linked login, the one the phone's link there will carry (the host refuses an approval
+    whose login is not the connection's);
+  - the rights are `rightsFor(peer, onBehalfOf)`, the self set;
+  - the key is the owner's floor boot's freeway key, and the audience is that floor boot.
+  The approval is the same shape the phone's own ask there gets, so the host verifies it unchanged. No Rust moved.
+- **The refusals a forwarding peer hears, in order:**
+  - no phone behind it (the daemon on its own account, or a window): FORBIDDEN_SCOPE;
+  - a desktop named (the carrier, another desktop, or the owner itself): FORBIDDEN_SCOPE;
+  - a phone the owner's roster does not know, or knows under no account: UNAVAILABLE `uncorrelated`, retryable;
+  - the owner's floor unread or its host down: UNAVAILABLE `unread` / `down`, retryable. These reach the phone
+    verbatim through the home.
+- **An owner the home cannot reach** is PeerLink's `UNAVAILABLE {service: "peer-link", device, state:
+  "unreachable"}`, retryable. That was already true before F1b, and it is witnessed end to end now.
+- **The audit.** The owner writes `freeway.approval.mint` attempt and outcome, target the phone's device. The actor is
+  the peer daemon, its node, and `onBehalfOf` naming the phone's roster device. No key, MAC or nonce enters the
+  ledger. The home mints and audits nothing.
+- **No replay of a credential.** Forwarded, the approval is a keyed mutation. The owner's journal replays a keyed
+  answer for `FORWARDING.RECEIPT_TTL_MS` (a day), and an approval lives half an hour under one floor boot's key. The
+  never-journaled set, renamed `CREDENTIAL_MINTS`, takes `freeway.approve` beside `terminal.openTicket` (DS-2b's
+  rule). A same-key retry mints afresh. DS-D15's key still rides, and the home's own journal still reads
+  `outcome-unknown`.
+- **`peer-fieldd` at the owner is kept.** truffle-egress is in field-native's default features (TB-E) and PeerLink
+  dials through it, so the owner's sidecar sees the home's truffle node, and the door mints the peer kind from the
+  node's `docHost` row (D1). Nothing in that path changed.
+
+**Not in this landing, and what is owed:**
+- **The kit's half (IOS), its own later slice.** `FieldLink.approveFreeway(on:)` (`FieldLink.swift:683`) still asks
+  a non-home desktop's own door (`ownerDoor`, a per-ask owner socket), which F1 already serves. Asking the home with
+  `device` instead is unbuilt, and so are FW-R3 (no phone probe of desktops) and FW-R6 (per-ask owner sockets
+  retired), both F1b's in §14. The kit keeps one `FreewayDesktopLink` per desktop already (F1).
+- **F1b's exit** (a session on a second desktop opens over that desktop's link, approved through the home's door,
+  its bytes owner-direct) needs the kit's half and James's device round on two desktops. The rows here are two real
+  fieldd daemons over scripted floors; no live tailnet ran.
+- **The `-vf-freeway` flag** stays: James's device round's exit rows take it off in their own commit.
+- **Errata owed at source**, to a draft slot VF-PM opens:
+  - `thinking-freeway.md` §3: "Routable for FW-D5" names `onBehalfOf {clientKind: "phone", deviceId}`. As built,
+    `clientKind` is the hello's `ios`, `deviceId` stays the home's, and the phone is `clientDeviceId`. "with DS-D15's
+    idempotency key and receipt": the key rides, and the owner journals no receipt (DS-2b's credential rule).
+  - `thinking-freeway.md` §3, "The refusals, as built": `forwarding-unbuilt` is retired; the forwarded refusals are
+    above. The Status line's "Next".
+  - `design-06-sync-planes.md:74` (§17's "At F1b"): `onBehalfOf` picks a forwarded approval's audience,
+    restrict-only.
+
+**Findings:**
+- **The doc's `onBehalfOf` could not name the phone.** `OnBehalfOf.deviceId` is the forwarding daemon's device,
+  and the phone's identity never reached an owner. `holderFaceFor` said so in its comment. Reusing `deviceId` for
+  the phone would have moved DS-4c's per-window keys and item 42's faces. Hence the fifth member.
+- **The generic forward path would have replayed an approval for a day** (above). Found reading
+  `forward-receipts.ts` against the approval's lifetime. Fixed at its cause by naming the set for what it holds.
+- **An unreachable owner costs the phone's ask about 15 s.** A keyed forward waits on the re-dialing client's
+  readiness until `FORWARDING.FORWARD_TIMEOUT_MS` (15 s), then answers `unreachable`. For the kit's half:
+  `FreewayDesktopLink.dial()` asks the approval before its 10 s handshake deadline starts, so each dial to an
+  unreachable desktop would wait those 15 s before its backoff. Reading the roster's state for the desktop first, or
+  FD1's held opens, would answer sooner.
+- **§4.1's `UNAVAILABLE {service: "freeway", device, state}`** is the desktop link's E3 dial (FD1). A forward's own
+  unreachable owner answers PeerLink's `{service: "peer-link", device, state}`, and the owner's freeway states pass
+  through as `{service: "freeway", state}`.
+
+**Validation:**
+- The lane `/Volumes/SamsungRed/lanes/fw1b/vibe-field`, rebased onto main `06cf3fe3d` at its start and not again.
+  Its own cargo target `/Volumes/SamsungRed/rust/fw1b`; the shared vitest lane taken and released by the HOLD file
+  for every run, nice 19 under the guard. Its logs: `/Volumes/SamsungRed/lanes/fw1b/logs/`.
+- **Red first**, each new row against the sources before its commit:
+  - contracts, with `packages/contracts/src` stashed: `rows.test.ts:143` red (an empty `clientDeviceId` passed).
+  - the home's half, its sources stashed: 4 of 17 red, at `forward-envelope.test.ts:69`, `:179`, `:222` and
+    `audit-service.test.ts:550`.
+  - the owner's half, on the previous commit: 7 of 8 red, at `freeway.test.ts:671`, `:728`, `:763`,
+    `forward-receipts.test.ts:302`, and the e2e's minted row, `:252` and `:275`.
+  - not red first, said: the e2e's unreachable-owner row passes on both, since PeerLink's answer was already honest.
+- **The lane's light at `e15a058f8`:** biome on the 20 changed files and `pnpm check:walls` clean; `nx run-many -t
+  typecheck` for contracts and fieldd 2 of 2; contracts' whole vitest 1,416 passed in 54 files; fieldd's whole vitest
+  2,774 passed and 29 skipped in 220 files (3 skipped), 142 s, no unhandled errors; `pnpm gen` left the tree clean;
+  `check:ios-fixtures` 186 copies and 63 pins identical; `pnpm preflight` OK with its standing R23 warning.
+- VF-PM re-ran the lane's light independently and read the tip clean: merge-tree against main with no conflict, no
+  markers, no pins moved.
+- **Run 63** (the mint M63, the MERGE shape: main `e0e76abfc` merged into `e15a058f8`, tree `7b1ba417f`):
+  - `pnpm verify` went green at 22:23:48Z (exit 0; armed 22:18:48Z, about 5 min), the mini's tree clean after it.
+  - vitest: 11,388 passed, 0 failed, 18 skipped, +12 over run 62's 11,376. contracts 1,416, +2 (fixtures.test.ts
+    525, rows.test.ts 10). fieldd 2,792 passed and 11 skipped, +10: freeway-forwarded-approval.e2e.test.ts new with
+    4, freeway.test.ts 22, forward-envelope.test.ts 8, forward-receipts.test.ts 28, audit-service.test.ts 9.
+  - cargo: `test result: ok.` × 33, no Rust moved; typecheck and test ran for 28 projects; biome checked 2,944 files;
+    MaxListeners 0; gen freshness held; the iOS fixtures' 186 copies and 63 pins identical, so the new fixture is not
+    among the held copies and no kit mirror is owed.
+  - The bundle's assert held at 911.4 KB raw and 240.6 KB gz.
+  - Its logs: `/Volumes/SamsungRed/lanes/ts6/logs/mini/run63/` (`mrun63.bundle`, sha256 `ff01a964981dfc96…`).
+- **Landed:** main fast-forwarded `e0e76abfc` → `599998fdd` at 2026-10-31 22:26:14Z on VF-PM's GO (21 files +718
+  −54; parents `e15a058f8` and `e0e76abfc`).
