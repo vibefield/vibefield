@@ -8,8 +8,16 @@ import {
   useRef,
   useState,
 } from "react";
+import "./boot.css";
 import { createFieldGlass, FieldGlassContext } from "./field-glass";
-import { type FieldDoor, fieldPlan, openFieldDoor, TEAR, tearLook } from "./splash/field-door";
+import {
+  type FieldDoor,
+  type FieldDoorEnv,
+  fieldPlan,
+  openFieldDoor,
+  TEAR,
+  tearLook,
+} from "./splash/field-door";
 
 // The field under the boot's first face (track FG; DESIGN.md §2.1, §8 "The boot splash"): the
 // website's splash, one for the window's whole first face — BootGround is one node from the splash
@@ -18,9 +26,14 @@ import { type FieldDoor, fieldPlan, openFieldDoor, TEAR, tearLook } from "./spla
 // door has opened. A window that can't run the field (no WebGPU on the page, or `?field=still`)
 // paints the field's still from its first frame, and one whose door fails falls back to it. What
 // stands on the field (`children`) holds it through `FieldGlassContext`: since FG-3b the Setup
-// Assistant's glass is drawn by the field in its own frame (field-glass.ts).
+// Assistant's glass is drawn by the field in its own frame (field-glass.ts). The design catalog
+// stands the shipping glass on this layer over the field's still (FG-6), asked for as a window
+// asks for it.
 
 type FieldState = "waking" | "live" | "still";
+
+/** The page as the field's door reads it at once (`fieldPlan`): its search and its WebGPU. */
+type FieldPage = Pick<FieldDoorEnv, "search" | "gpu">;
 
 /** How the tear went, said on the field's root as `data-tear` (FG-6c), an honest state like the
  * ground's `data-opening`: "tearing" while it opens, then "open"; or, where it did not open,
@@ -54,17 +67,20 @@ function prefersReducedMotion(): boolean {
 
 /** `mark`: the field's mark shows; under the Setup Assistant's glass it goes (DESIGN.md §6, the
  * glass forming), and it comes back as the glass clears (FG-5). `markMs`: how long its fade takes,
- * when not its own 400ms. `handleRef`: the boot's hold on the field at the reveal. `children`: what
- * stands on the field, drawn over it. */
+ * when not its own 400ms. `handleRef`: the boot's hold on the field at the reveal. `page`: the page
+ * as the door reads it, where it is not the window's own (the catalog's `?field=still`), read once
+ * at the first frame as the window's is. `children`: what stands on the field, drawn over it. */
 export function FieldLayer({
   mark,
   markMs,
   handleRef,
+  page: asked,
   children,
 }: {
   mark: boolean;
   markMs?: number | undefined;
   handleRef?: Ref<FieldHandle>;
+  page?: FieldPage | undefined;
   children?: ReactNode;
 }): ReactElement {
   const ref = useRef<HTMLDivElement>(null);
@@ -72,19 +88,22 @@ export function FieldLayer({
   const door = useRef<FieldDoor | null>(null);
   const shown = useRef(mark);
   const [glass] = useState(() => createFieldGlass(() => ref.current));
+  const [page] = useState<FieldPage>(() => asked ?? {});
   const [field, setField] = useState<FieldState>(() =>
-    "still" in fieldPlan() ? "still" : "waking",
+    "still" in fieldPlan(page) ? "still" : "waking",
   );
   const [tearState, setTearState] = useState<TearState | null>(null);
 
   useEffect(() => {
     const container = ref.current;
-    if (container === null || "still" in fieldPlan()) return;
+    if (container === null || "still" in fieldPlan(page)) return;
     let gone = false;
-    void openFieldDoor(container, still.current, {
-      reducedMotion: prefersReducedMotion(),
-      onGlass: glass.report,
-    }).then((opened) => {
+    void openFieldDoor(
+      container,
+      still.current,
+      { reducedMotion: prefersReducedMotion(), onGlass: glass.report },
+      page,
+    ).then((opened) => {
       if (gone) {
         opened.destroy();
         return;
@@ -101,7 +120,7 @@ export function FieldLayer({
       door.current?.destroy();
       door.current = null;
     };
-  }, [glass]);
+  }, [glass, page]);
 
   // What stands on the field sizes its logo to the still's own mark while the field is its still (FG-4b).
   useLayoutEffect(() => glass.stillness(field === "still"), [glass, field]);
