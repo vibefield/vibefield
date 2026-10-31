@@ -15,6 +15,7 @@ import {
   AGENT_CATALOG,
   AGENT_EXIT,
   AGENT_FIELD,
+  AGENT_STOP,
   type AgentCapability,
   type AgentCatalogEntry,
   type AgentCatalogReaders,
@@ -40,6 +41,7 @@ import {
   type AgentSessionSummary,
   type AgentSpawnParams,
   type AgentSpawnResult,
+  type AgentStopState,
   type AgentSurface,
   type AgentsProfilesListResult,
   type AgentsProfilesLoginParams,
@@ -110,6 +112,14 @@ import {
   summarizeManaged,
   summarizePending,
 } from "./agent-sessions";
+import {
+  afterEscalation,
+  type EscalationOutcome,
+  heardByStatus,
+  nextStopStep,
+  type StopFacts,
+  stopReadable,
+} from "./agent-stop";
 import {
   isTypedRun,
   processIsGone,
@@ -443,6 +453,8 @@ export interface AgentRuntimeServiceOptions {
   audit?: SystemAudit;
   /** AR-4 test seam: the resume-when-idle thresholds (defaults above) */
   resumeWhenIdle?: { afterMs?: number; pollMs?: number };
+  /** DS test seam: how long a sent Stop waits to be heard (default `AGENT_STOP.HEARD_WITHIN_MS`) */
+  stopHeardWithinMs?: number;
   /** A login pane ended and the agent confirmed it is signed in. */
   onProfileSignedIn?: (profileId: string) => Promise<void>;
   /** AO-5a (AO-D14) — the note of the profiles Add a profile… made and no
@@ -528,6 +540,9 @@ interface ManagedEntry {
   /** Item 124 — this process was born without its briefing: its executable takes no door. A fact of the process,
    * never of the record (the briefing never is), so a later birth briefs it afresh. */
   door?: "off" | undefined;
+  /** DS — the person's Stop while this fieldd holds one (DS-D8: not across a restart), and its bound's timer */
+  stop?: AgentStopState | undefined;
+  stopTimer?: NodeJS.Timeout | undefined;
 }
 
 /** Item 124 — one birth's identity (`AgentRuntimeService.identity`): each attempt of a briefed birth has its own. */
@@ -687,6 +702,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   private readonly replacements = new Set<Promise<unknown>>();
   private readonly idleAfterMs: number;
   private readonly pollMs: number;
+  private readonly stopHeardWithinMs: number;
   /** login panes awaiting their exit, by the floor's session id */
   private readonly logins = new Map<
     string,
@@ -742,6 +758,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     });
     this.idleAfterMs = opts.resumeWhenIdle?.afterMs ?? RESUME_IDLE_AFTER_MS;
     this.pollMs = opts.resumeWhenIdle?.pollMs ?? RESUME_POLL_MS;
+    this.stopHeardWithinMs = opts.stopHeardWithinMs ?? AGENT_STOP.HEARD_WITHIN_MS;
     this.distributionRecord =
       opts.vibefieldRoot === null
         ? null
@@ -1858,21 +1875,158 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       // the same words the host itself would answer with — no floor, no act
       return { accepted: false, reason: "no-terminal-host" };
     }
-    const stop = entry.agent.turnStop;
-    const result =
-      stop === undefined
-        ? await host.automateTerminal(entry.info.terminalSessionId, { kind: "interrupt" })
-        : await entry.agent.stopTurn();
-    const stopKey = stopKeyOf(stop);
+    const result = await this.deliverStop(entry, host);
     this.logger.info("fieldd.agents.interrupted", "An agent run was interrupted", {
       runtimeRunId: params.runtimeRunId,
       sessionId: entry.info.terminalSessionId,
       // what was sent, in puppeteer's words: a key, or the agent's own control
-      stop: stopKey ?? "native",
+      stop: stopKeyOf(entry.agent.turnStop) ?? "native",
       accepted: result.accepted,
       ...(result.accepted ? {} : { reason: result.reason }),
     });
+    if (result.accepted) this.stopSent(entry);
     return result.accepted ? { accepted: true } : { accepted: false, reason: result.reason };
+  }
+
+  /** The run's OWN stop, delivered: the floor's interrupt, or the agent's declared turn stop (Q08). The one thing a
+   * person's Stop sends, and the one thing its re-send sends again (DS-D2). */
+  private async deliverStop(
+    entry: ManagedEntry,
+    host: TerminalAgentHost,
+  ): Promise<{ accepted: true } | { accepted: false; reason: string }> {
+    return entry.agent.turnStop === undefined
+      ? await host.automateTerminal(entry.info.terminalSessionId, { kind: "interrupt" })
+      : await entry.agent.stopTurn();
+  }
+
+  /** DS — what the run's status says to its Stop (`agent-stop.ts`). */
+  private stopFacts(entry: ManagedEntry): StopFacts {
+    let observationLevel = "unknown";
+    try {
+      observationLevel = entry.agent.observationLevel;
+    } catch {
+      // a disposed adapter's status cannot be read
+    }
+    return { readable: stopReadable(observationLevel), working: entry.status === "working" };
+  }
+
+  /** DS — a person's Stop was delivered: it is held as SENT until the run is heard to stop, and its bound is armed. A
+   * second press while one is held changes nothing: the first Stop's clock and stage stand. */
+  private stopSent(entry: ManagedEntry): void {
+    if (entry.stop !== undefined && entry.stop.stage !== "heard") return;
+    entry.stop = { sentAt: this.now().toISOString(), stage: "sent" };
+    if (heardByStatus(entry.stop, this.stopFacts(entry))) this.stopHeard(entry, "status");
+    else this.armStop(entry);
+    this.publish();
+  }
+
+  private armStop(entry: ManagedEntry): void {
+    if (entry.stopTimer !== undefined) clearTimeout(entry.stopTimer);
+    const runtimeRunId = entry.info.runtimeRunId;
+    entry.stopTimer = setTimeout(() => void this.stopBound(runtimeRunId), this.stopHeardWithinMs);
+    entry.stopTimer.unref?.();
+  }
+
+  private clearStopTimer(entry: ManagedEntry): void {
+    if (entry.stopTimer === undefined) return;
+    clearTimeout(entry.stopTimer);
+    entry.stopTimer = undefined;
+  }
+
+  /** DS — the Stop was heard: by the PTY's exit, or by the status leaving `working`. */
+  private stopHeard(entry: ManagedEntry, heardBy: "exit" | "status"): void {
+    const stop = entry.stop;
+    if (stop === undefined || stop.stage === "heard") return;
+    this.clearStopTimer(entry);
+    entry.stop = { sentAt: stop.sentAt, stage: "heard", heardBy };
+    this.logger.info("fieldd.agents.stop_heard", "A person's Stop was heard", {
+      runtimeRunId: entry.info.runtimeRunId,
+      heardBy,
+      stage: stop.stage,
+      afterMs: this.now().getTime() - Date.parse(stop.sentAt),
+    });
+  }
+
+  /** DS-D2/D3 — a Stop's bound passed and nothing was heard: the one step the rule names, taken. The re-send and
+   * the terminate are fieldd's own acts, in the ledger as such (DS-D6), never the person's. */
+  private async stopBound(runtimeRunId: string): Promise<void> {
+    const entry = this.managed.get(runtimeRunId);
+    if (entry === undefined || entry.exiting || entry.stop === undefined) return;
+    entry.stopTimer = undefined;
+    const stop = entry.stop;
+    const step = nextStopStep(stop, this.stopFacts(entry));
+    const afterMs = this.now().getTime() - Date.parse(stop.sentAt);
+    if (step === "none") return;
+    if (step === "unheard") {
+      this.stopUnheard(entry, afterMs);
+      return;
+    }
+    const host = this.terminalHost;
+    const terminals = this.opts.terminals?.() ?? null;
+    const stage = step === "resend" ? "resent" : "terminating";
+    entry.stop = { sentAt: stop.sentAt, stage };
+    this.publish();
+    const mutation: AuditMutation = {
+      action: "agent.session.stop_escalated",
+      target: { kind: "agent-session", id: runtimeRunId },
+      attrs: { stage, afterMs, sessionId: entry.info.terminalSessionId },
+    };
+    let outcome: EscalationOutcome;
+    try {
+      if (step === "resend") {
+        await this.audited(
+          mutation,
+          async () =>
+            host === null
+              ? { accepted: false as const, reason: "no-terminal-host" }
+              : await this.deliverStop(entry, host),
+          (result) =>
+            result.accepted
+              ? { outcome: "succeeded" }
+              : { outcome: "failed", reasonCode: "STOP_REFUSED", attrs: { reason: result.reason } },
+        );
+        outcome = "answered";
+      } else {
+        const placed = await this.audited(
+          mutation,
+          async () =>
+            terminals === null
+              ? false
+              : await this.terminateLive(terminals, entry.info.terminalSessionId),
+          (terminated) =>
+            terminated
+              ? { outcome: "succeeded" }
+              : { outcome: "failed", reasonCode: "TERMINATE_NOT_PLACED" },
+        );
+        outcome = placed ? "placed" : "not-placed";
+      }
+    } catch (error) {
+      this.logger.warn("fieldd.agents.stop_escalation_failed", "A Stop's escalation failed", {
+        runtimeRunId,
+        stage,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      outcome = "threw";
+    }
+    // heard or left while the act was in flight: nothing is left to do
+    if (this.managed.get(runtimeRunId) !== entry || entry.stop?.stage !== stage) return;
+    const next = afterEscalation(stage, outcome);
+    if (next === "rearm") this.armStop(entry);
+    else if (next === "unheard") this.stopUnheard(entry, afterMs);
+  }
+
+  /** DS-D3 — a Stop nothing heard and fieldd will not escalate further: left to the person, who can end the run. */
+  private stopUnheard(entry: ManagedEntry, afterMs: number): void {
+    const stop = entry.stop;
+    if (stop === undefined || stop.stage === "heard" || stop.unheardAt !== undefined) return;
+    if (this.managed.get(entry.info.runtimeRunId) !== entry) return;
+    entry.stop = { ...stop, unheardAt: this.now().toISOString() };
+    this.logger.info(
+      "fieldd.agents.stop_unheard",
+      "A person's Stop was not heard; the run is left to them",
+      { runtimeRunId: entry.info.runtimeRunId, stage: stop.stage, afterMs },
+    );
+    this.publish();
   }
 
   /** CP-2 — the input queue's delivery (CP-L5): paste and submit one input into a live run, with puppeteer's receipt
@@ -2436,6 +2590,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     this.logins.clear();
     for (const entry of this.managed.values()) {
       if (entry.backstop !== undefined) clearTimeout(entry.backstop);
+      this.clearStopTimer(entry);
       entry.unwatch?.();
       entry.unwatch = undefined;
     }
@@ -4266,6 +4421,11 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       entry.status = status;
       entry.stateChangedAt = mirror?.statusSince ?? this.now().toISOString();
     }
+    // DS — the Stop is heard when a readable status leaves `working`; once heard, the next turn lets it go
+    if (entry.stop !== undefined) {
+      if (heardByStatus(entry.stop, this.stopFacts(entry))) this.stopHeard(entry, "status");
+      else if (entry.stop.stage === "heard" && status === "working") entry.stop = undefined;
+    }
     const evidence = mirror?.freshness?.lastEvidenceAt;
     if (evidence !== undefined) entry.lastActivityAt = evidence;
     this.refreshContinuation(entry);
@@ -4302,6 +4462,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     // row leaves; the record stays for a resume
     entry.unwatch?.();
     entry.unwatch = undefined;
+    this.clearStopTimer(entry);
     this.managed.delete(runtimeRunId);
     this.byTerminal.delete(entry.info.terminalSessionId);
     this.terminalHost?.forget(entry.info.terminalSessionId);
@@ -4329,6 +4490,9 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     }
     entry.unwatch?.();
     entry.unwatch = undefined;
+    // DS-D6 — an exit while a Stop is held is the Stop heard (one already heard by its status is not this exit's)
+    const stopped = entry.stop !== undefined && entry.stop.stage !== "heard";
+    if (stopped) this.stopHeard(entry, "exit");
     // Item 87 — puppeteer's cleanup is unbounded (its workspace finalization
     // runs git), and the exit does not wait for it. Its synchronous part has
     // run when the call returns (`process:exited` dispatched, the run marked
@@ -4381,6 +4545,9 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       exitCode: exit.exitCode,
       signal: exit.signal,
       reason: exit.reason,
+      ...(stopped && entry.stop !== undefined
+        ? { stop: { sentAt: entry.stop.sentAt, heardBy: "exit" } }
+        : {}),
     });
     this.managed.delete(runtimeRunId);
     this.byTerminal.delete(entry.info.terminalSessionId);
@@ -4503,6 +4670,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         spark: entry.spark,
         door: entry.door,
         stopKey: stopKeyOf(entry.agent.turnStop),
+        stop: entry.stop,
         createdAt: entry.createdAt,
         stateChangedAt: entry.stateChangedAt,
         lastActivityAt: entry.lastActivityAt,

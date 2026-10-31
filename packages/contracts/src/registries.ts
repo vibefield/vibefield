@@ -418,6 +418,15 @@ export const AGENT_EXIT = {
   RESUME_CLEANUP_WAIT_MS: 5_000,
 } as const;
 
+/** DS-D1 (2026-10-31, James's `ds-marks` at the leans) — a durable Stop. A person's Stop is SENT (the run's own stop,
+ * as `agent.interrupt` delivers it) and stays sent until fieldd HEARS the run stop: its PTY exited, or its status
+ * left `working`. A Stop not heard within HEARD_WITHIN_MS escalates (DS-D2, DS-D3): the same stop once more, then, for
+ * a run whose status can be read, the floor's own terminate ladder. PROVISIONAL: 3 s is a starting point, and it
+ * is final only once it has been measured on James's signed-in agents (`thinking-ar-durable-stop.md` §3, DS-D1). */
+export const AGENT_STOP = {
+  HEARD_WITHIN_MS: 3_000,
+} as const;
+
 /** DS-L3 — the rows protocol's numbers (`rows.ts`; design-06 §8). A snapshot
  * above SNAPSHOT_PAGE_BYTES is paged with `more: true`; a source keeps a
  * journal of JOURNAL_DEPTH changed-key frames per table, below which a kept

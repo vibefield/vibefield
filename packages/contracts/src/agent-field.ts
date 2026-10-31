@@ -4,6 +4,7 @@ import {
   AgentSessionOrigin,
   AgentSessionTerminal,
   AgentStatus,
+  AgentStopState,
   AgentTier,
   SparkId,
 } from "./agent-session";
@@ -150,6 +151,10 @@ export const AgentFieldRow = z
      * (CH-D3: "its face is working because its agents are"). Absent reads
      * `you`, as on the fold's row. */
     origin: AgentSessionOrigin.optional(),
+    /** DS-D5 (2026-10-31) — the person's durable Stop while fieldd holds one for the run (`AgentStopState`), on
+     * every audience's row: a phone's Stop needs the same truth as a window's. Absent otherwise, and on a row from a
+     * daemon before DS. */
+    stop: AgentStopState.optional(),
   })
   .passthrough();
 export type AgentFieldRow = z.infer<typeof AgentFieldRow>;

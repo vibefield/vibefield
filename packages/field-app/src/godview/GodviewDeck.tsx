@@ -5,7 +5,12 @@ import {
   type GhostteaWorkspaceContext,
   type GhostteaWorkspacePlatform,
 } from "@vibecook/ghosttea-react/workspace";
-import { AgentInterruptResult, AgentSpawnResult, type DeviceInfo } from "@vibefield/contracts";
+import {
+  AgentInterruptResult,
+  AgentSpawnResult,
+  type DeviceInfo,
+  TerminalTerminateResult,
+} from "@vibefield/contracts";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import {
   ChromeBoundary,
@@ -116,6 +121,7 @@ import { paneCardTarget } from "./pane-card-target";
 import { type DeckSession, describePane, type PaneFace } from "./pane-faces";
 import { RemotePaneState } from "./RemotePaneState";
 import { SeatPaneState } from "./SeatPaneState";
+import { StopPaneState } from "./StopPaneState";
 import "@vibecook/ghosttea-react/styles.css";
 import "@vibecook/ghosttea-react/workspace.css";
 
@@ -1872,6 +1878,30 @@ export function GodviewDeck({
   }, [fieldd, mountSummaryNow]);
 
   /**
+   * DS-D4 (a) — THE PERSON'S END RUN, from a pane whose run's Stop fieldd will
+   * take no further (`StopPaneState`'s "Still running"): `terminal.terminate`
+   * on the pane's own session, the floor's ladder, the act fieldd's escalation
+   * takes for a run whose status it can read. The run's exit is the Stop heard,
+   * and the pane shows it as any exit. A ref, so the stable frame below reads
+   * the current client without being rebuilt.
+   */
+  const endRun = useRef<(sessionId: string) => void>(() => undefined);
+  endRun.current = (sessionId) => {
+    const log = getRendererLogger().child({ component: "godview" });
+    fieldd.request("terminal.terminate", { sessionId }).then(
+      (answer) => {
+        const { terminated } = TerminalTerminateResult.parse(answer);
+        log.info("renderer.godview.end_run", "the person ended a run a Stop did not stop", {
+          sessionId,
+          terminated,
+        });
+      },
+      (cause: unknown) =>
+        log.error("renderer.godview.end_run_failed", "End run could not reach fieldd", cause),
+    );
+  };
+
+  /**
    * The host's frame: the package's, plus the one fact only this deck holds —
    * the device a remote replica lives on (GT-5c's locality record, kept in a
    * ref because `paneMeta` reads it too). Stable, so the portals are not torn
@@ -1902,6 +1932,8 @@ export function GodviewDeck({
             <RemotePaneState pane={props.pane} sessionId={session.id} nameOf={nameOf} />
             {/* item 42 — the pane says who drives its session from another device */}
             <SeatPaneState pane={props.pane} sessionId={session.id} />
+            {/* DS-D4 (a) — the pane says a Stop fieldd has not heard */}
+            <StopPaneState pane={props.pane} sessionId={session.id} endRun={endRun} />
           </ChromeBoundary>
         );
       },

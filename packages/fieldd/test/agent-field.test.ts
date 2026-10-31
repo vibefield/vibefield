@@ -147,6 +147,12 @@ const maximalSummary = (): AgentSessionSummary => ({
   // SP-1b — whose session it is, and who started it, the origin carrying a key the contract does not name
   spark: "sp-vela01",
   origin: { by: "flow", run: "fr-1", call: 2, note: "rides the passthrough and must never travel" },
+  // DS-D5 — a person's Stop held for the run: its clock and stage, content-free
+  stop: {
+    sentAt: "2026-09-13T10:05:30.000Z",
+    stage: "resent",
+    unheardAt: "2026-09-13T10:05:36.000Z",
+  },
 });
 
 describe("projectFieldRow — facts kept, content dropped (§10.1)", () => {
@@ -171,11 +177,13 @@ describe("projectFieldRow — facts kept, content dropped (§10.1)", () => {
     // produces is a fixture that can quietly stop describing the product.
     // PJ-7 — the native id joined the row in a golden of its own: the slice's
     // is the kit's mirror and stays byte for byte as it shipped. SP-1b — the
-    // spark and the origin joined it in another golden of their own.
+    // spark and the origin joined it in another golden of their own, and
+    // DS-D5's Stop the same way.
     const rows = [
       "agent-field-slice.valid.json",
       "agent-field-snapshot.native-session.json",
       "agent-field-snapshot.spark.json",
+      "agent-field-snapshot.stop.json",
     ].flatMap(
       (name) =>
         (

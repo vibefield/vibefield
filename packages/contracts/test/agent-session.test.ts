@@ -569,3 +569,27 @@ describe("item 124 — the row says the door is off for this process", () => {
     expect(Object.keys(AgentSessionRecord.shape)).not.toContain("door");
   });
 });
+
+describe("DS-D6 — the record says an exit followed a person's Stop", () => {
+  it("carries when the Stop was sent and how it was heard, beside the floor's own word for the exit", () => {
+    const record = AgentSessionRecord.parse(fixture("agent-session-record.stopped.json"));
+    expect(record.exited?.reason).toBe("application-terminated");
+    expect(record.exited?.stop).toEqual({ sentAt: "2026-10-31T06:00:03.000Z", heardBy: "exit" });
+    // a record from before DS carries none and still parses
+    expect(
+      AgentSessionRecord.parse(fixture("agent-session-record.valid.json")).exited?.stop,
+    ).toBeUndefined();
+  });
+
+  it("refuses an exit's Stop with no clock or no hearing", () => {
+    const record = fixture("agent-session-record.stopped.json") as {
+      exited: Record<string, unknown>;
+    };
+    for (const stop of [{ heardBy: "exit" }, { sentAt: "2026-10-31T06:00:03.000Z" }, "exit"]) {
+      expect(
+        AgentSessionRecord.safeParse({ ...record, exited: { ...record.exited, stop } }).success,
+        JSON.stringify(stop),
+      ).toBe(false);
+    }
+  });
+});

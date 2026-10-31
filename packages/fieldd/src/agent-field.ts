@@ -408,6 +408,8 @@ export function projectFieldRow(summary: AgentSessionSummary): ProjectedFieldRow
     // riding its passthrough reaches the wire.
     ...(summary.spark !== undefined ? { spark: summary.spark } : {}),
     ...(summary.origin !== undefined ? { origin: originOf(summary.origin) } : {}),
+    // DS-D5 — the person's Stop, on every audience's row: a stage and its clocks, content-free
+    ...(summary.stop !== undefined ? { stop: summary.stop } : {}),
   };
 }
 

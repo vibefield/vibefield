@@ -947,6 +947,58 @@ describe("the deck's pane frames", () => {
     expect(frameFor(host, "pty-1")?.classList.contains("is-stopping")).toBe(true);
   });
 
+  // DS-D4 (a) — the pane's own words for a Stop fieldd has not heard (`StopPaneState`)
+  const stoppingRun = (stop: AgentSessionSummary["stop"]): AgentSessionSummary => ({
+    ...managedSummary({
+      runtimeRunId: "run-46",
+      terminalSessionId: "pty-1",
+      kind: "claude",
+      label: "Claude",
+      status: "working",
+    }),
+    ...(stop !== undefined ? { stop } : {}),
+  });
+  const stopState = (host: HTMLElement): HTMLElement | null =>
+    frameFor(host, "pty-1")?.parentElement?.querySelector<HTMLElement>(".vf-godview-stop-state") ??
+    null;
+  const SENT_AT = "2026-10-31T06:00:00.000Z";
+
+  it("follows fieldd's hold on a Stop: nothing while it is sent, Ending the run while fieldd ends it, gone when it is heard", async () => {
+    foldRows = [stoppingRun({ sentAt: SENT_AT, stage: "sent" })];
+    const host = await mountDeck();
+    expect(frameFor(host, "pty-1")).not.toBeNull();
+    expect(stopState(host)).toBeNull();
+    await act(async () => {
+      foldFrame?.([stoppingRun({ sentAt: SENT_AT, stage: "terminating" })]);
+    });
+    await settle();
+    expect(stopState(host)?.getAttribute("data-stop-state")).toBe("ending");
+    expect(stopState(host)?.querySelector("button")).toBeNull();
+    await act(async () => {
+      foldFrame?.([stoppingRun({ sentAt: SENT_AT, stage: "heard", heardBy: "status" })]);
+    });
+    await settle();
+    expect(stopState(host)).toBeNull();
+    expect(requests.some((call) => call.method === "terminal.terminate")).toBe(false);
+  });
+
+  it("says Still running once fieldd takes the Stop no further, and End run terminates the pane's OWN session", async () => {
+    foldRows = [
+      stoppingRun({ sentAt: SENT_AT, stage: "resent", unheardAt: "2026-10-31T06:00:06.000Z" }),
+    ];
+    const host = await mountDeck();
+    const state = stopState(host);
+    expect(state?.getAttribute("data-stop-state")).toBe("still-running");
+    await act(async () => state?.querySelector<HTMLButtonElement>("button")?.click());
+    await settle();
+    expect(requests.filter((call) => call.method === "terminal.terminate")).toEqual([
+      { method: "terminal.terminate", params: { sessionId: "pty-1" } },
+    ]);
+    // the person's act, never fieldd's: no Stop is sent again
+    expect(requests.some((call) => call.method === "agent.interrupt")).toBe(false);
+    expect(logged.some((entry) => entry.event === "renderer.godview.end_run")).toBe(true);
+  });
+
   it("keeps the square solid when the daemon refuses the interrupt", async () => {
     interruptAnswer = { accepted: false, reason: "the run is not alive" };
     foldRows = [

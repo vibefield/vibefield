@@ -179,6 +179,28 @@ export const AgentSessionOrigin = z
   .passthrough();
 export type AgentSessionOrigin = z.infer<typeof AgentSessionOrigin>;
 
+/** DS-D5 (2026-10-31; James's `ds-marks` 05:36:54Z and `ds-marks-corrections` 05:53:50Z) — a person's durable Stop,
+ * as THIS fieldd holds it (DS-D8: a Stop is not carried across a fieldd restart). `sentAt` is when the run's own
+ * stop was first delivered (`agent.interrupt`, accepted). `stage` says how far it went, in OPEN words (a reader takes
+ * one it does not know as still stopping):
+ *  - `sent`: the run's own stop was delivered;
+ *  - `resent`: not heard within `AGENT_STOP.HEARD_WITHIN_MS`, so the same stop was delivered once more;
+ *  - `terminating`: still not heard, and the run's status can be read (DS-D3), so fieldd asked the floor to end it;
+ *  - `heard`: fieldd heard the run stop, and `heardBy` says how (`exit`: the PTY exited; `status`: the status left
+ *    `working`).
+ * `unheardAt` marks a Stop fieldd will take no further: a `resent` one on a run whose status cannot be read, once its
+ * bound has passed again, or a `terminating` one whose ladder could not be placed. The person ends the run (DS-D3's
+ * "Still running · End run"). */
+export const AgentStopState = z
+  .object({
+    sentAt: z.string(),
+    stage: z.string().min(1).max(32),
+    heardBy: z.string().min(1).max(32).optional(),
+    unheardAt: z.string().optional(),
+  })
+  .passthrough();
+export type AgentStopState = z.infer<typeof AgentStopState>;
+
 /** SessionSummary v2 — the fold's row (design-01 §6.2 as amended by AR-D4).
  * `sessionId` is the provider-native session id, THE spine every repo joins
  * on (puppeteer `nativeSession.id`, rosetta `native_session_id`); before an
@@ -261,6 +283,8 @@ export const AgentSessionSummary = z
      * never of the signed record: the next birth is briefed afresh. OPEN, like `spawnedBy`: `off` is the one word
      * today, and absent is the door as briefed (or none asked). */
     door: z.string().min(1).max(32).optional(),
+    /** DS — the person's Stop while this fieldd holds one for the run (`AgentStopState`); absent otherwise. */
+    stop: AgentStopState.optional(),
   })
   .passthrough();
 export type AgentSessionSummary = z.infer<typeof AgentSessionSummary>;
@@ -395,6 +419,12 @@ export const AgentSessionRecord = z
         exitCode: z.number().int().nullable(),
         signal: z.string().nullable(),
         reason: z.string(),
+        /** DS-D6 — the exit followed a person's Stop: when it was sent and how it was heard. `reason` stays the
+         * floor's own word for the exit beside it. */
+        stop: z
+          .object({ sentAt: z.string(), heardBy: z.string().min(1).max(32) })
+          .passthrough()
+          .optional(),
       })
       .passthrough()
       .optional(),
