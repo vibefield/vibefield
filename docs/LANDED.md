@@ -24475,3 +24475,135 @@ row 32's first green on the mini and James's look. The look came at 15:02Z and t
 - FG-6's remaining gates: the catalog over the field's still, the tear judged in the walk, the field's glass against
   the CSS glass on a frozen frame, FG-O2's contrast and FG-O3's GPU read during the tear. James's eye list stands as
   the follow-up 2 entry says.
+
+## FG-6c — the tear judged in the walk: on the live field the field says its tear opened (`data-tear`), a tear that did not open is red and the still opens by the fade, with FG-O3's GPU read printed beside it (desk-gates row 32)
+
+**Why.** FG-6's remaining gates (the thinking doc's §7) held the tear judged in the walk, and its §8 holds FG-O3, the
+GPU's read during the tear. Since FG-2 a returning boot, and since FG-5 a first run, opens onto the desk by the field's
+tear (DESIGN.md §6). The field's `tear()` gives true once the tear is open and false past its bound (its 1.9 s and a
+second) or on a reveal that fails, and the boot reveals the desk either way, so a tear never holds it. Nothing read
+which end it was, so a live walk whose tear ran out its bound was green. a5 proposed the next FG slice at VF-PM's ask
+(16:02Z, after FG-5's records), and VF-PM ruled FG-6c first at the leans (16:04Z):
+- (a) a bound or a lost device on a live walk is red: a deterministic class, so one lottery re-run and never a skip;
+- (b) FG-O3's read is printed, with no floor and no root (no sudo on the mini);
+- (c) built and lit on main at once, and minted only after run55b had reported, so FG-5's witness ran on the code it
+  was cut for.
+
+**What landed** (`f3de33803`, built in lane fg2 on `fg/tear` over `1273219ab` and lit as `b9431c00a`, then re-made on
+`83417b601` after run55b's records; Checks):
+- The product (field-app, `FieldLayer.tsx`): the field's root says how its tear went, `data-tear` = `TearState`. It is
+  an honest state like the ground's `data-opening`, not a test seam:
+  - "tearing" from the ask, then "open";
+  - or, where it did not open: "bound" (the bound passed first: its frames came late or never), "lost" (the reveal
+    failed: a lost device) or "cut" (the reveal ended before the window opened: the field's own Reduce Motion, or a
+    second reveal; the vendored splash's false).
+  `tear()` keeps its boolean and its contract, and BootRoot is unchanged.
+- boot-root's rows: `data-tear` is asserted inside FG-2's and FG-5's rows (live: tearing, then open; the bound; the
+  lost device; never set over the still, under Reduce Motion or in a hidden window), and one row is new, "cut" (20 →
+  21).
+- The row (desk-gates row 32; `smoke-first-run.ts`, `smoke.ts`):
+  - The page's recorder hears `data-opening` (on `.vf-splash`) and `data-tear` (on `.vf-field`) through FG-5's one
+    MutationObserver, as the page sets them.
+  - `judgeOpening` judges by order and outcome alone. On the live walks (day, night) the ground opens by the tear,
+    once, and the tear goes tearing and then open; a bound, a lost device or a cut is red, in its own words. Over the
+    still the ground opens by the fade, and nothing tears. `heard` is now shared with `judgeHandOver`.
+  - One still for James's eye, `tear-mid`, asked 950 ms into the tear and timed from the state as the page set it; its
+    moment is the walk's `opening.still`. About 16 stills on a live walk, 15 over the still.
+  - FG-O3's read, printed in the walk's `gpu` and never judged:
+    - the page's frame intervals (count, p50, p95 by nearest rank, max) over the tear and over as long a stretch
+      (1.9 s) before the hand-over;
+    - the GPU process's CPU (Electron's `getAppMetrics`: its seconds over the stretch, else the mean of its percents)
+      and the GPU's busy share (IOAccelerator's "Device Utilization %" through `/usr/sbin/ioreg`, with no root and a
+      one-second timeout), read in main every 100 ms from Setting up's welcome until the wizard goes;
+    - `busy` says "not read" where the host gives none. `smoke.ts` hands the walk the two readers.
+  - The tear's still is taken inside FG-O3's read of the tear, and row 32 says so.
+- What the row hears and prints at the three walks (its `SMOKE_FIRST_RUN` facts gain `opening` and `gpu`):
+  - day and night: `"opening":{"opening":["tear"],"tear":["tearing","open"],"still":950}`, `still` being
+    the ms into the tear when its still was asked (950, or later where the walk came late); `gpu` with `frames`
+    and `load`, each over `rest` and `tear`, then `readings` and `busy` ("read" or "not read");
+  - no-webgpu: `"opening":{"opening":["fade"],"tear":[],"still":null}`, and `gpu` with its tear's two
+    stretches null and the rest printed;
+  - its reds, each in its own words: "the tear did not open: bound, its bound passed first, so its frames came
+    late or never" (or lost, or cut); "the ground opened [...], not by the tear"; "the field never tore: no tear
+    was heard"; "over the still the field tore: [...]".
+- desk-gates row 32 gains **The opening**, the stills' count, and the tear's look as James's eye, with no floor on the
+  tear's length or on FG-O3's numbers.
+
+**Checks.**
+- Red first, on the lit tree: each half set aside to `1273219ab`'s text, then restored byte for byte (sha checked;
+  `lanes/fg2/fg6c/light6.out`).
+  - The row: 14 failed, 25 passed of 39 (`(0 , heard) is not a function`, `(0 , judgeOpening) is not a function`),
+    then 39/39.
+  - The product, under boot-root's rows: 5 failed, 16 passed of 21 (`expected null to be 'tearing'` three times,
+    `'lost'` and `'cut'`), then 21/21.
+- The GPU's one-line probe, `readGpuBusy`'s own call on this Mac (an M1 Max, uid 501): "1 accelerator(s), Device
+  Utilization % [19]", about 0.02 s a call.
+- The lane's light (16:19:30–16:22:17Z, nice 19 under the guard, the staged tree `bf82a1d00` before and after), all
+  green:
+  - `git diff --check`; biome over the five code files (its one info is the page's String.raw, as before, now at
+    :481:31); `check:walls` clean;
+  - electron-shell's and field-app's typecheck; ui-system-boundaries 40/40;
+  - field-app's whole vitest: 267 files (1 skipped), 3,484 passed, 3 skipped (+1);
+  - electron-shell's whole vitest: 158 files, 2,417 passed, 3 skipped (+14).
+- VF-PM's read (16:25Z): check clean, no markers, no pin, lock or package.json, nothing in draft/, tokens.css and
+  DESIGN.md untouched, no hex added outside tokens, and the ioreg read runs without root (its comment says never sudo).
+- The rebase (VF-PM 16:26Z): desk-gates row 32 is one line, and run55b's records wrote its verdict cell while FG-6c
+  wrote its proof cell, so the lit tip would have met those records in a conflict. `fg/tear` was re-made on
+  `83417b601`: its five code files byte for byte from `b9431c00a`, and row 32's line by three scripted replacements,
+  each anchor asserted once, main's verdict kept (`lanes/fg2/fg6c/rebase/rebase6c.out`).
+  verify6c's print (16:38:18Z): the five code files' blobs are the lit tip's, byte for byte; the only other paths
+  between the tips are main's own moves from `1273219ab` (`apps/ios/TESTFLIGHT.md` and the three docs); desk-gates.md is
+  main's but for row 32's proof cells, which are the lit tip's; and the numstat over main is the lit tip's over its
+  base, line for line (6 files, +619 −25). VF-PM's own blob compare agreed (16:39Z), so the light stands without a
+  re-run.
+- **Run 56:** M56 is the rebased tip itself, `f3de33803`: it contains main `83417b601`, so the mint is the tip (VF-PM
+  16:39Z; a9's mint-rebased).
+  - `pnpm verify` went green at 16:44:48Z (exit 0; armed 16:40:00Z).
+    - vitest: 11,361 passed, 0 failed, 18 skipped. That is +15 over run 55, all in FG-6c's two test files
+      (smoke-first-run 25 → 39, boot-root 20 → 21).
+    - cargo: `test result: ok.` × 33. typecheck and test ran for 28 projects. MaxListeners 0, the tree clean, and no
+      stubs.
+    - The bundle's assert held at 911.3 KB raw and 240.6 KB gz (run 55: 911.2 and 240.5).
+  - Row 32 alone on M56 (run56b): **GREEN, FG-6c's witness.** Its gate opened by itself at 16:45:04Z (the console
+    unlocked and idle 1,056 s after James's 16:27Z unlock; load1 7.33 at arming), nobody touched it during the row (idle
+    1,118 s at its end), and `pnpm smoke:first-run` exited 0 at 16:46:06Z (61 s). FIRST_RUN_VERDICT: day, night and
+    no-webgpu each green, in 20, 20 and 17 s, code 0, nothing left and its profile removed. 47 stills: 16 on each live
+    walk, `15-tear-mid` before `16-desk`, and 15 over the still (`lanes/ts6/logs/mini/run56b/first-run-shots`; the log's
+    sha256 `e69565cff12c3b4a…`).
+    - The opening: by day and by night `"opening":{"opening":["tear"],"tear":["tearing","open"],"still":950}`, the tear
+      open on both live walks and its still taken 950 ms in; over the still
+      `"opening":{"opening":["fade"],"tear":[],"still":null}`.
+    - FG-O3's first numbers, facts with no floor (the walk's `gpu`, day / night). Over the tear: frames p50 16.7 / 16.7,
+      p95 16.9 / 17.0 and max 17.6 / 17.4 ms (114 each), the still's capture inside it; the GPU process's CPU 14.5 /
+      14.5 % of a core; the GPU busy mean 35.6 / 38.7 %, max 40 / 45. At rest before the words: frames p95 17.7 / 17.4,
+      max 45.1 / 38.8 ms (113 / 114); CPU 12.8 / 13.5 %; busy mean 35.1 / 39.9 %, max 41 / 48, from 8 readings each, as
+      the sampler starts after Setting up's welcome still, inside that stretch. 38 readings a walk, the busy share read
+      on the mini without root.
+    - Over the still (no-webgpu), no tear: at rest frames p95 17.3, max 41.5 ms (113); CPU 0.5 %; busy mean 3.4 %, max
+      27; 22 readings.
+    - The earlier classes again: `handOver` `["words","clear"]` on all three walks; the login's terminal 170 and Cancel
+      9.7 above the fade (`cancelClear` 9.71875) on each; the mark's ink at 591, 373 / 590.5, 373 / 590, 374; Agents'
+      skip `(327 in 326)` once on each; `SMOKE_DAEMONS` left and reaped nothing.
+- **Landed:** main fast-forwarded `83417b601` → `f3de33803` at 2026-10-31 16:46:33Z on VF-PM's GO (land-stack4.sh, the
+  ff path, no lock wait; M56 is the rebased tip itself): 6 files, +619 −25, tree `7079ad408`.
+
+**Found while building.**
+- The tear's end had no reader. `tear()` gives one boolean for three ends and the desk is revealed after each, so the
+  row could not tell a tear that opened from one that ran out its bound.
+- The vendored splash's reveal resolves false when its own Reduce Motion or a second reveal ends it before the window
+  opens. The proposal (16:02Z) named "bound" and "lost" alone; FieldLayer names this third end "cut".
+- desk-gates row 32 is one line, so a records cut that writes its verdict and a slice that writes its proof meet at any
+  merge. VF-PM's order took it as a rebase that re-makes the line by script (16:26Z).
+
+**Owed.**
+- **Paid (2026-10-31, run56b, 16:46:06Z):** row 32 on M56, FG-6c's witness, in Checks: the tear opened on both live
+  walks and the still opened by the fade, nothing torn, with the hand-over and row 32's earlier classes again.
+- The tear's look on `tear-mid`, James's eye on that run's sheet; the look is James's to give.
+- FG-O3's first printed numbers, from that run, stand in Checks as facts, with no floor (VF-PM 16:04Z (b)). A GPU
+  budget would be a ruling of its own.
+- Not claimed: a returning boot's tear (FG-2's; the desk smokes could read the same `data-tear` when they next
+  change); Reduce Motion and the hidden window (unit rows only).
+- FG-6's remaining gates, in the ruled order (VF-PM 16:04Z): FG-O2's contrast (printed, then judged at DESIGN.md's
+  4.5:1, an ink step DESIGN.md first at the lean), the catalog over the field's still (a fixture adapter, never a
+  copy), and the field's glass against the CSS glass on a frozen frame (a test-only seam, ruled on its own).
+- The thinking doc's §8 holds FG-O3 open. Its line moves at the next draft queue the PM opens.
