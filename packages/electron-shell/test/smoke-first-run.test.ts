@@ -14,12 +14,15 @@ import {
   FIRST_RUN_WALKS,
   type FirstRunRecord,
   type FrameSeen,
+  firstRunContrast,
   firstRunGpu,
   firstRunRows,
   frameStats,
   type GpuSample,
   gpuOver,
   heard,
+  type InksSeen,
+  inkCuts,
   judgeBand,
   judgeFrame,
   judgeHandOver,
@@ -35,8 +38,10 @@ import {
   parseWalk,
   type SignInSeen,
   shotDirRefusal,
+  splashLook,
   TEAR_NOT_OPEN,
   WALKED_FACES,
+  type WordsSeen,
 } from "../src/testing/smoke-first-run";
 import type { StagedTypedAgent } from "../src/testing/typed-agent";
 import { fakeElectron } from "./fake-electron";
@@ -582,6 +587,107 @@ function capture(
   }
   return bgra;
 }
+
+describe("FG-O2's contrast (printed, not judged yet)", () => {
+  const words = (
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    text = "",
+    shown = 1,
+  ): WordsSeen => ({
+    x,
+    y,
+    width,
+    height,
+    text,
+    shown,
+  });
+  const seen = (over: Partial<InksSeen> = {}): InksSeen => ({
+    view: { width: 60, height: 30 },
+    wizard: false,
+    field: "live",
+    canvas: 1,
+    stage: null,
+    steps: [],
+    later: null,
+    sub: null,
+    ...over,
+  });
+
+  it("takes the splash's still on the field that has come, keeps one on a field still waking, and stops at the wizard", () => {
+    const stage = words(20, 20, 10, 5, "loading the field");
+    expect(splashLook(null)).toBe("stop");
+    expect(splashLook(seen({ stage, wizard: true }))).toBe("stop");
+    expect(splashLook(seen())).toBe("wait");
+    expect(splashLook(seen({ stage: { ...stage, shown: 0.5 } }))).toBe("wait");
+    expect(splashLook(seen({ stage, field: "waking", canvas: 0 }))).toBe("keep");
+    // the live field fading in over its still (500ms)
+    expect(splashLook(seen({ stage, canvas: 0.6 }))).toBe("keep");
+    expect(splashLook(seen({ stage }))).toBe("take");
+    expect(splashLook(seen({ stage, field: "still", canvas: null }))).toBe("take");
+  });
+
+  it("cuts each of the small words from its still, and prints its ground, its ink and their WCAG ratio", () => {
+    // a window 60 × 30 at 2 to the px on a glass of 200: the stage line's glyph cores at 40, a label's at 120 and the
+    // line under the actions' at 90
+    const still = capture(60, 30, 2, 200, [
+      { x0: 22, x1: 24, y0: 21, y1: 23, level: 40 },
+      { x0: 2, x1: 3, y0: 2, y1: 3, level: 120 },
+      { x0: 32, x1: 33, y0: 12, y1: 13, level: 90 },
+    ]);
+    const splash = seen({ stage: words(20, 20, 10, 5, "loading the field") });
+    const connect = seen({
+      steps: [
+        { step: "you", state: "done", words: words(0, 0, 10, 5, "You") },
+        { step: "devices", state: "now", words: null },
+      ],
+      later: words(30, 10, 10, 5, "Set up later — Settings → Devices", 0.98),
+      sub: words(0, 0, 10, 5, "not asked of this still"),
+    });
+    const cuts = [
+      ...inkCuts("01-splash.png", still, splash, ["stage"]),
+      ...inkCuts("11-connect.png", still, connect, ["steps", "later"]),
+    ];
+    const glass = [200, 200, 200];
+    expect(firstRunContrast(cuts)).toEqual({
+      stage: {
+        at: "01-splash.png",
+        said: "loading the field",
+        field: "live",
+        canvas: 1,
+        ground: glass,
+        ink: [40, 40, 40],
+        ratio: 8.8,
+        shown: 1,
+      },
+      steps: {
+        at: "11-connect.png",
+        you: { state: "done", ground: glass, ink: [120, 120, 120], ratio: 2.6, shown: 1 },
+      },
+      later: { at: "11-connect.png", ground: glass, ink: [90, 90, 90], ratio: 4.1, shown: 0.98 },
+      sub: null,
+    });
+  });
+
+  it("says what it could not read: words never seen are null, and a capture not the window's size reads nothing", () => {
+    expect(firstRunContrast([])).toEqual({ stage: null, steps: null, later: null, sub: null });
+    const odd = inkCuts(
+      "13-setting-up-welcome.png",
+      new Uint8Array(4 * 7),
+      seen({ sub: words(0, 0, 10, 5) }),
+      ["sub"],
+    );
+    expect(firstRunContrast(odd).sub).toEqual({
+      at: "13-setting-up-welcome.png",
+      ground: null,
+      ink: null,
+      ratio: null,
+      shown: 1,
+    });
+  });
+});
 
 describe("the mark in the pixels (measureMark)", () => {
   it("finds the ink against its glass, centred in CSS px at any density", () => {

@@ -37,6 +37,10 @@
 // Printed, never judged (FG-O3, VF-PM 16:04Z): the page's frame intervals and the GPU's load over the tear and over as
 // long a stretch before the hand-over: the GPU process's CPU as Electron counts it, and the GPU's own busy share where
 // the host gives it without root (IOAccelerator's, through `ioreg`), else "not read".
+// Printed, not judged yet (FG-O2, VF-PM 16:51Z): the small words' contrast as DK-16 measured the mat's, each cut from
+// the still that holds it (the window's own capture), its ground and ink read from the pixels and their WCAG ratio:
+// the splash's stage line on its one early still, the band's labels and the line under the actions on Connect's, and a
+// load's sub line on Setting up's welcome. DESIGN.md's 4.5:1 judges them only after one printed run on the mini.
 // Not this row's (desk-gates row 32): Agents with nine installed, History with six rows and Profiles' five cards
 // (James's eye), and the ways out at 6s and Start now at 8s (their unit rows): Start now is said when it shows, and
 // never pressed, so the welcome is always the walk's to see.
@@ -45,8 +49,9 @@ import { execFile } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve, sep } from "node:path";
 import { readUsersFile } from "@vibefield/users";
-import type { BrowserWindow, ProcessMetric } from "electron";
+import type { BrowserWindow, NativeImage, ProcessMetric } from "electron";
 import { loadRenderer } from "../main/windows";
+import { cutChip, measureChip } from "./smoke-contrast";
 import { WITHOUT_WEBGPU } from "./smoke-unavailable";
 import { readTypedAgentCalls, type StagedTypedAgent } from "./typed-agent";
 
@@ -413,6 +418,123 @@ export function readGpuBusy(): Promise<number | null> {
   });
 }
 
+/** FG-O2's small words as the page finds them (`inks()`): the box their glyphs take (a range over their text, never
+ * the element's box), in CSS px of the window; what they say; and how much of them shows, their opacity times every
+ * ancestor's. */
+export interface WordsSeen extends Box {
+  readonly text: string;
+  readonly shown: number;
+}
+
+/** FG-O2's read of the page (`inks()`): the window's size, whether the wizard has come, the field under the splash
+ * (its state, and its canvas's opacity while the live field fades in over its still), the splash's stage line, the
+ * band's labels, and the standing pane's line under its actions and a load's sub line, each null where none stands. */
+export interface InksSeen {
+  readonly view: { readonly width: number; readonly height: number };
+  readonly wizard: boolean;
+  readonly field: string | null;
+  readonly canvas: number | null;
+  readonly stage: WordsSeen | null;
+  readonly steps: readonly {
+    readonly step: string | null;
+    readonly state: string | null;
+    readonly words: WordsSeen | null;
+  }[];
+  readonly later: WordsSeen | null;
+  readonly sub: WordsSeen | null;
+}
+
+/** FG-O2: what the splash's one early still does with a read of the page. Its stage line whole on the field that has
+ * come (the still, or the live field with its canvas whole) is the still ("take"); whole on a field still waking or
+ * fading in, the first such capture is kept ("keep") for a wizard that comes before the field; the wizard come, or a
+ * page that can't say, ends the look ("stop"). */
+export function splashLook(seen: InksSeen | null): "take" | "keep" | "wait" | "stop" {
+  if (seen === null || seen.wizard) return "stop";
+  if (seen.stage === null || seen.stage.shown < 0.999) return "wait";
+  if (seen.field === "still") return "take";
+  return seen.field === "live" && (seen.canvas ?? 0) >= 0.999 ? "take" : "keep";
+}
+
+/** Which of FG-O2's small words a still is cut for. */
+export type InkWords = "stage" | "steps" | "later" | "sub";
+
+/** One of FG-O2's small words, cut from a still's capture and measured at the walk's end (`firstRunContrast`). */
+export interface InkCut {
+  readonly words: InkWords;
+  /** the still it was cut from */
+  readonly at: string;
+  /** a band's label: its step */
+  readonly step?: string;
+  /** what prints beside its reading: the stage's words and the field under them, or a label's state */
+  readonly about: Readonly<Record<string, string | number | null>>;
+  readonly shown: number;
+  /** the chip's BGRA (`cutChip`), null where the capture could not be cut */
+  readonly px: Uint8Array | null;
+}
+
+/** FG-O2: the small words a still holds, each cut from its capture where `seen` places it. */
+export function inkCuts(
+  at: string,
+  bitmap: Uint8Array,
+  seen: InksSeen,
+  words: readonly InkWords[],
+): InkCut[] {
+  const cut = (box: WordsSeen): Uint8Array | null => cutChip(bitmap, seen.view, box);
+  const cuts: InkCut[] = [];
+  for (const which of words) {
+    if (which === "steps") {
+      for (const { step, state, words: label } of seen.steps) {
+        if (label === null) continue;
+        cuts.push({
+          words: which,
+          at,
+          step: step ?? "?",
+          about: { state },
+          shown: label.shown,
+          px: cut(label),
+        });
+      }
+      continue;
+    }
+    const seenWords = seen[which];
+    if (seenWords === null) continue;
+    const about =
+      which === "stage" ? { said: seenWords.text, field: seen.field, canvas: seen.canvas } : {};
+    cuts.push({ words: which, at, about, shown: seenWords.shown, px: cut(seenWords) });
+  }
+  return cuts;
+}
+
+/** FG-O2's contrast, printed and not judged yet (DESIGN.md's 4.5:1 judges it only after one printed run on the mini
+ * has shown the numbers), as DK-16 measured the mat's: each of the small words with the still it was cut from, its
+ * ground and its ink as measured and their WCAG ratio, and how much of it showed. The band's labels are keyed by their
+ * step; words the walk never saw are null. */
+export function firstRunContrast(
+  cuts: readonly InkCut[],
+): Record<InkWords, Record<string, unknown> | null> {
+  const reading = (cut: InkCut): Record<string, unknown> => ({
+    ...cut.about,
+    ...(cut.px === null ? { ground: null, ink: null, ratio: null } : measureChip(cut.px)),
+    shown: cut.shown,
+  });
+  const facts: Record<InkWords, Record<string, unknown> | null> = {
+    stage: null,
+    steps: null,
+    later: null,
+    sub: null,
+  };
+  for (const cut of cuts) {
+    if (cut.words !== "steps") {
+      facts[cut.words] = { at: cut.at, ...reading(cut) };
+      continue;
+    }
+    const steps = facts.steps ?? { at: cut.at };
+    steps[cut.step ?? "?"] = reading(cut);
+    facts.steps = steps;
+  }
+  return facts;
+}
+
 /** The mark's ink in a capture `width` × `height` CSS px (BGRA, Electron's `toBitmap`, at the screen's density): the
  * glass is the median luminance of the capture's border, the ink every pixel that far from it. Its centre `at` is the
  * centre of the ink's extent, in CSS px of the capture: never its mean, since the field's mark carries more ink in one
@@ -509,6 +631,18 @@ export const FIRST_RUN_PAGE = String.raw`(() => {
     if (el === null) return null;
     const r = el.getBoundingClientRect();
     return { x: r.x, y: r.y, width: r.width, height: r.height };
+  };
+  // FG-O2's small words: the box their glyphs take (a range over their text, never the element's), what they say, and
+  // how much of them shows (their own opacity times every ancestor's)
+  const wordsOf = (el) => {
+    if (el === null || el.textContent.trim() === "") return null;
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    const r = range.getBoundingClientRect();
+    let shown = 1;
+    for (let at = el; at !== null; at = at.parentElement) shown *= opacity(at);
+    const text = el.textContent.trim();
+    return { x: r.x, y: r.y, width: r.width, height: r.height, text, shown: Math.round(shown * 1000) / 1000 };
   };
   // a scope's list (overflow-y auto or scroll): the one that outgrows its box, else the first, which fits
   const scrollerIn = (scope) => {
@@ -658,6 +792,29 @@ export const FIRST_RUN_PAGE = String.raw`(() => {
       return document.activeElement === el;
     },
     count: (selector) => document.querySelectorAll(selector).length,
+    /** FG-O2's small words where they stand now: the splash's stage line over the field, the band's labels, and the
+     * standing pane's line under its actions and a load's sub line */
+    inks: () => {
+      const root = standingRoot();
+      const field = document.querySelector(".vf-field");
+      const canvas = field?.querySelector(".vf-field-canvas") ?? null;
+      return {
+        view: { width: innerWidth, height: innerHeight },
+        wizard: shellOf() !== null,
+        field: field?.getAttribute("data-field") ?? null,
+        canvas: canvas === null ? null : Math.round(opacity(canvas) * 1000) / 1000,
+        stage: wordsOf(document.querySelector('.vf-field-words > [role="progressbar"] + div')),
+        steps: [...(shellOf()?.querySelectorAll(".vf-wizard-steps li") ?? [])].map((li) => ({
+          step: li.getAttribute("data-step"),
+          state: li.getAttribute("data-state"),
+          words: wordsOf(li.querySelector(".vf-wizard-step-label")),
+        })),
+        later: wordsOf(root?.querySelector(".vf-wizard-later") ?? null),
+        sub: wordsOf(
+          root?.querySelector(".vf-wizard-status-words:not([data-state='out']) .vf-wizard-status-sub") ?? null,
+        ),
+      };
+    },
     logo: () => {
       const shell = shellOf();
       const logo = shell?.querySelector(".vf-wizard-logo") ?? null;
@@ -1042,15 +1199,22 @@ export async function firstRunRows(
     // its own layout settled under the frame's fade
     await sleep(120);
   };
-  const capture = async (
-    name: string,
-    rect?: { x: number; y: number; width: number; height: number },
-  ): Promise<Uint8Array> => {
+  const keep = (name: string, image: NativeImage): Uint8Array => {
     const file = `${String(shots.length + 1).padStart(2, "0")}-${name}.png`;
-    const image = await d.win.capturePage(rect);
     writeFileSync(join(d.shotDir, file), image.toPNG());
     shots.push(file);
     return new Uint8Array(image.toBitmap());
+  };
+  const capture = async (
+    name: string,
+    rect?: { x: number; y: number; width: number; height: number },
+  ): Promise<Uint8Array> => keep(name, await d.win.capturePage(rect));
+  // FG-O2's small words (printed at the walk's end, not judged yet): on the still just taken, cut from its capture
+  // where the page placed them
+  const inks: InkCut[] = [];
+  const cutFrom = (bitmap: Uint8Array, seen: InksSeen | null, words: readonly InkWords[]): void => {
+    const at = shots.at(-1);
+    if (seen !== null && at !== undefined) inks.push(...inkCuts(at, bitmap, seen, words));
   };
   const target = (spec: ControlSpec): Promise<Target | null> =>
     page<Target | null>(`target(${JSON.stringify(spec)})`);
@@ -1137,6 +1301,23 @@ export async function firstRunRows(
     }
     await dbg.sendCommand("Page.addScriptToEvaluateOnNewDocument", { source: FIRST_RUN_PAGE });
     await loadRenderer(d.win, "smoke-first-run", d.viteUrl);
+
+    // 0 · the splash (FG-O2): its stage line's one early still, on the field that has come, or on the field still
+    // waking when the wizard comes first
+    step("splash");
+    let early: { image: NativeImage; seen: InksSeen } | null = null;
+    const splashBy = Date.now() + FIRST_RUN.paneMs;
+    while (Date.now() < splashBy) {
+      const seen = await page<InksSeen | null>("inks()");
+      const look = splashLook(seen);
+      if (look === "stop" || seen === null) break;
+      if (look === "take" || (look === "keep" && early === null)) {
+        early = { image: await d.win.capturePage(), seen };
+        if (look === "take") break;
+      }
+      await sleep(50);
+    }
+    if (early !== null) cutFrom(keep("splash", early.image), early.seen, ["stage"]);
 
     // 1 · the welcome's title card, its logo whole
     step("welcome");
@@ -1270,7 +1451,7 @@ export async function firstRunRows(
         ? "asking"
         : null;
     });
-    await capture("connect");
+    cutFrom(await capture("connect"), await page<InksSeen | null>("inks()"), ["steps", "later"]);
     if (way === "asking") {
       facts["connect"] = "asked long: its way out";
       await press(ASKING_OUT, "Connect's way out");
@@ -1297,8 +1478,9 @@ export async function firstRunRows(
         welcomed = true;
         // its crossfade in
         await sleep(300);
-        await capture("setting-up-welcome");
+        const welcomeStill = await capture("setting-up-welcome");
         gpuStart();
+        cutFrom(welcomeStill, await page<InksSeen | null>("inks()"), ["sub"]);
       }
       if (!startNow) startNow = (await target({ text: "Start now" }))?.hit === true;
       // the hand-over (FG-5): its stills, each timed from its step as the page set it
@@ -1363,6 +1545,7 @@ export async function firstRunRows(
   problems.push(...judgeOpening(walk, record.opening, record.tear));
   facts["opening"] = { opening: heard(record.opening), tear: heard(record.tear), still: tearShot };
   facts["gpu"] = firstRunGpu(record, gpu);
+  facts["contrast"] = firstRunContrast(inks);
   const user = readUsersFile(d.users.root)?.users.find((u) => u.userId === d.users.userId);
   facts["onboarded"] = user?.onboarded ?? null;
   if (user?.onboarded !== true) problems.push("the walk ended without the durable onboarded: true");
