@@ -22,6 +22,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ChatComposer, type ComposerPort } from "../src/chat/ChatComposer";
 import { ChatView } from "../src/chat/ChatView";
 import type { DraftPart } from "../src/chat/composer-draft";
+import { CANNOT_LIST_AGENTS } from "../src/chat/new-spark";
 import { sparkEntriesOf } from "../src/chat/spark-status";
 import { type SparksPort, startSparksFeed } from "../src/chat/sparks-feed";
 import type { ThreadSendOutcome } from "../src/chat/thread-send";
@@ -128,14 +129,6 @@ const MODELS = (provider: string, profileSet: string): AgentModelsResult => ({
 });
 
 const port: ComposerPort = {
-  providers: async () =>
-    [A, B].map((entry) => ({
-      id: entry.id,
-      label: entry.label,
-      available: true,
-      resumable: true,
-      personas: [],
-    })),
   profileSets: async () => SETS,
   models: async (provider, profileSet) => MODELS(provider, profileSet),
 };
@@ -214,6 +207,7 @@ interface Mounted {
 async function mountComposer(
   outcome: () => Promise<ThreadSendOutcome> = async () => ({ state: "pasted" }),
   parked: readonly DraftPart[] = [],
+  asks: ComposerPort = port,
 ): Promise<Mounted> {
   stopFeed = startSparksFeed(feed());
   const said: string[] = [];
@@ -237,7 +231,7 @@ async function mountComposer(
         onPark={setDraft}
         surface={surface}
         onSurfaceChange={setSurface}
-        port={port}
+        port={asks}
         send={send}
         say={(text) => {
           said.push(text);
@@ -416,6 +410,30 @@ describe("@ in Chat's composer (DESIGN.md §8, @'s rows in Chat; the surface `at
     typeText("@zzz");
     await settle();
     expect(words(menu())).toBe('Nothing called "zzz"');
+  });
+
+  it("says the New spark sheet's words, and offers no row, when its profiles can't be read; the next @ reads again", async () => {
+    let fails = true;
+    await mountComposer(undefined, undefined, {
+      ...port,
+      profileSets: async () => {
+        if (fails) throw new Error("fieldd is not answering");
+        return SETS;
+      },
+    });
+    typeText("ask @");
+    await settle();
+    expect(words(menu())).toBe(CANNOT_LIST_AGENTS);
+    expect(menu()?.querySelectorAll(".vf-chat-at-row").length).toBe(0);
+    press(editor(), { key: "Escape" });
+    fails = false;
+    typeText("ask @");
+    await settle();
+    expect(
+      [...(menu()?.querySelectorAll<HTMLElement>(".vf-chat-at-row") ?? [])].map(
+        (r) => r.dataset.row,
+      ),
+    ).toEqual([`agent:${A.id}:native`, `agent:${B.id}:work`, "session:run-his"]);
   });
 
   it("takes a session with Return: its chip is its handle, the @ and its query gone", async () => {
@@ -751,6 +769,7 @@ describe("the composer's words are DESIGN.md's (§8 \"Chat's composer\", §9 \"C
       '"Reading its agents…"',
       '`Nothing called "cla"`',
       '"Nothing to add from Vela\'s profiles"',
+      '"VibeField can\'t list its agents right now"',
       '"Claude Code · Working"',
       '"Add to your message to Vela"',
       '"Added to your message to Vela"',

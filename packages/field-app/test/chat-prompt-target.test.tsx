@@ -45,7 +45,6 @@ const VELA: SparkSummary = {
 };
 
 const port: ComposerPort = {
-  providers: async () => [],
   profileSets: async () => [],
   models: async () => {
     throw new Error("no picker here");

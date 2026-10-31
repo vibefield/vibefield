@@ -1,9 +1,4 @@
-import type {
-  AgentModelChoice,
-  AgentModelSelection,
-  AgentProfileSet,
-  AgentProviderSummary,
-} from "@vibefield/contracts";
+import type { AgentModelChoice, AgentModelSelection } from "@vibefield/contracts";
 import {
   type ClipboardEvent,
   type DragEvent,
@@ -24,7 +19,7 @@ import type { Card } from "../frame/cards/cards-model";
 import { OUTCOME_WORDS, TARGET_WORDS } from "../frame/cards/cards-words";
 import { type FrameSurface, foldSurface } from "../frame/frame-surface";
 import { sayOnLine } from "../frame/line-door";
-import { type AtRow, atDefaultHot, atMove, atRow, atRowsOf } from "./at-rows";
+import { type AtRow, type AtSources, atDefaultHot, atMove, atRow, atRowsOf } from "./at-rows";
 import { type AtShown, ChatComposerView, menuRowId } from "./ChatComposerView";
 import {
   type AgentChip,
@@ -75,8 +70,9 @@ import { sendNote, type ThreadSendOutcome } from "./thread-send";
 // send's clearing is made there, to the draft as the thread holds it then; and the editor follows a draft the thread
 // holds that this composer did not write — a send that was pasted after the thread was left and chosen again.
 
-/** What @'s rows read: the agents and profiles fieldd offers, and an agent's own picker (the New spark sheet's doors). */
-export type ComposerPort = Pick<NewSparkPort, "providers" | "profileSets" | "models">;
+/** What @'s rows read: the Agent Profiles fieldd offers, and an agent's own picker (the New spark sheet's doors). Its
+ * agents are said by the catalog's labels, so `agent.providers` is not read. */
+export type ComposerPort = Pick<NewSparkPort, "profileSets" | "models">;
 
 export interface ChatComposerProps {
   /** the spark whose thread this is: who a message goes to */
@@ -191,8 +187,7 @@ export function ChatComposer({
 
   // ── WHAT @ OFFERS: read on Chat's first show and again each time @ opens (an agent's picker as its menu opens) ──
   const [asks, setAsks] = useState(0);
-  const [providers, setProviders] = useState<readonly AgentProviderSummary[] | null>(null);
-  const [sets, setSets] = useState<readonly AgentProfileSet[] | null>(null);
+  const [sets, setSets] = useState<AtSources["sets"]>(null);
   const [models, setModels] = useState<ReadonlyMap<string, ModelsReading>>(new Map());
   const shownOnce = useRef(false);
   useEffect(() => {
@@ -203,20 +198,23 @@ export function ChatComposer({
   useEffect(() => {
     if (asks === 0) return;
     let current = true;
-    void Promise.allSettled([port.providers(), port.profileSets()]).then(([offered, listed]) => {
-      if (!current) return;
-      // a read that failed offers nothing from it, as the New spark sheet's does
-      setProviders(offered.status === "fulfilled" ? offered.value : []);
-      setSets(listed.status === "fulfilled" ? listed.value : []);
-    });
+    // a read that failed is said as failed (`atRowsOf`), never as profiles with nothing in them
+    port.profileSets().then(
+      (listed) => {
+        if (current) setSets(listed);
+      },
+      () => {
+        if (current) setSets("failed");
+      },
+    );
     return () => {
       current = false;
     };
   }, [asks, port]);
   const rows = useBoardRows();
   const list = useMemo(
-    () => atRowsOf({ spark, query: at?.query ?? "", providers, sets, rows }),
-    [spark, at, providers, sets, rows],
+    () => atRowsOf({ spark, query: at?.query ?? "", sets, rows }),
+    [spark, at, sets, rows],
   );
   const pointed = atRow(list, hot);
   const hotId = pointed !== null ? hot : atDefaultHot(list);

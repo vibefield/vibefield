@@ -11,6 +11,7 @@ import { NewSparkSheetView } from "./NewSparkSheetView";
 import {
   agentLine,
   agentMenuOf,
+  CANNOT_LIST_AGENTS,
   dealSeed,
   defaultProfileOf,
   effortOf,
@@ -147,8 +148,7 @@ function Sheet({
       const home = defaultProfileOf(profileSets)?.id;
       setThinksUnder((held) => held ?? home);
       setProfiles((held) => (held.length > 0 || home === undefined ? held : [home]));
-      if (offered.status === "rejected")
-        setRefusal({ at: "foot", words: "VibeField can't list its agents right now" });
+      if (offered.status === "rejected") setRefusal({ at: "foot", words: CANNOT_LIST_AGENTS });
     });
     return () => {
       live = false;

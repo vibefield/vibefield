@@ -2,14 +2,14 @@
 /**
  * SP-1d — @'s rows in Chat (DESIGN.md §8 "Chat's composer", @'s rows in Chat; CH-D5 A, EW-D4): the agents the
  * spark's `agents_available` answers and the sessions its `agent_send` takes, by fieldd's whole rule, read bottom-up,
- * nearest first. Agent ids are the catalog's (R23b), never a literal.
+ * nearest first. Agent ids are the catalog's (R23b), never a literal; an agent is said by the catalog's label, as
+ * `agents_available` says it.
  */
 import {
   AGENT_CATALOG,
   type AgentFieldRow,
   type AgentPersona,
   type AgentProfileSet,
-  type AgentProviderSummary,
   type SparkSummary,
 } from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
@@ -23,6 +23,7 @@ import {
   atStops,
   sessionWord,
 } from "../src/chat/at-rows";
+import { CANNOT_LIST_AGENTS } from "../src/chat/new-spark";
 
 const [A, B, C] = [AGENT_CATALOG[0], AGENT_CATALOG[1], AGENT_CATALOG[2]];
 const AT = "2026-10-31T05:00:00.000Z";
@@ -63,14 +64,6 @@ const NATIVE = profile(
 const WORK = profile("work", "Work", [persona("work-a", A.id, "work")]);
 const HOME = profile("home", "Home", [persona("home-b", B.id, "home")]);
 const SETS = [NATIVE, WORK, HOME];
-
-const PROVIDERS: AgentProviderSummary[] = [A, B, C].map((entry) => ({
-  id: entry.id,
-  label: entry.label,
-  available: true,
-  resumable: true,
-  personas: [],
-}));
 
 const VELA: SparkSummary = {
   id: "sp-vela0001",
@@ -150,7 +143,6 @@ const ROWS: AgentFieldRow[] = [
 const sources = (over: Partial<AtSources> = {}): AtSources => ({
   spark: VELA,
   query: "",
-  providers: PROVIDERS,
   sets: SETS,
   rows: ROWS,
   ...over,
@@ -168,6 +160,30 @@ describe("@'s rows in Chat (DESIGN.md §8 \"Chat's composer\")", () => {
     // the third agent is not signed in; Home's agent is in a profile the spark lacks
     expect(list.agents.some((r) => r.agent === C.id)).toBe(false);
     expect(list.agents.some((r) => r.profile.id === "home")).toBe(false);
+  });
+
+  it("says each agent by the catalog's label, as its agents_available does, and an id the catalog lacks by itself", () => {
+    const unknown = "an-agent-the-catalog-lacks";
+    const list = atRowsOf(
+      sources({
+        spark: { ...VELA, profiles: ["native"] },
+        sets: [
+          profile(
+            "native",
+            "This Mac",
+            [
+              persona(`${A.id}:native-default`, A.id, "native"),
+              persona(`${unknown}:native-default`, unknown, "native"),
+            ],
+            "native",
+          ),
+        ],
+      }),
+    );
+    expect(list.agents.map((r) => [r.agent, r.label])).toEqual([
+      [A.id, A.label],
+      [unknown, unknown],
+    ]);
   });
 
   it("says the profile as a pill only when the spark has more than one", () => {
@@ -189,6 +205,18 @@ describe("@'s rows in Chat (DESIGN.md §8 \"Chat's composer\")", () => {
     // filtered to the second, it keeps its ordinal
     const filtered = atRowsOf(sources({ query: "vibe" }));
     expect(filtered.sessions.map((r) => r.handle)).toEqual(["vibe-field·2", "vibe-field"]);
+  });
+
+  it("names a session whose run names no folder by its agent's label, numbered as any other", () => {
+    const bare = [
+      row({ runtimeRunId: "run-bare-1", createdAt: minute(1), lastActivityAt: minute(5) }),
+      row({ runtimeRunId: "run-bare-2", createdAt: minute(2), lastActivityAt: minute(4) }),
+    ];
+    const list = atRowsOf(sources({ rows: bare }));
+    expect(list.sessions.map((r) => [r.session, r.handle, r.project])).toEqual([
+      ["run-bare-2", `${A.label}·2`, null],
+      ["run-bare-1", A.label, null],
+    ]);
   });
 
   it("says each session's word: Working, Idle, Needs you", () => {
@@ -225,8 +253,22 @@ describe("@'s rows in Chat (DESIGN.md §8 \"Chat's composer\")", () => {
     expect(empty.quiet).toBe("Nothing to add from Vela's profiles");
   });
 
-  it("is reading until its agents, its profiles and the board are read, and offers nothing meanwhile", () => {
-    for (const over of [{ providers: null }, { sets: null }, { rows: null }]) {
+  it("says the New spark sheet's words, and offers no row, when its profiles can't be read", () => {
+    expect(AT_WORDS.failed).toBe(CANNOT_LIST_AGENTS);
+    expect(CANNOT_LIST_AGENTS).toBe("VibeField can't list its agents right now");
+    // with the board read or not: without its profiles no agent and no session can be placed
+    for (const over of [{}, { rows: null }, { query: "vib" }]) {
+      expect(atRowsOf(sources({ sets: "failed", ...over }))).toEqual({
+        agents: [],
+        sessions: [],
+        reading: false,
+        quiet: CANNOT_LIST_AGENTS,
+      });
+    }
+  });
+
+  it("is reading until its profiles and the board are read, and offers nothing meanwhile", () => {
+    for (const over of [{ sets: null }, { rows: null }]) {
       const list = atRowsOf(sources(over));
       expect(list).toEqual({ agents: [], sessions: [], reading: true, quiet: null });
     }

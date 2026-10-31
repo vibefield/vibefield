@@ -82,7 +82,6 @@ function own(over: Partial<AgentFieldRow> = {}): AgentFieldRow {
 }
 
 const PORT: ComposerPort = {
-  providers: async () => [],
   profileSets: async () => [],
   models: async () => {
     throw new Error("no picker here");

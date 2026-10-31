@@ -592,7 +592,6 @@ describe("Chat hands the pane's keyboard to the thread's hello (ChatView; DESIGN
     terminal: { hosted: "local", runtimeSessionId: "pty-vela" },
   };
   const PORT: ComposerPort = {
-    providers: async () => [],
     profileSets: async () => [],
     models: async () => {
       throw new Error("no picker here");

@@ -166,6 +166,12 @@ describe('what a send carries (DESIGN.md §8 "Chat\'s composer")', () => {
     );
   });
 
+  it("a session chip whose run names no folder carries its agent and its id alone", () => {
+    const bare = session({ handle: `${AGENT.label}·2`, project: null });
+    expect(chipLabel(bare)).toBe(`${AGENT.label}·2`);
+    expect(draftText([text("ask "), chipPart(bare)])).toBe(`ask ${AGENT.label} (session run-7f3a)`);
+  });
+
   it("keeps a card's line breaks, setting a multi-line card on its own lines", () => {
     expect(
       draftText([

@@ -78,7 +78,6 @@ const VELA_ASKS = row({
 
 /** What @'s rows would read of fieldd: nothing to offer here (the composer's own suite reads the rows). */
 const PORT: ComposerPort = {
-  providers: async () => [],
   profileSets: async () => [],
   models: async () => {
     throw new Error("no picker here");

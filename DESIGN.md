@@ -1528,6 +1528,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       thinks under on that agent's head, and Effort as a small segmented control.
     - An agent that cannot take the briefing yet is listed, disabled, with why ("can't take VibeField's tools yet"),
       read from `agent.providers[].briefing`.
+    - When its agents can't be read (`agent.providers`), the sheet lists none and its foot says "VibeField can't list
+      its agents right now". @'s list in Chat says the same sentence (§8 "Chat's composer").
   - **Its profiles** (NS-D5), once there is more than This Mac: a row of chips, 28 tall, corners 14, 12.5 medium. A
     checked chip takes the ready fill and a 1.5 inset ring. The default comes checked; the one it thinks under is always
     checked and cannot be unchecked. Under them, tertiary: "Sees 3 sessions · starts Claude Code and Codex".
@@ -1695,34 +1697,44 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   on hover removes it. A picture wears `capture` on the select blue at 14%; a card's chip wears its
   kind's index glyph (§8 "The hand").
   - **@'s rows in Chat** (CH-D5 A, "Agents to start, and sessions running"; EW-D4: @ offers only its scope). There are
-    two groups, read bottom-up, nearest first. Each lists only what the spark's own tools reach, so @ never offers a
-    row they would refuse.
+    two groups, read bottom-up, nearest first. Each lists only what the spark's own tools reach, but for the one
+    residual below.
+    - *Amended 2026-10-31 (SP-1d's critique, rulings-2):* this said @ never offers a row the spark's tools would
+      refuse. That holds but for a session's profile. The talk room reads it as the profile the run was filed under
+      (`profileSet`), else This Mac's. The board's row carries only the run's persona, so @ reads the persona's
+      profile, else This Mac's when the run names no persona. The two agree while a run is filed under its persona's
+      profile, or names neither. Where they part (a run filed under another profile, or naming only one of the two),
+      @ can offer a session that `agent_send` refuses as outside the spark's profiles, which the tool says, or leave
+      out one it would take. Carrying `profileSet` on the board's row closes it, and that is VF-PM's call, owed.
     - **Running in its profiles**, nearest the composer: the sessions the spark's `agent_send` (CP-2) takes, by its
       whole rule (`fieldd/src/tool-plane/rooms/talk/verbs.ts`). A session is a row when all three hold:
       - it is live;
-      - its profile, its set or This Mac's when it names none, is one of the spark's;
+      - its profile is one of the spark's (read as the residual above says);
       - it is the person's own, or one this spark started (CP-D6). The person's own is not a spark's own session, and
         you started it (`origin.by` you, or no origin). One this spark started has `origin.by` spark and `origin.spark`
         this spark.
       So the spark's own session, every other spark's session, another spark's agents and a flow's runs are never rows
       (CP-D5), and neither is a run whose origin names a word this build does not know.
-    - Each session row is 46 tall: the agent's mark at 20, then the session's handle in mono, its name as the swarm
-      names its body (the agent's project, else its folder: "vibe-field"). Under it a small line says the agent by the
-      catalog's label and one word for what it is doing ("Claude Code · Working"). The word is Working, Idle or Needs
-      you, the last in `--vf-ink-attention`. The newest activity is nearest.
+    - Each session row is 46 tall: the agent's mark at 20, then the session's handle in mono: its folder's name, which
+      is the board's project ("vibe-field"), else, for a run that names no folder, the agent's label ("Claude Code").
+      Under it a small line says the agent by the catalog's label and one word for what it is doing ("Claude Code ·
+      Working"). The word is Working, Idle or Needs you, the last in `--vf-ink-attention`. The newest activity is
+      nearest.
     - **Two sessions with one name** are told apart by an ordinal, the `·2` the Sparks page numbers its sessions with.
       Where more than one row shares a name, each after the first by its start takes the next: "vibe-field",
       "vibe-field·2", "vibe-field·3". They are numbered across every session @ offers, before what follows the @
       filters them, so a row keeps its handle while you type, and a chip keeps the handle it was taken with.
     - **Start an agent**, above it: each agent signed in under one of the spark's profiles, the same list its
-      `agents_available` tool answers (TL-D2). Each row is 36 tall: the agent's mark at 20, then its label. When the
-      spark has more than one profile there is a row for each agent and profile, and the profile's name follows as a
-      pill at the row's right (§8 "Pills").
+      `agents_available` tool answers (TL-D2). Each row is 36 tall: the agent's mark at 20, then the catalog's label,
+      as that tool says it. When the spark has more than one profile there is a row for each agent and profile, and
+      the profile's name follows as a pill at the row's right (§8 "Pills").
     - The eyebrows are "Running in its profiles" and "Start an agent". A group with no rows is left out. The hot row
       starts at the nearest row.
     - Until its agents are read, their group says "Reading its agents…". When nothing matches what follows the @, the
-      list says `Nothing called "cla"`, and with nothing to offer at all, "Nothing to add from Vela's profiles". Both
-      are 12/400 in tertiary ink, padded 10.
+      list says `Nothing called "cla"`, and with nothing to offer at all, "Nothing to add from Vela's profiles".
+    - When the spark's profiles can't be read (`agents.profileSets.list`), no agent and no session can be placed, so
+      the list offers no row and says the New spark sheet's sentence, "VibeField can't list its agents right now". The
+      next @ reads them again. Each of these words is 12/400 in tertiary ink, padded 10.
     - Flows' rows are CP-4's (FL-D5 A). Sparks are never rows: in a spark's thread the spark is the one you are
       talking to (CH-D5).
     - @'s list stays 316 wide. The page's 340 was not taken: 316 is the line's, and the rows fit it.
@@ -1745,9 +1757,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - the words as typed, their ends trimmed;
     - an agent chip as its words: "Claude Code", or "Claude Code at Opus 5.5 · high", either followed by " under Work"
       when the spark has more than one profile;
-    - a session chip as its words and the id the spark's tools take: "Claude Code in vibe-field (session ‹its run›)".
-      The id is there for the spark's tools to read (§9 "Chat's words"). The name is the project's, without @'s
-      ordinal, which is the window's own: the id is what tells two sessions apart;
+    - a session chip as its words and the id the spark's tools take: "Claude Code in vibe-field (session ‹its run›)",
+      or "Claude Code (session ‹its run›)" for a run that names no folder. The id is there for the spark's tools to
+      read (§9 "Chat's words"). The name is the project's, without @'s ordinal, which is the window's own: the id is
+      what tells two sessions apart;
     - a card chip as a pane takes the card (§8 "The hand"): its words, a file's path, a picture's file's path, or an
       agent card's handle. A chip that carries more than one line stands on lines of its own, with its line breaks kept;
     - never a trailing line break.
@@ -4966,14 +4979,17 @@ Inside History the room's own words stand as rosetta wrote them, and the Setup A
 - The pane's place: "Finding Vela's pane…" · "Vela's terminal is not on this desktop's floor." · "Couldn't find Vela's
   pane: …" (Send's note says it too) · "This window has no terminals to show it with."
 - @: "Running in its profiles" · "Start an agent" · "Reading its agents…" · `Nothing called "cla"` · "Nothing to add
-  from Vela's profiles"; a session's word, Working · Idle · Needs you.
+  from Vela's profiles" · "VibeField can't list its agents right now" (the New spark sheet's own sentence); a
+  session's word, Working · Idle · Needs you.
 - Send's notes: "Pasted into Vela's pane — Return sends it" · "Vela is waiting on you — answer it in its pane" · "Not
   pasted — Vela's pane is not taking input" · "Not pasted — that snapshot is no longer kept" · "Not pasted into Vela's
   pane — 300 KB, and one paste carries 261 KB of it" · "Not sent — Vela didn't wake in 20 seconds" · "Not sent — Vela's
   terminal is not on this desktop's floor" · "Not sent — you left Vela's thread before its pane was ready" · "Not sent
   — this window has no terminals" · "Couldn't wake Vela: …" · "Couldn't send to Vela: …". A card's: "Add to your
   message to Vela" · "Added to your message to Vela".
-- A session's handle: its project's name, else its folder's, with @'s ordinal where two share it ("vibe-field·2").
+- A session's handle: its folder's name, which is the board's project, else the agent's label for a run that names no
+  folder, with @'s ordinal where two share it ("vibe-field·2", "Claude Code·2"). Its chip pastes "Claude Code in
+  vibe-field (session ‹its run›)", or "Claude Code (session ‹its run›)" with no folder.
 - Where an outcome is the hand's, the words are the hand's (§8 "The hand"), so one outcome is never said two ways.
 - Each note is under 70 characters beside the spark's name, so it is read in the note's 2.4 s. A refusal from fieldd
   is said in its own words after the colon, as the line says it.

@@ -3,7 +3,6 @@ import {
   type AgentFieldRow,
   type AgentModelChoice,
   type AgentModelSelection,
-  type AgentProviderSummary,
   type SparkSummary,
 } from "@vibefield/contracts";
 import { atDefaultHot, atRowsOf } from "../chat/at-rows";
@@ -168,15 +167,6 @@ const HATCHED_RUN = row({
   lastActivityAt: minutesAgo(0),
 });
 
-/** The agents fieldd offers: the catalog's, by its labels. */
-const PROVIDERS: readonly AgentProviderSummary[] = AGENT_CATALOG.map((entry) => ({
-  id: entry.id,
-  label: entry.label,
-  available: true,
-  resumable: true,
-  personas: [],
-}));
-
 /** Chat's plates, one per honest state. */
 export const CHAT_STATES = [
   "list",
@@ -339,7 +329,6 @@ const words = (text: string): DraftPart => ({ kind: "text", text });
 const AT_LIST = atRowsOf({
   spark: JUNO,
   query: "",
-  providers: PROVIDERS,
   sets: [FIXTURE_NATIVE, FIXTURE_WORK],
   rows: ROWS,
 });
