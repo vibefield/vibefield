@@ -14,7 +14,8 @@
   },
   "sideEffects": [
     "*.css",
-    "./src/spark-face/vendor/sparks.js"
+    "./src/spark-face/vendor/sparks.js",
+    "./src/spark-face/vendor/star-spark.js"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit"

@@ -75,7 +75,10 @@
       // spark-face/vendor/sparks.js is James's Agent Sparks engine, vendored BYTE FOR BYTE
       // (DESIGN.md §2.10): spark-face.test.tsx holds its SHA-256, so nothing formats or lints it,
       // and a newer version is copied over it, never edited in place.
-      "!packages/design-kit/src/spark-face/vendor/sparks.js"
+      "!packages/design-kit/src/spark-face/vendor/sparks.js",
+      // spark-face/vendor/star-spark.js is James's Star Spark engine (`star-spark/engine.js`), vendored the same way
+      // with its first user, the New spark sheet's hatch (SP-1c).
+      "!packages/design-kit/src/spark-face/vendor/star-spark.js"
     ]
   },
   "formatter": {

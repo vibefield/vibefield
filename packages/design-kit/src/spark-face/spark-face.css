@@ -67,3 +67,37 @@
   block-size: 100%;
   pointer-events: none;
 }
+
+/* The hatch (DESIGN.md §2.10 "The hatch", §8 "The New spark sheet"): the sky's two canvases, one over the other, on the
+   night's ground; without WebGL2 the flat star stands at its centre. */
+.vf-spark-hatch {
+  position: relative;
+  overflow: hidden;
+  background: var(--vf-spark-night);
+}
+
+.vf-spark-hatch-sky,
+.vf-spark-hatch-face {
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  pointer-events: none;
+}
+
+.vf-spark-hatch-still {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+
+/* The flight to a row: one canvas over the whole window for its 0.66 s, above the frame as a carried card is (66). */
+.vf-spark-hatch-flight {
+  position: fixed;
+  inset: 0;
+  inline-size: 100vw;
+  block-size: 100vh;
+  z-index: 67;
+  pointer-events: none;
+}

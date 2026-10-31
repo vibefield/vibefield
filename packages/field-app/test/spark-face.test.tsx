@@ -11,10 +11,12 @@ import {
   SparkFace,
   type SparkFaceProps,
   SparkFaceRenderer,
+  SparkHatch,
+  type SparkHatchHandle,
   type Sparklings,
   SparkStage,
 } from "@vibefield/design-kit/spark-face";
-import { act, createElement, type ReactElement } from "react";
+import { act, createElement, createRef, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 
@@ -35,6 +37,14 @@ const VENDORED = {
   file: "src/spark-face/vendor/sparks.js",
   revision: "025b495c11406509389421d9c603d2fe08482469",
   sha256: "baa846eecc702dc4f7bcf3d1f7da20d1eb01051c87ce20685a29de1de6e67716",
+} as const;
+
+// James's research/spark, star-spark/engine.js: the hatch's falling star, vendored with its first user, the New spark
+// sheet (SP-1c). It moves as the face's engine does: a newer file, these two and DESIGN.md §2.10 in one commit.
+const VENDORED_STAR = {
+  file: "src/spark-face/vendor/star-spark.js",
+  revision: "025b495",
+  sha256: "e4c142f2b52e8b52f4cda371232bda9aaa211c7c9535e07f18a63a19b0d9ead6",
 } as const;
 
 // The reduced-motion query is the test's to turn; every other query is the default's.
@@ -238,6 +248,74 @@ describe("reduced motion (M6)", () => {
     expect(hop()).toEqual({});
     reduce.turn(false);
     expect(Object.keys(hop()).length).toBeGreaterThan(0);
+  });
+});
+
+describe("the hatch's star engine (DESIGN.md §2.10; SP-1c)", () => {
+  it("is James's file byte for byte, at the revision §2.10 names", () => {
+    const bytes = readFileSync(join(KIT, VENDORED_STAR.file));
+    expect(createHash("sha256").update(bytes).digest("hex")).toBe(VENDORED_STAR.sha256);
+    const design = readFileSync(join(REPO_ROOT, "DESIGN.md"), "utf8");
+    expect(design).toContain(`(\`star-spark/engine.js\` at \`${VENDORED_STAR.revision}\``);
+  });
+
+  it("loads only on demand: one dynamic import, by the hatch, no static one, and the kit names it a side effect", () => {
+    const pkg = JSON.parse(readFileSync(join(KIT, "package.json"), "utf8")) as {
+      sideEffects: string[];
+    };
+    expect(pkg.sideEffects).toContain("./src/spark-face/vendor/star-spark.js");
+    const sources = (dir: string): string[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+        entry.isDirectory()
+          ? entry.name === "node_modules"
+            ? []
+            : sources(join(dir, entry.name))
+          : /\.tsx?$/u.test(entry.name)
+            ? [join(dir, entry.name)]
+            : [],
+      );
+    let dynamic = 0;
+    for (const file of [...sources(join(KIT, "src")), ...sources(join(PACKAGE_ROOT, "src"))]) {
+      const text = readFileSync(file, "utf8");
+      expect(text, file).not.toMatch(/(?:from|import)\s+"[^"]*vendor\/star-spark(?:\.js)?"/u);
+      dynamic += (text.match(/import\("\.\/vendor\/star-spark\.js"\)/gu) ?? []).length;
+    }
+    expect(dynamic).toBe(1);
+  });
+});
+
+describe('the hatch (DESIGN.md §2.10 "The hatch")', () => {
+  async function hatch(element: ReactElement): Promise<HTMLElement> {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => root?.render(element));
+    const drawn = container.querySelector<HTMLElement>(".vf-spark-hatch");
+    if (!drawn) throw new Error("no hatch drawn");
+    // its engines load on demand; a window with no WebGL2 has neither, and the hatch says so
+    for (let tries = 0; tries < 50 && drawn.dataset.hatch === "loading"; tries += 1)
+      await act(async () => new Promise((settle) => setTimeout(settle, 10)));
+    return drawn;
+  }
+
+  it("is the flat star on the night's ground where the window has no WebGL2 — never a blank", async () => {
+    const drawn = await hatch(createElement(SparkHatch, { seed: 7, play: 1 }));
+    expect(drawn.dataset.hatch).toBe("flat");
+    const still = drawn.querySelector<HTMLElement>(".vf-spark-hatch-still .vf-spark-face");
+    expect(still?.dataset.drawn).toBe("flat");
+    expect(still?.dataset.framed).toBe("false");
+    expect(still?.style.getPropertyValue("--vf-spark-face-size")).toBe("104px");
+    expect(drawn.querySelector("canvas")).toBeNull();
+  });
+
+  it("flies nowhere where nothing can fly: the face's flight resolves at once", async () => {
+    const ref = createRef<SparkHatchHandle>();
+    await hatch(createElement(SparkHatch, { seed: 7, play: 1, ref }));
+    const target = document.createElement("span");
+    document.body.appendChild(target);
+    await expect(ref.current?.fly(target)).resolves.toBeUndefined();
+    expect(document.querySelector(".vf-spark-hatch-flight")).toBeNull();
+    target.remove();
   });
 });
 

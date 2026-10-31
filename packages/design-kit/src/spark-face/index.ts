@@ -8,6 +8,7 @@ export {
   sparkFaceScale,
 } from "./engine";
 export { type FlatStarShape, flatStar } from "./flat-star";
+export { SparkHatch, type SparkHatchHandle, type SparkHatchProps } from "./hatch";
 export {
   SparkFace,
   type SparkFaceProps,

@@ -86,6 +86,8 @@
      dim, under a blur of 18 — the window blurred and dimmed. The phone wears its
      dim alone under a door over a live field (§9, TS-D22; ChromePalette.searchScrim) */
   --vf-search-scrim: rgb(0 0 0 / 16%);
+  /* §8 the New spark sheet's sky (SP-1c): night in both themes, under the star engine's own night where it draws */
+  --vf-spark-night: #060716;
 
   /* §2.5 State & system color */
   --vf-green: #30d158;
