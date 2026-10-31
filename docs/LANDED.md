@@ -23254,6 +23254,9 @@ James's first sight: `pnpm dev`, then ⌘4 or the views track's fourth cell.
   RULED 2026-09-30). This track's marks were written DS-D1…D8 in its note, its board approvals (`ds-marks`,
   `ds-d4-place`, `ds-d4-look`) and the comments and test titles of 26 of this landing's 28 files. There DS-Dn means
   ST-Dn, never the sync plane's. The rename commit is owed to the next mint (below).
+  > **Closed (2026-10-31, 09:51:46Z):** the rename landed in the mint `f2c695b69` (LANDED "ST's rename and the kit
+  > half"). From there, DS-Dn in the code is only ever the desktop sync plane's. The note, PU-K and the board approvals
+  > keep the old spelling: the first two take a dated erratum at the next draft queue, and the approvals' names stand.
 - James on the board: `ds-marks` (A, all eight marks at their leans, 05:36:54Z); `ds-marks-corrections` (Accept,
   05:53:50Z); `ds-d4-place` (Accept, 06:16:32Z); `ds-d4-look` ("Accept all three", 06:29:00Z).
 - VF-PM's words: 05:55Z (D1–D6 at the code read's corrections), 06:16Z (ST-D4 (a) + (c), (b) never), 06:26Z (the
@@ -23458,3 +23461,145 @@ the Sparks page's rulings NS-D1 A, NS-D2 B, NS-D3 A and NS-D5 (James, 2026-10-30
   {key "⌘N", view "assistant", outcome "opened"/"closed"} for it.
 
 James's first sight: `pnpm dev`, ⌘4 for Chat, then ⌘N or the line's sparkle.
+
+## ST's rename and the kit half — the durable Stop's marks named ST-Dn in the code, and the phone reads the field row's `stop` (2026-10-31; `cc99532f6` on `6ea6cc727` and fd's `e45142626` on it, landed in the mint `f2c695b69` over main `bcedadd4e`, the mini's run 45)
+
+**Rulings.**
+- VF-PM 07:52Z, on the fixer's finding: the durable Stop's track is ST, and DS stays the desktop sync plane's
+  (DECISIONS DS-D1…DS-D18). (a) the records said ST at once (LANDED "ST", `6ea6cc727`); (b) this rename, folded into
+  fd's kit mint.
+- VF-PM 09:33Z: the kit mint is this merge shape (the rename, then the kit half, minted over the then-main), and its
+  records are one cut.
+
+**What.**
+- **The rename** (the fixer; `cc99532f6`, 26 files, +81 −81). Only lines the ST slice itself added
+  (`c2b20b4ab..7cbd2b59f`) are renamed: "DS-D" → "ST-D", "track DS" → "track ST", the bare tag "DS" → "ST".
+  - In comments, test titles ("ST — a durable Stop (the real floor)", …), DESIGN.md §8 and §9, the godview.css
+    block's marker (with the seat and stop tests that slice on it) and the stop golden's `"//"` line.
+  - Kept: the sync plane's own DS-Dn in the same files (contracts `agent-field.ts`' DS-3 and DS-D4; DESIGN.md :4380
+    and :4414's DS-D5), the board approvals' names (`ds-marks`, `ds-d4-place`, `ds-d4-look`) and the `DS_HEARD` log
+    tag, which LANDED "ST" quotes as that run's evidence.
+  - The golden's bytes changed: `agent-field-snapshot.stop.json` sha256 `22b8868c…` (was `68a99f18…`).
+  - No wire name, audit action or log event changed.
+- **The kit half** (fd; `e45142626` on the rename `cc99532f6`, 4 files, +127; the first cut, `dbb710108` on `7cbd2b59f`,
+  is kept as the record of its first light): EL9's third side for the field row's `stop`. FieldProduct's
+  `AgentFieldStop` reads `AgentStopState`: `sentAt` and `stage` required, `heardBy` and `unheardAt` optional. The stage
+  is kept in its open word, so one this build has never heard is kept as it came and read as still stopping, and unknown
+  keys are counted. `AgentFieldRow.stop` reads through `decodeObject`, as `terminal` does. Absent means no Stop is held,
+  or the daemon predates ST; a malformed Stop drops its row into `droppedRows`. The golden
+  `agent-field-snapshot.stop.json` is mirrored byte for byte into FieldProductTests' Fixtures (sha256 `22b8868c…`) and
+  named in check-ios-fixtures' `launchFixtures`, a `requiredMirrors` set, so the mirror is required from here on. Two
+  rows in LaunchShapeTests, beside PJ-7's: (1) the golden's three Stops (terminating · resent with `unheardAt` · heard
+  by `status`), with no unknown field, and none on a row that holds none; (2) an unknown stage kept, an unknown key
+  counted, a Stop without `sentAt` refused. The kit run on this Mac (`ts7-mac.sh kit e45142626`, 09:28–09:31:45Z; load1
+  16 at the take, 43.9 when the tests armed): 13 runs, 1373 tests, 0 red. check:ios-fixtures exit 0 (186 copies
+  identical, 63 pins). Logs: `lanes/ios/logs/kit-e451426260551cab386c508e1b09a832c3112287/`. `dbb710108`'s first light
+  (07:42–07:47Z, load1 171): LaunchShapeTests whole and check:ios-fixtures 186, beside one unrelated red, now item 126.
+
+**Validation.**
+- **The rename's light** (`records/ds/rows11.sh`, at `cc99532f6` on `6ea6cc727`, 09:25:48–09:27:41Z, nice 19, each
+  row alone, every row exit 0):
+  - biome over 25 files; typecheck contracts, fieldd and field-app 0.
+  - fieldd: `agent-stop` 16/16; the real-floor describe under its ST title 5/5 (`DS_HEARD` resent 8,087 ms at the
+    8 s bound, ladder 3,066 ms at 500 ms bounds); `agent-field` 39/39.
+  - contracts: `agent-field` 43; `agent-session` 30; `fixtures` 523.
+  - field-app: `godview-stop-pane-state` 13; `godview-deck-frames` 68; `godview-pane-frame-facts` 15;
+    `godview-seat-pane-state` 19; `godview-monitor-status` 9; `ui-system-boundaries` 40.
+- **The kit run:** fd's paragraph above.
+- **Run 45** (the mini): verify at `f2c695b69`. VF-PM's stripped read of `lanes/ts6/logs/mini/run45/verify.log`:
+  - FAIL rows 0; Tests 11,176 passed, 0 failed, 18 skipped; cargo `test result: ok.` 33, FAILED 0;
+  - typecheck and test "for 28 projects"; the gen:check line present; MaxListenersExceededWarning 0;
+  - "ios fixtures: 186 copies identical" (185 → 186: the stop golden's mirror is now required);
+  - the fieldd describe runs under its new title, "ST — a durable Stop (the real floor)";
+  - verify exit 0 at 09:50:33Z, and the checkout's tree clean after it.
+- **Landed:** main fast-forwarded `bcedadd4e` → `f2c695b69` at 2026-10-31 09:51:46Z by `land-stack.sh` (the fixer,
+  on VF-PM's GO): 30 files, +208 −81.
+
+**Owed.**
+- Drawing the Stop on the phone is a later iOS slice (fd's; the PG/IOS track).
+- PU-K (James files it), ST-D1's live half, and the note's and PU-K's DS-Dn → ST-Dn errata at the next draft queue
+  (LANDED "ST").
+- Item 126 (fd's FakeCellDoorTests stale-route timeout under heavy load), on the fixer-items list at the next queue.
+
+## PG-1e0 — the projection bench: what each of a desktop's three cuts projects per corpus-second and what it costs; measured, and NEITHER 1e1 nor 1e2 (2026-10-31; `36574b549`, the merge of main `f2c695b69` into `e18cde11e` on `2b973c587`, lane `pg/1e0`)
+
+**What.** The brief's §PG-1e rung, "the bench only", granted by VF-PM at 07:41Z (board `vf-pg1e0-bench-lane`). It is a
+measuring instrument: no product line, no daemon-plane touch, no contract, golden or wire change. One commit,
+`e18cde11e` on `2b973c587`, 4 files, +620 −7:
+- **`perf/lib/projection-bench.ts`** (field-app, new) hosts the corpus's desktop as `perf/lib/model-stream.ts` does,
+  whose hosting helpers are now exported for it (nothing else there moved). It runs each of the desktop's three cuts
+  ALONE over the same ticks, on virtual time, wired as `daemon.ts`'s `openLocalBoard` wires it:
+  - `model`: this desktop's windows; FULL_TICK_MS with the urgent edge; agents and bare terminals.
+  - `desk`: a peer's hub; DESK_MIN_INTERVAL_MS with the mesh heartbeat; woken by the fold and the backend.
+  - `field`: the phone; MIN_INTERVAL_MS; the fold's alone.
+- **Counts** (deterministic). The sources a cut reads are wrapped, so every apply, item projected, stamp (the JSON
+  `RowsProjection.apply` makes to find what moved) and row moved is counted, along with the frames sent. The stamps are
+  re-derived by the same exported projectors the cut runs. No counter hook lives in fieldd.
+- **CPU** (opt-in, host-bound): `process.cpuUsage` brackets the attach and the ticks. Each cut's pass runs beside a
+  no-cut baseline; the baselines' spread is printed as the noise floor, with each cut's paired spread beside it.
+- **Every cut lists the fold as `agents.list()` does**: a fresh row per run on each call, sorted by `createdAt`.
+- **`perf/projection-bench.perf.ts`** and field-app's `perf:godview:projection`, outside `pnpm test` and `pnpm verify`
+  (`vitest.perf.config.ts`). It asserts no budget.
+
+**Measured.** The lane corpora (8 s, seed 1), on M46 in ts3, in VF-PM's quiet window (10:03Z, closed at 10:08Z;
+load1 13.8 → 10.5, nothing compiling). Two runs: 5 ABAB rounds, then 10.
+- **CPU each cut adds over a no-cut baseline,** per corpus-second (the median, r5 / r10):
+  - n20: model 18.5 / 15.6 ms; desk 2.9 / 2.1; field 1.5 / −0.4, inside the noise;
+  - n60: model 45.4 / 48.3 ms; desk 6.5 / 8.1; field 3.6 / −0.4, inside the noise;
+  - n10: every cut inside the noise.
+  - The baselines' spread (the noise floor), per 8 s: n20 124–175 / 116–169 ms; n60 395–487 / 343–556 ms.
+- **Counts,** per corpus-second, n20:
+  - model 58.3 applies, 1281.5 rows projected (2.13 M stamp chars), 575.8 moved (44.9%);
+  - desk 8.6 / 172.5 / 86.1 (49.9%);
+  - field 4 / 80 / 40.3 (50.3%).
+  - At n60 the model moved 48.1% of what it projected, desk 50%, field 50.1%.
+- **Together,** the three cuts cost about 18–21 ms of CPU a second at n20 (about 2% of one core) and about 52–56 ms/s
+  at n60 (about 5%), during a swarm whose every agent is busy. The model cut is ≥85% of it.
+
+**The ruling: NEITHER** (VF-PM, 10:08Z, at fd's reading).
+- **1e2's ceiling.** About half of the model's projected rows are unmoved. Skipping them saves at most ~8 ms/s at n20
+  and ~24 ms/s at n60 (≤1% and ≤2.5% of a core), even if projection and stamping were all of the cut's cost. The brief
+  sized 1e2 at ~550–750 lines.
+- **1e1's ceiling.** Desk plus field are 2–8 ms/s, at or inside the noise, and their rows are shaped differently from
+  the model's. A shared cut has nothing worth sharing at K=1.
+- **The bench stays as the instrument.** The decision reopens on any of: a fourth cut projecting the same rows; swarms
+  well past 60 busy agents; the model cut's cost growing.
+- **The frames' wire serialization not measured.**
+
+**Found:**
+- The scripted fold hands back one cached list. The CPU passes would have priced every apply's listing at zero,
+  understating 1e1. It would also have let a memo keyed by a row's identity hit where production's `agents.list()`,
+  which makes a fresh sorted row per run on each call, never could. Every cut now lists the fold as the runtime does
+  (the review's one confirmed finding).
+- The bench checks itself. While no row leaves and no snapshot replaces the board, upserts = moved − the rows at the
+  open, exactly, for every cut and corpus. This is asserted.
+- The backend's row type in field-app's perf is puppeteer-view-sdk's `MonitorAgentRow` (`/model`), not the contracts'
+  zod mirror. *(`e18cde11e`'s message says "the kit's"; it is field-app's perf, not the iOS kit.)*
+
+**Validation.**
+- **The lane:** `/Volumes/SamsungRed/lanes/ios` (the worktree `vibe-field`, branch `pg/1e0`). It was cut on
+  `c2b20b4ab`, then rebased onto `7cbd2b59f` and `2b973c587`; none of the moves overlapped it.
+- **The light** (`lanes/ios/pg1e0-light.sh`; ts3, nice 19, under the guard): green on `2b973c587..e18cde11e` at
+  09:34:48Z. It ran biome on the four files, field-app's typecheck, check:walls, the model-stream pin
+  (`test/godview-model-stream.test.ts` 9/9: the in-repo streams are byte-identical) and the bench (2/2, counts). The same
+  light was green on the WIP at 09:15:27Z and 09:33:02Z.
+- **The review** (three lenses, a skeptic per finding; `wf_22eda99c-daf`): 9 findings. 1 was confirmed and folded; 8
+  were refuted against the code, among them that the trailing floors are an overcount (they are owed by in-corpus
+  changes) and that a sources-moved counter would differ from `moved` (on these corpora it equals it).
+- **No verify on this Mac** (James, 2026-10-29 09:05Z: the Mac mini's verify lane).
+- **The landed tip** is `36574b549`: main `f2c695b69` merged into `e18cde11e`, tree `058c6fd5b` (VF-PM's merge-tree).
+  a9 carried it to the mini as `mrun46.bundle` (sha256 `0b5a923d…`). The mini's `next` ran at 09:54:01Z, and the locks
+  stood.
+- **The mini, run 46, `pnpm verify` at `36574b549`:** exit 0, armed 09:54:19Z, done 09:59:13Z.
+  - vitest 11,176 passed, 0 failed, 18 skipped: unchanged from run 45, since the bench is outside `pnpm test`.
+  - rust 532 / 0 / 14 over 33 binaries.
+  - biome 2,924 files; field-app's typecheck over `perf/`; `test/godview-model-stream.test.ts` 9 ✓.
+  - The tree was clean after, with no stub left. Logs: `lanes/ts6/logs/mini/run46/`.
+- **Landed:** main fast-forwarded `f2c695b69` → `36574b549` at 10:02:04Z on VF-PM's GO; VF-PM pushes it.
+- **The CPU half:** `lanes/ios/pg1e0-cpu.sh 36574b549 5` and `… 10`, in the window above. JSON in
+  `lanes/ios/pg1e0/lane-8s/` (10 rounds) and `lane-8s/r5/`, the in-repo counts in `lanes/ios/pg1e0/`. Logs:
+  `lanes/ios/logs/pg1e0-cpu-36574b549/` and `…-r5/`.
+
+**Records.** The design record's §8 ("1e0 as measured") goes in at the next draft queue.
+
+**Owed.** PG-1f, the PU-I petition: draft-only, and its pin test waits on the puppeteer 0.3.1 EL8. Then PG-2.

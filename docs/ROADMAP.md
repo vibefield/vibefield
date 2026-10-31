@@ -148,9 +148,13 @@
   backpressure at 256 KiB (`2392b0ef8`, `83e08f1e1`), as the merge `1790be95f`, run 18 (LANDED "PG-1a…1c"). **PG-0**,
   the rulings at their sources (`2509d573a`), with PG-1's agent-plane clauses (`ec04b7c41`). **PG-1d**, a gate flip
   re-presents every live field and desk board (`098ae53d1`, as the merge `38f722c3b`, run 37; LANDED "PG-1d").
-- Next: PG-1e0 (the projection bench), with PG-1f (the PU-I petition) in parallel. Then PG-2 (the remote cut) → PG-3
-  (the phone's replica under the swarm) → PG-5…PG-8 (list, timeline, spend, rain, native) → PG-9 (resume, `agent.get`,
-  the measured rates).
+  **PG-1e0**, the projection bench (`e18cde11e`, as the merge `36574b549`, run 46; LANDED "PG-1e0"): measured, and
+  NEITHER 1e1 nor 1e2 (VF-PM 10:08Z). The three cuts cost ~2% of one core at n20 and ~5% at n60 in a busy swarm, the
+  model cut ≥85% of it. The bench stays as the instrument; it reopens on a fourth cut projecting the same rows, swarms
+  well past 60 busy agents, or the model cut's cost growing (the frames' wire serialization not measured).
+- Next: PG-1f (the PU-I petition, draft-only; its pin test waits on the puppeteer 0.3.1 EL8). Then PG-2 (the remote
+  cut) → PG-3 (the phone's replica under the swarm) → PG-5…PG-8 (list, timeline, spend, rain, native) → PG-9 (resume,
+  `agent.get`, the measured rates).
 - Owed: items 109 (the History tail's reset hole) and 110 (`project.subscribe`'s no-op snapshot on the phone), both on
   the shed; the cap read on the phone under the link conditioner (PG-9); from PG-1d, the F-H2 rider (the board's gate
   and the ticket mint read different things), an old owner's run-id fallback (a design question) and a kit comment
@@ -298,7 +302,8 @@
   Then items 120 (`dd8d5e84d`) and 93's zombie half (`dc2d54a4c`), the mint `b6363425b`.
   Then items 116 (`684fd4dae`, one smoke census) and 122b (`198fee645`, the remote door's endpoints wait), the
   mint `06e1385d7`. Then ST, the durable Stop (`9196da93f`, `69f9414f3`, `7de74165b`, `7cbd2b59f`), landed as its
-  rebased tip itself, run 41 (LANDED "ST"; DECISIONS ST-D1…D8, written DS-D1…D8 until 10-31 07:52Z).
+  rebased tip itself, run 41 (LANDED "ST"; DECISIONS ST-D1…D8, written DS-D1…D8 until 10-31 07:52Z). Then ST's
+  rename (`cc99532f6`) with fd's kit half (`e45142626`), the mint `f2c695b69`, run 45.
 - Queue: item 80 (DS-5c's wall-clock gap margin, `doc-sync-service.test.ts`, shaped with the DS owner; its sibling
   TC-S3, item 120, landed in run 34) · item 71 (persona refresh window) · item
   73 (`unregistered_webcontents` false positive on every factory window) · item 74 (the generation-1 port forward before
@@ -314,8 +319,8 @@
   runner that ends without `shutdown()`: a watcher host on a stdin pipe, and a SIGHUP handler; after 111 and 112) ·
   item 121 (RA-D7's refused re-attach: TC-D4's interactive fallback against AR-4b's cell rule; James ruled A on
   10-31, re-attach a fallback-born run when fieldd's own record stamps its placement, the placement audited and the
-  row showing the cell; next, ST having landed) · ST's rename (the slice's DS-Dn → ST-Dn, then fd's kit half re-cut
-  on it; one mint) · item 125 (retire `agent-status.ts`' other six exports and their tests) · item 122's floor
+  row showing the cell; next, ST having landed) · item 125 (retire `agent-status.ts`' other six exports and their
+  tests) · item 126 (fd's: FakeCellDoorTests' stale-route row times out under heavy load) · item 122's floor
   half (a fresh floor's two class cells' hello times, idle and under burners; its study found one test exposure,
   landed as 122b).
 - **Item 77b**, FieldTerminalTests' 60 s block. The 5 s shape is fixed: (d) `b1e9bf53d` runs AttachDeadlineTests
@@ -526,8 +531,8 @@
 
 **Agent plane (AR · AO · MV · Godview)**
 - ST's owed: PU-K (James files it; asks 1–2 close DESIGN.md §8's two gaps, the 8 s arithmetic and a spark's Stop
-  with no pane state, and ask 4 the unverified coalescing residual) · the phone's drawing of `stop` (fd's track) —
-  LANDED "ST".
+  with no pane state, and ask 4 the unverified coalescing residual) · drawing the Stop on the phone, a later iOS
+  slice (fd's; the PG/IOS track) — LANDED "ST", "ST's rename and the kit half".
 - Item 50: agent probes inherit fieldd's env (EL7); one puppeteer seam (`BuiltinProviderOptions.env`, abort on stop) also ends fieldd's agent-inventory probes outliving its stop (QW1 stack A's `4c54f20c7` covers an adapter's helper once the pinned puppeteer asks) — DK-18 follow-up (a).
 - COLORFGBG: ghosttea writes it into every session, an agent's included; EL7 accepted ghosttea's value 10-23 — decide whether an agent's value is VibeField's own.
 - Item 60's doors: James's veto on the phone's bounded reply; whether `project.figures` says a count beside `clipped`; the phone's "N more" for `omitted`; a revisioned delta past a page (measure first) — LANDED "AR/SP — item 60's three doors".
@@ -656,7 +661,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | FG — the first run on the field | ACTIVE; FG-0…3a landed 10-30, FG-3b, FG-4a and FG-4b 10-31 | `thinking-first-run-glass.md`; DESIGN.md §2.1/§5/§6/§8/§13 | FG-5 |
 | AL — app lifecycle | ACTIVE; AL-1…3, 5, 7, 8a, 9 landed | `thinking-app-lifecycle.md`; ESR §7.3 | AL-6, Last exit, relaunch cap |
 | AU — Updates That Wait | ACTIVE; B1–B4 (AU-0…AU-7) landed 10-30/31 | `thinking-update-ux.md` §7 (page sources `draft/update-ux/`); DESIGN.md §2.5/§2.8/§6/§8/§9/§13; EDP §5.2/§6.4/§11; ESR §7.3 | the owed eyeballs, the first signed nightly with notes, the physical rows |
-| PG — the phone's Godview | ACTIVE; PG-0, PG-1a…1d landed 10-31 | `thinking-phone-godview.md` §7/§8; `design-mv.md`; `design-06-sync-planes.md` | PG-1e0, with PG-1f |
+| PG — the phone's Godview | ACTIVE; PG-0, PG-1a…1d and PG-1e0 (measured: neither) landed 10-31 | `thinking-phone-godview.md` §7/§8; `design-mv.md`; `design-06-sync-planes.md` | PG-1f; then PG-2 |
 | HN — Cards in Hand | BUILT; B1–B3 (HN-0…HN-8) landed 10-31 | `thinking-cards-in-hand.md` §6 (page sources `draft/cards-in-hand/`); DESIGN.md §1/§5/§6/§8/§9/§10/§13 | the console-window smoke rows; D10 (James) |
 | QW1 — Godview swarm QA, fix wave 1 | ACTIVE; stacks A and B landed 10-28, B on puppeteer 0.3.0's EL8 pin | `godview-swarm-qa-plan.md`; `thinking-ar-reattach.md` | QA wave 1 |
 | Release rails (EDP/ESP, WP12, TD, BP, RD, RM) | ACTIVE; nightlies live, W10/W11 passed | the release specs; `thinking-browser-profile.md`, `thinking-release-deps.md`, `thinking-release-management.md` | round 3; the first-beta list |
