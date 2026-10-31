@@ -30,6 +30,15 @@ export const OnBehalfOf = z
     /** The forwarding daemon's user, for the ledger; the owner compares its
      * OWN login against the transport, never this. */
     userId: z.string().min(1).optional(),
+    /** F1b (FW-D5, 2026-10-31) — the roster device the client behind the call
+     * runs on, when that is not the forwarding daemon's own: the phone behind
+     * its home, named by the device the HOME's roster correlated the phone's
+     * sidecar-injected node to (never a claim of the phone's). Absent for a
+     * window (its device is `deviceId`). Like every member here it grants
+     * nothing: an owner may read it only to pick, among its OWN roster's phone
+     * rows, whom a forwarded mint is for (restrict-only), and reads that
+     * phone's node from its own roster, never from this. */
+    clientDeviceId: z.string().min(1).optional(),
   })
   .passthrough();
 export type OnBehalfOf = z.infer<typeof OnBehalfOf>;

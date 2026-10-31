@@ -435,7 +435,7 @@ export interface CallerContext {
   connection?: { id: string; helloClientKind: ClientKind };
 }
 
-/** DS-L7 — the tolerant reading of a peer's `OnBehalfOf`: the same four
+/** DS-L7 — the tolerant reading of a peer's `OnBehalfOf`: the same five
  * members with `clientKind` widened to a bounded string, so a newer peer's
  * client kind is recorded rather than refused (tolerant reader). Bounded at
  * the door so a restatement always fits an audit record. */
@@ -444,4 +444,6 @@ export interface ForwardedFor {
   deviceId: string;
   windowId?: string;
   userId?: string;
+  /** F1b — the phone behind its home, by its roster device (`OnBehalfOf`) */
+  clientDeviceId?: string;
 }
