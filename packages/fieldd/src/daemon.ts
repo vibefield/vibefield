@@ -109,6 +109,8 @@ import {
   type NativeLinkHealth,
   type NativeLinkState,
   type NativeRestartReason,
+  NEEDS_NAME_MAX,
+  NeedsAnswerParams,
   PluginsDisableParams,
   PluginsEnableParams,
   PluginsGetParams,
@@ -348,6 +350,9 @@ import {
 import { TokenService } from "./token-service";
 import { composeProjects, ToolPlaneService } from "./tool-plane";
 import type { TalkDeps, TalkSession } from "./tool-plane/rooms/talk/verbs";
+import { NeedsQueue } from "./tool-plane/rooms/you/queue";
+import { NeedsStore } from "./tool-plane/rooms/you/store";
+import { oneLine } from "./tool-plane/rooms/you/words";
 import { SparkService, SparkStore } from "./tool-plane/sparks";
 import { userMe } from "./user-me";
 import type { BrowseFacts } from "./workspace/browse-exports";
@@ -1255,6 +1260,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // stays null and every commit takes the same path it always did.
     let docSync: DocSyncService | null = null;
     let toolPlane: ToolPlaneService | null = null;
+    // CP-3 — the needs-you queue, bound with the tool plane below; its one timer (the re-attach's settle) stops with it
+    let needsQueue: NeedsQueue | null = null;
     let presenceRooms: PresenceRoomRouter | null = null;
     // DS-5 (DS-D6) — the holders slice, bound once DeviceService exists below.
     let docHolders: DocHoldersService | null = null;
@@ -2789,6 +2796,16 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     const sparkSessionOf = (sparkId: string): string | undefined =>
       agents.list().sessions.find((row) => row.spark === sparkId && agents.isLive(row.runtimeRunId))
         ?.runtimeRunId;
+    /** An agent's label in the catalog (R23b: a lookup, never a compare). */
+    const agentLabelOf = (provider: string | undefined): string | undefined =>
+      (config.agentCatalog ?? AGENT_CATALOG).find((entry) => entry.id === provider)?.label;
+    /** How a run is named in a wake, an item and a notice: its title, else its row's label (the catalog's, AC-D4), else
+     * its id; one line, cut at NEEDS_NAME_MAX (critique 8: the one place a run's name is bounded). */
+    const runLabel = (runtimeRunId: string): string => {
+      const row = runRow(runtimeRunId);
+      const named = [row?.title, row?.label].find((s) => s !== undefined && s.trim() !== "");
+      return oneLine(named ?? runtimeRunId, NEEDS_NAME_MAX);
+    };
     const inputs = new AgentInputQueues({
       dir: join(config.dataDir, ...LAYOUT.AGENT_INPUTS_DIR),
       keyPath: join(config.dataDir, ...LAYOUT.AGENT_INPUTS_KEY_FILE),
@@ -2839,31 +2856,83 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         return origin?.by === "spark" ? origin.spark : undefined;
       },
       sparkSession: sparkSessionOf,
-      label: (runtimeRunId) => {
-        const row = runRow(runtimeRunId);
-        return (
-          row?.title ??
-          (config.agentCatalog ?? AGENT_CATALOG).find((entry) => entry.id === row?.provider)
-            ?.label ??
-          runtimeRunId
-        );
-      },
+      label: runLabel,
       logger: logger.child({ component: "waker" }),
     });
+    // the one spawn a spark's agents start by: the talk room's, and the needs-you queue's Allow one more
+    const talkSpawn: TalkDeps["spawn"] = async (launch, spark) => {
+      const result = await agents.spawn(
+        {
+          provider: launch.agent,
+          cwd: launch.cwd,
+          profileSet: launch.profileSet,
+          ...(launch.model !== undefined ? { modelSelection: launch.model } : {}),
+        },
+        // the spark's own door principal: a run's ticket rights follow it (read only), never the person's
+        { kind: "mcp-agent" },
+        undefined,
+        { origin: { by: "spark", spark } },
+      );
+      return { runtimeRunId: result.session.runtimeRunId };
+    };
+    // CP-3 (`draft/compose-plane/cp3-the-person.md`, ruled 2026-10-31; tool-plane/rooms/you/) — the needs-you queue:
+    // a spark's questions, its held sends and spawns (signed records under LAYOUT.NEEDS_DIR, kept across a restart),
+    // and every run's own ask, read from its blockers. An answer is told to its spark through its input queue, and
+    // resumes a sleeping spark as compose.sparks.open does (CP3-D7 A).
+    const needs = new NeedsQueue({
+      store: new NeedsStore({
+        dir: join(config.dataDir, ...LAYOUT.NEEDS_DIR),
+        keyPath: join(config.dataDir, ...LAYOUT.NEEDS_KEY_FILE),
+        logger: logger.child({ component: "needs" }),
+      }),
+      inputs,
+      run: (runtimeRunId) => {
+        const row = runRow(runtimeRunId);
+        // an exited row is a dead pane the deck still shows: no run to send to
+        if (row === undefined || row.continuation?.exited === true) return undefined;
+        return {
+          runtimeRunId,
+          label: runLabel(runtimeRunId),
+          spark: row.spark,
+          startedBy: row.origin?.by === "spark" ? row.origin.spark : undefined,
+          profileSet: row.profileSet,
+          live: agents.isLive(runtimeRunId),
+        };
+      },
+      sparkSession: sparkSessionOf,
+      spark: (id) => sparks.get(id),
+      open: (id, principal) => sparks.open(id, principal),
+      spawn: talkSpawn,
+      agentLabel: agentLabelOf,
+      logger: logger.child({ component: "needs" }),
+    });
+    needsQueue = needs;
     agents.onRunMonitor((runtimeRunId, mirror) => {
       waker.onMonitor(runtimeRunId, mirror);
-      // a spark whose own session is live again takes the wakes held for it
+      needs.onRunMonitor(runtimeRunId, mirror);
+      // a spark whose own session is live again takes the wakes held for it, and the answers owed to it
       const sparkOf = runRow(runtimeRunId)?.spark;
-      if (sparkOf !== undefined) waker.onSparkLive(sparkOf, runtimeRunId);
+      if (sparkOf !== undefined) {
+        waker.onSparkLive(sparkOf, runtimeRunId);
+        needs.onSparkLive(sparkOf, runtimeRunId);
+      }
       void inputs.poke(runtimeRunId);
     });
     agents.onRunEnded((runtimeRunId) => {
       waker.onEnded(runtimeRunId);
+      needs.onRunEnded(runtimeRunId);
       inputs.forget(runtimeRunId);
     });
     const kept = inputs.restore();
     if (kept > 0)
       logger.info("fieldd.inputs.restored", "Kept inputs wait for their sessions", { kept });
+    // read only: no run has re-attached yet, so what ended while fieldd was down is judged once that has settled
+    const keptNeeds = needs.restore();
+    if (keptNeeds > 0)
+      logger.info("fieldd.needs.restored", "Kept needs-you records wait for the person", {
+        kept: keptNeeds,
+      });
+    needs.reconcileWhenSettled(() => agents.reattachSettled());
     const talkSession = (row: ReturnType<typeof runRow>): TalkSession | undefined =>
       row === undefined
         ? undefined
@@ -2881,26 +2950,13 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           .list()
           .sessions.map((row) => talkSession(row))
           .filter((s): s is TalkSession => s !== undefined),
-      spawn: async (launch, spark) => {
-        const result = await agents.spawn(
-          {
-            provider: launch.agent,
-            cwd: launch.cwd,
-            profileSet: launch.profileSet,
-            ...(launch.model !== undefined ? { modelSelection: launch.model } : {}),
-          },
-          // the spark's own door principal: a run's ticket rights follow it (read only), never the person's
-          { kind: "mcp-agent" },
-          undefined,
-          { origin: { by: "spark", spark } },
-        );
-        return { runtimeRunId: result.session.runtimeRunId };
-      },
+      spawn: talkSpawn,
       enqueue: (runtimeRunId, text, from) =>
         inputs.enqueue(runtimeRunId, text, { kind: "spark", spark: from.spark, name: from.name }),
       interrupt: (runtimeRunId) => agents.interrupt({ runtimeRunId }),
       end: (runtimeRunId) => agents.endRun(runtimeRunId),
       watch: (spark, runtimeRunId, on) => waker.watch(spark, runtimeRunId, on),
+      holds: needs,
     };
     toolPlane = new ToolPlaneService({
       native,
@@ -2909,8 +2965,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       spark: (id) => sparks.get(id),
       verbs: {
         profileSets: async () => (await agents.profiles.sets()).sets,
-        agentLabel: (provider) =>
-          (config.agentCatalog ?? AGENT_CATALOG).find((entry) => entry.id === provider)?.label,
+        agentLabel: agentLabelOf,
         models: (provider, profileSet) => agents.models({ provider, profileSet }),
         runs: () => agents.list().sessions,
         runFacts: (runtimeRunId) => {
@@ -2940,6 +2995,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           index.search({ q, runtime, limit, ...(afterMs !== undefined ? { afterMs } : {}) }),
       },
       talk,
+      you: { queue: needs, label: runLabel },
       audit,
       version: FIELDD_VERSION,
       logger: logger.child({ component: "compose" }),
@@ -6039,6 +6095,51 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         () => ({ outcome: "succeeded" }),
       );
     });
+    // CP-3 — the needs-you queue's doors (compose.ts; METHODS rows under agents.manage, local, CP3-D6 A): the
+    // window's. The list and its subscription are unaudited reads, as compose.sparks.list is; an answer is audited.
+    api.register("needs.list", (ctx) => {
+      requireDesktopCaller(ctx);
+      return { items: needs.list() };
+    });
+    api.registerSubscription("needs.subscribe", (ctx, _params, emit) => {
+      requireDesktopCaller(ctx);
+      const off = needs.onChange((items) => emit({ items }));
+      return { snapshot: { items: needs.list() }, dispose: off };
+    });
+    api.register("needs.answer", async (ctx, params) => {
+      requireDesktopCaller(ctx);
+      const parsed = NeedsAnswerParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { item, choice }, the choice an act's place among the item's choices",
+          false,
+        );
+      const { item, choice } = parsed.data;
+      const answered = await audit.required(
+        ctx,
+        // the act by its place, never the words (CP-L6): an item's words are an agent's
+        { action: "needs.answer", target: { kind: "needs-item", id: item }, attrs: { choice } },
+        () => needs.answer(item, choice, ctx.principal),
+        (r) => ({
+          outcome: r.item.answer?.outcome === "failed" ? "failed" : "succeeded",
+          attrs: {
+            kind: r.item.kind,
+            outcome: r.item.answer?.outcome ?? "done",
+            told: r.item.answer?.told ?? false,
+            // critique 20a: an answer that resumed or started a sleeping spark says which run it woke
+            ...(r.woke !== undefined ? { woke: r.woke } : {}),
+          },
+        }),
+      );
+      return { item: answered.item };
+    });
+    // notify's carrier (CP3-D5 A): an event, never kept, so the snapshot is empty by design
+    api.registerSubscription("needs.notices.subscribe", (ctx, _params, emit) => {
+      requireDesktopCaller(ctx);
+      const off = needs.onNotice((notice) => emit({ notices: [notice] }));
+      return { snapshot: { notices: [] }, dispose: off };
+    });
     api.register("setup.moment", (ctx, params) => {
       requireDesktopCaller(ctx);
       const parsed = SetupMomentParams.safeParse(params);
@@ -6856,6 +6957,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         links.stop();
         await presenceRooms?.stop();
         toolPlane?.stop();
+        needsQueue?.stop();
         docSync?.stop();
         laneLink.close();
         docs.dispose();
@@ -6907,6 +7009,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       runtimeDiagnostics.dispose();
       await presenceRooms?.stop();
       toolPlane?.stop();
+      needsQueue?.stop();
       docSync?.stop();
       laneLink.close();
       docs.dispose();
@@ -7360,6 +7463,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           docLane.close();
           await presenceRooms?.stop();
           toolPlane?.stop();
+          needsQueue?.stop();
           docSync?.stop();
           laneLink.close();
           docs.dispose();

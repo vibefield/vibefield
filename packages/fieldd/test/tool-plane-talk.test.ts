@@ -2,14 +2,18 @@ import { describe, expect, it } from "vitest";
 import type { RpcCallError } from "../src/native-link";
 import {
   createTalkVerbs,
+  type HeldLaunch,
+  type HoldSender,
   SPARK_LIVE_AGENTS_MAX,
   type TalkCaller,
   type TalkSession,
 } from "../src/tool-plane/rooms/talk/verbs";
 
 // CP-2 — the talk room (`draft/compose-plane/cp2-talk-room.md`, ruled 2026-10-31): who a spark may reach (CP-D5, CP-D6),
-// held at every call to its Agent Profiles (CP-L4), the cap (CP-D7 as the fact `limit`, CP2-D5), and spawn's tasks
-// queued for the agent's first idle moment. fieldd's services are faked; the queue and the waker have their own files.
+// held at every call to its Agent Profiles (CP-L4), the cap (CP-D7), and spawn's tasks queued for the agent's first idle
+// moment. CP-3 (`draft/compose-plane/cp3-the-person.md`, ruled 2026-10-31) holds a spark's first send into the person's
+// session (CP3-D3 B) and a spawn past the cap (CP3-D4 A) in the needs-you queue. fieldd's services are faked; the
+// queue, the waker and the needs-you queue have their own files.
 
 const VELA: TalkCaller = {
   sparkId: "sp-vela00000000000",
@@ -31,9 +35,11 @@ const SESSIONS: TalkSession[] = [
   { runtimeRunId: "run-orin-agent", origin: { by: "spark", spark: ORIN }, live: true },
 ];
 
-function harness(extra: TalkSession[] = [], stopAccepted = true) {
+function harness(extra: TalkSession[] = [], stopAccepted = true, allowed: string[] = []) {
   const sessions = [...SESSIONS, ...extra];
   const queued: { run: string; text: string; from: string }[] = [];
+  const heldSends: { from: HoldSender; run: string; text: string }[] = [];
+  const heldSpawns: { from: HoldSender; launch: HeldLaunch; live: number }[] = [];
   const spawned: unknown[] = [];
   const watched: string[] = [];
   const stopped: string[] = [];
@@ -59,8 +65,19 @@ function harness(extra: TalkSession[] = [], stopAccepted = true) {
       ended.push(run);
     },
     watch: (spark, run, on) => watched.push(`${on ? "+" : "-"}${spark}:${run}`),
+    holds: {
+      allowed: (spark, run) => allowed.includes(`${spark}:${run}`),
+      send: (from, run, text) => {
+        heldSends.push({ from, run, text });
+        return "ny-held0send";
+      },
+      spawn: (from, launch, live) => {
+        heldSpawns.push({ from, launch, live });
+        return "ny-held0spawn";
+      },
+    },
   });
-  return { verbs, queued, spawned, watched, stopped, ended };
+  return { verbs, queued, spawned, watched, stopped, ended, heldSends, heldSpawns };
 }
 
 /** A call's answer, or the fact its refusal names. */
@@ -75,7 +92,7 @@ const fact = async (call: Promise<unknown>) => {
 
 describe("the talk room's reach (CP-D5, CP-D6, CP-L4)", () => {
   it("sends to his sessions and its own agents, and to no other spark nor another spark's agents", async () => {
-    const h = harness();
+    const h = harness([], true, [`${VELA.sparkId}:run-his`]);
     expect(await h.verbs.agent_send(VELA, { session: "run-his", text: "hi" })).toEqual({
       session: "run-his",
       queued: true,
@@ -158,6 +175,54 @@ describe("the talk room's reach (CP-D5, CP-D6, CP-L4)", () => {
   });
 });
 
+describe("the person's holds on a send (CP-D3, CP3-D3 B)", () => {
+  it("holds the first send into his session in the needs-you queue, and queues it once he allowed it", async () => {
+    const h = harness();
+    expect(await h.verbs.agent_send(VELA, { session: "run-his", text: "run the tests" })).toEqual({
+      session: "run-his",
+      queued: false,
+      held: "ny-held0send",
+    });
+    expect(h.heldSends).toEqual([
+      {
+        from: { spark: VELA.sparkId, name: "Vela", session: "run-vela" },
+        run: "run-his",
+        text: "run the tests",
+      },
+    ]);
+    expect(h.queued).toEqual([]);
+    const allowed = harness([], true, [`${VELA.sparkId}:run-his`]);
+    expect(await allowed.verbs.agent_send(VELA, { session: "run-his", text: "and again" })).toEqual(
+      { session: "run-his", queued: true, position: 1 },
+    );
+    expect(allowed.heldSends).toEqual([]);
+  });
+
+  it("never holds a send to its own agents: they ask the person themselves (TL-D2 A)", async () => {
+    const h = harness();
+    expect(await h.verbs.agent_send(VELA, { session: "run-ada", text: "go" })).toEqual({
+      session: "run-ada",
+      queued: true,
+      position: 1,
+    });
+    expect(h.heldSends).toEqual([]);
+  });
+
+  it("holds nothing it would refuse: a send that is forbidden, outside or to a stopped session is refused first", async () => {
+    const h = harness();
+    expect(await fact(h.verbs.agent_send(VELA, { session: "run-orin", text: "x" }))).toBe(
+      "forbidden",
+    );
+    expect(await fact(h.verbs.agent_send(VELA, { session: "run-work", text: "x" }))).toBe(
+      "outside",
+    );
+    expect(await fact(h.verbs.agent_send(VELA, { session: "run-old", text: "x" }))).toBe(
+      "unavailable",
+    );
+    expect(h.heldSends).toEqual([]);
+  });
+});
+
 describe("the talk room's start (TL-D2, CP-D7)", () => {
   it("starts an agent under the profile it thinks under, in its folder, with each task queued in order", async () => {
     const h = harness();
@@ -176,7 +241,7 @@ describe("the talk room's start (TL-D2, CP-D7)", () => {
     );
   });
 
-  it("refuses a spawn past the cap of live agents as the fact `limit` (CP2-D5)", async () => {
+  it("holds a spawn past the cap of live agents in the needs-you queue (CP3-D4 A)", async () => {
     const many: TalkSession[] = Array.from({ length: SPARK_LIVE_AGENTS_MAX - 1 }, (_, i) => ({
       runtimeRunId: `run-live-${i}`,
       origin: { by: "spark", spark: VELA.sparkId },
@@ -184,7 +249,17 @@ describe("the talk room's start (TL-D2, CP-D7)", () => {
     }));
     // run-ada is the eighth
     const h = harness(many);
-    expect(await fact(h.verbs.agent_spawn(VELA, { agent: "claude" }))).toBe("limit");
+    expect(
+      await h.verbs.agent_spawn(VELA, { agent: "claude", cwd: "/p/vibe-field", tasks: ["review"] }),
+    ).toEqual({ held: "ny-held0spawn", queued: 1 });
     expect(h.spawned).toEqual([]);
+    expect(h.queued).toEqual([]);
+    expect(h.heldSpawns).toEqual([
+      {
+        from: { spark: VELA.sparkId, name: "Vela", session: "run-vela" },
+        launch: { agent: "claude", profileSet: "native", cwd: "/p/vibe-field", tasks: ["review"] },
+        live: SPARK_LIVE_AGENTS_MAX,
+      },
+    ]);
   });
 });

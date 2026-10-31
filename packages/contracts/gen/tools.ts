@@ -110,7 +110,7 @@ export const SERVED_TOOLS = [
     "audience": "spark",
     "scope": "profiles",
     "slice": "CP-2",
-    "description": "Start an agent under one of your profiles, in a folder, with a model, an effort and a first prompt. It asks the user before it acts, as every agent does. Returns its session id, and you are woken when it finishes, asks or fails.",
+    "description": "Start an agent under one of your profiles, in a folder, with a model, an effort and a first prompt. It asks the user before it acts, as every agent does. Returns its session id, or past your cap of live agents the item it waits in for the user's OK; you are woken when it finishes, asks or fails.",
     "annotations": {
       "readOnlyHint": false,
       "destructiveHint": false,
@@ -185,13 +185,16 @@ export const SERVED_TOOLS = [
           "type": "string",
           "minLength": 1
         },
+        "held": {
+          "type": "string",
+          "pattern": "^ny-[0-9a-z]{6,32}$"
+        },
         "queued": {
           "type": "integer",
           "minimum": 0
         }
       },
       "required": [
-        "session",
         "queued"
       ],
       "additionalProperties": true
@@ -496,7 +499,7 @@ export const SERVED_TOOLS = [
     "audience": "spark",
     "scope": "profiles",
     "slice": "CP-2",
-    "description": "Send words to a session the user or you started. They wait for its next idle moment and land there marked as yours, sent on the user's behalf.",
+    "description": "Send words to a session the user or you started. They wait for its next idle moment and land there marked as yours, sent on the user's behalf. Your first words to a session the user started wait for the user's OK.",
     "annotations": {
       "readOnlyHint": false,
       "destructiveHint": false,
@@ -530,18 +533,20 @@ export const SERVED_TOOLS = [
           "minLength": 1
         },
         "queued": {
-          "type": "boolean",
-          "const": true
+          "type": "boolean"
         },
         "position": {
           "type": "integer",
           "minimum": 1
+        },
+        "held": {
+          "type": "string",
+          "pattern": "^ny-[0-9a-z]{6,32}$"
         }
       },
       "required": [
         "session",
-        "queued",
-        "position"
+        "queued"
       ],
       "additionalProperties": true
     }
@@ -872,6 +877,107 @@ export const SERVED_TOOLS = [
       },
       "required": [
         "projects"
+      ],
+      "additionalProperties": true
+    }
+  },
+  {
+    "name": "ask_user",
+    "family": "you",
+    "category": "you",
+    "audience": "spark",
+    "scope": "self",
+    "slice": "CP-3",
+    "description": "Ask the user a question with choices. Returns at once; the answer arrives as a wake.",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "question": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "choices": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "pattern": "^[^\\r\\n]+$"
+          },
+          "minItems": 1,
+          "maxItems": 4
+        }
+      },
+      "required": [
+        "question",
+        "choices"
+      ],
+      "additionalProperties": true
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "item": {
+          "type": "string",
+          "pattern": "^ny-[0-9a-z]{6,32}$"
+        },
+        "queued": {
+          "type": "boolean",
+          "const": true
+        }
+      },
+      "required": [
+        "item",
+        "queued"
+      ],
+      "additionalProperties": true
+    }
+  },
+  {
+    "name": "notify",
+    "family": "you",
+    "category": "you",
+    "audience": "agent",
+    "scope": "self",
+    "slice": "CP-3",
+    "description": "Tell the user something while they are in another view.",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "additionalProperties": true
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "sent": {
+          "type": "boolean",
+          "const": true
+        }
+      },
+      "required": [
+        "sent"
       ],
       "additionalProperties": true
     }

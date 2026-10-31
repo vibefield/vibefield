@@ -105,6 +105,14 @@
     "fieldd",
     "inputs.key"
   ],
+  "NEEDS_DIR": [
+    "fieldd",
+    "needs"
+  ],
+  "NEEDS_KEY_FILE": [
+    "fieldd",
+    "needs.key"
+  ],
   "TERMINAL_CONFIG_FILE": [
     "native",
     "config.ghostty"

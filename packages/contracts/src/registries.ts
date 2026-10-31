@@ -1182,6 +1182,8 @@ export const SCOPES = [
   // record — the active executable per provider, updates — the native.admin
   // posture. Both are local-only forever: consent is an act of the person at
   // this device; neither enters TAILNET_SCOPES or any plugin eligibility table.
+  // Since CP-0 and CP-3 `agents.manage` is also the person's acts on the agents
+  // and sparks of this device: the `compose.sparks.*` and `needs.*` doors.
   "index.manage",
   "agents.manage",
   // AR-5b (the review's EL7 lens) — two CONTENT reads, split off the census
@@ -1632,6 +1634,12 @@ export const LAYOUT = {
    * aside at restore, never delivered. */
   AGENT_INPUTS_DIR: ["fieldd", "inputs"],
   AGENT_INPUTS_KEY_FILE: ["fieldd", "inputs.key"],
+  /** CP-3 (cp3-the-person.md §5.1) — the needs-you queue: one `NeedsRecord` per item, 0600 in a 0700 directory, each
+   * signed with NEEDS_KEY_FILE's secret (0600, made once, never overwritten), so an agent that edits one cannot answer
+   * it, allow itself a session or put words in a spark's mouth: an unsigned or forged record is set aside, never served.
+   * That holds against an edit; the key is 0600 to the same uid, as the sparks' is (EL7). */
+  NEEDS_DIR: ["fieldd", "needs"],
+  NEEDS_KEY_FILE: ["fieldd", "needs.key"],
   TERMINAL_CONFIG_FILE: ["native", FILES.TERMINAL_CONFIG],
   RESTART_INTENT_FILE: ["native", FILES.RESTART_INTENT],
   // RETIRED 2026-09-14 (TM-3, `thinking-terminal-mesh-cells.md` §7 / TM-D3):

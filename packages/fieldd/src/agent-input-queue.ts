@@ -16,7 +16,7 @@ import {
   type AgentQueuedInput,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
-import { RecordSigner, type SetAsideWhy } from "./signed-record";
+import { RecordSigner, type SetAsideWhy, setAsideFile } from "./signed-record";
 
 // CP-L5 (ruled 2026-10-29) and CP-2's marks (`draft/compose-plane/cp2-talk-room.md`, ruled 2026-10-31 03:49:24Z).
 // Every session has ONE input queue in fieldd. A spark's agent_send, its spawn's tasks and fieldd's own wakes join it,
@@ -195,20 +195,14 @@ export class AgentInputQueues {
     return kept.data.inputs;
   }
 
-  /** A kept file fieldd will not deliver: moved out of the listing for a human to look at, never deleted, never
-   * read again (SessionRecordStore's rule). */
+  /** A kept file fieldd will not deliver: set aside for a human (signed-record.ts), never delivered. */
   #setAside(path: string, runtimeRunId: string, why: SetAsideWhy): undefined {
-    const aside = `${path}.${why}-${Date.now()}`;
+    const aside = setAsideFile(path, why);
     this.#logger.warn(
       "fieldd.inputs.set_aside",
       `A kept input queue is ${why}; set aside, never delivered`,
       { runtimeRunId, file: basename(path), why, aside: basename(aside) },
     );
-    try {
-      renameSync(path, aside);
-    } catch {
-      // nothing else to do: the run's next keep replaces it
-    }
     return undefined;
   }
 

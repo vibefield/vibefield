@@ -119,20 +119,34 @@ describe("served and planned (ruling 2)", () => {
   });
 
   // CP-1's rows only read; CP-2's act (start and talk; `draft/compose-plane/cp2-talk-room.md`, ruled 2026-10-31), each a
-  // spark's alone, with its destructive and idempotent hints said.
-  it("serves exactly the rows whose slice has landed: CP-1's read, CP-2's act and are a spark's", () => {
+  // spark's alone, with its destructive and idempotent hints said. CP-3's two act too (the person;
+  // `draft/compose-plane/cp3-the-person.md`, ruled 2026-10-31): asking is a spark's, telling every agent's (MT-D11).
+  it("serves exactly the rows whose slice has landed: CP-1's read, CP-2's and CP-3's act", () => {
+    const landed = ["CP-1", "CP-2", "CP-3"];
     for (const t of TOOLS.filter((x) => served.has(x.name))) {
-      expect(["CP-1", "CP-2"], t.name).toContain(t.slice);
+      expect(landed, t.name).toContain(t.slice);
       if (t.slice === "CP-1") expect(t.readOnly, t.name).toBe(true);
-      if (t.slice === "CP-2") {
+      if (t.slice === "CP-2") expect(t.audience, t.name).toBe("spark");
+      if (t.slice === "CP-2" || t.slice === "CP-3") {
         expect(t.readOnly, t.name).toBe(false);
-        expect(t.audience, t.name).toBe("spark");
         expect(typeof t.destructive, t.name).toBe("boolean");
         expect(typeof t.idempotent, t.name).toBe("boolean");
       }
     }
-    for (const t of TOOLS.filter((x) => x.slice === "CP-1" || x.slice === "CP-2"))
+    for (const t of TOOLS.filter((x) => landed.includes(x.slice)))
       expect(served.has(t.name), t.name).toBe(true);
+    expect(toolRow("ask_user")?.audience).toBe("spark");
+    expect(toolRow("notify")?.audience).toBe("agent");
+  });
+
+  it("says agent_spawn may answer the item it waits in, never only a session (CP3-D4 A)", () => {
+    expect(toolRow("agent_spawn")!.description).toContain("the item it waits in");
+  });
+
+  it("says a spark's first words to the user's session wait for the user's OK (CP3-D3 B)", () => {
+    expect(toolRow("agent_send")!.description).toContain(
+      "Your first words to a session the user started wait for the user's OK.",
+    );
   });
 
   it("says agent_send's words land marked as the spark's, sent on the user's behalf (CP2-D1)", () => {

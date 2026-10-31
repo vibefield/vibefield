@@ -64,7 +64,27 @@ reach, and is written to the audit log before it acts.
   - CP2-D7's "wait for his quiet" needs the time of the person's last keystroke in the pane, which the floor does not
     give fieldd. Until it does, the terminal service's ordering against accepted human input is the guard (the mark's
     B).
-  - CP-D7's cap past 8 live agents is refused as `limit`. Its needs-you card comes with CP-3.
+  - *Corrected 2026-10-31 (CP-3):* this said "CP-D7's cap past 8 live agents is refused as `limit`. Its needs-you card
+    comes with CP-3." Since CP-3 such a spawn waits in the needs-you queue for Allow one more (below), and Not now is
+    told as `limit`. The card that answers it is the window's, in CP-3's window half.
+
+## The person (CP-3)
+
+A spark's door serves CP-3's two rows too (`draft/compose-plane/cp3-the-person.md`, ruled 2026-10-31), and every
+settled run's door serves `notify` (MT-D11). The you room (`fieldd/src/tool-plane/rooms/you/`) answers them over the
+needs-you queue, fieldd's one list of what waits on the person, which the window reads and answers through `needs.*`.
+
+- **`ask_user`** returns at once with the item its question waits in. The answer is a wake: one marked line of facts in
+  the spark's own input queue ("VibeField: you answered Vela's question "Push the fix?": Push", DESIGN.md §9), and a
+  sleeping spark is resumed for it (CP3-D7 A).
+- **`notify`** is said on every window's status line, and as an OS notice while no window is in front (CP3-D5 A). A
+  plain run's harness asks the person before each call, because its allowance takes read-only rows alone (MT-D7).
+- **Holds.** A spark's first send into a session the person started answers `{queued: false, held}` and waits for his
+  Allow, which lasts for that run (CP3-D3 B). Past 8 live agents a spawn answers `{held, queued}` and waits for Allow
+  one more (CP3-D4 A). Each call answers at once and is no refusal; the person's answer reaches the spark as a wake.
+- **Kept.** Each item is a signed record under `LAYOUT.NEEDS_DIR`, signed by the one record signer under
+  `LAYOUT.NEEDS_KEY_FILE`, with the input queues' EL7 claim: it holds against an edit, not against an agent that reads
+  the key. An agent's own ask is read from its run's blockers and never kept.
 
 ## Process identity is a separate prerequisite
 

@@ -128,6 +128,19 @@ export class RecordSigner {
   }
 }
 
+/** A signed file its store will not serve, moved out of the listing for a human to look at: renamed
+ * `<file>.<why>-<ms>` beside it, never deleted and never read again (SessionRecordStore's rule). The store says so in
+ * its own log line. The name it was set aside under is returned; a file another writer moved first stays where it is. */
+export function setAsideFile(path: string, why: SetAsideWhy): string {
+  const aside = `${path}.${why}-${Date.now()}`;
+  try {
+    renameSync(path, aside);
+  } catch {
+    // nothing else to do: the store's next write replaces it
+  }
+  return aside;
+}
+
 /** Whether a file's mode lets group or others at it (never on win32, where the mode bits say nothing). */
 function exposed(path: string): boolean {
   if (process.platform === "win32") return false;

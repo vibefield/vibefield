@@ -1,18 +1,29 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type {
   AgentProfileSet,
   IndexSearchResult,
   NativeDoorOpen,
   SparkRecord,
 } from "@vibefield/contracts";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { type ToolPlaneAudit, ToolPlaneService } from "../src/tool-plane";
 import { MCP_MODERN } from "../src/tool-plane/mcp";
+import { NeedsQueue } from "../src/tool-plane/rooms/you/queue";
+import { NeedsStore } from "../src/tool-plane/rooms/you/store";
 
 // MT-0 — the tool plane end to end inside fieldd, with the floor and the lane link faked (CP-1b's witness, widened).
 // Each caller is listed its audience's rows (MT-D2): a spark every served row, a settled plain run the `agent` rows
 // (History and the projects list), and a pane, the outside and an unsettled run nothing, with one plain line each.
 // Every call is held to its row again at the call (MT-L2), held to the caller's own profiles, written to the audit log
-// as the caller's before it answers (CP-L6), and refused as a fact the model reads, never a protocol error.
+// as the caller's before it answers (CP-L6), and refused as a fact the model reads, never a protocol error. CP-3 adds
+// the you room over a real needs-you queue: a spark's ask_user and every settled agent's notify.
+
+const roots: string[] = [];
+afterEach(() => {
+  for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
+});
 
 const META = {
   "io.modelcontextprotocol/protocolVersion": MCP_MODERN,
@@ -79,6 +90,7 @@ function harness() {
     principal: unknown;
     reason?: unknown;
     outcome?: string | undefined;
+    item?: unknown;
   }[] = [];
   const audit: ToolPlaneAudit = {
     required: async (ctx, mutation, effect, describe) => {
@@ -89,10 +101,29 @@ function harness() {
         principal: ctx.principal,
         ...(mutation.attrs?.reason !== undefined ? { reason: mutation.attrs.reason } : {}),
         outcome: describe?.(value).outcome,
+        item: describe?.(value).attrs?.item,
       });
       return value;
     },
   };
+  const root = mkdtempSync(join(tmpdir(), "vf-plane-needs-"));
+  roots.push(root);
+  const notices: unknown[] = [];
+  const needs = new NeedsQueue({
+    store: new NeedsStore({ dir: join(root, "needs"), keyPath: join(root, "needs.key") }),
+    inputs: { wake: () => undefined, enqueue: () => ({ position: 1 }) },
+    run: () => undefined,
+    sparkSession: () => "run-12",
+    spark: (id) => (id === SPARK.id ? SPARK : undefined),
+    open: async () => {
+      throw new Error("unused");
+    },
+    spawn: async () => {
+      throw new Error("unused");
+    },
+    agentLabel: () => undefined,
+  });
+  needs.onNotice((notice) => notices.push(notice));
   const plane = new ToolPlaneService({
     native: {
       subscribe: async () => ({ snapshot: { doors: DOORS }, dispose: () => undefined }),
@@ -150,6 +181,7 @@ function harness() {
         } as IndexSearchResult;
       },
     },
+    you: { queue: needs, label: (run) => (run === "run-7" ? "claude·7" : run) },
     audit,
     version: "0.1.0",
   });
@@ -165,7 +197,7 @@ function harness() {
       .filter(Boolean)
       .map((l) => JSON.parse(l));
   const settle = () => new Promise((r) => setTimeout(r, 0));
-  return { plane, ask, call, answers, audited, searched, settle };
+  return { plane, ask, call, answers, audited, searched, settle, needs, notices };
 }
 
 const names = (answer: { result: { tools: { name: string }[] } }) =>
@@ -178,7 +210,8 @@ describe("the tool plane in fieldd (MT-0)", () => {
     for (const d of DOORS)
       h.ask(d.laneId, { id: 1, method: "tools/list", params: { _meta: META } });
     await h.settle();
-    // CP-1's six reads and, since CP-2, its six acting rows (start, watch, talk), in catalog order
+    // CP-1's six reads, since CP-2 its six acting rows (start, watch, talk), and since CP-3 the person's two, in
+    // catalog order
     expect(names(h.answers(1001)[0])).toEqual([
       "agents_available",
       "agent_spawn",
@@ -192,6 +225,8 @@ describe("the tool plane in fieldd (MT-0)", () => {
       "history_search",
       "history_read",
       "projects_list",
+      "ask_user",
+      "notify",
     ]);
     expect(h.answers(1001)[0].result.tools[0].annotations).toEqual({
       readOnlyHint: true,
@@ -199,7 +234,13 @@ describe("the tool plane in fieldd (MT-0)", () => {
       idempotentHint: true,
       openWorldHint: false,
     });
-    expect(names(h.answers(1002)[0])).toEqual(["history_search", "history_read", "projects_list"]);
+    // MT-D11: telling the person is every agent's; asking is a spark's
+    expect(names(h.answers(1002)[0])).toEqual([
+      "history_search",
+      "history_read",
+      "projects_list",
+      "notify",
+    ]);
     for (const lane of [1003, 1004, 1005, 1006]) {
       expect(names(h.answers(lane)[0]), String(lane)).toEqual([]);
       expect(h.answers(lane)[0].result.ttlMs, String(lane)).toBe(0);
@@ -315,11 +356,80 @@ describe("the tool plane in fieldd (MT-0)", () => {
     const pane = h.answers(1005)[0].result.instructions as string;
     expect(spark).toContain("see which agents you can start");
     expect(spark).toContain("Every call is recorded.");
-    expect(run).toContain("search and read History and list the user's projects");
+    expect(run).toContain("search and read History, list the user's projects and reach the user");
     expect(run).not.toContain("agents you can start");
     expect(run).toContain("never as the user's words");
     expect(pane).toBe(
       "VibeField has not named this session, so it holds none of VibeField's tools yet.",
     );
+  });
+});
+
+describe("the you room (CP-3; MT-D11, CP3-D2 A, CP3-D5 A)", () => {
+  it("answers a spark's ask_user with the item it waits in, and names the item on the audit outcome", async () => {
+    const h = harness();
+    await h.plane.ensureStarted();
+    h.call(1001, 20, "ask_user", { question: "Push the fix?", choices: ["Push", "Hold"] });
+    await h.settle();
+    const out = h.answers(1001)[0].result.structuredContent;
+    expect(out).toEqual({ item: expect.stringMatching(/^ny-/), queued: true });
+    expect(h.needs.list()).toEqual([
+      expect.objectContaining({ id: out.item, choices: ["Push", "Hold", "Not now"] }),
+    ]);
+    expect(h.audited).toEqual([
+      {
+        action: "tools.ask_user",
+        target: { kind: "spark", id: SPARK.id },
+        principal: { kind: "mcp-agent", sessionId: "run-12", scopes: [] },
+        outcome: "succeeded",
+        item: out.item,
+      },
+    ]);
+    // a choice that is VibeField's own is the schema's refusal, before any line
+    h.call(1001, 21, "ask_user", { question: "?", choices: ["Not now"] });
+    await h.settle();
+    expect(h.answers(1001)[1].result.structuredContent).toEqual({ fact: "bad-input" });
+    expect(h.audited).toHaveLength(1);
+  });
+
+  it("tells the person a plain run's notify under its name, and refuses its ask_user as `forbidden` (MT-L2)", async () => {
+    const h = harness();
+    await h.plane.ensureStarted();
+    h.call(1002, 22, "notify", { text: "the build\nis green" });
+    h.call(1002, 23, "ask_user", { question: "?", choices: ["Yes"] });
+    h.call(1001, 24, "notify", { text: "done" });
+    await h.settle();
+    expect(h.answers(1002)[0].result.structuredContent).toEqual({ sent: true });
+    expect(h.answers(1002)[1].result.structuredContent).toEqual({ fact: "forbidden" });
+    // each lane answers in its own order; across lanes either may be first
+    expect(h.notices).toHaveLength(2);
+    expect(h.notices).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          from: { name: "claude·7", session: "run-7" },
+          words: "the build is green",
+        }),
+        expect.objectContaining({
+          from: { name: "Vela", session: "run-12", spark: SPARK.id },
+          words: "done",
+        }),
+      ]),
+    );
+    expect(h.audited.map((a) => `${a.action} ${a.outcome}`).sort()).toEqual([
+      "tools.ask_user denied",
+      "tools.notify succeeded",
+      "tools.notify succeeded",
+    ]);
+  });
+
+  it("refuses a seventh notify in a minute from one session as the fact `limit`", async () => {
+    const h = harness();
+    await h.plane.ensureStarted();
+    for (let i = 0; i < 7; i += 1) h.call(1002, 30 + i, "notify", { text: `n${i}` });
+    await h.settle();
+    const facts = h.answers(1002).map((a) => a.result.structuredContent);
+    expect(facts.slice(0, 6)).toEqual(Array.from({ length: 6 }, () => ({ sent: true })));
+    expect(facts[6]).toEqual({ fact: "limit" });
+    expect(h.notices).toHaveLength(6);
   });
 });

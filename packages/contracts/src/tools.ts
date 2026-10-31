@@ -13,9 +13,13 @@ import {
   ComposeAgentsListInput,
   ComposeAgentsListOutput,
   ComposeAgentWatchOutput,
+  ComposeAskUserInput,
+  ComposeAskUserOutput,
   ComposeHistoryReadInput,
   ComposeHistorySearchInput,
   ComposeHistorySearchOutput,
+  ComposeNotifyInput,
+  ComposeNotifyOutput,
   ComposeProjectsListInput,
   ComposeProjectsListOutput,
   ComposeReadOutput,
@@ -109,7 +113,7 @@ export const TOOLS: readonly ToolDef[] = [
     idempotent: false,
     slice: "CP-2",
     description:
-      "Start an agent under one of your profiles, in a folder, with a model, an effort and a first prompt. It asks the user before it acts, as every agent does. Returns its session id, and you are woken when it finishes, asks or fails.",
+      "Start an agent under one of your profiles, in a folder, with a model, an effort and a first prompt. It asks the user before it acts, as every agent does. Returns its session id, or past your cap of live agents the item it waits in for the user's OK; you are woken when it finishes, asks or fails.",
   },
   {
     name: "agents_list",
@@ -159,7 +163,7 @@ export const TOOLS: readonly ToolDef[] = [
     idempotent: false,
     slice: "CP-2",
     description:
-      "Send words to a session the user or you started. They wait for its next idle moment and land there marked as yours, sent on the user's behalf.",
+      "Send words to a session the user or you started. They wait for its next idle moment and land there marked as yours, sent on the user's behalf. Your first words to a session the user started wait for the user's OK.",
   },
   {
     name: "agent_interrupt",
@@ -321,6 +325,9 @@ export const TOOL_SCHEMAS = {
   agent_send: { input: ComposeAgentSendInput, output: ComposeAgentSendOutput },
   agent_interrupt: { input: ComposeAgentSessionInput, output: ComposeAgentInterruptOutput },
   agent_stop: { input: ComposeAgentSessionInput, output: ComposeAgentStopOutput },
+  // CP-3 (the person; `draft/compose-plane/cp3-the-person.md`, ruled 2026-10-31)
+  ask_user: { input: ComposeAskUserInput, output: ComposeAskUserOutput },
+  notify: { input: ComposeNotifyInput, output: ComposeNotifyOutput },
 } as const satisfies Record<string, { input: z.ZodTypeAny; output: z.ZodTypeAny }>;
 
 export type ServedToolName = keyof typeof TOOL_SCHEMAS;
