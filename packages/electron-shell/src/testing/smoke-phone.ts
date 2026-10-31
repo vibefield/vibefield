@@ -1436,8 +1436,12 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
     laid.delete(k);
     await sleep(300);
   };
-  /** Picked up: pressed at its centre at rest (selected), then ⏎; held once `held()` names it, settled. */
+  /** Picked up: pressed at its centre at rest (selected), then ⏎; held once `held()` names it, settled. Never over a phone
+   * already in hand: the select press would land on the held one, and a release over its capsule runs its act with no
+   * press gate and no fence (R6). */
   const pickUp = async (k: string): Promise<PhoneFrame> => {
+    if (await js<boolean>("globalThis.__vfDesk.held() !== null"))
+      throw new Error("a phone is already in hand: the select press would land on it, ungated");
     const e = await entityOf(k);
     const at = await placeOf(k);
     if (e === null || at === null) throw new Error("the phone left the board");
@@ -1729,6 +1733,12 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
         out = { problems: [], void: `STOPPED: ${error.message}` };
       } else
         out = { problems: [`${name}: ${error instanceof Error ? error.message : String(error)}`] };
+    }
+    // a row that threw with a phone in hand puts it down before the next row's select press (R6)
+    try {
+      if (await js<boolean>("globalThis.__vfDesk.held() !== null")) await putDown();
+    } catch {
+      /* the next pickUp refuses over a phone still in hand */
     }
     await wordsLine(name);
     openRow = null;
