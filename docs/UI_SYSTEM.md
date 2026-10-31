@@ -75,7 +75,9 @@ The catalog currently mounts these shipping views directly:
 - the command palette (re-cut by One Frame FR-3: the frame's acts and the plugins' commands, each
   key at its row's end), settings dialog and loading veil (the side-panel frame retired into the
   right edge's drawer at FR-4, and the drawer into the pill's Artifacts shelf at HN-8)
-- shared controls/states and every onboarding pane, alternate entry, and completion failure
+- shared controls/states and every onboarding pane, alternate entry, and completion failure, each
+  on the shipping glass over the shipping field at its still (FG-6, 2026-10-31): the frame's field
+  is told the page a window that can't run the field is (`?field=still`), so no frame opens WebGPU
 - the account's face (UA-7): the Me menu open, closed, waiting and offline, the Settings head,
   both face frames at every size, and the face picker
 - a spark's face (SP-1a, DESIGN.md §2.10): the shipping `SparkFace` in Foundations beside the

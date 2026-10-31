@@ -15,9 +15,9 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { gunzipSync } from "node:zlib";
 import type {
-  AgentModelBoardRow,
   AgentModelMeshFrame,
   AgentModelMeshOpen,
+  AgentModelMeshRow,
 } from "@vibefield/contracts";
 import type { AgentView } from "@vibefield/puppeteer-view-sdk/model";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -57,7 +57,7 @@ function refusingClient(): DoorClient & { calls: string[] } {
  * board by key, then every row's model row with the reader's one fact. */
 function streamRows(text: string, upToSeq = Number.POSITIVE_INFINITY): Map<string, unknown> {
   const { meta, frames } = decodeModelStreamJsonl(text);
-  const boards = new Map<string, Map<string, AgentModelBoardRow>>();
+  const boards = new Map<string, Map<string, AgentModelMeshRow>>();
   for (const frame of frames) {
     if (frame.seq > upToSeq) break;
     if (frame.kind === "model-open") {
@@ -155,12 +155,12 @@ describe("the model door's instrument", () => {
       () => undefined,
     );
     expect(board.snapshot).toEqual({ devices: [] });
-    const desk = await client.subscribe(
+    const field = await client.subscribe(
       "agent.subscribe",
-      { projection: "desk", scope: "mesh" },
+      { projection: "field", scope: "mesh" },
       () => undefined,
     );
-    expect(desk.snapshot).toBe("real-board");
+    expect(field.snapshot).toBe("real-board");
     expect(real.request).toHaveBeenCalledTimes(1);
     expect(real.subscribe).toHaveBeenCalledTimes(1);
   });

@@ -1244,7 +1244,9 @@ export class ProductApi extends EventEmitter {
             return;
           }
           // DS-L7 — who the call is for, from the CALLING context (a peer's
-          // relayed call restates what that peer said); never from params
+          // relayed call restates what that peer said); never from params.
+          // F1b — the phone behind it is named by the device this door's own
+          // roster correlates its node to (the same correlation the hello reads)
           // DS-2 — every forwarded MUTATION carries a key (the caller's, a
           // relaying peer's, else a fresh one); a read carries none
           const idempotencyKey = isKeyedForward(def) ? (inboundKey ?? mintForwardKey()) : undefined;
@@ -1252,6 +1254,7 @@ export class ProductApi extends EventEmitter {
             onBehalfOf: forwardProvenance(callCtx, {
               deviceId: this.ownDeviceId?.() ?? "",
               userId: this.opts.userId,
+              correlateNodeId: this.opts.correlateNodeId,
             }),
             ...(idempotencyKey !== undefined ? { idempotencyKey } : {}),
           };

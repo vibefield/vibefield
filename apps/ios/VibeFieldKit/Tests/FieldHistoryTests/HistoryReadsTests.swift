@@ -209,6 +209,38 @@ struct HistoryReadsTests {
     #expect(group.readers.count == 1 && group.readers[0].corpus.desktop == "studio")
     #expect(group.readers[0].corpus.projects.count == 7)
   }
+
+  /// ITEM 130 — AP-D4 (ruled 2026-10-28): a sign-out clears what the field
+  /// taught this phone. History's cache was never cleared (`clear()` had no
+  /// caller), so a signed-out phone replayed the account that left, as asleep.
+  @Test("signing out clears the cache: no reader, no ledger, nothing left on disk to replay")
+  @MainActor
+  func signingOutClearsTheCache() async throws {
+    let cache = HistoryCache(directory: scratch())
+    let door = ScriptedDoor()
+    door.tailSnapshot = try Fixture.json("index-session-tail-open.snapshot")["snapshot"]
+    let group = HistoryDesktops(cache: cache)
+    group.attach(deviceId: "dev-1", name: "studio", isHome: true, door: door, ownsDoor: true)
+    let online = try #require(group.reader(for: "dev-1"))
+    online.need(.session(device: "dev-1", id: "s1"))
+    await settle("the document") { online.corpus.document("s1") != nil }
+    #expect(cache.bytes() > 0, "the phone kept what it read")
+
+    group.signedOut()
+
+    #expect(group.readers.isEmpty)
+    #expect(group.home == nil)
+    #expect(door.closed, "a door the reader owned is closed with it")
+    #expect(cache.bytes() == 0, "nothing of the account is left on disk")
+    // The mesh leaving after the sign-out replays nothing, and neither does
+    // the next account's desktop of the same id.
+    group.allOffline()
+    group.markOffline(deviceId: "dev-1", name: "studio")
+    let replay = try #require(group.reader(for: "dev-1"))
+    replay.need(.session(device: "dev-1", id: "s1"))
+    #expect(replay.corpus.document("s1") == nil)
+    #expect(replay.corpus.projects.isEmpty)
+  }
 }
 
 @Suite("the cache is an LRU under a bound")

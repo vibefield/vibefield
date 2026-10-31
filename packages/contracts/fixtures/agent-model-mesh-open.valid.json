@@ -190,44 +190,13 @@
           {
             "runtimeRunId": "run-loft-w",
             "revision": 4,
-            "kind": "claude",
-            "label": "Claude Code",
-            "tier": "managed",
             "device": "dev-01HQ9S7XZ2",
-            "status": "working",
-            "statusSince": "2026-09-30T21:14:02.000Z",
-            "stateChangedAt": "2026-09-30T21:14:02.000Z",
-            "createdAt": "2026-09-30T20:51:40.000Z",
-            "lastActivityAt": "2026-09-30T21:14:02.000Z",
-            "alive": true,
-            "blockers": [],
-            "lastAssistantMessage": {
-              "text": "Rebasing the lane.",
-              "at": "2026-09-30T21:15:40.000Z",
-              "final": false
-            },
-            "usage": {
-              "cumulativeTokens": 412880,
-              "burnRatePerMin": 2210,
-              "costUsd": 4.04,
-              "costCoverage": "complete"
-            },
-            "context": {
-              "usedPercent": 41
-            },
-            "model": {
-              "id": "claude-opus-5",
-              "displayName": "Opus 5"
-            },
-            "project": {
-              "name": "puppeteer",
-              "branch": "mv/land"
-            },
             "terminal": {
               "hosted": "local",
               "runtimeSessionId": "pty-l2",
               "workloadClass": "agent"
             },
+            "nativeSessionId": "0b6e1f3a-2c4d-4e5f-8a9b-7c6d5e4f3a2b",
             "monitorRow": {
               "id": "run-loft-w",
               "kind": "agent",

@@ -1286,7 +1286,8 @@
                   is no ack protocol — the tolerant reader's own rule. <em>Since PG-1d (2026-10-31):</em> the
                   field and desk boards may also send a mid-stream snapshot on the same epoch, at the board's
                   current revision: a re-present when the doors' gate flips, or the repair after a lost frame.
-                  The reader replaces its copy.
+                  The reader replaces its copy. <em>Since PG-2 (2026-10-31):</em> the field and remote boards; the
+                  desk board retired into the remote cut.
                 </p>
               </div>
               <div class="card">
@@ -1651,12 +1652,12 @@
                   </tr>
                   <tr>
                     <td><span class="route">agent.subscribe</span></td>
-                    <td><p><code>AgentSubscribeParams {projection?: "full" | "field" | "desk" | "model", scope?: "local" | "mesh", …}</code> → the projection's snapshot/deltas (full: whole <code>AgentListResult</code> frames)</p></td>
+                    <td><p><code>AgentSubscribeParams {projection?: "full" | "field" | "model" | "remote", scope?: "local" | "mesh", …}</code> → the projection's snapshot/deltas (full: whole <code>AgentListResult</code> frames). <em>PG-2 (2026-10-31):</em> <code>remote</code> replaced <code>desk</code>.</p></td>
                     <td><p><code>agent.observe</code></p></td>
                     <td><p>yes</p></td>
                     <td><p><code>runtime.onMonitorState / onMonitorRemoved / onMonitorNotification</code></p></td>
                     <td><span class="badge tone-built">Built</span></td>
-                    <td><p><code>agent-field-daemon.test.ts</code></p></td>
+                    <td><p><code>agent-field-daemon.test.ts</code>, <code>agent-remote-cut.test.ts</code></p></td>
                   </tr>
                 </tbody>
               </table>
@@ -1686,13 +1687,24 @@
               peer windows keep the 100 ms floor, and the phone's is 1 s with a 250 ms urgent edge. None of it is built:
               as built a peer's rows still arrive as <code>desk</code> and the phone still reads <code>field</code>,
               until PG-2 (the cut) and PG-3 (the phone's replica).
+              <em>Corrected 2026-10-31 (PG-2, as built):</em> the remote cut is built and <code>desk</code> is retired.
+              Other desktops contribute their owner's <code>remote</code> cut (<code>AgentRemoteRow</code>), which
+              the window's door reads as <code>AgentModelMeshRow</code>. A phone may ask
+              <code>{projection: "remote", scope: "mesh"}</code> at its home (<code>AgentRemoteMeshOpen</code> /
+              <code>AgentRemoteMeshFrame</code>), served at <code>AGENT_FIELD.REMOTE_PHONE_MIN_INTERVAL_MS</code> with
+              an urgent change after at most <code>AGENT_FIELD.REMOTE_URGENT_MS</code>. The home asks each owner for its
+              cut at the phone's floor, so the owner cuts and paces and the home relays. The row also carries the
+              person's Stop (ST-D5), and a bare terminal's directory travels as its folder's name. An older desktop
+              asking <code>desk</code> is refused as a malformed ask, so mixed versions read each other as another
+              version until both update. The phone still reads <code>field</code> until PG-3, the kit's decode.
             </p>
             <p>
               <code>AgentModelLocalFacts</code> carries only what this window's chrome needs: <code>nativeSessionId</code>,
               <code>cwd</code>, <code>spawnedBy</code>, <code>exited</code>, and optional mirror facts
               <code>alive</code>, <code>startedAt</code>, <code>lastEvidenceAt</code>, <code>contextSource</code>.
               These facts ride the same row/frame, eliminating the race with a second full-board subscription.
-              They never enter <code>monitorRow</code>, the peer's desk cut or the phone's field row. A missing fact
+              They never enter <code>monitorRow</code>, the remote cut (the peer's desk cut before PG-2) or the
+              phone's field row. A missing fact
               remains absent. The schemas live in <code>packages/contracts/src/agent-field.ts</code>.
             </p>
             <p>
@@ -2075,7 +2087,7 @@
                   <tr><td><span class="route">terminal.openTicket</span></td><td><p><code>TerminalOpenTicket</code></p></td><td><p><strong>no</strong></p></td><td><p>The mint for an existing session — how a fold row's <code>terminal.runtimeSessionId</code> becomes a mounted pane. Every mint is a fresh audited grant.</p></td></tr>
                   <tr><td><span class="route">terminal.create</span></td><td><p><code>TerminalCreateOpenResult</code></p></td><td><p>no</p></td><td><p>The atomic birth-plus-ticket, so a spawn mounts without a second inventory round trip. Since AR-7 the shell it births is integrated by fieldd itself (the launcher home at the head of PATH, the person's own ZDOTDIR restored by the integration). Since SB-2 it takes <code>profileSet</code>: the shell is born under that Agent Profile's binding (AR-7g) and the answer carries <code>profileSet</code> when it was. A bound birth also needs <code>agent.spawn</code> (<code>FORBIDDEN_SCOPE</code> without it), and is refused before anything reaches the floor for a profile that no longer exists (<code>NOT_FOUND</code>), profiles that cannot be read (<code>UNAVAILABLE</code>, retryable) or a binding that fails (<code>PRECONDITION_FAILED</code>, in puppeteer's words) — never answered with an unbound shell.</p></td></tr>
                   <tr><td><span class="route">terminal.renewAttach</span></td><td><p><code>TerminalRenewAttachResult</code></p></td><td><p>yes</p></td><td><p>A compare-and-set on the generation the caller holds, idempotent by request id, so a retried renewal returns the grant it already got.</p></td></tr>
-                  <tr><td><span class="route">freeway.approve</span></td><td><p><code>FreewayApproveResult</code></p></td><td><p>no</p></td><td><p>F1 (2026-10-17): the phone's approval for its freeway link — minted only for a node fieldd's roster correlates to a phone row (never a desktop's, never a node that publishes no device), under the floor's per-boot freeway key, audited like a ticket. The link's host mints every terminal grant after it from its own keyring, so a tap needs no fieldd round trip. Refused <code>UNAVAILABLE {service: "freeway"}</code> while the host is down; the approval forwarded for a phone on another desktop (FW-D5) is F1b's.</p></td></tr>
+                  <tr><td><span class="route">freeway.approve</span></td><td><p><code>FreewayApproveResult</code></p></td><td><p>no</p></td><td><p>F1 (2026-10-17): the phone's approval for its freeway link — minted only for a node fieldd's roster correlates to a phone row (never a desktop's, never a node that publishes no device), under the floor's per-boot freeway key, audited like a ticket. The link's host mints every terminal grant after it from its own keyring, so a tap needs no fieldd round trip. Refused <code>UNAVAILABLE {service: "freeway"}</code> while the host is down. F1b (2026-10-31): routable for FW-D5 — the phone asks its home with <code>device</code> naming another desktop, the home forwards it whole, and that desktop mints under its own floor's key for a self peer daemon carrying <code>onBehalfOf.clientDeviceId</code> (the phone, as the home's roster correlated its node): the phone's node read from the owner's own roster, the linked login, the peer's self set; authorized as the peer, audited as the phone. A peer with no phone behind it, or naming a desktop, is <code>FORBIDDEN_SCOPE</code>; a phone the owner's roster does not know is <code>UNAVAILABLE uncorrelated</code>; an owner the home cannot reach is PeerLink's <code>UNAVAILABLE {service: "peer-link", device, state}</code>. Never replayed from a receipt: a same-key retry mints afresh.</p></td></tr>
                   <tr><td><span class="route">terminal.terminate</span></td><td><p>—</p></td><td><p>yes</p></td><td><p>Closes an agent's pane. Idempotent by intent: terminating an already-exited session is the normal race when the ladder and a click converge.</p></td></tr>
                   <tr><td><span class="route">terminal.list · sessions · roster · get</span></td><td><p>inventories</p></td><td><p>yes</p></td><td><p>Four doors over three projections for three readers, with <code>get</code> answering one row. The fold joins against the inventory; the roster is the UI's view and carries no placement. Since SB-2 a roster row names the Agent Profile its shell was born under (<code>profileSet</code>, from fieldd's record, still naming a profile deleted since).</p></td></tr>
                 </tbody>
@@ -2147,6 +2159,7 @@
               with its series and burn rate — the owed item's answer, superseding Q13's <code>desk</code> door of
               2026-10-28. The remote cut never carries the mirror, the absolute path, <code>project.seq</code> or
               <code>local</code>. As built the phone's rows carry none of it until PG-2 and PG-3.
+              <em>2026-10-31 (PG-2):</em> the remote cut is served to a phone; the kit reads it from PG-3.
             </p>
             <div class="callout foundation">
               <strong>Login scope is a transport guarantee, and not a licence to stop thinking.</strong>

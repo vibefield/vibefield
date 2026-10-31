@@ -1,9 +1,9 @@
 import type {
   AgentDeskTerminalRow,
-  AgentModelBoardRow,
   AgentModelDeskRow,
   AgentModelMeshFrame,
   AgentModelMeshOpen,
+  AgentModelMeshRow,
   RowsDelta,
   RowsDeviceState,
   RowsSnapshot,
@@ -38,6 +38,11 @@ import type {
  * (`local`). That is what the window's chrome reads — the deck's pane frames,
  * the find sheet, the AR-7 marker — now that the fold's `full` board is no
  * longer asked (`runs()`; `model-replica.ts` publishes it as `chrome`).
+ *
+ * PG-2 (PG-L1) — every other desktop's board is its owner's REMOTE cut
+ * (`AgentRemoteRow`): the model's row and its joins, a bare terminal's among
+ * them, with no field half beside it. The fold reads a peer's row for exactly
+ * what it read before: its `monitorRow`, its `terminal` join and its key.
  */
 
 /** A desktop as the board stands it: its state and when that was established. */
@@ -53,14 +58,14 @@ export interface ModelBoardDevice {
  * and the BOARD row it rode in on, kept beside it for the window's own joins.
  * The model carries no pane join by design (a view never looks a pane up); the
  * board row does — a terminal row's `terminal.runtimeSessionId` (G3), a desk
- * row's `terminal` and `runtimeRunId` — and that is what lets the window map
+ * or remote row's `terminal` and `runtimeRunId` — and that is what lets the window map
  * its panes, its spawn answers and fieldd's history (keyed by run) onto model
  * ids without deriving a business fact. Every row the fold has heard is here,
  * the ones the replica hides included (`alive: false`, M3).
  */
 export interface HeldModelRow {
   readonly device: string;
-  readonly board: AgentModelBoardRow;
+  readonly board: AgentModelMeshRow;
   readonly row: MonitorAgentRow;
 }
 
@@ -76,10 +81,19 @@ interface HeldDevice {
 
 const SDK_OS = new Set<string>(["mac", "windows", "linux", "ios", "android"]);
 
-/** A board row is a bare terminal's when it is of the terminal kind and carries
- * no status of its own; every other row is a run's (a desk row). */
-export function isTerminalBoardRow(row: AgentModelBoardRow): row is AgentDeskTerminalRow {
-  return row.kind === "terminal" && !("status" in row);
+/** A board row is a bare terminal's when it is of the terminal kind, carries no
+ * status of its own and names its pane: the join every reader of one reads. A
+ * peer's terminal whose owner's doors are down names none (F-M4, PG-2), and no
+ * join is read off it. */
+export function isTerminalBoardRow(row: AgentModelMeshRow): row is AgentDeskTerminalRow {
+  return row.kind === "terminal" && !("status" in row) && row.terminal !== undefined;
+}
+
+/** A board row is a run's desk row (this desktop's model board) when it carries
+ * the field half, a status of its own; a bare terminal's and a peer's remote row
+ * carry none. */
+export function isDeskBoardRow(row: AgentModelMeshRow): row is AgentModelDeskRow {
+  return "status" in row;
 }
 
 /** A wire OS word as the SDK's mark, kept only when it is one of the SDK's words. */
@@ -109,8 +123,8 @@ export function modelRowFrom(wire: WireMonitorRow, here: string | undefined): Mo
   } as unknown as MonitorAgentRow;
 }
 
-/** The model row a board row carries, or none (a desk row from an older daemon). */
-export function monitorRowOf(row: AgentModelBoardRow): WireMonitorRow | undefined {
+/** The model row a board row carries, or none (a run the backend has not assembled yet). */
+export function monitorRowOf(row: AgentModelMeshRow): WireMonitorRow | undefined {
   return row.monitorRow;
 }
 
@@ -262,7 +276,7 @@ export class ModelBoardFold {
   #replaceBoard(
     device: string,
     held: HeldDevice,
-    snapshot: RowsSnapshot<AgentModelBoardRow>,
+    snapshot: RowsSnapshot<AgentModelMeshRow>,
   ): MonitorAgentRow[] {
     for (const id of held.idByKey.values()) this.#held.delete(id);
     held.idByKey = new Map();
@@ -287,10 +301,10 @@ export class ModelBoardFold {
   }
 
   /** One of this desktop's board rows, for the chrome: a run row is kept whole
-   * (assembled by the backend or not); a key that turned into a terminal row
-   * is a run no more. */
-  #takeRun(row: AgentModelBoardRow): void {
-    if (isTerminalBoardRow(row)) {
+   * (assembled by the backend or not); a key that turned into any other row is
+   * a run no more. */
+  #takeRun(row: AgentModelMeshRow): void {
+    if (!isDeskBoardRow(row)) {
       if (this.#runs.delete(row.runtimeRunId)) this.#runsList = null;
       return;
     }

@@ -45,25 +45,35 @@ import { RpcCallError } from "./native-link";
 // DS-2b (2026-10-01; the review's DS-2 list) — TICKETS. Keyed results replayed
 // for the TTL, tickets included, and a ticket's transport grant lives a minute
 // (TERMINAL_PIPELINE.TRANSPORT_GRANT_TTL_MS): a retry past that replayed a
-// ticket the cell refuses to dial. So a ticket MINT (TICKET_MINTS) is never
+// ticket the cell refuses to dial. So a ticket MINT (CREDENTIAL_MINTS) is never
 // journaled — nothing it applies is doubled by minting again, and its retry
 // gets a fresh ticket — and any other answer that carries a transport grant (a
 // birth's `terminal`) replays only while that grant lives; past it, the retry
 // answers the receipt (`applied`, `resultOmitted`, `resultExpired`), never the
 // stale ticket, and the act still never runs twice.
+//
+// F1b (2026-10-31) — `freeway.approve` joins the never-journaled set: forwarded for FW-D5 it is a
+// keyed mutation, and its answer is a credential of the ticket's class — an approval lives half an
+// hour under one floor boot's key, so a day-long receipt would replay one the host refuses. A
+// second mint doubles nothing (the first, lost in flight, lapses unused; each mint is its own audit
+// row), so its same-key retry mints afresh. The set is named for what it holds now: credentials.
 
 const RECEIPT_MESSAGE_CHARS = 1024;
 
-/** DS-2b — the forwarded mints whose answer IS a ticket and which apply
+/** DS-2b — the forwarded mints whose answer IS a credential and which apply
  * nothing a second mint would double (a second credential; the first, lost
  * in flight, expires unused): never journaled, so a same-key retry mints
- * afresh. Named, never inferred from an answer's shape — `terminal.create`
- * answers a ticket too, and it creates a session. `workspace.openTicket`
- * (DS-D12) and `index.openTicket` (SP-3) join when they are served.
+ * afresh. A ticket; F1b's freeway approval. Named, never inferred from an
+ * answer's shape — `terminal.create` answers a ticket too, and it creates a
+ * session. `workspace.openTicket` (DS-D12) joins when it is served.
  * *DS-7 (2026-10-31): `index.openTicket` is served to a peer daemon, and joins —
  * its answer carries a rosetta grant, which a receipt must neither keep nor
  * replay; a same-key retry mints a fresh one.* */
-const TICKET_MINTS: ReadonlySet<string> = new Set(["terminal.openTicket", "index.openTicket"]);
+const CREDENTIAL_MINTS: ReadonlySet<string> = new Set([
+  "terminal.openTicket",
+  "freeway.approve",
+  "index.openTicket",
+]);
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -224,10 +234,10 @@ export class OwnerForwardJournal {
     this.ttlMs = opts.ttlMs ?? FORWARDING.RECEIPT_TTL_MS;
   }
 
-  /** Execute a keyed forwarded mutation at most once per {peer, key}. A ticket
-   * mint (TICKET_MINTS) is not journaled at all: it runs every time. */
+  /** Execute a keyed forwarded mutation at most once per {peer, key}. A
+   * credential mint (CREDENTIAL_MINTS) is not journaled at all: it runs every time. */
   async run(call: OwnerForwardCall, execute: () => Promise<unknown>): Promise<unknown> {
-    if (TICKET_MINTS.has(call.method)) return await execute();
+    if (CREDENTIAL_MINTS.has(call.method)) return await execute();
     this.sweep();
     const id = `${call.peer}\u0000${call.key}`;
     const hit = this.entries.get(id);

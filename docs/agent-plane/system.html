@@ -1671,6 +1671,11 @@
               fold's, and <code>projectFieldRow</code>, the fold's alone, which never reads the backend's model. Only the
               peers' <code>desk</code> becomes <code>remote</code> at PG-2; the phone reads <code>remote</code> from PG-3,
               and <code>field</code> stays for an older phone until it retires after one release of skew.
+              <em>As built 2026-10-31 (PG-2):</em> <code>agent-model-board.ts</code> publishes both of the model's
+              cuts now: the <code>model</code> board for this desktop's windows, and the <code>remote</code> board
+              (<code>createRemoteSubscription</code>, <code>projectRemoteRow</code>) for every other screen. The
+              <code>desk</code> cut is retired; each window's mesh board asks the peers for <code>remote</code>, and
+              the phone's door is open at its home, though the kit reads <code>field</code> until PG-3.
             </p>
             <p>
               <code>GodviewAgentsProvider</code> owns the window's one model subscription and replica. The deck,
@@ -1782,7 +1787,8 @@
               window reading it no longer raises the deck on a run it cannot attach. An owner older than PG-1a still
               promises, and its readers keep the run-id fallback. <em>Since PG-1d (2026-10-31):</em> a flip of the
               gate re-presents every live field and desk board at once, so an idle board no longer keeps a stale
-              join or promise until its next change.
+              join or promise until its next change. <em>Since PG-2 (2026-10-31):</em> the field and remote boards,
+              a bare terminal's join and promise on the remote cut included.
             </p>
             <div class="callout foundation">
               <strong>The store's audience is the tailscale login.</strong>

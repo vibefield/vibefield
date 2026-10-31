@@ -330,20 +330,20 @@ describe("SP-1 — the subscription descriptor (SP-L4)", () => {
             shape: "snapshot-delta",
             cadenceFloorMs: AGENT_FIELD.MIN_INTERVAL_MS,
           },
-          '{projection: "desk"}': {
+          '{projection: "remote"}': {
             shape: "snapshot-delta",
-            cadenceFloorMs: AGENT_FIELD.DESK_MIN_INTERVAL_MS,
+            cadenceFloorMs: AGENT_FIELD.REMOTE_MIN_INTERVAL_MS,
           },
           '{scope: "mesh", projection: "field"}': {
             shape: "rows",
             cadenceFloorMs: AGENT_FIELD.MIN_INTERVAL_MS,
           },
-          '{scope: "mesh", projection: "desk"}': {
+          '{scope: "mesh", projection: "remote"}': {
             shape: "rows",
-            cadenceFloorMs: AGENT_FIELD.DESK_MIN_INTERVAL_MS,
+            cadenceFloorMs: AGENT_FIELD.REMOTE_MIN_INTERVAL_MS,
           },
           // MV-3a (MV-D18, L12) — this desktop's own windows' board, at the
-          // fold's tick; peers ride beside it as desk cuts at the desk floor
+          // fold's tick; peers ride beside it as remote cuts at the remote floor
           '{projection: "model"}': {
             shape: "snapshot-delta",
             cadenceFloorMs: AGENT_FIELD.FULL_TICK_MS,
@@ -355,9 +355,11 @@ describe("SP-1 — the subscription descriptor (SP-L4)", () => {
         },
       },
     });
-    // the board's floors, as design-06 §8 rules them
+    // the board's floors, as design-06 §8 rules them (PG-D8 (a) for the remote cut's)
     expect(AGENT_FIELD.MIN_INTERVAL_MS).toBe(250);
-    expect(AGENT_FIELD.DESK_MIN_INTERVAL_MS).toBe(100);
+    expect(AGENT_FIELD.REMOTE_MIN_INTERVAL_MS).toBe(100);
+    expect(AGENT_FIELD.REMOTE_PHONE_MIN_INTERVAL_MS).toBe(1_000);
+    expect(AGENT_FIELD.REMOTE_URGENT_MS).toBe(250);
     expect(PRODUCT_API_LIMITS.STREAM_MIN_INTERVAL_MS).toBe(250);
   });
 

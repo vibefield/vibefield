@@ -112,12 +112,17 @@
   glass at 4.5:1, the day's milk at 75% by James's "b", the ramp stopped at t2 on the glass, and row 32 judging every
   word), in the stacked mint M59 (`2d2f41046`), run 59 on the Mac mini: verify green; row 32 alone on M59 RED at run59b
   (20:43:06Z), its first live findings: two inks short on the day's 75% milk, the agents' "Ready" at 3.4–3.7:1 and t2 at
-  4.1–4.4:1, the night green (LANDED "FG-1", "FG-2", "FG-3a", "FG-3b", "FG-4a", "FG-4b", "FG-5", "FG-6", "FG-6's
-  follow-up slice", "FG-6's follow-up 2 and class C", "FG-6c", "FG-O2", "FG-O2's judge").
-- Next: the fix slice at VF-PM's lean (20:46Z), James's to overturn: DESIGN.md first, the glass's t2 at 80% by day (the
-  re-projection on `.vf-wizard-shell`, the night untouched) and a day-glass variant of the healthy status ink, the
-  milk's 75% kept; then row 32 at the next unlock. Then, in the ruled order: the catalog over the field's still, then
-  the field's glass against the CSS glass on a frozen frame (its seam ruled on its own). Each verifies on the Mac mini.
+  4.1–4.4:1, the night green; **FG-O2's judge's fix** (`06cf3fe3d`: one rule for the glass, 5:1 at the thinnest stroke
+  row 32 measured, the glass's own t2 at 80% by day, its healthy and attention inks, and the wizard's error line onto
+  the attention ink), as the mint `06cf3fe3d`, run 60 on the Mac mini: verify green; row 32 alone on M60 GREEN at run60b
+  (21:33:51Z), the fix's witness, every word on the glass at 4.5:1 or more on all three walks; **FG-6's catalog**
+  (`aa4d41a3e`: the design catalog's 13 Setup Assistant frames on the shipping glass over the shipping field at its
+  still, told the page a window that can't run the field is, never a copy), in the mint M62 (`48c67b39a`), run 62 on the
+  Mac mini: verify green (LANDED "FG-1", "FG-2", "FG-3a", "FG-3b", "FG-4a", "FG-4b", "FG-5", "FG-6",
+  "FG-6's follow-up slice", "FG-6's follow-up 2 and class C", "FG-6c", "FG-O2", "FG-O2's judge",
+  "FG-O2's judge, its fix", "FG-6's catalog").
+- Next: FG-6's last gate in the ruled order, the field's glass against the CSS glass on a frozen frame (its seam ruled
+  on its own). It verifies on the Mac mini.
 - Owed: James's eye list from row 32: Agents with nine installed (PU-L, drafted, would bring nine into the walk),
   History with six rows, Profiles' five cards, and a login opened from This Mac's row (not walked: its Cancel comes
   into view on the fade's top at zero margin; a margin of 10 like the add's, or the slot's `nearest` on the add's
@@ -127,7 +132,12 @@
   (14:20Z), James's to overturn. The glass terminal's 170 is James's ruling (15:07Z, on VF-PM's 14:57Z lean). FG-O2's
   judge's scope is VF-PM's ruling at its leans (18:05Z, 18:11Z, 18:40Z), James's to overturn: every word on the glass,
   its panes' with its own; the wizard's class inks onto the ramp; the name field's placeholder to item 127; and a word
-  in a control that is off passed over and said so.
+  in a control that is off passed over and said so. The fix's one rule and its scope are VF-PM's rulings at its leans
+  (20:46Z, 20:56Z, 21:07Z), James's to overturn: t2 and the two state inks held at 5:1 at the thinnest stroke row 32
+  measured, attention in the slice, and no danger or info glass ink until one is worn; an error pane under the judge is
+  owed. The catalog judged is owed, a slice of its own at a5's lean (VF-PM 21:32Z): an Electron walk of its frames on
+  the Mac mini by row 32's own measure, which pays the error pane (its two completion failures stand the wizard's error
+  line on the glass).
 
 **AL — what Quit means** · better-quit (lanes `al2`, `al/chords`, `al/chords-2`) · law `draft/thinking-app-lifecycle.md` v0.2 §8, ESR §7.3 (amended), design-00 EL1
 - Landed: AL-1…AL-3 (`7ebb1eeda` · `5eea4b2d5` · `697beb199`; AL-4 folded in), AL-5, AL-7, AL-8a, **AL-9** (`933d2fba3`,
@@ -174,7 +184,8 @@
 
 **PG — the phone's Godview** · vibe-field-fd (lane `lanes/ios`) · law `draft/thinking-phone-godview.md` §7/§8 (the page *The Phone's Godview*, AAYgPk8o), `design-mv.md`, `design-06-sync-planes.md`
 - Ruled 10-29 08:17–08:30Z (James, on the page): all ten (a), nine at their leans; PG-D3 (a), native transcriptions,
-  against the lean. PG-D11 A at 16:22:36Z (the PM board): the phone's queue cap is 256 KiB.
+  against the lean. PG-D11 A at 16:22:36Z (the PM board): the phone's queue cap is 256 KiB. James put the phone's
+  Godview ahead of the Settings track on 10-31 21:09Z.
 - Landed 10-31: **PG-1a…1c**, the desktop's efficiencies first (PG-D9): the model's attach promise withdrawn with the
   join (`e9a57b4b6`), the key-only relay and the window's per-desktop screen (`f2d76f7bf`, `8a3b64ced`), and tailnet
   backpressure at 256 KiB (`2392b0ef8`, `83e08f1e1`), as the merge `1790be95f`, run 18 (LANDED "PG-1a…1c"). **PG-0**,
@@ -186,12 +197,21 @@
   well past 60 busy agents, or the model cut's cost growing (the frames' wire serialization not measured).
   **PG-1f**, PU-I's pin test (`627bda158`, as the merge `5aa41562f`, run 50; LANDED "PG-1f"): an idle priced row's
   silence across the 30 s cost step, `.fails` at puppeteer 0.3.2 beside two controls; the petition drafted, not filed.
-- Next: PG-2 (the remote cut), on James's go → PG-3 (the phone's replica under the swarm) → PG-5…PG-8 (list,
-  timeline, spend, rain, native) → PG-9 (resume, `agent.get`, the measured rates). PU-I is filed by James.
+  **PG-2**, the remote cut (`2a8c3398a` the contract, `5e70a6c44` fieldd, the relay and the window; as the merge
+  `ed212d21b`, run 64; LANDED "PG-2"): the model's one cut for every other screen, `AgentRemoteRow`, cut by its owner
+  and paced by its caller's kind (a peer window 100 ms; the phone 1 s, its urgent edge 250 ms). Bare terminals ride it
+  (PG-D5), their directory as its folder; each window's mesh asks its peers for `remote`, the phone's `{remote, mesh}`
+  door is open at its home, and `desk` retired.
+- Next: PG-3 (the phone's replica under the swarm: the kit decodes `AgentRemoteRow` from mirrored goldens, folds by
+  `ModelBoardFold`'s rule, retires `UsageLedger`/`UnreadLedger`/the stale rule, and routes `reportShown` through the
+  home, PG-D6) → PG-5…PG-8 (list, timeline, spend, rain, native) → PG-9 (resume, `agent.get`, the measured rates).
+  PU-I is filed by James.
 - Owed: items 109 (the History tail's reset hole) and 110 (`project.subscribe`'s no-op snapshot on the phone), both on
   the shed; the cap read on the phone under the link conditioner (PG-9); from PG-1d, the F-H2 rider (the board's gate
   and the ticket mint read different things), an old owner's run-id fallback (a design question) and a kit comment
-  (`AgentTerminalFace.swift`).
+  (`AgentTerminalFace.swift`); from PG-2, the draft queue's amendments (design-06's SP-L4, DS-D4 and limits "not
+  built" clauses, design-mv §1, build-mv L8 and M29, the design record's §8 as built), and `field`'s retirement one
+  release of skew after the kit ships (PG-L1).
 
 **HN — Cards in Hand** · vibe-field-a1 (lane `lanes/hn`) · law `draft/thinking-cards-in-hand.md` §6 (page sources `draft/cards-in-hand/`), DESIGN.md §1/§5/§6/§8/§9/§10/§13
 - Ruled 10-29 10:40Z (James): all sixteen at their leans (LN-D1…D3, HN-D1…D10, PL-D1…D3); HN-D1 was his own pick on
@@ -363,7 +383,10 @@
   paid 18:29:53Z, green unlocked; owed: the arming rule in row 26's doors; LANDED "PR #6 landed through the
   train") · item 129 (GitHub's macOS verify red five pushes on the catalog's Hub wait, its real 10 s bound
   crossed before the click: fixed in M59 `2d2f41046`, tests only, HN-8's design kept; proof paid 20:20Z, main's
-  push-event verify run 41235730001 green; owed: PR #7's re-run; LANDED "Item 129") · item 122's floor half (paid: idle,
+  push-event verify run 41235730001 green, PR #7's re-run green (41239299536); nothing owed; LANDED "Item 129") ·
+  item 130 (the phone's sign-out kept History's cache, against AP-D4: `35b9248d4`, with SP-D12's comment
+  `f8d93b4a2`, as the merge `6130153f8`, run 61; owed: IOS-10a's sign-out words at its turn; LANDED "Item 130") ·
+  item 122's floor half (paid: idle,
   idle-class, the ramp of run 53's verify and the peak of run 55's, load1 34.09–42.52, warm max 201 ms against the 15 s,
   0 missed; LANDED "item 122's floor half, measured"; nothing owed).
 - **Item 77b**, FieldTerminalTests' 60 s block. The 5 s shape is fixed: (d) `b1e9bf53d` runs AttachDeadlineTests
@@ -404,7 +427,8 @@
      `deskLayer({ ambientIdleMs })` (ICE 0.16.0's option; VibeField passes none today).
    - Q5: a note held longer than 2.4 s shows its advice again.
    - Q13 (`costRatePerMin` on the desk row, the phone reading `desk`, D-i18) is superseded by PG-D1 (a), 2026-10-29:
-     the phone reads the model's remote cut (PG-2, PG-3), and `desk` retires into it. D-i18's status flips in PG-0.
+     the phone reads the model's remote cut (PG-3), and `desk` retired into it at PG-2 (10-31). D-i18's status flipped
+     in PG-0.
    - Q20: "Settings on demand" (replaces ESR's follow-on): SettingsPanel (`packages/field-app/src/panels/SettingsPanel.tsx`)
      becomes a lazy chunk, measured before and after.
    - Q21: TP-S3f's stated limit (a deliberate own kill never gets an event-driven face), verified after item 59
@@ -436,7 +460,7 @@
 | History finish (AR-8) | B-D4/B-D5 (the doors federate; no window asks for another desktop's past; the phone reads none) · PJ-8 acts across desktops (PlaceRef + the params idempotency key) after DS-7 · R8/R9 and P2's runs (§6) | the History lead's slot; PJ-8 after DS-7 | `build-hf.md`, `thinking-ar-history-room.md`, `thinking-project-places.md` |
 | PJ-5 · PJ L5 | Godview's project chip, "Open in History", synced ink, where line: unbuilt; re-judged against One Frame and MV before any build (Q16) · the project key unkeyed (`normalize.ts:172`, version 1) | the re-judgement · a mesh-shared secret | `thinking-project-places.md` |
 | FS | FS-3 the files consumer on the desk (a kind or panel; `pickFolder()` → `attach(root)` is built) · FS-4 with DS-7 only · FS-5 the phone viewer · GitService replaces the interim git port (R2; M5) | a desk lane · DS-7 · mille's release | `thinking-files-service.md`, `draft/files-service/build-fs.md` |
-| FW — the freeway | F1's device round before leaving `-vf-freeway` · F1b, FD1/FD2 (truffle precondition met; need an owner), FD3/FD4, F4, FW-D10's slice, FW-R1…R10 · FW-DF-1/DF-2 (§6) | James's device round; an owner (History lead) | `draft/thinking-freeway.md` v0.3 §13/§14/§16 |
+| FW — the freeway | F1's device round before leaving `-vf-freeway`, which witnesses F1b's exit once the kit asks through its home · F1b's kit half, its own slice (`FieldLink.swift` `approveFreeway` asks the home with `device`; FW-R3, FW-R6) · FD1/FD2 (truffle precondition met; need an owner), FD3/FD4, F4, FW-D10's slice, FW-R1…R10 · FW-DF-1/DF-2 (§6) | James's device round; an owner for FD1/FD2 (History lead); F1b's kit half (IOS) | `draft/thinking-freeway.md` v0.3 §13/§14/§16; LANDED "F1b — the forwarded phone approval" |
 | AR-6 — approvals + prompts | Phase 0 paid (P0-H, 09-25); AG-1 shipped as AR-S1/AR-S2. Waits on AR6-D1…D9 (unindexed; re-verify §0's anchors at the pinned puppeteer). PU-15 rides it. A 1.0 exit | James rules AR6-D1…D9 | `thinking-ar-approvals-prompts.md` |
 | AR-7 later slices · AR-S4e3 | AR-7f leak detector, AR-7h bash/fish, AR-7i prewarm (AR-7j is a beta blocker) · S4e3 options, Needs/Needed by, EX6/EX7, other profiles | an AR lane | `thinking-ar7-typed-agents.md` §5.6, `thinking-ar-agents-settings.md` |
 | MV-8b ruling 8 | the transcript-provider migration: puppeteer 0.2.3 still ships adapter-claude's `observation/transcript/provider.ts` | its own track after MV | DECISIONS MV-8b, `docs/agent-plane/architecture.html` |
@@ -449,7 +473,7 @@
 | PLUG follow-ups | the KIT slice · third-party listing (P8e: TD registry + R2 process host; PA-24, §20.5, §21.8) · sideload · R2 `host:"process"` · PRC-5's power loss (§6) · PRC residual policies (§14–§15) · per-section undo/⌘Z/timeline (D29′, P7) | first-party publishing; third-party plugins; a Settings history design; runtime validation is tracked separately in §6 | `specs/plugin-architecture.md`, `thinking-p8-loadable-artifact.md` |
 | TP / TC | D6's cell half, C5, D5, the lineage break (§6) · TC RATIFIED as built (Q6: TC-D1/D2 as amended by WG-D1, D3, D15, L1c at TM-1); TC-S4…S8 (vault, broker, replay, drain-migrate, warm tiers) parked · TP-S4…S6 (S4's typeable mirror struck) | a TP lane · a ghosttea next-major or a P0 witness across a floor restart · measured demand | `specs/terminal-pipeline-v3*.md`, `specs/terminal-custody.md` |
 | GT | G29 upstream (then GT-D22's file half) · GT-D22 (§5) · smoke row 13b: attach through DS-4e to a second staged desktop · no kill control in Godview (Q2): a session ends by the agent's quit, ⌘Q (AL-3) or reaping | G29's release · the two-desktop run | `specs/godview-terminal.md` |
-| IOS | the rebuild and TestFlight (§5) · phone Settings ("Settings in a Pocket", revised 2026-10-31 against `02c902a8d`: 8 marks, none picked yet, page Hof2zWpt, replacing VCfkfxMp) · K-D5's ghosttea `customInputView` petition (unfiled) | James rebuilds; external TestFlight | `thinking-ios-app.md`, `thinking-ios-swarm.md`, `apps/ios/TESTFLIGHT.md` |
+| IOS | the rebuild and TestFlight (§5) · phone Settings ("Settings in a Pocket", revised 2026-10-31 against `02c902a8d`: 8 marks, none picked yet, page Hof2zWpt, replacing VCfkfxMp; IOS-10a BUILT on `ios/settings`, `7b6cb2332` and `81ce047d6`, held: it lands after FW, SP and PG, James 2026-10-31 21:09Z) · K-D5's ghosttea `customInputView` petition (unfiled) | James rebuilds; external TestFlight | `thinking-ios-app.md`, `thinking-ios-swarm.md`, `apps/ios/TESTFLIGHT.md` |
 | NF | COMPLETE; owed: item 52 (b)'s phone half (its routed ghosttea client) · headless floor-on-tailnet rows over TS-1's authKey path (`029af0e6f`) if wanted · native-floor §7 into the T posture | an NF lane | `specs/native-floor.md` |
 | Native push (APNs) | SP-D8: the relay after AR-6; pairing is the account; README's `services/push-relay` row is deferred | AR-6 | `thinking-native-push.md`, design-06 L4 |
 | LOG | LOG-39 (beta list) · LOG-V5 (rides Windows) · LOG-V8 retention (James's product call) · LOG-V7 optional | the beta checklist | `specs/logging-and-diagnostics.md` |
@@ -464,7 +488,8 @@
 - AR6-D1…D9 (AR-6) · AR-D24…D35 (one batched ratification; Agent Profiles) · QL-D1…D10, QL-D12…D17 (built as
   QL-1/QL-2) · GT-D22 (adopted as built; the web-only narrowing above all).
 - NF-D3/NF-D5's long-pending read, or record them as answered by the as-built code.
-- MB-D1…D9 and UP-D1…D8 (proposal pages owed first, LANDED :7954) · SP-D4, D11, D12.
+- MB-D1…D9 and UP-D1…D8 (proposal pages owed first, LANDED :7954) · SP-D4, ~~D11~~ *(struck 2026-10-31: ANSWERED
+  2026-10-29 by PG-D2 (a) and PG-L4.6, as DECISIONS' SP row, design-06 and `thinking-sync-planes.md` record it)*, D12.
 - Whether the phone (`vibefield.simulator`) ships among `BUNDLED_PLUGINS` (`apps/desktop/packaging/bundled-list.mjs`;
   PT-S1…PT-S3 left it untouched) · WIN-D6…D9 · LOG-V8. `PT-S-vs-PHONE.md` §5's seven choices are ruled (James,
   2026-10-29 00:25Z, "Go with your leans"; its §6, the work kept) and leave the list.
@@ -703,10 +728,10 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 |---|---|---|---|
 | TS — the Tailscale door | ACTIVE; TS-0…3b, 4a, 4b, 5, 6, 7, 8a, 8b landed | `thinking-tailscale-onboarding.md`; DESIGN.md §5/§6/§8/§9/§13 | TS-8c (T8, after its live probe) |
 | AO — Bring Your Agents | ACTIVE; AO-0…6b3 landed | `thinking-agent-onboarding.md` | AO-7 on a puppeteer release after 0.3.0 (`installRecipe`) |
-| FG — the first run on the field | ACTIVE; FG-0…3a landed 10-30, FG-3b, FG-4a, FG-4b, FG-6, FG-5, FG-6c, FG-O2 and FG-O2's judge 10-31 | `thinking-first-run-glass.md`; DESIGN.md §2.1/§5/§6/§8/§13; desk-gates row 32 | the fix slice (t2 at 80% by day, a day-glass healthy ink) → row 32 → the catalog over the still → the frozen frame |
+| FG — the first run on the field | ACTIVE; FG-0…3a landed 10-30, FG-3b, FG-4a, FG-4b, FG-6, FG-5, FG-6c, FG-O2, FG-O2's judge and its fix, FG-6's catalog 10-31 | `thinking-first-run-glass.md`; DESIGN.md §2.1/§5/§6/§8/§13; desk-gates row 32 | the frozen frame |
 | AL — app lifecycle | ACTIVE; AL-1…3, 5, 7, 8a, 9 landed | `thinking-app-lifecycle.md`; ESR §7.3 | AL-6, Last exit, relaunch cap |
 | AU — Updates That Wait | ACTIVE; B1–B4 (AU-0…AU-7) landed 10-30/31 | `thinking-update-ux.md` §7 (page sources `draft/update-ux/`); DESIGN.md §2.5/§2.8/§6/§8/§9/§13; EDP §5.2/§6.4/§11; ESR §7.3 | the owed eyeballs, the first signed nightly with notes, the physical rows |
-| PG — the phone's Godview | ACTIVE; PG-0, PG-1a…1d, PG-1e0 (measured: neither) and PG-1f's pin test landed 10-31 | `thinking-phone-godview.md` §7/§8; `design-mv.md`; `design-06-sync-planes.md` | PG-2, on James's go |
+| PG — the phone's Godview | ACTIVE; PG-0, PG-1a…1d, PG-1e0 (measured: neither), PG-1f's pin test and PG-2 (the remote cut) landed 10-31 | `thinking-phone-godview.md` §7/§8; `design-mv.md`; `design-06-sync-planes.md` | PG-3, the phone's replica |
 | HN — Cards in Hand | BUILT; B1–B3 (HN-0…HN-8) landed 10-31 | `thinking-cards-in-hand.md` §6 (page sources `draft/cards-in-hand/`); DESIGN.md §1/§5/§6/§8/§9/§10/§13 | the console-window smoke rows; D10 (James) |
 | QW1 — Godview swarm QA, fix wave 1 | ACTIVE; stacks A and B landed 10-28, B on puppeteer 0.3.0's EL8 pin | `godview-swarm-qa-plan.md`; `thinking-ar-reattach.md` | QA wave 1 |
 | Release rails (EDP/ESP, WP12, TD, BP, RD, RM) | ACTIVE; nightlies live, W10/W11 passed | the release specs; `thinking-browser-profile.md`, `thinking-release-deps.md`, `thinking-release-management.md` | round 3; the first-beta list |
@@ -715,7 +740,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | MV — monitor views | PARKED; landed 10-08 | `draft/monitor-view-sdk/design-mv.md`; DESIGN.md §8 | puppeteer 0.3.0 pinned 10-28 (`1469639a6`); item 39 and the tuck wait on a later release; QL ratifications |
 | History (AR-8) / PJ | PARKED; PJ-1…4, 6, 7 landed | `build-hf.md`, `thinking-ar-history-room.md`, `thinking-project-places.md` | R8/R9; B-D4/B-D5; PJ-5 re-judged; PJ-8 after DS-7 |
 | DS / SP — sync planes (was C — mesh) | PARKED; waves 1–3 landed | design-04, `design-06-sync-planes.md`, `thinking-desktop-sync-plane.md`, `thinking-sync-planes.md`, `thinking-c6-meshdata.md` | DS-7 with an owner + the two-desktop run |
-| FW — the freeway | PARKED; F1 landed 10-20, packaging 10-27 | `thinking-freeway.md` | James's device round; FD1/FD2's owner |
+| FW — the freeway | PARKED; F1 landed 10-20, packaging 10-27, F1b's desktop half 10-31 (M63 `599998fdd`) | `thinking-freeway.md` | James's device round (the flag-off); F1b's kit half; FD1/FD2's owner |
 | FS — files service | PARKED; FS-1a/1b/2 landed | `thinking-files-service.md`, `build-fs.md` | FS-3 on the desk; mille's release |
 | PT — PORTALS | ACTIVE (PT-S, resumed 10-29); browser landed 10-14; PT-S1 (the phone as a kind) built 10-18 and 10-29, gated and looked at 10-29, LANDED 10-30 (`1de84540b`); PT-S2 (the phone's producer) built code-only and light-green 10-30, LANDED 10-31 (`e4aa3d367`); PT-S3 (the gates) built code-only and light-green 10-31, LANDED 10-31 (`c564de0e4`) | `thinking-portals.md`, `draft/portals-maps/` (PT-S: `PT-S-the-simulator.md`), `draft/ground/PHONE.md`, ICE design-019, LSF spec | PT-S3's live run (on James's unlock) → PT-S4 (touch); then PT-C, PT-T |
 | Desk Phase 6 | PARKED; replaces the four dogfood packs (Q9) | `thinking-desk-migration.md` | STRING's thinking doc |
@@ -726,7 +751,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | PLUG — shipped core | COMPLETE: P0–P7, P8b–d (P8c via WP8), PRC-4/5; later publishing/validation work is separate | `specs/plugin-architecture.md`, `thinking-p8-loadable-artifact.md` | existing product gates; no blanket 24-hour prerequisite |
 | PRC-6 — plugin runtime validation | OPEN; diagnostics in draft [PR #7](https://github.com/vibefield/vibefield/pull/7); Linux CI passed, full verification and calibration pending | `thinking-prc6c2-physical-soak.md` §9–10 | full verify → guarded 32-cycle current-desk calibration + listener control; historical failures stay open; literal 24h only for that claim |
 | PLUG — publishing | PARKED: KIT/P8e | `thinking-p8-loadable-artifact.md`, `specs/trust-and-distribution.md` | publishing scope; TD registry + R2 process host |
-| IOS — companion | PARKED; IOS-8f landed 10-30 (`user.me`: the corner wears its home desktop's face and name) | `thinking-ios-app.md`, `thinking-ios-swarm.md`, `thinking-ios-account.md`, `thinking-ios-history.md`, `apps/ios/TESTFLIGHT.md` | the rebuild; TestFlight build 4 |
+| IOS — companion | PARKED; IOS-8f landed 10-30 (`user.me`: the corner wears its home desktop's face and name); item 130 landed 10-31 (a sign-out clears History's cache, AP-D4) | `thinking-ios-app.md`, `thinking-ios-swarm.md`, `thinking-ios-account.md`, `thinking-ios-history.md`, `apps/ios/TESTFLIGHT.md` | the rebuild; TestFlight build 4 |
 | UA — users and accounts | COMPLETE except witnesses | `specs/users-and-accounts.md`, `thinking-ua-phone-account.md` | the phone's second-account witness |
 | NF — native floor | COMPLETE; one owed line | `specs/native-floor.md` | item 52 (b)'s phone half |
 | LOG — logging and audit | PARKED; item 78 landed | `specs/logging-and-diagnostics.md` | LOG-39 for the beta |

@@ -138,13 +138,14 @@ describe("the model stream", { timeout: 30_000 }, () => {
       .map((frame) => frame.t);
     const gaps = selfTimes.slice(1).map((t, index) => t - (selfTimes[index] as number));
     expect(gaps.filter((gap) => gap < AGENT_FIELD.FULL_TICK_MS)).toEqual([]);
-    // the peer's desk cut at its own floor (L12: peers keep the desk's 100 ms)
+    // the peer's remote cut at its own floor (PG-2: a peer window's 100 ms, its
+    // urgent edge at the same floor)
     const peerTimes = modelFrames(stream)
       .filter((frame) => frame.frame.device === corpus.meta.peer)
       .map((frame) => frame.t);
     expect(peerTimes.length).toBeGreaterThan(5);
     const peerGaps = peerTimes.slice(1).map((t, index) => t - (peerTimes[index] as number));
-    expect(peerGaps.filter((gap) => gap < AGENT_FIELD.DESK_MIN_INTERVAL_MS)).toEqual([]);
+    expect(peerGaps.filter((gap) => gap < AGENT_FIELD.REMOTE_MIN_INTERVAL_MS)).toEqual([]);
   });
 
   it("moves the mark to the first frame whose model row carries the marker's change, on the leading edge", async () => {

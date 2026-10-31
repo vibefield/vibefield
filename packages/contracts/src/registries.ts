@@ -366,10 +366,9 @@ export const FREEWAY_APPROVAL = {
   STATE_UNREAD: "unread",
   /** the freeway host is not running: no declaration yet, between generations, or parked */
   STATE_DOWN: "down",
-  /** this desktop's roster does not correlate the calling node to a device (yet) */
+  /** this desktop's roster does not correlate the calling node — or, for an ask a self peer daemon
+   * forwards (F1b), the phone it names — to a device (yet) */
   STATE_UNCORRELATED: "uncorrelated",
-  /** FW-D5's approval forwarded through a self peer daemon for a phone (F1b) */
-  STATE_FORWARDING_UNBUILT: "forwarding-unbuilt",
 } as const;
 
 /** TC-D6(c) — per-class scrollback byte caps, enforced at the NATIVE create
@@ -402,24 +401,37 @@ export const TERMINAL_SCROLLBACK_CLASS_BYTES = {
  * They stay, unread, as the record of what an older desktop's slice means.*
  *
  * DS-3 (the mesh board, DS-D4; design-06 §8 "the board's cadence floors") —
- * DESK_MIN_INTERVAL_MS is the desk projection's floor (windows; a caller may
- * ask slower, never faster); DESK_TEXT_CHARS bounds every text a desk row
- * carries (the reply line, a blocker's question). MESH_HEARTBEAT_MS is the
- * heartbeat the mesh board asks each peer's upstream for (an empty delta
- * after that long without a frame), and a peer unheard for MESH_STALE_BEATS
- * of them reads `stale`: the board's own cadence is quiet when nothing moves,
- * so without a beat an idle desktop and a dead stream would look alike.
+ * DESK_MIN_INTERVAL_MS was the desk projection's floor (windows; a caller may
+ * ask slower, never faster; REMOTE_MIN_INTERVAL_MS since PG-2); DESK_TEXT_CHARS
+ * bounds every text a desk row carries (the reply line, a blocker's question).
+ * MESH_HEARTBEAT_MS is the heartbeat the mesh board asks each peer's upstream
+ * for (an empty delta after that long without a frame), and a peer unheard for
+ * MESH_STALE_BEATS of them reads `stale`: the board's own cadence is quiet
+ * when nothing moves, so without a beat an idle desktop and a dead stream would
+ * look alike.
  *
  * SP-1 (2026-10-01) — FULL_TICK_MS is the fold's own publish tick (PF5: one
  * whole-board frame per tick per subscriber, trailing-edge), moved here from a
  * fieldd constant so the registry can say what `agent.subscribe`'s full
- * projection costs a reader (`methods.ts`'s subscription descriptor). */
+ * projection costs a reader (`methods.ts`'s subscription descriptor).
+ *
+ * PG-2 (PG-L1, PG-D8 (a), 2026-10-31) — the `remote` cut's floors.
+ * REMOTE_MIN_INTERVAL_MS is a peer window's (the floor a peer daemon's upstream
+ * is served at; it was DESK_MIN_INTERVAL_MS, the retired `desk` cut's, and its
+ * value is unchanged). REMOTE_PHONE_MIN_INTERVAL_MS is the phone's ordinary
+ * floor, and REMOTE_URGENT_MS the longest an URGENT change (a status, a
+ * liveness, a wait, a birth or a death; L12's signal) waits on any remote
+ * board: the leading edge goes out once that long has passed since the last
+ * frame, or once the board's own floor has, whichever is shorter. DESK_TEXT_CHARS
+ * keeps its name: it bounds every text the remote cut carries (PG-D2). */
 export const AGENT_FIELD = {
   MIN_INTERVAL_MS: 250,
   STORE_MIN_INTERVAL_MS: 250,
   STORE_HEARTBEAT_MS: 10_000,
   STORE_EXPIRY_MS: 30_000,
-  DESK_MIN_INTERVAL_MS: 100,
+  REMOTE_MIN_INTERVAL_MS: 100,
+  REMOTE_PHONE_MIN_INTERVAL_MS: 1_000,
+  REMOTE_URGENT_MS: 250,
   DESK_TEXT_CHARS: 280,
   MESH_HEARTBEAT_MS: 1_000,
   MESH_STALE_BEATS: 3,

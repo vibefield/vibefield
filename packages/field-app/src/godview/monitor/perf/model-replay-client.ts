@@ -1,7 +1,7 @@
 import type {
-  AgentModelBoardRow,
   AgentModelMeshFrame,
   AgentModelMeshOpen,
+  AgentModelMeshRow,
   RowsDeviceState,
 } from "@vibefield/contracts";
 import type { DoorClient } from "../doors";
@@ -48,7 +48,7 @@ export interface ModelReplayClient extends DoorClient {
 interface HeldDevice {
   state: RowsDeviceState;
   asOf: string;
-  board?: { epoch: string; revision: number; rows: Map<string, AgentModelBoardRow> };
+  board?: { epoch: string; revision: number; rows: Map<string, AgentModelMeshRow> };
 }
 
 type FrameListener = (payload: unknown, kind?: "snapshot" | "delta") => void;

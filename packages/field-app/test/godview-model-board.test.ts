@@ -137,11 +137,11 @@ describe("ModelBoardFold — one chain from every desktop's own", () => {
     ).toMatchObject({ removed: ["run-studio-q"] });
   });
 
-  it("a row with no model row (an older daemon) is no row, and removes what its key stood for", () => {
+  it("a row with no model row (an older peer's desk row) is no row, and removes what its key stood for", () => {
     const fold = new ModelBoardFold();
     fold.open(OPEN);
     const peer = OPEN.devices[1]?.snapshot?.rows[0];
-    if (peer === undefined || peer.kind === "terminal") throw new Error("the peer's desk row");
+    if (peer === undefined || peer.kind === "terminal") throw new Error("the peer's row");
     const { monitorRow: _omitted, ...older } = peer;
     const change = fold.frame({
       device: PEER,
@@ -169,7 +169,7 @@ describe("ModelBoardFold — one chain from every desktop's own", () => {
     ]);
     const peer = OPEN.devices[1]?.snapshot?.rows[0];
     if (peer === undefined || peer.kind === "terminal" || peer.monitorRow === undefined) {
-      throw new Error("the peer's desk row");
+      throw new Error("the peer's row");
     }
     const upsert = (monitorRow: typeof peer.monitorRow, revision: number) =>
       fold.frame({
@@ -385,7 +385,8 @@ describe("createGodviewMonitorFeed — the one door, re-asked on a gap, the scre
   });
 
   it("PG-1b — a peer row this build cannot read reads that desktop as another version, and the Godview stands", async () => {
-    // a newer peer's row: a tier this build has no word for (the relay passes it since PG-1b)
+    // a newer peer's row: a tier this build has no word for (the relay passes it since PG-1b),
+    // in its model row (a peer's row is its remote cut since PG-2, whose own root is passthrough)
     const open = structuredClone(golden("agent-model-mesh-open.valid.json")) as {
       devices: Array<{ device: string; snapshot?: { rows: Array<Record<string, unknown>> } }>;
     };
@@ -396,8 +397,7 @@ describe("createGodviewMonitorFeed — the one door, re-asked on a gap, the scre
     const newer = (id: string, tier = "hosted") => ({
       ...sample,
       runtimeRunId: id,
-      tier,
-      monitorRow: { ...(sample["monitorRow"] as Record<string, unknown>), id },
+      monitorRow: { ...(sample["monitorRow"] as Record<string, unknown>), id, tier },
     });
     rows.push(newer("run-newer"));
     const door = fakeBoard(open);

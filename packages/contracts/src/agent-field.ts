@@ -135,9 +135,9 @@ export const AgentFieldRow = z
      * adapter observes the id, then the observed one), so a History row by that
      * id finds the card to jump to. The id only, never the folder: the path
      * stays on this desktop's own windows (`AgentModelLocalFacts.cwd`, EL7 B1).
-     * fieldd fills it on the phone's `field` cut only — a desk row leaves it
-     * off (a window reads its own runs' ids from `local`). Absent on a row from
-     * a daemon before PJ-7. */
+     * fieldd fills it on the phone's `field` cut and the `remote` cut (PG-2) —
+     * the `model` board's run row leaves it off (a window reads its own runs'
+     * ids from `local`). Absent on a row from a daemon before PJ-7. */
     nativeSessionId: z.string().min(1).max(256).optional(),
     terminal: AgentSessionTerminal.optional(),
     /** SP-1b (track CO; VF-PM 2026-10-31) — the run is this spark's own
@@ -167,19 +167,24 @@ export type AgentFieldRow = z.infer<typeof AgentFieldRow>;
 // reads `field`, content-free (SP-L4). Every text is bounded by
 // `AGENT_FIELD.DESK_TEXT_CHARS`: the row says what a run said, never the whole
 // of it — the transcript is History's, by ticket (DS-7).
+// *Retired 2026-10-31 (PG-2, PG-D1 (a)): the `desk` PROJECTION is gone. A peer
+// desktop's windows read the model's `remote` cut (`AgentRemoteRow` below),
+// which carries the model's row and the joins alone, not every fact twice. The
+// desk row's SHAPE stays: it is the run row of this desktop's own `model`
+// board (`AgentModelDeskRow` extends it), which no peer receives.*
 
 // MV-3a (MV-D22, MV-D18; `thinking-monitor-view-sdk`) — THE MODEL'S ROW ON THE
 // WIRE. The monitor backend beside the runtime (`@vibefield/puppeteer-monitor`,
 // hosted by fieldd) computes every business fact about this desktop's agents
 // once and emits `MonitorAgentRow`s (`@vibefield/puppeteer-view-sdk/model`); the
-// window's replica applies them with no logic of its own. The desk row carries
-// one as `monitorRow`, so a window — this desktop's, or another of this
-// person's reading it through the mesh board — maps a row to the model by
-// renaming nothing. The schemas below MIRROR the SDK's types field for field
+// window's replica applies them with no logic of its own. The `model` board's
+// run row carries one as `monitorRow`, and so does every `remote` row (PG-2), so
+// a window — this desktop's, or another of this person's reading it through the
+// mesh board — maps a row to the model by renaming nothing. The schemas below MIRROR the SDK's types field for field
 // (fieldd pins the two against each other, `agent-monitor.ts`); every clock is
 // epoch milliseconds, as the model's are. What is NOT here: `device.self` (a
 // reader-relative fact the adapter sets) and, on a PEER's row, `project.seq`
-// (desktop-local identity, M16 — omitted by the owner's desk cut).
+// (desktop-local identity, M16 — omitted by the owner's remote cut).
 
 /** A fixed-bucket series, oldest first; the last bucket is still filling. */
 export const MonitorSeries = z
@@ -372,12 +377,14 @@ export type AgentDeskBlocker = z.infer<typeof AgentDeskBlocker>;
  *
  * MV-3a — it also carries the MODEL's row for the run (`monitorRow`): the
  * backend's facts, computed once at the run's home desktop, so a window's
- * replica applies them with no derivation. Optional on the wire: a desktop on
- * an older daemon sends none, and a reader draws what it was sent. On a PEER's
- * row the owner's cut bounds its texts at `AGENT_FIELD.DESK_TEXT_CHARS` and
- * omits `project.seq` (M16, M21); this desktop's own window reads it whole.
+ * replica applies them with no derivation. Optional on the wire: a run the
+ * backend has not assembled yet carries none, and a reader draws what it was
+ * sent. This desktop's own window reads it whole.
  * The chrome's facts (MV-3d) are not here: they ride only the `model` board's
- * own rows (`AgentModelDeskRow.local`), which no peer receives. */
+ * own rows (`AgentModelDeskRow.local`), which no peer receives.
+ * *2026-10-31 (PG-2):* no peer receives a desk row at all now. The `desk` cut
+ * retired into `remote` (`AgentRemoteRow`), and this is the base of the
+ * `model` board's run row. */
 export const AgentDeskRow = AgentFieldRow.extend({
   lastAssistantMessage: AgentDeskMessage.optional(),
   blockers: z.array(AgentDeskBlocker),
@@ -399,24 +406,32 @@ export const AgentDeskRow = AgentFieldRow.extend({
 export type AgentDeskRow = z.infer<typeof AgentDeskRow>;
 
 /** Which board a subscription reads. `full` is the fold's whole row, LOCAL ONLY
- * (it never federates, DS-D4); `field` the content-free row (the phone's,
- * `AGENT_FIELD.MIN_INTERVAL_MS`); `desk` the field row plus the reply line,
- * the blocker's question and the cost (windows,
- * `AGENT_FIELD.DESK_MIN_INTERVAL_MS`).
+ * (it never federates, DS-D4); `field` the content-free row (an older phone's,
+ * `AGENT_FIELD.MIN_INTERVAL_MS`, until it retires one release of skew after the
+ * kit ships, PG-L1).
  *
  * MV-3a — `model` is THIS DESKTOP'S OWN WINDOWS' board (MV-D18, L8, L12,
- * M16): the desk rows with the model's row whole (`project.seq` dealt, texts
- * as core bounded them) plus this desktop's bare TERMINALS as rows of their
- * own (`AgentDeskTerminalRow`), at the fold's own 16 ms floor
- * (`AGENT_FIELD.FULL_TICK_MS`) with urgent changes ahead of it. Refused to a
- * peer daemon and to a phone, like `full`; with `scope: "mesh"` the other
- * desktops' boards beside it are their `desk` cuts, as their owners sent
- * them. The phone's `field` row is untouched by all of this.
+ * M16), PG-L1's `local` cut: the desk rows with the model's row whole
+ * (`project.seq` dealt, texts as core bounded them) plus this desktop's bare
+ * TERMINALS as rows of their own (`AgentDeskTerminalRow`), at the fold's own
+ * 16 ms floor (`AGENT_FIELD.FULL_TICK_MS`) with urgent changes ahead of it.
+ * Refused to a peer daemon and to a phone, like `full`; with `scope: "mesh"`
+ * the other desktops' boards beside it are their `remote` cuts, as their
+ * owners sent them.
  *
  * MV-3d (M35) — this desktop's run rows on it also carry the chrome's facts
  * (`AgentModelDeskRow.local`), so a window reads `model` alone: `full` is no
- * longer asked while Godview is open. */
-export const AgentProjection = z.enum(["full", "field", "desk", "model"]);
+ * longer asked while Godview is open.
+ *
+ * PG-2 (PG-L1, PG-D1 (a), PG-D8 (a)) — `remote` is the model's cut for every
+ * OTHER screen (`AgentRemoteRow`): a peer daemon asks it at the local scope for
+ * its windows' mesh board (`AGENT_FIELD.REMOTE_MIN_INTERVAL_MS`), and a phone
+ * asks it at its home's mesh scope (`AGENT_FIELD.REMOTE_PHONE_MIN_INTERVAL_MS`,
+ * an urgent change after at most `AGENT_FIELD.REMOTE_URGENT_MS`). It replaced
+ * `desk` (retired 2026-10-31): an older desktop that asks `desk` is refused as
+ * a malformed ask, and its mesh board reads this desktop as another version
+ * until it updates (DS-L9). */
+export const AgentProjection = z.enum(["full", "field", "model", "remote"]);
 export type AgentProjection = z.infer<typeof AgentProjection>;
 
 /** `agent.subscribe`'s options. Absent or `full` is TODAY's subscription,
@@ -424,23 +439,27 @@ export type AgentProjection = z.infer<typeof AgentProjection>;
  * and must not learn a new frame shape to keep working. */
 export const AgentSubscribeParams = z
   .object({
-    /** `full` (today's), `field`, `desk`, or `model` (MV-3a, this desktop's
-     * windows: `AgentModelMeshOpen`/`AgentModelMeshFrame` under `scope:
-     * "mesh"`, `AgentModelSnapshot`/`AgentModelDelta` local) */
+    /** `full` (today's), `field`, `model` (MV-3a, this desktop's windows:
+     * `AgentModelMeshOpen`/`AgentModelMeshFrame` under `scope: "mesh"`,
+     * `AgentModelSnapshot`/`AgentModelDelta` local), or `remote` (PG-2, every
+     * other screen: `AgentRemoteMeshOpen`/`AgentRemoteMeshFrame` under `scope:
+     * "mesh"`, `AgentRemoteSnapshot`/`AgentRemoteDelta` local) */
     projection: AgentProjection.optional(),
     /** DS-3 — `local` (the default: today's callers never move) is THIS
      * daemon's board; `mesh` is every self desktop the roster lists,
      * multiplexed by this daemon (DS-L4): the open answers `AgentMeshOpen`,
-     * later frames are `AgentMeshFrame`. `field` and `desk` only. */
+     * later frames are `AgentMeshFrame`. The board projections only. */
     scope: MeshScope.optional(),
-    /** field and desk only; default `AGENT_FIELD.MIN_INTERVAL_MS` (field) or
-     * `AGENT_FIELD.DESK_MIN_INTERVAL_MS` (desk), and never below the desk's
-     * floor for a desk board. A per-subscriber trailing-edge floor, like the
-     * fold's own tick. *Corrected 2026-10-01: a FLOOR for both — a field ask
-     * below `AGENT_FIELD.MIN_INTERVAL_MS` is served at the floor (it used to be
-     * a default a caller could undercut to the schema's 16 ms).* */
+    /** The board projections only; a per-subscriber trailing-edge floor, like
+     * the fold's own tick, which a caller may ask SLOWER and is never served
+     * faster: `AGENT_FIELD.MIN_INTERVAL_MS` (field), `AGENT_FIELD.FULL_TICK_MS`
+     * (model), `AGENT_FIELD.REMOTE_MIN_INTERVAL_MS` (remote), and
+     * `AGENT_FIELD.REMOTE_PHONE_MIN_INTERVAL_MS` for a phone's remote (PG-D8).
+     * *Corrected 2026-10-01: a FLOOR for both — a field ask below
+     * `AGENT_FIELD.MIN_INTERVAL_MS` is served at the floor (it used to be a
+     * default a caller could undercut to the schema's 16 ms).* */
     minIntervalMs: z.number().int().min(16).max(60_000).optional(),
-    /** DS-3 — field and desk only, `local` scope. After this long with no frame
+    /** DS-3 — the board projections only, `local` scope. After this long with no frame
      * the source sends a HEARTBEAT: an empty delta whose `since` equals its
      * `revision` (no upserts, no removals — it moves nothing a reader holds).
      * A reader across a link asks for it so a quiet board and a dead stream
@@ -487,7 +506,7 @@ export const AgentFieldDelta = z
 export type AgentFieldDelta = z.infer<typeof AgentFieldDelta>;
 
 /** PG-1b (PG-L4.1, 2026-10-29) — the RELAY's reading of every board it carries
- * (`field`, `desk`, and PG-2's `remote`): each row's KEY and the owner's stamp,
+ * (`field` and, since PG-2, `remote`): each row's KEY and the owner's stamp,
  * nothing else. Every other fact is the owner's and passes through untouched
  * (DS-L2: one owner per row, the relay copies; DS-D4: multiplexed, never
  * re-folded), so a peer whose rows this build's field schema cannot read is
@@ -524,8 +543,7 @@ export type AgentBoardKeyDelta = z.infer<typeof AgentBoardKeyDelta>;
  * established, and — once it has answered — its own board at its own
  * `{epoch, revision}`. Rows are keyed `{device, runtimeRunId}`. The daemon
  * MULTIPLEXES and never re-folds: a peer's revisions arrive as the peer
- * numbered them. A `desk` board's rows are `AgentDeskRow`s, which parse here
- * as field rows with the rest passed through. The ANSWERING desktop is listed
+ * numbered them. The ANSWERING desktop is listed
  * first — always present, always `live` — so a reader without a roster still
  * knows which board is its own.
  *
@@ -573,6 +591,10 @@ export type AgentMeshFrame =
 // protocol keys by that field (`diffFieldRows`, the mesh board's maps); for a
 // terminal it is the model's id (the floor session, or the identity it
 // carries), never a run.
+// *Amended 2026-10-31 (PG-2, PG-D5 (a); L8 and M29 as amended): every self
+// reader receives them now. The `remote` cut carries each bare terminal to a
+// peer's windows and the phone as this row, cut as an agent row is for a peer:
+// no `local`, no colour sequence, its directory named by its folder.*
 
 export const AgentDeskTerminalRow = z
   .object({
@@ -601,8 +623,9 @@ export type AgentDeskTerminalRow = z.infer<typeof AgentDeskTerminalRow>;
 //
 // WHO SEES IT is the projection's rule, not this schema's: `model` is refused to
 // peers and the phone (M29), and fieldd writes `local` on the window's cut only
-// — never on the `desk` cut a peer receives, never in `monitorRow` (the model,
-// which syncs), never on the phone's field row. That is what lets it carry the
+// — never on the `remote` cut a peer and the phone receive (PG-2; the `desk`
+// cut before it), never in `monitorRow` (the model, which syncs), never on the
+// phone's field row. That is what lets it carry the
 // working directory as a PATH (EL7 B1 keeps the path off everything that leaves
 // this desktop). Every field is optional (the tolerant reader); a reader of a
 // row with no `local` reads a run fieldd said nothing more about. A bare
@@ -657,8 +680,9 @@ export const AgentModelLocalFacts = z
 export type AgentModelLocalFacts = z.infer<typeof AgentModelLocalFacts>;
 
 /** A run's row on the `model` board: the desk row, and — this desktop's own
- * runs, the window's cut — the chrome's facts (`local`). A peer's desk row on
- * the same board carries none: its owner's desk cut never writes them. */
+ * runs, the window's cut — the chrome's facts (`local`). A peer's row on the
+ * window's door is its owner's remote cut (`AgentRemoteRow`), which never
+ * writes them. */
 export const AgentModelDeskRow = AgentDeskRow.extend({
   local: AgentModelLocalFacts.optional(),
 }).passthrough();
@@ -691,31 +715,126 @@ export const AgentModelDelta = z
   .passthrough();
 export type AgentModelDelta = z.infer<typeof AgentModelDelta>;
 
+// PG-2 (PG-L1, PG-D1 (a), PG-D2 (a), PG-D5 (a); `thinking-phone-godview.md` §4)
+// — THE REMOTE CUT. One model, two cuts: `model` is the LOCAL cut, this
+// desktop's own windows' (above, unchanged), and `remote` is every OTHER
+// screen's: a peer desktop's windows, through that desktop's mesh board, and
+// the phone, through its home's. Each row is cut BY ITS OWNER (DS-D4: a home
+// relays and never re-folds) to the model's row as a peer reads it and the
+// joins a screen elsewhere acts by. It replaced the `desk` cut, which carried
+// every fact twice: the whole field row beside `monitorRow`, the question text
+// three times and the reply twice (§3 item 2). No `local` and no colour
+// sequence ever ride it (M16), every text is bounded at
+// `AGENT_FIELD.DESK_TEXT_CHARS` (M21, PG-D2), and no path leaves the owner (EL7
+// B1): a bare terminal's directory travels as its folder's name. A run the
+// backend has not assembled yet has no row here.
+
+/** A row of the remote cut: an agent, or (`kind: "terminal"`) a bare terminal. */
+export const AgentRemoteRow = z
+  .object({
+    /** the board key: the run's id, or a bare terminal's model id (its floor session) */
+    runtimeRunId: z.string().min(1),
+    /** fieldd's per-row change stamp, as on every board row */
+    revision: z.number().int(),
+    /** the desktop the row lives on: its owner */
+    device: z.string().min(1),
+    /** `terminal` on a bare terminal's row, which is then the
+     * `AgentDeskTerminalRow` this desktop's own board carries, cut for a peer
+     * (L8 as amended); absent on an agent's */
+    kind: z.literal("terminal").optional(),
+    /** the pane join a screen attaches through (G3), withheld while the owner's
+     * terminal doors are down (F-M4), as the model row's promise is */
+    terminal: AgentSessionTerminal.optional(),
+    /** PJ-7 — the provider-native id of the conversation the run continues, so
+     * a History row finds the card it jumps to: the id, never the folder */
+    nativeSessionId: z.string().min(1).max(256).optional(),
+    /** ST-D5 — the person's durable Stop while fieldd holds one for the run: on
+     * every audience's row, so a phone's Stop reads what a window's does */
+    stop: AgentStopState.optional(),
+    /** the model's row, cut for a peer: no `project.seq`, texts bounded, and a
+     * bare terminal's `detail` its folder, never its path */
+    monitorRow: MonitorAgentRow,
+  })
+  .passthrough();
+export type AgentRemoteRow = z.infer<typeof AgentRemoteRow>;
+
+/** `agent.subscribe {projection: "remote"}` at the local scope (a peer daemon's
+ * upstream for its windows' mesh board, or the phone's routed ask): the field's
+ * pair over remote rows. */
+export const AgentRemoteSnapshot = z
+  .object({
+    epoch: RowsEpoch.optional(),
+    revision: z.number().int(),
+    rows: z.array(AgentRemoteRow),
+  })
+  .passthrough();
+export type AgentRemoteSnapshot = z.infer<typeof AgentRemoteSnapshot>;
+export const AgentRemoteDelta = z
+  .object({
+    epoch: RowsEpoch.optional(),
+    since: z.number().int(),
+    revision: z.number().int(),
+    upserts: z.array(AgentRemoteRow),
+    removed: z.array(z.string()),
+  })
+  .passthrough();
+export type AgentRemoteDelta = z.infer<typeof AgentRemoteDelta>;
+
+/** `agent.subscribe {projection: "remote", scope: "mesh"}` — the phone's
+ * Godview door (SP-L4 as amended): its home's remote board first (always
+ * `live`), then every other self desktop's remote board as its owner cut it,
+ * each on its own chain. Written out, as `AgentMeshOpen` is, so a reader's
+ * `"snapshot" in entry` narrows. */
+export interface AgentRemoteMeshDevice {
+  device: string;
+  state: RowsDeviceState;
+  asOf: string;
+  snapshot?: RowsSnapshot<AgentRemoteRow> | undefined;
+}
+export interface AgentRemoteMeshOpen {
+  devices: AgentRemoteMeshDevice[];
+}
+export type AgentRemoteMeshFrame =
+  | { device: string; delta: RowsDelta<AgentRemoteRow> }
+  | { device: string; snapshot: RowsSnapshot<AgentRemoteRow> }
+  | { device: string; state: RowsDeviceState; asOf: string };
+export const AgentRemoteMeshOpen: z.ZodType<AgentRemoteMeshOpen, z.ZodTypeDef, unknown> =
+  meshRowsOpen(AgentRemoteRow);
+export const AgentRemoteMeshFrame: z.ZodType<AgentRemoteMeshFrame, z.ZodTypeDef, unknown> =
+  meshRowsFrame(AgentRemoteRow);
+
+/** A row on the window's one door: this desktop's own model-board rows, or a
+ * peer's remote row (PG-2). The union tries the desk row first, then the bare
+ * terminal; a remote agent row is neither (it has no field half, no `status`
+ * at its root, and no `kind`). */
+export const AgentModelMeshRow = z.union([AgentModelDeskRow, AgentDeskTerminalRow, AgentRemoteRow]);
+export type AgentModelMeshRow = z.infer<typeof AgentModelMeshRow>;
+
 /** `agent.subscribe {projection: "model", scope: "mesh"}` — the window's one
  * door (MV-D18): this desktop's model board first (always `live`), then every
- * other self desktop's DESK board as its owner cut it, each on its own chain
- * (DS-D4: the daemon multiplexes, it never re-folds). The frames are the mesh
- * board's three arms over model-board rows. */
+ * other self desktop's REMOTE board as its owner cut it (PG-2; its `desk`
+ * board before), each on its own chain (DS-D4: the daemon multiplexes, it
+ * never re-folds). The frames are the mesh board's three arms over those rows. */
 export interface AgentModelMeshDevice {
   device: string;
   state: RowsDeviceState;
   asOf: string;
-  snapshot?: RowsSnapshot<AgentModelBoardRow> | undefined;
+  snapshot?: RowsSnapshot<AgentModelMeshRow> | undefined;
 }
 export interface AgentModelMeshOpen {
   devices: AgentModelMeshDevice[];
 }
 export type AgentModelMeshFrame =
-  | { device: string; delta: RowsDelta<AgentModelBoardRow> }
-  | { device: string; snapshot: RowsSnapshot<AgentModelBoardRow> }
+  | { device: string; delta: RowsDelta<AgentModelMeshRow> }
+  | { device: string; snapshot: RowsSnapshot<AgentModelMeshRow> }
   | { device: string; state: RowsDeviceState; asOf: string };
 // Annotated with the interfaces above: the inferred type of a mesh frame over
 // the model-board union is longer than the compiler will serialize into a
 // declaration (TS7056), so the schema is typed by its written-out output.
 export const AgentModelMeshOpen: z.ZodType<AgentModelMeshOpen, z.ZodTypeDef, unknown> =
-  meshRowsOpen(AgentModelBoardRow);
+  meshRowsOpen(AgentModelMeshRow);
 export const AgentModelMeshFrame: z.ZodType<AgentModelMeshFrame, z.ZodTypeDef, unknown> =
-  meshRowsFrame(AgentModelBoardRow);
+  meshRowsFrame(AgentModelMeshRow);
 
 /** MV-3a (L5) — `agent.reportShown`: which rows the calling window shows in its
  * active pane, by MODEL id. The screen is the CONNECTION's own model board

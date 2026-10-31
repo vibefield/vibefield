@@ -2,14 +2,17 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  AGENT_FIELD,
   AgentFieldRow,
   type AgentListResult,
   type AgentSessionSummary,
+  AgentSubscribeParams,
   type Principal,
 } from "@vibefield/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   attachableRows,
+  boardFloor,
   createFieldSubscription,
   diffFieldRows,
   FieldProjection,
@@ -63,20 +66,36 @@ describe("refuseBoardAsk — who may ask which board", () => {
     expect(refused("tailnet", { projection: "field", scope: "mesh" })).toBeNull();
   });
 
-  it("keeps the desk off the phone (SP-L4) — and serves it to a window and a self peer daemon", () => {
-    expect(refused("tailnet", { projection: "desk" })).toEqual({
+  it("PG-2 — serves the remote cut to the phone at its home's mesh (SP-L4 as amended) and to a self peer daemon at the local scope", () => {
+    expect(refused("tailnet", { projection: "remote", scope: "mesh" })).toBeNull();
+    expect(refused("tailnet", { projection: "remote" })).toBeNull();
+    expect(
+      refused("peer-fieldd", { projection: "remote", minIntervalMs: 100, heartbeatMs: 1_000 }),
+    ).toBeNull();
+    expect(refused("local-token", { projection: "remote" })).toBeNull();
+    // a peer asking the mesh is one daemon aggregating another's (DS-L4)
+    expect(refused("peer-fieldd", { projection: "remote", scope: "mesh" })).toEqual({
       kind: "FORBIDDEN_SCOPE",
       retryable: false,
-      details: { projection: "desk" },
+      details: { scope: "mesh" },
     });
-    expect(refused("tailnet", { projection: "desk", scope: "mesh" })?.kind).toBe("FORBIDDEN_SCOPE");
-    expect(refused("local-token", { projection: "desk" })).toBeNull();
-    expect(refused("peer-fieldd", { projection: "desk", minIntervalMs: 100 })).toBeNull();
-    expect(refused("local-token", { projection: "desk", scope: "mesh" })).toBeNull();
+    // and the model stays this desktop's windows', with the phone pointed at remote
+    expect(refuseBoardAsk("tailnet", { projection: "model" })?.message).toContain("remote");
+    expect(refuseBoardAsk("peer-fieldd", { projection: "model" })?.message).toContain("remote");
+  });
+
+  it("PG-2 — `desk` retired into `remote`: an ask for it is malformed, whoever asks", () => {
+    // the door parses every ask before the gate: an older desktop's relay asking
+    // `desk` is refused PRECONDITION_FAILED and reads this desktop as another version
+    expect(AgentSubscribeParams.safeParse({ projection: "desk" }).success).toBe(false);
+    expect(AgentSubscribeParams.safeParse({ projection: "desk", scope: "mesh" }).success).toBe(
+      false,
+    );
+    expect(malformedBoardAsk().message).not.toContain("desk");
   });
 
   it("keeps the mesh for this desktop's clients (DS-L4), without a heartbeat", () => {
-    for (const projection of ["field", "desk"] as const) {
+    for (const projection of ["field", "remote"] as const) {
       expect(refused("peer-fieldd", { projection, scope: "mesh" }), projection).toEqual({
         kind: "FORBIDDEN_SCOPE",
         retryable: false,
@@ -105,7 +124,31 @@ describe("refuseBoardAsk — who may ask which board", () => {
     const error = malformedBoardAsk();
     expect(error.kind).toBe("PRECONDITION_FAILED");
     expect(error.retryable).toBe(false);
-    expect(error.message).toContain('projection?: "full" | "field" | "desk"');
+    expect(error.message).toContain('projection?: "full" | "field" | "model" | "remote"');
+  });
+});
+
+// PG-2 (PG-D8 (a)) — the floor each board ask is served at, by projection and
+// the caller's kind, in the one function the handler and the forwarder share.
+describe("boardFloor — the floor a board is served at", () => {
+  it("serves the phone's remote at 1 s and every other screen's at 100 ms, slower on ask, never faster", () => {
+    expect(boardFloor("tailnet", { projection: "remote" })).toBe(
+      AGENT_FIELD.REMOTE_PHONE_MIN_INTERVAL_MS,
+    );
+    expect(boardFloor("tailnet", { projection: "remote", minIntervalMs: 100 })).toBe(1_000);
+    expect(boardFloor("tailnet", { projection: "remote", minIntervalMs: 5_000 })).toBe(5_000);
+    for (const principal of ["peer-fieldd", "local-token", "shell-main"] as const) {
+      expect(boardFloor(principal, { projection: "remote" }), principal).toBe(
+        AGENT_FIELD.REMOTE_MIN_INTERVAL_MS,
+      );
+      expect(boardFloor(principal, { projection: "remote", minIntervalMs: 16 }), principal).toBe(
+        100,
+      );
+    }
+    // the phone's 1 s is the remote cut's alone: its field stays at the field's floor
+    expect(boardFloor("tailnet", { projection: "field" })).toBe(AGENT_FIELD.MIN_INTERVAL_MS);
+    expect(boardFloor("local-token", { projection: "model" })).toBe(AGENT_FIELD.FULL_TICK_MS);
+    expect(boardFloor("local-token", { projection: "model", minIntervalMs: 50 })).toBe(50);
   });
 });
 

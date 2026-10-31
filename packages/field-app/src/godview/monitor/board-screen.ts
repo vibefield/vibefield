@@ -1,4 +1,4 @@
-import { AgentModelBoardRow, type RowsDeviceState } from "@vibefield/contracts";
+import { AgentModelMeshRow, type RowsDeviceState } from "@vibefield/contracts";
 
 /**
  * PG-1b (PG-L4.1, 2026-10-29) — the window reads the model board one desktop at a
@@ -21,6 +21,9 @@ import { AgentModelBoardRow, type RowsDeviceState } from "@vibefield/contracts";
  *
  * A payload not shaped like an open or a frame passes through untouched, and
  * the envelope's own parse decides it as before. The tolerant reader, per desktop.
+ *
+ * *2026-10-31 (PG-2):* a row is read as the door's own union (`AgentModelMeshRow`):
+ * this desktop's model-board rows, or a peer's remote row.
  */
 export class BoardScreen {
   /** device → the keys of its rows this build cannot read */
@@ -133,7 +136,7 @@ function split(rows: readonly unknown[]): { readable: unknown[]; unreadable: Set
   const readable: unknown[] = [];
   const unreadable = new Set<string>();
   for (const row of rows) {
-    if (AgentModelBoardRow.safeParse(row).success) readable.push(row);
+    if (AgentModelMeshRow.safeParse(row).success) readable.push(row);
     else unreadable.add(keyOf(row));
   }
   return { readable, unreadable };
