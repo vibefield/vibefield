@@ -161,7 +161,7 @@ export function describeSeat(seat: SessionSeat | undefined): SeatPaneFace | unde
 }
 
 /**
- * DS-D4 (a) — THE FACE OF A PANE WHOSE RUN A PERSON'S STOP HAS NOT STOPPED
+ * ST-D4 (a) — THE FACE OF A PANE WHOSE RUN A PERSON'S STOP HAS NOT STOPPED
  * (`StopPaneState`; DESIGN.md §8 "A run a Stop has not stopped"). fieldd holds
  * the Stop as sent until it hears the run stop (the field row's `stop`), and
  * the pane speaks only where a press cannot answer itself, in the held-edge

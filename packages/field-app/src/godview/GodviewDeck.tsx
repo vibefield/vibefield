@@ -1878,7 +1878,7 @@ export function GodviewDeck({
   }, [fieldd, mountSummaryNow]);
 
   /**
-   * DS-D4 (a) — THE PERSON'S END RUN, from a pane whose run's Stop fieldd will
+   * ST-D4 (a) — THE PERSON'S END RUN, from a pane whose run's Stop fieldd will
    * take no further (`StopPaneState`'s "Still running"): `terminal.terminate`
    * on the pane's own session, the floor's ladder, the act fieldd's escalation
    * takes for a run whose status it can read. The run's exit is the Stop heard,
@@ -1932,7 +1932,7 @@ export function GodviewDeck({
             <RemotePaneState pane={props.pane} sessionId={session.id} nameOf={nameOf} />
             {/* item 42 — the pane says who drives its session from another device */}
             <SeatPaneState pane={props.pane} sessionId={session.id} />
-            {/* DS-D4 (a) — the pane says a Stop fieldd has not heard */}
+            {/* ST-D4 (a) — the pane says a Stop fieldd has not heard */}
             <StopPaneState pane={props.pane} sessionId={session.id} endRun={endRun} />
           </ChromeBoundary>
         );

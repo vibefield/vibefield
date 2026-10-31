@@ -52,7 +52,7 @@ import type { MonitorDoor } from "./remote-door";
 
 /** What the deck's frames read: the agent facts per pane session, the run
  * each session belongs to (the verbs' target), and the Stop its run holds
- * (DS-D4 (a), `StopPaneState`). */
+ * (ST-D4 (a), `StopPaneState`). */
 export interface DeckAgentFacts {
   agents: ReadonlyMap<string, PaneFrameAgent>;
   runs: ReadonlyMap<string, string>;

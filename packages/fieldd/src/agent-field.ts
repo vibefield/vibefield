@@ -409,7 +409,7 @@ export function projectFieldRow(summary: AgentSessionSummary): ProjectedFieldRow
     // riding its passthrough reaches the wire.
     ...(summary.spark !== undefined ? { spark: summary.spark } : {}),
     ...(summary.origin !== undefined ? { origin: originOf(summary.origin) } : {}),
-    // DS-D5 — the person's Stop, on every audience's row: a stage and its clocks, content-free,
+    // ST-D5 — the person's Stop, on every audience's row: a stage and its clocks, content-free,
     // REBUILT from its named fields as the origin is, so nothing riding its passthrough travels
     ...(summary.stop !== undefined ? { stop: stopOf(summary.stop) } : {}),
   };
@@ -425,7 +425,7 @@ function originOf(origin: AgentSessionOrigin): AgentSessionOrigin {
   };
 }
 
-/** DS-D5's Stop as the field row carries it: its named fields, and only those. */
+/** ST-D5's Stop as the field row carries it: its named fields, and only those. */
 function stopOf(stop: AgentStopState): AgentStopState {
   return {
     sentAt: stop.sentAt,

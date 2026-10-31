@@ -513,7 +513,7 @@ export interface FielddConfig {
   /** AR-4 test seam: resume-when-idle's thresholds (production: 30 s still,
    * asked every 5 s). */
   agentResumeWhenIdle?: AgentRuntimeServiceOptions["resumeWhenIdle"];
-  /** DS test seam: how long a sent Stop waits to be heard (production: `AGENT_STOP.HEARD_WITHIN_MS`). */
+  /** ST test seam: how long a sent Stop waits to be heard (production: `AGENT_STOP.HEARD_WITHIN_MS`). */
   agentStopHeardWithinMs?: AgentRuntimeServiceOptions["stopHeardWithinMs"];
   /** AR-5d test/product seam: the account-usage polling cadence. Unset ⇒ each
    * adapter's own `refresh.pollIntervalMs` (the provider knows its quota). */

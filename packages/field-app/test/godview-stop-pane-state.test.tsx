@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * DS-D4 (a) — A RUN A STOP HAS NOT STOPPED (DESIGN.md §8, §9), in pieces:
+ * ST-D4 (a) — A RUN A STOP HAS NOT STOPPED (DESIGN.md §8, §9), in pieces:
  *
  *   1. the words: nothing for a Stop only sent, sent again, heard, or in a
  *      stage this build does not know (the frame's own "Stopping the turn…"
@@ -165,7 +165,7 @@ describe("the stopping pane's stylesheet (DESIGN.md §8, §2.5, §2.7)", () => {
     "utf8",
   );
   const stopSheet = sheet.slice(
-    sheet.indexOf("/* DS-D4 (a) — A RUN A STOP HAS NOT STOPPED"),
+    sheet.indexOf("/* ST-D4 (a) — A RUN A STOP HAS NOT STOPPED"),
     sheet.indexOf("/* M49 — a deck piece behind its own boundary"),
   );
   /** A rule's body, by its whole selector at a line's start. */
@@ -175,7 +175,7 @@ describe("the stopping pane's stylesheet (DESIGN.md §8, §2.5, §2.7)", () => {
   };
 
   it("is its own block, under the pane's frame, and takes no pointer but its act's", () => {
-    expect(stopSheet.startsWith("/* DS-D4 (a)")).toBe(true);
+    expect(stopSheet.startsWith("/* ST-D4 (a)")).toBe(true);
     expect(stopSheet).not.toContain("item 42 — A SESSION");
     const state = rule(".vf-godview-stop-state");
     expect(state).toContain("z-index: 5;");

@@ -104,7 +104,7 @@ describe("Godview agent status", () => {
     // through verbatim, and a renderer read `blocker.tool` at the root. The
     // fixture invented the root shape too, so the assertion passed on data the
     // fold has never sent while every real board said a bare "permission". The
-    // fixture now says what Core says. (DS, 2026-10-31: `agentDetail` and
+    // fixture now says what Core says. (ST, 2026-10-31: `agentDetail` and
     // `blockerTool`, the reader this row held, had no caller outside this
     // suite — Godview's row words are puppeteer's model backend's — and
     // retired; the fixture's witness and the frame's stay.)

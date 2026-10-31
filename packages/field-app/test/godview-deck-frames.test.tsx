@@ -947,7 +947,7 @@ describe("the deck's pane frames", () => {
     expect(frameFor(host, "pty-1")?.classList.contains("is-stopping")).toBe(true);
   });
 
-  // DS-D4 (a) — the pane's own words for a Stop fieldd has not heard (`StopPaneState`)
+  // ST-D4 (a) — the pane's own words for a Stop fieldd has not heard (`StopPaneState`)
   const stoppingRun = (stop: AgentSessionSummary["stop"]): AgentSessionSummary => ({
     ...managedSummary({
       runtimeRunId: "run-46",
