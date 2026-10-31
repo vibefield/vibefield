@@ -1,7 +1,7 @@
 import { GHOSTTEA_PANE_SELECTOR } from "@vibefield/puppeteer-views";
 import { type CardTarget, TARGET_LAYER } from "../frame/cards/card-targets";
-import type { Card } from "../frame/cards/cards-model";
-import { OUTCOME_WORDS, OUTSIDE_WORDS, TARGET_WORDS } from "../frame/cards/cards-words";
+import { nothingToGive, paneTextOf, stillOf } from "../frame/cards/card-text";
+import { OUTCOME_WORDS, TARGET_WORDS } from "../frame/cards/cards-words";
 import {
   claimingRefusals,
   getGodviewLineDoor,
@@ -31,51 +31,6 @@ export interface PaneCardTargetDeps {
   /** The shell's still door, asked whether a snapshot's still is kept (undefined: the window's
    * host). */
   readonly host?: Pick<FieldHost, "screenshotStillKept">;
-}
-
-/** Characters a shell reads as themselves; a path with any other is quoted. */
-const SHELL_PLAIN = /^[\w./@%+=:,-]+$/u;
-
-/** A path as a shell reads it: as it is, or single-quoted when it holds a space or anything a
- * shell would read otherwise (a quote inside closed, escaped and reopened, POSIX's way). PURE. */
-export function shellPath(path: string): string {
-  return SHELL_PLAIN.test(path) ? path : `'${path.replaceAll("'", "'\\''")}'`;
-}
-
-/** What each kind gives a pane, as it is: its words; a file its path; a picture its file's path,
- * the road a Finder drop takes (null with no file — or a file with no path, one a page made
- * (HN-6): nothing to give); an agent its handle. PURE. */
-function givenBy(card: Card): string | null {
-  switch (card.kind) {
-    case "text":
-    case "msg":
-    case "term":
-      return card.paste;
-    case "file":
-      return card.paste === "" ? null : shellPath(card.paste);
-    case "pict":
-      return card.path === undefined ? null : shellPath(card.path);
-    case "agent":
-      return card.handle;
-  }
-}
-
-/** HN-L5 — what a card puts into a pane. Return is never pressed for you (DESIGN.md §8 "The hand",
- * where cards go), so a card's text loses its trailing CR or LF before the pane is given it, for
- * every kind — here, the one place: a program that has not asked for bracketed paste reads a
- * trailing break as Return. The breaks inside are the card's own. PURE. */
-export function paneTextOf(card: Card): string | null {
-  const given = givenBy(card);
-  if (given === null) return null;
-  let end = given.length;
-  while (end > 0 && (given[end - 1] === "\n" || given[end - 1] === "\r")) end -= 1;
-  return given.slice(0, end);
-}
-
-/** Why a card gives a pane nothing, in the hand's words: a file with no path, else a picture with
- * no file (HN-L5). PURE. */
-function nothingToGive(card: Card): string {
-  return card.kind === "file" ? OUTSIDE_WORDS.fileNoPath : TARGET_WORDS.pictureNoFile;
 }
 
 /** The pane under a window point: the deck's panes as ghosttea lays them out (their chrome is
@@ -141,15 +96,10 @@ export function paneCardTarget(deps: PaneCardTargetDeps): CardTarget {
       const { pane } = under;
       const text = paneTextOf(card);
       if (text === null) return { ok: false, note: nothingToGive(card) };
-      // a snapshot's path names its still only while main keeps it — the ring every window shares
-      // moves on under the others' captures, and a pane is never handed a path to nothing. A
-      // picture brought in from another app names the person's own file, never a still (HN-6)
-      if (
-        card.kind === "pict" &&
-        card.origin.how === "snapshot" &&
-        card.path !== undefined &&
-        !(await stillKept(card.path))
-      ) {
+      // a snapshot's path names its still only while main keeps it (`stillOf`): a pane is never
+      // handed a path to nothing
+      const still = stillOf(card);
+      if (still !== null && !(await stillKept(still))) {
         return { ok: false, note: OUTCOME_WORDS.pasteGone };
       }
       if (!(await door.whenInputOpen(pane.paneId, PANE_INPUT_WAIT_MS))) {

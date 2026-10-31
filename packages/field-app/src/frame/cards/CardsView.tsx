@@ -15,13 +15,14 @@ import { CardFace } from "./CardFace";
 import { DEAL_SETTLE_MS, dealStart, settle, whenVisible } from "./card-flight";
 import {
   CARD_H,
-  CARD_LIFT,
   CARD_PEEK,
   CARD_W,
   type Card,
   type CardLayout,
+  type CardReach,
   type CardSlot,
   type CardWindow,
+  HAND_REACH,
 } from "./cards-model";
 import type { DealFrom } from "./cards-store";
 import { cardName, HAND_WORDS, OUTCOME_WORDS, provenance } from "./cards-words";
@@ -80,6 +81,9 @@ export interface CardsViewProps {
   readonly layout: CardLayout;
   /** each card's reach, 0…1 (`reachLift`) */
   readonly lifts: readonly number[];
+  /** the view's reach (`reachIn`): how far a lift of 1 raises a card — Chat's 20 while it shows,
+   * else the hand's 86 (undefined: the hand's) */
+  readonly reach?: CardReach;
   /** the card the reach brings forward, or -1 */
   readonly reached: number;
   readonly raised: boolean;
@@ -177,6 +181,7 @@ interface Label {
  * card's provenance, the raised hand's keyboard card's, or the empty hand's words. PURE. */
 export function labelOf(props: CardsViewProps): Label | null {
   const { cards, layout, raised, focus, reached, nudged, now, keys, win } = props;
+  const { lift } = props.reach ?? HAND_REACH;
   const over = (index: number, rise: number, text: string): Label | null => {
     const slot = layout.slots[index];
     return slot === undefined ? null : { text, x: slot.x + CARD_W / 2, y: slot.y - rise };
@@ -185,7 +190,7 @@ export function labelOf(props: CardsViewProps): Label | null {
   if (twin >= 0) return over(twin, NUDGE_RISE + LABEL_ABOVE, OUTCOME_WORDS.already);
   const card = cards[raised ? focus : reached];
   if (card !== undefined && !raised && reached >= 0) {
-    return over(reached, CARD_LIFT + LABEL_ABOVE, provenance(card, now, keys));
+    return over(reached, lift + LABEL_ABOVE, provenance(card, now, keys));
   }
   if (card !== undefined && raised) return over(focus, LABEL_ABOVE, provenance(card, now, keys));
   if (raised && cards.length === 0) {
@@ -254,6 +259,7 @@ function useFlying(
 export function CardsView(props: CardsViewProps): ReactElement {
   const { cards, layout, lifts, reached, raised, focus, held, arriving, carried, nudged } = props;
   const { win, reducedMotion, now, keys } = props;
+  const reach = props.reach ?? HAND_REACH;
   const own = useRef<HTMLDivElement | null>(null);
   const fan = props.fanRef ?? own;
   const settleMs = reducedMotion ? FADE_SETTLE_MS : DEAL_SETTLE_MS;
@@ -297,7 +303,7 @@ export function CardsView(props: CardsViewProps): ReactElement {
     return {
       phase: "rest",
       x: slot.x,
-      y: slot.y - lift * CARD_LIFT - rise,
+      y: slot.y - lift * reach.lift - rise,
       r: slot.r * (1 - lift),
       s: 1,
       lp: raised ? 1 : lift,
@@ -392,6 +398,7 @@ export function CardsView(props: CardsViewProps): ReactElement {
           key={held.card.id}
           held={held}
           slot={layout.slots[heldIndex]}
+          lift={reach.lift}
           win={win}
           now={now}
           keys={keys}
@@ -409,6 +416,8 @@ interface HeldLayerProps {
   readonly held: HeldCard;
   /** its place in the fan (undefined once it has left the hand) */
   readonly slot: CardSlot | undefined;
+  /** how far the reach had lifted it there: the view's (`CardReach.lift`) */
+  readonly lift: number;
   readonly win: CardWindow;
   readonly now: number;
   readonly keys: ViewKeys;
@@ -430,6 +439,7 @@ function keepKeyInside(event: ReactKeyboardEvent<HTMLDivElement>): void {
 function HeldLayer({
   held,
   slot,
+  lift,
   win,
   now,
   keys,
@@ -455,7 +465,7 @@ function HeldLayer({
     // M6: no flight — it fades in at the middle, and out there
     at = { ...at, o: up && risen ? 1 : 0 };
   } else if (up && !risen && slot !== undefined) {
-    at = { x: slot.x, y: slot.y - CARD_LIFT, s: 1, o: 1 };
+    at = { x: slot.x, y: slot.y - lift, s: 1, o: 1 };
   } else if (held.phase === "home" && slot !== undefined) {
     at = { x: slot.x, y: slot.y, s: 1, o: 1 };
   } else if (!up) {

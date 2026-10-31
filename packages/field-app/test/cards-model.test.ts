@@ -9,14 +9,18 @@ import {
   CARDS_CAP,
   type Card,
   type CardOrigin,
+  CHAT_REACH,
   FAN_LINE_CLEAR,
   FAN_MAX_PITCH,
   FAN_MAX_TILT,
+  HAND_REACH,
   inReach,
   layoutCards,
   layoutRaised,
   type PictCard,
+  REACH_BAND,
   reachedIndex,
+  reachIn,
   reachLift,
   reachX,
   sameAs,
@@ -25,6 +29,7 @@ import {
 } from "../src/frame/cards/cards-model";
 import { CardStore } from "../src/frame/cards/cards-store";
 import { provenance, TARGET_WORDS } from "../src/frame/cards/cards-words";
+import { COVER_RESERVE_PX } from "../src/frame/frame-geometry";
 import { viewKeysOf } from "../src/frame/views";
 
 // The hand's pure half (track HN; DESIGN.md §8 "The hand"): the fan's numbers,
@@ -100,6 +105,31 @@ describe("the reach", () => {
     expect(inReach(layout, WIN, { x: layout.left + 10, y: 300 })).toBe(false);
     expect(inReach(layout, WIN, { x: 10, y: WIN.height - 20 })).toBe(false);
     expect(inReach(layout, WIN, null)).toBe(false);
+  });
+
+  it("while Chat shows, answers only under the panel's foot, and lifts a card only its tip to that foot (SP-1d; Q5)", () => {
+    expect(reachIn("assistant")).toBe(CHAT_REACH);
+    for (const view of ["canvas", "godview", "history"] as const) {
+      expect(reachIn(view), view).toBe(HAND_REACH);
+    }
+    expect(HAND_REACH).toEqual({ band: REACH_BAND, lift: CARD_LIFT });
+    // the panel's foot is the cover's reserve (FC-D15), 692 in the default window
+    expect(CHAT_REACH).toEqual({ band: COVER_RESERVE_PX, lift: COVER_RESERVE_PX - CARD_PEEK });
+    expect(CHAT_REACH.lift).toBe(20);
+    const x = layout.left + 10;
+    // the composer stands on y 624–676 and the panel ends at 692: neither is the band in Chat
+    for (const y of [650, 684, WIN.height - COVER_RESERVE_PX]) {
+      expect(inReach(layout, WIN, { x, y }, CHAT_REACH), `y ${y}`).toBe(false);
+      expect(inReach(layout, WIN, { x, y }), `y ${y}, the hand's band`).toBe(true);
+    }
+    expect(inReach(layout, WIN, { x, y: WIN.height - COVER_RESERVE_PX + 1 }, CHAT_REACH)).toBe(
+      true,
+    );
+    expect(inReach(layout, WIN, { x, y: WIN.height - 20 }, CHAT_REACH)).toBe(true);
+    // every card, lifted whole, keeps its top at or under the panel's foot
+    for (const slot of layout.slots) {
+      expect(slot.y - CHAT_REACH.lift).toBeGreaterThanOrEqual(WIN.height - COVER_RESERVE_PX);
+    }
   });
 
   it("holds the reach on the card the pointer is ON above the fan, so its × is reachable", () => {

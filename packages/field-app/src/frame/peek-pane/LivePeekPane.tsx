@@ -8,6 +8,7 @@ import {
   useTerminalPoolOpen,
   useTerminalSessionViews,
 } from "../../terminal/pool";
+import { NO_TERMINALS } from "../../terminal/terminal-words";
 import { watchOnlyRuntime } from "./watch-only";
 
 // THE LIVE PEEK (P2; DESIGN.md §8 "Search — the Peek"; One Frame §23, GV-D8:
@@ -117,7 +118,7 @@ export function LivePeekPane({ sessionId }: { sessionId: string }): ReactElement
   if (!terminalPoolConfigured()) {
     return (
       <div className="vf-peek-livepane" data-live-peek="unavailable">
-        <p className="vf-peek-livepane-words">This window has no terminals to show it with.</p>
+        <p className="vf-peek-livepane-words">{NO_TERMINALS}</p>
       </div>
     );
   }

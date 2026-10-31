@@ -1,5 +1,6 @@
 import type { PaneFrameAgent } from "@vibefield/puppeteer-views";
 import type { LinePane, NewTerminalOutcome } from "../frame/line-door";
+import { pasteIntoInput } from "../terminal/paste-road";
 import { folderName } from "./monitor/folder-name";
 import type { LocalMountOutcome } from "./monitor/remote-door";
 
@@ -52,70 +53,13 @@ export function newTerminalOutcome(outcome: LocalMountOutcome): NewTerminalOutco
   return { state: "refused", reason: "no pane to open it in — open one in the deck first" };
 }
 
-/** What a pane's input wait listens to: the deck's runtime (GT-D17 — the deck
- * alone holds it), which answers a session's routed activation now and
- * announces each change of one. */
-export interface PaneInputSource {
-  routedActivation(sessionId: string): { readonly inputAllowed: boolean } | undefined;
-  addEventListener(type: "routed-activation-state", listener: () => void): void;
-  removeEventListener(type: "routed-activation-state", listener: () => void): void;
-}
-
-/** HN-4 — true once the session `sessionOf()` names takes input, false after
- * `timeoutMs` or with no session to wait for. A card spring-loaded into Godview
- * lands while the pane's routed input may still be reopening after the change
- * of view — the ⌘2 race the godview smoke waits out by its markers. The runtime
- * announces every change of a session's activation, so the wait is the
- * announcement, bounded, never a poll; `sessionOf` is asked again at each one,
- * since the pane may have changed what it shows. */
-export function whenPaneInputOpen(
-  source: PaneInputSource | null,
-  sessionOf: () => string | undefined,
-  timeoutMs: number,
-): Promise<boolean> {
-  const open = (): boolean => {
-    const sessionId = sessionOf();
-    return sessionId !== undefined && source?.routedActivation(sessionId)?.inputAllowed === true;
-  };
-  if (open()) return Promise.resolve(true);
-  if (source === null || sessionOf() === undefined) return Promise.resolve(false);
-  return new Promise((resolve) => {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const settle = (answer: boolean): void => {
-      clearTimeout(timer);
-      source.removeEventListener("routed-activation-state", hear);
-      resolve(answer);
-    };
-    const hear = (): void => {
-      if (open()) settle(true);
-    };
-    source.addEventListener("routed-activation-state", hear);
-    timer = setTimeout(() => settle(open()), timeoutMs);
-  });
-}
-
-/** Paste `text` into a pane's input — the road ⌘V takes: the pane's own
- * paste handler takes it (bracketed when the program asked for that), and
- * nothing presses Return. The pane is focused first, because the input it
- * pastes through is the one holding the keyboard. True when the pane's handler
- * claimed the event — which says a pane is there to hear it, NOT that the
- * paste was sent: ghosttea's handler claims a paste its runtime then drops
- * while the routed input is closed. The deck's door asks the runtime that
- * first (`GodviewDeck`'s `pasteInto`) and hands nothing over while the
- * session's input is closed. */
+/** Paste `text` into a deck pane's input — the road ⌘V takes (`terminal/paste-road.ts`), into
+ * the pane `paneId` names. True when the pane's handler claimed the event — which says a pane is
+ * there to hear it, NOT that the paste was sent: the deck's door asks the runtime that first
+ * (`GodviewDeck`'s `pasteInto`) and hands nothing over while the session's input is closed. */
 export function pasteIntoPane(root: ParentNode, paneId: string, text: string): boolean {
   const id =
     typeof CSS !== "undefined" && typeof CSS.escape === "function" ? CSS.escape(paneId) : paneId;
   const input = root.querySelector<HTMLTextAreaElement>(`[data-pane-id="${id}"] textarea`);
-  if (input === null) return false;
-  input.focus();
-  const data = new DataTransfer();
-  data.setData("text/plain", text);
-  const event = new ClipboardEvent("paste", {
-    clipboardData: data,
-    bubbles: true,
-    cancelable: true,
-  });
-  input.dispatchEvent(event);
-  return event.defaultPrevented;
+  return input === null ? false : pasteIntoInput(input, text);
 }

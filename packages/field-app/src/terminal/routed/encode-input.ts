@@ -213,7 +213,7 @@ function wireBytes(message: WireMessage): number {
  * are this build's own faults and stay closed without words. */
 export interface RoutedInputRefusal {
   readonly sessionId: string;
-  /** What was refused: a paste (⌘V, the line's send) or typed text. */
+  /** What was refused: a paste (⌘V, a card's play) or typed text. */
   readonly kind: "paste" | "text";
   /** The text's own UTF-8 size. */
   readonly bytes: number;

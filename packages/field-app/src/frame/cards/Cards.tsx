@@ -20,7 +20,6 @@ import { CarriedCardLayer } from "./CarriedCardLayer";
 import { type CardBox, getCarriedCard, startCardDrag, useCarriedCard } from "./card-drag";
 import {
   CARD_H,
-  CARD_LIFT,
   CARD_W,
   CARDS_LINE_RIGHT,
   type Card,
@@ -29,8 +28,8 @@ import {
   inReach,
   layoutCards,
   layoutRaised,
-  REACH_BAND,
   reachedIndex,
+  reachIn,
   reachLift,
   reachX,
 } from "./cards-model";
@@ -48,7 +47,9 @@ import { isField } from "./caret";
  *
  * - The reach: the pointer in the foot's band lifts the cards near it, the one under it whole,
  *   showing its × and where it came from; above the fan the card it is on holds the reach (its ×
- *   must be reachable). Nothing answers while a card is held, the hand raised, a drag carries,
+ *   must be reachable). While Chat shows, the band and the lift are Chat's (`reachIn`): the band
+ *   begins at the panel's foot and a card rises only to it, so nothing stands over or under the
+ *   composer (SP-1d, Q5). Nothing answers while a card is held, the hand raised, a drag carries,
  *   the pegboard is out, Settings is open over it, or another of the frame's surfaces is open.
  * - A press: moved under 4px it is a click, and picks the card up (HN-D5); farther, a drag, which
  *   the carried layer (`card-drag.ts`) takes over. × removes the card reached, and so does ⌫
@@ -212,6 +213,8 @@ export function Cards({
   const heldCard = open ? state.cards.find((card) => card.id === state.held) : undefined;
   const upId = heldCard?.id ?? null;
   const layout = layoutFor(state.cards.length, win, raised);
+  // the band the pointer is heard in and how far a card rises: the view's (Chat's, or the hand's)
+  const reach = reachIn(view);
   const focusIndex = raised ? Math.min(focus, state.cards.length - 1) : -1;
 
   // What left the hand, or its middle, since the last render — read from the SAME render it left
@@ -255,7 +258,7 @@ export function Cards({
   // under Settings' backdrop, which stands over it (R-B 2).
   const reachable =
     surface === null && carriedId === null && !tucked && !settingsOpen && held === null;
-  const at = reachable && inReach(layout, win, pointer) ? pointer : null;
+  const at = reachable && inReach(layout, win, pointer, reach) ? pointer : null;
   const over = at === null ? -1 : state.cards.findIndex((card) => card.id === at.over);
   const lifts = reachLift(layout.slots, at === null ? null : reachX(layout, win, at, over));
   const top = reachedIndex(lifts);
@@ -273,6 +276,7 @@ export function Cards({
     surface,
     onSurfaceChange,
     win,
+    reach,
     settingsOpen,
   };
   const live = useRef(latest);
@@ -351,7 +355,7 @@ export function Cards({
     const slot = layoutFor(cur.state.cards.length, cur.win, cur.raised).slots[index];
     if (slot === undefined) return;
     // the grab point on the card as it is drawn now: lifted by the reach, or raised
-    const lifted = cur.raised ? 0 : (cur.lifts[index] ?? 0) * CARD_LIFT;
+    const lifted = cur.raised ? 0 : (cur.lifts[index] ?? 0) * cur.reach.lift;
     event.preventDefault();
     press.current = {
       id,
@@ -389,7 +393,7 @@ export function Cards({
         });
         return;
       }
-      if (event.clientY <= live.current.win.height - REACH_BAND) {
+      if (event.clientY <= live.current.win.height - live.current.reach.band) {
         setPointer(null);
         return;
       }
@@ -658,6 +662,7 @@ export function Cards({
         cards={state.cards}
         layout={layout}
         lifts={lifts}
+        reach={reach}
         reached={reached}
         raised={raised}
         focus={focusIndex}

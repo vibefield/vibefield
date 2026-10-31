@@ -5,8 +5,9 @@ import {
   isGhostteaShaderEffect,
   TERMINAL_THEMES,
 } from "@vibecook/ghosttea-react/workspace";
+import { useMemo } from "react";
 import { hexToRgb01 } from "../appearance/color";
-import { type DeckAppearance, deckThemeNameForMode } from "./deck-appearance";
+import { type DeckAppearance, deckThemeNameForMode, useDeckAppearance } from "./deck-appearance";
 import type { GodviewTheme } from "./GodviewTuningPanel";
 
 // The deck's terminal projection: the viewer's stored appearance turned into
@@ -151,6 +152,24 @@ export function godviewTerminalEffects(appearance: DeckAppearance): TerminalEffe
   return { postProcess: "none", shaderEffects: stack, animate: appearance.shaderAnimate };
 }
 
+/** The terminal's ground and ink as the two custom properties the deck's stylesheets read: the
+ * stage's root (`--vf-godview-terminal-bg`, the sheet's ground) and the pane frame
+ * (`--vf-godview-terminal-ink`). */
+export type TerminalGroundStyle = Record<
+  "--vf-godview-terminal-bg" | "--vf-godview-terminal-ink",
+  string
+>;
+
+/** A theme's ground as those custom properties (CSS custom-property projection,
+ * docs/UI_SYSTEM.md). PURE. */
+export function terminalGroundStyle(theme: TerminalTheme): TerminalGroundStyle {
+  const ground = terminalGround(theme);
+  return {
+    "--vf-godview-terminal-bg": ground.background,
+    "--vf-godview-terminal-ink": ground.ink,
+  };
+}
+
 /** What the deck sheet is painted from (DESIGN.md §8): the terminal's ground
  * and, since round 3 (GV-D7), the terminal's ink — the sheet's ground is the
  * FRAME, that ground mixed toward that ink (`godview.css`, `--deck-frame`), and
@@ -165,10 +184,38 @@ export function godviewTerminalEffects(appearance: DeckAppearance): TerminalEffe
 export function godviewTerminalGroundStyle(
   appearance: DeckAppearance,
   godviewTheme: GodviewTheme,
-): Record<"--vf-godview-terminal-bg" | "--vf-godview-terminal-ink", string> {
-  const ground = terminalGround(godviewTerminalTheme(appearance, godviewTheme));
-  return {
-    "--vf-godview-terminal-bg": ground.background,
-    "--vf-godview-terminal-ink": ground.ink,
-  };
+): TerminalGroundStyle {
+  return terminalGroundStyle(godviewTerminalTheme(appearance, godviewTheme));
+}
+
+/** How a pane of the deck looks: the theme and effects its surface is handed, and the ground it
+ * stands on. */
+export interface DeckPaneLook {
+  readonly theme: TerminalTheme;
+  /** undefined: the prop is not passed (`godviewTerminalEffects`) */
+  readonly effects: TerminalEffects | undefined;
+  /** the terminal's ground and ink, for the place the pane stands in: a pane's own ground is
+   * translucent (the appearance's opacity, premultiplied by the renderer), and over a ground of
+   * the same colour it composites to it exactly, as the deck's panes do over its sheet */
+  readonly ground: TerminalGroundStyle;
+}
+
+/** THE ONE AUTHORITY for how a pane of the deck looks: the viewer's appearance (GT-D12) under
+ * Godview's mode. The deck reads it, and so must every other surface that shows a deck session as
+ * Godview shows it (Chat's thread at SP-1d; DESIGN.md §8 "Chat's thread"): `setTheme` is
+ * SESSION-wide, so a second surface handed a theme of its own would repaint the session for every
+ * viewer. Each value is memoized on what it is built from and only that — a new theme re-renders
+ * the panes without re-initializing the workspace (`theme` is not among its initialization deps),
+ * and the effects object stays the one handed over until the viewer changes the stored selection
+ * (0.9.1 canonicalizes equal effects behind `workspaceEffectsKey` and would forgive a fresh one
+ * each render, but a prop this module controls completely does not lean on that). */
+export function useDeckPaneLook(godviewTheme: GodviewTheme): DeckPaneLook {
+  const appearance = useDeckAppearance();
+  const theme = useMemo(
+    () => godviewTerminalTheme(appearance, godviewTheme),
+    [appearance, godviewTheme],
+  );
+  const effects = useMemo(() => godviewTerminalEffects(appearance), [appearance]);
+  const ground = useMemo(() => terminalGroundStyle(theme), [theme]);
+  return useMemo(() => ({ theme, effects, ground }), [theme, effects, ground]);
 }
