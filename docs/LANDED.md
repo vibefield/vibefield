@@ -25163,6 +25163,32 @@ Checks), in the commit's own order:
 - **Row 32 OWED at James's unlock (the console locked through the mint):** row 32 alone on M60 (run60b), the fix's
   witness: on each walk every pane still's count, its lowest words and any short one; run59b's two classes are answered
   when "Ready" and the t2 words hold on both day walks. Its counts fold in here as one `  >` block when the row runs.
+  > **Run (2026-10-31, row 32 alone on M60 on the Mac mini, run60b): GREEN, the fix's witness, every word on the glass
+  > at 4.5:1 or more on every walk.** Its gate opened at 21:32:48Z, after James's unlock at 21:29:17Z, with the console
+  > idle 176 s and untouched through the row (HID idle 177 s at its start and 239 s at its end), and
+  > `pnpm smoke:first-run` exited 0 at 21:33:51Z (62 s). FIRST_RUN_VERDICT: day, night and no-webgpu each green, in 20,
+  > 20 and 18 s, code 0, nothing left and its profile removed. Every walk went the whole way to the desk, 17, 17 and 16
+  > stills (50, `lanes/ts6/logs/mini/run60b/first-run-shots`; the log's sha256 `81146651055cef24…`).
+  > - Day: 186 words judged on its 11 pane stills and none short. The lowest, "Your phone" 5.3:1 on 11-connect (4.1 at
+  >   run59b); "its own updater" 5.6–5.7 on 05–07 (4.3), "0.0.0-smoke · its own updater" 5.7–5.8 (4.4) and "· last used"
+  >   5.6 on 10-history (4.3). "Ready" is among no still's three lowest, so on 05–07 it reads at least each still's
+  >   third lowest, 5.9–6.1:1 (3.4–3.7 at run59b). The six over run59b's 180 are 12-setting-up's: the band's six labels
+  >   held still for the capture this time, where at run59b they changed under it, as they still do on the other two
+  >   walks.
+  > - No-webgpu, over the still under the same milk: 180 judged and none short; "Your phone" 5.2:1 (4.1), "its own
+  >   updater" 5.6 (4.4), "0.0.0-smoke · its own updater" 5.9 (4.4), "· last used" 5.7 (4.5), and "Ready" again among no
+  >   still's three lowest, at least 5.9–6.2 (3.4–3.7).
+  > - Night: 180 judged and none short, its lowest words and their ratios as at run59b: "Not on this Mac" 4.9:1 on 06
+  >   and 07, the account line 4.9 on 11-connect, and "Ready" 5.2–5.5. The fix leaves the night's t2 and inks as they
+  >   were.
+  > - The t2 words run59b found short read 5.2–5.9:1, where the fix's arithmetic put them at 5.25–5.79 (each word's own
+  >   coverage) and 5.1 at the thinnest stroke.
+  > - The stage line, judged as it is cut over the waking field: 6.4, 6.5 and 6.5:1.
+  > - The earlier classes again: the tear on both live walks and the fade over the still, the hand-over in its order
+  >   (its words, then the clear) on all three, Agents' declared skip (327 in 326), Connect's "Not now", and the mark's
+  >   ink at 590.5, 373 (589.5, 374 over the still).
+  > Run59b's two classes are answered on both day walks. The row owed at the fix's landing is paid, and desk-gates
+  > row 32's verdict cell is written with it.
 - An error pane under the judge, a judge extension not built: the walk stands on no error, so attention's glass ink is
   judged by arithmetic alone.
 - Not claimed: a state word on the glass in danger or info (none is worn there); a healthy or attention word drawn
