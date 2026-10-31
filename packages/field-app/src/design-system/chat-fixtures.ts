@@ -4,6 +4,8 @@ import {
   type AgentModelChoice,
   type AgentModelSelection,
   type AgentProviderSummary,
+  NEEDS_CHOICE_WORDS,
+  type NeedsItem,
   type SparkSummary,
 } from "@vibefield/contracts";
 import { atDefaultHot, atRowsOf } from "../chat/at-rows";
@@ -19,11 +21,11 @@ import type { Card } from "../frame/cards/cards-model";
 import { FIXTURE_NATIVE, FIXTURE_WORK } from "./profiles-fixtures";
 import { FIXTURE_HATCHED, FIXTURE_SPARKS } from "./spark-fixtures";
 
-// Chat's fixture ADAPTER (SP-1b, SP-1d; docs/UI_SYSTEM.md): what fieldd would answer — the sparks it keeps, the field
-// board's rows, the agents and Agent Profiles it offers, an agent's picker — run through the PRODUCT's own readings
-// (`sparkEntriesOf`, @'s `atRowsOf`, the agent menu's `agentMenuOf` and `effortOf`), so the catalog draws what the
-// window would, never a copy of its words. Fixed seeds (`spark-fixtures.ts`) and a fixed clock, so every plate deals
-// the same faces and says the same times.
+// Chat's fixture ADAPTER (SP-1b, SP-1d, CP-3; docs/UI_SYSTEM.md): what fieldd would answer — the sparks it keeps, the
+// field board's rows, the needs-you queue's items, the agents and Agent Profiles it offers, an agent's picker — run
+// through the PRODUCT's own readings (`sparkEntriesOf`, @'s `atRowsOf`, the agent menu's `agentMenuOf` and
+// `effortOf`), so the catalog draws what the window would, never a copy of its words. Fixed seeds (`spark-fixtures.ts`)
+// and a fixed clock, so every plate deals the same faces and says the same times.
 
 /** The catalog's clock: a Saturday morning, 9:41 local. */
 export const FIXTURE_NOW = new Date(2026, 9, 31, 9, 41).getTime();
@@ -168,6 +170,33 @@ const HATCHED_RUN = row({
   lastActivityAt: minutesAgo(0),
 });
 
+/** The needs-you queue's open items, oldest first, as needs.subscribe would say them (CP-3): the ask of Vela's own run,
+ * which her row's blocker already says (read once, there), and Kiwi's held send — Kiwi asked, then slept, and an answer
+ * would wake it (CP3-D7). Names as fieldd's `runLabel` gives them: a session's title, else its agent's label. */
+const ITEMS: readonly NeedsItem[] = [
+  {
+    id: "ny-velaown0001",
+    kind: "agent-ask",
+    state: "open",
+    from: { name: AGENT.label, session: "run-vela" },
+    spark: "sp-vela0001",
+    asked: minutesAgo(0),
+    ask: "question",
+    count: 1,
+  },
+  {
+    id: "ny-kiwisend001",
+    kind: "held-send",
+    state: "open",
+    from: { name: "Kiwi", session: "run-kiwi", spark: "sp-kiwi0001" },
+    spark: "sp-kiwi0001",
+    asked: minutesAgo(30),
+    words: "run the tests in packages/fieldd and tell me what fails",
+    choices: [NEEDS_CHOICE_WORDS.allow, NEEDS_CHOICE_WORDS.notNow],
+    to: { session: "run-his-1", name: AGENT.label },
+  },
+];
+
 /** The agents fieldd offers: the catalog's, by its labels. */
 const PROVIDERS: readonly AgentProviderSummary[] = AGENT_CATALOG.map((entry) => ({
   id: entry.id,
@@ -189,6 +218,7 @@ export const CHAT_STATES = [
   "gone",
   "fault",
   "asleep",
+  "waiting",
   "empty",
   "opening",
   "unavailable",
@@ -206,6 +236,7 @@ export const CHAT_STATE_LABEL: Record<ChatState, string> = {
   gone: "Off the floor",
   fault: "No answer",
   asleep: "Asleep",
+  waiting: "Waiting on you",
   empty: "No sparks",
   opening: "Opening",
   unavailable: "Unavailable",
@@ -238,6 +269,8 @@ export function chatReadingOf(state: ChatState): SparksReading {
         state: "ready",
         entries: sparkEntriesOf([HATCHED, ...SPARKS], [HATCHED_RUN, ...ROWS]),
       };
+    case "waiting":
+      return { state: "ready", entries: sparkEntriesOf(SPARKS, ROWS, { items: ITEMS }) };
     case "empty":
       return { state: "ready", entries: [] };
     case "opening":
@@ -252,7 +285,8 @@ export function chatReadingOf(state: ChatState): SparksReading {
 export const CHAT_LATCHES: ThreadLatches = { needs: new Set(), unread: new Set(["sp-lyra0001"]) };
 
 /** The spark a plate opens on: the newest (Polaris, just hatched, on the hello's), Juno (awake and Ready) for the
- * pane's words and the composer, or Kiwi asleep. */
+ * pane's words and the composer, or Kiwi asleep — on the waiting plate with its held send in the queue, so its word is
+ * Needs your OK while its line still says it sleeps (CP-3). */
 export const CHAT_CHOSEN: Record<ChatState, string | null> = {
   list: null,
   hello: HATCHED.id,
@@ -264,6 +298,7 @@ export const CHAT_CHOSEN: Record<ChatState, string | null> = {
   gone: "sp-juno0001",
   fault: "sp-juno0001",
   asleep: "sp-kiwi0001",
+  waiting: "sp-kiwi0001",
   empty: null,
   opening: null,
   unavailable: null,

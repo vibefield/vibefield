@@ -62,7 +62,7 @@ function entryOf(
   own: AgentFieldRow | null = row(),
   turnsSeen: ReadonlySet<string> = new Set(),
 ) {
-  const entry = sparkEntriesOf([record], own === null ? [] : [own], turnsSeen)[0];
+  const entry = sparkEntriesOf([record], own === null ? [] : [own], { turnsSeen })[0];
   if (entry === undefined) throw new Error("no entry");
   return entry;
 }

@@ -19,14 +19,15 @@ import {
   FIXTURE_NOW,
 } from "./chat-fixtures";
 
-// Chat on fixtures (SP-1b, SP-1d; docs/UI_SYSTEM.md): the SHIPPING panel (`ChatPanelView`) over the product's own
-// reading of fixture sparks and rows (`chat-fixtures.ts`). What it replaces is only what a host supplies — fieldd's
-// answers, the clock, the acts (Wake and Send answer nothing here) and the thread's pane: a catalog holds no terminals,
-// so the pane's place shows the shipping `SparkPaneView`'s words, never the live pane. The thread's composer is the
-// shipping `ChatComposerView` on the plate's fixture draft and @ rows, never its controller. What stands in the thread
-// over its pane is the product's own reading (`threadItemsOf`) of the shown spark and the plate's draft: a new spark's
-// hello, whose starters send nothing here. Each row's mark is the product's own reading (`threadMarksOf`) of what the
-// plates' window saw off screen. The markup and the CSS are the product's.
+// Chat on fixtures (SP-1b, SP-1d, CP-3; docs/UI_SYSTEM.md): the SHIPPING panel (`ChatPanelView`) over the product's
+// own reading of fixture sparks, rows and, on the waiting plate, the needs-you queue's items (`chat-fixtures.ts`).
+// What it replaces is only what a host supplies — fieldd's answers, the clock, the acts (Wake and Send answer nothing
+// here) and the thread's pane: a catalog holds no terminals, so the pane's place shows the shipping `SparkPaneView`'s
+// words, never the live pane. The thread's composer is the shipping `ChatComposerView` on the plate's fixture draft
+// and @ rows, never its controller. What stands in the thread over its pane is the product's own reading
+// (`threadItemsOf`) of the shown spark and the plate's draft: a new spark's hello, whose starters send nothing here.
+// Each row's mark is the product's own reading (`threadMarksOf`) of what the plates' window saw off screen. The markup
+// and the CSS are the product's.
 
 /** One of Chat's states, in the cover's place, on the frame's ground. */
 export function ChatPreview({

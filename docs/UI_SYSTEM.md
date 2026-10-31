@@ -88,7 +88,9 @@ The catalog currently mounts these shipping views directly:
   swapping and lowering over a field with Godview's stage, History's room and Chat, on fixture state
 - Chat (SP-1b, DESIGN.md §8 "Chat's list"): the shipping `ChatPanelView` over the product's own
   reading (`sparkEntriesOf`) of fixture sparks and field rows (`chat-fixtures.ts`) — the list, a
-  spark asleep, no sparks yet, opening and unavailable — on a fixed clock and fixed seeds, each
+  spark asleep, no sparks yet, opening and unavailable, and since CP-3 a spark asleep while the
+  needs-you queue holds its held send (its word Needs your OK, its line still asleep with Wake,
+  and Vela's own run's ask read once, as her row's blocker) — on a fixed clock and fixed seeds, each
   row wearing the mark the product's own `threadMarksOf` reads from what the plates' window saw
   off screen (a need's orange dot, and since SP-1d a thread unread in cyan); and, since SP-1d
   (§8 "Chat's thread", "Chat's composer"), the thread:

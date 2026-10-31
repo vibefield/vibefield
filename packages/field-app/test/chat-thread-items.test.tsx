@@ -11,7 +11,12 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { AGENT_CATALOG, type AgentFieldRow, type SparkSummary } from "@vibefield/contracts";
+import {
+  AGENT_CATALOG,
+  type AgentFieldRow,
+  type NeedsItem,
+  type SparkSummary,
+} from "@vibefield/contracts";
 import { act, type ReactElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -20,7 +25,7 @@ import { ChatView } from "../src/chat/ChatView";
 import { type SparksPort, startSparksFeed } from "../src/chat/sparks-feed";
 import { ThreadItemsView } from "../src/chat/ThreadItemsView";
 import { helloWords, STARTERS, type ThreadItem } from "../src/chat/thread-items";
-import type { ThreadSendOutcome } from "../src/chat/thread-send";
+import type { ThreadSendDeps, ThreadSendOutcome } from "../src/chat/thread-send";
 import { ChatPreview } from "../src/design-system/ChatPreview";
 import type { ChatState } from "../src/design-system/chat-fixtures";
 import type { FrameSurface } from "../src/frame/frame-surface";
@@ -31,14 +36,17 @@ import { hearLineSays } from "../src/frame/line-door";
 /** Send's road, scripted: what each send was handed, and what it comes to. */
 const road = vi.hoisted(() => ({
   sent: [] as { readonly text: string; readonly stills: readonly string[] }[],
+  /** what Chat's controller lent the last send: the facts Send reads of the spark (CP-3) */
+  deps: null as ThreadSendDeps | null,
   outcome: (): Promise<ThreadSendOutcome> => Promise.resolve({ state: "pasted" }),
 }));
 vi.mock("../src/chat/thread-send", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/chat/thread-send")>();
   return {
     ...actual,
-    sendToThread: (_deps: unknown, text: string, stills: readonly string[]) => {
+    sendToThread: (deps: ThreadSendDeps, text: string, stills: readonly string[]) => {
       road.sent.push({ text, stills });
+      road.deps = deps;
       return road.outcome();
     },
   };
@@ -91,6 +99,8 @@ const PORT: ComposerPort = {
 
 /** The board's frames as the feed hears them: a test hands it another (fieldd restarted and re-attached). */
 let pushFrame: ((payload: unknown, kind: "snapshot" | "delta") => void) | null = null;
+/** The needs-you queue's open items as the feed's first reading hears them (CP-3); none unless a test says. */
+let queued: readonly NeedsItem[] = [];
 
 function feed(rows: AgentFieldRow[], record: SparkSummary): SparksPort {
   return {
@@ -100,9 +110,25 @@ function feed(rows: AgentFieldRow[], record: SparkSummary): SparksPort {
       onFrame({ revision: 1, rows }, "snapshot");
       return () => undefined;
     },
+    watchNeeds: async (onItems) => {
+      onItems(queued);
+      return () => undefined;
+    },
     open: async () => record,
   };
 }
+
+/** Vela's question in the needs-you queue (CP-3): a card in her thread, never a menu in her pane. */
+const VELA_ASKS: NeedsItem = {
+  id: "ny-velaasks01",
+  kind: "question",
+  state: "open",
+  from: { name: "Vela", session: "run-Vela", spark: VELA.id },
+  spark: VELA.id,
+  asked: AT,
+  words: "Push the fix?",
+  choices: ["Push", "Not now"],
+};
 
 let root: Root | null = null;
 let host: HTMLElement | null = null;
@@ -112,6 +138,8 @@ let said: string[] = [];
 
 beforeEach(() => {
   road.sent = [];
+  road.deps = null;
+  queued = [];
   road.outcome = () => Promise.resolve({ state: "pasted" });
   said = [];
   stopHearing = hearLineSays((text) => said.push(text));
@@ -342,6 +370,73 @@ describe("one send at a time into a thread, a starter's or Send's (DESIGN.md §8
     await act(async () => finish({ state: "not-taking" }));
     await settle();
     expect($(".vf-chat-starters")?.hasAttribute("aria-busy")).toBe(false);
+  });
+});
+
+describe('what Chat lends Send while the queue holds an item (CP-3; DESIGN.md §8 "Chat\'s composer", as amended)', () => {
+  const sendNow = async (text: string): Promise<ThreadSendDeps> => {
+    typeText(text);
+    await act(async () => {
+      $(".vf-chat-input")?.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
+      );
+    });
+    await settle();
+    if (road.deps === null) throw new Error("nothing was sent");
+    return road.deps;
+  };
+
+  it("lets a card in the thread stand without stopping Send; its own run's blocker, a menu in its pane, stops it", async () => {
+    queued = [VELA_ASKS];
+    await mountChat([own({ usage: { cumulativeTokens: 18_400 } })]);
+    expect(words($(".vf-chat-thread-status"))).toBe("Asking you");
+    const deps = await sendNow("and the docs too");
+    expect(deps.blocked()).toBe(false);
+    // the same spark's own run then asks in its pane: Send would paste into its menu
+    await act(async () =>
+      pushFrame?.(
+        {
+          since: 1,
+          revision: 2,
+          upserts: [
+            own({
+              revision: 2,
+              status: "blocked",
+              blockers: [{ id: "p-1", kind: "permission", since: AT }],
+              usage: { cumulativeTokens: 18_400 },
+            }),
+          ],
+          removed: [],
+        },
+        "delta",
+      ),
+    );
+    expect(deps.blocked()).toBe(true);
+  });
+
+  it("hears a sleeping spark with an item only once its woken run says so (R-4), though its word says Asking you throughout", async () => {
+    queued = [VELA_ASKS];
+    const asleep = { ...VELA, session: { runtimeRunId: "run-Vela", live: false } };
+    await mountChat([own({ alive: false, usage: { cumulativeTokens: 18_400 } })], asleep);
+    expect(words($(".vf-chat-thread-status"))).toBe("Asking you");
+    expect(words($(".vf-chat-thread-line"))).toBe("Vela is asleep Wake");
+    const deps = await sendNow("go on");
+    expect(deps.needsWake).toBe(true);
+    expect(await deps.heard(0)).toBe(false);
+    // woken: its run is back on the board, idle, and heard
+    const heard = deps.heard(5_000);
+    await act(async () =>
+      pushFrame?.(
+        {
+          since: 1,
+          revision: 2,
+          upserts: [own({ revision: 2, usage: { cumulativeTokens: 18_400 } })],
+          removed: [],
+        },
+        "delta",
+      ),
+    );
+    expect(await heard).toBe(true);
   });
 });
 

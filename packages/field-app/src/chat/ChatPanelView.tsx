@@ -72,10 +72,12 @@ const AT_WORK: ReadonlySet<SparkStatus> = new Set([
 /** The line the thread's column says under the head in place of a pane: asleep, or not started. */
 export type ThreadLine = "asleep" | "not-started";
 
-/** The spark's line, or null while it is awake: then its pane is the thread (DESIGN.md §8 "Chat's thread"). */
+/** The spark's line, or null while it is awake: then its pane is the thread (DESIGN.md §8 "Chat's thread"). Read from
+ * its session (`awake`), never from its word: a sleeping spark with an item says Asking you or Needs your OK, and still
+ * sleeps (§8 "Chat's list", the status as amended at CP-3). */
 export function threadLineOf(entry: SparkEntry): ThreadLine | null {
-  if (entry.status === "sleeping") return "asleep";
   if (entry.run === null && entry.spark.session === undefined) return "not-started";
+  if (!entry.awake) return "asleep";
   return null;
 }
 

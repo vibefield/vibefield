@@ -119,7 +119,8 @@ export function ChatView({
           outcome = await sendToThread(
             {
               terminals: terminalPoolConfigured(),
-              needsYou: () => (sparkEntryNow(spark) ?? entry).needsYou,
+              // its own run's menu in its pane, never a needs-you card, which is answered on the card (CP-3)
+              blocked: () => (sparkEntryNow(spark) ?? entry).blocked,
               needsWake: threadLineOf(entry) !== null,
               wake: async () => {
                 setAct({ spark, act: { state: "busy" } });
@@ -129,12 +130,8 @@ export function ChatView({
                   setAct((current) => (current?.spark === spark ? null : current));
                 }
               },
-              heard: async (ms) =>
-                (await whenSparkEntry(
-                  spark,
-                  (heard) => heard.status !== "hello" && heard.status !== "sleeping",
-                  ms,
-                )) !== null,
+              // from its own run's row, never its word: an item's word stands over Asleep and Hello (CP-3)
+              heard: async (ms) => (await whenSparkEntry(spark, (now) => now.heard, ms)) !== null,
               pane: (ms) => whenSparkPane(spark, ms),
               stillKept,
             },

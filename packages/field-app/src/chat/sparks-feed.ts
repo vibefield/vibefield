@@ -2,6 +2,7 @@ import {
   AgentFieldRow,
   ComposeSparksListResult,
   ComposeSparksOpenResult,
+  NeedsItem,
   type SparkId,
   type SparkSummary,
 } from "@vibefield/contracts";
@@ -10,11 +11,14 @@ import { useSyncExternalStore } from "react";
 import { type SparkEntry, sparkEntriesOf } from "./spark-status";
 import { cellMarkOf, ThreadLedger, type ThreadMark, threadMarksOf } from "./thread-marks";
 
-// CHAT'S FEED (SP-1b, SP-1d; DESIGN.md §8 "Chat's list"). The window's one reading of its sparks, started by the
+// CHAT'S FEED (SP-1b, SP-1d, CP-3; DESIGN.md §8 "Chat's list"). The window's one reading of its sparks, started by the
 // frame's host for the window's life so Chat's cell can say a spark needs you from any view: the sparks fieldd keeps
-// (`compose.sparks.list`), and the field board (`agent.subscribe {projection: "field"}` — content-free, a snapshot
-// then deltas at its floor), whose rows say whose session a run is (`spark`) and who started it (`origin`). The
-// list is asked again only when the board's sparks change — one appears, or one's run leaves — never on a timer.
+// (`compose.sparks.list`), the field board (`agent.subscribe {projection: "field"}` — content-free, a snapshot then
+// deltas at its floor), whose rows say whose session a run is (`spark`) and who started it (`origin`), and since CP-3
+// the needs-you queue (`needs.subscribe` — its open items, whole, at each change), which says what waits on you for
+// each spark. The list is asked again only when the board's sparks change — one appears, or one's run leaves — never
+// on a timer. A fieldd without the queue (one before CP-3) refuses its subscribe, and the list stands on the board:
+// no item, said by nothing, never a guess.
 // It holds the window's one ledger of each thread's mark (`thread-marks.ts`): Chat says which thread is on screen
 // (`showThread`), and every reading latches what happened in the others. A module store, as the status line's is:
 // only what reads it redraws when the board moves.
@@ -24,6 +28,9 @@ export interface SparksPort {
   list(): Promise<readonly SparkSummary[]>;
   /** The field board: its snapshot, then its deltas, in order. Resolves to the way to stop. */
   watch(onFrame: (payload: unknown, kind: "snapshot" | "delta") => void): Promise<() => void>;
+  /** CP-3 — the needs-you queue's open items, oldest first: its snapshot, then each change, whole, in order. Resolves
+   * to the way to stop; rejects where fieldd has no queue. */
+  watchNeeds(onItems: (items: readonly NeedsItem[]) => void): Promise<() => void>;
   /** Wake a spark: its last session resumes; a live one is answered as it is (CR-D11). */
   open(spark: SparkId): Promise<SparkSummary>;
 }
@@ -34,22 +41,45 @@ export function sparksPortOver(client: FielddClient): SparksPort {
   return {
     list: async () =>
       ComposeSparksListResult.parse(await client.request("compose.sparks.list", {})).sparks,
-    watch: async (onFrame) => {
-      // the subscribe answers its snapshot; a delta heard before that answer waits behind it
-      let ready = false;
-      const early: [unknown, "snapshot" | "delta"][] = [];
-      const subscription = await client.subscribe("agent.subscribe", FIELD_ASK, (payload, kind) => {
-        if (ready) onFrame(payload, kind);
-        else early.push([payload, kind]);
-      });
-      onFrame(subscription.snapshot, "snapshot");
-      ready = true;
-      for (const [payload, kind] of early) onFrame(payload, kind);
-      return () => subscription.unsubscribe();
-    },
+    watch: (onFrame) => subscribeInOrder(client, "agent.subscribe", FIELD_ASK, onFrame),
+    watchNeeds: (onItems) =>
+      subscribeInOrder(client, "needs.subscribe", {}, (payload) => onItems(needsItemsOf(payload))),
     open: async (spark) =>
       ComposeSparksOpenResult.parse(await client.request("compose.sparks.open", { spark })).spark,
   };
+}
+
+/** A subscription heard in order: the subscribe answers its snapshot, and a frame heard before that answer waits
+ * behind it. Resolves to the way to stop. */
+async function subscribeInOrder(
+  client: FielddClient,
+  method: string,
+  params: unknown,
+  onFrame: (payload: unknown, kind: "snapshot" | "delta") => void,
+): Promise<() => void> {
+  let ready = false;
+  const early: [unknown, "snapshot" | "delta"][] = [];
+  const subscription = await client.subscribe(method, params, (payload, kind) => {
+    if (ready) onFrame(payload, kind);
+    else early.push([payload, kind]);
+  });
+  onFrame(subscription.snapshot, "snapshot");
+  ready = true;
+  for (const [payload, kind] of early) onFrame(payload, kind);
+  return () => subscription.unsubscribe();
+}
+
+/** The queue's open items as one frame says them (needs.subscribe's snapshot and every change: the list, whole). Each
+ * is read on its own, so one this build cannot read is passed over and the rest stand (the tolerant reader); a frame
+ * with no list says none. */
+export function needsItemsOf(payload: unknown): NeedsItem[] {
+  if (!isRecord(payload) || !Array.isArray(payload["items"])) return [];
+  const items: NeedsItem[] = [];
+  for (const candidate of payload["items"]) {
+    const read = NeedsItem.safeParse(candidate);
+    if (read.success) items.push(read.data);
+  }
+  return items;
 }
 
 /**
@@ -107,7 +137,8 @@ export type SparksReading =
 
 interface FeedState {
   readonly reading: SparksReading;
-  /** the sparks that need you, or null before the first reading (so what needed you then is no news) */
+  /** the sparks that need you, or null before the first reading of the list, the board and the queue, each (so what
+   * needed you then is no news) */
   readonly needing: readonly SparkEntry[] | null;
   /** the person's live sessions on the board by the persona each runs as (its `profileId`; null for an agent's own
    * folder), or null before the board is read: the New spark sheet's "Sees N sessions" (SP-1c) */
@@ -172,15 +203,20 @@ function sameMarks(
   return a.size === b.size && [...b].every(([spark, mark]) => a.get(spark) === mark);
 }
 
-/** The same sparks needing you in the same words: the frame's note changes only when this does. */
+/** The same sparks needing you in the same words, for the same needs: the frame's note changes only when this does. */
 function sameNeeds(a: readonly SparkEntry[] | null, b: readonly SparkEntry[]): boolean {
   if (a === null || a.length !== b.length) return false;
-  return a.every(
-    (entry, index) =>
-      entry.spark.id === b[index]?.spark.id &&
-      entry.status === b[index]?.status &&
-      entry.spark.name === b[index]?.spark.name,
-  );
+  return a.every((entry, index) => {
+    const other = b[index];
+    return (
+      other !== undefined &&
+      entry.spark.id === other.spark.id &&
+      entry.status === other.status &&
+      entry.spark.name === other.spark.name &&
+      entry.needs.length === other.needs.length &&
+      entry.needs.every((need, at) => need === other.needs[at])
+    );
+  });
 }
 
 class RunningFeed {
@@ -188,6 +224,13 @@ class RunningFeed {
   #failed: string | null = null;
   #rows: readonly AgentFieldRow[] = [];
   #boardRead = false;
+  /** the board has had its first reading, or cannot be read: what it shows then is no news */
+  #boardSettled = false;
+  /** the queue's open items as last read (CP-3); none while it has not answered, or where fieldd has none */
+  #items: readonly NeedsItem[] = [];
+  /** the queue has had its first reading, or cannot be read */
+  #needsSettled = false;
+  #stopNeeds: (() => void) | null = null;
   #asked = 0;
   #generation = 0;
   #stop: (() => void) | null = null;
@@ -205,6 +248,7 @@ class RunningFeed {
     this.#ledger.show(onScreen, []);
     this.refresh();
     this.#watch();
+    this.#watchNeeds();
   }
 
   /** A thread came on screen, or left it: opening it reads it, and the reading stands as it was. */
@@ -251,6 +295,8 @@ class RunningFeed {
     this.#open = false;
     this.#stop?.();
     this.#stop = null;
+    this.#stopNeeds?.();
+    this.#stopNeeds = null;
   }
 
   /** The board, for the feed's life; a gap asks for a fresh snapshot. */
@@ -268,6 +314,7 @@ class RunningFeed {
         }
         this.#rows = board.rows();
         this.#boardRead = true;
+        this.#boardSettled = true;
         const key = boardSparksKey(this.#rows);
         if (key !== this.#onBoard) {
           this.#onBoard = key;
@@ -280,8 +327,35 @@ class RunningFeed {
           if (this.#open && mine === this.#generation) this.#stop = unsubscribe;
           else unsubscribe();
         },
-        // without the board the list stands on its records: Asleep, Hello, never a guess
-        () => undefined,
+        // without the board the list stands on its records (and the queue): Asleep, Hello, never a guess
+        () => {
+          if (!this.#open || mine !== this.#generation || this.#boardSettled) return;
+          this.#boardSettled = true;
+          this.#derive();
+        },
+      );
+  }
+
+  /** The queue, for the feed's life (CP-3). Each frame is the whole list, so no frame can be missed; a reconnect's
+   * fresh snapshot comes to the same listener. A fieldd without it refuses: the list stands on the board. */
+  #watchNeeds(): void {
+    this.port
+      .watchNeeds((items) => {
+        if (!this.#open) return;
+        this.#items = items;
+        this.#needsSettled = true;
+        this.#derive();
+      })
+      .then(
+        (unsubscribe) => {
+          if (this.#open) this.#stopNeeds = unsubscribe;
+          else unsubscribe();
+        },
+        () => {
+          if (!this.#open || this.#needsSettled) return;
+          this.#needsSettled = true;
+          this.#derive();
+        },
       );
   }
 
@@ -303,14 +377,19 @@ class RunningFeed {
       });
       return;
     }
-    const entries = sparkEntriesOf(this.#sparks, this.#rows, this.#turnsSeen);
+    const entries = sparkEntriesOf(this.#sparks, this.#rows, {
+      items: this.#items,
+      turnsSeen: this.#turnsSeen,
+    });
     for (const entry of entries) if (entry.turnSeen) this.#turnsSeen.add(entry.spark.id);
     this.#entries = entries;
     this.#ledger.read(entries);
     const needing = entries.filter((entry) => entry.needsYou);
+    // what the list, the board and the queue each say on their first reading is no news: the note waits for all three
+    const read = this.#boardSettled && this.#needsSettled;
     publish({
       reading: { state: "ready", entries },
-      needing: sameNeeds(state.needing, needing) ? state.needing : needing,
+      needing: !read ? null : sameNeeds(state.needing, needing) ? state.needing : needing,
       sessions,
       rows,
       open: this.open,
@@ -369,7 +448,8 @@ export function useSparkOpener(): SparkOpener | null {
   return useSyncExternalStore(subscribe, () => state.open);
 }
 
-/** The sparks that need you (S-4), or null before the first reading: the views track's note over Chat's cell. */
+/** The sparks that need you (S-4), or null before the first reading of the list, the board and the queue: the views
+ * track's note over Chat's cell, said for each need new since the last reading (`SparkEntry.needs`). */
 export function useSparksNeedingYou(): readonly SparkEntry[] | null {
   return useSyncExternalStore(subscribe, () => state.needing);
 }
