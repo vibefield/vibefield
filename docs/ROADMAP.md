@@ -160,8 +160,8 @@
   the Hub in tiles; the edges leave the frame), as the mint `e31e55ecd`, run 28, verify only (LANDED "HN B3"). The
   track is built: all sixteen marks.
 - Next: nothing built is left. The record's as-built lines and its Status flip go to the next draft queue.
-- Owed: HN's smoke:godview rungs on James's console window (§5; smoke:canvas's ran at run 30b, and item 123's
-  four HAND rows wait for the unlock on `aeb2e8712`); D10, one caption style for both of the
+- Owed: HN's smoke:godview rungs on James's console window, after item 124's fix (§5; smoke:canvas's are paid, run
+  30b's and item 123's four HAND rows at run 35b); D10, one caption style for both of the
   sheet's shelves as the page drew (§9); a card dropped on the desk is not smoke-covered
   in Electron; G30 (⌘C in a pane) and RO-31 (Copy in History) upstream (§7).
 
@@ -428,11 +428,10 @@
   the tab bar as an obstacle, the reconnect banner across a fieldd bounce, the attached-but-unlisted card, an overload
   refusal said in the connecting face, C1's swipe after a reopen, the corner wearing its home desktop's face and name
   (IOS-8f) (and PJ-7 run 3's n/a cases, if 10-19's round missed them).
-- HN's smoke:godview rungs on his console window (runs 22, 26 and 28 were verify only, the console locked): the
-  re-aimed 11h (a card played into a real pane), 11j (a program's OSC 52 reaching main's copy door, no card) and the
-  Hub in the head (LANDED "HN B1", "HN B2", "HN B3"). smoke:canvas's HN rows ran green at run 30b (M30
-  `c8e4c55eb`), but for the four HAND rows, whose judge still expected Send to… (item 123, fixed in `aeb2e8712`,
-  run 32; its smoke:canvas witness waits for the unlock, 32b skipped). *Corrected
+- HN's smoke:godview rungs on his console window, after item 124's fix: the re-aimed 11h (a card played into a real
+  pane), 11j (a program's OSC 52 reaching main's copy door, no card) and the Hub in the head (LANDED "HN B1", "HN
+  B2", "HN B3"). Run 35b (M35 `733f24ed5`) went red before them at QL-2's launch rung (item 124, cp-landing's).
+  smoke:canvas's HN rows are paid: run 30b's, and the four HAND rows at run 35b (item 123). *Corrected
   2026-10-31 (item 123): this line said "HN B1's and B2's" and "runs 22 and 26" while it listed B3's rows too.*
 - AR-7: his daily dogfood · AR7-D2's 8 s kit wait, measured on a pair bounce.
 

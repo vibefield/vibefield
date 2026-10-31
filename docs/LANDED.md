@@ -22366,6 +22366,10 @@ them over the live field (VF-PM's split, 13:17Z).
 - **smoke:canvas on the mint was SKIPPED (run 32b)**: the mini's console was locked, with HID idle 3,825 s at 04:26Z,
   and only James's hand unlocks it. It is owed as this slice's witness. a9's watcher runs it, then smoke:godview, when
   the unlock lands, with the mini's HEAD held at `aeb2e8712` until then, and its verdict is recorded at its source.
+  > **Witnessed (2026-10-31 05:51:07Z):** James opened the mini's console at 05:33Z, and a9's chain ran
+  > smoke:canvas on M35 `733f24ed5` (run 35b): exit 2 with ONE problem, HAND_WHITEBOARD's bar back at 251 ms
+  > (item 117's class, the fixer's). All four HAND specimens read lead `copy` and Copy's tip `Copy  ⌘C`, so
+  > item 123's witness is paid, and with it HN's smoke:canvas debt.
 - **Landed:** main fast-forwarded `3e39d1467` → `aeb2e8712` at 2026-10-31 04:26:52Z (the fixer, on VF-PM's GO).
 
 **Owed.**
