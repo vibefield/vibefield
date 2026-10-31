@@ -21880,3 +21880,118 @@ mini, verify only).
   lines (`thinking-cards-in-hand.md` §6).
 - **B3** (HN-8, Artifacts in the head) is light-green at `0874e0ac4`. It carries `0c783a22d` too, and re-merges after
   B2 lands, when git's own base serves.
+
+## HN B3 — Artifacts in the head: the pill's package and its sheet's two shelves, the covered views' package circle, the Hub in tiles, and the edges leave the frame (HN-8, PL-D1…PL-D3, 2026-10-31)
+
+Track HN, *Cards in Hand*, batch B3 of three and the last (`draft/thinking-cards-in-hand.md` §6). James ruled
+PL-D1…PL-D3 at their leans on 2026-10-29. The doc moved first. Three code-only builders built it on 10-30 (W3-head,
+W3-circle, W3-edges), then three read-only lenses reviewed it (design 15 findings, behaviour 10, tests 6). The lead
+ruled 16 points, and two fixers worked them (FX3-hub, FX3-sheet). It landed in the mint M28 `e31e55ecd` (run 28 on the
+Mac mini, verify only).
+
+**What.**
+- **HN-8, the doc first** (`854bf882b`, `990c296de`; the fix pass's `5708461c6`, `4abfc1b4c`).
+  - §1's signature 2 is one head, one line, the hand and a corner. §5's notch exception to "chrome is glass" retires,
+    dated.
+  - §8 "The head" gains the pill's package, the two-shelf sheet and, under a cover, the package circle. "Edge trays"
+    retires whole as history.
+  - §10: four places and the hand, no gutters on the covered views, and the bar 16 from the sides.
+  - §13: `package` is Artifacts', and `sidepanel` no longer is.
+- **The pill's package and the sheet** (PL-D1; `frame/Head.tsx`, `HeadView.tsx`, `head.css`, `head-artifacts.ts`).
+  - The package is a 28 round button after the chevron's 1 × 18 rule. Its 6 px standing dot is orange while an
+    artifact's source is unavailable, read from the catalog by the head itself, a store fed once inside FielddProvider.
+  - The sheet grows from the pill (600 ms, the island curve) to 544 × 420. It stands with the frame (62) and keeps 62
+    until its fold ends.
+  - Two shelves, Fields and Artifacts, with the button pressed shown on. They change in place with a 180 ms fade.
+  - The Artifacts shelf hosts the Hub's own `hud.side-panel` contribution through `PluginSurfaceHost`. It sits in a box
+    pinned at the OPEN sheet's inner width (`cqw`), so the Hub never reflows while the sheet grows or folds, and has
+    no fade at its foot.
+  - With no Hub bound the shelf says why, in four states: "Artifacts are off", "Artifacts can't run", "Opening
+    Artifacts…" (late) and, after 10 s, "Artifacts aren't starting", crossfading in 180 ms.
+  - Under reduced motion the sheets fade (90 ms) and never change size.
+- **The package circle** (PL-D2; `frame/PackageCircle.tsx`, `PackageCircleView.tsx`, `package-circle.css`).
+  - Under a cover (Godview, History, Chat) the pill hides with the desk, and a 40 round circle at x 96 grows the same
+    sheet on Artifacts alone. It steps aside while the sheet shows, its row the circle's own (the package at 18, its
+    dot 7 in), and the sheet folds back into it.
+  - While Godview's terminals are maximized it stands in their title bar on search's two steps, and the sheet's shut
+    box is the bar control's. Godview's Stories side goes from 108 to 148.
+  - The shown shelf is read once (`useShownShelf`, in FieldView) for the circle, the head, the recede and ChromeLayer.
+  - A keyboard open takes the keyboard into the sheet's package, and Esc or the fold gives it back.
+  - The dim follows the sheet it dims (61 over a cover only), and the status line stands over it.
+- **The Hub in tiles** (PL-D3; `plugins/browser/src/artifact-panel.css`, through the SDK alone).
+  - A container query answers the shelf with three tiles across: the preview, the name, the fact line `origin ·
+    proxy|folder` and the state, with the ••• chip over the preview.
+  - "Publish…" is the first tile and opens the "Publish" step, Proxy and Folder, in place.
+  - The tiles move as the fields do, and a first-column tile's menu hangs from its left.
+- **The edges leave the frame** (`990e8b475`, `63d749117`, `bd916e633`).
+  - The edge-tray module retires with its plates, its mount and its suite: the right notch, its sliver and drawer.
+    Walls hold it gone (retired-names, R25).
+  - `COVER_EDGE_CLEAR_PX` goes, so covered views run to the window's sides. The selection bar keeps 16 from the
+    sides, not 42.
+- **The catalog**: the head's plates carry the package, its dot, the sheet on each shelf and all four of the Hub's
+  waits, under a cover too, as the shipping HeadView on fixtures. The head plate is a container, so its `cqw`
+  measures the plate. The inventory, `docs/UI_SYSTEM.md` and the glyph roles (`package`, `sidepanel`, `plus`,
+  `globe`) say what the product draws.
+- **The smokes**: smoke:canvas's BAR judges keep the bar 16 from the sides (T4). Its RIM row reads its strip in the
+  head band, left of the lights (B9/T5).
+
+**The fix pass and the light.**
+- FX3-sheet was cut off by the five-hour usage limit at 21:47Z with nine files drafted and none committed. The lead
+  checkpointed them (`7a16c0434`), and FX3-sheet2 reviewed the checkpoint and finished rulings 1–10 with a test for
+  each (`7c9af5d15`, `245864f0a`, `051f067ee`), never amending.
+- The lead's integration (`dda138e0c`): the Hub's box in `cqw`, the two catalog plates, and ChromeLayer's one shown
+  shelf.
+- The light at `0874e0ac4` (10-31 00:19:59Z) was green after three runs, which found:
+  - the glyph data (`b4a07bc18`);
+  - biome's format of ChromeSection (`574f340a6`);
+  - a noUnsafeOptionalChaining and a noDescendingSpecificity (`112e9237d`);
+  - TS2322 in head.test's `bindHub` (`0874e0ac4`).
+- Its rows: typecheck of design-kit, electron-shell, field-app and plugin-browser; vitest field-app 41 files and 809
+  tests, electron-shell 3 and 56, plugin-browser 2 and 14.
+
+**Onto main.**
+- **Over `e71f2d332`**, HN B2 as landed (`e31e55ecd`), **from git's own base `16df734bd`**. B3's line carries item
+  102's cherry-pick `0c783a22d` as B2's did, but main held B2's line then, so nothing met twice.
+- Three files were resolved at the cause, rehearsed first over a stand-in for M26 with the same tree (`36cbbe72d`) and
+  byte-identical to that rehearsal:
+  - **DESIGN.md**, four blocks:
+    - §6's easings: B3's island and lift rows, and the pop row keeps AU-D1's dot while dropping the notch's bump.
+    - The corner: AU-D6's growth into the update's question, the reduced-motion sentence without the sliver, then B3's
+      dated retirement of the edges' motion.
+    - §8's safe top: the rulers printed at the window's edges (PR #3, 2026-10-29), with no notch over the band now.
+    - §13: AU's "The update", then `package`.
+  - **desk-layer.ts**'s GRID comment: margin 0, with no notch.
+  - **ui-system-boundaries.test.ts**, kept both: `updateCorner`, and no `edges`.
+  - hn-keepcheck flags the two prose resolutions as rewrites at the cause, and the commit body says so.
+- The proofs (VF-PM's read, 02:51:30Z):
+  - The tree differs from git's own merge on those three files alone.
+  - 68 files, +4,367 −1,932, the file list equal to B3's own over `16df734bd`, and the patch byte-identical on the 55
+    files only B3 touched.
+  - No hunk in item 102's 21 files.
+- The light over `e71f2d332` at `e31e55ecd` (02:51:14Z) was green: typecheck of the same four projects; vitest
+  field-app 44 files and 905 tests, electron-shell 3 and 56, plugin-browser 2 and 14 (49 suites).
+- **At the mint:** none was needed. `e31e55ecd` already merged the main standing at run 28, `e71f2d332`, so M28 is
+  `e31e55ecd` itself, minted as-is. Run 27, item 118's slice 2, stepped aside after two reds on load-lottery rows
+  not its own.
+
+**Gates.**
+- **Run 28: the mint `e31e55ecd`** (parents `0874e0ac4` and `e71f2d332`, tree `8390b985c`), over main
+  `e71f2d332`. Verify armed at 03:02:47Z and exited 0 at 03:07:27Z: vitest 10,939 passed, 0 failed and 18 skipped
+  across 815 files, and cargo 33 binaries ok, 0 FAILED (VF-PM's counts). Verify only.
+- **Not run at the landing:** the desk smokes, smoke:canvas's RIM and BAR rows and the Hub in the head under
+  smoke:godview. They are a recorded debt for James's console window, as B1's and B2's were.
+- **Landed:** main fast-forwarded `e71f2d332` → `e31e55ecd` at 03:09:01Z on VF-PM's GO (`land-stack.sh`). HN B2's
+  records landed on it as `4a638384e` at 03:09:13Z, and VF-PM's push of 03:10:19Z carried both.
+
+**Owed.**
+- The desk smoke rows above, on James's console window.
+- James's: D10, one caption style for both of the sheet's shelves, as the page drew them. The headers stay as built
+  (the doc allows it), and nothing has changed.
+- Doubts kept, not fixed:
+  - In the terminals' title bar, the sheet's 18 glyph does not sit where the bar control's 13 does (x 116 against
+    111). Ruling 3 rules the box only.
+  - A keyboard left inside the covered sheet as the view changes to Canvas falls to the body after the 600 ms fold.
+  - `PackageCircle` finds the sheet's package by a class query, the one coupling between the two.
+- At the next draft queue: the record's B3 as-built lines and, the track being built, `thinking-cards-in-hand.md`'s
+  Status header flipped (§6).
+- Track HN is complete: B1, B2 and B3, all sixteen marks built.

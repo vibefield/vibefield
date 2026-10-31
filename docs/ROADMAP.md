@@ -148,10 +148,12 @@
   mint `23e9c2538`, run 22, verify only (LANDED "HN B1"). **B2** — HN-5…HN-7 and LC-17's follow-ups (the doc
   `a7de38b5f`: every copy deals a card and reaches the system clipboard, the picture's write half; another app's
   paste and drag; History's New terminal ⌘T), as the mint `e71f2d332`, run 26, verify only (LANDED "HN B2").
-- Next: **B3** — HN-8, Artifacts in the head (PL-D1…D3: the pill's package, the covered views' circle, the Hub's
-  tiles on the sheet's Artifacts shelf; the right edge's tray retires): light-green at `0874e0ac4`, re-merged over
-  main from git's own base, run 28.
-- Owed: B1's and B2's desk smoke rows on James's console window (§5); a card dropped on the desk is not smoke-covered
+  **B3** — HN-8, Artifacts in the head (the pill's package and its two-shelf sheet, the covered views' package circle,
+  the Hub in tiles; the edges leave the frame), as the mint `e31e55ecd`, run 28, verify only (LANDED "HN B3"). The
+  track is built: all sixteen marks.
+- Next: nothing built is left. The record's as-built lines and its Status flip go to the next draft queue.
+- Owed: B1's, B2's and B3's desk smoke rows on James's console window (§5); D10, one caption style for both of the
+  sheet's shelves as the page drew (§9); a card dropped on the desk is not smoke-covered
   in Electron; G30 (⌘C in a pane) and RO-31 (Copy in History) upstream (§7).
 
 **QW1 — the Godview swarm QA, fix wave 1** · vibe-field-d4 · law `draft/testing/godview-swarm-qa-plan.md` v0.3 §12.1, `draft/thinking-ar-reattach.md` §6
@@ -409,8 +411,8 @@
   (IOS-8f) (and PJ-7 run 3's n/a cases, if 10-19's round missed them).
 - HN B1's and B2's desk smoke rows on his console window (runs 22 and 26 were verify only, the console locked):
   smoke:godview's re-aimed 11h rung (a card played into a real pane) and 11j (a program's OSC 52 reaching main's
-  copy door, no card), and smoke:canvas's Copy rows, its picture Copy rows (CLOCK, TWO, HAND, MISSING) and DROP
-  (LANDED "HN B1", "HN B2").
+  copy door, no card) and the Hub in the head, and smoke:canvas's Copy rows, its picture Copy rows (CLOCK, TWO, HAND,
+  MISSING), DROP, RIM (the head band) and BAR (16 from the sides) (LANDED "HN B1", "HN B2", "HN B3").
 - AR-7: his daily dogfood · AR7-D2's 8 s kit wait, measured on a pair bounce.
 
 **Eyeballs (both themes)**
@@ -433,6 +435,8 @@
 - Cards in Hand's B2: Settings', History's and the Setup Assistant's copies dealt into the hand from their buttons; a
   picture copied with its words; ⌘V with no caret and a drag from another app; History's New terminal ⌘T in the
   project it shows.
+- Cards in Hand's B3: the pill's package and its dot, the sheet's two shelves and the Hub's tiles on Artifacts, the
+  package circle under a cover and in the terminals' title bar, reduced motion's fades, a narrow window.
 
 **Releases, edits and chores**
 - Releases: puppeteer 0.3.0 PUBLISHED 10-28 08:19Z and pinned (`1469639a6`, with QW1 stack B) · a later puppeteer
@@ -601,7 +605,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | AL — app lifecycle | ACTIVE; AL-1…3, 5, 7, 8a, 9 landed | `thinking-app-lifecycle.md`; ESR §7.3 | AL-6, Last exit, relaunch cap |
 | AU — Updates That Wait | ACTIVE; B1–B4 (AU-0…AU-7) landed 10-30/31 | `thinking-update-ux.md` §7 (page sources `draft/update-ux/`); DESIGN.md §2.5/§2.8/§6/§8/§9/§13; EDP §5.2/§6.4/§11; ESR §7.3 | the owed eyeballs, the first signed nightly with notes, the physical rows |
 | PG — the phone's Godview | ACTIVE; PG-1a…1c landed 10-31 | `thinking-phone-godview.md` §7/§8; `design-mv.md`; `design-06-sync-planes.md` | PG-0 (queued); PG-1d → PG-1e0 |
-| HN — Cards in Hand | ACTIVE; B1 (HN-0…HN-4) and B2 (HN-5…HN-7) landed 10-31 | `thinking-cards-in-hand.md` §6 (page sources `draft/cards-in-hand/`); DESIGN.md §1/§5/§6/§8/§9/§10/§13 | B3 (HN-8), run 28 |
+| HN — Cards in Hand | BUILT; B1–B3 (HN-0…HN-8) landed 10-31 | `thinking-cards-in-hand.md` §6 (page sources `draft/cards-in-hand/`); DESIGN.md §1/§5/§6/§8/§9/§10/§13 | the console-window smoke rows; D10 (James) |
 | QW1 — Godview swarm QA, fix wave 1 | ACTIVE; stacks A and B landed 10-28, B on puppeteer 0.3.0's EL8 pin | `godview-swarm-qa-plan.md`; `thinking-ar-reattach.md` | QA wave 1 |
 | Release rails (EDP/ESP, WP12, TD, BP, RD, RM) | ACTIVE; nightlies live, W10/W11 passed | the release specs; `thinking-browser-profile.md`, `thinking-release-deps.md`, `thinking-release-management.md` | round 3; the first-beta list |
 | EL8 — pins | ACTIVE (watch) | DECISIONS TB; the manifests | puppeteer 0.3.0 pinned 10-28 (`1469639a6`); Swift rejoin; mille's release |
@@ -669,3 +673,6 @@ D-1 and D-10, he ruled A the same morning (DECISIONS' compact row). What stays o
 3. **FG-O7, the way out of a long load** (`draft/thinking-first-run-glass.md` §8): Opening Tailscale's Cancel shows
    only after 6 s, where TS shows it beside its pill from the start. Lean (the page's): after 6 s, by James's round-3
    words on loads ("nothing more"). Asked at FG-4.
+4. **HN's D10, the sheet's two shelf headers** (`draft/thinking-cards-in-hand.md`; B3's design review): the page drew
+   one caption style for both of the pill's sheet's shelves, and the build keeps each shelf's own header, as the doc
+   allows. Lean: as built.
