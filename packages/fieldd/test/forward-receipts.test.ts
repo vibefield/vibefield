@@ -285,6 +285,28 @@ describe("the owner's journal", () => {
     expect(journal.size()).toBe(0);
   });
 
+  // DS-7 (2026-10-31) — an index ticket is served to a peer daemon now, and
+  // its answer carries a rosetta grant: a receipt must never keep one (it would
+  // sit in the owner's journal for a day) nor replay one past its life.
+  it("an index ticket mint is never journaled either: no grant is kept, and the retry mints afresh", async () => {
+    const { journal } = ownerJournal();
+    let minted = 0;
+    const mint = async () => {
+      minted += 1;
+      return { device: "dev-b", grant: `g-${minted}`, expiresAt: 601_000 };
+    };
+    const ticket = call({
+      method: "index.openTicket",
+      digest: forwardDigest({ sessionId: "s1" }),
+    });
+    const first = await journal.run(ticket, mint);
+    const retry = await journal.run(ticket, mint);
+    expect(minted).toBe(2);
+    expect(retry).not.toEqual(first);
+    expect(journal.receipt("dev-a", KEY)).toBeUndefined();
+    expect(journal.size()).toBe(0);
+  });
+
   it("an answer carrying a transport grant replays only while the grant lives — past its own expiry the retry answers the receipt, never the stale ticket, and the act never runs twice", async () => {
     const { journal, tick } = ownerJournal(); // the journal's clock starts at 1_000
     let born = 0;

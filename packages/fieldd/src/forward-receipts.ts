@@ -59,8 +59,11 @@ const RECEIPT_MESSAGE_CHARS = 1024;
  * in flight, expires unused): never journaled, so a same-key retry mints
  * afresh. Named, never inferred from an answer's shape — `terminal.create`
  * answers a ticket too, and it creates a session. `workspace.openTicket`
- * (DS-D12) and `index.openTicket` (SP-3) join when they are served. */
-const TICKET_MINTS: ReadonlySet<string> = new Set(["terminal.openTicket"]);
+ * (DS-D12) and `index.openTicket` (SP-3) join when they are served.
+ * *DS-7 (2026-10-31): `index.openTicket` is served to a peer daemon, and joins —
+ * its answer carries a rosetta grant, which a receipt must neither keep nor
+ * replay; a same-key retry mints a fresh one.* */
+const TICKET_MINTS: ReadonlySet<string> = new Set(["terminal.openTicket", "index.openTicket"]);
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
