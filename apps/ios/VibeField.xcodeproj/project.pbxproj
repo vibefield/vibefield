@@ -195,7 +195,7 @@
 				INFOPLIST_FILE = App/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = VibeField;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
-				INFOPLIST_KEY_NSCameraUsageDescription = "VibeField reads text through the camera so a line you can see becomes a line you can send.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "VibeField reads text through the camera so a line you can see becomes a line you can send, and reads the code on your Mac so this phone signs in to the same account.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "VibeField reaches your desktops over your private tailnet.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "The microphone is used for dictation into the terminal draft, and nothing it hears is recorded or kept.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Speech recognition turns dictation into the terminal draft, on this device when this device can.";
@@ -228,7 +228,7 @@
 				INFOPLIST_FILE = App/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = VibeField;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
-				INFOPLIST_KEY_NSCameraUsageDescription = "VibeField reads text through the camera so a line you can see becomes a line you can send.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "VibeField reads text through the camera so a line you can see becomes a line you can send, and reads the code on your Mac so this phone signs in to the same account.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "VibeField reaches your desktops over your private tailnet.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "The microphone is used for dictation into the terminal draft, and nothing it hears is recorded or kept.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Speech recognition turns dictation into the terminal draft, on this device when this device can.";

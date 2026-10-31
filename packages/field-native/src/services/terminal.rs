@@ -141,7 +141,7 @@ use crate::contracts::{
     TerminalRouteSnapshot, TerminalWorkloadClass, UnitHealth, UnitState,
 };
 use crate::manager::NativeService;
-use crate::orphan::{Census, SessionCensus};
+use crate::orphan::{Census, NotFresh, SessionCensus};
 use crate::registries;
 use crate::registries::terminal_inventory;
 use crate::resource_pressure::{
@@ -726,6 +726,24 @@ impl SessionCensus for TerminalHandle {
         if let Some(stamps) = self.shared.inventory_stamps.get() {
             stamps.ask();
         }
+    }
+
+    /// Item 94 — `count`'s cells with no reconcile begun after `after` and applied, each with what its pump is
+    /// doing; a route row whose pump has no stamp yet is being dialed.
+    fn not_fresh(&self, after: Instant) -> Vec<(u32, NotFresh)> {
+        let shared = &self.shared;
+        let Some(stamps) = shared.inventory_stamps.get() else {
+            return Vec::new();
+        };
+        let after = tokio::time::Instant::from_std(after);
+        let applied = stamps.applied_instances(Some(after));
+        let owed = stamps.not_fresh(after);
+        let cells: Vec<u32> = shared.route_rows.lock().unwrap().keys().copied().collect();
+        cells
+            .into_iter()
+            .filter(|cell| !applied.contains(cell))
+            .map(|cell| (cell, owed.get(&cell).copied().unwrap_or(NotFresh::Dialing)))
+            .collect()
     }
 }
 
@@ -2338,6 +2356,34 @@ struct InventoryStamp {
     /// AL-8a — a reconcile has been applied at least once, published or not (an empty cell's first reconcile equals
     /// the pump's seed and publishes nothing, so `occupancy` alone cannot say it).
     applied: bool,
+    /// Item 94 — when the pump last heard a census ask, which it owes a reconcile at its next tick.
+    heard: Option<tokio::time::Instant>,
+    /// Item 94 — when the pump last went idle, between reconciles.
+    settled: tokio::time::Instant,
+}
+
+impl InventoryStamp {
+    /// Item 94 — why this cell has no reconcile begun after `after` and applied, as its pump's activity says it. An
+    /// idle pump that heard the ask, or went idle after the moment (the ask then waits on its next poll), is owed its
+    /// next tick; one idle since before the moment that never heard it is `Unheard`.
+    fn not_fresh(&self, after: tokio::time::Instant, now: tokio::time::Instant) -> NotFresh {
+        match self.activity {
+            PumpActivity::Reconciling { part, began } => NotFresh::Reconciling {
+                part: part.label(),
+                for_ms: ms(now.saturating_duration_since(began)),
+            },
+            PumpActivity::Dialing => NotFresh::Dialing,
+            PumpActivity::Idle => {
+                let owed = self.heard.into_iter().chain([self.settled]);
+                match owed.filter(|at| *at > after).max() {
+                    Some(owed) => NotFresh::TickLate {
+                        waiting_ms: ms(now.saturating_duration_since(owed)),
+                    },
+                    None => NotFresh::Unheard,
+                }
+            }
+        }
+    }
 }
 
 /// What a cell's pump is doing, as the stale line says it (IL-D3).
@@ -2391,11 +2437,14 @@ impl ReconcilePart {
 impl InventoryStamps {
     /// A new cell's stamp: its age counts from now.
     fn seed(&self, key: &CellKey) {
+        let now = tokio::time::Instant::now();
         let stamp = InventoryStamp {
-            as_of: tokio::time::Instant::now(),
+            as_of: now,
             since: unix_ms_now(),
             activity: PumpActivity::Dialing,
             applied: false,
+            heard: None,
+            settled: now,
         };
         self.cells.lock().unwrap().insert(key.clone(), stamp);
     }
@@ -2440,6 +2489,19 @@ impl InventoryStamps {
             .map(|((instance, _), _)| *instance)
             .collect()
     }
+
+    /// Item 94 — every cell with no reconcile begun after `after` and applied, and why
+    /// (`InventoryStamp::not_fresh`).
+    fn not_fresh(&self, after: tokio::time::Instant) -> BTreeMap<u32, NotFresh> {
+        let now = tokio::time::Instant::now();
+        self.cells
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(_, stamp)| !stamp.applied || stamp.as_of <= after)
+            .map(|((instance, _), stamp)| (*instance, stamp.not_fresh(after, now)))
+            .collect()
+    }
 }
 
 /// One pump's handle on its own cell's stamp.
@@ -2450,8 +2512,20 @@ struct CellStamp {
 
 impl CellStamp {
     fn doing(&self, activity: PumpActivity) {
+        let now = tokio::time::Instant::now();
+        self.stamps.update(&self.key, |stamp| {
+            stamp.activity = activity;
+            if activity == PumpActivity::Idle {
+                stamp.settled = now;
+            }
+        });
+    }
+
+    /// Item 94 — the pump heard a census ask: it owes a reconcile at its next tick.
+    fn heard(&self) {
+        let now = tokio::time::Instant::now();
         self.stamps
-            .update(&self.key, |stamp| stamp.activity = activity);
+            .update(&self.key, |stamp| stamp.heard = Some(now));
     }
 
     /// The reconcile in flight moved on to `part`.
@@ -2466,11 +2540,13 @@ impl CellStamp {
     /// A reconcile that began at `began` (wall clock `since`) was applied: the
     /// cell's inventory is as old as that moment.
     fn applied(&self, began: tokio::time::Instant, since: u64) {
+        let now = tokio::time::Instant::now();
         self.stamps.update(&self.key, |stamp| {
             stamp.as_of = began;
             stamp.since = since;
             stamp.activity = PumpActivity::Idle;
             stamp.applied = true;
+            stamp.settled = now;
         });
     }
 }
@@ -3505,7 +3581,10 @@ async fn pump_inventory_cell(
                 None => return Ok(()),
             },
             Some(()) = governed_rx.recv() => dirty = true,
-            Ok(()) = asked.changed() => dirty = true,
+            Ok(()) = asked.changed() => {
+                dirty = true;
+                pump.stamp.heard();
+            }
             _ = ticker.tick() => {
                 if dirty || last_reconcile.elapsed() >= pump.bounds.backstop {
                     dirty = false;
@@ -3773,7 +3852,10 @@ fn is_governed_here(session: &SessionSummary) -> bool {
 /// the mgmt seam (NF-L2), never invented here. `persistence` is opaque
 /// passthrough — it has an upstream source since G9 (absence 2 in the module
 /// note, RETIRED), and `is_governed_here` has already established that this row
-/// carries one.
+/// carries one. Item 97 (2026-10-29): `exited` is the summary's own fact, said
+/// only once true. A `keep-until-explicit-close` husk stays listed after its
+/// process ends, and no event will say it again, so the row is where fieldd
+/// reads it when the floor's `session-exited` never reached it.
 fn observed_row(session: &SessionSummary) -> ObservedTerminal {
     ObservedTerminal {
         session_id: session.id.clone(),
@@ -3782,6 +3864,7 @@ fn observed_row(session: &SessionSummary) -> ObservedTerminal {
         persistence: session.persistence.clone(),
         title: session.title.clone(),
         cwd: session.cwd.clone(),
+        exited: session.exited.then_some(true),
         // CORRECTED 2026-09-14 (N-L7). This used to read "the legacy in-process
         // serve has no cell", which named a caller TM-1 deleted — there is no
         // cell-less shape on this floor any more. What is true is narrower and
@@ -3922,6 +4005,37 @@ mod tests {
             "a replica reports no class because claiming one would assert a governance \
              this host does not hold; that absence is what keeps a peer's session out of \
              an inventory with no device field to put it in"
+        );
+    }
+
+    /// Item 97 — a husk's row says its process ended, and saying so changes the
+    /// inventory: the reconcile publishes on a changed snapshot
+    /// (`inventory_value`), so a row turning `exited` reaches fieldd by itself,
+    /// with no event to carry it. A live row says nothing, so its bytes are as
+    /// they were before the field existed.
+    #[test]
+    fn a_husk_row_says_its_process_ended_and_a_live_row_says_nothing() {
+        let live = observed_row(&summary(json!({"persistence": FLOOR_LIFETIME})));
+        assert_eq!(live.exited, None);
+        assert!(
+            serde_json::to_value(&live)
+                .expect("a row")
+                .get("exited")
+                .is_none(),
+            "a live row carries no exit fact at all"
+        );
+        // only an explicit-close session is still listed once its process ends
+        let husk = observed_row(&summary(json!({
+            "persistence": "keep-until-explicit-close",
+            "exited": true,
+            "exitCode": 0,
+            "exitOutcome": "exited",
+        })));
+        assert_eq!(husk.exited, Some(true));
+        assert_ne!(
+            inventory_value(&[live]),
+            inventory_value(&[husk]),
+            "the same session listed after its exit is a changed inventory"
         );
     }
 
@@ -4467,6 +4581,9 @@ mod tests {
         // tests build it: the unit binds a loopback listener on port 0 and never declares, so
         // no host starts.
         let terminal = TerminalUnit::new(&config, ping.clone());
+        // CP-1a's door seam, built the way bootstrap builds it; never started here.
+        let door =
+            crate::services::door::DoorUnit::new(&config, ping.clone(), bridge.clone()).handle();
         let freeway = crate::services::freeway::FreewayUnit::new(
             &config,
             "boot-under-test",
@@ -4499,6 +4616,7 @@ mod tests {
             .1,
             crate::config::MeshPlan::resolve(&config),
             freeway,
+            door,
             None,
         )
     }
@@ -5621,6 +5739,125 @@ mod tests {
             .await,
             "the ask is heard as an event owed a reconcile"
         );
+    }
+
+    /// Item 94 — a stamp says why its cell has no reconcile begun after a moment: mid-reconcile, owed its next tick
+    /// (it heard the ask, or went idle after the moment), dialing, or idle from before the moment with the ask never
+    /// heard.
+    #[test]
+    fn a_stamp_says_why_its_cell_is_not_fresh() {
+        let after = tokio::time::Instant::now();
+        let before = after - Duration::from_millis(50);
+        let now = after + Duration::from_millis(2_000);
+        let idle = InventoryStamp {
+            as_of: before,
+            since: 0,
+            activity: PumpActivity::Idle,
+            applied: true,
+            heard: None,
+            settled: before,
+        };
+        assert_eq!(
+            idle.not_fresh(after, now),
+            NotFresh::Unheard,
+            "idle since before the moment, and the ask never heard"
+        );
+        let heard_before = InventoryStamp {
+            heard: Some(before),
+            ..idle
+        };
+        assert_eq!(
+            heard_before.not_fresh(after, now),
+            NotFresh::Unheard,
+            "an ask heard before the moment is not this one"
+        );
+        let heard = InventoryStamp {
+            heard: Some(after + Duration::from_millis(5)),
+            ..idle
+        };
+        assert_eq!(
+            heard.not_fresh(after, now),
+            NotFresh::TickLate { waiting_ms: 1_995 }
+        );
+        let settled_after = InventoryStamp {
+            settled: after + Duration::from_millis(100),
+            ..idle
+        };
+        assert_eq!(
+            settled_after.not_fresh(after, now),
+            NotFresh::TickLate { waiting_ms: 1_900 },
+            "a reconcile begun before the moment ended after it: the ask waits on its next poll"
+        );
+        let reconciling = InventoryStamp {
+            activity: PumpActivity::Reconciling {
+                part: ReconcilePart::RoundTrip,
+                began: after + Duration::from_millis(100),
+            },
+            ..idle
+        };
+        assert_eq!(
+            reconciling.not_fresh(after, now),
+            NotFresh::Reconciling {
+                part: "round_trip",
+                for_ms: 1_900
+            }
+        );
+        let dialing = InventoryStamp {
+            activity: PumpActivity::Dialing,
+            ..idle
+        };
+        assert_eq!(dialing.not_fresh(after, now), NotFresh::Dialing);
+    }
+
+    /// Item 94, end to end: a quiet cell that has not heard an ask says so; once asked, a slow answer is said as the
+    /// reconcile in flight, and once that reconcile is applied the cell owes nothing.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_cell_not_fresh_says_whether_it_heard_the_ask_or_is_mid_reconcile() {
+        let cell = FakeCell::serve();
+        let bounds = InventoryBounds {
+            backstop: Duration::from_secs(60),
+            stale: Duration::from_secs(120),
+            ..InventoryBounds::REGISTRY
+        };
+        let dir = tempfile::tempdir().expect("tempdir");
+        let shared = test_shared();
+        let state = test_state(dir.path());
+        shared.route_upsert(1, fake_route(1, &cell.endpoint));
+        let handle = TerminalHandle {
+            shared: shared.clone(),
+        };
+        let _inventory = TaskGuard(install_inventory_with(
+            handle.clone(),
+            state.clone(),
+            LedgerThread::spawn(None, shared.clone()),
+            bounds,
+        ));
+        assert!(
+            settles(REAL_TIME_BOUND, || handle.count(None) == Census::Counted(1)).await,
+            "the pump's first reconcile counts the cell's session"
+        );
+        let asked = Instant::now();
+        assert_eq!(
+            handle.not_fresh(asked),
+            vec![(1, NotFresh::Unheard)],
+            "idle since its first reconcile, and no ask: its count would come only at its backstop"
+        );
+        cell.answer_after(Duration::from_millis(1_500));
+        handle.ask();
+        assert!(
+            settles(REAL_TIME_BOUND, || matches!(
+                handle.not_fresh(asked).as_slice(),
+                [(1, NotFresh::Reconciling { .. })]
+            ))
+            .await,
+            "the asked reconcile, held by the cell's slow answer, is said as in flight"
+        );
+        assert!(
+            settles(REAL_TIME_BOUND, || handle.not_fresh(asked).is_empty()).await,
+            "the asked reconcile applied: the cell owes nothing"
+        );
+        assert_eq!(handle.count(Some(asked)), Census::Counted(1));
     }
 
     /// IL-D6 (a), the bound's precondition, end to end: with the ledger's

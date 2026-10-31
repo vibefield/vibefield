@@ -55,6 +55,8 @@ import {
   appVersionOfBuildId,
   type CallerContext,
   CONTRACTS_VERSION,
+  ComposeSparksHatchParams,
+  ComposeSparksOpenParams,
   createAgentCatalogReaders,
   DEVICE_LIMITS,
   DeviceGetParams,
@@ -99,6 +101,7 @@ import {
   LOG_STREAMS,
   METHODS,
   type MeshSyncPosture,
+  MONITOR_AUDIENCE,
   NATIVE_SUPERVISION,
   type NativeHealth,
   type NativeLastExit,
@@ -194,6 +197,7 @@ import { projectPluginAuthority } from "@vibefield/plugin-runtime";
 import { PROTOCOL_VERSION as ROSETTA_PROTOCOL_VERSION } from "@vibefield/rosetta-protocol/protocol-version";
 import {
   agentListFor,
+  clipRecordedLanes,
   createFieldSubscription,
   deskProjector,
   malformedBoardAsk,
@@ -219,7 +223,9 @@ import {
 } from "./app-preferences";
 import { ArtifactService, type ArtifactServiceHealth } from "./artifact-service";
 import { AuditService, type AuditWriterTestHooks } from "./audit-service";
-import { nativeAlive, nativeEndpoint, nativeMgmtEndpoint } from "./boot-env";
+import { nativeAlive, nativeEndpoint, nativeMgmtEndpoint, splitPathList } from "./boot-env";
+import { ComposeService, composeProjects } from "./compose";
+import { LAUNCH_ROUTE, SparkService, SparkStore } from "./compose/sparks";
 import { DeviceService, localDeviceIdAt } from "./device-service";
 import { DiagnosticsService } from "./diagnostics-service";
 import { DocLane } from "./doc-lane";
@@ -313,6 +319,7 @@ import { SetupLedgerStore } from "./setup-ledger";
 import { appBundleOf, relaunchFromBundle, type SHELL_ABSENCE, ShellAbsence } from "./shell-absence";
 import { ShellLease } from "./shell-lease";
 import { createSurfaceService } from "./surface-service";
+import { oweSyncQuestion } from "./sync-question";
 import { peerAnswerBytes, tailnetRowLimit } from "./tailnet-rows";
 import { runtimeProfileBinding, TerminalBindingStore } from "./terminal-bindings";
 import { createTerminalLinkDoor } from "./terminal-links";
@@ -329,6 +336,7 @@ import {
   TerminalService,
 } from "./terminal-service";
 import { TokenService } from "./token-service";
+import { userMe } from "./user-me";
 import type { BrowseFacts } from "./workspace/browse-exports";
 import type { FilesHostLaunch } from "./workspace/launch";
 import { WorkspacePicker } from "./workspace/picker";
@@ -473,7 +481,9 @@ export interface FielddConfig {
    * refuse honestly. bin.ts derives it from the layout (`rootAboveUserRoot`). */
   vibefieldRoot?: string;
   /** AR-2 test seams: the PATH the agent install inventory searches, and the
-   * fetch the release detectors use. Production: the process PATH, global fetch. */
+   * fetch the release detectors use. Production: the process PATH, global fetch.
+   * Setting the search path also isolates the home the inventory searches each
+   * provider's install directories under (`agentInstallHome`, puppeteer 0.3.1). */
   agentSearchPath?: string;
   agentFetch?: typeof fetch;
   /** AR-S1c — read the agents' installs in the background once boot has
@@ -1092,7 +1102,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     },
     ...(config.agentProviders !== undefined ? { providers: config.agentProviders } : {}),
     ...(config.agentCatalog !== undefined ? { catalog: config.agentCatalog } : {}),
-    ...(config.agentSearchPath !== undefined ? { searchPath: config.agentSearchPath } : {}),
+    ...(config.agentSearchPath !== undefined
+      ? {
+          searchPath: config.agentSearchPath,
+          installHome: agentInstallHome(config.agentSearchPath, config.dataDir),
+        }
+      : {}),
     ...(config.agentFetch !== undefined ? { fetchFn: config.agentFetch } : {}),
     ...(config.agentResumeWhenIdle !== undefined
       ? { resumeWhenIdle: config.agentResumeWhenIdle }
@@ -1185,6 +1200,16 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       // is resident (UA-D3 — background pairs keep running), and the answer
       // that matters is the one true at the moment a login enters this tree.
       otherUserLinks: () => otherUserLinks(config.dataDir, linkLogger),
+      // TS-6 (TS-D13) — a new link keeps the fields made before it on this Mac
+      // and owes the sync question, before link.json is written. `docs` is
+      // declared below with no await between; a capture lands only after the
+      // floor answers, so the binding is live by then.
+      beforeLinked: () =>
+        oweSyncQuestion({
+          ledger: setupLedger,
+          docs,
+          logger: logger.child({ component: "sync-question" }),
+        }),
     });
     links.start();
     // UA-P-0j — the first dial already happened above, so this hears only the
@@ -1196,6 +1221,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // optional the whole way down — with the mesh off (the default) `docSync`
     // stays null and every commit takes the same path it always did.
     let docSync: DocSyncService | null = null;
+    let compose: ComposeService | null = null;
     let presenceRooms: PresenceRoomRouter | null = null;
     // DS-5 (DS-D6) — the holders slice, bound once DeviceService exists below.
     let docHolders: DocHoldersService | null = null;
@@ -1399,6 +1425,34 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         { error: String(error) },
       );
     }
+    // CP-1b — the lane link redials. It was dialed once per boot, so after a floor restart (NativeLink's "connected")
+    // or a dropped socket ("disconnected") every lane's bytes went nowhere until fieldd restarted: doc sync's, and now
+    // the compose plane's doors, whose bridges redial a restarted floor on their own (CP-1a). One dial at a time; a
+    // link this boot closed (doc sync's boot failure above, a shutdown) stays closed.
+    let laneDial: Promise<void> | null = null;
+    const redialLanes = (why: "floor" | "dropped"): void => {
+      if (laneDial !== null || laneLink.connected || laneLink.closed) return;
+      laneDial = laneLink
+        .connect()
+        .then(() => logger.info("fieldd.mesh_lane.redialed", "The MeshData link is back", { why }))
+        .catch((error: unknown) =>
+          logger.warn(
+            "fieldd.mesh_lane.redial_failed",
+            "The MeshData link could not be dialed again",
+            {
+              why,
+              error: String(error),
+            },
+          ),
+        )
+        .finally(() => {
+          laneDial = null;
+        });
+    };
+    native.on("connected", () => redialLanes("floor"));
+    laneLink.on("disconnected", () => {
+      setTimeout(() => redialLanes("dropped"), 1_000).unref?.();
+    });
     // P7 §5.3.1 — fetch/verify/install (user-initiated only; no phone-home)
     const installer = new RegistryInstallService({
       dataDir: config.dataDir,
@@ -2010,6 +2064,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     api.register("surface.sources", (ctx, params) => surfaces.sources(ctx, params));
     api.register("surface.open", (ctx, params) => surfaces.open(ctx, params));
     api.register("surface.close", (ctx, params) => surfaces.close(ctx, params));
+    // PT-S2 (R11) — the attach's device list (a phone's "Attach" binds from it)
+    api.register("surface.simulator.devices", (ctx, params) =>
+      surfaces.simulatorDevices(ctx, params),
+    );
 
     api.register("system.health", () => health());
     // WIN-D5 — the stop verb. The response flushes first (setImmediate), then
@@ -2634,6 +2692,104 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
               }),
       },
     });
+    // CP-1b (the compose plane, version 2; compose/) — the `vibefield` door. A spark's MCP calls arrive through the
+    // floor's door (native.door.subscribe; the bytes on the meshdata lane link) and are answered with its verbs, each
+    // held to its Agent Profiles and audited before it acts. A spark's own session is known by its record (CP-1c,
+    // just below); any other caller is served no tools and leaves its door's one audit line.
+    // CP-1c (compose/sparks.ts) — the sparks: their signed records under LAYOUT.SPARKS_DIR, each one's folder under
+    // LAYOUT.SPARK_HOMES_DIR, and the window's three doors (below, beside setup's). The route is A, the lean on the
+    // board's co-spark-door-route: until PU-F carries the server at launch, a spark hatches and thinks without tools.
+    const sparks = new SparkService({
+      store: new SparkStore({
+        dir: join(config.dataDir, ...LAYOUT.SPARKS_DIR),
+        keyPath: join(config.dataDir, ...LAYOUT.SPARKS_KEY_FILE),
+        logger: logger.child({ component: "compose.sparks" }),
+      }),
+      homes: join(config.dataDir, ...LAYOUT.SPARK_HOMES_DIR),
+      route: LAUNCH_ROUTE,
+      profileSets: async () => (await agents.profiles.sets()).sets,
+      runs: () => agents.list().sessions,
+      spawn: async (launch, spark, principal) => {
+        const result = await agents.spawn(
+          {
+            provider: launch.provider,
+            cwd: launch.cwd,
+            profileSet: launch.profileSet,
+            title: launch.title,
+            ...(launch.modelSelection !== undefined
+              ? { modelSelection: launch.modelSelection }
+              : {}),
+          },
+          principal,
+          undefined,
+          { origin: { by: "you" }, spark },
+        );
+        return { runtimeRunId: result.session.runtimeRunId };
+      },
+      resume: async (runtimeRunId, principal) => {
+        try {
+          return {
+            runtimeRunId: (await agents.resume({ runtimeRunId }, principal)).session.runtimeRunId,
+          };
+        } catch (error) {
+          // a session that cannot be resumed (gone, never resumable) is started again in the spark's folder
+          if (
+            error instanceof RpcCallError &&
+            (error.kind === "PRECONDITION_FAILED" || error.kind === "NOT_FOUND")
+          )
+            return undefined;
+          throw error;
+        }
+      },
+      now: () => new Date(),
+      logger: logger.child({ component: "compose.sparks" }),
+    });
+    compose = new ComposeService({
+      native,
+      lanes: laneLink,
+      runForTerminal: (terminalSessionId) => agents.runForTerminal(terminalSessionId),
+      spark: (id) => sparks.get(id),
+      verbs: {
+        profileSets: async () => (await agents.profiles.sets()).sets,
+        agentLabel: (provider) =>
+          (config.agentCatalog ?? AGENT_CATALOG).find((entry) => entry.id === provider)?.label,
+        models: (provider, profileSet) => agents.models({ provider, profileSet }),
+        runs: () => agents.list().sessions,
+        runFacts: (runtimeRunId) => {
+          const row = monitor?.rowForRun(runtimeRunId);
+          if (!row) return undefined;
+          return {
+            ...(row.cost?.usd !== undefined ? { usd: row.cost.usd } : {}),
+            ...(row.effort?.value ? { effort: row.effort.value } : {}),
+          };
+        },
+        projects: () =>
+          composeProjects(
+            projectDoors.list(
+              {},
+              { paths: true, tailnet: false },
+              PROJECT_DOORS.PAGE_DEFAULT_LIMIT,
+            ),
+          ),
+        indexSessionFor: async (nativeSessionId) =>
+          (await index.sessionByNativeId(nativeSessionId))?.id,
+        indexSessionProfile: async (sessionId) => ({
+          profileId: (await index.session(sessionId)).session.profileId,
+        }),
+        timeline: (sessionId, cursor, limit) =>
+          index.timeline({ sessionId, cursor, limit, boundedBelow: true }),
+        search: (q, runtime, limit, afterMs) =>
+          index.search({ q, runtime, limit, ...(afterMs !== undefined ? { afterMs } : {}) }),
+      },
+      audit,
+      version: FIELDD_VERSION,
+      logger: logger.child({ component: "compose" }),
+    });
+    {
+      const door = compose;
+      native.on("connected", () => void door.ensureStarted());
+      void door.ensureStarted();
+    }
     const projectPage = (ctx: { principal: Principal }, asked: number | undefined): number =>
       tailnetRowLimit(ctx.principal, asked, PROJECT_DOORS.PAGE_DEFAULT_LIMIT) ??
       PROJECT_DOORS.PAGE_DEFAULT_LIMIT;
@@ -3573,10 +3729,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
             : projectFieldRow,
         minIntervalMs,
         ...(heartbeatMs !== undefined ? { heartbeatMs } : {}),
-        // TM-2 (F-M4) — the SAME gate the store publisher applies below. The
-        // two carriers serve one board, and a row that promises a tap over one
-        // leg while refusing it over the other is the false positive MF-1l
-        // exists to prevent — the phone folds both legs into one card.
+        // TM-2 (F-M4) — the gate on every attach promise a row makes: the
+        // `terminal` join and, on a desk row, `monitorRow.attachable`/
+        // `.writable` (PG-1a). The store publisher it once matched retired at
+        // DS-D14; a promise of a tap the owner refuses is the false positive
+        // MF-1l exists to prevent.
         terminalPublished: () => native.terminalMeshPublished(),
         onError: (error) =>
           logger.warn("fieldd.agents.field_frame_failed", "A field subscriber's frame failed", {
@@ -3671,14 +3828,15 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
               service: "mesh-board",
               state: "starting",
             });
-          // `.snapshot` carries the whole mesh (the open, and the client's own
-          // replay after a reconnect); `.delta` carries every per-device frame —
-          // a device's delta, a device's reset, a device's state.
-          const reader = meshBoard.open(projection, floor, (frame) => emit(frame, "delta"));
+          // `.snapshot` carries the whole mesh (the open, the client's own
+          // replay after a reconnect, and the door's resync of a phone behind
+          // its cap, PG-1c); `.delta` carries every per-device frame — a
+          // device's delta, a device's reset, a device's state.
+          const install = meshBoard.subscribe(projection, floor, emit);
           return {
-            snapshot: reader.open,
+            ...install,
             dispose: () => {
-              reader.dispose();
+              install.dispose();
               screen?.();
             },
           };
@@ -3749,8 +3907,13 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // lanes' past as the backend beside the runtime derives it from the record,
     // asked by a window only while a mounted view asks (PF6). Read through to
     // rosettad at each ask (the backend's history port) and held nowhere — not
-    // the removed `agent.history`. A peer reads it without colour sequences
-    // (M16), as it reads the model's rows.
+    // the removed `agent.history`. Only this desktop's own callers read the
+    // colour sequences (M16), as only they read the model's rows: the cut is
+    // `MONITOR_AUDIENCE`'s by the caller's kind. Item 100: it was every kind
+    // but a peer daemon's, so a phone read this desktop's deal. SP-D13-bounded
+    // for a tailnet caller by `index.activity`'s rule (item 105): the newest
+    // MAX_ROWS ended lanes by their end, `clipped` saying so; a window and a
+    // peer daemon read the whole day.
     api.register("agent.recordedLanes", async (ctx, params) => {
       const parsed = AgentRecordedLanesParams.safeParse(params ?? {});
       if (!parsed.success)
@@ -3775,7 +3938,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           service: "agent.monitor",
           state: "no-record",
         });
-      return wireRecordedLanes(past, ctx.principal.kind === "peer-fieldd" ? "peer" : "window");
+      return clipRecordedLanes(
+        wireRecordedLanes(past, MONITOR_AUDIENCE[ctx.principal.kind]),
+        tailnetRowLimit(ctx.principal, undefined, Number.MAX_SAFE_INTEGER),
+      );
     });
     // AR-5d — the usage column's feed (agent-usage.ts). Both doors answer the
     // PROJECTION and nothing else: percentages, labels, the provider's own
@@ -4337,6 +4503,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       );
     }
     api.register("device.list", () => ({ devices: devices.list() }));
+    // IOS-8f — this desktop's person, read from its own user row at each ask (`user-me.ts`)
+    api.register("user.me", () =>
+      userMe({ userId: config.userId, root: config.vibefieldRoot, logger }),
+    );
     api.register("device.get", (_ctx, params) => {
       const parsed = DeviceGetParams.safeParse(params);
       if (!parsed.success)
@@ -5634,6 +5804,49 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       setupLedger.answer(parsed.data.step, parsed.data.state);
       return setupLedger.snapshot();
     });
+    // CP-1c — the sparks' doors (compose.ts; METHODS rows under agents.manage, local): the window's, and audited.
+    api.register("compose.sparks.list", (ctx) => {
+      requireDesktopCaller(ctx);
+      return { sparks: sparks.list() };
+    });
+    api.register("compose.sparks.hatch", async (ctx, params) => {
+      requireDesktopCaller(ctx);
+      const parsed = ComposeSparksHatchParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { name, face: { seed }, agent, modelSelection?, profiles, thinksUnder }, thinking under one of its profiles",
+          false,
+        );
+      const ask = parsed.data;
+      return await audit.required(
+        ctx,
+        {
+          action: "compose.spark.hatch",
+          target: { kind: "spark", id: "pending" },
+          attrs: {
+            agent: ask.agent,
+            profiles: ask.profiles.join(","),
+            thinksUnder: ask.thinksUnder,
+          },
+        },
+        async () => ({ spark: await sparks.hatch(ask, ctx.principal) }),
+        (result) => ({ outcome: "succeeded", attrs: { spark: result.spark.id } }),
+      );
+    });
+    api.register("compose.sparks.open", async (ctx, params) => {
+      requireDesktopCaller(ctx);
+      const parsed = ComposeSparksOpenParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { spark }", false);
+      const id = parsed.data.spark;
+      return await audit.required(
+        ctx,
+        { action: "compose.spark.open", target: { kind: "spark", id } },
+        async () => ({ spark: await sparks.open(id, ctx.principal) }),
+        () => ({ outcome: "succeeded" }),
+      );
+    });
     api.register("setup.moment", (ctx, params) => {
       requireDesktopCaller(ctx);
       const parsed = SetupMomentParams.safeParse(params);
@@ -6450,6 +6663,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         detachHealthSources?.();
         links.stop();
         await presenceRooms?.stop();
+        compose?.stop();
         docSync?.stop();
         laneLink.close();
         docs.dispose();
@@ -6500,6 +6714,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       await updateManager.dispose();
       runtimeDiagnostics.dispose();
       await presenceRooms?.stop();
+      compose?.stop();
       docSync?.stop();
       laneLink.close();
       docs.dispose();
@@ -6952,6 +7167,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           api.close();
           docLane.close();
           await presenceRooms?.stop();
+          compose?.stop();
           docSync?.stop();
           laneLink.close();
           docs.dispose();
@@ -7084,6 +7300,16 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     }
     throw e;
   }
+}
+
+/** AO-7 — the home puppeteer searches each provider's install directories under
+ * (`distribution.home`, 0.3.1) when a harness isolates the search path: the
+ * path's first directory, the stub's own in every harness, so the machine
+ * owner's `~/.local/bin` and the like are never read. An empty list falls to the
+ * user root, which here is fieldd's data directory, never $HOME. Production
+ * passes no search path, so its inventory reads the person's own home. */
+function agentInstallHome(searchPath: string, userRoot: string): string {
+  return splitPathList(searchPath)[0] ?? userRoot;
 }
 
 /** TC-D6(a) — Node's diagnostic report is the only stdlib window onto rlimits.

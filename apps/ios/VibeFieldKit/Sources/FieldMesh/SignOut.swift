@@ -13,7 +13,10 @@ import Foundation
 /// next one). **Stays — what the person taught it:** the terminal
 /// appearance, the snippets, the clipboard history, and every other
 /// preference. One account at a time, so there is no switch: sign out, then
-/// sign in.
+/// sign in. **Stays, and is no preference:** the account a Mac's code said to
+/// expect (TS-7b, `ExpectationMemory`) — "Another account?"'s Sign in again
+/// runs this sweep and then signs in, checked against it; the person's own
+/// Sign out from the menu forgets it beside this sweep.
 ///
 /// Pure about WHAT (the report says what went) and run by `MeshModel.signOut`
 /// after the node has stopped, because removing a state directory under a

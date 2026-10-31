@@ -1,0 +1,33 @@
+{
+  "format": 1,
+  "runtimeRunId": "run-12",
+  "runtimeEpoch": 1,
+  "provider": "claude",
+  "profileId": "claude:native-default",
+  "cwd": "/Users/you/Library/Application Support/VibeField/users/u-1f3a/sparks/vela",
+  "terminalSessionId": "sess-01JB7Q2V",
+  "continuation": {
+    "providerId": "claude",
+    "nativeSessionId": "native-12",
+    "implementation": "native",
+    "state": "{\"v\":1}"
+  },
+  "workspace": {
+    "mode": "direct",
+    "root": "/Users/you/Library/Application Support/VibeField/users/u-1f3a/sparks/vela"
+  },
+  "creationRequestId": "req-01JB7Q2V",
+  "ingress": {
+    "port": 53344,
+    "token": "typed-bearer"
+  },
+  "spawnedBy": "app",
+  "createdAt": "2026-09-27T10:00:00.500Z",
+  "updatedAt": "2026-09-27T10:00:05.000Z",
+  "signature": "0000000000000000000000000000000000000000000000000000000000000000",
+  "profileSet": "work",
+  "origin": {
+    "by": "you"
+  },
+  "spark": "sp-7k2m9q4x"
+}

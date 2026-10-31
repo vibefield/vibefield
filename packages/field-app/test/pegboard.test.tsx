@@ -36,6 +36,7 @@ import {
   trayEntity,
   trayEntryCount,
   trayFocus,
+  trayHung,
   trayOpen,
   Viewport,
 } from "@vibecook/ice";
@@ -249,7 +250,7 @@ function laidNow(engine: CanvasEngine, drawer: { x: number; y: number }, scroll:
       natural: widget?.defaultSize ?? { w: 1, h: 1 },
     };
   });
-  return boardSpecimens(laid, drawer, scroll);
+  return boardSpecimens(laid, trayHung(w), drawer, scroll);
 }
 
 /** The ring as the controller wrote it: its rect on screen. */
@@ -426,6 +427,15 @@ describe("inserting by keyboard (R14) — on ICE's own doors (I37)", () => {
     if (rect === null || rect === undefined) return null;
     return { x0: rect.x0 - 2, y0: rect.y0 - 2, x1: rect.x1 + 2, y1: rect.y1 + 2 };
   };
+  // the ring where ICE's anchor puts it, to the CSSOM's own grain: a width or a height reads back at six decimals
+  // ("213.44498px" for 213.444979…), so a hang whose size is no round number never round-trips exactly
+  const expectRingOnFocus = () => {
+    const ring = ringRect();
+    const want = ringOnFocus();
+    expect(ring === null).toBe(want === null);
+    for (const k of ["x0", "y0", "x1", "y1"] as const)
+      expect(ring?.[k]).toBeCloseTo(want?.[k] ?? 0, 5);
+  };
 
   it("takes the focus when the keyboard raised the board, the first specimen ringed where the board draws it", () => {
     raise();
@@ -445,7 +455,7 @@ describe("inserting by keyboard (R14) — on ICE's own doors (I37)", () => {
       x1: (at?.rect.x1 ?? 0) + 2,
       y1: (at?.rect.y1 ?? 0) + 2,
     });
-    expect(ringRect()).toEqual(ringOnFocus());
+    expectRingOnFocus();
   });
 
   it("rings ICE's first when the board holds the keyboard with no focus event — B in a window that is not the key window (DK-13's path)", async () => {
@@ -468,7 +478,7 @@ describe("inserting by keyboard (R14) — on ICE's own doors (I37)", () => {
     expect(trayFocus(ce.world)).toBe(first);
     expect(focusedType()).toBe(first);
     expect(ringRect()).not.toBeNull();
-    expect(ringRect()).toEqual(ringOnFocus());
+    expectRingOnFocus();
   });
 
   it("asks ICE for the first again when B raised the board before its first lay — a microtask after the publish, never inside it", async () => {
@@ -492,7 +502,7 @@ describe("inserting by keyboard (R14) — on ICE's own doors (I37)", () => {
     const first = [...board().querySelectorAll('[role="option"]')][0]?.getAttribute("data-type");
     expect(trayFocus(ce.world)).toBe(first);
     expect(focusedType()).toBe(first);
-    expect(ringRect()).toEqual(ringOnFocus());
+    expectRingOnFocus();
     // ICE holding a focus, a publish asks nothing more
     asks.mockClear();
     door.publish();
@@ -515,7 +525,7 @@ describe("inserting by keyboard (R14) — on ICE's own doors (I37)", () => {
     expect(door.scroll()).toBeGreaterThan(0);
     // VibeField scrolled nothing itself (DK-13's own scroll into view retired): every call a read
     expect(scrolls.mock.calls.every((c) => c[0] === undefined)).toBe(true);
-    expect(ringRect()).toEqual(ringOnFocus());
+    expectRingOnFocus();
     expect(ringRect()?.y0).toBeCloseTo((to?.rect.y0 ?? 0) - 2, 6);
   });
 

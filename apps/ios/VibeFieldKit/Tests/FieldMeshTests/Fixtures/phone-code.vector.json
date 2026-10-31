@@ -1,0 +1,188 @@
+{
+  "note": "TS-7b (Q2 A, 2026-10-29) \u2014 the phone code's cross-language vector: `vibefield://add-phone?login=\u2026&from=\u2026`. TS (src/phone-code.ts, pinned by test/phone-code.test.ts) and Swift (apps/ios FieldMesh/PhoneCode.swift, pinned by Tests/FieldMeshTests/PhoneCodeVectorTests.swift, reading a copy check:ios-fixtures holds byte-identical) must both read every `codes` row to its login and from, and refuse every `refused` row with the same `why`. A `canonical` row is also exactly what encodePhoneCode writes. A deliberate change to the rules edits this file in the same commit.",
+  "prefix": "vibefield://add-phone",
+  "limits": {
+    "text": 1024,
+    "login": 254,
+    "from": 64
+  },
+  "codes": [
+    {
+      "text": "vibefield://add-phone?login=me%40example.com&from=Studio",
+      "login": "me@example.com",
+      "from": "Studio",
+      "canonical": true,
+      "why": "the Mac's own spelling"
+    },
+    {
+      "text": "vibefield://add-phone?login=octo%40github&from=James%E2%80%99s%20MacBook%20Pro",
+      "login": "octo@github",
+      "from": "James\u2019s MacBook Pro",
+      "canonical": true,
+      "why": "a GitHub login; a name with a space and a curly apostrophe"
+    },
+    {
+      "text": "vibefield://add-phone?login=me%40example.com&from=Studio%20%F0%9F%A6%8A",
+      "login": "me@example.com",
+      "from": "Studio \ud83e\udd8a",
+      "canonical": true,
+      "why": "an emoji is one scalar"
+    },
+    {
+      "text": "vibefield://add-phone?login=me%40example.com&from=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "login": "me@example.com",
+      "from": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "canonical": true,
+      "why": "a name at the bound"
+    },
+    {
+      "text": "VIBEFIELD://Add-Phone?login=me%40example.com&from=Studio",
+      "login": "me@example.com",
+      "from": "Studio",
+      "canonical": false,
+      "why": "the scheme and host match without regard to ASCII case"
+    },
+    {
+      "text": "vibefield://add-phone/?login=me@example.com&from=Studio\n",
+      "login": "me@example.com",
+      "from": "Studio",
+      "canonical": false,
+      "why": "a bare slash, a raw @, and a scanner's trailing newline"
+    },
+    {
+      "text": "vibefield://add-phone?login=me%2Bwork@example.com&from=A+B",
+      "login": "me+work@example.com",
+      "from": "A+B",
+      "canonical": false,
+      "why": "+ is a plus, never a space, on both sides"
+    },
+    {
+      "text": "vibefield://add-phone?v=2&from=Studio&login=me%40example.com#later",
+      "login": "me@example.com",
+      "from": "Studio",
+      "canonical": false,
+      "why": "unknown parameters and a fragment are ignored; order does not matter"
+    },
+    {
+      "text": "vibefield://add-phone?login=%20me%40example.com%20&from=%20Studio%09",
+      "login": "me@example.com",
+      "from": "Studio",
+      "canonical": false,
+      "why": "each field is trimmed of ASCII whitespace"
+    }
+  ],
+  "refused": [
+    {
+      "text": "https://login.tailscale.com/start",
+      "why": "not-a-code"
+    },
+    {
+      "text": "vibefield://add-phonex?login=me%40example.com&from=Studio",
+      "why": "not-a-code"
+    },
+    {
+      "text": "vibefield://add-phone/extra?login=me%40example.com&from=Studio",
+      "why": "not-a-code"
+    },
+    {
+      "text": "vibefield://add-phone?login=me%40example.com&from=%",
+      "why": "not-a-code"
+    },
+    {
+      "text": "vibefield://add-phone?login=me%40example.com&from=%zz",
+      "why": "not-a-code"
+    },
+    {
+      "text": "vibefield://add-phone?login=me%40example.com&from=%C3",
+      "why": "not-a-code"
+    },
+    {
+      "text": "vibefield://add-phone?login=me%40example.com&from=Studio&pad=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "why": "too-long"
+    },
+    {
+      "text": "vibefield://add-phone?login=me%40example.com&login=you%40example.com&from=Studio",
+      "why": "duplicate"
+    },
+    {
+      "text": "vibefield://add-phone?login=me%40example.com&from=Studio&from=Mini",
+      "why": "duplicate"
+    },
+    {
+      "text": "vibefield://add-phone?from=Studio",
+      "why": "no-login"
+    },
+    {
+      "text": "vibefield://add-phone?login=%20&from=Studio",
+      "why": "no-login"
+    },
+    {
+      "text": "vibefield://add-phone?login=me&from=Studio",
+      "why": "bad-login"
+    },
+    {
+      "text": "vibefield://add-phone?login=%40example.com&from=Studio",
+      "why": "bad-login"
+    },
+    {
+      "text": "vibefield://add-phone?login=me%40&from=Studio",
+      "why": "bad-login"
+    },
+    {
+      "text": "vibefield://add-phone?login=me%20x%40example.com&from=Studio",
+      "why": "bad-login"
+    },
+    {
+      "text": "vibefield://add-phone?login=me%C2%A0x%40example.com&from=Studio",
+      "why": "bad-login"
+    },
+    {
+      "text": "vibefield://add-phone?login=me%00%40example.com&from=Studio",
+      "why": "bad-login"
+    },
+    {
+      "text": "vibefield://add-phone?login=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa%40example.com&from=Studio",
+      "why": "bad-login"
+    },
+    {
+      "text": "vibefield://add-phone?login=me%40example.com",
+      "why": "no-from"
+    },
+    {
+      "text": "vibefield://add-phone?login=me%40example.com&from=%20%20",
+      "why": "no-from"
+    },
+    {
+      "text": "vibefield://add-phone?login=me%40example.com&from=%E2%80%AEoiduts",
+      "why": "bad-from"
+    },
+    {
+      "text": "vibefield://add-phone?login=me%40example.com&from=a%0Ab",
+      "why": "bad-from"
+    },
+    {
+      "text": "vibefield://add-phone?login=me%40example.com&from=a%C2%85b",
+      "why": "bad-from"
+    },
+    {
+      "text": "vibefield://add-phone?login=me%40example.com&from=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "why": "bad-from"
+    },
+    {
+      "text": "vibefield://add-phone?login=me%40example.com&from=%D8%9CStudio",
+      "why": "bad-from"
+    },
+    {
+      "text": "vibefield://add-phone?login=me%40example.com&from=Studio%E2%80%A8Mini",
+      "why": "bad-from"
+    },
+    {
+      "text": "vibefield://add-phone?login=me%40example.com&from=Studio%E2%80%A9",
+      "why": "bad-from"
+    },
+    {
+      "text": "vibefield://add-phone?login=me%E2%80%8F%40example.com&from=Studio",
+      "why": "bad-login"
+    }
+  ]
+}

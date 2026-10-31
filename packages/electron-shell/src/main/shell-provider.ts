@@ -29,6 +29,9 @@ import {
   ShellSurfacesReleaseParams,
   type ShellSurfacesReleaseResult,
   ShellSurfacesReleaseResult as ShellSurfacesReleaseResultSchema,
+  ShellSurfacesSimulatorDevicesParams,
+  type ShellSurfacesSimulatorDevicesResult,
+  ShellSurfacesSimulatorDevicesResult as ShellSurfacesSimulatorDevicesResultSchema,
   ShellWebContentsCaptureArtifactPreviewParams,
   type ShellWebContentsCaptureArtifactPreviewResult,
   ShellWebContentsCaptureArtifactPreviewResult as ShellWebContentsCaptureArtifactPreviewResultSchema,
@@ -77,6 +80,11 @@ export interface ShellProviderNative {
   ): Promise<ShellSurfacesEnumerateResult>;
   mintSurfaceTicket(params: ShellSurfacesMintParams): Promise<ShellSurfacesMintResult>;
   releaseSurface(params: ShellSurfacesReleaseParams): Promise<ShellSurfacesReleaseResult>;
+  /** PT-S2 (R11) — the attach's device list: this Mac's simulator devices, REDACTED rows (never a UDID). */
+  listSimulatorDevices(
+    params: ShellSurfacesSimulatorDevicesParams,
+    signal: AbortSignal,
+  ): Promise<ShellSurfacesSimulatorDevicesResult>;
 }
 
 interface ActiveCall {
@@ -356,6 +364,12 @@ export class RecoveringShellProvider {
     if (call.method === "shell.surfaces.release") {
       const params = ShellSurfacesReleaseParams.parse(call.params);
       return ShellSurfacesReleaseResultSchema.parse(await this.native.releaseSurface(params));
+    }
+    if (call.method === "shell.surfaces.simulatorDevices") {
+      const params = ShellSurfacesSimulatorDevicesParams.parse(call.params);
+      return ShellSurfacesSimulatorDevicesResultSchema.parse(
+        await this.native.listSimulatorDevices(params, signal),
+      );
     }
     // GT-7 — Settings → Terminal's Import file…: one FILE, and main hands back
     // only its path; fieldd reads it (bounded, UTF-8). Each verb is locked to

@@ -12,10 +12,11 @@ import {
 } from "../src/main/live-surfaces/ios-simulator-producer";
 import type { MacosCaptureSource } from "../src/main/live-surfaces/macos-capture-helper";
 import type { MacosSimulatorViewportResult } from "../src/main/live-surfaces/macos-capture-native";
-import type {
-  SckCaptureClient,
-  SckCaptureClientStartRequest,
-  SckCaptureSession,
+import {
+  type SckCaptureClient,
+  SckCaptureClientError,
+  type SckCaptureClientStartRequest,
+  type SckCaptureSession,
 } from "../src/main/live-surfaces/sck-producer";
 
 const UDID = "F93EABF3-4281-4EB5-A5F6-A550FBE95CDC";
@@ -278,6 +279,61 @@ describe("Simulator resolution", () => {
     ).rejects.toMatchObject({
       surfaceError: { code: "source-not-found", recovery: "user-action" },
     });
+  });
+
+  it("PT-S2: types each refusal's reason, so the bound simulator's conditions never read a message", async () => {
+    const empty = new IosSimulatorSourceResolver({
+      devices: new FakeDevices([]),
+      windows: new FakeWindows(),
+      viewport: { resolveSimulatorViewport: () => viewportResolved() },
+    });
+    await expect(empty.resolve(source())).rejects.toMatchObject({
+      surfaceError: { code: "source-not-found" },
+      reason: "not-booted",
+    });
+    await expect(
+      resolverSetup(() => viewportResolved(), new FakeWindows([])).resolver.resolve(source()),
+    ).rejects.toMatchObject({ reason: "no-window" });
+    const result = resolverSetup(() => viewportResolved());
+    await expect(
+      result.resolver.resolve(source({ mode: "auto" }, "stale-ref")),
+    ).rejects.toMatchObject({ reason: "stale" });
+    await expect(
+      result.resolver.resolve(
+        source({ mode: "explicit", sourceRect: { x: 40, y: 80, width: 430, height: 874 } }),
+      ),
+    ).rejects.toMatchObject({ reason: "viewport" });
+    // Accessibility names another device in the one window: the crop no longer proves it
+    await expect(
+      resolverSetup(() =>
+        viewportResolved({ windowTitle: "iPhone 16e – iOS 26.5" }),
+      ).resolver.resolve(source()),
+    ).rejects.toMatchObject({ reason: "viewport" });
+    const twins = new FakeWindows([
+      simulatorWindow({ sourceRef: "11111111111111111111111111111111", windowId: 1 }),
+      simulatorWindow({
+        sourceRef: "22222222222222222222222222222222",
+        windowId: 2,
+        frame: { x: 500, y: 10, width: 456, height: 972 },
+      }),
+    ]);
+    await expect(
+      resolverSetup(() => viewportResolved(), twins).resolver.resolve(source()),
+    ).rejects.toMatchObject({ reason: "ambiguous" });
+    // a catalogue that fails is no verdict of the resolver's: no reason
+    const failing = new IosSimulatorSourceResolver({
+      devices: {
+        enumerateBootedDevices: async () => {
+          throw new Error("simctl failed");
+        },
+      },
+      windows: new FakeWindows(),
+      viewport: { resolveSimulatorViewport: () => viewportResolved() },
+    });
+    const crashed = await failing.resolve(source()).catch((error: unknown) => error);
+    expect(crashed).toBeInstanceOf(SckCaptureClientError);
+    expect((crashed as SckCaptureClientError).surfaceError.code).toBe("producer-crashed");
+    expect((crashed as SckCaptureClientError).reason).toBeUndefined();
   });
 });
 

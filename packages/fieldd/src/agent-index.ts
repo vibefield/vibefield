@@ -1168,6 +1168,9 @@ export class IndexService {
     query.set("limit", String(limit));
     if (params.afterMs !== undefined) query.set("after_ts", String(params.afterMs));
     if (params.kind !== undefined) query.set("kind", params.kind);
+    // CP-1b — one runtime per request (rosetta-protocol SearchRequest.runtime): a spark searches only the runtimes its
+    // Agent Profiles hold, one search each, merged by the caller (the compose plane, version 2; RO-30 asks for several).
+    if (params.runtime !== undefined) query.set("runtime", params.runtime);
 
     let body: unknown;
     try {
