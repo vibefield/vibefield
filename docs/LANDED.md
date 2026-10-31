@@ -21538,3 +21538,135 @@ landed in the mint M22 `23e9c2538` (run 22 on the Mac mini, verify only).
 - Upstream: G30 (ghosttea's routed `copySelection` answers nothing, so no ⌘C in a pane) and RO-31 (a copy port in
   rosetta's room, so no Copy in History), `draft/petitions/README.md`.
 - At the next draft queue: the record's B1 as-built lines (`thinking-cards-in-hand.md` §6) and its Status header.
+
+## AU B4 — what's in it: a release's signed plain-text notes on Settings → Updates and the Me row's What's new, and the day each build was made (AU-6a); the notes written in the sign job and carried inside the signed manifest, and each stage's `builtAt` (AU-6b) (AU-D10; AU-G10) (2026-10-31; `cf4335ab9`, a9's merge of main `cbc376da5` into `f21680dd3` on `4dad7e228` on `4fcf982d0` on `2b1cfff6f` on `4c25147bf`, lane `au/b4`)
+
+**What.** B4 is the last batch of AU. With it, a person can read what an update holds before taking it, and what
+it changed after.
+- **AU-6a (`4c25147bf`): the notes and the build's day, from contracts to the window.**
+  - contracts (`update-policy.ts`):
+    - `ReleaseNotes` is a union on `kind`:
+      - `written` (a stable, or a beta with a notes file): `since` or null, and 1–8 lines;
+      - `log` (a nightly, or a beta without a file): `since`, `commits`, `product` ≤ `commits`, and 0–4 lines of
+        `{track?, text}`.
+    - Every written line, and every log line's `text`, is `ReleaseNoteText`: 1–200 characters on one line, with no Cc,
+      Cf, Zl or Zp, so bidi overrides and zero-width characters are refused. A log line's `track` is 1–24 characters,
+      with no character rule in the contract; release-notes.mjs strips format characters before taking it. The limits
+      are `RELEASE_NOTES_LIMITS` (LC-19).
+    - `ReleaseManifest.notes` is `z.unknown().optional()`, additive at schemaVersion 1. An installed client's chain
+      never refuses notes it cannot read.
+    - `UpdateView` gains `notes?` (available, downloading, staged) and `builtAt?`. `UpdateViewLastApply` gains
+      `notes?` (installed only). The persisted staged clock and lastApply carry them tolerantly.
+    - `releaseTagOf` inverts release-plan's three tag shapes.
+    - No enum grew, and `pnpm gen` is untouched.
+  - The trust chain:
+    - `StagedReleaseIdentity.builtAt` is a strict `IsoInstant`, and the stager parses what it writes.
+    - verify-chain gains **step 6c**: notes that do not parse are DROPPED (`notesDropped` names why) and never refuse
+      the chain. Notes rewritten after signing refuse it, as any manifest change does.
+  - The controller:
+    - The staged version's notes are kept on the staged clock, and a newer head never swaps them.
+    - `recordLastApply` copies them into the record, so What's new reads offline after the relaunch. Every apply
+      path, AU-5's quit among them, writes through it.
+    - `compareUrlOf` composes the one link from the frozen origin and two release tags, only for a
+      `https://github.com/<owner>/<repo>/releases` origin (X18; EDP-38).
+    - Dropped notes are logged once per head in a row (`desktop.update.notes_dropped`; a head is said again after
+      another head's), and doctor says present, dropped or
+      absent.
+  - field-app:
+    - The page's head says "Nightly · built Oct 27, 2026".
+    - A notes card says "What's in the Oct 28 nightly" while an update is found, fetched or ready, and "What's new in
+      …" for a day after it installs.
+      - A log release says its count and up to four lines, each led by its track in mono when it has one.
+      - A written release says its lines and no count, with main's link when it composed one.
+      - Every string is a text node, and the link is drawn only when it is https.
+    - The Me row's R4 notes form (What's new · Updated today) opens Settings → Updates AT the card, once. The shell
+      target is `whats-new`, which opens `{page: updates, atNotes}`, and that is B4's one line in `ChromeLayer.tsx`.
+    - The catalog mounts the shipping views over the new fixture states.
+  - Six new contracts fixtures, none mirrored by the kit.
+- **AU-6b (`2b1cfff6f`): the notes are written in the sign job, and every stage says when it was built.**
+  - `scripts/release-notes.mjs` (new) computes LC-19's notes and parses them as `ReleaseNotes` before writing:
+    - a stable refuses without `apps/desktop/packaging/notes/<X.Y.Z>.txt`;
+    - a beta uses that file when it is there, else the log form;
+    - a nightly reads `git log --no-merges prev..commit`: the newest subject per track, at most four, each cut at its
+      first " — " and at 200 characters;
+    - a `Release-note:` trailer gives its commit's line its own words (LC-55);
+    - a git failure refuses the release.
+  - `release-manifest.mjs merge --notes` writes the notes INTO the manifest before the Sign step signs it, so they ride
+    under its one `release` signature, with no new key. `release-verify.mjs` parses them strictly after the signature
+    check: the client drops what it cannot read, and the release workflow refuses it before publishing
+    (release-verify in the sign and converge jobs).
+  - Both release plans carry `builtAt`. The stager writes the identity's `builtAt` on every stage, from
+    `VIBEFIELD_BUILT_AT`, else HEAD's commit time in UTC, else none, with a warning, when git cannot name the commit
+    (LC-57).
+  - `.github/workflows/release.yml`, every change listed in the body for the pre-push audit:
+    - the plan's `builtAt` output;
+    - `VIBEFIELD_BUILT_AT` on "Package, signed" and "Stage, release-keyed" ("Package, UNSIGNED" is untouched);
+    - the sign job's checkout gains `fetch-depth: 0`;
+    - a new step, "The notes", before "Merge the planes", with no secret and no `GH_TOKEN`;
+    - `--notes notes.json` on Merge.
+    `${{ secrets.` occurrences are 8 before and 8 after, and no permission moved.
+  - LC-54 (the GitHub release page saying the same lines, `gh release create --notes-file`) is NOT here, and is
+    James's to ask for.
+- **The comment fix (`4fcf982d0`):** AU-5a's `quitForSignal` doc comment now says what the stop's re-ask box does. A
+  signal there acts only on Cancel: VibeField quits and no further pair is stopped. "Quit and end N sessions" finishes
+  the stop already under way. It
+  carries a dated correction in the comment, owed since B3's records checkers (LANDED "AU B3").
+- B4 was merged over main, not rebased, so AU-6a's and AU-6b's shas are the ones built on 10-29.
+  - `4dad7e228` merged main `3ce8b1c40`. Its one conflict was `release.yml`'s sign job's first steps, resolved as
+    main's Dependabot pins (checkout v7.0.1, pnpm/action-setup v6.1.0, setup-node v7.1.0) plus AU-6b's comment and
+    `fetch-depth: 0`. Secrets stayed 8 == 8.
+  - `f21680dd3` merged main `23e9c2538` (HN B1). `ChromeLayer.tsx` was the one file both sides changed, and git
+    auto-merged it.
+
+**Validation.**
+- **The lane:** branch `au/b4` on B3's `a4688b7c9`, built in `/Volumes/SamsungRed/lanes/au/b4`.
+  - AU-6a and AU-6b were authored 2026-10-29 13:19Z and committed at 13:22Z, when the biome fixups were squashed.
+  - The comment fix was committed 2026-10-30 18:36 PDT (10-31 01:36Z).
+- **The light passes** (each at nice 19 under the guard, in `lanes/au/vibe-field`):
+  - **10-29, over `a4688b7c9`.** Green on its fourth run, at `2b1cfff6f`, 13:28:43Z.
+    - Run 1 (13:21Z, at `674bf6e06`) was red at biome on two rows, an import order (`release-scripts.test.ts`) and a
+      formatter fold (`updates-section.test.tsx`), both fixed and squashed.
+    - Runs 2 and 3 were stopped by the guard on another session's process, with no row red.
+    - The green run: contracts 1270 (50 files), electron-shell 2146 + 3 skipped (147), field-app 382 (14), the
+      stager's node test 11/11, and gen:check exit 0.
+  - **10-31, at `4dad7e228` over main `3ce8b1c40`.**
+    - Run 1 was red at 01:43:14Z on one row: electron-shell `smoke-profile.test.ts` DK-18 (39) at :184, at load
+      17–34. That row is item 93's, not B4's (`lanes/records/item93/item.md`, 01:46Z). The file alone went 9/9 three
+      times.
+    - Run 2 was green. Its verdict echo was lost to a redirect, so it was accepted on each row's own terminal line,
+      with gen:check re-run alone (exit 0, 01:51:26Z).
+    - The rows: contracts 1380 (53), electron-shell 2201 + 3 skipped (149), field-app 382 (14), stager 11/11.
+  - **10-31, at `f21680dd3` over main `23e9c2538`.** Green at 02:08:26Z, tee'd to `logs/b4-slot3.log`.
+    - The rows: contracts 1382 (53), electron-shell 2214 + 3 skipped (151), field-app 382 (14), stager 11/11, and
+      gen:check exit 0.
+    - The rises since the previous light are main's own tests.
+  - Logs: `lanes/au/logs/light-2b1cfff6f/`, `light-4dad7e228/` and `light-f21680dd3/`.
+- **The landed tip** is `cf4335ab9`: a9's merge of main `cbc376da5` (item 102) into `f21680dd3`. VF-PM's rehearsal was
+  clean, tree `12938cf53`, with no file changed on both sides. a9 minted it at
+  02:13:56Z; the bundle's sha256 is `119b3ede…`.
+- **The mini, run 24, `pnpm verify` at `cf4335ab9`:** exit 0, armed 02:14:31Z, done 02:19:09Z (load 1.62 → 8.35),
+  whole: preflight through `gen:check`, biome over 2,857 files.
+  - `pnpm test` ran 28 projects, and its 27 vitest summaries hold 10,715 passed, 0 failed and 18 skipped: contracts
+    1384, electron-shell 2225 + 3 skipped, field-app 3160, fieldd 2691 + 11 skipped. The dev-runner's node tests were
+    263/263, the stager's `builtAt` row among them.
+  - B4's files were among them: contracts `update-view` 35; electron-shell `updates/controller-apply` 97,
+    `updates/verify-chain` 25, `updates/release-scripts` 41 and `updates/identity` 7; field-app `update-words` 95,
+    `me-menu` 56, `updates-section` 34 and `limit-moment` 22.
+  - `pnpm test:rust`: 33 results, 532 passed, 0 failed, 14 ignored. The tree was clean after, with no stub left.
+  Logs: `lanes/ts6/logs/mini/run24/`.
+- **Landed:** main fast-forwarded `cbc376da5` → `cf4335ab9` at 02:21:26Z on VF-PM's GO (43 files, +3116 −75), and
+  was pushed at 02:22:09Z.
+
+**Records.** Owed to the next draft queue, in `draft/thinking-update-ux.md`:
+- §7's B4 as-built note gains its landing: merged over main three times, `cf4335ab9`, run 24.
+- The Status header's "B4 rebases twice … B2–B4's move" gets a dated correction: B4 was merged and its shas did not
+  move. The Status then flips to built.
+- Also owed elsewhere: EDP §11.1's note says built, and `build-wp12-updater.md`'s B3 paragraph gains step 6c.
+
+**Owed.**
+- The notes card, the build's day and What's new on a desk in both themes (James's display word).
+- The first signed nightly with notes: release-notes.mjs and the sign job's new step run for real only in the
+  release workflow, and nothing in `pnpm verify` publishes.
+- LC-54 (the GitHub release page saying the same lines) is James's to ask for. AU-6a's body calls LC-53 (the card's
+  words beyond DESIGN.md §8) open for James. He ruled it at the leans on the PM board, 2026-10-29 16:19:25Z, after
+  the commit (DECISIONS' AU row; the date is the record's §10, round 7).

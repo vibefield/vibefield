@@ -114,10 +114,16 @@
   signal skips the quit gate in every build, a fault older than AU, corrected at AL's LANDED entry) and AU-5
   (`a4688b7c9`: install on quit), as the merge `20783c656`, run 11. Each green on the Mac mini (LANDED "AU B1", "AU
   B2", "AU B3").
-- Next: **B4** — AU-6a (`4c25147bf`) and AU-6b (`2b1cfff6f`), the pre-rebase shas: signed notes and the build time,
-  every `release.yml` edit; built and light-green, rebased over HN B1 (landed 10-31). At its landing, EDP §11.1's
-  note says built and `build-wp12-updater.md`'s B3 paragraph gains step 6c.
-- Owed: Settings → Updates, the row, the dot and the question on a desk in both themes (James's display word); ⌘,
+- Landed 10-31: **B4** — AU-6a (`4c25147bf`: a release's signed plain-text notes on Settings → Updates and the Me row's
+  What's new, and the build's day on the page's head) and AU-6b (`2b1cfff6f`: the notes written in the sign job,
+  inside the manifest's one signature, and each stage's `builtAt`), merged over main twice in the lane (`4dad7e228`,
+  `f21680dd3`) and a third time by a9 over item 102, as `cf4335ab9`, run 24 (LANDED "AU B4"). AU-0…AU-7 are all built.
+- Next: the records at their sources at the next draft queue: the record's §7 B4 note gains its landing, and its Status
+  gets the dated "rebases … shas move" correction and flips to built; EDP §11.1's note and `build-wp12-updater.md`'s
+  step 6c. Then the owed rows below. Nothing of AU is left to build but LC-49's one-line words after the W row.
+- Owed: Settings → Updates, the row, the dot, the question, and B4's notes card, build day and What's new on a desk in
+  both themes (James's display word); the first signed nightly with notes (release-notes.mjs and the sign job's notes
+  step run only in the release workflow); ⌘,
   through the app menu (AU-4's eyeball, LC-28); AU-5's install-on-quit and AU-7's Move rows on the mini between two
   signed nightlies, then LC-49's "or quit" words in one line; the quit run's TCC probe; the logout probe; LC-52
   ("Check for Updates…" keeps its ellipsis, though the item does not open a box) is James's.
@@ -405,8 +411,8 @@
 
 **Eyeballs (both themes)**
 - Settings → Updates (AU-3; the update card left General with B2) with the Me menu's update row, the dot and the
-  question (AU-2), and since B3 the status item's update image and the app menu's update item (AU-4); ⌘, through the
-  app menu has no smoke (LC-28).
+  question (AU-2), since B3 the status item's update image and the app menu's update item (AU-4), and since B4 the
+  notes card, the build's day and What's new (AU-6); ⌘, through the app menu has no smoke (LC-28).
 - History by project (PJ-4 phase B): the list's order and folds, a row's marks, "n live".
 - Settings → Plugins (object rows since DK-8 `244263f8c`): enable, disable, update, a faulted plugin's state.
 - Settings → Devices → Network details' sync rows and the head's name-pill sync dot (C6-4); could join TS's photographs.
@@ -586,7 +592,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | AO — Bring Your Agents | ACTIVE; AO-0…6b3 landed | `thinking-agent-onboarding.md` | AO-7 on a puppeteer release after 0.3.0 (`installRecipe`) |
 | FG — the first run on the field | ACTIVE; FG-0…3a landed 10-30 | `thinking-first-run-glass.md`; DESIGN.md §2.1/§5/§6/§8/§13 | FG-3b |
 | AL — app lifecycle | ACTIVE; AL-1…3, 5, 7, 8a, 9 landed | `thinking-app-lifecycle.md`; ESR §7.3 | AL-6, Last exit, relaunch cap |
-| AU — Updates That Wait | ACTIVE; B1–B3 (AU-0…AU-5, AU-7) landed 10-30 | `thinking-update-ux.md` §7 (page sources `draft/update-ux/`); DESIGN.md §2.5/§2.8/§6/§8/§9/§13; EDP §5.2/§6.4/§11; ESR §7.3 | B4 (AU-6a, AU-6b), rebased over HN B1 |
+| AU — Updates That Wait | ACTIVE; B1–B4 (AU-0…AU-7) landed 10-30/31 | `thinking-update-ux.md` §7 (page sources `draft/update-ux/`); DESIGN.md §2.5/§2.8/§6/§8/§9/§13; EDP §5.2/§6.4/§11; ESR §7.3 | the owed eyeballs, the first signed nightly with notes, the physical rows |
 | PG — the phone's Godview | ACTIVE; PG-1a…1c landed 10-31 | `thinking-phone-godview.md` §7/§8; `design-mv.md`; `design-06-sync-planes.md` | PG-0 (queued); PG-1d → PG-1e0 |
 | HN — Cards in Hand | ACTIVE; B1 (HN-0…HN-4) landed 10-31 | `thinking-cards-in-hand.md` §6 (page sources `draft/cards-in-hand/`); DESIGN.md §1/§5/§6/§8/§9/§10/§13 | B2 (HN-5…HN-7), after item 102; then B3 (HN-8) |
 | QW1 — Godview swarm QA, fix wave 1 | ACTIVE; stacks A and B landed 10-28, B on puppeteer 0.3.0's EL8 pin | `godview-swarm-qa-plan.md`; `thinking-ar-reattach.md` | QA wave 1 |
