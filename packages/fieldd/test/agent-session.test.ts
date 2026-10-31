@@ -3329,6 +3329,8 @@ describe("item 87 — a run's exit is not held by its workspace's cleanup", () =
     })) as AgentSpawnResult;
     const runId = spawned.session.runtimeRunId;
     await joinedRow(win, runId);
+    // item 118 — the ⌃C below must meet `cat`, never the shell's prologue
+    await catReady(box, spawned.terminal.sessionId);
     // only now: the launch's own git calls (the workspace's baseline) are behind it
     const git = stalledGit(box.root);
     const path = process.env["PATH"];
@@ -3415,6 +3417,8 @@ describe("item 87 — a run's exit is not held by its workspace's cleanup", () =
     })) as AgentSpawnResult;
     const runId = spawned.session.runtimeRunId;
     await joinedRow(win, runId);
+    // item 118 — the ⌃C below must meet `cat`, never the shell's prologue
+    await catReady(box, spawned.terminal.sessionId);
     const git = stalledGit(box.root);
     const path = process.env["PATH"];
     process.env["PATH"] = `${git.dir}:${path ?? ""}`;
