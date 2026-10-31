@@ -255,6 +255,52 @@ describe("SP-1b — the row says whose session it is and who started it (track C
   });
 });
 
+describe("DS-D5 — a person's durable Stop rides the field row", () => {
+  it("carries the Stop's clock and stage, in open words, and only on a row that holds one", () => {
+    const snapshot = AgentFieldSnapshot.parse(golden("agent-field-snapshot.stop.json"));
+    const [ending, unheard, heard] = snapshot.rows;
+    expect(ending?.stop).toEqual({ sentAt: "2026-10-31T06:00:03.000Z", stage: "terminating" });
+    expect(unheard?.stop?.unheardAt).toBe("2026-10-31T06:01:08.000Z");
+    expect(heard?.stop).toMatchObject({ stage: "heard", heardBy: "status" });
+    // content-free: no key of a Stop names a path or a word of the run
+    expect(JSON.stringify(snapshot)).not.toContain('"cwd"');
+    // the goldens from before DS carry none and still parse
+    const older = AgentFieldSnapshot.parse(golden("agent-field-snapshot.valid.json"));
+    expect(older.rows.every((row) => row.stop === undefined)).toBe(true);
+  });
+
+  it("takes a stage or a hearing it does not know, and an unknown key beside them, as the tolerant reader does", () => {
+    const row = AgentFieldSnapshot.parse(golden("agent-field-snapshot.stop.json"))
+      .rows[0] as Record<string, unknown>;
+    const stop = {
+      sentAt: "2026-10-31T06:00:03.000Z",
+      stage: "paused",
+      heardBy: "turn-stop",
+      by: "x",
+    };
+    expect(AgentFieldRow.parse({ ...row, stop }).stop).toEqual(stop);
+  });
+
+  it("refuses a Stop that is not one rather than coercing it", () => {
+    const row = AgentFieldSnapshot.parse(golden("agent-field-snapshot.stop.json"))
+      .rows[0] as Record<string, unknown>;
+    for (const bad of [
+      "sent",
+      { stage: "sent" },
+      { sentAt: "2026-10-31T06:00:03.000Z" },
+      { sentAt: "2026-10-31T06:00:03.000Z", stage: "" },
+      { sentAt: "2026-10-31T06:00:03.000Z", stage: "x".repeat(33) },
+      { sentAt: "2026-10-31T06:00:03.000Z", stage: "heard", heardBy: "" },
+    ]) {
+      expect(AgentFieldRow.safeParse({ ...row, stop: bad }).success, JSON.stringify(bad)).toBe(
+        false,
+      );
+    }
+    // the desk row is a field row: it reads the same key the same way
+    expect(AgentDeskRow.safeParse({ ...row, stop: "sent" }).success).toBe(false);
+  });
+});
+
 describe("DS-3 — the subscription's new options", () => {
   it("a mesh board is field or desk at a scope; today's callers ask none of it", () => {
     const parsed = AgentSubscribeParams.parse({ projection: "desk", scope: "mesh" });

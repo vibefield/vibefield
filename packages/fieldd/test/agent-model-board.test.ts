@@ -222,6 +222,44 @@ describe("the two cuts of the model's row (M16, M21)", () => {
     down.dispose();
     monitor.service.dispose();
   });
+
+  it("PG-1d — an idle desk board re-presented on a gate flip: ONE snapshot at its revision, the attach promise withdrawn", async () => {
+    const monitor = await testMonitor({ summaries: [working] });
+    // the backend promises an attach (M41); `row` brings the model's rows up first
+    expect(monitor.row("run-working")).toMatchObject({ attachable: true, writable: true });
+    const frames: Array<{
+      frame: { epoch?: string; revision: number; rows: unknown[] };
+      kind: string;
+    }> = [];
+    let published = true;
+    const sub = createFieldSubscription({
+      list: () => monitor.fold.list(),
+      subscribe: (fn) => monitor.fold.subscribe(fn),
+      emit: (frame, kind) => frames.push({ frame: frame as never, kind }),
+      project: deskProjector((id) => monitor.service.rowForRun(id)),
+      minIntervalMs: AGENT_FIELD.DESK_MIN_INTERVAL_MS,
+      epoch: "boot.1",
+      terminalPublished: () => published,
+    });
+    const open = AgentDeskRow.parse(sub.snapshot.rows[0]);
+    expect(open.monitorRow).toMatchObject({ attachable: true, writable: true });
+
+    published = false;
+    sub.represent();
+    await new Promise((resolve) => setTimeout(resolve, AGENT_FIELD.DESK_MIN_INTERVAL_MS + 50));
+    expect(frames).toHaveLength(1);
+    expect(frames[0]).toMatchObject({
+      kind: "snapshot",
+      frame: { epoch: "boot.1", revision: sub.snapshot.revision },
+    });
+    const held = AgentDeskRow.parse(frames[0]?.frame.rows[0]);
+    expect(held.terminal).toBeUndefined();
+    expect(held.monitorRow).toMatchObject({ attachable: false, writable: false });
+    // nothing else of the model's row moves
+    expect({ ...held.monitorRow, attachable: true, writable: true }).toEqual(open.monitorRow);
+    sub.dispose();
+    monitor.service.dispose();
+  });
 });
 
 describe("who may ask the model board (MV-D18, M16, L8)", () => {

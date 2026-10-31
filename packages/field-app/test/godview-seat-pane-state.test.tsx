@@ -496,9 +496,10 @@ describe("the driven pane (the shipping view, and its controller over the real p
     join(dirname(fileURLToPath(import.meta.url)), "../src/godview/godview.css"),
     "utf8",
   );
+  // the item's block ends where the next state's begins (DS-D4 (a), the stopping pane)
   const seatSheet = sheet.slice(
     sheet.indexOf("/* item 42 — A SESSION ANOTHER DEVICE IS DRIVING"),
-    sheet.indexOf("/* M49 — a deck piece behind its own boundary"),
+    sheet.indexOf("/* DS-D4 (a) — A RUN A STOP HAS NOT STOPPED"),
   );
   /** A rule's body, by its whole selector at a line's start (a starting style,
    * indented in its block, is never it). */
@@ -524,6 +525,7 @@ describe("the driven pane (the shipping view, and its controller over the real p
     // the item's block, found whole: from its own head to the next item's
     expect(seatSheet.startsWith("/* item 42")).toBe(true);
     expect(seatSheet).not.toContain("M49");
+    expect(seatSheet).not.toContain("DS-D4");
     const state = rule(".vf-godview-seat-state");
     expect(state).toContain("pointer-events: none;");
     expect(state).toContain("z-index: 5;");

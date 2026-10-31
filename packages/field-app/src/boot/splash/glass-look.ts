@@ -30,6 +30,8 @@ export interface GlassLook {
   readonly radius: number;
   /** its shadow on the field, in CSS's order: the first listed lies over the second */
   readonly shadows: readonly GlassShadow[];
+  /** the logo wears `invert(1) hue-rotate(180deg)` (`--vf-wizard-logo-filter`, milk's), its colours kept */
+  readonly logoInvert: boolean;
 }
 
 /** Where the glass stands on the field's canvas (CSS px from its top left), and how far it has formed. */
@@ -46,6 +48,8 @@ export interface GlassPose {
   readonly frost: number;
   /** `--vf-glass-rise` */
   readonly rise: number;
+  /** `--vf-glass-logo`, 0 … 1: the logo, which only fades (FG-4b) */
+  readonly logo: number;
 }
 
 /** The glass as the field draws it: its recipe, and where it stands. */
@@ -62,6 +66,8 @@ export interface GlassLayers {
   readonly shadow: Element;
   /** the frost, whose ::after is its tint */
   readonly frost: Element;
+  /** the logo's own layer (the still mark), whose filter is the logo's */
+  readonly logo: Element;
 }
 
 /** At most two shadows, as the field's pass draws them (DESIGN.md §5: `--vf-shadow-wizard-field` has two). */
@@ -124,7 +130,7 @@ export function parseNumber(css: string): number | null {
 /** The glass's recipe, read off its layers' computed style. Null when any of it can't be read, and then the field
  * draws no glass: the browser keeps drawing it whole. */
 export function readGlassLook(
-  { glass, shadow, frost }: GlassLayers,
+  { glass, shadow, frost, logo }: GlassLayers,
   style: typeof getComputedStyle = getComputedStyle,
 ): GlassLook | null {
   const own = style(glass);
@@ -135,6 +141,8 @@ export function readGlassLook(
   const grain = parseNumber(token("--vf-wizard-grain"));
   const radius = parsePx(own.borderTopLeftRadius);
   const shadows = parseShadows(style(shadow).boxShadow);
+  // the tokens give the logo one filter or none, so any filter is that one (the draft page's rule)
+  const filter = style(logo).filter.trim();
   if (
     tint === null ||
     blur === null ||
@@ -145,13 +153,21 @@ export function readGlassLook(
     shadows.length > GLASS_SHADOWS
   )
     return null;
-  return { tint, blur, saturate, grain, radius, shadows };
+  return {
+    tint,
+    blur,
+    saturate,
+    grain,
+    radius,
+    shadows,
+    logoInvert: filter !== "" && filter !== "none",
+  };
 }
 
 /** Where the glass stands on the field's canvas, `field` being the canvas's box, and how far it has formed: its box
  * as laid out (the fit is an ancestor's scale; the rise scales its layers, never the glass, so its box holds the fit
- * alone), and the frost and the rise as they are this frame, since its forming animates them on it
- * (wizard-ui.css). */
+ * alone), and the frost, the rise and the logo as they are this frame, since its forming and the logo's fades
+ * animate them on it (wizard-ui.css). */
 export function readGlassPose(
   glass: HTMLElement,
   field: DOMRectReadOnly,
@@ -162,6 +178,7 @@ export function readGlassPose(
   const w = glass.offsetWidth;
   const h = glass.offsetHeight;
   const frost = parseNumber(own.getPropertyValue("--vf-glass-frost")) ?? 1;
+  const logo = parseNumber(own.getPropertyValue("--vf-glass-logo")) ?? 0;
   return {
     x: box.left + box.width / 2 - field.left,
     y: box.top + box.height / 2 - field.top,
@@ -170,6 +187,7 @@ export function readGlassPose(
     fit: w > 0 && box.width > 0 ? box.width / w : 1,
     frost: Math.min(1, Math.max(0, frost)),
     rise: parseNumber(own.getPropertyValue("--vf-glass-rise")) ?? 1,
+    logo: Math.min(1, Math.max(0, logo)),
   };
 }
 
@@ -182,7 +200,8 @@ export function samePose(a: GlassPose, b: GlassPose): boolean {
     a.h === b.h &&
     a.fit === b.fit &&
     a.frost === b.frost &&
-    a.rise === b.rise
+    a.rise === b.rise &&
+    a.logo === b.logo
   );
 }
 

@@ -1,5 +1,7 @@
 // @vitest-environment happy-dom
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { AGENT_CATALOG, type AgentCatalogEntryWire } from "@vibefield/contracts/agent-catalog";
 import type { AgentInstall } from "@vibefield/contracts/agent-index";
 import type { FielddClient } from "@vibefield/fieldd-client";
@@ -7,9 +9,11 @@ import { FielddProvider } from "@vibefield/fieldd-client/react";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { WizardShellView } from "../src/boot/onboarding/wizard-ui";
 import { type FieldHost, setHost } from "../src/host";
 import { AgentsWizardPane } from "../src/setup/AgentsWizardPane";
 import { agentsPaneModel, howItUpdates, installFact } from "../src/setup/agents-pane";
+import { AGENTS_LOOKING_FACE } from "../src/setup/agents-words";
 
 // AO-5 (track AO; AO-D1, AO-D13; DESIGN.md §8 "The Setup Assistant's agent
 // chapter" — Agents) — the chapter's first pane: the agents on this Mac as
@@ -18,6 +22,30 @@ import { agentsPaneModel, howItUpdates, installFact } from "../src/setup/agents-
 // so a status flip there moves these rows with it.
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+const AGENTS_CSS = readFileSync(join(process.cwd(), "src/setup/agents-pane.css"), "utf8");
+const TOKENS = readFileSync(join(process.cwd(), "../design-kit/src/tokens.css"), "utf8");
+const DESIGN = readFileSync(join(process.cwd(), "../../DESIGN.md"), "utf8");
+
+/** The glass's rule for a list that can outgrow its pane's body (DESIGN.md §4
+ * `--vf-scroll-fade`, the face deck's): it scrolls within itself, edge-faded,
+ * with no scrollbar, and gives back the 4 that keep a focus ring in its clip. */
+const scrollsWithin = (list: string): string =>
+  [
+    `.vf-wizard-shell[data-size="glass"] ${list} {`,
+    "  min-height: 0;",
+    "  margin: -4px -4px 0;",
+    "  padding: 4px 4px var(--vf-scroll-fade);",
+    "  overflow-y: auto;",
+    "  scroll-padding-bottom: var(--vf-scroll-fade);",
+    "  mask-image: linear-gradient(to bottom, black calc(100% - var(--vf-scroll-fade)), transparent);",
+    "  scrollbar-width: none;",
+    "}",
+    "",
+    `.vf-wizard-shell[data-size="glass"] ${list}::-webkit-scrollbar {`,
+    "  display: none;",
+    "}",
+  ].join("\n");
 
 const noopLogger: FieldHost["logger"] = {
   child: () => noopLogger,
@@ -178,13 +206,30 @@ function daemon(installs: readonly AgentInstall[] | null): FielddClient {
   } as unknown as FielddClient;
 }
 
-async function mount(client: FielddClient, onDone: (end: string) => void): Promise<void> {
+/** The pane alone, or (`onGlass`) in the glass's own shell, as the wizard
+ * stands it. */
+async function mount(
+  client: FielddClient,
+  onDone: (end: string) => void,
+  onGlass = false,
+): Promise<void> {
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
+  const pane = createElement(AgentsWizardPane, { onDone });
   await act(async () => {
     root?.render(
-      createElement(FielddProvider, { client }, createElement(AgentsWizardPane, { onDone })),
+      createElement(
+        FielddProvider,
+        { client },
+        onGlass
+          ? createElement(WizardShellView, {
+              dark: false,
+              onToggleTheme: () => undefined,
+              children: pane,
+            })
+          : pane,
+      ),
     );
   });
   await flush();
@@ -236,6 +281,72 @@ describe("the Agents pane on the wizard's glass", () => {
     await act(async () => more?.click());
     expect(more?.getAttribute("aria-expanded")).toBe("true");
     expect(text()).toContain(A_PREVIEW.label);
+    // More agents opens in two columns under the installed rows, a little less air per row, so the pane fits the
+    // glass's frame (FG-D19 A); each column's last row draws no hairline
+    const [installed, preview] = Array.from(
+      container?.querySelectorAll(".vf-agents-pane-rows") ?? [],
+    );
+    expect(installed?.hasAttribute("data-columns")).toBe(false);
+    expect(preview?.getAttribute("data-columns")).toBe("2");
+    expect(preview?.textContent).toContain(A_PREVIEW.label);
+    expect(AGENTS_CSS).toMatch(
+      /\.vf-agents-pane-rows\[data-columns="2"\] \{\s*display: grid;\s*grid-template-columns: minmax\(0, 1fr\) minmax\(0, 1fr\);\s*column-gap: 8px;/,
+    );
+    expect(AGENTS_CSS).toMatch(
+      /\.vf-agents-pane-rows\[data-columns="2"\] > \.vf-agents-pane-row \{\s*min-height: 40px;\s*padding: 3px 0;/,
+    );
+    expect(AGENTS_CSS).toContain(
+      '.vf-agents-pane-rows[data-columns="2"] > .vf-agents-pane-row:nth-last-child(2):nth-child(odd) {\n  border-bottom: 0;',
+    );
+  });
+
+  it("scrolls every agent within the list on the glass, edge-faded with no scrollbar, while the pane's head, its foot and Continue stand still (FG-L3)", async () => {
+    // every agent VibeField installs, on this Mac: nine today, 448 in a body of 322 by the CSS's own
+    // numbers. happy-dom lays nothing out, so the pane's 504 is held here by its rules (the frame's
+    // inset, a head and a foot that never give way, a body that yields: onboarding-wizard's frame
+    // row) and the list's own; the pixels are FG-4b's console rows
+    const every = [...SUPPORTED, ...PREVIEW_TO_GET];
+    await mount(daemon(every.map((row) => install(row.id))), vi.fn(), true);
+    const pane = container?.querySelector(
+      '.vf-wizard-shell[data-size="glass"] .vf-wizard-frame > form.vf-wizard-pane',
+    );
+    expect(Array.from(pane?.children ?? [], (part) => part.className)).toEqual([
+      "vf-wizard-pane-head",
+      "vf-wizard-pane-body",
+      "vf-wizard-pane-foot",
+    ]);
+    // the list is the body's one part and holds every row; Continue stands on the foot, outside it
+    const body = pane?.querySelector(".vf-wizard-pane-body");
+    expect(Array.from(body?.children ?? [], (part) => part.className)).toEqual(["vf-agents-pane"]);
+    const list = body?.querySelector(".vf-agents-pane");
+    expect(list?.querySelectorAll('.vf-agents-pane-row[data-state="ready"]')).toHaveLength(
+      every.length,
+    );
+    expect(list?.querySelector('button[type="submit"]')).toBeNull();
+    expect(pane?.querySelector('.vf-wizard-pane-foot button[type="submit"]')?.textContent).toBe(
+      "Continue",
+    );
+    // the glass's rule is the mounted list's: the face deck's, its 20 a token DESIGN.md names first
+    expect(list?.matches('.vf-wizard-shell[data-size="glass"] .vf-agents-pane')).toBe(true);
+    expect(AGENTS_CSS).toContain(scrollsWithin(".vf-agents-pane"));
+    expect(TOKENS).toContain("--vf-scroll-fade: 20px;");
+    expect(DESIGN).toContain("| `--vf-scroll-fade` | `20px` |");
+  });
+
+  it("scrolls More agents within the same list when it opens on a Mac with none, the first agent's line with them (FG-L3)", async () => {
+    // none here and More open: 348 in a body of 322
+    await mount(daemon([]), vi.fn(), true);
+    await click("More agents");
+    const list = container?.querySelector(".vf-wizard-pane-body > .vf-agents-pane");
+    expect(Array.from(list?.children ?? [], (part) => part.className)).toEqual([
+      "vf-agents-pane-rows",
+      "vf-agents-pane-more",
+      "vf-agents-pane-rows",
+      "vf-agents-pane-first",
+    ]);
+    expect(list?.querySelectorAll(".vf-agents-pane-row")).toHaveLength(
+      SUPPORTED.length + PREVIEW_TO_GET.length,
+    );
   });
 
   it("asks for a first agent on a Mac with none, and records the step put off", async () => {
@@ -244,7 +355,10 @@ describe("the Agents pane on the wizard's glass", () => {
     await mount(client, onDone);
     expect(heading()).toBe("Add your first agent.");
     expect(text()).toContain("Install one, and it appears here.");
-    expect(text()).toContain("Add agents anytime in Settings → Agents.");
+    // where a first agent appears later is the pane's later line, under its actions (FG-L3)
+    expect(container?.querySelector(".vf-wizard-later")?.textContent).toBe(
+      "Add agents anytime in Settings → Agents.",
+    );
     await click("Look again");
     expect(client.request).toHaveBeenCalledWith("agents.installs", { refresh: true });
     await flush();
@@ -253,12 +367,17 @@ describe("the Agents pane on the wizard's glass", () => {
     expect(onDone).toHaveBeenCalledWith("later");
   });
 
-  it("claims nothing while the inventory is unread, and records nothing when moved past", async () => {
+  it("holds while the inventory is unread, claiming nothing, and records nothing when moved past", async () => {
     const client = daemon(null);
     const onDone = vi.fn();
     await mount(client, onDone);
-    expect(heading()).toBe("Your agents.");
+    // a load is a hold on the glass (FG-L5; FG-4b): the logo and the look's own line, the face of
+    // the hold while the pane's code arrives, and no way out of its own — it gives up after 15s
+    const hold = container?.querySelector("form.vf-wizard-hold");
+    expect(hold?.getAttribute("data-face")).toBe(AGENTS_LOOKING_FACE);
+    expect(heading()).toBe("");
     expect(text()).toContain("Looking on this Mac…");
+    expect(hold?.querySelector("button")).toBeNull();
     // nothing found yet, so nothing claimed found (found by eye at the AO-6a gate)
     expect(text()).not.toContain("VibeField found these");
     await act(async () => {
@@ -267,7 +386,8 @@ describe("the Agents pane on the wizard's glass", () => {
     await act(async () => {
       vi.advanceTimersByTime(1_000);
     });
-    // the page's §10 row, word for word, with Try again (a fresh read)
+    // the page's §10 row, word for word, on the pane, with Try again (a fresh read)
+    expect(heading()).toBe("Your agents.");
     expect(text()).toContain("VibeField couldn't read the agents on this Mac.");
     expect(text()).not.toContain("VibeField found these");
     await click("Try again");

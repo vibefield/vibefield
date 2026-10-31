@@ -640,6 +640,8 @@ everywhere except eyebrows.
 | `--vf-radius-sheet` | `40px` | a sheet's far corners — the fields explorer's lower two (`22 22 40 40`, §8 the head, drawn by value); it named the open island's top corners until DK-13. No CSS reads the token today |
 | `--vf-radius-control` | `6–10px` | inline controls (`rounded` ≈ 4–6 for tiny) |
 | pills/buttons | fully round (`999px`) | chips, round icon buttons |
+| `--vf-scroll-fade` | `20px` | a list that can outgrow what holds it scrolls within itself (2026-10-31, FG-4a): no scrollbar; its last 20 masked from whole to clear (`linear-gradient(to bottom, black calc(100% - 20px), transparent)`) and 20 of padding under its end, so while there is more the next row peeks under the fade and at the end the last row clears it; a scroll into view (a focus, a login) stops 20 short of its foot. Padded 4 on its other sides, so a focus ring stays inside its clip. The face deck's rule (§2.8), which wears it; the Setup Assistant's Agents, History and Profiles lists on the glass (§8 "The Setup Assistant's glass") |
+| `--vf-glass-signin-height` | `190px` | a login's terminal in a pane on the Setup Assistant's glass (2026-10-31, FG-4a; Settings' sign-in keeps its 240). Its card is the terminal and 79.5 of chrome — the head's 33.5 (8, 11px at 1.5, 8 and its hairline), two borders, the gap of 8 and the Cancel row's 36 — so at 190 it is 269.5 and stands whole in the 278.2 that Profiles' cards keep above their fade (the body's 322.2 less the fact's one line of 18 and its gap of 10, the 4 given back, less the fade's 20): Cancel in view without a scroll. At 240 it would be 319.5, and Cancel a scroll away. Three lines of terminal are the cheaper loss (ruled at the lean, VF-PM 2026-10-31 05:12Z; James may overturn to 240 and the scroll) |
 
 Round icon buttons: `40px` (`h-10 w-10`).
 *Retired 2026-10-28 (the housekeeping pass), recording DK-13 and DK-17:* the iOS size grid (small
@@ -695,7 +697,7 @@ exception again.
 | Overlay chip | surface `/90–95` + `backdrop-blur-xl` | no wearer today: the put-back affordance and the HUD's toasts retired (DK-13, DK-17); the peers' chips wear the line's glass and the status line solid chrome (§8) |
 | Backdrop dim | `black/10` light · `black/40` dark | behind open sheets; canvas recedes to `scale(0.98)` |
 | Search scrim (GV-D8; K7, 2026-10-08) | `black/16` light · `black/46` dark, over a backdrop blur of 18 and `saturate(0.9)` | behind the Peek (§8 "Search"): the window blurred and dimmed, the view and the frame receding to `scale(0.98)` under it. Darker than the backdrop dim so it reads as dimmed (One Frame §23); the backdrop dim stays the sheets' until James rules otherwise (docket PK1). *Since TS-D22 A (2026-10-29):* the phone wears its dim alone, with no blur, under a door that stands over a live field, between the field and the bar (§9) |
-| Setup Assistant (as built since UA-3w; written down 2026-10-29, track FG; on the field, built at FG-3a as the browser's layers, and since FG-3b drawn by the field's own pass over the live field) | `--vf-wizard-surface` (white 55% by day, `rgb(28 28 30)` 55% by night) over a blur of `--vf-wizard-blur` (32px) and a saturation of `--vf-wizard-saturate` (1.12), the island radius (32). On the field (FG): a 1px edge, `--vf-wizard-edge` (white 60% by day, 12% by night) with a top light, `--vf-wizard-edge-light` (white 75%, 8%); the field's shadow, `--vf-shadow-wizard-field` (`0 40px 120px` and `0 12px 32px` in the field's ground at 55% and 28%); and a grain at `--vf-wizard-grain` (3%), so the blur never bands | the Setup Assistant's glass (§8): on the field its frost lets the tunnel's rings through softly (FG-D15 C). Over the live field the field draws this recipe itself, in its own frame and from these tokens (FG-D24); over the field's still the backdrop filter draws it |
+| Setup Assistant (as built since UA-3w; written down 2026-10-29, track FG; on the field, built at FG-3a as the browser's layers, and since FG-3b drawn by the field's own pass over the live field) | `--vf-wizard-surface` (white 55% by day, `rgb(28 28 30)` 55% by night) over a blur of `--vf-wizard-blur` (32px) and a saturation of `--vf-wizard-saturate` (1.12), the island radius (32). On the field (FG): a 1px edge, `--vf-wizard-edge` (white 60% by day, 12% by night) with a top light, `--vf-wizard-edge-light` (white 75%, 8%); the field's shadow, `--vf-shadow-wizard-field` (`0 40px 120px` and `0 12px 32px` in the field's ground at 55% and 28%); and a grain at `--vf-wizard-grain` (3%), so the blur never bands. Its logo (FG-4b): `--vf-wizard-logo-filter`, `invert(1) hue-rotate(180deg)` by day and `none` by night, so the mark is white on smoke and inverted on milk with its colours kept | the Setup Assistant's glass (§8): on the field its frost lets the tunnel's rings through softly (FG-D15 C). Over the live field the field draws this recipe itself, in its own frame and from these tokens (FG-D24); over the field's still the backdrop filter draws it |
 
 **Menus are solid, floating controls are glass** (One Frame FR-7, FC-D14 ruled 2026-10-01): a menu
 is rows to be read, so it is `--vf-chrome-solid` — opaque — ringed by `--vf-hairline-strong`, with
@@ -997,6 +999,11 @@ centre light by night) — while the desk settles in from `.985` (1.9s island) a
 frame-stable and never before the splash has stood **700ms**, the website's floor for a repeat visit (FG-L6): a
 floor, never a stage. Reduced motion: fades only, halved; no rise; the field at rest, and a 120ms fade in place of
 the tear.
+*Amended 2026-10-31 (FG-4b; ruled at the lean by VF-PM, 05:42Z, James may overturn):* **a load's floor.** A load is
+the logo and one line (FG-L5), and the product's loads often answer in milliseconds, so a hold never flashes: a load
+that answers before the pane it follows has faded out (120ms) shows no hold at all, and a hold that has begun to show
+stands at least **800ms** — the logo's 400 in, then a beat to read the line — before its words and the logo leave. The
+frame keeps the floor: the leaving hold stays whole until it is met, then fades as any pane does.
 
 *(Godview round 3, built 2026-10-12; its status is §8 the deck's.)*
 **The terminals rise and fall** (Godview's deck, §8; One Frame §22 "Shared mechanics" and §23 —
@@ -2931,6 +2938,51 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   keeps the edge and its light, and stands its other layers down only once the field says it draws them
   (`data-glass`); over the still, and until the field's pass is ready, it draws the whole glass. The logo stays
   FG-4's.*
+  *Status 2026-10-31 (FG-4a, built): the panes stand in the frame. A pane fills it: its head at 96 (the title and
+  the voice, 8 apart), its body 20 under the head (16 between its parts, 18 on TS's panes), and its foot on the
+  frame's foot at 600 (16 above the actions, and under them the later line, 12px in t3, whose 17 are kept on every
+  pane). The pane never scrolls, so its head, its foot and Continue never move: a list that can outgrow its body
+  scrolls within itself on the face deck's rule (`--vf-scroll-fade`, §4; ruled at the lean 2026-10-31, James may
+  overturn) — Agents' list, History's rows with its two sentences standing under them, and Profiles' cards with the
+  fact and a notice under them. A login's terminal stands 190 on the glass (`--vf-glass-signin-height`, §4), so its
+  whole card, Cancel with it, comes into view above Profiles' fade: 269.5 in 278.2, where Settings' 240 would be
+  319.5 and leave Cancel a scroll away (ruled at the lean; James may overturn to 240 and the scroll). The pixel
+  witness is owed to FG-4b's console rows: Agents with nine installed, History with six rows, Profiles' add with
+  its login. On the glass no pane draws its eyebrow. A new pane fades in (240ms `ease`, 160ms
+  reduced) once the old one has faded out (120ms, 60 reduced), the old one leaving as a still copy over the frame;
+  a pane's own changes never fade. A skip's later home (W3) is that line. You's face stands in a 112 × 104 slot,
+  and More agents opens in two columns with rows 40 tall (FG-D19 A). The welcome and the read before the first
+  pane stand centred in the frame until FG-4b stands them under the logo. Finish setting up's sheet keeps its panes
+  as they stood (FG-D26): the eyebrow, centred in it and scrolling downward only, 30rem at most, rising in.*
+  *Status 2026-10-31 (FG-4b, built): the holds and the logo. A load is a hold: it spans the glass, its rows
+  `1fr | the logo | 1fr`, and stands its words 26 under the logo in the frame's 560 — the line (400, 14px/1.4, t2)
+  and its sub 4 under it (12px/1.4, t3, its 17 kept), in tabular figures. A new line crossfades in place (140ms out,
+  then 240ms in; 60 and 120 reduced) with the sub it brings, the words leaving from where they had come to; a line
+  followed before it has begun to show is never shown (so what History's first pass found, which the welcome follows
+  at once, is the room's to say), and a new sub under the same line only counts. The loads are
+  the read before the first pane, Agents' and History's looks (the hold while a pane's code arrives and the pane's
+  own look are one, carried without a fade), the link's read ("Asking this Mac about its link…") and Tailscale
+  opening ("Opening Tailscale…", "Joining your network…" for an auth key, the slow note as its sub). A way out stands
+  18 under the words and only after 6s (fading in over 240ms, 120 reduced), hidden until then so it takes no focus
+  and no press: the link's read's Continue, since a read with no give-up of its own needs a way out, and Tailscale's
+  Cancel (FG-O7 (a), at the lean), whose Esc works from the start in the Setup Assistant. Agents' and History's looks
+  carry none: each gives up after 15s onto its unavailable pane. The sheet keeps its panes and its Escape (FG-D26).
+  The frame swaps on a pane's face (`data-face`), watching its own children: a pane's face is its step's, so its own
+  changes never fade, and a hold names its own; the sheet never swaps. It keeps §6's floor — a load answered before
+  the old pane has faded out shows no hold, and a hold that has begun to show stands 800ms, its leaving copy whole
+  until then — and the logo: in over 400ms once the last words are out, out over 280ms before the next come, which
+  wait for it (160 and 120 reduced). The welcome is a title card under the logo, its words 30 under it: Welcome.
+  (32px, light), AO's line 10 under it (420 at most), Get started 28 under that. Setting up is one line (FG-D21 B),
+  the work's own words: "Opening your field…" over the boot's stage, then History's first pass ("Finding your
+  history…", then "Discovering conversations…" over its files checked), and at the end the welcome on the same line,
+  in ink, over "Your face in the bottom-left corner opens Settings — so does ⌘,". Start now and its reason (360 at
+  most, 8 above it) stand under the line when AO-D4's 8s give them, fading in over 240ms. What went wrong stays a
+  pane: the answers not saved, and the desk that could not open, in the boot's words with its Retry. The band's
+  Setting up segment fills with the boot's own progress (260ms linear; at once reduced), then stands full. The logo
+  is the field's mark at the window's centre and its size on the screen (the splash's 128 × 77, held in the glass's
+  own px against the fit); over the field's still, the still's own mark, cover-fitted with the picture (1× wide, 2×
+  tall). Over the live field the field draws it over the frost, from the mark it draws itself, reading its fade and
+  its filter (§5) off the glass. The pixel witness and the console rows are owed to the next window.*
 - **The reveal** (boot-exclusive motion): the canvas composes and stabilizes BEHIND
   the splash (the frame-stability gate — never reveal mid-hitch), then the splash
   fades 240ms plain `ease` while the canvas settles `scale(0.99) → 1` over 560ms
@@ -3492,6 +3544,50 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     **45 × 22 · click the pane to take it.**, the size the session was left at. *Status
     2026-10-19: until item 20's lane lands, no pane takes the empty seat by itself, so every pane on
     the session, focused or not, says this until a click.*
+  - **A run a Stop has not stopped** (track DS, DS-D4 (a); ruled by James on the board: the place
+    at `ds-d4-place`, Accept, 2026-10-31 06:16:32Z, and the look at `ds-d4-look`, "Accept all
+    three", 06:29:00Z, as VF-PM proposed them at 06:16Z and in the convention read of 06:26Z).
+    fieldd holds a person's Stop as sent until it hears the run stop (the field row's `stop`;
+    `thinking-ar-durable-stop.md`). The pane speaks only in the two states a press cannot answer
+    itself, in the held-edge readout's figure (above), with its recipe and its reduced motion:
+    - **Sent, and sent again** (the stages `sent`, `resent`): the pane adds nothing. The frame's
+      stop verb already says **Stopping the turn…** from the press (puppeteer-views' own state),
+      and a veil over a turn the person is watching stop would dim the very fact. *This silence
+      rests on a number:* the frame's own guess lasts 8 s, and it must outlast both sends,
+      2 × `AGENT_STOP.HEARD_WITHIN_MS` (3 s, provisional) = 6 s. If DS-D1's measurement moves the
+      bound past about 3.5 s, the pane goes quiet while a stop is still in flight. It also holds
+      only for the frame's own press: *a gap, owed:* a spark's Stop (`agent_interrupt`, the talk
+      room) has no press on the pane, so the pane says nothing through its two sends. DS-D4 (c)'s
+      petition removes both, by letting the frame read fieldd's stage instead of its own guess.
+    - **Ending** (the stage `terminating`): the turn did not stop after two sends, and fieldd is
+      ending the run through the floor's ladder (a run whose status fieldd can read, DS-D3). The
+      words are **Ending** and **the run** at 40%, over **it did not stop after two sends · ending
+      it**. The pane colour lights it, as item 42's does: nothing is asked of the person. It holds
+      until the exit, the ladder's 4 s at most.
+    - **Still running** (`unheardAt`): fieldd sent the stop twice and cannot tell whether the turn
+      stopped (its status cannot be read, DS-D3), or the ladder could not be placed. The words are
+      **Still** and **running** at 40%, in text main as item 42's are, over **the stop was sent
+      twice and not heard ·** and then **End run**. The light, item 42's two insets and its bloom,
+      takes the attention fill (`--vf-orange`, §2.5: needs you, Godview's ring-1) in place of the
+      pane colour, and the caption, the small state word that has to be read, takes the attention
+      ink (§2.7), not ink 72%. S-4 protects a face's identity, and a pane's glow is not one.
+    - **End run** is the figure's one pointer target. *The rule, as the precedent:* a readout takes
+      a pointer only when the pane's own press cannot answer it, and the rest of the figure still
+      takes none. Item 42's press takes the seat back; here the press answers nothing, so the act
+      lives in the figure or nowhere the person is looking. It is a text button in the caption's
+      size and weight, named "End run", and its words take the danger text (`--vf-red`, §2.5 as
+      AU-0 amended it), because it ends a process. It is **one press, with no second step**: the
+      person's Stop was the first, fieldd's two sends were its honest repetition, and the caption
+      is the confirm's "what this does" line, so a two-step would be a third press for one intent.
+      It is `terminal.terminate` on the pane's own session (idempotent, the floor's ladder), and
+      the pane then shows the exit as any exit does.
+    - **Heard** (`heard`): by an exit, the pane shows the exit as any exit does (the frame's
+      resume), and the record says the exit followed a Stop (`exited.stop`); by its status, the run
+      reads idle and its pane stays live. Neither draws anything here: **Stopped** belongs to an
+      exit's record and is never painted over a live pane (VF-PM's wording note, 2026-10-31 04:40Z).
+    - Both entrances play at once, with no seat's 400ms: each is fieldd's fact, set once, never a
+      glance. Both figures go at once when fieldd lets the hold go. The line keeps the frame's own
+      1px.
 - **A launch in an empty pane is one element from the click to the first frame** (QL-2, 2026-09-29 —
   James picked look C · Cells from the Minimal Pane Frame's pass 4). The click (or ⌥n, or ↵ on a
   past session) answers in its own frame: the launcher shrinks to 0.94 toward the clicked mark
@@ -4461,6 +4557,12 @@ said as theirs. A count in 1024s names itself KiB or MiB (Diagnostics). Where a 
 limit, the size is rounded up and the limit down, so the two never read as equal. *Ruled
 2026-10-18 (James). Known deviation, owed: the desk readout's GPU memory says MB for a count in
 1024s (`panels/DeskReadout.tsx`).*
+
+**A Stop's words** (track DS, DS-D4; ruled with §8's pane state, `ds-d4-place` 2026-10-31
+06:16:32Z and `ds-d4-look` 06:29:00Z). The press is answered by the frame: **Stopping the
+turn…**. While fieldd ends a turn that did not stop: **Ending the run**. When fieldd cannot tell:
+**Still running** · "the stop was sent twice and not heard" · **End run**. A stop that was only
+sent is never "interrupted", and a live pane is never "Stopped": Stopped is an exit's word.
 
 **The link's words** (track TS, TS-D1 and TS-D2 ruled 2026-10-27). The act is **Continue with
 Tailscale** on every button that starts it — the Connect pane, Settings → Devices, the phone — and

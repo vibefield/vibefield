@@ -856,33 +856,37 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     await choose("connect", "Continue with Tailscale");
     expect(frame("connect").textContent).toContain("Opening Tailscale…");
 
-    // AO-1 — Setting up, fed the boot machine's states by hand: the desk's own
-    // stage while it opens, then the welcome in place of the title (one cell).
-    expect(frame("setting-up").textContent).toContain("drawing the board");
+    // AO-1 — Setting up, fed the boot machine's states by hand: one line under the logo
+    // (FG-D21 B), the desk's own stage under it while it opens, then the welcome on that line.
+    const standing = (state: string): Element | null =>
+      frame(state).querySelector('.vf-wizard-status-words:not([data-state="out"])');
+    const said = (state: string): [string, string] => [
+      standing(state)?.querySelector(".vf-wizard-status-line")?.textContent ?? "",
+      standing(state)?.querySelector(".vf-wizard-status-sub")?.textContent ?? "",
+    ];
+    expect(said("setting-up")).toEqual(["Opening your field…", "drawing the board"]);
     await choose("setting-up", "ready");
-    const swap = frame("setting-up").querySelector(".vf-wizard-title-swap");
-    expect(swap?.getAttribute("data-ready")).toBe("true");
-    expect(swap?.querySelector('[aria-hidden="false"]')?.textContent).toBe(
+    expect(said("setting-up")).toEqual([
       "Welcome to your field, James.",
-    );
+      "Your face in the bottom-left corner opens Settings — so does ⌘,.",
+    ]);
+    expect(standing("setting-up")?.getAttribute("data-ink")).toBe("true");
+    // the answers being written: the desk's line, nothing under it yet
     await choose("setting-up", "saving");
-    expect(
-      frame("setting-up").querySelector('.vf-wizard-phase[data-state="waiting"]'),
-    ).not.toBeNull();
-    // AO-4b — History's line beside the desk, in the room's words, and Start now
-    // once the first pass has run 8s past the desk
-    expect(frame("setting-up").textContent).toContain(
-      "Discovering conversations · 1,215 files checked",
-    );
+    expect(said("setting-up")).toEqual(["Opening your field…", ""]);
+    // AO-4b — History's line once the desk is ready, in the room's words with its count under it,
+    // and Start now once the first pass has run 8s past the desk
+    await choose("setting-up", "finding");
+    expect(said("setting-up")).toEqual(["Discovering conversations…", "1,215 files checked"]);
+    expect(frame("setting-up").textContent).not.toContain("Start now");
     await choose("setting-up", "slow");
+    expect(said("setting-up")).toEqual(["Discovering conversations…", "1,215 files checked"]);
     expect(frame("setting-up").textContent).toContain("Start now");
     expect(frame("setting-up").textContent).toContain(
       "Finding sessions in a history this size takes longer. It carries on in History.",
     );
     await choose("setting-up", "ready");
-    expect(frame("setting-up").textContent).toContain(
-      "4,441 sessions found in 74 projects · Reading conversations, in the background",
-    );
+    expect(said("setting-up")[0]).toBe("Welcome to your field, James.");
     expect(frame("setting-up").textContent).not.toContain("Start now");
 
     // AO-3 — the History pane: its rows with every switch on, then a no.

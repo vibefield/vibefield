@@ -81,6 +81,8 @@
   --vf-wizard-edge: rgb(255 255 255 / 60%);
   --vf-wizard-edge-light: rgb(255 255 255 / 75%);
   --vf-wizard-grain: 0.03;
+  /* §5 the Setup Assistant's logo (FG-4b): the field's mark, inverted on milk with its colours kept; none by night */
+  --vf-wizard-logo-filter: invert(1) hue-rotate(180deg);
   --vf-backdrop-dim: rgb(0 0 0 / 10%);
   /* §5 the search scrim (the Peek, §8 "Search"; K7): darker than the backdrop
      dim, under a blur of 18 — the window blurred and dimmed. The phone wears its
@@ -321,6 +323,12 @@
   --vf-radius-island: 32px;
   --vf-radius-sheet: 40px;
   --vf-radius-control: 9px;
+  /* §4 (FG-4a): a list that can outgrow what holds it scrolls within itself, its
+     last 20 faded and 20 of padding under its end — the face deck's rule. */
+  --vf-scroll-fade: 20px;
+  /* §4 (FG-4a): a login's terminal on the Setup Assistant's glass, so its card
+     (the terminal and 79.5 of chrome) stands whole above Profiles' fade. */
+  --vf-glass-signin-height: 190px;
 
   /* §8 The file tree. Geometry only — every COLOR the tree wears is one of
      the tokens above. The theme itself ships upstream
@@ -405,6 +413,7 @@
   --vf-wizard-surface: rgb(28 28 30 / 55%);
   --vf-wizard-edge: rgb(255 255 255 / 12%);
   --vf-wizard-edge-light: rgb(255 255 255 / 8%);
+  --vf-wizard-logo-filter: none;
   --vf-backdrop-dim: rgb(0 0 0 / 40%);
   --vf-search-scrim: rgb(0 0 0 / 46%);
   --vf-shadow-island: 0 8px 30px rgb(0 0 0 / 40%);

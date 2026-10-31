@@ -233,14 +233,21 @@ function keepLegacySpark(box: Box, runId: string): SparkRecord {
  * reads in canonical mode and a lone key byte would never reach its file. */
 const SCRIPTED_TURN_STOP_TEXT = "scripted-turn-stop\n";
 
+/** DS — the scripted adapter's candidate listener, by terminal, for a binding that witnesses its turns (`observed`). */
+type ScriptedCandidates = Map<string, Parameters<AgentAdapterBinding["events"]["onCandidate"]>[0]>;
+
 /** `turnStops` — Q08: the binding names a turn stop (an `escape` key, by
  * declaration) and records each press, by its terminal; absent, the binding
- * names none, as an adapter that has not been censused yet. */
+ * names none, as an adapter that has not been censused yet. `observed` — DS:
+ * the binding witnesses its turns (`native-hooks`), and a row moves its status
+ * by handing the kept listener a turn (`scriptedTurn`); absent, it reads as
+ * `terminal-only`, a status fieldd cannot read. */
 function scriptedBinding(
   host: AgentHost,
   runtimeSessionId: string,
   sessionId: string,
   turnStops?: string[],
+  observed?: ScriptedCandidates,
 ): AgentAdapterBinding {
   const turnStop: AgentTurnStopService | undefined =
     turnStops === undefined
@@ -261,8 +268,16 @@ function scriptedBinding(
   return {
     sessionId,
     runtimeSessionId,
-    observationLevel: () => "terminal-only",
-    events: { onCandidate: () => () => undefined },
+    observationLevel: () => (observed === undefined ? "terminal-only" : "native-hooks"),
+    events: {
+      onCandidate: (listener) => {
+        if (observed === undefined) return () => undefined;
+        observed.set(runtimeSessionId, listener);
+        return () => {
+          if (observed.get(runtimeSessionId) === listener) observed.delete(runtimeSessionId);
+        };
+      },
+    },
     services: {
       prompt: {
         async submit(submission: PromptSubmission): Promise<PromptReceipt> {
@@ -442,6 +457,8 @@ function scriptedProvider(
     program?: string;
     /** Q08 — each binding names a turn stop, and each press lands here (absent: none named) */
     turnStops?: string[];
+    /** DS — each binding witnesses its turns, its listener kept here (absent: terminal-only) */
+    observed?: ScriptedCandidates;
     /** the re-attach study's Step 1 — a continuation codec (every launch
      * captures `SCRIPTED_STATE`) and an attach record, reported before the
      * launch (`endpoint-<n>`) and again by each attach (`<handed>-attached`) */
@@ -544,7 +561,13 @@ function scriptedProvider(
           ...(options.instructions === undefined ? {} : { instructions: options.instructions }),
         },
       });
-      return scriptedBinding(options.host, runtimeSessionId, sessionId, extra.turnStops);
+      return scriptedBinding(
+        options.host,
+        runtimeSessionId,
+        sessionId,
+        extra.turnStops,
+        extra.observed,
+      );
     },
     // AR-4 — an adapter that can re-attach to its running process: it records
     // what it was handed and binds the same terminal and native session
@@ -574,6 +597,7 @@ function scriptedProvider(
               options.runtimeSessionId,
               options.sessionId,
               extra.turnStops,
+              extra.observed,
             );
           },
         }),
@@ -608,6 +632,8 @@ interface Box {
   models: ScriptedModels;
   /** Q08 — each press of the scripted turn stop, by terminal (`turnStop: true`) */
   turnStops: string[];
+  /** DS — each observed binding's candidate listener, by terminal (`observed: true`) */
+  observed: ScriptedCandidates;
 }
 
 interface SetupConfig {
@@ -646,6 +672,10 @@ interface SetupConfig {
   program?: string;
   /** Q08 — the scripted adapter names a turn stop (default: it names none) */
   turnStop?: boolean;
+  /** DS — the scripted adapter witnesses its turns, `native-hooks` (default: terminal-only, unreadable) */
+  observed?: boolean;
+  /** DS — how long a sent Stop waits to be heard (default: `AGENT_STOP.HEARD_WITHIN_MS`) */
+  stopHeardWithinMs?: number;
 }
 
 /** Boot fieldd: over the mock mgmt server (no floor) or the REAL field-native. */
@@ -718,6 +748,7 @@ async function setup(config: SetupConfig): Promise<Box> {
   const seen: Array<AgentProfile | undefined> = restart?.seen ?? [];
   const attached: ScriptedAttach[] = restart?.attached ?? [];
   const turnStops: string[] = restart?.turnStops ?? [];
+  const observed: ScriptedCandidates = restart?.observed ?? new Map();
   const models: ScriptedModels = restart?.models ?? {
     fail: false,
     reads: 0,
@@ -773,12 +804,16 @@ async function setup(config: SetupConfig): Promise<Box> {
             ...(config.afterBirth !== undefined ? { afterBirth: config.afterBirth } : {}),
             ...(config.program !== undefined ? { program: config.program } : {}),
             ...(config.turnStop === true ? { turnStops } : {}),
+            ...(config.observed === true ? { observed } : {}),
             ...(config.facts === true ? { facts: true } : {}),
           },
         ),
       ];
     },
     ...(config.resumeWhenIdle !== undefined ? { agentResumeWhenIdle: config.resumeWhenIdle } : {}),
+    ...(config.stopHeardWithinMs !== undefined
+      ? { agentStopHeardWithinMs: config.stopHeardWithinMs }
+      : {}),
     // FS-1a — every run's folder becomes a place, a test root under /tmp or
     // /var/folders included: a place refuses only a filesystem root. The
     // /System, /Library and /private exclusion is the browse exports' (and
@@ -829,7 +864,29 @@ async function setup(config: SetupConfig): Promise<Box> {
     seen,
     models,
     turnStops,
+    observed,
   };
+}
+
+/** DS — the observed scripted agent reports a turn, as an adapter's native hook would: `turn:started` reads as
+ * `working`, `turn:completed` as idle. */
+function scriptedTurn(
+  box: Box,
+  runtimeSessionId: string,
+  type: "turn:started" | "turn:completed",
+): void {
+  const listener = box.observed.get(runtimeSessionId);
+  if (listener === undefined) throw new Error(`no observed binding on ${runtimeSessionId}`);
+  const session = box.sessions.find((s) => s.runtimeSessionId === runtimeSessionId);
+  listener({
+    type,
+    sessionId: session?.sessionId ?? runtimeSessionId,
+    timestamp: new Date().toISOString(),
+    monotonicTime: performance.now(),
+    source: "native-hook",
+    confidence: "authoritative",
+    event: { type },
+  } as Parameters<typeof listener>[0]);
 }
 
 async function openRpc(port: number): Promise<WsRpc> {
@@ -3825,6 +3882,278 @@ describe("AR-6-0 — the stop verb (agent.interrupt)", () => {
     );
     expect(act.outcome.outcome).toBe("succeeded");
     expect(act.outcome.attrs?.["accepted"]).toBe(true);
+  }, 120_000);
+});
+
+// DS (2026-10-31; James's `ds-marks` and `ds-marks-corrections`; `thinking-ar-durable-stop.md` §4) — A DURABLE STOP,
+// on the real floor. A person's Stop stays SENT until fieldd hears the run stop; not heard within its bound, the run's
+// own stop goes once more; still not heard, a run whose status fieldd can read is ended through the floor's ladder,
+// and one whose status it cannot read is left to the person. The bound is the rows' own (`stopHeardWithinMs`), so a
+// row waits its bound rather than the product's 3 s.
+describe("DS — a durable Stop (the real floor)", () => {
+  /** The program that ignores ⌃C while `$SCRIPTED_ENV_OUT.release` is absent, then becomes `cat` (which a ⌃C ends).
+   * The ignore is the shell's own disposition, which `sleep` inherits; it is restored before the exec, so `cat` is
+   * killed by the next ⌃C. `$SCRIPTED_ENV_OUT.trapped` says the ignore stands. */
+  const SWALLOWS_ONE =
+    `trap '' INT; : > "$SCRIPTED_ENV_OUT.trapped"; ` +
+    `while [ ! -e "$SCRIPTED_ENV_OUT.release" ]; do sleep 0.05; done; ` +
+    `trap - INT; exec /bin/cat >> "$SCRIPTED_TYPED_OUT"`;
+  /** The program that ignores ⌃C for good: `cat` inherits the ignore across the exec. A SIGTERM still ends it. */
+  const IGNORES_INT = `trap '' INT; : > "$SCRIPTED_ENV_OUT.trapped"; exec /bin/cat >> "$SCRIPTED_TYPED_OUT"`;
+
+  /** The run's row as a window reads it. */
+  async function rowOf(win: WsRpc, runtimeRunId: string) {
+    const { sessions: rows } = (await win.call("agent.list", {})) as AgentListResult;
+    return rows.find((r) => r.runtimeRunId === runtimeRunId);
+  }
+  /** Waits until the run's row satisfies `ok`, saying what the row held when it gave up. */
+  async function rowWhere(
+    win: WsRpc,
+    runtimeRunId: string,
+    ok: (row: AgentListResult["sessions"][number]) => boolean,
+    what: string,
+    ms = 15_000,
+  ) {
+    return await poll(
+      async (seen) => {
+        const row = await rowOf(win, runtimeRunId);
+        seen({
+          stop: row?.stop ?? null,
+          status: row?.status ?? null,
+          exited: row?.continuation?.exited ?? null,
+        });
+        return row !== undefined && ok(row) ? row : undefined;
+      },
+      ms,
+      what,
+    );
+  }
+  /** The scripted program's `trapped` mark: its ⌃C ignore stands. */
+  async function trapped(box: Box, n = 1): Promise<void> {
+    const mark = join(box.envOut, `session-${n}.env.trapped`);
+    await poll(
+      async () => (existsSync(mark) ? true : undefined),
+      CAT_READY_MS,
+      "the program's ⌃C ignore",
+    );
+  }
+  /** The run's own ⌃C-ignoring PTY, born and joined to its cell. */
+  async function bornRun(box: Box, win: WsRpc) {
+    const spawned = (await born(win, "agent.spawn", {
+      provider: "scripted",
+      cwd: box.envOut,
+    })) as AgentSpawnResult;
+    await joinedRow(win, spawned.session.runtimeRunId);
+    return spawned;
+  }
+  const escalations = (dataDir: string, runtimeRunId: string) =>
+    auditEntries(dataDir).filter(
+      (entry) =>
+        entry.action === "agent.session.stop_escalated" &&
+        entry.phase === "attempt" &&
+        entry.target.id === runtimeRunId,
+    );
+
+  it("re-sends a Stop the run's prologue swallowed, and hears the exit that follows: `exited.stop` says so", async () => {
+    const box = await setup({ floor: "real", program: SWALLOWS_ONE, stopHeardWithinMs: 8_000 });
+    const { daemon, dataDir } = box;
+    const win = await window(daemon, [...DECK, "agent.control"], "ds1");
+    const spawned = await bornRun(box, win);
+    const runId = spawned.session.runtimeRunId;
+    await trapped(box);
+
+    // the first ⌃C meets the ignore: the floor delivered it, and nothing stopped
+    const pressedAt = Date.now();
+    expect(await win.call("agent.interrupt", { runtimeRunId: runId })).toEqual({ accepted: true });
+    const sent = await rowWhere(
+      win,
+      runId,
+      (row) => row.stop?.stage === "sent",
+      "the Stop held as sent",
+    );
+    const sentAt = sent.stop?.sentAt;
+    expect(sentAt).toBeTruthy();
+    // the prologue ends and the pane becomes `cat`, which the re-sent ⌃C ends
+    writeFileSync(join(box.envOut, "session-1.env.release"), "");
+    await catReady(box, spawned.terminal.sessionId);
+    await rowWhere(
+      win,
+      runId,
+      (row) => row.continuation?.exited === true,
+      "the re-sent Stop's exit",
+      8_000 + INTERRUPTED_EXIT_MS,
+    );
+    console.log(
+      `DS_HEARD ${JSON.stringify({ row: "resent", boundMs: 8_000, heardMs: Date.now() - pressedAt })}`,
+    );
+    const exited = await poll(async () => {
+      const record = readRecord(dataDir, runId);
+      return record.exited !== undefined ? record : undefined;
+    }, 10_000);
+    expect(exited.exited?.stop).toEqual({ sentAt, heardBy: "exit" });
+    // the floor's own word for the exit stays beside it
+    expect(exited.exited?.reason).toBeTruthy();
+
+    // the re-send is fieldd's own act, in the ledger as the system's, never the person's
+    const act = await auditAct(
+      dataDir,
+      (entry) => entry.action === "agent.session.stop_escalated" && entry.target.id === runId,
+    );
+    expect(act.attempt.actor.kind).toBe("system");
+    expect(act.attempt.attrs?.["stage"]).toBe("resent");
+    expect(act.outcome.outcome).toBe("succeeded");
+    expect(escalations(dataDir, runId).map((entry) => entry.attrs?.["stage"])).toEqual(["resent"]);
+  }, 120_000);
+
+  it("leaves a run whose status it cannot read to the person: sent twice, then unheard, never ended; End run ends it", async () => {
+    const box = await setup({ floor: "real", program: IGNORES_INT, stopHeardWithinMs: 500 });
+    const { daemon, dataDir } = box;
+    const win = await window(daemon, [...DECK, "agent.control"], "ds2");
+    const spawned = await bornRun(box, win);
+    const runId = spawned.session.runtimeRunId;
+    await trapped(box);
+    await catReady(box, spawned.terminal.sessionId);
+
+    expect(await win.call("agent.interrupt", { runtimeRunId: runId })).toEqual({ accepted: true });
+    const unheard = await rowWhere(
+      win,
+      runId,
+      (row) => row.stop?.unheardAt !== undefined,
+      "the Stop left to the person",
+    );
+    expect(unheard.stop?.stage).toBe("resent");
+    // several bounds later, nothing more was done: no ladder, and the pane is still `cat`
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
+    expect(escalations(dataDir, runId).map((entry) => entry.attrs?.["stage"])).toEqual(["resent"]);
+    expect((await rowOf(win, runId))?.continuation?.exited).not.toBe(true);
+    await catReady(box, spawned.terminal.sessionId);
+
+    // End run: the person's act, `terminal.terminate` on the pane's own session — the exit is the Stop heard
+    await win.call("terminal.terminate", { sessionId: spawned.terminal.sessionId });
+    const exited = await poll(async () => {
+      const record = readRecord(dataDir, runId);
+      return record.exited !== undefined ? record : undefined;
+    }, INTERRUPTED_EXIT_MS);
+    expect(exited.exited?.stop).toEqual({ sentAt: unheard.stop?.sentAt, heardBy: "exit" });
+  }, 120_000);
+
+  it("re-sends a declared turn stop as the run's own stop, never the floor's ⌃C, and leaves it unheard", async () => {
+    const box = await setup({ floor: "real", turnStop: true, stopHeardWithinMs: 500 });
+    const { daemon, turnStops } = box;
+    const win = await window(daemon, [...DECK, "agent.control"], "ds3");
+    const spawned = await bornRun(box, win);
+    const runId = spawned.session.runtimeRunId;
+    const paneId = spawned.terminal.sessionId;
+
+    expect(await win.call("agent.interrupt", { runtimeRunId: runId })).toEqual({ accepted: true });
+    await rowWhere(
+      win,
+      runId,
+      (row) => row.stop?.unheardAt !== undefined,
+      "the Stop left to the person",
+    );
+    // the adapter's own stop, twice, and nothing else
+    expect(turnStops).toEqual([paneId, paneId]);
+    // no ⌃C went with either: the `cat` a ⌃C kills still takes a prompt
+    const agent = daemon.agents.runtime.agent(paneId);
+    expect((await agent?.submitPrompt({ text: "still-running" }))?.status).toBe("confirmed");
+    expect((await rowOf(win, runId))?.continuation?.exited).not.toBe(true);
+  }, 120_000);
+
+  it("ends a run whose status reads working through the floor's ladder after two sends, and hears its exit", async () => {
+    const box = await setup({
+      floor: "real",
+      program: IGNORES_INT,
+      observed: true,
+      stopHeardWithinMs: 500,
+    });
+    const { daemon, dataDir } = box;
+    const win = await window(daemon, [...DECK, "agent.control"], "ds4");
+    const spawned = await bornRun(box, win);
+    const runId = spawned.session.runtimeRunId;
+    const paneId = spawned.terminal.sessionId;
+    await trapped(box);
+    await catReady(box, paneId);
+    scriptedTurn(box, paneId, "turn:started");
+    await rowWhere(win, runId, (row) => row.status === "working", "the observed run working");
+
+    const pressedAt = Date.now();
+    expect(await win.call("agent.interrupt", { runtimeRunId: runId })).toEqual({ accepted: true });
+    const ending = await rowWhere(
+      win,
+      runId,
+      (row) => row.stop?.stage === "terminating",
+      "the Stop ending the run",
+    );
+    expect(ending.stop?.unheardAt).toBeUndefined();
+    // the ladder's interrupt is ignored too; its SIGTERM ends `cat`
+    await rowWhere(
+      win,
+      runId,
+      (row) => row.continuation?.exited === true,
+      "the ladder's exit",
+      INTERRUPTED_EXIT_MS + 5_000,
+    );
+    const heardMs = Date.now() - pressedAt;
+    const exited = await poll(async () => {
+      const record = readRecord(dataDir, runId);
+      return record.exited !== undefined ? record : undefined;
+    }, 10_000);
+    expect(exited.exited?.stop).toEqual({ sentAt: ending.stop?.sentAt, heardBy: "exit" });
+    expect(escalations(dataDir, runId).map((entry) => entry.attrs?.["stage"])).toEqual([
+      "resent",
+      "terminating",
+    ]);
+    const ladder = await auditAct(
+      dataDir,
+      (entry) =>
+        entry.action === "agent.session.stop_escalated" &&
+        entry.target.id === runId &&
+        entry.attrs?.["stage"] === "terminating",
+    );
+    expect(ladder.attempt.actor.kind).toBe("system");
+    expect(ladder.outcome.outcome).toBe("succeeded");
+    // two bounds and the ladder's 4 s, on this host's load: the record's measurement (DS-D1's floor half)
+    console.log(`DS_HEARD ${JSON.stringify({ row: "ladder", boundMs: 500, heardMs })}`);
+  }, 120_000);
+
+  it("hears a Stop by a readable status leaving working: no second send, the pane lives, and the next turn lets it go", async () => {
+    const box = await setup({
+      floor: "real",
+      turnStop: true,
+      observed: true,
+      stopHeardWithinMs: 1_000,
+    });
+    const { daemon, turnStops } = box;
+    const win = await window(daemon, [...DECK, "agent.control"], "ds5");
+    const spawned = await bornRun(box, win);
+    const runId = spawned.session.runtimeRunId;
+    const paneId = spawned.terminal.sessionId;
+    scriptedTurn(box, paneId, "turn:started");
+    await rowWhere(win, runId, (row) => row.status === "working", "the observed run working");
+
+    expect(await win.call("agent.interrupt", { runtimeRunId: runId })).toEqual({ accepted: true });
+    await rowWhere(win, runId, (row) => row.stop?.stage === "sent", "the Stop held as sent");
+    scriptedTurn(box, paneId, "turn:completed");
+    const heard = await rowWhere(
+      win,
+      runId,
+      (row) => row.stop?.stage === "heard",
+      "the Stop heard",
+    );
+    expect(heard.stop?.heardBy).toBe("status");
+    // past two bounds: nothing was sent again, and the pane lives
+    await new Promise((resolve) => setTimeout(resolve, 2_500));
+    expect(turnStops).toEqual([paneId]);
+    expect((await rowOf(win, runId))?.continuation?.exited).not.toBe(true);
+    // the next turn lets the heard Stop go
+    scriptedTurn(box, paneId, "turn:started");
+    await rowWhere(
+      win,
+      runId,
+      (row) => row.status === "working" && row.stop === undefined,
+      "the Stop let go",
+    );
   }, 120_000);
 });
 

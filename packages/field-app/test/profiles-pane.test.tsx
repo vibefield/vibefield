@@ -15,6 +15,7 @@ import { FielddProvider } from "@vibefield/fieldd-client/react";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { WizardShellView } from "../src/boot/onboarding/wizard-ui";
 import { type FieldHost, setHost } from "../src/host";
 import { emptyProfilesContext } from "../src/panels/agents/profiles-model";
 import { ProfilesWizardPane } from "../src/setup/ProfilesWizardPane";
@@ -49,6 +50,39 @@ const NOW = new Date("2026-10-27T12:00:00.000Z");
 const READ = "2026-10-27T09:00:00.000Z";
 /** an identity read after any login a test starts */
 const LATER = "2026-10-27T12:05:00.000Z";
+
+/** A file by its path from this suite's folder. */
+const read = (path: string): string =>
+  readFileSync(join(dirname(fileURLToPath(import.meta.url)), path), "utf8");
+
+const PROFILES_CSS = read("../src/setup/profiles-pane.css");
+
+/** One number a stylesheet states, by the rule that states it. */
+function px(css: string, rule: RegExp): number {
+  const found = css.match(rule)?.[1];
+  if (found === undefined) throw new Error(`no ${rule} in the stylesheet`);
+  return Number(found);
+}
+
+/** The glass's rule for a list that can outgrow its pane's body (DESIGN.md §4
+ * `--vf-scroll-fade`, the face deck's): it scrolls within itself, edge-faded,
+ * with no scrollbar, and gives back the 4 that keep a focus ring in its clip. */
+const scrollsWithin = (list: string): string =>
+  [
+    `.vf-wizard-shell[data-size="glass"] ${list} {`,
+    "  min-height: 0;",
+    "  margin: -4px -4px 0;",
+    "  padding: 4px 4px var(--vf-scroll-fade);",
+    "  overflow-y: auto;",
+    "  scroll-padding-bottom: var(--vf-scroll-fade);",
+    "  mask-image: linear-gradient(to bottom, black calc(100% - var(--vf-scroll-fade)), transparent);",
+    "  scrollbar-width: none;",
+    "}",
+    "",
+    `.vf-wizard-shell[data-size="glass"] ${list}::-webkit-scrollbar {`,
+    "  display: none;",
+    "}",
+  ].join("\n");
 
 const PROVIDERS: AgentProviderSummary[] = [
   { id: "claude", label: "Claude Code", available: true, resumable: true, personas: [] },
@@ -259,13 +293,30 @@ async function flush(): Promise<void> {
   });
 }
 
-async function mount(client: FielddClient, onDone: (end: string) => void): Promise<void> {
+/** The pane alone, or (`onGlass`) in the glass's own shell, as the wizard
+ * stands it. */
+async function mount(
+  client: FielddClient,
+  onDone: (end: string) => void,
+  onGlass = false,
+): Promise<void> {
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
+  const pane = createElement(ProfilesWizardPane, { onDone });
   await act(async () => {
     root?.render(
-      createElement(FielddProvider, { client }, createElement(ProfilesWizardPane, { onDone })),
+      createElement(
+        FielddProvider,
+        { client },
+        onGlass
+          ? createElement(WizardShellView, {
+              dark: false,
+              onToggleTheme: () => undefined,
+              children: pane,
+            })
+          : pane,
+      ),
     );
   });
   await flush();
@@ -393,7 +444,9 @@ describe("the Profiles pane on the wizard's glass", () => {
     await addWork(client);
     // Continue waits while the login is open
     expect(button("Continue").disabled).toBe(true);
-    expect(text()).toContain("Finish or cancel the sign-in first.");
+    expect(container?.querySelector(".vf-wizard-later")?.textContent).toBe(
+      "Finish or cancel the sign-in first.",
+    );
     await frame([
       THIS_MAC,
       {
@@ -446,5 +499,88 @@ describe("the Profiles pane on the wizard's glass", () => {
     expect(
       vi.mocked(client.request).mock.calls.filter(([method]) => method === "agents.profiles.login"),
     ).toHaveLength(2);
+  });
+
+  it("scrolls its cards within themselves on the glass, the fact standing under them, and brings the login into view clear of the fade (FG-L3)", async () => {
+    // a login's card (its terminal 240) is more than the body's 322 holds beside This Mac and the
+    // fact, by the CSS's own numbers; happy-dom lays nothing out, so a scroll is the call itself (the
+    // pixels are FG-4b's console rows)
+    const proto: { scrollIntoView?: (options?: unknown) => void } = Element.prototype as never;
+    const original = proto.scrollIntoView;
+    const scrolled: Element[] = [];
+    proto.scrollIntoView = function (this: Element): void {
+      scrolled.push(this);
+    };
+    try {
+      const client = daemon(feedOf([THIS_MAC]), [install("claude"), install("codex")]);
+      await mount(client, vi.fn(), true);
+      await addWork(client);
+      const cards = container?.querySelector(".vf-profiles-pane-cards");
+      // the cards scroll; the fact stands under them, outside the scroll, and Continue on the foot
+      expect(
+        Array.from(
+          container?.querySelector(".vf-profiles-pane")?.children ?? [],
+          (part) => part.className,
+        ),
+      ).toEqual(["vf-profiles-pane-cards", "vf-profiles-pane-note"]);
+      expect(cards?.querySelector('[data-signin-terminal="login-work"]')).not.toBeNull();
+      expect(cards?.querySelector('button[type="submit"]')).toBeNull();
+      // each step the add opened came into view within the cards, the login's last
+      expect(scrolled.length).toBeGreaterThan(0);
+      expect(scrolled.every((target) => cards?.contains(target) === true)).toBe(true);
+      expect(scrolled.at(-1)?.querySelector('[data-signin-terminal="login-work"]')).not.toBeNull();
+      expect(cards?.matches('.vf-wizard-shell[data-size="glass"] .vf-profiles-pane-cards')).toBe(
+        true,
+      );
+      expect(PROFILES_CSS).toContain(
+        '.vf-wizard-shell[data-size="glass"] .vf-profiles-pane {\n  min-height: 0;\n}',
+      );
+      expect(PROFILES_CSS).toContain(scrollsWithin(".vf-profiles-pane-cards"));
+    } finally {
+      if (original === undefined) Reflect.deleteProperty(proto, "scrollIntoView");
+      else proto.scrollIntoView = original;
+    }
+  });
+
+  it("stands a login's terminal 190 on the glass, so its whole card, Cancel with it, comes into view above the cards' fade (FG-4a)", async () => {
+    const client = daemon(feedOf([THIS_MAC]), [install("claude"), install("codex")]);
+    await mount(client, vi.fn(), true);
+    await click("Sign in to Codex on This Mac");
+    const terminalBox = container?.querySelector(".vf-profiles-signin-body");
+    expect(
+      terminalBox?.matches('.vf-wizard-shell[data-size="glass"] .vf-profiles-signin-body'),
+    ).toBe(true);
+    expect(PROFILES_CSS).toContain(
+      '.vf-wizard-shell[data-size="glass"] .vf-profiles-signin-body {\n  height: var(--vf-glass-signin-height);\n}',
+    );
+    // the fit, from the stylesheets it stands on (happy-dom lays nothing out). The card is the
+    // terminal and its chrome: the output's head (its padding, 11px at the body's 1.5, its hairline),
+    // the output's two borders, the gap and the Cancel row's button
+    const tokens = read("../../design-kit/src/tokens.css");
+    const output = read("../src/panels/agents/agents-settings.css");
+    const signIn = read("../src/panels/agents/profiles-settings.css");
+    const terminal = px(tokens, /--vf-glass-signin-height: (\d+)px;/u);
+    const fade = px(tokens, /--vf-scroll-fade: (\d+)px;/u);
+    const headPadding = px(output, /\n\.vf-agents-output-head \{[^}]*padding: (\d+)px 12px;/u);
+    const headFont = px(output, /\n\.vf-agents-output-head \{[^}]*font-size: (\d+)px;/u);
+    const gap = px(signIn, /\n\.vf-profiles-signin \{[^}]*gap: (\d+)px;/u);
+    const button = px(
+      read("../../design-kit/src/primitives.css"),
+      /\n\.vf-ui-button \{[^}]*height: (\d+)px;/u,
+    );
+    const chrome = headPadding + headFont * 1.5 + headPadding + 1 + 2 + gap + button;
+    // the cards' room above the fade: the body (the frame's 504 less the head — the title's 28 at
+    // 1.15, 8, a two-line voice of 14 at 1.45 — the 20 under it, and the foot — 16, the actions'
+    // 2 and 40, 8, the later line's 17 less its 2), less the fact's line of 18 and its gap of 10,
+    // the 4 given back, less the fade
+    const body = 504 - (28 * 1.15 + 8 + 2 * 14 * 1.45) - 20 - (16 + 2 + 40 + 8 - 2 + 17);
+    const clear = body - 18 - 10 + 4 - fade;
+    expect(terminal).toBe(190);
+    expect(chrome).toBe(79.5);
+    expect(terminal + chrome).toBeLessThanOrEqual(clear);
+    // Settings' own 240 would leave Cancel a scroll away
+    const settings = px(signIn, /\n\.vf-profiles-signin-body \{\s*height: (\d+)px;/u);
+    expect(settings + chrome).toBeGreaterThan(clear);
+    expect(read("../../../DESIGN.md")).toContain("| `--vf-glass-signin-height` | `190px` |");
   });
 });

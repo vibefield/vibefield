@@ -26,6 +26,8 @@ export interface HistoryPaneParts {
   readonly primaryBusy: boolean;
   /** the census has rows to choose from */
   readonly choosing: boolean;
+  /** the census has not answered yet: on the Setup Assistant's glass, a load (FG-L5) */
+  readonly looking: boolean;
   readonly onPrimary: () => void;
   /** Not now — nothing is read, and the step waits under Finish setting up */
   readonly onLater: () => void;
@@ -88,6 +90,7 @@ export function HistoryConsentPane({
     primaryLabel,
     primaryBusy: busy,
     choosing,
+    looking: census.kind === "looking",
     error,
     onPrimary: () => {
       if (census.kind !== "found") {

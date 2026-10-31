@@ -139,8 +139,16 @@ function fakeGlass() {
 
 /** A glass on the field, as glass-look.ts reads it. */
 const GLASS: GlassState = {
-  look: { tint: [1, 1, 1, 0.55], blur: 32, saturate: 1.12, grain: 0.03, radius: 32, shadows: [] },
-  pose: { x: 600, y: 400, w: 880, h: 640, fit: 0.75, frost: 1, rise: 1 },
+  look: {
+    tint: [1, 1, 1, 0.55],
+    blur: 32,
+    saturate: 1.12,
+    grain: 0.03,
+    radius: 32,
+    shadows: [],
+    logoInvert: true,
+  },
+  pose: { x: 600, y: 400, w: 880, h: 640, fit: 0.75, frost: 1, rise: 1, logo: 0 },
 };
 
 /** The field's container with its still mark, as FieldLayer draws them. */

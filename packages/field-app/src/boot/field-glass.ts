@@ -27,6 +27,8 @@ export interface FieldGlass {
   box(): DOMRectReadOnly | null;
   /** Whether the field draws the glass, for `useSyncExternalStore`. */
   drawn(): boolean;
+  /** Whether the field is its still picture (FG-4b: the logo then takes the still's own mark size). */
+  still(): boolean;
   subscribe(listener: () => void): () => void;
 }
 
@@ -36,17 +38,23 @@ export interface FieldGlassHost extends FieldGlass {
   attach(door: { glass(glass: GlassState | null): void } | null): void;
   /** The door says whether the field draws the glass. */
   report(drawn: boolean): void;
+  /** The field became its still, or never was. */
+  stillness(still: boolean): void;
 }
 
 export function createFieldGlass(field: () => Element | null): FieldGlassHost {
   let door: { glass(glass: GlassState | null): void } | null = null;
   let kept: GlassState | null = null;
   let drawn = false;
+  let still = false;
   const listeners = new Set<() => void>();
+  const tell = (): void => {
+    for (const listener of listeners) listener();
+  };
   const say = (next: boolean): void => {
     if (next === drawn) return;
     drawn = next;
-    for (const listener of listeners) listener();
+    tell();
   };
   return {
     set(glass) {
@@ -55,6 +63,7 @@ export function createFieldGlass(field: () => Element | null): FieldGlassHost {
     },
     box: () => field()?.getBoundingClientRect() ?? null,
     drawn: () => drawn,
+    still: () => still,
     subscribe(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);
@@ -68,6 +77,11 @@ export function createFieldGlass(field: () => Element | null): FieldGlassHost {
       // a door already gone says nothing the field still draws
       if (door !== null || !next) say(next);
     },
+    stillness(next) {
+      if (next === still) return;
+      still = next;
+      tell();
+    },
   };
 }
 
@@ -75,7 +89,7 @@ export const FieldGlassContext = createContext<FieldGlass | null>(null);
 
 const alone = (): (() => void) => () => {};
 
-/** The glass's own animations, the forming, still running. */
+/** The glass's own animations still running: its forming, and the logo's fades (on the glass, `--vf-glass-logo`). */
 function forming(glass: Element): boolean {
   return (
     typeof glass.getAnimations === "function" &&
@@ -85,12 +99,13 @@ function forming(glass: Element): boolean {
 
 /** The Setup Assistant's glass drawn by the field it stands on (FG-3b). While `on`, it hands the field its look, read
  * off its layers and again whenever the theme turns, and its pose, read every frame it moves: through its forming
- * (the frost and the rise), and through a window's resize (the fit) until it has rested two frames. True while the
- * field draws it, so the browser draws only the edge. */
+ * (the frost and the rise), through the logo's fades (FG-4b), and through a window's resize (the fit) until it has
+ * rested two frames. True while the field draws it, so the browser draws only the edge. */
 export function useFieldGlass(
   glassRef: RefObject<HTMLElement | null>,
   shadowRef: RefObject<Element | null>,
   frostRef: RefObject<Element | null>,
+  logoRef: RefObject<Element | null>,
   on: boolean,
 ): boolean {
   const field = useContext(FieldGlassContext);
@@ -98,8 +113,17 @@ export function useFieldGlass(
     const glass = glassRef.current;
     const shadow = shadowRef.current;
     const frost = frostRef.current;
-    if (field === null || !on || glass === null || shadow === null || frost === null) return;
-    const layers = { glass, shadow, frost };
+    const logo = logoRef.current;
+    if (
+      field === null ||
+      !on ||
+      glass === null ||
+      shadow === null ||
+      frost === null ||
+      logo === null
+    )
+      return;
+    const layers = { glass, shadow, frost, logo };
     let look = readGlassLook(layers);
     let pose: GlassPose | null = null;
     let raf = 0;
@@ -121,6 +145,10 @@ export function useFieldGlass(
       rested = 0;
       if (raf === 0) raf = requestAnimationFrame(follow);
     };
+    // the logo fades on the glass itself, long after the forming has rested
+    const moved = (event: Event): void => {
+      if (event.target === glass) wake();
+    };
     // the tint is the theme's: `.dark` and `data-theme` on the root (theme.ts)
     const themed = new MutationObserver(() => {
       look = readGlassLook(layers);
@@ -131,18 +159,31 @@ export function useFieldGlass(
       attributeFilter: ["class", "data-theme"],
     });
     window.addEventListener("resize", wake);
+    glass.addEventListener("transitionrun", moved);
     follow();
     return () => {
       cancelAnimationFrame(raf);
       themed.disconnect();
       window.removeEventListener("resize", wake);
+      glass.removeEventListener("transitionrun", moved);
       field.set(null);
     };
-  }, [field, on, glassRef, shadowRef, frostRef]);
+  }, [field, on, glassRef, shadowRef, frostRef, logoRef]);
   const drawn = useSyncExternalStore(
     field?.subscribe ?? alone,
     () => field?.drawn() ?? false,
     () => false,
   );
   return on && drawn;
+}
+
+/** Whether what the glass stands on is the field's still picture (FG-4b): the logo is then the still's own mark,
+ * at the picture's size. False off the field. */
+export function useFieldStill(): boolean {
+  const field = useContext(FieldGlassContext);
+  return useSyncExternalStore(
+    field?.subscribe ?? alone,
+    () => field?.still() ?? false,
+    () => false,
+  );
 }

@@ -8,6 +8,7 @@ import { historySetupPhase } from "../boot/onboarding/history-line";
 import { type ConnectAside, OnboardingConnectPaneView } from "../boot/onboarding/views/connect";
 import { OnboardingFieldPaneView } from "../boot/onboarding/views/field";
 import {
+  DESK_LINE,
   OnboardingSettingUpPaneView,
   type OnboardingSetupPhase,
 } from "../boot/onboarding/views/setting-up";
@@ -216,9 +217,10 @@ const COMPLETION_FAILURE = {
 
 /** AO-D2 — Setting up as the boot machine moves under it: the answers being
  * written, the desk's own stages (the DocManager's words), then Ready. AO-4b:
- * History's line beside it, in the room's words (the shipping
+ * History's line after the desk's, in the room's words (the shipping
  * `historySetupPhase` over a fixture status) — still finding with the desk
- * ready, Start now 8s past it, and found at Ready. */
+ * ready, Start now 8s past it, and found at Ready. FG-4b: one line under the
+ * logo, the work still going on. */
 const SETTING_UP_STATES = [
   "saving",
   "opening",
@@ -230,19 +232,19 @@ const SETTING_UP_STATES = [
 ] as const;
 type SettingUpState = (typeof SETTING_UP_STATES)[number];
 
-const DESK_WAITING: OnboardingSetupPhase = { key: "desk", label: "Your desk", state: "waiting" };
-const DESK_READY: OnboardingSetupPhase = { key: "desk", label: "Your desk", state: "done" };
+const DESK_WAITING: OnboardingSetupPhase = { key: "desk", line: DESK_LINE, state: "waiting" };
+const DESK_READY: OnboardingSetupPhase = { key: "desk", line: DESK_LINE, state: "done" };
 
 function deskPhase(state: SettingUpState): OnboardingSetupPhase {
   switch (state) {
     case "saving":
       return DESK_WAITING;
     case "opening":
-      return { key: "desk", label: "Your desk", state: "live", detail: "opening doc" };
+      return { key: "desk", line: DESK_LINE, state: "live", detail: "opening doc" };
     case "drawing":
-      return { key: "desk", label: "Your desk", state: "live", detail: "drawing the board" };
+      return { key: "desk", line: DESK_LINE, state: "live", detail: "drawing the board" };
     case "settling":
-      return { key: "desk", label: "Your desk", state: "live", detail: "settling" };
+      return { key: "desk", line: DESK_LINE, state: "live", detail: "settling" };
     case "finding":
     case "slow":
     case "ready":
@@ -361,7 +363,7 @@ export function OnboardingPreview({
               phases={[
                 {
                   key: "desk",
-                  label: "Your desk",
+                  line: DESK_LINE,
                   state: "failed",
                   detail: "document open failed: the daemon refused doc.open (UNAVAILABLE)",
                 },
@@ -539,6 +541,7 @@ function HistoryPreview(): ReactElement {
               : HISTORY_WORDS.bringIn,
           primaryBusy: false,
           choosing,
+          looking: census.kind === "looking",
           error: null,
           onPrimary: noop,
           onLater: noop,
@@ -555,7 +558,7 @@ function SettingUpPreview(): ReactElement {
     <OnboardingFrame
       index="08"
       label="Setting up, then Ready"
-      note="The desk opens beneath the glass · the title becomes the welcome in place"
+      note="The desk opens beneath the glass · one line under the logo becomes the welcome in place"
       state="setting-up"
       controls={
         <SegmentedControl

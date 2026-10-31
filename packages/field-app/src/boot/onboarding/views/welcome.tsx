@@ -1,33 +1,36 @@
 import type { ReactElement } from "react";
-import { eyebrowCls, factCls, primaryCls, WizardPane } from "../wizard-ui";
+import { primaryCls, voiceCls, WizardHold, WizardPane, WizardStatus } from "../wizard-ui";
 
+/** The read before the first pane: a load, the logo and one line (FG-L5). */
 export function OnboardingDerivingPaneView(): ReactElement {
   return (
-    <div className="vf-wizard-pane w-full max-w-[30rem]">
-      <span className={eyebrowCls}>Setup</span>
-      <p className={`mt-2 ${factCls}`}>Reading what this field already knows…</p>
-    </div>
+    <WizardHold face="deriving">
+      <WizardStatus line="Reading what this field already knows…" />
+    </WizardHold>
   );
 }
 
+/** The welcome: the hold's title card under the logo (FG-4b) — Welcome., AO's
+ * line, and Get started. */
 export function OnboardingWelcomePaneView({
   onContinue,
 }: {
   onContinue: () => void;
 }): ReactElement {
   return (
-    <WizardPane
-      eyebrow="VibeField"
-      title="Welcome."
-      voice="Manage all your agents and compose your agentic workflow in one place."
-      centered
-      actions={
+    <WizardHold face="welcome" card onSubmit={onContinue}>
+      <h1 className="text-[32px] font-light leading-[1.15] tracking-[-0.02em] text-black dark:text-white">
+        Welcome.
+      </h1>
+      <p className={`vf-wizard-hold-voice ${voiceCls}`}>
+        Manage all your agents and compose your agentic workflow in one place.
+      </p>
+      <div className="vf-wizard-hold-actions">
         <button type="submit" className={primaryCls}>
           Get started
         </button>
-      }
-      onSubmit={onContinue}
-    />
+      </div>
+    </WizardHold>
   );
 }
 

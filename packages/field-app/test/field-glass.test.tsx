@@ -2,12 +2,13 @@
  * Track FG, FG-3b — the field's hold on the Setup Assistant's glass (field-glass.ts; FG-D24; DESIGN.md §8 "The Setup
  * Assistant's glass"): the glass on the live field hands the field its look and its pose, and the browser stands its
  * own layers down only once the field says it draws them. happy-dom computes no CSS and runs no animations, so the
- * rows hand the glass the computed style a browser would, and run its frames by hand.
+ * rows hand the glass the computed style a browser would, and run its frames by hand. FG-4b: the logo — its filter
+ * in the look and its fade in the pose, followed through its fades — and the field's still, which sizes it.
  */
 import { act, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createFieldGlass, FieldGlassContext } from "../src/boot/field-glass";
+import { createFieldGlass, FieldGlassContext, useFieldStill } from "../src/boot/field-glass";
 import { type WizardGround, WizardShellView } from "../src/boot/onboarding/wizard-ui";
 import type { GlassState } from "../src/boot/splash/glass-look";
 
@@ -24,17 +25,20 @@ let root: Root | null = null;
 /** The frames the glass asked for, by id, run by hand (`runFrame`). */
 const frames = new Map<number, FrameRequestCallback>();
 let lastFrame = 0;
-/** The glass's forming as a browser computes it this frame. */
-const forming = { frost: "1", rise: "1", running: false };
+/** The glass's forming as a browser computes it this frame, and the logo's fade. */
+const forming = { frost: "1", rise: "1", logo: "0", running: false };
 
 function computed(
-  props: Partial<Record<"backgroundColor" | "borderTopLeftRadius" | "boxShadow", string>>,
+  props: Partial<
+    Record<"backgroundColor" | "borderTopLeftRadius" | "boxShadow" | "filter", string>
+  >,
   custom: Record<string, string> = {},
 ): CSSStyleDeclaration {
   return {
     backgroundColor: "",
     borderTopLeftRadius: "",
     boxShadow: "",
+    filter: "none",
     ...props,
     getPropertyValue: (name: string) => custom[name] ?? "",
   } as unknown as CSSStyleDeclaration;
@@ -42,7 +46,7 @@ function computed(
 
 beforeEach(() => {
   frames.clear();
-  Object.assign(forming, { frost: "1", rise: "1", running: false });
+  Object.assign(forming, { frost: "1", rise: "1", logo: "0", running: false });
   const real = globalThis.getComputedStyle;
   // the glass's style as wizard-ui.css and the tokens compute it, by the theme on the root
   vi.stubGlobal("getComputedStyle", (element: Element, pseudo?: string | null) => {
@@ -57,9 +61,13 @@ beforeEach(() => {
           "--vf-wizard-grain": "0.03",
           "--vf-glass-frost": forming.frost,
           "--vf-glass-rise": forming.rise,
+          "--vf-glass-logo": forming.logo,
         },
       );
     if (is("vf-wizard-glass-shadow")) return computed({ boxShadow: FIELD_SHADOW });
+    // §5's logo filter: inverted on milk, as it is by day
+    if (is("vf-wizard-logo"))
+      return computed({ filter: night ? "none" : "invert(1) hue-rotate(180deg)" });
     if (is("vf-wizard-glass-frost") && pseudo === "::after")
       return computed({
         backgroundColor: night ? "rgba(28, 28, 30, 0.55)" : "rgba(255, 255, 255, 0.55)",
@@ -178,6 +186,75 @@ describe("the field's hold on the glass", () => {
   });
 });
 
+describe("the field's still (FG-4b)", () => {
+  it("says when the field becomes its still, once each time it turns", () => {
+    const { hold } = heldField();
+    const heard = vi.fn();
+    hold.subscribe(heard);
+    expect(hold.still()).toBe(false);
+    hold.stillness(true);
+    hold.stillness(true);
+    expect(hold.still()).toBe(true);
+    expect(heard).toHaveBeenCalledTimes(1);
+    hold.stillness(false);
+    expect(hold.still()).toBe(false);
+    expect(heard).toHaveBeenCalledTimes(2);
+  });
+
+  it("is read by what stands on the field, and is never the still off it", () => {
+    const { hold } = heldField();
+    const seen: boolean[] = [];
+    function Reader(): ReactElement {
+      const still = useFieldStill();
+      seen.push(still);
+      return <p>{String(still)}</p>;
+    }
+    mount(
+      <FieldGlassContext.Provider value={hold}>
+        <WizardShellView dark={false} onToggleTheme={() => {}} ground="field">
+          <Reader />
+        </WizardShellView>
+      </FieldGlassContext.Provider>,
+    );
+    expect(seen.at(-1)).toBe(false);
+    act(() => hold.stillness(true));
+    expect(seen.at(-1)).toBe(true);
+    act(() => root?.unmount());
+    root = null;
+    host?.remove();
+
+    hold.stillness(true);
+    mount(
+      <WizardShellView dark={false} onToggleTheme={() => {}} ground="field">
+        <Reader />
+      </WizardShellView>,
+    );
+    expect(seen.at(-1)).toBe(false);
+  });
+
+  it("sizes the logo: the field's mark on the live field, the still's own mark over its still", () => {
+    const { hold } = heldField();
+    // a 1800 × 900 ground, laid out; the glass at its own size there (fit 1)
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(1800);
+    vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(900);
+    mount(
+      <FieldGlassContext.Provider value={hold}>
+        <WizardShellView dark={false} onToggleTheme={() => {}} ground="field">
+          <p>a pane</p>
+        </WizardShellView>
+      </FieldGlassContext.Provider>,
+    );
+    const ground = host?.querySelector<HTMLElement>(".vf-wizard-ground");
+    expect(ground?.style.getPropertyValue("--vf-glass-fit")).toBe("1");
+    expect(ground?.style.getPropertyValue("--vf-wizard-logo-width")).toBe("128px");
+    expect(ground?.style.getPropertyValue("--vf-wizard-logo-height")).toBe("77px");
+    // the wide still, cover-fitted by width at 1.25×: its own mark, 160 × 96.25
+    act(() => hold.stillness(true));
+    expect(ground?.style.getPropertyValue("--vf-wizard-logo-width")).toBe("160px");
+    expect(ground?.style.getPropertyValue("--vf-wizard-logo-height")).toBe("96.25px");
+  });
+});
+
 describe("the glass on the field", () => {
   it("hands the field its look and its pose, and stands the browser's layers down once the field draws them", () => {
     const { hold, last } = heldField();
@@ -193,8 +270,9 @@ describe("the glass on the field", () => {
           { color: [4 / 255, 5 / 255, 15 / 255, 0.55], x: 0, y: 40, blur: 120, spread: 0 },
           { color: [4 / 255, 5 / 255, 15 / 255, 0.28], x: 0, y: 12, blur: 32, spread: 0 },
         ],
+        logoInvert: true,
       },
-      pose: { x: 600, y: 400, w: 880, h: 640, fit: 0.75, frost: 1, rise: 1 },
+      pose: { x: 600, y: 400, w: 880, h: 640, fit: 0.75, frost: 1, rise: 1, logo: 0 },
     });
     // until the field says it draws the glass, the browser does
     expect(shell.hasAttribute("data-glass")).toBe(false);
@@ -229,12 +307,57 @@ describe("the glass on the field", () => {
     expect(frames.size).toBe(1);
   });
 
-  it("follows the theme: by night the field reads the night's tint", async () => {
+  it("follows the theme: by night the field reads the night's tint, and the logo is never inverted", async () => {
     const { hold, last } = heldField();
     mount(glassOn("field", hold));
     expect(last()?.look.tint).toEqual(DAY);
+    expect(last()?.look.logoInvert).toBe(true);
     document.documentElement.setAttribute("data-theme", "dark");
     await vi.waitFor(() => expect(last()?.look.tint).toEqual(NIGHT));
+    expect(last()?.look.logoInvert).toBe(false);
+  });
+
+  it("follows the logo's fades on the glass, long after its forming has rested (FG-4b)", () => {
+    const { hold, door, last } = heldField();
+    const shell = mount(glassOn("field", hold));
+    runFrame();
+    runFrame();
+    expect(frames.size).toBe(0);
+    // the logo begins to fade in: the glass's own transition wakes the pose
+    Object.assign(forming, { logo: "0.3", running: true });
+    act(() => {
+      shell.dispatchEvent(new Event("transitionrun"));
+    });
+    expect(frames.size).toBe(1);
+    runFrame();
+    expect(last()?.pose.logo).toBe(0.3);
+    Object.assign(forming, { logo: "1", running: false });
+    runFrame();
+    expect(last()?.pose.logo).toBe(1);
+    runFrame();
+    runFrame();
+    expect(frames.size).toBe(0);
+    // a transition inside the glass (a button's) is not the glass's, and wakes nothing
+    const handed = door.glass.mock.calls.length;
+    act(() => {
+      shell
+        .querySelector(".vf-wizard-frame")
+        ?.dispatchEvent(new Event("transitionrun", { bubbles: true }));
+    });
+    expect(frames.size).toBe(0);
+    expect(door.glass.mock.calls).toHaveLength(handed);
+  });
+
+  it("hands the field nothing without its logo layer: the sheet's glass has none", () => {
+    const { hold, door } = heldField();
+    mount(
+      <FieldGlassContext.Provider value={hold}>
+        <WizardShellView dark={false} onToggleTheme={() => {}} ground="field" size="sheet">
+          <p>a pane</p>
+        </WizardShellView>
+      </FieldGlassContext.Provider>,
+    );
+    expect(door.glass).not.toHaveBeenCalled();
   });
 
   it("lets the field go when the glass goes", async () => {

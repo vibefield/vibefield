@@ -102,13 +102,19 @@ describe("the smoke launcher (apps/desktop/packaging/run-smoke.mjs)", () => {
     writeFileSync(binary, `#!${process.execPath}\n${body}`);
     chmodSync(binary, 0o755);
   };
+  /** Item 93 (2026-10-31): a daemon the launcher SIGTERMed and its census counted gone can still answer `kill(pid, 0)`
+   * as a zombie (its parent, the stand-in, had exited, and launchd had not yet reaped it). A zombie holds no work and
+   * carries no mark (`ps -E` shows it no environment), so the census is right to count it gone, and so is this. A pid
+   * `ps` shows nothing is gone too: launchd can reap the zombie between the two reads. */
   const alive = (pid: number): boolean => {
     try {
       process.kill(pid, 0);
-      return true;
     } catch {
       return false;
     }
+    const ps = spawnSync("ps", ["-o", "stat=", "-p", String(pid)], { encoding: "utf8" });
+    const stat = ps.stdout.trim();
+    return stat !== "" && !stat.startsWith("Z");
   };
   // *Measured 2026-10-29 (item 93):* each row below resolves Electron's binary in a node child (37 ms here), then runs
   // the launcher as a smoke does. The launcher and the stand-in are node starts (34 ms each), with one more node in two

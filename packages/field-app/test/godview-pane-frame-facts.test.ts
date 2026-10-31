@@ -27,6 +27,7 @@ import {
   paneFrameStatus,
   runIdsBySession,
   runsByTerminal,
+  stopsBySession,
 } from "../src/godview/monitor/pane-frame-facts";
 import { chromeRunOf } from "./chrome-run-fixture";
 import { managedSummary } from "./managed-session-fixture";
@@ -239,6 +240,38 @@ describe("the pane frame's facts", () => {
     // Q08 — the stop's key is in the title the frame draws
     expect(key({ ...row, stopKey: "escape" })).not.toBe(key(row));
     expect(key({ ...row, stopKey: "escape" })).not.toBe(key({ ...row, stopKey: "ctrl-c" }));
+  });
+
+  it("DS-D4 (a) — joins each pane session's held Stop through fieldd's cut, and redraws on its stage and its going unheard alone", () => {
+    const row = managedSummary({
+      runtimeRunId: "run-a",
+      terminalSessionId: "pty-a",
+      status: "working",
+    });
+    const sent = { sentAt: "2026-10-31T06:00:00.000Z", stage: "sent" };
+    const stopping: AgentSessionSummary = { ...row, stop: sent };
+    const other = managedSummary({ runtimeRunId: "run-b", terminalSessionId: "pty-b" });
+    const byTerminal = runsByTerminal([chromeRunOf(stopping), chromeRunOf(other)]);
+    // the row's `stop` crosses fieldd's cut whole, and a run that holds none is left out
+    expect([...stopsBySession(byTerminal)]).toEqual([["pty-a", sent]]);
+
+    const key = (summary: AgentSessionSummary): string => {
+      const joined = runsByTerminal([chromeRunOf(summary)]);
+      return paneFrameFactsKey(
+        paneFrameAgents(joined),
+        runIdsBySession(joined),
+        stopsBySession(joined),
+      );
+    };
+    expect(key(stopping)).not.toBe(key(row));
+    expect(key({ ...row, stop: { ...sent, stage: "terminating" } })).not.toBe(key(stopping));
+    expect(key({ ...row, stop: { ...sent, unheardAt: "2026-10-31T06:00:06.000Z" } })).not.toBe(
+      key(stopping),
+    );
+    // when it was sent draws nothing
+    expect(key({ ...row, stop: { ...sent, sentAt: "2026-10-31T06:00:01.000Z" } })).toBe(
+      key(stopping),
+    );
   });
 
   it("Q08 — hands the frame the key fieldd says the stop presses, and none when it presses none", () => {
