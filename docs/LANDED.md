@@ -24469,6 +24469,8 @@ row 32's first green on the mini and James's look. The look came at 15:02Z and t
   >   (`cancelClear` 9.71875); the mark's ink at 591, 373 by day, 590.5, 373 by night and 590, 374 over the still, as at
   >   run54b; Agents' skip `(327 in 326)` once on each walk; and on each, `SMOKE_DAEMONS` left and reaped nothing.
   > FG-5's witness is paid, and desk-gates row 32's verdict cell is written with it.
+  > **The look, paid (2026-10-31 17:11Z):** James, of the hand-over sheet (run55b's `13-handover-alone` and
+  > `14-handover-clearing` on the three walks) and the tear sheet: "The two sheets look good to me" (VF-PM, 17:12Z).
 - No row judges the hand-over's durations: unit rows under fake timers hold them. No GPU row ran on the field's pass's
   edge: unit rows hold its uniforms. The shared `tearOpen` is on every ordinary boot's path, so the smokes that press
   or shoot after a boot read it when they next run.
@@ -24599,6 +24601,8 @@ which end it was, so a live walk whose tear ran out its bound was green. a5 prop
 - **Paid (2026-10-31, run56b, 16:46:06Z):** row 32 on M56, FG-6c's witness, in Checks: the tear opened on both live
   walks and the still opened by the fade, nothing torn, with the hand-over and row 32's earlier classes again.
 - The tear's look on `tear-mid`, James's eye on that run's sheet; the look is James's to give.
+  > **Paid (2026-10-31 17:11Z):** James, of the tear sheet (run56b's `15-tear-mid` beside `16-desk`, day and
+  > night) and the hand-over sheet: "The two sheets look good to me" (VF-PM, 17:12Z).
 - FG-O3's first printed numbers, from that run, stand in Checks as facts, with no floor (VF-PM 16:04Z (b)). A GPU
   budget would be a ruling of its own.
 - Not claimed: a returning boot's tear (FG-2's; the desk smokes could read the same `data-tear` when they next
@@ -24607,3 +24611,121 @@ which end it was, so a live walk whose tear ran out its bound was green. a5 prop
   4.5:1, an ink step DESIGN.md first at the lean), the catalog over the field's still (a fixture adapter, never a
   copy), and the field's glass against the CSS glass on a frozen frame (a test-only seam, ruled on its own).
 - The thinking doc's §8 holds FG-O3 open. Its line moves at the next draft queue the PM opens.
+
+## FG-O2 — the glass's small words measured in the walk: the splash's stage line, the band's labels, the line under the actions and a load's sub line, each cut from the window's own capture by DK-16's method and printed, not judged yet (desk-gates row 32)
+
+**Why.** The thinking doc's §8 holds FG-O2 open: two measurements, each as DK-16 measured the mat's. One is the stage
+line on the field (white at 56% over the throat's shade). The other is the glass's small words over the moving field
+(the steps' labels, a load's sub line, the line under the actions). A rough read of the page's screenshots (the darkest
+3% of a box against its median, through JPEG) put the small words about a sixth lower by day than on round 4's thicker
+frost, and a little lower by night. VF-PM ruled the build at 16:51Z, after FG-6c's records:
+- measured in row 32's walk by DK-16's method: the chip cut from the window's own capture, its ground and ink colours
+  read, and the WCAG ratio;
+- printed first as facts in the row's record;
+- judged at DESIGN.md's 4.5:1 only in a second step, after one printed run on the mini has shown the numbers;
+- an ink step, if one is short, goes to DESIGN.md first at the lean, and is James's to overturn.
+
+**What landed** (`f198e5ec5`, built and lit in lane fg2 on `fg/contrast` over `626861249`; Checks):
+- One method, shared (`testing/smoke-contrast.ts`, new): DK-16's three helpers (`luminance`, `contrast`, `measureChip`)
+  moved there from `smoke-peers.ts` byte for byte, and DK-16's row moved with them. smoke:canvas reads a peer's chip by
+  the same code, so its printed contrast is unchanged. One helper is new, `cutChip`: a box cut out of a whole window's
+  capture. It reads the capture's scale from its own pixel count, and is null where the capture is not the window's
+  size.
+- The row (`smoke-first-run.ts`):
+  - The page's recorder reads the small words where they stand (`inks()`). For each it gives the box its glyphs take (a
+    range over its text, not the element's box), what it says, and how much of it shows (its opacity times every
+    ancestor's). The band's labels come with their step and state. The read also gives the window's size, and the
+    field's state under the splash (`data-field`, and its canvas's opacity while the live field fades in over its
+    still).
+  - The splash's one early still, `01-splash`, is the walk's first. It is taken once the stage line stands whole on
+    the field that has come: the live field with its canvas whole, or the still. The first whole capture on a field
+    still waking is kept, for a wizard that comes before the field.
+  - Connect's still gives the band's labels and the line under the actions. Setting up's welcome gives a load's sub
+    line, cut after FG-O3's sampler starts, so the sampler starts where FG-6c put it.
+  - Each chip is cut from its still's own capture, measured at the walk's end, and printed in the walk's `contrast`.
+    Nothing is judged.
+- What the row prints at the three walks (its `SMOKE_FIRST_RUN` facts gain `contrast`; each chip gives its ground, its
+  ink, their ratio and how much of it showed, with the still it was cut from):
+  - day and night: `stage` from `01-splash` (its words, and the field under them: `field`, `canvas`); `steps` from
+    `11-connect`, each label keyed by its step with its state (four done, `devices` now, `setting-up` next); `later`
+    from `11-connect`; `sub` from `13-setting-up-welcome`. 17 stills: every still after the splash moves up one
+    number, to `16-tear-mid` and `17-desk`.
+  - no-webgpu: the same, with the stage's `field` "still" and `canvas` null. 16 stills.
+  - A word the walk never saw is null (the stage, where the wizard came before its line stood whole).
+- desk-gates row 32 gains **The contrast** and the still count.
+
+**Checks.**
+- Red first, on the lit tree: each half set aside, then restored byte for byte (sha checked;
+  `lanes/fg2/fgo2/light7.out`).
+  - The walk at `626861249`'s text, under FG-O2's rows: 3 failed, 39 passed of 42
+    (`(0 , splashLook) is not a function`, and the same for `inkCuts` and `firstRunContrast`), then 42/42.
+  - The shared module with DK-16's three helpers alone, under its rows: 2 failed, 1 passed of 3
+    (`(0 , cutChip) is not a function` twice), with DK-16's moved row green on the moved code; then 3/3.
+- The lane's light (17:10:01–17:11:04Z, nice 19 under the guard, on the vitest lane cp-landing handed over; the staged
+  tree `1d80cd418` before and after), all green:
+  - `git diff --check`; biome over the six code files (its one info is the page's String.raw, as before, now at
+    :603:31); `check:walls` clean;
+  - electron-shell's typecheck;
+  - the three row files (smoke-first-run, smoke-contrast, smoke-peers): 67/67;
+  - electron-shell's whole vitest: 159 files, 2,422 passed, 3 skipped (+5).
+- VF-PM's read (17:14Z): one commit on main `626861249` (its parent, so it fast-forwards), 7 files +449 −83, all
+  row code and tests plus row 32's clause; the three helpers moved byte for byte, and smoke-peers.ts imports
+  `measureChip` from the shared module; no product code, field-app, DESIGN.md or tokens; check clean, no markers,
+  no pin, lock or package.json, nothing in draft/.
+- **Run 57:** M57 is the lit tip itself, `f198e5ec5`: its parent is main `626861249`, so the mint is the tip (VF-PM
+  17:14Z; a9's mint in the rebased shape).
+  - `pnpm verify` went green at 17:19:50Z (exit 0; armed 17:14:57Z).
+    - vitest: 11,366 passed, 0 failed, 18 skipped. That is +5 over run 56: smoke-first-run 39 → 42 (FG-O2's three
+      rows), smoke-contrast's 3 new (DK-16's row, moved, and `cutChip`'s two), and smoke-peers 23 → 22.
+    - cargo: `test result: ok.` × 33. typecheck and test ran for 28 projects. MaxListeners 0, the tree clean, and no
+      stubs.
+    - The bundle's assert held at 911.3 KB raw and 240.6 KB gz, as at run 56.
+  - Row 32 alone on M57 (run57b): **GREEN, FG-O2's first printed numbers.** Its gate opened by itself at 17:21:01Z
+    (after James's unlock at 17:17Z; the console unlocked and idle 164 s at arming; load1 4.00), nobody touched it
+    during the row (idle 225 s at its end), and `pnpm smoke:first-run` exited 0 at 17:22:02Z (61 s).
+    FIRST_RUN_VERDICT: day, night and no-webgpu each green, in 20, 20 and 17 s, code 0, nothing left and its profile
+    removed. 50 stills: 17 on each live walk, `01-splash` first, and 16 over the still
+    (`lanes/ts6/logs/mini/run57b/first-run-shots`; the log's sha256 `b62dbf7fca7811f2…`).
+    - The contrast, printed and not judged (the walk's `contrast`: each chip's ground and ink in sRGB and their WCAG
+      ratio, `shown` 1 on every chip), day / night / over the still:
+      - The stage line on `01-splash`: 6.4 / 6.4 / 6.5:1, its ground (4, 6, 15) / (4, 6, 15) / (4, 5, 15) and its ink
+        (145, 145, 150) on each. On both live walks no read saw the live field drawn whole under the whole line, so
+        the first capture on the field still waking was kept (`field` "waking", `canvas` 0, the line saying
+        "waking the daemon"). Over the still it stood on the still (`field` "still", "loading the field").
+      - The band's labels on `11-connect`: the four done (`you`, `agents`, `profiles`, `history`) 2.4, 2.4, 2.3, 2.2 /
+        3.2, 3.2, 3.5, 3.8 / 2.4, 2.3, 2.2, 2.2; `devices`, now, 6.7 / 13 / 6.6; `setting-up`, next, 1.7 / 2.5 / 1.7.
+      - The line under the actions on `11-connect`: 2.2 / 3.7 / 2.2. A load's sub line on `13-setting-up-welcome`:
+        2.2 / 3.2 / 2.2.
+      - The glass under those words, each channel's range over their chips: by day (156–183, 159–186, 180–203), by
+        night (34–62, 38–66, 63–84), over the still (156–185, 160–191, 175–206). The done labels' ink by day
+        (101–115, 105–116, 118–127), by night (128–143, 132–146, 145–157), over the still (99–117, 103–120, 115–129);
+        every chip's ground and ink stand in the log's `contrast`.
+    - FG-O3 printed again, with no floor (day / night): over the tear frames p95 16.8 / 16.8 and max 17.3 / 17.6 ms,
+      the GPU busy mean 32.6 / 33.3 %; at rest p95 18.4 / 19 and max 43.6 / 42.3 ms, busy 27.7 / 34.4 %. Over the
+      still, at rest: p95 17.9, max 35.8 ms, busy 3.3 %.
+    - The earlier classes again: the opening as at run56b (the tear open on both live walks, its still 950 ms in; over
+      the still the fade); `handOver` `["words","clear"]` on all three walks; the login's terminal 170 and Cancel 9.7
+      above the fade (`cancelClear` 9.71875) on each; the mark's ink at 591, 373 / 590.5, 373 / 590, 374; Agents'
+      skip `(327 in 326)` once on each; `SMOKE_DAEMONS` left and reaped nothing.
+- **Landed:** main fast-forwarded `626861249` → `f198e5ec5` at 2026-10-31 17:21:53Z on VF-PM's GO (land-stack4.sh, the
+  ff path, no lock wait; M57 is the lit tip itself): 7 files, +449 −83, tree `1d80cd418`.
+
+**Found while building.**
+- The splash's stage line has no class of its own (the splash's parts are Tailwind's). The recorder finds it as the line
+  after the splash's bar in `.vf-field-words`, which only the boot splash draws.
+- `data-field` says "live" as the field's door opens, and its canvas then fades in over the still for 500 ms. "live"
+  alone does not say the field is drawn whole, so the look also waits for the canvas's opacity.
+- The welcome's sub line is cut from the still the walk already takes, 300 ms after the welcome's words were first
+  seen. Its crossfade in is 240 ms, so `shown` says whether the words were whole when they were cut.
+
+**Owed.**
+- **Paid (2026-10-31, run57b, 17:22:02Z):** row 32 on M57, FG-O2's first printed run, in Checks: every walk green
+  and the contrast printed on all three, with row 32's earlier classes again.
+- The second step (VF-PM 16:51Z): DESIGN.md's 4.5:1 judged against the printed numbers. An ink that falls short moves
+  one step, DESIGN.md first at the lean, James's to overturn.
+- Not claimed: the stage line over the live field drawn whole (on both live walks of run57b no read saw it so, and the
+  line was cut on the field still waking); the splash's line on a returning boot (the desk smokes' face, not this
+  row's); any reading but the one still each word is cut from.
+- FG-6's remaining gates, in the ruled order: the catalog over the field's still (a fixture adapter, never a copy),
+  then the field's glass against the CSS glass on a frozen frame (a test-only seam, ruled on its own).
+- The thinking doc's §8 holds FG-O2 and FG-O3 open. Their lines move at the next draft queue the PM opens.
