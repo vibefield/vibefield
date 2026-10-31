@@ -25580,3 +25580,147 @@ own order:
 and limits "not built until PG-2" clauses, design-mv §1, build-mv L8 and M29, and the design record's §8 PG-2 as built.
 
 **Owed.** PG-3, the phone's replica, the next lane. The draft queue's amendments above.
+
+## FG-6's frozen frame — the live field held on one frame (`window.__vfField`), the glass captured as the field draws it, as the browser does and as the field does again, and the field's glass held to the browser's at DESIGN.md §8's bars in row 32's walks
+
+**Why.** FG-6's ladder entry (the record's §7) holds the field's glass against the CSS glass on one frozen frame, the
+last of FG-6's gates in the ruled order (VF-PM 16:04Z), named next by the catalog (LANDED "FG-6's catalog", its Owed).
+FG-D24, the field drawing the glass in its own frame, rested on an A/B outside the app: a scratchpad CDP rig over copies
+of the page's v6 and v7 measured the two glasses about 1/255 apart inside, 0.3 in the shadow and 2.5 on the logo, on one
+frozen field frame at 2× (the record's §9). In the app no gate held the field's glass to the browser's, and nothing
+could hold the live field on one frame: the vendored splash keeps its clock to itself. The seam is a harness's, ruled on
+its own: VF-PM ruled all five of a5's leans at 22:28Z, James's to overturn (FG-D29, the record's §4 and §7 FG-6), and
+took its one delta at 23:00Z.
+
+**What landed** (`9c8b4e280`, built and lit in lane fg2 on `fg/frozen-frame` over `e0e76abfc`; Checks), in the commit's
+own order:
+- The hold (`field-hold.ts`, new): the field held on the frame it last drew, with no patch of the vendored splash. Its
+  `stop()` ends the loop on that frame, the boot's `redraw` patch draws that frame again, and `start(at)` runs it on
+  from `at` seconds. The splash keeps that clock to itself, so the hold keeps its own, set when it starts the field.
+  Under reduced motion the field stands at rest at its start, and is held there.
+- The door (`field-door.ts`, `field-worker.ts`): `freeze()`, true once the field is held, and `thaw()`. On the main
+  thread they are the hold itself; in the worker they are two messages, "freeze" answered "frozen", and "thaw". A freeze
+  unanswered when the door goes answers false, and a reveal runs a held field on before it plays. The still's door
+  answers `freeze()` false and `thaw()` nothing, as its reveal answers false: one interface for every door, where the
+  ruling said it "has neither" (VF-PM took the delta at 23:00Z).
+- The glass's hold (`field-glass.ts`): `FieldGlassHost.hold(off)`. While the glass is held off, the door is handed none,
+  so the field draws none and says so (`data-glass` goes), and the browser draws the whole glass over the same frame.
+  What the glass sets meanwhile is kept for the door once the hold lets go. The shell is unchanged.
+- `window.__vfField` (`FieldLayer.tsx`): `mode`, `freeze()`, `glass(byField)` and `thaw()`. It stands while the live
+  field's door is open and goes with it (the tear open, or the layer gone), never over the still. It keeps `__vfDesk`'s
+  bargain: reads and switches, no document authority, inert unless called.
+- DESIGN.md §8 first, "Held to the browser's glass": on one held frame of the live field, the field's glass and the
+  browser's differ by a mean of at most 2 inside the glass, 1 in its shadow and 6 on the logo (of 255, a channel's),
+  where FG-D24's A/B measured about 1, 0.3 and 2.5.
+- Row 32 (`smoke-first-run.ts`), on the day and night walks at the welcome's title card, after the logo's judge and
+  before Get started:
+  - the steps: freeze, then three captures (the field's glass, the browser's, and the field's again), each switch waited
+    on by the page's `data-glass` and then 250 ms for the compositor; then the glass is handed back and the field runs
+    on, in a `finally`;
+  - the page's new read, `glass()`: the glass's box, its corners' radius and fit, who draws it, and the logo's box;
+  - `readFrozen`: `held`, the field's two captures apart over the whole window; then three regions by `frozenRegion`,
+    each read as a channel's mean difference: the logo's box, inside the glass 3 in from its rounded edge (past its two
+    hairlines), and the ring of its shadow out to 64, both in the glass's own px;
+  - `judgeFrozen`: held against 0.1, a frame not held said alone; each region against `FIRST_RUN.frozen`, which a unit
+    row holds equal to DESIGN.md §8's sentence;
+  - every number printed in the walk's `frozen`, and three stills more on a live walk (`frozen-field`, `frozen-browser`,
+    `frozen-field-again`); over the still the walk says "nothing to compare".
+- `docs/desk-gates.md`: row 32 says the frozen frame and its stills (about 20 a live walk), and the doors table gains
+  `__vfField.freeze()`, `.glass(byField)` and `.thaw()`.
+- Tests:
+  - field-door: the worker's freeze and thaw, and a freeze unanswered at the door's end; the main thread's hold by its
+    clock, a glass drawn over the held frame, and the reveal's thaw; field-hold's own row (its clock, a second freeze,
+    reduced motion); the still's row, widened to freeze false and thaw nothing;
+  - field-glass: the glass held off the field, and a door that opens while it is held; `window.__vfField` while the live
+    door is open, its three calls, gone at the tear's open; never there over the still, and gone with the layer;
+  - smoke-first-run: DESIGN.md's bars; `frozenRegion` on the logo, inside past the hairlines, the shadow's ring round a
+    corner and at a fit; `readFrozen` at densities 1 and 2, held and moved, and no picture of the window (an empty
+    capture, another window's size, three not one size); `judgeFrozen` within, at and over the bars, not held, and no
+    px; and the walk that stops saying the page's missing field door.
+
+**Checks.**
+- Red first, the code set aside at `e0e76abfc`'s text (the door, the worker, the glass host, the layer, the smoke and
+  DESIGN.md) under the new tests and restored byte for byte (cmp checked; `lanes/fg2/frozen/frozen-light.zsh`):
+  field-app's six rows 6 failed (`door.freeze` not a function on the still's, the worker's and the main thread's door,
+  the glass host's `hold` not a function, and `window.__vfField` absent twice), and electron-shell's five 5 failed
+  (`frozenRegion`, `readFrozen` and `judgeFrozen` absent, the bars absent, and the walk that stops saying two problems
+  for three). `field-hold.ts`, a new module, has no old code to be red on.
+- The lane's two lights, nice 19 under the guard, on the shared vitest lane by the HOLD file
+  (`lanes/fg2/frozen/light/`):
+  - the first (22:49:26–22:52:10Z, after ds7's hold, released to `released/HOLD-225210`) was red on two faults, both in
+    the tests: `readFrozen`'s no-picture case, a 1-pixel buffer read as the window at a density of 0.002 by the module's
+    own rule (`measureMark`'s), now an empty capture and one of another window's size; and TS2375 at
+    `field-glass.test.tsx:511`, an optional ref handed as `undefined` under `exactOptionalPropertyTypes`, now defaulted
+    to `null`;
+  - the re-light (22:54:14–22:56:49Z, released to `released/HOLD-225649`), on the staged tree `8a1904aaa`, the same
+    before and after, was green: the rows, the typecheck of field-app and electron-shell, and `check:walls`;
+    electron-shell's whole vitest 160 files, 2,430 passed, 3 skipped (+4); field-app's 267 files and 1 skipped, 3,496
+    passed, 3 skipped (+6);
+  - biome: both lights' step checked four of the nine files (the script's quoted zsh slice joined the five code paths
+    into one, which biome answered with an io error and exit 0), so biome ran on all nine by hand at 22:57:22Z on
+    `8a1904aaa`: clean.
+- VF-PM read the tip clean at 22:59Z: its parent `e0e76abfc`, 11 files +738 −21, no markers, pins or hex literals,
+  DESIGN.md §8 first, desk-gates row 32; merge-tree with no conflict against main `76e9ff6d7` and against the armed M64
+  `4de954bf7`, no file shared with PG-2.
+- **Run 65** (the mint M65, the merge `a09aae636`: main `e312dde9c` merged into `9c8b4e280`):
+  - The first run went red at 23:12:12Z (exit 1; armed 23:09:06Z, its load 2.66 at the arming and 42.34 at the end) on
+    one row alone, fieldd's `agent-session.test.ts:3675` (item 87's "a run whose workspace cleanup stalls still reads
+    exited…", `expected 1999 to be greater than or equal to 2000`): filed as item 131, item 120's class, in a file this
+    slice never touched.
+  - The re-run, run65r, went green at 23:18:51Z (exit 0; armed 23:14:00Z, its load 8.29 at the arming and 9.23 at the
+    end), the mini's tree clean after it and no stubs left.
+  - vitest: 11,421 passed, 0 failed, 18 skipped over its 27 rows, +10 over run 64's 11,411: field-door 15 → 18 and
+    field-glass 15 → 18 (field-app 3,494 → 3,500, none skipped, where this Mac's light read 3,496 and 3 skipped), and
+    smoke-first-run 44 → 48 (electron-shell 2,426 → 2,430, 3 skipped).
+  - cargo: `test result: ok.` × 33, none failed; typecheck and test ran for 28 projects; biome checked 2,949 files, one
+    more than run 64's 2,948 (`field-hold.ts`); MaxListeners 0; the iOS fixtures' 186 copies and 63 pins identical.
+  - The bundle's assert held at 912.8 KB raw and 241.0 KB gz, +0.9 KB raw and +0.3 KB gz over run 64's 911.9 and 240.7.
+  - The console was locked at the re-run's arming (HID idle 5,899 s) and unlocked by its end (13 s).
+- **Row 32 on M65**, RED at run65b (23:23:18Z), the frozen frame's first live run, read again in
+  `lanes/ts6/logs/mini/run65b/` (run65b-first-run.out and smoke:first-run.log, sha256 `22f3dc01e8d940bc…`):
+  - The row armed 23:22:13Z and ended 23:23:18Z, exit 1, on HEAD `a09aae636`: day red 22s, night red 21s, no-webgpu
+    green 18s; the console unlocked, HID idle 154 s at the arming and 218 s at the end.
+  - day: held 0 over the window; the field's glass against the browser's: 1.18 inside (543,540 px), 0.37 in the shadow's
+    ring (183,448 px) and 8.02 on the logo (9,856 px), against §8's 2, 1 and 6.
+  - night: held 0 over the window; the field's glass against the browser's: 1.08 inside (543,540 px), 0.37 in the
+    shadow's ring (183,448 px) and 7.59 on the logo (9,856 px), against §8's 2, 1 and 6.
+  - no-webgpu: "nothing to compare: over the still the browser draws the whole glass".
+  - day's problems: on the frozen frame the field's glass differs from the browser's by 8.02 on the logo, over DESIGN.md
+    §8's 6.
+  - night's problems: on the frozen frame the field's glass differs from the browser's by 7.59 on the logo, over
+    DESIGN.md §8's 6.
+  - The rest, read from the walks' facts: the words' contrast judge 0 short on every walk (186, 180 and 171 words judged
+    on day, night and no-webgpu), the hand-over heard `words` then `clear` on each, and the desk opened by its tear,
+    tear and fade.
+  - a9's reading of the stills (`first-run-shots/{day,night}/` 04, 05 and 06, and `a9-logo-sheets/`), through VF-PM
+    (23:27Z): the field's two captures the same (byte for byte on both walks, by a5's `cmp` at the cut), and against
+    them the browser's logo with its coloured arcs at another phase of the sweep and its outline doubled about 1 px off.
+- **Landed:** main fast-forwarded `e312dde9c` → `a09aae636` at 2026-10-31 23:21:07Z (main's reflog; VF-PM 23:22Z): 11
+  files +738 −21 over main, M65's tree `08478c631`.
+
+**Found while building.**
+- The splash's clock is its own (`shownAt`, set in its tick), so nothing outside it could say where the field stood; the
+  hold keeps its own from the field's start. Under reduced motion the splash never runs (`start(at)` draws `at` and
+  returns), so the hold holds it at 0, where it stands: a hold by the wall's time would have drawn another frame at the
+  thaw.
+- A capture is the field's glass only once the page says so: the walk waits for `data-glass` before the first capture as
+  before the others, so a field that never drew the glass can't pass as one compared with itself.
+- Nothing animates when `data-glass` turns: the frost's reduced-motion forming (`vf-glass-frost-in`, 280 ms) is keyed on
+  `data-ground` and plays once, and the logo's rule is a plain `visibility: hidden`, so 250 ms is enough for the
+  browser's frost to stand.
+- The walk prints no field mode, so which door held the field live, the worker's or the main thread's, is not printed;
+  the main thread's hold has its unit rows.
+
+**Owed.**
+- FG-6's follow-up 3, first: row 32 was red at run65b (Checks), the follow-up's class by the ruling (VF-PM 22:28Z (5)),
+  in VF-PM's words (23:27Z): the browser's glass draws the logo's colour sweep at its own phase, about 1 px from the
+  field's held frame; the handoff must carry the sweep's phase and the logo's placement (or the judge align them before
+  comparing); the fix at the handoff, never the bar.
+- The catalog judged, after FG-6's follow-up 3 (VF-PM 21:32Z): an Electron walk of its frames on the Mac mini, each
+  judged by row 32's own measure (`captureWords`, `judgeContrast`), which pays the error pane under the judge (its two
+  completion failures stand the wizard's error line on the glass). It folds in the one line that prints the door's mode
+  in the walk's `frozen` (VF-PM 23:13Z).
+- James's look at the frozen frame's three stills a live walk (`frozen-field`, `frozen-browser`, `frozen-field-again`),
+  and FG-D29 with the still's door's answers, VF-PM's rulings at a5's leans (22:28Z, 23:00Z), James's to overturn.
+- Not claimed: the frozen frame under reduced motion (no walk runs it), and which door held the field live. Item 127's
+  list stands.
