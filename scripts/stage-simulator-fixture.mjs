@@ -449,6 +449,29 @@ export function hidLine(sample, { end = false } = {}) {
 /** A console row's two lines. */
 export const hidLines = (begin, end) => [hidLine(begin), hidLine(end, { end: true })];
 
+/** The HID record's writer, GUARDED AT ITS DEFINITION (RM7.2): each line appended to the run's HID log (`path`). An
+ * append that fails (a full disk, its folder gone) never throws — at a row's begin or end that throw failed the door's
+ * request mid-row (the row never opened, or never closed), and in launch's finally it skipped the HID summary and the
+ * exit — and is said ONCE through `say` (the stage's own: redacted, and, as a `HID: ` line, mirrored into
+ * `<run>-stage.log`) as the record incomplete. Later lines are still tried; the run's rows and exit are unchanged. */
+export function hidRecord(path, say, append = appendFileSync) {
+  let said = false;
+  return (line) => {
+    try {
+      append(path, `${line}\n`);
+    } catch (error) {
+      if (said) return;
+      said = true;
+      const why = error?.code ?? (error instanceof Error ? error.message : String(error));
+      try {
+        say(
+          `HID: the record is incomplete: ${path} could not take a line (${why}) — the run goes on and its exit is unchanged; later lines are still tried, and this is said once`,
+        );
+      } catch {}
+    }
+  };
+}
+
 /** A row's begin: a locked console, or input since the last sample (a hand), STOPS the console acts. */
 export function rowVerdict({ name, sample, last }) {
   if (sample.idle === null) return { stop: true, why: `HID unreadable at ${name}'s begin` };
@@ -2239,7 +2262,8 @@ async function launch(mode, command, opts) {
   const deps = hostDeps(redactor, { write: stdout.write, mirror });
   const run = newRun(mode, opts, redactor);
   mkdirSync(dirname(opts.hidLog), { recursive: true });
-  deps.hid = (line) => appendFileSync(opts.hidLog, `${line}\n`);
+  // the HID record guarded at its definition (RM7.2): a failed append is said once, never thrown
+  deps.hid = hidRecord(opts.hidLog, deps.say);
   deps.probe = () => probeHid(deps);
 
   let running = null;

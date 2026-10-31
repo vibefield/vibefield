@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import childProcess from "node:child_process";
 import { EventEmitter } from "node:events";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
 import { join } from "node:path";
 import { Writable } from "node:stream";
@@ -40,7 +40,9 @@ const {
   fenceClear,
   guardedOutput,
   handleDoor,
+  hidLine,
   hidLines,
+  hidRecord,
   hidSummary,
   hostDeps,
   houseRules,
@@ -2635,6 +2637,115 @@ test("the stage's output, guarded: a reader gone never kills the run — later l
   );
   assert.doesNotThrow(() => tty.write("PHONE_ROWS {}\n"));
   assert.equal(tty.gone(), "EIO");
+});
+
+test("the HID record, guarded at its definition: a failed append is said ONCE as the record incomplete — the rows and the teardown complete, the exit unchanged (RM7.2 hid)", async () => {
+  const ctx = {
+    deleteDevices: false,
+    defaultsBefore: "",
+    crashDir: join(FIXTURES, "no-crash-reports-here"),
+    crashBefore: [],
+  };
+  const HID_LOG = "/lanes/pts3/logs/l2-t1/l2-t1-hid.log";
+  const run = ownRun();
+  run.othersAtArm.set(FOREIGN, "Shutdown");
+  run.last = sample(0, 300);
+  const host = fakeHost({ samples: [sample(10, 310), sample(40, 340)] });
+  const tried = [];
+  // a full disk: every append throws
+  host.deps.hid = hidRecord(HID_LOG, host.deps.say, (path, text) => {
+    tried.push({ path, text });
+    throw Object.assign(new Error("ENOSPC: no space left on device, write"), { code: "ENOSPC" });
+  });
+  // the arm's line, a row's begin and end, the teardown, then the END line launch's finally writes: nothing throws
+  assert.doesNotThrow(() => host.deps.hid(hidLine(sample(0, 300))));
+  assert.deepEqual((await doorRow({ name: "SIM-STAGED", phase: "begin" }, run, host.deps)).body, {
+    go: true,
+  });
+  assert.deepEqual((await doorRow({ name: "SIM-STAGED", phase: "end" }, run, host.deps)).body, {
+    go: true,
+  });
+  assert.equal(run.served, 1);
+  const verdict = await restoreHost(run, host.deps, ctx);
+  assert.doesNotThrow(() => host.deps.hid(hidLine(sample(60, 360), { end: true })));
+  // every line was tried at the run's HID log — the record keeps trying — and said ONCE as the record incomplete
+  assert.equal(tried.length, 4);
+  assert.ok(tried.every((t) => t.path === HID_LOG && t.text.endsWith("\n")));
+  const incomplete = host.said.filter((line) => line.startsWith("HID: the record is incomplete"));
+  assert.equal(incomplete.length, 1, host.said.join("\n"));
+  assert.match(incomplete[0], /l2-t1-hid\.log.*ENOSPC/u);
+  // the row's pair and HOST_RESTORED said as ever
+  for (const line of ["PHONE_ROW SIM-STAGED BEGIN", "PHONE_ROW SIM-STAGED END"])
+    assert.ok(host.said.includes(line), line);
+  assert.ok(host.said.some((line) => line.startsWith("PHONE_HOST_RESTORED ")));
+  // the exit unchanged: no stop, no VOID, the host restored — 0
+  assert.equal(run.stopped, null);
+  assert.deepEqual(run.voids, []);
+  assert.equal(verdict.ok, true);
+  assert.deepEqual(
+    launchExit({
+      signal: null,
+      stopped: run.stopped,
+      deadlineHit: false,
+      code: 0,
+      restored: verdict.ownOk,
+      foreign: verdict.foreign,
+    }),
+    { code: 0, lines: [] },
+  );
+  // through the stage's own say: mirrored into `<run>-stage.log` (a `HID: ` line), and redacted. The real append, at a
+  // folder that is not there: ENOENT, said once, and no file made
+  const mirrored = [];
+  const stage = hostDeps(createRedactor(), { write: () => {}, mirror: (l) => mirrored.push(l) });
+  const missing = join(FIXTURES, "no-such-folder");
+  const real = hidRecord(join(missing, "l2-t1-hid.log"), stage.say);
+  assert.doesNotThrow(() => {
+    real(hidLine(sample(0, 300)));
+    real(hidLine(sample(60, 360), { end: true }));
+  });
+  assert.equal(mirrored.length, 1);
+  assert.match(mirrored[0], /^HID: the record is incomplete: .*ENOENT/u);
+  assert.equal(existsSync(missing), false);
+  // a say that throws never makes the record throw
+  const mute = hidRecord(
+    HID_LOG,
+    () => {
+      throw new Error("say failed");
+    },
+    () => {
+      throw new Error("append failed");
+    },
+  );
+  assert.doesNotThrow(() => mute("x"));
+});
+
+/** RM7.2 hid: launch() defines `deps.hid` as the guarded record, before the arm writes its first line — never a raw
+ * append to the HID log (an append that throws would end the run before its teardown). */
+const hidGuarded = (launch) => {
+  assert.equal(launch.match(/deps\.hid = /gu)?.length, 1, "deps.hid defined once");
+  const at = launch.indexOf("deps.hid = hidRecord(opts.hidLog, deps.say);");
+  assert.ok(at >= 0, "deps.hid is the guarded record, said through the stage's own say");
+  assert.ok(at < launch.indexOf("await arm("), "defined before the arm's first HID line");
+  assert.doesNotMatch(launch, /appendFileSync\(opts\.hidLog/u, "never a raw append to the HID log");
+};
+
+test("launch: deps.hid is the guarded record, and an edit back to a raw append is caught (RM7.2 hid)", () => {
+  const launch = launchSource();
+  hidGuarded(launch);
+  const mutations = {
+    "a raw append": launch.replace(
+      "deps.hid = hidRecord(opts.hidLog, deps.say);",
+      'deps.hid = (line) => appendFileSync(opts.hidLog, line + "\\n");',
+    ),
+    "said nowhere": launch.replace(
+      "deps.hid = hidRecord(opts.hidLog, deps.say);",
+      "deps.hid = hidRecord(opts.hidLog, () => {});",
+    ),
+  };
+  for (const [what, mutated] of Object.entries(mutations)) {
+    assert.ok(mutated !== launch, `${what}: the mutation applies`);
+    assert.throws(() => hidGuarded(mutated), assert.AssertionError, what);
+  }
 });
 
 // ─── the responsible app, ENUM and the cost sampler ───────────────────────────────────────────────────────────────────
