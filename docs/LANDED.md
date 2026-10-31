@@ -23254,6 +23254,9 @@ James's first sight: `pnpm dev`, then ⌘4 or the views track's fourth cell.
   RULED 2026-09-30). This track's marks were written DS-D1…D8 in its note, its board approvals (`ds-marks`,
   `ds-d4-place`, `ds-d4-look`) and the comments and test titles of 26 of this landing's 28 files. There DS-Dn means
   ST-Dn, never the sync plane's. The rename commit is owed to the next mint (below).
+  > **Closed (2026-10-31, 09:51:46Z):** the rename landed in the mint `f2c695b69` (LANDED "ST's rename and the kit
+  > half"). From there, DS-Dn in the code is only ever the desktop sync plane's. The note, PU-K and the board approvals
+  > keep the old spelling: the first two take a dated erratum at the next draft queue, and the approvals' names stand.
 - James on the board: `ds-marks` (A, all eight marks at their leans, 05:36:54Z); `ds-marks-corrections` (Accept,
   05:53:50Z); `ds-d4-place` (Accept, 06:16:32Z); `ds-d4-look` ("Accept all three", 06:29:00Z).
 - VF-PM's words: 05:55Z (D1–D6 at the code read's corrections), 06:16Z (ST-D4 (a) + (c), (b) never), 06:26Z (the
@@ -23458,3 +23461,62 @@ the Sparks page's rulings NS-D1 A, NS-D2 B, NS-D3 A and NS-D5 (James, 2026-10-30
   {key "⌘N", view "assistant", outcome "opened"/"closed"} for it.
 
 James's first sight: `pnpm dev`, ⌘4 for Chat, then ⌘N or the line's sparkle.
+
+## ST's rename and the kit half — the durable Stop's marks named ST-Dn in the code, and the phone reads the field row's `stop` (2026-10-31; `cc99532f6` on `6ea6cc727` and fd's `e45142626` on it, landed in the mint `f2c695b69` over main `bcedadd4e`, the mini's run 45)
+
+**Rulings.**
+- VF-PM 07:52Z, on the fixer's finding: the durable Stop's track is ST, and DS stays the desktop sync plane's
+  (DECISIONS DS-D1…DS-D18). (a) the records said ST at once (LANDED "ST", `6ea6cc727`); (b) this rename, folded into
+  fd's kit mint.
+- VF-PM 09:33Z: the kit mint is this merge shape (the rename, then the kit half, minted over the then-main), and its
+  records are one cut.
+
+**What.**
+- **The rename** (the fixer; `cc99532f6`, 26 files, +81 −81). Only lines the ST slice itself added
+  (`c2b20b4ab..7cbd2b59f`) are renamed: "DS-D" → "ST-D", "track DS" → "track ST", the bare tag "DS" → "ST".
+  - In comments, test titles ("ST — a durable Stop (the real floor)", …), DESIGN.md §8 and §9, the godview.css
+    block's marker (with the seat and stop tests that slice on it) and the stop golden's `"//"` line.
+  - Kept: the sync plane's own DS-Dn in the same files (contracts `agent-field.ts`' DS-3 and DS-D4; DESIGN.md :4380
+    and :4414's DS-D5), the board approvals' names (`ds-marks`, `ds-d4-place`, `ds-d4-look`) and the `DS_HEARD` log
+    tag, which LANDED "ST" quotes as that run's evidence.
+  - The golden's bytes changed: `agent-field-snapshot.stop.json` sha256 `22b8868c…` (was `68a99f18…`).
+  - No wire name, audit action or log event changed.
+- **The kit half** (fd; `e45142626` on the rename `cc99532f6`, 4 files, +127; the first cut, `dbb710108` on `7cbd2b59f`,
+  is kept as the record of its first light): EL9's third side for the field row's `stop`. FieldProduct's
+  `AgentFieldStop` reads `AgentStopState`: `sentAt` and `stage` required, `heardBy` and `unheardAt` optional. The stage
+  is kept in its open word, so one this build has never heard is kept as it came and read as still stopping, and unknown
+  keys are counted. `AgentFieldRow.stop` reads through `decodeObject`, as `terminal` does. Absent means no Stop is held,
+  or the daemon predates ST; a malformed Stop drops its row into `droppedRows`. The golden
+  `agent-field-snapshot.stop.json` is mirrored byte for byte into FieldProductTests' Fixtures (sha256 `22b8868c…`) and
+  named in check-ios-fixtures' `launchFixtures`, a `requiredMirrors` set, so the mirror is required from here on. Two
+  rows in LaunchShapeTests, beside PJ-7's: (1) the golden's three Stops (terminating · resent with `unheardAt` · heard
+  by `status`), with no unknown field, and none on a row that holds none; (2) an unknown stage kept, an unknown key
+  counted, a Stop without `sentAt` refused. The kit run on this Mac (`ts7-mac.sh kit e45142626`, 09:28–09:31:45Z; load1
+  16 at the take, 43.9 when the tests armed): 13 runs, 1373 tests, 0 red. check:ios-fixtures exit 0 (186 copies
+  identical, 63 pins). Logs: `lanes/ios/logs/kit-e451426260551cab386c508e1b09a832c3112287/`. `dbb710108`'s first light
+  (07:42–07:47Z, load1 171): LaunchShapeTests whole and check:ios-fixtures 186, beside one unrelated red, now item 126.
+
+**Validation.**
+- **The rename's light** (`records/ds/rows11.sh`, at `cc99532f6` on `6ea6cc727`, 09:25:48–09:27:41Z, nice 19, each
+  row alone, every row exit 0):
+  - biome over 25 files; typecheck contracts, fieldd and field-app 0.
+  - fieldd: `agent-stop` 16/16; the real-floor describe under its ST title 5/5 (`DS_HEARD` resent 8,087 ms at the
+    8 s bound, ladder 3,066 ms at 500 ms bounds); `agent-field` 39/39.
+  - contracts: `agent-field` 43; `agent-session` 30; `fixtures` 523.
+  - field-app: `godview-stop-pane-state` 13; `godview-deck-frames` 68; `godview-pane-frame-facts` 15;
+    `godview-seat-pane-state` 19; `godview-monitor-status` 9; `ui-system-boundaries` 40.
+- **The kit run:** fd's paragraph above.
+- **Run 45** (the mini): verify at `f2c695b69`. VF-PM's stripped read of `lanes/ts6/logs/mini/run45/verify.log`:
+  - FAIL rows 0; Tests 11,176 passed, 0 failed, 18 skipped; cargo `test result: ok.` 33, FAILED 0;
+  - typecheck and test "for 28 projects"; the gen:check line present; MaxListenersExceededWarning 0;
+  - "ios fixtures: 186 copies identical" (185 → 186: the stop golden's mirror is now required);
+  - the fieldd describe runs under its new title, "ST — a durable Stop (the real floor)";
+  - verify exit 0 at 09:50:33Z, and the checkout's tree clean after it.
+- **Landed:** main fast-forwarded `bcedadd4e` → `f2c695b69` at 2026-10-31 09:51:46Z by `land-stack.sh` (the fixer,
+  on VF-PM's GO): 30 files, +208 −81.
+
+**Owed.**
+- Drawing the Stop on the phone is a later iOS slice (fd's; the PG/IOS track).
+- PU-K (James files it), ST-D1's live half, and the note's and PU-K's DS-Dn → ST-Dn errata at the next draft queue
+  (LANDED "ST").
+- Item 126 (fd's FakeCellDoorTests stale-route timeout under heavy load), on the fixer-items list at the next queue.
