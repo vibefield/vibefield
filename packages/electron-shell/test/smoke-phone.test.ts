@@ -47,6 +47,7 @@ import {
   judgePress,
   judgeReload,
   judgeStill,
+  judgeStopped,
   judgeUse,
   type LiveProof,
   type Measure,
@@ -613,6 +614,58 @@ describe("PT-S3 — the rows' judges", () => {
     expect(judgeGone({ ...gone, after: { ...gone.after, sessions: 2 } }).join(" ")).toMatch(
       /sessions 2 → 2/u,
     );
+  });
+});
+
+describe("PT-S3 — SIM-STOPPED's word (P8 amended)", () => {
+  const proven: LiveProof = {
+    bound: 20_000,
+    ms: 900,
+    condition: "streaming",
+    presented: 6,
+    frames: 6,
+    after: Array.from({ length: 10 }, () => "streaming"),
+  };
+  const seen = {
+    quit: "quit",
+    word: "stopped",
+    stateP: "Booted",
+    wakes: [3, 4],
+    paneAlive: true,
+    retry: proven,
+  } as const;
+  const mark = (s: Parameters<typeof judgeStopped>[0]) => {
+    const j = judgeStopped(s);
+    return rowMark(j.problems, { staging: j.staging, recorded: j.recorded }).mark;
+  };
+
+  it("`stopped`: the give-back and Try again's leg judged — green only when both hold", () => {
+    expect(mark(seen)).toBe("green");
+    expect(judgeStopped({ ...seen, retry: null }).problems.join(" ")).toMatch(/Try again/u);
+    expect(mark({ ...seen, retry: null })).toBe("red");
+  });
+
+  it("any other word is RECORDED as a finding, never green — `off` with P Shutdown, another word, or none (R1)", () => {
+    const off = judgeStopped({ ...seen, word: "off", stateP: "Shutdown", retry: null });
+    expect(off.recorded).toBe(true);
+    expect(off.staging).toBe("the quit reads off (device Shutdown) — the stopped face unwitnessed");
+    expect(mark({ ...seen, word: "off", stateP: "Shutdown", retry: null })).toBe("RECORDED");
+    for (const word of ["no-window", "at-rest", null])
+      expect(mark({ ...seen, word, retry: null })).toBe("RECORDED");
+  });
+
+  it("the cap's give-back stays red in every branch — over the word's record too", () => {
+    const asleep = {
+      ...seen,
+      word: "off",
+      stateP: "Shutdown",
+      wakes: [3, 3],
+      retry: null,
+    } as const;
+    expect(judgeStopped(asleep).problems.join(" ")).toMatch(/did not wake/u);
+    expect(mark(asleep)).toBe("red");
+    expect(mark({ ...seen, quit: "failed" })).toBe("red");
+    expect(mark({ ...seen, word: "no-window", paneAlive: false, retry: null })).toBe("red");
   });
 });
 

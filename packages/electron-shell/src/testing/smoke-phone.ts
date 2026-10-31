@@ -917,6 +917,38 @@ export function judgeReload(s: ReloadSeen): string[] {
   return out;
 }
 
+/** SIM-STOPPED (P8 amended): the cap's give-back — the quit, the pane's wake — judged in every branch; the word `stopped`
+ * expected, with Try again's leg judged; any other word (`off` with P Shutdown: the quit shut P down) is RECORDED as a
+ * finding, never green — its stopped face unwitnessed. A red give-back stays red over the word's record. */
+export interface StoppedSeen {
+  readonly quit: string;
+  readonly word: string | null;
+  readonly stateP: string;
+  readonly wakes: readonly [number, number];
+  readonly paneAlive: boolean;
+  readonly retry: LiveProof | null;
+}
+export function judgeStopped(s: StoppedSeen): {
+  readonly problems: string[];
+  readonly recorded: boolean;
+  readonly staging: string | null;
+} {
+  const out: string[] = [];
+  if (s.quit !== "quit") out.push(`SIM-STOPPED: the quit read ${s.quit}`);
+  if (s.wakes[1] < s.wakes[0] + 1 || !s.paneAlive)
+    out.push(
+      `SIM-STOPPED: the pane did not wake into the slot given back (wakes ${s.wakes[0]} → ${s.wakes[1]})`,
+    );
+  if (s.word === "stopped") {
+    out.push(...judgeLiveProven("SIM-STOPPED (Try again)", s.retry));
+    return { problems: out, recorded: false, staging: null };
+  }
+  const finding = `the quit reads ${s.word ?? "nothing"} (device ${s.stateP}) — the stopped face unwitnessed`;
+  return out.length > 0
+    ? { problems: out, recorded: false, staging: null }
+    : { problems: [], recorded: true, staging: finding };
+}
+
 /** SIM-ATTACH: ONE undo step binds; ONE undoes; Finish cycles and reverts. */
 export interface AttachSeen {
   readonly bound: { readonly deviceType: string; readonly runtime: string } | null;
@@ -2436,16 +2468,6 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
       const wakes1 = (await stats())?.wakes ?? 0;
       const paneAlive = (await faceOf(pane))?.alive === true;
       await shootDesk("pt-s3-stopped.png");
-      const out: string[] = [];
-      if (quit !== "quit") out.push(`SIM-STOPPED: the quit read ${quit}`);
-      if (wakes1 < wakes0 + 1 || !paneAlive)
-        out.push(
-          `SIM-STOPPED: the pane did not wake into the slot given back (wakes ${wakes0} → ${wakes1})`,
-        );
-      const finding =
-        wordNow === "stopped"
-          ? null
-          : `the quit reads ${wordNow ?? "nothing"} (device ${stateP}) — the stopped face unwitnessed`;
       let retry: LiveProof | null = null;
       if (wordNow === "stopped") {
         await pickUp(p);
@@ -2453,15 +2475,29 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
         await pressAct("SIM-STOPPED", p, 1, "retry");
         retry = await liveProven(p);
         await putDown();
-        out.push(...judgeLiveProven("SIM-STOPPED (Try again)", retry));
         say(`SMOKE_PHONE_RETRY ${JSON.stringify({ before, after: calls() })}`);
       }
       await js(`globalThis.__vfDesk.liveCap(${capNow ?? 6})`);
+      const stoppedSeen: StoppedSeen = {
+        quit,
+        word: wordNow,
+        stateP,
+        wakes: [wakes0, wakes1],
+        paneAlive,
+        retry,
+      };
+      const j = judgeStopped(stoppedSeen);
+      const finding =
+        wordNow === "stopped"
+          ? null
+          : `the quit reads ${wordNow ?? "nothing"} (device ${stateP}) — the stopped face unwitnessed`;
       if (finding !== null)
         say(`SMOKE_PHONE_FINDING ${JSON.stringify({ row: "SIM-STOPPED", finding })}`);
       return {
-        problems: out,
-        seen: { word: wordNow, stateP, finding, wakes: [wakes0, wakes1], paneAlive, retry },
+        problems: j.problems,
+        recorded: j.recorded,
+        staging: j.staging,
+        seen: { ...stoppedSeen, finding },
       };
     });
 
