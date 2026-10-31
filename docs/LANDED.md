@@ -23246,3 +23246,130 @@ James's first sight: `pnpm dev`, then ⌘4 or the views track's fourth cell.
 - The lane's draft record took its 4a and 4b clauses at the 06:59Z queue (copied at 07:15:53Z); its snapshot is
   VF-PM's at the queue's close.
 - Next: FG-5 (the hand-over), then FG-6.
+
+## ST — a durable Stop: a person's Stop stays sent until fieldd hears the run stop, is sent once more, then ends a readable run through the floor's ladder or leaves an unreadable one to the person; the pane says Ending the run, or Still running · End run (2026-10-31; four commits `9196da93f`, `69f9414f3`, `7de74165b` and `7cbd2b59f`, lane `ds/durable-stop`, rebased onto main `c2b20b4ab` and landed as that tip itself, no merge commit, the mini's run 41)
+
+**Rulings.**
+- **The track is ST** (VF-PM 07:52Z, on the fixer's finding): DS is the desktop sync plane's (DECISIONS DS-D1…DS-D18,
+  RULED 2026-09-30). This track's marks were written DS-D1…D8 in its note, its board approvals (`ds-marks`,
+  `ds-d4-place`, `ds-d4-look`) and the comments and test titles of 26 of this landing's 28 files. There DS-Dn means
+  ST-Dn, never the sync plane's. The rename commit is owed to the next mint (below).
+- James on the board: `ds-marks` (A, all eight marks at their leans, 05:36:54Z); `ds-marks-corrections` (Accept,
+  05:53:50Z); `ds-d4-place` (Accept, 06:16:32Z); `ds-d4-look` ("Accept all three", 06:29:00Z).
+- VF-PM's words: 05:55Z (D1–D6 at the code read's corrections), 06:16Z (ST-D4 (a) + (c), (b) never), 06:26Z (the
+  convention read), 06:50Z (the light, item 125, the order) and 06:58Z (PU-K's fourth ask).
+- The note: `thinking-ar-durable-stop.md`. Its Status flipped to RULED (built, lit, not landed) at the 06:59Z draft
+  queue, with a dated correction under each mark the code read changed.
+- VF-PM 07:18Z: the fourth commit (the row's `stop` rebuilt from its named fields).
+
+**What.**
+- **contracts:**
+  - `AGENT_STOP.HEARD_WITHIN_MS = 3_000` in `registries.ts`, PROVISIONAL (ST-D1).
+  - `AgentStopState {sentAt, stage, heardBy?, unheardAt?}` in `agent-session.ts`, in open words (a stage a reader
+    does not know is still stopping), passthrough.
+  - Optional `stop` on `AgentSessionSummary` and on `AgentFieldRow`, in its own block, so every audience's row
+    carries it: the phone's Stop needs the same truth.
+  - Optional `exited.stop {sentAt, heardBy}` on the session record. `exited.reason` stays the floor's own word
+    (ST-D6).
+  - Goldens `agent-field-snapshot.stop.json` and `agent-session-record.stopped.json`.
+- **fieldd:**
+  - `agent-stop.ts` is the pure rule: `TURN_OBSERVING_LEVELS` (puppeteer-runtime 0.3.2's, unexported),
+    `stopReadable`, `nextStopStep`, `heardByStatus` and `afterEscalation`.
+  - `interrupt()` delivers the run's OWN stop (the floor's interrupt, or the agent's declared turn stop) and holds it
+    sent. At the bound the same stop goes once more. Then a run whose status fieldd can read and which still says
+    `working` goes to `terminateLive`, the floor's ladder; any other run is marked `unheardAt` and left to the
+    person. Each escalation is audited `agent.session.stop_escalated`, the system's act, never the person's.
+  - A ladder that is not placed, or that throws, leaves the Stop unheard. A re-send whose delivery threw still
+    re-arms its bound.
+  - The Stop is heard by the PTY's exit (`exited.stop` stamped) or by a readable, known status leaving `working`. The
+    next turn lets a heard Stop go.
+  - Not carried across a fieldd restart (ST-D8 (a)). A disposed fieldd arms and acts on nothing.
+- **field-app:**
+  - `StopPaneState`, in the deck's pane state layer, from the field row's `stop` (`pane-faces.ts`
+    `describeStop`; `stopsBySession` joined into the deck's facts and their key).
+  - **Ending** / **the run** shows while fieldd ends a turn that did not stop, in the pane colour.
+  - **Still** / **running** shows when fieldd takes the Stop no further: the attention fill's light, the attention
+    ink's caption, and **End run** in `--vf-red` text, one press, `terminal.terminate` on the pane's own session.
+  - Sent, resent and heard draw nothing.
+- **DESIGN.md:** §8 "A run a Stop has not stopped" and §9 "A Stop's words", ruled, naming two owed gaps:
+  - the frame's own 8 s "Stopping the turn…" guess must outlast both sends;
+  - a spark's `agent_interrupt` Stop shows nothing through its sends.
+- **The retirement:** `agentDetail` and `blockerTool` (field-app `agent-status.ts`). Godview's row words are
+  puppeteer's model backend's, and these two had no caller outside their suite. The module's other six exports are
+  item 125.
+- **The row's `stop` rebuilt** (`7cbd2b59f`, VF-PM 07:18Z): fieldd's `projectFieldRow` builds it through `stopOf`
+  from `sentAt`, `stage`, `heardBy` and `unheardAt`, as SP-1b's `originOf` builds the origin, so nothing riding the
+  summary's passthrough reaches any audience. No wire shape or fixture changes.
+- 28 files, +1763 −109 over `c2b20b4ab`.
+
+**Found.**
+- **The note's premises the code read falsified** (05:52Z; the corrections James accepted at 05:53:50Z):
+  - the pane's Stop and "Stopping the turn…" are puppeteer-views' `PaneFrame`, upstream;
+  - the re-send must be the run's OWN stop: ⌃C quits an idle Hermes;
+  - `exited.reason` is the floor's `TerminalExitOutcome`;
+  - "readable" is puppeteer's observation level.
+- **ST-D4's first host place was wrong** (06:14Z): Godview's row words are the backend's `MonitorAgentRow`, and HN's
+  cards carry no run state. So the place is the deck's own pane layer.
+- **The adversarial review** (a reading-only subagent over `5321b12ac..c5cc97560`) found no hard defect. Its two
+  folds:
+  - a fieldd stopping never re-arms a Stop or acts on a run that left;
+  - `unknown` is never heard.
+  - Declined: "sent twice" for an unplaced ladder, which always follows the re-send.
+- **The rebase onto `c2b20b4ab`** (07:30–07:31Z, by hand): four adjacency conflicts with SP-1b, which widened the
+  same `AgentFieldRow` (contracts and fieldd `agent-field`, source and test), each resolved by keeping both sides.
+  `git range-diff`: the second and third commits are identical, and the first changed only at those four places.
+  The pre-rebase tip is kept at `ds/durable-stop-bf522eb` until run 41 is read.
+- **check:ios-fixtures requires no mirror of ST's goldens** (`requiredMirrors`, read 07:27Z): the kit's mirror and its
+  listing are fd's half.
+- **A residual, unverified:** if puppeteer's monitor coalesces working → idle → working, so fieldd never sees the
+  idle, an obeyed Stop is escalated. It is PU-K's fourth ask (a turn's end the host can hear).
+
+**Validation.**
+- **The light before the rebase** (`records/ds/rows9.sh`, at `bf522eb86` on M38, 06:52:42–06:54:44Z, load 29 → 15,
+  each row alone at nice 19):
+  - biome 0 (27 files); typecheck contracts, fieldd and field-app 0.
+  - fieldd: `agent-stop` 16/16; the real-floor describe 5/5; `agent-field` 37/37; `agent-session-records` 5/5.
+  - contracts: `agent-field` 41; `agent-session` 30; `fixtures` 522.
+  - field-app: `godview-stop-pane-state` 13; `godview-deck-frames` 68; `godview-pane-frame-facts` 15;
+    `godview-seat-pane-state` 19; `godview-monitor-status` 9.
+- **The floor's half of ST-D1** (`DS_HEARD`):
+  - a swallowed first ⌃C was heard 8,036 ms after the press (bound 8,000), by the re-send's exit;
+  - a readable working run that ignored ⌃C was heard 3,064 ms after the press (bound 500), by the ladder's SIGTERM.
+  - The other half, James's signed-in agents, is owed before the constant goes final.
+- **Red-first** (`rows9b.sh`, 06:55:22–06:56:47Z): the real-floor describe at the tip, over the parent's four fieldd
+  sources (lane-only). All five rows went red, each at its own first Stop fact, at 15 s. The files were restored, and
+  the tree read clean. The contracts and field-app rows' red is absence.
+- **Before the landing, nothing ran on this Mac after the rebase.** James's own `pnpm dev` ran from 07:21:43Z, and
+  VF-PM's 07:24Z rule held tsc, vitest, biome and `pnpm gen` meanwhile.
+  - The rebased tip and the fourth commit were checked by git and by eye only: the range-diff; no caller of the
+    retired readers at `c2b20b4ab`; DESIGN.md's merge a pure +50; ui-system-boundaries' four `godview.css` rule
+    patterns matching nothing; `diff --check`; widths ≤ 100.
+  - Two rows ran after the landing, once the hold lifted (VF-PM's word 07:46Z; `records/ds/rows10.sh`,
+    09:12:09–09:12:15Z, nice 19). This is the fourth commit's red-first, witnessed:
+    - fieldd `agent-field.test.ts` at `7cbd2b59f`: 39/39;
+    - over the parent's `src/agent-field.ts` (`7de74165b`, the spread): exactly the new row red, at `toEqual(stop)`,
+      the row carrying `"note": "rides the passthrough"`, 38 passed;
+    - restored byte for byte, and the tree read clean.
+- **Run 41, the light for all four commits** (the mini, a9's by-hand run of the rebased tip, armed 07:38:28Z): verify
+  at `7cbd2b59f`, the mini's checkout tree `f3c51c96a` (T's own). a9's by-hand proof matched the 28-file list.
+  VF-PM's stripped read of `lanes/ts6/logs/mini/run41/verify.log`:
+  - FAIL rows 0; Tests 11,148 passed, 0 failed, 18 skipped; cargo `test result: ok.` 33, FAILED 0;
+  - typecheck and test "for 28 projects"; the gen:check stage ran and diffed nothing;
+  - MaxListenersExceededWarning 0; the checkout's porcelain 0 after the verify.
+- **Landed:** main fast-forwarded `c2b20b4ab` → `7cbd2b59f` at 2026-10-31 07:46:58Z by `land-stack.sh` (the fixer,
+  on VF-PM's GO): 28 files, +1763 −109.
+
+**Owed.**
+- The kit's Swift half: fd's `dbb710108` on `7cbd2b59f` (`AgentFieldStop`, the FieldProductTests mirror, the
+  golden listed in `launchFixtures`, two decode rows), cut but not run. It is re-cut on the rename commit below, and
+  its kit suite runs on this Mac (the mini has no Metal toolchain). The phone's drawing of `stop` is a later iOS
+  slice (fd's track).
+- PU-K, placed at `draft/petitions/PU-K-puppeteer-host-stop-stage.md` at the 06:59Z queue. James files it.
+- ST-D1's live measurement on James's signed-in agents. The constant stays provisional until then.
+- The note's DS-D5 (ST-D5) blockquote says the kit's mirrors come "(`pnpm check:ios-fixtures`)". The gate does not
+  require them: a dated correction at the next draft queue, with the note's and PU-K's DS-Dn → ST-Dn (the board
+  approvals keep their names).
+- The rename commit: the slice's DS-Dn lines → ST-Dn (comments, test titles, DESIGN.md §8 and §9, the stop golden's
+  `"//"` line), on this landing, lit on the touched rows. fd's kit half is then re-cut on it (the mirror's bytes
+  change), and the two land as one mint.
+- Item 121's slice (James's A, 05:52:14Z), then item 125.

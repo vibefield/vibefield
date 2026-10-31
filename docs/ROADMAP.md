@@ -294,7 +294,8 @@
   with item 122 and item 121's evidence (`41f27d8cc`, `e3b70d38b`, `0543de224`), the mint `cf0a2982d`.
   Then items 120 (`dd8d5e84d`) and 93's zombie half (`dc2d54a4c`), the mint `b6363425b`.
   Then items 116 (`684fd4dae`, one smoke census) and 122b (`198fee645`, the remote door's endpoints wait), the
-  mint `06e1385d7`.
+  mint `06e1385d7`. Then ST, the durable Stop (`9196da93f`, `69f9414f3`, `7de74165b`, `7cbd2b59f`), landed as its
+  rebased tip itself, run 41 (LANDED "ST"; DECISIONS ST-D1…D8, written DS-D1…D8 until 10-31 07:52Z).
 - Queue: item 80 (DS-5c's wall-clock gap margin, `doc-sync-service.test.ts`, shaped with the DS owner; its sibling
   TC-S3, item 120, landed in run 34) · item 71 (persona refresh window) · item
   73 (`unregistered_webcontents` false positive on every factory window) · item 74 (the generation-1 port forward before
@@ -310,8 +311,10 @@
   runner that ends without `shutdown()`: a watcher host on a stdin pipe, and a SIGHUP handler; after 111 and 112) ·
   item 121 (RA-D7's refused re-attach: TC-D4's interactive fallback against AR-4b's cell rule; James ruled A on
   10-31, re-attach a fallback-born run when fieldd's own record stamps its placement, the placement audited and the
-  row showing the cell; after durable Stop) · item 122's floor half (a fresh floor's two class cells' hello times,
-  idle and under burners; its study found one test exposure, landed as 122b).
+  row showing the cell; next, ST having landed) · ST's rename (the slice's DS-Dn → ST-Dn, then fd's kit half re-cut
+  on it; one mint) · item 125 (retire `agent-status.ts`' other six exports and their tests) · item 122's floor
+  half (a fresh floor's two class cells' hello times, idle and under burners; its study found one test exposure,
+  landed as 122b).
 - **Item 77b**, FieldTerminalTests' 60 s block. The 5 s shape is fixed: (d) `b1e9bf53d` runs AttachDeadlineTests
   `.serialized`, because each row's 1 s deadline covers the dial too and rows started together stampeded the loopback
   dial under load. k1 is separate: `test-without-building` cold-boots a Shutdown simulator, and pre-booting it
@@ -418,6 +421,8 @@
   and D22's "packaged built-ins" by WP8 (`5e7507d6c`); both leave the list.
 
 **Witnesses (his hands, his devices)**
+- ST-D1's live half: how long each catalogued agent takes to be heard after a Stop, on his signed-in agents, before
+  `AGENT_STOP.HEARD_WITHIN_MS` (3 s, provisional) goes final — LANDED "ST".
 - AL-9's ten chord rows (row 1 first: a physical ⌘Q over a focused pane brings up the census box and sends no
   `deck_changed`; a miss on ⌘H or ⌘M puts that chord on D15's list) and AL-9b's two (⌘Q held over a focused pane: one
   box, and Cancel leaves both panes on their sessions; ⌘Q with a Russian input source selected brings up the same box)
@@ -517,6 +522,9 @@
 - After an unclean exit, a pair adopted across a shell-only change keeps its floor, loses its cells to the start-up reaper, and the floor starts its host again — LANDED "TC-S2 + GT-2d".
 
 **Agent plane (AR · AO · MV · Godview)**
+- ST's owed: PU-K (James files it; asks 1–2 close DESIGN.md §8's two gaps, the 8 s arithmetic and a spark's Stop
+  with no pane state, and ask 4 the unverified coalescing residual) · the phone's drawing of `stop` (fd's track) —
+  LANDED "ST".
 - Item 50: agent probes inherit fieldd's env (EL7); one puppeteer seam (`BuiltinProviderOptions.env`, abort on stop) also ends fieldd's agent-inventory probes outliving its stop (QW1 stack A's `4c54f20c7` covers an adapter's helper once the pinned puppeteer asks) — DK-18 follow-up (a).
 - COLORFGBG: ghosttea writes it into every session, an agent's included; EL7 accepted ghosttea's value 10-23 — decide whether an agent's value is VibeField's own.
 - Item 60's doors: James's veto on the phone's bounded reply; whether `project.figures` says a count beside `clipped`; the phone's "N more" for `omitted`; a revisioned delta past a page (measure first) — LANDED "AR/SP — item 60's three doors".
