@@ -245,12 +245,19 @@ const RULES = [
     // hatch for reaching the separate test-only build artifact (dist/testing/*,
     // which the production bundle never contains), so it is exempt FOR R8 ONLY —
     // R1/R5/R9 still catch dynamic imports.
+    // Item 116 (2026-10-31, VF-PM's ruling): `apps/desktop/packaging/` is out of scope. It holds node-run build and
+    // smoke scripts, never app source: the archive is the stage's allowlist (`apps/desktop/packaging/electron-builder.yml`'s
+    // `files:` names package.json, shell/main, shell/preload and shell/renderer alone, never packaging/), and the same list
+    // refuses `!**/testing/**` a second time. So a packaging script reading a package's testing module (the smoke census,
+    // `packages/electron-shell/src/testing/smoke-census.mjs`, which the launcher's row re-exports) puts nothing in the app,
+    // and R8's reason cannot arise there.
     staticOnly: true,
     description:
-      "no production static import of testing/spike- modules under apps/desktop, electron-shell, field-app",
+      "no production static import of testing/spike- modules under apps/desktop (but its node-run packaging/), electron-shell, field-app",
     applies: (p) =>
       SOURCE_EXT.test(p) &&
       underAny(p, ["apps/desktop", "packages/electron-shell", "packages/field-app"]) &&
+      !under(p, "apps/desktop/packaging") &&
       !isTestPath(p) &&
       !isSpikePath(p),
     importTest: importsTestingOrSpike,
@@ -1046,6 +1053,12 @@ function runSelfTest() {
       file: "packages/field-app/src/imports-testing.ts",
       body: 'import { M } from "../testing/mock";\n',
     },
+    // item 116: apps/desktop outside its packaging/ is still R8's, so reading a package's testing module there fires.
+    {
+      id: "R8",
+      file: "apps/desktop/imports-testing.mjs",
+      body: 'import { listRunProcesses } from "../../packages/electron-shell/src/testing/smoke-census.mjs";\n',
+    },
     { id: "R9", file: "packages/field-app/src/uses-ws.ts", body: 'import WebSocket from "ws";\n' },
     // R10 covers BOTH plugin roots (plugins/ and examples/plugins/).
     {
@@ -1371,6 +1384,12 @@ function runSelfTest() {
     {
       file: "packages/electron-shell/src/main/dynamic-testing.ts",
       body: 'const t = () => import("../testing/smoke.cjs");\n',
+    },
+    // item 116: a node-run packaging script may statically read a package's testing module (the launcher's row
+    // re-exports the smoke census); packaging/ never enters the archive.
+    {
+      file: "apps/desktop/packaging/reads-the-census.mjs",
+      body: 'import { listRunProcesses } from "../../../packages/electron-shell/src/testing/smoke-census.mjs";\nexport const l = listRunProcesses;\n',
     },
     // R7 comment stripping: a port named ONLY in a comment must not fire.
     // `//` line comment (with a `:9411` prose mention alongside a bare 9410).

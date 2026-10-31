@@ -637,6 +637,8 @@ everywhere except eyebrows.
 | `--vf-radius-sheet` | `40px` | a sheet's far corners — the fields explorer's lower two (`22 22 40 40`, §8 the head, drawn by value); it named the open island's top corners until DK-13. No CSS reads the token today |
 | `--vf-radius-control` | `6–10px` | inline controls (`rounded` ≈ 4–6 for tiny) |
 | pills/buttons | fully round (`999px`) | chips, round icon buttons |
+| `--vf-scroll-fade` | `20px` | a list that can outgrow what holds it scrolls within itself (2026-10-31, FG-4a): no scrollbar; its last 20 masked from whole to clear (`linear-gradient(to bottom, black calc(100% - 20px), transparent)`) and 20 of padding under its end, so while there is more the next row peeks under the fade and at the end the last row clears it; a scroll into view (a focus, a login) stops 20 short of its foot. Padded 4 on its other sides, so a focus ring stays inside its clip. The face deck's rule (§2.8), which wears it; the Setup Assistant's Agents, History and Profiles lists on the glass (§8 "The Setup Assistant's glass") |
+| `--vf-glass-signin-height` | `190px` | a login's terminal in a pane on the Setup Assistant's glass (2026-10-31, FG-4a; Settings' sign-in keeps its 240). Its card is the terminal and 79.5 of chrome — the head's 33.5 (8, 11px at 1.5, 8 and its hairline), two borders, the gap of 8 and the Cancel row's 36 — so at 190 it is 269.5 and stands whole in the 278.2 that Profiles' cards keep above their fade (the body's 322.2 less the fact's one line of 18 and its gap of 10, the 4 given back, less the fade's 20): Cancel in view without a scroll. At 240 it would be 319.5, and Cancel a scroll away. Three lines of terminal are the cheaper loss (ruled at the lean, VF-PM 2026-10-31 05:12Z; James may overturn to 240 and the scroll) |
 
 Round icon buttons: `40px` (`h-10 w-10`).
 *Retired 2026-10-28 (the housekeeping pass), recording DK-13 and DK-17:* the iOS size grid (small
@@ -2885,6 +2887,22 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   keeps the edge and its light, and stands its other layers down only once the field says it draws them
   (`data-glass`); over the still, and until the field's pass is ready, it draws the whole glass. The logo stays
   FG-4's.*
+  *Status 2026-10-31 (FG-4a, built): the panes stand in the frame. A pane fills it: its head at 96 (the title and
+  the voice, 8 apart), its body 20 under the head (16 between its parts, 18 on TS's panes), and its foot on the
+  frame's foot at 600 (16 above the actions, and under them the later line, 12px in t3, whose 17 are kept on every
+  pane). The pane never scrolls, so its head, its foot and Continue never move: a list that can outgrow its body
+  scrolls within itself on the face deck's rule (`--vf-scroll-fade`, §4; ruled at the lean 2026-10-31, James may
+  overturn) — Agents' list, History's rows with its two sentences standing under them, and Profiles' cards with the
+  fact and a notice under them. A login's terminal stands 190 on the glass (`--vf-glass-signin-height`, §4), so its
+  whole card, Cancel with it, comes into view above Profiles' fade: 269.5 in 278.2, where Settings' 240 would be
+  319.5 and leave Cancel a scroll away (ruled at the lean; James may overturn to 240 and the scroll). The pixel
+  witness is owed to FG-4b's console rows: Agents with nine installed, History with six rows, Profiles' add with
+  its login. On the glass no pane draws its eyebrow. A new pane fades in (240ms `ease`, 160ms
+  reduced) once the old one has faded out (120ms, 60 reduced), the old one leaving as a still copy over the frame;
+  a pane's own changes never fade. A skip's later home (W3) is that line. You's face stands in a 112 × 104 slot,
+  and More agents opens in two columns with rows 40 tall (FG-D19 A). The welcome and the read before the first
+  pane stand centred in the frame until FG-4b stands them under the logo. Finish setting up's sheet keeps its panes
+  as they stood (FG-D26): the eyebrow, centred in it and scrolling downward only, 30rem at most, rising in.*
 - **The reveal** (boot-exclusive motion): the canvas composes and stabilizes BEHIND
   the splash (the frame-stability gate — never reveal mid-hitch), then the splash
   fades 240ms plain `ease` while the canvas settles `scale(0.99) → 1` over 560ms

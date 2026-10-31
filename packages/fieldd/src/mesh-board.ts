@@ -82,6 +82,9 @@ export function upstreamFloor(projection: BoardProjection, floor: number): numbe
  * reader, and every fact past the key is the owner's, for each reader to judge. */
 export type BoardRow = { runtimeRunId: string } & Record<string, unknown>;
 export type BoardSnapshot = { epoch: string; revision: number; rows: BoardRow[] };
+/** A snapshot of this desktop's own board as its subscription emits it: its
+ * chain's epoch is stamped when the subscription was given one. */
+export type LocalBoardSnapshot = { epoch?: string | undefined; revision: number; rows: BoardRow[] };
 export type BoardDelta = {
   epoch?: string | undefined;
   since: number;
@@ -143,10 +146,13 @@ export interface MeshBoardOptions {
   roster: MeshBoardRoster;
   links: MeshBoardLinks;
   upstreams: MeshBoardUpstreams;
+  /** PG-1d — the local board's frames carry their kind: a delta, or a snapshot
+   * that replaces this desktop's copy on its own chain (a re-present on a gate
+   * flip, or the repair after a lost frame). Absent: a delta. */
   openLocal: (
     projection: BoardProjection,
     minIntervalMs: number,
-    emit: (delta: BoardDelta) => void,
+    emit: (frame: BoardDelta | LocalBoardSnapshot, kind?: "delta" | "snapshot") => void,
   ) => LocalBoard;
   now?: () => number;
   /** test seams; the registry's values by default */
@@ -294,7 +300,7 @@ class BoardHub {
   ) {
     // This desktop's own board, on its own chain; it is always `live` (the
     // daemon answering IS its liveness) and needs no heartbeat.
-    this.#local = opts.openLocal(projection, floor, (delta) => this.#onLocal(delta));
+    this.#local = opts.openLocal(projection, floor, (frame, kind) => this.#onLocal(frame, kind));
     this.#self = { asOf: opts.now(), board: held(this.#local.snapshot) };
     opts.roster.on("changed", this.#onRoster);
     opts.links.on("link-changed", this.#onRoster);
@@ -377,8 +383,23 @@ class BoardHub {
     }
   }
 
-  #onLocal(delta: BoardDelta): void {
-    if (this.#disposed || isHeartbeat(delta)) return;
+  #onLocal(frame: BoardDelta | LocalBoardSnapshot, kind: "delta" | "snapshot" = "delta"): void {
+    if (this.#disposed) return;
+    if (kind === "snapshot") {
+      // PG-1d — this desktop's own board re-presented (a gate flip) or
+      // repaired: the held copy is REPLACED, as an owner's mid-stream snapshot
+      // replaces a peer's (`#onUpstream`), so a reader joining now and a PG-1c
+      // resync are answered with it too. Its chain is this desktop's own.
+      const snapshot: BoardSnapshot = {
+        ...(frame as LocalBoardSnapshot),
+        epoch: frame.epoch ?? this.#self.board.epoch,
+      };
+      this.#self.board = held(snapshot);
+      this.#broadcast({ device: this.opts.selfDevice(), snapshot });
+      return;
+    }
+    const delta = frame as BoardDelta;
+    if (isHeartbeat(delta)) return;
     const board = this.#self.board;
     apply(board, delta);
     this.#broadcast({ device: this.opts.selfDevice(), delta: { ...delta, epoch: board.epoch } });

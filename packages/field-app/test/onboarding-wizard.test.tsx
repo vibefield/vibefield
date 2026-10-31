@@ -659,7 +659,8 @@ describe("Setup Assistant", () => {
     );
     expect(text()).not.toContain("Your field now lives in a user");
     expect(container?.querySelector('input[aria-label="Your name"]')).not.toBeNull();
-    expect(text()).toContain("New user");
+    // the band stands on You: on the glass it names the step, where "New user" was the pane's eyebrow (FG-L7)
+    expect(band()).toContain("you:now");
     // No roster door on this host, so no chooser to go back to — and nothing
     // offers to.
     expect(
@@ -703,7 +704,8 @@ describe("Setup Assistant", () => {
       onboarding: onboarding({ fuid: 2, setupVariant: "second-user" }),
       onComplete: vi.fn(),
     });
-    expect(text()).toContain("New user");
+    // the band stands on You: on the glass it names the step, where "New user" was the pane's eyebrow (FG-L7)
+    expect(band()).toContain("you:now");
 
     // The user being set up already exists, so Back means: choose who to enter.
     await click("Back");
@@ -1307,11 +1309,149 @@ describe("Setup Assistant", () => {
     expect(button("Get started").className).toContain("motion-reduce:transition-none");
   });
 
-  it("centres a pane safely in the frame, so a tall pane never loses its title above the fold", () => {
-    // Pane 2 with its face picker open (UA-D17) can be taller than the frame.
-    // Plain centring inside a scroller overflows both ways, and the top half
-    // can never be scrolled to; `safe` sends the overflow downward only.
-    expect(WIZARD_CSS).toMatch(/\.vf-wizard-frame \{[^}]*align-items: safe center;/);
+  it("lays every pane into the one frame: its head at the top, its body under it, its actions on the foot over a kept later line, and the pane never scrolls (FG-L3)", async () => {
+    host(vi.fn(async () => FRESH));
+    await mount({
+      fieldd: client({ link: NO_LINK }),
+      onboarding: onboarding(),
+      onComplete: vi.fn(),
+    });
+    await click("Get started");
+
+    const pane = container?.querySelector(".vf-wizard-frame > form.vf-wizard-pane");
+    expect(Array.from(pane?.children ?? [], (part) => part.className)).toEqual([
+      "vf-wizard-pane-head",
+      "vf-wizard-pane-body",
+      "vf-wizard-pane-foot",
+    ]);
+    const foot = pane?.querySelector(".vf-wizard-pane-foot");
+    expect(Array.from(foot?.children ?? [], (part) => part.className)).toEqual([
+      "vf-wizard-actions",
+      "vf-wizard-later",
+    ]);
+    // a pane that names no later home still draws the line, so its room is kept and the actions never move
+    expect(foot?.querySelector(".vf-wizard-later")?.textContent).toBe("");
+    // the frame is the pane's whole room, and never a scroller; the head and the foot never give
+    // way, so only the body yields room, and a list in it that can outgrow it scrolls within
+    // itself (the Agents, History and Profiles panes' own rows hold that rule)
+    const frame = WIZARD_CSS.match(/\n\.vf-wizard-frame \{([^}]*)\}/u)?.[1];
+    expect(frame).toBeDefined();
+    expect(frame).not.toMatch(/overflow|align-items|justify-content/u);
+    expect(WIZARD_CSS).toMatch(
+      /\n\.vf-wizard-pane \{\s*position: absolute;\s*inset: 0;\s*display: flex;\s*flex-direction: column;/u,
+    );
+    expect(WIZARD_CSS).toMatch(/\n\.vf-wizard-pane-head \{[^}]*flex: none;[^}]*gap: 8px;/u);
+    expect(WIZARD_CSS).toMatch(
+      /\n\.vf-wizard-pane-body \{[^}]*min-height: 0;[^}]*gap: 16px;\s*margin-top: 20px;/u,
+    );
+    expect(WIZARD_CSS).toMatch(
+      /\n\.vf-wizard-pane\[data-track="ts"\] \.vf-wizard-pane-body \{\s*gap: 18px;/u,
+    );
+    expect(WIZARD_CSS).toMatch(
+      /\n\.vf-wizard-pane-foot \{[^}]*flex: none;[^}]*margin-top: auto;\s*padding-top: 16px;/u,
+    );
+    expect(WIZARD_CSS).toMatch(/\n\.vf-wizard-later \{\s*min-height: 17px;/u);
+    // the glass is never reflowed, so You keeps its one layout, its face in a slot of its own
+    expect(WIZARD_CSS).not.toContain("@media (max-width");
+    expect(pane?.querySelector(".vf-wizard-face > .vf-wizard-face-slot")).not.toBeNull();
+    expect(WIZARD_CSS).toMatch(
+      /\n\.vf-wizard-face-slot \{\s*display: grid;\s*width: 112px;\s*height: 104px;\s*place-items: center;/u,
+    );
+  });
+
+  it("draws no eyebrow on the glass, where the band names the step (FG-L7)", async () => {
+    host(vi.fn(async () => FRESH));
+    await mount({
+      fieldd: client({ link: NO_LINK }),
+      onboarding: onboarding(),
+      onComplete: vi.fn(),
+    });
+    await click("Get started");
+
+    expect(band()[0]).toBe("you:now");
+    const head = container?.querySelector(".vf-wizard-pane-head");
+    expect(Array.from(head?.children ?? [], (part) => part.tagName)).toEqual(["H1", "P"]);
+  });
+
+  it("fades the old pane out first and then the new one in, and nothing rises (FG-L3)", async () => {
+    const animations: {
+      target: HTMLElement;
+      keyframes: Keyframe[];
+      options: KeyframeAnimationOptions;
+    }[] = [];
+    let finish: () => void = () => undefined;
+    const finished = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    Object.defineProperty(HTMLElement.prototype, "animate", {
+      configurable: true,
+      value(this: HTMLElement, keyframes: Keyframe[], options: KeyframeAnimationOptions) {
+        animations.push({ target: this, keyframes, options });
+        return { finished };
+      },
+    });
+    try {
+      host(vi.fn(async () => FRESH));
+      await mount({
+        fieldd: client({ link: NO_LINK }),
+        onboarding: onboarding(),
+        onComplete: vi.fn(),
+      });
+      const welcome = container?.querySelector(".vf-wizard-frame > form.vf-wizard-pane");
+      expect(animations).toHaveLength(0);
+      await click("Get started");
+
+      expect(animations).toHaveLength(2);
+      const [leaving, entering] = animations;
+      // the welcome leaves as a still copy laid over the frame, inert and hidden, fading out in 120ms
+      expect(leaving?.target).not.toBe(welcome);
+      expect(leaving?.target.textContent).toBe(welcome?.textContent);
+      expect(leaving?.target.hasAttribute("inert")).toBe(true);
+      expect(leaving?.target.getAttribute("aria-hidden")).toBe("true");
+      expect(leaving?.target.parentElement?.className).toBe("vf-wizard-frame");
+      expect(leaving?.keyframes).toEqual([{ opacity: 1 }, { opacity: 0 }]);
+      expect(leaving?.options).toMatchObject({ duration: 120, easing: "ease", fill: "forwards" });
+      // the new pane, mounted at once, waits under it, then fades in over 240ms
+      expect(entering?.target.querySelector("h1")?.textContent).toBe(title());
+      expect(entering?.keyframes).toEqual([{ opacity: 0 }, { opacity: 1 }]);
+      expect(entering?.options).toMatchObject({
+        duration: 240,
+        delay: 120,
+        easing: "ease",
+        fill: "backwards",
+      });
+      // the copy goes once its fade ends
+      await act(async () => finish());
+      expect(container?.querySelectorAll(".vf-wizard-pane-leaving")).toHaveLength(0);
+      // a pane's own changes never fade: typing redraws You, and nothing animates
+      const name = container?.querySelector<HTMLInputElement>('input[aria-label="Your name"]');
+      await act(async () => {
+        if (name === null || name === undefined) return;
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(
+          name,
+          "jam",
+        );
+        name.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      expect(name?.value).toBe("jam");
+      expect(animations).toHaveLength(2);
+    } finally {
+      delete (HTMLElement.prototype as { animate?: unknown }).animate;
+    }
+
+    // the glass's pane fades in, never rising; under reduced motion at 160ms, the sheet's too
+    expect(WIZARD_CSS).toMatch(
+      /\n\.vf-wizard-pane \{[^}]*animation: vf-wizard-fade 240ms ease both;/u,
+    );
+    const reduced = WIZARD_CSS.slice(WIZARD_CSS.indexOf("@media (prefers-reduced-motion: reduce)"));
+    expect(reduced).toMatch(
+      /\.vf-wizard-pane,\n\s*\.vf-wizard-shell\[data-size="sheet"\] \.vf-wizard-pane \{\s*animation: vf-wizard-fade 160ms ease both;/u,
+    );
+    // its keyframes stand outside the reduced-motion block, or the glass's fade would name nothing
+    expect(WIZARD_CSS.indexOf("@keyframes vf-wizard-fade")).toBeGreaterThan(-1);
+    expect(WIZARD_CSS.indexOf("@keyframes vf-wizard-fade")).toBeLessThan(
+      WIZARD_CSS.indexOf("@media (prefers-reduced-motion: reduce)"),
+    );
   });
 
   it("stands every pane in one glass on the field: 880 × 640, one frame, its material in layers (FG-L2, FG-L3)", async () => {

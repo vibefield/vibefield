@@ -20,6 +20,10 @@ import { z } from "zod";
 //         {snapshot: {epoch, revision, rows, more?}}  a new epoch, or a cursor older than the journal: the reader REPLACES its copy
 //     → later frames: delta {epoch, since, revision, upserts, removed} — only what changed —
 //       or snapshot again (a reset, mid-stream: the epoch moved).
+//       *2026-10-31 (PG-1d):* or on the SAME epoch at the board's current
+//       revision: the field and desk boards re-present on a terminal-gate flip
+//       (the reader's own revision when nothing else moved) and repair a lost
+//       frame (past it). A reader replaces its copy either way, never compares.
 // A reader never acks (SP-L4, the tolerant reader's own rule): a revision gap
 // re-subscribes with the last cursor it applied. Drift is caught by the epoch
 // in every frame and a periodic digest of row keys — a mismatch is a RESET,

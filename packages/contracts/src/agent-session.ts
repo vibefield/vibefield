@@ -255,6 +255,12 @@ export const AgentSessionSummary = z
     origin: AgentSessionOrigin.optional(),
     /** CO — the run is this spark's own session, the one it thinks in. */
     spark: SparkId.optional(),
+    /** Item 124 (2026-10-31) — the door is OFF for this process: its executable refused a field of its briefing
+     * (puppeteer's `UNSUPPORTED_LAUNCH_FIELD`; a Claude older than `--mcp-config`), so fieldd started it once more
+     * without one. A plain run holds no tool plane, and a spark thinks without its tools. A fact of this process,
+     * never of the signed record: the next birth is briefed afresh. OPEN, like `spawnedBy`: `off` is the one word
+     * today, and absent is the door as briefed (or none asked). */
+    door: z.string().min(1).max(32).optional(),
   })
   .passthrough();
 export type AgentSessionSummary = z.infer<typeof AgentSessionSummary>;
