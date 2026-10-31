@@ -233,12 +233,12 @@ function keepLegacySpark(box: Box, runId: string): SparkRecord {
  * reads in canonical mode and a lone key byte would never reach its file. */
 const SCRIPTED_TURN_STOP_TEXT = "scripted-turn-stop\n";
 
-/** DS — the scripted adapter's candidate listener, by terminal, for a binding that witnesses its turns (`observed`). */
+/** ST — the scripted adapter's candidate listener, by terminal, for a binding that witnesses its turns (`observed`). */
 type ScriptedCandidates = Map<string, Parameters<AgentAdapterBinding["events"]["onCandidate"]>[0]>;
 
 /** `turnStops` — Q08: the binding names a turn stop (an `escape` key, by
  * declaration) and records each press, by its terminal; absent, the binding
- * names none, as an adapter that has not been censused yet. `observed` — DS:
+ * names none, as an adapter that has not been censused yet. `observed` — ST:
  * the binding witnesses its turns (`native-hooks`), and a row moves its status
  * by handing the kept listener a turn (`scriptedTurn`); absent, it reads as
  * `terminal-only`, a status fieldd cannot read. */
@@ -457,7 +457,7 @@ function scriptedProvider(
     program?: string;
     /** Q08 — each binding names a turn stop, and each press lands here (absent: none named) */
     turnStops?: string[];
-    /** DS — each binding witnesses its turns, its listener kept here (absent: terminal-only) */
+    /** ST — each binding witnesses its turns, its listener kept here (absent: terminal-only) */
     observed?: ScriptedCandidates;
     /** the re-attach study's Step 1 — a continuation codec (every launch
      * captures `SCRIPTED_STATE`) and an attach record, reported before the
@@ -632,7 +632,7 @@ interface Box {
   models: ScriptedModels;
   /** Q08 — each press of the scripted turn stop, by terminal (`turnStop: true`) */
   turnStops: string[];
-  /** DS — each observed binding's candidate listener, by terminal (`observed: true`) */
+  /** ST — each observed binding's candidate listener, by terminal (`observed: true`) */
   observed: ScriptedCandidates;
 }
 
@@ -672,9 +672,9 @@ interface SetupConfig {
   program?: string;
   /** Q08 — the scripted adapter names a turn stop (default: it names none) */
   turnStop?: boolean;
-  /** DS — the scripted adapter witnesses its turns, `native-hooks` (default: terminal-only, unreadable) */
+  /** ST — the scripted adapter witnesses its turns, `native-hooks` (default: terminal-only, unreadable) */
   observed?: boolean;
-  /** DS — how long a sent Stop waits to be heard (default: `AGENT_STOP.HEARD_WITHIN_MS`) */
+  /** ST — how long a sent Stop waits to be heard (default: `AGENT_STOP.HEARD_WITHIN_MS`) */
   stopHeardWithinMs?: number;
 }
 
@@ -868,7 +868,7 @@ async function setup(config: SetupConfig): Promise<Box> {
   };
 }
 
-/** DS — the observed scripted agent reports a turn, as an adapter's native hook would: `turn:started` reads as
+/** ST — the observed scripted agent reports a turn, as an adapter's native hook would: `turn:started` reads as
  * `working`, `turn:completed` as idle. */
 function scriptedTurn(
   box: Box,
@@ -3885,12 +3885,12 @@ describe("AR-6-0 — the stop verb (agent.interrupt)", () => {
   }, 120_000);
 });
 
-// DS (2026-10-31; James's `ds-marks` and `ds-marks-corrections`; `thinking-ar-durable-stop.md` §4) — A DURABLE STOP,
+// ST (2026-10-31; James's `ds-marks` and `ds-marks-corrections`; `thinking-ar-durable-stop.md` §4) — A DURABLE STOP,
 // on the real floor. A person's Stop stays SENT until fieldd hears the run stop; not heard within its bound, the run's
 // own stop goes once more; still not heard, a run whose status fieldd can read is ended through the floor's ladder,
 // and one whose status it cannot read is left to the person. The bound is the rows' own (`stopHeardWithinMs`), so a
 // row waits its bound rather than the product's 3 s.
-describe("DS — a durable Stop (the real floor)", () => {
+describe("ST — a durable Stop (the real floor)", () => {
   /** The program that ignores ⌃C while `$SCRIPTED_ENV_OUT.release` is absent, then becomes `cat` (which a ⌃C ends).
    * The ignore is the shell's own disposition, which `sleep` inherits; it is restored before the exec, so `cat` is
    * killed by the next ⌃C. `$SCRIPTED_ENV_OUT.trapped` says the ignore stands. */
@@ -4113,7 +4113,7 @@ describe("DS — a durable Stop (the real floor)", () => {
     );
     expect(ladder.attempt.actor.kind).toBe("system");
     expect(ladder.outcome.outcome).toBe("succeeded");
-    // two bounds and the ladder's 4 s, on this host's load: the record's measurement (DS-D1's floor half)
+    // two bounds and the ladder's 4 s, on this host's load: the record's measurement (ST-D1's floor half)
     console.log(`DS_HEARD ${JSON.stringify({ row: "ladder", boundMs: 500, heardMs })}`);
   }, 120_000);
 

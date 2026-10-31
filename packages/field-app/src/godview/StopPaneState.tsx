@@ -4,7 +4,7 @@ import { useDeckAgentFacts } from "./monitor/GodviewAgentsProvider";
 import { describeStop, type StopPaneFace } from "./pane-faces";
 
 /**
- * DS-D4 (a) — THE PANE WHOSE RUN A PERSON'S STOP HAS NOT STOPPED (DESIGN.md §8
+ * ST-D4 (a) — THE PANE WHOSE RUN A PERSON'S STOP HAS NOT STOPPED (DESIGN.md §8
  * "A run a Stop has not stopped"; `pane-faces.ts` `describeStop` words it, the
  * field row's `stop` decides it). The held-edge readout's figure, as item 42's
  * seat draws it: over the veil, the word full and its rest at 40%, and one

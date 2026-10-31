@@ -242,7 +242,7 @@ describe("the pane frame's facts", () => {
     expect(key({ ...row, stopKey: "escape" })).not.toBe(key({ ...row, stopKey: "ctrl-c" }));
   });
 
-  it("DS-D4 (a) — joins each pane session's held Stop through fieldd's cut, and redraws on its stage and its going unheard alone", () => {
+  it("ST-D4 (a) — joins each pane session's held Stop through fieldd's cut, and redraws on its stage and its going unheard alone", () => {
     const row = managedSummary({
       runtimeRunId: "run-a",
       terminalSessionId: "pty-a",

@@ -456,7 +456,7 @@ export interface SummarizeInput {
   spark?: SparkId | undefined;
   /** Item 124 — this process was born without its briefing (its executable takes no door) */
   door?: "off" | undefined;
-  /** DS — the person's Stop while fieldd holds one */
+  /** ST — the person's Stop while fieldd holds one */
   stop?: AgentStopState | undefined;
 }
 

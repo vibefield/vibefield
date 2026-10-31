@@ -453,7 +453,7 @@ export interface AgentRuntimeServiceOptions {
   audit?: SystemAudit;
   /** AR-4 test seam: the resume-when-idle thresholds (defaults above) */
   resumeWhenIdle?: { afterMs?: number; pollMs?: number };
-  /** DS test seam: how long a sent Stop waits to be heard (default `AGENT_STOP.HEARD_WITHIN_MS`) */
+  /** ST test seam: how long a sent Stop waits to be heard (default `AGENT_STOP.HEARD_WITHIN_MS`) */
   stopHeardWithinMs?: number;
   /** A login pane ended and the agent confirmed it is signed in. */
   onProfileSignedIn?: (profileId: string) => Promise<void>;
@@ -540,7 +540,7 @@ interface ManagedEntry {
   /** Item 124 — this process was born without its briefing: its executable takes no door. A fact of the process,
    * never of the record (the briefing never is), so a later birth briefs it afresh. */
   door?: "off" | undefined;
-  /** DS — the person's Stop while this fieldd holds one (DS-D8: not across a restart), and its bound's timer */
+  /** ST — the person's Stop while this fieldd holds one (ST-D8: not across a restart), and its bound's timer */
   stop?: AgentStopState | undefined;
   stopTimer?: NodeJS.Timeout | undefined;
 }
@@ -1889,7 +1889,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   }
 
   /** The run's OWN stop, delivered: the floor's interrupt, or the agent's declared turn stop (Q08). The one thing a
-   * person's Stop sends, and the one thing its re-send sends again (DS-D2). */
+   * person's Stop sends, and the one thing its re-send sends again (ST-D2). */
   private async deliverStop(
     entry: ManagedEntry,
     host: TerminalAgentHost,
@@ -1899,7 +1899,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       : await entry.agent.stopTurn();
   }
 
-  /** DS — what the run's status says to its Stop (`agent-stop.ts`). */
+  /** ST — what the run's status says to its Stop (`agent-stop.ts`). */
   private stopFacts(entry: ManagedEntry): StopFacts {
     let observationLevel = "unknown";
     try {
@@ -1914,7 +1914,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     };
   }
 
-  /** DS — a person's Stop was delivered: it is held as SENT until the run is heard to stop, and its bound is armed. A
+  /** ST — a person's Stop was delivered: it is held as SENT until the run is heard to stop, and its bound is armed. A
    * second press while one is held changes nothing: the first Stop's clock and stage stand. */
   private stopSent(entry: ManagedEntry): void {
     // the delivery was awaited: a run that exited, was replaced, or a fieldd stopping meanwhile holds no Stop
@@ -1940,7 +1940,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     entry.stopTimer = undefined;
   }
 
-  /** DS — the Stop was heard: by the PTY's exit, or by the status leaving `working`. */
+  /** ST — the Stop was heard: by the PTY's exit, or by the status leaving `working`. */
   private stopHeard(entry: ManagedEntry, heardBy: "exit" | "status"): void {
     const stop = entry.stop;
     if (stop === undefined || stop.stage === "heard") return;
@@ -1954,8 +1954,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     });
   }
 
-  /** DS-D2/D3 — a Stop's bound passed and nothing was heard: the one step the rule names, taken. The re-send and
-   * the terminate are fieldd's own acts, in the ledger as such (DS-D6), never the person's. */
+  /** ST-D2/D3 — a Stop's bound passed and nothing was heard: the one step the rule names, taken. The re-send and
+   * the terminate are fieldd's own acts, in the ledger as such (ST-D6), never the person's. */
   private async stopBound(runtimeRunId: string): Promise<void> {
     // a fieldd stopping ends nothing: its runs outlive it (AR-4)
     if (this.disposed) return;
@@ -2025,7 +2025,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     else if (next === "unheard") this.stopUnheard(entry, afterMs);
   }
 
-  /** DS-D3 — a Stop nothing heard and fieldd will not escalate further: left to the person, who can end the run. */
+  /** ST-D3 — a Stop nothing heard and fieldd will not escalate further: left to the person, who can end the run. */
   private stopUnheard(entry: ManagedEntry, afterMs: number): void {
     const stop = entry.stop;
     if (stop === undefined || stop.stage === "heard" || stop.unheardAt !== undefined) return;
@@ -4431,7 +4431,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       entry.status = status;
       entry.stateChangedAt = mirror?.statusSince ?? this.now().toISOString();
     }
-    // DS — the Stop is heard when a readable status leaves `working`; once heard, the next turn lets it go
+    // ST — the Stop is heard when a readable status leaves `working`; once heard, the next turn lets it go
     if (entry.stop !== undefined) {
       if (heardByStatus(entry.stop, this.stopFacts(entry))) this.stopHeard(entry, "status");
       else if (entry.stop.stage === "heard" && status === "working") entry.stop = undefined;
@@ -4500,7 +4500,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     }
     entry.unwatch?.();
     entry.unwatch = undefined;
-    // DS-D6 — an exit while a Stop is held is the Stop heard (one already heard by its status is not this exit's)
+    // ST-D6 — an exit while a Stop is held is the Stop heard (one already heard by its status is not this exit's)
     const stopped = entry.stop !== undefined && entry.stop.stage !== "heard";
     if (stopped) this.stopHeard(entry, "exit");
     // Item 87 — puppeteer's cleanup is unbounded (its workspace finalization

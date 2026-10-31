@@ -28,7 +28,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "perf:godview:corpora": "vitest run --config vitest.perf.config.ts perf/corpora.generate.perf.ts",
-    "perf:godview:model": "vitest run --config vitest.perf.config.ts perf/model-streams.generate.perf.ts"
+    "perf:godview:model": "vitest run --config vitest.perf.config.ts perf/model-streams.generate.perf.ts",
+    "perf:godview:projection": "vitest run --config vitest.perf.config.ts perf/projection-bench.perf.ts"
   },
   "dependencies": {
     "@vibefield/rosetta-protocol": "*",

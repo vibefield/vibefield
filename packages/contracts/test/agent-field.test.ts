@@ -255,7 +255,7 @@ describe("SP-1b — the row says whose session it is and who started it (track C
   });
 });
 
-describe("DS-D5 — a person's durable Stop rides the field row", () => {
+describe("ST-D5 — a person's durable Stop rides the field row", () => {
   it("carries the Stop's clock and stage, in open words, and only on a row that holds one", () => {
     const snapshot = AgentFieldSnapshot.parse(golden("agent-field-snapshot.stop.json"));
     const [ending, unheard, heard] = snapshot.rows;
@@ -264,7 +264,7 @@ describe("DS-D5 — a person's durable Stop rides the field row", () => {
     expect(heard?.stop).toMatchObject({ stage: "heard", heardBy: "status" });
     // content-free: no key of a Stop names a path or a word of the run
     expect(JSON.stringify(snapshot)).not.toContain('"cwd"');
-    // the goldens from before DS carry none and still parse
+    // the goldens from before ST carry none and still parse
     const older = AgentFieldSnapshot.parse(golden("agent-field-snapshot.valid.json"));
     expect(older.rows.every((row) => row.stop === undefined)).toBe(true);
   });

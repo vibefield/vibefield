@@ -1,5 +1,5 @@
 /**
- * DS (2026-10-31) — THE DURABLE STOP'S RULE (`agent-stop.ts`), pure: which runs fieldd can read, the one step a Stop
+ * ST (2026-10-31) — THE DURABLE STOP'S RULE (`agent-stop.ts`), pure: which runs fieldd can read, the one step a Stop
  * takes at its bound, and when a status is the Stop heard. The timers, the deliveries and the floor's ladder are
  * agent-runtime's, and their rows run on a real floor in `agent-session.test.ts`.
  */
@@ -27,7 +27,7 @@ const READABLE_IDLE: StopFacts = { readable: true, known: true, working: false }
 const READABLE_UNKNOWN: StopFacts = { readable: true, known: false, working: false };
 const UNREADABLE: StopFacts = { readable: false, known: true, working: true };
 
-describe("DS-D3 — which runs fieldd can read", () => {
+describe("ST-D3 — which runs fieldd can read", () => {
   it("reads a run whose turns puppeteer witnesses: structured, native hooks or a native log", () => {
     expect([...TURN_OBSERVING_LEVELS].sort()).toEqual(["native-hooks", "native-log", "structured"]);
     for (const level of TURN_OBSERVING_LEVELS) expect(stopReadable(level)).toBe(true);
@@ -40,7 +40,7 @@ describe("DS-D3 — which runs fieldd can read", () => {
   });
 });
 
-describe("DS-D2/D3 — the one step a Stop takes at its bound", () => {
+describe("ST-D2/D3 — the one step a Stop takes at its bound", () => {
   it("sends a Stop not heard once more, whatever the run's status says", () => {
     for (const facts of [READABLE_WORKING, READABLE_IDLE, UNREADABLE]) {
       expect(nextStopStep(stop(), facts)).toBe("resend");
@@ -70,7 +70,7 @@ describe("DS-D2/D3 — the one step a Stop takes at its bound", () => {
   });
 });
 
-describe("DS — a status is the Stop heard", () => {
+describe("ST — a status is the Stop heard", () => {
   it("hears a readable status that left working, while the Stop is sent or sent again", () => {
     expect(heardByStatus(stop(), READABLE_IDLE)).toBe(true);
     expect(heardByStatus(stop({ stage: "resent" }), READABLE_IDLE)).toBe(true);
@@ -106,10 +106,10 @@ describe("DS — a status is the Stop heard", () => {
   });
 });
 
-describe("DS-D2/D3 — what is left once an escalation answered", () => {
+describe("ST-D2/D3 — what is left once an escalation answered", () => {
   it("gives a re-sent Stop its own bound whatever its delivery answered — refused, accepted, or a delivery that threw", () => {
     expect(afterEscalation("resent", "answered")).toBe("rearm");
-    // before DS's review a throwing re-send left the Stop at `resent` with no timer, forever
+    // before ST's review a throwing re-send left the Stop at `resent` with no timer, forever
     expect(afterEscalation("resent", "threw")).toBe("rearm");
   });
 
@@ -118,7 +118,7 @@ describe("DS-D2/D3 — what is left once an escalation answered", () => {
   });
 
   it("leaves the Stop to the person when the ladder was not placed or threw: nothing is ending the run", () => {
-    // before DS's review either left the Stop at `terminating`, "Ending the run" with nothing ending it
+    // before ST's review either left the Stop at `terminating`, "Ending the run" with nothing ending it
     expect(afterEscalation("terminating", "not-placed")).toBe("unheard");
     expect(afterEscalation("terminating", "threw")).toBe("unheard");
   });
