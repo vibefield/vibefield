@@ -39,6 +39,7 @@ import {
   glassRect,
   idleWait,
   isOwnDevice,
+  judgeCap,
   judgeGone,
   judgeLive,
   judgeLiveProven,
@@ -606,6 +607,38 @@ describe("PT-S3 — the rows' judges", () => {
     );
     expect(judgeStill({ ...seen, extraStill: true }).join(" ")).toMatch(/R14/u);
     expect(judgeStill({ ...seen, taken: { before: 0, after: 2 } }).join(" ")).toMatch(/2 stills/u);
+  });
+
+  it("SIM-CAP: waiting at rest on its still DIMMED, the pane put to rest (rests +1), the held surface unchanged 1 s on (R17)", () => {
+    const cap = {
+      proof0: proof,
+      cap: 1,
+      rests: [2, 3],
+      paneAlive: true,
+      waiting: { rested: true, still: 1_700_000_000_000 },
+      live: measure(),
+      seen: measure({ bandMean: [128, 22, 76] }),
+      predicted: [128, 22, 76],
+      proof,
+      held: { alive: true, wire: "live" },
+      paneRested: true,
+      surfaces: ["s-9", "s-9"],
+    } as const;
+    expect(judgeCap(cap)).toEqual([]);
+    // the waiting phone's glass is the LIVE band, not its still at the law's dim
+    expect(judgeCap({ ...cap, seen: measure() }).join(" ")).toMatch(
+      /SIM-CAP: .*a live face, not its still/u,
+    );
+    expect(judgeCap({ ...cap, seen: measure({ band: 0 }) }).join(" ")).toMatch(
+      /SIM-CAP: the band at the law's dim/u,
+    );
+    // the pane put to rest under the held phone: its face, and the count
+    expect(judgeCap({ ...cap, rests: [2, 2] }).join(" ")).toMatch(/not put to rest .*rests 2 → 2/u);
+    expect(judgeCap({ ...cap, paneRested: false }).join(" ")).toMatch(/not put to rest/u);
+    // HELD-NEVER: the surface read after LIVE-PROVEN in hand, and again a second on
+    expect(judgeCap({ ...cap, surfaces: ["s-9", "s-10"] }).join(" ")).toMatch(/surface changed/u);
+    expect(judgeCap({ ...cap, surfaces: [null, null] }).join(" ")).toMatch(/surface changed/u);
+    expect(judgeCap({ ...cap, cap: 6 }).join(" ")).toMatch(/not 1/u);
   });
 
   it("SIM-RELOAD: a session MADE is red even when the face looks right; SIM-GONE: each count one fewer, the device still booted", () => {

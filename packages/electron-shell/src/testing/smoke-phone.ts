@@ -837,6 +837,30 @@ export interface StillSeen {
 const apart = (a: readonly number[], b: readonly number[]): number =>
   Math.max(...a.map((v, i) => Math.abs(v - (b[i] ?? v))));
 
+/** A still's band at the law's dim, read on the glass: present, and nearer the dim than the live band — the law's dim
+ * moves a band less than BAND_TOL, so an undimmed live band counts as band pixels too (R2, R17). */
+function dimBand(
+  row: string,
+  live: Measure,
+  seen: Measure,
+  predicted: readonly [number, number, number] | null,
+): string[] {
+  if (predicted === null) return [`${row}: the live glass held no band to dim`];
+  if (seen.band < BAND_FLOOR * seen.px)
+    return [
+      `${row}: the band at the law's dim (${JSON.stringify(predicted)}) holds ${seen.band} of ${seen.px} pixels`,
+    ];
+  if (
+    seen.bandMean !== null &&
+    live.bandMean !== null &&
+    apart(seen.bandMean, predicted) >= apart(seen.bandMean, live.bandMean)
+  )
+    return [
+      `${row}: the band reads ${JSON.stringify(seen.bandMean)}, nearer the live band ${JSON.stringify(live.bandMean)} than the law's dim ${JSON.stringify(predicted)} — a live face, not its still`,
+    ];
+  return [];
+}
+
 export function judgeStill(s: StillSeen): string[] {
   const out: string[] = [];
   if (s.taken.after !== s.taken.before + 1)
@@ -856,22 +880,52 @@ export function judgeStill(s: StillSeen): string[] {
       out.push(
         `SIM-STILL: the still holds ${s.seen.colors} colours, under half the live face's ${s.live.colors}`,
       );
-    if (s.predicted === null) out.push("SIM-STILL: the live glass held no band to dim");
-    else if (s.seen.band < BAND_FLOOR * s.seen.px)
-      out.push(
-        `SIM-STILL: the band at the law's dim (${JSON.stringify(s.predicted)}) holds ${s.seen.band} of ${s.seen.px} pixels`,
-      );
-    else if (
-      s.seen.bandMean !== null &&
-      s.live.bandMean !== null &&
-      apart(s.seen.bandMean, s.predicted) >= apart(s.seen.bandMean, s.live.bandMean)
-    )
-      // the law's dim moves a band less than BAND_TOL: an undimmed live band counts as band pixels too (R2)
-      out.push(
-        `SIM-STILL: the band reads ${JSON.stringify(s.seen.bandMean)}, nearer the live band ${JSON.stringify(s.live.bandMean)} than the law's dim ${JSON.stringify(s.predicted)} — a live face, not its still`,
-      );
+    out.push(...dimBand("SIM-STILL", s.live, s.seen, s.predicted));
   }
   out.push(...judgeLiveProven("SIM-STILL (the hand-over)", s.handover));
+  return out;
+}
+
+/** SIM-CAP: the phone shares the cap with a pane — seen with the slot full it waits at rest on its still DIMMED; picked
+ * up it is alive, its wire live, the pane put to rest (`rests` +1); HELD-NEVER: its surface unchanged in hand (R17). */
+export interface CapSeen {
+  readonly proof0: LiveProof | null;
+  readonly cap: number | null;
+  /** `stats.rests` before the pick-up and in hand */
+  readonly rests: readonly [number, number];
+  readonly paneAlive: boolean;
+  readonly waiting: { readonly rested: boolean; readonly still: number | null } | null;
+  /** φP's glass live (before the cap), and waiting under it — the band at the law's dim predicted from the live one */
+  readonly live: Measure | null;
+  readonly seen: Measure | null;
+  readonly predicted: readonly [number, number, number] | null;
+  readonly proof: LiveProof | null;
+  readonly held: { readonly alive: boolean; readonly wire: string | null } | null;
+  readonly paneRested: boolean;
+  /** the held phone's surface after LIVE-PROVEN in hand, and a second on */
+  readonly surfaces: readonly [string | null, string | null];
+}
+
+export function judgeCap(s: CapSeen): string[] {
+  const out = [...judgeLiveProven("SIM-CAP (staged)", s.proof0)];
+  if (s.cap !== 1) out.push(`SIM-CAP: the cap reads ${s.cap ?? "nothing"}, not 1`);
+  if (!s.paneAlive) out.push("SIM-CAP: the pane was not alive in the slot");
+  if (s.waiting === null || !s.waiting.rested || s.waiting.still === null)
+    out.push(
+      `SIM-CAP: seen with the slot full the phone is not at rest on its still (${JSON.stringify(s.waiting)})`,
+    );
+  if (s.live === null || s.seen === null)
+    out.push("SIM-CAP: the glass was not read live and waiting");
+  else out.push(...dimBand("SIM-CAP", s.live, s.seen, s.predicted));
+  out.push(...judgeLiveProven("SIM-CAP (in hand)", s.proof));
+  if (s.held?.alive !== true || s.held.wire !== "live")
+    out.push("SIM-CAP: the held phone is not alive with its wire live");
+  if (!s.paneRested || s.rests[1] < s.rests[0] + 1)
+    out.push(
+      `SIM-CAP: the pane was not put to rest under the held phone (rests ${s.rests[0]} → ${s.rests[1]})`,
+    );
+  if (s.surfaces[0] === null || s.surfaces[0] !== s.surfaces[1])
+    out.push("SIM-CAP: the held phone's surface changed under the cap — it was rested");
   return out;
 }
 
@@ -2399,7 +2453,11 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
     });
 
     await row("SIM-CAP", "MUST", async () => {
-      const proof0 = await bringLive("SIM-CAP", p, 1, nonce());
+      const q = nonce();
+      const band = bandColour(q);
+      const proof0 = await bringLive("SIM-CAP", p, 1, q);
+      // its glass live, the band the page draws: the still's dim is judged against it
+      const live = await glassOf(p, false, band);
       pane ??= await placePane(0);
       await away();
       await view([pane]);
@@ -2414,34 +2472,37 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
       await sleep(1_500);
       const s0 = await stats();
       const waiting = await faceOf(p);
+      const lit = live === null ? null : live.bandMean;
+      const dim = lit === null ? null : dimmed(lit, band, PHONE.still);
+      const predicted: [number, number, number] | null =
+        dim === null ? null : [Math.round(dim[0]), Math.round(dim[1]), Math.round(dim[2])];
+      const seenGlass = await glassOf(p, false, predicted);
       const paneBefore = await faceOf(pane);
       await pickUp(p);
-      const surface0 = (await faceOf(p))?.surface ?? null;
+      // HELD-NEVER: the surface read once the wake has landed (LIVE-PROVEN in hand), and again a second on
       const proof = await liveProven(p);
+      const surface0 = (await faceOf(p))?.surface ?? null;
+      await sleep(1_000);
       const inHand = await faceOf(p);
       const paneHeld = await faceOf(pane);
       const s1 = await stats();
       await putDown();
       await js(`globalThis.__vfDesk.liveCap(${capNow ?? 6})`);
-      const out: string[] = [...judgeLiveProven("SIM-CAP (staged)", proof0)];
-      if (s0?.cap !== 1) out.push(`SIM-CAP: the cap reads ${s0?.cap ?? "nothing"}, not 1`);
-      if (paneBefore?.alive !== true) out.push("SIM-CAP: the pane was not alive in the slot");
-      if (waiting?.rested !== true || waiting.still === null)
-        out.push(
-          `SIM-CAP: seen with the slot full the phone is not at rest on its still (${JSON.stringify({ rested: waiting?.rested, still: waiting?.still })})`,
-        );
-      out.push(...judgeLiveProven("SIM-CAP (in hand)", proof));
-      if (inHand?.alive !== true || inHand.wire?.mode !== "live")
-        out.push("SIM-CAP: the held phone is not alive with its wire live");
-      if (paneHeld?.rested !== true)
-        out.push("SIM-CAP: the pane was not put to rest under the held phone");
-      // HELD-NEVER of its own: the held phone's surface unchanged under the cap
-      if (inHand?.surface !== surface0)
-        out.push("SIM-CAP: the held phone's surface changed under the cap — it was rested");
-      return {
-        problems: out,
-        seen: { s0, s1, waiting: { rested: waiting?.rested, still: waiting?.still }, proof },
+      const seen: CapSeen = {
+        proof0,
+        cap: s0?.cap ?? null,
+        rests: [s0?.rests ?? 0, s1?.rests ?? 0],
+        paneAlive: paneBefore?.alive === true,
+        waiting: waiting === null ? null : { rested: waiting.rested, still: waiting.still },
+        live,
+        seen: seenGlass,
+        predicted,
+        proof,
+        held: inHand === null ? null : { alive: inHand.alive, wire: inHand.wire?.mode ?? null },
+        paneRested: paneHeld?.rested === true,
+        surfaces: [surface0, inHand?.surface ?? null],
       };
+      return { problems: judgeCap(seen), seen: { ...seen, s0, s1 } };
     });
 
     await row("SIM-RELOAD", "MUST", async () => {
