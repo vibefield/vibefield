@@ -32,6 +32,7 @@ import { act, type ReactElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SyncQuestionDoor } from "../src/account/sync-question";
+import { HeadLive } from "../src/design-system/HeadPreview";
 import type { DocManagerApi, DocManagerState } from "../src/doc-manager";
 import { resetDocSyncStatuses, setDocSyncStatuses } from "../src/doc-sync-store";
 import { publishGodviewDeck, resetGodviewDeckDoorForTest } from "../src/frame/deck-door";
@@ -1584,6 +1585,29 @@ describe('the Artifacts shelf hosts the Hub (DESIGN.md §8 "Artifacts — the Ar
     expect(shelf("artifacts")?.textContent).toBe("Opening Artifacts…");
     act(() => vi.advanceTimersByTime(1));
     const said = shelf("artifacts")?.querySelector(".vf-head-waits-face:not([data-leaving])");
+    expect(said?.querySelector("strong")?.textContent).toBe("Artifacts aren't starting");
+  });
+
+  it("says the same in the catalog's live head, over its fixture doors with no plugin host: opening, and past 10 s not starting, as a window's would (HN-8)", () => {
+    // The catalog's playground runs this clock from its mount (HeadLive), so the page's own row
+    // cannot read the words under real time; they are read here, with the clock frozen (item 129).
+    vi.useFakeTimers();
+    // no plugin host runs in the catalog: no registry has answered, and no Hub binds
+    expect(registry.snapshot).toBeNull();
+    function Playground(): ReactElement {
+      const [surface, setSurface] = useState<FrameSurface | null>("artifacts");
+      return <HeadLive surface={surface} onSurfaceChange={setSurface} />;
+    }
+    host = document.createElement("div");
+    document.body.appendChild(host);
+    root = createRoot(host);
+    act(() => root?.render(<Playground />));
+    const words = (): HTMLElement | null | undefined =>
+      shelf("artifacts")?.querySelector<HTMLElement>(".vf-head-waits");
+    act(() => vi.advanceTimersByTime(HUB_START_BOUND_MS - 1));
+    expect(words()?.textContent).toBe("Opening Artifacts…");
+    act(() => vi.advanceTimersByTime(1));
+    const said = words()?.querySelector(".vf-head-waits-face:not([data-leaving])");
     expect(said?.querySelector("strong")?.textContent).toBe("Artifacts aren't starting");
   });
 

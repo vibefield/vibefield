@@ -687,12 +687,15 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     );
     expect(place?.dataset.open).toBe("true");
     // HN-8: its package turns the same sheet to Artifacts in place — which waits here, with no
-    // plugin host in the catalog to bind the Hub, as a window's does at boot
+    // plugin host in the catalog to bind the Hub, as a window's does at boot. Its words are the
+    // clock's: opening, and past 10 s from the playground's mount, not starting. This page can
+    // take longer than that to render and reach here (GitHub's runner did, item 129), so the
+    // words are read with the clock frozen, in head.test.tsx's row for the catalog's live head.
     await act(async () => place?.querySelector<HTMLButtonElement>(".vf-head-pack")?.click());
     expect(place?.dataset.open).toBe("true");
-    expect(place?.querySelector('[data-shelf="artifacts"][data-shown]')?.textContent).toBe(
-      "Opening Artifacts…",
-    );
+    const artifacts = place?.querySelector('[data-shelf="artifacts"][data-shown]');
+    expect(artifacts?.querySelector(".vf-head-waits")).not.toBeNull();
+    expect(artifacts?.querySelector("[data-vf-plugin]")).toBeNull();
 
     expect(container?.querySelector(".vf-godview .vf-monitor-list")).not.toBeNull();
     // GV-D1: the head in the other theme too — the page is dark, so the frame's
