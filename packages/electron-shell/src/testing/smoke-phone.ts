@@ -1498,7 +1498,9 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
       `(() => { const el = document.elementFromPoint(${Math.round(at.x)}, ${Math.round(at.y)}); return el === null ? null : getComputedStyle(el).cursor; })()`,
     );
   };
-  /** The act pressed IN HAND: THE PRESS GATE (ours, then the door's), the capsule found by the cursor, pressed there. */
+  /** The act pressed IN HAND: our press gate; the capsule found by the cursor; THEN the door's gate — the fence and the
+   * Simulator.app proof as of the press, never a scan's seconds stale, and no press recorded when no capsule is found
+   * (R11) — and the press at once. */
   const pressAct = async (row: string, k: string, n: number, act: PressAct): Promise<void> => {
     const f = await faceOf(k);
     const s = f?.simulator ?? null;
@@ -1512,19 +1514,24 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
       runId: env.runId,
     });
     if (why !== null) throw new PhoneStop(`${row}: the press gate: ${why}`);
-    const gate = await door.row(row, "press", { act, device: s?.name ?? "" });
-    if (gate.stop !== null) throw new PhoneStop(`${row}: the door's press gate: ${gate.stop}`);
     const frame = await heldFrame();
     if (frame === null) throw new Error(`${row}: the phone is not in hand for its act`);
     const off = await deskAt();
+    let capsule: { x: number; y: number } | null = null;
     for (const p of actScan(frame)) {
       const at = { x: off.left + p.x, y: off.top + p.y };
       if ((await cursorAt(at)) === "pointer") {
-        await press(at);
-        return;
+        capsule = at;
+        break;
       }
     }
-    throw new Error(`${row}: no point of the held phone is the act's capsule (no pointer cursor)`);
+    if (capsule === null)
+      throw new Error(
+        `${row}: no point of the held phone is the act's capsule (no pointer cursor)`,
+      );
+    const gate = await door.row(row, "press", { act, device: s?.name ?? "" });
+    if (gate.stop !== null) throw new PhoneStop(`${row}: the door's press gate: ${gate.stop}`);
+    await press(capsule);
   };
   /** LIVE-PROVEN, read off the face and main's helper (above). */
   const liveProven = async (k: string, bound: number = PHONE_BOUNDS.live): Promise<LiveProof> => {
