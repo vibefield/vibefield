@@ -24024,6 +24024,19 @@ overturn). VF-PM ruled its staging (a) at 07:48Z, History and Profiles at 09:17Z
 **Owed.**
 - The row's first run: OWED-ROWS row 2, on the Mac mini at James's unlock. The console chain is armed once on M52:
   smoke:godview, then smoke:first-run, its stills kept.
+  > **Run (2026-10-31, OWED-ROWS row 2 on the Mac mini, run52b): RED.** The chain's gate opened at 13:37:43Z on
+  > James's 13:34Z unlock, smoke:godview first (green, 128 s). `pnpm smoke:first-run` ran 13:39:52–13:41:32Z (100 s)
+  > and exited 1. FIRST_RUN_VERDICT: day red 16 s, night red 40 s, no-webgpu red 40 s, each walk code 2 and not timed
+  > out, with no process left and its profile removed. The reds fall in two classes, on the mini's 1180 × 748 window:
+  > - A (day, which reached the desk): `the mark's ink centres at 599.9, 373.6, not the window's 590, 374 · Agents:
+  >   the list fits its body, so nothing scrolls and the row witnesses no scroll`.
+  > - B (night and no-webgpu, alike): `the login's Cancel: no press reached it within 30000ms (covered by
+  >   vf-wizard-pane-foot)`. Their sign-in pane stood below the new profile's card with its Cancel under the pane's
+  >   foot, where day's list had brought the pane whole into view. The day walk alone, run warm in the same unlock
+  >   (13:47:38Z, exit 1 at 13:48:17Z), was red on B's line with the same picture: B is a timing race, which run52b's
+  >   cold first walk escaped.
+  > Its 31 stills are kept (day 13, night 9, no-webgpu 9; `~/vf-lanes/verify/logs/run52b/first-run-shots` on the mini).
+  > The row's first green stays owed: FG-6's follow-up slice takes A and B, then row 32 runs again.
 - James's look: one contact sheet of the three walks, and his eye list (row 32's "not this row's"):
   - Agents with nine installed (PU-L, drafted 2026-10-31 and not filed, would bring nine into the walk's own staging);
   - History with six rows;
