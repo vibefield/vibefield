@@ -249,7 +249,7 @@ function bindHub(): () => void {
     100,
     "Artifacts",
   );
-  const unbind = (): void => bound.dispose();
+  const unbind = () => bound.dispose();
   unbinds.push(unbind);
   return unbind;
 }
