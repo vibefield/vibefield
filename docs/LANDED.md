@@ -21997,6 +21997,8 @@ Mac mini, verify only).
   > none, and the same records (`623dbded2`) gave row 23 "the package circle grows the pill's sheet on Artifacts
   > (HN-8)" as well. The Hub in the head is witnessed by head.test.tsx's rows and the catalog's plates only; its
   > smoke:godview rung is owed (ROADMAP §5). smoke:canvas's HN rows held at 38b too.
+  > **2026-10-31 09:44:03Z (M44):** the rung is built: 11k (`a3c2b3d1d`), landed in M44 `bcedadd4e`. Its console
+  > witness is owed: OWED-ROWS row 1 at James's next unlock (LANDED "HN — smoke:godview's rungs").
 - **Landed:** main fast-forwarded `e71f2d332` → `e31e55ecd` at 03:09:01Z on VF-PM's GO (`land-stack.sh`). HN B2's
   records landed on it as `4a638384e` at 03:09:13Z, and VF-PM's push of 03:10:19Z carried both.
 
@@ -23466,6 +23468,9 @@ the Sparks page's rulings NS-D1 A, NS-D2 B, NS-D3 A and NS-D5 (James, 2026-10-30
 - The draft corpus's "as built" (thinking-roled-agents.md §17) and its status lines, at the next draft queue.
 - The ⌘N rung is a1's, in the smoke:godview lane (VF-PM 09:15Z; the facts sent 09:16Z). The line emits LINE_KEY
   {key "⌘N", view "assistant", outcome "opened"/"closed"} for it.
+  > **2026-10-31 (M44, M47):** built: 11l (`2b984cc0f`) landed in M44 `bcedadd4e` at 09:44:03Z, and its Esc from
+  > the body (`8db8685de`) in M47 `6e97717b1` at 10:10:14Z, over the fix `3a6353c40` (M43). Its console witness
+  > is owed: OWED-ROWS row 1 at James's next unlock (LANDED "HN — smoke:godview's rungs").
 
 James's first sight: `pnpm dev`, ⌘4 for Chat, then ⌘N or the line's sparkle.
 
@@ -24032,3 +24037,28 @@ overturn). VF-PM ruled its staging (a) at 07:48Z, History and Profiles at 09:17Z
   - the splash's `errors()` read beside the mode;
   - FG-O2's two contrast measurements;
   - FG-O3's GPU read during the tear.
+
+## HN — smoke:godview's rungs 11k (the Hub in the head) and 11l (Chat's New spark: ⌘N, and its Esc from the body) (2026-10-31; smoke.ts only, in the mints M44 `bcedadd4e` and M47 `6e97717b1`)
+
+**What.** 11l is SP-1c's rung, a1's lane (`hn/hub-rung`); 11k is HN B3's. One file,
+`packages/electron-shell/src/testing/smoke.ts`: two rungs between 11i and 11h, which stays last; no product change
+(VF-PM's grants of 07:13Z and 09:15Z; cp-landing's facts for 11l).
+- **11k, the Hub in the head** (HN-8; `a3c2b3d1d`). Under Godview's cover the package circle, pressed by the pointer,
+  grows the pill's sheet on Artifacts; the circle steps aside and the pill's own sheet stays shut. The shelf settles
+  within 15 s on the Hub's own "Artifact Hub", once in the page, or says one of its waits; still "Opening…" at 15 s,
+  or a blank shelf, is red. The sheet's own package folds it back: the witness HN B3's records claimed (`684fc65c8`).
+- **11l, Chat's New spark** (SP-1c; `2b984cc0f`). ⌘N in Chat says LINE_KEY "opened": the modal sheet in the body, the
+  field inert and receded, the name focused and filled, the create saying Close. ⌘N again says "closed", and Esc
+  folds it saying nothing; on Canvas ⌘N does nothing. Create is never pressed. Its Esc from the body (`8db8685de`,
+  M47) witnesses SP-1c's fix `3a6353c40` (M43).
+
+**Gates.**
+- The lane's light, nice 19: hn-light GREEN 09:26:22Z on the two rungs' tree and 09:47:04Z on the Esc step's
+  (preflight, walls, deps, retired, ios-fixtures, biome, electron-shell's typecheck; the smoke's bundle built). The
+  rungs' renderer JavaScript was evaluated ad hoc against happy-dom pages; each body predicts its red-first.
+- **M44** `bcedadd4e` (`2b984cc0f` × main `f80df35e3`): run 44 GREEN 09:42:48Z (11,176/0/18, cargo 33/0); landed
+  09:44:03Z. **M47** `6e97717b1` (`8db8685de` × main `36574b549`): run 47 GREEN 10:09:19Z; landed 10:10:14Z. Both
+  in push 24 (10:11:57Z).
+
+**Owed.** Neither rung has run at a console window: smoke:godview's godview-only row (11h, 11k, 11l) is OWED-ROWS
+row 1 at James's next unlock, armed on M52.
