@@ -23520,3 +23520,86 @@ James's first sight: `pnpm dev`, ⌘4 for Chat, then ⌘N or the line's sparkle.
 - PU-K (James files it), ST-D1's live half, and the note's and PU-K's DS-Dn → ST-Dn errata at the next draft queue
   (LANDED "ST").
 - Item 126 (fd's FakeCellDoorTests stale-route timeout under heavy load), on the fixer-items list at the next queue.
+
+## PG-1e0 — the projection bench: what each of a desktop's three cuts projects per corpus-second and what it costs; measured, and NEITHER 1e1 nor 1e2 (2026-10-31; `36574b549`, the merge of main `f2c695b69` into `e18cde11e` on `2b973c587`, lane `pg/1e0`)
+
+**What.** The brief's §PG-1e rung, "the bench only", granted by VF-PM at 07:41Z (board `vf-pg1e0-bench-lane`). It is a
+measuring instrument: no product line, no daemon-plane touch, no contract, golden or wire change. One commit,
+`e18cde11e` on `2b973c587`, 4 files, +620 −7:
+- **`perf/lib/projection-bench.ts`** (field-app, new) hosts the corpus's desktop as `perf/lib/model-stream.ts` does,
+  whose hosting helpers are now exported for it (nothing else there moved). It runs each of the desktop's three cuts
+  ALONE over the same ticks, on virtual time, wired as `daemon.ts`'s `openLocalBoard` wires it:
+  - `model`: this desktop's windows; FULL_TICK_MS with the urgent edge; agents and bare terminals.
+  - `desk`: a peer's hub; DESK_MIN_INTERVAL_MS with the mesh heartbeat; woken by the fold and the backend.
+  - `field`: the phone; MIN_INTERVAL_MS; the fold's alone.
+- **Counts** (deterministic). The sources a cut reads are wrapped, so every apply, item projected, stamp (the JSON
+  `RowsProjection.apply` makes to find what moved) and row moved is counted, along with the frames sent. The stamps are
+  re-derived by the same exported projectors the cut runs. No counter hook lives in fieldd.
+- **CPU** (opt-in, host-bound): `process.cpuUsage` brackets the attach and the ticks. Each cut's pass runs beside a
+  no-cut baseline; the baselines' spread is printed as the noise floor, with each cut's paired spread beside it.
+- **Every cut lists the fold as `agents.list()` does**: a fresh row per run on each call, sorted by `createdAt`.
+- **`perf/projection-bench.perf.ts`** and field-app's `perf:godview:projection`, outside `pnpm test` and `pnpm verify`
+  (`vitest.perf.config.ts`). It asserts no budget.
+
+**Measured.** The lane corpora (8 s, seed 1), on M46 in ts3, in VF-PM's quiet window (10:03Z, closed at 10:08Z;
+load1 13.8 → 10.5, nothing compiling). Two runs: 5 ABAB rounds, then 10.
+- **CPU each cut adds over a no-cut baseline,** per corpus-second (the median, r5 / r10):
+  - n20: model 18.5 / 15.6 ms; desk 2.9 / 2.1; field 1.5 / −0.4, inside the noise;
+  - n60: model 45.4 / 48.3 ms; desk 6.5 / 8.1; field 3.6 / −0.4, inside the noise;
+  - n10: every cut inside the noise.
+  - The baselines' spread (the noise floor), per 8 s: n20 124–175 / 116–169 ms; n60 395–487 / 343–556 ms.
+- **Counts,** per corpus-second, n20:
+  - model 58.3 applies, 1281.5 rows projected (2.13 M stamp chars), 575.8 moved (44.9%);
+  - desk 8.6 / 172.5 / 86.1 (49.9%);
+  - field 4 / 80 / 40.3 (50.3%).
+  - At n60 the model moved 48.1% of what it projected, desk 50%, field 50.1%.
+- **Together,** the three cuts cost about 18–21 ms of CPU a second at n20 (about 2% of one core) and about 52–56 ms/s
+  at n60 (about 5%), during a swarm whose every agent is busy. The model cut is ≥85% of it.
+
+**The ruling: NEITHER** (VF-PM, 10:08Z, at fd's reading).
+- **1e2's ceiling.** About half of the model's projected rows are unmoved. Skipping them saves at most ~8 ms/s at n20
+  and ~24 ms/s at n60 (≤1% and ≤2.5% of a core), even if projection and stamping were all of the cut's cost. The brief
+  sized 1e2 at ~550–750 lines.
+- **1e1's ceiling.** Desk plus field are 2–8 ms/s, at or inside the noise, and their rows are shaped differently from
+  the model's. A shared cut has nothing worth sharing at K=1.
+- **The bench stays as the instrument.** The decision reopens on any of: a fourth cut projecting the same rows; swarms
+  well past 60 busy agents; the model cut's cost growing.
+- **The frames' wire serialization not measured.**
+
+**Found:**
+- The scripted fold hands back one cached list. The CPU passes would have priced every apply's listing at zero,
+  understating 1e1. It would also have let a memo keyed by a row's identity hit where production's `agents.list()`,
+  which makes a fresh sorted row per run on each call, never could. Every cut now lists the fold as the runtime does
+  (the review's one confirmed finding).
+- The bench checks itself. While no row leaves and no snapshot replaces the board, upserts = moved − the rows at the
+  open, exactly, for every cut and corpus. This is asserted.
+- The backend's row type in field-app's perf is puppeteer-view-sdk's `MonitorAgentRow` (`/model`), not the contracts'
+  zod mirror. *(`e18cde11e`'s message says "the kit's"; it is field-app's perf, not the iOS kit.)*
+
+**Validation.**
+- **The lane:** `/Volumes/SamsungRed/lanes/ios` (the worktree `vibe-field`, branch `pg/1e0`). It was cut on
+  `c2b20b4ab`, then rebased onto `7cbd2b59f` and `2b973c587`; none of the moves overlapped it.
+- **The light** (`lanes/ios/pg1e0-light.sh`; ts3, nice 19, under the guard): green on `2b973c587..e18cde11e` at
+  09:34:48Z. It ran biome on the four files, field-app's typecheck, check:walls, the model-stream pin
+  (`test/godview-model-stream.test.ts` 9/9: the in-repo streams are byte-identical) and the bench (2/2, counts). The same
+  light was green on the WIP at 09:15:27Z and 09:33:02Z.
+- **The review** (three lenses, a skeptic per finding; `wf_22eda99c-daf`): 9 findings. 1 was confirmed and folded; 8
+  were refuted against the code, among them that the trailing floors are an overcount (they are owed by in-corpus
+  changes) and that a sources-moved counter would differ from `moved` (on these corpora it equals it).
+- **No verify on this Mac** (James, 2026-10-29 09:05Z: the Mac mini's verify lane).
+- **The landed tip** is `36574b549`: main `f2c695b69` merged into `e18cde11e`, tree `058c6fd5b` (VF-PM's merge-tree).
+  a9 carried it to the mini as `mrun46.bundle` (sha256 `0b5a923d…`). The mini's `next` ran at 09:54:01Z, and the locks
+  stood.
+- **The mini, run 46, `pnpm verify` at `36574b549`:** exit 0, armed 09:54:19Z, done 09:59:13Z.
+  - vitest 11,176 passed, 0 failed, 18 skipped: unchanged from run 45, since the bench is outside `pnpm test`.
+  - rust 532 / 0 / 14 over 33 binaries.
+  - biome 2,924 files; field-app's typecheck over `perf/`; `test/godview-model-stream.test.ts` 9 ✓.
+  - The tree was clean after, with no stub left. Logs: `lanes/ts6/logs/mini/run46/`.
+- **Landed:** main fast-forwarded `f2c695b69` → `36574b549` at 10:02:04Z on VF-PM's GO; VF-PM pushes it.
+- **The CPU half:** `lanes/ios/pg1e0-cpu.sh 36574b549 5` and `… 10`, in the window above. JSON in
+  `lanes/ios/pg1e0/lane-8s/` (10 rounds) and `lane-8s/r5/`, the in-repo counts in `lanes/ios/pg1e0/`. Logs:
+  `lanes/ios/logs/pg1e0-cpu-36574b549/` and `…-r5/`.
+
+**Records.** The design record's §8 ("1e0 as measured") goes in at the next draft queue.
+
+**Owed.** PG-1f, the PU-I petition: draft-only, and its pin test waits on the puppeteer 0.3.1 EL8. Then PG-2.
