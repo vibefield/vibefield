@@ -1,6 +1,9 @@
 import type { AgentStopState } from "@vibefield/contracts";
-import { folderName, type PaneFrameAgent } from "@vibefield/puppeteer-views";
-import type { AgentVisualStatus } from "./agent-status";
+import {
+  type AgentVisualStatus,
+  folderName,
+  type PaneFrameAgent,
+} from "@vibefield/puppeteer-views";
 import type { ChromeRun } from "./chrome-facts";
 import type { AgentStatus } from "./facet-types";
 
