@@ -13,7 +13,7 @@ import type { FrameStamp } from "./corpus-frames";
 // harness must hand B the model the way it hands A the fold, so B measures the
 // renderer alone, as A does. The stream is therefore computed OFFLINE, in Node,
 // by fieldd's own code (`perf/lib/model-stream.ts`: the hosted backend and its
-// host port per desktop, the model board, the peer's desk cut, the mesh relay),
+// host port per desktop, the model board, the peer's remote cut, the mesh relay),
 // and replayed in the page into the window adapter (`model-replay-client.ts`).
 //
 // One stream belongs to one corpus: `meta.corpus` and `meta.corpusFrames` name
@@ -30,7 +30,8 @@ import type { FrameStamp } from "./corpus-frames";
 // host's (`perf/lib/corpus-io.ts`).
 
 export const MODEL_STREAM_GENERATOR = "vibefield-godview-model-stream";
-export const MODEL_STREAM_VERSION = 1;
+/** 2 since PG-2 (2026-10-31): the peer's rows are its remote cut, no longer its desk cut. */
+export const MODEL_STREAM_VERSION = 2;
 export const MODEL_STREAM_META_KIND = "model-stream-meta";
 
 export type ModelStreamEvent =
@@ -52,8 +53,8 @@ export interface ModelStreamMeta {
   here: string;
   peer: string;
   marker: CorpusMeta["marker"];
-  /** the floors the stream was cut at: this desktop's model board, the peer's desk */
-  floors: { model: number; desk: number };
+  /** the floors the stream was cut at: this desktop's model board, the peer's remote cut */
+  floors: { model: number; remote: number };
   counts: { open: number; frames: number; marks: number; upserts: number; bytes: number };
 }
 

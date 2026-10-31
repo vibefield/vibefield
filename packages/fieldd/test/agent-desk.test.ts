@@ -17,8 +17,11 @@ import {
 } from "../src/agent-field";
 import { managedSummary as summary } from "./agent-field-summary";
 
-// DS-3 (DS-D4) — the DESK projection, the chain's epoch and the heartbeat: the
-// three things the mesh board asks of one desktop's own board. The fold rows
+// DS-3 (DS-D4) — the DESK row, the chain's epoch and the heartbeat: the three
+// things the mesh board asks of one desktop's own board. *2026-10-31 (PG-2): the
+// desk row is the run row of this desktop's own `model` board; the `desk` cut a
+// peer read retired into `remote`, whose custody rows live in
+// `agent-remote-cut.test.ts`.* The fold rows
 // come from `agent-field-summary.ts` (puppeteer's real shapes); a question
 // blocker and a cost are written onto its mirror here, in the shapes
 // `puppeteer/packages/core/src/monitor/types.ts` gives them.
@@ -75,9 +78,13 @@ describe("projectDeskRow — the field row plus the reply line, the question and
       if (key === "blockers" || key === "usage" || key === "nativeSessionId") continue;
       expect(desk[key], key).toEqual(value);
     }
-    // the only NEW key is the reply line; the question and the cost ride
-    // inside the blocker and the usage the field row already carries
-    expect(Object.keys(desk).filter((key) => !(key in field))).toEqual(["lastAssistantMessage"]);
+    // the only NEW keys are the reply line and the chrome's facts (the window's
+    // run row, MV-3d); the question and the cost ride inside the blocker and the
+    // usage the field row already carries
+    expect(Object.keys(desk).filter((key) => !(key in field))).toEqual([
+      "lastAssistantMessage",
+      "local",
+    ]);
     expect(desk["lastAssistantMessage"]).toEqual({ text: "Keeping it greyed.", final: true });
     expect(desk.blockers).toEqual([{ ...field.blockers[0], question: "Keep it?" }]);
     expect(desk.usage).toEqual({ ...field.usage, costUsd: 4.04, costCoverage: "complete" });
@@ -85,11 +92,10 @@ describe("projectDeskRow — the field row plus the reply line, the question and
     expect(AgentDeskRow.safeParse({ ...desk, revision: 1 }).success).toBe(true);
   });
 
-  it("PJ-7 — leaves the field row's conversation id off: the phone's cut carries it, a window reads its own runs' ids from `local`, a peer's desk wants none", () => {
+  it("PJ-7 — leaves the field row's conversation id off: the phone's cut carries it, a window reads its own runs' ids from `local`", () => {
     const run = summary({});
     expect(projectFieldRow(run).nativeSessionId).toBe(run.sessionId);
-    expect(projectDeskRow(run)).not.toHaveProperty("nativeSessionId");
-    const window = projectDeskRow(run, undefined, undefined, "window") as Record<string, unknown>;
+    const window = projectDeskRow(run) as Record<string, unknown>;
     expect(window).not.toHaveProperty("nativeSessionId");
     expect((window["local"] as { nativeSessionId?: string }).nativeSessionId).toBe(run.sessionId);
   });
@@ -104,15 +110,16 @@ describe("projectDeskRow — the field row plus the reply line, the question and
     expect(Array.from(question)).toHaveLength(AGENT_FIELD.DESK_TEXT_CHARS);
   });
 
-  it("is content for one person's desktops, not everything: no path, title, mirror or blocker input", () => {
-    const desk = projectDeskRow(
+  it("is the window's row, not everything: the path rides in the chrome's facts alone; no title, mirror or blocker input", () => {
+    const { local, ...desk } = projectDeskRow(
       asking(summary({ lastAssistantText: "hi", title: "a title", cwd: "/Users/me/repo" }), "?"),
-    );
+    ) as Record<string, unknown> & { blockers: Array<Record<string, unknown>> };
     for (const key of ["monitor", "title", "workspace"]) expect(desk).not.toHaveProperty(key);
     for (const key of ["detail", "questions", "input", "permission"]) {
       expect(desk.blockers[0]).not.toHaveProperty(key);
     }
     expect(JSON.stringify(desk)).not.toContain("/Users/");
+    expect((local as { cwd?: string }).cwd).toBe("/Users/me/repo");
   });
 
   it("says nothing it was not given: no reply, no question, no cost", () => {
@@ -124,7 +131,8 @@ describe("projectDeskRow — the field row plus the reply line, the question and
     // the phone's conversation id (PJ-7)
     const pending = summary({ monitor: false, pending: "not attached yet" });
     const { nativeSessionId: _phones, ...field } = projectFieldRow(pending);
-    expect(projectDeskRow(pending)).toEqual(field);
+    const { local: _chrome, ...half } = projectDeskRow(pending) as Record<string, unknown>;
+    expect(half).toEqual(field);
   });
 });
 

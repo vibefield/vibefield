@@ -8,7 +8,12 @@ import {
 import type { AgentMonitorState } from "@vibefield/puppeteer-core";
 import type { MonitorAgentRow } from "@vibefield/puppeteer-view-sdk/model";
 import { describe, expect, it } from "vitest";
-import { projectDeskRow, projectFieldRow, windowMonitorRow } from "../src/agent-field";
+import {
+  projectDeskRow,
+  projectFieldRow,
+  projectRemoteRow,
+  windowMonitorRow,
+} from "../src/agent-field";
 import { createModelSubscription } from "../src/agent-model-board";
 import { managedSummary as summary } from "./agent-field-summary";
 import { NOW0, stateOf, testMonitor } from "./agent-monitor-fixture";
@@ -217,7 +222,7 @@ describe("MV-7 — a local row carries the ledger's ten-minute series", () => {
 });
 
 describe("the wire — what n = 20 costs", () => {
-  it("today's full board against the model board: the snapshot, one changed row, a peer's desk row", async () => {
+  it("today's full board against the model board: the snapshot, one changed row, a peer's remote row", async () => {
     const rows: AgentSessionSummary[] = [];
     for (let index = 0; index < 20; index += 1) {
       rows.push(
@@ -256,8 +261,10 @@ describe("the wire — what n = 20 costs", () => {
     const perRow = snapshotBytes / 20;
     const modelRowBytes = JSON.stringify(windowMonitorRow(monitor.row("run-7"))).length;
     const deskRowBytes = JSON.stringify({ ...projectDeskRow(rows[7]!), revision: 1 }).length;
+    // PG-2 — a peer's row is the remote cut: the model's row and the joins, never
+    // the desk half beside it (§3 item 2, "every fact twice")
     const peerRowBytes = JSON.stringify({
-      ...projectDeskRow(rows[7]!, AGENT_FIELD.DESK_TEXT_CHARS, monitor.row("run-7")),
+      ...projectRemoteRow(rows[7]!, monitor.row("run-7"), AGENT_FIELD.DESK_TEXT_CHARS),
       revision: 1,
     }).length;
     // one row's usage ticks: today the whole board goes out; the model board
@@ -282,10 +289,12 @@ describe("the wire — what n = 20 costs", () => {
         `  today's full board frame (every tick while anything changes): ${fullBytes} (${(fullBytes / 20).toFixed(0)}/row)`,
         `  model board snapshot (the open): ${snapshotBytes} (${perRow.toFixed(0)}/row)`,
         `  one changed row's delta (the tick): ${deltaBytes}`,
-        `  a model row alone: ${modelRowBytes}; a desk row without it: ${deskRowBytes}; a PEER's desk row with it: ${peerRowBytes}`,
+        `  a model row alone: ${modelRowBytes}; a desk row without it: ${deskRowBytes}; a PEER's remote row: ${peerRowBytes}`,
       ].join("\n"),
     );
     expect(deltaBytes).toBeLessThan(fullBytes / 4);
+    // the remote row carries the model's row once, and little beside it
+    expect(peerRowBytes).toBeLessThan(modelRowBytes + deskRowBytes / 2);
     board.dispose();
     monitor.service.dispose();
   });

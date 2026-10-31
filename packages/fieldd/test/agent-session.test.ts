@@ -1285,13 +1285,13 @@ describe("agent.* without a floor (the mock mgmt server)", () => {
     };
     expect(again.snapshot.epoch).not.toBe(field.snapshot.epoch);
 
-    // DS-3 — the desk board: the field row plus what a person reads a run by,
+    // DS-3 — a board a peer asks (the remote cut since PG-2, the desk before it),
     // at its own floor, and a heartbeat asked of it is honoured
-    const desk = (await win.call("agent.subscribe", {
-      projection: "desk",
+    const remote = (await win.call("agent.subscribe", {
+      projection: "remote",
       heartbeatMs: 1_000,
     })) as { snapshot: { epoch?: string; revision: number; rows: unknown[] } };
-    expect(desk.snapshot).toMatchObject({ revision: 0, rows: [] });
+    expect(remote.snapshot).toMatchObject({ revision: 0, rows: [] });
     // a cadence or a heartbeat asked of the full fold is refused, as ever
     for (const params of [{ heartbeatMs: 1_000 }, { projection: "full", heartbeatMs: 1_000 }]) {
       const refused = (await win.callErr("agent.subscribe", params)) as RpcErrorShape;
@@ -1312,7 +1312,8 @@ describe("agent.* without a floor (the mock mgmt server)", () => {
     for (const params of [{ minIntervalMs: 250 }, { projection: "full", minIntervalMs: 250 }]) {
       const refused = (await win.callErr("agent.subscribe", params)) as RpcErrorShape;
       expect(refused.data?.kind, JSON.stringify(params)).toBe("PRECONDITION_FAILED");
-      expect(refused.message).toContain("field projection");
+      // it names where the option applies: the board projections (PG-2: field, model, remote)
+      expect(refused.message).toContain("board projections");
     }
     // an unknown OPTION is not an error — it is the next version's field
     expect(
@@ -1329,7 +1330,7 @@ describe("agent.* without a floor (the mock mgmt server)", () => {
   // honoured, and on the mesh every distinct ask stood up a hub (a set of
   // upstreams) of its own. Asked faster than its floor, a board is served at
   // the floor; asked slower, it is honoured.
-  it("the field projection's cadence is a FLOOR, like the desk's: faster asks share the floor's hub", async () => {
+  it("the field projection's cadence is a FLOOR, like the remote's: faster asks share the floor's hub", async () => {
     const { daemon } = await setup({ floor: "mock" });
     const win = await window(daemon, DECK, "floor");
     const ask = (minIntervalMs: number) =>
@@ -1340,12 +1341,12 @@ describe("agent.* without a floor (the mock mgmt server)", () => {
     expect(daemon.meshBoard.size).toBe(1); // all three at the 250 ms floor
     await ask(AGENT_FIELD.MIN_INTERVAL_MS * 2);
     expect(daemon.meshBoard.size).toBe(2); // slower is the caller's to ask
-    // the desk's floor, as it was
-    await win.call("agent.subscribe", { projection: "desk", scope: "mesh", minIntervalMs: 16 });
+    // the remote cut's floor for a window, the desk's as it was (PG-2)
+    await win.call("agent.subscribe", { projection: "remote", scope: "mesh", minIntervalMs: 16 });
     await win.call("agent.subscribe", {
-      projection: "desk",
+      projection: "remote",
       scope: "mesh",
-      minIntervalMs: AGENT_FIELD.DESK_MIN_INTERVAL_MS,
+      minIntervalMs: AGENT_FIELD.REMOTE_MIN_INTERVAL_MS,
     });
     expect(daemon.meshBoard.size).toBe(3);
   });

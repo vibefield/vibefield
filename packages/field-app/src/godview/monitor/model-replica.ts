@@ -15,8 +15,8 @@ import type { ModelBoardPort } from "./remote-door";
  * While Godview is open the window holds one subscription,
  * `agent.subscribe {projection: "model", scope: "mesh"}` (PF6: opened with the
  * feed, closed with it). fieldd answers this desktop's model board — every run
- * whole, every bare terminal — and every other self desktop's desk cut beside
- * it, each on its owner's chain. `ModelBoardFold` joins them into one chain of
+ * whole, every bare terminal — and every other self desktop's remote cut
+ * beside it (PG-2; its desk cut before), each on its owner's chain. `ModelBoardFold` joins them into one chain of
  * `MonitorModelChange`s, and the replica (`@vibefield/puppeteer-monitor/replica`)
  * applies them with structural sharing. Nothing here derives a business fact:
  * the rows are the backend's, the replica joins what only this window knows.

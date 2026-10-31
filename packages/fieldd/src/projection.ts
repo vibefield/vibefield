@@ -225,6 +225,11 @@ export interface RevisionedSubscriptionOptions<TOpen, TFrame> {
   emit: (frame: TOpen | TFrame, kind: FrameKind) => void;
   /** this subscriber's trailing-edge floor, in ms */
   minIntervalMs: number;
+  /** PG-2 (PG-D8 (a)) — the longest an URGENT change waits, in ms: once this long
+   * has passed since the last frame an urgent signal goes out at once, and
+   * inside it the frame leaves when it has passed, never a whole floor later.
+   * At most `minIntervalMs`. Absent: the floor itself, L12's edge exactly. */
+  urgentIntervalMs?: number;
   /** after this long with no frame, the view's heartbeat (DS-3); absent: none */
   heartbeatMs?: number;
   /** a throwing consumer or a source that failed to read: logged, never thrown
@@ -261,6 +266,8 @@ export class RevisionedSubscription<TOpen, TFrame> {
   #rest: TOpen[];
   readonly #unsubscribe: () => void;
   #timer: ReturnType<typeof setTimeout> | null = null;
+  /** ms — when the pending frame's timer fires, for an urgent edge that comes sooner */
+  #timerAt = 0;
   #beat: ReturnType<typeof setTimeout> | null = null;
   #gap = false;
   #disposed = false;
@@ -318,19 +325,37 @@ export class RevisionedSubscription<TOpen, TFrame> {
 
   #schedule(urgent = false): void {
     if (this.#disposed) return;
-    // L12 — the leading edge: an urgent change with the floor already elapsed
+    // L12 — the leading edge: an urgent change with its edge already elapsed
     // since the last frame goes out now, not a window later. A gap is repaired
     // on the floor as before (a replacement is never hurried).
-    if (urgent && !this.#gap && Date.now() - this.#lastFrameAt >= this.#opts.minIntervalMs) {
-      if (this.#timer !== null) {
-        clearTimeout(this.#timer);
+    if (urgent && !this.#gap) {
+      const edge = this.#opts.urgentIntervalMs ?? this.#opts.minIntervalMs;
+      const wait = this.#lastFrameAt + edge - Date.now();
+      if (wait <= 0) {
+        if (this.#timer !== null) clearTimeout(this.#timer);
         this.#timer = null;
+        this.#flush();
+        return;
       }
-      this.#flush();
-      return;
+      // PG-2 — an edge inside the floor: the frame leaves when the edge has
+      // passed, sooner than the window a change before it may have opened
+      if (
+        edge < this.#opts.minIntervalMs &&
+        (this.#timer === null || this.#timerAt > Date.now() + wait)
+      ) {
+        this.#arm(wait);
+        return;
+      }
     }
     if (this.#timer !== null) return;
-    this.#timer = setTimeout(() => this.#flush(), this.#opts.minIntervalMs);
+    this.#arm(this.#opts.minIntervalMs);
+  }
+
+  /** The pending frame leaves in `ms`, replacing a timer already set. */
+  #arm(ms: number): void {
+    if (this.#timer !== null) clearTimeout(this.#timer);
+    this.#timerAt = Date.now() + ms;
+    this.#timer = setTimeout(() => this.#flush(), ms);
     this.#timer.unref?.();
   }
 
