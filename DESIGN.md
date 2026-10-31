@@ -107,7 +107,8 @@ section described until then was ICE 0.11's — a world grid (`spacings: [25, 50
 and the magnet grid tuned through ICE's `GridMagnetConfig` (a dot or needle glyph, `reach: 60`, …),
 inked `#A6A6A6` by day and `#8A8A8A` by night (a classic alternate's `#1C1C1C` recorded beside it).
 ICE retired the magnet grid with the cards and the dot and needle grids on 2026-09-25, and on the
-desk (DK-3) the ground is the cutting mat below — its sage and cream, its rulers at a margin of 60,
+desk (DK-3) the ground is the cutting mat below — its sage and cream, its rulers printed at the
+window's edges (a margin of 0 since 2026-10-29; 60 before, §10 "The mat's places"),
 its lattice's fade-in (`GridConfig { fadeIn, mat }`). So the grid's projection, the magnet's tuning
 and its inks, Canvas Settings' Dot/Needle preference, Studio's grid controls and the appearance
 document's grid half left with the old ground: the document is v4, the plain ground alone
@@ -540,6 +541,16 @@ keeps the picture, cached by its seed, status, size, frame, ground and theme. A 
 (blinks, gaze, its status's motion), drawn by one layer over the window only while a live face is
 on screen. Without WebGL2, a face is the **flat star**: its own points and palette in SVG, on its
 disc when framed, two pill eyes, no glow. It is never a blank.
+*Amended 2026-10-29 (SP-1a, the face in the kit):* the live layer is one per **stage**, never one
+over the window, which would draw a face over a menu or sheet that covers it. A composition that
+shows live faces (Chat's list, a thread's head, the New spark sheet) is a stage: one transparent
+canvas over it and under whatever covers it, each face clipped to the scrollport it sits in and
+dropped while out of sight, drawing only while one of its faces is live and on screen. A face
+outside a stage is a still. The stills share one canvas for the window, laid out out of sight so it
+measures true, and keep the last 256 pictures. The flat star is drawn from the same DNA as the star
+(`agentDNA`'s points and palette), so a face is the same face with or without WebGL2. While the
+engine first loads (below), a framed face holds its place as its disc in the inset fill
+(`--vf-fill`), and a free face as its box.
 
 **Motion.** Reduced motion keeps the faces, their blinks and their status changes, and drops the hops,
 the shakes and the falling star (M6).
@@ -556,6 +567,29 @@ so it is a design event, said here first. SP-1 moves it into the design kit as a
 by seed, status, size, frame and ground, with a fixture in the catalog (UI_SYSTEM's order). Its
 palettes are the engine's art, carried as data inside the vendored files. That is the one place a hex
 outside `tokens.css` is allowed, the way an emoji's bitmap is a user's face's (§2.8).
+*Amended 2026-10-29 (SP-1a):* the face is `packages/design-kit/src/spark-face/`, the kit's
+`./spark-face` entry:
+- `SparkFace` (seed, status, size, framed or free, live), the stage `SparkStage`, and the statuses
+  with their words (the table above; a test reads the table, so the two never drift). The surface
+  behind a framed face, for its cut ring, is read where the face sits, again when the theme turns.
+- One adapter: `SparkFaceRenderer` tells the faces inside it to draw as the flat star. Without
+  it, a face draws the star where the window has WebGL2. The catalog's flat specimen and the tests
+  use it; the product never does.
+- The engine is `spark-face/vendor/sparks.js`. A test holds its SHA-256 and its revision, so an
+  edit in place fails and a newer copy moves both in one commit.
+- The kit stays pure at import (UI_SYSTEM): the engine is an IIFE that sets one global,
+  `window.Sparklings`, so the first face to mount loads it with a dynamic import, and the kit's
+  `sideEffects` names the vendored file so no bundler drops that global.
+- Reduced motion is the engine's own switch, as its page sets it: its motions are set aside while
+  the preference holds and restored when it lifts, never patched in place.
+- The kit's spark-face sources (TSX, TS, CSS) hold no colour literal of any spelling. The palettes
+  reach the page only as the engine's data, and `spark-face.test.tsx` holds both rules.
+- The catalog's Foundations section shows the shipping `SparkFace` beside §2.8's faces: every
+  status at the sizes above, framed and free, in both themes, the flat star, and a live stage.
+
+*Corrected the same day:* this said `star-spark.js` beside it. The falling star's engine is
+`star-spark/engine.js`, and it is vendored with its first user, the New spark sheet's hatch
+(SP-1c), not before.
 
 ---
 
@@ -646,7 +680,7 @@ claim it.
 | Overlay chip | surface `/90–95` + `backdrop-blur-xl` | no wearer today: the put-back affordance and the HUD's toasts retired (DK-13, DK-17); the peers' chips wear the line's glass and the status line solid chrome (§8) |
 | Backdrop dim | `black/10` light · `black/40` dark | behind open sheets; canvas recedes to `scale(0.98)` |
 | Search scrim (GV-D8; K7, 2026-10-08) | `black/16` light · `black/46` dark, over a backdrop blur of 18 and `saturate(0.9)` | behind the Peek (§8 "Search"): the window blurred and dimmed, the view and the frame receding to `scale(0.98)` under it. Darker than the backdrop dim so it reads as dimmed (One Frame §23); the backdrop dim stays the sheets' until James rules otherwise (docket PK1). *Since TS-D22 A (2026-10-29):* the phone wears its dim alone, with no blur, under a door that stands over a live field, between the field and the bar (§9) |
-| Setup Assistant (as built since UA-3w; written down 2026-10-29, track FG; on the field, to be built at FG-3) | `--vf-wizard-surface` (white 55% by day, `rgb(28 28 30)` 55% by night) over `blur(32px) saturate(1.12)`, the island radius (32). On the field (FG): a 1px edge, `--vf-wizard-edge` (white 60% by day, 12% by night) with a top light, `--vf-wizard-edge-light` (white 75%, 8%); the field's shadow, `--vf-shadow-wizard-field` (`0 40px 120px` and `0 12px 32px` in the field's ground at 55% and 28%); and a grain at `--vf-wizard-grain` (3%), so the blur never bands | the Setup Assistant's glass (§8): on the field its frost lets the tunnel's rings through softly (FG-D15 C). Over the live field the field draws this recipe itself, in its own frame and from these tokens (FG-D24); over the field's still the backdrop filter draws it |
+| Setup Assistant (as built since UA-3w; written down 2026-10-29, track FG; on the field, built at FG-3a as the browser's layers, which draw it over the live field too until the field's own pass at FG-3b) | `--vf-wizard-surface` (white 55% by day, `rgb(28 28 30)` 55% by night) over `blur(32px) saturate(1.12)`, the island radius (32). On the field (FG): a 1px edge, `--vf-wizard-edge` (white 60% by day, 12% by night) with a top light, `--vf-wizard-edge-light` (white 75%, 8%); the field's shadow, `--vf-shadow-wizard-field` (`0 40px 120px` and `0 12px 32px` in the field's ground at 55% and 28%); and a grain at `--vf-wizard-grain` (3%), so the blur never bands | the Setup Assistant's glass (§8): on the field its frost lets the tunnel's rings through softly (FG-D15 C). Over the live field the field draws this recipe itself, in its own frame and from these tokens (FG-D24); over the field's still the backdrop filter draws it |
 
 **Menus are solid, floating controls are glass** (One Frame FR-7, FC-D14 ruled 2026-10-01): a menu
 is rows to be read, so it is `--vf-chrome-solid` — opaque — ringed by `--vf-hairline-strong`, with
@@ -905,7 +939,8 @@ percentage names its step, never an invented whole). *Amended 2026-10-27 (AO-4b,
 the travel, and the arc rests at the top of the circle, a fifth of it from twelve o'clock, until the archive is ready;
 the glyph stays at a third of its ink.
 *Amended 2026-10-29 (track FG; FG-D9 A, FG-D10 B, FG-D11 A and FG-D17 A ruled by James; §8 "The Setup Assistant's
-glass"; a returning boot's tear built at FG-2, the rest to be at FG-3 and FG-5):* the first run happens on the field,
+glass"; a returning boot's tear built at FG-2, the glass's forming at FG-3a — its frost and its rise, the words' fade
+and the logo to come with FG-4's holds — the rest at FG-5):* the first run happens on the field,
 and these are its motions. **The
 glass forms** where the splash stood: the bar and the stage fade (240ms `ease`), and the frost condenses over the
 whole glass as its layers rise `.985 → 1` (560ms island); the field's mark fades under it while the logo fades in
@@ -2434,6 +2469,14 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   the glass, the steps, the frame and the logo at FG-3, the panes in the frame at FG-4 (after TS-6 and
   TS-7 land), the hand-over at FG-5, the gates at FG-6 (the record's §7). Until each lands, the Setup
   Assistant ships as "The Setup Assistant's agent chapter" and the Connect pane describe it.*
+  *Status 2026-10-29 (FG-3a, built): the glass at 880 × 640 with the fit, its layers (on the field the edge, its
+  light, the field's shadow and the grain), its forming, the band and the frame. The browser draws every layer,
+  over the live field too, until the field's own pass (FG-3b). The logo comes with the holds at FG-4, since no
+  pane shows it before they do; so do the panes in the frame — the old one's leaving first, the new one's fade in
+  place of its rise, and each one's place — and until then a pane keeps its entrance and centres in the frame,
+  scrolling downward only. Finish setting up's sheet is unchanged (FG-D26, a lean: AO's surface, and no step of
+  the chapter): its own size and padding, never fitted, no band. A press beside its glass now reaches its scrim,
+  which it never could (FG-D27).*
 - **The reveal** (boot-exclusive motion): the canvas composes and stabilizes BEHIND
   the splash (the frame-stability gate — never reveal mid-hitch), then the splash
   fades 240ms plain `ease` while the canvas settles `scale(0.99) → 1` over 560ms
@@ -4229,9 +4272,12 @@ their place". "Fullscreen" stays the pane's word (§8).
   brackets, under them near the top — and travels with it into the hand; **the tools in hand sit
   under the head** (top y 64, 16 under the name pill), still the object's chrome and not the head's;
   **the pegboard rises behind the line**, whose create is its door (§8). **The desk keeps two
-  reserves:** the **safe top, 94** — the rulers' band plus 8: the rulers move in to a margin of 60
-  (DK-3), so the top ruler starts below the head strip and the left ruler clears the notch, and
-  their band ends at 86 — above which the bar goes under its object; and **the foot, 88** — the
+  reserves:** the **safe top, 94** — above which the bar goes under its object. It was the rulers'
+  band plus 8 while the rulers were printed at a margin of 60 (DK-3: the top ruler below the head
+  strip, the left one clear of the notch, their band ending at 86). *Since 2026-10-29 the rulers are
+  printed at the window's edges* — a margin of 0, the frame on the window's four edges and the
+  band 0–26, under the head's controls and the notch, which stand over it — and the safe top keeps
+  its 94, still clear of the head's controls (their foot at 48); and **the foot, 88** — the
   line's reserve, the same 88 a covered view keeps (692): the board's lay ends 88 above the window's
   foot (I21) so its last row clears the line, and the bar's top never sits below 660 (its foot 8
   above the line's 708). Between them the bar keeps **42** from each side (the notch's 26 + 16), and
