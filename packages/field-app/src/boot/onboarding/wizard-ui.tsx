@@ -33,14 +33,17 @@ import "./wizard-ui.css";
 export const primaryCls =
   "inline-flex h-10 items-center justify-center rounded-full bg-black px-5 text-[13px] font-medium text-white shadow-md transition-[transform,opacity] hover:opacity-90 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--vf-select)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--vf-canvas-bg)] disabled:pointer-events-none disabled:opacity-40 motion-reduce:transition-none dark:bg-white dark:text-black";
 
-/** Quiet action — skips, backs, second thoughts. */
+/** Quiet action — skips, backs, second thoughts. Its words stand at t1 on its fill in both themes, so they read at
+ * 4.5:1 on the glass (DESIGN.md §5, FG-O2's judge). */
 export const quietCls =
-  "inline-flex h-10 items-center justify-center rounded-full bg-black/5 px-4 text-[13px] font-medium text-black/65 transition-[background-color,color,transform] hover:bg-black/10 hover:text-black active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--vf-select)] disabled:pointer-events-none disabled:opacity-40 motion-reduce:transition-none dark:bg-white/10 dark:text-white/65 dark:hover:bg-white/15 dark:hover:text-white";
+  "inline-flex h-10 items-center justify-center rounded-full bg-black/5 px-4 text-[13px] font-medium text-[var(--vf-text-primary)] transition-[background-color,color,transform] hover:bg-black/10 hover:text-[var(--vf-foreground)] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--vf-select)] disabled:pointer-events-none disabled:opacity-40 motion-reduce:transition-none dark:bg-white/10 dark:hover:bg-white/15";
 
+// The glass's words wear the ramp (DESIGN.md §2.4; §10: product code consumes tokens): an eyebrow and a fact at t3,
+// a voice at t2, and on the glass t3 reads as t2 (§5, FG-O2's judge).
 export const eyebrowCls =
-  "text-[10px] font-medium uppercase tracking-[0.08em] text-black/50 dark:text-white/50";
-export const voiceCls = "text-[14px] leading-[1.45] text-black/70 dark:text-white/70";
-export const factCls = "text-[12px] leading-5 text-black/45 dark:text-white/45";
+  "text-[10px] font-medium uppercase tracking-[0.08em] text-[var(--vf-text-tertiary)]";
+export const voiceCls = "text-[14px] leading-[1.45] text-[var(--vf-text-secondary)]";
+export const factCls = "text-[12px] leading-5 text-[var(--vf-text-tertiary)]";
 
 /** What the glass stands on (DESIGN.md §5, the Setup Assistant's row). On the
  * field, where the first run happens (track FG), it wears the field's edge,

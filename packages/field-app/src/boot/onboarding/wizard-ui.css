@@ -46,7 +46,13 @@
   transform: scale(var(--vf-glass-fit, 1));
 }
 
+/* Its words (DESIGN.md §5, the Setup Assistant tier; FG-O2's judge): the ramp stops at t2 on the glass, t3 and t4
+   re-projected to it, so every word on it, its panes' with its own, reads at 4.5:1 over the field (§8 "Its words
+   read", held by desk-gates row 32). The marks those tokens colour follow them: a done segment's fill and a ghost's
+   disc. Settings keeps its ramp. */
 .vf-wizard-shell {
+  --vf-text-tertiary: var(--vf-text-secondary);
+  --vf-text-faint: var(--vf-text-secondary);
   position: absolute;
   top: 50%;
   left: 50%;
@@ -171,8 +177,9 @@
 }
 
 /* The steps (FG-D22 A, FG-D23 A; DESIGN.md §8): the chapter along the glass's top 72, a segment a step, 76 × 3 with a
-   gap of 8, its label 9 under it in small capitals — done in grey, the current in ink, the rest a hairline. A segment
-   fills as you arrive (480ms island) and empties as you go back; the band fades in with You (240ms). */
+   gap of 8, its label 9 under it in small capitals — done in t2 over its filled segment, the current in ink, the rest
+   in t2 over the hairline (§5: the ramp stops at t2 on the glass). A segment fills as you arrive (480ms island) and
+   empties as you go back; the band fades in with You (240ms). */
 .vf-wizard-steps {
   position: absolute;
   top: 0;
@@ -254,7 +261,7 @@
 }
 
 .vf-wizard-step-label {
-  color: var(--vf-text-faint);
+  color: var(--vf-text-secondary);
   font-size: 10px;
   font-weight: 500;
   letter-spacing: 0.08em;
@@ -262,10 +269,6 @@
   text-transform: uppercase;
   transition: color 240ms ease;
   white-space: nowrap;
-}
-
-.vf-wizard-steps li[data-state="done"] .vf-wizard-step-label {
-  color: var(--vf-text-tertiary);
 }
 
 .vf-wizard-steps li[data-state="now"] .vf-wizard-step-label {
@@ -333,7 +336,7 @@
 .vf-wizard-later {
   min-height: 17px;
   margin: -2px 0 0;
-  color: var(--vf-text-tertiary);
+  color: var(--vf-text-secondary);
   font-size: 12px;
   line-height: 1.4;
 }
@@ -345,7 +348,7 @@
 
 /* A load (FG-L5, FG-D20; DESIGN.md §8): the logo and one line. A hold spans the glass — its rows `1fr | the logo | 1fr`,
    so the logo's row is the window's centre, where the field draws its mark — and stands its words 26 under the logo,
-   in the frame's 560: the line (400, 14px/1.4, t2) and its sub (12px/1.4, t3, 4 under it, its 17 kept), in tabular
+   in the frame's 560: the line (400, 14px/1.4, t2) and its sub (12px/1.4, t2 told by its size, 4 under it, its 17 kept), in tabular
    figures so their numbers count in place; a way out 18 under them only once the load has run long (6s), fading in
    over 240ms. The welcome is a hold too, as a title card: its words 30 under the logo — the title (32px), the voice 10
    under it (420 at most), and the actions 28 under that. */
@@ -412,7 +415,7 @@
 .vf-wizard-status-sub {
   min-height: 17px;
   margin: 4px 0 0;
-  color: var(--vf-text-tertiary);
+  color: var(--vf-text-secondary);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   line-height: 1.4;
@@ -592,7 +595,7 @@
 }
 
 .vf-wizard-user-detail {
-  color: var(--vf-text-tertiary);
+  color: var(--vf-text-secondary);
   font-size: 11px;
   line-height: 1.2;
 }
