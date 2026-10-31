@@ -1,3 +1,4 @@
+import type { AgentStopState } from "@vibefield/contracts";
 import { folderName, type PaneFrameAgent } from "@vibefield/puppeteer-views";
 import type { AgentVisualStatus } from "./agent-status";
 import type { ChromeRun } from "./chrome-facts";
@@ -172,15 +173,32 @@ export function paneFrameAgents(
 }
 
 /**
+ * DS-D4 (a) — each pane session's held Stop (the field row's `stop`), by the
+ * frame's own join: what `StopPaneState` words. A session whose run holds none
+ * is left out.
+ */
+export function stopsBySession(
+  byTerminal: ReadonlyMap<string, ChromeRun>,
+): ReadonlyMap<string, AgentStopState> {
+  const stops = new Map<string, AgentStopState>();
+  for (const [sessionId, row] of byTerminal) {
+    if (row.stop !== undefined) stops.set(sessionId, row.stop);
+  }
+  return stops;
+}
+
+/**
  * The key a re-projection is worth doing on: every field the frame DRAWS, and
  * nothing else. A working agent's row moves several times a second — tokens,
  * cost, its activity, the newest evidence — and the deck must not re-render its
  * workspace at that cadence for facts no frame reads. Same discipline as the
- * monitor's own damage gate, scoped to a much narrower drawing.
+ * monitor's own damage gate, scoped to a much narrower drawing. A held Stop's
+ * stage and whether it went unheard are drawn too (`StopPaneState`).
  */
 export function paneFrameFactsKey(
   agents: ReadonlyMap<string, PaneFrameAgent>,
   runs: ReadonlyMap<string, string>,
+  stops: ReadonlyMap<string, AgentStopState> = new Map(),
 ): string {
   const parts: string[] = [];
   // Keyed over the RUNS, not the agents: a session whose facts have gone (a
@@ -188,6 +206,7 @@ export function paneFrameFactsKey(
   // still in the run map.
   for (const [sessionId, runtimeRunId] of runs) {
     const facts = agents.get(sessionId);
+    const stop = stops.get(sessionId);
     parts.push(
       [
         sessionId,
@@ -207,6 +226,8 @@ export function paneFrameFactsKey(
         // share by a fraction of one is not news to a frame.
         facts?.contextPercent === undefined ? "" : Math.floor(facts.contextPercent),
         facts?.stopKey ?? "",
+        stop?.stage ?? "",
+        stop?.unheardAt === undefined ? "" : 1,
       ].join("\u0001"),
     );
   }

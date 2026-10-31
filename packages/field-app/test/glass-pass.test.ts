@@ -1,7 +1,8 @@
 /**
  * Track FG, FG-3b — the Setup Assistant's glass drawn by the field (glass-pass.ts; FG-D24; DESIGN.md §8 "The Setup
  * Assistant's glass"): a pass over each frame the field draws, after its own. happy-dom has no WebGPU, so the pass
- * runs on a device and an encoder that record what it asks of them; the shader itself compiles only on a GPU.
+ * runs on a device and an encoder that record what it asks of them; the shader itself compiles only on a GPU. FG-4b:
+ * the logo over the frost, the field's own mark where the field draws it.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GlassLook, GlassPose } from "../src/boot/splash/glass-look";
@@ -25,10 +26,14 @@ const LOOK: GlassLook = {
     { color: [4 / 255, 5 / 255, 15 / 255, 0.55], x: 0, y: 40, blur: 120, spread: 0 },
     { color: [4 / 255, 5 / 255, 15 / 255, 0.28], x: 0, y: 12, blur: 32, spread: 0 },
   ],
+  logoInvert: true,
 };
 
-/** Fitted at 0.75 in a 1200 × 800 window, formed. */
-const POSE: GlassPose = { x: 600, y: 400, w: 880, h: 640, fit: 0.75, frost: 1, rise: 1 };
+/** Fitted at 0.75 in a 1200 × 800 window, formed, with no logo on it (a pane's). */
+const POSE: GlassPose = { x: 600, y: 400, w: 880, h: 640, fit: 0.75, frost: 1, rise: 1, logo: 0 };
+
+/** That window's field at 2 device px a CSS px, its mark (128 × 77) in the middle. */
+const SIZE = { k: 2, MX: 1072, MY: 723, LW: 256, LH: 154 };
 
 beforeEach(() => {
   vi.stubGlobal("GPUBufferUsage", { COPY_DST: 0x8, UNIFORM: 0x40 });
@@ -63,8 +68,8 @@ describe("the glass's blur", () => {
 });
 
 describe("the glass's uniforms", () => {
-  it("are what the shader reads, in device px: the box, its shape, the frost, the tint and the two shadows", () => {
-    const { blur, uniforms } = glassFrame(LOOK, POSE, { k: 2 });
+  it("are what the shader reads, in device px: the box, its shape, the frost, the tint, the two shadows and the logo", () => {
+    const { blur, uniforms } = glassFrame(LOOK, POSE, SIZE);
     // 1.5 device px a glass px: a 48 px blur, from an eighth of the frame
     expect(blur.level).toBe(3);
     const expected = [
@@ -76,6 +81,8 @@ describe("the glass's uniforms", () => {
       [4 / 255, 5 / 255, 15 / 255, 0.55],
       [0, 12, 32, 0],
       [4 / 255, 5 / 255, 15 / 255, 0.28],
+      [1072, 723, 256, 154],
+      [0, 1, 0, 0],
     ].flat();
     expect(uniforms).toHaveLength(expected.length);
     for (const [i, value] of expected.entries()) {
@@ -84,22 +91,31 @@ describe("the glass's uniforms", () => {
   });
 
   it("form with the glass: the blur and the box follow the frost and the rise", () => {
-    const rising = glassFrame(LOOK, { ...POSE, frost: 0.5, rise: 0.985 }, { k: 2 });
+    const rising = glassFrame(LOOK, { ...POSE, frost: 0.5, rise: 0.985 }, SIZE);
     const px = 0.75 * 0.985 * 2;
     expect(rising.uniforms[2]).toBeCloseTo(440 * px, 3);
     expect(rising.uniforms[3]).toBeCloseTo(320 * px, 3);
     expect(rising.uniforms[6]).toBe(0.5);
     expect(rising.blur).toEqual(blurPlan(32 * 0.5 * px));
     // just condensing, the blur is under 2 px, so the frame shows through what the levels would blur
-    const condensing = glassFrame(LOOK, { ...POSE, frost: 0.02, rise: 0.985 }, { k: 2 });
+    const condensing = glassFrame(LOOK, { ...POSE, frost: 0.02, rise: 0.985 }, SIZE);
     expect(condensing.blur.level).toBe(1);
     expect(condensing.uniforms[9]).toBeGreaterThan(0);
     expect(condensing.uniforms[9]).toBeLessThan(1);
   });
 
   it("cast no shadow they weren't given", () => {
-    const { uniforms } = glassFrame({ ...LOOK, shadows: [] }, POSE, { k: 2 });
-    expect(Array.from(uniforms.slice(16))).toEqual(new Array(16).fill(0));
+    const { uniforms } = glassFrame({ ...LOOK, shadows: [] }, POSE, SIZE);
+    expect(Array.from(uniforms.slice(16, 32))).toEqual(new Array(16).fill(0));
+  });
+
+  it("carry the logo where the field draws its mark, at its fade, inverted only on milk (FG-4b)", () => {
+    const smoke = glassFrame({ ...LOOK, logoInvert: false }, { ...POSE, logo: 0.25 }, SIZE);
+    expect(Array.from(smoke.uniforms.slice(32))).toEqual([1072, 723, 256, 154, 0.25, 0, 0, 0]);
+    // the logo moves nothing else: the frost, the box and the blur are the glass's own
+    const bare = glassFrame({ ...LOOK, logoInvert: false }, POSE, SIZE);
+    expect(Array.from(smoke.uniforms.slice(0, 32))).toEqual(Array.from(bare.uniforms.slice(0, 32)));
+    expect(smoke.blur).toEqual(bare.blur);
   });
 });
 
@@ -111,6 +127,7 @@ function fakeDevice(fail?: Error) {
     textures: [] as { label: string; size: number[]; destroyed: boolean }[],
     buffers: [] as { label: string; destroyed: boolean }[],
     writes: [] as { buffer: string; data: number[] }[],
+    groups: [] as GPUBindGroupEntry[][],
   };
   const device = {
     createShaderModule({ code }: GPUShaderModuleDescriptor) {
@@ -147,7 +164,10 @@ function fakeDevice(fail?: Error) {
       made.textures.push(texture);
       return texture;
     },
-    createBindGroup: ({ entries }: GPUBindGroupDescriptor) => ({ entries }),
+    createBindGroup({ entries }: GPUBindGroupDescriptor) {
+      made.groups.push(Array.from(entries));
+      return { entries };
+    },
     queue: {
       writeBuffer(buffer: { label: string }, _offset: number, data: Float32Array) {
         made.writes.push({ buffer: buffer.label, data: Array.from(data) });
@@ -182,12 +202,18 @@ function fakeEncoder() {
 const gpu = { getPreferredCanvasFormat: () => "bgra8unorm" as const };
 const FRAME_VIEW = { of: "frame" } as unknown as GPUTextureView;
 
+/** The field's mark texture, as one size of the field makes it. */
+function markTexture(label = "mark"): GPUTexture {
+  return { createView: () => ({ of: label }) } as unknown as GPUTexture;
+}
+const MARK = markTexture();
+
 /** A frame the field has drawn at 2 device px a CSS px. */
-function frame(W = 2400, H = 1600): SplashFrame {
+function frame(W = 2400, H = 1600, mark = MARK): SplashFrame {
   return {
     view: FRAME_VIEW,
-    size: { k: 2, W, H, LW: 256, LH: 256, MX: 0, MY: 0 },
-    mark: {} as GPUTexture,
+    size: { ...SIZE, W, H },
+    mark,
     seconds: 0,
   };
 }
@@ -217,7 +243,7 @@ describe("the glass's pass", () => {
     expect(said.drawn).not.toHaveBeenCalled();
   });
 
-  it("makes its pipelines on the first look — the shader without brightness or logo — then asks for a frame", async () => {
+  it("makes its pipelines on the first look — the shader without brightness, with the logo — then asks for a frame", async () => {
     const { device, made } = fakeDevice();
     const said = hooks();
     const pass = createGlassPass(device, gpu, said);
@@ -228,8 +254,9 @@ describe("the glass's pass", () => {
     const [code = ""] = made.modules;
     for (const entry of ["fn full(", "fn down(", "fn blur(", "fn glass("])
       expect(code).toContain(entry);
-    // the product's frost has no brightness, and the logo comes with the holds (FG-4)
-    expect(code).not.toMatch(/bright|logo|mark/iu);
+    // the product's frost has no brightness; the logo reads the field's own mark (FG-4b, FG-D17 A)
+    expect(code).not.toMatch(/bright/iu);
+    expect(code).toContain("@group(0) @binding(4) var markTex: texture_2d<f32>;");
     expect(
       made.pipelines.map((pipeline) => [
         pipeline.vertex.entryPoint,
@@ -282,12 +309,12 @@ describe("the glass's pass", () => {
       [600, 400],
       [300, 200],
     ]);
-    const { blur } = glassFrame(LOOK, POSE, { k: 2 });
+    const { blur, uniforms } = glassFrame(LOOK, POSE, SIZE);
     expect(made.writes.slice(0, 2)).toEqual([
       { buffer: "glass-blur-h", data: [1, 0, expect.closeTo(blur.sigma, 5), blur.radius] },
       { buffer: "glass-blur-v", data: [0, 1, expect.closeTo(blur.sigma, 5), blur.radius] },
     ]);
-    expect(made.writes[2]?.buffer).toBe("glass");
+    expect(made.writes[2]).toEqual({ buffer: "glass", data: Array.from(uniforms) });
     expect(said.drawn.mock.calls).toEqual([[true]]);
 
     // said once, from the frame that first draws it
@@ -325,7 +352,26 @@ describe("the glass's pass", () => {
     expect(said.drawn.mock.calls).toEqual([[true]]);
   });
 
-  it("makes its levels again only when the frame's size changes", async () => {
+  it("draws a logo on a glass not yet frosted, and reads it from the field's mark (FG-4b)", async () => {
+    const { device, made } = fakeDevice();
+    const pass = createGlassPass(device, gpu, hooks());
+    pass.setLook(LOOK);
+    await settle();
+    pass.setPose({ ...POSE, frost: 0, logo: 0.5 });
+    const { encoder, passes } = fakeEncoder();
+    pass.encode(encoder, frame());
+    expect(passes.at(-1)).toEqual({ pipeline: "glass-glass", into: FRAME_VIEW, load: "load" });
+    expect(made.writes.at(-1)?.data.slice(32)).toEqual([1072, 723, 256, 154, 0.5, 1, 0, 0]);
+    // each level's glass group binds the field's mark, the texture the field drew this frame's mark from
+    const marks = made.groups.flatMap((entries) => entries.filter(({ binding }) => binding === 4));
+    expect(marks.map(({ resource }) => resource)).toEqual([
+      { of: "mark" },
+      { of: "mark" },
+      { of: "mark" },
+    ]);
+  });
+
+  it("makes its levels again only when the frame's size or the field's mark changes", async () => {
     const { device, made } = fakeDevice();
     const pass = createGlassPass(device, gpu, hooks());
     pass.setLook(LOOK);
@@ -342,6 +388,10 @@ describe("the glass's pass", () => {
     const remade = made.textures.slice(6);
     expect(remade.find((texture) => texture.label === "glass-level-1")?.size).toEqual([1201, 800]);
     expect(remade.find((texture) => texture.label === "glass-level-3")?.size).toEqual([301, 200]);
+    // the field makes its mark again with its size, and the glass binds the new one
+    pass.encode(fakeEncoder().encoder, frame(2401, 1600, markTexture("mark-2")));
+    expect(made.textures).toHaveLength(18);
+    expect(made.textures.slice(6, 12).every((texture) => texture.destroyed)).toBe(true);
   });
 
   it("stops drawing when the glass goes, and says so", async () => {

@@ -28,3 +28,8 @@ export const AGENTS_WORDS = {
   unavailable: "VibeField couldn't read the agents on this Mac.",
   tryAgain: "Try again",
 } as const;
+
+/** The face of the pane's look on the Setup Assistant's glass (FG-4b): the hold
+ * while the pane's code arrives and the pane's own look are one load, so the
+ * frame carries the one into the other without a fade. */
+export const AGENTS_LOOKING_FACE = "agents:looking";

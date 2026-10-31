@@ -1665,6 +1665,12 @@
               cost, spawn choices and model rows once. <code>agent-model-board.ts</code> publishes that model through
               audience cuts. The desktop's <code>model</code> board carries window-only chrome facts beside its rows;
               peers get the <code>desk</code> cut and phones the <code>field</code> cut (as built; <em>Amended 2026-10-29 (James, PG-D1 (a)): both become the model's <code>remote</code> cut at PG-2</em>). No runtime object syncs.
+              <em>Corrected 2026-10-31 (PG-0's re-read):</em> as built, <code>agent-model-board.ts</code> publishes only
+              this desktop's <code>model</code> board. A peer's <code>desk</code> rows and the phone's <code>field</code>
+              rows are <code>agent-field.ts</code>'s cuts: <code>projectDeskRow</code>, the backend's row beside the
+              fold's, and <code>projectFieldRow</code>, the fold's alone, which never reads the backend's model. Only the
+              peers' <code>desk</code> becomes <code>remote</code> at PG-2; the phone reads <code>remote</code> from PG-3,
+              and <code>field</code> stays for an older phone until it retires after one release of skew.
             </p>
             <p>
               <code>GodviewAgentsProvider</code> owns the window's one model subscription and replica. The deck,
@@ -1711,7 +1717,9 @@
                   per-subscriber trailing-edge floor. The door is never capped in rows: it carries the whole
                   board. <em>Since PG-1c (2026-10-31, <code>1790be95f</code>):</em> a phone that falls behind is held
                   in bytes, never cut. Once 256 KiB is queued on its connection, its mesh board's deltas stop, and at
-                  half it is sent the whole board, once (api, Subscriptions).
+                  half it is sent the whole board, once (api, Subscriptions). <em>Since PG-1d (2026-10-31):</em> a
+                  flip of the doors' gate re-presents the board as one snapshot at its current revision, so a
+                  reader learns of the flip at once, not at the board's next change.
                 </p>
                 <span class="badge tone-built">Built</span>
               </div>
@@ -1772,7 +1780,9 @@
               the model row's promise with the join. While this device's terminal doors are down, a desk row's
               <code>monitorRow.attachable</code>, and <code>.writable</code> where declared, read false, so a peer
               window reading it no longer raises the deck on a run it cannot attach. An owner older than PG-1a still
-              promises, and its readers keep the run-id fallback.
+              promises, and its readers keep the run-id fallback. <em>Since PG-1d (2026-10-31):</em> a flip of the
+              gate re-presents every live field and desk board at once, so an idle board no longer keeps a stale
+              join or promise until its next change.
             </p>
             <div class="callout foundation">
               <strong>The store's audience is the tailscale login.</strong>

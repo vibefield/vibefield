@@ -420,6 +420,12 @@ export class NativeLink extends EventEmitter {
 
   constructor(private readonly opts: NativeLinkOptions) {
     super();
+    // The daemon wires its consumers of this link once, for its own life, and
+    // the fan-out is fixed: eleven `connected` listeners as of PG-1d (daemon.ts
+    // seven and its gate watcher, the diagnostics service, the mesh client and
+    // the native supervisor). Node's default of ten is a leak heuristic; a bound
+    // with room keeps it for a real leak without warning on every boot.
+    this.setMaxListeners(20);
     this.logger = opts.logger ?? createNoopLogger();
   }
 

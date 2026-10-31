@@ -15,6 +15,7 @@ import {
   AGENT_CATALOG,
   AGENT_EXIT,
   AGENT_FIELD,
+  AGENT_STOP,
   type AgentCapability,
   type AgentCatalogEntry,
   type AgentCatalogReaders,
@@ -40,6 +41,7 @@ import {
   type AgentSessionSummary,
   type AgentSpawnParams,
   type AgentSpawnResult,
+  type AgentStopState,
   type AgentSurface,
   type AgentsProfilesListResult,
   type AgentsProfilesLoginParams,
@@ -88,6 +90,7 @@ import {
   DistributionRecordStore,
   type RevealPath,
 } from "./agent-distribution";
+import { birthWithDoor, refusedTheDoor, UNSUPPORTED_LAUNCH_FIELD } from "./agent-door-launch";
 import { AgentExtensionStore } from "./agent-extension-store";
 import { AgentExtensionService } from "./agent-extensions";
 import { createTerminalAgentHost, type TerminalAgentHost } from "./agent-host";
@@ -109,6 +112,14 @@ import {
   summarizeManaged,
   summarizePending,
 } from "./agent-sessions";
+import {
+  afterEscalation,
+  type EscalationOutcome,
+  heardByStatus,
+  nextStopStep,
+  type StopFacts,
+  stopReadable,
+} from "./agent-stop";
 import {
   isTypedRun,
   processIsGone,
@@ -442,6 +453,8 @@ export interface AgentRuntimeServiceOptions {
   audit?: SystemAudit;
   /** AR-4 test seam: the resume-when-idle thresholds (defaults above) */
   resumeWhenIdle?: { afterMs?: number; pollMs?: number };
+  /** DS test seam: how long a sent Stop waits to be heard (default `AGENT_STOP.HEARD_WITHIN_MS`) */
+  stopHeardWithinMs?: number;
   /** A login pane ended and the agent confirmed it is signed in. */
   onProfileSignedIn?: (profileId: string) => Promise<void>;
   /** AO-5a (AO-D14) — the note of the profiles Add a profile… made and no
@@ -524,7 +537,16 @@ interface ManagedEntry {
   origin?: AgentSessionOrigin | undefined;
   /** CP-1c — the spark this run is the own session of */
   spark?: SparkId | undefined;
+  /** Item 124 — this process was born without its briefing: its executable takes no door. A fact of the process,
+   * never of the record (the briefing never is), so a later birth briefs it afresh. */
+  door?: "off" | undefined;
+  /** DS — the person's Stop while this fieldd holds one (DS-D8: not across a restart), and its bound's timer */
+  stop?: AgentStopState | undefined;
+  stopTimer?: NodeJS.Timeout | undefined;
 }
+
+/** Item 124 — one birth's identity (`AgentRuntimeService.identity`): each attempt of a briefed birth has its own. */
+type BirthIdentity = ReturnType<AgentRuntimeService["identity"]>;
 
 /** AR-4 — a run whose PTY outlived a fieldd that could NOT re-attach to it:
  * held in the fold as a pending row (live, unobserved) until its
@@ -680,6 +702,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   private readonly replacements = new Set<Promise<unknown>>();
   private readonly idleAfterMs: number;
   private readonly pollMs: number;
+  private readonly stopHeardWithinMs: number;
   /** login panes awaiting their exit, by the floor's session id */
   private readonly logins = new Map<
     string,
@@ -735,6 +758,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     });
     this.idleAfterMs = opts.resumeWhenIdle?.afterMs ?? RESUME_IDLE_AFTER_MS;
     this.pollMs = opts.resumeWhenIdle?.pollMs ?? RESUME_POLL_MS;
+    this.stopHeardWithinMs = opts.stopHeardWithinMs ?? AGENT_STOP.HEARD_WITHIN_MS;
     this.distributionRecord =
       opts.vibefieldRoot === null
         ? null
@@ -1227,26 +1251,30 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       params.place !== undefined ? this.placeFolder(params.provider, params.place) : null;
     const terminals = this.requireTerminals();
     const cwd = place?.path ?? params.cwd ?? this.home;
-    const identity = this.identity();
     const entry = await this.creation(params.profileId ?? null, async () => {
       const briefing = await this.briefingFor(compose?.spark, params.provider);
-      const result = await this.runtime.spawn({
-        agent: params.provider,
-        cwd,
-        ...briefing,
-        ...(params.title !== undefined ? { title: params.title } : {}),
-        ...(params.profileId !== undefined ? { profile: params.profileId } : {}),
-        // AR-S5 — that profile's sign-in for the agent; puppeteer refuses a
-        // profile that holds none, and a plain spawn takes the default's
-        ...(params.profileSet !== undefined ? { profileSet: params.profileSet } : {}),
-        // PJ-6 — the model and its controls, opaque: puppeteer discovers again
-        // in the run's account and folder, validates, and translates
-        ...(params.modelSelection !== undefined
-          ? { modelSelection: modelSelectionOf(params.modelSelection) }
-          : {}),
-        creationRequestId: identity.creationRequestId,
-        ingress: identity.ingress,
-      });
+      const { result, identity, withheld } = await this.briefedBirth(
+        briefing,
+        { provider: params.provider, spark: compose?.spark },
+        (attempt, identity) =>
+          this.runtime.spawn({
+            agent: params.provider,
+            cwd,
+            ...attempt,
+            ...(params.title !== undefined ? { title: params.title } : {}),
+            ...(params.profileId !== undefined ? { profile: params.profileId } : {}),
+            // AR-S5 — that profile's sign-in for the agent; puppeteer refuses a
+            // profile that holds none, and a plain spawn takes the default's
+            ...(params.profileSet !== undefined ? { profileSet: params.profileSet } : {}),
+            // PJ-6 — the model and its controls, opaque: puppeteer discovers again
+            // in the run's account and folder, validates, and translates
+            ...(params.modelSelection !== undefined
+              ? { modelSelection: modelSelectionOf(params.modelSelection) }
+              : {}),
+            creationRequestId: identity.creationRequestId,
+            ingress: identity.ingress,
+          }),
+      );
       if (isSessionFailure(result)) throw this.sessionFailureToError(result, params.provider);
       // PJ-6 — CONFIRMED: the run is born. Its record keeps the selection (a
       // Resume starts at it again, Q4) and its project takes the recipe
@@ -1257,6 +1285,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         cwd,
         title: params.title,
         ...identity.launched(),
+        ...(withheld ? { door: "off" as const } : {}),
         ...(place !== null ? { place: place.placeId } : {}),
         ...(selection !== undefined ? { modelSelection: selection } : {}),
         ...(profileSet !== undefined
@@ -1473,7 +1502,6 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       );
     }
     if (params.cwd === undefined) this.requireConversationFolder(params.provider, cwd);
-    const identity = this.identity();
     // PJ-6 (Q4) — a conversation a run of ours launched at a model resumes at
     // it, in the account the index files it under
     const { record: previous, modelSelection: launched } = this.launchedContext(
@@ -1484,26 +1512,32 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     const selection = this.resumeSelection(params.provider, launched);
     const entry = await this.creation(profileId ?? null, async () => {
       const briefing = await this.briefingFor(previous?.spark, params.provider);
-      const result = await this.runtime.resume({
-        continuation: {
-          providerId: params.provider,
-          nativeSessionId: params.nativeSessionId,
-          implementation: "native",
-        },
-        cwd,
-        ...briefing,
-        ...(params.title !== undefined ? { title: params.title } : {}),
-        ...(profileId !== undefined ? { profile: profileId } : {}),
-        creationRequestId: identity.creationRequestId,
-        ingress: identity.ingress,
-        ...(selection.pass !== undefined ? { modelSelection: selection.pass } : {}),
-      });
+      const { result, identity, withheld } = await this.briefedBirth(
+        briefing,
+        { provider: params.provider, spark: previous?.spark },
+        (attempt, identity) =>
+          this.runtime.resume({
+            continuation: {
+              providerId: params.provider,
+              nativeSessionId: params.nativeSessionId,
+              implementation: "native",
+            },
+            cwd,
+            ...attempt,
+            ...(params.title !== undefined ? { title: params.title } : {}),
+            ...(profileId !== undefined ? { profile: profileId } : {}),
+            creationRequestId: identity.creationRequestId,
+            ingress: identity.ingress,
+            ...(selection.pass !== undefined ? { modelSelection: selection.pass } : {}),
+          }),
+      );
       if (isSessionFailure(result))
         throw this.sessionFailureToError(result, params.provider, "resume");
       return this.enter(result, {
         cwd,
         title: params.title,
         ...identity.launched(),
+        ...(withheld ? { door: "off" as const } : {}),
         ...(launched !== undefined ? { modelSelection: launched } : {}),
         ...(previous?.spark !== undefined ? { spark: previous.spark } : {}),
         ...(previous?.origin !== undefined ? { origin: previous.origin } : {}),
@@ -1841,21 +1875,168 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       // the same words the host itself would answer with — no floor, no act
       return { accepted: false, reason: "no-terminal-host" };
     }
-    const stop = entry.agent.turnStop;
-    const result =
-      stop === undefined
-        ? await host.automateTerminal(entry.info.terminalSessionId, { kind: "interrupt" })
-        : await entry.agent.stopTurn();
-    const stopKey = stopKeyOf(stop);
+    const result = await this.deliverStop(entry, host);
     this.logger.info("fieldd.agents.interrupted", "An agent run was interrupted", {
       runtimeRunId: params.runtimeRunId,
       sessionId: entry.info.terminalSessionId,
       // what was sent, in puppeteer's words: a key, or the agent's own control
-      stop: stopKey ?? "native",
+      stop: stopKeyOf(entry.agent.turnStop) ?? "native",
       accepted: result.accepted,
       ...(result.accepted ? {} : { reason: result.reason }),
     });
+    if (result.accepted) this.stopSent(entry);
     return result.accepted ? { accepted: true } : { accepted: false, reason: result.reason };
+  }
+
+  /** The run's OWN stop, delivered: the floor's interrupt, or the agent's declared turn stop (Q08). The one thing a
+   * person's Stop sends, and the one thing its re-send sends again (DS-D2). */
+  private async deliverStop(
+    entry: ManagedEntry,
+    host: TerminalAgentHost,
+  ): Promise<{ accepted: true } | { accepted: false; reason: string }> {
+    return entry.agent.turnStop === undefined
+      ? await host.automateTerminal(entry.info.terminalSessionId, { kind: "interrupt" })
+      : await entry.agent.stopTurn();
+  }
+
+  /** DS — what the run's status says to its Stop (`agent-stop.ts`). */
+  private stopFacts(entry: ManagedEntry): StopFacts {
+    let observationLevel = "unknown";
+    try {
+      observationLevel = entry.agent.observationLevel;
+    } catch {
+      // a disposed adapter's status cannot be read
+    }
+    return {
+      readable: stopReadable(observationLevel),
+      known: entry.status !== "unknown",
+      working: entry.status === "working",
+    };
+  }
+
+  /** DS — a person's Stop was delivered: it is held as SENT until the run is heard to stop, and its bound is armed. A
+   * second press while one is held changes nothing: the first Stop's clock and stage stand. */
+  private stopSent(entry: ManagedEntry): void {
+    // the delivery was awaited: a run that exited, was replaced, or a fieldd stopping meanwhile holds no Stop
+    if (this.disposed || entry.exiting || this.managed.get(entry.info.runtimeRunId) !== entry)
+      return;
+    if (entry.stop !== undefined && entry.stop.stage !== "heard") return;
+    entry.stop = { sentAt: this.now().toISOString(), stage: "sent" };
+    if (heardByStatus(entry.stop, this.stopFacts(entry))) this.stopHeard(entry, "status");
+    else this.armStop(entry);
+    this.publish();
+  }
+
+  private armStop(entry: ManagedEntry): void {
+    if (entry.stopTimer !== undefined) clearTimeout(entry.stopTimer);
+    const runtimeRunId = entry.info.runtimeRunId;
+    entry.stopTimer = setTimeout(() => void this.stopBound(runtimeRunId), this.stopHeardWithinMs);
+    entry.stopTimer.unref?.();
+  }
+
+  private clearStopTimer(entry: ManagedEntry): void {
+    if (entry.stopTimer === undefined) return;
+    clearTimeout(entry.stopTimer);
+    entry.stopTimer = undefined;
+  }
+
+  /** DS — the Stop was heard: by the PTY's exit, or by the status leaving `working`. */
+  private stopHeard(entry: ManagedEntry, heardBy: "exit" | "status"): void {
+    const stop = entry.stop;
+    if (stop === undefined || stop.stage === "heard") return;
+    this.clearStopTimer(entry);
+    entry.stop = { sentAt: stop.sentAt, stage: "heard", heardBy };
+    this.logger.info("fieldd.agents.stop_heard", "A person's Stop was heard", {
+      runtimeRunId: entry.info.runtimeRunId,
+      heardBy,
+      stage: stop.stage,
+      afterMs: this.now().getTime() - Date.parse(stop.sentAt),
+    });
+  }
+
+  /** DS-D2/D3 — a Stop's bound passed and nothing was heard: the one step the rule names, taken. The re-send and
+   * the terminate are fieldd's own acts, in the ledger as such (DS-D6), never the person's. */
+  private async stopBound(runtimeRunId: string): Promise<void> {
+    // a fieldd stopping ends nothing: its runs outlive it (AR-4)
+    if (this.disposed) return;
+    const entry = this.managed.get(runtimeRunId);
+    if (entry === undefined || entry.exiting || entry.stop === undefined) return;
+    entry.stopTimer = undefined;
+    const stop = entry.stop;
+    const step = nextStopStep(stop, this.stopFacts(entry));
+    const afterMs = this.now().getTime() - Date.parse(stop.sentAt);
+    if (step === "none") return;
+    if (step === "unheard") {
+      this.stopUnheard(entry, afterMs);
+      return;
+    }
+    const host = this.terminalHost;
+    const terminals = this.opts.terminals?.() ?? null;
+    const stage = step === "resend" ? "resent" : "terminating";
+    entry.stop = { sentAt: stop.sentAt, stage };
+    this.publish();
+    const mutation: AuditMutation = {
+      action: "agent.session.stop_escalated",
+      target: { kind: "agent-session", id: runtimeRunId },
+      attrs: { stage, afterMs, sessionId: entry.info.terminalSessionId },
+    };
+    let outcome: EscalationOutcome;
+    try {
+      if (step === "resend") {
+        await this.audited(
+          mutation,
+          async () =>
+            host === null
+              ? { accepted: false as const, reason: "no-terminal-host" }
+              : await this.deliverStop(entry, host),
+          (result) =>
+            result.accepted
+              ? { outcome: "succeeded" }
+              : { outcome: "failed", reasonCode: "STOP_REFUSED", attrs: { reason: result.reason } },
+        );
+        outcome = "answered";
+      } else {
+        const placed = await this.audited(
+          mutation,
+          async () =>
+            terminals === null
+              ? false
+              : await this.terminateLive(terminals, entry.info.terminalSessionId),
+          (terminated) =>
+            terminated
+              ? { outcome: "succeeded" }
+              : { outcome: "failed", reasonCode: "TERMINATE_NOT_PLACED" },
+        );
+        outcome = placed ? "placed" : "not-placed";
+      }
+    } catch (error) {
+      this.logger.warn("fieldd.agents.stop_escalation_failed", "A Stop's escalation failed", {
+        runtimeRunId,
+        stage,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      outcome = "threw";
+    }
+    // heard or left while the act was in flight, or fieldd stopping: nothing is left to do
+    if (this.disposed || this.managed.get(runtimeRunId) !== entry || entry.stop?.stage !== stage)
+      return;
+    const next = afterEscalation(stage, outcome);
+    if (next === "rearm") this.armStop(entry);
+    else if (next === "unheard") this.stopUnheard(entry, afterMs);
+  }
+
+  /** DS-D3 — a Stop nothing heard and fieldd will not escalate further: left to the person, who can end the run. */
+  private stopUnheard(entry: ManagedEntry, afterMs: number): void {
+    const stop = entry.stop;
+    if (stop === undefined || stop.stage === "heard" || stop.unheardAt !== undefined) return;
+    if (this.managed.get(entry.info.runtimeRunId) !== entry) return;
+    entry.stop = { ...stop, unheardAt: this.now().toISOString() };
+    this.logger.info(
+      "fieldd.agents.stop_unheard",
+      "A person's Stop was not heard; the run is left to them",
+      { runtimeRunId: entry.info.runtimeRunId, stage: stop.stage, afterMs },
+    );
+    this.publish();
   }
 
   /** CP-2 — the input queue's delivery (CP-L5): paste and submit one input into a live run, with puppeteer's receipt
@@ -2419,6 +2600,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     this.logins.clear();
     for (const entry of this.managed.values()) {
       if (entry.backstop !== undefined) clearTimeout(entry.backstop);
+      this.clearStopTimer(entry);
       entry.unwatch?.();
       entry.unwatch = undefined;
     }
@@ -2574,6 +2756,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       origin?: AgentSessionOrigin | undefined;
       /** CP-1c — the spark it is the own session of; kept on the record, and a resume keeps it */
       spark?: SparkId | undefined;
+      /** Item 124 — born without its briefing; the fold's row says so, the record never does */
+      door?: "off" | undefined;
     },
   ): ManagedEntry {
     const info = agent.info;
@@ -2643,6 +2827,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
           : undefined),
       origin: launch.origin ?? launch.reattached?.record.origin,
       spark: launch.spark ?? launch.reattached?.record.spark,
+      door: launch.door,
     };
     if (this.disposed) {
       // the service stopped while this run was being born or attached: the
@@ -2891,29 +3076,34 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   ): Promise<ManagedEntry> {
     const continuation = continuationOf(record);
     const cwd = cwdOverride ?? record.cwd;
-    const identity = this.identity();
     // PJ-6 (Q4) — the session's own launch model, where its resume takes one;
     // the account it was launched in rides with it (discovery runs there)
     const selection = this.resumeSelection(record.provider, record.modelSelection);
     return this.creation(record.profileId ?? null, async () => {
       const briefing = preparedBriefing ?? (await this.briefingFor(record.spark, record.provider));
-      const result = await this.runtime.resume({
-        continuation,
-        cwd,
-        ...briefing,
-        ...(record.title !== undefined ? { title: record.title } : {}),
-        ...(record.profileId !== undefined ? { profile: record.profileId } : {}),
-        workspace: restoredWorkspaceRequest(record.workspace, record.cwd),
-        creationRequestId: identity.creationRequestId,
-        ingress: identity.ingress,
-        ...(selection.pass !== undefined ? { modelSelection: selection.pass } : {}),
-      });
+      const { result, identity, withheld } = await this.briefedBirth(
+        briefing,
+        { provider: record.provider, spark: record.spark },
+        (attempt, identity) =>
+          this.runtime.resume({
+            continuation,
+            cwd,
+            ...attempt,
+            ...(record.title !== undefined ? { title: record.title } : {}),
+            ...(record.profileId !== undefined ? { profile: record.profileId } : {}),
+            workspace: restoredWorkspaceRequest(record.workspace, record.cwd),
+            creationRequestId: identity.creationRequestId,
+            ingress: identity.ingress,
+            ...(selection.pass !== undefined ? { modelSelection: selection.pass } : {}),
+          }),
+      );
       if (isSessionFailure(result))
         throw this.sessionFailureToError(result, record.provider, "resume");
       return this.enter(result, {
         cwd,
         title: record.title,
         ...identity.launched(),
+        ...(withheld ? { door: "off" as const } : {}),
         replaced,
         // the successor keeps the session's launch model, so its own resume
         // starts there too
@@ -2923,6 +3113,57 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         ...(record.spark !== undefined ? { spark: record.spark } : {}),
       });
     });
+  }
+
+  /** ITEM 124 — a briefed birth (`agent-door-launch.ts`). Refused for the door by its executable
+   * (`UNSUPPORTED_LAUNCH_FIELD`), it is made once more without the briefing: in the ledger as the daemon's own act
+   * (`tools.door.withheld`), and in the log in puppeteer's own sentence. Each attempt is its own identity, so the
+   * second is a fresh creation request; the answer names the attempt that answered. */
+  private async briefedBirth(
+    briefing: AgentRunBriefing,
+    context: { readonly provider: string; readonly spark?: SparkId | undefined },
+    launch: (briefing: AgentRunBriefing, identity: BirthIdentity) => Promise<SpawnAgentResult>,
+  ): Promise<{
+    readonly result: SpawnAgentResult;
+    readonly identity: BirthIdentity;
+    readonly withheld: boolean;
+  }> {
+    const born = await birthWithDoor(
+      briefing,
+      async (attempt) => {
+        const identity = this.identity();
+        return { result: await launch(attempt, identity), identity };
+      },
+      (attempt) => refusedTheDoor(attempt.result),
+      (refused, again) => {
+        const failure = isSessionFailure(refused.result) ? refused.result : undefined;
+        const spark = context.spark !== undefined ? { spark: context.spark } : {};
+        this.logger.warn(
+          "fieldd.agents.door_withheld",
+          "The agent's executable takes no door; the run starts without it",
+          {
+            provider: context.provider,
+            ...spark,
+            ...(failure !== undefined
+              ? { runtimeRunId: failure.runtimeRunId, error: failure.error.message }
+              : {}),
+          },
+        );
+        return this.audited(
+          {
+            action: "tools.door.withheld",
+            target: { kind: "agent-session", id: failure?.runtimeRunId ?? context.provider },
+            attrs: { provider: context.provider, ...spark, refusal: UNSUPPORTED_LAUNCH_FIELD },
+          },
+          again,
+          (attempt) =>
+            isSessionFailure(attempt.result)
+              ? { outcome: "failed", reasonCode: attempt.result.error.code }
+              : { outcome: "succeeded", attrs: { runtimeRunId: attempt.result.info.runtimeRunId } },
+        );
+      },
+    );
+    return { ...born.born, withheld: born.withheld };
   }
 
   /** Every birth's briefing (MT-D9): a spark's from its record, refusing when it cannot be delivered (CP-1d); a plain
@@ -4190,6 +4431,11 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       entry.status = status;
       entry.stateChangedAt = mirror?.statusSince ?? this.now().toISOString();
     }
+    // DS — the Stop is heard when a readable status leaves `working`; once heard, the next turn lets it go
+    if (entry.stop !== undefined) {
+      if (heardByStatus(entry.stop, this.stopFacts(entry))) this.stopHeard(entry, "status");
+      else if (entry.stop.stage === "heard" && status === "working") entry.stop = undefined;
+    }
     const evidence = mirror?.freshness?.lastEvidenceAt;
     if (evidence !== undefined) entry.lastActivityAt = evidence;
     this.refreshContinuation(entry);
@@ -4226,6 +4472,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     // row leaves; the record stays for a resume
     entry.unwatch?.();
     entry.unwatch = undefined;
+    this.clearStopTimer(entry);
     this.managed.delete(runtimeRunId);
     this.byTerminal.delete(entry.info.terminalSessionId);
     this.terminalHost?.forget(entry.info.terminalSessionId);
@@ -4253,6 +4500,9 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     }
     entry.unwatch?.();
     entry.unwatch = undefined;
+    // DS-D6 — an exit while a Stop is held is the Stop heard (one already heard by its status is not this exit's)
+    const stopped = entry.stop !== undefined && entry.stop.stage !== "heard";
+    if (stopped) this.stopHeard(entry, "exit");
     // Item 87 — puppeteer's cleanup is unbounded (its workspace finalization
     // runs git), and the exit does not wait for it. Its synchronous part has
     // run when the call returns (`process:exited` dispatched, the run marked
@@ -4305,6 +4555,9 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       exitCode: exit.exitCode,
       signal: exit.signal,
       reason: exit.reason,
+      ...(stopped && entry.stop !== undefined
+        ? { stop: { sentAt: entry.stop.sentAt, heardBy: "exit" } }
+        : {}),
     });
     this.managed.delete(runtimeRunId);
     this.byTerminal.delete(entry.info.terminalSessionId);
@@ -4425,7 +4678,9 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         ...(entry.typed !== undefined ? { spawnedBy: SPAWNED_BY_SHELL } : {}),
         origin: entry.origin,
         spark: entry.spark,
+        door: entry.door,
         stopKey: stopKeyOf(entry.agent.turnStop),
+        stop: entry.stop,
         createdAt: entry.createdAt,
         stateChangedAt: entry.stateChangedAt,
         lastActivityAt: entry.lastActivityAt,

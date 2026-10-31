@@ -1283,7 +1283,10 @@
                 <p>
                   The field projection's deltas apply on top of a named <code>since</code>. A client whose
                   revision is not that one has lost a frame and re-subscribes for a fresh snapshot. There
-                  is no ack protocol — the tolerant reader's own rule.
+                  is no ack protocol — the tolerant reader's own rule. <em>Since PG-1d (2026-10-31):</em> the
+                  field and desk boards may also send a mid-stream snapshot on the same epoch, at the board's
+                  current revision: a re-present when the doors' gate flips, or the repair after a lost frame.
+                  The reader replaces its copy.
                 </p>
               </div>
               <div class="card">

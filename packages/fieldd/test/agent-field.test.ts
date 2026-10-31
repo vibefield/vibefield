@@ -147,6 +147,12 @@ const maximalSummary = (): AgentSessionSummary => ({
   // SP-1b — whose session it is, and who started it, the origin carrying a key the contract does not name
   spark: "sp-vela01",
   origin: { by: "flow", run: "fr-1", call: 2, note: "rides the passthrough and must never travel" },
+  // DS-D5 — a person's Stop held for the run: its clock and stage, content-free
+  stop: {
+    sentAt: "2026-09-13T10:05:30.000Z",
+    stage: "resent",
+    unheardAt: "2026-09-13T10:05:36.000Z",
+  },
 });
 
 describe("projectFieldRow — facts kept, content dropped (§10.1)", () => {
@@ -171,11 +177,13 @@ describe("projectFieldRow — facts kept, content dropped (§10.1)", () => {
     // produces is a fixture that can quietly stop describing the product.
     // PJ-7 — the native id joined the row in a golden of its own: the slice's
     // is the kit's mirror and stays byte for byte as it shipped. SP-1b — the
-    // spark and the origin joined it in another golden of their own.
+    // spark and the origin joined it in another golden of their own, and
+    // DS-D5's Stop the same way.
     const rows = [
       "agent-field-slice.valid.json",
       "agent-field-snapshot.native-session.json",
       "agent-field-snapshot.spark.json",
+      "agent-field-snapshot.stop.json",
     ].flatMap(
       (name) =>
         (
@@ -273,6 +281,27 @@ describe("projectFieldRow — facts kept, content dropped (§10.1)", () => {
     const plain = Object.keys(projectFieldRow(summary({})));
     expect(plain).not.toContain("spark");
     expect(plain).not.toContain("origin");
+  });
+
+  it("DS-D5 — carries the person's Stop, rebuilt from its named fields", () => {
+    const stop = {
+      sentAt: "2026-09-13T10:05:30.000Z",
+      stage: "resent",
+      unheardAt: "2026-09-13T10:05:36.000Z",
+    };
+    const held = projectFieldRow({
+      ...summary({}),
+      stop: { ...stop, note: "rides the passthrough" },
+    });
+    // rebuilt, never spread: a key the contract does not name stays home
+    expect(held.stop).toEqual(stop);
+    const heard = projectFieldRow({
+      ...summary({}),
+      stop: { sentAt: stop.sentAt, stage: "heard", heardBy: "status" },
+    });
+    expect(heard.stop).toEqual({ sentAt: stop.sentAt, stage: "heard", heardBy: "status" });
+    // a run with no Stop carries no key at all
+    expect(Object.keys(projectFieldRow(summary({})))).not.toContain("stop");
   });
 
   it("names the FOLDER and never the path (EL7 B1), honestly about git", () => {
@@ -589,6 +618,55 @@ describe("createFieldSubscription — one subscriber's floor (§5)", () => {
     source.publish(board(summary({ status: "blocked", permissionTool: "Bash" })));
     vi.advanceTimersByTime(250);
     expect(frames[1]?.upserts[0]?.["terminal"]).toMatchObject({ hosted: "local" });
+    sub.dispose();
+  });
+
+  it("re-presents the board at its revision when the gate flips, with no change of its own (PG-1d)", () => {
+    // F-M4's residual: the gate is read at SEND time, so an idle board kept a
+    // stale join, and since PG-1a a stale attach promise, until its next
+    // change. `represent()` sends ONE snapshot at the revision the subscriber
+    // holds: the rows' own facts did not move, so the revision does not either
+    // (MF-1h), and the chain goes on from it.
+    const source = fold(board(summary({ status: "idle" })));
+    const frames: Array<{ frame: Record<string, unknown>; kind: string }> = [];
+    let published = true;
+    const sub = createFieldSubscription({
+      list: source.list,
+      subscribe: source.subscribe,
+      emit: (frame, kind) => frames.push({ frame: frame as never, kind }),
+      minIntervalMs: 250,
+      epoch: "boot.1",
+      terminalPublished: () => published,
+    });
+    expect(sub.snapshot.rows[0]?.terminal).toMatchObject({ hosted: "local" });
+    const revision = sub.snapshot.revision;
+    const rowsOf = (at: number) => frames[at]?.frame["rows"] as Array<Record<string, unknown>>;
+
+    published = false;
+    sub.represent();
+    expect(frames, "at the floor, like any frame").toHaveLength(0);
+    vi.advanceTimersByTime(250);
+    expect(frames).toHaveLength(1);
+    expect(frames[0]).toMatchObject({ kind: "snapshot", frame: { epoch: "boot.1", revision } });
+    expect(rowsOf(0)[0]?.["terminal"], "the join withdrawn").toBeUndefined();
+    expect(rowsOf(0)[0], "the row stands").toMatchObject({ kind: "claude", alive: true });
+
+    // the chain goes on from the snapshot's revision
+    source.publish(board(summary({ status: "working" })));
+    vi.advanceTimersByTime(250);
+    expect(frames[1]).toMatchObject({
+      kind: "delta",
+      frame: { since: revision, revision: revision + 1 },
+    });
+
+    // and back: the join restored, still at the revision the subscriber holds
+    published = true;
+    sub.represent();
+    vi.advanceTimersByTime(250);
+    expect(frames[2]).toMatchObject({ kind: "snapshot", frame: { revision: revision + 1 } });
+    expect(rowsOf(2)[0]?.["terminal"]).toMatchObject({ hosted: "local" });
+    vi.advanceTimersByTime(1_000);
+    expect(frames, "one snapshot per flip, nothing after").toHaveLength(3);
     sub.dispose();
   });
 

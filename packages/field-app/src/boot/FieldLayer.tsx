@@ -4,6 +4,7 @@ import {
   type Ref,
   useEffect,
   useImperativeHandle,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
@@ -89,6 +90,9 @@ export function FieldLayer({
       door.current = null;
     };
   }, [glass]);
+
+  // What stands on the field sizes its logo to the still's own mark while the field is its still (FG-4b).
+  useLayoutEffect(() => glass.stillness(field === "still"), [glass, field]);
 
   // The mark's fade: 400ms on `ease`, halved under reduced motion.
   useEffect(() => {

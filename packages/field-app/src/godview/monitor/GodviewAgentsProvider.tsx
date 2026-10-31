@@ -1,3 +1,4 @@
+import type { AgentStopState } from "@vibefield/contracts";
 import { frameScheduler } from "@vibefield/puppeteer-view-sdk/host";
 import type { PaneFrameAgent } from "@vibefield/puppeteer-views";
 import {
@@ -16,6 +17,7 @@ import {
   paneFrameFactsKey,
   runIdsBySession,
   runsByTerminal,
+  stopsBySession,
 } from "./pane-frame-facts";
 import type { MonitorDoor } from "./remote-door";
 
@@ -48,14 +50,16 @@ import type { MonitorDoor } from "./remote-door";
  * gated on the frame's own fields and changes only when one of them does.
  */
 
-/** What the deck's frames read: the agent facts per pane session, and the run
- * each session belongs to (the verbs' target). */
+/** What the deck's frames read: the agent facts per pane session, the run
+ * each session belongs to (the verbs' target), and the Stop its run holds
+ * (DS-D4 (a), `StopPaneState`). */
 export interface DeckAgentFacts {
   agents: ReadonlyMap<string, PaneFrameAgent>;
   runs: ReadonlyMap<string, string>;
+  stops: ReadonlyMap<string, AgentStopState>;
 }
 
-const EMPTY_DECK_FACTS: DeckAgentFacts = { agents: new Map(), runs: new Map() };
+const EMPTY_DECK_FACTS: DeckAgentFacts = { agents: new Map(), runs: new Map(), stops: new Map() };
 
 const DeckAgentFactsContext = createContext<DeckAgentFacts | undefined>(undefined);
 /** `null` is a fact of its own: no door, no model port, or Godview closed. The
@@ -92,11 +96,12 @@ function useDeckFacts(chrome: ChromeFacts | null): DeckAgentFacts {
     const byTerminal = runsByTerminal(runs);
     const agents = paneFrameAgents(byTerminal);
     const sessions = runIdsBySession(byTerminal);
-    const key = paneFrameFactsKey(agents, sessions);
+    const stops = stopsBySession(byTerminal);
+    const key = paneFrameFactsKey(agents, sessions, stops);
     held.current =
       key === cache.key
         ? { runs, key, facts: cache.facts }
-        : { runs, key, facts: { agents, runs: sessions } };
+        : { runs, key, facts: { agents, runs: sessions, stops } };
     return held.current.facts;
   };
   return useSyncExternalStore(subscribe, read, read);

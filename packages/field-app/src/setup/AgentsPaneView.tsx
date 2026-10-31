@@ -3,13 +3,15 @@ import { AgentIcon } from "@vibefield/puppeteer-view-sdk/react";
 import { type ReactElement, useId } from "react";
 import {
   BackAction,
-  factCls,
   primaryCls,
   quietCls,
+  useWizardFrame,
+  WizardHold,
   WizardPane,
+  WizardStatus,
 } from "../boot/onboarding/wizard-ui";
 import type { AgentsPaneModel, AgentsPaneRow } from "./agents-pane";
-import { AGENTS_WORDS } from "./agents-words";
+import { AGENTS_LOOKING_FACE, AGENTS_WORDS } from "./agents-words";
 import "./agents-pane.css";
 
 // The Agents pane (track AO, AO-5; DESIGN.md §8 "The Setup Assistant's agent
@@ -30,13 +32,16 @@ function AgentsPaneRows({
   rows,
   label,
   id,
+  columns,
 }: {
   rows: readonly AgentsPaneRow[];
   label: string;
   id?: string | undefined;
+  /** More agents opens in two columns, so the pane fits the glass (FG-D19 A). */
+  columns?: 2 | undefined;
 }): ReactElement {
   return (
-    <ul id={id} className="vf-agents-pane-rows" aria-label={label}>
+    <ul id={id} className="vf-agents-pane-rows" aria-label={label} data-columns={columns}>
       {rows.map((row) => (
         <li key={row.provider} className="vf-agents-pane-row" data-state={row.state}>
           <span className="vf-agents-pane-mark" aria-hidden="true">
@@ -105,7 +110,9 @@ export function AgentsPaneBody({
             {AGENTS_WORDS.more}
             <FieldGlyph name="chevron" size={12} />
           </button>
-          {moreOpen && <AgentsPaneRows id={moreId} rows={model.more} label={AGENTS_WORDS.more} />}
+          {moreOpen && (
+            <AgentsPaneRows id={moreId} rows={model.more} label={AGENTS_WORDS.more} columns={2} />
+          )}
         </>
       )}
       {model.first && (
@@ -135,7 +142,9 @@ export function agentsTitle(inventory: AgentsInventory): string {
 }
 
 /** The pane on the wizard's glass: the title says what was found, Continue
- * moves on, and a Mac with no agent says where one appears later (W3). */
+ * moves on, and a Mac with no agent says where one appears later (W3). While
+ * the inventory looks, the glass holds on its one line (FG-L5), the same load
+ * as the hold while the pane's code arrives. */
 export function AgentsWizardPaneView({
   inventory,
   moreOpen,
@@ -153,12 +162,21 @@ export function AgentsWizardPaneView({
   onContinue: () => void;
   onBack?: (() => void) | undefined;
 }): ReactElement {
+  const frame = useWizardFrame();
+  if (inventory.kind === "looking" && frame === "glass") {
+    return (
+      <WizardHold face={AGENTS_LOOKING_FACE}>
+        <WizardStatus line={AGENTS_WORDS.looking} />
+      </WizardHold>
+    );
+  }
   const first = inventory.kind === "found" && inventory.model.first;
   return (
     <WizardPane
       eyebrow={AGENTS_WORDS.eyebrow}
       title={agentsTitle(inventory)}
       voice={agentsVoice(inventory)}
+      later={first ? AGENTS_WORDS.later : undefined}
       onSubmit={onContinue}
       actions={
         <>
@@ -176,7 +194,6 @@ export function AgentsWizardPaneView({
         lookingAgain={lookingAgain}
         onLookAgain={onLookAgain}
       />
-      {first && <p className={factCls}>{AGENTS_WORDS.later}</p>}
     </WizardPane>
   );
 }

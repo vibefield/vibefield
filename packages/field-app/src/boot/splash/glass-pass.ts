@@ -5,7 +5,8 @@ import type { SplashFrame, SplashPost, SplashSize } from "./vibefield-splash.js"
 // glass"; James, 2026-10-29: "can we just render the glass with webgpu too so we only do one field render"). Over
 // the live field the glass is a pass of the field's own frame, so the window draws the field once and the
 // compositor never blurs it again. It ports the draft page's glass.js (draft/first-run-glass, version 7), typed,
-// without its brightness (the product's frost has none) and without the logo, which comes with the holds at FG-4.
+// without its brightness (the product's frost has none). Since FG-4b it draws the logo too: the field's own mark over
+// the frost, where the field draws its mark, so the two are one mark in one frame (FG-D17 A).
 //
 // Each frame the glass stands, after the field's own passes (the vendored splash's `post` patch), on its device:
 //   down   the frame to ½, ¼ and ⅛ (rgba16float), each texel a 4 × 4 box, only as deep as the blur needs
@@ -13,7 +14,7 @@ import type { SplashFrame, SplashPost, SplashSize } from "./vibefield-splash.js"
 //          less what the levels have already blurred
 //   glass  one pass over the frame in CSS's order (wizard-ui.css): the two shadows outside the glass (a rounded
 //          box's Gaussian, after Evan Wallace's "Fast Rounded Rectangle Shadows"), then inside it the blurred frame,
-//          saturated, then the tint and the grain
+//          saturated, then the tint and the grain, and over them the logo, inverted on milk
 // The recipe and the pose come from the page (glass-look.ts). The edge's hairlines stay the browser's, at the
 // screen's own pixels where the field may draw at fewer (its budget).
 
@@ -27,6 +28,8 @@ struct Glass {
   s0c: vec4f,
   s1: vec4f,
   s1c: vec4f,
+  mark: vec4f,    // the field's mark: x, y, w, h (device px)
+  logo: vec4f,    // the logo's opacity; 1 to wear invert(1) hue-rotate(180deg); 0, 0
 }
 struct Blur { dir: vec2f, sigma: f32, radius: f32 }
 
@@ -34,6 +37,7 @@ struct Blur { dir: vec2f, sigma: f32, radius: f32 }
 @group(0) @binding(1) var lin: sampler;
 @group(0) @binding(2) var<uniform> G: Glass;
 @group(0) @binding(3) var<uniform> B: Blur;
+@group(0) @binding(4) var markTex: texture_2d<f32>;
 
 @vertex
 fn full(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
@@ -126,6 +130,8 @@ fn saturated(c: vec3f, s: f32) -> vec3f {
     0.072 - 0.072 * s, 0.072 - 0.072 * s, 0.072 + 0.928 * s);
   return m * c;
 }
+// hue-rotate(180deg), Filter Effects' matrix (columns); the logo wears it after invert(1)
+const HUE180 = mat3x3f(-0.574, 0.426, 0.426, 1.430, 0.430, 1.430, 0.144, 0.144, -0.856);
 fn grain(c: vec2i) -> f32 {
   var h = (bitcast<u32>(c.x) * 0x8da6b343u) ^ (bitcast<u32>(c.y) * 0xd8163841u);
   h = (h ^ (h >> 15u)) * 0x2c1b3c6du;
@@ -160,14 +166,28 @@ fn glass(@builtin(position) fc: vec4f) -> @location(0) vec4f {
     // the grain: mid grey at the noise's alpha, a glass px a grain, fixed to the glass
     acc = over(acc, vec3f(0.5), inside * G.frost.z * fr * grain(vec2i(floor(p / px))));
   }
+  // the logo: the field's own mark over the glass, where the field draws it, wearing the look's filter
+  if (G.logo.x > 0.0) {
+    let at = vec2i(floor(fc.xy - G.mark.xy));
+    if (all(at >= vec2i(0)) && all(at < vec2i(G.mark.zw))) {
+      let m = textureLoad(markTex, at, 0);
+      if (m.a > 0.0) {
+        var ink = m.rgb / m.a;
+        if (G.logo.y > 0.5) {
+          ink = clamp(HUE180 * (1.0 - ink), vec3f(0.0), vec3f(1.0));
+        }
+        acc = over(acc, ink, m.a * G.logo.x);
+      }
+    }
+  }
   return acc;
 }
 `;
 
 const LEVEL: GPUTextureFormat = "rgba16float";
 const DEEPEST = 3;
-/** The glass's uniforms: eight vec4s (the shader's `Glass`). */
-const GLASS_FLOATS = 8 * 4;
+/** The glass's uniforms: ten vec4s (the shader's `Glass`). */
+const GLASS_FLOATS = 10 * 4;
 
 /** What the levels have blurred by the time the glass reads one, as a variance in device px²: each level's 4 × 4
  * box (1.25 of its own texels² a level) and the bilinear read of the deepest (a tent, a sixth of its texel²). */
@@ -195,11 +215,11 @@ const smooth = (a: number, b: number, x: number): number => {
 };
 
 /** One frame of the glass: how its blur runs, and the glass pass's uniforms, for a field drawn at `k` device px a
- * CSS px with the glass at `pose` in `look`. */
+ * CSS px with the glass at `pose` in `look`, its mark LW × LH at MX, MY. */
 export function glassFrame(
   look: GlassLook,
   pose: GlassPose,
-  { k }: Pick<SplashSize, "k">,
+  { k, MX, MY, LW, LH }: Pick<SplashSize, "k" | "MX" | "MY" | "LW" | "LH">,
 ): { blur: BlurPlan; uniforms: Float32Array<ArrayBuffer> } {
   const px = pose.fit * pose.rise * k;
   const sigma = look.blur * pose.frost * px;
@@ -226,6 +246,14 @@ export function glassFrame(
     ...look.tint,
     ...shadow(0),
     ...shadow(1),
+    MX,
+    MY,
+    LW,
+    LH,
+    pose.logo,
+    look.logoInvert ? 1 : 0,
+    0,
+    0,
   ]);
   return { blur, uniforms };
 }
@@ -277,8 +305,8 @@ export function createGlassPass(
   let gone = false;
   let drew = false;
 
-  // the levels, sized to the frame and made again with it
-  let made: { W: number; H: number } | null = null;
+  // the levels, sized to the frame and made again with it (or with the field's mark, which the glass reads)
+  let made: { W: number; H: number; mark: GPUTexture } | null = null;
   const levels: Level[] = [];
   const temps: Level[] = [];
   const downGroups: GPUBindGroup[] = [];
@@ -343,10 +371,11 @@ export function createGlassPass(
   const group = (pipeline: GPURenderPipeline, entries: GPUBindGroupEntry[]): GPUBindGroup =>
     device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries });
 
-  const resize = (p: Pipes, size: SplashSize): void => {
-    if (made !== null && made.W === size.W && made.H === size.H) return;
+  const resize = (p: Pipes, size: SplashSize, mark: GPUTexture): void => {
+    if (made !== null && made.W === size.W && made.H === size.H && made.mark === mark) return;
     destroySized();
-    made = { W: size.W, H: size.H };
+    made = { W: size.W, H: size.H, mark };
+    const markView = mark.createView();
     for (let j = 1; j <= DEEPEST; j++) {
       const w = Math.max(1, Math.ceil(size.W / 2 ** j));
       const h = Math.max(1, Math.ceil(size.H / 2 ** j));
@@ -372,6 +401,7 @@ export function createGlassPass(
         { binding: 0, resource: l.view },
         { binding: 1, resource: p.sampler },
         { binding: 2, resource: { buffer: p.glassUbo } },
+        { binding: 4, resource: markView },
       ]);
     }
   };
@@ -406,7 +436,7 @@ export function createGlassPass(
     recipe: GlassLook,
     at: GlassPose,
   ): void => {
-    resize(p, frame.size);
+    resize(p, frame.size, frame.mark);
     const { blur, uniforms } = glassFrame(recipe, at, frame.size);
     const first = levels[1];
     const deepest = levels[blur.level];
@@ -467,8 +497,8 @@ export function createGlassPass(
       const recipe = look;
       const at = pose;
       const draws = p !== null && recipe !== null && at !== null;
-      // a glass not yet frosted draws nothing, though the field already stands for it
-      if (draws && at.frost > 0.001) draw(p, encoder, frame, recipe, at);
+      // a glass not yet frosted, with no logo on it, draws nothing, though the field already stands for it
+      if (draws && (at.frost > 0.001 || at.logo > 0.001)) draw(p, encoder, frame, recipe, at);
       if (draws !== drew) {
         drew = draws;
         hooks.drawn(draws);

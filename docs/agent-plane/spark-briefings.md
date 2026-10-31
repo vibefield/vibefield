@@ -8,7 +8,7 @@ The runtime API is owned by Puppeteer's [per-run briefing guide](https://github.
 
 The signed session record keeps the spark identity. It does not keep MCP configuration or instructions; the next process receives freshly constructed values. The spark's signed record still bounds tool access through its Agent Profiles. The compose service and its verbs continue to import only fieldd services (R29); the runtime handoff lives outside `compose/`.
 
-`agent.providers[].briefing` projects Puppeteer's optional capability declaration. A reader must treat missing fields as unsupported, and an unknown process topology as unidentified. Hatch refuses unsupported agents before writing a spark folder or record, and each later birth checks support again. An installed executable can still refuse flags its adapter supports.
+`agent.providers[].briefing` projects Puppeteer's optional capability declaration. A reader must treat missing fields as unsupported, and an unknown process topology as unidentified. Hatch refuses unsupported agents before writing a spark folder or record, and each later birth checks support again. An installed executable can still refuse flags its adapter supports. *(Item 124, 2026-10-31: such a birth is made once more without the briefing, and says so; see "Plain runs" below.)*
 
 ## Plain runs (MT-0, the tool plane)
 
@@ -24,6 +24,16 @@ the run starts with no briefing. The check comes first, because the runtime refu
 (`UNSUPPORTED_LAUNCH_FIELD`) whose briefing carries a field the agent does not declare. A launch typed into a managed
 pane is adopted by puppeteer's spawn-through, which applies no briefing at 0.3.2, so it holds no door until petition
 PU-J.
+
+*Corrected 2026-10-31 (item 124):* "the check comes first" checked the agent's DECLARED capability
+(`agent.providers[].briefing`), never the executable on the PATH. puppeteer's adapter probes the executable itself
+(Claude's `--help`, for `--mcp-config`, `--allowedTools` and the instructions' two flags) and refused every briefed birth
+of a Claude that lacks them as `UNSUPPORTED_LAUNCH_FIELD`. So from MT-0 such a Claude started no agent at all, and the
+godview smoke's stub was one (`smoke:godview` row 23's launch rung, red since MT-0 and unseen while the row was owed). Since item 124
+such a birth is made once more without the briefing (`fieldd/src/agent-door-launch.ts`): the fold's row says
+`door: "off"`, the ledger has `tools.door.withheld`, and the log carries puppeteer's own sentence. A spark's birth too:
+it thinks with its folder's `CLAUDE.md`, which Claude reads itself, and without its tools. A second refusal is the
+launch's own.
 
 ## The talk room (CP-2)
 

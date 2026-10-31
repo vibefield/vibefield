@@ -9,8 +9,9 @@ import type { OnboardingSetupPhase } from "./views/setting-up";
 
 // Setting up's History line (track AO, AO-4b; DESIGN.md §8 "The Setup
 // Assistant's agent chapter", AO-D4): History in the room's own words, so the
-// room says the same thing when it opens. First "Finding your history", then
-// "Discovering conversations · 1,215 files checked", then what the first pass
+// room says the same thing when it opens. First "Finding your history…", then
+// "Discovering conversations…" over "1,215 files checked" (FG-4b: the pass
+// carries its count in the line under the logo), then what the first pass
 // found, with the conversations still reading in the background. Each is a
 // fact the status reports (W4), never a bar of its own. Pure, so the catalog
 // draws the pane's own line from a fixture status.
@@ -40,29 +41,28 @@ function unavailable(status: IndexStatus): boolean {
   return status.phase === "failed" || status.phase === "stopped" || status.phase === "unconfigured";
 }
 
-/** History's line, as Setting up lists it. */
+/** History's phase, as Setting up says it. */
 export function historySetupPhase(status: IndexStatus): OnboardingSetupPhase {
-  const line = { key: "history", label: "History" } as const;
+  const key = "history";
   if (unavailable(status))
-    return { ...line, state: "waiting", detail: "History isn't available right now." };
+    return { key, line: "History isn't available right now.", state: "waiting" };
   const { files, sessions, projects } = firstPassCounts(status);
   if (!firstPassDone(status))
-    return {
-      ...line,
-      state: "live",
-      detail:
-        files > 0
-          ? `Discovering conversations · ${count(files, "file", "files")} checked`
-          : "Finding your history",
-    };
+    return files > 0
+      ? {
+          key,
+          line: "Discovering conversations…",
+          state: "live",
+          detail: `${count(files, "file", "files")} checked`,
+        }
+      : { key, line: "Finding your history…", state: "live" };
   const found = `${count(sessions, "session", "sessions")} found${
     projects === null ? "" : ` in ${count(projects, "project", "projects")}`
   }`;
   return {
-    ...line,
+    key,
+    line: found,
     state: "done",
-    detail: historyImporting(status)
-      ? `${found} · Reading conversations, in the background`
-      : found,
+    ...(historyImporting(status) ? { detail: "Reading conversations, in the background" } : {}),
   };
 }

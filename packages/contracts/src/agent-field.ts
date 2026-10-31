@@ -4,6 +4,7 @@ import {
   AgentSessionOrigin,
   AgentSessionTerminal,
   AgentStatus,
+  AgentStopState,
   AgentTier,
   SparkId,
 } from "./agent-session";
@@ -150,6 +151,10 @@ export const AgentFieldRow = z
      * (CH-D3: "its face is working because its agents are"). Absent reads
      * `you`, as on the fold's row. */
     origin: AgentSessionOrigin.optional(),
+    /** DS-D5 (2026-10-31) — the person's durable Stop while fieldd holds one for the run (`AgentStopState`), on
+     * every audience's row: a phone's Stop needs the same truth as a window's. Absent otherwise, and on a row from a
+     * daemon before DS. */
+    stop: AgentStopState.optional(),
   })
   .passthrough();
 export type AgentFieldRow = z.infer<typeof AgentFieldRow>;
@@ -447,6 +452,12 @@ export const AgentSubscribeParams = z
 export type AgentSubscribeParams = z.infer<typeof AgentSubscribeParams>;
 
 /** The first frame of a field subscription, and what a re-subscribe answers.
+ * *2026-10-31 (PG-1d):* also a mid-stream frame (`.snapshot`), on the same
+ * epoch at the board's CURRENT revision, when fieldd re-presents the board on a
+ * terminal-gate flip or repairs it after a lost frame. That revision is the
+ * reader's own on a quiet flip, past it when a change waiting out the floor is
+ * folded in, and always past it for a repair. The reader replaces its copy and
+ * never compares.
  *
  * DS-3 — `epoch` names the revision CHAIN the frame belongs to (DS-L3's table
  * identity): fieldd ALWAYS sends it, as its boot id plus the chain's ordinal,
