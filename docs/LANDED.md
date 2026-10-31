@@ -24267,6 +24267,12 @@ cell's hello does at run 27b's load, and the 15 s budget is not moved.
 **Owed.** The peak: the same pass beside the next real mint's verify, with the companion gated on load1 ≥ 30 inside
 the fan-out (a9 writes the gate). If a loaded max nears 15 s, a new item on the hello budget is filed in fixer-items
 at the next draft queue, with no fix in that entry.
+  > **The peak's second try, refused (2026-10-31, the fixer; VF-PM's word 15:29Z):** a9's `hello-peak.sh`
+  > ran beside run 54's verify on the mini (M54 `2ebc24fd3`), gated on load1 ≥ 30 inside the fan-out. Its log
+  > (`logs/run54/run54-hello-peak.out`, copied home to `lanes/ts6/logs/mini/run54/`) reads: "15:19:56Z fan-out seen;
+  > load1 6.39; waiting for load1 >= 30", "15:20:43Z load1 33.65 >= 30 inside the fan-out", then "someone at the
+  > console (unlocked, HID idle 60s): NOT RUN". James was at the mini, so no floor ran. The peak stays owed; the third
+  > try runs beside SP-1d's verify.
 
 ## FG-6's follow-up 2 and class C — a walk that stops says what it had found, and the add holding a login stands whole above the cards' fade: the glass terminal 170, ruled by James, and a Cancel red that says what it saw (desk-gates row 32, green on M54)
 
