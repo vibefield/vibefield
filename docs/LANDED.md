@@ -21259,3 +21259,98 @@ CP-0's record. CP-1a is the fixer's, CP-1b and CP-1c are the CO lane's, and the 
 - At the next draft queue: the dated as-built lines in `thinking-roled-agents.md` §16 (CP-1a's walk past an exited
   pane, the stack as landed) and §17.
 - `system.html` lacks `ComposeService` and `SparkService` (cp-landing's, once CP-1d's shape is final).
+
+## item 118 — the ^C waits for the pane's image to be cat: a scripted run's interrupt can no longer fall into its shell's prologue and leave its `cat` alive (2026-10-31; `9e0457b3c`, lane `fix/item118-cat-ready` on `204240a7b`, main `67cf9f1cd` merged as `7b143fc51`, the mini's run 21 on the tip itself; VF-PM's word 2026-10-31 01:04Z)
+
+**What.**
+- `catReady(box, paneId)` in fieldd's `test/agent-session.test.ts` reads the floor's own pid for the pane
+  (`box.daemon.terminals.runtimeSessions()`) and polls `ps -o comm=` (`imageOf`) until the image is `cat`.
+  - It waits within `CAT_READY_MS`, the cell join's 15 s, with `poll`'s evidence at a deadline.
+  - It is a readiness read of the rows' own claim ("the scripted PTY's `cat` dies of the floor's own interrupt"),
+    not slack. Once the image is `cat`, no shell is left to swallow the ^C.
+- **Four sites**, each right after its cell join and before its `agent.interrupt`:
+  - MF-1's live board (CHAINED frames);
+  - `endedRun` (MF-1f/MF-1g and its callers);
+  - AR-6-0's stop verb;
+  - item 97's lost exit.
+- **Q08 is excluded** (VF-PM's ruling, 01:09Z). Its interrupt is the adapter's turn-stop TEXT, not an ISIG character.
+  Bytes written during the prologue wait in the tty's input queue for `cat`, so nothing can be swallowed there. It
+  stays among the witness rows.
+- Not the env file: `mv`'s exit window lies after its rename. Not a `trap 'exit 130' INT`: the pane would exit 130
+  instead of dying of SIGINT.
+- One file, +40 −1. No product code changes.
+
+**Found.**
+- **Two witnesses on the mini, one shape.**
+  - Run 12's MF-1f (M12 `1669134bf`, red at 2026-10-30 21:29:59Z, load 36.01): the interrupt 12 ms after the spawn.
+  - Run 17's AR-6-0 (M17 `2943ec558`, red at 00:49:28Z, load 38.21): 55 ms after the spawn.
+  - In both, the floor's row read `exited:false`, fieldd heard no exit, and the typed-out file's holder was the
+    floor's own pid as `/bin/cat`. So the shell finished its prologue AFTER the ^C and exec'd the `cat` nothing then
+    ended.
+  - Both are item 97's case A, which its witness names and neither landed fix (item 87's C3, item 97's C) can touch.
+  - Each red re-ran once and went green: run 12b and run 17b.
+- **The cause, measured.** The scripted program is `/bin/sh -c 'env > … && mv …; exec /bin/cat >> …'`, and macOS's
+  `/bin/sh` is bash 3.2.57.
+  - A ^C that meets `env` or `mv` as it exits cannot kill it. The waiting shell reads a normal exit and goes on to the
+    exec.
+  - Both rows waited only for the floor's inventory cell join, which says nothing about where the shell is.
+- **The probe** (`records/item118/probe/prologue-probe.py`, v2) ran the row's exact program under a PTY spawned as
+  portable-pty 0.9.0 spawns it (setsid + TIOCSCTTY, the spawn returning only after the exec, the master drained), with
+  one `\x03` d ms after the spawn.
+  - At d = 0–15 ms in 0.2 ms steps, 6 trials each, load ~17: 380 died-INT, 62 cat-died and **14 SWALLOWED of 456**
+    (alive as `cat` 400 ms on).
+  - The swallows came in two clusters, at `env`'s exit and at `mv`'s exit (the env file landing 0.1–0.2 ms after the
+    ^C).
+  - v1 used `pty.fork`, whose parent returns before the child's `login_tty`: a pre-foreground window the real stack
+    does not have, and a dying child that hung draining an undrained echo. That flaw is recorded in item 118.
+- **What the light measured:** catReady's own wait, once per site with a timing line that was never committed (the file
+  reverted byte for byte, hash `20da39f3f941` as lit), at load ~35:
+  - the live board 5 ms; **MF-1f 138 ms**; AR-6-0 7 ms; item 97 48 ms.
+  - MF-1f's 138 ms is the prologue still running at the cell join: the window the ^C used to fall into.
+
+**Validation.**
+- **The light**, in `lanes/item118` on `204240a7b` (records/item118/rows.sh; each row alone, nice 19, the guard read once
+  and clear; `CARGO_TARGET_DIR=/Volumes/SamsungRed/rust/item118`), 01:07:59–01:16:37Z, load 17–42:
+  - biome 0; fieldd typecheck 0;
+  - the file whole: 55 passed, 2 skipped;
+  - the five interrupt rows alone, ×3 each, all green:
+    - the live board 6720 / 6881 / 6715 ms;
+    - MF-1f 10796 / 10737 / 9878;
+    - AR-6-0 9935 / 4413 / 10590;
+    - Q08 14131 / 4530 / 5080;
+    - item 97 5727 / 5354 / 9494.
+- **The merge:** `7b143fc51` merged main `67cf9f1cd` with no conflict. Its diff over main equals `9e0457b3c`'s own,
+  line for line (tree `f4b60a53a`).
+- **The bundle:** `records/item118/item118-7b143fc51.bundle` (sha256 `2c694adf…ae08`, `^67cf9f1cd`, 2 commits).
+- **Run 21: the mint is the tip itself.** Verify armed at 01:25:34Z and exited 0 at 01:30:08Z:
+  - vitest 10,516 / 0 / 18, the same count as run 20: the slice changes rows and adds none;
+  - cargo 33 binaries, 0 FAILED; typecheck and test for 28 projects; 0 FAIL rows;
+  - the rows: MF-1f 7012 ms, AR-6-0 7343, Q08 863, item 97 (the real floor) 2503, MF-1's live board 4113.
+  - MF-1f's and AR-6-0's ~7 s is the rows' own duration, unchanged by the slice (a9's note).
+- **Landed:** main fast-forwarded `67cf9f1cd` → `7b143fc51` at 01:31:38Z, and was pushed at 01:33:27Z.
+
+**Ruled.**
+- James, 2026-10-31 01:16:48Z (the board approval `item118-stop-durable`): **(A) durable Stop** — escalate after a
+  bound, and show "stop sent" until an exit or a turn-stop is heard.
+- Today a Stop's `accepted` is the floor's "the byte was queued" (`input_tx.try_send(InputOperation::Interrupt)`,
+  ghosttea 0.13.7), and nothing escalates.
+- puppeteer's built-in providers hand `spawnTerminal` the prepared launch with no `sh -c` wrapper, so a directly
+  exec'd agent has no prologue to swallow a ^C. A shell-wrapped launch would. That was read at the checkout's 0.3.0;
+  recheck at 0.3.2.
+
+**Owed.**
+- The durable Stop's design note, on the next draft queue (e.g. `draft/agent-plane/thinking-durable-stop.md`). It
+  covers:
+  - the bound, and the ladder ⌃C → SIGINT to the pane's group → SIGTERM → SIGKILL;
+  - "stop sent" in Godview and in the pane, and what the ledger records;
+  - puppeteer's turn-stop versus the pane's death;
+  - the seam: fieldd's interrupt through the floor, or a field-native kill verb on the management channel. EL2 and
+    EL7 apply, and contracts come first.
+  - DECISIONS' index row comes with that note. James reads it at his leans; the slice follows after the queue.
+- The mini-slot plan in `records/item118/item.md`:
+  - the probe idle and under burners;
+  - the rows ×3 idle;
+  - the rows ×10 under load, with a lane-only stamp and `ps -t`;
+  - the slice ×10 under load.
+  - It also holds where MF-1f's and AR-6-0's ~7 s go.
+- Item 120 (fieldd TC-S3's timer read) is the fixer's next test-side slice, after the queue.
