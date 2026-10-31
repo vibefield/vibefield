@@ -21273,6 +21273,12 @@ CP-0's record. CP-1a is the fixer's, CP-1b and CP-1c are the CO lane's, and the 
   - `endedRun` (MF-1f/MF-1g and its callers);
   - AR-6-0's stop verb;
   - item 97's lost exit.
+  > **Correction (2026-10-31, item 118 slice 2 `41f27d8cc`):** four of SIX. This inventory was a one-line grep,
+  > `toEqual({ accepted: true })`. Item 87's two stalled-cleanup rows write `toEqual({` and `accepted: true,` on two
+  > lines, so the grep never matched them, and both sent their ⌃C right after `joinedRow` with no readiness read.
+  > cp-landing's CP-1d light went red on one of them at 2026-10-31 02:15:56Z with this item's signature. Slice 2 adds
+  > catReady at both, and the inventory is now taken by the CALL (every `.call("agent.interrupt"…)` mapped to its
+  > row). LANDED "item 118, slice 2" has the witness and the fix.
 - **Q08 is excluded** (VF-PM's ruling, 01:09Z). Its interrupt is the adapter's turn-stop TEXT, not an ISIG character.
   Bytes written during the prologue wait in the tty's input queue for `cat`, so nothing can be swallowed there. It
   stays among the witness rows.
@@ -22211,3 +22217,116 @@ them over the live field (VF-PM's split, 13:17Z).
   with the new canvas usage in Electron.
 - The glass on a desk in both themes (James's display word, §5 of ROADMAP), and the hand-off's frames by eye: where
   in the forming the field takes the glass over.
+
+## item 118, slice 2 — the two ⌃C sites the first slice missed: item 87's stalled-cleanup rows wait for `cat` too (2026-10-31; `41f27d8cc`, lane `fix/item118-cat-ready-2` on `cbc376da5`, landed with items 122 and 121 stacked above it as the mint `cf0a2982d` over main `9e6ac500d`, the mini's run 31; VF-PM's ruling (a) 2026-10-31 02:18Z)
+
+**What.**
+- `await catReady(box, spawned.terminal.sessionId)` goes right after `joinedRow` in item 87's two stalled-cleanup
+  rows, before `stalledGit`'s PATH change:
+  - "a run whose workspace cleanup stalls still reads exited, and says the exit was heard and the cleanup is pending";
+  - "a resume while the cleanup is pending waits for it, is refused retryably as finalizing past the bound, and goes
+    through once the cleanup ends".
+- catReady now stands before all six ⌃C sites in fieldd's `test/agent-session.test.ts`. Q08 stays out (its turn-stop
+  is text). The `agent.interrupt` refusal for a run that is not alive sends no ⌃C.
+- One file, +4. No product code changes.
+
+**Found.**
+- **The third witness.** cp-landing's CP-1d light at `9eabb5b33` went red at 02:15:56Z, load 54–64, on ONE fieldd
+  row, the resume-while-pending row above.
+  - The error: "the exited row of a run whose workspace cleanup is stalled did not hold within 15000 ms".
+  - The floor's row read `exited:false`, fieldd heard no exit, and the typed-out file's holder was the floor's own pid
+    as `/bin/cat`. That is item 118's signature: the ⌃C fell into the shell's prologue.
+  - `agents.interrupted` came at +281 ms, 13 ms after `session_started`.
+- **Why the first slice missed it.** Its inventory was a one-line grep, `toEqual({ accepted: true })`. Item 87's rows
+  write `toEqual({` and `accepted: true,` on two lines, so "four sites" was four of six.
+  - The correction stands at its source, in LANDED "item 118" under "Four sites".
+  - The inventory is now taken by the CALL: an awk map of every `.call("agent.interrupt"…)` to its row, with the
+    nearest `catReady` inside it.
+  - The other fieldd test files that call `agent.interrupt` are mesh-forwarding tests with fake peers and no PTY.
+    agent-gateway's typed-run row waits for the agent's own `managedLog` line first, a readiness read of its own, and
+    has never been seen red.
+
+**Validation.**
+- **The light**, in `lanes/item118` on `cbc376da5` (records/item118/rows2.sh; each row alone, nice 19, the guard read
+  once and clear; `CARGO_TARGET_DIR=/Volumes/SamsungRed/rust/item118`), 02:21:00–02:24:09Z, load 12–36:
+  - biome 0; fieldd typecheck 0;
+  - the file whole: 55 passed, 2 skipped;
+  - the stalled-cleanup row ×3: 4655 / 4402 / 4488 ms;
+  - the resume-while-pending row ×3: 7773 / 8340 / 7883 ms.
+  - catReady's wait at the two new sites (a timing line never committed; the file reverted byte for byte, hash
+    `d18c41adfafb`): 33 ms and 5 ms.
+  - Again under the stack's light (LANDED "item 122"), 03:07:25–03:07:46Z: 4,568 / 8,014 ms.
+- **The rehearsals:** over a stand-in M26 with its real merge base `cbc376da5`, tree `437a6f246`, which the real
+  `e71f2d332` × `41f27d8cc` matched. The stack over `9e6ac500d`: tree `34c16da67`. CP-1d (M25) added one test to the
+  file and no `agent.interrupt` call: 12 interrupt calls on main, in the slice and in the rehearsed tree alike.
+- **Only the runs that hold the slice count.** Run 25's green stall rows (2,570 / 5,820 ms) ran on CP-1d over
+  `34174e787`, which does not hold it: they passed without catReady, the lottery's luck, not the fix's evidence.
+- **Run 27** (M27 `9f9eb34dc` = `41f27d8cc` × `e71f2d332`; exit 1 at 02:50:58Z, load 36.53): red on ONE row that is
+  not this item's, RA-D7's re-attach, refused by the cell rule after the restart (item 121). This item's rows were all
+  ✓, the two stalled-cleanup rows behind catReady.
+- **Run 27b**, the same M27, the lottery's one re-run: red on another row that is not this item's, terminal-seam's
+  first row (item 122, the endpoints race). This item's rows were all ✓ again. VF-PM ruled at 03:02Z that M27 does
+  not land, and the slice returned with items 122 and 121 stacked above it.
+- **Run 31** (M31 `cf0a2982d` = `0543de224` × `9e6ac500d`, tree `34c16da67`): `pnpm verify` armed at 04:12:55Z
+  and exited 0 at 04:17:44Z (VF-PM's GO). Its counts: 10,996 passed, 0 failed, 18 skipped over 819 files; cargo 33
+  ok, 0 FAILED (532 passed, 14 ignored); typecheck and test for 28 projects; 0 FAIL rows. The rows (VF-PM's read):
+  the seam's first row 602 ms; RA-D7 ✓; MF-1f/1g ✓; AR-6-0 ✓; item 87's two stall rows ✓.
+- **Landed:** main fast-forwarded `9e6ac500d` → `cf0a2982d` at 04:18:34Z (the fixer, on VF-PM's GO).
+
+**Owed.**
+- Unchanged from LANDED "item 118": the durable Stop's design note on the next draft queue, and the mini-slot plan in
+  `records/item118/item.md`.
+
+## item 122 — the terminal seam's boot waits for the floor's terminal endpoints, and a refused re-attach's evidence names its cell's class (item 121) (2026-10-31; `e3b70d38b` + `0543de224`, lane `fix/item122-seam-endpoints` on item 118 slice 2's `41f27d8cc`, landed in the mint `cf0a2982d` over main `9e6ac500d`, the mini's run 31; VF-PM's ruling 2026-10-31 03:02Z)
+
+**What.**
+- **Item 122** (`e3b70d38b`, one file, +11). terminal-seam's `boot()`, which every row passes through:
+  - pushes the daemon's stop into cleanup first (stop is memoized, so a wait that gives up leaks no daemon);
+  - polls `daemon.native.terminalEndpoints` for 30 s through the suite's `poll`, as agent-gateway-floor's `floor()`
+    (`ec0118067`, 2026-10-08) and agent-session's `setup()` do. A floor that never sends them fails there, with its
+    evidence. Every row keeps its 60 s budget.
+- **Item 121's evidence** (`0543de224`, two files, +4 −1; test-only, riding the stack as ruled):
+  - native-harness's `EVIDENCE_ATTRS` gains `"workloadClass"`;
+  - RA-D7's 20 s poll `seen`s `found ?? null`, so its next red prints the run's row as the second boot lists it.
+- No product code changes.
+
+**Found.**
+- **Run 27b** (M27 `9f9eb34dc`, exit 02:57:00Z at load 48.71): terminal-seam's "create → observe → ticket-attach →
+  automate → terminate, one authority" was refused "the terminal floor is not available", UNAVAILABLE `absent`
+  (`TerminalService.endpoints()`), on its first `terminal.create`, in 15,495 ms.
+  - fieldd's own 15 s birth wait (`CELL_SUPERVISION.HELLO_DEADLINE_MS`) ran out inside the create. The five
+    siblings passed at 295–361 ms.
+  - It is a9's known class, the endpoints race, seen before at kill-matrix row 6 (10-11), QL-D10 (10-14) and PJ-7
+    (10-15). The seam's helper is the one the 10-08 fix never reached.
+- **Run 27** (the same M27, exit 02:50:58Z at load 36.53): RA-D7's 20 s poll failed, with "the row reported nothing
+  it saw" (item 121). It passed in 889 ms in 27b, so it is a lottery.
+  - The poll fired; the line is the predicate's own shape (it never called `seen`). The re-attach was REFUSED at
+    +15744 by attachRecord's EL7 branch (`reattach_refused_cell`, `row.cell?.workloadClass !== "agent"`), and that
+    refusal is final: nothing sets pending, and no budget passes.
+  - The leading reading, a code read and not yet measured: the agent cell had not said hello within the 15 s birth
+    wait (the first boot's spawn came at +15,323 ms). `classCell` then placed the run on the interactive cell (TC-D4's
+    fallback, logged only at debug), and AR-4b's cell rule refused it after the restart.
+  - Whether that should be final is the RA owner's product question, after the queue (`records/item121/item.md`).
+- Not changed, named for item 122's study: terminal-kill-matrix (3 creates), terminal-mint-hops (4) and
+  terminal-remote-door.e2e (1) carry no endpoints wait.
+
+**Validation.**
+- **The light** (`records/item122/rows3.sh`, lanes/item118, nice 19, each row alone, the guard clear,
+  `CARGO_TARGET_DIR=/Volumes/SamsungRed/rust/item118`), 03:06:35–03:07:54Z, load 9–37:
+  - biome 0 on the three files; fieldd typecheck 0;
+  - the seam file whole: 6 passed in 4,253 ms;
+  - its first row alone ×3: 3,340 / 3,027 / 4,460 ms;
+  - item 87's two stall rows ×1: 4,568 / 8,014 ms;
+  - RA-D7 ×1: 2,842 ms.
+  - A race this narrow has no deterministic red-proof (`ec0118067`'s note); the mini's runs that follow are its
+    witness.
+- **The bundle:** `records/item122/item122-0543de224.bundle` (`^cbc376da5`, 3 commits, sha256 `77bb8171…4974`, a
+  bare `.sha256`).
+- **The rehearsals:** clean over each main the queue moved to: `4a638384e` (tree `ad7fe8ec6`), `b3a0cc95a`
+  (`a936c2725`), `09060d7b4` (`e6b66b746`), `c8e4c55eb` (`5dfb11eda`) and `9e6ac500d` (`34c16da67`).
+- **Run 31:** the same run as LANDED "item 118, slice 2".
+- **Landed:** with it, at 04:18:34Z.
+
+**Owed.**
+- Item 121's study (the RA owner's product question: TC-D4's interactive fallback against AR-4b's cell rule) and
+  item 122's (the other three real-floor files), after the queue.
