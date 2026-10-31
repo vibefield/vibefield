@@ -173,7 +173,7 @@ export function paneFrameAgents(
 }
 
 /**
- * DS-D4 (a) — each pane session's held Stop (the field row's `stop`), by the
+ * ST-D4 (a) — each pane session's held Stop (the field row's `stop`), by the
  * frame's own join: what `StopPaneState` words. A session whose run holds none
  * is left out.
  */

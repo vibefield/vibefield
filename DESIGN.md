@@ -3544,7 +3544,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     **45 × 22 · click the pane to take it.**, the size the session was left at. *Status
     2026-10-19: until item 20's lane lands, no pane takes the empty seat by itself, so every pane on
     the session, focused or not, says this until a click.*
-  - **A run a Stop has not stopped** (track DS, DS-D4 (a); ruled by James on the board: the place
+  - **A run a Stop has not stopped** (track ST, ST-D4 (a); ruled by James on the board: the place
     at `ds-d4-place`, Accept, 2026-10-31 06:16:32Z, and the look at `ds-d4-look`, "Accept all
     three", 06:29:00Z, as VF-PM proposed them at 06:16Z and in the convention read of 06:26Z).
     fieldd holds a person's Stop as sent until it hears the run stop (the field row's `stop`;
@@ -3554,18 +3554,18 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       stop verb already says **Stopping the turn…** from the press (puppeteer-views' own state),
       and a veil over a turn the person is watching stop would dim the very fact. *This silence
       rests on a number:* the frame's own guess lasts 8 s, and it must outlast both sends,
-      2 × `AGENT_STOP.HEARD_WITHIN_MS` (3 s, provisional) = 6 s. If DS-D1's measurement moves the
+      2 × `AGENT_STOP.HEARD_WITHIN_MS` (3 s, provisional) = 6 s. If ST-D1's measurement moves the
       bound past about 3.5 s, the pane goes quiet while a stop is still in flight. It also holds
       only for the frame's own press: *a gap, owed:* a spark's Stop (`agent_interrupt`, the talk
-      room) has no press on the pane, so the pane says nothing through its two sends. DS-D4 (c)'s
+      room) has no press on the pane, so the pane says nothing through its two sends. ST-D4 (c)'s
       petition removes both, by letting the frame read fieldd's stage instead of its own guess.
     - **Ending** (the stage `terminating`): the turn did not stop after two sends, and fieldd is
-      ending the run through the floor's ladder (a run whose status fieldd can read, DS-D3). The
+      ending the run through the floor's ladder (a run whose status fieldd can read, ST-D3). The
       words are **Ending** and **the run** at 40%, over **it did not stop after two sends · ending
       it**. The pane colour lights it, as item 42's does: nothing is asked of the person. It holds
       until the exit, the ladder's 4 s at most.
     - **Still running** (`unheardAt`): fieldd sent the stop twice and cannot tell whether the turn
-      stopped (its status cannot be read, DS-D3), or the ladder could not be placed. The words are
+      stopped (its status cannot be read, ST-D3), or the ladder could not be placed. The words are
       **Still** and **running** at 40%, in text main as item 42's are, over **the stop was sent
       twice and not heard ·** and then **End run**. The light, item 42's two insets and its bloom,
       takes the attention fill (`--vf-orange`, §2.5: needs you, Godview's ring-1) in place of the
@@ -4558,7 +4558,7 @@ limit, the size is rounded up and the limit down, so the two never read as equal
 2026-10-18 (James). Known deviation, owed: the desk readout's GPU memory says MB for a count in
 1024s (`panels/DeskReadout.tsx`).*
 
-**A Stop's words** (track DS, DS-D4; ruled with §8's pane state, `ds-d4-place` 2026-10-31
+**A Stop's words** (track ST, ST-D4; ruled with §8's pane state, `ds-d4-place` 2026-10-31
 06:16:32Z and `ds-d4-look` 06:29:00Z). The press is answered by the frame: **Stopping the
 turn…**. While fieldd ends a turn that did not stop: **Ending the run**. When fieldd cannot tell:
 **Still running** · "the stop was sent twice and not heard" · **End run**. A stop that was only

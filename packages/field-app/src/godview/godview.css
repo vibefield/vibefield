@@ -1750,7 +1750,7 @@
   }
 }
 
-/* DS-D4 (a) — A RUN A STOP HAS NOT STOPPED (`StopPaneState.tsx`; DESIGN.md
+/* ST-D4 (a) — A RUN A STOP HAS NOT STOPPED (`StopPaneState.tsx`; DESIGN.md
    §8). item 42's held-edge readout figure, veil, glows and bloom, for the two
    states a press cannot answer: **Ending** **the run** while fieldd ends a run
    whose turn did not stop, lit in the pane colour (nothing is asked), and
