@@ -21354,3 +21354,73 @@ CP-0's record. CP-1a is the fixer's, CP-1b and CP-1c are the CO lane's, and the 
   - the slice ×10 under load.
   - It also holds where MF-1f's and AR-6-0's ~7 s go.
 - Item 120 (fieldd TC-S3's timer read) is the fixer's next test-side slice, after the queue.
+
+## GV fix — item 102: a paste reaches the pane; the deck's and the sign-in terminal's ⌘V read the clipboard through main's door, and the grant set stays empty (2026-10-31; `4e07f0308`, lane `fix/item102-clipboard-read-door` on `e23fa8a1f`, main merged as `b631d5725` and `cbc376da5`, the mini's run 23 on the tip itself; VF-PM's assignment 2026-10-29 12:38Z)
+
+**What.**
+- **The door:** design-03 §5.1's `shell.clipboard.*`, the product window's read half. It fills the inventory's entry
+  and adds no duty to main (PF2).
+  - `IPC_CHANNELS.clipboardRead` and main's pure `clipboard-door.ts`, wired in `ipc.ts` like every door.
+  - Only a window this shell registered (`registry.owns`) is answered. A stranger is warned, audited `denied`
+    UNREGISTERED_SENDER, never read, and thrown at.
+  - Only while the window AND its page are focused (EL7); otherwise `refused: unfocused`, and nothing is read.
+- **The bound** (ruled 2026-10-29 13:24Z on the HN lead's reading): `SHELL_CLIPBOARD.READ_MAX_BYTES` is
+  `TERMINAL_PIPELINE.MAX_PASTE_BYTES` by reference, never a third literal. Past it the read is refused whole with its
+  UTF-8 size, never cut.
+- **The audit:** `shell.clipboard.read` (contracts' `SHELL_CLIPBOARD_AUDIT_ACTIONS`, admitted by fieldd's
+  `SHELL_ACTIONS`) through local-only `audit.append`. It records the bytes and the page's id, never the text.
+  - It is best-effort and never awaited: a failed append is the warn line `desktop.clipboard.audit_unavailable`.
+- **The renderer:** the preload validates both ways and rejects a refusal in words, so nothing is pasted rather than
+  part of it.
+  - `FieldHost.clipboard` is optional. field-app's `readClipboardText()` reads the host's door, else the web's, so
+    the browser catalog keeps the web read.
+  - GodviewDeck and SignInTerminal hand ghosttea that reader as `readClipboard`.
+- **The grant set stays empty** (ESP §7.4). The security guard row (both handlers still deny `clipboard-read` and
+  `clipboard-sanitized-write`) is green by design: the door is not a grant.
+- 21 files, +805 −7. No lock, pin, Rust or docs.
+
+**Found.**
+- **The cause** (a code read on `e23fa8a1f`, 2026-10-29 12:32Z; no app run, by the no-input-injection rule):
+  - GodviewDeck (`:2201`) and SignInTerminal (`:115`) handed ghosttea `navigator.clipboard.readText`.
+  - The shell session grants no Chromium permission (`SHELL_GRANTED_PERMISSIONS` is empty by law), so the read was
+    denied, after ghosttea 0.13.7, given a `readClipboard`, had already taken the chord. ⌘V pasted nothing.
+  - A surface given no reader (LivePeekPane) left ⌘V to the platform and was never hit.
+- **A count in a title goes stale in silence** (a1, at HN's rebase rehearsal, 2026-10-29 14:23Z): contracts' channel
+  test named "the thirty channel keys" while the tip had thirty-one, and AU B1 and HN each bumped that same word.
+  - The count now lives once, in `toHaveLength`, where two added channels meet in a merge and conflict out loud. The
+    title names no number.
+  - It did conflict out loud, twice: 33 over `265325d09` (AU B1/B3's two update channels) and **35** over
+    `23e9c2538` (HN B1's two screenshot-still channels).
+
+**Validation.**
+- **The light** (2026-10-29 13:42–13:48Z, this Mac, nice 19, each row alone):
+  - the frozen install; typecheck ×4 (contracts, electron-shell, field-app, fieldd); the walls;
+  - the contracts, field-app and fieldd rows; field-native's build; gen:check (nothing regenerated).
+  - Two non-timed reds, fixed before the final commit: biome's layout of the bound row, and a stranger row asserting
+    a third `undefined` argument the door never passes (vitest counts arguments).
+  - The rerun after the 14:23Z count amend: contracts shell 57/57 and biome on the file.
+- **Red-first:**
+  - the parent's two sites plus fieldd's audit source gave exactly the 3 predicted reds;
+  - the door's `owns` gate cut gave exactly 2;
+  - its focus gate cut gave exactly 2.
+- **The first merge of main** (`b631d5725`, over `265325d09`, 2026-10-31 00:37Z): one conflict, the count, recounted
+  to 33. The rows: contracts typecheck, shell 58/58, electron-shell typecheck, and the door tests 25/25.
+- **The second merge of main** (`cbc376da5`, over `23e9c2538`, 02:02Z), with the two conflicts the 01:42Z rehearsal
+  over a stand-in M22 had foreseen:
+  - the count, recounted to 35 (the registry's IPC_CHANNELS also 35);
+  - `preload/index.ts`'s import list: HN B1's `ScreenshotStillBytesRequest, ScreenshotStillKeptRequest` and 102's
+    `SHELL_CLIPBOARD`, all three in the list's order, biome-clean.
+  - Its diff over main equals `4e07f0308`'s own, apart from the two count lines.
+  - The rows: contracts typecheck, shell 59/59, electron-shell typecheck, and the door tests 25/25.
+- **Run 23: the mint is the tip itself.** Verify exited 0 at 02:10:17Z:
+  - vitest 10,645 / 0 / 18 across 805 files (VF-PM's read); cargo 33 binaries, 0 FAILED; typecheck and test for 28
+    projects; 0 FAIL rows;
+  - the eight watch rows all ✓, contracts' `shell.test.ts` 59 at the literal 35.
+- **Landed:** main fast-forwarded `23e9c2538` → `cbc376da5` at 02:11:52Z.
+
+**Owed.**
+- At the next draft queue: design-03 §5.1's delta, and ESR §6.2's channel row and code-block line, from NOT LANDED to
+  `cbc376da5` (written 2026-10-29 at the 13:29Z and 16:03Z queues; snapshot `449145570`).
+- Item 111 (the Artifact panel's Copy: a plugin's web clipboard write under the same empty grant set) is item 102's
+  class, as an SDK write door over HN B2's host copy door, after HN B2.
+- Item 112 (the clipboard PNG's pixel bound) waits after HN B2.
