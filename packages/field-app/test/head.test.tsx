@@ -1418,7 +1418,7 @@ describe('the Artifacts shelf hosts the Hub (DESIGN.md §8 "Artifacts — the Ar
       '[data-vf-plugin="vibefield.browser"]',
     );
     expect(scope?.querySelector(".hub-close")?.textContent).toBe("The Hub");
-    act(() => (scope?.querySelector(".hub-close") as HTMLButtonElement).click());
+    act(() => scope?.querySelector<HTMLButtonElement>(".hub-close")?.click());
     expect(surfaceNow).toBeNull();
   });
 

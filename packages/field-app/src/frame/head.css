@@ -969,7 +969,7 @@
     animation: none;
   }
 
-  .vf-head-waits-face[data-leaving] {
+  .vf-head-waits[data-turning] > .vf-head-waits-face[data-leaving] {
     visibility: hidden;
   }
 
