@@ -89,17 +89,24 @@ The catalog currently mounts these shipping views directly:
 - Chat (SP-1b, DESIGN.md §8 "Chat's list"): the shipping `ChatPanelView` over the product's own
   reading (`sparkEntriesOf`) of fixture sparks and field rows (`chat-fixtures.ts`) — the list, a
   spark asleep, no sparks yet, opening and unavailable — on a fixed clock and fixed seeds; and,
-  since SP-1d (§8 "Chat's thread"), the thread's pane's place: the shipping `SparkPaneView` in the
-  words a window with no terminals says, and on three plates its words while it is being found,
-  when this desktop's floor does not hold it, and when the floor did not answer. No catalog holds a terminal pool ("a host, never a
-  painter"), so the live pane (`SparkPane`) is never mounted there, and no picture of a terminal
-  stands in for it
+  since SP-1d (§8 "Chat's thread", "Chat's composer"), the thread:
+  - the pane's place: the shipping `SparkPaneView` in the words a window with no terminals says,
+    and on three plates its words while it is being found, when this desktop's floor does not hold
+    it, and when the floor did not answer. No catalog holds a terminal pool ("a host, never a
+    painter"), so the live pane (`SparkPane`) is never mounted there, and no picture of a terminal
+    stands in for it;
+  - the composer: the shipping `ChatComposerView` at the thread's foot, its `AtRowsView` over
+    fixture agents, profiles and rows read by the product's own `atRowsOf`, and an agent's menu
+    read by the New spark sheet's own `agentMenuOf` — at rest, typing, @ open on both groups, an
+    agent's model and Effort, and the chips an agent, a session and a card make. Never its
+    controller (`ChatComposer`), which registers the hand's place and sends
 - the line (One Frame FR-2; shortened by Cards in Hand, HN-2): `ComposerLineView` in every state the
   Cards in Hand page's line plates draw — at rest, the snapshot under the pointer, in flight and
   waiting with no capture door, Objects out, Godview's New terminal, History's New terminal in the
   project the room shows (HN-7), Windows' keys — and the live line on its real controller
   (`Composer`) over the frame's field, with fixture doors for what Godview lends it and the
-  capture. @'s `AtMenuView` and the draft's plates left with the draft (LN-D3)
+  capture. @'s `AtMenuView` and the draft's plates left with the draft (LN-D3); @ came back in
+  Chat's composer at SP-1d, as `AtRowsView` (above), never on the line
 - the hand (Cards in Hand, HN-1): the shipping `CardsView` and `CardFace` over fixture cards
   (`CardsPreview`) — the six faces in both lights, the fan at rest, a card reached with its ×, the
   hand raised with a card in the keyboard's focus, a card picked up over its scrim, and a card from

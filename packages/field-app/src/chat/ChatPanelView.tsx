@@ -21,7 +21,7 @@ import "./chat.css";
 // sparks fieldd keeps, newest activity first (CH-D1); a row is the face, the name and the status word (CH-D3); the
 // needs-you three take the attention ink and the orange dot (CH-D4). The thread's column is a fixed box: the chosen
 // spark's head, then its own pane (the controller's `SparkPane`, handed in) — or, asleep or not started, one honest
-// line with its one act — then the thread's foot, where its items stand over the pane.
+// line with its one act — then the thread's foot: its composer, handed in, and its items standing over the pane.
 
 /** What the chosen spark's act is doing: at rest, under way, or refused in fieldd's words. */
 export type ChatAct =
@@ -44,6 +44,8 @@ export interface ChatPanelViewProps {
   pane?: ReactNode;
   /** what stands in the shown thread over its pane, in order */
   items?: readonly ThreadItem[];
+  /** the shown thread's composer, in its foot (the product's `ChatComposer`; the catalog's `ChatComposerView`) */
+  composer?: ReactNode;
   /** the locale the times are said in; the window's own when absent */
   locale?: string;
 }
@@ -91,6 +93,7 @@ export function ChatPanelView({
   onWake,
   pane,
   items = [],
+  composer,
   locale,
 }: ChatPanelViewProps): ReactElement {
   const place = {
@@ -147,7 +150,14 @@ export function ChatPanelView({
           </div>
         </section>
         {shown === undefined ? null : (
-          <ThreadColumn entry={shown} act={act} onWake={onWake} pane={pane} items={items} />
+          <ThreadColumn
+            entry={shown}
+            act={act}
+            onWake={onWake}
+            pane={pane}
+            items={items}
+            composer={composer}
+          />
         )}
       </>
     );
@@ -197,12 +207,14 @@ function ThreadColumn({
   onWake,
   pane,
   items,
+  composer,
 }: {
   entry: SparkEntry;
   act: ChatAct;
   onWake: ((entry: SparkEntry) => void) | undefined;
   pane: ReactNode;
   items: readonly ThreadItem[];
+  composer: ReactNode;
 }): ReactElement {
   const { spark, status, needsYou } = entry;
   const line = threadLineOf(entry);
@@ -237,6 +249,7 @@ function ThreadColumn({
       )}
       <div className="vf-chat-foot">
         <ThreadItemsView items={items} />
+        {composer}
       </div>
     </section>
   );

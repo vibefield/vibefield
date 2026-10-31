@@ -149,6 +149,26 @@ describe("UI system ownership boundaries", () => {
     }
   });
 
+  it("keeps Chat's composer fixture an ADAPTER — the shipping view over fixture drafts and @ rows, never its controller (SP-1d)", () => {
+    // The catalog stands in for what the composer's controller would hand its view — a draft, @'s rows read by the
+    // product's own `atRowsOf`, an agent's menu read by the sheet's own `agentMenuOf` — and mounts the shipping
+    // `ChatComposerView`. Never the controller (it registers the hand's place and sends), never the hand's registry,
+    // never the product's doors or feed.
+    const preview = source("design-system/ChatPreview.tsx");
+    const fixtures = source("design-system/chat-fixtures.ts");
+    expect(preview).toMatch(/<ChatComposerView\s/u);
+    expect(fixtures).toContain("atRowsOf");
+    expect(fixtures).toContain("agentMenuOf");
+    for (const file of [preview, fixtures]) {
+      expect(file).not.toMatch(/<ChatComposer[\s/>]/u);
+      expect(file).not.toMatch(/from "\.\.\/chat\/ChatComposer"/u);
+      expect(file).not.toContain("cardTargets");
+      expect(file).not.toContain("sendToThread");
+      expect(file).not.toContain("sparksPortOver");
+      expect(file).not.toContain("newSparkPortOver");
+    }
+  });
+
   it("keeps the New spark sheet's fixture an ADAPTER — the product's sheet over a fixture port, never its markup (SP-1c)", () => {
     // The catalog stands in for what fieldd answers the sheet — the agents, the profiles, a picker, a hatch — behind
     // the product's own port shape, and reads its still states through the product's own helpers; the sheet it mounts
@@ -965,6 +985,9 @@ describe("UI system ownership boundaries", () => {
       "chat/SparkPane.tsx",
       "chat/SparkPaneView.tsx",
       "chat/ThreadItemsView.tsx",
+      // SP-1d — Chat's composer
+      "chat/ChatComposer.tsx",
+      "chat/ChatComposerView.tsx",
       // SP-1c — the New spark sheet
       "chat/NewSparkSheet.tsx",
       "chat/NewSparkSheetView.tsx",
@@ -1007,6 +1030,7 @@ describe("UI system ownership boundaries", () => {
       "field/desk/pegboard/pegboard.css",
       "field/desk/peers/peers.css",
       "chat/chat.css",
+      "chat/chat-composer.css",
       "chat/new-spark-sheet.css",
     ]) {
       expect(source(stylesheet), stylesheet).not.toMatch(/#[\da-f]{3,8}\b/i);

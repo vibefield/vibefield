@@ -150,9 +150,20 @@ export function ChromeLayer({
   // redraws when the board moves; this layer never does.
   const fieldd = useFielddClient();
   useEffect(() => startSparksFeed(sparksPortOver(fieldd)), [fieldd]);
-  const chatView = useCallback((active: boolean) => <ChatView active={active} />, []);
-  // Chat's create (SP-1c): the New spark sheet asks fieldd through the same client.
+  // Chat's create (SP-1c): the New spark sheet asks fieldd through the same client — and so do @'s rows in Chat's
+  // composer (SP-1d), whose list is one of the frame's open surfaces (`at`), so Chat is handed the one owner's value.
   const newSparkPort = useMemo(() => newSparkPortOver(fieldd), [fieldd]);
+  const chatView = useCallback(
+    (active: boolean) => (
+      <ChatView
+        active={active}
+        surface={surface}
+        onSurfaceChange={onSurfaceChange}
+        port={newSparkPort}
+      />
+    ),
+    [newSparkPort, onSurfaceChange, surface],
+  );
   const closeNewSpark = useCallback(
     () => onSurfaceChange(foldSurface(surface, "new-spark")),
     [onSurfaceChange, surface],

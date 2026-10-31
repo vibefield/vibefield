@@ -219,7 +219,7 @@ export function ChromeSection({
 
       <Specimen
         title="Chat — the sparks, newest activity first, and the thread"
-        source="chat/ChatPanelView.tsx · chat/SparkPaneView.tsx · DESIGN.md §8 “Chat's list”, “Chat's thread”, §2.10"
+        source="chat/ChatPanelView.tsx · chat/SparkPaneView.tsx · chat/ChatComposerView.tsx · DESIGN.md §8 “Chat's list”, “Chat's thread”, “Chat's composer”, §2.10"
         bleed
       >
         <ChatSpecimen />
@@ -229,8 +229,11 @@ export function ChromeSection({
           (SP-1d) is the spark's own pane under its head. A catalog holds no terminals, so its place
           says what such a window says, and on three plates what the pane says while it is being
           found, when this desktop's floor does not hold it, and when the floor did not answer.
-          Asleep or not started, one honest line with its act. Fixture sparks and rows, read by the
-          product's own reading.
+          Asleep or not started, one honest line with its act. At the thread's foot, its composer:
+          the draft, the mic and send, at rest and typing; @'s list with the agents to start and the
+          sessions running; an agent's menu in its box (its model and Effort); and the chips an
+          agent, a session and a card make. Fixture sparks, rows and agents, read by the product's
+          own readings.
         </p>
       </Specimen>
 

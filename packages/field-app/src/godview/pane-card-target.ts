@@ -8,7 +8,7 @@ import {
   inputRefusalNote,
   type LineViewDoor,
 } from "../frame/line-door";
-import { type FieldHost, peekHost } from "../host";
+import { type FieldHost, stillKept } from "../host";
 import { hearTerminalInputRefusals, type RoutedInputRefusal } from "../terminal/pool";
 
 // GODVIEW'S PANES TAKE A CARD (HN-4; DESIGN.md §8 "The hand", where cards go). ONE place over the
@@ -55,12 +55,6 @@ export function paneAt(
 export function paneCardTarget(deps: PaneCardTargetDeps): CardTarget {
   const doorOf = (): LineViewDoor | null =>
     deps.door === undefined ? getGodviewLineDoor() : deps.door();
-  /** Whether main still keeps a snapshot's still; a host with no still door has no stills, and
-   * is not asked. */
-  const stillKept = (path: string): Promise<boolean> => {
-    const kept = (deps.host === undefined ? peekHost() : deps.host)?.screenshotStillKept;
-    return kept === undefined ? Promise.resolve(true) : kept(path);
-  };
   /** The pane under the point, as the door names it. */
   const paneUnder = (at: { readonly x: number; readonly y: number }) => {
     const root = deps.root();
@@ -99,7 +93,7 @@ export function paneCardTarget(deps: PaneCardTargetDeps): CardTarget {
       // a snapshot's path names its still only while main keeps it (`stillOf`): a pane is never
       // handed a path to nothing
       const still = stillOf(card);
-      if (still !== null && !(await stillKept(still))) {
+      if (still !== null && !(await stillKept(still, deps.host))) {
         return { ok: false, note: OUTCOME_WORDS.pasteGone };
       }
       if (!(await door.whenInputOpen(pane.paneId, PANE_INPUT_WAIT_MS))) {

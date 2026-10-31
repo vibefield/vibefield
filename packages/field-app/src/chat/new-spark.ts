@@ -77,6 +77,22 @@ export function defaultProfileOf(sets: readonly AgentProfileSet[]): AgentProfile
   return sets.find((set) => set.default) ?? sets[0];
 }
 
+/** A chosen model in words: its label, and its effort once one is chosen ("Opus 5.5", "high"); none while untouched.
+ * THE one spelling of a model and its effort — the New spark sheet's pill and Chat's agent chip (SP-1d, DESIGN.md §8
+ * "Chat's composer") both say it. */
+export function modelWords(
+  model: AgentModelChoice | undefined,
+  selection: AgentModelSelection | undefined,
+): string[] {
+  if (model === undefined || selection === undefined) return [];
+  const effort = model.controls.find((control) => control.role === "effort");
+  const value =
+    effort === undefined
+      ? undefined
+      : effort.values.find((candidate) => candidate.id === selection.controls?.[effort.id]);
+  return value === undefined ? [model.label] : [model.label, value.label];
+}
+
 /** What the agent pill says: the agent, and the model and effort once one is chosen (NS-D1 A's "Claude Code · Opus 5.5 ·
  * high"); untouched, the agent alone — it thinks at its own model. */
 export function agentLine(
@@ -85,13 +101,7 @@ export function agentLine(
   selection: AgentModelSelection | undefined,
 ): string {
   if (agent === undefined) return "No agent can be a spark yet";
-  if (model === undefined || selection === undefined) return agent.label;
-  const effort = model.controls.find((control) => control.role === "effort");
-  const value =
-    effort === undefined
-      ? undefined
-      : effort.values.find((candidate) => candidate.id === selection.controls?.[effort.id]);
-  return [agent.label, model.label, value?.label].filter(Boolean).join(" · ");
+  return [agent.label, ...modelWords(model, selection)].join(" · ");
 }
 
 /** Where the sheet says a refusal (DESIGN.md §8): under what it asked. */

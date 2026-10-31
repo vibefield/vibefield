@@ -35,15 +35,44 @@ export type SparkPaneReport =
   | { readonly state: "live"; readonly door: SparkPaneDoor };
 
 const reports = new Map<SparkId, SparkPaneReport>();
+const hearers = new Set<() => void>();
 
 /** The pane of `spark`'s thread says how it stands while Chat shows it, and `null` when it goes. */
 export function publishSparkPane(spark: SparkId, report: SparkPaneReport | null): void {
   if (report === null) reports.delete(spark);
   else reports.set(spark, report);
+  for (const hear of hearers) hear();
 }
 
 /** How `spark`'s thread pane stands now, or null while no pane of its thread is on screen (asleep, not started, or
  * Chat not the view). */
 export function sparkPaneOf(spark: SparkId): SparkPaneReport | null {
   return reports.get(spark) ?? null;
+}
+
+/** For Send (DESIGN.md §8 "Chat's composer"): `spark`'s thread pane once it has settled — live, or a place that says
+ * why there is none (not on this floor, a fault, no terminals) — heard as it is published, never polled. After
+ * `timeoutMs` it answers how the pane stands then: still being found, or null while none of its thread is on screen
+ * (a spark just woken whose pane has not mounted yet). */
+export function whenSparkPane(spark: SparkId, timeoutMs: number): Promise<SparkPaneReport | null> {
+  const settled = (): SparkPaneReport | null => {
+    const report = sparkPaneOf(spark);
+    return report === null || report.state === "finding" ? null : report;
+  };
+  const now = settled();
+  if (now !== null) return Promise.resolve(now);
+  return new Promise((resolve) => {
+    const hear = (): void => {
+      const report = settled();
+      if (report === null) return;
+      clearTimeout(timer);
+      hearers.delete(hear);
+      resolve(report);
+    };
+    const timer = setTimeout(() => {
+      hearers.delete(hear);
+      resolve(sparkPaneOf(spark));
+    }, timeoutMs);
+    hearers.add(hear);
+  });
 }

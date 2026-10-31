@@ -1727,18 +1727,23 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     with Return never pressed for you. Return in the draft and the send button both send. ⇧Return types nothing: the
     draft is one line. While a send runs, send waits (busy), and a second press does nothing.
     - The pane takes the keyboard just before the paste (§8 "Chat's thread"), so it takes the session's size, and the
-      keyboard stays there, where Return sends it. Sent, the draft's words and chips are cleared, and the line's note
-      (§8 "The line") says so once: "Pasted into Vela's pane — Return sends it".
+      keyboard stays there, where Return sends it. Sent, the words and chips it carried are cleared, and the line's
+      note (§8 "The line") says so once: "Pasted into Vela's pane — Return sends it". The draft stays a field while a
+      send runs, so what was typed or added after them meanwhile stays; a draft changed within what was sent stays
+      whole, so no word is lost.
     - **A message wakes it** (§2.10). Asleep or not started, Send wakes the spark first (`compose.sparks.open`; the
       line reads "Waking…"). It waits up to 20 s for the spark to be heard and its pane to appear, then up to 1.5 s for
       the pane's input to open, then pastes. An awake spark whose pane is still being found ("Finding Vela's pane…", §8
-      "Chat's thread") is waited for in the same 20 s, with no wake.
+      "Chat's thread"), or that has not been heard yet (Hello, as just after a hatch), is waited for in the same 20 s,
+      with no wake. Nothing is pasted into a spark before it is heard: a program not yet up may not read a paste as
+      one, and a line break inside the message would read as Return.
     - **While the spark waits on you** (Asking you, Needs your OK, Stuck), Send pastes nothing, because a menu in the
       pane would read the paste as its answer. The note says "Vela is waiting on you — answer it in its pane", and the
       draft stays.
     - When the paste is not taken, the draft stays whole and the note says why, in the hand's words where the outcome
       is the hand's own (§8 "The hand"):
-      - "Not pasted — Vela's pane is not taking input" (its input did not open within 1.5 s);
+      - "Not pasted — Vela's pane is not taking input" (its input did not open within 1.5 s, or a spark that is awake
+        was not heard in the 20 s);
       - "Not pasted — that snapshot is no longer kept";
       - "Not pasted into Vela's pane — 300 KB, and one paste carries 261 KB of it" (D6, said once);
       - "Not sent — Vela didn't wake in 20 seconds", only for a spark this send woke that was not heard in them;
@@ -1749,7 +1754,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
         it (§8 "Chat's thread");
       - "Not sent — this window has no terminals", at once, in a window with no terminals (the catalog, a browser),
         where the pane's place says the Peek's words. Send is still drawn there, so its states can be seen;
-      - "Couldn't wake Vela: …", in fieldd's words, as the line says it.
+      - "Couldn't wake Vela: …", in fieldd's words, as the line says it;
+      - "Couldn't send to Vela: …", in the words of the step that broke (main's still door, the pane's paste), so a
+        send that fails is never a blank.
       A starter is sent as Send sends, so its outcomes are these.
     - Chat has **no clipboard road**. A message is never copied in place of a send: the hand holds what you copied
       (HN-L1). "Pasted into" is never said for a paste the pane did not take.
@@ -4927,8 +4934,8 @@ Inside History the room's own words stand as rosetta wrote them, and the Setup A
 - Send's notes: "Pasted into Vela's pane — Return sends it" · "Vela is waiting on you — answer it in its pane" · "Not
   pasted — Vela's pane is not taking input" · "Not pasted — that snapshot is no longer kept" · "Not pasted into Vela's
   pane — 300 KB, and one paste carries 261 KB of it" · "Not sent — Vela didn't wake in 20 seconds" · "Not sent — Vela's
-  terminal is not on this desktop's floor" · "Not sent — this window has no terminals" · "Couldn't wake Vela: …". A
-  card's: "Add to your message to Vela" · "Added to your message to Vela".
+  terminal is not on this desktop's floor" · "Not sent — this window has no terminals" · "Couldn't wake Vela: …" ·
+  "Couldn't send to Vela: …". A card's: "Add to your message to Vela" · "Added to your message to Vela".
 - A session's handle: its project's name, else its folder's, with @'s ordinal where two share it ("vibe-field·2").
 - Where an outcome is the hand's, the words are the hand's (§8 "The hand"), so one outcome is never said two ways.
 - Each note is under 70 characters beside the spark's name, so it is read in the note's 2.4 s. A refusal from fieldd

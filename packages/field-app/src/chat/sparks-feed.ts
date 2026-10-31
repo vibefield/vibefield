@@ -109,6 +109,8 @@ interface FeedState {
   /** the person's live sessions on the board by the persona each runs as (its `profileId`; null for an agent's own
    * folder), or null before the board is read: the New spark sheet's "Sees N sessions" (SP-1c) */
   readonly sessions: ReadonlyMap<string | null, number> | null;
+  /** the field board's rows as last read, or null before the board is read: @'s sessions in Chat's composer (SP-1d) */
+  readonly rows: readonly AgentFieldRow[] | null;
   /** Wake, through the feed that reads this window's sparks; null while none does, so no act that wakes is drawn */
   readonly open: SparkOpener | null;
 }
@@ -123,6 +125,7 @@ const OPENING: FeedState = {
   reading: { state: "opening" },
   needing: null,
   sessions: null,
+  rows: null,
   open: null,
 };
 let state: FeedState = OPENING;
@@ -238,6 +241,7 @@ class RunningFeed {
 
   #derive(): void {
     const sessions = this.#boardRead ? sessionsByProfileOf(this.#rows) : null;
+    const rows = this.#boardRead ? this.#rows : null;
     if (this.#sparks === null) {
       publish({
         reading:
@@ -246,6 +250,7 @@ class RunningFeed {
             : { state: "unavailable", reason: this.#failed },
         needing: null,
         sessions,
+        rows,
         open: this.open,
       });
       return;
@@ -256,6 +261,7 @@ class RunningFeed {
       reading: { state: "ready", entries },
       needing: sameNeeds(state.needing, needing) ? state.needing : needing,
       sessions,
+      rows,
       open: this.open,
     });
   }
@@ -319,6 +325,46 @@ export function useSparksNeedingYou(): readonly SparkEntry[] | null {
 /** The person's live sessions by the persona each runs as, or null before the board is read. */
 export function useSessionTally(): ReadonlyMap<string | null, number> | null {
   return useSyncExternalStore(subscribe, () => state.sessions);
+}
+
+/** The field board's rows as last read, or null before the board is read (@'s sessions, SP-1d). */
+export function useBoardRows(): readonly AgentFieldRow[] | null {
+  return useSyncExternalStore(subscribe, () => state.rows);
+}
+
+/** `spark`'s entry as the feed reads it now, or null while the list does not hold it. */
+export function sparkEntryNow(spark: SparkId): SparkEntry | null {
+  return state.reading.state === "ready"
+    ? (state.reading.entries.find((entry) => entry.spark.id === spark) ?? null)
+    : null;
+}
+
+/** For Send (SP-1d; DESIGN.md §8 "Chat's composer"): `spark`'s entry once `test` holds for it, heard as the feed
+ * publishes — never polled — or null after `timeoutMs`. */
+export function whenSparkEntry(
+  spark: SparkId,
+  test: (entry: SparkEntry) => boolean,
+  timeoutMs: number,
+): Promise<SparkEntry | null> {
+  const held = (): SparkEntry | null => {
+    const entry = sparkEntryNow(spark);
+    return entry !== null && test(entry) ? entry : null;
+  };
+  const now = held();
+  if (now !== null) return Promise.resolve(now);
+  return new Promise((resolve) => {
+    const stop = subscribe(() => {
+      const entry = held();
+      if (entry === null) return;
+      clearTimeout(timer);
+      stop();
+      resolve(entry);
+    });
+    const timer = setTimeout(() => {
+      stop();
+      resolve(null);
+    }, timeoutMs);
+  });
 }
 
 /** The person's live sessions by persona (null: an agent's own folder); a spark's own session is not one of them. */

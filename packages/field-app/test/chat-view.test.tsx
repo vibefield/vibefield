@@ -12,14 +12,16 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { AgentFieldRow, SparkSummary } from "@vibefield/contracts";
-import { act, type ReactElement } from "react";
+import { act, type ReactElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { ComposerPort } from "../src/chat/ChatComposer";
 import { type ChatAct, ChatPanelView } from "../src/chat/ChatPanelView";
 import { ChatView } from "../src/chat/ChatView";
 import { sparkEntriesOf } from "../src/chat/spark-status";
 import { FieldBoard, type SparksPort, startSparksFeed } from "../src/chat/sparks-feed";
 import { sparkPaneOf } from "../src/chat/thread-pane-door";
+import type { FrameSurface } from "../src/frame/frame-surface";
 import { NO_TERMINALS } from "../src/terminal/terminal-words";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -71,6 +73,21 @@ const VELA_ASKS = row({
   blockers: [{ id: "q-1", kind: "question", since: AT }],
   terminal: { hosted: "local", runtimeSessionId: "pty-Vela" },
 });
+
+/** What @'s rows would read of fieldd: nothing to offer here (the composer's own suite reads the rows). */
+const PORT: ComposerPort = {
+  providers: async () => [],
+  profileSets: async () => [],
+  models: async () => {
+    throw new Error("no picker here");
+  },
+};
+
+/** Chat as the frame mounts it: FieldView's place, the one owner of the frame's open surface, stands around it. */
+function Chat(): ReactElement {
+  const [surface, setSurface] = useState<FrameSurface | null>(null);
+  return <ChatView active surface={surface} onSurfaceChange={setSurface} port={PORT} />;
+}
 
 let root: Root | null = null;
 let host: HTMLElement | null = null;
@@ -340,7 +357,7 @@ describe("Chat, live (the feed and its acts)", () => {
   it("reads the sparks fieldd keeps and the board's rows, and asks the list again when the board's sparks change", async () => {
     const { port, door, move } = scripted([VELA]);
     stop = startSparksFeed(door);
-    mount(<ChatView active />);
+    mount(<Chat />);
     await settle();
     expect(words($(".vf-chat-row-status"))).toBe("Hello");
     const lists = port.lists;
@@ -364,13 +381,16 @@ describe("Chat, live (the feed and its acts)", () => {
   it("mounts an awake spark's own pane as its thread, with no Show (SP-1d)", async () => {
     const { door, move } = scripted([VELA]);
     stop = startSparksFeed(door);
-    mount(<ChatView active />);
+    mount(<Chat />);
     await settle();
     await act(async () => move([VELA_ASKS]));
     expect($(".vf-chat-thread-line")).toBeNull();
     // this window holds no terminal pool: the pane's place says so (the pane is spark-pane.test.tsx's)
     expect($(".vf-chat-pane")?.getAttribute("data-pane-state")).toBe("no-terminals");
-    expect($(".vf-chat-thread button")).toBeNull();
+    // no Show: the thread's only buttons are its composer's (SP-1d's composer, `chat-composer.test.tsx`)
+    const buttons = [...(host?.querySelectorAll(".vf-chat-thread button") ?? [])];
+    expect(buttons.every((button) => button.closest(".vf-chat-composer") !== null)).toBe(true);
+    expect($(".vf-chat-foot .vf-chat-composer")).not.toBeNull();
   });
 
   it("opens on the newest spark and keeps it: a newer activity elsewhere moves that row up, never the thread", async () => {
@@ -378,7 +398,7 @@ describe("Chat, live (the feed and its acts)", () => {
     // Vela's record is the newer when Chat opens, so the thread opens on her
     const { door, move } = scripted([{ ...VELA, updatedAt: "2026-10-31T05:10:00.000Z" }, LYRA]);
     stop = startSparksFeed(door);
-    mount(<ChatView active />);
+    mount(<Chat />);
     await settle();
     await act(async () =>
       move([
@@ -418,13 +438,14 @@ describe("Chat, live (the feed and its acts)", () => {
     expect(rows()[1]?.getAttribute("aria-pressed")).toBe("true");
     // choosing is what moves the thread
     act(() => rows()[0]?.click());
+    await settle();
     expect($(".vf-chat-thread")?.getAttribute("aria-label")).toBe("Lyra's thread");
   });
 
   it("wakes an asleep spark through compose.sparks.open, and reads its record again", async () => {
     const { port, door } = scripted([KIWI]);
     stop = startSparksFeed(door);
-    mount(<ChatView active />);
+    mount(<Chat />);
     await settle();
     expect(words($(".vf-chat-thread-line"))).toBe("Kiwi is asleep Wake");
     const lists = port.lists;
@@ -442,7 +463,7 @@ describe("Chat, live (the feed and its acts)", () => {
     const { port, door } = scripted([KIWI]);
     port.refuse = "the spark's agent has no sign-in";
     stop = startSparksFeed(door);
-    mount(<ChatView active />);
+    mount(<Chat />);
     await settle();
     await act(async () => $(".vf-chat-thread-line button")?.click());
     await settle();
