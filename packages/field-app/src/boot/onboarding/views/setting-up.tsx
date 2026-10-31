@@ -1,27 +1,40 @@
 import type { ReactElement } from "react";
-import { factCls, primaryCls, quietCls, WizardError, WizardPane } from "../wizard-ui";
+import {
+  factCls,
+  primaryCls,
+  quietCls,
+  WizardError,
+  WizardHold,
+  WizardHoldOut,
+  WizardPane,
+  WizardStatus,
+} from "../wizard-ui";
 
-// Setting up, then Ready (track AO, AO-D2; DESIGN.md §8 "The Setup Assistant's
-// agent chapter", §6 "the hand-over"). The end of every path. The answers are
-// recorded first; then the desk opens, warms and settles beneath the glass
-// while this pane lists the real phases (W4: each a fact a door reports, never
-// a bar of its own); then its title becomes the welcome in place (M1) and the
-// glass hands the window to the desk it opened (W5).
+// Setting up, then the welcome (track AO, AO-D2; track FG, FG-D21 B; DESIGN.md
+// §8 "The Setup Assistant's agent chapter" and "The Setup Assistant's glass",
+// §6 "the hand-over"). The end of every path. The answers are recorded first;
+// then the desk opens, warms and settles beneath the glass while one line under
+// the logo says what the work is doing (W4: each a fact a door reports, never a
+// bar of its own); then the line becomes the welcome in place, and the glass
+// hands the window to the desk it opened (W5). What went wrong is a pane.
 
 export type OnboardingCompletionFlag =
   | { kind: "idle" }
   | { kind: "writing" }
   | { kind: "failed"; reason: string };
 
-/** One line of Setting up. `live` breathes (DESIGN.md §6's loop); `done` takes
- * its check; `failed` says the plain reason (the splash's rule). */
+/** One phase of Setting up: the line it says while it runs, and under it what
+ * it is doing now, in the words its door reports ("drawing the board", "1,215
+ * files checked"); `failed` says the plain reason (the splash's rule). */
 export interface OnboardingSetupPhase {
   readonly key: string;
-  readonly label: string;
+  readonly line: string;
   readonly state: "waiting" | "live" | "done" | "failed";
-  /** What it is doing, in the words its door reports ("drawing the board"). */
   readonly detail?: string | undefined;
 }
+
+/** The desk's line while it opens (FG-D21 B), over the boot machine's stage. */
+export const DESK_LINE = "Opening your field…";
 
 /** History's first pass has run 8s past the desk (AO-D4): said over Start now. */
 export const START_NOW_LINE =
@@ -78,62 +91,49 @@ export function OnboardingSettingUpPaneView({
     );
   }
 
-  const failed = phases.some((phase) => phase.state === "failed");
-  const welcome = name !== null && ready;
-  const slow = !failed && !ready && onStartNow !== undefined;
-  return (
-    <WizardPane
-      eyebrow={welcome ? "Ready" : "Setting up"}
-      title={
-        // One element (M1): both titles hold one cell from the start, so the
-        // welcome cross-fades in place and nothing below it moves.
-        <span className="vf-wizard-title-swap" data-ready={welcome ? "true" : "false"}>
-          <span aria-hidden={welcome}>Getting your desk ready.</span>
-          {name !== null && <span aria-hidden={!welcome}>Welcome to your field, {name}.</span>}
-        </span>
-      }
-      actions={
-        failed ? (
+  const failed = phases.find((phase) => phase.state === "failed");
+  if (failed !== undefined) {
+    return (
+      <WizardPane
+        eyebrow="Setting up"
+        title="Getting your desk ready."
+        actions={
           <button type="submit" className={primaryCls}>
             Retry
           </button>
-        ) : slow ? (
-          <button type="submit" className={primaryCls}>
+        }
+        onSubmit={onRetryPhase}
+      >
+        <WizardError reason={failed.detail ?? failed.line} />
+      </WizardPane>
+    );
+  }
+
+  // the line is the work still going on — the first phase not done — then the welcome
+  const welcome = name !== null && ready;
+  const live = phases.find((phase) => phase.state !== "done") ?? phases.at(-1);
+  return (
+    <WizardHold face="setting-up:line">
+      {welcome ? (
+        <WizardStatus
+          line={`Welcome to your field, ${name}.`}
+          // DESIGN.md §8's discoverability, said once: a face does not say
+          // "settings" the way the gear it replaced did.
+          sub={`Your face in the bottom-left corner opens Settings — so does ${settingsChord}.`}
+          ink
+        />
+      ) : (
+        <WizardStatus line={live?.line ?? DESK_LINE} sub={live?.detail} />
+      )}
+      {!welcome && onStartNow !== undefined && (
+        <WizardHoldOut now>
+          <p className={`vf-wizard-hold-why ${factCls}`}>{START_NOW_LINE}</p>
+          <button type="button" className={primaryCls} onClick={onStartNow}>
             Start now
           </button>
-        ) : null
-      }
-      onSubmit={() => {
-        if (failed) onRetryPhase();
-        else if (slow) onStartNow?.();
-      }}
-    >
-      <ul className="vf-wizard-phases" aria-label="Setting up">
-        {phases.map((phase) => (
-          <li key={phase.key} className="vf-wizard-phase" data-state={phase.state}>
-            <span aria-hidden="true" className="vf-wizard-phase-mark">
-              {phase.state === "done" ? "✓" : ""}
-            </span>
-            <span className="vf-wizard-phase-label">{phase.label}</span>
-            {phase.detail !== undefined && (
-              <span className="vf-wizard-phase-detail">{phase.detail}</span>
-            )}
-          </li>
-        ))}
-      </ul>
-      {slow && <p className={factCls}>{START_NOW_LINE}</p>}
-      {name !== null && (
-        // DESIGN.md §8's discoverability, said once: a face does not say
-        // "settings" the way the gear it replaced did. It arrives with the welcome.
-        <p
-          className={`vf-wizard-ready-line ${factCls}`}
-          data-ready={welcome ? "true" : "false"}
-          aria-hidden={!welcome}
-        >
-          Your face in the bottom-left corner opens Settings — so does {settingsChord}.
-        </p>
+        </WizardHoldOut>
       )}
-    </WizardPane>
+    </WizardHold>
   );
 }
 

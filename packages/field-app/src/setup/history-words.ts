@@ -19,3 +19,8 @@ export const HISTORY_WORDS = {
   newAgent: (label: string) => `${label} has history on this Mac.`,
   bringItIn: "Bring it in",
 } as const;
+
+/** The face of the pane's look on the Setup Assistant's glass (FG-4b): the hold
+ * while the pane's code arrives and the census's own look are one load, so the
+ * frame carries the one into the other without a fade. */
+export const HISTORY_LOOKING_FACE = "history:looking";

@@ -9,6 +9,7 @@ import {
   waitsForHistory,
 } from "../history-line";
 import {
+  DESK_LINE,
   type OnboardingCompletionFlag,
   OnboardingSettingUpPaneView,
   type OnboardingSetupPhase,
@@ -100,17 +101,17 @@ export function SettingUpPane({
   const deskReady = boot.phase === "handing-over" || boot.phase === "interactive";
   const desk: OnboardingSetupPhase =
     answered && boot.unavailable !== null
-      ? { key: "desk", label: "Your desk", state: "failed", detail: boot.unavailable.reason }
+      ? { key: "desk", line: DESK_LINE, state: "failed", detail: boot.unavailable.reason }
       : deskReady
-        ? { key: "desk", label: "Your desk", state: "done" }
+        ? { key: "desk", line: DESK_LINE, state: "done" }
         : answered
           ? {
               key: "desk",
-              label: "Your desk",
+              line: DESK_LINE,
               state: "live",
               ...(boot.stage === "" ? {} : { detail: boot.stage }),
             }
-          : { key: "desk", label: "Your desk", state: "waiting" };
+          : { key: "desk", line: DESK_LINE, state: "waiting" };
 
   // AO-4b — History's first pass, when history was brought in (AO-D4): its
   // line in the room's own words, heard pushed, and waited for — but never

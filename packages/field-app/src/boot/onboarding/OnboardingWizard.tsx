@@ -193,13 +193,18 @@ function WizardBody({
   };
 
   // Track FG (FG-3a): the glass stands on the field, and its band shows the
-  // chapter — this variant's steps, and the one this pane stands in. A new
-  // pane fades the old one out first (FG-4a); deriving is a pane of its own.
+  // chapter — this variant's steps, and the one this pane stands in, Setting
+  // up's segment filling with the boot's own progress (FG-4b). A new pane fades
+  // the old one out first (FG-4a); deriving is a hold of its own.
   const steps = stepsOf(variant);
   const shell = (content: ReactElement): ReactElement => (
     <WizardShell
       ground="field"
-      band={{ steps, at: pane === null ? null : STEP_OF[pane] }}
+      band={{
+        steps,
+        at: pane === null ? null : STEP_OF[pane],
+        progress: pane === "setting-up" ? (boot.progress ?? 0) : undefined,
+      }}
       paneKey={pane ?? "deriving"}
     >
       {content}

@@ -4,15 +4,18 @@ import {
   BackAction,
   primaryCls,
   SkipAction,
+  useWizardFrame,
   WizardError,
+  WizardHold,
   WizardPane,
+  WizardStatus,
 } from "../boot/onboarding/wizard-ui";
 import {
   HistoryConsentPane,
   type HistoryPaneEnd,
   type HistoryPaneParts,
 } from "./HistoryConsentPane";
-import { HISTORY_WORDS } from "./history-words";
+import { HISTORY_LOOKING_FACE, HISTORY_WORDS } from "./history-words";
 import { useHistoryCensus } from "./use-history-census";
 
 // The History pane on the Setup Assistant's glass (track AO, AO-3; DESIGN.md §8
@@ -58,7 +61,9 @@ export function HistoryWizardPane({
 }
 
 /** The pane on the wizard's glass, controller-free (the catalog's face): the
- * question, its body, Bring in history, Not now with its home, Back. */
+ * question, its body, Bring in history, Not now with its home, Back. While the
+ * census looks, the glass holds on its one line (FG-L5), the same load as the
+ * hold while the pane's code arrives; the sheet keeps its pane (FG-D26). */
 export function HistoryWizardPaneView({
   parts,
   onBack,
@@ -66,6 +71,14 @@ export function HistoryWizardPaneView({
   parts: HistoryPaneParts;
   onBack?: (() => void) | undefined;
 }): ReactElement {
+  const frame = useWizardFrame();
+  if (parts.looking && frame === "glass") {
+    return (
+      <WizardHold face={HISTORY_LOOKING_FACE}>
+        <WizardStatus line={HISTORY_WORDS.looking} />
+      </WizardHold>
+    );
+  }
   return (
     <WizardPane
       eyebrow={HISTORY_WORDS.eyebrow}

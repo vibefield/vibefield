@@ -694,7 +694,7 @@ exception again.
 | Overlay chip | surface `/90–95` + `backdrop-blur-xl` | no wearer today: the put-back affordance and the HUD's toasts retired (DK-13, DK-17); the peers' chips wear the line's glass and the status line solid chrome (§8) |
 | Backdrop dim | `black/10` light · `black/40` dark | behind open sheets; canvas recedes to `scale(0.98)` |
 | Search scrim (GV-D8; K7, 2026-10-08) | `black/16` light · `black/46` dark, over a backdrop blur of 18 and `saturate(0.9)` | behind the Peek (§8 "Search"): the window blurred and dimmed, the view and the frame receding to `scale(0.98)` under it. Darker than the backdrop dim so it reads as dimmed (One Frame §23); the backdrop dim stays the sheets' until James rules otherwise (docket PK1). *Since TS-D22 A (2026-10-29):* the phone wears its dim alone, with no blur, under a door that stands over a live field, between the field and the bar (§9) |
-| Setup Assistant (as built since UA-3w; written down 2026-10-29, track FG; on the field, built at FG-3a as the browser's layers, and since FG-3b drawn by the field's own pass over the live field) | `--vf-wizard-surface` (white 55% by day, `rgb(28 28 30)` 55% by night) over a blur of `--vf-wizard-blur` (32px) and a saturation of `--vf-wizard-saturate` (1.12), the island radius (32). On the field (FG): a 1px edge, `--vf-wizard-edge` (white 60% by day, 12% by night) with a top light, `--vf-wizard-edge-light` (white 75%, 8%); the field's shadow, `--vf-shadow-wizard-field` (`0 40px 120px` and `0 12px 32px` in the field's ground at 55% and 28%); and a grain at `--vf-wizard-grain` (3%), so the blur never bands | the Setup Assistant's glass (§8): on the field its frost lets the tunnel's rings through softly (FG-D15 C). Over the live field the field draws this recipe itself, in its own frame and from these tokens (FG-D24); over the field's still the backdrop filter draws it |
+| Setup Assistant (as built since UA-3w; written down 2026-10-29, track FG; on the field, built at FG-3a as the browser's layers, and since FG-3b drawn by the field's own pass over the live field) | `--vf-wizard-surface` (white 55% by day, `rgb(28 28 30)` 55% by night) over a blur of `--vf-wizard-blur` (32px) and a saturation of `--vf-wizard-saturate` (1.12), the island radius (32). On the field (FG): a 1px edge, `--vf-wizard-edge` (white 60% by day, 12% by night) with a top light, `--vf-wizard-edge-light` (white 75%, 8%); the field's shadow, `--vf-shadow-wizard-field` (`0 40px 120px` and `0 12px 32px` in the field's ground at 55% and 28%); and a grain at `--vf-wizard-grain` (3%), so the blur never bands. Its logo (FG-4b): `--vf-wizard-logo-filter`, `invert(1) hue-rotate(180deg)` by day and `none` by night, so the mark is white on smoke and inverted on milk with its colours kept | the Setup Assistant's glass (§8): on the field its frost lets the tunnel's rings through softly (FG-D15 C). Over the live field the field draws this recipe itself, in its own frame and from these tokens (FG-D24); over the field's still the backdrop filter draws it |
 
 **Menus are solid, floating controls are glass** (One Frame FR-7, FC-D14 ruled 2026-10-01): a menu
 is rows to be read, so it is `--vf-chrome-solid` — opaque — ringed by `--vf-hairline-strong`, with
@@ -996,6 +996,11 @@ centre light by night) — while the desk settles in from `.985` (1.9s island) a
 frame-stable and never before the splash has stood **700ms**, the website's floor for a repeat visit (FG-L6): a
 floor, never a stage. Reduced motion: fades only, halved; no rise; the field at rest, and a 120ms fade in place of
 the tear.
+*Amended 2026-10-31 (FG-4b; ruled at the lean by VF-PM, 05:42Z, James may overturn):* **a load's floor.** A load is
+the logo and one line (FG-L5), and the product's loads often answer in milliseconds, so a hold never flashes: a load
+that answers before the pane it follows has faded out (120ms) shows no hold at all, and a hold that has begun to show
+stands at least **800ms** — the logo's 400 in, then a beat to read the line — before its words and the logo leave. The
+frame keeps the floor: the leaving hold stays whole until it is met, then fades as any pane does.
 
 *(Godview round 3, built 2026-10-12; its status is §8 the deck's.)*
 **The terminals rise and fall** (Godview's deck, §8; One Frame §22 "Shared mechanics" and §23 —
@@ -2847,6 +2852,35 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   and More agents opens in two columns with rows 40 tall (FG-D19 A). The welcome and the read before the first
   pane stand centred in the frame until FG-4b stands them under the logo. Finish setting up's sheet keeps its panes
   as they stood (FG-D26): the eyebrow, centred in it and scrolling downward only, 30rem at most, rising in.*
+  *Status 2026-10-31 (FG-4b, built): the holds and the logo. A load is a hold: it spans the glass, its rows
+  `1fr | the logo | 1fr`, and stands its words 26 under the logo in the frame's 560 — the line (400, 14px/1.4, t2)
+  and its sub 4 under it (12px/1.4, t3, its 17 kept), in tabular figures. A new line crossfades in place (140ms out,
+  then 240ms in; 60 and 120 reduced) with the sub it brings, the words leaving from where they had come to; a line
+  followed before it has begun to show is never shown (so what History's first pass found, which the welcome follows
+  at once, is the room's to say), and a new sub under the same line only counts. The loads are
+  the read before the first pane, Agents' and History's looks (the hold while a pane's code arrives and the pane's
+  own look are one, carried without a fade), the link's read ("Asking this Mac about its link…") and Tailscale
+  opening ("Opening Tailscale…", "Joining your network…" for an auth key, the slow note as its sub). A way out stands
+  18 under the words and only after 6s (fading in over 240ms, 120 reduced), hidden until then so it takes no focus
+  and no press: the link's read's Continue, since a read with no give-up of its own needs a way out, and Tailscale's
+  Cancel (FG-O7 (a), at the lean), whose Esc works from the start in the Setup Assistant. Agents' and History's looks
+  carry none: each gives up after 15s onto its unavailable pane. The sheet keeps its panes and its Escape (FG-D26).
+  The frame swaps on a pane's face (`data-face`), watching its own children: a pane's face is its step's, so its own
+  changes never fade, and a hold names its own; the sheet never swaps. It keeps §6's floor — a load answered before
+  the old pane has faded out shows no hold, and a hold that has begun to show stands 800ms, its leaving copy whole
+  until then — and the logo: in over 400ms once the last words are out, out over 280ms before the next come, which
+  wait for it (160 and 120 reduced). The welcome is a title card under the logo, its words 30 under it: Welcome.
+  (32px, light), AO's line 10 under it (420 at most), Get started 28 under that. Setting up is one line (FG-D21 B),
+  the work's own words: "Opening your field…" over the boot's stage, then History's first pass ("Finding your
+  history…", then "Discovering conversations…" over its files checked), and at the end the welcome on the same line,
+  in ink, over "Your face in the bottom-left corner opens Settings — so does ⌘,". Start now and its reason (360 at
+  most, 8 above it) stand under the line when AO-D4's 8s give them, fading in over 240ms. What went wrong stays a
+  pane: the answers not saved, and the desk that could not open, in the boot's words with its Retry. The band's
+  Setting up segment fills with the boot's own progress (260ms linear; at once reduced), then stands full. The logo
+  is the field's mark at the window's centre and its size on the screen (the splash's 128 × 77, held in the glass's
+  own px against the fit); over the field's still, the still's own mark, cover-fitted with the picture (1× wide, 2×
+  tall). Over the live field the field draws it over the frost, from the mark it draws itself, reading its fade and
+  its filter (§5) off the glass. The pixel witness and the console rows are owed to the next window.*
 - **The reveal** (boot-exclusive motion): the canvas composes and stabilizes BEHIND
   the splash (the frame-stability gate — never reveal mid-hitch), then the splash
   fades 240ms plain `ease` while the canvas settles `scale(0.99) → 1` over 560ms

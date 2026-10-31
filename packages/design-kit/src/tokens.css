@@ -81,6 +81,8 @@
   --vf-wizard-edge: rgb(255 255 255 / 60%);
   --vf-wizard-edge-light: rgb(255 255 255 / 75%);
   --vf-wizard-grain: 0.03;
+  /* §5 the Setup Assistant's logo (FG-4b): the field's mark, inverted on milk with its colours kept; none by night */
+  --vf-wizard-logo-filter: invert(1) hue-rotate(180deg);
   --vf-backdrop-dim: rgb(0 0 0 / 10%);
   /* §5 the search scrim (the Peek, §8 "Search"; K7): darker than the backdrop
      dim, under a blur of 18 — the window blurred and dimmed. The phone wears its
@@ -409,6 +411,7 @@
   --vf-wizard-surface: rgb(28 28 30 / 55%);
   --vf-wizard-edge: rgb(255 255 255 / 12%);
   --vf-wizard-edge-light: rgb(255 255 255 / 8%);
+  --vf-wizard-logo-filter: none;
   --vf-backdrop-dim: rgb(0 0 0 / 40%);
   --vf-search-scrim: rgb(0 0 0 / 46%);
   --vf-shadow-island: 0 8px 30px rgb(0 0 0 / 40%);

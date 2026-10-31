@@ -13,6 +13,7 @@ import { WizardShellView } from "../src/boot/onboarding/wizard-ui";
 import { type FieldHost, setHost } from "../src/host";
 import { AgentsWizardPane } from "../src/setup/AgentsWizardPane";
 import { agentsPaneModel, howItUpdates, installFact } from "../src/setup/agents-pane";
+import { AGENTS_LOOKING_FACE } from "../src/setup/agents-words";
 
 // AO-5 (track AO; AO-D1, AO-D13; DESIGN.md §8 "The Setup Assistant's agent
 // chapter" — Agents) — the chapter's first pane: the agents on this Mac as
@@ -366,12 +367,17 @@ describe("the Agents pane on the wizard's glass", () => {
     expect(onDone).toHaveBeenCalledWith("later");
   });
 
-  it("claims nothing while the inventory is unread, and records nothing when moved past", async () => {
+  it("holds while the inventory is unread, claiming nothing, and records nothing when moved past", async () => {
     const client = daemon(null);
     const onDone = vi.fn();
     await mount(client, onDone);
-    expect(heading()).toBe("Your agents.");
+    // a load is a hold on the glass (FG-L5; FG-4b): the logo and the look's own line, the face of
+    // the hold while the pane's code arrives, and no way out of its own — it gives up after 15s
+    const hold = container?.querySelector("form.vf-wizard-hold");
+    expect(hold?.getAttribute("data-face")).toBe(AGENTS_LOOKING_FACE);
+    expect(heading()).toBe("");
     expect(text()).toContain("Looking on this Mac…");
+    expect(hold?.querySelector("button")).toBeNull();
     // nothing found yet, so nothing claimed found (found by eye at the AO-6a gate)
     expect(text()).not.toContain("VibeField found these");
     await act(async () => {
@@ -380,7 +386,8 @@ describe("the Agents pane on the wizard's glass", () => {
     await act(async () => {
       vi.advanceTimersByTime(1_000);
     });
-    // the page's §10 row, word for word, with Try again (a fresh read)
+    // the page's §10 row, word for word, on the pane, with Try again (a fresh read)
+    expect(heading()).toBe("Your agents.");
     expect(text()).toContain("VibeField couldn't read the agents on this Mac.");
     expect(text()).not.toContain("VibeField found these");
     await click("Try again");

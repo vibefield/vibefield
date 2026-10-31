@@ -1,9 +1,17 @@
 import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import { AgentIcon } from "@vibefield/puppeteer-view-sdk/react";
 import { type ReactElement, useId } from "react";
-import { BackAction, primaryCls, quietCls, WizardPane } from "../boot/onboarding/wizard-ui";
+import {
+  BackAction,
+  primaryCls,
+  quietCls,
+  useWizardFrame,
+  WizardHold,
+  WizardPane,
+  WizardStatus,
+} from "../boot/onboarding/wizard-ui";
 import type { AgentsPaneModel, AgentsPaneRow } from "./agents-pane";
-import { AGENTS_WORDS } from "./agents-words";
+import { AGENTS_LOOKING_FACE, AGENTS_WORDS } from "./agents-words";
 import "./agents-pane.css";
 
 // The Agents pane (track AO, AO-5; DESIGN.md §8 "The Setup Assistant's agent
@@ -134,7 +142,9 @@ export function agentsTitle(inventory: AgentsInventory): string {
 }
 
 /** The pane on the wizard's glass: the title says what was found, Continue
- * moves on, and a Mac with no agent says where one appears later (W3). */
+ * moves on, and a Mac with no agent says where one appears later (W3). While
+ * the inventory looks, the glass holds on its one line (FG-L5), the same load
+ * as the hold while the pane's code arrives. */
 export function AgentsWizardPaneView({
   inventory,
   moreOpen,
@@ -152,6 +162,14 @@ export function AgentsWizardPaneView({
   onContinue: () => void;
   onBack?: (() => void) | undefined;
 }): ReactElement {
+  const frame = useWizardFrame();
+  if (inventory.kind === "looking" && frame === "glass") {
+    return (
+      <WizardHold face={AGENTS_LOOKING_FACE}>
+        <WizardStatus line={AGENTS_WORDS.looking} />
+      </WizardHold>
+    );
+  }
   const first = inventory.kind === "found" && inventory.model.first;
   return (
     <WizardPane
