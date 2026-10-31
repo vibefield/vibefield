@@ -40,7 +40,9 @@ export function processName(command) {
 }
 
 /** The run's lines of a table with the environment (`psTables`): each whose environment carries the run's mark, as a whole
- * word. */
+ * word. Item 93 (2026-10-31): `ps -E` shows NO environment for a zombie (rightly gone: it holds no work) or for a macOS
+ * platform binary (`/bin/sh`, `/bin/sleep`), so neither is ever the run's here. Never wrap a smoke daemon in `sh -c` or a
+ * platform binary: the census could not see it. */
 function markedLines(withEnv, mark) {
   const quoted = mark.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
   const carries = new RegExp(`(^|\\s)${SMOKE_RUN_ENV}=${quoted}(\\s|$)`, "u");
