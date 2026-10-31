@@ -1857,3 +1857,86 @@ private final class ResumeGate: @unchecked Sendable {
     }
   }
 }
+
+// MARK: - Who the home's person is (IOS-8f, `user.me`)
+
+/// The home answers `user.me` once per connection; its answer rides the home's
+/// row in `desktops`, where the corner already reads.
+@MainActor
+@Suite struct FieldLinkPersonTests {
+  nonisolated private static let person = JSONValue.object([
+    "userId": .string("01J8F2ZQ9K3M4N5P6Q7R8S9T0V"), "name": .string("James"),
+    "face": .object(["emoji": .string("🐙"), "frame": .string("coin")]), "dealt": .bool(false),
+  ])
+
+  @Test func theHomesPersonRidesItsRowAndIsAskedOnce() async throws {
+    let tally = CatalogTally()
+    let person = Self.person
+    let (link, mesh, door, counter) = await countedLink(script: { method, id, _ in
+      switch method {
+      case "system.hello": return [frame(id: id, ack)]
+      case "user.me":
+        _ = tally.record(id)
+        return [frame(id: id, person)]
+      default: return []
+      }
+    })
+    defer { link.stop() }
+
+    try await waitUntil("the person", timeout: catalogWait) { link.desktops.first?.person != nil }
+    #expect(
+      link.desktops.first?.person
+        == DesktopPerson(name: "James", emoji: "🐙", frame: "coin", dealt: false))
+    try await sweepNow(mesh, counter)
+    try await sweepNow(mesh, counter)
+    #expect(tally.asks == 1)
+    #expect(await door.latest?.methods.filter { $0 == "user.me" }.count == 1)
+  }
+
+  /// A desktop from before the door, or one that serves no user: no person,
+  /// the desktop stays ready, and the door is not asked again on this connection.
+  @Test func aDesktopThatNamesNoPersonLeavesTheDeal() async throws {
+    for kind in ["NOT_FOUND", "UNAVAILABLE"] {
+      let tally = CatalogTally()
+      let (link, mesh, _, counter) = await countedLink(script: { method, id, _ in
+        switch method {
+        case "system.hello": return [frame(id: id, ack)]
+        case "user.me":
+          _ = tally.record(id)
+          return [failureFrame(id: id, kind: kind, message: "no person")]
+        default: return []
+        }
+      })
+      try await waitUntil("the note", timeout: catalogWait) {
+        link.notes.contains { $0.contains("names no person for this phone") }
+      }
+      #expect(link.desktops.first?.person == nil)
+      #expect(link.desktops.first?.state == .ready)
+      try await sweepNow(mesh, counter)
+      try await sweepNow(mesh, counter)
+      #expect(tally.asks == 1, "\(kind)")
+      link.stop()
+    }
+  }
+
+  /// A failure asking again could fix is asked again, and the second answer lands.
+  @Test func aRetryableFailureIsAskedAgain() async throws {
+    let tally = CatalogTally()
+    let person = Self.person
+    let (link, mesh, _, counter) = await countedLink(script: { method, id, _ in
+      switch method {
+      case "system.hello": return [frame(id: id, ack)]
+      case "user.me":
+        return tally.record(id) == 1
+          ? [failureFrame(id: id, kind: "UNAVAILABLE", message: "busy", retryable: true)]
+          : [frame(id: id, person)]
+      default: return []
+      }
+    })
+    defer { link.stop() }
+    try await waitUntil("the first ask", timeout: catalogWait) { tally.asks >= 1 }
+    try await sweepNow(mesh, counter)
+    try await waitUntil("the person", timeout: catalogWait) { link.desktops.first?.person != nil }
+    #expect(tally.asks == 2)
+  }
+}

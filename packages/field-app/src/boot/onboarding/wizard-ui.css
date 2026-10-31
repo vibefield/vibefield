@@ -1,28 +1,228 @@
-.vf-wizard-shell {
-  position: relative;
-  width: min(calc(100vw - 2rem), 44rem);
-  height: min(calc(100vh - 2rem), 32rem);
-  overflow: hidden;
-  border: 1px solid var(--vf-hairline);
-  border-radius: var(--vf-radius-island);
-  background: var(--vf-wizard-surface);
-  box-shadow: var(--vf-shadow-wizard);
-  padding: clamp(2rem, 5vw, 4rem);
-  -webkit-backdrop-filter: blur(32px) saturate(1.12);
-  backdrop-filter: blur(32px) saturate(1.12);
+/* The Setup Assistant's glass (track FG; DESIGN.md §5 "Setup Assistant", §8 "The Setup Assistant's glass"; FG-L2):
+   880 × 640 on every step, centred on its ground and scaled as one picture to fit it (`--vf-glass-fit`, set by
+   wizard-ui.tsx's `glassFit`), never reflowed. Its material is four layers under its contents, so it forms by
+   tweening them (`--vf-glass-frost`, `--vf-glass-rise`) and never by fading a wrapper: an ancestor of the frost that
+   set opacity, a filter or a mask would become its backdrop's root and leave it nothing to blur (§5.2 of the
+   record). */
+@property --vf-glass-frost {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 1;
 }
 
-.vf-wizard-shell-content {
-  display: flex;
+@property --vf-glass-rise {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 1;
+}
+
+/* Only the glass takes a press; around it a press reaches whatever holds the ground (Finish setting up's scrim). */
+.vf-wizard-ground {
+  position: relative;
   width: 100%;
   height: 100%;
-  /* SAFE centring: a pane taller than the shell (pane 2 with its face picker
-     open, UA-D17) overflows downward only. Plain centring overflows both ways
-     inside a scroller, and the half above the top edge — the pane's title —
-     can never be scrolled to. */
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.vf-wizard-fit {
+  position: absolute;
+  inset: 0;
+  transform: scale(var(--vf-glass-fit, 1));
+}
+
+.vf-wizard-shell {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 880px;
+  height: 640px;
+  margin: -320px 0 0 -440px;
+  border-radius: var(--vf-radius-island);
+  pointer-events: auto;
+}
+
+/* The material in CSS's order: the shadow outside, then inside the frost and its tint, the grain and the edge. The
+   layers rise with the glass as it forms; its contents never do. */
+.vf-wizard-glass-shadow,
+.vf-wizard-glass-frost,
+.vf-wizard-glass-grain,
+.vf-wizard-glass-edge {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  transform: scale(var(--vf-glass-rise));
+}
+
+.vf-wizard-glass-shadow {
+  box-shadow: var(--vf-shadow-wizard);
+  opacity: var(--vf-glass-frost);
+}
+
+.vf-wizard-glass-frost {
+  -webkit-backdrop-filter: blur(calc(32px * var(--vf-glass-frost)))
+    saturate(calc(1 + 0.12 * var(--vf-glass-frost)));
+  backdrop-filter: blur(calc(32px * var(--vf-glass-frost)))
+    saturate(calc(1 + 0.12 * var(--vf-glass-frost)));
+}
+
+.vf-wizard-glass-frost::after {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--vf-wizard-surface);
+  content: "";
+  opacity: var(--vf-glass-frost);
+}
+
+.vf-wizard-glass-edge {
+  box-shadow: inset 0 0 0 1px var(--vf-hairline);
+  opacity: var(--vf-glass-frost);
+}
+
+/* On the field (FG-D15 C): its edge with a top light, the field's own shadow, and a grain so the blur never bands.
+   It forms where the splash stood — the frost condenses as its layers rise .985 → 1 (DESIGN.md §6) — while the
+   field's mark fades under it (FieldLayer). */
+.vf-wizard-shell[data-ground="field"] {
+  animation: vf-glass-form 560ms var(--vf-ease-island) both;
+}
+
+.vf-wizard-shell[data-ground="field"] .vf-wizard-glass-shadow {
+  box-shadow: var(--vf-shadow-wizard-field);
+}
+
+.vf-wizard-shell[data-ground="field"] .vf-wizard-glass-grain {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 1 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  opacity: calc(var(--vf-wizard-grain) * var(--vf-glass-frost));
+}
+
+.vf-wizard-shell[data-ground="field"] .vf-wizard-glass-edge {
+  box-shadow:
+    inset 0 0 0 1px var(--vf-wizard-edge),
+    inset 0 1px 0 var(--vf-wizard-edge-light);
+}
+
+/* The steps (FG-D22 A, FG-D23 A; DESIGN.md §8): the chapter along the glass's top 72, a segment a step, 76 × 3 with a
+   gap of 8, its label 9 under it in small capitals — done in grey, the current in ink, the rest a hairline. A segment
+   fills as you arrive (480ms island) and empties as you go back; the band fades in with You (240ms). */
+.vf-wizard-steps {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  display: flex;
+  height: 72px;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 240ms ease,
+    visibility 0s linear 240ms;
+  visibility: hidden;
+}
+
+.vf-wizard-steps[data-shown="true"] {
+  opacity: 1;
+  transition:
+    opacity 240ms ease,
+    visibility 0s;
+  visibility: visible;
+}
+
+.vf-wizard-steps ol {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  gap: 8px;
+  grid-auto-columns: 76px;
+  grid-auto-flow: column;
+  list-style: none;
+}
+
+.vf-wizard-steps li {
+  display: grid;
+  gap: 9px;
+}
+
+.vf-wizard-step-seg {
+  position: relative;
+  display: block;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--vf-hairline-strong);
+}
+
+.vf-wizard-step-seg > span {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--vf-text-tertiary);
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+  transition:
+    transform 480ms var(--vf-ease-island),
+    background-color 240ms ease;
+}
+
+.vf-wizard-steps li[data-state="done"] .vf-wizard-step-seg > span,
+.vf-wizard-steps li[data-state="now"] .vf-wizard-step-seg > span {
+  transform: scaleX(1);
+}
+
+.vf-wizard-steps li[data-state="now"] .vf-wizard-step-seg > span {
+  background: var(--vf-foreground);
+}
+
+.vf-wizard-step-label {
+  color: var(--vf-text-faint);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  transition: color 240ms ease;
+  white-space: nowrap;
+}
+
+.vf-wizard-steps li[data-state="done"] .vf-wizard-step-label {
+  color: var(--vf-text-tertiary);
+}
+
+.vf-wizard-steps li[data-state="now"] .vf-wizard-step-label {
+  color: var(--vf-foreground);
+}
+
+/* One frame (FG-L3; DESIGN.md §8): every pane stands between 96 and 600, 560 wide, under the band. Until FG-4 lays a
+   pane's head, body and foot into it, the pane is centred in it — SAFE centring: a pane taller than the frame (pane 2
+   with its face picker open, UA-D17) overflows downward only. Plain centring overflows both ways inside a scroller,
+   and the half above the top edge — the pane's title — can never be scrolled to. */
+.vf-wizard-frame {
+  position: absolute;
+  top: 96px;
+  right: 160px;
+  bottom: 40px;
+  left: 160px;
+  display: flex;
   align-items: safe center;
   justify-content: center;
   overflow-y: auto;
+}
+
+/* Finish setting up's sheet keeps the shell it had before FG until AO rules (FG-D26, a lean: the sheet is AO's
+   surface and no step of the chapter, which FG-D3's 880 × 640 governs) — its size, and its body inside the old
+   border's pixel and padding. It is never fitted. */
+.vf-wizard-shell[data-size="sheet"] {
+  inset: 0;
+  width: min(calc(100vw - 2rem), 44rem);
+  height: min(calc(100vh - 2rem), 32rem);
+  margin: auto;
+}
+
+.vf-wizard-shell[data-size="sheet"] .vf-wizard-frame {
+  inset: calc(1px + clamp(2rem, 5vw, 4rem));
 }
 
 .vf-wizard-pane {
@@ -235,6 +435,13 @@
   }
 }
 
+@keyframes vf-glass-form {
+  from {
+    --vf-glass-frost: 0;
+    --vf-glass-rise: 0.985;
+  }
+}
+
 @keyframes vf-wizard-in {
   from {
     opacity: 0;
@@ -250,6 +457,32 @@
 @media (prefers-reduced-motion: reduce) {
   .vf-wizard-pane {
     animation: vf-wizard-fade 160ms ease both;
+  }
+
+  /* The glass forms by its frost alone, halved; nothing rises (M6). */
+  .vf-wizard-shell[data-ground="field"] {
+    animation: vf-glass-frost-in 280ms ease both;
+  }
+
+  /* The band fades, halved; its segments fill at once. */
+  .vf-wizard-steps {
+    transition:
+      opacity 120ms ease,
+      visibility 0s linear 120ms;
+  }
+
+  .vf-wizard-steps[data-shown="true"] {
+    transition:
+      opacity 120ms ease,
+      visibility 0s;
+  }
+
+  .vf-wizard-step-seg > span {
+    transition: background-color 120ms ease;
+  }
+
+  .vf-wizard-step-label {
+    transition-duration: 120ms;
   }
 
   .vf-wizard-user {
@@ -273,6 +506,12 @@
 
     to {
       opacity: 1;
+    }
+  }
+
+  @keyframes vf-glass-frost-in {
+    from {
+      --vf-glass-frost: 0;
     }
   }
 }

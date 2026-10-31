@@ -136,13 +136,25 @@ describe("useSettingsChord", () => {
     expect(settingsOpen).toBe(false);
   });
 
-  it("leaves every other key alone, and a repeat of its own", async () => {
+  it("leaves every other key alone", async () => {
     await mount(createElement(Spine));
     const other = await press({ key: "k", metaKey: true });
     expect(settingsOpen).toBe(false);
     expect(other.defaultPrevented).toBe(false);
-    await press({ key: ",", metaKey: true, repeat: true });
+  });
+
+  it("claims a held chord's repeats and acts on none of them", async () => {
+    // AU-4 — an unclaimed repeat reaches the app menu's Settings… (⌘,), which
+    // would reopen what the first press closed.
+    await mount(createElement(Spine));
+    const heldShut = await press({ key: ",", metaKey: true, repeat: true });
     expect(settingsOpen).toBe(false);
+    expect(heldShut.defaultPrevented).toBe(true);
+    await press({ key: ",", metaKey: true });
+    expect(settingsOpen).toBe(true);
+    const heldOpen = await press({ key: ",", metaKey: true, repeat: true });
+    expect(settingsOpen).toBe(true);
+    expect(heldOpen.defaultPrevented).toBe(true);
   });
 
   it("stops listening when the spine goes away", async () => {

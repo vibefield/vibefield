@@ -53,7 +53,8 @@ public final class MeshModel {
     case reconnecting(String)
   }
 
-  /// A login page pending presentation (Safari sheet).
+  /// A login page to put in front of the person (TS-7: the system's sign-in
+  /// sheet, `TailscaleSignInSession`).
   public struct LoginPage: Identifiable, Equatable {
     public let url: URL
     public var id: URL { url }
@@ -61,7 +62,10 @@ public final class MeshModel {
 
   public private(set) var state: State = .off
   public private(set) var peers: [MeshPeerView] = []
-  public private(set) var loginPage: LoginPage?
+  public var loginPage: LoginPage? { loginSheet.page.map(LoginPage.init(url:)) }
+  /// TS-7 — why the last sign-in sheet could not be shown, when it could not
+  /// (iOS refused it, or it had no window). The next ask clears it.
+  public private(set) var signInNote: String?
   /// UA-P-1c — the tailnet this node is signed in to, as a drawable fact.
   ///
   /// The same string `magicDNSSuffix` computes, kept as observable state
@@ -90,6 +94,13 @@ public final class MeshModel {
   /// A standing account note — why the gate could not be recorded, when it
   /// could not. Absent is the ordinary case.
   public private(set) var accountNote: String?
+  /// TS-7 — this node's machine name, for the approval page's row: what an
+  /// admin looks for in the console (`FieldTruffleRuntime.machineName`). Nil
+  /// with no node.
+  public private(set) var machineName: String?
+  /// TS-7 — where an admin approves this phone, or nil where no page can be
+  /// named. The app starts every node on the default control server.
+  public let adminConsoleURL = FieldTruffleRuntime.machinesAdminURL(controlURL: nil)
   /// IOS-8b — the login this phone REMEMBERS (`account.login` beside truffle's
   /// state), whether or not a node is running. The corner asks "who is this
   /// phone signed in as" before CONNECT, and the answer was on disk all along;
@@ -104,16 +115,30 @@ public final class MeshModel {
 
   @ObservationIgnored private var runtime: FieldTruffleRuntime?
   @ObservationIgnored private var eventsTask: Task<Void, Never>?
-  @ObservationIgnored private var lastLoginURL: URL?
-  /// Whether a login page the node asks for is put in front of the person. A
+  /// The login page's whole state: the page in front of the person, the last
+  /// one the node minted, and whether a minted page goes in front at all. A
   /// start the person made (`signIn()`) presents it; a start `keepUp()` made
-  /// only records it, and the corner offers Sign in — Safari never opens on
-  /// its own.
-  @ObservationIgnored private var presentsLogin = false
+  /// only records it, and the corner offers Sign in again — the sheet never
+  /// opens on its own. Every rule is `LoginPresentation`'s.
+  private var loginSheet = LoginPresentation()
   /// The next start after a drop, waiting on the backoff, and how many came
   /// before it since the mesh was last up.
   @ObservationIgnored private var retryTask: Task<Void, Never>?
   @ObservationIgnored private var retryAttempt = 0
+  /// A sign-out's stop and sweep, while they run (`signOut`). A sign-in waits
+  /// for it: a new node started over the state directory the sweep is about
+  /// to remove would lose its keys under it.
+  @ObservationIgnored private var signOutTask: Task<Void, Never>?
+  /// One sign-in waits behind a sign-out at most: two taps on the welcome's
+  /// Continue during `.stopping` are one sign-in.
+  @ObservationIgnored private var signInQueued = false
+  /// A node coming up (`launch`), from the moment it is asked for until it is
+  /// running or has failed — `runtime` is nil all that while, so this is what
+  /// says a start is under way. Each start has a generation; a sign-out moves
+  /// the generation on, and a start that finds itself superseded stops the
+  /// node it brought up instead of keeping it.
+  @ObservationIgnored private var startTask: Task<Void, Never>?
+  @ObservationIgnored private var startGeneration = 0
   /// The network coming back is a reason to retry at once rather than at the
   /// end of the backoff.
   @ObservationIgnored private var pathMonitor: NWPathMonitor?
@@ -275,16 +300,47 @@ public final class MeshModel {
     }
   }
 
+  /// What `signIn()` does, pure (pinned by tests). A sign-out still stopping
+  /// its node comes first: TS-7's welcome stands through `.stopping`, so its
+  /// Continue can land before the old node has stopped, and TS-7b's Sign in
+  /// again signs out and in at once — a node started then would run over the
+  /// state directory the sweep is about to remove. Then: no node starts one
+  /// (`regating` too: UA-P-5's restart has a beat with no runtime in hand, and
+  /// a tap landing in it would start a second node); a node re-surfaces its
+  /// page.
+  /// A start already under way is a node standing: the person's second tap
+  /// asks for its page rather than starting another (the welcome's Continue
+  /// is live through `.starting`).
+  enum SignInStep: Equatable, Sendable {
+    case afterSignOut, start, requestLogin
+  }
+
+  nonisolated static func signInStep(
+    signingOut: Bool, starting: Bool, hasRuntime: Bool, regating: Bool
+  ) -> SignInStep {
+    if signingOut { return .afterSignOut }
+    return !hasRuntime && !starting && !regating ? .start : .requestLogin
+  }
+
   /// The person's SIGN IN: the first sign-in starts a node and puts its login
   /// page in front of them; a node already standing re-surfaces the page.
   public func signIn() {
-    // `regating` as well as the runtime: UA-P-5's restart has a beat with no
-    // runtime in hand, and a tap landing in it would start a second node.
-    if runtime == nil, !regating {
+    switch Self.signInStep(
+      signingOut: signOutTask != nil, starting: startTask != nil, hasRuntime: runtime != nil, regating: regating)
+    {
+    case .afterSignOut:
+      guard !signInQueued, let pending = signOutTask else { return }
+      signInQueued = true
+      Task {
+        await pending.value
+        signInQueued = false
+        signIn()
+      }
+    case .start:
       retryTask?.cancel()
       retryTask = nil
       start(presentingLogin: true)
-    } else {
+    case .requestLogin:
       requestLogin()
     }
   }
@@ -297,10 +353,13 @@ public final class MeshModel {
     retryTask = nil
   }
 
+  /// A fresh node: the last one's page is dead, and only the person's own
+  /// start puts the new one's in front of them.
   private func start(presentingLogin: Bool) {
-    presentsLogin = presentingLogin
+    loginSheet.apply(.runtimeGone)
+    if presentingLogin { personAsked() }
     state = .starting
-    Task { await startRuntime() }
+    launch()
   }
 
   /// A node that stopped or failed still holds its runtime: stop it for good,
@@ -314,13 +373,13 @@ public final class MeshModel {
     eventsTask?.cancel()
     eventsTask = nil
     peers = []
-    presentsLogin = false
+    loginSheet.apply(.runtimeGone)
     state = .starting
     Task {
       await old.stop()
       guard self.runtime === old, state == .starting else { return }
       self.runtime = nil
-      await startRuntime()
+      await launch().value
     }
   }
 
@@ -371,19 +430,35 @@ public final class MeshModel {
     retryTask?.cancel()
     retryTask = nil
     retryAttempt = 0
-    presentsLogin = false
     let sweep = SignOutSweep(
       login: rememberedLogin ?? loginName, stateDirectory: stateDirectory,
       legacyStateDirectory: legacyStateDirectory)
-    lastLoginURL = nil
-    loginPage = nil
+    loginSheet.apply(.runtimeGone)
+    signInNote = nil
     rememberedLogin = nil
     loginName = nil
     tailnetDomain = nil
+    machineName = nil
     isGatedOnAccount = false
     accountNote = nil
     peers = []
+    // Whatever start is under way is superseded now (`launch`).
+    startGeneration &+= 1
     guard let runtime else {
+      if let starting = startTask {
+        // A node is still coming up: it stops itself when it arrives, and the
+        // sweep waits for that — never a state directory removed under a
+        // starting node, nor a superseded start restoring this account.
+        startTask = nil
+        state = .stopping
+        signOutTask = Task {
+          await starting.value
+          sweep.run()
+          if state == .stopping { state = .off }
+          signOutTask = nil
+        }
+        return
+      }
       sweep.run()
       state = .off
       return
@@ -392,16 +467,37 @@ public final class MeshModel {
     eventsTask?.cancel()
     eventsTask = nil
     self.runtime = nil
-    Task {
+    signOutTask = Task {
       await runtime.stop()
       sweep.run()
       if state == .stopping { state = .off }
+      signOutTask = nil
     }
   }
 
-  /// Safari sheet dismissed — ask the node to re-check its auth state.
-  public func loginSheetDismissed() {
-    loginPage = nil
+  /// TS-7 — the person closed the sign-in sheet. The page stops being put in
+  /// front of them (Continue, or Sign in again, puts it back), and the node is
+  /// asked again, in case they finished at Tailscale before they closed it.
+  ///
+  /// The order is the fix. `refresh()` clears truffle's auth-URL dedupe and
+  /// re-reads the status at once, so the URL comes straight back inside the
+  /// same call; with the page still presenting, the sheet the person had just
+  /// closed rose again under their thumb (the SFSafariViewController sheet's
+  /// `loginSheetDismissed`, before TS-7).
+  public func loginCancelled() {
+    loginSheet.apply(.personCancelled)
+    refreshAfterSheet()
+  }
+
+  /// TS-7 — the sheet could not be shown. Said where the act is, and treated
+  /// as a Cancel: nothing re-presents it until the person asks again.
+  public func loginSheetFailed(_ reason: String) {
+    signInNote = reason
+    loginSheet.apply(.personCancelled)
+    refreshAfterSheet()
+  }
+
+  private func refreshAfterSheet() {
     guard let runtime else { return }
     Task {
       try? await runtime.refresh()
@@ -412,30 +508,53 @@ public final class MeshModel {
   /// The SIGN IN act: re-surface the pending login page, or nudge the node
   /// to emit a fresh one.
   public func requestLogin() {
-    presentsLogin = true
-    if let url = lastLoginURL {
-      loginPage = LoginPage(url: url)
-    } else if let runtime {
+    personAsked()
+    if loginSheet.page == nil, let runtime {
       Task { try? await runtime.refresh() }
     }
   }
 
+  private func personAsked() {
+    signInNote = nil
+    loginSheet.apply(.personAsked)
+  }
+
   // MARK: - Runtime plumbing
 
-  private func startRuntime() async {
+  /// Every node starts here — the person's start, a restart, a re-gate — and
+  /// is held as `startTask` from this call until it is up or has failed.
+  @discardableResult
+  private func launch() -> Task<Void, Never> {
+    startGeneration &+= 1
+    let generation = startGeneration
+    let task = Task {
+      await bringUp(generation)
+      if startGeneration == generation { startTask = nil }
+    }
+    startTask = task
+    return task
+  }
+
+  private func bringUp(_ generation: Int) async {
     do {
       let runtime = try await FieldTruffleRuntime.start(
         deviceName: UIDevice.current.name,
         stateDirectory: stateDirectory,
         onAuthRequired: { [weak self] url in
-          guard let self else { return }
-          self.lastLoginURL = url
-          if self.presentsLogin { self.loginPage = LoginPage(url: url) }
+          // A superseded start's page is nobody's.
+          guard let self, self.startGeneration == generation else { return }
+          self.loginSheet.apply(.urlArrived(url))
         })
+      guard generation == startGeneration else {
+        // A sign-out superseded this start while the node came up.
+        await runtime.stop()
+        return
+      }
       self.runtime = runtime
       if let gated = runtime.gatedLogin { rememberedLogin = gated }
       await applyCurrentPhase()
       await refreshPeers()
+      guard generation == startGeneration, self.runtime === runtime else { return }
       eventsTask = Task { [weak self] in
         guard let stream = await self?.runtime?.events() else { return }
         for await event in stream {
@@ -445,8 +564,7 @@ public final class MeshModel {
             if await self.wentDown(Self.state(for: phase)) { return }
             await self.refreshAccount()
           case .authRequired(let url):
-            self.lastLoginURL = url
-            if self.presentsLogin { self.loginPage = LoginPage(url: url) }
+            self.loginSheet.apply(.urlArrived(url))
           case .peersChanged:
             await self.refreshPeers()
             // UA-P-5 — the login is re-read HERE as well as on a phase change.
@@ -472,7 +590,9 @@ public final class MeshModel {
         await self.lost(runtime, reason: "the mesh runtime stopped")
       }
     } catch {
+      guard generation == startGeneration else { return }
       runtime = nil
+      loginSheet.apply(.runtimeGone)
       dropped(Self.shortReason(error))
     }
   }
@@ -490,6 +610,10 @@ public final class MeshModel {
     default:
       state = next
       if next == .up { retryAttempt = 0 }
+      // TS-7 — signed in: the page is spent, and the sheet closes on it
+      // (`SignInSheet.step`). Approval counts: the person has signed in, and
+      // the phone draws the wait itself.
+      if next == .up || next == .needsMachineAuth { loginSheet.apply(.signedIn) }
       return false
     }
   }
@@ -501,6 +625,7 @@ public final class MeshModel {
     eventsTask = nil
     runtime = nil
     peers = []
+    loginSheet.apply(.runtimeGone)
     await dead.stop()
     dropped(reason)
   }
@@ -524,6 +649,7 @@ public final class MeshModel {
     guard let runtime else { return }
     tailnetDomain = await magicDNSSuffix
     loginName = await runtime.loginName
+    machineName = await runtime.machineName
     isGatedOnAccount = await runtime.isGatedOnAccount
     if let note = await runtime.accountNote { accountNote = note }
     await regateIfNeeded()
@@ -557,7 +683,11 @@ public final class MeshModel {
     eventsTask?.cancel()
     eventsTask = nil
     peers = []
-    loginPage = nil
+    // A login arrived: the page is spent, and the replacement comes up signed
+    // in. Its own boot must not present a page the person never asked for —
+    // this can run with the phase still `.needsLogin` (truffle moves a
+    // `.needsLogin` node only to `.running`), before `wentDown` has seen `.up`.
+    loginSheet.apply(.signedIn)
     // A note is about the node it came from, and that node is going. Carrying
     // it onto the replacement would be this app asserting a condition nobody
     // has observed on the thing now running.
@@ -571,7 +701,7 @@ public final class MeshModel {
     await runtime.stop()
     guard self.runtime === runtime, state == .starting else { return }
     self.runtime = nil
-    await startRuntime()
+    await launch().value
   }
 
   private func refreshPeers() async {
@@ -613,5 +743,56 @@ public final class MeshModel {
   public nonisolated static func shortReason(_ error: Error) -> String {
     let text = String(describing: error)
     return text.count > 120 ? String(text.prefix(117)) + "…" : text
+  }
+}
+
+/// TS-7 — every rule for the login page, in one place (pinned by
+/// `LoginPresentationTests`, with no node).
+///
+/// Three facts move together and were three loose fields before: the page in
+/// front of the person, the last page the node minted, and whether a minted
+/// page goes in front at all. Two defects lived in the gaps between them. A
+/// Cancel re-opened the sheet, because the refresh after it re-minted the URL
+/// while the page was still presenting. And a page outlived its node: a drop,
+/// a restart or a re-gate left the dead node's URL standing, and the next
+/// start put it in front of a person who had asked for nothing.
+struct LoginPresentation: Equatable, Sendable {
+  /// The page in front of the person, or about to be.
+  private(set) var page: URL?
+  /// The last page the node minted, kept for the person's next ask.
+  private(set) var lastURL: URL?
+  /// Whether a page the node mints goes in front of the person.
+  private(set) var presents = false
+
+  enum Event: Equatable, Sendable {
+    /// Continue with Tailscale, or Sign in again.
+    case personAsked
+    /// The node minted a login page.
+    case urlArrived(URL)
+    /// The person closed the sheet.
+    case personCancelled
+    /// The node stopped asking: approval, up, or a login that arrived.
+    case signedIn
+    /// The node that minted the page went: lost, restarted, re-gated away or
+    /// signed out. Its page is dead.
+    case runtimeGone
+  }
+
+  mutating func apply(_ event: Event) {
+    switch event {
+    case .personAsked:
+      presents = true
+      page = lastURL
+    case .urlArrived(let url):
+      lastURL = url
+      if presents { page = url }
+    case .personCancelled:
+      presents = false
+      page = nil
+    case .signedIn, .runtimeGone:
+      presents = false
+      page = nil
+      lastURL = nil
+    }
   }
 }

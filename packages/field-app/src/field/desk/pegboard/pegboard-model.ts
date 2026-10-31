@@ -106,37 +106,49 @@ export interface LaidSpecimen {
 export interface BoardSpecimen {
   readonly type: string;
   readonly label: string;
-  /** The hang's top on the board — the row it hangs in. */
+  /** The lay's line it hangs on (0 the first) — the row ↑ ↓ step between. */
   readonly row: number;
   readonly rect: ScreenRect;
 }
 
 /**
  * Each specimen's OBJECT on screen as the board draws it — the kernel's fit inside its hang (`specimenFit`, the law
- * core's grab point reads), offset by the drawer as drawn and the board's scroll — in READING order: row by row, each
- * row left to right.
+ * core's grab point reads), offset by the drawer as drawn and the board's scroll — in the LAY'S order (`order`, core's
+ * `trayHung`: line by line, each line left to right — the order ← → walk), a type the lay does not name left out.
+ * Its row is the lay's line. The kernel writes no line into the world, so it is read back from that order: a line
+ * starts wherever a hang's x falls back (`layTray` starts each line at the margin). It is never the hang's top: a line
+ * hangs its specimens' tops together only as near as their holes allow, and a shelf's sits below a hook's (item 119:
+ * the phone's 132.52 under the pad's 130).
  */
 export function boardSpecimens(
   laid: readonly LaidSpecimen[],
+  order: readonly string[],
   drawer: { readonly x: number; readonly y: number },
   scroll: number,
 ): BoardSpecimen[] {
-  return laid
-    .map((s) => {
-      const fit = specimenFit(s.hang, s.natural);
-      return {
-        type: s.type,
-        label: s.label,
-        row: s.hang.y,
-        rect: {
-          x0: drawer.x + fit.x,
-          y0: drawer.y + fit.y - scroll,
-          x1: drawer.x + fit.x + fit.w,
-          y1: drawer.y + fit.y + fit.h - scroll,
-        },
-      };
-    })
-    .sort((a, b) => a.row - b.row || a.rect.x0 - b.rect.x0);
+  const byType = new Map(laid.map((s) => [s.type, s]));
+  const out: BoardSpecimen[] = [];
+  let line = -1;
+  let lastX = Number.POSITIVE_INFINITY;
+  for (const type of order) {
+    const s = byType.get(type);
+    if (s === undefined) continue;
+    if (s.hang.x <= lastX) line += 1;
+    lastX = s.hang.x;
+    const fit = specimenFit(s.hang, s.natural);
+    out.push({
+      type: s.type,
+      label: s.label,
+      row: line,
+      rect: {
+        x0: drawer.x + fit.x,
+        y0: drawer.y + fit.y - scroll,
+        x1: drawer.x + fit.x + fit.w,
+        y1: drawer.y + fit.y + fit.h - scroll,
+      },
+    });
+  }
+  return out;
 }
 
 /**

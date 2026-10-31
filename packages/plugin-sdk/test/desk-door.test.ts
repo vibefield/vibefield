@@ -93,6 +93,43 @@ describe("the SDK's /desk door", () => {
     }>().toMatchTypeOf<door.LiveBrowserDevice>();
   });
 
+  it("PT-S1: types a simulator face's device and its nine honest states beside the browser's — its words on ICE's own LiveInfo", () => {
+    // the spec names the binding's two CoreSimulator ids — never a UDID — the device's name and the desk's scheme
+    expectTypeOf<door.LiveSimulatorSpec["source"]>().toEqualTypeOf<"ios-simulator">();
+    expectTypeOf<keyof door.LiveSimulatorSpec>().toEqualTypeOf<
+      "source" | "deviceType" | "runtime" | "label" | "scheme"
+    >();
+    expectTypeOf<door.LiveSimulatorSpec["scheme"]>().toEqualTypeOf<"light" | "dark">();
+    // the face's words ride ICE's own `LiveInfo.extra` (the desk never reads them); the act is the host's, run by the kind
+    expectTypeOf<iceKit.LiveInfo>().toMatchTypeOf<Parameters<typeof door.liveSimulatorFace>[0]>();
+    expectTypeOf<door.LiveSimulatorFace["is"]>().toEqualTypeOf<door.LiveSimulatorState>();
+    expectTypeOf<door.LiveSimulatorFace["act"]>().toEqualTypeOf<(() => void) | undefined>();
+    expect(door.LIVE_SIMULATOR_STATES).toHaveLength(9);
+    // a host reads it with no ICE of its own: the door's readers are plain functions
+    expect(typeof door.liveSimulatorSpec).toBe("function");
+    expect(typeof door.liveSimulatorFace).toBe("function");
+  });
+
+  it("PT-S2: keys this Mac's attachable devices beside LIVE — a synchronous answer, a binding and never a UDID (R11)", () => {
+    // the phone's second service: its own key, never LIVE's nor a page's navigation
+    expect(door.SIMULATOR_DEVICES.name).toBe("vibefield.simulator.devices");
+    expect(door.SIMULATOR_DEVICES).not.toBe(door.LIVE);
+    expect(door.SIMULATOR_DEVICES.name).not.toBe(door.BROWSER_NAVIGATION.name);
+    // a menu act runs once and writes in its own transaction: the answer is the host's last read, never a promise
+    expectTypeOf<door.SimulatorDevices["attachable"]>().toEqualTypeOf<
+      (prefer: string) => door.LiveSimulatorBinding | undefined
+    >();
+    // the binding's two CoreSimulator ids, and nothing that names one Mac's device
+    expectTypeOf<keyof door.LiveSimulatorBinding>().toEqualTypeOf<"deviceType" | "runtime">();
+    // the door names no capture technology: a kind never learns how its frames are made (James's choice 4)
+    const from = SOURCE.indexOf("export interface LiveSimulatorBinding");
+    const words = SOURCE.slice(from, SOURCE.indexOf("export const SIMULATOR_DEVICES", from));
+    expect(words.length).toBeGreaterThan(0);
+    expect(words).not.toMatch(
+      /ScreenCaptureKit|\bSCK\b|desktopCapturer|getDisplayMedia|serve-sim|IOSurface|simctl|sharedTexture/u,
+    );
+  });
+
   it("hands over the kind contract, the placement keys and the service keys", () => {
     expect(door.defineObject).toBe(iceDesk.defineObject);
     expect(door.isObjectKind).toBe(iceDesk.isObjectKind);

@@ -29,10 +29,14 @@ import {
   type ThemeState,
   ThemeState as ThemeStateSchema,
   type UpdateChannel,
+  UpdateCheckResult,
   UpdateConfirmRequest,
   UpdateConfirmResult,
   UpdateDeclineRequest,
   UpdateDoctorResult,
+  UpdateDownloadRequest,
+  UpdateDownloadResult,
+  UpdateMoveResult,
   UpdatePrepareResult,
   UpdateSetChannelRequest,
   UpdateSetEnabledRequest,
@@ -408,9 +412,9 @@ contextBridge.exposeInMainWorld("vibefield", {
    * URL, every payload parsed both ways (a malformed one throws here instead of crossing). Its state rides
    * `onDesktopState` (`update`). */
   update: {
-    check: async (): Promise<void> => {
-      await ipcRenderer.invoke(IPC_CHANNELS.updateCheck);
-    },
+    /** AU-1 (LC-5) — answered when the check settles; a found update's download goes on (the view says it) */
+    check: async (): Promise<UpdateCheckResult> =>
+      UpdateCheckResult.parse(await ipcRenderer.invoke(IPC_CHANNELS.updateCheck)),
     setEnabled: async (enabled: boolean): Promise<void> => {
       await ipcRenderer.invoke(
         IPC_CHANNELS.updateSetEnabled,
@@ -426,6 +430,14 @@ contextBridge.exposeInMainWorld("vibefield", {
     decline: async (version: string): Promise<void> => {
       await ipcRenderer.invoke(IPC_CHANNELS.updateDecline, UpdateDeclineRequest.parse({ version }));
     },
+    /** AU-1 (AU-G5, AU-G6) — download THIS found version; a refusal comes back in main's words */
+    download: async (version: string): Promise<UpdateDownloadResult> =>
+      UpdateDownloadResult.parse(
+        await ipcRenderer.invoke(
+          IPC_CHANNELS.updateDownload,
+          UpdateDownloadRequest.parse({ version }),
+        ),
+      ),
     prepareRestart: async (): Promise<UpdatePrepareResult> =>
       UpdatePrepareResult.parse(await ipcRenderer.invoke(IPC_CHANNELS.updatePrepareRestart)),
     confirmRestart: async (token: string): Promise<UpdateConfirmResult> =>
@@ -437,6 +449,9 @@ contextBridge.exposeInMainWorld("vibefield", {
       ),
     doctor: async (): Promise<UpdateDoctorResult> =>
       UpdateDoctorResult.parse(await ipcRenderer.invoke(IPC_CHANNELS.updateDoctor)),
+    /** AU-7 (AU-G8) — Move to Applications through the quit gate; answered when the gate decides */
+    moveToApplications: async (): Promise<UpdateMoveResult> =>
+      UpdateMoveResult.parse(await ipcRenderer.invoke(IPC_CHANNELS.updateMoveToApplications)),
   },
   deck: {
     /** Say Godview's deck state by name — or null for none — never a position

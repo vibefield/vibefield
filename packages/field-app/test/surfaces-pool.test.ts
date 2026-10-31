@@ -110,6 +110,8 @@ class FakeSurfaceHost {
   readonly attaches: AttachRequest[] = [];
   readonly demands: { attachmentId: string; demand: LiveSurfaceDemandV1 }[] = [];
   readonly detaches: string[] = [];
+  /** PT-S2: the device acts the control port carried, with the attachment each named. */
+  readonly devices: { attachmentId: string; command: unknown }[] = [];
   readonly attachmentIds: string[] = [];
   readonly transport: LiveSurfaceRendererTransport<LiveSurfaceClosableFrame>;
   #rejectNext: { code: string; message: string } | null = null;
@@ -150,6 +152,7 @@ class FakeSurfaceHost {
       attachmentId?: string;
       ticket?: { token?: string };
       demand?: LiveSurfaceDemandV1;
+      command?: unknown;
     };
     if (message.type === "attach" && message.requestId !== undefined) {
       this.attaches.push({
@@ -191,6 +194,10 @@ class FakeSurfaceHost {
     }
     if (message.type === "detach" && message.attachmentId !== undefined) {
       this.detaches.push(message.attachmentId);
+      return;
+    }
+    if (message.type === "device" && message.attachmentId !== undefined) {
+      this.devices.push({ attachmentId: message.attachmentId, command: message.command });
     }
   }
 }
@@ -552,6 +559,30 @@ describe("surface pool", () => {
     // Revisions never restart with the attachment they are declared against.
     const revisions = host.demands.map((entry) => entry.demand.revision);
     expect(new Set(revisions).size).toBe(revisions.length);
+  });
+
+  it("PT-S2: a handle's DEVICE act reaches its live attachment's control port — soft-failing (false) while attaching, lost or released", async () => {
+    const { host, tickets, pool } = await poolHarness();
+
+    const handle = pool.acquire("phone", { tickets, initialDemand: LIVE_30 });
+    // still attaching: there is no attachment to carry it
+    expect(handle.device?.({ verb: "boot" })).toBe(false);
+    await settle();
+    expect(handle.status).toBe("live");
+    expect(handle.device?.({ verb: "boot" })).toBe(true);
+    expect(host.devices).toEqual([
+      { attachmentId: host.lastAttachmentId, command: { verb: "boot" } },
+    ]);
+
+    // lost: nothing is sent until a retry attaches again
+    host.detach();
+    expect(handle.status).toBe("lost");
+    expect(handle.device?.({ verb: "show" })).toBe(false);
+
+    // released: this holder may send nothing, whatever the surface
+    handle.release();
+    expect(handle.device?.({ verb: "show" })).toBe(false);
+    expect(host.devices).toHaveLength(1);
   });
 
   it("reports a rejected attach as lost, and recovers on retry", async () => {

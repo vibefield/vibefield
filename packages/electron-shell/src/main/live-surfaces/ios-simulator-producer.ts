@@ -24,6 +24,7 @@ import {
   type SckCaptureClientStartRequest,
   type SckCaptureGeometryOverride,
   type SckCaptureSession,
+  type SckCaptureUnresolvedReason,
   SckLiveSurfaceRuntime,
   type SckLiveSurfaceRuntimeStats,
 } from "./sck-producer";
@@ -194,6 +195,16 @@ function captureError(
   return new SckCaptureClientError({ code, message, recovery });
 }
 
+/** A resolver's own refusal: `source-not-found`, with its typed reason (PT-S2 — the bound simulator reads the reason,
+ * never the message). */
+function unresolved(
+  reason: SckCaptureUnresolvedReason,
+  message: string,
+  recovery: LiveSurfaceErrorV1["recovery"] = "automatic",
+): SckCaptureClientError {
+  return new SckCaptureClientError({ code: "source-not-found", message, recovery }, reason);
+}
+
 function titleMatchesDevice(windowTitle: string, device: BootedSimulatorDevice): boolean {
   if (windowTitle === device.name) return true;
   return (
@@ -270,7 +281,7 @@ export class IosSimulatorSourceResolver implements IosSimulatorResolutionProvide
       (device) => device.udid.toUpperCase() === source.udid.toUpperCase(),
     );
     if (matches.length !== 1) {
-      throw captureError("source-not-found", "The selected Simulator device is not booted");
+      throw unresolved("not-booted", "The selected Simulator device is not booted");
     }
     const device = matches[0]!;
     const candidates = windows.filter(
@@ -278,7 +289,7 @@ export class IosSimulatorSourceResolver implements IosSimulatorResolutionProvide
         window.bundleIdentifier === SIMULATOR_BUNDLE_IDENTIFIER && window.title === device.name,
     );
     if (candidates.length === 0) {
-      throw captureError("source-not-found", "The booted Simulator device has no capture window");
+      throw unresolved("no-window", "The booted Simulator device has no capture window");
     }
 
     let selected: MacosCaptureSource | undefined;
@@ -286,7 +297,7 @@ export class IosSimulatorSourceResolver implements IosSimulatorResolutionProvide
     if (source.windowRef !== undefined) {
       selected = candidates.find((candidate) => candidate.sourceRef === source.windowRef);
       if (selected === undefined) {
-        throw captureError("source-not-found", "The selected Simulator window reference is stale");
+        throw unresolved("stale", "The selected Simulator window reference is stale");
       }
     } else if (candidates.length === 1) {
       selected = candidates[0];
@@ -307,15 +318,15 @@ export class IosSimulatorSourceResolver implements IosSimulatorResolutionProvide
       }
     }
     if (selected === undefined) {
-      throw captureError("source-not-found", "The Simulator window identity is ambiguous");
+      throw unresolved("ambiguous", "The Simulator window identity is ambiguous");
     }
 
     let sckCrop: ReturnType<typeof LiveSurfaceSckWindowSourceV1.parse>["crop"];
     let geometry: SckCaptureGeometryOverride;
     if (source.crop.mode === "explicit") {
       if (!contained(source.crop.sourceRect, selected.frame)) {
-        throw captureError(
-          "source-not-found",
+        throw unresolved(
+          "viewport",
           "The explicit Simulator viewport exceeds the selected window",
           "user-action",
         );
@@ -342,7 +353,7 @@ export class IosSimulatorSourceResolver implements IosSimulatorResolutionProvide
           !titleMatchesDevice(viewport.windowTitle, device) ||
           !contained(viewport.sourceRect, selected.frame)
         ) {
-          throw captureError("source-not-found", "The Simulator viewport identity changed");
+          throw unresolved("viewport", "The Simulator viewport identity changed");
         }
         sckCrop = { mode: "explicit", sourceRect: viewport.sourceRect };
         geometry = {

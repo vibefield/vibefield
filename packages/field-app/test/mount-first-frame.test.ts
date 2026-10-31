@@ -58,9 +58,16 @@ describe("the first frame", () => {
   it("is the splash, drawn before mountFieldApp returns, in the stored theme", () => {
     localStorage.setItem("vf-dark", "true");
     mountFieldApp({ container, host });
-    // No act(), no await: this is the document the blocked first paint shows.
-    expect(container.querySelector(".vf-splash")).not.toBeNull();
-    expect(container.textContent).toContain("VibeField");
+    // No act(), no await: this is the document the blocked first paint shows —
+    // the field (track FG), here its still, since this document has no WebGPU,
+    // and the words under its mark. The wordmark retired: the mark is the name.
+    expect(container.querySelector(".vf-splash .vf-field")?.getAttribute("data-field")).toBe(
+      "still",
+    );
+    expect(container.querySelector('[role="progressbar"]')?.getAttribute("aria-label")).toBe(
+      "Starting VibeField",
+    );
+    expect(container.textContent).not.toContain("VibeField");
     expect(container.textContent).toContain("waking the daemon");
     expect(document.documentElement.classList.contains("dark")).toBe(true);
     expect(document.documentElement.dataset.theme).toBe("dark");
@@ -81,7 +88,9 @@ describe("the first frame", () => {
     expect(scene?.getAttribute("data-step")).toBe("held");
     expect(scene?.querySelector(".vf-switch-name")?.textContent).toBe("Sandbox");
     expect(scene?.textContent).toContain("waking the daemon");
-    // Never the plain splash first, and never the other theme.
+    // Never the plain splash first (neither the boot's ground nor the switch's
+    // own plain frame), and never the other theme.
+    expect(container.querySelector(".vf-splash")).toBeNull();
     expect(container.textContent).not.toContain("VibeField");
     expect(document.documentElement.dataset.theme).toBe("light");
   });
