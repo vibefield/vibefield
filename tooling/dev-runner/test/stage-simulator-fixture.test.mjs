@@ -2308,6 +2308,66 @@ test("a foreign device booted mid-run: the fence STOPS, teardown touches the run
   assert.match(observed(theirs)[0], /launched no Simulator\.app since its last quit/u);
 });
 
+test("teardown's quit reads the fence AGAIN after the settle, right before its SIGTERM — a device booted meanwhile keeps the app (S-4)", async () => {
+  const ctx = {
+    deleteDevices: false,
+    defaultsBefore: "",
+    crashDir: join(FIXTURES, "no-crash-reports-here"),
+    crashBefore: [],
+  };
+  /** The run launched Simulator.app, and none is up yet: teardown settles; during its sleep the given happens. */
+  const settling = (during) => {
+    const run = ownRun();
+    run.othersAtArm.set(FOREIGN, "Shutdown");
+    run.simulator.shown = 1;
+    run.simulator.launchedAt = ARMED + 30_000;
+    const host = fakeHost();
+    const order = [];
+    const exec = host.deps.exec;
+    host.deps.exec = async (file, args, o) => {
+      if (file === "/usr/bin/xcrun" && args[1] === "list")
+        order.push(host.state.list.includes('"Booted"') ? "list (foreign Booted)" : "list");
+      return exec(file, args, o);
+    };
+    host.deps.kill = (pid, signal) => {
+      order.push(`kill ${signal}`);
+      host.killed.push({ pid, signal });
+    };
+    let slept = false;
+    host.deps.sleep = async () => {
+      if (slept) return;
+      slept = true;
+      during(host);
+      order.push("— the settle's sleep —");
+    };
+    return { run, host, order };
+  };
+  // a foreign device boots, and the run's app appears, while teardown settles: never SIGTERMed beside it
+  const late = settling((host) => {
+    host.state.list = hostList([{ udid: FOREIGN, state: "Booted" }]);
+    host.state.pgrep = "4242";
+  });
+  const verdict = await restoreHost(late.run, late.host.deps, ctx);
+  assert.deepEqual(late.host.killed, [], late.order.join(" → "));
+  // the fence read again after the settle, and nothing killed after it
+  const settled = late.order.indexOf("— the settle's sleep —");
+  assert.ok(late.order.indexOf("list (foreign Booted)", settled) > settled, late.order.join(" → "));
+  const said = late.host.said.find((line) => line.startsWith("PHONE_HOST_RESTORED "));
+  assert.match(said, /left running beside a foreign booted device/u);
+  assert.match(said, /quit-app skipped: a foreign device booted during teardown/u);
+  // another's device kept the run's app (S-1): the run's own side stands, and the observation names it
+  assert.equal(verdict.ownOk, true);
+  assert.equal(verdict.ok, false);
+  // control: the app appears alone — the fence read again is clear, and the quit is SIGTERM
+  const alone = settling((host) => {
+    host.state.pgrep = "4242";
+  });
+  await restoreHost(alone.run, alone.host.deps, ctx);
+  assert.deepEqual(alone.host.killed, [{ pid: 4242, signal: "SIGTERM" }]);
+  const kill = alone.order.indexOf("kill SIGTERM");
+  assert.equal(alone.order[kill - 1], "list", alone.order.join(" → "));
+});
+
 // ─── the responsible app, ENUM and the cost sampler ───────────────────────────────────────────────────────────────────
 
 test("responsibleApp: the ancestor chain's first .app, or none; ps rows keep a comm with spaces", () => {

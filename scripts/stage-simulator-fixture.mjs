@@ -2000,7 +2000,10 @@ export async function restoreHost(run, deps, ctx) {
       continue;
     }
     if (step.do === "quit-app") {
-      ({ word: quit, foreign: quitForeign } = await quitAppNow(run, deps));
+      const r = await quitAppNow(run, deps);
+      quit = r.word;
+      quitForeign = r.foreign;
+      if (r.finding !== undefined) findings.push(r.finding);
       continue;
     }
     const device = run.own.get(step.n);
@@ -2070,12 +2073,28 @@ export async function restoreHost(run, deps, ctx) {
   return verdict;
 }
 
-/** Teardown's quit: proven, SIGTERM, ≤ 10 s. Answers the word it ends on, and whether another's doing kept it (an app
- * proven another's). */
+/** Teardown's quit: proven, then THE FENCE AGAIN — read after the settle and the proof, right before the SIGTERM (RM6
+ * S-4; teardown's first read may be seconds old: a device booted since gets no look else, as the door's `quitApp` reads
+ * it) — SIGTERM, ≤ 10 s. Answers the word it ends on, whether another's doing kept it (an app proven another's, a
+ * foreign device booted), and a finding for HOST-RESTORED. */
 async function quitAppNow(run, deps) {
   const proof = await simulatorNow(run, deps);
   if (proof.running === 0) return { word: "not-running", foreign: false };
   if (!proof.own) return { word: `refused: ${proof.why}`, foreign: proof.foreign === true };
+  const list = await readList(run, deps);
+  if (list === null)
+    return {
+      word: "refused: simctl list failed: the fence is unproven",
+      foreign: false,
+      finding: "quit-app skipped: simctl list failed right before it (the fence unproven)",
+    };
+  if (!fenceClear(list, ownUdids(run)).clear)
+    return {
+      word: BESIDE_FOREIGN,
+      foreign: true,
+      finding:
+        "quit-app skipped: a foreign device booted during teardown: a quit could take it down",
+    };
   deps.kill(proof.pid, "SIGTERM");
   run.simulator.quits += 1;
   if (!(await waitGone(proof.pid, deps, 10_000)))
