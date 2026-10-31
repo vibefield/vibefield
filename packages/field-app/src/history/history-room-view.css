@@ -19,8 +19,9 @@
 
 /* FC-D15: the room ENDS at the reserve (692 in the default window) — the line
    and the face sit on the view's own ground, never on a row. Its top band is
-   the head's and its side edges keep the notches' slivers clear; both are the
-   room's own edge inset (`HistoryRoomView`, from `frame-geometry.ts`). */
+   the head's, the room's own edge inset (`HistoryRoomView`, from
+   `frame-geometry.ts`), and its sides are the window's: the 8 they kept clear
+   for the notches' slivers left with the edges (HN-8; DESIGN.md §10). */
 .vf-history-room {
   position: absolute;
   inset: 0 0 var(--vf-history-reserve) 0;
@@ -54,13 +55,14 @@
 
 /* The faces before the room (2026-10-04; DESIGN.md §8 "History" — "Its first
    open says 'Opening History'"): the same words' place, in the room's box and
-   inside the edges the room keeps — the head's band above, the slivers' 8 at
-   each side (`HistoryOpening.tsx` projects the frame's numbers) — and the
-   room's own top edge, the hairline under the head band, so the room takes the
-   face's place with nothing appearing at its edge. */
+   inside the edges the room keeps — the head's band above
+   (`HistoryOpening.tsx` projects the frame's numbers), and at its sides the
+   window's own since HN-8 — and the room's own top edge, the hairline under
+   the head band, so the room takes the face's place with nothing appearing at
+   its edge. */
 .vf-history-face {
   position: absolute;
-  inset: var(--vf-history-head) var(--vf-history-edge) 0;
+  inset: var(--vf-history-head) 0 0;
   border-top: 1px solid var(--vf-hairline);
 }
 

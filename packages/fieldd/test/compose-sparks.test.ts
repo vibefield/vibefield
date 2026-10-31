@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AgentProfileSet, AgentSessionSummary, SparkRecord } from "@vibefield/contracts";
 import { afterAll, describe, expect, it } from "vitest";
-import { type SparkLaunch, SparkService, SparkStore, sparkSlug } from "../src/compose/sparks";
+import { type SparkLaunch, SparkService, SparkStore, sparkSlug } from "../src/tool-plane/sparks";
 
 // CP-1c — the sparks fieldd keeps and the doors' work (the compose plane, version 2; NS-D1, NS-D2 B, NS-D5, CR-D11).
 // What must hold: an agent that edits a spark's record cannot widen what the spark reaches; a hatch refuses what the

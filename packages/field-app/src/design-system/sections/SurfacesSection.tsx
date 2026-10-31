@@ -1,6 +1,9 @@
 import type { ThemePreference } from "@vibefield/contracts";
 import { SegmentedControl as UiSegmentedControl, UnavailableState } from "@vibefield/design-kit";
-import type { ArtifactPanelPreviewState } from "@vibefield/plugin-browser/design-system";
+import {
+  ArtifactPanelPreview,
+  type ArtifactPanelPreviewState,
+} from "@vibefield/plugin-browser/design-system";
 import { type ReactElement, useState } from "react";
 import { LoadingVeilView } from "../../hud/LoadingVeil";
 import { AppearanceSectionView } from "../../panels/AppearanceSection";
@@ -34,7 +37,6 @@ import {
   type DevicesFixtureState,
   devicesFixture,
 } from "../devices-settings-fixtures";
-import { ArtifactsDrawer } from "../EdgesPreview";
 import { ProfilesSettingsPreview, profilesPreviewHead } from "../ProfilesSettingsPreview";
 import {
   FIXTURE_PROFILE_SETS,
@@ -205,8 +207,8 @@ export function SurfacesSection(): ReactElement {
           </div>
         </Specimen>
         <Specimen
-          title="Artifacts — the Hub in the right edge's drawer"
-          source="hud/edge-tray/EdgeTray.tsx · DESIGN.md §8"
+          title="Artifacts — the Hub at the Artifacts shelf's width"
+          source="plugins/browser/src/ArtifactPanel.tsx · DESIGN.md §8"
           darkStage
         >
           <ArtifactsSpecimen />
@@ -494,14 +496,15 @@ function ProfilesSettingsSpecimen(): ReactElement {
   );
 }
 
-/** The Artifact Hub in every production state, in the drawer that holds it
- * since One Frame FR-4 — the side panel's contents in the 152 column, where
- * the plugin answers with its narrow form. */
+/** The Artifact Hub in every production state at the width the pill's sheet
+ * gives its Artifacts shelf (HN-8, PL-D3) — the stage is a container 504 wide,
+ * the shelf inside the sheet's 544, where the plugin answers with its tile
+ * form. The head's plates show the shelf itself, in the sheet. */
 function ArtifactsSpecimen(): ReactElement {
   const [state, setState] = useState<ArtifactPanelPreviewState>("empty");
   const options = ["empty", "populated", "loading", "unavailable"] as const;
   return (
-    <div className="vf-ds-side-stage">
+    <div className="vf-ds-shelf-plate">
       <div className="vf-ds-production-statebar">
         <span>Production state</span>
         <UiSegmentedControl
@@ -511,7 +514,9 @@ function ArtifactsSpecimen(): ReactElement {
           label="Artifact panel state"
         />
       </div>
-      <ArtifactsDrawer state={state} />
+      <div className="vf-ds-shelf-stage">
+        <ArtifactPanelPreview state={state} />
+      </div>
     </div>
   );
 }

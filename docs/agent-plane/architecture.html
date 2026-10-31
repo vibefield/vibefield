@@ -1743,14 +1743,15 @@
                     </td>
                   </tr>
                   <tr>
-                    <td><span class="route">fieldd's door: the <code>vibefield</code> MCP server (CP-1b)</span></td>
+                    <td><span class="route">fieldd's door: the <code>vibefield</code> MCP server (CP-1b; the tool plane since MT-0)</span></td>
                     <td><span class="badge tone-vibefield">contracts</span></td>
                     <td><span class="badge tone-vibefield">fieldd</span></td>
                     <td>
                       <p>
-                        <code>packages/contracts/src/compose.ts</code> (<code>COMPOSE_VERBS</code>, projected as
-                        <code>compose-tools</code>)<br />
-                        <code>packages/fieldd/src/compose/index.ts</code> · <code>mcp.ts</code> · <code>verbs.ts</code>
+                        <code>packages/contracts/src/tools.ts</code> (<code>TOOLS</code>, projected as
+                        <code>@vibefield/contracts/tools</code>)<br />
+                        <code>packages/fieldd/src/tool-plane/index.ts</code> · <code>door.ts</code> · <code>mcp.ts</code> ·
+                        <code>rooms/compose/verbs.ts</code>
                       </p>
                     </td>
                     <td>
@@ -1758,10 +1759,12 @@
                         MCP over the door's lane, one JSON-RPC message per line: <code>2026-07-28</code> (stateless:
                         <code>server/discover</code>, <code>_meta</code> on every request, <code>resultType</code>, a
                         list's <code>ttlMs</code>) and the handshake before it, on the same connection. fieldd maps the
-                        floor's pane to its run. A spark's own session, known by its signed record (CP-1c), is served
-                        the six CP-1 read tools, each held to the spark's Agent Profiles and written to the audit log
-                        before it acts (CP-L6). Any other caller is served none and leaves one
-                        <code>compose.door.plain</code> line (CP-L1). The door knows no vendor (AR-L1): any agent that
+                        floor's pane to its run, and serves each caller its audience's rows (MT-0): a spark, known by
+                        its signed record (CP-1c), every served row; a plain run whose verified record names no spark the
+                        <code>agent</code> rows (History, the projects list). Each call is held to its row and to the
+                        caller's Agent Profiles, and written to the audit log as <code>tools.&lt;name&gt;</code> before
+                        it acts (CP-L6). A pane, the outside and an unsettled run are served none and leave one
+                        <code>tools.door.plain</code> line. The door knows no vendor (AR-L1): any agent that
                         speaks MCP over stdio is served the same way, and who it is comes from the walk. The lane link
                         redials after a floor restart or a dropped socket.
                       </p>
@@ -1769,6 +1772,36 @@
                     <td>
                       <span class="badge tone-built">Built</span>
                       <p>CP-1b <code>42748065</code> · <code>3e93ba71</code>; CP-1c <code>f98d0d2b</code> · <code>1060d4b2</code>. The seam's owner is api's <a href="api.html#cat-compose-door"><code>vibefield</code> MCP door</a>, and the window's <a href="api.html#cat-compose"><code>compose.sparks.*</code></a> doors are beside it.</p>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">the tool plane: one catalog, one door (MT-0)</span></td>
+                    <td><span class="badge tone-vibefield">contracts</span></td>
+                    <td><span class="badge tone-vibefield">fieldd</span></td>
+                    <td>
+                      <p>
+                        <code>packages/contracts/src/tools.ts</code> · <code>gen/tools.ts</code> ·
+                        <code>test/tools.test.ts</code><br />
+                        <code>packages/fieldd/src/tool-plane/</code> (<code>rooms/&lt;room&gt;/</code>) ·
+                        <code>agent-briefing.ts</code>
+                      </p>
+                    </td>
+                    <td>
+                      <p>
+                        Every tool VibeField offers an agent is one row: <code>&lt;noun&gt;_&lt;verb&gt;</code>, its
+                        family, category, audience (<code>agent</code> or <code>spark</code>), scope, its four
+                        annotations, its slice and its schemas. A row with schemas is served and a row without is
+                        planned; a lint holds every row's columns and gives every schema a row. fieldd lists each caller
+                        its audience's rows, holds every call to its row again, and each later room is a folder under
+                        <code>rooms/</code> over fieldd's own services: no puppeteer or rosetta package anywhere in the
+                        plane (R29), and no Electron, plugin package or window code in a room (R30). The briefing
+                        reaches every run fieldd starts (MT-D9). The design: <code>draft/thinking-tool-plane.md</code>,
+                        ruled 2026-10-30.
+                      </p>
+                    </td>
+                    <td>
+                      <span class="badge tone-designed">Designed</span>
+                      <p>MT-0, drafted on the compose stack. The seam's owner is api's <a href="api.html#cat-compose-door"><code>vibefield</code> door</a>.</p>
                     </td>
                   </tr>
                 </tbody>

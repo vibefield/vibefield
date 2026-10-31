@@ -330,8 +330,8 @@ export function MeMenuView({
   // canvas under it never has to know a menu was open. Esc folds it from
   // ANYWHERE, not only from inside the rows: a menu opened with the pointer
   // leaves focus on the face, outside them. Capture + stopImmediatePropagation,
-  // as the drawers do, so the field's own Esc (leave a container) waits for the
-  // next press.
+  // as the pill's sheet does, so the field's own Esc (leave a container) waits
+  // for the next press.
   useEffect(() => {
     if (!open) return;
     const onPointerDown = (event: PointerEvent): void => {

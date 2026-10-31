@@ -12,12 +12,9 @@ export const HEAD_BAND_PX = 52;
 
 /** FC-D15 — the reserve: a covered view's content ends this far above the
  * window's foot (at 692 in the default 1180 × 780 window), where the line
- * floats over the view's own ground. */
+ * floats over the view's own ground. Its sides are the window's: the 8 it kept
+ * clear at each for the notches' slivers left with the edges (HN-8; §10). */
 export const COVER_RESERVE_PX = 88;
-
-/** FC-D15 — what a covered view keeps clear at each side edge, for the notches'
- * slivers (DESIGN.md §8, edge trays). */
-export const COVER_EDGE_CLEAR_PX = 8;
 
 /** LN-D1 — the line, `[views] snapshot create` (DESIGN.md §10, §8 "The line"):
  * 300 × 52 on the line's glass, standing 76 from the window's left — never

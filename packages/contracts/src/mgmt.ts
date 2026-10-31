@@ -1130,10 +1130,10 @@ export const NativeDoorCloseResult = z
   .passthrough();
 export type NativeDoorCloseResult = z.infer<typeof NativeDoorCloseResult>;
 
-/** `native.door.info` — the bridge command a spark's briefing names: the door's absolute path, the floor's own
- * executable, and the arguments (`["door", "--endpoint", <endpoint>]`). Asked at every launch, so an app update or a
- * dev target never leaves a stale path. A platform with no door (Windows: a named pipe's client pid is out of CP-1a's
- * scope) answers `UNAVAILABLE {service: "door"}`.
+/** `native.door.info` — the bridge command a run's briefing names, a spark's (CP-1d) and, since MT-0, a plain run's:
+ * the door's absolute path, the floor's own executable, and the arguments (`["door", "--endpoint", <endpoint>]`). Asked
+ * at every launch, so an app update or a dev target never leaves a stale path. A platform with no door (Windows: a named
+ * pipe's client pid is out of CP-1a's scope) answers `UNAVAILABLE {service: "door"}`.
  * *Corrected 2026-10-31 (CP-1d): this said fieldd writes the command into a spark's `.mcp.json` at every launch. That
  * was route B's, which was never wired. CP-1d writes no `.mcp.json` (docs/agent-plane/spark-briefings.md): the command
  * rides puppeteer's per-run briefing.* */

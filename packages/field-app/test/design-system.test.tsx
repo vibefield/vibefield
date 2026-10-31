@@ -225,6 +225,16 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       expect(tile?.querySelector("svg.vf-glyph"), name).not.toBeNull();
       expect(tile?.querySelector("small")?.textContent, name).toBe("instrument");
     }
+    // HN-8 (§13): Artifacts' glyph in a button is `package`, the pill's button's and the covered
+    // views' circle's, at rest and at the circle's 18 — never `sidepanel`, the retired side
+    // panel's toggle, inverted. (Named for the button: the head's `artifacts` plate is below.)
+    const artifactsButton = container?.querySelector<HTMLElement>(
+      '#glyphs button[title="Artifacts"]',
+    );
+    const packageGlyph = artifactsButton?.querySelector("[data-glyph]");
+    expect(packageGlyph?.getAttribute("data-glyph")).toBe("package");
+    expect(packageGlyph?.getAttribute("width")).toBe("18");
+    expect(artifactsButton?.dataset.active).toBe("false");
     // One Frame FR-1: the view frame on fixtures — the shipping track and cover
     // over a field, and a plate per state the page's Chrome & Composer plates
     // show for the frame (the last the keys as Windows prints them).
@@ -343,10 +353,17 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       ),
     ).toEqual([
       "top:mac",
+      "package-dot:mac",
       "folder:mac",
       "narrow:mac",
       "renaming:mac",
       "explorer:mac",
+      "artifacts:mac",
+      "artifacts-off:mac",
+      "artifacts-cant-run:mac",
+      "artifacts-opening:mac",
+      "artifacts-not-starting:mac",
+      "covered:mac",
       "zoom:mac",
       "palette:mac",
       "sync-question:mac",
@@ -383,6 +400,52 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(question?.querySelector('form[aria-label="Sync question"]')).not.toBeNull();
     expect(question?.querySelector(".vf-head-docs")?.hasAttribute("hidden")).toBe(true);
     expect(question?.querySelectorAll('input[type="checkbox"]')).toHaveLength(3);
+    // HN-8 (PL-D1, PL-D2) — the package after the chevron's rule, with its standing dot in its
+    // own plate; the sheet on Artifacts holding the Hub's own adapter, and with none bound each of
+    // its four words (ruling 10); and under a cover the same sheet, grown from the package circle,
+    // on Artifacts alone
+    const pack = headPlate("top")?.querySelector<HTMLButtonElement>(".vf-head-pack");
+    expect(pack?.previousElementSibling?.className).toBe("vf-head-rule");
+    expect(pack?.previousElementSibling?.previousElementSibling?.className).toBe("vf-head-chev");
+    expect(pack?.title).toBe("Artifacts");
+    expect(pack?.querySelector(".vf-head-pack-dot")).toBeNull();
+    const dotted = headPlate("package-dot")?.querySelector<HTMLButtonElement>(".vf-head-pack");
+    expect(dotted?.querySelector(".vf-head-pack-dot")).not.toBeNull();
+    expect(dotted?.title).toBe("Artifacts — vibe-field's source is unavailable");
+    const artifacts = headPlate("artifacts");
+    const on = artifacts?.querySelector<HTMLButtonElement>('.vf-head-pack[aria-expanded="true"]');
+    expect(on?.title).toBe("Close  Esc");
+    expect(artifacts?.querySelector(".vf-head-chev")?.getAttribute("title")).toBe("Fields");
+    expect(
+      artifacts?.querySelector('[data-shelf="artifacts"][data-shown] .vf-artifact-panel'),
+    ).not.toBeNull();
+    const off = headPlate("artifacts-off")?.querySelector('[data-shelf="artifacts"]');
+    expect(off?.textContent).toContain("Artifacts are off");
+    expect(off?.textContent).toContain("Turn on the Browser plugin in Settings › Plugins.");
+    const cantRun = headPlate("artifacts-cant-run")?.querySelector('[data-shelf="artifacts"]');
+    expect(cantRun?.textContent).toContain("Artifacts can't run");
+    expect(cantRun?.textContent).toContain(
+      "The Browser plugin can't run in this VibeField — see Settings › Plugins.",
+    );
+    expect(
+      headPlate("artifacts-opening")?.querySelector(".vf-head-waits[data-late]")?.textContent,
+    ).toBe("Opening Artifacts…");
+    // past the 10 s bound the plate says so at once, with nothing left to turn from
+    const stalled = headPlate("artifacts-not-starting")?.querySelector(".vf-head-waits");
+    expect(stalled?.hasAttribute("data-late")).toBe(false);
+    expect(stalled?.hasAttribute("data-turning")).toBe(false);
+    expect(stalled?.textContent).toContain("Artifacts aren't starting");
+    expect(stalled?.textContent).toContain(
+      "Turn the Browser plugin off and on in Settings › Plugins.",
+    );
+    const covered = headPlate("covered");
+    expect(covered?.querySelector(".vf-head")?.hasAttribute("data-covered")).toBe(true);
+    expect(covered?.querySelector('[data-head-place][data-open="true"]')).toBeNull();
+    const circleSheet = covered?.querySelector('.vf-head-sheet[data-open="true"]');
+    expect(circleSheet?.querySelector(".vf-head-sheet-name")?.textContent).toBe("Artifacts");
+    expect(
+      circleSheet?.querySelector('[data-shelf="artifacts"] .vf-artifact-panel'),
+    ).not.toBeNull();
     expect(
       headPlate("palette")?.querySelector('[role="dialog"][aria-label="Command palette"]'),
     ).not.toBeNull();
@@ -470,6 +533,38 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
         ?.value,
     ).toBe("plus");
     expect(document.activeElement?.closest(".vf-peek-pop")).toBeFalsy();
+    // HN-8 (PL-D2) — the package circle: the shipping view at the head's left over each covered
+    // view's own ground, in the head's own words — over Godview's stage, its Stories row there to
+    // keep its side from it; over History's band, a source unavailable; and in the terminals'
+    // title bar while they are maximized, folded there, two sources unavailable
+    const packagePlates = [
+      ...(container?.querySelectorAll<HTMLElement>(".vf-ds-package-plate") ?? []),
+    ];
+    expect(packagePlates.map((p) => p.dataset.state)).toEqual(["godview", "history", "bar"]);
+    const packagePlate = (state: string): HTMLElement | undefined =>
+      packagePlates.find((p) => p.dataset.state === state);
+    const overGodview = packagePlate("godview");
+    expect(overGodview?.querySelector(".vf-godview .vf-stories")).not.toBeNull();
+    expect(overGodview?.querySelector(".vf-package-circle")?.hasAttribute("data-bar")).toBe(false);
+    expect(overGodview?.querySelector(".vf-package-dot")).toBeNull();
+    expect(overGodview?.querySelector(".vf-package-button")?.getAttribute("title")).toBe(
+      "Artifacts",
+    );
+    const overHistory = packagePlate("history");
+    expect(overHistory?.querySelector(".vf-history")).not.toBeNull();
+    expect(overHistory?.querySelector(".vf-package-circle .vf-package-dot")).not.toBeNull();
+    expect(overHistory?.querySelector(".vf-package-button")?.getAttribute("title")).toBe(
+      "Artifacts — vibe-field's source is unavailable",
+    );
+    const inTheBar = packagePlate("bar");
+    expect(inTheBar?.querySelector(".vf-godview")?.getAttribute("data-godview-deck")).toBe(
+      "maximized",
+    );
+    expect(inTheBar?.querySelector(".vf-package-circle")?.getAttribute("data-bar")).toBe("true");
+    expect(inTheBar?.querySelector(".vf-package-circle .vf-package-dot")).not.toBeNull();
+    expect(inTheBar?.querySelector(".vf-package-button")?.getAttribute("aria-label")).toBe(
+      "Artifacts — 2 sources unavailable",
+    );
     // DK-12 — the tools in hand: a plate per specimen, the shipping bar in its hand's role, its tools in their order
     const hands = [...(container?.querySelectorAll(".vf-ds-bar-plate") ?? [])].filter((p) =>
       p.getAttribute("data-state")?.startsWith("In hand"),
@@ -591,6 +686,13 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       place?.querySelector<HTMLButtonElement>('button[aria-label="Fields"]')?.click(),
     );
     expect(place?.dataset.open).toBe("true");
+    // HN-8: its package turns the same sheet to Artifacts in place — which waits here, with no
+    // plugin host in the catalog to bind the Hub, as a window's does at boot
+    await act(async () => place?.querySelector<HTMLButtonElement>(".vf-head-pack")?.click());
+    expect(place?.dataset.open).toBe("true");
+    expect(place?.querySelector('[data-shelf="artifacts"][data-shown]')?.textContent).toBe(
+      "Opening Artifacts…",
+    );
 
     expect(container?.querySelector(".vf-godview .vf-monitor-list")).not.toBeNull();
     // GV-D1: the head in the other theme too — the page is dark, so the frame's
@@ -692,6 +794,11 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       await Promise.resolve();
     });
     expect(container?.textContent).toContain("VibeField docs");
+    // HN-8: the Hub's plate gives it the Artifacts shelf's width, a container its tile form
+    // answers — the plugin's own panel, Publish… first in its catalog
+    const shelf = container?.querySelector(".vf-ds-shelf-stage");
+    expect(shelf?.firstElementChild?.className).toBe("vf-artifact-panel");
+    expect(shelf?.querySelector(".vf-artifact-list > li")?.className).toBe("vf-artifact-publish");
   });
 
   it("keeps every onboarding state lab interactive", async () => {

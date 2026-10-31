@@ -4,13 +4,17 @@ import { AgentModelSelection, AgentSessionOrigin, SparkId } from "./agent-sessio
 
 // The compose plane, version 2 (track CO; `draft/compose-plane/v2/`, ruled by James on its page 2026-10-29
 // 09:42–09:57Z; the study's §15 and §16). A spark is an agent session VibeField starts in a folder of its own, under
-// the Agent Profiles James checks for it (NS-D5). fieldd serves it one MCP server, `vibefield`, whose verbs are
-// defined here once (CP-L2) and held to the spark's profiles at every call (TL-D5). Plain agents hold no door (CP-L1):
-// anything else that reaches the server sees an empty tool list. fieldd knows a caller by its process — the floor's
-// socket, the kernel's pid, the pane that holds it — never by a token (CP-L3, CP-D1).
+// the Agent Profiles James checks for it (NS-D5). fieldd serves it one MCP server, `vibefield`, whose tools are rows
+// of the tool plane's one catalog (tools.ts, MT-L1), each held to the caller's profiles at every call (TL-D5). fieldd
+// knows a caller by its process — the floor's socket, the kernel's pid, the pane that holds it — never by a token
+// (CP-L3, CP-D1).
+// *Narrowed 2026-10-30 21:19Z by MT-D2 (`draft/thinking-tool-plane.md` §5): this header said "Plain agents hold no
+// door (CP-L1): anything else that reaches the server sees an empty tool list". That law now governs the COMPOSE
+// rooms alone. A plain run fieldd can name holds the door too and is served the `agent` rows (History, the projects
+// list); the agents a spark spawns get no compose tools and never address each other.*
 //
-// Three projections of one verb set (CP-L2): the MCP tools a spark sees (this catalog), the flow API a run calls
-// (CP-4), and the `compose.*` doors the window calls (METHODS rows; the sparks' doors are below).
+// Three projections of one verb set (CP-L2): the MCP tools a caller sees (tools.ts, by audience), the flow API a run
+// calls (CP-4), and the `compose.*` doors the window calls (METHODS rows; the sparks' doors are below).
 //
 // TS-only: field-native reads none of it (gen-jsonschema.ts's agent-plane rule). The floor's door messages, which it
 // does read, live in mgmt.ts.
@@ -132,163 +136,9 @@ export type ComposeSparksOpenParams = z.infer<typeof ComposeSparksOpenParams>;
 export const ComposeSparksOpenResult = z.object({ spark: SparkSummary }).passthrough();
 export type ComposeSparksOpenResult = z.infer<typeof ComposeSparksOpenResult>;
 
-// ── the verbs (TL-D1 A: one server, seven families, every spark gets all of them) ──
-
-export const COMPOSE_FAMILIES = [
-  "agents",
-  "watch",
-  "talk",
-  "flows",
-  "history",
-  "canvas",
-  "you",
-] as const;
-export type ComposeFamily = (typeof COMPOSE_FAMILIES)[number];
-
-/** The slice that builds a verb (the study's §16; the version 2 page's build order). A verb is listed to a spark only
- * once its slice has landed. */
-export const COMPOSE_SLICES = ["CP-1", "CP-2", "CP-3", "CP-4"] as const;
-export type ComposeSlice = (typeof COMPOSE_SLICES)[number];
-
-export interface ComposeVerbDef {
-  /** the tool's name: short and plain, because Grok finds MCP tools by searching their descriptions */
-  readonly name: string;
-  readonly family: ComposeFamily;
-  readonly slice: ComposeSlice;
-  /** answers from what fieldd already knows and changes nothing (MCP's `readOnlyHint`) */
-  readonly readOnly: boolean;
-  /** what the model reads in the tool list; "you" is the spark, "the user" the person it works for */
-  readonly description: string;
-}
-
-const verb = (
-  name: string,
-  family: ComposeFamily,
-  slice: ComposeSlice,
-  readOnly: boolean,
-  description: string,
-): ComposeVerbDef => ({ name, family, slice, readOnly, description });
-
-/** Every verb, in the version 2 page's order. Each is held to the caller's profiles (TL-D5) and written to the audit
- * log before it acts (CP-L6). None waits: what takes time comes back as a wake (CP-L5). */
-export const COMPOSE_VERBS: readonly ComposeVerbDef[] = [
-  verb(
-    "agents_available",
-    "agents",
-    "CP-1",
-    true,
-    "List the agents you can start: each agent signed in under your Agent Profiles, with its models and their efforts.",
-  ),
-  verb(
-    "projects_list",
-    "agents",
-    "CP-1",
-    true,
-    "List the user's projects, each with its name and folders.",
-  ),
-  verb(
-    "agent_spawn",
-    "agents",
-    "CP-2",
-    false,
-    "Start an agent under one of your profiles, in a folder, with a model, an effort and a first prompt. It asks the user before it acts, as every agent does. Returns its session id, and you are woken when it finishes, asks or fails.",
-  ),
-  verb(
-    "agents_list",
-    "watch",
-    "CP-1",
-    true,
-    "List the agent sessions under your profiles: each one's agent, state, folder, model, cost, and who started it.",
-  ),
-  verb(
-    "agent_read",
-    "watch",
-    "CP-1",
-    true,
-    "Read the latest turns of one session: what it was asked and what it answered. Bounded; pass `before` for older turns.",
-  ),
-  verb(
-    "agent_watch",
-    "watch",
-    "CP-2",
-    false,
-    "Be woken when a session you did not start finishes, asks the user, fails or ends.",
-  ),
-  verb("agent_unwatch", "watch", "CP-2", false, "Stop being woken by a session you watch."),
-  verb(
-    "agent_send",
-    "talk",
-    "CP-2",
-    false,
-    "Send words to a session the user or you started. They wait for its next idle moment and land there as the user's words.",
-  ),
-  verb(
-    "agent_interrupt",
-    "talk",
-    "CP-2",
-    false,
-    "Stop a session's current turn. The session stays, and the stop counts as the user's.",
-  ),
-  verb("agent_stop", "talk", "CP-2", false, "End a session you started."),
-  verb(
-    "flow_run",
-    "flows",
-    "CP-4",
-    false,
-    "Run a flow the user approved, with its input. You are woken when the run asks or ends.",
-  ),
-  verb("flow_read", "flows", "CP-4", true, "Read a run's steps, rounds and spend."),
-  verb(
-    "flow_stop",
-    "flows",
-    "CP-4",
-    false,
-    "Stop a run. Its journal stays, and its agents' turns stop.",
-  ),
-  verb(
-    "flow_propose",
-    "flows",
-    "CP-4",
-    false,
-    "Propose a flow file you wrote. It goes to the user with what it does, which agents it starts and what it may spend, and it never runs before the user approves it.",
-  ),
-  verb(
-    "history_search",
-    "history",
-    "CP-1",
-    true,
-    "Search past agent sessions under your profiles. Returns the matching turns with their session, agent, folder and time.",
-  ),
-  verb(
-    "history_read",
-    "history",
-    "CP-1",
-    true,
-    "Read a past session's turns from History. Bounded; pass `before` for older turns.",
-  ),
-  verb(
-    "canvas_place",
-    "canvas",
-    "CP-4",
-    false,
-    "Put a board or a note on the user's canvas, only when the user asked for it. The window places it, signed and undoable.",
-  ),
-  verb(
-    "canvas_update",
-    "canvas",
-    "CP-4",
-    false,
-    "Change a board or a note you placed, on the user's word.",
-  ),
-  verb(
-    "ask_user",
-    "you",
-    "CP-3",
-    false,
-    "Ask the user a question with choices. Returns at once; the answer arrives as a wake.",
-  ),
-  verb("notify", "you", "CP-3", false, "Tell the user something while they are in another view."),
-];
+// ── the verbs moved to tools.ts in MT-0 (2026-10-30), the tool plane's one catalog: every spark is served
+// every row that has landed, and a plain run the `agent` rows (TL-D1 A, narrowed by MT-D2). Their inputs and
+// outputs stay below, the compose room's own shapes. ──
 
 // ── CP-1's verbs: inputs and outputs (the MCP tools' schemas; fieldd projects them to JSON Schema) ──
 
@@ -467,13 +317,3 @@ export type ComposeHistorySearchOutput = z.infer<typeof ComposeHistorySearchOutp
 
 export const ComposeHistoryReadInput = ComposeAgentReadInput;
 export type ComposeHistoryReadInput = z.infer<typeof ComposeHistoryReadInput>;
-
-/** Each built verb's input and output. A verb the server lists has an entry here; the rest arrive with their slices. */
-export const COMPOSE_VERB_SCHEMAS = {
-  agents_available: { input: ComposeAgentsAvailableInput, output: ComposeAgentsAvailableOutput },
-  projects_list: { input: ComposeProjectsListInput, output: ComposeProjectsListOutput },
-  agents_list: { input: ComposeAgentsListInput, output: ComposeAgentsListOutput },
-  agent_read: { input: ComposeAgentReadInput, output: ComposeReadOutput },
-  history_search: { input: ComposeHistorySearchInput, output: ComposeHistorySearchOutput },
-  history_read: { input: ComposeHistoryReadInput, output: ComposeReadOutput },
-} as const satisfies Record<string, { input: z.ZodTypeAny; output: z.ZodTypeAny }>;

@@ -4,14 +4,24 @@
  * zoom act (DK-D24's ⌘+ ⌘− ⌘0 ⇧1 on the Mac, Ctrl and Shift elsewhere), what
  * each act does to the camera, the palette's table of the frame's acts with
  * their keys, and the head's canvas door over a REAL engine (the nav path with
- * no synthesized "Root", the zoom as a percent). The views are head.test's and
+ * no synthesized "Root", the zoom as a percent). HN-8: the sheet's two shelves
+ * in the one owner's value, the package's dot read from the catalog, and why
+ * the Artifacts shelf has no Hub. The views are head.test's and
  * command-palette.test's; delivery from a focused pane is the godview smoke's
  * row 11i.
  */
 import { createCanvasEngine, NavDepth, NavFrame, PrefabId } from "@vibecook/ice";
 import { ZOOM_MAX, ZOOM_MIN } from "@vibecook/ice/desk";
+import type {
+  ArtifactAvailability,
+  ArtifactView,
+  PluginRecordState,
+  PluginRegistrySnapshot,
+} from "@vibefield/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildRegistry, createFieldEngine } from "../src/field-engine";
+import { type FrameSurface, sheetShelf } from "../src/frame/frame-surface";
+import { artifactsDotWords, hubWaits, unavailableSources } from "../src/frame/head-artifacts";
 import { canvasHead, headPathEqual, readHeadPath } from "../src/frame/head-canvas";
 import { chosenSessionAct, frameActGroups } from "../src/frame/palette-acts";
 import {
@@ -290,6 +300,95 @@ describe("the head's canvas door over a real engine", () => {
     expect(headPathEqual([{ depth: 1, label: "A" }], [{ depth: 1, label: "A" }])).toBe(true);
     expect(headPathEqual([{ depth: 1, label: "A" }], [{ depth: 1, label: "B" }])).toBe(false);
     expect(headPathEqual([], [{ depth: 1, label: "A" }])).toBe(false);
+  });
+});
+
+describe("the pill's sheet in the one owner's value (HN-8, PL-D1)", () => {
+  it("names the shelf that shows — Fields or Artifacts — and no other surface is the sheet", () => {
+    expect(sheetShelf("fields")).toBe("fields");
+    expect(sheetShelf("artifacts")).toBe("artifacts");
+    const others: readonly (FrameSurface | null)[] = [
+      null,
+      "objects",
+      "zoom",
+      "palette",
+      "me",
+      "cards",
+      "search",
+      "selection",
+    ];
+    for (const surface of others) {
+      expect(sheetShelf(surface), String(surface)).toBeNull();
+    }
+  });
+});
+
+/** A catalog row as `artifact.subscribe` sends it; only its title and state matter here. */
+function row(title: string, availability: ArtifactAvailability): ArtifactView {
+  return { title, availability } as unknown as ArtifactView;
+}
+
+describe("the package's dot (HN-8, PL-D1) — the catalog's standing state, in words", () => {
+  it("is the source-unavailable artifacts alone, by title, in the catalog's order", () => {
+    expect(
+      unavailableSources([
+        row("vibe-field", "source-unavailable"),
+        row("Docs", "active"),
+        row("Renderer preview", "source-unavailable"),
+        row("Old site", "offline"),
+        row("Fresh", "starting"),
+        row("Broken", "error"),
+      ]),
+    ).toEqual(["vibe-field", "Renderer preview"]);
+  });
+
+  it("says one source by its title, past one how many, and nothing — no dot — while all are there", () => {
+    expect(artifactsDotWords([])).toBeNull();
+    expect(artifactsDotWords(["vibe-field"])).toBe(
+      "Artifacts — vibe-field's source is unavailable",
+    );
+    expect(artifactsDotWords(["vibe-field", "Docs"])).toBe("Artifacts — 2 sources unavailable");
+    expect(artifactsDotWords(["a", "b", "c"])).toBe("Artifacts — 3 sources unavailable");
+  });
+});
+
+/** The registry with these plugins, each in the state the registry folds it to (§9.3) and each
+ * offering the side panel unless it names another slot — only the fields read here. */
+function registryOf(
+  ...plugins: ReadonlyArray<readonly [state: PluginRecordState, slot?: string]>
+): PluginRegistrySnapshot {
+  return {
+    generation: 1,
+    problems: [],
+    plugins: plugins.map(([state, slot = "hud.side-panel"], index) => ({
+      id: `vibefield.plugin-${index}`,
+      state,
+      contributions: { surfaces: [{ slot }] },
+    })),
+  } as unknown as PluginRegistrySnapshot;
+}
+
+describe('why the Artifacts shelf has no Hub (HN-8; DESIGN.md §8 "Artifacts"; ruling 10)', () => {
+  it("is off while the plugin that offers the side panel is `disabled` — the one state that turning it on would help", () => {
+    expect(hubWaits(registryOf(["disabled"]))).toBe("off");
+  });
+
+  it("can't run while that plugin is `invalid` or `incompatible` — on or off alike — or while none offers the side panel", () => {
+    expect(hubWaits(registryOf(["invalid"]))).toBe("cant-run");
+    expect(hubWaits(registryOf(["incompatible"]))).toBe("cant-run");
+    // a plugin that is on but offers another slot brings no Hub
+    expect(hubWaits(registryOf(["enabled", "hud.panel"]))).toBe("cant-run");
+    expect(hubWaits(registryOf())).toBe("cant-run");
+  });
+
+  it("is opening while that plugin is on and its Hub not yet bound — and before any registry", () => {
+    expect(hubWaits(registryOf(["enabled"]))).toBe("opening");
+    expect(hubWaits(null)).toBe("opening");
+  });
+
+  it("lets the plugin likelier to bring a Hub speak, should two offer it", () => {
+    expect(hubWaits(registryOf(["invalid"], ["enabled"]))).toBe("opening");
+    expect(hubWaits(registryOf(["incompatible"], ["disabled"]))).toBe("off");
   });
 });
 

@@ -1,6 +1,7 @@
 // CP-1b — the `vibefield` MCP server's protocol, one connection at a time (the compose plane, version 2; CP-L2, CP-D1).
 // Transport-free: the door hands it one JSON-RPC line and writes back the line it answers. fieldd has no MCP library
-// (its client, mcp-service.ts, is hand-written too), and this answers only what a spark needs: tools.
+// (its client, mcp-service.ts, is hand-written too), and this answers only what a caller needs: tools (the tool plane,
+// MT-0: one server for every room, each caller listed its rows by their audience).
 //
 // Two eras on one connection, as the 2026-07-28 revision allows ("a dual-era server MAY serve both"):
 // - 2026-07-28 (stateless): no handshake. Every request carries `_meta` with the protocol version and the client's
@@ -34,7 +35,13 @@ export interface McpTool {
   readonly description: string;
   readonly inputSchema: Readonly<Record<string, unknown>>;
   readonly outputSchema?: Readonly<Record<string, unknown>>;
-  readonly annotations?: { readonly readOnlyHint?: boolean };
+  /** All four, from the catalog's row (gen/tools.ts): every room is closed-world. */
+  readonly annotations?: {
+    readonly readOnlyHint: boolean;
+    readonly destructiveHint: boolean;
+    readonly idempotentHint: boolean;
+    readonly openWorldHint: boolean;
+  };
 }
 
 /** What a tool call answered: the structured result, and the words a model reads. */
@@ -46,13 +53,17 @@ export interface McpCallResult {
 
 export interface McpServerOptions {
   readonly serverInfo: { readonly name: string; readonly version: string };
-  readonly instructions?: string;
-  /** The caller's tools: every built verb for a spark, none for anything else (CP-L1). Read at each list. */
+  /** The caller's own paragraph, read at each handshake (MT-0, the MT lead's ruling 12: built from what it is listed). */
+  instructions?(): string | undefined;
+  /** The caller's rows, by their audience (MT-0). Read at each list; a settled caller's are the same for its whole
+   * session (MT-D4), so no `listChanged` is ever announced. */
   tools(): readonly McpTool[];
-  /** Run one tool the caller holds. A thrown error becomes a tool error the model reads, never a protocol error. */
+  /** Run one tool. The service holds every call to the caller's own rows and answers a refusal as a tool result with a
+   * fact the model can act on; a thrown error becomes a tool error too, never a protocol error. */
   call(name: string, args: Record<string, unknown>): Promise<McpCallResult>;
-  /** How long a client may keep the tool list. The list changes only when fieldd does. */
-  readonly listTtlMs?: number;
+  /** How long a client may keep the tool list: 0 while the caller is not yet settled, so a harness that listed too
+   * early asks again. The list of a settled caller changes only when fieldd does. */
+  listTtlMs?(): number | undefined;
 }
 
 type Id = string | number;
@@ -120,7 +131,7 @@ export class McpConnection {
           protocolVersion: this.#legacy,
           capabilities: { tools: {} },
           serverInfo: this.opts.serverInfo,
-          ...(this.opts.instructions ? { instructions: this.opts.instructions } : {}),
+          ...instructions(this.opts),
         },
       };
     }
@@ -150,14 +161,14 @@ export class McpConnection {
             ok: { resultType: "complete", ...body, _meta: { [META_SERVER]: this.opts.serverInfo } },
           }
         : { ok: body };
-    const ttlMs = this.opts.listTtlMs ?? 60 * 60 * 1000;
+    const ttlMs = this.opts.listTtlMs?.() ?? 60 * 60 * 1000;
 
     switch (method) {
       case "server/discover":
         return done({
           supportedVersions: [MCP_MODERN],
           capabilities: { tools: {} },
-          ...(this.opts.instructions ? { instructions: this.opts.instructions } : {}),
+          ...instructions(this.opts),
           ttlMs,
           cacheScope: "private",
         });
@@ -166,14 +177,16 @@ export class McpConnection {
       case "tools/list":
         return done({
           tools: this.opts.tools().map(listed),
-          // The list is the caller's own (a spark's, or nothing), so no other caller may reuse it.
+          // The list is the caller's own (its audience's rows, or nothing), so no other caller may reuse it.
           ...(modern ? { ttlMs, cacheScope: "private" } : {}),
         });
       case "tools/call": {
         const name = params.name;
-        if (typeof name !== "string" || !this.opts.tools().some((t) => t.name === name))
+        // A malformed call is the protocol's; a name the caller is not listed (unknown, or another audience's) is the
+        // service's to refuse as a result the model reads (the study's §8; index.ts holds the call to the row).
+        if (typeof name !== "string")
           return {
-            error: { code: MCP_ERRORS.invalidParams, message: `no tool named ${String(name)}` },
+            error: { code: MCP_ERRORS.invalidParams, message: "a tool's name is a string" },
           };
         const args = isRecord(params.arguments) ? params.arguments : {};
         let result: McpCallResult;
@@ -198,6 +211,11 @@ export class McpConnection {
     }
   }
 }
+
+const instructions = (opts: McpServerOptions) => {
+  const text = opts.instructions?.();
+  return text ? { instructions: text } : {};
+};
 
 const listed = (tool: McpTool) => ({
   name: tool.name,

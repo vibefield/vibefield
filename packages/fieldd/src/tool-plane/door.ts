@@ -16,16 +16,46 @@ import { McpConnection, type McpServerOptions } from "./mcp";
 // claims each announced door's lane, splits its bytes into lines (the floor moves raw chunks and never parses a
 // message), answers each line through an McpConnection, and writes the answer back down the same lane.
 //
-// Who is calling is the floor's walk plus fieldd's own map of panes to runs: a spark's own session is served the
-// spark's tools; any other run, a pane with no run, and a caller outside every pane are served none (CP-L1). A token
-// plays no part (CP-D1). Lines on one door are answered in order; doors do not wait on each other.
+// Who is calling is the floor's walk plus fieldd's own map of panes to runs, and what each caller is served is the tool
+// plane's (index.ts, by the rows' audience; MT-0): a spark every served row, a run the `agent` rows, and a pane with no
+// run or a caller outside every pane nothing. A token plays no part (CP-D1). Lines on one door are answered in order;
+// doors do not wait on each other.
+//
+// MT-0's settle rule (the MT lead's rulings 8 and 9, as corrected 2026-10-30 23:40Z): a caller is SETTLED only on
+// positive evidence, a spark that verifies or a run whose verified record names no spark, and its answer is then final
+// for the door's life (MT-D4: the list is stable per session). Anything else is UNSETTLED: served nothing and asked
+// again, at most once per REASK_MS. A door can open before fieldd knows its run or its spark: after a fieldd restart
+// the floor re-announces the doors it held before the session records and the spark store are read back.
 
-/** Who opened a door, as fieldd knows it. */
+/** Why an unsettled run is served nothing yet: its record is missing or does not verify, or it names a spark that does
+ * not (a spark's run must never be served a plain run's rows, nor a forged spark's run anything). */
+export type DoorUnsettled = "record-unverified" | "spark-unverified";
+
+/** Who opened a door, as fieldd knows it. `profiles` are the Agent Profiles its calls are held to: a spark's record's,
+ * or the one a run is filed under. */
 export type DoorCaller =
-  | { readonly kind: "spark"; readonly sparkId: SparkId; readonly runtimeRunId: string }
-  | { readonly kind: "run"; readonly runtimeRunId: string }
+  | {
+      readonly kind: "spark";
+      readonly sparkId: SparkId;
+      readonly runtimeRunId: string;
+      readonly profiles: readonly string[];
+    }
+  | {
+      readonly kind: "run";
+      readonly runtimeRunId: string;
+      readonly profiles: readonly string[];
+      readonly unsettled?: DoorUnsettled;
+    }
   | { readonly kind: "pane"; readonly terminalSessionId: string }
   | { readonly kind: "outside" };
+
+/** A settled caller's answer is final for its door; an unsettled one is asked again. */
+export const isSettled = (caller: DoorCaller): boolean =>
+  caller.kind === "spark" || (caller.kind === "run" && caller.unsettled === undefined);
+
+/** How often an unsettled door is asked again, at most: each ask reads a session record and checks its HMAC, so a
+ * forged spark's run cannot make fieldd do that at its own request rate (EL7; the MT lead, 23:40Z). */
+export const REASK_MS = 1000;
 
 export interface DoorNative {
   subscribe(
@@ -47,13 +77,17 @@ export interface DoorLanes {
 export interface DoorServiceOptions {
   readonly native: DoorNative;
   readonly lanes: DoorLanes;
-  /** The pane's run, and whether that run is a spark's own session. Asked again until the answer is a spark, so a
-   * door that opens a moment before fieldd records its spark's run is served once it is. */
+  /** The pane's run, and whether that run is a spark's own session. Asked again, at most once per REASK_MS, until the
+   * answer is settled, so a door that opens a moment before fieldd records its run or its spark is served once it is. */
   identify(pane: NativeDoorPane | undefined): DoorCaller;
-  /** The server a caller is served: a spark's verbs, or nothing. */
+  /** The server a caller is served (index.ts: its rows by audience). */
   serve(caller: () => DoorCaller, door: { readonly connId: string }): McpServerOptions;
+  /** Whether a caller is served any row. */
+  holdsTools(caller: DoorCaller): boolean;
   /** A door whose caller holds no tools: once per door, for the record (CP-L6). */
   onPlainCaller?(caller: DoorCaller, door: NativeDoorOpen): void;
+  /** The clock the re-ask bound reads (tests). Default Date.now. */
+  readonly now?: () => number;
   readonly logger?: Logger;
   /** A line longer than this closes its door. Default NATIVE_DOOR.LINE_MAX_BYTES, the bound the bridge itself ends on
    * (exit 4), so this is the backstop. Counted in UTF-16 units, never more than the line's bytes, so it never closes a
@@ -65,7 +99,7 @@ interface Door {
   readonly open: NativeDoorOpen;
   readonly connection: McpConnection;
   readonly decoder: TextDecoder;
-  /** Who is calling, asked again until it is a spark (DoorServiceOptions.identify). */
+  /** Who is calling, asked again until it is settled (DoorServiceOptions.identify). */
   readonly caller: () => DoorCaller;
   pending: string;
   chain: Promise<void>;
@@ -155,9 +189,14 @@ export class DoorService {
     const known = this.#doors.get(open.connId);
     if (known && known.open.laneId === open.laneId) return;
     if (known) this.#release(open.connId);
+    const now = this.opts.now ?? Date.now;
     let seen = this.opts.identify(open.pane);
+    let askedAt = now();
     const caller = (): DoorCaller => {
-      if (seen.kind !== "spark") seen = this.opts.identify(open.pane);
+      if (!isSettled(seen) && now() - askedAt >= REASK_MS) {
+        seen = this.opts.identify(open.pane);
+        askedAt = now();
+      }
       return seen;
     };
     const door: Door = {
@@ -201,7 +240,7 @@ export class DoorService {
   async #answer(door: Door, line: string): Promise<void> {
     const out = await door.connection.receive(line);
     const caller = door.caller();
-    if (caller.kind !== "spark" && !door.toldPlain) {
+    if (!this.opts.holdsTools(caller) && !door.toldPlain) {
       door.toldPlain = true;
       this.opts.onPlainCaller?.(caller, door.open);
     }

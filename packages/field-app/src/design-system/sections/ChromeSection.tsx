@@ -3,7 +3,7 @@ import { SegmentedControl } from "@vibefield/design-kit/primitives";
 import { type ReactElement, useState } from "react";
 import { MeMenuView } from "../../account/MeMenu";
 import { ComposerLineView } from "../../frame/ComposerLine";
-import type { FrameSurface } from "../../frame/frame-surface";
+import { type FrameSurface, sheetShelf } from "../../frame/frame-surface";
 import { SNAPSHOT_NO_DOOR } from "../../frame/line-model";
 import { ViewsTrackView } from "../../frame/ViewsTrack";
 import {
@@ -40,8 +40,8 @@ import {
 import { ComposerLinePlate, LINE_STATES } from "../ComposerLinePreview";
 import { AppearancePlate, CORNER_PICKS, CornerPlate } from "../CornerPreview";
 import { DeskPreview } from "../DeskPreview";
-import { EDGE_STATES, EdgesPlate } from "../EdgesPreview";
 import { HEAD_STATES, HeadLive, HeadPlate } from "../HeadPreview";
+import { PACKAGE_CIRCLE_STATES, PackageCirclePlate } from "../PackageCirclePreview";
 import { PEERS_STATES, PeersPlate } from "../PeersPreview";
 import { PEGBOARD_STATES, PegboardPlate, StageBoard } from "../PegboardPreview";
 import { BAR_STATES, HAND_STATES, HandPlate, SelectionBarPlate } from "../SelectionBarPreview";
@@ -104,7 +104,7 @@ export function ChromeSection({
       <Specimen title="Field chrome playground" source="frame/* · hud/*" bleed>
         <div
           className="vf-ds-field-stage"
-          data-docs-open={surface === "fields"}
+          data-docs-open={sheetShelf(surface) !== null}
           data-board-open={trayOpen}
         >
           <DeskPreview
@@ -118,7 +118,9 @@ export function ChromeSection({
           <div className="vf-ds-stage-card card-b" />
           {/* The head on its real controller (One Frame FR-3), in a folder —
               the readout alone at its right since FR-4 (the theme went into
-              the Me menu, Artifacts behind the right notch). */}
+              the Me menu), and Artifacts in the pill since HN-8: its package
+              grows the sheet on that shelf, which waits here, with no plugin
+              host to bind the Hub. */}
           <HeadLive surface={surface} onSurfaceChange={changeSurface} />
 
           {/* Objects: the board risen behind the line (DK-13) — the desk's own drawer in the
@@ -158,16 +160,16 @@ export function ChromeSection({
           </div>
         </div>
         <p className="vf-ds-stage-caption">
-          The head — the field's name pill with its crumbs, which grows the fields explorer, and the
-          zoom readout, which grows its menu — the line's Objects and your face are interactive.
-          Open one to inspect its motion and the rule that only one of them is open at a time. Your
-          menu's Theme sets this page's theme, as it sets the app's.
+          The head — the field's name pill with its crumbs, whose chevron and package grow its sheet
+          on Fields or Artifacts, and the zoom readout, which grows its menu — the line's Objects
+          and your face are interactive. Open one to inspect its motion and the rule that only one
+          of them is open at a time. Your menu's Theme sets this page's theme, as it sets the app's.
         </p>
       </Specimen>
 
       <Specimen
-        title="The head — the name pill, the zoom readout, the palette"
-        source="frame/HeadView.tsx · hud/CommandPalette.tsx · DESIGN.md §8, §5, §10"
+        title="The head — the name pill, its sheet's two shelves, the zoom readout, the palette"
+        source="frame/HeadView.tsx · hud/CommandPalette.tsx · DESIGN.md §8, §5, §6, §10"
         bleed
       >
         <div className="vf-ds-head-plates">
@@ -177,11 +179,13 @@ export function ChromeSection({
           <HeadPlate state="zoom" keys="other" />
         </div>
         <p className="vf-ds-stage-caption">
-          Every state the page's head plates draw — the field's top as one name, the crumbs folded
-          into the pill inside a folder, a long path in a narrow window dropping whole leading
-          names, renaming in place, the fields explorer grown from the pill, the zoom's solid menu
-          with its keys, and the palette under the head — then the zoom's keys as Windows says them,
-          in this page's theme. No keycaps and no plus in the head.
+          Every state the page's head plates draw — the field's top as one name, the package after
+          its rule and with its dot while a source is unavailable, the crumbs folded into the pill
+          inside a folder, a long path in a narrow window dropping whole leading names, renaming in
+          place, the sheet grown from the pill on Fields and on Artifacts (the Hub's tiles, the
+          plugin off, the Hub opening), the same sheet under a cover grown from the package circle,
+          the zoom's solid menu with its keys, and the palette under the head — then the zoom's keys
+          as Windows says them, in this page's theme. No keycaps and no plus in the head.
         </p>
       </Specimen>
 
@@ -206,6 +210,32 @@ export function ChromeSection({
         <p className="vf-ds-stage-caption">
           Every state the page's plates show for the track — at rest, ⌘ held, Godview, History, ⌘4's
           note, and the keys as Windows prints them — in this page's theme.
+        </p>
+      </Specimen>
+
+      <Specimen
+        title="The package circle — Artifacts under a cover"
+        source="frame/PackageCircleView.tsx · DESIGN.md §8, §10, §6"
+        bleed
+      >
+        <div className="vf-ds-package-plates">
+          {PACKAGE_CIRCLE_STATES.map((state) => (
+            <PackageCirclePlate
+              key={`${state}-${dark ? "dark" : "light"}`}
+              state={state}
+              dark={dark}
+            />
+          ))}
+        </div>
+        <p className="vf-ds-stage-caption">
+          Under a cover the pill is the desk's and hides with it, and Artifacts' door stands alone
+          at the head's left: the package circle, 40 on the line's glass at x 96, search's mirror.
+          Over Godview the Stories row keeps one head gap from it, a side of 148; over History its
+          dot says an artifact's source is unavailable, and its tooltip which — "Artifacts —
+          vibe-field's source is unavailable"; while the terminals are maximized it stands at the
+          left end of their title bar, 30 × 24 in the deck's ink, as search stands at the right, its
+          tooltip saying how many — "Artifacts — 2 sources unavailable". It grows the pill's sheet
+          on its Artifacts shelf, which the head's plates draw.
         </p>
       </Specimen>
 
@@ -273,24 +303,6 @@ export function ChromeSection({
           it, the face first, then the name — never the person's colour. Placed every frame through
           the camera; hidden after 8 s idle, when the pointer leaves its window or its canvas, under
           a cover and while the board is out. The plates lay the lit mat where the desk draws it.
-        </p>
-      </Specimen>
-
-      <Specimen
-        title="The edge — Artifacts' notch in every view, a sliver over a covered view"
-        source="hud/edge-tray/* · DESIGN.md §8, §10, §6"
-        bleed
-      >
-        <div className="vf-ds-edges-plates">
-          {EDGE_STATES.map((state) => (
-            <EdgesPlate key={`${state}-${dark ? "dark" : "light"}`} state={state} dark={dark} />
-          ))}
-        </div>
-        <p className="vf-ds-stage-caption">
-          The page's edges plates: Artifacts' notch on the right, whole on Canvas; over a covered
-          view it rests as its 7 × 96 sliver in the 8 px the view keeps clear — point at it and it
-          grows into the notch (240 ms) — the notch it grows into over History; and its drawer open
-          with the Artifact Hub in its 152 column. The left edge's clipboard is the hand now.
         </p>
       </Specimen>
 

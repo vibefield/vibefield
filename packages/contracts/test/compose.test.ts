@@ -3,60 +3,19 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { AgentSessionRecord, AgentSessionSummary } from "../src/agent-session";
-import {
-  COMPOSE_FAMILIES,
-  COMPOSE_SLICES,
-  COMPOSE_VERB_SCHEMAS,
-  COMPOSE_VERBS,
-  ComposeSparksHatchParams,
-  SparkRecord,
-  SparkSummary,
-} from "../src/compose";
+import { ComposeSparksHatchParams, SparkRecord, SparkSummary } from "../src/compose";
 import { METHODS } from "../src/methods";
 
-// CO — the compose plane, version 2 (ruled 2026-10-29; draft/compose-plane/v2/). What these hold: one verb set, named
-// the way a model searches for it; the verbs a spark is served are exactly the ones whose schemas exist; a spark thinks
-// under one of its own profiles; and a run's origin is read the way spawnedBy is, OPEN.
+// CO — the compose plane, version 2 (ruled 2026-10-29; draft/compose-plane/v2/). What these hold: the window's spark
+// doors are local agents.manage rows; a spark thinks under one of its own profiles; and a run's origin is read the way
+// spawnedBy is, OPEN. The verb catalog moved to tools.ts in MT-0 (2026-10-30), and its lint to tools.test.ts.
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures");
 const fixture = (name: string): unknown =>
   JSON.parse(readFileSync(join(FIXTURES, `${name}.json`), "utf8"));
 
-describe("the verb catalog (TL-D1 A, CP-L2)", () => {
-  it("names every verb once, short and plain, in a known family and slice", () => {
-    const names = COMPOSE_VERBS.map((v) => v.name);
-    expect(new Set(names).size).toBe(names.length);
-    for (const v of COMPOSE_VERBS) {
-      expect(v.name, v.name).toMatch(/^[a-z]+(?:_[a-z]+)*$/);
-      expect(v.name.length, v.name).toBeLessThanOrEqual(24);
-      expect(COMPOSE_FAMILIES).toContain(v.family);
-      expect(COMPOSE_SLICES).toContain(v.slice);
-      expect(v.description.length, v.name).toBeGreaterThan(20);
-      expect(v.description.length, v.name).toBeLessThanOrEqual(300);
-      expect(v.description, v.name).toMatch(/\.$/);
-    }
-  });
-
-  it("holds the seven families of round 2 plus flow_propose, twenty verbs in all", () => {
-    expect(new Set(COMPOSE_VERBS.map((v) => v.family))).toEqual(new Set(COMPOSE_FAMILIES));
-    expect(COMPOSE_VERBS).toHaveLength(20);
-    expect(COMPOSE_VERBS.find((v) => v.name === "flow_propose")?.family).toBe("flows");
-  });
-
-  it("has an approve verb nowhere: approvals stay the user's (CP-L4, TL-D4)", () => {
-    for (const v of COMPOSE_VERBS) expect(v.name).not.toMatch(/approv|permission|allow/);
-  });
-
-  it("gives schemas to exactly CP-1's verbs, and CP-1's verbs only read", () => {
-    const cp1 = COMPOSE_VERBS.filter((v) => v.slice === "CP-1").map((v) => v.name);
-    expect(Object.keys(COMPOSE_VERB_SCHEMAS).sort()).toEqual([...cp1].sort());
-    for (const v of COMPOSE_VERBS.filter((x) => x.slice === "CP-1"))
-      expect(v.readOnly, v.name).toBe(true);
-  });
-
-  it("keeps the spark's tools out of METHODS: a tool's name is never a dotted method", () => {
-    const methods = new Set(METHODS.map((m) => m.method));
-    for (const v of COMPOSE_VERBS) expect(methods.has(v.name)).toBe(false);
+describe("the window's spark doors (CP-0)", () => {
+  it("are local agents.manage rows, as the other doors that start agents for the person here", () => {
     for (const m of ["compose.sparks.list", "compose.sparks.hatch", "compose.sparks.open"]) {
       const row = METHODS.find((r) => r.method === m);
       expect(row?.scope, m).toBe("agents.manage");

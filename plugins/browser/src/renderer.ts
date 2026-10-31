@@ -11,8 +11,8 @@ import { ARTIFACT_SURFACE } from "./manifest";
 export default defineRendererPlugin({
   activate(ctx) {
     ctx.logger.info("Renderer plugin activated");
-    ctx.surfaces?.register(ARTIFACT_SURFACE, (props) =>
-      createElement(ArtifactPanel, { client: ctx.client, surface: props }),
+    ctx.surfaces?.register(ARTIFACT_SURFACE, () =>
+      createElement(ArtifactPanel, { client: ctx.client }),
     );
   },
 });

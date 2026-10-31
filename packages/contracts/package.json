@@ -7,18 +7,18 @@
     ".": "./src/index.ts",
     "./agent-catalog": "./src/agent-catalog.ts",
     "./agent-index": "./src/agent-index.ts",
-    "./compose-tools": "./gen/compose-tools.ts",
     "./diagnostics": "./src/diagnostics.ts",
     "./logging": "./src/logging.ts",
     "./phone-code": "./src/phone-code.ts",
     "./registries": "./src/registries.ts",
     "./setup": "./src/setup.ts",
+    "./tools": "./gen/tools.ts",
     "./user-face": "./src/user-face.ts"
   },
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "gen:schema": "tsx scripts/gen-jsonschema.ts && tsx scripts/gen-catalog.ts && tsx scripts/gen-compose-tools.ts",
+    "gen:schema": "tsx scripts/gen-jsonschema.ts && tsx scripts/gen-catalog.ts && tsx scripts/gen-tools.ts",
     "gen:rust": "pnpm gen:schema && tsx scripts/gen-registries-rs.ts && cargo typify gen/jsonschema/bundle.json -o ../field-native/src/contracts.rs"
   },
   "dependencies": {

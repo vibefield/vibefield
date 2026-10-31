@@ -93,11 +93,11 @@ import type {
 import { afterEach, describe, expect, it, vi } from "vitest";
 import WebSocket from "ws";
 import { EXIT_GRACE_MS } from "../src/agent-runtime";
-import { SparkStore } from "../src/compose/sparks";
 import { bootstrap, type FielddDaemon, SessionRecordStore } from "../src/index";
 import { RpcCallError } from "../src/native-link";
 import type { SecretStore } from "../src/plugin-settings";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
+import { SparkStore } from "../src/tool-plane/sparks";
 import { RootsRegistry } from "../src/workspace/roots";
 import { born } from "./agent-birth";
 import { catalogWith, SCRIPTED_CATALOG, SCRIPTED_ROW } from "./agent-catalog-fixture";
@@ -1471,7 +1471,7 @@ describe("agent.* without a floor (the mock mgmt server)", () => {
 });
 
 describe("managed sessions over the REAL floor (field-native)", () => {
-  it("CP-1d — hatch and run-id resume carry a fresh briefing, while ordinary runs carry none", async () => {
+  it("CP-1d and MT-0 — hatch and run-id resume carry a spark's fresh briefing, and an ordinary run the door with its read-only agent rows", async () => {
     const briefing: AgentBriefingCapabilities = {
       mcpServers: true,
       allowTools: true,
@@ -1537,7 +1537,27 @@ describe("managed sessions over the REAL floor (field-native)", () => {
       provider: "scripted",
       cwd: box.envOut,
     })) as AgentSpawnResult;
-    expect(sessions[2]?.briefing).toEqual({});
+    // MT-0 (MT-D7, MT-D9): a plain run carries the door and its read-only `agent` rows by name, and no instructions.
+    expect(sessions[2]?.briefing.allowTools).toEqual([
+      "vibefield/history_search",
+      "vibefield/history_read",
+      "vibefield/projects_list",
+    ]);
+    expect(sessions[2]?.briefing.instructions).toBeUndefined();
+    expect(sessions[2]?.briefing.mcpServers?.vibefield?.command).toBe(BIN);
+    const plainProof = await poll(async () => {
+      const path = join(box.envOut, "session-3.tools.json");
+      return existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : undefined;
+    }, 25_000);
+    expect(plainProof.error).toBeUndefined();
+    expect(plainProof.listed.tools.map((tool: { name: string }) => tool.name)).toEqual([
+      "history_search",
+      "history_read",
+      "projects_list",
+    ]);
+    // MT-L2: a call is held to its row again, so a spark's row answers a plain run as the fact `forbidden`.
+    expect(plainProof.called.isError).toBe(true);
+    expect(plainProof.called.structuredContent?.fact).toBe("forbidden");
     await win.call("terminal.terminate", { sessionId: ordinary.terminal.sessionId });
   }, 90_000);
 

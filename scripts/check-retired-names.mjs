@@ -101,6 +101,14 @@ export const RETIRED = [
     name: "Send to…",
     pattern: /\b(?:sendSelection|sendToRows)\b|(?<![\w-])send-face\b|__vfDesk\.sent\b/u,
   },
+  // HN-8 — what Artifacts in the head retired (PL-D1…PL-D3; 2026-10-30): the edge tray — its notch, its sliver, its
+  // drawer, their controllers and its sheet (Artifacts into the pill's sheet and the covered views' circle) — the
+  // catalog's plates of it, and the covered views' gutter for its slivers
+  {
+    name: "the edge tray",
+    pattern:
+      /\b(?:EdgeTray\w*|ArtifactsTray|useEdgeDrawer|EdgeDrawer\w*|EdgesPreview|EdgesPlate|ArtifactsDrawer|COVER_EDGE_CLEAR_PX)\b|\bnotch-path\b|\bvf-edge-tray\b|\bhud\/edge-tray\b/u,
+  },
 ];
 
 /** Files that hold a retired thing ABSENT by naming it — each allowed exactly these names. */
@@ -116,8 +124,13 @@ export const ALLOWED = {
   // no generated page and no scaffold teaches the DOM card
   "tooling/plugin-cli/test/docs-anchors.test.ts": ["CardShell"],
   "tooling/create-plugin/test/output.test.ts": ["CardShell"],
-  // the catalog's boundary: the tray island's files stay gone, the field hands no grid projection
-  "packages/field-app/test/ui-system-boundaries.test.ts": ["WidgetTray", "the magnet grid's code"],
+  // the catalog's boundary: the tray island's files stay gone, the field hands no grid projection, and the edge tray,
+  // its plates and its suite stay gone with nothing mounting, importing or styling it (HN-8)
+  "packages/field-app/test/ui-system-boundaries.test.ts": [
+    "WidgetTray",
+    "the magnet grid's code",
+    "the edge tray",
+  ],
   // ChromeLayer takes no stage hold
   "packages/field-app/test/godview-freeze.test.tsx": ["useStageHold"],
   // the dots named nowhere in the product
@@ -129,7 +142,6 @@ export const ALLOWED = {
   // HN: the chrome mounts no clipboard tray, the chords keep no tray row, and neither the line nor its catalog plates
   // draw the draft's field, its send, its mic, its rule or @'s list
   "packages/field-app/test/cards.test.tsx": ["the clipboard tray"],
-  "packages/field-app/test/edge-tray.test.tsx": ["the clipboard tray"],
   "packages/field-app/test/product-chords.test.tsx": ["the clipboard tray's flight and chord"],
   "packages/field-app/test/composer-line.test.tsx": ["the line's draft"],
   "packages/field-app/test/design-system.test.tsx": ["@'s list", "the line's draft"],

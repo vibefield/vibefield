@@ -12,8 +12,8 @@ export const BAR = {
   /** the SAFE TOP — a bar whose top would cross it stands below. It was the rulers' band (ending at 86 at their margin of
    * 60) plus 8; the rulers print at the window's edges since 2026-10-29 and it stays 94, clear of the head's controls */
   safeTop: 94,
-  /** kept from each side: the notch's 26 + 16 */
-  sides: 42,
+  /** kept from each side: 16 since the edges left (HN-8) — the notch's 26 + 16 until then */
+  sides: 16,
   /** its top never lower than the window's foot less this — 660 at 780: its foot 8 above the line's top (708) */
   lowest: 120,
   /** the line's reserve: nothing of the bar's grows lower than the window's foot less this (700 at 780) */
@@ -28,7 +28,7 @@ export const HAND = {
 } as const;
 
 /**
- * Where the bar stands IN HAND (§8 "Tools in hand"): its top at y 64, centred on the window — kept 42 from each side
+ * Where the bar stands IN HAND (§8 "Tools in hand"): its top at y 64, centred on the window — kept 16 from each side
  * where the window is narrower than the bar and its sides. The selection's box is not read: the tools are the
  * hand's, not the object's place on the desk.
  */
@@ -76,7 +76,7 @@ export const offScreen = (box: ScreenBox, view: ViewSize): boolean =>
 
 /**
  * Where the bar goes over a selection (R7): centred over the brackets, its foot 10 above them; when its top would
- * cross the safe top (94) it stands 10 below them instead, and a bar flipped below clamps at 94; kept 42 from each
+ * cross the safe top (94) it stands 10 below them instead, and a bar flipped below clamps at 94; kept 16 from each
  * side; its top never lower than the window's foot less 120 (660). Null — no bar — with nothing selected, no box
  * drawn, or the selection wholly off-screen.
  */
@@ -110,7 +110,7 @@ export interface MenuPlace {
 }
 
 /**
- * The bar grown (R6, R20): at least 244 wide — the bar's width when wider — centred on the bar and kept 42 from
+ * The bar grown (R6, R20): at least 244 wide — the bar's width when wider — centred on the bar and kept 16 from
  * the sides; UPWARD from the bar's own row, or DOWNWARD when its top would cross the safe top (94), the row then
  * heading it; when it fits neither way the list scrolls inside it, clamped between the safe top and the line's
  * reserve, on the side with the more room. The bar's row never moves (M2): the menu is placed from it.

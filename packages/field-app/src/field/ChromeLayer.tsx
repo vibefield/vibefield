@@ -19,10 +19,11 @@ import { isSwitchCovering, useSwitchState } from "../boot/switch";
 import type { DocManager, DocManagerState } from "../doc-manager";
 import type { LineActs } from "../frame/Composer";
 import { Cards } from "../frame/cards/Cards";
-import { type FrameSurface, foldSurface } from "../frame/frame-surface";
+import { type FrameSurface, foldSurface, type SheetShelf } from "../frame/frame-surface";
 import { Head } from "../frame/Head";
 import { canvasHead } from "../frame/head-canvas";
 import { runChosenSession } from "../frame/line-door";
+import { PackageCircle } from "../frame/PackageCircle";
 import { FramePeek } from "../frame/Peek";
 import type { FrameActRun } from "../frame/palette-acts";
 import { StatusLine } from "../frame/StatusLine";
@@ -37,7 +38,6 @@ import { HistoryView } from "../history/HistoryView";
 import { prefetchHistoryRoomWhenIdle } from "../history/room-chunk";
 import { getHost } from "../host";
 import { CommandPalette } from "../hud/CommandPalette";
-import { ArtifactsTray } from "../hud/edge-tray/EdgeTray";
 import { LoadingVeil } from "../hud/LoadingVeil";
 import { PluginSurfaceHost } from "../hud/PluginSurfaceSlot";
 import { SettingsPanel } from "../panels";
@@ -55,7 +55,7 @@ import {
 } from "./shell-presentation";
 
 // ChromeLayer (§5.4.3): the head, the pegboard's chrome (Objects, behind the
-// line — the board itself is the desk's), the edges, the corner, settings, and
+// line — the board itself is the desk's), the hand, the corner, settings, and
 // overlays — WITHOUT owning document or engine lifetime. All the chrome-scoped
 // effects live here too: the two keyboard additions, the hud-flight dock
 // choreography, the devtools attach, and the switch's freeze. Sheet
@@ -89,6 +89,7 @@ export function ChromeLayer({
   hudMotion,
   docState,
   surface,
+  shelf,
   onSurfaceChange,
   chrome,
 }: {
@@ -99,6 +100,10 @@ export function ChromeLayer({
   /** The frame's open surface (One Frame FR-2/FR-3/FR-4) and its one owner's
    * setter — FieldView's, where the explorer's recede is computed. */
   surface: FrameSurface | null;
+  /** The shelf the pill's sheet shows: FieldView's one reading of `surface`
+   * for the view (`useShownShelf`), handed on to the head and the package
+   * circle as the recede reads it (HN-8). */
+  shelf: SheetShelf | null;
   onSurfaceChange: (next: FrameSurface | null) => void;
   chrome: ChromeState;
 }): ReactElement {
@@ -110,7 +115,10 @@ export function ChromeLayer({
   // TS-6 (TS-D13) — the sync question New field asks while a link owes it.
   const syncQuestion = useSyncQuestion();
   const boardOut = surface === "objects" || board?.open === true;
-  const docsOpen = surface === "fields";
+  // The pill's sheet, on either shelf (HN-8): the desk's gestures stop and the
+  // selection bar steps out behind it, as they did behind the explorer — read
+  // from the owner's one reading of the shelf it shows, as the head reads it.
+  const docsOpen = shelf !== null;
   const paletteOpen = surface === "palette";
   // UA-D19 — the Me menu: one of the frame's open surfaces since FR-4, so the
   // one owner folds it when any other opens, and it folds them (DESIGN.md §10).
@@ -118,9 +126,6 @@ export function ChromeLayer({
   const [shellPresentation, setShellPresentation] = useState(INITIAL_SHELL_PRESENTATION);
   const opening = settingsOpening(shellPresentation.target);
   const [desktopState, setDesktopState] = useState<DesktopShellState | null>(null);
-  // Artifacts' drawer is open (One Frame FR-4): the attention stack steps
-  // clear of it, as it stepped clear of the side panel.
-  const artifactsOpen = surface === "artifacts";
   // Whether a view covers the field (One Frame FR-1): every view but the
   // canvas. The window's view is main's (one owner); this is its mirror.
   const view = useActiveView();
@@ -214,7 +219,7 @@ export function ChromeLayer({
   // ⌘K / Ctrl+K toggles the command palette (§8.3; One Frame §7). ⌘K is free —
   // the ICE keymap, the line's B and the tray's Esc never claim it. The palette
   // is one of the frame's surfaces, so opening it folds whichever was open —
-  // the drawers and the Me menu included — and the owner folds Settings.
+  // the pill's sheet and the Me menu included — and the owner folds Settings.
   // GT-D21: caught in the window's capture phase, so a focused Godview pane
   // (whose Ghostty default for ⌘K is clear_screen) never sees it.
   useEffect(
@@ -305,20 +310,39 @@ export function ChromeLayer({
       {/* Chrome overlays sit OUTSIDE the scene's recede (a sheet's) — they never
           scale with the desk. Under the Peek they recede with the cover and the
           still, in field.tsx's `.field-recede` (DESIGN.md §6). */}
+      {/* THE PACKAGE CIRCLE (PL-D2, HN-8; DESIGN.md §8 "The head"): under a
+          cover the pill is the desk's and hides, and Artifacts' door stands
+          alone at the head's left, at 96 — search's mirror, above the cover
+          (62), folded into the terminals' title bar with search while they are
+          maximized. It grows the pill's sheet on its Artifacts shelf, the
+          frame's `artifacts`, and steps aside while the sheet stands in its
+          place (M1). Before the head in the document, so the sheet, at the same
+          62, is the one on top as the two hand over. */}
+      <PackageCircle
+        view={view}
+        surface={surface}
+        shelf={shelf}
+        onSurfaceChange={onSurfaceChange}
+      />
+
       {/* THE HEAD (One Frame FR-3, DESIGN.md §8 "The head"): the field's name
-          pill with the crumbs folded in, which grows the fields explorer, and
-          the zoom readout — alone at the right since FR-4 took the theme into
-          the Me menu and Artifacts behind the right notch. Still the canvas's
-          chrome: under the cover. */}
+          pill with the crumbs folded in, the chevron and the package (HN-8,
+          PL-D1), which grow its sheet on Fields or Artifacts — the Hub's, hosted
+          on that shelf — and the zoom readout, alone at the right since FR-4
+          took the theme into the Me menu. The pill is still the canvas's chrome,
+          under the cover; its sheet stands with the frame (62), so under a
+          cover the package circle grows it on Artifacts (PL-D2). */}
       <Head
         manager={manager}
         canvas={head}
         view={view}
         keys={keys}
         surface={surface}
+        shelf={shelf}
         onSurfaceChange={onSurfaceChange}
         menuZoom={subscribeMenuZoom}
         syncQuestion={syncQuestion}
+        windowId={FIELD_WINDOW_ID}
       />
 
       {/* SEARCH — THE PEEK (GV-D8/D9/D10, 2026-10-08; DESIGN.md §8 "Search — the
@@ -351,26 +375,12 @@ export function ChromeLayer({
         settingsOpen={showSettings}
       />
 
-      {/* THE RIGHT EDGE (One Frame FR-4, DESIGN.md §8 edge trays, §10):
-          Artifacts' notch — its drawer the Artifact Hub, the side panel's
-          contents — at mid-edge with its drawer behind it. The frame's: it
-          stands above the cover in every view, resting there as a sliver,
-          and its drawer is one of the frame's open surfaces. */}
-      <ArtifactsTray
-        surface={surface}
-        onSurfaceChange={onSurfaceChange}
-        sliver={covered}
-        windowId={FIELD_WINDOW_ID}
-      />
-
       {/* hud.attention (§8.4): the top-right attention stack, under the head.
           pointer-events-none wrapper so an empty slot never blocks the
-          canvas; the host restores pointer-events on its own content. It
-          steps clear of Artifacts' drawer while that is open. */}
+          canvas; the host restores pointer-events on its own content. */}
       <div
         data-hud-flight="top-right"
-        className="hud-flight pointer-events-none absolute top-16 z-40 flex w-72 max-w-[80vw] flex-col transition-[right] duration-300"
-        style={{ right: artifactsOpen ? "calc(152px + 1rem)" : "1rem" }}
+        className="hud-flight pointer-events-none absolute top-16 right-4 z-40 flex w-72 max-w-[80vw] flex-col"
       >
         <PluginSurfaceHost slot="hud.attention" windowId={FIELD_WINDOW_ID} />
       </div>

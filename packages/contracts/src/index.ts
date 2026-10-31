@@ -43,6 +43,7 @@ export * from "./shell-lease";
 export * from "./terminal";
 export * from "./terminal-pipeline";
 export * from "./terminal-pipeline-machines";
+export * from "./tools";
 export * from "./trust-root";
 export * from "./update-policy";
 export * from "./user-face";

@@ -4,25 +4,55 @@
  * `HeadView` on its real controller (`Head`), with a plain fake document
  * manager (no sockets), a fake canvas door (the path and the camera), and a
  * stateful harness standing where FieldView does as the frame's ONE owner of
- * the open surface. The name pill (one name at the top, the crumbs folded in
- * a folder, FitPath, renaming on a double-click, the sync dot), the fields
- * explorer it grows into (the old file pill's cases, carried over), the zoom
- * readout and its solid menu, and the zoom's keys. The model is
- * head-model.test's; delivery from a focused pane is the godview smoke's 11i.
+ * the open surface and its one reading of the shelf the sheet shows. The name
+ * pill (one name at the top, the crumbs folded in a folder, FitPath, renaming
+ * on a double-click, the sync dot), the fields explorer it grows into (the old
+ * file pill's cases, carried over), the zoom readout and its solid menu, and
+ * the zoom's keys. HN-8 (PL-D1, PL-D2): the package and its standing dot, the
+ * sheet's two shelves, the Hub hosted on Artifacts as the right edge's drawer
+ * hosted it (edge-tray.test's hosting cases, moved here with the tray's
+ * retirement; its fold on an unbind retired with it, and the shelf's words for
+ * why it has no Hub stand in its place), and the same sheet under a cover,
+ * grown from the package circle — with the circle beside it where the two hand
+ * over (its keyboard, its bar). The model is head-model.test's; delivery from
+ * a focused pane is the godview smoke's 11i.
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { DocSyncStatus, FrameView, FrameZoomAct } from "@vibefield/contracts";
-import { act, useState } from "react";
+import type {
+  ArtifactAvailability,
+  ArtifactView,
+  DocSyncStatus,
+  FrameView,
+  FrameZoomAct,
+  PluginRecordState,
+} from "@vibefield/contracts";
+import type { PluginSurfaceProps } from "@vibefield/plugin-sdk";
+import { act, type ReactElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SyncQuestionDoor } from "../src/account/sync-question";
 import type { DocManagerApi, DocManagerState } from "../src/doc-manager";
 import { resetDocSyncStatuses, setDocSyncStatuses } from "../src/doc-sync-store";
+import { publishGodviewDeck, resetGodviewDeckDoorForTest } from "../src/frame/deck-door";
 import type { FrameSurface } from "../src/frame/frame-surface";
-import { Head } from "../src/frame/Head";
+import { Head, useShownShelf } from "../src/frame/Head";
+import {
+  HUB_START_BOUND_MS,
+  resetArtifactCatalog,
+  setArtifactCatalog,
+} from "../src/frame/head-artifacts";
 import type { HeadCanvas, HeadCrumb } from "../src/frame/head-canvas";
+import { PackageCircle } from "../src/frame/PackageCircle";
 import type { ViewKeys } from "../src/frame/views";
+import { register } from "../src/plugin-host/surface-registry";
+
+// The plugin registry as the window's feed sets it: none until a test says
+// otherwise (no daemon has answered).
+const registry = vi.hoisted(() => ({ snapshot: null as unknown }));
+vi.mock("../src/plugin-host/plugin-registry-store", () => ({
+  usePluginRegistrySnapshot: () => registry.snapshot,
+}));
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -143,10 +173,94 @@ function syncStatus(overrides: Partial<DocSyncStatus> & { docId: string }): DocS
   };
 }
 
+/** One catalog row as `artifact.subscribe` sends it whole, its source there or not. */
+function artifact(title: string, availability: ArtifactAvailability, index = 0): ArtifactView {
+  const artifactId = `01J3QH5XX6M8QPK7R2B4F9C1T${index}`;
+  return {
+    artifactId,
+    artifactKey: `device-a:${artifactId}`,
+    title,
+    kind: "proxy",
+    originDeviceId: "device-a",
+    originDeviceName: "Studio Mac",
+    originBootId: "boot-a",
+    originOnline: availability !== "offline",
+    advertisedAvailability:
+      availability === "offline" || availability === "unknown" ? "active" : availability,
+    availability,
+    availabilityAt: 1_722_000_000_000,
+    publishedAt: 1_722_000_000_000,
+    updatedAt: 1_722_000_000_000,
+    openable: availability === "active",
+    editable: true,
+  };
+}
+
+/** The registry as fieldd would say it: the Browser plugin — the one that contributes the side
+ * panel, the Hub — on or off, and the state the registry folds that to (§9.3: `invalid` and
+ * `incompatible` whether on or off). Only the fields the head and the surface host read. */
+function browserRegistry(
+  on: boolean,
+  state: PluginRecordState = on ? "enabled" : "disabled",
+): unknown {
+  return {
+    generation: 1,
+    problems: [],
+    plugins: [
+      {
+        id: "vibefield.browser",
+        state,
+        enabled: on,
+        contributions: {
+          surfaces: [
+            { id: "vibefield.browser.artifacts", title: "Artifacts", slot: "hud.side-panel" },
+          ],
+        },
+      },
+    ],
+  };
+}
+
+/** The Artifact Hub's stand-in: the side panel's contribution, whose button closes it, and a
+ * field as its Add step has. */
+function HubSurface(props: PluginSurfaceProps): ReactElement {
+  return (
+    <div>
+      <button
+        type="button"
+        className="hub-close"
+        onClick={props.slot === "hud.side-panel" ? props.requestClose : undefined}
+      >
+        The Hub
+      </button>
+      <input className="hub-field" aria-label="Local port" />
+    </div>
+  );
+}
+
+/** Bind the Hub as the Browser plugin binds it; unbound after the test, or sooner by the
+ * returned hand (a disable or a restart). */
+function bindHub(): () => void {
+  const bound = register(
+    "vibefield.browser",
+    "vibefield.browser.artifacts",
+    "hud.side-panel",
+    HubSurface,
+    100,
+    "Artifacts",
+  );
+  const unbind = () => bound.dispose();
+  unbinds.push(unbind);
+  return unbind;
+}
+
 let root: Root | null = null;
 let host: HTMLElement | null = null;
 let pane: HTMLElement | null = null;
 let surfaceNow: FrameSurface | null = null;
+let setSurfaceNow: ((next: FrameSurface | null) => void) | null = null;
+let setViewNow: ((view: FrameView) => void) | null = null;
+const unbinds: Array<() => void> = [];
 
 afterEach(() => {
   act(() => root?.unmount());
@@ -156,8 +270,15 @@ afterEach(() => {
   host = null;
   pane = null;
   surfaceNow = null;
+  setSurfaceNow = null;
+  setViewNow = null;
   document.body.innerHTML = "";
   act(() => resetDocSyncStatuses());
+  act(() => resetArtifactCatalog());
+  for (const unbind of unbinds.splice(0).reverse()) unbind();
+  registry.snapshot = null;
+  resetGodviewDeckDoorForTest();
+  vi.useRealTimers();
 });
 
 interface Mounted {
@@ -174,6 +295,8 @@ function mount(
     open?: FrameSurface | null;
     menuZoom?: (handler: (act: FrameZoomAct) => void) => () => void;
     syncQuestion?: SyncQuestionDoor;
+    /** Stand the package circle beside the head, before it, as ChromeLayer mounts the two. */
+    circle?: boolean;
   } = {},
 ): Mounted {
   const used: Mounted = {
@@ -181,20 +304,34 @@ function mount(
     canvas: options.canvas ?? fakeCanvas(),
   };
   function Owner(): React.ReactElement {
-    // FieldView's place: the frame's one owner of the open surface.
+    // FieldView's place: the frame's one owner of the open surface — and the
+    // window's view, which nothing here folds the owner on (the line does) —
+    // and its one reading of the shelf the sheet shows, handed to the head and
+    // the circle alike.
     const [surface, setSurface] = useState<FrameSurface | null>(options.open ?? null);
+    const [view, setView] = useState<FrameView>(options.view ?? "canvas");
+    const shelf = useShownShelf(surface, view);
     surfaceNow = surface;
+    setSurfaceNow = setSurface;
+    setViewNow = setView;
     return (
-      <Head
-        manager={used.manager}
-        canvas={used.canvas}
-        view={options.view ?? "canvas"}
-        keys={options.keys ?? "mac"}
-        surface={surface}
-        onSurfaceChange={setSurface}
-        {...(options.menuZoom !== undefined ? { menuZoom: options.menuZoom } : {})}
-        {...(options.syncQuestion !== undefined ? { syncQuestion: options.syncQuestion } : {})}
-      />
+      <>
+        {options.circle === true ? (
+          <PackageCircle view={view} surface={surface} shelf={shelf} onSurfaceChange={setSurface} />
+        ) : null}
+        <Head
+          manager={used.manager}
+          canvas={used.canvas}
+          view={view}
+          keys={options.keys ?? "mac"}
+          surface={surface}
+          shelf={shelf}
+          onSurfaceChange={setSurface}
+          {...(options.menuZoom !== undefined ? { menuZoom: options.menuZoom } : {})}
+          {...(options.syncQuestion !== undefined ? { syncQuestion: options.syncQuestion } : {})}
+          windowId="field"
+        />
+      </>
     );
   }
   host = document.createElement("div");
@@ -1006,5 +1143,779 @@ describe("TS-6 — New field asks the sync question while a link owes it (TS-D13
     expect($(".vf-head-docs")?.hasAttribute("hidden")).toBe(false);
     expect(manager.createDoc).not.toHaveBeenCalled();
     expect(door.answer).not.toHaveBeenCalled();
+  });
+});
+
+/** HN-8 — the pill's package, and a shelf of the pill's sheet. */
+const pack = (): HTMLButtonElement => $("[data-head-place] .vf-head-pack") as HTMLButtonElement;
+const shelf = (which: "fields" | "artifacts"): HTMLElement | null =>
+  $(`[data-head-place] [data-shelf="${which}"]`);
+const HEAD_CSS = readFileSync(join(process.cwd(), "src/frame/head.css"), "utf8");
+const CIRCLE_CSS = readFileSync(join(process.cwd(), "src/frame/package-circle.css"), "utf8");
+/** The head's motion under reduced motion (M6): its stylesheet's last media block. */
+const REDUCED_CSS = HEAD_CSS.slice(HEAD_CSS.lastIndexOf("@media (prefers-reduced-motion: reduce)"));
+
+/** A rule's body in a stylesheet: from its selector to its first close. */
+function ruleIn(css: string, selector: string): string {
+  const from = css.indexOf(`${selector} {`);
+  return from < 0 ? "" : css.slice(from, css.indexOf("}", from));
+}
+
+/** One declaration's value in a rule's body, its whitespace folded to single spaces. */
+function declared(rule: string, property: string): string | undefined {
+  return rule.match(new RegExp(`\\s${property}:\\s*([^;]+);`, "u"))?.[1]?.replace(/\s+/gu, " ");
+}
+
+/** A declaration's value in pixels (the first, where it lists several). */
+function px(rule: string, property: string): number {
+  return Number(declared(rule, property)?.match(/^(-?\d+(?:\.\d+)?)px/u)?.[1]);
+}
+
+/** What a rule's transition does to one property: its timing, as written after the name. */
+function transitionOf(rule: string, property: string): string | undefined {
+  return declared(rule, "transition")?.match(new RegExp(`(?:^|, )${property} ([^,]+)`, "u"))?.[1];
+}
+
+describe("the package (PL-D1) — the pill's second button", () => {
+  it("stands after the chevron and a 1 × 18 rule: `package`, named Artifacts", () => {
+    mount();
+    const rule = $(".vf-head-chev")?.nextElementSibling;
+    expect(rule?.className).toBe("vf-head-rule");
+    expect(rule?.getAttribute("aria-hidden")).toBe("true");
+    expect(rule?.nextElementSibling).toBe(pack());
+    expect(pack().querySelector("[data-glyph]")?.getAttribute("data-glyph")).toBe("package");
+    expect(pack().getAttribute("aria-label")).toBe("Artifacts");
+    expect(pack().title).toBe("Artifacts");
+    expect(pack().getAttribute("aria-expanded")).toBe("false");
+    const drawn = ruleIn(HEAD_CSS, ".vf-head-rule");
+    expect(drawn).toContain("width: 1px;");
+    expect(drawn).toContain("height: 18px;");
+    expect(drawn).toContain("background: var(--vf-hairline-strong);");
+  });
+});
+
+describe("the package's dot (PL-D1) — standing states only, read from the catalog by the head", () => {
+  it("stands while a source is unavailable, its words the package's — the sheet shut, no Hub bound", () => {
+    mount();
+    expect($(".vf-head-pack-dot")).toBeNull();
+    act(() =>
+      setArtifactCatalog([
+        artifact("vibe-field", "source-unavailable", 0),
+        artifact("Docs", "active", 1),
+      ]),
+    );
+    expect(pack().querySelector(".vf-head-pack-dot")).not.toBeNull();
+    expect(pack().title).toBe("Artifacts — vibe-field's source is unavailable");
+    expect(pack().getAttribute("aria-label")).toBe(pack().title);
+    act(() =>
+      setArtifactCatalog([
+        artifact("vibe-field", "source-unavailable", 0),
+        artifact("Docs", "source-unavailable", 1),
+      ]),
+    );
+    expect(pack().title).toBe("Artifacts — 2 sources unavailable");
+    act(() => setArtifactCatalog([artifact("vibe-field", "active", 0)]));
+    expect($(".vf-head-pack-dot")).toBeNull();
+    expect(pack().title).toBe("Artifacts");
+    // orange, ringed in the solid chrome so it reads on the glass (§2.5: attention, never red)
+    const dot = ruleIn(HEAD_CSS, ".vf-head-pack-dot");
+    expect(dot).toContain("background: var(--vf-orange);");
+    expect(dot).toContain("box-shadow: 0 0 0 1.5px var(--vf-chrome-solid);");
+  });
+
+  it("leaves every other state to the shelf: starting, removing, error, offline, unknown", () => {
+    mount();
+    act(() =>
+      setArtifactCatalog(
+        (["starting", "removing", "error", "offline", "unknown"] as const).map((state, index) =>
+          artifact(state, state, index),
+        ),
+      ),
+    );
+    expect($(".vf-head-pack-dot")).toBeNull();
+  });
+
+  it("keeps the last good reading when a list cannot be read — a tolerant reader", () => {
+    mount();
+    act(() => setArtifactCatalog([artifact("vibe-field", "source-unavailable")]));
+    act(() => setArtifactCatalog({ artifacts: "not a list" }));
+    expect(pack().title).toBe("Artifacts — vibe-field's source is unavailable");
+  });
+
+  it("stands on the package while its shelf shows, the button saying Close there", () => {
+    act(() => setArtifactCatalog([artifact("vibe-field", "source-unavailable")]));
+    mount({ open: "artifacts" });
+    expect(pack().querySelector(".vf-head-pack-dot")).not.toBeNull();
+    expect(pack().title).toBe("Close  Esc");
+  });
+});
+
+describe("the sheet's two shelves (PL-D1) — one surface, the button pressed shown on", () => {
+  it("opens on Artifacts from the package: it is on and says Close, the chevron names its shelf", () => {
+    mount();
+    act(() => pack().click());
+    expect(surfaceNow).toBe("artifacts");
+    expect($("[data-head-place]")?.dataset.open).toBe("true");
+    expect(pack().getAttribute("aria-expanded")).toBe("true");
+    expect(pack().getAttribute("aria-label")).toBe("Close the artifacts");
+    expect(pack().title).toBe("Close  Esc");
+    const chevron = button("Fields");
+    expect(chevron.title).toBe("Fields");
+    expect(chevron.getAttribute("aria-expanded")).toBe("false");
+    expect(shelf("artifacts")?.hasAttribute("data-shown")).toBe(true);
+    expect(shelf("artifacts")?.hasAttribute("inert")).toBe(false);
+    expect(shelf("fields")?.hasAttribute("data-shown")).toBe(false);
+    expect(shelf("fields")?.hasAttribute("inert")).toBe(true);
+    // the button that is on shuts it
+    act(() => pack().click());
+    expect(surfaceNow).toBeNull();
+    expect($("[data-head-place]")?.dataset.open).toBe("false");
+  });
+
+  it("turns in place: the other button changes the shelf, the sheet stays out, the turn forgotten once shut", () => {
+    mount({ open: "fields" });
+    const place = $("[data-head-place]");
+    expect(place?.hasAttribute("data-turned")).toBe(false);
+    act(() => pack().click());
+    expect(surfaceNow).toBe("artifacts");
+    expect(place?.dataset.open).toBe("true");
+    expect(place?.hasAttribute("data-turned")).toBe(true);
+    expect(shelf("fields")?.hasAttribute("data-shown")).toBe(false);
+    expect(shelf("artifacts")?.hasAttribute("data-shown")).toBe(true);
+    act(() => button("Fields").click());
+    expect(surfaceNow).toBe("fields");
+    expect(button("Close the fields").title).toBe("Close  Esc");
+    expect(pack().title).toBe("Artifacts");
+    act(() => button("Close the fields").click());
+    expect(surfaceNow).toBeNull();
+    // the next opening rises in behind the morph again
+    expect(place?.hasAttribute("data-turned")).toBe(false);
+  });
+
+  it("changes its shelves in 180ms `ease`, in place, and at once under reduced motion (§6)", () => {
+    expect(ruleIn(HEAD_CSS, ".vf-head-place[data-turned] .vf-head-shelf[data-shown]")).toMatch(
+      /opacity 180ms ease,\s*visibility 0s;/,
+    );
+    expect(ruleIn(HEAD_CSS, ".vf-head-place[data-turned] .vf-head-shelf")).toContain(
+      "transform: none;",
+    );
+    const reduced = HEAD_CSS.slice(HEAD_CSS.lastIndexOf("@media (prefers-reduced-motion: reduce)"));
+    expect(ruleIn(reduced, ".vf-head-place[data-turned] .vf-head-shelf[data-shown]")).toContain(
+      "transition: none;",
+    );
+  });
+
+  it("grows to 544 × 420, never ending nearer the line than 8, and stands with the frame", () => {
+    const open = ruleIn(HEAD_CSS, '.vf-head-place[data-open="true"]');
+    expect(open).toContain("z-index: 62;");
+    expect(open).toContain("width: min(56%, 34rem);");
+    expect(open).toContain("height: min(420px, calc(100% - 88px));");
+    expect(open).toContain("border-radius: 22px 22px 40px 40px;");
+  });
+
+  it("stands with the frame (62) the moment it opens and keeps it until its fold ends, so a status line never pops over a sheet still folding (§10; ruling 7)", () => {
+    const open = ruleIn(HEAD_CSS, '.vf-head-place[data-open="true"]');
+    expect(declared(open, "z-index")).toBe("62");
+    expect(transitionOf(open, "z-index")).toBe("0s");
+    // shut, it is the canvas's chrome again (50) — once the morph that folds it is over
+    const shut = ruleIn(HEAD_CSS, ".vf-head-place");
+    expect(declared(shut, "z-index")).toBe("50");
+    const morph = transitionOf(shut, "width")?.split(" ")[0];
+    expect(morph).toBe("600ms");
+    expect(transitionOf(shut, "z-index")).toBe(`0s linear ${morph}`);
+  });
+
+  it("never changes size under reduced motion: from the pill it is its size at once and fades in over 90ms, and fades out at that size before it is the pill again (M6; ruling 2)", () => {
+    // open: every measure at once, the whole element fading in from nothing
+    const opening = ruleIn(REDUCED_CSS, '.vf-head-place[data-open="true"]');
+    expect(opening).toContain("transition: none;");
+    expect(opening).toContain("animation: vf-head-in 90ms ease;");
+    expect(HEAD_CSS).toMatch(/@keyframes vf-head-in \{\s*from \{\s*opacity: 0;\s*\}\s*\}/u);
+    // shut: every measure — and the frame's 62 — waits out that 90ms, then changes at once…
+    const shut = declared(ruleIn(REDUCED_CSS, ".vf-head-place"), "transition") ?? "";
+    const shutting = shut.split(", ");
+    for (const item of shutting) expect(item).toMatch(/^[\w-]+ 0s linear 90ms$/u);
+    expect(shutting.map((item) => item.split(" ")[0])).toEqual(
+      expect.arrayContaining(["width", "max-width", "height", "border-radius", "z-index"]),
+    );
+    // …while the whole element fades out at its size over those 90ms, then is the pill
+    expect(ruleIn(REDUCED_CSS, ".vf-head-place[data-folded]")).toContain(
+      "animation: vf-head-out 90ms ease;",
+    );
+    expect(HEAD_CSS).toMatch(/@keyframes vf-head-out \{\s*to \{\s*opacity: 0;\s*\}\s*\}/u);
+  });
+
+  it("marks a fold, never the first paint nor a turn, so reduced motion fades out only a sheet that was open (M6; ruling 2)", () => {
+    mount();
+    const place = $("[data-head-place]");
+    expect(place?.hasAttribute("data-folded")).toBe(false);
+    act(() => pack().click());
+    expect(place?.hasAttribute("data-folded")).toBe(false);
+    act(() => button("Fields").click());
+    expect(place?.hasAttribute("data-folded")).toBe(false);
+    act(() => button("Close the fields").click());
+    expect(surfaceNow).toBeNull();
+    expect(place?.hasAttribute("data-folded")).toBe(true);
+    // opened again, it fades in as any opening does
+    act(() => pack().click());
+    expect(place?.hasAttribute("data-folded")).toBe(false);
+  });
+
+  it("is one of the frame's surfaces: opening it on either shelf folds the zoom's menu", () => {
+    mount();
+    clickTimes($(".vf-head-zoom") as HTMLButtonElement, 1);
+    expect(surfaceNow).toBe("zoom");
+    act(() => pack().click());
+    expect(surfaceNow).toBe("artifacts");
+    expect($(".vf-head-zoom-menu")).toBeNull();
+  });
+
+  it("shuts on the dim from Artifacts too", () => {
+    mount({ open: "artifacts" });
+    act(() => ($(".vf-head-dim") as HTMLElement).click());
+    expect(surfaceNow).toBeNull();
+  });
+
+  it("shuts on Esc from a field in the Hub, and gives the keyboard back to the button that opened it", () => {
+    bindHub();
+    mount();
+    act(() => pack().focus());
+    act(() => pack().click());
+    const field = shelf("artifacts")?.querySelector<HTMLInputElement>(".hub-field");
+    act(() => field?.focus());
+    expect(document.activeElement).toBe(field);
+    const viewEsc = vi.fn();
+    window.addEventListener("keydown", viewEsc);
+    try {
+      press(field as HTMLInputElement, { key: "Escape" });
+    } finally {
+      window.removeEventListener("keydown", viewEsc);
+    }
+    expect(surfaceNow).toBeNull();
+    expect(viewEsc).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(pack());
+  });
+
+  it("leaves a rename its own Esc while the sheet is out: the name stands, and so does the sheet", () => {
+    mount({ open: "fields" });
+    clickTimes($(".vf-head-name") as HTMLButtonElement, 2);
+    const input = $(".vf-head-rename") as HTMLInputElement;
+    act(() => setInputValue(input, "Nope"));
+    press(input, { key: "Escape" });
+    expect(pathNames()).toEqual(["Field"]);
+    expect(surfaceNow).toBe("fields");
+  });
+});
+
+describe('the Artifacts shelf hosts the Hub (DESIGN.md §8 "Artifacts — the Artifacts shelf\'s contents")', () => {
+  it("mounts the side panel's one contribution there, in its plugin's scope; the Hub's own close shuts the sheet", () => {
+    bindHub();
+    mount();
+    // only while the shelf shows: a shut sheet holds no Hub
+    expect(host?.textContent).not.toContain("The Hub");
+    act(() => pack().click());
+    const scope = shelf("artifacts")?.querySelector<HTMLElement>(
+      '[data-vf-plugin="vibefield.browser"]',
+    );
+    expect(scope?.querySelector(".hub-close")?.textContent).toBe("The Hub");
+    act(() => scope?.querySelector<HTMLButtonElement>(".hub-close")?.click());
+    expect(surfaceNow).toBeNull();
+  });
+
+  it("keeps the Hub through the sheet's 600ms fold, so it never folds away empty", async () => {
+    vi.useFakeTimers();
+    bindHub();
+    mount({ open: "artifacts" });
+    act(() => pack().click());
+    expect(surfaceNow).toBeNull();
+    expect(shelf("artifacts")?.textContent).toContain("The Hub");
+    await act(async () => vi.advanceTimersByTimeAsync(599));
+    expect(shelf("artifacts")?.textContent).toContain("The Hub");
+    await act(async () => vi.advanceTimersByTimeAsync(1));
+    expect(shelf("artifacts")?.textContent).not.toContain("The Hub");
+  });
+
+  it("hosts the Hub in a container pinned at the OPEN sheet's inner width, so its tiles never reflow while the sheet grows or folds (PL-D3; ruling 1)", () => {
+    bindHub();
+    mount({ open: "artifacts" });
+    // the Hub stands in the shelf's one inner box, never in the shelf itself
+    const box = shelf("artifacts")?.firstElementChild;
+    expect(box?.className).toBe("vf-head-hub");
+    expect(box?.querySelector('[data-vf-plugin="vibefield.browser"]')).not.toBeNull();
+    // the box is the container the Hub's stylesheet asks (PL-D3) — at the open sheet's width
+    // (`cqw`: the window's, with no container above the head; the catalog's plate stages one)
+    // less the shelf's padding at each side
+    const hub = ruleIn(HEAD_CSS, ".vf-head-hub");
+    expect(hub).toContain("container-type: inline-size;");
+    const open = ruleIn(HEAD_CSS, '.vf-head-place[data-open="true"]').match(
+      /\swidth: min\((\d+)%, (\d+rem)\);/u,
+    );
+    const side = Number(ruleIn(HEAD_CSS, ".vf-head-shelf").match(/padding: \d+px (\d+)px/u)?.[1]);
+    expect([open?.[1], open?.[2], side]).toEqual(["56", "34rem", 20]);
+    expect(hub).toContain(`width: calc(min(${open?.[1]}cqw, ${open?.[2]}) - ${2 * side}px);`);
+    // the shelf narrows with the morph, so it is no container: it clips the box instead, as the
+    // sheet's own `overflow: hidden` does — the query never sees the width shrink
+    const narrowing = ruleIn(HEAD_CSS, '.vf-head-shelf[data-shelf="artifacts"]');
+    expect(narrowing).not.toContain("container-type");
+    expect(narrowing).toContain("overflow-x: hidden;");
+    // the covered sheet opens to the same width, so the same box serves it
+    expect(ruleIn(HEAD_CSS, '.vf-head-sheet[data-open="true"]')).toContain(
+      `width: min(${open?.[1]}%, ${open?.[2]});`,
+    );
+  });
+
+  it("says the Hub is off, in words, while its plugin is off — never a blank shelf", () => {
+    registry.snapshot = browserRegistry(false);
+    // bound, but its plugin turned off: the host shows it nowhere
+    bindHub();
+    mount({ open: "artifacts" });
+    const words = shelf("artifacts")?.querySelector(".vf-head-waits");
+    expect(words?.querySelector("strong")?.textContent).toBe("Artifacts are off");
+    expect(words?.textContent).toContain("Turn on the Browser plugin in Settings › Plugins.");
+    expect(words?.hasAttribute("data-late")).toBe(false);
+    expect(shelf("artifacts")?.textContent).not.toContain("The Hub");
+  });
+
+  it("says it is opening, late, while the Hub starts — its plugin on and not yet bound, or no registry yet", () => {
+    for (const snapshot of [browserRegistry(true), null]) {
+      registry.snapshot = snapshot;
+      mount({ open: "artifacts" });
+      const words = shelf("artifacts")?.querySelector(".vf-head-waits");
+      expect(words?.textContent).toBe("Opening Artifacts…");
+      expect(words?.hasAttribute("data-late")).toBe(true);
+      act(() => root?.unmount());
+      root = null;
+      host?.remove();
+    }
+  });
+
+  it("times those words as History's opening words: nothing for 120ms, then a 180ms `ease`", () => {
+    const history = readFileSync(join(process.cwd(), "src/history/history-room-view.css"), "utf8");
+    const timing = (css: string, selector: string): string | undefined =>
+      ruleIn(css, selector).match(/animation: [\w-]+ ([^;]+);/u)?.[1];
+    expect(timing(HEAD_CSS, ".vf-head-waits[data-late]")).toBe("180ms ease 120ms both");
+    expect(timing(HEAD_CSS, ".vf-head-waits[data-late]")).toBe(
+      timing(history, ".vf-history-face[data-late]"),
+    );
+  });
+
+  it("stays open through the Hub's restart — an unbind never folds it — and takes the Hub back", () => {
+    registry.snapshot = browserRegistry(true);
+    const unbind = bindHub();
+    mount({ open: "artifacts" });
+    expect(shelf("artifacts")?.textContent).toContain("The Hub");
+    act(() => unbind());
+    expect(surfaceNow).toBe("artifacts");
+    expect($("[data-head-place]")?.dataset.open).toBe("true");
+    expect(shelf("artifacts")?.textContent).toBe("Opening Artifacts…");
+    act(() => {
+      bindHub();
+    });
+    expect(shelf("artifacts")?.textContent).toContain("The Hub");
+  });
+
+  it("says the Hub can't run while its plugin is invalid or incompatible, on or off, or absent — turning it on would not help (ruling 10)", () => {
+    for (const snapshot of [
+      browserRegistry(true, "invalid"),
+      browserRegistry(false, "incompatible"),
+      { generation: 1, problems: [], plugins: [] },
+    ]) {
+      registry.snapshot = snapshot;
+      mount({ open: "artifacts" });
+      const words = shelf("artifacts")?.querySelector(".vf-head-waits");
+      expect(words?.querySelector("strong")?.textContent).toBe("Artifacts can't run");
+      expect(words?.textContent).toContain(
+        "The Browser plugin can't run in this VibeField — see Settings › Plugins.",
+      );
+      // a fact, said at once: nothing is starting
+      expect(words?.hasAttribute("data-late")).toBe(false);
+      act(() => root?.unmount());
+      root = null;
+      host?.remove();
+    }
+  });
+
+  it("says the Hub isn't starting once it has been opening for 10 s, the words crossfading in place — and the Hub takes the shelf the moment it binds (ruling 10)", () => {
+    vi.useFakeTimers();
+    registry.snapshot = browserRegistry(true);
+    mount({ open: "artifacts" });
+    const words = (): HTMLElement | null | undefined =>
+      shelf("artifacts")?.querySelector<HTMLElement>(".vf-head-waits");
+    const faces = (): HTMLElement[] => [
+      ...(words()?.querySelectorAll<HTMLElement>(".vf-head-waits-face") ?? []),
+    ];
+    expect(HUB_START_BOUND_MS).toBe(10_000);
+    act(() => vi.advanceTimersByTime(HUB_START_BOUND_MS - 1));
+    expect(words()?.textContent).toBe("Opening Artifacts…");
+    act(() => vi.advanceTimersByTime(1));
+    // the turn: the words it leaves fade out under the new ones, in one cell, and are not read
+    expect(words()?.hasAttribute("data-turning")).toBe(true);
+    expect(faces().map((face) => face.hasAttribute("data-leaving"))).toEqual([true, false]);
+    expect(faces()[0]?.getAttribute("aria-hidden")).toBe("true");
+    expect(faces()[0]?.textContent).toBe("Opening Artifacts…");
+    expect(faces()[1]?.querySelector("strong")?.textContent).toBe("Artifacts aren't starting");
+    expect(faces()[1]?.textContent).toContain(
+      "Turn the Browser plugin off and on in Settings › Plugins.",
+    );
+    act(() => vi.advanceTimersByTime(179));
+    expect(faces()).toHaveLength(2);
+    act(() => vi.advanceTimersByTime(1));
+    expect(faces()).toHaveLength(1);
+    expect(words()?.hasAttribute("data-turning")).toBe(false);
+    expect(words()?.hasAttribute("data-late")).toBe(false);
+    // whichever it says, the Hub takes the shelf the moment it binds
+    act(() => {
+      bindHub();
+    });
+    expect(shelf("artifacts")?.querySelector(".vf-head-waits")).toBeNull();
+    expect(shelf("artifacts")?.textContent).toContain("The Hub");
+  });
+
+  it("starts its 10 s again with every new opening: a Hub that restarts is opening again, not stalled (ruling 10)", () => {
+    vi.useFakeTimers();
+    registry.snapshot = browserRegistry(true);
+    const unbind = bindHub();
+    mount({ open: "artifacts" });
+    act(() => vi.advanceTimersByTime(HUB_START_BOUND_MS * 2));
+    expect(shelf("artifacts")?.textContent).toContain("The Hub");
+    act(() => unbind());
+    expect(shelf("artifacts")?.textContent).toBe("Opening Artifacts…");
+    act(() => vi.advanceTimersByTime(HUB_START_BOUND_MS - 1));
+    expect(shelf("artifacts")?.textContent).toBe("Opening Artifacts…");
+    act(() => vi.advanceTimersByTime(1));
+    const said = shelf("artifacts")?.querySelector(".vf-head-waits-face:not([data-leaving])");
+    expect(said?.querySelector("strong")?.textContent).toBe("Artifacts aren't starting");
+  });
+
+  it("crossfades that turn over 180ms `ease` in one cell, and makes it at once under reduced motion (ruling 10)", () => {
+    const turning = ".vf-head-waits[data-turning] > .vf-head-waits-face";
+    expect(declared(ruleIn(HEAD_CSS, ".vf-head-waits-face"), "grid-area")).toBe("1 / 1");
+    expect(declared(ruleIn(HEAD_CSS, turning), "animation")).toBe("vf-head-in 180ms ease both");
+    expect(declared(ruleIn(HEAD_CSS, `${turning}[data-leaving]`), "animation")).toBe(
+      "vf-head-out 180ms ease both",
+    );
+    expect(declared(ruleIn(REDUCED_CSS, turning), "animation")).toBe("none");
+    expect(declared(ruleIn(REDUCED_CSS, ".vf-head-waits-face[data-leaving]"), "visibility")).toBe(
+      "hidden",
+    );
+  });
+
+  it("draws no fade at the shelf's foot, so the Hub's buttons are never faded — Fields keeps the explorer's (ruling 9)", () => {
+    mount({ view: "godview", open: "artifacts" });
+    const fade = "vf-mask-fade-bottom";
+    expect(shelf("fields")?.classList.contains(fade)).toBe(true);
+    expect(shelf("artifacts")?.classList.contains(fade)).toBe(false);
+    const covered = $('.vf-head-sheet [data-shelf="artifacts"]');
+    expect(covered).not.toBeNull();
+    expect(covered?.classList.contains(fade)).toBe(false);
+  });
+});
+
+describe("under a cover — the same sheet, grown from the package circle (PL-D2)", () => {
+  const circleSheet = (): HTMLElement | null => $(".vf-head-sheet");
+
+  it("holds Artifacts alone above the cover, its head row the circle's own, outside the canvas's head", () => {
+    bindHub();
+    mount({ view: "godview", open: "artifacts" });
+    const sheet = circleSheet();
+    expect(sheet?.dataset.open).toBe("true");
+    expect(sheet?.hasAttribute("inert")).toBe(false);
+    expect($(".vf-head")?.contains(sheet ?? null)).toBe(false);
+    // the pill is the desk's and hides with it: its own sheet stays shut
+    expect($("[data-head-place]")?.dataset.open).toBe("false");
+    const own = sheet?.querySelector<HTMLButtonElement>(".vf-head-pack");
+    expect(own?.getAttribute("aria-expanded")).toBe("true");
+    expect(own?.title).toBe("Close  Esc");
+    expect(sheet?.querySelector(".vf-head-sheet-name")?.textContent).toBe("Artifacts");
+    expect(sheet?.querySelector('[data-shelf="fields"]')).toBeNull();
+    const hub = sheet?.querySelector('[data-shelf="artifacts"] [data-vf-plugin]');
+    expect(hub?.textContent).toContain("The Hub");
+    // its dim over the cover, outside the head too
+    const dim = $(".vf-head-dim");
+    expect(dim?.dataset.open).toBe("true");
+    expect(dim?.hasAttribute("data-covered")).toBe(true);
+    expect($(".vf-head")?.contains(dim ?? null)).toBe(false);
+    act(() => own?.click());
+    expect(surfaceNow).toBeNull();
+    expect(circleSheet()?.dataset.open).toBe("false");
+    expect(circleSheet()?.hasAttribute("inert")).toBe(true);
+  });
+
+  it("keeps Fields with the pill: no covered sheet opens on them", () => {
+    mount({ view: "history", open: "fields" });
+    expect(circleSheet()?.dataset.open).toBe("false");
+    expect($("[data-head-place]")?.dataset.open).toBe("false");
+    expect($(".vf-head-dim")?.dataset.open).toBe("false");
+  });
+
+  it("is not drawn on Canvas, where the pill holds the package", () => {
+    mount({ open: "artifacts" });
+    expect(circleSheet()).toBeNull();
+    expect($("[data-head-place]")?.dataset.open).toBe("true");
+  });
+
+  it("shuts on its dim", () => {
+    mount({ view: "godview", open: "artifacts" });
+    act(() => ($(".vf-head-dim") as HTMLElement).click());
+    expect(surfaceNow).toBeNull();
+  });
+
+  it("is drawn shut the moment the view changes, before the line's fold reaches the owner", () => {
+    mount({ open: "artifacts" });
+    act(() => setViewNow?.("godview"));
+    // nothing here folds the owner on a change of view: the line does, in an effect
+    expect(surfaceNow).toBe("artifacts");
+    expect($("[data-head-place]")?.dataset.open).toBe("false");
+    expect(circleSheet()?.dataset.open).toBe("false");
+    expect($(".vf-head-dim")?.dataset.open).toBe("false");
+  });
+
+  it("grows from the circle's own box — 40 at x 96, top 8 — to the pill's sheet's size, at 62, its dim at 61", () => {
+    const shut = ruleIn(HEAD_CSS, ".vf-head-sheet");
+    for (const measure of [
+      "z-index: 62;",
+      "top: 8px;",
+      "left: 96px;",
+      "width: 40px;",
+      "height: 40px;",
+      "border-radius: 20px;",
+      "visibility: hidden;",
+      "width 600ms var(--vf-ease-island)",
+    ]) {
+      expect(shut).toContain(measure);
+    }
+    const open = ruleIn(HEAD_CSS, '.vf-head-sheet[data-open="true"]');
+    expect(open).toContain("width: min(56%, 34rem);");
+    expect(open).toContain("height: min(420px, calc(100% - 88px));");
+    expect(open).toContain("border-radius: 22px 22px 40px 40px;");
+    expect(ruleIn(HEAD_CSS, ".vf-head-dim[data-covered]")).toContain("z-index: 61;");
+    // its head row: the package 6 in, the shelf's name 8 after it, at 13/600
+    const row = ruleIn(HEAD_CSS, ".vf-head-sheet-row");
+    expect(row).toContain("padding: 0 16px 0 6px;");
+    expect(row).toContain("gap: 8px;");
+    const name = ruleIn(HEAD_CSS, ".vf-head-sheet-name");
+    expect(name).toContain("font-size: 13px;");
+    expect(name).toContain("font-weight: 600;");
+  });
+
+  it("takes the circle's place with nothing moving: its package draws the circle's 18 where the circle drew it, its dot where the circle's is — the pill's own stays 15 (M1; ruling 4)", () => {
+    mount({ view: "godview", open: "artifacts", circle: true });
+    const glyph = (at: Element | null | undefined): string | null | undefined =>
+      at?.querySelector('svg[data-glyph="package"]')?.getAttribute("width");
+    expect(glyph(circleSheet()?.querySelector(".vf-head-pack"))).toBe("18");
+    expect(glyph($(".vf-package-button"))).toBe("18");
+    expect(glyph(pack())).toBe("15");
+    // by the stylesheets' numbers: the circle, 40 at its place, its dot 7 in from its top right…
+    const circle = ruleIn(CIRCLE_CSS, ".vf-package-circle");
+    const circleDot = ruleIn(CIRCLE_CSS, ".vf-package-dot");
+    const [left, top, size] = [px(circle, "left"), px(circle, "top"), px(circle, "width")];
+    // …and the sheet at the same place, its 40 row holding the 28 button 6 in, the dot 1 in
+    const sheet = ruleIn(HEAD_CSS, ".vf-head-sheet");
+    expect([px(sheet, "left"), px(sheet, "top")]).toEqual([left, top]);
+    const row = ruleIn(HEAD_CSS, ".vf-head-sheet-row");
+    const height = px(row, "height");
+    const inset = Number(declared(row, "padding")?.split(" ")[3]?.replace("px", ""));
+    const button = px(ruleIn(HEAD_CSS, ".vf-head-chev,\n.vf-head-pack"), "width");
+    expect([height, inset, button]).toEqual([40, 6, 28]);
+    // the glyph's centre is the circle's…
+    const centre = [left + inset + button / 2, top + height / 2];
+    expect(centre).toEqual([left + size / 2, top + size / 2]);
+    // …and so are the dot's top and its right edge
+    const dot = ruleIn(HEAD_CSS, ".vf-head-sheet-row .vf-head-pack-dot");
+    expect(top + (height - button) / 2 + px(dot, "top")).toBe(top + px(circleDot, "top"));
+    expect(left + inset + button - px(dot, "right")).toBe(left + size - px(circleDot, "right"));
+  });
+
+  it('keeps its package on — "Close  Esc" — until the fold ends, so nothing in its row changes as it folds into the circle (ruling 4)', () => {
+    vi.useFakeTimers();
+    mount({ view: "godview", open: "artifacts" });
+    const own = (): HTMLButtonElement | null | undefined =>
+      circleSheet()?.querySelector<HTMLButtonElement>(".vf-head-pack");
+    clickTimes(own() as HTMLButtonElement, 1);
+    expect(surfaceNow).toBeNull();
+    expect(circleSheet()?.dataset.open).toBe("false");
+    act(() => vi.advanceTimersByTime(599));
+    expect(own()?.getAttribute("aria-expanded")).toBe("true");
+    expect(own()?.title).toBe("Close  Esc");
+    act(() => vi.advanceTimersByTime(1));
+    expect(own()?.getAttribute("aria-expanded")).toBe("false");
+    expect(own()?.title).toBe("Artifacts");
+  });
+
+  it("is shut into the bar's own control while Godview's terminals are maximized, read step for step as the circle reads it — top 3, 30 × 24, corners 8, no glass (GV-D11; ruling 3)", () => {
+    vi.useFakeTimers();
+    mount({ view: "godview", circle: true });
+    /** Where the sheet's shut box stands — the circle's place, at every moment. */
+    const box = (): "bar" | "head" => {
+      const bar = circleSheet()?.hasAttribute("data-bar") === true;
+      expect(bar).toBe($(".vf-package-circle")?.hasAttribute("data-bar") === true);
+      return bar ? "bar" : "head";
+    };
+    expect(box()).toBe("head");
+    act(() => publishGodviewDeck("maximized"));
+    expect(box()).toBe("bar");
+    // out of the bar on search's two steps: the control fades where it stands, and the sheet's
+    // box stays with it until the head's circle comes back
+    act(() => publishGodviewDeck("up"));
+    expect(box()).toBe("bar");
+    act(() => vi.advanceTimersByTime(153));
+    expect(box()).toBe("bar");
+    act(() => vi.advanceTimersByTime(1));
+    expect(box()).toBe("head");
+    // the box is the bar control's own (package-circle.css), at the circle's left
+    const shut = ruleIn(HEAD_CSS, '.vf-head-sheet[data-bar][data-open="false"]');
+    const control = ruleIn(CIRCLE_CSS, ".vf-package-circle[data-bar]");
+    for (const property of [
+      "top",
+      "width",
+      "height",
+      "border-radius",
+      "background",
+      "backdrop-filter",
+      "box-shadow",
+    ]) {
+      expect(declared(shut, property), property).toBe(declared(control, property));
+    }
+    expect([declared(shut, "top"), declared(shut, "background")]).toEqual(["3px", "transparent"]);
+    expect(shut).not.toContain("left:");
+    // and the sheet moves its top as it grows out of the bar and folds back into it
+    for (const rule of [".vf-head-sheet", '.vf-head-sheet[data-open="true"]']) {
+      expect(transitionOf(ruleIn(HEAD_CSS, rule), "top"), rule).toBe("600ms var(--vf-ease-island)");
+    }
+  });
+
+  it("never changes size under reduced motion: from the circle or the bar it is always its size and place, and only fades, 90ms in and out (M6; ruling 2)", () => {
+    // one rule for the sheet shut — by day, by night and into the bar
+    const shared = '.vf-head-sheet[data-bar][data-open="false"]';
+    const at = REDUCED_CSS.indexOf(`${shared} {`);
+    expect(at).toBeGreaterThan(-1);
+    expect(REDUCED_CSS.slice(0, at)).toMatch(/\.vf-head-sheet,\s*\.dark \.vf-head-sheet,\s*$/u);
+    const shut = ruleIn(REDUCED_CSS, shared);
+    const open = ruleIn(HEAD_CSS, '.vf-head-sheet[data-open="true"]');
+    for (const property of [
+      "width",
+      "height",
+      "border-radius",
+      "background",
+      "backdrop-filter",
+      "box-shadow",
+    ]) {
+      expect(declared(shut, property), property).toBe(declared(open, property));
+    }
+    // at the sheet's own top, never the bar's 3
+    expect(declared(shut, "top")).toBe(declared(ruleIn(HEAD_CSS, ".vf-head-sheet"), "top"));
+    expect(declared(shut, "opacity")).toBe("0");
+    expect(declared(shut, "transition")).toBe("opacity 90ms ease, visibility 0s linear 90ms");
+    const shown = ruleIn(REDUCED_CSS, '.vf-head-sheet[data-open="true"]');
+    expect(declared(shown, "opacity")).toBe("1");
+    expect(declared(shown, "transition")).toBe("opacity 90ms ease");
+  });
+
+  it("folds over its 600ms as the cover lowers, the Hub still in it — never moving the Hub to the pill (ruling 5)", () => {
+    vi.useFakeTimers();
+    bindHub();
+    mount({ view: "godview", open: "artifacts" });
+    const hub = circleSheet()?.querySelector(".hub-close");
+    expect(hub).not.toBeNull();
+    act(() => setViewNow?.("canvas"));
+    // the line folds the owner a frame later
+    act(() => setSurfaceNow?.(null));
+    expect(circleSheet()?.dataset.open).toBe("false");
+    expect(circleSheet()?.querySelector(".hub-close")).toBe(hub);
+    expect(shelf("artifacts")?.querySelector(".hub-close")).toBeNull();
+    act(() => vi.advanceTimersByTime(599));
+    expect(circleSheet()?.querySelector(".hub-close")).toBe(hub);
+    act(() => vi.advanceTimersByTime(1));
+    expect(circleSheet()).toBeNull();
+    expect($(".hub-close")).toBeNull();
+  });
+
+  it("lets the pill's sheet fold as a cover rises, the Hub still on its shelf — the covered sheet never hosts it (ruling 5)", () => {
+    vi.useFakeTimers();
+    bindHub();
+    mount({ open: "artifacts" });
+    const hub = shelf("artifacts")?.querySelector(".hub-close");
+    expect(hub).not.toBeNull();
+    act(() => setViewNow?.("godview"));
+    act(() => setSurfaceNow?.(null));
+    expect($("[data-head-place]")?.dataset.open).toBe("false");
+    expect(shelf("artifacts")?.querySelector(".hub-close")).toBe(hub);
+    expect(circleSheet()).not.toBeNull();
+    expect(circleSheet()?.querySelector(".hub-close")).toBeNull();
+    act(() => vi.advanceTimersByTime(600));
+    expect($(".hub-close")).toBeNull();
+  });
+
+  it("lays its dim over the cover only while the covered sheet shows — the dim follows the sheet it dims (§10; ruling 7)", () => {
+    mount({ open: "artifacts" });
+    const dim = (): HTMLElement | null => $(".vf-head-dim");
+    // the pill's sheet: its dim at 40, under the cover
+    expect(dim()?.dataset.open).toBe("true");
+    expect(dim()?.hasAttribute("data-covered")).toBe(false);
+    // a cover rising over it never lifts that dim over the cover as it fades
+    act(() => setViewNow?.("godview"));
+    expect(dim()?.dataset.open).toBe("false");
+    expect(dim()?.hasAttribute("data-covered")).toBe(false);
+    act(() => setSurfaceNow?.(null));
+    expect(dim()?.hasAttribute("data-covered")).toBe(false);
+    // the covered sheet's: over the cover, under the frame
+    act(() => setSurfaceNow?.("artifacts"));
+    expect(dim()?.dataset.open).toBe("true");
+    expect(dim()?.hasAttribute("data-covered")).toBe(true);
+    act(() => setSurfaceNow?.(null));
+    expect(dim()?.hasAttribute("data-covered")).toBe(false);
+  });
+
+  it("lifts its dim over the cover at once and keeps it there through its own fade — and a status line stands over it (§10; ruling 7)", () => {
+    const dim = ruleIn(HEAD_CSS, ".vf-head-dim");
+    expect(declared(dim, "z-index")).toBe("40");
+    const fade = transitionOf(dim, "opacity")?.split(" ")[0];
+    expect(fade).toBe("500ms");
+    expect(transitionOf(dim, "z-index")).toBe(`0s linear ${fade}`);
+    const over = ruleIn(HEAD_CSS, ".vf-head-dim[data-covered]");
+    expect(declared(over, "z-index")).toBe("61");
+    expect(transitionOf(over, "z-index")).toBe("0s");
+    // the status line: the same 61, later in the document — an honest state stays readable and
+    // clickable while a sheet is open
+    const status = readFileSync(join(process.cwd(), "src/frame/status-line.css"), "utf8");
+    expect(declared(ruleIn(status, ".vf-status-line"), "z-index")).toBe("61");
+    const layer = readFileSync(join(process.cwd(), "src/field/ChromeLayer.tsx"), "utf8");
+    const head = layer.search(/<Head\s/u);
+    expect(head).toBeGreaterThan(-1);
+    expect(layer.search(/<StatusLine\s/u)).toBeGreaterThan(head);
+  });
+
+  it("takes the keyboard to its own package when the keyboard opens it from the circle — a pointer's open leaves the keyboard be — and Esc gives it back to the circle (ruling 8)", () => {
+    mount({ view: "godview", circle: true });
+    const circle = $(".vf-package-button") as HTMLButtonElement;
+    const own = (): HTMLButtonElement | null | undefined =>
+      circleSheet()?.querySelector<HTMLButtonElement>(".vf-head-pack");
+    act(() => circle.focus());
+    // a pointer's press: the sheet grows, and the keyboard stays where it was
+    clickTimes(circle, 1);
+    expect(surfaceNow).toBe("artifacts");
+    expect(document.activeElement).toBe(circle);
+    clickTimes(own() as HTMLButtonElement, 1);
+    expect(surfaceNow).toBeNull();
+    // Return or Space on the circle — a click with no count: the keyboard goes into the sheet
+    clickTimes(circle, 0);
+    expect(surfaceNow).toBe("artifacts");
+    expect(document.activeElement).toBe(own());
+    // Esc folds it, and the keyboard comes back to the circle
+    press(document.activeElement as HTMLElement, { key: "Escape" });
+    expect(surfaceNow).toBeNull();
+    expect(document.activeElement).toBe(circle);
+  });
+
+  it("gives the keyboard back to the circle on any fold — its own package pressed from the keyboard (ruling 8)", () => {
+    mount({ view: "godview", circle: true });
+    const circle = $(".vf-package-button") as HTMLButtonElement;
+    act(() => circle.focus());
+    clickTimes(circle, 0);
+    const own = circleSheet()?.querySelector<HTMLButtonElement>(".vf-head-pack");
+    expect(document.activeElement).toBe(own);
+    clickTimes(own as HTMLButtonElement, 0);
+    expect(surfaceNow).toBeNull();
+    expect(document.activeElement).toBe(circle);
   });
 });
