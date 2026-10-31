@@ -22531,3 +22531,108 @@ the tool plane MT-0 landed.
 **Owed.**
 - CP-3 (the person: `ask_user`, `notify`, the needs-you queue, with CP-D3's allowance and CP-D7's card).
 - The floor fact for CP2-D7 A, at the next draft queue.
+
+## item 120 — TC-S3's birth budget is judged by a probe timer armed before create, never by `Date.now()` and never by slack (2026-10-31; test only; `dd8d5e84d`, lane `fix/item120-probe-timer` on `2eb42abd8`, landed with item 93's zombie half in the mint `b6363425b` over main `62e5c4077`, the mini's run 34; VF-PM's ruling 2026-10-31 00:06Z)
+
+**What.**
+- `packages/fieldd/test/terminal-service.test.ts`, TC-S3's "a class with no cell of its own lands on the interactive
+  one after the birth budget":
+  - `birthWaitMs = 100` names the service's budget once.
+  - A probe `setTimeout(…, birthWaitMs)` is armed BEFORE `service.create`, and the create's `.finally` flags it
+    settled. Node fires equal-duration timers in insertion order, so at the probe the create must still be pending.
+  - Then it lands on `cell-i`, as before.
+  - No fake timers: they would freeze the fake floor's sockets.
+- One file, +17 −7.
+  > **Correction (2026-10-31 05:04Z):** `dd8d5e84d`'s message ends "One file, +13 −8", and the fixer's handoff and
+  > VF-PM's read repeated it. The numstat over `2eb42abd8` is +17 −7. The message is immutable once minted, so the
+  > correction lives here and in `records/item120/item.md`.
+
+**Found.**
+- **The witness:** run 15 on the mini (M15 `265325d09`, 2026-10-30 23:57:29Z, load 40.80). The row went red at
+  `terminal-service.test.ts:3190`: "it waited for the agent cell before falling back: expected 99 to be greater than
+  or equal to 100".
+- **The read** (`records/item120/item.md`, 00:04Z): the service measures the budget with its timer alone
+  (`awaitEndpoints` arms `setTimeout(done, birthWaitMs)`).
+  - Node starts a timer from libuv's loop time in whole milliseconds, and `Date.now()` truncates the wall clock at its
+    own phase. So a 100 ms timer can read 99.
+  - The probe saw a completion at 99.346 ms on `performance.now()`, so `performance.now()` alone is not a fix either.
+- Not changed: the same class with explicit slack, all green. They are `egress.test.ts:209`,
+  `doc-holders-stop.test.ts:155` and `native-supervisor.test.ts:652` and `:702`, for a later sweep if wanted.
+
+**Validation.**
+- **The light** (`records/item120/rows4.sh`, lanes/item118 on `2eb42abd8`, nice 19, each row alone, the guard clear),
+  04:48:03–04:48:59Z, load 12–19:
+  - biome 0 (its one warning, an unused `TerminalCreateResult` import, is main's own); fieldd typecheck 0;
+  - the row alone ×5, all green; the TC-S3 group, 11 passed; the file whole, 107 passed.
+- **Red-first:** with the service's class wait cut (`awaitEndpoints` resolving at once, lane-only), exactly this row
+  went red for its predicted reason: "expected true to be false", because the create had settled before the budget.
+  The source was restored byte for byte (`6cc77c01fdab`).
+- **Run 34:** the same run as the entry below.
+
+**Owed.** Item 80, its DS-5c sibling (`doc-sync-service.test.ts`), stays queued, to be shaped with the DS owner.
+
+## item 93's zombie half — smoke-profile's `alive()` calls a zombie dead, as the census already does, and the census states the `ps -E` rule (2026-10-31; test and a comment; `dc2d54a4c`, lane `fix/item93-zombie-alive` on item 120's `dd8d5e84d`, landed with it in the mint `b6363425b` over main `62e5c4077`, the mini's run 34; VF-PM's GO 2026-10-31 04:42Z)
+
+**What.**
+- `packages/electron-shell/test/smoke-profile.test.ts`: `alive(pid)` is "the pid answers `kill(pid, 0)`, and
+  `ps -o stat= -p` shows it and does not read `Z`".
+  - Its two call sites keep their shapes: the LEFT row's judge (:190) and its cleanup SIGKILL (:192).
+  - A zombie needs no SIGKILL; its reaper takes it.
+- `apps/desktop/packaging/smoke-daemons.mjs`: a comment only, at `markedLines`, stating the `ps -E` rule. `ps -E`
+  shows NO environment for a zombie (rightly gone) or for a macOS platform binary (`/bin/sh`, `/bin/sleep`), so neither
+  is ever the run's.
+  - Never wrap a smoke daemon in `sh -c` or a platform binary: the census could not see it.
+  - The census's code is unchanged.
+- Two files, +10 −2.
+
+**Found.**
+- **The witness:** AU B4's slot-2 light (2026-10-31 01:46Z, load 24–34). The LEFT row's
+  `expect(alive(seen.daemon)).toBe(false)` received `true`, after every assertion before it had passed (the mark,
+  `left`, the reap, status 1), in 1,353 ms.
+- **The cause** (the fixer's `zombie-probe.py`, 02:06Z): a zombie answers `kill(pid, 0)`.
+  - The daemon died at the reap. Its parent, the stand-in, had exited, and launchd had not yet reaped the orphan.
+  - `ps -E -p` shows it as `Z <defunct>` with no environment, so it carries no mark and holds no work.
+  - The census was right to count it gone; the row's own liveness test was wrong. The "3 s budget then SIGKILL" ending
+    is ruled out by the row's 1.35 s.
+- **The `ps -E` platform-binaries note** (VF-PM's standing note, 02:10Z): `/bin/sh` and `/bin/sleep` carrying the run
+  mark showed no environment, while node showed it (02:07Z, side by side).
+  - Searched read-only at main `23e9c2538`: no smoke, launcher, dev runner, supervisor or daemon spawn wraps a daemon
+    in a shell. The one standing place is a terminal pane's shell under field-native; the census sees the floor that
+    hosts it.
+- **a9's pre-read caught a race in the first cut** (`22363d6c6`, lit 04:53Z, never minted; VF-PM's word 05:01Z).
+  - That cut read `!stat.stdout.trim().startsWith("Z")`. But `ps -o stat= -p` prints nothing (exit 1) for a pid that
+    is gone, and `!"".startsWith("Z")` is true.
+  - So a zombie that launchd reaps between the `kill(pid, 0)` and the `ps` would read as alive. :190 would red, and
+    :192's SIGKILL would throw ESRCH on the vanished pid.
+  - a9 measured the premise on this Mac (a9's shell; the fixer's rows6). VF-PM ruled the amend before the mint:
+    `stat !== "" && !stat.startsWith("Z")`, with one comment clause.
+  > **Correction (2026-10-31 05:14Z):** `dc2d54a4c`'s message (its line 16) says a9 measured the premise "on the
+  > mini". It was this Mac, in a9's own shell (pid 86263; VF-PM's word 05:14Z), and nothing ran on the mini for it.
+  > VF-PM's 05:01Z relay repeated a9's "here" without naming the host, and the fixer read it as the mini.
+
+**Validation.**
+- **The light** (`records/item93/rows6.sh`, lanes/item118 on `dd8d5e84d`, nice 19, each row alone, the guard clear),
+  05:02:02–05:02:39Z, load 7–11:
+  - the amend's premise first, on this Mac: a pid that had exited and been reaped answered `ps -o stat= -p` with
+    nothing and exit 1;
+  - biome 0 on both files; electron-shell typecheck 0;
+  - `smoke-profile.test.ts` whole ×3, 9 passed each (the LEFT row 928 / 851 / 838 ms).
+- **Red-first:** a lane-only row, never committed. A `/usr/bin/python3` parent forks a child that exits and is never
+  waited on. The row asserts that `ps -o stat=` begins `Z`, then that `alive(zombie)` is false.
+  - Beside the parent's `alive()` it went red at the second assertion ("expected true to be false"), so the zombie was
+    real and `kill(pid, 0)` called it alive.
+  - Beside the fix it went green (354 ms). The file was restored byte for byte (`94f3f7d7cacc`).
+  - The reap-between-the-reads clause has no red-first of its own: that window cannot be reproduced on demand. Its
+    premise is the light's first row.
+  - The first cut's light (`rows5.sh`, 04:53Z) was the same, without the clause.
+- **Run 34:** the mint `b6363425b` ("Merge main 62e5c4077 into fix/item93-zombie-alive") over main `62e5c4077`.
+  - The merge-tree was clean (tree `b6314bab6`), with no both-sides file.
+  - `pnpm verify` armed at 05:05:02Z and exited 0 at 05:09:48Z. vitest: 11,015 passed, 0 failed, 18 skipped. cargo:
+    33 ok, 0 FAILED. typecheck and test ran for 28 projects; gen:check left the tree clean, stubs 0.
+  - `smoke-profile.test.ts`: 9 passed (1,852 ms). `terminal-service.test.ts`: 107 passed. (VF-PM's read, 05:12Z.)
+- **Landed:** main fast-forwarded `62e5c4077` → `b6363425b` at 2026-10-31 05:11:33Z (the fixer, on VF-PM's GO).
+
+**Owed.**
+- Item 116, item 93's twin (electron-shell's `stopRunDaemons`, one census after PR #8), stays queued.
+- The fixer-items note's "State" lines for items 93 and 120 (`draft/testing/fixer-items-100-106.md`) take dated
+  "Landed" clauses at the next draft queue.
