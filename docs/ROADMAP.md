@@ -360,8 +360,8 @@
   hidden-Studio step needs an unlocked screen: a hidden window's page never goes `hidden` on a locked one; control
   paid 18:29:53Z, green unlocked; owed: the arming rule in row 26's doors; LANDED "PR #6 landed through the
   train") · item 129 (GitHub's macOS verify red five pushes on the catalog's Hub wait, its real 10 s bound
-  crossed before the click: fixed in M59 `2d2f41046`, tests only, HN-8's design kept; owed: main's next push-event
-  verify green, then PR #7's re-run; LANDED "Item 129") · item 122's floor half (paid: idle,
+  crossed before the click: fixed in M59 `2d2f41046`, tests only, HN-8's design kept; proof paid 20:20Z, main's
+  push-event verify run 41235730001 green; owed: PR #7's re-run; LANDED "Item 129") · item 122's floor half (paid: idle,
   idle-class, the ramp of run 53's verify and the peak of run 55's, load1 34.09–42.52, warm max 201 ms against the 15 s,
   0 missed; LANDED "item 122's floor half, measured"; nothing owed).
 - **Item 77b**, FieldTerminalTests' 60 s block. The 5 s shape is fixed: (d) `b1e9bf53d` runs AttachDeadlineTests

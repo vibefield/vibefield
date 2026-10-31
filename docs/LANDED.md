@@ -25026,6 +25026,8 @@ projects. Vitest 11,372 passed, 18 skipped, 0 failed: four more than run 58, amo
 
 **Owed:** the proof is main's next push-event GitHub macOS verify green, on the push that carries this landing.
 Then VF-PM re-runs PR #7's verify.
+  > **The proof, paid (2026-10-31 20:20Z):** main's push-event verify run 41235730001 on `b57c484c9` green, the
+  > first since `2f71beb2e` at 13:52Z; PR #7's re-run next.
 
 **Landed:** local main fast-forwarded `bd9ecd159` → `2d2f41046` (a5's judge, then this) at 2026-10-31T19:38:05Z by
 `land-stack4.sh`, on VF-PM's GO.
