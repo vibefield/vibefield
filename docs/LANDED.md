@@ -24965,6 +24965,39 @@ with the fixer's item 129 on top, `2d2f41046`; Checks), in the commit's own orde
 - **Row 32 OWED at James's unlock (the console locked at the mint):** row 32 alone on M59 (run59b), the
   every-word judge's first live run: on each walk every pane still's count, its lowest words and any short one, and
   the stage line judged as it is cut. Its counts fold in here as one `  >` block when the row runs.
+  > **Run (2026-10-31, row 32 alone on M59 on the Mac mini, run59b): RED, the every-word judge's first live findings,
+  > two inks short on the day's milk.** Its gate opened at 20:42:03Z, after James's unlock at 20:38:33Z, with the
+  > console idle 164 s, and `pnpm smoke:first-run` exited 1 at 20:43:06Z (62 s). FIRST_RUN_VERDICT: night green in 20 s;
+  > day and no-webgpu red, code 2, in 20 and 18 s; nothing left and the profile removed on each. Every walk went the
+  > whole way to the desk, 17, 17 and 16 stills (`lanes/ts6/logs/mini/run59b/first-run-shots`; the log's sha256
+  > `56e270df7d8e7854…`). The same words fall short on both walks over the day's milk, so the red is the glass's, not a
+  > lottery's: no re-run (VF-PM 20:46Z).
+  > - Night: 180 words judged on its 11 pane stills and none short, the lowest "Not on this Mac" 4.9:1 on
+  >   06-agents-more.
+  > - Day: 14 of its 180 short; no-webgpu, over the still under the same milk: 10 of 180. Two classes, both on the day's
+  >   75% milk, whose ground under the words reads [200–209, 201–213, 210–223], the field through the milk, darker than
+  >   the grounds the model took from run57b's stills (the Why above); and a small word's strokes read lighter than a
+  >   full composite (t2 over [200, 202, 211] composites to [80, 80, 84] and reads [87, 88, 92]):
+  >   - (1) "Ready", an agent's status in `--vf-ink-healthy` (`rgb(31, 122, 54)`, a status ink outside the t ramp):
+  >     3.4–3.7:1, twice on each of 05-agents, 06-agents-more and 07-agents-more-scrolled, on both walks (12 of the 24).
+  >   - (2) t2 (`rgba(28, 28, 30, 0.7)`, its ink read at [87–93, 88–94, 92–98]): "Your phone" 4.1:1 on 11-connect on
+  >     both walks; "its own updater" 4.3 by day and 4.4 over the still on 05–07; "0.0.0-smoke · its own updater" 4.4 on
+  >     05–07 and "· last used" 4.3 on 10-history by day alone (over the still the first holds and the second reads 4.5)
+  >     (12 of the 24).
+  > - The stage line, judged as it is cut over the waking field: 6.4, 6.4 and 6.5:1.
+  > - The earlier classes again: the tear on both live walks and the fade over the still, the hand-over in its order,
+  >   Agents' declared skip (327 in 326), Connect's "Not now", and the mark's ink at 590.5, 373 (589.5, 374 over the
+  >   still).
+  > - 12-setting-up judged no word on any walk: the band's six labels changed under the capture, and the welcome was
+  >   still fading in (0.93, 0.77 and 0.84). The same words are judged on 13-setting-up-welcome, 8 on each walk.
+  > - A touch at the console about 6 s before the end, in the no-webgpu walk (HID idle 6 s at the end; a9). The day walk
+  >   before it shows the same shorts, so the touch is not their cause; on record.
+  > The fix is the next slice, at VF-PM's lean (20:46Z), James's to overturn: DESIGN.md first, the glass's t2 at 80% by
+  > day (the re-projection on `.vf-wizard-shell`, the night untouched) and a day-glass healthy ink, a darker green; the
+  > milk's 75% stands. Row 32 runs again at the next unlock.
+  > **Paid (2026-10-31), the draft-queue bullet below:** the thinking doc's correction at its source at the 19:47Z queue
+  > (its §8 FG-O2, with FG-D15 C amended in its §4 where it is ruled; dev-local `048b4e5ea`), and FG-D15's status line
+  > in DECISIONS with these records, where VF-PM routed it (19:47Z).
 - At the next draft queue the PM opens: FG-D15's status line in DECISIONS (C, amended by James's "b" at 18:25Z), and
   the thinking doc's dated correction at its source: its FG-O2 says "If a small ink falls short, it moves one ink
   step", which run57b showed false by day.
