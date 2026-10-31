@@ -26,6 +26,9 @@
 //     fade, while the head, the foot and Continue stand inside the frame, unmoved by the scroll. Profiles' login
 //     terminal stands 170 tall, with Cancel in view above the fade.
 //   · THE BAND (FG-D22 A): Setting up's segment advances with the boot's progress, then stands full.
+//   · THE HAND-OVER (FG-5; DESIGN.md §6): the glass steps out as the page says, its words and then its clearing, each
+//     once. Judged by order alone, never by how long a step stood: the recorder hears each step as the page sets it.
+//     Two stills of it are for the eye: the logo alone, and the glass clearing as the field's mark takes over.
 //   · The walk's end: Setting up's welcome said, the durable `onboarded: true`, the wizard gone, no CSP refusal.
 // Not this row's (desk-gates row 32): Agents with nine installed, History with six rows and Profiles' five cards
 // (James's eye), and the ways out at 6s and Start now at 8s (their unit rows): Start now is said when it shows, and
@@ -86,6 +89,10 @@ export const FIRST_RUN = {
   inkStep: 36,
   /** the ink and its glass apart by at least this much, darker by day, lighter by night */
   inkContrast: 20,
+  /** the hand-over's stills (FG-5; DESIGN.md §6), for the eye alone: the logo alone, 400ms into its words' step (the
+   * words out in 240ms, then the logo alone for 640ms), and the glass clearing, 150ms into its 600ms */
+  aloneShotMs: 400,
+  clearingShotMs: 150,
 } as const;
 
 /** The field's mark (`boot/splash/field-mark.ts` FIELD_MARK) and the stills it is drawn on (FIELD_STILLS): the
@@ -144,6 +151,8 @@ export interface FirstRunRecord {
   readonly faces: readonly FaceSeen[];
   /** `[ms, progress]` at each change of Setting up's segment */
   readonly progress: readonly (readonly [number, number])[];
+  /** `[ms, step]` at each step the glass takes out at the hand-over (`data-leaving`, FG-5), as the page sets it */
+  readonly leaving: readonly (readonly [number, string | null])[];
   readonly now: number;
 }
 
@@ -211,6 +220,19 @@ export function judgeBand(progress: FirstRunRecord["progress"]): string[] {
     problems.push(`Setting up's segment came full, then fell to ${after.toFixed(3)}`);
   }
   return problems;
+}
+
+/** The hand-over (FG-5; DESIGN.md §6): the glass stepped out as the page says, its words and then its clearing, each
+ * once. By order alone, never by how long a step stood: the recorder hears each step as the page sets it, so a
+ * loaded host can neither drop one nor redden this by its pace. */
+export function judgeHandOver(leaving: FirstRunRecord["leaving"]): string[] {
+  const steps = leaving
+    .map(([, step]) => step)
+    .filter((step, at, all) => at === 0 || step !== all[at - 1]);
+  if (steps.length === 0) return ["the glass never stepped out: no hand-over was heard"];
+  return steps.length === 2 && steps[0] === "words" && steps[1] === "clear"
+    ? []
+    : [`the glass stepped out ${JSON.stringify(steps)}, not its words and then its clearing`];
 }
 
 /** The mark's ink in a capture `width` × `height` CSS px (BGRA, Electron's `toBitmap`, at the screen's density): the
@@ -285,6 +307,7 @@ export const FIRST_RUN_PAGE = String.raw`(() => {
   const current = new Map();
   const progress = [];
   let lastProgress = null;
+  const leaving = [];
   const shellOf = () => document.querySelector(".vf-wizard-shell");
   const frameOf = () => shellOf()?.querySelector(".vf-wizard-frame") ?? null;
   const rootsOf = (frame) => [...frame.children].filter((child) => child.hasAttribute("data-face"));
@@ -355,6 +378,14 @@ export const FIRST_RUN_PAGE = String.raw`(() => {
     requestAnimationFrame(sample);
   };
   requestAnimationFrame(sample);
+  // the hand-over (FG-5): each step the glass takes out, heard as the page sets it and never sampled, so no step falls
+  // between two frames of a loaded host
+  new MutationObserver((records) => {
+    for (const record of records) {
+      if (!record.target.classList.contains("vf-wizard-shell")) continue;
+      leaving.push([Math.round(performance.now()), record.target.getAttribute("data-leaving")]);
+    }
+  }).observe(document, { subtree: true, attributes: true, attributeFilter: ["data-leaving"] });
   const targetOf = (spec) => {
     const root = standingRoot();
     if (root === null) return null;
@@ -364,7 +395,7 @@ export const FIRST_RUN_PAGE = String.raw`(() => {
     ) ?? null;
   };
   globalThis.__vfFirstRun = {
-    read: () => ({ faces, progress, now: performance.now() }),
+    read: () => ({ faces, progress, leaving, now: performance.now() }),
     /** the face standing whole in the frame, with no pane leaving over it */
     standing: () => {
       const frame = frameOf();
@@ -374,6 +405,11 @@ export const FIRST_RUN_PAGE = String.raw`(() => {
       return opacity(root) >= 0.999 ? root.getAttribute("data-face") : null;
     },
     wizard: () => shellOf() !== null,
+    /** the hand-over's step standing now (FG-5), and how long it has stood */
+    handOver: () => {
+      const last = leaving.at(-1);
+      return last === undefined ? null : { step: last[1], since: performance.now() - last[0] };
+    },
     /** a control's centre in the standing root, if the page would hand a press there to it */
     target: (spec) => {
       const el = targetOf(spec);
@@ -993,6 +1029,8 @@ export async function firstRunRows(
     await capture("setting-up");
     let welcomed = false;
     let startNow = false;
+    let alone = false;
+    let clearing = false;
     await until("the wizard gone, the desk revealed", FIRST_RUN.revealMs, async () => {
       const welcome = '.vf-wizard-status-words[data-ink="true"]:not([data-state="out"])';
       if (!welcomed && (await count(welcome)) > 0) {
@@ -1002,6 +1040,18 @@ export async function firstRunRows(
         await capture("setting-up-welcome");
       }
       if (!startNow) startNow = (await target({ text: "Start now" }))?.hit === true;
+      // the hand-over (FG-5): its stills, each timed from its step as the page set it
+      const handOver = await page<{ step: string | null; since: number } | null>("handOver()");
+      if (!alone && handOver?.step === "words") {
+        alone = true;
+        await sleep(Math.max(0, FIRST_RUN.aloneShotMs - handOver.since));
+        await capture("handover-alone");
+      }
+      if (!clearing && handOver?.step === "clear") {
+        clearing = true;
+        await sleep(Math.max(0, FIRST_RUN.clearingShotMs - handOver.since));
+        await capture("handover-clearing");
+      }
       return (await page<boolean | null>("wizard()")) !== true;
     });
     step("desk");
@@ -1034,6 +1084,8 @@ export async function firstRunRows(
     first: record.progress[0]?.[1] ?? null,
     last: record.progress.at(-1)?.[1] ?? null,
   };
+  problems.push(...judgeHandOver(record.leaving));
+  facts["handOver"] = record.leaving.map(([, step]) => step);
   const user = readUsersFile(d.users.root)?.users.find((u) => u.userId === d.users.userId);
   facts["onboarded"] = user?.onboarded ?? null;
   if (user?.onboarded !== true) problems.push("the walk ended without the durable onboarded: true");

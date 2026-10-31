@@ -1,9 +1,9 @@
 /* The Setup Assistant's glass (track FG; DESIGN.md §5 "Setup Assistant", §8 "The Setup Assistant's glass"; FG-L2):
    880 × 640 on every step, centred on its ground and scaled as one picture to fit it (`--vf-glass-fit`, set by
-   wizard-ui.tsx's `glassFit`), never reflowed. Its material is four layers under its contents, so it forms by
-   tweening them (`--vf-glass-frost`, `--vf-glass-rise`) and never by fading a wrapper: an ancestor of the frost that
-   set opacity, a filter or a mask would become its backdrop's root and leave it nothing to blur (§5.2 of the
-   record). */
+   wizard-ui.tsx's `glassFit`), never reflowed. Its material is four layers under its contents, so it forms and clears
+   by tweening them (`--vf-glass-frost`, `--vf-glass-edge`, `--vf-glass-rise`) and never by fading a wrapper: an
+   ancestor of the frost that set opacity, a filter or a mask would become its backdrop's root and leave it nothing to
+   blur (§5.2 of the record). */
 @property --vf-glass-frost {
   syntax: "<number>";
   inherits: true;
@@ -11,6 +11,13 @@
 }
 
 @property --vf-glass-rise {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 1;
+}
+
+/* The edge and its shadow (FG-5): they form with the frost, and go only in the last 240ms of its clearing. */
+@property --vf-glass-edge {
   syntax: "<number>";
   inherits: true;
   initial-value: 1;
@@ -80,7 +87,7 @@
 
 .vf-wizard-glass-shadow {
   box-shadow: var(--vf-shadow-wizard);
-  opacity: var(--vf-glass-frost);
+  opacity: var(--vf-glass-edge);
 }
 
 .vf-wizard-glass-frost {
@@ -101,7 +108,7 @@
 
 .vf-wizard-glass-edge {
   box-shadow: inset 0 0 0 1px var(--vf-hairline);
-  opacity: var(--vf-glass-frost);
+  opacity: var(--vf-glass-edge);
 }
 
 /* On the field (FG-D15 C): its edge with a top light, the field's own shadow, and a grain so the blur never bands.
@@ -593,6 +600,7 @@
 @keyframes vf-glass-form {
   from {
     --vf-glass-frost: 0;
+    --vf-glass-edge: 0;
     --vf-glass-rise: 0.985;
   }
 }
@@ -699,6 +707,72 @@
   @keyframes vf-glass-frost-in {
     from {
       --vf-glass-frost: 0;
+      --vf-glass-edge: 0;
     }
+  }
+}
+
+/* The hand-over (FG-5; DESIGN.md §6): the line and the steps go (240ms), and the theme control with them, so the logo
+   holds alone (640ms); then the glass clears — the frost over 600ms on the island curve, the edge and its shadow in its
+   last 240ms, and the logo with it as the field's mark takes over in place (FieldLayer) — and the field opens onto the
+   desk (BootRoot steps it all). Last in the sheet, as the leaving outranks every state it leaves: the clearing replaces
+   the forming, from where it stands, formed. */
+.vf-wizard-shell[data-leaving] .vf-wizard-frame,
+.vf-wizard-shell[data-leaving] .vf-wizard-steps,
+.vf-wizard-shell[data-leaving] .vf-wizard-theme {
+  opacity: 0;
+  transition: opacity 240ms ease;
+}
+
+.vf-wizard-shell[data-leaving="clear"] {
+  animation:
+    vf-glass-clear 600ms var(--vf-ease-island) both,
+    vf-glass-clear-edge 240ms ease 360ms both,
+    vf-glass-clear-logo 600ms ease both;
+}
+
+@keyframes vf-glass-clear {
+  from {
+    --vf-glass-frost: 1;
+  }
+
+  to {
+    --vf-glass-frost: 0;
+  }
+}
+
+@keyframes vf-glass-clear-edge {
+  from {
+    --vf-glass-edge: 1;
+  }
+
+  to {
+    --vf-glass-edge: 0;
+  }
+}
+
+@keyframes vf-glass-clear-logo {
+  from {
+    --vf-glass-logo: 1;
+  }
+
+  to {
+    --vf-glass-logo: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Fades only, halved: the words in 120ms, the glass clearing in 300ms, its edge in the last 120. */
+  .vf-wizard-shell[data-leaving] .vf-wizard-frame,
+  .vf-wizard-shell[data-leaving] .vf-wizard-steps,
+  .vf-wizard-shell[data-leaving] .vf-wizard-theme {
+    transition-duration: 120ms;
+  }
+
+  .vf-wizard-shell[data-leaving="clear"] {
+    animation:
+      vf-glass-clear 300ms ease both,
+      vf-glass-clear-edge 120ms ease 180ms both,
+      vf-glass-clear-logo 300ms ease both;
   }
 }

@@ -15,10 +15,11 @@ import {
   type OnboardingSetupPhase,
 } from "../views/setting-up";
 
-/** The welcome's beat (DESIGN.md §6, the hand-over): long enough to read the
- * welcome and its one line. The old Ready pane's 700ms never was — the splash
- * used to stand in for the rest, and now nothing does. */
-export const WELCOME_BEAT_MS = 1_400;
+/** The welcome's beat (DESIGN.md §6, the hand-over, 1.6s since FG-5): long
+ * enough to read the welcome and its one line, then the glass leaves. The old
+ * Ready pane's 700ms never was — the splash used to stand in for the rest, and
+ * now nothing does. */
+export const WELCOME_BEAT_MS = 1_600;
 
 /** Setting up's controller (track AO, AO-D2). Three acts, in order:
  *   1. the answers are recorded — `onboarded: true`, the same durable write the
@@ -31,8 +32,8 @@ export const WELCOME_BEAT_MS = 1_400;
  *      the boot's Retry, as the splash would;
  *   3. once every fact is in — the desk, and History's first pass when history
  *      was brought in (AO-4b: at most 8s past the desk, then Start now) — the
- *      welcome's beat, then the reveal. A second user's end has no welcome
- *      (§6.2): the glass hands over at once. */
+ *      welcome's beat, then the hand-over (BootRoot, FG-5). A second user's end
+ *      has no welcome (§6.2): the hand-over begins at once. */
 export function SettingUpPane({
   profile,
   welcomeName,

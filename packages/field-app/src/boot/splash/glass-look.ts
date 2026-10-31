@@ -46,6 +46,9 @@ export interface GlassPose {
   readonly fit: number;
   /** `--vf-glass-frost`, 0 … 1 */
   readonly frost: number;
+  /** `--vf-glass-edge`, 0 … 1: the edge and its shadow, which form with the frost and go only in the last 240ms of its
+   * clearing (FG-5) */
+  readonly edge: number;
   /** `--vf-glass-rise` */
   readonly rise: number;
   /** `--vf-glass-logo`, 0 … 1: the logo, which only fades (FG-4b) */
@@ -166,8 +169,8 @@ export function readGlassLook(
 
 /** Where the glass stands on the field's canvas, `field` being the canvas's box, and how far it has formed: its box
  * as laid out (the fit is an ancestor's scale; the rise scales its layers, never the glass, so its box holds the fit
- * alone), and the frost, the rise and the logo as they are this frame, since its forming and the logo's fades
- * animate them on it (wizard-ui.css). */
+ * alone), and the frost, the edge, the rise and the logo as they are this frame, since its forming, the logo's fades
+ * and its clearing animate them on it (wizard-ui.css). */
 export function readGlassPose(
   glass: HTMLElement,
   field: DOMRectReadOnly,
@@ -178,6 +181,7 @@ export function readGlassPose(
   const w = glass.offsetWidth;
   const h = glass.offsetHeight;
   const frost = parseNumber(own.getPropertyValue("--vf-glass-frost")) ?? 1;
+  const edge = parseNumber(own.getPropertyValue("--vf-glass-edge")) ?? 1;
   const logo = parseNumber(own.getPropertyValue("--vf-glass-logo")) ?? 0;
   return {
     x: box.left + box.width / 2 - field.left,
@@ -186,6 +190,7 @@ export function readGlassPose(
     h,
     fit: w > 0 && box.width > 0 ? box.width / w : 1,
     frost: Math.min(1, Math.max(0, frost)),
+    edge: Math.min(1, Math.max(0, edge)),
     rise: parseNumber(own.getPropertyValue("--vf-glass-rise")) ?? 1,
     logo: Math.min(1, Math.max(0, logo)),
   };
@@ -200,6 +205,7 @@ export function samePose(a: GlassPose, b: GlassPose): boolean {
     a.h === b.h &&
     a.fit === b.fit &&
     a.frost === b.frost &&
+    a.edge === b.edge &&
     a.rise === b.rise &&
     a.logo === b.logo
   );

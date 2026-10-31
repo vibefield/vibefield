@@ -190,11 +190,17 @@ describe("the glass's pose, read off the glass", () => {
     glass.getBoundingClientRect = () => new DOMRect(rect.left, rect.top, rect.width, rect.height);
     return glass;
   }
-  const forming = (frost: string, rise: string, logo = "0") =>
+  // the edge forms with the frost (wizard-ui.css), and parts from it only at the hand-over (FG-5)
+  const forming = (frost: string, rise: string, logo = "0", edge = frost) =>
     (() =>
       computed(
         {},
-        { "--vf-glass-frost": frost, "--vf-glass-rise": rise, "--vf-glass-logo": logo },
+        {
+          "--vf-glass-frost": frost,
+          "--vf-glass-edge": edge,
+          "--vf-glass-rise": rise,
+          "--vf-glass-logo": logo,
+        },
       )) as typeof getComputedStyle;
   const field = new DOMRect(0, 28, 1200, 800);
 
@@ -208,6 +214,7 @@ describe("the glass's pose, read off the glass", () => {
       h: 640,
       fit: 0.75,
       frost: 0.4,
+      edge: 0.4,
       rise: 0.99,
       logo: 0.5,
     });
@@ -219,6 +226,7 @@ describe("the glass's pose, read off the glass", () => {
     expect(readGlassPose(glass, field, still)).toMatchObject({
       fit: 1,
       frost: 1,
+      edge: 1,
       rise: 1,
       logo: 0,
     });
@@ -226,6 +234,18 @@ describe("the glass's pose, read off the glass", () => {
     expect(readGlassPose(glass, field, forming("-0.1", "1")).frost).toBe(0);
     expect(readGlassPose(glass, field, forming("1", "1", "1.3")).logo).toBe(1);
     expect(readGlassPose(glass, field, forming("1", "1", "-0.2")).logo).toBe(0);
+  });
+
+  it("reads the edge apart from the frost as the glass clears, the edge and its shadow going last (FG-5)", () => {
+    const glass = placed({ left: 160, top: 108, width: 880, height: 640 });
+    // the clearing's 360th ms: the frost nearly gone, the logo going, the edge and its shadow whole
+    expect(readGlassPose(glass, field, forming("0.03", "1", "0.4", "1"))).toMatchObject({
+      frost: 0.03,
+      edge: 1,
+      logo: 0.4,
+    });
+    expect(readGlassPose(glass, field, forming("0", "1", "0", "1.4")).edge).toBe(1);
+    expect(readGlassPose(glass, field, forming("0", "1", "0", "-0.3")).edge).toBe(0);
   });
 
   it("is the same pose only when every part of it is", () => {
@@ -236,6 +256,7 @@ describe("the glass's pose, read off the glass", () => {
       h: 640,
       fit: 0.75,
       frost: 0.4,
+      edge: 0.4,
       rise: 0.99,
       logo: 0.5,
     };

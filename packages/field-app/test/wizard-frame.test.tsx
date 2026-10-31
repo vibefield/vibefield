@@ -18,6 +18,7 @@ import {
   leavingFrames,
   WizardHold,
   WizardHoldOut,
+  type WizardLeaving,
   WizardPane,
   WizardShellView,
   WizardStatus,
@@ -87,6 +88,8 @@ afterEach(() => {
 interface Step {
   readonly paneKey: string;
   readonly content: ReactNode;
+  /** how far the hand-over has come, as the boot steps it (FG-5) */
+  readonly leaving?: WizardLeaving;
 }
 
 let show: (step: Step) => void = () => undefined;
@@ -102,6 +105,7 @@ function Stage({ first, size }: { first: Step; size: "glass" | "sheet" }): React
       ground={size === "glass" ? "field" : "app"}
       size={size}
       paneKey={step.paneKey}
+      leaving={step.leaving}
     >
       {step.content}
     </WizardShellView>
@@ -384,6 +388,90 @@ describe("the frame (FG-4b)", () => {
     expect(played).toHaveLength(0);
     expect(host?.querySelector(".vf-wizard-shell")?.hasAttribute("data-logo")).toBe(false);
     expect(host?.querySelector(".vf-wizard-shell .vf-wizard-logo")).toBeNull();
+  });
+});
+
+describe("the hand-over (FG-5; DESIGN.md §6)", () => {
+  it("steps the glass out as the boot says, the logo standing to the clearing, and takes no press from its first step", async () => {
+    const welcome = hold("setting-up", "setting-up:line", "Welcome to your field, Ada.");
+    await mount(welcome);
+    wait(1_600);
+    const shell = host?.querySelector<HTMLElement>(".vf-wizard-shell");
+    expect(shell?.hasAttribute("data-leaving")).toBe(false);
+    expect(shell?.hasAttribute("inert")).toBe(false);
+    expect(logo()).toBe(true);
+    const swaps = played.length;
+
+    // the words go, and the theme control with them (the stylesheet's): the frame swaps nothing, and the logo holds
+    await to({ ...welcome, leaving: "words" });
+    expect(shell?.getAttribute("data-leaving")).toBe("words");
+    expect(shell?.hasAttribute("inert")).toBe(true);
+    expect(shell?.querySelector(".vf-wizard-theme")).not.toBeNull();
+    expect(played).toHaveLength(swaps);
+    expect(copies()).toEqual([]);
+    expect(logo()).toBe(true);
+
+    // the glass clears; the logo goes with it by the stylesheet's clearing, never by the frame
+    wait(880);
+    await to({ ...welcome, leaving: "clear" });
+    expect(shell?.getAttribute("data-leaving")).toBe("clear");
+    expect(shell?.hasAttribute("inert")).toBe(true);
+    expect(played).toHaveLength(swaps);
+    expect(logo()).toBe(true);
+    expect(host?.querySelector(".vf-wizard-shell")).toBe(shell);
+  });
+
+  it("plays it in the stylesheet: the words out in 240ms, the logo alone, then the clearing, the edge in its last 240ms", () => {
+    // the edge and its shadow have a level of their own, formed with the frost
+    expect(WIZARD_CSS).toMatch(
+      /@property --vf-glass-edge \{\s*syntax: "<number>";\s*inherits: true;\s*initial-value: 1;\s*\}/u,
+    );
+    expect(WIZARD_CSS).toMatch(
+      /\n\.vf-wizard-glass-shadow \{\s*box-shadow: var\(--vf-shadow-wizard\);\s*opacity: var\(--vf-glass-edge\);\s*\}/u,
+    );
+    expect(WIZARD_CSS).toMatch(
+      /\n\.vf-wizard-glass-edge \{\s*box-shadow: inset 0 0 0 1px var\(--vf-hairline\);\s*opacity: var\(--vf-glass-edge\);\s*\}/u,
+    );
+    expect(WIZARD_CSS).toMatch(
+      /@keyframes vf-glass-form \{\s*from \{\s*--vf-glass-frost: 0;\s*--vf-glass-edge: 0;\s*--vf-glass-rise: 0\.985;\s*\}\s*\}/u,
+    );
+    expect(REDUCED).toMatch(
+      /@keyframes vf-glass-frost-in \{\s*from \{\s*--vf-glass-frost: 0;\s*--vf-glass-edge: 0;\s*\}\s*\}/u,
+    );
+    // the line, the steps and the theme control go together (240ms)
+    expect(WIZARD_CSS).toMatch(
+      /\n\.vf-wizard-shell\[data-leaving\] \.vf-wizard-frame,\n\.vf-wizard-shell\[data-leaving\] \.vf-wizard-steps,\n\.vf-wizard-shell\[data-leaving\] \.vf-wizard-theme \{\s*opacity: 0;\s*transition: opacity 240ms ease;\s*\}/u,
+    );
+    // the clearing replaces the forming, as specific and later in the sheet: the frost 600ms island, the edge and its
+    // shadow in its last 240, the logo over all of it as the field's mark takes over
+    const clear =
+      /\n\.vf-wizard-shell\[data-leaving="clear"\] \{\s*animation:\s*vf-glass-clear 600ms var\(--vf-ease-island\) both,\s*vf-glass-clear-edge 240ms ease 360ms both,\s*vf-glass-clear-logo 600ms ease both;\s*\}/u;
+    expect(WIZARD_CSS).toMatch(clear);
+    expect(WIZARD_CSS.search(clear)).toBeGreaterThan(
+      WIZARD_CSS.indexOf('\n.vf-wizard-shell[data-ground="field"] {'),
+    );
+    for (const [name, level] of [
+      ["vf-glass-clear", "frost"],
+      ["vf-glass-clear-edge", "edge"],
+      ["vf-glass-clear-logo", "logo"],
+    ] as const) {
+      expect(WIZARD_CSS).toMatch(
+        new RegExp(
+          String.raw`@keyframes ${name} \{\s*from \{\s*--vf-glass-${level}: 1;\s*\}\s*to \{\s*--vf-glass-${level}: 0;\s*\}\s*\}`,
+          "u",
+        ),
+      );
+    }
+    // fades only, halved, under reduced motion, after the reduced forming
+    expect(REDUCED).toMatch(
+      /\.vf-wizard-shell\[data-leaving\] \.vf-wizard-frame,\s*\.vf-wizard-shell\[data-leaving\] \.vf-wizard-steps,\s*\.vf-wizard-shell\[data-leaving\] \.vf-wizard-theme \{\s*transition-duration: 120ms;\s*\}/u,
+    );
+    const halved =
+      /\.vf-wizard-shell\[data-leaving="clear"\] \{\s*animation:\s*vf-glass-clear 300ms ease both,\s*vf-glass-clear-edge 120ms ease 180ms both,\s*vf-glass-clear-logo 300ms ease both;\s*\}/u;
+    expect(REDUCED).toMatch(halved);
+    expect(REDUCED.search(halved)).toBeGreaterThan(
+      REDUCED.indexOf('.vf-wizard-shell[data-ground="field"] {'),
+    );
   });
 });
 

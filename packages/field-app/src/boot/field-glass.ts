@@ -89,7 +89,8 @@ export const FieldGlassContext = createContext<FieldGlass | null>(null);
 
 const alone = (): (() => void) => () => {};
 
-/** The glass's own animations still running: its forming, and the logo's fades (on the glass, `--vf-glass-logo`). */
+/** The glass's own animations still running: its forming, the logo's fades (on the glass, `--vf-glass-logo`), and its
+ * clearing at the hand-over (FG-5). */
 function forming(glass: Element): boolean {
   return (
     typeof glass.getAnimations === "function" &&
@@ -99,8 +100,9 @@ function forming(glass: Element): boolean {
 
 /** The Setup Assistant's glass drawn by the field it stands on (FG-3b). While `on`, it hands the field its look, read
  * off its layers and again whenever the theme turns, and its pose, read every frame it moves: through its forming
- * (the frost and the rise), through the logo's fades (FG-4b), and through a window's resize (the fit) until it has
- * rested two frames. True while the field draws it, so the browser draws only the edge. */
+ * (the frost, the edge and the rise), through the logo's fades (FG-4b), through its clearing at the hand-over (FG-5),
+ * and through a window's resize (the fit) until it has rested two frames. True while the field draws it, so the
+ * browser draws only the edge. */
 export function useFieldGlass(
   glassRef: RefObject<HTMLElement | null>,
   shadowRef: RefObject<Element | null>,
@@ -145,7 +147,7 @@ export function useFieldGlass(
       rested = 0;
       if (raf === 0) raf = requestAnimationFrame(follow);
     };
-    // the logo fades on the glass itself, long after the forming has rested
+    // the logo fades on the glass itself, long after the forming has rested, and the glass clears there at the end
     const moved = (event: Event): void => {
       if (event.target === glass) wake();
     };
@@ -160,12 +162,14 @@ export function useFieldGlass(
     });
     window.addEventListener("resize", wake);
     glass.addEventListener("transitionrun", moved);
+    glass.addEventListener("animationstart", moved);
     follow();
     return () => {
       cancelAnimationFrame(raf);
       themed.disconnect();
       window.removeEventListener("resize", wake);
       glass.removeEventListener("transitionrun", moved);
+      glass.removeEventListener("animationstart", moved);
       field.set(null);
     };
   }, [field, on, glassRef, shadowRef, frostRef, logoRef]);

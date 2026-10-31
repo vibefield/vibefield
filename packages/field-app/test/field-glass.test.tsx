@@ -25,8 +25,8 @@ let root: Root | null = null;
 /** The frames the glass asked for, by id, run by hand (`runFrame`). */
 const frames = new Map<number, FrameRequestCallback>();
 let lastFrame = 0;
-/** The glass's forming as a browser computes it this frame, and the logo's fade. */
-const forming = { frost: "1", rise: "1", logo: "0", running: false };
+/** The glass's forming (and its clearing) as a browser computes it this frame, and the logo's fade. */
+const forming = { frost: "1", edge: "1", rise: "1", logo: "0", running: false };
 
 function computed(
   props: Partial<
@@ -46,7 +46,7 @@ function computed(
 
 beforeEach(() => {
   frames.clear();
-  Object.assign(forming, { frost: "1", rise: "1", logo: "0", running: false });
+  Object.assign(forming, { frost: "1", edge: "1", rise: "1", logo: "0", running: false });
   const real = globalThis.getComputedStyle;
   // the glass's style as wizard-ui.css and the tokens compute it, by the theme on the root
   vi.stubGlobal("getComputedStyle", (element: Element, pseudo?: string | null) => {
@@ -60,6 +60,7 @@ beforeEach(() => {
           "--vf-wizard-saturate": "1.12",
           "--vf-wizard-grain": "0.03",
           "--vf-glass-frost": forming.frost,
+          "--vf-glass-edge": forming.edge,
           "--vf-glass-rise": forming.rise,
           "--vf-glass-logo": forming.logo,
         },
@@ -272,7 +273,7 @@ describe("the glass on the field", () => {
         ],
         logoInvert: true,
       },
-      pose: { x: 600, y: 400, w: 880, h: 640, fit: 0.75, frost: 1, rise: 1, logo: 0 },
+      pose: { x: 600, y: 400, w: 880, h: 640, fit: 0.75, frost: 1, edge: 1, rise: 1, logo: 0 },
     });
     // until the field says it draws the glass, the browser does
     expect(shell.hasAttribute("data-glass")).toBe(false);
@@ -283,17 +284,16 @@ describe("the glass on the field", () => {
   });
 
   it("follows the glass's forming frame by frame, and rests two frames after it has", () => {
-    Object.assign(forming, { frost: "0", rise: "0.985", running: true });
+    Object.assign(forming, { frost: "0", edge: "0", rise: "0.985", running: true });
     const { hold, door, last } = heldField();
     mount(glassOn("field", hold));
-    expect(last()?.pose).toMatchObject({ frost: 0, rise: 0.985 });
-    forming.frost = "0.5";
-    forming.rise = "0.99";
+    expect(last()?.pose).toMatchObject({ frost: 0, edge: 0, rise: 0.985 });
+    Object.assign(forming, { frost: "0.5", edge: "0.5", rise: "0.99" });
     runFrame();
-    expect(last()?.pose).toMatchObject({ frost: 0.5, rise: 0.99 });
-    Object.assign(forming, { frost: "1", rise: "1", running: false });
+    expect(last()?.pose).toMatchObject({ frost: 0.5, edge: 0.5, rise: 0.99 });
+    Object.assign(forming, { frost: "1", edge: "1", rise: "1", running: false });
     runFrame();
-    expect(last()?.pose).toMatchObject({ frost: 1, rise: 1 });
+    expect(last()?.pose).toMatchObject({ frost: 1, edge: 1, rise: 1 });
     const handed = door.glass.mock.calls.length;
     runFrame();
     runFrame();
@@ -343,6 +343,40 @@ describe("the glass on the field", () => {
       shell
         .querySelector(".vf-wizard-frame")
         ?.dispatchEvent(new Event("transitionrun", { bubbles: true }));
+    });
+    expect(frames.size).toBe(0);
+    expect(door.glass.mock.calls).toHaveLength(handed);
+  });
+
+  it("follows the glass's clearing at the hand-over, begun long after its forming has rested (FG-5)", () => {
+    Object.assign(forming, { logo: "1" });
+    const { hold, door, last } = heldField();
+    const shell = mount(glassOn("field", hold));
+    runFrame();
+    runFrame();
+    expect(frames.size).toBe(0);
+    // the clearing's animations begin on the glass itself, and wake the pose
+    Object.assign(forming, { running: true });
+    act(() => {
+      shell.dispatchEvent(new Event("animationstart"));
+    });
+    expect(frames.size).toBe(1);
+    // its 360th ms: the frost all but gone, the logo going, the edge and its shadow whole
+    Object.assign(forming, { frost: "0.03", edge: "1", logo: "0.4" });
+    runFrame();
+    expect(last()?.pose).toMatchObject({ frost: 0.03, edge: 1, logo: 0.4 });
+    Object.assign(forming, { frost: "0", edge: "0", logo: "0", running: false });
+    runFrame();
+    expect(last()?.pose).toMatchObject({ frost: 0, edge: 0, logo: 0 });
+    runFrame();
+    runFrame();
+    expect(frames.size).toBe(0);
+    // an animation inside the glass (a line's crossfade) is not the glass's, and wakes nothing
+    const handed = door.glass.mock.calls.length;
+    act(() => {
+      shell
+        .querySelector(".vf-wizard-frame")
+        ?.dispatchEvent(new Event("animationstart", { bubbles: true }));
     });
     expect(frames.size).toBe(0);
     expect(door.glass.mock.calls).toHaveLength(handed);

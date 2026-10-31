@@ -22,7 +22,8 @@ const WGSL = /* wgsl */ `
 struct Glass {
   box: vec4f,     // the glass's centre and half size, device px
   shape: vec4f,   // its corner (device px), device px a glass px, the frost, device px a texel of the blurred level
-  frost: vec4f,   // saturation less 1, the blurred frame's weight, the grain's opacity, 0
+  frost: vec4f,   // saturation less 1, the blurred frame's weight, the grain's opacity, the edge's (its shadow's)
+                  // opacity
   tint: vec4f,
   s0: vec4f,      // the shadows: offset x, y, blur, spread (glass px), each with its colour
   s0c: vec4f,
@@ -150,10 +151,10 @@ fn glass(@builtin(position) fc: vec4f) -> @location(0) vec4f {
   let d = sdBox(p, ext, r);
   let inside = cover(d);
   var acc = vec4f(0.0);
-  // the shadow layer: an outer box-shadow at the frost's opacity, so only outside the glass; the second listed lies
+  // the shadow layer: an outer box-shadow at the edge's opacity, so only outside the glass; the second listed lies
   // under the first
   if (inside < 1.0) {
-    let outside = fr * (1.0 - inside);
+    let outside = G.frost.w * (1.0 - inside);
     acc = over(acc, G.s1c.rgb, G.s1c.a * outside * castShadow(p, G.s1, ext, r, px));
     acc = over(acc, G.s0c.rgb, G.s0c.a * outside * castShadow(p, G.s0, ext, r, px));
   }
@@ -242,7 +243,7 @@ export function glassFrame(
     // below a 2 px blur the levels can only blur more than the frost asks, so the frame shows through instead
     smooth(0, 2, sigma),
     look.grain,
-    0,
+    pose.edge,
     ...look.tint,
     ...shadow(0),
     ...shadow(1),
@@ -497,8 +498,11 @@ export function createGlassPass(
       const recipe = look;
       const at = pose;
       const draws = p !== null && recipe !== null && at !== null;
-      // a glass not yet frosted, with no logo on it, draws nothing, though the field already stands for it
-      if (draws && (at.frost > 0.001 || at.logo > 0.001)) draw(p, encoder, frame, recipe, at);
+      // a glass not yet frosted (or cleared), with no edge and no logo on it, draws nothing, though the field already
+      // stands for it
+      if (draws && (at.frost > 0.001 || at.edge > 0.001 || at.logo > 0.001)) {
+        draw(p, encoder, frame, recipe, at);
+      }
       if (draws !== drew) {
         drew = draws;
         hooks.drawn(draws);

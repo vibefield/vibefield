@@ -3009,6 +3009,15 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   keep their reveal. A tear is bounded at its length and a second (a hidden window draws no frames); a
   field that never opened leaves with the splash's fade, never a pop, and one that opened stops drawing
   at once. Every boot now holds until its ground has opened, so the desk is never handed over mid-tear.
+  *As built at FG-5:* a first run's last beat (the welcome's 1.6s, or none for a second user, whose end
+  has no welcome) steps the glass out as §6 says. The line and the steps go (240ms `ease`), and the theme
+  control with them, so the logo truly holds alone (640ms). Then the glass clears while the logo goes and
+  the field's mark comes back under it, both over the clearing's 600ms on `ease`, one mark in place. The
+  edge and its shadow have a level of their own (`--vf-glass-edge`): it forms with the frost and goes in
+  the clearing's last 240ms, on the field's pass as in the browser. Then the field opens as the splash's
+  does, chosen once as the hand-over begins: the tear when the field is live and motion is allowed, else
+  the base reveal (the still in 240ms; under reduced motion, where the glass fades only and halved, the
+  field in 120ms). A hidden window hands over at once. From its first step the glass takes no press.
 - **The switch** (UA-D15's reload, dressed; 2026-09-22): changing users reloads the window,
   so the transition is two halves that meet on one frame — the boot splash wearing the face of
   the user you are going to. **Leaving.** The face you clicked lifts out of its row (held,

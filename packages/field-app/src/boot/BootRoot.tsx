@@ -2,6 +2,7 @@ import {
   type ReactElement,
   type ReactNode,
   type RefObject,
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -13,6 +14,7 @@ import { getAppTheme } from "../theme";
 import { type FieldHandle, FieldLayer } from "./FieldLayer";
 import type { BootMachine } from "./machine";
 import { OnboardingWizard } from "./onboarding/OnboardingWizard";
+import type { WizardLeaving } from "./onboarding/wizard-ui";
 import { SwitchLayer } from "./SwitchScene";
 import { SplashFace } from "./splash-parts";
 import { isSwitchCovering, SWITCH_MOTION, useSwitchState } from "./switch";
@@ -35,10 +37,11 @@ import "./boot.css";
 // mark goes under the glass. Since
 // AO-D2 it keeps them to the end: its answers recorded, the document opens,
 // warms and settles behind its glass while Setting up reports those stages,
-// and at `interactive` the glass leaves exactly as the splash would — the
-// 240ms fade over the 560ms settle — so the splash never returns between the
-// wizard and the desk. W5 in mechanism: the wizard ends inside the field it
-// opened, not at a door.
+// so the splash never returns between the wizard and the desk. Since FG-5 its
+// last beat hands over as a returning boot's splash does, its glass leaving
+// first: its words go, its logo holds alone, and the glass clears as the
+// field's mark takes over; then the tear, or the base reveal's fade. W5 in
+// mechanism: the wizard ends inside the field it opened, not at a door.
 //
 // The switch (DESIGN.md §8) borrows it once per user change. The window being
 // left draws its scene over everything — the field recedes and freezes under
@@ -48,6 +51,14 @@ import "./boot.css";
 
 const EASE = "cubic-bezier(0.25, 1, 0.3, 1)"; // --vf-ease-island
 const WORDS_OUT_MS = 240; // the website's `SPLASH.wordsOut`: the bar and the stage go first
+
+/** The Setup Assistant's hand-over (FG-5; DESIGN.md §6), as its glass plays it (wizard-ui.css):
+ * its words go, its logo holds alone, and its glass clears as the field's mark takes over — fades
+ * only, halved, under Reduce Motion. */
+const HANDOVER = {
+  full: { words: 240, alone: 640, clear: 600 },
+  reduced: { words: 120, alone: 320, clear: 300 },
+} as const;
 
 /** How a returning boot's first face opens (FG-2): the field's tear, or the base reveal's fade. */
 type Opening = "tear" | "fade";
@@ -95,10 +106,10 @@ export function BootRoot({
   // splash opens onto the desk once the machine is at `handing-over`: the tear
   // when the field is live, motion is allowed and the window is seen, else the
   // base reveal's fade, handed over at once. The Setup Assistant hands over at
-  // its own last beat (`onReveal`; FG-5 brings it to the tear), and a switch's
-  // arrival at once: its scene was this boot's splash, on the mat. Decided once,
-  // and never cancelled by a later render — a hand-over that never came would
-  // hold the boot.
+  // its own last beat (`onReveal`, FG-5 below), and a switch's arrival at once:
+  // its scene was this boot's splash, on the mat. Decided once, and never
+  // cancelled by a later render — a hand-over that never came would hold the
+  // boot.
   const field = useRef<FieldHandle>(null);
   const mounted = useRef(false);
   useEffect(() => {
@@ -109,33 +120,69 @@ export function BootRoot({
   }, []);
   const [opening, setOpening] = useState<Opening | null>(null);
   const [tearing, setTearing] = useState(false);
+  // The tear itself: the desk settles in as the field opens, and is handed over
+  // once the field is open, or once its bound has passed.
+  const tearOpen = useCallback((): void => {
+    if (!mounted.current) return;
+    setTearing(true);
+    const torn = field.current?.tear(getAppTheme().resolved === "dark") ?? Promise.resolve(false);
+    void torn.then(() => {
+      if (mounted.current) machine.revealDesk();
+    });
+  }, [machine]);
   const handing = view.phase === "handing-over";
   const wizard = machine.client !== null && machine.onboarding !== null;
   const splashShown = !wizard && switching.kind !== "arriving" && !splashRetired;
   useEffect(() => {
     if (!handing || wizard || opening !== null) return;
-    const tear =
+    const tears =
       splashShown && !document.hidden && !prefersReducedMotion() && field.current?.live === true;
-    setOpening(tear ? "tear" : "fade");
-    if (!tear) {
+    setOpening(tears ? "tear" : "fade");
+    if (!tears) {
       machine.revealDesk();
       return;
     }
+    setTimeout(tearOpen, WORDS_OUT_MS);
+  }, [handing, wizard, opening, splashShown, machine, tearOpen]);
+
+  // FG-5 — the Setup Assistant's hand-over (DESIGN.md §6). From its last beat
+  // its glass leaves first — its words go, its logo holds alone, and the glass
+  // clears as the field's mark takes over (`leaving`) — and then the field
+  // opens as a returning boot's does, chosen as FG-2 chooses: the tear when the
+  // field is live and motion is allowed, else the base reveal's fade. Under
+  // Reduce Motion the glass fades only, halved; a hidden window, which draws
+  // nothing, hands over at once. Begun once, and decided as it begins.
+  const begun = useRef(false);
+  const [leaving, setLeaving] = useState<WizardLeaving | null>(null);
+  const handOver = useCallback((): void => {
+    if (begun.current) return;
+    begun.current = true;
+    if (document.hidden) {
+      setOpening("fade");
+      machine.revealDesk();
+      return;
+    }
+    const reduced = prefersReducedMotion();
+    const motion = reduced ? HANDOVER.reduced : HANDOVER.full;
+    const tears = !reduced && field.current?.live === true;
+    setOpening(tears ? "tear" : "fade");
+    setLeaving("words");
     setTimeout(() => {
       if (!mounted.current) return;
-      setTearing(true);
-      const torn = field.current?.tear(getAppTheme().resolved === "dark") ?? Promise.resolve(false);
-      void torn.then(() => {
-        if (mounted.current) machine.revealDesk();
-      });
-    }, WORDS_OUT_MS);
-  }, [handing, wizard, opening, splashShown, machine]);
+      setLeaving("clear");
+      setTimeout(() => {
+        if (tears) tearOpen();
+        else if (mounted.current) machine.revealDesk();
+      }, motion.clear);
+    }, motion.words + motion.alone);
+  }, [machine, tearOpen]);
 
   // The stage recedes under a switch it is leaving (M5), and comes forward
   // again while a refused one plays back; the transform lives only that long,
   // for the settle's reason below.
   const returning = switching.kind === "leaving" && switching.phase === "returning";
   const recede = !prefersReducedMotion() && (covered || returning);
+  const clearMs = (prefersReducedMotion() ? HANDOVER.reduced : HANDOVER.full).clear;
   return (
     <>
       {ready !== null && (
@@ -187,13 +234,23 @@ export function BootRoot({
         </div>
       )}
       {machine.client !== null && machine.onboarding !== null ? (
-        <LeavingGround revealed={revealed} inert={covered} glass field={field}>
+        <LeavingGround
+          revealed={revealed}
+          inert={covered}
+          // the glass stands until it clears, and over its clearing the field's
+          // mark takes over from its logo (FG-5)
+          glass={leaving !== "clear"}
+          markMs={leaving === "clear" ? clearMs : undefined}
+          opening={opening}
+          field={field}
+        >
           <OnboardingWizard
             client={machine.client}
             onboarding={machine.onboarding}
             boot={view}
+            leaving={leaving}
             onComplete={machine.completeOnboarding}
-            onReveal={machine.revealDesk}
+            onReveal={handOver}
             onRetry={machine.retry}
           />
         </LeavingGround>
@@ -215,15 +272,17 @@ export function BootRoot({
  * website's splash, not a logo card). Shared by the splash and the Setup
  * Assistant so handing one to the other changes the content and never the
  * floor: one node, so one field runs from the first paint to the reveal, its
- * mark gone while the Setup Assistant's glass stands on it — and since FG-3b
- * the glass drawn by the field itself, so what stands on the ground stands in
- * the field's layer. `opening` (FG-2): at the tear the words go and the
- * ground's own colour with them (boot.css). */
+ * mark gone while the Setup Assistant's glass stands on it and back as the
+ * glass clears (`markMs`, FG-5) — and since FG-3b the glass drawn by the field
+ * itself, so what stands on the ground stands in the field's layer. `opening`
+ * (FG-2): at the tear the words go and the ground's own colour with them
+ * (boot.css). */
 function BootGround({
   className = "",
   ariaHidden = false,
   inert = false,
   glass,
+  markMs,
   opening,
   field,
   children,
@@ -232,6 +291,7 @@ function BootGround({
   ariaHidden?: boolean;
   inert?: boolean;
   glass: boolean;
+  markMs: number | undefined;
   opening: Opening | null;
   field: RefObject<FieldHandle | null>;
   children: ReactNode;
@@ -243,7 +303,7 @@ function BootGround({
       aria-hidden={ariaHidden}
       inert={inert}
     >
-      <FieldLayer mark={!glass} handleRef={field}>
+      <FieldLayer mark={!glass} markMs={markMs} handleRef={field}>
         {children}
       </FieldLayer>
     </div>
@@ -253,13 +313,14 @@ function BootGround({
 /** The first face — the splash, or the Setup Assistant that kept the window
  * (AO-D2) — leaves on the reveal: a 240ms fade over the desk's settle, then it
  * unmounts. One leaving for both, so the two can never part differently. Since
- * FG-2 a returning boot's field may have torn open first, leaving the fade
- * nothing to fade but a field that never opened (the Setup Assistant's comes to
- * the tear at FG-5). */
+ * FG-2 a returning boot's field may have torn open first, and since FG-5 a
+ * first run's, its glass cleared before it, leaving the fade nothing to fade
+ * but a field that never opened. */
 function LeavingGround({
   revealed,
   inert = false,
   glass = false,
+  markMs,
   opening = null,
   field,
   children,
@@ -268,7 +329,9 @@ function LeavingGround({
   inert?: boolean;
   /** the Setup Assistant's glass stands on the ground */
   glass?: boolean;
-  /** how a returning boot's splash is opening (FG-2) */
+  /** how long the field's mark takes to come back, when not its own 400ms (FG-5) */
+  markMs?: number | undefined;
+  /** how the ground is opening (FG-2, FG-5) */
   opening?: Opening | null;
   /** the field's handle, for the reveal (FG-2) */
   field: RefObject<FieldHandle | null>;
@@ -290,6 +353,7 @@ function LeavingGround({
       ariaHidden={revealed}
       inert={inert}
       glass={glass}
+      markMs={markMs}
       opening={opening}
       field={field}
     >

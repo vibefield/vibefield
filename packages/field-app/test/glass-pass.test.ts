@@ -30,7 +30,17 @@ const LOOK: GlassLook = {
 };
 
 /** Fitted at 0.75 in a 1200 × 800 window, formed, with no logo on it (a pane's). */
-const POSE: GlassPose = { x: 600, y: 400, w: 880, h: 640, fit: 0.75, frost: 1, rise: 1, logo: 0 };
+const POSE: GlassPose = {
+  x: 600,
+  y: 400,
+  w: 880,
+  h: 640,
+  fit: 0.75,
+  frost: 1,
+  edge: 1,
+  rise: 1,
+  logo: 0,
+};
 
 /** That window's field at 2 device px a CSS px, its mark (128 × 77) in the middle. */
 const SIZE = { k: 2, MX: 1072, MY: 723, LW: 256, LH: 154 };
@@ -68,14 +78,14 @@ describe("the glass's blur", () => {
 });
 
 describe("the glass's uniforms", () => {
-  it("are what the shader reads, in device px: the box, its shape, the frost, the tint, the two shadows and the logo", () => {
+  it("are what the shader reads, in device px: the box, its shape, the frost and the edge, the tint, the two shadows and the logo", () => {
     const { blur, uniforms } = glassFrame(LOOK, POSE, SIZE);
     // 1.5 device px a glass px: a 48 px blur, from an eighth of the frame
     expect(blur.level).toBe(3);
     const expected = [
       [1200, 800, 660, 480],
       [48, 1.5, 1, 8],
-      [0.12, 1, 0.03, 0],
+      [0.12, 1, 0.03, 1],
       [1, 1, 1, 0.55],
       [0, 40, 120, 0],
       [4 / 255, 5 / 255, 15 / 255, 0.55],
@@ -90,18 +100,32 @@ describe("the glass's uniforms", () => {
     }
   });
 
-  it("form with the glass: the blur and the box follow the frost and the rise", () => {
-    const rising = glassFrame(LOOK, { ...POSE, frost: 0.5, rise: 0.985 }, SIZE);
+  it("form with the glass: the blur and the box follow the frost and the rise, the edge the frost", () => {
+    const rising = glassFrame(LOOK, { ...POSE, frost: 0.5, edge: 0.5, rise: 0.985 }, SIZE);
     const px = 0.75 * 0.985 * 2;
     expect(rising.uniforms[2]).toBeCloseTo(440 * px, 3);
     expect(rising.uniforms[3]).toBeCloseTo(320 * px, 3);
     expect(rising.uniforms[6]).toBe(0.5);
+    expect(rising.uniforms[11]).toBe(0.5);
     expect(rising.blur).toEqual(blurPlan(32 * 0.5 * px));
     // just condensing, the blur is under 2 px, so the frame shows through what the levels would blur
     const condensing = glassFrame(LOOK, { ...POSE, frost: 0.02, rise: 0.985 }, SIZE);
     expect(condensing.blur.level).toBe(1);
     expect(condensing.uniforms[9]).toBeGreaterThan(0);
     expect(condensing.uniforms[9]).toBeLessThan(1);
+  });
+
+  it("clear at the hand-over with the edge apart: the frost going first, the edge and its shadow at their own level (FG-5)", () => {
+    // the clearing's 360th ms: the frost all but gone, the logo going, the edge and its shadow whole
+    const clearing = glassFrame(LOOK, { ...POSE, frost: 0.03, edge: 1, logo: 0.4 }, SIZE);
+    expect(clearing.uniforms[6]).toBeCloseTo(0.03, 6);
+    expect(clearing.uniforms[9]).toBeLessThan(1); // the blur thinning out of the frame
+    expect(clearing.uniforms[11]).toBe(1);
+    expect(clearing.uniforms[36]).toBeCloseTo(0.4, 6);
+    // and the box stands still: no rise at the clearing
+    expect(Array.from(clearing.uniforms.slice(0, 4))).toEqual(
+      Array.from(glassFrame(LOOK, POSE, SIZE).uniforms.slice(0, 4)),
+    );
   });
 
   it("cast no shadow they weren't given", () => {
@@ -345,10 +369,36 @@ describe("the glass's pass", () => {
     const pass = createGlassPass(device, gpu, said);
     pass.setLook(LOOK);
     await settle();
-    pass.setPose({ ...POSE, frost: 0, rise: 0.985 });
+    pass.setPose({ ...POSE, frost: 0, edge: 0, rise: 0.985 });
     const { encoder, passes } = fakeEncoder();
     pass.encode(encoder, frame());
     expect(passes).toEqual([]);
+    expect(said.drawn.mock.calls).toEqual([[true]]);
+  });
+
+  it("draws a cleared glass's edge and shadow until they go, at their own level, then nothing (FG-5)", async () => {
+    const { device, made } = fakeDevice();
+    const said = hooks();
+    const pass = createGlassPass(device, gpu, said);
+    pass.setLook(LOOK);
+    await settle();
+    // the shadow is cast at the edge's level, never the frost's
+    const [code = ""] = made.modules;
+    expect(code).toContain("let outside = G.frost.w * (1.0 - inside);");
+    pass.setPose({ ...POSE, frost: 0, edge: 0.5, logo: 0 });
+    const first = fakeEncoder();
+    pass.encode(first.encoder, frame());
+    expect(first.passes.at(-1)).toEqual({
+      pipeline: "glass-glass",
+      into: FRAME_VIEW,
+      load: "load",
+    });
+    expect(made.writes.at(-1)?.data.slice(8, 12)).toEqual([0.12, 0, 0.03, 0.5].map(Math.fround));
+    // cleared whole: nothing to draw, though the field still stands for the glass
+    pass.setPose({ ...POSE, frost: 0, edge: 0, logo: 0 });
+    const last = fakeEncoder();
+    pass.encode(last.encoder, frame());
+    expect(last.passes).toEqual([]);
     expect(said.drawn.mock.calls).toEqual([[true]]);
   });
 
@@ -357,7 +407,7 @@ describe("the glass's pass", () => {
     const pass = createGlassPass(device, gpu, hooks());
     pass.setLook(LOOK);
     await settle();
-    pass.setPose({ ...POSE, frost: 0, logo: 0.5 });
+    pass.setPose({ ...POSE, frost: 0, edge: 0, logo: 0.5 });
     const { encoder, passes } = fakeEncoder();
     pass.encode(encoder, frame());
     expect(passes.at(-1)).toEqual({ pipeline: "glass-glass", into: FRAME_VIEW, load: "load" });

@@ -56,6 +56,12 @@ export type WizardGround = "field" | "app";
  * and padding it had before FG, never fitted, until AO rules. */
 export type WizardSize = "glass" | "sheet";
 
+/** The hand-over (FG-5; DESIGN.md §6), as the glass plays it: its words go
+ * (`words`: the line, the steps and the theme control), so the logo holds
+ * alone; then the glass clears (`clear`) as the field's mark takes over from
+ * the logo. BootRoot steps it; the stylesheet plays each step. */
+export type WizardLeaving = "words" | "clear";
+
 /** The band's state (FG-D22 A): the chapter's steps, in order (`stepsOf`), and
  * the step the pane stands in (`STEP_OF`) — none where the band is absent. */
 export interface WizardBand {
@@ -92,6 +98,7 @@ export function WizardShell({
   size,
   band,
   paneKey,
+  leaving,
 }: {
   children: ReactNode;
   ground?: WizardGround | undefined;
@@ -99,6 +106,8 @@ export function WizardShell({
   band?: WizardBand | undefined;
   /** Which pane stands in the frame: a new key fades the old pane out first. */
   paneKey?: string | undefined;
+  /** How far the hand-over has come (FG-5); absent until it begins. */
+  leaving?: WizardLeaving | undefined;
 }): ReactElement {
   const { dark, toggle } = useTheme();
   return (
@@ -109,6 +118,7 @@ export function WizardShell({
       size={size}
       band={band}
       paneKey={paneKey}
+      leaving={leaving}
     >
       {children}
     </WizardShellView>
@@ -122,7 +132,8 @@ export function WizardShell({
  * contents (wizard-ui.css), so it can form without fading anything above its
  * frost. On the live field the field draws those layers and the logo
  * (`useFieldGlass`, `data-glass`). Only the glass takes a press: around it the
- * ground lets one through to what holds it (the sheet's scrim closes it). */
+ * ground lets one through to what holds it (the sheet's scrim closes it). From
+ * the hand-over's first step it takes none (`data-leaving`, FG-5). */
 export function WizardShellView({
   children,
   dark,
@@ -131,6 +142,7 @@ export function WizardShellView({
   size = "glass",
   band,
   paneKey,
+  leaving,
 }: {
   children: ReactNode;
   dark: boolean;
@@ -139,6 +151,7 @@ export function WizardShellView({
   size?: WizardSize | undefined;
   band?: WizardBand | undefined;
   paneKey?: string | undefined;
+  leaving?: WizardLeaving | undefined;
 }): ReactElement {
   const groundRef = useRef<HTMLDivElement>(null);
   const glassRef = useRef<HTMLDivElement>(null);
@@ -163,6 +176,8 @@ export function WizardShellView({
           data-size={size}
           data-glass={drawn ? "field" : undefined}
           data-logo={logo ? "shown" : undefined}
+          data-leaving={leaving}
+          inert={leaving !== undefined}
         >
           <div ref={shadowRef} className="vf-wizard-glass-shadow" />
           <div ref={frostRef} className="vf-wizard-glass-frost" />
@@ -173,7 +188,7 @@ export function WizardShellView({
           <ThemeToggleButton
             dark={dark}
             onToggle={onToggleTheme}
-            className="no-drag absolute top-5 right-5"
+            className="vf-wizard-theme no-drag absolute top-5 right-5"
           />
           <WizardFrameSize.Provider value={size}>
             <WizardFace.Provider value={paneKey ?? "pane"}>

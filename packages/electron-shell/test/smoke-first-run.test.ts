@@ -16,6 +16,7 @@ import {
   firstRunRows,
   judgeBand,
   judgeFrame,
+  judgeHandOver,
   judgeHolds,
   judgeLogo,
   judgeRecorded,
@@ -103,6 +104,7 @@ describe("the walks and where their stills may go", () => {
 const record = (faces: FaceSeen[], now = 100_000): FirstRunRecord => ({
   faces,
   progress: [],
+  leaving: [],
   now,
 });
 
@@ -211,6 +213,72 @@ describe("the band (FG-D22 A): Setting up's segment", () => {
         [20, 0.4],
       ]),
     ).toEqual(["Setting up's segment came full, then fell to 0.400"]);
+  });
+});
+
+describe("the hand-over (FG-5; DESIGN.md §6)", () => {
+  it("passes the glass's words and then its clearing, each once, however long or short each stood", () => {
+    expect(
+      judgeHandOver([
+        [61_200, "words"],
+        [62_080, "clear"],
+      ]),
+    ).toEqual([]);
+    // a loaded host's pace is no step of its own: order alone is judged
+    expect(
+      judgeHandOver([
+        [61_200, "words"],
+        [61_201, "clear"],
+      ]),
+    ).toEqual([]);
+    expect(
+      judgeHandOver([
+        [61_200, "words"],
+        [64_000, "clear"],
+      ]),
+    ).toEqual([]);
+    // a step heard twice over is one step
+    expect(
+      judgeHandOver([
+        [61_200, "words"],
+        [61_300, "words"],
+        [62_080, "clear"],
+      ]),
+    ).toEqual([]);
+  });
+
+  it("finds a glass that never stepped out, never cleared, cleared first, or stepped back", () => {
+    expect(judgeHandOver([])).toEqual(["the glass never stepped out: no hand-over was heard"]);
+    expect(judgeHandOver([[61_200, "words"]])).toEqual([
+      'the glass stepped out ["words"], not its words and then its clearing',
+    ]);
+    expect(judgeHandOver([[61_200, "clear"]])).toEqual([
+      'the glass stepped out ["clear"], not its words and then its clearing',
+    ]);
+    expect(
+      judgeHandOver([
+        [61_200, "clear"],
+        [62_080, "words"],
+      ]),
+    ).toEqual(['the glass stepped out ["clear","words"], not its words and then its clearing']);
+    expect(
+      judgeHandOver([
+        [61_200, "words"],
+        [62_080, "clear"],
+        [62_300, "words"],
+      ]),
+    ).toEqual([
+      'the glass stepped out ["words","clear","words"], not its words and then its clearing',
+    ]);
+    expect(
+      judgeHandOver([
+        [61_200, "words"],
+        [61_500, null],
+        [62_080, "clear"],
+      ]),
+    ).toEqual([
+      'the glass stepped out ["words",null,"clear"], not its words and then its clearing',
+    ]);
   });
 });
 

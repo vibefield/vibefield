@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, vi, it as vitestIt } from "vit
 import { BootRoot } from "../src/boot/BootRoot";
 import type { BootMachine, BootOnboarding, BootView } from "../src/boot/machine";
 import { OnboardingWizard } from "../src/boot/onboarding/OnboardingWizard";
-import { glassFit } from "../src/boot/onboarding/wizard-ui";
+import { glassFit, type WizardLeaving } from "../src/boot/onboarding/wizard-ui";
 import { cardsStore } from "../src/frame/cards/cards-store";
 import { type FieldHost, type FieldUserProfile, type FieldUserRoster, setHost } from "../src/host";
 import { observeFrames } from "./wizard-frame-fixture";
@@ -74,8 +74,8 @@ function act(callback: () => void | Promise<void>): Promise<void> {
   });
 }
 
-/** DESIGN.md §6, the hand-over: the welcome's beat before the glass leaves. */
-const WELCOME_BEAT_MS = 1_400;
+/** DESIGN.md §6, the hand-over: the welcome's beat before the glass leaves (1.6s since FG-5). */
+const WELCOME_BEAT_MS = 1_600;
 /** DESIGN.md §8 (AO-D4): how long past the desk Setting up waits for History's
  * first pass before it offers Start now. */
 const START_NOW_AFTER_MS = 8_000;
@@ -335,6 +335,8 @@ interface MountProps {
   onReveal?: () => void;
   onRetry?: () => void;
   boot?: BootView;
+  /** how far the boot has stepped the hand-over (FG-5) */
+  leaving?: WizardLeaving | null;
 }
 let mounted: (MountProps & { boot: BootView }) | null = null;
 
@@ -345,6 +347,7 @@ function render(): void {
       client: mounted.fieldd,
       onboarding: mounted.onboarding,
       boot: mounted.boot,
+      leaving: mounted.leaving ?? null,
       onComplete: mounted.onComplete,
       onReveal: mounted.onReveal ?? (() => undefined),
       onRetry: mounted.onRetry ?? (() => undefined),
@@ -368,6 +371,13 @@ async function mount(props: MountProps): Promise<void> {
 async function boot(view: BootView): Promise<void> {
   if (mounted === null) throw new Error("nothing is mounted");
   mounted = { ...mounted, boot: view };
+  await act(async () => render());
+}
+
+/** The boot steps the hand-over (FG-5): the wizard is told how far its glass has left. */
+async function leave(leaving: WizardLeaving): Promise<void> {
+  if (mounted === null) throw new Error("nothing is mounted");
+  mounted = { ...mounted, leaving };
   await act(async () => render());
 }
 
@@ -1585,6 +1595,26 @@ describe("Setup Assistant", () => {
     expect(container?.querySelector("form.vf-wizard-pane")).not.toBeNull();
   });
 
+  it("hands its one glass the boot's hand-over, step by step, taking no press from the first (FG-5)", async () => {
+    host(vi.fn(async () => FRESH));
+    await mount({
+      fieldd: client({ link: NO_LINK }),
+      onboarding: onboarding(),
+      onComplete: vi.fn(),
+    });
+    const shell = container?.querySelector(".vf-wizard-shell");
+    expect(shell?.hasAttribute("data-leaving")).toBe(false);
+    expect(shell?.hasAttribute("inert")).toBe(false);
+
+    await leave("words");
+    expect(container?.querySelector(".vf-wizard-shell")).toBe(shell);
+    expect(shell?.getAttribute("data-leaving")).toBe("words");
+    expect(shell?.hasAttribute("inert")).toBe(true);
+    await leave("clear");
+    expect(container?.querySelector(".vf-wizard-shell")).toBe(shell);
+    expect(shell?.getAttribute("data-leaving")).toBe("clear");
+  });
+
   it("projects the glass's tokens from DESIGN.md §5: one frost, and on the field one shadow and one grain, for both themes", () => {
     const [day = "", night = ""] = TOKENS.split("\n.dark {");
     expect(day).toContain("--vf-wizard-blur: 32px;");
@@ -1657,13 +1687,14 @@ describe("Setup Assistant", () => {
     expect(WIZARD_CSS).toContain(
       '.vf-wizard-shell[data-ground="field"] {\n  animation: vf-glass-form 560ms var(--vf-ease-island) both;',
     );
+    // the edge and its shadow form with the frost, at their own level (FG-5)
     expect(WIZARD_CSS).toMatch(
-      /@keyframes vf-glass-form \{\s*from \{\s*--vf-glass-frost: 0;\s*--vf-glass-rise: 0\.985;/,
+      /@keyframes vf-glass-form \{\s*from \{\s*--vf-glass-frost: 0;\s*--vf-glass-edge: 0;\s*--vf-glass-rise: 0\.985;/,
     );
     // reduced motion: the frost alone, halved, and nothing rises (M6)
     expect(WIZARD_CSS).toContain("animation: vf-glass-frost-in 280ms ease both;");
     expect(WIZARD_CSS).toMatch(
-      /@keyframes vf-glass-frost-in \{\s*from \{\s*--vf-glass-frost: 0;\s*\}/,
+      /@keyframes vf-glass-frost-in \{\s*from \{\s*--vf-glass-frost: 0;\s*--vf-glass-edge: 0;\s*\}/,
     );
     // A backdrop filter samples nothing past an ancestor that sets opacity, a
     // filter or a mask, so nothing that holds the frost may set one.

@@ -31,6 +31,19 @@ const field = vi.hoisted(() => ({
   },
 }));
 
+/** FG-5's rows open the Setup Assistant as a stand-in that keeps what BootRoot hands it, so a row can end its last
+ * beat (`onReveal`) and read how far its glass has left (`leaving`). Its own rows are onboarding-wizard.test's. */
+const wizard = vi.hoisted(() => ({
+  props: null as null | { readonly leaving?: string | null; readonly onReveal: () => void },
+}));
+
+vi.mock("../src/boot/onboarding/OnboardingWizard", () => ({
+  OnboardingWizard: (props: { leaving?: string | null; onReveal: () => void }) => {
+    wizard.props = props;
+    return null;
+  },
+}));
+
 vi.mock("../src/boot/splash/field-door", async (importOriginal) => {
   const real = await importOriginal<typeof import("../src/boot/splash/field-door")>();
   return {
@@ -42,7 +55,7 @@ vi.mock("../src/boot/splash/field-door", async (importOriginal) => {
   };
 });
 
-function fakeMachine() {
+function fakeMachine({ setup = false }: { setup?: boolean } = {}) {
   let view: BootView = {
     phase: "requesting-bootstrap",
     unavailable: null,
@@ -70,13 +83,14 @@ function fakeMachine() {
     get ready() {
       return ready;
     },
+    // UA-3w: this suite is about the reveal, so the wizard opens only for
+    // FG-5's hand-over, as a stand-in. The layer swap it drives has its own
+    // coverage in onboarding-wizard.test.
     get client() {
-      return null;
+      return setup ? ({} as BootMachine["client"]) : null;
     },
-    // UA-3w: this suite is about the reveal, so the wizard never opens here.
-    // The layer swap it drives has its own coverage in onboarding-wizard.test.
     get onboarding() {
-      return null;
+      return setup ? ({ profile: {} } as BootMachine["onboarding"]) : null;
     },
     start: () => {},
     retry: () => {},
@@ -105,6 +119,7 @@ afterEach(() => {
   sessionStorage.clear();
   document.body.innerHTML = "";
   field.door = null;
+  wizard.props = null;
 });
 
 function workspaceWrapper(): HTMLElement | null {
@@ -350,6 +365,190 @@ describe("BootRoot hands a returning boot's desk over (FG-2)", () => {
       vi.advanceTimersByTime(3_000);
     });
     expect(door.reveal).not.toHaveBeenCalled();
+  });
+});
+
+// ---- the first run's hand-over (FG-5; DESIGN.md §6) -------------------------
+
+/** Reduce Motion, from here on. */
+function reduceMotion(): void {
+  vi.spyOn(window, "matchMedia").mockImplementation(
+    (query: string) =>
+      ({
+        matches: query === "(prefers-reduced-motion: reduce)",
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      }) as unknown as MediaQueryList,
+  );
+}
+
+const leaving = (): string | null | undefined => wizard.props?.leaving;
+const opening = (): string | null | undefined =>
+  host?.querySelector(".vf-splash")?.getAttribute("data-opening");
+const markShown = (): string | null | undefined =>
+  host?.querySelector(".vf-field")?.getAttribute("data-mark");
+
+function advance(ms: number): void {
+  act(() => {
+    vi.advanceTimersByTime(ms);
+  });
+}
+
+describe("BootRoot hands a first run's desk over (FG-5)", () => {
+  it("steps the glass out at its last beat (the words, the logo alone, the clearing as the field's mark takes over), then tears, and only then hands the desk over", async () => {
+    vi.useFakeTimers();
+    let open: (opened: boolean) => void = () => {};
+    const door = liveDoor(
+      () =>
+        new Promise((resolve) => {
+          open = resolve;
+        }),
+    );
+    const { machine, set, revealDesk } = fakeMachine({ setup: true });
+    await mountWarm(machine, set);
+    expect(host?.querySelector(".vf-field")?.getAttribute("data-field")).toBe("live");
+    act(() => set({ phase: "handing-over", stage: "" }));
+    // the wizard hands over at its own last beat, never the splash's
+    expect(revealDesk).not.toHaveBeenCalled();
+    expect(opening()).toBeNull();
+    expect(leaving()).toBeNull();
+    expect(markShown()).toBe("hidden");
+    const marks = door.mark.mock.calls.length;
+
+    act(() => wizard.props?.onReveal());
+    // the words go (240ms) and the logo holds alone (640ms) while the desk waits under the field, small and bright
+    expect(leaving()).toBe("words");
+    expect(opening()).toBe("tear");
+    expect(workspaceWrapper()?.style.transform).toBe("scale(0.985)");
+    expect(workspaceWrapper()?.style.filter).toBe("brightness(1.16)");
+    advance(240 + 640 - 1);
+    expect(leaving()).toBe("words");
+    expect(markShown()).toBe("hidden");
+    expect(door.mark.mock.calls).toHaveLength(marks);
+
+    // the glass clears (600ms) as the field's mark comes back under the logo, over the clearing's own 600ms
+    advance(1);
+    expect(leaving()).toBe("clear");
+    expect(markShown()).toBe("shown");
+    expect(door.mark.mock.calls.slice(marks)).toEqual([[1, 600]]);
+    advance(599);
+    expect(door.reveal).not.toHaveBeenCalled();
+
+    // then the tear, in the day's light, as the desk settles in; `interactive` still means revealed
+    advance(1);
+    expect(door.reveal).toHaveBeenCalledTimes(1);
+    expect(door.reveal).toHaveBeenCalledWith({ ...TEAR, ink: DAYLIGHT });
+    expect(workspaceWrapper()?.style.transform).toBe("scale(1)");
+    expect(workspaceWrapper()?.style.filter).toBe("brightness(1)");
+    expect(workspaceWrapper()?.style.transition).toContain("1900ms");
+    expect(revealDesk).not.toHaveBeenCalled();
+    open(true);
+    await settle();
+    expect(door.destroy).toHaveBeenCalledTimes(1);
+    expect(revealDesk).toHaveBeenCalledTimes(1);
+
+    // begun once: a second last beat begins nothing
+    act(() => wizard.props?.onReveal());
+    advance(5_000);
+    await settle();
+    expect(door.reveal).toHaveBeenCalledTimes(1);
+    expect(revealDesk).toHaveBeenCalledTimes(1);
+
+    // then the click contract as ever: settled, the wrapper carries nothing, and the ground is gone
+    act(() => set({ phase: "interactive" }));
+    advance(700);
+    expect(groundStyle()).toBe("");
+    expect(host?.querySelector(".vf-splash")).toBeNull();
+  });
+
+  it("tears in the look's own light by night", async () => {
+    vi.useFakeTimers();
+    setAppTheme("dark");
+    const door = liveDoor(async () => true);
+    const { machine, set } = fakeMachine({ setup: true });
+    await mountWarm(machine, set);
+    act(() => set({ phase: "handing-over", stage: "" }));
+    act(() => wizard.props?.onReveal());
+    advance(240 + 640 + 600);
+    expect(door.reveal).toHaveBeenCalledWith({ ...TEAR }); // no ink: the splash keeps its own
+  });
+
+  it("steps the glass out over the field's still alike, then the still fades in place: the base reveal", async () => {
+    vi.useFakeTimers();
+    const { machine, set, revealDesk } = fakeMachine({ setup: true });
+    await mountWarm(machine, set); // happy-dom: no WebGPU, so the field is its still
+    expect(host?.querySelector(".vf-field")?.getAttribute("data-field")).toBe("still");
+    act(() => set({ phase: "handing-over", stage: "" }));
+    act(() => wizard.props?.onReveal());
+    expect(leaving()).toBe("words");
+    expect(opening()).toBe("fade");
+    expect(groundStyle()).not.toContain("brightness");
+    advance(240 + 640);
+    expect(leaving()).toBe("clear");
+    advance(599);
+    expect(revealDesk).not.toHaveBeenCalled();
+    advance(1);
+    expect(revealDesk).toHaveBeenCalledTimes(1);
+
+    act(() => set({ phase: "interactive" }));
+    expect(workspaceWrapper()?.style.transform).toBe("scale(1)"); // the base settle
+    advance(500); // past the 400ms fade hold
+    expect(host?.querySelector(".vf-splash")).toBeNull();
+  });
+
+  it("fades only, halved, under Reduce Motion: the words in 120, the logo alone 320, the clearing 300, and never a tear", async () => {
+    vi.useFakeTimers();
+    const door = liveDoor(async () => true);
+    const { machine, set, revealDesk } = fakeMachine({ setup: true });
+    await mountWarm(machine, set);
+    reduceMotion();
+    act(() => set({ phase: "handing-over", stage: "" }));
+    act(() => wizard.props?.onReveal());
+    expect(leaving()).toBe("words");
+    expect(opening()).toBe("fade");
+    advance(120 + 320 - 1);
+    expect(leaving()).toBe("words");
+    advance(1);
+    expect(leaving()).toBe("clear");
+    expect(door.mark).toHaveBeenLastCalledWith(1, 300);
+    advance(299);
+    expect(revealDesk).not.toHaveBeenCalled();
+    advance(1);
+    expect(revealDesk).toHaveBeenCalledTimes(1);
+    advance(3_000);
+    expect(door.reveal).not.toHaveBeenCalled();
+  });
+
+  it("hands over at once in a hidden window, which draws nothing", async () => {
+    vi.useFakeTimers();
+    const door = liveDoor(async () => true);
+    const { machine, set, revealDesk } = fakeMachine({ setup: true });
+    await mountWarm(machine, set);
+    act(() => set({ phase: "handing-over", stage: "" }));
+    vi.spyOn(document, "hidden", "get").mockReturnValue(true);
+    act(() => wizard.props?.onReveal());
+    expect(revealDesk).toHaveBeenCalledTimes(1);
+    expect(leaving()).toBeNull();
+    expect(opening()).toBe("fade");
+    advance(3_000);
+    expect(door.reveal).not.toHaveBeenCalled();
+  });
+
+  it("hands nothing over from a window gone mid-hand-over", async () => {
+    vi.useFakeTimers();
+    const door = liveDoor(async () => true);
+    const { machine, set, revealDesk } = fakeMachine({ setup: true });
+    await mountWarm(machine, set);
+    act(() => set({ phase: "handing-over", stage: "" }));
+    act(() => wizard.props?.onReveal());
+    advance(240 + 640 + 300);
+    act(() => root?.unmount());
+    root = null;
+    advance(3_000);
+    await settle();
+    expect(door.reveal).not.toHaveBeenCalled();
+    expect(revealDesk).not.toHaveBeenCalled();
   });
 });
 

@@ -148,7 +148,7 @@ const GLASS: GlassState = {
     shadows: [],
     logoInvert: true,
   },
-  pose: { x: 600, y: 400, w: 880, h: 640, fit: 0.75, frost: 1, rise: 1, logo: 0 },
+  pose: { x: 600, y: 400, w: 880, h: 640, fit: 0.75, frost: 1, edge: 1, rise: 1, logo: 0 },
 };
 
 /** The field's container with its still mark, as FieldLayer draws them. */

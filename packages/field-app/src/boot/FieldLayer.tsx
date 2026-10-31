@@ -45,14 +45,17 @@ function prefersReducedMotion(): boolean {
 }
 
 /** `mark`: the field's mark shows; under the Setup Assistant's glass it goes (DESIGN.md §6, the
- * glass forming). `handleRef`: the boot's hold on the field at the reveal. `children`: what stands
- * on the field, drawn over it. */
+ * glass forming), and it comes back as the glass clears (FG-5). `markMs`: how long its fade takes,
+ * when not its own 400ms. `handleRef`: the boot's hold on the field at the reveal. `children`: what
+ * stands on the field, drawn over it. */
 export function FieldLayer({
   mark,
+  markMs,
   handleRef,
   children,
 }: {
   mark: boolean;
+  markMs?: number | undefined;
   handleRef?: Ref<FieldHandle>;
   children?: ReactNode;
 }): ReactElement {
@@ -94,11 +97,12 @@ export function FieldLayer({
   // What stands on the field sizes its logo to the still's own mark while the field is its still (FG-4b).
   useLayoutEffect(() => glass.stillness(field === "still"), [glass, field]);
 
-  // The mark's fade: 400ms on `ease`, halved under reduced motion.
+  // The mark's fade: 400ms on `ease`, halved under reduced motion; as long as the glass's clearing
+  // when it takes over from the logo (FG-5).
   useEffect(() => {
     shown.current = mark;
-    door.current?.mark(mark ? 1 : 0, prefersReducedMotion() ? 200 : 400);
-  }, [mark]);
+    door.current?.mark(mark ? 1 : 0, markMs ?? (prefersReducedMotion() ? 200 : 400));
+  }, [mark, markMs]);
 
   useImperativeHandle(
     handleRef,
