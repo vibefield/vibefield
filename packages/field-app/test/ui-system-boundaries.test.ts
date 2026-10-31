@@ -789,6 +789,8 @@ describe("UI system ownership boundaries", () => {
       // DK-3 — when the desk can't draw: the stage's card and the status line's banner
       "DeskUnavailableView",
       "StatusLineView",
+      // CP-3 — an agent's notify on the line, said through the window's own notice, never a copy of its words
+      "needsNoticeStatus",
       "LiveSurfaceView",
       "PaneFramePreview",
       "PaneFrameChrome",

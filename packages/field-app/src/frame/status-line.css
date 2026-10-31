@@ -33,6 +33,15 @@
   overflow-wrap: anywhere;
 }
 
+/* A one-line notice — an agent's notify (CP-3; DESIGN.md §8 "The status line", amended 2026-10-31):
+   one line, cut with an ellipsis at the line's width, never wrapped. */
+.vf-status-line[data-one-line] .vf-status-line__text {
+  overflow: hidden;
+  overflow-wrap: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* A notice with a detail (the degraded desk's ICE message, DK-17): the words and the act on the first
    row, the detail on its own row under them — 11 mono, faint, verbatim, as the unavailable card's. */
 .vf-status-line[data-detail] {

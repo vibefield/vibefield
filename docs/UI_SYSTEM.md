@@ -184,7 +184,9 @@ The catalog currently mounts these shipping views directly:
   WebGPU and no adapter (no Reload: a reload cannot help), and a board from before the desk — the
   kit's card (the primitives layer, above) on the plain ground, in the product's own words
   (`desk-words.ts`); and the status line's notices (`StatusLineView`): a missing face's word said
-  once, its place under the tools in hand, and a degraded desk holding ICE's message and its Reload
+  once, its place under the tools in hand, a degraded desk holding ICE's message and its Reload, and
+  (CP-3) an agent's notify longer than the line, on one line cut at its width, said through the
+  window's own notice (`needsNoticeStatus`) over a fixture notice
 - the desk itself (`DeskPreview`, DK-3; named so at DK-17): the field's own layer (`fieldDeskLayer`)
   on a disposable engine with an empty board, under the canvas-ground workbench, the field chrome's
   playground and the view frame — and where a page has no WebGPU, the specimen says so

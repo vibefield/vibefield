@@ -1,4 +1,4 @@
-import { type FrameView, NeedsNotice } from "@vibefield/contracts";
+import { type FrameView, type NeedsNotice, needsNoticesOf } from "@vibefield/contracts";
 import type { FielddHandleCoordinator } from "./fieldd-handle-coordinator";
 
 // CP-3 (track CO, CP3-D5 A) — an agent's notify, said outside the app. Every
@@ -78,18 +78,13 @@ export class NeedsNoticeObserver {
     this.clear();
   }
 
-  /** The tolerant reader: each notice is read alone, and one this build cannot
-   * read is passed over without holding back the others. */
+  /** The tolerant reader (contracts' `needsNoticesOf`, the window's too): each
+   * notice is read alone, and one this build cannot read is passed over
+   * without holding back the others. */
   private apply(payload: unknown): void {
-    const notices =
-      typeof payload === "object" && payload !== null
-        ? (payload as { notices?: unknown }).notices
-        : undefined;
-    if (!Array.isArray(notices)) return;
-    for (const value of notices) {
-      const notice = NeedsNotice.safeParse(value);
-      if (!notice.success || this.ports.focused()) continue;
-      this.ports.notify(needsOsNotice(notice.data));
+    for (const notice of needsNoticesOf(payload)) {
+      if (this.ports.focused()) continue;
+      this.ports.notify(needsOsNotice(notice));
     }
   }
 

@@ -13,7 +13,9 @@ import {
   NeedsAnswerParams,
   NeedsAnswerResult,
   NeedsItem,
+  NeedsNotices,
   NeedsRecord,
+  needsNoticesOf,
   SparkRecord,
   SparkSummary,
 } from "../src/compose";
@@ -217,6 +219,17 @@ describe("CP-3 — the held answers and the person's doors (cp3-the-person.md, r
     expect(NeedsRecord.parse(fixture("needs-record.held-spawn")).launch?.tasks).toHaveLength(2);
     // its words are marked with the spark's own name (CP2-D1): a SparkName, never a run's long title
     expect(NeedsRecord.safeParse({ ...record, sender: "x".repeat(33) }).success).toBe(false);
+  });
+
+  it("reads a notices frame one notice at a time, for main and the window alike (the tolerant reader)", () => {
+    const { notices } = NeedsNotices.parse(fixture("needs-notices.valid"));
+    expect(needsNoticesOf(fixture("needs-notices.valid"))).toEqual(notices);
+    // one this build cannot read is passed over, and the rest are said
+    const [first, second] = notices;
+    expect(needsNoticesOf({ notices: [first, { id: "nt-bad" }, 7, second] })).toEqual(notices);
+    // a frame with no list says none
+    for (const none of [null, undefined, "notices", [], {}, { notices: "x" }])
+      expect(needsNoticesOf(none), JSON.stringify(none)).toEqual([]);
   });
 
   it("keeps the queue per user under fieldd, its key beside it, never at the root", () => {

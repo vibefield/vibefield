@@ -609,6 +609,22 @@ export type NeedsNotice = z.infer<typeof NeedsNotice>;
 export const NeedsNotices = z.object({ notices: z.array(NeedsNotice).max(16) }).passthrough();
 export type NeedsNotices = z.infer<typeof NeedsNotices>;
 
+/** The notices one needs.notices.subscribe frame tells, as main and every window read them: each on its own, so one
+ * this build cannot read is passed over and the rest are said (the tolerant reader); a frame with no list tells none. */
+export function needsNoticesOf(payload: unknown): NeedsNotice[] {
+  const notices =
+    typeof payload === "object" && payload !== null
+      ? (payload as { notices?: unknown }).notices
+      : undefined;
+  if (!Array.isArray(notices)) return [];
+  const read: NeedsNotice[] = [];
+  for (const value of notices) {
+    const notice = NeedsNotice.safeParse(value);
+    if (notice.success) read.push(notice.data);
+  }
+  return read;
+}
+
 /** One of a question's choices: one line, trimmed. */
 const AskChoice = z
   .string()
