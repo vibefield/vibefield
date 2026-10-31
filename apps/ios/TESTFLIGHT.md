@@ -192,6 +192,16 @@ rounded corners.
 
 ## Install and test away from your Mac
 
+> **Read 2026-10-31 (main `2ebc24fd3`):** steps 2–3 and the limits below are build **0.1 (3)**'s (main
+> `a8691ead`, 2026-09-13), still the newest upload, and true of it. Main has moved past them, so the next
+> upload's steps change. There are no write keys: they were deleted at TM-3 (2026-09-14), and a session a desktop
+> shares is writable by default (QW1, James 2026-10-28). There is no mesh control and no **CONNECT**: the mesh sheet
+> retired at IOS-8b (2026-09-23), and Connect and Disconnect on 2026-10-18, because a signed-in phone stays
+> connected by itself. A phone signs in from the Field page's welcome, **Continue with Tailscale**, in iOS's own
+> sign-in sheet, or by **Scan the code on your Mac** (TS-7); its account corner holds Sign out and Settings…. On
+> main the field's agents come from your desktops (IOS-4b), History is built (IOS-9, PJ-7), and a project's colour is
+> its ink (PJ-7). Write steps 2–3 and the limits again with the next build's notes.
+
 1. Install Apple's [TestFlight](https://testflight.apple.com/) on the iPhone.
    Accept your internal tester invitation on that device, then install VibeField.
    Enable Automatic Updates for VibeField in TestFlight.
