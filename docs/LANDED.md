@@ -22636,3 +22636,70 @@ the tool plane MT-0 landed.
 - Item 116, item 93's twin (electron-shell's `stopRunDaemons`, one census after PR #8), stays queued.
 - The fixer-items note's "State" lines for items 93 and 120 (`draft/testing/fixer-items-100-106.md`) take dated
   "Landed" clauses at the next draft queue.
+
+## FG-4a — the panes stand in the frame: the head at 96, the actions on the foot over a kept later line, no eyebrow on the glass, the old pane out before the new one fades in, and only a list scrolls, within itself (FG-L3, FG-L7, FG-D19 A) (2026-10-31; `fc1fc0f75`, lane `fg/build` on main `9e6ac500d`, in the mini's mint `733f24ed5` over main `de8185226`)
+
+**What landed.**
+- `WizardPane` fills the frame (96/160/40, 560 wide). Its head is at the top, the title and the voice 8 apart. Its body
+  stands 20 under the head, 16 between its parts (18 on TS's panes). Its foot stands on the frame's foot: 16 above the
+  actions, and under them the later line, whose 17 are kept on every pane. So the title and the actions stand at one
+  height on every step.
+- The pane never scrolls, so its head, its foot and Continue never move. A list that can outgrow the body scrolls within
+  itself on the face deck's rule, scoped to the glass: Agents' list, History's rows (its two sentences under them) and
+  Profiles' cards (the fact and a notice under them). The rule: no scrollbar; the last 20 masked whole to clear over 20
+  of padding; `scroll-padding-bottom` 20.
+  - It is **at the lean** (VF-PM 04:50Z; James may overturn). (b), folding the first block, and (c), leaving it to
+    AO-7, were not taken.
+  - The numbers, against a body of 322.2 (the 504 frame less a head of 80.8, 20, and a foot of 81): Agents with More
+    open is 348 with none here and 360 from four, and nine installed are 448. History's rows are 354 from six with a
+    switch on. Profiles' cards are 336 from five agents, and the add's list 344 from four.
+- Two tokens, each a DESIGN.md §4 row first, then `tokens.css`:
+  - `--vf-scroll-fade` (20px). The face deck (`FacePicker.css`) now wears it in place of its own two 20s.
+  - `--vf-glass-signin-height` (190px), a login's terminal on the glass. Its card is the terminal and 79.5 of chrome,
+    so it stands whole above Profiles' fade, 269.5 in 278.2, with Cancel in view. It is **at the lean** (VF-PM 05:12Z;
+    James may overturn to "accept as built"): at Settings' 240 the card would be 319.5, and Cancel a scroll away.
+    Settings' sign-in keeps its 240.
+- No eyebrow on the glass (FG-L7): the band names the step, and the sheet's panes keep theirs. The later line is a
+  skip's later home (W3).
+- `PaneSwap`: a new pane fades the old one out first (120ms, 60 reduced) as an inert, aria-hidden still copy over the
+  frame, then fades in (240ms, 160 reduced). A pane's own changes never fade.
+- You's face stands in a 112 × 104 slot. More agents opens in two columns with rows 40 tall (FG-D19 A). The 520px
+  media query is gone: the glass is scaled as one picture, never reflowed.
+- Finish setting up's sheet keeps its panes as they stood (FG-D26).
+- DESIGN.md §8's Setup Assistant entry gains a dated *Status 2026-10-31 (FG-4a, built)*.
+
+**Checks.**
+- The light over `fc1fc0f75` ran 05:21:28–05:23:49Z, verify-only (VF-PM 05:12Z), each row alone at nice 19 under the
+  guard:
+  - field-app's typecheck.
+  - 27 vitest files, each alone and all green: onboarding-wizard 52, setup-sheet 5, agents-pane 12, history-consent
+    10, profiles-pane 12, wizard-steps 4, design-system 8, ui-system-boundaries 38, and DESIGN.md's and `tokens.css`'s
+    other readers.
+  - biome; `check:walls`, `check:retired` and `catalog:check` (R23); `git diff --check` against `9e6ac500d`.
+  - The same rows ran green before the commit, 05:16–05:20Z.
+- **Run 35:** the mint `733f24ed5` ("Merge main de8185226 into fg/build") over main `de8185226`.
+  - The merge-tree was clean (tree `566df96dc`), with no both-sides file.
+  - `pnpm verify` armed at 05:26:40Z and exited 0 at 05:31:26Z. vitest: 11,022 passed, 0 failed, 18 skipped (FG-4a's
+    +7). cargo: 33 ok, 0 FAILED. typecheck and test ran for 28 projects; gen:check left the tree clean, stubs 0.
+  - onboarding-wizard 52, agents-pane 12, history-consent 10, profiles-pane 12, setup-sheet 5, design-system 8,
+    ui-system-boundaries 38. (VF-PM's read, 05:32Z.)
+- **Landed:** main fast-forwarded `de8185226` → `733f24ed5` at 2026-10-31 05:32:57Z (the fixer, on VF-PM's GO): 20
+  files, +957 −130.
+
+**Found while building.**
+- The fit, by the CSS's own numbers (above): hence the list rule.
+- Profiles' login. On FG-4a's frame alone it would have spilled over the foot. With the cards' scroll alone, Cancel
+  waited a scroll: I first named the card "about 314", and the stylesheets' sum is 319.5. Hence the 190.
+- The fade's 20 is always paid: History's sentences stand 36 under its last row, and Profiles' fact 30 under its last
+  card.
+- Three small finds: `@keyframes vf-wizard-fade` lived inside the reduced-motion block; the 520px query read the
+  window, never the glass; and the second user's name pane said "New user" in its eyebrow.
+- happy-dom lays nothing out. The 504 is held by the rules (the frame's inset, a head and a foot that never give way, a
+  body that yields, each list's own scroll), not measured.
+
+**Owed.**
+- The pixel witness, at FG-4b's console window: Agents with nine installed, History with six rows, and Profiles' add
+  with its login.
+- FG-O7 (a), ruled at the lean at 04:15Z (Opening Tailscale's Cancel after 6 s), is built and recorded with FG-4b.
+- The lane's draft record (`draft/thinking-first-run-glass.md`, FG-4's two dated 4a clauses) goes in at the next draft
+  queue.
