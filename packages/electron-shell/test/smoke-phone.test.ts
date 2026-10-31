@@ -72,6 +72,7 @@ import {
   rowMark,
   type StillSeen,
   stillAddress,
+  stoppedBeforeQuit,
   type UseSeen,
   uuidHits,
 } from "../src/testing/smoke-phone";
@@ -706,6 +707,7 @@ describe("PT-S3 — SIM-STOPPED's word (P8 amended)", () => {
     after: Array.from({ length: 10 }, () => "streaming"),
   };
   const seen = {
+    proof0: proven,
     quit: "quit",
     word: "stopped",
     stateP: "Booted",
@@ -718,6 +720,47 @@ describe("PT-S3 — SIM-STOPPED's word (P8 amended)", () => {
     const j = judgeStopped(s);
     return rowMark(j.problems, { staging: j.staging, recorded: j.recorded }).mark;
   };
+  /** φP held the cap slot `streaming` with no frames: a fresh retry or boot answers it before any window (the grade's R-1) */
+  const unproven: LiveProof = {
+    bound: 20_000,
+    ms: null,
+    condition: "streaming",
+    presented: 0,
+    frames: 0,
+    after: [],
+  };
+
+  it("φP LIVE-PROVEN before the quit is judged in every branch: `stopped` with Try again live is still red over an unproven stream (R-1)", () => {
+    expect(judgeStopped({ ...seen, proof0: unproven }).problems.join(" ")).toMatch(
+      /SIM-STOPPED \(before the quit\): 0 frames presented, not 3/u,
+    );
+    expect(mark({ ...seen, proof0: unproven })).toBe("red");
+    // the word's record never takes a red proof away
+    expect(mark({ ...seen, proof0: unproven, word: "off", stateP: "Shutdown", retry: null })).toBe(
+      "red",
+    );
+    expect(mark({ ...seen, proof0: null })).toBe("red");
+  });
+
+  it("before the quit: a red proof0 is RED, never STAGING NOT MET, and no quit is spent; the cap's staging after it (R-1)", () => {
+    const before = (s: Parameters<typeof stoppedBeforeQuit>[0]) => {
+      const b = stoppedBeforeQuit(s);
+      return b === null ? null : rowMark(b.problems, { staging: b.staging }).mark;
+    };
+    expect(before({ proof0: proven, paneRested: true, phoneAlive: true })).toBeNull();
+    expect(before({ proof0: unproven, paneRested: true, phoneAlive: true })).toBe("red");
+    // red even when the cap's staging missed too: the stream is the row's precondition, judged first
+    expect(before({ proof0: unproven, paneRested: false, phoneAlive: true })).toBe("red");
+    expect(stoppedBeforeQuit({ proof0: unproven, paneRested: true, phoneAlive: true })).toEqual({
+      problems: judgeLiveProven("SIM-STOPPED (before the quit)", unproven),
+      staging: null,
+    });
+    expect(before({ proof0: proven, paneRested: false, phoneAlive: true })).toBe("STAGING NOT MET");
+    expect(stoppedBeforeQuit({ proof0: proven, paneRested: true, phoneAlive: false })).toEqual({
+      problems: [],
+      staging: "under the cap the phone alive false, the pane rested true",
+    });
+  });
 
   it("`stopped`: the give-back and Try again's leg judged — green only when both hold", () => {
     expect(mark(seen)).toBe("green");

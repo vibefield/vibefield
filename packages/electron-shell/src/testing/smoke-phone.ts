@@ -999,10 +999,31 @@ export function quitStaging(quit: string): string | null {
     : `quit-app read ${quit}: Simulator.app may be running`;
 }
 
-/** SIM-STOPPED (P8 amended): the cap's give-back — the quit, the pane's wake — judged in every branch; the word `stopped`
- * expected, with Try again's leg judged; any other word (`off` with P Shutdown: the quit shut P down) is RECORDED as a
- * finding, never green — its stopped face unwitnessed. A red give-back stays red over the word's record. */
+/** SIM-STOPPED before its quit (the grade's R-1): φP LIVE-PROVEN first — §4's stimulus, the quit MID-STREAM — and a red
+ * proof is RED here, never STAGING NOT MET, before any quit is spent (the cap's `alive` is its seat, not frames); then
+ * the cap's staging: the phone alive in the slot, the pane rested. Null: quit. */
+export function stoppedBeforeQuit(s: {
+  readonly proof0: LiveProof | null;
+  readonly paneRested: boolean;
+  readonly phoneAlive: boolean;
+}): { readonly problems: string[]; readonly staging: string | null } | null {
+  const unproven = judgeLiveProven("SIM-STOPPED (before the quit)", s.proof0);
+  if (unproven.length > 0) return { problems: unproven, staging: null };
+  if (!s.paneRested || !s.phoneAlive)
+    return {
+      problems: [],
+      staging: `under the cap the phone alive ${s.phoneAlive}, the pane rested ${s.paneRested}`,
+    };
+  return null;
+}
+
+/** SIM-STOPPED (P8 amended): φP LIVE-PROVEN before the quit and the cap's give-back — the quit, the pane's wake — judged
+ * in every branch; the word `stopped` expected, with Try again's leg judged; any other word (`off` with P Shutdown: the
+ * quit shut P down) is RECORDED as a finding, never green — its stopped face unwitnessed. A red proof or give-back stays
+ * red over the word's record. */
 export interface StoppedSeen {
+  /** φP's LIVE-PROVEN before the quit (R-1): a quit of an unproven stream witnesses nothing "mid-stream" */
+  readonly proof0: LiveProof | null;
   readonly quit: string;
   readonly word: string | null;
   readonly stateP: string;
@@ -1017,7 +1038,7 @@ export function judgeStopped(s: StoppedSeen): {
   readonly recorded: boolean;
   readonly staging: string | null;
 } {
-  const out: string[] = [];
+  const out = judgeLiveProven("SIM-STOPPED (before the quit)", s.proof0);
   if (!s.shot) out.push("SIM-STOPPED: no VF_SMOKE_SHOT_DIR — the desk screenshot was not stored");
   if (s.quit !== "quit") out.push(`SIM-STOPPED: the quit read ${s.quit}`);
   if (s.wakes[1] < s.wakes[0] + 1 || !s.paneAlive)
@@ -2615,12 +2636,11 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
       await sleep(1_500);
       const paneRested = (await faceOf(pane))?.rested === true;
       const phoneAlive = (await faceOf(p))?.alive === true;
-      if (!paneRested || !phoneAlive) {
+      // φP LIVE-PROVEN, judged before any quit is spent: red, never recorded away; then the cap's staging (R-1)
+      const unmet = stoppedBeforeQuit({ proof0, paneRested, phoneAlive });
+      if (unmet !== null) {
         await js(`globalThis.__vfDesk.liveCap(${capNow ?? 6})`);
-        return {
-          problems: judgeLiveProven("SIM-STOPPED (staged)", proof0),
-          staging: `under the cap the phone alive ${phoneAlive}, the pane rested ${paneRested}`,
-        };
+        return { ...unmet, seen: { proof0, paneRested, phoneAlive } };
       }
       const wakes0 = (await stats())?.wakes ?? 0;
       const quit = await quitApp();
@@ -2647,6 +2667,7 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
       }
       await js(`globalThis.__vfDesk.liveCap(${capNow ?? 6})`);
       const stoppedSeen: StoppedSeen = {
+        proof0,
         quit,
         word: wordNow,
         stateP,
