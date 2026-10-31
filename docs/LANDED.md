@@ -22703,3 +22703,137 @@ the tool plane MT-0 landed.
 - FG-O7 (a), ruled at the lean at 04:15Z (Opening Tailscale's Cancel after 6 s), is built and recorded with FG-4b.
 - The lane's draft record (`draft/thinking-first-run-glass.md`, FG-4's two dated 4a clauses) goes in at the next draft
   queue.
+
+## item 116 — one smoke census: electron-shell's `src/testing/smoke-census.mjs`, which the launcher's row re-exports and the in-app teardown reads; R8 stops at `apps/desktop/packaging/` (2026-10-31; `684fd4dae`, lane `fix/item116-one-census` on `de8185226`, landed with item 122b in the mint `06e1385d7` over main `904bd1029`, the mini's run 36; VF-PM's rulings 2026-10-31 05:21Z (the home) and 05:23Z (R8's scope))
+
+**The rule.** The census lives with the package that owns the teardown, and apps re-export it: apps are packaging roots
+that read packages, never the reverse.
+
+**What.**
+- `packages/electron-shell/src/testing/smoke-census.mjs` (129 lines) is the census, moved byte for byte from
+  `apps/desktop/packaging/smoke-daemons.mjs`: the mark, each process's name (with the packaged layout), the one
+  whole-table read, `stillRunning`'s per-pid reads, `psTables()`' spellings and item 93's comments. It is plain
+  JavaScript, so a launcher runs it under node unbuilt. `smoke-census.d.mts` holds its types (update-fixture's shape).
+- `apps/desktop/packaging/smoke-daemons.mjs` keeps the launcher's row (`HELPER_SETTLE_MS`, `leftByRun`) and re-exports
+  the census's six names, so run-smoke, run-studio-smoke, run-update-smoke, run-browser-profile-smoke, smoke-godview
+  and the dev runner's tests keep their import path.
+  - Its one non-moved line is in `leftByRun`: `const ps = deps.ps ?? runPs;` became `const ps = deps.ps;`.
+    `runPs` moved into the census, and an undefined `ps` now takes the census's own default.
+- `packages/electron-shell/src/testing/smoke-daemons.ts` keeps the teardown's policy alone, unchanged: ask those whose
+  parent is gone, drain, ask again, kill.
+  - Its census is the launcher's: one whole-table read finds the run, and each wait asks only the pids it found, in
+    each platform's own `ps` spelling. A process born after the look is the launcher's row's to find.
+  - `StopRunDeps` gains `still`, and `censusDeps(ps?, spelling?)` builds the real seams over the census.
+- `scripts/check-import-boundaries.mjs`, R8: its `applies` excludes `apps/desktop/packaging/`, the directory and not
+  one spec. The reason is in the wall's comment: the archive is the stage's allowlist
+  (`apps/desktop/packaging/electron-builder.yml`'s `files:` names package.json, shell/main, shell/preload and
+  shell/renderer alone), and the same list refuses `!**/testing/**`. So a node-run packaging script puts nothing in
+  the app. Two self-test fixtures: a packaging `.mjs` reading a package's testing module is clean, and an
+  `apps/desktop` `.mjs` outside packaging/ doing the same is R8.
+- `tooling/dev-runner/project.json`: the test target's inputs gain the census.
+- 7 files, +359 −204.
+
+**Found.**
+- **The item** (filed 2026-10-30 18:18Z from PR #8, `records/item116/item.md`): the teardown kept its own copy of the
+  census, and the two drifted.
+  - It read `ps` in macOS's spelling alone, so on Linux a smoke that stops its daemons through it reads nothing.
+  - It read the whole table twice per 100 ms poll, where the launcher's copy reads it once (item 93).
+  - It named a packaged app's `VibeField Helper (Renderer)` "VibeField", not "electron-helper".
+  > **Correction (2026-10-31 05:29Z):** the fixer's 05:19Z read said a packaged smoke's teardown would therefore have
+  > asked its own Chromium children to stop. It could not have. The testing bundle never ships
+  > (`apps/desktop/packaging/package-manifest.json` marks `dist/testing/smoke.cjs` `neverShip`, and the archive
+  > refuses `!**/testing/**`), so this teardown never runs in a packaged app. The gap was latent drift. The launcher's
+  > row, which judges packaged runs, always had the names.
+- **A was considered and lost:** keep the census in packaging, and have electron-shell's `src/testing` import it
+  through a `.d.mts`.
+  - electron-shell's `build` and `typecheck` targets would have taken an app's file as an input, so a package's
+    shipped testing bundle would be built from the app tree.
+  - update-fixture's `.d.mts` is a test-input exception already tolerated. Widening it into `build` would make it a
+    pattern.
+- **R8 refused B as written:** the packaging `.mjs` statically imports a `testing/` path. So the wall moved first, with
+  its reason.
+- **A respawn during the teardown's wait** (a9, three witnesses tonight, all on the pre-116 census): a rosettad under a
+  NEW pid appeared during the teardown's 20 s wait, and the launcher's final `SMOKE_DAEMONS` found none.
+  - 30b; 35b's smoke:canvas; 35b's smoke:godview (asked 8035, killed 11027, a new one seen at 11187).
+  - The leading guess, not yet read: fieldd's supervisor respawns its rosettad before fieldd itself is asked to stop.
+  - The question for the census: should the teardown stop fieldd before the daemons it supervises, so that nothing
+    respawns under it? Since this slice the teardown asks only the pids it found at its one look, so a respawned
+    rosettad is the launcher's row's to find. The first live run (below) should read its `SMOKE_TEARDOWN` for one.
+
+**Validation.**
+- **The light** (`records/item116/rows7.sh` and `rows7b.sh`, lanes/item118, nice 19, each row alone, alone on this
+  Mac's vitest lane):
+  - rows7, 05:26:57–05:27:42Z, load 11–36:
+    - the walls: the self-test all passed (both new fixtures) and enforce is clean;
+    - electron-shell typecheck 0; `smoke-daemons.test.ts` 13/13; the dev runner's census files 5/5;
+    - `smoke-profile.test.ts` whole ×3, 9/9 each (the LEFT row 955 / 1,013 / 971 ms).
+    - Its biome row was red on one line, a hand-collapsed call that biome formats multi-line. It was reverted to
+      biome's form.
+  - rows7b, 05:28:28–05:28:32Z: biome 0 on the 7 files; `smoke-daemons.test.ts` 13/13.
+  - rows7's typecheck, dev-runner files and smoke-profile ran on the pre-revert tree. The tree differs from it in that
+    statement's line breaks and one test comment's words alone.
+- **Red-first, the wall:** the parent's walls at their own path, over this tree, refuse exactly the launcher's two
+  import lines (R8 at `smoke-daemons.mjs` :15 and :24, "2 enforced violations"). Restored byte for byte, the walls
+  are clean.
+- **Red-first, the teardown:** the parent's `smoke-daemons.ts` under the new tests.
+  - The packaged-name row went red: "expected 'VibeField' to be 'electron-helper'".
+  - The one-copy row went red: the teardown's `listRunProcesses` is not the launcher's.
+  - The fake-`ps` rows (darwin and linux) failed as absence (`censusDeps is not a function`). They are new rows with no
+    parent red: each counts ONE whole-table read, in the platform's own spelling, across a 4.1 s drain.
+- **What verify witnesses, and what it does not:** verify sees the one census only through `smoke-daemons.test.ts`,
+  `smoke-profile.test.ts` (the launcher with stand-ins) and check:walls. The census's first LIVE run is the first real
+  smoke on `06e1385d7` or later. The owed-rows watcher's `smoke:canvas`, on James's unlock, is that run, and its
+  `SMOKE_TEARDOWN` / `SMOKE_DAEMONS` lines are the evidence (owed, 2026-10-31).
+- **Run 36:** the mint `06e1385d7` ("Merge main 904bd1029 into fix/item122b-remote-door-endpoints") over main
+  `904bd1029`.
+  - The merge-tree was clean (tree `b0851c03a`), with no both-sides file. The stack over `de8185226` is 8 files,
+    +383 −206: this slice's 7 and item 122b's one.
+  - `pnpm verify` armed at 05:55:37Z and exited 0 at 06:00:22Z. vitest: 11,026 passed, 0 failed, 18 skipped. cargo:
+    33 ok, 0 FAILED. typecheck and test ran for 28 projects; gen:check left the tree clean, stubs 0.
+  - check:walls: `--self-test` passed with R8's two new fixtures, and `--enforce` is clean.
+  - `smoke-daemons.test.ts`: 13 passed. `smoke-profile.test.ts`: 9 passed. (VF-PM's read, 06:02Z.)
+- **Landed:** main fast-forwarded `904bd1029` → `06e1385d7` at 2026-10-31 06:02:28Z (the fixer, on VF-PM's GO).
+
+**Owed.**
+- The census's first live run (above): the next real smoke's `SMOKE_TEARDOWN` / `SMOKE_DAEMONS` lines.
+- The fixer-items note gains item 116's section at the next draft queue.
+
+## item 122b — terminal-remote-door.e2e's boot waits for the floor's terminal endpoints, as terminal-seam's does (2026-10-31; test only; `198fee645`, lane `fix/item122b-remote-door-endpoints` on item 116's `684fd4dae`, landed with it in the mint `06e1385d7`, run 36; VF-PM's word 2026-10-31 05:39Z)
+
+**What.**
+- `packages/fieldd/test/terminal-remote-door.e2e.test.ts`, TM-2's `boot()`:
+  - polls `daemon.native.terminalEndpoints` through `waitWithEvidence` for 30 s, inside the row's 120 s, with the
+    floor's scene;
+  - hands `bootstrap` `logRoot: join(dataDir, "logs")`, so a wait that gives up prints fieldd's events beside the
+    floor's.
+- terminal-seam's shape (`e3b70d38b`). One file, +24 −2.
+
+**Found** (item 122's study, `records/item122/study.md`, a code read at `684fd4dae`):
+- **`terminal-remote-door.e2e.test.ts` was the one exposure left.** It bootstraps and creates at once after the
+  hello, with no endpoints wait and no retry, which is terminal-seam's shape before item 122. It runs in verify.
+- **`terminal-kill-matrix.test.ts` needs nothing.**
+  - Every create goes through `createRetrying`, which retries an UNAVAILABLE retryable refusal every 250 ms for 30 s.
+  - The race's `absent` is retryable (`TerminalService.endpoints()`).
+  - Its `udsEndpoints()` reads come after a landed create, or after a re-pair to a live floor, whose hello carries
+    the current routes (TC-D15).
+- **`terminal-mint-hops.test.ts` is opt-in** (`VF_MINT_HOPS=1`). Its 6 s cell poll falls through silently, which
+  skews a measurement rather than going red.
+- **The floor spawns both class cells at its own boot** (`supervise_cells`, field-native `services/terminal.rs`), each
+  with its own 15 s hello deadline. That is the same 15 s as fieldd's birth wait, so a cell slow to hello under load
+  misses both budgets at once.
+
+**Validation.**
+- **The light** (`records/item122/rows8.sh` and `rows8b.sh`, lanes/item118, nice 19, each row alone, alone on this
+  Mac's vitest and cargo lane):
+  - rows8b, on the final tree, 05:42:51–05:44:04Z, load 7–27: biome 0; fieldd typecheck 0; the e2e file ×3 green
+    (3,437 / 2,785 / 2,619 ms).
+  - The wait's witness: the predicate was cut to never hold (lane-only). The row failed AT this wait, "the floor's
+    terminal endpoints reaching the daemon did not hold within 30000 ms", printing the link line and both logs'
+    events. The file was restored byte for byte.
+  - rows8 was the same without `logRoot`. Its witness printed "no fieldd log", hence rows8b and the `logRoot`.
+- A race this narrow has no deterministic red-first (`ec0118067`'s note). The mini's runs that follow are its
+  witness.
+- **Run 36:** the same run as item 116's entry above. `terminal-remote-door.e2e.test.ts` passed in 662 ms (VF-PM's
+  read).
+
+**Owed.** A fresh floor's two cells' hello times, measured idle and under burners (item 122's floor half).

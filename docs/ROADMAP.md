@@ -278,24 +278,25 @@
   Then items 102 (`4e07f0308`, in the mint `cbc376da5`) and 118 (`9e0457b3c`, in `7b143fc51`); and 118's slice 2
   with item 122 and item 121's evidence (`41f27d8cc`, `e3b70d38b`, `0543de224`), the mint `cf0a2982d`.
   Then items 120 (`dd8d5e84d`) and 93's zombie half (`dc2d54a4c`), the mint `b6363425b`.
+  Then items 116 (`684fd4dae`, one smoke census) and 122b (`198fee645`, the remote door's endpoints wait), the
+  mint `06e1385d7`.
 - Queue: item 80 (DS-5c's wall-clock gap margin, `doc-sync-service.test.ts`, shaped with the DS owner; its sibling
   TC-S3, item 120, landed in run 34) · item 71 (persona refresh window) · item
   73 (`unregistered_webcontents` false positive on every factory window) · item 74 (the generation-1 port forward before
   the main world, live-surfaces) · the sibling 5 s waits (§6 Gates) · item 91 (MF-1's field-projection row judges a
   board settled from one pair of 750 ms readings, `agent-session.test.ts:2835`; red in item 87's first verify at load
-  257; its red-first inverted on 10-29, so a read comes first) · item 116 (item 93's twin: electron-shell's
-  `stopRunDaemons`, `src/testing/smoke-daemons.ts`, reads the whole process table twice per 100 ms poll, in macOS's `ps`
-  spelling alone, so a Linux smoke reads nothing; one census, after PR #8) · item 117 (the smoke:canvas HAND bar-return
-  class on the mini, 250 ms vs 200 ± 40; filed from FG's run 7, `lanes/records/item117`; after 116) · item 96's own half
+  257; its red-first inverted on 10-29, so a read comes first) · item 117 (the smoke:canvas HAND bar-return
+  class on the mini, 250 ms vs 200 ± 40; filed from FG's run 7, `lanes/records/item117`) · item 96's own half
   (the parts alone ×N and on CI; which of the 13 bare `30_000` rows keep a named constant; the one row still past a
   second) · item 111 (the Artifact panel's Copy does nothing in the app: a plugin's web clipboard write under the empty
   grant set, item 102's class; an SDK clipboard-write door over HN B2's host copy door (landed) unless HN B3 claims
   it) · item 112 (main decodes a clipboard PNG of up to 64 MiB with no pixel bound; an IHDR read before decoding against
   one new contracts constant, its literal ruled alone; HN B2 is in) · item 115 (`pnpm dev`'s nx watcher outlives a
   runner that ends without `shutdown()`: a watcher host on a stdin pipe, and a SIGHUP handler; after 111 and 112) ·
-  item 121's study (RA-D7's
-  refused re-attach: TC-D4's interactive fallback against AR-4b's cell rule, the RA owner's product question) · item
-  122's study (three more real-floor test files with no endpoints wait).
+  item 121 (RA-D7's refused re-attach: TC-D4's interactive fallback against AR-4b's cell rule; James ruled A on
+  10-31, re-attach a fallback-born run when fieldd's own record stamps its placement, the placement audited and the
+  row showing the cell; after durable Stop) · item 122's floor half (a fresh floor's two class cells' hello times,
+  idle and under burners; its study found one test exposure, landed as 122b).
 - **Item 77b**, FieldTerminalTests' 60 s block. The 5 s shape is fixed: (d) `b1e9bf53d` runs AttachDeadlineTests
   `.serialized`, because each row's 1 s deadline covers the dial too and rows started together stampeded the loopback
   dial under load. k1 is separate: `test-without-building` cold-boots a Shutdown simulator, and pre-booting it

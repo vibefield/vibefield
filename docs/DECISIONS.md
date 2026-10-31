@@ -306,8 +306,9 @@ treat G1′ as canonical.
 - **`R` is THREE namespaces:** walls R1–R30 (`scripts/check-import-boundaries.mjs`; R23 is
   `scripts/check-agent-catalog.mjs` — R1–R17 all enforce:true as of 2026-08-02; R18 joined at LSF-1 and R19 at
   SNAP-0 on 2026-09-09, both enforce:true; the range refreshed from R1–R19 on 2026-10-28, and from R1–R28 on
-  2026-10-31 for CP-1b's R29 and MT-0's R30) · predesign-01 standing rules R1–R12 · trust rungs R0–R3 (plugin spec
-  §20.5). Walls R11 ≠ predesign R11 — they conflict numerically.
+  2026-10-31 for CP-1b's R29 and MT-0's R30; R8's scope stops at `apps/desktop/packaging/` since 2026-10-31, item
+  116: node-run scripts the archive's `files:` never takes) · predesign-01 standing rules R1–R12 · trust rungs R0–R3
+  (plugin spec §20.5). Walls R11 ≠ predesign R11 — they conflict numerically.
   Docket and plan rulings reuse R too (the Files & History docket's R1–R16 in the FS row, the BP rows' R1–R6, the
   PT-S row's R1–R6, ruled mid-slice in PT-S1's brief, and its R1–R16, ruled before the build in PT-S2's brief at the
   orchestrator's leans — one row, two sets: cite a PT-S R with its slice, as "PT-S2's R3");
