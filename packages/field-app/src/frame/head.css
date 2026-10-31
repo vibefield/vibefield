@@ -348,19 +348,22 @@
    Artifacts shelf's contents"), the side panel's contribution, in a box
    pinned at the OPEN sheet's inner width — the sheet's `min(56%, 34rem)` of
    the window, less the shelf's 20 at each side: 504 at 544. It is spelled in
-   `vw` because a percentage here would be the shelf's, which the morph
-   narrows; the window is the viewport. The box is a container, so the Hub's
-   own stylesheet answers it with its tiles (PL-D3), and it keeps its width
-   while the sheet grows and folds: the shelf clips it, so the Hub's query
-   never sees the width shrink and the Hub never reflows mid-morph. With no
-   Hub bound, the words stand in the same box, at its centre. */
+   `cqw` because a percentage here would be the shelf's, which the morph
+   narrows: with no container above the head the unit is the window's own
+   (the small viewport), and the catalog's plate, the window it stages, is
+   one, so a plate narrower than the window measures as that window would.
+   The box is a container, so the Hub's own stylesheet answers it with its
+   tiles (PL-D3), and it keeps its width while the sheet grows and folds: the
+   shelf clips it, so the Hub's query never sees the width shrink and the Hub
+   never reflows mid-morph. With no Hub bound, the words stand in the same
+   box, at its centre. */
 .vf-head-shelf[data-shelf="artifacts"] {
   overflow-x: hidden;
 }
 
 .vf-head-hub {
   display: flex;
-  width: calc(min(56vw, 34rem) - 40px);
+  width: calc(min(56cqw, 34rem) - 40px);
   min-height: 100%;
   flex-direction: column;
   container-type: inline-size;

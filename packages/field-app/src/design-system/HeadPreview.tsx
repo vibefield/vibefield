@@ -151,8 +151,10 @@ const DEEP: readonly HeadCrumb[] = [
 /** The states the page's head plates show (§05 "The head", §06 the palette
  * and the fields), plus the two the brief adds: FitPath in a narrow window,
  * and renaming in place. HN-8 adds the package with its standing dot and the
- * sheet on its Artifacts shelf — the Hub's, the plugin off, the Hub opening —
- * and the same sheet under a cover, grown from the package circle. */
+ * sheet on its Artifacts shelf — the Hub's, and with none bound each of the
+ * four reasons the shelf gives (the plugin off or unable to run, the Hub
+ * opening or not starting) — and the same sheet under a cover, grown from the
+ * package circle. */
 export const HEAD_STATES = [
   "top",
   "package-dot",
@@ -162,7 +164,9 @@ export const HEAD_STATES = [
   "explorer",
   "artifacts",
   "artifacts-off",
+  "artifacts-cant-run",
   "artifacts-opening",
+  "artifacts-not-starting",
   "covered",
   "zoom",
   "palette",
@@ -179,7 +183,9 @@ export const HEAD_STATE_LABEL: Record<HeadState, string> = {
   explorer: "The fields",
   artifacts: "The artifacts",
   "artifacts-off": "Artifacts off",
+  "artifacts-cant-run": "Artifacts can't run",
   "artifacts-opening": "Opening Artifacts",
+  "artifacts-not-starting": "Artifacts not starting",
   covered: "Under a cover",
   zoom: "The zoom's menu",
   palette: "The palette, ⌘K",
@@ -196,7 +202,9 @@ function plateArtifacts(state: HeadState): HeadArtifacts | null {
     return { state: "hub", hub: <ArtifactPanelPreview state="populated" /> };
   }
   if (state === "artifacts-off") return { state: "off" };
+  if (state === "artifacts-cant-run") return { state: "cant-run" };
   if (state === "artifacts-opening") return { state: "opening" };
+  if (state === "artifacts-not-starting") return { state: "not-starting" };
   return null;
 }
 

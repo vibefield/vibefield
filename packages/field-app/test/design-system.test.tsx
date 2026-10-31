@@ -360,7 +360,9 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       "explorer:mac",
       "artifacts:mac",
       "artifacts-off:mac",
+      "artifacts-cant-run:mac",
       "artifacts-opening:mac",
+      "artifacts-not-starting:mac",
       "covered:mac",
       "zoom:mac",
       "palette:mac",
@@ -399,8 +401,9 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(question?.querySelector(".vf-head-docs")?.hasAttribute("hidden")).toBe(true);
     expect(question?.querySelectorAll('input[type="checkbox"]')).toHaveLength(3);
     // HN-8 (PL-D1, PL-D2) — the package after the chevron's rule, with its standing dot in its
-    // own plate; the sheet on Artifacts holding the Hub's own adapter, the plugin off, the Hub
-    // opening; and under a cover the same sheet, grown from the package circle, on Artifacts alone
+    // own plate; the sheet on Artifacts holding the Hub's own adapter, and with none bound each of
+    // its four words (ruling 10); and under a cover the same sheet, grown from the package circle,
+    // on Artifacts alone
     const pack = headPlate("top")?.querySelector<HTMLButtonElement>(".vf-head-pack");
     expect(pack?.previousElementSibling?.className).toBe("vf-head-rule");
     expect(pack?.previousElementSibling?.previousElementSibling?.className).toBe("vf-head-chev");
@@ -419,9 +422,22 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     const off = headPlate("artifacts-off")?.querySelector('[data-shelf="artifacts"]');
     expect(off?.textContent).toContain("Artifacts are off");
     expect(off?.textContent).toContain("Turn on the Browser plugin in Settings › Plugins.");
+    const cantRun = headPlate("artifacts-cant-run")?.querySelector('[data-shelf="artifacts"]');
+    expect(cantRun?.textContent).toContain("Artifacts can't run");
+    expect(cantRun?.textContent).toContain(
+      "The Browser plugin can't run in this VibeField — see Settings › Plugins.",
+    );
     expect(
       headPlate("artifacts-opening")?.querySelector(".vf-head-waits[data-late]")?.textContent,
     ).toBe("Opening Artifacts…");
+    // past the 10 s bound the plate says so at once, with nothing left to turn from
+    const stalled = headPlate("artifacts-not-starting")?.querySelector(".vf-head-waits");
+    expect(stalled?.hasAttribute("data-late")).toBe(false);
+    expect(stalled?.hasAttribute("data-turning")).toBe(false);
+    expect(stalled?.textContent).toContain("Artifacts aren't starting");
+    expect(stalled?.textContent).toContain(
+      "Turn the Browser plugin off and on in Settings › Plugins.",
+    );
     const covered = headPlate("covered");
     expect(covered?.querySelector(".vf-head")?.hasAttribute("data-covered")).toBe(true);
     expect(covered?.querySelector('[data-head-place][data-open="true"]')).toBeNull();

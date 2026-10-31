@@ -1443,7 +1443,8 @@ describe('the Artifacts shelf hosts the Hub (DESIGN.md §8 "Artifacts — the Ar
     expect(box?.className).toBe("vf-head-hub");
     expect(box?.querySelector('[data-vf-plugin="vibefield.browser"]')).not.toBeNull();
     // the box is the container the Hub's stylesheet asks (PL-D3) — at the open sheet's width
-    // (`vw`: the window is the sheet's containing block) less the shelf's padding at each side
+    // (`cqw`: the window's, with no container above the head; the catalog's plate stages one)
+    // less the shelf's padding at each side
     const hub = ruleIn(HEAD_CSS, ".vf-head-hub");
     expect(hub).toContain("container-type: inline-size;");
     const open = ruleIn(HEAD_CSS, '.vf-head-place[data-open="true"]').match(
@@ -1451,7 +1452,7 @@ describe('the Artifacts shelf hosts the Hub (DESIGN.md §8 "Artifacts — the Ar
     );
     const side = Number(ruleIn(HEAD_CSS, ".vf-head-shelf").match(/padding: \d+px (\d+)px/u)?.[1]);
     expect([open?.[1], open?.[2], side]).toEqual(["56", "34rem", 20]);
-    expect(hub).toContain(`width: calc(min(${open?.[1]}vw, ${open?.[2]}) - ${2 * side}px);`);
+    expect(hub).toContain(`width: calc(min(${open?.[1]}cqw, ${open?.[2]}) - ${2 * side}px);`);
     // the shelf narrows with the morph, so it is no container: it clips the box instead, as the
     // sheet's own `overflow: hidden` does — the query never sees the width shrink
     const narrowing = ruleIn(HEAD_CSS, '.vf-head-shelf[data-shelf="artifacts"]');

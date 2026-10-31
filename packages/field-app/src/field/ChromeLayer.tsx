@@ -19,12 +19,7 @@ import { isSwitchCovering, useSwitchState } from "../boot/switch";
 import type { DocManager, DocManagerState } from "../doc-manager";
 import type { LineActs } from "../frame/Composer";
 import { Cards } from "../frame/cards/Cards";
-import {
-  type FrameSurface,
-  foldSurface,
-  type SheetShelf,
-  sheetShelf,
-} from "../frame/frame-surface";
+import { type FrameSurface, foldSurface, type SheetShelf } from "../frame/frame-surface";
 import { Head } from "../frame/Head";
 import { canvasHead } from "../frame/head-canvas";
 import { runChosenSession } from "../frame/line-door";
@@ -121,8 +116,9 @@ export function ChromeLayer({
   const syncQuestion = useSyncQuestion();
   const boardOut = surface === "objects" || board?.open === true;
   // The pill's sheet, on either shelf (HN-8): the desk's gestures stop and the
-  // selection bar steps out behind it, as they did behind the explorer.
-  const docsOpen = sheetShelf(surface) !== null;
+  // selection bar steps out behind it, as they did behind the explorer — read
+  // from the owner's one reading of the shelf it shows, as the head reads it.
+  const docsOpen = shelf !== null;
   const paletteOpen = surface === "palette";
   // UA-D19 — the Me menu: one of the frame's open surfaces since FR-4, so the
   // one owner folds it when any other opens, and it folds them (DESIGN.md §10).
