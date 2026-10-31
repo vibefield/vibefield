@@ -10006,7 +10006,9 @@ export async function runSmokeGodview(opts: {
     //      and receded, the name field holding the keyboard and a suggested star
     //      name, the create on and saying Close, the hatch in one of its states. ⌘N
     //      again: LINE_KEY "closed", the sheet gone after its 240ms leave, the field
-    //      live again. Esc folds it too, and says no LINE_KEY; on Canvas ⌘N does
+    //      live again. Esc folds it too, from the name and from the body (the sheet
+    //      hears Esc on the window's capture phase, since the frame stops every key
+    //      aimed at the body under a cover), and says no LINE_KEY; on Canvas ⌘N does
     //      nothing. Create is never pressed: it hatches a real spark through the
     //      run's fieldd. Back to Godview's deck for 11h, which must stay last.
     const newSpark: Record<string, string> = {};
@@ -10151,6 +10153,30 @@ export async function runSmokeGodview(opts: {
         throw new Error(`Esc said a LINE_KEY: ${lineKeysSaid.slice(saidBeforeEsc).join(" · ")}`);
       }
       newSpark["Esc"] = "folded the sheet, and the line said no LINE_KEY";
+
+      // Esc with the keyboard on the body folds it too, as a click on the sheet's blank space
+      // leaves it: the frame stops a key aimed at the body under a cover, so the sheet hears Esc
+      // on the window's capture phase before it can (SP-1c's `3a6353c40`, the Peek's way).
+      await openSheet("⌘N in Chat, before Esc from the body");
+      await win.webContents.executeJavaScript(`document.activeElement?.blur?.(); "ok"`);
+      await untilRenderer(
+        win,
+        "the keyboard on the body under the sheet",
+        `document.activeElement === document.body ? "ok" : String(document.activeElement)`,
+        2_000,
+      );
+      const saidBeforeBodyEsc = lineKeysSaid.length;
+      win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
+      await untilRenderer(win, "Esc from the body folding the New spark sheet", SPARK_GONE, 2_000);
+      await sleep(1_000);
+      if (lineKeysSaid.length > saidBeforeBodyEsc) {
+        throw new Error(
+          `Esc from the body said a LINE_KEY: ${lineKeysSaid.slice(saidBeforeBodyEsc).join(" · ")}`,
+        );
+      }
+      newSpark["Esc from the body"] =
+        "folded the sheet with the keyboard on the body, and the line said no LINE_KEY";
 
       // On Canvas ⌘N does nothing. An absence is watched for a while (⇧⇧'s rule).
       pressViewKey(win, "canvas");
