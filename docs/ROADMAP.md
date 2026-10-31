@@ -36,8 +36,9 @@
   Since the audit's base (`bb1a2c823`): AL-9, items 82–84, TS-8a/8b, the TS-3a erratum, AO-6b3 and QW1 stack A landed;
   then HK, the EL8 to puppeteer 0.3.0 (`1469639a6`) and QW1 stack B (10-28).
 - **The live program.** §2: TS, AO, FG, AL, **AU (updates that wait)**, **PG (the phone's Godview)**, QW1 (the Godview
-  swarm's fix wave 1), PT-S (PORTALS' phone, resumed 10-29), the release rails, the EL8 watch, the fixer, upstream.
-  The first-beta blockers are §3 item 7. Everything valid but unscheduled is §4.
+  swarm's fix wave 1), PT-S (PORTALS' phone, resumed 10-29), **CO (the compose plane: sparks and the tool plane,
+  re-entered 10-28)**, the release rails, the EL8 watch, the fixer, upstream. The first-beta blockers are §3 item 7.
+  Everything valid but unscheduled is §4.
 
 ## 2 Now — the active tracks
 
@@ -190,6 +191,36 @@
   (`field-engine.ts`) untouched); PT-S1's host-bound files and its two ICE candidates (§6 PORTALS); a stale comment in
   `plugins/simulator/src/live.ts:17-20`, "(the cap shared with panes is PT-S2's)": the cap is built, a one-line fix.
 
+**CO — the compose plane (sparks and their doors)** · cp-landing (lanes `co` and `mt/mt0`; the MT lead, vibe-field-dc, reviews the tool plane's rooms) · law `draft/compose-plane/thinking-roled-agents.md` §15–§17 and `draft/compose-plane/v2/` (version 2, ruled 2026-10-29), `draft/thinking-tool-plane.md` (MT, ruled 2026-10-30), DESIGN.md §2.10
+- Re-entered 10-28 on James's word, with its rulings since:
+  - the plane, ruled 10-29: fifteen CP marks, each on its lean, on the v2 page;
+  - Sparks round 2, ruled 10-30: 22 of 22 on its page;
+  - the tool plane, ruled 10-30: MT-D1…D12, each on its lean.
+  - The foundation was James's ask, 10-29 ~10:24Z: "now shall we start planning and land the foundation of composer
+    plane and spark".
+- **CP-0, the record**: LANDED 10-30 (`b9ca35824`, the mini's run 5; LANDED "CP-0").
+  - compose.ts: a spark, the 20-verb catalog and CP-1's six read verbs.
+  - A run's origin, the `compose.sparks` doors, and DESIGN.md §2.10's spark faces.
+- **SP-1a, the spark face in the kit**: LANDED 10-30 (in the mini's run 14, `0b40e56da`; LANDED "SP-1a").
+- **CP-1a…1c and their docs, one candidate**: LANDED 10-31 (`67cf9f1cd`, the mini's run 20; LANDED "CP-1a…1c").
+  - The floor's `door.sock` names each caller by the kernel's pid and start time, and walks it to its pane.
+  - fieldd's hand-written `vibefield` MCP server speaks 2026-07-28 and the handshake before it. It serves a spark the six
+    read verbs, each held to its Agent Profiles and audited before it acts.
+  - Each spark is a signed record with a folder of its own and the window's three doors.
+  - No launch hands an agent the server yet, so no agent holds the door until CP-1d.
+- Next, in order:
+  - **CP-1d**, James's PR #4: the briefing at every birth, through puppeteer 0.3.2's per-run `mcpServers`, `allowTools`
+    and `instructions`. Claude only, until CP-5.
+  - **MT-0**, the tool plane: `contracts/src/tools.ts`, one catalog with audience and scope columns, and
+    `fieldd/src/tool-plane/` serving each caller its rows; a plain run gets History and the projects list. It is drafted
+    on PR #4's tip and is lit after that lands.
+  - **SP-1b** (Chat's list) and **SP-1c** (the New spark sheet): renderer only, on James's go.
+  - **SP-1d**: the thread and Chat's composer, after HN B1/B2.
+  - **CP-2**: start and talk (`rooms/talk/`).
+  - **CP-3**: the person (`ask_user`, `notify`).
+  - **CP-4**: flows and the desk applier.
+  - **CP-5**, which is MT-7: Codex and Grok, once their MCP processes can be named.
+
 **Release rails — WP12 · TD · BP · FW packaging · RD** · prod-builder (resting) · law `specs/build-wp12-updater.md`,
 `specs/trust-and-distribution.md`, the three `specs/electron-*.md` + `electron-packaging-implementation-plan.md`,
 `specs/build-wp8-bundled-plugins.md`, `draft/thinking-browser-profile.md` (BP), `draft/thinking-release-deps.md` (RD),
@@ -298,7 +329,6 @@
 | AR-7 later slices · AR-S4e3 | AR-7f leak detector, AR-7h bash/fish, AR-7i prewarm (AR-7j is a beta blocker) · S4e3 options, Needs/Needed by, EX6/EX7, other profiles | an AR lane | `thinking-ar7-typed-agents.md` §5.6, `thinking-ar-agents-settings.md` |
 | MV-8b ruling 8 | the transcript-provider migration: puppeteer 0.2.3 still ships adapter-claude's `observation/transcript/provider.ts` | its own track after MV | DECISIONS MV-8b, `docs/agent-plane/architecture.html` |
 | MV · SB | third-party views (MV-D14) · SB-4, SB-6 (after DS); SB's M4/L7/M5/L8 RULED at the built leans (Q14); SB-5 was delivered by PJ-7 (PJ-7's own Q4) | the next MV slot | `design-mv.md`, `thinking-spawn-bloom.md` |
-| CO | composing, characters, the Assistant view (DEFERRED 09-12, FV-D3/D8) · CO-D1…D16 unruled · re-entered as the compose plane (`draft/compose-plane/thinking-roled-agents.md`, 10-28); James's MT ruling of 10-30 (`draft/thinking-tool-plane.md` MT-D1, ruled 21:19–21:20Z) makes `compose/` the tool plane's first room · CP-0 LANDED 10-30 `b9ca35824` · SP-1a, a spark's face in the kit, LANDED 10-30 `0b40e56da` (the mini's run 14; LANDED "SP-1a") · SP-1b…1d next (`thinking-roled-agents.md` §17) | AR's P0 exit witnessed | `thinking-four-views.md` §5–6, `draft/compose-plane/` |
 | Desk Phase 6 | STRING (ports on objects, ICE's wires, the Wire tool DK-D29) · OBJECT KIT (panel, controls, screens, cables, `process`) · AGENT'S EYES (`canvas.read`/`canvas.render`, MCP canvas tools DK-D26; DT-5's control lane, the reserved `surface.control` scope) · UPLOAD PLANE + the mini-app bridge (SP-D9/SP-D7; UP v0.1 and MB v0.1 drafted 10-01; UP-D1…D8, MB-D1…D9 unruled; AH-D10's cross-device CAS rides it). It replaces the four dogfood packs (Q9); the microservice pack retires or becomes an OBJECT KIT `process` candidate | a thinking doc each; STRING first | `thinking-desk-migration.md`, `thinking-upload-plane.md`, `thinking-mini-app-bridge.md` |
 | Mind map pack | waits for STRING; redesign from Paper & String (MD-1…MD-15); v3's MM-D1…D14 were cut for the pre-desk canvas, MM-D14 moot (DK-D30) | STRING's thinking doc | `draft/mindmap/`, `thinking-mindmap-pack.md`, `predesign-mindmap-evidence.md` |
 | The bare mat's menu | "Paste here", "New note here": unbuilt | a desk lane | DESIGN.md §8, ICE design-015 §7 |
@@ -322,7 +352,7 @@
 - AR6-D1…D9 (AR-6) · AR-D24…D35 (one batched ratification; Agent Profiles) · QL-D1…D10, QL-D12…D17 (built as
   QL-1/QL-2) · GT-D22 (adopted as built; the web-only narrowing above all).
 - NF-D3/NF-D5's long-pending read, or record them as answered by the as-built code.
-- MB-D1…D9 and UP-D1…D8 (proposal pages owed first, LANDED :7954) · SP-D4, D11, D12 · CO-D1…D16 at CO's re-entry.
+- MB-D1…D9 and UP-D1…D8 (proposal pages owed first, LANDED :7954) · SP-D4, D11, D12.
 - Whether the phone (`vibefield.simulator`) ships among `BUNDLED_PLUGINS` (`apps/desktop/packaging/bundled-list.mjs`;
   PT-S1 and PT-S2 left it untouched) · WIN-D6…D9 · LOG-V8. `PT-S-vs-PHONE.md` §5's seven choices are ruled (James,
   2026-10-29 00:25Z, "Go with your leans"; its §6, the work kept) and leave the list.
@@ -491,7 +521,7 @@
 - `specs/terminal-custody.md` §5: TP-D23's cell-side fairness (TPv3 rollout §13).
 - F-C6-4 probably closed by item 79's mechanism 1 (`5d0cc20d1`); confirm, then correct thinking-c6-meshdata :135 and DECISIONS.
 - SNAP's DECISIONS status (the audit's item 18), only after `codesign -dv` on a nightly's zip shows a Developer ID-signed `field-screenshot-helper.app`.
-- DECISIONS rows not yet written (the audit's appendix B), each after its owner's status read: RL2…RL8, K-D1…K-D6, AR6-D1…D9, CO-D.
+- DECISIONS rows not yet written (the audit's appendix B), each after its owner's status read: RL2…RL8, K-D1…K-D6, AR6-D1…D9.
 - G27's own file (`draft/petitions/G27-ghosttea-kit-routed-terminal-client.md`) still says "Filed 2026-09-14": a dated correction at its source.
 - LANDED's dated corrections: the EL8 to ghosttea 0.13.7 entry's "FieldTerminalTests' 60 s red is a fixed set of 17", corrected or confirmed now that item 77b measured the 60 s block (§2 Fixer).
 - `.github/workflows/verify.yml`'s step name still says "Build rosettad and the Ghosttea renderer from their pinned siblings".
@@ -565,7 +595,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | SD — sound | PARKED (James's lab, Q27) | `draft/sound/design-sound.md` | James's call |
 | WIN — Windows port | PARKED since 08-24 (`c16e618f4`) | `thinking-windows-port.md`, `docs/WINDOWS_PORT_STATUS.md` | a Windows leg on the rails |
 | LSF — live surfaces foundation | COMPLETE; LSF-4 landed 10-26 | `specs/live-surfaces-foundation.md` | consumed by PT; §18 Windows rows with WIN |
-| CO — composing | PARKED (deferred 09-12) · re-entered as the compose plane (10-28): CP-0 LANDED 10-30 `b9ca35824`, SP-1a LANDED 10-30 `0b40e56da`; SP-1b…1d next | `thinking-four-views.md` §5–6, `draft/compose-plane/` | AR's P0 exit |
+| CO — the compose plane | ACTIVE; CP-0, SP-1a and CP-1a…1c landed | `compose-plane/thinking-roled-agents.md` §15–§17, `compose-plane/v2/`, `thinking-tool-plane.md`; DESIGN.md §2.10 | CP-1d (PR #4) → MT-0 → SP-1b/1c |
 | A — shell and spine | COMPLETE | design-03, `specs/electron-shell-refactor.md` | Settings on demand (Q20, §3 item 6) |
 
 **Retired and superseded tracks**
