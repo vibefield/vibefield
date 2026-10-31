@@ -122,6 +122,7 @@ import {
   rendererPolicyMode,
   smokeSimctlDeveloperDir,
 } from "./modes";
+import { NeedsNoticeObserver } from "./needs-notices";
 import { readCensus, requestConsentedStop } from "./pair-stop";
 import { installPluginProtocol } from "./plugin-protocol";
 import { RendererPluginProvenanceCatalog } from "./plugin-provenance";
@@ -1271,6 +1272,41 @@ async function main(
           error,
         ),
     );
+    // CP-3 (CP3-D5 A) — an agent's notify, said outside the app while no
+    // VibeField window is in front; the window's status line says it inside.
+    // A click opens Chat, whoever told it. A smoke never puts one on the
+    // person's screen.
+    const needsNotices = new NeedsNoticeObserver(
+      bundle.handles,
+      {
+        focused: () => BrowserWindow.getFocusedWindow() !== null,
+        notify: (words) => {
+          if (isSmokeLike(MODE) || !Notification.isSupported()) return;
+          const notice = new Notification({ title: words.title, body: words.body });
+          notice.on("click", () => {
+            void revealPrimaryWindow().then(
+              (window) => {
+                if (!window.isDestroyed()) viewStates?.ensure(window.webContents).set(words.opens);
+              },
+              (error: unknown) => {
+                logger.error(
+                  "desktop.needs_notice.reveal_failed",
+                  "The notice could not open its view",
+                  error,
+                );
+              },
+            );
+          });
+          notice.show();
+        },
+      },
+      (error) =>
+        logger.error(
+          "desktop.needs_notice.observe_failed",
+          "Agents' notices could not follow fieldd",
+          error,
+        ),
+    );
     const offerConnect = (): void => {
       trayController?.update({ connectDevices: connectAsks.offersConnect() });
     };
@@ -1312,6 +1348,7 @@ async function main(
         stopOffer();
         trayController?.update({ connectDevices: false });
         linkNotices.dispose();
+        needsNotices.dispose();
         shellProvider.dispose();
         stopDaemonBootFence();
         stopPluginModuleClient();
