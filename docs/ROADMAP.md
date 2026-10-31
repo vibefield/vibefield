@@ -87,15 +87,18 @@
   **FG-4b** (`07b1dad5e`, the holds and the logo: a load as the logo and one line, standing at least 800ms once it
   shows, the welcome's title card, Setting up's one line with Start now, the band's fill, the logo drawn by the field
   over the live field and the still's own mark over the still, and a way out after 6 s), as the mint `a5106c727`, run
-  40 on the Mac mini: verify green (LANDED "FG-1", "FG-2", "FG-3a", "FG-3b", "FG-4a", "FG-4b").
-- Next: FG-5 (the hand-over) → FG-6 (the gates: the catalog, a `smoke:first-run` row that judges the field's mode at
-  boot, live or its still, and its own live pass with the new canvas usage in Electron, which no smoke judged at
-  FG-3b; contrast). Each verifies on the Mac mini.
-- Owed: the pixel witness of FG-4a's three rows (Agents with nine installed, History with six rows, Profiles' add with
-  its login) and of FG-4b's holds and logo, to console rows that drive the wizard: a lane of its own, proposed after
-  FG-4b's landing. No smoke reaches the Setup Assistant (a smoke boot mints an onboarded user, UA-3w), and FG-4b's
-  glass pass draws its logo only there, so `smoke:canvas` cannot witness it. FG-4b's rulings at VF-PM's leans (05:42Z:
-  the hold's floor, the link read's Continue, the swap on `data-face`) and FG-O7 (a) (§9) are James's to overturn.
+  40 on the Mac mini: verify green; **FG-6** (`4c5c2b233`, built ahead of FG-5: `pnpm smoke:first-run`, desk-gates row
+  32, walks the Setup Assistant by its own controls to the desk by day, by night and over the field's still, its user
+  the one harness minted not onboarded, UA-3w as amended), as the mint `7310560ea`, run 48 on the Mac mini: verify
+  green, the row itself not yet run (LANDED "FG-1", "FG-2", "FG-3a", "FG-3b", "FG-4a", "FG-4b", "FG-6").
+- Next: row 32's first green on the Mac mini (the console chain armed on M52, after smoke:godview, at James's unlock)
+  → James's look at its stills (one contact sheet) → FG-5 (the hand-over, written in the lane and uncommitted; its
+  commit carries the hand-over's stills and order check into row 32). Then the rest of FG-6's gates: the catalog over
+  the field's still, the tear judged in the walk, the field's glass against the CSS glass on a frozen frame, FG-O2's
+  contrast and FG-O3's GPU read during the tear. Each verifies on the Mac mini.
+- Owed: James's eye list from row 32: Agents with nine installed (PU-L, drafted, would bring nine into the walk),
+  History with six rows, and Profiles' five cards. FG-4b's rulings at VF-PM's leans (05:42Z: the hold's floor, the link
+  read's Continue, the swap on `data-face`), FG-O7 (a) (§9) and FG-6's lane (07:39Z) are James's to overturn.
 
 **AL — what Quit means** · better-quit (lanes `al2`, `al/chords`, `al/chords-2`) · law `draft/thinking-app-lifecycle.md` v0.2 §8, ESR §7.3 (amended), design-00 EL1
 - Landed: AL-1…AL-3 (`7ebb1eeda` · `5eea4b2d5` · `697beb199`; AL-4 folded in), AL-5, AL-7, AL-8a, **AL-9** (`933d2fba3`,
@@ -664,7 +667,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 |---|---|---|---|
 | TS — the Tailscale door | ACTIVE; TS-0…3b, 4a, 4b, 5, 6, 7, 8a, 8b landed | `thinking-tailscale-onboarding.md`; DESIGN.md §5/§6/§8/§9/§13 | TS-8c (T8, after its live probe) |
 | AO — Bring Your Agents | ACTIVE; AO-0…6b3 landed | `thinking-agent-onboarding.md` | AO-7 on a puppeteer release after 0.3.0 (`installRecipe`) |
-| FG — the first run on the field | ACTIVE; FG-0…3a landed 10-30, FG-3b, FG-4a and FG-4b 10-31 | `thinking-first-run-glass.md`; DESIGN.md §2.1/§5/§6/§8/§13 | FG-5 |
+| FG — the first run on the field | ACTIVE; FG-0…3a landed 10-30, FG-3b, FG-4a, FG-4b and FG-6 10-31 | `thinking-first-run-glass.md`; DESIGN.md §2.1/§5/§6/§8/§13; desk-gates row 32 | row 32's first green → James's look → FG-5 |
 | AL — app lifecycle | ACTIVE; AL-1…3, 5, 7, 8a, 9 landed | `thinking-app-lifecycle.md`; ESR §7.3 | AL-6, Last exit, relaunch cap |
 | AU — Updates That Wait | ACTIVE; B1–B4 (AU-0…AU-7) landed 10-30/31 | `thinking-update-ux.md` §7 (page sources `draft/update-ux/`); DESIGN.md §2.5/§2.8/§6/§8/§9/§13; EDP §5.2/§6.4/§11; ESR §7.3 | the owed eyeballs, the first signed nightly with notes, the physical rows |
 | PG — the phone's Godview | ACTIVE; PG-0, PG-1a…1d, PG-1e0 (measured: neither) and PG-1f's pin test landed 10-31 | `thinking-phone-godview.md` §7/§8; `design-mv.md`; `design-06-sync-planes.md` | PG-2, on James's go |

@@ -23908,3 +23908,120 @@ R7's letter; the cost at the cap beside a pane.
 - After it: the P7 fix and the P8 word, ruled on what the rows record (James's if they change words or add a grant).
 - **PT-S4, touch,** through serve-sim: an EL8 pin event, loopback only, never `--allow-exec`.
 - `BUNDLED_PLUGINS` stays James's.
+
+## FG-6 — the first run, walked: `pnpm smoke:first-run` answers the Setup Assistant by its own controls to the desk, by day, by night and over the field's still (desk-gates row 32; UA-3w as amended) (2026-10-31; `4c5c2b233`, lane `fg/first-run` on M47 `6e97717b1`, in the mini's mint `7310560ea` over main `588405291`)
+
+**Why.** No smoke reached the Setup Assistant. A smoke boot minted an onboarded user (UA-3w), so `smoke:canvas` drew
+none of its panes, and FG-4a's three rows and FG-4b's holds and logo were owed to console rows that drive the wizard.
+VF-PM granted that row as a lane of its own, ahead of FG-5 (2026-10-31 07:39Z, board `fg-first-run-row`, James's to
+overturn). VF-PM ruled its staging (a) at 07:48Z, History and Profiles at 09:17Z, and accepted its budget at 10:05Z.
+
+**What landed.**
+- UA-3w as amended: a test harness's first user is minted onboarded, except the one harness built to answer the Setup
+  Assistant.
+  - `modes.ts`: `answersSetup` is true for `smoke-first-run` alone. Main mints with `mintsOnboarded(MODE)`, which is
+    `isSmokeLike(MODE) && !answersSetup(MODE)`.
+  - `modes.test.ts` pins every mode, so a new smoke-like mode lands onboarded unless that row changes with it.
+  - The amendment's text went to its source at the 11:14Z draft queue: a dated note in
+    `draft/specs/users-and-accounts.md` §6 and UA-3w's slice line, with pointers in the FG and AO records.
+- The mode `smoke-first-run` (`--smoke-first-run`):
+  - it is smoke-like (the instance lock, GT-8b's opener record) and stop-owned;
+  - it keeps the GPU and its frames when covered (`drawsTheField`);
+  - it has no app menu, because the walk presses no chord.
+- The person (`stageFirstRun`, typed-agent.ts) is staged in the run's own root before the pair boots, under AR-L1.
+  - A throwaway HOME, and the typed agent's one conversation, so History shows one row (its rows are per agent kind).
+  - One stub, which the machine record names as the active install of every launchable row, by the catalog alone.
+    Which rows count it installed is each adapter's own rule (AR-L1, R23b). The stub's file is named for no agent. At
+    puppeteer 0.3.x two adapters count it, so Agents shows two ready.
+  - At a terminal the stub REFUSES (godview's, as before: exit 1) or STANDS (the first run's). A standing stub says one
+    line and waits for its terminal's end, so Profiles' sign-in has a login standing in its terminal.
+- The walk (`smoke-first-run.ts`, `firstRunRows`, through the testing bundle's `runSmokeFirstRun`) has one window,
+  shown inactive and click-through, never focused.
+  - The page's recorder is armed on the window's one DevTools session before any of the page's scripts. With no WebGPU,
+    `navigator.gpu` is taken away first.
+  - A press is `sendInputEvent` at a control the page hit-tests to, and a name is typed as characters. Never OS input.
+  - Its steps:
+    1. The welcome's title card, its logo whole → Get started.
+    2. You: "Ada" → Continue.
+    3. Agents: the two ready rows, More opened, the list scrolled to its end → Continue.
+    4. Profiles: its one card, then a profile added ("Work"), its login standing 1.5 s in its terminal, Cancel →
+       Continue.
+    5. History: its one row, the switch on → Bring in history.
+    6. Connect: put off by whatever this Mac's link said. Never a sign-in.
+    7. Setting up: its one line through the work to the welcome in ink, then the desk. Start now is said if it shows,
+       and never pressed.
+- What it judges:
+  - The logo at the welcome: `data-logo`; its box the field's mark at the window's centre within 1 px (128 × 77 on the
+    live field, the still's own mark over the still); the field's glass by day and by night (`data-glass="field"`) and
+    the page's over the still. In the pixels the mark's ink centres within 3 px, darker than its milk by day and
+    lighter than its glass by night. So a field fallen to its still on a WebGPU walk is red: run 30b's blind spot,
+    closed for the glass.
+  - The holds: every face that began to show stood its 800 ms floor (34 ms slack) with the logo, a line hold said one
+    line, and the recorder saw every walked face.
+  - The frame (FG-4a): More's list scrolls within its body under its fade, the head, the foot and Continue unmoved;
+    Profiles' login terminal stands 190, with Cancel above the fade.
+  - The band: Setting up's segment advances with the boot's progress, then stands full.
+  - The end: the welcome said, `onboarded: true` in users.json, the wizard gone, no CSP refusal and no crash, and
+    GT-8b's opener record empty.
+- The launcher (`apps/desktop/packaging/run-first-run.mjs`) makes three launches: day, night and no-webgpu.
+  - Each is on a fresh profile with its theme written into it before the boot (`vibefield-theme.json`: light, dark,
+    light, each explicit), marked (`VF_SMOKE_RUN`) and censused after (`SMOKE_DAEMONS`).
+  - A walk past 240 s is stopped and red, and every walk runs, even after a red one.
+  - The stills, about 14 a walk, go to one folder outside every smoke's own (`VF_SMOKE_SHOT_DIR`, said as
+    `FIRST_RUN_SHOTS`), a sub-folder a walk.
+- Wiring: `pnpm smoke:first-run` (root and apps/desktop); gate-landing's list, after smoke:godview; desk-gates row 32
+  and its doors (`--smoke-first-run` and `VF_FIRST_RUN_WALK` new, `--smoke-no-webgpu` and `VF_SMOKE_SHOT_DIR`
+  extended).
+- 16 files, +2178 −69.
+
+**Checks.**
+- The lane's light (09:54–10:02Z, on `c2b20b4ab` plus the tree), each row at nice 19 under the guard:
+  - electron-shell typecheck;
+  - its whole vitest: 155 files, 2303 passed, 3 skipped (modes 79, smoke-profile 9, typed-agent 17, smoke-first-run 19);
+  - gate-landing's node rows 12/12;
+  - biome, `check:walls`, `catalog:check` (R23) and `git diff --check` clean.
+  - Three mutation probes each turned their row red and were restored byte for byte: a second mode answering Setup,
+    the stub leaving right after its line, and night seeded light.
+- The re-light on the tip (10:11:53–10:14:35Z, on M47 `6e97717b1`, tree `35e36c812`): the same rows green, with
+  `check:retired`, and the main and testing bundles built as `build` builds them.
+- Every selector, label and face the walk presses or waits on was read against field-app's source at the tip. The row
+  itself has never run.
+- **Run 48:** the mint `7310560ea` ("Merge main 588405291 into fg/first-run") over main `588405291`, tree `4ab91036d`
+  (VF-PM's merge-tree at 10:18:10Z; nothing hand-resolved).
+  - `pnpm verify` armed at 10:23:01Z and went green at 10:27:51Z (290 s).
+    - vitest: 11,219 passed, 0 failed, 18 skipped. That is FG-6's +43: smoke-first-run's 19, modes' 18 and
+      typed-agent's 6.
+    - cargo: 33 ok, 0 FAILED. typecheck and test ran for 28 projects; gen:check left the tree clean; the iOS fixtures
+      were 186 identical copies.
+    - electron-shell: 155 files, 2303 passed, 3 skipped.
+  - No smoke ran on M48. The row's own run is owed (below).
+- **Landed:** main fast-forwarded `588405291` → `7310560ea` at 2026-10-31 10:29:31Z (the fixer's land-stack.sh, on
+  VF-PM's GO at 10:29Z): 16 files, +2178 −69. It went out in push 26 (11:03:58Z, `588405291..c564de0e4`), with M49–M52.
+
+**Found while building.**
+- macOS script(1) refuses a socket stdin, and Node gives a child a socketpair, so the new at-a-terminal rows had been
+  skipping on their "no terminal here" probe. `cat |` in front of script gives it a pipe, and script passes the child's
+  status through.
+- After that fix, a mutation probe stayed green: the sh/cat wrapper outlives the stub. The row now reads the stub's own
+  recorded pid.
+- The launcher's fake Electron (`ELECTRON_OVERRIDE_DIST_PATH`) moved out of smoke-profile.test.ts into
+  `test/fake-electron.ts`, so both files use it.
+- PT-S3 also added desk-gates row 32, and edited modes.ts beside `answersSetup`. VF-PM ruled at 10:24Z that the first
+  to land keeps the number: FG-6 (M48) kept row 32, and PT-S3 re-cut onto M48 as row 33.
+
+**Owed.**
+- The row's first run: OWED-ROWS row 2, on the Mac mini at James's unlock. The console chain is armed once on M52:
+  smoke:godview, then smoke:first-run, its stills kept.
+- James's look: one contact sheet of the three walks, and his eye list (row 32's "not this row's"):
+  - Agents with nine installed (PU-L, drafted 2026-10-31 and not filed, would bring nine into the walk's own staging);
+  - History with six rows;
+  - Profiles' five cards.
+- FG-5 (the hand-over) is written in the lane and uncommitted. It is cut after the row's first green and James's look
+  (VF-PM 10:19Z), and its commit carries the hand-over's two stills and its order check into this row (11:04Z).
+- Of FG-6's ladder entry (the record's §7), the row is what landed. Still owed:
+  - the catalog over a still of the field at the glass's fit;
+  - the tear and a frame-stable desk judged in the walk (they come with FG-5's hand-over);
+  - the field's glass against the CSS glass on one frozen frame;
+  - the splash's `errors()` read beside the mode;
+  - FG-O2's two contrast measurements;
+  - FG-O3's GPU read during the tear.
