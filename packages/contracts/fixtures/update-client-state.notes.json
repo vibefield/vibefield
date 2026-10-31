@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "enabled": true,
+  "channel": "nightly",
+  "declined": [],
+  "remembered": {
+    "trustRoot": 1,
+    "channels": 412,
+    "policy": { "nightly": 3, "beta": null, "stable": null }
+  },
+  "lastCheckAt": 1793178000000,
+  "lastApply": {
+    "at": 1793178000000,
+    "version": "0.1.0-nightly.20261028",
+    "branch": "installing",
+    "consented": 0,
+    "operationId": "5b0f3c1e-8a2d-4f6b-9c7e-1d2a3b4c5d6e",
+    "audited": true,
+    "from": "0.1.0-nightly.20261027",
+    "trigger": "restart",
+    "landed": {
+      "at": 1793178007000,
+      "outcome": "installed"
+    },
+    "notes": {
+      "kind": "log",
+      "since": { "version": "0.1.0-nightly.20261027", "tag": "nightly-20261027" },
+      "commits": 103,
+      "product": 58,
+      "lines": [
+        {
+          "track": "QW1 attach",
+          "text": "the agent-plane pages name the helper environment and the not-yet-resumable refusal"
+        },
+        { "track": "QW1 unread (A)", "text": "hidden means unread" }
+      ]
+    }
+  },
+  "staged": {
+    "version": "0.1.0-nightly.20261028",
+    "at": 1792400400000,
+    "notes": {
+      "kind": "log",
+      "since": { "version": "0.1.0-nightly.20261027", "tag": "nightly-20261027" },
+      "commits": 103,
+      "product": 58,
+      "lines": [
+        {
+          "track": "QW1 attach",
+          "text": "the agent-plane pages name the helper environment and the not-yet-resumable refusal"
+        },
+        { "track": "QW1 unread (A)", "text": "hidden means unread" }
+      ]
+    }
+  }
+}

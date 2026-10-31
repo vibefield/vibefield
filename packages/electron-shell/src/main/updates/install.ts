@@ -115,6 +115,8 @@ export function installUpdateController(options: {
     ...(options.appendAudit !== undefined ? { appendAudit: options.appendAudit } : {}),
     ...(options.apply !== undefined ? { apply: options.apply } : {}),
     ...(options.currentVersion !== undefined ? { currentVersion: options.currentVersion } : {}),
+    // AU-6 (LC-18) — when this build was made, from the staged identity (absent on a stage cut before AU-6)
+    ...(options.identity.builtAt !== undefined ? { builtAt: options.identity.builtAt } : {}),
     ...(options.safeWindowContext !== undefined
       ? { safeWindowContext: options.safeWindowContext }
       : {}),

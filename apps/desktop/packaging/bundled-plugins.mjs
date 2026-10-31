@@ -195,6 +195,31 @@ function stagedBuildId(appVersion) {
   return {};
 }
 
+/** AU-6 (LC-18; X8) — when this build was made: the release workflow's plan time (VIBEFIELD_BUILT_AT), else this
+ * checkout's HEAD commit time written as UTC (`%ct`, never `%cI`, whose offset IsoInstant refuses), which keeps a
+ * stage reproducible (EDP §12.1); omitted (said) when git cannot name the commit. */
+function stagedBuiltAt() {
+  const stamped = process.env.VIBEFIELD_BUILT_AT;
+  if (stamped !== undefined && stamped !== "") {
+    if (!contracts.IsoInstant.safeParse(stamped).success)
+      refuse(
+        `VIBEFIELD_BUILT_AT is "${stamped}"; it names a UTC instant (2026-10-28T06:17:00.000Z)`,
+      );
+    return { builtAt: stamped };
+  }
+  try {
+    const seconds = execFileSync("git", ["log", "-1", "--format=%ct", "HEAD"], {
+      cwd: repo,
+      stdio: ["ignore", "pipe", "ignore"],
+    })
+      .toString()
+      .trim();
+    if (/^\d+$/.test(seconds)) return { builtAt: new Date(Number(seconds) * 1000).toISOString() };
+  } catch {}
+  console.warn("bundled-plugins: no git commit — the staged identity carries no builtAt (AU-6)");
+  return {};
+}
+
 function chmodTree(dir) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const abs = join(dir, entry.name);
@@ -276,6 +301,8 @@ async function stage({
     // joins when WP12d stages the committed policy sources.
     // WP12 D10: this build's identity, which the shell requires of the fieldd it adopts (a different one is replaced)
     ...stagedBuildId(appVersion),
+    // AU-6 (LC-18): when this build was made; the Updates page's head says "built Oct 27, 2026" from it
+    ...stagedBuiltAt(),
     updateFloors: {
       trustRoot: trust.doc.version,
       channels: null,

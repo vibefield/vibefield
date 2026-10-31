@@ -8,6 +8,7 @@ import {
 import { InlineNotice, SegmentedControl, UiButton } from "@vibefield/design-kit";
 import {
   type ReactElement,
+  type RefObject,
   useCallback,
   useEffect,
   useId,
@@ -16,6 +17,7 @@ import {
   useState,
 } from "react";
 import { copyText } from "../account/use-link-door";
+import { useReducedMotion } from "../field/desk/bar/bar-motion";
 import { CopyButton } from "../frame/cards/CopyButton";
 import type { DealFrom } from "../frame/cards/cards-store";
 import { COPY_PLACES } from "../frame/cards/cards-words";
@@ -31,8 +33,8 @@ import {
 import { errorText, NO_FLOW, type UpdatesFlow, useUpdateRestart } from "./update-flow";
 import {
   AUTOMATIC_UPDATES_LINES,
+  buildLine,
   cannotUpdateHere,
-  channelLabel,
   channelUnresolved,
   checkedLabel,
   downgradeWords,
@@ -41,7 +43,14 @@ import {
   LOCATION_WORDS,
   moveRefusalFallback,
   notAppliedWords,
+  notesCount,
+  notesHeading,
+  notesLines,
+  notesLink,
+  recentInstall,
   restartAsks,
+  type ShownNotes,
+  shownNotes,
   UPDATE_CHANNEL_LINES,
   UPDATE_CHANNEL_OPTIONS,
   type UpdateStateWords,
@@ -61,6 +70,10 @@ import {
 // AU-7 (AU-G8; LC-10, LC-40) — where the app runs: a copy macOS won't let replace itself says so in the attention ink
 // with Move to Applications… as its primary; a writable copy elsewhere carries one quiet line with the move beside it.
 // The move goes through main's quit gate (`moveToApplications`): its Cancel brings the page back to rest.
+// AU-6 (AU-D10 A; AU-G10; LC-7, LC-18) — what's in it: the release's signed notes in a card of their own while it is
+// found, fetched or ready, and for a day after it installs (with What's new beside "Updated today from …"); the head
+// says when the build was made. Every line of the notes is a text node, never markup and never linkified (EDP §11.1 as
+// amended); the card's one link is main's comparison, an `https:` address opened in the browser.
 
 // Colour (DESIGN.md §2.5): a state word that has to be READ takes its ink (`--vf-ink-attention`, `--vf-ink-danger`),
 // never the fill; a channel with nothing published is quiet (the tertiary ink, LC-31); the notices stay neutral and
@@ -129,6 +142,7 @@ export function UpdatesSectionView({
   onMoveToApplications,
   onOpenDiagnostics,
   onCopyVersion,
+  atNotes = false,
 }: {
   /** null: no updater runs in this build (a development build, a browser harness) */
   view: UpdateView | null;
@@ -161,6 +175,8 @@ export function UpdatesSectionView({
   /** AU-3 (AU-G4) — Copy the exact version, dealt into the hand from the button's box as every Settings copy is
    * (HN-5): true once it is on the clipboard */
   onCopyVersion?: (version: string, from: DealFrom | null) => Promise<boolean>;
+  /** AU-6 (LC-7) — opened by the Me row's What's new: the page opens AT the release's notes (when it shows them) */
+  atNotes?: boolean | undefined;
 }): ReactElement {
   // LC-9 — Cancel or Esc takes the question away with focus inside it: focus comes back to the head's act, never to
   // the page's body, where the dialog's Tab trap can't hold it (the Me menu brings it back to its row the same way).
@@ -175,6 +191,18 @@ export function UpdatesSectionView({
     if (active !== null && active !== document.body) return;
     primaryRef.current?.focus({ preventScroll: true });
   }, [flow.kind]);
+  // AU-6 (AU-D10 A) — the release's notes, and where they are on the page: the Me row's What's new opens the page at
+  // them, once, as it mounts (a later return to the page opens at its top); the page's own What's new scrolls to them
+  const shown = shownNotes(view, now);
+  const notesRef = useRef<HTMLElement>(null);
+  const openAtNotes = useRef(atNotes && shown !== null);
+  const reduced = useReducedMotion();
+  useEffect(() => {
+    if (openAtNotes.current) notesRef.current?.scrollIntoView?.({ block: "start" });
+  }, []);
+  const toNotes = (): void => {
+    notesRef.current?.scrollIntoView?.({ block: "start", behavior: reduced ? "auto" : "smooth" });
+  };
   if (view === null) {
     return (
       <SettingsSection title="Updates" description="VibeField's release builds update themselves.">
@@ -196,6 +224,8 @@ export function UpdatesSectionView({
   const staged = view.phase === "staged" && view.applyWired && !cannotUpdateHere(view);
   const primary = primaryAct(view);
   const notApplied = notAppliedWords(view);
+  // AU-6 (AU-D11, LC-7) — for a day after an install that carried notes: What's new beside "Updated today from …"
+  const whatsNew = recentInstall(view, now)?.notes !== undefined && shown?.after === true;
   const currentVersion = view.currentVersion;
   const channelLowered = isDowngrade(view.channel, view.buildChannel);
   return (
@@ -222,7 +252,10 @@ export function UpdatesSectionView({
                 />
               </div>
             )}
-            <div className={`mt-0.5 ${labelCls}`}>{channelLabel(view.buildChannel)}</div>
+            {/* the channel's word, and the build's day when the identity names it (LC-18) */}
+            <div className={`mt-0.5 ${labelCls}`} data-updates-build="">
+              {buildLine(view)}
+            </div>
           </div>
           {primary !== null && (
             <UiButton
@@ -296,6 +329,13 @@ export function UpdatesSectionView({
           </div>
         )}
 
+        {whatsNew && (
+          // AU-6 (AU-D11, LC-7) — the install carried notes: What's new, the act that takes you to them
+          <div className="flex flex-wrap items-center gap-2 pt-3">
+            <UiButton onClick={toNotes}>What's new</UiButton>
+          </div>
+        )}
+
         {(elsewhere || moving) && (
           // AU-7 (LC-10) — a writable copy outside Applications updates as usual: one quiet line, the move beside it;
           // while the move asks, its words (the read-only copy's move is the head's primary)
@@ -355,6 +395,8 @@ export function UpdatesSectionView({
           </InlineNotice>
         )}
       </section>
+
+      {shown !== null && <ReleaseNotesCard shown={shown} cardRef={notesRef} />}
 
       <section className={borderCls}>
         <SettingsRow
@@ -513,16 +555,85 @@ function ChannelConfirm({
   );
 }
 
+/** AU-6 (AU-D10 A; DESIGN.md §8 "What's in it") — the release's signed notes, as plain text: the heading, a log's count,
+ * the lines (a log's each led by its track in mono), and main's comparison when it composed one. Every string here is a
+ * TEXT NODE — never markup, never linkified (EDP §11.1 as amended); the link's address is main's alone (EDP-38), and it
+ * opens in the browser as every `https:` anchor in the window does. */
+function ReleaseNotesCard({
+  shown,
+  cardRef,
+}: {
+  shown: ShownNotes;
+  /** where the Me row's What's new and the page's own land */
+  cardRef: RefObject<HTMLElement | null>;
+}): ReactElement {
+  const headingId = useId();
+  const body = shown.notes.body;
+  const count = notesCount(body);
+  const lines = notesLines(body);
+  const link = notesLink(shown.notes);
+  return (
+    <section
+      ref={cardRef}
+      className={borderCls}
+      aria-labelledby={headingId}
+      data-updates-notes={shown.after ? "after" : "before"}
+      data-notes-kind={body.kind}
+    >
+      <h3
+        id={headingId}
+        className="text-[13px] font-semibold tracking-[-0.01em] text-black/85 dark:text-white/85"
+      >
+        {notesHeading(shown)}
+      </h3>
+      {count !== null && (
+        <p className={`mt-0.5 max-w-[62ch] tabular-nums ${labelCls}`} data-notes-count="">
+          {count}
+        </p>
+      )}
+      {lines.length > 0 && (
+        <ul className="mt-2 space-y-1" aria-label="What changed">
+          {lines.map((line, index) => (
+            // the manifest's own lines in its order, never reordered; two may read alike, so the place is the key
+            <li
+              key={index}
+              className="flex min-w-0 items-baseline gap-2 text-[13px] leading-5 text-[var(--vf-text-secondary)]"
+              data-notes-line=""
+            >
+              {line.track !== undefined && (
+                <code className="vf-ui-mono shrink-0 text-[12px] text-[var(--vf-text-tertiary)]">
+                  {line.track}
+                </code>
+              )}
+              <span className="min-w-0">{line.text}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {link !== null && (
+        <div className="mt-3">
+          <a className={buttonCls} href={link.href} target="_blank" rel="noreferrer">
+            {link.label}
+          </a>
+        </div>
+      )}
+    </section>
+  );
+}
+
 /** Settings → Updates (AU-3; first in Support). Reads the projection main publishes in `desktopState.update` and asks
  * through `getHost().updates`; absent either, the page says no updater runs here. The devices beside it are a
  * controller of their own (`UpdatesDevicesSection`), so this half works with fieldd broken (EDP §11.3). */
 export function UpdatesSection({
   desktopState = null,
   onOpenDiagnostics,
+  atNotes = false,
 }: {
   desktopState?: DesktopShellState | null;
   /** Settings → Diagnostics, where the updater's doctor lines are */
   onOpenDiagnostics?: (() => void) | undefined;
+  /** AU-6 (LC-7) — opened by the Me row's What's new: at the release's notes */
+  atNotes?: boolean | undefined;
 }): ReactElement {
   const host = getHost().updates;
   const view = host === undefined ? null : (desktopState?.update ?? null);
@@ -626,6 +737,7 @@ export function UpdatesSection({
         })();
       }}
       onOpenDiagnostics={onOpenDiagnostics}
+      atNotes={atNotes}
       onCopyVersion={(version, from) => copyText(version, COPY_PLACES.settings, from)}
     />
   );

@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "version": "0.2.0",
+  "tag": "v0.2.0",
+  "channel": "stable",
+  "commit": "419178f200000000000000000000000000000000",
+  "builds": {
+    "mac-arm64": {
+      "shell": {
+        "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "files": 412
+      },
+      "fieldd": {
+        "digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "files": 9
+      },
+      "field-native": {
+        "digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "files": 4,
+        "members": [
+          "bin/field-freeway-host",
+          "bin/field-native",
+          "bin/field-terminal-host",
+          "bin/sidecar-slim"
+        ]
+      }
+    }
+  },
+  "touched": ["shell", "fieldd", "field-native"],
+  "previous": null,
+  "notes": {
+    "kind": "written",
+    "since": null,
+    "lines": [
+      "Updates wait for you: VibeField downloads them in the background and installs when you restart or quit.",
+      "Settings → Updates says what's in a release before you restart, and what's new after.",
+      "Your devices say which version of VibeField each one runs."
+    ]
+  }
+}

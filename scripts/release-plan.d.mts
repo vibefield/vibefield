@@ -7,6 +7,8 @@ export interface ReleasePlan {
   prerelease: boolean;
   makeLatest: boolean;
   commit: string;
+  /** AU-6 (LC-18) — the plan time, ISO UTC: the build job stages it as the identity's `builtAt` */
+  builtAt: string;
   skip: boolean;
   reason?: string;
 }

@@ -238,10 +238,15 @@ export function installLifecycle(opts: {
     stopping = false;
     replayQuit();
   };
-  /** AU-5a — a signal came while the person's quit was still open to it (its box up, or the gate's re-ask box): it is
-   * not the person's quit, whatever the box answers — VibeField quits, the pairs are left, and nothing a waiting move
-   * or an install would do runs. Without it the swallowed signal left `restarting` set for the rest of the session: no
-   * later signal acted (the handler's latch) and the person's next ⌘Q skipped the gate. */
+  /** AU-5a — a signal came while the person's quit was still open to it. During the gate's box it is not the person's
+   * quit, whatever the box answers: VibeField quits, the pairs are left, and nothing a waiting move or an install would
+   * do runs. During the stop's re-ask box it acts only on Cancel (the stop comes back `aborted`, and VibeField quits
+   * with no further pair stopped); "Quit and end N sessions" finishes the stop already under way, because a quit
+   * already stopping waits for that stop's answer (`afterWindowsClosed`). Without it the swallowed signal left
+   * `restarting` set for the rest of the session: no later signal acted (the handler's latch) and the person's next ⌘Q
+   * skipped the gate.
+   * (Corrected 2026-10-30: this said "the gate's re-ask box … whatever the box answers … the pairs are left"; the
+   * records' checkers found that a confirmed re-ask finishes the stop.) */
   const quitForSignal = (): boolean => {
     if (!restarting) return false;
     gate = "open";
