@@ -410,6 +410,7 @@ export function ChromeLayer({
           onConnectTaken={() => setShellPresentation((state) => ({ ...state, connect: false }))}
           initialPage={opening.page}
           {...(opening.profiles !== undefined ? { initialProfiles: opening.profiles } : {})}
+          {...(opening.atNotes === true ? { updatesAtNotes: true } : {})}
           devtools={{ open: showEcs, onToggle: () => chrome.setShowEcs((open) => !open) }}
           onClose={() => {
             setShellPresentation((state) => ({ ...state, target: "general", connect: false }));

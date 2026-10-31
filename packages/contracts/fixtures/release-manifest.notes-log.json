@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "version": "0.1.0-nightly.20261028",
+  "tag": "nightly-20261028",
+  "channel": "nightly",
+  "commit": "419178f200000000000000000000000000000000",
+  "builds": {
+    "mac-arm64": {
+      "shell": {
+        "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "files": 412
+      },
+      "fieldd": {
+        "digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "files": 9
+      },
+      "field-native": {
+        "digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "files": 4,
+        "members": [
+          "bin/field-freeway-host",
+          "bin/field-native",
+          "bin/field-terminal-host",
+          "bin/sidecar-slim"
+        ]
+      }
+    }
+  },
+  "touched": ["fieldd"],
+  "previous": "nightly-20261027",
+  "notes": {
+    "kind": "log",
+    "since": { "version": "0.1.0-nightly.20261027", "tag": "nightly-20261027" },
+    "commits": 103,
+    "product": 58,
+    "lines": [
+      {
+        "track": "QW1 attach",
+        "text": "the agent-plane pages name the helper environment and the not-yet-resumable refusal"
+      },
+      { "track": "QW1 unread (A)", "text": "hidden means unread" },
+      {
+        "track": "AO",
+        "text": "the History pane says \"last used\" against the clock it is given (item 84)"
+      },
+      {
+        "track": "TS-3a erratum",
+        "text": "the Setup Assistant's Not now hint points at Settings → Devices"
+      }
+    ]
+  }
+}

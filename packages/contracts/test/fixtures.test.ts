@@ -347,7 +347,8 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "native-link-health": NativeLinkHealth,
   "system-native-restart-params": SystemNativeRestartParams,
   "system-native-restart-result": SystemNativeRestartResult,
-  // WP12 L3a (D5, D11) — a channel's committed policy source and the signed per-plane release manifest (TS-only)
+  // WP12 L3a (D5, D11) — a channel's committed policy source and the signed per-plane release manifest (TS-only).
+  // AU-6: `release-manifest.notes-log` / `.notes-written` carry the signed notes (their own rows: update-view.test.ts).
   "update-policy-source": UpdatePolicySource,
   "release-manifest": ReleaseManifest,
   "rpc-request": RpcRequest,

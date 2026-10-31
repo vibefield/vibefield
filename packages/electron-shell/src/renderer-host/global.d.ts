@@ -133,6 +133,11 @@ declare global {
       browserData: {
         clear(): Promise<BrowserDataClearResult>;
       };
+      /** Item 102 — a paste's read through main (design-03 §5.1's
+       * `shell.clipboard.*`): the focused product window only; a refusal rejects. */
+      clipboard: {
+        readText(): Promise<string>;
+      };
       /** Godview round 3 — the deck's state said by name; main owns the
        * window's lights (GV-D11) and lends ⌘W by the same word. */
       deck: {

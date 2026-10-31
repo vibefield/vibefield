@@ -1,10 +1,12 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { UpdateView } from "@vibefield/contracts";
+import { type ReleaseNotes, type ReleaseNotesView, UpdateView } from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
 import {
   AUTOMATIC_UPDATES_LINES,
+  buildLine,
+  builtDay,
   channelLabel,
   channelUnresolved,
   checkedLabel,
@@ -18,6 +20,10 @@ import {
   moveRefusalFallback,
   notAppliedNotice,
   notAppliedWords,
+  notesCount,
+  notesHeading,
+  notesLines,
+  notesLink,
   READY_SINCE_DAYS,
   readyClause,
   readySince,
@@ -25,7 +31,9 @@ import {
   refusalFallback,
   refusalLine,
   restartAsks,
+  type ShownNotes,
   shortDay,
+  shownNotes,
   UPDATE_CHANNEL_LINES,
   UPDATE_CHANNEL_OPTIONS,
   updateStateWords,
@@ -37,6 +45,8 @@ import {
 // states with their numbers and provenance, errors that say what happened and what to do next, no apology.
 // AU-3 — the page's words: a version in a sentence is its friendly name, a skip is the person's own act, the ready
 // day grows the words from the 7th day, an install that took is said for a day, one that didn't on its launch only.
+// AU-6 — what's in a release (the card's heading, a log's count, the lines as the manifest says them, main's link
+// only as an https: address), the build's day on the head, and R4's What's new for a day after notes came with it.
 
 /** The contracts' own projections (AU-1's fixtures), read through the schema main writes them by. */
 const viewFixture = (name: string): UpdateView =>
@@ -296,6 +306,167 @@ describe("the install, after it — for a day when it took, on its launch when i
   });
 });
 
+describe("the build's day — the head's line under the version (AU-6, LC-18)", () => {
+  it("says the channel's word, and the build's day when the identity names it", () => {
+    const built = new Date(2026, 9, 27, 3, 12).getTime();
+    expect(builtDay(built)).toBe("Oct 27, 2026");
+    expect(buildLine({ ...BASE, buildChannel: "nightly", builtAt: built })).toBe(
+      "Nightly · built Oct 27, 2026",
+    );
+    expect(buildLine({ ...BASE, buildChannel: "beta", builtAt: built })).toBe(
+      "Beta · built Oct 27, 2026",
+    );
+    // an older stage names none: the channel's word alone, as before AU-6
+    expect(buildLine({ ...BASE, buildChannel: "nightly" })).toBe("Nightly");
+    // EL9: main's projection (built 2026-10-27T09:00Z; the person's own calendar day)
+    expect(buildLine(viewFixture("update-view.staged-notes"))).toMatch(
+      /^Nightly · built Oct 2[67], 2026$/u,
+    );
+  });
+});
+
+describe("what's in a release — the notes card's words (AU-6; AU-D10 A, LC-7, X18)", () => {
+  const READY = viewFixture("update-view.staged-notes");
+  const UPDATED = viewFixture("update-view.updated-notes");
+  const INSTALLED_AT = UPDATED.lastApply?.at ?? 0;
+  const heading = (shown: ShownNotes | null): string | null =>
+    shown === null ? null : notesHeading(shown);
+  const SINCE_27 = { version: "0.1.0-nightly.20261027", tag: "nightly-20261027" };
+  /** a log of `commits`, `product` of them outside the docs, `shown` lines */
+  const log = (commits: number, product: number, shown: number): ReleaseNotes => ({
+    kind: "log",
+    since: SINCE_27,
+    commits,
+    product,
+    lines: Array.from({ length: shown }, (_, index) => ({
+      track: `T${index}`,
+      text: `line ${index}`,
+    })),
+  });
+  const WRITTEN: ReleaseNotes = {
+    kind: "written",
+    since: null,
+    lines: ["Updates wait for you.", "<b>x</b>"],
+  };
+
+  it("shows the ready update's notes before the restart, and an install's for a day after it", () => {
+    expect(shownNotes(READY, NOW)?.after).toBe(false);
+    expect(heading(shownNotes(READY, NOW))).toBe("What's in the Oct 28 nightly");
+    expect(shownNotes(UPDATED, INSTALLED_AT + HOUR)?.after).toBe(true);
+    expect(heading(shownNotes(UPDATED, INSTALLED_AT + HOUR))).toBe(
+      "What's new in the Oct 28 nightly",
+    );
+    // the day holds while a check runs (the card doesn't come and go), and ends a day on
+    expect(shownNotes({ ...UPDATED, phase: "checking" }, INSTALLED_AT + HOUR)?.after).toBe(true);
+    expect(shownNotes(UPDATED, INSTALLED_AT + DAY)).toBeNull();
+    // a newer update's notes outrank the install's
+    const newer: ReleaseNotesView = {
+      version: "0.1.0-nightly.20261029",
+      body: { kind: "written", since: null, lines: ["The next one."] },
+    };
+    const found: UpdateView = {
+      ...UPDATED,
+      phase: "available",
+      version: "0.1.0-nightly.20261029",
+      notes: newer,
+    };
+    expect(shownNotes(found, INSTALLED_AT + HOUR)).toEqual({ notes: newer, after: false });
+    // a release that carried none shows none; no updater, no card
+    expect(shownNotes(viewFixture("update-view.updated"), INSTALLED_AT + HOUR)).toBeNull();
+    expect(shownNotes(viewFixture("update-view.idle"), NOW)).toBeNull();
+    expect(shownNotes(null, NOW)).toBeNull();
+    // a release by its name (§9)
+    expect(heading({ notes: { version: "0.2.0", body: WRITTEN }, after: false })).toBe(
+      "What's in VibeField 0.2.0",
+    );
+    expect(heading({ notes: { version: "0.2.0", body: WRITTEN }, after: true })).toBe(
+      "What's new in VibeField 0.2.0",
+    );
+  });
+
+  it("says a log's count, its lead following the lines shown, and a written release no count", () => {
+    const body = READY.notes?.body;
+    if (body === undefined) throw new Error("the fixture carries notes");
+    expect(notesCount(body)).toBe(
+      "103 changes since the Oct 27 nightly, 58 of them outside the docs. Four of them:",
+    );
+    expect(notesCount(log(103, 58, 2))).toBe(
+      "103 changes since the Oct 27 nightly, 58 of them outside the docs. Two of them:",
+    );
+    // no lines: the sentence ends at "the docs."
+    expect(notesCount(log(103, 58, 0))).toBe(
+      "103 changes since the Oct 27 nightly, 58 of them outside the docs.",
+    );
+    // every change outside the docs listed: the sentence leads straight into them
+    expect(notesCount(log(3, 2, 2))).toBe(
+      "3 changes since the Oct 27 nightly, 2 of them outside the docs:",
+    );
+    expect(notesCount(log(12, 12, 4))).toBe(
+      "12 changes since the Oct 27 nightly, all of them outside the docs. Four of them:",
+    );
+    expect(notesCount(log(12, 0, 0))).toBe(
+      "12 changes since the Oct 27 nightly, all of them in the docs.",
+    );
+    expect(notesCount(log(1, 1, 1))).toBe("1 change since the Oct 27 nightly, outside the docs:");
+    expect(notesCount(log(1, 0, 0))).toBe("1 change since the Oct 27 nightly, in the docs.");
+    expect(notesCount(log(0, 0, 0))).toBe("No changes since the Oct 27 nightly.");
+    expect(notesCount(WRITTEN)).toBeNull();
+    for (const said of [notesCount(body), notesCount(log(1, 0, 0))]) {
+      expect(said).not.toMatch(APOLOGY);
+      expect(said).not.toMatch(/[\u2018\u2019]/u);
+    }
+  });
+
+  it("draws both kinds as one shape — a log's lines led by their track, a written release's as text — never parsed", () => {
+    const body = READY.notes?.body;
+    if (body === undefined) throw new Error("the fixture carries notes");
+    const lines = notesLines(body);
+    expect(lines).toHaveLength(4);
+    expect(lines[1]).toEqual({ track: "QW1 unread (A)", text: "hidden means unread" });
+    // a log line without a track is its text alone
+    const trackless: ReleaseNotes = {
+      kind: "log",
+      since: SINCE_27,
+      commits: 5,
+      product: 5,
+      lines: [{ text: "no prefix" }],
+    };
+    expect(notesLines(trackless)).toEqual([{ text: "no prefix" }]);
+    expect(notesLines(trackless)[0]).not.toHaveProperty("track");
+    // the manifest's own strings: markup stays characters for the card to say as text
+    expect(notesLines(WRITTEN)).toEqual([{ text: "Updates wait for you." }, { text: "<b>x</b>" }]);
+  });
+
+  it("links main's comparison only as an https: address, its words counting the log (X18; EDP-38)", () => {
+    const notes = READY.notes;
+    if (notes === undefined) throw new Error("the fixture carries notes");
+    expect(notesLink(notes)).toEqual({
+      href: "https://github.com/vibefield/vibefield/compare/nightly-20261027...nightly-20261028",
+      label: "See all 103 on GitHub ↗",
+    });
+    // none composed (a first release, an origin that isn't GitHub's releases): no link
+    expect(notesLink({ version: notes.version, body: notes.body })).toBeNull();
+    // never another scheme, whatever reaches the window
+    for (const compareUrl of [
+      "http://github.com/vibefield/vibefield/compare/a...b",
+      "file:///etc/hosts",
+      "data:text/html,x",
+      "not an address",
+    ]) {
+      expect(notesLink({ ...notes, compareUrl })).toBeNull();
+    }
+    // one change; a written release's link says no number
+    const compare = "https://github.com/vibefield/vibefield/compare/v0.1.0...v0.2.0";
+    expect(
+      notesLink({ version: notes.version, body: log(1, 1, 1), compareUrl: compare })?.label,
+    ).toBe("See it on GitHub ↗");
+    expect(notesLink({ version: "0.2.0", body: WRITTEN, compareUrl: compare })).toEqual({
+      href: compare,
+      label: "See the changes on GitHub ↗",
+    });
+  });
+});
+
 describe("the provenance — when the last check ran, never implied fresh", () => {
   const now = new Date(2026, 9, 15, 14, 20).getTime();
   it("says the clock for today, the day for an older check, and never-checked plainly", () => {
@@ -417,6 +588,21 @@ describe("the Me menu's update row — at rest, in place, and the hold in its in
     dot: false,
   } as const;
   const ON_27 = "You're on the Oct 27 nightly";
+  /** AU-6 (LC-7) — an install of CURRENT whose release carried notes, `hours` before the clock */
+  const INSTALLED_WITH_NOTES = (hours: number): UpdateView => ({
+    ...NIGHTLY,
+    lastApply: {
+      version: CURRENT,
+      from: "0.1.0-nightly.20261026",
+      outcome: "installed",
+      at: NOW - hours * HOUR,
+      trigger: "restart",
+      notes: {
+        version: CURRENT,
+        body: { kind: "written", since: null, lines: ["Updates wait for you."] },
+      },
+    },
+  });
 
   // [row, view, the row's flow, what it says]
   const ROWS: [string, UpdateView | null, MeUpdateLocal, Partial<MeUpdateRow>][] = [
@@ -445,6 +631,38 @@ describe("the Me menu's update row — at rest, in place, and the hold in its in
       { ...NIGHTLY, enabled: false },
       REST,
       { ...CHECK, detail: "Automatic updates are off" },
+    ],
+    // AU-6 (LC-7) — R4 after an install that carried notes: What's new, opening the page AT them
+    [
+      "R4 — an install that carried notes: What's new",
+      INSTALLED_WITH_NOTES(3),
+      REST,
+      {
+        glyph: "check",
+        turn: 0,
+        label: "What's new",
+        detail: "Updated today",
+        act: "notes",
+        dot: false,
+      },
+    ],
+    [
+      "R4 — What's new once the date turns: yesterday",
+      INSTALLED_WITH_NOTES(20),
+      REST,
+      { glyph: "check", label: "What's new", detail: "Updated yesterday", act: "notes" },
+    ],
+    [
+      "R4 — a day on, the resting row again",
+      INSTALLED_WITH_NOTES(24),
+      REST,
+      { ...CHECK, detail: ON_27 },
+    ],
+    [
+      "R4 — the row's own check keeps line 2",
+      INSTALLED_WITH_NOTES(3),
+      at("checking"),
+      { glyph: "reset", label: "Checking for updates…", detail: "Updated today", act: "none" },
     ],
     // AU-7 (LC-10, LC-40) — the one hold that changes the act: it opens Settings → Updates, where the move is
     [
@@ -787,6 +1005,45 @@ describe("the Me menu's update row — at rest, in place, and the hold in its in
     // the idle fixture: R2 in the version's friendly name
     const idle = viewFixture("update-view.idle");
     expect(meUpdateRow({ view: idle, local: REST, now: NOW }).detail).toBe(ON_27);
+  });
+
+  it("says R4's notes form for a day after an install that carried notes (LC-7; EL9: AU-6's fixture)", () => {
+    const view = viewFixture("update-view.updated-notes");
+    const installed = view.lastApply?.at ?? 0;
+    expect(meUpdateRow({ view, local: REST, now: installed + 30 * 60 * 1000 })).toMatchObject({
+      glyph: "check",
+      turn: 0,
+      label: "What's new",
+      detail: "Updated today",
+      act: "notes",
+      dot: false,
+    });
+    expect(recentInstall(view, installed + 30 * 60 * 1000)?.notes?.version).toBe(
+      "0.1.0-nightly.20261028",
+    );
+    // a day on, the resting row again
+    expect(meUpdateRow({ view, local: REST, now: installed + DAY })).toMatchObject({
+      ...CHECK,
+      detail: "You're on the Oct 28 nightly",
+    });
+    // the same record without notes keeps today's words exactly (the no-notes form)
+    expect(
+      meUpdateRow({
+        view: viewFixture("update-view.updated"),
+        local: REST,
+        now: installed + 30 * 60 * 1000,
+      }),
+    ).toMatchObject({ label: "Updated today", detail: "From the Oct 27 nightly", act: "open" });
+    // an install that didn't take never says What's new, whatever its record carries
+    const notApplied = viewFixture("update-view.not-applied");
+    const last = notApplied.lastApply;
+    const notes = view.lastApply?.notes;
+    if (last === undefined || notes === undefined) throw new Error("the fixtures carry both");
+    const carried: UpdateView = { ...notApplied, phase: "idle", lastApply: { ...last, notes } };
+    expect(meUpdateRow({ view: carried, local: REST, now: last.at + 60_000 })).toMatchObject({
+      ...CHECK,
+    });
+    expect(shownNotes(carried, last.at + 60_000)).toBeNull();
   });
 
   it("adds one third line at most: the floor outranks the ready day, which starts on day 7 (AU-D3)", () => {

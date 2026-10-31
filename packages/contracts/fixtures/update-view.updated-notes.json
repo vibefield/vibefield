@@ -1,0 +1,42 @@
+{
+  "phase": "idle",
+  "channel": "nightly",
+  "buildChannel": "nightly",
+  "enabled": true,
+  "lastCheckAt": 1793178000000,
+  "applyWired": true,
+  "currentVersion": "0.1.0-nightly.20261028",
+  "lastApply": {
+    "version": "0.1.0-nightly.20261028",
+    "from": "0.1.0-nightly.20261027",
+    "outcome": "installed",
+    "at": 1793178007000,
+    "trigger": "restart",
+    "thisLaunch": true,
+    "notes": {
+      "version": "0.1.0-nightly.20261028",
+      "body": {
+        "kind": "log",
+        "since": { "version": "0.1.0-nightly.20261027", "tag": "nightly-20261027" },
+        "commits": 103,
+        "product": 58,
+        "lines": [
+          {
+            "track": "QW1 attach",
+            "text": "the agent-plane pages name the helper environment and the not-yet-resumable refusal"
+          },
+          { "track": "QW1 unread (A)", "text": "hidden means unread" },
+          {
+            "track": "AO",
+            "text": "the History pane says \"last used\" against the clock it is given (item 84)"
+          },
+          {
+            "track": "TS-3a erratum",
+            "text": "the Setup Assistant's Not now hint points at Settings → Devices"
+          }
+        ]
+      },
+      "compareUrl": "https://github.com/vibefield/vibefield/compare/nightly-20261027...nightly-20261028"
+    }
+  }
+}

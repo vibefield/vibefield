@@ -147,6 +147,10 @@ export function mountProductHost(
       browserData: {
         clear: () => window.vibefield.browserData.clear(),
       },
+      // Item 102 — a terminal's paste reads through main's door; the web's read is denied here
+      clipboard: {
+        readText: () => window.vibefield.clipboard.readText(),
+      },
       // DT-2a: the claimed transport reaches the product instead of only being
       // parked here. The promise is handed over as-is — the pool behind the seam
       // awaits it — while the LIFETIME stays this adapter's: pagehide above

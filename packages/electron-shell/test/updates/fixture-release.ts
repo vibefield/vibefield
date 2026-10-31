@@ -58,6 +58,10 @@ export class FixtureOrigin {
   private readonly files = new Map<string, string>();
   private tags: string[] = [];
 
+  /** AU-6 — the origin this release is served under: GitHub's by default, or a dev-keyed fixture origin (which gives
+   * the notes no comparison link) */
+  constructor(readonly origin: string = ORIGIN) {}
+
   get rootKeys(): string[] {
     return [this.rootA.pub, this.rootB.pub];
   }
@@ -86,10 +90,10 @@ export class FixtureOrigin {
   }
 
   put(tag: string, file: string, text: string, signer: Key | null): void {
-    this.files.set(`${ORIGIN}/download/${encodeURIComponent(tag)}/${file}`, text);
+    this.files.set(`${this.origin}/download/${encodeURIComponent(tag)}/${file}`, text);
     if (signer !== null) {
       this.files.set(
-        `${ORIGIN}/download/${encodeURIComponent(tag)}/${file}.sig`,
+        `${this.origin}/download/${encodeURIComponent(tag)}/${file}.sig`,
         signText(text, signer),
       );
     }
@@ -152,12 +156,13 @@ export class FixtureOrigin {
     }
   }
 
-  /** L3b-i (6b) — the head's signed release manifest, its field-native plane as given for `mac-arm64`. */
+  /** L3b-i (6b) — the head's signed release manifest, its field-native plane as given for `mac-arm64`. AU-6 (6c): its
+   * `notes` as given, well-formed or not (signed with the manifest either way). */
   putManifest(
     tag: string,
     version: string,
     native: { readonly digest: string; readonly members: readonly string[] },
-    opts: { signer?: Key; nameTag?: string; nameVersion?: string } = {},
+    opts: { signer?: Key; nameTag?: string; nameVersion?: string; notes?: unknown } = {},
   ): void {
     const hex = (c: string) => c.repeat(64);
     this.putJson(
@@ -182,6 +187,7 @@ export class FixtureOrigin {
         },
         touched: ["shell", "fieldd", "field-native"],
         previous: null,
+        ...(opts.notes !== undefined ? { notes: opts.notes } : {}),
       },
       opts.signer ?? this.release,
     );
@@ -199,7 +205,7 @@ export class FixtureOrigin {
 
   readonly fetch: FetchBytes = async (url) => {
     this.requests.push(url);
-    if (url === `${ORIGIN}.atom`) {
+    if (url === `${this.origin}.atom`) {
       if (this.tags.length === 0) return null;
       const entries = this.tags
         .map(

@@ -6,6 +6,7 @@ import { useFielddClient } from "@vibefield/fieldd-client/react";
 import { type ReactElement, useEffect, useMemo, useState } from "react";
 import { useDeckAppearance } from "../../godview/deck-appearance";
 import { godviewTerminalTheme } from "../../godview/deck-theme";
+import { readClipboardText } from "../../terminal/clipboard";
 import {
   adoptCreatedTerminal,
   prewarmTerminalPool,
@@ -112,7 +113,7 @@ export function SignInTerminal({
         controlsResize
         visible
         {...(platform !== undefined ? { platform } : {})}
-        readClipboard={() => navigator.clipboard?.readText() ?? ""}
+        readClipboard={readClipboardText}
       />
     </GhostteaProvider>
   );

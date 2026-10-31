@@ -1,9 +1,12 @@
 import {
+  type ReleaseNotes,
+  type ReleaseNotesView,
   releaseName,
   UPDATES_SERVICE,
   type UpdateChannel,
   type UpdateCheckResult,
   type UpdateView,
+  type UpdateViewLastApply,
 } from "@vibefield/contracts";
 
 // WP12d (L3c-ii; build-wp12-updater.md §13 C3) — the Settings update card's own words, in DESIGN.md §9's voice:
@@ -15,6 +18,9 @@ import {
 // contracts — the one main's boxes say too).
 // AU-7 (AU-G8; LC-10, LC-40) — where the app runs: a copy macOS won't let replace itself says so on every surface,
 // with Move to Applications… as its act; a writable copy outside Applications holds nothing.
+// AU-6 (AU-D10 A; LC-7, LC-18) — what's in a release and when the build was made: the page's notes card and its head's
+// "built Oct 27, 2026", and the Me row's What's new for a day after an install that carried notes. Notes are signed
+// plain text (EDP §11.1 as amended): these words compose around them and never parse them; the one link is main's.
 
 /** The channels lowest first, as the segmented control lays them out (EDP-36: a lower one is a downgrade). */
 export const UPDATE_CHANNEL_OPTIONS: readonly { id: UpdateChannel; label: string }[] = [
@@ -100,6 +106,23 @@ export function youAreOn(version: string): string {
   return `You're on ${releaseName(version)}`;
 }
 
+/** AU-6 (LC-18) — the day a build was made: "Oct 27, 2026", the person's own calendar day in fixed English months (as
+ * `shortDay`). */
+export function builtDay(at: number): string {
+  return new Date(at).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+/** AU-3, AU-6 (LC-18) — the head's line under the version: the channel's word, and when the identity names it, the
+ * build's day — "Nightly · built Oct 27, 2026". An older stage names none: the channel's word alone. */
+export function buildLine(view: UpdateView): string {
+  const channel = channelLabel(view.buildChannel);
+  return view.builtAt === undefined ? channel : `${channel} · built ${builtDay(view.builtAt)}`;
+}
+
 /** AU-7 (AU-G8; LC-10, LC-40, LC-41) — the location's words (DESIGN.md §8 "Settings → Updates", "The Me menu"). The
  * act wears "…": the Me row opens Settings → Updates, and the page's move may ask through the quit gate. */
 export const LOCATION_WORDS = {
@@ -158,21 +181,135 @@ export interface RecentInstall {
   readonly version: string;
   /** the version it left; absent when an older app wrote the record */
   readonly from?: string;
+  /** AU-6 (LC-7) — what's new in `version`: the record's own copy, so it reads offline; absent when the release
+   * carried none (every release before AU-6) */
+  readonly notes?: ReleaseNotesView;
+}
+
+/** The record of an install that took, while its day lasts (by `lastApply.at`, the first launch that ran it); else
+ * null. A clock behind the record reads as no day at all. */
+function installTookToday(view: UpdateView, now: number): UpdateViewLastApply | null {
+  const last = view.lastApply;
+  if (last === undefined || last.outcome !== "installed") return null;
+  const age = now - last.at;
+  return age < 0 || age >= DAY_MS ? null : last;
 }
 
 export function recentInstall(
   view: UpdateView | null | undefined,
   now: number,
 ): RecentInstall | null {
-  const last = view?.lastApply;
-  if (view?.phase !== "idle" || last === undefined || last.outcome !== "installed") return null;
-  const age = now - last.at;
-  if (age < 0 || age >= DAY_MS) return null;
+  if (view === null || view === undefined || view.phase !== "idle") return null;
+  const last = installTookToday(view, now);
+  if (last === null) return null;
   return {
     day: sameDay(last.at, now) ? "today" : "yesterday",
     version: last.version,
     ...(last.from !== undefined ? { from: last.from } : {}),
+    ...(last.notes !== undefined ? { notes: last.notes } : {}),
   };
+}
+
+// ── AU-6 (AU-D10 A; DESIGN.md §8 "What's in it") — the release's signed notes on Settings → Updates: "What's in the
+// Oct 28 nightly" while it is found, fetched or ready, "What's new in the Oct 28 nightly" for a day after it installs.
+// A log (a nightly, or a beta with no written file, LC-19) says its count and up to four lines, each led by its track;
+// a written release says its lines and no count. The lines are the manifest's own strings, shown as text. ──
+
+/** The notes the page shows, and on which side of the install. */
+export interface ShownNotes {
+  readonly notes: ReleaseNotesView;
+  /** true after the install (the record's copy, `lastApply.notes`): "What's new in …" */
+  readonly after: boolean;
+}
+
+/** AU-6 (AU-G10; LC-7) — which notes the page shows: the found, fetched or ready update's (`view.notes`, main's while it
+ * holds verified ones) before the restart, else, for a day after an install took, that install's own
+ * (`lastApply.notes`). Null hides the card: a release that carries none shows none. The day holds whatever the phase
+ * (a check that runs doesn't take it away); a newer update's notes outrank it. */
+export function shownNotes(view: UpdateView | null | undefined, now: number): ShownNotes | null {
+  if (view === null || view === undefined) return null;
+  if (view.notes !== undefined) return { notes: view.notes, after: false };
+  const notes = installTookToday(view, now)?.notes;
+  return notes === undefined ? null : { notes, after: true };
+}
+
+/** The card's heading: "What's in the Oct 28 nightly" before, "What's new in the Oct 28 nightly" after; a release by
+ * its name, "What's in VibeField 0.2.0" (§9: one name everywhere). */
+export function notesHeading(shown: ShownNotes): string {
+  const name = releaseName(shown.notes.version);
+  return shown.after ? `What's new in ${name}` : `What's in ${name}`;
+}
+
+const COUNT_WORDS: readonly string[] = ["One", "Two", "Three", "Four"];
+
+/** A log's count, said before its lines: "103 changes since the Oct 27 nightly, 58 of them outside the docs. Four of
+ * them:" — the lead's word follows the lines shown; with none, the sentence ends at "the docs."; when every change
+ * outside the docs is listed, it leads straight into them ("…, 2 of them outside the docs:"). A written release says
+ * no count: null. */
+export function notesCount(body: ReleaseNotes): string | null {
+  if (body.kind !== "log") return null;
+  const since = releaseName(body.since.version);
+  const { commits, product } = body;
+  const shown = body.lines.length;
+  if (commits === 0) return `No changes since ${since}.`;
+  const outside =
+    commits === 1
+      ? product === 1
+        ? "outside the docs"
+        : "in the docs"
+      : product === commits
+        ? "all of them outside the docs"
+        : product === 0
+          ? "all of them in the docs"
+          : `${product} of them outside the docs`;
+  const said = `${commits} ${commits === 1 ? "change" : "changes"} since ${since}, ${outside}`;
+  if (shown === 0) return `${said}.`;
+  if (shown >= product) return `${said}:`;
+  return `${said}. ${COUNT_WORDS[shown - 1] ?? String(shown)} of them:`;
+}
+
+/** One line of the notes as the card draws it: its track (a log's prefix, in mono) and its text, both the manifest's
+ * own strings. */
+export interface NotesLine {
+  readonly track?: string;
+  readonly text: string;
+}
+
+/** The notes' lines, one shape for both kinds: a written release's lines as text, a log's with their track. */
+export function notesLines(body: ReleaseNotes): readonly NotesLine[] {
+  if (body.kind === "written") return body.lines.map((text) => ({ text }));
+  return body.lines.map((line) => ({
+    ...(line.track !== undefined ? { track: line.track } : {}),
+    text: line.text,
+  }));
+}
+
+/** An `https:` address, never another scheme — the card's one link opens nothing else. */
+const isHttps = (href: string): boolean => {
+  try {
+    return new URL(href).protocol === "https:";
+  } catch {
+    return false;
+  }
+};
+
+/** AU-6 (X18; EDP-38) — the card's one link: the comparison main composed from its frozen update origin and two
+ * verified tags (never read from the manifest), shown only as an `https:` address. "See all 103 on GitHub ↗" for a log
+ * (it counts what the comparison holds); a written release's says no number. Null without one (a first release, an
+ * origin that isn't GitHub's releases). */
+export function notesLink(
+  notes: ReleaseNotesView,
+): { readonly href: string; readonly label: string } | null {
+  const href = notes.compareUrl;
+  if (href === undefined || !isHttps(href)) return null;
+  const body = notes.body;
+  const label =
+    body.kind === "log" && body.commits > 1
+      ? `See all ${body.commits} on GitHub ↗`
+      : body.kind === "log" && body.commits === 1
+        ? "See it on GitHub ↗"
+        : "See the changes on GitHub ↗";
+  return { href, label };
 }
 
 // ── AU-2 (the corner, DESIGN.md §8 "The Me menu") reads these: the row's own flow, its acts and its shape. They land
@@ -191,8 +328,9 @@ export type MeUpdateLocal =
   | { readonly kind: "restarting" }
   | { readonly kind: "requested" };
 
-/** What a click on the row does: `open` folds the menu and opens Settings → Updates; `none` is `aria-disabled`. */
-export type MeUpdateAct = "check" | "restart" | "ask" | "download" | "open" | "none";
+/** What a click on the row does: `open` folds the menu and opens Settings → Updates; `notes` (AU-6, LC-7) folds it
+ * and opens the page AT the release's notes; `none` is `aria-disabled`. */
+export type MeUpdateAct = "check" | "restart" | "ask" | "download" | "open" | "notes" | "none";
 
 /** The update row as the menu draws it: plain data, so the catalog builds it with the shipping words. */
 export interface MeUpdateRow {
@@ -532,9 +670,18 @@ function restingRow(view: UpdateView, now: number): MeUpdateRowBody {
       if (channelUnresolved(view)) return checkRow(`No ${view.channel} release yet`, "quiet");
       return checkRow("The last check failed", "danger");
     default: {
-      // idle — R4 (AU-D11, LC-7): for a day from the first launch that ran it, the no-notes form (AU-6
-      // adds "What's new"); "You're on …" when an older app's record names no version it came from
+      // idle — R4 (AU-D11, LC-7): for a day from the first launch that ran it. AU-6 — an install that carried notes
+      // says What's new and opens the page at them; one that carried none keeps the no-notes form ("You're on …"
+      // when an older app's record names no version it came from)
       const recent = recentInstall(view, now);
+      if (recent?.notes !== undefined)
+        return {
+          glyph: "check",
+          turn: 0,
+          label: "What's new",
+          detail: `Updated ${recent.day}`,
+          act: "notes",
+        };
       if (recent !== null) {
         const from = recent.from;
         return {

@@ -1,6 +1,8 @@
 import {
   type BrowserDataClearResult,
   BrowserDataClearResult as BrowserDataClearResultSchema,
+  ClipboardReadRequest,
+  ClipboardReadResult,
   CloseRequest,
   CloseResult,
   type DesktopShellState,
@@ -24,6 +26,7 @@ import {
   ScreenshotPreviewResult,
   ScreenshotStillBytesRequest,
   ScreenshotStillKeptRequest,
+  SHELL_CLIPBOARD,
   type ShellCommand,
   ShellPlatform,
   type ThemePreference,
@@ -358,6 +361,23 @@ contextBridge.exposeInMainWorld("vibefield", {
   browserData: {
     clear: async (): Promise<BrowserDataClearResult> =>
       BrowserDataClearResultSchema.parse(await ipcRenderer.invoke(IPC_CHANNELS.browserDataClear)),
+  },
+  /** Item 102 — a paste's read: main reads the system clipboard for this window
+   * while it and its page are focused (the shell session grants no Chromium
+   * clipboard permission, ESP §7.4). Validated both ways; a refusal rejects with
+   * its reason in words, so the terminal pastes nothing rather than part. */
+  clipboard: {
+    readText: async (): Promise<string> => {
+      const result = ClipboardReadResult.parse(
+        await ipcRenderer.invoke(IPC_CHANNELS.clipboardRead, ClipboardReadRequest.parse({})),
+      );
+      if (result.status === "read") return result.text;
+      throw new Error(
+        result.reason === "too-large"
+          ? `the clipboard holds ${result.bytes ?? "more than"} bytes; a paste reads at most ${SHELL_CLIPBOARD.READ_MAX_BYTES}`
+          : "the clipboard is read only for the focused window",
+      );
+    },
   },
   onPrepareClose: (handler: (requestId: string) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, raw: unknown) => {

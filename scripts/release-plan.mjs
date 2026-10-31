@@ -49,6 +49,10 @@ export function planRelease({
   mainGreen = true,
 }) {
   if (!SEMVER.test(productVersion)) refuse(`the product version "${productVersion}" is not X.Y.Z`);
+  // AU-6 (LC-18; X8) — when this build was made: the PLAN time, in UTC, which the build job stages as the identity's
+  // `builtAt` (VIBEFIELD_BUILT_AT). A nightly is named for its plan day, so "built Oct 27" agrees with "the Oct 27
+  // nightly" even when its head commit is from the evening before.
+  const builtAt = new Date(now).toISOString();
   if (event === "schedule" || event === "workflow_dispatch") {
     const day = utcDay(now);
     const base = {
@@ -58,6 +62,7 @@ export function planRelease({
       prerelease: true,
       makeLatest: false,
       commit,
+      builtAt,
     };
     if (!mainGreen)
       return { ...base, skip: true, reason: "main is red: no nightly from a red trunk" };
@@ -90,6 +95,7 @@ export function planRelease({
       prerelease: Boolean(beta),
       makeLatest: !beta,
       commit,
+      builtAt,
       skip: false,
     };
   }

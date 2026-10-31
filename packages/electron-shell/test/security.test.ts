@@ -108,6 +108,17 @@ describe("installPermissionPolicy", () => {
     }
   });
 
+  // Item 102 — the paste reads through main's door, which is no grant: a page's own
+  // clipboard read stays denied at both handlers, and the grant set stays empty.
+  it("still denies a renderer's clipboard read and write at both handlers — the door is not a grant", () => {
+    const ses = fakeSession();
+    installPermissionPolicy(ses.session);
+    for (const permission of ["clipboard-read", "clipboard-sanitized-write"]) {
+      expect(ses.request(permission), permission).toBe(false);
+      expect(ses.check(permission), permission).toBe(false);
+    }
+  });
+
   it("reports each denial so an unexpected request is visible in evidence", () => {
     const ses = fakeSession();
     const denied = vi.fn();

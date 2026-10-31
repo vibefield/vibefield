@@ -8373,7 +8373,7 @@ Within it sit the contract's 21 marks (MV-D1…D22, D16 marks only), built as `d
 - **The SDK and the one backend.**
   - `@vibecook/puppeteer-view-sdk`: the contract, `/react`, `/host`, `/testing` and `/toolkit`.
   - `@vibecook/puppeteer-monitor` runs beside the runtime, one per desktop: in fieldd, and in Electron main in puppeteer's Godview.
-  - Windows and the phone hold replicas of its model (MV-D22, D18).
+  - Windows ~~and the phone~~ hold replicas of its model (MV-D22, D18). *(Corrected 2026-10-29, PG-0 (C4, `thinking-phone-godview.md` §2): FALSE for the phone. Only the windows held replicas (`createMonitorReplica` over the `model` board), here and still at `e23fa8a1f`; the phone read `field` rows cut from the fold (`projectFieldRow`), never the backend's model. The phone's replica is PG's, the model's remote cut (PG-D1 (a), James, 2026-10-29, on the page The Phone's Godview), not yet built (PG-2, PG-3).)*
 - **Godview's five views are SDK modules:** list, rain, swarm, timeline and spend.
   - Spend is MV-7: the runtime-only watchlist, ported as built (M177 ruling 2). SV-D15…D19 are ruled later.
   - Each view has its own root and its own CSS (L18), keys only while focused (MV-D8), and its mark in the manifest (MV-D16).
@@ -21354,3 +21354,187 @@ CP-0's record. CP-1a is the fixer's, CP-1b and CP-1c are the CO lane's, and the 
   - the slice ×10 under load.
   - It also holds where MF-1f's and AR-6-0's ~7 s go.
 - Item 120 (fieldd TC-S3's timer read) is the fixer's next test-side slice, after the queue.
+
+## GV fix — item 102: a paste reaches the pane; the deck's and the sign-in terminal's ⌘V read the clipboard through main's door, and the grant set stays empty (2026-10-31; `4e07f0308`, lane `fix/item102-clipboard-read-door` on `e23fa8a1f`, main merged as `b631d5725` and `cbc376da5`, the mini's run 23 on the tip itself; VF-PM's assignment 2026-10-29 12:38Z)
+
+**What.**
+- **The door:** design-03 §5.1's `shell.clipboard.*`, the product window's read half. It fills the inventory's entry
+  and adds no duty to main (PF2).
+  - `IPC_CHANNELS.clipboardRead` and main's pure `clipboard-door.ts`, wired in `ipc.ts` like every door.
+  - Only a window this shell registered (`registry.owns`) is answered. A stranger is warned, audited `denied`
+    UNREGISTERED_SENDER, never read, and thrown at.
+  - Only while the window AND its page are focused (EL7); otherwise `refused: unfocused`, and nothing is read.
+- **The bound** (ruled 2026-10-29 13:24Z on the HN lead's reading): `SHELL_CLIPBOARD.READ_MAX_BYTES` is
+  `TERMINAL_PIPELINE.MAX_PASTE_BYTES` by reference, never a third literal. Past it the read is refused whole with its
+  UTF-8 size, never cut.
+- **The audit:** `shell.clipboard.read` (contracts' `SHELL_CLIPBOARD_AUDIT_ACTIONS`, admitted by fieldd's
+  `SHELL_ACTIONS`) through local-only `audit.append`. It records the bytes and the page's id, never the text.
+  - It is best-effort and never awaited: a failed append is the warn line `desktop.clipboard.audit_unavailable`.
+- **The renderer:** the preload validates both ways and rejects a refusal in words, so nothing is pasted rather than
+  part of it.
+  - `FieldHost.clipboard` is optional. field-app's `readClipboardText()` reads the host's door, else the web's, so
+    the browser catalog keeps the web read.
+  - GodviewDeck and SignInTerminal hand ghosttea that reader as `readClipboard`.
+- **The grant set stays empty** (ESP §7.4). The security guard row (both handlers still deny `clipboard-read` and
+  `clipboard-sanitized-write`) is green by design: the door is not a grant.
+- 21 files, +805 −7. No lock, pin, Rust or docs.
+
+**Found.**
+- **The cause** (a code read on `e23fa8a1f`, 2026-10-29 12:32Z; no app run, by the no-input-injection rule):
+  - GodviewDeck (`:2201`) and SignInTerminal (`:115`) handed ghosttea `navigator.clipboard.readText`.
+  - The shell session grants no Chromium permission (`SHELL_GRANTED_PERMISSIONS` is empty by law), so the read was
+    denied, after ghosttea 0.13.7, given a `readClipboard`, had already taken the chord. ⌘V pasted nothing.
+  - A surface given no reader (LivePeekPane) left ⌘V to the platform and was never hit.
+- **A count in a title goes stale in silence** (a1, at HN's rebase rehearsal, 2026-10-29 14:23Z): contracts' channel
+  test named "the thirty channel keys" while the tip had thirty-one, and AU B1 and HN each bumped that same word.
+  - The count now lives once, in `toHaveLength`, where two added channels meet in a merge and conflict out loud. The
+    title names no number.
+  - It did conflict out loud, twice: 33 over `265325d09` (AU B1/B3's two update channels) and **35** over
+    `23e9c2538` (HN B1's two screenshot-still channels).
+
+**Validation.**
+- **The light** (2026-10-29 13:42–13:48Z, this Mac, nice 19, each row alone):
+  - the frozen install; typecheck ×4 (contracts, electron-shell, field-app, fieldd); the walls;
+  - the contracts, field-app and fieldd rows; field-native's build; gen:check (nothing regenerated).
+  - Two non-timed reds, fixed before the final commit: biome's layout of the bound row, and a stranger row asserting
+    a third `undefined` argument the door never passes (vitest counts arguments).
+  - The rerun after the 14:23Z count amend: contracts shell 57/57 and biome on the file.
+- **Red-first:**
+  - the parent's two sites plus fieldd's audit source gave exactly the 3 predicted reds;
+  - the door's `owns` gate cut gave exactly 2;
+  - its focus gate cut gave exactly 2.
+- **The first merge of main** (`b631d5725`, over `265325d09`, 2026-10-31 00:37Z): one conflict, the count, recounted
+  to 33. The rows: contracts typecheck, shell 58/58, electron-shell typecheck, and the door tests 25/25.
+- **The second merge of main** (`cbc376da5`, over `23e9c2538`, 02:02Z), with the two conflicts the 01:42Z rehearsal
+  over a stand-in M22 had foreseen:
+  - the count, recounted to 35 (the registry's IPC_CHANNELS also 35);
+  - `preload/index.ts`'s import list: HN B1's `ScreenshotStillBytesRequest, ScreenshotStillKeptRequest` and 102's
+    `SHELL_CLIPBOARD`, all three in the list's order, biome-clean.
+  - Its diff over main equals `4e07f0308`'s own, apart from the two count lines.
+  - The rows: contracts typecheck, shell 59/59, electron-shell typecheck, and the door tests 25/25.
+- **Run 23: the mint is the tip itself.** Verify exited 0 at 02:10:17Z:
+  - vitest 10,645 / 0 / 18 across 805 files (VF-PM's read); cargo 33 binaries, 0 FAILED; typecheck and test for 28
+    projects; 0 FAIL rows;
+  - the eight watch rows all ✓, contracts' `shell.test.ts` 59 at the literal 35.
+- **Landed:** main fast-forwarded `23e9c2538` → `cbc376da5` at 02:11:52Z.
+
+**Owed.**
+- At the next draft queue: design-03 §5.1's delta, and ESR §6.2's channel row and code-block line, from NOT LANDED to
+  `cbc376da5` (written 2026-10-29 at the 13:29Z and 16:03Z queues; snapshot `449145570`).
+- Item 111 (the Artifact panel's Copy: a plugin's web clipboard write under the same empty grant set) is item 102's
+  class, as an SDK write door over HN B2's host copy door, after HN B2.
+- Item 112 (the clipboard PNG's pixel bound) waits after HN B2.
+
+## HN B1 — Cards in Hand's new foot: the hand at the window's foot, the line `[views] snapshot create`, the desk's Copy ⌘C, and a card played into a pane or onto the desk (HN-0…HN-4, 2026-10-31)
+
+Track HN, *Cards in Hand*, batch B1 of three. James ruled all sixteen marks at their leans on 2026-10-29
+(`draft/thinking-cards-in-hand.md` §2; DECISIONS' row). Three code-only builders built it on 10-29, it was integrated,
+three read-only lenses reviewed it (behaviour, design fidelity, tests) and three fixers worked their findings. It
+landed in the mint M22 `23e9c2538` (run 22 on the Mac mini, verify only).
+
+**What.**
+- **HN-0, the doc first** (`0e2ad08bc`).
+  - DESIGN.md §8 "The line": 300 × 52, 76 from the left (LN-D1). The snapshot is 40, a ghost, `capture`, "Snapshot
+    ⌃⌘A"; its waiting states are in the Snap tile's honest words. The draft, @, mic, send and the interim send leave
+    the line (LN-D3). The D6 sentences are kept verbatim.
+  - New §8 "Chat's composer" keeps the line's draft canon for CO's SP-1 (LN-D3, not built here).
+  - New §8 "The hand": one stock and six faces (HN-D1), holding and reaching, ⇧⌘V raised as a list, where cards come
+    from (HN-D2, HN-D3) and go (HN-D4, D6, D7), the pick-up as a modal (HN-D5), twelve (HN-D8), this session (HN-D9).
+  - New §8 "Copy" replaces "Send to…" (HN-D3). The left (clipboard) edge tray retires into the hand.
+  - §1, §2.2, §5 (the cards are paper), §5.1, §6 (the deal's arc, `cubic-bezier(0.45, -0.3, 0.7, 1)`, the one new
+    curve), §10 and §13. `docs/UI_SYSTEM.md`'s catalog entries. DECISIONS' row, with dated notes on the FC, MC and
+    compact rows.
+- **HN-1, the hand** (`6835b5398`, `field-app/src/frame/cards/`).
+  - cards-model: the kinds, the fan's numbers, the reach and its hold, the twelve, what a copy becomes, and HN-D10's
+    twin. cards-store is the window's one, kept for the session only. cards-words holds every word.
+  - card-targets is the registry places answer in. cards-sources (`dealCapture`, `dealCard`) is the one road every
+    source deals through.
+  - CardFace (one stock, six faces, the index twice, the × when reached), CardsView (the fan, the deal's arc, the
+    reach, raised as a listbox, the held card as a modal dialog) and Cards, the controller. Cards keeps ONE
+    key-ownership scope (held, raised, at rest under the pointer), the pick-up, ⇧⌘V and the one screenshot
+    subscription.
+  - The card tokens are in design-kit's tokens.css (§5). ChromeLayer mounts the hand above the line (z 63).
+  - The left clipboard tray retires: ClipboardTray, the left notch, the Snap tile, clipboard-store and tray-flight.
+- **HN-2, the line** (`frame/ComposerLine.tsx`, `Composer.tsx`, `line-model.ts`).
+  - It is `[views] snapshot create`, 300 at 76. The snapshot calls the shell's capture door and deals through
+    `dealCapture`. Its waiting state is one store (`frame/capture-state.ts`), written by the line's own capture and by
+    the hand's ⌃⌘A subscription.
+  - The draft, @'s list, chips, mic, send, the interim send, line-send and at-list are deleted; CO's SP-1 restores what
+    Chat's composer takes, from git. The line door's `paste(sessionId)` retires: `pasteInto(paneId)` is the one road.
+- **HN-3, Copy** (`field/desk/copy/`).
+  - The selection bar's Send to… is Copy (`clipboard`), and so are its menu row and the tools in hand. ⌘C on the desk
+    is a desk-scoped chord; Settings → Terminal → Keyboard says Ghostty's ⌘C runs in the deck.
+  - One note becomes a text card; anything else becomes a picture card, its PNG bytes taken from the selection's box.
+    The text half goes on the system clipboard (an image waited for HN-5's door). The selection is never written.
+- **HN-4, playing a card** (`frame/cards/card-drag.ts`, `CarriedCardLayer.tsx`, `godview/pane-card-target.ts`,
+  `field/desk/desk-card-target.ts`).
+  - One drag machine: the pointer captured, Esc and blur cancel, and the place on top answers. View cells are
+    spring-loaded (520 ms); the carried card ducks over the line.
+  - Into a pane through the deck's `pasteInto(paneId)` and `whenInputOpen` (a spring-loaded drop waits, bounded). D6's
+    refusal is claimed by the play for its call and said once. A pane is never given a trailing line break, and a
+    snapshot that is gone is refused.
+  - On the desk a card prints a note or a print (HN-D7), checked again after its bytes arrive.
+  - Two shell doors, `screenshotStillBytes` and `screenshotStillKept` (contracts IPC, main, preload, host). The still is
+    found by name in the ring and opened O_NOFOLLOW, and the HANDLE is checked (a regular file, ≤ 64 MiB) and read,
+    never a path checked and then opened.
+- **The smokes.**
+  - smoke:godview's 11h line-send rung is re-aimed at a card played into a real pane (`window.__vfCards`, the desk
+    lab's pattern; `SMOKE_GODVIEW_CARD_PLAY`): pasted, no marker before the harness's Return, the nonce after it.
+  - smoke:canvas's Send to… rows are the Copy rows (`smoke-desk-copy.ts`). A marked run never writes the person's
+    clipboard, the capture's marks are recorded as handed, and the hand is emptied after.
+  - The draft's typing rungs are retired or re-aimed: headKeys and the pegboard's REFUSED rung type into the palette's
+    field.
+- **The walls.** check-retired-names and R25 hold the retired modules. The glyph roles for `clipboard` and `capture`
+  are regenerated.
+
+**Onto main.**
+- `3d3273281` merged main `0b4cb2ff0` (the item 94 stack, TS-6, item 113, Rosetta 0.1.2's EL8, PT and Q19) with no
+  conflict. `e2c0cca70` fixed what that clean merge broke: TS-6's caption called Head.tsx's `fmtRelative`, which HN-1
+  had moved to `format/relative-time.ts` as `relativeTime` (TS2304).
+- `7bb563258` merged main `67cf9f1cd` (PT-S1's fix for item 119, PT-S2, items 100 and 105, PG-1, the CP stack and five
+  records commits).
+  - Both sides had changed 20 files. Four conflicted, one block each, each kept both and held by hn-keepcheck:
+    - DESIGN.md §13: HN's paragraph, then AU's "The update".
+    - DECISIONS: AU's row, then HN's, in landing order.
+    - ChromeSection: AU-2's `UPDATE_GROUP_OPTIONS` among the file's consts, where the tray's stood.
+    - ui-system-boundaries: the one catalog template line holds both, `${updateCorner}` and `${cards}`.
+  - Every other path is git's own merge.
+  - `096870274`: the closed channel table's title says thirty-four, for HN's two channels and main's two over the base's
+    thirty; each side's "thirty-two" had merged once.
+  - `f4816ecef`: AU-2's `UpdateMenuPlate` had copied CornerPreview's mount of the line from before HN-2, with `blank`.
+    It mounts it as the corner's plate does now (TS2322).
+- `89a4233a5` merged main `289e9b43d` (item 118's test file, PG-1's and the compose plane's records). Its one conflict
+  was DECISIONS, where the rows stand in landing order: AU, CO-D, CP, PG, then HN.
+
+**Gates.**
+- The light at the integrated tip (2026-10-29 14:04:27Z, this Mac, each row alone at nice 19) was green: preflight,
+  walls, deps, retired, ios-fixtures, biome (112 files), typecheck of contracts, design-kit, electron-shell and
+  field-app, and vitest contracts 69, electron-shell 76 (9 files) and field-app 826 (39 files, with the five DESIGN.md
+  readers). The catalog look was read in both themes by the lead and VF-PM.
+- The light over main `67cf9f1cd` at `f4816ecef` (2026-10-31 01:35:52Z, the lane, nice 19 under the guard,
+  CARGO_TARGET_DIR the lane's) was green.
+  - Its rows: preflight, walls, deps, retired, ios-fixtures, biome, and typecheck of contracts, design-kit,
+    electron-shell and field-app.
+  - Its vitest: contracts 29 files and 1,030 tests, electron-shell 19 and 166, field-app 86 and 1,520. The 134 files are
+    B1's own list, every file importing what B1 changed over main, DESIGN.md's readers and the changed stylesheets'
+    readers.
+  - Run 1 was red at typecheck on the merge's one type error, which `f4816ecef` fixed.
+- `89a4233a5`'s merge differs from git's own (`merge-tree --write-tree 289e9b43d f4816ecef`) on DECISIONS alone, so
+  that light stands for the code (VF-PM, 01:41Z).
+- **Run 22: the mint `23e9c2538`**, which merges `89a4233a5` and main `12323581c` (item 118's records, a LANDED-only
+  difference). Verify was green at 01:49:20Z: vitest 10,626 passed, 0 failed and 18 skipped, and cargo 33 binaries
+  ok, 0 FAILED (VF-PM's counts). Verify only.
+- **Not run at the landing:** the desk smokes, smoke:godview's re-aimed 11h rung and smoke:canvas's Copy rows. The
+  console was locked, so they are a recorded debt for James's console window, as FG-3a's were.
+- **Landed:** main fast-forwarded `12323581c` → `23e9c2538` on VF-PM's GO, and VF-PM's push of 02:02:18Z carried it.
+
+**Owed.**
+- The desk smoke rows above, on James's console window.
+- Not smoke-covered yet: a card dropped on the desk in Electron.
+- **B2** (HN-5 copies, HN-6 another app's paste and drag, HN-7 History's New terminal, and LC-17's follow-ups) was
+  light-green at `16df734bd`. It is re-merged over this main and lit again, and it lands in the order VF-PM keeps
+  after item 102, whose channel recount goes from 34 to 35, re-merged once more over the main at its mint. **B3**
+  (HN-8, Artifacts in the head, PL-D1…D3) is light-green at `0874e0ac4` and follows B2 the same way.
+- Upstream: G30 (ghosttea's routed `copySelection` answers nothing, so no ⌘C in a pane) and RO-31 (a copy port in
+  rosetta's room, so no Copy in History), `draft/petitions/README.md`.
+- At the next draft queue: the record's B1 as-built lines (`thinking-cards-in-hand.md` §6) and its Status header.

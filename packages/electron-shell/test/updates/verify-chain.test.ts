@@ -8,7 +8,7 @@ import {
   verifyUpdateChain,
   withFloors,
 } from "../../src/main/updates/verify-chain";
-import { FixtureOrigin, NOW, ORIGIN, PAST } from "./fixture-release";
+import { canonical, FixtureOrigin, NOW, ORIGIN, PAST } from "./fixture-release";
 
 // WP12b, W3 (build-wp12-updater.md §3, §5) — the chain verified BEFORE any download: the good chain and each
 // refusal state, named, plus D4's resolution (heads, never a nightly for a beta client), D5's policy from the NEWEST
@@ -334,5 +334,86 @@ describe("step 6b — the head's release manifest (B3)", () => {
     expect(feedVersionOf("version: 0.9.0\nfiles: []\n")).toBe("0.9.0");
     expect(feedVersionOf("files: []\nversion: '1.2.3-beta.1'\n")).toBe("1.2.3-beta.1");
     expect(feedVersionOf("files: []\n")).toBeNull();
+  });
+});
+
+// AU-6 (AU-D10 A; LC-19) — step 6c: the head's notes, signed with its manifest. Parsed when they read as ReleaseNotes;
+// DROPPED (null, with the reason) when they do not — never a refusal: an update never waits on its notes.
+describe("step 6c — the head's notes (AU-6)", () => {
+  const VERSION = "0.9.0-nightly.20261016";
+  const NATIVE = { digest: "d".repeat(64), members: ["bin/field-native"] };
+  const NOTES = {
+    kind: "log",
+    since: { version: "0.9.0-nightly.20261015", tag: "nightly-20261015" },
+    commits: 12,
+    product: 7,
+    lines: [{ track: "AU-6", text: "the notes ride the manifest" }],
+  };
+
+  it("notes signed with the manifest come back parsed", async () => {
+    const fx = world();
+    fx.putManifest(NIGHTLY, VERSION, NATIVE, { notes: NOTES });
+    expect(await run(fx)).toMatchObject({ ok: true, notes: NOTES, notesDropped: null });
+  });
+
+  it("notes that do not parse are dropped with a reason, and the chain still verifies", async () => {
+    const twoLines = { ...NOTES, lines: [{ track: "AU-6", text: "two\nlines" }] };
+    const named = world();
+    named.putManifest(NIGHTLY, VERSION, NATIVE, { notes: twoLines });
+    expect(await run(named)).toMatchObject({
+      ok: true,
+      notes: null,
+      notesDropped: "lines.0.text: one line of plain text",
+    });
+    for (const notes of [
+      { ...NOTES, product: 13 },
+      { ...NOTES, lines: [{ track: "AU-6", text: "zero\u200bwidth" }] },
+      { kind: "html", body: "<b>What's new</b>" },
+      "What's new",
+      null,
+    ]) {
+      const fx = world();
+      fx.putManifest(NIGHTLY, VERSION, NATIVE, { notes });
+      const result = await run(fx);
+      expect(result.ok, JSON.stringify(notes)).toBe(true);
+      if (!result.ok) continue;
+      expect(result.notes, JSON.stringify(notes)).toBeNull();
+      expect(result.notesDropped, JSON.stringify(notes)).toEqual(expect.any(String));
+      // the manifest itself stands: the native plane is still judged by digest, and the feed is the head's
+      expect(result.manifest?.builds["mac-arm64"]?.["field-native"]?.digest).toBe(NATIVE.digest);
+      expect(result.headVersion).toBe(VERSION);
+    }
+  });
+
+  it("a manifest without notes, and no manifest at all, give neither notes nor a reason", async () => {
+    const bare = world();
+    bare.putManifest(NIGHTLY, VERSION, NATIVE);
+    expect(await run(bare)).toMatchObject({ ok: true, notes: null, notesDropped: null });
+    expect(await run(world())).toMatchObject({
+      ok: true,
+      manifest: null,
+      notes: null,
+      notesDropped: null,
+    });
+  });
+
+  it("the notes are under the manifest's one signature: notes changed after signing refuse the chain", async () => {
+    const fx = world();
+    fx.putManifest(NIGHTLY, VERSION, NATIVE, { notes: NOTES });
+    const bytes = await fx.fetch(`${ORIGIN}/download/${NIGHTLY}/release-manifest.json`);
+    if (bytes === null) throw new Error("the manifest was not put");
+    const signed = JSON.parse(Buffer.from(bytes).toString("utf8")) as Record<string, unknown>;
+    // the same manifest with its notes rewritten, and the signature left as it was
+    fx.put(
+      NIGHTLY,
+      "release-manifest.json",
+      canonical({ ...signed, notes: { ...NOTES, commits: 99 } }),
+      null,
+    );
+    expect(await run(fx)).toMatchObject({
+      ok: false,
+      state: "feed-unverified",
+      detail: "release-manifest.json does not verify by the release role",
+    });
   });
 });
