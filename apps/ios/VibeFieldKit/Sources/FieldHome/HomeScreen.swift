@@ -2282,6 +2282,10 @@ public struct HomeScreen: View {
     createSheet = nil
     workspaceLaunch = nil
     closeLink()
+    // AP-D4 (ITEM 130): History's readers, its ledger and its cache on disk go
+    // with the account, beside the mesh's own sweep — the one place every
+    // sign-out passes, the welcome's "Another account?" included.
+    historyDesktops.signedOut()
     mesh.signOut()
     assembly.projects = .empty
     refold()
