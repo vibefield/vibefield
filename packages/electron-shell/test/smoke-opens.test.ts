@@ -71,12 +71,12 @@ describe("PT-S3 (D3) — what main's opener was handed, judged", () => {
     const udid = "1BD54690-0A1B-4C2D-8E3F-0123456789AB";
     const before = opensMark(EARLIER);
     const seen: ShellOpens = {
-      opened: [...EARLIER.opened, `vibefield://device/${udid.toLowerCase()}`],
+      opened: [...EARLIER.opened, `x-test://device/${udid.toLowerCase()}`],
       revealed: [`/Users/x/Library/Developer/CoreSimulator/Devices/${udid}`],
     };
     const out = judgeOpens(ROW, seen, before, [SCREEN_RECORDING_SETTINGS]);
     expect(out).toEqual([
-      `${ROW}: main's opener was handed ["vibefield://device/<uuid>"], not ${JSON.stringify([SCREEN_RECORDING_SETTINGS])}`,
+      `${ROW}: main's opener was handed ["x-test://device/<uuid>"], not ${JSON.stringify([SCREEN_RECORDING_SETTINGS])}`,
       `${ROW}: main's opener was asked to reveal 1 path(s) — no row of the phone reveals one`,
     ]);
     expect(out.join("\n").toLowerCase()).not.toContain(udid.toLowerCase());
