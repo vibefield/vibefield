@@ -24,6 +24,7 @@ import {
   type InksSeen,
   inkCuts,
   judgeBand,
+  judgeContrast,
   judgeFrame,
   judgeHandOver,
   judgeHolds,
@@ -36,11 +37,14 @@ import {
   measureMark,
   parseGpuBusy,
   parseWalk,
+  passedOver,
   type SignInSeen,
+  type StageReading,
   shotDirRefusal,
   splashLook,
   TEAR_NOT_OPEN,
   WALKED_FACES,
+  type WordSeen,
   type WordsSeen,
 } from "../src/testing/smoke-first-run";
 import type { StagedTypedAgent } from "../src/testing/typed-agent";
@@ -588,7 +592,7 @@ function capture(
   return bgra;
 }
 
-describe("FG-O2's contrast (printed, not judged yet)", () => {
+describe('FG-O2\'s judge: every word on the glass at 4.5:1 (DESIGN.md §8 "Its words read")', () => {
   const words = (
     x: number,
     y: number,
@@ -604,15 +608,35 @@ describe("FG-O2's contrast (printed, not judged yet)", () => {
     text,
     shown,
   });
+  const word = (
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    text: string,
+    over: Partial<WordSeen> = {},
+  ): WordSeen => ({
+    x,
+    y,
+    width,
+    height,
+    text,
+    shown: 1,
+    lines: [{ x, y, width, height }],
+    off: false,
+    fading: false,
+    cut: null,
+    color: "rgba(28, 28, 30, 0.7)",
+    list: null,
+    ...over,
+  });
   const seen = (over: Partial<InksSeen> = {}): InksSeen => ({
     view: { width: 60, height: 30 },
     wizard: false,
     field: "live",
     canvas: 1,
     stage: null,
-    steps: [],
-    later: null,
-    sub: null,
+    words: [],
     ...over,
   });
 
@@ -629,29 +653,74 @@ describe("FG-O2's contrast (printed, not judged yet)", () => {
     expect(splashLook(seen({ stage, field: "still", canvas: null }))).toBe("take");
   });
 
-  it("cuts each of the small words from its still, and prints its ground, its ink and their WCAG ratio", () => {
-    // a window 60 × 30 at 2 to the px on a glass of 200: the stage line's glyph cores at 40, a label's at 120 and the
-    // line under the actions' at 90
+  it("holds a word as it stands, dimmed or not, and passes over one that does not show as it stands, saying why", () => {
+    const label = word(10, 10, 20, 6, "Agents");
+    expect(passedOver(label, null)).toBeNull();
+    // dimmed to stay so, it is held as it shows; in a control that is off, or fading in, it is passed over
+    expect(passedOver({ ...label, shown: 0.55 }, null)).toBeNull();
+    expect(passedOver({ ...label, shown: 0.4, off: true }, null)).toBe(
+      "in a control that is off (0.4)",
+    );
+    expect(passedOver({ ...label, shown: 0.6, fading: true }, null)).toBe("fading (0.6)");
+    expect(passedOver({ ...label, fading: true }, null)).toBeNull();
+    expect(passedOver({ ...label, cut: "list" }, null)).toBe("cut off at its list's edge");
+    expect(passedOver({ ...label, cut: "box" }, null)).toBe("cut off by its box");
+    // a list 100 tall whose foot fades over its last 20: a word ending in that foot stands under the fade; one ending
+    // above it, or in a list that wears no fade, is held
+    const list = { x: 0, y: 0, width: 60, height: 100, masked: true };
+    expect(passedOver({ ...label, y: 76, list }, null)).toBe("under its list's fade");
+    expect(passedOver({ ...label, y: 74, list }, null)).toBeNull();
+    expect(passedOver({ ...label, y: 76, list: { ...list, masked: false } }, null)).toBeNull();
+    // read on the capture's other side: held where it stood as it stands, within the slack
+    expect(passedOver(label, [label])).toBeNull();
+    expect(passedOver(label, [{ ...label, x: 10.8 }])).toBeNull();
+    expect(passedOver(label, [{ ...label, y: 14 }])).toBe("changed under the capture");
+    expect(passedOver(label, [{ ...label, text: "Agent" }])).toBe("changed under the capture");
+    expect(passedOver(label, [{ ...label, shown: 0.9, fading: true }])).toBe(
+      "changed under the capture",
+    );
+    expect(passedOver(label, [])).toBe("changed under the capture");
+  });
+
+  it("cuts every word from its still by its own lines, holds each at 4.5:1, and prints the lowest and every short one", () => {
+    // a window 60 × 30 at 2 to the px on a glass of 200: the stage line's glyph cores at 40, a label's at 120, two
+    // buttons' at 40, and a voice of two lines at 90 with a darker mark between its lines' ends
     const still = capture(60, 30, 2, 200, [
-      { x0: 22, x1: 24, y0: 21, y1: 23, level: 40 },
-      { x0: 2, x1: 3, y0: 2, y1: 3, level: 120 },
-      { x0: 32, x1: 33, y0: 12, y1: 13, level: 90 },
+      { x0: 2, x1: 4, y0: 1, y1: 3, level: 40 },
+      { x0: 14, x1: 15, y0: 2, y1: 3, level: 120 },
+      { x0: 26, x1: 27, y0: 2, y1: 3, level: 40 },
+      { x0: 50, x1: 51, y0: 2, y1: 3, level: 40 },
+      { x0: 4, x1: 6, y0: 11, y1: 13, level: 90 },
+      { x0: 4, x1: 6, y0: 16, y1: 18, level: 90 },
+      { x0: 12, x1: 18, y0: 15, y1: 19, level: 0 },
     ]);
-    const splash = seen({ stage: words(20, 20, 10, 5, "loading the field") });
-    const connect = seen({
-      steps: [
-        { step: "you", state: "done", words: words(0, 0, 10, 5, "You") },
-        { step: "devices", state: "now", words: null },
+    const long = "Your agents keep their history on this Mac, and the field can read it";
+    const you = word(12, 0, 10, 5, "You");
+    const onward = word(24, 0, 10, 5, "Continue");
+    const back = word(36, 0, 10, 5, "Back");
+    const next = word(48, 0, 10, 5, "Next");
+    const voice = word(0, 10, 20, 9, long, {
+      lines: [
+        { x: 0, y: 10, width: 20, height: 4 },
+        { x: 0, y: 15, width: 10, height: 4 },
       ],
-      later: words(30, 10, 10, 5, "Set up later — Settings → Devices", 0.98),
-      sub: words(0, 0, 10, 5, "not asked of this still"),
+    });
+    const later = word(30, 10, 10, 5, "Set up later", { shown: 0.5, fading: true });
+    const agents = seen({ wizard: true, words: [you, onward, back, next, voice, later] });
+    // Back stood 3 lower when the page was read before the capture
+    const before = seen({
+      wizard: true,
+      words: [you, onward, { ...back, y: 3 }, next, voice, later],
     });
     const cuts = [
-      ...inkCuts("01-splash.png", still, splash, ["stage"]),
-      ...inkCuts("11-connect.png", still, connect, ["steps", "later"]),
+      ...inkCuts("01-splash.png", still, seen({ stage: words(0, 0, 10, 5, "loading the field") }), [
+        "stage",
+      ]),
+      ...inkCuts("05-agents.png", still, agents, ["words"], before),
     ];
     const glass = [200, 200, 200];
-    expect(firstRunContrast(cuts)).toEqual({
+    const contrast = firstRunContrast(cuts);
+    expect(contrast).toEqual({
       stage: {
         at: "01-splash.png",
         said: "loading the field",
@@ -662,30 +731,111 @@ describe("FG-O2's contrast (printed, not judged yet)", () => {
         ratio: 8.8,
         shown: 1,
       },
-      steps: {
-        at: "11-connect.png",
-        you: { state: "done", ground: glass, ink: [120, 120, 120], ratio: 2.6, shown: 1 },
-      },
-      later: { at: "11-connect.png", ground: glass, ink: [90, 90, 90], ratio: 4.1, shown: 0.98 },
-      sub: null,
+      words: [
+        {
+          at: "05-agents.png",
+          judged: 4,
+          lowest: [
+            ["You", 2.6],
+            [`${long.slice(0, 47)}…`, 4.1],
+            ["Continue", 8.8],
+          ],
+          short: [
+            {
+              text: "You",
+              color: "rgba(28, 28, 30, 0.7)",
+              ground: glass,
+              ink: [120, 120, 120],
+              ratio: 2.6,
+            },
+            {
+              text: long,
+              color: "rgba(28, 28, 30, 0.7)",
+              ground: glass,
+              ink: [90, 90, 90],
+              ratio: 4.1,
+            },
+          ],
+          passed: [
+            ["Back", "changed under the capture"],
+            ["Set up later", "fading (0.5)"],
+          ],
+        },
+      ],
     });
+    expect(judgeContrast(contrast)).toEqual([
+      'on 05-agents.png "You" reads 2.6:1 ([200,200,200] → [120,120,120]) in rgba(28, 28, 30, 0.7), under 4.5:1',
+      `on 05-agents.png "${long}" reads 4.1:1 ([200,200,200] → [90,90,90]) in rgba(28, 28, 30, 0.7), under 4.5:1`,
+    ]);
   });
 
-  it("says what it could not read: words never seen are null, and a capture not the window's size reads nothing", () => {
-    expect(firstRunContrast([])).toEqual({ stage: null, steps: null, later: null, sub: null });
-    const odd = inkCuts(
-      "13-setting-up-welcome.png",
-      new Uint8Array(4 * 7),
-      seen({ sub: words(0, 0, 10, 5) }),
-      ["sub"],
-    );
-    expect(firstRunContrast(odd).sub).toEqual({
-      at: "13-setting-up-welcome.png",
-      ground: null,
-      ink: null,
-      ratio: null,
+  it("judges the splash's stage line as it is cut: under 4.5:1 it is red with its numbers", () => {
+    const stage: StageReading = {
+      at: "01-splash.png",
+      said: "loading the field",
+      field: "waking",
+      canvas: 0,
+      ground: [200, 200, 200],
+      ink: [90, 90, 90],
+      ratio: 4.1,
       shown: 1,
+    };
+    expect(judgeContrast({ stage, words: [] })).toEqual([
+      "the splash's stage line reads 4.1:1 ([200,200,200] → [90,90,90]) on 01-splash.png, under 4.5:1",
+    ]);
+    expect(
+      judgeContrast({ stage: { ...stage, ink: [40, 40, 40], ratio: 8.8 }, words: [] }),
+    ).toEqual([]);
+  });
+
+  it("says what it could not read: no still prints nothing, and a capture not the window's size is red, unread", () => {
+    expect(firstRunContrast([])).toEqual({ stage: null, words: [] });
+    expect(judgeContrast({ stage: null, words: [] })).toEqual([]);
+    const odd = new Uint8Array(4 * 7);
+    const contrast = firstRunContrast([
+      ...inkCuts("01-splash.png", odd, seen({ stage: words(0, 0, 10, 5, "loading the field") }), [
+        "stage",
+      ]),
+      ...inkCuts(
+        "11-connect.png",
+        odd,
+        seen({ wizard: true, words: [word(0, 0, 10, 5, "Not now")] }),
+        ["words"],
+      ),
+    ]);
+    expect(contrast).toEqual({
+      stage: {
+        at: "01-splash.png",
+        said: "loading the field",
+        field: "live",
+        canvas: 1,
+        ground: null,
+        ink: null,
+        ratio: null,
+        shown: 1,
+      },
+      words: [
+        {
+          at: "11-connect.png",
+          judged: 1,
+          lowest: [["Not now", null]],
+          short: [
+            {
+              text: "Not now",
+              color: "rgba(28, 28, 30, 0.7)",
+              ground: null,
+              ink: null,
+              ratio: null,
+            },
+          ],
+          passed: [],
+        },
+      ],
     });
+    expect(judgeContrast(contrast)).toEqual([
+      "the splash's stage line could not be cut from 01-splash.png",
+      'on 11-connect.png "Not now" could not be cut from its still',
+    ]);
   });
 });
 

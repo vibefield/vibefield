@@ -24729,3 +24729,303 @@ frost, and a little lower by night. VF-PM ruled the build at 16:51Z, after FG-6c
 - FG-6's remaining gates, in the ruled order: the catalog over the field's still (a fixture adapter, never a copy),
   then the field's glass against the CSS glass on a frozen frame (a test-only seam, ruled on its own).
 - The thinking doc's §8 holds FG-O2 and FG-O3 open. Their lines move at the next draft queue the PM opens.
+
+## PR #6 landed through the train — Dawn kept alive through its device's loss, a hidden Studio's appearance published, and the smoke's tap in one turn (James's `2b1bb87ec`, re-cut whole as `a8bdb8057`, the mint itself, run 58; 2026-10-29 → 10-31)
+
+**What landed:** James's PR #6 (`fix/dawn-studio-smoke`, head `dbf3a5a43`), as one commit on main `ce8864e86`:
+`a8bdb8057` is his `2b1bb87ec` re-cut whole, with his authorship and message verbatim (11 files, +204 −14). The PR
+names three independent lifecycle and timing defects that made the desktop gates fail:
+- **Dawn's lifetime** (`apps/plugin-playground/src/still.ts`, `cli.ts`). A still's GPU holds Dawn's instance (the
+  object `create([])` returns) through `device.lost` and the next event-loop turn, then releases it. Before, Dawn could
+  process events after its owner was collected. `destroy()` is asynchronous and idempotent, and the CLI awaits it at
+  both call sites. The regression is a child process (`test/fixtures/still-gpu-lifetime.mjs`, run with
+  `--expose-gc`): 12 forced-GC create/destroy cycles, then a natural exit. Its row is in `still.dawn.test.ts`, so row
+  15, outside `pnpm verify`.
+- **A hidden Studio's publishing** (`studio/publish-scheduler.ts`, new; `studio-preload.ts`):
+  - An appearance proposal publishes on the next animation frame or after 100 ms, whichever comes first. The losing
+    callback is cancelled and a stale one ignored, so the latest snapshot still wins. Before, a frame-only publisher
+    stranded its snapshot while Studio was covered or hidden.
+  - Two scheduler rows (`test/studio-publish-scheduler.test.ts`).
+  - The physical acceptance (`physical-acceptance.ts`) now hides Studio and waits for `document.visibilityState ===
+    "hidden"` before it publishes. It shows Studio again (inactive) before the product reloads, and reports
+    `publishedWhileHidden`.
+  - `docs/UI_SYSTEM.md` states the rule: transport keeps progressing without a repaint, and Studio's background
+    throttling stays on. desk-gates row 26's "What it proves" names the hidden edit.
+- **The smoke's tap** (`testing/smoke-tools-in-hand.ts`). The tools-in-hand tap sends its mouse-down and mouse-up in
+  one main-process turn. The 50 ms timer between them could stretch past ICE's 250 ms tap limit under load and become
+  a hold.
+
+**The re-cut.** PR #6's head carried three commits past main's merge base:
+- `2b1bb87ec`, the fix;
+- `4c092d92d`, which merged PR #8's Linux CI fix `72a7145df` into it;
+- `dbf3a5a43`, which merged main `0765b2fba`.
+
+`72a7145df` was already on main through PR #8's merge (GitHub's `2d455ce1c`, with PR #5's `26af57a2d`; LANDED
+"DK-18 — PR #8"). Picked again, it conflicted in `smoke-daemons.mjs` and auto-merged a second, old-spelling
+`psTables` row into `smoke-profile.test.ts`: the silent double that PR #8's entry names. So it was skipped as
+empty, and the two merges carry nothing of their own. The re-cut's tree (`03cf6f5e6`) equals
+`git merge-tree --write-tree ce8864e86 dbf3a5a43`.
+*Corrected 2026-10-31 (at its landing): VF-PM's train brief (17:20Z) said "none of its commits is on main".
+`72a7145df` is, through PR #8's merge. The fixer found it at the re-cut, and VF-PM accepted it at 17:31Z. The
+fixer's first account (17:29:44Z) named PR #3's line, corrected to PR #8's at 17:53Z; PR #3's copy of the fix is
+`f5bfa0c32`.*
+
+**The light**, in the fixer's lane (`lanes/item118/vibe-field`, `train/pr6`) on this Mac at nice 19, 17:32:29 →
+17:35:26Z (load 15.5 → 24.5), with the vitest lane by cp-landing's yield (`lanes/records/pr6/pr6-light.sh`):
+- **Red-firsts:**
+  - The scheduler without its timer fallback: "delivers the latest command with no frames, and ignores a stale frame
+    after fallback" red (`expected [] to deeply equal [ { type: 'appearance.clear', … } ]`), the coalescing row
+    green.
+  - `still.ts` at main's: the lifetime row red. Its child failed, and vitest names no signal.
+  - Both green restored.
+- biome on the nine code files, and `check:walls`: clean. The plugin-playground and electron-shell typechecks: 0.
+- The two packages whole: plugin-playground 6 files, 68/68; electron-shell 160 files, 2,424 passed, 3 skipped.
+- `pnpm still` (row 15): 19/19. That covers the lifetime row and every kind held to its golden; no golden was
+  written.
+
+**Run 58** (the mini, on the mint itself, armed 17:42:41Z): verify exit 0 at 17:47:28Z, the tree clean, stubs 0.
+Typecheck and test ran for 28 projects. VF-PM's stripped read (17:48:43Z, 13,820 lines) found 0 FAIL rows. Vitest
+11,368 passed, 18 skipped, 0 failed: two more than run 57, the scheduler's rows. `test result: ok.` ×33;
+MaxListeners 0; the bundle unchanged.
+
+**The desk rows:**
+- **Row 26, `smoke:studio`: RED on this Mac.** The run was 17:39:30 → 17:41:09Z, the fixer's lane on `a8bdb8057`,
+  the screen locked (HID idle 1,272 s), load 34.5 → 41.1. The verdict line: `STUDIO_PHYSICAL failed: Studio to become
+  hidden timed out after 20000ms`, at the PR's new step. Every step before it passed. `SMOKE_DAEMONS` left `[]`, and
+  the root `/tmp/vf-studio-1sbFyH` was kept for its logs. It was not re-run.
+- **Item 128** (filed 17:46Z): on a locked macOS session, a hidden window's page never goes `hidden`.
+  - The probe: `lanes/records/pr6/vis-probe.sh`, the lane's Electron 43.1.1 / Chrome 150, no product code, no input,
+    17:44:16 → 17:44:42Z, locked. One plain window was shown inactive, then hidden with `hide()`. For 20 s, every
+    `executeJavaScript('document.visibilityState')` resolved in 0–12 ms and read `visible`, and no
+    `visibilitychange` fired. The renderer was awake; the state never went hidden.
+  - So the step cannot pass with the screen locked. James's own physical gate passed it on his original branch
+    `c10617873` ("appearance published while hidden, replayed after reload, and restored on close", PR #6's body).
+  - **The unlocked control is OWED**, on James's word that he is at this Mac: the probe again, then row 26 once on
+    `a8bdb8057`. Then either row 26 takes an arming condition (an unlocked screen, like the mini's rows), or the step
+    takes a witness that is not `visibilityState`.
+  > **The control, paid (2026-10-31 18:29:53Z, James "At the Mac" at 18:27Z):** the probe's unlocked arm (18:28:06 →
+  > 18:28:32Z, locked no, HID idle 7 s; `lanes/records/pr6/vis-probe-unlocked.out`): after `hide()` the page's
+  > `visibilitychange` went to `hidden` at 2,659 ms, every poll read `hidden` (t = 1…20, each resolved in 0–51 ms),
+  > and re-shown it went back to `visible`. The locked arm had read `visible` throughout, with no `visibilitychange`.
+  > Then row 26 once on `a8bdb8057` (18:28:44 → 18:29:53Z, 69 s, the screen unlocked): `STUDIO_PHYSICAL` ok with
+  > `publishedWhileHidden: true`, `replayed: true` and `restored: true`; `SMOKE_DAEMONS` left `[]`; the root
+  > (`/tmp/vf-studio-Ddxrx7`) removed. The logs: `lanes/item118/logs/pr6-smoke-studio.log` (the locked red) and
+  > `lanes/item118/logs/pr6-smoke-studio-unlocked.log` (this green). The reading: row 26 needs an unlocked screen as
+  > an ARMING condition, like the mini's rows. It is not a product red, and the 17:41:09Z red stays the honest
+  > locked reading.
+- **Row 17, `smoke:canvas`, on M58** (run58b, the mini, its console chain opened 17:47:53Z; exit 2 at 18:02:52Z,
+  897 s, unattended, the tree clean after): red by item 117 alone. HAND_BACK read whiteboard 250.6, calendar 249.0 and
+  clock 250.5 ms (notebook 233.4) against 200 ± 40: the mini's 15-frame bar-return step on three specimens. PR #6's
+  one hunk in the tap helper (the 50 ms sleep between a tap's down and up removed) does not touch that judge
+  (`backMs` 200, `SLACK_MS` 40), so 117's reds were never this PR's. No tap became a hold in the run. **Paid for the
+  landing with 117 cited**, as at M54–M56 (VF-PM's ruling, 18:04Z).
+  - COVER HISTORY was green on its re-run: captured 20 / swapped 20 / frozen 20 / parked 26 ms, the first frame up on
+    a visible canvas, `beforeSwap` 1; COVER_GODVIEW 22 / 23 / 23 / 27 ms, `beforeSwap` 1. M57's cover red was the
+    observer's first-sample race, the host flake the records already name, and not deterministic. Nothing goes to a5.
+  - The log: `lanes/ts6/logs/mini/run58b/smoke:canvas.log` (sha256 `662881aaebce06a3…`).
+- **Row 23, `smoke:godview`, on M58: GREEN** (run58b, exit 0 at 18:04:59Z, 127 s, untouched, the tree clean after,
+  daemons left `[]`; the chain done 18:04:59Z):
+  - 11k: the Hub bound once in the shelf (the circle at 96,8, 40 × 40); its sheet grew on Artifacts to 544 × 420 and
+    folded back.
+  - 11l: ⌘N opened and closed "New spark"; Esc, and Esc from the body, folded it; ⌘N on the canvas did nothing.
+  - 11h: B went to the focused pane; the paste card ran only on the pane's own Return; ⌘T opened a new shell; B on the
+    canvas raised Objects and put it away.
+  - The log: `lanes/ts6/logs/mini/run58b/smoke:godview.log` (sha256 `b8ce3734dd39065c…`).
+- **The tally:** verify GREEN (run 58); row 23 GREEN; row 17 RED on item 117 alone, paid; row 26 RED on the locked
+  screen (item 128, the unlocked control owed).
+
+**Not here:**
+- ROADMAP's PORTALS line "`smoke:studio` reds when its window is covered: give Studio's acceptance window DK-11's
+  frames". DK-11's frames are `backgroundThrottling: false`, which by `window-policy.ts`'s own measurement keeps a
+  covered page visible. `UI_SYSTEM.md` now keeps Studio's throttling on, and row 26 now needs the page hidden. The
+  line stands, with a dated note sending it to item 128.
+- DECISIONS: no row moves. The PR's one rule lives in its owning doc, `UI_SYSTEM.md`.
+
+**Landed:** local main fast-forwarded `ce8864e86` → `a8bdb8057` at 2026-10-31T18:06:54Z by `land-stack4.sh`, on VF-PM's
+GO. VF-PM closes PR #6 naming the sha.
+
+## FG-O2's judge — every word on the glass at 4.5:1: the day's milk at 75% (James's "b", amending his FG-D15 C), the ramp stopped at t2 on the glass, the wizard's own inks on the ramp, and row 32 judging every lettered word of the band and the standing pane (desk-gates row 32)
+
+**Why.** FG-O2's printed run, row 32 on M57 at run57b, put the glass's small words short of DESIGN.md's 4.5:1 on every
+walk (day / night / over the still): the band's done labels 2.2–2.4 / 3.2–3.8 / 2.2–2.4:1, its next 1.7 / 2.5 / 1.7,
+the line under the actions 2.2 / 3.7 / 2.2 and a load's sub line 2.2 / 3.2 / 2.2. The stage line (6.4–6.5:1) and the
+band's now (6.6–13:1) passed. a5's proposal (17:42Z, `lanes/fg2/judge/proposal.md`) worked the arithmetic over
+run57b's own chips (`ramp.py`, which reproduces every printed ratio within 0.1 by day and 0.16 by night, a little
+high):
+- t3 cannot reach 4.5:1, or even 3:1, on any light ground (2.85:1 on white). One step up, to t2, gives 3.74–4.46 by
+  day (3.79–4.59 over the still) and 5.45–7.41 at night, and 4.5:1 needs the ink at about 79% by day on the worst
+  ground measured. So the night is the plan's one step, and the day is the gap.
+- Three ways. (a) A glass-only quiet ink, t1 by day and t2 at night, the milk kept: 5.05–6.42 by day. (b) A lighter
+  day glass, the milk from 55% to 75% with the small words at t2: 4.90–5.29 by day and 4.93–5.36 over the still (at
+  70% only 4.61, too little margin for a model that runs a little high), the night unchanged. (c) A lower bar, 3:1,
+  for the band's done and next labels, which would make a 10px label a mark and fixes neither reading line. The lean
+  was (b), DESIGN.md first, James's to overturn, since FG-D15 C was his pick.
+- The sheet James ruled on (`lanes/fg2/judge/sheet.png`, sent through VF-PM at 17:48Z): run57b's own Connect still
+  as it is beside (a) and (b) by day, and as it is beside (a) = (b) by night, each quiet word re-inked at its tier over
+  the ground it stood on.
+- **James ruled "b" at 18:25Z** (through VF-PM): the lighter day glass, amending his own FG-D15 C; (a) not taken.
+  VF-PM ruled the slice's scope at its leans, James's to overturn: every word on the glass, its panes' with its own,
+  with no exceptions list (18:05Z); every lettered text of the band and the standing pane measured on each still, the
+  wizard's class inks onto the ramp, and the name field's placeholder to item 127 (18:11Z); a word in a control that
+  is off passed over and said so (18:40Z).
+
+**What landed** (`6adf58dd3`, built and lit in lane fg2 on `fg/judge` over `bd9ecd159`, in the stacked mint M59
+with the fixer's item 129 on top, `2d2f41046`; Checks), in the commit's own order:
+- DESIGN.md first (the text drafted while the slice was held, in `lanes/fg2/judge/design/`, applied byte for byte
+  with James's time):
+  - §5, the Setup Assistant tier: its words (on the glass the ramp stops at t2, t3 and t4 re-projected there; a quiet
+    button's words at t1 on its fill; every word on it at 4.5:1), the milk at 75% by day in its recipe, and FG-D15
+    C's amendment in its Use cell.
+  - §8, the Setup Assistant's glass: the material sentence; the bar, **Its words read**, which row 32 measures, a
+    word in a control that is off or under a list's fade passed over and said so; the band's labels (done and to
+    come in t2, the current in ink); a load's sub in t2, told by its size; and one dated amendment after FG-4b's
+    status, with run57b's numbers, the milk, the words each tier gives up, the class inks §10 already ruled out, the
+    model's numbers until the row measures them, the marks that follow, what it costs to see, and Settings and the
+    placeholder left to item 127.
+- `tokens.css`: `--vf-wizard-surface` white 75% by day; the night's smoke stays 55%. One token serves both glasses
+  (FG-D24): the browser's over the field's still wears it on the frost's layer, and the field's own over the live
+  field reads that layer's computed style (`glass-look.ts`). The catalog's glass follows the token, nothing copied.
+- `wizard-ui.css`: on `.vf-wizard-shell` t3 and t4 are re-projected to t2, so the panes' words come up with the
+  wizard's own (AO's and TS's quiet words, the face deck's labels, Devices' small print and a ghost's name) and
+  Settings keeps its ramp; the marks those tokens colour follow them (a done segment's fill, a ghost's disc). The
+  re-projection is the composition's, never the kit's: `tokens.css` holds `:root` and `.dark` alone. The wizard's
+  own words name t2: the band's labels (the done label's rule merged away), the line under the actions, a load's sub
+  and a user's detail.
+- `wizard-ui.tsx`: the class inks leave fixed black and white (§10: product code consumes tokens) for the ramp:
+  `factCls` and `eyebrowCls` at t3 (t2 on the glass), `voiceCls` at t2, and `quietCls`'s words at t1 on its fill,
+  its hover the foreground.
+- Row 32's judge (`smoke-first-run.ts`):
+  - The page reads every lettered text of the band and the standing pane (`wordsIn`), one text node at a time: each
+    line's box from a range, clipped by every box around it that cuts what overflows (an ellipsis's cut excepted);
+    how much of it shows; whether it stands in a control that is off, or under a box still moving; its computed
+    colour; and the list it scrolls in, with its fade.
+  - Every pane's still is read on both sides of its capture (`captureWords`): the welcome, You, Agents three times,
+    Profiles twice, History, Connect, Setting up and its welcome. Each word is cut from the capture by its own
+    lines, joined, and measured by DK-16's method at the walk's end.
+  - `passedOver` says why a word is not held: in a control that is off (WCAG 1.4.3's exemption for an inactive
+    control), fading (an animation running and the word shown less than whole), cut off at its list's edge or by its
+    box, under its list's fade, or changed under the capture. A word dimmed to stay so is measured as it shows.
+  - The walk's `contrast` prints per still how many words were held, the lowest three with their ratios, every short
+    one in full (its text, colour, ground, ink and ratio) and every one passed over with why. `judgeContrast` makes
+    each short word red with its numbers, an unread one red, and the splash's stage line red under 4.5:1, judged as
+    it is cut.
+- desk-gates row 32: **The contrast**, judged now.
+- Tests: FG-O2's block in `smoke-first-run.test.ts` rewritten as the judge's, five rows where its three stood; one row
+  in `onboarding-wizard.test.tsx` (the milk at 75% by day and 55% by night, the re-projection, the t2 names, no fixed
+  ink in the four constants); and FG-4b's crossfade row moved with the sub to t2 (Found).
+
+**Checks.**
+- Red first, each half set aside at `bd9ecd159`'s text and restored byte for byte (cmp checked;
+  `lanes/fg2/judge/light/`):
+  - The judge, under its rows: 4 failed, 40 passed of 44 (`(0 , passedOver) is not a function`,
+    `(0 , judgeContrast) is not a function`, and the old reading's shape where `{ stage, words }` was asked, twice),
+    the splash's row green on `splashLook`, which the slice leaves; then 44/44.
+  - The inks (`tokens.css`, `wizard-ui.css`, `wizard-ui.tsx`) under the new row: 1 failed, the day's milk at 55%
+    where 75% was asked; then green.
+  - FG-4b's crossfade row as moved, under `wizard-ui.css`: 1 failed, the sub at t3 where t2 was asked; then green.
+- The lane's light (19:19:48–19:24:53Z, nice 19 under the guard, on the vitest lane cp-landing handed over at
+  19:19:00Z), in two passes, the second on the staged tree `f20162bc0`, the same before and after, all green:
+  - `git diff --check`; biome over the six code files; `check:walls` clean; the typecheck of electron-shell,
+    field-app and design-kit (at 18:36Z, before the one later code edit, FG-4b's regex, which biome and vitest
+    parsed);
+  - electron-shell's whole vitest: 160 files, 2,426 passed, 3 skipped (+4 over FG-O2's light: the judge's two more
+    rows, and PR #6's two in `studio-publish-scheduler.test.ts`);
+  - field-app's whole vitest: 267 files and 1 skipped, 3,485 passed, 3 skipped, with ui-system-boundaries 40/40 and
+    `design-system.test.tsx` 8/8 in 48.2 s (item 129's file, green on this Mac);
+  - design-kit has no test target of its own; its tokens are held by field-app's rows.
+- VF-PM's read (19:32Z): `6adf58dd3` on `bd9ecd159`, tree `f20162bc0`, 8 files +631 −173; DESIGN.md quotes James's
+  "b" at 18:25Z and names the off control's pass-over; the milk at 75%; the four constants carry no fixed black or
+  white; no hex outside `tokens.css`; no path in common with item 129.
+- **Run 59:** M59 is the stacked tip `2d2f41046`: the judge's `6adf58dd3` on `bd9ecd159` with the fixer's item 129
+  re-cut on top path for path, its tree `9ca93834b` (VF-PM's merge-tree of the two); a9's run on the Mac mini.
+  - `pnpm verify` went green at 19:35:59Z (exit 0; armed 19:31:08Z), with 0 FAIL rows in VF-PM's stripped read.
+    - vitest: 11,372 passed, 0 failed, 18 skipped. That is +4 over run 58: smoke-first-run 42 → 44 (the judge's
+      five rows where FG-O2's three stood), onboarding-wizard 56 → 57 (the judge's row) and head 95 → 96 (item
+      129's row).
+    - cargo: `test result: ok.` × 33. typecheck and test ran for 28 projects. MaxListeners 0, the tree clean, and no
+      stubs.
+    - The bundle's assert held at 911.0 KB raw and 240.6 KB gz (911.3 KB raw at run 58: the judge's inks and
+      stylesheet).
+- **Landed:** main fast-forwarded `bd9ecd159` → `2d2f41046` at 2026-10-31 19:38:05Z on VF-PM's GO (land-stack4.sh,
+  the ff path, no lock wait; M59 is the stacked tip itself): two commits, the judge's `6adf58dd3` (8 files, +631
+  −173, tree `f20162bc0`, the light's) and item 129's `2d2f41046` on it.
+
+**Found while building.**
+- FG-4b's crossfade row pinned a load's sub at t3. (b) moves the sub to t2, told from its line by its size, so the row
+  moved with it: the first pass's whole field-app run found it (1 failed, 3,484 passed), and the second pass ran its
+  red first and both packages whole again.
+- A word can stand dimmed in a control that is off: a primary at 40% while it writes, waits or is busy, or Profiles'
+  Next before a name. WCAG 1.4.3 exempts an inactive control, so the judge passes such a word over and says so
+  (VF-PM's ruling, 18:40Z), and the bar's sentence names it. A word dimmed to stay so is measured, and only a running
+  animation counts as fading.
+- The wizard's fills stand outside the tokens: `primaryCls`'s black fill with its white words, and `quietCls`'s black
+  at 5% (white at 10% by night). They are fills, not inks, so item 127 takes them (VF-PM, 18:40Z).
+
+**Owed.**
+- **Row 32 OWED at James's unlock (the console locked at the mint):** row 32 alone on M59 (run59b), the
+  every-word judge's first live run: on each walk every pane still's count, its lowest words and any short one, and
+  the stage line judged as it is cut. Its counts fold in here as one `  >` block when the row runs.
+- At the next draft queue the PM opens: FG-D15's status line in DECISIONS (C, amended by James's "b" at 18:25Z), and
+  the thinking doc's dated correction at its source: its FG-O2 says "If a small ink falls short, it moves one ink
+  step", which run57b showed false by day.
+- Item 127's list (a5's, after this judge): DESIGN.md §2.4 against the tokens (the light ramp's t3 and t4 under 3:1 on
+  light chrome, 2.85:1 and 1.92:1 on white), Settings' ramp, the name field's placeholder, and the wizard's fills
+  outside the tokens (`primaryCls`'s black fill and its white words, `quietCls`'s black at 5%).
+- Not claimed: the night's and the still's numbers beyond the model until the row measures them, and any word on a
+  pane or in a state the walk does not stand on.
+- FG-6's remaining gates, in the ruled order: the catalog over the field's still (a fixture adapter, never a copy),
+  then the field's glass against the CSS glass on a frozen frame (a test-only seam, ruled on its own).
+
+## Item 129 — the catalog's Hub wait is read under a frozen clock: main's GitHub macOS verify was red five pushes in a row on the page's Artifacts row, the catalog's real 10 s bound crossed before the click on GitHub's runner; HN-8's design kept (2026-10-31; `2d2f41046`, re-cut onto a5's judge `6adf58dd3` on main `bd9ecd159`, lane `item129/hub-wait-clock`; the stacked mint M59, run 59)
+
+VF-PM handed it to a1 at 18:51Z; a1 had not taken it by 19:17Z, when VF-PM gave it to the fixer. The clause the row
+tested is HN-8's (a1's). Main's GitHub macOS verify
+was red on five consecutive push-event runs, `e4b882f5a` (14:42Z) through `bd9ecd159`: 41211407418, 41217367766,
+41221716774, 41224936723 and 41230000358. The last green was `2f71beb2e` at 13:52Z. Every one failed on ONE assertion,
+field-app's `test/design-system.test.tsx:693` ("design system page › exposes theme and representative component-state
+controls"): after clicking `.vf-head-pack` it expected "Opening Artifacts…" and read "Artifacts aren't starting — Turn
+the Browser plugin off and on in Settings › Plugins."
+
+**The finding, plainly.** The catalog's playground mounts the shipping head on its real controller (`HeadLive`), and
+no plugin host runs in the catalog. So its Artifacts shelf waits on HN-8's real bound: `useHubWaits` arms a 10 s
+`setTimeout` (`HUB_START_BOUND_MS`) from the playground's mount, and past it the shelf says the Hub isn't starting.
+That is HN-8's ruled behaviour (`HeadLive`'s own doc: "past 10 s says the Hub isn't starting, as a window's would").
+The page renders whole in each row's `beforeEach`. On GitHub's loaded runner (field-app's vitest 489 s, 210 s of
+setup) the render and the row's earlier acts outlasted 10 s before the click, so the row read the later words.
+- The mini was green on every one of those commits: **the mini's green is not GitHub's.**
+- Nothing in `HeadView` or the test changed between the last green and the first red.
+- The row asserted a clock's words without holding the clock.
+
+**What** (`2d2f41046`, first cut `78f12bd17` on `bd9ecd159`; test files only, 2 files +31 −4):
+- **HN-8's design kept.** The adapter does not hold the wait, and the shipping `Head` takes no new seam for the
+  catalog.
+- **The page row** (`design-system.test.tsx`) keeps what real time can prove. The package turns the SAME sheet to
+  Artifacts in place (`data-open` stays true), and the shown shelf holds the Hub's wait (`.vf-head-waits`) and no Hub
+  (`[data-vf-plugin]`). Its comment says why the words are not read there. File-wide fake timers were not an option:
+  the page renders under real time for all eight rows, and two of them wait on real timers.
+- **The words, under a frozen clock** (`head.test.tsx`, a new row beside the bound's own): the catalog's `HeadLive`
+  over its fixture doors, the registry mock at null (no plugin host, the catalog's case), `vi.useFakeTimers()`. It
+  reads "Opening Artifacts…" at `HUB_START_BOUND_MS` − 1 and "Artifacts aren't starting" at the bound.
+
+**The light** (lane `item118/vibe-field` on this Mac at nice 19, 19:25:33 → 19:27:53Z, load 39.7 → 94.5; the vitest
+lane from a5's release, with cp-landing's HOLD kept through it; `lanes/records/item129/item129-light.sh`):
+- **R1, in CI's shape** (`HUB_START_BOUND_MS` at 1 ms, the bound crossed before the click):
+  - the OLD page row red with GitHub's own failure: `Expected: "Opening Artifacts…"`, `Received: "Artifacts aren't
+    startingTurn the Browser plugin off and on in Settings › Plugins."`;
+  - the NEW page row green under the same mutation.
+- **R2:** with `useHubWaits`' stall timer inert, the new `HeadLive` row red (`Expected: "Artifacts aren't starting"`,
+  `Received: "Opening Artifacts…"`); restored, green.
+- biome on the two files: clean. `check:walls`: total 0. The field-app typecheck: 0.
+- **field-app whole:** 267 files passed, 1 skipped; 3,485 tests passed, 3 skipped, in 86 s.
+  `design-system.test.tsx` 8/8 in 42.1 s (a5's baseline 48.2 s); `head.test.tsx` 96/96.
+
+**Run 59** (the mini, on the stacked mint: a5's FG-O2 judge `6adf58dd3`, then this): verify exit 0 at 19:35:59Z,
+the tree clean, stubs 0. VF-PM's stripped read (13,833 lines) found 0 FAIL rows. Typecheck and test ran for 28
+projects. Vitest 11,372 passed, 18 skipped, 0 failed: four more than run 58, among them `head.test.tsx`'s new row
+(96), with `design-system.test.tsx` 8/8. `test result: ok.` ×33; MaxListeners 0; the bundle 911.0 / 240.6 KB.
+
+**Owed:** the proof is main's next push-event GitHub macOS verify green, on the push that carries this landing.
+Then VF-PM re-runs PR #7's verify.
+
+**Landed:** local main fast-forwarded `bd9ecd159` → `2d2f41046` (a5's judge, then this) at 2026-10-31T19:38:05Z by
+`land-stack4.sh`, on VF-PM's GO.

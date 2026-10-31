@@ -33,14 +33,16 @@
 //     field's `data-tear`, "tearing" then "open"); over the still it opens by the fade, and nothing tears. Judged by
 //     order and outcome, heard as the page sets them; a tear that passed its bound, failed or was cut is red. One still
 //     of it is for the eye: the tear about halfway.
+//   · THE WORDS (FG-O2's judge; DESIGN.md §8 "Its words read"): on every pane's still, every lettered word of the band
+//     and the standing pane, cut from the window's own capture where the page placed it and measured as DK-16
+//     measured the mat's (its ground, its ink, their WCAG ratio), reads at 4.5:1 or more. A word passed over is said
+//     with why: in a control that is off, still fading, cut off, under a list's masked foot, or changed under the
+//     capture (`passedOver`). The splash's stage line, on its one early still, is held to the same bar as it is cut.
+//     Each still prints how many it held, its lowest, every short one in full and every one passed over.
 //   · The walk's end: Setting up's welcome said, the durable `onboarded: true`, the wizard gone, no CSP refusal.
 // Printed, never judged (FG-O3, VF-PM 16:04Z): the page's frame intervals and the GPU's load over the tear and over as
 // long a stretch before the hand-over: the GPU process's CPU as Electron counts it, and the GPU's own busy share where
 // the host gives it without root (IOAccelerator's, through `ioreg`), else "not read".
-// Printed, not judged yet (FG-O2, VF-PM 16:51Z): the small words' contrast as DK-16 measured the mat's, each cut from
-// the still that holds it (the window's own capture), its ground and ink read from the pixels and their WCAG ratio:
-// the splash's stage line on its one early still, the band's labels and the line under the actions on Connect's, and a
-// load's sub line on Setting up's welcome. DESIGN.md's 4.5:1 judges them only after one printed run on the mini.
 // Not this row's (desk-gates row 32): Agents with nine installed, History with six rows and Profiles' five cards
 // (James's eye), and the ways out at 6s and Start now at 8s (their unit rows): Start now is said when it shows, and
 // never pressed, so the welcome is always the walk's to see.
@@ -92,6 +94,12 @@ export const FIRST_RUN = {
   signInHeight: 170,
   /** DESIGN.md §4 `--vf-scroll-fade` */
   scrollFade: 20,
+  /** DESIGN.md §8 "Its words read" (§2.5's bar for a word that is read): every word on the glass, WCAG 2 */
+  wordContrast: 4.5,
+  /** a word's text as the row prints it, at most this many characters */
+  wordChars: 48,
+  /** a still's lowest words, printed with their ratios */
+  lowestWords: 3,
   /** how far a box may sit from where it is meant to, in CSS px */
   slackPx: 1,
   /** the mark's ink centre found in the pixels, in CSS px of the window */
@@ -418,30 +426,44 @@ export function readGpuBusy(): Promise<number | null> {
   });
 }
 
-/** FG-O2's small words as the page finds them (`inks()`): the box their glyphs take (a range over their text, never
- * the element's box), in CSS px of the window; what they say; and how much of them shows, their opacity times every
- * ancestor's. */
+/** FG-O2's words as the page finds them (`inks()`), the splash's stage line one of them: the box their glyphs take (a
+ * range over their text, never the element's box), in CSS px of the window; what they say; and how much of them
+ * shows, their opacity times every ancestor's. */
 export interface WordsSeen extends Box {
   readonly text: string;
   readonly shown: number;
 }
 
+/** The list a word scrolls in (FG-4a: a list that can outgrow its body scrolls within itself, its foot masked over
+ * `--vf-scroll-fade`): its box, and whether it wears the mask. */
+export interface ListSeen extends Box {
+  readonly masked: boolean;
+}
+
+/** One lettered text of the band or the standing pane (FG-O2's judge): one text node, the box each of its lines takes
+ * (clipped to what the boxes around it let show) and their extent; what it says; how much of it shows; whether it
+ * stands in a control that is off, and under a box still moving (an animation or a transition running on it or
+ * around it); whether a box around it cut it off, its list or another (an ellipsis's cut excepted: it ends a line as
+ * the line is drawn); its colour as computed; and the list it scrolls in. */
+export interface WordSeen extends WordsSeen {
+  readonly lines: readonly Box[];
+  readonly off: boolean;
+  readonly fading: boolean;
+  readonly cut: "list" | "box" | null;
+  readonly color: string;
+  readonly list: ListSeen | null;
+}
+
 /** FG-O2's read of the page (`inks()`): the window's size, whether the wizard has come, the field under the splash
- * (its state, and its canvas's opacity while the live field fades in over its still), the splash's stage line, the
- * band's labels, and the standing pane's line under its actions and a load's sub line, each null where none stands. */
+ * (its state, and its canvas's opacity while the live field fades in over its still), the splash's stage line (null
+ * where none stands), and every lettered word of the band and the standing pane (FG-O2's judge). */
 export interface InksSeen {
   readonly view: { readonly width: number; readonly height: number };
   readonly wizard: boolean;
   readonly field: string | null;
   readonly canvas: number | null;
   readonly stage: WordsSeen | null;
-  readonly steps: readonly {
-    readonly step: string | null;
-    readonly state: string | null;
-    readonly words: WordsSeen | null;
-  }[];
-  readonly later: WordsSeen | null;
-  readonly sub: WordsSeen | null;
+  readonly words: readonly WordSeen[];
 }
 
 /** FG-O2: what the splash's one early still does with a read of the page. Its stage line whole on the field that has
@@ -455,84 +477,226 @@ export function splashLook(seen: InksSeen | null): "take" | "keep" | "wait" | "s
   return seen.field === "live" && (seen.canvas ?? 0) >= 0.999 ? "take" : "keep";
 }
 
-/** Which of FG-O2's small words a still is cut for. */
-export type InkWords = "stage" | "steps" | "later" | "sub";
+/** Which of FG-O2's reads a still is cut for: the splash's stage line, or every word on the glass. */
+export type InkWords = "stage" | "words";
 
-/** One of FG-O2's small words, cut from a still's capture and measured at the walk's end (`firstRunContrast`). */
-export interface InkCut {
-  readonly words: InkWords;
-  /** the still it was cut from */
-  readonly at: string;
-  /** a band's label: its step */
-  readonly step?: string;
-  /** what prints beside its reading: the stage's words and the field under them, or a label's state */
-  readonly about: Readonly<Record<string, string | number | null>>;
-  readonly shown: number;
-  /** the chip's BGRA (`cutChip`), null where the capture could not be cut */
-  readonly px: Uint8Array | null;
+/** One of FG-O2's words, cut from a still's capture (`cutChip`, its BGRA null where the capture could not be cut) and
+ * measured at the walk's end (`firstRunContrast`): the stage line with the field under it, or a word on the glass
+ * with its colour, never cut where it is passed over (`passedOver`). */
+export type InkCut =
+  | {
+      readonly words: "stage";
+      /** the still it was cut from */
+      readonly at: string;
+      readonly said: string;
+      readonly field: string | null;
+      readonly canvas: number | null;
+      readonly shown: number;
+      readonly px: Uint8Array | null;
+    }
+  | {
+      readonly words: "words";
+      readonly at: string;
+      readonly text: string;
+      readonly color: string;
+      readonly shown: number;
+      readonly passed: string | null;
+      readonly px: Uint8Array | null;
+    };
+
+/** FG-O2's judge: why a word is passed over rather than held at the bar, or null when it is held. A word is held as it
+ * stands, dimmed or not: one in a control that is off is passed over (an inactive control's words carry no contrast
+ * need, WCAG 2's 1.4.3); one shown less than whole only for a moment, still fading, shows less than its ink; one cut
+ * off shows part of it, and one in a masked list's foot stands under its fade on purpose; and a word the read on the
+ * capture's other side (`before`) did not hold as it holds now changed under the capture, so its pixels may show
+ * another. */
+export function passedOver(word: WordSeen, before: readonly WordSeen[] | null): string | null {
+  if (word.off) return `in a control that is off (${word.shown})`;
+  if (word.fading && word.shown < 0.999) return `fading (${word.shown})`;
+  if (word.cut !== null)
+    return word.cut === "list" ? "cut off at its list's edge" : "cut off by its box";
+  const list = word.list;
+  const slack = FIRST_RUN.slackPx;
+  if (
+    list?.masked === true &&
+    word.y + word.height > list.y + list.height - FIRST_RUN.scrollFade + slack
+  )
+    return "under its list's fade";
+  const near = (a: number, b: number): boolean => Math.abs(a - b) <= slack;
+  const same = (other: WordSeen): boolean =>
+    other.text === word.text &&
+    !other.fading &&
+    other.cut === null &&
+    Math.abs(other.shown - word.shown) < 0.01 &&
+    near(other.x, word.x) &&
+    near(other.y, word.y) &&
+    near(other.width, word.width) &&
+    near(other.height, word.height);
+  if (before !== null && !before.some(same)) return "changed under the capture";
+  return null;
 }
 
-/** FG-O2: the small words a still holds, each cut from its capture where `seen` places it. */
+/** FG-O2: the words a still holds, each cut from its capture where `seen` places it: the splash's stage line, or every
+ * word on the glass, each held at the bar or passed over (`passedOver`, against `before`, the page read on the
+ * capture's other side). */
 export function inkCuts(
   at: string,
   bitmap: Uint8Array,
   seen: InksSeen,
   words: readonly InkWords[],
+  before: InksSeen | null = null,
 ): InkCut[] {
-  const cut = (box: WordsSeen): Uint8Array | null => cutChip(bitmap, seen.view, box);
+  const cut = (box: Box): Uint8Array | null => cutChip(bitmap, seen.view, box);
   const cuts: InkCut[] = [];
-  for (const which of words) {
-    if (which === "steps") {
-      for (const { step, state, words: label } of seen.steps) {
-        if (label === null) continue;
-        cuts.push({
-          words: which,
-          at,
-          step: step ?? "?",
-          about: { state },
-          shown: label.shown,
-          px: cut(label),
-        });
-      }
-      continue;
+  const stage = seen.stage;
+  if (words.includes("stage") && stage !== null)
+    cuts.push({
+      words: "stage",
+      at,
+      said: stage.text,
+      field: seen.field,
+      canvas: seen.canvas,
+      shown: stage.shown,
+      px: cut(stage),
+    });
+  if (words.includes("words"))
+    for (const word of seen.words) {
+      const passed = passedOver(word, before?.words ?? null);
+      // a word's chip is its lines' together: its own glyphs, never what stands between its lines
+      const lines = passed === null ? word.lines.map(cut) : [];
+      const whole = lines.filter((line): line is Uint8Array => line !== null);
+      cuts.push({
+        words: "words",
+        at,
+        text: word.text,
+        color: word.color,
+        shown: word.shown,
+        passed,
+        px: whole.length === 0 || whole.length < lines.length ? null : joined(whole),
+      });
     }
-    const seenWords = seen[which];
-    if (seenWords === null) continue;
-    const about =
-      which === "stage" ? { said: seenWords.text, field: seen.field, canvas: seen.canvas } : {};
-    cuts.push({ words: which, at, about, shown: seenWords.shown, px: cut(seenWords) });
-  }
   return cuts;
 }
 
-/** FG-O2's contrast, printed and not judged yet (DESIGN.md's 4.5:1 judges it only after one printed run on the mini
- * has shown the numbers), as DK-16 measured the mat's: each of the small words with the still it was cut from, its
- * ground and its ink as measured and their WCAG ratio, and how much of it showed. The band's labels are keyed by their
- * step; words the walk never saw are null. */
-export function firstRunContrast(
-  cuts: readonly InkCut[],
-): Record<InkWords, Record<string, unknown> | null> {
-  const reading = (cut: InkCut): Record<string, unknown> => ({
-    ...cut.about,
-    ...(cut.px === null ? { ground: null, ink: null, ratio: null } : measureChip(cut.px)),
-    shown: cut.shown,
-  });
-  const facts: Record<InkWords, Record<string, unknown> | null> = {
-    stage: null,
-    steps: null,
-    later: null,
-    sub: null,
-  };
+/** Chips (BGRA) as one, for `measureChip`, which reads a chip's pixels and never its shape. */
+function joined(chips: readonly Uint8Array[]): Uint8Array {
+  const all = new Uint8Array(chips.reduce((n, chip) => n + chip.length, 0));
+  let at = 0;
+  for (const chip of chips) {
+    all.set(chip, at);
+    at += chip.length;
+  }
+  return all;
+}
+
+/** A chip as DK-16 measured it (`measureChip`), or nulls where its still could not give it up. */
+export interface ChipReading {
+  readonly ground: readonly [number, number, number] | null;
+  readonly ink: readonly [number, number, number] | null;
+  readonly ratio: number | null;
+}
+
+/** The splash's stage line as the row prints it: the still it was cut from, its words and the field under them. */
+export interface StageReading extends ChipReading {
+  readonly at: string;
+  readonly said: string;
+  readonly field: string | null;
+  readonly canvas: number | null;
+  readonly shown: number;
+}
+
+/** A word under the bar, or unread, in full: its whole text, its colour as computed, and its chip's reading. */
+export interface ShortWord extends ChipReading {
+  readonly text: string;
+  readonly color: string;
+}
+
+/** One still's words as the row prints them (FG-O2's judge), a word's text cut to `FIRST_RUN.wordChars` but a short
+ * one's. */
+export interface StillWords {
+  readonly at: string;
+  /** how many were held at the bar */
+  readonly judged: number;
+  /** the lowest of them with their ratios, from the lowest (`FIRST_RUN.lowestWords`) */
+  readonly lowest: readonly (readonly [string, number | null])[];
+  /** every one under the bar, or unread, in full */
+  readonly short: readonly ShortWord[];
+  /** every one passed over, with why (`passedOver`) */
+  readonly passed: readonly (readonly [string, string])[];
+}
+
+/** FG-O2's contrast as the row prints it: the splash's stage line (null where the walk never saw it whole), and every
+ * still's words, in the walk's order. */
+export interface FirstRunContrast {
+  readonly stage: StageReading | null;
+  readonly words: readonly StillWords[];
+}
+
+/** FG-O2's contrast, as DK-16 measured the mat's: each chip's ground and ink as measured and their WCAG ratio, the
+ * stage line with the still it was cut from, and each still's words (`StillWords`). */
+export function firstRunContrast(cuts: readonly InkCut[]): FirstRunContrast {
+  const reading = (px: Uint8Array | null): ChipReading =>
+    px === null ? { ground: null, ink: null, ratio: null } : measureChip(px);
+  const clip = (text: string): string =>
+    text.length > FIRST_RUN.wordChars ? `${text.slice(0, FIRST_RUN.wordChars - 1)}…` : text;
+  let stage: StageReading | null = null;
+  const stills = new Map<
+    string,
+    { read: [string, number | null][]; short: ShortWord[]; passed: [string, string][] }
+  >();
   for (const cut of cuts) {
-    if (cut.words !== "steps") {
-      facts[cut.words] = { at: cut.at, ...reading(cut) };
+    if (cut.words === "stage") {
+      const { at, said, field, canvas, shown } = cut;
+      stage = { at, said, field, canvas, ...reading(cut.px), shown };
       continue;
     }
-    const steps = facts.steps ?? { at: cut.at };
-    steps[cut.step ?? "?"] = reading(cut);
-    facts.steps = steps;
+    let still = stills.get(cut.at);
+    if (still === undefined) {
+      still = { read: [], short: [], passed: [] };
+      stills.set(cut.at, still);
+    }
+    if (cut.passed !== null) {
+      still.passed.push([clip(cut.text), cut.passed]);
+      continue;
+    }
+    const chip = reading(cut.px);
+    still.read.push([clip(cut.text), chip.ratio]);
+    if (chip.ratio === null || chip.ratio < FIRST_RUN.wordContrast)
+      still.short.push({ text: cut.text, color: cut.color, ...chip });
   }
-  return facts;
+  return {
+    stage,
+    words: [...stills].map(([at, { read, short, passed }]) => ({
+      at,
+      judged: read.length,
+      lowest: read.sort((p, q) => (p[1] ?? -1) - (q[1] ?? -1)).slice(0, FIRST_RUN.lowestWords),
+      short,
+      passed,
+    })),
+  };
+}
+
+/** FG-O2's judge (DESIGN.md §8 "Its words read"): the splash's stage line as it is cut, and every word held at the
+ * bar, read at 4.5:1 or more; a word under it is red with its numbers, and one its still could not give up is red as
+ * unread. */
+export function judgeContrast(contrast: FirstRunContrast): string[] {
+  const bar = FIRST_RUN.wordContrast;
+  const reads = (chip: ChipReading): string =>
+    `${chip.ratio}:1 (${JSON.stringify(chip.ground)} → ${JSON.stringify(chip.ink)})`;
+  const problems: string[] = [];
+  const stage = contrast.stage;
+  if (stage !== null && stage.ratio === null)
+    problems.push(`the splash's stage line could not be cut from ${stage.at}`);
+  else if (stage !== null && (stage.ratio ?? bar) < bar)
+    problems.push(`the splash's stage line reads ${reads(stage)} on ${stage.at}, under ${bar}:1`);
+  for (const still of contrast.words)
+    for (const word of still.short)
+      problems.push(
+        word.ratio === null
+          ? `on ${still.at} "${word.text}" could not be cut from its still`
+          : `on ${still.at} "${word.text}" reads ${reads(word)} in ${word.color}, under ${bar}:1`,
+      );
+  return problems;
 }
 
 /** The mark's ink in a capture `width` × `height` CSS px (BGRA, Electron's `toBitmap`, at the screen's density): the
@@ -632,8 +796,8 @@ export const FIRST_RUN_PAGE = String.raw`(() => {
     const r = el.getBoundingClientRect();
     return { x: r.x, y: r.y, width: r.width, height: r.height };
   };
-  // FG-O2's small words: the box their glyphs take (a range over their text, never the element's), what they say, and
-  // how much of them shows (their own opacity times every ancestor's)
+  // FG-O2's stage line: the box its glyphs take (a range over its text, never the element's), what it says, and how
+  // much of it shows (its own opacity times every ancestor's)
   const wordsOf = (el) => {
     if (el === null || el.textContent.trim() === "") return null;
     const range = document.createRange();
@@ -643,6 +807,68 @@ export const FIRST_RUN_PAGE = String.raw`(() => {
     for (let at = el; at !== null; at = at.parentElement) shown *= opacity(at);
     const text = el.textContent.trim();
     return { x: r.x, y: r.y, width: r.width, height: r.height, text, shown: Math.round(shown * 1000) / 1000 };
+  };
+  // FG-O2's judge: every lettered text in a scope, one text node at a time. Each of its lines is the box a range over
+  // the node gives it (never its element's box), clipped by every box around it that cuts what overflows it; a box that
+  // cuts a line short says the word was cut off, its list (a scroller) or another, but an ellipsis's cut, which ends a
+  // line as the line is drawn. A text not one line of which shows past the slack is not on the still. Its list is the
+  // scroller nearest it, with whether it wears its fade (a mask).
+  const lettered = /\p{L}/u;
+  const wordsIn = (scope) => {
+    if (scope === null || scope === undefined) return [];
+    const slack = ${FIRST_RUN.slackPx};
+    const words = [];
+    const walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+      const text = node.data.replace(/\s+/g, " ").trim();
+      const el = node.parentElement;
+      if (el === null || !lettered.test(text)) continue;
+      const style = getComputedStyle(el);
+      if (style.visibility !== "visible") continue;
+      let shown = 1;
+      for (let at = el; at !== null; at = at.parentElement) shown *= opacity(at);
+      if (shown < 0.01) continue;
+      // a word in a control that is off; and one under a box still moving (an animation or a transition running on it
+      // or around it), shown less than whole only for a moment, against one dimmed to stay so
+      const off = el.closest(':disabled, [aria-disabled="true"]') !== null;
+      let fading = false;
+      for (let at = el; at !== null && !fading; at = at.parentElement)
+        fading = at.getAnimations().some((animation) => animation.playState === "running");
+      const clips = [];
+      let list = null;
+      for (let at = el; at !== null; at = at.parentElement) {
+        const s = at === el ? style : getComputedStyle(at);
+        if (s.overflowX === "visible" && s.overflowY === "visible") continue;
+        const scrolls = /(auto|scroll)/.test(s.overflowY);
+        clips.push({ ...box(at), scrolls, ellipsis: s.textOverflow === "ellipsis" });
+        if (scrolls && list === null)
+          list = { ...box(at), masked: (s.maskImage || s.webkitMaskImage || "none") !== "none" };
+      }
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      const lines = [];
+      let cut = null;
+      for (const r of range.getClientRects()) {
+        if (r.width <= 0 || r.height <= 0) continue;
+        let [x0, y0, x1, y1] = [r.left, r.top, r.right, r.bottom];
+        for (const c of clips) {
+          const [cx0, cy0] = [Math.max(x0, c.x), Math.max(y0, c.y)];
+          const [cx1, cy1] = [Math.min(x1, c.x + c.width), Math.min(y1, c.y + c.height)];
+          const short = cy1 - cy0 < y1 - y0 - slack || (cx1 - cx0 < x1 - x0 - slack && !c.ellipsis);
+          if (short && cut === null) cut = c.scrolls ? "list" : "box";
+          [x0, y0, x1, y1] = [cx0, cy0, cx1, cy1];
+        }
+        if (x1 - x0 > slack && y1 - y0 > slack) lines.push({ x: x0, y: y0, width: x1 - x0, height: y1 - y0 });
+      }
+      if (lines.length === 0) continue;
+      const x = Math.min(...lines.map((line) => line.x));
+      const y = Math.min(...lines.map((line) => line.y));
+      const width = Math.max(...lines.map((line) => line.x + line.width)) - x;
+      const height = Math.max(...lines.map((line) => line.y + line.height)) - y;
+      const seen = Math.round(shown * 1000) / 1000;
+      words.push({ x, y, width, height, lines, text, shown: seen, off, fading, cut, color: style.color, list });
+    }
+    return words;
   };
   // a scope's list (overflow-y auto or scroll): the one that outgrows its box, else the first, which fits
   const scrollerIn = (scope) => {
@@ -792,10 +1018,9 @@ export const FIRST_RUN_PAGE = String.raw`(() => {
       return document.activeElement === el;
     },
     count: (selector) => document.querySelectorAll(selector).length,
-    /** FG-O2's small words where they stand now: the splash's stage line over the field, the band's labels, and the
-     * standing pane's line under its actions and a load's sub line */
+    /** FG-O2's words where they stand now: the splash's stage line over the field, and every word of the band and the
+     * standing pane (FG-O2's judge) */
     inks: () => {
-      const root = standingRoot();
       const field = document.querySelector(".vf-field");
       const canvas = field?.querySelector(".vf-field-canvas") ?? null;
       return {
@@ -804,15 +1029,7 @@ export const FIRST_RUN_PAGE = String.raw`(() => {
         field: field?.getAttribute("data-field") ?? null,
         canvas: canvas === null ? null : Math.round(opacity(canvas) * 1000) / 1000,
         stage: wordsOf(document.querySelector('.vf-field-words > [role="progressbar"] + div')),
-        steps: [...(shellOf()?.querySelectorAll(".vf-wizard-steps li") ?? [])].map((li) => ({
-          step: li.getAttribute("data-step"),
-          state: li.getAttribute("data-state"),
-          words: wordsOf(li.querySelector(".vf-wizard-step-label")),
-        })),
-        later: wordsOf(root?.querySelector(".vf-wizard-later") ?? null),
-        sub: wordsOf(
-          root?.querySelector(".vf-wizard-status-words:not([data-state='out']) .vf-wizard-status-sub") ?? null,
-        ),
+        words: [...wordsIn(shellOf()?.querySelector(".vf-wizard-steps")), ...wordsIn(standingRoot())],
       };
     },
     logo: () => {
@@ -1209,12 +1426,24 @@ export async function firstRunRows(
     name: string,
     rect?: { x: number; y: number; width: number; height: number },
   ): Promise<Uint8Array> => keep(name, await d.win.capturePage(rect));
-  // FG-O2's small words (printed at the walk's end, not judged yet): on the still just taken, cut from its capture
-  // where the page placed them
+  // FG-O2's words (judged at the walk's end): on the still just taken, cut from its capture where the page placed
+  // them
   const inks: InkCut[] = [];
-  const cutFrom = (bitmap: Uint8Array, seen: InksSeen | null, words: readonly InkWords[]): void => {
+  const cutFrom = (
+    bitmap: Uint8Array,
+    seen: InksSeen | null,
+    words: readonly InkWords[],
+    before: InksSeen | null = null,
+  ): void => {
     const at = shots.at(-1);
-    if (seen !== null && at !== undefined) inks.push(...inkCuts(at, bitmap, seen, words));
+    if (seen !== null && at !== undefined) inks.push(...inkCuts(at, bitmap, seen, words, before));
+  };
+  // FG-O2's judge: a pane's still with every word on it, the page read on each side of the capture, so a word that
+  // changed under it is passed over, never measured on another's pixels
+  const captureWords = async (name: string): Promise<void> => {
+    const before = await page<InksSeen | null>("inks()");
+    const bitmap = await capture(name);
+    cutFrom(bitmap, await page<InksSeen | null>("inks()"), ["words"], before);
   };
   const target = (spec: ControlSpec): Promise<Target | null> =>
     page<Target | null>(`target(${JSON.stringify(spec)})`);
@@ -1331,7 +1560,7 @@ export async function firstRunRows(
     const logo = await until("the welcome's logo read", 5_000, () =>
       page<LogoSeen | null>("logo()"),
     );
-    await capture("welcome");
+    await captureWords("welcome");
     const margin = FIRST_RUN.logoMargin;
     const region = {
       x: Math.round(logo.box.x - margin),
@@ -1349,7 +1578,7 @@ export async function firstRunRows(
     // 2 · You: a name typed into its field
     step("you");
     await standing("field");
-    await capture("you");
+    await captureWords("you");
     await type({ selector: 'input[aria-label="Your name"]' }, "Ada", "the name's field");
     await press(PRIMARY, "You's Continue");
 
@@ -1360,7 +1589,7 @@ export async function firstRunRows(
     facts["agentsReady"] = ready;
     if (ready < 1)
       problems.push("Agents counts no agent ready: no adapter took the staged install");
-    await capture("agents");
+    await captureWords("agents");
     await press({ selector: ".vf-agents-pane-more" }, "More agents");
     await until(
       "More agents open",
@@ -1369,13 +1598,13 @@ export async function firstRunRows(
     );
     await sleep(300);
     const agents = await until("Agents' frame", 5_000, () => page<FrameSeen | null>("frame()"));
-    await capture("agents-more");
+    await captureWords("agents-more");
     await page<boolean>("scrollToEnd()");
     await sleep(200);
     const scrolled = await until("Agents' frame, scrolled", 5_000, () =>
       page<FrameSeen | null>("frame()"),
     );
-    await capture("agents-more-scrolled");
+    await captureWords("agents-more-scrolled");
     facts["agentsList"] =
       agents.scroller === null
         ? null
@@ -1392,7 +1621,7 @@ export async function firstRunRows(
     // 4 · Profiles: This Mac's card, then a profile added, its login standing in its terminal, then cancelled
     step("profiles");
     await standing("profiles");
-    await capture("profiles");
+    await captureWords("profiles");
     await press({ selector: '[aria-label="Add a profile…"]' }, "Add a profile…");
     await type({ selector: "#vf-profiles-pane-name" }, "Work", "the profile's name");
     await press({ text: "Next" }, "the name's Next");
@@ -1408,7 +1637,7 @@ export async function firstRunRows(
     await sleep(1_500);
     const signIn = await page<SignInSeen | null>("signIn()");
     const signingIn = await page<FrameSeen | null>("frame()");
-    await capture("profiles-login");
+    await captureWords("profiles-login");
     facts["login"] =
       signIn === null
         ? null
@@ -1436,7 +1665,7 @@ export async function firstRunRows(
     const rows = await count('ul[aria-label="Past sessions on this Mac"] > li');
     facts["historyRows"] = rows;
     if (rows !== 1) problems.push(`History shows ${rows} rows, not the typed agent's one`);
-    await capture("history");
+    await captureWords("history");
     await press(
       { text: "Bring in history", within: ".vf-wizard-actions button" },
       "Bring in history",
@@ -1451,7 +1680,7 @@ export async function firstRunRows(
         ? "asking"
         : null;
     });
-    cutFrom(await capture("connect"), await page<InksSeen | null>("inks()"), ["steps", "later"]);
+    await captureWords("connect");
     if (way === "asking") {
       facts["connect"] = "asked long: its way out";
       await press(ASKING_OUT, "Connect's way out");
@@ -1467,7 +1696,7 @@ export async function firstRunRows(
     // 7 · Setting up: its line through the work to the welcome, then the desk
     step("setting-up");
     await standing("setting-up:line");
-    await capture("setting-up");
+    await captureWords("setting-up");
     let welcomed = false;
     let startNow = false;
     let alone = false;
@@ -1478,9 +1707,8 @@ export async function firstRunRows(
         welcomed = true;
         // its crossfade in
         await sleep(300);
-        const welcomeStill = await capture("setting-up-welcome");
+        await captureWords("setting-up-welcome");
         gpuStart();
-        cutFrom(welcomeStill, await page<InksSeen | null>("inks()"), ["sub"]);
       }
       if (!startNow) startNow = (await target({ text: "Start now" }))?.hit === true;
       // the hand-over (FG-5): its stills, each timed from its step as the page set it
@@ -1545,7 +1773,9 @@ export async function firstRunRows(
   problems.push(...judgeOpening(walk, record.opening, record.tear));
   facts["opening"] = { opening: heard(record.opening), tear: heard(record.tear), still: tearShot };
   facts["gpu"] = firstRunGpu(record, gpu);
-  facts["contrast"] = firstRunContrast(inks);
+  const contrast = firstRunContrast(inks);
+  problems.push(...judgeContrast(contrast));
+  facts["contrast"] = contrast;
   const user = readUsersFile(d.users.root)?.users.find((u) => u.userId === d.users.userId);
   facts["onboarded"] = user?.onboarded ?? null;
   if (user?.onboarded !== true) problems.push("the walk ended without the durable onboarded: true");

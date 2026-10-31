@@ -71,7 +71,9 @@
   --vf-chrome-surface-soft: rgb(255 255 255 / 58%);
   --vf-chrome-surface-hover: rgb(255 255 255 / 78%);
   --vf-field-surface: rgb(255 255 255 / 60%);
-  --vf-wizard-surface: rgb(255 255 255 / 55%);
+  /* §5 the Setup Assistant's milk (FG-D15 C): 75% by day since FG-O2's judge, so its words read at 4.5:1 over the
+     field (§8 "Its words read"); the smoke stays 55% by night */
+  --vf-wizard-surface: rgb(255 255 255 / 75%);
   /* §5 the Setup Assistant's frost under its surface (one value in both themes): the blur and the saturation, which
      the field reads off the glass where it draws the frost itself (track FG, FG-3b, FG-D24) */
   --vf-wizard-blur: 32px;

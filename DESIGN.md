@@ -697,7 +697,7 @@ exception again.
 | Overlay chip | surface `/90–95` + `backdrop-blur-xl` | no wearer today: the put-back affordance and the HUD's toasts retired (DK-13, DK-17); the peers' chips wear the line's glass and the status line solid chrome (§8) |
 | Backdrop dim | `black/10` light · `black/40` dark | behind open sheets; canvas recedes to `scale(0.98)` |
 | Search scrim (GV-D8; K7, 2026-10-08) | `black/16` light · `black/46` dark, over a backdrop blur of 18 and `saturate(0.9)` | behind the Peek (§8 "Search"): the window blurred and dimmed, the view and the frame receding to `scale(0.98)` under it. Darker than the backdrop dim so it reads as dimmed (One Frame §23); the backdrop dim stays the sheets' until James rules otherwise (docket PK1). *Since TS-D22 A (2026-10-29):* the phone wears its dim alone, with no blur, under a door that stands over a live field, between the field and the bar (§9) |
-| Setup Assistant (as built since UA-3w; written down 2026-10-29, track FG; on the field, built at FG-3a as the browser's layers, and since FG-3b drawn by the field's own pass over the live field) | `--vf-wizard-surface` (white 55% by day, `rgb(28 28 30)` 55% by night) over a blur of `--vf-wizard-blur` (32px) and a saturation of `--vf-wizard-saturate` (1.12), the island radius (32). On the field (FG): a 1px edge, `--vf-wizard-edge` (white 60% by day, 12% by night) with a top light, `--vf-wizard-edge-light` (white 75%, 8%); the field's shadow, `--vf-shadow-wizard-field` (`0 40px 120px` and `0 12px 32px` in the field's ground at 55% and 28%); and a grain at `--vf-wizard-grain` (3%), so the blur never bands. Its logo (FG-4b): `--vf-wizard-logo-filter`, `invert(1) hue-rotate(180deg)` by day and `none` by night, so the mark is white on smoke and inverted on milk with its colours kept | the Setup Assistant's glass (§8): on the field its frost lets the tunnel's rings through softly (FG-D15 C). Over the live field the field draws this recipe itself, in its own frame and from these tokens (FG-D24); over the field's still the backdrop filter draws it |
+| Setup Assistant (as built since UA-3w; written down 2026-10-29, track FG; on the field, built at FG-3a as the browser's layers, and since FG-3b drawn by the field's own pass over the live field) | `--vf-wizard-surface` (white 75% by day, `rgb(28 28 30)` 55% by night) over a blur of `--vf-wizard-blur` (32px) and a saturation of `--vf-wizard-saturate` (1.12), the island radius (32). On the field (FG): a 1px edge, `--vf-wizard-edge` (white 60% by day, 12% by night) with a top light, `--vf-wizard-edge-light` (white 75%, 8%); the field's shadow, `--vf-shadow-wizard-field` (`0 40px 120px` and `0 12px 32px` in the field's ground at 55% and 28%); and a grain at `--vf-wizard-grain` (3%), so the blur never bands. Its logo (FG-4b): `--vf-wizard-logo-filter`, `invert(1) hue-rotate(180deg)` by day and `none` by night, so the mark is white on smoke and inverted on milk with its colours kept. Its words (FG-O2's judge): the ramp stops at t2 on the glass, t3 and t4 re-projected to t2 there (`--vf-text-tertiary`, `--vf-text-faint`), and a quiet button's words stand at t1 on its fill; its panes' words go with its own, so every word on it reads at 4.5:1 (§8) | the Setup Assistant's glass (§8): on the field its frost lets the tunnel's rings through softly (FG-D15 C; by day through a 75% milk since FG-O2's judge, 2026-10-31, at a little over half the strength 55% let through). Over the live field the field draws this recipe itself, in its own frame and from these tokens (FG-D24); over the field's still the backdrop filter draws it |
 
 **Menus are solid, floating controls are glass** (One Frame FR-7, FC-D14 ruled 2026-10-01): a menu
 is rows to be read, so it is `--vf-chrome-solid` — opaque — ringed by `--vf-hairline-strong`, with
@@ -2898,12 +2898,21 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   `draft/thinking-first-run-glass.md`, the page *First run on the field*). The Setup Assistant stands on
   the field as one glass, **880 × 640 on every step** (FG-D3 A): centred, never scrolling, and below a
   976 × 736 window scaled as one picture (fit = min(1, (w − 96)/880, (h − 96)/640)), never reflowed. Its
-  material is §5's Setup Assistant tier (FG-D15 C: the tunnel's rings come through softly), milk by day
+  material is §5's Setup Assistant tier (FG-D15 C: the tunnel's rings come through softly, by day through a
+  75% milk since FG-O2's judge), milk by day
   and smoke by night while the field stays the dark in both (FG-D4 A), and nothing see-through is ever cut
-  into it (FG-L2). **The steps** (FG-D22 A, FG-D23 A): a band along the glass's top 72, one segment per
+  into it (FG-L2). **Its words read** (FG-O2's judge): every word on the glass, its panes' with its own, reads at
+  4.5:1 or more over the field as it moves, by day, by night and over the field's still (§2.5's bar for a word that
+  is read), so on the glass the ramp stops at t2 and a quiet button's words stand at t1 (§5). Row 32 measures every
+  word on each pane it walks (`docs/desk-gates.md`): each lettered word of the band and the standing pane, cut from
+  the window's own capture by DK-16's method and held at the bar once it shows whole; a word in a control that is
+  off (WCAG 2's exemption for an inactive control) or under a list's fade is passed over and said so, and a word
+  under the bar is red with its numbers.
+  **The steps** (FG-D22 A, FG-D23 A): a band along the glass's top 72, one segment per
   step of the chapter's order — You · Agents · Profiles · History · Devices · Setting up — 76 × 3 with a
-  gap of 8, its label in small capitals 9 under it (500, 10px, .08em): done in grey (t3), the current in
-  ink (`aria-current="step"`), the rest a hairline (t4). A segment fills as you arrive (480ms island),
+  gap of 8, its label in small capitals 9 under it (500, 10px, .08em): done in t2 over its filled segment, the
+  current in ink (`aria-current="step"`), the rest in t2 over the hairline (§5).
+  A segment fills as you arrive (480ms island),
   Setting up's with the work's own progress. The band is absent on the welcome, fades in with You (240ms)
   and stays over a load and over Setting up. **One frame** (FG-L3): every pane stands between 96 and 600,
   560 wide — its head at the top, its body 20 under it, its foot on the bottom (the actions, and the line
@@ -2911,7 +2920,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   fades in (240ms `ease`, 160ms reduced), the old one out first (120ms); nothing rises, slides or
   recentres. AO's and TS's panes keep their markup and words without their eyebrows (FG-L7). **A load**
   (FG-L5, FG-D20) is the logo and one line: the glass's rows `1fr | the logo | 1fr`, the line 26 under the
-  logo (400, 14px/1.4, t2, tabular figures) with its sub (12px, t3), and no buttons; a way out shows only
+  logo (400, 14px/1.4, t2, tabular figures) with its sub (12px, t2, told by its
+  size), and no buttons; a way out shows only
   when it runs long (Setting up's Start now after 8 s, AO-D4). Setting up is one such line from its first
   phase to the welcome (FG-D21 B). **The logo** (FG-D1, FG-D2, FG-D16, FG-D17 A, FG-D18): one living mark,
   the field's own, at the field's mark's spot and size, only ever fading (§6); white on smoke, inverted on
@@ -2986,6 +2996,33 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   own px against the fit); over the field's still, the still's own mark, cover-fitted with the picture (1× wide, 2×
   tall). Over the live field the field draws it over the frost, from the mark it draws itself, reading its fade and
   its filter (§5) off the glass. The pixel witness and the console rows are owed to the next window.*
+  *Amended 2026-10-31 (track FG, FG-O2's judge: the lighter day glass, ruled by James at 18:25Z ("b"), amending his
+  own FG-D15 C; DESIGN.md first, built in the judge's slice):* the glass's words read at 4.5:1. Row 32's walks
+  measured the small ones at run57b (FG-O2, printed, not judged): by day the band's done labels at 2.2–2.4:1, its
+  next at 1.7, the line under the actions and a load's sub at 2.2; by night 3.2–3.8, 2.5, 3.7 and 3.2; over the
+  field's still as by day. t3 cannot reach 4.5:1 on any light ground (2.85:1 on white, 2.6 on a 75% milk), and on
+  the 55% milk over the dark field one step up, t2, gave 3.7–4.5 by day by the walk's own grounds (3.8–4.6 over the
+  still). So by day the milk goes from 55% to 75% (`--vf-wizard-surface`; by night the smoke stays 55%), and on the
+  glass the ramp stops at t2 (§5). In t2 now, from t3, the band's done labels, the line under the actions (FG-4a's
+  status), a load's sub (FG-4b's), a user's detail in the chooser, the face deck's labels and its "Or any emoji",
+  and on Devices the partner line's small print and the waiting steps; from t4, the band's labels still to come and
+  a ghost's name on Devices. A load's sub is told from its line by its size, and a load's line and the panes' t2
+  words come up with the milk. The wizard's own class inks stood outside the tokens, in fixed black and white, which
+  §10 already rules out (product code consumes tokens): its facts at 45%, among them Connect's "What VibeField can
+  see", You's "Name" at 50%, its voices at 70%, and its quiet buttons' words at 65% on a 5% fill (10% by night).
+  They come onto the ramp: the facts and the label as t3 and the voices as t2, so on the glass the facts and the
+  label in t2 with the small words, and the voices a shade lighter than the fixed black they wore; and a quiet
+  button's words at t1 on its fill in both themes, since on that fill a 70% ink gives 4.3–5.8 by night. By the
+  judge's model over the walk's grounds the quiet words read at 4.9–5.3:1 by day, 4.9–5.4 over the still and 5.5–7.4
+  by night, and a quiet button's words at 6.8–7.6 by day and 5.5–7.7 by night, until the row measures them. The
+  marks the two re-projected tokens colour follow them: a done segment's fill (t3) and a ghost's disc (t4). By day
+  the field shows through at 25% where it showed at 45%, so the tunnel's rings come through at a little over half
+  their strength and the glass reads a light grey-blue where it read a mid one; FG-D15 C chose 55% with the rings
+  showing softly over A's thick frost (84% under a 64px blur), and 75% under the same 32px blur goes two-thirds of
+  the way back to that milk and none of the way to that blur. It is one token, so all that wears it moves with it:
+  Finish setting up's sheet, and the field's own pass and the still's CSS glass, which read it (FG-D24). Settings
+  keeps its ramp: these panes' words on its chrome are §2.4's own question (item 127), as is the name field's
+  placeholder, which stands on the input's own white, a control's face.
 - **The reveal** (boot-exclusive motion): the canvas composes and stabilizes BEHIND
   the splash (the frame-stability gate — never reveal mid-hitch), then the splash
   fades 240ms plain `ease` while the canvas settles `scale(0.99) → 1` over 560ms

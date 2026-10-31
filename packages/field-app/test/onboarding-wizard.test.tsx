@@ -12,7 +12,14 @@ import { afterEach, beforeEach, describe, expect, vi, it as vitestIt } from "vit
 import { BootRoot } from "../src/boot/BootRoot";
 import type { BootMachine, BootOnboarding, BootView } from "../src/boot/machine";
 import { OnboardingWizard } from "../src/boot/onboarding/OnboardingWizard";
-import { glassFit, type WizardLeaving } from "../src/boot/onboarding/wizard-ui";
+import {
+  eyebrowCls,
+  factCls,
+  glassFit,
+  quietCls,
+  voiceCls,
+  type WizardLeaving,
+} from "../src/boot/onboarding/wizard-ui";
 import { cardsStore } from "../src/frame/cards/cards-store";
 import { type FieldHost, type FieldUserProfile, type FieldUserRoster, setHost } from "../src/host";
 import { observeFrames } from "./wizard-frame-fixture";
@@ -1634,6 +1641,31 @@ describe("Setup Assistant", () => {
     expect(night).not.toContain("--vf-wizard-saturate");
   });
 
+  it("reads its words at 4.5:1 over the field (FG-O2's judge; DESIGN.md §5, §8): the day's milk at 75%, the ramp stopped at t2 on the glass, the wizard's own inks on it", () => {
+    const [day = "", night = ""] = TOKENS.split("\n.dark {");
+    expect(day).toContain("--vf-wizard-surface: rgb(255 255 255 / 75%);");
+    expect(night).toContain("--vf-wizard-surface: rgb(28 28 30 / 55%);");
+    // on the glass t3 and t4 read as t2, its panes' words with its own; Settings keeps its ramp
+    expect(WIZARD_CSS).toMatch(
+      /\n\.vf-wizard-shell \{\s*--vf-text-tertiary: var\(--vf-text-secondary\);\s*--vf-text-faint: var\(--vf-text-secondary\);/u,
+    );
+    // its own words name their tier: the band's labels, done or to come, the line under the actions, a load's sub and a
+    // user's detail, all t2
+    for (const rule of ["step-label", "later", "status-sub", "user-detail"])
+      expect(WIZARD_CSS).toMatch(
+        new RegExp(`\\n\\.vf-wizard-${rule} \\{[^}]*color: var\\(--vf-text-secondary\\);`, "u"),
+      );
+    expect(WIZARD_CSS).not.toContain('li[data-state="done"] .vf-wizard-step-label');
+    // the class inks on the ramp, never a fixed black or white (DESIGN.md §10): a fact and an eyebrow at t3, a voice at
+    // t2, and a quiet button's words at t1 on its fill
+    expect(factCls).toContain("text-[var(--vf-text-tertiary)]");
+    expect(eyebrowCls).toContain("text-[var(--vf-text-tertiary)]");
+    expect(voiceCls).toContain("text-[var(--vf-text-secondary)]");
+    expect(quietCls).toContain("text-[var(--vf-text-primary)]");
+    for (const cls of [factCls, eyebrowCls, voiceCls, quietCls])
+      expect(cls).not.toMatch(/text-(black|white)\b/u);
+  });
+
   it("stands the browser's glass down where the field draws it, keeping the edge (FG-3b, FG-D24)", () => {
     // the shadow, the frost (its tint is its ::after) and the grain, hidden but keeping their style, which is the
     // recipe the field reads; the frost's backdrop filter off, so nothing blurs the field but the field
@@ -2020,12 +2052,13 @@ describe("Setup Assistant", () => {
     expect(WIZARD_CSS).toMatch(
       /@keyframes vf-wizard-fade-out \{\s*from \{\s*opacity: var\(--vf-wizard-from, 1\);\s*\}\s*to \{\s*opacity: 0;/u,
     );
-    // the line in t2 and the sub in t3, in tabular figures, the sub's 17 kept; the welcome's line in ink
+    // the line and the sub both in t2, the sub told by its size (FG-O2's judge), in tabular figures, the sub's 17 kept;
+    // the welcome's line in ink
     expect(WIZARD_CSS).toMatch(
       /\n\.vf-wizard-status-line \{\s*margin: 0;\s*color: var\(--vf-text-secondary\);\s*font-size: 14px;\s*font-variant-numeric: tabular-nums;\s*font-weight: 400;\s*line-height: 1\.4;/u,
     );
     expect(WIZARD_CSS).toMatch(
-      /\n\.vf-wizard-status-sub \{\s*min-height: 17px;\s*margin: 4px 0 0;\s*color: var\(--vf-text-tertiary\);\s*font-size: 12px;\s*font-variant-numeric: tabular-nums;\s*line-height: 1\.4;/u,
+      /\n\.vf-wizard-status-sub \{\s*min-height: 17px;\s*margin: 4px 0 0;\s*color: var\(--vf-text-secondary\);\s*font-size: 12px;\s*font-variant-numeric: tabular-nums;\s*line-height: 1\.4;/u,
     );
     expect(WIZARD_CSS).toMatch(
       /\n\.vf-wizard-status-words\[data-ink="true"\] \.vf-wizard-status-line \{\s*color: var\(--vf-foreground\);/u,
