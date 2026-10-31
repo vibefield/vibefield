@@ -9,6 +9,7 @@ import {
   type FixtureServer,
   mintKeys,
   nextVersion,
+  OPT_IN_RUNS,
   serveReleases,
   smokeTrustRoot,
   UPDATE_RUNS,
@@ -67,6 +68,9 @@ const filesUnder = (dir: string): string[] =>
 describe("the fixture update origin (W9's five runs, by the client's own chain)", () => {
   it("names the five runs in order, and N is above N-1 for either channel", () => {
     expect(UPDATE_RUNS).toEqual(["staged", "forged", "rollback", "killed", "unresolved"]);
+    // AU-5 (LC-29) — the quit run is opt-in: only `--runs quit` names it, never the row's default
+    expect(OPT_IN_RUNS).toEqual(["quit"]);
+    expect(UPDATE_RUNS).not.toContain("quit");
     expect(nextVersion("0.1.0", "beta")).toBe("0.1.1-beta.1");
     expect(nextVersion("0.1.0", "nightly", Date.parse("2026-10-16T01:00:00Z"))).toBe(
       "0.1.1-nightly.20261016",
@@ -127,6 +131,17 @@ describe("the fixture update origin (W9's five runs, by the client's own chain)"
       state: UPDATES_SERVICE.STATE_CHANNEL_UNRESOLVED,
     });
     expect(server.requests.some((request) => request.path.endsWith("latest-mac.yml"))).toBe(false);
+    expect(server.payloadRequests()).toEqual([]);
+  });
+
+  it("AU-5 · quit (opt-in): the good chain with requireUserConfirmation off, staged first, then a person's quit", async () => {
+    const { run, server, walk } = await served("quit");
+    expect(run).toMatchObject({ seed: null, expect: "staged", next: "quit-install" });
+    const result = await walk();
+    expect(result).toMatchObject({ ok: true, headVersion: run.releases[0]!.version });
+    if (!result.ok) return;
+    // a policy that asks first would hold the quit's install (LC-24): this run's never does
+    expect(result.policy.requireUserConfirmation).toBe(false);
     expect(server.payloadRequests()).toEqual([]);
   });
 

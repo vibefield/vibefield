@@ -972,6 +972,17 @@ export const METHODS: MethodDef[] = [
     locality: "sync",
     subscription: WHOLE_VALUE_STREAM,
   }),
+  // IOS-8f (AP-D3's end state; `thinking-ios-account.md` §3) — who this desktop's person is: the daemon's own
+  // user row as its windows show it (`UserMeResult`), asked by the phone once per connection beside the roster,
+  // and the answer replaces the face the phone dealt. workspace.read, as the roster is (the same audience reads
+  // device names today); local — a peer daemon has its own person.
+  defineMethod({
+    surface: "product",
+    method: "user.me",
+    scope: "workspace.read",
+    idempotent: true,
+    locality: "local",
+  }),
   // TS-3b (P9, TS-D17 A) — the person's own name for THIS device, or null for
   // the computer's. Local: it edits this device's file and republishes its own
   // slice; a peer is never renamed from here. Desktop callers only.
@@ -1756,11 +1767,11 @@ export const METHODS: MethodDef[] = [
   // ── surface.* (DT-1 — thinking-devtools-pack.md DT-D2/DT-D3) ──
   // The registry scope is the BASE gate; one row carries one scope, so the
   // SurfaceService additionally enforces the kind→scope matrix on `open`
-  // (browser → surface.browser · sck-window/ios-simulator → surface.capture),
-  // service-level and tested. `sources` lists capture kinds only, hence the
-  // capture scope outright. locality "local": a surface is a window on THIS
-  // device — remote surfaces are not a v1 concept, and none of these rows may
-  // ever gain `guestOk` or enter a tailnet preset.
+  // (browser → surface.browser · sck-window/ios-simulator/ios-simulator-device
+  // → surface.capture), service-level and tested. `sources` lists capture kinds
+  // only, hence the capture scope outright. locality "local": a surface is a
+  // window on THIS device — remote surfaces are not a v1 concept, and none of
+  // these rows may ever gain `guestOk` or enter a tailnet preset.
   defineMethod({
     surface: "product",
     method: "surface.sources",
@@ -1779,6 +1790,19 @@ export const METHODS: MethodDef[] = [
     surface: "product",
     method: "surface.close",
     scope: "surface.attach",
+    idempotent: true,
+    locality: "local",
+  }),
+  // PT-S2 (R11) — the attach's device list: this Mac's simulator devices as
+  // REDACTED rows (`{ deviceType, runtime, name, booted }`, never a UDID), the
+  // booted first, which a phone's one "Attach" act binds from. A capture kind's
+  // catalogue, as `sources` is, hence `surface.capture` outright; it needs no
+  // window, so no matrix adds to it. locality "local": a peer's devices are its
+  // own Mac's, and a phone binds a TYPE, never a device.
+  defineMethod({
+    surface: "product",
+    method: "surface.simulator.devices",
+    scope: "surface.capture",
     idempotent: true,
     locality: "local",
   }),
@@ -2783,5 +2807,33 @@ export const METHODS: MethodDef[] = [
         },
       },
     },
+  }),
+  // CO (the compose plane, version 2, ruled 2026-10-29; compose.ts) — the sparks' doors for the window: Chat's list,
+  // the New spark sheet, and waking one. `agents.manage`, like the other acts on this machine's agents a person takes at
+  // this device (the window holds it; no tailnet preset and no plugin eligibility table does), because a spark is an
+  // agent that may start agents: hatching one is not a plugin's call to make. `local`: a spark lives on the desktop
+  // that hatched it (sparks on the phone are not designed yet). The spark's own tools are not METHODS rows: they are
+  // compose.ts's catalog, served by fieldd's MCP server, and their names are a tool's, not a dotted method's.
+  defineMethod({
+    surface: "product",
+    method: "compose.sparks.list",
+    scope: "agents.manage",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "compose.sparks.hatch",
+    scope: "agents.manage",
+    idempotent: false,
+    locality: "local",
+  }),
+  // Declarative: a second open finds the spark awake and answers it as it is.
+  defineMethod({
+    surface: "product",
+    method: "compose.sparks.open",
+    scope: "agents.manage",
+    idempotent: true,
+    locality: "local",
   }),
 ];

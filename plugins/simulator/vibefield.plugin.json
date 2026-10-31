@@ -1,0 +1,99 @@
+{
+  "activation": [
+    "onObject:vibefield.simulator"
+  ],
+  "capabilities": [
+    "surface.attach",
+    "surface.capture"
+  ],
+  "contributes": {
+    "objects": [
+      {
+        "binding": {
+          "kind": "simulator"
+        },
+        "description": "An iPhone lying face up at its true size, its screen a Simulator's: double-click to use it — view-only",
+        "groups": {},
+        "interaction": {
+          "movable": true,
+          "resizable": false,
+          "selectable": true,
+          "snap": "both"
+        },
+        "props": {
+          "binding": {
+            "default": {
+              "deviceType": "",
+              "runtime": ""
+            },
+            "inner": {
+              "fields": {
+                "deviceType": {
+                  "kind": "string"
+                },
+                "runtime": {
+                  "kind": "string"
+                }
+              },
+              "kind": "object"
+            },
+            "kind": "json"
+          },
+          "finish": {
+            "default": "cosmic-orange",
+            "kind": "string",
+            "maxLength": 64
+          },
+          "model": {
+            "default": "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro",
+            "kind": "string",
+            "maxLength": 128
+          }
+        },
+        "provides": [
+          "vibefield.simulator",
+          "desk.object"
+        ],
+        "schemaVersion": 1,
+        "size": {
+          "h": 393.7,
+          "w": 188.71
+        },
+        "title": "Phone",
+        "tray": {
+          "category": "devices",
+          "hang": {
+            "accessory": "shelf",
+            "h": 157.48,
+            "pegs": [
+              [
+                -1,
+                0.5
+              ],
+              [
+                1,
+                0.5
+              ]
+            ],
+            "w": 75.48
+          },
+          "label": "Phone",
+          "order": 0
+        },
+        "type": "vibefield.simulator"
+      }
+    ]
+  },
+  "description": "An iPhone on the desk at its true size — any of the models Xcode's Simulator knows — its screen a Simulator's, view-only",
+  "engines": {
+    "app": ">=0.0.0",
+    "contracts": "^0.1.0"
+  },
+  "entries": {
+    "renderer": "./dist/renderer.js"
+  },
+  "id": "vibefield.simulator",
+  "manifestVersion": 1,
+  "title": "iOS Simulator",
+  "version": "0.1.0"
+}

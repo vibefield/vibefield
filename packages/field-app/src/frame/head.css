@@ -279,6 +279,93 @@
   gap: 16px 14px;
 }
 
+/* TS-6 — the tiles step aside while the sync question stands in their place
+   (the grid's own display would otherwise outrank the attribute). */
+.vf-head-docs[hidden] {
+  display: none;
+}
+
+/* TS-6 — the sync question (DESIGN.md §8 "The sync question"): in the explorer
+   in place of its tiles, when New field is asked while a link owes it. One
+   column: the title, the posture's two cards, the fields from before with Add,
+   and the acts, the primary in the History card's inverted ink. */
+.vf-head-question {
+  display: flex;
+  max-width: 520px;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0 auto;
+}
+
+.vf-head-question-title {
+  margin: 0;
+  color: var(--vf-text-primary);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.vf-head-question-earlier {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.vf-head-question-legend {
+  padding: 0;
+  color: var(--vf-text-primary);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.vf-head-question-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.vf-head-question-field {
+  display: flex;
+  min-height: 28px;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.vf-head-question-name {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--vf-text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-head-question-error {
+  margin: 0;
+  color: var(--vf-orange);
+  font-size: 12px;
+}
+
+.vf-head-question-acts {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.vf-head-question-acts [data-primary],
+.vf-head-question-acts [data-primary]:hover:not(:disabled) {
+  background: var(--vf-foreground);
+  color: var(--vf-canvas-bg);
+}
+
 .vf-head-doc-tile {
   position: relative;
   transition: transform 200ms ease;

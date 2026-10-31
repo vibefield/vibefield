@@ -98,8 +98,9 @@ export function keepsFramesWhenCovered(mode: ShellMode, argv: readonly string[])
 /** AL-3 (ESR §7.3 as amended 2026-10-27; `quit-gate.ts`) — the modes in which a
  * PERSON's quit (⌘Q, Dock → Quit, the tray's or the menu's Quit) passes the quit
  * gate and stops every pair. Production and dev alike (AL-D7: dev follows
- * production; its signals are not a person's quit, `dev-signals.ts`). The smokes
- * and labs keep their own policies: no hands answer a box there. */
+ * production; a signal is not a person's quit in either, `signal-quit.ts`,
+ * AU-5a). The smokes and labs keep their own policies: no hands answer a box
+ * there. */
 export function hasQuitGate(mode: ShellMode): boolean {
   return mode === "production" || mode === "dev";
 }

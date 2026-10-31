@@ -127,8 +127,9 @@
 //
 // Item 65 — FAKE_ROSETTAD_LATE_STDERR_MS: the last words reach stderr AFTER this process has exited. A refusal
 // (crash-on-start), the old binary's flag error and the schema mismatch are then written by a grandchild that holds
-// the inherited stderr pipe that many milliseconds, while this process exits at once: the order a loaded host can
-// give any child, made deterministic. Unset, they are written before the exit, as before.
+// the inherited stderr pipe, that many milliseconds after this process exits (item 92: measured from the exit, the
+// helper already running): the order a loaded host can give any child, made deterministic. Unset, they are written
+// before the exit, as before.
 import { spawn } from "node:child_process";
 import {
   appendFileSync,
@@ -160,21 +161,43 @@ const protocol = Number(process.env.FAKE_ROSETTAD_PROTOCOL ?? PROTOCOL_VERSION);
 const censusDelayMs = Number(process.env.FAKE_ROSETTAD_CENSUS_DELAY_MS ?? "0");
 const lateStderrMs = Number(process.env.FAKE_ROSETTAD_LATE_STDERR_MS ?? "0");
 
-/** Last words, then the exit — or, under FAKE_ROSETTAD_LATE_STDERR_MS, the exit first and the words after it. */
-const sayThenExit = (words, code) => {
+/** Last words, then the exit — or, under FAKE_ROSETTAD_LATE_STDERR_MS, the exit first and the words after it.
+ *
+ * *Item 92 (2026-10-29):* the words were written by a `node -e` spawned at the exit, so its own boot rode the
+ * trail, and at load 250 it carried them past the supervisor's 1 s drain bound: an older binary retried as a crash.
+ * The helper now says it is running (a line on its stdout) before this process exits, takes this process's exit as
+ * the EOF of its stdin, and writes the words `lateStderrMs` after it: no boot rides the trail. *Corrected
+ * 2026-10-29:* this said "the trail is exactly the delay the rows name"; it is the delay plus the helper's wake
+ * after the exit, which a load of 362 at nice 19 stretched past 0.7 s (the 07:41Z re-run). The rows' drain bound
+ * holds that wake (LATE_DRAIN in rosettad-supervisor.test.ts). A `sh`, so the wait for its line costs no node boot
+ * inside the startup bound. Windows has no `/bin/sh`, so there the helper is a node on the same protocol, its boot
+ * inside that bound. */
+const LATE_SH = 'echo; cat >/dev/null; sleep "$1"; printf "%s" "$2" >&2';
+const LATE_NODE = [
+  'process.stdout.write("\\n");',
+  "process.stdin.resume();",
+  'process.stdin.on("end", () =>',
+  " setTimeout(() => process.stderr.write(process.argv[2]), Number(process.argv[1])));",
+].join("");
+const sayThenExit = async (words, code) => {
   if (lateStderrMs > 0) {
-    spawn(
-      process.execPath,
-      ["-e", `setTimeout(() => process.stderr.write(${JSON.stringify(words)}), ${lateStderrMs})`],
-      { stdio: ["ignore", "ignore", "inherit"] },
-    ).unref();
+    const [command, helperArgs] =
+      process.platform === "win32"
+        ? [process.execPath, ["-e", LATE_NODE, String(lateStderrMs), words]]
+        : ["/bin/sh", ["-c", LATE_SH, "late", String(lateStderrMs / 1000), words]];
+    const helper = spawn(command, helperArgs, { stdio: ["pipe", "pipe", "inherit"] });
+    await new Promise((resolve) => {
+      helper.stdout.once("data", resolve);
+      helper.once("error", resolve);
+    });
   } else {
     process.stderr.write(words);
   }
   process.exit(code);
 };
 
-if (mode === "crash-on-start") sayThenExit("fake rosettad: refusing to start (scripted)\n", 2);
+if (mode === "crash-on-start")
+  await sayThenExit("fake rosettad: refusing to start (scripted)\n", 2);
 
 // DEBTS (fix7) — rosetta's schema stamp (store/src/schema.rs at the pin): `serve`
 // opens the projection and FAILS CLOSED on another schema version, in rosettad's
@@ -218,7 +241,7 @@ if (args[0] === "rebuild") {
   await new Promise(() => {});
 }
 if (schemaFound() !== SCHEMA_EXPECTED) {
-  sayThenExit(
+  await sayThenExit(
     `rosettad: opening progressive ${db}: SchemaVersionMismatch { found: ${schemaFound()}, expected: ${SCHEMA_EXPECTED} }\n`,
     1,
   );
@@ -232,7 +255,7 @@ const allowOrigins = args.flatMap((arg, at) =>
 );
 if (mode === "old-binary" && tokenPath !== undefined) {
   // an older daemon's own words for a flag it does not know (main.rs)
-  sayThenExit("rosettad: unknown flag --token-file\n", 2);
+  await sayThenExit("rosettad: unknown flag --token-file\n", 2);
 }
 /** rosetta's file rule: a regular file, at most 4 KiB, owner-only on Unix */
 const readSecretFile = (path, what) => {

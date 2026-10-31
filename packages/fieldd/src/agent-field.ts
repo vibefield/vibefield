@@ -483,11 +483,14 @@ export function windowMonitorRow(row: MonitorAgentRow): WireMonitorRow {
 /** TL — the backend's past (`readPast`) as `agent.recordedLanes` answers it,
  * cut as the model's rows are: `device.self` never travels, and a PEER reads
  * no colour sequence (M16 — desktop-local, it would collide with the reader's
- * own). The snapshot is the SDK's, field for field (the contract mirrors it).
- * The door names the audience from `MONITOR_AUDIENCE` (item 100). */
+ * own) and each ended title at the desk's bound (M21, item 105), as
+ * `peerMonitorRow` bounds the model's rows. The snapshot is the SDK's, field for
+ * field (the contract mirrors it). The door names the audience from
+ * `MONITOR_AUDIENCE` (item 100). */
 export function wireRecordedLanes(
   past: MonitorPastSnapshot,
   audience: MonitorAudience,
+  chars: number = AGENT_FIELD.DESK_TEXT_CHARS,
 ): AgentRecordedLanesResult {
   const spans = (list: MonitorPastSnapshot["live"][number]["spans"]) =>
     list.map(({ kind, from, to }) => ({ kind, from, to }));
@@ -500,11 +503,40 @@ export function wireRecordedLanes(
       return {
         ...lane,
         ...(lane.provider !== undefined ? { provider: { ...lane.provider } } : {}),
+        ...(audience === "peer" && lane.title !== undefined
+          ? { title: boundText(lane.title, chars) }
+          : {}),
         device,
         project: audience === "peer" ? peerProject : { ...lane.project },
         spans: spans(lane.spans),
       };
     }),
+  };
+}
+
+/** `agent.recordedLanes`' answer cut for a tailnet caller (SP-D13, item 105): the
+ * `limit` ended lanes that ended last, in the answer's own order, `clipped`
+ * saying so. It is `index.activity`'s rule for the same record (`clipActivity`),
+ * one rule for the two day doors. The live lanes are the model's rows, which the
+ * caller reads whole over the board, and stay whole. A window's and a peer
+ * daemon's answer (no limit) is whole and says nothing. */
+export function clipRecordedLanes(
+  result: AgentRecordedLanesResult,
+  limit: number | undefined,
+): AgentRecordedLanesResult {
+  if (limit === undefined) return result;
+  if (result.ended.length <= limit) return { ...result, clipped: false };
+  const kept = new Set(
+    result.ended
+      .map((lane, index) => ({ index, endedAt: lane.endedAt }))
+      .sort((a, b) => b.endedAt - a.endedAt || a.index - b.index)
+      .slice(0, limit)
+      .map(({ index }) => index),
+  );
+  return {
+    ...result,
+    ended: result.ended.filter((_lane, index) => kept.has(index)),
+    clipped: true,
   };
 }
 

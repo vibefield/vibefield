@@ -450,6 +450,15 @@ export class ProductApi extends EventEmitter {
     >;
   }
 
+  /** PT-S2 (R11) — the attach's device list: this Mac's simulator devices, redacted in main. */
+  surfacesSimulatorDevices(
+    params: import("@vibefield/contracts").ShellSurfacesSimulatorDevicesParams,
+  ): Promise<import("@vibefield/contracts").ShellSurfacesSimulatorDevicesResult> {
+    return this.shellProvider.callInternal("shell.surfaces.simulatorDevices", params) as Promise<
+      import("@vibefield/contracts").ShellSurfacesSimulatorDevicesResult
+    >;
+  }
+
   surfaceAuthorityAvailable(): boolean {
     return this.shellProvider.provides("shell.surfaces.mint");
   }

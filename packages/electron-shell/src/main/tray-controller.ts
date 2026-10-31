@@ -75,6 +75,8 @@ export interface TrayControllerActions {
   takeScreenshot?: () => Promise<void>;
   checkForUpdates?: () => Promise<void>;
   restartToUpdate?: () => Promise<void>;
+  /** AU-4 (AU-G5) — Download Update: optional like the update pair */
+  downloadUpdate?: (version: string) => Promise<void>;
   setBackgroundShell(enabled: boolean): Promise<void>;
   setTrayVisible(enabled: boolean): Promise<void>;
   /** UA-5 — optional like the update pair: absent hides the submenu. */
@@ -101,13 +103,12 @@ const NATIVE_LAYOUT_SETTLE_MS = 250;
 
 export function trayImageKind(snapshot: TraySnapshot): TrayImageKind {
   if (snapshot.link === "unavailable") return "offline";
-  if (
-    snapshot.evidence === "degraded" ||
-    snapshot.update.kind === "failed" ||
-    snapshot.update.kind === "staged"
-  ) {
-    return "attention";
-  }
+  // AU-4 (AU-G14) — the attention badge keeps ONE meaning: a degraded
+  // service or a failed check. It outranks the update.
+  if (snapshot.evidence === "degraded" || snapshot.update.kind === "failed") return "attention";
+  // AU-4 (AU-L1) — an install waits on the person: the mark with one plain
+  // dot. Where no apply exists nothing waits, so the mark stays plain.
+  if (snapshot.update.kind === "staged" && snapshot.update.applyWired === true) return "update";
   return "base";
 }
 
@@ -416,6 +417,12 @@ export class TrayController {
         ? {
             restartToUpdate: () =>
               this.runAction("restartToUpdate", this.options.actions.restartToUpdate!),
+          }
+        : {}),
+      ...(this.options.actions.downloadUpdate !== undefined
+        ? {
+            downloadUpdate: (version: string) =>
+              this.runAction("downloadUpdate", () => this.options.actions.downloadUpdate!(version)),
           }
         : {}),
       ...(this.options.actions.switchUser !== undefined

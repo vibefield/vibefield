@@ -843,6 +843,9 @@ describe("BrowserLiveSurfaceRuntime", () => {
           iosSimulator: () => {
             throw new Error("no simulator here");
           },
+          iosSimulatorDevice: () => {
+            throw new Error("no simulator here");
+          },
         },
         enumeration: { sckWindows: async () => [], bootedSimulators: async () => [] },
       });

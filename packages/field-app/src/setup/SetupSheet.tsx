@@ -80,7 +80,7 @@ export function SetupSheet({
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <WizardShell>
+      <WizardShell size="sheet">
         <SheetPane me={me} step={step} onDone={next} />
       </WizardShell>
     </div>,

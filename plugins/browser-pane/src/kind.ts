@@ -273,11 +273,12 @@ export function browserPaneKind(
         );
       else local?.drop(ctx.entity);
       if (face !== undefined) {
-        // PT-3 — the url it read (one that moved under the page is followed), and, in hand, where the hand's points land
+        // PT-3 — the url it read (one that moved under the page is followed).
         local?.follow(ctx.entity, url);
-        if (ctx.held !== undefined)
-          local?.laid(ctx.entity, G, openExtent(ctx.rect, S), ctx.view.zoom);
       }
+      // The head works before there is a page: the sample and a blank pane need the address to open their first one.
+      if (ctx.held !== undefined)
+        local?.laid(ctx.entity, G, openExtent(ctx.rect, S), ctx.view.zoom);
       const words = face === undefined ? undefined : local?.page(ctx.entity);
       // PT-5a (ruling 3) — A FAILED PAGE; PT-5b (ruling 2) — and whether what the host shows of the page is its last
       // STILL: a photograph, never passed off as the page

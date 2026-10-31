@@ -9,12 +9,12 @@
     "./tokens.css": "./src/tokens.css",
     "./primitives": "./src/primitives.tsx",
     "./project-ink": "./src/project-ink.ts",
-    "./icons": "./src/icons/index.tsx",
-    "./face-stickers": "./src/face-stickers/index.tsx",
+    "./spark-face": "./src/spark-face/index.ts",
     "./glyphs": "./src/glyphs/index.ts"
   },
   "sideEffects": [
-    "*.css"
+    "*.css",
+    "./src/spark-face/vendor/sparks.js"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit"

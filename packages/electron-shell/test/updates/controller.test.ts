@@ -8,7 +8,11 @@ import {
   updateErrorOf,
 } from "../../src/main/updates/controller";
 import { UpdateRefusal } from "../../src/main/updates/refusal";
-import { type StoreFs, UpdateStateStore } from "../../src/main/updates/state-store";
+import {
+  FRESH_CLIENT_STATE,
+  type StoreFs,
+  UpdateStateStore,
+} from "../../src/main/updates/state-store";
 import type { ChainResult, FetchBytes, VerifiedChain } from "../../src/main/updates/verify-chain";
 import { FixtureOrigin, NOW, ORIGIN } from "./fixture-release";
 
@@ -52,6 +56,8 @@ class FakeUpdater implements UpdaterPort {
     verified(r: VerifiedChain): void;
   } | null = null;
   holdDownload: Promise<void> | null = null;
+  /** held between the provider's verify and its `verified` hand-off (a check in flight) */
+  holdCheck: Promise<void> | null = null;
   constructor(readonly fx: FixtureOrigin) {}
   setFeedURL(options: unknown): void {
     this.context = (options as { vibefield: FakeUpdater["context"] }).vibefield;
@@ -59,6 +65,7 @@ class FakeUpdater implements UpdaterPort {
   async checkForUpdates() {
     this.checks += 1;
     const result = await this.context!.verify(this.fx.fetch);
+    if (this.holdCheck !== null) await this.holdCheck;
     if (!result.ok) throw new UpdateRefusal(result.state, result.detail);
     this.context!.verified(result);
     const version = /^version: (.+)$/m.exec(result.feedText)?.[1] ?? "0.0.0";
@@ -185,7 +192,9 @@ describe("the UpdateController (WP12b)", () => {
     controller.decline("0.9.0-nightly.20261016");
     release();
     await running;
-    expect(controller.state.kind).toBe("idle");
+    // AU-1 (LC-13) — the skipped version stays found (`available`, declined): "Download anyway" is one click away
+    expect(controller.state).toEqual({ kind: "available", version: "0.9.0-nightly.20261016" });
+    expect(controller.view()).toMatchObject({ phase: "available", declined: true });
     expect((updater.downloads[0] as { cancelled?: boolean }).cancelled).toBe(true);
     expect(JSON.parse(files.get("/state.json")!).declined).toEqual(["0.9.0-nightly.20261016"]);
     // a restart reads the decline back: the version is found and not downloaded
@@ -209,13 +218,34 @@ describe("the UpdateController (WP12b)", () => {
     controller.setEnabled(false);
     release();
     await running;
-    expect(controller.state.kind).toBe("idle");
+    // AU-1 (X13) — a found update waits for you: off mid-download lands on `available`, never a blank idle
+    expect(controller.state).toEqual({ kind: "available", version: "0.9.0-nightly.20261016" });
     expect(await controller.check("launch")).toEqual({ kind: "none", reason: "disabled" });
     // a person's explicit check still runs — and downloads nothing
     updater.holdDownload = null;
     await controller.check("manual");
     expect(controller.state.kind).toBe("available");
     expect(updater.downloads).toHaveLength(1);
+    // AU-1 (X13) — and on again, the found version downloads
+    controller.setEnabled(true);
+    await vi.waitFor(() => expect(controller.state.kind).toBe("staged"));
+    expect(updater.downloads).toHaveLength(2);
+  });
+
+  it("AU-1 — the store keeps the staged clock, and reads an older file as nothing staged", () => {
+    const { store, files } = memoryStore(null);
+    const staged = { version: "0.9.0-nightly.20261016", at: NOW - 9 * 86_400_000 };
+    store.save({ ...FRESH_CLIENT_STATE, staged });
+    expect(JSON.parse(files.get("/state.json")!).staged).toEqual(staged);
+    expect(store.load()).toEqual({ state: { ...FRESH_CLIENT_STATE, staged }, recovered: null });
+    // a file an older app wrote names no staged clock: nothing staged, and nothing else lost
+    const older = memoryStore(
+      JSON.stringify({ schemaVersion: 1, declined: ["0.9.0-nightly.20261015"], lastCheckAt: NOW }),
+    );
+    expect(older.store.load()).toMatchObject({
+      state: { staged: null, declined: ["0.9.0-nightly.20261015"], lastCheckAt: NOW },
+      recovered: null,
+    });
   });
 
   it("starts from defaults when no setting exists (the absent-settings class)", () => {
@@ -257,6 +287,37 @@ describe("the UpdateController (WP12b)", () => {
     expect(refused.controller.doctorLines()).toContain(
       'UNAVAILABLE {service: "updates", state: "feed-unverified"}',
     );
+  });
+
+  it("AU-1 — a channel change outlives the check in flight: the old channel's answer is dropped, never judged", async () => {
+    const { controller, updater } = setup();
+    let release: () => void = () => {};
+    updater.holdCheck = new Promise((resolve) => {
+      release = resolve;
+    });
+    const running = controller.checkForPerson();
+    await vi.waitFor(() => expect(updater.checks).toBe(1));
+    controller.setChannel("stable");
+    // still checking: a second check now would be handed the first one's (nightly) answer
+    expect(controller.state.kind).toBe("checking");
+    expect(await controller.check("manual")).toEqual({ kind: "none", reason: "in-flight" });
+    release();
+    expect(await running).toEqual({ outcome: "busy" });
+    // nothing found, nothing downloaded, and the nightly chain never stands as the stable one's levers
+    expect(controller.state).toEqual({ kind: "idle" });
+    expect(controller.verified).toBeNull();
+    expect(updater.downloads).toHaveLength(0);
+  });
+
+  it("AU-1 — a channel change drops the old channel's staged clock whatever the state shows", () => {
+    const staged = { version: "0.9.0-nightly.20261016", at: NOW - 86_400_000 };
+    // a relaunch: the state is idle, and the payload waits in the cache behind it
+    const { controller, files } = setup({
+      initial: JSON.stringify({ schemaVersion: 1, declined: [], lastCheckAt: NOW, staged }),
+    });
+    expect(controller.state.kind).toBe("idle");
+    controller.setChannel("stable");
+    expect(JSON.parse(files.get("/state.json")!).staged).toBeNull();
   });
 
   it("remembers what it accepted, so a replayed older policy is refused next time", async () => {

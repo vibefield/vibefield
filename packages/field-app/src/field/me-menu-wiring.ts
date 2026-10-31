@@ -8,16 +8,15 @@ type ChordKey = Pick<
   "key" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey" | "repeat"
 >;
 
+/** The chord's keys, held or not. */
+function isSettingsKeys(event: Omit<ChordKey, "repeat">): boolean {
+  return event.key === "," && (event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey;
+}
+
 /** ⌘, or Ctrl+, — and only that: no Alt, no Shift, and never a held key's
  * repeats, which would flicker Settings open and shut. */
 export function isSettingsChord(event: ChordKey): boolean {
-  return (
-    event.key === "," &&
-    (event.metaKey || event.ctrlKey) &&
-    !event.altKey &&
-    !event.shiftKey &&
-    !event.repeat
-  );
+  return isSettingsKeys(event) && !event.repeat;
 }
 
 /** Settings from anywhere. The gear this replaced said "settings" by being
@@ -30,9 +29,13 @@ export function isSettingsChord(event: ChordKey): boolean {
 export function useSettingsChord(open: boolean, onOpen: () => void, onClose: () => void): void {
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
-      if (!isSettingsChord(event)) return;
+      if (!isSettingsKeys(event)) return;
       event.preventDefault();
       event.stopPropagation();
+      // AU-4 — a held chord's repeats are claimed too, and never acted on: an
+      // unclaimed one reaches the app menu's Settings… (⌘,), whose reveal
+      // would reopen what the first press closed (LC-28, one owner).
+      if (event.repeat) return;
       if (open) onClose();
       else onOpen();
     };

@@ -253,8 +253,9 @@ describe("resolvePackagedResources", () => {
     ).toBeNull();
   });
 
-  it("carries all three tray states and preserves the macOS Template suffix", () => {
-    for (const kind of ["base", "attention", "offline"] as const) {
+  it("carries all four tray states and preserves the macOS Template suffix", () => {
+    // AU-4 (AU-G14): `update` joins — an install that waits wears its own image, never the attention badge
+    for (const kind of ["base", "attention", "update", "offline"] as const) {
       const set = pkg.tray[kind];
       // The suffix is what makes macOS tint the glyph for light/dark menu bars;
       // losing it to a rename or a bundler hash is a silent visual bug.
@@ -263,11 +264,17 @@ describe("resolvePackagedResources", () => {
       expect(set.windowsIco.endsWith(".ico")).toBe(true);
       expect(set.linuxPng.endsWith(".png")).toBe(true);
     }
-    // distinct art per state — not one file reused three times
+    // distinct art per state — not one file reused four times
     const ones = new Set(
-      (["base", "attention", "offline"] as const).map((k) => pkg.tray[k].macTemplate1x),
+      (["base", "attention", "update", "offline"] as const).map((k) => pkg.tray[k].macTemplate1x),
     );
-    expect(ones.size).toBe(3);
+    expect(ones.size).toBe(4);
+    expect(pkg.tray.update).toEqual({
+      macTemplate1x: expect.stringMatching(/[\\/]fieldUpdateTemplate\.png$/),
+      macTemplate2x: expect.stringMatching(/[\\/]fieldUpdateTemplate@2x\.png$/),
+      windowsIco: expect.stringMatching(/[\\/]field-update\.ico$/),
+      linuxPng: expect.stringMatching(/[\\/]field-linux-update\.png$/),
+    });
   });
 });
 
@@ -429,7 +436,24 @@ describe("assertPackagedResources", () => {
     expect(pkg.fielddCommand).not.toContain(REPO);
     expect(pkg.fieldNativePath).not.toContain(REPO);
     // With nothing on disk at those paths, boot must fail rather than search.
-    expect(() => assertPackagedResources(pkg)).toThrow(ResourceError);
+    // The disk is the test's own (item 113): nothing at the packaged paths and a
+    // whole development tree under REPO, so a search would find one. A default
+    // reader read the HOST's installed app, and on a machine with VibeField in
+    // /Applications the packaged paths were there and nothing threw.
+    const devTreeOnly = (path: string): Uint8Array | null =>
+      path.startsWith(REPO) ? MACHO_ARM64 : null;
+    try {
+      assertPackagedResources(pkg, {
+        nodeArch: "arm64",
+        readHead: devTreeOnly,
+        readText: (path) => (path.startsWith(REPO) ? textReader()(path) : null),
+      });
+      throw new Error("expected a ResourceError");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ResourceError);
+      expect((error as ResourceError).code).toBe("fieldd-bundle-missing");
+      expect((error as ResourceError).path).toBe(pkg.fielddCommand);
+    }
   });
 });
 

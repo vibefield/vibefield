@@ -282,7 +282,14 @@ export const PRODUCT_API_LIMITS = {
  *
  * AR-8b (2026-10-03): the same bound holds `index.project`'s one per-session
  * list, its contribution rows, which says `clipped` when it cut; the door's
- * other figures are bounded by the window the caller asked for (`sinceMs`). */
+ * other figures are bounded by the window the caller asked for (`sinceMs`).
+ *
+ * Item 105 (2026-10-29): the two DAY doors over the record hold it too, by one
+ * rule (`tailnetRowLimit(principal, undefined, MAX_SAFE_INTEGER)`): `index.activity`
+ * keeps the newest MAX_ROWS sessions and `agent.recordedLanes` the MAX_ROWS ended
+ * lanes that ended last, each saying `clipped`. The first has held it since TL
+ * and was never listed here; the second had no bound. A day door pages by its
+ * window, never by a cursor. */
 export const INDEX_TAILNET_LIMITS = {
   MAX_ROWS: 100,
 } as const;
@@ -766,6 +773,13 @@ export const PROJECT_DOORS = {
   JOURNAL_PLACES_MAX: 4_096,
   JOURNAL_MOVES_MAX: 1_024,
   MOVE_HOPS_MAX: 16,
+} as const;
+
+/** IOS-8f — `user.me`'s honest UNAVAILABLE: a daemon that knows no user id (an embedded one) has no person to
+ * name, and says so rather than answer a face for nobody. TS-only: no native reader. */
+export const USER_ME = {
+  SERVICE: "user",
+  STATE_NO_USER: "no-user",
 } as const;
 
 /** DS-D15 / DS-2 — forwarded mutations (`forwarding.ts`). The owner journals
@@ -1768,6 +1782,10 @@ export const IPC_CHANNELS = {
   updatePrepareRestart: "vibefield:update:prepare-restart",
   updateConfirmRestart: "vibefield:update:confirm-restart",
   updateDoctor: "vibefield:update:doctor",
+  /** AU-1 (AU-G5, AU-G6) — a person's download of ONE found version (renderer → main, invoke) */
+  updateDownload: "vibefield:update:download",
+  /** AU-7 (AU-G8) — Move to Applications through the quit gate (renderer → main, invoke; no payload) */
+  updateMoveToApplications: "vibefield:update:move-to-applications",
   // GT-D3's bridge channels (`vibefield:terminal:connect` invoke,
   // `vibefield:terminal:status` event) RETIRED at TP-S3e: the renderer dials
   // the cells' T1 doors directly and main runs no terminal Backend.

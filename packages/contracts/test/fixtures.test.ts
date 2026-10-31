@@ -108,6 +108,15 @@ import {
   ArtifactView,
   LocalArtifactIntent,
 } from "../src/artifacts";
+import {
+  ComposeAgentsAvailableOutput,
+  ComposeAgentsListOutput,
+  ComposeHistorySearchOutput,
+  ComposeReadOutput,
+  ComposeSparksHatchParams,
+  ComposeSparksListResult,
+  SparkRecord,
+} from "../src/compose";
 import { DeviceInfo, DeviceNameFile, DeviceRenameParams, DeviceSlice } from "../src/devices";
 import {
   AuditRecordV1,
@@ -151,6 +160,7 @@ import {
   FreewayState,
   FreewayWelcome,
 } from "../src/freeway";
+import { LiveSurfaceIosSimulatorBindingV1 } from "../src/live-surfaces";
 import { LoggingHealthV1, LogRecordV1 } from "../src/logging";
 import { NativeTickNotification, SystemTickNotification } from "../src/methods";
 import {
@@ -260,10 +270,14 @@ import {
   RestartScheduled,
   SystemShutdownParams,
   SystemShutdownResult,
+  UpdateCheckResult,
   UpdateClientStateFile,
+  UpdateMoveResult,
   UpdatePolicy,
   UpdatePolicySource,
+  UpdateView,
 } from "../src/update-policy";
+import { UserMeResult } from "../src/users";
 import {
   WorkspaceCloseTicketParams,
   WorkspaceCloseTicketResult,
@@ -345,7 +359,8 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // with every cell fresh (`observed-state.fresh`: `inventoryBoundMs` alone), one with a stale
   // cell (`observed-state.stale-cell`: `staleCells` beside it), and an older floor that cannot
   // say (`observed-state.valid`, neither field). Generated for field-native and parity-checked
-  // strict in fixture_parity.rs; their own rows: terminal-inventory.test.ts.
+  // strict in fixture_parity.rs; their own rows: terminal-inventory.test.ts. Item 97 adds a
+  // fourth: a husk listed `exited` beside a live row (`observed-state.exited-husk`).
   "observed-state": ObservedState,
   "peer-info": PeerInfo,
   "store-snapshot": StoreSnapshot,
@@ -426,12 +441,22 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "channel-heads": ChannelHeads,
   // WP12b: the updater's persisted client state (Electron main's `updates/state.json`).
   "update-client-state": UpdateClientStateFile,
+  // AU-1: the updater's one projection (`UpdateController.view()`, through `desktopState.update`) and a person's
+  // check answered when the check settles. `update-view.pre-au1.json` is today's shape: the tolerant-reader witness.
+  "update-view": UpdateView,
+  "update-check-result": UpdateCheckResult,
+  // AU-7: the Move door's answer (`update-view.read-only` / `.elsewhere` ride the view's prefix above).
+  "update-move-result": UpdateMoveResult,
   // WP8a: the packaged app's signed bundled-plugin index (refusals in plugin-distribution.test.ts).
   "bundled-plugin-index": BundledPluginIndex,
   // WP8b: the stage's public identity (Resources/identity/release-identity.json).
   "staged-release-identity": StagedReleaseIdentity,
   "log-record": LogRecordV1,
   "logging-health": LoggingHealthV1,
+  // PT-S1 — the device a phone on the desk is bound to: a CoreSimulator device type and runtime, never a UDID
+  // (live-surfaces.ts; TS-only, as all of Live Surfaces is) — the 17 Pro on iOS 26.1, and Apple's own spelling of the
+  // 2nd-generation SE's id (its dashes kept).
+  "ios-simulator-binding": LiveSurfaceIosSimulatorBindingV1,
   "diagnostic-snapshot": DiagnosticLogSnapshotV1,
   "diagnostic-delta": DiagnosticLogDeltaV1,
   "diagnostic-lease": DiagnosticLeaseV1,
@@ -560,6 +585,9 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // TS-4 (TS-D7) — the asks to connect after Not now, each said `asked` with its
   // time beside AO's retired moments (setup-moment-params.asked is one saying)
   "setup-ledger-connect-ask": SetupLedger,
+  // TS-6 (TS-D13) — a link landed during setup: the sync question owed beside
+  // AO's retired moment and TS-4's saying (fieldd's store reads it from disk)
+  "setup-ledger-sync-question": SetupLedger,
   "agent-persona": AgentPersona,
   "agent-distribution": AgentDistributionRecord,
   "agents-installs": AgentsInstallsResult,
@@ -776,6 +804,16 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "project-figures": ProjectFiguresResult,
   "project-figures-day-params": ProjectFiguresDayParams,
   "project-figures-day": ProjectFiguresDayResult,
+  // CO — the compose plane, version 2 (compose.ts): a spark, its doors, and CP-1's verbs
+  "compose-spark-record": SparkRecord,
+  "compose-sparks-list": ComposeSparksListResult,
+  "compose-sparks-hatch-params": ComposeSparksHatchParams,
+  "compose-agents-available": ComposeAgentsAvailableOutput,
+  "compose-agents-list": ComposeAgentsListOutput,
+  "compose-agent-read": ComposeReadOutput,
+  "compose-history-search": ComposeHistorySearchOutput,
+  // IOS-8f — who this desktop's person is: a written face with a name, and the deal with none
+  "user-me": UserMeResult,
 };
 
 // *.vector.json = cross-language crypto vectors, not wire shapes — pinned by their own tests.

@@ -60,6 +60,13 @@ struct AccountCornerView: View {
   /// The same circle, saying the act in words under a glyph — the tab items'
   /// own voice (an icon over a 10 pt label) — so the corner keeps its size
   /// and place whether or not anyone is signed in.
+  ///
+  /// TS-7 — a named deviation from DESIGN.md §9 ("Continue with Tailscale" on
+  /// every button that starts the link): three words do not fit a 10 pt label
+  /// in the circle, so it says `Sign in` and its spoken name carries the act.
+  /// The spoken name starts with the visible word, so Voice Control's "Tap
+  /// Sign in" still finds it. On the Field page the welcome stands instead and
+  /// this circle hides; it is the act on History.
   private var signInCircle: some View {
     Button {
       onSignIn()
@@ -77,7 +84,7 @@ struct AccountCornerView: View {
     }
     .buttonStyle(.plain)
     .liquidGlassCircle()
-    .accessibilityLabel("Sign in with Tailscale")
+    .accessibilityLabel("Sign in, Continue with Tailscale")
   }
 
   // MARK: - The face, and the menu it grows into
@@ -218,7 +225,7 @@ struct AccountCornerView: View {
         AccountMenuRow(glyph: "rectangle.portrait.and.arrow.right", label: "Sign out", action: onSignOut)
       }
       if face.offersSignIn {
-        AccountMenuRow(glyph: "key", label: "Sign in", action: onSignIn)
+        AccountMenuRow(glyph: "key", label: face.signInWord, action: onSignIn)
       }
       AccountMenuRow(glyph: "gearshape", label: "Settings…", action: onSettings)
       separator
@@ -229,8 +236,8 @@ struct AccountCornerView: View {
           .padding(.bottom, 4)
         ForEach(face.desktops) { row in
           AccountMenuRow(
-            glyph: "laptopcomputer", label: row.name, word: row.word, wantsTheUser: row.wantsTheUser,
-            action: nil)
+            glyph: "laptopcomputer", device: DeviceMark.OS(platform: row.platform), label: row.name,
+            word: row.word, wantsTheUser: row.wantsTheUser, action: nil)
         }
       }
       if let others = face.othersLine {
@@ -262,6 +269,9 @@ struct AccountCornerView: View {
 /// only the person can fix.
 struct AccountMenuRow: View {
   let glyph: String
+  /// TS-7 — a desktop's row draws its OS mark in the glyph's column (§8: a
+  /// device is its operating system's mark), in the glyph's own ink.
+  var device: DeviceMark.OS? = nil
   let label: String
   var word: String? = nil
   var wantsTheUser: Bool = false
@@ -281,10 +291,16 @@ struct AccountMenuRow: View {
 
   private var content: some View {
     HStack(spacing: 4) {
-      Image(systemName: glyph)
-        .font(.system(size: 17, weight: .regular))
-        .foregroundStyle(ChromePalette.inkSecondary)
-        .frame(width: AccountCornerView.circle - 12)
+      Group {
+        if let device {
+          DeviceMark(os: device, size: 17)
+        } else {
+          Image(systemName: glyph)
+            .font(.system(size: 17, weight: .regular))
+        }
+      }
+      .foregroundStyle(ChromePalette.inkSecondary)
+      .frame(width: AccountCornerView.circle - 12)
       Text(label)
         .font(ChromeType.sans(15, .medium))
         .foregroundStyle(ChromePalette.ink)

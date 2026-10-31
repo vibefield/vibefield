@@ -31,6 +31,8 @@ import {
   ShellSurfacesMintResult,
   ShellSurfacesReleaseParams,
   ShellSurfacesReleaseResult,
+  ShellSurfacesSimulatorDevicesParams,
+  ShellSurfacesSimulatorDevicesResult,
   ShellWebContentsCaptureArtifactPreviewParams,
   ShellWebContentsCaptureArtifactPreviewResult,
   SURFACE_AUTHORITY_LIMITS,
@@ -103,6 +105,13 @@ const METHOD_CONTRACTS: Record<ShellProviderMethod, MethodContract> = {
     input: ShellSurfacesReleaseParams,
     output: ShellSurfacesReleaseResult,
     deadlineMs: SURFACE_AUTHORITY_LIMITS.RELEASE_DEADLINE_MS,
+  },
+  // PT-S2 (R11) — the attach's device list: one simctl read in main, its rows REDACTED there and re-checked here (a
+  // UDID on a row fails this output schema).
+  "shell.surfaces.simulatorDevices": {
+    input: ShellSurfacesSimulatorDevicesParams,
+    output: ShellSurfacesSimulatorDevicesResult,
+    deadlineMs: SURFACE_AUTHORITY_LIMITS.SIMULATOR_DEVICES_DEADLINE_MS,
   },
   // The Agents settings section's Show in Finder (internal; the agent
   // distribution service dispatches it for a path its own inventory holds, and
