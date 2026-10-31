@@ -117,6 +117,31 @@ import Testing
     #expect(board.rows.allSatisfy { $0.unknownFields.isEmpty })
   }
 
+  // ST-D5 — a person's durable Stop rides the field row while fieldd holds one,
+  // on every audience's row: the phone's Stop reads the window's truth.
+  @Test func theFieldRowCarriesAPersonsStopOnlyWhileFielddHoldsOne() throws {
+    let board = try AgentFieldSnapshot(json: try Fixture.json("agent-field-snapshot.stop"))
+    #expect(board.droppedRows.isEmpty)
+    let stops = board.rows.map(\.stop)
+    #expect(stops.map { $0?.stage } == ["terminating", "resent", "heard"])
+    #expect(stops.map { $0?.sentAt } == ["2026-10-31T06:00:03.000Z", "2026-10-31T06:01:02.000Z", "2026-10-31T06:02:04.000Z"])
+    #expect(stops.map { $0?.unheardAt } == [nil, "2026-10-31T06:01:08.000Z", nil])
+    #expect(stops.map { $0?.heardBy } == [nil, nil, "status"])
+    #expect(board.rows.allSatisfy { $0.unknownFields.isEmpty && $0.stop?.unknownFields == [] })
+    let none = try AgentFieldSnapshot(json: try Fixture.json("agent-field-snapshot.native-session"))
+    #expect(none.rows.allSatisfy { $0.stop == nil }, "a row holding no Stop carries none")
+  }
+
+  @Test func aStopsStageIsAnOpenWordKeptAsItCame() throws {
+    let stop = try AgentFieldStop(
+      json: .object([
+        "sentAt": .string("2026-10-31T06:03:00.000Z"), "stage": .string("withdrawn"), "by": .string("x"),
+      ]))
+    #expect(stop.stage == "withdrawn", "a reader takes it as still stopping")
+    #expect(stop.unknownFields == ["by"])
+    #expect(throws: WireDecodeError.self) { try AgentFieldStop(json: .object(["stage": .string("sent")])) }
+  }
+
   @Test func theCatalogSaysWhichAgentsResume() throws {
     let catalog = try AgentCatalogResult(json: try Fixture.json("agent-catalog.valid"))
     #expect(catalog.catalog.first { $0.id == "claude" }?.canResume == true)
