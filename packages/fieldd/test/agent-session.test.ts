@@ -873,6 +873,38 @@ function holdersOf(path: string): string {
     .join("; ");
 }
 
+/** Item 118 — the scripted pane's prologue's budget on a loaded host: the cell join's (`joinedRow`). */
+const CAT_READY_MS = 15_000;
+
+/** Item 118 — a row that ends the scripted run with the floor's ⌃C first reads that the pane's process IS `cat`.
+ * The program is `/bin/sh -c 'env > … && mv …; exec /bin/cat >> …'`, and macOS's `/bin/sh` is bash 3.2: a ⌃C that
+ * meets `env` or `mv` as it exits cannot kill it, the waiting shell reads a normal exit and goes on to the exec, and the
+ * `cat` after it lives (the floor's row `exited:false`, its pid holding the typed-out file as `/bin/cat`; reproduced
+ * under a PTY in 14 of 456 trials). The cell join says nothing about where the shell is, so the ⌃C waits for the exec:
+ * the floor's own pid for the pane, read by `ps`, names `cat`, and then there is no shell left to swallow it. */
+async function catReady(box: Box, paneId: string): Promise<void> {
+  await poll(
+    async (seen) => {
+      const { sessions } = await box.daemon.terminals.runtimeSessions();
+      const pid = sessions.find((session) => session.id === paneId)?.pid;
+      const image = typeof pid === "number" ? imageOf(pid) : undefined;
+      seen({ pid: pid ?? null, image: image ?? null });
+      return image !== undefined && /(^|\/)cat$/.test(image) ? image : undefined;
+    },
+    CAT_READY_MS,
+    "the scripted pane's process to be `cat`, its prologue done",
+  );
+}
+
+/** The executable a pid runs now (`ps -o comm=`), or undefined once it is gone. */
+function imageOf(pid: number): string | undefined {
+  try {
+    return execFileSync("ps", ["-o", "comm=", "-p", String(pid)], { encoding: "utf8" }).trim();
+  } catch {
+    return undefined;
+  }
+}
+
 const mode = (path: string) => statSync(path).mode & 0o777;
 const readRecord = (dataDir: string, runtimeRunId: string) =>
   AgentSessionRecord.parse(
@@ -2847,6 +2879,8 @@ describe('MF-1 — agent.subscribe {projection: "field"} over the wire', () => {
     })) as AgentSpawnResult;
     const runId = spawned.session.runtimeRunId;
     await joinedRow(win, runId);
+    // item 118 — the ⌃C below must meet `cat`, never the shell's prologue
+    await catReady(box, spawned.terminal.sessionId);
 
     // the SNAPSHOT is the live board, not an empty one
     // the floor this subscriber asks for IS the registry's default; naming the
@@ -2992,7 +3026,8 @@ describe("MF-1f/MF-1g — an agent pane outlives its run, and the fold keeps its
     })) as AgentSpawnResult;
     const runId = spawned.session.runtimeRunId;
     await joinedRow(win, runId);
-    // the scripted PTY's `cat` dies of the floor's own interrupt
+    // the scripted PTY's `cat` dies of the floor's own interrupt, once it IS `cat` (item 118)
+    await catReady(box, spawned.terminal.sessionId);
     expect(await win.call("agent.interrupt", { runtimeRunId: runId })).toEqual({ accepted: true });
     await poll(
       async () => {
@@ -3467,6 +3502,8 @@ describe("AR-6-0 — the stop verb (agent.interrupt)", () => {
     // Q08 — this adapter names no turn stop, so the verb is still the floor's
     // ⌃C, and the row says that key rather than none
     expect(tagged.stopKey).toBe("ctrl-c");
+    // item 118 — and the pane's process is `cat` by now: a ⌃C into the shell's prologue is swallowed
+    await catReady(box, spawned.terminal.sessionId);
 
     // ── the act: the floor takes it, and the scripted PTY's `cat` dies of it ──
     // `accepted` is the FLOOR's word — that the interrupt reached the PTY's
@@ -3598,6 +3635,8 @@ describe("item 97 — an exit fieldd never heard (the real floor)", () => {
     const runId = spawned.session.runtimeRunId;
     const paneId = spawned.terminal.sessionId;
     await joinedRow(win, runId);
+    // item 118 — the ⌃C below must meet `cat`, never the shell's prologue
+    await catReady(box, paneId);
 
     // fieldd deaf at its own door, for this pane alone: daemon.ts hands each `session-exited` to the
     // runtime by this property, so the floor's exit is dropped where fieldd would have heard it
