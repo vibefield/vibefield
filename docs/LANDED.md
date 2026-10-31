@@ -24369,3 +24369,96 @@ ruled it at 15:07Z ("go with your lean", after the 190-vs-170 visual, `lanes/fg/
   on its 249.5 card, which fits), so Cancel's foot stands on the fade's top at zero margin. The fix would be a
   margin of 10 like the add's, or the slot's `nearest` on the add's rule (VF-PM 15:14Z). It joins the eye list for
   James's own look.
+
+## FG-5 — the hand-over: a first run's last beat steps the glass out (its words, the logo alone, the clearing as the field's mark takes over) and the field opens onto the desk (DESIGN.md §6; desk-gates row 32)
+
+**Why.** The thinking doc's §5.8 (FG-D9 A, FG-D11 A) and DESIGN.md §6 (amended 2026-10-29) give the first run a last
+beat: the welcome holds, the glass steps out, and the field opens onto the desk. FG-5 was written in the lane on
+`fg/build` over FG-6's row (`4c5c2b233`, 10:48–11:09Z; VF-PM 10:19Z: "write FG-5 in the lane, cut nothing"), with
+the hand-over's order check and two stills in its own commit (VF-PM 11:04Z). James's O3 (13:37:07Z) cut it only after
+row 32's first green on the mini and James's look. The look came at 15:02Z and the green at run54b (15:24:54Z).
+
+**What landed** (`14524e7b2`, ported onto `a741b1073` as `fg/hand-over`, with `fg/build` untouched):
+- The product (field-app, nine files):
+  - The welcome's beat is 1.6 s (`WELCOME_BEAT_MS`, was 1.4 s). A second user's end has no welcome, and its
+    hand-over begins as the facts are in.
+  - BootRoot's `handOver` (the wizard's `onReveal`) begins once and chooses the field's opening as it begins:
+    1. `words` (240ms `ease`): the line, the steps and the theme control fade, and from here the glass takes no
+       press (`inert`).
+    2. The logo alone (640ms).
+    3. `clear` (600ms): the frost clears on the island curve, the edge and its shadow in the last 240ms. The logo
+       goes out on `ease` while the field's mark comes back in place over the same 600ms (FieldLayer's `markMs`).
+    4. The field opens as FG-2's does. When the field is live and motion is allowed, it tears in the theme's light
+       and the desk settles in from .985 and 1.16 over 1900ms; otherwise it is the base reveal (the still in 240ms).
+  - Reduce Motion halves the fades (120, 320, 300) and never tears: the field fades away in 120ms. A hidden window
+    hands over at once.
+  - FG-2's tear is one `tearOpen`, shared by the splash's opening and the wizard's.
+  - The glass: `WizardLeaving` on the shell as `data-leaving` (wizard-ui.tsx, through OnboardingWizard), its rules
+    last in wizard-ui.css with their reduced halves after them.
+  - The edge has a level of its own, `--vf-glass-edge` (`@property`, initial 1). It forms with the frost, the
+    browser's edge and shadow fade by it, and the field's pass reads it as `frost.w` (glass-look, glass-pass).
+    `useFieldGlass` wakes on the glass's `animationstart` too.
+- The row (desk-gates row 32):
+  - The page's recorder hears each step the glass takes out through a MutationObserver on `data-leaving`, as the
+    page sets it.
+  - `judgeHandOver` asks for the words and then the clearing, each once, by order alone.
+  - Two stills for the eye, timed from the page's own step time: `handover-alone` (400ms into the words) and
+    `handover-clearing` (150ms into the clearing). The facts carry `handOver`.
+  - The hand-over is taken inside the walk's last wait (step `setting-up`), so a hand-over that never comes stops
+    the walk there with all it had found (follow-up 2).
+  - Row 32's text gains **The hand-over**, and about 15 stills a walk.
+- DESIGN.md §8 "As built at FG-5" (nine lines) says what §6 does not: the theme control goes with the words, `ease`
+  for the words, the logo and the mark, the edge's own level, how the opening is chosen, the hidden window, and no
+  press from the first step.
+- The port: 18 of the 20 files applied clean 3-way. By hand: row 32 (main's text, with the hand-over clause and 15
+  stills) and the row's test (main's ink helper, with FG-5's describe before it). 20 files, +827 −95, as on
+  `fg/build`.
+
+**Checks.**
+- Red first, on the ported tree: each half set aside to `a741b1073`'s text, then restored byte for byte (sha
+  checked; `lanes/fg2/fg5/light5.out`).
+  - The row: `TypeError: (0 , judgeHandOver) is not a function` on the hand-over's two rows (2 failed, 23 passed),
+    then 25/25.
+  - The product, under FG-5's seven field-app files: 6 files and 22 rows red (141 passed), among them `expected
+    undefined to be 'words'` and `expected +0 to be 1`, then 163/163.
+- The lane's light (15:40–15:42Z, nice 19 under the guard, the staged tree `bdd84888e` before and after), all green:
+  - `git diff --check`; biome over the 18 touched files (its one info is the landed row's own);
+  - electron-shell's and field-app's typecheck; ui-system-boundaries 40/40;
+  - field-app's whole vitest: 267 files (1 skipped), 3483 passed, 3 skipped;
+  - electron-shell's whole vitest: 158 files, 2403 passed, 3 skipped.
+- VF-PM's read (15:45Z): check clean, no markers, no pin, lock or package.json, nothing in draft/, tokens.css
+  untouched, and no hex added outside tokens. Main `b109d2392` (the fixer's item 122 insert) is not in the tip, so
+  the mint is the merge shape: merge-tree `d645d4513`.
+- **Run 55:** M55 is the merge `5fb101980`: `14524e7b2` over `b109d2392`, both its parents, its tree `d645d4513`
+  (VF-PM's merge-tree).
+  - `pnpm verify` went green at 15:51:09Z (exit 0).
+    - vitest: 11,346 passed, 0 failed, 18 skipped. That is +15 over run 54, all in FG-5's seven test files (their
+      counts at run 55: boot-root 20, wizard-frame 25, glass-pass 18, smoke-first-run 25, field-glass 14,
+      glass-look 15, onboarding-wizard 56).
+    - cargo: `test result: ok.` × 33. typecheck and test ran for 28 projects, and the tree was clean.
+    - The bundle's assert held at 911.2 KB raw and 240.5 KB gz; FG-5 adds about 1.9 KB raw.
+  - Item 122's peak ran beside this verify; its line is the fixer's.
+  - Row 32's own run on M55 is owed (below).
+- **Landed:** main fast-forwarded `b109d2392` → `5fb101980` at 2026-10-31 15:54:12Z on VF-PM's GO (land-stack4's first
+  mint run, the ff path, no lock wait): 20 files, +827 −95, tree `d645d4513`, VF-PM's merge-tree.
+
+**Found while building.**
+- The theme control stood on the glass beside the logo, so "the logo holds alone" would not have held. It goes with
+  the words.
+- The edge and its shadow were on the frost's level, and §6 has them go only in the clearing's last 240ms. So they
+  have a level of their own, and the field's pass reads it too.
+- The pose follower woke only on the glass's transitions. The clearing is an animation, so the follower wakes on
+  `animationstart` too.
+- A recorder that samples once a frame could see the clearing without its words under load, since an overdue timer
+  runs before the next frame. The hand-over is heard through a MutationObserver, so its order is exact.
+
+**Owed.**
+- Row 32 on M55, FG-5's witness: the chain re-armed on M55 with row 32 alone (by itself while the console stands
+  unlocked and idle, else at James's next unlock). It proves the hand-over's order on all three walks (`handOver`
+  is `["words","clear"]`) and gives its two stills for James's eye, with row 32's earlier classes again.
+- No row judges the hand-over's durations: unit rows under fake timers hold them. No GPU row ran on the field's pass's
+  edge: unit rows hold its uniforms. The shared `tearOpen` is on every ordinary boot's path, so the smokes that press
+  or shoot after a boot read it when they next run.
+- FG-6's remaining gates: the catalog over the field's still, the tear judged in the walk, the field's glass against
+  the CSS glass on a frozen frame, FG-O2's contrast and FG-O3's GPU read during the tear. James's eye list stands as
+  the follow-up 2 entry says.

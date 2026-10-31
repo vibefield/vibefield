@@ -100,13 +100,14 @@
   (`c92a48a13`: a walk that stops says what it had found; `09631d7d0`: the glass terminal 170, DESIGN.md §4 first,
   ruled by James at 15:07Z, and a Cancel red that says its numbers), as the mint `2ebc24fd3`, run 54 on the Mac
   mini: verify green; row 32 alone on M54 GREEN at run54b (15:24:54Z), its first: every walk green in 16 s, Cancel
-  9.7 clear above the fade (LANDED "FG-1", "FG-2", "FG-3a", "FG-3b", "FG-4a", "FG-4b", "FG-6", "FG-6's follow-up
-  slice", "FG-6's follow-up 2 and class C").
-- Next: FG-5, its gate met: James's look at 15:02Z on run53b's sheet, and row 32's first green, alone on M54 at
-  run54b (15:24:54Z). FG-5 is the hand-over, written in the lane and uncommitted; its commit carries the hand-over's
-  stills and order check into row 32. Then the rest of FG-6's gates: the catalog over the field's still, the tear
-  judged in the walk, the field's glass against the CSS glass on a frozen frame, FG-O2's contrast and FG-O3's GPU
-  read during the tear. Each verifies on the Mac mini.
+  9.7 clear above the fade; **FG-5** (`14524e7b2`: the hand-over, the glass stepping out and the field opening onto
+  the desk, its order and two stills in row 32), as the mint `5fb101980`, run 55 on the Mac mini: verify green (LANDED
+  "FG-1", "FG-2", "FG-3a", "FG-3b", "FG-4a", "FG-4b", "FG-5", "FG-6", "FG-6's follow-up slice", "FG-6's follow-up
+  2 and class C").
+- Next: row 32 alone on M55 on the Mac mini (run55b), FG-5's witness: the hand-over's order on all three walks and
+  its two stills for James's eye. Then the rest of FG-6's gates: the catalog over the field's still, the tear judged
+  in the walk, the field's glass against the CSS glass on a frozen frame, FG-O2's contrast and FG-O3's GPU read
+  during the tear. Each verifies on the Mac mini.
 - Owed: James's eye list from row 32: Agents with nine installed (PU-L, drafted, would bring nine into the walk),
   History with six rows, Profiles' five cards, and a login opened from This Mac's row (not walked: its Cancel comes
   into view on the fade's top at zero margin; a margin of 10 like the add's, or the slot's `nearest` on the add's
@@ -683,7 +684,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 |---|---|---|---|
 | TS — the Tailscale door | ACTIVE; TS-0…3b, 4a, 4b, 5, 6, 7, 8a, 8b landed | `thinking-tailscale-onboarding.md`; DESIGN.md §5/§6/§8/§9/§13 | TS-8c (T8, after its live probe) |
 | AO — Bring Your Agents | ACTIVE; AO-0…6b3 landed | `thinking-agent-onboarding.md` | AO-7 on a puppeteer release after 0.3.0 (`installRecipe`) |
-| FG — the first run on the field | ACTIVE; FG-0…3a landed 10-30, FG-3b, FG-4a, FG-4b and FG-6 10-31 | `thinking-first-run-glass.md`; DESIGN.md §2.1/§5/§6/§8/§13; desk-gates row 32 | FG-5 (its gate met: row 32 green on M54, James's look) → the rest of FG-6's gates |
+| FG — the first run on the field | ACTIVE; FG-0…3a landed 10-30, FG-3b, FG-4a, FG-4b, FG-6 and FG-5 10-31 | `thinking-first-run-glass.md`; DESIGN.md §2.1/§5/§6/§8/§13; desk-gates row 32 | row 32 on M55 (FG-5's witness) → the rest of FG-6's gates |
 | AL — app lifecycle | ACTIVE; AL-1…3, 5, 7, 8a, 9 landed | `thinking-app-lifecycle.md`; ESR §7.3 | AL-6, Last exit, relaunch cap |
 | AU — Updates That Wait | ACTIVE; B1–B4 (AU-0…AU-7) landed 10-30/31 | `thinking-update-ux.md` §7 (page sources `draft/update-ux/`); DESIGN.md §2.5/§2.8/§6/§8/§9/§13; EDP §5.2/§6.4/§11; ESR §7.3 | the owed eyeballs, the first signed nightly with notes, the physical rows |
 | PG — the phone's Godview | ACTIVE; PG-0, PG-1a…1d, PG-1e0 (measured: neither) and PG-1f's pin test landed 10-31 | `thinking-phone-godview.md` §7/§8; `design-mv.md`; `design-06-sync-planes.md` | PG-2, on James's go |
