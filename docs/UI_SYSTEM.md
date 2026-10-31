@@ -56,6 +56,12 @@ components. Plugin content styles remain inside their plugin packages.
 
 ## Catalog fidelity
 
+Fieldmarks / After Hours and Face Club retired under housekeeping Q19 C (2026-10-28); their
+catalog sections, reports, design-kit exports, generated artwork and generators were removed
+2026-10-29. Their sheets and SVG archives remain in `draft/archive/retired/design-fieldmarks/`
+on `dev-local`. The catalog's account specimens mount §2.8's shipping `UserFaceView`, and its
+glyph specimens mount §13's `FieldGlyph`.
+
 The catalog currently mounts these shipping views directly:
 
 - Artifact Hub and all empty/loading/populated/unavailable states — in the right edge's drawer
@@ -71,6 +77,10 @@ The catalog currently mounts these shipping views directly:
 - shared controls/states and every onboarding pane, alternate entry, and completion failure
 - the account's face (UA-7): the Me menu open, closed, waiting and offline, the Settings head,
   both face frames at every size, and the face picker
+- a spark's face (SP-1a, DESIGN.md §2.10): the shipping `SparkFace` in Foundations beside the
+  account's face — the nineteen statuses at Chat's row size, both forms on the sizes §2.10's
+  surfaces wear, a live `SparkStage`, and the flat star through the face's one adapter
+  (`SparkFaceRenderer`), all on fixed seeds (`spark-fixtures.ts`)
 - the view frame (One Frame FR-1): the views track in every state the design's plates show — at
   rest, ⌘ held, Godview, History, the Assistant's note, Windows' keys — and the cover rising,
   swapping and lowering over a field with Godview's stage and History's room, on fixture state
@@ -194,6 +204,11 @@ catalog stays the single composition root without ever owning foreign markup. (A
 ## Rules for new UI
 
 - Add or change visual constants in `DESIGN.md`, then project them into `tokens.css`.
+- Main-process code can't read CSS. A colour Electron needs before the page paints (a window's
+  `backgroundColor`) is a named projection of its token: the literal stands beside a comment naming
+  the token and DESIGN.md's value, DESIGN.md's token row names the file that projects it, and a test
+  holds the two equal. (Added 2026-10-29, FG-D25: `--vf-field-ground` in
+  `electron-shell/src/main/windows.ts`, held by `wearing-the-mat.test.tsx`.)
 - Reuse a shell primitive before creating domain-specific control anatomy.
 - An icon is a `FieldGlyph` from the kit's `/glyphs` leaf (DESIGN.md §13; plugins reach it through
   `@vibefield/plugin-sdk/ui`). An inline `<svg>` that is an icon fails `glyphs.test.tsx`; the

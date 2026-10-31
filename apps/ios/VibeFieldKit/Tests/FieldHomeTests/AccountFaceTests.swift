@@ -54,7 +54,7 @@ struct AccountFaceTests {
     #expect(corner.name == "James")
     #expect(corner.detail == "me@jamesyong42.com · tail3f2a8c.ts.net")
     #expect(corner.detailIsLogin)
-    #expect(corner.desktops == [.init(id: "dev-1", name: "studio", word: nil, wantsTheUser: false)])
+    #expect(corner.desktops == [.init(id: "dev-1", name: "studio", word: nil, wantsTheUser: false, platform: "darwin")])
     #expect(corner.othersLine == nil)
     #expect(!corner.offersSignIn)
     #expect(corner.canSignOut)
@@ -100,7 +100,7 @@ struct AccountFaceTests {
     let corner = face(meshState: .needsLogin, remembered: login, face: fox)
     #expect(corner.control == .face(fox))
     #expect(corner.wantsAttention)
-    #expect(corner.notice == "Sign in to your tailnet to reach your desktops.")
+    #expect(corner.notice == "Sign in to Tailscale again to reach your desktops.")
     #expect(corner.detail == "sign in again")
     #expect(corner.detailWantsAttention)
     #expect(corner.offersSignIn)
@@ -114,7 +114,7 @@ struct AccountFaceTests {
       isHearing: true)
     #expect(corner.wantsAttention)
     #expect(corner.notice == nil)
-    #expect(corner.desktops[1] == .init(id: "b", name: "mini", word: "refused", wantsTheUser: true))
+    #expect(corner.desktops[1] == .init(id: "b", name: "mini", word: "refused", wantsTheUser: true, platform: "darwin"))
   }
 
   @Test("another account's desktop nearby is one faint sentence and no dot")

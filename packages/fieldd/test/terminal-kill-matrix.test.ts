@@ -149,20 +149,80 @@ function udsEndpoints(daemon: FielddDaemon): TerminalEndpoints {
   return ep;
 }
 
+/** The floor's own log, every file in order; throws while it has none. */
+function nativeLogText(dir: string): string {
+  const root = join(dir, "logs", "system");
+  return readdirSync(root)
+    .filter((name) => name.startsWith("field-native") && name.endsWith(".ndjson"))
+    .sort()
+    .map((name) => readFileSync(join(root, name), "utf8"))
+    .join("");
+}
+
 /** The native log's last lines, read while the data dir still exists (cleanup
  * deletes it): the one witness that tells a slow cell from a crashed one. */
 function nativeLogTail(dir: string, lines = 40): string {
-  const root = join(dir, "logs", "system");
   try {
-    const text = readdirSync(root)
-      .filter((name) => name.startsWith("field-native") && name.endsWith(".ndjson"))
-      .sort()
-      .map((name) => readFileSync(join(root, name), "utf8"))
-      .join("");
+    const text = nativeLogText(dir);
     return `--- field-native log, last ${lines} lines ---\n${text.trimEnd().split("\n").slice(-lines).join("\n")}`;
   } catch (error) {
     return `--- no field-native log: ${(error as Error).message} ---`;
   }
+}
+
+/** One line of the floor's log, as far as a row reads it. */
+interface NativeLogLine {
+  event?: string;
+  attrs?: Record<string, unknown>;
+}
+
+/** The floor's log as lines, a line still being written skipped. */
+function nativeLogLines(dir: string): NativeLogLine[] {
+  let text: string;
+  try {
+    text = nativeLogText(dir);
+  } catch {
+    return [];
+  }
+  return text.split("\n").flatMap((line) => {
+    try {
+      return [JSON.parse(line) as NativeLogLine];
+    } catch {
+      return [];
+    }
+  });
+}
+
+/** Item 94 (2026-10-29) — the next fieldd's record of a crash beside ONE session. The law the AL-8a rows guard is
+ * never a stale 0: the record counts the session, or says unknown (`null`) only when the floor's own give-up line for
+ * THIS departure (`manager_count_unknown`, its `at_ms` the record's `at`) says every cell it still owed was mid-work,
+ * reconciling or owed its next tick (`why: "slow"`): a loaded floor met its bounded wait (`FRESH_COUNT_WAIT`, 2 s,
+ * AL-8a's ruling of 2026-10-27) with the count still coming. A 0 is red, a bare null is red, and so is a null whose
+ * line says a cell sat idle from before the departure without hearing the ask (`unheard`): that count would not have
+ * come in time on any floor, the regression these rows exist for. The floor cannot tell a pump that does not listen
+ * from one not run at all for the whole wait; both read `unheard`, and neither is the slow floor the bound allows
+ * for, so neither is accepted. An honest null that passes is printed with the floor's word. */
+async function expectCountedOrSlow(
+  native: NativeHandle,
+  record: { at: number; sessions: number | null } | null,
+): Promise<void> {
+  expect(record).not.toBeNull();
+  const { at, sessions } = record as { at: number; sessions: number | null };
+  if (sessions !== null) {
+    expect(sessions).toBe(1);
+    return;
+  }
+  const gaveUp = await poll(
+    async () =>
+      nativeLogLines(native.dir).find(
+        (line) =>
+          line.event === "field_native.lifecycle.manager_count_unknown" && line.attrs?.at_ms === at,
+      ),
+    5_000,
+    `the floor's own give-up line for the departure at ${at} (a null without it is red)`,
+  );
+  console.warn(`the crash's count was unknown; the floor said ${JSON.stringify(gaveUp.attrs)}`);
+  expect(gaveUp.attrs).toMatchObject({ count_for: "departure", why: "slow" });
 }
 
 /** `terminal.create`, retried while it is refused UNAVAILABLE and retryable —
@@ -620,9 +680,9 @@ describe("the kill matrix (NF-4, real field-native)", () => {
       );
       const shell = await connectShell(next);
       const answer = (await shell.rpc.call("system.shell.attach", {})) as {
-        lastManagerExit: { sessions: number | null } | null;
+        lastManagerExit: { at: number; sessions: number | null } | null;
       };
-      expect(answer.lastManagerExit).toMatchObject({ sessions: 1 });
+      await expectCountedOrSlow(native, answer.lastManagerExit);
       expect(await shell.rpc.call("system.shell.attach", {})).toMatchObject({
         lastManagerExit: null,
       });
@@ -636,6 +696,8 @@ describe("the kill matrix (NF-4, real field-native)", () => {
   // cells' last reconciles, however old, so a fieldd that died before any reconcile saw a new session was recorded
   // as `sessions: 0`. The floor now counts from reconciles begun after the departure, and the next hello waits for
   // one. Here fieldd dies the moment the create returns, the gap the old count read a stale zero in.
+  // *Item 94 (2026-10-29):* that wait is bounded, and in a loaded verify (load ~216) it ended with the count unknown,
+  // `sessions: null`, which this row read as red. Both rows now hold the law itself (`expectCountedOrSlow`).
   it("row AL-8a-4: fieldd gone the moment a session is born — the next fieldd still counts it, never a stale 0", async () => {
     const native = await spawnNative();
     await withNativeLog(native, async () => {
@@ -665,9 +727,9 @@ describe("the kill matrix (NF-4, real field-native)", () => {
       );
       const shell = await connectShell(next);
       const answer = (await shell.rpc.call("system.shell.attach", {})) as {
-        lastManagerExit: { sessions: number | null } | null;
+        lastManagerExit: { at: number; sessions: number | null } | null;
       };
-      expect(answer.lastManagerExit).toMatchObject({ sessions: 1 });
+      await expectCountedOrSlow(native, answer.lastManagerExit);
     });
   }, 90_000);
 

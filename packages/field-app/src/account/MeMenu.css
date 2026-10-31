@@ -128,7 +128,8 @@
 .vf-me-eyebrow,
 .vf-me-notice,
 .vf-me-separator,
-.vf-me-you {
+.vf-me-you,
+.vf-me-ask {
   opacity: 0;
   transform: translateY(4px);
   transition:
@@ -141,13 +142,31 @@
 .vf-me[data-open] .vf-me-eyebrow,
 .vf-me[data-open] .vf-me-notice,
 .vf-me[data-open] .vf-me-separator,
-.vf-me[data-open] .vf-me-you {
+.vf-me[data-open] .vf-me-you,
+.vf-me[data-open] .vf-me-ask {
   opacity: 1;
   transform: none;
   transition:
     opacity 240ms ease var(--vf-me-delay, 160ms),
     transform 240ms ease var(--vf-me-delay, 160ms),
     background-color 120ms ease;
+}
+
+/* AU-D6 (§6) — the rows and the update's question trade places in one beat:
+   the face going out fades over 120ms plain `ease`, taking no pointer, before
+   the other is drawn; rows coming back from the question rise as its lines
+   did, nearest-first (Esc reverses it). */
+.vf-me[data-open] .vf-me-list[data-leaving] {
+  pointer-events: none;
+}
+
+.vf-me[data-open] .vf-me-list[data-leaving] > * {
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.vf-me[data-open] .vf-me-list[data-returning] > * {
+  animation: vf-me-ask-rise 240ms ease var(--vf-me-delay, 0ms) backwards;
 }
 
 .vf-me-row {
@@ -267,11 +286,151 @@
   padding: 0;
 }
 
-/* A refusal (a switch, a new user, a link), said where the act was — at the
-   top of the menu, in words, until the menu folds (I-5: state stays in words). */
+/* ---- the update row (AU-2; DESIGN.md §8 "The Me menu") ----------------------
+   The app's own row, nearest the face: the act (13/500, primary) over its line
+   (11.5px, tertiary unless an ink is named), and a third line at most. Every
+   line wraps rather than cuts — the cost is never cut. */
+.vf-me-row--update {
+  position: relative;
+  min-height: 44px;
+  padding-block: 6px;
+}
+
+/* A row that can't act now is dimmed, and keeps its place in the arrows' walk
+   (`aria-disabled`, never `disabled`): no fill under the pointer. */
+.vf-me-row--update[aria-disabled="true"] {
+  cursor: default;
+}
+
+.vf-me-row--update[aria-disabled="true"]:hover {
+  background-color: transparent;
+}
+
+.vf-me-row--update[aria-disabled="true"] .vf-me-icon,
+.vf-me-row--update[aria-disabled="true"] .vf-me-update-label:not([data-tone]) {
+  color: var(--vf-text-tertiary);
+}
+
+.vf-me-update-lines {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+  overflow-wrap: anywhere;
+}
+
+.vf-me-update-label {
+  color: var(--vf-text-primary);
+}
+
+.vf-me-update-detail,
+.vf-me-update-note {
+  color: var(--vf-text-tertiary);
+  font-size: 11.5px;
+  font-weight: 400;
+  line-height: 1.3;
+}
+
+.vf-me-update-label[data-tone="attention"],
+.vf-me-update-detail[data-tone="attention"],
+.vf-me-update-note[data-tone="attention"] {
+  color: var(--vf-ink-attention);
+}
+
+.vf-me-update-label[data-tone="danger"],
+.vf-me-update-detail[data-tone="danger"] {
+  color: var(--vf-ink-danger);
+}
+
+/* Offline and a channel with nothing published: quiet, the line's own ink
+   (LC-3, LC-31) — said so the tone is never read as a failure's. */
+.vf-me-update-detail[data-tone="quiet"] {
+  color: var(--vf-text-tertiary);
+}
+
+/* The 6px end dot ties the row to the face's while an install waits. */
+.vf-me-update-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--vf-cyan);
+}
+
+/* Real progress only (no spinner): 2px under the lines, from the text's edge. */
+.vf-me-update-bar {
+  position: absolute;
+  right: 10px;
+  bottom: 4px;
+  left: 48px;
+  height: 2px;
+  overflow: hidden;
+  border-radius: 1px;
+  background: var(--vf-hairline-strong);
+}
+
+.vf-me-update-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--vf-text-secondary);
+  transition: width 240ms ease;
+}
+
+/* ---- the question (AU-D6): the panel grows to 320 into main's words --------
+   Cancel leads and is focused; the act trails in the danger text. Its lines
+   rise 4px nearest-first once the rows' 120ms fade has run (§6; the beat is
+   the view's, `data-leaving` above). */
+.vf-me-ask {
+  display: grid;
+  gap: 8px;
+  padding: 8px 6px 4px 8px;
+}
+
+.vf-me-ask > * {
+  margin: 0;
+  animation: vf-me-ask-rise 240ms ease var(--vf-me-delay, 0ms) backwards;
+}
+
+.vf-me-ask-question {
+  color: var(--vf-text-primary);
+  font: 600 13px / 1.3 var(--vf-font-sans);
+}
+
+.vf-me-ask-lead {
+  color: var(--vf-text-secondary);
+  font: 400 12px / 1.35 var(--vf-font-sans);
+}
+
+.vf-me-ask-list {
+  display: grid;
+  gap: 2px;
+  padding: 0;
+  color: var(--vf-text-secondary);
+  font: 400 12px / 1.35 var(--vf-font-sans);
+  list-style: none;
+  overflow-wrap: anywhere;
+}
+
+.vf-me-ask-acts {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+@keyframes vf-me-ask-rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+/* A refusal (a switch, a new user, a link, an update step), said where the act
+   was — at the top of the menu, in words, until the menu folds (I-5: state
+   stays in words); and once per window, an install that didn't take (AU-D11).
+   The attention ink (§2.5): it wore the orange fill from UA-7 until AU-2. */
 .vf-me-notice {
   padding: 8px 14px 6px 12px;
-  color: var(--vf-orange);
+  color: var(--vf-ink-attention);
   font-size: 12px;
   line-height: 1.35;
 }
@@ -371,6 +530,50 @@
   opacity: 0;
 }
 
+/* ---- an install waits on you: a cyan dot BESIDE the face (AU-D1, AU-D2) -----
+   10px, ringed 2px in the ground, centred where the one-digit count centres
+   (top 1, right -3 of the 44px face) — the badge's one slot: a waiting count
+   outranks it (I-5). It pops in once and never pulses; `backwards`, so once
+   it has popped an open menu still fades it with the badge. */
+.vf-me-mark {
+  position: absolute;
+  z-index: 4;
+  top: 1px;
+  right: -3px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--vf-cyan);
+  box-shadow: 0 0 0 2px var(--vf-canvas-bg);
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.vf-me-mark[data-pop] {
+  animation: vf-me-mark-pop 280ms var(--vf-ease-pop) backwards;
+}
+
+.vf-me[data-open] .vf-me-mark {
+  opacity: 0;
+}
+
+@keyframes vf-me-mark-pop {
+  from {
+    opacity: 0;
+    scale: 0.4;
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+  }
+}
+
+@keyframes vf-me-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
 /* M6 — the morph becomes a fade: the menu appears whole, in 120ms. */
 @media (prefers-reduced-motion: reduce) {
   .vf-me-panel {
@@ -404,13 +607,34 @@
   .vf-me-notice,
   .vf-me-separator,
   .vf-me-you,
+  .vf-me-ask,
   .vf-me[data-open] .vf-me-row,
   .vf-me[data-open] .vf-me-eyebrow,
   .vf-me[data-open] .vf-me-notice,
   .vf-me[data-open] .vf-me-separator,
-  .vf-me[data-open] .vf-me-you {
+  .vf-me[data-open] .vf-me-you,
+  .vf-me[data-open] .vf-me-ask {
     opacity: 1;
     transform: none;
     transition: background-color 60ms ease;
+  }
+
+  /* AU-D6 — the question replaces the rows in a 120ms fade, at 320 wide; the
+     rows come back from it the same way, whole. */
+  .vf-me-ask > * {
+    animation: vf-me-fade-in 120ms ease backwards;
+  }
+
+  .vf-me[data-open] .vf-me-list[data-returning] > * {
+    animation: vf-me-fade-in 120ms ease backwards;
+  }
+
+  .vf-me-update-bar > span {
+    transition: none;
+  }
+
+  /* The dot fades in over 120ms; nothing scales. */
+  .vf-me-mark[data-pop] {
+    animation: vf-me-fade-in 120ms ease backwards;
   }
 }

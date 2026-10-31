@@ -52,6 +52,7 @@ import {
   ArtifactRefreshPreviewParams,
   ArtifactUnpublishParams,
   ArtifactUpdateParams,
+  appVersionOfBuildId,
   type CallerContext,
   CONTRACTS_VERSION,
   createAgentCatalogReaders,
@@ -218,7 +219,7 @@ import {
 } from "./app-preferences";
 import { ArtifactService, type ArtifactServiceHealth } from "./artifact-service";
 import { AuditService, type AuditWriterTestHooks } from "./audit-service";
-import { nativeAlive, nativeEndpoint, nativeMgmtEndpoint } from "./boot-env";
+import { nativeAlive, nativeEndpoint, nativeMgmtEndpoint, splitPathList } from "./boot-env";
 import { DeviceService, localDeviceIdAt } from "./device-service";
 import { DiagnosticsService } from "./diagnostics-service";
 import { DocLane } from "./doc-lane";
@@ -312,6 +313,7 @@ import { SetupLedgerStore } from "./setup-ledger";
 import { appBundleOf, relaunchFromBundle, type SHELL_ABSENCE, ShellAbsence } from "./shell-absence";
 import { ShellLease } from "./shell-lease";
 import { createSurfaceService } from "./surface-service";
+import { oweSyncQuestion } from "./sync-question";
 import { peerAnswerBytes, tailnetRowLimit } from "./tailnet-rows";
 import { runtimeProfileBinding, TerminalBindingStore } from "./terminal-bindings";
 import { createTerminalLinkDoor } from "./terminal-links";
@@ -328,6 +330,7 @@ import {
   TerminalService,
 } from "./terminal-service";
 import { TokenService } from "./token-service";
+import { userMe } from "./user-me";
 import type { BrowseFacts } from "./workspace/browse-exports";
 import type { FilesHostLaunch } from "./workspace/launch";
 import { WorkspacePicker } from "./workspace/picker";
@@ -472,7 +475,9 @@ export interface FielddConfig {
    * refuse honestly. bin.ts derives it from the layout (`rootAboveUserRoot`). */
   vibefieldRoot?: string;
   /** AR-2 test seams: the PATH the agent install inventory searches, and the
-   * fetch the release detectors use. Production: the process PATH, global fetch. */
+   * fetch the release detectors use. Production: the process PATH, global fetch.
+   * Setting the search path also isolates the home the inventory searches each
+   * provider's install directories under (`agentInstallHome`, puppeteer 0.3.1). */
   agentSearchPath?: string;
   agentFetch?: typeof fetch;
   /** AR-S1c — read the agents' installs in the background once boot has
@@ -1091,7 +1096,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     },
     ...(config.agentProviders !== undefined ? { providers: config.agentProviders } : {}),
     ...(config.agentCatalog !== undefined ? { catalog: config.agentCatalog } : {}),
-    ...(config.agentSearchPath !== undefined ? { searchPath: config.agentSearchPath } : {}),
+    ...(config.agentSearchPath !== undefined
+      ? {
+          searchPath: config.agentSearchPath,
+          installHome: agentInstallHome(config.agentSearchPath, config.dataDir),
+        }
+      : {}),
     ...(config.agentFetch !== undefined ? { fetchFn: config.agentFetch } : {}),
     ...(config.agentResumeWhenIdle !== undefined
       ? { resumeWhenIdle: config.agentResumeWhenIdle }
@@ -1184,6 +1194,16 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       // is resident (UA-D3 — background pairs keep running), and the answer
       // that matters is the one true at the moment a login enters this tree.
       otherUserLinks: () => otherUserLinks(config.dataDir, linkLogger),
+      // TS-6 (TS-D13) — a new link keeps the fields made before it on this Mac
+      // and owes the sync question, before link.json is written. `docs` is
+      // declared below with no await between; a capture lands only after the
+      // floor answers, so the binding is live by then.
+      beforeLinked: () =>
+        oweSyncQuestion({
+          ledger: setupLedger,
+          docs,
+          logger: logger.child({ component: "sync-question" }),
+        }),
     });
     links.start();
     // UA-P-0j — the first dial already happened above, so this hears only the
@@ -4144,12 +4164,17 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
 
     // -- DeviceService (C4, design-04 D31): the device directory --
     // (also the tailnet door's node-id correlator via devicesRef, assigned below)
+    // AU-3a (AU-D13 A) — the app version this desktop says on its slice, from
+    // the build id its launcher gave (`FIELDD_BUILD_ID`, the staged identity's
+    // `<appVersion>+<commit7>`). A dev runner's id names none, so dev says none.
+    const appVersion = appVersionOfBuildId(config.buildId);
     const devices = new DeviceService({
       dataDir: config.dataDir,
       mesh,
       bootId,
       fielddVersion: FIELDD_VERSION,
       contractsVersion: CONTRACTS_VERSION,
+      ...(appVersion !== undefined ? { appVersion } : {}),
       // NF-3: honest capability — true iff the pairing hello delivered the
       // floor's endpoints (D31; re-synced on the terminal-endpoints event).
       terminalHost: () => native.terminalEndpoints !== undefined,
@@ -4331,6 +4356,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       );
     }
     api.register("device.list", () => ({ devices: devices.list() }));
+    // IOS-8f — this desktop's person, read from its own user row at each ask (`user-me.ts`)
+    api.register("user.me", () =>
+      userMe({ userId: config.userId, root: config.vibefieldRoot, logger }),
+    );
     api.register("device.get", (_ctx, params) => {
       const parsed = DeviceGetParams.safeParse(params);
       if (!parsed.success)
@@ -7078,6 +7107,16 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     }
     throw e;
   }
+}
+
+/** AO-7 — the home puppeteer searches each provider's install directories under
+ * (`distribution.home`, 0.3.1) when a harness isolates the search path: the
+ * path's first directory, the stub's own in every harness, so the machine
+ * owner's `~/.local/bin` and the like are never read. An empty list falls to the
+ * user root, which here is fieldd's data directory, never $HOME. Production
+ * passes no search path, so its inventory reads the person's own home. */
+function agentInstallHome(searchPath: string, userRoot: string): string {
+  return splitPathList(searchPath)[0] ?? userRoot;
 }
 
 /** TC-D6(a) — Node's diagnostic report is the only stdlib window onto rlimits.

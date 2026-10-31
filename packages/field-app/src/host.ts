@@ -22,8 +22,11 @@ import type {
   ThemePreference,
   ThemeState,
   UpdateChannel,
+  UpdateCheckResult,
   UpdateConfirmResult,
   UpdateDoctorResult,
+  UpdateDownloadResult,
+  UpdateMoveResult,
   UpdatePrepareResult,
   WindowLightsState,
   WindowTerminalBootstrap,
@@ -61,17 +64,25 @@ export interface FieldConnection {
  * §11.3). Its state rides `onDesktopState` (`update`). Absent in browser harnesses and unpackaged builds. No door
  * takes a path or a URL. */
 export interface FieldUpdatesHost {
-  check(): Promise<void>;
+  /** AU-1 (LC-5) — a person's check, answered when the CHECK settles; a found update's download goes on and the view
+   * says it */
+  check(): Promise<UpdateCheckResult>;
   setEnabled(enabled: boolean): Promise<void>;
   setChannel(channel: UpdateChannel): Promise<void>;
   /** "Skip this version": declined across restarts and a staged download (EDP §11.3) */
   decline(version: string): Promise<void>;
+  /** AU-1 (AU-G5, AU-G6) — download THIS found version: with automatic updates off, or after a skip (its decline is
+   * removed); a refusal comes back in main's words */
+  download(version: string): Promise<UpdateDownloadResult>;
   /** C2's first phase: the snapshot a consent shows, and a token bound to its ids (or the refusal and its words) */
   prepareRestart(): Promise<UpdatePrepareResult>;
   /** C2's second phase: act on THAT snapshot; `expired` means prepare again, never a silent proceed */
   confirmRestart(token: string): Promise<UpdateConfirmResult>;
   /** C4 — the doctor's lines */
   doctor(): Promise<UpdateDoctorResult>;
+  /** AU-7 (AU-G8) — move the app into Applications through the quit gate (it opens again from there); answered when
+   * the gate decides, or a refusal before anything stops */
+  moveToApplications(): Promise<UpdateMoveResult>;
 }
 
 /** BP-D4 (thinking-browser-profile.md §3·3) — Settings › General's "Clear browsing data": main clears this shell's browser

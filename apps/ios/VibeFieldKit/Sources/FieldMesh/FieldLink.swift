@@ -58,14 +58,20 @@ public struct FieldDesktop: Identifiable, Sendable, Equatable {
   /// IOS-8c — the user this desktop serves, as its door said at hello
   /// (`HelloAck.userId`, UA-2's ULID). Nil until the door has answered, or
   /// from a daemon that names none. It is the seed the corner's face is
-  /// dealt from until the door carries the face itself (AP-D3).
+  /// dealt from until the home answers with the face itself (`person`, IOS-8f).
   public let userId: String?
+  /// IOS-8f — who this desktop's person is, in its own words (`user.me`): the
+  /// face its windows show and the name, asked of the HOME once per
+  /// connection. Nil until it answers, and from a desktop older than the door
+  /// or one that serves no user — then the corner deals from `userId`.
+  public let person: DesktopPerson?
 
   public var id: String { deviceId }
 
   public init(
     deviceId: String, name: String, platform: String?, state: State, feed: FieldFeedSource,
-    publishesTerminalDoors: Bool? = nil, fieldRefusal: String? = nil, userId: String? = nil
+    publishesTerminalDoors: Bool? = nil, fieldRefusal: String? = nil, userId: String? = nil,
+    person: DesktopPerson? = nil
   ) {
     self.deviceId = deviceId
     self.name = name
@@ -75,6 +81,28 @@ public struct FieldDesktop: Identifiable, Sendable, Equatable {
     self.publishesTerminalDoors = publishesTerminalDoors
     self.fieldRefusal = fieldRefusal
     self.userId = userId
+    self.person = person
+  }
+}
+
+/// IOS-8f — a desktop's answer to `user.me`, narrowed to the corner: the face as
+/// the wire spells it (`frame` nil = a sticker) and the name, nil where the
+/// desktop has no user row. `dealt` = the face is the desktop's proposal still.
+public struct DesktopPerson: Sendable, Equatable {
+  public let name: String?
+  public let emoji: String
+  public let frame: String?
+  public let dealt: Bool
+
+  public init(name: String?, emoji: String, frame: String?, dealt: Bool) {
+    self.name = name
+    self.emoji = emoji
+    self.frame = frame
+    self.dealt = dealt
+  }
+
+  init(_ answer: UserMeResult) {
+    self.init(name: answer.name, emoji: answer.face.emoji, frame: answer.face.frame, dealt: answer.dealt)
   }
 }
 
@@ -272,6 +300,13 @@ public final class FieldLink {
   /// device id, or nil while it has none.
   public private(set) var home: String?
 
+  /// TS-7 — whether a sweep has ANSWERED since this link started: the online
+  /// peers were read, and every one had finished its hello and was filed.
+  /// `desktops` empty before this is "not asked yet"; after it, "none" — the
+  /// difference between the phone's "No desktops yet" and a flash of it. Not
+  /// `refreshDesktops()`'s: that runs from `start()` before any sweep has.
+  public private(set) var hasListed = false
+
   /// Whether anything at all is being heard. `false` with `desktops` non-empty
   /// is the honest "they are there and saying nothing" that a blank field must
   /// never be mistaken for.
@@ -355,6 +390,8 @@ public final class FieldLink {
   /// synchronously, and cleared whenever the client leaves `ready`, so the next
   /// hello — a new connection — is asked afresh.
   @ObservationIgnored private var catalogAsked: Set<String> = []
+  /// IOS-8f — the homes asked `user.me` on their current connection.
+  @ObservationIgnored private var personAsked: Set<String> = []
   /// The desktops the home's roster has been asked to name on its current
   /// connection; nil = not asked on this connection.
   @ObservationIgnored private var rosterAskedFor: Set<String>?
@@ -392,6 +429,8 @@ public final class FieldLink {
     var fieldRefusal: String?
     /// IOS-8c — the user ULID the door answered hello with.
     var userId: String?
+    /// IOS-8f — the home's answer to `user.me`.
+    var person: DesktopPerson?
     /// SP-2 (e) — a door that STOPPED this phone (`INCOMPATIBLE`,
     /// `UNAUTHORIZED`, `PRECONDITION_FAILED`), in its own words; when it may be
     /// asked again, and how many times it has stopped since it last answered.
@@ -534,10 +573,12 @@ public final class FieldLink {
     catalogs.removeAll()
     readingDoors.removeAll()
     catalogAsked.removeAll()
+    personAsked.removeAll()
     rosterAskedFor = nil
     catalog = .empty
     devices.unsubscribe()
     desktops = []
+    hasListed = false
     agents = []
     endpointRefusals = [:]
     foreignDoors = [:]
@@ -888,6 +929,7 @@ public final class FieldLink {
         armHomeSubscription()
         askHomeForRoster()
         askHomeForCatalog()
+        askHomeForPerson()
         continue
       }
       // SP-2 (e) — a door that STOPPED this phone is not asked again, and is
@@ -910,6 +952,11 @@ public final class FieldLink {
     }
 
     refreshDesktops()
+    // TS-7 — the first listing has answered once every online peer is filed: a
+    // peer still mid-hello has no id yet, and is a desktop on its way.
+    if !hasListed, !peers.contains(where: { $0.online && ($0.deviceId ?? "").isEmpty }) {
+      hasListed = true
+    }
     // A desktop that dropped off the online list (a sleep: truffle says
     // `online: false`, never `left`) was forgotten — its catalog with it — and
     // the field must follow NOW.
@@ -1016,6 +1063,7 @@ public final class FieldLink {
     if deviceId == home { loseHome(because: "the tailnet no longer lists it") }
     if catalogs.removeValue(forKey: deviceId) != nil { mergeCatalogs() }
     catalogAsked.remove(deviceId)
+    personAsked.remove(deviceId)
     found.removeValue(forKey: deviceId)
     endpointRefusals.removeValue(forKey: deviceId)
     foreignDoors.removeValue(forKey: deviceId)
@@ -1118,6 +1166,7 @@ public final class FieldLink {
     homeClient = nil
     client?.close()
     catalogAsked.remove(lost)
+    personAsked.remove(lost)
     rosterAskedFor = nil
     // A door that answered once and has stopped answering is not "answering"
     // any more: it is weather, asked again on the next pass like every other
@@ -1191,6 +1240,7 @@ public final class FieldLink {
         self.armHomeSubscription()
         self.askHomeForRoster()
         self.askHomeForCatalog()
+        self.askHomeForPerson()
         self.refreshDesktops()
         self.refold()
         self.trackHome(client, deviceId)
@@ -1323,6 +1373,41 @@ public final class FieldLink {
           self.note(
             "\(deviceId) has no agent catalog for this phone: \(MeshModel.shortReason(error))"
               + " — its agents are named by their rows")
+        }
+      }
+    }
+  }
+
+  /// IOS-8f — who the home's person is (`user.me`): asked once per connection,
+  /// as the catalog is, and kept on the home's own entry so the corner reads it
+  /// from `desktops` with nothing new to observe. A desktop older than the door
+  /// answers NOT_FOUND, and one that serves no user UNAVAILABLE: neither is
+  /// asked again on this connection, and the corner keeps dealing from the
+  /// hello's user id. A retryable failure is asked again.
+  private func askHomeForPerson() {
+    guard let deviceId = home, let client = homeClient else { return }
+    guard case .ready = client.state else {
+      personAsked.remove(deviceId)
+      return
+    }
+    guard !personAsked.contains(deviceId) else { return }
+    personAsked.insert(deviceId)
+    Task { @MainActor [weak self] in
+      guard let self else { return }
+      do {
+        let answer = try await client.call("user.me", as: UserMeResult.self)
+        guard self.started, self.homeClient === client else { return }
+        self.found[deviceId]?.person = DesktopPerson(answer)
+        self.refreshDesktops()
+      } catch {
+        guard self.started, self.homeClient === client else { return }
+        if (error as? FieldProductError)?.retryable == true {
+          self.personAsked.remove(deviceId)
+          self.note("\(deviceId) did not answer user.me: \(MeshModel.shortReason(error)) — asking again")
+        } else {
+          self.note(
+            "\(deviceId) names no person for this phone: \(MeshModel.shortReason(error))"
+              + " — the corner deals the face")
         }
       }
     }
@@ -1544,7 +1629,8 @@ public final class FieldLink {
         feed: feed(of: deviceId),
         publishesTerminalDoors: row?.capabilities?.terminalMesh,
         fieldRefusal: entry.fieldRefusal,
-        userId: entry.userId)
+        userId: entry.userId,
+        person: entry.person)
     }
   }
 
@@ -1580,7 +1666,8 @@ public final class FieldLink {
         state: desktop.state, feed: feed(of: desktop.deviceId),
         publishesTerminalDoors: desktop.publishesTerminalDoors,
         fieldRefusal: desktop.fieldRefusal,
-        userId: desktop.userId)
+        userId: desktop.userId,
+        person: desktop.person)
     }
   }
 

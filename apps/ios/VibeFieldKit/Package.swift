@@ -324,7 +324,13 @@ let package = Package(
     // The face (IOS-8a, DESIGN.md §2.8): the deal, the hash, the tilt and the
     // edge pinned to goldens computed from the contracts' own TypeScript, and
     // the die-cut witnessed on pixels.
-    .testTarget(name: "FieldDesignTests", dependencies: ["FieldDesign"]),
+    .testTarget(
+      name: "FieldDesignTests",
+      dependencies: ["FieldDesign"],
+      // IOS-8f — the contracts' face-deal vector, copied in (EL9 on the third plane): the deck, the hash and the
+      // deal the desktop computes are the ones these read. `pnpm check:ios-fixtures` keeps the word "copy" true.
+      resources: [.copy("Fixtures")]
+    ),
     .testTarget(
       name: "FieldAgentsTests",
       dependencies: ["FieldAgents"],

@@ -367,8 +367,8 @@ export const DesktopShellState = z
           .nullable(),
       })
       .passthrough(),
-    /** WP12d (L3c-i) — the desktop updater, as the tray and the Settings card render it (`projectUpdateView`); absent
-     * where no updater runs (a development or unpackaged build) */
+    /** WP12d (L3c-i) — the desktop updater, as the tray and the Settings card render it (`UpdateController.view()`);
+     * absent where no updater runs (a development or unpackaged build) */
     update: UpdateView.optional(),
   })
   .passthrough();

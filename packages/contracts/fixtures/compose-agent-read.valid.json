@@ -1,0 +1,17 @@
+{
+  "session": "run-13",
+  "turns": [
+    {
+      "who": "user",
+      "text": "Research ACP: who speaks it natively, and what changed this year.",
+      "at": 1793272320000
+    },
+    {
+      "who": "agent",
+      "text": "Zed, JetBrains and Kiro speak it natively; Codex and Claude Code reach it through adapters.",
+      "at": 1793272680000,
+      "cut": true
+    }
+  ],
+  "before": "tl-41"
+}

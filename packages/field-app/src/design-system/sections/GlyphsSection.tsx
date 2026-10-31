@@ -21,7 +21,7 @@ export function GlyphsSection(): ReactElement {
   return (
     <Section
       id="glyphs"
-      index="02d"
+      index="02a"
       eyebrow="The chrome's alphabet"
       title="One drawing per meaning, in one box."
       description={`${GLYPH_NAMES.length} glyphs in a 24-unit box, painted in currentColor and nothing else. ${GLYPH_NAMES.length - hardware.length} are one 2-unit stroke (Instrument); ${hardware.length} verbs are solid silhouettes (Hardware). The phone draws the same geometry from template assets.`}

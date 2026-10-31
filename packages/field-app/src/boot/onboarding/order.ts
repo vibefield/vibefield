@@ -7,8 +7,9 @@ import type { FieldUserProfile } from "../../host";
 // tracks share (AO's agent chapter and TS's Connect pane), so it stays short.
 //
 // The questions run name → the agent chapter (Agents and Profiles since AO-5,
-// History since AO-3) → Connect → the sync question (a linked user's, until
-// TS-6 moves it) → Setting up. A chapter pane with nothing to
+// History since AO-3) → Connect → Setting up. The sync question left setup at
+// TS-6 (TS-D13): the first new field after connecting asks it (`Head.tsx`).
+// A chapter pane with nothing to
 // decide moves on by itself (AO-L2). Setting up is
 // not a question: it reports the work the answers started, shows the desk
 // opening beneath it, and becomes Ready in place (AO-D2).
@@ -24,7 +25,6 @@ export type Pane =
   /** AO-3 — "Bring in your past sessions.": whose history is read. */
   | "history"
   | "connect"
-  | "posture"
   /** The end of every path: the answers are recorded, the desk opens beneath
    * the glass, and the pane becomes Ready (a second user's has no welcome). */
   | "setting-up"
@@ -44,13 +44,17 @@ export function variantOf(profile: FieldUserProfile): SetupVariant {
 
 /** W6, before anything is asked of the daemon. A record with no face never
  * finished the name pane (mint never writes one — UA-D17), so the wizard starts
- * at the top; a pre-v0.3 record's `color` proves the same thing. "The top" is
- * variant-specific: a second user starts AT the name pane, because the field
- * it is joining needs no welcome. Null: the record answered the name pane, and
- * where to resume depends on facts the daemon holds (`entryAfterName`). */
+ * at the top; a pre-v0.3 record's `color` proves the same thing. Null: the
+ * record answered the name pane, and where to resume depends on facts the
+ * daemon holds (`entryAfterName`). */
 export function entryBeforeAsking(profile: FieldUserProfile): Pane | null {
   if (profile.face !== undefined || profile.color !== undefined) return null;
-  const variant = variantOf(profile);
+  return topOf(variantOf(profile));
+}
+
+/** "The top" is variant-specific: a second user starts AT the name pane,
+ * because the field it is joining needs no welcome. */
+export function topOf(variant: SetupVariant): Pane {
   if (variant === "migrated") return "welcome-back";
   if (variant === "second-user") return "field";
   return "welcome";
@@ -61,7 +65,7 @@ export function entryBeforeAsking(profile: FieldUserProfile): Pane | null {
  * after the name is the end — its link, if there is one, is acknowledged
  * rather than re-asked (spec §6, migration); its history is History's own
  * pane's to ask (AO-D12). The agent chapter's steps are the ledger's rows
- * (AO-2); a linked user lands on the sync question. */
+ * (AO-2); a linked user has nothing left to answer here (TS-6). */
 export function entryAfterName(
   variant: SetupVariant,
   facts: {
@@ -75,16 +79,15 @@ export function entryAfterName(
   if (!facts.agentsAnswered) return "agents";
   if (!facts.profilesAnswered) return "profiles";
   if (!facts.historyAnswered) return "history";
-  return facts.linked ? "posture" : "connect";
+  return facts.linked ? "setting-up" : "connect";
 }
 
-/** Where each question goes when it is answered (`continue`) or put off
- * (`skip`). A skip never asks the next question in its own group: skipping
- * Connect skips the sync question with it, which only a link makes sense of. */
+/** Where each question goes once it is answered or put off: the same place
+ * either way, since TS-6 took the sync question (Connect's follower) out of
+ * setup — the first new field after connecting asks it (TS-D13). */
 export function nextPane(
   from: Exclude<Pane, "setting-up" | "users">,
-  facts: { variant: SetupVariant; linked: boolean },
-  act: "continue" | "skip" = "continue",
+  facts: { variant: SetupVariant },
 ): Pane {
   switch (from) {
     case "welcome":
@@ -99,8 +102,42 @@ export function nextPane(
     case "history":
       return "connect";
     case "connect":
-      return act === "continue" && facts.linked ? "posture" : "setting-up";
-    case "posture":
       return "setting-up";
   }
+}
+
+/** The steps' band (track FG, FG-D22 A; DESIGN.md §8 "The Setup Assistant's
+ * glass"): the step each pane stands in, or none where the band is absent —
+ * the welcomes, and the chooser, which is no step of the chapter. A profile's
+ * own panes (its name, its pick, its sign-in) are the Profiles pane's, so they
+ * stand in Profiles. The band's steps and their order come from this map and
+ * `nextPane` alone (`stepsOf`), never a second list. */
+export const STEP_OF = {
+  welcome: null,
+  "welcome-back": null,
+  field: "you",
+  agents: "agents",
+  profiles: "profiles",
+  history: "history",
+  connect: "devices",
+  "setting-up": "setting-up",
+  users: null,
+} as const satisfies Record<Pane, string | null>;
+
+export type WizardStep = NonNullable<(typeof STEP_OF)[Pane]>;
+
+/** A variant's chapter, in order: its walk from the top through `nextPane` to
+ * Setting up, each pane's step once. */
+export function stepsOf(variant: SetupVariant): WizardStep[] {
+  const steps: WizardStep[] = [];
+  const seen = new Set<Pane>();
+  let pane = topOf(variant);
+  while (!seen.has(pane)) {
+    seen.add(pane);
+    const step = STEP_OF[pane];
+    if (step !== null && !steps.includes(step)) steps.push(step);
+    if (pane === "setting-up" || pane === "users") break;
+    pane = nextPane(pane, { variant });
+  }
+  return steps;
 }

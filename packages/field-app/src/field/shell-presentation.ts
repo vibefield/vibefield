@@ -7,8 +7,9 @@ export interface ShellPresentationState {
   /** Which page Settings opens on. `account` is the Me menu's name row and its
    * Link… act (UA-D19); `general` is Settings… and ⌘,; `devices` is a link
    * notice's click (TS-5); `new-profile` is the limit moment's Add a profile…
-   * (AO-6b): Agent Profiles on its New profile… form. */
-  readonly target: "general" | "diagnostics" | "account" | "devices" | "new-profile";
+   * (AO-6b): Agent Profiles on its New profile… form; `updates` is Settings →
+   * Updates (AU-3), where the update rows open. */
+  readonly target: "general" | "diagnostics" | "account" | "devices" | "new-profile" | "updates";
   /** TS-4 (TS-D7) — the status item's Connect Your Devices… and the away
    * notice's Connect…: Settings → Devices begins the link once it can read it,
    * as its own Connect does, and says it has (`connect` back to false). */
@@ -58,7 +59,7 @@ export function settingsOpening(target: ShellPresentationState["target"]): {
   page: SettingsPage;
   profiles?: ProfilesRoute;
 } {
-  if (target === "account" || target === "devices") return { page: target };
+  if (target === "account" || target === "devices" || target === "updates") return { page: target };
   if (target === "new-profile") return { page: "profiles", profiles: { kind: "new" } };
   return { page: "general" };
 }
