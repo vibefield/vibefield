@@ -42,11 +42,13 @@ const {
   houseRules,
   isOwnName,
   launchChecks,
+  launchExit,
   MODE_ROWS_FLOOR,
   nativeFresh,
   NONE_DEVELOPER_DIR,
   newestMtime,
   newRun,
+  NOT_ARMED,
   othersCompare,
   parseArgs,
   parseIdle,
@@ -475,6 +477,22 @@ test("launchChecks: right before the command, the responsible app is the one ENU
     /recorded no responsible app/u,
   );
   assert.match(launchChecks({ ...at, app: null, enumApp: term })[0].why, /none inferred/u);
+});
+
+test("launchExit: a STOP reads 75 (relaunch later) only when the host is restored; unrestored, 1 and a line (S8)", () => {
+  const ran = { signal: null, stopped: false, deadlineHit: false, code: 0, restored: true };
+  assert.deepEqual(launchExit(ran), { code: 0, line: null });
+  assert.deepEqual(launchExit({ ...ran, code: 3 }), { code: 3, line: null });
+  assert.deepEqual(launchExit({ ...ran, restored: false }), { code: 1, line: null });
+  assert.deepEqual(launchExit({ ...ran, deadlineHit: true }), { code: 1, line: null });
+  assert.deepEqual(launchExit({ ...ran, stopped: true }), { code: NOT_ARMED, line: null });
+  const unrestored = launchExit({ ...ran, stopped: true, restored: false });
+  assert.equal(unrestored.code, 1);
+  assert.match(
+    unrestored.line,
+    /^PHONE_STOP_UNRESTORED .*PHONE_HOST_RESTORED.*before any relaunch/u,
+  );
+  assert.equal(launchExit({ ...ran, signal: 2, stopped: true, restored: false }).code, 130);
 });
 
 test("preflightLines: one line per failure, its fix named; ok alone when none", () => {

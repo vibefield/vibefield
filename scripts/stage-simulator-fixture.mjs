@@ -19,7 +19,8 @@
 //   VF_PHONE_GUARD_AWK, VF_PHONE_PERF_LOCK, VF_PHONE_DISK_FLOORS (`<path>:<GiB>[,…]`)
 //                              another host's house rules (the mini's); unset, this Mac's. PHONE_HOUSE_RULES says which
 // Exit: the command's own code; 1 for a red preflight, rows record or restore; 2 for a usage error; 75 NOT ARMED or
-// STOPPED (a hand, a foreign device booted mid-run, a Simulator.app not proven the run's); 128+n on a signal.
+// STOPPED (a hand, a foreign device booted mid-run, a Simulator.app not proven the run's) over a restored host — a STOP
+// whose teardown left the host unrestored is 1 and PHONE_STOP_UNRESTORED; 128+n on a signal.
 //
 // THE SMOKE'S SIDE (`es/testing/smoke-phone.ts`). The command's env carries `VF_PHONE_HOST` (`http://127.0.0.1:<port>`),
 // `VF_PHONE_TOKEN`, `VF_PHONE_MODE`, `VF_PHONE_RUNTIME` (the ONE iOS runtime the stage picked: never a literal, RM4.1),
@@ -47,7 +48,7 @@
 //                                                booted set ⊆ the run's own — and `device` Booted; never a launch
 // and it prints `PHONE_ROWS_BEGIN mode=<m>` first, `PHONE_ROWS_END n=<k>` last (k = the rows it opened and closed).
 //
-// Lines a reader greps: PHONE_PREFLIGHT, PHONE_HOUSE_RULES, NOT ARMED, ARMED, PHONE_CRASH_BEFORE, PHONE_XCODE_SELECT, PHONE_DEVICE,
+// Lines a reader greps: PHONE_PREFLIGHT, PHONE_HOUSE_RULES, NOT ARMED, ARMED, PHONE_STOP_UNRESTORED, PHONE_CRASH_BEFORE, PHONE_XCODE_SELECT, PHONE_DEVICE,
 // PHONE_COMMAND_ENV, PHONE_ROW, PHONE_STOP, PHONE_ROWS, PHONE_COST_SAMPLE, PHONE_ENUM, RESPONSIBLE, HID:, PHONE_REDACTED,
 // PHONE_OBSERVATION, PHONE_HOST_RESTORED, PHONE_SWEEP. Every line — the command's stdout and stderr, and the stage's own —
 // passes the redactor LINE-BUFFERED: the run's UDIDs read `<pts3-dev-n>`, every other device's `<host-dev-k>`.
@@ -2259,10 +2260,31 @@ async function launch(mode, command, opts) {
     );
     deps.say(`PHONE_REDACTED ${JSON.stringify(redactor.counts())}`);
   }
-  if (signalled !== null) return 128 + constants.signals[signalled];
-  if (run.stopped !== null) return NOT_ARMED;
-  if (deadlineHit) return 1;
-  return code === 0 && !restored ? 1 : code;
+  const exit = launchExit({
+    signal: signalled === null ? null : constants.signals[signalled],
+    stopped: run.stopped !== null,
+    deadlineHit,
+    code,
+    restored,
+  });
+  if (exit.line !== null) deps.say(exit.line);
+  return exit.code;
+}
+
+/** A launch's exit: 128+n on a signal; a STOP is 75 — "NOT ARMED: relaunch later" (§6.3) — only over a restored host;
+ * a STOP that left it unrestored (an own device booted, Simulator.app refused) is 1 and PHONE_STOP_UNRESTORED, so no
+ * caller relaunches over it; past the deadline 1; else the command's code, 1 for its 0 over an unrestored host. */
+export function launchExit({ signal, stopped, deadlineHit, code, restored }) {
+  if (signal !== null) return { code: 128 + signal, line: null };
+  if (stopped)
+    return restored
+      ? { code: NOT_ARMED, line: null }
+      : {
+          code: 1,
+          line: "PHONE_STOP_UNRESTORED the run stopped and its teardown left the host unrestored (PHONE_HOST_RESTORED): restore it by hand before any relaunch",
+        };
+  if (deadlineHit) return { code: 1, line: null };
+  return { code: code === 0 && !restored ? 1 : code, line: null };
 }
 
 function startCostSampler(run, deps) {
