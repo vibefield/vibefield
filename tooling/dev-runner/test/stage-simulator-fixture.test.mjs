@@ -1399,7 +1399,8 @@ test("doorRow press: the gate refuses create and a device not the run's (STOP, n
   };
   for (const [body, why] of [
     [{ act: "create", device: `pts3-${RUN}-1` }, /refuses act create/u],
-    [{ act: "attach", device: `pts3-${RUN}-1` }, /refuses act attach/u],
+    [{ act: "finish", device: `pts3-${RUN}-1` }, /refuses act finish/u],
+    [{ act: "attach", device: "pts3-other-3" }, /not one of this run's/u],
     [{ act: "show", device: "pts3-other-1" }, /not one of this run's/u],
     [{ act: "show", device: "iPhone 17 Pro" }, /not one of this run's/u],
     [{ act: "show" }, /not one of this run's/u],
@@ -1431,6 +1432,44 @@ test("doorRow press: the gate refuses create and a device not the run's (STOP, n
   assert.deepEqual(go.body, { go: true });
   assert.equal(run.simulator.pressed, 1);
   assert.equal(host.said.at(-1), `PHONE_ROW SIM-SHOW-FRESH PRESS show pts3-${RUN}-3`);
+});
+
+test("doorRow press attach: the fence (the host's booted set ⊆ the run's own) and its device Booted — or STOP; never a launch (S6)", async () => {
+  const begun = async (list) => {
+    const run = ownRun();
+    run.last = sample(0, 300);
+    const host = fakeHost({ samples: [sample(10, 310)], list });
+    await doorRow({ name: "SIM-ATTACH", phase: "begin" }, run, host.deps);
+    return { run, host };
+  };
+  const attach = { name: "SIM-ATTACH", phase: "press", act: "attach", device: `pts3-${RUN}-3` };
+  const withOwn = (state, foreign = [{ udid: FOREIGN, state: "Shutdown" }]) =>
+    simctlList({
+      devices: [
+        ...OWN.map((udid, i) => ({
+          udid,
+          name: `pts3-${RUN}-${i + 1}`,
+          type: CATALOG[i + 2],
+          state: i === 2 ? state : "Shutdown",
+        })),
+        ...foreign.map((d) => ({ name: "iPhone 11", type: CATALOG[0], ...d })),
+      ],
+    });
+  // R booted, every other device off: go — and no Simulator.app launch counted
+  const ok = await begun(withOwn("Booted"));
+  assert.deepEqual((await doorRow(attach, ok.run, ok.host.deps)).body, { go: true });
+  assert.equal(ok.run.simulator.pressed, 0);
+  assert.equal(ok.run.simulator.launchedAt, null);
+  assert.equal(ok.host.said.at(-1), `PHONE_ROW SIM-ATTACH PRESS attach pts3-${RUN}-3`);
+  // a foreign device booted: Attach could bind it — STOP before the press
+  const fenced = await begun(withOwn("Booted", [{ udid: FOREIGN, state: "Booted" }]));
+  assert.equal((await doorRow(attach, fenced.run, fenced.host.deps)).body.stop, true);
+  assert.match(fenced.run.stopped.why, /the fence/u);
+  // R not booted: nothing of its model to bind — STOP
+  const off = await begun(withOwn("Shutdown"));
+  const r = await doorRow(attach, off.run, off.host.deps);
+  assert.equal(r.body.stop, true);
+  assert.match(r.body.why, /pts3-l2-t1-3 reads Shutdown, not Booted/u);
 });
 
 test("doorRow: a press with no input said before is the run's first input; END idle under its seconds there is RM4.5", async () => {

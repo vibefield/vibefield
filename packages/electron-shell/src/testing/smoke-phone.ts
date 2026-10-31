@@ -2454,13 +2454,12 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
             return globalThis.__vfDesk.local(${T})?.devices?.()?.attachable(${tr}) ?? null; })()`);
           if (answer === null) await sleep(500);
         }
-        // THE GATE, in the same step: R booted, and the answer its own type (tier 1)
-        const state = (await door.act("state", 3)).state;
-        if (state !== "Booted" || answer?.deviceType !== typeOf(3))
-          return {
-            problems: [],
-            staging: `the attach gate: device 3 ${state}, the host answers ${JSON.stringify(answer)}`,
-          };
+        // THE GATE (§4), its first leg: the answer its own type (tier 1). Its second is the door's, right before the
+        // press: R Booted and the host's booted set ⊆ the run's own. Any miss STOPs the run without pressing.
+        if (answer?.deviceType !== typeOf(3))
+          throw new PhoneStop(
+            `SIM-ATTACH: the attach gate: the host answers ${JSON.stringify(answer)}, not tier 1`,
+          );
         const e = await entityOf(a);
         const at = await placeOf(a);
         if (e === null || at === null) throw new Error("φA left the board");
@@ -2476,6 +2475,12 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
         );
         const props = async (): Promise<Record<string, unknown>> =>
           (await objectsOf(PHONE.type)).find((o) => o.key === a)?.props ?? {};
+        const gate = await door.row("SIM-ATTACH", "press", {
+          act: "attach",
+          device: env.runId === null ? "" : ownName(env.runId, 3),
+        });
+        if (gate.stop !== null)
+          throw new PhoneStop(`SIM-ATTACH: the door's attach gate: ${gate.stop}`);
         await h.pressSelector(act("attach"));
         await sleep(1_000);
         const bound = bindingRead((await props())["binding"]);

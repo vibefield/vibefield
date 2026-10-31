@@ -40,7 +40,9 @@
 //   POST /row {name, phase: press, act, device}  THE PRESS GATE, right before every press of a face's act: `act` one of
 //                                                boot, show, retry, open-settings (never create), `device` the phone's
 //                                                D4 name, one of this run's `pts3-<runId>-n`; then the fence and no
-//                                                Simulator.app running unless proven the run's → `{go}`, else `{stop}`
+//                                                Simulator.app running unless proven the run's → `{go}`, else `{stop}`;
+//                                                `act: attach` (the bar's Attach, SIM-ATTACH): the fence — the host's
+//                                                booted set ⊆ the run's own — and `device` Booted; never a launch
 // and it prints `PHONE_ROWS_BEGIN mode=<m>` first, `PHONE_ROWS_END n=<k>` last (k = the rows it opened and closed).
 //
 // Lines a reader greps: PHONE_PREFLIGHT, NOT ARMED, ARMED, PHONE_CRASH_BEFORE, PHONE_XCODE_SELECT, PHONE_DEVICE,
@@ -809,6 +811,10 @@ export const DOOR_VERBS = [
 ];
 /** The face's acts a press may run; `create` is never pressed (Q1/RM4.4: a product-made device is never the run's). */
 export const PRESS_ACTS = ["boot", "show", "retry", "open-settings"];
+/** The acts the press gate takes: the face's, and the selection bar's Attach — which binds whatever booted device of its
+ * model the host answers, so it is gated by the fence (§4 SIM-ATTACH: "the driver's booted set ⊆ own devices") and its
+ * own device Booted, and launches no Simulator.app. */
+export const GATED_ACTS = [...PRESS_ACTS, "attach"];
 export const NONCE = /^[0-9a-f]{6}$/u;
 const DEVICE_STATES = new Set(["Booted", "Booting", "Shutdown", "ShuttingDown", "Creating"]);
 const MAX_BODY_BYTES = 16 * 1024;
@@ -1161,14 +1167,24 @@ export async function doorRow(body, run, deps) {
       return refuse(run, "press", status, { stop: true, why: run.stopped.why });
     };
     const act = body.act;
-    if (!PRESS_ACTS.includes(act)) return halt(403, `it refuses act ${act}`);
-    const ownNames = new Set([...run.own.values()].map((d) => d.name));
-    if (!ownNames.has(body.device)) return halt(403, "the phone's device is not one of this run's");
+    if (!GATED_ACTS.includes(act)) return halt(403, `it refuses act ${act}`);
+    const own = [...run.own.values()].find((d) => d.name === body.device);
+    if (own === undefined) return halt(403, "the phone's device is not one of this run's");
     const fence = await fenceAgain(run, deps);
     if (!fence.ok)
       return run.stopped === null
         ? halt(409, fence.why)
         : json(409, { stop: true, why: fence.why });
+    if (act === "attach") {
+      // every other device is off (the fence); the one Attach must find is the run's own, Booted
+      const now = fence.list.devices.find((d) => d.udid.toUpperCase() === own.udid.toUpperCase());
+      if (now?.state !== "Booted")
+        return halt(409, `${body.device} reads ${now?.state ?? "absent"}, not Booted`);
+      run.open.pressed = true;
+      run.firstInput ??= name;
+      deps.say(`PHONE_ROW ${name} PRESS attach ${body.device}`);
+      return json(200, { go: true });
+    }
     const app = await simulatorNow(run, deps);
     if (app.running === null) return halt(409, "pgrep failed");
     if (app.running > 0 && !app.own)
