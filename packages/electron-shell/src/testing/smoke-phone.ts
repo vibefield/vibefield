@@ -2465,7 +2465,11 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
         const problems = judgeLiveProven("SIM-SHOW-RUNNING", proof);
         return { problems, recorded: true, seen: { quit, word, proof } };
       } finally {
+        // φQ's attachment reaped at once (the grace is read when armed): never inside SIM-GONE's count window (R5)
+        await js("globalThis.__vfDesk.liveGrace(1000)");
         await remove(q);
+        await sleep(1_500);
+        await js("globalThis.__vfDesk.liveGrace(null)");
       }
     });
 
@@ -2539,6 +2543,8 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
     await row("SIM-ATTACH", "MUST", async () => {
       const staged0 = await ensure(3, "Booted");
       if (staged0 !== null) return { problems: [], staging: staged0 };
+      // φA's attachment to R, released at ⌘Z, reaped at once: never warm on R's session in SIM-GONE (R5)
+      await js("globalThis.__vfDesk.liveGrace(1000)");
       const a = await placePhone("φA", 4, typeOf(3), false);
       try {
         await view([a]);
@@ -2600,11 +2606,18 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
         return { problems: judgeAttach(seen), seen };
       } finally {
         await remove(a);
+        await sleep(1_500);
+        await js("globalThis.__vfDesk.liveGrace(null)");
       }
     });
 
     await row("SIM-GONE", "MUST", async () => {
       if (r === "") return { problems: [], staging: "φR was never laid (SIM-SHOW-FRESH)" };
+      // Show on a FRESH launch: SIM-STOPPED's Try again left Simulator.app up, and Show over a running app is
+      // SIM-SHOW-RUNNING's may-be-red case, outside this row's Proves (R5)
+      const quit = await quitApp();
+      if (quit !== "quit" && quit !== "not-running")
+        return { problems: [], staging: `quit-app read ${quit}: Simulator.app may be running` };
       await js("globalThis.__vfDesk.liveGrace(1000)");
       const proof = await bringLive("SIM-GONE", r, 3, nonce());
       const now = (): { runtimes: number; sessions: number; active: number } => ({
@@ -2612,7 +2625,19 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
         sessions: census()?.sessions ?? 0,
         active: census()?.helper?.activeSessions ?? 0,
       });
-      const before = now();
+      // `before` read only once main's counts hold still (an earlier row's attachment reaping mid-window would move
+      // them by more than the one this row removes)
+      let before = now();
+      for (let i = 0; i < 8; i += 1) {
+        await sleep(1_000);
+        const again = now();
+        const same =
+          again.runtimes === before.runtimes &&
+          again.sessions === before.sessions &&
+          again.active === before.active;
+        before = again;
+        if (same) break;
+      }
       const t0 = Date.now();
       await remove(r);
       let closedMs: number | null = null;
