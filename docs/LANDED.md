@@ -22992,3 +22992,111 @@ could start NO agent, deterministically.
 - **Run 38:** the mint `5321b12ac` (tree `9efe3a6d1`) over main `90089dd63`, with no both-sides files. `pnpm verify` armed at 06:36:14Z and exited 0 at 06:41:01Z (287 s), HEAD `5321b12ac`. Test Files 823 passed (+1, agent-door-launch) | 3 skipped; Tests 11,039 passed (11,031 plus this item's 8) | 0 failed | 18 skipped; cargo 33 `test result: ok.` (532/0/14); gen:check clean; preflight's standing R23 `acp` WARN only; check:ios-fixtures 185 identical. The rows: agent-door-launch 5 (new), agent-briefing 18, agent-runtime 39, agent-session 59 + 2 skipped, and contracts' agent-session 28 (the door-off golden). The lottery rows were all green, with no re-run (VF-PM's read of the mini's `lanes/ts6/logs/mini/run38/`).
 - **Landed:** main fast-forwarded to `5321b12ac` at 2026-10-31T06:42:58Z by land-stack.sh (the fixer, on VF-PM's GO): `90089dd63..5321b12ac`, 9 files, +368 −47.
 - **The smoke's witness** (row 23's launch rung on the door path) is the next console window, James's hand: armed on M38 at 06:41:32Z (its keeper 06:41:31Z) behind the idle gate, on James's open console, smoke:canvas first and then smoke:godview. Its verdict is owed to the desk-gates ledger, in a later commit of a1's or VF-PM's.
+
+## SP-1b — Chat: the fourth view is built, and its list is the sparks fieldd keeps, newest activity first, live from the field board; the needs-you three take the attention ink and the orange dot, on the row and on Chat's cell, with a 2.4 s note from another view (2026-10-31; `e1aee11f0` — the doc `ee7b1eac5`, the retirement `09740337f`, the field row's widening `ea5653700` and the list `e1aee11f0` on main `62e5c4077` — lane `co/sp1b`, in the mini's mint `30d610136` over main `d9cba57d4`)
+
+VF-PM started it on the lean at 05:03Z. James clicked A on `cp-next-slice-2` at 05:36:48Z (SP-1b/1c, with CP-3's note
+drafted meanwhile). VF-PM ruled the retirement as one commit (05:11Z), then the feed, the thread's column and the canon
+corrections (05:23Z). It is `thinking-roled-agents.md` §17's SP-1b, on the Sparks page's rulings CH-D1, CH-D3 and CH-D4
+(A, James, 2026-10-30).
+
+**What.**
+- **DESIGN.md first** (`ee7b1eac5`): §8 "Chat's list", plus the views track, the palette, the package circle and
+  Chat's composer amended where the Assistant waited.
+  - The list: the panel, the row, the head ("Sparks" and its count), needs you (S-4), the status as SP-1b reads it, the
+    thread's column at first light, every state in words.
+  - §3's ramp: Body takes 12 and Title 14–15.
+  - §13: `message` stays Chat's, and New spark takes `sparkle`; no `kindle`.
+- **The fourth cell is built** (`09740337f`, 28 files): FC-D2's waiting Assistant retires in ONE commit.
+  - `contracts`' `frameViewBuilt` goes, with every branch that read it (the frame, the track, the palette, card-drag,
+    main's view owner and its View menu), the note and its CSS, the dev console's `waits`, and the smoke judge.
+  - The name is "Chat" on both sides; the wire id `assistant` and the menu id `view-assistant` stay.
+  - The cover holds Chat.
+- **The field row says whose session a run is and who started it** (`ea5653700`, 5 files; SP-1b's one daemon-plane
+  touch):
+  - `AgentFieldRow` gains `spark: SparkId.optional()` and `origin: AgentSessionOrigin.optional()`, in their own block
+    after `terminal`.
+  - fieldd's `projectFieldRow` copies `spark` and rebuilds `origin` from its named fields (`originOf`).
+  - The golden is `agent-field-snapshot.spark.json`. fieldd's maximal summary carries both, and its goldens list in
+    `agent-field.test.ts` names three goldens.
+  - `pnpm gen` leaves no diff, and `check:ios-fixtures` finds no mirror moved.
+  - *For the durable-Stop slice's rebase (its `stop` field): these are the field names, the golden and the two test
+    lines it regenerates around.*
+- **Chat's list** (`e1aee11f0`, 21 files):
+  - The pure reading (`chat/spark-status.ts`).
+  - The window's one feed, a module store, started by ChromeLayer for the window's life (`chat/sparks-feed.ts`): a
+    `FieldBoard` that applies snapshots and deltas, reads row by row and asks again at a gap; the list re-asked only
+    when the board's live sparks change.
+  - The panel (`chat/ChatPanelView.tsx`, `chat/chat.css`) and its controller (`chat/ChatView.tsx`).
+  - The thread's column: the chosen spark's head and ONE honest line with ONE act. "Vela's pane is in Godview" + Show
+    (Jump to's path, `openLiveRow`, now taking a run's id and floor session alone); "Vela is asleep" + Wake
+    (`compose.sparks.open`); "Vela hasn't started yet".
+  - The frame's half of CH-D4: Chat's cell's dot and the 2.4 s "Vela needs you" note.
+  - The catalog's adapter (`ChatPreview` over `chat-fixtures`, through the product's `sparkEntriesOf`) and the gate's
+    rules for it. UI_SYSTEM.md names it.
+
+**Real vs not yet.**
+- Real: the list of the sparks fieldd keeps, their live words and dots, the note, Show and Wake.
+- Not yet:
+  - the unread dot, with SP-1d's thread;
+  - New spark (SP-1c);
+  - Rate limited, an UPSTREAM GAP: puppeteer 0.3.2's blockers are a permission, a question or a failure, so no signal
+    says a limit; the slice that reports one owns it, and nothing is filed upstream yet;
+  - the other statuses no slice reports;
+  - Godview's rim and History's "Lyra's" (EW-D1).
+
+**Found.**
+- The canon was corrected before code. The page James ruled heads the list "Sparks" with its count and puts New spark on
+  the LINE (⌘N), not in the head (`sparks/src/kit.js` :161 and :301; `pages.js` :59).
+- The bare fold is whole-board frames at FULL_TICK_MS = 16, too heavy for a list. The content-free field projection
+  lacked `spark` and `origin`, hence the widening (VF-PM's ruling 1, A). A two-door join in the renderer was refused as
+  a second aggregation.
+- The first light went red at preflight (`light-98e372289.out`, 06:26:11Z): R23b caught two "claude" literals in the
+  catalog's `chat-fixtures.ts`. The fixtures read `AGENT_CATALOG[0]` now, amended into the list's commit (`98e372289` →
+  `e1aee11f0`).
+
+**Validation.**
+- **Per commit, in the lane** (nice 19, guard clear):
+  - the retirement: tsc 0 for contracts, field-app and electron-shell; vitest 64/64, 85/85 and 170/170;
+  - the widening: tsc 0; contracts 560/560 and fieldd 69/69;
+  - the list: field-app's WHOLE suite, 263 files passed | 1 skipped, 3387 tests passed | 3 skipped.
+- **The lane lights**, each stage alone under the guard (preflight with R23 and R23b, the walls, biome, tsc for
+  contracts, fieldd, electron-shell and field-app, gen, the iOS fixtures, then each package's vitest):
+  - on `e1aee11f0` (`lanes/sp1b/logs/light-e1aee11f0.out`): GREEN 06:30:12Z. contracts 54 files, 1401 tests; fieldd 4
+    files, 69 tests; field-app 263 files passed | 1 skipped, 3387 tests passed | 3 skipped; electron-shell 85 tests.
+  - over main `f62f27916` (the lane's merge `2c45f4e7d`, `light-2c45f4e7d.out`): GREEN 06:50:43Z. contracts 1404,
+    fieldd 71, field-app 3394 passed | 3 skipped, electron-shell 85.
+- **Run 39:** the mint `30d610136` (tree `5d830bd11`, which is VF-PM's merge-tree and the lane's `17df11713`) over main
+  `d9cba57d4`. Four files changed on both sides (DESIGN.md, contracts' and fieldd's `agent-field.ts`, and fieldd's
+  `agent-field.test.ts`), each side its own hunks, none by hand. The bundle `mrun39` (85,241 B, sha256 a2761dc6…) was
+  carried from ^`5321b12ac`. `pnpm verify` armed at 07:04:17Z and exited 0 at 07:09:03Z (286 s), HEAD `30d610136`.
+  - Tests 11,067 passed (+28 over run 38's 11,039) | 0 failed | 18 skipped, and no FAIL row; cargo 33 `test result:
+    ok.`, FAILED 0; typecheck and test for 28 projects; gen:check clean after; check:ios-fixtures "185 copies
+    identical"; MaxListenersExceededWarning 0; preflight's standing R23 `acp` WARN only.
+  - The rows: contracts' agent-field 40 and shell 64; fieldd's agent-field 38, agent-field-daemon 5 (4,230 ms) and
+    agent-model-board 17; field-app's view-frame 27, card-drag 30, command-palette 11 and head-model 27;
+    electron-shell's app-menu-model 55 and login-shell 7.
+  - The lottery rows, terminal-seam 6 (3,139 ms) and terminal-remote-door.e2e 1 (692 ms), were green with no re-run
+    (VF-PM's read of the mini's `lanes/ts6/logs/mini/run39/`).
+  - a9's read: field-app whole on the mini, 264 files and 3,397 tests passed, 0 skipped (this host skips 3 the mini
+    runs); SP-1b's other suites chat-view 11, spark-status 10, line-model 18, package-circle 13, design-system 8 and
+    ui-system-boundaries 39; electron-shell's view-state 12 and window-lights 18. A hand touched the mini at about
+    07:05:25Z, mid-run; the verify reads no GUI.
+- **Landed:** main fast-forwarded to `30d610136` at 2026-10-31T07:10:48Z by land-stack.sh (the fixer, on VF-PM's GO at
+  07:10Z): `d9cba57d4..30d610136`, 47 files, +2366 −218.
+- **The smoke's witness** (smoke:godview's view-key rung 11g, the godview-only windowed row run39b on M39): GREEN, exit
+  0 at 07:11:21Z (armed 07:09:21Z, the console unlocked, idle 236 → 356 s, no input).
+  - viewKeys "1": godview → canvas (moved) · "2": godview → godview (stayed) · "3": godview → history (moved) · "4":
+    "godview → assistant (moved); the pane never heard it". In 35b and 38b, "4" read "godview → godview (waits)".
+  - `smoke.ts` at M39 names Chat's view `assistant` (:5393), and :8857 expects exactly that (:8822, "⌘4 opens Chat
+    (SP-1b)").
+  - The logs are the mini's `lanes/ts6/logs/mini/run39b/` and the keeper's `app-logs.tgz`. Desk-gates' row 23 carries
+    the same line (a1).
+
+**Owed.**
+- The draft corpus's "not built yet" sentences (design-03 among them), at the next draft queue.
+
+**Records** (this commit): FC-D2's and FV-D7's waits end, dated, in DECISIONS, and the CP row's Built cell names the
+sparks' renderer (SP-1a and SP-1b); ROADMAP's CO block is rewritten in place.
+
+James's first sight: `pnpm dev`, then ⌘4 or the views track's fourth cell.

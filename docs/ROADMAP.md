@@ -254,10 +254,16 @@
   - A spark starts agents one level deep, watches them and talks to them through each session's one input queue; its
     words land at the session's idle, marked as its own and sent on the person's behalf (CP2-D1).
   - CP2-D7's quiet wait waits on a floor fact (the person's last keystroke); the ordering guard stands meanwhile.
+- **SP-1b, Chat's list**: LANDED 10-31 (`30d610136`, the mini's run 39; LANDED "SP-1b").
+  - The fourth view is Chat. Its list is the sparks fieldd keeps, newest activity first, live from the field board,
+    whose rows now say whose session a run is (`spark`) and who started it (`origin`).
+  - The needs-you three take the attention ink and the orange dot, on the row and on Chat's cell, with a 2.4 s note
+    from another view.
 - Next, in order:
-  - **SP-1b** (Chat's list) and **SP-1c** (the New spark sheet): renderer only, on James's go.
+  - **SP-1c** (the New spark sheet): renderer only, on James's A (10-31 05:36:48Z).
   - **SP-1d**: the thread and Chat's composer (HN B1 and B2 landed 10-31).
-  - **CP-3**: the person (`ask_user`, `notify`).
+  - **CP-3**: the person (`ask_user`, `notify`). Its marks CP3-D1…D8 were ruled 10-31 at their leans (James, 06:31:34Z;
+    `draft/compose-plane/cp3-the-person.md`), and its build follows SP-1c, on his go.
   - **CP-4**: flows and the desk applier.
   - **CP-5**, which is MT-7: Codex and Grok, once their MCP processes can be named.
 
@@ -659,7 +665,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | SD — sound | PARKED (James's lab, Q27) | `draft/sound/design-sound.md` | James's call |
 | WIN — Windows port | PARKED since 08-24 (`c16e618f4`) | `thinking-windows-port.md`, `docs/WINDOWS_PORT_STATUS.md` | a Windows leg on the rails |
 | LSF — live surfaces foundation | COMPLETE; LSF-4 landed 10-26 | `specs/live-surfaces-foundation.md` | consumed by PT; §18 Windows rows with WIN |
-| CO — the compose plane | ACTIVE; CP-0, SP-1a, CP-1a…1c, CP-1d, MT-0 and CP-2 landed | `compose-plane/thinking-roled-agents.md` §15–§17, `compose-plane/v2/`, `thinking-tool-plane.md`; DESIGN.md §2.10 | SP-1b/1c → CP-3 |
+| CO — the compose plane | ACTIVE; CP-0, SP-1a, CP-1a…1c, CP-1d, MT-0, CP-2 and SP-1b landed | `compose-plane/thinking-roled-agents.md` §15–§17, `compose-plane/v2/`, `thinking-tool-plane.md`; DESIGN.md §2.10 | SP-1c → SP-1d · CP-3 (ruled 10-31) |
 | A — shell and spine | COMPLETE | design-03, `specs/electron-shell-refactor.md` | Settings on demand (Q20, §3 item 6) |
 
 **Retired and superseded tracks**
