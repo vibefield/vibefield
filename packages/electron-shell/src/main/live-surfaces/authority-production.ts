@@ -19,7 +19,7 @@ import {
 import { MacosCaptureHelperSupervisor } from "./macos-capture-helper";
 import { loadMacosCaptureNativeAdapter } from "./macos-capture-native";
 import { SckLiveSurfaceRuntime } from "./sck-producer";
-import { SimctlService } from "./simctl";
+import { type SimctlCall, type SimctlCallCounts, SimctlService } from "./simctl";
 
 // DT-1c — the production binding of the authority's injectable seams onto the
 // LSF runtime classes. Everything here is lazy: the browser native costs
@@ -74,8 +74,13 @@ export function createProductionLiveSurfaceSupport(opts: {
   /** PT-S3 (P2) — a SMOKE's simctl developer directories (`main/index.ts`: `smokeSimctlDeveloperDir`, read only in a
    * smoke-like mode): the probe vets these alone and asks xcode-select nothing. Absent (production): xcode-select's. */
   simctlCandidates?: readonly string[];
+  /** PT-S3 (D2) — SMOKE-ONLY (`main/index.ts` passes it only in a smoke-like mode, beside the harness's shell opens): the
+   * harness's count of main's simctl calls by NAME — never an argument, so never a UDID. The shared simctl bumps it at
+   * each call (its `onCall`), and `census().simctl` reads a copy. Absent (production): nothing is counted. */
+  simctlCalls?: SimctlCallCounts;
   logger?: Logger;
 }): ProductionLiveSurfaceSupport {
+  const simctlCalls = opts.simctlCalls;
   let browserNative: ElectronBrowserSurfaceNative | null = null;
   /** BP-D4: the browser surfaces this support made — what "Clear browsing data" reloads (closed ones are let go there) */
   const browserSurfaces = new Set<BrowserLiveSurfaceRuntime>();
@@ -91,9 +96,16 @@ export function createProductionLiveSurfaceSupport(opts: {
 
   const ensureSimctl = (): SimctlService => {
     if (simctl === null) {
-      simctl = new SimctlService(
-        opts.simctlCandidates === undefined ? {} : { candidates: opts.simctlCandidates },
-      );
+      simctl = new SimctlService({
+        ...(opts.simctlCandidates === undefined ? {} : { candidates: opts.simctlCandidates }),
+        ...(simctlCalls === undefined
+          ? {}
+          : {
+              onCall: (call: SimctlCall) => {
+                simctlCalls[call] += 1;
+              },
+            }),
+      });
     }
     return simctl;
   };
@@ -246,6 +258,7 @@ export function createProductionLiveSurfaceSupport(opts: {
                 framesReceived: stats.framesReceived,
               },
         vetted: simctl?.vetted() ?? null,
+        ...(simctlCalls === undefined ? {} : { simctl: { ...simctlCalls } }),
       };
     },
     dispose: async () => {

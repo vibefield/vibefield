@@ -23,7 +23,7 @@ import {
 } from "@vibefield/contracts";
 import type { Logger } from "@vibefield/logging";
 import type { LiveSurfaceRuntimeAuthority } from "./runtime";
-import type { SimctlVetted } from "./simctl";
+import type { SimctlCallCounts, SimctlVetted } from "./simctl";
 import type { LiveSurfaceWindowHost } from "./window-host";
 
 // DT-1c (thinking-devtools-pack.md DT-D2) — the production live-surface
@@ -132,6 +132,8 @@ export interface LiveSurfaceSimulatorCensus {
   } | null;
   /** which answer main's simctl probe vetted (P1) — null: none yet, or no Simulator here */
   readonly vetted: SimctlVetted | null;
+  /** D2, a SMOKE's only: main's simctl calls counted by name (never an argument) — absent in production */
+  readonly simctl?: Readonly<SimctlCallCounts>;
 }
 
 export interface LiveSurfaceAuthorityDeps {

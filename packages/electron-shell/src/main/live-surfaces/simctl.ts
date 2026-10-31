@@ -63,6 +63,24 @@ export type SimctlVerb = (typeof SIMCTL_VERBS)[number];
  * directory without simctl (R5′), or a smoke's candidate (`SimctlServiceOptions.candidates`). */
 export type SimctlVetted = "xcode-select" | "fallback" | "override";
 
+/** PT-S3 (D2) — one call main makes of CoreSimulator, by NAME (never an argument, so never a UDID): a probe ATTEMPT, a
+ * spawn of xcode-select, of an allowed simctl verb, or of Simulator.app's `open` (Show it). */
+export type SimctlCall = "probe" | "xcode-select" | SimctlVerb | "show";
+export const SIMCTL_CALLS: readonly SimctlCall[] = [
+  "probe",
+  "xcode-select",
+  ...SIMCTL_VERBS,
+  "show",
+];
+
+/** D2: a count of each call, by name — what a smoke's census reads */
+export type SimctlCallCounts = Record<SimctlCall, number>;
+
+/** D2: every call counted zero */
+export function simctlCallCounts(): SimctlCallCounts {
+  return Object.fromEntries(SIMCTL_CALLS.map((call) => [call, 0])) as SimctlCallCounts;
+}
+
 /** One spawn of a fixed binary. `developerDir` rides as `DEVELOPER_DIR` (absent only for the probe itself). */
 export interface SimctlExecRequest {
   readonly file: string;
@@ -444,6 +462,10 @@ export interface SimctlServiceOptions {
    * xcode-select nothing and vets only these, in order, under the same checks (`override`); none passing is no Simulator.
    * Production passes none. */
   readonly candidates?: readonly string[];
+  /** PT-S3 (D2) — SMOKE-ONLY: told each call by NAME as it is made — `probe` once per probe attempt (before
+   * xcode-select or the candidates), `xcode-select` once per spawn of it, each verb and `show` once per spawn. Never an
+   * argument. Production passes none. */
+  readonly onCall?: (call: SimctlCall) => void;
 }
 
 /** PT-S2 — main's ONE simctl, shared by every bound phone, the inner resolvers and the attach's list. */
@@ -452,6 +474,7 @@ export class SimctlService implements SimulatorDeviceCatalog {
   readonly #exists: (path: string) => boolean;
   readonly #now: () => number;
   readonly #candidates: readonly string[] | null;
+  readonly #onCall: ((call: SimctlCall) => void) | undefined;
   #developerDir: string | null = null;
   /** which answer vetted `#developerDir` (P1) — meaningful only while it is held */
   #vettedBy: SimctlVetted | null = null;
@@ -468,6 +491,7 @@ export class SimctlService implements SimulatorDeviceCatalog {
     this.#exists = options.exists ?? existsSync;
     this.#now = options.now ?? Date.now;
     this.#candidates = options.candidates === undefined ? null : [...options.candidates];
+    this.#onCall = options.onCall;
   }
 
   /** R5: the developer directory that holds simctl, or `SimctlUnavailableError` — before ANY xcrun. */
@@ -590,6 +614,7 @@ export class SimctlService implements SimulatorDeviceCatalog {
   async show(udid: string): Promise<void> {
     assertUdid(udid);
     const developerDir = await this.developerDir();
+    this.#onCall?.("show");
     await this.#exec({
       file: OPEN_PATH,
       args: [
@@ -650,6 +675,7 @@ export class SimctlService implements SimulatorDeviceCatalog {
   }
 
   private async probe(): Promise<string> {
+    this.#onCall?.("probe");
     const vetted = await this.selected();
     if (vetted === null) {
       this.#probeFailedAt = this.#now();
@@ -675,6 +701,7 @@ export class SimctlService implements SimulatorDeviceCatalog {
       return found === undefined ? null : { developerDir: found, by: "override" };
     }
     let answer: string;
+    this.#onCall?.("xcode-select");
     try {
       answer = (
         await this.#exec({
@@ -718,6 +745,7 @@ export class SimctlService implements SimulatorDeviceCatalog {
   private async simctl(verb: SimctlVerb, args: readonly string[], timeoutMs: number) {
     const argv = simctlArgv(verb, args);
     const developerDir = await this.developerDir();
+    this.#onCall?.(verb);
     return await this.#exec({ file: XCRUN_PATH, args: argv, timeoutMs, developerDir });
   }
 }

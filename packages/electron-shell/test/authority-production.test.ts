@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createProductionLiveSurfaceSupport } from "../src/main/live-surfaces/authority-production";
-import { SimctlUnavailableError } from "../src/main/live-surfaces/simctl";
+import { SimctlUnavailableError, simctlCallCounts } from "../src/main/live-surfaces/simctl";
 
 // PT-S3 — main's production live-surface support with NOTHING real beneath it: `node:child_process` refuses every spawn
 // unless a row scripts an in-process answer to `execFile`, the native adapter's loader is a fake that counts its loads,
@@ -267,5 +267,45 @@ describe("createProductionLiveSurfaceSupport — main's simulator census (PT-S3 
       await support.dispose();
     }
     expect(support.census()).toEqual({ ...FRESH, helperPresent: true });
+  });
+});
+
+describe("createProductionLiveSurfaceSupport — the simctl call record (PT-S3 D2)", () => {
+  it("a smoke's record counts the shared simctl's calls by name into census().simctl — a copy; production keeps none", async () => {
+    const empty = join(root, "empty");
+    mkdirSync(empty);
+    const calls = simctlCallCounts();
+    const smoke = createProductionLiveSurfaceSupport({
+      capture: CAPTURE,
+      simctlCandidates: [empty],
+      simctlCalls: calls,
+    });
+    try {
+      expect(smoke.census().simctl).toEqual(simctlCallCounts());
+      expect(await smoke.simulatorDevices.list()).toEqual([]);
+      // SIM-NONE's read: a probe attempted, and no xcode-select, list, boot, create or show
+      const read = smoke.census().simctl;
+      expect(read).toEqual({ ...simctlCallCounts(), probe: 1 });
+      expect(calls.probe).toBe(1);
+      // the census hands a copy: a reader never moves main's count
+      (read as Record<string, number>)["probe"] = 99;
+      expect(smoke.census().simctl?.probe).toBe(1);
+    } finally {
+      await smoke.dispose();
+    }
+
+    // the same support without the record — production's — counts nothing and says none
+    const production = createProductionLiveSurfaceSupport({
+      capture: CAPTURE,
+      simctlCandidates: [empty],
+    });
+    try {
+      expect(await production.simulatorDevices.list()).toEqual([]);
+      expect(production.census()).not.toHaveProperty("simctl");
+    } finally {
+      await production.dispose();
+    }
+    expect(calls.probe).toBe(1);
+    expect(fakes.execs).toEqual([]);
   });
 });

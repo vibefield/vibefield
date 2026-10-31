@@ -3,14 +3,17 @@ import { describe, expect, it } from "vitest";
 import {
   parseSimctlSnapshot,
   pickDevice,
+  SIMCTL_CALLS,
   SIMCTL_TIMEOUTS_MS,
   SIMCTL_VERBS,
+  type SimctlCall,
   type SimctlExec,
   type SimctlExecRequest,
   SimctlService,
   SimctlUnavailableError,
   SimctlVerbRefusedError,
   simctlArgv,
+  simctlCallCounts,
   simulatorDeviceRows,
   simulatorRuntimeIds,
 } from "../src/main/live-surfaces/simctl";
@@ -105,6 +108,8 @@ function harness(options: HarnessOptions = {}) {
   const calls: SimctlExecRequest[] = [];
   /** every path the probe's file check was asked about */
   const checked: string[] = [];
+  /** PT-S3 (D2): every call the service told, by name */
+  const told: SimctlCall[] = [];
   const clock = { now: 50_000 };
   const developerDir = options.developerDir ?? DEVELOPER_DIR;
   const holding = new Set(
@@ -127,10 +132,12 @@ function harness(options: HarnessOptions = {}) {
     },
     now: () => clock.now,
     ...(options.candidates === undefined ? {} : { candidates: options.candidates }),
+    onCall: (call) => told.push(call),
   });
   return {
     calls,
     checked,
+    told,
     clock,
     service,
     setList(raw: string) {
@@ -703,5 +710,105 @@ describe("SimctlService", () => {
     expect(await service.deviceRows()).toEqual([]);
     expect(await service.runtimeIds()).toEqual([]);
     expect(calls).toEqual([]);
+  });
+});
+
+describe("PT-S3 (D2): the simctl call record — names, never arguments", () => {
+  const CREATED = "11111111-2222-4333-8444-555555555555";
+
+  it("names every call main makes of CoreSimulator, each counted zero to start", () => {
+    expect(SIMCTL_CALLS).toEqual([
+      "probe",
+      "xcode-select",
+      "list",
+      "boot",
+      "shutdown",
+      "create",
+      "show",
+    ]);
+    expect(simctlCallCounts()).toEqual({
+      probe: 0,
+      "xcode-select": 0,
+      list: 0,
+      boot: 0,
+      shutdown: 0,
+      create: 0,
+      show: 0,
+    });
+  });
+
+  it("xcode-select's path tells the probe and its spawn once each; then each verb and Show it once per SPAWN", async () => {
+    let refuseBoot = false;
+    const { service, told } = harness({
+      answer: (request) => {
+        if (request.args[1] === "create") return `${CREATED}\n`;
+        if (request.args[1] === "boot" && refuseBoot) {
+          return Promise.reject(new Error("Unable to boot device in current state: Booted"));
+        }
+        return undefined;
+      },
+      list: listJson({ [IOS_26_5]: [rawDevice(UDID_A, PRO, "Booted")] }),
+    });
+    await service.list();
+    expect(told).toEqual(["probe", "xcode-select", "list"]);
+    await service.boot(UDID_A);
+    await service.shutdown(UDID_A);
+    await service.create("iPhone 17 Pro", PRO, IOS_26_5);
+    await service.show(UDID_A);
+    expect(told.slice(3)).toEqual(["boot", "shutdown", "create", "show"]);
+    // a boot refused as already booted reads the list afresh — a spawn of its own, told as one
+    refuseBoot = true;
+    await service.boot(UDID_A);
+    expect(told.slice(7)).toEqual(["boot", "list"]);
+    // a call refused before any spawn tells nothing
+    await expect(service.boot("--help")).rejects.toThrow();
+    expect(told).toHaveLength(9);
+  });
+
+  it("the candidates path tells the probe once per ATTEMPT, and xcode-select never", async () => {
+    const { clock, service, told } = harness({ candidates: ["/var/empty"] });
+    await expect(service.list()).rejects.toBeInstanceOf(SimctlUnavailableError);
+    // inside the retry window there is no attempt, so nothing to tell
+    await expect(service.show(UDID_A)).rejects.toBeInstanceOf(SimctlUnavailableError);
+    expect(told).toEqual(["probe"]);
+    clock.now += 30_000;
+    await expect(service.list()).rejects.toBeInstanceOf(SimctlUnavailableError);
+    expect(told).toEqual(["probe", "probe"]);
+  });
+
+  it("one probe and one list joined by every reader are told once each (R8)", async () => {
+    const { service, told } = harness();
+    await Promise.all([service.list(), service.deviceRows(), service.runtimeIds()]);
+    expect(told).toEqual(["probe", "xcode-select", "list"]);
+  });
+
+  it("a stringified record holds no UDID it was handed — nor one it answered", async () => {
+    const { service, told } = harness({
+      list: listJson({
+        [IOS_26_5]: [rawDevice(UDID_A, PRO, "Booted"), rawDevice(UDID_B, SE, "Shutdown")],
+      }),
+      answer: (request) => (request.args[1] === "create" ? `${CREATED}\n` : undefined),
+    });
+    expect(await service.enumerateBootedDevices()).toHaveLength(1);
+    await service.boot(UDID_B);
+    await service.shutdown(UDID_B);
+    await service.show(UDID_A);
+    expect(await service.create("iPhone 17 Pro", PRO, IOS_26_5)).toBe(CREATED);
+    const counts = simctlCallCounts();
+    for (const call of told) counts[call] += 1;
+    const record = JSON.stringify({ told, counts });
+    for (const udid of [UDID_A, UDID_B, CREATED]) {
+      expect(record.toUpperCase()).not.toContain(udid.toUpperCase());
+    }
+    expect(record).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/iu);
+    expect(counts).toEqual({
+      probe: 1,
+      "xcode-select": 1,
+      list: 1,
+      boot: 1,
+      shutdown: 1,
+      create: 1,
+      show: 1,
+    });
   });
 });

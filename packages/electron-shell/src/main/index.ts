@@ -103,6 +103,7 @@ import {
 import { isGuardedBrowserSurfaceSession } from "./live-surfaces/browser-security";
 import { createElectronLiveSurfaceTextureTransferApi } from "./live-surfaces/electron-texture-transfer";
 import type { LiveSurfaceRuntimeAuthority } from "./live-surfaces/runtime";
+import { type SimctlCallCounts, simctlCallCounts } from "./live-surfaces/simctl";
 import {
   LiveSurfaceTextureForwarder,
   type LiveSurfaceTextureTransferBudget,
@@ -1036,6 +1037,9 @@ async function main(
   const harnessShellOpens: { opened: string[]; revealed: string[] } | null = isSmokeLike(MODE)
     ? { opened: [], revealed: [] }
     : null;
+  // PT-S3 (D2) — and main's simctl calls are COUNTED, by name — never an argument, so never a UDID: the phone rows read
+  // them on the live census (`state().simulator.simctl`). Production counts nothing.
+  const harnessSimctlCalls: SimctlCallCounts | null = isSmokeLike(MODE) ? simctlCallCounts() : null;
   const wireAttachment = (
     bundle: PairBundle,
     userRoot: string,
@@ -1145,6 +1149,8 @@ async function main(
       ...(SMOKE_SIMCTL_DEVELOPER_DIR === undefined
         ? {}
         : { simctlCandidates: [SMOKE_SIMCTL_DEVELOPER_DIR] }),
+      // PT-S3 (D2): a smoke's count of main's simctl calls, by name (above) — the census's `simctl`
+      ...(harnessSimctlCalls === null ? {} : { simctlCalls: harnessSimctlCalls }),
       logger: logger.child({ component: "live-surfaces.capture" }),
     });
     if (!app.isPackaged && process.env["FIELDD_DATA_DIR"] === undefined && !isSmokeLike(MODE)) {
