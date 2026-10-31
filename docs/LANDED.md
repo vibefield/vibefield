@@ -21991,6 +21991,12 @@ Mac mini, verify only).
   > **2026-10-31 05:52:34Z:** run 35b's smoke:godview (M35 `733f24ed5`) went red at QL-2's launch rung (item 124,
   > cp-landing's) before the Hub, and before B1's 11h and B2's 11j: they stay owed to the next console window after
   > 124's fix. smoke:canvas's RIM and BAR ran green at run 30b.
+  > **2026-10-31 07:00:52Z (run 38b):** smoke:godview on M38 `5321b12ac` ran green with the console unlocked for the
+  > whole row, so B1's 11h (all four rungs) and B2's 11j are paid; run 39b (M39 `30d610136`, 07:11:21Z) ran them green
+  > again. The Hub in the head has no smoke:godview rung, and never had one, though this bullet lists it: B3 built
+  > none, and the same records (`623dbded2`) gave row 23 "the package circle grows the pill's sheet on Artifacts
+  > (HN-8)" as well. The Hub in the head is witnessed by head.test.tsx's rows and the catalog's plates only; its
+  > smoke:godview rung is owed (ROADMAP §5). smoke:canvas's HN rows held at 38b too.
 - **Landed:** main fast-forwarded `e71f2d332` → `e31e55ecd` at 03:09:01Z on VF-PM's GO (`land-stack.sh`). HN B2's
   records landed on it as `4a638384e` at 03:09:13Z, and VF-PM's push of 03:10:19Z carried both.
 
@@ -22797,6 +22803,14 @@ that read packages, never the reverse.
   `smoke-profile.test.ts` (the launcher with stand-ins) and check:walls. The census's first LIVE run is the first real
   smoke on `06e1385d7` or later. The owed-rows watcher's `smoke:canvas`, on James's unlock, is that run, and its
   `SMOKE_TEARDOWN` / `SMOKE_DAEMONS` lines are the evidence (owed, 2026-10-31).
+  > **Paid (2026-10-31; VF-PM's read of run 38b, 07:02Z):** the census's first live run is run 38b's smoke:canvas on
+  > M38 `5321b12ac` (06:43:33–06:58:51Z, the mini, a9's chain), and it read ONE census. `SMOKE_TEARDOWN` found
+  > field-native 4919, field-terminal-host 4920 and 4921, and rosettad 5707; it asked 4919 and 5707, waited 354 ms,
+  > killed none and left none. `SMOKE_DAEMONS {left:[], reaped:[], helpersSettledMs:0}`. No rosettad respawned during
+  > the wait this time, so the respawn question above (30b, 35b) stays open: absent here, not explained. The row's
+  > exit 2 is two known classes, neither of them the census: item 117's HAND_BACK (whiteboard 250.2 ms, notebook
+  > 233.6, calendar 233.5, clock 217.0, against 200) and the 10-26 IDLE class (three unlabelled +15/+16/+16 ms submits
+  > for a still page in hand). Logs: the mini's `lanes/ts6/logs/mini/run38b/` and the kept HOME `vf-smoke-q1UaLF`.
 - **Run 36:** the mint `06e1385d7` ("Merge main 904bd1029 into fix/item122b-remote-door-endpoints") over main
   `904bd1029`.
   - The merge-tree was clean (tree `b0851c03a`), with no both-sides file. The stack over `de8185226` is 8 files,
@@ -22992,6 +23006,12 @@ could start NO agent, deterministically.
 - **Run 38:** the mint `5321b12ac` (tree `9efe3a6d1`) over main `90089dd63`, with no both-sides files. `pnpm verify` armed at 06:36:14Z and exited 0 at 06:41:01Z (287 s), HEAD `5321b12ac`. Test Files 823 passed (+1, agent-door-launch) | 3 skipped; Tests 11,039 passed (11,031 plus this item's 8) | 0 failed | 18 skipped; cargo 33 `test result: ok.` (532/0/14); gen:check clean; preflight's standing R23 `acp` WARN only; check:ios-fixtures 185 identical. The rows: agent-door-launch 5 (new), agent-briefing 18, agent-runtime 39, agent-session 59 + 2 skipped, and contracts' agent-session 28 (the door-off golden). The lottery rows were all green, with no re-run (VF-PM's read of the mini's `lanes/ts6/logs/mini/run38/`).
 - **Landed:** main fast-forwarded to `5321b12ac` at 2026-10-31T06:42:58Z by land-stack.sh (the fixer, on VF-PM's GO): `90089dd63..5321b12ac`, 9 files, +368 −47.
 - **The smoke's witness** (row 23's launch rung on the door path) is the next console window, James's hand: armed on M38 at 06:41:32Z (its keeper 06:41:31Z) behind the idle gate, on James's open console, smoke:canvas first and then smoke:godview. Its verdict is owed to the desk-gates ledger, in a later commit of a1's or VF-PM's.
+  > **2026-10-31 07:00:52Z (run 38b; row 23 on M38 `5321b12ac`, exit 0):** the launch rung PASSED.
+  > `SMOKE_GODVIEW_LAUNCH` "Claude Code" read is-home at 132 ms (35b: is-refused at 130 ms) and landed at 556 ms;
+  > fieldd.ndjson has no runtime_error and no UNSUPPORTED_LAUNCH. The births walked the door path, since the stub now
+  > declares the four flags, so the relaunch without the door is witnessed by fieldd's unit rows only
+  > (`agent-door-launch.test.ts`), not by this smoke. Run 39b (M39 `30d610136`, smoke:godview alone, green at
+  > 07:11:21Z) passed it again: is-home at 128 ms, landed at 544 ms. desk-gates row 23 carries both.
 
 ## SP-1b — Chat: the fourth view is built, and its list is the sparks fieldd keeps, newest activity first, live from the field board; the needs-you three take the attention ink and the orange dot, on the row and on Chat's cell, with a 2.4 s note from another view (2026-10-31; `e1aee11f0` — the doc `ee7b1eac5`, the retirement `09740337f`, the field row's widening `ea5653700` and the list `e1aee11f0` on main `62e5c4077` — lane `co/sp1b`, in the mini's mint `30d610136` over main `d9cba57d4`)
 

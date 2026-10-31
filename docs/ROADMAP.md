@@ -163,11 +163,12 @@
   **B3** — HN-8, Artifacts in the head (the pill's package and its two-shelf sheet, the covered views' package circle,
   the Hub in tiles; the edges leave the frame), as the mint `e31e55ecd`, run 28, verify only (LANDED "HN B3"). The
   track is built: all sixteen marks.
-- Next: nothing built is left. The record's as-built lines and its Status flip go to the next draft queue.
-- Owed: HN's smoke:godview rungs on James's console window, now that item 124 is fixed (`5321b12ac`, 10-31) (§5; smoke:canvas's are paid, run
-  30b's and item 123's four HAND rows at run 35b); D10, one caption style for both of the
-  sheet's shelves as the page drew (§9); a card dropped on the desk is not smoke-covered
-  in Electron; G30 (⌘C in a pane) and RO-31 (Copy in History) upstream (§7).
+- Next: the Hub in the head's smoke:godview rung, the one row HN B3 still owes (granted 2026-10-31 as a small lane:
+  the rung alone, no product change).
+- Owed: the Hub's rung at a console window once it is minted (§5); D10, one caption style for both of the sheet's
+  shelves as the page drew (§9); a card dropped on the desk is not smoke-covered in Electron; G30 (⌘C in a pane) and
+  RO-31 (Copy in History) upstream (§7). HN's other console-window rows are paid: smoke:canvas's at runs 30b, 35b
+  and 38b, and smoke:godview's 11h and 11j at run 38b.
 
 **QW1 — the Godview swarm QA, fix wave 1** · vibe-field-d4 · law `draft/testing/godview-swarm-qa-plan.md` v0.3 §12.1, `draft/thinking-ar-reattach.md` §6
 - Ruled: the plan (A01–A27, X01–X26, Q01–Q21; page 3ZrkUWG4) and re-attach's RA-D1…RA-D9 (10-27, every pick at the
@@ -438,11 +439,13 @@
   the tab bar as an obstacle, the reconnect banner across a fieldd bounce, the attached-but-unlisted card, an overload
   refusal said in the connecting face, C1's swipe after a reopen, the corner wearing its home desktop's face and name
   (IOS-8f) (and PJ-7 run 3's n/a cases, if 10-19's round missed them).
-- HN's smoke:godview rungs on his console window, after item 124's fix: the re-aimed 11h (a card played into a real
-  pane), 11j (a program's OSC 52 reaching main's copy door, no card) and the Hub in the head (LANDED "HN B1", "HN
-  B2", "HN B3"). Run 35b (M35 `733f24ed5`) went red before them at QL-2's launch rung (item 124, fixed 10-31 by `5321b12ac`, LANDED "Item 124"; the launch rung's own witness is owed to the same window).
-  smoke:canvas's HN rows are paid: run 30b's, and the four HAND rows at run 35b (item 123). *Corrected
-  2026-10-31 (item 123): this line said "HN B1's and B2's" and "runs 22 and 26" while it listed B3's rows too.*
+- HN's one console-window row left: the Hub in the head's smoke:godview rung, once built and minted. It never existed,
+  though HN B3's records claimed it; LANDED "HN B3" owes it, granted 2026-10-31 as a small lane. The rest
+  are paid: smoke:canvas's HN rows at run 30b and item 123's four HAND rows at runs 35b and 38b, and smoke:godview's
+  re-aimed 11h (a card played into a real pane) and 11j (a program's OSC 52 reaching main's copy door, no card) at
+  run 38b (M38 `5321b12ac`), where item 124's launch rung PASSED (LANDED "Item 124"). *Corrected 2026-10-31 (item
+  123): this line said "HN B1's and B2's" and "runs 22 and 26" while it listed B3's rows too.* *Corrected 2026-10-31
+  (run 38b): it listed "the Hub in the head" among smoke:godview's rungs; no such rung exists.*
 - AR-7: his daily dogfood · AR7-D2's 8 s kit wait, measured on a pair bounce.
 
 **Eyeballs (both themes)**
