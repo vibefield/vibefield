@@ -505,7 +505,7 @@ test("rowVerdict: a begin goes on an untouched unlocked console; input since the
   );
 });
 
-test("endVerdict: VOID when END idle is under the row's seconds or END reads locked; at the first press row, RM4.5", () => {
+test("endVerdict: VOID when END idle is under the row's seconds or END reads locked; at the first input row, RM4.5", () => {
   const began = { at: ARMED, locked: "No", idle: 300 };
   assert.deepEqual(
     endVerdict({ name: "SIM-USE", sample: { at: ARMED + 30_000, locked: "No", idle: 330 }, began }),
@@ -530,7 +530,7 @@ test("endVerdict: VOID when END idle is under the row's seconds or END reads loc
     name: "SIM-SHOW-FRESH",
     sample: { at: ARMED + 30_000, locked: "No", idle: 1 },
     began,
-    firstPress: true,
+    firstInput: true,
   });
   assert.equal(own.stop, true);
   assert.equal(own.why, "HID moved by the run's own input — RM4.5");
@@ -1433,7 +1433,7 @@ test("doorRow press: the gate refuses create and a device not the run's (STOP, n
   assert.equal(host.said.at(-1), `PHONE_ROW SIM-SHOW-FRESH PRESS show pts3-${RUN}-3`);
 });
 
-test("doorRow: at the first press row, END idle under its seconds is the run's own input (RM4.5): STOP, never a hand", async () => {
+test("doorRow: a press with no input said before is the run's first input; END idle under its seconds there is RM4.5", async () => {
   const run = ownRun();
   run.last = sample(0, 300);
   const host = fakeHost({ samples: [sample(10, 310), sample(40, 1)] });
@@ -1449,6 +1449,47 @@ test("doorRow: at the first press row, END idle under its seconds is the run's o
   assert.equal(run.ownInput, true);
   assert.equal(run.hands, 0);
   assert.equal(host.hid.length, 2);
+});
+
+test("doorRow input: L2's FIRST input row is SIM-STAGED's lay (a drag, no press gate) — its reset is RM4.5, never a hand (S3)", async () => {
+  const run = ownRun();
+  run.last = sample(0, 300);
+  const host = fakeHost({ samples: [sample(10, 310), sample(40, 2)] });
+  await doorRow({ name: "SIM-STAGED", phase: "begin" }, run, host.deps);
+  assert.deepEqual((await doorRow({ name: "SIM-STAGED", phase: "input" }, run, host.deps)).body, {
+    go: true,
+  });
+  // said once: a second input is the same row's, and moves nothing
+  await doorRow({ name: "SIM-STAGED", phase: "input" }, run, host.deps);
+  assert.equal(run.firstInput, "SIM-STAGED");
+  assert.deepEqual(host.said, [
+    "PHONE_ROW SIM-STAGED BEGIN",
+    "PHONE_ROW SIM-STAGED INPUT (the run's first)",
+  ]);
+  const r = await doorRow({ name: "SIM-STAGED", phase: "end" }, run, host.deps);
+  assert.equal(r.body.stop, true);
+  assert.equal(r.body.why, "HID moved by the run's own input — RM4.5");
+  assert.equal(run.ownInput, true);
+  assert.equal(run.hands, 0);
+  // a later row's press is no longer the first input: its END reset is a hand, VOID
+  const later = ownRun();
+  later.last = sample(0, 300);
+  later.firstInput = "SIM-STAGED";
+  const touched = fakeHost({ samples: [sample(10, 310), sample(40, 2)] });
+  await doorRow({ name: "SIM-SHOW-FRESH", phase: "begin" }, later, touched.deps);
+  await doorRow(
+    { name: "SIM-SHOW-FRESH", phase: "press", act: "show", device: `pts3-${RUN}-3` },
+    later,
+    touched.deps,
+  );
+  const v = await doorRow({ name: "SIM-SHOW-FRESH", phase: "end" }, later, touched.deps);
+  assert.match(v.body.void, /a hand at the Mac mid-row/u);
+  assert.equal(later.ownInput, false);
+  // an input with no row open is refused
+  assert.equal(
+    (await doorRow({ name: "SIM-USE", phase: "input" }, later, touched.deps)).status,
+    409,
+  );
 });
 
 test("doorRow: a row stopped mid-way still takes its END (the record keeps two lines); a later row's END VOIDs on a hand", async () => {

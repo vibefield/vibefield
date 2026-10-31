@@ -670,6 +670,23 @@ describe("PT-S3 — the host door", () => {
     });
   });
 
+  it("says the run's first input as a phase of the open row (RM4.5 is read at that row's END), and reads a stop on it", async () => {
+    const asked: unknown[] = [];
+    const answers: [number, unknown][] = [
+      [200, { go: true }],
+      [409, { stop: true, why: "the door is closing: the run is ending" }],
+    ];
+    const fetcher = (async (_url: string, init?: RequestInit) => {
+      asked.push(JSON.parse(String(init?.body)));
+      const [status, body] = answers.shift() ?? [500, {}];
+      return new Response(JSON.stringify(body), { status });
+    }) as typeof fetch;
+    const door = phoneDoor(env, fetcher);
+    expect(await door.row("SIM-STAGED", "input")).toEqual({ go: true, void: null, stop: null });
+    expect((await door.row("SIM-STAGED", "input")).stop).toMatch(/closing/u);
+    expect(asked[0]).toEqual({ name: "SIM-STAGED", phase: "input" });
+  });
+
   it("says a door that never answered as a stop, never a go", async () => {
     const door = phoneDoor(env, (async () => {
       throw new TypeError("fetch failed");

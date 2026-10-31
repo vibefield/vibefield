@@ -1031,7 +1031,7 @@ export interface PhoneDoor {
   act(verb: string, device?: number, extra?: { url?: string; file?: string }): Promise<DoorAct>;
   row(
     name: string,
-    phase: "begin" | "end" | "press",
+    phase: "begin" | "end" | "press" | "input",
     press?: { act: string; device: string },
   ): Promise<DoorRow>;
   /** `/loaded` or `/input`'s count for a nonce; null: unread */
@@ -1169,6 +1169,17 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
   const nonce = (): string => bandNonce(nonceK++);
   const laid = new Set<string>();
   const typeOf = (n: number): string => env.devices.get(n) ?? "";
+  /** The row open at the door (its `/row` begun and not ended), and whether the run's first input was said. */
+  let openRow: string | null = null;
+  let inputSaid = false;
+  /** Said to the door ONCE, right before the run's first `sendInputEvent` (a drag, a press, a key): RM4.5 reads an HID
+   * reset at THAT row's END as the run's own input, never a hand — in L2 it is SIM-STAGED's lay, not a press-gate row. */
+  const ownInput = async (): Promise<void> => {
+    if (inputSaid || openRow === null) return;
+    inputSaid = true;
+    const r = await door.row(openRow, "input");
+    if (r.stop !== null) throw new PhoneStop(`${openRow}: ${r.stop}`);
+  };
   say(`PHONE_ROWS_BEGIN mode=${env.mode}`);
 
   // ── the reads ─────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -1356,6 +1367,7 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
     const at = await placeOf(k);
     if (e === null || at === null) throw new Error("the phone left the board");
     const off = await deskAt();
+    await ownInput();
     await press({ x: off.left + at.cx, y: off.top + at.cy });
     await sleep(300);
     await keyPress("Enter");
@@ -1369,6 +1381,7 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
     return f;
   };
   const putDown = async (): Promise<boolean> => {
+    await ownInput();
     await keyPress("Escape");
     try {
       await until("the phone put down", 10_000, "globalThis.__vfDesk.held() === null");
@@ -1627,6 +1640,7 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
       stopped = `${name}: ${begin.stop}`;
       return null;
     }
+    openRow = name;
     let out: RowBody;
     try {
       out = await body();
@@ -1642,6 +1656,7 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
         out = { problems: [`${name}: ${error instanceof Error ? error.message : String(error)}`] };
     }
     await wordsLine(name);
+    openRow = null;
     const end = await door.row(name, "end");
     served += 1;
     if (end.stop !== null && stopped === null) stopped = `${name}: ${end.stop}`;
@@ -1775,6 +1790,8 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
                 : [],
             };
       const before = (await objectsOf(PHONE.type)).length;
+      // the run's first input: the lay is a drag from the chip and a key (RM4.5 is read at this row's END)
+      await ownInput();
       const at = await layObject(
         h,
         {
@@ -2448,6 +2465,7 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
         const at = await placeOf(a);
         if (e === null || at === null) throw new Error("φA left the board");
         const off = await deskAt();
+        await ownInput();
         await press({ x: off.left + at.cx, y: off.top + at.cy });
         const act = (id: string): string =>
           `[data-selection-bar] .vf-bar-row [data-act="act:${id}"]`;

@@ -35,6 +35,8 @@
 //                                                once the run is stopped
 //   POST /row {name, phase: begin|press|end}     the HID record → `{go}` (at an end, `{go, void}` for a VOID row) or
 //                                                `{stop, why}`; the smoke ends its rows on a stop
+//   POST /row {name, phase: input}               said by the smoke right before its FIRST `sendInputEvent` of the run
+//                                                (a press is input too): RM4.5's own-input reading is held to that row
 //   POST /row {name, phase: press, act, device}  THE PRESS GATE, right before every press of a face's act: `act` one of
 //                                                boot, show, retry, open-settings (never create), `device` the phone's
 //                                                D4 name, one of this run's `pts3-<runId>-n`; then the fence and no
@@ -391,15 +393,16 @@ export function rowVerdict({ name, sample, last }) {
 }
 
 /** A row's end: VOID when its END idle is under its own seconds (input mid-row) or END reads locked. At the run's FIRST
- * press row, a reset with the console unlocked is the run's own `sendInputEvent` moving HIDIdleTime — P10's assumption
- * failed — and the run STOPS on it (RM4.5), never loops. */
-export function endVerdict({ name, sample, began, firstPress = false }) {
+ * INPUT row — the first the smoke presses, drags or keys in by `sendInputEvent` (L2's SIM-STAGED lays the phone by a
+ * drag; a press-gate row comes later) — a reset with the console unlocked is the run's own input moving HIDIdleTime —
+ * P10's assumption failed — and the run STOPS on it (RM4.5), never loops. */
+export function endVerdict({ name, sample, began, firstInput = false }) {
   const secs = Math.floor((sample.at - began.at) / 1000);
   if (sample.idle === null) return { void: true, secs, why: `HID unreadable at ${name}'s END` };
   if (sample.locked !== "No")
     return { void: true, secs, why: `${name}'s END reads locked ${sample.locked}` };
   if (sample.idle < secs) {
-    if (firstPress)
+    if (firstInput)
       return { stop: true, own: true, secs, why: "HID moved by the run's own input — RM4.5" };
     return {
       void: true,
@@ -1112,13 +1115,16 @@ const rowNameOk = (name) =>
   name.length <= ROW_NAME_CHARS &&
   !hasControlCharacters(name);
 
-/** POST /row — a row's HID pair (`begin`, `end`) and the PRESS GATE (`press`, right before every press of a face's
- * act: the fence, and no Simulator.app running unless proven the run's). */
+/** POST /row — a row's HID pair (`begin`, `end`), the run's first input (`input`) and the PRESS GATE (`press`, right
+ * before every press of a face's act: the fence, and no Simulator.app running unless proven the run's). */
 export async function doorRow(body, run, deps) {
   const name = isRecord(body) ? body.name : undefined;
   const phase = isRecord(body) ? body.phase : undefined;
-  if (!rowNameOk(name) || !["begin", "press", "end"].includes(phase))
-    return refuse(run, "row", 400, { stop: true, why: "a row is {name, phase: begin|press|end}" });
+  if (!rowNameOk(name) || !["begin", "press", "input", "end"].includes(phase))
+    return refuse(run, "row", 400, {
+      stop: true,
+      why: "a row is {name, phase: begin|press|input|end}",
+    });
   // a stopped run still takes the open row's END: the HID record keeps its two lines a row
   const endingOpen = phase === "end" && run.open !== null && run.open.name === name;
   if (run.stopped !== null && !endingOpen) return json(409, { stop: true, why: run.stopped.why });
@@ -1140,6 +1146,14 @@ export async function doorRow(body, run, deps) {
   }
   if (run.open === null || run.open.name !== name)
     return refuse(run, "row", 409, { stop: true, why: `${name} is not the open row` });
+  if (phase === "input") {
+    // the row the run first injects input in: its END reads RM4.5's own-input case, never a hand
+    if (run.firstInput === null) {
+      run.firstInput = name;
+      deps.say(`PHONE_ROW ${name} INPUT (the run's first)`);
+    }
+    return json(200, { go: true });
+  }
   if (phase === "press") {
     // every refusal here STOPS the console acts: the smoke presses nothing on a stop
     const halt = (status, why) => {
@@ -1165,7 +1179,7 @@ export async function doorRow(body, run, deps) {
       launching(run, deps);
     }
     run.open.pressed = true;
-    run.firstPress ??= name;
+    run.firstInput ??= name;
     deps.say(`PHONE_ROW ${name} PRESS ${act} ${body.device}`);
     return json(200, { go: true });
   }
@@ -1176,7 +1190,7 @@ export async function doorRow(body, run, deps) {
     name,
     sample,
     began: run.open.began,
-    firstPress: run.firstPress === name,
+    firstInput: run.firstInput === name,
   });
   run.last = sample;
   run.open = null;
@@ -1714,7 +1728,7 @@ export function newRun(mode, opts, redactor) {
     last: null,
     open: null,
     served: 0,
-    firstPress: null,
+    firstInput: null,
     voids: [],
     hands: 0,
     ownInput: false,
