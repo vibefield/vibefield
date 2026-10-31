@@ -16,4 +16,3 @@
             {
               "IOUserClientCreator" = "pid 412, WindowServer"
             }
-
