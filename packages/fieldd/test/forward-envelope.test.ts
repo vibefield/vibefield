@@ -2,6 +2,7 @@
 // one round trip through a REAL PeerLink dialling a REAL ProductApi tailnet
 // door (the device-routing harness's door, with a sidecar-simulating ws-ctor
 // that injects the WhoIs login and node id the way the peer's sidecar does).
+import { readFileSync } from "node:fs";
 import type { CallerContext } from "@vibefield/contracts";
 import type { WsCtor } from "@vibefield/fieldd-client";
 import { afterEach, describe, expect, it } from "vitest";
@@ -64,6 +65,18 @@ describe("the envelope helpers", () => {
     expect(readOnBehalfOf({ clientKind: "k".repeat(65), deviceId: "d" })).toBeUndefined();
     expect(readOnBehalfOf({ clientKind: "renderer", deviceId: "d", windowId: 7 })).toBeUndefined();
     expect(readOnBehalfOf("renderer")).toBeUndefined();
+    // F1b — the phone behind a home, by its roster device: kept, and bounded like its siblings
+    expect(readOnBehalfOf({ clientKind: "ios", deviceId: "d", clientDeviceId: "p" })).toEqual({
+      clientKind: "ios",
+      deviceId: "d",
+      clientDeviceId: "p",
+    });
+    expect(
+      readOnBehalfOf({ clientKind: "ios", deviceId: "d", clientDeviceId: "" }),
+    ).toBeUndefined();
+    expect(
+      readOnBehalfOf({ clientKind: "ios", deviceId: "d", clientDeviceId: "p".repeat(257) }),
+    ).toBeUndefined();
   });
 
   it("reads a peer's key strictly: the contract's bounds, or a refusal", () => {
@@ -146,6 +159,75 @@ describe("the envelope helpers", () => {
       onBehalfOf: { clientKind: "renderer", deviceId: "dev-a", windowId: "w" },
     };
     expect(forwardProvenance(relayed, { deviceId: "self" })).toEqual(relayed.onBehalfOf);
+  });
+
+  it("F1b — names the phone behind it by the device its OWN roster correlates the phone's node to, and nothing else", () => {
+    const roster = (node: string) =>
+      ({ "node-phone": "dev-phone", "node-self": "self" })[node] as string | undefined;
+    const self = { deviceId: "self", correlateNodeId: roster };
+    const phone = (tailscaleId?: string): CallerContext => ({
+      principal: {
+        kind: "tailnet",
+        login: "me@example.com",
+        self: true,
+        ...(tailscaleId !== undefined ? { tailscaleId } : {}),
+      },
+      transport: "ws-tailnet",
+      receivedAt: 0,
+      connection: { id: "conn_2", helloClientKind: "ios" },
+    });
+    expect(forwardProvenance(phone("node-phone"), self)).toEqual({
+      clientKind: "ios",
+      deviceId: "self",
+      windowId: "conn_2",
+      clientDeviceId: "dev-phone",
+    });
+    // a node the roster does not know, no node at all, or this daemon's own: no device is named
+    for (const ctx of [phone("node-stranger"), phone(), phone("node-self")])
+      expect(forwardProvenance(ctx, self)).not.toHaveProperty("clientDeviceId");
+    // a window's device is the forwarding daemon's, already `deviceId`
+    const window: CallerContext = {
+      principal: { kind: "local-token", tokenId: "t", scopes: [] },
+      transport: "ws-loopback",
+      receivedAt: 0,
+      clientKind: "renderer",
+    };
+    expect(forwardProvenance(window, self)).not.toHaveProperty("clientDeviceId");
+  });
+
+  it("F1b — the golden envelope: the home's forwarder writes exactly it, and the owner's door reads it back", () => {
+    const fixture = JSON.parse(
+      readFileSync(
+        new URL("../../contracts/fixtures/forward-envelope.phone.json", import.meta.url),
+        "utf8",
+      ),
+    ) as unknown;
+    // the writer: the phone on the home's tailnet door, its node correlated by the home's roster
+    const phone: CallerContext = {
+      principal: { kind: "tailnet", login: "me@example.com", self: true, tailscaleId: "node-p1" },
+      transport: "ws-tailnet",
+      receivedAt: 0,
+      connection: { id: "conn_7", helloClientKind: "ios" },
+    };
+    const onBehalfOf = forwardProvenance(phone, {
+      deviceId: "dev-desktop-a",
+      userId: "u_01J9ABCDEFGHJKMNPQRSTVWXYZ",
+      correlateNodeId: (node) => (node === "node-p1" ? "dev-phone-1" : undefined),
+    });
+    expect(
+      withEnvelope(
+        { device: "dev-desktop-b" },
+        { onBehalfOf, idempotencyKey: "fk_9pQwErTyUiOpAsDfGhJkLzXc" },
+      ),
+    ).toEqual(fixture);
+    // the reader: the owner splits it off and honours every member
+    const split = splitForwardEnvelope(fixture);
+    expect(split.rest).toEqual({ device: "dev-desktop-b" });
+    expect(readPeerEnvelope(split)).toEqual({
+      ok: true,
+      onBehalfOf,
+      idempotencyKey: "fk_9pQwErTyUiOpAsDfGhJkLzXc",
+    });
   });
 });
 

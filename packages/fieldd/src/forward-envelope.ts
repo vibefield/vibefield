@@ -84,7 +84,10 @@ function boundedString(value: unknown, max: number): string | undefined {
   return typeof value === "string" && value.length > 0 && value.length <= max ? value : undefined;
 }
 
-/** Read `onBehalfOf` TOLERANTLY: the four members, each a bounded string;
+/** The optional members of a restatement, each a bounded identity. */
+const OPTIONAL_IDENTITIES = ["windowId", "userId", "clientDeviceId"] as const;
+
+/** Read `onBehalfOf` TOLERANTLY: the five members, each a bounded string;
  * unknown members are ignored (a newer peer may add some), and a client kind
  * this build does not know is kept as the string it is. `deviceId` and
  * `clientKind` are required — a restatement without them names no one. */
@@ -94,15 +97,11 @@ export function readOnBehalfOf(raw: unknown): ForwardedFor | undefined {
   const deviceId = boundedString(raw["deviceId"], IDENTITY_MAX);
   if (clientKind === undefined || deviceId === undefined) return undefined;
   const out: ForwardedFor = { clientKind, deviceId };
-  if (raw["windowId"] !== undefined) {
-    const windowId = boundedString(raw["windowId"], IDENTITY_MAX);
-    if (windowId === undefined) return undefined;
-    out.windowId = windowId;
-  }
-  if (raw["userId"] !== undefined) {
-    const userId = boundedString(raw["userId"], IDENTITY_MAX);
-    if (userId === undefined) return undefined;
-    out.userId = userId;
+  for (const member of OPTIONAL_IDENTITIES) {
+    if (raw[member] === undefined) continue;
+    const value = boundedString(raw[member], IDENTITY_MAX);
+    if (value === undefined) return undefined;
+    out[member] = value;
   }
   return out;
 }
@@ -161,25 +160,45 @@ function fallbackClientKind(ctx: CallerContext): string {
   }
 }
 
+/** The forwarding daemon, as `forwardProvenance` reads it: its device, its
+ * user, and its roster's correlation of a sidecar-injected node id to a device
+ * (`DeviceService.deviceIdByNodeId`; absent ⇒ it correlates nothing). */
+export interface ForwardingSelf {
+  deviceId: string;
+  userId?: string | undefined;
+  correlateNodeId?: ((nodeId: string) => string | undefined) | undefined;
+}
+
 /** Who a call is for, when THIS daemon forwards it — built from the calling
  * context, never from the call's params (DS-L7). A peer's own call being
  * forwarded again restates what that peer said (a relay adds no identity). The
  * window is the renderer participant when the grant names one (stable for one
- * BrowserWindow within a shell boot), else the product connection's own id. */
-export function forwardProvenance(
-  ctx: CallerContext,
-  self: { deviceId: string; userId?: string | undefined },
-): ForwardedFor {
+ * BrowserWindow within a shell boot), else the product connection's own id.
+ *
+ * F1b (FW-D5) — the phone behind this daemon is named by its roster device too
+ * (`clientDeviceId`): the device this daemon's roster correlates the node the
+ * phone's sidecar injected to, a transport fact read at the forward, never the
+ * phone's claim. The owner needs it to approve the phone's link to itself, and
+ * reads that phone's node from its own roster. A caller whose node correlates
+ * to nothing, or to this daemon, names no device beyond `deviceId`. */
+export function forwardProvenance(ctx: CallerContext, self: ForwardingSelf): ForwardedFor {
   if (ctx.onBehalfOf !== undefined) return ctx.onBehalfOf;
   const clientKind = ctx.clientKind ?? ctx.connection?.helloClientKind ?? fallbackClientKind(ctx);
   const participant =
     ctx.principal.kind === "local-token" ? ctx.principal.rendererParticipant : undefined;
   const windowId = participant?.participantId ?? ctx.connection?.id;
+  const node =
+    ctx.principal.kind === "tailnet" && ctx.principal.self === true
+      ? ctx.principal.tailscaleId
+      : undefined;
+  const correlated = node !== undefined ? self.correlateNodeId?.(node) : undefined;
+  const clientDeviceId = correlated !== self.deviceId ? correlated : undefined;
   return {
     clientKind,
     deviceId: self.deviceId,
     ...(windowId !== undefined ? { windowId } : {}),
     ...(self.userId !== undefined ? { userId: self.userId } : {}),
+    ...(clientDeviceId !== undefined ? { clientDeviceId } : {}),
   };
 }
 

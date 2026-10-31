@@ -130,7 +130,8 @@ function targetForAudit(target: AuditTargetV1): AuditTargetV1 {
  * transport fact), and a `peer-fieldd` call that carried the forwarding
  * envelope carries the window or phone behind it (DS-L7: authorized as the
  * peer daemon, recorded as the client it acted for). The record used to name
- * the login alone, which read two devices of one person as one. */
+ * the login alone, which read two devices of one person as one. F1b — a phone
+ * behind its home is named by its roster device as well (`clientDeviceId`). */
 export function actorFor(ctx: CallerContext): AuditPrincipalV1 {
   const base = baseActorFor(ctx);
   const behalf = ctx.onBehalfOf;
@@ -142,6 +143,7 @@ export function actorFor(ctx: CallerContext): AuditPrincipalV1 {
       deviceId: behalf.deviceId,
       ...(behalf.windowId !== undefined ? { windowId: behalf.windowId } : {}),
       ...(behalf.userId !== undefined ? { userId: behalf.userId } : {}),
+      ...(behalf.clientDeviceId !== undefined ? { clientDeviceId: behalf.clientDeviceId } : {}),
     },
   };
 }
