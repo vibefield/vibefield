@@ -28,7 +28,6 @@ import { getHost } from "../host";
 import { MeshSection } from "./MeshSection";
 import {
   buttonCls,
-  CopyButton,
   fieldCls,
   labelCls,
   SettingsRow,

@@ -1478,8 +1478,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     drag let go away from a pane and the prompt — deal as their doors arrive (*as built*, below).
     Another app's clipboard is never read on its own: what is copied elsewhere, passwords included,
     stays out. Every other copy VibeField makes deals the same way, as a text card — Settings' (a
-    sign-in link, a device's name, a diagnostics record) from the button pressed, and the copies
-    History's room makes through its workspace port — and what a card holds goes on the system
+    sign-in link, a device's name, the exact version, a diagnostics record) from the button pressed,
+    and the copies History's room makes through its workspace port — and what a card holds goes on the system
     clipboard too — its words, its picture, or both in one write (§8 "Copy"). **A program's write
     is not a copy**: a terminal's OSC 52 reaches the system clipboard through the same door and
     deals no card — the hand holds what you copied (HN-L1). **Brought in**

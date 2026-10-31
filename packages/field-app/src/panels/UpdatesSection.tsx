@@ -16,10 +16,13 @@ import {
   useState,
 } from "react";
 import { copyText } from "../account/use-link-door";
+import { CopyButton } from "../frame/cards/CopyButton";
+import type { DealFrom } from "../frame/cards/cards-store";
+import { COPY_PLACES } from "../frame/cards/cards-words";
 import { getHost } from "../host";
 import {
   borderCls,
-  CopyButton,
+  buttonCls,
   labelCls,
   SettingsRow,
   SettingsSection,
@@ -155,8 +158,9 @@ export function UpdatesSectionView({
   /** the foot's Updater diagnostics →, a failed check's and a failed install's Diagnostics → (`| undefined`: the
    * controller forwards its own optional prop) */
   onOpenDiagnostics?: (() => void) | undefined;
-  /** AU-3 (AU-G4) — Copy the exact version: true once it is on the clipboard */
-  onCopyVersion?: (version: string) => Promise<boolean>;
+  /** AU-3 (AU-G4) — Copy the exact version, dealt into the hand from the button's box as every Settings copy is
+   * (HN-5): true once it is on the clipboard */
+  onCopyVersion?: (version: string, from: DealFrom | null) => Promise<boolean>;
 }): ReactElement {
   // LC-9 — Cancel or Esc takes the question away with focus inside it: focus comes back to the head's act, never to
   // the page's body, where the dialog's Tab trap can't hold it (the Me menu brings it back to its row the same way).
@@ -213,7 +217,8 @@ export function UpdatesSectionView({
                 </code>
                 <CopyButton
                   label="Copy"
-                  copy={() => onCopyVersion?.(currentVersion) ?? Promise.resolve(false)}
+                  copy={(from) => onCopyVersion?.(currentVersion, from) ?? Promise.resolve(false)}
+                  className={buttonCls}
                 />
               </div>
             )}
@@ -621,14 +626,7 @@ export function UpdatesSection({
         })();
       }}
       onOpenDiagnostics={onOpenDiagnostics}
-      onCopyVersion={async (version) => {
-        try {
-          await copyText(version);
-          return true;
-        } catch {
-          return false;
-        }
-      }}
+      onCopyVersion={(version, from) => copyText(version, COPY_PLACES.settings, from)}
     />
   );
 }
