@@ -11,10 +11,12 @@ import { SparkPane } from "./SparkPane";
 import type { SparkEntry } from "./spark-status";
 import {
   type SparkOpener,
+  showThread,
   sparkEntryNow,
   useChooseRequest,
   useSparkOpener,
   useSparksReading,
+  useThreadMarks,
   whenSparkEntry,
 } from "./sparks-feed";
 import { threadItemsOf, threadQuiet } from "./thread-items";
@@ -28,8 +30,9 @@ import { sendNote, sendToThread, type ThreadSendOutcome } from "./thread-send";
 // (`ChatComposer`), keeps each thread's draft for the window's life, and runs the thread's two acts that wake a
 // spark — Wake on the line, and Send — through the feed's one wake (`SparkOpener`). It reads what stands in the shown
 // thread over its pane (`threadItemsOf`: a new spark's hello and its starters while the thread is quiet), and sends a
-// starter pressed as Send sends, one send at a time into a thread. What it chose, whose hello has left, and which
-// threads a send runs into, are this view's alone.
+// starter pressed as Send sends, one send at a time into a thread. It tells the feed which thread is on screen — the
+// shown one while Chat is the view — so opening a thread reads it, and draws each row's mark as the feed keeps it.
+// What it chose, whose hello has left, and which threads a send runs into, are this view's alone.
 
 /** How often the rows' times are said again while Chat shows ("now" becomes "9:41"). */
 const CLOCK_MS = 30_000;
@@ -167,6 +170,12 @@ export function ChatView({
       setChosen((current) => current ?? shownId);
     }
   }, [active, chosen, shownId]);
+  // The thread on screen (DESIGN.md §8 "Chat's list", Needs you): the shown one while Chat is the view, and none in
+  // another view, nor once Chat is gone. Opening it reads it.
+  const onScreen = active ? (shownId ?? null) : null;
+  useEffect(() => showThread(onScreen), [onScreen]);
+  useEffect(() => () => showThread(null), []);
+  const marks = useThreadMarks();
   const pane =
     shown === undefined || threadLineOf(shown) !== null ? undefined : (
       <SparkPane
@@ -210,6 +219,7 @@ export function ChatView({
       reading={reading}
       chosen={chosen}
       now={now}
+      marks={marks}
       act={act !== null && act.spark === shown?.spark.id ? act.act : { state: "idle" }}
       onChoose={setChosen}
       {...(open === null ? {} : { onWake: (entry: SparkEntry) => void wake(open, entry) })}

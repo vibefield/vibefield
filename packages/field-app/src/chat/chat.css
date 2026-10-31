@@ -169,6 +169,7 @@
   color: var(--vf-ink-attention);
 }
 
+/* the row's mark: a needs-you dot, lasting until its thread is opened (SP-1d), or unread's, the same dot in cyan */
 .vf-chat-row-dot {
   position: absolute;
   right: 12px;
@@ -177,6 +178,10 @@
   height: 8px;
   border-radius: 50%;
   background: var(--vf-orange);
+}
+
+.vf-chat-row-dot[data-mark="unread"] {
+  background: var(--vf-cyan);
 }
 
 /* ── the thread's column (SP-1b, SP-1d): a fixed box — the head, the pane (or, asleep or not started, one honest

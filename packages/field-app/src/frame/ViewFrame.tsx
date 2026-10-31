@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useSparksNeedingYou } from "../chat/sparks-feed";
+import { useCellMark, useSparksNeedingYou } from "../chat/sparks-feed";
 import { emitViewKeyMarker } from "../development-console";
 import { listenForProductChord } from "../field/product-chords";
 import { historyImporting, useIndexStatus } from "../history/first-reading";
@@ -69,9 +69,11 @@ export function ViewFrame({
   // AO-4b — History's cell carries the arc while History imports, heard pushed
   // (`index.status.subscribe`), whether or not History was ever opened.
   const importing = historyImporting(useIndexStatus());
-  // CH-D4 — the sparks that need you (the window's one feed, `chat/sparks-feed.ts`): Chat's cell takes the dot in
-  // another view, and a spark that STARTS to need you there says so over the cell, once. What needed you before
-  // the first reading is no news; the dot says it.
+  // CH-D4, SP-1d — the window's one feed (`chat/sparks-feed.ts`): Chat's cell takes its mark in another view (the
+  // orange dot while a needs-you dot stands, which lasts until its thread is opened, else the cyan one while a thread
+  // is unread), and a spark that STARTS to need you there says so over the cell, once. What needed you before the
+  // first reading is no news; the dot says it.
+  const mark = useCellMark();
   const needing = useSparksNeedingYou();
   const [note, setNote] = useState<ViewsNote | null>(null);
   const notes = useRef(0);
@@ -243,7 +245,7 @@ export function ViewFrame({
             press={press}
             onSelect={select}
             importing={importing}
-            needs={view !== "assistant" && needing !== null && needing.length > 0}
+            mark={view === "assistant" ? null : mark}
             note={view === "assistant" ? null : note}
           />
         }

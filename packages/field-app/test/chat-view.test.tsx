@@ -20,7 +20,9 @@ import { type ChatAct, ChatPanelView } from "../src/chat/ChatPanelView";
 import { ChatView } from "../src/chat/ChatView";
 import { sparkEntriesOf } from "../src/chat/spark-status";
 import { FieldBoard, type SparksPort, startSparksFeed } from "../src/chat/sparks-feed";
+import type { ThreadMark } from "../src/chat/thread-marks";
 import { sparkPaneOf } from "../src/chat/thread-pane-door";
+import { ChatPreview } from "../src/design-system/ChatPreview";
 import type { FrameSurface } from "../src/frame/frame-surface";
 import { NO_TERMINALS } from "../src/terminal/terminal-words";
 
@@ -83,10 +85,11 @@ const PORT: ComposerPort = {
   },
 };
 
-/** Chat as the frame mounts it: FieldView's place, the one owner of the frame's open surface, stands around it. */
-function Chat(): ReactElement {
+/** Chat as the frame mounts it: FieldView's place, the one owner of the frame's open surface, stands around it. Chat
+ * is the view showing unless the test says it is not (the frame keeps it mounted in another view). */
+function Chat({ active = true }: { active?: boolean }): ReactElement {
   const [surface, setSurface] = useState<FrameSurface | null>(null);
-  return <ChatView active surface={surface} onSurfaceChange={setSurface} port={PORT} />;
+  return <ChatView active={active} surface={surface} onSurfaceChange={setSurface} port={PORT} />;
 }
 
 let root: Root | null = null;
@@ -160,9 +163,51 @@ describe('the panel (DESIGN.md §8 "Chat\'s list")', () => {
     mount(<ChatPanelView reading={ready([VELA, KIWI], [VELA_ASKS])} chosen={null} now={NOW} />);
     const [vela, kiwi] = rows();
     expect(vela?.querySelector(".vf-chat-row-status")?.getAttribute("data-tone")).toBe("attention");
-    expect(vela?.querySelector(".vf-chat-row-dot")).not.toBeNull();
+    expect(vela?.querySelector(".vf-chat-row-dot")?.getAttribute("data-mark")).toBe("needs");
     expect(kiwi?.querySelector(".vf-chat-row-status")?.hasAttribute("data-tone")).toBe(false);
     expect(kiwi?.querySelector(".vf-chat-row-dot")).toBeNull();
+  });
+
+  it("draws each thread's mark on its row: a needs-you dot that outlasts the need, and unread's cyan one (SP-1d)", () => {
+    const LYRA = spark("sp-lyra0001", "Lyra");
+    mount(
+      <ChatPanelView
+        reading={ready([VELA, KIWI, LYRA], [VELA_ASKS])}
+        chosen={null}
+        now={NOW}
+        marks={
+          new Map<string, ThreadMark>([
+            ["sp-vela0001", "needs"],
+            ["sp-kiwi0001", "needs"],
+            ["sp-lyra0001", "unread"],
+          ])
+        }
+      />,
+    );
+    const row = (id: string): HTMLElement | null => $(`.vf-chat-row[data-spark="${id}"]`);
+    expect(row("sp-vela0001")?.querySelector(".vf-chat-row-dot")?.getAttribute("data-mark")).toBe(
+      "needs",
+    );
+    // Kiwi's need has ended (asleep since): the dot stands until its thread is opened, and the word is the status now
+    expect(row("sp-kiwi0001")?.querySelector(".vf-chat-row-dot")?.getAttribute("data-mark")).toBe(
+      "needs",
+    );
+    expect(
+      words(row("sp-kiwi0001")?.querySelector<HTMLElement>(".vf-chat-row-status") ?? null),
+    ).toBe("Asleep");
+    expect(
+      row("sp-kiwi0001")?.querySelector(".vf-chat-row-status")?.hasAttribute("data-tone"),
+    ).toBe(false);
+    expect(row("sp-lyra0001")?.querySelector(".vf-chat-row-dot")?.getAttribute("data-mark")).toBe(
+      "unread",
+    );
+    // the same dot, in --vf-cyan; the need's stays --vf-orange
+    const here = dirname(fileURLToPath(import.meta.url));
+    const css = readFileSync(join(here, "../src/chat/chat.css"), "utf8");
+    expect(css).toMatch(/\.vf-chat-row-dot \{[^}]*background: var\(--vf-orange\)/);
+    expect(css).toMatch(
+      /\.vf-chat-row-dot\[data-mark="unread"\] \{[^}]*background: var\(--vf-cyan\)/,
+    );
   });
 
   it("draws an awake spark's own pane under its head, with no line and no Show (SP-1d)", () => {
@@ -229,6 +274,19 @@ describe('the panel (DESIGN.md §8 "Chat\'s list")', () => {
     expect(words($(".vf-chat-thread-line"))).toBe(
       "Couldn't wake Nova: the spark's agent has no sign-in",
     );
+  });
+
+  it("draws the catalog's rows with the product's own marks: Vela's need orange, Lyra's unread thread cyan (SP-1d)", async () => {
+    host = document.createElement("div");
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await act(async () => root?.render(<ChatPreview state="list" />));
+    const mark = (id: string): string | null =>
+      $(`.vf-chat-row[data-spark="${id}"] .vf-chat-row-dot`)?.getAttribute("data-mark") ?? null;
+    expect(mark("sp-vela0001")).toBe("needs");
+    expect(mark("sp-lyra0001")).toBe("unread");
+    expect(mark("sp-juno0001")).toBeNull();
+    expect(mark("sp-kiwi0001")).toBeNull();
   });
 
   it("keeps the thread a fixed box: the pane takes every height left, and the foot is where the thread's items stand over it", () => {
@@ -440,6 +498,64 @@ describe("Chat, live (the feed and its acts)", () => {
     act(() => rows()[0]?.click());
     await settle();
     expect($(".vf-chat-thread")?.getAttribute("aria-label")).toBe("Lyra's thread");
+  });
+
+  it("reads a thread by showing it: a turn that ends in another marks that row unread until it is chosen (SP-1d)", async () => {
+    const LYRA = spark("sp-lyra0001", "Lyra");
+    const { door, move } = scripted([{ ...VELA, updatedAt: "2026-10-31T05:10:00.000Z" }, LYRA]);
+    stop = startSparksFeed(door);
+    mount(<Chat />);
+    await settle();
+    const velaRun = (status: "idle" | "working") =>
+      row({
+        runtimeRunId: "run-Vela",
+        spark: "sp-vela0001",
+        status,
+        lastActivityAt: "2026-10-31T05:29:00.000Z",
+        terminal: { hosted: "local", runtimeSessionId: "pty-Vela" },
+      });
+    const lyraRun = (status: "idle" | "working") =>
+      row({ runtimeRunId: "run-Lyra", spark: "sp-lyra0001", status, lastActivityAt: AT });
+    const dotOf = (id: string): string | null =>
+      $(`.vf-chat-row[data-spark="${id}"]`)
+        ?.querySelector(".vf-chat-row-dot")
+        ?.getAttribute("data-mark") ?? null;
+    await act(async () => move([velaRun("idle"), lyraRun("working")]));
+    await settle();
+    expect($(".vf-chat-thread")?.getAttribute("aria-label")).toBe("Vela's thread");
+    // Lyra's turn ends while Vela's thread is the one on screen
+    await act(async () => move([lyraRun("idle")]));
+    expect(dotOf("sp-lyra0001")).toBe("unread");
+    // Vela's own turn ends where you can see it: nothing to read
+    await act(async () => move([velaRun("working")]));
+    await act(async () => move([velaRun("idle")]));
+    expect(dotOf("sp-vela0001")).toBeNull();
+    // choosing Lyra's row opens her thread, and opening it reads it
+    act(() => $('.vf-chat-row[data-spark="sp-lyra0001"]')?.click());
+    await settle();
+    expect($(".vf-chat-thread")?.getAttribute("aria-label")).toBe("Lyra's thread");
+    expect(dotOf("sp-lyra0001")).toBeNull();
+  });
+
+  it("shows no thread while Chat is not the view: the chosen spark's turn ending then is unread when Chat comes back", async () => {
+    const { door, move } = scripted([VELA]);
+    stop = startSparksFeed(door);
+    mount(<Chat />);
+    await settle();
+    const velaRun = (status: "idle" | "working") =>
+      row({ runtimeRunId: "run-Vela", spark: "sp-vela0001", status, lastActivityAt: AT });
+    const dot = (): string | null =>
+      $(".vf-chat-row .vf-chat-row-dot")?.getAttribute("data-mark") ?? null;
+    await act(async () => move([velaRun("working")]));
+    await settle();
+    // the window goes to another view; Chat stays mounted, its thread no longer on screen
+    act(() => root?.render(<Chat active={false} />));
+    await act(async () => move([velaRun("idle")]));
+    expect(dot()).toBe("unread");
+    // Chat is the view again, on Vela's thread: read
+    act(() => root?.render(<Chat />));
+    await settle();
+    expect(dot()).toBeNull();
   });
 
   it("wakes an asleep spark through compose.sparks.open, and reads its record again", async () => {

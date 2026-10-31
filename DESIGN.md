@@ -1463,10 +1463,13 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - *At SP-1b a dot lasted while the need did; the thread (SP-1d) was to make it last until you open the thread, with
       unread beside it: until there is a thread there is nothing to read.* *Amended 2026-10-31 (SP-1d):* a needs-you dot
       lasts until you open the thread, even after the need ends, and **unread** comes with it: the same dot in
-      `--vf-cyan`. A thread is unread when its spark's own turn ends while its thread is not on screen. A thread is on
-      screen while Chat is the view and it is the one shown, and opening it reads it. In another view Chat's cell takes
-      the orange dot while a needs-you dot stands, else the cyan one while a thread is unread, its accessible name
-      "Chat, a thread is unread". Both are kept for the window's life and written nowhere (HN-D9's rule).
+      `--vf-cyan`. A thread is unread when its spark's own turn ends while its thread is not on screen: its own run, at
+      work on one of the window's readings, is not on a later one (idle, waiting on you, or gone), so a turn that ended
+      before the window first read the board is no news. A need the window finds on its first reading keeps its dot as
+      any need does. On the row the word says the status as it stands, and the dot stays. A thread is on screen while
+      Chat is the view and it is the one shown, and opening it reads it. In another view Chat's cell takes the orange
+      dot while a needs-you dot stands, else the cyan one while a thread is unread, its accessible name "Chat, a thread
+      is unread". Both are kept for the window's life and written nowhere (HN-D9's rule).
   - **The status, as SP-1b reads it:** from the spark's own run row (`agent.subscribe {projection: "field"}`, by the
     row's `spark`) and its agents' rows (by their `origin`). The first that holds is the word:
     - no session yet: Hello;

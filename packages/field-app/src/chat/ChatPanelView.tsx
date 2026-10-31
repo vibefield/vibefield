@@ -14,14 +14,16 @@ import { activityWords, type SparkEntry } from "./spark-status";
 import type { SparksReading } from "./sparks-feed";
 import { ThreadItemsView } from "./ThreadItemsView";
 import type { ThreadItem } from "./thread-items";
+import { NO_LATCHES, type ThreadMark, threadMarksOf } from "./thread-marks";
 import "./chat.css";
 
 // CHAT, THE PANEL (SP-1b, SP-1d; DESIGN.md §8 "Chat's list", "Chat's thread"; the Sparks page's `ch-view`,
 // `ch-needs`) — controller-free, so the catalog mounts this exact markup on fixtures. The list's column holds the
 // sparks fieldd keeps, newest activity first (CH-D1); a row is the face, the name and the status word (CH-D3); the
-// needs-you three take the attention ink and the orange dot (CH-D4). The thread's column is a fixed box: the chosen
-// spark's head, then its own pane (the controller's `SparkPane`, handed in) — or, asleep or not started, one honest
-// line with its one act — then the thread's foot: its composer, handed in, and its items standing over the pane.
+// needs-you three take the attention ink (CH-D4), and a row wears its thread's mark: the orange dot, or unread's cyan
+// one (SP-1d). The thread's column is a fixed box: the chosen spark's head, then its own pane (the controller's
+// `SparkPane`, handed in) — or, asleep or not started, one honest line with its one act — then the thread's foot: its
+// composer, handed in, and its items standing over the pane.
 
 /** What the chosen spark's act is doing: at rest, under way, or refused in fieldd's words. */
 export type ChatAct =
@@ -35,6 +37,9 @@ export interface ChatPanelViewProps {
   chosen: SparkId | null;
   /** the clock the rows' times are said by, epoch ms */
   now: number;
+  /** each thread's mark, by its spark (the window's feed keeps them: `useThreadMarks`); absent, the reading's alone,
+   * a need standing now */
+  marks?: ReadonlyMap<SparkId, ThreadMark>;
   act?: ChatAct;
   onChoose?: (spark: SparkId) => void;
   /** its last session, resumed (`compose.sparks.open`) */
@@ -92,6 +97,7 @@ export function ChatPanelView({
   reading,
   chosen,
   now,
+  marks,
   act = { state: "idle" },
   onChoose,
   onWake,
@@ -136,6 +142,7 @@ export function ChatPanelView({
       );
     }
     const shown = shownOf(entries, chosen);
+    const marked = marks ?? threadMarksOf(entries, NO_LATCHES);
     return (
       <>
         <section className="vf-chat-list" aria-label="Sparks">
@@ -149,6 +156,7 @@ export function ChatPanelView({
                 key={entry.spark.id}
                 entry={entry}
                 on={entry === shown}
+                mark={marked.get(entry.spark.id) ?? null}
                 time={activityWords(entry.activityAt, now, locale)}
                 onChoose={onChoose}
               />
@@ -175,11 +183,13 @@ export function ChatPanelView({
 function SparkRow({
   entry,
   on,
+  mark,
   time,
   onChoose,
 }: {
   entry: SparkEntry;
   on: boolean;
+  mark: ThreadMark | null;
   time: string;
   onChoose: ((spark: SparkId) => void) | undefined;
 }): ReactElement {
@@ -204,7 +214,9 @@ function SparkRow({
           {sparkStatusWord(status)}
         </span>
       </span>
-      {needsYou ? <span className="vf-chat-row-dot" aria-hidden="true" /> : null}
+      {mark === null ? null : (
+        <span className="vf-chat-row-dot" data-mark={mark} aria-hidden="true" />
+      )}
     </button>
   );
 }

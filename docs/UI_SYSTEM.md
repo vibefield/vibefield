@@ -84,12 +84,14 @@ The catalog currently mounts these shipping views directly:
   (`SparkFaceRenderer`), all on fixed seeds (`spark-fixtures.ts`)
 - the view frame (One Frame FR-1): the views track in every state the design's plates show — at
   rest, ⌘ held, Godview, History, importing, Chat, a spark that needs you (the cell's dot and its
-  note), Windows' keys — and the cover rising, swapping and lowering over a field with Godview's
-  stage, History's room and Chat, on fixture state
+  note), a thread unread (the cell's cyan dot, SP-1d), Windows' keys — and the cover rising,
+  swapping and lowering over a field with Godview's stage, History's room and Chat, on fixture state
 - Chat (SP-1b, DESIGN.md §8 "Chat's list"): the shipping `ChatPanelView` over the product's own
   reading (`sparkEntriesOf`) of fixture sparks and field rows (`chat-fixtures.ts`) — the list, a
-  spark asleep, no sparks yet, opening and unavailable — on a fixed clock and fixed seeds; and,
-  since SP-1d (§8 "Chat's thread", "Chat's composer"), the thread:
+  spark asleep, no sparks yet, opening and unavailable — on a fixed clock and fixed seeds, each
+  row wearing the mark the product's own `threadMarksOf` reads from what the plates' window saw
+  off screen (a need's orange dot, and since SP-1d a thread unread in cyan); and, since SP-1d
+  (§8 "Chat's thread", "Chat's composer"), the thread:
   - the pane's place: the shipping `SparkPaneView` in the words a window with no terminals says,
     and on three plates its words while it is being found, when this desktop's floor does not hold
     it, and when the floor did not answer. No catalog holds a terminal pool ("a host, never a

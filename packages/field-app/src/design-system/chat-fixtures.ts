@@ -12,6 +12,7 @@ import type { AgentChip, CardChip, DraftPart, SessionChip } from "../chat/compos
 import { agentMenuOf, effortOf, modelWords } from "../chat/new-spark";
 import { sparkEntriesOf } from "../chat/spark-status";
 import type { SparksReading } from "../chat/sparks-feed";
+import type { ThreadLatches } from "../chat/thread-marks";
 import type { SparkPanePlace } from "../chat/thread-pane-door";
 import { paneTextOf } from "../frame/cards/card-text";
 import type { Card } from "../frame/cards/cards-model";
@@ -245,6 +246,10 @@ export function chatReadingOf(state: ChatState): SparksReading {
       return { state: "unavailable", reason: "fieldd is not answering (the daemon is restarting)" };
   }
 }
+
+/** What the plates' window saw while each thread was off screen (SP-1d): Lyra's own turn ended, so her thread is
+ * unread, the cyan dot on her row. Vela's need is standing, so it needs no latch to wear the orange one. */
+export const CHAT_LATCHES: ThreadLatches = { needs: new Set(), unread: new Set(["sp-lyra0001"]) };
 
 /** The spark a plate opens on: the newest (Polaris, just hatched, on the hello's), Juno (awake and Ready) for the
  * pane's words and the composer, or Kiwi asleep. */

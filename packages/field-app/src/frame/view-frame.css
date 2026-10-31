@@ -274,7 +274,8 @@
 }
 
 /* CH-D4 — a spark needs you: Chat's cell takes the orange dot, 6, 9 in from the
-   cell's right and 5 down (DESIGN.md §8 "Chat's list"). */
+   cell's right and 5 down (DESIGN.md §8 "Chat's list"); SP-1d — while no
+   needs-you dot stands and a thread is unread, the same dot in cyan. */
 .vf-views-dot {
   position: absolute;
   top: 5px;
@@ -284,6 +285,10 @@
   border-radius: 50%;
   background: var(--vf-orange);
   pointer-events: none;
+}
+
+.vf-views-dot[data-mark="unread"] {
+  background: var(--vf-cyan);
 }
 
 /* "Vela needs you" — over Chat's cell (the track's fourth: 3 + 3 × 48 + 23 from

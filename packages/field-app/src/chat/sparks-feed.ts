@@ -8,13 +8,16 @@ import {
 import type { FielddClient } from "@vibefield/fieldd-client";
 import { useSyncExternalStore } from "react";
 import { type SparkEntry, sparkEntriesOf } from "./spark-status";
+import { cellMarkOf, ThreadLedger, type ThreadMark, threadMarksOf } from "./thread-marks";
 
-// CHAT'S FEED (SP-1b; DESIGN.md §8 "Chat's list"). The window's one reading of its sparks, started by the frame's
-// host for the window's life so Chat's cell can say a spark needs you from any view: the sparks fieldd keeps
+// CHAT'S FEED (SP-1b, SP-1d; DESIGN.md §8 "Chat's list"). The window's one reading of its sparks, started by the
+// frame's host for the window's life so Chat's cell can say a spark needs you from any view: the sparks fieldd keeps
 // (`compose.sparks.list`), and the field board (`agent.subscribe {projection: "field"}` — content-free, a snapshot
 // then deltas at its floor), whose rows say whose session a run is (`spark`) and who started it (`origin`). The
 // list is asked again only when the board's sparks change — one appears, or one's run leaves — never on a timer.
-// A module store, as the status line's is: only what reads it redraws when the board moves.
+// It holds the window's one ledger of each thread's mark (`thread-marks.ts`): Chat says which thread is on screen
+// (`showThread`), and every reading latches what happened in the others. A module store, as the status line's is:
+// only what reads it redraws when the board moves.
 
 /** What the feed reads: the window's fieldd client in the product (`sparksPortOver`), a fixture in a test. */
 export interface SparksPort {
@@ -113,6 +116,11 @@ interface FeedState {
   readonly rows: readonly AgentFieldRow[] | null;
   /** Wake, through the feed that reads this window's sparks; null while none does, so no act that wakes is drawn */
   readonly open: SparkOpener | null;
+  /** each thread's mark on the reading (SP-1d): a needs-you dot, or unread; empty before the first reading */
+  readonly marks: ReadonlyMap<SparkId, ThreadMark>;
+  /** Chat's cell's mark, which the views track draws in another view: needs while any needs-you dot stands, else
+   * unread while a thread is */
+  readonly cell: ThreadMark | null;
 }
 
 /** Wake a spark (`compose.sparks.open`): its last session resumes; a live one is answered as it is (CR-D11). It throws
@@ -121,15 +129,23 @@ interface FeedState {
  * Send. */
 export type SparkOpener = (spark: SparkId) => Promise<void>;
 
+const NO_MARKS: ReadonlyMap<SparkId, ThreadMark> = new Map();
+
 const OPENING: FeedState = {
   reading: { state: "opening" },
   needing: null,
   sessions: null,
   rows: null,
   open: null,
+  marks: NO_MARKS,
+  cell: null,
 };
 let state: FeedState = OPENING;
 const listeners = new Set<() => void>();
+
+/** The thread on screen (SP-1d): the one Chat shows while Chat is the view, else null. Chat says it (`showThread`);
+ * it outlives any one feed, so a feed started later knows it. */
+let onScreen: SparkId | null = null;
 
 function publish(next: FeedState): void {
   state = next;
@@ -148,7 +164,15 @@ function boardSparksKey(rows: readonly AgentFieldRow[]): string {
     .join(" ");
 }
 
-/** The same sparks needing you in the same words: the frame's note and dot change only when this does. */
+/** The same threads with the same marks: what draws the dots redraws only when this changes. */
+function sameMarks(
+  a: ReadonlyMap<SparkId, ThreadMark>,
+  b: ReadonlyMap<SparkId, ThreadMark>,
+): boolean {
+  return a.size === b.size && [...b].every(([spark, mark]) => a.get(spark) === mark);
+}
+
+/** The same sparks needing you in the same words: the frame's note changes only when this does. */
 function sameNeeds(a: readonly SparkEntry[] | null, b: readonly SparkEntry[]): boolean {
   if (a === null || a.length !== b.length) return false;
   return a.every(
@@ -172,10 +196,29 @@ class RunningFeed {
   /** the sparks this window has seen have a turn, for its life and written nowhere (HN-D9's rule): a run fieldd
    * re-attached reads its transcript back, which the board never counts, so a turn seen before stays seen */
   readonly #turnsSeen = new Set<SparkId>();
+  /** each thread's mark, for the feed's life (the window's) and written nowhere (HN-D9's rule) */
+  readonly #ledger = new ThreadLedger();
+  /** the last reading's entries, which a thread shown is read on */
+  #entries: readonly SparkEntry[] = [];
 
   constructor(readonly port: SparksPort) {
+    this.#ledger.show(onScreen, []);
     this.refresh();
     this.#watch();
+  }
+
+  /** A thread came on screen, or left it: opening it reads it, and the reading stands as it was. */
+  show(spark: SparkId | null): void {
+    this.#ledger.show(spark, this.#entries);
+    if (state.reading.state === "ready") publish({ ...state, ...this.#marked() });
+  }
+
+  /** The ledger's marks on the last reading, kept as they were while nothing changed. */
+  #marked(): Pick<FeedState, "marks" | "cell"> {
+    const marks = threadMarksOf(this.#entries, this.#ledger);
+    return sameMarks(state.marks, marks)
+      ? { marks: state.marks, cell: state.cell }
+      : { marks, cell: cellMarkOf(marks) };
   }
 
   /** The feed's wake: the list is asked again whether it woke or not, since the record says what the door did. */
@@ -255,11 +298,15 @@ class RunningFeed {
         sessions,
         rows,
         open: this.open,
+        marks: NO_MARKS,
+        cell: null,
       });
       return;
     }
     const entries = sparkEntriesOf(this.#sparks, this.#rows, this.#turnsSeen);
     for (const entry of entries) if (entry.turnSeen) this.#turnsSeen.add(entry.spark.id);
+    this.#entries = entries;
+    this.#ledger.read(entries);
     const needing = entries.filter((entry) => entry.needsYou);
     publish({
       reading: { state: "ready", entries },
@@ -267,6 +314,7 @@ class RunningFeed {
       sessions,
       rows,
       open: this.open,
+      ...this.#marked(),
     });
   }
 }
@@ -321,9 +369,30 @@ export function useSparkOpener(): SparkOpener | null {
   return useSyncExternalStore(subscribe, () => state.open);
 }
 
-/** The sparks that need you (S-4), or null before the first reading. */
+/** The sparks that need you (S-4), or null before the first reading: the views track's note over Chat's cell. */
 export function useSparksNeedingYou(): readonly SparkEntry[] | null {
   return useSyncExternalStore(subscribe, () => state.needing);
+}
+
+/** Chat says which thread is on screen (SP-1d; DESIGN.md §8 "Chat's list"): the one it shows while Chat is the view,
+ * else null. Opening a thread reads it: its needs-you dot and its unread go. */
+export function showThread(spark: SparkId | null): void {
+  if (spark === onScreen) return;
+  onScreen = spark;
+  running?.show(spark);
+}
+
+/** Each thread's mark (SP-1d), by its spark: a needs-you dot while the need stands or since it stood off screen,
+ * else unread since its spark's own turn ended off screen. Empty before the first reading. Chat's rows draw it. */
+export function useThreadMarks(): ReadonlyMap<SparkId, ThreadMark> {
+  return useSyncExternalStore(subscribe, () => state.marks);
+}
+
+/** Chat's cell's mark (SP-1d): "needs" while any thread's needs-you dot stands, else "unread" while any thread is
+ * unread, else null (and before the first reading). It does not know the view: the frame draws it in another view
+ * only, where nothing is on screen. A spark's need, however it is read into `SparkEntry.needsYou`, is a needs mark. */
+export function useCellMark(): ThreadMark | null {
+  return useSyncExternalStore(subscribe, () => state.cell);
 }
 
 /** The person's live sessions by the persona each runs as, or null before the board is read. */
