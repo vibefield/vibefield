@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import childProcess from "node:child_process";
+import { EventEmitter } from "node:events";
 import { readFileSync } from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
 import { join } from "node:path";
@@ -64,6 +65,7 @@ const {
   rowsMark,
   rowsVerdict,
   rowVerdict,
+  runCommand,
   runIdOk,
   simulatorExe,
   simulatorProof,
@@ -1355,6 +1357,146 @@ test("doorRow: a row stopped mid-way still takes its END (the record keeps two l
     ["SIM-USE"],
   );
   assert.equal(later.hands, 1);
+});
+
+// ─── the command: settled on its exit ─────────────────────────────────────────────────────────────────────────────────
+
+/** A command's child as `spawn` hands it, driven by the unit: it emits only what the unit says, and spawns nothing. */
+function fakeChild(pid = 7001) {
+  const child = new EventEmitter();
+  child.pid = pid;
+  child.exitCode = null;
+  child.signalCode = null;
+  child.stdout = Object.assign(new EventEmitter(), { setEncoding: () => {} });
+  child.stderr = Object.assign(new EventEmitter(), { setEncoding: () => {} });
+  child.killed = [];
+  child.kill = (signal) => child.killed.push(signal);
+  child.exit = (code, signal = null) => {
+    child.exitCode = code;
+    child.signalCode = signal;
+    child.emit("exit", code, signal);
+  };
+  return child;
+}
+
+/** The command's deps: a `spawn` that hands the fake child (and keeps how it was asked), the group's signals kept. */
+function commandDeps(child) {
+  const asked = [];
+  const groups = [];
+  const said = [];
+  return {
+    asked,
+    groups,
+    said,
+    deps: {
+      spawn: (file, args, o) => {
+        asked.push({ file, args, o });
+        return child;
+      },
+      killGroup: (pid, signal) => groups.push({ pid, signal }),
+      sleep: (ms) => new Promise((done) => setTimeout(done, ms)),
+      say: (line) => said.push(line),
+    },
+  };
+}
+
+const lineSink = () => {
+  const lines = [];
+  let ended = 0;
+  return {
+    lines,
+    ended: () => ended,
+    stream: {
+      push: (chunk) => lines.push(String(chunk)),
+      end: () => {
+        ended += 1;
+      },
+    },
+  };
+};
+
+test("runCommand: settled on the command's EXIT — a process it started holding its pipes never holds teardown (S1)", async () => {
+  const child = fakeChild();
+  const { deps, asked, said } = commandDeps(child);
+  const out = lineSink();
+  const err = lineSink();
+  const running = runCommand({
+    command: ["node", "packaging/run-smoke.mjs", "--smoke-canvas", "--phone"],
+    env: { VF_PHONE_MODE: "devices" },
+    deadlineMs: 60_000,
+    deps,
+    out: out.stream,
+    err: err.stream,
+    drainMs: 20,
+  });
+  // the leader of its own group, its stdin never the terminal's
+  assert.deepEqual(asked[0].args, ["packaging/run-smoke.mjs", "--smoke-canvas", "--phone"]);
+  assert.equal(asked[0].o.detached, true);
+  assert.deepEqual(asked[0].o.stdio, ["ignore", "pipe", "pipe"]);
+  child.stdout.emit("data", "PHONE_ROWS_END n=20\n");
+  // run-smoke exits; the Electron it orphaned still holds the pipes: `close` never comes
+  child.exit(0);
+  const settled = await Promise.race([
+    running.done,
+    new Promise((done) => setTimeout(() => done("held"), 1_000)),
+  ]);
+  assert.deepEqual(settled, { code: 0, deadlineHit: false });
+  assert.deepEqual(out.lines, ["PHONE_ROWS_END n=20\n"]);
+  assert.equal(out.ended(), 1);
+  assert.equal(err.ended(), 1);
+  assert.match(said.at(-1), /still holds its output past 20 ms — not waited for/u);
+  // a signal's exit is 128+n; a stop after the exit signals nothing
+  const killed = fakeChild();
+  const k = commandDeps(killed);
+  const r = runCommand({
+    command: ["x"],
+    env: {},
+    deadlineMs: 60_000,
+    deps: k.deps,
+    out: lineSink().stream,
+    err: lineSink().stream,
+    drainMs: 5,
+  });
+  killed.exit(null, "SIGTERM");
+  killed.emit("close", null, "SIGTERM");
+  assert.deepEqual(await r.done, { code: 143, deadlineHit: false });
+  r.stop("SIGINT");
+  assert.deepEqual(killed.killed, []);
+});
+
+test("runCommand: past the deadline the command is SIGTERMed, then its whole GROUP SIGKILLed — never run-smoke alone (S1)", async () => {
+  const child = fakeChild(7002);
+  const { deps, groups, said } = commandDeps(child);
+  const running = runCommand({
+    command: ["x"],
+    env: {},
+    deadlineMs: 5,
+    deps,
+    out: lineSink().stream,
+    err: lineSink().stream,
+    drainMs: 5,
+    killAfterMs: 10,
+  });
+  await new Promise((done) => setTimeout(done, 60));
+  assert.deepEqual(child.killed, ["SIGTERM"]);
+  assert.deepEqual(groups, [{ pid: 7002, signal: "SIGKILL" }]);
+  assert.match(said[0], /past the deadline \(5 ms\)/u);
+  child.exit(null, "SIGKILL");
+  child.emit("close", null, "SIGKILL");
+  assert.deepEqual(await running.done, { code: 137, deadlineHit: true });
+  // a command that never started is settled too (exit 2)
+  const failed = fakeChild();
+  const f = commandDeps(failed);
+  const never = runCommand({
+    command: ["x"],
+    env: {},
+    deadlineMs: 60_000,
+    deps: f.deps,
+    out: lineSink().stream,
+    err: lineSink().stream,
+  });
+  failed.emit("error", new Error("ENOENT"));
+  assert.deepEqual(await never.done, { code: 2, deadlineHit: false });
 });
 
 // ─── teardown ─────────────────────────────────────────────────────────────────────────────────────────────────────────

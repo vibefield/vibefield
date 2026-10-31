@@ -1440,6 +1440,83 @@ export function realExec(file, args, { env = process.env, input, timeoutMs = 30_
 
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 
+/** How long the command's output is drained after its exit, and how long past the deadline's SIGTERM its group is let be. */
+export const DRAIN_MS = 5_000;
+export const KILL_AFTER_MS = 60_000;
+
+/**
+ * The command, run (the smoke's own `run-smoke.mjs`): its stdout and stderr through `out` and `err` (the redactor's
+ * streams). It is SETTLED ON ITS EXIT, never on its pipes' close: a process it started that outlives it keeps its pipes
+ * open (an Electron orphaned by a SIGKILL of run-smoke), and that never holds the stage's teardown — the drain after the
+ * exit is bounded. It is spawned the leader of its own process group, so past the deadline the SIGKILL reaches every
+ * process it started, not run-smoke alone (stdin is not the terminal's: a group of its own never reads it). Answers
+ * `{stop(signal), done}`: `done` resolves `{code, deadlineHit}` and never rejects.
+ */
+export function runCommand({
+  command,
+  env,
+  deadlineMs,
+  deps,
+  out,
+  err,
+  drainMs = DRAIN_MS,
+  killAfterMs = KILL_AFTER_MS,
+}) {
+  const child = deps.spawn(command[0], command.slice(1), {
+    env,
+    stdio: ["ignore", "pipe", "pipe"],
+    detached: true,
+  });
+  let deadlineHit = false;
+  let backstop = null;
+  const stop = (signal) => {
+    if (child.exitCode === null && child.signalCode === null) child.kill(signal);
+  };
+  child.stdout.setEncoding("utf8");
+  child.stderr.setEncoding("utf8");
+  child.stdout.on("data", (chunk) => out.push(chunk));
+  child.stderr.on("data", (chunk) => err.push(chunk));
+  const closed = new Promise((done) => child.once("close", () => done(true)));
+  const deadline = setTimeout(() => {
+    deadlineHit = true;
+    deps.say(
+      `stage-simulator-fixture: past the deadline (${deadlineMs} ms): the command is stopped`,
+    );
+    stop("SIGTERM");
+    backstop = setTimeout(() => {
+      if (child.pid !== undefined) deps.killGroup(child.pid, "SIGKILL");
+    }, killAfterMs);
+    backstop.unref?.();
+  }, deadlineMs);
+  deadline.unref?.();
+  const done = new Promise((settle) => {
+    let settled = false;
+    const finish = (code) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(deadline);
+      clearTimeout(backstop);
+      settle({ code, deadlineHit });
+    };
+    child.once("error", (error) => {
+      deps.say(`stage-simulator-fixture: the command did not start: ${error.message}`);
+      finish(2);
+    });
+    child.once("exit", async (exit, signal) => {
+      const code = exit ?? 128 + (signal === null ? 0 : (constants.signals[signal] ?? 0));
+      const drained = await Promise.race([closed, deps.sleep(drainMs).then(() => false)]);
+      if (!drained)
+        deps.say(
+          `stage-simulator-fixture: the command exited, but a process it started still holds its output past ${drainMs} ms — not waited for`,
+        );
+      out.end();
+      err.end();
+      finish(code);
+    });
+  });
+  return { stop, done };
+}
+
 const alive = (pid) => {
   try {
     process.kill(pid, 0);
@@ -1489,6 +1566,12 @@ function hostDeps(redactor) {
     kill: (pid, signal) => {
       try {
         process.kill(pid, signal);
+      } catch {}
+    },
+    /** a signal to a process group: its leader's pid, negated */
+    killGroup: (pid, signal) => {
+      try {
+        process.kill(-pid, signal);
       } catch {}
     },
     exists: existsLink,
@@ -1864,15 +1947,12 @@ async function launch(mode, command, opts) {
   deps.hid = (line) => appendFileSync(opts.hidLog, `${line}\n`);
   deps.probe = () => probeHid(deps);
 
-  let child = null;
+  let running = null;
   let signalled = null;
   let deadlineHit = false;
   let stopTimer = null;
-  const childGone = { promise: null };
   // the stage's own stops (the deadline, a stopped run) end the command without posing as a signal the stage was sent
-  const stopChild = (signal) => {
-    if (child !== null && child.exitCode === null) child.kill(signal);
-  };
+  const stopChild = (signal) => running?.stop(signal);
   // a signal is forwarded (as run-smoke does); the stage awaits the command, tears down, and exits 128+n
   const forward = (signal) => {
     signalled ??= signal;
@@ -1985,39 +2065,13 @@ async function launch(mode, command, opts) {
           process.stdout.write(line);
         });
         const err = redactStream(redactor, "main", (line) => process.stderr.write(line));
-        child = deps.spawn(command[0], command.slice(1), {
-          env,
-          stdio: ["inherit", "pipe", "pipe"],
-        });
-        child.stdout.setEncoding("utf8");
-        child.stderr.setEncoding("utf8");
-        child.stdout.on("data", (chunk) => out.push(chunk));
-        child.stderr.on("data", (chunk) => err.push(chunk));
-        childGone.promise = new Promise((done) => {
-          child.once("error", (error) => {
-            deps.say(`stage-simulator-fixture: the command did not start: ${error.message}`);
-            done({ code: 2 });
-          });
-          child.once("close", (exit, signal) => {
-            out.end();
-            err.end();
-            done({ code: exit ?? 128 + (signal === null ? 0 : (constants.signals[signal] ?? 0)) });
-          });
-        });
-        const deadline = setTimeout(() => {
-          deadlineHit = true;
-          deps.say(
-            `stage-simulator-fixture: past the deadline (${opts.deadlineMs} ms): the command is stopped`,
-          );
-          stopChild("SIGTERM");
-          setTimeout(() => stopChild("SIGKILL"), 60_000).unref();
-        }, opts.deadlineMs);
+        running = runCommand({ command, env, deadlineMs: opts.deadlineMs, deps, out, err });
         let sampler = null;
         if (mode === "cost") sampler = startCostSampler(run, deps);
-        const exited = await childGone.promise;
-        clearTimeout(deadline);
+        const exited = await running.done;
         if (sampler !== null) clearInterval(sampler);
         code = exited.code;
+        deadlineHit = exited.deadlineHit;
         const rows = rowsVerdict({ mode, begin: marks.begin, end: marks.end, served: run.served });
         deps.say(`PHONE_ROWS ${JSON.stringify({ ...rows, voids: run.voids })}`);
         if (code === 0 && !rows.ok) code = 1;
