@@ -177,10 +177,10 @@
   track is built: all sixteen marks.
 - Next: nothing built is left. The Hub in the head's smoke:godview rung is built: 11k, on main since M44
   (`bcedadd4e`; LANDED "HN — smoke:godview's rungs").
-- Owed: 11k's console witness, in smoke:godview's godview-only row at James's next unlock (§5); D10, one caption
-  style for both of the sheet's shelves as the page drew (§9); a card dropped on the desk is not smoke-covered in
-  Electron; G30 (⌘C in a pane) and RO-31 (Copy in History) upstream (§7). HN's other console-window rows are paid:
-  smoke:canvas's at runs 30b, 35b and 38b, and smoke:godview's 11h and 11j at run 38b.
+- Owed: D10, one caption style for both of the sheet's shelves as the page drew (§9); a card dropped on the desk is
+  not smoke-covered in Electron; G30 (⌘C in a pane) and RO-31 (Copy in History) upstream (§7). HN's console-window
+  rows are all paid: smoke:canvas's at runs 30b, 35b and 38b; smoke:godview's 11h and 11j at run 38b, and 11k and
+  11l (its Esc from the body too) at run52b (M52 `c564de0e4`).
 
 **QW1 — the Godview swarm QA, fix wave 1** · vibe-field-d4 · law `draft/testing/godview-swarm-qa-plan.md` v0.3 §12.1, `draft/thinking-ar-reattach.md` §6
 - Ruled: the plan (A01–A27, X01–X26, Q01–Q21; page 3ZrkUWG4) and re-attach's RA-D1…RA-D9 (10-27, every pick at the
@@ -465,9 +465,8 @@
   the tab bar as an obstacle, the reconnect banner across a fieldd bounce, the attached-but-unlisted card, an overload
   refusal said in the connecting face, C1's swipe after a reopen, the corner wearing its home desktop's face and name
   (IOS-8f) (and PJ-7 run 3's n/a cases, if 10-19's round missed them).
-- HN's one console-window row left: 11k, the Hub in the head's smoke:godview rung, on main since M44 (`bcedadd4e`;
-  LANDED "HN — smoke:godview's rungs"), in smoke:godview's godview-only row with 11h and SP-1c's 11l: OWED-ROWS
-  row 1 at James's next unlock, armed on M52. The rest
+- HN's console-window rows are all paid: 11k, the Hub in the head's smoke:godview rung, at run52b (M52 `c564de0e4`,
+  2026-10-31; LANDED "HN — smoke:godview's rungs"), with 11h and SP-1c's 11l in the same row. The rest
   are paid: smoke:canvas's HN rows at run 30b and item 123's four HAND rows at runs 35b and 38b, and smoke:godview's
   re-aimed 11h (a card played into a real pane) and 11j (a program's OSC 52 reaching main's copy door, no card) at
   run 38b (M38 `5321b12ac`), where item 124's launch rung PASSED (LANDED "Item 124"). *Corrected 2026-10-31 (item

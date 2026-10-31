@@ -24062,3 +24062,24 @@ overturn). VF-PM ruled its staging (a) at 07:48Z, History and Profiles at 09:17Z
 
 **Owed.** Neither rung has run at a console window: smoke:godview's godview-only row (11h, 11k, 11l) is OWED-ROWS
 row 1 at James's next unlock, armed on M52.
+  > **Witnessed (2026-10-31, run52b on M52 `c564de0e4`):** James unlocked the mini at 13:34Z, the owed chain's gate
+  > opened at 13:37:43Z, and row 1, smoke:godview, ran 13:37:44→13:39:52Z (128 s) to exit 0: `SMOKE_GODVIEW
+  > {"ok":true,…}` and `SMOKE_DAEMONS {"left":[],"reaped":[]}`, no input mid-row, the HOME removed; main `b770f8eb4`
+  > stood beside the mint, docs only. The verdict's three fields, verbatim (the home copy
+  > `lanes/ts6/logs/mini/run52b/smoke:godview.log`, sha256 `9d4ebd847b02af9d…`):
+  > - `hubInHead` (11k): the shelf "the Hub bound: its "Artifact Hub" in the shelf, once in the page"; the circle "under
+  >   Godview at 96,8, 40 × 40; pressed by the pointer at 116,28"; the sheet "grew on Artifacts to 544 × 420; the circle
+  >   stepped aside, and the pill's own sheet stayed shut"; the fold "the sheet's own package at 116,28 folded it into
+  >   the circle; still in Godview".
+  > - `newSpark` (11l): ⌘N "opened (LINE_KEY): a modal "New spark" over the field, which is inert and receded; the name
+  >   field holds the keyboard and "Polaris"; the create says "Close the sheet"; the hatch loading"; ⌘N again "closed
+  >   (LINE_KEY): the sheet gone and the field live; the create says "New spark" (Meta+N)"; Esc "folded the sheet, and
+  >   the line said no LINE_KEY"; Esc from the body "folded the sheet with the keyboard on the body, and the line said
+  >   no LINE_KEY"; on the canvas "⌘N did nothing: no LINE_KEY, no sheet".
+  > - `lineKeys` (11h): B "godview, a pane focused: the pane typed it; the line took nothing (the pane's input open
+  >   after 0ms; its Backspace heard after 1ms)"; card "Pasted into work (Paste into work): not run until the pane's own
+  >   Return, then the shell ran it (the input open after 1ms); 1 card(s) cleared"; ⌘T "godview, a pane focused: the
+  >   line asked the deck; a new shell e4df1579… in the focused pane (4 → 4 panes); the pane never heard it"; B on the
+  >   canvas "nothing focused: Objects rose behind the line; B again put it away".
+  > So the rungs' console witness is paid: 11k's, 11l's with its Esc from the body, and 11h's again (first paid at run
+  > 38b).
