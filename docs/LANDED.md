@@ -23701,3 +23701,54 @@ is unchanged.
 - **Run 51 and the landing:** the mint `3798a5fc1` (tree `85f98525c`), verify exit 0 at 10:54:03Z (293 s; Tests
   11,230/0/18, −7 the retired rows; cargo 33 ok; ios fixtures 186; VF-PM's read 10:54:30Z). main fast-forwarded to it
   at 2026-10-31T10:55:05Z (land-stack.sh, the fixer, on VF-PM's GO): `5aa41562f..3798a5fc1`, 5 files, +19 −180.
+
+## PG-1f — PU-I's pin test: an idle priced row should send nothing across the backend's 30 s cost step, `.fails` at puppeteer 0.3.2 beside two controls (2026-10-31; `5aa41562f`, the merge of main `4c86c2923` into `627bda158` on `588405291`, lane `pg/1f-pin`)
+
+**What.** The brief's §PG-1f rung, VibeField's half, granted by VF-PM at 10:19Z. It is test-only: three rows in fieldd's
+`agent-model-board.test.ts`, +100, no product line. The petition itself, `draft/petitions/PU-I-puppeteer-idle-cost-step.md`,
+was drafted on 2026-10-29 and is NOT filed; James files it or says to.
+- **The defect, at the pin (0.3.2, since `0cfb25c5b`).** puppeteer-monitor's usage ledger stamps `lastStepAt` from the
+  clock on every read (`dist/backend/usage-ledger.js:37`), so `settle`'s `deepEqual` finds a priced row's history
+  changed at each 30 s step (:87-89), and the backend re-emits the row, against its own README §Cost ("idle emits
+  nothing"). An unpriced row's cost stays absent, so `sameInputs` holds and it is spared.
+- **The board under test** is this desktop's model board over one idle run. It is settled for an hour of the backend's
+  clock, so the spend leaves the ten-minute window and recency has nothing left to flip; its frames are counted from
+  there.
+- **Control 1:** a priced run's new spend is heard, as an upsert carrying the new `cost.usd`. It also pins what the
+  `.fails` row stands on: a priced settled board whose window is all zero.
+- **Control 2:** an unpriced idle run is silent across ten steps.
+- **The pin, `it.fails`:** a priced idle run is silent across ten steps. The puppeteer EL8 that carries PU-I's fix turns
+  it RED in that EL8's own `pnpm verify`, and that red is the signal to drop `.fails`. This is the G13 precedent
+  (`terminal-kill-matrix.test.ts` row 6b).
+
+**Found:**
+- **Core never sends one revision twice.** A second state pushed at the same revision is dropped, so a test's
+  readings each take their own. The first light's control 1 was red until they did.
+- **`siblings:pin` typechecks the consumers only** (`scripts/siblings.mjs`, "the consumers' typecheck", since
+  2026-10-04), so it cannot see a `.fails` flip. The loud failure is the puppeteer EL8 commit's own verify. *This
+  corrects VF-PM's 10:19Z grant line at the row's comment, accepted 10:35Z.*
+- **vitest prints a length of zero as "+0"** ("to have a length of +0 but got 10"); the probe's pattern takes it.
+
+**Validation.**
+- **The lane:** `/Volumes/SamsungRed/lanes/ios` (the worktree `vibe-field`, branch `pg/1f-pin` off `588405291`).
+- **The light** (`lanes/ios/pg1f-light.sh`; ts3, nice 19, under the guard): green on `588405291..627bda158` at
+  10:33:14Z, with biome on the file, fieldd's typecheck and the file's vitest (20/20). The first cut was red at
+  10:31:56Z, at control 1 (the revision, above).
+- **The red-first probe:** the `.fails` row was flipped to a plain `it` in ts3's tree and never committed. It went RED
+  for the right reason: "expected [ … ] to have a length of +0 but got 10", a frame per idle step at 0.3.2.
+- **VF-PM's read** (10:35Z): `merge-tree --write-tree 4c86c2923 627bda158` = `6b7e6fe19`, clean; the file is in neither
+  M48 nor M49.
+- **No verify on this Mac** (James, 2026-10-29 09:05Z: the Mac mini's verify lane).
+- **The mini, run 50, `pnpm verify` at `5aa41562f`:** exit 0, armed 10:40:53Z, done 10:45:45Z (load1 2.26 → 9.45).
+  - vitest 11,237 passed, 0 failed, 18 skipped; `test/agent-model-board.test.ts` 20 ✓, the `.fails` row counted
+    passed.
+  - rust 532 / 0 / 14 over 33 binaries; ios fixtures 186 copies identical.
+  - The tree was clean after, with no stub left. a9 carried it as `mrun50.bundle` (sha256 `21e18ac5…`); the mini's
+    `next` ran at 10:40:42Z, the locks stood, and its tree is `6b7e6fe19` (VF-PM's merge-tree). Logs:
+    `lanes/ts6/logs/mini/run50/`.
+- **Landed:** main fast-forwarded `4c86c2923` → `5aa41562f` at 10:47:09Z on VF-PM's GO; VF-PM pushes it.
+
+**Records.** The design record's §8 (1f as built) and PU-I's dated "re-read at 0.3.2, unchanged" line go in at the next
+draft queue.
+
+**Owed.** PU-I's filing (James's). PG-2 (the remote cut), on James's go.

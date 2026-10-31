@@ -152,9 +152,10 @@
   NEITHER 1e1 nor 1e2 (VF-PM 10:08Z). The three cuts cost ~2% of one core at n20 and ~5% at n60 in a busy swarm, the
   model cut ≥85% of it. The bench stays as the instrument; it reopens on a fourth cut projecting the same rows, swarms
   well past 60 busy agents, or the model cut's cost growing (the frames' wire serialization not measured).
-- Next: PG-1f (the PU-I petition, draft-only; its pin test waits on the puppeteer 0.3.1 EL8). Then PG-2 (the remote
-  cut) → PG-3 (the phone's replica under the swarm) → PG-5…PG-8 (list, timeline, spend, rain, native) → PG-9 (resume,
-  `agent.get`, the measured rates).
+  **PG-1f**, PU-I's pin test (`627bda158`, as the merge `5aa41562f`, run 50; LANDED "PG-1f"): an idle priced row's
+  silence across the 30 s cost step, `.fails` at puppeteer 0.3.2 beside two controls; the petition drafted, not filed.
+- Next: PG-2 (the remote cut), on James's go → PG-3 (the phone's replica under the swarm) → PG-5…PG-8 (list,
+  timeline, spend, rain, native) → PG-9 (resume, `agent.get`, the measured rates). PU-I is filed by James.
 - Owed: items 109 (the History tail's reset hole) and 110 (`project.subscribe`'s no-op snapshot on the phone), both on
   the shed; the cap read on the phone under the link conditioner (PG-9); from PG-1d, the F-H2 rider (the board's gate
   and the ticket mint read different things), an old owner's run-id fallback (a design question) and a kit comment
@@ -660,7 +661,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | FG — the first run on the field | ACTIVE; FG-0…3a landed 10-30, FG-3b, FG-4a and FG-4b 10-31 | `thinking-first-run-glass.md`; DESIGN.md §2.1/§5/§6/§8/§13 | FG-5 |
 | AL — app lifecycle | ACTIVE; AL-1…3, 5, 7, 8a, 9 landed | `thinking-app-lifecycle.md`; ESR §7.3 | AL-6, Last exit, relaunch cap |
 | AU — Updates That Wait | ACTIVE; B1–B4 (AU-0…AU-7) landed 10-30/31 | `thinking-update-ux.md` §7 (page sources `draft/update-ux/`); DESIGN.md §2.5/§2.8/§6/§8/§9/§13; EDP §5.2/§6.4/§11; ESR §7.3 | the owed eyeballs, the first signed nightly with notes, the physical rows |
-| PG — the phone's Godview | ACTIVE; PG-0, PG-1a…1d and PG-1e0 (measured: neither) landed 10-31 | `thinking-phone-godview.md` §7/§8; `design-mv.md`; `design-06-sync-planes.md` | PG-1f; then PG-2 |
+| PG — the phone's Godview | ACTIVE; PG-0, PG-1a…1d, PG-1e0 (measured: neither) and PG-1f's pin test landed 10-31 | `thinking-phone-godview.md` §7/§8; `design-mv.md`; `design-06-sync-planes.md` | PG-2, on James's go |
 | HN — Cards in Hand | BUILT; B1–B3 (HN-0…HN-8) landed 10-31 | `thinking-cards-in-hand.md` §6 (page sources `draft/cards-in-hand/`); DESIGN.md §1/§5/§6/§8/§9/§10/§13 | the console-window smoke rows; D10 (James) |
 | QW1 — Godview swarm QA, fix wave 1 | ACTIVE; stacks A and B landed 10-28, B on puppeteer 0.3.0's EL8 pin | `godview-swarm-qa-plan.md`; `thinking-ar-reattach.md` | QA wave 1 |
 | Release rails (EDP/ESP, WP12, TD, BP, RD, RM) | ACTIVE; nightlies live, W10/W11 passed | the release specs; `thinking-browser-profile.md`, `thinking-release-deps.md`, `thinking-release-management.md` | round 3; the first-beta list |
