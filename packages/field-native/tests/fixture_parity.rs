@@ -386,6 +386,9 @@ fn mesh_egress_fixtures() {
     // and pins that `login` survives the trip.
     roundtrip::<MeshEgressProxy>("mesh-egress-proxy.valid.json", true);
     roundtrip::<MeshEgressRouteAddParams>("mesh-egress-route-add-params.valid.json", true);
+    // DS-7 — a route to another desktop's index serve (`PORTS.INDEX_SERVE`),
+    // the second door DS-L6 routes; the floor's belt reads this file too.
+    roundtrip::<MeshEgressRouteAddParams>("mesh-egress-route-add-params.index.json", true);
     roundtrip::<MeshEgressRouteBound>("mesh-egress-route-bound.valid.json", true);
     roundtrip::<MeshEgressRouteRef>("mesh-egress-route-ref.valid.json", true);
     roundtrip::<MeshEgressRouteTable>("mesh-egress-route-table.valid.json", true);

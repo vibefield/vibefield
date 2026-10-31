@@ -2077,6 +2077,13 @@ export const METHODS: MethodDef[] = [
   // refused FORBIDDEN_SCOPE; the phone and a peer daemon's forward still hear
   // `direct-plane-unbuilt` (SP-6, DS-7); the plane switched off answers
   // `direct-plane-off`, and a daemon that is not ready its phase.*
+  // *DS-7 (2026-10-31): a peer daemon's forward is served — the owner answers
+  // the tailnet set of its live index serve with a `read` grant, and the
+  // forwarding daemon re-homes it onto an egress route of its own desktop for
+  // its window (`IndexOpenTicket`'s DS-7 note). Only a window or the shell is
+  // carried; the phone still hears `direct-plane-unbuilt` (SP-7). A ticket is
+  // never journaled as a receipt (forward-receipts' TICKET_MINTS): a retry
+  // mints a fresh grant rather than replaying one.*
   defineMethod({
     surface: "product",
     method: "index.openTicket",

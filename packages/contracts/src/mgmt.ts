@@ -1206,8 +1206,12 @@ export const MESH_EGRESS = {
    * A new row here is a claim about a door's authentication, made in review.
    * (SP-3, 2026-10-01: `PORTS.INDEX_SERVE` is deliberately absent — the pinned
    * rosettad verifies no credential; it is the claim DS-7's pin move makes,
-   * when rosettad starts with RO-1's bearer and RO-10's grant key.) */
-  ROUTABLE_PORTS: [PORTS.TERMINAL_CELLS_SERVE],
+   * when rosettad starts with RO-1's bearer and RO-10's grant key.)
+   * *DS-7 (2026-10-31) — the claim, made: rosettad demands a bearer on every
+   * route and opens a session's routes only to that session's RO-10 grant
+   * (fieldd refuses any generation whose ready line does not say both,
+   * `indexPlaneLive`), so its serve is a door that demands its own grant.* */
+  ROUTABLE_PORTS: [PORTS.TERMINAL_CELLS_SERVE, PORTS.INDEX_SERVE],
 } as const;
 
 /** 1–65535 with no leading zero, as a PATTERN rather than a refinement so the
