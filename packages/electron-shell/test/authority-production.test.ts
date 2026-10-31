@@ -1,9 +1,14 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createProductionLiveSurfaceSupport } from "../src/main/live-surfaces/authority-production";
-import { SimctlUnavailableError, simctlCallCounts } from "../src/main/live-surfaces/simctl";
+import type { SimulatorDeviceCatalog } from "../src/main/live-surfaces/ios-simulator-producer";
+import {
+  SimctlService,
+  SimctlUnavailableError,
+  simctlCallCounts,
+} from "../src/main/live-surfaces/simctl";
 
 // PT-S3 — main's production live-surface support with NOTHING real beneath it: `node:child_process` refuses every spawn
 // unless a row scripts an in-process answer to `execFile`, the native adapter's loader is a fake that counts its loads,
@@ -19,6 +24,10 @@ const fakes = vi.hoisted(() => ({
   loads: [] as string[],
   /** what the loader answers; null: it refuses */
   adapter: null as unknown,
+  /** each simulator source resolver built, with the device catalog it was handed (M3) */
+  resolvers: [] as { resolver: unknown; devices: unknown }[],
+  /** each legacy `ios-simulator` runtime minted, with the resolver it was handed (M3) */
+  legacy: [] as { resolver: unknown }[],
 }));
 
 vi.mock("node:child_process", async (importOriginal) => {
@@ -67,6 +76,25 @@ vi.mock("../src/main/live-surfaces/macos-capture-native", async (importOriginal)
       return fakes.adapter as ReturnType<typeof actual.loadMacosCaptureNativeAdapter>;
     },
   };
+});
+
+// M3: the real classes, each construction recorded — which catalog a resolver reads, which resolver the legacy kind holds
+vi.mock("../src/main/live-surfaces/ios-simulator-producer", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../src/main/live-surfaces/ios-simulator-producer")>();
+  class IosSimulatorSourceResolver extends actual.IosSimulatorSourceResolver {
+    constructor(options: ConstructorParameters<typeof actual.IosSimulatorSourceResolver>[0]) {
+      super(options);
+      fakes.resolvers.push({ resolver: this, devices: options.devices });
+    }
+  }
+  class IosSimulatorLiveSurfaceRuntime extends actual.IosSimulatorLiveSurfaceRuntime {
+    constructor(options: ConstructorParameters<typeof actual.IosSimulatorLiveSurfaceRuntime>[0]) {
+      super(options);
+      fakes.legacy.push({ resolver: options.resolver });
+    }
+  }
+  return { ...actual, IosSimulatorSourceResolver, IosSimulatorLiveSurfaceRuntime };
 });
 
 vi.mock("electron", () => ({ BrowserWindow: class {}, session: {} }));
@@ -129,6 +157,8 @@ afterEach(() => {
   fakes.answer = undefined;
   fakes.loads.length = 0;
   fakes.adapter = null;
+  fakes.resolvers.length = 0;
+  fakes.legacy.length = 0;
   rmSync(root, { recursive: true, force: true });
 });
 
@@ -163,6 +193,40 @@ describe("createProductionLiveSurfaceSupport — main's ONE simctl (PT-S3 P1)", 
         { file: XCRUN, args: ["simctl", "list", "--json"], developerDir: vetted },
       ]);
       expect(fakes.loads).toEqual([CAPTURE.adapterPath]);
+    } finally {
+      await support.dispose();
+    }
+  });
+
+  it("the legacy kind's RESOLVER reads the same shared simctl: minted through factories.iosSimulator, its list pinned and one with the picker's (M3)", async () => {
+    const vetted = developerDir();
+    fakes.adapter = refusingAdapter();
+    fakes.answer = (file, args) => {
+      if (file === XCODE_SELECT) return `${vetted}\n`;
+      if (file === XCRUN && args[1] === "list") return LIST;
+      return undefined;
+    };
+    const support = createProductionLiveSurfaceSupport({ capture: CAPTURE });
+    try {
+      support.factories.iosSimulator("ios_surface_000000000a", {
+        kind: "ios-simulator",
+        udid: UDID,
+        crop: { mode: "auto" },
+      });
+      // the stack's two resolvers — the legacy kind's and the bound phones' — hold ONE catalog: main's simctl
+      expect(fakes.resolvers).toHaveLength(2);
+      const [legacy, phones] = fakes.resolvers;
+      expect(fakes.legacy).toEqual([{ resolver: legacy?.resolver }]);
+      expect(legacy?.devices).toBeInstanceOf(SimctlService);
+      expect(legacy?.devices).toBe(phones?.devices);
+      // driven: the legacy resolver's catalog and the picker read ONE probe and ONE list, under the vetted Xcode
+      const catalog = legacy?.devices as SimulatorDeviceCatalog;
+      expect(await catalog.enumerateBootedDevices()).toHaveLength(1);
+      expect(await support.enumeration.bootedSimulators()).toHaveLength(1);
+      expect(fakes.execs).toEqual([
+        { file: XCODE_SELECT, args: ["-p"], developerDir: null },
+        { file: XCRUN, args: ["simctl", "list", "--json"], developerDir: vetted },
+      ]);
     } finally {
       await support.dispose();
     }
@@ -307,5 +371,26 @@ describe("createProductionLiveSurfaceSupport — the simctl call record (PT-S3 D
     }
     expect(calls.probe).toBe(1);
     expect(fakes.execs).toEqual([]);
+  });
+});
+
+describe("the simctl call record is SMOKE-ONLY — held in main's source (main/index.ts) (PT-S3 D2, M2)", () => {
+  const index = readFileSync(new URL("../src/main/index.ts", import.meta.url), "utf8");
+
+  it("main makes the record only in a smoke-like mode — production makes none", () => {
+    expect(index).toMatch(
+      /const harnessSimctlCalls: SimctlCallCounts \| null = isSmokeLike\(MODE\)\s*\?\s*simctlCallCounts\(\)\s*:\s*null;/u,
+    );
+  });
+
+  it("and hands it to the production support only when it was made — never otherwise", () => {
+    const start = index.indexOf("liveSurfaceSupport = createProductionLiveSurfaceSupport({");
+    expect(start).toBeGreaterThanOrEqual(0);
+    const call = index.slice(start, index.indexOf("\n    });", start));
+    expect(call).toContain(
+      "...(harnessSimctlCalls === null ? {} : { simctlCalls: harnessSimctlCalls }),",
+    );
+    // the ONE `simctlCalls:` main writes is that conditional spread's
+    expect(index.match(/simctlCalls:/gu)).toHaveLength(1);
   });
 });
