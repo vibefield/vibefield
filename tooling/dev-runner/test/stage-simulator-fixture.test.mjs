@@ -69,6 +69,7 @@ const {
   runIdOk,
   simulatorExe,
   simulatorProof,
+  simulatorSettled,
   startDoor,
   teardownPlan,
   XCODE_DEVELOPER_DIR,
@@ -1220,6 +1221,80 @@ test("startDoor: a loopback server on a random port, answering 401 without the t
   } finally {
     await door.close();
   }
+});
+
+test("startDoor: close waits for the act in flight; an act queued behind it is answered a stop and never runs (S2)", async () => {
+  const run = ownRun();
+  const host = fakeHost();
+  let release;
+  const booting = new Promise((done) => {
+    release = done;
+  });
+  let bootAsked;
+  const asked = new Promise((done) => {
+    bootAsked = done;
+  });
+  const exec = host.deps.exec;
+  host.deps.exec = async (file, args, o) => {
+    if (file === "/usr/bin/xcrun" && args[1] === "boot") {
+      bootAsked();
+      await booting;
+    }
+    return exec(file, args, o);
+  };
+  const door = await startDoor(run, host.deps);
+  const post = (body) =>
+    fetch(`http://127.0.0.1:${door.port}/act`, {
+      method: "POST",
+      headers: { "x-phone-token": run.token, "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }).catch(() => null);
+  const boot = post({ verb: "boot", device: 1 });
+  await asked;
+  const queued = post({ verb: "shutdown", device: 2 });
+  await new Promise((done) => setTimeout(done, 100));
+  let closed = false;
+  const closing = door.close().then(() => {
+    closed = true;
+  });
+  await new Promise((done) => setTimeout(done, 100));
+  assert.equal(closed, false, "close waits for the boot in flight");
+  release();
+  await closing;
+  await Promise.all([boot, queued]);
+  // the boot ran to its end; the shutdown queued behind it never ran
+  const ran = host.calls
+    .filter((c) => c.file === "/usr/bin/xcrun" && c.args[1] !== "list")
+    .map((c) => c.args[1]);
+  assert.deepEqual(ran, ["boot"]);
+});
+
+test("simulatorSettled: a run that launched Simulator.app and finds none looks again for its launch on the way (S2)", async () => {
+  const run = ownRun();
+  run.simulator.shown = 1;
+  const host = fakeHost();
+  let looks = 0;
+  const exec = host.deps.exec;
+  host.deps.exec = async (file, args, o) => {
+    if (file === "/usr/bin/pgrep") {
+      looks += 1;
+      host.state.pgrep = looks >= 3 ? "4242" : null;
+    }
+    return exec(file, args, o);
+  };
+  assert.deepEqual(await simulatorSettled(run, host.deps), { running: 1, own: true, pid: 4242 });
+  assert.equal(looks, 3);
+  // a run that launched none looks once
+  const none = ownRun();
+  const quiet = fakeHost();
+  assert.equal((await simulatorSettled(none, quiet.deps)).running, 0);
+  assert.equal(quiet.calls.filter((c) => c.file === "/usr/bin/pgrep").length, 1);
+  // and gives up after its 2 s (eight looks past the first)
+  const gone = ownRun();
+  gone.simulator.pressed = 1;
+  const never = fakeHost();
+  assert.equal((await simulatorSettled(gone, never.deps)).running, 0);
+  assert.equal(never.calls.filter((c) => c.file === "/usr/bin/pgrep").length, 9);
 });
 
 // ─── /row: the HID pair and the press gate ────────────────────────────────────────────────────────────────────────────

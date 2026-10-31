@@ -940,6 +940,18 @@ export async function simulatorNow(run, deps) {
   return simulatorProof({ ...proof, comm: comm.stdout, lstart: lstart.stdout, realExe });
 }
 
+/** Simulator.app at teardown: a launch the run asked for may still be on its way (LaunchServices answers `open -a` before
+ * the app's process exists, and the door's last act may have just ended), so a run that launched one and finds none looks
+ * again, every 250 ms for `ms`. */
+export async function simulatorSettled(run, deps, ms = 2_000) {
+  let app = await simulatorNow(run, deps);
+  for (let i = 0; i < ms / 250 && app.running === 0 && launchesOf(run) > 0; i += 1) {
+    await deps.sleep(250);
+    app = await simulatorNow(run, deps);
+  }
+  return app;
+}
+
 async function waitGone(pid, deps, ms) {
   const until = deps.now() + ms;
   while (deps.alive(pid)) {
@@ -1185,9 +1197,20 @@ export async function handleDoor(request, run, deps) {
   return refuse(run, "path", 404, { n: null, state: "refused" });
 }
 
-/** The door's server on loopback, a random port. `/act` and `/row` are answered one at a time, in order. */
+/** What a queued `/act` or `/row` is answered once the door is closing: a stop (both readers end their rows on it). */
+const CLOSING = json(409, {
+  n: null,
+  state: "stop",
+  stop: true,
+  why: "the door is closing: the run is ending",
+});
+
+/** The door's server on loopback, a random port. `/act` and `/row` are answered one at a time, in order. Its `close`
+ * resolves only once the act in flight has ENDED (an in-flight `simctl boot`, or show-app's `open -a`, never lands beside
+ * teardown), and an act queued behind it is answered a stop, never run. */
 export function startDoor(run, deps) {
   let chain = Promise.resolve();
+  let closing = false;
   const server = createServer((req, res) => {
     const chunks = [];
     let size = 0;
@@ -1209,7 +1232,7 @@ export function startDoor(run, deps) {
       if (over) answer = Promise.resolve(refuse(run, "body", 413, { n: null, state: "refused" }));
       else if (serial) {
         // one at a time, in order — and a request that fails never holds the next one back
-        answer = chain.then(() => handleDoor(request, run, deps));
+        answer = chain.then(() => (closing ? CLOSING : handleDoor(request, run, deps)));
         chain = answer.catch(() => {});
       } else answer = handleDoor(request, run, deps);
       answer.then(
@@ -1238,12 +1261,14 @@ export function startDoor(run, deps) {
     server.once("error", fail);
     server.listen(0, "127.0.0.1", () => {
       const { port } = server.address();
-      // closed with its sockets: a keep-alive one left by the smoke's fetch never holds teardown
-      const close = () =>
-        new Promise((done) => {
-          server.close(() => done());
-          server.closeAllConnections();
-        });
+      // closed with its sockets (a keep-alive one left by the smoke's fetch never holds teardown), and the act in flight
+      // ended — each of its spawns has its own timeout, so the wait is bounded
+      const close = async () => {
+        closing = true;
+        const closed = new Promise((done) => server.close(() => done()));
+        server.closeAllConnections();
+        await Promise.all([closed, chain]);
+      };
       ready({ port, close });
     });
   });
@@ -1785,7 +1810,7 @@ async function restoreHost(run, deps, ctx) {
       state: device === undefined ? (list === null ? "unknown" : "absent") : device.state,
     };
   });
-  const app = run.devDir === null ? { running: 0, own: false } : await simulatorNow(run, deps);
+  const app = run.devDir === null ? { running: 0, own: false } : await simulatorSettled(run, deps);
   const fence = list === null ? { clear: false, busy: -1 } : fenceClear(list, ownUdids(run));
   let quit = app.running === 0 ? "not-running" : "stayed";
   for (const step of teardownPlan({
