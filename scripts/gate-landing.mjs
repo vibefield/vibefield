@@ -71,6 +71,9 @@ export const LANDING = [
   // `pnpm smoke:plugin` (a bare `pnpm smoke:plugin` stages nothing and says so)
   { name: "smoke:plugin", run: pnpm("plugin", "try", "examples/plugins/desk-clock") },
   { name: "smoke:godview", run: pnpm("smoke:godview") },
+  // FG (desk-gates row 32): the Setup Assistant walked by its own controls to the desk — by day and by night on the
+  // live field, and with no WebGPU over its still; three launches, its stills kept outside every smoke's own folder
+  { name: "smoke:first-run", run: pnpm("smoke:first-run") },
   { name: "smoke:terminal-door", run: pnpm("smoke:terminal-door") },
   { name: "smoke:terminal-direct", run: pnpm("smoke:terminal-direct") },
   { name: "smoke:studio", run: pnpm("smoke:studio") },
