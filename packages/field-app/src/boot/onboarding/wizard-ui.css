@@ -210,25 +210,109 @@
   color: var(--vf-foreground);
 }
 
-/* One frame (FG-L3; DESIGN.md §8): every pane stands between 96 and 600, 560 wide, under the band. Until FG-4 lays a
-   pane's head, body and foot into it, the pane is centred in it — SAFE centring: a pane taller than the frame (pane 2
-   with its face picker open, UA-D17) overflows downward only. Plain centring overflows both ways inside a scroller,
-   and the half above the top edge — the pane's title — can never be scrolled to. */
+/* One frame (FG-L3; DESIGN.md §8): every pane stands between 96 and 600, 560 wide, under the band, and fills it — its
+   head at the top (the title and the voice, 8 apart), its body 20 under the head (16 between its parts, 18 on TS's
+   panes), and its foot on the frame's foot: the actions, and the line under them, whose room is always kept. So the
+   title and the actions stand at one height on every step. Nothing in it scrolls; a pane fits the frame. A pane only
+   fades in (240ms), after the one it replaces fades out (120ms, wizard-ui.tsx's PaneSwap). */
 .vf-wizard-frame {
   position: absolute;
   top: 96px;
   right: 160px;
   bottom: 40px;
   left: 160px;
+}
+
+.vf-wizard-pane {
+  position: absolute;
+  inset: 0;
   display: flex;
-  align-items: safe center;
+  flex-direction: column;
+  margin: 0;
+  animation: vf-wizard-fade 240ms ease both;
+}
+
+.vf-wizard-pane-head {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vf-wizard-pane-body {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.vf-wizard-pane[data-track="ts"] .vf-wizard-pane-body {
+  gap: 18px;
+}
+
+.vf-wizard-pane-foot {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 16px;
+}
+
+.vf-wizard-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.vf-wizard-later {
+  min-height: 17px;
+  margin: -2px 0 0;
+  color: var(--vf-text-tertiary);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* The pane that leaves: a still copy laid over the frame as it fades, which takes no press. */
+.vf-wizard-pane-leaving {
+  animation: none;
+  pointer-events: none;
+}
+
+/* The welcome, and the read before the first pane, stand centred in the frame until FG-4b stands them under the logo
+   as its holds. */
+.vf-wizard-pane[data-centered="true"] {
+  align-items: center;
   justify-content: center;
-  overflow-y: auto;
+  text-align: center;
+}
+
+.vf-wizard-pane[data-centered="true"] .vf-wizard-pane-head {
+  align-items: center;
+}
+
+.vf-wizard-pane[data-centered="true"] .vf-wizard-pane-foot {
+  margin-top: 0;
+}
+
+.vf-wizard-pane[data-centered="true"] .vf-wizard-actions {
+  justify-content: center;
+}
+
+.vf-wizard-pane[data-centered="true"] .vf-wizard-pane-body:empty,
+.vf-wizard-pane[data-centered="true"] .vf-wizard-later:empty {
+  display: none;
 }
 
 /* Finish setting up's sheet keeps the shell it had before FG until AO rules (FG-D26, a lean: the sheet is AO's
    surface and no step of the chapter, which FG-D3's 880 × 640 governs) — its size, and its body inside the old
-   border's pixel and padding. It is never fitted. */
+   border's pixel and padding. It is never fitted. Its panes stand as they did: centred in it — SAFE centring, so a
+   pane taller than the sheet overflows downward only (plain centring overflows both ways inside a scroller, and the
+   half above the top edge, the pane's title, can never be scrolled to) — 30rem at most, 20 between the head, each part
+   of the body and the actions, and rising in. */
 .vf-wizard-shell[data-size="sheet"] {
   inset: 0;
   width: min(calc(100vw - 2rem), 44rem);
@@ -238,10 +322,38 @@
 
 .vf-wizard-shell[data-size="sheet"] .vf-wizard-frame {
   inset: calc(1px + clamp(2rem, 5vw, 4rem));
+  display: flex;
+  align-items: safe center;
+  justify-content: center;
+  overflow-y: auto;
 }
 
-.vf-wizard-pane {
+.vf-wizard-shell[data-size="sheet"] .vf-wizard-pane {
+  position: relative;
+  inset: auto;
+  width: 100%;
+  max-width: 30rem;
+  gap: 20px;
   animation: vf-wizard-in 320ms var(--vf-ease-island) both;
+}
+
+.vf-wizard-shell[data-size="sheet"] .vf-wizard-pane-body {
+  gap: 20px;
+  margin-top: 0;
+}
+
+.vf-wizard-shell[data-size="sheet"] .vf-wizard-pane-foot {
+  margin-top: 0;
+  padding-top: 0;
+}
+
+.vf-wizard-shell[data-size="sheet"] .vf-wizard-actions {
+  padding-top: 4px;
+}
+
+.vf-wizard-shell[data-size="sheet"] .vf-wizard-pane-body:empty,
+.vf-wizard-shell[data-size="sheet"] .vf-wizard-later:empty {
+  display: none;
 }
 
 /* Pane 2 (UA-D17; DESIGN.md §2.8): the dealt face with its frame switch under
@@ -262,6 +374,15 @@
   padding-top: 6px;
 }
 
+/* The face in a 112 × 104 slot of its own (FG-4), so a sticker's tilt or a coin's rim never moves the switch under
+   it. The glass is never reflowed, so the pane keeps this one layout at every window size. */
+.vf-wizard-face-slot {
+  display: grid;
+  width: 112px;
+  height: 104px;
+  place-items: center;
+}
+
 .vf-wizard-frames {
   width: 100%;
 }
@@ -271,22 +392,6 @@
   min-width: 0;
   flex-direction: column;
   gap: 14px;
-}
-
-@media (max-width: 520px) {
-  .vf-wizard-identity {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .vf-wizard-face {
-    flex-direction: row;
-    justify-content: flex-start;
-    padding-top: 0;
-  }
-
-  .vf-wizard-frames {
-    width: 136px;
-  }
 }
 
 /* The users chooser (§6.2; DESIGN.md §8): every user as a tile, four to a row.
@@ -469,9 +574,25 @@
   }
 }
 
+@keyframes vf-wizard-fade {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .vf-wizard-pane {
+  /* A pane fades in at 160ms, on the glass and in the sheet; nothing rises (M6). */
+  .vf-wizard-pane,
+  .vf-wizard-shell[data-size="sheet"] .vf-wizard-pane {
     animation: vf-wizard-fade 160ms ease both;
+  }
+
+  .vf-wizard-pane-leaving {
+    animation: none;
   }
 
   /* The glass forms by its frost alone, halved; nothing rises (M6). */
@@ -512,16 +633,6 @@
 
   .vf-wizard-phase[data-state="live"] .vf-wizard-phase-mark::before {
     animation: none;
-  }
-
-  @keyframes vf-wizard-fade {
-    from {
-      opacity: 0;
-    }
-
-    to {
-      opacity: 1;
-    }
   }
 
   @keyframes vf-glass-frost-in {

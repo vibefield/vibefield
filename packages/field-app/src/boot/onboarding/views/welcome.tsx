@@ -1,11 +1,12 @@
 import type { ReactElement } from "react";
-import { eyebrowCls, factCls, primaryCls, WizardPane } from "../wizard-ui";
+import { factCls, primaryCls, WizardPane } from "../wizard-ui";
 
+/** The read before the first pane: one line, centred in the frame, and no
+ * eyebrow — on the glass the band names the step (FG-L7). */
 export function OnboardingDerivingPaneView(): ReactElement {
   return (
-    <div className="vf-wizard-pane w-full max-w-[30rem]">
-      <span className={eyebrowCls}>Setup</span>
-      <p className={`mt-2 ${factCls}`}>Reading what this field already knows…</p>
+    <div className="vf-wizard-pane" data-centered="true">
+      <p className={factCls}>Reading what this field already knows…</p>
     </div>
   );
 }

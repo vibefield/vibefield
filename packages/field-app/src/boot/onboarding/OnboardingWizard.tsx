@@ -40,8 +40,8 @@ import { WizardShell } from "./wizard-ui";
 //   W2 the mandatory core is a name   — the name pane pre-fills it and Continue never
 //                                       validates; an empty box keeps the
 //                                       pre-filled name rather than blocking.
-//   W3 everything else is skippable   — SkipAction, whose subtitle names the
-//                                       later home verbatim.
+//   W3 everything else is skippable   — SkipAction, its pane's later line naming
+//                                       the later home verbatim.
 //   W4 honest progress only           — Setting up lists the boot machine's own
 //                                       phase and stage for the desk, as it opens.
 //   W5 it ends inside the product     — the answers are a durable write, then the
@@ -193,10 +193,15 @@ function WizardBody({
   };
 
   // Track FG (FG-3a): the glass stands on the field, and its band shows the
-  // chapter — this variant's steps, and the one this pane stands in.
+  // chapter — this variant's steps, and the one this pane stands in. A new
+  // pane fades the old one out first (FG-4a); deriving is a pane of its own.
   const steps = stepsOf(variant);
   const shell = (content: ReactElement): ReactElement => (
-    <WizardShell ground="field" band={{ steps, at: pane === null ? null : STEP_OF[pane] }}>
+    <WizardShell
+      ground="field"
+      band={{ steps, at: pane === null ? null : STEP_OF[pane] }}
+      paneKey={pane ?? "deriving"}
+    >
       {content}
     </WizardShell>
   );

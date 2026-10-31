@@ -1,8 +1,12 @@
 import {
+  Component,
   type CSSProperties,
+  createContext,
+  createRef,
   type ReactElement,
   type ReactNode,
   type RefObject,
+  useContext,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -58,6 +62,11 @@ export interface WizardBand {
   at: WizardStep | null;
 }
 
+/** What a pane stands in, told by the shell around it: the glass's one frame,
+ * where the band names the step (FG-L3), or Finish setting up's sheet, which
+ * keeps its panes as they stood before FG (FG-D26). */
+const WizardFrameSize = createContext<WizardSize>("glass");
+
 /** One persistent glass around every step (FG-L2). The question inside
  * changes; the glass, its band and the theme control never resize or remount
  * around it. */
@@ -66,15 +75,25 @@ export function WizardShell({
   ground,
   size,
   band,
+  paneKey,
 }: {
   children: ReactNode;
   ground?: WizardGround | undefined;
   size?: WizardSize | undefined;
   band?: WizardBand | undefined;
+  /** Which pane stands in the frame: a new key fades the old pane out first. */
+  paneKey?: string | undefined;
 }): ReactElement {
   const { dark, toggle } = useTheme();
   return (
-    <WizardShellView dark={dark} onToggleTheme={toggle} ground={ground} size={size} band={band}>
+    <WizardShellView
+      dark={dark}
+      onToggleTheme={toggle}
+      ground={ground}
+      size={size}
+      band={band}
+      paneKey={paneKey}
+    >
       {children}
     </WizardShellView>
   );
@@ -95,6 +114,7 @@ export function WizardShellView({
   ground = "app",
   size = "glass",
   band,
+  paneKey,
 }: {
   children: ReactNode;
   dark: boolean;
@@ -102,6 +122,7 @@ export function WizardShellView({
   ground?: WizardGround | undefined;
   size?: WizardSize | undefined;
   band?: WizardBand | undefined;
+  paneKey?: string | undefined;
 }): ReactElement {
   const groundRef = useRef<HTMLDivElement>(null);
   const glassRef = useRef<HTMLDivElement>(null);
@@ -133,11 +154,89 @@ export function WizardShellView({
             onToggle={onToggleTheme}
             className="no-drag absolute top-5 right-5"
           />
-          <div className="vf-wizard-frame">{children}</div>
+          <WizardFrameSize.Provider value={size}>
+            <PaneSwap paneKey={paneKey}>{children}</PaneSwap>
+          </WizardFrameSize.Provider>
         </div>
       </div>
     </div>
   );
+}
+
+/** How long the old pane takes to leave, and the new one to arrive (DESIGN.md
+ * §8 "The Setup Assistant's glass", FG-L3); halved and more under Reduce
+ * Motion, as the page plays them. */
+const PANE_OUT_MS = 120;
+const PANE_OUT_REDUCED_MS = 60;
+const PANE_IN_MS = 240;
+const PANE_IN_REDUCED_MS = 160;
+
+interface PaneSwapProps {
+  paneKey: string | undefined;
+  children: ReactNode;
+}
+
+/** The pane standing in the frame: its own, never a leaving copy. */
+function standingPane(frame: HTMLElement | null): HTMLElement | null {
+  const pane = Array.from(frame?.children ?? []).find(
+    (child) => child.classList.contains("vf-wizard-pane") && !child.hasAttribute("inert"),
+  );
+  return pane instanceof HTMLElement ? pane : null;
+}
+
+/** The frame (FG-L3), where a pane only fades in and the one it replaces fades
+ * out first. The old pane leaves as a still copy laid over the frame, inert and
+ * hidden from assistive tech, while the new one, mounted at once, waits under
+ * it before its own fade. A pane's own changes never fade; only a new `paneKey`
+ * does. A host that cannot animate swaps at once. A class, because React reads
+ * the leaving pane only through `getSnapshotBeforeUpdate`, before it goes. */
+class PaneSwap extends Component<PaneSwapProps> {
+  private readonly frame = createRef<HTMLDivElement>();
+
+  override getSnapshotBeforeUpdate(previous: Readonly<PaneSwapProps>): HTMLElement | null {
+    if (previous.paneKey === this.props.paneKey) return null;
+    const old = standingPane(this.frame.current);
+    if (old === null || typeof old.animate !== "function") return null;
+    return old.cloneNode(true) as HTMLElement;
+  }
+
+  override componentDidUpdate(
+    _previous: Readonly<PaneSwapProps>,
+    _state: unknown,
+    leaving: HTMLElement | null,
+  ): void {
+    const frame = this.frame.current;
+    if (leaving === null || frame === null) return;
+    const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+    const out = reduced ? PANE_OUT_REDUCED_MS : PANE_OUT_MS;
+    const entering = standingPane(frame);
+    leaving.setAttribute("inert", "");
+    leaving.setAttribute("aria-hidden", "true");
+    leaving.classList.add("vf-wizard-pane-leaving");
+    frame.append(leaving);
+    const gone = (): void => leaving.remove();
+    leaving
+      .animate([{ opacity: 1 }, { opacity: 0 }], {
+        duration: out,
+        easing: "ease",
+        fill: "forwards",
+      })
+      .finished.then(gone, gone);
+    entering?.animate([{ opacity: 0 }, { opacity: 1 }], {
+      duration: reduced ? PANE_IN_REDUCED_MS : PANE_IN_MS,
+      delay: out,
+      easing: "ease",
+      fill: "backwards",
+    });
+  }
+
+  override render(): ReactNode {
+    return (
+      <div ref={this.frame} className="vf-wizard-frame">
+        {this.props.children}
+      </div>
+    );
+  }
 }
 
 /** The room the glass keeps around itself on its ground, 48 a side (FG-L2:
@@ -230,17 +329,21 @@ function WizardSteps({ band }: { band: WizardBand }): ReactElement {
   );
 }
 
-/** One pane: eyebrow, headline, a line of voice, its content, its actions.
- * `key` the caller passes drives the entrance — one container, new content
- * (M1: nothing crossfades with anything). */
+/** One pane in the frame (FG-L3): its head (the headline and a line of voice),
+ * its body, and its foot — the actions, and the line under them, whose room
+ * the glass always keeps, so the actions stand at one height on every step.
+ * The band names the step on the glass, so the pane's eyebrow is drawn only in
+ * the sheet, which has no band (FG-L7, FG-D26). */
 export function WizardPane({
   eyebrow,
   title,
   voice,
   children,
   actions,
+  later,
   onSubmit,
   centered = false,
+  track,
 }: {
   eyebrow: string;
   /** Words, or — for Setting up's welcome — one cell whose words cross-fade. */
@@ -248,57 +351,55 @@ export function WizardPane({
   voice?: ReactNode;
   children?: ReactNode;
   actions: ReactNode;
+  /** The line under the actions: where a skip says the question's later home
+   * (W3), or what a pane says last. */
+  later?: ReactNode;
   /** The opening welcome is intentionally quieter than the question panes. */
   centered?: boolean;
+  /** TS's panes keep their own rhythm in the body, 18 between its parts. */
+  track?: "ts" | undefined;
   /** Enter advances: the primary action is the form's submit button, so the
    * keyboard path is the same object as the pointer path. */
   onSubmit?: () => void;
 }): ReactElement {
+  const size = useContext(WizardFrameSize);
   return (
     <form
-      className={`vf-wizard-pane flex w-full max-w-[30rem] flex-col gap-5 ${
-        centered ? "items-center text-center" : ""
-      }`}
+      className="vf-wizard-pane"
+      data-centered={centered ? "true" : undefined}
+      data-track={track}
       onSubmit={(event) => {
         event.preventDefault();
         onSubmit?.();
       }}
     >
-      <div className={`flex flex-col gap-2 ${centered ? "items-center" : ""}`}>
-        <span className={eyebrowCls}>{eyebrow}</span>
+      <div className="vf-wizard-pane-head">
+        {size === "sheet" && <span className={eyebrowCls}>{eyebrow}</span>}
         <h1 className="text-[28px] font-light leading-[1.15] tracking-[-0.02em] text-black dark:text-white">
           {title}
         </h1>
         {voice !== undefined && <p className={voiceCls}>{voice}</p>}
       </div>
-      {children}
-      <div className={`flex flex-wrap items-center gap-2 pt-1 ${centered ? "justify-center" : ""}`}>
-        {actions}
+      <div className="vf-wizard-pane-body">{children}</div>
+      <div className="vf-wizard-pane-foot">
+        <div className="vf-wizard-actions">{actions}</div>
+        <p className="vf-wizard-later">{later}</p>
       </div>
     </form>
   );
 }
 
-/** Every skip names its later home (W3) — the spec's subtitle, unless the pane
- * names its own (the agent chapter's: "Bring it in anytime from History.").
- * The pane that skips with this default, the link, lives on Settings →
- * Devices since TS-3a (TS-D3), as the posture it was followed by does (TS-6). */
-export function SkipAction({
-  label,
-  onSkip,
-  home = "Set up later — Settings → Devices",
-}: {
-  label: string;
-  onSkip: () => void;
-  home?: string;
-}): ReactElement {
+/** The later home of a question put off on the Connect pane (W3): the link
+ * lives on Settings → Devices since TS-3a (TS-D3), as the posture it was
+ * followed by does (TS-6). */
+export const LATER_ON_DEVICES = "Set up later — Settings → Devices";
+
+/** Every skip names its later home (W3), on its pane's later line (`later`). */
+export function SkipAction({ label, onSkip }: { label: string; onSkip: () => void }): ReactElement {
   return (
-    <div className="flex flex-col gap-1">
-      <button type="button" className={quietCls} onClick={onSkip}>
-        {label}
-      </button>
-      <span className={factCls}>{home}</span>
-    </div>
+    <button type="button" className={quietCls} onClick={onSkip}>
+      {label}
+    </button>
   );
 }
 
