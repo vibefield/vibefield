@@ -540,8 +540,55 @@ test("launch: the responsible app is checked right after the arm infers it — B
   assert.equal(launch.indexOf("app: armed.app", check + 1), -1, "once");
 });
 
+/** RM7.2a: launch() keeps teardown's verdict WHOLE and hands launchExit its own side AND its foreign list — `.ok` would
+ * judge another's change as the run's red (RM6 S-1), and a dropped `foreign` would read 0 over it (RM7.1). */
+const teardownFed = (launch) => {
+  assert.equal(launch.match(/await teardown\(/gu)?.length, 1, "teardown awaited once");
+  const torn = launch.indexOf("hostVerdict = await teardown(");
+  assert.ok(torn >= 0, "teardown's verdict kept whole, as hostVerdict");
+  assert.equal(launch.match(/launchExit\(/gu)?.length, 1, "launchExit called once");
+  const at = launch.indexOf("launchExit({");
+  assert.ok(at > torn, "launchExit after the teardown");
+  const call = launch.slice(at, launch.indexOf("});", at));
+  assert.match(call, /\brestored: hostVerdict\.ownOk,/u, "restored: the verdict's OWN side");
+  assert.match(call, /\bforeign: hostVerdict\.foreign,/u, "foreign: the verdict's foreign list");
+  assert.doesNotMatch(launch, /hostVerdict\.ok\b|\)\.ok\b/u, "never the whole verdict's ok");
+};
+
+test("launch: teardown's verdict kept whole — launchExit takes its OWN side and its foreign list (RM7.2a)", () => {
+  teardownFed(launchSource());
+});
+
+test("launch: an edit that hands launchExit `.ok`, or drops or empties `foreign`, is caught (RM7.2a)", () => {
+  const launch = launchSource();
+  const mutations = {
+    ".ok handed": launch.replace("restored: hostVerdict.ownOk,", "restored: hostVerdict.ok,"),
+    "foreign dropped": launch.replace(/\n\s*foreign: hostVerdict\.foreign,/u, ""),
+    "foreign emptied": launch.replace("foreign: hostVerdict.foreign,", "foreign: [],"),
+    "the verdict kept for its ownOk alone": launch.replace(
+      "hostVerdict = await teardown(",
+      "restored = (await teardown(",
+    ),
+    "the whole verdict's ok read": launch.replace(
+      "restored: hostVerdict.ownOk,",
+      "restored: hostVerdict.ok && hostVerdict.ownOk,",
+    ),
+  };
+  for (const [what, mutated] of Object.entries(mutations)) {
+    assert.ok(mutated !== launch, `${what}: the mutation applies`);
+    assert.throws(() => teardownFed(mutated), assert.AssertionError, what);
+  }
+});
+
 test("launchExit: a STOP reads 75 (relaunch later) only when the host is restored; unrestored, 1 and a line (S8)", () => {
-  const ran = { signal: null, stopped: null, deadlineHit: false, code: 0, restored: true };
+  const ran = {
+    signal: null,
+    stopped: null,
+    deadlineHit: false,
+    code: 0,
+    restored: true,
+    foreign: [],
+  };
   assert.deepEqual(launchExit(ran), { code: 0, lines: [] });
   assert.deepEqual(launchExit({ ...ran, code: 3 }), { code: 3, lines: [] });
   assert.deepEqual(launchExit({ ...ran, restored: false }), { code: 1, lines: [] });
@@ -556,6 +603,120 @@ test("launchExit: a STOP reads 75 (relaunch later) only when the host is restore
     /^PHONE_STOP_UNRESTORED .*PHONE_HOST_RESTORED.*before any relaunch/u,
   );
   assert.equal(launchExit({ ...ran, signal: 2, stopped: hand, restored: false }).code, 130);
+});
+
+test("launchExit: a run that did NOT stop is never 0 while HOST_RESTORED is red — another's change alone is 75 and one line (RM7.1)", () => {
+  const ran = {
+    signal: null,
+    stopped: null,
+    deadlineHit: false,
+    code: 0,
+    restored: true,
+    foreign: [],
+  };
+  const change = ["another device changed"];
+  // the four non-stopped combinations: 0, own side restored, no foreign — 0, HOST_RESTORED green
+  assert.deepEqual(launchExit(ran), { code: 0, lines: [] });
+  // 0, own side restored, another's change — HOST-RESTORED unprovable: 75, relaunch on a quiet host, the change named
+  const theirs = launchExit({ ...ran, foreign: change });
+  assert.equal(theirs.code, NOT_ARMED);
+  assert.equal(theirs.lines.length, 1);
+  assert.match(
+    theirs.lines[0],
+    /^PHONE_HOST_UNPROVEN .*another device changed.*HOST-RESTORED is unprovable.*relaunch on a quiet host/u,
+  );
+  // every change is named, in the one line
+  const two = launchExit({ ...ran, foreign: [...change, "Simulator.app: refused: not the run's"] });
+  assert.equal(two.lines.length, 1);
+  assert.match(two.lines[0], /another device changed; Simulator\.app: refused: not the run's/u);
+  // a PHONE_HOST_UNPROVEN line is mirrored into `<run>-stage.log`, as the stop's exit lines are (S-2)
+  const mirrored = [];
+  const stage = hostDeps(createRedactor(), { write: () => {}, mirror: (l) => mirrored.push(l) });
+  stage.say(theirs.lines[0]);
+  assert.deepEqual(mirrored, [`${theirs.lines[0]}\n`]);
+  // 0 over an unrestored own side — 1, with or without another's change, and no line of it
+  assert.deepEqual(launchExit({ ...ran, restored: false }), { code: 1, lines: [] });
+  assert.deepEqual(launchExit({ ...ran, restored: false, foreign: change }), {
+    code: 1,
+    lines: [],
+  });
+  // the command's non-zero code is kept beside another's change: a red row is a red row
+  assert.deepEqual(launchExit({ ...ran, code: 3, foreign: change }), { code: 3, lines: [] });
+  assert.deepEqual(launchExit({ ...ran, code: 1, foreign: change }), { code: 1, lines: [] });
+  // the precedence otherwise unchanged: past the deadline 1; a signal 128+n — each over another's change
+  assert.deepEqual(launchExit({ ...ran, deadlineHit: true, foreign: change }), {
+    code: 1,
+    lines: [],
+  });
+  assert.deepEqual(launchExit({ ...ran, signal: 15, foreign: change }), { code: 143, lines: [] });
+  // the STOP paths unchanged (RM6): a transient stop over a restored own side is 75 and says nothing more; a final one
+  // is 1 and PHONE_STOP_FINAL; an unrestored one 1 and PHONE_STOP_UNRESTORED — another's change adds no line to any
+  const hand = { why: "a hand at the Mac before SIM-LIVE", final: false };
+  const reset = { why: "SIM-STAGED: HID moved by the run's own input — RM4.5", final: true };
+  assert.deepEqual(launchExit({ ...ran, stopped: hand, foreign: change }), {
+    code: NOT_ARMED,
+    lines: [],
+  });
+  assert.deepEqual(launchExit({ ...ran, stopped: reset, foreign: change }), {
+    code: 1,
+    lines: [`PHONE_STOP_FINAL ${reset.why}`],
+  });
+  const unrestored = launchExit({ ...ran, stopped: hand, restored: false, foreign: change });
+  assert.equal(unrestored.code, 1);
+  assert.deepEqual(
+    unrestored.lines.map((line) => line.split(" ")[0]),
+    ["PHONE_STOP_UNRESTORED"],
+  );
+});
+
+test("a run that never stopped while another booted a device: HOST_RESTORED red, the exit 75 and PHONE_HOST_UNPROVEN — never 0 (RM7.1)", async () => {
+  const ctx = {
+    deleteDevices: false,
+    defaultsBefore: "",
+    crashDir: join(FIXTURES, "no-crash-reports-here"),
+    crashBefore: [],
+  };
+  // no press after the boot: the fence never read it mid-run, so the run did not stop — teardown finds it
+  const run = ownRun();
+  run.othersAtArm.set(FOREIGN, "Shutdown");
+  const host = fakeHost({ list: hostList([{ udid: FOREIGN, state: "Booted" }]) });
+  const verdict = await restoreHost(run, host.deps, ctx);
+  assert.equal(run.stopped, null);
+  assert.equal(verdict.ownOk, true);
+  assert.deepEqual(verdict.foreign, ["another device changed"]);
+  assert.match(
+    host.said.find((line) => line.startsWith("PHONE_HOST_RESTORED ")),
+    /"ok":false/u,
+  );
+  const exit = launchExit({
+    signal: null,
+    stopped: run.stopped,
+    deadlineHit: false,
+    code: 0,
+    restored: verdict.ownOk,
+    foreign: verdict.foreign,
+  });
+  assert.equal(exit.code, NOT_ARMED);
+  assert.equal(exit.lines.length, 1);
+  assert.match(exit.lines[0], /^PHONE_HOST_UNPROVEN .*another device changed/u);
+  // the OBSERVATION is kept beside it, and neither line holds a UDID
+  assert.equal(host.said.filter((line) => line.startsWith("PHONE_OBSERVATION ")).length, 1);
+  assert.ok(!holdsUdid(host.said.join("\n")) && !holdsUdid(exit.lines[0]));
+  // control: the same run over a quiet host is 0
+  const quiet = ownRun();
+  quiet.othersAtArm.set(FOREIGN, "Shutdown");
+  const calm = await restoreHost(quiet, fakeHost().deps, ctx);
+  assert.deepEqual(
+    launchExit({
+      signal: null,
+      stopped: null,
+      deadlineHit: false,
+      code: 0,
+      restored: calm.ownOk,
+      foreign: calm.foreign,
+    }),
+    { code: 0, lines: [] },
+  );
 });
 
 test("preflightLines: one line per failure, its fix named; ok alone when none", () => {
@@ -1798,7 +1959,7 @@ test("a DETERMINISTIC stop is FINAL — exit 1 and PHONE_STOP_FINAL, never 75; a
       return press("show", `pts3-${RUN}-3`)(run, host);
     }),
   };
-  const restored = { signal: null, deadlineHit: false, code: 0, restored: true };
+  const restored = { signal: null, deadlineHit: false, code: 0, restored: true, foreign: [] };
   for (const [what, stopped] of Object.entries(final)) {
     assert.equal(stopped.final, true, what);
     assert.deepEqual(
@@ -2293,6 +2454,7 @@ test("a foreign device booted mid-run: the fence STOPS, teardown touches the run
       deadlineHit: false,
       code: 0,
       restored: verdict.ownOk,
+      foreign: verdict.foreign,
     });
   const observed = (host) => host.said.filter((line) => line.startsWith("PHONE_OBSERVATION "));
   const booted = hostList([{ udid: FOREIGN, state: "Booted" }]);

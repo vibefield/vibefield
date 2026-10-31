@@ -25,7 +25,9 @@
 // restored host — a DETERMINISTIC stop (RM4.5's own-input reset; the press gate refusing an act or a device not the
 // run's) is 1 and PHONE_STOP_FINAL, and a STOP whose teardown left the host unrestored is 1 and PHONE_STOP_UNRESTORED;
 // 128+n on a signal. "Restored" is the run's OWN side: another's change (a device booted, an app it started) keeps
-// PHONE_HOST_RESTORED red and is said as a PHONE_OBSERVATION, never judged as the run's.
+// PHONE_HOST_RESTORED red and is said as a PHONE_OBSERVATION, never judged as the run's — and no exit is 0 while
+// HOST_RESTORED is red: a run that did not stop, whose command said 0 over a restored own side, is 75 and
+// PHONE_HOST_UNPROVEN on another's change (RM7.1: relaunch on a quiet host).
 //
 // THE SMOKE'S SIDE (`es/testing/smoke-phone.ts`). The command's env carries `VF_PHONE_HOST` (`http://127.0.0.1:<port>`),
 // `VF_PHONE_TOKEN`, `VF_PHONE_MODE`, `VF_PHONE_RUNTIME` (the ONE iOS runtime the stage picked: never a literal, RM4.1),
@@ -55,7 +57,7 @@
 //
 // Lines a reader greps: PHONE_PREFLIGHT, PHONE_HOUSE_RULES, NOT ARMED, ARMED, PHONE_STOP_FINAL, PHONE_STOP_UNRESTORED, PHONE_CRASH_BEFORE, PHONE_XCODE_SELECT, PHONE_DEVICE,
 // PHONE_COMMAND_ENV, PHONE_ROW, PHONE_STOP, PHONE_ROWS, PHONE_COST_SAMPLE, PHONE_ENUM, RESPONSIBLE, HID:, PHONE_REDACTED,
-// PHONE_OBSERVATION, PHONE_HOST_RESTORED, PHONE_SWEEP. Every line — the command's stdout and stderr, and the stage's own —
+// PHONE_OBSERVATION, PHONE_HOST_RESTORED, PHONE_HOST_UNPROVEN, PHONE_SWEEP. Every line — the command's stdout and stderr, and the stage's own —
 // passes the redactor LINE-BUFFERED: the run's UDIDs read `<pts3-dev-n>`, every other device's `<host-dev-k>`.
 //
 // Importing this module spawns nothing (its units import it with node:child_process throwing): `main()` runs only as the
@@ -1771,8 +1773,9 @@ export function guardedOutput(stream, onGone = () => {}) {
 }
 
 /** The stage's lines mirrored into the run's log folder (`<run>-stage.log`, RM6 S-2), so the run's end outlives an output
- * gone: its STOP (`PHONE_STOP`, `_FINAL`, `_UNRESTORED`), PHONE_HOST_RESTORED and the HID summary. */
-export const MIRRORED = /^(PHONE_STOP|PHONE_HOST_RESTORED |HID: )/u;
+ * gone: its STOP (`PHONE_STOP`, `_FINAL`, `_UNRESTORED`), PHONE_HOST_RESTORED, the exit's PHONE_HOST_UNPROVEN (RM7.1)
+ * and the HID lines. */
+export const MIRRORED = /^(PHONE_STOP|PHONE_HOST_RESTORED |PHONE_HOST_UNPROVEN |HID: )/u;
 
 /** The host's own deps: the real exec (and the command's own spawn), the clock, the files. `say` writes through the
  * redactor to `write` (the guarded stdout unless given), and each MIRRORED line, as redacted, to `mirror` too. Exported
@@ -2330,7 +2333,7 @@ async function launch(mode, command, opts) {
   });
 
   let code = 0;
-  let restored = true;
+  let hostVerdict = null;
   let door = null;
   try {
     if (mode === "enum") code = await enumerate(deps, opts, helperSha, armed.app);
@@ -2395,16 +2398,14 @@ async function launch(mode, command, opts) {
   } finally {
     clearTimeout(stopTimer);
     if (door !== null) await door.close();
-    // restoration, for the exit, is the run's OWN side (RM6 S-1): another's change is said, and never relaunched over
-    // by this run's verdict
-    restored = (
-      await teardown(run, deps, {
-        deleteDevices: opts.deleteDevices,
-        defaultsBefore,
-        crashDir,
-        crashBefore,
-      })
-    ).ownOk;
+    // the teardown's verdict kept WHOLE (RM7.2a): the exit judges restoration on the run's OWN side (RM6 S-1), and
+    // another's change — said as an OBSERVATION — keeps a run that did not stop from 0 (RM7.1)
+    hostVerdict = await teardown(run, deps, {
+      deleteDevices: opts.deleteDevices,
+      defaultsBefore,
+      crashDir,
+      crashBefore,
+    });
     const end = await probeHid(deps);
     deps.hid(hidLine(end, { end: true }));
     deps.say(
@@ -2423,21 +2424,25 @@ async function launch(mode, command, opts) {
     stopped: run.stopped,
     deadlineHit,
     code,
-    restored,
+    restored: hostVerdict.ownOk,
+    foreign: hostVerdict.foreign,
   });
   for (const line of exit.lines) deps.say(line);
   return exit.code;
 }
 
 /** A launch's exit, and the lines it says: 128+n on a signal. `restored` is the run's OWN side (`restoredVerdict`'s
- * `ownOk`, RM6 S-1): another's change never decides it. A STOP (`stopped`: the run's `{why, final}`, or null) is 75 —
- * "NOT ARMED: relaunch later" (§6.3) — only when it is TRANSIENT (a hand at a begin, a locked console, the fence, a
- * Simulator.app not proven the run's) over a restored own side. A DETERMINISTIC stop (`final`: RM4.5's own-input reset,
- * the press gate refusing an act or a device) would repeat on a relaunch: 1 and PHONE_STOP_FINAL <why> (RM6 S-3). A
- * STOP that left the run's own side unrestored (an own device booted, its app not quit, its lock left) is 1 and
- * PHONE_STOP_UNRESTORED, so no caller relaunches over it. Past the deadline 1; else the command's code, 1 for its 0
- * over an unrestored own side. */
-export function launchExit({ signal, stopped, deadlineHit, code, restored }) {
+ * `ownOk`, RM6 S-1) and `foreign` its list of another's changes (`restoredVerdict`'s `foreign`): launch() hands both
+ * from ONE teardown verdict (RM7.2a). A STOP (`stopped`: the run's `{why, final}`, or null) is 75 — "NOT ARMED:
+ * relaunch later" (§6.3) — only when it is TRANSIENT (a hand at a begin, a locked console, the fence, a Simulator.app
+ * not proven the run's) over a restored own side. A DETERMINISTIC stop (`final`: RM4.5's own-input reset, the press gate
+ * refusing an act or a device) would repeat on a relaunch: 1 and PHONE_STOP_FINAL <why> (RM6 S-3). A STOP that left the
+ * run's own side unrestored (an own device booted, its app not quit, its lock left) is 1 and PHONE_STOP_UNRESTORED, so
+ * no caller relaunches over it. Past the deadline 1; a non-zero command code is kept (a red row is a red row); 0 over
+ * an unrestored own side is 1. NO EXIT IS 0 WHILE HOST_RESTORED IS RED (RM7.1): a run that did not stop, whose command
+ * said 0 over a restored own side while another changed the host, is 75 and PHONE_HOST_UNPROVEN — HOST-RESTORED (RM4.3:
+ * the non-own set unchanged) cannot be proven over another's hand, so the run is relaunched on a quiet host. */
+export function launchExit({ signal, stopped, deadlineHit, code, restored, foreign }) {
   if (signal !== null) return { code: 128 + signal, lines: [] };
   if (stopped) {
     const lines = [];
@@ -2449,7 +2454,16 @@ export function launchExit({ signal, stopped, deadlineHit, code, restored }) {
     return { code: lines.length === 0 ? NOT_ARMED : 1, lines };
   }
   if (deadlineHit) return { code: 1, lines: [] };
-  return { code: code === 0 && !restored ? 1 : code, lines: [] };
+  if (code !== 0) return { code, lines: [] };
+  if (!restored) return { code: 1, lines: [] };
+  if (foreign.length > 0)
+    return {
+      code: NOT_ARMED,
+      lines: [
+        `PHONE_HOST_UNPROVEN another's hand changed the host during the run (${foreign.join("; ")}): HOST-RESTORED is unprovable, though the run's OWN side is restored (PHONE_OBSERVATION's change, never touched by it) — relaunch on a quiet host`,
+      ],
+    };
+  return { code: 0, lines: [] };
 }
 
 function startCostSampler(run, deps) {
