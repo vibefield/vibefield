@@ -15,6 +15,7 @@ import {
 } from "./live-surfaces";
 import { isAbsoluteDesktopPath } from "./paths";
 import { PluginId } from "./plugins";
+import { SHELL_CLIPBOARD } from "./registries";
 import { ScreenshotShortcutState } from "./screenshot";
 import { TERMINAL_LINK_MAX_CHARS } from "./terminal";
 import { UpdateView } from "./update-policy";
@@ -284,6 +285,57 @@ export const BrowserDataClearResult = z
   })
   .passthrough();
 export type BrowserDataClearResult = z.infer<typeof BrowserDataClearResult>;
+
+/** The UTF-8 bytes of a text: the measure `SHELL_CLIPBOARD.READ_MAX_BYTES` and the
+ * pane's own paste refusal (D6) both state. */
+export function utf8ByteLength(text: string): number {
+  return new TextEncoder().encode(text).byteLength;
+}
+
+/** renderer → main: a paste's read (`IPC_CHANNELS.clipboardRead`; item 102). It
+ * carries nothing: main reads the system clipboard's text, and the page never says
+ * what it holds. */
+export const ClipboardReadRequest = z.object({}).passthrough();
+export type ClipboardReadRequest = z.infer<typeof ClipboardReadRequest>;
+
+/** main → renderer: the clipboard's text, or why it was not read. Both refusals are
+ * honest states of a product window's life:
+ *  · `unfocused` — the window or its page is not the one in front of the person,
+ *    and a paste is that person's chord, so nothing was read for it;
+ *  · `too-large` — the text is over `SHELL_CLIPBOARD.READ_MAX_BYTES`; it is refused
+ *    whole with its size, never cut.
+ * A sender this shell did not register is no state of a product window: main
+ * throws for it and reads nothing. */
+export const ClipboardReadResult = z.discriminatedUnion("status", [
+  z
+    .object({
+      status: z.literal("read"),
+      text: z
+        .string()
+        .refine(
+          (text) => utf8ByteLength(text) <= SHELL_CLIPBOARD.READ_MAX_BYTES,
+          "clipboard text over SHELL_CLIPBOARD.READ_MAX_BYTES",
+        ),
+    })
+    .passthrough(),
+  z
+    .object({
+      status: z.literal("refused"),
+      reason: z.enum(["unfocused", "too-large"]),
+      bytes: z.number().int().min(0).optional(),
+    })
+    .passthrough(),
+]);
+export type ClipboardReadResult = z.infer<typeof ClipboardReadResult>;
+export type ClipboardReadRefusal = Extract<ClipboardReadResult, { status: "refused" }>["reason"];
+
+/** Item 102 — the read door's audit action, appended by main through fieldd's
+ * `audit.append` (wall R17), which admits only registered shell-owned actions. One
+ * outcome for every answer and every refusal, with the bytes and the asking page's
+ * id, never the text. */
+export const SHELL_CLIPBOARD_AUDIT_ACTIONS = {
+  READ: "shell.clipboard.read",
+} as const;
 
 /** Small host fact used only to describe platform-specific desktop behavior in
  * Settings. Unknown Electron platforms collapse to `other` at the preload

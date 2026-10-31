@@ -1905,4 +1905,26 @@ export const IPC_CHANNELS = {
    * the desk's browser profile and reloads the open pages on it. No path, no
    * site, no size crosses; a registered window alone may ask. */
   browserDataClear: "vibefield:browser:clear-data",
+  /** renderer → main invoke: ClipboardReadRequest → ClipboardReadResult — a paste
+   * in the deck or the sign-in terminal (item 102; design-03 §5.1's
+   * `shell.clipboard.*`, the product window's read half). Main reads the system
+   * clipboard for a registered product window while it and its page are focused:
+   * the shell session grants no Chromium permission (ESP §7.4), so the web's own
+   * read is denied there by law. */
+  clipboardRead: "vibefield:clipboard:read",
+} as const;
+
+/** Item 102 (2026-10-29) — the clipboard read door's bound (`IPC_CHANNELS.clipboardRead`).
+ * NOT a number of its own: it reads the cell's paste ceiling, TM/D6's
+ * `TERMINAL_PIPELINE.MAX_PASTE_BYTES`, so the door never refuses a paste a pane
+ * could take and the two cannot drift (the HN lead's reading, ruled 13:24Z).
+ * The carry downstream is smaller: a pane carries one SendInput of at most
+ * `TERMINAL_PIPELINE.MAX_CONTROL_MESSAGE_BYTES`, and the routed encoder refuses
+ * a larger paste in the line's words (D6). That refusal stays the pane's honest
+ * sentence, and the carry rises to MAX_PASTE_BYTES once paste-parts is wired.
+ * Over this bound the door refuses the read whole, in its own words, and never
+ * cuts it: half a paste into a shell is a different command. UTF-8 bytes, the
+ * measure D6 states. */
+export const SHELL_CLIPBOARD = {
+  READ_MAX_BYTES: TERMINAL_PIPELINE.MAX_PASTE_BYTES,
 } as const;
