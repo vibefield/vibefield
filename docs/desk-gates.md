@@ -34,7 +34,7 @@ said `"left": []`.
 | # | Gate | Command | What it proves | Where | Verdict |
 |---|---|---|---|---|---|
 | 1 | preflight | `pnpm preflight` | tool versions (cargo-typify, rustc per `rust-toolchain.toml`), the EL8 pins (ICE, truffle, ghosttea, loro — the numbers are the manifests'), the sibling checkouts at `siblings.lock.json`'s pins, the import walls, the agent catalog (R23) | CI · every checkout | red — MAIN's (exit 1): ghosttea at `10d0b17bbc14`, the lock pins `8a0930e86fc7`; the same row alone on main's tip |
-| 2 | check:walls | `pnpm check:walls` | the import-boundary walls ON THEIR OWN (R1–R25, `--self-test` then `--enforce`) — a red preflight never hides them again (plan (85)) | CI | ok — self-test passed, clean |
+| 2 | check:walls | `pnpm check:walls` | the import-boundary walls ON THEIR OWN (R1–R30, `--self-test` then `--enforce`; the range refreshed from R1–R25 on 2026-10-31) — a red preflight never hides them again (plan (85)) | CI | ok — self-test passed, clean |
 | 3 | check:deps | `pnpm check:deps` | one copy each of loro-crdt, ICE, strata, react (EL8's single-copy law) | CI | red — MAIN's (exit 1): the second loro / ICE / strata copies all under the main checkout's `node_modules` (FS-1b's mille links); the same three rows on main's tip; this checkout's own one each |
 | 4 | check:retired | `pnpm check:retired` | no name the retire table deleted comes back in code (DK-17) | CI | ok |
 | 5 | check:ios-fixtures | `pnpm check:ios-fixtures` | the iOS kit's fixture and registry copies equal contracts' | CI | ok — 20 registry values identical |
