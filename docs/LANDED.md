@@ -22094,3 +22094,120 @@ first room. cp-landing built it on the MT lead's build note (signed 2026-10-30 2
   - design-01 §5.3's pin-note;
   - the plan's as-built line.
 - The plugin spec's `contributes.tools[]` at MT-6.
+
+## FG-3b — the field draws the Setup Assistant's glass in its own frame: one splash for the whole first run, its recipe read off the glass's own layers (FG-D24) (2026-10-31; `be1dd92ad`, lane `fg/build`, merged over main `e71f2d332` as `31487e07f`, in the mini's mint `c8e4c55eb` over main `09060d7b4`)
+
+**What.** James on version 6 (10-29): "can we just render the glass with webgpu too so we only do one field render so
+it is more performant?" That became FG-D24. FG-3a built the glass as the browser's layers; FG-3b has the field draw
+them over the live field (VF-PM's split, 13:17Z).
+- **The pass** (`boot/splash/glass-pass.ts`) runs on the field's device, in the worker beside the field or on the main
+  thread with it. It runs through the vendored splash's `post`: four patches in `tooling/splash/patches.json` (post,
+  post-usage, post-encode, redraw), each saying why, recorded in the vendor check as FG-1's pin is.
+  - The canvas's texture becomes readable by the pass, and the pass encodes after the field's own passes, before the
+    frame is submitted.
+  - The blur: the frame goes down to ½, ¼ or ⅛ (rgba16float, a 4 × 4 box each), only as deep as the blur needs
+    (σ under 6 → ½, under 20 → ¼, else ⅛). A separable Gaussian there adds what the boxes left (`spent`). σ is the
+    blur × the frost × the fit × the rise × the field's pixels per CSS px.
+  - One glass pass draws the two shadows (Evan Wallace's erf for a rounded box, outside the glass only, at the
+    frost's opacity), then the frost (the blurred frame unpremultiplied and saturated by CSS's matrix, fading in with
+    σ under 2 px so a sharp frame shows), the tint at its alpha × the frost, and the grain (a mid-grey hash per glass
+    px, at the grain × the frost). It blends premultiplied over the frame, with a 1 px cover ramp inside the border.
+  - The hairlines (the edge and its top light) stay CSS, at the screen's own pixels. There is no brightness, and the
+    logo stays FG-4's.
+  - The pipelines are made lazily on the first look, so a boot with no glass (a returning one) compiles none. A pass
+    that fails says why (`renderer.boot.field_glass`), and the browser keeps the glass.
+- **The look** (`boot/splash/glass-look.ts`) is read off the glass's CSS layers' computed style, so DESIGN.md's tokens
+  stay the one authority for both glasses. It takes:
+  - the tint from the frost's `::after`;
+  - the blur and the saturation from `--vf-wizard-blur` and `--vf-wizard-saturate`, two new tokens (DESIGN.md §5
+    first; one value in both themes);
+  - the grain from `--vf-wizard-grain`, the shadow from the shadow layer's `box-shadow`, and the corner from the
+    shell's radius.
+  - A value it can't read (another colour space, a third shadow, an inset) makes the look null. Then the field draws
+    nothing, and the browser keeps the whole glass.
+- **The pose** is read off `.vf-wizard-shell`: its box holds the fit (the rise scales the layers, never the glass),
+  and the frost and the rise are the registered properties that the forming animates.
+- **The hold** (`boot/field-glass.ts`): FieldLayer holds the field's glass and hands it to its door. The Setup
+  Assistant on the field follows its pose each frame while it moves or its forming runs, and rests two frames after.
+  A resize wakes it, and a theme turn (`<html>`'s class or `data-theme`) re-reads its look. It hands the field nothing
+  when it goes.
+- **The handshake.** The browser stands its shadow, frost and grain down only once the field says it draws them
+  (`data-glass="field"`): `visibility: hidden`, and the frost's `backdrop-filter: none`. The edge and its light stay.
+  Over the still, until the pass is ready, or when it fails, the browser draws the whole glass. The hand-off is a
+  frame or two in which both may draw. Where it falls in the forming depends on how soon the pipelines are made after
+  the first look; at the frost's 0 neither shows one. No row measures it in the app (Owed).
+- **DESIGN.md**: §5's Setup Assistant row and §8's "The Setup Assistant's glass" carry FG-3b's as-built status, and §5
+  names the two tokens. `tokens.css` projects them, and the frost's CSS reads them × the frost.
+
+**Found.**
+- **An apply stops on an adjacent row.** §5's Setup Assistant row sits directly under the Search scrim row, which
+  TS-7c rewrote on main. Over `fg/land` `ffe9d9b40` a three-way apply read the two edits as one hunk, so the FG-3a and
+  FG-3b DESIGN.md drafts were re-based over it, keeping both rows (the record's §6). `lanes/fg/fg3ab-rehearsal.sh`
+  rehearses 3a then 3b over a main as their apply scripts do.
+- **The drafts had never been typechecked.** vitest strips types, so the light's typecheck was the first to read
+  them. `glassFrame`'s return annotation `uniforms: Float32Array` widened what `new Float32Array(n)` makes
+  (`Float32Array<ArrayBuffer>`) to `ArrayBufferLike`, which `GPUQueue.writeBuffer`'s `GPUAllowSharedBufferSource`
+  refuses (TS2345, `glass-pass.ts`:439, in field-app and electron-shell). It was fixed at the annotation, with no cast.
+- **The GPU row's first run died of SIGSEGV in the lane's check tool, not in the pass.** Dawn's `ProcessEvents` locked
+  a freed instance's mutex from a callback the event loop had queued.
+  - dawn.node lives only while the object `create` returns is referenced (the `webgpu` README, "Lifetime"). The tool's
+    local `gpu` was last used at its `requestAdapter`, so V8 could collect it across the awaits that followed.
+  - The tool now holds it on a global for the whole run, as the playground's stills hold theirs in ICE's `acquire`.
+  - Run alone and alternating, without the hold it crashed 3 of 3; with it, it was green 3 of 3.
+
+**Validation.**
+- The light (`lanes/fg/fg3b-light.sh`, each row alone at nice 19 under the guard, read once, with the lane's
+  own CARGO_TARGET_DIR) was GREEN over main `5cc2d1108`, 2026-10-31 00:13:22–00:24:54Z. Its GPU row was green alone at
+  00:27:47Z, once its tool held Dawn (the Found above). Logs: `lanes/fg/logs/fg3b-light-5cc2d1108.out`; the first pass,
+  stopped at the SSD stop word, is in `fg3b-light-5cc2d1108-pass1/`.
+  - the vendor check against vibefield-dotdev `37eb2c3` (the module, its pin, and its four patches);
+  - typecheck for field-app and electron-shell;
+  - 30 vitest files, 542 tests, the three new among them (`glass-look`, `glass-pass`, `field-glass`);
+  - biome, check:walls, check:retired, build:renderer, diff --check;
+  - **the GPU row** (`lanes/fg/fg3b-gpu-check.mjs`, the pass as it is on this Mac's Dawn, the `webgpu` package the
+    stills use). The WGSL compiles, the three pipelines make, and one frame validates with no uncaptured error. The
+    pass says it draws, once, and a 16 px blur goes down to ¼. Inside, day's tint lies over the blurred stripes
+    (0.771 ≈ 0.775, the spread 0.004); the shadow is darker below the glass than above it (0.118 > 0.020); far
+    outside, the frame is untouched.
+- Re-merged over main `3ce8b1c40` (01:35Z), the light ran whole again on `6a5740771`: GREEN 01:38:48–01:51:26Z, every
+  row rc 0. Logs: `lanes/fg/logs/fg3b-light-3ce8b1c40.out` and the rows' `fg3b-3ce8b1c40-*.log`.
+  - Two more DESIGN.md readers came with main and joined as rows: SP-1a's `spark-face` (§2.10) and PT-S2's simulator
+    `attach` (§9). That made 32 vitest files and 565 tests: the 30 above at the same 542, `spark-face` 12 and
+    `attach` 11.
+  - Both typechecks (field-app 59 s, electron-shell 50 s), biome (43 files), walls, retired, build:renderer (79
+    files, 12,164,930 bytes), and diff --check against `3ce8b1c40`.
+  - The GPU row, 10 of 10, with the same numbers.
+- Re-merged over main `e71f2d332` (02:50Z) for its slot, the light ran whole a third time, on `31487e07f`: GREEN
+  02:52:02–02:54:51Z, all 41 rows rc 0. Logs: `lanes/fg/logs/fg3b-light-31487e07f.out` and the rows'
+  `fg3b-31487e07f-*.log`.
+  - HN B1's `card-face` (a reader of DESIGN.md and tokens.css) joined as a row, which made 33 vitest files and 578
+    tests. The counts that moved were main's own: `card-face` 13, `onboarding-wizard` 50 (HN B2's copy button),
+    `ui-system-boundaries` 36 and `line-model` 18.
+  - build:renderer: 82 files, 12,208,665 bytes. The GPU row was 10 of 10, with the same numbers.
+- **No verify on this Mac** (James, 2026-10-29 09:05Z: the Mac mini's verify lane). The lane is a worktree of the main
+  repo, so a9 minted from its objects, with no bundle (VF-PM, 02:50Z).
+- **Run 30: the mint `c8e4c55eb`, a fresh merge of `31487e07f` over main `09060d7b4`** (MT-0, landed by run 29, and HN
+  B3's and MT-0's records).
+  - Its tree, `c4fb346f7`, equals the lane's rehearsal. The files both sides touch were DESIGN.md and tokens.css, from
+    HN B3: its §5 Sheet row sits three rows above the Setup Assistant's, and the two merged apart, with 0 markers.
+  - `pnpm verify` armed at 03:20:48Z and exited 0 at 03:25:30Z (VF-PM's GO). Its counts: 10,996 passed, 0 failed, 18
+    skipped over 819 files; cargo 33/0 (532 passed, 14 ignored); typecheck and test for 28 projects.
+  - Run 30b on the mint: smoke:canvas:no-webgpu green, and smoke:canvas red on its HAND rows alone, neither in FG-3b's
+    22 files: item 117's bar-return (251 ms, twice), and item 123 (HN's, a1's; filed 03:48Z), where
+    `smoke-tools-in-hand.ts:554` still expects the hand's first tool as "send" but HN B1 (`6835b5398`, on main) made it
+    "copy"; its fix, that test literal, is queued behind run 31. smoke:canvas booted through the patched splash to the
+    desk, and its kept app logs show no logged fallback to the still (renderer.boot.field_still 0, field_glass 0).
+    smoke:canvas:no-webgpu's page has no `navigator.gpu`, so its field takes the still by plan (`fieldPlan`) and the
+    splash never starts; the boot reaches the desk's NO-WEBGPU card. The field's own live pass with the new canvas usage
+    in Electron stays FG-6's (smoke:first-run).
+- **Landed:** main fast-forwarded `09060d7b4` → `c8e4c55eb` at 03:47:59Z (the fixer, on VF-PM's GO).
+- No row sees the glass on a real first run: no smoke reaches onboarding until FG-6's `smoke:first-run`. The glass by
+  eye, in both themes, is James's.
+
+**Owed.**
+- FG-4: the logo drawn by the field (FG-D24's other half), and the panes in the frame.
+- FG-5 (the hand-over) and FG-6 (the gates: the catalog's still, `smoke:first-run`, FG-O2's contrast). FG-6's
+  `smoke:first-run` judges what run 30b could not: the field's mode at boot (live, or its still) and its own live pass
+  with the new canvas usage in Electron.
+- The glass on a desk in both themes (James's display word, §5 of ROADMAP), and the hand-off's frames by eye: where
+  in the forming the field takes the glass over.
