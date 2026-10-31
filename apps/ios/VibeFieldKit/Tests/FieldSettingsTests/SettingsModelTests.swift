@@ -200,12 +200,13 @@ struct SettingsModelTests {
   func signOutWords() {
     #expect(SettingsWords.signOutTitle(login: "me@jamesyong42.com") == "Sign out of me@jamesyong42.com?")
     #expect(SettingsWords.signOutTitle(login: nil) == "Sign out of this account?")
-    // What `SignOutSweep` removes and keeps, said whole: the project colours
-    // go; this phone's look and the terminal's look stay.
+    // What a sign-out removes and keeps, said whole: the project colours and
+    // the History read from your desktops go (item 130); this phone's look and
+    // the terminal's look stay.
     #expect(
       SettingsWords.signOutMessage
-        == "This phone forgets your Tailscale sign-in, your desktops, your face and your project colours. "
-        + "Appearance, the terminal’s look, snippets and clipboard history stay.")
+        == "This phone forgets your Tailscale sign-in, your desktops and the History it read from them, your face "
+        + "and your project colours. Appearance, the terminal’s look, snippets and clipboard history stay.")
   }
 
   // MARK: - About
