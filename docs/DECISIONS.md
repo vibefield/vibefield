@@ -253,7 +253,10 @@ laws — users-and-accounts §6** (W6's pane-2 signal amended 2026-09-22, v0.3: 
   2026-10-28:* **AP-D3, AP-D4 and AP-D5 RULED at their built leans (James, 2026-10-28, the housekeeping page (Q14)
   "A").** *Status 2026-10-30:* **IOS-8f LANDED** (`f250e8971`, the mini's run 9; LANDED "IOS-8f"): D3's end state
   is built. The home desktop answers `user.me`, and the corner wears its face and name; the deal is the fallback
-  until a home answers. D7's protocol cause stays owed.
+  until a home answers. D7's protocol cause stays owed. *Status 2026-10-31:* **AP-D4's History half BUILT** (ITEM
+  130: `35b9248d4` in the merge `6130153f8`, the mini's run 61; LANDED "Item 130"). A sign-out also closes History's
+  readers and clears its cache on disk (`HistoryDesktops.signedOut`, from HomeScreen's one sign-out), which
+  `HistoryCache.clear()` was written for and nothing called.
 - **H-D1…H-D9** — `thinking-ios-history.md` §2 (the History tab). Candidates, unruled. **Built
   mock-first 2026-09-23 (IOS-9, §7):** H-D4 the `FieldHistory` target (chrome family, decisions in
   `FieldHistoryModel`, tested) · H-D5 the bar — the system `TabView` at IOS-9a, ours at IOS-9e by

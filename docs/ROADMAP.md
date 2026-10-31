@@ -369,6 +369,8 @@
   train") · item 129 (GitHub's macOS verify red five pushes on the catalog's Hub wait, its real 10 s bound
   crossed before the click: fixed in M59 `2d2f41046`, tests only, HN-8's design kept; proof paid 20:20Z, main's
   push-event verify run 41235730001 green, PR #7's re-run green (41239299536); nothing owed; LANDED "Item 129") ·
+  item 130 (the phone's sign-out kept History's cache, against AP-D4: `35b9248d4`, with SP-D12's comment
+  `f8d93b4a2`, as the merge `6130153f8`, run 61; owed: IOS-10a's sign-out words at its turn; LANDED "Item 130") ·
   item 122's floor half (paid: idle,
   idle-class, the ramp of run 53's verify and the peak of run 55's, load1 34.09–42.52, warm max 201 ms against the 15 s,
   0 missed; LANDED "item 122's floor half, measured"; nothing owed).
@@ -455,7 +457,7 @@
 | PLUG follow-ups | the KIT slice · third-party listing (P8e: TD registry + R2 process host; PA-24, §20.5, §21.8) · sideload · R2 `host:"process"` · PRC-5's power loss (§6) · PRC residual policies (§14–§15) · per-section undo/⌘Z/timeline (D29′, P7) | first-party publishing; third-party plugins; a Settings history design; runtime validation is tracked separately in §6 | `specs/plugin-architecture.md`, `thinking-p8-loadable-artifact.md` |
 | TP / TC | D6's cell half, C5, D5, the lineage break (§6) · TC RATIFIED as built (Q6: TC-D1/D2 as amended by WG-D1, D3, D15, L1c at TM-1); TC-S4…S8 (vault, broker, replay, drain-migrate, warm tiers) parked · TP-S4…S6 (S4's typeable mirror struck) | a TP lane · a ghosttea next-major or a P0 witness across a floor restart · measured demand | `specs/terminal-pipeline-v3*.md`, `specs/terminal-custody.md` |
 | GT | G29 upstream (then GT-D22's file half) · GT-D22 (§5) · smoke row 13b: attach through DS-4e to a second staged desktop · no kill control in Godview (Q2): a session ends by the agent's quit, ⌘Q (AL-3) or reaping | G29's release · the two-desktop run | `specs/godview-terminal.md` |
-| IOS | the rebuild and TestFlight (§5) · phone Settings ("Settings in a Pocket", revised 2026-10-31 against `02c902a8d`: 8 marks, none picked yet, page Hof2zWpt, replacing VCfkfxMp) · K-D5's ghosttea `customInputView` petition (unfiled) | James rebuilds; external TestFlight | `thinking-ios-app.md`, `thinking-ios-swarm.md`, `apps/ios/TESTFLIGHT.md` |
+| IOS | the rebuild and TestFlight (§5) · phone Settings ("Settings in a Pocket", revised 2026-10-31 against `02c902a8d`: 8 marks, none picked yet, page Hof2zWpt, replacing VCfkfxMp; IOS-10a BUILT on `ios/settings`, `7b6cb2332` and `81ce047d6`, held: it lands after FW, SP and PG, James 2026-10-31 21:09Z) · K-D5's ghosttea `customInputView` petition (unfiled) | James rebuilds; external TestFlight | `thinking-ios-app.md`, `thinking-ios-swarm.md`, `apps/ios/TESTFLIGHT.md` |
 | NF | COMPLETE; owed: item 52 (b)'s phone half (its routed ghosttea client) · headless floor-on-tailnet rows over TS-1's authKey path (`029af0e6f`) if wanted · native-floor §7 into the T posture | an NF lane | `specs/native-floor.md` |
 | Native push (APNs) | SP-D8: the relay after AR-6; pairing is the account; README's `services/push-relay` row is deferred | AR-6 | `thinking-native-push.md`, design-06 L4 |
 | LOG | LOG-39 (beta list) · LOG-V5 (rides Windows) · LOG-V8 retention (James's product call) · LOG-V7 optional | the beta checklist | `specs/logging-and-diagnostics.md` |
@@ -733,7 +735,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | PLUG — shipped core | COMPLETE: P0–P7, P8b–d (P8c via WP8), PRC-4/5; later publishing/validation work is separate | `specs/plugin-architecture.md`, `thinking-p8-loadable-artifact.md` | existing product gates; no blanket 24-hour prerequisite |
 | PRC-6 — plugin runtime validation | OPEN; diagnostics in draft [PR #7](https://github.com/vibefield/vibefield/pull/7); Linux CI passed, full verification and calibration pending | `thinking-prc6c2-physical-soak.md` §9–10 | full verify → guarded 32-cycle current-desk calibration + listener control; historical failures stay open; literal 24h only for that claim |
 | PLUG — publishing | PARKED: KIT/P8e | `thinking-p8-loadable-artifact.md`, `specs/trust-and-distribution.md` | publishing scope; TD registry + R2 process host |
-| IOS — companion | PARKED; IOS-8f landed 10-30 (`user.me`: the corner wears its home desktop's face and name) | `thinking-ios-app.md`, `thinking-ios-swarm.md`, `thinking-ios-account.md`, `thinking-ios-history.md`, `apps/ios/TESTFLIGHT.md` | the rebuild; TestFlight build 4 |
+| IOS — companion | PARKED; IOS-8f landed 10-30 (`user.me`: the corner wears its home desktop's face and name); item 130 landed 10-31 (a sign-out clears History's cache, AP-D4) | `thinking-ios-app.md`, `thinking-ios-swarm.md`, `thinking-ios-account.md`, `thinking-ios-history.md`, `apps/ios/TESTFLIGHT.md` | the rebuild; TestFlight build 4 |
 | UA — users and accounts | COMPLETE except witnesses | `specs/users-and-accounts.md`, `thinking-ua-phone-account.md` | the phone's second-account witness |
 | NF — native floor | COMPLETE; one owed line | `specs/native-floor.md` | item 52 (b)'s phone half |
 | LOG — logging and audit | PARKED; item 78 landed | `specs/logging-and-diagnostics.md` | LOG-39 for the beta |

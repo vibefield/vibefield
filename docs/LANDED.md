@@ -25196,3 +25196,62 @@ Checks), in the commit's own order:
 - FG-6's remaining gates, in the ruled order: the catalog over the field's still (a fixture adapter, never a copy), then
   the field's glass against the CSS glass on a frozen frame (a test-only seam, ruled on its own). Item 127's list
   stands.
+
+## Item 130 — signing out clears History's cache: the sign-out kept every transcript the phone had read, and History showed the account that left, as asleep; `HistoryCache.clear()` was written for it and nothing called it (2026-10-31; `6130153f8`, the merge of main `88c7d5f5f` into `f8d93b4a2` on `d89bf47c8`, lane `ios/item130-signout-cache`)
+
+IOS-10a's readiness review found it on 2026-10-31: the reviewer reading the branch against the sync planes and the
+freeway. It was verified at its source at 21:25Z, and VF-PM filed it at 21:31Z as ITEM 130. The bug is in main's kit
+and predates IOS-10a. It goes against AP-D4 (ruled 2026-10-28, the housekeeping page (Q14) "A"): a sign-out clears
+what the field taught this phone. History's own record owed it (`thinking-ios-history.md` §7.2: "Sign out should
+clear it (owed: `clear()` is built, the corner's Sign out does not call it yet)").
+
+**The finding, plainly.**
+- `HistoryCache.clear()` ("Drop everything (sign out: what the field taught this phone goes)") had no caller in
+  `apps/ios`. `SignOutSweep` never touched History's cache, `<Caches>/history`.
+- **What a person saw:** the sign-out closes the link, and `HomeScreen`'s History sync turns every reader into the
+  cache's (`allOffline`). So the History tab kept the account that left on screen, as asleep. A desktop of the same
+  device id under the next account read back the old account's transcripts.
+
+**What** (`35b9248d4`, 4 files +55 −1):
+- `HistoryDesktops.signedOut()` closes every reader and the ledger, clears the cache on disk, and stands up the empty
+  cache's ledger. A closed reader writes nothing more (`closed`, `Task.isCancelled`), so the cache stays clear.
+- `HomeScreen.signOut()` calls it after `closeLink()` and before `mesh.signOut()`. That is the one place every
+  sign-out passes: the menu's Sign out and "Another account?"'s `switchAccount` both call it. The mock and the stamped
+  demo sweep nothing, as before.
+- `SignOutSweep`'s doc names the History half beside its own.
+- **`f8d93b4a2`, SP-D12's comment** (`FieldProduct/PhoneBudget.swift`, comment only, +6 −4). Its header still gave
+  SP-D12's lean of "two attached terminals" after FW-D2 had ruled the terminal half (three lanes, `TERMINAL_LEGS: 6`),
+  as `registries.ts`'s own comment says. No literal moved. It is its own commit, on VF-PM's word. The draft records
+  carry the same correction (dev-local `c43b01d58`).
+
+**Validation.**
+- **Red first**, on this Mac's kit in the lane `/Volumes/SamsungRed/lanes/item130/vibe-field`, at nice 19 with the
+  guard clear, 21:44:08 → 21:47:06Z:
+  - FieldHistoryTests' new row ("signing out clears the cache: no reader, no ledger, nothing left on disk to replay")
+    ran against an empty `signedOut()` stub and went RED with five issues:
+    - the readers stayed;
+    - the home stayed;
+    - the reader's own door stayed open;
+    - the cache held 1,412 bytes;
+    - a replay for the same device id returned the old account's document ("Named").
+  - The other 46 History rows passed.
+- **Green at the tip**, 21:48:29 → 21:49:08Z:
+  - FieldHistoryTests 47, FieldHomeTests 99, FieldMeshTests 295 and FieldProductTests 159, all passed, 0 failed.
+  - `node scripts/check-ios-fixtures.mjs`: 186 copies and 63 pins identical.
+- **VF-PM's read** (21:51Z): `merge-tree` onto `88c7d5f5f` = `cdc6c32b4`, with 0 conflicts and 5 Swift files.
+- **Run 61**, the mini's `pnpm verify` at `6130153f8`: armed 21:51:43Z, exit 0 at 21:56:30Z, about five minutes, a
+  Swift-only change on the cached TS and Rust stages.
+  - Vitest 11,373 passed, 0 failed, 18 skipped, identical to run 60 (the per-file diff empty). Cargo 33 ok, 0
+    FAILED. Typecheck and test ran for 28 projects; MaxListeners 0.
+  - `ios fixtures: 186 copies identical` and `ios pins: 63 contract values identical`. Biome 2,942. The bundle
+    911.3 KB, 240.6 KB gzipped. The mini's porcelain 0.
+  - The log: `/Volumes/SamsungRed/lanes/ts6/logs/mini/run61/` (`verify.log`; `mrun61.bundle`, sha256
+    `559d1295c8095a10…`).
+  - The kit is outside `pnpm verify`, and the mini has no Metal toolchain, so the kit's run above is the iOS proof.
+- **Landed** at 21:57:58Z, main fast-forwarded `88c7d5f5f..6130153f8` (5 Swift files, +61 −5; tree `cdc6c32b4`).
+
+**Owed.**
+- Settings' sign-out words (IOS-10a, `ios/settings`, held until FW, SP and PG land) can say History goes too, at
+  IOS-10a's turn.
+- `HomeScreen`'s one call is read, not driven by a test, because HomeScreen is a View.
+- `thinking-ios-history.md` §7.2's owed line wants a dated note at its source, at the next draft queue.
