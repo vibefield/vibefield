@@ -6,6 +6,7 @@ import {
   APP_PREFERENCE_KEYS,
   AppPreferences,
   CONTRACTS_VERSION,
+  commitOfBuildId,
   DESKTOP_APP_ID,
   type DesktopShellState,
   DesktopShellState as DesktopShellStateSchema,
@@ -70,7 +71,6 @@ import { runAuditedSupportExport } from "./audited-support-export";
 import { installDurableClose } from "./close";
 import { ConnectAsks, workingAgents } from "./connect-asks";
 import { CrashArtifactManager, startLocalCrashReporter } from "./crash-artifacts";
-import { installDevSignalQuit } from "./dev-signals";
 import { desktopDevelopmentExtension } from "./development-extension";
 import { installLocalDiagnosticsPort } from "./diagnostics-port";
 import { buildSupervisor, dataRoot } from "./fieldd";
@@ -143,14 +143,23 @@ import { buildCsp, importMapHashesFromHtml } from "./security-policy";
 import { backfillMigratedSetupVariant } from "./setup-variant";
 import { shellExitNotice } from "./shell-exit-notice";
 import { RecoveringShellProvider } from "./shell-provider";
+import { installSignalQuit } from "./signal-quit";
 import { isolateSmokeProfile } from "./smoke-profile";
 import { installStillProtocol, resolveStill, resolveStillFile } from "./still-protocol";
 import { SupportBundleError, SupportBundleService } from "./support-bundle";
 import { fileThemeStore, THEME_FILE, ThemeOwner } from "./theme";
 import { TrayController } from "./tray-controller";
 import { TrayEvidenceMonitor } from "./tray-evidence";
-import { type TrayLinkState, type TraySnapshot, trayUpdateOf } from "./tray-model";
+import {
+  type TrayLinkState,
+  type TraySnapshot,
+  type TrayUpdateState,
+  trayUpdateOf,
+  type UpdateMenuActs,
+  updateMenuEntry,
+} from "./tray-model";
 import { createElectronTrayRuntime } from "./tray-native";
+import { wordsBox } from "./updates/controller";
 import { readUpdateIdentity } from "./updates/identity";
 import { createElectronApplyPort, installUpdateController } from "./updates/install";
 import { applyProfileUpdate, dealOwedFace } from "./users-profile";
@@ -227,6 +236,9 @@ let lifecycleFlow: LifecycleFlow | null = null;
  * pairs exist and after teardown, when a person's quit leaves the pairs as before. */
 let quitGate: QuitGate | null = null;
 let restoreAfterAbortedQuit: (() => void) | null = null;
+/** AU-5 — install on quit, the updater's (assigned once it exists); null in a build with no updater and after teardown,
+ * when a person's quit installs nothing. */
+let quitInstaller: ((context: { readonly ended: number }) => Promise<void>) | null = null;
 /** P8b-2 — the live fieldd client the plugin protocol authorizes against. Null
  * until the pair is up, which is the honest state: with no authority reachable,
  * no plugin module is servable. */
@@ -238,6 +250,10 @@ let supportBundles: SupportBundleService | null = null;
 /** WP12d (L3c-i, §13 C4) — the updater's doctor lines for the support bundle; null where no updater runs */
 let updateDoctorLines: (() => readonly string[]) | null = null;
 let trayController: TrayController | null = null;
+/** AU-4 — the app menu's update item, redrawn from the updater's current view (assigned once the updater exists). Its
+ * acts stop while the app quits, and `quitting` flips outside any update, so a quit's start and its abort redraw it;
+ * null in a build with no updater and after teardown. */
+let redrawUpdateMenu: (() => void) | null = null;
 /** Closing the last window leaves VibeField running: on macOS always, elsewhere
  * while the status item keeps it (the lifecycle's rule, and TS-4's away notice). */
 function staysResident(): boolean {
@@ -1101,6 +1117,14 @@ async function main(
       // BP-D6: a packaged shell's profiles (its cookie store encrypted — ESP-11's fuse) carry their own name, so an
       // unpackaged shell never opens one, whatever data root it was started on
       browserProfilesPackaged: app.isPackaged,
+      // PT-S2 (R4): a bound phone's Open Settings — the fixed Screen Recording address the screenshot door opens, through
+      // the harness's gate: a smoke records it, and System Settings never opens under a test
+      openSettings: () => {
+        const url = "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture";
+        if (harnessShellOpens === null) return shell.openExternal(url);
+        harnessShellOpens.opened.push(url);
+        return Promise.resolve();
+      },
       logger: logger.child({ component: "live-surfaces.capture" }),
     });
     if (!app.isPackaged && process.env["FIELDD_DATA_DIR"] === undefined && !isSmokeLike(MODE)) {
@@ -1123,6 +1147,8 @@ async function main(
       factories: liveSurfaceSupport.factories,
       enumeration:
         resources.macosLiveSurfaceCapture === null ? null : liveSurfaceSupport.enumeration,
+      // PT-S2 (R11): answered everywhere — a shell with no capture half lists no device
+      simulatorDevices: liveSurfaceSupport.simulatorDevices,
       logger: logger.child({ component: "live-surfaces.authority" }),
     });
     const shellProvider = new RecoveringShellProvider(
@@ -1159,6 +1185,11 @@ async function main(
           const authority = liveSurfaceAuthority;
           if (authority === null) throw { kind: "UNAVAILABLE" };
           return authority.release(params);
+        },
+        listSimulatorDevices: async () => {
+          const authority = liveSurfaceAuthority;
+          if (authority === null) throw { kind: "UNAVAILABLE" };
+          return authority.simulatorDevices();
         },
       },
       logger.child({ component: "shell.provider" }),
@@ -1488,7 +1519,10 @@ async function main(
   // frame's four), the menu names it, the renderer mirrors it. `redrawMenu` is
   // assigned below for the modes that have a menu; the states exist in every
   // windowed mode because the renderer needs its truth either way.
-  let redrawMenu: (state: AppMenuState) => void = () => undefined;
+  let redrawMenu: (patch: Partial<AppMenuState>) => void = () => undefined;
+  // AU-4 (AU-G9) — the app menu's Settings…, late-bound: the menu is installed
+  // long before the window's reveal exists (a click before then does nothing)
+  let openSettingsFromMenu: (() => void) | null = null;
   const views = new ViewRegistry({
     logger: logger.child({ component: "view" }),
     onChanged: (state, target) => {
@@ -1738,6 +1772,7 @@ async function main(
       zoom,
       // SNAP-D5: no helper for this platform ⇒ the item stays, disabled.
       ...(screenshotHelperAvailable ? { takeScreenshot } : {}),
+      openSettings: () => openSettingsFromMenu?.(),
     });
   }
 
@@ -2032,6 +2067,13 @@ async function main(
       window.webContents.send(IPC_CHANNELS.shellCommand, ShellCommandRequest.parse({ command }));
     }
   };
+  // AU-4 (AU-G9) — the app menu's Settings… is the status item's: the same command, which REVEALS Settings (the
+  // page's ⌘, toggles it; this never closes it)
+  openSettingsFromMenu = (): void => {
+    void revealSurface("open-settings").catch((error: unknown) => {
+      logger.error("desktop.app_menu.reveal_failed", "Settings… could not open Settings", error);
+    });
+  };
   const setAppPreference = async (
     key: (typeof APP_PREFERENCE_KEYS)[keyof typeof APP_PREFERENCE_KEYS],
     value: boolean,
@@ -2059,6 +2101,17 @@ async function main(
   // delay and a resume checks when the last check is stale (EDP §11.2, no interval stays alive). The apply waits for
   // WP12c's gate — nothing installs on a quit.
   const updateIdentity = readUpdateIdentity(resources);
+  // AU-4 (AU-G9) — About names the version and the commit its build id records: "Version 0.1.0-nightly.20261027
+  // (84509d6)". With no staged build id (development, a stage before WP12c) the commit is left to macOS. macOS only:
+  // the one app menu that carries About.
+  if (process.platform === "darwin") {
+    const commit = commitOfBuildId(updateIdentity?.buildId);
+    app.setAboutPanelOptions({
+      applicationName: "VibeField",
+      applicationVersion: app.getVersion(),
+      ...(commit !== undefined ? { version: commit } : {}),
+    });
+  }
   // WP12c (L2b-ii, build-wp12-updater.md §10) — the apply's port: the census and the consented stop through the held
   // coordinator (from the stop on, nothing may start fieldd), Squirrel staged only after the stop, the quit flow's
   // update mode. macOS only; elsewhere a staged update stays `apply-unbuilt`.
@@ -2069,6 +2122,7 @@ async function main(
     registry.cancelShutdown();
     if (what === "update") lifecycleFlow?.resetAfterAbortedQuit();
     trayController?.update({ quitting: false });
+    redrawUpdateMenu?.();
     void revealPrimaryWindow().catch((error: unknown) => {
       logger.error(
         what === "update" ? "desktop.update.restore_failed" : "desktop.quit.restore_failed",
@@ -2233,6 +2287,10 @@ async function main(
       release: () => {
         for (const bundle of pairBundles.values()) bundle.handles.releaseHold();
       },
+      // AU-5 (LC-24, LC-25, LC-36) — the box's last line, only when this quit will try to install the ready update; a
+      // move to Applications waiting for this quit installs nothing (the update waits for the copy in Applications)
+      installLine: () =>
+        lifecycleFlow?.movePending === true ? null : (updates?.quitInstallLine() ?? null),
       log: logger,
     });
     restoreAfterAbortedQuit = () => restoreAfterAbort("quit");
@@ -2245,6 +2303,37 @@ async function main(
       restoreAfterAbortedQuit = null;
     });
   }
+  // AU-4 (AU-L4) — the update's acts, ONE set: the status item's update item and the app menu's run the same three
+  // through the same doors — the check, a person's Download, the restart with its native consent
+  const updateActs =
+    updates === null
+      ? null
+      : {
+          check: async (): Promise<void> => {
+            await updates.check("manual");
+          },
+          download: async (version: string): Promise<void> => {
+            const outcome = await updates.downloadForPerson(version);
+            logger.info("desktop.update.download_requested", "Download Update was chosen", {
+              ok: outcome.ok,
+              reason: outcome.ok ? null : outcome.reason,
+            });
+            // a menu has no page to say a refusal on: main's own words, in its box, as a restart's refusal is said
+            if (!outcome.ok && outcome.words !== undefined) {
+              await applyPort?.notify(wordsBox(outcome.words));
+            }
+          },
+          restart:
+            applyPort?.wired === true
+              ? async (): Promise<void> => {
+                  const outcome = await updates.restartToInstall();
+                  logger.info("desktop.update.restart_requested", "Restart to Update was chosen", {
+                    ok: outcome.ok,
+                    reason: outcome.ok ? null : outcome.reason,
+                  });
+                }
+              : null,
+        };
   trayController = new TrayController({
     runtime: createElectronTrayRuntime(resources),
     initial: {
@@ -2268,23 +2357,11 @@ async function main(
       openSettings: () => revealSurface("open-settings"),
       openDiagnostics: () => revealSurface("open-diagnostics"),
       connectDevices: () => revealSurface("open-connect"),
-      ...(updates !== null
-        ? {
-            checkForUpdates: async () => {
-              await updates.check("manual");
-            },
-          }
+      ...(updateActs !== null
+        ? { checkForUpdates: updateActs.check, downloadUpdate: updateActs.download }
         : {}),
-      ...(updates !== null && applyPort?.wired === true
-        ? {
-            restartToUpdate: async () => {
-              const outcome = await updates.restartToInstall();
-              logger.info("desktop.update.restart_requested", "Restart to Update was chosen", {
-                ok: outcome.ok,
-                reason: outcome.ok ? null : outcome.reason,
-              });
-            },
-          }
+      ...(updateActs !== null && updateActs.restart !== null
+        ? { restartToUpdate: updateActs.restart }
         : {}),
       ...(screenshotHelperAvailable ? { takeScreenshot: async () => takeScreenshot() } : {}),
       setBackgroundShell: (enabled) =>
@@ -2334,26 +2411,78 @@ async function main(
     onDesktopState: publishDesktopState,
   });
   if (updates !== null) {
-    // C6 — ONE projection feeds the tray's item and the Settings card (through desktopState), so they cannot drift
+    // AU-4 (AU-G9; AU-L4) — the app menu's update item runs the status item's acts; a failed act is logged as the
+    // tray's are, never thrown into Electron's menu
+    const menuActFailed = (act: string) => (error: unknown) => {
+      logger.error(
+        "desktop.app_menu.update_failed",
+        "The app menu's update item could not act",
+        error,
+        { act },
+      );
+    };
+    // guarded as the status item's are (`TrayController.runAction`): none runs while the app quits, so a click that
+    // lands before the redraw has disabled the item does nothing
+    const menuAct = (act: string, run: () => Promise<void>): void => {
+      if (trayController?.current().quitting === true) return;
+      void run().catch(menuActFailed(act));
+    };
+    const restartFromMenu = updateActs?.restart ?? null;
+    const menuUpdateActs: UpdateMenuActs = {
+      ...(updateActs !== null
+        ? {
+            check: () => menuAct("check", updateActs.check),
+            download: (version: string) => menuAct("download", () => updateActs.download(version)),
+          }
+        : {}),
+      ...(restartFromMenu !== null ? { restart: () => menuAct("restart", restartFromMenu) } : {}),
+    };
+    let menuUpdateKey = "";
+    // C6 — ONE projection feeds the tray's item and the Settings card (through desktopState), so they cannot drift.
+    // AU-4: and the app menu's update item, the status item's entry (`updateMenuEntry`). Download progress emits often,
+    // so the menu is rebuilt only when what the item says or does changes: its label, whether it acts, the version a
+    // Download names.
+    const projectUpdateMenu = (update: TrayUpdateState): void => {
+      const entry = updateMenuEntry(
+        update,
+        menuUpdateActs,
+        trayController?.current().quitting !== true,
+      );
+      const key = JSON.stringify([
+        entry.label,
+        entry.enabled,
+        update.kind === "available" ? update.version : null,
+      ]);
+      if (key !== menuUpdateKey) {
+        menuUpdateKey = key;
+        redrawMenu({ update: entry });
+      }
+    };
     const projectUpdate = (): void => {
       const view = updates.view();
       latestUpdateView = view;
-      trayController?.update({ update: trayUpdateOf(view) });
+      const update = trayUpdateOf(view);
+      trayController?.update({ update });
+      projectUpdateMenu(update);
       if (latestDesktopRaw !== null) publishDesktopState(latestDesktopRaw);
     };
     projectUpdate();
     shellDisposers.add(updates.subscribe(() => projectUpdate()));
+    redrawUpdateMenu = () => projectUpdateMenu(trayUpdateOf(updates.view()));
+    shellDisposers.add(() => {
+      redrawUpdateMenu = null;
+    });
     updateDoctorLines = () => updates.doctorLines();
     // C1 — the Settings card's host doors (the narrow preload set; no path, no URL)
     registerUpdateDoors(
       registry,
       {
-        check: async () => {
-          await updates.check("manual");
-        },
+        // AU-1 (LC-5) — a person's check answers when it settles; the tray's and the app menu's stay `check("manual")`
+        check: () => updates.checkForPerson(),
         setEnabled: (enabled) => updates.setEnabled(enabled),
         setChannel: (channel) => updates.setChannel(channel),
         decline: (version) => updates.decline(version),
+        download: (version) => updates.downloadForPerson(version),
         prepareRestart: async () => {
           const prepared = await updates.prepareRestart();
           if (!prepared.ok) return prepared;
@@ -2382,9 +2511,39 @@ async function main(
         },
         confirmRestart: (token) => updates.confirmRestart(token),
         doctor: () => updates.doctorLines(),
+        // AU-7 (AU-G8; LC-10, LC-25, LC-37; main-process.md §8.4) — Move to Applications: a person's quit through the
+        // gate, with the move after a COMPLETE stop (`quitThen`). A copy already in Applications needs none; a quit,
+        // an update's quit or another move underway is busy. An existing copy in Applications goes to the Trash; one
+        // that is running refuses the mover, and this one opens again where it was (logged, no words: the
+        // single-instance lock makes it near-unreachable).
+        moveToApplications: async () => {
+          const where = updates.location;
+          if (where !== "read-only" && where !== "elsewhere")
+            return { ok: false, reason: "not-needed" };
+          const flow = lifecycleFlow;
+          if (flow === null) return { ok: false, reason: "busy" };
+          const outcome = await flow.quitThen(async () =>
+            app.moveToApplicationsFolder({
+              conflictHandler: (conflict) => {
+                logger.warn(
+                  "desktop.update.move_conflict",
+                  "A VibeField is already in Applications",
+                  { conflict, replaced: conflict === "exists" },
+                );
+                return conflict === "exists";
+              },
+            }),
+          );
+          return outcome === "busy" ? { ok: false, reason: "busy" } : { ok: true, outcome };
+        },
       },
       logger.child({ component: "ipc.update" }),
     );
+    // AU-5 (AU-D9 A) — a person's quit that stopped every pair hands a ready update to Squirrel (the lifecycle calls it
+    // only then); the controller says what it did (`desktop.update.quit_install`)
+    quitInstaller = async (context) => {
+      await updates.installOnQuit(context);
+    };
     const launchCheck = setTimeout(() => void updates.check("launch"), UPDATE_LAUNCH_DELAY_MS);
     launchCheck.unref?.();
     // L3b-ii (B4) — the silent apply is considered after a resume (once its check settles), and a few seconds after
@@ -2413,6 +2572,7 @@ async function main(
         : null;
     censusWatch?.unref?.();
     shellDisposers.add(() => {
+      quitInstaller = null;
       clearTimeout(launchCheck);
       if (censusWatch !== null) clearInterval(censusWatch);
       powerMonitor.removeListener("resume", onResume);
@@ -2655,22 +2815,26 @@ if (!hasInstanceLock) {
       onQuitRequested: () => {
         registry.beginShutdown();
         trayController?.update({ quitting: true });
+        redrawUpdateMenu?.();
       },
       disposeShell: disposeShellState,
       logger,
       closeLogging: closeEvidence,
       getQuitGate: () => quitGate,
       onQuitAborted: () => restoreAfterAbortedQuit?.(),
+      installOnQuit: async (context) => {
+        await quitInstaller?.(context);
+      },
     });
     lifecycleFlow = flow;
-    if (MODE === "dev") {
-      // AL-4 — a signal is never a person's quit: the runner restarts the shell (the next one adopts the pairs), or
-      // ends its session and stops the daemons itself. Only ⌘Q, the Dock, the tray and the menu meet the gate.
-      installDevSignalQuit(process, () => {
-        flow.leavePairsOnQuit("signal");
-        app.quit();
-      });
-    }
+    // AL-4 — a signal is never a person's quit: dev's runner restarts the shell (the next one adopts the pairs), or
+    // ends its session and stops the daemons itself. Only ⌘Q, the Dock, the tray and the menu meet the gate.
+    // AU-5a (LC-26's read) — production too, and every other build: Electron 43 turns SIGTERM, SIGINT and SIGHUP into
+    // an ordinary quit, which met the census gate and stopped the pairs while only dev installed this handler.
+    installSignalQuit(process, () => {
+      flow.leavePairsOnQuit("signal");
+      app.quit();
+    });
     try {
       await main(userRoot, logRoot, logging, localDiagnostics, crashArtifacts, supportBundles, {
         userId: ensured.user.userId,

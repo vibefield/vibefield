@@ -5,6 +5,11 @@ import { type RendererParticipantIdentity, SCOPES, type Scope } from "@vibefield
 // Same-uid agents are the adversary (EL7) — tokens are mandatory on every
 // surface; peer-cred/origin checks are sanity only. Audit via the event hook
 // (JSONL sink lands with the storage milestone).
+// *Note 2026-10-29 (CP-D1, ruled by James on the compose plane version 2 page; design-02 §3.3's dated note):* one
+// surface takes no token. The `vibefield` door is the floor's unix socket: the kernel names the calling process and
+// its start, the floor walks it to the pane that holds it, and fieldd maps that pane to its run (compose/). A pid's
+// ancestry tells one session from another, which no token every same-uid agent can read could do. The rule above
+// stands for every other surface, and the mcp-agent preset design-02 planned stays for them.
 
 export interface TokenGrant {
   tokenId: string;

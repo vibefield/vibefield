@@ -9,6 +9,8 @@ pub mod config;
 // doors, a revoke of every client); the file is regenerated, so the lint is answered here.
 #[allow(clippy::derivable_impls)]
 pub mod contracts;
+/// CP-1a — `field-native door --endpoint <path>`: the stdio bridge a spark's agent runs to the floor's door.
+pub mod door_bridge;
 pub mod endpoints;
 /// FW — the freeway host's library (`field-freeway-host`): the link's frame codec first.
 pub mod freeway;
@@ -165,7 +167,7 @@ pub async fn bootstrap_with_logging(
     // units push health transitions (e.g. mesh auth flow) via this channel;
     // a refresh task re-aggregates and publishes on every ping
     let (ping_tx, mut ping_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
-    let (units, mesh_handle, bridge_handle, terminal_handle, freeway_handle) =
+    let (units, mesh_handle, bridge_handle, terminal_handle, freeway_handle, door_handle) =
         services::build_units(&config, secret, &boot_id, ping_tx);
     let mgr = Arc::new(manager::NativeServiceManager::new(units)?);
     mgr.start_all().await;
@@ -208,6 +210,7 @@ pub async fn bootstrap_with_logging(
         // hello's `terminalMesh` without learning what either one is.
         config::MeshPlan::resolve(&config),
         freeway_handle.clone(),
+        door_handle.clone(),
         logging.clone(),
     );
     state.restart.configure(restart_intent_file, last_exit);
@@ -266,6 +269,11 @@ pub async fn bootstrap_with_logging(
     state
         .manager
         .configure_census(Arc::new(terminal_handle.clone()));
+    // CP-1a — the door's walk reads the panes off the observed inventory, and a
+    // miss asks the same census for a fresh one: wiring, so the unit learns rows
+    // and a census, never what an inventory or a cell is.
+    door_handle.observe(state.observed_tx.subscribe());
+    door_handle.configure_census(Arc::new(terminal_handle.clone()));
     let (orphan_span, orphan_poll) = orphan::timings(config.orphan_idle_override);
     let orphan_bound = orphan::spawn(state.clone(), orphan_span, orphan_poll);
 

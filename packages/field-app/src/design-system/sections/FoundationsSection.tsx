@@ -1,8 +1,22 @@
 import { faceLiftHostClass, UserFaceView } from "@vibefield/design-kit/face";
 import { projectInk, projectInkHue } from "@vibefield/design-kit/project-ink";
+import {
+  SPARK_NEEDS_YOU,
+  SPARK_STATUSES,
+  SparkFace,
+  SparkFaceRenderer,
+  SparkStage,
+  sparkStatusWord,
+} from "@vibefield/design-kit/spark-face";
 import type { CSSProperties, ReactElement } from "react";
 import { FACE_LADDER, FIXTURE_ME, FIXTURE_OTHERS } from "../account-fixtures";
 import { Section, Specimen } from "../catalog-ui";
+import {
+  FIXTURE_SPARKS,
+  LIVE_SPARKS,
+  SPARK_FRAMED_LADDER,
+  SPARK_FREE_LADDER,
+} from "../spark-fixtures";
 
 const SURFACE_COLORS = [
   { label: "Canvas", token: "--vf-canvas-bg", value: "var(--vf-canvas-bg)" },
@@ -110,6 +124,51 @@ export function FoundationsSection(): ReactElement {
         </div>
       </Specimen>
 
+      <Specimen
+        title="Spark faces · the nineteen statuses"
+        source="design-kit/spark-face · DESIGN.md §2.10"
+      >
+        <div className="vf-ds-spark-statuses">
+          {SPARK_STATUSES.map(({ id, word }) => (
+            <figure key={id} className="vf-ds-face-rung">
+              <SparkFace seed={FIXTURE_SPARKS[0].seed} status={id} size={40} />
+              <figcaption>{SPARK_NEEDS_YOU.has(id) ? `${word} · needs you` : word}</figcaption>
+            </figure>
+          ))}
+        </div>
+      </Specimen>
+
+      <Specimen
+        title="Spark faces · framed and free"
+        source="design-kit/spark-face · DESIGN.md §2.10"
+      >
+        <SparkLadders />
+      </Specimen>
+
+      <div className="vf-ds-grid vf-ds-grid-2">
+        <Specimen title="Spark faces · live on a stage" source="design-kit/spark-face/stage.tsx">
+          <SparkStage className="vf-ds-spark-stage">
+            <ul className="vf-ds-spark-rows">
+              {LIVE_SPARKS.map(({ name, seed, status }) => (
+                <li key={name}>
+                  <SparkFace seed={seed} status={status} size={40} live />
+                  <span>{name}</span>
+                  <span className="vf-ds-spark-word">{sparkStatusWord(status)}</span>
+                </li>
+              ))}
+            </ul>
+          </SparkStage>
+        </Specimen>
+        <Specimen
+          title="Spark faces · without WebGL2, the flat star"
+          source="design-kit/spark-face/flat-star.ts"
+        >
+          <SparkFaceRenderer renderer="flat">
+            <SparkLadders />
+          </SparkFaceRenderer>
+        </Specimen>
+      </div>
+
       <div className="vf-ds-grid vf-ds-grid-2">
         <Specimen title="Type ramp" source="DESIGN.md §3">
           <div className="vf-ds-type-ramp">
@@ -163,6 +222,41 @@ export function FoundationsSection(): ReactElement {
         </div>
       </Specimen>
     </Section>
+  );
+}
+
+/** Both forms on the sizes §2.10's surfaces wear, each face a different deal. */
+function SparkLadders(): ReactElement {
+  return (
+    <div className="vf-ds-face-ladders">
+      {(
+        [
+          { framed: true, label: "Framed · on its disc", ladder: SPARK_FRAMED_LADDER },
+          { framed: false, label: "Free · the star alone", ladder: SPARK_FREE_LADDER },
+        ] as const
+      ).map(({ framed, label, ladder }) => (
+        <div key={label} className="vf-ds-face-ladder">
+          <span className="vf-ds-face-ladder-label">{label}</span>
+          <div className="vf-ds-face-rungs">
+            {ladder.map((size, index) => {
+              const spark = FIXTURE_SPARKS[index % FIXTURE_SPARKS.length] ?? FIXTURE_SPARKS[0];
+              return (
+                <figure key={size} className="vf-ds-face-rung">
+                  <SparkFace
+                    seed={spark.seed}
+                    status="ready"
+                    size={size}
+                    framed={framed}
+                    label={`${spark.name}, Ready, ${size}px`}
+                  />
+                  <figcaption>{size}</figcaption>
+                </figure>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 

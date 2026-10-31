@@ -6,6 +6,14 @@ export type TrayEvidenceState = "healthy" | "degraded";
 export type TrayUpdateState =
   | { readonly kind: "idle" }
   | { readonly kind: "checking" }
+  // AU-4 (AU-G5; X13) — found and not downloading: the person skipped it, or turned automatic updates off. With updates
+  // off it waits for the person's Download; a skip is theirs to take back on the page
+  | {
+      readonly kind: "available";
+      readonly version: string;
+      readonly declined: boolean;
+      readonly enabled: boolean;
+    }
   | { readonly kind: "downloading"; readonly percent: number }
   // EDP §11.1 / WP12 D14: "ready" renamed — macOS stages, nothing installs in place (EDP-34)
   | {
@@ -15,6 +23,9 @@ export type TrayUpdateState =
       readonly sessions?: number | "unknown";
       /** L3b-i (B3) — the release leaves the floor alone, so the verb ends no session whatever the count */
       readonly keepsSessions?: boolean;
+      /** AU-4 (AU-G14) — an apply exists on this platform, so the install waits on the person: the status item wears
+       * the update image. Absent or false (no apply here) wears the base image. */
+      readonly applyWired?: boolean;
     }
   // L3b-i (B1) — the policy's answers, which are not failures: the kill switch, and an OS below the release's floor
   | { readonly kind: "paused" }
@@ -63,6 +74,8 @@ export interface TrayActions {
   takeScreenshot?: () => void;
   checkForUpdates?: () => void;
   restartToUpdate?: () => void;
+  /** AU-4 (AU-G5) — Download Update: this found version, with automatic updates off */
+  downloadUpdate?: (version: string) => void;
   setBackgroundShell(enabled: boolean): void;
   setTrayVisible(enabled: boolean): void;
   /** UA-5 — attach another user (UA-D15: re-target + window reload). */
@@ -112,80 +125,104 @@ function availability(platform: TrayPlatform, enabled: boolean): Pick<TrayMenuIt
   return platform === "darwin" ? {} : { enabled };
 }
 
-function updateItem(
-  snapshot: TraySnapshot,
-  actions: TrayActions,
-  platform: TrayPlatform,
-): TrayMenuItem {
-  const actionable = !snapshot.quitting;
-  switch (snapshot.update.kind) {
-    case "idle": {
-      const enabled = actionable && actions.checkForUpdates !== undefined;
-      return {
-        id: "update",
-        label: "Check for Updates…",
-        ...availability(platform, enabled),
-        ...(enabled ? { click: actions.checkForUpdates } : {}),
-      };
-    }
+/** AU-4 (AU-L4) — the acts an update item runs. The status item and the app menu hand the same three. */
+export interface UpdateMenuActs {
+  readonly check?: () => void;
+  readonly restart?: () => void;
+  readonly download?: (version: string) => void;
+}
+
+/** AU-4 (AU-L4) — one update item, said the same way in the status item and the app menu: its label, whether it
+ * acts, and what it runs. Pure; each menu maps it into its own item. */
+export interface UpdateMenuEntry {
+  readonly label: string;
+  readonly enabled: boolean;
+  readonly click?: () => void;
+}
+
+/** An entry acts exactly when it has something to run. */
+function menuEntry(label: string, click?: () => void): UpdateMenuEntry {
+  return click === undefined ? { label, enabled: false } : { label, enabled: true, click };
+}
+
+/** AU-4 (AU-L4) — the update item from the one projection (`trayUpdateOf`). macOS menus say the verbs in title case,
+ * and "…" only where the act asks or answers in a box before it completes (DESIGN.md §9, LC-41): Check for Updates…,
+ * Download Update, Restart to Update, Update Ends 3 Sessions…. Nothing acts while the app quits (`actionable`). */
+export function updateMenuEntry(
+  update: TrayUpdateState,
+  acts: UpdateMenuActs,
+  actionable: boolean,
+): UpdateMenuEntry {
+  switch (update.kind) {
+    case "idle":
+      return menuEntry("Check for Updates…", actionable ? acts.check : undefined);
     case "checking":
-      return {
-        id: "update",
-        label: "Checking for Updates…",
-        ...availability(platform, false),
-      };
+      return menuEntry("Checking for Updates…");
+    case "available": {
+      // AU-4 (AU-G5) — found with automatic updates off: it waits for the person's Download, this one version. A
+      // skipped version is theirs to take back on the page (Download anyway), so the item checks, as at rest
+      if (!update.declined && !update.enabled) {
+        const { download } = acts;
+        const version = update.version;
+        return menuEntry(
+          "Download Update",
+          actionable && download !== undefined ? () => download(version) : undefined,
+        );
+      }
+      return menuEntry("Check for Updates…", actionable ? acts.check : undefined);
+    }
     case "downloading": {
-      const percent = Math.max(0, Math.min(100, Math.round(snapshot.update.percent)));
-      return {
-        id: "update",
-        label: `Downloading Update… ${percent}%`,
-        ...availability(platform, false),
-      };
+      const percent = Math.max(0, Math.min(100, Math.round(update.percent)));
+      return menuEntry(`Downloading Update… ${percent}%`);
     }
     case "staged": {
       // The verb renders only when an apply exists (WP12c's gate) and the census could be read; otherwise the update
       // is downloaded and the item says so instead of offering a restart that would do nothing. With live sessions
       // the verb IS the consequence (EDP-35): "Update Ends N Sessions…" — the plain verb never renders beside it.
-      const sessions = snapshot.update.sessions;
-      const keepsSessions = snapshot.update.keepsSessions === true;
+      const sessions = update.sessions;
+      const keepsSessions = update.keepsSessions === true;
       if (
-        actions.restartToUpdate === undefined ||
+        acts.restart === undefined ||
         sessions === undefined ||
         (sessions === "unknown" && !keepsSessions)
       ) {
-        return {
-          id: "update",
-          label: stagedTrayLabel(undefined),
-          ...availability(platform, false),
-        };
+        return menuEntry(stagedTrayLabel(undefined));
       }
-      const enabled = actionable;
-      return {
-        id: "update",
-        label: stagedTrayLabel(sessions, keepsSessions),
-        ...availability(platform, enabled),
-        ...(enabled ? { click: actions.restartToUpdate } : {}),
-      };
+      return menuEntry(
+        stagedTrayLabel(sessions, keepsSessions),
+        actionable ? acts.restart : undefined,
+      );
     }
     case "paused":
-      return {
-        id: "update",
-        label: "Updates Paused",
-        ...availability(platform, false),
-      };
+      return menuEntry("Updates Paused");
     case "unsupported":
-      return {
-        id: "update",
-        label: "Update Needs a Newer macOS",
-        ...availability(platform, false),
-      };
+      return menuEntry("Update Needs a Newer macOS");
     case "failed":
-      return {
-        id: "update",
-        label: "Update Check Failed",
-        ...availability(platform, false),
-      };
+      return menuEntry("Update Check Failed");
   }
+}
+
+/** The status item's mapping of the update entry (the availability rule: on macOS, action presence is the policy). */
+function updateItem(
+  snapshot: TraySnapshot,
+  actions: TrayActions,
+  platform: TrayPlatform,
+): TrayMenuItem {
+  const entry = updateMenuEntry(
+    snapshot.update,
+    {
+      ...(actions.checkForUpdates !== undefined ? { check: actions.checkForUpdates } : {}),
+      ...(actions.restartToUpdate !== undefined ? { restart: actions.restartToUpdate } : {}),
+      ...(actions.downloadUpdate !== undefined ? { download: actions.downloadUpdate } : {}),
+    },
+    !snapshot.quitting,
+  );
+  return {
+    id: "update",
+    label: entry.label,
+    ...availability(platform, entry.enabled),
+    ...(entry.click !== undefined ? { click: entry.click } : {}),
+  };
 }
 
 /** Pure tray projection. Localization can replace these labels later without
@@ -332,9 +369,15 @@ export function trayUpdateOf(view: UpdateView): TrayUpdateState {
   switch (view.phase) {
     case "checking":
       return { kind: "checking" };
-    // L3c-ii — a found update that is not downloading (skipped, or updates off) is quiet in the menu
+    // AU-4 (AU-G5; X13) — a found update that is not downloading (skipped, or updates off) stays found: with updates off
+    // the item offers its Download (L3c-ii kept it quiet as idle)
     case "available":
-      return { kind: "idle" };
+      return {
+        kind: "available",
+        version: view.version ?? "",
+        declined: view.declined === true,
+        enabled: view.enabled,
+      };
     case "downloading":
       return { kind: "downloading", percent: view.percent ?? 0 };
     case "staged":
@@ -343,6 +386,7 @@ export function trayUpdateOf(view: UpdateView): TrayUpdateState {
         version: view.version ?? "",
         ...(view.sessions !== undefined ? { sessions: view.sessions } : {}),
         ...(view.keepsSessions === true ? { keepsSessions: true } : {}),
+        applyWired: view.applyWired,
       };
     case "paused":
       return { kind: "paused" };

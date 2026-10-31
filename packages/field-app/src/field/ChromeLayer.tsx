@@ -385,6 +385,15 @@ export function ChromeLayer({
           open={meOpen}
           onOpenChange={onMeOpenChange}
           onOpenSettings={openSettings}
+          // AU-2 — the update row: null where no updater runs (R1), absent
+          // until the desktop's state arrives (no row yet)
+          update={
+            getHost().updates === undefined
+              ? null
+              : desktopState === null
+                ? undefined
+                : (desktopState.update ?? null)
+          }
           shortcut={getHost().platform === "darwin" ? "⌘," : "Ctrl+,"}
         />
       </div>

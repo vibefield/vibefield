@@ -277,11 +277,30 @@ export const UPDATES_AUDIT_ACTIONS = {
    * reason (`SQUIRREL_TIMEOUT`, `SQUIRREL_REFUSED`, `SESSIONS_CHANGED`, `INSTALL_FAILED`), the consented count in attrs.
    * WP12d (L3b-i) adds the levers' refusals — `KILLED`, `YANKED`, `FLOOR_UNMET` on `app.update.verify` (a check that
    * found a release it may not offer) and on `app.update.apply` (a policy re-read at the click), and
-   * `POLICY_UNREACHABLE` / `POLICY_UNVERIFIED` on `app.update.apply`. */
+   * `POLICY_UNREACHABLE` / `POLICY_UNVERIFIED` on `app.update.apply`. AU-1: the ATTEMPT row's `trigger` attr is who
+   * began it (`person`, `silent`); the next launch's OUTCOME row adds `from` and `began` (`UpdateApplyTrigger`:
+   * `restart`, `silent`, `quit`) from the record, never a second `trigger`. AU-5: a quit-install appends no ATTEMPT
+   * row (fieldd is already down); its OUTCOME row at the next launch carries `began: quit`, and `QUIT_HELD` when the
+   * quit's own policy read held it. */
   APPLY: "app.update.apply",
   /** WP12d (L3c-i) — a person's channel change (EDP §11.6), `from` and `to` in attrs; a lower channel is a downgrade */
   CHANNEL: "app.update.channel",
+  /** AU-1 (AU-G5, AU-G6) — a person's hand download: `why` is `updates-off` or `skipped` (the decline it removed) */
+  DOWNLOAD: "app.update.download",
 } as const;
+
+// ── AU-1 (AU-D11 A) — an apply, as the window says it afterwards ──
+
+/** How an apply began: a person's Restart to Update (the tray, Settings, the Me menu), the safe window's silent apply
+ * (B4), or a person's quit (AU-5). All three are declared here so no later slice grows the enum an older app reads. */
+export const UPDATE_APPLY_TRIGGERS = ["restart", "silent", "quit"] as const;
+export const UpdateApplyTrigger = z.enum(UPDATE_APPLY_TRIGGERS);
+export type UpdateApplyTrigger = z.infer<typeof UpdateApplyTrigger>;
+
+/** What the first launch after an apply found: it runs the version (`installed`) or it does not (`not-applied`). */
+export const UPDATE_APPLY_OUTCOMES = ["installed", "not-applied"] as const;
+export const UpdateApplyOutcome = z.enum(UPDATE_APPLY_OUTCOMES);
+export type UpdateApplyOutcome = z.infer<typeof UpdateApplyOutcome>;
 
 const RememberedVersion = z.number().int().min(1).nullable();
 
@@ -292,7 +311,10 @@ const RememberedVersion = z.number().int().min(1).nullable();
  *  - `installing`: the install was handed to Squirrel (`quitAndInstall`);
  *  - `relaunched`: Squirrel refused the payload (nothing armed) — the app relaunched on the current bytes;
  *  - `exited`: Squirrel timed out, or the install never took over — the app quit WITHOUT relaunch, because Squirrel may
- *    have armed the install (a downloaded update is applied at the next start: `electron.d.ts:2103-2104`). */
+ *    have armed the install (a downloaded update is applied at the next start: `electron.d.ts:2103-2104`).
+ * AU-1 adds `from`, `trigger` and `landed`, all tolerant (`.catch`), never a new `branch` or `reason` value.
+ * AU-5 (install on quit, `trigger: "quit"`): nothing relaunches on any branch — `installing`, or `exited` with Squirrel's
+ * refusal or timeout, or with no reason when the quit's own policy read held the install. */
 export const UpdateLastApply = z
   .object({
     at: z.number().int().nonnegative(),
@@ -304,6 +326,20 @@ export const UpdateLastApply = z
     /** the ATTEMPT row's operation id, so the outcome row appended at the next launch names the same operation */
     operationId: z.string().min(1).max(128).optional(),
     audited: z.boolean().default(false),
+    /** AU-1 — the version this apply LEFT (the running app's, written with the record); absent on a record an older
+     * app wrote */
+    from: z.string().min(1).max(64).optional().catch(undefined),
+    /** AU-1 — how the apply began; absent on a record an older app wrote (the window then says "restarted") */
+    trigger: UpdateApplyTrigger.optional().catch(undefined),
+    /** AU-1 — judged ONCE, at the first launch after the record and before its OUTCOME row is delivered: `installed`
+     * when that launch runs `version`, else `not-applied`; `at` is that launch's clock (the window's "for a day" counts
+     * from it). Absent while the apply's own process runs, and on a record an older app already delivered (`audited`
+     * without `landed` is history: never judged, never shown). */
+    landed: z
+      .object({ at: z.number().int().nonnegative(), outcome: UpdateApplyOutcome })
+      .passthrough()
+      .optional()
+      .catch(undefined),
   })
   .passthrough();
 export type UpdateLastApply = z.infer<typeof UpdateLastApply>;
@@ -337,6 +373,15 @@ export const UpdateClientStateFile = z
     lastCheckAt: z.number().int().nonnegative().nullable().default(null),
     /** WP12c — the last apply's branch (`UpdateLastApply`); null = none since the state began */
     lastApply: UpdateLastApply.nullable().default(null),
+    /** AU-1 (AU-D3 A) — the version staged on this Mac and when it FIRST became ready: kept while the same version
+     * re-stages after a relaunch (so "Ready since Oct 19" is true), replaced when another version stages, cleared when
+     * its payload is collected (declined, a channel change, a lever, a check that finds nothing) or it installs. */
+    staged: z
+      .object({ version: z.string().min(1).max(64), at: z.number().int().nonnegative() })
+      .passthrough()
+      .nullable()
+      .default(null)
+      .catch(null),
     /** WP12d (L3b-ii, B5; the PM's ruling 2026-10-15 16:03Z) — the trust-root DOCUMENTS this client adopted by rotation,
      * oldest first, each with its detached signature, never bare keys: re-verified from the app's EMBEDDED root keys at
      * every load, each by the set before it (a same-uid writer cannot forge one, EL7), and the newest that verifies
@@ -415,9 +460,37 @@ export const SystemShutdownResult = z
 export type SystemShutdownResult = z.infer<typeof SystemShutdownResult>;
 
 // ── WP12d (L3c-i; `build-wp12-updater.md` §13, the PM's ruling 2026-10-15 18:17Z) — the updater over the HOST BRIDGE ──
-// The renderer's Settings card and the tray read ONE projection of the updater (`projectUpdateView` in main) and act
-// through narrow host doors (the preload's allowlist; `IPC_CHANNELS.update*`). The bridge, not fieldd, because an
-// updater must work with fieldd broken (EDP §11.3). No door carries a path or a URL (EDP-38); main validates each.
+// The renderer's Settings card and the tray read ONE projection of the updater (`UpdateController.view()` in main)
+// and act through narrow host doors (the preload's allowlist; `IPC_CHANNELS.update*`). The bridge, not fieldd, because
+// an updater must work with fieldd broken (EDP §11.3). No door carries a path or a URL (EDP-38); main validates each.
+
+/** AU-1 (AU-D11 A; AU-G7) — the last apply as the window says it, once a launch has judged it
+ * (`UpdateLastApply.landed`). An `installed` apply is projected only while its `version` runs (another build on the
+ * same state never reads "Updated today" of it). Main applies no time filter (a view is not re-emitted as time
+ * passes): the window decides "Updated today" against `at`, as `checkedLabel` does for `lastCheckAt`. */
+export const UpdateViewLastApply = z
+  .object({
+    version: z.string().min(1).max(64),
+    /** the version it left; absent when an older app wrote the record */
+    from: z.string().min(1).max(64).optional(),
+    outcome: UpdateApplyOutcome,
+    /** epoch ms of the first launch after the apply (`landed.at`) */
+    at: z.number().int().nonnegative(),
+    /** how it began; absent on an older app's record */
+    trigger: UpdateApplyTrigger.optional(),
+    /** true only in the launch that judged it, and only when that launch runs the version the apply left (or landed
+     * on): a failed install is said once, by the launch that found it, and never by a third version */
+    thisLaunch: z.boolean().optional(),
+  })
+  .passthrough();
+export type UpdateViewLastApply = z.infer<typeof UpdateViewLastApply>;
+
+/** AU-7 (AU-G8; LC-10) — macOS: where this bundle runs. `read-only` (App Translocation, a mounted disk image, an
+ * unwritable parent folder) cannot update itself: decide holds it and the apply refuses before anything stops.
+ * `elsewhere` is writable and updates as usual. */
+export const UPDATE_APP_LOCATIONS = ["applications", "elsewhere", "read-only"] as const;
+export const UpdateAppLocation = z.enum(UPDATE_APP_LOCATIONS);
+export type UpdateAppLocation = z.infer<typeof UpdateAppLocation>;
 
 /** The updater as the person sees it: the tray's item and the Settings card both render THIS. */
 export const UpdateView = z
@@ -457,6 +530,14 @@ export const UpdateView = z
     applyWired: z.boolean(),
     /** the advisory UNSUPPORTED line: the running version is below the policy's `minSupported` — never a block */
     unsupportedBelow: z.string().min(1).max(64).optional(),
+    /** AU-1 (AU-G4; AU-D4 B) — the running app's exact version (`app.getVersion()`) */
+    currentVersion: z.string().min(1).max(64).optional(),
+    /** AU-1 (AU-D3 A; AU-G12) — staged: when `version` FIRST became ready on this Mac, across launches (epoch ms) */
+    stagedAt: z.number().int().nonnegative().optional(),
+    /** AU-1 (AU-D11 A; AU-G7) — the last apply, once a launch has judged it */
+    lastApply: UpdateViewLastApply.optional(),
+    /** AU-7 (AU-G8) — macOS only: where the app runs; absent elsewhere */
+    location: UpdateAppLocation.optional(),
   })
   .passthrough();
 export type UpdateView = z.infer<typeof UpdateView>;
@@ -538,8 +619,152 @@ export const UpdateConfirmResult = z.discriminatedUnion("ok", [
 ]);
 export type UpdateConfirmResult = z.infer<typeof UpdateConfirmResult>;
 
+/** AU-1 (LC-5) — a person's check, answered when the CHECK settles (`updateCheck`'s answer): a found update's download
+ * goes on and the view says it. `busy`: a check or a download was already in flight (the view says which). `held`:
+ * found and not downloading (skipped, updates off, or a lever). `failed`: the check threw (the view says offline,
+ * failed, paused or unsupported). */
+export const UpdateCheckResult = z
+  .object({
+    outcome: z.enum(["up-to-date", "found", "held", "failed", "busy"]),
+    /** found or held: the version */
+    version: z.string().min(1).max(64).optional(),
+  })
+  .passthrough();
+export type UpdateCheckResult = z.infer<typeof UpdateCheckResult>;
+
+/** AU-1 (AU-G5, AU-G6) — a person downloads THIS found version: with automatic updates off, or a skip taken back
+ * (its decline is removed). Never a version a lever refuses. */
+export const UpdateDownloadRequest = z.object({ version: z.string().min(1).max(64) }).strict();
+
+export const UpdateDownloadResult = z.discriminatedUnion("ok", [
+  z.object({ ok: z.literal(true) }).passthrough(),
+  z
+    .object({
+      ok: z.literal(false),
+      /** `not-available`, `busy`, a lever (`killed`, `yanked`, `floor-unmet`), `location` (AU-7) */
+      reason: z.string().min(1).max(64),
+      words: UpdateWords.optional(),
+    })
+    .passthrough(),
+]);
+export type UpdateDownloadResult = z.infer<typeof UpdateDownloadResult>;
+
+/** AU-7 (LC-10, LC-25, LC-37) — Move to Applications, through the quit gate. `proceed`: the person's quit is underway;
+ * the app moves itself once the pairs have stopped and opens again from Applications. `cancel`: the quit box's
+ * Cancel, nothing changed. A refusal comes back BEFORE anything stops: `not-needed` (it already runs from
+ * Applications), `busy` (a quit or an apply is underway). Another VibeField running in Applications is no refusal
+ * (LC-37): the move fails after the stop and the app opens again where it was. */
+export const UpdateMoveResult = z.discriminatedUnion("ok", [
+  z.object({ ok: z.literal(true), outcome: z.enum(["proceed", "cancel"]) }).passthrough(),
+  z
+    .object({
+      ok: z.literal(false),
+      reason: z.string().min(1).max(64),
+      words: UpdateWords.optional(),
+    })
+    .passthrough(),
+]);
+export type UpdateMoveResult = z.infer<typeof UpdateMoveResult>;
+
 /** C4 — the doctor's lines (EDP §11.6), as `doctorLines()` says them. */
 export const UpdateDoctorResult = z
   .object({ lines: z.array(z.string().max(1024)).max(64) })
   .passthrough();
 export type UpdateDoctorResult = z.infer<typeof UpdateDoctorResult>;
+
+// ── AU-1 (LC-2; AU-L6) — one friendly name for a version, said the same by main's words and the window's ──
+
+const RELEASE_NAME_MONTHS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+] as const;
+/** `release-plan.mjs`'s nightly version, `<X.Y.Z>-nightly.<YYYYMMDD>`, its UTC plan day. */
+const NIGHTLY_VERSION_PATTERN = /^\d+\.\d+\.\d+-nightly\.(\d{4})(\d{2})(\d{2})$/;
+/** `release-plan.mjs`'s beta version: the tag without its `v`. */
+const BETA_VERSION_PATTERN = /^(\d+\.\d+\.\d+)-beta\.(\d+)$/;
+
+/** A version in a sentence: "the Oct 28 nightly" ("The Oct 28 nightly" with `start`) for a nightly, by the UTC day its
+ * version names; "VibeField 0.2.0 beta 3" for a beta; "VibeField " + the version for a stable and for anything else
+ * (a nightly whose day is not a real date included). English on purpose: the exact version stays where it can be
+ * copied (Settings → Updates' head). */
+export function releaseName(version: string, options: { readonly start?: boolean } = {}): string {
+  const nightly = NIGHTLY_VERSION_PATTERN.exec(version);
+  if (nightly !== null) {
+    const month = Number(nightly[2]) - 1;
+    const date = Number(nightly[3]);
+    const day = new Date(Date.UTC(Number(nightly[1]), month, date));
+    if (day.getUTCMonth() === month && day.getUTCDate() === date) {
+      const the = options.start === true ? "The" : "the";
+      return `${the} ${RELEASE_NAME_MONTHS[month]} ${date} nightly`;
+    }
+  }
+  const beta = BETA_VERSION_PATTERN.exec(version);
+  if (beta !== null) return `VibeField ${beta[1]} beta ${Number(beta[2])}`;
+  return `VibeField ${version}`;
+}
+
+// ── AU-3a (X24) — one version order, read by main's decision and the window's devices alike ──
+// Moved verbatim from main's `updates/decide.ts` (`compareDotted`, `compareSemver`), renamed, with no alias left
+// behind, so the window can say a desktop's version is older or newer (AU-3's devices) by the order main decides by.
+// A string compare would put 0.10.0 below 0.9.0.
+
+/** Dotted numeric versions (`15.1.0` against `14.0`): <0, 0 or >0, and NaN when either has a part that is not a
+ * number — which the floor reads as unmet (fail closed). */
+export function compareDottedVersions(a: string, b: string): number {
+  const parts = (v: string) =>
+    v.split(".").map((part) => (/^\d+$/.test(part) ? Number(part) : Number.NaN));
+  const left = parts(a);
+  const right = parts(b);
+  for (let i = 0; i < Math.max(left.length, right.length); i++) {
+    const l = left[i] ?? 0;
+    const r = right[i] ?? 0;
+    if (Number.isNaN(l) || Number.isNaN(r)) return Number.NaN;
+    if (l !== r) return l - r;
+  }
+  return 0;
+}
+
+/** Semver precedence, enough for the advisory `minSupported` line: the dotted core first, then a prerelease sorts
+ * below its release, identifiers compared numerically when both are numbers. NaN when a core part is not a number.
+ * Across channels the order means nothing (`beta` sorts below `nightly`), so the window compares within one. */
+export function compareReleaseVersions(a: string, b: string): number {
+  const [aCore = "", ...aPre] = a.split("-");
+  const [bCore = "", ...bPre] = b.split("-");
+  const core = compareDottedVersions(aCore, bCore);
+  if (Number.isNaN(core) || core !== 0) return core;
+  const ap = aPre.join("-");
+  const bp = bPre.join("-");
+  if (ap === bp) return 0;
+  if (ap === "") return 1;
+  if (bp === "") return -1;
+  const ai = ap.split(".");
+  const bi = bp.split(".");
+  for (let i = 0; i < Math.max(ai.length, bi.length); i++) {
+    const x = ai[i];
+    const y = bi[i];
+    if (x === undefined) return -1;
+    if (y === undefined) return 1;
+    if (x === y) continue;
+    const numeric = /^\d+$/.test(x) && /^\d+$/.test(y);
+    return numeric ? Number(x) - Number(y) : x < y ? -1 : 1;
+  }
+  return 0;
+}
+
+/** AU-3 (LC-20) — a release version's channel by its shape (`release-plan.mjs`'s naming), or null for anything else.
+ * Older and newer are said only within one channel: semver orders `beta` below `nightly`. */
+export function releaseChannelOf(version: string): UpdateChannel | null {
+  if (NIGHTLY_VERSION_PATTERN.test(version)) return "nightly";
+  if (BETA_VERSION_PATTERN.test(version)) return "beta";
+  return /^\d+\.\d+\.\d+$/.test(version) ? "stable" : null;
+}

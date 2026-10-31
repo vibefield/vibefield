@@ -15,8 +15,8 @@ struct AccountMemoryTests {
     return defaults
   }
 
-  private func desktop(id: String, name: String) -> FieldDesktop {
-    FieldDesktop(deviceId: id, name: name, platform: "darwin", state: .ready, feed: .door)
+  private func desktop(id: String, name: String, platform: String? = "darwin") -> FieldDesktop {
+    FieldDesktop(deviceId: id, name: name, platform: platform, state: .ready, feed: .door)
   }
 
   @Test("a listed desktop is remembered, by device id, with the name it reports now")
@@ -24,12 +24,92 @@ struct AccountMemoryTests {
     let memory = DesktopMemory(defaults: scratch())
     let t0 = Date(timeIntervalSince1970: 1_000)
     memory.record([desktop(id: "a", name: "studio")], login: "Me@Example.com", at: t0)
-    #expect(memory.remembered(for: "me@example.com") == [.init(deviceId: "a", name: "studio", lastSeen: t0)])
+    #expect(
+      memory.remembered(for: "me@example.com") == [
+        .init(deviceId: "a", name: "studio", lastSeen: t0, platform: "darwin")
+      ])
     // Seen again under a new name: the same row, renamed, re-dated.
     let t1 = Date(timeIntervalSince1970: 2_000)
     memory.record([desktop(id: "a", name: "studio-2"), desktop(id: "b", name: "mini")], login: "me@example.com", at: t1)
     #expect(memory.remembered(for: "me@example.com").map(\.name) == ["studio-2", "mini"])
     #expect(memory.remembered(for: "me@example.com").allSatisfy { $0.lastSeen == t1 })
+  }
+
+  @Test("TS-7: a listing that has not said its platform keeps the one remembered, and a new one replaces it")
+  func platformMerges() {
+    let memory = DesktopMemory(defaults: scratch())
+    memory.record([desktop(id: "a", name: "studio")], login: "me@example.com")
+    memory.record([desktop(id: "a", name: "studio", platform: nil)], login: "me@example.com")
+    #expect(memory.remembered(for: "me@example.com").map(\.platform) == ["darwin"])
+    memory.record([desktop(id: "a", name: "studio", platform: "linux")], login: "me@example.com")
+    #expect(memory.remembered(for: "me@example.com").map(\.platform) == ["linux"])
+  }
+
+  @Test("TS-7: a record written before the platform decodes, and says none")
+  func oldRecordDecodes() throws {
+    let defaults = scratch()
+    let old = #"[{"deviceId":"a","name":"studio","lastSeen":0}]"#
+    defaults.set(Data(old.utf8), forKey: DesktopMemory.key(for: "me@example.com"))
+    let rows = DesktopMemory(defaults: defaults).remembered(for: "me@example.com")
+    #expect(rows.map(\.deviceId) == ["a"])
+    #expect(rows.first?.platform == nil)
+  }
+
+  @Test("TS-7b: a Mac's code is remembered once, the newest replacing the last, and forgotten when settled")
+  func expectation() throws {
+    let memory = ExpectationMemory(defaults: scratch())
+    #expect(memory.expected() == nil)
+    let t0 = Date(timeIntervalSince1970: 1_000)
+    memory.record(PhoneCode(login: "me@example.com", from: "Studio"), arrival: .scanned, at: t0)
+    #expect(memory.expected() == PhoneCodeExpectation(login: "me@example.com", from: "Studio", arrival: .scanned, at: t0))
+    memory.record(PhoneCode(login: "you@example.com", from: "Mini"), arrival: .link, at: t0)
+    #expect(memory.expected()?.login == "you@example.com")
+    #expect(memory.expected()?.arrival == .link)
+    memory.forget()
+    #expect(memory.expected() == nil)
+  }
+
+  @Test("TS-7b: the sign-out sweep keeps the Mac's code — Sign in again is checked against it")
+  func sweepKeepsTheExpectation() {
+    let defaults = scratch()
+    let memory = ExpectationMemory(defaults: defaults)
+    memory.record(PhoneCode(login: "me@example.com", from: "Studio"), arrival: .scanned)
+    SignOutSweep(login: "james@acme.dev", stateDirectory: nil).run(defaults: defaults)
+    #expect(memory.expected()?.login == "me@example.com")
+  }
+
+  @Test("IOS-8f: the home's own word replaces a deal, keeps its name, and a later deal never moves it")
+  func adoptsTheHomesPerson() {
+    let store = AccountFaceStore(defaults: scratch())
+    let login = "me@example.com"
+    store.dealIfNeeded(login: login, userId: "01J8F2ZQ9K3M4N5P6Q7R8S9T0V")
+    #expect(store.face(for: login) == UserFace(emoji: "🐳", frame: .sticker))
+    #expect(store.name(for: login) == nil)
+
+    let written = DesktopPerson(name: "James", emoji: "🐙", frame: "coin", dealt: false)
+    #expect(store.adopt(written, login: login))
+    #expect(store.face(for: login) == UserFace(emoji: "🐙", frame: .coin))
+    #expect(store.name(for: "ME@example.com") == "James")
+    // the same answer again moves nothing, so the corner redraws once
+    #expect(!store.adopt(written, login: login))
+    // a later desktop's deal never moves the desktop's own word
+    store.dealIfNeeded(login: login, userId: "01J9AAAAAAAAAAAAAAAAAAAAAA")
+    #expect(store.face(for: login)?.emoji == "🐙")
+  }
+
+  @Test("IOS-8f: a nameless answer keeps the name; an unknown frame is a sticker; sign out forgets both")
+  func adoptEdges() {
+    let defaults = scratch()
+    let store = AccountFaceStore(defaults: defaults)
+    let login = "me@example.com"
+    store.adopt(DesktopPerson(name: "James", emoji: "🐙", frame: "coin", dealt: false), login: login)
+    #expect(store.adopt(DesktopPerson(name: nil, emoji: "🦊", frame: "hologram", dealt: true), login: login))
+    #expect(store.face(for: login) == UserFace(emoji: "🦊", frame: .sticker))
+    #expect(store.name(for: login) == "James")
+    #expect(!store.adopt(DesktopPerson(name: "Nobody", emoji: "🦊", frame: nil, dealt: true), login: ""))
+    SignOutSweep(login: login, stateDirectory: nil).run(defaults: defaults)
+    #expect(store.face(for: login) == nil)
+    #expect(store.name(for: login) == nil)
   }
 
   @Test("an absent desktop stays remembered until the account is forgotten")

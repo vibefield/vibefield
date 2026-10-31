@@ -1,4 +1,8 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { SURFACE_LIMITS } from "../src/live-surfaces";
 import { METHODS } from "../src/methods";
 import { IPC_CHANNELS } from "../src/registries";
 import {
@@ -37,8 +41,11 @@ import {
   ShellProviderRegisterResult,
   ShellRendererRequestReplacementParams,
   ShellRendererRequestReplacementResult,
+  ShellSurfacesSimulatorDevicesParams,
+  ShellSurfacesSimulatorDevicesResult,
   ShellWebContentsCaptureArtifactPreviewParams,
   ShellWebContentsCaptureArtifactPreviewResult,
+  SURFACE_AUTHORITY_LIMITS,
   ThemePreference,
   ThemeSetRequest,
   ThemeState,
@@ -239,6 +246,8 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       "updatePrepareRestart",
       "updateConfirmRestart",
       "updateDoctor",
+      "updateDownload", // AU-1 — a person's download of one found version (AU-G5, AU-G6)
+      "updateMoveToApplications", // AU-7 — Move to Applications through the quit gate (AU-G8)
       // TP-S3e: terminalConnect + terminalStatus retired with the bridge —
       // the renderer dials the cells' T1 doors itself.
       "viewState", // FR-1 — the window's active view (GT-D2's Godview bit, grown into four)
@@ -278,6 +287,8 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       updatePrepareRestart: "vibefield:update:prepare-restart",
       updateConfirmRestart: "vibefield:update:confirm-restart",
       updateDoctor: "vibefield:update:doctor",
+      updateDownload: "vibefield:update:download",
+      updateMoveToApplications: "vibefield:update:move-to-applications",
       viewState: "vibefield:view:state",
       viewSet: "vibefield:view:set",
       viewZoom: "vibefield:view:zoom",
@@ -491,6 +502,20 @@ describe("tray shell commands and app preferences", () => {
     ).toBe(false);
   });
 
+  it("AU-1 — every update-view fixture parses as the desktop state's update", () => {
+    // the preload drops the WHOLE desktop state when it fails to parse (`preload/desktop-state.ts`): a view field the
+    // contract does not take blanks the tray facts and the Settings card together
+    const fixtures = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures");
+    const views = readdirSync(fixtures).filter((f) => f.startsWith("update-view."));
+    expect(views.length).toBeGreaterThanOrEqual(5);
+    for (const f of views) {
+      const raw: unknown = JSON.parse(readFileSync(join(fixtures, f), "utf8"));
+      const parsed = DesktopShellState.shape.update.safeParse(raw);
+      const issues = parsed.success ? "" : JSON.stringify(parsed.error.issues);
+      expect(parsed.success, `${f}: ${issues}`).toBe(true);
+    }
+  });
+
   it("keeps the renderer command set closed", () => {
     expect(ShellCommandRequest.parse({ command: "open-settings" }).command).toBe("open-settings");
     expect(ShellCommandRequest.parse({ command: "open-diagnostics" }).command).toBe(
@@ -699,6 +724,57 @@ describe("AH-3/AH-4 static shell provider", () => {
     expect(SHELL_INTERNAL_PROVIDER_METHODS).toContain("shell.openLink");
     expect(SHELL_PROVIDER_METHODS).toContain("shell.openLink");
     expect(METHODS.some((method) => method.method === "shell.openLink")).toBe(false);
+  });
+
+  it("PT-S2 (R11): the attach's device list is a local `surface.capture` read, carried by an INTERNAL provider verb, and its rows never hold a UDID", () => {
+    expect(METHODS.find((method) => method.method === "surface.simulator.devices")).toEqual({
+      surface: "product",
+      method: "surface.simulator.devices",
+      scope: "surface.capture",
+      idempotent: true,
+      locality: "local",
+    });
+    expect(SHELL_INTERNAL_PROVIDER_METHODS).toContain("shell.surfaces.simulatorDevices");
+    expect(SHELL_PROVIDER_METHODS).toContain("shell.surfaces.simulatorDevices");
+    expect(METHODS.some((method) => method.method === "shell.surfaces.simulatorDevices")).toBe(
+      false,
+    );
+    // above main's own worst case for the call: the Xcode probe (5 s) and the list (8 s)
+    expect(SURFACE_AUTHORITY_LIMITS.SIMULATOR_DEVICES_DEADLINE_MS).toBe(15_000);
+    expect(ShellSurfacesSimulatorDevicesParams.parse({})).toEqual({});
+    const row = {
+      deviceType: "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro",
+      runtime: "com.apple.CoreSimulator.SimRuntime.iOS-26-1",
+      name: "iPhone 17 Pro",
+      booted: true,
+    };
+    expect(ShellSurfacesSimulatorDevicesResult.parse({ devices: [row] })).toEqual({
+      devices: [row],
+    });
+    expect(ShellSurfacesSimulatorDevicesResult.parse({ devices: [] })).toEqual({ devices: [] });
+    // a UDID anywhere refuses the whole list: main's own parse is the last door before fieldd
+    expect(
+      ShellSurfacesSimulatorDevicesResult.safeParse({
+        devices: [{ ...row, udid: "F93EABF3-4281-4EB5-A5F6-A550FBE95CDC" }],
+      }).success,
+    ).toBe(false);
+    expect(
+      ShellSurfacesSimulatorDevicesResult.safeParse({
+        devices: Array.from({ length: SURFACE_LIMITS.MAX_SIMULATOR_DEVICES + 1 }, () => row),
+      }).success,
+    ).toBe(false);
+    // the runtimes installed here ride with them (the attach's third pick): CoreSimulator's ids, never a UDID
+    const runtimes = ["com.apple.CoreSimulator.SimRuntime.iOS-26-1"];
+    expect(ShellSurfacesSimulatorDevicesResult.parse({ devices: [], runtimes })).toEqual({
+      devices: [],
+      runtimes,
+    });
+    expect(
+      ShellSurfacesSimulatorDevicesResult.safeParse({
+        devices: [],
+        runtimes: ["F93EABF3-4281-4EB5-A5F6-A550FBE95CDC"],
+      }).success,
+    ).toBe(false);
   });
 
   it("requires a unique registered static method set and exactly one outcome arm", () => {

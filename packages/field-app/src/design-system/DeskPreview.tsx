@@ -18,7 +18,7 @@ export interface DeskPreviewProps {
 /**
  * A controller-free mount of the production GROUND — the desk itself (DK-3; DK-17 retired this
  * specimen's pre-desk name with the R3F ground it once drew): the field's own layer (`fieldDeskLayer`
- * — the mat, its rulers at 60, the plates, the hand) on a disposable engine of the desk's preset with
+ * — the mat, its rulers on the edges, the plates, the hand) on a disposable engine of the desk's preset with
  * an empty board. ICE owns the camera and the drawing; the catalog supplies only the engine and the
  * page's theme. Where the page has no WebGPU (a test's DOM) the specimen says so instead of mounting a
  * desk that cannot draw.

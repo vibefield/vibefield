@@ -41,6 +41,7 @@ import {
   SOCKETS,
   STORES,
   TAILNET_SCOPES,
+  USER_ME,
 } from "../src/registries";
 import {
   TerminalOpenTicketParams,
@@ -56,6 +57,16 @@ describe("PRODUCT_API_LIMITS — the door's inbound cap is a registry number (DS
     expect(PRODUCT_API_LIMITS.WS_MAX_INBOUND_BYTES).toBeLessThan(
       MESH_CONTROL_LIMITS.PRODUCT_FRAME_BYTES,
     );
+  });
+
+  it("holds a phone's queue at one number, short of the shed (PG-1c, PG-D11)", () => {
+    // James's ruling moves this one number and this one row
+    expect(PRODUCT_API_LIMITS.TAILNET_QUEUED_BYTES).toBe(256 * 1024);
+    expect(PRODUCT_API_LIMITS.TAILNET_QUEUED_BYTES).toBeLessThan(
+      MESH_CONTROL_LIMITS.PRODUCT_QUEUED_BYTES,
+    );
+    // it holds deltas, never a snapshot, so a snapshot page always fits under the shed
+    expect(ROWS.SNAPSHOT_PAGE_BYTES).toBeLessThanOrEqual(MESH_CONTROL_LIMITS.PRODUCT_QUEUED_BYTES);
   });
 });
 
@@ -795,5 +806,27 @@ describe("SP-3 — index.openTicket, declared", () => {
     expect(IndexOpenTicketParams.safeParse({ sessionId: "" }).success).toBe(false);
     expect(IndexOpenTicketParams.safeParse({ device: "dev-a" }).success).toBe(false);
     expect(IndexOpenTicketParams.safeParse({ sessionId: "s1", device: "" }).success).toBe(false);
+  });
+});
+
+// IOS-8f (AP-D3's end state) — who this desktop's person is, read by the phone beside the roster.
+describe("IOS-8f — user.me, the desktop's own person", () => {
+  it("is local and idempotent on workspace.read, the roster's scope: the phone reads it, a peer daemon never", () => {
+    const def = METHODS.find((m) => m.method === "user.me");
+    expect(def).toEqual({
+      surface: "product",
+      method: "user.me",
+      scope: "workspace.read",
+      idempotent: true,
+      locality: "local",
+    });
+    expect(def?.subscription).toBeUndefined();
+    expect(def?.guestOk).toBeUndefined();
+    expect(def !== undefined && reachableFromTailnet(def)).toBe(true);
+    expect(TAILNET_SCOPES).toContain("workspace.read");
+  });
+
+  it("names its honest UNAVAILABLE: a daemon with no user id has no person to answer", () => {
+    expect(USER_ME).toEqual({ SERVICE: "user", STATE_NO_USER: "no-user" });
   });
 });

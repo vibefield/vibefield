@@ -1,0 +1,15 @@
+{
+  "name": "Vela",
+  "face": {
+    "seed": 2846113027
+  },
+  "agent": "claude",
+  "modelSelection": {
+    "modelId": "claude-opus-5-5",
+    "controls": {
+      "effort": "high"
+    }
+  },
+  "profiles": ["work", "native"],
+  "thinksUnder": "work"
+}

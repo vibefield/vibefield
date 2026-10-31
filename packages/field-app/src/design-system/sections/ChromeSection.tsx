@@ -17,6 +17,15 @@ import { Section, Specimen } from "../catalog-ui";
 const ME_STATES = ["Three users", "Waiting", "One user · offline"] as const;
 type MeState = (typeof ME_STATES)[number];
 
+/** AU-2 — the update row's states, in the page's groups (the fixtures'). */
+const UPDATE_GROUP_OPTIONS: readonly { id: UpdateCornerGroup; label: string }[] = [
+  { id: "path", label: "The path" },
+  { id: "edges", label: "Choices · line 3" },
+  { id: "held", label: "Held" },
+  { id: "answers", label: "A check's answers" },
+  { id: "acts", label: "Restart · Download" },
+];
+
 import {
   CARD_FIXTURES,
   CARDS_STATES,
@@ -34,6 +43,13 @@ import { PEERS_STATES, PeersPlate } from "../PeersPreview";
 import { PEGBOARD_STATES, PegboardPlate, StageBoard } from "../PegboardPreview";
 import { BAR_STATES, HAND_STATES, HandPlate, SelectionBarPlate } from "../SelectionBarPreview";
 import { SwitchPreview } from "../SwitchPreview";
+import { UpdateFacePlate, UpdateMenuPlate } from "../UpdateCornerPreview";
+import {
+  UPDATE_CORNER_GROUPS,
+  UPDATE_FACE_STATES,
+  type UpdateCornerGroup,
+  type UpdateCornerState,
+} from "../updates-settings-fixtures";
 import { FRAME_STATES, ViewFramePreview, ViewsTrackSpecimen } from "../ViewFramePreview";
 
 export function ChromeSection({
@@ -61,6 +77,13 @@ export function ChromeSection({
     if ((resolveTheme(pick, osDark) === "dark") !== dark) onToggleTheme();
   };
   const playgroundTheme = { preference: themePick, resolved: dark ? "dark" : "light" } as const;
+  const [updateGroup, setUpdateGroup] = useState<UpdateCornerGroup>("path");
+  const [updateState, setUpdateState] = useState<UpdateCornerState>("current");
+  const updateStates: readonly UpdateCornerState[] = UPDATE_CORNER_GROUPS[updateGroup];
+  const chooseUpdateGroup = (group: UpdateCornerGroup): void => {
+    setUpdateGroup(group);
+    setUpdateState(UPDATE_CORNER_GROUPS[group][0]);
+  };
 
   const changeSurface = (next: FrameSurface | null): void => {
     setSurface(next);
@@ -401,6 +424,44 @@ export function ChromeSection({
         <p className="vf-ds-stage-caption">
           Your face, where the Settings gear was. The menu grows above it on the island curve, and
           your face never moves — click it again to fold the menu back.
+        </p>
+      </Specimen>
+
+      <Specimen
+        title="Me menu — the update: the dot and the always-row"
+        source="account/MeMenu.tsx · panels/update-words.ts · DESIGN.md §8"
+        bleed
+      >
+        <div className="vf-ds-update-faces">
+          {UPDATE_FACE_STATES.map((state) => (
+            <UpdateFacePlate key={state} state={state} />
+          ))}
+        </div>
+        <div className="vf-ds-update-controls">
+          <SegmentedControl
+            options={UPDATE_GROUP_OPTIONS}
+            value={updateGroup}
+            onChange={chooseUpdateGroup}
+            label="Update row group"
+          />
+          <SegmentedControl
+            options={updateStates}
+            value={updateState}
+            onChange={setUpdateState}
+            label="Update row state"
+            size="small"
+          />
+        </div>
+        <UpdateMenuPlate
+          key={`${updateState}-${dark ? "dark" : "light"}`}
+          state={updateState}
+          dark={dark}
+        />
+        <p className="vf-ds-stage-caption">
+          AU-2: the menu always carries one row about the app, nearest your face — it checks,
+          downloads and restarts in place, and a restart that ends sessions grows the panel to 320
+          into main's own question, Cancel first. While an install waits on you, a cyan dot sits
+          beside your face: it pops in once, never pulses, and gives way to a waiting count.
         </p>
       </Specimen>
 
