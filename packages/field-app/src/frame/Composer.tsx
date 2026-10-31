@@ -11,7 +11,11 @@ import {
 } from "react";
 import { emitLineKeyMarker } from "../development-console";
 import { type BoardLineDoor, useBoardLineDoor } from "../field/desk/pegboard/board-door";
-import { isNewTerminalChord, listenForProductChord } from "../field/product-chords";
+import {
+  isNewSparkChord,
+  isNewTerminalChord,
+  listenForProductChord,
+} from "../field/product-chords";
 import { type FieldHost, getHost } from "../host";
 import { hearTerminalInputRefusals, type RoutedInputRefusal } from "../terminal/pool";
 import { ComposerLineView, type LineNote } from "./ComposerLine";
@@ -217,6 +221,8 @@ export function Composer({
         onSurfaceChange(open ? "objects" : foldSurface(surface, "objects"));
       } else if (view === "godview") void newTerminal();
       else if (view === "history") void historyTerminal();
+      // SP-1c — Chat's create: the New spark sheet, one of the frame's surfaces
+      else onSurfaceChange(surface === "new-spark" ? null : "new-spark");
     },
     [board, boardRefused, historyTerminal, newTerminal, onSurfaceChange, surface, view],
   );
@@ -312,6 +318,26 @@ export function Composer({
     [historyTerminal, keys, newTerminal, takesNewTerminal, view],
   );
 
+  // ⌘N — New spark, Chat's create (SP-1c): a product chord, as ⌘T is Godview's and History's. Only while Chat is
+  // the view: it opens the sheet, and again folds it.
+  const takesNewSpark = bindKeys && view === "assistant";
+  useEffect(
+    () =>
+      listenForProductChord(
+        (event) => takesNewSpark && isNewSparkChord(event, keys),
+        (event) => {
+          if (event.repeat) return;
+          emitLineKeyMarker({
+            key: keys === "mac" ? "⌘N" : "Ctrl+N",
+            view,
+            outcome: surface === "new-spark" ? "closed" : "opened",
+          });
+          create(true);
+        },
+      ),
+    [create, keys, surface, takesNewSpark, view],
+  );
+
   const createWaits = view === "godview" && door === null ? "the deck is not connected yet" : null;
 
   return (
@@ -320,6 +346,7 @@ export function Composer({
       keys={keys}
       track={track}
       objectsOpen={board === null ? surface === "objects" : board.open}
+      sheetOpen={surface === "new-spark"}
       createHeld={boardRefused}
       createWaits={createWaits}
       createProject={view === "history" ? (historyDoor?.project ?? null) : null}

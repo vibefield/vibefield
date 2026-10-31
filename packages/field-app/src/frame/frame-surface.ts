@@ -47,7 +47,10 @@ export type FrameSurface =
   /** The selection bar grown into its menu, by More or a right-click (DK-11;
    * DESIGN.md §10 "The mat's places": the one owner's ninth, R5) — the bar
    * over the desk's selection, never the frame's own. */
-  | "selection";
+  | "selection"
+  /** The New spark sheet (SP-1c; DESIGN.md §8 "The New spark sheet"), Chat's line create: a name, an agent and the
+   * face it is dealt. */
+  | "new-spark";
 
 /** What a surface's own close asks of the owner: fold it if it is the one
  * open, and leave the others alone — the board's Esc must not close the palette. */

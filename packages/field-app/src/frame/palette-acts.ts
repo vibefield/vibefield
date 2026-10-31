@@ -80,22 +80,19 @@ export function frameActGroups(
     run: { kind: "view", view: cell.view },
   }));
   // The line's create, as the line names and keys it in this view (FC-D3) —
-  // New terminal ⌘T in Godview and in History (HN-7) — no row where the view
-  // has no act on the line (Chat's, until its New spark comes with SP-1c).
+  // New terminal ⌘T in Godview and in History (HN-7), New spark ⌘N in Chat
+  // (SP-1c).
   const create = createActOf(view, keys);
-  const onView: FrameAct[] =
-    create === null
-      ? []
-      : [
-          {
-            id: "create",
-            name: create.name,
-            glyph: create.glyph,
-            key: create.key,
-            waits: null,
-            run: { kind: "create" },
-          },
-        ];
+  const onView: FrameAct[] = [
+    {
+      id: "create",
+      name: create.name,
+      glyph: create.glyph,
+      key: create.key,
+      waits: null,
+      run: { kind: "create" },
+    },
+  ];
   // History's chosen session, after the create (DESIGN.md §8 the palette):
   // Resume, waiting until a session is chosen — Jump to while it runs here —
   // by the reading the line's create kept until HN-7.

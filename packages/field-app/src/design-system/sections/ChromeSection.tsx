@@ -42,6 +42,7 @@ import { ComposerLinePlate, LINE_STATES } from "../ComposerLinePreview";
 import { AppearancePlate, CORNER_PICKS, CornerPlate } from "../CornerPreview";
 import { DeskPreview } from "../DeskPreview";
 import { HEAD_STATES, HeadLive, HeadPlate } from "../HeadPreview";
+import { NewSparkSpecimen } from "../NewSparkPreview";
 import { PACKAGE_CIRCLE_STATES, PackageCirclePlate } from "../PackageCirclePreview";
 import { PEERS_STATES, PeersPlate } from "../PeersPreview";
 import { PEGBOARD_STATES, PegboardPlate, StageBoard } from "../PegboardPreview";
@@ -227,6 +228,20 @@ export function ChromeSection({
           Asking you, Needs your OK and Stuck in the attention ink with the orange dot. Until the
           thread comes (SP-1d) its column holds the chosen spark's head and one honest line with its
           one act. Fixture sparks and rows, read by the product's own reading.
+        </p>
+      </Specimen>
+
+      <Specimen
+        title="The New spark sheet — a name, an agent, and the face it is dealt"
+        source="chat/NewSparkSheetView.tsx · DESIGN.md §8 “The New spark sheet”, §2.10"
+        bleed
+      >
+        <NewSparkSpecimen />
+        <p className="vf-ds-stage-caption">
+          Chat's create (SP-1c): a suggested star name, ↻ for another face, the agent it thinks with
+          and its menu, the profiles once there is more than This Mac, and Create. Live, the
+          product's own sheet over fixture doors (Create hatches after a beat); still, the agent
+          menu, the profiles and a name another spark holds.
         </p>
       </Specimen>
 

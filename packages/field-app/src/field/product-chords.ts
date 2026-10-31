@@ -83,6 +83,15 @@ export function isNewTerminalChord(event: ChordKey, keys: ViewKeys): boolean {
   return event.key === "t" || event.key === "T";
 }
 
+/** ⌘N (Ctrl+N off the Mac): New spark, Chat's create (SP-1c). Never with ⇧ or
+ * ⌥, and never the other platform's modifier. */
+export function isNewSparkChord(event: ChordKey, keys: ViewKeys): boolean {
+  const command =
+    keys === "mac" ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
+  if (!command || event.altKey || event.shiftKey) return false;
+  return event.key === "n" || event.key === "N";
+}
+
 /** ⌘F (Ctrl+F off the Mac): search — the Peek. Never with ⇧ or ⌥, and never
  * the other platform's modifier. */
 export function isSearchChord(event: ChordKey, keys: ViewKeys): boolean {
@@ -107,6 +116,7 @@ interface ProductChordRow {
     | "settings"
     | "cards"
     | "new-terminal"
+    | "new-spark"
     | "search"
     | "desk-copy"
     | "view-canvas"
@@ -153,6 +163,13 @@ export const PRODUCT_CHORDS: readonly ProductChord[] = [
     label: "New terminal",
     when: "while Godview or History is the view",
     matches: (event) => isNewTerminalChord(event, viewKeysOf(getHost().platform)),
+  },
+  {
+    id: "new-spark",
+    trigger: "super+n",
+    label: "New spark",
+    when: "while Chat is the view",
+    matches: (event) => isNewSparkChord(event, viewKeysOf(getHost().platform)),
   },
   {
     id: "search",

@@ -376,15 +376,15 @@ export function emitViewKeyMarker(facts: ViewKeyFacts): void {
 }
 
 /** One key the LINE took for its create (One Frame FR-2, §11): B on Canvas,
- * ⌘T in Godview and in History (HN-7). The delivery probe's ear at the line, in
- * VIEW_KEY's form — said from the line's own handler, so a key that never
- * arrived says nothing, which is what the probe from a focused pane reads B's
- * silence by. */
+ * ⌘T in Godview and in History (HN-7), ⌘N in Chat (SP-1c). The delivery
+ * probe's ear at the line, in VIEW_KEY's form — said from the line's own
+ * handler, so a key that never arrived says nothing, which is what the probe
+ * from a focused pane reads B's silence by. */
 export interface LineKeyFacts {
   key: string;
   view: string;
-  /** "opened" / "closed": Objects; "refused": Objects while an object is in hand (DK-13, R14); "new-terminal": the
-   * view's New terminal was asked (the deck in Godview; History's door in History). */
+  /** "opened" / "closed": Objects, or Chat's New spark sheet (SP-1c); "refused": Objects while an object is in hand
+   * (DK-13, R14); "new-terminal": the view's New terminal was asked (the deck in Godview; History's door in History). */
   outcome: "opened" | "closed" | "refused" | "new-terminal";
 }
 

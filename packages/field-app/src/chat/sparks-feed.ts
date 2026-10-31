@@ -106,9 +106,12 @@ interface FeedState {
   readonly reading: SparksReading;
   /** the sparks that need you, or null before the first reading (so what needed you then is no news) */
   readonly needing: readonly SparkEntry[] | null;
+  /** the person's live sessions on the board by the persona each runs as (its `profileId`; null for an agent's own
+   * folder), or null before the board is read: the New spark sheet's "Sees N sessions" (SP-1c) */
+  readonly sessions: ReadonlyMap<string | null, number> | null;
 }
 
-const OPENING: FeedState = { reading: { state: "opening" }, needing: null };
+const OPENING: FeedState = { reading: { state: "opening" }, needing: null, sessions: null };
 let state: FeedState = OPENING;
 const listeners = new Set<() => void>();
 
@@ -144,6 +147,7 @@ class RunningFeed {
   #sparks: readonly SparkSummary[] | null = null;
   #failed: string | null = null;
   #rows: readonly AgentFieldRow[] = [];
+  #boardRead = false;
   #asked = 0;
   #generation = 0;
   #stop: (() => void) | null = null;
@@ -192,6 +196,7 @@ class RunningFeed {
           return;
         }
         this.#rows = board.rows();
+        this.#boardRead = true;
         const key = boardSparksKey(this.#rows);
         if (key !== this.#onBoard) {
           this.#onBoard = key;
@@ -210,6 +215,7 @@ class RunningFeed {
   }
 
   #derive(): void {
+    const sessions = this.#boardRead ? sessionsByProfileOf(this.#rows) : null;
     if (this.#sparks === null) {
       publish({
         reading:
@@ -217,6 +223,7 @@ class RunningFeed {
             ? { state: "opening" }
             : { state: "unavailable", reason: this.#failed },
         needing: null,
+        sessions,
       });
       return;
     }
@@ -225,6 +232,7 @@ class RunningFeed {
     publish({
       reading: { state: "ready", entries },
       needing: sameNeeds(state.needing, needing) ? state.needing : needing,
+      sessions,
     });
   }
 }
@@ -244,6 +252,26 @@ export function startSparksFeed(port: SparksPort): () => void {
   };
 }
 
+/** Chat chooses a spark it was asked to (the New spark sheet's, once hatched): one request at a time, counted, so the
+ * same spark asked again is chosen again. */
+let chooseRequest: { readonly spark: SparkId; readonly seq: number } | null = null;
+const choosers = new Set<() => void>();
+
+export function chooseSpark(spark: SparkId): void {
+  chooseRequest = { spark, seq: (chooseRequest?.seq ?? 0) + 1 };
+  for (const listener of choosers) listener();
+}
+
+export function useChooseRequest(): { readonly spark: SparkId; readonly seq: number } | null {
+  return useSyncExternalStore(
+    (listener) => {
+      choosers.add(listener);
+      return () => choosers.delete(listener);
+    },
+    () => chooseRequest,
+  );
+}
+
 /** Ask for the list again (after a Wake, which changes the spark's record). */
 export function refreshSparks(): void {
   running?.refresh();
@@ -261,6 +289,22 @@ export function useSparksReading(): SparksReading {
 /** The sparks that need you (S-4), or null before the first reading. */
 export function useSparksNeedingYou(): readonly SparkEntry[] | null {
   return useSyncExternalStore(subscribe, () => state.needing);
+}
+
+/** The person's live sessions by the persona each runs as, or null before the board is read. */
+export function useSessionTally(): ReadonlyMap<string | null, number> | null {
+  return useSyncExternalStore(subscribe, () => state.sessions);
+}
+
+/** The person's live sessions by persona (null: an agent's own folder); a spark's own session is not one of them. */
+function sessionsByProfileOf(rows: readonly AgentFieldRow[]): ReadonlyMap<string | null, number> {
+  const tally = new Map<string | null, number>();
+  for (const row of rows) {
+    if (!row.alive || row.spark !== undefined) continue;
+    const profile = row.profileId ?? null;
+    tally.set(profile, (tally.get(profile) ?? 0) + 1);
+  }
+  return tally;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

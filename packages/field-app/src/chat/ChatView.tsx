@@ -3,7 +3,7 @@ import { type ReactElement, useCallback, useEffect, useState } from "react";
 import { openLiveRow } from "../frame/live-open";
 import { type ChatAct, ChatPanelView } from "./ChatPanelView";
 import type { SparkEntry } from "./spark-status";
-import { refreshSparks, sparksDoor, useSparksReading } from "./sparks-feed";
+import { refreshSparks, sparksDoor, useChooseRequest, useSparksReading } from "./sparks-feed";
 
 // CHAT, THE CONTROLLER (SP-1b; DESIGN.md §8 "Chat's list"). It draws the window's one feed (`sparks-feed.ts`, which
 // the frame's host starts for the window's life, so Chat's cell hears a spark that needs you from any view), holds
@@ -23,6 +23,11 @@ export function ChatView({
   const [chosen, setChosen] = useState<SparkId | null>(null);
   const [act, setAct] = useState<{ readonly spark: SparkId; readonly act: ChatAct } | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  // SP-1c — a spark just hatched from the sheet is the one Chat shows
+  const request = useChooseRequest();
+  useEffect(() => {
+    if (request !== null) setChosen(request.spark);
+  }, [request]);
   useEffect(() => {
     if (!active) return;
     setNow(Date.now());

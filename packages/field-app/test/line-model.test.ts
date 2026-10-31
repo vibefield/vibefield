@@ -67,9 +67,18 @@ describe("the view's one act (FR-3, FC-D3)", () => {
     expect(createActOf("canvas", "mac", "vibe-field")?.title).toBeUndefined();
   });
 
-  it("draws no act for Chat until its sheet brings New spark (SP-1c) — never Canvas's Objects in its place", () => {
-    expect(createActOf("assistant", "mac")).toBeNull();
-    expect(createActOf("assistant", "other", "vibe-field")).toBeNull();
+  it("gives Chat its create, New spark — never Canvas's Objects in its place (SP-1c)", () => {
+    // DESIGN.md §8 "The line": Chat's create opens the New spark sheet, ✦ and ⌘N; no project names it
+    expect(createActOf("assistant", "mac")).toEqual({
+      glyph: "sparkle",
+      name: "New spark",
+      key: "⌘N",
+    });
+    expect(createActOf("assistant", "other", "vibe-field")).toEqual({
+      glyph: "sparkle",
+      name: "New spark",
+      key: "Ctrl+N",
+    });
   });
 
   it("spells every key the line says as aria-keyshortcuts reads it", () => {

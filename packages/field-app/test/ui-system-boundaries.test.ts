@@ -108,6 +108,8 @@ describe("UI system ownership boundaries", () => {
     expect(catalogCss).not.toMatch(/^\.vf-package-/m);
     // SP-1b: Chat's plate is a box on the frame's ground; the panel's rules are the product's
     expect(catalogCss).not.toMatch(/^\.vf-chat(?:\b|-)/m);
+    // SP-1c: the New spark sheet's plate stages it over Chat; the sheet's rules are the product's
+    expect(catalogCss).not.toMatch(/^\.vf-new-spark(?:\b|-)/m);
   });
 
   it("keeps Chat's fixture an ADAPTER — the product's reading over fixture sparks and rows, never the panel's markup (SP-1b)", () => {
@@ -128,6 +130,33 @@ describe("UI system ownership boundaries", () => {
     }
     // the frame's cover mounts the same preview, as it mounts History's
     expect(source("design-system/ViewFramePreview.tsx")).toContain("<ChatPreview");
+  });
+
+  it("keeps the New spark sheet's fixture an ADAPTER — the product's sheet over a fixture port, never its markup (SP-1c)", () => {
+    // The catalog stands in for what fieldd answers the sheet — the agents, the profiles, a picker, a hatch — behind
+    // the product's own port shape, and reads its still states through the product's own helpers; the sheet it mounts
+    // is the shipping one, live and still. Never the sheet's classes, never a stylesheet, never the product's doors or
+    // the host.
+    const preview = source("design-system/NewSparkPreview.tsx");
+    const fixtures = source("design-system/new-spark-fixtures.ts");
+    expect(preview).toMatch(/<NewSparkSheet\s/u);
+    expect(preview).toMatch(/<NewSparkSheetView\s/u);
+    for (const reading of [
+      "sparkAgentsOf",
+      "agentMenuOf",
+      "effortOf",
+      "profileChipsOf",
+      "reachOf",
+      "refusalOf",
+    ])
+      expect(fixtures).toContain(reading);
+    for (const file of [preview, fixtures]) {
+      expect(file).not.toMatch(/className="vf-new-spark/);
+      expect(file).not.toContain("<style");
+      expect(file).not.toContain("getHost");
+      expect(file).not.toContain("useFielddClient");
+      expect(file).not.toContain("newSparkPortOver");
+    }
   });
 
   it("keeps the face's own styling free of colour literals of any spelling (UA-7)", () => {
@@ -293,16 +322,18 @@ describe("UI system ownership boundaries", () => {
     }
   });
 
-  it("recedes the field under the Peek and holds it out of reach — at rest no transform, so no stacking context (2026-10-08)", () => {
+  it("recedes the field under the Peek and the New spark sheet and holds it out of reach — at rest no transform, so no stacking context (2026-10-08; SP-1c)", () => {
     // DESIGN.md §6: the view AND the frame recede to 0.98 about 50% 46% over
-    // 420ms on the island curve while the Peek stands; its scrim and popup are
-    // drawn on the document's body, outside the field. A resting transform
-    // would bury the head under the drag strip (BootRoot, 2026-07-22).
+    // 420ms on the island curve while the Peek stands, or the New spark sheet
+    // (§8, SP-1c); each one's scrim is drawn on the document's body, outside
+    // the field. A resting transform would bury the head under the drag strip
+    // (BootRoot, 2026-07-22).
     const field = source("field.tsx");
+    expect(field).toContain('const modal = surface === "search" || surface === "new-spark";');
     expect(field).toContain(
-      '<div className="field-recede" data-peek-recede={searching ? "true" : "false"}>',
+      '<div className="field-recede" data-peek-recede={modal ? "true" : "false"}>',
     );
-    expect(field).toContain("inert={searching}");
+    expect(field).toContain("inert={modal}");
     // What recedes is what you see — the still and the chrome, the cover with
     // it — and never the desk's own box (DK-15): the keyed scene comes BEFORE
     // the recede's box and outside it; the still and the chrome inside it; the
@@ -913,6 +944,9 @@ describe("UI system ownership boundaries", () => {
       // SP-1b — Chat
       "chat/ChatView.tsx",
       "chat/ChatPanelView.tsx",
+      // SP-1c — the New spark sheet
+      "chat/NewSparkSheet.tsx",
+      "chat/NewSparkSheetView.tsx",
     ]) {
       expect(source(component)).not.toContain("<style");
     }
@@ -952,6 +986,7 @@ describe("UI system ownership boundaries", () => {
       "field/desk/pegboard/pegboard.css",
       "field/desk/peers/peers.css",
       "chat/chat.css",
+      "chat/new-spark-sheet.css",
     ]) {
       expect(source(stylesheet), stylesheet).not.toMatch(/#[\da-f]{3,8}\b/i);
     }

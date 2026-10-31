@@ -16,6 +16,7 @@ import {
   isCardsChord,
   isCommandPaletteChord,
   isCopyChord,
+  isNewSparkChord,
   isSearchChord,
   listenForProductChord,
   PRODUCT_CHORDS,
@@ -63,6 +64,8 @@ describe("the product chords (GT-D21)", () => {
       // One Frame FR-2 (§11): New terminal, Godview's create and History's (HN-7), over
       // ghostty's new_tab
       "super+t",
+      // SP-1c: New spark, Chat's create, over ghostty's new_window
+      "super+n",
       // the Peek (GV-D10, 2026-10-08): search, over ghostty's start_search
       "super+f",
       // the desk's Copy (HN-D3): over ghostty's copy_to_clipboard, which keeps it in a pane
@@ -157,9 +160,36 @@ describe("the product chords (GT-D21)", () => {
     // the chords kept always say no when
     expect(PRODUCT_CHORDS.filter((chord) => chord.when !== undefined).map((c) => c.id)).toEqual([
       "new-terminal",
+      "new-spark",
       "search",
       "desk-copy",
     ]);
+  });
+
+  it("⌘N is New spark's — Ctrl+N off the Mac — never with ⇧ or ⌥, never the other platform's modifier, and SAYS when it is kept (SP-1c)", () => {
+    const key = (init: Partial<KeyboardEvent>) => ({
+      key: "n",
+      metaKey: false,
+      ctrlKey: false,
+      altKey: false,
+      shiftKey: false,
+      repeat: false,
+      ...init,
+    });
+    expect(isNewSparkChord(key({ metaKey: true }), "mac")).toBe(true);
+    expect(isNewSparkChord(key({ key: "N", metaKey: true }), "mac")).toBe(true);
+    expect(isNewSparkChord(key({ metaKey: true, shiftKey: true }), "mac")).toBe(false);
+    expect(isNewSparkChord(key({ metaKey: true, altKey: true }), "mac")).toBe(false);
+    expect(isNewSparkChord(key({ ctrlKey: true }), "mac")).toBe(false);
+    expect(isNewSparkChord(key({ ctrlKey: true }), "other")).toBe(true);
+    expect(isNewSparkChord(key({ metaKey: true }), "other")).toBe(false);
+    expect(isNewSparkChord(key({ key: "m", metaKey: true }), "mac")).toBe(false);
+    // the line takes it in Chat alone; a pane in Godview keeps Ghostty's new_window
+    expect(PRODUCT_CHORDS.find((chord) => chord.id === "new-spark")).toMatchObject({
+      trigger: "super+n",
+      label: "New spark",
+      when: "while Chat is the view",
+    });
   });
 
   it("⌘T is New terminal's — and SAYS when it is kept: in Godview and, since HN-7, in History", () => {

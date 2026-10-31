@@ -902,12 +902,12 @@
 
 /* ── THE RECEDE — the view and the frame, under the scrim (§6) ─────────────
    Whatever wears `data-peek-recede` recedes to 0.98 about 50% 46% over 420ms
-   on the island curve while the Peek is open: in the product what you see —
-   the cover's still and the frame's chrome, the cover with it (`field.tsx`'s
-   `.field-recede`) — and never the desk's own box (DK-15); in a catalog plate
-   the staged view. At rest it carries NO transform, so it makes no stacking
-   context (BootRoot's 2026-07-22 lesson: a resting transform buried the head
-   under the drag strip). */
+   on the island curve while the Peek is open, or the New spark sheet (SP-1c):
+   in the product what you see — the cover's still and the frame's chrome, the
+   cover with it (`field.tsx`'s `.field-recede`) — and never the desk's own box
+   (DK-15); in a catalog plate the staged view. At rest it carries NO transform,
+   so it makes no stacking context (BootRoot's 2026-07-22 lesson: a resting
+   transform buried the head under the drag strip). */
 [data-peek-recede] {
   transform-origin: 50% 46%;
   transition: transform 420ms var(--vf-ease-island);

@@ -350,14 +350,15 @@ export function FieldView({
   // scrim and popup are drawn outside this wrapper, which is out of reach while
   // they stand (a modal: nothing under the scrim may hold the keyboard). What
   // you see recedes under them — the cover's still and the frame's chrome, in
-  // `.field-recede` below — and the desk's own box never does (DK-15).
-  const searching = surface === "search";
+  // `.field-recede` below — and the desk's own box never does (DK-15). The New
+  // spark sheet (SP-1c; §8 "The New spark sheet") is the same kind of modal.
+  const modal = surface === "search" || surface === "new-spark";
 
   return (
     <div
       className="field-wrap"
       data-doc-transition={hudMotion}
-      inert={searching}
+      inert={modal}
       {...(appearanceOverride.appearance === null
         ? {}
         : { "data-appearance-override-revision": appearanceOverride.revision })}
@@ -402,12 +403,12 @@ export function FieldView({
       {/* THE RECEDE UNDER THE PEEK (GV-D8 × DK-15; DESIGN.md §6, §8 "Search —
           the Peek"): what you see over the desk — its still under a cover and
           the frame's chrome, the cover with it — in ONE full-window box that
-          recedes to 0.98 about the window's 50% 46% while the Peek stands
-          (`data-peek-recede`, frame/peek.css). The desk's own box stays outside
+          recedes to 0.98 about the window's 50% 46% while the Peek or the New
+          spark sheet stands (`data-peek-recede`, frame/peek.css). The desk's own box stays outside
           it, so no transform reaches the desk under a cover. At rest the box
           carries no transform (no stacking context) and takes no pointer; its
           children keep theirs (styles/base.css). */}
-      <div className="field-recede" data-peek-recede={searching ? "true" : "false"}>
+      <div className="field-recede" data-peek-recede={modal ? "true" : "false"}>
         {/* THE STILL UNDER THE COVERS (DK-15; DESIGN.md §8): over the desk and
             under every piece of chrome; outside the keyed scene, so a remount
             under a standing cover keeps it. */}

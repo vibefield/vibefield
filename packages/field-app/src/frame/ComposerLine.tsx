@@ -32,6 +32,8 @@ export interface ComposerLineViewProps {
   readonly track: ReactNode;
   /** Objects is out (Canvas): create wears its ✕ — the board's `open`, mirrored (DK-13). */
   readonly objectsOpen?: boolean;
+  /** The New spark sheet shows (Chat, SP-1c): the create offers to close it, Esc. */
+  readonly sheetOpen?: boolean;
   /** An object is in hand (Canvas): the desk refuses the board — the create is faint by ink, "Put it down first"
    * (R14). */
   readonly createHeld?: boolean;
@@ -60,7 +62,7 @@ export interface ComposerLineViewProps {
 
 /** Canvas's plus, and New terminal's start in Godview and History (HN-7): the two cross-fade in
  * the create's one place. */
-const CREATE_GLYPHS = ["plus", "start"] as const;
+const CREATE_GLYPHS = ["plus", "start", "sparkle"] as const;
 
 /** R14 — the create's word while an object is in hand: the desk refuses the board. */
 export const PUT_IT_DOWN_FIRST = "Put it down first";
@@ -83,6 +85,7 @@ export function ComposerLineView({
   keys,
   track,
   objectsOpen = false,
+  sheetOpen = false,
   createHeld = false,
   createWaits = null,
   createProject = null,
@@ -96,7 +99,9 @@ export function ComposerLineView({
   onSnapshot,
 }: ComposerLineViewProps): ReactElement {
   const act = createActOf(view, keys, createProject);
-  const open = view === "canvas" && objectsOpen;
+  const open = (view === "canvas" && objectsOpen) || (view === "assistant" && sheetOpen);
+  // open, the create offers to close what it opened: the board on Canvas, the sheet in Chat
+  const closeWords = view === "canvas" ? "Close the objects" : "Close the sheet";
   const held = view === "canvas" && !open && createHeld;
   const waits = open ? null : createWaits;
   const snapKey = snapshotKey(keys);
@@ -121,34 +126,32 @@ export function ComposerLineView({
       >
         <FieldGlyph name="capture" size={18} />
       </button>
-      {act === null ? null : (
-        <button
-          type="button"
-          className="vf-line-create"
-          data-view={view}
-          aria-label={open ? "Close the objects" : act.name}
-          title={createTitle(act, open, waits, held)}
-          aria-keyshortcuts={open ? "Escape" : createKeys(act)}
-          {...(view === "canvas" ? { "aria-expanded": open } : {})}
-          {...(waits !== null || held ? { "aria-disabled": true } : {})}
-          {...(held ? { "data-held": "true" } : {})}
-          onClick={(event) => {
-            // a click with no pointer behind it (detail 0) is the create's keys: Enter or Space on it
-            if (waits === null && !held) onCreate?.(event.detail === 0);
-          }}
-        >
-          {CREATE_GLYPHS.map((glyph) => (
-            <span
-              key={glyph}
-              className="vf-line-create-glyph"
-              data-glyph={glyph}
-              {...(glyph === act.glyph ? { "data-shown": "true" } : {})}
-            >
-              <FieldGlyph name={glyph} size={16} />
-            </span>
-          ))}
-        </button>
-      )}
+      <button
+        type="button"
+        className="vf-line-create"
+        data-view={view}
+        aria-label={open ? closeWords : act.name}
+        title={createTitle(act, open, waits, held)}
+        aria-keyshortcuts={open ? "Escape" : createKeys(act)}
+        {...(view === "canvas" || view === "assistant" ? { "aria-expanded": open } : {})}
+        {...(waits !== null || held ? { "aria-disabled": true } : {})}
+        {...(held ? { "data-held": "true" } : {})}
+        onClick={(event) => {
+          // a click with no pointer behind it (detail 0) is the create's keys: Enter or Space on it
+          if (waits === null && !held) onCreate?.(event.detail === 0);
+        }}
+      >
+        {CREATE_GLYPHS.map((glyph) => (
+          <span
+            key={glyph}
+            className="vf-line-create-glyph"
+            data-glyph={glyph}
+            {...(glyph === act.glyph ? { "data-shown": "true" } : {})}
+          >
+            <FieldGlyph name={glyph} size={16} />
+          </span>
+        ))}
+      </button>
       {note === null ? null : (
         <div key={note.seq} className="vf-line-note" data-at={note.at} role="status">
           {note.text}

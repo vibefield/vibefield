@@ -14,7 +14,7 @@ import type { ViewKeys } from "./views";
  * never printed (FR-5); `title`, when the act says where it acts, is the name
  * the tooltip says in its place (HN-7: "New terminal in vibe-field"). */
 export interface CreateAct {
-  readonly glyph: "plus" | "start";
+  readonly glyph: "plus" | "start" | "sparkle";
   readonly name: string;
   readonly key: string | null;
   readonly title?: string;
@@ -26,15 +26,14 @@ function newTerminalAct(keys: ViewKeys): CreateAct {
   return { glyph: "start", name: "New terminal", key: keys === "mac" ? "⌘T" : "Ctrl+T" };
 }
 
-/** The view's one act, or null where the view has none on the line yet: Chat's,
- * New spark (⌘N), comes with its sheet (SP-1c) — never Canvas's Objects drawn
- * in its place. `project`: the project History's room shows (its name), where
- * History's create opens its terminal — History's line door says so. */
+/** The view's one act. Chat's is New spark (⌘N; SP-1c), the New spark sheet.
+ * `project`: the project History's room shows (its name), where History's
+ * create opens its terminal — History's line door says so. */
 export function createActOf(
   view: FrameView,
   keys: ViewKeys,
   project: string | null = null,
-): CreateAct | null {
+): CreateAct {
   switch (view) {
     case "canvas":
       return { glyph: "plus", name: "Objects", key: "B" };
@@ -48,7 +47,7 @@ export function createActOf(
       return project === null ? act : { ...act, title: `${act.name} in ${project}` };
     }
     case "assistant":
-      return null;
+      return { glyph: "sparkle", name: "New spark", key: keys === "mac" ? "⌘N" : "Ctrl+N" };
   }
 }
 

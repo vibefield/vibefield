@@ -1409,3 +1409,27 @@
   overflow: hidden;
   background: var(--vf-canvas-bg);
 }
+
+/* The New spark sheet on fixtures (SP-1c): Chat's plate with the sheet over it, drawn into
+   the plate as the product draws it into the window; Chat recedes behind it by the product's
+   rule (`data-peek-recede`). The sheet's own rules are the product's. */
+.vf-ds-new-spark-plate {
+  position: relative;
+  isolation: isolate;
+  height: 640px;
+  overflow: hidden;
+  background: var(--vf-canvas-bg);
+}
+
+.vf-ds-new-spark-view {
+  position: absolute;
+  inset: 0;
+}
+
+.vf-ds-new-spark-again {
+  position: absolute;
+  inset-block-end: 24px;
+  inset-inline: 0;
+  display: flex;
+  justify-content: center;
+}

@@ -18,6 +18,8 @@ import { MeMenu } from "../account/MeMenu";
 import { useSyncQuestion } from "../account/sync-question";
 import { isSwitchCovering, useSwitchState } from "../boot/switch";
 import { ChatView } from "../chat/ChatView";
+import { NewSparkSheet } from "../chat/NewSparkSheet";
+import { newSparkPortOver } from "../chat/new-spark";
 import { sparksPortOver, startSparksFeed } from "../chat/sparks-feed";
 import type { DocManager, DocManagerState } from "../doc-manager";
 import type { LineActs } from "../frame/Composer";
@@ -149,6 +151,12 @@ export function ChromeLayer({
   const fieldd = useFielddClient();
   useEffect(() => startSparksFeed(sparksPortOver(fieldd)), [fieldd]);
   const chatView = useCallback((active: boolean) => <ChatView active={active} />, []);
+  // Chat's create (SP-1c): the New spark sheet asks fieldd through the same client.
+  const newSparkPort = useMemo(() => newSparkPortOver(fieldd), [fieldd]);
+  const closeNewSpark = useCallback(
+    () => onSurfaceChange(foldSurface(surface, "new-spark")),
+    [onSurfaceChange, surface],
+  );
   // The room is its own chunk (DESIGN.md §8 "History"): fetched when the window
   // is next idle after the chrome has mounted — after the canvas has drawn,
   // never on its path — so the first ⌘3 finds it here. Code only: the room
@@ -477,6 +485,11 @@ export function ChromeLayer({
         onSurfaceChange={onSurfaceChange}
         lineActs={lineActs}
       />
+
+      {/* THE NEW SPARK SHEET (SP-1c; DESIGN.md §8 "The New spark sheet"): Chat's create, ⌘N or the line's
+          sparkle, one of the frame's open surfaces. Drawn outside the field like the Peek, which goes out of reach
+          and recedes under it (`field.tsx`); over the cover and the line, under a carried card and the palette. */}
+      <NewSparkSheet open={surface === "new-spark"} port={newSparkPort} onClose={closeNewSpark} />
 
       {/* THE SELECTION BAR (DK-11; DESIGN.md §8 "The selection bar", "The
           bar grown"): object chrome on the desk's selection — over the desk
