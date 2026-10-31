@@ -38,6 +38,10 @@ export interface ViewsTrackViewProps {
   importing?: boolean;
 }
 
+/** A view's cell, as a card carried over the line finds it to open that view (HN-D6,
+ * `cards/card-drag.ts`): named here, beside the markup it selects. */
+export const VIEW_CELL_SELECTOR = "button.vf-views-cell[data-view]";
+
 /** The track's glyphs, in CSS px. */
 const GLYPH_PX = 15;
 

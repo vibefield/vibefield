@@ -4,23 +4,40 @@ import type { GlyphName } from "@vibefield/design-kit/glyphs";
 import { eyebrowOf, type ObjectWords } from "../desk-object-words";
 
 // THE BAR'S CONTENT (DK-11; DESIGN.md §8 "The selection bar" — Order, Keyboard; "The bar grown" — the order
-// nearest first, the eyebrow; R1, R3, R4, R10, R11, R23 reversed, DK-D24, DK-D29). Pure: what the bar and its
+// nearest first, the eyebrow; R1, R3, R4, R10, R11, R23 reversed, DK-D24, DK-D29; HN-D3). Pure: what the bar and its
 // grown menu show for a selection, from the anchor's facts (`count`, `locked`, the kinds' acts `menu`) and the
 // host's own read of the selected objects (their types' words, whether the one selected opens). The host prints
 // what a kind declares and adds nothing; a kind's act prints NO key on this build (R1 — its declared keys are
-// ICE's demo's), while the DESK's acts print theirs (DK-D24; ⇧⌘L is the desk's, ICE's default keymap's — R23).
+// ICE's demo's), while the DESK's acts print theirs (DK-D24; ⇧⌘L is the desk's, ICE's default keymap's — R23; ⌘C
+// the desk's Copy, HN-D3).
 
 /** The desk's keys as this platform spells them (the frame's way, FR-5: said, never a cap). */
 export type DeskKeys = "mac" | "other";
 
+/** The desk's acts that have a key. */
+type KeyedAct = "copy" | "duplicate" | "tape" | "delete" | "open";
+
 const KEYS = {
-  mac: { duplicate: "⌘D", tape: "⇧⌘L", delete: "⌫", open: "↩" },
-  other: { duplicate: "Ctrl+D", tape: "Ctrl+Shift+L", delete: "Delete", open: "Enter" },
-} as const satisfies Record<DeskKeys, Record<"duplicate" | "tape" | "delete" | "open", string>>;
+  mac: { copy: "⌘C", duplicate: "⌘D", tape: "⇧⌘L", delete: "⌫", open: "↩" },
+  other: {
+    copy: "Ctrl+C",
+    duplicate: "Ctrl+D",
+    tape: "Ctrl+Shift+L",
+    delete: "Delete",
+    open: "Enter",
+  },
+} as const satisfies Record<DeskKeys, Record<KeyedAct, string>>;
 
 /** The tooltip the frame's way: the act, two spaces, its key ("Tape it down  ⇧⌘L"). */
 export const tipOf = (label: string, key?: string): string =>
   key === undefined ? label : `${label}  ${key}`;
+
+/** Copy — the bar's one word (HN-D3): the selection dealt into the hand as ONE card. Plain "Copy" for one object or
+ * several, as every Copy is — the count is the menu's eyebrow's ("2 OBJECTS"), and the card's own title. */
+export const COPY_LABEL = "Copy";
+
+/** Copy's tooltip, its key the desk's (⌘C over the desk; product-chords' `desk-copy`): "Copy  ⌘C". */
+export const copyTip = (keys: DeskKeys): string => tipOf(COPY_LABEL, KEYS[keys].copy);
 
 /** What the host read of the selection — the anchor's facts and its own (the doors, §8). */
 export interface SelectionFacts {
@@ -41,8 +58,8 @@ export interface SelectionFacts {
 export type DeskAct = "duplicate" | "tape" | "more" | "delete";
 
 export type BarCell =
-  /** Send to… — the bar's one word: the selection drafted into the line as ONE chip (DK-14; it never sends). */
-  | { readonly kind: "send"; readonly label: string; readonly tip: string }
+  /** Copy — the bar's one word: the selection dealt into the hand as ONE card (HN-D3). */
+  | { readonly kind: "copy"; readonly label: string; readonly tip: string }
   | { readonly kind: "rule"; readonly at: "lead" | "end" }
   /** A kind's act: its glyph by §13's table, or its label alone (R3); its label is its tip — no key (R1). */
   | {
@@ -65,11 +82,8 @@ export type BarCell =
 export const missingOf = (f: SelectionFacts): ObjectWords | undefined =>
   f.words.find((w) => w.state !== null);
 
-/** "Send to…", or for several "Send 2 to…" (§8: several selected, it counts them). */
-export const sendLabel = (count: number): string => (count > 1 ? `Send ${count} to…` : "Send to…");
-
 /**
- * The bar's cells, in the canon's order: Send to… · rule · the kind's acts · Duplicate · Tape it down · More · rule
+ * The bar's cells, in the canon's order: Copy · rule · the kind's acts · Duplicate · Tape it down · More · rule
  * · Delete. Taped (every selected object taped): no Duplicate, and the tape act becomes "Lift the tape", wearing
  * `lift` — an act whose name changes, never a toggle (R10). A missing face selected: its name and word where the
  * kind's acts would stand, and Duplicate still offered (it duplicates the data — R11).
@@ -77,8 +91,7 @@ export const sendLabel = (count: number): string => (count > 1 ? `Send ${count} 
 export function barCells(f: SelectionFacts, keys: DeskKeys): BarCell[] {
   const k = KEYS[keys];
   const cells: BarCell[] = [
-    // its tip is its name: Send to… prints no key (DK-D24 binds none)
-    { kind: "send", label: sendLabel(f.count), tip: sendLabel(f.count) },
+    { kind: "copy", label: COPY_LABEL, tip: copyTip(keys) },
     { kind: "rule", at: "lead" },
   ];
   const missing = missingOf(f);
@@ -119,11 +132,11 @@ export function barCells(f: SelectionFacts, keys: DeskKeys): BarCell[] {
 
 /** One row of the grown menu: its label and, at its end, its key (none for a kind's act — R1). */
 export interface MenuRow {
-  /** `act:<id>` for a kind's act; else open · comment · send · duplicate · front · back · cleanup · tape · delete. */
+  /** `act:<id>` for a kind's act; else open · comment · copy · duplicate · front · back · cleanup · tape · delete. */
   readonly id: string;
   readonly label: string;
   readonly key?: string;
-  /** A row that waits, and why: drawn, never taken (none does since DK-14 made Send to… draft). */
+  /** A row that waits, and why: drawn, never taken (none does on this build). */
   readonly waits?: string;
   /** Delete: armed red under the pointer. */
   readonly danger?: boolean;
@@ -132,9 +145,9 @@ export interface MenuRow {
 /**
  * The grown menu's rows in their groups, NEAREST FIRST (the group and the row next to the bar's own row first):
  * the kind's acts (no keys) · Open (one object whose type opens; a container has none — ⏎ enters it, R4) ·
- * Comment (a pad laid at the selection's edge — the C key's wrap, DK-D24) · Send to… | Duplicate (not while taped)
- * · Bring to front · Send to back · Clean up (two or more — DK-D29) | Tape it down, or Lift the tape | Delete. No
- * Copy: the engine has no copy op.
+ * Comment (a pad laid at the selection's edge — the C key's wrap, DK-D24) · Copy (⌘C — HN-D3: a card, not the
+ * engine's, which has no copy op) | Duplicate (not while taped) · Bring to front · Send to back · Clean up (two or
+ * more — DK-D29) | Tape it down, or Lift the tape | Delete.
  */
 export function menuGroups(f: SelectionFacts, keys: DeskKeys): MenuRow[][] {
   const k = KEYS[keys];
@@ -143,7 +156,7 @@ export function menuGroups(f: SelectionFacts, keys: DeskKeys): MenuRow[][] {
     for (const act of f.menu) near.push({ id: `act:${act.id}`, label: act.label });
   if (f.openable) near.push({ id: "open", label: "Open", key: k.open });
   if (f.commentable) near.push({ id: "comment", label: "Comment" });
-  near.push({ id: "send", label: sendLabel(f.count) });
+  near.push({ id: "copy", label: COPY_LABEL, key: k.copy });
   const arrange: MenuRow[] = [];
   if (!f.locked) arrange.push({ id: "duplicate", label: "Duplicate", key: k.duplicate });
   arrange.push({ id: "front", label: "Bring to front" }, { id: "back", label: "Send to back" });

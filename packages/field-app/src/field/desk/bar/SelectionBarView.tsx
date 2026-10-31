@@ -89,7 +89,7 @@ export interface SelectionBarViewProps {
   readonly hand?: readonly HandCell[];
   /** DK-12 — the travel between the roles, ms: the anchor's `held.travelMs` (I20); the layer's 560 when it carries none. */
   readonly travelMs?: number;
-  /** DK-12 — a tool used, or Done (the controller runs `ops.useHeldTool` / `ops.putDown`); DK-14 — Send to… in hand. */
+  /** DK-12 — a tool used, or Done (the controller runs `ops.useHeldTool` / `ops.putDown`); HN-D3 — Copy in hand. */
   readonly onHand?: (cell: HandCell) => void;
   /** Reduced motion (M6, R8): every duration halved, fades only. */
   readonly reduced?: boolean;
@@ -580,10 +580,10 @@ export function SelectionBarView({
     onCell(cell);
   };
 
-  /** Send to…, a tool used, or Done: never a faint slot, one its kind says is disabled (ICE I49), a rule or the readout. */
+  /** Copy, a tool used, or Done: never a faint slot, one its kind says is disabled (ICE I49), a rule or the readout. */
   const runHand = (cell: HandCell): void => {
     if (
-      cell.kind === "send" ||
+      cell.kind === "copy" ||
       cell.kind === "done" ||
       (cell.kind === "tool" && cell.look !== "faint" && !cell.disabled)
     )
@@ -605,18 +605,18 @@ export function SelectionBarView({
             {cell.label}
           </span>
         );
-      case "send":
+      case "copy":
         return (
           <button
             key={cellKey(cell, index)}
             type="button"
-            className="vf-bar-send"
-            data-act="send"
+            className="vf-bar-copy"
+            data-act="copy"
             title={cell.tip}
             onClick={() => press(cell, false)}
             {...stop}
           >
-            <FieldGlyph name="agents" size={16} />
+            <FieldGlyph name="clipboard" size={16} />
             <span>{cell.label}</span>
           </button>
         );
@@ -661,7 +661,7 @@ export function SelectionBarView({
     }
   };
 
-  // THE TOOLS IN HAND's cells (§8 "Tools in hand"): Send to… · rule · the kind's tools · the readout · rule · Done
+  // THE TOOLS IN HAND's cells (§8 "Tools in hand"): Copy · rule · the kind's tools · the readout · rule · Done
   const handNode = (cell: HandCell, index: number): ReactElement => {
     const stop = {
       "data-cell": index,
@@ -671,18 +671,18 @@ export function SelectionBarView({
     switch (cell.kind) {
       case "rule":
         return <span key={handKey(cell, index)} className="vf-bar-rule" aria-hidden="true" />;
-      case "send":
+      case "copy":
         return (
           <button
             key={handKey(cell, index)}
             type="button"
-            className="vf-bar-send"
-            data-act="send"
+            className="vf-bar-copy"
+            data-act="copy"
             title={cell.tip}
             onClick={() => runHand(cell)}
             {...stop}
           >
-            <FieldGlyph name="agents" size={16} />
+            <FieldGlyph name="clipboard" size={16} />
             <span>{cell.label}</span>
           </button>
         );

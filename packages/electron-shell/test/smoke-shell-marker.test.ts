@@ -1,25 +1,27 @@
 /**
- * smoke:godview's line-send rung (11h), the parts a test can hold (testing/smoke-line-send.ts): what a wait for a shell
- * marker says when it ends without one — "never created" told apart from "created empty" — the aimed session's input gate
- * read off the direct-terminal markers, and the one line of evidence the rung prints when it fails.
+ * smoke:godview's shell markers and the routed input gate, the parts a test can hold (testing/smoke-shell-marker.ts):
+ * what a wait for a shell marker says when it ends without one — "never created" told apart from "created empty" — a
+ * session's input gate read off the direct-terminal markers, and 11h's card play: its judge and its line of evidence.
  */
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  CARD_PLAY_EVIDENCE,
+  type CardPlaySeen,
+  cardPlayEvidenceLine,
   gateOpen,
-  LINE_SEND_EVIDENCE,
+  judgeCardPlay,
   latestGate,
-  lineSendEvidenceLine,
   markerFile,
-  newLineSendEvidence,
+  newCardPlayEvidence,
   shellMarkerFailure,
-} from "../src/testing/smoke-line-send";
+} from "../src/testing/smoke-shell-marker";
 
 let dir: string | null = null;
 const scratch = (): string => {
-  dir ??= mkdtempSync(join(tmpdir(), "vf-line-send-"));
+  dir ??= mkdtempSync(join(tmpdir(), "vf-shell-marker-"));
   return dir;
 };
 afterEach(() => {
@@ -70,7 +72,7 @@ describe("what the wait says when it ends without the marker", () => {
   });
 });
 
-describe("the aimed session's input gate, from the direct-terminal markers", () => {
+describe("a session's input gate, from the direct-terminal markers", () => {
   const facts = (sessionId: string, presentationReady: boolean, inputAllowed: boolean) => ({
     sessionId,
     activationId: "a",
@@ -98,60 +100,50 @@ describe("the aimed session's input gate, from the direct-terminal markers", () 
   });
 });
 
-describe("the rung's one line of evidence", () => {
-  it("begins with nothing sampled, and says so as nulls", () => {
-    expect(newLineSendEvidence("aimed")).toEqual({
-      session: "aimed",
-      path: null,
-      inputAllowed: { b: null, Backspace: null, send: null, Return: null },
-      backspaceHeardBeforeDraft: null,
-      waitedMs: { inputBeforeB: null, backspaceHeard: null, inputBeforeReturn: null },
-    });
+describe("11h's card play, as the hand's lab door answers it (R-T 2)", () => {
+  const pasted: CardPlaySeen = {
+    at: { x: 590, y: 380 },
+    target: "pane",
+    answer: { ok: true, label: "Paste into vibe-field" },
+    played: { ok: true, note: "Pasted into vibe-field" },
+    refused: null,
+  };
+
+  it("passes a card the deck's pane answered and pasted", () => {
+    expect(judgeCardPlay(pasted)).toEqual([]);
   });
 
-  it("is one line: why it failed, the file, the four samples, the Backspace, the waits, the gate now", () => {
-    const evidence = newLineSendEvidence("aimed");
-    evidence.path = "/tmp/fr2abc.txt";
-    evidence.inputAllowed.b = true;
-    evidence.inputAllowed.Backspace = false;
-    evidence.inputAllowed.send = true;
-    evidence.inputAllowed.Return = true;
-    evidence.backspaceHeardBeforeDraft = true;
-    evidence.waitedMs.inputBeforeB = 12;
-    evidence.waitedMs.backspaceHeard = 3;
-    evidence.waitedMs.inputBeforeReturn = 0;
-    const gateNow = {
-      sessionId: "aimed",
-      activationId: "a",
-      phase: "presenting",
-      presentationReady: true,
-      inputAllowed: true,
-    };
-    const line = lineSendEvidenceLine(
-      evidence,
-      new Error("the routed pane created /tmp/fr2abc.txt …"),
-      { exists: true, bytes: 0 },
-      gateNow,
-    );
-    expect(line.startsWith(LINE_SEND_EVIDENCE)).toBe(true);
-    expect(line).not.toContain("\n");
-    expect(JSON.parse(line.slice(LINE_SEND_EVIDENCE.length))).toEqual({
-      failed: "the routed pane created /tmp/fr2abc.txt …",
-      session: "aimed",
-      file: { path: "/tmp/fr2abc.txt", exists: true, bytes: 0 },
-      inputAllowed: { b: true, Backspace: false, send: true, Return: true },
-      backspaceHeardBeforeDraft: true,
-      waitedMs: { inputBeforeB: 12, backspaceHeard: 3, inputBeforeReturn: 0 },
-      gateNow,
-    });
+  it("names no answer, a play that never reached a place, a place that is not a pane, and an outcome that is no paste", () => {
+    expect(judgeCardPlay(null)).toEqual(["the hand's lab door answered nothing"]);
+    const covered = "no place takes a card there — div.vf-cover is on top";
+    const unplayed = { ...pasted, target: null, answer: null, played: null, refused: covered };
+    expect(judgeCardPlay(unplayed)).toEqual([`nothing was played: ${covered}`]);
+    const placed = { ...pasted, target: "desk", played: { ok: true, note: "Placed as a note" } };
+    expect(judgeCardPlay(placed)).toEqual([
+      "the place that took the card is desk, not a pane",
+      'the play said "Placed as a note"',
+    ]);
+    const closed = "Not pasted — vibe-field's pane is not taking input";
+    expect(judgeCardPlay({ ...pasted, played: { ok: false, note: closed } })).toEqual([
+      `the play said ${JSON.stringify(closed)}`,
+    ]);
   });
 
-  it("says a rung that failed before its send began has no file yet", () => {
-    const line = lineSendEvidenceLine(newLineSendEvidence("aimed"), "timed out", null, null);
-    const said = JSON.parse(line.slice(LINE_SEND_EVIDENCE.length)) as Record<string, unknown>;
-    expect(said["failed"]).toBe("timed out");
-    expect(said["file"]).toBeNull();
-    expect(said["gateNow"]).toBeNull();
-    expect(said["inputAllowed"]).toEqual({ b: null, Backspace: null, send: null, Return: null });
+  it("prints ONE line of evidence when its rung fails: the cause, the file, the samples, the play, the gate now", () => {
+    const evidence = newCardPlayEvidence("s-active", "/tmp/hn4abc.txt");
+    evidence.inputAllowed.play = true;
+    evidence.play = pasted;
+    const cause = new Error("the routed pane did not create /tmp/hn4abc.txt");
+    const line = cardPlayEvidenceLine(evidence, cause, { exists: false }, null);
+    expect(line.startsWith(CARD_PLAY_EVIDENCE)).toBe(true);
+    expect(JSON.parse(line.slice(CARD_PLAY_EVIDENCE.length))).toEqual({
+      failed: "the routed pane did not create /tmp/hn4abc.txt",
+      session: "s-active",
+      file: { path: "/tmp/hn4abc.txt", exists: false },
+      inputAllowed: { play: true, Return: null },
+      play: pasted,
+      waitedMs: { inputBeforeReturn: null },
+      gateNow: null,
+    });
   });
 });

@@ -2,7 +2,7 @@
 /**
  * One Frame FR-3 (FR-4, "one surface at a time") — the frame's ONE owner of the
  * open surface, renamed from the line's when the head's three joined: Objects,
- * @'s list, the fields explorer, the zoom's menu and the palette are one value,
+ * the fields explorer, the zoom's menu and the palette are one value,
  * so opening any one folds the rest by construction. A stateful harness stands
  * where FieldView does and mounts the shipping head, line and palette on it,
  * with ChromeLayer's one piece of glue — the palette's create row run through
@@ -17,6 +17,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MeMenuView } from "../src/account/MeMenu";
 import type { DocManagerApi } from "../src/doc-manager";
 import { Composer, type LineActs } from "../src/frame/Composer";
+import { Cards } from "../src/frame/cards/Cards";
+import { CardStore } from "../src/frame/cards/cards-store";
 import { type FrameSurface, foldSurface } from "../src/frame/frame-surface";
 import { Head } from "../src/frame/Head";
 import type { HeadCanvas, HeadCrumb } from "../src/frame/head-canvas";
@@ -25,13 +27,18 @@ import type { FrameActRun } from "../src/frame/palette-acts";
 import { ViewsTrackView } from "../src/frame/ViewsTrack";
 import { type FieldHost, setHost } from "../src/host";
 import { CommandPalette } from "../src/hud/CommandPalette";
-import { ClipboardStore } from "../src/hud/edge-tray/clipboard-store";
-import { ClipboardTray } from "../src/hud/edge-tray/EdgeTray";
 import type { RendererLogger } from "../src/logging";
 
 vi.mock("../src/plugin-host/plugin-registry-store", () => ({
   usePluginRegistrySnapshot: () => null,
 }));
+// The hand's carried layer carries nothing here: the hand stands on the owner (HN-L7).
+vi.mock("../src/frame/cards/card-drag", () => ({
+  startCardDrag: () => undefined,
+  useCarriedCard: () => null,
+  getCarriedCard: () => null,
+}));
+vi.mock("../src/frame/cards/CarriedCardLayer", () => ({ CarriedCardLayer: () => null }));
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -103,7 +110,7 @@ function mount(door: LineViewDoor | null = null): void {
     const [surface, setSurface] = useState<FrameSurface | null>(null);
     const [view, setView] = useState<FrameView>("canvas");
     const lineActs = useRef<LineActs | null>(null);
-    const [clipboard] = useState(() => new ClipboardStore(() => 0));
+    const [cards] = useState(() => new CardStore(() => 0));
     surfaceNow = surface;
     setSurfaceNow = setSurface;
     setViewNow = setView;
@@ -130,9 +137,7 @@ function mount(door: LineViewDoor | null = null): void {
           onSurfaceChange={setSurface}
           actsRef={lineActs}
           godview={door}
-          clipboard={clipboard}
           host={{}}
-          writeClipboard={async () => undefined}
           bindKeys={false}
         />
         <CommandPalette
@@ -144,8 +149,8 @@ function mount(door: LineViewDoor | null = null): void {
           keys="mac"
           onAct={onAct}
         />
-        {/* The left edge (FR-4): the clipboard's drawer is one of the surfaces. */}
-        <ClipboardTray store={clipboard} host={{}} surface={surface} onSurfaceChange={setSurface} />
+        {/* The hand (HN-1): raised, it is one of the surfaces (HN-L7). */}
+        <Cards store={cards} host={{}} surface={surface} onSurfaceChange={setSurface} />
         {/* ChromeLayer's glue for the corner (FR-4): the Me menu asks the owner. */}
         <MeMenuView
           me={{
@@ -217,18 +222,27 @@ describe("the frame's one owner of the open surface", () => {
     expect(surfaceNow).toBeNull();
   });
 
-  it("holds the edges' drawers in the same one value (FR-4, F11)", () => {
+  it("holds the hand raised in the same one value (F11; HN-L7)", () => {
     mount();
     click(".vf-line-create");
     expect(surfaceNow).toBe("objects");
-    click(".vf-edge-tray__nub");
-    expect(surfaceNow).toBe("clipboard");
+    act(() => {
+      document.body.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "V",
+          metaKey: true,
+          shiftKey: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
+    expect(surfaceNow).toBe("cards");
     expect($(".vf-line-create")?.getAttribute("aria-expanded")).toBe("false");
-    expect($(".vf-edge-tray")?.dataset.pinned).toBe("true");
+    expect($(".vf-cards")?.hasAttribute("data-raised")).toBe(true);
     click(".vf-head-zoom");
     expect(surfaceNow).toBe("zoom");
-    expect($(".vf-edge-tray")?.dataset.open).toBe("false");
-    expect($(".vf-edge-tray")?.dataset.pinned).toBe("false");
+    expect($(".vf-cards")?.hasAttribute("data-raised")).toBe(false);
     click(".vf-me-face");
     expect(surfaceNow).toBe("me");
     expect($(".vf-head-zoom-menu")).toBeNull();
@@ -256,7 +270,8 @@ describe("the frame's one owner of the open surface", () => {
       panes: [],
       onScreen: true,
       newTerminal,
-      paste: () => false,
+      pasteInto: () => false,
+      whenInputOpen: async () => false,
       canPlace: true,
       place: async () => ({ state: "opened" }),
       reveal: async () => ({ state: "opened" }),

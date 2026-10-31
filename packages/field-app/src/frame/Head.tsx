@@ -20,6 +20,7 @@ import { earlierFields, type SyncQuestionDoor } from "../account/sync-question";
 import { emitZoomKeyMarker, emitZoomMenuMarker } from "../development-console";
 import type { DocManagerApi } from "../doc-manager";
 import { useDocSyncStatuses } from "../doc-sync-store";
+import { relativeTime } from "../format/relative-time";
 import { getRendererLogger } from "../logging";
 import { type FrameSurface, foldSurface } from "./frame-surface";
 import { type HeadDocTile, type HeadDot, HeadView } from "./HeadView";
@@ -42,16 +43,6 @@ import {
 // it. What it reads comes through two doors — the document manager (the
 // field, the fields) and the head's canvas door (the path, the zoom) — so the
 // catalog runs this exact controller on fixtures.
-
-/** "2h ago": a field's time, as its tile says it. */
-function fmtRelative(ms: number, now = Date.now()): string {
-  const s = Math.max(0, Math.floor((now - ms) / 1000));
-  if (s < 60) return "just now";
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-  if (s < 86_400) return `${Math.floor(s / 3600)}h ago`;
-  if (s < 7 * 86_400) return `${Math.floor(s / 86_400)}d ago`;
-  return new Date(ms).toLocaleDateString();
-}
 
 /** C6-4 — the pill's sync dot says STANDING states only (pending, a peer
  * offline, declined, epoch-stale): transient syncing lives in Settings and the
@@ -400,7 +391,7 @@ export function Head({
         const thumbnailUrl = state.thumbnailUrls[entry.docId];
         return {
           entry,
-          caption: `${fmtRelative(entry.updatedAt)}${word === null ? "" : ` · ${word}`}`,
+          caption: `${relativeTime(entry.updatedAt)}${word === null ? "" : ` · ${word}`}`,
           ...(thumbnailUrl === undefined ? {} : { thumbnailUrl }),
           ...((state.beforeTheDesk ?? []).includes(entry.docId) ? { beforeTheDesk: true } : {}),
         };
@@ -460,7 +451,7 @@ export function Head({
                   .map((entry) => ({
                     docId: entry.docId,
                     name: entry.name,
-                    caption: fmtRelative(entry.updatedAt),
+                    caption: relativeTime(entry.updatedAt),
                   })),
                 added: asking.added,
                 error: answerError ?? syncQuestion.posture.writeError,

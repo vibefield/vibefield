@@ -392,8 +392,9 @@ const CANVAS_BG = `(() => {
 })()`;
 
 /** A peer's arrow and chip as A draws them. */
-/** B's page: where its pointer can leave from beside the desk — the line's centre, a head control's (no-drag), a point
- * of the head's drag strip that no control covers — each as the page hit-tests it. */
+/** B's page: where its pointer can leave from beside the desk — the line's snapshot's centre (LN-D1: the line holds no
+ * draft), a head control's (no-drag), a point of the head's drag strip that no control covers — each as the page
+ * hit-tests it. */
 const READ_EXIT_POINTS = `(() => {
   const desk = document.querySelector("[data-desk]");
   const regionOf = (el) => {
@@ -417,7 +418,7 @@ const READ_EXIT_POINTS = `(() => {
     return r.width > 0 && r.height > 0 ? at(r.left + r.width / 2, r.top + r.height / 2) : null;
   };
   const strip = (p) => (p === null ? null : { x: p.x, y: p.y, hit: p.hit, inDesk: p.inDesk, region: p.region });
-  const line = document.querySelector(".vf-line-input");
+  const line = document.querySelector(".vf-line-snapshot");
   let head = null;
   for (const el of document.querySelectorAll(".vf-head-place button, .vf-head-place [role='button'], .vf-head-tools button")) {
     const c = centre(el);

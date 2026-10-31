@@ -280,22 +280,34 @@ export interface FieldHost {
    * users doors: a browser harness has no helper to spawn, and a surface that
    * offers the capture renders disabled and says so. The answer is the
    * contract's own result — a still on disk (and on the clipboard), a cancel,
-   * or a typed error such as `helper-missing` or `permission-denied`. How the
-   * still reaches the canvas is a later slice; the clipboard tray calls this. */
+   * or a typed error such as `helper-missing` or `permission-denied`. A still
+   * reaches the page as a picture card dealt into the hand (HN-2): the line's
+   * snapshot calls this. */
   readonly screenshotCapture?: () => Promise<ScreenshotCaptureResult>;
   /** SNAP-3 — the answer to a capture MAIN ran on the page's behalf (the View
    * menu's item, its accelerator). A capture this page asked for through
    * `screenshotCapture` already answered it; this is how the other door stops
-   * being invisible to the tray that holds the still. Optional like the door:
+   * being invisible to the hand that holds the still. Optional like the door:
    * a browser harness has no menu. */
   readonly onScreenshotResult?: (handler: (result: ScreenshotCaptureResult) => void) => () => void;
   /** SNAP-3 — the URL a retained still is shown through: the shell-owned
    * `vibefield-still://` scheme, which only main can serve. A harness without
-   * the shell leaves this undefined; a tile then renders without its image
-   * and says so, rather than pretending. */
+   * the shell leaves this undefined; a picture's card then shows its ground,
+   * never a broken image. */
   readonly screenshotStillUrl?: (path: string) => string;
   /** Preview a retained still through the native host; no window navigation. */
   readonly screenshotPreview?: (path: string) => Promise<ScreenshotPreviewResult>;
+  /** HN-D7 — a retained still's PNG bytes, for the desk's print of a snapshot
+   * played onto it: the still scheme can show a still but never hand script its
+   * pixels. Null once main no longer keeps the still. Optional like its
+   * neighbours: a harness without the shell has no stills, and the desk says it
+   * cannot place the picture. */
+  readonly screenshotStillBytes?: (path: string) => Promise<Uint8Array<ArrayBuffer> | null>;
+  /** HN-4 — whether main still keeps a retained still: a snapshot's card
+   * played onto a pane pastes its still's path, and asks this first, so a pane
+   * is never handed a path the ring has let go. Optional like its neighbours:
+   * a harness without the shell has no stills to ask about. */
+  readonly screenshotStillKept?: (path: string) => Promise<boolean>;
   getConnection(): Promise<FieldConnection>;
   onPrepareClose(handler: (requestId: string) => void): () => void;
   completeClose(result: { requestId: string; ok: boolean; error?: string }): void;

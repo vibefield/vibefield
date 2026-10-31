@@ -174,6 +174,32 @@
   --vf-folder-ink: #eaeaf4;
   --vf-folder-muted: #8b8ba6;
 
+  /* §5 "The hand's cards are paper" (track HN, HN-D1): one white stock for every kind, the same in
+     both themes but for the night's reading light (`.dark` below: it keeps 86% of its day, and its
+     shadow deepens) — the stock and its inks, the index printed in two corners, the cut edge, a
+     pass line in a terminal's output, a picture's ground before it loads, the grain, and the
+     agent's card, the one dark stock. The stock's inks are its own, never the chrome's:
+     `--vf-card-ink` is §2.2's dark surface's, so the stock's are named for the stock. */
+  --vf-card-stock: #fbfaf7;
+  --vf-card-edge: #d6d0c3;
+  --vf-card-stock-ink: rgb(33 31 27 / 92%);
+  --vf-card-stock-ink-2: rgb(33 31 27 / 64%);
+  --vf-card-stock-ink-3: rgb(33 31 27 / 42%);
+  --vf-card-index: rgb(33 31 27 / 58%);
+  --vf-card-cut: rgb(58 46 22 / 15%);
+  --vf-card-pass: #1f7a36;
+  --vf-card-photo: #cfd3cf;
+  --vf-card-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .2  0 0 0 0 .18  0 0 0 0 .14  0 0 0 .9 0'/%3E%3C/filter%3E%3Crect width='150' height='150' filter='url(%23n)'/%3E%3C/svg%3E");
+  --vf-card-dark-stock: #1c1c1e;
+  --vf-card-dark-edge: #050506;
+  --vf-card-dark-ink: rgb(255 255 255 / 92%);
+  --vf-card-dark-ink-2: rgb(255 255 255 / 62%);
+  --vf-card-dark-ink-3: rgb(255 255 255 / 40%);
+  --vf-card-dark-index: rgb(255 255 255 / 46%);
+  --vf-card-dark-cut: rgb(255 255 255 / 9%);
+  --vf-card-dim: 1;
+  --vf-card-shade: 1;
+
   /* §2.7 Godview instrument palette — exact values from the Chopsticks
      Godview reference. Both modes live here because Godview owns a local theme
      switch independent of the field behind it. */
@@ -383,6 +409,11 @@
   --vf-shadow-dialog: 0 48px 120px rgb(0 0 0 / 48%), 0 14px 40px rgb(0 0 0 / 30%);
   --vf-shadow-wizard: 0 8px 30px rgb(0 0 0 / 40%);
   --vf-shadow-search: 0 40px 100px rgb(0 0 0 / 60%), inset 0 1px 0 rgb(255 255 255 / 6%);
+
+  /* §5 the hand's cards by night: the stock keeps its white, read at 86% of its day, and casts
+     a deeper shadow */
+  --vf-card-dim: 0.86;
+  --vf-card-shade: 1.7;
 
   /* §2.8 the face — the paper stays white; the pewter darkens with the room */
   --vf-sticker-shadow: rgb(0 0 0 / 50%);

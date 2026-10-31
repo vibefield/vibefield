@@ -564,8 +564,9 @@ export async function peekSeededHitRung(
  * receded room — then the theme back to the run's own (Auto) and the popup
  * folded. LAST in the smoke, on purpose: a theme round trip through
  * `window.vibefield.theme.set` mid-run made a later rung's synthesized ⇧1
- * type nothing into the line's draft (2 of 2 runs; the same captures without
- * the round trip passed), so nothing runs after it. */
+ * type nothing into a field (the line's draft, then; the palette's since LN-D3
+ * — 2 of 2 runs; the same captures without the round trip passed), so nothing
+ * runs after it. */
 export async function peekPhotosRung(
   win: BrowserWindow,
   opts: { seeded: boolean; word: string; shotDir: string },

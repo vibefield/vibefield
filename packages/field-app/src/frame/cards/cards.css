@@ -1,0 +1,773 @@
+/* ═══ THE HAND (track HN; DESIGN.md §5 "The hand's cards are paper", §8 "The hand", §6) ═══════════
+   Every copy is a card at the window's foot, fanned like a hand you hold. Two halves: the card
+   (`CardFace.tsx`) and the fan with its layers (`CardsView.tsx`). Tokens only — the stock's are
+   `--vf-card-*` (tokens.css) — and no colour literal but the stock's own light and shade (white
+   and black, with an alpha). */
+
+/* ── THE CARD (HN-D1: one stock, six faces) ────────────────────────────────────────────────────
+   One card for every kind: a white stock, the kind's glyph in two corners as a playing card prints
+   its index, and one thing on its face. The realism is in the stock — a grain, a cut edge, a catch
+   of light, a card's thickness, a shadow that grows as it rises — never in the printing. Every
+   face measure is in em of the face's 9.5px, so a held card sets the same design finer and reads
+   more of itself. Whoever places a card sets its lift (0…1), turn and scale on its own wrapper —
+   `--vf-cards-lp`, `--vf-cards-r`, `--vf-cards-s` — and the card inherits them. */
+.vf-card {
+  --card-stock: var(--vf-card-stock);
+  --card-edge: var(--vf-card-edge);
+  --card-ink: var(--vf-card-stock-ink);
+  --card-ink-2: var(--vf-card-stock-ink-2);
+  --card-ink-3: var(--vf-card-stock-ink-3);
+  --card-ix: var(--vf-card-index);
+  --card-cut: var(--vf-card-cut);
+  --card-lit: 0.6;
+  --card-foot: 0.035;
+  --card-gloss: 0.09;
+  --card-grain: 0.05;
+  --card-catch: 0.9;
+  /* its shadow: its own edge first (a card is a third of a millimetre thick), then a shadow cast
+     down and a little right, tight where it touches and soft as it rises, deeper by night */
+  --card-lp: var(--vf-cards-lp, 0);
+  --card-near-x: calc(0.5px + var(--card-lp) * 1.5px);
+  --card-near-y: calc(2px + var(--card-lp) * 7px);
+  --card-near-blur: calc(5px + var(--card-lp) * 12px);
+  --card-near: rgb(0 0 0 / calc((0.07 + var(--card-lp) * 0.05) * var(--vf-card-shade)));
+  --card-far-x: calc(1px + var(--card-lp) * 4px);
+  --card-far-y: calc(7px + var(--card-lp) * 20px);
+  --card-far-blur: calc(18px + var(--card-lp) * 30px);
+  --card-far: rgb(0 0 0 / calc((0.08 + var(--card-lp) * 0.09) * var(--vf-card-shade)));
+  position: relative;
+  /* poker size and proportion: cards-model's CARD_W × CARD_H */
+  width: 104px;
+  height: 146px;
+  border-radius: 6px;
+  box-shadow:
+    0 0.7px 0 0.15px var(--card-edge),
+    0 0.6px 1.4px rgb(0 0 0 / calc(0.15 * var(--vf-card-shade))),
+    var(--card-near-x) var(--card-near-y) var(--card-near-blur) var(--card-near),
+    var(--card-far-x) var(--card-far-y) var(--card-far-blur) var(--card-far);
+  filter: brightness(var(--vf-card-dim));
+  cursor: grab;
+  pointer-events: auto;
+  transform: rotate(var(--vf-cards-r, 0deg)) scale(var(--vf-cards-s, 1));
+  transform-origin: var(--vf-cards-ox, 50%) var(--vf-cards-oy, 125%);
+  transition:
+    transform 240ms var(--vf-ease-island),
+    box-shadow 220ms ease;
+  user-select: none;
+}
+
+/* the stock: the paper, lit from the top left and a shade darker at its foot, under its grain */
+.vf-card-stock {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      170deg,
+      rgb(255 255 255 / var(--card-lit)) 0%,
+      transparent 36%,
+      transparent 64%,
+      rgb(0 0 0 / var(--card-foot)) 100%
+    ),
+    var(--card-stock);
+}
+
+.vf-card-stock::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: var(--vf-card-grain);
+  background-size: 150px 150px;
+  mix-blend-mode: multiply;
+  opacity: var(--card-grain);
+}
+
+.vf-card-face {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  color: var(--card-ink);
+  font-size: 9.5px;
+  line-height: 1.42;
+}
+
+/* the gloss: a catch of light across the stock, travelling a little as the card turns */
+.vf-card-gloss {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    118deg,
+    transparent 36%,
+    rgb(255 255 255 / var(--card-gloss)) 48%,
+    transparent 60%
+  );
+  background-position: calc(50% - var(--vf-cards-rd, 0) * 8%) 0;
+  background-size: 300% 100%;
+  mix-blend-mode: screen;
+  pointer-events: none;
+  transition: background-position 300ms var(--vf-ease-island);
+}
+
+/* the cut edge and the catch of light along its top, over everything printed */
+.vf-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow:
+    inset 0 0 0 0.5px var(--card-cut),
+    inset 0 1px 0 rgb(255 255 255 / var(--card-catch)),
+    inset 0 -0.5px 0 rgb(0 0 0 / 5%);
+  pointer-events: none;
+}
+
+/* the index, printed twice: the top left a fanned hand shows, and the bottom right turned */
+.vf-card-ix {
+  position: absolute;
+  top: 0.84em;
+  left: 0.84em;
+  width: 1.2em;
+  height: 1.2em;
+  color: var(--card-ix);
+}
+
+.vf-card-ix-tail {
+  top: auto;
+  right: 0.84em;
+  bottom: 0.84em;
+  left: auto;
+  transform: rotate(180deg);
+}
+
+/* the face: one column under the index, clear of the turned one */
+.vf-card-body {
+  position: absolute;
+  top: 2.72em;
+  right: 1em;
+  bottom: 2.5em;
+  left: 1em;
+  overflow: hidden;
+}
+
+/* TEXT — the words themselves; the first sentence is their name */
+.vf-card-words {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--card-ink-2);
+  font-size: 0.96em;
+  text-wrap: pretty;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 7;
+}
+
+.vf-card-words b {
+  color: var(--card-ink);
+  font-weight: 600;
+}
+
+/* FILE — its name, where it lives, and its first lines fading into the stock */
+.vf-card-name {
+  overflow: hidden;
+  font-size: 1.1em;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-card-path {
+  margin-top: 0.28em;
+  overflow-wrap: anywhere;
+  color: var(--card-ink-3);
+  font-family: var(--vf-font-mono);
+  font-size: 0.76em;
+  line-height: 1.42;
+}
+
+.vf-card-path[data-facts] {
+  margin-top: 0.9em;
+}
+
+.vf-card-lines {
+  margin: 0.95em 0 0;
+  overflow: hidden;
+  color: var(--card-ink-3);
+  font-family: var(--vf-font-mono);
+  font-size: 0.72em;
+  line-height: 1.6;
+  white-space: pre;
+  mask-image: linear-gradient(rgb(0 0 0) 30%, transparent 92%);
+}
+
+/* AGENT — the one dark card, the session card's stock: its handle, its project, its mark, its
+   state */
+.vf-card[data-kind="agent"] {
+  --card-stock: var(--vf-card-dark-stock);
+  --card-edge: var(--vf-card-dark-edge);
+  --card-ink: var(--vf-card-dark-ink);
+  --card-ink-2: var(--vf-card-dark-ink-2);
+  --card-ink-3: var(--vf-card-dark-ink-3);
+  --card-ix: var(--vf-card-dark-index);
+  --card-cut: var(--vf-card-dark-cut);
+  --card-lit: 0.06;
+  --card-foot: 0.12;
+  --card-gloss: 0.07;
+  --card-grain: 0.16;
+  --card-catch: 0.13;
+}
+
+.vf-card[data-kind="agent"] .vf-card-stock::after {
+  mix-blend-mode: overlay;
+}
+
+.vf-card[data-kind="agent"] .vf-card-body {
+  display: grid;
+  align-content: start;
+  justify-items: center;
+  text-align: center;
+}
+
+.vf-card-handle {
+  font-size: 1.2em;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.vf-card-project {
+  display: flex;
+  align-items: center;
+  gap: 0.42em;
+  margin-top: 0.3em;
+  color: var(--card-ink-3);
+  font-size: 0.82em;
+  white-space: nowrap;
+}
+
+/* the project's dot, in its dealt ink (§2.9), before its name */
+.vf-card-project i {
+  flex: none;
+  width: 0.6em;
+  height: 0.6em;
+  border-radius: 50%;
+  background: var(--card-project);
+}
+
+/* the mark in the dark stock's own white, a step under its handle's ink (the page's 84%) */
+.vf-card-mark {
+  width: 4em;
+  height: 4em;
+  margin-top: 1.15em;
+  color: rgb(255 255 255 / 84%);
+}
+
+.vf-card-mark svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.vf-card-state {
+  position: absolute;
+  bottom: 0.9em;
+  left: 1em;
+  display: flex;
+  align-items: center;
+  gap: 0.42em;
+  color: var(--card-ink-2);
+  font-size: 0.82em;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.vf-card-state i {
+  width: 0.62em;
+  height: 0.62em;
+  border-radius: 50%;
+  background: var(--card-ink-3);
+}
+
+.vf-card-state[data-tone="working"] i {
+  background: var(--vf-green);
+}
+
+.vf-card-state[data-tone="attention"] i {
+  background: var(--vf-orange);
+}
+
+/* TERMINAL — the command is its name; what it printed runs under it, cut by the card's edge as a
+   pane cuts it. A pass is the one colour it prints. */
+.vf-card-cmd {
+  display: -webkit-box;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  color: var(--card-ink);
+  font-family: var(--vf-font-mono);
+  font-size: 0.8em;
+  font-weight: 500;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.vf-card-cmd span {
+  color: var(--card-ink-3);
+  font-weight: 400;
+}
+
+.vf-card-out {
+  margin: 0;
+  overflow: hidden;
+  color: var(--card-ink-3);
+  font-family: var(--vf-font-mono);
+  font-size: 0.74em;
+  line-height: 1.6;
+  white-space: pre;
+  mask-image: linear-gradient(90deg, rgb(0 0 0) 78%, transparent);
+}
+
+.vf-card-cmd + .vf-card-out {
+  margin-top: 0.7em;
+}
+
+.vf-card-pass {
+  color: var(--vf-card-pass);
+}
+
+.vf-card-out b {
+  color: var(--vf-card-pass);
+  font-weight: 600;
+}
+
+/* MESSAGE — who said it, then what they said */
+.vf-card-who {
+  display: flex;
+  height: 1.55em;
+  align-items: center;
+  gap: 0.45em;
+  white-space: nowrap;
+}
+
+.vf-card-who b {
+  font-weight: 600;
+}
+
+.vf-card-who span {
+  color: var(--card-ink-3);
+  font-size: 0.84em;
+}
+
+.vf-card[data-kind="msg"] .vf-card-words {
+  margin-top: 0.62em;
+  -webkit-line-clamp: 5;
+}
+
+/* PICTURE — the picture, mounted in the face's column at its own proportion (clamped), named under
+   it; its ground shows until it loads */
+.vf-card-photo {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  aspect-ratio: var(--card-ar, 1.4);
+  border-radius: 1.5px;
+  background: var(--vf-card-photo);
+  box-shadow: 0 0 0 0.5px rgb(0 0 0 / 14%);
+}
+
+.vf-card-photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+.vf-card-photo::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(160deg, rgb(255 255 255 / 16%), transparent 40%);
+}
+
+/* a picture still on its way in from another app: the capture glyph on a faint ground of the
+   card's ink, a hairline round it (the page's) */
+.vf-card-photo[data-waiting] {
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--card-ink) 6%, transparent);
+  box-shadow: inset 0 0 0 0.5px color-mix(in srgb, var(--card-ink) 12%, transparent);
+  color: var(--card-ink-3);
+}
+
+.vf-card-photo[data-waiting]::after {
+  content: none;
+}
+
+.vf-card-photo[data-waiting] svg {
+  width: 2.1em;
+  height: 2.1em;
+}
+
+.vf-card[data-kind="pict"] .vf-card-name {
+  margin-top: 0.72em;
+  font-size: 1em;
+  line-height: 1.42;
+}
+
+.vf-card-size {
+  margin-top: 0.1em;
+  overflow: hidden;
+  color: var(--card-ink-3);
+  font-family: var(--vf-font-mono);
+  font-size: 0.76em;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* held (HN-D5): the same card, its type set finer inside so the whole of it reads */
+.vf-card[data-held] {
+  cursor: default;
+}
+
+.vf-card[data-held] .vf-card-face {
+  font-size: 5.6px;
+}
+
+.vf-card[data-held] :is(.vf-card-words, .vf-card-cmd) {
+  display: block;
+  -webkit-line-clamp: unset;
+}
+
+/* the × of a card reached for: inside its top right, across from the index, in the card's own
+   ink, red under the pointer (HN-D4: the one way a card leaves) */
+.vf-card-x {
+  position: absolute;
+  z-index: 3;
+  top: 5px;
+  right: 5px;
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--card-ink) 8%, transparent);
+  color: var(--card-ink-2);
+  cursor: pointer;
+  animation: vf-card-x-in 140ms ease both;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.vf-card-x:hover {
+  background: var(--vf-red);
+  color: var(--vf-state-on-solid);
+}
+
+@keyframes vf-card-x-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* ── THE FAN (§8 "The hand", Holding them) ─────────────────────────────────────────────────────
+   The frame's, not a view's: it stands above the cover in every view, one above the line (62) so
+   a card dealt across the line's glass passes over it, under a card picked up (64) and the carried
+   card (66); and it comes with you when you switch. Each card is placed by its wrappers — x on the
+   slot, y on the lift — so the two travel on their own transitions, and its turn and lift ride
+   down to the card. */
+.vf-cards {
+  position: absolute;
+  z-index: 63;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  translate: 0 0;
+  transition: translate 420ms var(--vf-ease-island);
+}
+
+/* raised, the hand holds the keyboard on its root (a list walked by its keyboard card): what shows
+   it is that card's ring, never a ring round the window */
+.vf-cards:focus {
+  outline: none;
+}
+
+/* the pegboard risen behind the line: the hand steps down out of its way, back the way it came */
+.vf-cards[data-tucked] {
+  translate: 0 120px;
+  transition: translate 300ms cubic-bezier(0.4, 0, 1, 1);
+}
+
+.vf-cards-slot {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform: translateX(var(--vf-cards-x, 0px));
+  transition: transform 240ms var(--vf-ease-island);
+}
+
+.vf-cards-lift {
+  opacity: var(--vf-cards-o, 1);
+  transform: translateY(var(--vf-cards-y, 0px));
+  transition:
+    transform 240ms var(--vf-ease-island),
+    opacity 120ms ease;
+}
+
+/* the deal: drawn at its source's box first (or past the window's foot, with no box to leave
+   from), then 560ms into its place — across on the island curve, and up on the arc's own curve,
+   which dips before it climbs, so the card ARCS in (the page's; DESIGN.md §6) — the card's own
+   turn on the pop — a small toss — and its lift falling away; turning about its centre until it
+   is home */
+.vf-cards-slot[data-phase="deal"],
+.vf-cards-slot[data-phase="deal"] .vf-cards-lift {
+  transition-duration: 560ms;
+}
+
+.vf-cards-slot[data-phase="deal"] .vf-cards-lift {
+  transition-timing-function: cubic-bezier(0.45, -0.3, 0.7, 1);
+}
+
+.vf-cards-slot[data-phase="deal"] .vf-card {
+  transition:
+    transform 560ms var(--vf-ease-pop),
+    box-shadow 560ms ease;
+}
+
+.vf-cards-slot:is([data-phase="from"], [data-phase="deal"]) .vf-card {
+  transform-origin: 50% 50%;
+}
+
+.vf-cards-slot[data-phase="from"],
+.vf-cards-slot[data-phase="from"] :is(.vf-cards-lift, .vf-card) {
+  transition: none;
+}
+
+/* leaving — × or ⌫, or pushed off by the thirteenth (HN-D8): down past the foot, back the way it
+   would have come (M4) */
+.vf-cards-slot[data-phase="leaving"] .vf-cards-lift {
+  transition:
+    transform 240ms cubic-bezier(0.4, 0, 1, 1),
+    opacity 120ms ease;
+}
+
+/* held or carried: its place kept, the card drawn by the held or the carried layer */
+.vf-cards-slot[data-phase="hidden"] {
+  visibility: hidden;
+}
+
+.vf-cards-slot:is([data-phase="hidden"], [data-phase="leaving"]) .vf-card {
+  pointer-events: none;
+}
+
+/* the raised hand's keyboard card (⇧⌘V; ← → walk it): the frame's focus ring, 2px at offset 2 */
+.vf-cards-slot[data-focus] .vf-card {
+  outline: 2px solid var(--vf-select);
+  outline-offset: 2px;
+}
+
+/* a paste of what is already the newest card lifts it instead of dealing a twin (HN-D10): it rises
+   12 on the pop in 280ms, holds under its words, and settles on the retract curve in the pop's own
+   280ms — the pop run backwards (§6) */
+.vf-cards-slot[data-nudged] .vf-cards-lift {
+  transition:
+    transform 280ms var(--vf-ease-pop),
+    opacity 120ms ease;
+}
+
+.vf-cards-slot[data-settling] .vf-cards-lift {
+  transition:
+    transform 280ms cubic-bezier(0.4, 0, 1, 1),
+    opacity 120ms ease;
+}
+
+/* where the reached card came from, above it: solid chrome in the status line's voice */
+.vf-cards-label {
+  position: absolute;
+  z-index: 300;
+  display: flex;
+  height: 24px;
+  align-items: center;
+  padding: 0 10px;
+  border-radius: 12px;
+  background: var(--vf-chrome-solid);
+  box-shadow:
+    0 0 0 1px var(--vf-hairline-strong),
+    var(--vf-shadow-island);
+  color: var(--vf-text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translateX(-50%);
+  animation: vf-cards-label-in 140ms ease both;
+}
+
+@keyframes vf-cards-label-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* reduced motion (M6): nothing travels — the reach and the raise move at once — and only a card's
+   coming and going is seen, as a fade: a deal in at its place, a card leaving where it stood */
+.vf-cards[data-motion="reduced"] :is(.vf-cards-slot, .vf-card) {
+  transition: none;
+}
+
+.vf-cards[data-motion="reduced"] .vf-cards-lift {
+  transition: opacity 120ms ease-out;
+}
+
+/* ── A CARD PICKED UP (HN-D5) ──────────────────────────────────────────────────────────────────
+   As the desk opens a notebook: the card at reading size in the middle, the window behind it out
+   of focus (blurred 14, dimmed 8%), and a bar under the head at the tools in hand's place (y 64)
+   saying where it came from, with Remove and Done. Above the line and the hand. */
+.vf-cards-held {
+  position: absolute;
+  z-index: 64;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* the window out of focus fades in and out in 240ms plain `ease` (§6), so on a put back it has
+   mostly gone before the card leaves after its 140ms lead */
+.vf-cards-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgb(0 0 0 / 8%);
+  backdrop-filter: blur(14px);
+  opacity: 0;
+  transition: opacity 240ms ease;
+}
+
+.vf-cards-held[data-phase="up"] .vf-cards-scrim {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.vf-cards-heldcard {
+  --vf-cards-lp: 1;
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: var(--vf-cards-o, 1);
+  transform-origin: 50% 50%;
+  transition:
+    transform 560ms var(--vf-ease-island),
+    opacity 120ms ease;
+}
+
+/* home: a 140ms lead for the window to come back into focus, then 440ms into its place */
+.vf-cards-held[data-phase="home"] .vf-cards-heldcard {
+  transition:
+    transform 440ms var(--vf-ease-island) 140ms,
+    opacity 120ms ease;
+}
+
+/* removed: it shrinks where it stands, back the way it came (M4) */
+.vf-cards-held[data-phase="gone"] .vf-cards-heldcard {
+  transition: transform 280ms cubic-bezier(0.4, 0, 1, 1);
+}
+
+.vf-cards-held:not([data-phase="up"]) .vf-card {
+  pointer-events: none;
+}
+
+/* M6: the card fades in at the centre over a scrim that fades with it, both in 120ms */
+.vf-cards-held[data-motion="reduced"] .vf-cards-heldcard {
+  transition: opacity 120ms ease-out;
+}
+
+.vf-cards-held[data-motion="reduced"] .vf-cards-scrim {
+  transition-duration: 120ms;
+}
+
+/* the bar under the head, on the line's glass (§5) */
+.vf-cards-bar {
+  position: absolute;
+  top: 64px;
+  left: 50%;
+  display: flex;
+  height: 40px;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 4px 4px 14px;
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--vf-chrome-solid) 88%, transparent);
+  backdrop-filter: blur(24px);
+  box-shadow:
+    0 0 0 1px var(--vf-hairline),
+    var(--vf-shadow-island);
+  opacity: 0;
+  transform: translateX(-50%);
+  transition: opacity 200ms ease;
+}
+
+.dark .vf-cards-bar {
+  background: color-mix(in srgb, var(--vf-chrome-solid) 94%, transparent);
+  box-shadow:
+    0 0 0 1px var(--vf-hairline-strong),
+    var(--vf-shadow-island),
+    inset 0 1px 0 rgb(255 255 255 / 6%);
+}
+
+.vf-cards-bar[data-on] {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.vf-cards-bar-from {
+  margin-right: 6px;
+  color: var(--vf-text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.vf-cards-bar-rule {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: var(--vf-hairline-strong);
+}
+
+.vf-cards-bar button {
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 16px;
+  background: none;
+  color: var(--vf-text-primary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.vf-cards-bar button:hover {
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+}
+
+.vf-cards-bar button:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: 2px;
+}
+
+.vf-cards-bar .vf-cards-bar-done,
+.vf-cards-bar .vf-cards-bar-done:hover {
+  padding: 0 15px;
+  background: var(--vf-foreground);
+  box-shadow: 0 4px 10px rgb(0 0 0 / 14%);
+  color: var(--vf-chrome-solid);
+}

@@ -16,8 +16,8 @@
 //               the filters and the board two stops of Tab. Since DK-17b the focus is ICE's (I37 — `tray.focus`, read
 //               back from `anchor().focused`): the listbox says ICE's focused id and the ring stands 2 out from ICE's
 //               `focused.rect` — where the last frame drew the object;
-//   REFUSED   — B while typing in the draft types a b (the board stays shut); B under a cover (Godview) does nothing; an
-//               object in hand: the create faint ("Put it down first"), B and the create refused;
+//   REFUSED   — B while typing in the palette's field types a b (the board stays shut); B under a cover (Godview) does
+//               nothing; an object in hand: the create faint ("Put it down first"), B and the create refused;
 //   PLUGIN    — the example clock's plugin off: the desk remounts, and the board no longer offers its "Things" (P3c); on
 //               again, offered;
 //   MOTION    — under reduced motion (the page's media emulated): the thumb does not travel, the ring only fades (M6);
@@ -678,21 +678,27 @@ export async function pegboardRows(d: BoardRowsDriver): Promise<string[]> {
   await deselect();
 
   // ── REFUSED: B while typing; B under a cover; in hand the create faint and the board refused ───────────────────
-  await pressAt(".vf-line-input");
+  // typing: into the palette's field, the frame's one editor over the desk since the line's draft left it (LN-D3)
+  const command = process.platform === "darwin" ? "meta" : "control";
+  await key("k", [command]);
   await until(
-    "the draft focused",
+    "the palette's field focused",
     5_000,
-    `document.activeElement?.classList.contains("vf-line-input") === true`,
+    `document.activeElement?.closest?.(".vf-palette-field") != null`,
   );
   await key("B", [], true);
   await sleep(300);
   const typing = await door();
-  const typed = await js<string>(`document.querySelector(".vf-line-input")?.textContent ?? ""`);
+  const typed = await js<string>(`document.querySelector(".vf-palette-field input")?.value ?? ""`);
   if (typing.anchor.open) problems.push("REFUSED: B while typing raised the board");
   if (!/b/iu.test(typed))
     problems.push(`REFUSED: B while typing did not type (${JSON.stringify(typed)})`);
-  await js(
-    `(() => { const e = document.querySelector(".vf-line-input"); e.textContent = ""; e.dispatchEvent(new InputEvent("input", { bubbles: true })); e.blur(); })()`,
+  // ⌘K again folds the palette, its field with it
+  await key("k", [command]);
+  await until(
+    "the palette folded",
+    5_000,
+    `document.querySelector(".vf-palette-layer[data-visible]") === null`,
   );
   // under a cover: Godview
   await key("2", [process.platform === "darwin" ? "meta" : "control"]);

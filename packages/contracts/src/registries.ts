@@ -1881,6 +1881,17 @@ export const IPC_CHANNELS = {
   screenshotResult: "vibefield:screenshot:result",
   /** A registered product window asks main to preview one retained still. */
   screenshotPreview: "vibefield:screenshot:preview",
+  /** renderer → main invoke: ScreenshotStillBytesRequest → the still's PNG bytes,
+   * or null — one retained still by its basename, for the desk to print a
+   * snapshot played onto it (HN-D7). The same retained-file authority as the
+   * still scheme and Quick Look: nothing else on the disk answers. */
+  screenshotStillBytes: "vibefield:screenshot:still-bytes",
+  /** renderer → main invoke: ScreenshotStillKeptRequest → boolean — whether main
+   * still retains one still, by its basename: a snapshot's card asks it before
+   * its still's path is pasted into a pane, so a pane is never handed a path the
+   * ring has let go (HN-4). The still-bytes door's retained-file check, and no
+   * bytes. */
+  screenshotStillKept: "vibefield:screenshot:still-kept",
   /** renderer → main invoke: RendererReplaceRequest → RendererReplaceResult — the
    * window's renderer REPLACED at its own asking (DK-9, the runtime with kinds: a
    * plugin update whose kinds this realm defined otherwise — ICE's catalog cannot

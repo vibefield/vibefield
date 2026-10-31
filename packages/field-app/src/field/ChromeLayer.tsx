@@ -18,6 +18,7 @@ import { useSyncQuestion } from "../account/sync-question";
 import { isSwitchCovering, useSwitchState } from "../boot/switch";
 import type { DocManager, DocManagerState } from "../doc-manager";
 import type { LineActs } from "../frame/Composer";
+import { Cards } from "../frame/cards/Cards";
 import { type FrameSurface, foldSurface } from "../frame/frame-surface";
 import { Head } from "../frame/Head";
 import { canvasHead } from "../frame/head-canvas";
@@ -35,7 +36,7 @@ import { HistoryView } from "../history/HistoryView";
 import { prefetchHistoryRoomWhenIdle } from "../history/room-chunk";
 import { getHost } from "../host";
 import { CommandPalette } from "../hud/CommandPalette";
-import { ArtifactsTray, ClipboardTray } from "../hud/edge-tray/EdgeTray";
+import { ArtifactsTray } from "../hud/edge-tray/EdgeTray";
 import { LoadingVeil } from "../hud/LoadingVeil";
 import { PluginSurfaceHost } from "../hud/PluginSurfaceSlot";
 import { SettingsPanel } from "../panels";
@@ -330,13 +331,26 @@ export function ChromeLayer({
         openLiveFeed={openHistoryLiveFeed}
       />
 
-      {/* THE EDGES (SNAP-3; One Frame FR-4, DESIGN.md §8 edge trays, §10): the
-          clipboard's notch on the left and Artifacts' on the right — its
-          drawer the Artifact Hub, the side panel's contents — each a notch at
-          mid-edge with its drawer behind it. The frame's, not the canvas's:
-          they stand above the cover in every view, resting there as slivers,
-          and each drawer is one of the frame's open surfaces. */}
-      <ClipboardTray surface={surface} onSurfaceChange={onSurfaceChange} sliver={covered} />
+      {/* THE HAND (track HN; DESIGN.md §8 "The hand", §10): every copy is a
+          card at the window's foot, fanned like a hand you hold — the
+          clipboard you can see, where the left edge's tray stood. The frame's,
+          not the canvas's: it stands above the cover with the line in every
+          view, and raised (⇧⌘V) or with a card picked up it is one of the
+          frame's open surfaces. It steps down out of the pegboard's way, and
+          at rest under Settings' backdrop it answers neither the pointer nor ⌫
+          (Settings is not one of the frame's surfaces, so it is told). */}
+      <Cards
+        surface={surface}
+        onSurfaceChange={onSurfaceChange}
+        tucked={boardOut}
+        settingsOpen={showSettings}
+      />
+
+      {/* THE RIGHT EDGE (One Frame FR-4, DESIGN.md §8 edge trays, §10):
+          Artifacts' notch — its drawer the Artifact Hub, the side panel's
+          contents — at mid-edge with its drawer behind it. The frame's: it
+          stands above the cover in every view, resting there as a sliver,
+          and its drawer is one of the frame's open surfaces. */}
       <ArtifactsTray
         surface={surface}
         onSurfaceChange={onSurfaceChange}
@@ -444,8 +458,8 @@ export function ChromeLayer({
           and under the frame (§10), placed imperatively from the desk's
           anchor; More or a right-click grows it into its menu, one of the
           frame's open surfaces. After the line in the document, so Tab from
-          the draft reaches it (R9). Not shown over a covered view, nor over
-          the field receded under a sheet. */}
+          the line's create reaches it (R9). Not shown over a covered view, nor
+          over the field receded under a sheet. */}
       <SelectionBar
         surface={surface}
         onSurfaceChange={onSurfaceChange}
