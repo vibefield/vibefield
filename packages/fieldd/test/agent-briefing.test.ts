@@ -4,8 +4,8 @@ import { join } from "node:path";
 import type { NativeDoorInfoResult, SparkRecord } from "@vibefield/contracts";
 import type { AgentBriefingCapabilities } from "@vibefield/puppeteer-core";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AgentSparkBriefings } from "../src/agent-spark-briefing";
-import { SparkStore } from "../src/compose/sparks";
+import { AgentBriefings } from "../src/agent-briefing";
+import { SparkStore } from "../src/tool-plane/sparks";
 
 const roots: string[] = [];
 afterEach(() => {
@@ -18,7 +18,8 @@ const supported: AgentBriefingCapabilities = {
   mcpServerProcess: "terminal",
 };
 
-function harness(capability: AgentBriefingCapabilities | undefined = supported) {
+// `null` is an agent that declares no briefing at all (a default parameter would read `undefined` as `supported`).
+function harness(capability: AgentBriefingCapabilities | null = supported, doorDown = false) {
   const root = mkdtempSync(join(tmpdir(), "vf-briefing-"));
   roots.push(root);
   const spark: SparkRecord = {
@@ -42,10 +43,13 @@ function harness(capability: AgentBriefingCapabilities | undefined = supported) 
     args: ["door", "--endpoint", "/run/door.sock"],
     endpoint: "/run/door.sock",
   };
-  const door = vi.fn(async () => info);
-  const service = new AgentSparkBriefings({
+  const door = vi.fn(async () => {
+    if (doorDown) throw new Error("the floor offers no door");
+    return info;
+  });
+  const service = new AgentBriefings({
     spark: (id) => store.get(id),
-    capabilities: () => capability,
+    capabilities: () => capability ?? undefined,
     door,
   });
   return { service, spark, store, root, brief, info, door };
@@ -131,4 +135,42 @@ describe("CP-1d: a fresh briefing for each spark process", () => {
       });
     },
   );
+});
+
+// MT-0 (MT-D9; the MT lead's ruling 7) — a plain run is briefed with the tool plane's door and the allowance of its
+// read-only `agent` rows by name, and no instructions (the server's own paragraph says the rest; provisional on the
+// history room's sentinel eval). It degrades: an agent that cannot take it, a process the door cannot name, or a door
+// that does not answer means a run with no briefing, never a refused spawn.
+describe("MT-0: a plain run's briefing, which degrades and never refuses", () => {
+  it("carries the door and the read-only agent rows by name, and no instructions", async () => {
+    const h = harness();
+    expect(await h.service.forRun("scripted")).toEqual({
+      mcpServers: { vibefield: { command: h.info.command, args: [...h.info.args] } },
+      allowTools: ["vibefield/history_search", "vibefield/history_read", "vibefield/projects_list"],
+    });
+  });
+
+  it("needs no instructions capability: an agent that takes servers and allowances is briefed", async () => {
+    const h = harness({ ...supported, instructions: false });
+    expect((await h.service.forRun("scripted")).allowTools).toHaveLength(3);
+  });
+
+  it.each([
+    ["no servers", { ...supported, mcpServers: false }],
+    ["no allowances", { ...supported, allowTools: false }],
+    ["a helper's process", { ...supported, mcpServerProcess: "helper" as const }],
+    ["no capabilities at all", null],
+  ])("starts an agent with %s bare, before asking for a door", async (_label, capability) => {
+    const h = harness(capability);
+    expect(await h.service.forRun("scripted")).toEqual({});
+    expect(h.door).not.toHaveBeenCalled();
+  });
+
+  it("starts a run bare when the door does not answer, where a spark's birth refuses", async () => {
+    const h = harness(supported, true);
+    expect(await h.service.forRun("scripted")).toEqual({});
+    await expect(h.service.prepare(h.spark.id, "scripted")).rejects.toThrow(
+      "the floor offers no door",
+    );
+  });
 });

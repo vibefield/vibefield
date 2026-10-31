@@ -7,7 +7,7 @@ import type {
   SparkRecord,
 } from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
-import { createComposeVerbs, type VerbDeps } from "../src/compose/verbs";
+import { createComposeVerbs, type VerbDeps } from "../src/tool-plane/rooms/compose/verbs";
 
 // CP-1b — the six read verbs, held to a spark's Agent Profiles (TL-D5, NS-D5). The v2 page's CP-1 witness, at the
 // verbs' level: a session from another profile never shows, and nothing outside the profiles can be read or searched.

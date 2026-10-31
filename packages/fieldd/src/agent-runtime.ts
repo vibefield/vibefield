@@ -415,6 +415,9 @@ export interface AgentRuntimeServiceOptions {
   providers?: (builtin: AgentProvider[]) => AgentProvider[];
   /** CP-1d — rebuild a spark's briefing for each birth, from its signed record and the current native door. */
   sparkBriefing?: (spark: SparkId, provider: string) => Promise<AgentRunBriefing>;
+  /** MT-0 (MT-D9) — a plain run's briefing for each birth: the tool plane's door and its read-only `agent` rows, or
+   * nothing when its agent cannot take them. It never refuses (agent-briefing.ts `forRun`). */
+  runBriefing?: (provider: string) => Promise<AgentRunBriefing>;
   /** AC-3 test seam: the catalog (default: THE table, `AGENT_CATALOG`) — a
    * test composes rows for its scripted provider beside the real ones, which
    * is how the catalog's rules are exercised without a vendor literal */
@@ -1221,7 +1224,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     const cwd = place?.path ?? params.cwd ?? this.home;
     const identity = this.identity();
     const entry = await this.creation(params.profileId ?? null, async () => {
-      const briefing = await this.briefingForSpark(compose?.spark, params.provider);
+      const briefing = await this.briefingFor(compose?.spark, params.provider);
       const result = await this.runtime.spawn({
         agent: params.provider,
         cwd,
@@ -1475,7 +1478,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     );
     const selection = this.resumeSelection(params.provider, launched);
     const entry = await this.creation(profileId ?? null, async () => {
-      const briefing = await this.briefingForSpark(previous?.spark, params.provider);
+      const briefing = await this.briefingFor(previous?.spark, params.provider);
       const result = await this.runtime.resume({
         continuation: {
           providerId: params.provider,
@@ -1926,14 +1929,22 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
 
   /** CP-1b (the compose plane, version 2; CP-D1) — the run a pane holds, for the `vibefield` door. The floor walks a
    * caller to its pane; fieldd maps the pane to its run here and never walks itself. Managed and pending runs only:
-   * an exited run's pane holds no process that could have called. `spark` is set when the run is a spark's own
-   * session, as its record says (CP-1c writes it at hatch). */
-  runForTerminal(terminalSessionId: string): { runtimeRunId: string; spark?: SparkId } | undefined {
+   * an exited run's pane holds no process that could have called. MT-0's settle rule reads the rest from the run's
+   * record: whether it exists and verifies, the spark it names when the run is a spark's own session (CP-1c writes it
+   * at hatch), and the profile set it was filed under. */
+  runForTerminal(
+    terminalSessionId: string,
+  ): { runtimeRunId: string; verified: boolean; spark?: SparkId; profileSet?: string } | undefined {
     const runtimeRunId = this.byTerminal.get(terminalSessionId);
     if (runtimeRunId === undefined) return undefined;
     if (!this.managed.has(runtimeRunId) && !this.pending.has(runtimeRunId)) return undefined;
-    const spark = this.records.read(runtimeRunId)?.spark;
-    return { runtimeRunId, ...(spark ? { spark } : {}) };
+    const record = this.records.read(runtimeRunId);
+    return {
+      runtimeRunId,
+      verified: record !== undefined,
+      ...(record?.spark ? { spark: record.spark } : {}),
+      ...(record?.profileSet ? { profileSet: record.profileSet } : {}),
+    };
   }
 
   /** `agent.subscribe`: full snapshots, at most one per tick. */
@@ -2834,8 +2845,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     // the account it was launched in rides with it (discovery runs there)
     const selection = this.resumeSelection(record.provider, record.modelSelection);
     return this.creation(record.profileId ?? null, async () => {
-      const briefing =
-        preparedBriefing ?? (await this.briefingForSpark(record.spark, record.provider));
+      const briefing = preparedBriefing ?? (await this.briefingFor(record.spark, record.provider));
       const result = await this.runtime.resume({
         continuation,
         cwd,
@@ -2864,11 +2874,13 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     });
   }
 
-  private async briefingForSpark(
+  /** Every birth's briefing (MT-D9): a spark's from its record, refusing when it cannot be delivered (CP-1d); a plain
+   * run's from the tool plane, degrading to none. */
+  private async briefingFor(
     spark: SparkId | undefined,
     provider: string,
   ): Promise<AgentRunBriefing> {
-    if (spark === undefined) return {};
+    if (spark === undefined) return (await this.opts.runBriefing?.(provider)) ?? {};
     if (!this.opts.sparkBriefing)
       throw new RpcCallError("UNAVAILABLE", "the spark's briefing is unavailable", true, {
         service: "compose",
@@ -3716,7 +3728,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         if (stale !== undefined) throw stale;
         // CP-1d — an unreadable spark record/brief or unsupported door must not cost the pending run its PTY.
         // Keep this one prepared briefing for the replacement; never perform a second read after ending it.
-        briefing = await this.briefingForSpark(record.spark, record.provider);
+        briefing = await this.briefingFor(record.spark, record.provider);
         if (oldId !== undefined) {
           const row = this.listed(terminals, oldId) ? terminals.get(oldId) : undefined;
           if (row !== undefined) {

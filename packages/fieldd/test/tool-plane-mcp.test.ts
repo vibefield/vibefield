@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MCP_ERRORS, MCP_MODERN, McpConnection, type McpTool } from "../src/compose/mcp";
+import { MCP_ERRORS, MCP_MODERN, McpConnection, type McpTool } from "../src/tool-plane/mcp";
 
 // CP-1b — the `vibefield` server's protocol (the compose plane, version 2). The modern frames are the ones Claude Code
 // 2.1.312 sent in the 2026-10-29 measurement (the study's §16.1): `server/discover` first, then `tools/list`, each with
@@ -17,15 +17,21 @@ const TOOL: McpTool = {
   name: "agents_list",
   description: "List the agent sessions under your profiles.",
   inputSchema: { type: "object", properties: {} },
-  annotations: { readOnlyHint: true },
+  annotations: {
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
 };
 
-function server(tools: readonly McpTool[] = [TOOL]) {
+function server(tools: readonly McpTool[] = [TOOL], ttl?: () => number | undefined) {
   const calls: { name: string; args: Record<string, unknown> }[] = [];
   const conn = new McpConnection({
     serverInfo: { name: "vibefield", version: "0.1.0" },
-    instructions: "VibeField's tools for sparks.",
+    instructions: () => "VibeField's tools for sparks.",
     tools: () => tools,
+    ...(ttl ? { listTtlMs: ttl } : {}),
     call: async (name, args) => {
       calls.push({ name, args });
       if (args.fail) throw new Error("the index is building");
@@ -72,7 +78,7 @@ describe("the vibefield server, 2026-07-28 (CP-1b)", () => {
         name: "agents_list",
         description: TOOL.description,
         inputSchema: TOOL.inputSchema,
-        annotations: { readOnlyHint: true },
+        annotations: TOOL.annotations,
       },
     ]);
     expect(out.result.ttlMs).toBeGreaterThan(0);
@@ -124,7 +130,27 @@ describe("the vibefield server, 2026-07-28 (CP-1b)", () => {
     });
   });
 
-  it("refuses a tool the caller does not hold as an unknown tool (-32602): a plain agent holds none", async () => {
+  it("says ttl 0 on discover and on the list while the caller is unsettled, so the client asks again", async () => {
+    const { ask } = server([], () => 0);
+    const discover = await ask({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "server/discover",
+      params: { _meta: META },
+    });
+    expect(discover.result.ttlMs).toBe(0);
+    const list = await ask({
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/list",
+      params: { _meta: META },
+    });
+    expect(list.result.ttlMs).toBe(0);
+  });
+
+  // MT-0: a name the caller is not listed is the service's to refuse, as a result with a fact (index.ts); only a
+  // malformed call is the protocol's.
+  it("hands a named call to the service whatever the list held, and refuses a call with no name (-32602)", async () => {
     const { ask, calls } = server([]);
     const list = await ask({
       jsonrpc: "2.0",
@@ -139,8 +165,16 @@ describe("the vibefield server, 2026-07-28 (CP-1b)", () => {
       method: "tools/call",
       params: { _meta: META, name: "agents_list" },
     });
-    expect(call.error.code).toBe(MCP_ERRORS.invalidParams);
-    expect(calls).toEqual([]);
+    expect(call.result.resultType).toBe("complete");
+    expect(calls.map((c) => c.name)).toEqual(["agents_list"]);
+    const nameless = await ask({
+      jsonrpc: "2.0",
+      id: 8,
+      method: "tools/call",
+      params: { _meta: META },
+    });
+    expect(nameless.error.code).toBe(MCP_ERRORS.invalidParams);
+    expect(calls).toHaveLength(1);
   });
 
   it("answers no notification, no stray response, and says so for a method it lacks or a line that is not JSON", async () => {

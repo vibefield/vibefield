@@ -603,12 +603,30 @@ const RULES = [
     // runs, the index, the projects, the audit) and reaches past none of them: no puppeteer package and no rosetta
     // package, so a spark's verbs cannot branch on a vendor (AR-L1) or read a vendor's transcript. R20 already keeps
     // the adapters out of all of fieldd; this keeps even the runtime door out of compose/. The flow host (CP-4) gets
-    // its own rule.
+    // its own rule. MT-0 (2026-10-30, the tool plane; thinking-tool-plane.md §3, §13): compose/ became tool-plane/, so
+    // the rule is re-aimed at the whole plane, every room in it.
     enforce: true,
     description:
-      "packages/fieldd/src/compose imports no @vibefield/puppeteer-* and no @vibefield/rosetta-* package: it composes fieldd's own services",
-    applies: (p) => SOURCE_EXT.test(p) && under(p, "packages/fieldd/src/compose"),
+      "packages/fieldd/src/tool-plane imports no @vibefield/puppeteer-* and no @vibefield/rosetta-* package: it composes fieldd's own services",
+    applies: (p) => SOURCE_EXT.test(p) && under(p, "packages/fieldd/src/tool-plane"),
     importTest: (s) => s.startsWith("@vibefield/puppeteer-") || s.startsWith("@vibefield/rosetta-"),
+  },
+  {
+    id: "R30",
+    // MT-0 (the tool plane, thinking-tool-plane.md §13; MT-L5: policy in fieldd, mechanism where the kind lives): a
+    // room is an adapter over fieldd's own services. Pixels and input are main's, reached through internal shell.*
+    // doors, and a plugin acts through its declared methods, so no room imports Electron, a plugin's package or the
+    // window's code. R10 keeps the SDK a door, never a way in.
+    enforce: true,
+    description:
+      "packages/fieldd/src/tool-plane/rooms imports no electron, no @vibefield/plugin-* or plugins/ package, and no field-app or electron-shell",
+    applies: (p) => SOURCE_EXT.test(p) && under(p, "packages/fieldd/src/tool-plane/rooms"),
+    importTest: (s) =>
+      importsModule(s, "electron") ||
+      s.startsWith("@vibefield/plugin-") ||
+      importsModule(s, "@vibefield/field-app") ||
+      importsModule(s, "@vibefield/electron-shell") ||
+      /(?:^|\/)plugins\//.test(s),
   },
 ];
 
@@ -1270,16 +1288,31 @@ function runSelfTest() {
     },
     {
       id: "R29",
-      file: "packages/fieldd/src/compose/uses-runtime.ts",
+      file: "packages/fieldd/src/tool-plane/uses-runtime.ts",
       body: 'import { createRuntime } from "@vibefield/puppeteer-runtime";\nexport const r = createRuntime;\n',
     },
     {
       id: "R29",
-      file: "packages/fieldd/src/compose/uses-rosetta.ts",
+      file: "packages/fieldd/src/tool-plane/rooms/compose/uses-rosetta.ts",
       body: 'import { RosettaClient } from "@vibefield/rosetta-protocol";\nexport const c = RosettaClient;\n',
+    },
+    {
+      id: "R30",
+      file: "packages/fieldd/src/tool-plane/rooms/compose/uses-electron.ts",
+      body: 'import { BrowserWindow } from "electron";\nexport const w = BrowserWindow;\n',
+    },
+    {
+      id: "R30",
+      file: "packages/fieldd/src/tool-plane/rooms/pages/uses-plugin.ts",
+      body: 'import { definePlugin } from "@vibefield/plugin-sdk";\nexport const p = definePlugin;\n',
     },
   ];
   const cleans = [
+    // MT-0: a room's own imports (contracts, fieldd's services) pass R29 and R30, so neither overfires on the plane.
+    {
+      file: "packages/fieldd/src/tool-plane/rooms/compose/clean-room.ts",
+      body: 'import type { ComposeProject } from "@vibefield/contracts";\nimport { RpcCallError } from "../../../native-link";\nexport const ok: ComposeProject[] = [];\nexport const e = RpcCallError;\n',
+    },
     // react + a DECLARED entry import + plain code: proves R1/R2/R9 don't
     // overfire and R5 accepts what the manifest publishes.
     //

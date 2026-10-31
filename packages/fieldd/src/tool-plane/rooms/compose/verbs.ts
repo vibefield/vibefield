@@ -18,14 +18,15 @@ import type {
   ComposeTurn,
   IndexSearchResult,
   IndexTimelineResult,
-  SparkRecord,
+  ServedToolName,
 } from "@vibefield/contracts";
-import { COMPOSE_VERB_SCHEMAS } from "@vibefield/contracts";
-import { RpcCallError } from "../native-link";
+import { RpcCallError } from "../../../native-link";
 
-// CP-1b — the six read verbs a spark is served first (the compose plane, version 2; compose.ts's COMPOSE_VERB_SCHEMAS).
-// Each is held to the spark's Agent Profiles (TL-D5, NS-D5): it lists, reads and searches only what those profiles
-// hold. fieldd's own services answer them through VerbDeps, so nothing here imports puppeteer or rosetta (wall R29) and
+// CP-1b — the six read verbs served first (the compose plane, version 2), the compose room of the tool plane since
+// MT-0 (its rows and schemas are tools.ts's). Each is held to the caller's Agent Profiles (TL-D5, NS-D5): a spark's
+// record's, or the one a plain run is filed under (the MT lead's ruling 5). It lists, reads and searches only what
+// those profiles hold, and this join is the whole of History's profile bound: the index's doors carry no profile
+// (the rooms survey, 23:45Z). The audience a row is served to is the plane's (index.ts), never a check here. fieldd's own services answer them through VerbDeps, so nothing here imports puppeteer or rosetta (wall R29) and
 // nothing reads a vendor's transcript. They change nothing; the audit line around each call is the caller's (index.ts).
 
 /** The profile a run belongs to: its set, or This Mac's when it names none. */
@@ -71,31 +72,31 @@ export interface VerbDeps {
   ): Promise<IndexSearchResult>;
 }
 
-export interface ComposeVerbs {
-  agents_available(spark: SparkRecord, input: unknown): Promise<ComposeAgentsAvailableOutput>;
-  projects_list(spark: SparkRecord, input: unknown): Promise<ComposeProjectsListOutput>;
-  agents_list(spark: SparkRecord, input: ComposeAgentsListInput): Promise<ComposeAgentsListOutput>;
-  agent_read(spark: SparkRecord, input: ComposeAgentReadInput): Promise<ComposeReadOutput>;
-  history_search(
-    spark: SparkRecord,
-    input: ComposeHistorySearchInput,
-  ): Promise<ComposeHistorySearchOutput>;
-  history_read(spark: SparkRecord, input: ComposeHistoryReadInput): Promise<ComposeReadOutput>;
+/** Who a verb answers: the Agent Profiles its calls are held to (the door's settled caller). */
+export interface VerbCaller {
+  readonly profiles: readonly string[];
 }
 
-/** The verbs built so far: exactly the ones compose.ts gives schemas. */
-export type ComposeVerbName = keyof typeof COMPOSE_VERB_SCHEMAS;
-export const isComposeVerb = (name: string): name is ComposeVerbName =>
-  Object.hasOwn(COMPOSE_VERB_SCHEMAS, name);
+export interface ComposeVerbs {
+  agents_available(caller: VerbCaller, input: unknown): Promise<ComposeAgentsAvailableOutput>;
+  projects_list(caller: VerbCaller, input: unknown): Promise<ComposeProjectsListOutput>;
+  agents_list(caller: VerbCaller, input: ComposeAgentsListInput): Promise<ComposeAgentsListOutput>;
+  agent_read(caller: VerbCaller, input: ComposeAgentReadInput): Promise<ComposeReadOutput>;
+  history_search(
+    caller: VerbCaller,
+    input: ComposeHistorySearchInput,
+  ): Promise<ComposeHistorySearchOutput>;
+  history_read(caller: VerbCaller, input: ComposeHistoryReadInput): Promise<ComposeReadOutput>;
+}
 
-/** Run a built verb on input its own schema has already parsed (the one place the union is widened). */
+/** Run a served row's verb on input its own schema has already parsed (the one place the union is widened). */
 export function runVerb(
   verbs: ComposeVerbs,
-  name: ComposeVerbName,
-  spark: SparkRecord,
+  name: ServedToolName,
+  caller: VerbCaller,
   input: unknown,
 ) {
-  return (verbs[name] as (spark: SparkRecord, input: unknown) => Promise<unknown>)(spark, input);
+  return (verbs[name] as (caller: VerbCaller, input: unknown) => Promise<unknown>)(caller, input);
 }
 
 /** A refusal the model reads as the tool's own answer (never a protocol error). */
@@ -103,13 +104,13 @@ const outside = (what: string) =>
   new RpcCallError("FORBIDDEN_SCOPE", `${what} is outside your Agent Profiles`, false);
 
 export function createComposeVerbs(deps: VerbDeps): ComposeVerbs {
-  const inScope = (spark: SparkRecord, profile: string) => spark.profiles.includes(profile);
-  const scopedSets = async (spark: SparkRecord) =>
-    (await deps.profileSets()).filter((set) => inScope(spark, set.id));
+  const inScope = (profiles: readonly string[], profile: string) => profiles.includes(profile);
+  const scopedSets = async (caller: VerbCaller) =>
+    (await deps.profileSets()).filter((set) => inScope(caller.profiles, set.id));
 
-  /** The runtimes History reads under a spark's profiles: one per signed-in persona that has one. */
-  const runtimes = async (spark: SparkRecord, agent: string | undefined) =>
-    (await scopedSets(spark)).flatMap((set) =>
+  /** The runtimes History reads under the caller's profiles: one per signed-in persona that has one. */
+  const runtimes = async (caller: VerbCaller, agent: string | undefined) =>
+    (await scopedSets(caller)).flatMap((set) =>
       set.personas
         .filter((p) => p.runtimeId !== undefined && (agent === undefined || p.provider === agent))
         .map((p) => ({ runtimeId: p.runtimeId as string, profile: set.id, provider: p.provider })),
@@ -144,12 +145,12 @@ export function createComposeVerbs(deps: VerbDeps): ComposeVerbs {
     };
   };
 
-  /** A run the spark may read: on this desktop, under its profiles. */
-  const scopedRun = (spark: SparkRecord, id: string): AgentSessionSummary => {
+  /** A run the caller may read: on this desktop, under its profiles. */
+  const scopedRun = (caller: VerbCaller, id: string): AgentSessionSummary => {
     const row = deps.runs().find((r) => r.runtimeRunId === id && r.tier !== "remote");
     if (!row)
       throw new RpcCallError("NOT_FOUND", `no session ${id}; agents_list names them`, false);
-    if (!inScope(spark, profileOf(row))) throw outside(`session ${id}`);
+    if (!inScope(caller.profiles, profileOf(row))) throw outside(`session ${id}`);
     return row;
   };
 
@@ -183,8 +184,8 @@ export function createComposeVerbs(deps: VerbDeps): ComposeVerbs {
   };
 
   return {
-    async agents_available(spark) {
-      const sets = await scopedSets(spark);
+    async agents_available(caller) {
+      const sets = await scopedSets(caller);
       const offers = sets.flatMap((set) =>
         [
           ...new Set(
@@ -230,25 +231,25 @@ export function createComposeVerbs(deps: VerbDeps): ComposeVerbs {
       return { projects: [...deps.projects()] };
     },
 
-    async agents_list(spark, input) {
+    async agents_list(caller, input) {
       const sessions = deps
         .runs()
-        .filter((r) => r.tier !== "remote" && inScope(spark, profileOf(r)))
+        .filter((r) => r.tier !== "remote" && inScope(caller.profiles, profileOf(r)))
         .filter((r) => input.ended === true || !r.continuation?.exited)
         .map(session);
       return { sessions };
     },
 
-    async agent_read(spark, input) {
-      const row = scopedRun(spark, input.session);
+    async agent_read(caller, input) {
+      const row = scopedRun(caller, input.session);
       const indexId = await deps.indexSessionFor(row.sessionId);
       if (!indexId) return { session: input.session, turns: [] };
       const out = await read(indexId, input.before, input.turns);
       return { ...out, session: input.session };
     },
 
-    async history_search(spark, input) {
-      const under = await runtimes(spark, input.agent);
+    async history_search(caller, input) {
+      const under = await runtimes(caller, input.agent);
       const limit = input.limit ?? SEARCH_DEFAULT;
       const afterMs = input.since !== undefined ? Date.parse(input.since) : undefined;
       if (afterMs !== undefined && Number.isNaN(afterMs))
@@ -289,13 +290,13 @@ export function createComposeVerbs(deps: VerbDeps): ComposeVerbs {
       };
     },
 
-    async history_read(spark, input) {
+    async history_read(caller, input) {
       const { profileId } = await deps.indexSessionProfile(input.session);
       const sets = await deps.profileSets();
       const filedUnder =
         sets.find((set) => set.personas.some((p) => p.profileId === profileId))?.id ??
         (profileId === undefined ? NATIVE : undefined);
-      if (filedUnder === undefined || !inScope(spark, filedUnder))
+      if (filedUnder === undefined || !inScope(caller.profiles, filedUnder))
         throw outside(`session ${input.session}`);
       return read(input.session, input.before, input.turns);
     },
