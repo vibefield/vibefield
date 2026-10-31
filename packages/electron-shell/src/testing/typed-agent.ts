@@ -116,15 +116,40 @@ export const TYPED_AGENT_MODELS = [
   { value: "stub-plain", displayName: "Plain", supportsEffort: false },
 ] as const;
 
+/** What the stub does with a TERMINAL run that is no session — a sign-in, or its
+ * name typed by hand at a prompt. A run with no terminal (a sign-in's status, a
+ * usage read) exits 1 either way. For the godview smoke a terminal run exits 1
+ * too (`"refuses"`). For the first-run smoke it STANDS (`"stands"`): the Setup
+ * Assistant's Profiles pane opens a sign-in in a terminal, and a login waits
+ * for its person, so the stub says one line and waits for its terminal's end.
+ * Terminal semantics only: no vendor's words or flags. */
+export type StubAtATerminal = "refuses" | "stands";
+
+/** What a standing stub says in its terminal. */
+export const STUB_STANDING = "typed-agent stub: a sign-in that stands until it is cancelled.";
+
 /** The stub, as a Node program: `#!/usr/bin/env node`, so a shell, the
  * shim's exec and fieldd's probes all run the same file the same way. */
-export function typedAgentStubSource(calls: string): string {
+export function typedAgentStubSource(
+  calls: string,
+  atATerminal: StubAtATerminal = "refuses",
+): string {
+  const notASession =
+    atATerminal === "stands"
+      ? `  // Not a session. A sign-in's status or a usage read (no terminal) has
+  // nothing to answer; a sign-in at a terminal stands until its terminal ends.
+  if (!(isatty(0) && isatty(1))) process.exit(1);
+  process.stdout.write(${JSON.stringify(`${STUB_STANDING}\n`)});
+  process.stdin.on("data", () => {});
+  process.stdin.on("end", () => process.exit(0));`
+      : `  // Not a session (a sign-in's status, a usage read): nothing to answer.
+  process.exit(1);`;
   return `#!/usr/bin/env node
 "use strict";
-// The godview smoke's typed-agent stub: a stand-in written by the smoke, never
-// an agent. It records every run of itself — its arguments, its folder and the
-// NAMES of its environment, never a value — and, run as a managed session, waits at
-// its prompt until \`exit\` or the end of its input.
+// A smoke's typed-agent stub: a stand-in written by the smoke, never an agent.
+// It records every run of itself — its arguments, its folder and the NAMES of
+// its environment, never a value — and, run as a managed session, waits at its
+// prompt until \`exit\` or the end of its input.
 const { appendFileSync } = require("node:fs");
 const { isatty } = require("node:tty");
 const argv = process.argv.slice(2);
@@ -169,8 +194,7 @@ if (argv.includes("--print") && argv.includes("stream-json")) {
   });
   process.stdin.on("end", () => process.exit(0));
 } else if (!argv.includes("--session-id") && !argv.includes("--resume")) {
-  // Not a session (a sign-in's status, a usage read): nothing to answer.
-  process.exit(1);
+${notASession}
 } else {
   process.stdout.write("typed-agent stub: a managed session. Type exit to leave.\\n");
   process.stdin.on("data", (chunk) => {
@@ -408,10 +432,13 @@ export function writeTypedAgentConversation(
   writePersonTranscript(staged.person, staged.work, row, { sessionId, ...words });
 }
 
-/** What `stageTypedAgent` put in place, for the step that types. */
+/** What `stageTypedAgent` (and `stageFirstRun`) put in place, for the steps that drive it. */
 export interface StagedTypedAgent {
-  /** the catalog id the stub stands in for */
+  /** the catalog id the stub stands in for — the typed agent, whose history is seeded */
   agentId: string;
+  /** every catalog id the machine record names the stub for: the typed agent's
+   * alone for the godview smoke, every launchable row for the first-run smoke */
+  standsFor: readonly string[];
   /** the stand-in: that agent's ACTIVE install in this run */
   stub: string;
   /** what the stub records, one JSON line per run of it */
@@ -430,26 +457,60 @@ export interface StagedTypedAgent {
   history: { kind: string; nativeSessionId: string };
 }
 
-/**
- * Stage the typed agent in a run's OWN root, before its pair boots. Refuses a
- * root that already holds a machine record: this is only ever a root the run
- * created (main never stages into an injected `FIELDD_DATA_DIR`).
- */
-export function stageTypedAgent(opts: {
+/** Where a smoke stages its person: the options both stagers take. */
+export interface StagePersonOptions {
   /** the VibeField root above the run's user root (`users.json`'s root) */
   vibefieldRoot: string;
   /** the environment the person's is made from (default: this process's) */
   source?: Readonly<Record<string, string | undefined>>;
   /** the machine owner's home (default: this process's) */
   ownerHome?: string;
-}): StagedTypedAgent {
+}
+
+/**
+ * Stage the typed agent in a run's OWN root, before its pair boots. Refuses a
+ * root that already holds a machine record: this is only ever a root the run
+ * created (main never stages into an injected `FIELDD_DATA_DIR`).
+ */
+export function stageTypedAgent(opts: StagePersonOptions): StagedTypedAgent {
+  return stagePerson(opts, {
+    dir: "typed-agent",
+    atATerminal: "refuses",
+    standsFor: (entry) => entry.id === TYPED_AGENT_ID,
+  });
+}
+
+/**
+ * The first-run smoke's person (track FG; `smoke-first-run.ts`): the typed
+ * agent's, with its one conversation — History's one row, a rosetta kind's — and
+ * a stub that STANDS at a terminal, for Profiles' sign-in. The machine record
+ * names the stub as the active install of EVERY row puppeteer launches, by the
+ * catalog alone: which of them count it installed is each adapter's own rule
+ * (an executable the host was configured to launch), never a name of this
+ * repo's (AR-L1, R23b). The stub's file is named for no agent, so no PATH
+ * lookup of an agent's command can find it.
+ */
+export function stageFirstRun(opts: StagePersonOptions): StagedTypedAgent {
+  return stagePerson(opts, { dir: "first-run", atATerminal: "stands", standsFor: () => true });
+}
+
+function stagePerson(
+  opts: StagePersonOptions,
+  shape: {
+    /** the folder under the root */
+    dir: string;
+    atATerminal: StubAtATerminal;
+    /** whether the machine record names the stub for this launchable row */
+    standsFor: (entry: (typeof AGENT_CATALOG)[number]) => boolean;
+  },
+): StagedTypedAgent {
   const row = AGENT_CATALOG.find((entry) => entry.id === TYPED_AGENT_ID);
   if (row === undefined || row.seams.puppeteer === null || !row.offers.invoke) {
     throw new Error(
       "the typed agent's catalog row is gone or no longer offers invoke: no launcher would stand for it, and the step has nothing to type",
     );
   }
-  const base = join(opts.vibefieldRoot, "typed-agent");
+  const base = join(opts.vibefieldRoot, shape.dir);
   const bin = join(base, "bin");
   const person = join(base, "person");
   const work = join(base, "work");
@@ -458,22 +519,27 @@ export function stageTypedAgent(opts: {
   const stub = join(bin, "typed-agent");
   const record = join(opts.vibefieldRoot, ...LAYOUT.MACHINE_DISTRIBUTION_FILE);
   if (existsSync(record)) {
-    throw new Error(`${record} exists: the typed agent stages only into a root this run created`);
+    throw new Error(
+      `${record} exists: a smoke stages its person only into a root this run created`,
+    );
   }
   for (const directory of [bin, person, work, dirname(record)]) {
     mkdirSync(directory, { recursive: true });
   }
-  writeFileSync(stub, typedAgentStubSource(calls));
+  writeFileSync(stub, typedAgentStubSource(calls, shape.atATerminal));
   chmodSync(stub, 0o755);
   writePersonFiles(person, ran);
   const history = writePersonTranscript(person, work, row);
-  // Every other agent's install names a path that is never created: whatever
-  // fieldd would start for one of them fails to start.
+  // Every agent the stub does not stand for names an install that is never
+  // created: whatever fieldd would start for one of them fails to start.
   const absent = join(base, "absent");
   const providers: Record<string, { activeExecutable: string }> = {};
+  const standsFor: string[] = [];
   for (const entry of AGENT_CATALOG) {
     if (entry.seams.puppeteer === null) continue;
-    providers[entry.id] = { activeExecutable: entry.id === row.id ? stub : join(absent, entry.id) };
+    const stands = shape.standsFor(entry);
+    if (stands) standsFor.push(entry.id);
+    providers[entry.id] = { activeExecutable: stands ? stub : join(absent, entry.id) };
   }
   const machine = AgentDistributionRecord.parse({
     format: AGENT_DISTRIBUTION_FORMAT,
@@ -483,6 +549,7 @@ export function stageTypedAgent(opts: {
   writeFileSync(record, `${JSON.stringify(machine, null, 2)}\n`);
   return {
     agentId: row.id,
+    standsFor,
     stub,
     calls,
     person,

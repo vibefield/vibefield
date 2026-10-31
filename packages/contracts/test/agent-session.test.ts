@@ -8,6 +8,7 @@ import {
   AgentMonitorMirror,
   AgentResumeNativeParams,
   AgentResumeParams,
+  AgentSessionPlacement,
   AgentSessionRecord,
   AgentSessionSummary,
   AgentSpawnParams,
@@ -591,5 +592,39 @@ describe("ST-D6 — the record says an exit followed a person's Stop", () => {
         JSON.stringify(stop),
       ).toBe(false);
     }
+  });
+});
+
+describe("item 121 — the record names the non-agent cell its PTY was born on", () => {
+  it("carries the cell and its class beside the launch facts; a record without one is every agent-cell birth", () => {
+    const record = AgentSessionRecord.parse(fixture("agent-session-record.placed.json"));
+    expect(record.placement).toEqual({
+      cellBootId: "01JCELLBOOT0000000000000001",
+      workloadClass: "interactive",
+    });
+    expect(
+      AgentSessionRecord.parse(fixture("agent-session-record.valid.json")).placement,
+    ).toBeUndefined();
+  });
+
+  it("refuses a placement with no cell or an unknown class, and keeps a key a newer fieldd adds", () => {
+    const record = fixture("agent-session-record.placed.json") as Record<string, unknown>;
+    for (const placement of [
+      { workloadClass: "interactive" },
+      { cellBootId: "", workloadClass: "interactive" },
+      { cellBootId: "01JCELLBOOT0000000000000001", workloadClass: "batch" },
+      "01JCELLBOOT0000000000000001",
+    ]) {
+      expect(
+        AgentSessionRecord.safeParse({ ...record, placement }).success,
+        JSON.stringify(placement),
+      ).toBe(false);
+    }
+    const later = AgentSessionPlacement.parse({
+      cellBootId: "01JCELLBOOT0000000000000001",
+      workloadClass: "interactive",
+      role: "later-word",
+    });
+    expect(later).toMatchObject({ role: "later-word" });
   });
 });

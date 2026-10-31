@@ -238,6 +238,8 @@ const EVIDENCE_ATTRS = [
   "pendingMs",
   // item 121 — the class of the cell a refused re-attach's terminal was on (`fieldd.agents.reattach_refused_cell`)
   "workloadClass",
+  // item 121 — which of the cell rule's proofs the record lacked (`agent-placement.ts`)
+  "why",
 ] as const;
 
 /** The streams a real-floor row's evidence reads, under `<dataDir>/logs/system/`: the floor's (the suites set

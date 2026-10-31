@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -10,6 +10,7 @@ import {
   sharedProfilePath,
   userDataDirArg,
 } from "../src/main/smoke-profile";
+import { fakeElectron as installFakeElectron } from "./fake-electron";
 
 // DK-5 — a smoke never touches the app's SHARED Electron profile: each run has its own,
 // fresh under the OS temp and removed after it. Main's half holds the line for every
@@ -77,31 +78,9 @@ describe("main's smoke profile", () => {
 describe("the smoke launcher (apps/desktop/packaging/run-smoke.mjs)", () => {
   const desktopRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../../apps/desktop");
   const launcher = join(desktopRoot, "packaging", "run-smoke.mjs");
-  /** Electron's own seam for its binary (`ELECTRON_OVERRIDE_DIST_PATH`): a stand-in Node script at the path Electron's
-   * package names, run in `dist`; the launcher spawns it as it would Electron. The path is asked of Electron's package
-   * in a child, exactly as the launcher asks it. Under the override it names `<dist>/<path.txt>` when the binary is
-   * installed and `<dist>/electron` when it is not, and never downloads, so these rows need no binary. They once read
-   * path.txt themselves, a file only the download writes. Electron 43 has no postinstall, so on a fresh install it
-   * appears at the run's first plain `require("electron")`, and the rows raced that (CI's verify 40333930954,
-   * 2026-10-26). */
-  const fakeElectron = (dist: string, body: string): void => {
-    const resolved = spawnSync(
-      process.execPath,
-      [
-        "-e",
-        'process.stdout.write(require("node:module").createRequire(process.argv[1])("electron"))',
-        launcher,
-      ],
-      { encoding: "utf8", env: { ...process.env, ELECTRON_OVERRIDE_DIST_PATH: dist } },
-    );
-    if (resolved.status !== 0) {
-      throw new Error(`Electron's package does not resolve from the launcher: ${resolved.stderr}`);
-    }
-    const binary = resolved.stdout;
-    mkdirSync(dirname(binary), { recursive: true });
-    writeFileSync(binary, `#!${process.execPath}\n${body}`);
-    chmodSync(binary, 0o755);
-  };
+  /** The stand-in Electron, resolved as this launcher resolves it (`fake-electron.ts`: Electron's own seam). */
+  const fakeElectron = (dist: string, body: string): void =>
+    installFakeElectron(launcher, dist, body);
   /** Item 93 (2026-10-31): a daemon the launcher SIGTERMed and its census counted gone can still answer `kill(pid, 0)`
    * as a zombie (its parent, the stand-in, had exited, and launchd had not yet reaped it). A zombie holds no work and
    * carries no mark (`ps -E` shows it no environment), so the census is right to count it gone, and so is this. A pid
