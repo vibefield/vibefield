@@ -118,11 +118,19 @@
   (21:33:51Z), the fix's witness, every word on the glass at 4.5:1 or more on all three walks; **FG-6's catalog**
   (`aa4d41a3e`: the design catalog's 13 Setup Assistant frames on the shipping glass over the shipping field at its
   still, told the page a window that can't run the field is, never a copy), in the mint M62 (`48c67b39a`), run 62 on the
-  Mac mini: verify green (LANDED "FG-1", "FG-2", "FG-3a", "FG-3b", "FG-4a", "FG-4b", "FG-5", "FG-6",
-  "FG-6's follow-up slice", "FG-6's follow-up 2 and class C", "FG-6c", "FG-O2", "FG-O2's judge",
-  "FG-O2's judge, its fix", "FG-6's catalog").
-- Next: FG-6's last gate in the ruled order, the field's glass against the CSS glass on a frozen frame (its seam ruled
-  on its own). It verifies on the Mac mini.
+  Mac mini: verify green; **FG-6's frozen frame** (`9c8b4e280`: the live field held on one frame through
+  `window.__vfField`, the field's glass held to the browser's at DESIGN.md §8's 2, 1 and 6), in the mint M65
+  (`a09aae636`), run 65 on the Mac mini: verify green; row 32 on M65 RED at run65b (23:23:18Z), its day and night walks
+  red, the frozen frame's judge on the logo their only problem; the frozen frame's first live numbers: held at 0, the
+  field's glass 1.08–1.18 inside, 0.37 in the shadow and 7.59–8.02 on the logo, against §8's 2, 1 and 6 (LANDED "FG-1",
+  "FG-2", "FG-3a", "FG-3b", "FG-4a", "FG-4b", "FG-5", "FG-6", "FG-6's follow-up slice",
+  "FG-6's follow-up 2 and class C", "FG-6c", "FG-O2", "FG-O2's judge", "FG-O2's judge, its fix", "FG-6's catalog",
+  "FG-6's frozen frame").
+- Next: FG-6's follow-up 3, for row 32's red at run65b: the browser's glass draws the logo's colour sweep at its own
+  phase, about 1 px from the field's held frame; the handoff must carry the sweep's phase and the logo's placement (or
+  the judge align them before comparing); the fix at the handoff, never the bar. Then the catalog judged, a slice of its
+  own at a5's lean (VF-PM 21:32Z): an Electron walk of its frames on the Mac mini, each judged by row 32's own measure
+  (`captureWords`, `judgeContrast`), which pays the error pane under the judge.
 - Owed: James's eye list from row 32: Agents with nine installed (PU-L, drafted, would bring nine into the walk),
   History with six rows, Profiles' five cards, and a login opened from This Mac's row (not walked: its Cancel comes
   into view on the fade's top at zero margin; a margin of 10 like the add's, or the slot's `nearest` on the add's
@@ -135,9 +143,9 @@
   in a control that is off passed over and said so. The fix's one rule and its scope are VF-PM's rulings at its leans
   (20:46Z, 20:56Z, 21:07Z), James's to overturn: t2 and the two state inks held at 5:1 at the thinnest stroke row 32
   measured, attention in the slice, and no danger or info glass ink until one is worn; an error pane under the judge is
-  owed. The catalog judged is owed, a slice of its own at a5's lean (VF-PM 21:32Z): an Electron walk of its frames on
-  the Mac mini by row 32's own measure, which pays the error pane (its two completion failures stand the wizard's error
-  line on the glass).
+  owed. The frozen frame's seam (FG-D29) is VF-PM's ruling at a5's leans (22:28Z), the still's door's answers with it
+  (23:00Z), James's to overturn. Row 32's red at run65b, on the logo's colour sweep, is the class of FG-6's follow-up 3,
+  now Next (VF-PM 22:28Z (5)).
 
 **AL — what Quit means** · better-quit (lanes `al2`, `al/chords`, `al/chords-2`) · law `draft/thinking-app-lifecycle.md` v0.2 §8, ESR §7.3 (amended), design-00 EL1
 - Landed: AL-1…AL-3 (`7ebb1eeda` · `5eea4b2d5` · `697beb199`; AL-4 folded in), AL-5, AL-7, AL-8a, **AL-9** (`933d2fba3`,
@@ -728,7 +736,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 |---|---|---|---|
 | TS — the Tailscale door | ACTIVE; TS-0…3b, 4a, 4b, 5, 6, 7, 8a, 8b landed | `thinking-tailscale-onboarding.md`; DESIGN.md §5/§6/§8/§9/§13 | TS-8c (T8, after its live probe) |
 | AO — Bring Your Agents | ACTIVE; AO-0…6b3 landed | `thinking-agent-onboarding.md` | AO-7 on a puppeteer release after 0.3.0 (`installRecipe`) |
-| FG — the first run on the field | ACTIVE; FG-0…3a landed 10-30, FG-3b, FG-4a, FG-4b, FG-6, FG-5, FG-6c, FG-O2, FG-O2's judge and its fix, FG-6's catalog 10-31 | `thinking-first-run-glass.md`; DESIGN.md §2.1/§5/§6/§8/§13; desk-gates row 32 | the frozen frame |
+| FG — the first run on the field | ACTIVE; FG-0…3a landed 10-30, FG-3b, FG-4a, FG-4b, FG-6, FG-5, FG-6c, FG-O2, FG-O2's judge and its fix, FG-6's catalog, FG-6's frozen frame 10-31 | `thinking-first-run-glass.md`; DESIGN.md §2.1/§5/§6/§8/§13; desk-gates row 32 | FG-6's follow-up 3 → the catalog judged |
 | AL — app lifecycle | ACTIVE; AL-1…3, 5, 7, 8a, 9 landed | `thinking-app-lifecycle.md`; ESR §7.3 | AL-6, Last exit, relaunch cap |
 | AU — Updates That Wait | ACTIVE; B1–B4 (AU-0…AU-7) landed 10-30/31 | `thinking-update-ux.md` §7 (page sources `draft/update-ux/`); DESIGN.md §2.5/§2.8/§6/§8/§9/§13; EDP §5.2/§6.4/§11; ESR §7.3 | the owed eyeballs, the first signed nightly with notes, the physical rows |
 | PG — the phone's Godview | ACTIVE; PG-0, PG-1a…1d, PG-1e0 (measured: neither), PG-1f's pin test and PG-2 (the remote cut) landed 10-31 | `thinking-phone-godview.md` §7/§8; `design-mv.md`; `design-06-sync-planes.md` | PG-3, the phone's replica |

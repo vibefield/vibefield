@@ -3,7 +3,7 @@
  * WebGPU is read first (a smoke's `--smoke-no-webgpu` takes it per document, and a worker would still find its own),
  * then the worker runs the field, then the main thread, then the still. happy-dom has neither WebGPU nor a worker,
  * so every branch runs on fakes the door is handed. Since FG-3b the door carries the Setup Assistant's glass to the
- * field and the field's word on it back (FG-D24).
+ * field and the field's word on it back (FG-D24), and since FG-6's frozen frame it holds the field on one frame.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -16,6 +16,7 @@ import {
   TEAR,
   tearLook,
 } from "../src/boot/splash/field-door";
+import { fieldHold } from "../src/boot/splash/field-hold";
 import { ease, markFade } from "../src/boot/splash/field-mark";
 import type { GlassState } from "../src/boot/splash/glass-look";
 import type * as GlassModule from "../src/boot/splash/glass-pass";
@@ -77,7 +78,9 @@ function fakeSplash(fail?: Error) {
   }
   const calls = {
     created: [] as unknown[],
-    started: 0,
+    /** each start's `at`, the field's seconds it runs from (none: its start) */
+    started: [] as (number | undefined)[],
+    stopped: 0,
     setReveal: [] as [number, unknown][],
     reveals: [] as unknown[],
     redrawn: 0,
@@ -89,10 +92,12 @@ function fakeSplash(fail?: Error) {
       calls.created.push(options);
       if (fail !== undefined) throw fail;
       return {
-        start() {
-          calls.started++;
+        start(at?: number) {
+          calls.started.push(at);
         },
-        stop() {},
+        stop() {
+          calls.stopped++;
+        },
         setReveal(front: number, look: unknown) {
           calls.setReveal.push([front, look]);
         },
@@ -215,8 +220,10 @@ describe("the field's door", () => {
     expect(door.reason).toBe("forced");
     expect(container.querySelector("canvas")).toBeNull();
     expect(await door.reveal()).toBe(false);
-    // the browser draws the glass over the still
+    // the browser draws the glass over the still, and nothing runs to hold (FG-6's frozen frame)
     door.glass(GLASS);
+    expect(await door.freeze()).toBe(false);
+    door.thaw();
   });
 
   it("runs the field in a worker: the website's budget and power, the page's size, its canvas under the still mark", async () => {
@@ -307,6 +314,39 @@ describe("the field's door", () => {
     expect(worker.last()).toEqual({ type: "destroy" });
   });
 
+  it("holds the field in its worker on the worker's word and runs it on, and holds nothing once the door is gone (FG-6's frozen frame)", async () => {
+    const worker = new FakeWorker((m) =>
+      m.type === "start" ? { type: "ready" } : m.type === "freeze" ? { type: "frozen" } : null,
+    );
+    const { container, mark } = stage();
+    const door = await openFieldDoor(
+      container,
+      mark,
+      { reducedMotion: false },
+      { search: "", gpu: fakeGpu().gpu, worker: () => worker as unknown as Worker },
+    );
+    expect(await door.freeze()).toBe(true);
+    expect(worker.last()).toEqual({ type: "freeze" });
+    door.thaw();
+    expect(worker.last()).toEqual({ type: "thaw" });
+    door.destroy();
+
+    // a freeze the worker has not answered when the door goes holds nothing
+    const silent = new FakeWorker((m) => (m.type === "start" ? { type: "ready" } : null));
+    const other = await openFieldDoor(
+      container,
+      mark,
+      { reducedMotion: false },
+      { search: "", gpu: fakeGpu().gpu, worker: () => silent as unknown as Worker },
+    );
+    const held = other.freeze();
+    other.destroy();
+    expect(await held).toBe(false);
+    expect(await other.freeze()).toBe(false);
+    other.thaw();
+    expect(silent.last()).toEqual({ type: "destroy" });
+  });
+
   it("answers a reveal still in flight with false when the door is destroyed", async () => {
     const worker = new FakeWorker((m) => (m.type === "start" ? { type: "ready" } : null));
     const { container, mark } = stage();
@@ -355,7 +395,7 @@ describe("the field's door", () => {
         reducedMotion: false,
       }),
     ]);
-    expect(calls.started).toBe(1);
+    expect(calls.started).toEqual([undefined]);
 
     // A reveal cancels the mark's own fade: the two would fight over the window.
     door.mark(0, 0);
@@ -408,6 +448,45 @@ describe("the field's door", () => {
     expect(calls.destroyed).toBe(1);
     door.glass(GLASS);
     expect(glass.calls.looks).toHaveLength(2);
+  });
+
+  it("holds the field on the main thread, draws a glass handed in over the held frame, and runs it on, at a reveal too (FG-6's frozen frame)", async () => {
+    let now = 1_000;
+    vi.spyOn(performance, "now").mockImplementation(() => now);
+    const { module, calls } = fakeSplash();
+    const glass = fakeGlass();
+    const { container, mark } = stage();
+    const door = await openFieldDoor(
+      container,
+      mark,
+      { reducedMotion: false },
+      {
+        search: "?field=main",
+        gpu: fakeGpu().gpu,
+        splash: async () => module,
+        glass: async () => glass.module,
+      },
+    );
+    expect(calls.started).toEqual([undefined]);
+    now = 3_500;
+    expect(await door.freeze()).toBe(true);
+    expect(calls.stopped).toBe(1);
+    door.glass(GLASS);
+    expect(calls.redrawn).toBe(1);
+    // held as long as its harness likes, it runs on from the 2.5s it was held at
+    now = 9_000;
+    door.thaw();
+    expect(calls.started).toEqual([undefined, 2.5]);
+    door.thaw();
+    expect(calls.started).toHaveLength(2);
+    // a reveal runs a held field on before it plays
+    now = 10_000;
+    await door.freeze();
+    expect(await door.reveal({ duration: 1900 })).toBe(true);
+    expect(calls.started).toEqual([undefined, 2.5, 3.5]);
+    door.destroy();
+    expect(await door.freeze()).toBe(false);
+    expect(calls.stopped).toBe(2);
   });
 
   it("skips the worker for ?field=main", async () => {
@@ -521,6 +600,36 @@ describe("the field's mark, faded by hand", () => {
 
     fade.to(1, 0);
     expect(calls.at(-1)).toEqual([0, { mark: 1 }]);
+  });
+});
+
+describe("the field held on one frame (FG-6's frozen frame; field-hold.ts)", () => {
+  it("holds the field by its own clock, once, and under reduced motion at rest, where it stands", () => {
+    let now = 1_000;
+    vi.spyOn(performance, "now").mockImplementation(() => now);
+    const started: (number | undefined)[] = [];
+    let stopped = 0;
+    const splash = {
+      start: (at?: number) => void started.push(at),
+      stop: () => void stopped++,
+    };
+    const live = fieldHold(splash, false);
+    live.start();
+    now = 2_000;
+    live.freeze();
+    // a second freeze holds where the first did
+    now = 3_000;
+    live.freeze();
+    live.thaw();
+    expect(started).toEqual([undefined, 1]);
+    expect(stopped).toBe(1);
+
+    const rest = fieldHold(splash, true);
+    rest.start();
+    now = 5_000;
+    rest.freeze();
+    rest.thaw();
+    expect(started).toEqual([undefined, 1, undefined, 0]);
   });
 });
 

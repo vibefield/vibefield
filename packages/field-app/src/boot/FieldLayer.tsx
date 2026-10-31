@@ -9,7 +9,7 @@ import {
   useState,
 } from "react";
 import "./boot.css";
-import { createFieldGlass, FieldGlassContext } from "./field-glass";
+import { createFieldGlass, FieldGlassContext, type FieldGlassHost } from "./field-glass";
 import {
   type FieldDoor,
   type FieldDoorEnv,
@@ -28,7 +28,8 @@ import {
 // stands on the field (`children`) holds it through `FieldGlassContext`: since FG-3b the Setup
 // Assistant's glass is drawn by the field in its own frame (field-glass.ts). The design catalog
 // stands the shipping glass on this layer over the field's still (FG-6), asked for as a window
-// asks for it.
+// asks for it. While the live field's door is open, a harness may hold it on one frame and the
+// glass off it (`window.__vfField`, FG-6's frozen frame).
 
 type FieldState = "waking" | "live" | "still";
 
@@ -56,6 +57,35 @@ export interface FieldHandle {
 
 /** The tear's bound: its length, and a second for frames that come late. */
 const TEAR_BOUND_MS = TEAR.duration + 1_000;
+
+/** The live field's door for a harness, `window.__vfField` (FG-6's frozen frame; `docs/desk-gates.md` row 32), while
+ * the field's door is open on the GPU: `__vfDesk`'s bargain (desk-door.ts), reads and switches and no document
+ * authority, inert unless called. */
+export interface VfFieldDoor {
+  /** where the field runs */
+  readonly mode: FieldDoor["mode"];
+  /** the field held on the frame it last drew: true once it is held */
+  freeze(): Promise<boolean>;
+  /** the glass drawn by the field (true), or held off it, so the browser draws the whole glass (false) */
+  glass(byField: boolean): void;
+  /** the held field run on from where it was held */
+  thaw(): void;
+}
+
+/** Install `window.__vfField` for one open door; the returned undo removes it if it is still this one's. */
+function installFieldDoor(door: FieldDoor, glass: FieldGlassHost): () => void {
+  const handle: VfFieldDoor = {
+    mode: door.mode,
+    freeze: () => door.freeze(),
+    glass: (byField) => glass.hold(!byField),
+    thaw: () => door.thaw(),
+  };
+  const scope = globalThis as Record<string, unknown>;
+  scope["__vfField"] = handle;
+  return () => {
+    if (scope["__vfField"] === handle) delete scope["__vfField"];
+  };
+}
 
 function prefersReducedMotion(): boolean {
   return (
@@ -86,6 +116,7 @@ export function FieldLayer({
   const ref = useRef<HTMLDivElement>(null);
   const still = useRef<HTMLDivElement>(null);
   const door = useRef<FieldDoor | null>(null);
+  const undoDoor = useRef<(() => void) | null>(null);
   const shown = useRef(mark);
   const [glass] = useState(() => createFieldGlass(() => ref.current));
   const [page] = useState<FieldPage>(() => asked ?? {});
@@ -112,10 +143,13 @@ export function FieldLayer({
       // A door that opens under the glass takes the mark away at once.
       if (!shown.current) opened.mark(0, 0);
       glass.attach(opened);
+      if (opened.mode !== "still") undoDoor.current = installFieldDoor(opened, glass);
       setField(opened.mode === "still" ? "still" : "live");
     });
     return () => {
       gone = true;
+      undoDoor.current?.();
+      undoDoor.current = null;
       glass.attach(null);
       door.current?.destroy();
       door.current = null;
@@ -159,6 +193,8 @@ export function FieldLayer({
           opened.destroy(); // open: nothing left to draw
           if (door.current === opened) {
             door.current = null;
+            undoDoor.current?.();
+            undoDoor.current = null;
             glass.attach(null);
           }
           return true;

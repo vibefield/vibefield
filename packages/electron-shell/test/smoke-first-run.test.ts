@@ -14,10 +14,13 @@ import {
   FIRST_RUN_WALKS,
   type FirstRunRecord,
   type FrameSeen,
+  type FrozenReading,
   firstRunContrast,
   firstRunGpu,
   firstRunRows,
   frameStats,
+  frozenRegion,
+  type GlassSeen,
   type GpuSample,
   gpuOver,
   heard,
@@ -26,6 +29,7 @@ import {
   judgeBand,
   judgeContrast,
   judgeFrame,
+  judgeFrozen,
   judgeHandOver,
   judgeHolds,
   judgeLogo,
@@ -38,6 +42,7 @@ import {
   parseGpuBusy,
   parseWalk,
   passedOver,
+  readFrozen,
   type SignInSeen,
   type StageReading,
   shotDirRefusal,
@@ -960,6 +965,139 @@ describe("the logo at the welcome's title card (FG-4b, FG-D24)", () => {
   });
 });
 
+describe("FG-6's frozen frame (DESIGN.md §8 \"Held to the browser's glass\")", () => {
+  // a 600 × 500 window, its glass 400 × 300 at 100, 100 with corners of 32, at its own size, the logo's box at its
+  // centre
+  const seen: GlassSeen = {
+    box: { x: 100, y: 100, width: 400, height: 300 },
+    radius: 32,
+    fit: 1,
+    drawn: "field",
+    logo: { x: 250, y: 220, width: 100, height: 60 },
+    view: { width: 600, height: 500 },
+  };
+  /** A capture of the window at `density` (BGRA), each px the grey `level` gives at its centre in CSS px. */
+  const shot = (density: number, level: (x: number, y: number) => number): Uint8Array => {
+    const w = seen.view.width * density;
+    const h = seen.view.height * density;
+    const bgra = new Uint8Array(w * h * 4);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const l = level((x + 0.5) / density, (y + 0.5) / density);
+        bgra.set([l, l, l, 255], (y * w + x) * 4);
+      }
+    }
+    return bgra;
+  };
+
+  it("holds the field's glass to DESIGN.md §8's bars", () => {
+    const design = readFileSync(resolve(here, "../../../DESIGN.md"), "utf8").replace(/\s+/g, " ");
+    const bars =
+      /\*\*Held to the browser's glass\*\*.*? differ by a mean of at most ([\d.]+) inside the glass, ([\d.]+) in its shadow and ([\d.]+) on the logo/.exec(
+        design,
+      );
+    expect(bars?.slice(1).map(Number)).toEqual([
+      FIRST_RUN.frozen.inside,
+      FIRST_RUN.frozen.shadow,
+      FIRST_RUN.frozen.logo,
+    ]);
+  });
+
+  it("places a window's px on the glass: on its logo, inside past its edge's hairlines, in the ring of its shadow, or on none", () => {
+    expect(frozenRegion(seen, 300, 250)).toBe("logo");
+    expect(frozenRegion(seen, 150, 150)).toBe("inside");
+    // its edge, with its two hairlines
+    expect(frozenRegion(seen, 104, 250)).toBe("inside");
+    expect(frozenRegion(seen, 101, 250)).toBeNull();
+    expect(frozenRegion(seen, 99.5, 250)).toBeNull();
+    // the ring of its shadow, round its corners too, and the field past it
+    expect(frozenRegion(seen, 70, 250)).toBe("shadow");
+    expect(frozenRegion(seen, 102, 102)).toBe("shadow");
+    expect(frozenRegion(seen, 30, 250)).toBeNull();
+    // at the glass's fit
+    const half = { ...seen, fit: 0.5 };
+    expect(frozenRegion(half, 102, 250)).toBe("inside");
+    expect(frozenRegion(half, 60, 250)).toBeNull();
+  });
+
+  it("reads the field's two captures apart over the window, and its glass against the browser's by region, at any density", () => {
+    // square corners, so a region's px are the paint's
+    const square = { ...seen, radius: 0 };
+    const inLogo = (x: number, y: number) => x >= 250 && x < 350 && y >= 220 && y < 280;
+    const inGlass = (x: number, y: number) => x >= 100 && x < 500 && y >= 100 && y < 400;
+    for (const density of [1, 2]) {
+      const field = shot(density, () => 200);
+      const browser = shot(density, (x, y) => (inLogo(x, y) ? 205 : inGlass(x, y) ? 201 : 202));
+      // the field again, but 10 apart over a block the logo's size: a field that moved there
+      const moved = shot(density, (x, y) => (inLogo(x, y) ? 210 : 200));
+      const reading = readFrozen(field, browser, field, square);
+      expect(reading).toEqual({
+        held: 0,
+        regions: {
+          inside: { diff: 1, px: (394 * 294 - 6000) * density * density },
+          shadow: { diff: 2, px: expect.any(Number) },
+          logo: { diff: 5, px: 6000 * density * density },
+        },
+      });
+      expect(reading?.regions.shadow.px).toBeGreaterThan(0);
+      expect(readFrozen(field, browser, moved, square)?.held).toBe(0.2);
+    }
+    // nothing off a capture that is no picture of the window read: an empty one (a hidden window's), one of another
+    // window's size (600 × 400), or three not one size
+    const field = shot(1, () => 200);
+    const empty = new Uint8Array(0);
+    const other = new Uint8Array(600 * 400 * 4);
+    expect(readFrozen(empty, empty, empty, seen)).toBeNull();
+    expect(readFrozen(other, other, other, seen)).toBeNull();
+    expect(readFrozen(field, field.subarray(4), field, seen)).toBeNull();
+  });
+
+  it("passes a held frame within §8's bars, and at them, and finds a frame not held, a region over its bar, and one with no px", () => {
+    const within: FrozenReading = {
+      held: 0,
+      regions: {
+        inside: { diff: 1.1, px: 400_000 },
+        shadow: { diff: 0.3, px: 90_000 },
+        logo: { diff: 2.4, px: 39_424 },
+      },
+    };
+    expect(judgeFrozen(within)).toEqual([]);
+    expect(
+      judgeFrozen({
+        held: 0.1,
+        regions: {
+          inside: { diff: 2, px: 1 },
+          shadow: { diff: 1, px: 1 },
+          logo: { diff: 6, px: 1 },
+        },
+      }),
+    ).toEqual([]);
+    expect(
+      judgeFrozen({
+        ...within,
+        regions: {
+          ...within.regions,
+          inside: { diff: 2.4, px: 400_000 },
+          shadow: { diff: 0, px: 0 },
+        },
+      }),
+    ).toEqual([
+      "on the frozen frame the field's glass differs from the browser's by 2.4 inside the glass, over DESIGN.md §8's 2",
+      "the frozen frame has no px in its shadow",
+    ]);
+    // a frame not held is said alone: what differs then is no longer one frame
+    expect(
+      judgeFrozen({
+        held: 0.4,
+        regions: { ...within.regions, logo: { diff: 9, px: 39_424 } },
+      }),
+    ).toEqual([
+      "the field did not hold its frame: its two captures with the field's glass differ by 0.4 (at most 0.1)",
+    ]);
+    expect(judgeFrozen(null)).toEqual(["the frozen frame's captures are no picture of the window"]);
+  });
+});
+
 describe("the frame (FG-4a, FG-L3)", () => {
   const agents: FrameSeen = {
     fit: 1,
@@ -1175,6 +1313,8 @@ describe("a walk that stops (firstRunRows)", () => {
       });
       expect(problems).toEqual([
         "the mark's ink centres at 600.0, 374.0, not the window's 590, 374",
+        // a page with no field's door: the frozen frame finds nothing to hold, and the walk goes on
+        "on the live field the field's door held no frame (window.__vfField)",
         "the walk stopped at you: the renderer went away",
       ]);
       expect(facts["stoppedAt"]).toBe("you");
