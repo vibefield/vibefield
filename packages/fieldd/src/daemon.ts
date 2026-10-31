@@ -103,6 +103,7 @@ import {
   type MeshSyncPosture,
   MONITOR_AUDIENCE,
   NATIVE_SUPERVISION,
+  NativeDoorInfoResult,
   type NativeHealth,
   type NativeLastExit,
   type NativeLinkHealth,
@@ -215,6 +216,7 @@ import { LastRunKeeper, modelBoardSource } from "./agent-last-run";
 import { createModelSubscription } from "./agent-model-board";
 import { type AgentMonitorService, createAgentMonitorService } from "./agent-monitor";
 import { AgentRuntimeService, type AgentRuntimeServiceOptions } from "./agent-runtime";
+import { AgentSparkBriefings } from "./agent-spark-briefing";
 import { type AccountUsagePollOptions, AccountUsageService } from "./agent-usage";
 import {
   DEFAULT_APP_PREFERENCES,
@@ -225,7 +227,7 @@ import { ArtifactService, type ArtifactServiceHealth } from "./artifact-service"
 import { AuditService, type AuditWriterTestHooks } from "./audit-service";
 import { nativeAlive, nativeEndpoint, nativeMgmtEndpoint, splitPathList } from "./boot-env";
 import { ComposeService, composeProjects } from "./compose";
-import { LAUNCH_ROUTE, SparkService, SparkStore } from "./compose/sparks";
+import { SparkService, SparkStore } from "./compose/sparks";
 import { DeviceService, localDeviceIdAt } from "./device-service";
 import { DiagnosticsService } from "./diagnostics-service";
 import { DocLane } from "./doc-lane";
@@ -1082,11 +1084,22 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     logger,
   });
   const projectIntents = projectIntentWriter(projectRecords);
-  const agents = new AgentRuntimeService({
+  const sparkStore = new SparkStore({
+    dir: join(config.dataDir, ...LAYOUT.SPARKS_DIR),
+    keyPath: join(config.dataDir, ...LAYOUT.SPARKS_KEY_FILE),
+    logger: logger.child({ component: "compose.sparks" }),
+  });
+  const sparkBriefings: AgentSparkBriefings = new AgentSparkBriefings({
+    spark: (id) => sparkStore.get(id),
+    capabilities: (provider) => agents.runtime.providers().find((p) => p.id === provider)?.briefing,
+    door: async () => NativeDoorInfoResult.parse(await native.request("native.door.info", {})),
+  });
+  const agents: AgentRuntimeService = new AgentRuntimeService({
     userRoot: config.dataDir,
     vibefieldRoot: config.vibefieldRoot ?? null,
     index,
     supervisor: rosettad,
+    sparkBriefing: (spark, provider) => sparkBriefings.prepare(spark, provider),
     terminals: () => terminalsRef,
     deviceId: () => devicesForAgents?.currentDeviceId() ?? "local",
     onProfileSignedIn: async (profileId): Promise<void> => {
@@ -2697,16 +2710,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // held to its Agent Profiles and audited before it acts. A spark's own session is known by its record (CP-1c,
     // just below); any other caller is served no tools and leaves its door's one audit line.
     // CP-1c (compose/sparks.ts) — the sparks: their signed records under LAYOUT.SPARKS_DIR, each one's folder under
-    // LAYOUT.SPARK_HOMES_DIR, and the window's three doors (below, beside setup's). The route is A, the lean on the
-    // board's co-spark-door-route: until PU-F carries the server at launch, a spark hatches and thinks without tools.
+    // LAYOUT.SPARK_HOMES_DIR, and the window's three doors. CP-1d's route A is prepared at every runtime birth,
+    // including run-id, native-id and idle resumes; no launch configuration is written into the spark's folder.
     const sparks = new SparkService({
-      store: new SparkStore({
-        dir: join(config.dataDir, ...LAYOUT.SPARKS_DIR),
-        keyPath: join(config.dataDir, ...LAYOUT.SPARKS_KEY_FILE),
-        logger: logger.child({ component: "compose.sparks" }),
-      }),
+      store: sparkStore,
       homes: join(config.dataDir, ...LAYOUT.SPARK_HOMES_DIR),
-      route: LAUNCH_ROUTE,
+      requireSupport: (provider) => sparkBriefings.requireSupported(provider),
       profileSets: async () => (await agents.profiles.sets()).sets,
       runs: () => agents.list().sessions,
       spawn: async (launch, spark, principal) => {
@@ -2735,7 +2744,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           // a session that cannot be resumed (gone, never resumable) is started again in the spark's folder
           if (
             error instanceof RpcCallError &&
-            (error.kind === "PRECONDITION_FAILED" || error.kind === "NOT_FOUND")
+            (error.kind === "PRECONDITION_FAILED" || error.kind === "NOT_FOUND") &&
+            !String((error.details as { reason?: string } | undefined)?.reason ?? "").startsWith(
+              "spark-",
+            )
           )
             return undefined;
           throw error;

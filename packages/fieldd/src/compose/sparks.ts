@@ -7,7 +7,6 @@ import {
   type AgentSessionSummary,
   type ComposeSparksHatchParams,
   canonicalJson,
-  type NativeDoorInfoResult,
   type SparkId,
   SparkRecord,
   type SparkSummary,
@@ -25,10 +24,8 @@ import type { GrantPrincipal } from "../terminal-grants";
 // what its verbs reach (TL-D5), so an agent that edits the file must not widen them: a record that is unsigned, does
 // not verify, does not parse, or is exposed to other users is set aside and never served.
 //
-// How a spark's session is handed the `vibefield` server is CP-1c's open route (the board's co-spark-door-route, the
-// study's §16.1): A, puppeteer passes it at launch (PU-F, for Claude too), and B, the folder's own `.mcp.json`, which
-// Claude Code asks about at every launch. `SparkRoute` is that seam; fieldd wires A, under which a spark hatches and
-// thinks but holds no tools until PU-F is pinned.
+// CP-1d wires route A (co-spark-door-route): AgentRuntimeService rebuilds the briefing at every process birth,
+// through AgentSparkBriefings. Keeping that handoff at the runtime also covers resumes outside this service.
 
 /** The secret's bytes, and the signature's: an HMAC-SHA256 over the record's canonical JSON (contracts' one form). */
 const KEY_BYTES = 32;
@@ -148,28 +145,6 @@ export class SparkStore {
   }
 }
 
-/** How a spark's session is handed the `vibefield` server, prepared before every launch (co-spark-door-route). */
-export interface SparkRoute {
-  prepare(spark: SparkRecord): Promise<void>;
-}
-
-/** A, the lean: the server rides the launch itself once PU-F carries it, so the folder holds no server of its own.
- * Until PU-F is pinned, a spark hatched this way thinks without tools. */
-export const LAUNCH_ROUTE: SparkRoute = { prepare: async () => undefined };
-
-/** B: the folder's own `.mcp.json`, naming the floor's bridge (`native.door.info`, asked at every launch so an app
- * update never leaves a stale path). Claude Code asks about it at every launch: an untrusted folder's own approval is
- * set aside (measured 2026-10-29, the study's §16.1). */
-export function folderRoute(info: () => Promise<NativeDoorInfoResult>): SparkRoute {
-  return {
-    async prepare(spark) {
-      const door = await info();
-      const config = { mcpServers: { vibefield: { command: door.command, args: [...door.args] } } };
-      writeFileSync(join(spark.folder, ".mcp.json"), `${JSON.stringify(config, null, 2)}\n`);
-    },
-  };
-}
-
 /** The brief a spark's folder starts with: who it is and its rules, not its verbs (the tool list says those). It is
  * written once, at hatch, and is the person's to edit after. */
 export function sparkBrief(name: string): string {
@@ -215,7 +190,8 @@ export interface SparkServiceOptions {
   readonly store: SparkStore;
   /** LAYOUT.SPARK_HOMES_DIR, absolute */
   readonly homes: string;
-  readonly route: SparkRoute;
+  /** CP-1d — refuse an unsupported agent before hatch writes its folder or record. */
+  requireSupport(provider: string): void;
   profileSets(): Promise<readonly AgentProfileSet[]>;
   runs(): readonly AgentSessionSummary[];
   /** A fresh session, its origin `you` and its record naming the spark (the runtime's spawn, CP-1c's fourth argument). */
@@ -268,6 +244,7 @@ export class SparkService {
       });
     if (this.opts.store.named(params.name))
       throw refused("another spark has that name", "name-taken");
+    this.opts.requireSupport(params.agent);
 
     const id = SparkStore.mintId();
     const slug = sparkSlug(params.name, (s) => existsSync(join(this.opts.homes, s)));
@@ -301,7 +278,6 @@ export class SparkService {
     const runs = this.opts.runs();
     if (this.#liveRun(spark, runs)) return this.#summary(spark, runs);
     if (spark.session) {
-      await this.opts.route.prepare(spark);
       const resumed = await this.opts.resume(spark.session.runtimeRunId, principal);
       if (resumed) return this.#summary(this.#keep(spark, resumed.runtimeRunId), this.opts.runs());
     }
@@ -309,7 +285,6 @@ export class SparkService {
   }
 
   async #launch(spark: SparkRecord, principal: GrantPrincipal): Promise<SparkRecord> {
-    await this.opts.route.prepare(spark);
     const { runtimeRunId } = await this.opts.spawn(
       {
         provider: spark.agent,
