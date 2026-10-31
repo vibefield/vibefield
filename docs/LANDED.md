@@ -25472,3 +25472,111 @@ own order:
   - Its logs: `/Volumes/SamsungRed/lanes/ts6/logs/mini/run63/` (`mrun63.bundle`, sha256 `ff01a964981dfc96…`).
 - **Landed:** main fast-forwarded `e0e76abfc` → `599998fdd` at 2026-10-31 22:26:14Z on VF-PM's GO (21 files +718
   −54; parents `e15a058f8` and `e0e76abfc`).
+
+## PG-2 — the remote cut: the model's one cut for every other screen, cut by its owner and paced by its caller's kind; bare terminals ride it, each window's mesh asks its peers for it, the phone's door opens at its home, and `desk` retires (2026-10-31; `ed212d21b`, main `76e9ff6d7` merged into `5e70a6c44`)
+
+**What James asked and ruled:**
+- **PG-D1, D2, D5 and D8 (a), 2026-10-29 08:17–08:30Z** (on the page *The Phone's Godview*): one model, two cuts
+  (PG-L1). `model` stays this desktop's cut; `remote` is every other screen's, cut by the run's owner: no
+  `project.seq` (M16), never `local`, texts at `DESK_TEXT_CHARS` (M21, PG-D2). Bare terminals ride it (PG-D5, L8 and
+  M29 amended). A peer window is paced at 100 ms, the phone at 1 s with a 250 ms urgent edge (PG-D8 (a)). `desk`
+  retires into `remote`; `field` stays for the phones already shipped.
+- **2026-10-31 21:09Z:** the phone's Godview lands before the Settings track. VF-PM dispatched PG-2 on James's go.
+
+**What landed** (two commits, 49 files +2,321 −706 over main `06cf3fe3d`):
+- **`2a8c3398a`, the contract.** `AgentRemoteRow` `{runtimeRunId, revision, device, kind?: "terminal", terminal?,
+  nativeSessionId?, stop?, monitorRow}`, passthrough, with `AgentRemoteSnapshot`/`AgentRemoteDelta` (local) and
+  `AgentRemoteMeshOpen`/`AgentRemoteMeshFrame` (the phone's mesh). The window's door reads `AgentModelMeshRow`: the
+  model's run row, its terminal row or a peer's remote row. `AgentProjection` is `full · field · model · remote`.
+  `AGENT_FIELD`: `REMOTE_MIN_INTERVAL_MS` 100 (was `DESK_MIN_INTERVAL_MS`), `REMOTE_PHONE_MIN_INTERVAL_MS` 1 000,
+  `REMOTE_URGENT_MS` 250. `agent.subscribe`'s variants `{remote}` and `{remote, mesh}` replace `desk`'s. Four new
+  goldens (`agent-remote-row.valid` and `.terminal`, `agent-remote-mesh-open`, `agent-remote-mesh-frames`); the model
+  mesh open's peer is a remote row.
+- **`5e70a6c44`, fieldd, the relay, the window and the lab.**
+  - **The owner cuts it** (`createRemoteSubscription`): every assembled run and every bare terminal, the doors' gate
+    (F-M4) on every frame, PG-1d's one-snapshot re-present on a gate flip. A run the backend has not assembled has no
+    remote row. `stop` rides it by ST-D5's "every audience's row", beyond D1's listed shape.
+  - **The door:** `refuseBoardAsk` admits `remote` for `tailnet` and for `peer-fieldd` at the local scope. `boardFloor`
+    picks the floor by the caller's kind. The urgent edge is `RevisionedSubscription`'s new `urgentIntervalMs`,
+    min(floor, 250) on the remote board; the model board's L12 edge is unchanged.
+  - **The relay** asks each owner for `remote`: a window's model hub at the remote floor, the phone's `{remote, mesh}`
+    hub at the phone's floor. PG-1c's tailnet hold covers the phone's door as built.
+  - **The window** reads remote rows: `BoardScreen` passes them and `ModelBoardFold` folds them.
+  - **`desk` retired:** no projection, no variant, no projector. An older desktop asking `desk` is refused as malformed.
+- **Stubbed / not here:** the kit still reads `field` (PG-3 decodes the remote row and mirrors its goldens);
+  `reportShown` through the home (PG-D6) is PG-3's; `field` retires one release of skew after the kit ships.
+
+**Deltas from the brief:**
+- `routedBoardAsk`, added: a phone's routed `remote` would otherwise be served at a peer window's 100 ms.
+- A peer terminal's `detail` path is cut to its folder name (EL7).
+- `isTerminalBoardRow` tightened (it needs `terminal`), and `isDeskBoardRow` added.
+- `MODEL_STREAM_VERSION` 2: the three committed lab streams regenerated; a peer's frame bytes fall 34–36%.
+- The design catalog's fieldd-backed harness cuts peers with `RemoteProjection`.
+- `docs/agent-plane/api.html` and `system.html` carry dated as-built notes.
+
+**Found:**
+- **A path would have left the desktop.** The backend writes a bare terminal's working directory into its `detail`
+  (puppeteer-monitor's `deriveTerminalRow`), harmless while terminals were window-only. PG-D5 sends them to peers and
+  the phone, so the owner's cut names the folder.
+- **The phone's floor needed the routed ask too.** The owner of a routed ask sees the home's `peer-fieldd`, which it
+  serves at a peer window's 100 ms, so the home carries its caller's floor. The e2e row proves the phone's and a
+  window's routed asks stand on two upstreams.
+- **A test harness was giving peers a window's row.** `projectDeskRow` defaulted to the peer cut; with that audience
+  gone, field-app's fieldd-backed harness sent peers the colour sequence and the local facts until it took the real
+  remote cut. The catalog-versus-fieldd row caught it.
+- **What the cut saves.** A peer's remote row is 1,004 B against a model row's 820 B (the differential, n20). In the
+  committed streams a peer's frame bytes fall 34–36% (n10 13,600 → 8,991; n20 37,383 → 24,471; n60 46,168 → 29,603),
+  and n20's peer sends one more frame, the urgent edge.
+- **The agent plane has no Rust side.** `gen-jsonschema.ts` leaves it out (field-native reads none of it), so EL9's
+  two sides here are fieldd and the window, and the kit from PG-3; `pnpm gen` writes nothing for this seam.
+- **No skew clause for `desk`.** Mixed-version desktops read each other as another version (DS-L9) until both carry
+  PG-2; the refusal is remembered under the peer's boot and versions, so an update clears it.
+
+**Validation:**
+- The lane `/Volumes/SamsungRed/lanes/pg2/vibe-field`, rebased onto main `06cf3fe3d` at its start and not again. Its
+  own cargo target `/Volumes/SamsungRed/rust/pg2`; the shared vitest lane taken and released by the HOLD file for
+  every run, nice 19 under the guard. Its logs: `/Volumes/SamsungRed/lanes/pg2/logs/`.
+- **Red first** at 22:23:50Z: the product sources from main `06cf3fe3d`, the tests and goldens as committed, the
+  tree restored clean after.
+  - on the old behaviour: `projection.test.ts:570` (expected [t] to deeply equal [t, t+250]); fieldd's
+    `agent-field.test.ts:69` (the refusal did not name `remote`) and `:87` (`desk` still parsed);
+    `mesh-board.test.ts:228` (the hub asked its peers for `desk`); `agent-remote-cut.test.ts:98` (expected
+    '/Users/me/notes' to be 'notes', the path); `agent-model-daemon.test.ts:134` and `mesh-board.e2e.test.ts:632`
+    (the old schema refused `remote`); `mesh-board.e2e.test.ts:513` (PRECONDITION_FAILED, expected FORBIDDEN_SCOPE)
+    and `:574` (FORBIDDEN_SCOPE, expected PRECONDITION_FAILED); field-app's `board-screen.test.ts:52` (the remote
+    rows dropped) and `:63` (expected 'incompatible' to be 'live').
+  - by absence, the code not there yet: contracts' PG-2 block (`agent-field.test.ts:646`, 6 rows; the file failed to
+    load); `boardFloor` (fieldd's `agent-field.test.ts:134`, `agent-remote-cut.test.ts:217` and `:257`);
+    `createRemoteSubscription` (`agent-remote-cut.test.ts:50`, `:113`, `:156`); `routedBoardAsk` (`:289`, `:308`);
+    ST-D5's row (`:133`, `AgentRemoteRow` undefined).
+  - not red first, said: `projection.test.ts:597`, the L12 control, green on both by design.
+  - on main: fieldd's unit rows 14 failed and 1 passed, its daemon rows 4 of 4 failed, field-app's 2 of 2 failed.
+- **The lane's light at `5e70a6c44`** (UTC):
+  - biome on the 44 changed files clean, its one warning already on main (22:54); `pnpm check:walls` clean (22:54).
+  - `nx run-many -t typecheck` for contracts, fieldd and field-app 3 of 3 (22:34); field-app's tsc again (22:39).
+  - contracts' whole vitest 1,422 passed in 54 files (22:34); field-app's 3,488 passed and 3 skipped in 268 files
+    (22:39); electron-shell's typecheck and whole vitest 2,426 passed and 3 skipped in 160 files (23:02).
+  - fieldd's 2,777 passed, 29 skipped and 1 failed in 223 files (22:41). The failure is `workspace-engine.test.ts`'s
+    held-engine row (expected 1 engine, got 2), untouched by the branch; alone it went 12/12 three times at load
+    averages 14 to 31 (22:46).
+  - `pnpm gen:check` clean (22:57); `check:ios-fixtures` 186 copies and 63 pins identical, no changed fixture among
+    the held copies, so no kit mirror is owed (22:54); `pnpm catalog:check` pass, 10 rows honoured by both pins
+    (22:55); `pnpm preflight` OK with its standing R23 warning (22:47).
+- **Run 64** (the mint `ed212d21b`, the MERGE shape: main `76e9ff6d7` merged into `5e70a6c44`):
+  - `pnpm verify` went green at 23:02:26Z (exit 0; armed 22:57:34Z, about 5 min), the mini's tree clean after it.
+  - vitest: 11,411 passed, 0 failed, 18 skipped, +23 over run 63's 11,388. contracts 1,424, +8 (fixtures.test.ts
+    528, projection 23, agent-field 41/48). fieldd 2,806 passed and 11 skipped, +14: agent-remote-cut.test.ts new
+    with 9, mesh-board.test.ts 29, mesh-board.e2e.test.ts 7, agent-model-board.test.ts 20 → 19. field-app 3,494, +1
+    (board-screen.test.ts 8). `workspace-engine.test.ts` 12/12, so the lane's red was its load.
+  - cargo: `test result: ok.` × 33, no Rust moved; typecheck and test ran for 28 projects; biome checked 2,948 files;
+    MaxListeners 0; gen freshness held; the iOS fixtures' 186 copies and 63 pins identical.
+  - The bundle's assert held at 911.9 KB raw and 240.7 KB gz.
+  - Its logs: `/Volumes/SamsungRed/lanes/ts6/logs/mini/run64/` (`mrun64.bundle`, sha256 `c1fbf96944dbad01…`).
+- **Landed:** main fast-forwarded `76e9ff6d7` → `ed212d21b` at 2026-10-31 23:04:27Z on VF-PM's GO (49 files +2,321
+  −706; parents `5e70a6c44` and `76e9ff6d7`; tree `b9745ae7e`). Both sides touched `api.html`, `registries.ts`,
+  `fixtures.test.ts` and `daemon.ts`, F1b's lines beside PG-2's; the merge was clean.
+
+**Records.** ROADMAP's PG lines and DECISIONS' PG row advanced in place. The draft queue owes design-06's SP-L4, DS-D4
+and limits "not built until PG-2" clauses, design-mv §1, build-mv L8 and M29, and the design record's §8 PG-2 as built.
+
+**Owed.** PG-3, the phone's replica, the next lane. The draft queue's amendments above.
