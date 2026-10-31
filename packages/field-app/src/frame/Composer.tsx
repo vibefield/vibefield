@@ -20,17 +20,15 @@ import { installCardsLab } from "./cards/cards-lab";
 import { dealCapture } from "./cards/cards-sources";
 import type { CardStore } from "./cards/cards-store";
 import { CAPTURE_WORDS, captureRefusal } from "./cards/cards-words";
+import { isField } from "./cards/caret";
 import { type FrameSurface, foldSurface } from "./frame-surface";
 import {
   type HistoryLineDoor,
   hearLineSays,
-  historyCreateWaits,
   inputRefusalNote,
-  jumpNote,
   type LineViewDoor,
   newTerminalNote,
   refusalClaimed,
-  resumeNote,
   useGodviewLineDoor,
   useHistoryLineDoor,
   useHistorySaid,
@@ -56,7 +54,8 @@ export type ComposerHost = Pick<FieldHost, "screenshotCapture" | "screenshotStil
 
 /** What the line lends the palette (One Frame FR-3): its create, so the
  * palette's row for the view's act runs the line's own — Objects on Canvas,
- * New terminal in Godview, with the line's note saying what came of it. */
+ * New terminal in Godview and in History, with the line's note saying what
+ * came of it. */
 export interface LineActs {
   create(keyboard?: boolean): void;
 }
@@ -92,18 +91,6 @@ export interface ComposerProps {
   /** Whether the line binds its window keys (B, ⌘T). The catalog's live line
    * does not: its page is not a window the line owns. */
   readonly bindKeys?: boolean;
-}
-
-function isEditable(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  const tag = target.tagName;
-  return (
-    tag === "INPUT" ||
-    tag === "TEXTAREA" ||
-    tag === "SELECT" ||
-    target.isContentEditable ||
-    target.closest("[contenteditable='true']") !== null
-  );
 }
 
 export function Composer({
@@ -199,18 +186,19 @@ export function Composer({
     say(newTerminalNote(await door.newTerminal()), "create");
   }, [door, say]);
 
-  // History's create is Resume (AR-8c): the chosen session, continued in its
-  // own agent — or Jump to while it runs here (P3): its pane, shown. The note
-  // says what came of it — in History, or in Godview once the frame has moved
-  // there to show the pane.
-  const resumeOrJump = useCallback(async () => {
-    const waits = historyCreateWaits(historyDoor);
-    if (historyDoor === null || waits !== null) {
-      say(resumeNote({ state: "refused", reason: waits ?? "choose a session first" }), "create");
+  // History's create is New terminal (LN-D2, HN-7): a fresh shell in the folder
+  // of the project the room shows, opened by Godview's deck — History's door
+  // finds the folder as New agent does, refuses one it cannot open in New
+  // agent's words, and moves the frame to Godview to show the shell. The note
+  // says Godview's words — in History, or in Godview once the frame has moved
+  // there. (Resume and Jump to were this create until HN-7: the chosen
+  // session's acts now, the palette's History row among them.)
+  const historyTerminal = useCallback(async () => {
+    if (historyDoor === null) {
+      say(newTerminalNote({ state: "refused", reason: "History is still opening" }), "create");
       return;
     }
-    if (historyDoor.live) say(jumpNote(await historyDoor.jump()), "create");
-    else say(resumeNote(await historyDoor.resume()), "create");
+    say(newTerminalNote(await historyDoor.newTerminal()), "create");
   }, [historyDoor, say]);
 
   // Objects on Canvas (DK-13; DESIGN.md §8 "The pegboard"): the create calls the board's `toggle()` and the frame's
@@ -228,9 +216,9 @@ export function Composer({
         if (open === null) return;
         onSurfaceChange(open ? "objects" : foldSurface(surface, "objects"));
       } else if (view === "godview") void newTerminal();
-      else if (view === "history") void resumeOrJump();
+      else if (view === "history") void historyTerminal();
     },
-    [board, boardRefused, newTerminal, onSurfaceChange, resumeOrJump, surface, view],
+    [board, boardRefused, historyTerminal, newTerminal, onSurfaceChange, surface, view],
   );
 
   // THE SNAPSHOT (HN-D2; SNAP-D3): the snapshot tool, opened as ⌃⌘A opens it —
@@ -279,17 +267,18 @@ export function Composer({
     };
   }, [actsRef, create]);
 
-  // B — Objects, on Canvas only, never while typing, never under a cover
-  // (DESIGN.md §8 "The pegboard", §10), and refused while an object is in hand
-  // (R14). Heard on the window's bubble phase, so a focused pane or a note being
-  // typed in keeps its own b. A board B raises takes the focus (the keyboard
-  // asked for it): its specimens are the arrows' at once.
+  // B — Objects, on Canvas only, never while typing (a field holds the caret:
+  // the frame's one test, `cards/caret.ts`), never under a cover (DESIGN.md §8
+  // "The pegboard", §10), and refused while an object is in hand (R14). Heard
+  // on the window's bubble phase, so a focused pane or a note being typed in
+  // keeps its own b. A board B raises takes the focus (the keyboard asked for
+  // it): its specimens are the arrows' at once.
   useEffect(() => {
     if (!bindKeys) return;
     const onKey = (event: globalThis.KeyboardEvent): void => {
       if (event.key !== "b" && event.key !== "B") return;
       if (event.metaKey || event.ctrlKey || event.altKey || event.repeat) return;
-      if (view !== "canvas" || isEditable(event.target)) return;
+      if (view !== "canvas" || isField(event.target)) return;
       if (boardRefused) {
         emitLineKeyMarker({ key: "B", view, outcome: "refused" });
         return;
@@ -302,13 +291,14 @@ export function Composer({
     return () => window.removeEventListener("keydown", onKey);
   }, [bindKeys, board, boardRefused, create, surface, view]);
 
-  // ⌘T — Godview's New terminal: a product chord on the capture phase, so a
-  // focused pane never sees it (ghostty's new_tab). Only in Godview: it is
-  // Godview's create's key, as B is Canvas's.
+  // ⌘T — New terminal, in Godview and in History (HN-7): a product chord on
+  // the capture phase, so a focused pane never sees it (ghostty's new_tab).
+  // Only in those two views: it is their create's key, as B is Canvas's.
+  const takesNewTerminal = bindKeys && (view === "godview" || view === "history");
   useEffect(
     () =>
       listenForProductChord(
-        (event) => bindKeys && view === "godview" && isNewTerminalChord(event, keys),
+        (event) => takesNewTerminal && isNewTerminalChord(event, keys),
         (event) => {
           if (event.repeat) return;
           emitLineKeyMarker({
@@ -316,18 +306,13 @@ export function Composer({
             view,
             outcome: "new-terminal",
           });
-          void newTerminal();
+          void (view === "history" ? historyTerminal() : newTerminal());
         },
       ),
-    [bindKeys, keys, newTerminal, view],
+    [historyTerminal, keys, newTerminal, takesNewTerminal, view],
   );
 
-  const createWaits =
-    view === "history"
-      ? historyCreateWaits(historyDoor)
-      : view === "godview" && door === null
-        ? "the deck is not connected yet"
-        : null;
+  const createWaits = view === "godview" && door === null ? "the deck is not connected yet" : null;
 
   return (
     <ComposerLineView
@@ -337,7 +322,7 @@ export function Composer({
       objectsOpen={board === null ? surface === "objects" : board.open}
       createHeld={boardRefused}
       createWaits={createWaits}
-      createLive={view === "history" && historyDoor?.live === true}
+      createProject={view === "history" ? (historyDoor?.project ?? null) : null}
       snapshotWaits={host.screenshotCapture === undefined ? SNAPSHOT_NO_DOOR : captureState.waits}
       snapshotWhy={captureState.why}
       snapshotOn={capturing}

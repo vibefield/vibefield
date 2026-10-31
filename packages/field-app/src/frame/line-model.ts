@@ -11,28 +11,43 @@ import type { ViewKeys } from "./views";
 
 /** The create act each view puts in the line (One Frame FC-D3: the view's own
  * glyph; FR-3: only Canvas's is a bare plus). `key` is said in the tooltip,
- * never printed (FR-5). */
+ * never printed (FR-5); `title`, when the act says where it acts, is the name
+ * the tooltip says in its place (HN-7: "New terminal in vibe-field"). */
 export interface CreateAct {
-  readonly glyph: "plus" | "start" | "resume" | "jump";
+  readonly glyph: "plus" | "start";
   readonly name: string;
   readonly key: string | null;
+  readonly title?: string;
+}
+
+/** New terminal (One Frame FR-2, §11): Godview's create, and History's since
+ * HN-7 — its glyph and its key in both. */
+function newTerminalAct(keys: ViewKeys): CreateAct {
+  return { glyph: "start", name: "New terminal", key: keys === "mac" ? "⌘T" : "Ctrl+T" };
 }
 
 /** The view's one act, or null where the view has none on the line yet: the
  * Assistant is not built (FC-D2), so no window is ever in it, and its act comes
- * with Chat (SP-1) — never Canvas's Objects drawn in its place. `live`: History's
- * chosen session runs on this desktop, so its create is Jump to (P3) — History's
- * line door says so. */
-export function createActOf(view: FrameView, keys: ViewKeys, live = false): CreateAct | null {
+ * with Chat (SP-1) — never Canvas's Objects drawn in its place. `project`: the
+ * project History's room shows (its name), where History's create opens its
+ * terminal — History's line door says so. */
+export function createActOf(
+  view: FrameView,
+  keys: ViewKeys,
+  project: string | null = null,
+): CreateAct | null {
   switch (view) {
     case "canvas":
       return { glyph: "plus", name: "Objects", key: "B" };
     case "godview":
-      return { glyph: "start", name: "New terminal", key: keys === "mac" ? "⌘T" : "Ctrl+T" };
-    case "history":
-      return live
-        ? { glyph: "jump", name: "Jump to this session", key: null }
-        : { glyph: "resume", name: "Resume this session", key: null };
+      return newTerminalAct(keys);
+    case "history": {
+      // LN-D2 (HN-7): Godview's act, in the folder of the project the room
+      // shows — which its tooltip names. Resume and Jump to are the chosen
+      // session's acts now: its row's, ④'s head's and the palette's.
+      const act = newTerminalAct(keys);
+      return project === null ? act : { ...act, title: `${act.name} in ${project}` };
+    }
     case "assistant":
       return null;
   }

@@ -443,7 +443,7 @@ describe("Search — the Peek, in History (GV-D8/D9/D10)", () => {
     expect(document.activeElement).toBe(button());
   });
 
-  it("⌘F opens it while History or Godview is the view and puts the caret back while it is open — and is left alone on the canvas", async () => {
+  it("⌘F opens it while Godview or History is the view and puts the caret back while it is open — and is left alone on the canvas", async () => {
     mount(fieldd());
     expect(press(document.body, { key: "f", metaKey: true }).defaultPrevented).toBe(false);
     expect(surfaceNow).toBeNull();

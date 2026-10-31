@@ -111,9 +111,9 @@
   outline-offset: 2px;
 }
 
-/* The three views' glyphs — and History's Jump to (P3) — stand in one place
-   and cross-fade (200ms, One Frame §12); Objects' plus turns 135° into ✕
-   while the objects are out. */
+/* The views' glyphs — Canvas's plus, and New terminal's start in Godview and
+   History (HN-7) — stand in one place and cross-fade (200ms, One Frame §12);
+   Objects' plus turns 135° into ✕ while the objects are out. */
 .vf-line-create-glyph {
   display: grid;
   grid-area: 1 / 1;
@@ -131,7 +131,7 @@
   transform: rotate(135deg);
 }
 
-/* A create that waits (History's Resume, until a session is chosen) — or
+/* A create that waits (Godview's, while the deck has no connection) — or
    Objects while an object is in hand, "Put it down first" (DK-13, R14): faint
    by ink, as the Assistant's cell is, and still. */
 .vf-line-create[aria-disabled="true"],

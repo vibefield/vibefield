@@ -21,13 +21,15 @@ import { isSettingsChord } from "./me-menu-wiring";
 // ⌘1–⌘8 to goto_tab, and a pane in the deck has no tabs; the frame takes them
 // first, so ⌘1 leaves Godview from inside a focused pane and ⌘2 comes back.
 //
-// ⌘T (One Frame FR-2, §11) is Godview's create in the line — New terminal —
-// over ghostty's new_tab, which the deck has no tabs for either. The line
-// claims it only while the window is in Godview; the table names it so
-// Settings can say which Ghostty default it keeps from a pane.
+// ⌘T (One Frame FR-2, §11) is the line's create in Godview — New terminal —
+// and in History since HN-7 (there, in the folder of the project the room
+// shows), over ghostty's new_tab, which the deck has no tabs for either. The
+// line claims it only while the window is in one of the two, so the row says
+// WHEN; the table names it so Settings can say which Ghostty default it keeps
+// from a pane.
 //
 // ⌘F (the Peek, GV-D8/D10, 2026-10-08) is search's, printed under the frame's
-// button: the Peek claims it while History or Godview is the view (Godview's
+// button: the Peek claims it while Godview or History is the view (Godview's
 // own Find left with P2, 2026-10-09). So Ghostty's start_search reaches a pane
 // in neither — the row says WHEN, so Settings says it honestly rather than as
 // an always.
@@ -72,8 +74,8 @@ export function isCardsChord(event: ChordKey): boolean {
   );
 }
 
-/** ⌘T (Ctrl+T off the Mac): New terminal, Godview's create. Never with ⇧ or
- * ⌥, and never the other platform's modifier. */
+/** ⌘T (Ctrl+T off the Mac): New terminal, Godview's create and History's
+ * (HN-7). Never with ⇧ or ⌥, and never the other platform's modifier. */
 export function isNewTerminalChord(event: ChordKey, keys: ViewKeys): boolean {
   const command =
     keys === "mac" ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
@@ -149,13 +151,14 @@ export const PRODUCT_CHORDS: readonly ProductChord[] = [
     id: "new-terminal",
     trigger: "super+t",
     label: "New terminal",
+    when: "while Godview or History is the view",
     matches: (event) => isNewTerminalChord(event, viewKeysOf(getHost().platform)),
   },
   {
     id: "search",
     trigger: "super+f",
     label: "Search",
-    when: "while History or Godview is the view",
+    when: "while Godview or History is the view",
     matches: (event) => isSearchChord(event, viewKeysOf(getHost().platform)),
   },
   {

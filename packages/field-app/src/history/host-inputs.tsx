@@ -358,15 +358,39 @@ function foldersOf(
   };
 }
 
+/** HN-7 — ③ for a project the model lacks (rosetta's own unassigned bucket,
+ * which is no project of fieldd's): no folders, but ③ says it shows none. The
+ * room calls `onShow` only while its host lists a project's folders, and the
+ * line's create follows every project the room shows; this one reads as none
+ * (`HistoryView`). */
+function noFoldersOf(project: string, acts: HistoryHostActs): RoomFolders {
+  return { groups: [], onShow: (key) => acts.shown(project, key) };
+}
+
 /* ── R5 ②: New agent and the project's acts ────────────────────────────── */
 
-function newAgentAct(
+/** Where something new of a project starts on this desktop. */
+export interface StartPlace {
+  readonly place: ProjectPlace | undefined;
+  readonly device: HostDevice | undefined;
+  /** the folder's path; null when the project has no folder to start in */
+  readonly path: string | null;
+  /** why nothing can start there, in New agent's words — or null: then
+   * `path` is the folder to start in */
+  readonly why: string | null;
+}
+
+/** PJ-D8 — the folder ③ shows (`folder`, its key), else the project's usual
+ * place here, and why nothing can start there: another desktop's (until
+ * routed acts), a volume not connected, a folder gone, or none here at all.
+ * New agent's reading and words, and History's New terminal's reading (HN-7,
+ * LN-D2; its words, `newTerminalWhy`): one reading, so the two never disagree
+ * about where "here" is. */
+export function startPlaceOf(
   model: HistoryHostModel,
   project: ProjectSummary,
   folder: string | null,
-  state: HistoryHostState,
-  acts: HistoryHostActs,
-): RoomAct {
+): StartPlace {
   const place = placeOfKey(project, folder) ?? usualPlaceOf(model, project);
   const device = place === undefined ? undefined : deviceOf(model, place.ref.device);
   const path = place?.path ?? place?.name ?? null;
@@ -376,6 +400,27 @@ function newAgentAct(
     why = `it starts on ${device.name} — not from here until routed acts (DS-2)`;
   else if (!place.mounted) why = "its volume is not connected";
   else if (!place.exists) why = "the folder is gone";
+  return { place, device, path, why };
+}
+
+/** HN-7 — why History's New terminal cannot open where ③ shows, or null: New
+ * agent's reading and words (`startPlaceOf`), but a folder on another desktop
+ * is History's own to say, by the desktop it is on — "vibe-field is on Mac
+ * mini" (DESIGN.md §8 "History"), never a track code. */
+export function newTerminalWhy(project: ProjectSummary, start: StartPlace): string | null {
+  if (start.why === null) return null;
+  const there = start.device?.here === false ? start.device : undefined;
+  return there === undefined ? start.why : `${project.name} is on ${there.name}`;
+}
+
+function newAgentAct(
+  model: HistoryHostModel,
+  project: ProjectSummary,
+  folder: string | null,
+  state: HistoryHostState,
+  acts: HistoryHostActs,
+): RoomAct {
+  const { place, device, path, why } = startPlaceOf(model, project, folder);
   const where = path === null ? "" : homePath(path, device?.here === true ? state.home : null);
   const working = place === undefined ? 0 : workingIn(model, place);
   // what is true of the folder — never where it is drawn: ③ is a column the
@@ -932,7 +977,7 @@ export function historyHostInputs(
     },
     folders: (key) => {
       const found = project(key);
-      return found === undefined ? null : foldersOf(model, found, state, acts);
+      return found === undefined ? noFoldersOf(key, acts) : foldersOf(model, found, state, acts);
     },
     projectFilters: [
       desktopChip(

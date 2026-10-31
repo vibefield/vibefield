@@ -610,6 +610,31 @@ describe("MeMenuView — the update row, the dot and the question (AU-2)", () =>
     expect(document.activeElement).toBe(face());
   });
 
+  it("opens Settings → Updates at the notes from What's new, folded first (AU-6, LC-7)", async () => {
+    const installed: UpdateView = {
+      ...IDLE,
+      currentVersion: NEXT,
+      lastApply: {
+        version: NEXT,
+        from: CURRENT,
+        outcome: "installed",
+        at: Date.now() - 60_000,
+        notes: {
+          version: NEXT,
+          body: { kind: "written", since: null, lines: ["Updates wait for you."] },
+        },
+      },
+    };
+    const spies = await mountUpdating(updateOf(installed), { open: true });
+    expect(updateRow()?.textContent).toMatch(/^What's newUpdated (today|yesterday)$/u);
+    await act(async () => updateRow()?.click());
+    expect(spies.onOpenChange).toHaveBeenLastCalledWith(false);
+    expect(spies.onUpdate).toHaveBeenCalledWith("notes");
+    expect(spies.onOpenChange.mock.invocationCallOrder[0]).toBeLessThan(
+      spies.onUpdate.mock.invocationCallOrder[0] ?? 0,
+    );
+  });
+
   it("wears the dot beside the face while an install waits, and a waiting count outranks it (I-5)", async () => {
     await mountUpdating(updateOf(STAGED, { markTitle: "the Oct 28 nightly is ready" }));
     expect(mark()).not.toBeNull();
@@ -1386,6 +1411,30 @@ describe("MeMenu (controller)", () => {
         "VibeField didn't download the update. That version is no longer available.",
       );
       expect(rowText()).toBe("Download updateAutomatic updates are off");
+    });
+
+    it("opens Settings → Updates at the notes from What's new, folding the menu (AU-6, LC-7)", async () => {
+      baseHost({ usersList: vi.fn(ROSTER), updates: fakeUpdates() });
+      const { onOpenSettings, onOpenChange } = await mountUpdate({
+        ...IDLE,
+        currentVersion: NEXT,
+        lastApply: {
+          version: NEXT,
+          from: CURRENT,
+          outcome: "installed",
+          at: Date.now() - 60_000,
+          trigger: "restart",
+          notes: {
+            version: NEXT,
+            body: { kind: "written", since: null, lines: ["Updates wait for you."] },
+          },
+        },
+      });
+      expect(rowText()).toMatch(/^What's newUpdated (today|yesterday)$/u);
+      await click(updateRow());
+      expect(onOpenSettings).toHaveBeenCalledWith("whats-new");
+      expect(onOpenSettings).not.toHaveBeenCalledWith("updates");
+      expect(onOpenChange).toHaveBeenLastCalledWith(false);
     });
 
     it("opens Settings → Updates from a download, folding the menu", async () => {

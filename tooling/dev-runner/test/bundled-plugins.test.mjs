@@ -100,6 +100,36 @@ test("a DEV stage: both plugins staged under a signed index, a dev trust-root, a
   );
 });
 
+// AU-6 (LC-18) — the identity says when the build was made: the release workflow's stamp when it is set, else this
+// checkout's HEAD commit time, both a UTC instant; a stamp that names none refuses the stage in words.
+test("AU-6: the staged builtAt is the stamp, else HEAD's commit time; a malformed stamp refuses", () => {
+  const builtAtOf = (stage) =>
+    JSON.parse(readFileSync(join(stage, "identity", "release-identity.json"), "utf8")).builtAt;
+  const stageWith = (name, stamp) =>
+    run(["stage", "--stage", join(work, name), "--plugins", plugins, "--app-version", "0.9.0"], {
+      VIBEFIELD_BUILT_AT: stamp,
+    });
+  const stamp = "2026-10-28T06:17:00.000Z";
+  const stamped = stageWith("built-stamped", stamp);
+  assert.equal(stamped.status, 0, JSON.stringify(stamped.verdict));
+  assert.equal(builtAtOf(join(work, "built-stamped")), stamp);
+  // an empty stamp is no stamp
+  const head = spawnSync("git", ["log", "-1", "--format=%ct", "HEAD"], {
+    cwd: REPO_ROOT,
+    encoding: "utf8",
+  }).stdout.trim();
+  const fromHead = stageWith("built-head", "");
+  assert.equal(fromHead.status, 0, JSON.stringify(fromHead.verdict));
+  assert.equal(builtAtOf(join(work, "built-head")), new Date(Number(head) * 1000).toISOString());
+  // git's %cI carries an offset, which IsoInstant refuses: the stage says so rather than failing later
+  const offset = stageWith("built-refused", "2026-10-28T09:00:00-07:00");
+  assert.equal(offset.status, 1);
+  assert.match(
+    offset.verdict.problems.join("\n"),
+    /VIBEFIELD_BUILT_AT is "2026-10-28T09:00:00-07:00"/,
+  );
+});
+
 test("EL7: no secret is written anywhere in a stage — every file is public", () => {
   const { stage } = freshStage("el7");
   for (const file of filesUnder(stage)) {

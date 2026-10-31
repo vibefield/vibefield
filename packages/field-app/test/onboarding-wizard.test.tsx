@@ -13,6 +13,7 @@ import { BootRoot } from "../src/boot/BootRoot";
 import type { BootMachine, BootOnboarding, BootView } from "../src/boot/machine";
 import { OnboardingWizard } from "../src/boot/onboarding/OnboardingWizard";
 import { glassFit } from "../src/boot/onboarding/wizard-ui";
+import { cardsStore } from "../src/frame/cards/cards-store";
 import { type FieldHost, type FieldUserProfile, type FieldUserRoster, setHost } from "../src/host";
 
 // UA-3w — the Setup Assistant (spec §6). The cases that matter are the ones
@@ -1097,6 +1098,57 @@ describe("Setup Assistant", () => {
     expect(title()).not.toBe("Waiting for approval.");
   });
 
+  it("deals a copy from its button's box, under the glass (HN-5)", async () => {
+    // DESIGN.md §8 "Copy" (LC-22): a copy made under a sheet is dealt into the hand under it,
+    // from the button pressed, and the button's "Copied" is its sign while the sheet stands
+    const copied: string[] = [];
+    host(
+      vi.fn(async () => ({ ...FRESH, color: "accent-2" }) as FieldUserProfile),
+      {
+        diagnostics: {
+          copyText: async (words: string) => {
+            copied.push(words);
+          },
+        } as unknown as NonNullable<FieldHost["diagnostics"]>,
+      },
+    );
+    const admin = "https://login.tailscale.com/admin/machines";
+    await mount({
+      fieldd: client({
+        link: {
+          ...NO_LINK,
+          meshEnabled: true,
+          nodeState: "NeedsMachineAuth",
+          linkState: "awaiting_approval",
+          machineName: "truffle-vibefield-studio",
+          adminUrl: admin,
+        },
+      }),
+      onboarding: onboarding({ color: "accent-2" }),
+      onComplete: vi.fn(),
+    });
+
+    const copy = button("Copy a request for your admin");
+    const box = { left: 420, top: 560, width: 220, height: 32 };
+    vi.spyOn(copy, "getBoundingClientRect").mockReturnValue(box as DOMRect);
+    await act(async () => {
+      copy.click();
+      for (let hop = 0; hop < 30; hop += 1) await Promise.resolve();
+    });
+    expect(copied).toEqual([
+      `Please approve truffle-vibefield-studio in the Tailscale admin console: ${admin}`,
+    ]);
+    const card = cardsStore.snapshot().cards.at(-1);
+    expect(card).toMatchObject({
+      kind: "text",
+      paste: copied[0],
+      origin: { place: "Setup Assistant", how: "copy" },
+    });
+    expect(cardsStore.snapshot().arriving.get(card?.id ?? "")).toEqual(box);
+    expect(button("Copied")).not.toBeUndefined();
+    if (card !== undefined) cardsStore.remove(card.id);
+  });
+
   it("says what capture is waiting on before the node offers an address", async () => {
     host(vi.fn(async () => ({ ...FRESH, color: "accent-2" }) as FieldUserProfile));
     await mount({
@@ -1287,10 +1339,14 @@ describe("Setup Assistant", () => {
     expect(WIZARD_CSS).toMatch(
       /\.vf-wizard-frame \{[^}]*top: 96px;\s*right: 160px;\s*bottom: 40px;\s*left: 160px;/,
     );
-    // §5's tier at full frost: the surface over blur(32px) saturate(1.12)
+    // §5's tier at full frost: the surface over the frost's blur and saturation, both tokens (FG-3b)
     expect(WIZARD_CSS).toContain("background: var(--vf-wizard-surface)");
-    expect(WIZARD_CSS).toContain("backdrop-filter: blur(calc(32px * var(--vf-glass-frost)))");
-    expect(WIZARD_CSS).toContain("saturate(calc(1 + 0.12 * var(--vf-glass-frost)))");
+    expect(WIZARD_CSS).toContain(
+      "backdrop-filter: blur(calc(var(--vf-wizard-blur) * var(--vf-glass-frost)))",
+    );
+    expect(WIZARD_CSS).toContain(
+      "saturate(calc(1 + (var(--vf-wizard-saturate) - 1) * var(--vf-glass-frost)))",
+    );
     // on the field: the edge and its light, the field's own shadow, and the grain
     expect(WIZARD_CSS).toContain("box-shadow: var(--vf-shadow-wizard-field)");
     expect(WIZARD_CSS).toContain("inset 0 0 0 1px var(--vf-wizard-edge),");
@@ -1302,8 +1358,10 @@ describe("Setup Assistant", () => {
     expect(container?.querySelector("form.vf-wizard-pane")).not.toBeNull();
   });
 
-  it("projects the glass's field tokens from DESIGN.md §5, one shadow and one grain for both themes", () => {
+  it("projects the glass's tokens from DESIGN.md §5: one frost, and on the field one shadow and one grain, for both themes", () => {
     const [day = "", night = ""] = TOKENS.split("\n.dark {");
+    expect(day).toContain("--vf-wizard-blur: 32px;");
+    expect(day).toContain("--vf-wizard-saturate: 1.12;");
     expect(day).toContain("--vf-wizard-edge: rgb(255 255 255 / 60%);");
     expect(day).toContain("--vf-wizard-edge-light: rgb(255 255 255 / 75%);");
     expect(day).toContain("--vf-wizard-grain: 0.03;");
@@ -1312,9 +1370,26 @@ describe("Setup Assistant", () => {
     );
     expect(night).toContain("--vf-wizard-edge: rgb(255 255 255 / 12%);");
     expect(night).toContain("--vf-wizard-edge-light: rgb(255 255 255 / 8%);");
-    // the field is the dark in both themes, so its shadow and the grain never change
+    // the field is the dark in both themes, so its shadow and the grain never change; nor does the frost
     expect(night).not.toContain("--vf-shadow-wizard-field");
     expect(night).not.toContain("--vf-wizard-grain");
+    expect(night).not.toContain("--vf-wizard-blur");
+    expect(night).not.toContain("--vf-wizard-saturate");
+  });
+
+  it("stands the browser's glass down where the field draws it, keeping the edge (FG-3b, FG-D24)", () => {
+    // the shadow, the frost (its tint is its ::after) and the grain, hidden but keeping their style, which is the
+    // recipe the field reads; the frost's backdrop filter off, so nothing blurs the field but the field
+    expect(WIZARD_CSS).toMatch(
+      /\n\.vf-wizard-shell\[data-glass="field"\] \.vf-wizard-glass-shadow,\n\.vf-wizard-shell\[data-glass="field"\] \.vf-wizard-glass-frost,\n\.vf-wizard-shell\[data-glass="field"\] \.vf-wizard-glass-grain \{\s*visibility: hidden;\s*\}/u,
+    );
+    expect(WIZARD_CSS).toMatch(
+      /\n\.vf-wizard-shell\[data-glass="field"\] \.vf-wizard-glass-frost \{\s*-webkit-backdrop-filter: none;\s*backdrop-filter: none;\s*\}/u,
+    );
+    // the edge and its light stay the browser's, at the screen's own pixels
+    expect(WIZARD_CSS).not.toMatch(/data-glass="field"\] \.vf-wizard-glass-edge/u);
+    // nothing else answers to the attribute
+    expect(WIZARD_CSS.match(/\[data-glass="field"\]/gu)).toHaveLength(4);
   });
 
   it("scales the glass as one picture to fit its ground, never reflowing it (FG-L2)", async () => {

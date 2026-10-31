@@ -10,6 +10,7 @@ import {
 } from "react";
 import { ThemeToggleButton } from "../../ThemeToggleButton";
 import { useTheme } from "../../theme";
+import { useFieldGlass } from "../field-glass";
 import type { WizardStep } from "./order";
 import "./wizard-ui.css";
 
@@ -38,8 +39,10 @@ export const factCls = "text-[12px] leading-5 text-black/45 dark:text-white/45";
 
 /** What the glass stands on (DESIGN.md §5, the Setup Assistant's row). On the
  * field, where the first run happens (track FG), it wears the field's edge,
- * shadow and grain, and forms where the splash stood; over the app (Finish
- * setting up's sheet) it keeps the hairline and the island's shadow. */
+ * shadow and grain, and forms where the splash stood — over the live field
+ * drawn by the field itself (FG-3b), the browser keeping only its edge; over
+ * the app (Finish setting up's sheet) it keeps the hairline and the island's
+ * shadow. */
 export type WizardGround = "field" | "app";
 
 /** How the glass is sized (FG-D26, a lean). The Setup Assistant's steps stand
@@ -82,8 +85,9 @@ export function WizardShell({
  * to fit it (`glassFit`), never reflowed — the sheet's keeps its own size,
  * unscaled (FG-D26); its material is layers under its
  * contents (wizard-ui.css), so it can form without fading anything above its
- * frost. Only the glass takes a press: around it the ground lets one through
- * to what holds it (the sheet's scrim closes it). */
+ * frost. On the live field the field draws those layers (`useFieldGlass`,
+ * `data-glass`). Only the glass takes a press: around it the ground lets one
+ * through to what holds it (the sheet's scrim closes it). */
 export function WizardShellView({
   children,
   dark,
@@ -101,7 +105,10 @@ export function WizardShellView({
 }): ReactElement {
   const groundRef = useRef<HTMLDivElement>(null);
   const glassRef = useRef<HTMLDivElement>(null);
+  const shadowRef = useRef<HTMLDivElement>(null);
+  const frostRef = useRef<HTMLDivElement>(null);
   const fit = useGlassFit(groundRef, glassRef, size === "glass");
+  const drawn = useFieldGlass(glassRef, shadowRef, frostRef, ground === "field");
   return (
     <div
       ref={groundRef}
@@ -109,9 +116,15 @@ export function WizardShellView({
       style={fit === null ? undefined : ({ "--vf-glass-fit": String(fit) } as CSSProperties)}
     >
       <div className="vf-wizard-fit">
-        <div ref={glassRef} className="vf-wizard-shell" data-ground={ground} data-size={size}>
-          <div className="vf-wizard-glass-shadow" />
-          <div className="vf-wizard-glass-frost" />
+        <div
+          ref={glassRef}
+          className="vf-wizard-shell"
+          data-ground={ground}
+          data-size={size}
+          data-glass={drawn ? "field" : undefined}
+        >
+          <div ref={shadowRef} className="vf-wizard-glass-shadow" />
+          <div ref={frostRef} className="vf-wizard-glass-frost" />
           <div className="vf-wizard-glass-grain" />
           <div className="vf-wizard-glass-edge" />
           {band !== undefined && <WizardSteps band={band} />}

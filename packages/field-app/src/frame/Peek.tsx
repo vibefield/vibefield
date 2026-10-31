@@ -80,8 +80,8 @@ import type { ViewKeys } from "./views";
 // word is typed, the filters, the hot row, the keys, the focus, the window it
 // fits — and nothing it shows, which is `PeekView`'s. Whether it is open is
 // NOT its own: that is the frame's one value (`frame-surface.ts`, `search`),
-// which this reads and asks — so the palette, a drawer, the Me menu, Settings
-// and a change of view fold it, and it folds them. What it reads comes
+// which this reads and asks — so the palette, the pill's sheet, the Me menu,
+// Settings and a change of view fold it, and it folds them. What it reads comes
 // through a port, so the catalog runs this exact controller over a fixture.
 //
 // LIVE NOW (P2): Godview's rows through the door its monitor publishes
@@ -162,8 +162,10 @@ type FindPlace = "bar" | "head" | "elsewhere";
  * out, then the step in); into the bar, out of Godview and under reduced
  * motion the place changes at once. Each step ends on a timer — the step out
  * on its length and the deck's two frames (`DECK_TRAVEL_GRACE_MS`) — never on
- * a `transitionend` a hidden window may not send. */
-function useFindStep(
+ * a `transitionend` a hidden window may not send. The package circle folds
+ * into the bar's other end on these same two steps (PL-D2, HN-8;
+ * `PackageCircle.tsx`), so the two never step apart. */
+export function useFindStep(
   inGodview: boolean,
   maximized: boolean,
   reducedMotion: boolean,

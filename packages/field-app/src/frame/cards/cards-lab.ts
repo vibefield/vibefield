@@ -1,6 +1,6 @@
 import { getGodviewLineDoor, type LineViewDoor, sayOnLine } from "../line-door";
 import { type CardPlayed, type CardTarget, type CardTargets, cardTargets } from "./card-targets";
-import { textCardOf } from "./cards-model";
+import { type Card, textCardOf } from "./cards-model";
 import { dealCard } from "./cards-sources";
 import { type CardStore, cardsStore } from "./cards-store";
 
@@ -39,6 +39,9 @@ export interface CardsLab {
   /** Play the newest card onto the deck's pane showing floor session
    * `sessionId` — the active pane when two show it — let go at its centre. */
   playInto(sessionId: string): Promise<CardsLabPlay>;
+  /** Play the newest card let go at this window point — whatever place a drop finds there, as
+   * the drag finds it: smoke:canvas lets one go on the desk's clear ground (LC-17). */
+  playAt(x: number, y: number): Promise<CardsLabPlay>;
   /** Empty the hand: nothing held, the hand lowered, every card removed (each
    * leaves as a removed card leaves); answers how many there were. */
   clear(): number;
@@ -90,6 +93,34 @@ export function cardsLab(seams: CardsLabSeams = {}): CardsLab {
   const store = seams.store ?? cardsStore;
   const targets = seams.targets ?? cardTargets;
   const doorOf = seams.door ?? getGodviewLineDoor;
+  // a drop at `at`: the place on top there answers the card, and one that takes it plays a copy
+  // in, its outcome said on the line
+  const letGo = async (
+    card: Card,
+    at: { readonly x: number; readonly y: number },
+  ): Promise<CardsLabPlay> => {
+    const top = topAt(at.x, at.y);
+    const target = targets.at(at.x, at.y, top);
+    if (target === null) {
+      const refused = `no place takes a card there — ${named(top)} is on top`;
+      return { ...NOTHING_PLAYED, at, refused };
+    }
+    const said = target.answer(card, at);
+    const answer = said === null ? null : { ok: said.ok, label: said.label };
+    if (said === null || !said.ok) {
+      const refused = said?.label ?? "the place said nothing to the card";
+      return { at, target: target.kind, answer, played: null, refused };
+    }
+    const played = await target.play(card, at);
+    if (played.note !== "") sayOnLine(played.note);
+    return {
+      at,
+      target: target.kind,
+      answer,
+      played: { ok: played.ok, note: played.note },
+      refused: null,
+    };
+  };
   return {
     deal: (text) => {
       const card = textCardOf(text, {
@@ -111,28 +142,12 @@ export function cardsLab(seams: CardsLabSeams = {}): CardsLab {
       if (box === null || box.width === 0 || box.height === 0) {
         return { ...NOTHING_PLAYED, refused: `the deck shows no pane of session ${sessionId}` };
       }
-      const at = { x: box.left + box.width / 2, y: box.top + box.height / 2 };
-      const top = topAt(at.x, at.y);
-      const target = targets.at(at.x, at.y, top);
-      if (target === null) {
-        const refused = `no place takes a card there — ${named(top)} is on top`;
-        return { ...NOTHING_PLAYED, at, refused };
-      }
-      const said = target.answer(card, at);
-      const answer = said === null ? null : { ok: said.ok, label: said.label };
-      if (said === null || !said.ok) {
-        const refused = said?.label ?? "the place said nothing to the card";
-        return { at, target: target.kind, answer, played: null, refused };
-      }
-      const played = await target.play(card, at);
-      if (played.note !== "") sayOnLine(played.note);
-      return {
-        at,
-        target: target.kind,
-        answer,
-        played: { ok: played.ok, note: played.note },
-        refused: null,
-      };
+      return letGo(card, { x: box.left + box.width / 2, y: box.top + box.height / 2 });
+    },
+    playAt: async (x, y) => {
+      const card = store.newest();
+      if (card === undefined) return { ...NOTHING_PLAYED, refused: "the hand holds no card" };
+      return letGo(card, { x, y });
     },
     clear: () => {
       const { cards } = store.snapshot();

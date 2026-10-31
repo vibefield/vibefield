@@ -7,14 +7,14 @@ import type { StagedTypedAgent } from "./typed-agent";
 // person's own seeded conversation (`openSeededSession`), and the typed-agent
 // rows, after the stub stands as the agent's install:
 //
-//   · the agent STARTS: History's own Resume, pressed on the seeded session —
-//     the typed stub, continued by `agent.resume`'s native form, placed in
-//     Godview's active pane;
+//   · the agent STARTS: History's own Resume, pressed on the seeded session's
+//     row (R4) — the typed stub, continued by `agent.resume`'s native form,
+//     placed in Godview's active pane;
 //   · a second `agent.resume` of the running conversation, asked over the
 //     harness's own client, is REFUSED by fieldd (AR-4b's one-run law,
 //     `terminal-alive`) — what a Resume on a live session met before P3;
-//   · a split makes another pane the active one; back in History the line's
-//     create says JUMP TO under `jump`, and pressed, the window moves to
+//   · a split makes another pane the active one; back in History the session's
+//     row says JUMP TO under `jump`, and pressed, the window moves to
 //     Godview with the agent's session in the FOCUSED pane — MIRRORED there,
 //     its own pane still showing it (GV-D4, re-ruled 2026-10-18: "Everywhere",
 //     "Mirror it"), the deck's pane count unchanged;
@@ -26,6 +26,9 @@ import type { StagedTypedAgent } from "./typed-agent";
 //
 // *Corrected 2026-10-18:* until GV-D4's re-ruling, Jump to and the pick made
 // the agent's own pane the active one and never mounted it again.
+// *Moved 2026-10-29 (HN-7, LN-D2):* Resume and Jump to were pressed on the
+// line's create, which is New terminal since; they are the chosen session's
+// acts — its row's, ④'s head's and the palette's — with the same words.
 //
 // It leaves Godview's panes showing that ENDED session (the mirrors with it),
 // so the smoke runs it after every row that types into a shell (after 11h, the
@@ -81,15 +84,29 @@ const VIEW_NOW = `(document.querySelector(".vf-views-line")?.getAttribute("data-
 const PEEK_SCOPE = `(document.querySelector('.vf-peek-pop[role="dialog"]')?.getAttribute("data-scope") ?? "closed")`;
 const HISTORY_ROOM = `document.querySelector('[data-cover-view="history"] .vf-history .ah-frame')`;
 
-/** The line's create as the window draws it now. */
-const CREATE_NOW = `(() => {
-  const create = document.querySelector(".vf-line-create");
+/** The chosen session's row in the room. */
+const CHOSEN_ROW = `${HISTORY_ROOM}?.querySelector(".ah-session-list-item.is-selected")`;
+
+/** The chosen session's own act as its row draws it now (R4): Resume, or Jump to while it
+ * runs here — the act's label its name, its glyph the act's; none there, the row's reason. */
+const ACT_NOW = `(() => {
+  const row = ${CHOSEN_ROW};
+  const act = row?.querySelector('.ah-hostact[data-place="row"]');
   return JSON.stringify({
-    name: create?.getAttribute("aria-label") ?? null,
-    title: create?.getAttribute("title") ?? null,
-    waits: create?.getAttribute("aria-disabled") === "true",
-    glyph: create?.querySelector("[data-shown]")?.getAttribute("data-glyph") ?? null,
+    name: act?.getAttribute("aria-label") ?? null,
+    waits: act === null || act === undefined || act.disabled === true,
+    glyph: act?.querySelector("svg[data-glyph]")?.getAttribute("data-glyph") ?? null,
+    reason: row?.querySelector(".vf-history-reason")?.textContent ?? null,
   });
+})()`;
+
+/** Press it IN THE SAME evaluation that finds it, so a miss is said, never read as a press
+ * (history-project-rungs.ts's `pressWhenThere`). */
+const ACT_PRESS = `(() => {
+  const act = ${CHOSEN_ROW}?.querySelector('.ah-hostact[data-place="row"]');
+  if (!act || act.disabled) return "absent";
+  act.click();
+  return "pressed";
 })()`;
 
 /** Every note the line says from now on, in order — a note stands 2.4s, and a
@@ -110,11 +127,11 @@ const NOTES_ARM = `(() => {
 const NOTES_HEARD = `JSON.stringify(window.__vfJumpNotes ?? [])`;
 const NOTES_OFF = `(() => { window.__vfJumpNoteEar?.disconnect(); delete window.__vfJumpNoteEar; delete window.__vfJumpNotes; return "ok"; })()`;
 
-interface CreateNow {
+interface SessionActNow {
   name: string | null;
-  title: string | null;
   waits: boolean;
   glyph: string | null;
+  reason: string | null;
 }
 
 async function untilValue<T>(
@@ -168,11 +185,15 @@ async function jumpToSteps(
   const native = staged.history.nativeSessionId;
   const evaluate = async (expression: string): Promise<string> =>
     String(await win.webContents.executeJavaScript(expression));
-  const createNow = async (): Promise<CreateNow> => JSON.parse(await evaluate(CREATE_NOW));
-  /** Press the line's create and hear the note it comes to (one of `ends`). */
-  const pressCreate = async (label: string, ends: readonly string[]): Promise<string> => {
+  const actNow = async (): Promise<SessionActNow> => JSON.parse(await evaluate(ACT_NOW));
+  /** Press the chosen session's act and hear the note it comes to (one of `ends`). */
+  const pressAct = async (label: string, ends: readonly string[]): Promise<string> => {
     await evaluate(NOTES_ARM);
-    await evaluate(`(document.querySelector(".vf-line-create")?.click(), "ok")`);
+    if ((await evaluate(ACT_PRESS)) !== "pressed") {
+      throw new Error(
+        `${label}: the chosen session's row held no act to press (${await evaluate(ACT_NOW)})`,
+      );
+    }
     const heard = await untilValue(
       label,
       async () => JSON.parse(await evaluate(NOTES_HEARD)) as string[],
@@ -239,15 +260,16 @@ async function jumpToSteps(
     throw new Error("the seeded conversation already runs here before the rung started it");
   }
 
-  // 2. The agent starts: History's Resume, as a person presses it.
+  // 2. The agent starts: History's Resume, as a person presses it — on the
+  //    seeded session's row (the line's create until HN-7).
   const resumeFace = await untilValue(
-    "History's create to offer Resume for the seeded session",
-    createNow,
+    "the seeded session's row to offer Resume",
+    actNow,
     (face) => face.name === "Resume this session" && !face.waits,
     30_000,
   );
   verdict["before"] = { name: resumeFace.name, glyph: resumeFace.glyph };
-  const resumed = await pressCreate("Resume's note", [
+  const resumed = await pressAct("Resume's note", [
     "Resumed in the active pane",
     "Could not resume",
     "This session is running",
@@ -300,11 +322,11 @@ async function jumpToSteps(
     throw new Error(`the agent's pane left the deck at the split: ${JSON.stringify(split)}`);
   }
 
-  // 5. History again: the create says Jump to under `jump`.
+  // 5. History again: the session's row says Jump to under `jump`.
   await toView("history");
   const jumpFace = await untilValue(
-    "History's create to say Jump to for the running session",
-    createNow,
+    "the session's row to say Jump to for the running session",
+    actNow,
     (face) => face.name === "Jump to this session" && face.glyph === "jump" && !face.waits,
     30_000,
   );
@@ -313,7 +335,7 @@ async function jumpToSteps(
   // 6. Jump to: Godview, the agent's session in the FOCUSED pane (the split's)
   //    — mirrored there, its own pane still showing it (GV-D4, re-ruled
   //    2026-10-18: "Everywhere", "Mirror it"), the pane count unchanged.
-  const note = await pressCreate("Jump to's note", [
+  const note = await pressAct("Jump to's note", [
     "Jumped to its pane",
     "Could not jump",
     "This session has ended",
@@ -405,8 +427,8 @@ async function jumpToSteps(
   await untilValue("fieldd's fold to drop the run", floorOfRun, (found) => found === null, 30_000);
   await toView("history");
   const endedFace = await untilValue(
-    "History's create to say Resume once the run ended",
-    createNow,
+    "the session's row to say Resume once the run ended",
+    actNow,
     (face) => face.name === "Resume this session" && face.glyph === "resume",
     30_000,
   );

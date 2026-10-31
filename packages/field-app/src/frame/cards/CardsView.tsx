@@ -10,6 +10,7 @@ import {
   useRef,
   useState,
 } from "react";
+import type { ViewKeys } from "../views";
 import { CardFace } from "./CardFace";
 import { DEAL_SETTLE_MS, dealStart, settle, whenVisible } from "./card-flight";
 import {
@@ -100,6 +101,8 @@ export interface CardsViewProps {
   readonly tucked?: boolean;
   /** epoch ms, for the provenance's "2m ago" */
   readonly now: number;
+  /** how the provenance spells a paste's key: ⌘V on the Mac, Ctrl+V elsewhere (`views.ts`) */
+  readonly keys: ViewKeys;
   readonly reducedMotion: boolean;
   /** the window: where the held card's middle is, and where the foot is */
   readonly win: CardWindow;
@@ -173,7 +176,7 @@ interface Label {
 /** What the fan says above itself, and where: a lifted twin's "Already in your hand", the reached
  * card's provenance, the raised hand's keyboard card's, or the empty hand's words. PURE. */
 export function labelOf(props: CardsViewProps): Label | null {
-  const { cards, layout, raised, focus, reached, nudged, now, win } = props;
+  const { cards, layout, raised, focus, reached, nudged, now, keys, win } = props;
   const over = (index: number, rise: number, text: string): Label | null => {
     const slot = layout.slots[index];
     return slot === undefined ? null : { text, x: slot.x + CARD_W / 2, y: slot.y - rise };
@@ -182,9 +185,9 @@ export function labelOf(props: CardsViewProps): Label | null {
   if (twin >= 0) return over(twin, NUDGE_RISE + LABEL_ABOVE, OUTCOME_WORDS.already);
   const card = cards[raised ? focus : reached];
   if (card !== undefined && !raised && reached >= 0) {
-    return over(reached, CARD_LIFT + LABEL_ABOVE, provenance(card, now));
+    return over(reached, CARD_LIFT + LABEL_ABOVE, provenance(card, now, keys));
   }
-  if (card !== undefined && raised) return over(focus, LABEL_ABOVE, provenance(card, now));
+  if (card !== undefined && raised) return over(focus, LABEL_ABOVE, provenance(card, now, keys));
   if (raised && cards.length === 0) {
     const x = (layout.left + layout.right) / 2;
     return { text: HAND_WORDS.empty, x, y: win.height - CARD_PEEK - LABEL_ABOVE };
@@ -250,7 +253,7 @@ function useFlying(
 
 export function CardsView(props: CardsViewProps): ReactElement {
   const { cards, layout, lifts, reached, raised, focus, held, arriving, carried, nudged } = props;
-  const { win, reducedMotion } = props;
+  const { win, reducedMotion, now, keys } = props;
   const own = useRef<HTMLDivElement | null>(null);
   const fan = props.fanRef ?? own;
   const settleMs = reducedMotion ? FADE_SETTLE_MS : DEAL_SETTLE_MS;
@@ -345,7 +348,7 @@ export function CardsView(props: CardsViewProps): ReactElement {
               ? {
                   id: optionId(card),
                   role: "option",
-                  "aria-label": HAND_WORDS.option(cardName(card), provenance(card, props.now)),
+                  "aria-label": HAND_WORDS.option(cardName(card), provenance(card, now, keys)),
                   "aria-selected": row.index === focus,
                 }
               : {};
@@ -390,7 +393,8 @@ export function CardsView(props: CardsViewProps): ReactElement {
           held={held}
           slot={layout.slots[heldIndex]}
           win={win}
-          now={props.now}
+          now={now}
+          keys={keys}
           reducedMotion={reducedMotion}
           onPutBack={props.onPutBack}
           onRemoveHeld={props.onRemoveHeld}
@@ -407,6 +411,7 @@ interface HeldLayerProps {
   readonly slot: CardSlot | undefined;
   readonly win: CardWindow;
   readonly now: number;
+  readonly keys: ViewKeys;
   readonly reducedMotion: boolean;
   readonly onPutBack: (() => void) | undefined;
   readonly onRemoveHeld: (() => void) | undefined;
@@ -427,6 +432,7 @@ function HeldLayer({
   slot,
   win,
   now,
+  keys,
   reducedMotion,
   onPutBack,
   onRemoveHeld,
@@ -479,7 +485,7 @@ function HeldLayer({
         <CardFace card={held.card} held />
       </div>
       <div className="vf-cards-bar" {...(up ? { "data-on": "" } : {})} inert={!up}>
-        <span className="vf-cards-bar-from">{provenance(held.card, now)}</span>
+        <span className="vf-cards-bar-from">{provenance(held.card, now, keys)}</span>
         <span className="vf-cards-bar-rule" aria-hidden="true" />
         <button
           type="button"

@@ -1,6 +1,7 @@
 import { getRendererLogger } from "../../logging";
 import { markFade } from "./field-mark";
-import type { SplashRevealOptions } from "./vibefield-splash.js";
+import type { GlassState } from "./glass-look";
+import type { Splash, SplashRevealOptions } from "./vibefield-splash.js";
 
 // The field's door (DESIGN.md §2.1, §8 "The boot splash"; track FG): the website's loading window
 // (vibefield-dotdev lib/loading-window.js), ported. The field runs in a worker when it can
@@ -10,6 +11,8 @@ import type { SplashRevealOptions } from "./vibefield-splash.js";
 // (FieldLayer). One change from the website's door: the PAGE's navigator.gpu is read first, since a
 // smoke's `--smoke-no-webgpu` takes it from each document and a worker would still find its own.
 // `?field=still` and `?field=main` force the still and the main thread (the website's `?splash=`).
+// Since FG-3b the door carries the Setup Assistant's glass to the field (FG-D24, glass-pass.ts): what
+// to draw goes in, and whether the field draws it comes out, so the browser can stand its own down.
 
 /** The website's desktop budget (lib/loading-window.js BUDGET.desktop): the device pixels the
  * field's backing store stops at, so it leaves the GPU room for the desk composing behind it. */
@@ -44,6 +47,8 @@ export interface FieldDoor {
   mark(to: number, ms: number): void;
   /** The website's reveal, opening the field from its centre: true once the window is open. */
   reveal(options?: FieldRevealOptions): Promise<boolean>;
+  /** The Setup Assistant's glass, drawn by the field in its own frame (FG-3b); null draws none. */
+  glass(glass: GlassState | null): void;
   destroy(): void;
 }
 
@@ -62,6 +67,7 @@ export type FieldToWorker =
   | { type: "visibility"; hidden: boolean }
   | { type: "mark"; to: number; ms: number }
   | { type: "reveal"; id: number; options: FieldRevealOptions }
+  | { type: "glass"; glass: GlassState | null }
   | { type: "destroy" };
 
 export type FieldFromWorker =
@@ -69,9 +75,12 @@ export type FieldFromWorker =
   | { type: "unavailable"; reason: string; message: string }
   | { type: "error"; message: string }
   | { type: "revealed"; id: number; opened: boolean }
+  | { type: "glass-drawn"; drawn: boolean }
+  | { type: "glass-failed"; message: string }
   | { type: "destroyed" };
 
 type SplashModule = typeof import("./vibefield-splash.js");
+type GlassModule = typeof import("./glass-pass");
 
 /** What the door reaches for, each the page's own unless a test hands it one. */
 export interface FieldDoorEnv {
@@ -79,6 +88,7 @@ export interface FieldDoorEnv {
   readonly gpu?: GPU | undefined;
   readonly worker?: () => Worker;
   readonly splash?: () => Promise<SplashModule>;
+  readonly glass?: () => Promise<GlassModule>;
 }
 
 interface Settings {
@@ -102,11 +112,12 @@ export function fieldPlan(env: Pick<FieldDoorEnv, "search" | "gpu"> = {}): Field
 }
 
 /** Open the field in `container`, its canvas placed before `before` (the still mark, which stays
- * over the canvas while it fades in). Never rejects: a field that can't start is the still. */
+ * over the canvas while it fades in). Never rejects: a field that can't start is the still.
+ * `onGlass` hears whether the field draws the Setup Assistant's glass (FG-3b). */
 export async function openFieldDoor(
   container: HTMLElement,
   before: Element | null,
-  { reducedMotion }: { reducedMotion: boolean },
+  { reducedMotion, onGlass }: { reducedMotion: boolean; onGlass?: (drawn: boolean) => void },
   env: FieldDoorEnv = {},
 ): Promise<FieldDoor> {
   const settings: Settings = { reducedMotion, budget: FIELD_BUDGET, powerPreference: POWER };
@@ -127,7 +138,7 @@ export async function openFieldDoor(
   ) {
     const canvas = place();
     try {
-      return await inWorker(canvas, settings, env);
+      return await inWorker(canvas, settings, env, onGlass);
     } catch (error) {
       canvas.remove();
       log().info("renderer.boot.field_main_thread", "The field runs on the main thread", {
@@ -136,10 +147,16 @@ export async function openFieldDoor(
       });
     }
   }
-  return onMainThread(place(), settings, plan.gpu, env);
+  return onMainThread(place(), settings, plan.gpu, env, onGlass);
 }
 
 const log = () => getRendererLogger().child({ component: "boot.field" });
+
+/** The glass's pass couldn't be made, so the browser keeps drawing the glass (FG-3b). */
+const glassFailed = (message: string): void =>
+  log().warn("renderer.boot.field_glass", "The field can't draw the Setup Assistant's glass", {
+    message,
+  });
 
 class FieldUnavailable extends Error {
   constructor(
@@ -151,13 +168,14 @@ class FieldUnavailable extends Error {
 }
 
 function still(reason: string): FieldDoor {
-  return { mode: "still", reason, mark() {}, reveal: async () => false, destroy() {} };
+  return { mode: "still", reason, mark() {}, reveal: async () => false, glass() {}, destroy() {} };
 }
 
 async function inWorker(
   canvas: HTMLCanvasElement,
   settings: Settings,
   env: FieldDoorEnv,
+  onGlass?: (drawn: boolean) => void,
 ): Promise<FieldDoor> {
   const worker =
     env.worker?.() ?? new Worker(new URL("./field-worker.ts", import.meta.url), { type: "module" });
@@ -178,7 +196,8 @@ async function inWorker(
       else if (data.type === "revealed") {
         reveals.get(data.id)?.(data.opened);
         reveals.delete(data.id);
-      }
+      } else if (data.type === "glass-drawn") onGlass?.(data.drawn);
+      else if (data.type === "glass-failed") glassFailed(data.message);
     };
   });
   const offscreen = canvas.transferControlToOffscreen();
@@ -208,6 +227,9 @@ async function inWorker(
         post({ type: "reveal", id, options });
       });
     },
+    glass(state) {
+      if (!gone) post({ type: "glass", glass: state });
+    },
     destroy() {
       if (gone) return;
       gone = true;
@@ -228,22 +250,37 @@ async function onMainThread(
   settings: Settings,
   gpu: GPU,
   env: FieldDoorEnv,
+  onGlass?: (drawn: boolean) => void,
 ): Promise<FieldDoor> {
   let device: GPUDevice | null = null;
   let module: SplashModule | null = null;
   try {
-    module = await (env.splash?.() ?? import("./vibefield-splash.js"));
+    const [splashModule, { createGlassPass }] = await Promise.all([
+      env.splash?.() ?? import("./vibefield-splash.js"),
+      env.glass?.() ?? import("./glass-pass"),
+    ]);
+    module = splashModule;
     const { createSplash, SplashUnavailable } = module;
     const adapter = await gpu.requestAdapter({ powerPreference: settings.powerPreference });
     if (adapter === null) throw new SplashUnavailable("no-adapter", "no WebGPU adapter");
     device = await adapter.requestDevice();
+    // The glass's pass is the splash's post, so it comes first. It asks for a frame only once it
+    // has a look, which comes through the door, so after the splash is made.
+    let drawing: Splash | null = null;
+    const glass = createGlassPass(device, gpu, {
+      drawn: (drawn) => onGlass?.(drawn),
+      frame: () => drawing?.redraw(),
+      failed: glassFailed,
+    });
     const splash = await createSplash(canvas, {
       fps: 60,
       reducedMotion: settings.reducedMotion,
       transparent: true,
       budget: settings.budget,
       device,
+      post: glass,
     });
+    drawing = splash;
     splash.start();
     const mark = markFade(splash);
     const owned = device;
@@ -258,10 +295,17 @@ async function onMainThread(
         mark.cancel();
         return splash.reveal(options);
       },
+      glass(state) {
+        if (gone) return;
+        glass.setLook(state?.look ?? null);
+        glass.setPose(state?.pose ?? null);
+        splash.redraw();
+      },
       destroy() {
         if (gone) return;
         gone = true;
         mark.cancel();
+        glass.destroy();
         splash.destroy();
         owned.destroy();
         canvas.remove();

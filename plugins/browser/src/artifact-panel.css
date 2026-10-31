@@ -323,6 +323,13 @@
   color: rgb(245 245 247 / 50%);
 }
 
+/* The "Publish" step's two choices, one under the other as the list's rows; the tile form lays
+   them side by side as cards (below). */
+.vf-artifact-choices {
+  display: grid;
+  gap: 12px;
+}
+
 .vf-artifact-choice,
 .vf-artifact-folder-picked {
   display: grid;
@@ -507,26 +514,58 @@
   align-self: stretch;
   margin-top: 3px;
 }
-.vf-artifact-close {
-  display: block;
-  margin: 2rem auto 0;
-  border: 0;
-  background: transparent;
-  color: rgb(128 128 128 / 65%);
-  font-size: 11px;
-}
-.vf-artifact-close:hover {
-  color: inherit;
+
+/* Publish… — the Add act as a tile, in words (FR-3: every create but Canvas's
+   carries its noun), wearing VibeField's New field face: the fill inside a
+   dashed strong hairline, 12/500 in secondary ink at its centre (VibeField
+   DESIGN.md §8 "Artifacts — the Artifacts shelf's contents"). It stands only
+   where the catalog is tiles; the list keeps the header's round plus. */
+.vf-artifact-publish {
+  display: none;
 }
 
-/* One Frame FR-4 — THE NARROW FORM. The Hub's door is the right edge's notch,
-   and its drawer is a 152 column (VibeField DESIGN.md §8, edge trays): the
-   drawer's column is a container, and under 200 wide the panel reads as that
-   column — each row a 128-wide card, the preview full width on top, the title,
-   the fact line and the status under it, the overflow on a chip over the
-   preview; the Add step's choices and fields stacked. The wide form above stays
-   for any host that is wider. */
-@container (max-width: 200px) {
+.vf-artifact-publish > button {
+  display: grid;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  place-items: center;
+  padding: 0;
+  border: 1px dashed var(--vf-hairline-strong);
+  border-radius: 10px;
+  color: var(--vf-text-secondary);
+  background: var(--vf-fill);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 180ms ease;
+}
+
+.vf-artifact-publish > button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.vf-artifact-publish > button:hover:not(:disabled) {
+  background: var(--vf-fill-hover);
+}
+
+/* HN-8 — THE TILE FORM (PL-D3, "Tiles, like your fields"; VibeField DESIGN.md
+   §8 "Artifacts — the Artifacts shelf's contents"). The Hub's host is the
+   pill's sheet, on its Artifacts shelf: 504 wide inside the sheet's 544, a
+   container. There the catalog is laid out as the fields' tiles are — three
+   across, 16 between rows and 14 between columns — each tile the preview
+   (16:10, corners 10, the hairline ring, the strong one under the pointer as
+   the row's border was), the name (12/500 in primary ink), where it runs (the
+   fact line) and its state (the status dot and word), the overflow on a chip
+   over the preview — and the tiles move as the fields' do. Publish… is the
+   first tile and stands for the round plus; its step, "Publish", takes the
+   shelf in place, its two choices two cards side by side. The sheet is the
+   padding, so the panel takes none, and its header keeps the Hub's words at
+   the sheet's size. From 320 wide, so a narrow window's shelf is tiles too;
+   a host that is no container keeps the list above. The 152 column's narrow
+   form retired with the edges' drawer (HN-8). */
+@container (min-width: 320px) {
   .vf-artifact-panel {
     min-height: 0;
     padding: 0;
@@ -545,47 +584,99 @@
   }
 
   .vf-artifact-add {
-    width: 28px;
-    height: 28px;
-  }
-
-  .vf-artifact-add svg {
-    width: 14px;
+    display: none;
   }
 
   .vf-artifact-list {
-    gap: 10px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px 14px;
+  }
+
+  .vf-artifact-publish {
+    display: block;
+    transition: transform 200ms ease;
   }
 
   .vf-artifact-row {
     grid-template-columns: minmax(0, 1fr);
     gap: 0;
-    overflow: hidden;
     padding: 0;
-    border-radius: 14px;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    transition: transform 200ms ease;
+  }
+
+  .vf-artifact-row:hover {
+    background: none;
+  }
+
+  /* The tiles move as the fields' do (§7; §8 "Artifacts", HN-8 ruling 12): 1.03 under the
+     pointer, 0.95 pressed, over 200ms `ease`. A scaled tile is a stacking context of its own,
+     which a later neighbour would paint over, so the tile under the pointer stands above its
+     neighbours, and the one holding the focus (its menu open) above that: its menu stays on top
+     while the pointer crosses the tiles under it. */
+  .vf-artifact-row:hover,
+  .vf-artifact-publish:hover {
+    z-index: 1;
+    transform: scale(1.03);
+  }
+
+  .vf-artifact-row:focus-within,
+  .vf-artifact-publish:focus-within {
+    z-index: 2;
+  }
+
+  /* Pressed is the tile's own face; its chip, its menu and its rename press as themselves. */
+  .vf-artifact-row:has(> .vf-artifact-row__open:not(:disabled):active),
+  .vf-artifact-publish:active {
+    transform: scale(0.95);
   }
 
   .vf-artifact-row__open {
     grid-template-columns: minmax(0, 1fr);
-    gap: 0;
+    gap: 6px;
+  }
+
+  /* the tile presses (above), so its face never presses a second time inside it */
+  .vf-artifact-row__open:not(:disabled):active {
+    transform: none;
   }
 
   .vf-artifact-preview {
     width: 100%;
-    border-radius: 0;
+    box-shadow: 0 0 0 1px var(--vf-hairline);
+    transition: box-shadow 180ms ease;
+  }
+
+  .vf-artifact-row:hover .vf-artifact-preview {
+    box-shadow: 0 0 0 1px var(--vf-hairline-strong);
   }
 
   .vf-artifact-row__facts {
-    padding: 8px 10px 10px;
+    padding: 0 2px;
   }
 
+  .vf-artifact-row__facts strong {
+    color: var(--vf-text-primary);
+    font-weight: 500;
+    line-height: 1.2;
+  }
+
+  /* The overflow on a chip over the preview, as the narrow form put it, its menu hanging under it
+     from the tile's right — from the tile's left in the first column, Publish… being the first
+     tile — so it never leaves the shelf (§8 "Artifacts", HN-8 ruling 13). The chip and its menu
+     are both placed on the tile, so the menu can hang from either of its edges; the details
+     between them keeps its place in the tile's flow, with no height of its own. */
   .vf-artifact-menu {
-    position: absolute;
-    top: 6px;
-    right: 6px;
+    position: static;
   }
 
   .vf-artifact-menu summary {
+    position: absolute;
+    top: 6px;
+    right: 6px;
     width: 26px;
     height: 26px;
     background: var(--vf-chrome-solid);
@@ -593,41 +684,77 @@
   }
 
   .vf-artifact-menu > div {
-    width: 120px;
+    top: 40px;
+    right: 6px;
+  }
+
+  .vf-artifact-row:nth-child(3n + 1) .vf-artifact-menu > div {
+    right: auto;
+    left: 6px;
   }
 
   .vf-artifact-rename {
     flex-wrap: wrap;
-    padding: 6px 8px 8px;
+    padding: 6px 0 0;
+  }
+
+  .vf-artifact-rename input {
+    flex-basis: 100%;
   }
 
   .vf-artifact-quiet {
     min-height: 0;
-    padding: 20px 0;
-  }
-
-  .vf-artifact-placeholder {
-    width: 100%;
   }
 
   .vf-artifact-flow {
     padding: 0;
   }
 
-  .vf-artifact-choice,
-  .vf-artifact-folder-picked {
-    grid-template-columns: 28px minmax(0, 1fr);
-    gap: 8px;
-    min-height: 0;
-    padding: 10px;
+  /* The "Publish" step's two choices, Proxy and Folder, are two cards side by side (the ruled
+     page's drawing; §8 "Artifacts", HN-8 ruling 11): each its glyph over its name and its line,
+     8 apart, on the fill, with no chevron, the card itself the way on. */
+  .vf-artifact-choices {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .vf-artifact-choice .vf-artifact-chevron {
+  .vf-artifact-choices > .vf-artifact-choice {
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+    gap: 8px;
+    min-height: 0;
+    padding: 16px;
+    border: 0;
+    border-radius: 14px;
+    background: var(--vf-fill);
+  }
+
+  .vf-artifact-choices > .vf-artifact-choice:hover:not(:disabled) {
+    background: var(--vf-fill-hover);
+  }
+
+  .vf-artifact-choices > .vf-artifact-choice > span {
+    gap: 8px;
+  }
+
+  .vf-artifact-choices .vf-artifact-choice-icon {
+    justify-self: start;
+    color: var(--vf-text-secondary);
+  }
+
+  .vf-artifact-choices .vf-artifact-chevron {
     display: none;
   }
 
-  .vf-artifact-close {
-    margin-top: 12px;
+  .vf-artifact-choices > .vf-artifact-choice strong {
+    font-size: 14px;
+    line-height: 1.2;
+  }
+
+  .vf-artifact-choices > .vf-artifact-choice small {
+    margin-top: 0;
+    color: var(--vf-text-secondary);
+    font-size: 12px;
+    line-height: 1.4;
   }
 }
 
@@ -637,5 +764,13 @@
   .vf-artifact-panel *::after {
     scroll-behavior: auto;
     transition-duration: 90ms;
+  }
+
+  /* M6: the tiles hold still — no rise under the pointer, no press (§8 "Artifacts"). */
+  .vf-artifact-row:hover,
+  .vf-artifact-row:has(> .vf-artifact-row__open:not(:disabled):active),
+  .vf-artifact-publish:hover,
+  .vf-artifact-publish:active {
+    transform: none;
   }
 }

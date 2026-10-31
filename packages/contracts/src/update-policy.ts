@@ -120,6 +120,8 @@ const ReleasePlaneDigest = z.object({
 });
 export const ReleaseManifest = z
   .object({
+    /** Additive at 1 only: a bump, or a retyped field, makes every installed app refuse the whole chain
+     * (`feed-unverified`). */
     schemaVersion: z.literal(1),
     /** the app version (D6) */
     version: SemverString,
@@ -136,6 +138,11 @@ export const ReleaseManifest = z
     touched: z.array(z.enum(UPDATE_PLANES_LIST)),
     /** the tag the comparison was made against; null on a first release */
     previous: z.string().min(1).max(128).nullable(),
+    /** AU-6 — the release's notes, signed with the manifest. Declared LOOSELY here: an installed client verifies the
+     * chain by this schema, so a notes block it cannot read must never refuse its updates. verify-chain parses it
+     * separately (`ReleaseNotes.safeParse`) and drops it, logged; `release-verify` parses it strictly at publish.
+     * Absent on every manifest before AU-6. */
+    notes: z.unknown().optional(),
   })
   .passthrough()
   .superRefine((manifest, ctx) => {
@@ -289,6 +296,88 @@ export const UPDATES_AUDIT_ACTIONS = {
   DOWNLOAD: "app.update.download",
 } as const;
 
+// ── AU-6 (AU-D10 A; EDP §11.1 as amended 2026-10-29: "no remote markup; signed plain text only") ──
+// A release's notes ride INSIDE `release-manifest.json`, under its one `release` signature. A line is plain text on one
+// line, rendered as a text node: never markup, never linkified. The one link (the comparison) is composed by MAIN from
+// its frozen origin and two verified tags, never read from the manifest (EDP-38).
+
+/** LC-19 — a written release says at most 8 lines, a log at most 4 (one per track); a line at most 200 characters. */
+export const RELEASE_NOTES_LIMITS = {
+  WRITTEN_LINES: 8,
+  LOG_LINES: 4,
+  LINE_CHARS: 200,
+  TRACK_CHARS: 24,
+} as const;
+
+/** One line of plain text: no control or format character (bidi overrides, zero-width) and no line separator. */
+export const ReleaseNoteText = z
+  .string()
+  .min(1)
+  .max(RELEASE_NOTES_LIMITS.LINE_CHARS)
+  .regex(/^[^\p{Cc}\p{Cf}\p{Zl}\p{Zp}]+$/u, "one line of plain text");
+
+/** The release the notes count from: the manifest's `previous`, with its version (the words name it). */
+const ReleaseNotesSince = z
+  .object({ version: SemverString, tag: z.string().min(1).max(128) })
+  .passthrough();
+
+export const ReleaseNotes = z
+  .discriminatedUnion("kind", [
+    // a stable (it refuses to publish without `apps/desktop/packaging/notes/<X.Y.Z>.txt`), or a beta that has one
+    z
+      .object({
+        kind: z.literal("written"),
+        since: ReleaseNotesSince.nullable(),
+        lines: z.array(ReleaseNoteText).min(1).max(RELEASE_NOTES_LIMITS.WRITTEN_LINES),
+      })
+      .passthrough(),
+    // a nightly, or a beta with no file (LC-19): read from the log since the channel's previous release
+    z
+      .object({
+        kind: z.literal("log"),
+        since: ReleaseNotesSince,
+        /** the non-merge commits in `since..commit` */
+        commits: z.number().int().nonnegative(),
+        /** those outside the docs (a `docs:` subject is the docs) */
+        product: z.number().int().nonnegative(),
+        /** the newest subject per track prefix, newest first, cut at its first " — "; a `Release-note:` trailer
+         * replaces its commit's subject */
+        lines: z
+          .array(
+            z
+              .object({
+                track: z.string().min(1).max(RELEASE_NOTES_LIMITS.TRACK_CHARS).optional(),
+                text: ReleaseNoteText,
+              })
+              .passthrough(),
+          )
+          .max(RELEASE_NOTES_LIMITS.LOG_LINES),
+      })
+      .passthrough(),
+  ])
+  // zod 3 refuses a ZodEffects member inside a discriminatedUnion, so the cross-field rule sits on the union
+  .superRefine((notes, ctx) => {
+    if (notes.kind === "log" && notes.product > notes.commits)
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["product"],
+        message: "product counts within commits",
+      });
+  });
+export type ReleaseNotes = z.infer<typeof ReleaseNotes>;
+
+/** The notes as the window reads them: the verified notes of `version`, and the comparison main composed. */
+export const ReleaseNotesView = z
+  .object({
+    /** the release the notes describe */
+    version: z.string().min(1).max(64),
+    body: ReleaseNotes,
+    /** composed by MAIN from its frozen update origin and two verified tags; never read from the manifest */
+    compareUrl: z.string().url().max(512).optional(),
+  })
+  .passthrough();
+export type ReleaseNotesView = z.infer<typeof ReleaseNotesView>;
+
 // ── AU-1 (AU-D11 A) — an apply, as the window says it afterwards ──
 
 /** How an apply began: a person's Restart to Update (the tray, Settings, the Me menu), the safe window's silent apply
@@ -312,7 +401,8 @@ const RememberedVersion = z.number().int().min(1).nullable();
  *  - `relaunched`: Squirrel refused the payload (nothing armed) — the app relaunched on the current bytes;
  *  - `exited`: Squirrel timed out, or the install never took over — the app quit WITHOUT relaunch, because Squirrel may
  *    have armed the install (a downloaded update is applied at the next start: `electron.d.ts:2103-2104`).
- * AU-1 adds `from`, `trigger` and `landed`, all tolerant (`.catch`), never a new `branch` or `reason` value.
+ * AU-1 adds `from`, `trigger` and `landed`, all tolerant (`.catch`), never a new `branch` or `reason` value; AU-6 adds
+ * `notes`, tolerant the same way.
  * AU-5 (install on quit, `trigger: "quit"`): nothing relaunches on any branch — `installing`, or `exited` with Squirrel's
  * refusal or timeout, or with no reason when the quit's own policy read held the install. */
 export const UpdateLastApply = z
@@ -340,6 +430,9 @@ export const UpdateLastApply = z
       .passthrough()
       .optional()
       .catch(undefined),
+    /** AU-6 — the verified notes of `version`, copied from `staged` when the record is written, so "What's new"
+     * reads offline after the relaunch */
+    notes: ReleaseNotes.optional().catch(undefined),
   })
   .passthrough();
 export type UpdateLastApply = z.infer<typeof UpdateLastApply>;
@@ -377,7 +470,13 @@ export const UpdateClientStateFile = z
      * re-stages after a relaunch (so "Ready since Oct 19" is true), replaced when another version stages, cleared when
      * its payload is collected (declined, a channel change, a lever, a check that finds nothing) or it installs. */
     staged: z
-      .object({ version: z.string().min(1).max(64), at: z.number().int().nonnegative() })
+      .object({
+        version: z.string().min(1).max(64),
+        at: z.number().int().nonnegative(),
+        /** AU-6 — the staged version's verified notes, kept so a later check that finds a newer head never swaps
+         * them */
+        notes: ReleaseNotes.optional().catch(undefined),
+      })
       .passthrough()
       .nullable()
       .default(null)
@@ -481,6 +580,8 @@ export const UpdateViewLastApply = z
     /** true only in the launch that judged it, and only when that launch runs the version the apply left (or landed
      * on): a failed install is said once, by the launch that found it, and never by a third version */
     thisLaunch: z.boolean().optional(),
+    /** AU-6 — installed only: what's new in `version` */
+    notes: ReleaseNotesView.optional(),
   })
   .passthrough();
 export type UpdateViewLastApply = z.infer<typeof UpdateViewLastApply>;
@@ -538,6 +639,11 @@ export const UpdateView = z
     lastApply: UpdateViewLastApply.optional(),
     /** AU-7 (AU-G8) — macOS only: where the app runs; absent elsewhere */
     location: UpdateAppLocation.optional(),
+    /** AU-6 (AU-D10 A; AU-G10) — available, downloading or staged: the verified notes of `version`; absent when its
+     * manifest carried none */
+    notes: ReleaseNotesView.optional(),
+    /** AU-6 (LC-18) — when this build was made (the staged identity's `builtAt`), epoch ms; absent on an older stage */
+    builtAt: z.number().int().nonnegative().optional(),
   })
   .passthrough();
 export type UpdateView = z.infer<typeof UpdateView>;
@@ -767,4 +873,15 @@ export function releaseChannelOf(version: string): UpdateChannel | null {
   if (NIGHTLY_VERSION_PATTERN.test(version)) return "nightly";
   if (BETA_VERSION_PATTERN.test(version)) return "beta";
   return /^\d+\.\d+\.\d+$/.test(version) ? "stable" : null;
+}
+
+/** AU-6 — the tag a release version was published under (the inverse of `release-plan.mjs`'s naming), or null. Main
+ * composes the notes' comparison from two of these (X18); it matches `NIGHTLY_TAG_PATTERN`, `BETA_TAG_PATTERN` or
+ * `STABLE_TAG_PATTERN` whenever it is not null. */
+export function releaseTagOf(version: string): string | null {
+  const nightly = NIGHTLY_VERSION_PATTERN.exec(version);
+  if (nightly !== null) return `nightly-${nightly[1]}${nightly[2]}${nightly[3]}`;
+  return BETA_VERSION_PATTERN.test(version) || /^\d+\.\d+\.\d+$/.test(version)
+    ? `v${version}`
+    : null;
 }

@@ -12,6 +12,10 @@ import type {
 import type { LogLevelNameV1, LogRecordV1, LogStreamV1 } from "@vibefield/contracts/logging";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { CopyButton } from "../frame/cards/CopyButton";
+import type { DealFrom } from "../frame/cards/cards-store";
+import { COPY_PLACES } from "../frame/cards/cards-words";
+import { copyNamedWords, sheetOrigin } from "../frame/cards/copy-door";
 import { getHost } from "../host";
 
 const ALL_SOURCES: readonly LogStreamV1[] = [
@@ -144,6 +148,20 @@ function sourceOf(record: LogRecordV1): LogStreamV1 {
   if (record.service === "utility") return LOG_STREAMS.SYSTEM_UTILITY;
   if (record.service === "fieldd") return LOG_STREAMS.SYSTEM_FIELDD;
   return LOG_STREAMS.SYSTEM_FIELD_NATIVE;
+}
+
+/** HN-5 — a record copied: its JSON on the system clipboard, then a text card dealt from the
+ * button pressed (DESIGN.md §8 "The hand": Settings' copies deal text cards), named by the
+ * record's own name — its event, over its message — never by the JSON's first "{". True once the
+ * clipboard took it, for the button to say so. */
+async function copyRecord(record: LogRecordV1, from: DealFrom | null): Promise<boolean> {
+  const copied = await copyNamedWords(
+    JSON.stringify(record, null, 2),
+    { title: record.event, body: record.msg },
+    sheetOrigin(COPY_PLACES.settings),
+    from,
+  );
+  return copied.ok;
 }
 
 function timeRangeMs(value: string): number | null {
@@ -793,17 +811,12 @@ export function DiagnosticsSection(): ReactElement {
                       <span className="text-neutral-200">{record.event}</span>
                       <span className="ml-2 text-neutral-400">{record.msg}</span>
                     </span>
-                    <button
-                      type="button"
+                    <CopyButton
+                      label="copy"
+                      copy={(from) => copyRecord(record, from)}
                       className="flex-none text-neutral-500 hover:text-neutral-200"
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        void host?.copyText(JSON.stringify(record, null, 2));
-                      }}
-                    >
-                      copy
-                    </button>
+                      inSummary
+                    />
                   </summary>
                   <pre className="mt-1 overflow-x-auto whitespace-pre-wrap break-all rounded bg-black/40 p-2 text-[10px] text-neutral-400">
                     {JSON.stringify(record, null, 2)}

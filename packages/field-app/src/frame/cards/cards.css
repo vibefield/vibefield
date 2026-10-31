@@ -157,6 +157,8 @@
   display: -webkit-box;
   margin: 0;
   overflow: hidden;
+  /* a path or a URL copied as words breaks anywhere, as the file's path does, never cut at the edge */
+  overflow-wrap: anywhere;
   color: var(--card-ink-2);
   font-size: 0.96em;
   text-wrap: pretty;
@@ -627,6 +629,21 @@
 
 .vf-cards[data-motion="reduced"] .vf-cards-lift {
   transition: opacity 120ms ease-out;
+}
+
+/* the hand's own step down out of the pegboard's way, and back, is at once too, and the gloss stays
+   where a card's turn leaves it: equal in weight to the tuck's rule above, this one wins by coming
+   after it */
+.vf-cards[data-motion="reduced"] {
+  transition: none;
+}
+
+.vf-cards[data-motion="reduced"] .vf-card-gloss {
+  transition: none;
+}
+
+.vf-cards-held[data-motion="reduced"] .vf-card-gloss {
+  transition: none;
 }
 
 /* ── A CARD PICKED UP (HN-D5) ──────────────────────────────────────────────────────────────────

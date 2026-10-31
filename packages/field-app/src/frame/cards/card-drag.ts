@@ -7,6 +7,7 @@ import { getActiveView, requestView } from "../view-state";
 import { type CardAnswer, type CardPlayed, type CardTarget, cardTargets } from "./card-targets";
 import type { Card } from "./cards-model";
 import { TARGET_WORDS } from "./cards-words";
+import { isDropField } from "./caret";
 
 /**
  * THE ONE DRAG MACHINE (track HN, HN-4; DESIGN.md §8 "The hand", where cards go). A card
@@ -18,6 +19,11 @@ import { TARGET_WORDS } from "./cards-words";
  * go on a place that took it, and a COPY plays in: the card shrinks into the point, the outcome
  * is said once on the line, and the card springs back to its slot (HN-D4, HN-L2: never spent).
  * Let go anywhere else, or press Esc, or let the window lose focus, and it flies straight home.
+ * A card from another app (B2, HN-6) waits — its kind alone — until the drop says what it holds:
+ * filled then, it plays straight into a pane or the prompt, and anywhere else it is the hand's —
+ * but over a field no place answers for it says nothing and ducks, since that field takes the drop
+ * (HN-L3) and shows its own caret; and a place that refuses what it held once it played leaves it
+ * the hand's too (HN-L5: never lost).
  * A hand drag holds its pointer for the carry — captured on the hand, the cursor grabbing (§7) —
  * so nothing under the card hears a move or an up it never saw pressed. Otherwise there is no DOM
  * here: the layer draws the card, and the clock is the tests' to fake.
@@ -65,7 +71,8 @@ export interface CarriedCard {
   readonly drag: number;
   /** Degrees the card leans with the pointer's speed (±10, the page's); 0 once it is let go. */
   readonly tilt: number;
-  /** Over the line it ducks small, so the cell it is held over shows (HN-D6). */
+  /** Over the line it ducks small, so the cell it is held over shows (HN-D6) — and, from another
+   * app, over a field that takes the drop, so the field's own caret shows (LC-25). */
   readonly ducked: boolean;
   /** Where the select ring is drawn: the place that takes it (a pane, the desk's stage) — kept
    * through the play, while it fades (§6). */
@@ -75,6 +82,14 @@ export interface CarriedCard {
   /** Once it turns home: its slot as `home()` answered, or null — it fades where it is. */
   readonly home: CardBox | null;
 }
+
+/** What became of a card let go (`endCardDrag`): a place took it and a copy `played`, its outcome
+ * said; the place took it and then `refused` what it was handed, its refusal said (a card from
+ * another app is then the hand's, as below); it went `home`, nothing played; or — a card from
+ * another app let go where nothing takes it straight — it is for the `hand`: its carry is over,
+ * and its source deals it from where it was let go (DESIGN.md §8 "The hand", brought in). `none`:
+ * nothing was being carried. */
+export type CardLetGo = "played" | "refused" | "home" | "hand" | "none";
 
 /** HN-D6 — how long a card is held over a view's cell before that view opens under it. */
 export const SPRING_LOAD_MS = 520;
@@ -118,6 +133,8 @@ interface Spring {
 interface LiveDrag {
   readonly start: CardDragStart;
   readonly drag: number;
+  /** the card carried: the start's, or — from another app — the one its drop filled (B2) */
+  card: Card;
   phase: CarriedCard["phase"];
   x: number;
   y: number;
@@ -167,7 +184,7 @@ function snapshot(drag: LiveDrag): CarriedCard {
   const carrying = drag.phase === "carry";
   const spring = carrying && drag.spring !== null && !drag.spring.done ? drag.spring : null;
   return {
-    card: drag.start.card,
+    card: drag.card,
     source: drag.start.source,
     x: drag.x,
     y: drag.y,
@@ -200,6 +217,13 @@ function elementsAt(x: number, y: number): readonly Element[] | null {
   }
   const stack = document.elementsFromPoint(x, y);
   return stack.filter((element) => element.closest(`.${CARRIED_LAYER_CLASS}`) === null);
+}
+
+/** The element on top at a point, past the carried card — what the places and the cells answer
+ * by; null for nothing, undefined in a DOM with no layout. */
+function topAt(x: number, y: number): Element | null | undefined {
+  const stack = elementsAt(x, y);
+  return stack === null ? undefined : (stack[0] ?? null);
 }
 
 /** Over the line (its box read from the DOM, never a constant): the card ducks small there. */
@@ -265,11 +289,26 @@ function answerOf(
   }
 }
 
+/** The place a card from this source plays into at a point, and what it says: the topmost place
+ * there that answers it — except that from another app only a live input takes a card straight
+ * (a pane, the prompt); anywhere else, the desk included, it settles into the hand (DESIGN.md §8
+ * "The hand", from another app). Null for none. The hit test and the drop's field ask this one. */
+function placeFor(
+  source: CardDragStart["source"],
+  card: Card,
+  at: { readonly x: number; readonly y: number },
+  top: Element | null | undefined,
+): { readonly target: CardTarget; readonly said: CardAnswer } | null {
+  const target = cardTargets.at(at.x, at.y, top);
+  if (target === null || (source === "outside" && target.kind === "desk")) return null;
+  const said = answerOf(target, card, at);
+  return said === null ? null : { target, said };
+}
+
 /** What is under the pointer now: the line's cell, or the place on top and what it says. */
 function hitTest(drag: LiveDrag): void {
   const { x, y } = drag;
-  const stack = elementsAt(x, y);
-  const top = stack === null ? undefined : (stack[0] ?? null);
+  const top = topAt(x, y);
   drag.ducked = overLine(x, y);
   const cell = viewCellAt(top ?? null);
   springAt(drag, cell);
@@ -283,15 +322,9 @@ function hitTest(drag: LiveDrag): void {
         : { kind: "cell", ok: true, label: TARGET_WORDS.opening(spring.view) };
     return;
   }
-  const target = cardTargets.at(x, y, top);
-  const said = target === null ? null : answerOf(target, drag.start.card, { x, y });
-  // from another app only a live input takes a card straight (a pane, the prompt); anywhere
-  // else, the desk included, it settles into the hand (DESIGN.md §8 "The hand", from another app)
-  if (
-    target !== null &&
-    said !== null &&
-    !(drag.start.source === "outside" && target.kind === "desk")
-  ) {
+  const place = placeFor(drag.start.source, drag.card, { x, y }, top);
+  if (place !== null) {
+    const { target, said } = place;
     drag.target = target;
     drag.answer = { kind: target.kind, ok: said.ok, label: said.label };
     drag.ring = said.ok ? boxOf(said.ring ?? target.rect()) : null;
@@ -299,8 +332,25 @@ function hitTest(drag: LiveDrag): void {
   }
   drag.target = null;
   drag.ring = null;
-  drag.answer =
-    drag.start.source === "outside" ? { kind: "hand", ok: true, label: TARGET_WORDS.hand } : null;
+  if (drag.start.source !== "outside") {
+    drag.answer = null;
+    return;
+  }
+  // …but a field no place takes it at — the desk's own note included — takes a drop itself
+  // (HN-L3): over it the card says nothing, since letting go there will not put it in the hand,
+  // and ducks as it does over the line, so the field's own caret shows where it will go (LC-25)
+  const field = isDropField(top);
+  if (field) drag.ducked = true;
+  drag.answer = field ? null : { kind: "hand", ok: true, label: TARGET_WORDS.hand };
+}
+
+/** Whether a card from another app let go at this window point is a field's (HN-L3): a field that
+ * takes a drop, on top there — read as the drag reads what is under the pointer — that no place
+ * takes the card at, by the drag's own rule (`placeFor`). A pane's own text area and Chat's prompt
+ * outrank the field; the desk, which takes no card from another app, does not. */
+export function fieldTakesDrop(x: number, y: number, card: Card): boolean {
+  const top = topAt(x, y);
+  return isDropField(top) && placeFor("outside", card, { x, y }, top) === null;
 }
 
 function moveTo(drag: LiveDrag, x: number, y: number): void {
@@ -435,6 +485,7 @@ export function startCardDrag(start: CardDragStart): void {
   const drag: LiveDrag = {
     start,
     drag: drags,
+    card: start.card,
     phase: "carry",
     x: start.at.x,
     y: start.at.y,
@@ -463,25 +514,40 @@ export function moveCardDrag(x: number, y: number): void {
 
 /** Let go at this window point. A place that took the card plays a copy in, its outcome said
  * once on the line, and the card springs back; a refusal, or nothing under it, sends it straight
- * home. Resolves once the outcome is said. */
-export async function endCardDrag(x: number, y: number): Promise<void> {
+ * home. A card from another app (B2) is `filled` here — the drop says what it holds, so the filled
+ * card takes the waiting one's place and the place under it is asked again — and anywhere but a
+ * place that takes it straight it is the hand's; a place that refuses what it turned out to hold
+ * says so on the line, since under the pointer it answered only the waiting card — whether it
+ * refuses before the play or in it. Resolves once the outcome is said. */
+export async function endCardDrag(x: number, y: number, filled?: Card): Promise<CardLetGo> {
   const drag = live;
-  if (drag === null || drag.phase !== "carry") return;
+  if (drag === null || drag.phase !== "carry") return "none";
+  if (filled !== undefined) drag.card = filled;
   moveTo(drag, x, y);
-  const target = drag.target;
-  if (target === null || drag.answer === null || !drag.answer.ok) {
-    turnHome(drag);
-    return;
+  const { target, answer } = drag;
+  if (target === null || answer === null || !answer.ok) {
+    if (drag.start.source === "hand") {
+      turnHome(drag);
+      return "home";
+    }
+    if (target !== null && answer !== null) sayOnLine(answer.label);
+    finish(drag);
+    return "hand";
   }
   drag.detach();
   stopSpring(drag);
   drag.phase = "play";
   publish(snapshot(drag));
-  const played = playOf(target, drag.start.card, { x: drag.x, y: drag.y });
+  const played = playOf(target, drag.card, { x: drag.x, y: drag.y });
   await wait(playTimings().shrinkMs);
   if (live === drag) turnHome(drag);
   const outcome = await played;
   if (outcome.note !== "") sayOnLine(outcome.note);
+  if (outcome.ok) return "played";
+  // refused in the play: a card from another app is never lost (HN-L5) — the fade it began where
+  // it went in ends here, for its source deals it into the hand from where it hung
+  if (drag.start.source === "outside" && live === drag) finish(drag);
+  return "refused";
 }
 
 /** Esc, a lost pointer, the window's blur: home at once, nothing played. */

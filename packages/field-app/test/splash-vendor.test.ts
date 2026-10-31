@@ -1,9 +1,11 @@
 /**
  * Track FG — the vendored splash (DESIGN.md §8 "The boot splash"): `tooling/splash/vendor.mjs` copies the website's
- * splash and its pictures at their pinned sha256 and names each pin in the module's header. The website's checkout
- * isn't here (CI has none), so this holds the committed files to their header and the header to the tool: a hand
- * edit, a copy from another bake, or a pin moved in one place only is red. `vendor.mjs --check` is the full check
- * where the website's checkout stands beside this one.
+ * splash and its pictures at their pinned sha256, patches the module where the boot draws over the field's frames
+ * (`tooling/splash/patches.json`, FG-3b), and names each pin and each patch in the module's header. The website's
+ * checkout isn't here (CI has none), so this holds the committed files to their header and the header to the tool:
+ * the patches undone give back the source's pin, so a hand edit, a copy from another bake, a change outside the
+ * patches, or a pin moved in one place only is red. `vendor.mjs --check` is the full check where the website's
+ * checkout stands beside this one.
  */
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -13,19 +15,27 @@ import * as splash from "../src/boot/splash/vibefield-splash.js";
 
 const DIR = join(process.cwd(), "src/boot/splash");
 const TOOL = readFileSync(join(process.cwd(), "../../tooling/splash/vendor.mjs"), "utf8");
+const PATCHES = JSON.parse(
+  readFileSync(join(process.cwd(), "../../tooling/splash/patches.json"), "utf8"),
+) as { name: string; why: string; from: string; to: string }[];
 const sha256 = (bytes: Buffer | string): string => createHash("sha256").update(bytes).digest("hex");
 
 const vendored = readFileSync(join(DIR, "vibefield-splash.js"), "utf8");
 const cut = vendored.indexOf("\n\n");
 const header = vendored.slice(0, cut).split("\n");
 const body = vendored.slice(cut + 2);
-const pins = header.slice(1).map((line) => {
-  const m = line.match(
-    /^\/\/ sha256 ([0-9a-f]{64}) (\S+) → (\S+)(?: \(body sha256 ([0-9a-f]{64})\))?$/u,
-  );
-  if (m === null) throw new Error(`not a pin line: ${line}`);
-  return { source: m[1] ?? "", from: m[2] ?? "", to: m[3] ?? "", body: m[4] };
-});
+const PATCHED = /^\/\/ patched by tooling\/splash\/patches\.json: (.+)$/u;
+const patched = header.slice(1).flatMap((line) => line.match(PATCHED)?.[1]?.split(", ") ?? []);
+const pins = header
+  .slice(1)
+  .filter((line) => !PATCHED.test(line))
+  .map((line) => {
+    const m = line.match(
+      /^\/\/ sha256 ([0-9a-f]{64}) (\S+) → (\S+)(?: \(body sha256 ([0-9a-f]{64})\))?$/u,
+    );
+    if (m === null) throw new Error(`not a pin line: ${line}`);
+    return { source: m[1] ?? "", from: m[2] ?? "", to: m[3] ?? "", body: m[4] };
+  });
 
 describe("the vendored splash", () => {
   it("says it is generated, from which revision, and never to be edited", () => {
@@ -36,12 +46,25 @@ describe("the vendored splash", () => {
     expect(TOOL).toContain(`revision: "${revision}"`);
   });
 
-  it("is the website's module byte for byte: its body's hash is its source's pin", () => {
+  it("is the website's module with the boot's patches and nothing else: undone, its body is its source's pin", () => {
     const [module] = pins;
     expect(module?.from).toBe("lib/splash/vibefield-splash.js");
     expect(module?.to).toBe("vibefield-splash.js");
-    expect(module?.body).toBe(module?.source);
-    expect(sha256(body)).toBe(module?.source);
+    expect(sha256(body)).toBe(module?.body);
+    let undone = body;
+    for (const patch of [...PATCHES].reverse()) {
+      // each patch's text stands once in the body, so undoing it is exact
+      expect(undone.split(patch.to), patch.name).toHaveLength(2);
+      undone = undone.replace(patch.to, () => patch.from);
+    }
+    expect(sha256(undone)).toBe(module?.source);
+  });
+
+  it("names the patches the tool applies, in its order, each saying why (FG-3b)", () => {
+    expect(patched).toEqual(PATCHES.map((patch) => patch.name));
+    expect(patched).toEqual(["post", "post-usage", "post-encode", "redraw"]);
+    for (const patch of PATCHES) expect(patch.why, patch.name).not.toBe("");
+    expect(TOOL).toContain('readFileSync(join(HERE, "patches.json"), "utf8")');
   });
 
   it("copies the website's pictures byte for byte", () => {

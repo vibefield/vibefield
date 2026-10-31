@@ -10,10 +10,12 @@ import {
   copiedToMain,
   judgeBarStayed,
   judgeCard,
+  judgePictured,
   judgeSelectionKept,
   judgeStill,
   NOTE_LINE,
   NOTE_TITLE,
+  picturedToMain,
 } from "../src/testing/smoke-desk-copy";
 
 const copiedSeen = (over: Partial<CopiedSeen> = {}): CopiedSeen => ({
@@ -106,6 +108,40 @@ describe("the words reach main's copy door, and only its record (R-T 4: a marked
 
   it("has nothing to read in an unmarked run, whose door writes the real clipboard", () => {
     expect(copiedToMain(undefined, 0, NOTE_LINE)).toBeNull();
+  });
+});
+
+describe("a picture reaches main's picture door, and only its record (HN-5, R-T 4)", () => {
+  it("finds the still's PNG by its size among those the door kept since the press", () => {
+    const kept = [4100, 9000, 7700];
+    expect(picturedToMain(kept, 0, 9000)).toBe(true);
+    expect(picturedToMain(kept, 1, 9000)).toBe(true);
+    expect(picturedToMain(kept, 2, 9000)).toBe(false);
+    expect(picturedToMain([], 0, 9000)).toBe(false);
+  });
+
+  it("has nothing to read in an unmarked run, or with no still to measure", () => {
+    expect(picturedToMain(undefined, 0, 9000)).toBeNull();
+    expect(picturedToMain([9000], 0, undefined)).toBeNull();
+  });
+
+  it("passes a picture the door took and main kept, and names any other", () => {
+    expect(judgePictured(copiedSeen({ wrote: true }), [4100, 9000], 1)).toEqual([]);
+    // an unmarked run keeps nothing to read: the door's answer alone is the witness
+    expect(judgePictured(copiedSeen({ wrote: true }), undefined, 0)).toEqual([]);
+    const refused = copiedSeen({
+      wrote: false,
+      card: null,
+      refused: "Not copied — the picture could not be read",
+    });
+    expect(judgePictured(refused, [], 0)).toEqual([
+      "the picture door did not take the picture (Not copied — the picture could not be read)",
+      "main's picture door never received the picture",
+    ]);
+    expect(judgePictured(copiedSeen({ wrote: true }), [9000], 1)).toEqual([
+      "main's picture door never received the picture",
+    ]);
+    expect(judgePictured(null, [], 0)).toEqual(["no Copy was recorded"]);
   });
 });
 

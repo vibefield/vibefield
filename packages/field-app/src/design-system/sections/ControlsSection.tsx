@@ -73,10 +73,13 @@ export function ControlsSection(): ReactElement {
             <button type="button" className={roundButtonCls(false)} aria-label="Settings">
               <Icon name="settings" />
             </button>
+            {/* The persistent active state, by itself: no 40px toggle has worn it since
+                the Artifacts toggle left at FR-4, and Artifacts' door is the head's now
+                (HN-8). */}
             <button
               type="button"
               className={roundButtonCls(true)}
-              aria-label="Artifacts open"
+              aria-label="Toggled on"
               aria-pressed="true"
             >
               <Icon name="layers" />

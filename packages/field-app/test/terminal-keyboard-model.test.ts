@@ -176,7 +176,7 @@ describe("the rows", () => {
     });
   });
 
-  it("says WHEN a chord is kept when it is kept only sometimes — the Peek's ⌘F, in History and Godview (K4)", () => {
+  it("says WHEN a chord is kept when it is kept only sometimes — the Peek's ⌘F, in Godview and History (K4)", () => {
     const find = row(rows, "super+f");
     expect(find.reserved?.id).toBe("search");
     expect(find.defaultAction).toBe("start_search");
@@ -184,13 +184,25 @@ describe("the rows", () => {
     const kept = find.reserved;
     if (kept === null) throw new Error("⌘F is not kept");
     expect(reservedWords(kept, find.defaultAction)).toBe(
-      "VibeField: Search, while History or Godview is the view — Ghostty's find never runs on this chord then.",
+      "VibeField: Search, while Godview or History is the view — Ghostty's find never runs on this chord then.",
     );
     // an always-kept chord says no when
     const palette = row(rows, "super+k");
     if (palette.reserved === null) throw new Error("⌘K is not kept");
     expect(reservedWords(palette.reserved, palette.defaultAction)).toBe(
       "VibeField: Command palette — Ghostty's clear the screen never runs on this chord.",
+    );
+  });
+
+  it("says when ⌘T is kept: New terminal, in Godview and History (HN-7) — Ghostty's new tab then", () => {
+    const tab = row(rows, "super+t");
+    expect(tab.reserved?.id).toBe("new-terminal");
+    expect(tab.defaultAction).toBe("new_tab");
+    expect(routeWords(tab)).toEqual({ text: "VibeField: New terminal", runs: false });
+    const kept = tab.reserved;
+    if (kept === null) throw new Error("⌘T is not kept");
+    expect(reservedWords(kept, tab.defaultAction)).toBe(
+      "VibeField: New terminal, while Godview or History is the view — Ghostty's new tab never runs on this chord then.",
     );
   });
 

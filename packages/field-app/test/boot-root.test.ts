@@ -26,6 +26,7 @@ const field = vi.hoisted(() => ({
     readonly mode: "worker";
     mark(to: number, ms: number): void;
     reveal(options?: object): Promise<boolean>;
+    glass(glass: object | null): void;
     destroy(): void;
   },
 }));
@@ -172,6 +173,7 @@ function liveDoor(reveal: () => Promise<boolean>) {
     mode: "worker" as const,
     mark: vi.fn<(to: number, ms: number) => void>(),
     reveal: vi.fn<(options?: object) => Promise<boolean>>(reveal),
+    glass: vi.fn<(glass: object | null) => void>(),
     destroy: vi.fn<() => void>(),
   };
   field.door = door;

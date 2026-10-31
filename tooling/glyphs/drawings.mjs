@@ -132,14 +132,14 @@ export const DRAWINGS = {
   plus: {
     label: "Plus",
     group: "actions",
-    role: "Objects — the composer's create on Canvas, the one bare plus on screen; New profile and Add artifact inside their sheets",
+    role: "Objects — the line's create on Canvas, the one bare plus on screen; New profile inside its sheet",
     instrument: { s: P("M12 5v14M5 12h14") },
     hardware: { d: "M10.5 4h3v6.5H20v3h-6.5V20h-3v-6.5H4v-3h6.5Z" },
   },
   close: {
     label: "Close",
     group: "actions",
-    role: "Close settings, stop loading; the composer's plus turned 135°",
+    role: "Close settings, stop loading; the line's plus turned 135°",
     instrument: { s: P("M6.5 6.5l11 11M17.5 6.5l-11 11") },
     hardware: { d: xPoly(12, 12, 7.6, 1.5) },
   },
@@ -203,7 +203,7 @@ export const DRAWINGS = {
   return: {
     label: "Return",
     group: "actions",
-    role: "Enter on the composer and the keypad; a snippet that sends Enter",
+    role: "Enter on the phone's composer and keypad; a snippet that sends Enter",
     instrument: { s: P("M19 6v5a3 3 0 0 1-3 3H6M9.5 10.5L6 14l3.5 3.5") },
     hardware: { d: "M17.5 4h3v7.5a3 3 0 0 1-3 3H10.5V18L4 13l6.5-5v3.5h7Z" },
   },
@@ -230,7 +230,7 @@ export const DRAWINGS = {
   start: {
     label: "New terminal",
     group: "actions",
-    role: "Godview's create in the composer: a session started, the window holding a plus",
+    role: "The line's create in Godview and History: a session started, the window holding a plus",
     // spawn-T3: the verb is a plus in the window's open corner.
     instrument: { s: P(`${WIN_OPEN}${WIN_CHEV}M18 14.5v7M14.5 18h7`) },
     hardware: { d: `${SOLID_CHEV}M16 10.5h3v3h3v3h-3v3h-3v-3h-3v-3h3Z` },
@@ -238,7 +238,7 @@ export const DRAWINGS = {
   resume: {
     label: "Resume",
     group: "actions",
-    role: "History's create in the composer: a past session resumed, the window holding play",
+    role: "The chosen session's act on its row, ④'s head and the palette: a past session resumed, the window holding play",
     // resume-play-T3: the verb is play in the window's open corner.
     instrument: { s: P(`${WIN_OPEN}${WIN_CHEV}M15.5 14.5v7l6-3.5Z`) },
     hardware: { d: `${SOLID_CHEV}M14 9.5v11l8-5.5Z` },
@@ -517,9 +517,9 @@ export const DRAWINGS = {
     },
   },
   package: {
-    label: "Package",
+    label: "Artifacts",
     group: "objects",
-    role: "The right-edge notch, reserved for the Artifacts twin",
+    role: "Artifacts: the pill's package button and the covered views' circle, folded into the terminals' title bar with search",
     instrument: { s: `${P(CUBE)}${P("M4.3 7.4 12 11.7l7.7-4.3M12 11.7v9.3M8 4.9l8 4.4")}` },
     hardware: {
       d: `${rectPath(3, 4, 18, 17, 1.5)}${bar(3, 9.7, 21, 9.7, 0.7)}${bar(3, 15.3, 21, 15.3, 0.7)}${bar(12, 4, 12, 21, 0.7)}`,
@@ -560,9 +560,9 @@ export const DRAWINGS = {
     },
   },
   sidepanel: {
-    label: "Artifacts",
+    label: "Side panel",
     group: "objects",
-    role: "The Artifact Hub toggle, outermost in the top-right cluster",
+    role: "Drawn nowhere in the product: the Hub side panel's toggle until FR-4, kept in the set until a glyph pass retires it",
     instrument: { s: `${R(3, 5, 18, 14, 3)}${P("M15 5v14")}` },
     hardware: {
       d: `M5.5 3H16l4 4v12.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 19.5v-15A1.5 1.5 0 0 1 5.5 3Z${rectPath(7.5, 3, 8, 5.5, 0.8)}${rectPath(7, 13, 10, 6, 0.8)}${rectPath(13, 4, 2, 3.5, 0.5)}`,
@@ -582,7 +582,7 @@ export const DRAWINGS = {
   globe: {
     label: "Proxy",
     group: "objects",
-    role: "The Add-artifact choice: a local port, served on the tailnet",
+    role: "The Publish step's Proxy: a local port, served on the tailnet",
     instrument: {
       s: `${C(12, 12, 8.5)}${P("M3.5 12h17M12 3.5a13 13 0 0 1 0 17M12 3.5a13 13 0 0 0 0 17")}`,
     },

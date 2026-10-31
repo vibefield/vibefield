@@ -60,7 +60,8 @@ describe("the product chords (GT-D21)", () => {
       "super+k",
       "super+,",
       "super+shift+v",
-      // One Frame FR-2 (§11): Godview's New terminal, over ghostty's new_tab
+      // One Frame FR-2 (§11): New terminal, Godview's create and History's (HN-7), over
+      // ghostty's new_tab
       "super+t",
       // the Peek (GV-D10, 2026-10-08): search, over ghostty's start_search
       "super+f",
@@ -150,13 +151,27 @@ describe("the product chords (GT-D21)", () => {
     expect(search).toMatchObject({
       trigger: "super+f",
       label: "Search",
-      when: "while History or Godview is the view",
+      // the design lens's 16: the two rows the views share name them in one order, ⌘T's
+      when: "while Godview or History is the view",
     });
     // the chords kept always say no when
     expect(PRODUCT_CHORDS.filter((chord) => chord.when !== undefined).map((c) => c.id)).toEqual([
+      "new-terminal",
       "search",
       "desk-copy",
     ]);
+  });
+
+  it("⌘T is New terminal's — and SAYS when it is kept: in Godview and, since HN-7, in History", () => {
+    // the line takes it on the capture phase in those two views alone (composer-line.test.tsx's
+    // rows: from a focused pane in Godview and in History, left alone on Canvas)
+    expect(PRODUCT_CHORDS.find((chord) => chord.id === "new-terminal")).toMatchObject({
+      trigger: "super+t",
+      label: "New terminal",
+      when: "while Godview or History is the view",
+    });
+    // a pane's chord to keep, not the desk's: Settings → Terminal → Keyboard names it
+    expect(PRODUCT_CHORDS.find((chord) => chord.id === "new-terminal")?.scope).toBeUndefined();
   });
 
   it("⌘C is the desk's Copy — Ctrl+C off the Mac — never with ⇧ or ⌥, never the other platform's modifier, and SAYS when it is kept (HN-D3)", () => {

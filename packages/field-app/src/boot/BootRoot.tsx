@@ -215,8 +215,10 @@ export function BootRoot({
  * website's splash, not a logo card). Shared by the splash and the Setup
  * Assistant so handing one to the other changes the content and never the
  * floor: one node, so one field runs from the first paint to the reveal, its
- * mark gone while the Setup Assistant's glass stands on it. `opening` (FG-2):
- * at the tear the words go and the ground's own colour with them (boot.css). */
+ * mark gone while the Setup Assistant's glass stands on it — and since FG-3b
+ * the glass drawn by the field itself, so what stands on the ground stands in
+ * the field's layer. `opening` (FG-2): at the tear the words go and the
+ * ground's own colour with them (boot.css). */
 function BootGround({
   className = "",
   ariaHidden = false,
@@ -241,8 +243,9 @@ function BootGround({
       aria-hidden={ariaHidden}
       inert={inert}
     >
-      <FieldLayer mark={!glass} handleRef={field} />
-      {children}
+      <FieldLayer mark={!glass} handleRef={field}>
+        {children}
+      </FieldLayer>
     </div>
   );
 }

@@ -17,6 +17,10 @@
  *   · R7 the chips; H4 each act's intent;
  *   · Resume refusing a gone folder with the reason, and a session another
  *     desktop holds (the host key);
+ *   · HN-7 — where something new of a project starts (`startPlaceOf`, New
+ *     agent's reading, and History's New terminal's), and New terminal's act:
+ *     Godview's deck asked for a shell in that folder — first when it is up,
+ *     the window moved there once it opened; raised by the move when not;
  *   · an act never ending in silence (2026-10-11): a deck that never answers,
  *     an answer that cannot be read and a throw are each refused in words;
  *   · and never refused for the person's time (W7): while the deck asks the
@@ -54,6 +58,7 @@ import {
   jumpTarget,
   newAgent,
   newAgentNote,
+  newTerminalIn,
   projectIntent,
   resumeTarget,
   spawnParamsOf,
@@ -62,9 +67,11 @@ import {
   type HistoryHostActs,
   historyHostInputs,
   NO_HOST_STATE,
+  newTerminalWhy,
   projectSectionsOf,
   resumeWaits,
   sessionSectionsOf,
+  startPlaceOf,
 } from "../src/history/host-inputs";
 import { type HistoryListing, hostModelOf } from "../src/history/host-model";
 import { FIRST_PAGE, type HeldModels, type LaunchPage, modelsKey } from "../src/history/launch";
@@ -707,6 +714,147 @@ describe("the acts", () => {
     }
   });
 
+  // HN-7 (LN-D2): History's create, the act behind it — Resume's road to Godview's deck, which
+  // births the shell in the folder asked for (godview-deck.test.tsx), or as its own create with
+  // none.
+  it("New terminal asks Godview's deck for a shell in the folder, or as Godview's create with none — the window moved there to show it", async () => {
+    const { door } = deck();
+    const opened = { state: "opened", placement: "replace" } as const;
+    const newTerminal = vi.fn<LineViewDoor["newTerminal"]>(async () => opened);
+    const shown = vi.fn();
+    const deps = { ...depsOf(resumeClient(true), { ...door, newTerminal }), showView: shown };
+    expect(await newTerminalIn(deps, "/Users/me/Projects/vibe-field")).toEqual(opened);
+    expect(newTerminal).toHaveBeenLastCalledWith({ cwd: "/Users/me/Projects/vibe-field" });
+    expect(shown).toHaveBeenCalledWith("godview");
+    expect(await newTerminalIn(deps, undefined)).toEqual(opened);
+    expect(newTerminal).toHaveBeenLastCalledWith();
+    // the deck's own refusal is the act's, in its words — and the window, moved for the two
+    // that opened, stays for it
+    newTerminal.mockResolvedValueOnce({ state: "refused", reason: "no pane to open it in" });
+    expect(await newTerminalIn(deps, "/w")).toEqual({
+      state: "refused",
+      reason: "no pane to open it in",
+    });
+    expect(shown).toHaveBeenCalledTimes(2);
+  });
+
+  // DESIGN.md §8 "History" (the behaviour lens's 5): a deck that is up is asked where it stands,
+  // and the window moves only once the terminal opened — a refusal is said in History, where the
+  // person is; a deck not up yet is raised by the move first, and what it answers is said there.
+  it("New terminal asks a deck that is up first, the window moving to Godview only once it opened", async () => {
+    const { door } = deck();
+    const order: string[] = [];
+    let answer: NewTerminalOutcome = { state: "opened" };
+    const deps: HistoryActsDeps = {
+      ...depsOf(resumeClient(true), {
+        ...door,
+        newTerminal: async () => {
+          order.push("asked");
+          return answer;
+        },
+      }),
+      showView: (view) => {
+        order.push(`moved to ${view}`);
+      },
+    };
+    expect(await newTerminalIn(deps, "/w")).toEqual({ state: "opened" });
+    expect(order).toEqual(["asked", "moved to godview"]);
+    // refused where it stands: the window never moved
+    order.length = 0;
+    answer = { state: "refused", reason: "no pane to open it in" };
+    expect(await newTerminalIn(deps, "/w")).toEqual(answer);
+    expect(order).toEqual(["asked"]);
+  });
+
+  it("New terminal with no deck up moves the window to Godview to raise one, then asks it — what it answers said there", async () => {
+    const { door } = deck();
+    const order: string[] = [];
+    const refused = { state: "refused", reason: "no pane to open it in" } as const;
+    const raised: LineViewDoor = {
+      ...door,
+      newTerminal: async () => {
+        order.push("asked");
+        return refused;
+      },
+    };
+    let moved = false;
+    const deps: HistoryActsDeps = {
+      ...depsOf(resumeClient(true), raised),
+      // the deck mounts on Godview's first open: none can place before the window moves
+      deck: async () => (moved ? raised : null),
+      showView: (view) => {
+        moved = true;
+        order.push(`moved to ${view}`);
+      },
+    };
+    expect(await newTerminalIn(deps, "/w")).toEqual(refused);
+    expect(order).toEqual(["moved to godview", "asked"]);
+  });
+
+  // W7: the restore question is drawn in Godview — a deck asking it is raised there, never asked
+  // from History, where the person would wait on a question no one can see
+  it("New terminal raises a deck that is asking the person the restore question before asking it", async () => {
+    const { door } = deck();
+    const order: string[] = [];
+    const deps: HistoryActsDeps = {
+      ...depsOf(resumeClient(true), {
+        ...door,
+        waitsOnPerson: true,
+        newTerminal: async () => {
+          order.push("asked");
+          return { state: "opened" };
+        },
+      }),
+      showView: (view) => {
+        order.push(`moved to ${view}`);
+      },
+    };
+    expect(await newTerminalIn(deps, "/w")).toEqual({ state: "opened" });
+    expect(order).toEqual(["moved to godview", "asked"]);
+  });
+
+  it("New terminal whose deck never opens, throws or never answers is refused in words, and logged", async () => {
+    const { door } = deck();
+    const unplaced = vi.fn();
+    const client = resumeClient(true);
+    // no deck came in the bound
+    expect(
+      await newTerminalIn({ ...depsOf(client, door), deck: async () => null, unplaced }, "/w"),
+    ).toEqual({ state: "refused", reason: "the deck is not connected yet" });
+    expect(unplaced).toHaveBeenLastCalledWith("terminal");
+    // a deck that throws as it births
+    const throwing = {
+      ...door,
+      newTerminal: async (): Promise<never> => {
+        throw new Error("the routed terminal runtime has no fieldd client");
+      },
+    };
+    expect(await newTerminalIn({ ...depsOf(client, throwing), unplaced }, "/w")).toEqual({
+      state: "refused",
+      reason: "the routed terminal runtime has no fieldd client",
+    });
+    expect(unplaced).toHaveBeenLastCalledWith(
+      "terminal",
+      "the routed terminal runtime has no fieldd client",
+    );
+    // a deck that never answers: said once its bound has passed, as Resume's is
+    vi.useFakeTimers();
+    try {
+      const pending = newTerminalIn(
+        { ...depsOf(client, { ...door, newTerminal: neverAnswers }), unplaced },
+        "/w",
+      );
+      await vi.advanceTimersByTimeAsync(HISTORY_DECK_WAIT_MS + 1_000);
+      expect(await settledBy(pending)).toEqual({
+        state: "refused",
+        reason: "no pane took it in 20 s",
+      });
+      expect(unplaced).toHaveBeenLastCalledWith("terminal", "no pane took it in 20 s");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   // W7 (GV-D5, N14 (a)): a launch opens Godview on the monitor alone, so an
   // act's call can be the one that brings last time's panes back — and with
   // some of them ended, the deck asks the person first. Their time is never
@@ -1209,6 +1357,67 @@ describe("R5: New agent and the project's acts", () => {
   });
 });
 
+// PJ-D8, HN-7 — one reading of where something new of a project starts: New agent's rows draw it,
+// and History's New terminal opens there (or says why not, in the same words).
+describe("where something new of a project starts — New agent's, and History's New terminal's (HN-7)", () => {
+  const of = (key: string): ProjectSummary => {
+    const found = MODEL.projects.get(key);
+    if (found === undefined) throw new Error(`no project ${key}`);
+    return found;
+  };
+
+  it("is the folder ③ shows, else the project's usual place here", () => {
+    const vibe = of("p1:vibe");
+    // no folder shown: the usual place — the newest here that is there to start in
+    expect(startPlaceOf(MODEL, vibe, null)).toMatchObject({
+      path: "/Users/me/Projects/vibe-field",
+      why: null,
+    });
+    // ③ showing the worktree: there, whatever the usual place
+    expect(startPlaceOf(MODEL, vibe, `${STUDIO}\u001fpl_wt`)).toMatchObject({
+      path: "/Users/me/wt/feature",
+      why: null,
+    });
+  });
+
+  it("says why nothing can start there in New agent's words: another desktop's, not connected, gone, none here", () => {
+    expect(startPlaceOf(MODEL, of("p1:vibe"), `${LAPTOP}\u001fpl_lap`).why).toBe(
+      "it starts on Laptop — not from here until routed acts (DS-2)",
+    );
+    const vibe = of("p1:vibe");
+    const unmounted = {
+      ...vibe,
+      places: vibe.places.map((place) => ({ ...place, mounted: false })),
+    };
+    expect(startPlaceOf(MODEL, unmounted, null).why).toBe("its volume is not connected");
+    expect(startPlaceOf(MODEL, of("p1:notes"), null).why).toBe("the folder is gone");
+    expect(startPlaceOf(MODEL, of("p1:away"), null)).toEqual({
+      place: undefined,
+      device: undefined,
+      path: null,
+      why: "no folder of this project is here to start in",
+    });
+  });
+
+  // the design lens's 9 (DESIGN.md §8 "History"): History's New terminal names another desktop in
+  // its own words — never New agent's track code — and keeps New agent's for the rest
+  it("History's New terminal says another desktop's folder by the desktop it is on, the rest in New agent's words", () => {
+    const vibe = of("p1:vibe");
+    const why = (project: ProjectSummary, folder: string | null) =>
+      newTerminalWhy(project, startPlaceOf(MODEL, project, folder));
+    expect(why(vibe, `${LAPTOP}\u001fpl_lap`)).toBe("vibe-field is on Laptop");
+    const unmounted = {
+      ...vibe,
+      places: vibe.places.map((place) => ({ ...place, mounted: false })),
+    };
+    expect(why(unmounted, null)).toBe("its volume is not connected");
+    expect(why(of("p1:notes"), null)).toBe("the folder is gone");
+    expect(why(of("p1:away"), null)).toBe("no folder of this project is here to start in");
+    // a folder here that is there to start in: nothing to say
+    expect(why(vibe, null)).toBeNull();
+  });
+});
+
 describe("R6: ③'s folders", () => {
   it("every folder by desktop, the worktree one step in, another desktop's never opened here (and captioned), the usual one first", () => {
     const acts = spyActs();
@@ -1251,6 +1460,20 @@ describe("R6: ③'s folders", () => {
     const notes = historyHostInputs(MODEL, NO_HOST_STATE, acts).folders?.("p1:notes");
     expect(text(notes?.groups[0]?.folders[0]?.elsewhere)).toBe("This folder is gone");
     expect(notes?.groups[0]?.folders[0]?.caption).toBe("notes");
+  });
+
+  // HN-7 (the behaviour lens's 4): the room calls `onShow` only while its host lists a project's
+  // folders, and History's create follows the project the room shows — so a project the model
+  // lacks lists none, and ③ still says it shows none of the host's.
+  it("a project the model lacks — rosetta's own unassigned bucket — lists no folders, and ③ still says what it shows", () => {
+    const acts = spyActs();
+    /** the room's bucket for sessions no project holds: no project of fieldd's */
+    const bucket = "__rosetta_unassigned__";
+    const folders = historyHostInputs(MODEL, NO_HOST_STATE, acts).folders?.(bucket);
+    expect(folders?.groups).toEqual([]);
+    expect(folders?.initial).toBeUndefined();
+    folders?.onShow?.(null);
+    expect(acts.shown).toHaveBeenCalledExactlyOnceWith(bucket, null);
   });
 });
 

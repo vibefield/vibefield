@@ -48,7 +48,7 @@ import {
 // calls `toggle()`; `frame/Composer.tsx`). This keeps the rest:
 //  - ONE SURFACE AT A TIME: Objects is one of the frame's open surfaces (§10). The tray's `open` is the truth and the
 //    frame's one value follows it — a board the desk shut (Esc on the desk, a click on the dimmed desk, a take handed
-//    out) folds "objects"; another surface opening (the hand raised, the explorer, a menu, a drawer, the palette, a
+//    out) folds "objects"; another surface opening (the hand raised, the pill's sheet, a menu, the palette, a
 //    change of view) shuts the board; "objects" asked of the owner with the board shut opens it, and a refusal (in hand)
 //    folds it.
 //  - THE FILTERS, placed imperatively each time the tray publishes — following the drawer every frame of its slide,

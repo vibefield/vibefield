@@ -97,6 +97,7 @@ function props(over: Partial<CardsViewProps> = {}): CardsViewProps {
     carried: null,
     nudged: null,
     now: NOW,
+    keys: "mac",
     reducedMotion: false,
     win: WIN,
     ...over,
@@ -136,7 +137,7 @@ describe("the fan at rest and the reach (HN: Holding them)", () => {
     expect(el.querySelectorAll(".vf-card-x")).toHaveLength(1);
     expect(reached.querySelector(".vf-card-x")).not.toBeNull();
     const label = el.querySelector<HTMLElement>(".vf-cards-label");
-    expect(label?.textContent).toBe(provenance(CARDS[2] as Card, NOW));
+    expect(label?.textContent).toBe(provenance(CARDS[2] as Card, NOW, "mac"));
     expect(label?.textContent).toBe("Godview · claude·2 · 2m ago");
     expect(Number.parseFloat(label?.style.left ?? "")).toBeCloseTo(centre, 1);
     const above = (REST.slots[2]?.y ?? 0) - CARD_LIFT - 32;
@@ -180,8 +181,26 @@ describe("the fan at rest and the reach (HN: Holding them)", () => {
     expect(slotOf(el, "c").getAttribute("aria-selected")).toBe("false");
     expect(d.getAttribute("aria-label")).toBe("Words of d. — Godview · claude·2 · 2m ago");
     expect(d.getAttribute("aria-label")).toBe(
-      HAND_WORDS.option("Words of d.", provenance(CARDS[3] as Card, NOW)),
+      HAND_WORDS.option("Words of d.", provenance(CARDS[3] as Card, NOW, "mac")),
     );
+  });
+
+  it("spells a paste's key as its keys say — Ctrl+V off the Mac — above the card reached, and on the bar under a card picked up", () => {
+    const pasted = textCardOf("From Notes.", {
+      id: "v",
+      origin: { view: "outside", how: "paste" },
+      at: NOW - 20_000,
+    });
+    const cards = [...CARDS.slice(0, 4), pasted];
+    const lifts = reachLift(REST.slots, (REST.slots[4]?.x ?? 0) + CARD_W / 2);
+    const el = mount(<CardsView {...props({ cards, lifts, reached: 4, keys: "other" })} />);
+    expect(el.querySelector(".vf-cards-label")?.textContent).toBe("Ctrl+V · just now");
+    act(() => root?.unmount());
+    root = null;
+    const held = { card: pasted, phase: "up" as const };
+    const up = mount(<CardsView {...props({ cards, held, keys: "other" })} />);
+    expect(up.querySelector(".vf-cards-bar-from")?.textContent).toBe("Ctrl+V · just now");
+    expect(provenance(pasted, NOW, "mac"), "the same card on the Mac").toBe("⌘V · just now");
   });
 
   it("raises every card the full lift and straight (⇧⌘V), the keyboard's card ringed and saying where it came from", () => {
@@ -198,7 +217,7 @@ describe("the fan at rest and the reach (HN: Holding them)", () => {
     }
     expect(el.querySelector(".vf-card-x")).toBeNull();
     expect(el.querySelector(".vf-cards-label")?.textContent).toBe(
-      provenance(CARDS[3] as Card, NOW),
+      provenance(CARDS[3] as Card, NOW, "mac"),
     );
   });
 
@@ -218,6 +237,23 @@ describe("the fan at rest and the reach (HN: Holding them)", () => {
     const lift = rule('.vf-cards[data-motion="reduced"] .vf-cards-lift');
     expect(lift).toContain("transition: opacity 120ms ease-out;");
     expect(lift).not.toContain("transform");
+  });
+
+  it("breaks a text card's words anywhere, so a copied path never runs off the card's edge", () => {
+    expect(rule(".vf-card-words")).toContain("overflow-wrap: anywhere;");
+  });
+
+  it("steps out of the pegboard's way at once and keeps the gloss still under reduced motion (M6)", () => {
+    expect(rule('.vf-cards[data-motion="reduced"]')).toContain("transition: none;");
+    // the tuck's rule weighs the same, so the reduced one must come after it to win
+    expect(CARDS_CSS.indexOf(".vf-cards[data-tucked] {")).toBeGreaterThan(-1);
+    expect(CARDS_CSS.indexOf('.vf-cards[data-motion="reduced"] {')).toBeGreaterThan(
+      CARDS_CSS.indexOf(".vf-cards[data-tucked] {"),
+    );
+    expect(rule('.vf-cards[data-motion="reduced"] .vf-card-gloss')).toContain("transition: none;");
+    expect(rule('.vf-cards-held[data-motion="reduced"] .vf-card-gloss')).toContain(
+      "transition: none;",
+    );
   });
 
   it("says so when the hand raised holds nothing", () => {
@@ -436,7 +472,7 @@ describe("a card picked up (HN-D5)", () => {
     expect(bar?.hasAttribute("data-on")).toBe(true);
     expect(bar?.hasAttribute("inert")).toBe(false);
     expect(bar?.querySelector(".vf-cards-bar-from")?.textContent).toBe(
-      provenance(CARDS[1] as Card, NOW),
+      provenance(CARDS[1] as Card, NOW, "mac"),
     );
     const [remove, done] = [...(bar?.querySelectorAll("button") ?? [])];
     expect([remove?.textContent, done?.textContent]).toEqual(["Remove", "Done"]);

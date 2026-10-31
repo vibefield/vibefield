@@ -21,6 +21,7 @@ import {
   releasePlatformKey,
   type ScreenshotCaptureResult,
   SHELL_BACKGROUND_RELAUNCH_ARG,
+  SHELL_CLIPBOARD,
   type ShellCommand,
   ShellCommandRequest,
   type ShellExitRecord,
@@ -78,6 +79,7 @@ import { FielddDaemonBootFence, FielddHandleCoordinator } from "./fieldd-handle-
 import {
   registerBrowserDataClear,
   registerClipboardRead,
+  registerClipboardWriteImage,
   registerDeckSet,
   registerRendererReplace,
   registerScreenshotCapture,
@@ -404,6 +406,10 @@ async function main(
   // the copy door KEEPS the words instead of writing them and answers as it would: the act's own
   // record (`wrote`) stays the witness, and the canvas smoke reads what arrived here.
   const harnessCopies: string[] | null = process.env["VF_SMOKE_RUN"] === undefined ? null : [];
+  // HN-5 — the same for a copy's picture: the clipboard's picture door keeps its PNG's size here
+  // in a marked run, and the words written beside it in `harnessCopies`, instead of writing them,
+  // and answers as it would.
+  const harnessPictures: number[] | null = process.env["VF_SMOKE_RUN"] === undefined ? null : [];
   const installDiagnostics = (window: Electron.BrowserWindow): void => {
     let supportDialogOpen = false;
     installLocalDiagnosticsPort({
@@ -469,7 +475,11 @@ async function main(
         copyText: (raw) => {
           const text =
             typeof raw === "object" && raw !== null && "text" in raw ? raw.text : undefined;
-          if (typeof text !== "string" || Buffer.byteLength(text, "utf8") > 64 * 1024) {
+          // the copy door's bound, by reference since HN-5: the picture door's words read it too
+          if (
+            typeof text !== "string" ||
+            Buffer.byteLength(text, "utf8") > SHELL_CLIPBOARD.WRITE_TEXT_MAX_BYTES
+          ) {
             throw Object.assign(new Error("expected bounded clipboard text"), {
               kind: "PRECONDITION_FAILED",
             });
@@ -1578,6 +1588,35 @@ async function main(
     },
     clipboardLogger,
   );
+  // HN-5: a copy's picture is written here, the read's other half — for a registered product
+  // window, the text copy's rule, and NO focus gate (LC-18, VF-PM 16:10Z): a write leaks
+  // nothing, where the read's gate is EL7's exposure rule (a page behind must not read what was
+  // copied elsewhere). Its PNG is decoded first and refused when it holds no picture, and the
+  // copy's words go beside it on the same item in ONE write, so neither replaces the other
+  // (LC-19). No audit row: the words' copy door keeps none (LC-13). A marked run keeps the
+  // picture's size and the words instead of writing them (R-T 4, as `harnessCopies`), after
+  // every check a write passes.
+  registerClipboardWriteImage(
+    registry,
+    {
+      decode: (png: Uint8Array) => {
+        const image = nativeImage.createFromBuffer(
+          Buffer.from(png.buffer, png.byteOffset, png.byteLength),
+        );
+        return image.isEmpty() ? null : image;
+      },
+      write: (item) => clipboard.write(item),
+      ...(harnessPictures === null || harnessCopies === null
+        ? {}
+        : {
+            keep: (bytes: number, text: string | undefined) => {
+              harnessPictures.push(bytes);
+              if (text !== undefined) harnessCopies.push(text);
+            },
+          }),
+    },
+    clipboardLogger,
+  );
 
   // FR-4: main owns the app's one theme (FC-D5) — Light · Dark · Auto, kept in
   // the shell's own profile, Auto following the OS through `nativeTheme`, and
@@ -1897,6 +1936,7 @@ async function main(
       beforeExit: closeEvidence,
       terminalDirectProof: process.argv.includes("--terminal-direct-proof"),
       ...(harnessShellOpens === null ? {} : { shellOpens: harnessShellOpens }),
+      ...(harnessCopies === null ? {} : { copies: harnessCopies }),
       ...(typedAgent !== undefined ? { typedAgent } : {}),
       onWindow: (window) => {
         installLiveSurfaceHost(window, logger);
@@ -1932,6 +1972,7 @@ async function main(
       viteUrl: VITE_URL,
       beforeExit: closeEvidence,
       ...(harnessCopies === null ? {} : { copies: harnessCopies }),
+      ...(harnessPictures === null ? {} : { pictures: harnessPictures }),
       onWindow: (window) => {
         installLiveSurfaceHost(window, logger);
         installRendererLogging({

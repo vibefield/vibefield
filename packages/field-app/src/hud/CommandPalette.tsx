@@ -12,7 +12,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { historyCreateWaits, useHistoryLineDoor } from "../frame/line-door";
+import { chosenSessionWaits, useHistoryLineDoor } from "../frame/line-door";
 import { type FrameActRun, frameActGroups } from "../frame/palette-acts";
 import { useSystemControlDoor } from "../frame/system-control-door";
 import type { ViewKeys } from "../frame/views";
@@ -279,11 +279,11 @@ export function CommandPalette({
     return () => window.removeEventListener("keydown", onKey, true);
   }, [open, onClose]);
 
-  // The frame's acts, as this view has them — History's Resume waiting for
-  // what History lends the line (AR-8c), and Jump to while the chosen session
-  // runs here (P3), exactly as the line's create does.
+  // The frame's acts, as this view has them — in History the chosen session's
+  // Resume, waiting for what History lends the frame (AR-8c), and Jump to while
+  // it runs here (P3), by the reading the line's create kept until HN-7.
   const historyDoor = useHistoryLineDoor();
-  const historyWaits = historyCreateWaits(historyDoor);
+  const historyWaits = chosenSessionWaits(historyDoor);
   const historyLive = historyDoor?.live === true;
   // GV-D1: Godview's System control runs through the door Godview publishes
   // while it is open; until the door is there the act waits, and says so.

@@ -5,9 +5,10 @@ import type { ViewKeys } from "../frame/views";
 import { CommandPaletteView, filterPalette, type PaletteGroup } from "../hud/CommandPalette";
 
 // The palette's fixture ADAPTER (One Frame FR-3, §7): the production view on
-// the frame's own acts — built by the product's table for the view — and two
-// fixture plugins' commands, one of them declared with no live handler. What
-// running a row does is the controller's; here a row is only pointed at.
+// the frame's own acts — built by the product's table for the view, History's
+// chosen session read as a fixture door would answer (HN-7) — and two fixture
+// plugins' commands, one of them declared with no live handler. What running a
+// row does is the controller's; here a row is only pointed at.
 
 const FIXTURE_COMMANDS: readonly PaletteGroup[] = [
   {
@@ -40,19 +41,25 @@ const FIXTURE_COMMANDS: readonly PaletteGroup[] = [
   },
 ];
 
-/** Runtime-free adapter around the production command-palette composition. */
+/** Runtime-free adapter around the production command-palette composition.
+ * `historyWaits` and `historyLive`: History's chosen session as its door would
+ * be read (`chosenSessionWaits`, its `live`) — absent, none is chosen. */
 export function CommandPalettePreview({
   view = "canvas",
   keys = "mac",
+  historyWaits,
+  historyLive,
 }: {
   view?: FrameView;
   keys?: ViewKeys;
+  historyWaits?: string | null;
+  historyLive?: boolean;
 }): ReactElement {
   const [query, setQuery] = useState("");
   const [hot, setHot] = useState<string | null>(null);
   const groups = useMemo<PaletteGroup[]>(
     () => [
-      ...frameActGroups(view, keys).map((group) => ({
+      ...frameActGroups(view, keys, historyWaits, historyLive).map((group) => ({
         id: group.id,
         eyebrow: group.eyebrow,
         rows: group.acts.map((act) => ({
@@ -66,7 +73,7 @@ export function CommandPalettePreview({
       })),
       ...FIXTURE_COMMANDS,
     ],
-    [view, keys],
+    [view, keys, historyWaits, historyLive],
   );
   const matched = useMemo(() => filterPalette(groups, query), [groups, query]);
   const walk = matched.flatMap((group) => group.rows.filter((row) => row.waits === null));

@@ -987,7 +987,8 @@
 }
 
 /* THE WELL (GV-D7): what the panes sit in, set into the frame. 8 in from the
-   sheet's sides and its foot — the 8 a covered view keeps clear (FC-D15) —
+   sheet's sides and its foot — its own frame, which outlived the 8 a covered
+   view kept clear for the slivers (FC-D15, until HN-8) —
    corners 10 (a selected pane's 8, the 1 gap, the 1 edge), and a rim of light
    under its foot. It has no ground of its own: the panes paint theirs over
    the frame's.
@@ -1939,15 +1940,12 @@
 }
 
 /* FC-D15: the content ends at 692 — the 88 reserve above the window's foot,
-   where the frame's line floats over the deck's own ground — and keeps 8px
-   clear of each edge for the notches' slivers. The sheet's ground still runs to
-   the foot and to the edges; only what it holds stops short. The deck's well
-   keeps that 8 at its sides wherever it is drawn; here its foot is the reserve. */
-.vf-cover .vf-godview-monitor-stage {
-  width: auto;
-  margin-inline: 8px;
-}
-
+   where the frame's line floats over the deck's own ground. The sheet's ground
+   still runs to the foot; only what it holds stops short. Its sides are the
+   window's: the monitor kept 8px clear of each for the notches' slivers until
+   the edges left the frame (HN-8; DESIGN.md §10). The deck's well keeps its own
+   8 at its sides wherever it is drawn — the deck's frame, not a gutter — and
+   here its foot is the reserve. */
 .vf-cover .vf-godview-deck-well {
   margin-bottom: 88px;
 }

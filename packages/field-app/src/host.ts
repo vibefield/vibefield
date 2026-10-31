@@ -99,6 +99,13 @@ export interface FieldBrowserDataHost {
  * stands. */
 export interface FieldClipboardHost {
   readText(): Promise<string>;
+  /** HN-5 — a copy's picture onto the system clipboard, its PNG's bytes written through
+   * main (the web's write is denied in the app as its read is), with the copy's words
+   * beside it when it has any: ONE write, both formats, so neither replaces the other
+   * (LC-19). No focus is asked, the words' rule (LC-18); a refusal rejects typed
+   * (`ClipboardCopyRefusal`, a plain record), and the copy then deals no card. Words alone
+   * keep `FieldDiagnosticsHost.copyText`. */
+  writeImage(png: Uint8Array, text?: string): Promise<void>;
 }
 
 export interface FieldDiagnosticsHost {
@@ -118,6 +125,9 @@ export interface FieldDiagnosticsHost {
   markCrashViewed(request: { artifactId: string }): Promise<{ viewed: boolean }>;
   previewSupport(selection: SupportBundleSelectionV1): Promise<SupportBundlePreviewV1>;
   exportSupport(request: { previewId: string }): Promise<SupportBundleExportResultV1>;
+  /** HN-5 — a copy's words onto the system clipboard through main. Past main's bound, or past
+   * what one request carries of them as sent, it rejects typed (`ClipboardCopyRefusal`) and
+   * sends nothing; any other failure is the bridge's own error. */
   copyText(text: string): Promise<void>;
 }
 
@@ -319,6 +329,11 @@ export interface FieldHost {
    * is never handed a path the ring has let go. Optional like its neighbours:
    * a harness without the shell has no stills to ask about. */
   readonly screenshotStillKept?: (path: string) => Promise<boolean>;
+  /** HN-6 — a file another app handed over (a paste's, a drop's) as its path on disk, which a
+   * pane is given for it (HN-L5); null for one not on disk. The preload's own read, no IPC.
+   * Optional like its neighbours: a harness without the shell (the catalog) has no paths, and a
+   * file card brought in there says it can't be pasted yet. */
+  readonly pathForFile?: (file: File) => string | null;
   getConnection(): Promise<FieldConnection>;
   onPrepareClose(handler: (requestId: string) => void): () => void;
   completeClose(result: { requestId: string; ok: boolean; error?: string }): void;

@@ -72,14 +72,16 @@
 /* ── THE ROOM — what the row may take ──────────────────────────────────────
    Every control 40 at top 8, on the lights' axis (y 28). The row is centred on
    the window, so it gives up the WIDER end on both sides: one head gap (12)
-   from the lights' slot (96), and one from the search button — 16 in, as wide
-   as the Peek says its glass is (`--vf-peek-find-width`: the circle's 40 until
-   a filter's token widens it). The view measures this box and shows as many
-   whole circles as it holds. The glass is the line's (§5): the solid at 88%
-   under a 24 blur, ringed by the hairline, with the island shadow — by night
-   94%, the strong hairline and a 6% top light. */
+   from the package circle at the left slot (96 and its 40, PL-D2 — the frame's
+   since HN-8, `package-circle.css`), and one from the search button — 16 in,
+   as wide as the Peek says its glass is (`--vf-peek-find-width`: the circle's
+   40 until a filter's token widens it). The view measures this box and shows
+   as many whole circles as it holds. The glass is the line's (§5): the solid
+   at 88% under a 24 blur, ringed by the hairline, with the island shadow — by
+   night 94%, the strong hairline and a 6% top light. Until HN-8 the gap was
+   kept from the lights' slot itself, a side of 108. */
 .vf-stories {
-  --vf-stories-side: max(96px + 12px, 16px + var(--vf-peek-find-width, 40px) + 12px);
+  --vf-stories-side: max(96px + 40px + 12px, 16px + var(--vf-peek-find-width, 40px) + 12px);
   --vf-stories-glass: color-mix(in srgb, var(--vf-chrome-solid) 88%, transparent);
   --vf-stories-edge: var(--vf-hairline);
   --vf-stories-lift: 0 0 0 transparent;

@@ -11,15 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AgentProfileSet, AgentSessionSummary, SparkRecord } from "@vibefield/contracts";
 import { afterAll, describe, expect, it } from "vitest";
-import {
-  folderRoute,
-  LAUNCH_ROUTE,
-  type SparkLaunch,
-  type SparkRoute,
-  SparkService,
-  SparkStore,
-  sparkSlug,
-} from "../src/compose/sparks";
+import { type SparkLaunch, SparkService, SparkStore, sparkSlug } from "../src/tool-plane/sparks";
 
 // CP-1c — the sparks fieldd keeps and the doors' work (the compose plane, version 2; NS-D1, NS-D2 B, NS-D5, CR-D11).
 // What must hold: an agent that edits a spark's record cannot widen what the spark reaches; a hatch refuses what the
@@ -138,16 +130,18 @@ const SETS: AgentProfileSet[] = [
   },
 ];
 
-function service(runs: AgentSessionSummary[] = []) {
+function service(
+  runs: AgentSessionSummary[] = [],
+  requireSupport: (provider: string) => void = () => undefined,
+) {
   const root = tmp();
   const calls: string[] = [];
   const launched: { launch: SparkLaunch; spark: string }[] = [];
   let resumable = true;
-  const route: SparkRoute = { prepare: async (s) => void calls.push(`prepare:${s.name}`) };
   const svc = new SparkService({
     store: store(root),
     homes: join(root, "sparks"),
-    route,
+    requireSupport,
     profileSets: async () => SETS,
     runs: () => runs,
     spawn: async (launch, sparkId) => {
@@ -182,6 +176,16 @@ const HATCH = {
 };
 
 describe("hatch, list and open (CP-1c; NS-D1, NS-D5, CR-D11)", () => {
+  it("refuses unsupported briefing support before creating a spark's folder or record", async () => {
+    const h = service([], () => {
+      throw new Error("unsupported briefing");
+    });
+    await expect(h.svc.hatch(HATCH, h.principal)).rejects.toThrow("unsupported briefing");
+    expect(h.svc.list()).toEqual([]);
+    expect(h.launched).toEqual([]);
+    expect(existsSync(join(h.root, "sparks"))).toBe(false);
+  });
+
   it("hatches into a folder of its own with its brief, then starts its session there under the profile it thinks in", async () => {
     const h = service();
     const out = await h.svc.hatch(HATCH, h.principal);
@@ -195,7 +199,7 @@ describe("hatch, list and open (CP-1c; NS-D1, NS-D5, CR-D11)", () => {
     expect(readFileSync(join(out.folder, "CLAUDE.md"), "utf8")).toContain(
       "You are Vela, a spark in VibeField.",
     );
-    expect(h.calls).toEqual(["prepare:Vela", "spawn"]);
+    expect(h.calls).toEqual(["spawn"]);
     expect(h.launched[0]).toEqual({
       launch: {
         provider: "claude",
@@ -247,30 +251,12 @@ describe("hatch, list and open (CP-1c; NS-D1, NS-D5, CR-D11)", () => {
     expect(h.calls).toEqual([]);
     runs.length = 0;
     await h.svc.open(vela.id, h.principal);
-    expect(h.calls).toEqual(["prepare:Vela", "resume:run-1"]);
+    expect(h.calls).toEqual(["resume:run-1"]);
     expect(h.svc.get(vela.id)?.session).toEqual({ runtimeRunId: "run-1-b" });
     h.notResumable();
     h.calls.length = 0;
     await h.svc.open(vela.id, h.principal);
-    expect(h.calls).toEqual(["prepare:Vela", "resume:run-1-b", "prepare:Vela", "spawn"]);
+    expect(h.calls).toEqual(["resume:run-1-b", "spawn"]);
     expect(h.svc.list().map((s) => s.name)).toEqual(["Vela"]);
-  });
-});
-
-describe("the two routes for the vibefield server (co-spark-door-route)", () => {
-  it("A writes nothing into the folder; B writes .mcp.json naming the floor's bridge", async () => {
-    const folder = tmp();
-    await LAUNCH_ROUTE.prepare(spark({ folder }));
-    expect(existsSync(join(folder, ".mcp.json"))).toBe(false);
-    await folderRoute(async () => ({
-      endpoint: "/run/door.sock",
-      command: "/app/field-native",
-      args: ["door", "--endpoint", "/run/door.sock"],
-    })).prepare(spark({ folder }));
-    expect(JSON.parse(readFileSync(join(folder, ".mcp.json"), "utf8"))).toEqual({
-      mcpServers: {
-        vibefield: { command: "/app/field-native", args: ["door", "--endpoint", "/run/door.sock"] },
-      },
-    });
   });
 });

@@ -292,7 +292,8 @@ export function termCardOf(
 }
 
 /** HN-D10: is what is being brought in already the newest card? Text by its
- * words (trimmed), a file by its path, a picture by its file — or, for a
+ * words (trimmed), a file by its path — one with none (a file a page made) is
+ * never a twin, nothing tells two such apart — a picture by its file — or, for a
  * picture pasted with no file, by its pixels' size: the snapshot tool puts its
  * still on the clipboard as well, so the paste right after a snapshot is that
  * picture without its path. PURE. */
@@ -306,6 +307,8 @@ export function sameAs(card: Card | undefined, incoming: Card): boolean {
       card.height === incoming.height
     );
   }
-  if (card.kind === "file" && incoming.kind === "file") return card.paste === incoming.paste;
+  if (card.kind === "file" && incoming.kind === "file") {
+    return card.paste !== "" && card.paste === incoming.paste;
+  }
   return card.paste.trim() !== "" && card.paste.trim() === incoming.paste.trim();
 }

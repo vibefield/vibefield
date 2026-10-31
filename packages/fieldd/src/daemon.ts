@@ -103,6 +103,7 @@ import {
   type MeshSyncPosture,
   MONITOR_AUDIENCE,
   NATIVE_SUPERVISION,
+  NativeDoorInfoResult,
   type NativeHealth,
   type NativeLastExit,
   type NativeLinkHealth,
@@ -195,6 +196,7 @@ import { projectPluginAuthority } from "@vibefield/plugin-runtime";
 // the bare wire number (RO-4): the client entry is a DOM program, and fieldd
 // needs only the version its supervisor holds a spawned rosettad to
 import { PROTOCOL_VERSION as ROSETTA_PROTOCOL_VERSION } from "@vibefield/rosetta-protocol/protocol-version";
+import { AgentBriefings } from "./agent-briefing";
 import {
   agentListFor,
   clipRecordedLanes,
@@ -224,8 +226,6 @@ import {
 import { ArtifactService, type ArtifactServiceHealth } from "./artifact-service";
 import { AuditService, type AuditWriterTestHooks } from "./audit-service";
 import { nativeAlive, nativeEndpoint, nativeMgmtEndpoint, splitPathList } from "./boot-env";
-import { ComposeService, composeProjects } from "./compose";
-import { LAUNCH_ROUTE, SparkService, SparkStore } from "./compose/sparks";
 import { DeviceService, localDeviceIdAt } from "./device-service";
 import { DiagnosticsService } from "./diagnostics-service";
 import { DocLane } from "./doc-lane";
@@ -336,6 +336,8 @@ import {
   TerminalService,
 } from "./terminal-service";
 import { TokenService } from "./token-service";
+import { composeProjects, ToolPlaneService } from "./tool-plane";
+import { SparkService, SparkStore } from "./tool-plane/sparks";
 import { userMe } from "./user-me";
 import type { BrowseFacts } from "./workspace/browse-exports";
 import type { FilesHostLaunch } from "./workspace/launch";
@@ -1082,11 +1084,23 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     logger,
   });
   const projectIntents = projectIntentWriter(projectRecords);
-  const agents = new AgentRuntimeService({
+  const sparkStore = new SparkStore({
+    dir: join(config.dataDir, ...LAYOUT.SPARKS_DIR),
+    keyPath: join(config.dataDir, ...LAYOUT.SPARKS_KEY_FILE),
+    logger: logger.child({ component: "compose.sparks" }),
+  });
+  const briefings: AgentBriefings = new AgentBriefings({
+    spark: (id) => sparkStore.get(id),
+    capabilities: (provider) => agents.runtime.providers().find((p) => p.id === provider)?.briefing,
+    door: async () => NativeDoorInfoResult.parse(await native.request("native.door.info", {})),
+  });
+  const agents: AgentRuntimeService = new AgentRuntimeService({
     userRoot: config.dataDir,
     vibefieldRoot: config.vibefieldRoot ?? null,
     index,
     supervisor: rosettad,
+    sparkBriefing: (spark, provider) => briefings.prepare(spark, provider),
+    runBriefing: (provider) => briefings.forRun(provider),
     terminals: () => terminalsRef,
     deviceId: () => devicesForAgents?.currentDeviceId() ?? "local",
     onProfileSignedIn: async (profileId): Promise<void> => {
@@ -1221,7 +1235,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // optional the whole way down — with the mesh off (the default) `docSync`
     // stays null and every commit takes the same path it always did.
     let docSync: DocSyncService | null = null;
-    let compose: ComposeService | null = null;
+    let toolPlane: ToolPlaneService | null = null;
     let presenceRooms: PresenceRoomRouter | null = null;
     // DS-5 (DS-D6) — the holders slice, bound once DeviceService exists below.
     let docHolders: DocHoldersService | null = null;
@@ -2692,21 +2706,18 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
               }),
       },
     });
-    // CP-1b (the compose plane, version 2; compose/) — the `vibefield` door. A spark's MCP calls arrive through the
-    // floor's door (native.door.subscribe; the bytes on the meshdata lane link) and are answered with its verbs, each
-    // held to its Agent Profiles and audited before it acts. A spark's own session is known by its record (CP-1c,
-    // just below); any other caller is served no tools and leaves its door's one audit line.
-    // CP-1c (compose/sparks.ts) — the sparks: their signed records under LAYOUT.SPARKS_DIR, each one's folder under
-    // LAYOUT.SPARK_HOMES_DIR, and the window's three doors (below, beside setup's). The route is A, the lean on the
-    // board's co-spark-door-route: until PU-F carries the server at launch, a spark hatches and thinks without tools.
+    // CP-1b, the tool plane since MT-0 (tool-plane/) — the `vibefield` door. An agent's MCP calls arrive through the
+    // floor's door (native.door.subscribe; the bytes on the meshdata lane link) and are answered with the rows its
+    // audience holds, each held to its Agent Profiles and audited before it acts: a spark (known by its record, CP-1c,
+    // just below) every served row, a plain run the `agent` rows; any other caller is served no tools and leaves its
+    // door's one audit line.
+    // CP-1c (tool-plane/sparks.ts) — the sparks: their signed records under LAYOUT.SPARKS_DIR, each one's folder under
+    // LAYOUT.SPARK_HOMES_DIR, and the window's three doors. CP-1d's route A is prepared at every runtime birth,
+    // including run-id, native-id and idle resumes; no launch configuration is written into the spark's folder.
     const sparks = new SparkService({
-      store: new SparkStore({
-        dir: join(config.dataDir, ...LAYOUT.SPARKS_DIR),
-        keyPath: join(config.dataDir, ...LAYOUT.SPARKS_KEY_FILE),
-        logger: logger.child({ component: "compose.sparks" }),
-      }),
+      store: sparkStore,
       homes: join(config.dataDir, ...LAYOUT.SPARK_HOMES_DIR),
-      route: LAUNCH_ROUTE,
+      requireSupport: (provider) => briefings.requireSupported(provider),
       profileSets: async () => (await agents.profiles.sets()).sets,
       runs: () => agents.list().sessions,
       spawn: async (launch, spark, principal) => {
@@ -2735,7 +2746,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           // a session that cannot be resumed (gone, never resumable) is started again in the spark's folder
           if (
             error instanceof RpcCallError &&
-            (error.kind === "PRECONDITION_FAILED" || error.kind === "NOT_FOUND")
+            (error.kind === "PRECONDITION_FAILED" || error.kind === "NOT_FOUND") &&
+            !String((error.details as { reason?: string } | undefined)?.reason ?? "").startsWith(
+              "spark-",
+            )
           )
             return undefined;
           throw error;
@@ -2744,7 +2758,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       now: () => new Date(),
       logger: logger.child({ component: "compose.sparks" }),
     });
-    compose = new ComposeService({
+    toolPlane = new ToolPlaneService({
       native,
       lanes: laneLink,
       runForTerminal: (terminalSessionId) => agents.runForTerminal(terminalSessionId),
@@ -2786,7 +2800,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       logger: logger.child({ component: "compose" }),
     });
     {
-      const door = compose;
+      const door = toolPlane;
       native.on("connected", () => void door.ensureStarted());
       void door.ensureStarted();
     }
@@ -6663,7 +6677,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         detachHealthSources?.();
         links.stop();
         await presenceRooms?.stop();
-        compose?.stop();
+        toolPlane?.stop();
         docSync?.stop();
         laneLink.close();
         docs.dispose();
@@ -6714,7 +6728,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       await updateManager.dispose();
       runtimeDiagnostics.dispose();
       await presenceRooms?.stop();
-      compose?.stop();
+      toolPlane?.stop();
       docSync?.stop();
       laneLink.close();
       docs.dispose();
@@ -7167,7 +7181,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           api.close();
           docLane.close();
           await presenceRooms?.stop();
-          compose?.stop();
+          toolPlane?.stop();
           docSync?.stop();
           laneLink.close();
           docs.dispose();

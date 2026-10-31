@@ -1,11 +1,12 @@
 import type { FieldFromWorker, FieldToWorker } from "./field-door";
 import { type MarkFade, markFade } from "./field-mark";
+import { createGlassPass, type GlassPass } from "./glass-pass";
 import { createSplash, type Splash, SplashUnavailable } from "./vibefield-splash.js";
 
 // The field in a worker (DESIGN.md §8 "The boot splash"; track FG): the website's splash drawing
 // into the boot's canvas through an OffscreenCanvas, so the boot's work on the main thread can't
 // stall it. The website's loading-window.worker.js (vibefield-dotdev), typed, with the mark's fade
-// (field-mark.ts).
+// (field-mark.ts), and since FG-3b the Setup Assistant's glass as a pass of its frames (glass-pass.ts).
 //
 // The vendored module runs as it is. It reads three things a worker lacks, so they stand in: a
 // ResizeObserver the page feeds sizes to, document.hidden and its event, and the pixel ratio. It
@@ -63,6 +64,7 @@ const resize = ({ cssW, cssH, dpr }: { cssW: number; cssH: number; dpr: number }
 let splash: Splash | null = null;
 let device: GPUDevice | null = null;
 let mark: MarkFade | null = null;
+let glass: GlassPass | null = null;
 
 scope.onmessage = async ({ data }) => {
   if (data.type === "start") {
@@ -78,18 +80,28 @@ scope.onmessage = async ({ data }) => {
       // Before its first size, the splash reads the canvas's own size as CSS px.
       canvas.width = Math.max(1, Math.round(data.cssW));
       canvas.height = Math.max(1, Math.round(data.cssH));
+      // The glass's pass is the splash's post, so it comes first; it draws nothing until the page
+      // hands it a glass.
+      glass = createGlassPass(device, navigator.gpu, {
+        drawn: (drawn) => scope.postMessage({ type: "glass-drawn", drawn }),
+        frame: () => splash?.redraw(),
+        failed: (message) => scope.postMessage({ type: "glass-failed", message }),
+      });
       splash = await createSplash(canvas, {
         fps: 60,
         reducedMotion: data.reducedMotion,
         transparent: true,
         budget: data.budget,
         device,
+        post: glass,
       });
       resize(data);
       splash.start();
       mark = markFade(splash);
       scope.postMessage({ type: "ready" });
     } catch (error) {
+      glass?.destroy();
+      glass = null;
       device?.destroy();
       device = null;
       const message = String(error instanceof Error ? error.message : error);
@@ -110,9 +122,15 @@ scope.onmessage = async ({ data }) => {
     mark?.cancel();
     const opened = splash === null ? false : await splash.reveal(data.options);
     scope.postMessage({ type: "revealed", id: data.id, opened });
+  } else if (data.type === "glass") {
+    glass?.setLook(data.glass?.look ?? null);
+    glass?.setPose(data.glass?.pose ?? null);
+    splash?.redraw();
   } else if (data.type === "destroy") {
     mark?.cancel();
     mark = null;
+    glass?.destroy();
+    glass = null;
     splash?.destroy();
     splash = null;
     device?.destroy();

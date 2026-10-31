@@ -1337,6 +1337,12 @@
                 touches VibeField's JSON control plane. The renderer's direct route to <code>rosettad</code> is
                 <em>not</em> drawn, because it is not built: fieldd is still the daemon's only client, and the
                 <span class="badge tone-designed">Designed</span> ticketed route waits on RO-1.
+                <em>Corrected 2026-10-29 (PG, C6):</em> the phone box's "reads the mesh store", the mesh box's
+                <code>field.agents.v1</code> lines and the two arrows "publishes the field slice" and "reads the store"
+                stopped being live routes on 2026-10-01, when DS-D14 retired the store (<code>a6a1bfa1</code>, landed
+                with DS wave 3). The phone reads the field through its home desktop's product door
+                (<code>agent.subscribe {projection: "field", scope: "mesh"}</code>, DS-8), a route this figure does not
+                draw, so the home's fieldd is in its read path.
               </figcaption>
             </figure>
           </section>
@@ -1430,6 +1436,13 @@
                         Everything puppeteer would otherwise keep under <code>~/.puppeteer</code>, injected from this
                         user's root: the profile registry, the managed profile roots, update transcripts, the creation
                         registry and the own-action recorder. fieldd owns every byte, puppeteer every schema.
+                      </p>
+                      <p>
+                        CP-1d also supplies typed per-run <code>mcpServers</code>, <code>allowTools</code> and
+                        <code>instructions</code> beside model selection on spark spawn and every resume. The
+                        <a href="spark-briefings.md">spark briefing handoff</a> rebuilds them from the signed spark
+                        record and current native door. Provider-declared process topology gates the ancestry-based
+                        door; helper children need a separate trusted association.
                       </p>
                     </td>
                     <td><span class="badge tone-built">Built</span><p>AR-2 <code>f9f04763</code></p></td>
@@ -1600,6 +1613,12 @@
                         cost nothing. Two carriers for the same projection: the mesh store
                         <code>field.agents.v1</code>, and <code>agent.subscribe {projection: "field"}</code> for a
                         reader that prefers to dial. Mesh-down is a normal state — the slice is simply not written.
+                        <em>Corrected 2026-10-29 (PG, C6): one carrier since DS-D14 retired the store on 2026-10-01
+                        (<code>a6a1bfa1</code>) — <code>agent-field-publisher.ts</code> is deleted, and the phone reads the
+                        door through its home desktop's mesh board (DS-8). Amended 2026-10-29 (James, PG-D1 (a);
+                        <code>draft/thinking-phone-godview.md</code> §6): the phone's seam becomes the backend model's
+                        REMOTE cut, which a peer desktop's windows will read too, and <code>field</code> retires after one
+                        release of skew; as built the phone reads <code>field</code> until PG-2 and PG-3.</em>
                       </p>
                     </td>
                     <td><span class="badge tone-built">Built</span><p>MF-1</p></td>
@@ -1724,14 +1743,15 @@
                     </td>
                   </tr>
                   <tr>
-                    <td><span class="route">fieldd's door: the <code>vibefield</code> MCP server (CP-1b)</span></td>
+                    <td><span class="route">fieldd's door: the <code>vibefield</code> MCP server (CP-1b; the tool plane since MT-0)</span></td>
                     <td><span class="badge tone-vibefield">contracts</span></td>
                     <td><span class="badge tone-vibefield">fieldd</span></td>
                     <td>
                       <p>
-                        <code>packages/contracts/src/compose.ts</code> (<code>COMPOSE_VERBS</code>, projected as
-                        <code>compose-tools</code>)<br />
-                        <code>packages/fieldd/src/compose/index.ts</code> · <code>mcp.ts</code> · <code>verbs.ts</code>
+                        <code>packages/contracts/src/tools.ts</code> (<code>TOOLS</code>, projected as
+                        <code>@vibefield/contracts/tools</code>)<br />
+                        <code>packages/fieldd/src/tool-plane/index.ts</code> · <code>door.ts</code> · <code>mcp.ts</code> ·
+                        <code>rooms/compose/verbs.ts</code>
                       </p>
                     </td>
                     <td>
@@ -1739,10 +1759,12 @@
                         MCP over the door's lane, one JSON-RPC message per line: <code>2026-07-28</code> (stateless:
                         <code>server/discover</code>, <code>_meta</code> on every request, <code>resultType</code>, a
                         list's <code>ttlMs</code>) and the handshake before it, on the same connection. fieldd maps the
-                        floor's pane to its run. A spark's own session, known by its signed record (CP-1c), is served
-                        the six CP-1 read tools, each held to the spark's Agent Profiles and written to the audit log
-                        before it acts (CP-L6). Any other caller is served none and leaves one
-                        <code>compose.door.plain</code> line (CP-L1). The door knows no vendor (AR-L1): any agent that
+                        floor's pane to its run, and serves each caller its audience's rows (MT-0): a spark, known by
+                        its signed record (CP-1c), every served row; a plain run whose verified record names no spark the
+                        <code>agent</code> rows (History, the projects list). Each call is held to its row and to the
+                        caller's Agent Profiles, and written to the audit log as <code>tools.&lt;name&gt;</code> before
+                        it acts (CP-L6). A pane, the outside and an unsettled run are served none and leave one
+                        <code>tools.door.plain</code> line. The door knows no vendor (AR-L1): any agent that
                         speaks MCP over stdio is served the same way, and who it is comes from the walk. The lane link
                         redials after a floor restart or a dropped socket.
                       </p>
@@ -1750,6 +1772,36 @@
                     <td>
                       <span class="badge tone-built">Built</span>
                       <p>CP-1b <code>42748065</code> · <code>3e93ba71</code>; CP-1c <code>f98d0d2b</code> · <code>1060d4b2</code>. The seam's owner is api's <a href="api.html#cat-compose-door"><code>vibefield</code> MCP door</a>, and the window's <a href="api.html#cat-compose"><code>compose.sparks.*</code></a> doors are beside it.</p>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">the tool plane: one catalog, one door (MT-0)</span></td>
+                    <td><span class="badge tone-vibefield">contracts</span></td>
+                    <td><span class="badge tone-vibefield">fieldd</span></td>
+                    <td>
+                      <p>
+                        <code>packages/contracts/src/tools.ts</code> · <code>gen/tools.ts</code> ·
+                        <code>test/tools.test.ts</code><br />
+                        <code>packages/fieldd/src/tool-plane/</code> (<code>rooms/&lt;room&gt;/</code>) ·
+                        <code>agent-briefing.ts</code>
+                      </p>
+                    </td>
+                    <td>
+                      <p>
+                        Every tool VibeField offers an agent is one row: <code>&lt;noun&gt;_&lt;verb&gt;</code>, its
+                        family, category, audience (<code>agent</code> or <code>spark</code>), scope, its four
+                        annotations, its slice and its schemas. A row with schemas is served and a row without is
+                        planned; a lint holds every row's columns and gives every schema a row. fieldd lists each caller
+                        its audience's rows, holds every call to its row again, and each later room is a folder under
+                        <code>rooms/</code> over fieldd's own services: no puppeteer or rosetta package anywhere in the
+                        plane (R29), and no Electron, plugin package or window code in a room (R30). The briefing
+                        reaches every run fieldd starts (MT-D9). The design: <code>draft/thinking-tool-plane.md</code>,
+                        ruled 2026-10-30.
+                      </p>
+                    </td>
+                    <td>
+                      <span class="badge tone-designed">Designed</span>
+                      <p>MT-0, drafted on the compose stack. The seam's owner is api's <a href="api.html#cat-compose-door"><code>vibefield</code> door</a>.</p>
                     </td>
                   </tr>
                 </tbody>
@@ -1957,6 +2009,10 @@
                         store. Content never rides it; a tap fetches through a door. That the projection is
                         content-free is GM-D4's ruling (built at MF-1), and it is a separate decision from who may
                         read it.
+                        <em>Corrected 2026-10-29 (PG, C6): the store retired on 2026-10-01 (DS-D14, revisiting GM-D4;
+                        <code>a6a1bfa1</code>): no fieldd publishes this slice and no phone reads it. The id stays in
+                        <code>registries.ts</code>, marked RETIRED, because the floor's slice cap names it and an older
+                        desktop may still publish one. The node's login scope, in the next column, stands.</em>
                       </p>
                     </td>
                     <td>
@@ -1985,6 +2041,9 @@
               label are on that wire today. The absolute cwd was already reduced to a folder basename at no product
               cost. The three options and the lean are recorded in <code>docs/DECISIONS.md</code>; the ruling is
               James's.
+              <em>Corrected 2026-10-29 (PG, C6): neither open nor on that wire. GM-D10 was answered by UA-P-D2 and
+              built at UA-P-4 (2026-09-16, the login-scoped node in the row above), and the store has carried nothing
+              since DS-D14 retired it on 2026-10-01 (<code>docs/DECISIONS.md</code>, the GM-D row's status).</em>
             </div>
           </section>
 
@@ -2086,7 +2145,7 @@
                   <tr>
                     <td><span class="route">login</span></td>
                     <td><p>The tailscale login the account is bound to, and since RFC 025 the mesh node's scope.</p></td>
-                    <td><p>the account gate; <code>field.agents.v1</code>'s scope</p></td>
+                    <td><p>the account gate; <code>field.agents.v1</code>'s scope <em>(Corrected 2026-10-29, PG C6: that store retired 2026-10-01, DS-D14; the login scopes the mesh node, and the door compares a caller's WhoIs login to the stored link.)</em></p></td>
                   </tr>
                 </tbody>
               </table>
@@ -2111,7 +2170,8 @@
                 <p>
                   Control-rate JSON rides the product API; high-rate or bulk traffic rides a ticketed direct route.
                   Applied here: terminal frames go from the floor's cell to the renderer's terminal runtime and never
-                  transit fieldd; monitor deltas coalesce to at most one frame per tick per connection; and rosetta's
+                  transit fieldd; monitor deltas coalesce to at most one frame per tick per connection, and a phone whose
+                  connection falls 256 KiB behind is sent its mesh board as it is, never the backlog (PG-1c); and rosetta's
                   inline images, which are content-addressed bytes, are why the history data plane must be direct rather
                   than proxied.
                 </p>
@@ -2406,7 +2466,7 @@
                   </tr>
                   <tr>
                     <td>the mesh store to a phone</td>
-                    <td><p>Measured on a real tailnet pair: store convergence 28 ms, round trip p99 0.56 ms.</p></td>
+                    <td><p>Measured on a real tailnet pair: store convergence 28 ms, round trip p99 0.56 ms. <em>(Corrected 2026-10-29, PG C6: the convergence is the retired store's, DS-D14, 2026-10-01; the round trip was truffle's 1 KiB request/reply on the same pair, both nodes on one host. The phone's read through its home desktop's door has no measured figure yet; PG-9 owes it.)</em></p></td>
                     <td><p><code>docs/DECISIONS.md</code> GM-D4's probe gate</p></td>
                   </tr>
                   <tr>
@@ -2506,7 +2566,7 @@
                   </tr>
                   <tr>
                     <td><strong>D-i18</strong></td>
-                    <td><p>The phone's projection of the cost fields. The desktop already carries them — the mirror passes them through at the same schema version — but the field slice is a separate content-free projection, so the phone's burn ladder is on estimated dollars until fieldd projects the real ones.</p></td>
+                    <td><p>The phone's projection of the cost fields. The desktop already carries them — the mirror passes them through at the same schema version — but the field slice is a separate content-free projection, so the phone's burn ladder is on estimated dollars until fieldd projects the real ones. <em>Amended 2026-10-29 (James, PG-D1 (a); <code>draft/thinking-phone-godview.md</code> §6 item 7): Q13 ruled this door on 2026-10-28 (the home desktop's <code>desk</code> board), and PG-D1 supersedes it — the phone's replica will read the backend model's REMOTE cut, which carries <code>cost</code> with its series and burn rate. As built the phone reads <code>field</code>, with no cost, until PG-2 and PG-3.</em></p></td>
                     <td><span class="badge tone-owed">Owed</span><p><code>docs/LANDED.md</code> §AR-5-1</p></td>
                   </tr>
                   <tr>

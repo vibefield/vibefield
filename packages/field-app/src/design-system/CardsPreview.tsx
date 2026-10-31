@@ -22,16 +22,23 @@ import {
   termCardOf,
   textCardOf,
 } from "../frame/cards/cards-model";
-import { TARGET_WORDS, WAITING_WORDS } from "../frame/cards/cards-words";
+import {
+  COPY_PLACES,
+  OUTSIDE_WORDS,
+  TARGET_WORDS,
+  WAITING_WORDS,
+} from "../frame/cards/cards-words";
 
 // The hand's fixture ADAPTER (track HN; docs/UI_SYSTEM.md): the shipping fan —
 // `CardsView`, placed by the product's own model (`layoutCards`, `layoutRaised`,
 // `reachLift`) — the shipping `CardFace`, over fixture cards, one of each kind
-// (and the two the desk's Copy deals, named by the product's own `copyName`),
-// and the shipping `CarriedCardView` over a card carried to a pane. What it
-// replaces is only what a host supplies: the cards (a picture the catalog draws
-// itself, as the edge tray's fixtures did), the pointer, the drag, the clock and
-// the window. The markup and the CSS are the product's.
+// (and the two the desk's Copy deals, named by the product's own `copyName`,
+// and what another app, Settings and History deal, in the product's own words
+// and provenances), and the shipping `CarriedCardView` over a card carried to
+// a pane. What it replaces is only what a host supplies: the cards (a picture
+// the catalog draws itself, as the edge tray's fixtures did), the pointer, the
+// drag, the clock, the window and the keys (the Mac's). The markup and the CSS
+// are the product's.
 
 /** The plates' clock: every card was dealt a few minutes before it. */
 const NOW = Date.UTC(2026, 9, 29, 14, 10);
@@ -171,6 +178,43 @@ export const WAITING_FIXTURES: readonly Card[] = [
   },
 ];
 
+/** What another app, Settings and History deal (HN-5, HN-6; DESIGN.md §8 "The hand"): a file
+ * dragged in from another app — not words, so its kind and its size, in the product's own words —
+ * words ⌘V brought in with no caret, a device's name copied in Settings over Canvas, and a path
+ * History's room copied. */
+export const FROM_FIXTURES: readonly Card[] = [
+  {
+    id: "fx-from-file",
+    kind: "file",
+    origin: { view: "outside", how: "drag" },
+    at: minutesAgo(3),
+    paste: "/Users/james/Desktop/report.pdf",
+    name: "report.pdf",
+    folder: "james/Desktop",
+    facts: OUTSIDE_WORDS.facts("PDF", 2_400_000),
+  },
+  textCardOf("Can you check the routes table before the cut? The files worker moved.", {
+    id: "fx-from-paste",
+    origin: { view: "outside", how: "paste" },
+    at: NOW - 20_000,
+  }),
+  textCardOf("james-mac-mini", {
+    id: "fx-from-settings",
+    origin: { view: "canvas", place: COPY_PLACES.settings, how: "copy" },
+    at: NOW - 15_000,
+  }),
+  textCardOf("/Users/james/vibe-field/packages/fieldd/src/files/routes.ts", {
+    id: "fx-from-history",
+    origin: { view: "history", how: "copy" },
+    at: NOW - 10_000,
+  }),
+];
+
+/** The cards of FROM_FIXTURES a plate reaches, to read where each came from above it (§8 "The
+ * hand", Holding them): a paste with no caret, a copy made in Settings over Canvas, and one
+ * History's room made. */
+export const FROM_REACHED = ["fx-from-paste", "fx-from-settings", "fx-from-history"] as const;
+
 /** The page's hand plates, in its order. */
 export const CARDS_STATES = ["rest", "reached", "raised", "held", "carried"] as const;
 export type CardsState = (typeof CARDS_STATES)[number];
@@ -247,6 +291,7 @@ export function CardsPlate({ state }: { state: CardsState }): ReactElement {
         carried={carried?.card.id ?? null}
         nudged={null}
         now={NOW}
+        keys="mac"
         reducedMotion={false}
         win={win}
       />
@@ -255,8 +300,38 @@ export function CardsPlate({ state }: { state: CardsState }): ReactElement {
   );
 }
 
-/** The six faces at twice their size (and a drag's two waiting faces, and the
- * two the desk's Copy deals), by the page's light or by the Moon's. */
+/** Where those came from, each over its own card as the reach shows it: the hand of FROM_FIXTURES
+ * at rest, the pointer on that card's middle as the product measures it — the card up whole, and
+ * above it where it came from. */
+export function CardsFromPlate({ reach }: { readonly reach: string }): ReactElement {
+  const layout = layoutCards(FROM_FIXTURES.length, PLATE, CARDS_LINE_RIGHT);
+  const slot = layout.slots[FROM_FIXTURES.findIndex((card) => card.id === reach)];
+  const lifts = reachLift(layout.slots, slot === undefined ? null : slot.x + CARD_W / 2);
+  return (
+    <div className="vf-ds-cards-plate" data-state="from" data-reach={reach}>
+      <CardsView
+        cards={FROM_FIXTURES}
+        layout={layout}
+        lifts={lifts}
+        reached={reachedIndex(lifts)}
+        raised={false}
+        focus={-1}
+        held={null}
+        arriving={NONE}
+        carried={null}
+        nudged={null}
+        now={NOW}
+        keys="mac"
+        reducedMotion={false}
+        win={PLATE}
+      />
+    </div>
+  );
+}
+
+/** The six faces at twice their size (and a drag's two waiting faces, the
+ * two the desk's Copy deals, and what another app, Settings and History deal),
+ * by the page's light or by the Moon's. */
 export function CardFacesPlate({
   cards,
   night = false,

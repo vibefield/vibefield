@@ -9,6 +9,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import {
+  type ReleaseNotes,
   type UpdateChannel,
   UpdateClientStateFile,
   type UpdateLastApply,
@@ -24,8 +25,13 @@ export interface UpdateClientState {
   readonly lastCheckAt: number | null;
   /** WP12c (§10 S4) — the last apply's branch, written before every exit it takes */
   readonly lastApply: UpdateLastApply | null;
-  /** AU-1 (AU-D3 A) — the version staged on this Mac and when it FIRST became ready (kept across launches) */
-  readonly staged: { readonly version: string; readonly at: number } | null;
+  /** AU-1 (AU-D3 A) — the version staged on this Mac and when it FIRST became ready (kept across launches); AU-6: with
+   * its verified notes, kept at the staged transition (the file's tolerant reader drops malformed ones alone) */
+  readonly staged: {
+    readonly version: string;
+    readonly at: number;
+    readonly notes?: ReleaseNotes | undefined;
+  } | null;
   /** L3b-ii (B5) — the trust-root documents adopted by rotation, oldest first (`root-chain.ts`) */
   readonly trustRoots: readonly AdoptedRoot[];
 }

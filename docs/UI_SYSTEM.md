@@ -64,8 +64,9 @@ glyph specimens mount §13's `FieldGlyph`.
 
 The catalog currently mounts these shipping views directly:
 
-- Artifact Hub and all empty/loading/populated/unavailable states — in the right edge's drawer
-  since One Frame FR-4, where the side panel's contents now live
+- Artifact Hub and all empty/loading/populated/unavailable states — at the width the pill's sheet
+  gives its Artifacts shelf since HN-8, a container its plugin's own tile form answers (PL-D3); the
+  side panel's contents, which the right edge's drawer held from One Frame FR-4 until then
 - Godview stage, monitor registry, tuning panel, unavailable terminal deck, and the complete
   swarm-circle state matrix — and, since GV-D1 (2026-10-11), Godview's head: the shipping
   `GodviewHeadView`, which the shipping monitor mounts, so every Godview specimen wears it and no
@@ -73,7 +74,7 @@ The catalog currently mounts these shipping views directly:
   control panel, which the product reaches from the palette
 - the command palette (re-cut by One Frame FR-3: the frame's acts and the plugins' commands, each
   key at its row's end), settings dialog and loading veil (the side-panel frame retired into the
-  right edge's drawer, FR-4)
+  right edge's drawer at FR-4, and the drawer into the pill's Artifacts shelf at HN-8)
 - shared controls/states and every onboarding pane, alternate entry, and completion failure
 - the account's face (UA-7): the Me menu open, closed, waiting and offline, the Settings head,
   both face frames at every size, and the face picker
@@ -86,28 +87,40 @@ The catalog currently mounts these shipping views directly:
   swapping and lowering over a field with Godview's stage and History's room, on fixture state
 - the line (One Frame FR-2; shortened by Cards in Hand, HN-2): `ComposerLineView` in every state the
   Cards in Hand page's line plates draw — at rest, the snapshot under the pointer, in flight and
-  waiting with no capture door, Objects out, Godview's New terminal, History's Resume, Windows' keys
-  — and the live line on its real controller (`Composer`) over the frame's field, with fixture doors
-  for what Godview lends it and the capture. @'s `AtMenuView` and the draft's plates left with the
-  draft (LN-D3)
+  waiting with no capture door, Objects out, Godview's New terminal, History's New terminal in the
+  project the room shows (HN-7), Windows' keys — and the live line on its real controller
+  (`Composer`) over the frame's field, with fixture doors for what Godview lends it and the
+  capture. @'s `AtMenuView` and the draft's plates left with the draft (LN-D3)
 - the hand (Cards in Hand, HN-1): the shipping `CardsView` and `CardFace` over fixture cards
   (`CardsPreview`) — the six faces in both lights, the fan at rest, a card reached with its ×, the
   hand raised with a card in the keyboard's focus, a card picked up over its scrim, and a card from
   another app still waiting
-- the head (One Frame FR-3): `HeadView` in every state the page's head plates draw — the field's
-  name at its top, the crumbs folded in inside a folder, FitPath in a narrow window, renaming in
-  place, the fields explorer grown from the pill, the zoom readout's menu (and Windows' keys), the
-  palette under the head — and the live head on its real controller (`Head`) in the playground,
-  over a fixture document manager and a fixture canvas door (the path, the zoom). It replaced the
-  file pill, the navigation breadcrumbs and the − % + zoom pill
+- the head (One Frame FR-3; its package and the pill's sheet on two shelves since HN-8, PL-D1 and
+  PL-D2): `HeadView` in every state the page's head plates draw — the field's name at its top, the
+  package after the chevron's rule and, in a plate of its own, its standing dot, the crumbs folded
+  in inside a folder, FitPath in a narrow window, renaming in place, the pill's sheet on its Fields
+  shelf (the fields explorer, and the sync question in place of its tiles, TS-6) and on its
+  Artifacts shelf — holding the Hub's own fixture adapter (`ArtifactPanelPreview`, the plugin's
+  design-system door) or, with no Hub bound, the words the shelf waits in — the same sheet under a
+  cover, grown from the package circle, the zoom readout's menu (and Windows' keys), the palette
+  under the head — and the live head on its real controller (`Head`) in the playground, over a
+  fixture document manager and a fixture canvas door (the path, the zoom); the playground hosts no
+  plugin, so its shelf says it waits, as a window's does at boot. It replaced the file pill, the
+  navigation breadcrumbs and the − % + zoom pill
+- the package circle (PL-D2, HN-8): the shipping `PackageCircleView` at its place over each covered
+  view's own ground (`PackageCirclePreview`) — over Godview's stage, its Stories keeping one head
+  gap from it; over History's band with a source unavailable, its dot on; and in the terminals'
+  title bar while they are maximized, folded there as search is — its dot's words the head's own
+  (`artifactsDotWords`). The sheet it grows is the pill's, drawn by the head's plates
 - the corner (One Frame FR-4): `MeMenuView` open above the line over fixture account and theme
   state, a plate per Theme it holds — Light, Dark, and Auto following the page's own theme — and
   Settings → Appearance (`AppearanceSectionView`) in the shipping dialog, the same setting; the
   Settings specimen's old Appearance replica is gone
-- the edge (One Frame FR-4; the right edge alone since HN-1): `EdgeTrayView` in every state the
-  page's edges plates draw — the notch whole on Canvas, the sliver over Godview, the notch a sliver
-  grows into (over History), and Artifacts' drawer holding the Hub through the plugin's own fixture
-  door (`ArtifactsDrawer`); the clipboard's left notch and drawer retired into the hand
+- *the edges' plates retired with the edges at HN-8 (PL-D1…PL-D3, 2026-10-30):* the shipping tray
+  view on the right edge — the notch whole on Canvas, the sliver over Godview, the notch a sliver
+  grew into over History, and the drawer holding the Hub — and its fixture adapter are gone, as the
+  clipboard's left notch and drawer went into the hand at HN-1. Artifacts' doors are the head's
+  (the pill's package and the covered views' circle), and the Hub's states are the first row above
 - search, the frame's Peek (GV-D8, 2026-10-08): the shipping controller (`Peek`) over a fixture
   port answering from the room package's demo (`peek-fixtures.ts`) — the frame's button at rest
   over History before anything is read, and the popup holding words over the shipping History view
@@ -216,7 +229,8 @@ catalog stays the single composition root without ever owning foreign markup. (A
 - Reuse a shell primitive before creating domain-specific control anatomy.
 - An icon is a `FieldGlyph` from the kit's `/glyphs` leaf (DESIGN.md §13; plugins reach it through
   `@vibefield/plugin-sdk/ui`). An inline `<svg>` that is an icon fails `glyphs.test.tsx`; the
-  allowlist is geometry that is not an icon, such as the edge tray's notch and drawer.
+  allowlist is geometry that is not an icon, such as the coin's marks and the catalog's fixture
+  stills (the edge tray's notch and drawer were, until HN-8 retired them).
 - Put static styling in CSS. Inline styles are reserved for runtime geometry, progress, user data,
   or CSS custom-property projection.
 - Give domain selectors a namespace and keep their CSS beside the component. Do not add another
