@@ -97,6 +97,37 @@ export const PHONE_ROWS: Readonly<
   cost: [{ name: "SIM-COST", klass: "OBSERVATION" }],
 };
 
+/** The rows that run, held to `PHONE_ROWS[mode]` AS they run (the grade's R-6): each `(name, klass)` must be the table's
+ * next — a row added, dropped, moved or reclassed in the runner reds the run at once, said, never first at the stage's
+ * count on a console unlock — and the table must be run out before `PHONE_ROWS_END`. */
+export interface RowLedger {
+  /** null: the table's next row, taken; else why not (nothing taken) */
+  take(name: string, klass: RowClass): string | null;
+  /** null: every row of the table taken; else the rows that never ran */
+  rest(): string | null;
+}
+
+export function rowLedger(mode: PhoneMode): RowLedger {
+  const table = PHONE_ROWS[mode];
+  let next = 0;
+  return {
+    take(name, klass) {
+      const want = table[next];
+      if (want === undefined)
+        return `${name} (${klass}) runs past the ${mode} table's ${table.length} rows`;
+      if (want.name !== name || want.klass !== klass)
+        return `${name} (${klass}) runs where the ${mode} table's row ${next + 1} is ${want.name} (${want.klass})`;
+      next += 1;
+      return null;
+    },
+    rest() {
+      if (next === table.length) return null;
+      const left = table.slice(next).map((r) => r.name);
+      return `${left.length} of the ${mode} table's ${table.length} rows never ran (${left.join(", ")})`;
+    },
+  };
+}
+
 /** The acts a press may run (the stage's `PRESS_ACTS`): never `create` — a product-named device P5 cannot delete. */
 export const PRESS_ACTS = ["boot", "show", "retry", "open-settings"] as const;
 export type PressAct = (typeof PRESS_ACTS)[number];
@@ -1409,6 +1440,9 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
   const { js, until, move, press, key: keyPress, undoKey, deskAt } = h;
   const T = JSON.stringify(PHONE.type);
   const results: PhoneRowResult[] = [];
+  /** The rows run, against the mode's table (R-6); `ranOut`: the mode's rows returned (not thrown) */
+  const ledger = rowLedger(env.mode);
+  let ranOut = false;
   const words: string[] = [];
   let ownRow = false;
   let served = 0;
@@ -1866,6 +1900,9 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
     body: () => Promise<RowBody>,
   ): Promise<PhoneRowResult | null> => {
     if (stopped !== null) return null;
+    // the table's next row, or the runner is not the table: thrown before the door's begin, so no HID pair is broken
+    const off = ledger.take(name, klass);
+    if (off !== null) throw new Error(`PHONE_ROWS: ${off}`);
     const begin = await door.row(name, "begin");
     if (begin.stop !== null) {
       stopped = `${name}: ${begin.stop}`;
@@ -1928,6 +1965,7 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
     if (env.mode === "none") await noneRows();
     else if (env.mode === "devices") await deviceRows();
     else await costRows();
+    ranOut = true;
   } catch (error) {
     results.push({
       name: "PHONE",
@@ -1963,6 +2001,16 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
         problems: [
           `CLEARED: ${phonesAfter} phones on the board after the rows, not the ${phonesBefore} found`,
         ],
+        why: null,
+      });
+    // the table run out (R-6): a stop says its own why, and a thrown runner is red already
+    const rest = ranOut && stopped === null ? ledger.rest() : null;
+    if (rest !== null)
+      results.push({
+        name: "PHONE_ROWS",
+        klass: "MUST",
+        mark: "red",
+        problems: [`PHONE_ROWS: ${rest}`],
         why: null,
       });
     if (stopped !== null) say(`SMOKE_PHONE_STOP ${JSON.stringify({ why: stopped })}`);

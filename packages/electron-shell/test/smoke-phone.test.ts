@@ -74,6 +74,7 @@ import {
   pressInHand,
   quitStaging,
   readSince,
+  rowLedger,
   rowMark,
   type StillSeen,
   stillAddress,
@@ -182,6 +183,66 @@ describe("PT-S3 — the stage's word: the env", () => {
         true,
       );
     }
+  });
+});
+
+describe("PT-S3 — the rows that run are the table's (R-6)", () => {
+  it("the ledger takes each mode's rows in order and is run out; it refuses a row out of turn, reclassed or past the table", () => {
+    for (const mode of ["none", "devices", "cost"] as const) {
+      const l = rowLedger(mode);
+      expect(l.rest()).toMatch(
+        new RegExp(`^${PHONE_ROWS[mode].length} of the ${mode} table's`, "u"),
+      );
+      for (const r of PHONE_ROWS[mode]) expect(l.take(r.name, r.klass)).toBeNull();
+      expect(l.rest()).toBeNull();
+      expect(l.take("SIM-EXTRA", "MUST")).toBe(
+        `SIM-EXTRA (MUST) runs past the ${mode} table's ${PHONE_ROWS[mode].length} rows`,
+      );
+    }
+    const l2 = rowLedger("devices");
+    expect(l2.take("SIM-STAGED", "MUST")).toBeNull();
+    expect(l2.take("SIM-SHOW-FRESH", "MUST")).toBe(
+      "SIM-SHOW-FRESH (MUST) runs where the devices table's row 2 is SIM-NO-DEVICE (MUST)",
+    );
+    expect(l2.take("SIM-NO-DEVICE", "NICE")).toBe(
+      "SIM-NO-DEVICE (NICE) runs where the devices table's row 2 is SIM-NO-DEVICE (MUST)",
+    );
+    // a refusal takes nothing: the table's next row still stands
+    expect(l2.take("SIM-NO-DEVICE", "MUST")).toBeNull();
+    expect(l2.rest()).toMatch(
+      /^18 of the devices table's 20 rows never ran \(SIM-SHOW-FRESH, SIM-OFF-BOOT, /u,
+    );
+  });
+
+  it("the runner's own row calls, mode by mode, are PHONE_ROWS in order; row() takes each from the ledger before the door's begin; the table is run out before PHONE_ROWS_END", () => {
+    const span = (from: string, to: string | null): string => {
+      const at = SOURCE.indexOf(from);
+      expect(at).toBeGreaterThanOrEqual(0);
+      return SOURCE.slice(at, to === null ? SOURCE.length : SOURCE.indexOf(to, at));
+    };
+    const calls = (src: string) =>
+      [...src.matchAll(/\brow\("([^"]+)", "([A-Z]+)"|await noUdidRow\(\)/gu)].map((m) =>
+        m[1] === undefined
+          ? { name: "SIM-NO-UDID", klass: "MUST" }
+          : { name: m[1], klass: m[2] ?? "" },
+      );
+    expect(calls(span("async function noneRows()", "async function noUdidRow()"))).toEqual(
+      PHONE_ROWS.none,
+    );
+    expect(calls(span("async function noUdidRow()", "async function deviceRows()"))).toEqual([
+      { name: "SIM-NO-UDID", klass: "MUST" },
+    ]);
+    expect(calls(span("async function deviceRows()", "async function costRows()"))).toEqual(
+      PHONE_ROWS.devices,
+    );
+    expect(calls(span("async function costRows()", null))).toEqual(PHONE_ROWS.cost);
+    const runner = span("const row = async (", "// ── the rows, by mode");
+    const take = runner.indexOf("ledger.take(name, klass)");
+    expect(take).toBeGreaterThanOrEqual(0);
+    expect(take).toBeLessThan(runner.indexOf('door.row(name, "begin")'));
+    const finale = span("} finally {", "const problems = phoneProblems(results);");
+    expect(finale.indexOf("ledger.rest()")).toBeGreaterThanOrEqual(0);
+    expect(finale.indexOf("ledger.rest()")).toBeLessThan(finale.indexOf("PHONE_ROWS_END n="));
   });
 });
 
