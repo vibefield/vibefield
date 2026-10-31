@@ -20532,3 +20532,82 @@ desk-gates row 30's quit run.
 - FG-4 (the panes in the frame and the logo), FG-5 (the hand-over), FG-6 (the gates; the catalog over the field's
   still).
 - AO: rule D26 (the sheet's size) and D28 (its fade above the frost).
+
+## PT-S1 fix — item 119: the pegboard's rows are the lay's lines, not the hangs' tops; a hook and a shelf on one line read as one row, so → and the listbox agree again (2026-10-31; `88bf4605d`, lane `portals/item119-rows` on `bef070265`, in the mini's mint `265325d09` over main `eb3a562ac`; VF-PM's GO 2026-10-30 23:30Z)
+
+**What.**
+- The board's specimens (`field/desk/pegboard/pegboard-model.ts`, `boardSpecimens(laid, order, drawer, scroll)`) are
+  drawn in the lay's own order: core's `trayHung`, which reads `TrayContent.order`, the types `layTray` placed line by
+  line. That is the order ← → walk (ICE's `tray.focus`). A type the lay does not name is left out.
+- A specimen's row is the lay's line, numbered from 0. The kernel writes no line into the world, so it is read back
+  from that order: a line starts wherever a hang's x falls back, since `layTray` starts each line at the margin.
+  `rowStep` (↑ ↓) is unchanged.
+- `Pegboard.tsx`'s `drawnSpecimens` passes `trayHung(engine.world)`. `laidOf` is unchanged: the specimens' sibling order
+  is not the lay's, since a re-lay appends new ones.
+- smoke:canvas's KEYS expectation is untouched (`smoke-pegboard.ts`: → lands on `first.options[1]`).
+
+**Found.**
+- **The cause was field-app's.** PT-S1 exposed it and did not make it.
+  - `boardSpecimens` keyed a row on the hang's exact top (`row: s.hang.y`) and sorted the listbox's options by it.
+  - ICE hangs a line's specimens with their tops together only "as near as their holes allow".
+  - PT-S1's phone is the first shelf on line 0. ICE 0.16.0 lays it beside the comment pad's hook, at y 132.52 against
+    the hook's 130: 2.52 px apart, so the board read two rows.
+  - The listbox went [pad, note, …, phone] while → walked pad → phone. That is run 12's "→ moved the focus to
+    vibefield.simulator, not the next specimen desk.note".
+- **Found and fixed with it, predating PT-S1 on that desk:** line 1 of `pegboard.test.tsx`'s desk, which has no phone.
+  It was measured on `bef070265`'s code with an uncommitted log.
+  - main's rows were the pad, the note, the photo, the notebook and the calendar at 130; the minimat and the board at
+    450; and the browser pane, a shelf laid first on line 1, alone at 471.42 and listed last.
+  - So ↓ from the pad (centre 120) skipped the browser pane right below it (centre 180) and went to the minimat
+    (centre 460).
+  - With the fix, ↓ lands on the browser pane, row 1. It is the same cause, with one fix.
+- **The ring reads back at the CSSOM's grain.** That ↓ row's `expect(ringRect()).toEqual(ringOnFocus())` then went red
+  by 3.7e-8 px.
+  - A width serializes at six decimals: "213.44498px" for the browser pane's 213.444979…, where the minimat's was a
+    round 217px.
+  - The four ring checks now share `expectRingOnFocus()`: each edge `toBeCloseTo(…, 5)`, and null where ICE has no
+    focus.
+  - VF-PM ruled it the unit's float grain, not a wider slack on a judged motion (23:45Z).
+
+**Validation.**
+- **The witness came first.** A probe, uncommitted, on main `bef070265` alone laid the two manifests' hangs with ICE's
+  own `layTray` (1120 px at `DRAWER.pitch` 40).
+  - It was green on its precondition: both hangs valid, both on line 0.
+  - It was red on the row: "expected 2 to be 1". Log: `lanes/pts/logs/probe119-keys-bef070265.log`.
+  - It is promoted to `test/pegboard-rows.test.ts`, which reads both manifests' tray entries and lays them on the widest
+    drawer (`DRAWER.maxWidth`, `DRAWER.pitch`). Its two rows: "is laid on one line by the kernel (the precondition)" and
+    "reads as one row, in the lay's order".
+- **The control decided the owner.** ctl119, smoke:canvas on `bef070265` alone (exit 2 at 23:33:35Z, VF-PM 23:37Z),
+  repeated KEYS byte for byte: first comment-pad, → vibefield.simulator, ↓ desk.calendar. Its IDLE was the 10-26 class.
+  REST ACT was absent on main alone (FG-3a's entry carries that read).
+- **The light**, on this Mac at nice 19, the guard read once and clear, armed 2026-10-30 23:40:41Z, each row alone (logs:
+  `lanes/pts/logs/item119-light/`):
+  - pegboard-rows + pegboard-model: 12 / 12;
+  - field-app's whole suite: 2,967 passed, 3 skipped (236 files);
+  - electron-shell's smoke-use-pane and smoke-pegboard: 23 / 23;
+  - `check:walls` clean; `pnpm typecheck` 28 projects; `git diff --cached --check` clean.
+  - The first pass (`item119-light-r1/`) was red on two rows, both fixed before the commit: the typecheck on the new
+    unit's optional `order` (exactOptionalPropertyTypes), and the ↓ ring above.
+- **The bundle:** `lanes/pts/item119-keys-88bf4605d.bundle` (sha256 `97a4b627…`), cut over M14 `0b40e56da` and carrying
+  the one commit, requiring `bef070265`.
+- **Run 15: the mint `265325d09` over main `eb3a562ac`** (M14, SP-1a, and FG-3a's records).
+  - Its first `pnpm verify` armed at 23:54:43Z and exited 1 at 23:57:29Z on ONE row: fieldd's `terminal-service.test.ts`
+    "TC-S3 — class cells (K=2) and solo isolation > a class with no cell of its own lands on the interactive one after
+    the birth budget". That is item 120, a timer-vs-`Date.now()` truncation and the fixer's. This fix touches no fieldd
+    file.
+  - Run 15b, a full verify on the same `265325d09`, armed at 00:16:41Z and exited 0 at 00:21:05Z: 28 projects; vitest
+    10,303 / 0 / 18 (VF-PM's counts); cargo 31 binaries, 0 FAILED.
+- **smoke:canvas on M15** (00:00:38Z → 00:16:41Z, exit 2, under the held console): **KEYS is absent.**
+  - The board's keys: first vibefield.comment-pad, → vibefield.simulator, which is now the listbox's second option and
+    so the agreed answer, and ↓ vibefield.browser-pane, where main gave desk.calendar.
+  - The run's failed line has two clauses, neither this fix's: "HAND_NOTEBOOK: the bar came back 250 ms after the
+    landing, not 200" (item 117) and "IDLE: the desk submitted 3 times for a still page in hand — +40 ms … +41 ms …
+    +41 ms" (the 10-26 class, ICE's held-pane blur).
+  - REST and PEERS CONTRAST were absent: the wind 22,081 ms with wakes {world 2, doc 1}; contrast day 7.2, night 9.2.
+  - The HID idle read was ARMED 2192 s and END 3154 s over the 963 s row: nobody touched the mini (VF-PM's read).
+  - Logs: `lanes/ts6/logs/mini/run15/` and `run15b/`.
+- **Landed:** main fast-forwarded `eb3a562ac` → `265325d09` at 00:32:09Z, and was pushed at 00:32:26Z.
+
+**Owed.**
+- Item 120 (fieldd TC-S3) is the fixer's. HAND (item 117) and IDLE (the 10-26 class) stay their own; neither is
+  item 119's.
