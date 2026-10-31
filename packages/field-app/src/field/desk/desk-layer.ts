@@ -9,7 +9,12 @@ import {
 } from "@vibecook/ice/desk";
 import { LIVE, type LiveSources, service } from "@vibecook/ice/desk/kit";
 import { deskPalette, deskTheme } from "@vibecook/ice/desk/objects";
-import { BROWSER_NAVIGATION, type BrowserNavigation } from "@vibefield/plugin-sdk/desk";
+import {
+  BROWSER_NAVIGATION,
+  type BrowserNavigation,
+  SIMULATOR_DEVICES,
+  type SimulatorDevices,
+} from "@vibefield/plugin-sdk/desk";
 import { deskText } from "./desk-assets";
 import { deskBlobs } from "./desk-blobs";
 
@@ -71,6 +76,9 @@ export interface FieldDeskLayerOptions {
   /** PT-2 — the desk's live pages (`surfaces/live/desk-live.ts`), lent under ICE's `LIVE`: a portal kind's face opens on it.
    * PT-3 — their `navigation`, lent beside it under `BROWSER_NAVIGATION`: a page navigated by its face's key. */
   readonly live?: LiveSources & { readonly navigation?: BrowserNavigation };
+  /** PT-S2 (R11) — this Mac's Simulator devices as a phone's attach reads them (`surfaces/live/simulator-devices.ts`), lent
+   * beside them under `SIMULATOR_DEVICES`: the device a phone binds to, answered from the host's last read. */
+  readonly devices?: SimulatorDevices;
 }
 
 /**
@@ -79,7 +87,8 @@ export interface FieldDeskLayerOptions {
  * facade's, the one VibeField opens, autosaves and attaches presence to), the renderer-local byte
  * store (`blobs`, DK-D21), the grid, the hand's reserves (`hold`, DK-12 — the tools in hand under the head), the
  * pegboard's foot (`tray`, DK-13 — its lay clears the line), and the desk's LIVE pages when the stage lends them (PT-2:
- * `services` — a portal kind's face; the kv service rides later). The room's other people are VibeField's to draw (DK-16, DESIGN.md §8
+ * `services` — a portal kind's face; PT-S2, this Mac's Simulator devices beside them — a phone's attach; the kv service
+ * rides later). The room's other people are VibeField's to draw (DK-16, DESIGN.md §8
  * "Peers on the mat"; ICE I26): `cursors: false`, so the host mounts no remote cursors of ICE's and nobody is drawn twice —
  * the desk's children draw each peer by face (`peers/PeersOnTheMat.tsx`), and their observers arm the world.
  */
@@ -98,14 +107,15 @@ export function fieldDeskLayer(opts: FieldDeskLayerOptions): DeskLayerFactory {
     ...(opts.gpuLedger === true ? { gpuLedger: true } : {}),
     ...(opts.gpu === undefined ? {} : { gpu: opts.gpu }),
     ...(opts.onDevice === undefined ? {} : { onDevice: opts.onDevice }),
-    ...(opts.live === undefined
+    ...(opts.live === undefined && opts.devices === undefined
       ? {}
       : {
           services: [
-            service(LIVE, opts.live),
-            ...(opts.live.navigation === undefined
+            ...(opts.live === undefined ? [] : [service(LIVE, opts.live)]),
+            ...(opts.live?.navigation === undefined
               ? []
               : [service(BROWSER_NAVIGATION, opts.live.navigation)]),
+            ...(opts.devices === undefined ? [] : [service(SIMULATOR_DEVICES, opts.devices)]),
           ],
         }),
   });

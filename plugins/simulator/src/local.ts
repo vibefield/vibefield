@@ -10,20 +10,24 @@
 //    its record when the phone is next drawn;
 //  - IN HAND (used — the open binding): the hand's press on the face's act's capsule runs the act on its release over it
 //    (the host's — it manages the device, never iOS); every other press is the desk's (view-only until PT-S4's touch
-//    lands).
+//    lands);
+//  - PT-S2 — THIS MAC'S DEVICES (`devices()`): what the host lends under `SIMULATOR_DEVICES`, read by the menu's Attach
+//    (attach.ts) — the device a phone binds to, answered from the host's last read.
 // A loop at rest ticks the kind only when it is due: nothing is polled.
 
-import type {
-  Entity,
-  HeldEvent,
-  KindHost,
-  KindLocal,
-  LiveFace,
-  LiveInfo,
-  LiveSimulatorSpec,
-  LiveState,
-  LiveTexture,
-  Sight,
+import {
+  type Entity,
+  type HeldEvent,
+  type KindHost,
+  type KindLocal,
+  type LiveFace,
+  type LiveInfo,
+  type LiveSimulatorSpec,
+  type LiveState,
+  type LiveTexture,
+  SIMULATOR_DEVICES,
+  type Sight,
+  type SimulatorDevices,
 } from "@vibefield/plugin-sdk/desk";
 import { stillWords } from "./face-words";
 import { SIMULATOR_KIND } from "./ids";
@@ -86,6 +90,8 @@ export interface SimulatorLocal extends KindLocal {
   morphs(): { readonly running: number; readonly begun: number };
   /** What the faces did (a test's and a smoke's witness). */
   faces(): PhoneFaceStats;
+  /** PT-S2 — this Mac's devices as the host lends them (`SIMULATOR_DEVICES`), or undefined: none lent on this desk. */
+  devices(): SimulatorDevices | undefined;
   /** Words drawn, and acts run, since the desk was made (a test's witness). */
   readonly notices: number;
   readonly acts: number;
@@ -194,6 +200,7 @@ export function createSimulatorLocal(host: KindHost | undefined): SimulatorLocal
     },
     morphs: () => morphs.stats(),
     faces: () => live.stats(),
+    devices: () => host?.use?.(SIMULATOR_DEVICES),
     get notices() {
       return notices;
     },

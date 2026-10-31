@@ -541,6 +541,16 @@ keeps the picture, cached by its seed, status, size, frame, ground and theme. A 
 (blinks, gaze, its status's motion), drawn by one layer over the window only while a live face is
 on screen. Without WebGL2, a face is the **flat star**: its own points and palette in SVG, on its
 disc when framed, two pill eyes, no glow. It is never a blank.
+*Amended 2026-10-29 (SP-1a, the face in the kit):* the live layer is one per **stage**, never one
+over the window, which would draw a face over a menu or sheet that covers it. A composition that
+shows live faces (Chat's list, a thread's head, the New spark sheet) is a stage: one transparent
+canvas over it and under whatever covers it, each face clipped to the scrollport it sits in and
+dropped while out of sight, drawing only while one of its faces is live and on screen. A face
+outside a stage is a still. The stills share one canvas for the window, laid out out of sight so it
+measures true, and keep the last 256 pictures. The flat star is drawn from the same DNA as the star
+(`agentDNA`'s points and palette), so a face is the same face with or without WebGL2. While the
+engine first loads (below), a framed face holds its place as its disc in the inset fill
+(`--vf-fill`), and a free face as its box.
 
 **Motion.** Reduced motion keeps the faces, their blinks and their status changes, and drops the hops,
 the shakes and the falling star (M6).
@@ -557,6 +567,29 @@ so it is a design event, said here first. SP-1 moves it into the design kit as a
 by seed, status, size, frame and ground, with a fixture in the catalog (UI_SYSTEM's order). Its
 palettes are the engine's art, carried as data inside the vendored files. That is the one place a hex
 outside `tokens.css` is allowed, the way an emoji's bitmap is a user's face's (§2.8).
+*Amended 2026-10-29 (SP-1a):* the face is `packages/design-kit/src/spark-face/`, the kit's
+`./spark-face` entry:
+- `SparkFace` (seed, status, size, framed or free, live), the stage `SparkStage`, and the statuses
+  with their words (the table above; a test reads the table, so the two never drift). The surface
+  behind a framed face, for its cut ring, is read where the face sits, again when the theme turns.
+- One adapter: `SparkFaceRenderer` tells the faces inside it to draw as the flat star. Without
+  it, a face draws the star where the window has WebGL2. The catalog's flat specimen and the tests
+  use it; the product never does.
+- The engine is `spark-face/vendor/sparks.js`. A test holds its SHA-256 and its revision, so an
+  edit in place fails and a newer copy moves both in one commit.
+- The kit stays pure at import (UI_SYSTEM): the engine is an IIFE that sets one global,
+  `window.Sparklings`, so the first face to mount loads it with a dynamic import, and the kit's
+  `sideEffects` names the vendored file so no bundler drops that global.
+- Reduced motion is the engine's own switch, as its page sets it: its motions are set aside while
+  the preference holds and restored when it lifts, never patched in place.
+- The kit's spark-face sources (TSX, TS, CSS) hold no colour literal of any spelling. The palettes
+  reach the page only as the engine's data, and `spark-face.test.tsx` holds both rules.
+- The catalog's Foundations section shows the shipping `SparkFace` beside §2.8's faces: every
+  status at the sizes above, framed and free, in both themes, the flat star, and a live stage.
+
+*Corrected the same day:* this said `star-spark.js` beside it. The falling star's engine is
+`star-spark/engine.js`, and it is vendored with its first user, the New spark sheet's hatch
+(SP-1c), not before.
 
 ---
 
@@ -647,7 +680,7 @@ claim it.
 | Overlay chip | surface `/90–95` + `backdrop-blur-xl` | no wearer today: the put-back affordance and the HUD's toasts retired (DK-13, DK-17); the peers' chips wear the line's glass and the status line solid chrome (§8) |
 | Backdrop dim | `black/10` light · `black/40` dark | behind open sheets; canvas recedes to `scale(0.98)` |
 | Search scrim (GV-D8; K7, 2026-10-08) | `black/16` light · `black/46` dark, over a backdrop blur of 18 and `saturate(0.9)` | behind the Peek (§8 "Search"): the window blurred and dimmed, the view and the frame receding to `scale(0.98)` under it. Darker than the backdrop dim so it reads as dimmed (One Frame §23); the backdrop dim stays the sheets' until James rules otherwise (docket PK1). *Since TS-D22 A (2026-10-29):* the phone wears its dim alone, with no blur, under a door that stands over a live field, between the field and the bar (§9) |
-| Setup Assistant (as built since UA-3w; written down 2026-10-29, track FG; on the field, to be built at FG-3) | `--vf-wizard-surface` (white 55% by day, `rgb(28 28 30)` 55% by night) over `blur(32px) saturate(1.12)`, the island radius (32). On the field (FG): a 1px edge, `--vf-wizard-edge` (white 60% by day, 12% by night) with a top light, `--vf-wizard-edge-light` (white 75%, 8%); the field's shadow, `--vf-shadow-wizard-field` (`0 40px 120px` and `0 12px 32px` in the field's ground at 55% and 28%); and a grain at `--vf-wizard-grain` (3%), so the blur never bands | the Setup Assistant's glass (§8): on the field its frost lets the tunnel's rings through softly (FG-D15 C). Over the live field the field draws this recipe itself, in its own frame and from these tokens (FG-D24); over the field's still the backdrop filter draws it |
+| Setup Assistant (as built since UA-3w; written down 2026-10-29, track FG; on the field, built at FG-3a as the browser's layers, which draw it over the live field too until the field's own pass at FG-3b) | `--vf-wizard-surface` (white 55% by day, `rgb(28 28 30)` 55% by night) over `blur(32px) saturate(1.12)`, the island radius (32). On the field (FG): a 1px edge, `--vf-wizard-edge` (white 60% by day, 12% by night) with a top light, `--vf-wizard-edge-light` (white 75%, 8%); the field's shadow, `--vf-shadow-wizard-field` (`0 40px 120px` and `0 12px 32px` in the field's ground at 55% and 28%); and a grain at `--vf-wizard-grain` (3%), so the blur never bands | the Setup Assistant's glass (§8): on the field its frost lets the tunnel's rings through softly (FG-D15 C). Over the live field the field draws this recipe itself, in its own frame and from these tokens (FG-D24); over the field's still the backdrop filter draws it |
 
 **Menus are solid, floating controls are glass** (One Frame FR-7, FC-D14 ruled 2026-10-01): a menu
 is rows to be read, so it is `--vf-chrome-solid` — opaque — ringed by `--vf-hairline-strong`, with
@@ -906,7 +939,8 @@ percentage names its step, never an invented whole). *Amended 2026-10-27 (AO-4b,
 the travel, and the arc rests at the top of the circle, a fifth of it from twelve o'clock, until the archive is ready;
 the glyph stays at a third of its ink.
 *Amended 2026-10-29 (track FG; FG-D9 A, FG-D10 B, FG-D11 A and FG-D17 A ruled by James; §8 "The Setup Assistant's
-glass"; a returning boot's tear built at FG-2, the rest to be at FG-3 and FG-5):* the first run happens on the field,
+glass"; a returning boot's tear built at FG-2, the glass's forming at FG-3a — its frost and its rise, the words' fade
+and the logo to come with FG-4's holds — the rest at FG-5):* the first run happens on the field,
 and these are its motions. **The
 glass forms** where the splash stood: the bar and the stage fade (240ms `ease`), and the frost condenses over the
 whole glass as its layers rise `.985 → 1` (560ms island); the field's mark fades under it while the logo fades in
@@ -2435,6 +2469,14 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   the glass, the steps, the frame and the logo at FG-3, the panes in the frame at FG-4 (after TS-6 and
   TS-7 land), the hand-over at FG-5, the gates at FG-6 (the record's §7). Until each lands, the Setup
   Assistant ships as "The Setup Assistant's agent chapter" and the Connect pane describe it.*
+  *Status 2026-10-29 (FG-3a, built): the glass at 880 × 640 with the fit, its layers (on the field the edge, its
+  light, the field's shadow and the grain), its forming, the band and the frame. The browser draws every layer,
+  over the live field too, until the field's own pass (FG-3b). The logo comes with the holds at FG-4, since no
+  pane shows it before they do; so do the panes in the frame — the old one's leaving first, the new one's fade in
+  place of its rise, and each one's place — and until then a pane keeps its entrance and centres in the frame,
+  scrolling downward only. Finish setting up's sheet is unchanged (FG-D26, a lean: AO's surface, and no step of
+  the chapter): its own size and padding, never fitted, no band. A press beside its glass now reaches its scrim,
+  which it never could (FG-D27).*
 - **The reveal** (boot-exclusive motion): the canvas composes and stabilizes BEHIND
   the splash (the frame-stability gate — never reveal mid-hitch), then the splash
   fades 240ms plain `ease` while the canvas settles `scale(0.99) → 1` over 560ms
@@ -4060,6 +4102,18 @@ tap, key or button until PT-S4's touch lands.
 | live | the stream | — |
 | at rest | its last frame, with the rest mark | — |
 | stopped | "The Simulator stopped", over its still | "Try again" |
+
+**The phone's two acts on the selection menu** (track PT, PT-S2; R11, ruled 2026-10-30) — said for the phones selected, one
+undo step for each phone it changes, quoted exactly by the plugin (`plugins/simulator`'s `attach.ts`). **Attach** binds each
+phone to a Simulator of this Mac's own: the booted device of the phone's own model, else the first booted iPhone (the phone
+morphs into its model), else the phone's own model on the newest iOS this Mac has, whose face then says what is true of it
+— off, with "Boot", or no device, with "Create it". **Finish** turns each phone to the next of its model's launch colours,
+and round to the first. There is no Model act: a bound phone's model is its device's, and only Attach sets it — a model
+unlike its device would show another iPhone's screen in its frame. A binding names a model and an iOS, never one Mac's
+device, so on another Mac the same phone shows that Mac's own Simulator of its model. "The newest iOS this Mac has" is its
+newest INSTALLED iOS runtime, whether or not any device runs it yet: the face then shows the model's device on whatever
+runtime has one, or says "no device", with "Create it". Attach changes nothing on a Mac with no iOS runtime installed, or
+before VibeField has read this Mac's devices.
 
 **The update's words** (track AU, AU-L2, AU-L3, AU-L6; ruled 2026-10-29). **A version is said two ways:** exactly
 where it can be copied — `0.1.0-nightly.20261027` in mono on Settings → Updates' head — and in friendly words in a

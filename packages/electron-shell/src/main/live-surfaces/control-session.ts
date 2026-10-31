@@ -238,6 +238,24 @@ export class LiveSurfaceControlSession {
         }
         return;
       }
+      case "device": {
+        // PT-S2 — navigate's shape: an unknown attachment is the same detach race (silent); an act without its grant is
+        // not our renderer (EL7: fail the generation closed); a runtime with no device member drops it.
+        const attachment = this.#attachments.get(message.attachmentId);
+        if (attachment === undefined || !attachment.active) return;
+        if (!attachment.operations.includes("device")) {
+          this.protocolFault("device act arrived without its operation grant");
+          return;
+        }
+        const device = attachment.runtime.device;
+        if (device === undefined) return;
+        try {
+          device.call(attachment.runtime, message.command);
+        } catch {
+          this.protocolFault("runtime rejected a validated device act");
+        }
+        return;
+      }
       case "cpu-frame-ack": {
         const attachment = this.#attachments.get(message.attachmentId);
         if (attachment === undefined || !attachment.active) return;

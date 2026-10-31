@@ -2,7 +2,8 @@
 // its entity, its type, the plugin that contributes it, that plugin's effective capabilities — never by a kind's spec. On a REAL
 // engine and document: the browser pane (granted `surface.attach` + `surface.browser`) opens; the comment pad (granted neither) is
 // refused in the plugin door's own words; a desk built-in and an unknown key open nothing; a staged plugin's grants are its
-// record's.
+// record's. PT-S2 — the scopes are the SOURCE's: the phone (granted `surface.attach` + `surface.capture`, its manifest's since
+// PT-S2's attach) opens a bound Simulator and no page; the pane opens no Simulator.
 import {
   defineQuery,
   Not,
@@ -15,10 +16,16 @@ import {
 import * as pane from "@vibefield/plugin-browser-pane";
 import * as pad from "@vibefield/plugin-comment-pad";
 import type { RegisteredPlugin } from "@vibefield/plugin-runtime";
+import * as phone from "@vibefield/plugin-simulator";
 import { describe, expect, it } from "vitest";
 import { buildRegistry, createFieldEngine } from "../src/field-engine";
 import { objectBindingsFrom } from "../src/plugin-host/build-widget";
-import { createLiveGate, grantsOf } from "../src/surfaces/live/live-gate";
+import {
+  createLiveGate,
+  grantsOf,
+  LIVE_FACE_SCOPES,
+  SIMULATOR_SCOPES,
+} from "../src/surfaces/live/live-gate";
 
 const objectsQ = defineQuery([Position, Size, PrefabId, Not(Specimen)]);
 
@@ -40,12 +47,21 @@ function board() {
         mod: pad.commentPadRenderer,
         objectBindings: objectBindingsFrom(pad, pad.commentPadManifest.contributes?.objects ?? []),
       },
+      {
+        manifest: phone.simulatorManifest,
+        mod: phone.simulatorRenderer,
+        objectBindings: objectBindingsFrom(
+          phone,
+          phone.simulatorManifest.contributes?.objects ?? [],
+        ),
+      },
     ],
   });
   const ce = createFieldEngine(registry);
   ce.docs.create();
   ce.ops.spawnWidget(pane.BROWSER_PANE_TYPE, { x: 0, y: 0, ...pane.PANE_SIZE, props: {} });
   ce.ops.spawnWidget(pad.COMMENT_PAD_TYPE, { x: 900, y: 0, w: 220, h: 280, props: {} });
+  ce.ops.spawnWidget(phone.SIMULATOR_TYPE, { x: 1400, y: 0, ...phone.PHONE_SIZE, props: {} });
   ce.ops.spawnWidget("desk.note", { x: 0, y: 700, w: 200, h: 200, props: {} });
   ce.world.sync();
   const keyOf = (type: string): string => {
@@ -98,6 +114,36 @@ describe("the live face's gate — the host's, by the object (ruling 3)", () => 
       record: { grantedCapabilities: ["surface.attach"] },
     } as unknown as RegisteredPlugin<WidgetType>;
     expect(grantsOf(staged)).toEqual(["surface.attach"]);
+    ce.dispose();
+  });
+
+  it("PT-S2: the scopes are the SOURCE's — a page asks surface.attach + surface.browser (the default), a bound Simulator surface.attach + surface.capture", () => {
+    expect(LIVE_FACE_SCOPES).toEqual({
+      browser: ["surface.attach", "surface.browser"],
+      "ios-simulator": ["surface.attach", "surface.capture"],
+    });
+    expect(SIMULATOR_SCOPES).toEqual(["surface.attach", "surface.capture"]);
+  });
+
+  it("PT-S2: opens the PHONE's Simulator — its plugin is granted surface.attach and surface.capture — and no page of it; the pane opens no Simulator", () => {
+    const { ce, registry, gate, keyOf } = board();
+    const phoneKey = keyOf(phone.SIMULATOR_TYPE);
+    const bundled = registry.plugin(phone.SIMULATOR_TYPE);
+    if (bundled === undefined) throw new Error("the phone is not registered");
+    expect([...grantsOf(bundled)].sort()).toEqual(["surface.attach", "surface.capture"]);
+    expect(gate(phoneKey, "ios-simulator")).toEqual({ type: "vibefield.simulator" });
+    // asked as a page — the default — it is refused: capture grants no browser
+    expect(gate(phoneKey)).toEqual({
+      refused: "FORBIDDEN_SCOPE: plugin vibefield.simulator is not granted surface.browser",
+    });
+    // the pane's plugin is granted no capture: its object opens no Simulator, whatever a spec says
+    expect(gate(keyOf(pane.BROWSER_PANE_TYPE), "ios-simulator")).toEqual({
+      refused: "FORBIDDEN_SCOPE: plugin vibefield.browser-pane is not granted surface.capture",
+    });
+    // the comment pad is granted neither: refused at the first
+    expect(gate(keyOf(pad.COMMENT_PAD_TYPE), "ios-simulator")).toEqual({
+      refused: "FORBIDDEN_SCOPE: plugin vibefield.comment-pad is not granted surface.attach",
+    });
     ce.dispose();
   });
 });

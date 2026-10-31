@@ -216,7 +216,11 @@ export const PRODUCT_API_LIMITS = {
   TICK_INTERVAL_MS: 120_000,
   /** The largest frame the product door accepts INBOUND, in bytes (`ws`'s
    * `maxPayload`); a larger one closes the connection 1009. The outbound pair
-   * lives in `MESH_CONTROL_LIMITS` (`PRODUCT_FRAME_BYTES`, `PRODUCT_QUEUED_BYTES`).
+   * lives in `MESH_CONTROL_LIMITS` (`PRODUCT_FRAME_BYTES`, `PRODUCT_QUEUED_BYTES`,
+   * the shed). A phone's subscriptions that can resync (today the mesh board)
+   * stop sending deltas at `TAILNET_QUEUED_BYTES` below (PG-1c); the rest of its
+   * connection (snapshots, replies, the History tail, project.subscribe) keeps
+   * the shed.
    * DS wave 3 landing (2026-10-01): it was a fieldd literal (`product-api.ts:62`)
    * that the corpus cited as a registry number — now it is one.
    * *Errata (2026-10-26, item 60): this said "closes the connection 1013";
@@ -238,6 +242,23 @@ export const PRODUCT_API_LIMITS = {
    * protocol's own pages (`ROWS.SNAPSHOT_PAGE_BYTES`), a one-shot answer by a
    * byte budget with the honest marker its door already has. */
   WS_MAX_INBOUND_BYTES: 4 * 1024 * 1024,
+  /** PG-1c (PG-D11, James's to rule; built at the lean, 256 KiB, 2026-10-29) —
+   * a phone's queue on the door. A `tailnet` principal's subscription whose
+   * producer can resync (today the mesh board, `agent.subscribe {scope:
+   * "mesh"}`) is sent no more deltas once its connection's queued bytes
+   * (`ws.bufferedAmount`) reach this, and ONE fresh snapshot when the queue
+   * drains to half of it: a phone that fell behind gets the board as it is,
+   * never the backlog of what it was. Its snapshots are never held (each
+   * restates everything), never count toward holding it while they are
+   * queued (a board past the cap would hold itself again with each one), and
+   * stay under the connection's shed
+   * (`MESH_CONTROL_LIMITS.PRODUCT_QUEUED_BYTES`, 128 MiB). Every other caller,
+   * a peer daemon on the same door included, and every subscription without a
+   * resync keep that shed alone. The queue it reads is fieldd's own: the
+   * sidecar's and tsnet's buffers lie past it, so the number is confirmed on
+   * the phone under the Network Link Conditioner, not here. One ROWS snapshot
+   * page. */
+  TAILNET_QUEUED_BYTES: 256 * 1024,
 } as const;
 
 /** SP-D13 (a), James, 2026-10-03 — the bound on a TAILNET caller's history.
@@ -261,7 +282,14 @@ export const PRODUCT_API_LIMITS = {
  *
  * AR-8b (2026-10-03): the same bound holds `index.project`'s one per-session
  * list, its contribution rows, which says `clipped` when it cut; the door's
- * other figures are bounded by the window the caller asked for (`sinceMs`). */
+ * other figures are bounded by the window the caller asked for (`sinceMs`).
+ *
+ * Item 105 (2026-10-29): the two DAY doors over the record hold it too, by one
+ * rule (`tailnetRowLimit(principal, undefined, MAX_SAFE_INTEGER)`): `index.activity`
+ * keeps the newest MAX_ROWS sessions and `agent.recordedLanes` the MAX_ROWS ended
+ * lanes that ended last, each saying `clipped`. The first has held it since TL
+ * and was never listed here; the second had no bound. A day door pages by its
+ * window, never by a cursor. */
 export const INDEX_TAILNET_LIMITS = {
   MAX_ROWS: 100,
 } as const;

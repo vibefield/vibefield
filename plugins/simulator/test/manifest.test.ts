@@ -26,8 +26,9 @@ import * as rendererModule from "../src/renderer";
 // OBJECT row names an export of the renderer module whose kind the host will take — a desk kind whose registry name IS the
 // row's type; it lies on the desk by the SDK's key and goes into no mini mat yet; its size is the default model's body at the
 // desk's one scale and it is never resized nor turned (no angle prop); its props are model, finish and binding — each named
-// once (ids.ts), the binding's default UNBOUND; it hangs on a shelf under its own new category; it asks for NO capability
-// (surface.attach and surface.capture are PT-S2's); and its activation binds nothing (the kind is a static export).
+// once (ids.ts), the binding's default UNBOUND; it hangs on a shelf under its own new category; it asks for surface.attach and
+// surface.capture (PT-S2 — a bound phone's live device, the gate's pair); and its activation binds nothing (the kind is a static
+// export).
 describe("vibefield.simulator", () => {
   const row = simulatorManifest.contributes?.objects?.[0];
 
@@ -98,8 +99,9 @@ describe("vibefield.simulator", () => {
     expect(tray?.local).toBeUndefined();
   });
 
-  it("asks for NO capability in PT-S1 — surface.attach and surface.capture (the Screen Recording class) are PT-S2's", () => {
-    expect(simulatorManifest.capabilities).toEqual([]);
+  it("asks for surface.attach and surface.capture (PT-S2 — the Screen Recording class): a bound phone's live device, and no page", () => {
+    expect(simulatorManifest.capabilities).toEqual(["surface.attach", "surface.capture"]);
+    expect(simulatorManifest.capabilities).not.toContain("surface.browser");
   });
 
   it("activates as any plugin does, binding no command, surface or behavior — its kind is its export", async () => {

@@ -2,7 +2,8 @@
 // for the face's life, as ICE's writer keeps it: a present moves its revision, a resize its epoch — its state, its words, the
 // demands it was sent), a host lending `LIVE` and the words' raster (or not) and counting its doors (the durable key, wake,
 // redraw, remake, the desk's frames), the root pass's words doors, a raster budget the test reads, and an object's context;
-// and for the fixture's live source (fixture-live.ts): the host's clock and timer, and its writers.
+// and for the fixture's live source (fixture-live.ts): the host's clock and timer, and its writers. PT-S2: the host's device
+// list for the attach (`SIMULATOR_DEVICES`), when a test hands one.
 import {
   DEFAULT_GRID,
   type Entity,
@@ -18,6 +19,8 @@ import {
   type LiveTexture,
   lampOf,
   type ObjectContext,
+  SIMULATOR_DEVICES,
+  type SimulatorDevices,
   type SlotContext,
 } from "@vibefield/plugin-sdk/desk";
 import { productPalette } from "@vibefield/plugin-sdk/testing";
@@ -124,7 +127,8 @@ export function fakeWords() {
   return { raster, asked };
 }
 
-/** A host lending `LIVE` (its own fake faces, or the `sources` a test hands it) and the words' raster (or not), its doors counted; the desk's frames moved by the test. */
+/** A host lending `LIVE` (its own fake faces, or the `sources` a test hands it), the words' raster (or not) and — PT-S2 — this
+ * Mac's devices under `SIMULATOR_DEVICES` (when a test hands them), its doors counted; the desk's frames moved by the test. */
 export function fakeHost(
   opts: {
     live?: boolean;
@@ -133,6 +137,7 @@ export function fakeHost(
     holds?: boolean;
     words?: WordsRaster;
     pass?: boolean;
+    devices?: SimulatorDevices;
   } = {},
 ) {
   const pass = {
@@ -199,7 +204,9 @@ export function fakeHost(
         ? ((opts.sources ?? sources) as T)
         : opts.words !== undefined && key.name === WORDS_RASTER.name
           ? (opts.words as T)
-          : undefined,
+          : opts.devices !== undefined && key.name === SIMULATOR_DEVICES.name
+            ? (opts.devices as T)
+            : undefined,
     keyOf: (e: Entity) => keys[e as number],
     wake: () => {
       n.wake += 1;

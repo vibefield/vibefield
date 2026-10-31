@@ -7,7 +7,15 @@ import { hasLink, linkFace, type UserLinkStatus } from "../../account/link";
 import { type FieldUserProfile, getHost } from "../../host";
 import { answerSetupStep } from "../../setup/ledger";
 import type { BootOnboarding, BootView } from "../machine";
-import { entryAfterName, entryBeforeAsking, nextPane, type Pane, variantOf } from "./order";
+import {
+  entryAfterName,
+  entryBeforeAsking,
+  nextPane,
+  type Pane,
+  STEP_OF,
+  stepsOf,
+  variantOf,
+} from "./order";
 import { AgentsPane } from "./panes/AgentsPane";
 import { ConnectPane } from "./panes/ConnectPane";
 import { FieldPane } from "./panes/FieldPane";
@@ -184,7 +192,14 @@ function WizardBody({
     );
   };
 
-  const shell = (content: ReactElement): ReactElement => <WizardShell>{content}</WizardShell>;
+  // Track FG (FG-3a): the glass stands on the field, and its band shows the
+  // chapter — this variant's steps, and the one this pane stands in.
+  const steps = stepsOf(variant);
+  const shell = (content: ReactElement): ReactElement => (
+    <WizardShell ground="field" band={{ steps, at: pane === null ? null : STEP_OF[pane] }}>
+      {content}
+    </WizardShell>
+  );
 
   if (pane === null) {
     // Deriving. A fact, not a spinner (§8: a state is rendered, never blank).

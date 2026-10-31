@@ -12,18 +12,20 @@
 // empty day; nothing pages a transcript (only rosetta reads them); an ended run
 // is ONE active band; and a desktop with no index says so in words.
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   AGENT_CATALOG,
+  AGENT_FIELD,
   AGENT_SESSION_RECORD_FORMAT,
   AgentRecordedLanesResult,
   type AgentSessionRecord,
   CONTRACTS_VERSION,
   createAgentCatalogReaders,
   INDEX_ACTIVITY,
+  INDEX_TAILNET_LIMITS,
   IndexActivityResult,
   type IndexCatalogSession,
   LAYOUT,
@@ -32,6 +34,7 @@ import {
 import type { WsCtor } from "@vibefield/fieldd-client";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import WebSocket from "ws";
+import { clipRecordedLanes, wireRecordedLanes } from "../src/agent-field";
 import { bootstrap, type FielddDaemon, SessionRecordStore } from "../src/index";
 import {
   activityFromCatalog,
@@ -393,6 +396,9 @@ function writeRunRecord(
 
 let cleanup: Array<() => void | Promise<void>> = [];
 
+/** The world's identity record: `/work/app`, the lanes' project, dealt sequence 0. */
+const DEALT = { version: 1, next: 1, projects: [{ key: "/work/app", seq: 0 }] };
+
 /** The peer link's dialer: this world has one desktop awake, so nothing answers. */
 class Unreachable extends WebSocket {
   constructor(_url: string) {
@@ -449,6 +455,12 @@ beforeAll(async () => {
   // this runtime ran `today` and `late` (not `stranger`)
   writeRunRecord(dataDir, "today", NOW - 3 * HOUR - MIN, { title: "Split the invoice writer" });
   writeRunRecord(dataDir, "late", NOW - 51 * MIN);
+  // item 100 — `/work/app` was dealt its colour while its runs were live (a
+  // past is only read), so the lanes' `project.seq` is there to be cut:
+  // without it a peer's cut and a window's cannot be told apart
+  const identity = join(dataDir, ...LAYOUT.PROJECT_IDENTITY_FILE);
+  mkdirSync(dirname(identity), { recursive: true });
+  writeFileSync(identity, JSON.stringify(DEALT), { mode: 0o600 });
   const files = {
     sessions: join(dataDir, "sessions.json"),
     projects: join(dataDir, "projects.json"),
@@ -756,28 +768,58 @@ describe("agent.recordedLanes — the backend's lanes over the floor (B-D6 (a), 
       endedAt: NOW - 2 * HOUR,
       spans: [{ kind: "bounds", from: NOW - 3 * HOUR, to: NOW - 2 * HOUR }],
     });
-    // colour is read, never dealt: `/work/app` was never dealt here, so the
-    // lane wears the neutral ramp and the identity file stays unwritten
-    expect(today?.project).not.toHaveProperty("seq");
-    expect(existsSync(world.identityFile)).toBe(false);
+    // colour is read, never dealt: `/work/app` was dealt while its runs were
+    // live, so this desktop's window reads its sequence, and the ask writes no
+    // identity (the record is byte for byte the one the world wrote)
+    expect(today?.project.seq).toBe(0);
+    expect(readFileSync(world.identityFile, "utf8")).toBe(JSON.stringify(DEALT));
     // `self` is the reader's to say
     expect(today?.device).not.toHaveProperty("self");
     expect(today?.device.id).toBe(world.daemon.devices.currentDeviceId());
     expect(world.asked().filter((url) => url.includes("/timeline"))).toEqual([]);
   });
 
+  // Item 100: until the world dealt `/work/app`, no lane had a sequence to
+  // cut, and this row could not have failed.
   it("a peer reads no colour sequence (M16); a bad window is the caller's", async () => {
     const past = AgentRecordedLanesResult.parse(
       await world.peer.call("agent.recordedLanes", day()),
     );
     expect(past.ended.length).toBe(2);
     for (const lane of past.ended) expect(lane.project).not.toHaveProperty("seq");
+    expect(past.ended[0]?.project).toMatchObject({ name: "app" });
     const now = Date.now();
     const refused = await world.window.callErr("agent.recordedLanes", {
       sinceMs: now - DAY - 1,
       untilMs: now,
     });
     expect(refused.data?.kind).toBe("PRECONDITION_FAILED");
+  });
+
+  // Item 100: the cut was every kind's but a peer daemon's, so the phone
+  // read this desktop's deal.
+  it("a phone reads no colour sequence either: only this desktop's own callers read its deal (M16, SP-L4)", async () => {
+    const past = AgentRecordedLanesResult.parse(
+      await world.phone.call("agent.recordedLanes", day()),
+    );
+    expect(past.ended.length).toBe(2);
+    for (const lane of past.ended) expect(lane.project).not.toHaveProperty("seq");
+  });
+
+  // Item 105: the door had no SP-D13 bound, so a phone's day of ended lanes was
+  // whatever the day held. It is the activity door's rule now, and the phone is
+  // told; a window and a peer daemon read the whole day and are never told.
+  it("tells a phone whether its day was clipped, and never a window or a peer daemon (SP-D13, item 105)", async () => {
+    const phone = AgentRecordedLanesResult.parse(
+      await world.phone.call("agent.recordedLanes", day()),
+    );
+    expect(phone.clipped).toBe(false);
+    expect(phone.ended.length).toBe(2);
+    for (const caller of [world.window, world.peer]) {
+      const past = AgentRecordedLanesResult.parse(await caller.call("agent.recordedLanes", day()));
+      expect(past).not.toHaveProperty("clipped");
+      expect(past.ended.length).toBe(2);
+    }
   });
 });
 
@@ -845,4 +887,65 @@ describe("a desktop with no record, and one whose record is not up", () => {
       ended: [],
     });
   }, 60_000);
+});
+
+// Item 105 — the lanes' answer for its audience, without a daemon: SP-D13's cut
+// for a tailnet caller (the activity door's rule, by each lane's end) and M21's
+// bound on the titles a peer reads.
+describe("agent.recordedLanes' answer for its audience (SP-D13, M21; item 105)", () => {
+  const T0 = 1_791_460_800_000;
+  const lane = (n: number, endedAt: number, title?: string) => ({
+    id: `past:claude:run-${n}`,
+    provider: { id: "claude", label: "Claude Code" },
+    ...(title !== undefined ? { title } : {}),
+    project: { name: "app", seq: 0 },
+    device: { id: "01JDESK", name: "Studio", os: "mac", self: true },
+    startedAt: endedAt - MIN,
+    endedAt,
+    spans: [{ kind: "bounds", from: endedAt - MIN, to: endedAt }],
+  });
+  const past = (ended: ReturnType<typeof lane>[]) =>
+    ({
+      sinceMs: T0,
+      untilMs: T0 + DAY,
+      readAt: T0 + DAY,
+      fidelity: "bounds",
+      state: "complete",
+      live: [{ id: "pty-7", seamAt: T0 + DAY, spans: [] }],
+      ended,
+    }) as unknown as Parameters<typeof wireRecordedLanes>[0];
+
+  it("keeps a tailnet caller's newest lanes by their end, in the answer's order, and says so; live stays whole", () => {
+    const limit = INDEX_TAILNET_LIMITS.MAX_ROWS;
+    // one more lane than the bound, and the one that ended FIRST sits mid-day,
+    // so a cut by position would keep it and drop the last-born
+    const lanes = Array.from({ length: limit + 1 }, (_, n) =>
+      lane(n, n === 50 ? T0 + 1 : T0 + HOUR + n * MIN),
+    );
+    const wire = wireRecordedLanes(past(lanes), "peer");
+    const cut = clipRecordedLanes(wire, limit);
+    expect(cut.clipped).toBe(true);
+    expect(cut.ended).toHaveLength(limit);
+    expect(cut.ended.map((row) => row.id)).toEqual(
+      lanes.filter((_row, n) => n !== 50).map((row) => row.id),
+    );
+    expect(cut.live).toEqual(wire.live);
+    // a day inside the bound is whole and still says so; no limit, no word
+    expect(clipRecordedLanes(wire, limit + 1)).toMatchObject({ clipped: false });
+    expect(clipRecordedLanes(wire, limit + 1).ended).toHaveLength(limit + 1);
+    expect(clipRecordedLanes(wire, undefined)).toBe(wire);
+  });
+
+  it("bounds every ended title a peer reads at the desk's bound, and a window's not at all (M21)", () => {
+    const long = `Untangle ${"the invoice writer ".repeat(20)}`;
+    const lanes = [lane(0, T0 + HOUR, long), lane(1, T0 + 2 * HOUR)];
+    const peer = wireRecordedLanes(past(lanes), "peer");
+    const title = peer.ended[0]?.title ?? "";
+    expect(Array.from(title)).toHaveLength(AGENT_FIELD.DESK_TEXT_CHARS);
+    expect(title.endsWith("…")).toBe(true);
+    expect(long.startsWith(title.slice(0, -1))).toBe(true);
+    expect(peer.ended[1]).not.toHaveProperty("title");
+    const window = wireRecordedLanes(past(lanes), "window");
+    expect(window.ended[0]?.title).toBe(long);
+  });
 });

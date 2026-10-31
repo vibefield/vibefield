@@ -2,7 +2,12 @@ import { type LiveSurfaceDemandV1, LiveSurfaceRuntimeSummaryV1 } from "@vibefiel
 
 export const LIVE_SURFACE_SUPPORT_MAX_SURFACES = 256;
 
-export type LiveSurfaceRuntimeSourceKind = "browser" | "sck-window" | "ios-simulator";
+export type LiveSurfaceRuntimeSourceKind =
+  | "browser"
+  | "sck-window"
+  | "ios-simulator"
+  /** PT-S2 — a phone bound by its device type and runtime (main keeps the device it picked) */
+  | "ios-simulator-device";
 
 export interface LiveSurfaceRuntimeSupportMetrics {
   readonly attachmentsCreated: number;

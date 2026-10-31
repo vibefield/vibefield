@@ -473,6 +473,34 @@ export function liveSimulatorFace(
 }
 // docs:end live-simulator
 
+/** The device a phone is BOUND to, as a host answers it: CoreSimulator's device type and runtime — never a UDID. */
+export interface LiveSimulatorBinding {
+  readonly deviceType: string;
+  readonly runtime: string;
+}
+
+/**
+ * THE DEVICES A PHONE MAY ATTACH (PT-S2; R11) — the second service VibeField lends a simulator kind beside `LIVE`, as
+ * `BROWSER_NAVIGATION` is a browser kind's. A kind cannot know which devices this Mac holds (its catalog knows models, never
+ * the runtimes installed here, and a binding's runtime is a concrete id), so its ATTACH asks the host here. SYNCHRONOUS: a
+ * menu act runs once, outside the tick, and writes in its own transaction — so the host answers from what it last read of
+ * this Mac's devices (it reads them while a phone stands on the desk), never by asking now: before its first read it answers
+ * undefined, and the act writes nothing. Its answer is a binding, never a UDID: each Mac attaches its OWN simulator of the
+ * bound type, so a peer's phone shows the peer's.
+ */
+export interface SimulatorDevices {
+  /**
+   * The device a phone of model `prefer` (a CoreSimulator device type) attaches here: this Mac's BOOTED device of that
+   * type; else its first booted iPhone (the phone takes that iPhone's model); else `prefer` on the newest runtime this Mac
+   * holds — whose face then says honestly that it is off, or that there is no such device. Undefined: the host has not read
+   * this Mac's devices yet, or it holds none to offer.
+   */
+  attachable(prefer: string): LiveSimulatorBinding | undefined;
+}
+
+/** The key the host lends a simulator kind this Mac's devices under (`KindHost.use(SIMULATOR_DEVICES)`). */
+export const SIMULATOR_DEVICES = serviceKey<SimulatorDevices>("vibefield.simulator.devices");
+
 // docs:begin object-binding
 /**
  * An OBJECT's code half (spec §12.8; DK-0f's contract): the value of the renderer module's NAMED

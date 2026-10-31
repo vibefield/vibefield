@@ -101,6 +101,7 @@ import {
   LOG_STREAMS,
   METHODS,
   type MeshSyncPosture,
+  MONITOR_AUDIENCE,
   NATIVE_SUPERVISION,
   type NativeHealth,
   type NativeLastExit,
@@ -196,6 +197,7 @@ import { projectPluginAuthority } from "@vibefield/plugin-runtime";
 import { PROTOCOL_VERSION as ROSETTA_PROTOCOL_VERSION } from "@vibefield/rosetta-protocol/protocol-version";
 import {
   agentListFor,
+  clipRecordedLanes,
   createFieldSubscription,
   deskProjector,
   malformedBoardAsk,
@@ -2062,6 +2064,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     api.register("surface.sources", (ctx, params) => surfaces.sources(ctx, params));
     api.register("surface.open", (ctx, params) => surfaces.open(ctx, params));
     api.register("surface.close", (ctx, params) => surfaces.close(ctx, params));
+    // PT-S2 (R11) — the attach's device list (a phone's "Attach" binds from it)
+    api.register("surface.simulator.devices", (ctx, params) =>
+      surfaces.simulatorDevices(ctx, params),
+    );
 
     api.register("system.health", () => health());
     // WIN-D5 — the stop verb. The response flushes first (setImmediate), then
@@ -3723,10 +3729,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
             : projectFieldRow,
         minIntervalMs,
         ...(heartbeatMs !== undefined ? { heartbeatMs } : {}),
-        // TM-2 (F-M4) — the SAME gate the store publisher applies below. The
-        // two carriers serve one board, and a row that promises a tap over one
-        // leg while refusing it over the other is the false positive MF-1l
-        // exists to prevent — the phone folds both legs into one card.
+        // TM-2 (F-M4) — the gate on every attach promise a row makes: the
+        // `terminal` join and, on a desk row, `monitorRow.attachable`/
+        // `.writable` (PG-1a). The store publisher it once matched retired at
+        // DS-D14; a promise of a tap the owner refuses is the false positive
+        // MF-1l exists to prevent.
         terminalPublished: () => native.terminalMeshPublished(),
         onError: (error) =>
           logger.warn("fieldd.agents.field_frame_failed", "A field subscriber's frame failed", {
@@ -3821,14 +3828,15 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
               service: "mesh-board",
               state: "starting",
             });
-          // `.snapshot` carries the whole mesh (the open, and the client's own
-          // replay after a reconnect); `.delta` carries every per-device frame —
-          // a device's delta, a device's reset, a device's state.
-          const reader = meshBoard.open(projection, floor, (frame) => emit(frame, "delta"));
+          // `.snapshot` carries the whole mesh (the open, the client's own
+          // replay after a reconnect, and the door's resync of a phone behind
+          // its cap, PG-1c); `.delta` carries every per-device frame — a
+          // device's delta, a device's reset, a device's state.
+          const install = meshBoard.subscribe(projection, floor, emit);
           return {
-            snapshot: reader.open,
+            ...install,
             dispose: () => {
-              reader.dispose();
+              install.dispose();
               screen?.();
             },
           };
@@ -3899,8 +3907,13 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // lanes' past as the backend beside the runtime derives it from the record,
     // asked by a window only while a mounted view asks (PF6). Read through to
     // rosettad at each ask (the backend's history port) and held nowhere — not
-    // the removed `agent.history`. A peer reads it without colour sequences
-    // (M16), as it reads the model's rows.
+    // the removed `agent.history`. Only this desktop's own callers read the
+    // colour sequences (M16), as only they read the model's rows: the cut is
+    // `MONITOR_AUDIENCE`'s by the caller's kind. Item 100: it was every kind
+    // but a peer daemon's, so a phone read this desktop's deal. SP-D13-bounded
+    // for a tailnet caller by `index.activity`'s rule (item 105): the newest
+    // MAX_ROWS ended lanes by their end, `clipped` saying so; a window and a
+    // peer daemon read the whole day.
     api.register("agent.recordedLanes", async (ctx, params) => {
       const parsed = AgentRecordedLanesParams.safeParse(params ?? {});
       if (!parsed.success)
@@ -3925,7 +3938,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           service: "agent.monitor",
           state: "no-record",
         });
-      return wireRecordedLanes(past, ctx.principal.kind === "peer-fieldd" ? "peer" : "window");
+      return clipRecordedLanes(
+        wireRecordedLanes(past, MONITOR_AUDIENCE[ctx.principal.kind]),
+        tailnetRowLimit(ctx.principal, undefined, Number.MAX_SAFE_INTEGER),
+      );
     });
     // AR-5d — the usage column's feed (agent-usage.ts). Both doors answer the
     // PROJECTION and nothing else: percentages, labels, the provider's own
