@@ -15,6 +15,9 @@
 //   6b. (WP12d, L3b-i, B3) the HEAD release's `release-manifest.json` + `.sig`, verified, naming the head and its
 //      version: the planes it touches are read by DIGEST from it (`native-plane.ts`). A release without one is `null`
 //      (every plane counts as touched); one that does not verify, or names another release, refuses the chain.
+//   6c. (AU-6, AU-D10 A; LC-19) the head's notes, signed with that manifest, read on their own: a block this client
+//      cannot read is DROPPED (`notes: null`, `notesDropped` names why, the controller logs it once) and NEVER refuses
+//      the chain — an update never waits on its notes. The manifest declares them loosely for the same reason.
 // The policy's levers (killSwitch, yanked, floors, requireUserConfirmation, minSupported) are WP12d's: this chain
 // verifies the document and returns it parsed, and `decide.ts` applies them (L3b-i, B1).
 //
@@ -27,6 +30,7 @@ import {
   judgeSignedDocument,
   RELEASE_MANIFEST_FILE,
   ReleaseManifest,
+  ReleaseNotes,
   SIGNATURE_SUFFIX,
   TRUST_ROOT_FILE,
   type TrustRoot,
@@ -93,6 +97,10 @@ export interface VerifiedChain {
   readonly headVersion: string | null;
   /** the head's verified release manifest (6b); null for a release that carries none */
   readonly manifest: ReleaseManifest | null;
+  /** AU-6 (6c) — the head's notes, parsed; null when its manifest carried none, or carried notes that did not parse */
+  readonly notes: ReleaseNotes | null;
+  /** AU-6 (6c) — why the head's notes were dropped (for the log line and doctor); null when none were */
+  readonly notesDropped: string | null;
   readonly trustRoot: TrustRoot;
   readonly heads: ChannelHeads;
   readonly policy: UpdatePolicy;
@@ -162,6 +170,15 @@ export function withFloors(
       stable: atLeast(remembered.policy.stable, floors.policy.stable),
     },
   };
+}
+
+/** AU-6 (6c) — why a notes block was dropped, short: the first issue's path and message ("lines.2.text: one line of
+ * plain text"). For the log line and doctor; nothing of it reaches privileged UI (EDP §11.1). */
+function droppedReason(
+  issue: { readonly path: readonly (string | number)[]; readonly message: string } | undefined,
+): string {
+  if (issue === undefined) return "malformed";
+  return issue.path.length > 0 ? `${issue.path.join(".")}: ${issue.message}` : issue.message;
 }
 
 export async function verifyUpdateChain(input: ChainInput): Promise<ChainResult> {
@@ -367,6 +384,8 @@ export async function verifyUpdateChain(input: ChainInput): Promise<ChainResult>
   // 6b. the head's release manifest, by the release role (B3)
   const manifestDoc = await signed(headBase, RELEASE_MANIFEST_FILE);
   let manifest: ReleaseManifest | null = null;
+  let notes: ReleaseNotes | null = null;
+  let notesDropped: string | null = null;
   if (manifestDoc.bytes !== null) {
     if (
       manifestDoc.sigText === null ||
@@ -396,6 +415,13 @@ export async function verifyUpdateChain(input: ChainInput): Promise<ChainResult>
       );
     }
     manifest = parsed.data;
+    // 6c. the head's notes (AU-6): the check above bound them to the head release; a block that does not parse is
+    // dropped and said, never a refusal
+    if (manifest.notes !== undefined) {
+      const read = ReleaseNotes.safeParse(manifest.notes);
+      if (read.success) notes = read.data;
+      else notesDropped = droppedReason(read.error.issues[0]);
+    }
   }
   return {
     ok: true,
@@ -405,6 +431,8 @@ export async function verifyUpdateChain(input: ChainInput): Promise<ChainResult>
     feedText,
     headVersion,
     manifest,
+    notes,
+    notesDropped,
     acceptedRoot: accepted,
     trustRoot,
     heads,

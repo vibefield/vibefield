@@ -1,3 +1,4 @@
+import { HAND_WORDS } from "../frame/cards/cards-words";
 import { FRAME_VIEWS, type ViewKeys, viewForKey, viewKeysOf } from "../frame/views";
 import { getHost } from "../host";
 import { isSettingsChord } from "./me-menu-wiring";
@@ -20,16 +21,25 @@ import { isSettingsChord } from "./me-menu-wiring";
 // ⌘1–⌘8 to goto_tab, and a pane in the deck has no tabs; the frame takes them
 // first, so ⌘1 leaves Godview from inside a focused pane and ⌘2 comes back.
 //
-// ⌘T (One Frame FR-2, §11) is Godview's create in the line — New terminal —
-// over ghostty's new_tab, which the deck has no tabs for either. The line
-// claims it only while the window is in Godview; the table names it so
-// Settings can say which Ghostty default it keeps from a pane.
+// ⌘T (One Frame FR-2, §11) is the line's create in Godview — New terminal —
+// and in History since HN-7 (there, in the folder of the project the room
+// shows), over ghostty's new_tab, which the deck has no tabs for either. The
+// line claims it only while the window is in one of the two, so the row says
+// WHEN; the table names it so Settings can say which Ghostty default it keeps
+// from a pane.
 //
 // ⌘F (the Peek, GV-D8/D10, 2026-10-08) is search's, printed under the frame's
-// button: the Peek claims it while History or Godview is the view (Godview's
+// button: the Peek claims it while Godview or History is the view (Godview's
 // own Find left with P2, 2026-10-09). So Ghostty's start_search reaches a pane
 // in neither — the row says WHEN, so Settings says it honestly rather than as
 // an always.
+//
+// ⌘C (HN-D3, 2026-10-29) is the desk's Copy: the selection bar claims it only on
+// Canvas, over a selection or an object in hand, and never from a field or a
+// kind that holds the keyboard (`SelectionBar.tsx`). A pane is never on the desk,
+// so Ghostty's copy_to_clipboard keeps ⌘C in Godview: the row is scoped to the
+// desk, and Settings → Terminal → Keyboard, which says what a PANE never hears,
+// leaves it out (`reservedChord`).
 //
 // ⌘Q and ⌃⌘F (AL-9, AL-D14/D15, 2026-10-27) are the SHELL's: main takes them
 // in `before-input-event`, above every page (`window-chords.ts`), because the
@@ -53,8 +63,9 @@ export function isCommandPaletteChord(event: ChordKey): boolean {
   );
 }
 
-/** ⌘⇧V or Ctrl+Shift+V: the clipboard tray. */
-export function isClipboardTrayChord(event: ChordKey): boolean {
+/** ⌘⇧V or Ctrl+Shift+V: the hand raised (track HN; DESIGN.md §8 "The hand") — the clipboard
+ * tray's chord, kept for the clipboard you can see. */
+export function isCardsChord(event: ChordKey): boolean {
   return (
     (event.key === "v" || event.key === "V") &&
     (event.metaKey || event.ctrlKey) &&
@@ -63,8 +74,8 @@ export function isClipboardTrayChord(event: ChordKey): boolean {
   );
 }
 
-/** ⌘T (Ctrl+T off the Mac): New terminal, Godview's create. Never with ⇧ or
- * ⌥, and never the other platform's modifier. */
+/** ⌘T (Ctrl+T off the Mac): New terminal, Godview's create and History's
+ * (HN-7). Never with ⇧ or ⌥, and never the other platform's modifier. */
 export function isNewTerminalChord(event: ChordKey, keys: ViewKeys): boolean {
   const command =
     keys === "mac" ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
@@ -81,13 +92,23 @@ export function isSearchChord(event: ChordKey, keys: ViewKeys): boolean {
   return event.key === "f" || event.key === "F";
 }
 
+/** ⌘C (Ctrl+C off the Mac): the desk's Copy. Never with ⇧ or ⌥, and never the
+ * other platform's modifier — Ctrl+C on the Mac is a shell's interrupt. */
+export function isCopyChord(event: ChordKey, keys: ViewKeys): boolean {
+  const command =
+    keys === "mac" ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
+  if (!command || event.altKey || event.shiftKey) return false;
+  return event.key === "c" || event.key === "C";
+}
+
 interface ProductChordRow {
   readonly id:
     | "palette"
     | "settings"
-    | "clipboard-tray"
+    | "cards"
     | "new-terminal"
     | "search"
+    | "desk-copy"
     | "view-canvas"
     | "view-godview"
     | "view-history"
@@ -100,6 +121,10 @@ interface ProductChordRow {
   readonly label: string;
   /** When VibeField keeps the chord, if not always — said beside the label. */
   readonly when?: string;
+  /** Where VibeField keeps it, when that is never a pane: `desk` — only over the
+   * desk, which no pane is ever on, so a focused pane always keeps the chord for
+   * Ghostty and the deck's keyboard page never names it VibeField's. */
+  readonly scope?: "desk";
 }
 
 /** A chord the page catches on the window's capture phase (the head of this
@@ -121,24 +146,28 @@ export type ProductChord = PageChord | ShellChord;
 export const PRODUCT_CHORDS: readonly ProductChord[] = [
   { id: "palette", trigger: "super+k", label: "Command palette", matches: isCommandPaletteChord },
   { id: "settings", trigger: "super+,", label: "Settings", matches: isSettingsChord },
-  {
-    id: "clipboard-tray",
-    trigger: "super+shift+v",
-    label: "Clipboard tray",
-    matches: isClipboardTrayChord,
-  },
+  { id: "cards", trigger: "super+shift+v", label: HAND_WORDS.chord, matches: isCardsChord },
   {
     id: "new-terminal",
     trigger: "super+t",
     label: "New terminal",
+    when: "while Godview or History is the view",
     matches: (event) => isNewTerminalChord(event, viewKeysOf(getHost().platform)),
   },
   {
     id: "search",
     trigger: "super+f",
     label: "Search",
-    when: "while History or Godview is the view",
+    when: "while Godview or History is the view",
     matches: (event) => isSearchChord(event, viewKeysOf(getHost().platform)),
+  },
+  {
+    id: "desk-copy",
+    trigger: "super+c",
+    label: "Copy",
+    when: "on the desk, with something selected",
+    scope: "desk",
+    matches: (event) => isCopyChord(event, viewKeysOf(getHost().platform)),
   },
   // The four views, in the track's order. Off the Mac they are Ctrl+1–4; the
   // trigger keeps ghostty's macOS spelling, which is what names the default

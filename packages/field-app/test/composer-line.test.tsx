@@ -1,31 +1,36 @@
 // @vitest-environment happy-dom
 /**
- * One Frame FR-2 — the line, at the grain the repo tests chrome: the shipping
- * composition `[views] create │ draft mic send` on its real controller, its
- * ONE owner of the open surface (a stateful harness stands where FieldView
- * does), @ typed into the draft, chips in the sentence, the interim send, and
- * the create's keys. The model is `line-model.test.ts`'s; the delivery of B and
- * ⌘T from a focused pane in a live window is the godview smoke's row 11h.
+ * One Frame FR-2, LN-D1 — the line, at the grain the repo tests chrome: the
+ * shipping composition `[views] snapshot create` on its real controller, its ONE
+ * owner of the open surface (a stateful harness stands where FieldView does),
+ * the snapshot's act on a fixture host dealing into a fixture hand, the frame's
+ * note at its two places, the create's keys, and History's create — New
+ * terminal through History's door (HN-7). The model is `line-model.test.ts`'s;
+ * the delivery of B and ⌘T from a focused pane in a live window is the godview
+ * smoke's row 11h.
  */
-import type { FrameView } from "@vibefield/contracts";
+import type { FrameView, ScreenshotCaptureResult } from "@vibefield/contracts";
 import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BoardLineDoor } from "../src/field/desk/pegboard/board-door";
-import { Composer } from "../src/frame/Composer";
-import type { DeskChip } from "../src/frame/draft";
+import { Composer, type ComposerHost } from "../src/frame/Composer";
+import { noteCapture, resetCaptureStateForTest } from "../src/frame/capture-state";
+import { CardStore } from "../src/frame/cards/cards-store";
 import type { FrameSurface } from "../src/frame/frame-surface";
-import type { LineViewDoor } from "../src/frame/line-door";
 import {
-  type LineSendTicket,
-  lineSendPhase,
-  sendToLine,
-  setLineSendPhase,
-} from "../src/frame/line-send";
+  claimingRefusals,
+  type HistoryLineDoor,
+  type LineViewDoor,
+  resetHistoryLineDoorForTest,
+  runChosenSession,
+  sayOnHistoryLine,
+  sayOnLine,
+} from "../src/frame/line-door";
 import { ViewsTrackView } from "../src/frame/ViewsTrack";
+import type { ViewKeys } from "../src/frame/views";
 import { pasteIntoPane } from "../src/godview/line-panes";
 import { type FieldHost, setHost } from "../src/host";
-import { ClipboardStore } from "../src/hud/edge-tray/clipboard-store";
 import type { RendererLogger } from "../src/logging";
 import type { RoutedInputRefusal } from "../src/terminal/pool";
 
@@ -52,17 +57,26 @@ function door(overrides: Partial<LineViewDoor> = {}): LineViewDoor {
   return {
     panes: [
       {
+        paneId: "p1",
         sessionId: "s-vibe",
         name: "vibe-field",
         runs: "Claude Code",
         state: "working",
         active: true,
       },
-      { sessionId: "s-ros", name: "rosetta", runs: "Codex", state: "idle", active: false },
+      {
+        paneId: "p2",
+        sessionId: "s-ros",
+        name: "rosetta",
+        runs: "Codex",
+        state: "idle",
+        active: false,
+      },
     ],
     onScreen: true,
     newTerminal: vi.fn(async () => ({ state: "opened" as const })),
-    paste: vi.fn(() => true),
+    pasteInto: vi.fn(() => true),
+    whenInputOpen: vi.fn(async () => true),
     canPlace: true,
     place: vi.fn(async () => ({ state: "opened" as const })),
     reveal: vi.fn(async () => ({ state: "opened" as const })),
@@ -70,33 +84,80 @@ function door(overrides: Partial<LineViewDoor> = {}): LineViewDoor {
   };
 }
 
-function store(): ClipboardStore {
-  const clipboard = new ClipboardStore(() => 0);
-  clipboard.addCapture({
-    status: "ok",
-    path: "/stills/one.png",
-    width: 1440,
-    height: 900,
-    scale: 2,
-    displayId: 1,
-    bounds: { x: 0, y: 0, width: 1440, height: 900 },
-  });
-  return clipboard;
+/** What History lends the line (HN-7): the room shows vibe-field, and its New terminal opens. */
+function historyDoor(overrides: Partial<HistoryLineDoor> = {}): HistoryLineDoor {
+  return {
+    chosen: null,
+    waits: null,
+    live: false,
+    resume: vi.fn(async () => ({ state: "resumed" as const })),
+    jump: vi.fn(async () => ({ state: "jumped" as const })),
+    project: "vibe-field",
+    newTerminal: vi.fn(async () => ({ state: "opened" as const })),
+    ...overrides,
+  };
+}
+
+/** What the snapshot tool kept: a region of the window, on disk and on the clipboard. */
+const KEPT: ScreenshotCaptureResult = {
+  status: "ok",
+  path: "/stills/region.png",
+  width: 600,
+  height: 400,
+  scale: 2,
+  displayId: 1,
+  bounds: { x: 100, y: 120, width: 300, height: 200 },
+  screenBounds: { x: 100, y: 120, width: 300, height: 200 },
+};
+
+/** A capture door the test answers by hand: the tool is up until `answer`. */
+function captureDoor(): {
+  capture: () => Promise<ScreenshotCaptureResult>;
+  answer: (result: ScreenshotCaptureResult) => void;
+  fail: (cause: unknown) => void;
+  asked: () => number;
+} {
+  let asked = 0;
+  let settle: { ok: (r: ScreenshotCaptureResult) => void; no: (c: unknown) => void } | null = null;
+  return {
+    capture: () => {
+      asked += 1;
+      return new Promise<ScreenshotCaptureResult>((ok, no) => {
+        settle = { ok, no };
+      });
+    },
+    answer: (result) => settle?.ok(result),
+    fail: (cause) => settle?.no(cause),
+    asked: () => asked,
+  };
 }
 
 interface Mount {
   door: LineViewDoor | null;
+  /** History's door (HN-7): a fixture door when given; undefined, the published one (none). */
+  history?: HistoryLineDoor;
   /** The board's door (DK-13): a fixture board when given — undefined, the published one (no desk here: none). */
   board?: { held: boolean; open?: boolean };
-  write: (text: string) => Promise<void>;
-  clipboard: ClipboardStore;
+  host: ComposerHost;
+  cards: CardStore;
+  keys: ViewKeys;
+  /** Whether the line binds the window's keys (the catalog's live line does not). */
+  bindKeys: boolean;
 }
 
 function mount(view: FrameView, options: Partial<Mount> = {}): Mount {
   const used: Mount = {
     door: options.door === undefined ? door() : options.door,
-    write: options.write ?? vi.fn(async () => undefined),
-    clipboard: options.clipboard ?? store(),
+    ...(options.history === undefined ? {} : { history: options.history }),
+    // a capture door that never answers unless a row hands its own: the snapshot at rest is
+    // ready ("Snapshot  ⌃⌘A"); a row that wants no door says `host: {}`
+    host: options.host ?? {
+      screenshotCapture: () => new Promise<ScreenshotCaptureResult>(() => undefined),
+      screenshotStillUrl: (path) => `still://${path}`,
+    },
+    cards: options.cards ?? new CardStore(() => 1_000),
+    keys: options.keys ?? "mac",
+    bindKeys: options.bindKeys ?? true,
   };
   function Owner(): React.ReactElement {
     // FieldView's place: the one owner of the line's open surface.
@@ -125,16 +186,17 @@ function mount(view: FrameView, options: Partial<Mount> = {}): Mount {
     return (
       <Composer
         view={shown}
-        keys="mac"
-        track={<ViewsTrackView view={shown} keys="mac" />}
+        keys={used.keys}
+        track={<ViewsTrackView view={shown} keys={used.keys} />}
         surface={surface}
         onSurfaceChange={setSurface}
         godview={used.door}
+        {...(used.history === undefined ? {} : { history: used.history })}
         {...(objects === undefined ? {} : { objects })}
-        clipboard={used.clipboard}
-        host={{ screenshotStillUrl: (path) => `still://${path}` }}
-        writeClipboard={used.write}
+        host={used.host}
+        cards={used.cards}
         inputRefusals={inputRefusals}
+        bindKeys={used.bindKeys}
       />
     );
   }
@@ -165,6 +227,8 @@ afterEach(() => {
   root = null;
   host = null;
   pane = null;
+  resetHistoryLineDoorForTest();
+  resetCaptureStateForTest();
   vi.useRealTimers();
 });
 
@@ -173,29 +237,10 @@ const q = <T extends Element = HTMLElement>(selector: string): T => {
   if (!element) throw new Error(`nothing matches ${selector}`);
   return element;
 };
-const editor = (): HTMLElement => q(".vf-line-input");
 const create = (): HTMLButtonElement => q<HTMLButtonElement>(".vf-line-create");
+const snapshot = (): HTMLButtonElement => q<HTMLButtonElement>(".vf-line-snapshot");
 const shownGlyph = (): string | null =>
   create().querySelector("[data-shown] [data-glyph]")?.getAttribute("data-glyph") ?? null;
-
-/** Type into the draft the way the browser leaves it: the text in the editor,
- * the caret at its end, and an input event. */
-function typeText(text: string): void {
-  act(() => {
-    const field = editor();
-    field.focus();
-    field.textContent = text;
-    const node = field.firstChild;
-    const range = document.createRange();
-    if (node !== null) range.setStart(node, text.length);
-    else range.setStart(field, 0);
-    range.collapse(true);
-    const selection = window.getSelection();
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-    field.dispatchEvent(new Event("input", { bubbles: true }));
-  });
-}
 
 function press(target: EventTarget, init: KeyboardEventInit): KeyboardEvent {
   const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...init });
@@ -205,242 +250,290 @@ function press(target: EventTarget, init: KeyboardEventInit): KeyboardEvent {
   return event;
 }
 
-describe("the line's composition (DESIGN.md §8)", () => {
-  it("draws [views] create │ draft mic send, the views track at its left end", () => {
+describe("the line's composition (DESIGN.md §8; LN-D1)", () => {
+  it("draws [views] snapshot create — no draft, no mic, no send — and the note after them when the frame speaks", () => {
     mount("canvas");
     const line = q(".vf-line");
-    expect(line.getAttribute("aria-label")).toBe("The composer");
+    expect(line.getAttribute("aria-label")).toBe("The line");
     expect([...line.children].map((child) => child.className)).toEqual([
       "vf-views-line",
+      "vf-line-snapshot",
       "vf-line-create",
-      "vf-line-rule",
-      "vf-line-draft",
-      "vf-line-mic",
-      "vf-line-send",
     ]);
-    // FC-D1: no @ button, no attach button — four cells, create, mic, send
-    const buttons = [...line.querySelectorAll("button")];
-    expect(buttons).toHaveLength(4 + 3);
-    expect(buttons.some((button) => /^@$|attach|mention/i.test(button.textContent ?? ""))).toBe(
-      false,
-    );
-    expect(
-      buttons.some((button) => /attach|mention/i.test(button.getAttribute("aria-label") ?? "")),
-    ).toBe(false);
+    // the four view cells, the snapshot and the create: nothing to type into, nothing to send
+    expect(line.querySelectorAll("button")).toHaveLength(4 + 2);
+    expect(line.querySelector("[contenteditable], input, textarea")).toBeNull();
+    for (const gone of [".vf-line-input", ".vf-line-mic", ".vf-line-send", ".vf-line-rule"]) {
+      expect(host?.querySelector(gone)).toBeNull();
+    }
+    act(() => {
+      sayOnLine("Could not jump — its pane is gone from the deck");
+    });
+    expect([...line.children].map((child) => child.className)).toEqual([
+      "vf-views-line",
+      "vf-line-snapshot",
+      "vf-line-create",
+      "vf-line-note",
+    ]);
   });
 
   it("gives each view its own create — only Canvas's is a bare plus (FR-3, FC-D3)", () => {
     mount("canvas");
     expect(shownGlyph()).toBe("plus");
     expect(create().getAttribute("title")).toBe("Objects  B");
+    expect(create().getAttribute("aria-keyshortcuts")).toBe("B");
     expect(create().getAttribute("aria-expanded")).toBe("false");
     act(() => setViewNow?.("godview"));
     expect(shownGlyph()).toBe("start");
     expect(create().getAttribute("title")).toBe("New terminal  ⌘T");
     expect(create().getAttribute("aria-keyshortcuts")).toBe("Meta+T");
     expect(create().hasAttribute("aria-expanded")).toBe(false);
+    // HN-7 (LN-D2): History's create is Godview's act — no longer Resume, waiting on a choice
+    // (the chosen session's Resume is the palette's row now: command-palette.test.tsx)
     act(() => setViewNow?.("history"));
-    expect(shownGlyph()).toBe("resume");
-    expect(create().getAttribute("aria-disabled")).toBe("true");
-    expect(create().getAttribute("title")).toBe("Resume this session — choose a session first");
+    expect(shownGlyph()).toBe("start");
+    expect(create().getAttribute("aria-label")).toBe("New terminal");
+    expect(create().hasAttribute("aria-disabled")).toBe(false);
+    expect(create().getAttribute("title")).toBe("New terminal  ⌘T");
+    expect(create().getAttribute("aria-keyshortcuts")).toBe("Meta+T");
   });
 
-  it("draws the mic waiting and says why — the desktop has no dictation door", () => {
-    mount("canvas");
-    const mic = q(".vf-line-mic");
-    expect(mic.getAttribute("aria-disabled")).toBe("true");
-    expect(mic.getAttribute("title")).toBe("Dictation — not on the desktop yet");
-  });
-
-  it("teaches the one way in at rest, and inverts send once there is something to send", () => {
-    mount("canvas");
-    expect(q(".vf-line-ph").textContent).toBe("Message, or type @ to add…");
-    expect(q(".vf-line-send").getAttribute("aria-disabled")).toBe("true");
-    typeText("ship it");
-    expect(host?.querySelector(".vf-line-ph")).toBeNull();
-    expect(q(".vf-line-send").getAttribute("data-armed")).toBe("true");
+  it("reads each key off the act it names, the platform's way — never a letter hard-coded", () => {
+    mount("godview", { keys: "other" });
+    expect(create().getAttribute("title")).toBe("New terminal  Ctrl+T");
+    expect(create().getAttribute("aria-keyshortcuts")).toBe("Control+T");
+    expect(snapshot().getAttribute("title")).toBe("Snapshot  Alt+A");
+    expect(snapshot().getAttribute("aria-keyshortcuts")).toBe("Alt+A");
   });
 });
 
-describe("send stays quiet over a mention still being typed", () => {
-  it("is not armed by a lone @, and is by a word beside it", () => {
+describe("the snapshot (HN-D2; SNAP's door on the line)", () => {
+  it("stands between the views and the act, a ghost that says main's key: Snapshot  ⌃⌘A", () => {
     mount("canvas");
-    typeText("@");
-    expect(q(".vf-line-send").getAttribute("aria-disabled")).toBe("true");
-    typeText("ask @");
-    expect(q(".vf-line-send").getAttribute("data-armed")).toBe("true");
+    expect(snapshot().getAttribute("aria-label")).toBe("Snapshot");
+    expect(snapshot().getAttribute("title")).toBe("Snapshot  ⌃⌘A");
+    expect(snapshot().getAttribute("aria-keyshortcuts")).toBe("Control+Meta+A");
+    expect(snapshot().hasAttribute("aria-disabled")).toBe(false);
+    expect(snapshot().hasAttribute("data-on")).toBe(false);
+    expect(snapshot().querySelector("svg")?.getAttribute("data-glyph")).toBe("capture");
+  });
+
+  it("deals what the tool kept into the hand as ONE picture card, from its region — filled until the tool answers", async () => {
+    const tool = captureDoor();
+    const used = mount("canvas", {
+      host: { screenshotCapture: tool.capture, screenshotStillUrl: (path) => `still://${path}` },
+    });
+    act(() => snapshot().click());
+    expect(tool.asked()).toBe(1);
+    expect(snapshot().getAttribute("data-on")).toBe("true");
+    // the tool is modal, one at a time: a second press while it is up asks nothing
+    act(() => snapshot().click());
+    expect(tool.asked()).toBe(1);
+    expect(used.cards.snapshot().cards).toEqual([]);
+    await act(async () => tool.answer(KEPT));
+    expect(snapshot().hasAttribute("data-on")).toBe(false);
+    const { cards, arriving } = used.cards.snapshot();
+    expect(cards).toHaveLength(1);
+    expect(cards[0]).toMatchObject({
+      kind: "pict",
+      origin: { view: "canvas", how: "snapshot" },
+      at: 1_000,
+      title: "Snapshot",
+      width: 600,
+      height: 400,
+      src: "still:///stills/region.png",
+      path: "/stills/region.png",
+      paste: "/stills/region.png",
+    });
+    // it leaves the region it was taken of (window px: the region less the window's screen origin)
+    const from = arriving.get(cards[0]?.id ?? "");
+    expect(from).toEqual({ left: 100, top: 120, width: 300, height: 200 });
+    expect(host?.querySelector(".vf-line-note")).toBeNull();
+  });
+
+  it("deals the card as taken in the view it was pressed in", async () => {
+    const tool = captureDoor();
+    const used = mount("godview", { host: { screenshotCapture: tool.capture } });
+    act(() => snapshot().click());
+    await act(async () => tool.answer(KEPT));
+    expect(used.cards.snapshot().cards[0]?.origin).toEqual({ view: "godview", how: "snapshot" });
+  });
+
+  it("fills for its own press only: a capture main ran (⌃⌘A, the View menu) is heard as its result and fills nothing (LC-17)", () => {
+    const tool = captureDoor();
+    mount("canvas", { host: { screenshotCapture: tool.capture } });
+    // the hand's subscription hears main's capture when it is over — its result, never its start —
+    // so the tool's own overlay is that capture's signal, and the line's snapshot stays a ghost
+    act(() => noteCapture(KEPT));
+    expect(snapshot().hasAttribute("data-on")).toBe(false);
+    expect(tool.asked()).toBe(0);
+  });
+
+  it("says a capture that failed on the line, from its left — and nothing at all of a cancel", async () => {
+    const tool = captureDoor();
+    const used = mount("canvas", { host: { screenshotCapture: tool.capture } });
+    act(() => snapshot().click());
+    await act(async () => tool.answer({ status: "cancel" }));
+    expect(host?.querySelector(".vf-line-note")).toBeNull();
+    expect(snapshot().hasAttribute("data-on")).toBe(false);
+    act(() => snapshot().click());
+    await act(async () =>
+      tool.answer({
+        status: "error",
+        code: "permission-denied",
+        message: "Screen Recording is off",
+      }),
+    );
+    // the Snap tile's honest words, which moved to the line with the door
+    expect(q(".vf-line-note").textContent).toBe(
+      "Screen Recording is off — System Settings › Privacy & Security",
+    );
+    expect(q(".vf-line-note").getAttribute("data-at")).toBe("line");
+    act(() => snapshot().click());
+    await act(async () => tool.fail(new Error("the helper went away")));
+    expect(q(".vf-line-note").textContent).toBe("Not captured — the helper went away");
+    expect(snapshot().hasAttribute("data-on")).toBe(false);
+    expect(used.cards.snapshot().cards).toEqual([]);
+  });
+
+  it("waits, faint, where the host lends no capture door — and its tooltip says why", () => {
+    const used = mount("canvas", { host: {} });
+    expect(snapshot().getAttribute("aria-disabled")).toBe("true");
+    expect(snapshot().getAttribute("title")).toBe("Snapshot — no capture here");
+    act(() => snapshot().click());
+    expect(snapshot().hasAttribute("data-on")).toBe(false);
+    expect(used.cards.snapshot().cards).toEqual([]);
+  });
+
+  // R-B 4 — the door can be there and the tool still unable to capture: what it answered is kept
+  // (capture-state.ts), from the line's own press and from main's ⌃⌘A alike
+  it("waits, faint, once the tool says no capture helper is here — until a still is kept again", async () => {
+    const tool = captureDoor();
+    mount("canvas", { host: { screenshotCapture: tool.capture } });
+    act(() => snapshot().click());
+    await act(async () =>
+      tool.answer({ status: "error", code: "helper-missing", message: "no helper was built" }),
+    );
+    expect(q(".vf-line-note").textContent).toBe(
+      "Not captured — no capture helper on this platform",
+    );
+    expect(snapshot().getAttribute("aria-disabled")).toBe("true");
+    expect(snapshot().getAttribute("title")).toBe("Snapshot — no capture helper on this platform");
+    act(() => snapshot().click());
+    expect(tool.asked()).toBe(1);
+    // ⌃⌘A, run by main once the helper is built, kept a still: the hand's subscription notes it
+    act(() => noteCapture(KEPT));
+    expect(snapshot().hasAttribute("aria-disabled")).toBe(false);
+    expect(snapshot().getAttribute("title")).toBe("Snapshot  ⌃⌘A");
+  });
+
+  it("says Screen Recording is off in its tooltip and stays pressable — a press asks the system again", async () => {
+    const tool = captureDoor();
+    mount("canvas", { host: { screenshotCapture: tool.capture } });
+    act(() => snapshot().click());
+    await act(async () =>
+      tool.answer({
+        status: "error",
+        code: "permission-denied",
+        message: "Screen Recording is off",
+      }),
+    );
+    expect(snapshot().hasAttribute("aria-disabled")).toBe(false);
+    expect(snapshot().getAttribute("title")).toBe(
+      "Snapshot — Screen Recording is off — System Settings › Privacy & Security",
+    );
+    act(() => snapshot().click());
+    expect(tool.asked()).toBe(2);
+    await act(async () => tool.answer(KEPT));
+    expect(snapshot().getAttribute("title")).toBe("Snapshot  ⌃⌘A");
+  });
+
+  it("hears what main's ⌃⌘A learned of the tool, and keeps it through one at a time", () => {
+    mount("canvas");
+    act(() => {
+      noteCapture({ status: "error", code: "unsupported-platform", message: "no helper here" });
+    });
+    expect(snapshot().getAttribute("aria-disabled")).toBe("true");
+    act(() => {
+      noteCapture({ status: "error", code: "busy", message: "one capture at a time" });
+    });
+    expect(snapshot().getAttribute("title")).toBe("Snapshot — no capture helper on this platform");
+  });
+});
+
+describe("the hand's lab door (cards-lab.ts; R-T 2)", () => {
+  it("is lent while the line owns the window — a smoke's hands for the window's hand — and taken back with it", () => {
+    const used = mount("godview");
+    const lab = window.__vfCards;
+    if (lab === undefined) throw new Error("the line lent no lab door");
+    act(() => {
+      lab.deal("echo hn4 > /tmp/hn4.txt");
+    });
+    expect(used.cards.snapshot().cards.map((card) => card.paste)).toEqual([
+      "echo hn4 > /tmp/hn4.txt",
+    ]);
+    act(() => root?.unmount());
+    root = null;
+    expect(window.__vfCards).toBeUndefined();
+  });
+
+  it("is never lent by a line that binds no window keys (the catalog's live line)", () => {
+    mount("canvas", { bindKeys: false });
+    expect(window.__vfCards).toBeUndefined();
   });
 });
 
 describe("one owner of the line's open surface (FR-4)", () => {
-  it("opens @'s list when @ is typed at a word's start, as the line's surface", () => {
-    mount("canvas");
-    typeText("ask @");
-    expect(surfaceNow).toBe("at");
-    expect(host?.querySelector(".vf-at-menu")).not.toBeNull();
-    typeText("mail a@b");
-    expect(surfaceNow).toBeNull();
-    expect(host?.querySelector(".vf-at-menu")).toBeNull();
-  });
-
-  it("folds @'s list when Objects opens, and Objects when @ is typed — one value", () => {
-    mount("canvas");
-    typeText("@");
-    expect(surfaceNow).toBe("at");
-    act(() => create().click());
-    expect(surfaceNow).toBe("objects");
-    expect(create().getAttribute("aria-expanded")).toBe("true");
-    expect(create().getAttribute("title")).toBe("Close  Esc");
-    expect(host?.querySelector(".vf-at-menu")).toBeNull();
-    typeText("@");
-    expect(surfaceNow).toBe("at");
-    expect(create().getAttribute("aria-expanded")).toBe("false");
-  });
-
-  it("closes @'s list on Esc and keeps what was typed", () => {
-    mount("canvas");
-    typeText("ping @ro");
-    const esc = press(editor(), { key: "Escape" });
-    expect(esc.defaultPrevented).toBe(true);
-    expect(surfaceNow).toBeNull();
-    expect(editor().textContent).toBe("ping @ro");
-  });
-
   it("folds what the line had open when the view changes", () => {
     mount("canvas");
     act(() => create().click());
     expect(surfaceNow).toBe("objects");
+    expect(create().getAttribute("aria-expanded")).toBe("true");
+    expect(create().getAttribute("title")).toBe("Close  Esc");
     act(() => setViewNow?.("godview"));
     expect(surfaceNow).toBeNull();
   });
 });
 
-describe("@'s list (FC-D1, FC-D14)", () => {
-  it("leads with the panes in Godview, nearest against the line, the active one hot", () => {
-    mount("godview");
-    typeText("@");
-    const menu = q(".vf-at-menu");
-    expect(menu.getAttribute("role")).toBe("menu");
-    expect([...menu.querySelectorAll(".vf-at-eye")].map((eye) => eye.textContent)).toEqual([
-      "Add",
-      "Send to a pane",
-    ]);
-    const rows = [...menu.querySelectorAll<HTMLElement>(".vf-at-row.is-aim")];
-    expect(rows.map((row) => row.querySelector("b")?.textContent)).toEqual([
-      "rosetta",
-      "vibe-field",
-    ]);
-    expect(rows.at(-1)?.getAttribute("data-hot")).toBe("true");
-    expect(menu.textContent).toContain("No file door on the desktop yet");
-    expect(menu.textContent).toContain("No past-session door on the line yet");
+describe("the frame's note on the line (DESIGN.md §8, §9)", () => {
+  it("says the create's outcome and History's acts over the create, and what the frame says from the line's left", () => {
+    mount("history");
+    act(() => {
+      sayOnHistoryLine("Resumed in the active pane");
+    });
+    expect(q(".vf-line-note").textContent).toBe("Resumed in the active pane");
+    expect(q(".vf-line-note").getAttribute("data-at")).toBe("create");
+    act(() => {
+      sayOnLine("Waiting in Godview — restore the last run, or start clean");
+    });
+    expect(q(".vf-line-note").textContent).toBe(
+      "Waiting in Godview — restore the last run, or start clean",
+    );
+    expect(q(".vf-line-note").getAttribute("data-at")).toBe("line");
   });
 
-  it("takes the hot row on Return: a pane aims the draft, and the @ goes", () => {
+  it("lets a note go after 2.4 s, and says the same words twice when they are said twice", () => {
+    vi.useFakeTimers();
     mount("canvas");
-    typeText("@");
-    press(editor(), { key: "ArrowUp" });
-    expect(q(".vf-at-row.is-aim[data-hot]").textContent).toContain("rosetta");
-    press(editor(), { key: "ArrowDown" });
-    press(editor(), { key: "Enter" });
-    expect(q('.vf-line-chip[data-chip="aim"]').textContent).toContain("@vibe-field");
-    expect(q(".vf-line-ph").textContent).toBe("Message vibe-field…");
-    expect(editor().textContent).toBe("");
-    expect(surfaceNow).toBeNull();
-  });
-
-  it("filters both groups by the word after the @", () => {
-    mount("godview");
-    typeText("@ros");
-    const menu = q(".vf-at-menu");
-    expect([...menu.querySelectorAll(".vf-at-row")].map((row) => row.textContent)).toEqual([
-      expect.stringContaining("rosetta"),
-    ]);
-  });
-
-  it("sets the clipboard's still where the @ was, as a chip in the sentence", () => {
-    mount("canvas");
-    typeText("compare @");
-    act(() => q<HTMLButtonElement>('[data-row="clipboard"]').click());
-    const chip = q('.vf-line-input .vf-line-chip[data-chip="capture"]');
-    expect(chip.textContent).toContain("1440 × 900");
-    expect(chip.getAttribute("contenteditable")).toBe("false");
-    expect(editor().textContent).toContain("compare");
-    expect(editor().textContent).not.toContain("@");
-  });
-});
-
-describe("the interim send (thinking-four-views §11)", () => {
-  it("pastes into the aimed pane the deck shows, and says so", async () => {
-    const used = mount("godview");
-    typeText("@");
-    press(editor(), { key: "Enter" });
-    typeText("run the tests");
-    await act(async () => {
-      press(editor(), { key: "Enter" });
+    act(() => {
+      sayOnLine("Could not jump — its pane is gone from the deck");
     });
-    expect(used.door?.paste).toHaveBeenCalledWith("s-vibe", "run the tests");
-    expect(used.write).not.toHaveBeenCalled();
-    expect(q(".vf-line-note").textContent).toBe("Pasted into vibe-field");
-    expect(q(".vf-line-note").getAttribute("data-at")).toBe("send");
-    // the words go, the aim stays (CB-1)
-    expect(editor().textContent).toBe("");
-    expect(q('.vf-line-chip[data-chip="aim"]').textContent).toContain("vibe-field");
-  });
-
-  it("copies when nothing can take it, says why, and carries a chip as its path", async () => {
-    const used = mount("canvas");
-    typeText("compare @");
-    act(() => q<HTMLButtonElement>('[data-row="clipboard"]').click());
-    await act(async () => q<HTMLButtonElement>(".vf-line-send").click());
-    expect(used.write).toHaveBeenCalledWith("compare /stills/one.png");
-    expect(q(".vf-line-note").textContent).toBe("Copied — no agent takes a message from here yet");
-    expect(editor().textContent).toBe("");
-  });
-
-  it("copies an aim at a pane that is not on screen, and says that is why", async () => {
-    const used = mount("canvas", { door: door({ onScreen: false }) });
-    typeText("@");
-    press(editor(), { key: "Enter" });
-    typeText("hello");
-    await act(async () => {
-      press(editor(), { key: "Enter" });
+    const first = q(".vf-line-note");
+    act(() => {
+      sayOnLine("Could not jump — its pane is gone from the deck");
     });
-    expect(used.door?.paste).not.toHaveBeenCalled();
-    expect(used.write).toHaveBeenCalledWith("hello");
-    expect(q(".vf-line-note").textContent).toBe("Copied — vibe-field's pane is not on screen");
-  });
-
-  it("copies an aim at a shown pane that would drop the paste, and says its input is why", async () => {
-    // the deck's door answers false while the pane's input is closed
-    const used = mount("godview", { door: door({ paste: vi.fn(() => false) }) });
-    typeText("@");
-    press(editor(), { key: "Enter" });
-    typeText("run the tests");
-    await act(async () => {
-      press(editor(), { key: "Enter" });
-    });
-    expect(used.door?.paste).toHaveBeenCalledWith("s-vibe", "run the tests");
-    expect(used.write).toHaveBeenCalledWith("run the tests");
-    expect(q(".vf-line-note").textContent).toBe("Copied — vibe-field's pane is not taking input");
-    // sent all the same: the words go, the aim stays
-    expect(editor().textContent).toBe("");
-    expect(q('.vf-line-chip[data-chip="aim"]').textContent).toContain("vibe-field");
-  });
-
-  it("keeps the draft when the clipboard refuses it, and says so", async () => {
-    mount("canvas", { write: vi.fn(async () => Promise.reject(new Error("denied"))) });
-    typeText("keep me");
-    await act(async () => {
-      press(editor(), { key: "Enter" });
-    });
-    expect(q(".vf-line-note").textContent).toBe("Not sent — the clipboard refused it");
-    expect(editor().textContent).toBe("keep me");
+    // a fresh note, keyed by its count: its animation starts again
+    expect(q(".vf-line-note")).not.toBe(first);
+    act(() => vi.advanceTimersByTime(2_399));
+    expect(host?.querySelector(".vf-line-note")).not.toBeNull();
+    act(() => vi.advanceTimersByTime(1));
+    expect(host?.querySelector(".vf-line-note")).toBeNull();
   });
 });
 
 // D6 — a paste a terminal refuses for its size: the runtime says nothing of an
-// input it was not handed, so the line says it, in the note an act's outcome is
-// said in (DESIGN.md §8, §9).
+// input it was not handed, so the line says it, in the note the frame speaks in
+// (DESIGN.md §8, §9).
 describe("what a terminal could not take (D6)", () => {
   it("says a refused paste on the line: the pane, its size, and how much of it one paste carries", () => {
     mount("godview");
@@ -450,7 +543,35 @@ describe("what a terminal could not take (D6)", () => {
     expect(q(".vf-line-note").textContent).toBe(
       "Not pasted into vibe-field — 300 KB, and one paste carries 261 KB of it",
     );
-    expect(q(".vf-line-note").getAttribute("data-at")).toBe("send");
+    expect(q(".vf-line-note").getAttribute("data-at")).toBe("line");
+  });
+
+  it("leaves every refusal heard while the frame's own paste runs to that paste's outcome — said once (HN-L5)", () => {
+    mount("godview");
+    const refused = (sessionId: string): RoutedInputRefusal => ({
+      sessionId,
+      kind: "paste",
+      bytes: 300_000,
+      limitBytes: 261_958,
+    });
+    // a card played onto vibe-field's pane: its paste claims what is refused while it runs
+    act(() => {
+      claimingRefusals(() => hearRefusal?.(refused("s-vibe")));
+    });
+    expect(host?.querySelector(".vf-line-note")).toBeNull();
+    // whatever session the refusal names: the pane may show another by now (⌘T or a Resume while
+    // the card waited for its input), and a refusal heard inside the paste is still the paste's
+    act(() => {
+      claimingRefusals(() => hearRefusal?.(refused("s-ros")));
+    });
+    expect(host?.querySelector(".vf-line-note")).toBeNull();
+    // only while its paste runs: a refusal after it is the line's to say
+    act(() => {
+      hearRefusal?.(refused("s-vibe"));
+    });
+    expect(q(".vf-line-note").textContent).toBe(
+      "Not pasted into vibe-field — 300 KB, and one paste carries 261 KB of it",
+    );
   });
 
   it("names the terminal plainly when no pane shows it, and says typed text in its own words", () => {
@@ -474,20 +595,12 @@ describe("what a terminal could not take (D6)", () => {
     );
   });
 
-  it("keeps each refusal under 70 characters beside the pane's name, to be read before it fades", async () => {
-    // The note lives 2.4s (DESIGN.md §8) as one nowrap line right-aligned on
-    // send (composer.css) — a longer sentence is gone before it is read, and in
-    // a narrow window runs past its left edge.
+  it("keeps each refusal under 70 characters beside the pane's name, to be read before it fades", () => {
+    // The note lives 2.4s (DESIGN.md §8) as one nowrap line from the line's
+    // left edge (composer.css) — a longer sentence is gone before it is read.
     const name = "vibe-field";
     const said: number[] = [];
-    const used = mount("godview", {
-      door: door({
-        paste: (sessionId) => {
-          hearRefusal?.({ sessionId, kind: "paste", bytes: 999_850_000, limitBytes: 261_958 });
-          return true;
-        },
-      }),
-    });
+    mount("godview");
     // Sizes as the units roll over (999.9 MB is the longest a clipboard says),
     // and what fits as it can be: a message's room of plain text, of nothing
     // but control characters (six bytes each), a paste in parts.
@@ -501,18 +614,6 @@ describe("what a terminal could not take (D6)", () => {
         }
       }
     }
-    // …and the line's own send of such a draft, its longest
-    typeText("@");
-    press(editor(), { key: "Enter" });
-    typeText("the log");
-    await act(async () => {
-      press(editor(), { key: "Enter" });
-    });
-    expect(used.write).toHaveBeenCalledWith("the log");
-    expect(q(".vf-line-note").textContent).toBe(
-      "Copied — too large for vibe-field: 999.9 MB, and one paste carries 261 KB of it",
-    );
-    said.push((q(".vf-line-note").textContent ?? "").length - name.length);
     expect(Math.max(...said)).toBeLessThan(70);
   });
 
@@ -523,42 +624,33 @@ describe("what a terminal could not take (D6)", () => {
     root = null;
     expect(hearRefusal).toBeNull();
   });
-
-  it("copies a draft the aimed pane's terminal refuses for its size, and never says it was pasted", async () => {
-    // the pane claims the paste, as ghosttea's handler does, and its terminal
-    // refuses it INSIDE the call, as the encoder does
-    const paste = vi.fn((sessionId: string) => {
-      hearRefusal?.({ sessionId, kind: "paste", bytes: 300_000, limitBytes: 261_958 });
-      return true;
-    });
-    const used = mount("godview", { door: door({ paste }) });
-    typeText("@");
-    press(editor(), { key: "Enter" });
-    typeText("run the tests");
-    await act(async () => {
-      press(editor(), { key: "Enter" });
-    });
-    expect(paste).toHaveBeenCalledWith("s-vibe", "run the tests");
-    expect(used.write).toHaveBeenCalledWith("run the tests");
-    expect(q(".vf-line-note").textContent).toBe(
-      "Copied — too large for vibe-field: 300 KB, and one paste carries 261 KB of it",
-    );
-    // sent all the same: the words go, the aim stays
-    expect(editor().textContent).toBe("");
-    expect(q('.vf-line-chip[data-chip="aim"]').textContent).toContain("vibe-field");
-  });
 });
 
 describe("the create's keys (DESIGN.md §10; One Frame §11)", () => {
-  it("B toggles Objects on Canvas — never while typing in the draft, never under a cover", () => {
+  it("B toggles Objects on Canvas — never while typing, never under a cover", () => {
     mount("canvas");
     press(document.body, { key: "b" });
     expect(surfaceNow).toBe("objects");
     press(document.body, { key: "b" });
     expect(surfaceNow).toBeNull();
-    typeText("abc");
-    press(editor(), { key: "b" });
+    // a field anywhere in the window keeps its b (the palette's, a note's)
+    const field = document.createElement("input");
+    document.body.appendChild(field);
+    field.focus();
+    press(field, { key: "b" });
     expect(surfaceNow).toBeNull();
+    field.remove();
+    // …but a control a person does not type in holds no caret: B is Objects' (the one field
+    // test, cards/caret.ts)
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    document.body.appendChild(box);
+    box.focus();
+    press(box, { key: "b" });
+    expect(surfaceNow).toBe("objects");
+    press(box, { key: "b" });
+    expect(surfaceNow).toBeNull();
+    box.remove();
     act(() => setViewNow?.("godview"));
     press(document.body, { key: "b" });
     expect(surfaceNow).toBeNull();
@@ -590,12 +682,41 @@ describe("the create's keys (DESIGN.md §10; One Frame §11)", () => {
     expect(q(".vf-line-note").getAttribute("data-at")).toBe("create");
   });
 
-  it("leaves ⌘T alone outside Godview, and Ctrl+T on the Mac", () => {
-    const used = mount("canvas");
+  it("⌘T in History asks History's door from a focused pane, which never hears it (HN-7)", async () => {
+    const history = historyDoor();
+    const used = mount("history", { history });
+    const heard: string[] = [];
+    pane = document.createElement("div");
+    pane.tabIndex = 0;
+    pane.addEventListener("keydown", (event) => {
+      heard.push(event.key);
+      event.stopPropagation();
+    });
+    document.body.appendChild(pane);
+    pane.focus();
+    let event: KeyboardEvent | null = null;
+    await act(async () => {
+      event = press(pane as HTMLElement, { key: "t", code: "KeyT", metaKey: true });
+    });
+    expect((event as KeyboardEvent | null)?.defaultPrevented).toBe(true);
+    // History's own door — never Godview's deck asked directly from History
+    expect(history.newTerminal).toHaveBeenCalledTimes(1);
+    expect(used.door?.newTerminal).not.toHaveBeenCalled();
+    expect(heard).toEqual([]);
+    expect(q(".vf-line-note").textContent).toBe("Terminal opened in the active pane");
+    expect(q(".vf-line-note").getAttribute("data-at")).toBe("create");
+  });
+
+  it("leaves ⌘T alone on Canvas, and Ctrl+T on the Mac in Godview and History", () => {
+    const history = historyDoor();
+    const used = mount("canvas", { history });
     expect(press(document.body, { key: "t", metaKey: true }).defaultPrevented).toBe(false);
     act(() => setViewNow?.("godview"));
     expect(press(document.body, { key: "t", ctrlKey: true }).defaultPrevented).toBe(false);
+    act(() => setViewNow?.("history"));
+    expect(press(document.body, { key: "t", ctrlKey: true }).defaultPrevented).toBe(false);
     expect(used.door?.newTerminal).not.toHaveBeenCalled();
+    expect(history.newTerminal).not.toHaveBeenCalled();
   });
 
   it("says a new terminal cannot open while the deck has no connection", async () => {
@@ -611,7 +732,113 @@ describe("the create's keys (DESIGN.md §10; One Frame §11)", () => {
   });
 });
 
-describe("the interim send's paste (the deck's half)", () => {
+// HN-7 (LN-D2; DESIGN.md §8 "The line", §8 "History"): History's create is New terminal in the
+// project the room shows. The line asks History's door, which finds the folder as New agent does
+// and moves the window to Godview (history-view.test.tsx, history-host.test.tsx); the line names
+// the project in its tooltip and says what came of it in Godview's words.
+describe("History's create: New terminal in the project the room shows (HN-7)", () => {
+  it("names the project in its tooltip, and a press asks History's door — the note in Godview's words, over the create", async () => {
+    const history = historyDoor();
+    const used = mount("history", { history });
+    expect(shownGlyph()).toBe("start");
+    expect(create().getAttribute("aria-label")).toBe("New terminal");
+    expect(create().getAttribute("title")).toBe("New terminal in vibe-field  ⌘T");
+    expect(create().hasAttribute("aria-disabled")).toBe(false);
+    await act(async () => {
+      create().click();
+    });
+    expect(history.newTerminal).toHaveBeenCalledTimes(1);
+    expect(used.door?.newTerminal).not.toHaveBeenCalled();
+    // the chosen session's acts are not the create's any more
+    expect(history.resume).not.toHaveBeenCalled();
+    expect(history.jump).not.toHaveBeenCalled();
+    expect(q(".vf-line-note").textContent).toBe("Terminal opened in the active pane");
+    expect(q(".vf-line-note").getAttribute("data-at")).toBe("create");
+  });
+
+  it("says a folder it could not open in, in the words History's door refused it with", async () => {
+    const history = historyDoor({
+      newTerminal: vi.fn(async () => ({
+        state: "refused" as const,
+        reason: "its volume is not connected",
+      })),
+    });
+    mount("history", { history });
+    await act(async () => {
+      create().click();
+    });
+    expect(q(".vf-line-note").textContent).toBe(
+      "Terminal could not be opened — its volume is not connected",
+    );
+  });
+
+  it("names no project while the room shows none: its tooltip is Godview's create's", () => {
+    mount("history", { history: historyDoor({ project: null }) });
+    expect(create().getAttribute("title")).toBe("New terminal  ⌘T");
+  });
+
+  it("says so, rather than nothing, when pressed before History has lent its door", async () => {
+    // History publishes its door as it mounts; a press in the moment before is said in words
+    mount("history");
+    expect(create().getAttribute("title")).toBe("New terminal  ⌘T");
+    expect(create().hasAttribute("aria-disabled")).toBe(false);
+    await act(async () => {
+      create().click();
+    });
+    expect(q(".vf-line-note").textContent).toBe(
+      "Terminal could not be opened — History is still opening",
+    );
+  });
+});
+
+// The chosen session's act — Resume, or Jump to while it runs here (P3) — was the line's create
+// until HN-7; the palette's History row runs it since (`runChosenSession`, ChromeLayer's glue), and
+// what it comes to is said where it always was: over the create, in the same words.
+describe("History's chosen session, as the palette's row runs it (HN-7)", () => {
+  it("resumes it, or jumps to it while it runs here, and says what came of it over the create", async () => {
+    mount("history", { history: historyDoor() });
+    const chosen = historyDoor({ chosen: "ses-1" });
+    await act(async () => {
+      await runChosenSession(chosen);
+    });
+    expect(chosen.resume).toHaveBeenCalledTimes(1);
+    expect(chosen.newTerminal).not.toHaveBeenCalled();
+    expect(q(".vf-line-note").textContent).toBe("Resumed in the active pane");
+    expect(q(".vf-line-note").getAttribute("data-at")).toBe("create");
+    // running here it is Jump to, whatever the launcher read of a resume (P3)
+    const live = historyDoor({ chosen: "ses-1", live: true, waits: "its folder is gone" });
+    await act(async () => {
+      await runChosenSession(live);
+    });
+    expect(live.jump).toHaveBeenCalledTimes(1);
+    expect(live.resume).not.toHaveBeenCalled();
+    expect(q(".vf-line-note").textContent).toBe("Jumped to its pane");
+  });
+
+  it("says why it waits in Resume's words, and asks nothing — no choice, or the launcher's reason", async () => {
+    mount("history", { history: historyDoor() });
+    const none = historyDoor();
+    await act(async () => {
+      await runChosenSession(none);
+    });
+    expect(none.resume).not.toHaveBeenCalled();
+    expect(q(".vf-line-note").textContent).toBe("Could not resume — choose a session first");
+    const waits = historyDoor({ chosen: "ses-1", waits: "its folder is gone" });
+    await act(async () => {
+      await runChosenSession(waits);
+    });
+    expect(waits.resume).not.toHaveBeenCalled();
+    expect(waits.jump).not.toHaveBeenCalled();
+    expect(q(".vf-line-note").textContent).toBe("Could not resume — its folder is gone");
+    // History's door not lent at all (the published one, none here): the same words
+    await act(async () => {
+      await runChosenSession();
+    });
+    expect(q(".vf-line-note").textContent).toBe("Could not resume — choose a session first");
+  });
+});
+
+describe("the deck's paste (line-panes.ts): what a pane takes", () => {
   it("pastes through the pane's own input — focused, as ⌘V would — and reports the take", () => {
     const deck = document.createElement("div");
     deck.innerHTML = `<div data-pane-id="p1"><textarea class="terminal-input"></textarea></div>`;
@@ -657,9 +884,6 @@ describe('the create is the pegboard\'s door (DK-13; DESIGN.md §8 "The pegboard
     expect(surfaceNow).toBeNull();
     expect(create().getAttribute("aria-expanded")).toBe("true");
     expect(create().getAttribute("title")).toBe("Close  Esc");
-    typeText("@");
-    expect(surfaceNow).toBe("at");
-    expect(create().getAttribute("aria-expanded")).toBe("true");
   });
 
   it("asks the board for the focus when the keyboard raised it — B, or the create's own keys", () => {
@@ -705,208 +929,5 @@ describe('the create is the pegboard\'s door (DK-13; DESIGN.md §8 "The pegboard
     mount("godview", { board: { held: true } });
     expect(create().hasAttribute("data-held")).toBe(false);
     expect(create().getAttribute("title")).not.toBe("Put it down first");
-  });
-});
-
-// ── DK-14 — SEND TO… INTO THE LINE (DESIGN.md §8 "Send to…"; R15; FC-D1) ────────────────────────────────────────────
-// The desk's chrome hands the line ONE chip (`sendToLine`); the line sets it at the caret, the draft focused, after a
-// flight from the selection (1.25 → 0.86, 560 ms on the island curve) — or, under reduced motion, a fade at the caret —
-// then TYPES the @ 180 ms after it lands so @'s list opens as typing opens it, the caret after the chip. A draft already
-// aimed takes it with no @ and send arms. The phase the bar steps aside for follows the list.
-describe("Send to… lands ONE chip in the draft (DK-14)", () => {
-  const FROM = { x0: 400, y0: 300, x1: 600, y1: 440 };
-  const deskChip = (over: Partial<DeskChip> = {}): DeskChip => ({
-    id: `dk14-${Math.random().toString(36).slice(2, 8)}`,
-    kind: "desk",
-    label: "Ship the desk by Friday,…",
-    glyph: "snippets",
-    paper: "#f6e7a9",
-    ink: "#264a9a",
-    objects: [
-      { type: "desk.note", name: "Note", text: "Ship the desk by Friday, then the covers" },
-    ],
-    still: null,
-    ...over,
-  });
-  const withoutPaper = ({ paper: _p, ink: _i, ...rest }: DeskChip): DeskChip => rest;
-  const flier = (): HTMLElement | null => host?.querySelector(".vf-line-flier") ?? null;
-  const chips = (): HTMLElement[] => [
-    ...(host?.querySelectorAll<HTMLElement>('.vf-line-input .vf-line-chip[data-chip="desk"]') ??
-      []),
-  ];
-
-  afterEach(() => {
-    setLineSendPhase("idle");
-  });
-
-  it("flies the chip's face to the caret, sets it there, and TYPES the @ 180 ms after it lands — @'s list open, the caret after it", () => {
-    vi.useFakeTimers();
-    mount("canvas");
-    typeText("look at ");
-    act(() => editor().blur());
-    let ticket: LineSendTicket | null = null;
-    act(() => {
-      ticket = sendToLine(deskChip(), FROM);
-    });
-    expect(ticket).not.toBeNull();
-    expect(lineSendPhase()).toBe("flying");
-    // the draft focused at once; the flier carries the chip's own face
-    expect(document.activeElement).toBe(editor());
-    const f = flier();
-    expect(f?.querySelector(".vf-line-chip")?.getAttribute("data-glyph")).toBe("snippets");
-    expect(f?.textContent).toBe("Ship the desk by Friday,…");
-    expect(f?.style.transition).toBe("transform 560ms var(--vf-ease-island), opacity 140ms ease");
-    expect(f?.style.transform).toMatch(/scale\(0\.86\)$/u);
-    expect(chips()).toHaveLength(0);
-    // no transitions run here: the landing is taken a beat past the flight's 560
-    act(() => vi.advanceTimersByTime(659));
-    expect(chips()).toHaveLength(0);
-    act(() => vi.advanceTimersByTime(1));
-    expect(flier()).toBeNull();
-    expect(chips()).toHaveLength(1);
-    expect(editor().textContent).toBe("look at Ship the desk by Friday,… ");
-    expect(surfaceNow).toBeNull();
-    act(() => vi.advanceTimersByTime(179));
-    expect(host?.querySelector(".vf-at-menu")).toBeNull();
-    act(() => vi.advanceTimersByTime(1));
-    // the @, typed: @'s list open as typing opens it, the line's own surface
-    expect(surfaceNow).toBe("at");
-    expect(host?.querySelector(".vf-at-menu")).not.toBeNull();
-    expect(editor().textContent).toBe("look at Ship the desk by Friday,… @");
-    expect(lineSendPhase()).toBe("listing");
-    // the caret after the chip and its @
-    const selection = window.getSelection();
-    const landed = chips()[0] as HTMLElement;
-    const between = document.createRange();
-    between.setStartAfter(landed);
-    between.setEnd(selection?.anchorNode as Node, selection?.anchorOffset ?? 0);
-    expect(between.toString()).toBe(" @");
-    const rest = document.createRange();
-    rest.selectNodeContents(editor());
-    rest.setStart(selection?.anchorNode as Node, selection?.anchorOffset ?? 0);
-    expect(rest.toString()).toBe("");
-    // the list folds: the act is over, the bar may come back
-    press(editor(), { key: "Escape" });
-    expect(surfaceNow).toBeNull();
-    expect(lineSendPhase()).toBe("idle");
-  });
-
-  it("wears a note's paper and ink, and carries its words in a message — the still's size once it comes", async () => {
-    vi.useFakeTimers();
-    const used = mount("canvas");
-    let ticket: LineSendTicket | null = null;
-    act(() => {
-      ticket = sendToLine(deskChip({ id: "dk14-note" }), FROM);
-    });
-    // the still comes while it flies
-    act(() =>
-      (ticket as LineSendTicket | null)?.attach({
-        url: "blob:x",
-        width: 376,
-        height: 276,
-        bytes: 900,
-      }),
-    );
-    act(() => vi.advanceTimersByTime(660));
-    const [chip] = chips();
-    expect(chip?.hasAttribute("data-paper")).toBe(true);
-    expect(chip?.style.getPropertyValue("--vf-chip-paper")).toBe("#f6e7a9");
-    expect(chip?.style.getPropertyValue("--vf-chip-ink")).toBe("#264a9a");
-    expect(chip?.getAttribute("data-still")).toBe("376 × 276");
-    expect(chip?.getAttribute("title")).toBe(
-      'Note: "Ship the desk by Friday, then the covers" · a still 376 × 276',
-    );
-    act(() => vi.advanceTimersByTime(180));
-    press(editor(), { key: "Escape" });
-    vi.useRealTimers();
-    await act(async () => q<HTMLButtonElement>(".vf-line-send").click());
-    expect(used.write).toHaveBeenCalledWith('Note: "Ship the desk by Friday, then the covers" @');
-  });
-
-  it("a still that comes after the landing is set on the chip where it stands", () => {
-    vi.useFakeTimers();
-    mount("canvas");
-    let ticket: LineSendTicket | null = null;
-    act(() => {
-      ticket = sendToLine(
-        { ...withoutPaper(deskChip()), id: "dk14-late", label: "Clock", glyph: null },
-        FROM,
-      );
-    });
-    act(() => vi.advanceTimersByTime(660));
-    expect(chips()[0]?.hasAttribute("data-still")).toBe(false);
-    act(() =>
-      (ticket as LineSendTicket | null)?.attach({
-        url: "blob:y",
-        width: 200,
-        height: 100,
-        bytes: 9,
-      }),
-    );
-    expect(chips()[0]?.getAttribute("data-still")).toBe("200 × 100");
-    expect(chips()[0]?.getAttribute("data-glyph")).toBe("none");
-    expect(chips()[0]?.querySelector(":scope > svg")).toBeNull();
-  });
-
-  it("takes no second chip while one is still landing", () => {
-    vi.useFakeTimers();
-    mount("canvas");
-    act(() => {
-      sendToLine(deskChip(), FROM);
-    });
-    let second: LineSendTicket | null = null;
-    act(() => {
-      second = sendToLine(deskChip(), FROM);
-    });
-    expect(second).toBeNull();
-    act(() => vi.advanceTimersByTime(660));
-    expect(chips()).toHaveLength(1);
-  });
-
-  it("an AIMED draft takes the chip with no @ — and send arms", () => {
-    vi.useFakeTimers();
-    mount("godview");
-    typeText("@");
-    press(editor(), { key: "Enter" });
-    expect(q('.vf-line-chip[data-chip="aim"]').textContent).toContain("vibe-field");
-    act(() => setViewNow?.("canvas"));
-    expect(q(".vf-line-send").hasAttribute("data-armed")).toBe(false);
-    act(() => {
-      sendToLine(deskChip(), FROM);
-    });
-    act(() => vi.advanceTimersByTime(660));
-    expect(chips()).toHaveLength(1);
-    expect(lineSendPhase()).toBe("idle");
-    act(() => vi.advanceTimersByTime(1_000));
-    expect(editor().textContent).not.toContain("@");
-    expect(surfaceNow).toBeNull();
-    expect(q(".vf-line-send").getAttribute("data-armed")).toBe("true");
-  });
-
-  it("REDUCED MOTION: no flight — the chip fades in at the caret, the @ 90 ms after (M6)", () => {
-    vi.useFakeTimers();
-    const matchMedia = window.matchMedia;
-    window.matchMedia = ((query: string) => ({
-      matches: query === "(prefers-reduced-motion: reduce)",
-      media: query,
-      addEventListener: () => undefined,
-      removeEventListener: () => undefined,
-    })) as unknown as typeof window.matchMedia;
-    try {
-      mount("canvas");
-      act(() => {
-        sendToLine(deskChip(), FROM);
-      });
-      expect(flier()).toBeNull();
-      expect(chips()).toHaveLength(1);
-      expect(chips()[0]?.style.transition).toBe("opacity 120ms ease");
-      expect(chips()[0]?.style.opacity).toBe("1");
-      act(() => vi.advanceTimersByTime(89));
-      expect(surfaceNow).toBeNull();
-      act(() => vi.advanceTimersByTime(1));
-      expect(surfaceNow).toBe("at");
-    } finally {
-      window.matchMedia = matchMedia;
-    }
   });
 });

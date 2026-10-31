@@ -4,12 +4,21 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { SURFACE_LIMITS } from "../src/live-surfaces";
 import { METHODS } from "../src/methods";
-import { IPC_CHANNELS } from "../src/registries";
+import {
+  IPC_CHANNELS,
+  SCREENSHOT_STILL,
+  SHELL_CLIPBOARD,
+  TERMINAL_PIPELINE,
+} from "../src/registries";
 import {
   APP_PREFERENCE_KEYS,
   AppPreferenceSetParams,
   AppPreferences,
   BrowserDataClearResult,
+  ClipboardCopyRefusal,
+  ClipboardReadRequest,
+  ClipboardReadResult,
+  ClipboardWriteImageResult,
   CloseReason,
   CloseRequest,
   CloseResult,
@@ -228,7 +237,11 @@ describe("Close protocol — CloseReason / CloseRequest / CloseResult (ESR §6.4
 });
 
 describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => {
-  it("exposes exactly the thirty-two channel keys, in order", () => {
+  // The count lives here alone, in the literal: two lines that each add a channel
+  // meet at it in a merge and conflict out loud, where a number in the title
+  // went stale in silence (item 102, found at HN's rebase rehearsal).
+  it("exposes exactly its channel keys, in order", () => {
+    expect(Object.keys(IPC_CHANNELS)).toHaveLength(36);
     expect(Object.keys(IPC_CHANNELS)).toEqual([
       "windowBootstrap",
       "prepareClose",
@@ -263,8 +276,13 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       "screenshotCapture", // SNAP-D3 — the native screenshot helper, one capture at a time
       "screenshotResult", // SNAP-3 — main → renderer: the View menu's capture, told to the page
       "screenshotPreview",
+      "screenshotStillBytes", // HN-D7 — a retained still's bytes, for the desk's print of a snapshot
+      "screenshotStillKept", // HN-4 — whether a still is kept, before a pane is given its path
       "rendererReplace", // DK-9 — the window's renderer replaced at its own asking (a plugin's kinds)
       "browserDataClear", // BP-D4 — Settings' Clear browsing data: the desk's profile cleared, its pages reloaded
+      "clipboardRead", // item 102 — a paste's read through main, for the focused product window
+      // HN-5 — a copy's picture written through main, for a registered window (no focus, LC-18)
+      "clipboardWriteImage",
     ]);
   });
 
@@ -300,8 +318,12 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       screenshotCapture: "vibefield:screenshot:capture",
       screenshotResult: "vibefield:screenshot:result",
       screenshotPreview: "vibefield:screenshot:preview",
+      screenshotStillBytes: "vibefield:screenshot:still-bytes",
+      screenshotStillKept: "vibefield:screenshot:still-kept",
       rendererReplace: "vibefield:shell:renderer-replace",
       browserDataClear: "vibefield:browser:clear-data",
+      clipboardRead: "vibefield:clipboard:read",
+      clipboardWriteImage: "vibefield:clipboard:write-image",
     });
   });
 
@@ -332,6 +354,113 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       { profiles: 65, pages: 0 },
     ])
       expect(BrowserDataClearResult.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
+  });
+});
+
+describe("the clipboard read door (item 102)", () => {
+  it("asks with nothing, and answers the text or an honest refusal", () => {
+    expect(ClipboardReadRequest.parse({})).toEqual({});
+    expect(ClipboardReadResult.parse({ status: "read", text: "ls\n" })).toEqual({
+      status: "read",
+      text: "ls\n",
+    });
+    expect(ClipboardReadResult.parse({ status: "refused", reason: "unfocused" })).toEqual({
+      status: "refused",
+      reason: "unfocused",
+    });
+    expect(
+      ClipboardReadResult.parse({ status: "refused", reason: "too-large", bytes: 5_000_000 }),
+    ).toMatchObject({ reason: "too-large", bytes: 5_000_000 });
+    for (const bad of [
+      {},
+      { status: "read" },
+      { status: "read", text: 1 },
+      { status: "refused" },
+      { status: "refused", reason: "because" },
+      { status: "refused", reason: "too-large", bytes: -1 },
+    ])
+      expect(ClipboardReadResult.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
+  });
+
+  it("reads the cell's paste ceiling by reference, never a number of its own, in UTF-8 bytes", () => {
+    expect(SHELL_CLIPBOARD.READ_MAX_BYTES).toBe(TERMINAL_PIPELINE.MAX_PASTE_BYTES);
+    // the pane's own carry is smaller, and D6 refuses past it in the line's words
+    expect(TERMINAL_PIPELINE.MAX_CONTROL_MESSAGE_BYTES).toBeLessThan(
+      SHELL_CLIPBOARD.READ_MAX_BYTES,
+    );
+    const atBound = "é".repeat(SHELL_CLIPBOARD.READ_MAX_BYTES / 2);
+    expect(ClipboardReadResult.safeParse({ status: "read", text: atBound }).success).toBe(true);
+    expect(ClipboardReadResult.safeParse({ status: "read", text: `${atBound}x` }).success).toBe(
+      false,
+    );
+  });
+});
+
+describe("the clipboard picture door (HN-5)", () => {
+  it("answers written, or an honest refusal with the size it refused", () => {
+    expect(ClipboardWriteImageResult.parse({ status: "written" })).toEqual({ status: "written" });
+    expect(ClipboardWriteImageResult.parse({ status: "refused", reason: "not-an-image" })).toEqual({
+      status: "refused",
+      reason: "not-an-image",
+    });
+    const past = SHELL_CLIPBOARD.WRITE_IMAGE_MAX_BYTES + 1;
+    expect(
+      ClipboardWriteImageResult.parse({ status: "refused", reason: "too-large", bytes: past }),
+    ).toMatchObject({ reason: "too-large", bytes: past });
+    // a tolerant reader: a later field rides through
+    expect(ClipboardWriteImageResult.parse({ status: "written", later: 1 })).toMatchObject({
+      status: "written",
+    });
+    for (const bad of [
+      {},
+      { status: "wrote" },
+      { status: "refused" },
+      { status: "refused", reason: "because" },
+      { status: "refused", reason: "too-large", bytes: -1 },
+      { status: "refused", reason: "too-large", bytes: 1.5 },
+      // LC-18: the write asks no focus, so a window behind is no refusal of it
+      { status: "refused", reason: "unfocused" },
+    ])
+      expect(ClipboardWriteImageResult.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
+  });
+
+  it("bounds a picture by the kept still's cap, by reference — never a number of its own", () => {
+    expect(SHELL_CLIPBOARD.WRITE_IMAGE_MAX_BYTES).toBe(SCREENSHOT_STILL.MAX_BYTES);
+    expect(SCREENSHOT_STILL.MAX_BYTES).toBe(64 * 1024 * 1024);
+  });
+
+  it("bounds the words by the copy door's one bound, 64 KiB of UTF-8 (LC-19)", () => {
+    expect(SHELL_CLIPBOARD.WRITE_TEXT_MAX_BYTES).toBe(64 * 1024);
+  });
+});
+
+describe("a copy's refusal, typed for the page (HN-5)", () => {
+  it("names its reason; a size refusal, what it measured, its size and its bound", () => {
+    for (const refusal of [
+      { reason: "too-large", what: "words", bytes: 80_000, max: 65_536 },
+      { reason: "too-large", what: "picture", bytes: 70_000_000, max: 67_108_864 },
+      { reason: "too-large", what: "words-as-sent", bytes: 80_000, max: 65_465 },
+      { reason: "not-an-image" },
+    ])
+      expect(ClipboardCopyRefusal.parse(refusal)).toEqual(refusal);
+    // a tolerant reader: a later field rides through
+    expect(ClipboardCopyRefusal.parse({ reason: "not-an-image", later: 1 })).toMatchObject({
+      reason: "not-an-image",
+    });
+  });
+
+  it("is never a size within its bound, nor an Error — whose terms the bridge would drop", () => {
+    for (const bad of [
+      {},
+      { reason: "unfocused" },
+      { reason: "too-large" },
+      { reason: "too-large", what: "sound", bytes: 2, max: 1 },
+      { reason: "too-large", what: "words", bytes: 1.5, max: 1 },
+      { reason: "too-large", what: "words", bytes: 65_536, max: 65_536 },
+      { reason: "too-large", what: "picture", bytes: 8, max: 67_108_864 },
+    ])
+      expect(ClipboardCopyRefusal.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
+    expect(ClipboardCopyRefusal.safeParse(new Error("the words hold 80 KB")).success).toBe(false);
   });
 });
 

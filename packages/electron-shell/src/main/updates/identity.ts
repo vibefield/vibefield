@@ -24,6 +24,8 @@ export interface UpdateIdentity {
   readonly floors: RememberedVersions;
   /** AU-4 (AU-G9) — WP12 D10's `<appVersion>+<commit7>`, for About's commit; absent on a stage cut before WP12c */
   readonly buildId?: string;
+  /** AU-6 (LC-18) — when this build was made (the identity's `builtAt`), epoch ms; absent on a stage cut before AU-6 */
+  readonly builtAt?: number;
 }
 
 export function readUpdateIdentity(
@@ -45,6 +47,9 @@ export function readUpdateIdentity(
   const override = env[UPDATE_ORIGIN_OVERRIDE_ENV];
   const useOverride =
     identity.keyClass === "dev" && typeof override === "string" && override.length > 0;
+  // AU-6 (LC-18) — the build's time as the view carries it (epoch ms); an instant before 1970 or one Date cannot read
+  // is left out rather than handed to a view that would refuse it
+  const builtAt = identity.builtAt === undefined ? Number.NaN : Date.parse(identity.builtAt);
   return {
     origin: useOverride ? override : identity.updateOrigin,
     channel: identity.updateChannel,
@@ -64,6 +69,7 @@ export function readUpdateIdentity(
             },
           },
     ...(identity.buildId !== undefined ? { buildId: identity.buildId } : {}),
+    ...(Number.isSafeInteger(builtAt) && builtAt >= 0 ? { builtAt } : {}),
   };
 }
 

@@ -8373,7 +8373,7 @@ Within it sit the contract's 21 marks (MV-D1…D22, D16 marks only), built as `d
 - **The SDK and the one backend.**
   - `@vibecook/puppeteer-view-sdk`: the contract, `/react`, `/host`, `/testing` and `/toolkit`.
   - `@vibecook/puppeteer-monitor` runs beside the runtime, one per desktop: in fieldd, and in Electron main in puppeteer's Godview.
-  - Windows and the phone hold replicas of its model (MV-D22, D18).
+  - Windows ~~and the phone~~ hold replicas of its model (MV-D22, D18). *(Corrected 2026-10-29, PG-0 (C4, `thinking-phone-godview.md` §2): FALSE for the phone. Only the windows held replicas (`createMonitorReplica` over the `model` board), here and still at `e23fa8a1f`; the phone read `field` rows cut from the fold (`projectFieldRow`), never the backend's model. The phone's replica is PG's, the model's remote cut (PG-D1 (a), James, 2026-10-29, on the page The Phone's Godview), not yet built (PG-2, PG-3).)*
 - **Godview's five views are SDK modules:** list, rain, swarm, timeline and spend.
   - Spend is MV-7: the runtime-only watchlist, ported as built (M177 ruling 2). SV-D15…D19 are ruled later.
   - Each view has its own root and its own CSS (L18), keys only while focused (MV-D8), and its mark in the manifest (MV-D16).
@@ -21006,3 +21006,754 @@ the next draft queue. DECISIONS gains the PG row, and ROADMAP the PG track.
 - The cap read on the phone under the Network Link Conditioner (PG-9): `bufferedAmount` is fieldd's own queue, and
   the sidecar's and tsnet's buffers lie past it.
 - Items 109 and 110.
+
+## CP-0 — the compose plane's record: `compose.ts` (a spark, the 20-verb catalog, CP-1's six read verbs), a run's origin, the `compose.sparks` doors and DESIGN.md §2.10's spark faces (2026-10-30; `b9ca35824`, the merge of main `401fb238e` into `aaa9c22fa`, lane `co/cp0`)
+
+**What.**
+- This is the compose plane, version 2. James ruled it on its page on 2026-10-29, 09:42–09:57Z: all fifteen CP marks,
+  each on its lean (`draft/compose-plane/v2/`; the study's §15 and §16). Contracts came first, and nothing served them
+  yet.
+- `packages/contracts/src/compose.ts` is TS-only, by the agent plane's rule (`gen-jsonschema.ts`:8-11). It holds:
+  - `SparkRecord` and `SparkSummary`. A spark's face is a seed of its own (NS-D2, ruled B). It has its profiles, and
+    the one it thinks under must be one of them (NS-D5). A refinement holds that on both the record and the hatch
+    params.
+  - The params and results of the window's doors: `compose.sparks.list`, `.hatch` and `.open`.
+  - `COMPOSE_VERBS`: round 2's seven families plus `flow_propose`, 20 verbs. Each carries its slice (CP-1…CP-4),
+    whether it only reads, and the description a model reads. There is no approve verb (CP-L4).
+  - The inputs and outputs of CP-1's six read verbs (`COMPOSE_VERB_SCHEMAS`): agents_available, projects_list,
+    agents_list, agent_read, history_search and history_read.
+- `agent-session.ts`:
+  - It adds `SparkId` and `AgentSessionOrigin` (CP-D15: you, a spark or a flow's step). The origin is OPEN like
+    `spawnedBy`, and an absent one reads `you`.
+  - `origin` and `spark` join the record and the row. Both are optional, so a signed record without them verifies as
+    before.
+- `methods.ts`: `compose.sparks.{list,hatch,open}` under `agents.manage`, `local`.
+  - The window holds that scope; no tailnet preset or plugin eligibility table does.
+  - A spark's tools are not METHODS rows. They are compose.ts's catalog, served by fieldd's MCP server.
+- Ten fixtures, each mapped in `fixtures.test.ts`:
+  - the seven compose rows: `compose-agent-read`, `compose-agents-available`, `compose-agents-list`,
+    `compose-history-search`, `compose-spark-record`, `compose-sparks-hatch-params` and `compose-sparks-list`, each
+    `.valid`;
+  - three spark session variants: `agent-session-record.spark`, `agent-session-record.spark-started` and
+    `agent-session-summary.spark`.
+- `compose.test.ts` holds:
+  - the catalog: names, families, slices, no approve verb, and schemas for exactly CP-1's verbs;
+  - a spark's profile rule, its face seed's range and its one-line name;
+  - origin's OPEN reading.
+- DESIGN.md §2.10 is a spark's face, James's mouthless star set:
+  - S-1…S-5 and the nineteen statuses;
+  - framed and free, the sizes per surface (the EW-D1 and FL-D2 rows marked proposed), still and live;
+  - the flat star without WebGL2, reduced motion, and the hatch (NS-D3 was open then);
+  - the engine vendored byte for byte, with its palettes as the one hex allowed outside tokens.css.
+
+**Stubbed.**
+- fieldd served no compose door, and answered none of the three `compose.sparks` rows. Those are later slices:
+  - CP-1a: the floor's door;
+  - CP-1b: fieldd's door;
+  - CP-1c: the sparks;
+  - CP-1d: the briefing.
+- CP-0's measurement (in the lane, 2026-10-29; the study's §16.1) is why CP-1d exists.
+  - Under puppeteer 0.3.0's managed launch, Claude Code 2.1.312 held a spark folder's `.mcp.json` server behind its
+    approval screen, despite a folder-local `enabledMcpjsonServers`.
+  - So James ruled route A on the board (16:15:50Z): puppeteer passes the spark's server and allowance at launch (PU-F,
+    released in puppeteer 0.3.2).
+
+**Validation.**
+- **The light pass** ran in `lanes/co` on this Mac, 2026-10-29 11:11:13–11:12:15Z, on base `e23fa8a1f`, each row
+  alone (logs: `lanes/co/logs/light-aaa9c22fa/`).
+  - preflight 0, `check:walls` 0, and biome on the touched files 0.
+  - tsc contracts 0 and tsc fieldd 0.
+  - contracts 563/563 (4 files) and field-app's DESIGN.md readers 112/112 (4 files).
+  - Bundle: `lanes/co/cp0-aaa9c22fa.bundle` (sha256 `4ae0414d…`).
+- **The mint.**
+  - The first, `bdc67871e` over main `99a2cdd53`, went stale when TS-7 (run 4) landed before it ran. It is kept at
+    `mint/run5-stale-bdc67871e`, with its logs under `lanes/ts6/logs/mini/run5/stale/`.
+  - The second, `b9ca35824`, is `aaa9c22fa` over main `401fb238e` (TS-7, James's PR #2, and his PRC-6 docs commit).
+  - Three files changed on both sides. Each was resolved as ours + theirs − base, with 0 markers:
+    - DESIGN.md: §2.10 beside AU-0's, TS-6's, Q19's and TS-7's sections;
+    - `contracts/src/index.ts`: CP-0's export beside TS-7b's phone code;
+    - `contracts/test/fixtures.test.ts`: CP-0's rows beside TS-6's, AR-6's and AU-1's.
+- **Run 5** was on the mini, on VF-PM's GO at 18:24Z (logs: `lanes/ts6/logs/mini/run5/`).
+  - The host: Apple M4, 16 GiB, macOS 26.7.2 (25G332); node 26.5.0, pnpm 11.13.1, rustc 1.99.1.
+  - preflight 0, with one WARN: R23, the candidate `acp` could offer `spawn`, and the pin implements `createSession`.
+  - `pnpm verify` armed at 18:24:28Z and exited 0 at 18:28:51Z, on `b9ca35824` (tree `d0195a2cc`).
+  - Its counts: typecheck 27 projects; vitest 9,861 passed, 0 failed, 17 skipped; cargo 31 binaries ok, 499 passed,
+    0 failed, 14 ignored. The tree was clean after.
+- **Landed:** main fast-forwarded to `b9ca35824` on 2026-10-30. Main's next commit, `7b25bb348` (18:39:01Z), sits on
+  it.
+
+**Owed.**
+- The rest of the foundation landed as ONE candidate (VF-PM, 2026-10-30 23:34Z): `co/cp1-docs-main` `83065f58d`, in
+  the mini's mint `67cf9f1cd` (run 20; LANDED "CP-1a…1c", the next entry). It holds:
+  - CP-1a: the floor's door and its walk;
+  - CP-1b: fieldd's `vibefield` server and the six read verbs;
+  - CP-1c: the signed sparks and their three doors;
+  - the stack's docs.
+- Then CP-1d: PR #4, the briefing on puppeteer 0.3.2.
+- MT-0, the tool plane's first slice (`draft/thinking-tool-plane.md`, ruled 2026-10-30):
+  - compose.ts's verb table becomes `contracts/src/tools.ts`'s catalog;
+  - CP-0's header law, "Plain agents hold no door (CP-L1)", takes MT-D2's dated narrowing then.
+- The Sparks marks' DECISIONS row is owed with SP-1b's records (VF-PM, 2026-10-31 01:01Z). These are James's round-2
+  Sparks rulings: CH-D1…D5, NS-D1…D6, TL-D1…D5, FL-D1…D6 and EW-D1…D3. The page's 22 picks were made on 2026-10-30,
+  18:41–18:48Z, on v8. The CO-D and CP rows ride this records commit.
+
+## CP-1a…1c — the compose plane's door: the floor's `door.sock` names each caller by the kernel and walks it to its pane, fieldd's `vibefield` MCP server serves a spark the six read verbs under its Agent Profiles, and each spark is a signed record with a folder of its own and the window's three doors (2026-10-31; `83065f58d` — CP-1a `8cf8013b2`, CP-1b `3e93ba71f`, CP-1c `1060d4b28` and the docs `a44f43dfd`, merged over main `bef070265` — lane `co/cp1-docs-main`, in the mini's mint `67cf9f1cd` over main `aca3794ce`)
+
+The compose plane, version 2 (ruled 2026-10-29; `draft/compose-plane/thinking-roled-agents.md` §15 and §16), after
+CP-0's record. CP-1a is the fixer's, CP-1b and CP-1c are the CO lane's, and the four landed as one candidate (VF-PM,
+2026-10-30 23:34Z).
+
+**What.**
+- **CP-1a, the floor's door** (`6b64620c8`, `44d706e10`, `ec87e42cd`, `5aa290200`; onto main `53894f1e7`; `8cf8013b2`).
+  Identity comes from the process, with no token (CP-L3, CP-D1).
+  - Contracts:
+    - `SOCKETS.DOOR` is `door.sock`, and `LAYOUT.DOOR_SOCKET` is `native/run/door.sock`.
+    - `NATIVE_DOOR` holds the numbers: 64 doors open, 256 KiB held per door and 4 MiB in all, a walk of 32 parents,
+      the 60 s birth rule, starts compared at whole seconds, and `LINE_MAX_BYTES` 8 MiB, the one bound both line
+      readers keep.
+    - mgmt.ts gains the caller, the pane, the open and closed door, the snapshot, and the three verbs
+      `native.door.subscribe`, `.close` and `.info`. `MeshLaneProtocol` gains `mcp`.
+    - Ten `native-door-*` fixtures are parsed on both sides (`fixture_parity.rs` `native_door_fixtures`).
+  - `services/door/peer.rs`: the kernel names a connection.
+    - On macOS it reads the holder's pid (`LOCAL_PEERPID`) and the effective pid (`LOCAL_PEEREPID`); they differ only
+      for a delegated socket, which the door refuses. The uid and the process's parent and start come from
+      `proc_pidinfo`, or from `/proc` on Linux.
+  - `services/door/walk.rs`: THE FLOOR WALKS.
+    - It goes from the caller up at most 32 parents to the first pane whose root it reaches, and answers
+      `{terminalSessionId, depth}`.
+    - A pid is a root only when its process started within 60 s of the pane's `createdAt`.
+    - Since `8cf8013b2`, a row the floor lists `exited` (AR-6) is no root.
+  - The door unit binds `door.sock` at 0600 inside the 0700 run dir. Windows reports it `disabled`.
+    - It refuses, in order: `refused-uid`, `delegated`, `peer-gone`, and `limit` for the 65th door. A refused caller
+      opens no lane, is never announced, and is logged at most once a second per reason.
+    - A caller found in no pane is walked once more after a reconcile, within 2 s.
+    - Each door is a local lane (`mcp`). `native.mesh.lane.subscribe` never lists it, and `mesh.lane.close` refuses it.
+    - A door outlives fieldd: its bytes are held in order while fieldd is away, and a door past its bound is closed
+      `held-too-long`.
+    - The door stream is a snapshot, then deltas. A backlog is coalesced into one `.snapshot` rather than closing mgmt
+      (`MgmtOutbox::offer_rebuildable`, EL7).
+  - `field-native door --endpoint <path>` (`door_bridge.rs`) is the stdio bridge an agent runs.
+    - It reads no environment and binds nothing. It passes whole lines both ways, and exits 4 past the bound.
+    - It dials a restarted floor again (250 ms doubling, 60 s in all). Its exits are 0, 2 (usage), 3 (unreachable) and 4.
+- **CP-1b, fieldd's door** (`427480652`, `3e93ba71f`):
+  - `compose/mcp.ts` is a hand-written MCP server for one connection at a time. It speaks 2026-07-28 (`server/discover`,
+    `_meta` on every request, -32022 for another revision, `resultType`, private `ttlMs`) and the `initialize`
+    handshake before it. Claude Code 2.1.312's measured frames are its tests' frames.
+  - `compose/door.ts` subscribes to the floor's door stream and claims each door's lane. It splits the floor's raw
+    chunks on newlines and answers each line in order. It closes a door past `LINE_MAX_BYTES`, and is quiet on a
+    floor without a door.
+  - `compose/verbs.ts` holds the six read verbs to the spark's profiles (TL-D5): `agents_available`, `projects_list`,
+    `agents_list`, `agent_read`, `history_search` and `history_read`. Another profile's session never shows.
+    History asks rosetta once per runtime the profiles hold.
+  - `compose/index.ts` (`ComposeService`) names the caller: pane, then run, then the spark it is.
+    - Each call is parsed by its schema and written through `audit.required` as `compose.<verb>` before it runs.
+    - A plain caller's door leaves one `compose.door.plain` line.
+  - Contracts: `gen/compose-tools.ts` (the tools' JSON Schema, under gen:schema and gen:check), and
+    `IndexSearchParams.runtime`. agent-runtime.ts: `runForTerminal`.
+  - Wall R29: `packages/fieldd/src/compose` imports no `@vibefield/puppeteer-*` and no `@vibefield/rosetta-*`.
+  - The lane link redials (`3e93ba71f`). It was dialed once per boot, so after a floor restart or a dropped socket
+    every lane's bytes went nowhere until fieldd restarted. That was doc sync's gap as well.
+- **CP-1c, the sparks** (`f98d0d2b0`, `1060d4b28`):
+  - A run carries its `origin` and its `spark` onto its signed record and its row, and a resume keeps both (CR-D11).
+    - Both sit under the record's HMAC, so an agent that writes `spark` into its record fails verification.
+    - `runForTerminal` reads verified records only.
+  - LAYOUT gains three rows: `SPARKS_DIR` (the records, 0600 in 0700), `SPARKS_KEY_FILE` (made once, never
+    overwritten) and `SPARK_HOMES_DIR` (each spark's folder).
+  - `SparkStore`: each record is signed (HMAC-SHA256 over `canonicalJson`).
+    - A record that does not verify, does not parse or that other users can read is set aside, never served.
+    - Names are unique per user without case. Ids are `sp-` plus 16 hex. A folder's slug comes from the name, with
+      accents folded.
+  - `SparkService`:
+    - hatch refuses an unknown profile, a profile with no sign-in for its agent, and a name taken. Otherwise it writes
+      the record, makes the folder and its brief (CLAUDE.md, the person's after hatch), and starts the session with
+      origin `you`.
+    - open answers a live spark, resumes a sleeping one in its last session, or starts it again in its folder.
+  - `compose.sparks.list`, `.hatch` and `.open` answer the window only. hatch and open are audited
+    (`compose.spark.hatch`, `.open`).
+  - The route to the `vibefield` server is the board's `co-spark-door-route`. `LAUNCH_ROUTE` (A, ruled 2026-10-29
+    16:15:50Z) is wired. `folderRoute` (B, a folder's own `.mcp.json`) is built and tested, not wired.
+- **The docs** (`a44f43dfd`):
+  - `api.html` lists `compose.sparks.*`, the `vibefield` MCP door with its six tools, and `native.door.*` with the
+    bridge. "Thirty-six doors" gets a dated correction.
+  - `architecture.html` gains two seams rows, the floor's door and fieldd's door.
+
+**Real vs not yet.**
+- Real:
+  - the floor's door on a real floor and kernel (`tests/door.rs` 8 rows, `tests/door_bridge.rs` 9);
+  - fieldd's server, door and verbs (fieldd's units, the floor faked);
+  - the signed sparks and their three doors.
+- Not yet:
+  - **No launch hands an agent the `vibefield` server.** `LAUNCH_ROUTE` does nothing until CP-1d carries the server
+    at launch (PR #4, puppeteer 0.3.2's per-run briefing). Until then a spark hatches and thinks without tools, and no
+    agent in the product reaches the door.
+  - No window calls `compose.sparks.*` yet: that is SP-1b and SP-1c.
+  - A plain run is served nothing, until MT-0.
+- Unproven on this Mac: the delegated-socket refusal. `SO_DELEGATED` is privileged, so that row runs on injected facts.
+  The Linux arm compiles only on Linux.
+
+**Found.**
+- The bridge installed a client's delivery slot before queueing its `HELLO_OK`, so an inbound byte could reach a
+  client ahead of its own ack. It was fixed at its cause (`ec87e42cd`).
+- AR-6's kept panes, listed `exited`, read as live pane roots after CP-1a's merge of main. A husk's pid reused inside
+  the birth rule would have named its dead pane. It was fixed red-first (`8cf8013b2`; red 2026-10-30 17:50:45Z,
+  `left: [rooted 500, husk 600]`).
+- CP-1c's first light was red at 2026-10-29 12:40:23Z on the slug row (`'u-ni-code-star'`, not `'unicode-star'`).
+  NFKD splits a letter from its combining marks, and the marks were hyphenated. They are stripped (`\p{M}`) first now.
+- mgmt.ts's `NativeDoorInfoResult` says fieldd writes the bridge into a spark's `.mcp.json` at every launch. Only
+  route B would, and B is not wired. The dated erratum rides MT-0.
+- The merges:
+  - CP-1b onto CP-1a was clean (`803a57d46`).
+  - Over main `bef070265` there was one conflict (`20ced228a`): daemon.ts's boot-env import, where PR #5's
+    `splitPathList` (`0cfb25c5b`) met CP-1b's compose import. Both were kept.
+  - `78796f435` and `83065f58d` were clean, with 0 markers.
+  - The mint (`67cf9f1cd`) changed three files on both sides: `contracts/src/methods.ts`, `contracts/src/registries.ts`
+    and `fieldd/src/daemon.ts`. Its tree `0d1c873d5` equals merge-tree's.
+  - The landed diff (`bef070265`..`83065f58d`) is 112 files, +21,478 −5,044. 47 of the files are generated JSON
+    schemas. It changes no lock and no pin: contracts' `package.json` gains only the `./compose-tools` export and
+    gen:schema's third generator.
+
+**Validation.**
+- No lane light at 83065f58d; the parts' lights 10-29 12:23:31Z (3e93ba71f) and 12:43:54Z (1060d4b28); CP-1a's rows
+  10-29 12:18:47Z and 10-30 17:52Z; the re-merge check GREEN 10-30 23:30:45Z (tsc and the touched units, not a light);
+  run 20 the first full gate. The law is a lane light before the mint, and run 20 is its recorded exception (VF-PM,
+  2026-10-31 01:17Z).
+- **CP-1a, the fixer's rows** (`lanes/cp1a/logs/`):
+  - At `5aa290200`, 2026-10-29 11:49:59–11:52:45Z: fmt 0, clippy `-D warnings` 0, the whole `cargo test -p
+    field-native` (lib 312, door 8, door_bridge 9, every suite ok), contracts tsc 0 and its tests 0, biome 0, and
+    gen:check.
+  - The gate rows, ending 12:18:47Z: preflight OK with 1 warning, walls 0, deps 0.
+  - Red-first by mutation (`mutate-c3.sh`, `mutate-c4.sh`): each mutant turned exactly its own row red.
+  - At `8cf8013b2`, 2026-10-30 17:52:23Z: fmt 0, the new row 1/1, `--lib services::door` 13/13. Clippy, the whole
+    suite, gen:check and the TS rows were not run after the main merge.
+- **CP-1b's light** (`lanes/co/logs/light-3e93ba71f/`): `== co-light GREEN 12:23:31Z; HEAD 3e93ba71f` (2026-10-29,
+  base `5aa290200`). Its rows: preflight 0, walls 0, biome 0 on 20 files, tsc contracts and fieldd 0, gen fresh, the
+  lane link's redial row, contracts 554/554, and fieldd 43 passed with 1 skipped.
+- **CP-1c's light** (`light-1060d4b28/`): `== co-light GREEN 12:43:54Z; HEAD 1060d4b28` (2026-10-29, base
+  `3e93ba71f`). Its rows are the same, with biome on 8 files, plus `cargo test --test layout_vector` 0 in the lane's
+  own target. Contracts 520/520, and fieldd 66 passed with 2 skipped.
+- **The docs commit** had no light. Its checks were merge-tree and the pages' tag balance; no gate reads the pages.
+- **The re-merge check** (`co-remerge-check.sh`, 2026-10-30 23:28:27–23:30:45Z), on `20ced228a` and `78796f435`: tsc
+  contracts and fieldd 0 on each. CP-1b: contracts 576/576, fieldd 43 passed with 1 skipped, the redial row 0. CP-1c:
+  contracts 540/540, fieldd 67 passed with 2 skipped. Its header says what it is: "Not a light pass: no preflight,
+  walls, biome or gen rows."
+- **Run 20: the mint `67cf9f1cd` over main `aca3794ce`.**
+  - a9's re-check: clean, three both-sides files, gen freshness a real row through the `compose-tools` export, and
+    field-native rebuilt (+1.4 MB, CP-1a's door).
+  - The host: Apple M4, 16 GiB, macOS 26.7.2 (25G332); node 26.5.0, pnpm 11.13.1, rustc 1.99.1.
+  - `pnpm verify` armed at 01:15:23Z (load 1.15) and exited 0 at 01:19:58Z (load 9.94), on `67cf9f1cd`.
+  - Its counts: "Successfully ran target test for 28 projects"; vitest 10,516 passed, 0 failed, 18 skipped (+52 tests,
+    +6 files); "cargo test results: ok 33, FAILED 0", with 532 passed and 14 ignored (VF-PM's counts, 01:22Z). CP-1a's
+    `door` and `door_bridge` are the two new binaries. gen freshness passed with the compose-tools generator live.
+  - The tree was clean after, with no stubs left. HID idle went from 395 to 671 s: no hand touched the mini. Verify
+    only; the logs hold no smoke row. Logs: `lanes/ts6/logs/mini/run20/`.
+- **Landed:** main fast-forwarded `aca3794ce` → `67cf9f1cd` at 01:22:03Z (main's reflog; the fixer, on VF-PM's GO), and
+  VF-PM's push of 01:22Z (`aca3794ce`..`67cf9f1cd`) carried it, origin equal to local.
+
+**Owed.**
+- **CP-1d**, James's PR #4, retargeted onto main after this. It gives every birth its briefing; until it lands no agent
+  holds the door.
+- **MT-0**, the tool plane's first slice, drafted on PR #4's tip (`lanes/mt/mt0`). It turns `compose/` into
+  `tool-plane/` and compose.ts's verb table into `contracts/src/tools.ts`, and serves a plain run its rows. It also
+  carries mgmt.ts's dated erratum.
+- **SP-1b and SP-1c** (renderer only, on James's go), then SP-1d.
+- At the next draft queue: the dated as-built lines in `thinking-roled-agents.md` §16 (CP-1a's walk past an exited
+  pane, the stack as landed) and §17.
+- `system.html` lacks `ComposeService` and `SparkService` (cp-landing's, once CP-1d's shape is final).
+
+## item 118 — the ^C waits for the pane's image to be cat: a scripted run's interrupt can no longer fall into its shell's prologue and leave its `cat` alive (2026-10-31; `9e0457b3c`, lane `fix/item118-cat-ready` on `204240a7b`, main `67cf9f1cd` merged as `7b143fc51`, the mini's run 21 on the tip itself; VF-PM's word 2026-10-31 01:04Z)
+
+**What.**
+- `catReady(box, paneId)` in fieldd's `test/agent-session.test.ts` reads the floor's own pid for the pane
+  (`box.daemon.terminals.runtimeSessions()`) and polls `ps -o comm=` (`imageOf`) until the image is `cat`.
+  - It waits within `CAT_READY_MS`, the cell join's 15 s, with `poll`'s evidence at a deadline.
+  - It is a readiness read of the rows' own claim ("the scripted PTY's `cat` dies of the floor's own interrupt"),
+    not slack. Once the image is `cat`, no shell is left to swallow the ^C.
+- **Four sites**, each right after its cell join and before its `agent.interrupt`:
+  - MF-1's live board (CHAINED frames);
+  - `endedRun` (MF-1f/MF-1g and its callers);
+  - AR-6-0's stop verb;
+  - item 97's lost exit.
+- **Q08 is excluded** (VF-PM's ruling, 01:09Z). Its interrupt is the adapter's turn-stop TEXT, not an ISIG character.
+  Bytes written during the prologue wait in the tty's input queue for `cat`, so nothing can be swallowed there. It
+  stays among the witness rows.
+- Not the env file: `mv`'s exit window lies after its rename. Not a `trap 'exit 130' INT`: the pane would exit 130
+  instead of dying of SIGINT.
+- One file, +40 −1. No product code changes.
+
+**Found.**
+- **Two witnesses on the mini, one shape.**
+  - Run 12's MF-1f (M12 `1669134bf`, red at 2026-10-30 21:29:59Z, load 36.01): the interrupt 12 ms after the spawn.
+  - Run 17's AR-6-0 (M17 `2943ec558`, red at 00:49:28Z, load 38.21): 55 ms after the spawn.
+  - In both, the floor's row read `exited:false`, fieldd heard no exit, and the typed-out file's holder was the
+    floor's own pid as `/bin/cat`. So the shell finished its prologue AFTER the ^C and exec'd the `cat` nothing then
+    ended.
+  - Both are item 97's case A, which its witness names and neither landed fix (item 87's C3, item 97's C) can touch.
+  - Each red re-ran once and went green: run 12b and run 17b.
+- **The cause, measured.** The scripted program is `/bin/sh -c 'env > … && mv …; exec /bin/cat >> …'`, and macOS's
+  `/bin/sh` is bash 3.2.57.
+  - A ^C that meets `env` or `mv` as it exits cannot kill it. The waiting shell reads a normal exit and goes on to the
+    exec.
+  - Both rows waited only for the floor's inventory cell join, which says nothing about where the shell is.
+- **The probe** (`records/item118/probe/prologue-probe.py`, v2) ran the row's exact program under a PTY spawned as
+  portable-pty 0.9.0 spawns it (setsid + TIOCSCTTY, the spawn returning only after the exec, the master drained), with
+  one `\x03` d ms after the spawn.
+  - At d = 0–15 ms in 0.2 ms steps, 6 trials each, load ~17: 380 died-INT, 62 cat-died and **14 SWALLOWED of 456**
+    (alive as `cat` 400 ms on).
+  - The swallows came in two clusters, at `env`'s exit and at `mv`'s exit (the env file landing 0.1–0.2 ms after the
+    ^C).
+  - v1 used `pty.fork`, whose parent returns before the child's `login_tty`: a pre-foreground window the real stack
+    does not have, and a dying child that hung draining an undrained echo. That flaw is recorded in item 118.
+- **What the light measured:** catReady's own wait, once per site with a timing line that was never committed (the file
+  reverted byte for byte, hash `20da39f3f941` as lit), at load ~35:
+  - the live board 5 ms; **MF-1f 138 ms**; AR-6-0 7 ms; item 97 48 ms.
+  - MF-1f's 138 ms is the prologue still running at the cell join: the window the ^C used to fall into.
+
+**Validation.**
+- **The light**, in `lanes/item118` on `204240a7b` (records/item118/rows.sh; each row alone, nice 19, the guard read once
+  and clear; `CARGO_TARGET_DIR=/Volumes/SamsungRed/rust/item118`), 01:07:59–01:16:37Z, load 17–42:
+  - biome 0; fieldd typecheck 0;
+  - the file whole: 55 passed, 2 skipped;
+  - the five interrupt rows alone, ×3 each, all green:
+    - the live board 6720 / 6881 / 6715 ms;
+    - MF-1f 10796 / 10737 / 9878;
+    - AR-6-0 9935 / 4413 / 10590;
+    - Q08 14131 / 4530 / 5080;
+    - item 97 5727 / 5354 / 9494.
+- **The merge:** `7b143fc51` merged main `67cf9f1cd` with no conflict. Its diff over main equals `9e0457b3c`'s own,
+  line for line (tree `f4b60a53a`).
+- **The bundle:** `records/item118/item118-7b143fc51.bundle` (sha256 `2c694adf…ae08`, `^67cf9f1cd`, 2 commits).
+- **Run 21: the mint is the tip itself.** Verify armed at 01:25:34Z and exited 0 at 01:30:08Z:
+  - vitest 10,516 / 0 / 18, the same count as run 20: the slice changes rows and adds none;
+  - cargo 33 binaries, 0 FAILED; typecheck and test for 28 projects; 0 FAIL rows;
+  - the rows: MF-1f 7012 ms, AR-6-0 7343, Q08 863, item 97 (the real floor) 2503, MF-1's live board 4113.
+  - MF-1f's and AR-6-0's ~7 s is the rows' own duration, unchanged by the slice (a9's note).
+- **Landed:** main fast-forwarded `67cf9f1cd` → `7b143fc51` at 01:31:38Z, and was pushed at 01:33:27Z.
+
+**Ruled.**
+- James, 2026-10-31 01:16:48Z (the board approval `item118-stop-durable`): **(A) durable Stop** — escalate after a
+  bound, and show "stop sent" until an exit or a turn-stop is heard.
+- Today a Stop's `accepted` is the floor's "the byte was queued" (`input_tx.try_send(InputOperation::Interrupt)`,
+  ghosttea 0.13.7), and nothing escalates.
+- puppeteer's built-in providers hand `spawnTerminal` the prepared launch with no `sh -c` wrapper, so a directly
+  exec'd agent has no prologue to swallow a ^C. A shell-wrapped launch would. That was read at the checkout's 0.3.0;
+  recheck at 0.3.2.
+
+**Owed.**
+- The durable Stop's design note, on the next draft queue (e.g. `draft/agent-plane/thinking-durable-stop.md`). It
+  covers:
+  - the bound, and the ladder ⌃C → SIGINT to the pane's group → SIGTERM → SIGKILL;
+  - "stop sent" in Godview and in the pane, and what the ledger records;
+  - puppeteer's turn-stop versus the pane's death;
+  - the seam: fieldd's interrupt through the floor, or a field-native kill verb on the management channel. EL2 and
+    EL7 apply, and contracts come first.
+  - DECISIONS' index row comes with that note. James reads it at his leans; the slice follows after the queue.
+- The mini-slot plan in `records/item118/item.md`:
+  - the probe idle and under burners;
+  - the rows ×3 idle;
+  - the rows ×10 under load, with a lane-only stamp and `ps -t`;
+  - the slice ×10 under load.
+  - It also holds where MF-1f's and AR-6-0's ~7 s go.
+- Item 120 (fieldd TC-S3's timer read) is the fixer's next test-side slice, after the queue.
+
+## GV fix — item 102: a paste reaches the pane; the deck's and the sign-in terminal's ⌘V read the clipboard through main's door, and the grant set stays empty (2026-10-31; `4e07f0308`, lane `fix/item102-clipboard-read-door` on `e23fa8a1f`, main merged as `b631d5725` and `cbc376da5`, the mini's run 23 on the tip itself; VF-PM's assignment 2026-10-29 12:38Z)
+
+**What.**
+- **The door:** design-03 §5.1's `shell.clipboard.*`, the product window's read half. It fills the inventory's entry
+  and adds no duty to main (PF2).
+  - `IPC_CHANNELS.clipboardRead` and main's pure `clipboard-door.ts`, wired in `ipc.ts` like every door.
+  - Only a window this shell registered (`registry.owns`) is answered. A stranger is warned, audited `denied`
+    UNREGISTERED_SENDER, never read, and thrown at.
+  - Only while the window AND its page are focused (EL7); otherwise `refused: unfocused`, and nothing is read.
+- **The bound** (ruled 2026-10-29 13:24Z on the HN lead's reading): `SHELL_CLIPBOARD.READ_MAX_BYTES` is
+  `TERMINAL_PIPELINE.MAX_PASTE_BYTES` by reference, never a third literal. Past it the read is refused whole with its
+  UTF-8 size, never cut.
+- **The audit:** `shell.clipboard.read` (contracts' `SHELL_CLIPBOARD_AUDIT_ACTIONS`, admitted by fieldd's
+  `SHELL_ACTIONS`) through local-only `audit.append`. It records the bytes and the page's id, never the text.
+  - It is best-effort and never awaited: a failed append is the warn line `desktop.clipboard.audit_unavailable`.
+- **The renderer:** the preload validates both ways and rejects a refusal in words, so nothing is pasted rather than
+  part of it.
+  - `FieldHost.clipboard` is optional. field-app's `readClipboardText()` reads the host's door, else the web's, so
+    the browser catalog keeps the web read.
+  - GodviewDeck and SignInTerminal hand ghosttea that reader as `readClipboard`.
+- **The grant set stays empty** (ESP §7.4). The security guard row (both handlers still deny `clipboard-read` and
+  `clipboard-sanitized-write`) is green by design: the door is not a grant.
+- 21 files, +805 −7. No lock, pin, Rust or docs.
+
+**Found.**
+- **The cause** (a code read on `e23fa8a1f`, 2026-10-29 12:32Z; no app run, by the no-input-injection rule):
+  - GodviewDeck (`:2201`) and SignInTerminal (`:115`) handed ghosttea `navigator.clipboard.readText`.
+  - The shell session grants no Chromium permission (`SHELL_GRANTED_PERMISSIONS` is empty by law), so the read was
+    denied, after ghosttea 0.13.7, given a `readClipboard`, had already taken the chord. ⌘V pasted nothing.
+  - A surface given no reader (LivePeekPane) left ⌘V to the platform and was never hit.
+- **A count in a title goes stale in silence** (a1, at HN's rebase rehearsal, 2026-10-29 14:23Z): contracts' channel
+  test named "the thirty channel keys" while the tip had thirty-one, and AU B1 and HN each bumped that same word.
+  - The count now lives once, in `toHaveLength`, where two added channels meet in a merge and conflict out loud. The
+    title names no number.
+  - It did conflict out loud, twice: 33 over `265325d09` (AU B1/B3's two update channels) and **35** over
+    `23e9c2538` (HN B1's two screenshot-still channels).
+
+**Validation.**
+- **The light** (2026-10-29 13:42–13:48Z, this Mac, nice 19, each row alone):
+  - the frozen install; typecheck ×4 (contracts, electron-shell, field-app, fieldd); the walls;
+  - the contracts, field-app and fieldd rows; field-native's build; gen:check (nothing regenerated).
+  - Two non-timed reds, fixed before the final commit: biome's layout of the bound row, and a stranger row asserting
+    a third `undefined` argument the door never passes (vitest counts arguments).
+  - The rerun after the 14:23Z count amend: contracts shell 57/57 and biome on the file.
+- **Red-first:**
+  - the parent's two sites plus fieldd's audit source gave exactly the 3 predicted reds;
+  - the door's `owns` gate cut gave exactly 2;
+  - its focus gate cut gave exactly 2.
+- **The first merge of main** (`b631d5725`, over `265325d09`, 2026-10-31 00:37Z): one conflict, the count, recounted
+  to 33. The rows: contracts typecheck, shell 58/58, electron-shell typecheck, and the door tests 25/25.
+- **The second merge of main** (`cbc376da5`, over `23e9c2538`, 02:02Z), with the two conflicts the 01:42Z rehearsal
+  over a stand-in M22 had foreseen:
+  - the count, recounted to 35 (the registry's IPC_CHANNELS also 35);
+  - `preload/index.ts`'s import list: HN B1's `ScreenshotStillBytesRequest, ScreenshotStillKeptRequest` and 102's
+    `SHELL_CLIPBOARD`, all three in the list's order, biome-clean.
+  - Its diff over main equals `4e07f0308`'s own, apart from the two count lines.
+  - The rows: contracts typecheck, shell 59/59, electron-shell typecheck, and the door tests 25/25.
+- **Run 23: the mint is the tip itself.** Verify exited 0 at 02:10:17Z:
+  - vitest 10,645 / 0 / 18 across 805 files (VF-PM's read); cargo 33 binaries, 0 FAILED; typecheck and test for 28
+    projects; 0 FAIL rows;
+  - the eight watch rows all ✓, contracts' `shell.test.ts` 59 at the literal 35.
+- **Landed:** main fast-forwarded `23e9c2538` → `cbc376da5` at 02:11:52Z.
+
+**Owed.**
+- At the next draft queue: design-03 §5.1's delta, and ESR §6.2's channel row and code-block line, from NOT LANDED to
+  `cbc376da5` (written 2026-10-29 at the 13:29Z and 16:03Z queues; snapshot `449145570`).
+- Item 111 (the Artifact panel's Copy: a plugin's web clipboard write under the same empty grant set) is item 102's
+  class, as an SDK write door over HN B2's host copy door, after HN B2.
+- Item 112 (the clipboard PNG's pixel bound) waits after HN B2.
+
+## HN B1 — Cards in Hand's new foot: the hand at the window's foot, the line `[views] snapshot create`, the desk's Copy ⌘C, and a card played into a pane or onto the desk (HN-0…HN-4, 2026-10-31)
+
+Track HN, *Cards in Hand*, batch B1 of three. James ruled all sixteen marks at their leans on 2026-10-29
+(`draft/thinking-cards-in-hand.md` §2; DECISIONS' row). Three code-only builders built it on 10-29, it was integrated,
+three read-only lenses reviewed it (behaviour, design fidelity, tests) and three fixers worked their findings. It
+landed in the mint M22 `23e9c2538` (run 22 on the Mac mini, verify only).
+
+**What.**
+- **HN-0, the doc first** (`0e2ad08bc`).
+  - DESIGN.md §8 "The line": 300 × 52, 76 from the left (LN-D1). The snapshot is 40, a ghost, `capture`, "Snapshot
+    ⌃⌘A"; its waiting states are in the Snap tile's honest words. The draft, @, mic, send and the interim send leave
+    the line (LN-D3). The D6 sentences are kept verbatim.
+  - New §8 "Chat's composer" keeps the line's draft canon for CO's SP-1 (LN-D3, not built here).
+  - New §8 "The hand": one stock and six faces (HN-D1), holding and reaching, ⇧⌘V raised as a list, where cards come
+    from (HN-D2, HN-D3) and go (HN-D4, D6, D7), the pick-up as a modal (HN-D5), twelve (HN-D8), this session (HN-D9).
+  - New §8 "Copy" replaces "Send to…" (HN-D3). The left (clipboard) edge tray retires into the hand.
+  - §1, §2.2, §5 (the cards are paper), §5.1, §6 (the deal's arc, `cubic-bezier(0.45, -0.3, 0.7, 1)`, the one new
+    curve), §10 and §13. `docs/UI_SYSTEM.md`'s catalog entries. DECISIONS' row, with dated notes on the FC, MC and
+    compact rows.
+- **HN-1, the hand** (`6835b5398`, `field-app/src/frame/cards/`).
+  - cards-model: the kinds, the fan's numbers, the reach and its hold, the twelve, what a copy becomes, and HN-D10's
+    twin. cards-store is the window's one, kept for the session only. cards-words holds every word.
+  - card-targets is the registry places answer in. cards-sources (`dealCapture`, `dealCard`) is the one road every
+    source deals through.
+  - CardFace (one stock, six faces, the index twice, the × when reached), CardsView (the fan, the deal's arc, the
+    reach, raised as a listbox, the held card as a modal dialog) and Cards, the controller. Cards keeps ONE
+    key-ownership scope (held, raised, at rest under the pointer), the pick-up, ⇧⌘V and the one screenshot
+    subscription.
+  - The card tokens are in design-kit's tokens.css (§5). ChromeLayer mounts the hand above the line (z 63).
+  - The left clipboard tray retires: ClipboardTray, the left notch, the Snap tile, clipboard-store and tray-flight.
+- **HN-2, the line** (`frame/ComposerLine.tsx`, `Composer.tsx`, `line-model.ts`).
+  - It is `[views] snapshot create`, 300 at 76. The snapshot calls the shell's capture door and deals through
+    `dealCapture`. Its waiting state is one store (`frame/capture-state.ts`), written by the line's own capture and by
+    the hand's ⌃⌘A subscription.
+  - The draft, @'s list, chips, mic, send, the interim send, line-send and at-list are deleted; CO's SP-1 restores what
+    Chat's composer takes, from git. The line door's `paste(sessionId)` retires: `pasteInto(paneId)` is the one road.
+- **HN-3, Copy** (`field/desk/copy/`).
+  - The selection bar's Send to… is Copy (`clipboard`), and so are its menu row and the tools in hand. ⌘C on the desk
+    is a desk-scoped chord; Settings → Terminal → Keyboard says Ghostty's ⌘C runs in the deck.
+  - One note becomes a text card; anything else becomes a picture card, its PNG bytes taken from the selection's box.
+    The text half goes on the system clipboard (an image waited for HN-5's door). The selection is never written.
+- **HN-4, playing a card** (`frame/cards/card-drag.ts`, `CarriedCardLayer.tsx`, `godview/pane-card-target.ts`,
+  `field/desk/desk-card-target.ts`).
+  - One drag machine: the pointer captured, Esc and blur cancel, and the place on top answers. View cells are
+    spring-loaded (520 ms); the carried card ducks over the line.
+  - Into a pane through the deck's `pasteInto(paneId)` and `whenInputOpen` (a spring-loaded drop waits, bounded). D6's
+    refusal is claimed by the play for its call and said once. A pane is never given a trailing line break, and a
+    snapshot that is gone is refused.
+  - On the desk a card prints a note or a print (HN-D7), checked again after its bytes arrive.
+  - Two shell doors, `screenshotStillBytes` and `screenshotStillKept` (contracts IPC, main, preload, host). The still is
+    found by name in the ring and opened O_NOFOLLOW, and the HANDLE is checked (a regular file, ≤ 64 MiB) and read,
+    never a path checked and then opened.
+- **The smokes.**
+  - smoke:godview's 11h line-send rung is re-aimed at a card played into a real pane (`window.__vfCards`, the desk
+    lab's pattern; `SMOKE_GODVIEW_CARD_PLAY`): pasted, no marker before the harness's Return, the nonce after it.
+  - smoke:canvas's Send to… rows are the Copy rows (`smoke-desk-copy.ts`). A marked run never writes the person's
+    clipboard, the capture's marks are recorded as handed, and the hand is emptied after.
+  - The draft's typing rungs are retired or re-aimed: headKeys and the pegboard's REFUSED rung type into the palette's
+    field.
+- **The walls.** check-retired-names and R25 hold the retired modules. The glyph roles for `clipboard` and `capture`
+  are regenerated.
+
+**Onto main.**
+- `3d3273281` merged main `0b4cb2ff0` (the item 94 stack, TS-6, item 113, Rosetta 0.1.2's EL8, PT and Q19) with no
+  conflict. `e2c0cca70` fixed what that clean merge broke: TS-6's caption called Head.tsx's `fmtRelative`, which HN-1
+  had moved to `format/relative-time.ts` as `relativeTime` (TS2304).
+- `7bb563258` merged main `67cf9f1cd` (PT-S1's fix for item 119, PT-S2, items 100 and 105, PG-1, the CP stack and five
+  records commits).
+  - Both sides had changed 20 files. Four conflicted, one block each, each kept both and held by hn-keepcheck:
+    - DESIGN.md §13: HN's paragraph, then AU's "The update".
+    - DECISIONS: AU's row, then HN's, in landing order.
+    - ChromeSection: AU-2's `UPDATE_GROUP_OPTIONS` among the file's consts, where the tray's stood.
+    - ui-system-boundaries: the one catalog template line holds both, `${updateCorner}` and `${cards}`.
+  - Every other path is git's own merge.
+  - `096870274`: the closed channel table's title says thirty-four, for HN's two channels and main's two over the base's
+    thirty; each side's "thirty-two" had merged once.
+  - `f4816ecef`: AU-2's `UpdateMenuPlate` had copied CornerPreview's mount of the line from before HN-2, with `blank`.
+    It mounts it as the corner's plate does now (TS2322).
+- `89a4233a5` merged main `289e9b43d` (item 118's test file, PG-1's and the compose plane's records). Its one conflict
+  was DECISIONS, where the rows stand in landing order: AU, CO-D, CP, PG, then HN.
+
+**Gates.**
+- The light at the integrated tip (2026-10-29 14:04:27Z, this Mac, each row alone at nice 19) was green: preflight,
+  walls, deps, retired, ios-fixtures, biome (112 files), typecheck of contracts, design-kit, electron-shell and
+  field-app, and vitest contracts 69, electron-shell 76 (9 files) and field-app 826 (39 files, with the five DESIGN.md
+  readers). The catalog look was read in both themes by the lead and VF-PM.
+- The light over main `67cf9f1cd` at `f4816ecef` (2026-10-31 01:35:52Z, the lane, nice 19 under the guard,
+  CARGO_TARGET_DIR the lane's) was green.
+  - Its rows: preflight, walls, deps, retired, ios-fixtures, biome, and typecheck of contracts, design-kit,
+    electron-shell and field-app.
+  - Its vitest: contracts 29 files and 1,030 tests, electron-shell 19 and 166, field-app 86 and 1,520. The 134 files are
+    B1's own list, every file importing what B1 changed over main, DESIGN.md's readers and the changed stylesheets'
+    readers.
+  - Run 1 was red at typecheck on the merge's one type error, which `f4816ecef` fixed.
+- `89a4233a5`'s merge differs from git's own (`merge-tree --write-tree 289e9b43d f4816ecef`) on DECISIONS alone, so
+  that light stands for the code (VF-PM, 01:41Z).
+- **Run 22: the mint `23e9c2538`**, which merges `89a4233a5` and main `12323581c` (item 118's records, a LANDED-only
+  difference). Verify was green at 01:49:20Z: vitest 10,626 passed, 0 failed and 18 skipped, and cargo 33 binaries
+  ok, 0 FAILED (VF-PM's counts). Verify only.
+- **Not run at the landing:** the desk smokes, smoke:godview's re-aimed 11h rung and smoke:canvas's Copy rows. The
+  console was locked, so they are a recorded debt for James's console window, as FG-3a's were.
+- **Landed:** main fast-forwarded `12323581c` → `23e9c2538` on VF-PM's GO, and VF-PM's push of 02:02:18Z carried it.
+
+**Owed.**
+- The desk smoke rows above, on James's console window.
+- Not smoke-covered yet: a card dropped on the desk in Electron.
+- **B2** (HN-5 copies, HN-6 another app's paste and drag, HN-7 History's New terminal, and LC-17's follow-ups) was
+  light-green at `16df734bd`. It is re-merged over this main and lit again, and it lands in the order VF-PM keeps
+  after item 102, whose channel recount goes from 34 to 35, re-merged once more over the main at its mint. **B3**
+  (HN-8, Artifacts in the head, PL-D1…D3) is light-green at `0874e0ac4` and follows B2 the same way.
+- Upstream: G30 (ghosttea's routed `copySelection` answers nothing, so no ⌘C in a pane) and RO-31 (a copy port in
+  rosetta's room, so no Copy in History), `draft/petitions/README.md`.
+- At the next draft queue: the record's B1 as-built lines (`thinking-cards-in-hand.md` §6) and its Status header.
+
+## AU B4 — what's in it: a release's signed plain-text notes on Settings → Updates and the Me row's What's new, and the day each build was made (AU-6a); the notes written in the sign job and carried inside the signed manifest, and each stage's `builtAt` (AU-6b) (AU-D10; AU-G10) (2026-10-31; `cf4335ab9`, a9's merge of main `cbc376da5` into `f21680dd3` on `4dad7e228` on `4fcf982d0` on `2b1cfff6f` on `4c25147bf`, lane `au/b4`)
+
+**What.** B4 is the last batch of AU. With it, a person can read what an update holds before taking it, and what
+it changed after.
+- **AU-6a (`4c25147bf`): the notes and the build's day, from contracts to the window.**
+  - contracts (`update-policy.ts`):
+    - `ReleaseNotes` is a union on `kind`:
+      - `written` (a stable, or a beta with a notes file): `since` or null, and 1–8 lines;
+      - `log` (a nightly, or a beta without a file): `since`, `commits`, `product` ≤ `commits`, and 0–4 lines of
+        `{track?, text}`.
+    - Every written line, and every log line's `text`, is `ReleaseNoteText`: 1–200 characters on one line, with no Cc,
+      Cf, Zl or Zp, so bidi overrides and zero-width characters are refused. A log line's `track` is 1–24 characters,
+      with no character rule in the contract; release-notes.mjs strips format characters before taking it. The limits
+      are `RELEASE_NOTES_LIMITS` (LC-19).
+    - `ReleaseManifest.notes` is `z.unknown().optional()`, additive at schemaVersion 1. An installed client's chain
+      never refuses notes it cannot read.
+    - `UpdateView` gains `notes?` (available, downloading, staged) and `builtAt?`. `UpdateViewLastApply` gains
+      `notes?` (installed only). The persisted staged clock and lastApply carry them tolerantly.
+    - `releaseTagOf` inverts release-plan's three tag shapes.
+    - No enum grew, and `pnpm gen` is untouched.
+  - The trust chain:
+    - `StagedReleaseIdentity.builtAt` is a strict `IsoInstant`, and the stager parses what it writes.
+    - verify-chain gains **step 6c**: notes that do not parse are DROPPED (`notesDropped` names why) and never refuse
+      the chain. Notes rewritten after signing refuse it, as any manifest change does.
+  - The controller:
+    - The staged version's notes are kept on the staged clock, and a newer head never swaps them.
+    - `recordLastApply` copies them into the record, so What's new reads offline after the relaunch. Every apply
+      path, AU-5's quit among them, writes through it.
+    - `compareUrlOf` composes the one link from the frozen origin and two release tags, only for a
+      `https://github.com/<owner>/<repo>/releases` origin (X18; EDP-38).
+    - Dropped notes are logged once per head in a row (`desktop.update.notes_dropped`; a head is said again after
+      another head's), and doctor says present, dropped or
+      absent.
+  - field-app:
+    - The page's head says "Nightly · built Oct 27, 2026".
+    - A notes card says "What's in the Oct 28 nightly" while an update is found, fetched or ready, and "What's new in
+      …" for a day after it installs.
+      - A log release says its count and up to four lines, each led by its track in mono when it has one.
+      - A written release says its lines and no count, with main's link when it composed one.
+      - Every string is a text node, and the link is drawn only when it is https.
+    - The Me row's R4 notes form (What's new · Updated today) opens Settings → Updates AT the card, once. The shell
+      target is `whats-new`, which opens `{page: updates, atNotes}`, and that is B4's one line in `ChromeLayer.tsx`.
+    - The catalog mounts the shipping views over the new fixture states.
+  - Six new contracts fixtures, none mirrored by the kit.
+- **AU-6b (`2b1cfff6f`): the notes are written in the sign job, and every stage says when it was built.**
+  - `scripts/release-notes.mjs` (new) computes LC-19's notes and parses them as `ReleaseNotes` before writing:
+    - a stable refuses without `apps/desktop/packaging/notes/<X.Y.Z>.txt`;
+    - a beta uses that file when it is there, else the log form;
+    - a nightly reads `git log --no-merges prev..commit`: the newest subject per track, at most four, each cut at its
+      first " — " and at 200 characters;
+    - a `Release-note:` trailer gives its commit's line its own words (LC-55);
+    - a git failure refuses the release.
+  - `release-manifest.mjs merge --notes` writes the notes INTO the manifest before the Sign step signs it, so they ride
+    under its one `release` signature, with no new key. `release-verify.mjs` parses them strictly after the signature
+    check: the client drops what it cannot read, and the release workflow refuses it before publishing
+    (release-verify in the sign and converge jobs).
+  - Both release plans carry `builtAt`. The stager writes the identity's `builtAt` on every stage, from
+    `VIBEFIELD_BUILT_AT`, else HEAD's commit time in UTC, else none, with a warning, when git cannot name the commit
+    (LC-57).
+  - `.github/workflows/release.yml`, every change listed in the body for the pre-push audit:
+    - the plan's `builtAt` output;
+    - `VIBEFIELD_BUILT_AT` on "Package, signed" and "Stage, release-keyed" ("Package, UNSIGNED" is untouched);
+    - the sign job's checkout gains `fetch-depth: 0`;
+    - a new step, "The notes", before "Merge the planes", with no secret and no `GH_TOKEN`;
+    - `--notes notes.json` on Merge.
+    `${{ secrets.` occurrences are 8 before and 8 after, and no permission moved.
+  - LC-54 (the GitHub release page saying the same lines, `gh release create --notes-file`) is NOT here, and is
+    James's to ask for.
+- **The comment fix (`4fcf982d0`):** AU-5a's `quitForSignal` doc comment now says what the stop's re-ask box does. A
+  signal there acts only on Cancel: VibeField quits and no further pair is stopped. "Quit and end N sessions" finishes
+  the stop already under way. It
+  carries a dated correction in the comment, owed since B3's records checkers (LANDED "AU B3").
+- B4 was merged over main, not rebased, so AU-6a's and AU-6b's shas are the ones built on 10-29.
+  - `4dad7e228` merged main `3ce8b1c40`. Its one conflict was `release.yml`'s sign job's first steps, resolved as
+    main's Dependabot pins (checkout v7.0.1, pnpm/action-setup v6.1.0, setup-node v7.1.0) plus AU-6b's comment and
+    `fetch-depth: 0`. Secrets stayed 8 == 8.
+  - `f21680dd3` merged main `23e9c2538` (HN B1). `ChromeLayer.tsx` was the one file both sides changed, and git
+    auto-merged it.
+
+**Validation.**
+- **The lane:** branch `au/b4` on B3's `a4688b7c9`, built in `/Volumes/SamsungRed/lanes/au/b4`.
+  - AU-6a and AU-6b were authored 2026-10-29 13:19Z and committed at 13:22Z, when the biome fixups were squashed.
+  - The comment fix was committed 2026-10-30 18:36 PDT (10-31 01:36Z).
+- **The light passes** (each at nice 19 under the guard, in `lanes/au/vibe-field`):
+  - **10-29, over `a4688b7c9`.** Green on its fourth run, at `2b1cfff6f`, 13:28:43Z.
+    - Run 1 (13:21Z, at `674bf6e06`) was red at biome on two rows, an import order (`release-scripts.test.ts`) and a
+      formatter fold (`updates-section.test.tsx`), both fixed and squashed.
+    - Runs 2 and 3 were stopped by the guard on another session's process, with no row red.
+    - The green run: contracts 1270 (50 files), electron-shell 2146 + 3 skipped (147), field-app 382 (14), the
+      stager's node test 11/11, and gen:check exit 0.
+  - **10-31, at `4dad7e228` over main `3ce8b1c40`.**
+    - Run 1 was red at 01:43:14Z on one row: electron-shell `smoke-profile.test.ts` DK-18 (39) at :184, at load
+      17–34. That row is item 93's, not B4's (`lanes/records/item93/item.md`, 01:46Z). The file alone went 9/9 three
+      times.
+    - Run 2 was green. Its verdict echo was lost to a redirect, so it was accepted on each row's own terminal line,
+      with gen:check re-run alone (exit 0, 01:51:26Z).
+    - The rows: contracts 1380 (53), electron-shell 2201 + 3 skipped (149), field-app 382 (14), stager 11/11.
+  - **10-31, at `f21680dd3` over main `23e9c2538`.** Green at 02:08:26Z, tee'd to `logs/b4-slot3.log`.
+    - The rows: contracts 1382 (53), electron-shell 2214 + 3 skipped (151), field-app 382 (14), stager 11/11, and
+      gen:check exit 0.
+    - The rises since the previous light are main's own tests.
+  - Logs: `lanes/au/logs/light-2b1cfff6f/`, `light-4dad7e228/` and `light-f21680dd3/`.
+- **The landed tip** is `cf4335ab9`: a9's merge of main `cbc376da5` (item 102) into `f21680dd3`. VF-PM's rehearsal was
+  clean, tree `12938cf53`, with no file changed on both sides. a9 minted it at
+  02:13:56Z; the bundle's sha256 is `119b3ede…`.
+- **The mini, run 24, `pnpm verify` at `cf4335ab9`:** exit 0, armed 02:14:31Z, done 02:19:09Z (load 1.62 → 8.35),
+  whole: preflight through `gen:check`, biome over 2,857 files.
+  - `pnpm test` ran 28 projects, and its 27 vitest summaries hold 10,715 passed, 0 failed and 18 skipped: contracts
+    1384, electron-shell 2225 + 3 skipped, field-app 3160, fieldd 2691 + 11 skipped. The dev-runner's node tests were
+    263/263, the stager's `builtAt` row among them.
+  - B4's files were among them: contracts `update-view` 35; electron-shell `updates/controller-apply` 97,
+    `updates/verify-chain` 25, `updates/release-scripts` 41 and `updates/identity` 7; field-app `update-words` 95,
+    `me-menu` 56, `updates-section` 34 and `limit-moment` 22.
+  - `pnpm test:rust`: 33 results, 532 passed, 0 failed, 14 ignored. The tree was clean after, with no stub left.
+  Logs: `lanes/ts6/logs/mini/run24/`.
+- **Landed:** main fast-forwarded `cbc376da5` → `cf4335ab9` at 02:21:26Z on VF-PM's GO (43 files, +3116 −75), and
+  was pushed at 02:22:09Z.
+
+**Records.** Owed to the next draft queue, in `draft/thinking-update-ux.md`:
+- §7's B4 as-built note gains its landing: merged over main three times, `cf4335ab9`, run 24.
+- The Status header's "B4 rebases twice … B2–B4's move" gets a dated correction: B4 was merged and its shas did not
+  move. The Status then flips to built.
+- Also owed elsewhere: EDP §11.1's note says built, and `build-wp12-updater.md`'s B3 paragraph gains step 6c.
+
+**Owed.**
+- The notes card, the build's day and What's new on a desk in both themes (James's display word).
+- The first signed nightly with notes: release-notes.mjs and the sign job's new step run for real only in the
+  release workflow, and nothing in `pnpm verify` publishes.
+- LC-54 (the GitHub release page saying the same lines) is James's to ask for. AU-6a's body calls LC-53 (the card's
+  words beyond DESIGN.md §8) open for James. He ruled it at the leans on the PM board, 2026-10-29 16:19:25Z, after
+  the commit (DECISIONS' AU row; the date is the record's §10, round 7).
+
+## CP-1d — a spark carries its door and its brief on every birth: puppeteer 0.3.2's per-run briefing names the `vibefield` server, its allowance and the spark's brief at hatch, at both resumes and at a pending run's replacement; PR #4's slice, re-cut onto main through the train (2026-10-31; `9eabb5b33` — `57f1d7431`, James's `352f19b26` cherry-picked alone, and `9eabb5b33`, the comment's correction, on main `23e9c2538` — lane `co/cp1d-main`, in the mini's mint `ef5fb6161` over main `34174e787`)
+
+James wrote CP-1d as PR #4 (`cb61f29de`), stacked on `stack/cp1d-prerequisites`. On 2026-10-31 at 02:11:50Z James chose
+A: the slice goes through the train like CP-1a…1c, re-cut onto main in the CO lane, with his branch and his PR
+untouched. The PR is his to close after this landing.
+
+**What.**
+- **The briefing** (`fieldd/src/agent-spark-briefing.ts`, new).
+  - It is built from three things: the verified spark record, the spark's editable brief as it reads at that moment
+    (`CLAUDE.md` in its folder), and a fresh `native.door.info`.
+  - It passes the `vibefield` server, its tool allowance and the instructions at every birth `agent-runtime.ts` makes:
+    hatch, a run-id resume, a resume by the recorded native id, and a pending run's replacement.
+  - It is prepared and validated before a pending terminal ends, so a missing or invalid brief keeps that terminal.
+  - A spark's identity and origin stay in the signed session records. No MCP configuration and no instructions are
+    persisted there. Ordinary runs receive no briefing.
+- **Support is read from the agent, never from its id.** The provider row gains an optional `briefing` declaration
+  (`mcpServers`, `allowTools`, `instructions`, `mcpServerProcess`; `contracts/src/agent-session.ts`, its fixture in
+  `agent-providers.valid.json`).
+  - All three fields and a terminal MCP process are required, with no vendor branch. A helper or external MCP
+    process needs a trusted identity of its own.
+  - An unsupported hatch is refused before its folder or its record is written.
+- **The void launch route and the folder `.mcp.json` alternative retire.** `compose/sparks.ts`'s `LAUNCH_ROUTE` and
+  `folderRoute` are gone. The handoff lives outside `compose/`, so wall R29 holds.
+- **The docs:** `docs/agent-plane/spark-briefings.md` (new), and a line each in `AGENT_PLANE.md` and
+  `architecture.html`.
+- **The erratum at its source** (`9eabb5b33`). `contracts/src/mgmt.ts` `NativeDoorInfoResult` said fieldd writes the
+  bridge command into a spark's `.mcp.json` at every launch. That was route B's, which was never wired. The comment now
+  says the command is what a spark's briefing names, with a dated "Corrected 2026-10-31 (CP-1d)" line.
+
+**Real vs not yet.**
+- Real: real native-terminal witnesses (`agent-session.test.ts`, with the scripted MCP client `spark-mcp-client.mjs`)
+  launch the briefing's bridge, list the tools and call `agents_list` on fresh and resumed runs. So since this landing
+  a spark's own session holds the door.
+- Not yet:
+  - Claude only, until CP-5. In puppeteer 0.3.2 only `adapter-claude` declares `mcpServerProcess: 'terminal'`; Codex
+    and Grok declare `'helper'` and ACP `'external'`, so their hatch is refused as `spark-door-identity-unsupported`
+    (read in the pinned packages, 2026-10-31). Claude Code's and Codex's native delivery has its own isolated proof
+    upstream (PU-F); fieldd's witness uses a scripted provider.
+  - A plain run gets nothing until MT-0.
+  - A typed launch that puppeteer adopts in a managed pane holds no door until petition PU-J.
+
+**Found.**
+- The re-cut had one conflict, in `fieldd/test/agent-session.test.ts`'s imports. Main had added `TERMINAL_INVENTORY`
+  and `EXIT_GRACE_MS`, and the slice `SparkRecord` and `SparkStore`. Both were kept, in biome's order.
+- No lock and no pin moved. The slice's parent, `8308cb8a4` (the EL8 to Puppeteer 0.3.2), had reached main through
+  PR #5, and `72a7145df` (PR #4's Linux CI repair) is main's own.
+- The landed diff (`23e9c2538`..`9eabb5b33`) is 14 files, +581 −93: the slice's 13 files exactly as PR #4 has them,
+  plus `mgmt.ts`.
+
+**Validation.**
+- **PR #4's own** (`352f19b26`'s message, James's): a full `pnpm verify` against npm 0.3.2 passed, with 9,765 Vitest,
+  257 Node and 525 Rust tests. Read, not re-run.
+- **The re-cut's lane light**, at `9eabb5b33` on base `23e9c2538`, in `lanes/co` (`CARGO_TARGET_DIR=/Volumes/SamsungRed/rust/co`):
+  - The first run (`lanes/co/logs/light-cp1d.out`, 2026-10-31 02:13:30–02:15:56Z, load 54–64) was green on every row
+    but one. preflight, walls, biome, tsc contracts and fieldd, and gen fresh were all 0, and contracts 551/551. fieldd
+    was "1 failed | 127 passed | 4 skipped (132)".
+  - The red was item 87's "a resume while the cleanup is pending …" (`agent-session.test.ts` :3560): "the exited row of
+    a run whose workspace cleanup is stalled did not hold within 15000 ms". The floor's row read `exited:false`, with
+    its pid holding the typed-out file as `/bin/cat`. The ^C came 13 ms after `session_started`.
+  - That is **item 118's third witness**, at a site its fix (`9e0457b3c`) did not cover. Item 87's two stall rows
+    (:3475, :3560) interrupt with no `catReady`. Their fix is item 118's follow-up, the fixer's own commit (VF-PM,
+    02:18Z), not CP-1d's. The log is kept at `lanes/co/logs/light-cp1d-run1/vt-fieldd.log`.
+  - The one lottery re-run (`light-cp1d-2.out`, 02:18:01–02:20:02Z, load 15–21) is the light that stands:
+    `== co-light GREEN 02:20:02Z; HEAD 9eabb5b33`. Every row was 0. Contracts were 551/551 (3 files), and fieldd
+    "Test Files 7 passed (7) Tests 128 passed | 4 skipped (132)". The 4 skips are opt-in: two need the real rosettad,
+    two the real Claude.
+  - CP-1d's own witness ran on the REAL floor: "CP-1d — hatch and run-id resume carry a fresh briefing, while ordinary
+    runs carry none", passing in 3646 ms. All 11 `agent-spark-briefing` rows and compose-sparks' 9 passed.
+- **Run 25: the mint `ef5fb6161` (`9eabb5b33` × main `34174e787`).**
+  - VF-PM's rehearsal and the lane's agreed before the mint: `merge-tree --write-tree 34174e787 9eabb5b33` was clean,
+    tree `1289396c6`. The one both-sides file was `architecture.html`, beside PG-0's and the PG-1 clauses' rows.
+  - The host: Apple M4, 16 GiB, macOS 26.7.2 (25G332); node 26.5.0, pnpm 11.13.1, rustc 1.99.1.
+  - `pnpm verify` armed at 02:28:15Z (load 1.54) and exited 0 at 02:32:52Z (load 9.51).
+  - Its counts: "Successfully ran target test for 28 projects"; vitest 10,727 passed, 0 failed, 18 skipped across 806
+    files, one more file than before (`agent-spark-briefing`); "cargo test results: ok 33, FAILED 0".
+  - The real-floor witness passed in 1,153 ms, `agent-spark-briefing` 11 of 11, and compose-sparks 9 (VF-PM's counts,
+    02:34Z).
+  - The tree was clean after, with no stubs left, and no hand touched the console. Verify only. Logs:
+    `lanes/ts6/logs/mini/run25/`.
+- **Landed:** main fast-forwarded `34174e787` → `ef5fb6161` at 02:35:38Z (main's reflog; the fixer, on VF-PM's GO).
+  AU B4's records (`16814dea5`) landed on it at 02:35:54Z, before this entry.
+
+**Owed.**
+- James closes PR #4.
+- MT-0 rebases onto this, then runs the fieldd rows it has been holding back, and is lit.
+- PU-J, at the next draft queue.

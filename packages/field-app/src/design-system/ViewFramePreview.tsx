@@ -1,13 +1,17 @@
-import type { FrameView } from "@vibefield/contracts";
+import type { FrameView, ScreenshotCaptureResult } from "@vibefield/contracts";
 import { SegmentedControl } from "@vibefield/design-kit/primitives";
 import { type ReactElement, useEffect, useState } from "react";
-import { Composer } from "../frame/Composer";
+import { Composer, type ComposerHost } from "../frame/Composer";
 import { ComposerLineView } from "../frame/ComposerLine";
 import type { FrameSurface } from "../frame/frame-surface";
 import { type CoverState, coverAfter, coverAt, ViewCoverView } from "../frame/ViewCover";
 import { type ViewKeyPress, ViewsTrackView } from "../frame/ViewsTrack";
 import type { ViewKeys } from "../frame/views";
-import { FIXTURE_LINE_DOOR, fixtureClipboardStore, fixtureStillUrl } from "./ComposerLinePreview";
+import {
+  FIXTURE_HISTORY_DOOR,
+  FIXTURE_HISTORY_PROJECT,
+  FIXTURE_LINE_DOOR,
+} from "./ComposerLinePreview";
 import { DeskPreview } from "./DeskPreview";
 import { GodviewPreview } from "./GodviewPreview";
 import { HistoryPreview } from "./HistoryPreview";
@@ -18,10 +22,24 @@ import { StageBoard } from "./PegboardPreview";
 // cover, History's room — on fixture state. What it replaces is only what a
 // host supplies: the window's view (main's owner, here a local value), the
 // keys' timing (the controller's, here the state controls), the line's open
-// surface (FieldView's owner, here a local value) and what Godview lends the
-// line (a fixture door). The line itself runs on its REAL controller, so the
-// draft takes typing, @ opens its list and send says what it did. The markup
-// and the CSS are the product's.
+// surface (FieldView's owner, here a local value), what Godview and History lend
+// the line (fixture doors) and the capture (a fixture door whose tool comes up
+// and is let go: the catalog has no screen to freeze). The line itself runs on its
+// REAL controller, so its create raises Objects and says what came of it, and
+// its snapshot presses, stays filled while the tool is up, and says nothing of
+// the cancel. The markup and the CSS are the product's.
+
+/** How long the fixture's snapshot tool stays up before it is let go. */
+const FIXTURE_TOOL_UP_MS = 1_200;
+
+/** The live line's capture door, in fixture: the tool comes up, and a while
+ * later it is let go — a cancel, which the line says nothing of. */
+export const FIXTURE_CAPTURE_HOST: ComposerHost = {
+  screenshotCapture: () =>
+    new Promise<ScreenshotCaptureResult>((answer) => {
+      window.setTimeout(() => answer({ status: "cancel" }), FIXTURE_TOOL_UP_MS);
+    }),
+};
 
 /** The states the One Frame page's Chrome & Composer plates show for the
  * frame (`data-state`): at rest on the canvas, ⌘ held, Godview, History, the
@@ -72,7 +90,7 @@ export function ViewsTrackSpecimen({
         <ComposerLineView
           view={VIEW_OF[state]}
           keys={keys}
-          createWaits={VIEW_OF[state] === "history" ? "choose a session first" : null}
+          createProject={VIEW_OF[state] === "history" ? FIXTURE_HISTORY_PROJECT : null}
           track={
             <ViewsTrackView
               view={VIEW_OF[state]}
@@ -99,7 +117,6 @@ export function ViewFramePreview({ dark }: { dark: boolean }): ReactElement {
   const [press, setPress] = useState<ViewKeyPress | null>(null);
   const [note, setNote] = useState<number | null>(null);
   const [surface, setSurface] = useState<FrameSurface | null>(null);
-  const [clipboard] = useState(fixtureClipboardStore);
 
   // The owner, in fixture: the window moves as soon as it is asked.
   if (shown !== view) {
@@ -171,9 +188,8 @@ export function ViewFramePreview({ dark }: { dark: boolean }): ReactElement {
           surface={surface}
           onSurfaceChange={setSurface}
           godview={FIXTURE_LINE_DOOR}
-          clipboard={clipboard}
-          host={{ screenshotStillUrl: fixtureStillUrl }}
-          writeClipboard={async () => undefined}
+          history={FIXTURE_HISTORY_DOOR}
+          host={FIXTURE_CAPTURE_HOST}
           bindKeys={false}
           track={
             <ViewsTrackView

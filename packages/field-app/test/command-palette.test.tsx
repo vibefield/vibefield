@@ -13,6 +13,11 @@ import type { FrameView } from "@vibefield/contracts";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  type HistoryLineDoor,
+  publishHistoryLineDoor,
+  resetHistoryLineDoorForTest,
+} from "../src/frame/line-door";
 import type { FrameActRun } from "../src/frame/palette-acts";
 import {
   publishSystemControlDoor,
@@ -55,6 +60,7 @@ afterEach(() => {
   host = null;
   dispose = null;
   resetSystemControlDoorForTest();
+  resetHistoryLineDoorForTest();
 });
 
 function mount(options: { view?: FrameView; keys?: ViewKeys } = {}) {
@@ -154,6 +160,60 @@ describe("the palette (One Frame §7)", () => {
       // no key: the row ends on its name (GV-D1)
       "System control",
     ]);
+  });
+
+  it("follows History: New terminal ⌘T, then the chosen session's Resume — waiting until one is chosen, Jump to while it runs here (HN-7)", () => {
+    // what History lends the frame, as its controller would publish it
+    const door = (over: Partial<HistoryLineDoor> = {}): HistoryLineDoor => ({
+      chosen: null,
+      waits: null,
+      live: false,
+      resume: async () => ({ state: "resumed" }),
+      jump: async () => ({ state: "jumped" }),
+      project: "vibe-field",
+      newTerminal: async () => ({ state: "opened" }),
+      ...over,
+    });
+    act(() => publishHistoryLineDoor(door()));
+    const { onAct } = mount({ view: "history" });
+    const onView = reading();
+    expect(onView.slice(onView.indexOf("# On this view"), onView.indexOf("# App"))).toEqual([
+      "# On this view",
+      // the create never waits on a chosen session (DESIGN.md §8 the palette)
+      "New terminal ⌘T",
+      // no key: the row ends on its name
+      "Resume this session",
+    ]);
+    const create = (): HTMLButtonElement => $('[data-row="create"]') as HTMLButtonElement;
+    const session = (): HTMLButtonElement => $('[data-row="chosen-session"]') as HTMLButtonElement;
+    expect(create().hasAttribute("aria-disabled")).toBe(false);
+    expect(create().querySelector("svg")?.getAttribute("data-glyph")).toBe("start");
+    // nothing chosen: Resume waits, and says why in the line's own words
+    expect(session().getAttribute("aria-disabled")).toBe("true");
+    expect(session().textContent).toContain("choose a session first");
+    expect(session().querySelector("svg")?.getAttribute("data-glyph")).toBe("resume");
+    act(() => session().click());
+    expect(onAct).not.toHaveBeenCalled();
+    // chosen: it runs through the frame's door for the chosen session
+    act(() => publishHistoryLineDoor(door({ chosen: "ses-1" })));
+    expect(session().hasAttribute("aria-disabled")).toBe(false);
+    act(() => session().click());
+    expect(onAct).toHaveBeenLastCalledWith({ kind: "chosen-session" });
+    // the launcher's reason, said under it while it cannot resume
+    act(() => publishHistoryLineDoor(door({ chosen: "ses-1", waits: "its folder is gone" })));
+    expect(session().textContent).toContain("its folder is gone");
+    // running here: Jump to, which never waits on the launcher's reading (P3)
+    act(() =>
+      publishHistoryLineDoor(door({ chosen: "ses-1", waits: "its folder is gone", live: true })),
+    );
+    expect(session().querySelector(".vf-menu-label")?.firstChild?.textContent).toBe(
+      "Jump to this session",
+    );
+    expect(session().querySelector("svg")?.getAttribute("data-glyph")).toBe("jump");
+    expect(session().hasAttribute("aria-disabled")).toBe(false);
+    // the create runs the line's own, as in every view
+    act(() => create().click());
+    expect(onAct).toHaveBeenLastCalledWith({ kind: "create" });
   });
 
   it("runs Godview's System control through the frame's door, and waits while Godview has not lent it (GV-D1)", () => {

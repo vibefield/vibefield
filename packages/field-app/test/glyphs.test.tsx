@@ -195,6 +195,29 @@ describe("the glyph set", () => {
     expect(redo.firstElementChild?.getAttribute("transform")).toBe("matrix(-1 0 0 1 24 0)");
   });
 
+  // the tests lens's 5: a role is the catalog's tooltip for its glyph and says where the chrome
+  // draws it — since HN-7 the line's create is `start` in Godview and in History, and `resume` the
+  // chosen session's act; "the composer" alone is Chat's since LN-D3, so a role names the line, or
+  // the phone's composer (DESIGN.md §13), by name. Read from the kit's data, which
+  // tooling/glyphs/build.mjs writes from drawings.mjs.
+  it("says where each glyph is drawn as the chrome draws it since HN-7 — the line, never a bare composer", () => {
+    expect({
+      plus: GLYPH_META.plus.role,
+      close: GLYPH_META.close.role,
+      return: GLYPH_META.return.role,
+      start: GLYPH_META.start.role,
+      resume: GLYPH_META.resume.role,
+    }).toEqual({
+      plus: "Objects — the line's create on Canvas, the one bare plus on screen; New profile and Add artifact inside their sheets",
+      close: "Close settings, stop loading; the line's plus turned 135°",
+      return: "Enter on the phone's composer and keypad; a snippet that sends Enter",
+      start:
+        "The line's create in Godview and History: a session started, the window holding a plus",
+      resume:
+        "The chosen session's act on its row, ④'s head and the palette: a past session resumed, the window holding play",
+    });
+  });
+
   it("keeps the committed drawings and the phone's template assets fresh", () => {
     // The generator is the source; data.ts and FieldGlyphs.xcassets are its
     // outputs. A drawing edited by hand in either place fails here.

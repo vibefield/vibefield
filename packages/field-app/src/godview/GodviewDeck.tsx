@@ -39,11 +39,13 @@ import {
   emitGodviewDirectTerminalMarker,
   type GodviewDeckFacts,
 } from "../development-console";
+import { cardTargets } from "../frame/cards/card-targets";
 import { askGodviewDeckUp } from "../frame/deck-door";
 import { type LinePane, publishGodviewLineDoor, sayOnLine } from "../frame/line-door";
 import { requestView } from "../frame/view-state";
 import { getHost } from "../host";
 import { getRendererLogger } from "../logging";
+import { readClipboardText } from "../terminal/clipboard";
 import {
   adoptCreatedTerminal,
   adoptRemoteTerminalSession,
@@ -88,7 +90,7 @@ import {
   resumedPaneSession,
   useLastRun,
 } from "./last-run";
-import { linePanesOf, newTerminalOutcome, pasteIntoPane } from "./line-panes";
+import { linePanesOf, newTerminalOutcome, pasteIntoPane, whenPaneInputOpen } from "./line-panes";
 import type { MonitorFloorRecord } from "./monitor/agents";
 import { RosterFlips, teeDevicesPort } from "./monitor/devices";
 import {
@@ -110,6 +112,7 @@ import type {
   RemoteAttachRequest,
 } from "./monitor/remote-door";
 import type { MonitorPaneFacts } from "./monitor/useMonitorAgents";
+import { paneCardTarget } from "./pane-card-target";
 import { type DeckSession, describePane, type PaneFace } from "./pane-faces";
 import { RemotePaneState } from "./RemotePaneState";
 import { SeatPaneState } from "./SeatPaneState";
@@ -188,10 +191,12 @@ function deckFaultConsequence(plane: TerminalFaultPlane): string {
 
 /** SB-3 — a birth the door asked for, on its way to the `createSplitSession`
  * override: the Agent Profile it is born under (undefined: unbound, as the
- * door's plain create always was), and fieldd's words when it was refused —
- * ghosttea swallows the override's throw, so they come back this way. */
+ * door's plain create always was), the folder it is born in (HN-7; undefined:
+ * the source pane's), and fieldd's words when it was refused — ghosttea
+ * swallows the override's throw, so they come back this way. */
 interface PendingBirth {
   readonly profileSet: string | undefined;
+  readonly cwd: string | undefined;
   refusal?: string;
 }
 
@@ -750,7 +755,8 @@ export function GodviewDeck({
   // ride ghosttea's `createSessionInActivePane()` — it takes no arguments — but
   // ghosttea calls this deck's `createSplitSession` override FIRST and
   // synchronously inside it, so a ref set just before the call is what the
-  // override reads (and clears) before its first await.
+  // override reads (and clears) before its first await. The folder the door
+  // asks a shell to be born in (HN-7, History's New terminal) rides with it.
   const pendingBirth = useRef<PendingBirth | null>(null);
 
   // THE PANE IS THE PROFILE BOUNDARY (RFC 006). A pane's Agent Profile is the
@@ -965,7 +971,10 @@ export function GodviewDeck({
           ) ?? panes.find((pane) => pane.session.id === activeSession.id);
         profileSet = source === undefined ? undefined : paneSetOf(source.id, activeSession.id);
       }
-      const cwd = paneCwd({ cwd: activeSession.cwd }, readDeviceHost()) ?? shell?.home;
+      // HN-7: the folder the door asked for is the birth's (History's New terminal, the folder of
+      // the project the room shows); with none, the source pane's, as a split's always was
+      const cwd =
+        birth?.cwd ?? paneCwd({ cwd: activeSession.cwd }, readDeviceHost()) ?? shell?.home;
       let born: SessionSummary | null;
       try {
         born = await bornSession(cwd, profileSet);
@@ -1237,25 +1246,29 @@ export function GodviewDeck({
         await workspaceReady();
         const context = workspaceRef.current;
         if (context?.activeSession === undefined) return { state: "no-pane" };
+        // A waiting shell (L20's, N16's, below) answers a plain ask alone: one
+        // asked under an Agent Profile (SB-3) or in a folder (HN-7 — a waiting
+        // shell sits in another) is born, in that shell's place.
+        const plainAsk = request?.profileSet === undefined && request?.cwd === undefined;
         // L20 (W7): the first call after a launch is this create, and the deck
         // it called up had nothing to bring back — the workspace's opening
         // shell IS the terminal asked for: one pane, and no second birth.
-        // Asked under an Agent Profile, the ask is born in that shell's place
-        // instead, and the opening shell, never used, is released as every
-        // unused born shell is (a refused profile then faults nothing, SB-3).
+        // Asked under an Agent Profile or in a folder, the ask is born in that
+        // shell's place instead, and the opening shell, never used, is released
+        // as every unused born shell is (a refused profile then faults nothing,
+        // SB-3).
         const opening = first ? openingShellOf(context) : null;
-        if (opening !== null && request?.profileSet === undefined)
-          return { state: "mounted", sessionId: opening };
+        if (opening !== null && plainAsk) return { state: "mounted", sessionId: opening };
         // N16 (a): the focused pane is the one ⌘W emptied — its fresh shell IS
-        // the terminal asked for (under an Agent Profile, the profile's shell is
-        // born in its place by the rule below, and the fresh one released)
+        // the terminal asked for (under an Agent Profile or in a folder, the
+        // ask is born in its place by the rule below, and the fresh one released)
         const empty = opening === null ? emptyPaneOf(context) : undefined;
         const fresh = emptyPane.current?.sessionId;
         if (
           empty !== undefined &&
           empty === context.activePaneId &&
           fresh !== undefined &&
-          request?.profileSet === undefined
+          plainAsk
         ) {
           emptyPane.current = null;
           return { state: "mounted", sessionId: fresh, placement: "replace" };
@@ -1266,7 +1279,7 @@ export function GodviewDeck({
         const placement = opening === null ? deckPlacement(deckShape(context)) : null;
         if (placement !== null && placement.kind !== "replace") return { state: "no-pane" };
         // SB-3: the ask rides the pending-birth ref into the override (above).
-        const birth: PendingBirth = { profileSet: request?.profileSet };
+        const birth: PendingBirth = { profileSet: request?.profileSet, cwd: request?.cwd };
         pendingBirth.current = birth;
         try {
           // Ghosttea owns the birth and its concurrent-birth fencing: its birth
@@ -1468,8 +1481,10 @@ export function GodviewDeck({
   // WHAT GODVIEW LENDS THE LINE (One Frame FR-2, `frame/line-door.ts`). The
   // line's New terminal (⌘T, its create in Godview) is this door's
   // `createTerminal` — what the swarm's hold does, without a spot to land on —
-  // and the interim send pastes into a pane through the pane's own input. The
-  // rows are the panes this deck shows, named as the swarm names their bodies.
+  // and so is History's (HN-7), born in the folder of the project the room
+  // shows; a card played from the hand pastes into a pane through the pane's
+  // own input (HN-4). The rows are the panes this deck shows, named as the
+  // swarm names their bodies.
   // History lands here too: its Resume places, its Jump to reveals (P3) — each
   // by the one rule (GV-D4: in the focused pane), and each outcome says how it
   // was placed. Published on change only; the deck going away takes the door
@@ -1483,23 +1498,33 @@ export function GodviewDeck({
     publishGodviewLineDoor({
       panes: JSON.parse(linePanesKey) as LinePane[],
       onScreen: active,
-      newTerminal: async () =>
-        door === null
-          ? { state: "refused", reason: "the deck has no connection yet" }
-          : newTerminalOutcome(await door.createTerminal()),
-      paste: (sessionId, text) => {
-        const pane = workspaceRef.current?.panes.find((entry) => entry.session.id === sessionId);
-        const root = zoomHostRef.current;
-        // A pane whose routed input is closed (its activation still reopening
-        // after a change of view, say) drops a paste silently, and its handler
-        // claims the event all the same — so the runtime is asked first, and a
-        // paste it would drop is never handed over: the line copies instead.
-        // (`door` is rebuilt per runtime, so this is never a replaced one.)
-        const inputOpen = runtime?.routedActivation(sessionId)?.inputAllowed === true;
-        return (
-          pane !== undefined && root !== null && inputOpen && pasteIntoPane(root, pane.id, text)
+      newTerminal: async (options) => {
+        if (door === null) return { state: "refused", reason: "the deck has no connection yet" };
+        const cwd = options?.cwd;
+        return newTerminalOutcome(
+          await (cwd === undefined ? door.createTerminal() : door.createTerminal({ cwd })),
         );
       },
+      // HN-4 — a card played from the hand lands in ONE pane, the one it is let go on, by the
+      // pane's own id (two panes may show one session). A pane whose routed input is closed (its
+      // activation still reopening after a change of view, say) drops a paste silently, and its
+      // handler claims the event all the same — so the runtime is asked first, and a paste it
+      // would drop is never handed over. (`door` is rebuilt per runtime, so this is never a
+      // replaced one.)
+      pasteInto: (paneId, text) => {
+        const pane = workspaceRef.current?.panes.find((entry) => entry.id === paneId);
+        const root = zoomHostRef.current;
+        const inputOpen =
+          pane !== undefined && runtime?.routedActivation(pane.session.id)?.inputAllowed === true;
+        return root !== null && inputOpen && pasteIntoPane(root, paneId, text);
+      },
+      // …and a card spring-loaded into Godview waits, bounded, for that pane's input to reopen
+      whenInputOpen: (paneId, timeoutMs) =>
+        whenPaneInputOpen(
+          runtime,
+          () => workspaceRef.current?.panes.find((entry) => entry.id === paneId)?.session.id,
+          timeoutMs,
+        ),
       // AR-8c — History's Resume: the resumed agent's create ticket, adopted
       // into the pool exactly as the launcher's resume adopts one, and placed
       // by the rule (GV-D4) through the door's serialized mount (AR-4b).
@@ -1524,6 +1549,15 @@ export function GodviewDeck({
     });
   }, [linePanesKey, active, door, asking]);
   useEffect(() => () => publishGodviewLineDoor(null), []);
+
+  // HN-4 — the deck's panes take a card played from the hand (DESIGN.md §8 "The hand", where cards
+  // go): ONE place over the deck's own element while the deck is on screen. It finds the pane under
+  // the point and plays through the door above (`pasteInto`), so a card goes in by the road and
+  // the guard every paste takes.
+  useEffect(() => {
+    if (!active) return;
+    return cardTargets.register(paneCardTarget({ root: () => zoomHostRef.current }));
+  }, [active]);
 
   useCompletedAgentPanes(
     runtime,
@@ -2198,7 +2232,8 @@ export function GodviewDeck({
             // placeholder for a path we then never took, and it was what James
             // actually saw in a pane.
             defaultShell: shell.defaultShell,
-            readClipboard: () => navigator.clipboard?.readText() ?? "",
+            // Item 102: through main's door — the web's read is denied in the app
+            readClipboard: readClipboardText,
             showContextMenu: () => undefined,
             toggleFullscreen: () => undefined,
             // The deck's "window" is Godview. Ghosttea calls this when the

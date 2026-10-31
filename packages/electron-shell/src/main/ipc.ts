@@ -33,9 +33,20 @@ import type { FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import type { Logger } from "@vibefield/logging";
 import { ipcMain, type WebContents } from "electron";
 import { createBootstrapHandler, type WindowRendererBoundary } from "./bootstrap";
+import {
+  type ClipboardDoorOptions,
+  type ClipboardImageDoorOptions,
+  createClipboardDoor,
+  createClipboardImageDoor,
+} from "./clipboard-door";
 import { shellIdentity } from "./login-shell";
 import { createScreenshotDoor } from "./screenshot-door";
 import { createScreenshotPreviewDoor } from "./screenshot-preview";
+import {
+  createScreenshotStillBytesDoor,
+  createScreenshotStillKeptDoor,
+  type StillOpened,
+} from "./screenshot-still-bytes";
 import type { StillResolution } from "./still-protocol";
 import type { ThemeOwner } from "./theme";
 import type { ViewRegistry } from "./view";
@@ -273,6 +284,55 @@ export function registerBrowserDataClear(
   });
 }
 
+/** Item 102 — the clipboard read door (design-03 §5.1's `shell.clipboard.*`, the
+ * product window's read half). Policy in clipboard-door.ts; this is the ipcMain
+ * wiring only. The registered-sender gate is `registry.owns`, as at every door
+ * here, and the focus fact is the caller's: the sender's window and its page. */
+export function registerClipboardRead(
+  registry: WindowRegistry,
+  options: Omit<ClipboardDoorOptions<WebContents>, "owns" | "onRefused">,
+  logger?: Logger,
+): void {
+  const door = createClipboardDoor<WebContents>({
+    ...options,
+    owns: (sender) => registry.owns(sender),
+    onRefused: (sender, reason, bytes) => {
+      logger?.warn("desktop.ipc.clipboard_read_refused", "Electron refused a clipboard read", {
+        webContentsId: sender.id,
+        reason,
+        ...(bytes === undefined ? {} : { bytes }),
+      });
+    },
+  });
+  ipcMain.handle(IPC_CHANNELS.clipboardRead, (event, raw: unknown) => door(event.sender, raw));
+}
+
+/** HN-5 — the clipboard's picture write (design-03 §5.1's `shell.clipboard.*`, the product
+ * window's write half beside item 102's read): the PNG's bytes and the copy's words, the
+ * invoke's two arguments. Policy in clipboard-door.ts; this is the ipcMain wiring only. The
+ * registered-sender gate is `registry.owns`, as at every door here — the text copy's rule,
+ * no focus asked (LC-18); the decode and the one write are the caller's. */
+export function registerClipboardWriteImage<Picture>(
+  registry: WindowRegistry,
+  options: Omit<ClipboardImageDoorOptions<WebContents, Picture>, "owns" | "onRefused">,
+  logger?: Logger,
+): void {
+  const door = createClipboardImageDoor<WebContents, Picture>({
+    ...options,
+    owns: (sender) => registry.owns(sender),
+    onRefused: (sender, reason, bytes) => {
+      logger?.warn(
+        "desktop.ipc.clipboard_write_refused",
+        "Electron refused a clipboard picture write",
+        { webContentsId: sender.id, reason, ...(bytes === undefined ? {} : { bytes }) },
+      );
+    },
+  });
+  ipcMain.handle(IPC_CHANNELS.clipboardWriteImage, (event, raw: unknown, text?: unknown) =>
+    door(event.sender, raw, text),
+  );
+}
+
 /** WP12d (L3c-i; `build-wp12-updater.md` §13 C1, the PM's ruling 2026-10-15 18:17Z) — the updater's host doors. The
  * Settings card reaches main's ONE updater here, not through fieldd: an updater must work with fieldd broken (EDP §11.3).
  * Same registered-sender gate as every door; every payload parsed by its contract in both directions; no door carries
@@ -444,5 +504,52 @@ export function registerScreenshotPreview(
   });
   ipcMain.handle(IPC_CHANNELS.screenshotPreview, async (event, raw: unknown) =>
     ScreenshotPreviewResult.parse(await door(event.sender, raw)),
+  );
+}
+
+/** HN-D7 — a retained still's bytes, for the desk's print of a snapshot played onto it: found by
+ * name in the tool's ring, and read from the handle it is judged by (policy in
+ * screenshot-still-bytes.ts; the wiring here). */
+export function registerScreenshotStillBytes(
+  registry: WindowRegistry,
+  find: (url: string) => StillResolution,
+  read: (path: string) => Promise<StillOpened<Uint8Array>>,
+  logger?: Logger,
+): void {
+  const door = createScreenshotStillBytesDoor({
+    owns: (sender: WebContents) => registry.owns(sender),
+    find,
+    read,
+    onRefused: (reason) => {
+      logger?.warn(
+        "desktop.ipc.still_bytes_refused",
+        "A retained still's bytes were not handed to the page",
+        { reason },
+      );
+    },
+  });
+  ipcMain.handle(IPC_CHANNELS.screenshotStillBytes, (event, raw: unknown) =>
+    door(event.sender, raw),
+  );
+}
+
+/** HN-4 — whether a still is still kept, for a snapshot's card played onto a pane: the bytes door's
+ * lookup and handle check above, answered as a boolean (policy in screenshot-still-bytes.ts). */
+export function registerScreenshotStillKept(
+  registry: WindowRegistry,
+  find: (url: string) => StillResolution,
+  check: (path: string) => Promise<StillOpened<true>>,
+  logger?: Logger,
+): void {
+  const door = createScreenshotStillKeptDoor({
+    owns: (sender: WebContents) => registry.owns(sender),
+    find,
+    check,
+    onRefused: (reason) => {
+      logger?.warn("desktop.ipc.still_not_kept", "A still asked about is not kept", { reason });
+    },
+  });
+  ipcMain.handle(IPC_CHANNELS.screenshotStillKept, (event, raw: unknown) =>
+    door(event.sender, raw),
   );
 }

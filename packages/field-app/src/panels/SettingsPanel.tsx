@@ -80,6 +80,9 @@ interface SettingsPanelProps {
   /** Where Agent Profiles opens: the limit moment opens it on New profile…
    * (AO-6b); This Mac's page otherwise. */
   initialProfiles?: ProfilesRoute;
+  /** AU-6 (LC-7) — the Me row's What's new: Settings → Updates opens at the
+   * release's notes, on its first showing only. */
+  updatesAtNotes?: boolean;
   /** ICE's devtools, which left the corner for Settings → Advanced (One Frame
    * FC-D12): shown in development builds only, and only where a host lends
    * the switch. */
@@ -180,6 +183,7 @@ export function SettingsPanel({
   onConnectTaken,
   initialPage = "general",
   initialProfiles,
+  updatesAtNotes = false,
   devtools,
   onClose,
 }: SettingsPanelProps): ReactElement {
@@ -644,6 +648,9 @@ export function SettingsPanel({
         <UpdatesSection
           desktopState={desktopState}
           onOpenDiagnostics={() => selectPage("diagnostics")}
+          // AU-6 (LC-7) — the Me row's What's new opens the page at the release's notes; a press on the rail (any
+          // `selectPage`) moves past the opening, so a return to the page opens at its top
+          atNotes={updatesAtNotes && pageRequest === 0}
         />
         <UpdatesDevicesSection
           current={desktopState?.update?.currentVersion}

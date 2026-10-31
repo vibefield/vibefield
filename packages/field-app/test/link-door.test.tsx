@@ -7,7 +7,10 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { qrMatrix } from "../src/account/door/sign-in-qr";
 import { TAILSCALE_MARK_MIN, TailscaleMark } from "../src/account/tailscale-mark";
-import { type LinkDoor, useLinkDoor } from "../src/account/use-link-door";
+import { copyText, type LinkDoor, useLinkDoor } from "../src/account/use-link-door";
+import { cardsStore } from "../src/frame/cards/cards-store";
+import { COPY_PLACES } from "../src/frame/cards/cards-words";
+import { type FieldHost, setHost } from "../src/host";
 
 // TS-2 (track TS) — the door's machinery and its two kept-exact drawings. What
 // these pin is what a person feels: one click reaches the browser and only one
@@ -272,5 +275,74 @@ describe("Send logs on this network (TS-D16)", () => {
     expect(harness.client.request).toHaveBeenLastCalledWith("user.link.begin", { sendLogs: true });
     await harness.push(capturing("https://login.tailscale.com/a/with-logs"));
     expect(harness.opened).toEqual(["https://login.tailscale.com/a/with-logs"]);
+  });
+});
+
+describe("the link's copies deal cards (HN-5)", () => {
+  afterEach(() => {
+    for (const card of cardsStore.snapshot().cards) cardsStore.remove(card.id);
+  });
+
+  function copyHost(takes = true): string[] {
+    const copied: string[] = [];
+    setHost({
+      logger: {},
+      diagnostics: {
+        copyText: async (text: string) => {
+          copied.push(text);
+          if (!takes) throw new Error("clipboard text is invalid or too large");
+        },
+      },
+    } as unknown as FieldHost);
+    return copied;
+  }
+
+  it("copies the live address from the button's box, named by the door's place", async () => {
+    const copied = copyHost();
+    const harness = await mountDoor(async () => capturing(null));
+    await harness.push(capturing("https://login.tailscale.com/a/copy"));
+    const from = { left: 40, top: 500, width: 80, height: 28 };
+    let ok: boolean | null = null;
+    await act(async () => {
+      ok = await harness.door().copyLink(from);
+    });
+    expect(ok).toBe(true);
+    expect(copied).toEqual(["https://login.tailscale.com/a/copy"]);
+    const card = cardsStore.snapshot().cards.at(-1);
+    expect(card).toMatchObject({
+      kind: "text",
+      paste: "https://login.tailscale.com/a/copy",
+      origin: { view: "canvas", place: COPY_PLACES.settings, how: "copy" },
+    });
+    expect(cardsStore.snapshot().arriving.get(card?.id ?? "")).toEqual(from);
+  });
+
+  it("copies nothing with no address, and deals nothing the clipboard refused", async () => {
+    copyHost(false);
+    const harness = await mountDoor(async () => capturing(null));
+    let ok: boolean | null = null;
+    await act(async () => {
+      ok = await harness.door().copyLink();
+    });
+    expect(ok).toBe(false);
+    await harness.push(capturing("https://login.tailscale.com/a/refused"));
+    await act(async () => {
+      ok = await harness.door().copyLink();
+    });
+    expect(ok).toBe(false);
+    expect(cardsStore.snapshot().cards).toEqual([]);
+  });
+
+  it("names the Setup Assistant on a word's card, dealt from the button's box", async () => {
+    copyHost();
+    const from = { left: 300, top: 420, width: 48, height: 28 };
+    const copied = copyText("truffle-vibefield-studio", COPY_PLACES.setup, from);
+    await expect(copied).resolves.toBe(true);
+    const card = cardsStore.snapshot().cards.at(-1);
+    expect(card).toMatchObject({
+      paste: "truffle-vibefield-studio",
+      origin: { place: "Setup Assistant", how: "copy" },
+    });
+    expect(cardsStore.snapshot().arriving.get(card?.id ?? "")).toEqual(from);
   });
 });

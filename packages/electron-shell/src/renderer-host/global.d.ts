@@ -100,6 +100,9 @@ declare global {
        * its own board with a plugin's new kinds. The page saves its board first.
        * RELOAD RACE — see `usersSwitch`. */
       replaceRenderer(reason: "plugin-kinds"): Promise<{ replacing: true }>;
+      /** HN-6 — a file another app handed over, by its path on disk; null for one not on disk.
+       * The preload reads it itself (`webUtils`): no IPC. */
+      pathForFile(file: File): string | null;
       onPrepareClose(handler: (requestId: string) => void): () => void;
       completeClose(result: { requestId: string; ok: boolean; error?: string }): void;
       onShellCommand(handler: (command: ShellCommand) => void): () => void;
@@ -133,6 +136,15 @@ declare global {
       browserData: {
         clear(): Promise<BrowserDataClearResult>;
       };
+      /** Item 102 — a paste's read through main (design-03 §5.1's
+       * `shell.clipboard.*`): the focused product window only; a refusal rejects. */
+      clipboard: {
+        readText(): Promise<string>;
+        /** HN-5 — a copy's picture written through main, the read's other half: a PNG's
+         * bytes and the copy's words in one write (LC-19), no focus asked (LC-18); a
+         * refusal rejects typed (`ClipboardCopyRefusal`, a plain record), never in words. */
+        writeImage(png: Uint8Array, text?: string): Promise<void>;
+      };
       /** Godview round 3 — the deck's state said by name; main owns the
        * window's lights (GV-D11) and lends ⌘W by the same word. */
       deck: {
@@ -143,6 +155,11 @@ declare global {
        * typed error). */
       screenshot: {
         preview(name: string): Promise<ScreenshotPreviewResult>;
+        /** HN-D7 — a retained still's PNG bytes by its basename; null once the
+         * tool no longer keeps it. */
+        stillBytes(name: string): Promise<Uint8Array<ArrayBuffer> | null>;
+        /** HN-4 — whether the tool still keeps a still, by its basename. */
+        stillKept(name: string): Promise<boolean>;
         capture(): Promise<ScreenshotCaptureResult>;
         /** SNAP-3 — the result of a capture MAIN ran (the View menu's item);
          * the latest is retained until the renderer subscribes. */

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { CallerContext } from "@vibefield/contracts";
+import { type CallerContext, SHELL_CLIPBOARD_AUDIT_ACTIONS } from "@vibefield/contracts";
 import type { AuditRecordV1 } from "@vibefield/contracts/diagnostics";
 import { afterEach, describe, expect, it } from "vitest";
 import { AuditService, verifyAuditSegment } from "../src/audit-service";
@@ -169,6 +169,38 @@ describe("LOG-L6 append-only audit ledger", () => {
       }),
     ).rejects.toMatchObject({ kind: "PRECONDITION_FAILED" });
     await service.close();
+  });
+
+  // Item 102 — red until the action is registered: the shell's append was refused as not
+  // shell-owned.
+  it("admits the clipboard read door's outcome from the shell: its bytes, never its text (item 102)", async () => {
+    const dataDir = await root();
+    const service = new AuditService({ dataDir, bootId: "fieldd-clipboard-test" });
+    await service.start();
+    await service.appendFromCaller(shellContext(), {
+      action: SHELL_CLIPBOARD_AUDIT_ACTIONS.READ,
+      target: { kind: "clipboard", id: "system" },
+      phase: "outcome",
+      outcome: "succeeded",
+      operationId: "op_clipboard_01",
+      attrs: { webContentsId: 3, bytes: 12 },
+    });
+    await service.appendFromCaller(shellContext(), {
+      action: SHELL_CLIPBOARD_AUDIT_ACTIONS.READ,
+      target: { kind: "clipboard", id: "system" },
+      phase: "outcome",
+      outcome: "denied",
+      reasonCode: "UNFOCUSED",
+      operationId: "op_clipboard_02",
+      attrs: { webContentsId: 3 },
+    });
+    await service.close();
+    const read = await records(service.root);
+    expect(read.map((record) => [record.action, record.outcome, record.reasonCode])).toEqual([
+      ["shell.clipboard.read", "succeeded", undefined],
+      ["shell.clipboard.read", "denied", "UNFOCUSED"],
+    ]);
+    expect(read[0]?.attrs).toEqual({ webContentsId: 3, bytes: 12 });
   });
 
   it("prevents a required side effect when its attempt cannot be made durable", async () => {

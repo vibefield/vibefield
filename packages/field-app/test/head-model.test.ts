@@ -13,7 +13,7 @@ import { ZOOM_MAX, ZOOM_MIN } from "@vibecook/ice/desk";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildRegistry, createFieldEngine } from "../src/field-engine";
 import { canvasHead, headPathEqual, readHeadPath } from "../src/frame/head-canvas";
-import { frameActGroups } from "../src/frame/palette-acts";
+import { chosenSessionAct, frameActGroups } from "../src/frame/palette-acts";
 import {
   formatZoomPercent,
   runZoom,
@@ -133,28 +133,56 @@ describe("the palette's table of the frame's acts (One Frame §7)", () => {
     ]);
   });
 
-  it("follows the view: Godview's New terminal ⌘T and System control, History's Resume waiting, no zoom off Canvas", () => {
+  it("follows the view: Godview's New terminal ⌘T and System control, History's New terminal ⌘T and Resume waiting, no zoom off Canvas", () => {
     expect(rows("godview", "mac")[1]).toEqual([
       "On this view",
       ["New terminal ⌘T", "System control"],
     ]);
+    // HN-7 (DESIGN.md §8 the palette): History's create is New terminal, which never waits,
+    // and the chosen session's Resume follows it, waiting until a session is chosen
+    expect(rows("history", "mac")[1]).toEqual([
+      "On this view",
+      ["New terminal ⌘T", "Resume this session"],
+    ]);
     const history = frameActGroups("history", "mac")[1]?.acts ?? [];
-    expect(history.map((act) => [act.name, act.waits])).toEqual([
-      ["Resume this session", "choose a session first"],
+    expect(history.map((act) => [act.id, act.glyph, act.waits, act.run.kind])).toEqual([
+      ["create", "start", null, "create"],
+      ["chosen-session", "resume", "choose a session first", "chosen-session"],
+    ]);
+    expect(rows("history", "other")[1]).toEqual([
+      "On this view",
+      ["New terminal Ctrl+T", "Resume this session"],
     ]);
   });
 
-  it("says History's Jump to while the chosen session runs here — the line's own reading (P3)", () => {
+  it("says History's Jump to while the chosen session runs here — the room's reading, the line's create's until HN-7 (P3)", () => {
     const live = frameActGroups("history", "mac", null, true)[1]?.acts ?? [];
     expect(live.map((act) => [act.name, act.glyph, act.waits, act.run.kind])).toEqual([
-      ["Jump to this session", "jump", null, "create"],
+      ["New terminal", "start", null, "create"],
+      ["Jump to this session", "jump", null, "chosen-session"],
     ]);
-    // a live word from History never reaches another view's create
+    // the launcher's reason is said under Resume, whatever it is
+    const waits = frameActGroups("history", "mac", "its folder is gone")[1]?.acts ?? [];
+    expect(waits.find((act) => act.id === "chosen-session")?.waits).toBe("its folder is gone");
+    // a live word from History never reaches another view's acts, and the chosen session's row
+    // is History's alone
     expect(rows("godview", "mac")[1]).toEqual([
       "On this view",
       ["New terminal ⌘T", "System control"],
     ]);
     expect(frameActGroups("godview", "mac", null, true)[1]?.acts[0]?.glyph).toBe("start");
+    for (const view of ["canvas", "godview", "assistant"] as const) {
+      const acts = frameActGroups(view, "mac", null, true).flatMap((group) => group.acts);
+      expect(
+        acts.map((act) => act.id),
+        view,
+      ).not.toContain("chosen-session");
+    }
+  });
+
+  it("names the chosen session's act as the line's create named it until HN-7: Resume, else Jump to while it runs here (P3)", () => {
+    expect(chosenSessionAct(false)).toEqual({ glyph: "resume", name: "Resume this session" });
+    expect(chosenSessionAct(true)).toEqual({ glyph: "jump", name: "Jump to this session" });
   });
 
   it("lists System control in Godview alone, with no key and no glyph, waiting only while its door is not there (GV-D1)", () => {

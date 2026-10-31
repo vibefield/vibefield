@@ -1,7 +1,8 @@
 import { useSubscription } from "@vibefield/fieldd-client/react";
 import { type ReactElement, useEffect, useState } from "react";
 import type { DoorDevice } from "../../../account/door/door-parts";
-import { copyText, useLinkDoor } from "../../../account/use-link-door";
+import { copyText, openSignIn, useLinkDoor } from "../../../account/use-link-door";
+import { COPY_PLACES } from "../../../frame/cards/cards-words";
 import { osOf } from "../../../godview/monitor/devices";
 import { getHost } from "../../../host";
 import { type ConnectMe, OnboardingConnectPaneView } from "../views/connect";
@@ -49,7 +50,8 @@ export function ConnectPane({
   /** Esc is Not now — the Setup Assistant's; a sheet that closes on Esc leaves it off */
   escapeIsNotNow?: boolean;
 }): ReactElement {
-  const door = useLinkDoor();
+  // HN-5: a copy made here is the Setup Assistant's on its card, dealt from the button pressed
+  const door = useLinkDoor(openSignIn, COPY_PLACES.setup);
   // C4 (D31): the roster wholesale on every delta — self ⋈ the account's peers
   const roster = useSubscription<RosterRow[]>("device.subscribe");
   const devices: DoorDevice[] = (roster.data ?? []).map((device) => ({
@@ -84,14 +86,7 @@ export function ConnectPane({
       onCancel={() => void door.cancel()}
       onOpenAgain={door.openAgain}
       onCopyLink={door.copyLink}
-      onCopyText={async (text) => {
-        try {
-          await copyText(text);
-          return true;
-        } catch {
-          return false;
-        }
-      }}
+      onCopyText={(text, from) => copyText(text, COPY_PLACES.setup, from)}
       onSignInAgain={() => void door.startOver()}
       onNewUser={onNewUser}
       onContinue={onContinue}

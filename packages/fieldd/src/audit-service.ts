@@ -11,7 +11,11 @@ import {
   cleanAuditTarget,
   sanitizeAuditAttrs,
 } from "@vibefield/audit";
-import { type CallerContext, UPDATES_AUDIT_ACTIONS } from "@vibefield/contracts";
+import {
+  type CallerContext,
+  SHELL_CLIPBOARD_AUDIT_ACTIONS,
+  UPDATES_AUDIT_ACTIONS,
+} from "@vibefield/contracts";
 import {
   AuditAppendResultV1 as AuditAppendResultSchemaV1,
   type AuditAppendResultV1,
@@ -42,6 +46,8 @@ const SHELL_ACTIONS = new Set<string>([
   "support.bundle.export",
   // WP12b (TD-3, EDP §11.6): the updater's verification outcomes and declines, named in contracts.
   ...Object.values(UPDATES_AUDIT_ACTIONS),
+  // Item 102: the clipboard read door's outcomes (bytes, never the text), named in contracts.
+  ...Object.values(SHELL_CLIPBOARD_AUDIT_ACTIONS),
 ]);
 
 export interface AuditServiceOptions {

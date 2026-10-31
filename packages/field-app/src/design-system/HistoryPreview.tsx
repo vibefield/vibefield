@@ -2,7 +2,7 @@ import type { RoomSelection, RoomTarget } from "@vibefield/rosetta-room";
 import { type ReactElement, useEffect, useMemo, useState } from "react";
 import { Composer } from "../frame/Composer";
 import type { FrameSurface } from "../frame/frame-surface";
-import type { HistoryLineDoor } from "../frame/line-door";
+import { chosenSessionWaits, type HistoryLineDoor } from "../frame/line-door";
 import { ViewsTrackView } from "../frame/ViewsTrack";
 import type { ViewKeys } from "../frame/views";
 import { projectIntent } from "../history/acts";
@@ -17,7 +17,8 @@ import { EMPTY_HOST_MODEL, hostModelOf } from "../history/host-model";
 import { launchActs } from "../history/launch-acts";
 import { NewAgentPastCard } from "../history/NewAgentPast";
 import { FIXTURE_HISTORY_NOW, FIXTURE_NEW_AGENT_PAST } from "./account-fixtures";
-import { FIXTURE_LINE_DOOR, fixtureClipboardStore, fixtureStillUrl } from "./ComposerLinePreview";
+import { CommandPalettePreview } from "./CommandPalettePreview";
+import { FIXTURE_HISTORY_PROJECT, FIXTURE_LINE_DOOR } from "./ComposerLinePreview";
 import {
   FIXTURE_CHOSEN_SESSION,
   FIXTURE_UNAVAILABLE_WORDS,
@@ -130,12 +131,14 @@ function HistoryProjectsPreview(): ReactElement {
   );
 }
 
-/** A session chosen in the room, and the line's create — Resume — live for it:
- * the room's own selection is what History lends the line (the product wires
- * the same report through `HistoryView`), and pressing Resume here answers as
- * a placed pane would ("Resumed in the active pane"). `live`: the chosen
- * session runs here, so the create is Jump to (P3), answering as a revealed
- * pane would ("Jumped to its pane"). */
+/** A session chosen in the room, and its act — Resume — live for it in the
+ * palette, where it went from the line at HN-7: the room's own selection is
+ * what History lends the frame (the product wires the same report through
+ * `HistoryView`), the palette reading it as the product's does
+ * (`chosenSessionWaits`). The line's create is New terminal, in the project the
+ * room shows (LN-D2), and pressing it here answers as an opened terminal would
+ * ("Terminal opened in the active pane"). `live`: the chosen session runs here,
+ * so its act is Jump to (P3). */
 export function HistoryResumePlate({
   keys = "mac",
   live = false,
@@ -147,7 +150,6 @@ export function HistoryResumePlate({
   const [openAt] = useState<RoomTarget>({ sessionId: FIXTURE_CHOSEN_SESSION });
   const [selection, setSelection] = useState<RoomSelection | null>(null);
   const [surface, setSurface] = useState<FrameSurface | null>(null);
-  const [clipboard] = useState(fixtureClipboardStore);
   const door = useMemo<HistoryLineDoor>(
     () => ({
       chosen: selection?.sessionId ?? null,
@@ -155,6 +157,8 @@ export function HistoryResumePlate({
       live: live && selection !== null,
       resume: async () => ({ state: "resumed" }),
       jump: async () => ({ state: "jumped" }),
+      project: FIXTURE_HISTORY_PROJECT,
+      newTerminal: async () => ({ state: "opened" }),
     }),
     [selection, live],
   );
@@ -174,11 +178,15 @@ export function HistoryResumePlate({
         onSurfaceChange={setSurface}
         godview={FIXTURE_LINE_DOOR}
         history={door}
-        clipboard={clipboard}
-        host={{ screenshotStillUrl: fixtureStillUrl }}
-        writeClipboard={async () => undefined}
+        host={{}}
         bindKeys={false}
         track={<ViewsTrackView view="history" keys={keys} />}
+      />
+      <CommandPalettePreview
+        view="history"
+        keys={keys}
+        historyWaits={chosenSessionWaits(door)}
+        historyLive={door.live}
       />
     </>
   );

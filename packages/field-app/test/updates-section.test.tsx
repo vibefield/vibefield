@@ -1,11 +1,15 @@
 // @vitest-environment happy-dom
 
-import type {
-  DesktopShellState,
-  UpdateConfirmResult,
-  UpdateDownloadResult,
-  UpdateMoveResult,
-  UpdatePrepareResult,
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import {
+  type DesktopShellState,
+  type ReleaseNotesView,
+  type UpdateConfirmResult,
+  type UpdateDownloadResult,
+  type UpdateMoveResult,
+  type UpdatePrepareResult,
   UpdateView,
 } from "@vibefield/contracts";
 import { act, createElement } from "react";
@@ -22,6 +26,8 @@ import { UpdatesDoctorSection, UpdatesSection } from "../src/panels/UpdatesSecti
 // Download and Download anyway through AU-1's door, the install that didn't take, and the foot's diagnostics.
 // AU-7 — where the app runs: a copy macOS won't let replace itself moves first, through main's quit gate; a writable
 // copy elsewhere carries one quiet line with the move beside it.
+// AU-6 — what's in it: the release's signed notes as text nodes only (EDP §11.1 as amended), main's one comparison
+// link, What's new for a day after an install that carried notes, the page opened AT them, and the build's day.
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -614,6 +620,277 @@ describe("Settings → Updates — where the app runs (AU-7; AU-G8, LC-10, LC-40
     await mount(BASE);
     expect(container?.querySelector("[data-updates-location]")).toBeNull();
     expect(() => button("Move to Applications…")).toThrow();
+  });
+});
+
+describe("Settings → Updates — what's in it (AU-6; AU-D10 A, LC-7, LC-18)", () => {
+  const CUR = "0.1.0-nightly.20261027";
+  const NIGHTLY_28 = "0.1.0-nightly.20261028";
+  const COMPARE =
+    "https://github.com/vibefield/vibefield/compare/nightly-20261027...nightly-20261028";
+  /** A nightly's log as main projects it: one line holds markup's characters, one an address, one no track. */
+  const LOG_NOTES: ReleaseNotesView = {
+    version: NIGHTLY_28,
+    body: {
+      kind: "log",
+      since: { version: CUR, tag: "nightly-20261027" },
+      commits: 103,
+      product: 58,
+      lines: [
+        { track: "QW1 attach", text: "a resume the agent has not saved is refused first" },
+        { track: "AO", text: "<b>x</b>" },
+        { text: "a line with no track" },
+        { track: "TS-3a", text: "see https://example.com/not-a-link for nothing" },
+      ],
+    },
+    compareUrl: COMPARE,
+  };
+  /** A release's hand-written lines, counted from no release: no count, no link. */
+  const WRITTEN_NOTES: ReleaseNotesView = {
+    version: VERSION,
+    body: {
+      kind: "written",
+      since: null,
+      lines: ["Updates wait for you.", "<b>x</b>", "Your devices say which version each one runs."],
+    },
+  };
+  const READY: UpdateView = {
+    ...BASE,
+    phase: "staged",
+    version: NIGHTLY_28,
+    sessions: 0,
+    currentVersion: CUR,
+    notes: LOG_NOTES,
+  };
+  /** Up to date on the Oct 28 nightly, an install `ago` ms before now that carried `notes`. */
+  const updated = (ago: number, notes?: ReleaseNotesView): UpdateView => ({
+    ...BASE,
+    currentVersion: NIGHTLY_28,
+    lastApply: {
+      version: NIGHTLY_28,
+      from: CUR,
+      outcome: "installed",
+      at: Date.now() - ago,
+      trigger: "restart",
+      ...(notes !== undefined ? { notes } : {}),
+    },
+  });
+
+  const card = (): HTMLElement | null =>
+    container?.querySelector<HTMLElement>("[data-updates-notes]") ?? null;
+  const lines = (): HTMLElement[] => [
+    ...(card()?.querySelectorAll<HTMLElement>("[data-notes-line]") ?? []),
+  ];
+  const unmount = (): void => {
+    act(() => root?.unmount());
+    root = null;
+    container?.remove();
+  };
+  /** Where the page scrolls: happy-dom lays nothing out, so the scroll is the call itself. */
+  function watchScrolls(): {
+    calls: { target: Element; options: unknown }[];
+    restore: () => void;
+  } {
+    const proto: { scrollIntoView?: (options?: unknown) => void } = Element.prototype as never;
+    const original = proto.scrollIntoView;
+    const calls: { target: Element; options: unknown }[] = [];
+    proto.scrollIntoView = function (this: Element, options?: unknown): void {
+      calls.push({ target: this, options });
+    };
+    return {
+      calls,
+      restore: () => {
+        if (original === undefined) Reflect.deleteProperty(proto, "scrollIntoView");
+        else proto.scrollIntoView = original;
+      },
+    };
+  }
+
+  it("shows a ready nightly's log: the heading, the count, each line led by its track in mono, and main's link", async () => {
+    host(fakeUpdates());
+    await mount(READY);
+    expect(card()?.getAttribute("data-updates-notes")).toBe("before");
+    expect(card()?.querySelector("h3")?.textContent).toBe("What's in the Oct 28 nightly");
+    expect(card()?.querySelector("[data-notes-count]")?.textContent).toBe(
+      "103 changes since the Oct 27 nightly, 58 of them outside the docs. Four of them:",
+    );
+    expect(lines()).toHaveLength(4);
+    expect(lines()[0]?.querySelector("code")?.textContent).toBe("QW1 attach");
+    expect(lines()[0]?.querySelector("span")?.textContent).toBe(
+      "a resume the agent has not saved is refused first",
+    );
+    // a line without a track is its text alone
+    expect(lines()[2]?.querySelector("code")).toBeNull();
+    expect(lines()[2]?.textContent).toBe("a line with no track");
+    // the one link: main's comparison, an https: anchor that opens in the browser and sends no referrer
+    const links = [...(card()?.querySelectorAll("a") ?? [])];
+    expect(links).toHaveLength(1);
+    expect(links[0]?.getAttribute("href")).toBe(COMPARE);
+    expect(links[0]?.getAttribute("rel")).toBe("noreferrer");
+    expect(links[0]?.getAttribute("target")).toBe("_blank");
+    expect(links[0]?.textContent).toBe("See all 103 on GitHub ↗");
+  });
+
+  it("says every line as a text node: markup stays characters, an address in a line is never a link (EDP §11.1)", async () => {
+    host(fakeUpdates());
+    await mount(READY);
+    expect(card()?.querySelector("b")).toBeNull();
+    const marked = lines()[1]?.querySelector("span");
+    expect(marked?.textContent).toBe("<b>x</b>");
+    expect(marked?.childNodes).toHaveLength(1);
+    expect(marked?.firstChild?.nodeType).toBe(Node.TEXT_NODE);
+    expect(lines()[3]?.querySelector("a")).toBeNull();
+    expect(lines()[3]?.textContent).toContain("https://example.com/not-a-link");
+    const hrefs = [...(card()?.querySelectorAll("a") ?? [])].map((a) => a.getAttribute("href"));
+    expect(hrefs).toEqual([COMPARE]);
+    // the page never hands a string to the parser
+    const page = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "../src/panels/UpdatesSection.tsx"),
+      "utf8",
+    );
+    expect(page).not.toContain("dangerouslySetInnerHTML");
+    expect(page).not.toContain("innerHTML");
+  });
+
+  it("shows a found release's written lines: no count, no track, and no link where main composed none", async () => {
+    host(fakeUpdates());
+    await mount({
+      ...BASE,
+      channel: "stable",
+      buildChannel: "stable",
+      enabled: false,
+      phase: "available",
+      version: VERSION,
+      notes: WRITTEN_NOTES,
+    });
+    expect(card()?.getAttribute("data-notes-kind")).toBe("written");
+    expect(card()?.querySelector("h3")?.textContent).toBe(`What's in VibeField ${VERSION}`);
+    expect(card()?.querySelector("[data-notes-count]")).toBeNull();
+    expect(lines().map((line) => line.textContent)).toEqual([
+      "Updates wait for you.",
+      "<b>x</b>",
+      "Your devices say which version each one runs.",
+    ]);
+    expect(card()?.querySelector("code")).toBeNull();
+    expect(card()?.querySelector("b")).toBeNull();
+    expect(card()?.querySelector("a")).toBeNull();
+  });
+
+  it("hides the card where the view carries no notes, and the link where main's isn't an https: address", async () => {
+    host(fakeUpdates());
+    await mount(STAGED);
+    expect(card()).toBeNull();
+    expect(text()).not.toContain("What's in");
+    await rerender({
+      ...READY,
+      notes: { ...LOG_NOTES, compareUrl: "http://github.com/a/b/compare/x...y" },
+    });
+    expect(card()).not.toBeNull();
+    expect(card()?.querySelector("a")).toBeNull();
+    // none composed (a first release, an origin that isn't GitHub's releases): the card, no link
+    await rerender({ ...READY, notes: { version: LOG_NOTES.version, body: LOG_NOTES.body } });
+    expect(card()?.querySelector("[data-notes-count]")).not.toBeNull();
+    expect(card()?.querySelector("a")).toBeNull();
+  });
+
+  it("says what's new for a day after an install that carried notes, What's new taking you to them", async () => {
+    const scrolls = watchScrolls();
+    try {
+      host(fakeUpdates());
+      await mount(updated(60_000, LOG_NOTES));
+      expect(card()?.getAttribute("data-updates-notes")).toBe("after");
+      expect(card()?.querySelector("h3")?.textContent).toBe("What's new in the Oct 28 nightly");
+      expect(text()).toMatch(/Updated (today|yesterday) from the Oct 27 nightly\./u);
+      await click("What's new");
+      expect(scrolls.calls).toHaveLength(1);
+      expect(scrolls.calls[0]?.target).toBe(card());
+      expect(scrolls.calls[0]?.options).toMatchObject({ block: "start" });
+      unmount();
+
+      // an install that carried none: no card, no What's new — the words it said before AU-6
+      host(fakeUpdates());
+      await mount(updated(60_000));
+      expect(card()).toBeNull();
+      expect(() => button("What's new")).toThrow();
+      expect(text()).toMatch(/Updated (today|yesterday) from the Oct 27 nightly\./u);
+      unmount();
+
+      // a day on, both go
+      host(fakeUpdates());
+      await mount(updated(25 * 60 * 60 * 1000, LOG_NOTES));
+      expect(card()).toBeNull();
+      expect(() => button("What's new")).toThrow();
+    } finally {
+      scrolls.restore();
+    }
+  });
+
+  it("opens AT the notes when the Me row's What's new opened the page, and at its top otherwise (LC-7)", async () => {
+    const scrolls = watchScrolls();
+    try {
+      const open = async (update: UpdateView, atNotes: boolean): Promise<void> => {
+        container = document.createElement("div");
+        document.body.appendChild(container);
+        root = createRoot(container);
+        await act(async () => {
+          root?.render(createElement(UpdatesSection, { desktopState: desktop(update), atNotes }));
+        });
+      };
+      host(fakeUpdates());
+      await open(updated(60_000, LOG_NOTES), true);
+      expect(scrolls.calls.map((call) => call.target)).toEqual([card()]);
+      unmount();
+
+      // Settings → Updates from anywhere else opens at the page's top
+      await open(updated(60_000, LOG_NOTES), false);
+      expect(scrolls.calls).toHaveLength(1);
+      unmount();
+
+      // the notes it asked for aren't shown (a day on): the page opens at its top
+      await open(updated(25 * 60 * 60 * 1000, LOG_NOTES), true);
+      expect(scrolls.calls).toHaveLength(1);
+    } finally {
+      scrolls.restore();
+    }
+  });
+
+  it("reads main's projection of a ready nightly with its notes (EL9: AU-6's fixture)", async () => {
+    const fixture = UpdateView.parse(
+      JSON.parse(
+        readFileSync(
+          join(
+            dirname(fileURLToPath(import.meta.url)),
+            "../../contracts/fixtures/update-view.staged-notes.json",
+          ),
+          "utf8",
+        ),
+      ),
+    );
+    host(fakeUpdates());
+    await mount(fixture);
+    expect(card()?.querySelector("h3")?.textContent).toBe("What's in the Oct 28 nightly");
+    expect(lines()).toHaveLength(4);
+    expect(card()?.querySelector("a")?.getAttribute("href")).toBe(
+      "https://github.com/vibefield/vibefield/compare/nightly-20261027...nightly-20261028",
+    );
+    // and the head says when this build was made
+    expect(container?.querySelector("[data-updates-build]")?.textContent).toMatch(
+      /^Nightly · built Oct 2[67], 2026$/u,
+    );
+  });
+
+  it("says when the build was made under the version, and the channel's word alone without it (LC-18)", async () => {
+    host(fakeUpdates());
+    await mount({ ...BASE, currentVersion: CUR, builtAt: new Date(2026, 9, 27, 3, 12).getTime() });
+    expect(container?.querySelector("[data-updates-build]")?.textContent).toBe(
+      "Nightly · built Oct 27, 2026",
+    );
+    unmount();
+
+    host(fakeUpdates());
+    await mount({ ...BASE, currentVersion: CUR });
+    expect(container?.querySelector("[data-updates-build]")?.textContent).toBe("Nightly");
+    expect(container?.querySelector("[data-updates-head]")?.textContent).not.toContain("built");
   });
 });
 

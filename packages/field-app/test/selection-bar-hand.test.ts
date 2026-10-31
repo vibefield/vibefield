@@ -59,7 +59,7 @@ const CLOCK = slotsOf(CLOCK_TOOLS);
 const said = (cells: readonly HandCell[]): string[] =>
   cells.map((c) => {
     switch (c.kind) {
-      case "send":
+      case "copy":
         return c.label;
       case "rule":
         return "|";
@@ -75,11 +75,14 @@ const said = (cells: readonly HandCell[]): string[] =>
 const tools = (cells: readonly HandCell[]) =>
   cells.filter((c): c is Extract<HandCell, { kind: "tool" }> => c.kind === "tool");
 
+/** The cells in hand as the Mac says their keys. */
+const cellsOnMac = (held: Parameters<typeof handCells>[0]): HandCell[] => handCells(held, "mac");
+
 describe("the tools in hand — the four specimens, from the real kinds' held tools (DK-12)", () => {
   it("the notebook: ‹ › · felt, ball, fountain, red · undo, reading “Page 1” — the pens dots in their own inks, the fountain in hand", () => {
-    const cells = handCells({ tools: NOTEBOOK, active: "pen:fountain", readout: "Page 1" });
+    const cells = cellsOnMac({ tools: NOTEBOOK, active: "pen:fountain", readout: "Page 1" });
     expect(said(cells)).toEqual([
-      "Send to…",
+      "Copy",
       "|",
       "turn:-1",
       "turn:1",
@@ -120,9 +123,9 @@ describe("the tools in hand — the four specimens, from the real kinds' held to
   });
 
   it("the whiteboard: black, blue, red, green · eraser · undo · redo — the eraser a cell, inverted while in hand; no word", () => {
-    const cells = handCells({ tools: WHITEBOARD, active: "eraser" });
+    const cells = cellsOnMac({ tools: WHITEBOARD, active: "eraser" });
     expect(said(cells)).toEqual([
-      "Send to…",
+      "Copy",
       "|",
       "marker:black",
       "marker:blue",
@@ -149,9 +152,9 @@ describe("the tools in hand — the four specimens, from the real kinds' held to
   });
 
   it("the calendar: ‹ › · today · pen, reading its month — the pen a mode without a swatch", () => {
-    const cells = handCells({ tools: CALENDAR, active: "pen", readout: "September" });
+    const cells = cellsOnMac({ tools: CALENDAR, active: "pen", readout: "September" });
     expect(said(cells)).toEqual([
-      "Send to…",
+      "Copy",
       "|",
       "month:-1",
       "month:1",
@@ -173,9 +176,9 @@ describe("the tools in hand — the four specimens, from the real kinds' held to
   });
 
   it("the clock: seconds · the 24-hour ring · an hour back · an hour ahead · the next dial — its own five drawings, reading its time", () => {
-    const cells = handCells({ tools: CLOCK, active: "", readout: "10:08:42" });
+    const cells = cellsOnMac({ tools: CLOCK, active: "", readout: "10:08:42" });
     expect(said(cells)).toEqual([
-      "Send to…",
+      "Copy",
       "|",
       "seconds",
       "ring24",
@@ -217,7 +220,7 @@ describe("what a slot looks like, and where the runs change (§8, R13)", () => {
   });
 
   it("keeps the DECLARED order, never regrouped: a gap each time the run changes, however often it changes back", () => {
-    const cells = handCells({
+    const cells = cellsOnMac({
       tools: [
         { id: "ink-1", label: "Ink", kind: "mode", swatch: "#111111" },
         { id: "next", label: "Next", kind: "action", glyph: "chevron" },
@@ -226,20 +229,11 @@ describe("what a slot looks like, and where the runs change (§8, R13)", () => {
       ],
       active: "ink-2",
     });
-    expect(said(cells)).toEqual([
-      "Send to…",
-      "|",
-      "ink-1",
-      "+next",
-      "+ink-2",
-      "+wait",
-      "|",
-      "Done",
-    ]);
+    expect(said(cells)).toEqual(["Copy", "|", "ink-1", "+next", "+ink-2", "+wait", "|", "Done"]);
     // a mode's `on` is the anchor's mode in hand; never an action's, never a slot that only waits — even named by it
     expect(tools(cells).map((c) => c.on)).toEqual([false, false, true, false]);
     for (const active of ["next", "wait"]) {
-      const named = handCells({
+      const named = cellsOnMac({
         tools: [
           { id: "next", label: "Next", kind: "action", glyph: "chevron" },
           { id: "wait", label: "Waits" },
@@ -255,7 +249,7 @@ describe("what a slot looks like, and where the runs change (§8, R13)", () => {
 
   it("a slot with no glyph and no swatch keeps its label (R3); an unknown name passes to §13's table, which draws `missing`", () => {
     const [plain, odd] = tools(
-      handCells({
+      cellsOnMac({
         tools: [
           { id: "flip", label: "Flip", kind: "action" },
           { id: "odd", label: "Odd", kind: "action", glyph: "stopwatch" },
@@ -268,12 +262,18 @@ describe("what a slot looks like, and where the runs change (§8, R13)", () => {
   });
 
   it("says no word for a kind that says none — or an empty one — and Done's tip the frame's way", () => {
-    const none = handCells({ tools: [], active: "" });
-    expect(said(none)).toEqual(["Send to…", "|", "|", "Done"]);
-    expect(said(handCells({ tools: [], active: "", readout: "" }))).toEqual(said(none));
+    const none = cellsOnMac({ tools: [], active: "" });
+    expect(said(none)).toEqual(["Copy", "|", "|", "Done"]);
+    expect(said(cellsOnMac({ tools: [], active: "", readout: "" }))).toEqual(said(none));
     expect(none.at(-1)).toEqual({ kind: "done", label: "Done", tip: "Put it down  Esc" });
     expect(DONE_TIP).toBe("Put it down  Esc");
-    expect(none[0]).toEqual({ kind: "send", label: "Send to…", tip: "Send to…" });
+    // Copy leads it, as on the bar over a selection (HN-D3) — its key the desk's, the platform's way
+    expect(none[0]).toEqual({ kind: "copy", label: "Copy", tip: "Copy  ⌘C" });
+    expect(handCells({ tools: [], active: "" }, "other")[0]).toEqual({
+      kind: "copy",
+      label: "Copy",
+      tip: "Copy  Ctrl+C",
+    });
   });
 
   it("keys the slots by everything the bar says of them — a swatch's change is a change, the same slots never are", () => {
@@ -302,14 +302,14 @@ describe("what a slot looks like, and where the runs change (§8, R13)", () => {
       glyph: { path: "M1 1" },
     } as const;
     const stop = { ...reload, label: "Stop", glyph: { path: "M2 2" } } as const;
-    const cells = handCells({ tools: [{ ...back, enabled: false }, reload], active: "" });
+    const cells = cellsOnMac({ tools: [{ ...back, enabled: false }, reload], active: "" });
     const tools = cells.filter((c) => c.kind === "tool");
     expect(tools.map((c) => [c.id, c.look, c.disabled])).toEqual([
       ["back", "action", true],
       ["reload", "action", false],
     ]);
     // a slot declared only is faint, never "disabled": its kind said nothing of it
-    const faint = handCells({ tools: [{ id: "later", label: "Later" }], active: "" });
+    const faint = cellsOnMac({ tools: [{ id: "later", label: "Later" }], active: "" });
     expect(faint.filter((c) => c.kind === "tool").map((c) => [c.look, c.disabled])).toEqual([
       ["faint", false],
     ]);

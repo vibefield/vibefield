@@ -1,23 +1,25 @@
-/* The line (One Frame FR-2): `[views] create │ draft mic send` at the frame's
-   foot, and @'s list grown upward from it. Every number is DESIGN.md's — §8
-   the line, the chip and @'s list, §5 the line's glass and the solid menu,
-   §10 the place. Tokens only; the ready fill is the foreground at the doc's
-   percentages, mixed here as the views track mixes its own. */
+/* The line (One Frame FR-2; LN-D1): `[views] snapshot create` at the frame's
+   foot, and the note the frame speaks in over it. Every number is DESIGN.md's —
+   §8 the line, §5 the line's glass, §10 the place. Tokens only; the ready fill
+   is the foreground at the doc's percentages, mixed here as the views track
+   mixes its own. */
 
 /* ── THE LINE (§8, §10) on the line's glass (§5) ──────────────────────────
-   880 × 52 at 20 from the foot, never nearer the left than 76 (so it never
-   meets the corner) and never past 20 from the right. Above the cover (60),
-   below Settings (65), the palette (70) and the veil (80). */
+   300 × 52 at 76 from the left — never nearer, so it never meets the corner —
+   and 20 from the foot: its centre on the foot axis (y 734 at 780). The hand
+   fans to its right. The four numbers are `frame-geometry.ts`'s LINE_* (the
+   suite holds the two spellings together). Above the cover (60), below
+   Settings (65), the palette (70) and the veil (80). */
 .vf-line {
   position: absolute;
   z-index: 62;
-  left: max(76px, calc(50% - 440px));
+  left: 76px;
   bottom: 20px;
   display: flex;
-  width: min(880px, calc(100% - 96px));
+  width: 300px;
   height: 52px;
   align-items: center;
-  gap: 2px;
+  gap: 6px;
   padding: 5px 6px;
   border-radius: 26px;
   background: color-mix(in srgb, var(--vf-chrome-solid) 88%, transparent);
@@ -35,18 +37,55 @@
     inset 0 1px 0 rgb(255 255 255 / 6%);
 }
 
-/* ── CREATE: the view's own act, 32 in the ready fill ────────────────────── */
+/* ── THE SNAPSHOT (HN-D2): SNAP's door, 40 round, 6 after the track ──────
+   A ghost — no fill — so the view's act stays the line's one solid button:
+   `capture` 18 in secondary ink, the ready fill under the pointer, and filled
+   while a capture is in flight (`data-on`), until the tool answers. */
+.vf-line-snapshot {
+  display: grid;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 20px;
+  color: var(--vf-text-secondary);
+  background: none;
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease;
+}
+
+.vf-line-snapshot:hover,
+.vf-line-snapshot[data-hot],
+.vf-line-snapshot[data-on] {
+  color: var(--vf-text-primary);
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+}
+
+/* no capture door here (a browser harness): faint by ink, as the create that
+   waits is, and still a ghost */
+.vf-line-snapshot[aria-disabled="true"],
+.vf-line-snapshot[aria-disabled="true"]:hover {
+  color: color-mix(in srgb, var(--vf-text-faint) 55%, transparent);
+  background: none;
+  cursor: default;
+}
+
+/* ── CREATE: the view's own act, 40 in the ready fill, the line's right end ─
+   its corners concentric with the line's (26 − 6). */
 .vf-line-create {
   position: relative;
   display: grid;
   flex: none;
-  width: 32px;
-  height: 32px;
-  margin: 0 2px 0 6px;
+  width: 40px;
+  height: 40px;
   padding: 0;
   place-items: center;
   border: 0;
-  border-radius: 16px;
+  border-radius: 20px;
   color: var(--vf-text-secondary);
   background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
   cursor: pointer;
@@ -66,17 +105,15 @@
   color: var(--vf-text-primary);
 }
 
-.vf-line-create:focus-visible,
-.vf-line-mic:focus-visible,
-.vf-line-send:focus-visible,
-.vf-line-chip-x:focus-visible {
+.vf-line-snapshot:focus-visible,
+.vf-line-create:focus-visible {
   outline: 2px solid var(--vf-select);
   outline-offset: 2px;
 }
 
-/* The three views' glyphs — and History's Jump to (P3) — stand in one place
-   and cross-fade (200ms, One Frame §12); Objects' plus turns 135° into ✕
-   while the objects are out. */
+/* The views' glyphs — Canvas's plus, and New terminal's start in Godview and
+   History (HN-7) — stand in one place and cross-fade (200ms, One Frame §12);
+   Objects' plus turns 135° into ✕ while the objects are out. */
 .vf-line-create-glyph {
   display: grid;
   grid-area: 1 / 1;
@@ -94,7 +131,7 @@
   transform: rotate(135deg);
 }
 
-/* A create that waits (History's Resume, until a session is chosen) — or
+/* A create that waits (Godview's, while the deck has no connection) — or
    Objects while an object is in hand, "Put it down first" (DK-13, R14): faint
    by ink, as the Assistant's cell is, and still. */
 .vf-line-create[aria-disabled="true"],
@@ -105,211 +142,12 @@
   cursor: default;
 }
 
-.vf-line-rule {
-  flex: none;
-  width: 1px;
-  height: 18px;
-  margin: 0 6px 0 8px;
-  background: var(--vf-hairline-strong);
-}
-
-/* ── THE DRAFT: an editor on one line, the aim leading it ───────────────── */
-.vf-line-draft {
-  display: flex;
-  flex: 1;
-  min-width: 0;
-  height: 40px;
-  align-items: center;
-  gap: 6px;
-  padding: 0 10px;
-}
-
-.vf-line-field {
-  position: relative;
-  display: flex;
-  flex: 1;
-  min-width: 0;
-  height: 100%;
-  align-items: center;
-}
-
-.vf-line-input {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  color: var(--vf-text-primary);
-  font-size: 14px;
-  line-height: 24px;
-  /* one line, its spaces kept as typed: a chip's space after it is a real
-     space, never collapsed away when the next character comes (DK-14) */
-  white-space: pre;
-  caret-color: var(--vf-select);
-  outline: none;
-  cursor: text;
-  scrollbar-width: none;
-}
-
-.vf-line-input br {
-  display: none;
-}
-
-.vf-line-ph {
-  position: absolute;
-  top: 50%;
-  left: 0;
-  max-width: 100%;
-  overflow: hidden;
-  color: var(--vf-text-tertiary);
-  font-size: 14px;
-  line-height: 24px;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  pointer-events: none;
-  transform: translateY(-50%);
-}
-
-/* The chip (D1): a token in the sentence, 24 tall. A capture wears the select
-   blue; the aim, which leads the draft, the fill. */
-.vf-line-chip {
-  display: inline-flex;
-  height: 24px;
-  align-items: center;
-  gap: 5px;
-  padding: 0 8px 0 6px;
-  border-radius: 7px;
-  vertical-align: middle;
-  color: var(--vf-text-primary);
-  background: color-mix(in srgb, var(--vf-select) 14%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vf-select) 22%, transparent);
-  font-size: 12.5px;
-  font-weight: 500;
-  line-height: 1;
-  white-space: nowrap;
-  user-select: none;
-}
-
-.vf-line-chip[data-chip="capture"] > .vf-glyph {
-  color: var(--vf-select);
-}
-
-.vf-line-chip[data-chip="aim"] {
-  flex: none;
-  background: var(--vf-fill);
-  box-shadow: inset 0 0 0 1px var(--vf-hairline-strong);
-}
-
-/* Send to…'s chip (DK-14; §8 "Send to…"; R15): the selection from the desk.
-   A kind's name, several's `package` "N objects", a missing face's type: the
-   ready fill (the foreground at 8%) in primary ink, ringed in the strong
-   hairline. A NOTE wears its paper and its ink — the palette's colours, handed
-   in as `--vf-chip-paper` / `--vf-chip-ink` — ringed in its ink at 14%. */
-.vf-line-chip[data-chip="desk"] {
-  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
-  box-shadow: inset 0 0 0 1px var(--vf-hairline-strong);
-}
-
-.vf-line-chip[data-chip="desk"][data-paper] {
-  color: var(--vf-chip-ink, var(--vf-text-primary));
-  background: var(--vf-chip-paper);
-  box-shadow: inset 0 0 0 1px
-    color-mix(in srgb, var(--vf-chip-ink, var(--vf-foreground)) 14%, transparent);
-}
-
-/* …and IN FLIGHT: the same face, carried from the selection to the caret by
-   the line's controller (Composer.tsx) — 1.25 → 0.86 on a straight line over
-   560ms on the island curve, written imperatively as a transition (M3, M4).
-   Above the line and @'s list; never a target. */
-.vf-line-flier {
-  position: absolute;
-  z-index: 64;
-  top: 0;
-  left: 0;
-  pointer-events: none;
-  transform-origin: 50% 50%;
-  will-change: transform, opacity;
-}
-
-.vf-line-flier > .vf-line-chip {
-  box-shadow:
-    inset 0 0 0 1px var(--vf-hairline-strong),
-    var(--vf-shadow-island);
-}
-
-.vf-line-flier > .vf-line-chip[data-paper] {
-  box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, var(--vf-chip-ink, var(--vf-foreground)) 14%, transparent),
-    var(--vf-shadow-island);
-}
-
-.vf-line-chip-x {
-  display: grid;
-  width: 14px;
-  height: 14px;
-  margin-right: -3px;
-  padding: 0;
-  place-items: center;
-  border: 0;
-  border-radius: 7px;
-  color: var(--vf-text-tertiary);
-  background: none;
-  opacity: 0;
-  cursor: pointer;
-  transition: opacity 120ms ease;
-}
-
-.vf-line-chip:hover .vf-line-chip-x,
-.vf-line-chip-x:focus-visible {
-  opacity: 1;
-}
-
-/* a note's chip: its × in its own ink */
-.vf-line-chip[data-chip="desk"][data-paper] .vf-line-chip-x {
-  color: color-mix(in srgb, var(--vf-chip-ink, var(--vf-foreground)) 60%, transparent);
-}
-
-/* ── MIC (waiting: no dictation door on the desktop) and SEND ───────────── */
-.vf-line-mic {
-  display: grid;
-  flex: none;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  place-items: center;
-  border: 0;
-  border-radius: 18px;
-  color: color-mix(in srgb, var(--vf-text-faint) 55%, transparent);
-  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
-  cursor: default;
-}
-
-.vf-line-send {
-  display: grid;
-  flex: none;
-  width: 40px;
-  height: 40px;
-  margin-left: 4px;
-  padding: 0;
-  place-items: center;
-  border: 0;
-  border-radius: 20px;
-  color: var(--vf-text-tertiary);
-  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
-  cursor: default;
-  transition:
-    background-color 160ms ease,
-    color 160ms ease;
-}
-
-.vf-line-send[data-armed] {
-  color: var(--vf-foreground-inverse);
-  background: var(--vf-foreground);
-  cursor: pointer;
-}
-
-/* ── THE LINE'S NOTE: the views track's note, over the piece it speaks for ─
-   Over create, centred (6 + 196 + 2 + 6 + 16 from the line's left); over send,
-   its right edge on send's, so a long sentence grows leftward, never past the
-   window's right edge (in a window too narrow for it, past the left edge). */
+/* ── THE NOTE: the frame's voice on the line, 2.4s ─────────────────────────
+   Over the create, centred (6 + 196 + 6 + 40 + 6 + 20 from the line's left):
+   its own outcome and History's acts'. Everything else the frame says stands
+   with its left edge on the line's and grows rightward, over the window's
+   width — the line is at the window's left now, so a sentence anchored at
+   its right end would run off the window's left edge. */
 .vf-line-note {
   position: absolute;
   bottom: calc(100% + 10px);
@@ -329,12 +167,12 @@
 }
 
 .vf-line-note[data-at="create"] {
-  left: 226px;
+  left: 274px;
   transform: translateX(-50%);
 }
 
-.vf-line-note[data-at="send"] {
-  right: 6px;
+.vf-line-note[data-at="line"] {
+  left: 0;
 }
 
 @keyframes vf-line-note {
@@ -357,175 +195,6 @@
   }
 }
 
-/* ── @'S LIST (§8, §5: solid, above the line) ─────────────────────────────
-   316 wide, its foot 8 above the line (20 + 52 + 8), its left set by the
-   controller 10 before the @ it grew from. */
-.vf-at-menu {
-  position: absolute;
-  z-index: 62;
-  bottom: 80px;
-  display: flex;
-  width: 316px;
-  flex-direction: column;
-  gap: 1px;
-  padding: 6px;
-  border-radius: 18px;
-  color: var(--vf-text-primary);
-  background: var(--vf-chrome-solid);
-  box-shadow:
-    0 0 0 1px var(--vf-hairline-strong),
-    var(--vf-shadow-island);
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1;
-  transform-origin: 10px 100%;
-  animation: vf-at-grow 240ms var(--vf-ease-island) both;
-}
-
-@keyframes vf-at-grow {
-  from {
-    opacity: 0;
-    transform: translateY(6px) scale(0.97);
-  }
-
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-.vf-at-eye {
-  padding: 8px 10px 5px;
-  color: var(--vf-text-tertiary);
-  font-family: var(--vf-font-mono);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.vf-at-row {
-  display: flex;
-  width: 100%;
-  min-height: 36px;
-  align-items: center;
-  gap: 10px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 12px;
-  color: var(--vf-text-primary);
-  background: none;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.vf-at-row[data-hot] {
-  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
-}
-
-.vf-at-row[aria-disabled="true"] {
-  color: var(--vf-text-tertiary);
-  cursor: default;
-}
-
-.vf-at-row.is-aim {
-  min-height: 46px;
-  padding: 5px 10px;
-}
-
-.vf-at-row.vf-at-tiles {
-  min-height: 52px;
-  gap: 6px;
-}
-
-.vf-at-label {
-  min-width: 0;
-}
-
-.vf-at-tiles .vf-at-label {
-  margin-left: 6px;
-}
-
-.vf-at-row b {
-  font-weight: 500;
-}
-
-.vf-at-row small {
-  display: block;
-  margin-top: 3px;
-  color: var(--vf-text-tertiary);
-  font-size: 11px;
-  font-weight: 400;
-  line-height: 1.25;
-}
-
-.vf-at-row em {
-  margin-left: auto;
-  padding-left: 10px;
-  color: var(--vf-text-secondary);
-  font-size: 11.5px;
-  font-style: normal;
-  font-variant-numeric: tabular-nums;
-  font-weight: 400;
-  white-space: nowrap;
-}
-
-.vf-at-ico {
-  display: grid;
-  width: 24px;
-  flex: none;
-  place-items: center;
-  color: var(--vf-text-secondary);
-}
-
-.vf-at-dot {
-  display: inline-block;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--vf-text-faint);
-}
-
-.vf-at-dot[data-dot="green"] {
-  background: var(--vf-green);
-}
-
-.vf-at-dot[data-dot="orange"] {
-  background: var(--vf-orange);
-}
-
-.vf-at-mini {
-  position: relative;
-  width: 34px;
-  height: 34px;
-  flex: none;
-  overflow: hidden;
-  border-radius: 8px;
-  background: var(--vf-fill);
-  box-shadow: 0 0 0 1px var(--vf-hairline-strong);
-}
-
-.vf-at-mini img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.vf-at-sep {
-  height: 1px;
-  flex: none;
-  margin: 4px 10px;
-  background: var(--vf-hairline-strong);
-}
-
-.vf-at-quiet {
-  padding: 10px;
-  color: var(--vf-text-tertiary);
-  font-size: 12px;
-  font-weight: 400;
-}
-
 /* M6: fades only, halved. */
 @media (prefers-reduced-motion: reduce) {
   .vf-line-create,
@@ -533,23 +202,16 @@
     transform: none;
   }
 
+  .vf-line-create,
+  .vf-line-snapshot {
+    transition:
+      background-color 80ms ease,
+      color 80ms ease;
+  }
+
   /* the ✕ still shows, without the turn that would bring it */
   .vf-line-create-glyph {
     transition: opacity 100ms ease;
-  }
-
-  .vf-at-menu {
-    animation: vf-at-fade 120ms ease both;
-  }
-
-  @keyframes vf-at-fade {
-    from {
-      opacity: 0;
-    }
-
-    to {
-      opacity: 1;
-    }
   }
 
   @keyframes vf-line-note {

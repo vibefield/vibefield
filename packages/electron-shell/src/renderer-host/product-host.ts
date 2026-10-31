@@ -123,6 +123,12 @@ export function mountProductHost(
       screenshotStillUrl: (path) => screenshotStillUrl(path),
       screenshotPreview: (path) =>
         window.vibefield.screenshot.preview(screenshotStillBasename(path)),
+      screenshotStillBytes: (path) =>
+        window.vibefield.screenshot.stillBytes(screenshotStillBasename(path)),
+      screenshotStillKept: (path) =>
+        window.vibefield.screenshot.stillKept(screenshotStillBasename(path)),
+      // HN-6 — a file brought in from another app, by its path: the preload's own read
+      pathForFile: (file) => window.vibefield.pathForFile(file),
       onPrepareClose: (handler) => window.vibefield.onPrepareClose(handler),
       completeClose: (result) => window.vibefield.completeClose(result),
       onShellCommand: (handler) => window.vibefield.onShellCommand(handler),
@@ -142,6 +148,12 @@ export function mountProductHost(
       // BP-D4 — Settings' Clear browsing data, straight onto the preload's one door
       browserData: {
         clear: () => window.vibefield.browserData.clear(),
+      },
+      // Item 102 — a terminal's paste reads through main's door; the web's read is denied here
+      clipboard: {
+        readText: () => window.vibefield.clipboard.readText(),
+        // HN-5 — a copy's picture, and its words, through main's door; the web's write is denied
+        writeImage: (png, text) => window.vibefield.clipboard.writeImage(png, text),
       },
       // DT-2a: the claimed transport reaches the product instead of only being
       // parked here. The promise is handed over as-is — the pool behind the seam

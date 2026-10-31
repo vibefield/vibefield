@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { accessSync, constants as fsConstants, readFileSync } from "node:fs";
 import { homedir, release, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -21,6 +21,7 @@ import {
   releasePlatformKey,
   type ScreenshotCaptureResult,
   SHELL_BACKGROUND_RELAUNCH_ARG,
+  SHELL_CLIPBOARD,
   type ShellCommand,
   ShellCommandRequest,
   type ShellExitRecord,
@@ -77,10 +78,14 @@ import { buildSupervisor, dataRoot } from "./fieldd";
 import { FielddDaemonBootFence, FielddHandleCoordinator } from "./fieldd-handle-coordinator";
 import {
   registerBrowserDataClear,
+  registerClipboardRead,
+  registerClipboardWriteImage,
   registerDeckSet,
   registerRendererReplace,
   registerScreenshotCapture,
   registerScreenshotPreview,
+  registerScreenshotStillBytes,
+  registerScreenshotStillKept,
   registerThemeSet,
   registerUpdateDoors,
   registerUsersRoster,
@@ -130,6 +135,7 @@ import { registerShellSchemes } from "./scheme-registration";
 import { withScreenshotScreenBounds } from "./screenshot-bounds";
 import { screenshotHelperSupportsService } from "./screenshot-helper-capabilities";
 import { ScreenshotShortcutController } from "./screenshot-shortcut";
+import { checkStill, readStill } from "./screenshot-still-bytes";
 import {
   installCsp,
   installNavigationPolicy,
@@ -142,7 +148,7 @@ import { shellExitNotice } from "./shell-exit-notice";
 import { RecoveringShellProvider } from "./shell-provider";
 import { installSignalQuit } from "./signal-quit";
 import { isolateSmokeProfile } from "./smoke-profile";
-import { installStillProtocol, resolveStillFile } from "./still-protocol";
+import { installStillProtocol, resolveStill, resolveStillFile } from "./still-protocol";
 import { SupportBundleError, SupportBundleService } from "./support-bundle";
 import { fileThemeStore, THEME_FILE, ThemeOwner } from "./theme";
 import { TrayController } from "./tray-controller";
@@ -394,6 +400,16 @@ async function main(
     });
     await handle.client.request("audit.append", record);
   };
+  // HN-3 (R-T 4) — a smoke drives the desk's real Copy, and a run isolates its profile and its
+  // daemons but never the system clipboard, which is the person's (`gate:landing` runs on their
+  // Mac). So in a MARKED run (`VF_SMOKE_RUN`, run-smoke.mjs's mark — testing/smoke-daemons.ts)
+  // the copy door KEEPS the words instead of writing them and answers as it would: the act's own
+  // record (`wrote`) stays the witness, and the canvas smoke reads what arrived here.
+  const harnessCopies: string[] | null = process.env["VF_SMOKE_RUN"] === undefined ? null : [];
+  // HN-5 — the same for a copy's picture: the clipboard's picture door keeps its PNG's size here
+  // in a marked run, and the words written beside it in `harnessCopies`, instead of writing them,
+  // and answers as it would.
+  const harnessPictures: number[] | null = process.env["VF_SMOKE_RUN"] === undefined ? null : [];
   const installDiagnostics = (window: Electron.BrowserWindow): void => {
     let supportDialogOpen = false;
     installLocalDiagnosticsPort({
@@ -459,10 +475,18 @@ async function main(
         copyText: (raw) => {
           const text =
             typeof raw === "object" && raw !== null && "text" in raw ? raw.text : undefined;
-          if (typeof text !== "string" || Buffer.byteLength(text, "utf8") > 64 * 1024) {
+          // the copy door's bound, by reference since HN-5: the picture door's words read it too
+          if (
+            typeof text !== "string" ||
+            Buffer.byteLength(text, "utf8") > SHELL_CLIPBOARD.WRITE_TEXT_MAX_BYTES
+          ) {
             throw Object.assign(new Error("expected bounded clipboard text"), {
               kind: "PRECONDITION_FAILED",
             });
+          }
+          if (harnessCopies !== null) {
+            harnessCopies.push(text);
+            return { copied: true };
           }
           clipboard.writeText(text);
           return { copied: true };
@@ -1542,6 +1566,57 @@ async function main(
     async () => liveSurfaceSupport?.clearBrowsingData() ?? { profiles: 0, pages: 0 },
     logger.child({ component: "ipc.browser-data" }),
   );
+  // Item 102: a paste in the deck or the sign-in terminal reads the clipboard here,
+  // for a registered product window while it and its page hold the focus; the
+  // grant set stays empty (ESP §7.4). Audited, best-effort: a paste never waits on
+  // fieldd.
+  const clipboardLogger = logger.child({ component: "ipc.clipboard" });
+  registerClipboardRead(
+    registry,
+    {
+      focused: (sender) =>
+        BrowserWindow.fromWebContents(sender)?.isFocused() === true && sender.isFocused(),
+      read: () => clipboard.readText(),
+      audit: (record) => appendShellAudit(record),
+      operationId: () => randomUUID(),
+      onAuditFailed: (error) =>
+        clipboardLogger.warn(
+          "desktop.clipboard.audit_unavailable",
+          "A clipboard read was answered, and its audit record could not be appended",
+          { error: error instanceof Error ? error.message : String(error) },
+        ),
+    },
+    clipboardLogger,
+  );
+  // HN-5: a copy's picture is written here, the read's other half — for a registered product
+  // window, the text copy's rule, and NO focus gate (LC-18, VF-PM 16:10Z): a write leaks
+  // nothing, where the read's gate is EL7's exposure rule (a page behind must not read what was
+  // copied elsewhere). Its PNG is decoded first and refused when it holds no picture, and the
+  // copy's words go beside it on the same item in ONE write, so neither replaces the other
+  // (LC-19). No audit row: the words' copy door keeps none (LC-13). A marked run keeps the
+  // picture's size and the words instead of writing them (R-T 4, as `harnessCopies`), after
+  // every check a write passes.
+  registerClipboardWriteImage(
+    registry,
+    {
+      decode: (png: Uint8Array) => {
+        const image = nativeImage.createFromBuffer(
+          Buffer.from(png.buffer, png.byteOffset, png.byteLength),
+        );
+        return image.isEmpty() ? null : image;
+      },
+      write: (item) => clipboard.write(item),
+      ...(harnessPictures === null || harnessCopies === null
+        ? {}
+        : {
+            keep: (bytes: number, text: string | undefined) => {
+              harnessPictures.push(bytes);
+              if (text !== undefined) harnessCopies.push(text);
+            },
+          }),
+    },
+    clipboardLogger,
+  );
 
   // FR-4: main owns the app's one theme (FC-D5) — Light · Dark · Auto, kept in
   // the shell's own profile, Auto following the OS through `nativeTheme`, and
@@ -1620,6 +1695,23 @@ async function main(
         if (error !== "") throw new Error(error);
       }
     },
+  );
+  // HN-D7 — a snapshot played onto the desk is printed from its own bytes: asked for by name, found
+  // in the tool's ring (a lookup, not the disk), and judged by the handle it is read from — never
+  // through a symlink, a regular file within the cap (`readStill`, EL7)
+  registerScreenshotStillBytes(
+    registry,
+    (url) => resolveStill(url, screenshotTool?.retainedStills ?? []),
+    readStill,
+    logger.child({ component: "ipc.screenshot" }),
+  );
+  // HN-4 — …and played onto a pane, it pastes the still's path only while that path opens to the
+  // still (`checkStill`: the same lookup and handle check, nothing read)
+  registerScreenshotStillKept(
+    registry,
+    (url) => resolveStill(url, screenshotTool?.retainedStills ?? []),
+    checkStill,
+    logger.child({ component: "ipc.screenshot" }),
   );
   // A global capture can finish with every product window closed. Keep the
   // latest result for the next field, without revealing it before the freeze.
@@ -1844,6 +1936,7 @@ async function main(
       beforeExit: closeEvidence,
       terminalDirectProof: process.argv.includes("--terminal-direct-proof"),
       ...(harnessShellOpens === null ? {} : { shellOpens: harnessShellOpens }),
+      ...(harnessCopies === null ? {} : { copies: harnessCopies }),
       ...(typedAgent !== undefined ? { typedAgent } : {}),
       onWindow: (window) => {
         installLiveSurfaceHost(window, logger);
@@ -1878,6 +1971,8 @@ async function main(
       preloadPath: PRELOAD_PATH,
       viteUrl: VITE_URL,
       beforeExit: closeEvidence,
+      ...(harnessCopies === null ? {} : { copies: harnessCopies }),
+      ...(harnessPictures === null ? {} : { pictures: harnessPictures }),
       onWindow: (window) => {
         installLiveSurfaceHost(window, logger);
         installRendererLogging({

@@ -13,8 +13,9 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useSettingsChord } from "../src/field/me-menu-wiring";
 import {
-  isClipboardTrayChord,
+  isCardsChord,
   isCommandPaletteChord,
+  isCopyChord,
   isSearchChord,
   listenForProductChord,
   PRODUCT_CHORDS,
@@ -59,10 +60,13 @@ describe("the product chords (GT-D21)", () => {
       "super+k",
       "super+,",
       "super+shift+v",
-      // One Frame FR-2 (§11): Godview's New terminal, over ghostty's new_tab
+      // One Frame FR-2 (§11): New terminal, Godview's create and History's (HN-7), over
+      // ghostty's new_tab
       "super+t",
       // the Peek (GV-D10, 2026-10-08): search, over ghostty's start_search
       "super+f",
+      // the desk's Copy (HN-D3): over ghostty's copy_to_clipboard, which keeps it in a pane
+      "super+c",
       // One Frame FR-1 (FC-D4): the four views, over ghostty's goto_tab
       "super+1",
       "super+2",
@@ -98,7 +102,7 @@ describe("the product chords (GT-D21)", () => {
       }),
     ).toBe(false);
     expect(
-      isClipboardTrayChord({
+      isCardsChord({
         key: "V",
         metaKey: true,
         ctrlKey: false,
@@ -108,7 +112,7 @@ describe("the product chords (GT-D21)", () => {
       }),
     ).toBe(true);
     expect(
-      isClipboardTrayChord({
+      isCardsChord({
         key: "v",
         metaKey: true,
         ctrlKey: false,
@@ -117,6 +121,12 @@ describe("the product chords (GT-D21)", () => {
         repeat: false,
       }),
     ).toBe(false);
+    // HN: the clipboard tray's chord raises the hand now, its row named for it
+    expect(PRODUCT_CHORDS.find((chord) => chord.trigger === "super+shift+v")).toMatchObject({
+      id: "cards",
+      label: "Your hand",
+    });
+    expect(PRODUCT_CHORDS.some((chord) => (chord.id as string) === "clipboard-tray")).toBe(false);
   });
 
   it("⌘F is search's — Ctrl+F off the Mac — never with ⇧ or ⌥, never the other platform's modifier, and SAYS when it is kept (K4)", () => {
@@ -141,11 +151,58 @@ describe("the product chords (GT-D21)", () => {
     expect(search).toMatchObject({
       trigger: "super+f",
       label: "Search",
-      when: "while History or Godview is the view",
+      // the design lens's 16: the two rows the views share name them in one order, ⌘T's
+      when: "while Godview or History is the view",
     });
     // the chords kept always say no when
     expect(PRODUCT_CHORDS.filter((chord) => chord.when !== undefined).map((c) => c.id)).toEqual([
+      "new-terminal",
       "search",
+      "desk-copy",
+    ]);
+  });
+
+  it("⌘T is New terminal's — and SAYS when it is kept: in Godview and, since HN-7, in History", () => {
+    // the line takes it on the capture phase in those two views alone (composer-line.test.tsx's
+    // rows: from a focused pane in Godview and in History, left alone on Canvas)
+    expect(PRODUCT_CHORDS.find((chord) => chord.id === "new-terminal")).toMatchObject({
+      trigger: "super+t",
+      label: "New terminal",
+      when: "while Godview or History is the view",
+    });
+    // a pane's chord to keep, not the desk's: Settings → Terminal → Keyboard names it
+    expect(PRODUCT_CHORDS.find((chord) => chord.id === "new-terminal")?.scope).toBeUndefined();
+  });
+
+  it("⌘C is the desk's Copy — Ctrl+C off the Mac — never with ⇧ or ⌥, never the other platform's modifier, and SAYS when it is kept (HN-D3)", () => {
+    const key = (init: Partial<KeyboardEvent>) => ({
+      key: "c",
+      metaKey: false,
+      ctrlKey: false,
+      altKey: false,
+      shiftKey: false,
+      repeat: false,
+      ...init,
+    });
+    expect(isCopyChord(key({ metaKey: true }), "mac")).toBe(true);
+    expect(isCopyChord(key({ key: "C", metaKey: true }), "mac")).toBe(true);
+    // Ctrl+C on the Mac is a shell's interrupt; ⇧⌘C and ⌥⌘C are other chords
+    expect(isCopyChord(key({ ctrlKey: true }), "mac")).toBe(false);
+    expect(isCopyChord(key({ metaKey: true, shiftKey: true }), "mac")).toBe(false);
+    expect(isCopyChord(key({ metaKey: true, altKey: true }), "mac")).toBe(false);
+    expect(isCopyChord(key({ ctrlKey: true }), "other")).toBe(true);
+    expect(isCopyChord(key({ metaKey: true }), "other")).toBe(false);
+    expect(isCopyChord(key({ key: "v", metaKey: true }), "mac")).toBe(false);
+    expect(PRODUCT_CHORDS.find((chord) => chord.id === "desk-copy")).toMatchObject({
+      trigger: "super+c",
+      label: "Copy",
+      when: "on the desk, with something selected",
+      scope: "desk",
+    });
+    // kept only over the desk, which no pane is ever on — the one row the deck's keyboard page
+    // leaves to Ghostty (terminal-keyboard-model.test.ts)
+    expect(PRODUCT_CHORDS.filter((chord) => chord.scope === "desk").map((c) => c.id)).toEqual([
+      "desk-copy",
     ]);
   });
 

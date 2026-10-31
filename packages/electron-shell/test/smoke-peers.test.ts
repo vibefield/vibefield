@@ -98,7 +98,7 @@ describe("what a window says of its own pointer — ICE's presence (I42, desk.6)
 });
 
 describe("the window exit from BESIDE the desk (ICE I44) — away within one publish, still away back over the chrome", () => {
-  const line = { x: 677, y: 702, hit: "vf-line-input", inDesk: false, region: "no-drag" };
+  const line = { x: 304, y: 734, hit: "vf-line-snapshot", inDesk: false, region: "no-drag" };
   const said = { reason: null, cursor: { away: true, canvas: "" } };
   const exit = (over: Partial<ExitSeen> = {}): ExitSeen => ({
     from: "line",

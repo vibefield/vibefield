@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Ed25519SpkiBase64 } from "./trust-root";
+import { Ed25519SpkiBase64, IsoInstant } from "./trust-root";
 import { UpdateChannel } from "./update-policy";
 
 // WP8b / TD-2 (build-wp8-bundled-plugins.md WP8-D3/D4 as amended; trust-and-distribution.md §5) — the public
@@ -52,6 +52,10 @@ export const StagedReleaseIdentity = z
      * same one in product.json and replaces any other (`ProductInfo.buildId`'s shape). Absent on a stage cut before
      * WP12c: that app keeps the old adoption rule (user + contracts major only). */
     buildId: z.string().min(1).max(128).optional(),
+    /** AU-6 (LC-18) — when this build was made: the release workflow's plan time (`VIBEFIELD_BUILT_AT`), else the
+     * source commit's time, in UTC. Absent on a stage cut before AU-6. Strict on purpose: the stager parses the
+     * identity it writes, so a malformed time fails the stage, never the updater. */
+    builtAt: IsoInstant.optional(),
   })
   .passthrough()
   .superRefine((identity, ctx) => {

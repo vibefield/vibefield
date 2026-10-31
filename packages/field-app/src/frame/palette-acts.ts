@@ -1,6 +1,6 @@
 import { type FrameView, frameViewBuilt } from "@vibefield/contracts";
 import type { GlyphName } from "@vibefield/design-kit/glyphs";
-import { createActOf } from "./draft";
+import { createActOf } from "./line-model";
 import { FRAME_VIEWS, type ViewKeys, viewKeyLabel } from "./views";
 import { ZOOM_ACTS, type ZoomAct, zoomKeyLabel } from "./zoom";
 
@@ -11,10 +11,13 @@ import { ZOOM_ACTS, type ZoomAct, zoomKeyLabel } from "./zoom";
 // line's create, the zoom's), so a key changed there changes here. Godview's
 // System control is the one act with no table and no key: it was the
 // instrument bar's last tool, and the palette is where it went (GV-D1).
+// History's chosen session — Resume, or Jump to — is the other with no key: it
+// was the line's create until HN-7, and the palette's History row since.
 
 export type FrameActRun =
   | { readonly kind: "view"; readonly view: FrameView }
   | { readonly kind: "create" }
+  | { readonly kind: "chosen-session" }
   | { readonly kind: "zoom"; readonly act: ZoomAct }
   | { readonly kind: "system-control" }
   | { readonly kind: "settings" };
@@ -39,13 +42,28 @@ export interface FrameActGroup {
   readonly acts: readonly FrameAct[];
 }
 
+/** History's chosen session's act, as the palette's row names and marks it. */
+export interface ChosenSessionAct {
+  readonly glyph: "resume" | "jump";
+  readonly name: string;
+}
+
+/** History's chosen session's act (AR-8c, P3; DESIGN.md §8 "History"): Jump to
+ * while it runs here, else Resume. The line's create until HN-7; the palette's
+ * History row since — each session row's and ④'s head's say the same. */
+export function chosenSessionAct(live: boolean): ChosenSessionAct {
+  return live
+    ? { glyph: "jump", name: "Jump to this session" }
+    : { glyph: "resume", name: "Resume this session" };
+}
+
 /** The groups in the palette's order: Views · On this view · App.
- * `historyWaits` is why History's create (Resume) waits — the line's own
- * reading of what History lends it (`historyCreateWaits`, AR-8c); absent,
- * History's create waits for a session to be chosen. `historyLive`: the chosen
- * session runs here, so the create is Jump to (P3) — the same door's word.
- * `systemControlWaits` is why Godview's System control cannot run — its door
- * (`system-control-door.ts`) is not there yet — or null when it can. */
+ * `historyWaits` is why History's chosen session's act waits — the reading of
+ * what History lends the frame (`chosenSessionWaits`, AR-8c); absent, it waits
+ * for a session to be chosen. `historyLive`: the chosen session runs here, so
+ * its act is Jump to (P3) — the same door's word. `systemControlWaits` is why
+ * Godview's System control cannot run — its door (`system-control-door.ts`) is
+ * not there yet — or null when it can. */
 export function frameActGroups(
   view: FrameView,
   keys: ViewKeys,
@@ -61,18 +79,37 @@ export function frameActGroups(
     waits: frameViewBuilt(cell.view) ? null : "not built yet",
     run: { kind: "view", view: cell.view },
   }));
-  // The line's create, as the line names and keys it in this view (FC-D3).
-  const create = createActOf(view, keys, view === "history" && historyLive);
-  const onView: FrameAct[] = [
-    {
-      id: "create",
-      name: create.name,
-      glyph: create.glyph,
-      key: create.key,
-      waits: view === "history" ? historyWaits : null,
-      run: { kind: "create" },
-    },
-  ];
+  // The line's create, as the line names and keys it in this view (FC-D3) —
+  // New terminal ⌘T in Godview and in History (HN-7) — no row where the view
+  // has no act on the line (the Assistant's, unbuilt).
+  const create = createActOf(view, keys);
+  const onView: FrameAct[] =
+    create === null
+      ? []
+      : [
+          {
+            id: "create",
+            name: create.name,
+            glyph: create.glyph,
+            key: create.key,
+            waits: null,
+            run: { kind: "create" },
+          },
+        ];
+  // History's chosen session, after the create (DESIGN.md §8 the palette):
+  // Resume, waiting until a session is chosen — Jump to while it runs here —
+  // by the reading the line's create kept until HN-7.
+  if (view === "history") {
+    const session = chosenSessionAct(historyLive);
+    onView.push({
+      id: "chosen-session",
+      name: session.name,
+      glyph: session.glyph,
+      key: null,
+      waits: historyWaits,
+      run: { kind: "chosen-session" },
+    });
+  }
   // The zoom is Canvas's instrument (FC-D8): its acts are on Canvas only.
   if (view === "canvas") {
     for (const entry of ZOOM_ACTS) {
