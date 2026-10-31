@@ -21,6 +21,7 @@ import {
 } from "../chat/new-spark";
 import { FIXTURE_NOW } from "./chat-fixtures";
 import { FIXTURE_NATIVE, FIXTURE_WORK } from "./profiles-fixtures";
+import { FIXTURE_HATCHED } from "./spark-fixtures";
 
 // The New spark sheet on fixtures (SP-1c; docs/UI_SYSTEM.md): what fieldd would answer the sheet — the agents it
 // offers, the Agent Profiles, an agent's picker, a hatch — behind the product's own port (`NewSparkPort`), and the
@@ -39,7 +40,7 @@ export const NEW_SPARK_STATE_LABEL: Record<NewSparkState, string> = {
 };
 
 /** The face the still plates are dealt, so a plate draws the same star every time. */
-export const FIXTURE_SEED = 0x2f6a91c3;
+export const FIXTURE_SEED = FIXTURE_HATCHED.seed;
 
 const THINKER = AGENT_CATALOG[0];
 
@@ -151,7 +152,7 @@ export function newSparkPlateOf(state: Exclude<NewSparkState, "live">): NewSpark
   const agents = sparkAgentsOf(PROVIDERS);
   const thinker = agents[0];
   const base: NewSparkSheetViewProps = {
-    name: "Polaris",
+    name: FIXTURE_HATCHED.name,
     seed: FIXTURE_SEED,
     play: 1,
     agentId: THINKER.id,

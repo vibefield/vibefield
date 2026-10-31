@@ -8,9 +8,11 @@
  * seat's rules are upstream's (`focusTakesGeometry`, `pressTakesGeometry`).
  */
 
+import { AGENT_CATALOG, type AgentFieldRow, type SparkSummary } from "@vibefield/contracts";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { ComposerPort } from "../src/chat/ChatComposer";
 import type { FieldHost } from "../src/host";
 import { setHost } from "../src/host";
 
@@ -123,6 +125,8 @@ const { getDeckAppearance } = await import("../src/godview/deck-appearance");
 const { godviewThemeFor } = await import("../src/godview/godview-theme");
 const { getAppTheme } = await import("../src/theme");
 const { FielddProvider } = await import("@vibefield/fieldd-client/react");
+const { ChatView } = await import("../src/chat/ChatView");
+const { startSparksFeed } = await import("../src/chat/sparks-feed");
 
 type PoolClient = Parameters<typeof pool.openTerminalPool>[0];
 /** The floor's sessions as fieldd's roster lists them (`terminal.roster`). */
@@ -191,13 +195,20 @@ afterEach(() => {
 interface Mount {
   sessionId?: string | null;
   active?: boolean;
+  onKeyboard?: () => void;
 }
 
-function draw({ sessionId = "pty-vela", active = true }: Mount = {}) {
+function draw({ sessionId = "pty-vela", active = true, onKeyboard }: Mount = {}) {
   return createElement(
     FielddProvider,
     { client: fieldd as never },
-    createElement(SparkPane, { spark: "sp-vela0001", name: "Vela", sessionId, active }),
+    createElement(SparkPane, {
+      spark: "sp-vela0001",
+      name: "Vela",
+      sessionId,
+      active,
+      ...(onKeyboard === undefined ? {} : { onKeyboard }),
+    }),
   );
 }
 
@@ -330,6 +341,32 @@ describe("the pane takes the session's size when it takes the keyboard, never at
     const verbs = runtimeCalls.map((call) => call.verb);
     expect(verbs.indexOf("takeResizeControl")).toBeGreaterThanOrEqual(0);
     expect(verbs.indexOf("takeResizeControl")).toBeLessThan(verbs.indexOf("paste"));
+  });
+
+  it("says when it takes the keyboard — a press in it, or Send's paste — and never at mount (the thread's hello leaves)", async () => {
+    activations.set("pty-vela", { inputAllowed: true });
+    const onKeyboard = vi.fn();
+    await mountPane({ onKeyboard });
+    expect(onKeyboard).not.toHaveBeenCalled();
+    await act(async () => {
+      input().dispatchEvent(
+        new PointerEvent("pointerdown", { bubbles: true, pointerId: 1, button: 0 }),
+      );
+      await settle();
+    });
+    expect(onKeyboard).toHaveBeenCalledTimes(1);
+
+    // a pane that has not held it yet, taken by Send's paste
+    act(() => root?.unmount());
+    root = container === null ? null : createRoot(container);
+    const pasted = vi.fn();
+    await mountPane({ onKeyboard: pasted });
+    expect(pasted).not.toHaveBeenCalled();
+    await act(async () => {
+      sparkPaneOf("sp-vela0001")?.door?.paste("look at the failing test");
+      await settle();
+    });
+    expect(pasted).toHaveBeenCalledTimes(1);
   });
 
   it("gives the keyboard back when focus leaves the pane, and keeps the seat until another pane takes it", async () => {
@@ -496,5 +533,113 @@ describe("when there is no pane to draw, its place says why, never a blank", () 
     expect(pane().textContent).toBe(NO_TERMINALS);
     expect(sparkPaneOf("sp-vela0001")).toEqual({ state: "no-terminals", door: null });
     expect(runtimeCalls).toEqual([]);
+  });
+});
+
+describe("Chat hands the pane's keyboard to the thread's hello (ChatView; DESIGN.md §8 \"Chat's thread\")", () => {
+  const AT = "2026-10-31T05:00:00.000Z";
+  const AGENT = AGENT_CATALOG[0];
+  /** Vela just hatched: awake on the floor session this file's runtime holds, her run up and idle, no turn taken. */
+  const VELA: SparkSummary = {
+    id: "sp-vela0001",
+    name: "Vela",
+    face: { seed: 7 },
+    agent: AGENT.id,
+    profiles: ["native"],
+    thinksUnder: "native",
+    folder: "/f/vela",
+    createdAt: AT,
+    updatedAt: AT,
+    session: { runtimeRunId: "run-Vela", terminalSessionId: "pty-vela", live: true },
+  };
+  const OWN: AgentFieldRow = {
+    runtimeRunId: "run-Vela",
+    revision: 1,
+    kind: AGENT.id,
+    label: AGENT.label,
+    tier: "managed",
+    device: "dev-1",
+    status: "idle",
+    statusSince: AT,
+    stateChangedAt: AT,
+    createdAt: AT,
+    alive: true,
+    blockers: [],
+    spark: VELA.id,
+    terminal: { hosted: "local", runtimeSessionId: "pty-vela" },
+  };
+  const PORT: ComposerPort = {
+    providers: async () => [],
+    profileSets: async () => [],
+    models: async () => {
+      throw new Error("no picker here");
+    },
+  };
+  let stopFeed: (() => void) | null = null;
+  afterEach(() => {
+    stopFeed?.();
+    stopFeed = null;
+  });
+
+  const hello = (): Element | null => container?.querySelector(".vf-chat-hello") ?? null;
+  /** Type into the draft as the browser leaves it: the text in the editor, the caret at its end, an input event. */
+  function typeText(text: string): void {
+    act(() => {
+      const field = container?.querySelector<HTMLElement>(".vf-chat-input");
+      if (field === null || field === undefined) throw new Error("no draft");
+      field.focus();
+      field.textContent = "";
+      const node = document.createTextNode(text);
+      field.append(node);
+      const range = document.createRange();
+      range.setStart(node, node.length);
+      range.collapse(true);
+      window.getSelection()?.removeAllRanges();
+      window.getSelection()?.addRange(range);
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  }
+
+  it("a press in the pane takes the hello away for the window's life: an emptied draft does not bring it back", async () => {
+    stopFeed = startSparksFeed({
+      list: async () => [VELA],
+      watch: async (onFrame) => {
+        onFrame({ revision: 1, rows: [OWN] }, "snapshot");
+        return () => undefined;
+      },
+      open: async () => VELA,
+    });
+    await act(async () => {
+      root?.render(
+        createElement(
+          FielddProvider,
+          { client: fieldd as never },
+          createElement(ChatView, {
+            active: true,
+            surface: null,
+            onSurfaceChange: () => undefined,
+            port: PORT,
+          }),
+        ),
+      );
+      await settle();
+    });
+    await act(async () => {
+      await settle();
+    });
+    expect(pane().getAttribute("data-pane-state")).toBe("live");
+    expect(hello()).not.toBeNull();
+    await act(async () => {
+      input().dispatchEvent(
+        new PointerEvent("pointerdown", { bubbles: true, pointerId: 1, button: 0 }),
+      );
+      await settle();
+    });
+    expect(hello()).toBeNull();
+    // the keyboard back in the draft, a character typed and taken away: the hello stays gone
+    typeText("h");
+    typeText("");
+    expect(container?.querySelector(".vf-chat-input")?.textContent).toBe("");
+    expect(hello()).toBeNull();
   });
 });

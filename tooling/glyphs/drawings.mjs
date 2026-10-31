@@ -254,7 +254,7 @@ export const DRAWINGS = {
   duplicate: {
     label: "Duplicate",
     group: "actions",
-    role: "Duplicate on the desk's selection bar (⌘D); a taped selection does not offer it",
+    role: "Duplicate on the desk's selection bar (⌘D); a taped selection does not offer it; Chat's third starter",
     instrument: {
       s: `${R(8.5, 8.5, 12, 12, 3)}${P("M15.5 8.5V6.5a3 3 0 0 0-3-3h-6a3 3 0 0 0-3 3v6a3 3 0 0 0 3 3h2")}`,
     },
@@ -420,7 +420,7 @@ export const DRAWINGS = {
   agents: {
     label: "Agents",
     group: "objects",
-    role: "The Agents page and its head glyph",
+    role: "The Agents page and its head glyph; Chat's first starter",
     instrument: {
       s: `${C(12, 12, 3)}${C(12, 4.5, 2)}${C(5.5, 15.75, 2)}${C(18.5, 15.75, 2)}`,
     },
@@ -537,7 +537,7 @@ export const DRAWINGS = {
   panes: {
     label: "Godview",
     group: "objects",
-    role: "The Godview toggle: the deck's own silhouette",
+    role: "The Godview toggle: the deck's own silhouette; Chat's second starter",
     instrument: { s: `${R(3, 4, 18, 16, 3)}${P("M10.5 4v16M10.5 12H21")}` },
     hardware: {
       d: `${circlePath(12, 12, 9)}${circlePath(12, 12, 6.15)}${circlePath(12, 12, 4.85)}${bar(12, 12, 18.5, 5.5, 0.65)}${circlePath(15.5, 14.5, 1.2)}`,

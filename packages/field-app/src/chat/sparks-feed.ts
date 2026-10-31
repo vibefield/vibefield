@@ -169,6 +169,9 @@ class RunningFeed {
   #stop: (() => void) | null = null;
   #open = true;
   #onBoard = "";
+  /** the sparks this window has seen have a turn, for its life and written nowhere (HN-D9's rule): a run fieldd
+   * re-attached reads its transcript back, which the board never counts, so a turn seen before stays seen */
+  readonly #turnsSeen = new Set<SparkId>();
 
   constructor(readonly port: SparksPort) {
     this.refresh();
@@ -255,7 +258,8 @@ class RunningFeed {
       });
       return;
     }
-    const entries = sparkEntriesOf(this.#sparks, this.#rows);
+    const entries = sparkEntriesOf(this.#sparks, this.#rows, this.#turnsSeen);
+    for (const entry of entries) if (entry.turnSeen) this.#turnsSeen.add(entry.spark.id);
     const needing = entries.filter((entry) => entry.needsYou);
     publish({
       reading: { state: "ready", entries },

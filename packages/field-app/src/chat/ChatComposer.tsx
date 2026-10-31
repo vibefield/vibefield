@@ -90,6 +90,8 @@ export interface ChatComposerProps {
   port: ComposerPort;
   /** Send into the thread's pane (`thread-send.ts`, over Chat's world) */
   send: (text: string, stills: readonly string[]) => Promise<ThreadSendOutcome>;
+  /** a send into this thread runs, Send's or a starter's (Chat's one per thread): Send waits, busy, as for its own */
+  threadSending?: boolean | undefined;
   /** where an outcome is said (undefined: the line's note) */
   say?: ((text: string) => boolean) | undefined;
   /** the hand's registry of places (undefined: the window's) */
@@ -129,6 +131,7 @@ export function ChatComposer({
   onSurfaceChange,
   port,
   send,
+  threadSending = false,
   say = sayOnLine,
   targets = cardTargets,
 }: ChatComposerProps): ReactElement {
@@ -452,7 +455,7 @@ export function ChatComposer({
   // ── SEND (DESIGN.md §8 "Chat's composer"): pasted into the thread's pane, Return left to the person ──
   const sendNow = useCallback(async () => {
     const sent = parts;
-    if (sending.current || !draftSendable(sent, null)) return;
+    if (sending.current || threadSending || !draftSendable(sent, null)) return;
     sending.current = true;
     setBusy(true);
     let outcome: ThreadSendOutcome;
@@ -472,7 +475,7 @@ export function ChatComposer({
     chips.current = chipsOf(rest);
     if (live.current) redraw(rest, null);
     else onParkRef.current(rest);
-  }, [name, parts, redraw, say, send]);
+  }, [name, parts, redraw, say, send, threadSending]);
 
   const onKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
@@ -658,7 +661,7 @@ export function ChatComposer({
       revision={revision}
       blank={draftBlank(parts)}
       armed={draftSendable(parts, at === null ? null : `@${at.query}`)}
-      busy={busy}
+      busy={busy || threadSending}
       at={shownAt}
       boxRef={boxRef}
       editorRef={editorRef}

@@ -117,8 +117,9 @@ describe("the reach", () => {
     expect(CHAT_REACH).toEqual({ band: COVER_RESERVE_PX, lift: COVER_RESERVE_PX - CARD_PEEK });
     expect(CHAT_REACH.lift).toBe(20);
     const x = layout.left + 10;
-    // the composer stands on y 624–676 and the panel ends at 692: neither is the band in Chat
-    for (const y of [650, 684, WIN.height - COVER_RESERVE_PX]) {
+    // the thread's items (the hello's foot at 612) and the composer (y 624–676) stand inside the panel, which ends at
+    // 692: none of them is the band in Chat, though the hand's own band would reach them
+    for (const y of [600, 650, 684, WIN.height - COVER_RESERVE_PX]) {
       expect(inReach(layout, WIN, { x, y }, CHAT_REACH), `y ${y}`).toBe(false);
       expect(inReach(layout, WIN, { x, y }), `y ${y}, the hand's band`).toBe(true);
     }

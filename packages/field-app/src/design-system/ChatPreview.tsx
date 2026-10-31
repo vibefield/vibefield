@@ -3,7 +3,9 @@ import { SegmentedControl } from "@vibefield/design-kit/primitives";
 import { type ReactElement, useState } from "react";
 import { ChatComposerView } from "../chat/ChatComposerView";
 import { ChatPanelView, shownOf } from "../chat/ChatPanelView";
+import { draftBlank } from "../chat/composer-draft";
 import { SparkPaneView } from "../chat/SparkPaneView";
+import { threadItemsOf, threadQuiet } from "../chat/thread-items";
 import {
   CHAT_CHOSEN,
   CHAT_COMPOSER,
@@ -19,8 +21,9 @@ import {
 // reading of fixture sparks and rows (`chat-fixtures.ts`). What it replaces is only what a host supplies — fieldd's
 // answers, the clock, the acts (Wake and Send answer nothing here) and the thread's pane: a catalog holds no terminals,
 // so the pane's place shows the shipping `SparkPaneView`'s words, never the live pane. The thread's composer is the
-// shipping `ChatComposerView` on the plate's fixture draft and @ rows, never its controller. The markup and the CSS
-// are the product's.
+// shipping `ChatComposerView` on the plate's fixture draft and @ rows, never its controller. What stands in the thread
+// over its pane is the product's own reading (`threadItemsOf`) of the shown spark and the plate's draft: a new spark's
+// hello, whose starters send nothing here. The markup and the CSS are the product's.
 
 /** One of Chat's states, in the cover's place, on the frame's ground. */
 export function ChatPreview({
@@ -38,10 +41,14 @@ export function ChatPreview({
     place === undefined || shown === undefined ? undefined : (
       <SparkPaneView name={shown.spark.name} {...place} />
     );
+  const drafted = CHAT_COMPOSER[state];
   const composer =
-    shown === undefined ? undefined : (
-      <ChatComposerView name={shown.spark.name} {...CHAT_COMPOSER[state]} />
-    );
+    shown === undefined ? undefined : <ChatComposerView name={shown.spark.name} {...drafted} />;
+  // a catalog window has sent nothing, and its pane holds no keyboard: the hello leaves only for a draft
+  const items =
+    shown === undefined
+      ? []
+      : threadItemsOf(shown, threadQuiet(shown, draftBlank(drafted?.seed ?? []), false));
   return (
     <ChatPanelView
       reading={reading}
@@ -49,6 +56,7 @@ export function ChatPreview({
       now={FIXTURE_NOW}
       onChoose={setChosen}
       {...(pane === undefined ? {} : { pane })}
+      items={items}
       {...(composer === undefined ? {} : { composer })}
       {...(locale === undefined ? {} : { locale })}
     />

@@ -120,6 +120,9 @@ describe("UI system ownership boundaries", () => {
     const fixtures = source("design-system/chat-fixtures.ts");
     expect(preview).toMatch(/<ChatPanelView\s/u);
     expect(fixtures).toContain("sparkEntriesOf");
+    // SP-1d: the thread's items are the product's own reading of the shown spark, never a drawn copy of the hello
+    expect(preview).toContain("threadItemsOf");
+    expect(preview).not.toMatch(/<ThreadItemsView\s/u);
     for (const file of [preview, fixtures]) {
       expect(file).not.toMatch(/className="vf-chat/);
       expect(file).not.toContain("<style");

@@ -1609,21 +1609,42 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - **A starter** is 34 tall, corners 17, padded 0 14 0 11, on solid chrome ringed by the strong hairline, as wide as
       its words. Its glyph is 14 in secondary ink, then 8, then its words in 13/500 primary ink. Under the pointer it
       takes `--vf-fill` and rises 1, in 180ms on `--vf-ease-lift`. Pressed, it is sent as Send sends (§8 "Chat's
-      composer"): pasted into the pane, with Return left to you.
+      composer"): pasted into the pane, with Return left to you, its note Send's own. A thread takes one send at a
+      time, a starter's or Send's: while one runs, the starters wait (busy) and Send waits, and a press of either
+      does nothing, so two messages never sit in the agent's one input for a single Return to send as one.
+    - **A send that is not taken** leaves the hello standing when it was refused before the pane took the keyboard:
+      the window has no terminals, the pane was not found or not heard, its input did not open, or the spark waits on
+      you. Once the pane has taken the keyboard for a send, the hello leaves with it, pasted or not, since the pane
+      then holds the keyboard.
     - **What it covers:** at 1180 × 780 the card is about 200 tall, y 412–612, so while it shows it covers about the
       pane's last ten rows, where a new agent's input box waits. It leaves the moment you write, so nothing you type is
       under it.
     - **When they show:** while the thread is quiet. Quiet means four things hold:
-      - the spark is new: its session has had no turn yet;
+      - the spark is new: its session has had no turn yet (below);
       - its draft is empty;
       - the pane does not hold the keyboard;
       - nothing has been sent to it from this window.
-      A spark that has had a turn never says hello, so an idle spark with a transcript shows its pane alone. The hello
-      and starters leave the moment the draft holds anything, and come back if it is emptied. The pane taking the
-      keyboard, or the first send, takes them away for the window's life. A new window keeps no memory of them (HN-D9's
-      rule), so a spark that is still new says hello again.
+      The hello and starters leave the moment the draft holds anything, and come back if it is emptied. The pane
+      taking the keyboard, or the first send, takes them away for the window's life. A new window keeps no memory of
+      them (HN-D9's rule), so a spark that is still new says hello again.
+    - **How "new" is read:** from the board, cautiously, so that an idle spark with a transcript shows its pane alone.
+      The board counts a run's tokens only as they are spent live: a run that reads its transcript back counts nothing
+      from it until its next live turn. Both a woken spark's run (resumed, or started afresh) and a run fieldd
+      re-attached after a restart read it back. So a spark is new only while every fact the window holds agrees:
+      - it never started; or
+      - the board shows its own run, and all three hold:
+        - that run is the one it hatched in, born within a minute of the spark's record. A wake's run never is, so a
+          woken spark never says hello;
+        - fieldd is watching that run, not waiting to resume it;
+        - this window has never seen the spark at work or waiting on you, nor that run's tokens spent (a turn is a
+          model's answer, and every answer spends them). What the window saw is kept for its life (HN-D9's rule), so
+          a turn it saw outlasts the board's count when fieldd restarts.
+      A spark whose run the board does not show is not said to be new. One case is still open. A window that opens
+      after fieldd re-attached the run a spark hatched in, before that run's next live turn, has seen none of its
+      turns, so it can say hello over that spark's transcript. Closing it takes a fact on the board's row that a
+      transcript read back keeps, the run's turns (a contracts question, VF-PM's).
     - They come in over 420ms on `--vf-ease-island`, from 8 below at opacity 0, and they go at once. With reduced
-      motion they fade in over 120ms.
+      motion they fade in over 120ms, and a starter's rise takes 90ms on ease-out (M6).
     - The hello is VibeField's words for what a spark does, drawn in its voice. It is never sent to the session and is
       not in its transcript.
   - **Listening** (§2.10) is not reported: typing in the draft, or a paste, is not a report (§8 "Chat's list").
@@ -1725,7 +1746,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - never a trailing line break.
   - **Send** pastes the message into the thread's pane, the road ⌘V takes: bracketed when its program asked for it,
     with Return never pressed for you. Return in the draft and the send button both send. ⇧Return types nothing: the
-    draft is one line. While a send runs, send waits (busy), and a second press does nothing.
+    draft is one line. The thread takes one send at a time, Send's or a starter's (§8 "Chat's thread"): while one
+    runs, send waits (busy), and a press does nothing.
     - The pane takes the keyboard just before the paste (§8 "Chat's thread"), so it takes the session's size, and the
       keyboard stays there, where Return sends it. Sent, the words and chips it carried are cleared, and the line's
       note (§8 "The line") says so once: "Pasted into Vela's pane — Return sends it". The draft stays a field while a

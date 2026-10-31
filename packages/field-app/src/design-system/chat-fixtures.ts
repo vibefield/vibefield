@@ -16,7 +16,7 @@ import type { SparkPanePlace } from "../chat/thread-pane-door";
 import { paneTextOf } from "../frame/cards/card-text";
 import type { Card } from "../frame/cards/cards-model";
 import { FIXTURE_NATIVE, FIXTURE_WORK } from "./profiles-fixtures";
-import { FIXTURE_SPARKS } from "./spark-fixtures";
+import { FIXTURE_HATCHED, FIXTURE_SPARKS } from "./spark-fixtures";
 
 // Chat's fixture ADAPTER (SP-1b, SP-1d; docs/UI_SYSTEM.md): what fieldd would answer — the sparks it keeps, the field
 // board's rows, the agents and Agent Profiles it offers, an agent's picker — run through the PRODUCT's own readings
@@ -86,6 +86,14 @@ const SPARKS: readonly SparkSummary[] = [
   spark("sp-kiwi0001", "Kiwi", { runtimeRunId: "run-kiwi", live: false }),
 ];
 
+/** The spark the New spark sheet's plates hatch, just hatched: awake, its run up, no turn taken yet (the hello's). */
+const HATCHED: SparkSummary = {
+  ...spark("sp-polaris01", FIXTURE_HATCHED.name, live("polaris")),
+  face: { seed: FIXTURE_HATCHED.seed },
+  createdAt: minutesAgo(0),
+  updatedAt: minutesAgo(0),
+};
+
 /** Work's sign-in for the fixture agent: a session run under it is filed under Work. */
 const WORK_PERSONA = FIXTURE_WORK.personas.find((persona) => persona.provider === AGENT.id);
 
@@ -98,6 +106,7 @@ const ROWS: readonly AgentFieldRow[] = [
     status: "blocked",
     lastActivityAt: minutesAgo(0),
     blockers: [{ id: "q-1", kind: "question", since: minutesAgo(0) }],
+    usage: { cumulativeTokens: 48_200 },
   }),
   // Lyra is idle, but an agent it started is at work: Running (CH-D3)
   row({
@@ -105,6 +114,7 @@ const ROWS: readonly AgentFieldRow[] = [
     spark: "sp-lyra0001",
     origin: { by: "you" },
     lastActivityAt: minutesAgo(12),
+    usage: { cumulativeTokens: 126_900 },
   }),
   row({
     runtimeRunId: "run-lyra-agent",
@@ -112,12 +122,13 @@ const ROWS: readonly AgentFieldRow[] = [
     status: "working",
     lastActivityAt: minutesAgo(3),
   }),
-  // Juno is awake with nothing running: Ready
+  // Juno is awake with nothing running: Ready, a transcript behind it (so no hello: its pane alone)
   row({
     runtimeRunId: "run-juno",
     spark: "sp-juno0001",
     origin: { by: "you" },
     lastActivityAt: minutesAgo(60 * 26),
+    usage: { cumulativeTokens: 18_400 },
   }),
   // the person's own sessions, which @ offers a spark of This Mac and Work (SP-1d): two folders of one name, so the
   // second started takes its ordinal, and one under Work
@@ -145,6 +156,17 @@ const ROWS: readonly AgentFieldRow[] = [
   }),
 ];
 
+/** The hatched spark's own run: up and idle, nothing spent — it has had no turn. */
+const HATCHED_RUN = row({
+  runtimeRunId: "run-polaris",
+  spark: HATCHED.id,
+  origin: { by: "you" },
+  statusSince: minutesAgo(0),
+  stateChangedAt: minutesAgo(0),
+  createdAt: minutesAgo(0),
+  lastActivityAt: minutesAgo(0),
+});
+
 /** The agents fieldd offers: the catalog's, by its labels. */
 const PROVIDERS: readonly AgentProviderSummary[] = AGENT_CATALOG.map((entry) => ({
   id: entry.id,
@@ -157,6 +179,7 @@ const PROVIDERS: readonly AgentProviderSummary[] = AGENT_CATALOG.map((entry) => 
 /** Chat's plates, one per honest state. */
 export const CHAT_STATES = [
   "list",
+  "hello",
   "typing",
   "at",
   "menu",
@@ -173,6 +196,7 @@ export type ChatState = (typeof CHAT_STATES)[number];
 
 export const CHAT_STATE_LABEL: Record<ChatState, string> = {
   list: "Sparks",
+  hello: "A new spark",
   typing: "Typing",
   at: "@",
   menu: "An agent's model",
@@ -208,6 +232,11 @@ export function chatReadingOf(state: ChatState): SparksReading {
     case "fault":
     case "asleep":
       return { state: "ready", entries: sparkEntriesOf(SPARKS, ROWS) };
+    case "hello":
+      return {
+        state: "ready",
+        entries: sparkEntriesOf([HATCHED, ...SPARKS], [HATCHED_RUN, ...ROWS]),
+      };
     case "empty":
       return { state: "ready", entries: [] };
     case "opening":
@@ -217,10 +246,11 @@ export function chatReadingOf(state: ChatState): SparksReading {
   }
 }
 
-/** The spark a plate opens on: the newest, Juno (awake and Ready) for the pane's words and the composer, or Kiwi
- * asleep. */
+/** The spark a plate opens on: the newest (Polaris, just hatched, on the hello's), Juno (awake and Ready) for the
+ * pane's words and the composer, or Kiwi asleep. */
 export const CHAT_CHOSEN: Record<ChatState, string | null> = {
   list: null,
+  hello: HATCHED.id,
   typing: "sp-juno0001",
   at: "sp-juno0001",
   menu: "sp-juno0001",

@@ -43,7 +43,8 @@ import {
 //     paste — and Chat is the view. That flag gates the surface's auto-focus (so the caret stays the composer's at
 //     mount) AND its focus report, which is how the pane takes the session's size on focus (DS-D5, the deck's policy:
 //     `controlsResize` + `takeGeometryOnFocus`). It claims an empty seat only once Chat has shown it, never while it
-//     was mounted under another view's cover;
+//     was mounted under another view's cover. It says when it takes the keyboard (`onKeyboard`): the thread's hello,
+//     which stands over the agent's input box, leaves then;
 //   - its demand is live while Chat shows and none under another view's cover, as the deck's is.
 //
 // No pane frame: the thread's head is its head. While there is no pane to draw, its place says why (`SparkPaneView`).
@@ -57,6 +58,9 @@ export interface SparkPaneProps {
   sessionId: string | null;
   /** Chat is the view showing */
   active: boolean;
+  /** the pane took the keyboard — a press or a focus in it, or Send's paste: the thread's hello leaves for the window's
+   * life (DESIGN.md §8 "Chat's thread", when they show) */
+  onKeyboard?: (() => void) | undefined;
 }
 
 const NO_TERMINALS_REPORT: SparkPaneReport = Object.freeze({ state: "no-terminals", door: null });
@@ -141,7 +145,13 @@ function useFindingLapsed(episode: string | null): boolean {
 }
 
 /** The pane, on the window's floor. */
-function FloorSparkPane({ spark, name, sessionId, active }: SparkPaneProps): ReactElement {
+function FloorSparkPane({
+  spark,
+  name,
+  sessionId,
+  active,
+  onKeyboard,
+}: SparkPaneProps): ReactElement {
   const client = useFielddClient();
   // warmed, never claimed (the sign-in terminal's rule): a no-op once the runtime is warm or the deck has the pool
   useEffect(() => prewarmTerminalPool(client), [client]);
@@ -165,6 +175,11 @@ function FloorSparkPane({ spark, name, sessionId, active }: SparkPaneProps): Rea
   useEffect(() => {
     if (!active) setHolds(false);
   }, [active]);
+  const onKeyboardRef = useRef(onKeyboard);
+  onKeyboardRef.current = onKeyboard;
+  useEffect(() => {
+    if (holds) onKeyboardRef.current?.();
+  }, [holds]);
   // it claims the session's size only once Chat has shown it (DESIGN.md §8 "Chat's thread"), and keeps whatever seat
   // it holds after: mounted under another view's cover — a wake, a terminal named late — it claims no seat at the
   // hidden column's grid

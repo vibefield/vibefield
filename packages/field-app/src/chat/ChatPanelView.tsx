@@ -42,8 +42,12 @@ export interface ChatPanelViewProps {
   /** the shown spark's own pane, while it is awake (the product's `SparkPane`); absent, the pane's place says what a
    * window with no terminals says */
   pane?: ReactNode;
-  /** what stands in the shown thread over its pane, in order */
+  /** what stands in the shown thread over its pane, in order (`threadItemsOf`) */
   items?: readonly ThreadItem[];
+  /** a starter pressed in the thread's hello: its words, sent as Send sends */
+  onStarter?: ((words: string) => void) | undefined;
+  /** a send into the shown thread runs, a starter's or Send's: the starters wait */
+  sending?: boolean | undefined;
   /** the shown thread's composer, in its foot (the product's `ChatComposer`; the catalog's `ChatComposerView`) */
   composer?: ReactNode;
   /** the locale the times are said in; the window's own when absent */
@@ -93,6 +97,8 @@ export function ChatPanelView({
   onWake,
   pane,
   items = [],
+  onStarter,
+  sending = false,
   composer,
   locale,
 }: ChatPanelViewProps): ReactElement {
@@ -156,6 +162,8 @@ export function ChatPanelView({
             onWake={onWake}
             pane={pane}
             items={items}
+            onStarter={onStarter}
+            sending={sending}
             composer={composer}
           />
         )}
@@ -207,6 +215,8 @@ function ThreadColumn({
   onWake,
   pane,
   items,
+  onStarter,
+  sending,
   composer,
 }: {
   entry: SparkEntry;
@@ -214,6 +224,8 @@ function ThreadColumn({
   onWake: ((entry: SparkEntry) => void) | undefined;
   pane: ReactNode;
   items: readonly ThreadItem[];
+  onStarter: ((words: string) => void) | undefined;
+  sending: boolean;
   composer: ReactNode;
 }): ReactElement {
   const { spark, status, needsYou } = entry;
@@ -248,7 +260,7 @@ function ThreadColumn({
         </p>
       )}
       <div className="vf-chat-foot">
-        <ThreadItemsView items={items} />
+        <ThreadItemsView items={items} onStarter={onStarter} sending={sending} />
         {composer}
       </div>
     </section>

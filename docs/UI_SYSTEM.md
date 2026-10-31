@@ -99,7 +99,11 @@ The catalog currently mounts these shipping views directly:
     fixture agents, profiles and rows read by the product's own `atRowsOf`, and an agent's menu
     read by the New spark sheet's own `agentMenuOf` — at rest, typing, @ open on both groups, an
     agent's model and Effort, and the chips an agent, a session and a card make. Never its
-    controller (`ChatComposer`), which registers the hand's place and sends
+    controller (`ChatComposer`), which registers the hand's place and sends;
+  - the hello: what stands in the thread over its pane is the product's own `threadItemsOf` over
+    the shown spark and the plate's draft, drawn by the shipping `ThreadItemsView` inside the
+    panel — a spark just hatched saying hello with its three starters, which send nothing there,
+    and none where the shown spark has had a turn
 - the line (One Frame FR-2; shortened by Cards in Hand, HN-2): `ComposerLineView` in every state the
   Cards in Hand page's line plates draw — at rest, the snapshot under the pointer, in flight and
   waiting with no capture door, Objects out, Godview's New terminal, History's New terminal in the
