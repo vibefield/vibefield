@@ -1900,6 +1900,73 @@
               </table>
             </div>
 
+            <h3 id="cat-needs">needs.* — the person's queue</h3>
+            <p class="section-note">
+              CP-3, the person (<code>draft/compose-plane/cp3-the-person.md</code>, CP3-D1…D8 ruled A 2026-10-31;
+              <code>packages/contracts/src/compose.ts</code>; fieldd's <code>tool-plane/rooms/you/</code>). The needs-you
+              queue (CP-D12) is fieldd's one list of what waits on the person: a spark's question
+              (<a href="#cat-compose-door"><code>ask_user</code></a>), a spark's first send into a session the person
+              started (CP-D3, CP3-D3 B: whatever that session's mode, until a permission mode is a fact fieldd reads in no
+              vendor's words), a spawn past a spark's 8 live agents (CP-D7, CP3-D4 A), and an agent's own ask, which is
+              listed with where to answer it and never answered here (CP3-D1 A, CP-L4). fieldd keeps one record per item
+              per user root (<code>LAYOUT.NEEDS_DIR</code>, 0600 files in a 0700 directory), each an HMAC-SHA256 under
+              <code>NEEDS_KEY_FILE</code>'s secret, made by the one signer the spark records and the sessions' input
+              queues use. A record that is unsigned, does not verify, does not parse or is exposed to other users is set
+              aside and never served. That holds against an edit, not against an agent that reads the key: the key is
+              0600 to the same uid, as the sparks' is (EL7). An agent's ask is derived from its run's blockers and never
+              kept. Chat's list and thread call these doors. They hold <code>agents.manage</code> and are
+              <code>local</code>, beside <code>compose.sparks.*</code> (CP3-D6 A), because an answer may start an agent or
+              send words on the person's behalf, an act of the person at this desktop. <code>approval.respond</code>
+              stays reserved for AR-6's answers to an agent's own asks, and the phone reaches none of these until PG
+              rules its scope. An item's <code>kind</code> and <code>state</code> are open words, so an item of a kind
+              this build never heard of still reads. Its acts' words are DESIGN.md §9's ("The person's queue's words").
+            </p>
+            <div class="table-wrap">
+              <table class="reference-table">
+                <thead>
+                  <tr><th>Door</th><th>Params → result</th><th>Scope</th><th>Idem</th><th>Wraps upstream</th><th>Status</th><th>Witness</th></tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><span class="route">needs.list</span></td>
+                    <td><p><code>—</code> → <code>NeedsListResult {items: NeedsItem[]}</code></p></td>
+                    <td><p><code>agents.manage</code></p></td>
+                    <td><p>yes</p></td>
+                    <td><p>nothing upstream: the open items, oldest first, whole. An item is <code>{id, kind, state, from, spark?, asked, words?, cut?, choices?, count?}</code>. <code>from</code> names who asks as Chat or Godview names it; <code>spark</code> is the thread that shows it (the asker, or the spark that started the asking agent); <code>choices</code> are its acts in order, absent for an agent's ask. A held send adds <code>to</code>, a held spawn <code>agent</code>, <code>folder</code> and <code>live</code>, an agent's ask <code>ask</code> and <code>tool</code>. What an Allow acts on (the held words, the resolved launch) stays in the record and never rides the wire. An unaudited read, as <code>compose.sparks.list</code> is.</p></td>
+                    <td><span class="badge tone-built">Built</span></td>
+                    <td><p><code>needs-doors.test.ts</code> · <code>needs-queue.test.ts</code></p></td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">needs.subscribe</span></td>
+                    <td><p><code>—</code> → snapshot, then frames, of <code>NeedsListResult</code></p></td>
+                    <td><p><code>agents.manage</code></p></td>
+                    <td><p>yes</p></td>
+                    <td><p>the list, whole, at open and on every change (state transfer, never edges). An item answered in one window leaves every window's list.</p></td>
+                    <td><span class="badge tone-built">Built</span></td>
+                    <td><p><code>needs-doors.test.ts</code></p></td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">needs.answer</span></td>
+                    <td><p><code>NeedsAnswerParams {item, choice}</code> → <code>NeedsAnswerResult {item}</code></p></td>
+                    <td><p><code>agents.manage</code></p></td>
+                    <td><p>yes</p></td>
+                    <td><p><code>choice</code> is the act's index into the item's <code>choices</code>, never its word, so rewording an act in DESIGN.md changes nothing here. Declarative: answered once, an item is answered for every window, and the same answer again answers it as it is; another is <code>PRECONDITION_FAILED {reason: "answered"}</code>. Two answers to one item at once are one: the second waits for the first. An agent's ask is <code>PRECONDITION_FAILED {reason: "in-its-pane"}</code>, an act the item does not offer is <code>PRECONDITION_FAILED</code>, and an id fieldd does not know is <code>NOT_FOUND</code>. A question's answer is a fact. Allow queues a held send's words, marked as the spark's, and keeps the yes for that run, through a fieldd restart, until the run ends. Allow one more starts the held spawn past the cap, with its tasks. Not now drops what waited. Each answer is told to the spark as one marked line through its input queue (DESIGN.md §9), and an answer to a sleeping spark resumes it as <code>compose.sparks.open</code> does (CP3-D7 A). The result's <code>answer</code> keeps the act apart from its telling: <code>outcome</code> is the act's (<code>done</code> or <code>failed</code>, open, with a <code>reason</code>), and <code>told</code> is false while the spark could not be woken, with <code>waits</code> saying why; it hears the answer when it wakes. An act a restart broke into is never done again, and the spark is told so. Audited as <code>needs.answer</code> on a <code>needs-item</code> target, its choice by index and never the words, in the own-actions ledger; the outcome names the item's kind, the act's outcome and the run an answer woke.</p></td>
+                    <td><span class="badge tone-built">Built</span></td>
+                    <td><p><code>needs-doors.test.ts</code> · <code>needs-queue.test.ts</code></p></td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">needs.notices.subscribe</span></td>
+                    <td><p><code>—</code> → snapshot <code>{notices: []}</code>, then frames of <code>NeedsNotices {notices: NeedsNotice[]}</code></p></td>
+                    <td><p><code>agents.manage</code></p></td>
+                    <td><p>yes</p></td>
+                    <td><p>notify's carrier (CP3-D5 A). A frame carries the notices told since the last, each <code>{id, from, words, at}</code>, its words on one line of at most 140 characters. A notice is an event and is never kept: the snapshot is empty by design, and a window that opens later hears only what is told after it. Every window's status line says each. Electron main subscribes with its <code>shell-main</code> client, as TS-5's link notices do, and says one as an OS notice while no VibeField window is in front, never in a smoke; no IPC channel is added.</p></td>
+                    <td><span class="badge tone-built">Built</span></td>
+                    <td><p><code>needs-doors.test.ts</code> · <code>needs-notices.test.ts</code></p></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
             <h3 id="cat-compose-door">The <code>vibefield</code> MCP door — the tool plane's catalog</h3>
             <p class="section-note">
               These are not METHODS rows. Every tool VibeField offers an agent is one row of the tool plane's catalog
@@ -1931,7 +1998,9 @@
               (CP-L6), under the principal <code>mcp-agent</code> with the run's id and the caller as its target. A
               refusal is a tool result, <code>isError</code> with <code>structuredContent.fact</code>
               (<code>unknown-tool</code>, <code>forbidden</code>, <code>bad-input</code>, <code>outside</code>,
-              <code>not-found</code>), never a protocol error. Each caller's <code>instructions</code> are built from
+              <code>not-found</code>, <code>unavailable</code>, and since CP-2 <code>limit</code> and
+              <code>failed</code>), never a protocol error. A send or a spawn held for the person's OK (CP-3) is an
+              answer, never a refusal: it names the needs-you item it waits in (<a href="#cat-needs"><code>needs.*</code></a>). Each caller's <code>instructions</code> are built from
               the rows it holds. The door knows no vendor (AR-L1). The bridge reaches an agent by the agent runtime's
               per-run briefing at every birth (MT-D9): a spark's carries the whole server and its brief and refuses
               when it cannot be delivered (CP-1d); a plain run's carries the door and its read-only <code>agent</code>
@@ -1944,12 +2013,12 @@
                 <thead><tr><th>Tool</th><th>Family</th><th>Audience</th><th>Scope</th><th>Slice</th><th>Answers</th><th>Status</th></tr></thead>
                 <tbody>
                   <tr><td><span class="route">agents_available</span></td><td><p><code>agents</code></p></td><td><p><code>spark</code></p></td><td><p><code>profiles</code></p></td><td><p>CP-1</p></td><td><p>The agents the spark can start: each signed in under its Agent Profiles, with its models and their efforts.</p></td><td><span class="badge tone-built">Built</span></td></tr>
-                  <tr><td><span class="route">agent_spawn</span></td><td><p><code>agents</code></p></td><td><p><code>spark</code></p></td><td><p><code>profiles</code></p></td><td><p>CP-2</p></td><td><p>Starts an agent under one of its profiles, in a folder, with a model, an effort and a first prompt: its session id, and a wake when it finishes, asks or fails.</p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">agent_spawn</span></td><td><p><code>agents</code></p></td><td><p><code>spark</code></p></td><td><p><code>profiles</code></p></td><td><p>CP-2</p></td><td><p>Starts an agent under one of its profiles, in a folder, with a model, an effort and a first prompt: its session id, and a wake when it finishes, asks or fails. Past the spark's 8 live agents it answers <code>{held, queued}</code>, the needs-you item the spawn waits in for the person's OK; Allow one more starts it, Not now is the fact <code>limit</code> told as a wake (CP-3, CP3-D4 A).</p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">agents_list</span></td><td><p><code>watch</code></p></td><td><p><code>spark</code></p></td><td><p><code>profiles</code></p></td><td><p>CP-1</p></td><td><p>The sessions under its profiles: each one's agent, state, folder, model, cost, and who started it.</p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">agent_read</span></td><td><p><code>watch</code></p></td><td><p><code>spark</code></p></td><td><p><code>profiles</code></p></td><td><p>CP-1</p></td><td><p>One session's latest turns, bounded; <code>before</code> pages back.</p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">agent_watch</span></td><td><p><code>watch</code></p></td><td><p><code>spark</code></p></td><td><p><code>profiles</code></p></td><td><p>CP-2</p></td><td><p>A wake when a session it did not start finishes, asks, fails or ends.</p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">agent_unwatch</span></td><td><p><code>watch</code></p></td><td><p><code>spark</code></p></td><td><p><code>profiles</code></p></td><td><p>CP-2</p></td><td><p>Ends those wakes.</p></td><td><span class="badge tone-built">Built</span></td></tr>
-                  <tr><td><span class="route">agent_send</span></td><td><p><code>talk</code></p></td><td><p><code>spark</code></p></td><td><p><code>profiles</code></p></td><td><p>CP-2</p></td><td><p>Words to a session the person or the spark started, landing at its next idle moment marked as the spark's, sent on the person's behalf (CP2-D1).</p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">agent_send</span></td><td><p><code>talk</code></p></td><td><p><code>spark</code></p></td><td><p><code>profiles</code></p></td><td><p>CP-2</p></td><td><p>Words to a session the person or the spark started, landing at its next idle moment marked as the spark's, sent on the person's behalf (CP2-D1). The spark's first words to a session the person started answer <code>{queued: false, held}</code> and wait in the needs-you queue for his OK, which lasts for that run (CP-3, CP-D3, CP3-D3 B); words to an agent it started itself are never held.</p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">agent_interrupt</span></td><td><p><code>talk</code></p></td><td><p><code>spark</code></p></td><td><p><code>profiles</code></p></td><td><p>CP-2</p></td><td><p>Stops a session's current turn; the session stays.</p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">agent_stop</span></td><td><p><code>talk</code></p></td><td><p><code>spark</code></p></td><td><p><code>profiles</code></p></td><td><p>CP-2</p></td><td><p>Ends a session the spark started.</p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">flow_run</span></td><td><p><code>flows</code></p></td><td><p><code>spark</code></p></td><td><p><code>profiles</code></p></td><td><p>CP-4</p></td><td><p>Runs a flow the person approved, with its input; a wake when it asks or ends.</p></td><td><span class="badge tone-designed">Designed</span></td></tr>
@@ -1961,8 +2030,8 @@
                   <tr><td><span class="route">projects_list</span></td><td><p><code>projects</code></p></td><td><p><code>agent</code></p></td><td><p><code>device</code></p></td><td><p>CP-1</p></td><td><p>The person's projects, each with its name and the folders it has on this desktop.</p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">canvas_place</span></td><td><p><code>canvas</code></p></td><td><p><code>agent</code></p></td><td><p><code>device</code></p></td><td><p>CP-4</p></td><td><p>A board or a note on the desk, only when the person asked; the window places it, signed and undoable.</p></td><td><span class="badge tone-designed">Designed</span></td></tr>
                   <tr><td><span class="route">canvas_update</span></td><td><p><code>canvas</code></p></td><td><p><code>agent</code></p></td><td><p><code>object</code></p></td><td><p>CP-4</p></td><td><p>A change to a board or a note the caller placed, on the person's word.</p></td><td><span class="badge tone-designed">Designed</span></td></tr>
-                  <tr><td><span class="route">ask_user</span></td><td><p><code>you</code></p></td><td><p><code>spark</code></p></td><td><p><code>self</code></p></td><td><p>CP-3</p></td><td><p>A question to the person with choices; it returns at once and the answer is a wake.</p></td><td><span class="badge tone-designed">Designed</span></td></tr>
-                  <tr><td><span class="route">notify</span></td><td><p><code>you</code></p></td><td><p><code>agent</code></p></td><td><p><code>self</code></p></td><td><p>CP-3</p></td><td><p>A word to the person while they are in another view.</p></td><td><span class="badge tone-designed">Designed</span></td></tr>
+                  <tr><td><span class="route">ask_user</span></td><td><p><code>you</code></p></td><td><p><code>spark</code></p></td><td><p><code>self</code></p></td><td><p>CP-3</p></td><td><p>A question to the person with one to four distinct choices of its own (each one line, at most 40 characters, never VibeField's Not now, which follows them). It returns at once, <code>{item, queued: true}</code>, and the answer lands as one marked line in the spark's input queue (CP3-D2 A); a sleeping spark is woken for it (CP3-D7 A). A ninth open item from one spark is the fact <code>limit</code>.</p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">notify</span></td><td><p><code>you</code></p></td><td><p><code>agent</code></p></td><td><p><code>self</code></p></td><td><p>CP-3</p></td><td><p>A word to the person while they are in another view: every window's status line, and an OS notice while no VibeField window is in front (CP3-D5 A), on one line of at most 140 characters. It answers <code>{sent: true}</code>, handed on, never that they read it. A seventh in a minute from one session is the fact <code>limit</code>. A plain run's harness asks the person before the call, because its allowance takes read-only rows alone (MT-D7).</p></td><td><span class="badge tone-built">Built</span></td></tr>
                 </tbody>
               </table>
             </div>

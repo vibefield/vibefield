@@ -4576,6 +4576,47 @@ turn…**. While fieldd ends a turn that did not stop: **Ending the run**. When 
 **Still running** · "the stop was sent twice and not heard" · **End run**. A stop that was only
 sent is never "interrupted", and a live pane is never "Stopped": Stopped is an exit's word.
 
+**The person's queue's words** (track CO, CP-3; CP3-D1…D8 ruled A by James, 2026-10-31 06:31:34Z). An item's acts
+are words fieldd hands every window, so each is said once, here. A question's acts are the spark's own choices, one to
+four, each on one line, then **Not now**. A held send's are **Allow** and **Not now**; a held spawn's, **Allow one
+more** and **Not now**. An agent's own ask has no answer here, only **Show**: it is answered in its pane (CP-L4). A
+window answers by the act's place among the item's acts, never by its word, so rewording an act here changes nothing
+on the wire.
+A send is held for the person's OK when it is a spark's first send into a session the person started, whatever that
+session's mode (CP3-D3 B). CP3-D3 A, which holds only a session running with its approvals off, waits on a fact
+VibeField does not read yet: the session's permission mode, in no vendor's words. The person's yes lasts as long as
+that run does, through a restart of VibeField; a session resumed later is a new run, and asks again. A spark's words
+to an agent it started itself are never held, because that agent asks the person itself (TL-D2 A).
+What VibeField tells a spark lands in its session as one marked line of facts, never as the person's words (CP-L5),
+without a closing stop, so that lines waiting together join with " · ". Every value a fact quotes stays on its line:
+a line break or a run of spaces in a question, a choice or a name is said as one space, a name is cut at 64
+characters and a question at 120, the last of them "…". An answer to a sleeping spark wakes it, and lands as its first
+input (CP3-D7 A); a spark that cannot be woken hears it when it next wakes.
+- an answer: "VibeField: you answered Vela's question "Push the fix?": Yes" — Not now is said the same way;
+- a held send allowed: "VibeField: you allowed Vela's words to claude·2; they wait for its next idle moment, and its
+  later words to claude·2 are not held"; not allowed: "VibeField: you held back Vela's words to claude·2 (Not now);
+  they were not sent";
+- a held send whose session ended first: "VibeField: claude·2 ended before you answered; Vela's words were not sent";
+  one allowed that could not then be sent: "VibeField: Vela's words to claude·2 were not sent: ‹reason›";
+- a held spawn allowed: "VibeField: you allowed Vela one more agent: Claude Code started as ‹session›"; not allowed:
+  "VibeField: you said Not now to one more agent for Vela: limit, 8 live agents is the most a spark may run"; one
+  allowed that could not start: "VibeField: the agent you allowed Vela could not start: ‹reason›";
+- an act a restart broke into: "VibeField: VibeField restarted while acting on your answer about Vela's words to
+  claude·2; read the session to see", and for a spawn, "VibeField: VibeField restarted while starting the agent you
+  allowed Vela; list Vela's agents to see". An act is never done twice (CP2-D2).
+
+"Claude Code" is the catalog's label (R23b), and ‹reason› is fieldd's own words for what stopped it.
+
+**An agent's notify** (CP-3, CP3-D5 A) is said as its teller, named as Chat or Godview names it ("Vela", "claude·2"),
+then its words on one line: each line break or run of spaces is one space, and the words are cut at 140 characters,
+the last of them "…". In every window it is the status line's note (§8 draws it with CP-3's window half). At most two
+of one teller's notices wait their turn there, and a third from the same teller sheds that teller's oldest waiting
+one, so one agent's notices never hold back another's (PF4's watermark). Outside the app it is an OS notice, said
+only while no VibeField window is in front, and never in a smoke: its title is the teller, and its body the words. A
+click on it opens Chat, whoever told it, and chooses nothing there. A notify is never kept, and nothing says the
+person read it. A new item in the queue raises no OS notice: CP3-D5 rules notify alone. *Main decides, as for the
+link's notices (TS-5): a notice must reach someone with no window in front.*
+
 **The link's words** (track TS, TS-D1 and TS-D2 ruled 2026-10-27). The act is **Continue with
 Tailscale** on every button that starts it — the Connect pane, Settings → Devices, the phone — and
 the place that holds it says **Connect your devices**; the state is **Connected**. A desktop that
