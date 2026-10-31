@@ -12,9 +12,9 @@
 // Options come by ENV, since a pnpm script's trailing arguments reach Electron:
 //   VF_PHONE_RUN               the run's id, `^[a-z0-9]+(-[a-z0-9]+)*$` (its devices are `pts3-<runId>-1..3`)
 //   VF_PHONE_HID_LOG           `<logs>/<run>/<run>-hid.log`: the HID record; `shots/` is made beside it, and
-//                              `<run>-stage.log` (the run's STOP, HOST_RESTORED and HID lines, mirrored: they outlive an
-//                              output whose reader went away); ENUM's record (`phone-enum.json`) lives in `<logs>`,
-//                              where every launch reads it
+//                              `<run>-stage.log` (the run's STOP, HOST_RESTORED, HOST_UNPROVEN and HID lines,
+//                              mirrored: they outlive an output whose reader went away); ENUM's record
+//                              (`phone-enum.json`) lives in `<logs>`, where every launch reads it
 //   VF_PHONE_DEADLINE_MS       past it the command is stopped and the host restored (default 30 min, at most 6 h)
 //   VF_PHONE_DELETE_DEVICES=1  teardown (and --sweep) DELETES the run's own devices; unset, they are KEPT, shut down and
 //                              named (P5's default; the console runs set it on James's word, brief §13 RM2)
@@ -239,7 +239,7 @@ export function readOptions(env) {
     deleteDevices: del === "1",
     shotDir: runDir === null ? null : join(runDir, "shots"),
     enumRecord: runDir === null ? null : join(dirname(runDir), "phone-enum.json"),
-    // S-2: the run's STOP, HOST_RESTORED and HID lines, mirrored (`MIRRORED`) — kept if the output goes away
+    // S-2: the run's STOP, HOST_RESTORED, HOST_UNPROVEN and HID lines, mirrored (`MIRRORED`) — kept if the output goes away
     stageLog: runDir === null || !runIdOk(run) ? null : join(runDir, `${run}-stage.log`),
     errors,
   };
@@ -2246,7 +2246,7 @@ export async function sweep(
 /** One launch — enum, none, devices or cost. */
 async function launch(mode, command, opts) {
   // S-2: the output guarded before a line is said — a reader gone never kills the run before or during its teardown —
-  // and the run's STOP, HOST_RESTORED and HID lines mirrored beside its HID log, where they outlive it
+  // and the run's STOP, HOST_RESTORED, HOST_UNPROVEN and HID lines mirrored beside its HID log, where they outlive it
   const mirror = (line) => {
     try {
       appendFileSync(opts.stageLog, line);
@@ -2254,7 +2254,7 @@ async function launch(mode, command, opts) {
   };
   const gone = (which) => (why) =>
     mirror(
-      `stage-simulator-fixture: ${which} went away (${why}): its later lines are dropped; this file keeps the run's STOP, HOST_RESTORED and HID lines\n`,
+      `stage-simulator-fixture: ${which} went away (${why}): its later lines are dropped; this file keeps the run's STOP, HOST_RESTORED, HOST_UNPROVEN and HID lines\n`,
     );
   const stdout = guardedOutput(process.stdout, gone("stdout"));
   const stderr = guardedOutput(process.stderr, gone("stderr"));
