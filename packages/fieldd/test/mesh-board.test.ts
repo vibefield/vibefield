@@ -1,10 +1,5 @@
 import { EventEmitter } from "node:events";
-import {
-  type AgentFieldDelta,
-  type AgentFieldRow,
-  CONTRACTS_VERSION,
-  type DeviceInfo,
-} from "@vibefield/contracts";
+import { type AgentFieldRow, CONTRACTS_VERSION, type DeviceInfo } from "@vibefield/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MeshBoard, type MeshBoardFrame } from "../src/mesh-board";
 import { RpcCallError } from "../src/native-link";
@@ -142,7 +137,11 @@ interface Harness {
   roster: FakeRoster;
   links: FakeLinks;
   upstreams: FakeUpstreams;
-  local: { emit: ((delta: AgentFieldDelta) => void) | null; opened: number; disposed: number };
+  local: {
+    emit: ((frame: unknown, kind?: "delta" | "snapshot") => void) | null;
+    opened: number;
+    disposed: number;
+  };
 }
 
 function harness(rows: DeviceInfo[], selfDevice: () => string = () => SELF): Harness {
@@ -157,7 +156,7 @@ function harness(rows: DeviceInfo[], selfDevice: () => string = () => SELF): Har
     links,
     upstreams,
     openLocal: (_projection, _floor, emit) => {
-      local.emit = emit;
+      local.emit = emit as NonNullable<Harness["local"]["emit"]>;
       local.opened += 1;
       return {
         snapshot: { epoch: "self-boot.1", revision: 1, rows: [row("run-here", SELF)] },
@@ -838,5 +837,40 @@ describe("PG-1c — a reader's current open, the door's resync for a phone behin
     late.dispose();
     install.dispose();
     expect(h.board.size).toBe(0);
+  });
+});
+
+describe("PG-1d — this desktop's own board, re-presented in the hub", () => {
+  it("takes its own board's mid-stream snapshot: the held copy replaced, ONE per-device snapshot broadcast, later deltas on the same chain", () => {
+    const h = harness([selfRow]);
+    const r = reader(h);
+    const opened = r.open.devices.find((entry) => entry.device === SELF)?.snapshot;
+    const heard = r.frames.length;
+    // the self board re-presents on its own chain, its row presented anew (a
+    // stand-in for the gate's withdrawn join: the hub reads nothing but the key)
+    const represented = {
+      epoch: "self-boot.1",
+      revision: 1,
+      rows: [{ ...row("run-here", SELF), status: "idle" }],
+    };
+    expect(represented, "the re-present differs from the open").not.toEqual(opened);
+    h.local.emit?.(represented, "snapshot");
+    expect(r.frames.slice(heard)).toEqual([{ device: SELF, snapshot: represented }]);
+    // the held copy is REPLACED: a reader joining now, and a PG-1c resync, are
+    // answered with it, never with the open
+    const late = reader(h);
+    expect(late.open.devices.find((entry) => entry.device === SELF)?.snapshot).toEqual(represented);
+    expect(r.current()).toEqual(late.open);
+    // and a later delta still flows to its readers, on the same chain
+    h.local.emit?.(
+      { since: 1, revision: 2, upserts: [row("run-here", SELF, 2)], removed: [] },
+      "delta",
+    );
+    expect(r.frames.at(-1)).toMatchObject({
+      device: SELF,
+      delta: { epoch: "self-boot.1", since: 1, revision: 2 },
+    });
+    late.dispose();
+    r.dispose();
   });
 });

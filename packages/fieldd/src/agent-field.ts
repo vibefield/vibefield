@@ -856,8 +856,11 @@ export interface FieldSubscriptionOptions {
    * second source (MV-3a: the backend's changes behind the desk row) may
    * signal it with none */
   subscribe: (emit: (rows?: AgentListResult) => void) => () => void;
-  /** push one delta frame to this subscriber */
-  emit: (delta: AgentFieldDelta) => void;
+  /** push one frame to this subscriber, and the kind it rides: a delta, or
+   * (PG-1d) a snapshot that replaces the subscriber's copy at the board's
+   * current revision — a re-present on a gate flip, or the repair after a lost
+   * frame */
+  emit: (frame: AgentFieldDelta | AgentFieldSnapshot, kind: "delta" | "snapshot") => void;
   /** per-subscriber trailing-edge floor */
   minIntervalMs?: number;
   /**
@@ -897,6 +900,14 @@ export interface FieldSubscriptionOptions {
    * `monitorRow.attachable`/`.writable` (`attachableRows`). The store carrier
    * retired at DS-D14, so the door is the one carrier the gate keeps honest.
    * The residual above is PG-1d's (a re-present on a gate flip).
+   *
+   * *2026-10-31 (PG-1d):* the residual is closed. A flip of the gate
+   * re-presents the board (`FieldSubscription.represent`): ONE snapshot at the
+   * board's current revision, its rows shaped by the gate as it reads now. The
+   * flip itself moves no revision (the rows' own facts did not), so MF-1h
+   * holds; only a change already waiting out the floor, folded into the same
+   * snapshot, moves it. The daemon calls it on every live field and desk board
+   * when `terminalMeshPublished()` flips (`daemon.ts`, `openLocalBoard`).
    */
   terminalPublished?: () => boolean;
   onError?: (error: unknown) => void;
@@ -904,6 +915,12 @@ export interface FieldSubscriptionOptions {
 
 export interface FieldSubscription {
   snapshot: AgentFieldSnapshot;
+  /** PG-1d — the next frame re-presents the whole board as a snapshot at its
+   * current revision, at the floor like any frame: what a reader must hear when
+   * the gate that shapes the rows has moved and the rows have not. That is the
+   * subscriber's own revision unless a change still waiting out the floor is
+   * folded into it. */
+  represent: () => void;
   dispose: () => void;
 }
 
@@ -923,7 +940,15 @@ export interface FieldSubscription {
  * waiting out the floor has not moved it yet. A lost frame stays the READER's
  * gap (the view has no `reset`): the field's wire has never carried a
  * mid-stream snapshot, and the tolerant reader re-subscribes on a `since` it
- * does not hold. */
+ * does not hold.
+ *
+ * *Corrected 2026-10-31 (PG-1d):* the view resets now. A re-present and the
+ * repair after a lost frame both ride a mid-stream snapshot at the current
+ * revision, and every reader of the field and desk boards takes one: a mesh
+ * hub's upstreams and its own board (`mesh-board.ts` `#onUpstream`,
+ * `#onLocal`), a window's fold (field-app `model-board.ts` `frame`) and the
+ * phone's mesh copy (`MeshBoardCopy.swift` `apply(.snapshot)`), with the kind
+ * carried through `federated-subs.ts`. */
 export function createFieldSubscription(opts: FieldSubscriptionOptions): FieldSubscription {
   const projection = new FieldProjection(opts.project);
   const published = (): boolean => opts.terminalPublished?.() ?? true;
@@ -935,12 +960,17 @@ export function createFieldSubscription(opts: FieldSubscriptionOptions): FieldSu
       revision: () => projection.revision,
       ...(opts.epoch !== undefined ? { epoch: opts.epoch } : {}),
       present: (rows) => attachableRows(rows, published()),
+      resets: true,
     }),
     subscribe: (onChange) => opts.subscribe(() => onChange()),
-    emit: (frame) => opts.emit(frame as AgentFieldDelta),
+    emit: (frame, kind) => opts.emit(frame as AgentFieldDelta | AgentFieldSnapshot, kind),
     minIntervalMs: opts.minIntervalMs ?? AGENT_FIELD.MIN_INTERVAL_MS,
     ...(opts.heartbeatMs !== undefined ? { heartbeatMs: opts.heartbeatMs } : {}),
     ...(opts.onError !== undefined ? { onError: opts.onError } : {}),
   });
-  return { snapshot: subscriber.snapshot, dispose: () => subscriber.dispose() };
+  return {
+    snapshot: subscriber.snapshot,
+    represent: () => subscriber.resnapshot(),
+    dispose: () => subscriber.dispose(),
+  };
 }

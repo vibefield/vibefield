@@ -46,6 +46,9 @@ export type Locality = (typeof LOCALITIES)[number];
  *     answers `{epoch?, revision, rows}`, later frames `{epoch?, since,
  *     revision, upserts, removed}`. No resume: a gap re-subscribes for a fresh
  *     snapshot (the tolerant reader's own rule — there is no ack protocol).
+ *     *2026-10-31 (PG-1d):* a later frame may also be a `.snapshot` on the same
+ *     epoch that replaces the copy: a re-present on a terminal-gate flip, or the
+ *     repair after a lost frame, at the board's current revision.
  *   · `stream` — whole values: the open answers the current value and every
  *     later frame is the WHOLE current value again; the newest stands. Nothing
  *     on the wire is revisioned, so there is no gap to detect: a lost frame is

@@ -311,7 +311,8 @@ export async function computeModelStream(
               offModel();
             };
           },
-          emit: (delta) => emit(wire(delta), "delta"),
+          // the kind as sent (PG-1d: a re-present or a repair rides `.snapshot`)
+          emit: (frame, kind) => emit(wire(frame), kind),
           epoch,
           project: deskProjector((runtimeRunId) => peer.service.rowForRun(runtimeRunId)),
           minIntervalMs: ask.minIntervalMs,

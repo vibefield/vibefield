@@ -90,7 +90,7 @@ function writeExitedRecord(dataDir: string): void {
 }
 
 async function boot(
-  opts: { terminalMesh?: boolean } = {},
+  opts: { terminalMesh?: boolean; routes?: boolean } = {},
 ): Promise<{ daemon: FielddDaemon; mock: MockMgmtServer }> {
   const dataDir = mkdtempSync(join(tmpdir(), "vf-field-"));
   cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
@@ -113,6 +113,22 @@ async function boot(
   // live. A floor with its doors off is the publisher test's row, not this
   // file's.
   mock.helloTerminalMesh = opts.terminalMesh ?? true;
+  // PG-1d — a floor that names its cell on the routes stream, so a flip of the
+  // published boolean alone (E-F1's push: the same snapshot, the same revision)
+  // moves nothing on the board but the gate
+  if (opts.routes === true)
+    mock.terminalRoutes = {
+      revision: 1,
+      cells: [
+        {
+          cellInstanceId: 1,
+          cellBootId: "cell-a",
+          pid: 4001,
+          tokenGeneration: 1,
+          endpoints: ENDPOINTS,
+        },
+      ],
+    };
   mock.observedState = observed([
     { sessionId: PANE, pid: 42, cell: { cellInstanceId: 1, cellBootId: "cell-a" } },
   ]);
@@ -145,7 +161,7 @@ async function poll<T>(fn: () => T | undefined, ms = 5_000): Promise<T> {
  * `rpc.notifications`). */
 async function fieldSubscription(
   daemon: FielddDaemon,
-): Promise<{ rows: Array<Record<string, unknown>>; rpc: WsRpc }> {
+): Promise<{ rows: Array<Record<string, unknown>>; revision: number; rpc: WsRpc }> {
   const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}`);
   cleanup.push(() => ws.close());
   await new Promise<void>((resolve, reject) => {
@@ -155,9 +171,9 @@ async function fieldSubscription(
   const rpc = new WsRpc(ws);
   await helloAs(rpc, daemon.tokens.mint(["agent.observe"], "fm4").token);
   const sub = (await rpc.call("agent.subscribe", { projection: "field" })) as {
-    snapshot: { rows: Array<Record<string, unknown>> };
+    snapshot: { rows: Array<Record<string, unknown>>; revision: number };
   };
-  return { rows: sub.snapshot.rows, rpc };
+  return { rows: sub.snapshot.rows, revision: sub.snapshot.revision, rpc };
 }
 
 async function fieldDoor(daemon: FielddDaemon): Promise<Array<Record<string, unknown>>> {
@@ -208,6 +224,77 @@ describe("TM-2 (F-M4) — the door answers the attach-join question", () => {
     expect(rows.find((r) => r["runtimeRunId"] === RUN)?.["terminal"]).toMatchObject({
       runtimeSessionId: PANE,
     });
+  });
+});
+
+// PG-1d — F-M4's residual. The gate is read at SEND time, so an idle board kept
+// what its last frame said about the doors until the board next moved. A flip
+// of the gate re-presents every live field and desk board: ONE snapshot at the
+// board's current revision. The flip moves none (MF-1h), but a live daemon's
+// fold may have a change waiting out the floor, folded into the same snapshot,
+// so these rows hold it to "never behind the reader"; the idle unit rows pin
+// the exact revision.
+describe("PG-1d — the door re-presents its board when the doors' gate flips", () => {
+  type Note = { method: string; params: { payload: unknown } };
+  type Board = { revision: number; rows: Array<Record<string, unknown>> };
+  const snapshots = (notes: Note[]) => notes.filter((note) => note.method.endsWith(".snapshot"));
+  /** the revision a reader holds once every frame before `at` has landed */
+  const heldAt = (notes: Note[], at: Note, open: number): number => {
+    const before = notes.slice(0, notes.indexOf(at));
+    const last = before.filter((note) => note.method.endsWith(".delta")).at(-1);
+    return last === undefined ? open : (last.params.payload as { revision: number }).revision;
+  };
+  const joinOf = (board: Board) => board.rows.find((r) => r["runtimeRunId"] === RUN)?.["terminal"];
+
+  it("sends ONE snapshot at the held revision when the doors close, and one when they reopen", async () => {
+    const { daemon, mock } = await boot({ terminalMesh: true, routes: true });
+    await poll(() =>
+      daemon.agents.list().sessions.some((row) => row.runtimeRunId === RUN) ? true : undefined,
+    );
+    const { rows, revision, rpc } = await fieldSubscription(daemon);
+    expect(rows.find((r) => r["runtimeRunId"] === RUN)?.["terminal"]).toMatchObject({
+      runtimeSessionId: PANE,
+    });
+    const notes = rpc.notifications as Note[];
+
+    mock.pushTerminalMeshPublished(false);
+    const closed = await poll(() => snapshots(notes)[0]);
+    const shut = closed.params.payload as Board;
+    expect(shut.revision, "never behind the reader").toBeGreaterThanOrEqual(
+      heldAt(notes, closed, revision),
+    );
+    expect(joinOf(shut), "the join withdrawn").toBeUndefined();
+    expect(
+      shut.rows.find((r) => r["runtimeRunId"] === RUN),
+      "the row stands",
+    ).toBeDefined();
+
+    mock.pushTerminalMeshPublished(true);
+    const reopened = await poll(() => snapshots(notes)[1]);
+    const open = reopened.params.payload as Board;
+    expect(open.revision).toBeGreaterThanOrEqual(heldAt(notes, reopened, revision));
+    expect(joinOf(open)).toMatchObject({ runtimeSessionId: PANE });
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    expect(snapshots(notes), "one snapshot per flip").toHaveLength(2);
+  });
+
+  it("re-presents the doors reopening after a re-pair, which only `connected` announces", async () => {
+    // native-link: a re-pair to the same floor reopens the gate at `connected`;
+    // its hello's terminal-endpoints fires while `connected` is still false
+    const { daemon, mock } = await boot({ terminalMesh: true, routes: true });
+    await poll(() =>
+      daemon.agents.list().sessions.some((row) => row.runtimeRunId === RUN) ? true : undefined,
+    );
+    const { revision, rpc } = await fieldSubscription(daemon);
+    const notes = rpc.notifications as Note[];
+
+    mock.killClients();
+    const dropped = await poll(() => snapshots(notes)[0], 15_000);
+    expect(joinOf(dropped.params.payload as Board), "the link down: no doors").toBeUndefined();
+    const repaired = await poll(() => snapshots(notes)[1], 15_000);
+    const back = repaired.params.payload as Board;
+    expect(back.revision).toBeGreaterThanOrEqual(heldAt(notes, repaired, revision));
+    expect(joinOf(back), "the doors back with the link").toMatchObject({ runtimeSessionId: PANE });
   });
 });
 

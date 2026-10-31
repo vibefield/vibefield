@@ -26,6 +26,7 @@
         "{workspaceRoot}/apps/desktop/packaging/bundled-list.mjs",
         "{workspaceRoot}/apps/desktop/packaging/run-browser-profile-smoke.mjs",
         "{workspaceRoot}/apps/desktop/packaging/smoke-daemons.mjs",
+        "{workspaceRoot}/packages/electron-shell/src/testing/smoke-census.mjs",
         "{workspaceRoot}/apps/desktop/packaging/build-native-release.mjs",
         "{workspaceRoot}/scripts/host-links.mjs",
         "{workspaceRoot}/apps/desktop/packaging/codesign-entitlements.mjs",
