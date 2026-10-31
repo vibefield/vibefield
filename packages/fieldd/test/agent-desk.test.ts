@@ -237,7 +237,8 @@ describe("createFieldSubscription — the chain's epoch and the heartbeat (DS-3)
     const sub = createFieldSubscription({
       list: source.list,
       subscribe: source.subscribe,
-      emit: (delta) => frames.push(delta),
+      // no re-present and no throw here: every frame these rows hear is a delta
+      emit: (frame) => frames.push(frame as AgentFieldDelta),
       minIntervalMs: 100,
       epoch: "fieldd-test.7",
     });
@@ -256,7 +257,8 @@ describe("createFieldSubscription — the chain's epoch and the heartbeat (DS-3)
     const sub = createFieldSubscription({
       list: source.list,
       subscribe: source.subscribe,
-      emit: (delta) => frames.push(delta),
+      // no re-present and no throw here: every frame these rows hear is a delta
+      emit: (frame) => frames.push(frame as AgentFieldDelta),
       minIntervalMs: 100,
       epoch: "fieldd-test.1",
       heartbeatMs: 1_000,
@@ -293,7 +295,8 @@ describe("createFieldSubscription — the chain's epoch and the heartbeat (DS-3)
     const sub = createFieldSubscription({
       list: source.list,
       subscribe: source.subscribe,
-      emit: (delta) => frames.push(delta),
+      // no re-present and no throw here: every frame these rows hear is a delta
+      emit: (frame) => frames.push(frame as AgentFieldDelta),
     });
     expect(sub.snapshot).not.toHaveProperty("epoch");
     vi.advanceTimersByTime(60_000);

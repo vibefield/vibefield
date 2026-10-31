@@ -1711,7 +1711,9 @@
                   per-subscriber trailing-edge floor. The door is never capped in rows: it carries the whole
                   board. <em>Since PG-1c (2026-10-31, <code>1790be95f</code>):</em> a phone that falls behind is held
                   in bytes, never cut. Once 256 KiB is queued on its connection, its mesh board's deltas stop, and at
-                  half it is sent the whole board, once (api, Subscriptions).
+                  half it is sent the whole board, once (api, Subscriptions). <em>Since PG-1d (2026-10-31):</em> a
+                  flip of the doors' gate re-presents the board as one snapshot at its current revision, so a
+                  reader learns of the flip at once, not at the board's next change.
                 </p>
                 <span class="badge tone-built">Built</span>
               </div>
@@ -1772,7 +1774,9 @@
               the model row's promise with the join. While this device's terminal doors are down, a desk row's
               <code>monitorRow.attachable</code>, and <code>.writable</code> where declared, read false, so a peer
               window reading it no longer raises the deck on a run it cannot attach. An owner older than PG-1a still
-              promises, and its readers keep the run-id fallback.
+              promises, and its readers keep the run-id fallback. <em>Since PG-1d (2026-10-31):</em> a flip of the
+              gate re-presents every live field and desk board at once, so an idle board no longer keeps a stale
+              join or promise until its next change.
             </p>
             <div class="callout foundation">
               <strong>The store's audience is the tailscale login.</strong>

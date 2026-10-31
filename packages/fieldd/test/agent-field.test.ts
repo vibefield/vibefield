@@ -571,6 +571,55 @@ describe("createFieldSubscription — one subscriber's floor (§5)", () => {
     sub.dispose();
   });
 
+  it("re-presents the board at its revision when the gate flips, with no change of its own (PG-1d)", () => {
+    // F-M4's residual: the gate is read at SEND time, so an idle board kept a
+    // stale join, and since PG-1a a stale attach promise, until its next
+    // change. `represent()` sends ONE snapshot at the revision the subscriber
+    // holds: the rows' own facts did not move, so the revision does not either
+    // (MF-1h), and the chain goes on from it.
+    const source = fold(board(summary({ status: "idle" })));
+    const frames: Array<{ frame: Record<string, unknown>; kind: string }> = [];
+    let published = true;
+    const sub = createFieldSubscription({
+      list: source.list,
+      subscribe: source.subscribe,
+      emit: (frame, kind) => frames.push({ frame: frame as never, kind }),
+      minIntervalMs: 250,
+      epoch: "boot.1",
+      terminalPublished: () => published,
+    });
+    expect(sub.snapshot.rows[0]?.terminal).toMatchObject({ hosted: "local" });
+    const revision = sub.snapshot.revision;
+    const rowsOf = (at: number) => frames[at]?.frame["rows"] as Array<Record<string, unknown>>;
+
+    published = false;
+    sub.represent();
+    expect(frames, "at the floor, like any frame").toHaveLength(0);
+    vi.advanceTimersByTime(250);
+    expect(frames).toHaveLength(1);
+    expect(frames[0]).toMatchObject({ kind: "snapshot", frame: { epoch: "boot.1", revision } });
+    expect(rowsOf(0)[0]?.["terminal"], "the join withdrawn").toBeUndefined();
+    expect(rowsOf(0)[0], "the row stands").toMatchObject({ kind: "claude", alive: true });
+
+    // the chain goes on from the snapshot's revision
+    source.publish(board(summary({ status: "working" })));
+    vi.advanceTimersByTime(250);
+    expect(frames[1]).toMatchObject({
+      kind: "delta",
+      frame: { since: revision, revision: revision + 1 },
+    });
+
+    // and back: the join restored, still at the revision the subscriber holds
+    published = true;
+    sub.represent();
+    vi.advanceTimersByTime(250);
+    expect(frames[2]).toMatchObject({ kind: "snapshot", frame: { revision: revision + 1 } });
+    expect(rowsOf(2)[0]?.["terminal"]).toMatchObject({ hosted: "local" });
+    vi.advanceTimersByTime(1_000);
+    expect(frames, "one snapshot per flip, nothing after").toHaveLength(3);
+    sub.dispose();
+  });
+
   it("carries the join by default — a caller with no tailnet question to ask", () => {
     const source = fold(board(summary({ status: "idle" })));
     const sub = createFieldSubscription({

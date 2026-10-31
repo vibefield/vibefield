@@ -202,6 +202,7 @@ import {
   clipRecordedLanes,
   createFieldSubscription,
   deskProjector,
+  type FieldSubscription,
   malformedBoardAsk,
   projectFieldRow,
   refuseBoardAsk,
@@ -261,7 +262,13 @@ import {
 } from "./library-doc";
 import { LinkService, otherUserLinks } from "./link-service";
 import { McpService } from "./mcp-service";
-import { type BoardDelta, type BoardProjection, type LocalBoard, MeshBoard } from "./mesh-board";
+import {
+  type BoardDelta,
+  type BoardProjection,
+  type LocalBoard,
+  type LocalBoardSnapshot,
+  MeshBoard,
+} from "./mesh-board";
 import { MESH_BUS_CARRIES_CONTENT } from "./mesh-bus";
 import { MeshClient, meshNodeUp, type ServeSpec } from "./mesh-client";
 import { MeshLaneLink } from "./mesh-lane";
@@ -3685,12 +3692,31 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // a revision of one chain for a revision of another.
     let boardChains = 0;
     const nextBoardEpoch = (): string => `${bootId}.${++boardChains}`;
+    // PG-1d (F-M4's residual) — every live field and desk board of this device
+    // is re-presented when the doors' gate flips: ONE snapshot at the board's
+    // current revision (its reader's own unless a change waiting out the floor
+    // is folded in), its rows shaped by the gate as it reads now. The flip
+    // is read off the gate itself, never off one event: a re-pair to the same
+    // floor reopens it at `connected` (its hello's `terminal-endpoints` fires
+    // while the link is still down), and a link lost with nothing held closes
+    // it with no `terminal-endpoints` at all (`native-link.ts`).
+    const gatedBoards = new Set<FieldSubscription>();
+    let presentedGate = native.terminalMeshPublished();
+    const representOnGateFlip = (): void => {
+      const gate = native.terminalMeshPublished();
+      if (gate === presentedGate) return;
+      presentedGate = gate;
+      for (const board of gatedBoards) board.represent();
+    };
+    for (const event of ["terminal-endpoints", "connected", "reconnecting", "closed", "superseded"])
+      native.on(event, representOnGateFlip);
     /** One board of THIS device at a projection and a floor: a snapshot on its
-     * own chain, then deltas through `emit` (`createFieldSubscription`). */
+     * own chain, then its frames through `emit` (`createFieldSubscription`): its
+     * deltas, and (PG-1d) a snapshot when it is re-presented or repaired. */
     const openLocalBoard = (
       projection: BoardProjection,
       minIntervalMs: number,
-      emit: (delta: BoardDelta) => void,
+      emit: (frame: BoardDelta | LocalBoardSnapshot, kind?: "delta" | "snapshot") => void,
       heartbeatMs?: number,
     ): LocalBoard => {
       const epoch = nextBoardEpoch();
@@ -3754,7 +3780,14 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
             error: error instanceof Error ? error.message : String(error),
           }),
       });
-      return { snapshot: { ...board.snapshot, epoch }, dispose: board.dispose };
+      gatedBoards.add(board);
+      return {
+        snapshot: { ...board.snapshot, epoch },
+        dispose: () => {
+          gatedBoards.delete(board);
+          board.dispose();
+        },
+      };
     };
     /** DS-3 — the mesh board; built once PeerLink and the federated manager
      * exist (below). Null only in the window before that. */
@@ -3855,7 +3888,14 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
             },
           };
         }
-        const board = openLocalBoard(projection, floor, (delta) => emit(delta), heartbeatMs);
+        // `.delta` carries the board's deltas; `.snapshot` (PG-1d) its
+        // re-present on a gate flip (or a repair), at its current revision
+        const board = openLocalBoard(
+          projection,
+          floor,
+          (frame, kind) => emit(frame, kind),
+          heartbeatMs,
+        );
         return {
           snapshot: board.snapshot,
           dispose: () => {
