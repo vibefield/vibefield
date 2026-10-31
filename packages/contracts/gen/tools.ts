@@ -104,6 +104,100 @@ export const SERVED_TOOLS = [
     }
   },
   {
+    "name": "agent_spawn",
+    "family": "agents",
+    "category": "agents",
+    "audience": "spark",
+    "scope": "profiles",
+    "slice": "CP-2",
+    "description": "Start an agent under one of your profiles, in a folder, with a model, an effort and a first prompt. It asks the user before it acts, as every agent does. Returns its session id, and you are woken when it finishes, asks or fails.",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "agent": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+        },
+        "profile": {
+          "type": "string",
+          "pattern": "^[a-z0-9](?:[a-z0-9-]{0,46}[a-z0-9])?$"
+        },
+        "cwd": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model": {
+          "type": "object",
+          "properties": {
+            "modelId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            "custom": {
+              "type": "boolean"
+            },
+            "controls": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1024
+              },
+              "propertyNames": {
+                "minLength": 1,
+                "maxLength": 1024
+              }
+            }
+          },
+          "required": [
+            "modelId"
+          ],
+          "additionalProperties": true
+        },
+        "tasks": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32000
+          },
+          "maxItems": 16
+        }
+      },
+      "required": [
+        "agent"
+      ],
+      "additionalProperties": true
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "session": {
+          "type": "string",
+          "minLength": 1
+        },
+        "queued": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "session",
+        "queued"
+      ],
+      "additionalProperties": true
+    }
+  },
+  {
     "name": "agents_list",
     "family": "watch",
     "category": "agents",
@@ -301,6 +395,245 @@ export const SERVED_TOOLS = [
       "required": [
         "session",
         "turns"
+      ],
+      "additionalProperties": true
+    }
+  },
+  {
+    "name": "agent_watch",
+    "family": "watch",
+    "category": "agents",
+    "audience": "spark",
+    "scope": "profiles",
+    "slice": "CP-2",
+    "description": "Be woken when a session you did not start finishes, asks the user, fails or ends.",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "session": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "session"
+      ],
+      "additionalProperties": true
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "session": {
+          "type": "string",
+          "minLength": 1
+        },
+        "watching": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "session",
+        "watching"
+      ],
+      "additionalProperties": true
+    }
+  },
+  {
+    "name": "agent_unwatch",
+    "family": "watch",
+    "category": "agents",
+    "audience": "spark",
+    "scope": "profiles",
+    "slice": "CP-2",
+    "description": "Stop being woken by a session you watch.",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "session": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "session"
+      ],
+      "additionalProperties": true
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "session": {
+          "type": "string",
+          "minLength": 1
+        },
+        "watching": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "session",
+        "watching"
+      ],
+      "additionalProperties": true
+    }
+  },
+  {
+    "name": "agent_send",
+    "family": "talk",
+    "category": "agents",
+    "audience": "spark",
+    "scope": "profiles",
+    "slice": "CP-2",
+    "description": "Send words to a session the user or you started. They wait for its next idle moment and land there marked as yours, sent on the user's behalf.",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "session": {
+          "type": "string",
+          "minLength": 1
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32000
+        }
+      },
+      "required": [
+        "session",
+        "text"
+      ],
+      "additionalProperties": true
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "session": {
+          "type": "string",
+          "minLength": 1
+        },
+        "queued": {
+          "type": "boolean",
+          "const": true
+        },
+        "position": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "session",
+        "queued",
+        "position"
+      ],
+      "additionalProperties": true
+    }
+  },
+  {
+    "name": "agent_interrupt",
+    "family": "talk",
+    "category": "agents",
+    "audience": "spark",
+    "scope": "profiles",
+    "slice": "CP-2",
+    "description": "Stop a session's current turn. The session stays, and the stop counts as the user's.",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "session": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "session"
+      ],
+      "additionalProperties": true
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "session": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sent": {
+          "type": "boolean",
+          "const": true
+        }
+      },
+      "required": [
+        "session",
+        "sent"
+      ],
+      "additionalProperties": true
+    }
+  },
+  {
+    "name": "agent_stop",
+    "family": "talk",
+    "category": "agents",
+    "audience": "spark",
+    "scope": "profiles",
+    "slice": "CP-2",
+    "description": "End a session you started.",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "session": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "session"
+      ],
+      "additionalProperties": true
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "session": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ending": {
+          "type": "boolean",
+          "const": true
+        }
+      },
+      "required": [
+        "session",
+        "ending"
       ],
       "additionalProperties": true
     }

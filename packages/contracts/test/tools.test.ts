@@ -118,13 +118,27 @@ describe("served and planned (ruling 2)", () => {
     for (const name of served) expect(toolRow(name), name).toBeDefined();
   });
 
-  it("serves only rows whose slice has landed, and every one of them only reads", () => {
+  // CP-1's rows only read; CP-2's act (start and talk; `draft/compose-plane/cp2-talk-room.md`, ruled 2026-10-31), each a
+  // spark's alone, with its destructive and idempotent hints said.
+  it("serves exactly the rows whose slice has landed: CP-1's read, CP-2's act and are a spark's", () => {
     for (const t of TOOLS.filter((x) => served.has(x.name))) {
-      expect(t.slice, t.name).toBe("CP-1");
-      expect(t.readOnly, t.name).toBe(true);
+      expect(["CP-1", "CP-2"], t.name).toContain(t.slice);
+      if (t.slice === "CP-1") expect(t.readOnly, t.name).toBe(true);
+      if (t.slice === "CP-2") {
+        expect(t.readOnly, t.name).toBe(false);
+        expect(t.audience, t.name).toBe("spark");
+        expect(typeof t.destructive, t.name).toBe("boolean");
+        expect(typeof t.idempotent, t.name).toBe("boolean");
+      }
     }
-    for (const t of TOOLS.filter((x) => x.slice === "CP-1"))
+    for (const t of TOOLS.filter((x) => x.slice === "CP-1" || x.slice === "CP-2"))
       expect(served.has(t.name), t.name).toBe(true);
+  });
+
+  it("says agent_send's words land marked as the spark's, sent on the user's behalf (CP2-D1)", () => {
+    const send = toolRow("agent_send")!;
+    expect(send.description).toContain("marked as yours, sent on the user's behalf");
+    expect(send.description).not.toContain("as the user's words");
   });
 
   it("projects exactly the served rows, in catalog order, with all four annotations and closed-world", () => {

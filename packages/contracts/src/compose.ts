@@ -317,3 +317,75 @@ export type ComposeHistorySearchOutput = z.infer<typeof ComposeHistorySearchOutp
 
 export const ComposeHistoryReadInput = ComposeAgentReadInput;
 export type ComposeHistoryReadInput = z.infer<typeof ComposeHistoryReadInput>;
+
+// ── CP-2: start and talk (`draft/compose-plane/cp2-talk-room.md`, ruled 2026-10-31 03:49:24Z, CP2-D1…D7 on their
+// leans). A spark's words join the session's one input queue and land at its next idle moment, marked as the spark's
+// and sent on the person's behalf (CP-L5, CP2-D1); no call blocks, so every answer here is what was queued or sent,
+// never what the other agent did with it.
+
+/** The longest text one send or one task carries. */
+export const COMPOSE_TEXT_MAX = 32_000;
+
+/** agent_spawn: one agent under one of the spark's profiles, one level deep (TL-D2). fieldd's spawn takes no first
+ * prompt, so each task is queued and lands at the agent's next idle moment (the v2 page's spawn). */
+export const ComposeAgentSpawnInput = z
+  .object({
+    /** the agent, as agents_available names it */
+    agent: AgentProviderId,
+    /** the profile set it runs under, one of the spark's (absent: the one the spark thinks under) */
+    profile: AgentProfileSetId.optional(),
+    /** the folder it starts in (absent: the spark's own folder) */
+    cwd: z.string().min(1).optional(),
+    /** a model the agent offers and its controls, the effort among them (PJ-6) */
+    model: AgentModelSelection.optional(),
+    /** the first prompts, queued in order */
+    tasks: z.array(z.string().min(1).max(COMPOSE_TEXT_MAX)).max(16).optional(),
+  })
+  .passthrough();
+export type ComposeAgentSpawnInput = z.infer<typeof ComposeAgentSpawnInput>;
+
+export const ComposeAgentSpawnOutput = z
+  .object({
+    session: z.string().min(1),
+    /** how many tasks wait in its queue */
+    queued: z.number().int().min(0),
+  })
+  .passthrough();
+export type ComposeAgentSpawnOutput = z.infer<typeof ComposeAgentSpawnOutput>;
+
+/** The one input of agent_watch, agent_unwatch, agent_interrupt and agent_stop: the session it acts on. */
+export const ComposeAgentSessionInput = z.object({ session: z.string().min(1) }).passthrough();
+export type ComposeAgentSessionInput = z.infer<typeof ComposeAgentSessionInput>;
+
+export const ComposeAgentWatchOutput = z
+  .object({ session: z.string().min(1), watching: z.boolean() })
+  .passthrough();
+export type ComposeAgentWatchOutput = z.infer<typeof ComposeAgentWatchOutput>;
+
+export const ComposeAgentSendInput = z
+  .object({ session: z.string().min(1), text: z.string().min(1).max(COMPOSE_TEXT_MAX) })
+  .passthrough();
+export type ComposeAgentSendInput = z.infer<typeof ComposeAgentSendInput>;
+
+/** A send is queued, never delivered, at the call; the spark is told how it went on its next wake (CP2-D2). */
+export const ComposeAgentSendOutput = z
+  .object({
+    session: z.string().min(1),
+    queued: z.literal(true),
+    /** its place in the session's queue, 1 being next */
+    position: z.number().int().min(1),
+  })
+  .passthrough();
+export type ComposeAgentSendOutput = z.infer<typeof ComposeAgentSendOutput>;
+
+/** The stop was delivered to the agent, never that its turn ended (puppeteer's turn stop). */
+export const ComposeAgentInterruptOutput = z
+  .object({ session: z.string().min(1), sent: z.literal(true) })
+  .passthrough();
+export type ComposeAgentInterruptOutput = z.infer<typeof ComposeAgentInterruptOutput>;
+
+/** The end has begun (the floor's ladder: a stop, then the signals); the session's row says when it is gone. */
+export const ComposeAgentStopOutput = z
+  .object({ session: z.string().min(1), ending: z.literal(true) })
+  .passthrough();
+export type ComposeAgentStopOutput = z.infer<typeof ComposeAgentStopOutput>;

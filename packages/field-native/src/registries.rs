@@ -276,6 +276,7 @@ pub mod layout {
     pub const SPARKS_DIR: &[&str] = &["fieldd", "sparks"];
     pub const SPARKS_KEY_FILE: &[&str] = &["fieldd", "sparks.key"];
     pub const SPARK_HOMES_DIR: &[&str] = &["sparks"];
+    pub const AGENT_INPUTS_DIR: &[&str] = &["fieldd", "inputs"];
     pub const TERMINAL_CONFIG_FILE: &[&str] = &["native", "config.ghostty"];
     pub const RESTART_INTENT_FILE: &[&str] = &["native", "restart-intent.json"];
     pub const MGMT_SOCKET: &[&str] = &["native", "run", "mgmt.sock"];
@@ -345,6 +346,7 @@ pub mod layout {
         ("SPARKS_DIR", SPARKS_DIR),
         ("SPARKS_KEY_FILE", SPARKS_KEY_FILE),
         ("SPARK_HOMES_DIR", SPARK_HOMES_DIR),
+        ("AGENT_INPUTS_DIR", AGENT_INPUTS_DIR),
         ("TERMINAL_CONFIG_FILE", TERMINAL_CONFIG_FILE),
         ("RESTART_INTENT_FILE", RESTART_INTENT_FILE),
         ("MGMT_SOCKET", MGMT_SOCKET),

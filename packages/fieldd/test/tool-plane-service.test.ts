@@ -178,10 +178,17 @@ describe("the tool plane in fieldd (MT-0)", () => {
     for (const d of DOORS)
       h.ask(d.laneId, { id: 1, method: "tools/list", params: { _meta: META } });
     await h.settle();
+    // CP-1's six reads and, since CP-2, its six acting rows (start, watch, talk), in catalog order
     expect(names(h.answers(1001)[0])).toEqual([
       "agents_available",
+      "agent_spawn",
       "agents_list",
       "agent_read",
+      "agent_watch",
+      "agent_unwatch",
+      "agent_send",
+      "agent_interrupt",
+      "agent_stop",
       "history_search",
       "history_read",
       "projects_list",
@@ -262,7 +269,8 @@ describe("the tool plane in fieldd (MT-0)", () => {
     const h = harness();
     await h.plane.ensureStarted();
     h.call(1001, 5, "nope");
-    h.call(1001, 6, "agent_spawn", { agent: "claude" });
+    // a row still planned (CP-4's) is served to no one yet
+    h.call(1001, 6, "flow_run", { flow: "f" });
     h.call(1001, 7, "agent_read");
     await h.settle();
     expect(h.answers(1001).map((a) => a.result.structuredContent.fact)).toEqual([

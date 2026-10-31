@@ -3178,16 +3178,26 @@ describe("TC-S3 — class cells (K=2) and solo isolation", () => {
         },
       ]),
     );
-    const service = new TerminalService({ link: routed.link, birthWaitMs: 100 });
+    const birthWaitMs = 100;
+    const service = new TerminalService({ link: routed.link, birthWaitMs });
     cleanup.push(() => service.dispose());
 
-    const started = Date.now();
-    const born = await service.create({ workloadClass: "agent" });
-    expect(born.cellBootId).toBe("cell-i");
+    // Item 120 — the budget is the service's own timer, so a timer judges it: a probe of the same duration, armed
+    // BEFORE create arms the service's. Node fires equal-duration timers in insertion order, so at the probe the
+    // create must still be pending. `Date.now()` is never the judge: a 100 ms timer can read 99 under load (libuv's
+    // whole-ms start and the wall clock's own truncation), and no slack is a fix.
+    let settled = false;
+    const probe = new Promise<boolean>((resolve) =>
+      setTimeout(() => resolve(settled), birthWaitMs),
+    );
+    const creating = service.create({ workloadClass: "agent" }).finally(() => {
+      settled = true;
+    });
     expect(
-      Date.now() - started,
-      "it waited for the agent cell before falling back",
-    ).toBeGreaterThanOrEqual(100);
+      await probe,
+      "it waited out the agent cell's whole birth budget before falling back",
+    ).toBe(false);
+    expect((await creating).cellBootId).toBe("cell-i");
   });
 });
 
