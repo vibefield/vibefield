@@ -1295,6 +1295,69 @@ export function actOrStop(door: Pick<PhoneDoor, "act">): PhoneDoor["act"] {
     return r;
   };
 }
+
+/** What the press in hand asks of the window (the rows' hands; a unit's fakes). */
+export interface PressHands {
+  /** the face's simulator facts, read afresh each call */
+  readonly sim: () => Promise<PhoneSimRow | null>;
+  readonly frame: () => Promise<PhoneFrame | null>;
+  /** the desk's place in the window */
+  readonly offset: () => Promise<{ readonly left: number; readonly top: number }>;
+  /** the window's cursor at a point, the pointer moved there */
+  readonly cursorAt: (at: { x: number; y: number }) => Promise<string | null>;
+  /** the door's half of the gate: its `/row press` */
+  readonly door: (act: string, device: string) => Promise<DoorRow>;
+  readonly press: (at: { x: number; y: number }) => Promise<void>;
+}
+
+/** The act pressed IN HAND: our press gate; the capsule found by the cursor; our gate AGAIN on a face read after the
+ * scan — its probes take seconds, and the capsule found is whatever act stands NOW, so the act pressed and told the
+ * door is the act judged (R-3); THEN the door's gate — the fence and the Simulator.app proof as of the press, never a
+ * scan's seconds stale, and no press recorded when no capsule is found (R11) — and the press at once. */
+export async function pressInHand(
+  row: string,
+  o: {
+    readonly n: number;
+    readonly act: PressAct;
+    readonly type: string;
+    readonly runId: string | null;
+  },
+  hands: PressHands,
+): Promise<void> {
+  const gate = async (when: string): Promise<PhoneSimRow | null> => {
+    const s = await hands.sim();
+    const why = judgePress({
+      act: o.act,
+      offered: s?.act ?? null,
+      name: s?.name ?? null,
+      deviceType: s?.deviceType ?? null,
+      n: o.n,
+      type: o.type,
+      runId: o.runId,
+    });
+    if (why !== null) throw new PhoneStop(`${row}: the press gate${when}: ${why}`);
+    return s;
+  };
+  await gate("");
+  const frame = await hands.frame();
+  if (frame === null) throw new Error(`${row}: the phone is not in hand for its act`);
+  const off = await hands.offset();
+  let capsule: { x: number; y: number } | null = null;
+  for (const p of actScan(frame)) {
+    const at = { x: off.left + p.x, y: off.top + p.y };
+    if ((await hands.cursorAt(at)) === "pointer") {
+      capsule = at;
+      break;
+    }
+  }
+  if (capsule === null)
+    throw new Error(`${row}: no point of the held phone is the act's capsule (no pointer cursor)`);
+  const s = await gate(" after the scan");
+  const door = await hands.door(o.act, s?.name ?? "");
+  if (door.stop !== null) throw new PhoneStop(`${row}: the door's press gate: ${door.stop}`);
+  await hands.press(capsule);
+}
+
 /** A face read `no-permission` (TCC): the rule below runs, then the rows stop. */
 class NoPermission extends Error {
   readonly key: string;
@@ -1592,41 +1655,20 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
       `(() => { const el = document.elementFromPoint(${Math.round(at.x)}, ${Math.round(at.y)}); return el === null ? null : getComputedStyle(el).cursor; })()`,
     );
   };
-  /** The act pressed IN HAND: our press gate; the capsule found by the cursor; THEN the door's gate — the fence and the
-   * Simulator.app proof as of the press, never a scan's seconds stale, and no press recorded when no capsule is found
-   * (R11) — and the press at once. */
-  const pressAct = async (row: string, k: string, n: number, act: PressAct): Promise<void> => {
-    const f = await faceOf(k);
-    const s = f?.simulator ?? null;
-    const why = judgePress({
-      act,
-      offered: s?.act ?? null,
-      name: s?.name ?? null,
-      deviceType: s?.deviceType ?? null,
-      n,
-      type: typeOf(n),
-      runId: env.runId,
-    });
-    if (why !== null) throw new PhoneStop(`${row}: the press gate: ${why}`);
-    const frame = await heldFrame();
-    if (frame === null) throw new Error(`${row}: the phone is not in hand for its act`);
-    const off = await deskAt();
-    let capsule: { x: number; y: number } | null = null;
-    for (const p of actScan(frame)) {
-      const at = { x: off.left + p.x, y: off.top + p.y };
-      if ((await cursorAt(at)) === "pointer") {
-        capsule = at;
-        break;
-      }
-    }
-    if (capsule === null)
-      throw new Error(
-        `${row}: no point of the held phone is the act's capsule (no pointer cursor)`,
-      );
-    const gate = await door.row(row, "press", { act, device: s?.name ?? "" });
-    if (gate.stop !== null) throw new PhoneStop(`${row}: the door's press gate: ${gate.stop}`);
-    await press(capsule);
-  };
+  /** The act pressed IN HAND (`pressInHand`, above), on this window's hands. */
+  const pressAct = (row: string, k: string, n: number, act: PressAct): Promise<void> =>
+    pressInHand(
+      row,
+      { n, act, type: typeOf(n), runId: env.runId },
+      {
+        sim: async () => (await faceOf(k))?.simulator ?? null,
+        frame: heldFrame,
+        offset: deskAt,
+        cursorAt,
+        door: (a, device) => door.row(row, "press", { act: a, device }),
+        press,
+      },
+    );
   /** LIVE-PROVEN, read off the face and main's helper (above). */
   const liveProven = async (k: string, bound: number = PHONE_BOUNDS.live): Promise<LiveProof> => {
     const t0 = Date.now();

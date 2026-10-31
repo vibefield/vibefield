@@ -69,6 +69,7 @@ import {
   phoneDoor,
   phoneEnv,
   phoneProblems,
+  pressInHand,
   quitStaging,
   rowMark,
   type StillSeen,
@@ -215,6 +216,79 @@ describe("PT-S3 — THE PRESS GATE", () => {
     expect(judgePress({ ...ok, runId: null })).toMatch(/no VF_PHONE_RUN/u);
     // the run id taken literally: a dot is not "any character"
     expect(isOwnDevice("pts3-l2xa-1", "l2.a", 1)).toBe(false);
+  });
+});
+
+describe("PT-S3 — THE PRESS in hand: our gate, the capsule, our gate AGAIN on a face read after the scan, the door's", () => {
+  const own = (act: string | null, name = "pts3-l2-a-3") => ({
+    is: "no-window",
+    act,
+    condition: null,
+    acting: null,
+    degraded: false,
+    name,
+    deviceType: TR,
+    runtime: RUNTIME,
+  });
+  /** A held phone whose capsule is the scan's `hitAt`-th point; the face's reads in turn (the last one repeats). */
+  const hands = (reads: ReturnType<typeof own>[], hitAt = 3, stop: string | null = null) => {
+    const said = { reads: 0, probes: 0, door: [] as [string, string][], pressed: [] as unknown[] };
+    return {
+      said,
+      hands: {
+        sim: async () => reads[Math.min(said.reads++, reads.length - 1)] ?? null,
+        frame: async () => ({ cx: 600, cy: 400, hx: 200, hy: 420 }),
+        offset: async () => ({ left: 10, top: 20 }),
+        cursorAt: async () => (++said.probes === hitAt ? "pointer" : "auto"),
+        door: async (act: string, device: string) => {
+          said.door.push([act, device]);
+          return { go: stop === null, void: null, stop };
+        },
+        press: async (at: { x: number; y: number }) => {
+          said.pressed.push(at);
+        },
+      },
+    };
+  };
+  const ask = { n: 3, act: "show", type: TR, runId: "l2-a" } as const;
+
+  it("presses the capsule the cursor found, the door told the act and the run's own device", async () => {
+    const h = hands([own("show")]);
+    await pressInHand("SIM-SHOW-FRESH", ask, h.hands);
+    expect(h.said.door).toEqual([["show", "pts3-l2-a-3"]]);
+    expect(h.said.pressed).toHaveLength(1);
+    expect(h.said.probes).toBe(3);
+  });
+
+  it("a face whose act changed during the scan STOPs before the door is asked or anything pressed (R-3)", async () => {
+    const h = hands([own("show"), own("retry")]);
+    const stop = await pressInHand("SIM-SHOW-FRESH", ask, h.hands).catch((e: unknown) => e);
+    expect((stop as Error).constructor.name).toBe("PhoneStop");
+    expect((stop as Error).message).toMatch(
+      /SIM-SHOW-FRESH: the press gate after the scan: the face offers retry, not show/u,
+    );
+    expect(h.said.door).toEqual([]);
+    expect(h.said.pressed).toEqual([]);
+    // so does a face gone to another device's, or to no act
+    for (const after of [own("show", "pts3-other-3"), own(null)]) {
+      const g = hands([own("show"), after]);
+      await expect(pressInHand("SIM-SHOW-FRESH", ask, g.hands)).rejects.toThrow(/after the scan/u);
+      expect(g.said.door).toEqual([]);
+      expect(g.said.pressed).toEqual([]);
+    }
+  });
+
+  it("a gate refused before the scan probes nothing; a door's stop presses nothing", async () => {
+    const refused = hands([own("boot")]);
+    await expect(pressInHand("SIM-SHOW-FRESH", ask, refused.hands)).rejects.toThrow(
+      /the press gate: the face offers boot, not show/u,
+    );
+    expect(refused.said.probes).toBe(0);
+    const h = hands([own("show")], 3, "a hand at the Mac");
+    await expect(pressInHand("SIM-SHOW-FRESH", ask, h.hands)).rejects.toThrow(
+      /the door's press gate: a hand at the Mac/u,
+    );
+    expect(h.said.pressed).toEqual([]);
   });
 });
 
