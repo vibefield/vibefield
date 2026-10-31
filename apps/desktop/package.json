@@ -25,6 +25,8 @@
     "lab:live-surfaces:sck:soak": "pnpm build:shell && node packaging/build-live-surface-capture.mjs --with-fixture && pnpm --filter @vibefield/electron-shell build:live-surfaces-lab && node packaging/run-live-surfaces-soak.mjs --sck-fixture",
     "smoke:godview": "pnpm build:all && node ../../scripts/smoke-godview.mjs",
     "smoke:terminal-direct": "pnpm build:all && node ../../scripts/smoke-godview.mjs --terminal-direct-proof",
+    "//smoke:first-run": "FG (desk-gates row 32) — the Setup Assistant walked by its own controls from a user minted NOT onboarded (UA-3w as amended: the one harness that answers it) to the desk, three launches each on a fresh profile: by day and by night on the live field (the theme seeded in the profile before the boot), and with no WebGPU over the field's still. Its stills go to FIRST_RUN_SHOTS (VF_SMOKE_SHOT_DIR, or a fresh folder under the OS temp), outside every smoke's own. Name walks to run them alone: `node packaging/run-first-run.mjs night`. Landing-only, keeps the GPU.",
+    "smoke:first-run": "pnpm build:all && node ../../scripts/bundle-report.mjs --dist ../../packages/electron-shell/dist --assert && node packaging/run-first-run.mjs",
     "smoke:canvas": "pnpm build:all && node ../../scripts/bundle-report.mjs --dist ../../packages/electron-shell/dist --assert && node packaging/run-smoke.mjs --smoke-canvas",
     "//smoke:canvas:no-gpu": "DK-18 (plan (77)) — the GPU-less modes REUSE smoke:canvas's build (run it first, or `pnpm build:all`): `--disable-gpu` is the no-adapter card after the heal's three retries; `--smoke-no-webgpu` the no-WebGPU card (the page given no navigator.gpu — Electron 43 hides WebGPU by no switch)",
     "smoke:canvas:no-gpu": "node packaging/run-smoke.mjs --smoke-canvas --disable-gpu",

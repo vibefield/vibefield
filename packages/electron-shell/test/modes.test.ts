@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  answersSetup,
   isSmokeLike,
   keepsFramesWhenCovered,
   keepsGpu,
+  mintsOnboarded,
   parseMode,
   rendererPolicyMode,
   type ShellMode,
@@ -20,6 +22,7 @@ const ALL_MODES: readonly ShellMode[] = [
   "smoke-canvas",
   "smoke-plugin-restart",
   "smoke-godview",
+  "smoke-first-run",
   "live-surfaces-lab",
   "terminal-perf-lab",
   "godview-perf-lab",
@@ -40,6 +43,7 @@ describe("parseMode", () => {
     expect(parseMode(["--smoke-canvas"])).toBe("smoke-canvas");
     expect(parseMode(["--smoke-plugin-restart"])).toBe("smoke-plugin-restart");
     expect(parseMode(["--smoke-godview"])).toBe("smoke-godview");
+    expect(parseMode(["--smoke-first-run"])).toBe("smoke-first-run");
     expect(parseMode(["--live-surfaces-lab"])).toBe("live-surfaces-lab");
     expect(parseMode(["--terminal-perf-lab"])).toBe("terminal-perf-lab");
     expect(parseMode(["--godview-perf-lab"])).toBe("godview-perf-lab");
@@ -53,7 +57,7 @@ describe("parseMode", () => {
     expect(parseMode(["a", "b", "c", "--spike-loro"])).toBe("spike-loro");
   });
 
-  it("honors precedence lab > perf-lab > spike-loro > restart > godview > smoke > canvas > dev", () => {
+  it("honors precedence lab > perf-lab > spike-loro > restart > godview > first-run > smoke > canvas > dev", () => {
     expect(parseMode(["--spike-loro", "--live-surfaces-lab"])).toBe("live-surfaces-lab");
     expect(parseMode(["--spike-loro", "--terminal-perf-lab"])).toBe("terminal-perf-lab");
     expect(parseMode(["--terminal-perf-lab", "--live-surfaces-lab"])).toBe("live-surfaces-lab");
@@ -71,6 +75,9 @@ describe("parseMode", () => {
     // it as a prefix; the ordering below is about a caller passing both.
     expect(parseMode(["--smoke", "--smoke-godview"])).toBe("smoke-godview");
     expect(parseMode(["--dev", "--smoke-godview"])).toBe("smoke-godview");
+    // track FG: the first-run smoke sits under godview and over the plain smoke
+    expect(parseMode(["--smoke-first-run", "--smoke-godview"])).toBe("smoke-godview");
+    expect(parseMode(["--smoke", "--smoke-first-run", "--dev"])).toBe("smoke-first-run");
   });
 });
 
@@ -81,6 +88,7 @@ describe("isSmokeLike", () => {
     "smoke-canvas",
     "smoke-plugin-restart",
     "smoke-godview",
+    "smoke-first-run",
     "live-surfaces-lab",
     "terminal-perf-lab",
     "godview-perf-lab",
@@ -101,6 +109,8 @@ describe("keepsGpu", () => {
     "dev",
     "smoke-canvas",
     "smoke-plugin-restart",
+    // track FG: the Setup Assistant's glass is the live field's own pass
+    "smoke-first-run",
     "live-surfaces-lab",
     "terminal-perf-lab",
     // MV-0: the Godview perf lab measures the swarm's WebGPU canvas
@@ -114,6 +124,7 @@ describe("keepsGpu", () => {
   it("drops it for the desk smokes run with --disable-gpu, and only for them", () => {
     expect(keepsGpu("smoke-canvas", ["--disable-gpu"])).toBe(false);
     expect(keepsGpu("smoke-plugin-restart", ["--disable-gpu"])).toBe(false);
+    expect(keepsGpu("smoke-first-run", ["--disable-gpu"])).toBe(false);
     expect(keepsGpu("live-surfaces-lab", ["--disable-gpu"])).toBe(true);
     expect(keepsGpu("production", ["--disable-gpu"])).toBe(true);
   });
@@ -122,7 +133,13 @@ describe("keepsGpu", () => {
 describe("keepsFramesWhenCovered", () => {
   // TP-S0c, grown at DK-9: the frame-counting labs keep a covered window's frames — the terminal perf lab and
   // the GPU-on desk smokes (their idle, stillness and frame-rate rows); production backgrounds a covered window.
-  const kept = new Set<ShellMode>(["terminal-perf-lab", "smoke-canvas", "smoke-plugin-restart"]);
+  const kept = new Set<ShellMode>([
+    "terminal-perf-lab",
+    "smoke-canvas",
+    "smoke-plugin-restart",
+    // track FG: the first run's holds are timed by their own clocks, its stills taken of the field's frames
+    "smoke-first-run",
+  ]);
 
   it.each(ALL_MODES)("%s", (mode) => {
     expect(keepsFramesWhenCovered(mode, [])).toBe(kept.has(mode));
@@ -131,6 +148,7 @@ describe("keepsFramesWhenCovered", () => {
   it("not for a desk smoke run GPU-less (nothing draws there to count)", () => {
     expect(keepsFramesWhenCovered("smoke-canvas", ["--disable-gpu"])).toBe(false);
     expect(keepsFramesWhenCovered("smoke-plugin-restart", ["--disable-gpu"])).toBe(false);
+    expect(keepsFramesWhenCovered("smoke-first-run", ["--disable-gpu"])).toBe(false);
     expect(keepsFramesWhenCovered("terminal-perf-lab", ["--disable-gpu"])).toBe(true);
   });
 });
@@ -147,6 +165,7 @@ describe("shutdownPolicy", () => {
     "smoke-canvas": "stop-owned",
     "smoke-plugin-restart": "stop-owned",
     "smoke-godview": "stop-owned",
+    "smoke-first-run": "stop-owned",
     "live-surfaces-lab": "leave-running",
     // TP-S0c: the ONE lab that is stop-owned. Unlike the others it spawns a
     // pair against its own data root and drives real sessions through it, so it
@@ -161,6 +180,26 @@ describe("shutdownPolicy", () => {
 
   it.each(ALL_MODES)("%s", (mode) => {
     expect(shutdownPolicy(mode)).toBe(expected[mode]);
+  });
+});
+
+describe("the Setup Assistant at a fresh root's mint (UA-3w as amended 2026-10-31)", () => {
+  // A test harness's first user is minted onboarded, so its boot never holds at the Setup Assistant — but for the
+  // ONE harness built to answer it. A new smoke-like mode lands here onboarded unless this row is changed with it.
+  const answering = new Set<ShellMode>(["smoke-first-run"]);
+
+  it.each(ALL_MODES)("%s", (mode) => {
+    expect(answersSetup(mode)).toBe(answering.has(mode));
+    expect(mintsOnboarded(mode)).toBe(isSmokeLike(mode) && !answering.has(mode));
+  });
+
+  it("answers it in exactly one mode, and a person's modes meet it", () => {
+    expect(ALL_MODES.filter(answersSetup)).toEqual(["smoke-first-run"]);
+    expect(ALL_MODES.filter((mode) => isSmokeLike(mode) && !mintsOnboarded(mode))).toEqual([
+      "smoke-first-run",
+    ]);
+    expect(mintsOnboarded("production")).toBe(false);
+    expect(mintsOnboarded("dev")).toBe(false);
   });
 });
 

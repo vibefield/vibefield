@@ -146,6 +146,13 @@ import { deskCopyRows } from "./smoke-desk-copy";
 import { deskRigRows } from "./smoke-desk-rig";
 import { DEVICE_FLAG, type DeviceRowsDriver, devicePaneRows } from "./smoke-device-pane";
 import { FIRST_FLAG, type FirstLoadDriver, firstLoadRows } from "./smoke-first-load";
+import {
+  FIRST_RUN_WALKS,
+  firstRunRows,
+  parseWalk,
+  shotDirRefusal,
+  WALK_ENV,
+} from "./smoke-first-run";
 import { FRAMES_FLAG, type FramesDriver, framesRows as framesPaneRows } from "./smoke-frames";
 import { HONEST_FLAG, type HonestRowsDriver, honestPaneRows } from "./smoke-honest-pane";
 import { type LastStillDriver, lastStillRows, STILL_FLAG } from "./smoke-last-still";
@@ -213,7 +220,8 @@ export { runTerminalPerfLab, SCENARIOS as TERMINAL_PERF_SCENARIOS } from "./term
 // AR-7 — main stages the godview smoke's typed agent BEFORE the pair boots
 // (fieldd composes an agent's executable once, at boot), so the stager is a
 // door of this bundle's like the runners are; its code lives in its own file.
-export { stageTypedAgent } from "./typed-agent";
+// FG — and the first-run smoke's person, the same way.
+export { stageFirstRun, stageTypedAgent } from "./typed-agent";
 
 // Smoke/spike runners (ESR §5.2.6 / ESR-12): a SEPARATE build artifact
 // (dist/testing/smoke.cjs) that the production main bundle never contains —
@@ -1568,6 +1576,109 @@ export async function runSmokeCanvas(opts: {
     ok = true;
   } catch (e) {
     console.error(`SMOKE_CANVAS failed: ${e instanceof Error ? e.message : e}`);
+  }
+  await teardown(opts.supervisor, opts.root, opts.beforeExit, ok);
+  app.exit(ok ? 0 : 2);
+}
+
+/**
+ * FG — THE FIRST RUN, WALKED (`pnpm smoke:first-run`, desk-gates row 32): one walk of the Setup Assistant a launch, by
+ * the page's own controls, from a user minted not onboarded (UA-3w as amended: `answersSetup`) to the desk
+ * (smoke-first-run.ts). The launcher (`packaging/run-first-run.mjs`) runs the three walks, each on a fresh profile with
+ * its theme seeded before the boot, and keeps their stills where no teardown reaches.
+ */
+export async function runSmokeFirstRun(opts: {
+  handle: FielddHandle;
+  supervisor: FielddSupervisor;
+  root: string;
+  registry: WindowRegistry;
+  preloadPath: string;
+  viteUrl: string;
+  beforeExit: () => Promise<void>;
+  /** the person main staged into this run's own root before the pair booted (`stageFirstRun`) */
+  staged: StagedTypedAgent | undefined;
+  /** users.json's root, and the user this run minted not onboarded */
+  users: { readonly root: string; readonly userId: string };
+  /** GT-8b — what main's opener recorded in place of opening */
+  shellOpens?: { readonly opened: readonly string[]; readonly revealed: readonly string[] };
+  onWindow?: (window: BrowserWindow) => void;
+}): Promise<void> {
+  // Shown, as the desk smokes' are with the GPU on: the walk's stills are of the field's own frames. DK-18 (36): shown
+  // inactive and click-through — kept from the person's input (smoke-window.ts).
+  const win = smokeWindow({ mode: "smoke-first-run", preloadPath: opts.preloadPath, show: true });
+  opts.registry.adopt(win); // the bootstrap sender policy admits only registered windows
+  opts.onWindow?.(win);
+  if (process.env["VF_SMOKE_DEBUG"]) {
+    win.webContents.on("console-message", (...args: unknown[]) => {
+      console.log(`[renderer] ${args.map((a) => JSON.stringify(a)).join(" ")}`);
+    });
+  }
+  // The packaged CSP is this mode's too (every non-dev mode): a refusal fails the walk, as it fails the canvas smoke.
+  const cspViolations: string[] = [];
+  win.webContents.on("console-message", (...args: unknown[]) => {
+    for (const a of args) {
+      const text = consoleText(a);
+      if (!text.includes("Content Security Policy")) continue;
+      cspViolations.push(text.replace(/blob:[^'"\s]+/gu, "blob:…").slice(0, 240));
+    }
+  });
+  let ok = false;
+  try {
+    const walk = parseWalk(process.env[WALK_ENV]);
+    if (walk === null) {
+      throw new Error(`${WALK_ENV} names no walk (${Object.keys(FIRST_RUN_WALKS).join(", ")})`);
+    }
+    const shotDir = process.env["VF_SMOKE_SHOT_DIR"];
+    if (shotDir === undefined || shotDir.length === 0) {
+      throw new Error("VF_SMOKE_SHOT_DIR names no folder for the walk's stills");
+    }
+    const refusal = shotDirRefusal(shotDir);
+    if (refusal !== null) throw new Error(refusal);
+    if (opts.staged === undefined) {
+      throw new Error(
+        "main staged no person: the walk needs a root of its own (no FIELDD_DATA_DIR)",
+      );
+    }
+    // the walks are the live field's two and the page with no WebGPU: the GPU is kept in every one
+    if (process.argv.includes("--disable-gpu")) {
+      throw new Error("the first-run smoke keeps the GPU: no walk of it runs with --disable-gpu");
+    }
+    const noWebgpu = process.argv.includes(NO_WEBGPU_FLAG);
+    if (noWebgpu === FIRST_RUN_WALKS[walk].webgpu) {
+      throw new Error(
+        `the ${walk} walk was launched ${noWebgpu ? "with" : "without"} ${NO_WEBGPU_FLAG}`,
+      );
+    }
+    const problems = smokeProfileFailures();
+    const { facts, problems: walked } = await firstRunRows({
+      win,
+      viteUrl: opts.viteUrl,
+      walk,
+      shotDir,
+      staged: opts.staged,
+      users: opts.users,
+      say: (line) => console.log(line),
+    });
+    problems.push(...walked);
+    // GT-8b: the walk presses no link, so main's opener has nothing to record — anything there opened on its own
+    const opens = opts.shellOpens;
+    if (opens === undefined) problems.push("main handed the walk no opener record (GT-8b)");
+    else if (opens.opened.length + opens.revealed.length > 0) {
+      problems.push(
+        `the walk pressed no link, yet main's opener recorded ${JSON.stringify({ opened: opens.opened, revealed: opens.revealed })}`,
+      );
+    }
+    const focused = smokeWindowsFocused();
+    console.log(
+      `SMOKE_FIRST_RUN ${JSON.stringify({ ...facts, shotDir, shellOpens: opens ?? null, isolation: focused })}`,
+    );
+    if (cspViolations.length > 0) problems.push(`CSP refused: ${cspViolations.join(" | ")}`);
+    if (win.webContents.isCrashed()) problems.push("the renderer crashed");
+    if (problems.length > 0) throw new Error(problems.join(" · "));
+    console.log(`SMOKE_FIRST_RUN_OK ${walk}`);
+    ok = true;
+  } catch (e) {
+    console.error(`SMOKE_FIRST_RUN failed: ${e instanceof Error ? e.message : e}`);
   }
   await teardown(opts.supervisor, opts.root, opts.beforeExit, ok);
   app.exit(ok ? 0 : 2);

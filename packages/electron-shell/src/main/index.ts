@@ -116,6 +116,7 @@ import {
   isSmokeLike,
   keepsFramesWhenCovered,
   keepsGpu,
+  mintsOnboarded,
   parseMode,
   rendererPolicyMode,
 } from "./modes";
@@ -1321,7 +1322,17 @@ async function main(
     process.env["FIELDD_DATA_DIR"] === undefined
       ? (await testing()).stageTypedAgent({ vibefieldRoot: user.rootReal })
       : undefined;
-  const bootBundle = ensurePairBundle(user.userId, root, typedAgent?.environment);
+  // FG — the first-run smoke answers the Setup Assistant as a person of its own, staged the same way: a throwaway
+  // HOME, the typed agent's one conversation, and one stub as every launchable row's active install.
+  const firstRun =
+    MODE === "smoke-first-run" && process.env["FIELDD_DATA_DIR"] === undefined
+      ? (await testing()).stageFirstRun({ vibefieldRoot: user.rootReal })
+      : undefined;
+  const bootBundle = ensurePairBundle(
+    user.userId,
+    root,
+    typedAgent?.environment ?? firstRun?.environment,
+  );
   supervisor = bootBundle.supervisor;
   fielddHandles = bootBundle.handles;
   let attachmentWiring = wireAttachment(bootBundle, root);
@@ -1826,8 +1837,9 @@ async function main(
   // The rule is a window somebody can press a key in — production, dev, and the
   // godview harness. `smoke` and `spike-loro` have already returned by here;
   // `smoke-canvas`'s window is hidden, so it would be installing accelerators
-  // for nobody.
-  if (MODE !== "smoke-canvas" && MODE !== "smoke-plugin-restart") {
+  // for nobody, and the first-run smoke's is pressed by its own walk alone,
+  // which types a name and presses no chord.
+  if (MODE !== "smoke-canvas" && MODE !== "smoke-plugin-restart" && MODE !== "smoke-first-run") {
     redrawMenu = installAppMenu(process.platform === "darwin" ? "darwin" : "other", {
       setView,
       closeWindow,
@@ -1938,6 +1950,42 @@ async function main(
       ...(harnessShellOpens === null ? {} : { shellOpens: harnessShellOpens }),
       ...(harnessCopies === null ? {} : { copies: harnessCopies }),
       ...(typedAgent !== undefined ? { typedAgent } : {}),
+      onWindow: (window) => {
+        installLiveSurfaceHost(window, logger);
+        installRendererLogging({
+          window,
+          sink: shellLogging.renderer,
+          pluginRouter: shellLogging.pluginRendererRouter,
+          pluginResolver: pluginProvenance,
+          desktopLogger: logger,
+          onProcessGone: () => {
+            void crashes.refresh("renderer").catch((error) => {
+              logger.error(
+                "desktop.crash.refresh_failed",
+                "Electron could not refresh crash evidence after a renderer exited",
+                error,
+              );
+            });
+          },
+        });
+        installDiagnostics(window);
+      },
+    });
+    return;
+  }
+
+  if (MODE === "smoke-first-run") {
+    await (await testing()).runSmokeFirstRun({
+      handle: await fielddReady,
+      supervisor,
+      root,
+      registry,
+      preloadPath: PRELOAD_PATH,
+      viteUrl: VITE_URL,
+      beforeExit: closeEvidence,
+      staged: firstRun,
+      users: { root: user.rootReal, userId: user.userId },
+      ...(harnessShellOpens === null ? {} : { shellOpens: harnessShellOpens }),
       onWindow: (window) => {
         installLiveSurfaceHost(window, logger);
         installRendererLogging({
@@ -2758,9 +2806,11 @@ if (!hasInstanceLock) {
     const mayWriteUsers = !(isSmokeLike(MODE) && process.env["FIELDD_DATA_DIR"] !== undefined);
     const ensured = await ensureUsersRoot(root, {
       allowMint: mayWriteUsers,
-      // UA-3w — a test harness never meets the Setup Assistant: it has no hands
-      // to answer it with, and a held boot would read as a hung smoke.
-      mintOnboarded: isSmokeLike(MODE),
+      // UA-3w as amended (2026-10-31, track FG) — a test harness never meets the
+      // Setup Assistant: it has no hands to answer it with, and a held boot
+      // would read as a hung smoke. The one that answers it does
+      // (`answersSetup`: the first-run smoke, which walks it).
+      mintOnboarded: mintsOnboarded(MODE),
       onEvent: (event, attrs) => usersLogger.info(event, "user-directory event", attrs),
     });
     const userRoot = ensured.userRoot;

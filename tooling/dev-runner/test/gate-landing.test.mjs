@@ -51,6 +51,7 @@ test("the list: verify's chain stage by stage, then this host's GPU gates", () =
       "smoke:plugin-restart",
       "smoke:plugin",
       "smoke:godview",
+      "smoke:first-run",
       "smoke:terminal-door",
       "smoke:terminal-direct",
       "smoke:studio",
