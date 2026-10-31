@@ -23456,6 +23456,13 @@ the Sparks page's rulings NS-D1 A, NS-D2 B, NS-D3 A and NS-D5 (James, 2026-10-30
 **Owed.**
 - The follow-up "SP-1c: Esc folds the sheet from anywhere under a cover" (`3a6353c40`, on `90500b731`), its own small
   mint after push 23.
+  > **Landed (2026-10-31, M43; VF-PM's records audit, 11:21Z):** the Owed follow-up `3a6353c40` landed as M43
+  > `f80df35e3` at 09:36:03Z. Run 43 was GREEN at 09:34:51Z: 11,176 passed | 0 failed | 18 skipped, new-spark-sheet 9
+  > with its red-first row. smoke:godview reads it through a1's ⌘N rung 11l (`2b984cc0f`, in M44 `bcedadd4e`) and
+  > 11l's Esc from the body (`8db8685de`, in M47 `6e97717b1`), the half that reads the fix. Its live witness is the
+  > owed console row 1 (11k + 11l + the body Esc) on the mini at James's unlock, armed on M52.
+  > **Paid (2026-10-31, the 11:13Z draft queue, slot 3):** the draft corpus's "as built" — thinking-roled-agents.md
+  > §17, cp2-talk-room.md §8, design-03's dated bullet — snapshot `5928c73f2`.
 - The draft corpus's "as built" (thinking-roled-agents.md §17) and its status lines, at the next draft queue.
 - The ⌘N rung is a1's, in the smoke:godview lane (VF-PM 09:15Z; the facts sent 09:16Z). The line emits LINE_KEY
   {key "⌘N", view "assistant", outcome "opened"/"closed"} for it.
