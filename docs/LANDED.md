@@ -24456,6 +24456,19 @@ row 32's first green on the mini and James's look. The look came at 15:02Z and t
 - Row 32 on M55, FG-5's witness: the chain re-armed on M55 with row 32 alone (by itself while the console stands
   unlocked and idle, else at James's next unlock). It proves the hand-over's order on all three walks (`handOver`
   is `["words","clear"]`) and gives its two stills for James's eye, with row 32's earlier classes again.
+  > **Run (2026-10-31, row 32 alone on M55 on the Mac mini, run55b): GREEN, FG-5's witness.** Its gate opened at
+  > 16:30:03Z, after James's unlock at 16:27:32Z, with the console idle 154 s and untouched through the row (idle 215 s
+  > at its end), and `pnpm smoke:first-run` exited 0 at 16:31:04Z (61 s). FIRST_RUN_VERDICT: day, night and no-webgpu
+  > each green, in 20, 19 and 17 s, code 0, nothing left and its profile removed. Every walk went the whole way to the
+  > desk, 15 stills each (45, `lanes/ts6/logs/mini/run55b/first-run-shots`; the log's sha256 `964a6eaeea741c13…`).
+  > - The hand-over: the walk's `handOver` fact is `["words","clear"]` on all three walks, so the glass stepped out in
+  >   its order, the words and then the clearing, each once. Its two stills, `13-handover-alone` and
+  >   `14-handover-clearing`, stand before `15-desk` on each walk's sheet for James's eye, the look James's own to give.
+  >   The walks took 1 to 4 s longer than run54b's 16 s: the hand-over's beat.
+  > - The earlier classes again: the login's terminal 170, its Cancel reached and its foot 9.7 above the fade's top
+  >   (`cancelClear` 9.71875); the mark's ink at 591, 373 by day, 590.5, 373 by night and 590, 374 over the still, as at
+  >   run54b; Agents' skip `(327 in 326)` once on each walk; and on each, `SMOKE_DAEMONS` left and reaped nothing.
+  > FG-5's witness is paid, and desk-gates row 32's verdict cell is written with it.
 - No row judges the hand-over's durations: unit rows under fake timers hold them. No GPU row ran on the field's pass's
   edge: unit rows hold its uniforms. The shared `tearOpen` is on every ordinary boot's path, so the smokes that press
   or shoot after a boot read it when they next run.
