@@ -65,10 +65,12 @@ import {
   PHONE_ROWS,
   type PhoneCensus,
   type PhoneRowResult,
+  type PhoneRowsDriver,
   type PressAsk,
   phoneDoor,
   phoneEnv,
   phoneProblems,
+  phoneRows,
   pressInHand,
   quitStaging,
   readSince,
@@ -1092,5 +1094,54 @@ describe("PT-S3 — the host door", () => {
     expect(row.go).toBe(false);
     expect(row.stop).toMatch(/did not answer/u);
     expect((await door.act("state", 1)).state).toBe("unanswered");
+  });
+});
+
+describe("PT-S3 — the board as found, whatever throws before a row (R10, R-5)", () => {
+  it("a focus that throws still restores the wind (set still first) and says PHONE_ROWS_END — the cause a problem", async () => {
+    const asked: string[] = [];
+    const lines: string[] = [];
+    const win = {
+      webContents: {
+        executeJavaScript: async (expression: string): Promise<unknown> => {
+          asked.push(expression);
+          if (expression === "globalThis.__vfDesk.ambient()") return "breeze";
+          if (expression === "globalThis.__vfDesk.liveCap()") return 4;
+          if (expression.startsWith("globalThis.__vfDesk.objects(")) return [];
+          if (expression === "globalThis.__vfDesk.held() !== null") return false;
+          return undefined;
+        },
+        sendInputEvent: () => {
+          throw new Error("no input before a row");
+        },
+      },
+    };
+    const driver = {
+      win,
+      shotDir: undefined,
+      say: (line: string) => lines.push(line),
+      env: { ...ENV, VF_PHONE_MODE: "none", VF_PHONE_DEVICES: `1:${TP}` },
+      fixture: { url: "http://127.0.0.1:1/", setPlaying: () => undefined },
+      custody: () => null,
+      shellOpens: undefined,
+      reload: async () => true,
+      plugin: async () => null,
+      focused: async () => {
+        throw new Error("the debugger is held by another client");
+      },
+      pngPixels: () => null,
+      metrics: () => ({ mb: 0, cpu: 0, processes: 0 }),
+      fetch: (async () => {
+        throw new Error("no row was begun");
+      }) as unknown as typeof fetch,
+    } as unknown as PhoneRowsDriver;
+    const problems = await phoneRows(driver);
+    expect(lines[0]).toBe("PHONE_ROWS_BEGIN mode=none");
+    expect(lines.at(-1)).toBe("PHONE_ROWS_END n=0");
+    expect(problems).toContain("PT-S3 PHONE: the debugger is held by another client");
+    const still = asked.indexOf('globalThis.__vfDesk.ambient("still")');
+    expect(still).toBeGreaterThanOrEqual(0);
+    expect(asked.indexOf('globalThis.__vfDesk.ambient("breeze")')).toBeGreaterThan(still);
+    expect(asked).toContain("globalThis.__vfDesk.liveCap(4)");
   });
 });

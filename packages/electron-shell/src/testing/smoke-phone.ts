@@ -1920,9 +1920,11 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
   const still = async (): Promise<void> => {
     await js(`globalThis.__vfDesk.ambient("still")`);
   };
-  await still();
-  await d.focused();
   try {
+    // the wind still and the focus told INSIDE the try: a throw here (the focus attaches CDP's debugger) still meets
+    // the finally's restores and PHONE_ROWS_END (R-5)
+    await still();
+    await d.focused();
     if (env.mode === "none") await noneRows();
     else if (env.mode === "devices") await deviceRows();
     else await costRows();
