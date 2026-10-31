@@ -589,20 +589,24 @@ describe("the Profiles pane on the wizard's glass", () => {
     }
   });
 
-  it("stands a login's terminal 190 on the glass, so its whole card, Cancel with it, comes into view above the cards' fade (FG-4a)", async () => {
+  it("stands a login's terminal 170 on the glass, so the add holding it, Cancel with it, stands whole above the cards' fade (FG-4a; row 32 at run53b)", async () => {
     const client = daemon(feedOf([THIS_MAC]), [install("claude"), install("codex")]);
     await mount(client, vi.fn(), true);
-    await click("Sign in to Codex on This Mac");
+    await openWork(client);
     const terminalBox = container?.querySelector(".vf-profiles-signin-body");
     expect(
-      terminalBox?.matches('.vf-wizard-shell[data-size="glass"] .vf-profiles-signin-body'),
+      terminalBox?.matches(
+        '.vf-wizard-shell[data-size="glass"] .vf-profiles-pane-grown .vf-profiles-signin-body',
+      ),
     ).toBe(true);
     expect(PROFILES_CSS).toContain(
       '.vf-wizard-shell[data-size="glass"] .vf-profiles-signin-body {\n  height: var(--vf-glass-signin-height);\n}',
     );
-    // the fit, from the stylesheets it stands on (happy-dom lays nothing out). The card is the
-    // terminal and its chrome: the output's head (its padding, 11px at the body's 1.5, its hairline),
-    // the output's two borders, the gap and the Cancel row's button
+    // the fit, from the stylesheets it stands on (happy-dom lays nothing out). The login's card is
+    // the terminal and its chrome: the output's head (its padding, 11px at the body's 1.5, its
+    // hairline), the output's two borders, the gap and the Cancel row's button. Opened in the add, it
+    // stands in the add's own padding above and below, and the add is what comes into view: at 190
+    // it was 289.2 on run53b's stills, its head on the cards' top and Cancel's foot 1.3 under the fade
     const tokens = read("../../design-kit/src/tokens.css");
     const output = read("../src/panels/agents/agents-settings.css");
     const signIn = read("../src/panels/agents/profiles-settings.css");
@@ -616,18 +620,20 @@ describe("the Profiles pane on the wizard's glass", () => {
       /\n\.vf-ui-button \{[^}]*height: (\d+)px;/u,
     );
     const chrome = headPadding + headFont * 1.5 + headPadding + 1 + 2 + gap + button;
+    const add = px(PROFILES_CSS, /\n\.vf-profiles-pane-grown \{[^}]*padding: (\d+)px 12px;/u);
     // the cards' room above the fade: the body (the frame's 504 less the head — the title's 28 at
     // 1.15, 8, a two-line voice of 14 at 1.45 — the 20 under it, and the foot — 16, the actions'
     // 2 and 40, 8, the later line's 17 less its 2), less the fact's line of 18 and its gap of 10,
     // the 4 given back, less the fade
     const body = 504 - (28 * 1.15 + 8 + 2 * 14 * 1.45) - 20 - (16 + 2 + 40 + 8 - 2 + 17);
     const clear = body - 18 - 10 + 4 - fade;
-    expect(terminal).toBe(190);
     expect(chrome).toBe(79.5);
-    expect(terminal + chrome).toBeLessThanOrEqual(clear);
+    expect(add).toBe(10);
+    expect(terminal + chrome + 2 * add).toBeLessThanOrEqual(clear);
+    expect(terminal).toBe(170);
     // Settings' own 240 would leave Cancel a scroll away
     const settings = px(signIn, /\n\.vf-profiles-signin-body \{\s*height: (\d+)px;/u);
-    expect(settings + chrome).toBeGreaterThan(clear);
-    expect(read("../../../DESIGN.md")).toContain("| `--vf-glass-signin-height` | `190px` |");
+    expect(settings + chrome + 2 * add).toBeGreaterThan(clear);
+    expect(read("../../../DESIGN.md")).toContain("| `--vf-glass-signin-height` | `170px` |");
   });
 });

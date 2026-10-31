@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import type { BrowserWindow } from "electron";
 import { describe, expect, it } from "vitest";
 import {
+  cancelClearOfFade,
   expectedLogoBox,
   type FaceSeen,
   FIRST_RUN_MARK,
@@ -468,29 +469,50 @@ describe("the frame (FG-4a, FG-L3)", () => {
     ).toBe("Agents: the frame is 560.0 × 560.0, not 560 × 504 at the glass's fit 1.000");
   });
 
-  it("passes a login's terminal 190 tall with Cancel in view above the fade, and finds one that is not", () => {
-    const body = { x: 340, y: 270, width: 500, height: 190 };
-    const cancel = { x: 760, y: 470, width: 80, height: 30, label: "Cancel" };
-    const signIn: SignInSeen = {
-      fit: 1,
-      frame: agents.frame,
-      body,
-      cancel,
-      cancelHit: true,
-      scroller: { x: 330, y: 250, width: 520, height: 300 },
-    };
+  const body = { x: 340, y: 270, width: 500, height: 170 };
+  const cancel = { x: 760, y: 470, width: 80, height: 30, label: "Cancel" };
+  const signIn: SignInSeen = {
+    fit: 1,
+    frame: agents.frame,
+    body,
+    cancel,
+    cancelHit: true,
+    scroller: { x: 330, y: 250, width: 520, height: 300 },
+  };
+
+  it("passes a login's terminal 170 tall with Cancel in view above the fade, and finds one that is not", () => {
     expect(judgeSignIn(signIn)).toEqual([]);
     expect(judgeSignIn({ ...signIn, body: { ...body, height: 160 } })).toEqual([
-      "the login's terminal is 160.0 tall, not 190",
-    ]);
-    // its foot in the list's last 20 px, under the fade
-    expect(judgeSignIn({ ...signIn, cancel: { ...cancel, y: 515 } })).toEqual([
-      "the login's Cancel is not in view above the list's fade",
+      "the login's terminal is 160.0 tall, not 170",
     ]);
     expect(judgeSignIn({ ...signIn, cancelHit: false })).toEqual([
       "a press at the login's Cancel does not reach it",
     ]);
     expect(judgeSignIn({ ...signIn, cancel: null })).toEqual(["the login has no Cancel"]);
+  });
+
+  it("says what it saw when Cancel stands under the list's fade: Cancel's box, the list's, the fade's top and how far under (row 32 at run53b)", () => {
+    // its foot in the list's last 20 px, under the fade
+    expect(judgeSignIn({ ...signIn, cancel: { ...cancel, y: 515 } })).toEqual([
+      "the login's Cancel is not in view above the list's fade: Cancel at 760.0, 515.0, 80.0 × 30.0, the list at 330.0, 250.0, 520.0 × 300.0, its fade's top at 530.0: Cancel's foot 15.0 under it",
+    ]);
+    // row 32 at run53b: the add holding the login was taller than the list keeps above its fade, so a scroll by
+    // `nearest` set its head on the list's top and left Cancel's foot 1.3 under the fade's top
+    expect(
+      judgeSignIn({
+        ...signIn,
+        cancel: { ...cancel, y: 490.3, height: 36 },
+        scroller: { x: 300, y: 246.8, width: 580, height: 298.2 },
+      }),
+    ).toEqual([
+      "the login's Cancel is not in view above the list's fade: Cancel at 760.0, 490.3, 80.0 × 36.0, the list at 300.0, 246.8, 580.0 × 298.2, its fade's top at 525.0: Cancel's foot 1.3 under it",
+    ]);
+    // a foot within half a px of the fade's top stands clear of it
+    expect(judgeSignIn({ ...signIn, cancel: { ...cancel, y: 500.4 } })).toEqual([]);
+    // the walk's facts carry how far it stands clear
+    expect(cancelClearOfFade(signIn)).toBe(30);
+    expect(cancelClearOfFade({ ...signIn, cancel: { ...cancel, y: 515 } })).toBe(-15);
+    expect(cancelClearOfFade({ ...signIn, scroller: null })).toBeNull();
   });
 });
 

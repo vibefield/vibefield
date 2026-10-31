@@ -38,9 +38,12 @@
   display: none;
 }
 
-/* A login's terminal stands 190 on the glass (DESIGN.md §4 `--vf-glass-signin-height`;
-   Settings' keeps its 240), so its whole card, Cancel with it, comes into view above
-   the cards' fade: 269.5 in 278.2. */
+/* A login's terminal stands 170 on the glass (DESIGN.md §4 `--vf-glass-signin-height`;
+   Settings' keeps its 240), so the add holding it, Cancel with it, comes into view
+   whole above the cards' fade: the login's card and the add's padding of 10 above
+   and below, 269.5 in 278.2. (Corrected 2026-10-31, row 32 at run53b: this said 190,
+   a sum without the add's padding; the add was 289.2 and Cancel's foot 1.3 under
+   the fade.) */
 .vf-wizard-shell[data-size="glass"] .vf-profiles-signin-body {
   height: var(--vf-glass-signin-height);
 }

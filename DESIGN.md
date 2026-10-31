@@ -641,7 +641,7 @@ everywhere except eyebrows.
 | `--vf-radius-control` | `6–10px` | inline controls (`rounded` ≈ 4–6 for tiny) |
 | pills/buttons | fully round (`999px`) | chips, round icon buttons |
 | `--vf-scroll-fade` | `20px` | a list that can outgrow what holds it scrolls within itself (2026-10-31, FG-4a): no scrollbar; its last 20 masked from whole to clear (`linear-gradient(to bottom, black calc(100% - 20px), transparent)`) and 20 of padding under its end, so while there is more the next row peeks under the fade and at the end the last row clears it; a scroll into view (a focus, a login) stops 20 short of its foot. Padded 4 on its other sides, so a focus ring stays inside its clip. The face deck's rule (§2.8), which wears it; the Setup Assistant's Agents, History and Profiles lists on the glass (§8 "The Setup Assistant's glass") |
-| `--vf-glass-signin-height` | `190px` | a login's terminal in a pane on the Setup Assistant's glass (2026-10-31, FG-4a; Settings' sign-in keeps its 240). Its card is the terminal and 79.5 of chrome — the head's 33.5 (8, 11px at 1.5, 8 and its hairline), two borders, the gap of 8 and the Cancel row's 36 — so at 190 it is 269.5 and stands whole in the 278.2 that Profiles' cards keep above their fade (the body's 322.2 less the fact's one line of 18 and its gap of 10, the 4 given back, less the fade's 20): Cancel in view without a scroll. At 240 it would be 319.5, and Cancel a scroll away. Three lines of terminal are the cheaper loss (ruled at the lean, VF-PM 2026-10-31 05:12Z; James may overturn to 240 and the scroll) |
+| `--vf-glass-signin-height` | `170px` | a login's terminal in a pane on the Setup Assistant's glass (2026-10-31, FG-4a; Settings' sign-in keeps its 240). Its card is the terminal and 79.5 of chrome — the head's 33.5 (8, 11px at 1.5, 8 and its hairline), two borders, the gap of 8 and the Cancel row's 36 — and opened in Add a profile… it stands in the add's own padding of 10 above and below, so at 170 the add holding it is 269.5 and stands whole in the 278.2 that Profiles' cards keep above their fade (the body's 322.2 less the fact's one line of 18 and its gap of 10, the 4 given back, less the fade's 20): its head 8.7 under the cards' top, Cancel 10 above the fade, in view without a scroll. At 240 the add would be 339.5, and Cancel a scroll away. Four lines of terminal are the cheaper loss (ruled by James 2026-10-31 15:07Z (VF-PM's lean 14:57Z), on row 32 at run53b; 190 had been ruled at the lean, VF-PM 05:12Z). (Corrected 2026-10-31, row 32 at run53b: this row said 190, and that at 190 the card is 269.5 and stands whole in the 278.2. That sum counted the login's card and left out the add's padding of 10 above and below. On run53b's stills the cards measure 298.2 by their mask's gradient, the fade's top at 524.9, and the add at 190 was 289.2, so a scroll into view by `nearest` set its head on the cards' top and left Cancel's foot 1.3 under the fade, against the row's half-px slack.) |
 
 Round icon buttons: `40px` (`h-10 w-10`).
 *Retired 2026-10-28 (the housekeeping pass), recording DK-13 and DK-17:* the iOS size grid (small
@@ -2944,9 +2944,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   pane). The pane never scrolls, so its head, its foot and Continue never move: a list that can outgrow its body
   scrolls within itself on the face deck's rule (`--vf-scroll-fade`, §4; ruled at the lean 2026-10-31, James may
   overturn) — Agents' list, History's rows with its two sentences standing under them, and Profiles' cards with the
-  fact and a notice under them. A login's terminal stands 190 on the glass (`--vf-glass-signin-height`, §4), so its
-  whole card, Cancel with it, comes into view above Profiles' fade: 269.5 in 278.2, where Settings' 240 would be
-  319.5 and leave Cancel a scroll away (ruled at the lean; James may overturn to 240 and the scroll). The pixel
+  fact and a notice under them. A login's terminal stands 170 on the glass (`--vf-glass-signin-height`, §4), so the
+  add holding it, Cancel with it, comes into view whole above Profiles' fade: 269.5 in 278.2 (the login's card and
+  the add's padding of 10 above and below), where Settings' 240 would be 339.5 and leave Cancel a scroll away (ruled
+  by James 2026-10-31 15:07Z, VF-PM's lean 14:57Z). (Corrected 2026-10-31, row 32 at run53b: this said 190,
+  and that the login's whole card comes into view, 269.5 in 278.2. That sum left out the add's padding: at 190 the
+  add was 289.2 on run53b's stills, its head on the cards' top and Cancel's foot 1.3 under the fade.) The pixel
   witness is owed to FG-4b's console rows: Agents with nine installed, History with six rows, Profiles' add with
   its login. On the glass no pane draws its eyebrow. A new pane fades in (240ms `ease`, 160ms
   reduced) once the old one has faded out (120ms, 60 reduced), the old one leaving as a still copy over the frame;

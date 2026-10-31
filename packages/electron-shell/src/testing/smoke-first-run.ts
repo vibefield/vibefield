@@ -24,7 +24,7 @@
 //     logo, and a line hold said one line.
 //   · THE FRAME (FG-4a, FG-L3): on Agents with More open, the list outgrows its body and scrolls within itself under its
 //     fade, while the head, the foot and Continue stand inside the frame, unmoved by the scroll. Profiles' login
-//     terminal stands 190 tall, with Cancel in view above the fade.
+//     terminal stands 170 tall, with Cancel in view above the fade.
 //   · THE BAND (FG-D22 A): Setting up's segment advances with the boot's progress, then stands full.
 //   · The walk's end: Setting up's welcome said, the durable `onboarded: true`, the wizard gone, no CSP refusal.
 // Not this row's (desk-gates row 32): Agents with nine installed, History with six rows and Profiles' five cards
@@ -73,7 +73,7 @@ export const FIRST_RUN = {
   /** DESIGN.md §8: the frame every pane stands in, in the glass's own px */
   frame: { width: 560, height: 504 },
   /** DESIGN.md §4 `--vf-glass-signin-height`: a login's terminal on the glass */
-  signInHeight: 190,
+  signInHeight: 170,
   /** DESIGN.md §4 `--vf-scroll-fade` */
   scrollFade: 20,
   /** how far a box may sit from where it is meant to, in CSS px */
@@ -597,7 +597,20 @@ export function judgeFrame(pane: string, before: FrameSeen, after: FrameSeen): s
   return problems;
 }
 
-/** A login's terminal on the glass: 190 tall, and its Cancel inside the frame, in view above the list's fade, and a
+/** A box in words: its corner, then its size, in CSS px. */
+function placed(box: Box): string {
+  return `${box.x.toFixed(1)}, ${box.y.toFixed(1)}, ${box.width.toFixed(1)} × ${box.height.toFixed(1)}`;
+}
+
+/** How far a login's Cancel stands clear above its list's fade: its foot to the fade's top, in CSS px (under the
+ * fade, less than 0), or null with no Cancel or no list. */
+export function cancelClearOfFade(seen: SignInSeen): number | null {
+  if (seen.cancel === null || seen.scroller === null) return null;
+  const fadeTop = seen.scroller.y + seen.scroller.height - FIRST_RUN.scrollFade * seen.fit;
+  return fadeTop - (seen.cancel.y + seen.cancel.height);
+}
+
+/** A login's terminal on the glass: 170 tall, and its Cancel inside the frame, in view above the list's fade, and a
  * press there reaching it. */
 export function judgeSignIn(seen: SignInSeen): string[] {
   const problems: string[] = [];
@@ -619,7 +632,12 @@ export function judgeSignIn(seen: SignInSeen): string[] {
       height: seen.scroller.height - FIRST_RUN.scrollFade * seen.fit,
     };
     if (!within(seen.cancel, clear)) {
-      problems.push("the login's Cancel is not in view above the list's fade");
+      // said with what the row saw (row 32 at run53b: the line said only this, and Cancel's foot was 1.3 under)
+      const fadeTop = clear.y + clear.height;
+      const under = seen.cancel.y + seen.cancel.height - fadeTop;
+      problems.push(
+        `the login's Cancel is not in view above the list's fade: Cancel at ${placed(seen.cancel)}, the list at ${placed(seen.scroller)}, its fade's top at ${fadeTop.toFixed(1)}: Cancel's foot ${Math.abs(under).toFixed(1)} ${under > 0 ? "under" : "above"} it`,
+      );
     }
   }
   if (!seen.cancelHit) problems.push("a press at the login's Cancel does not reach it");
@@ -917,7 +935,11 @@ export async function firstRunRows(
     facts["login"] =
       signIn === null
         ? null
-        : { terminal: signIn.body?.height ?? null, cancelHit: signIn.cancelHit };
+        : {
+            terminal: signIn.body?.height ?? null,
+            cancelHit: signIn.cancelHit,
+            cancelClear: cancelClearOfFade(signIn),
+          };
     if (signIn === null) problems.push("the login did not stand: it ended before Cancel");
     else problems.push(...judgeSignIn(signIn));
     if (signingIn !== null) problems.push(...judgeFrameParts("Profiles, signing in", signingIn));
