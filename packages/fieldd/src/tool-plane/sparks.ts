@@ -1,34 +1,31 @@
-import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { randomBytes } from "node:crypto";
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
+import { basename, join } from "node:path";
 import {
   type AgentModelSelection,
   type AgentProfileSet,
   type AgentSessionSummary,
   type ComposeSparksHatchParams,
-  canonicalJson,
   type SparkId,
   SparkRecord,
   type SparkSummary,
 } from "@vibefield/contracts";
 import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/logging";
 import { RpcCallError } from "../native-link";
+import { RecordSigner, type SetAsideWhy } from "../signed-record";
 import type { GrantPrincipal } from "../terminal-grants";
 
 // CP-1c — the sparks fieldd keeps, and the three doors the window calls (the compose plane, version 2; compose.ts;
 // NS-D1, NS-D2 B, NS-D5, CR-D11).
 //
 // A spark is a record fieldd keeps (LAYOUT.SPARKS_DIR) and a folder of its own (LAYOUT.SPARK_HOMES_DIR/<slug>/), where
-// its session works with the brief written for it. Each record carries an HMAC-SHA256 over its canonical JSON, keyed
-// by a secret made once per user root (LAYOUT.SPARKS_KEY_FILE): SessionRecordStore's pattern. A spark's profiles bound
-// what its verbs reach (TL-D5), so an agent that edits the file must not widen them: a record that is unsigned, does
-// not verify, does not parse, or is exposed to other users is set aside and never served.
+// its session works with the brief written for it. Each record is signed by the one record signer (signed-record.ts)
+// under a secret made once per user root (LAYOUT.SPARKS_KEY_FILE). A spark's profiles bound what its verbs reach
+// (TL-D5), so an agent that edits the file must not widen them: a record that is unsigned, does not verify, does not
+// parse, or is exposed to other users is set aside and never served.
 //
 // CP-1d wires route A (co-spark-door-route): AgentRuntimeService rebuilds the briefing at every process birth,
 // through AgentSparkBriefings. Keeping that handoff at the runtime also covers resumes outside this service.
-
-/** The secret's bytes, and the signature's: an HMAC-SHA256 over the record's canonical JSON (contracts' one form). */
-const KEY_BYTES = 32;
 
 export interface SparkStoreOptions {
   readonly dir: string;
@@ -37,11 +34,12 @@ export interface SparkStoreOptions {
 }
 
 export class SparkStore {
-  #key: Buffer | undefined;
+  readonly #signer: RecordSigner;
   readonly #logger: Logger;
 
   constructor(private readonly opts: SparkStoreOptions) {
     this.#logger = opts.logger ?? createNoopLogger();
+    this.#signer = new RecordSigner({ keyPath: opts.keyPath, logger: this.#logger });
   }
 
   /** A new spark's id: never reused, never its name. */
@@ -85,7 +83,7 @@ export class SparkStore {
     const temp = `${path}.${process.pid}.tmp`;
     writeFileSync(
       temp,
-      `${JSON.stringify({ ...unsigned, signature: this.#sign(unsigned) }, null, 2)}\n`,
+      `${JSON.stringify({ ...unsigned, signature: this.#signer.sign(unsigned) }, null, 2)}\n`,
       {
         mode: 0o600,
       },
@@ -94,25 +92,13 @@ export class SparkStore {
   }
 
   #read(path: string): SparkRecord | undefined {
-    try {
-      if ((statSync(path).mode & 0o077) !== 0) return this.#setAside(path, "exposed");
-      const { signature, ...unsigned } = JSON.parse(readFileSync(path, "utf8")) as Record<
-        string,
-        unknown
-      >;
-      if (typeof signature !== "string") return this.#setAside(path, "unsigned");
-      const want = Buffer.from(this.#sign(unsigned), "hex");
-      const given = Buffer.from(signature, "hex");
-      if (given.length !== want.length || !timingSafeEqual(given, want))
-        return this.#setAside(path, "forged");
-      const parsed = SparkRecord.safeParse(unsigned);
-      return parsed.success ? parsed.data : this.#setAside(path, "unreadable");
-    } catch {
-      return this.#setAside(path, "unreadable");
-    }
+    const read = this.#signer.read(path);
+    if ("why" in read) return this.#setAside(path, read.why);
+    const parsed = SparkRecord.safeParse(read.body);
+    return parsed.success ? parsed.data : this.#setAside(path, "unreadable");
   }
 
-  #setAside(path: string, why: string): undefined {
+  #setAside(path: string, why: SetAsideWhy): undefined {
     this.#logger.warn(
       "fieldd.compose.spark_set_aside",
       "A spark's record was set aside and is not served",
@@ -122,26 +108,6 @@ export class SparkStore {
       },
     );
     return undefined;
-  }
-
-  #sign(unsigned: unknown): string {
-    return createHmac("sha256", this.#signingKey()).update(canonicalJson(unsigned)).digest("hex");
-  }
-
-  #signingKey(): Buffer {
-    if (this.#key) return this.#key;
-    mkdirSync(dirname(this.opts.keyPath), { recursive: true, mode: 0o700 });
-    try {
-      // made once, never overwritten: a second fieldd that races the first reads the winner's secret
-      writeFileSync(this.opts.keyPath, randomBytes(KEY_BYTES).toString("hex"), {
-        mode: 0o600,
-        flag: "wx",
-      });
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-    }
-    this.#key = Buffer.from(readFileSync(this.opts.keyPath, "utf8").trim(), "hex");
-    return this.#key;
   }
 }
 

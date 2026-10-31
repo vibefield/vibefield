@@ -164,7 +164,10 @@ export class SessionRecordStore {
   /** The root's signing key: read, or minted once (32 random bytes, base64,
    * 0600, created without overwrite so two writers cannot both mint). A key
    * that other users could read is worthless as evidence: set aside, re-minted,
-   * and every record signed with it reads as untrusted from then on. */
+   * and every record signed with it reads as untrusted from then on. An exposed
+   * key and a malformed one are each replaced on the pass that finds them, and
+   * the second pass reads what was minted (the one record signer,
+   * signed-record.ts, carries the same rule). */
   private signingKey(): Buffer {
     if (this.key !== undefined) return this.key;
     const path = this.opts.keyPath;
@@ -180,21 +183,21 @@ export class SessionRecordStore {
             { aside },
           );
           renameSync(path, aside);
-          continue;
+        } else {
+          const key = Buffer.from(readFileSync(path, "utf8").trim(), "base64");
+          if (key.length === 32) {
+            this.key = key;
+            return key;
+          }
+          const aside = `${path}.unreadable-${Date.now()}`;
+          this.logger.error(
+            "fieldd.agents.session_key_unreadable",
+            "The session-record signing key is malformed; set aside and re-minted",
+            undefined,
+            { aside },
+          );
+          renameSync(path, aside);
         }
-        const key = Buffer.from(readFileSync(path, "utf8").trim(), "base64");
-        if (key.length === 32) {
-          this.key = key;
-          return key;
-        }
-        const aside = `${path}.unreadable-${Date.now()}`;
-        this.logger.error(
-          "fieldd.agents.session_key_unreadable",
-          "The session-record signing key is malformed; set aside and re-minted",
-          undefined,
-          { aside },
-        );
-        renameSync(path, aside);
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
       }
