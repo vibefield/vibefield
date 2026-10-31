@@ -1748,7 +1748,7 @@ async function pgrep(deps, name) {
 
 /** The guard by its intent (§1): `ps -axo pid=,command=` through guard-stop.awk — its count only, the table never said. */
 async function guardHits(deps, guardAwk) {
-  if (!existsSync(guardAwk)) return null;
+  if (!deps.exists(guardAwk)) return null;
   const table = await deps.exec(PS, ["-axo", "pid=,command="], { timeoutMs: 15_000 });
   if (table.code !== 0) return null;
   const hits = await deps.exec(AWK, ["-f", guardAwk], { input: table.stdout, timeoutMs: 15_000 });
@@ -1924,7 +1924,9 @@ async function teardown(run, deps, ctx) {
   }
 }
 
-async function restoreHost(run, deps, ctx) {
+/** The plan run against the host now: each own device's name read again right before its step (RM2); HOST-RESTORED
+ * said; true when restored. Exported for its units (deps-injected, as `doorAct` is). */
+export async function restoreHost(run, deps, ctx) {
   const findings = [];
   let list = run.devDir === null ? null : await readList(run, deps);
   const own = [...run.own.entries()].map(([n, d]) => {
@@ -2038,13 +2040,18 @@ async function preflightOnly() {
   return fails.length === 0 ? 0 : 1;
 }
 
-/** `--sweep <runId>`: exactly `pts3-<runId>-n`, shut down; deleted only under the flag, each name checked right before. */
-async function sweep(runId, env, rules) {
-  const redactor = createRedactor();
-  const deps = hostDeps(redactor);
+/** `--sweep <runId>`: exactly `pts3-<runId>-n`, shut down; deleted only under the flag, each name checked right before.
+ * The host's deps by default; a unit's injected. */
+export async function sweep(
+  runId,
+  env,
+  rules,
+  redactor = createRedactor(),
+  deps = hostDeps(redactor),
+) {
   deps.say(rulesLine(rules));
   const guard = await guardHits(deps, rules.guardAwk);
-  if (guard !== 0 || existsLink(rules.perfLock)) {
+  if (guard !== 0 || deps.exists(rules.perfLock)) {
     deps.say(`NOT ARMED: ${guard === 0 ? `${rules.perfLock} is held` : "the guard is not clear"}`);
     return NOT_ARMED;
   }
@@ -2052,7 +2059,7 @@ async function sweep(runId, env, rules) {
     env: withoutDeveloperDir(deps.env),
     timeoutMs: 5_000,
   });
-  const dev = select.code === 0 ? pickDeveloperDir(select.stdout, existsSync) : null;
+  const dev = select.code === 0 ? pickDeveloperDir(select.stdout, deps.exists) : null;
   if (dev === null) {
     deps.say("PHONE_SWEEP no developer dir holds simctl");
     return 1;

@@ -64,6 +64,7 @@ const {
   realExec,
   redactStream,
   responsibleApp,
+  restoreHost,
   restoredVerdict,
   rowsMark,
   rowsVerdict,
@@ -74,6 +75,7 @@ const {
   simulatorProof,
   simulatorSettled,
   startDoor,
+  sweep,
   teardownPlan,
   XCODE_DEVELOPER_DIR,
 } = await import("../../../scripts/stage-simulator-fixture.mjs");
@@ -1793,6 +1795,142 @@ test("runCommand: past the deadline the command is SIGTERMed, then its whole GRO
 });
 
 // ─── teardown ─────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+/** A host whose `simctl list` answers each read with the next list given (the last one held). */
+function scriptedLists(lists, opts = {}) {
+  const host = fakeHost(opts);
+  const exec = host.deps.exec;
+  const queue = [...lists];
+  host.reads = 0;
+  host.deps.exec = async (file, args, o = {}) => {
+    if (file === "/usr/bin/xcrun" && args[1] === "list") {
+      host.reads += 1;
+      host.state.list = queue.length > 1 ? queue.shift() : queue[0];
+    }
+    if (opts.extra !== undefined) {
+      const r = opts.extra(file, args);
+      if (r !== undefined) return r;
+    }
+    return exec(file, args, o);
+  };
+  /** the simctl acts run on own devices, as `<verb> <n>` (`?` for a UDID not the run's) */
+  host.acts = () =>
+    host.calls
+      .filter((c) => c.file === "/usr/bin/xcrun" && ["shutdown", "delete"].includes(c.args[1]))
+      .map((c) => `${c.args[1]} ${OWN.indexOf(c.args[2]) + 1 || "?"}`);
+  return host;
+}
+
+const ownList = (states, renamed = {}) =>
+  simctlList({
+    devices: [
+      ...OWN.map((udid, i) => ({
+        udid,
+        name: renamed[i + 1] ?? `pts3-${RUN}-${i + 1}`,
+        type: CATALOG[i + 2],
+        state: states[i],
+      })),
+      { udid: FOREIGN, name: "iPhone 11", type: CATALOG[0], state: "Shutdown" },
+    ],
+  });
+
+test("restoreHost: each own device's name read again right before its step — renamed, refused; delete only under the flag (S9)", async () => {
+  const restore = async (lists, deleteDevices) => {
+    const run = ownRun();
+    run.othersAtArm.set(FOREIGN, "Shutdown");
+    const host = scriptedLists(lists);
+    await restoreHost(run, host.deps, {
+      deleteDevices,
+      defaultsBefore: "",
+      crashDir: join(FIXTURES, "no-crash-reports-here"),
+      crashBefore: [],
+    });
+    return host;
+  };
+  const armed = ownList(["Booted", "Shutdown", "Booted"]);
+  const renamed = ownList(["Shutdown", "Shutdown", "Booted"], { 3: "James's iPhone" });
+  // KEEP: the plan shuts 1 and 3; 3 is renamed between the plan and its step — refused, never shut
+  const kept = await restore([armed, armed, renamed, renamed], false);
+  assert.deepEqual(kept.acts(), ["shutdown 1"]);
+  const said = kept.said.find((line) => line.startsWith("PHONE_HOST_RESTORED "));
+  assert.match(said, /shutdown of <pts3-dev-3> refused: its name is no longer pts3-l2-t1-3/u);
+  assert.match(said, /"form":"kept"/u);
+  // DELETE, under the flag: 1 shut then deleted, 2 deleted; 3 renamed before its steps — neither runs
+  const gone = await restore([armed, armed, armed, armed, renamed, renamed, renamed], true);
+  assert.deepEqual(gone.acts(), ["shutdown 1", "delete 1", "delete 2"]);
+  assert.equal(
+    gone.reads,
+    7,
+    "the list read once before the plan, once before each of its five steps, once after",
+  );
+  // no flag, no delete — whatever the list says
+  assert.ok(!kept.acts().some((act) => act.startsWith("delete")));
+});
+
+test("sweep: exactly the run's own names, shut down; deleted only under the flag, each name read again right before (S9)", async () => {
+  const rules = {
+    guardAwk: "/lanes/guard/guard-stop.awk",
+    perfLock: "/lanes/PERF.lock",
+    diskFloors: [],
+    by: "env (VF_PHONE_GUARD_AWK, VF_PHONE_PERF_LOCK)",
+  };
+  const simctlAt = join(XCODE_DEVELOPER_DIR, "usr/bin/simctl");
+  const swept = async (
+    lists,
+    { env = {}, guard = "", files = [rules.guardAwk, simctlAt] } = {},
+  ) => {
+    const host = scriptedLists(lists, {
+      files,
+      extra: (file) =>
+        file === "/usr/bin/awk"
+          ? ok(guard)
+          : file === "/usr/bin/xcode-select"
+            ? ok(`${XCODE_DEVELOPER_DIR}\n`)
+            : undefined,
+    });
+    const code = await sweep(RUN, env, rules, createRedactor(), host.deps);
+    return { code, host, line: host.said.find((l) => l.startsWith("PHONE_SWEEP ")) };
+  };
+  // another run whose id begins like this one's, booted: never the sweep's
+  const near = (states, renamed) =>
+    JSON.stringify(
+      (() => {
+        const list = JSON.parse(ownList(states, renamed));
+        list.devices[RT26].push({
+          dataPath: "/x",
+          udid: FOREIGN_GONE,
+          isAvailable: true,
+          deviceTypeIdentifier: CATALOG[2],
+          state: "Booted",
+          name: `pts3-${RUN}0-1`,
+        });
+        return list;
+      })(),
+    );
+  const left = near(["Booted", "Shutdown", "Shutdown"]);
+  const keep = await swept([left]);
+  assert.equal(keep.code, 0);
+  assert.deepEqual(keep.host.acts(), ["shutdown 1"]);
+  assert.match(keep.line, /"found":3,"shutdown":1,"deleted":0,"kept":3/u);
+  const renamed = near(["Shutdown", "Shutdown", "Shutdown"], { 3: "James's iPhone" });
+  const del = await swept([left, left, left, renamed], { env: { VF_PHONE_DELETE_DEVICES: "1" } });
+  assert.equal(del.code, 0);
+  assert.deepEqual(del.host.acts(), ["shutdown 1", "delete 1", "delete 2"]);
+  assert.match(del.line, /"deleted":2,"kept":1/u);
+  // no UDID in anything it says
+  for (const line of [...keep.host.said, ...del.host.said])
+    assert.doesNotMatch(line, /[0-9a-f]{8}-[0-9a-f]{4}-/iu, line);
+  // the guard not clear, or the lock held: NOT ARMED, and simctl never run
+  for (const blocked of [
+    await swept([left], { guard: "4242 Electron\n" }),
+    await swept([left], { files: [rules.guardAwk, simctlAt, rules.perfLock] }),
+    await swept([left], { files: [simctlAt] }),
+  ]) {
+    assert.equal(blocked.code, NOT_ARMED);
+    assert.equal(blocked.host.reads, 0);
+    assert.deepEqual(blocked.host.acts(), []);
+  }
+});
 
 test("teardownPlan: no quit unless proven the run's (and never beside a foreign booted device); no delete without the flag", () => {
   const own = [
