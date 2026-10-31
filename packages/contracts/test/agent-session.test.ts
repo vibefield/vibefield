@@ -552,3 +552,20 @@ describe("the record's tamper evidence (AR-4b)", () => {
     expect(resumed.reattach?.replacedBy).toBe("run-next");
   });
 });
+
+describe("item 124 — the row says the door is off for this process", () => {
+  it("carries `door: off` for a run born without its briefing, and a row without it reads as before", () => {
+    const off = AgentSessionSummary.parse(fixture("agent-session-summary.door-off.json"));
+    expect(off.door).toBe("off");
+    // absent is the door as briefed, or none asked: every row from before item 124
+    const before = AgentSessionSummary.parse(fixture("agent-session-summary.valid.json"));
+    expect(before.door).toBeUndefined();
+    // OPEN, like spawnedBy: a later word still reads; an empty one is no word
+    expect(AgentSessionSummary.safeParse({ ...off, door: "later-word" }).success).toBe(true);
+    expect(AgentSessionSummary.safeParse({ ...off, door: "" }).success).toBe(false);
+  });
+
+  it("is never the signed record's: the record keeps no door, so the next birth is briefed afresh", () => {
+    expect(Object.keys(AgentSessionRecord.shape)).not.toContain("door");
+  });
+});
