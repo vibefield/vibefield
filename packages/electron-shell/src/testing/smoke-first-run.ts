@@ -29,15 +29,23 @@
 //   · THE HAND-OVER (FG-5; DESIGN.md §6): the glass steps out as the page says, its words and then its clearing, each
 //     once. Judged by order alone, never by how long a step stood: the recorder hears each step as the page sets it.
 //     Two stills of it are for the eye: the logo alone, and the glass clearing as the field's mark takes over.
+//   · THE OPENING (FG-6c; DESIGN.md §6): on the live field the ground opens by the tear and the tear opens (the
+//     field's `data-tear`, "tearing" then "open"); over the still it opens by the fade, and nothing tears. Judged by
+//     order and outcome, heard as the page sets them; a tear that passed its bound, failed or was cut is red. One still
+//     of it is for the eye: the tear about halfway.
 //   · The walk's end: Setting up's welcome said, the durable `onboarded: true`, the wizard gone, no CSP refusal.
+// Printed, never judged (FG-O3, VF-PM 16:04Z): the page's frame intervals and the GPU's load over the tear and over as
+// long a stretch before the hand-over: the GPU process's CPU as Electron counts it, and the GPU's own busy share where
+// the host gives it without root (IOAccelerator's, through `ioreg`), else "not read".
 // Not this row's (desk-gates row 32): Agents with nine installed, History with six rows and Profiles' five cards
 // (James's eye), and the ways out at 6s and Start now at 8s (their unit rows): Start now is said when it shows, and
 // never pressed, so the welcome is always the walk's to see.
 
+import { execFile } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve, sep } from "node:path";
 import { readUsersFile } from "@vibefield/users";
-import type { BrowserWindow } from "electron";
+import type { BrowserWindow, ProcessMetric } from "electron";
 import { loadRenderer } from "../main/windows";
 import { WITHOUT_WEBGPU } from "./smoke-unavailable";
 import { readTypedAgentCalls, type StagedTypedAgent } from "./typed-agent";
@@ -93,6 +101,12 @@ export const FIRST_RUN = {
    * words out in 240ms, then the logo alone for 640ms), and the glass clearing, 150ms into its 600ms */
   aloneShotMs: 400,
   clearingShotMs: 150,
+  /** the tear's still (FG-6c), for the eye alone: about halfway through its 1.9s */
+  tearShotMs: 950,
+  /** FG-O3's stretch before the hand-over's first step: as long as the tear */
+  restMs: 1_900,
+  /** FG-O3's readings of the GPU's load, one this often */
+  gpuEveryMs: 100,
 } as const;
 
 /** The field's mark (`boot/splash/field-mark.ts` FIELD_MARK) and the stills it is drawn on (FIELD_STILLS): the
@@ -153,7 +167,18 @@ export interface FirstRunRecord {
   readonly progress: readonly (readonly [number, number])[];
   /** `[ms, step]` at each step the glass takes out at the hand-over (`data-leaving`, FG-5), as the page sets it */
   readonly leaving: readonly (readonly [number, string | null])[];
+  /** `[ms, opening]` at each change of how the ground opens (`data-opening`, FG-2's tear or fade), as the page sets it */
+  readonly opening: readonly (readonly [number, string | null])[];
+  /** `[ms, state]` at each change of how the field's tear goes (`data-tear`, FG-6c), as the page sets it */
+  readonly tear: readonly (readonly [number, string | null])[];
+  /** FG-O3's read: the page's frame intervals (ms) over the tear, and over `restMs` before the hand-over's first step */
+  readonly frames: {
+    readonly rest: readonly number[] | null;
+    readonly tear: readonly number[] | null;
+  };
   readonly now: number;
+  /** the wall's clock (epoch ms) read with `now`, to set the page's moments beside main's readings */
+  readonly epoch: number;
 }
 
 /** The faces every walk stands on (Connect's is one of two, by what the link said). */
@@ -222,17 +247,170 @@ export function judgeBand(progress: FirstRunRecord["progress"]): string[] {
   return problems;
 }
 
+/** What the page set, one value to each change: a value heard twice over is one. */
+export function heard(changes: readonly (readonly [number, string | null])[]): (string | null)[] {
+  return changes
+    .map(([, value]) => value)
+    .filter((value, at, all) => at === 0 || value !== all[at - 1]);
+}
+
 /** The hand-over (FG-5; DESIGN.md §6): the glass stepped out as the page says, its words and then its clearing, each
  * once. By order alone, never by how long a step stood: the recorder hears each step as the page sets it, so a
  * loaded host can neither drop one nor redden this by its pace. */
 export function judgeHandOver(leaving: FirstRunRecord["leaving"]): string[] {
-  const steps = leaving
-    .map(([, step]) => step)
-    .filter((step, at, all) => at === 0 || step !== all[at - 1]);
+  const steps = heard(leaving);
   if (steps.length === 0) return ["the glass never stepped out: no hand-over was heard"];
   return steps.length === 2 && steps[0] === "words" && steps[1] === "clear"
     ? []
     : [`the glass stepped out ${JSON.stringify(steps)}, not its words and then its clearing`];
+}
+
+/** The tear's ways of not opening (FieldLayer.tsx's `TearState`, held equal by a unit row), in words. */
+export const TEAR_NOT_OPEN: Readonly<Record<string, string>> = {
+  bound: "its bound passed first, so its frames came late or never",
+  lost: "its reveal failed (a lost device)",
+  cut: "its reveal ended before the window opened",
+};
+
+/** The opening (FG-6c; DESIGN.md §6): on the live field the ground opens by the tear and the tear opens, "tearing"
+ * and then "open"; over the still the ground opens by the fade, and nothing tears. By order and outcome alone, never
+ * by how long the tear took: its bound is the product's own, and a tear that did not open is red (VF-PM 16:04Z). */
+export function judgeOpening(
+  walk: { readonly webgpu: boolean },
+  opening: FirstRunRecord["opening"],
+  tear: FirstRunRecord["tear"],
+): string[] {
+  const problems: string[] = [];
+  const want = walk.webgpu ? "tear" : "fade";
+  const opened = heard(opening);
+  if (opened.length === 0) problems.push("the ground never opened: no opening was heard");
+  else if (opened.length !== 1 || opened[0] !== want) {
+    problems.push(`the ground opened ${JSON.stringify(opened)}, not by the ${want}`);
+  }
+  const torn = heard(tear);
+  if (!walk.webgpu) {
+    if (torn.length > 0) problems.push(`over the still the field tore: ${JSON.stringify(torn)}`);
+    return problems;
+  }
+  const end = torn[1];
+  if (torn.length === 0) problems.push("the field never tore: no tear was heard");
+  else if (
+    torn.length === 2 &&
+    torn[0] === "tearing" &&
+    typeof end === "string" &&
+    Object.hasOwn(TEAR_NOT_OPEN, end)
+  ) {
+    problems.push(`the tear did not open: ${end}, ${TEAR_NOT_OPEN[end]}`);
+  } else if (torn.length !== 2 || torn[0] !== "tearing" || end !== "open") {
+    problems.push(`the tear went ${JSON.stringify(torn)}, not tearing and then open`);
+  }
+  return problems;
+}
+
+/** A stretch of the page's frame intervals in four numbers (ms, the percentiles by nearest rank), or null when the walk
+ * kept none (FG-O3; printed, never judged). */
+export function frameStats(
+  intervals: readonly number[] | null,
+): { n: number; p50: number; p95: number; max: number } | null {
+  if (intervals === null || intervals.length === 0) return null;
+  const sorted = [...intervals].sort((a, b) => a - b);
+  const rank = (q: number): number =>
+    sorted[Math.max(0, Math.ceil(q * sorted.length) - 1)] as number;
+  const tenth = (ms: number): number => Math.round(ms * 10) / 10;
+  return {
+    n: sorted.length,
+    p50: tenth(rank(0.5)),
+    p95: tenth(rank(0.95)),
+    max: tenth(sorted.at(-1) as number),
+  };
+}
+
+/** One reading of the GPU's load (FG-O3; printed, never judged), in main's clock (epoch ms): the GPU process's CPU as
+ * Electron counts it (seconds since it started, and percent since the last reading), and the GPU's own busy share
+ * where the host gives it (`readGpuBusy`), each null where it was not read. */
+export interface GpuSample {
+  readonly at: number;
+  readonly cpuSeconds: number | null;
+  readonly cpuPercent: number | null;
+  readonly busy: number | null;
+}
+
+/** The readings over `[from, to]` (epoch ms), or null with fewer than two: the GPU process's CPU in percent of one
+ * core (its seconds over the stretch, else the mean of the percents after its first reading), and the GPU's busy
+ * share (the mean and the most of its readings, or null where none was read). */
+export function gpuOver(
+  samples: readonly GpuSample[],
+  from: number,
+  to: number,
+): { n: number; cpu: number | null; busy: { mean: number; max: number } | null } | null {
+  const inside = samples.filter((sample) => sample.at >= from && sample.at <= to);
+  const first = inside[0];
+  const last = inside.at(-1);
+  if (first === undefined || last === undefined || inside.length < 2) return null;
+  const tenth = (value: number): number => Math.round(value * 10) / 10;
+  const mean = (values: readonly number[]): number =>
+    values.reduce((sum, value) => sum + value, 0) / values.length;
+  const seconds = (last.at - first.at) / 1_000;
+  const percents = inside.slice(1).flatMap((s) => (s.cpuPercent === null ? [] : [s.cpuPercent]));
+  const cpu =
+    first.cpuSeconds !== null && last.cpuSeconds !== null && seconds > 0
+      ? ((last.cpuSeconds - first.cpuSeconds) / seconds) * 100
+      : percents.length > 0
+        ? mean(percents)
+        : null;
+  const busy = inside.flatMap((s) => (s.busy === null ? [] : [s.busy]));
+  return {
+    n: inside.length,
+    cpu: cpu === null ? null : tenth(cpu),
+    busy: busy.length === 0 ? null : { mean: tenth(mean(busy)), max: Math.max(...busy) },
+  };
+}
+
+/** FG-O3's read (FG-6c; printed, never judged): the page's frame intervals and the GPU's load over the tear, and over
+ * `restMs` just before the hand-over's first step. The page's moments are in its own clock and the readings in
+ * main's, set side by side by the wall's clock the page read with its own at the walk's end. A stretch the walk never
+ * had is null, and the GPU's busy share is "not read" where the host gave none. */
+export function firstRunGpu(record: FirstRunRecord, samples: readonly GpuSample[]) {
+  const wall = (ms: number): number => record.epoch - (record.now - ms);
+  const words = record.leaving.find(([, step]) => step === "words")?.[0];
+  const begun = record.tear.findIndex(([, state]) => state === "tearing");
+  const tearing = record.tear[begun]?.[0];
+  const ended = record.tear.slice(begun + 1).find(([, state]) => state !== "tearing")?.[0];
+  return {
+    frames: { rest: frameStats(record.frames.rest), tear: frameStats(record.frames.tear) },
+    load: {
+      rest:
+        words === undefined ? null : gpuOver(samples, wall(words) - FIRST_RUN.restMs, wall(words)),
+      tear:
+        begun < 0 || tearing === undefined || ended === undefined
+          ? null
+          : gpuOver(samples, wall(tearing), wall(ended)),
+    },
+    readings: samples.length,
+    busy: samples.some((sample) => sample.busy !== null) ? "read" : "not read",
+  };
+}
+
+/** The GPU's busy share in a reading of `ioreg -c IOAccelerator` (its "Device Utilization %", the busiest
+ * accelerator's where there are several), or null where it gives none. */
+export function parseGpuBusy(ioreg: string): number | null {
+  const shares = [...ioreg.matchAll(/"Device Utilization %"=(\d+)/g)].map((match) =>
+    Number(match[1]),
+  );
+  return shares.length === 0 ? null : Math.max(...shares);
+}
+
+/** The GPU's busy share now (FG-O3): IOAccelerator's, as `ioreg` reads it with no root, or null where the host gives
+ * none (or the read takes past a second). Never sudo (VF-PM 16:04Z). */
+export function readGpuBusy(): Promise<number | null> {
+  return new Promise((done) => {
+    execFile(
+      "/usr/sbin/ioreg",
+      ["-r", "-d", "1", "-w", "0", "-c", "IOAccelerator"],
+      { timeout: 1_000 },
+      (error, stdout) => done(error === null ? parseGpuBusy(stdout) : null),
+    );
+  });
 }
 
 /** The mark's ink in a capture `width` × `height` CSS px (BGRA, Electron's `toBitmap`, at the screen's density): the
@@ -308,6 +486,15 @@ export const FIRST_RUN_PAGE = String.raw`(() => {
   const progress = [];
   let lastProgress = null;
   const leaving = [];
+  const opening = [];
+  const tear = [];
+  // FG-O3's read (FG-6c): the page's frame intervals, the last few hundred kept so the stretch before the hand-over
+  // can be cut from them, and the tear's kept while it runs
+  const recent = [];
+  let lastFrame = null;
+  let restFrames = null;
+  let tearFrames = null;
+  let tearing = false;
   const shellOf = () => document.querySelector(".vf-wizard-shell");
   const frameOf = () => shellOf()?.querySelector(".vf-wizard-frame") ?? null;
   const rootsOf = (frame) => [...frame.children].filter((child) => child.hasAttribute("data-face"));
@@ -332,6 +519,13 @@ export const FIRST_RUN_PAGE = String.raw`(() => {
   };
   const sample = () => {
     const now = performance.now();
+    if (lastFrame !== null) {
+      const interval = Math.round((now - lastFrame) * 10) / 10;
+      recent.push([now, interval]);
+      if (recent.length > 600) recent.shift();
+      if (tearing) tearFrames.push(interval);
+    }
+    lastFrame = now;
     const shell = shellOf();
     const frame = frameOf();
     const seen = new Map();
@@ -378,14 +572,31 @@ export const FIRST_RUN_PAGE = String.raw`(() => {
     requestAnimationFrame(sample);
   };
   requestAnimationFrame(sample);
-  // the hand-over (FG-5): each step the glass takes out, heard as the page sets it and never sampled, so no step falls
-  // between two frames of a loaded host
+  // the hand-over (FG-5) and the opening (FG-6c): each step the glass takes out, how the ground opens and how the
+  // field's tear goes, heard as the page sets them and never sampled, so no step falls between two frames of a loaded
+  // host
+  const heard = {
+    "data-leaving": ["vf-wizard-shell", leaving],
+    "data-opening": ["vf-splash", opening],
+    "data-tear": ["vf-field", tear],
+  };
   new MutationObserver((records) => {
     for (const record of records) {
-      if (!record.target.classList.contains("vf-wizard-shell")) continue;
-      leaving.push([Math.round(performance.now()), record.target.getAttribute("data-leaving")]);
+      const [owner, list] = heard[record.attributeName] ?? [];
+      if (owner === undefined || !record.target.classList.contains(owner)) continue;
+      const now = performance.now();
+      const value = record.target.getAttribute(record.attributeName);
+      list.push([Math.round(now), value]);
+      // FG-O3's stretch before the hand-over's first step, as long as the tear
+      if (record.attributeName === "data-leaving" && value === "words" && restFrames === null) {
+        restFrames = recent.filter(([at]) => at >= now - ${FIRST_RUN.restMs}).map(([, ms]) => ms);
+      }
+      if (record.attributeName === "data-tear") {
+        if (value === "tearing" && tearFrames === null) tearFrames = [];
+        tearing = value === "tearing";
+      }
     }
-  }).observe(document, { subtree: true, attributes: true, attributeFilter: ["data-leaving"] });
+  }).observe(document, { subtree: true, attributes: true, attributeFilter: Object.keys(heard) });
   const targetOf = (spec) => {
     const root = standingRoot();
     if (root === null) return null;
@@ -395,7 +606,16 @@ export const FIRST_RUN_PAGE = String.raw`(() => {
     ) ?? null;
   };
   globalThis.__vfFirstRun = {
-    read: () => ({ faces, progress, leaving, now: performance.now() }),
+    read: () => ({
+      faces,
+      progress,
+      leaving,
+      opening,
+      tear,
+      frames: { rest: restFrames, tear: tearFrames },
+      now: performance.now(),
+      epoch: Date.now(),
+    }),
     /** the face standing whole in the frame, with no pane leaving over it */
     standing: () => {
       const frame = frameOf();
@@ -409,6 +629,11 @@ export const FIRST_RUN_PAGE = String.raw`(() => {
     handOver: () => {
       const last = leaving.at(-1);
       return last === undefined ? null : { step: last[1], since: performance.now() - last[0] };
+    },
+    /** how the field's tear goes now (FG-6c), and how long it has stood so */
+    tearState: () => {
+      const last = tear.at(-1);
+      return last === undefined ? null : { state: last[1], since: performance.now() - last[0] };
     },
     /** a control's centre in the standing root, if the page would hand a press there to it */
     target: (spec) => {
@@ -755,6 +980,10 @@ export interface FirstRunDriver {
   /** users.json's root, and the user this window boots as */
   readonly users: { readonly root: string; readonly userId: string };
   readonly say: (line: string) => void;
+  /** FG-O3's readers (printed, never judged): this app's processes as Electron counts them (`app.getAppMetrics`),
+   * and the GPU's busy share now (`readGpuBusy`); a walk without them reads no load */
+  readonly processes?: () => readonly ProcessMetric[];
+  readonly gpuBusy?: () => Promise<number | null>;
 }
 
 /** A control the walk presses: by selector, or by its words (in `within`'s elements, buttons by default). */
@@ -860,6 +1089,37 @@ export async function firstRunRows(
     at = name;
     d.say(`SMOKE_FIRST_RUN_STEP ${d.walk} ${name}`);
   };
+  // FG-O3's readings (FG-6c; printed, never judged): the GPU's load from Setting up's welcome until the wizard goes, one
+  // every `gpuEveryMs` in main's clock; the busy share is asked again only while the host gives it
+  const gpu: GpuSample[] = [];
+  let gpuOn = false;
+  let gpuRun: Promise<void> | null = null;
+  const gpuStart = (): void => {
+    if (gpuRun !== null || (d.processes === undefined && d.gpuBusy === undefined)) return;
+    gpuOn = true;
+    gpuRun = (async () => {
+      let ask = d.gpuBusy !== undefined;
+      while (gpuOn) {
+        const now = Date.now();
+        const cpu = d.processes?.().find((metric) => metric.type === "GPU")?.cpu;
+        const busy = ask ? ((await d.gpuBusy?.()) ?? null) : null;
+        if (gpu.length === 0 && busy === null) ask = false;
+        gpu.push({
+          at: now,
+          cpuSeconds: cpu?.cumulativeCPUUsage ?? null,
+          cpuPercent: cpu?.percentCPUUsage ?? null,
+          busy,
+        });
+        await sleep(FIRST_RUN.gpuEveryMs);
+      }
+    })();
+  };
+  const gpuStop = async (): Promise<void> => {
+    gpuOn = false;
+    await gpuRun;
+  };
+  // the tear's still (FG-6c), in ms into the tear as asked: null while the walk never saw it tearing
+  let tearShot: number | null = null;
 
   mkdirSync(d.shotDir, { recursive: true });
   try {
@@ -1038,12 +1298,14 @@ export async function firstRunRows(
         // its crossfade in
         await sleep(300);
         await capture("setting-up-welcome");
+        gpuStart();
       }
       if (!startNow) startNow = (await target({ text: "Start now" }))?.hit === true;
       // the hand-over (FG-5): its stills, each timed from its step as the page set it
       const handOver = await page<{ step: string | null; since: number } | null>("handOver()");
       if (!alone && handOver?.step === "words") {
         alone = true;
+        gpuStart();
         await sleep(Math.max(0, FIRST_RUN.aloneShotMs - handOver.since));
         await capture("handover-alone");
       }
@@ -1052,8 +1314,19 @@ export async function firstRunRows(
         await sleep(Math.max(0, FIRST_RUN.clearingShotMs - handOver.since));
         await capture("handover-clearing");
       }
+      // the opening (FG-6c): the tear's still, timed from its state as the page set it; its capture falls inside
+      // FG-O3's read of the tear, and `opening.still` says when
+      if (tearShot === null) {
+        const tear = await page<{ state: string | null; since: number } | null>("tearState()");
+        if (tear?.state === "tearing") {
+          tearShot = Math.round(Math.max(tear.since, FIRST_RUN.tearShotMs));
+          await sleep(Math.max(0, FIRST_RUN.tearShotMs - tear.since));
+          await capture("tear-mid");
+        }
+      }
       return (await page<boolean | null>("wizard()")) !== true;
     });
+    await gpuStop();
     step("desk");
     await sleep(1_000);
     await capture("desk");
@@ -1061,6 +1334,7 @@ export async function firstRunRows(
     facts["startNowShown"] = startNow;
     if (!welcomed) problems.push("Setting up's line never said the welcome");
   } catch (error) {
+    await gpuStop();
     if (!d.win.isDestroyed()) await capture("at-failure").catch(() => undefined);
     // said with what the walk had found before it, never alone: at run52b night and no-webgpu stopped at the login's
     // Cancel, and the reds they had found on the welcome and on Agents were never said
@@ -1086,6 +1360,9 @@ export async function firstRunRows(
   };
   problems.push(...judgeHandOver(record.leaving));
   facts["handOver"] = record.leaving.map(([, step]) => step);
+  problems.push(...judgeOpening(walk, record.opening, record.tear));
+  facts["opening"] = { opening: heard(record.opening), tear: heard(record.tear), still: tearShot };
+  facts["gpu"] = firstRunGpu(record, gpu);
   const user = readUsersFile(d.users.root)?.users.find((u) => u.userId === d.users.userId);
   facts["onboarded"] = user?.onboarded ?? null;
   if (user?.onboarded !== true) problems.push("the walk ended without the durable onboarded: true");

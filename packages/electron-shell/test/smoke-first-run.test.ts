@@ -9,24 +9,33 @@ import {
   cancelClearOfFade,
   expectedLogoBox,
   type FaceSeen,
+  FIRST_RUN,
   FIRST_RUN_MARK,
   FIRST_RUN_WALKS,
   type FirstRunRecord,
   type FrameSeen,
+  firstRunGpu,
   firstRunRows,
+  frameStats,
+  type GpuSample,
+  gpuOver,
+  heard,
   judgeBand,
   judgeFrame,
   judgeHandOver,
   judgeHolds,
   judgeLogo,
+  judgeOpening,
   judgeRecorded,
   judgeSignIn,
   type LogoSeen,
   listFits,
   measureMark,
+  parseGpuBusy,
   parseWalk,
   type SignInSeen,
   shotDirRefusal,
+  TEAR_NOT_OPEN,
   WALKED_FACES,
 } from "../src/testing/smoke-first-run";
 import type { StagedTypedAgent } from "../src/testing/typed-agent";
@@ -105,7 +114,11 @@ const record = (faces: FaceSeen[], now = 100_000): FirstRunRecord => ({
   faces,
   progress: [],
   leaving: [],
+  opening: [],
+  tear: [],
+  frames: { rest: null, tear: null },
   now,
+  epoch: 1_790_000_000_000,
 });
 
 describe("the holds (FG-L5, FG-D20; DESIGN.md §6's floor)", () => {
@@ -279,6 +292,260 @@ describe("the hand-over (FG-5; DESIGN.md §6)", () => {
     ).toEqual([
       'the glass stepped out ["words",null,"clear"], not its words and then its clearing',
     ]);
+  });
+});
+
+describe("the opening (FG-6c; DESIGN.md §6)", () => {
+  const live = FIRST_RUN_WALKS.day;
+  const still = FIRST_RUN_WALKS["no-webgpu"];
+
+  it("knows every state FieldLayer.tsx's TearState names: tearing, open, and each way of not opening", () => {
+    const source = readFileSync(resolve(here, "../../field-app/src/boot/FieldLayer.tsx"), "utf8");
+    const union = /export type TearState = ((?:"[a-z]+"(?: \| )?)+);/.exec(source)?.[1];
+    const states = [...(union ?? "").matchAll(/"([a-z]+)"/g)].map((match) => match[1]);
+    expect(states.sort()).toEqual(["tearing", "open", ...Object.keys(TEAR_NOT_OPEN)].sort());
+  });
+
+  it("hears each change once: a value set twice over is one", () => {
+    expect(
+      heard([
+        [1, "tearing"],
+        [2, "tearing"],
+        [3, "open"],
+      ]),
+    ).toEqual(["tearing", "open"]);
+    expect(heard([])).toEqual([]);
+  });
+
+  it("passes the live field opened by its tear, tearing and then open, however long the tear took", () => {
+    expect(
+      judgeOpening(
+        live,
+        [[63_100, "tear"]],
+        [
+          [63_700, "tearing"],
+          [65_600, "open"],
+        ],
+      ),
+    ).toEqual([]);
+    // a loaded host's pace is no step of its own, and a value heard twice over is one
+    expect(
+      judgeOpening(
+        FIRST_RUN_WALKS.night,
+        [
+          [63_100, "tear"],
+          [63_101, "tear"],
+        ],
+        [
+          [63_700, "tearing"],
+          [66_500, "open"],
+        ],
+      ),
+    ).toEqual([]);
+  });
+
+  it("passes the still opened by the fade, with nothing torn", () => {
+    expect(judgeOpening(still, [[63_100, "fade"]], [])).toEqual([]);
+  });
+
+  it("finds a tear that did not open, in its own words: its bound, a lost device, or its reveal cut", () => {
+    const opened: FirstRunRecord["opening"] = [[63_100, "tear"]];
+    expect(
+      judgeOpening(live, opened, [
+        [63_700, "tearing"],
+        [66_600, "bound"],
+      ]),
+    ).toEqual([
+      "the tear did not open: bound, its bound passed first, so its frames came late or never",
+    ]);
+    expect(
+      judgeOpening(live, opened, [
+        [63_700, "tearing"],
+        [63_710, "lost"],
+      ]),
+    ).toEqual(["the tear did not open: lost, its reveal failed (a lost device)"]);
+    expect(
+      judgeOpening(live, opened, [
+        [63_700, "tearing"],
+        [63_710, "cut"],
+      ]),
+    ).toEqual(["the tear did not open: cut, its reveal ended before the window opened"]);
+  });
+
+  it("finds the live field never opened, opened by the fade, never torn, still tearing, or torn out of order", () => {
+    expect(judgeOpening(live, [], [])).toEqual([
+      "the ground never opened: no opening was heard",
+      "the field never tore: no tear was heard",
+    ]);
+    expect(judgeOpening(live, [[63_100, "fade"]], [])).toEqual([
+      'the ground opened ["fade"], not by the tear',
+      "the field never tore: no tear was heard",
+    ]);
+    expect(judgeOpening(live, [[63_100, "tear"]], [[63_700, "tearing"]])).toEqual([
+      'the tear went ["tearing"], not tearing and then open',
+    ]);
+    expect(judgeOpening(live, [[63_100, "tear"]], [[63_700, "open"]])).toEqual([
+      'the tear went ["open"], not tearing and then open',
+    ]);
+    expect(
+      judgeOpening(
+        live,
+        [
+          [63_100, "tear"],
+          [63_200, "fade"],
+        ],
+        [
+          [63_700, "tearing"],
+          [65_600, "open"],
+        ],
+      ),
+    ).toEqual(['the ground opened ["tear","fade"], not by the tear']);
+  });
+
+  it("finds the still opened by the tear, or torn", () => {
+    expect(judgeOpening(still, [[63_100, "tear"]], [])).toEqual([
+      'the ground opened ["tear"], not by the fade',
+    ]);
+    expect(
+      judgeOpening(
+        still,
+        [[63_100, "fade"]],
+        [
+          [63_700, "tearing"],
+          [65_600, "open"],
+        ],
+      ),
+    ).toEqual(['over the still the field tore: ["tearing","open"]']);
+  });
+});
+
+describe("FG-O3's read (FG-6c; printed, never judged)", () => {
+  it("gives a stretch of frame intervals as its count, its median, its 95th by nearest rank and its most", () => {
+    expect(frameStats(null)).toBeNull();
+    expect(frameStats([])).toBeNull();
+    expect(frameStats([16.7])).toEqual({ n: 1, p50: 16.7, p95: 16.7, max: 16.7 });
+    const intervals = [...Array.from({ length: 19 }, () => 16.7), 41.23];
+    expect(frameStats(intervals)).toEqual({ n: 20, p50: 16.7, p95: 16.7, max: 41.2 });
+    expect(frameStats([33.4, 16.6, 16.8, 16.7])).toEqual({ n: 4, p50: 16.7, p95: 33.4, max: 33.4 });
+  });
+
+  const reading = (
+    at: number,
+    cpuSeconds: number | null,
+    cpuPercent: number | null,
+    busy: number | null,
+  ): GpuSample => ({
+    at,
+    cpuSeconds,
+    cpuPercent,
+    busy,
+  });
+
+  it("reads the GPU process's CPU over a stretch from its seconds, and the GPU's busy share from its readings", () => {
+    const samples = [
+      reading(900, 9.9, 10, 12),
+      reading(1_000, 10, 20, 30),
+      reading(1_100, 10.05, 50, 50),
+      reading(1_200, 10.1, 50, 70),
+      reading(1_300, 11, 900, 0),
+    ];
+    // 0.1 s of CPU over 0.2 s of the wall: 50% of one core; the readings outside the stretch are not its own
+    expect(gpuOver(samples, 1_000, 1_200)).toEqual({
+      n: 3,
+      cpu: 50,
+      busy: { mean: 50, max: 70 },
+    });
+  });
+
+  it("falls back to the percents after its first reading where Electron gives no seconds, and says what was not read", () => {
+    const samples = [
+      reading(1_000, null, 99, null),
+      reading(1_100, null, 20, null),
+      reading(1_200, null, 30, null),
+    ];
+    expect(gpuOver(samples, 1_000, 1_200)).toEqual({ n: 3, cpu: 25, busy: null });
+    expect(
+      gpuOver([reading(1_000, null, null, null), reading(1_100, null, null, null)], 0, 2_000),
+    ).toEqual({
+      n: 2,
+      cpu: null,
+      busy: null,
+    });
+  });
+
+  it("reads nothing over a stretch with fewer than two readings", () => {
+    expect(gpuOver([], 0, 1_000)).toBeNull();
+    expect(gpuOver([reading(500, 1, 10, 10)], 0, 1_000)).toBeNull();
+  });
+
+  it("sets the page's moments beside main's readings by the wall's clock: the stretch before the hand-over, and the tear's", () => {
+    // the page's clock at 70,000 read with the wall's at 1,790,000,070,000: the page's ms t is the wall's
+    // 1,790,000,000,000 + t
+    const wall = (ms: number): number => 1_790_000_000_000 + ms;
+    const page: FirstRunRecord = {
+      ...record([], 70_000),
+      epoch: wall(70_000),
+      leaving: [
+        [61_200, "words"],
+        [62_080, "clear"],
+      ],
+      opening: [[61_200, "tear"]],
+      tear: [
+        [62_680, "tearing"],
+        [64_580, "open"],
+      ],
+      frames: { rest: [16.7, 16.7, 16.6], tear: [16.7, 33.4, 16.6, 16.8] },
+    };
+    const samples = [
+      reading(wall(59_200), 1, 0, 10), // before the stretch before the hand-over
+      reading(wall(59_400), 2, 0, 20),
+      reading(wall(61_200), 2.36, 0, 30), // 0.36 s over 1.8 s: 20%
+      reading(wall(62_680), 3, 0, 40),
+      reading(wall(63_630), 3.38, 0, 60),
+      reading(wall(64_580), 3.76, 0, 80), // 0.76 s over 1.9 s: 40%
+      reading(wall(65_000), 9, 0, 0), // after the tear
+    ];
+    expect(firstRunGpu(page, samples)).toEqual({
+      frames: {
+        rest: { n: 3, p50: 16.7, p95: 16.7, max: 16.7 },
+        tear: { n: 4, p50: 16.7, p95: 33.4, max: 33.4 },
+      },
+      load: {
+        rest: { n: 2, cpu: 20, busy: { mean: 25, max: 30 } },
+        tear: { n: 3, cpu: 40, busy: { mean: 60, max: 80 } },
+      },
+      readings: 7,
+      busy: "read",
+    });
+    expect(FIRST_RUN.restMs).toBe(1_900);
+  });
+
+  it("reads no tear where none was heard, and says the busy share was not read where the host gave none", () => {
+    const page: FirstRunRecord = {
+      ...record([], 70_000),
+      epoch: 1_790_000_070_000,
+      leaving: [[61_200, "words"]],
+      opening: [[61_200, "fade"]],
+      frames: { rest: [16.7], tear: null },
+    };
+    const gpu = firstRunGpu(page, [
+      reading(1_790_000_060_000, 1, 0, null),
+      reading(1_790_000_061_000, 1.1, 0, null),
+    ]);
+    expect(gpu.frames.tear).toBeNull();
+    expect(gpu.load.tear).toBeNull();
+    expect(gpu.load.rest).toEqual({ n: 2, cpu: 10, busy: null });
+    expect(gpu.busy).toBe("not read");
+    expect(firstRunGpu(record([]), []).load).toEqual({ rest: null, tear: null });
+  });
+
+  it("finds the GPU's busy share in ioreg's reading of IOAccelerator, the busiest's where there are several", () => {
+    const agx =
+      '+-o AGXAcceleratorG13X  <class AGXAcceleratorG13X>\n    | "PerformanceStatistics" = {"Tiler Utilization %"=23,"Renderer Utilization %"=22,"Device Utilization %"=23}\n';
+    expect(parseGpuBusy(agx)).toBe(23);
+    expect(parseGpuBusy(`${agx}${agx.replace("=23}", "=71}")}`)).toBe(71);
+    expect(parseGpuBusy("+-o IntelAccelerator\n")).toBeNull();
+    expect(parseGpuBusy("")).toBeNull();
   });
 });
 

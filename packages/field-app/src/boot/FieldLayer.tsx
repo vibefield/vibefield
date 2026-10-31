@@ -22,6 +22,13 @@ import { type FieldDoor, fieldPlan, openFieldDoor, TEAR, tearLook } from "./spla
 
 type FieldState = "waking" | "live" | "still";
 
+/** How the tear went, said on the field's root as `data-tear` (FG-6c), an honest state like the
+ * ground's `data-opening`: "tearing" while it opens, then "open"; or, where it did not open,
+ * "bound" (its bound passed first: its frames came late or never), "lost" (its reveal failed: a
+ * lost device) or "cut" (its reveal ended before the window opened: the field's own Reduce Motion,
+ * or a second reveal). */
+export type TearState = "tearing" | "open" | "bound" | "lost" | "cut";
+
 /** What the boot asks of the field at the reveal (FG-2). */
 export interface FieldHandle {
   /** The field is drawing (its door open on the GPU), so it can tear. */
@@ -29,7 +36,8 @@ export interface FieldHandle {
   /** The tear (DESIGN.md §6) onto what lies under the ground, in the theme's light: true once it is
    * open, false at once when the field can't tear, and false past its bound — a hidden window
    * draws no frames, and a tear never holds the boot. Open, the field stops drawing at once; not
-   * open, it stays to leave with the ground's fade (the website's `.is-fading`). */
+   * open, it stays to leave with the ground's fade (the website's `.is-fading`). The field's root
+   * says how it went (`TearState`). */
   tear(dark: boolean): Promise<boolean>;
 }
 
@@ -67,6 +75,7 @@ export function FieldLayer({
   const [field, setField] = useState<FieldState>(() =>
     "still" in fieldPlan() ? "still" : "waking",
   );
+  const [tearState, setTearState] = useState<TearState | null>(null);
 
   useEffect(() => {
     const container = ref.current;
@@ -113,23 +122,27 @@ export function FieldLayer({
       tear(dark) {
         const opened = door.current;
         if (opened === null || opened.mode === "still") return Promise.resolve(false);
-        return new Promise<boolean>((resolve) => {
-          const bound = setTimeout(() => resolve(false), TEAR_BOUND_MS);
-          const settle = (done: boolean): void => {
+        setTearState("tearing");
+        return new Promise<TearState>((resolve) => {
+          const bound = setTimeout(() => resolve("bound"), TEAR_BOUND_MS);
+          const settle = (state: TearState): void => {
             clearTimeout(bound);
-            resolve(done);
+            resolve(state);
           };
           // A reveal that fails (a lost device) is a tear that did not open.
-          void opened.reveal(tearLook(dark)).then(settle, () => settle(false));
-        }).then((done) => {
-          if (done) {
-            opened.destroy(); // open: nothing left to draw
-            if (door.current === opened) {
-              door.current = null;
-              glass.attach(null);
-            }
+          void opened.reveal(tearLook(dark)).then(
+            (done) => settle(done ? "open" : "cut"),
+            () => settle("lost"),
+          );
+        }).then((state) => {
+          setTearState(state);
+          if (state !== "open") return false;
+          opened.destroy(); // open: nothing left to draw
+          if (door.current === opened) {
+            door.current = null;
+            glass.attach(null);
           }
-          return done;
+          return true;
         });
       },
     }),
@@ -143,6 +156,7 @@ export function FieldLayer({
         className="vf-field"
         data-field={field}
         data-mark={mark ? "shown" : "hidden"}
+        data-tear={tearState ?? undefined}
         aria-hidden="true"
       >
         <div ref={still} className="vf-field-mark" />

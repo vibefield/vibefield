@@ -207,6 +207,10 @@ async function mountWarm(machine: BootMachine, set: (patch: Partial<BootView>) =
 
 const groundStyle = (): string => workspaceWrapper()?.getAttribute("style") ?? "";
 
+/** How the field's tear went, as its root says it (FG-6c's `data-tear`): null while none was asked. */
+const tearSays = (): string | null | undefined =>
+  host?.querySelector(".vf-field")?.getAttribute("data-tear");
+
 /** Lets the tear's promises settle: the door's reveal, its bound, the hand-over. */
 async function settle(): Promise<void> {
   await act(async () => {
@@ -225,6 +229,7 @@ describe("BootRoot hands a returning boot's desk over (FG-2)", () => {
     expect(revealDesk).toHaveBeenCalledTimes(1);
     expect(host?.querySelector(".vf-splash")?.getAttribute("data-opening")).toBe("fade");
     expect(groundStyle()).not.toContain("brightness");
+    expect(tearSays()).toBeNull(); // no tear was asked
 
     act(() => set({ phase: "interactive" }));
     expect(workspaceWrapper()?.style.transform).toBe("scale(1)"); // the base settle
@@ -267,11 +272,13 @@ describe("BootRoot hands a returning boot's desk over (FG-2)", () => {
     expect(workspaceWrapper()?.style.transition).toContain("1900ms");
     expect(workspaceWrapper()?.style.transition).toContain("1500ms");
     expect(revealDesk).not.toHaveBeenCalled(); // `interactive` means revealed
+    expect(tearSays()).toBe("tearing");
 
     open(true);
     await settle();
     expect(door.destroy).toHaveBeenCalledTimes(1); // open: the field stops drawing at once
     expect(revealDesk).toHaveBeenCalledTimes(1);
+    expect(tearSays()).toBe("open");
 
     // Then the click contract as ever: settled, the wrapper carries nothing, and the ground is gone.
     act(() => set({ phase: "interactive" }));
@@ -307,12 +314,14 @@ describe("BootRoot hands a returning boot's desk over (FG-2)", () => {
     });
     await settle();
     expect(revealDesk).not.toHaveBeenCalled();
+    expect(tearSays()).toBe("tearing");
     act(() => {
       vi.advanceTimersByTime(1);
     });
     await settle();
     expect(revealDesk).toHaveBeenCalledTimes(1);
     expect(door.destroy).not.toHaveBeenCalled(); // not open: it stays for the fade
+    expect(tearSays()).toBe("bound");
 
     act(() => set({ phase: "interactive" }));
     act(() => {
@@ -335,6 +344,23 @@ describe("BootRoot hands a returning boot's desk over (FG-2)", () => {
     expect(door.reveal).toHaveBeenCalledTimes(1);
     expect(revealDesk).toHaveBeenCalledTimes(1); // never the bound's 2.9 s
     expect(door.destroy).not.toHaveBeenCalled();
+    expect(tearSays()).toBe("lost");
+  });
+
+  it("hands the desk over at once when the tear's reveal ends before the window opens, the field left for the fade", async () => {
+    vi.useFakeTimers();
+    const door = liveDoor(async () => false); // the field's own Reduce Motion, or a second reveal
+    const { machine, set, revealDesk } = fakeMachine();
+    await mountWarm(machine, set);
+    act(() => set({ phase: "handing-over", stage: "" }));
+    act(() => {
+      vi.advanceTimersByTime(240);
+    });
+    await settle();
+    expect(door.reveal).toHaveBeenCalledTimes(1);
+    expect(revealDesk).toHaveBeenCalledTimes(1); // never the bound's 2.9 s
+    expect(door.destroy).not.toHaveBeenCalled();
+    expect(tearSays()).toBe("cut");
   });
 
   it.each([
@@ -365,6 +391,7 @@ describe("BootRoot hands a returning boot's desk over (FG-2)", () => {
       vi.advanceTimersByTime(3_000);
     });
     expect(door.reveal).not.toHaveBeenCalled();
+    expect(tearSays()).toBeNull();
   });
 });
 
@@ -443,10 +470,12 @@ describe("BootRoot hands a first run's desk over (FG-5)", () => {
     expect(workspaceWrapper()?.style.filter).toBe("brightness(1)");
     expect(workspaceWrapper()?.style.transition).toContain("1900ms");
     expect(revealDesk).not.toHaveBeenCalled();
+    expect(tearSays()).toBe("tearing");
     open(true);
     await settle();
     expect(door.destroy).toHaveBeenCalledTimes(1);
     expect(revealDesk).toHaveBeenCalledTimes(1);
+    expect(tearSays()).toBe("open");
 
     // begun once: a second last beat begins nothing
     act(() => wizard.props?.onReveal());
@@ -490,6 +519,7 @@ describe("BootRoot hands a first run's desk over (FG-5)", () => {
     expect(revealDesk).not.toHaveBeenCalled();
     advance(1);
     expect(revealDesk).toHaveBeenCalledTimes(1);
+    expect(tearSays()).toBeNull(); // the still never tears
 
     act(() => set({ phase: "interactive" }));
     expect(workspaceWrapper()?.style.transform).toBe("scale(1)"); // the base settle
@@ -518,6 +548,7 @@ describe("BootRoot hands a first run's desk over (FG-5)", () => {
     expect(revealDesk).toHaveBeenCalledTimes(1);
     advance(3_000);
     expect(door.reveal).not.toHaveBeenCalled();
+    expect(tearSays()).toBeNull();
   });
 
   it("hands over at once in a hidden window, which draws nothing", async () => {
@@ -533,6 +564,7 @@ describe("BootRoot hands a first run's desk over (FG-5)", () => {
     expect(opening()).toBe("fade");
     advance(3_000);
     expect(door.reveal).not.toHaveBeenCalled();
+    expect(tearSays()).toBeNull();
   });
 
   it("hands nothing over from a window gone mid-hand-over", async () => {

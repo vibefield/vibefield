@@ -152,6 +152,7 @@ import {
   FIRST_RUN_WALKS,
   firstRunRows,
   parseWalk,
+  readGpuBusy,
   shotDirRefusal,
   WALK_ENV,
 } from "./smoke-first-run";
@@ -1671,6 +1672,9 @@ export async function runSmokeFirstRun(opts: {
       staged: opts.staged,
       users: opts.users,
       say: (line) => console.log(line),
+      // FG-O3's read (FG-6c): printed, never judged
+      processes: () => app.getAppMetrics(),
+      gpuBusy: readGpuBusy,
     });
     problems.push(...walked);
     // GT-8b: the walk presses no link, so main's opener has nothing to record — anything there opened on its own
