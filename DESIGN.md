@@ -4050,6 +4050,17 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     room's vocabulary. Until transcripts travel (DS-7) the list is THIS desktop's places and
     sessions (H3): a project with no folder here is not listed, and nothing of another desktop is
     handed to the room as if it were here.
+    *Amended 2026-10-31 (DS-7, transcripts by ticket): transcripts travel. Another desktop's
+    sessions of a project that has a folder here are handed to the room, and never as if they were
+    here: the row's id slot leads with **its** desktop's mark and that desktop's path; in the act's
+    place, quiet, **"ran on Studio"** (or **"Studio is asleep"**), since acting on it waits for
+    routed acts (PJ-8); a folder of it in ③ still says "Files stay on Studio". Opened, its
+    transcript is read from its own desktop by ticket, and what stands in its place says which
+    desktop, never a blank: **"Studio is asleep — its transcript opens when it wakes"** ·
+    **"Studio isn't answering — its transcript opens when it does"** · **"No road to Studio from
+    this desktop yet"** · **"Studio isn't serving its history right now — open it again in a
+    moment"**. A project with no folder here is still not listed, and another desktop's Home and
+    Temporary stay its own: listing them is the project list's to design (PJ), not DS-7's.*
     - **A project's colour is its ink** (§2.9), never the room's dealt tint.
     - **A project row** leads its path line with one OS mark per desktop it lives on (§6.0 of the
       record, PJ-D24: Simple Icons' marks, 11 px, in the path line's ink), left-aligned in the
@@ -4342,6 +4353,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     line: the room's own `openAt` with the hit's session and message, the session in its project and
     the transcript landed on the message (§8 "History"). Everything reads this desktop's index (K5);
     other desktops' history waits for DS-7, since the room cannot open a peer's session yet.
+    *Corrected 2026-10-31 (DS-7): the room opens a peer's session now (History, above); the
+    Peek's search still reads this desktop's index alone (K5) until its own slice widens it.*
   - **A narrow window** (K6): the popup clamps to the window — 24 clear of each side, and 96 clear
     of the window's top and foot (the line's 72, and 24), so it never covers the head or the line.
     Below a 680 popup — a window narrower than 728 — the list and a useful peek no longer both fit:

@@ -32,6 +32,7 @@ import { hostKeyOf, type NewAgentAsk, type SessionTarget } from "./acts";
 import {
   deviceOf,
   elsewhereCounts,
+  elsewhereDeviceOf,
   folderKeyOf,
   type HistoryHostModel,
   type HostDevice,
@@ -218,6 +219,13 @@ function placeOfSession(model: HistoryHostModel, session: IndexSession): Project
  * holds (the launcher's words), or null. The press reads it again whole
  * (`readResume`), so a folder gone since the scan is still said then. */
 export function resumeWaits(model: HistoryHostModel, session: IndexSession): string | null {
+  // DS-7 — a session another desktop holds is acted on THERE (routed acts are
+  // PJ-8's): its row says where, quiet, in the act's place (DESIGN.md §8)
+  const elsewhere = elsewhereDeviceOf(session, model.self);
+  if (elsewhere !== null) {
+    const device = deviceOf(model, elsewhere);
+    return device.asleep ? `${device.name} is asleep` : `ran on ${device.name}`;
+  }
   // the empty pane launcher's own words and order (`launcher-doors.ts`'s
   // `unresumable`): a folder gone before an install, which a person can fix
   if (session.provider === undefined || session.nativeSessionId === "") return "can’t resume";

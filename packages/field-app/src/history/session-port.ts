@@ -34,6 +34,19 @@ import type { SessionClient, SessionPort } from "@vibefield/rosetta-room";
 // lease like every other read: renewed, repointed, in rosetta's own words when
 // the file is gone. Only a refusal of the grant's REACH there is said in the
 // room's words (`FILE_TARGET_REFUSAL`).
+//
+// DS-7 (2026-10-31): a session ANOTHER desktop holds (`SessionHome`, read off
+// the catalog's listing when the lease opens) is asked for by its owner:
+// `index.openTicket {sessionId, device}`. This window's fieldd forwards the ask
+// and hands back the same loopback pair a local ticket carries — re-homed onto
+// an egress route of this desktop's sidecar — so everything below reads it
+// alike. A desktop the listing already calls asleep is said so at once and not
+// asked (DS-L8 — the forward would dial it until the peer link gives up); a
+// road refusal at the open (the owner not answering, no road to it, its serve
+// not up) is said at once in that desktop's name, never retried behind a
+// spinner; a renewal keeps its patient retry, since the open stream outlives
+// its grant. A recorded file there is rosetta's `wrong-scope` (the
+// owner mints a forwarded ticket `read` alone), said as FILE_TARGET_REFUSAL.
 
 /** How long before a grant's `expiresAt` its lease asks for the next one
  * (`INDEX_TICKET.TTL_MS` is ten minutes); a shorter grant renews at half its
@@ -65,6 +78,15 @@ function reachRefused(cause: unknown): boolean {
   );
 }
 
+/** DS-7 — the desktop a session's transcript is read from, when it is not
+ * this one: its device id and, when the listing names it, its name. */
+export interface SessionHome {
+  readonly device: string;
+  readonly name: string | null;
+  /** the listing's sources call it asleep (the roster's word, DS-L8) */
+  readonly asleep: boolean;
+}
+
 /** The one call the session port makes of fieldd. */
 export interface TicketClient {
   request(method: string, params: Record<string, unknown>): Promise<unknown>;
@@ -89,6 +111,8 @@ export interface HistorySessionPort extends SessionPort {
 
 interface Lease {
   readonly sessionId: string;
+  /** DS-7 — the desktop that holds it, when it is not this one */
+  readonly home: SessionHome | null;
   client: RosettaClient | null;
   timer: ReturnType<typeof setTimeout> | null;
   renewing: Promise<void> | null;
@@ -116,16 +140,49 @@ function retryable(cause: unknown): boolean {
   return refusalOf(cause).retryable === true;
 }
 
+/** DS-7 — a refusal about a road to ANOTHER desktop: the owner's peer link,
+ * or the index ticket's two road states. Each names the desktop. */
+function roadRefusal(cause: unknown): boolean {
+  const refusal = refusalOf(cause);
+  const service = refusal.details?.["service"];
+  const state = refusal.details?.["state"];
+  return (
+    refusal.kind === "UNAVAILABLE" &&
+    typeof refusal.details?.["device"] === "string" &&
+    (service === "peer-link" ||
+      (service === INDEX_TICKET.SERVICE &&
+        (state === INDEX_TICKET.STATE_EGRESS_UNAVAILABLE ||
+          state === INDEX_TICKET.STATE_DOORS_NOT_PUBLISHED)))
+  );
+}
+
+/** DS-7 — a desktop that is asleep, in the room's words (DESIGN.md §8). */
+function asleepWords(name: string | null | undefined): string {
+  return `${name ?? "That desktop"} is asleep — its transcript opens when it wakes`;
+}
+
 /** fieldd's refusal of a ticket, in the room's words: the two capability
- * refusals named, anything else in fieldd's own words. */
-export function ticketRefusalWords(cause: unknown): string {
+ * refusals named; since DS-7 the roads to another desktop, in that desktop's
+ * name (`name`, when the listing knows it); anything else in fieldd's own
+ * words. */
+export function ticketRefusalWords(cause: unknown, name?: string | null): string {
   const refusal = refusalOf(cause);
   const state = refusal.details?.["state"];
+  const desktop = name ?? "That desktop";
   if (refusal.kind === "UNAVAILABLE" && state === INDEX_TICKET.STATE_OFF) {
     return "This desktop has the direct plane switched off — its transcripts can't be read here";
   }
   if (refusal.kind === "UNAVAILABLE" && state === INDEX_TICKET.STATE_UNBUILT) {
     return "Transcripts on another desktop can't be read from here yet";
+  }
+  if (roadRefusal(cause)) {
+    if (refusal.details?.["service"] === "peer-link")
+      return state === "offline"
+        ? asleepWords(name)
+        : `${desktop} isn't answering — its transcript opens when it does`;
+    return state === INDEX_TICKET.STATE_EGRESS_UNAVAILABLE
+      ? `No road to ${name ?? "that desktop"} from this desktop yet`
+      : `${desktop} isn't serving its history right now — open it again in a moment`;
   }
   if (cause instanceof Error && cause.message) return cause.message;
   return typeof refusal.message === "string" && refusal.message !== ""
@@ -137,8 +194,9 @@ function grantOf(ticket: IndexOpenTicket): RosettaCredential {
   return { kind: "grant", grant: ticket.grant };
 }
 
-/** The ticket's origin. A window's ticket is the loopback set; the tailnet
- * set (another desktop's, DS-7) is not one this window can dial yet. */
+/** The ticket's origin. A window's ticket is the loopback set — another
+ * desktop's too since DS-7, re-homed by this window's fieldd onto an egress
+ * route — so a tailnet set here is a fieldd that cannot re-home it. */
 function originOf(ticket: IndexOpenTicket): string {
   const parsed = IndexEndpointSet.safeParse(ticket.endpoints);
   if (!parsed.success)
@@ -149,6 +207,8 @@ function originOf(ticket: IndexOpenTicket): string {
 export function sessionPortOver(
   client: TicketClient,
   options: SessionPortOptions = {},
+  /** DS-7 — the desktop a session lives on, when it is not this one */
+  homeOf: (sessionId: string) => SessionHome | null = () => null,
 ): HistorySessionPort {
   const now = options.now ?? (() => Date.now());
   const leases = new Map<string, Lease>();
@@ -159,17 +219,21 @@ export function sessionPortOver(
 
   const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-  /** One ticket for the lease's session, asked again while fieldd answers a
-   * retryable refusal and the lease is open; a terminal refusal throws. */
-  async function ticketFor(lease: Lease): Promise<IndexOpenTicket> {
+  /** One ticket for the lease's session — from its own desktop (DS-7) —
+   * asked again while fieldd answers a retryable refusal and the lease is
+   * open; a terminal refusal throws, and so, when `sayRoads`, does a road
+   * refusal naming another desktop: the open says it rather than wait. */
+  async function ticketFor(lease: Lease, sayRoads = false): Promise<IndexOpenTicket> {
+    const ask = {
+      sessionId: lease.sessionId,
+      ...(lease.home !== null ? { device: lease.home.device } : {}),
+    };
     let delay = TICKET_RETRY_MIN_MS;
     for (;;) {
       try {
-        return IndexOpenTicket.parse(
-          await client.request("index.openTicket", { sessionId: lease.sessionId }),
-        );
+        return IndexOpenTicket.parse(await client.request("index.openTicket", ask));
       } catch (cause) {
-        if (lease.closed || !retryable(cause)) throw cause;
+        if (lease.closed || !retryable(cause) || (sayRoads && roadRefusal(cause))) throw cause;
         await wait(delay);
         if (lease.closed) throw cause;
         delay = Math.min(TICKET_RETRY_MAX_MS, delay * 2);
@@ -209,7 +273,7 @@ export function sessionPortOver(
         apply(lease, await ticketFor(lease));
       } catch (cause) {
         if (lease.closed) return;
-        const message = ticketRefusalWords(cause);
+        const message = ticketRefusalWords(cause, lease.home?.name);
         for (const [stream, handlers] of [...lease.streams]) {
           handlers.onError?.({ code: "internal", message });
           stream.close();
@@ -320,6 +384,7 @@ export function sessionPortOver(
       if (previous !== undefined) release(previous);
       const lease: Lease = {
         sessionId,
+        home: homeOf(sessionId),
         client: null,
         timer: null,
         renewing: null,
@@ -327,12 +392,16 @@ export function sessionPortOver(
         streams: new Map(),
       };
       leases.set(sessionId, lease);
+      if (lease.home?.asleep === true) {
+        release(lease);
+        throw new Error(asleepWords(lease.home.name));
+      }
       let ticket: IndexOpenTicket;
       try {
-        ticket = await ticketFor(lease);
+        ticket = await ticketFor(lease, true);
       } catch (cause) {
         release(lease);
-        throw new Error(ticketRefusalWords(cause));
+        throw new Error(ticketRefusalWords(cause, lease.home?.name));
       }
       if (lease.closed) throw new Error("This session was closed before it opened");
       lease.client = new RosettaClient({

@@ -56,9 +56,19 @@ import type {
 } from "@vibefield/rosetta-room";
 import { WorkspaceClient, type WorkspaceClientOptions } from "../workspace/client";
 import { type AssetSourceOptions, assetSourceOver, type HistoryAssetSource } from "./asset-source";
-import type { HistoryListing } from "./host-model";
+import {
+  elsewhereDeviceOf,
+  type HistoryListing,
+  isHandedToRoom,
+  projectsHereOf,
+} from "./host-model";
 import { type HistorySections, historySectionsOf } from "./sections";
-import { type HistorySessionPort, type SessionPortOptions, sessionPortOver } from "./session-port";
+import {
+  type HistorySessionPort,
+  type SessionHome,
+  type SessionPortOptions,
+  sessionPortOver,
+} from "./session-port";
 
 // THE HISTORY ROOM'S PORTS (AR-8c; thinking-ar-history-room.md §2 — AR-D36,
 // AR-D37 (a)). rosetta's room (`@vibefield/rosetta-room`) dials nothing: it reads four
@@ -87,6 +97,13 @@ import { type HistorySessionPort, type SessionPortOptions, sessionPortOver } fro
 // or resume THIS Mac's same-spelled folder for it. Until the room can say
 // where a session ran (PJ-4's second half), History is this desktop's places
 // and sessions (H3 (a)), and a project with no place here is not listed.
+// *DS-7 (2026-10-31): the room can say where a session ran (PJ-4 phase B's
+// host keys and marks), and transcripts travel by ticket, so another
+// desktop's sessions of a project that has a place here reach it
+// (`isHandedToRoom`, host-model.ts) — each opened from its own desktop
+// (`sessionHomeOf` below, `session-port.ts`) and acted on there, never here.
+// The rest of the guard stands: a remote place's path is never a project's
+// root, and a project with no place here is not listed.*
 //
 // AR-L1 holds at the seam: the adapters speak contract shapes in and rosetta's
 // row shapes out (the package's own types, re-exported), and no agent id is
@@ -170,16 +187,6 @@ export function runtimeKindOf(provider: string | undefined): string {
   return (
     (provider === undefined ? undefined : AGENT_CATALOG_READERS.kindFor(provider)) ?? "unknown"
   );
-}
-
-/** The device guard (V6, A4.2): whether a row is THIS desktop's — its own
- * `device`, or none named (a listing scoped to this desktop names it). With no
- * desktop known yet, a row that names one is not trusted. */
-export function isThisDesktops(
-  row: { readonly device?: string | undefined },
-  self: string | null,
-): boolean {
-  return row.device === undefined || (self !== null && row.device === self);
 }
 
 /** The repository the room may open: the project's identity remote, by the
@@ -292,6 +299,23 @@ function roomRowOf(
   };
 }
 
+/** DS-7 — where one session's transcript is read: null for this desktop's own
+ * (or one it also holds, DS-D10), else the desktop that holds it and its name
+ * as the listing's sources say it, and whether they call it asleep. A thread
+ * (`index.threads`) is this desktop's by construction, and a session the
+ * listing does not name is read here — the ask then says what fieldd knows. */
+export function sessionHomeOf(
+  listing: Pick<HistoryListing, "sessions" | "sources" | "self"> | null,
+  sessionId: string,
+): SessionHome | null {
+  if (listing === null) return null;
+  const row = listing.sessions.find((session) => session.sessionId === sessionId);
+  const device = row === undefined ? null : elsewhereDeviceOf(row, listing.self);
+  if (device === null) return null;
+  const source = listing.sources.find((candidate) => candidate.device === device);
+  return { device, name: source?.name ?? null, asleep: source?.state === "asleep" };
+}
+
 /** The room's whole topology from the catalog's listings — the roots and,
  * since AR-8 (L1), the delegated threads beside them, which the room builds
  * its subthreads and its search grouping from: the runtimes are one per agent
@@ -300,14 +324,19 @@ function roomRowOf(
  * PJ-4: the projects are fieldd's (`project.list`) with a place on THIS
  * desktop, and only this desktop's sessions pass (the device guard, H3 (a));
  * `self` is this desktop's id as the listings name it (their `sources`), and
- * with none known nothing that names a desktop is handed over. */
+ * with none known nothing that names a desktop is handed over. *DS-7
+ * (2026-10-31): another desktop's sessions of those projects pass too
+ * (`isHandedToRoom`); its Home, its Temporary and a project only it holds do
+ * not.* */
 export function metaStateOf(
   projects: readonly ProjectSummary[],
   sessions: readonly IndexSession[],
   threads: readonly IndexThread[] = [],
   self: string | null = null,
 ): MetaState {
-  const roots = sessions.filter((row) => isThisDesktops(row, self));
+  // DS-7: another desktop's sessions of a project with a place here, too
+  const here = projectsHereOf(projects, self);
+  const roots = sessions.filter((row) => isHandedToRoom(row, self, here));
   const rootKeys = new Map(roots.map((row) => [row.sessionId, row.projectKey ?? null]));
   const sessionRows = [
     ...roots.map(sessionRowOf),
@@ -329,9 +358,7 @@ export function metaStateOf(
       }),
     ),
     projects: projects
-      .filter(
-        (project) => self !== null && project.places.some((place) => place.ref.device === self),
-      )
+      .filter((project) => here.has(project.key))
       .map((project) => projectRowOf(project, self)),
     sessions: sessionRows,
   };
@@ -670,7 +697,10 @@ export function catalogPortOver(
   /** Page a whole listing at the door's own page ceiling: `project.list`
    * (every project this desktop groups), `index.sessions` (this desktop's own,
    * `scope: "local"` — H3 (a)), `index.threads` (this desktop's by
-   * construction). The last page's `sources` say which desktop is this one. */
+   * construction). The last page's `sources` say which desktop is this one.
+   * *DS-7 (2026-10-31): `index.sessions` reads the MESH (`scope: "mesh"`, the
+   * merged replica DS-6 keeps): the room is handed another desktop's sessions
+   * of a project with a place here (`metaStateOf`).* */
   async function listAll<T>(
     method: string,
     parse: (answer: unknown) => {
@@ -728,7 +758,7 @@ export function catalogPortOver(
       listAll(
         "index.sessions",
         (answer) => IndexSessionsResult.parse(answer),
-        { scope: "local" },
+        { scope: "mesh" },
         INDEX_MESH.PAGE_MAX_LIMIT,
       ),
     ]);
@@ -1243,7 +1273,10 @@ export function historyPortsOver(
   options: HistoryPortsOptions,
 ): HistoryPorts {
   const catalog = catalogPortOver(client, options.catalog);
-  const sessions = sessionPortOver(client, options.sessions);
+  // DS-7 — a session on another desktop is opened by its owner's ticket
+  const sessions = sessionPortOver(client, options.sessions, (sessionId) =>
+    sessionHomeOf(catalog.listing(), sessionId),
+  );
   const assets = assetSourceOver(sessions, options.assets);
   const workspace = new WorkspaceClient(client, options.workspace);
   return {
