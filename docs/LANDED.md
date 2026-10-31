@@ -24803,6 +24803,16 @@ MaxListeners 0; the bundle unchanged.
   - **The unlocked control is OWED**, on James's word that he is at this Mac: the probe again, then row 26 once on
     `a8bdb8057`. Then either row 26 takes an arming condition (an unlocked screen, like the mini's rows), or the step
     takes a witness that is not `visibilityState`.
+  > **The control, paid (2026-10-31 18:29:53Z, James "At the Mac" at 18:27Z):** the probe's unlocked arm (18:28:06 →
+  > 18:28:32Z, locked no, HID idle 7 s; `lanes/records/pr6/vis-probe-unlocked.out`): after `hide()` the page's
+  > `visibilitychange` went to `hidden` at 2,659 ms, every poll read `hidden` (t = 1…20, each resolved in 0–51 ms),
+  > and re-shown it went back to `visible`. The locked arm had read `visible` throughout, with no `visibilitychange`.
+  > Then row 26 once on `a8bdb8057` (18:28:44 → 18:29:53Z, 69 s, the screen unlocked): `STUDIO_PHYSICAL` ok with
+  > `publishedWhileHidden: true`, `replayed: true` and `restored: true`; `SMOKE_DAEMONS` left `[]`; the root
+  > (`/tmp/vf-studio-Ddxrx7`) removed. The logs: `lanes/item118/logs/pr6-smoke-studio.log` (the locked red) and
+  > `lanes/item118/logs/pr6-smoke-studio-unlocked.log` (this green). The reading: row 26 needs an unlocked screen as
+  > an ARMING condition, like the mini's rows. It is not a product red, and the 17:41:09Z red stays the honest
+  > locked reading.
 - **Row 17, `smoke:canvas`, on M58** (run58b, the mini, its console chain opened 17:47:53Z; exit 2 at 18:02:52Z,
   897 s, unattended, the tree clean after): red by item 117 alone. HAND_BACK read whiteboard 250.6, calendar 249.0 and
   clock 250.5 ms (notebook 233.4) against 200 ± 40: the mini's 15-frame bar-return step on three specimens. PR #6's
