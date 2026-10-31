@@ -18,6 +18,7 @@ import {
   judgeRecorded,
   judgeSignIn,
   type LogoSeen,
+  listFits,
   measureMark,
   parseWalk,
   type SignInSeen,
@@ -209,26 +210,34 @@ describe("the band (FG-D22 A): Setting up's segment", () => {
   });
 });
 
-/** A capture `width` × `height` CSS px at `density`, one grey, with a block of ink over CSS px [x0, x1) × [y0, y1). */
+/** A block of ink over CSS px [x0, x1) × [y0, y1). */
+interface InkBlock {
+  readonly x0: number;
+  readonly x1: number;
+  readonly y0: number;
+  readonly y1: number;
+  readonly level: number;
+}
+
+/** A capture `width` × `height` CSS px at `density`, one grey, with blocks of ink on it. */
 function capture(
   width: number,
   height: number,
   density: number,
   glass: number,
-  ink: { x0: number; x1: number; y0: number; y1: number; level: number } | null,
+  ink: InkBlock | readonly InkBlock[] | null,
 ): Uint8Array {
+  const blocks: readonly InkBlock[] = ink === null ? [] : "level" in ink ? [ink] : ink;
   const w = width * density;
   const h = height * density;
   const bgra = new Uint8Array(w * h * 4);
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
-      const inside =
-        ink !== null &&
-        x >= ink.x0 * density &&
-        x < ink.x1 * density &&
-        y >= ink.y0 * density &&
-        y < ink.y1 * density;
-      const level = inside ? (ink?.level ?? glass) : glass;
+      const block = blocks.find(
+        (b) =>
+          x >= b.x0 * density && x < b.x1 * density && y >= b.y0 * density && y < b.y1 * density,
+      );
+      const level = block?.level ?? glass;
       bgra.set([level, level, level, 255], (y * w + x) * 4);
     }
   }
@@ -249,6 +258,31 @@ describe("the mark in the pixels (measureMark)", () => {
       expect(seen?.at.x).toBeCloseTo(20, 6);
       expect(seen?.at.y).toBeCloseTo(15, 6);
     }
+  });
+
+  it("centres the ink by its extent, never its weight: a mark heavier on one side stands where it is drawn (row 32 at run52b)", () => {
+    // the field's mark carries more ink in its right lobe: run52b's day mark had 417 of its 657 ink px right of the
+    // window's centre, its extent centred within 1 px and its mean 10 px right
+    for (const density of [1, 2]) {
+      const seen = measureMark(
+        capture(40, 30, density, 230, [
+          { x0: 10, x1: 12, y0: 10, y1: 20, level: 40 },
+          { x0: 24, x1: 30, y0: 10, y1: 20, level: 40 },
+        ]),
+        40,
+        30,
+      );
+      expect(seen?.count).toBe(80 * density * density);
+      expect(seen?.at.x).toBeCloseTo(20, 6);
+      expect(seen?.at.y).toBeCloseTo(15, 6);
+    }
+    // a mark drawn off its place is off by its extent too
+    const off = measureMark(
+      capture(40, 30, 1, 230, { x0: 18, x1: 30, y0: 10, y1: 20, level: 40 }),
+      40,
+      30,
+    );
+    expect(off?.at.x).toBeCloseTo(24, 6);
   });
 
   it("says no ink on a plain glass, and no picture for a buffer of another size", () => {
@@ -366,13 +400,47 @@ describe("the frame (FG-4a, FG-L3)", () => {
     expect(judgeFrame("Agents", fitted, scrolled(fitted))).toEqual([]);
   });
 
-  it("finds a list that fits, scrolls with no fade or not at all, and parts that move or stand outside", () => {
+  it("declares a list that fits its body, with its numbers, and still holds its fade and the frame's parts (row 32 at run52b)", () => {
+    // two ready and More's seven in two columns fit the glass's body: the glass is one picture at every window size,
+    // so no window makes the list outgrow it
+    const fits: FrameSeen = {
+      ...agents,
+      scroller: agents.scroller && { ...agents.scroller, scrollHeight: 296 },
+    };
+    expect(judgeFrame("Agents", fits, fits)).toEqual([]);
+    expect(listFits("Agents", fits)).toBe(
+      "Agents: the list fits its body (296 in 300), so the row witnesses no scroll: the glass is one picture at every window size, and only a longer list outgrows it",
+    );
+    // the page's own px of slack: one more fits, two more outgrow and are judged
+    const brim = (scrollHeight: number): FrameSeen => ({
+      ...agents,
+      scroller: agents.scroller && { ...agents.scroller, scrollHeight },
+    });
+    expect(listFits("Agents", brim(301))).not.toBeNull();
+    expect(listFits("Agents", brim(302))).toBeNull();
+    expect(judgeFrame("Agents", brim(302), brim(302))).toEqual([
+      "Agents: the list did not scroll within itself",
+    ]);
+    expect(listFits("Agents", agents)).toBeNull();
+    expect(listFits("Agents", { ...agents, scroller: null })).toBeNull();
+    const bare = { ...fits, scroller: fits.scroller && { ...fits.scroller, mask: "none" } };
+    expect(judgeFrame("Agents", bare, bare)).toEqual(["Agents: the list has no fade (mask none)"]);
+    const out = {
+      ...fits,
+      primary: { x: 700, y: 640, width: 120, height: 36, label: "Continue" },
+    };
+    expect(judgeFrame("Agents", out, out)).toEqual([
+      "Agents: the primary action stands outside the frame",
+    ]);
+  });
+
+  it("finds a body with no list that scrolls, a list with no fade or that does not scroll, and parts that move or stand outside", () => {
     expect(judgeFrame("Agents", { ...agents, scroller: null }, agents)).toEqual([
-      "Agents: the list fits its body, so nothing scrolls and the row witnesses no scroll",
+      "Agents: no list in its body scrolls within itself",
     ]);
     const bare = { ...agents, scroller: agents.scroller && { ...agents.scroller, mask: "none" } };
     expect(judgeFrame("Agents", bare, scrolled(bare))).toEqual([
-      "Agents: the list scrolls with no fade (mask none)",
+      "Agents: the list has no fade (mask none)",
     ]);
     expect(judgeFrame("Agents", agents, agents)).toEqual([
       "Agents: the list did not scroll within itself",

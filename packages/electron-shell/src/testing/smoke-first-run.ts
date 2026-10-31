@@ -214,8 +214,10 @@ export function judgeBand(progress: FirstRunRecord["progress"]): string[] {
 }
 
 /** The mark's ink in a capture `width` × `height` CSS px (BGRA, Electron's `toBitmap`, at the screen's density): the
- * glass is the median luminance of the capture's border, the ink every pixel that far from it. Its centre `at` is in
- * CSS px of the capture; null when the buffer is no picture of that size. */
+ * glass is the median luminance of the capture's border, the ink every pixel that far from it. Its centre `at` is the
+ * centre of the ink's extent, in CSS px of the capture: never its mean, since the field's mark carries more ink in one
+ * lobe than the other and its mean stands off where it is drawn (row 32 at run52b: 10 px right). Null when the buffer
+ * is no picture of that size. */
 export function measureMark(
   bgra: Uint8Array,
   width: number,
@@ -242,16 +244,20 @@ export function measureMark(
   const glass = border[Math.floor(border.length / 2)] as number;
   let count = 0;
   let sum = 0;
-  let sx = 0;
-  let sy = 0;
+  let x0 = w;
+  let x1 = 0;
+  let y0 = h;
+  let y1 = 0;
   for (let y = band; y < h - band; y++) {
     for (let x = band; x < w - band; x++) {
       const l = luma(y * w + x);
       if (Math.abs(l - glass) < FIRST_RUN.inkStep) continue;
       count += 1;
       sum += l;
-      sx += x + 0.5;
-      sy += y + 0.5;
+      x0 = Math.min(x0, x);
+      x1 = Math.max(x1, x + 1);
+      y0 = Math.min(y0, y);
+      y1 = Math.max(y1, y + 1);
     }
   }
   if (count === 0) {
@@ -266,7 +272,7 @@ export function measureMark(
     glass: Math.round(glass),
     ink: Math.round(sum / count),
     count,
-    at: { x: sx / count / scale, y: sy / count / scale },
+    at: { x: (x0 + x1) / 2 / scale, y: (y0 + y1) / 2 / scale },
   };
 }
 
@@ -294,10 +300,12 @@ export const FIRST_RUN_PAGE = String.raw`(() => {
     const r = el.getBoundingClientRect();
     return { x: r.x, y: r.y, width: r.width, height: r.height };
   };
+  // a scope's list (overflow-y auto or scroll): the one that outgrows its box, else the first, which fits
   const scrollerIn = (scope) => {
     if (scope === null) return null;
-    return [...scope.querySelectorAll("*")].find((el) =>
-      /(auto|scroll)/.test(getComputedStyle(el).overflowY) && el.scrollHeight > el.clientHeight + 1) ?? null;
+    const lists = [...scope.querySelectorAll("*")].filter((el) =>
+      /(auto|scroll)/.test(getComputedStyle(el).overflowY));
+    return lists.find((el) => el.scrollHeight > el.clientHeight + 1) ?? lists[0] ?? null;
   };
   const sample = () => {
     const now = performance.now();
@@ -481,6 +489,7 @@ export interface FrameSeen {
   readonly head: Box | null;
   readonly foot: Box | null;
   readonly primary: (Box & { readonly label: string }) | null;
+  /** the body's list that scrolls (overflow-y auto or scroll), whether it outgrows its box or fits */
   readonly scroller:
     | (Box & {
         readonly scrollHeight: number;
@@ -550,19 +559,29 @@ export function judgeFrameParts(pane: string, seen: FrameSeen): string[] {
   return problems;
 }
 
-/** The frame's law on a pane whose list outgrows its body (FG-L3): the frame's parts (`judgeFrameParts`), and the list
- * scrolling within itself under its fade while the head, the foot and the primary action stand unmoved. */
+/** The skip a pane's list declares when it fits its body, with the page's own px of slack: FG-L3's scroll is witnessed
+ * only by a list that outgrows it. The glass is one picture at every window size (DESIGN.md §8), so no window makes a
+ * list outgrow it; on Agents only a stage whose adapters take more rows would (row 32 at run52b: two ready and More's
+ * seven fit). Null when the list outgrows its body, or there is none (`judgeFrame` says so). */
+export function listFits(pane: string, seen: FrameSeen): string | null {
+  const list = seen.scroller;
+  if (list === null || list.scrollHeight > list.clientHeight + 1) return null;
+  return `${pane}: the list fits its body (${list.scrollHeight} in ${list.clientHeight}), so the row witnesses no scroll: the glass is one picture at every window size, and only a longer list outgrows it`;
+}
+
+/** The frame's law on a pane with a list (FG-L3): the frame's parts (`judgeFrameParts`) and the list's fade, and a
+ * list that outgrows its body scrolling within itself while the head, the foot and the primary action stand unmoved.
+ * One that fits has no scroll to witness: `listFits` declares it, and the walk prints it. */
 export function judgeFrame(pane: string, before: FrameSeen, after: FrameSeen): string[] {
   const problems = judgeFrameParts(pane, before);
   if (before.scroller === null) {
-    problems.push(
-      `${pane}: the list fits its body, so nothing scrolls and the row witnesses no scroll`,
-    );
+    problems.push(`${pane}: no list in its body scrolls within itself`);
     return problems;
   }
   if (!before.scroller.mask.includes("linear-gradient")) {
-    problems.push(`${pane}: the list scrolls with no fade (mask ${before.scroller.mask})`);
+    problems.push(`${pane}: the list has no fade (mask ${before.scroller.mask})`);
   }
+  if (listFits(pane, before) !== null) return problems;
   if (after.scroller === null || after.scroller.scrollTop <= 0) {
     problems.push(`${pane}: the list did not scroll within itself`);
   }
@@ -834,7 +853,7 @@ export async function firstRunRows(
     await type({ selector: 'input[aria-label="Your name"]' }, "Ada", "the name's field");
     await press(PRIMARY, "You's Continue");
 
-    // 3 · Agents: More open, the list outgrowing its body
+    // 3 · Agents: More open, its list scrolled within itself, or said to fit its body
     step("agents");
     await standing("agents");
     const ready = await count(".vf-agents-pane-ready");
@@ -864,6 +883,9 @@ export async function firstRunRows(
             scrollHeight: agents.scroller.scrollHeight,
             clientHeight: agents.scroller.clientHeight,
           };
+    const fits = listFits("Agents", agents);
+    if (fits !== null) d.say(`SMOKE_FIRST_RUN_SKIP ${d.walk} ${fits}`);
+    facts["skipped"] = fits === null ? [] : [fits];
     problems.push(...judgeFrame("Agents", agents, scrolled));
     await press(PRIMARY, "Agents' Continue");
 
