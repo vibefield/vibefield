@@ -949,6 +949,8 @@ export interface StoppedSeen {
   readonly wakes: readonly [number, number];
   readonly paneAlive: boolean;
   readonly retry: LiveProof | null;
+  /** the desk screenshot stored (§4: "A desk screenshot, stored"; §2: a row that needs the shot dir FAILS without it) */
+  readonly shot: boolean;
 }
 export function judgeStopped(s: StoppedSeen): {
   readonly problems: string[];
@@ -956,6 +958,7 @@ export function judgeStopped(s: StoppedSeen): {
   readonly staging: string | null;
 } {
   const out: string[] = [];
+  if (!s.shot) out.push("SIM-STOPPED: no VF_SMOKE_SHOT_DIR — the desk screenshot was not stored");
   if (s.quit !== "quit") out.push(`SIM-STOPPED: the quit read ${s.quit}`);
   if (s.wakes[1] < s.wakes[0] + 1 || !s.paneAlive)
     out.push(
@@ -2500,8 +2503,16 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
           await sleep(500);
         }
         const proof = await liveProven(q, 5_000);
-        await shootDesk("pt-s3-show-running.png");
+        const shot = await shootDesk("pt-s3-show-running.png");
         await putDown();
+        // a row that needs the shot dir FAILS without it (§2): red, never recorded away
+        if (!shot)
+          return {
+            problems: [
+              "SIM-SHOW-RUNNING: no VF_SMOKE_SHOT_DIR — the desk screenshot was not stored",
+            ],
+            seen: { quit, word, proof },
+          };
         const problems = judgeLiveProven("SIM-SHOW-RUNNING", proof);
         return { problems, recorded: true, seen: { quit, word, proof } };
       } finally {
@@ -2546,7 +2557,7 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
       await sleep(1_500);
       const wakes1 = (await stats())?.wakes ?? 0;
       const paneAlive = (await faceOf(pane))?.alive === true;
-      await shootDesk("pt-s3-stopped.png");
+      const shot = await shootDesk("pt-s3-stopped.png");
       let retry: LiveProof | null = null;
       if (wordNow === "stopped") {
         await pickUp(p);
@@ -2564,6 +2575,7 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
         wakes: [wakes0, wakes1],
         paneAlive,
         retry,
+        shot,
       };
       const j = judgeStopped(stoppedSeen);
       const finding =

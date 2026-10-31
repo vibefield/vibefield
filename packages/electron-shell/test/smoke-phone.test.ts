@@ -660,6 +660,7 @@ describe("PT-S3 — SIM-STOPPED's word (P8 amended)", () => {
     wakes: [3, 4],
     paneAlive: true,
     retry: proven,
+    shot: true,
   } as const;
   const mark = (s: Parameters<typeof judgeStopped>[0]) => {
     const j = judgeStopped(s);
@@ -693,6 +694,15 @@ describe("PT-S3 — SIM-STOPPED's word (P8 amended)", () => {
     expect(mark(asleep)).toBe("red");
     expect(mark({ ...seen, quit: "failed" })).toBe("red");
     expect(mark({ ...seen, word: "no-window", paneAlive: false, retry: null })).toBe("red");
+  });
+
+  it("the desk screenshot is a read: without VF_SMOKE_SHOT_DIR the row FAILS, never skips (R15)", () => {
+    expect(judgeStopped({ ...seen, shot: false }).problems).toEqual([
+      "SIM-STOPPED: no VF_SMOKE_SHOT_DIR — the desk screenshot was not stored",
+    ]);
+    expect(mark({ ...seen, word: "off", stateP: "Shutdown", retry: null, shot: false })).toBe(
+      "red",
+    );
   });
 });
 
