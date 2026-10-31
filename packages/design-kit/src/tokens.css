@@ -74,6 +74,12 @@
   /* §5 the Setup Assistant's milk (FG-D15 C): 75% by day since FG-O2's judge, so its words read at 4.5:1 over the
      field (§8 "Its words read"); the smoke stays 55% by night */
   --vf-wizard-surface: rgb(255 255 255 / 75%);
+  /* §5 the glass's own t2 and its two state inks (§2.5), which `.vf-wizard-shell` re-projects the ramp's t2, t3 and
+     t4 and those inks to: by day each holds 5:1 over the field through the milk at the thinnest stroke row 32
+     measured (FG-O2's judge, its fix after run59b); by night the ramp's t2 and the inks themselves */
+  --vf-wizard-text: rgb(28 28 30 / 80%);
+  --vf-wizard-ink-healthy: #104c1f;
+  --vf-wizard-ink-attention: #683400;
   /* §5 the Setup Assistant's frost under its surface (one value in both themes): the blur and the saturation, which
      the field reads off the glass where it draws the frost itself (track FG, FG-3b, FG-D24) */
   --vf-wizard-blur: 32px;
@@ -414,6 +420,9 @@
   --vf-chrome-surface-hover: rgb(255 255 255 / 8%);
   --vf-field-surface: rgb(255 255 255 / 6%);
   --vf-wizard-surface: rgb(28 28 30 / 55%);
+  --vf-wizard-text: rgb(245 245 247 / 70%);
+  --vf-wizard-ink-healthy: var(--vf-green);
+  --vf-wizard-ink-attention: var(--vf-orange);
   --vf-wizard-edge: rgb(255 255 255 / 12%);
   --vf-wizard-edge-light: rgb(255 255 255 / 8%);
   --vf-wizard-logo-filter: none;

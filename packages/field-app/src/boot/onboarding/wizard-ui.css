@@ -46,13 +46,17 @@
   transform: scale(var(--vf-glass-fit, 1));
 }
 
-/* Its words (DESIGN.md §5, the Setup Assistant tier; FG-O2's judge): the ramp stops at t2 on the glass, t3 and t4
-   re-projected to it, so every word on it, its panes' with its own, reads at 4.5:1 over the field (§8 "Its words
-   read", held by desk-gates row 32). The marks those tokens colour follow them: a done segment's fill and a ghost's
-   disc. Settings keeps its ramp. */
+/* Its words (DESIGN.md §5, the Setup Assistant tier; FG-O2's judge, and its fix after row 32 at run59b): the ramp
+   stops at the glass's own t2, t2, t3 and t4 re-projected to it, and a state word takes its glass ink (§2.5), so
+   every word on it, its panes' with its own, reads at 4.5:1 over the field (§8 "Its words read", held by desk-gates
+   row 32). The marks those tokens colour follow them: a done segment's fill and a ghost's disc. Settings keeps its
+   ramp and its inks. */
 .vf-wizard-shell {
-  --vf-text-tertiary: var(--vf-text-secondary);
-  --vf-text-faint: var(--vf-text-secondary);
+  --vf-text-secondary: var(--vf-wizard-text);
+  --vf-text-tertiary: var(--vf-wizard-text);
+  --vf-text-faint: var(--vf-wizard-text);
+  --vf-ink-healthy: var(--vf-wizard-ink-healthy);
+  --vf-ink-attention: var(--vf-wizard-ink-attention);
   position: absolute;
   top: 50%;
   left: 50%;

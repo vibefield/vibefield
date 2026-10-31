@@ -13,6 +13,7 @@ import { BootRoot } from "../src/boot/BootRoot";
 import type { BootMachine, BootOnboarding, BootView } from "../src/boot/machine";
 import { OnboardingWizard } from "../src/boot/onboarding/OnboardingWizard";
 import {
+  errorCls,
   eyebrowCls,
   factCls,
   glassFit,
@@ -1645,9 +1646,10 @@ describe("Setup Assistant", () => {
     const [day = "", night = ""] = TOKENS.split("\n.dark {");
     expect(day).toContain("--vf-wizard-surface: rgb(255 255 255 / 75%);");
     expect(night).toContain("--vf-wizard-surface: rgb(28 28 30 / 55%);");
-    // on the glass t3 and t4 read as t2, its panes' words with its own; Settings keeps its ramp
+    // on the glass t2, t3 and t4 read as the glass's own t2 (its value is the next row's), its panes' words with its
+    // own; Settings keeps its ramp
     expect(WIZARD_CSS).toMatch(
-      /\n\.vf-wizard-shell \{\s*--vf-text-tertiary: var\(--vf-text-secondary\);\s*--vf-text-faint: var\(--vf-text-secondary\);/u,
+      /\n\.vf-wizard-shell \{\s*--vf-text-secondary: var\(--vf-wizard-text\);\s*--vf-text-tertiary: var\(--vf-wizard-text\);\s*--vf-text-faint: var\(--vf-wizard-text\);/u,
     );
     // its own words name their tier: the band's labels, done or to come, the line under the actions, a load's sub and a
     // user's detail, all t2
@@ -1664,6 +1666,35 @@ describe("Setup Assistant", () => {
     expect(quietCls).toContain("text-[var(--vf-text-primary)]");
     for (const cls of [factCls, eyebrowCls, voiceCls, quietCls])
       expect(cls).not.toMatch(/text-(black|white)\b/u);
+  });
+
+  it("holds its small words and its state words at 5:1 by day at the thinnest stroke row 32 measured (run59b; DESIGN.md §2.5, §5, §8)", () => {
+    const [day = "", night = ""] = TOKENS.split("\n.dark {");
+    // the glass's own t2: 80% by day; by night the ramp's t2
+    expect(day).toContain("--vf-wizard-text: rgb(28 28 30 / 80%);");
+    const nightT2 = night.match(/\n {2}--vf-text-secondary: ([^;]+);/u)?.[1];
+    expect(nightT2).toBe("rgb(245 245 247 / 70%)");
+    expect(night).toContain(`--vf-wizard-text: ${nightT2};`);
+    // its two state inks, darker by day; by night the inks themselves
+    expect(day).toContain("--vf-wizard-ink-healthy: #104c1f;");
+    expect(day).toContain("--vf-wizard-ink-attention: #683400;");
+    for (const [ink, fill] of [
+      ["healthy", "green"],
+      ["attention", "orange"],
+    ]) {
+      expect(night).toContain(`--vf-ink-${ink}: var(--vf-${fill});`);
+      expect(night).toContain(`--vf-wizard-ink-${ink}: var(--vf-${fill});`);
+    }
+    // re-projected on the shell alone, so Settings keeps its inks; danger and info take theirs when a word in them
+    // first comes onto the glass
+    expect(WIZARD_CSS).toMatch(
+      /\n\.vf-wizard-shell \{[^}]*--vf-ink-healthy: var\(--vf-wizard-ink-healthy\);\s*--vf-ink-attention: var\(--vf-wizard-ink-attention\);/u,
+    );
+    expect(WIZARD_CSS.match(/--vf-ink-[a-z]+: var\(--vf-wizard-ink-/gu)).toHaveLength(2);
+    expect(TOKENS + WIZARD_CSS).not.toMatch(/--vf-wizard-ink-(danger|info)/u);
+    // the wizard's error line wears the attention ink, never a palette colour of its own
+    expect(errorCls).toContain("text-[var(--vf-ink-attention)]");
+    expect(errorCls).not.toMatch(/text-[a-z]+-\d{2,3}\b/u);
   });
 
   it("stands the browser's glass down where the field draws it, keeping the edge (FG-3b, FG-D24)", () => {

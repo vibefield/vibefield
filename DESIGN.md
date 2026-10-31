@@ -227,6 +227,19 @@ update", in `--vf-red` text (§8's two-step destructive confirm). Offline adds n
 tertiary line, and the page stays in its neutral words, as shipped (§8 "Settings → Updates"). A channel with no
 release yet is quiet: "No stable release yet" ("No beta release yet") is tertiary on the row and on the page.
 
+*Amended 2026-10-31 (track FG, row 32 at run59b: the glass's day inks, at VF-PM's leans 20:46Z and 20:56Z, James's to
+overturn; built in the judge's fix):* the inks hold 4.5:1 on light chrome, and the Setup Assistant's day glass (§5,
+§8 "The Setup Assistant's glass") is not light chrome: its ground is the field through a 75% milk, which row 32
+measured as dark as [200, 201, 210] under a short word, where an agent's "Ready" in `--vf-ink-healthy` read
+3.4–3.7:1. So on that glass a state word takes its glass ink: its ink's own hue, scaled in linear light until it
+holds 5:1 over that ground at the thinnest stroke the row measured (a small word's strokes read at 90% of their
+ink, §8 "The Setup Assistant's glass"), the rule the glass's t2 follows. `--vf-wizard-ink-healthy` `#104C1F`, where
+`#1F7A36` gives 2.9 (an agent's "Ready" in AO's panes, drawn whole at 500, reads 6.3–6.9:1); and
+`--vf-wizard-ink-attention` `#683400`, where `#B25E00` gives 2.6 (the wizard's own error line, which wore
+Tailwind's amber outside these inks, under 2:1 there). The shell re-projects the two on the glass alone, so AO's
+panes keep their inks in Settings, and by night the glass reads the inks as they are. They are the two the glass
+wears; danger and info take theirs when a word in them first comes onto the glass, DESIGN.md first.
+
 ### 2.6 Organizational accents (containers, comments, tags)
 
 Curated set, assigned per object, used as *tint*: `#6366F1 · #EC4899 · #22C55E · #F59E0B ·
@@ -697,7 +710,7 @@ exception again.
 | Overlay chip | surface `/90–95` + `backdrop-blur-xl` | no wearer today: the put-back affordance and the HUD's toasts retired (DK-13, DK-17); the peers' chips wear the line's glass and the status line solid chrome (§8) |
 | Backdrop dim | `black/10` light · `black/40` dark | behind open sheets; canvas recedes to `scale(0.98)` |
 | Search scrim (GV-D8; K7, 2026-10-08) | `black/16` light · `black/46` dark, over a backdrop blur of 18 and `saturate(0.9)` | behind the Peek (§8 "Search"): the window blurred and dimmed, the view and the frame receding to `scale(0.98)` under it. Darker than the backdrop dim so it reads as dimmed (One Frame §23); the backdrop dim stays the sheets' until James rules otherwise (docket PK1). *Since TS-D22 A (2026-10-29):* the phone wears its dim alone, with no blur, under a door that stands over a live field, between the field and the bar (§9) |
-| Setup Assistant (as built since UA-3w; written down 2026-10-29, track FG; on the field, built at FG-3a as the browser's layers, and since FG-3b drawn by the field's own pass over the live field) | `--vf-wizard-surface` (white 75% by day, `rgb(28 28 30)` 55% by night) over a blur of `--vf-wizard-blur` (32px) and a saturation of `--vf-wizard-saturate` (1.12), the island radius (32). On the field (FG): a 1px edge, `--vf-wizard-edge` (white 60% by day, 12% by night) with a top light, `--vf-wizard-edge-light` (white 75%, 8%); the field's shadow, `--vf-shadow-wizard-field` (`0 40px 120px` and `0 12px 32px` in the field's ground at 55% and 28%); and a grain at `--vf-wizard-grain` (3%), so the blur never bands. Its logo (FG-4b): `--vf-wizard-logo-filter`, `invert(1) hue-rotate(180deg)` by day and `none` by night, so the mark is white on smoke and inverted on milk with its colours kept. Its words (FG-O2's judge): the ramp stops at t2 on the glass, t3 and t4 re-projected to t2 there (`--vf-text-tertiary`, `--vf-text-faint`), and a quiet button's words stand at t1 on its fill; its panes' words go with its own, so every word on it reads at 4.5:1 (§8) | the Setup Assistant's glass (§8): on the field its frost lets the tunnel's rings through softly (FG-D15 C; by day through a 75% milk since FG-O2's judge, 2026-10-31, at a little over half the strength 55% let through). Over the live field the field draws this recipe itself, in its own frame and from these tokens (FG-D24); over the field's still the backdrop filter draws it |
+| Setup Assistant (as built since UA-3w; written down 2026-10-29, track FG; on the field, built at FG-3a as the browser's layers, and since FG-3b drawn by the field's own pass over the live field) | `--vf-wizard-surface` (white 75% by day, `rgb(28 28 30)` 55% by night) over a blur of `--vf-wizard-blur` (32px) and a saturation of `--vf-wizard-saturate` (1.12), the island radius (32). On the field (FG): a 1px edge, `--vf-wizard-edge` (white 60% by day, 12% by night) with a top light, `--vf-wizard-edge-light` (white 75%, 8%); the field's shadow, `--vf-shadow-wizard-field` (`0 40px 120px` and `0 12px 32px` in the field's ground at 55% and 28%); and a grain at `--vf-wizard-grain` (3%), so the blur never bands. Its logo (FG-4b): `--vf-wizard-logo-filter`, `invert(1) hue-rotate(180deg)` by day and `none` by night, so the mark is white on smoke and inverted on milk with its colours kept. Its words (FG-O2's judge, and its fix after row 32 at run59b, 2026-10-31): the ramp stops at the glass's own t2, `--vf-wizard-text` (`rgb(28 28 30)` 80% by day, the ramp's t2 by night), t2, t3 and t4 re-projected to it there (`--vf-text-secondary`, `--vf-text-tertiary`, `--vf-text-faint`); a state word takes its glass ink (§2.5), `--vf-ink-healthy` and `--vf-ink-attention` re-projected to `--vf-wizard-ink-healthy` (`#104C1F` by day) and `--vf-wizard-ink-attention` (`#683400` by day), the inks themselves by night; and a quiet button's words stand at t1 on its fill; its panes' words go with its own, so every word on it reads at 4.5:1 (§8) | the Setup Assistant's glass (§8): on the field its frost lets the tunnel's rings through softly (FG-D15 C; by day through a 75% milk since FG-O2's judge, 2026-10-31, at a little over half the strength 55% let through). Over the live field the field draws this recipe itself, in its own frame and from these tokens (FG-D24); over the field's still the backdrop filter draws it |
 
 **Menus are solid, floating controls are glass** (One Frame FR-7, FC-D14 ruled 2026-10-01): a menu
 is rows to be read, so it is `--vf-chrome-solid` — opaque — ringed by `--vf-hairline-strong`, with
@@ -2903,11 +2916,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   and smoke by night while the field stays the dark in both (FG-D4 A), and nothing see-through is ever cut
   into it (FG-L2). **Its words read** (FG-O2's judge): every word on the glass, its panes' with its own, reads at
   4.5:1 or more over the field as it moves, by day, by night and over the field's still (§2.5's bar for a word that
-  is read), so on the glass the ramp stops at t2 and a quiet button's words stand at t1 (§5). Row 32 measures every
-  word on each pane it walks (`docs/desk-gates.md`): each lettered word of the band and the standing pane, cut from
-  the window's own capture by DK-16's method and held at the bar once it shows whole; a word in a control that is
-  off (WCAG 2's exemption for an inactive control) or under a list's fade is passed over and said so, and a word
-  under the bar is red with its numbers.
+  is read), so on the glass the ramp stops at t2, by day the glass's own 80% (§5), a state word takes its glass ink
+  (§2.5), and a quiet button's words stand at t1 (§5). Row 32 measures every word on each pane it walks
+  (`docs/desk-gates.md`): each lettered word of the band and the standing pane, cut from the window's own capture
+  by DK-16's method and held at the bar once it shows whole; a word in a control that is off (WCAG 2's exemption
+  for an inactive control) or under a list's fade is passed over and said so, and a word under the bar is red with
+  its numbers.
   **The steps** (FG-D22 A, FG-D23 A): a band along the glass's top 72, one segment per
   step of the chapter's order — You · Agents · Profiles · History · Devices · Setting up — 76 × 3 with a
   gap of 8, its label in small capitals 9 under it (500, 10px, .08em): done in t2 over its filled segment, the
@@ -3023,6 +3037,22 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   Finish setting up's sheet, and the field's own pass and the still's CSS glass, which read it (FG-D24). Settings
   keeps its ramp: these panes' words on its chrome are §2.4's own question (item 127), as is the name field's
   placeholder, which stands on the input's own white, a control's face.
+  *Corrected 2026-10-31 (track FG, row 32 at run59b, the judge's first live run; the fix at VF-PM's leans, 20:46Z and
+  20:56Z, James's to overturn; DESIGN.md first, built in the fix's slice):* the judge's model ran high. On the
+  walk's own stills by day, two inks fell short on the 75% milk: t2 at 4.1–4.4:1 (Agents' "its own updater",
+  History's "· last used", Connect's "Your phone") and an agent's "Ready" in `--vf-ink-healthy` at 3.4–3.7; by night
+  every word read 4.9:1 or more. The ground under those words reads [200–209, 201–213, 210–223], darker than the
+  grounds the model took, and a small word's strokes read lighter than a full composite, at 90–94% of it (t2 over
+  [200, 202, 211] composites to [80, 80, 84] and reads [87, 88, 92]). So by day the glass's t2 is 80%
+  (`--vf-wizard-text`; by night the ramp's t2), and t2, t3 and t4 are re-projected to it (§5): at each short
+  word's own coverage they come to 5.25–5.79:1, where about 78% would be the least for 5:1, and at the thinnest
+  stroke on the darkest ground under a short word 80% holds 5.1:1. A state word on the glass takes its glass ink
+  (§2.5), held by the same rule: healthy `#104C1F` (an agent's "Ready", drawn whole, 6.3:1 on the darkest ground
+  under it); and attention `#683400` for the wizard's own error line, which wore Tailwind's amber outside the inks
+  (under 2:1 there) and now wears `--vf-ink-attention`, judged by this arithmetic alone, since row 32 walks no
+  error (an error pane under the judge is owed). The milk stays 75% (James's "b"). By day t2 now stands close to
+  t1 (80% against 85%), so on the glass the quiet words are told from the reading ones by their size and place
+  more than by their shade.
 - **The reveal** (boot-exclusive motion): the canvas composes and stabilizes BEHIND
   the splash (the frame-stability gate — never reveal mid-hitch), then the splash
   fades 240ms plain `ease` while the canvas settles `scale(0.99) → 1` over 560ms
