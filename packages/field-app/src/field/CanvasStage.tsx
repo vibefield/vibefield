@@ -294,6 +294,8 @@ export function CanvasStage({
       off: mountedOff,
       device: () => deviceRef.current,
       ...(live === undefined ? {} : { live }),
+      // PT-S3 (D5) — the devices the mount's phones attach by, read on the door
+      ...(devices === undefined ? {} : { devices }),
       ...(docIdRef.current === undefined ? {} : { docId: docIdRef.current }),
     };
     deskRef.current = desk;
@@ -404,7 +406,7 @@ export function CanvasStage({
       if (deskRef.current === desk) deskRef.current = null;
       if (handleRef.current === handle) handleRef.current = null;
     };
-  }, [ce, generation, mount, remount, live]);
+  }, [ce, generation, mount, remount, live, devices]);
 
   if (refused !== null) {
     return (

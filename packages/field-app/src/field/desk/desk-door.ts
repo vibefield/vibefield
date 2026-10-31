@@ -34,6 +34,10 @@ import type {
   DeskLiveStats,
 } from "../../surfaces/live/desk-live";
 import { pageStills } from "../../surfaces/live/page-stills";
+import type {
+  DeskSimulatorDevices,
+  DeskSimulatorDevicesStats,
+} from "../../surfaces/live/simulator-devices";
 import { setSurfaceGraceForTest, surfaceGraceMs } from "../../surfaces/pool";
 import { type BarStats, readBarStats } from "./bar/bar-stats";
 import { type CopyRecord, lastCopy } from "./copy/copy-record";
@@ -73,6 +77,9 @@ export interface MountedDesk {
   readonly device?: () => GPUDevice | null;
   /** PT-2 — the mount's live pages (the service lent under ICE's `LIVE`); absent where none is lent. */
   readonly live?: DeskLiveSources;
+  /** PT-S3 (D5) — the mount's Simulator devices (the service lent under the SDK's `SIMULATOR_DEVICES`, a phone's attach
+   * reads it); absent where none is lent. */
+  readonly devices?: DeskSimulatorDevices;
   /** PT-5b — the document the mount shows (a page's last still is kept under it); absent: none is kept. */
   readonly docId?: string;
 }
@@ -288,6 +295,13 @@ export interface VfDeskDoor {
    * no live service is lent. A read: the live-pane smoke's witness.
    */
   live(): { readonly stats: DeskLiveStats; readonly faces: readonly DeskLiveFaceRow[] } | null;
+  /**
+   * PT-S3 (D5) — this Mac's Simulator devices as the mount's service has read them for a phone's attach
+   * (surfaces/live/simulator-devices.ts): the looks it took, the lists it read and those that failed, and how many rows the
+   * last read held — null: none read yet, so `attachable` answers nothing. COUNTS, never a row. Null where no device list is
+   * lent. A read: the phone smoke's wait for a warm list before it presses Attach.
+   */
+  simulatorDevices(): DeskSimulatorDevicesStats | null;
   /**
    * PT-5b — the TEST door on the live pages' cap (ruling 3: six pages alive at most): read it, or set it — the plan is
    * made again (lowered: pages are put to rest, the unseen first; raised: waiting pages come alive). Null where no live
@@ -557,6 +571,12 @@ export function installDeskDoor(desk: MountedDesk, platesSet: () => boolean): ()
     objects: (type) => deskObjects(engine, type),
     live: () =>
       desk.live === undefined ? null : { stats: desk.live.stats(), faces: desk.live.faces() },
+    simulatorDevices: () => {
+      if (desk.devices === undefined) return null;
+      // the four counts by name — whatever else the service may count one day is not the door's
+      const { looks, reads, failures, rows } = desk.devices.stats();
+      return { looks, reads, failures, rows };
+    },
     liveCap: (next) => desk.live?.cap(next) ?? null,
     liveGrace: (ms) => (ms === undefined ? surfaceGraceMs() : setSurfaceGraceForTest(ms)),
     liveSettled: async () => {
