@@ -1,0 +1,230 @@
+/* Chat (SP-1b; DESIGN.md §8 "Chat's list", §2.10; One Frame FC-D15, FC-D16): the sparks' list on the cover's glass,
+   after the Sparks page's `ch-view` plate. Tokens only. */
+
+/* The view's own ground: the covers' glass, 72% (FC-D16). */
+.vf-chat {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--vf-chrome-solid) 72%, transparent);
+}
+
+/* The panel: from the head band's foot to the reserve (FC-D15), 8 in from the window's sides — solid chrome, corners
+   22, the hairline ring and the island shadow; the list's column 272, the thread's beside it. It is the faces' stage. */
+.vf-chat-panel {
+  position: absolute;
+  inset: var(--vf-chat-head) 8px var(--vf-chat-reserve) 8px;
+  display: grid;
+  grid-template-columns: 272px minmax(0, 1fr);
+  overflow: hidden;
+  border-radius: 22px;
+  background: var(--vf-chrome-solid);
+  box-shadow:
+    0 0 0 1px var(--vf-hairline),
+    var(--vf-shadow-island);
+}
+
+/* Opening, unavailable, or no sparks yet: the words, centred in the panel. */
+.vf-chat-panel-state {
+  grid-column: 1 / -1;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+/* ── the list ── */
+
+.vf-chat-list {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--vf-hairline);
+}
+
+.vf-chat-list-head {
+  flex: none;
+  height: 60px;
+  padding: 4px 22px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.vf-chat-list-head h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  color: var(--vf-text-primary);
+}
+
+.vf-chat-count {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--vf-text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.vf-chat-rows {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-width: none;
+  padding: 0 10px 10px;
+  display: grid;
+  align-content: start;
+  gap: 2px;
+}
+
+.vf-chat-rows::-webkit-scrollbar {
+  display: none;
+}
+
+.vf-chat-row {
+  position: relative;
+  width: 100%;
+  height: 64px;
+  padding: 0 12px 0 10px;
+  border: 0;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  background: transparent;
+  cursor: default;
+  transition: background 160ms ease;
+}
+
+.vf-chat-row:hover {
+  background: color-mix(in srgb, var(--vf-foreground) 4%, transparent);
+}
+
+/* the chosen row: the ready fill */
+.vf-chat-row[aria-pressed="true"],
+.vf-chat-row[aria-pressed="true"]:hover {
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+}
+
+.vf-chat-row:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: -2px;
+}
+
+.vf-chat-row-words {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 4px;
+}
+
+.vf-chat-row-name {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.15;
+  color: var(--vf-text-primary);
+}
+
+.vf-chat-row-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-chat-row-time {
+  flex: none;
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--vf-text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.vf-chat-row-status,
+.vf-chat-thread-status {
+  font-size: 12px;
+  line-height: 1.2;
+  color: var(--vf-text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vf-chat-row-status {
+  padding-right: 10px;
+}
+
+/* S-4: the word in the attention ink; the face never turns orange */
+.vf-chat-row-status[data-tone="attention"],
+.vf-chat-thread-status[data-tone="attention"] {
+  color: var(--vf-ink-attention);
+}
+
+.vf-chat-row-dot {
+  position: absolute;
+  right: 12px;
+  bottom: 15px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--vf-orange);
+}
+
+/* ── the thread's column, at SP-1b: the head and one honest line ── */
+
+.vf-chat-thread {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.vf-chat-thread-head {
+  flex: none;
+  height: 72px;
+  padding: 0 18px 0 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--vf-hairline);
+}
+
+.vf-chat-thread-words {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.vf-chat-thread-name {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.15;
+  color: var(--vf-text-primary);
+}
+
+.vf-chat-thread-line {
+  margin: 0;
+  padding: 18px 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--vf-text-secondary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vf-chat-row {
+    transition: none;
+  }
+}

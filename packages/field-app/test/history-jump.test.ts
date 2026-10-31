@@ -2,7 +2,8 @@
  * P3 — Jump to's reading (DESIGN.md §8 "History"; AR-D43, K11): the run that
  * continues the chosen conversation HERE, joined from fieldd's fold on the
  * provider-native id, and the words the line says around it. The view's own
- * rows (the create flipping, the press, the refusals) are
+ * rows (the chosen session's act flipping, the press, the refusals — the
+ * line's create until HN-7, the palette's History row since) are
  * `history-view.test.tsx`'s; the deck's reveal is `godview-deck.test.tsx`'s.
  */
 import { readFileSync } from "node:fs";
@@ -10,8 +11,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
+  chosenSessionWaits,
   type HistoryLineDoor,
-  historyCreateWaits,
   jumpNote,
   newTerminalNote,
   resumeNote,
@@ -100,6 +101,8 @@ describe("the line's words around Jump to (P3)", () => {
     live: false,
     resume: async () => ({ state: "resumed" }),
     jump: async () => ({ state: "jumped" }),
+    project: "vibe-field",
+    newTerminal: async () => ({ state: "opened" }),
     ...overrides,
   });
 
@@ -136,9 +139,9 @@ describe("the line's words around Jump to (P3)", () => {
   });
 
   it("never makes Jump to wait on the launcher's reading — only on a choice", () => {
-    expect(historyCreateWaits(door({ waits: "its folder is gone" }))).toBe("its folder is gone");
-    expect(historyCreateWaits(door({ waits: "its folder is gone", live: true }))).toBeNull();
-    expect(historyCreateWaits(door({ chosen: null, live: true }))).toBe("choose a session first");
-    expect(historyCreateWaits(null)).toBe("choose a session first");
+    expect(chosenSessionWaits(door({ waits: "its folder is gone" }))).toBe("its folder is gone");
+    expect(chosenSessionWaits(door({ waits: "its folder is gone", live: true }))).toBeNull();
+    expect(chosenSessionWaits(door({ chosen: null, live: true }))).toBe("choose a session first");
+    expect(chosenSessionWaits(null)).toBe("choose a session first");
   });
 });

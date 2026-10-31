@@ -30,6 +30,7 @@ pub mod sockets {
     pub const MESHDATA: &str = "meshdata.sock";
     pub const TERMINAL_CONTROL: &str = "termctl.sock";
     pub const TERMINAL_FRAME: &str = "termframe.sock";
+    pub const DOOR: &str = "door.sock";
 }
 
 pub mod stores {
@@ -119,6 +120,20 @@ pub mod terminal_inventory {
 pub mod orphan_bound {
     pub const IDLE_EXIT_MS: u64 = 600000;
     pub const IDLE_POLL_MS: u64 = 30000;
+}
+
+/// CP-1a — the floor's door: open doors at once, the bytes held while no fieldd is
+/// attached (per door and in all), the parent walk's links, a pane root's birth
+/// tolerance, the start's resolution and the longest line the bridge carries. One
+/// authority with fieldd; see registries.ts.
+pub mod native_door {
+    pub const MAX_OPEN: u64 = 64;
+    pub const HELD_BYTES_PER_DOOR: u64 = 262144;
+    pub const HELD_BYTES_TOTAL: u64 = 4194304;
+    pub const WALK_MAX_STEPS: u64 = 32;
+    pub const ROOT_BIRTH_TOLERANCE_MS: u64 = 60000;
+    pub const START_RESOLUTION_MS: u64 = 1000;
+    pub const LINE_MAX_BYTES: u64 = 8388608;
 }
 
 /// TPv3 (terminal-pipeline-v3 §5.1/§8; §20 item 5) — the pipeline's numbers:
@@ -258,12 +273,17 @@ pub mod layout {
     pub const SETUP_LEDGER_FILE: &[&str] = &["fieldd", "setup.json"];
     pub const DEVICE_NAME_FILE: &[&str] = &["fieldd", "device-name.json"];
     pub const AGENT_PROFILE_DRAFTS_FILE: &[&str] = &["fieldd", "profile-drafts.json"];
+    pub const SPARKS_DIR: &[&str] = &["fieldd", "sparks"];
+    pub const SPARKS_KEY_FILE: &[&str] = &["fieldd", "sparks.key"];
+    pub const SPARK_HOMES_DIR: &[&str] = &["sparks"];
+    pub const AGENT_INPUTS_DIR: &[&str] = &["fieldd", "inputs"];
     pub const TERMINAL_CONFIG_FILE: &[&str] = &["native", "config.ghostty"];
     pub const RESTART_INTENT_FILE: &[&str] = &["native", "restart-intent.json"];
     pub const MGMT_SOCKET: &[&str] = &["native", "run", "mgmt.sock"];
     pub const MESHDATA_SOCKET: &[&str] = &["native", "run", "meshdata.sock"];
     pub const TERMINAL_CONTROL_SOCKET: &[&str] = &["native", "run", "termctl.sock"];
     pub const TERMINAL_FRAME_SOCKET: &[&str] = &["native", "run", "termframe.sock"];
+    pub const DOOR_SOCKET: &[&str] = &["native", "run", "door.sock"];
     pub const CRASH_DIR: &[&str] = &["crash"];
     pub const EXPORTS_STAGING_DIR: &[&str] = &["exports", ".staging"];
     pub const BROWSER_PROFILES_DIR: &[&str] = &["browser", "profiles"];
@@ -323,12 +343,17 @@ pub mod layout {
         ("SETUP_LEDGER_FILE", SETUP_LEDGER_FILE),
         ("DEVICE_NAME_FILE", DEVICE_NAME_FILE),
         ("AGENT_PROFILE_DRAFTS_FILE", AGENT_PROFILE_DRAFTS_FILE),
+        ("SPARKS_DIR", SPARKS_DIR),
+        ("SPARKS_KEY_FILE", SPARKS_KEY_FILE),
+        ("SPARK_HOMES_DIR", SPARK_HOMES_DIR),
+        ("AGENT_INPUTS_DIR", AGENT_INPUTS_DIR),
         ("TERMINAL_CONFIG_FILE", TERMINAL_CONFIG_FILE),
         ("RESTART_INTENT_FILE", RESTART_INTENT_FILE),
         ("MGMT_SOCKET", MGMT_SOCKET),
         ("MESHDATA_SOCKET", MESHDATA_SOCKET),
         ("TERMINAL_CONTROL_SOCKET", TERMINAL_CONTROL_SOCKET),
         ("TERMINAL_FRAME_SOCKET", TERMINAL_FRAME_SOCKET),
+        ("DOOR_SOCKET", DOOR_SOCKET),
         ("CRASH_DIR", CRASH_DIR),
         ("EXPORTS_STAGING_DIR", EXPORTS_STAGING_DIR),
         ("BROWSER_PROFILES_DIR", BROWSER_PROFILES_DIR),

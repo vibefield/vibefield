@@ -1,0 +1,178 @@
+/* The package circle (DESIGN.md §8 "The head" — the package circle; PL-D2
+   ruled by James 2026-10-29, Cards in Hand; HN-8; §5 the line's glass, §6 the
+   step, §10 its place). Under a cover the pill is the desk's and hides with
+   it, and Artifacts' door stands alone at the head's left. Tokens only. */
+
+/* ── THE CIRCLE — the frame's, at the head's left ─────────────────────────
+   A 40 glass circle (the line's glass) at x 96, `top-2`, on the lights' axis
+   — the left slot's start, mirroring search's circle at the right end
+   (peek.css). Above the cover with the line and the corner (62); no-drag, as
+   it stands in the window's drag strip. The pill's sheet grows from it and
+   stands in its place while it shows (§8 "The head"; at the foot). */
+.vf-package-circle {
+  position: absolute;
+  z-index: 62;
+  top: 8px;
+  left: 96px;
+  width: 40px;
+  height: 40px;
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--vf-chrome-solid) 88%, transparent);
+  backdrop-filter: blur(24px);
+  box-shadow:
+    0 0 0 1px var(--vf-hairline),
+    var(--vf-shadow-island);
+}
+
+.dark .vf-package-circle {
+  background: color-mix(in srgb, var(--vf-chrome-solid) 94%, transparent);
+  box-shadow:
+    0 0 0 1px var(--vf-hairline-strong),
+    var(--vf-shadow-island),
+    inset 0 1px 0 rgb(255 255 255 / 6%);
+}
+
+/* `package` 18 in secondary ink, primary under the pointer and while its
+   sheet shows (the button whose shelf shows is on). */
+.vf-package-button {
+  position: relative;
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 20px;
+  color: var(--vf-text-secondary);
+  background: none;
+  cursor: pointer;
+  transition: color 120ms ease;
+}
+
+.vf-package-button:hover,
+.vf-package-button[aria-expanded="true"] {
+  color: var(--vf-text-primary);
+}
+
+.vf-package-button:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: 2px;
+}
+
+/* Its dot is the pill's package's (PL-D1): a STANDING state only, as the sync
+   dot is — 6, 7 in from the circle's top right, ringed 1.5 in the solid
+   chrome so it reads on the glass, orange while an artifact's source is
+   unavailable (§2.5's attention), and nothing at all otherwise. The words are
+   the button's name; the dot only shows them. */
+.vf-package-dot {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--vf-orange);
+  box-shadow: 0 0 0 1.5px var(--vf-chrome-solid);
+  pointer-events: none;
+}
+
+/* ── IN THE TERMINALS' TITLE BAR (PL-D2 with GV-D11; §8 "The head", "Search —
+   the Peek") ─────────────────────────────────────────────────────────────
+   While Godview's terminals are maximized the head's circle is not drawn and
+   the SAME button stands at the bar's left end, at 96, clear of the lights:
+   the bar's own controls' box (30 × 24, corners 8), centred on the bar's axis
+   as search is at its other end, `package` 13 in the terminal's ink at 64%,
+   the full ink on a 10% fill of it under the pointer. No glass: it stands on
+   the bar. The ink is the deck's, lent on the document by Godview's stage. */
+.vf-package-circle[data-bar] {
+  top: 3px;
+  width: var(--vf-godview-deck-control-width);
+  height: var(--vf-godview-deck-control-height);
+  border-radius: var(--vf-godview-deck-control-radius);
+  background: transparent;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+.dark .vf-package-circle[data-bar] {
+  background: transparent;
+  box-shadow: none;
+}
+
+.vf-package-circle[data-bar] .vf-package-button {
+  width: var(--vf-godview-deck-control-width);
+  height: var(--vf-godview-deck-control-height);
+  border-radius: var(--vf-godview-deck-control-radius);
+  color: color-mix(in srgb, var(--vf-godview-bar-ink, var(--vf-text-primary)) 64%, transparent);
+  transition:
+    color 120ms ease,
+    background-color 120ms ease;
+}
+
+.vf-package-circle[data-bar] .vf-package-button:hover,
+.vf-package-circle[data-bar] .vf-package-button[aria-expanded="true"] {
+  color: var(--vf-godview-bar-ink, var(--vf-text-primary));
+  background: color-mix(
+    in srgb,
+    var(--vf-godview-bar-ink, var(--vf-text-primary)) 10%,
+    transparent
+  );
+}
+
+.vf-package-circle[data-bar] .vf-package-button > .vf-glyph {
+  width: 13px;
+  height: 13px;
+}
+
+/* Its dot on it, 3 in from the box's top right as on the pill's 28 button —
+   unringed: the ring is there so the dot reads on glass, and the bar is the
+   deck's own ground. */
+.vf-package-circle[data-bar] .vf-package-dot {
+  top: 3px;
+  right: 3px;
+  box-shadow: none;
+}
+
+/* Out of the bar, with search (GV-D11; §6): the bar's control fades where it
+   stands over 120ms, taking no pointer, and only then the head's circle fades
+   in over 200ms — one element, so it is never in two places. Into the bar,
+   and under reduced motion, it changes place at once (`Peek.tsx`'s step,
+   which both buttons take, draws none under reduced motion). */
+.vf-package-circle[data-step="out"] {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.vf-package-circle[data-step="in"] {
+  animation: vf-package-fade 200ms ease;
+}
+
+@keyframes vf-package-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+/* ── WHILE ITS SHEET SHOWS (§8 "The head"; M1) ────────────────────────────
+   The sheet grew from the circle and stands in its place, its head row the
+   circle's own (Head's `.vf-head-sheet`, the same 62), so the circle steps
+   aside at once — by opacity, never visibility, so Esc can give the keyboard
+   back to it while the sheet folds. It returns only as the sheet's shut box,
+   which wears the circle's glass at the circle's place, goes: the fold's
+   600ms, 90 under reduced motion (the sheet's M6). The bar's step keeps its
+   own timing. */
+.vf-package-circle[data-open] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.vf-package-circle:not([data-open]):not([data-step]) {
+  transition: opacity 0s linear 600ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vf-package-circle:not([data-open]):not([data-step]) {
+    transition-delay: 90ms;
+  }
+}

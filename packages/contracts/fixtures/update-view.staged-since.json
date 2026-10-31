@@ -1,0 +1,12 @@
+{
+  "phase": "staged",
+  "version": "0.1.0-nightly.20261028",
+  "sessions": 3,
+  "channel": "nightly",
+  "buildChannel": "nightly",
+  "enabled": true,
+  "lastCheckAt": 1793178000000,
+  "applyWired": true,
+  "currentVersion": "0.1.0-nightly.20261027",
+  "stagedAt": 1792400400000
+}

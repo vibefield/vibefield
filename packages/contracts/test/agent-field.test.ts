@@ -3,6 +3,9 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
+  AgentBoardKeyDelta,
+  AgentBoardKeySnapshot,
+  AgentBoardRowKey,
   AgentDeskRow,
   AgentDeskTerminalRow,
   AgentFieldDelta,
@@ -20,6 +23,7 @@ import {
   AgentProjection,
   AgentReportShownParams,
   AgentSubscribeParams,
+  MONITOR_AUDIENCE,
   MonitorAgentRow,
 } from "../src/agent-field";
 import { AGENT_FIELD } from "../src/registries";
@@ -210,6 +214,90 @@ describe("PJ-7 — the phone's row knows its conversation (Q3 (a))", () => {
     }
     // the desk row is a field row: it reads the same key the same way
     expect(AgentDeskRow.safeParse({ ...row, nativeSessionId: 42 }).success).toBe(false);
+  });
+});
+
+describe("SP-1b — the row says whose session it is and who started it (track CO)", () => {
+  it("carries the spark and the origin, and a row with neither still parses", () => {
+    const snapshot = AgentFieldSnapshot.parse(golden("agent-field-snapshot.spark.json"));
+    const [own, started, plain] = snapshot.rows;
+    expect(own?.spark).toBe("sp-vela01");
+    expect(own?.origin).toEqual({ by: "you" });
+    expect(started?.spark).toBeUndefined();
+    expect(started?.origin).toEqual({ by: "spark", spark: "sp-vela01" });
+    expect(plain?.spark).toBeUndefined();
+    expect(plain?.origin).toBeUndefined();
+    // the goldens from before SP-1b carry neither, and still parse: the tolerant reader
+    for (const name of [
+      "agent-field-snapshot.valid.json",
+      "agent-field-snapshot.native-session.json",
+    ]) {
+      const older = AgentFieldSnapshot.parse(golden(name));
+      expect(
+        older.rows.every((row) => row.spark === undefined && row.origin === undefined),
+        name,
+      ).toBe(true);
+    }
+  });
+
+  it("refuses a spark that is not an id, and an origin that names no one, rather than coercing them", () => {
+    const row = AgentFieldSnapshot.parse(golden("agent-field-snapshot.spark.json"))
+      .rows[0] as Record<string, unknown>;
+    expect(AgentFieldRow.safeParse(row).success).toBe(true);
+    for (const bad of ["", "Vela", "sp-", 42]) {
+      expect(AgentFieldRow.safeParse({ ...row, spark: bad }).success, String(bad)).toBe(false);
+    }
+    expect(AgentFieldRow.safeParse({ ...row, origin: { by: "" } }).success).toBe(false);
+    expect(AgentFieldRow.safeParse({ ...row, origin: { spark: "sp-vela01" } }).success).toBe(false);
+    // the desk row is a field row: it reads both the same way
+    expect(AgentDeskRow.safeParse(row).success).toBe(true);
+    expect(AgentDeskRow.safeParse({ ...row, spark: "Vela" }).success).toBe(false);
+  });
+});
+
+describe("ST-D5 — a person's durable Stop rides the field row", () => {
+  it("carries the Stop's clock and stage, in open words, and only on a row that holds one", () => {
+    const snapshot = AgentFieldSnapshot.parse(golden("agent-field-snapshot.stop.json"));
+    const [ending, unheard, heard] = snapshot.rows;
+    expect(ending?.stop).toEqual({ sentAt: "2026-10-31T06:00:03.000Z", stage: "terminating" });
+    expect(unheard?.stop?.unheardAt).toBe("2026-10-31T06:01:08.000Z");
+    expect(heard?.stop).toMatchObject({ stage: "heard", heardBy: "status" });
+    // content-free: no key of a Stop names a path or a word of the run
+    expect(JSON.stringify(snapshot)).not.toContain('"cwd"');
+    // the goldens from before ST carry none and still parse
+    const older = AgentFieldSnapshot.parse(golden("agent-field-snapshot.valid.json"));
+    expect(older.rows.every((row) => row.stop === undefined)).toBe(true);
+  });
+
+  it("takes a stage or a hearing it does not know, and an unknown key beside them, as the tolerant reader does", () => {
+    const row = AgentFieldSnapshot.parse(golden("agent-field-snapshot.stop.json"))
+      .rows[0] as Record<string, unknown>;
+    const stop = {
+      sentAt: "2026-10-31T06:00:03.000Z",
+      stage: "paused",
+      heardBy: "turn-stop",
+      by: "x",
+    };
+    expect(AgentFieldRow.parse({ ...row, stop }).stop).toEqual(stop);
+  });
+
+  it("refuses a Stop that is not one rather than coercing it", () => {
+    const row = AgentFieldSnapshot.parse(golden("agent-field-snapshot.stop.json"))
+      .rows[0] as Record<string, unknown>;
+    for (const bad of [
+      "sent",
+      { stage: "sent" },
+      { sentAt: "2026-10-31T06:00:03.000Z" },
+      { sentAt: "2026-10-31T06:00:03.000Z", stage: "" },
+      { sentAt: "2026-10-31T06:00:03.000Z", stage: "x".repeat(33) },
+      { sentAt: "2026-10-31T06:00:03.000Z", stage: "heard", heardBy: "" },
+    ]) {
+      expect(AgentFieldRow.safeParse({ ...row, stop: bad }).success, JSON.stringify(bad)).toBe(
+        false,
+      );
+    }
+    // the desk row is a field row: it reads the same key the same way
+    expect(AgentDeskRow.safeParse({ ...row, stop: "sent" }).success).toBe(false);
   });
 });
 
@@ -552,5 +640,68 @@ describe("MV-3d — the chrome's facts ride this desktop's own rows of the model
       unknown
     >;
     expect(AgentModelDeskRow.parse(bare).local).toBeUndefined();
+  });
+});
+
+describe("item 100 — whose cut a caller reads, by its principal's kind (M16, SP-L4)", () => {
+  it("names every kind, and only this desktop's own callers read the window's whole row", () => {
+    // the typecheck holds the table to `Principal["kind"]`; this row holds what it says
+    expect(Object.keys(MONITOR_AUDIENCE)).toHaveLength(7);
+    const windows = Object.entries(MONITOR_AUDIENCE)
+      .filter(([, audience]) => audience === "window")
+      .map(([kind]) => kind);
+    expect(windows.sort()).toEqual(["local-token", "shell-main"]);
+    expect(MONITOR_AUDIENCE.tailnet).toBe("peer");
+    expect(MONITOR_AUDIENCE["peer-fieldd"]).toBe("peer");
+  });
+});
+
+// PG-1b (PG-L4.1) — the relay's reading: every board golden this repo pins is
+// readable by its key alone, field rows, desk rows, bare terminals and the
+// model board's rows alike, and the key reading copies every other fact
+// through untouched (DS-L2).
+describe("AgentBoardRowKey — the relay reads each row's key alone", () => {
+  type Board = { revision: number; rows: unknown[]; epoch?: string | undefined };
+  const boards = (): Board[] => {
+    const found: Board[] = [AgentFieldSnapshot.parse(golden("agent-field-snapshot.valid.json"))];
+    for (const name of ["agent-mesh-open.valid.json", "agent-model-mesh-open.valid.json"]) {
+      const open = golden(name) as { devices: Array<{ snapshot?: Board }> };
+      for (const device of open.devices)
+        if (device.snapshot !== undefined) found.push(device.snapshot);
+    }
+    return found;
+  };
+
+  it("reads every pinned board and every pinned delta, and keeps every fact past the key", () => {
+    for (const board of boards()) {
+      const keyed = AgentBoardKeySnapshot.parse(board);
+      expect(keyed).toEqual(board);
+    }
+    const deltas = [
+      golden("agent-field-delta.valid.json"),
+      ...(golden("agent-mesh-frames.valid.json") as Array<{ delta?: unknown }>).map((f) => f.delta),
+      ...(golden("agent-model-mesh-frames.valid.json") as Array<{ delta?: unknown }>).map(
+        (f) => f.delta,
+      ),
+    ].filter((delta) => delta !== undefined);
+    expect(deltas.length).toBeGreaterThan(3);
+    for (const delta of deltas) expect(AgentBoardKeyDelta.parse(delta)).toEqual(delta);
+  });
+
+  it("reads a bare terminal and a desk row the field row refuses or holds whole", () => {
+    const terminal = golden("agent-desk-terminal-row.valid.json");
+    expect(AgentFieldRow.safeParse(terminal).success).toBe(false);
+    expect(AgentBoardRowKey.parse(terminal)).toEqual(terminal);
+    const desk = golden("agent-desk-row.valid.json");
+    expect(AgentBoardRowKey.parse(desk)).toEqual(desk);
+  });
+
+  it("refuses what has no key: no run id, an empty one, or a stamp that is no integer", () => {
+    expect(AgentBoardRowKey.safeParse({ revision: 1 }).success).toBe(false);
+    expect(AgentBoardRowKey.safeParse({ runtimeRunId: "", revision: 1 }).success).toBe(false);
+    expect(AgentBoardRowKey.safeParse({ runtimeRunId: "run-a", revision: 1.5 }).success).toBe(
+      false,
+    );
+    expect(AgentBoardRowKey.safeParse({ runtimeRunId: "run-a" }).success).toBe(false);
   });
 });

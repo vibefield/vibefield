@@ -12,6 +12,7 @@ import {
   type SessionExitedEvent,
 } from "@vibecook/ghosttea-client";
 import {
+  type AgentSessionPlacement,
   CELL_SUPERVISION,
   type CellEndpointSet,
   ENV_PREFIXES,
@@ -276,6 +277,12 @@ export interface TerminalServiceOptions {
   /** TC-S2 test seam: the cell-birth wait budget. Production defaults to the
    * cell's own hello deadline (the genned CELL_SUPERVISION authority). */
   birthWaitMs?: number;
+  /** Item 121 test seam: the route snapshot as class PLACEMENT reads it (which
+   * cell a new session of a class lands on, and whether its class's cell is up
+   * yet). A test hides the agent cell from placement here to birth an agent on
+   * TC-D4's fallback while the floor still runs both cells. Production leaves
+   * it unset: placement reads the snapshot itself. */
+  classRoutes?: (routes: TerminalRouteSnapshot) => TerminalRouteSnapshot;
   /** WG-E6 test seam: how long one cell may take to connect and to list its
    * sessions for `floorCensus`. Production uses CENSUS_CELL_TIMEOUT_MS. */
   censusTimeoutMs?: number;
@@ -414,12 +421,17 @@ interface CellTarget {
    * reads them. Absent = the ticket carries no endpoints (honest: a renderer
    * shows `transport-not-landed`), never a made-up URL. */
   doors?: CellEndpointSet;
+  /** Item 121 — the row's workload class, when it names one (TC-S3): an agent
+   * birth on a classed cell other than the agent's says so in its record. */
+  workloadClass?: TerminalWorkloadClass;
 }
 
 /** What a route row adds to a cell target beyond its dial coordinates: the
- * grant key in the minter's shape (TP-S1) and the T1 doors (TP-S3a) — each
- * present only when the row carries it. */
-function rowExtrasOf(row: TerminalRouteCell): Pick<CellTarget, "grantKey" | "doors"> {
+ * grant key in the minter's shape (TP-S1), the T1 doors (TP-S3a) and the
+ * row's class (item 121) — each present only when the row carries it. */
+function rowExtrasOf(
+  row: TerminalRouteCell,
+): Pick<CellTarget, "grantKey" | "doors" | "workloadClass"> {
   return {
     ...(row.grantKey === undefined
       ? {}
@@ -431,6 +443,7 @@ function rowExtrasOf(row: TerminalRouteCell): Pick<CellTarget, "grantKey" | "doo
           },
         }),
     ...(row.doors === undefined ? {} : { doors: row.doors }),
+    ...(row.workloadClass === undefined ? {} : { workloadClass: row.workloadClass }),
   };
 }
 
@@ -559,7 +572,14 @@ export class TerminalService {
   /** AR-3 — the floor's `session-exited` news, fanned out from every cell
    * control connection fieldd holds (the agent host turns it into puppeteer's
    * `handleProcessExit`; a login pane's end verifies its persona). Only cells
-   * fieldd has dialed report here — the inventory diff is the backstop. */
+   * fieldd has dialed report here — the inventory is the backstop: a row that
+   * left it, or one it lists `exited`.
+   *
+   * CORRECTED 2026-10-29 (item 97): this said "the inventory diff is the
+   * backstop", a row that leaves. A kept pane (`keep-until-explicit-close`,
+   * MF-1g's agent panes) stays listed after its process ends, so an exit lost
+   * on its way here was never backstopped; the floor now says `exited` on the
+   * husk's row (ObservedTerminal.exited). */
   private readonly exitListeners = new Set<(event: SessionExitedEvent) => void>();
   /** Item 59 — the terminations fieldd itself asked for, by session, at the
    * moment each ask was issued (`terminate`, the ONE method every ask goes
@@ -571,7 +591,9 @@ export class TerminalService {
    * arrives, the ask fails, or TERMINATION_ASK_TTL_MS passes. */
   private readonly terminationAsks = new Map<string, number>();
   /** AR-3 — every applied inventory, for consumers that diff it (the managed-
-   * session backstop: a PTY that left the inventory has exited). */
+   * session backstop: a PTY that left the inventory, or that it lists
+   * `exited`, has exited). CORRECTED 2026-10-29 (item 97): this said only "a
+   * PTY that left the inventory"; a kept pane's husk never leaves it. */
   private readonly inventoryListeners = new Set<(terminals: readonly TerminalInfo[]) => void>();
   /** AR-7 — every birth this service made, at the moment the floor answered
    * it: the inventory lists a session one reconcile tick later, and whoever
@@ -1552,11 +1574,17 @@ export class TerminalService {
    * retained, and the husk is reaped at both ends — `agent.resume` terminates
    * it once the successor holds the pane (agent-runtime.ts), and closing or
    * killing the pane is `terminal.terminate` exactly as before. NF-D3's
-   * daemon-lifetime ceiling is untouched: nothing here outlives the floor. */
+   * daemon-lifetime ceiling is untouched: nothing here outlives the floor.
+   *
+   * Item 121 (James A, 2026-10-31) — a birth that TC-D4's fallback put on
+   * another class's cell answers `placement`, that cell as its route row names
+   * it, so the run's signed record can carry it: AR-4b's cell rule admits a
+   * re-attach off the agent cell on that proof alone. */
   async spawn(spec: AgentTerminalSpec): Promise<{
     sessionId: string;
     session: TerminalRuntimeSession;
     cellBootId?: string | undefined;
+    placement?: AgentSessionPlacement | undefined;
   }> {
     this.refuseWhileStopping();
     if (this.observation() !== undefined && this.terminals.length >= TERMINAL_SESSION_CAP) {
@@ -1572,7 +1600,7 @@ export class TerminalService {
     const cell = await this.awaitClassCell("agent");
     const client = await this.connectedClient(cell);
     const scrollbackBytes = classScrollbackBytes("agent");
-    return await this.birth(cell, client, spec.command, {
+    const born = await this.birth(cell, client, spec.command, {
       executable: spec.command,
       args: [...spec.args],
       cwd: spec.cwd,
@@ -1584,6 +1612,9 @@ export class TerminalService {
       ownerId: OWNER_ID,
       ...(scrollbackBytes === undefined ? {} : { scrollbackBytes }),
     });
+    return cell.workloadClass === undefined || cell.workloadClass === "agent"
+      ? born
+      : { ...born, placement: { cellBootId: cell.key, workloadClass: cell.workloadClass } };
   }
 
   /** AR-3 — puppeteer's `automateTerminal` over the floor: one semantic input
@@ -2441,7 +2472,7 @@ export class TerminalService {
 
   /** Is there a cell this class can land on right now? */
   private hasCellFor(workloadClass: TerminalWorkloadClass): boolean {
-    const routes = this.opts.link.terminalRoutes;
+    const routes = this.placementRoutes();
     if (routes !== undefined && terminalCreateTarget(routes, workloadClass) !== undefined)
       return true;
     // A snapshot with ROWS that names no cell for this class is a class still
@@ -2464,7 +2495,7 @@ export class TerminalService {
   /** TC-S3 — the cell a NEW session of this class belongs in: the create-target
    * discipline against the current snapshot. */
   private classCell(workloadClass: TerminalWorkloadClass): CellTarget {
-    const routes = this.opts.link.terminalRoutes;
+    const routes = this.placementRoutes();
     if (routes !== undefined) {
       const target = terminalCreateTarget(routes, workloadClass);
       if (target !== undefined)
@@ -2473,12 +2504,14 @@ export class TerminalService {
       // policy selector, never a permanent failure domain (TC-D4), so the
       // session lands on the floor's interactive target rather than being
       // refused by a floor that can perfectly well host it — the scrollback cap
-      // the class selects rides the create either way. Debug, not warn: the
+      // the class selects rides the create either way. Info, not warn: the
       // budget above has already been spent waiting for the class's own cell,
-      // and the fallback is a placement, not a fault.
+      // and the fallback is a placement, not a fault — but since item 121 an
+      // agent born here carries this cell into its record, and the log says
+      // when that happened.
       const fallback = terminalCreateTarget(routes, "interactive");
       if (fallback !== undefined) {
-        this.logger.debug(
+        this.logger.info(
           "fieldd.terminal.class_cell_absent",
           "No cell hosts this workload class; the session lands on the interactive cell",
           { workloadClass, revision: routes.revision },
@@ -2494,6 +2527,16 @@ export class TerminalService {
     // the legacy mirror is the only reading there is, and `endpoints()` refuses
     // honestly when it is absent too.
     return { key: LEGACY_CELL_KEY, endpoints: this.endpoints() };
+  }
+
+  /** The snapshot class placement reads: the link's, through the item 121
+   * test seam when one is set. Per-session ops never read it — a session's
+   * own cell is its tag's, whatever placement would choose now. */
+  private placementRoutes(): TerminalRouteSnapshot | undefined {
+    const routes = this.opts.link.terminalRoutes;
+    return routes === undefined || this.opts.classRoutes === undefined
+      ? routes
+      : this.opts.classRoutes(routes);
   }
 
   /** TC-S3 — the cell a KNOWN session lives on, from the observed inventory's

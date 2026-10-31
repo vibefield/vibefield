@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { AgentOffers } from "./agent-catalog";
 import { AgentPersona, AgentProfileId, AgentProfileSetId, AgentProviderId } from "./agent-index";
+import { TerminalWorkloadClass } from "./envelope";
 import { PlaceRef } from "./project-places";
 import { TerminalCreateOpenResult } from "./terminal-pipeline";
 
@@ -154,6 +155,53 @@ export type AgentSessionWorkspace = z.infer<typeof AgentSessionWorkspace>;
 export const AGENT_SPAWNED_BY = ["app", "user-shell"] as const;
 export type AgentSpawnedBy = (typeof AGENT_SPAWNED_BY)[number];
 
+/** CO (the compose plane, version 2; `draft/compose-plane/v2/`, ruled by James 2026-10-29) — a spark's id: fieldd's,
+ * minted when it hatches and never reused. Never its name, which can change while its face and folder stay. Defined
+ * here rather than in compose.ts because a run's record names it (`spark`, `origin.spark`), and compose.ts reads this
+ * module's model selection. */
+export const SparkId = z.string().regex(/^sp-[0-9a-z]{6,32}$/);
+export type SparkId = z.infer<typeof SparkId>;
+
+/** CP-D15 — who started a run fieldd launched: `you` (a door you pressed: the spawn button, a resume, a spark you
+ * hatched or opened), `spark` (its `agent_spawn`; `spark` names it), `flow` (a run's step: `run` and its `call`).
+ * OPEN on the wire, like `spawnedBy`: a word this build never heard of must not refuse a row. Absent reads `you`. */
+export const AGENT_ORIGIN_BY = ["you", "spark", "flow"] as const;
+export type AgentOriginBy = (typeof AGENT_ORIGIN_BY)[number];
+
+export const AgentSessionOrigin = z
+  .object({
+    by: z.string().min(1).max(32),
+    spark: SparkId.optional(),
+    /** a flow run's id (CP-4) */
+    run: z.string().min(1).max(64).optional(),
+    /** the run's call that started it, counted from 1 in the run's journal */
+    call: z.number().int().positive().optional(),
+  })
+  .passthrough();
+export type AgentSessionOrigin = z.infer<typeof AgentSessionOrigin>;
+
+/** ST-D5 (2026-10-31; James's `ds-marks` 05:36:54Z and `ds-marks-corrections` 05:53:50Z) — a person's durable Stop,
+ * as THIS fieldd holds it (ST-D8: a Stop is not carried across a fieldd restart). `sentAt` is when the run's own
+ * stop was first delivered (`agent.interrupt`, accepted). `stage` says how far it went, in OPEN words (a reader takes
+ * one it does not know as still stopping):
+ *  - `sent`: the run's own stop was delivered;
+ *  - `resent`: not heard within `AGENT_STOP.HEARD_WITHIN_MS`, so the same stop was delivered once more;
+ *  - `terminating`: still not heard, and the run's status can be read (ST-D3), so fieldd asked the floor to end it;
+ *  - `heard`: fieldd heard the run stop, and `heardBy` says how (`exit`: the PTY exited; `status`: the status left
+ *    `working`).
+ * `unheardAt` marks a Stop fieldd will take no further: a `resent` one on a run whose status cannot be read, once its
+ * bound has passed again, or a `terminating` one whose ladder could not be placed. The person ends the run (ST-D3's
+ * "Still running · End run"). */
+export const AgentStopState = z
+  .object({
+    sentAt: z.string(),
+    stage: z.string().min(1).max(32),
+    heardBy: z.string().min(1).max(32).optional(),
+    unheardAt: z.string().optional(),
+  })
+  .passthrough();
+export type AgentStopState = z.infer<typeof AgentStopState>;
+
 /** SessionSummary v2 — the fold's row (design-01 §6.2 as amended by AR-D4).
  * `sessionId` is the provider-native session id, THE spine every repo joins
  * on (puppeteer `nativeSession.id`, rosetta `native_session_id`); before an
@@ -225,6 +273,19 @@ export const AgentSessionSummary = z
      * none. Absent: the stop presses no key (the agent's own control stops the
      * turn), or a daemon from before Q08. */
     stopKey: z.string().min(1).max(32).optional(),
+    /** CP-D15 — who started the run (`AgentSessionOrigin`; absent reads `you`), as its record says. Godview's rim
+     * and History's "Lyra's" are joins over it (EW-D1). */
+    origin: AgentSessionOrigin.optional(),
+    /** CO — the run is this spark's own session, the one it thinks in. */
+    spark: SparkId.optional(),
+    /** Item 124 (2026-10-31) — the door is OFF for this process: its executable refused a field of its briefing
+     * (puppeteer's `UNSUPPORTED_LAUNCH_FIELD`; a Claude older than `--mcp-config`), so fieldd started it once more
+     * without one. A plain run holds no tool plane, and a spark thinks without its tools. A fact of this process,
+     * never of the signed record: the next birth is briefed afresh. OPEN, like `spawnedBy`: `off` is the one word
+     * today, and absent is the door as briefed (or none asked). */
+    door: z.string().min(1).max(32).optional(),
+    /** ST — the person's Stop while this fieldd holds one for the run (`AgentStopState`); absent otherwise. */
+    stop: AgentStopState.optional(),
   })
   .passthrough();
 export type AgentSessionSummary = z.infer<typeof AgentSessionSummary>;
@@ -273,6 +334,21 @@ export const AgentSessionAttach = z
   })
   .passthrough();
 export type AgentSessionAttach = z.infer<typeof AgentSessionAttach>;
+
+/** Item 121 (James A, 2026-10-31) — the cell a run's PTY was born on, when it
+ * was not the agent cell: TC-D4's fallback lands an agent birth on the
+ * interactive cell while no agent cell is up. fieldd stamps it from the route
+ * row it chose, under the record's HMAC, so AR-4b's cell rule can admit a
+ * re-attach on exactly that cell and terminal after a fieldd restart, and
+ * nothing else. Passthrough, like `attach`: a key a newer fieldd adds reaches
+ * an older reader whole. */
+export const AgentSessionPlacement = z
+  .object({
+    cellBootId: z.string().min(1),
+    workloadClass: TerminalWorkloadClass,
+  })
+  .passthrough();
+export type AgentSessionPlacement = z.infer<typeof AgentSessionPlacement>;
 
 /** One managed session's record: puppeteer's OPAQUE continuation (persisted,
  * never inspected — its `state` is adapter-versioned and credential-free by
@@ -323,6 +399,10 @@ export const AgentSessionRecord = z
      * a run whose adapter reported none, and on every record before the
      * re-attach study's Step 1: such a record verifies as it did. */
     attach: AgentSessionAttach.optional(),
+    /** Item 121 — the non-agent cell the PTY was born on
+     * (`AgentSessionPlacement`). Absent on a birth on the agent cell, and on
+     * every record before item 121: those verify and re-attach as they did. */
+    placement: AgentSessionPlacement.optional(),
     /** AR-4 — what the last fieldd boot did with a live terminal: attached at
      * the next epoch, failed (the reason), unsupported by the adapter, or
      * resumed into a new run — `replacedBy` names the successor run (AR-4b;
@@ -359,6 +439,12 @@ export const AgentSessionRecord = z
         exitCode: z.number().int().nullable(),
         signal: z.string().nullable(),
         reason: z.string(),
+        /** ST-D6 — the exit followed a person's Stop: when it was sent and how it was heard. `reason` stays the
+         * floor's own word for the exit beside it. */
+        stop: z
+          .object({ sentAt: z.string(), heardBy: z.string().min(1).max(32) })
+          .passthrough()
+          .optional(),
       })
       .passthrough()
       .optional(),
@@ -382,6 +468,13 @@ export const AgentSessionRecord = z
      * verifies — the same under an older fieldd, whose passthrough keeps the
      * key it does not know. */
     modelSelection: AgentModelSelection.optional(),
+    /** CP-D15 — who started the run (`AgentSessionOrigin`; absent reads `you`: every record written before CO). The
+     * audit's spawn line says the same. Optional, like AR-7's fields, so a record without it canonicalises — and so
+     * verifies — exactly as before. */
+    origin: AgentSessionOrigin.optional(),
+    /** CO — the run is this spark's own session, the one it thinks in. A spark that thinks under another profile
+     * starts a fresh session (NS-D6), so each of its past sessions carries it too. */
+    spark: SparkId.optional(),
   })
   .passthrough();
 export type AgentSessionRecord = z.infer<typeof AgentSessionRecord>;
@@ -399,6 +492,17 @@ export const AgentProviderSummary = z
     label: z.string().min(1),
     available: z.boolean(),
     resumable: z.boolean(),
+    /** CP-1d — the runtime's optional per-run briefing declaration. Missing fields claim no support; an unknown
+     * process topology must not be treated as terminal ancestry by a spark picker. Older daemons omit the field. */
+    briefing: z
+      .object({
+        mcpServers: z.boolean().optional(),
+        allowTools: z.boolean().optional(),
+        instructions: z.boolean().optional(),
+        mcpServerProcess: z.string().min(1).max(32).optional(),
+      })
+      .passthrough()
+      .optional(),
     personas: z.array(AgentPersona),
     // AC-1/AC-3 (thinking-ar-agent-catalog.md) — the row's decision and its
     // claims, so a picker badges `preview`/`deprecated` and hides verbs the

@@ -1,0 +1,9 @@
+{
+  "connId": "door-4",
+  "laneId": 4294967304,
+  "state": "open",
+  "caller": {
+    "pid": 51907,
+    "startedAtMs": 1792431671093
+  }
+}

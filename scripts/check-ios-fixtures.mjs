@@ -105,6 +105,7 @@ const launchFixtures = [
   "agent-spawn-params.place.json",
   "agents-profile-sets.valid.json",
   "agent-field-snapshot.native-session.json",
+  "agent-field-snapshot.stop.json",
 ];
 // History's ledger reads them: the fixture door serves these, its tests read them.
 const historyFixtures = [
@@ -154,6 +155,12 @@ const requiredMirrors = [
   ["launch", launchFixtures, ["Tests/FieldProductTests"]],
   ["launch", sheetFixtures, ["Tests/FieldWorkspaceTests"]],
   ["launch", sheetFixtures.slice(0, 2), ["Sources/FieldWorkspace"]],
+  // TS-7b — the phone code's vector: the Swift parser reads the bytes the TypeScript one does
+  ["phone-code", ["phone-code.vector.json"], ["Tests/FieldMeshTests"]],
+  // IOS-8f — the face deal's vector: the phone deals from the desktop's own deck and hash
+  ["face", ["face-deal.vector.json"], ["Tests/FieldDesignTests"]],
+  // IOS-8f — `user.me`'s answers, read by the kit's own `UserMeResult`
+  ["user-me", ["user-me.valid.json", "user-me.dealt.json"], ["Tests/FieldProductTests"]],
 ];
 for (const [set, fixtures, folders] of requiredMirrors) {
   for (const folder of folders) {
@@ -228,6 +235,128 @@ const OS_MARKS_IOS = join(
       );
     }
   }
+}
+
+// TS-7 — Tailscale's logomark and its ink on the phone's sign-in (DESIGN.md
+// §13, TS-D4: kept exact, in its own ink). The phone draws the desktop's
+// `tailscale-mark.tsx` from the same constants, so each constant is read from
+// both files and compared; and the approval page's admin console is
+// truffle-core's own literal, which field-native's tests pin and the Swift
+// node does not expose.
+{
+  const MARK_TSX = "packages/field-app/src/account/tailscale-mark.tsx";
+  const MARK_SWIFT = "apps/ios/VibeFieldKit/Sources/FieldDesign/TailscaleMark.swift";
+  const TOKENS = "packages/design-kit/src/tokens.css";
+  const PALETTE_SWIFT = "apps/ios/VibeFieldKit/Sources/FieldDesign/ChromePalette.swift";
+  const ADMIN_ORIGIN = "packages/field-native/tests/mesh_unit.rs";
+  const ADMIN_SWIFT = "apps/ios/VibeFieldKit/Sources/FieldMesh/FieldTruffleRuntime.swift";
+  const read = (file) => {
+    try {
+      return readFileSync(join(root, file), "utf8");
+    } catch {
+      return "";
+    }
+  };
+  const tsx = read(MARK_TSX);
+  const swift = read(MARK_SWIFT);
+  const tokens = read(TOKENS);
+  const palette = read(PALETTE_SWIFT);
+  const field = (text, pattern) => pattern.exec(text)?.[1]?.trim().toLowerCase() ?? null;
+  const compare = (label, origin, copy, originFile, copyFile) => {
+    checked += 1;
+    if (origin === null || copy === null || origin !== copy) {
+      problems.push(
+        `${copyFile}'s ${label} is ${copy ?? "unreadable"} but ${originFile}'s is ${origin ?? "unreadable"}\n` +
+          "  fix: copy the desktop's value exactly (or move this script's pattern with the declaration)",
+      );
+    }
+  };
+  for (const [label, origin, copy] of [
+    ["box", /viewBox="0 0 (\d+) \d+"/, /^ {2}static let box: CGFloat = (\d+)$/m],
+    [
+      "dot centres",
+      /^const AT = \[([^\]]+)\] as const;$/m,
+      /^ {2}static let at: \[CGFloat\] = \[([^\]]+)\]$/m,
+    ],
+    ["dot radius", /\br=\{(\d+)\}/, /^ {2}static let radius: CGFloat = (\d+)$/m],
+    [
+      "solid dots",
+      /^const SOLID = new Set\(\[([^\]]+)\]\);$/m,
+      /^ {2}static let solid: Set<String> = \[([^\]]+)\]$/m,
+    ],
+    [
+      "faint opacity",
+      /fillOpacity: ([0-9.]+)/,
+      /^ {2}static let faintOpacity: Double = ([0-9.]+)$/m,
+    ],
+    [
+      "floor",
+      /^export const TAILSCALE_MARK_MIN = (\d+);$/m,
+      /^ {2}public static let minimum: CGFloat = (\d+)$/m,
+    ],
+  ]) {
+    compare(
+      `Tailscale mark ${label}`,
+      field(tsx, origin),
+      field(swift, copy),
+      MARK_TSX,
+      MARK_SWIFT,
+    );
+  }
+  const inkCopy =
+    /public static let tailscaleInk = dynamic\(light: 0x([0-9A-Fa-f]{6}), dark: 0x([0-9A-Fa-f]{6})\)/.exec(
+      palette,
+    );
+  compare(
+    "Tailscale ink (light)",
+    field(tokens, /--vf-tailscale-ink: #([0-9a-fA-F]{6});/),
+    inkCopy?.[1]?.toLowerCase() ?? null,
+    TOKENS,
+    PALETTE_SWIFT,
+  );
+  compare(
+    "Tailscale ink (dark)",
+    field(
+      tokens,
+      /--vf-tailscale-ink: #[0-9a-fA-F]{6};[\s\S]*?--vf-tailscale-ink: #([0-9a-fA-F]{6});/,
+    ),
+    inkCopy?.[2]?.toLowerCase() ?? null,
+    TOKENS,
+    PALETTE_SWIFT,
+  );
+  // TS-D22 — the Peek's scrim on the phone: `ChromePalette.searchScrim` is `--vf-search-scrim`'s
+  // two alphas, black on both sides.
+  const scrimCopy =
+    /public static let searchScrim = dynamic\(\s*light: 0x000000, lightAlpha: ([0-9.]+), dark: 0x000000, darkAlpha: ([0-9.]+)\)/.exec(
+      palette,
+    );
+  const alpha = (percent) => (percent === null ? null : (Number(percent) / 100).toFixed(2));
+  compare(
+    "search scrim (light)",
+    alpha(field(tokens, /--vf-search-scrim: rgb\(0 0 0 \/ (\d+)%\);/)),
+    scrimCopy?.[1] ?? null,
+    TOKENS,
+    PALETTE_SWIFT,
+  );
+  compare(
+    "search scrim (dark)",
+    alpha(
+      field(
+        tokens,
+        /--vf-search-scrim: rgb\(0 0 0 \/ \d+%\);[\s\S]*?--vf-search-scrim: rgb\(0 0 0 \/ (\d+)%\);/,
+      ),
+    ),
+    scrimCopy?.[2] ?? null,
+    TOKENS,
+    PALETTE_SWIFT,
+  );
+  compare(
+    "machines admin URL",
+    field(read(ADMIN_ORIGIN), /facts\.admin_url\.as_deref\(\),\s*Some\("([^"]+)"\)/),
+    field(read(ADMIN_SWIFT), /^ {2}static let tailscaleMachinesAdminURL = "([^"]+)"$/m),
+    ADMIN_ORIGIN,
+    ADMIN_SWIFT,
+  );
 }
 
 // The same argument one level up: the REGISTRY VALUES the phone speaks.
@@ -368,6 +497,33 @@ const pins = [
       file: "apps/ios/VibeFieldKit/Sources/FieldMesh/FieldMeshContract.swift",
       pattern: /^ {2}public static let appID = "([^"]*)"/m,
       label: "FieldMeshContract.appID",
+    },
+  },
+  // TS-7b — the phone code's prefix: the Mac writes it, the phone reads it and registers the scheme.
+  ...["SCHEME", "HOST"].map((part) => ({
+    name: `phoneCode${part}`,
+    origin: {
+      file: "packages/contracts/src/phone-code.ts",
+      pattern: new RegExp(`^export const PHONE_CODE_${part} = "([^"]*)"`, "m"),
+      label: `PHONE_CODE_${part}`,
+    },
+    copy: {
+      file: "apps/ios/VibeFieldKit/Sources/FieldMesh/PhoneCode.swift",
+      pattern: new RegExp(`^ {2}public static let ${part.toLowerCase()} = "([^"]*)"`, "m"),
+      label: `PhoneCode.${part.toLowerCase()}`,
+    },
+  })),
+  {
+    name: "phoneCodeAppScheme",
+    origin: {
+      file: "packages/contracts/src/phone-code.ts",
+      pattern: /^export const PHONE_CODE_SCHEME = "([^"]*)"/m,
+      label: "PHONE_CODE_SCHEME",
+    },
+    copy: {
+      file: "apps/ios/App/Info.plist",
+      pattern: /<key>CFBundleURLSchemes<\/key>\s*<array>\s*<string>([^<]*)<\/string>/,
+      label: "the app's CFBundleURLSchemes",
     },
   },
   // The handshake the phone offers and the liveness it keeps.
@@ -608,6 +764,6 @@ if (problems.length > 0 || pinProblems.length > 0) {
 const values = pins.length === 1 ? "contract value" : "contract values";
 console.log(`ios fixtures: ${checked} copies identical to packages/contracts/fixtures`);
 console.log(
-  `ios pins: ${pins.length} ${values} identical to packages/contracts/src (registries.ts and the terminal word lists)`,
+  `ios pins: ${pins.length} ${values} identical to packages/contracts/src (registries.ts, the terminal word lists and the phone code)`,
 );
 for (const notice of notices) console.log(`ios pins: NOTICE — ${notice}`);

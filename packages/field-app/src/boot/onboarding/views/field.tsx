@@ -60,15 +60,18 @@ export function OnboardingFieldPaneView({
       <div className="vf-wizard-identity">
         {/* Where a switch's face lands when it arrives in Setup (DESIGN.md §8). */}
         <div className="vf-wizard-face" data-vf-switch-home={seed}>
-          {/* The sticker's one big moment — or, for a coin, its engraving. */}
-          <UserFaceView
-            emoji={face.emoji}
-            frame={face.frame}
-            size={96}
-            seed={seed}
-            label={faceLabel(name.trim().length > 0 ? name.trim() : "You", face)}
-            legend={face.frame === "coin" ? name.trim() : undefined}
-          />
+          {/* The sticker's one big moment — or, for a coin, its engraving — in a
+              slot of its own, so the switch under it never moves (FG-4). */}
+          <div className="vf-wizard-face-slot">
+            <UserFaceView
+              emoji={face.emoji}
+              frame={face.frame}
+              size={96}
+              seed={seed}
+              label={faceLabel(name.trim().length > 0 ? name.trim() : "You", face)}
+              legend={face.frame === "coin" ? name.trim() : undefined}
+            />
+          </div>
           <FaceFrameSwitch
             value={face}
             onChange={onFaceChange}

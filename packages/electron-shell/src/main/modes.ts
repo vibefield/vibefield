@@ -8,6 +8,7 @@ export type ShellMode =
   | "smoke-canvas"
   | "smoke-plugin-restart"
   | "smoke-godview"
+  | "smoke-first-run"
   | "live-surfaces-lab"
   | "terminal-perf-lab"
   | "godview-perf-lab"
@@ -23,6 +24,7 @@ export function parseMode(argv: readonly string[]): ShellMode {
   if (argv.includes("--spike-loro")) return "spike-loro";
   if (argv.includes("--smoke-plugin-restart")) return "smoke-plugin-restart";
   if (argv.includes("--smoke-godview")) return "smoke-godview";
+  if (argv.includes("--smoke-first-run")) return "smoke-first-run";
   if (argv.includes("--smoke")) return "smoke";
   if (argv.includes("--smoke-canvas")) return "smoke-canvas";
   if (argv.includes("--dev")) return "dev";
@@ -49,12 +51,39 @@ export function isSmokeLike(mode: ShellMode): boolean {
     mode === "smoke-canvas" ||
     mode === "smoke-plugin-restart" ||
     mode === "smoke-godview" ||
+    mode === "smoke-first-run" ||
     mode === "live-surfaces-lab" ||
     mode === "terminal-perf-lab" ||
     mode === "godview-perf-lab" ||
     mode === "terminal-door-probe" ||
     mode === "spike-loro"
   );
+}
+
+/** UA-3w as amended (2026-10-31, track FG) — the one test harness that answers the Setup Assistant:
+ * `smoke:first-run`, the row built to witness it, which walks it by the page's own controls. Every other
+ * harness has no hands to answer it with (`mintsOnboarded`). */
+export function answersSetup(mode: ShellMode): boolean {
+  return mode === "smoke-first-run";
+}
+
+/** UA-3w — whether a FRESH root's first user is minted already onboarded. A test harness's is, so its boot never
+ * holds at the Setup Assistant (a held boot would read as a hung smoke) — but for the one mode that answers it
+ * (`answersSetup`). A person's (production, dev) is not: they meet it. */
+export function mintsOnboarded(mode: ShellMode): boolean {
+  return isSmokeLike(mode) && !answersSetup(mode);
+}
+
+/** PT-S3 (P2) — a smoke's simctl developer directory, `VF_SMOKE_SIMCTL_DEVELOPER_DIR`: main's simctl probe then vets it
+ * ALONE, asking xcode-select nothing (`simctl.ts`), so a phone row can witness `no-simulator` on a Mac that has a
+ * Simulator — an empty directory holds no simctl. Read beside the mode, as `rendererPolicyMode` reads its lab's flag, and
+ * only in a smoke-like mode: production and dev never read it, whatever the environment says. Set, it is the smoke's
+ * word even when empty (which vets nothing). */
+export function smokeSimctlDeveloperDir(
+  mode: ShellMode,
+  env: Readonly<Record<string, string | undefined>>,
+): string | undefined {
+  return isSmokeLike(mode) ? env["VF_SMOKE_SIMCTL_DEVELOPER_DIR"] : undefined;
 }
 
 /** Whether the mode keeps hardware acceleration. Main disables it for every other
@@ -64,15 +93,19 @@ export function isSmokeLike(mode: ShellMode): boolean {
  * plugin-restart smokes draw the DESK — WebGPU alone, no Canvas2D fallback (DK-D32) —
  * so a software run would prove only that the registry loaded (r6b risk 1); each keeps
  * the GPU unless run with `--disable-gpu`, the smokes' GPU-less mode, where the desk's
- * unavailable card is what it asserts instead (DK-3 canvas, DK-5 plugin-restart). */
+ * unavailable card is what it asserts instead (DK-3 canvas, DK-5 plugin-restart). So does the
+ * first-run smoke (track FG): the Setup Assistant's glass is the live field's own pass. */
 export function keepsGpu(mode: ShellMode, argv: readonly string[]): boolean {
   if (!isSmokeLike(mode)) return true;
   if (mode === "live-surfaces-lab" || mode === "terminal-perf-lab" || mode === "godview-perf-lab") {
     return true;
   }
-  return (
-    (mode === "smoke-canvas" || mode === "smoke-plugin-restart") && !argv.includes("--disable-gpu")
-  );
+  return drawsTheField(mode) && !argv.includes("--disable-gpu");
+}
+
+/** The smokes that draw the field — the desk's two and the Setup Assistant's glass on it. */
+function drawsTheField(mode: ShellMode): boolean {
+  return mode === "smoke-canvas" || mode === "smoke-plugin-restart" || mode === "smoke-first-run";
 }
 
 /**
@@ -82,7 +115,8 @@ export function keepsGpu(mode: ShellMode, argv: readonly string[]): boolean {
  * so do the GPU-on DESK SMOKES (smoke-canvas, smoke-plugin-restart — its soak): their idle, stillness and frame-rate
  * rows count frames and submits, and on a shared Mac a window something else came to sit on had its desk loop wait
  * for a frame that never came (awake, not a step in a second — DK-9's soak, cycle 1). Production backgrounds a
- * covered window — a battery feature — and so does every other mode.
+ * covered window — a battery feature — and so does every other mode. The first-run smoke (track FG) times the Setup
+ * Assistant's holds by their own clocks and takes its stills of the field's frames, so it keeps them too.
  * The gate does TWO things: main/index.ts appends Chromium's two switches (DK-9), and since DK-11 the main window's own
  * `backgroundThrottling` is off (window-policy.ts `mainWindowPreferences`) — the switches alone still let a new window's
  * page blink `hidden` for about a second, once, early in its life (measured on Electron 43.1.1), the blink a frame-counting
@@ -90,16 +124,15 @@ export function keepsGpu(mode: ShellMode, argv: readonly string[]): boolean {
  */
 export function keepsFramesWhenCovered(mode: ShellMode, argv: readonly string[]): boolean {
   if (mode === "terminal-perf-lab") return true;
-  return (
-    (mode === "smoke-canvas" || mode === "smoke-plugin-restart") && !argv.includes("--disable-gpu")
-  );
+  return drawsTheField(mode) && !argv.includes("--disable-gpu");
 }
 
 /** AL-3 (ESR §7.3 as amended 2026-10-27; `quit-gate.ts`) — the modes in which a
  * PERSON's quit (⌘Q, Dock → Quit, the tray's or the menu's Quit) passes the quit
  * gate and stops every pair. Production and dev alike (AL-D7: dev follows
- * production; its signals are not a person's quit, `dev-signals.ts`). The smokes
- * and labs keep their own policies: no hands answer a box there. */
+ * production; a signal is not a person's quit in either, `signal-quit.ts`,
+ * AU-5a). The smokes and labs keep their own policies: no hands answer a box
+ * there. */
 export function hasQuitGate(mode: ShellMode): boolean {
   return mode === "production" || mode === "dev";
 }
@@ -132,6 +165,7 @@ export function shutdownPolicy(mode: ShellMode): "stop-owned" | "leave-running" 
     mode === "smoke-canvas" ||
     mode === "smoke-plugin-restart" ||
     mode === "smoke-godview" ||
+    mode === "smoke-first-run" ||
     mode === "terminal-perf-lab" ||
     // MV-0: the Godview perf lab is the perf lab's shape — its own pair, stop-owned
     mode === "godview-perf-lab" ||

@@ -37,6 +37,7 @@ import {
   BrowserWindow,
   Menu,
   MessageChannelMain,
+  nativeImage,
   nativeTheme,
   powerMonitor,
   powerSaveBlocker,
@@ -47,6 +48,7 @@ import {
 import { CLOSE_WINDOW_ITEM_ID, ZOOM_ITEM_IDS } from "../main/app-menu-model";
 import { APP_ORIGIN } from "../main/app-protocol";
 import type { WindowRendererBoundary } from "../main/bootstrap";
+import type { LiveSurfaceSimulatorCensus } from "../main/live-surfaces/authority";
 import { BrowserControlTargetRegistry } from "../main/live-surfaces/browser-control-target";
 import { ElectronBrowserSurfaceNative } from "../main/live-surfaces/browser-electron-native";
 import { BrowserLiveSurfaceRuntime } from "../main/live-surfaces/browser-producer";
@@ -149,29 +151,40 @@ import { browserPaneRows, PANE_FLAG } from "./smoke-browser-pane";
 import { BUNDLED_FLAG, bundledFixture, judgeBundled } from "./smoke-bundled";
 import { coverRows } from "./smoke-covers";
 import { removeSmokeRoot, SMOKE_RUN_ENV, stopRunDaemons } from "./smoke-daemons";
+import { deskCopyRows } from "./smoke-desk-copy";
 import { deskRigRows } from "./smoke-desk-rig";
 import { DEVICE_FLAG, type DeviceRowsDriver, devicePaneRows } from "./smoke-device-pane";
 import { FIRST_FLAG, type FirstLoadDriver, firstLoadRows } from "./smoke-first-load";
+import {
+  FIRST_RUN_WALKS,
+  firstRunRows,
+  parseWalk,
+  readGpuBusy,
+  shotDirRefusal,
+  WALK_ENV,
+} from "./smoke-first-run";
 import { FRAMES_FLAG, type FramesDriver, framesRows as framesPaneRows } from "./smoke-frames";
 import { HONEST_FLAG, type HonestRowsDriver, honestPaneRows } from "./smoke-honest-pane";
 import { type LastStillDriver, lastStillRows, STILL_FLAG } from "./smoke-last-still";
-import {
-  gateOpen,
-  type LineSendEvidence,
-  latestGate,
-  lineSendEvidenceLine,
-  markerFile,
-  newLineSendEvidence,
-  shellMarkerFailure,
-} from "./smoke-line-send";
 import { LIVE_FLAG, type LiveRowsDriver, livePaneRows } from "./smoke-live-pane";
 import { faultRows, peersRows } from "./smoke-peers";
 import { pegboardRows } from "./smoke-pegboard";
+import { PHONE_FLAG, type PhoneRowsDriver, phoneRows as phonePaneRows } from "./smoke-phone";
 import { profileSeedRows, profileSeedUrl } from "./smoke-profile-seed";
 import { putDownRow } from "./smoke-put-down";
 import { restRows } from "./smoke-rest";
 import { selectionBarRows } from "./smoke-selection-bar";
-import { sendToRows } from "./smoke-send-to";
+import {
+  type CardPlayEvidence,
+  type CardPlaySeen,
+  cardPlayEvidenceLine,
+  gateOpen,
+  judgeCardPlay,
+  latestGate,
+  markerFile,
+  newCardPlayEvidence,
+  shellMarkerFailure,
+} from "./smoke-shell-marker";
 import {
   countersOf,
   judgePresenceRest,
@@ -218,7 +231,8 @@ export { runTerminalPerfLab, SCENARIOS as TERMINAL_PERF_SCENARIOS } from "./term
 // AR-7 — main stages the godview smoke's typed agent BEFORE the pair boots
 // (fieldd composes an agent's executable once, at boot), so the stager is a
 // door of this bundle's like the runners are; its code lives in its own file.
-export { stageTypedAgent } from "./typed-agent";
+// FG — and the first-run smoke's person, the same way.
+export { stageFirstRun, stageTypedAgent } from "./typed-agent";
 
 // Smoke/spike runners (ESR §5.2.6 / ESR-12): a SEPARATE build artifact
 // (dist/testing/smoke.cjs) that the production main bundle never contains —
@@ -475,6 +489,21 @@ async function waitForFrameDrawn(win: BrowserWindow, what: string): Promise<void
   if ("problem" in drawn) throw new Error(drawn.problem);
   const from = (await deskCounters(win)).frames;
   await waitForRendererFact(win, what, 10_000, `globalThis.__vfDesk.perf().frames > ${from}`);
+}
+
+/** FG-2 — THE BOOT'S REVEAL, before a row's first press or still: DESK_READY is said beneath the boot's splash, and a
+ * returning boot (every smoke's: its user is minted onboarded) holds the splash until it hands over — its floor (700ms
+ * from its first frame), then, where the field is live, the tear (240ms of words, the field opening ~1.9 s, bounded at
+ * 2.9 s). Until then the desk takes no press. The word is the reveal law's own mark (field-app `boot/machine.ts`); before
+ * FG-2 it followed the stable desk at once, and the rows leaned on that. */
+async function bootRevealed(win: BrowserWindow, what: string): Promise<void> {
+  await waitForRendererFact(
+    win,
+    what,
+    30_000,
+    `performance.getEntriesByName("vf:renderer:interactive", "mark").length > 0`,
+    `performance.getEntriesByType("mark").map((m) => m.name)`,
+  );
 }
 
 /** DK-11 — a frame-counting row's window, judged once its last sample is taken: null, or the named cause. */
@@ -1034,6 +1063,8 @@ export interface LiveCensus {
   readonly childSessions: number;
   /** PT-6a (M14 — R3): and each page's by its SURFACE (FRAME-SESSIONS reads its own pane's: another page's never moves it) */
   readonly childSessionsBy?: Readonly<Record<string, number>>;
+  /** PT-S3 (D1): main's bound simulators, counted — the phone rows' sessions, inners made, helper and vetted directory */
+  readonly simulator?: LiveSurfaceSimulatorCensus;
 }
 
 export async function runSmokeCanvas(opts: {
@@ -1049,6 +1080,15 @@ export async function runSmokeCanvas(opts: {
    * PT-5c2 (F4) TAPS-PENDING's guard its count of the device switches main accepted (PT-5d, G7: named here, so a census
    * built to this type keeps it). */
   liveSurfaces?: () => LiveCensus | null;
+  /** PT-S3 (D3) — what main's OS opener was handed, as the godview smoke is handed it (GT-8b: a harness records instead
+   * of opening — main's `harnessShellOpens`): a phone's Open Settings is read here, and nothing opens (smoke-opens.ts). */
+  shellOpens?: { readonly opened: readonly string[]; readonly revealed: readonly string[] };
+  /** HN-3 (R-T 4) — the words main's copy door KEPT in place of the system clipboard, a marked run's (main/index.ts);
+   * absent in an unmarked run, whose copy door writes the real one. */
+  copies?: readonly string[];
+  /** HN-5 (R-T 4) — the PNG sizes main's picture door KEPT in place of the system clipboard, a marked run's; absent in
+   * an unmarked run. */
+  pictures?: readonly number[];
 }): Promise<void> {
   const gpu = !process.argv.includes("--disable-gpu");
   // DK-16: the GPU kept and the page given no `navigator.gpu` (`--smoke-no-webgpu`, as a remote desktop has none —
@@ -1117,7 +1157,11 @@ export async function runSmokeCanvas(opts: {
       deskSaid.stop();
       if (!gpu)
         problems.push("the try board needs the GPU: a kind draws only on the host's device");
-      else problems.push(...(await tryBoardRows(win, types, shotDir, (line) => console.log(line))));
+      else {
+        // FG-2: the board's stills are the author's, taken on the revealed desk, never through the boot's tear
+        await bootRevealed(win, "the try board's desk revealed");
+        problems.push(...(await tryBoardRows(win, types, shotDir, (line) => console.log(line))));
+      }
       if (cspViolations.length > 0) problems.push(`CSP refused: ${cspViolations.join(" | ")}`);
       if (problems.length > 0) throw new Error(problems.join(" · "));
       ok = true;
@@ -1222,6 +1266,9 @@ export async function runSmokeCanvas(opts: {
       );
       if (win.webContents.isCrashed()) problems.push("the renderer crashed");
     } else if (gpu) {
+      // FG-2: the rows start on the revealed desk, as they did while the reveal followed the stable desk at once (the
+      // theme stills are the grader's)
+      await bootRevealed(win, "the boot's reveal");
       problems.push(...(await deskWitnesses(win, shotDir)));
       console.log(`SMOKE_CANVAS_MARKERS ${JSON.stringify(deskSaid.said)}`);
       deskSaid.stop();
@@ -1287,6 +1334,11 @@ export async function runSmokeCanvas(opts: {
         } catch (error) {
           problems.push(`PT-1 PANE: ${error instanceof Error ? error.message : String(error)}`);
         }
+      } else if (process.argv.includes(PHONE_FLAG)) {
+        // PT-S3 — the phone's rows ALONE after the boot's, under the phone's stage (`node
+        // ../../scripts/stage-simulator-fixture.mjs devices -- node packaging/run-smoke.mjs --smoke-canvas --phone`, the
+        // `smoke:phone` scripts on smoke:canvas's build): INTERACTION rows, never in smoke:canvas's own order below
+        problems.push(...(await phoneRows(win, shotDir, opts)));
       } else if (faultRun) {
         // DK-9: the fault fixture's run (`smoke:kind-faults`) — the witnesses above ran with the broken kind
         // refused at the boot; the fault rows lay the broken clocks beside a drawn one. The pad's, the retry's
@@ -1351,13 +1403,15 @@ export async function runSmokeCanvas(opts: {
         } catch (error) {
           problems.push(`DK-18 TAKE: ${error instanceof Error ? error.message : String(error)}`);
         }
-        // DK-14: Send to… — the bar's pill, the grown menu's row and the tools in hand's pill each drafting ONE chip into
-        // the line: its face by kind, the flight, the @ typed, the still, the bar aside, reduced motion, an aimed draft (the
-        // terminals called up first, W7) (testing/smoke-send-to.ts) — still at the arrival fit, before the pad row moves
-        // the camera
+        // HN-D3: the desk's Copy — the bar's pill, the grown menu's row, the tools in hand's pill and ⌘C each dealing ONE
+        // card: a note's writing a text card, anything else a picture of the objects without the marks, the selection
+        // never blinking, the bar never stepping aside, what each card holds handed to main first — a note's words to
+        // the copy door, a picture and the words its objects keep to the picture door in one write (HN-5, LC-19) —
+        // kept there, never on the person's clipboard (R-T 4), the hand emptied after (testing/smoke-desk-copy.ts) —
+        // still at the arrival fit, before the pad row moves the camera
         try {
           problems.push(
-            ...(await sendToRows({
+            ...(await deskCopyRows({
               win,
               plugins: {
                 disable: (id) => opts.handle.client.request("plugins.disable", { id }),
@@ -1365,10 +1419,12 @@ export async function runSmokeCanvas(opts: {
               },
               shotDir,
               say: (line) => console.log(line),
+              ...(opts.copies === undefined ? {} : { copies: opts.copies }),
+              ...(opts.pictures === undefined ? {} : { pictures: opts.pictures }),
             })),
           );
         } catch (error) {
-          problems.push(`DK-14: ${error instanceof Error ? error.message : String(error)}`);
+          problems.push(`HN-3: ${error instanceof Error ? error.message : String(error)}`);
         }
         // DK-17b: the explorer's thumbnail taken while a selection stands is the desk without its marks (ICE I40's
         // purpose; testing/smoke-thumb.ts) — an object moved, its still owed and taken, read back; the move undone
@@ -1412,6 +1468,7 @@ export async function runSmokeCanvas(opts: {
                 const ready = waitForConsole(peer, "DESK_READY ", 60_000);
                 await loadRenderer(peer, "smoke-canvas", opts.viteUrl, { presenceRelay: "1" });
                 await ready;
+                await bootRevealed(peer, "the peer's desk revealed");
                 await sleep(800);
                 return peer;
               },
@@ -1540,6 +1597,113 @@ export async function runSmokeCanvas(opts: {
     ok = true;
   } catch (e) {
     console.error(`SMOKE_CANVAS failed: ${e instanceof Error ? e.message : e}`);
+  }
+  await teardown(opts.supervisor, opts.root, opts.beforeExit, ok);
+  app.exit(ok ? 0 : 2);
+}
+
+/**
+ * FG — THE FIRST RUN, WALKED (`pnpm smoke:first-run`, desk-gates row 32): one walk of the Setup Assistant a launch, by
+ * the page's own controls, from a user minted not onboarded (UA-3w as amended: `answersSetup`) to the desk
+ * (smoke-first-run.ts). The launcher (`packaging/run-first-run.mjs`) runs the three walks, each on a fresh profile with
+ * its theme seeded before the boot, and keeps their stills where no teardown reaches.
+ */
+export async function runSmokeFirstRun(opts: {
+  handle: FielddHandle;
+  supervisor: FielddSupervisor;
+  root: string;
+  registry: WindowRegistry;
+  preloadPath: string;
+  viteUrl: string;
+  beforeExit: () => Promise<void>;
+  /** the person main staged into this run's own root before the pair booted (`stageFirstRun`) */
+  staged: StagedTypedAgent | undefined;
+  /** users.json's root, and the user this run minted not onboarded */
+  users: { readonly root: string; readonly userId: string };
+  /** GT-8b — what main's opener recorded in place of opening */
+  shellOpens?: { readonly opened: readonly string[]; readonly revealed: readonly string[] };
+  onWindow?: (window: BrowserWindow) => void;
+}): Promise<void> {
+  // Shown, as the desk smokes' are with the GPU on: the walk's stills are of the field's own frames. DK-18 (36): shown
+  // inactive and click-through — kept from the person's input (smoke-window.ts).
+  const win = smokeWindow({ mode: "smoke-first-run", preloadPath: opts.preloadPath, show: true });
+  opts.registry.adopt(win); // the bootstrap sender policy admits only registered windows
+  opts.onWindow?.(win);
+  if (process.env["VF_SMOKE_DEBUG"]) {
+    win.webContents.on("console-message", (...args: unknown[]) => {
+      console.log(`[renderer] ${args.map((a) => JSON.stringify(a)).join(" ")}`);
+    });
+  }
+  // The packaged CSP is this mode's too (every non-dev mode): a refusal fails the walk, as it fails the canvas smoke.
+  const cspViolations: string[] = [];
+  win.webContents.on("console-message", (...args: unknown[]) => {
+    for (const a of args) {
+      const text = consoleText(a);
+      if (!text.includes("Content Security Policy")) continue;
+      cspViolations.push(text.replace(/blob:[^'"\s]+/gu, "blob:…").slice(0, 240));
+    }
+  });
+  let ok = false;
+  try {
+    const walk = parseWalk(process.env[WALK_ENV]);
+    if (walk === null) {
+      throw new Error(`${WALK_ENV} names no walk (${Object.keys(FIRST_RUN_WALKS).join(", ")})`);
+    }
+    const shotDir = process.env["VF_SMOKE_SHOT_DIR"];
+    if (shotDir === undefined || shotDir.length === 0) {
+      throw new Error("VF_SMOKE_SHOT_DIR names no folder for the walk's stills");
+    }
+    const refusal = shotDirRefusal(shotDir);
+    if (refusal !== null) throw new Error(refusal);
+    if (opts.staged === undefined) {
+      throw new Error(
+        "main staged no person: the walk needs a root of its own (no FIELDD_DATA_DIR)",
+      );
+    }
+    // the walks are the live field's two and the page with no WebGPU: the GPU is kept in every one
+    if (process.argv.includes("--disable-gpu")) {
+      throw new Error("the first-run smoke keeps the GPU: no walk of it runs with --disable-gpu");
+    }
+    const noWebgpu = process.argv.includes(NO_WEBGPU_FLAG);
+    if (noWebgpu === FIRST_RUN_WALKS[walk].webgpu) {
+      throw new Error(
+        `the ${walk} walk was launched ${noWebgpu ? "with" : "without"} ${NO_WEBGPU_FLAG}`,
+      );
+    }
+    const problems = smokeProfileFailures();
+    const { facts, problems: walked } = await firstRunRows({
+      win,
+      viteUrl: opts.viteUrl,
+      walk,
+      shotDir,
+      staged: opts.staged,
+      users: opts.users,
+      say: (line) => console.log(line),
+      // FG-O3's read (FG-6c): printed, never judged
+      processes: () => app.getAppMetrics(),
+      gpuBusy: readGpuBusy,
+    });
+    problems.push(...walked);
+    // GT-8b: the walk presses no link, so main's opener has nothing to record — anything there opened on its own
+    const opens = opts.shellOpens;
+    if (opens === undefined) problems.push("main handed the walk no opener record (GT-8b)");
+    else if (opens.opened.length + opens.revealed.length > 0) {
+      problems.push(
+        `the walk pressed no link, yet main's opener recorded ${JSON.stringify({ opened: opens.opened, revealed: opens.revealed })}`,
+      );
+    }
+    const focused = smokeWindowsFocused();
+    console.log(
+      `SMOKE_FIRST_RUN ${JSON.stringify({ ...facts, shotDir, shellOpens: opens ?? null, isolation: focused })}`,
+    );
+    if (cspViolations.length > 0) problems.push(`CSP refused: ${cspViolations.join(" | ")}`);
+    // a walk that stopped comes back with what it found, and its window may be gone: never lose them to this read
+    if (!win.isDestroyed() && win.webContents.isCrashed()) problems.push("the renderer crashed");
+    if (problems.length > 0) throw new Error(problems.join(" · "));
+    console.log(`SMOKE_FIRST_RUN_OK ${walk}`);
+    ok = true;
+  } catch (e) {
+    console.error(`SMOKE_FIRST_RUN failed: ${e instanceof Error ? e.message : e}`);
   }
   await teardown(opts.supervisor, opts.root, opts.beforeExit, ok);
   app.exit(ok ? 0 : 2);
@@ -1876,8 +2040,9 @@ async function deskRefusalRow(win: BrowserWindow, viteUrl: string): Promise<stri
  * PT-2 — the live page's rows (testing/smoke-live-pane.ts) over the smoke's own fixture page on 127.0.0.1, served for the rows
  * and closed after them; the window's RENDERER REPLACED for the RELOAD row (`loadRenderer`, the same webContents — so the same
  * participant, a new document — as the retry row replaces it, with the window's doors and without the first board's seeding,
- * which a bare `webContents.reload()` would ask again), answered once the desk says DESK_READY again. DESK_READY is said beneath
- * the boot's splash, so the rows wait for it to lift before they press.
+ * which a bare `webContents.reload()` would ask again), answered once the desk says DESK_READY again and the boot has revealed
+ * it (`bootRevealed`, FG-2: DESK_READY is said beneath the boot's splash, which a returning boot holds through its floor and
+ * its tear); the rows still wait for the splash to lift before they press.
  */
 async function liveRows(
   win: BrowserWindow,
@@ -1898,6 +2063,7 @@ async function liveRows(
         await loadRenderer(win, "smoke-canvas", viteUrl, { presenceRelay: "1", deskFaults: "1" });
         try {
           await ready;
+          await bootRevealed(win, "the reloaded desk revealed");
           return true;
         } catch {
           return false;
@@ -1943,6 +2109,7 @@ async function useRows(
         await loadRenderer(win, "smoke-canvas", viteUrl, { presenceRelay: "1", deskFaults: "1" });
         try {
           await ready;
+          await bootRevealed(win, "the reloaded desk revealed");
           return true;
         } catch {
           return false;
@@ -1984,6 +2151,7 @@ async function deviceRows(
         await loadRenderer(win, "smoke-canvas", viteUrl, { presenceRelay: "1", deskFaults: "1" });
         try {
           await ready;
+          await bootRevealed(win, "the reloaded desk revealed");
           return true;
         } catch {
           return false;
@@ -2043,6 +2211,7 @@ async function honestRows(
         await loadRenderer(win, "smoke-canvas", viteUrl, { presenceRelay: "1", deskFaults: "1" });
         try {
           await ready;
+          await bootRevealed(win, "the reloaded desk revealed");
           return true;
         } catch {
           return false;
@@ -2107,6 +2276,7 @@ async function stillRows(
         await loadRenderer(win, "smoke-canvas", opts.viteUrl, doors);
         try {
           await ready;
+          await bootRevealed(win, "the reloaded desk revealed");
           return true;
         } catch {
           return false;
@@ -2142,6 +2312,7 @@ async function stillRows(
         const ready = waitForConsole(peer, "DESK_READY ", 60_000);
         await loadRenderer(peer, "smoke-canvas", opts.viteUrl, { docRelay: "1" });
         await ready;
+        await bootRevealed(peer, "the peer's desk revealed");
         await sleep(800);
         return peer;
       },
@@ -2176,6 +2347,7 @@ async function firstRows(
         await loadRenderer(win, "smoke-canvas", viteUrl, doors);
         try {
           await ready;
+          await bootRevealed(win, "the reloaded desk revealed");
           return true;
         } catch {
           return false;
@@ -2225,6 +2397,7 @@ async function framesRows(
         await loadRenderer(win, "smoke-canvas", viteUrl, { presenceRelay: "1", deskFaults: "1" });
         try {
           await ready;
+          await bootRevealed(win, "the reloaded desk revealed");
           return true;
         } catch {
           return false;
@@ -2258,6 +2431,89 @@ async function framesRows(
   }
 }
 
+/** PT-S3's rows on the phone's stage (testing/smoke-phone.ts): PT-2's driver with the stage's env, main's simulator census
+ * (D1, D2) on its custody, the opener's record (D3), fieldd's plugin row, the shell's page told it is focused (`open -a`
+ * takes the app's focus), a device screenshot's pixels and the app's processes. */
+async function phoneRows(
+  win: BrowserWindow,
+  shotDir: string | undefined,
+  opts: {
+    readonly viteUrl: string;
+    readonly handle: FielddHandle;
+    readonly liveSurfaces?: (() => LiveCensus | null) | undefined;
+    readonly shellOpens?:
+      | { readonly opened: readonly string[]; readonly revealed: readonly string[] }
+      | undefined;
+  },
+): Promise<string[]> {
+  const fixture = await startLiveFixture();
+  const dbg = win.webContents.debugger;
+  let attachedHere = false;
+  try {
+    const driver: PhoneRowsDriver = {
+      win,
+      shotDir,
+      say: (line) => console.log(line),
+      env: process.env,
+      fixture,
+      custody: () => opts.liveSurfaces?.() ?? null,
+      shellOpens: opts.shellOpens,
+      reload: async () => {
+        const ready = waitForConsole(win, "DESK_READY ", 60_000);
+        await loadRenderer(win, "smoke-canvas", opts.viteUrl, {
+          presenceRelay: "1",
+          deskFaults: "1",
+        });
+        try {
+          await ready;
+          await bootRevealed(win, "the reloaded desk revealed");
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      plugin: (id) => opts.handle.client.request("plugins.get", { id }),
+      focused: async () => {
+        if (!dbg.isAttached()) {
+          dbg.attach("1.3");
+          attachedHere = true;
+        }
+        await dbg.sendCommand("Emulation.setFocusEmulationEnabled", { enabled: true });
+      },
+      // a device screenshot: Electron's bitmap is BGRA
+      pngPixels: (file) => {
+        const image = nativeImage.createFromPath(file);
+        if (image.isEmpty()) return null;
+        const { width, height } = image.getSize();
+        const bgra = image.toBitmap();
+        if (bgra.length !== width * height * 4) return null;
+        const rgba = new Uint8Array(bgra.length);
+        for (let i = 0; i < bgra.length; i += 4) {
+          rgba[i] = bgra[i + 2] ?? 0;
+          rgba[i + 1] = bgra[i + 1] ?? 0;
+          rgba[i + 2] = bgra[i] ?? 0;
+          rgba[i + 3] = bgra[i + 3] ?? 0;
+        }
+        return { width, height, rgba };
+      },
+      metrics: () => {
+        const metrics = app.getAppMetrics();
+        return {
+          mb: Math.round(metrics.reduce((sum, m) => sum + m.memory.workingSetSize, 0) / 1024),
+          cpu: Math.round(metrics.reduce((sum, m) => sum + m.cpu.percentCPUUsage, 0)),
+          processes: metrics.length,
+        };
+      },
+    };
+    return await phonePaneRows(driver);
+  } catch (error) {
+    return [`PT-S3 PHONE: ${error instanceof Error ? error.message : String(error)}`];
+  } finally {
+    if (attachedHere && dbg.isAttached()) dbg.detach();
+    await fixture.close();
+  }
+}
+
 async function deskRetryRow(win: BrowserWindow, viteUrl: string): Promise<string[]> {
   const log = deskMarkerLog(win);
   const problems: string[] = [];
@@ -2276,14 +2532,16 @@ async function deskRetryRow(win: BrowserWindow, viteUrl: string): Promise<string
     if (log.said.includes("DESK_UNAVAILABLE")) problems.push("the card was said before the retry");
     if (facts.mount !== 1) problems.push(`the desk drew on mount ${facts.mount}, not the retry's`);
     if (card) problems.push("the unavailable card is in the DOM after the retry drew");
+    // FG-2: the rows after this one press on the desk the retry drew, so on its revealed desk
+    await bootRevealed(win, "the retried desk revealed");
   } finally {
     log.stop();
   }
   return problems;
 }
 
-/** The composer line's editor — the frame's chrome a person types into over the desk. */
-const LINE_INPUT = ".vf-line-input";
+/** The line's create — the frame's chrome the keyboard can rest on over the desk (LN-D1: the line holds no editor). */
+const LINE_FOCUS = ".vf-line-create";
 
 /**
  * DK-6 — THE EXPLORER'S QUARTER STILL IS THE DESK, SMALLER (ICE petition I29, fixed in 0.15.0-desk.2):
@@ -2334,14 +2592,15 @@ const QUARTER_STILL = { meanDiff: 6, farShare: 0.02 } as const;
 
 /**
  * DK-4 — THE DESK IDLES AT ZERO SUBMITS with the frame's chrome over it (plan §9 Phase 2's witness):
- * the line focused (its caret is the DOM's, never the desk's), the wind let settle, the engine's loop
- * at rest — then not one submit and not one frame for two whole seconds, the line still focused.
+ * the line focused (the keyboard is the DOM's, never the desk's — since LN-D1 its create, the line
+ * holding no editor), the wind let settle, the engine's loop at rest — then not one submit and not one
+ * frame for two whole seconds, the line still focused.
  */
 async function deskIdleRow(win: BrowserWindow): Promise<string[]> {
   const js = <T>(expression: string): Promise<T> =>
     win.webContents.executeJavaScript(expression, true) as Promise<T>;
   const focused = await js<boolean>(
-    `(() => { const line = document.querySelector(${JSON.stringify(LINE_INPUT)}); line?.focus(); return line !== null && document.activeElement === line; })()`,
+    `(() => { const line = document.querySelector(${JSON.stringify(LINE_FOCUS)}); line?.focus(); return line !== null && document.activeElement === line; })()`,
   );
   // the two seconds are taken clear of the example clock's minute turn (DK-6), so the zero is still the whole
   // witness: not a frame, not a submit, between the wakes — and a window a person's input moved is taken again (DK-10b)
@@ -2355,7 +2614,7 @@ async function deskIdleRow(win: BrowserWindow): Promise<string[]> {
     ),
   );
   const stillFocused = await js<boolean>(
-    `document.activeElement === document.querySelector(${JSON.stringify(LINE_INPUT)})`,
+    `document.activeElement === document.querySelector(${JSON.stringify(LINE_FOCUS)})`,
   );
   const outside = disturbed.length > 0 ? { disturbed } : {};
   console.log(
@@ -4869,7 +5128,7 @@ async function waitForShellMarker(
     }
     await sleep(25);
   }
-  // "never created" and "created empty" are different failures (smoke-line-send.ts)
+  // "never created" and "created empty" are different failures (smoke-shell-marker.ts)
   throw new Error(shellMarkerFailure(path, markerFile(path), marker));
 }
 
@@ -7110,6 +7369,10 @@ export async function runSmokeGodview(opts: {
   /** GT-8b: what main's OS opener was handed — a harness records instead of
    * opening (main's `harnessShellOpens`). The link row reads it. */
   shellOpens?: { readonly opened: readonly string[]; readonly revealed: readonly string[] };
+  /** HN-5 (R-T 4) — the words main's copy door KEPT in place of the system clipboard, a
+   * marked run's (main's `harnessCopies`); absent in an unmarked run, whose door writes the
+   * person's clipboard. The OSC 52 row reads a program's write here. */
+  copies?: readonly string[];
   /** AR-7: what main staged for the typed-agent rows before the pair booted
    * (`stageTypedAgent`); absent when it staged nothing — an injected root. */
   typedAgent?: StagedTypedAgent;
@@ -7733,8 +7996,9 @@ export async function runSmokeGodview(opts: {
         `${launcher}?.querySelector('.vf-pane-launcher') != null`,
         launcherState,
       );
-      // (1) the split session's OWN input gate (the line-send rung's, 6bde8506): its activation
-      // has applied a scene and admits input, so its mount-time focus moves are behind it
+      // (1) the split session's OWN input gate (the line's send rung's, 6bde8506; 11h's card play
+      // waits on it now): its activation has applied a scene and admits input, so its mount-time
+      // focus moves are behind it
       const gateBegan = Date.now();
       await direct.until(
         () => gateOpen(latestGate(direct.history(), splitSession)),
@@ -8778,16 +9042,16 @@ export async function runSmokeGodview(opts: {
       10_000,
     );
 
-    // ⇧⌘V OVER A FOCUSED PANE (One Frame FR-4's exit; GT-D21) — 11e's form for
-    //      the clipboard's chord, which had no row of its own: the pin reaches
-    //      the frame's ONE owner from inside a pane — the left edge's drawer
-    //      open over the cover, where its notch rests as a sliver — and the
-    //      pane never hears it, so ghostty's paste_from_selection never runs.
-    //      ⇧⌘V again puts it away.
+    // ⇧⌘V OVER A FOCUSED PANE (track HN; One Frame FR-4's exit; GT-D21) — 11e's
+    //      form for the hand's chord, which had no row of its own (the clipboard
+    //      tray's, which retired into the hand): the raise reaches the frame's ONE
+    //      owner from inside a pane — the hand up over the cover, the frame's in
+    //      every view — and the pane never hears it, so ghostty's
+    //      paste_from_selection never runs. ⇧⌘V again lowers it.
     await focusDeck(win);
     await untilRenderer(win, "the probe reset", CHORD_PROBE, 5_000);
-    const CLIPBOARD_TRAY = `document.querySelector('.vf-edge-tray[data-side="left"]')`;
-    const pressClipboardChord = (): void => {
+    const CARDS = `document.querySelector('.vf-cards')`;
+    const pressCardsChord = (): void => {
       const modifiers: ("meta" | "control" | "shift")[] = [
         process.platform === "darwin" ? "meta" : "control",
         "shift",
@@ -8795,13 +9059,12 @@ export async function runSmokeGodview(opts: {
       win.webContents.sendInputEvent({ type: "keyDown", keyCode: "V", modifiers });
       win.webContents.sendInputEvent({ type: "keyUp", keyCode: "V", modifiers });
     };
-    pressClipboardChord();
+    pressCardsChord();
     await untilRenderer(
       win,
-      "⇧⌘V pinning the clipboard over a focused pane",
-      `(() => { const tray = ${CLIPBOARD_TRAY}; if (!tray) return "no clipboard tray";
-        return tray.dataset.pinned === "true" && tray.dataset.open === "true"
-          ? "ok" : JSON.stringify({ ...tray.dataset }); })()`,
+      "⇧⌘V raising the hand over a focused pane",
+      `(() => { const fan = ${CARDS}; if (!fan) return "no hand";
+        return fan.hasAttribute("data-raised") ? "ok" : "the hand stayed down"; })()`,
       10_000,
     );
     const heardV = await chordProbeHeard(win);
@@ -8810,15 +9073,15 @@ export async function runSmokeGodview(opts: {
         `the pane heard ⇧⌘V too (Ghostty's paste_from_selection): ${JSON.stringify(heardV)}`,
       );
     }
-    pressClipboardChord();
+    pressCardsChord();
     await untilRenderer(
       win,
-      "⇧⌘V putting the clipboard away",
-      `${CLIPBOARD_TRAY}?.dataset.pinned === "false" ? "ok" : "still pinned"`,
+      "⇧⌘V lowering the hand",
+      `${CARDS}?.hasAttribute("data-raised") === false ? "ok" : "still raised"`,
       10_000,
     );
-    verdict["chordClipboard"] =
-      "⇧⌘V pinned the clipboard over a focused pane (its drawer open over Godview) and put it away; the pane never heard it";
+    verdict["chordHand"] =
+      "⇧⌘V raised the hand over a focused pane (over Godview) and lowered it; the pane never heard it";
 
     // 11g. THE VIEW KEYS, DELIVERED FROM A FOCUSED PANE (One Frame FR-1,
     //      FC-D4) — the probe each of ⌘1–⌘4 owes before it ships (⌘⎋ never
@@ -8827,15 +9090,16 @@ export async function runSmokeGodview(opts: {
     //      pressed the way a keyboard presses it. Three facts per key: the
     //      FRAME heard it (its VIEW_KEY line says what it did), the PANE never
     //      did (ghostty's goto_tab), and the window ends in the view the key
-    //      names. ⌘2 and ⌘4 move nothing a screen shows from here — the window
-    //      is already in Godview, and the Assistant waits — so for them the
-    //      frame's own line is the proof of delivery. `sendInputEvent`, like
+    //      names. ⌘2 moves nothing a screen shows from here — the window is
+    //      already in Godview — so for it the frame's own line is the proof of
+    //      delivery; ⌘4 opens Chat (SP-1b), under which the pane lets go of
+    //      the keyboard, as it does under History. `sendInputEvent`, like
     //      11e's keys: below AppKit's key-equivalent dispatch, so this is the
     //      page's road; the View menu's darwin accelerators stand behind it and
     //      are not what this row measures.
     const viewKeyFromPane = async (
       view: FrameView,
-      want: { outcome: "moved" | "stayed" | "waits"; endsIn: FrameView },
+      want: { outcome: "moved" | "stayed"; endsIn: FrameView },
     ): Promise<string> => {
       const digit = VIEW_DIGIT[view];
       await focusDeck(win);
@@ -8863,12 +9127,19 @@ export async function runSmokeGodview(opts: {
       return `${facts.from} → ${want.endsIn} (${facts.outcome}); the pane never heard it`;
     };
     const viewKeys: Record<string, string> = {};
-    viewKeys["4"] = await viewKeyFromPane("assistant", { outcome: "waits", endsIn: "godview" });
+    viewKeys["4"] = await viewKeyFromPane("assistant", { outcome: "moved", endsIn: "assistant" });
     await untilRenderer(
       win,
-      "the Assistant's note over its cell",
-      `(document.querySelector(".vf-views-note")?.textContent ?? "").includes("not built yet") ? "ok" : "no note"`,
+      "the pane letting go of the keyboard under Chat",
+      `document.activeElement?.classList.contains("terminal-input") ? "still focused" : "ok"`,
       5_000,
+    );
+    pressViewKey(win, "godview");
+    await untilRenderer(
+      win,
+      "⌘2 out of Chat",
+      `${VIEW_NOW} === "godview" ? "ok" : ${VIEW_NOW}`,
+      10_000,
     );
     viewKeys["2"] = await viewKeyFromPane("godview", { outcome: "stayed", endsIn: "godview" });
     viewKeys["3"] = await viewKeyFromPane("history", { outcome: "moved", endsIn: "history" });
@@ -9104,6 +9375,49 @@ export async function runSmokeGodview(opts: {
       );
     }
     verdict["fileLinkNotAsked"] = `${fileHovered} found; the deck asked nothing (GT-8b)`;
+
+    // 11j. A PROGRAM'S CLIPBOARD WRITE (HN-5, LC-14). A program in a pane writes the
+    //      clipboard by OSC 52; ghosttea hands its runtime platform's `writeClipboard`
+    //      the words, and the window hands them main's copy door — never the web's own
+    //      write, which the empty grant set denies — and deals NO card: a program's
+    //      write is not the person's copy. A marked run's door KEEPS the words instead
+    //      of writing them (main's `harnessCopies`, R-T 4), and this row reads them
+    //      there. GATED on that mark (`VF_SMOKE_RUN`, run-smoke.mjs): an unmarked
+    //      run's door writes the person's clipboard, so there the row prints nothing
+    //      and says it was skipped. The printf is written into a script and only
+    //      `sh <script>` is typed, as 11f's loop is; `\033` and `\007`, never `\e`
+    //      and `\a`, because dash's printf knows only the octal forms.
+    const copies = opts.copies;
+    if (copies === undefined) {
+      verdict["osc52"] = "skipped: an unmarked run's copy door writes the real clipboard";
+    } else {
+      const osc52Script = join(scratch, `hn5-osc52-${nonce}.sh`);
+      writeFileSync(osc52Script, `printf '\\033]52;c;%s\\007' "$(printf 'hn5-osc52' | base64)"\n`);
+      const HAND_CARDS = `document.querySelectorAll(".vf-cards .vf-card").length`;
+      const cardsBefore = (await win.webContents.executeJavaScript(HAND_CARDS)) as number;
+      const keptBefore = copies.length;
+      await focusDeck(win);
+      await runInPane(win, join(scratch, "osc52.txt"), `sh ${osc52Script}`);
+      const osc52Deadline = Date.now() + 15_000;
+      while (Date.now() < osc52Deadline && !copies.slice(keptBefore).includes("hn5-osc52")) {
+        await sleep(100);
+      }
+      if (!copies.slice(keptBefore).includes("hn5-osc52")) {
+        throw new Error(
+          `OSC 52 never reached the copy door (it kept ${JSON.stringify(copies.slice(keptBefore))})`,
+        );
+      }
+      // an absence, given the deal's flight (560 ms) and more to be wrong in
+      await sleep(1_000);
+      const cardsAfter = (await win.webContents.executeJavaScript(HAND_CARDS)) as number;
+      if (cardsAfter !== cardsBefore) {
+        throw new Error(
+          `a program's OSC 52 dealt a card: ${cardsBefore} → ${cardsAfter} in the hand`,
+        );
+      }
+      verdict["osc52"] =
+        "OSC 52 in a pane → writeClipboard → main's copy door (kept, not written); no card";
+    }
 
     // 12. RETIRED AT TP-S3e. This row SIGKILLed the ghosttea bridge utility
     //    and watched the deck rebuild — a failure mode that no longer has a
@@ -9456,7 +9770,7 @@ export async function runSmokeGodview(opts: {
     //      dispatch is over); ⇧1 is typed — the input's ear hears its "!", and a
     //      Backspace takes it back out of the shell. Then the canvas, with
     //      nothing focused: each key moves the zoom and says so. Then ⇧1 typed
-    //      into the line's draft stays a "!" — never a fit. ⌘K's probe is 11e's,
+    //      into the palette's field stays a "!" — never a fit. ⌘K's probe is 11e's,
     //      unchanged. Before 11h, which must stay last (its ⌘T leaves a fresh
     //      shell whose launcher holds the keys).
     //
@@ -9515,9 +9829,9 @@ export async function runSmokeGodview(opts: {
     /** The zoom's keys as a keyboard presses them: ⌘ (Ctrl) with = − 0, and
      * ⇧1. A terminal types from the KEY, so into a pane ⇧1 is down and up (as
      * 11h types its b) — a char event as well would type a second "!", and a
-     * stray "!" left in the shell turns 11h's sent line into a history
-     * expansion; an editor inserts the CHARACTER, so into the draft it is down,
-     * the character, up. */
+     * stray "!" left in the shell turns a later row's typed line into a history
+     * expansion; a field inserts the CHARACTER, so into the palette's it is
+     * down, the character, up. */
     const pressZoomKey = (key: "=" | "-" | "0" | "!", into: "pane" | "editor" = "pane"): void => {
       if (key !== "!") {
         pressProductChord(win, key);
@@ -9701,34 +10015,37 @@ export async function runSmokeGodview(opts: {
         `Zoom In answered by the head ${answeredIn.from} → ${answeredIn.to} · Actual Size ` +
         `${answeredActual.from} → ${answeredActual.to}; the page zoom level stayed ${levelAfterCanvasMenu}`;
 
-      const placed = (await win.webContents.executeJavaScript(
-        `(() => { const field = document.querySelector(".vf-line-input"); if (!field) return "no draft";
-          field.focus(); return document.activeElement === field ? "ok" : "focus refused"; })()`,
-      )) as string;
-      if (placed !== "ok") throw new Error(`the line's draft could not take focus: ${placed}`);
+      // ⇧1 typed into an editor over the canvas types "!" and fits nothing: the palette's field,
+      // the frame's one editor over the canvas since the line's draft left it (LN-D3)
+      pressProductChord(win, "k");
+      await untilRenderer(
+        win,
+        "the palette's field holding the keyboard",
+        `document.activeElement?.closest?.(".vf-palette-field") ? "ok" : "unfocused"`,
+        5_000,
+      );
       const takenBefore = zoomTaken.length;
       pressZoomKey("!", "editor");
       await sleep(1_500);
       if (zoomTaken.length > takenBefore) {
         throw new Error(
-          `⇧1 typed into the draft zoomed: ${zoomTaken.slice(takenBefore).join(" · ")}`,
+          `⇧1 typed into the palette's field zoomed: ${zoomTaken.slice(takenBefore).join(" · ")}`,
         );
       }
       const typed = (await win.webContents.executeJavaScript(
-        `document.querySelector(".vf-line-input")?.textContent ?? "no draft"`,
+        `document.querySelector(".vf-palette-field input")?.value ?? "no field"`,
       )) as string;
-      if (!typed.includes("!")) throw new Error(`⇧1 typed nothing into the draft: ${typed}`);
-      // Clear the draft through the editing pipeline (its input event is what
-      // the line reads back). Not a Backspace: on the Mac a synthesized keyDown
-      // carries no Cocoa edit command, so it deletes nothing in an editor — and
-      // a "!" left here rides 11h's sent line into the shell.
-      const cleared = (await win.webContents.executeJavaScript(
-        `(() => { const field = document.querySelector(".vf-line-input"); if (!field) return "no draft";
-          field.focus(); document.execCommand("selectAll"); document.execCommand("delete");
-          return (field.textContent ?? "") === "" ? "ok" : "left " + JSON.stringify(field.textContent); })()`,
-      )) as string;
-      if (cleared !== "ok") throw new Error(`the draft kept the probe's typing: ${cleared}`);
-      headKeys["typing"] = `⇧1 into the line's draft typed "${typed}" and fit nothing`;
+      if (!typed.includes("!"))
+        throw new Error(`⇧1 typed nothing into the palette's field: ${typed}`);
+      // ⌘K again folds the palette, and its field with it
+      pressProductChord(win, "k");
+      await untilRenderer(
+        win,
+        "the palette folded",
+        `document.querySelector(".vf-palette-layer[data-visible]") === null ? "ok" : "open"`,
+        5_000,
+      );
+      headKeys["typing"] = `⇧1 into the palette's field typed "${typed}" and fit nothing`;
       await win.webContents.executeJavaScript(`document.activeElement?.blur?.(); "ok"`);
       pressViewKey(win, "godview");
       await deck.until((facts) => facts.active, "⌘2 back to the deck", 30_000);
@@ -9736,6 +10053,433 @@ export async function runSmokeGodview(opts: {
       win.webContents.off("console-message", hearHead);
     }
     verdict["headKeys"] = headKeys;
+
+    // 11k. THE HUB IN THE HEAD, UNDER GODVIEW'S COVER (HN-8, PL-D1…PL-D3;
+    //      DESIGN.md §8 "The head", the package circle). Under a cover the pill
+    //      is the desk's and hides with it, and Artifacts' door is the package
+    //      circle at the head's left (the terminals' title bar while they are
+    //      maximized). Pressed the way a pointer presses it, it grows the pill's
+    //      sheet on its Artifacts shelf alone: the circle steps aside, on and
+    //      saying Close, and the pill's own sheet stays shut. The shelf is never
+    //      blank — it hosts the Hub's own `hud.side-panel` contribution (the
+    //      Browser plugin's Artifact Hub, once, in this sheet only), or says in
+    //      one of its four waits why none is bound: off, can't run, opening, or
+    //      not starting, the last after the head's own 10 s. The rung waits for
+    //      the shelf to settle past "Opening…", says which it found, and folds
+    //      the sheet back with the sheet's own package, where the circle stood.
+    //      Added 2026-10-31: HN B3's records claimed this witness of the row and
+    //      no rung gave it (LANDED "HN B3", corrected at run 38b). Before 11h,
+    //      which must stay last.
+    const hubInHead: Record<string, string> = {};
+    /** The shelf's four waits as a person reads them (`HeadView`'s words; DESIGN.md §8
+     * "Artifacts"). */
+    const HUB_WAITS = [
+      "Artifacts are off",
+      "Artifacts can't run",
+      "Opening Artifacts…",
+      "Artifacts aren't starting",
+    ] as const;
+    type HubBox = { x: number; y: number; w: number; h: number };
+    type HubFacts = {
+      view: string;
+      circle: { open: boolean; bar: boolean; box: HubBox | null } | null;
+      sheet: { open: boolean; inert: boolean; box: HubBox; name: string | null } | null;
+      /** The pill's own sheet: its `data-open`, or "absent". */
+      pill: string;
+      shown: boolean;
+      /** The Hub's panel stands in the covered sheet's shelf. */
+      hub: boolean;
+      /** Artifact Hubs in the whole page: one while bound, never one in each sheet. */
+      hubs: number;
+      /** The words of the wait the shelf says, or null. */
+      wait: string | null;
+    };
+    /** The covered sheet, its circle and its shelf as the page shows them now. Under a cover
+     * `.vf-head-sheet` is the circle's sheet alone: the pill is `.vf-head-place`. */
+    const HUB_FACTS = `(() => {
+      const box = (el) => {
+        if (el === null) return null;
+        const r = el.getBoundingClientRect();
+        return {
+          x: Math.round(r.left),
+          y: Math.round(r.top),
+          w: Math.round(r.width),
+          h: Math.round(r.height),
+        };
+      };
+      const circle = document.querySelector(".vf-package-circle");
+      const sheet = document.querySelector(".vf-head-sheet");
+      const shelf = sheet === null ? null : sheet.querySelector('[data-shelf="artifacts"]');
+      const face =
+        shelf === null ? null : shelf.querySelector(".vf-head-waits-face:not([data-leaving])");
+      const hub =
+        shelf === null ? null : shelf.querySelector('.vf-head-hub [aria-label="Artifact Hub"]');
+      return {
+        view: ${VIEW_NOW},
+        circle: circle === null ? null : {
+          open: circle.getAttribute("data-open") === "true",
+          bar: circle.hasAttribute("data-bar"),
+          box: box(circle.querySelector(".vf-package-button")),
+        },
+        sheet: sheet === null ? null : {
+          open: sheet.getAttribute("data-open") === "true",
+          inert: sheet.hasAttribute("inert"),
+          box: box(sheet),
+          name: sheet.querySelector(".vf-head-sheet-name")?.textContent ?? null,
+        },
+        pill: document.querySelector(".vf-head-place")?.getAttribute("data-open") ?? "absent",
+        shown: shelf !== null && shelf.hasAttribute("data-shown"),
+        hub: hub !== null,
+        hubs: document.querySelectorAll('[aria-label="Artifact Hub"]').length,
+        wait: face === null ? null : (face.textContent ?? "").trim(),
+      };
+    })()`;
+    const hubFacts = async (): Promise<HubFacts> =>
+      (await win.webContents.executeJavaScript(HUB_FACTS)) as HubFacts;
+    const waitSaid = (facts: HubFacts): (typeof HUB_WAITS)[number] | undefined =>
+      HUB_WAITS.find((words) => facts.wait?.startsWith(words) === true);
+    /** A press the way a pointer presses it, at the middle of what `selector` names: moved
+     * there, down, up — a click with a count, so the circle takes it as the pointer's. */
+    const pressAt = async (selector: string): Promise<{ x: number; y: number }> => {
+      const at = (await win.webContents.executeJavaScript(`(() => {
+        const el = document.querySelector(${JSON.stringify(selector)});
+        if (el === null) return null;
+        const r = el.getBoundingClientRect();
+        return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
+      })()`)) as { x: number; y: number } | null;
+      if (at === null) throw new Error(`no ${selector} to press under Godview`);
+      win.webContents.sendInputEvent({ type: "mouseMove", x: at.x, y: at.y });
+      await sleep(40);
+      win.webContents.sendInputEvent({
+        type: "mouseDown",
+        x: at.x,
+        y: at.y,
+        button: "left",
+        clickCount: 1,
+      });
+      await sleep(50);
+      win.webContents.sendInputEvent({
+        type: "mouseUp",
+        x: at.x,
+        y: at.y,
+        button: "left",
+        clickCount: 1,
+      });
+      return at;
+    };
+    const shut = await hubFacts();
+    const circle = shut.circle;
+    if (shut.view !== "godview") throw new Error(`11k began outside Godview: ${shut.view}`);
+    if (circle === null || circle.box === null) {
+      throw new Error(`Godview's head has no package circle: ${JSON.stringify(shut)}`);
+    }
+    if (circle.open || shut.sheet?.open === true) {
+      throw new Error(`the covered sheet was already open: ${JSON.stringify(shut)}`);
+    }
+    const circleBox = circle.box;
+    const circleAt = await pressAt(".vf-package-circle .vf-package-button");
+    await untilRenderer(
+      win,
+      "the circle's sheet grown on Artifacts",
+      `(() => { const f = ${HUB_FACTS};
+        return f.sheet !== null && f.sheet.open && !f.sheet.inert && f.shown
+          ? "ok" : JSON.stringify(f); })()`,
+      5_000,
+    );
+    // It grows over its 600ms (the island curve): read it once it has.
+    await sleep(800);
+    const grown = await hubFacts();
+    if (grown.sheet === null || grown.circle === null) {
+      throw new Error(`the covered sheet went as it grew: ${JSON.stringify(grown)}`);
+    }
+    if (!grown.circle.open) {
+      throw new Error(`the circle did not step aside for its sheet: ${JSON.stringify(grown)}`);
+    }
+    if (grown.pill !== "false") {
+      throw new Error(`the pill's own sheet opened under Godview: ${JSON.stringify(grown)}`);
+    }
+    if (grown.sheet.name !== "Artifacts") {
+      throw new Error(`the covered sheet is not Artifacts': ${JSON.stringify(grown)}`);
+    }
+    // Grown, not its size: DESIGN.md §8 holds the size, and the catalog's plates draw it.
+    if (grown.sheet.box.w < circleBox.w * 4 || grown.sheet.box.h < circleBox.h * 4) {
+      throw new Error(
+        `the sheet did not grow out of the circle: ${JSON.stringify(circleBox)} → ` +
+          JSON.stringify(grown.sheet.box),
+      );
+    }
+    const sheetBox = grown.sheet.box;
+    // The shelf settles: the Hub binds, or a wait stands. "Opening…" is a passage — the
+    // head turns it to "not starting" after its own 10 s (`HUB_START_BOUND_MS`) — so it is
+    // waited past.
+    const settleBy = Date.now() + 15_000;
+    let shelf = grown;
+    let said = waitSaid(shelf);
+    while (
+      !shelf.hub &&
+      (said === undefined || said === "Opening Artifacts…") &&
+      Date.now() < settleBy
+    ) {
+      await sleep(250);
+      shelf = await hubFacts();
+      said = waitSaid(shelf);
+    }
+    if (shelf.hub) {
+      if (shelf.hubs !== 1) {
+        throw new Error(
+          `${shelf.hubs} Artifact Hubs in the page, not one: ${JSON.stringify(shelf)}`,
+        );
+      }
+      hubInHead["the shelf"] = 'the Hub bound: its "Artifact Hub" in the shelf, once in the page';
+    } else if (said === undefined) {
+      throw new Error(
+        `the Artifacts shelf said nothing, neither the Hub nor a wait: ${JSON.stringify(shelf)}`,
+      );
+    } else if (said === "Opening Artifacts…") {
+      throw new Error(
+        `the shelf still said "${said}" after 15 s, past the head's own 10 s: ` +
+          JSON.stringify(shelf),
+      );
+    } else {
+      hubInHead["the shelf"] = `no Hub bound, and the shelf said why: "${said}"`;
+    }
+    // The sheet's own package ("Close  Esc"), where the circle stood, folds it into the circle.
+    const packAt = await pressAt(".vf-head-sheet .vf-head-pack");
+    await untilRenderer(
+      win,
+      "the sheet folded back into the circle",
+      `(() => { const f = ${HUB_FACTS};
+        const shut = f.sheet !== null && !f.sheet.open && f.sheet.inert;
+        return shut && f.circle !== null && !f.circle.open ? "ok" : JSON.stringify(f); })()`,
+      5_000,
+    );
+    const folded = await hubFacts();
+    if (folded.view !== "godview") {
+      throw new Error(`the Artifacts sheet moved the window: ${folded.view}`);
+    }
+    hubInHead["the circle"] =
+      `under Godview at ${circleBox.x},${circleBox.y}, ${circleBox.w} × ${circleBox.h}` +
+      `${circle.bar ? " in the terminals' bar" : ""}; pressed by the pointer at ` +
+      `${circleAt.x},${circleAt.y}`;
+    hubInHead["the sheet"] =
+      `grew on Artifacts to ${sheetBox.w} × ${sheetBox.h}; the circle stepped aside, and the ` +
+      `pill's own sheet stayed shut`;
+    hubInHead["the fold"] =
+      `the sheet's own package at ${packAt.x},${packAt.y} folded it into the circle; ` +
+      "still in Godview";
+    verdict["hubInHead"] = hubInHead;
+
+    // 11l. CHAT'S NEW SPARK, ⌘N (SP-1c; DESIGN.md §8 "The New spark sheet") — the
+    //      line's create in Chat, pressed the way a keyboard presses it (⌘N, Ctrl+N
+    //      off the Mac), and the LINE says what it took: its LINE_KEY line, as B's
+    //      and ⌘T's say. In Chat the line takes ⌘N on the window's capture phase, so
+    //      focus never decides it; in Godview it is never pressed, because there a
+    //      focused pane's ghostty keeps ⌘N (new_window). Open: LINE_KEY "opened",
+    //      the sheet a modal dialog portaled to the body, the field behind it inert
+    //      and receded, the name field holding the keyboard and a suggested star
+    //      name, the create on and saying Close, the hatch in one of its states. ⌘N
+    //      again: LINE_KEY "closed", the sheet gone after its 240ms leave, the field
+    //      live again. Esc folds it too, from the name and from the body (the sheet
+    //      hears Esc on the window's capture phase, since the frame stops every key
+    //      aimed at the body under a cover), and says no LINE_KEY; on Canvas ⌘N does
+    //      nothing. Create is never pressed: it hatches a real spark through the
+    //      run's fieldd. Back to Godview's deck for 11h, which must stay last.
+    const newSpark: Record<string, string> = {};
+    /** The key as the line names it in its LINE_KEY line: ⌘N on the Mac, Ctrl+N elsewhere. */
+    const NEW_SPARK_KEY = process.platform === "darwin" ? "⌘N" : "Ctrl+N";
+    type LineKeyFacts = { key: string; view: string; outcome: string };
+    type SparkFacts = {
+      view: string;
+      /** The sheet's layer under the body: its `data-open`, or null while there is none. */
+      layer: string | null;
+      dialog: boolean;
+      fieldInert: boolean | null;
+      recede: string | null;
+      nameFocused: boolean;
+      name: string | null;
+      create: { expanded: string | null; label: string | null; keys: string | null } | null;
+      hatch: string | null;
+    };
+    /** Every LINE_KEY line, as said: an absence is read by its count. */
+    const lineKeysSaid: string[] = [];
+    const hearLineKeys = (...args: unknown[]): void => {
+      for (const arg of args) {
+        const text = consoleText(arg);
+        if (text.startsWith("LINE_KEY ")) lineKeysSaid.push(text.slice("LINE_KEY ".length));
+      }
+    };
+    /** The New spark sheet and what stands behind it, as the page shows them now. */
+    const SPARK_FACTS = `(() => {
+      const layer = document.querySelector("body > .vf-new-spark");
+      const dialog = layer === null ? null : layer.querySelector(
+        'section.vf-new-spark-sheet[role="dialog"][aria-modal="true"][aria-label="New spark"]',
+      );
+      const name = layer === null ? null : layer.querySelector("input.vf-new-spark-name");
+      const hatch = layer === null ? null : layer.querySelector(".vf-spark-hatch");
+      const create = document.querySelector('button.vf-line-create[data-view="assistant"]');
+      const field = document.querySelector(".field-wrap");
+      return {
+        view: ${VIEW_NOW},
+        layer: layer === null ? null : layer.getAttribute("data-open"),
+        dialog: dialog !== null,
+        fieldInert: field === null ? null : field.hasAttribute("inert"),
+        recede: document.querySelector(".field-recede")?.getAttribute("data-peek-recede") ?? null,
+        nameFocused: name !== null && document.activeElement === name,
+        name: name === null ? null : name.value,
+        create: create === null ? null : {
+          expanded: create.getAttribute("aria-expanded"),
+          label: create.getAttribute("aria-label"),
+          keys: create.getAttribute("aria-keyshortcuts"),
+        },
+        hatch: hatch === null ? null : hatch.getAttribute("data-hatch"),
+      };
+    })()`;
+    const sparkFacts = async (): Promise<SparkFacts> =>
+      (await win.webContents.executeJavaScript(SPARK_FACTS)) as SparkFacts;
+    const SPARK_OPEN = `(() => { const f = ${SPARK_FACTS};
+      const open = f.layer === "true" && f.dialog && f.fieldInert === true;
+      return open && f.nameFocused && (f.name ?? "") !== "" && f.hatch !== null
+        ? "ok" : JSON.stringify(f); })()`;
+    const SPARK_GONE = `(() => { const f = ${SPARK_FACTS};
+      return f.layer === null && f.fieldInert === false ? "ok" : JSON.stringify(f); })()`;
+    /** ⌘N as a keyboard presses it, and the LINE_KEY the line says for it. */
+    const newSparkKey = async (): Promise<LineKeyFacts> => {
+      const heard = waitForConsole(win, "LINE_KEY ", 10_000);
+      pressProductChord(win, "n");
+      return JSON.parse(await heard) as LineKeyFacts;
+    };
+    const openSheet = async (label: string): Promise<SparkFacts> => {
+      const said = await newSparkKey();
+      if (said.key !== NEW_SPARK_KEY || said.view !== "assistant" || said.outcome !== "opened") {
+        throw new Error(`${label} was heard as ${JSON.stringify(said)}`);
+      }
+      await untilRenderer(
+        win,
+        `${label}: the New spark sheet open over the field`,
+        SPARK_OPEN,
+        5_000,
+      );
+      return sparkFacts();
+    };
+    win.webContents.on("console-message", hearLineKeys);
+    try {
+      pressViewKey(win, "assistant");
+      await untilRenderer(
+        win,
+        "⌘4 to Chat",
+        `${VIEW_NOW} === "assistant" ? "ok" : ${VIEW_NOW}`,
+        10_000,
+      );
+      await untilRenderer(
+        win,
+        "the pane letting go of the keyboard under Chat",
+        `document.activeElement?.classList.contains("terminal-input") ? "still focused" : "ok"`,
+        5_000,
+      );
+      const before = await sparkFacts();
+      if (before.layer !== null || before.fieldInert !== false || before.create === null) {
+        throw new Error(`Chat was not ready for ⌘N: ${JSON.stringify(before)}`);
+      }
+
+      // ⌘N opens the sheet.
+      const open = await openSheet("⌘N in Chat");
+      if (open.create?.expanded !== "true" || open.create.label !== "Close the sheet") {
+        throw new Error(`Chat's create did not turn to Close: ${JSON.stringify(open)}`);
+      }
+      if (open.recede !== "true") {
+        throw new Error(`the field did not recede behind the sheet: ${JSON.stringify(open)}`);
+      }
+      if (open.hatch === null || !["loading", "live", "flat"].includes(open.hatch)) {
+        throw new Error(`the sheet's hatch is in no state of its own: ${JSON.stringify(open)}`);
+      }
+      newSpark["⌘N"] =
+        `opened (LINE_KEY): a modal "New spark" over the field, which is inert and receded; the ` +
+        `name field holds the keyboard and "${open.name}"; the create says ` +
+        `"${open.create.label}"; the hatch ${open.hatch}`;
+
+      // ⌘N again closes it.
+      const closed = await newSparkKey();
+      if (
+        closed.key !== NEW_SPARK_KEY ||
+        closed.view !== "assistant" ||
+        closed.outcome !== "closed"
+      ) {
+        throw new Error(`⌘N again in Chat was heard as ${JSON.stringify(closed)}`);
+      }
+      await untilRenderer(win, "the New spark sheet gone after its leave", SPARK_GONE, 2_000);
+      const shut = await sparkFacts();
+      if (shut.create?.expanded !== "false" || shut.create.label !== "New spark") {
+        throw new Error(`Chat's create did not turn back to New spark: ${JSON.stringify(shut)}`);
+      }
+      newSpark["⌘N again"] =
+        `closed (LINE_KEY): the sheet gone and the field live; the create says ` +
+        `"${shut.create.label}" (${shut.create.keys ?? "no keys said"})`;
+
+      // Esc folds it too, and the line says nothing.
+      await openSheet("⌘N in Chat, before Esc");
+      const saidBeforeEsc = lineKeysSaid.length;
+      win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
+      await untilRenderer(win, "Esc folding the New spark sheet", SPARK_GONE, 2_000);
+      await sleep(1_000);
+      if (lineKeysSaid.length > saidBeforeEsc) {
+        throw new Error(`Esc said a LINE_KEY: ${lineKeysSaid.slice(saidBeforeEsc).join(" · ")}`);
+      }
+      newSpark["Esc"] = "folded the sheet, and the line said no LINE_KEY";
+
+      // Esc with the keyboard on the body folds it too, as a click on the sheet's blank space
+      // leaves it: the frame stops a key aimed at the body under a cover, so the sheet hears Esc
+      // on the window's capture phase before it can (SP-1c's `3a6353c40`, the Peek's way).
+      await openSheet("⌘N in Chat, before Esc from the body");
+      await win.webContents.executeJavaScript(`document.activeElement?.blur?.(); "ok"`);
+      await untilRenderer(
+        win,
+        "the keyboard on the body under the sheet",
+        `document.activeElement === document.body ? "ok" : String(document.activeElement)`,
+        2_000,
+      );
+      const saidBeforeBodyEsc = lineKeysSaid.length;
+      win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
+      await untilRenderer(win, "Esc from the body folding the New spark sheet", SPARK_GONE, 2_000);
+      await sleep(1_000);
+      if (lineKeysSaid.length > saidBeforeBodyEsc) {
+        throw new Error(
+          `Esc from the body said a LINE_KEY: ${lineKeysSaid.slice(saidBeforeBodyEsc).join(" · ")}`,
+        );
+      }
+      newSpark["Esc from the body"] =
+        "folded the sheet with the keyboard on the body, and the line said no LINE_KEY";
+
+      // On Canvas ⌘N does nothing. An absence is watched for a while (⇧⇧'s rule).
+      pressViewKey(win, "canvas");
+      await untilRenderer(
+        win,
+        "⌘1 to the canvas",
+        `${VIEW_NOW} === "canvas" ? "ok" : ${VIEW_NOW}`,
+        10_000,
+      );
+      await win.webContents.executeJavaScript(`document.activeElement?.blur?.(); "ok"`);
+      const saidOnCanvas = lineKeysSaid.length;
+      pressProductChord(win, "n");
+      await sleep(1_500);
+      const canvas = await sparkFacts();
+      if (lineKeysSaid.length > saidOnCanvas || canvas.layer !== null) {
+        throw new Error(
+          `⌘N on the canvas did something: ${lineKeysSaid.slice(saidOnCanvas).join(" · ")} · ` +
+            JSON.stringify(canvas),
+        );
+      }
+      if (canvas.view !== "canvas") {
+        throw new Error(`⌘N moved the window off the canvas: ${canvas.view}`);
+      }
+      newSpark["on the canvas"] = "⌘N did nothing: no LINE_KEY, no sheet";
+      pressViewKey(win, "godview");
+      await deck.until((facts) => facts.active, "⌘2 back to the deck", 30_000);
+    } finally {
+      win.webContents.off("console-message", hearLineKeys);
+    }
+    verdict["newSpark"] = newSpark;
 
     // 11h. THE LINE'S KEYS, DELIVERED FROM A FOCUSED PANE (One Frame FR-2,
     //      §11) — the probes B and ⌘T owe before they ship, in 11g's form: a
@@ -9749,32 +10493,22 @@ export async function runSmokeGodview(opts: {
     //      the PANE hears it and the LINE takes nothing — no LINE_KEY line,
     //      Objects shut, the window still in Godview — an absence, watched for
     //      a while as ⇧⇧'s is; a Backspace then takes the b back out of the
-    //      shell. The interim send (four-views §11) goes next, end to end: @
-    //      typed into the line, Return takes the nearest pane (the active one),
-    //      a line typed and sent is PASTED into that pane — and the shell runs
-    //      it only when the harness presses Return there, because the send
-    //      never presses it. ⌘T is the line's in Godview: the LINE asked the
-    //      deck, the PANE never heard it (ghostty's new_tab), and the deck
-    //      shows a session it did not before. Then B on the canvas with
-    //      nothing focused raises Objects behind the line, and B puts it away.
+    //      shell. A CARD's play goes next, end to end (HN-4; the line's send
+    //      rung, re-aimed when the draft left with LN-D3 — R-T 2): a line for
+    //      the shell dealt into the hand and played onto the active pane through
+    //      the hand's lab door (`__vfCards`: the place a drop finds there, the
+    //      deck's own pane target) is PASTED into it — and the shell runs it
+    //      only when the harness presses the pane's Return, because a card never
+    //      presses it. ⌘T is the line's in Godview: the LINE asked the deck, the
+    //      PANE never heard it (ghostty's new_tab), and the deck shows a session
+    //      it did not before. Then B on the canvas with nothing focused raises
+    //      Objects behind the line, and B puts it away.
     const lineKeys: Record<string, string> = {};
     const lineTaken: string[] = [];
     const hearLine = (...args: unknown[]): void => {
       for (const arg of args) {
         const text = consoleText(arg);
         if (text.startsWith("LINE_KEY ")) lineTaken.push(text.slice("LINE_KEY ".length));
-      }
-    };
-    /** Type into whatever holds focus as a keyboard does — a key down, the
-     * character it types, the key up — which is what an editor needs (a
-     * terminal reads the key; a contenteditable inserts the character). */
-    const typeChars = async (text: string): Promise<void> => {
-      for (const character of text) {
-        const keyCode = character === " " ? "Space" : character;
-        win.webContents.sendInputEvent({ type: "keyDown", keyCode });
-        win.webContents.sendInputEvent({ type: "char", keyCode });
-        win.webContents.sendInputEvent({ type: "keyUp", keyCode });
-        await sleep(3);
       }
     };
     const pressKey = (keyCode: string): void => {
@@ -9785,40 +10519,33 @@ export async function runSmokeGodview(opts: {
     // runs GPU-less — no desk, so no board can rise here (smoke:canvas's BOARD rows hold the board itself). What B moves
     // here is the LINE's own: the frame's Objects surface, read off the line's create (`aria-expanded`, its ✕)
     const objectsNow = `(document.querySelector(".vf-line-create")?.getAttribute("aria-expanded") === "true" ? "open" : "shut")`;
-    // THE SEND'S WAITS AND ITS EVIDENCE (testing/smoke-line-send.ts). The rung hands a pane four
-    // inputs — b, its Backspace, the line's send (a paste), the pane's Return — straight after ⌘2
-    // back from the canvas, when the pane's frames leg is replaced (two red runs' cell logs show
-    // it) and its routed input is closed while the activation recovers; ghosttea drops input
-    // silently while it is. It was the one shell-marker rung with no wait and no retry, and it
-    // ended "the routed pane did not create /tmp/fr2….txt" six times. So it waits for the aimed
-    // session's input to be open before its first key and before the pane's Return (the `direct`
-    // watch, by the session's OWN latest marker — the watch's latest may speak of another pane),
-    // samples that gate before each of the four, and prints all of it once, when it fails (the
-    // catch below). No retry: a retyped line would hide an input the pane dropped.
-    let sendEvidence: LineSendEvidence | null = null;
-    const gateOf = (session: string): DirectTerminalFacts | null =>
-      latestGate(direct.history(), session);
+    // B and its Backspace go to the active pane straight after ⌘2 back from the canvas, when the pane's frames leg is
+    // replaced and its routed input is closed while the activation recovers — ghosttea drops input silently while it
+    // is. So the rung waits for that session's input to be open first (the `direct` watch, by the session's OWN latest
+    // marker — the watch's latest may speak of another pane), and the b never stays at the shell's prompt; and again
+    // before the pane's Return that runs the card's line. The play itself waits on the pane's input as a drop does
+    // (`whenInputOpen`, the product's own bound), so the rung samples that gate before it and waits on nothing: a wait
+    // here would hide the play's. The play's evidence is printed once, when its rung fails (the catch below). No retry:
+    // a line played again would hide a paste the pane dropped.
     const untilInputOpen = async (session: string, before: string): Promise<number> => {
       const began = Date.now();
       await direct.until(
-        () => gateOpen(gateOf(session)),
-        `the aimed pane's input to be open before ${before}`,
+        () => gateOpen(latestGate(direct.history(), session)),
+        `the active pane's input to be open before ${before}`,
         15_000,
       );
       return Date.now() - began;
     };
+    let playEvidence: CardPlayEvidence | null = null;
     win.webContents.on("console-message", hearLine);
     try {
       await focusDeck(win);
       await untilRenderer(win, "the probe reset", CHORD_PROBE, 5_000);
-      const aimedSession = deck.current()?.activeSessionId;
-      if (aimedSession === undefined) {
+      const activeSession = deck.current()?.activeSessionId;
+      if (activeSession === undefined) {
         throw new Error("the deck names no active session for the line's keys to be typed into");
       }
-      const evidence = newLineSendEvidence(aimedSession);
-      sendEvidence = evidence;
-      evidence.waitedMs.inputBeforeB = await untilInputOpen(aimedSession, "b");
-      evidence.inputAllowed.b = gateOf(aimedSession)?.inputAllowed ?? null;
+      const inputWaitedMs = await untilInputOpen(activeSession, "B");
       pressKey("b");
       await sleep(1_500);
       const paneHeardB = await chordProbeHeard(win);
@@ -9834,14 +10561,11 @@ export async function runSmokeGodview(opts: {
       const afterB = (await win.webContents.executeJavaScript(VIEW_NOW)) as string;
       if (afterB !== "godview")
         throw new Error(`B from a focused pane moved the window: ${afterB}`);
-      evidence.inputAllowed.Backspace = gateOf(aimedSession)?.inputAllowed ?? null;
       pressKey("Backspace");
-      // THE BACKSPACE IS HEARD BEFORE THE DRAFT TAKES FOCUS. A key and an evaluate travel separate
-      // channels with no order between them: the focus move below could land first, the Backspace
-      // then goes to the line's empty draft (where a synthesized one deletes nothing), and the b
-      // stays at the shell's prompt, where the sent line becomes `becho …`. The probe hears every
-      // key the pane is handed, so the rung waits for it to have heard this one.
-      evidence.backspaceHeardBeforeDraft = false;
+      // THE BACKSPACE IS HEARD BEFORE ANYTHING MOVES THE FOCUS. A key and an evaluate travel
+      // separate channels with no order between them: ⌘T's focus move below could land first, and
+      // the b would stay at the shell's prompt. The probe hears every key the pane is handed, so
+      // the rung waits for it to have heard this one.
       const backspaceAt = Date.now();
       await untilRenderer(
         win,
@@ -9849,61 +10573,64 @@ export async function runSmokeGodview(opts: {
         `(window.__vfChordProbe ?? []).includes("Backspace") ? "ok" : JSON.stringify(window.__vfChordProbe ?? [])`,
         5_000,
       );
-      evidence.backspaceHeardBeforeDraft = true;
-      evidence.waitedMs.backspaceHeard = Date.now() - backspaceAt;
+      const backspaceMs = Date.now() - backspaceAt;
       lineKeys["B"] =
         "godview, a pane focused: the pane typed it; the line took nothing (the pane's input open " +
-        `after ${evidence.waitedMs.inputBeforeB}ms; its Backspace heard after ${evidence.waitedMs.backspaceHeard}ms)`;
+        `after ${inputWaitedMs}ms; its Backspace heard after ${backspaceMs}ms)`;
 
       if (process.platform !== "win32") {
-        const nonce = `fr2${Math.random().toString(36).slice(2, 10)}`;
-        const sentPath = `/tmp/${nonce}.txt`;
-        evidence.path = sentPath;
-        const placed = (await win.webContents.executeJavaScript(
-          `(() => { const field = document.querySelector(".vf-line-input"); if (!field) return "no draft";
-            field.focus(); return document.activeElement === field ? "ok" : "focus refused"; })()`,
-        )) as string;
-        if (placed !== "ok") throw new Error(`the line's draft could not take focus: ${placed}`);
-        await typeChars("@");
-        const aimedAt = await untilRendererValue(
-          win,
-          "@'s list, the active pane hot",
-          `document.querySelector(".vf-at-menu .vf-at-row.is-aim[data-hot] b")?.textContent ?? "no list"`,
-          5_000,
-          (value) => value !== "no list",
-        );
-        pressKey("Return");
-        await untilRenderer(
-          win,
-          "the aim leading the draft",
-          `document.querySelector('.vf-line-chip[data-chip="aim"]') ? "ok" : "unaimed"`,
-          5_000,
-        );
-        await typeChars(`echo ${nonce} > ${sentPath}`);
-        evidence.inputAllowed.send = gateOf(aimedSession)?.inputAllowed ?? null;
-        pressKey("Return");
+        const nonce = `hn4${Math.random().toString(36).slice(2, 10)}`;
+        const playedPath = `/tmp/${nonce}.txt`;
+        const evidence = newCardPlayEvidence(activeSession, playedPath);
+        playEvidence = evidence;
+        const shellLine = `echo ${nonce} > ${playedPath}`;
+        const dealt = (await win.webContents.executeJavaScript(
+          `globalThis.__vfCards?.deal(${JSON.stringify(shellLine)}) ?? "no lab"`,
+          true,
+        )) as string | null;
+        if (dealt === "no lab" || dealt === null) {
+          throw new Error(`the hand's lab door (window.__vfCards) dealt no card (${dealt})`);
+        }
+        evidence.inputAllowed.play =
+          latestGate(direct.history(), activeSession)?.inputAllowed ?? null;
+        const play = (await win.webContents.executeJavaScript(
+          `globalThis.__vfCards.playInto(${JSON.stringify(activeSession)})`,
+          true,
+        )) as CardPlaySeen;
+        evidence.play = play;
+        const misplayed = judgeCardPlay(play);
+        if (misplayed.length > 0) {
+          throw new Error(`the card did not play: ${misplayed.join("; ")}`);
+        }
+        // the play's outcome said on the line, as a drop's is (not a note an earlier row left)
         const said = await untilRendererValue(
           win,
-          "the line saying where the send went",
+          "the line saying the card was pasted",
           `document.querySelector(".vf-line-note")?.textContent ?? "no note"`,
           5_000,
-          (value) => value !== "no note",
+          (value) => value.startsWith("Pasted into"),
         );
-        if (!said.startsWith("Pasted into")) throw new Error(`the send did not paste: ${said}`);
         await sleep(400);
-        if (existsSync(sentPath)) {
-          throw new Error("the send pressed Return for the pane — the shell ran it unasked");
+        if (existsSync(playedPath)) {
+          throw new Error("the play pressed Return for the pane — the shell ran the line unasked");
         }
-        evidence.waitedMs.inputBeforeReturn = await untilInputOpen(aimedSession, "its Return");
-        evidence.inputAllowed.Return = gateOf(aimedSession)?.inputAllowed ?? null;
+        evidence.waitedMs.inputBeforeReturn = await untilInputOpen(activeSession, "its Return");
+        evidence.inputAllowed.Return =
+          latestGate(direct.history(), activeSession)?.inputAllowed ?? null;
         pressKey("Return");
-        await waitForShellMarker(sentPath, 10_000, nonce);
-        lineKeys["send"] =
-          `aimed at ${aimedAt}: ${said}; the shell ran it on the pane's own Return (the pane's ` +
-          `input open after ${evidence.waitedMs.inputBeforeReturn}ms)`;
+        await waitForShellMarker(playedPath, 10_000, nonce);
+        rmSync(playedPath, { force: true });
+        const emptied = (await win.webContents.executeJavaScript(
+          "globalThis.__vfCards.clear()",
+          true,
+        )) as number;
+        const returnMs = evidence.waitedMs.inputBeforeReturn;
+        lineKeys["card"] =
+          `${said} (${play.answer?.label ?? "?"}): not run until the pane's own Return, then ` +
+          `the shell ran it (the input open after ${returnMs}ms); ${emptied} card(s) cleared`;
       }
-      // the send's rung is over: what fails below is ⌘T's or the canvas's, and prints none of this
-      sendEvidence = null;
+      // the play's rung is over: what fails below is ⌘T's or the canvas's, and prints none of this
+      playEvidence = null;
 
       await focusDeck(win);
       await untilRenderer(win, "the probe reset", CHORD_PROBE, 5_000);
@@ -9975,29 +10702,23 @@ export async function runSmokeGodview(opts: {
       pressViewKey(win, "godview");
       await deck.until((facts) => facts.active, "⌘2 back to the deck", 30_000);
     } catch (cause) {
-      // THE SEND'S ONE LINE OF EVIDENCE, printed only when its rung fails. How it reads (the
-      // line-send diagnosis, §6):
-      //   the file exists with 0 bytes · input open at the Backspace · the Backspace not heard
-      //     before the draft — the Backspace lost its race with the draft's focus, and the shell
-      //     ran `becho …` (cause B). The rung waits for the probe now and cannot go on unheard,
-      //     so `backspaceHeardBeforeDraft: false` means that wait timed out: the pane was never
-      //     handed the key, and the send had not begun (no file);
-      //   the file exists with 0 bytes · input CLOSED at the Backspace — the pane dropped the
-      //     Backspace and the b stayed at the prompt (cause A, the routed input gate);
-      //   no file · input CLOSED at the send or at the Return — the pane dropped the paste or the
-      //     Return (cause A). The line's door asks the gate first now, so a send into a closed
-      //     input fails before the file is looked for, as "the send did not paste: Copied — …";
-      //   no file · input open at all four — neither cause: the next look is the cell's own debug
-      //     line `field_native.tp.input.dropped` (run with FIELD_NATIVE_ALLOW_LOG_FILTER=1).
-      // A sample is the session's latest marker as main had heard it: it can trail the renderer
-      // by a console message, and `gateNow` is the same reading at the moment of the failure.
-      if (sendEvidence !== null) {
+      // THE PLAY'S ONE LINE OF EVIDENCE, printed only when its rung fails. How it reads:
+      //   `play` names no pane target, or refused — the play never reached the deck's pane: the lab door aimed at the
+      //     active pane's centre and found another place on top there (or none), or the pane refused the card;
+      //   `play.played` "Not pasted — …'s pane is not taking input" · input CLOSED at the play — the pane's routed
+      //     input stayed shut past the play's own bound (the gate, as the send's cause A);
+      //   no file · input open at the play and at the Return — the paste or the Return never reached the shell: the
+      //     next look is the cell's own debug line `field_native.tp.input.dropped` (FIELD_NATIVE_ALLOW_LOG_FILTER=1);
+      //   the file exists before the Return — the play pressed Return for the pane (the failure's own words say so).
+      // A sample is the session's latest marker as main had heard it: it can trail the renderer by a console message,
+      // and `gateNow` is the same reading at the moment of the failure.
+      if (playEvidence !== null) {
         console.log(
-          lineSendEvidenceLine(
-            sendEvidence,
+          cardPlayEvidenceLine(
+            playEvidence,
             cause,
-            sendEvidence.path === null ? null : markerFile(sendEvidence.path),
-            gateOf(sendEvidence.session),
+            markerFile(playEvidence.path),
+            latestGate(direct.history(), playEvidence.session),
           ),
         );
       }

@@ -102,8 +102,61 @@ describe("UI system ownership boundaries", () => {
     ].join("\n");
 
     expect(catalogCss).not.toMatch(
-      /^\.vf-(?:artifact|godview\b|widget-tray\b|command-palette\b|palette-|settings-dialog\b|loading-veil\b|terminal-picker\b|deck-zoom\b|me\b|me-|face\b|face-|face-picker|settings-account|edge-tray\b|views\b|views-|cover\b|cover-|history\b|history-|line\b|line-|at-|head\b|head-|menu\b|menu-|ah-|tr-|bar\b|bar-|status-line|stories\b|stories-|story\b|story-)/m,
+      /^\.vf-(?:artifact|godview\b|widget-tray\b|command-palette\b|palette-|settings-dialog\b|loading-veil\b|terminal-picker\b|deck-zoom\b|me\b|me-|face\b|face-|face-picker|settings-account|edge-tray\b|views\b|views-|cover\b|cover-|history\b|history-|line\b|line-|at-|head\b|head-|menu\b|menu-|ah-|tr-|bar\b|bar-|status-line|stories\b|stories-|story\b|story-|card\b|card-|cards\b|cards-)/m,
     );
+    // HN-8 (PL-D2): the package circle's plates stage it, and never restyle it
+    expect(catalogCss).not.toMatch(/^\.vf-package-/m);
+    // SP-1b: Chat's plate is a box on the frame's ground; the panel's rules are the product's
+    expect(catalogCss).not.toMatch(/^\.vf-chat(?:\b|-)/m);
+    // SP-1c: the New spark sheet's plate stages it over Chat; the sheet's rules are the product's
+    expect(catalogCss).not.toMatch(/^\.vf-new-spark(?:\b|-)/m);
+  });
+
+  it("keeps Chat's fixture an ADAPTER — the product's reading over fixture sparks and rows, never the panel's markup (SP-1b)", () => {
+    // The catalog stands in for what fieldd answers — the sparks it keeps and the field board's rows — and runs them
+    // through the PRODUCT's own reading (`sparkEntriesOf`); the panel it mounts is the shipping one. Never the
+    // panel's classes, never a stylesheet, never the product's doors, its feed or the host.
+    const preview = source("design-system/ChatPreview.tsx");
+    const fixtures = source("design-system/chat-fixtures.ts");
+    expect(preview).toMatch(/<ChatPanelView\s/u);
+    expect(fixtures).toContain("sparkEntriesOf");
+    for (const file of [preview, fixtures]) {
+      expect(file).not.toMatch(/className="vf-chat/);
+      expect(file).not.toContain("<style");
+      expect(file).not.toContain("getHost");
+      expect(file).not.toContain("useFielddClient");
+      expect(file).not.toContain("sparksPortOver");
+      expect(file).not.toContain("startSparksFeed");
+    }
+    // the frame's cover mounts the same preview, as it mounts History's
+    expect(source("design-system/ViewFramePreview.tsx")).toContain("<ChatPreview");
+  });
+
+  it("keeps the New spark sheet's fixture an ADAPTER — the product's sheet over a fixture port, never its markup (SP-1c)", () => {
+    // The catalog stands in for what fieldd answers the sheet — the agents, the profiles, a picker, a hatch — behind
+    // the product's own port shape, and reads its still states through the product's own helpers; the sheet it mounts
+    // is the shipping one, live and still. Never the sheet's classes, never a stylesheet, never the product's doors or
+    // the host.
+    const preview = source("design-system/NewSparkPreview.tsx");
+    const fixtures = source("design-system/new-spark-fixtures.ts");
+    expect(preview).toMatch(/<NewSparkSheet\s/u);
+    expect(preview).toMatch(/<NewSparkSheetView\s/u);
+    for (const reading of [
+      "sparkAgentsOf",
+      "agentMenuOf",
+      "effortOf",
+      "profileChipsOf",
+      "reachOf",
+      "refusalOf",
+    ])
+      expect(fixtures).toContain(reading);
+    for (const file of [preview, fixtures]) {
+      expect(file).not.toMatch(/className="vf-new-spark/);
+      expect(file).not.toContain("<style");
+      expect(file).not.toContain("getHost");
+      expect(file).not.toContain("useFielddClient");
+      expect(file).not.toContain("newSparkPortOver");
+    }
   });
 
   it("keeps the face's own styling free of colour literals of any spelling (UA-7)", () => {
@@ -134,6 +187,8 @@ describe("UI system ownership boundaries", () => {
       "account/FacePicker.tsx",
       "account/faces.ts",
       "account/use-account.ts",
+      // TS-7b — the Connected aside's phone code: connect.tsx mounts it, so it is boot-reachable too
+      "account/door/add-phone-code.tsx",
       ...onboarding,
     ]) {
       expect(source(module), module).not.toMatch(/from "@vibefield\/(?:contracts|design-kit)";/);
@@ -267,16 +322,18 @@ describe("UI system ownership boundaries", () => {
     }
   });
 
-  it("recedes the field under the Peek and holds it out of reach — at rest no transform, so no stacking context (2026-10-08)", () => {
+  it("recedes the field under the Peek and the New spark sheet and holds it out of reach — at rest no transform, so no stacking context (2026-10-08; SP-1c)", () => {
     // DESIGN.md §6: the view AND the frame recede to 0.98 about 50% 46% over
-    // 420ms on the island curve while the Peek stands; its scrim and popup are
-    // drawn on the document's body, outside the field. A resting transform
-    // would bury the head under the drag strip (BootRoot, 2026-07-22).
+    // 420ms on the island curve while the Peek stands, or the New spark sheet
+    // (§8, SP-1c); each one's scrim is drawn on the document's body, outside
+    // the field. A resting transform would bury the head under the drag strip
+    // (BootRoot, 2026-07-22).
     const field = source("field.tsx");
+    expect(field).toContain('const modal = surface === "search" || surface === "new-spark";');
     expect(field).toContain(
-      '<div className="field-recede" data-peek-recede={searching ? "true" : "false"}>',
+      '<div className="field-recede" data-peek-recede={modal ? "true" : "false"}>',
     );
-    expect(field).toContain("inert={searching}");
+    expect(field).toContain("inert={modal}");
     // What recedes is what you see — the still and the chrome, the cover with
     // it — and never the desk's own box (DK-15): the keyed scene comes BEFORE
     // the recede's box and outside it; the still and the chrome inside it; the
@@ -385,6 +442,24 @@ describe("UI system ownership boundaries", () => {
     }
   });
 
+  it("keeps the package circle's fixture an ADAPTER — fixture titles in the head's own words, never the circle's markup (HN-8, PL-D2)", () => {
+    // The catalog stands in for what a host supplies — the window's view, the deck's state and
+    // the head's reading of the catalog (the titles whose source is unavailable) — and mounts the
+    // shipping circle over them, in the words the head says. Never the circle's classes, never a
+    // stylesheet, never the reading's own door or the host.
+    const fixture = source("design-system/PackageCirclePreview.tsx");
+    expect(fixture).toMatch(/<PackageCircleView\s/u);
+    expect(fixture).toContain("artifactsDotWords(");
+    expect(fixture).not.toMatch(/className="vf-package/);
+    expect(fixture).not.toContain("<style");
+    expect(fixture).not.toContain("getHost");
+    expect(fixture).not.toContain("useFielddClient");
+    expect(fixture).not.toContain("useArtifactsDot");
+    expect(fixture).not.toContain("setArtifactCatalog");
+    // …and its plates MOUNTED on the page, not merely defined
+    expect(catalogPageSources()).toMatch(/<PackageCirclePlate\s/u);
+  });
+
   it("keeps the corner's fixture an ADAPTER — the account's and the theme's facts, never the menu's markup (FR-4)", () => {
     // The catalog stands in for what a host supplies — the account and the
     // theme's owner (main's) — and mounts the shipping Me menu and Settings →
@@ -397,6 +472,23 @@ describe("UI system ownership boundaries", () => {
     expect(fixture).not.toContain("getHost");
     expect(fixture).not.toContain("useAppTheme");
     expect(fixture).not.toContain("setAppTheme");
+  });
+
+  it("keeps the update corner's fixture an ADAPTER — main's projections through the shipping row, never the menu's markup (AU-2)", () => {
+    // The catalog stands in for what the controller holds — the row's flow inside one open, main's question, a
+    // refusal's line — and mounts the shipping Me menu over the shipping words: the row by `meUpdateRow`, the dot by
+    // `updateWaits`. Never the menu's own classes, never the host's doors, never the controller.
+    const fixture = source("design-system/UpdateCornerPreview.tsx");
+    expect(fixture).toContain("MeMenuView");
+    expect(fixture).toContain("meUpdateRow");
+    expect(fixture).toContain("updateWaits");
+    expect(fixture).not.toMatch(/className="vf-me/u);
+    expect(fixture).not.toContain("<style");
+    expect(fixture).not.toContain("getHost");
+    expect(fixture).not.toContain("useUpdateRestart");
+    expect(fixture).not.toMatch(/<MeMenu\s/u);
+    const words = source("design-system/updates-settings-fixtures.ts");
+    expect(words).toContain("updateCornerFixture");
   });
 
   it("keeps the update card's fixture an ADAPTER — main's projections, answers and doctor lines, never the card's markup (WP12d L3c-ii)", () => {
@@ -420,19 +512,74 @@ describe("UI system ownership boundaries", () => {
     );
     expect(page).not.toMatch(/<UpdatesSection\s/u);
     expect(page).not.toMatch(/<UpdatesDoctorSection\s/u);
+    // AU-3 (AU-D8 A) — the page of its own, in the shipping dialog; Your devices over the SHIPPING rows' builder,
+    // never its controller (the roster is fieldd's, and the catalog has none)
+    expect(page).toMatch(/activePage="updates"/u);
+    expect(fixture).toContain("updateDeviceRows(");
+    expect(fixture).not.toMatch(/import \{[^}]*\} from "\.\.\/panels\/UpdatesDevicesSection"/u);
+    expect(page).not.toMatch(/<UpdatesDevicesSection\s/u);
   });
 
-  it("keeps the edges' fixture an ADAPTER — tiles and an open drawer, never the trays' markup (FR-4)", () => {
-    // The catalog stands in for what a host supplies — the stills, which drawer
-    // the owner holds, the view — and mounts the shipping tray view on both
-    // sides, with the Hub through its plugin's own fixture door.
-    const fixture = source("design-system/EdgesPreview.tsx");
-    expect(fixture).toContain("EdgeTrayView");
-    expect(fixture).toContain("ArtifactPanelPreview");
-    expect(fixture).not.toMatch(/className="vf-(?:edge-tray|artifact|side-panel)/);
+  it("keeps the Hub's plate on its plugin's own fixture door, at the shelf's width — never the Hub's markup (HN-8)", () => {
+    // The catalog stands in for what a host supplies — the product client,
+    // through the plugin's `/design-system` entry — and gives the Hub the width
+    // the pill's sheet gives its Artifacts shelf, in a container, where the
+    // plugin's own stylesheet answers with its tile form (PL-D3). The drawer
+    // that held it until HN-8 left with the edges.
+    const page = source("design-system/sections/SurfacesSection.tsx");
+    expect(page).toMatch(/<ArtifactPanelPreview state=\{state\} \/>/u);
+    expect(page).not.toMatch(/className="vf-(?:artifact|side-panel)/u);
+    expect(page).not.toContain("useVisiblePluginSurfaces");
+    expect(source("design-system/styles/scenes.css")).toMatch(
+      /\.vf-ds-shelf-stage \{[^}]*504px\);[^}]*container-type: inline-size;/u,
+    );
+  });
+
+  it("keeps the edge tray, its catalog plates and its suite gone (HN-8) — Artifacts' doors are the head's", () => {
+    // The edges left the frame (PL-D1…PL-D3; DESIGN.md §8 "Edge trays", retired; §10): no
+    // notch, no sliver, no drawer. The tray's module, the catalog's plates of it and its suite
+    // are gone; nothing imports or styles it; ChromeLayer mounts none and the attention stack
+    // steps aside for no drawer; and the hud-flight direction only the tray wore went with it.
+    expect(existsSync(join(PACKAGE_ROOT, "src", "hud", "edge-tray"))).toBe(false);
+    expect(existsSync(join(PACKAGE_ROOT, "src", "design-system", "EdgesPreview.tsx"))).toBe(false);
+    expect(readdirSync(join(PACKAGE_ROOT, "test"))).not.toContain("edge-tray.test.tsx");
+    const walk = (dir: string): string[] =>
+      readdirSync(join(PACKAGE_ROOT, "src", dir), { withFileTypes: true }).flatMap((entry) =>
+        entry.isDirectory()
+          ? walk(join(dir, entry.name))
+          : /\.(?:css|tsx?)$/u.test(entry.name)
+            ? [join(dir, entry.name)]
+            : [],
+      );
+    for (const file of walk(".")) {
+      const text = source(file);
+      expect(text, file).not.toMatch(/from "[./]*(?:hud\/)?edge-tray\//u);
+      expect(text, file).not.toMatch(/\.vf-edge-tray[\w-]*[^\n{]*\{/u);
+      expect(text, file).not.toMatch(/className="[^"]*vf-edge-tray/u);
+    }
+    const chrome = source("field/ChromeLayer.tsx");
+    expect(chrome).not.toMatch(/<ArtifactsTray\s/u);
+    expect(chrome).not.toContain("calc(152px + 1rem)");
+    expect(source("styles/base.css")).not.toContain('[data-hud-flight="right"]');
+  });
+
+  it("keeps the hand's fixture an ADAPTER — the product's own model over fixture cards, never the hand's markup (HN)", () => {
+    // The catalog stands in for what a host supplies — the cards (a picture it
+    // draws itself), the pointer, the clock, the window — and mounts the
+    // shipping fan and faces, placed by the product's own model. Never the
+    // hand's own classes, never a stylesheet, never the store, the host or the
+    // controller (`<Cards` — never `CardsView`).
+    const fixture = source("design-system/CardsPreview.tsx");
+    expect(fixture).toMatch(/<CardsView\s/u);
+    expect(fixture).toMatch(/<CardFace\s/u);
+    // the CALLS, not the names (an import alone would satisfy a name)
+    for (const model of ["reachLift(", "reachedIndex(", "textCardOf(", "termCardOf("])
+      expect(fixture).toContain(model);
+    expect(fixture).toMatch(/raised \? layoutRaised : layoutCards/u);
+    expect(fixture).not.toMatch(/className="[^"]*vf-cards?(?:-|\b)/u);
     expect(fixture).not.toContain("<style");
-    expect(fixture).not.toContain("getHost");
-    expect(fixture).not.toContain("useVisiblePluginSurfaces");
+    for (const door of [/\bgetHost\b/u, /\bcardsStore\b/u, /\buseCards\b/u, /<Cards\s/u])
+      expect(fixture).not.toMatch(door);
   });
 
   it("keeps the selection bar's fixture an ADAPTER — the product's own model over fixture selections, never the bar's markup (DK-11)", () => {
@@ -563,13 +710,14 @@ describe("UI system ownership boundaries", () => {
     const head = source("design-system/HeadPreview.tsx");
     const palette = source("design-system/CommandPalettePreview.tsx");
     const corner = source("design-system/CornerPreview.tsx");
-    const edges = source("design-system/EdgesPreview.tsx");
+    const updateCorner = source("design-system/UpdateCornerPreview.tsx");
+    const cards = source("design-system/CardsPreview.tsx");
     const history = source("design-system/HistoryPreview.tsx");
     const bar = source("design-system/SelectionBarPreview.tsx");
     const pegboard = source("design-system/PegboardPreview.tsx");
     const peers = source("design-system/PeersPreview.tsx");
     const peek = source("design-system/PeekPreview.tsx");
-    const catalog = `${peers}\n${pegboard}\n${bar}\n${history}\n${peek}\n${corner}\n${edges}\n${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${paneFrame}\n${paneLauncher}\n${switchScene}\n${viewFrame}\n${line}\n${head}\n${palette}`;
+    const catalog = `${peers}\n${pegboard}\n${bar}\n${history}\n${peek}\n${corner}\n${updateCorner}\n${cards}\n${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${paneFrame}\n${paneLauncher}\n${switchScene}\n${viewFrame}\n${line}\n${head}\n${palette}`;
     for (const productionView of [
       "ArtifactPanelPreview",
       "CommandPalettePreview",
@@ -584,7 +732,6 @@ describe("UI system ownership boundaries", () => {
       // DK-13 — the scenes' board: the pegboard's chrome over the desk's drawer's stand-in (the old
       // Objects sheet, `WidgetTrayFrame`, deleted with its island's state — R21)
       "StageBoard",
-      "EdgeTrayView",
       "OnboardingConnectPaneView",
       "OnboardingDerivingPaneView",
       "OnboardingFieldPaneView",
@@ -623,14 +770,11 @@ describe("UI system ownership boundaries", () => {
       // …and the two faces before the room, as they ship (2026-10-04)
       "HistoryOpeningState",
       "HistoryOpenFailedState",
-      // One Frame FR-2 — the line: its view, @'s list, the plates, and the
-      // live line on its real controller with fixture doors
+      // One Frame FR-2, LN-D1 — the line: its view, the plates (the snapshot's
+      // states among them), and the live line on its real controller with
+      // fixture doors
       "ComposerLinePlate",
       "ComposerLineView",
-      "AtMenuView",
-      // DK-14 — Send to…'s chip faces on the shipping line, and its flier frozen in flight
-      "SendFlightPlate",
-      "ChipFlierView",
       // One Frame FR-3 — the head: its view, a plate per state, and the live
       // head on its real controller over fixture doors (the file pill, the
       // breadcrumbs and the − % + pill retired into it)
@@ -642,10 +786,12 @@ describe("UI system ownership boundaries", () => {
       "CornerPlate",
       "AppearancePlate",
       "AppearanceSectionView",
-      // One Frame FR-4 — the edges: both notches in every view, the slivers,
-      // and Artifacts' drawer holding the Hub (the side panel retired into it)
-      "EdgesPlate",
-      "ArtifactsDrawer",
+      // HN — the hand: the shipping fan and faces over fixture cards, a plate per
+      // state and the six faces (the left edge's clipboard retired into it)
+      "CardsPlate",
+      "CardsView",
+      "CardFacesPlate",
+      "CardFace",
       // DK-11 — the desk's selection bar over fixture selections, and grown into its menu
       "SelectionBarPlate",
       "SelectionBarView",
@@ -662,9 +808,15 @@ describe("UI system ownership boundaries", () => {
       "PeerCursorView",
       "arrowBoxAt",
       "peerLabel",
-      // WP12d (L3c-ii) — Settings › General's update card and Settings › Diagnostics' updater block, over fixtures
+      // WP12d (L3c-ii) — Settings › General's update card and Settings › Diagnostics' updater block, over fixtures;
+      // AU-3 — the card became Settings → Updates, Your devices under it
       "UpdatesSectionView",
       "UpdatesDoctorView",
+      "UpdatesDevicesView",
+      // AU-2 — the corner's update: the face's dot and the open menu's row, over the shipping words
+      "UpdateFacePlate",
+      "UpdateMenuPlate",
+      "meUpdateRow",
     ]) {
       expect(catalog).toContain(productionView);
     }
@@ -672,22 +824,28 @@ describe("UI system ownership boundaries", () => {
     // the elements, not the views' names they prefix.
     expect(catalog).toMatch(/<Composer\s/u);
     expect(catalog).toMatch(/<Head\s/u);
-    // …and the corner's and the edges' plates MOUNTED on the page, not merely
-    // defined (FR-4).
+    // …and the corner's plates MOUNTED on the page, not merely defined (FR-4).
+    // (The edges' plates retired with the edges at HN-8; the Hub's plate is
+    // the shelf's, above.)
     expect(page).toMatch(/<CornerPlate\s/u);
     expect(page).toMatch(/<AppearancePlate\s/u);
-    expect(page).toMatch(/<EdgesPlate\s/u);
-    expect(page).toMatch(/<ArtifactsDrawer\s/u);
+    // …and the hand's plates and faces (HN)
+    expect(page).toMatch(/<CardsPlate\s/u);
+    expect(page).toMatch(/<CardFacesPlate\s/u);
     // …and the selection bar's plates mounted (DK-11), and the pegboard's (DK-13).
     expect(page).toMatch(/<SelectionBarPlate\s/u);
     expect(page).toMatch(/<PegboardPlate\s/u);
     // …and the peers' plates (DK-16)
     expect(page).toMatch(/<PeersPlate\s/u);
-    // …and Send to…'s flight (DK-14)
-    expect(page).toMatch(/<SendFlightPlate\s/u);
+    // …and the line's plates (LN-D1), the line's own view on each
+    expect(page).toMatch(/<ComposerLinePlate\s/u);
     // …and the update card and the updater block mounted in the shipping dialog (WP12d L3c-ii)
     expect(page).toMatch(/<UpdatesSectionView\s/u);
     expect(page).toMatch(/<UpdatesDoctorView\s/u);
+    expect(page).toMatch(/<UpdatesDevicesView\s/u);
+    // …and the corner's update, the face and the open menu (AU-2)
+    expect(page).toMatch(/<UpdateFacePlate\s/u);
+    expect(page).toMatch(/<UpdateMenuPlate\s/u);
     // …and the board risen behind the line in both scenes that raise Objects (the playground, the view frame's stage)
     expect(page).toMatch(/<StageBoard\s/u);
     expect(viewFrame).toMatch(/<StageBoard\s/u);
@@ -750,8 +908,9 @@ describe("UI system ownership boundaries", () => {
     for (const component of [
       "boot/BootRoot.tsx",
       "hud/CommandPalette.tsx",
-      "hud/edge-tray/EdgeTray.tsx",
-      "hud/edge-tray/EdgeTrayView.tsx",
+      "frame/cards/Cards.tsx",
+      "frame/cards/CardsView.tsx",
+      "frame/cards/CardFace.tsx",
       "hud/LoadingVeil.tsx",
       "boot/onboarding/wizard-ui.tsx",
       "godview/GodviewMonitor.tsx",
@@ -763,6 +922,9 @@ describe("UI system ownership boundaries", () => {
       "history/HistoryView.tsx",
       "frame/Peek.tsx",
       "frame/PeekView.tsx",
+      "frame/PackageCircle.tsx",
+      "frame/PackageCircleView.tsx",
+      "frame/cards/CarriedCardLayer.tsx",
       "frame/Composer.tsx",
       "frame/ComposerLine.tsx",
       "frame/Head.tsx",
@@ -770,6 +932,7 @@ describe("UI system ownership boundaries", () => {
       "account/MeMenu.tsx",
       "panels/AppearanceSection.tsx",
       "panels/UpdatesSection.tsx",
+      "panels/UpdatesDevicesSection.tsx",
       "field/desk/bar/SelectionBar.tsx",
       "field/desk/bar/SelectionBarView.tsx",
       "field/desk/bar/KindGlyph.tsx",
@@ -778,6 +941,12 @@ describe("UI system ownership boundaries", () => {
       "field/desk/pegboard/PegboardView.tsx",
       "field/desk/peers/PeersOnTheMat.tsx",
       "field/desk/peers/PeersView.tsx",
+      // SP-1b — Chat
+      "chat/ChatView.tsx",
+      "chat/ChatPanelView.tsx",
+      // SP-1c — the New spark sheet
+      "chat/NewSparkSheet.tsx",
+      "chat/NewSparkSheetView.tsx",
     ]) {
       expect(source(component)).not.toContain("<style");
     }
@@ -794,7 +963,7 @@ describe("UI system ownership boundaries", () => {
       "setup/history-consent.css",
       "history/history-consent-slot.css",
       "hud/CommandPalette.css",
-      "hud/edge-tray/edge-tray.css",
+      "frame/cards/cards.css",
       "hud/LoadingVeil.css",
       "hud/PluginSurfaceSlot.css",
       "panels/devices.css",
@@ -811,9 +980,13 @@ describe("UI system ownership boundaries", () => {
       "frame/menu.css",
       "frame/status-line.css",
       "frame/peek.css",
+      "frame/package-circle.css",
+      "frame/cards/carried.css",
       "field/desk/bar/selection-bar.css",
       "field/desk/pegboard/pegboard.css",
       "field/desk/peers/peers.css",
+      "chat/chat.css",
+      "chat/new-spark-sheet.css",
     ]) {
       expect(source(stylesheet), stylesheet).not.toMatch(/#[\da-f]{3,8}\b/i);
     }
@@ -1004,8 +1177,13 @@ describe("UI system ownership boundaries", () => {
     expect(chrome.indexOf("<Pegboard")).toBeGreaterThan(chrome.indexOf("<SelectionBar"));
     // the selection bar hides while the board is out; the selection persists under it
     expect(chrome).toMatch(/hidden=\{covered \|\| boardOut \|\| docsOpen \|\| showSettings\}/u);
-    // the stage neither recedes nor dims for Objects: only the explorer and Settings recede it
-    expect(field).toContain("const sheetOpen = docsOpen || chrome.showSettings;");
+    // the stage neither recedes nor dims for Objects: only the pill's sheet on Canvas — the
+    // owner's one reading of the shelf it shows, the head's and the circle's (HN-8) — and
+    // Settings recede it
+    expect(field).toContain("const shelf = useShownShelf(surface, view);");
+    expect(field).toContain(
+      "const sheetOpen = (shelf !== null && !covered) || chrome.showSettings;",
+    );
     expect(field).not.toMatch(/surface === "objects"/u);
     // chrome does not dim by night: the anchor's night is never read, nor the night's dimming
     expect(source("field/desk/pegboard/Pegboard.tsx")).not.toMatch(/\.night\b/u);

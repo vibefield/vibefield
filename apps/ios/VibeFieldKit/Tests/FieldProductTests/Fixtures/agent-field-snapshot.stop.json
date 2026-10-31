@@ -1,0 +1,68 @@
+{
+  "//": "ST-D5 — a person's durable Stop rides the field row while fieldd holds one: when it was sent and how far it went, in open words, content-free. A run fieldd will take no further carries `unheardAt`; a heard one says how. A row holding none carries no key.",
+  "epoch": "fieldd-5d1e2a7c90b3f418.3",
+  "revision": 14,
+  "rows": [
+    {
+      "runtimeRunId": "run-ending",
+      "revision": 6,
+      "kind": "claude",
+      "label": "Claude Code",
+      "tier": "managed",
+      "device": "dev-01HQ8ZK4M7",
+      "status": "working",
+      "statusSince": "2026-10-31T06:00:00.000Z",
+      "stateChangedAt": "2026-10-31T06:00:00.000Z",
+      "createdAt": "2026-10-31T05:58:12.000Z",
+      "alive": true,
+      "blockers": [],
+      "terminal": {
+        "hosted": "local",
+        "runtimeSessionId": "pty-6b10",
+        "workloadClass": "agent"
+      },
+      "stop": {
+        "sentAt": "2026-10-31T06:00:03.000Z",
+        "stage": "terminating"
+      }
+    },
+    {
+      "runtimeRunId": "run-unheard",
+      "revision": 3,
+      "kind": "codex",
+      "label": "Codex",
+      "tier": "managed",
+      "device": "dev-01HQ8ZK4M7",
+      "status": "unknown",
+      "statusSince": "2026-10-31T06:01:00.000Z",
+      "stateChangedAt": "2026-10-31T06:01:00.000Z",
+      "createdAt": "2026-10-31T06:00:40.000Z",
+      "alive": true,
+      "blockers": [],
+      "stop": {
+        "sentAt": "2026-10-31T06:01:02.000Z",
+        "stage": "resent",
+        "unheardAt": "2026-10-31T06:01:08.000Z"
+      }
+    },
+    {
+      "runtimeRunId": "run-heard",
+      "revision": 9,
+      "kind": "claude",
+      "label": "Claude Code",
+      "tier": "managed",
+      "device": "dev-01HQ8ZK4M7",
+      "status": "idle",
+      "statusSince": "2026-10-31T06:02:05.000Z",
+      "stateChangedAt": "2026-10-31T06:02:05.000Z",
+      "createdAt": "2026-10-31T06:01:30.000Z",
+      "alive": true,
+      "blockers": [],
+      "stop": {
+        "sentAt": "2026-10-31T06:02:04.000Z",
+        "stage": "heard",
+        "heardBy": "status"
+      }
+    }
+  ]
+}

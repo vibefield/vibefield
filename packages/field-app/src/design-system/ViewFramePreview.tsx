@@ -1,13 +1,18 @@
-import type { FrameView } from "@vibefield/contracts";
+import type { FrameView, ScreenshotCaptureResult } from "@vibefield/contracts";
 import { SegmentedControl } from "@vibefield/design-kit/primitives";
 import { type ReactElement, useEffect, useState } from "react";
-import { Composer } from "../frame/Composer";
+import { Composer, type ComposerHost } from "../frame/Composer";
 import { ComposerLineView } from "../frame/ComposerLine";
 import type { FrameSurface } from "../frame/frame-surface";
 import { type CoverState, coverAfter, coverAt, ViewCoverView } from "../frame/ViewCover";
-import { type ViewKeyPress, ViewsTrackView } from "../frame/ViewsTrack";
+import { type ViewKeyPress, type ViewsNote, ViewsTrackView } from "../frame/ViewsTrack";
 import type { ViewKeys } from "../frame/views";
-import { FIXTURE_LINE_DOOR, fixtureClipboardStore, fixtureStillUrl } from "./ComposerLinePreview";
+import { ChatPreview } from "./ChatPreview";
+import {
+  FIXTURE_HISTORY_DOOR,
+  FIXTURE_HISTORY_PROJECT,
+  FIXTURE_LINE_DOOR,
+} from "./ComposerLinePreview";
 import { DeskPreview } from "./DeskPreview";
 import { GodviewPreview } from "./GodviewPreview";
 import { HistoryPreview } from "./HistoryPreview";
@@ -18,16 +23,31 @@ import { StageBoard } from "./PegboardPreview";
 // cover, History's room — on fixture state. What it replaces is only what a
 // host supplies: the window's view (main's owner, here a local value), the
 // keys' timing (the controller's, here the state controls), the line's open
-// surface (FieldView's owner, here a local value) and what Godview lends the
-// line (a fixture door). The line itself runs on its REAL controller, so the
-// draft takes typing, @ opens its list and send says what it did. The markup
-// and the CSS are the product's.
+// surface (FieldView's owner, here a local value), what Godview and History lend
+// the line (fixture doors) and the capture (a fixture door whose tool comes up
+// and is let go: the catalog has no screen to freeze). The line itself runs on its
+// REAL controller, so its create raises Objects and says what came of it, and
+// its snapshot presses, stays filled while the tool is up, and says nothing of
+// the cancel. The markup and the CSS are the product's.
+
+/** How long the fixture's snapshot tool stays up before it is let go. */
+const FIXTURE_TOOL_UP_MS = 1_200;
+
+/** The live line's capture door, in fixture: the tool comes up, and a while
+ * later it is let go — a cancel, which the line says nothing of. */
+export const FIXTURE_CAPTURE_HOST: ComposerHost = {
+  screenshotCapture: () =>
+    new Promise<ScreenshotCaptureResult>((answer) => {
+      window.setTimeout(() => answer({ status: "cancel" }), FIXTURE_TOOL_UP_MS);
+    }),
+};
 
 /** The states the One Frame page's Chrome & Composer plates show for the
  * frame (`data-state`): at rest on the canvas, ⌘ held, Godview, History, the
- * arc while History imports (AO-4b), and ⌘4's note — each in the catalog's
+ * arc while History imports (AO-4b), Chat (SP-1b), and a spark that needs you
+ * from Godview (CH-D4, the Sparks page's `ch-away`) — each in the catalog's
  * light and dark. */
-export const FRAME_STATES = ["rest", "cmd", "gv", "hx", "import", "note"] as const;
+export const FRAME_STATES = ["rest", "cmd", "gv", "hx", "import", "chat", "needs"] as const;
 export type FrameState = (typeof FRAME_STATES)[number];
 
 const STATE_LABEL: Record<FrameState, string> = {
@@ -36,7 +56,8 @@ const STATE_LABEL: Record<FrameState, string> = {
   gv: "Godview",
   hx: "History",
   import: "Importing",
-  note: "⌘4 waits",
+  chat: "Chat",
+  needs: "Needs you",
 };
 
 const VIEW_OF: Record<FrameState, FrameView> = {
@@ -45,7 +66,19 @@ const VIEW_OF: Record<FrameState, FrameView> = {
   gv: "godview",
   hx: "history",
   import: "canvas",
-  note: "canvas",
+  chat: "assistant",
+  needs: "godview",
+};
+
+/** The note the `needs` plate says: Vela asking you, from another view (CH-D4). */
+const FIXTURE_NOTE = (seq: number): ViewsNote => ({ seq, name: "Vela", seed: 7, status: "asking" });
+
+/** The state a cell's view opens, as the controls name it. */
+const STATE_OF: Record<FrameView, FrameState> = {
+  canvas: "rest",
+  godview: "gv",
+  history: "hx",
+  assistant: "chat",
 };
 
 /** One state of the track, at the line's left end — the page's §04 plates,
@@ -57,13 +90,13 @@ export function ViewsTrackSpecimen({
   state: FrameState;
   keys?: ViewKeys;
 }): ReactElement {
-  // The note lives 1.4s and goes, as it does in the product; on a plate it is
-  // said again every 1.6s — the controller's timing in fixture — so the state
+  // The note lives 2.4s and goes, as it does in the product; on a plate it is
+  // said again every 2.6s — the controller's timing in fixture — so the state
   // can be looked at rather than caught.
   const [said, setSaid] = useState(1);
   useEffect(() => {
-    if (state !== "note") return;
-    const timer = window.setInterval(() => setSaid((count) => count + 1), 1_600);
+    if (state !== "needs") return;
+    const timer = window.setInterval(() => setSaid((count) => count + 1), 2_600);
     return () => window.clearInterval(timer);
   }, [state]);
   return (
@@ -72,14 +105,15 @@ export function ViewsTrackSpecimen({
         <ComposerLineView
           view={VIEW_OF[state]}
           keys={keys}
-          createWaits={VIEW_OF[state] === "history" ? "choose a session first" : null}
+          createProject={VIEW_OF[state] === "history" ? FIXTURE_HISTORY_PROJECT : null}
           track={
             <ViewsTrackView
               view={VIEW_OF[state]}
               keys={keys}
               held={state === "cmd"}
-              note={state === "note" ? said : null}
               importing={state === "import"}
+              needs={state === "needs"}
+              note={state === "needs" ? FIXTURE_NOTE(said) : null}
             />
           }
         />
@@ -97,9 +131,8 @@ export function ViewFramePreview({ dark }: { dark: boolean }): ReactElement {
   const [shown, setShown] = useState<FrameView>("canvas");
   const [cover, setCover] = useState<CoverState>(() => coverAt("canvas"));
   const [press, setPress] = useState<ViewKeyPress | null>(null);
-  const [note, setNote] = useState<number | null>(null);
+  const [note, setNote] = useState<ViewsNote | null>(null);
   const [surface, setSurface] = useState<FrameSurface | null>(null);
-  const [clipboard] = useState(fixtureClipboardStore);
 
   // The owner, in fixture: the window moves as soon as it is asked.
   if (shown !== view) {
@@ -109,16 +142,13 @@ export function ViewFramePreview({ dark }: { dark: boolean }): ReactElement {
 
   useEffect(() => {
     if (note === null) return;
-    const timer = window.setTimeout(() => setNote(null), 1_400);
+    const timer = window.setTimeout(() => setNote(null), 2_400);
     return () => window.clearTimeout(timer);
   }, [note]);
 
   const choose = (next: FrameState): void => {
     setState(next);
-    if (next === "note") {
-      setNote((seq) => (seq ?? 0) + 1);
-      return;
-    }
+    if (next === "needs") setNote((last) => FIXTURE_NOTE((last?.seq ?? 0) + 1));
     const target = VIEW_OF[next];
     setPress((last) => ({ seq: (last?.seq ?? 0) + 1, moved: target !== view }));
     setView(target);
@@ -163,6 +193,7 @@ export function ViewFramePreview({ dark }: { dark: boolean }): ReactElement {
           motion={cover.motion}
           godview={<GodviewPreview theme={dark ? "dark" : "light"} />}
           history={<HistoryPreview />}
+          chat={<ChatPreview />}
         />
         <StageBoard open={surface === "objects"} />
         <Composer
@@ -171,9 +202,8 @@ export function ViewFramePreview({ dark }: { dark: boolean }): ReactElement {
           surface={surface}
           onSurfaceChange={setSurface}
           godview={FIXTURE_LINE_DOOR}
-          clipboard={clipboard}
-          host={{ screenshotStillUrl: fixtureStillUrl }}
-          writeClipboard={async () => undefined}
+          history={FIXTURE_HISTORY_DOOR}
+          host={FIXTURE_CAPTURE_HOST}
           bindKeys={false}
           track={
             <ViewsTrackView
@@ -181,12 +211,10 @@ export function ViewFramePreview({ dark }: { dark: boolean }): ReactElement {
               keys={keys === "Mac" ? "mac" : "other"}
               held={state === "cmd"}
               press={press}
-              note={note}
               importing={state === "import"}
-              onSelect={(asked) => {
-                if (asked === "assistant") choose("note");
-                else choose(asked === "canvas" ? "rest" : asked === "godview" ? "gv" : "hx");
-              }}
+              needs={state === "needs"}
+              note={note}
+              onSelect={(asked) => choose(STATE_OF[asked])}
             />
           }
         />

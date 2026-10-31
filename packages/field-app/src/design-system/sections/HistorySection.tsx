@@ -6,8 +6,9 @@ import { PeekPlate } from "../PeekPreview";
 
 // History (AR-8c; DESIGN.md §8 "History"): rosetta's room as the frame holds
 // it, on the package's fixture ports — the shipping view in every state the
-// host owns: the room on the cover's glass, a session chosen with the line's
-// Resume live, one running here with its Jump to (P3), the index not
+// host owns: the room on the cover's glass, a session chosen with its Resume
+// live in the palette and the line's New terminal in the project shown (HN-7),
+// one running here with its Jump to (P3), the index not
 // answering, nothing enrolled yet, and an agent with a past offered at its
 // head (AO-6b) — and the two faces before the room (2026-10-04, the room's own
 // chunk): opening, and a room that could not open. Its search is the frame's Peek (2026-10-08;
@@ -41,7 +42,7 @@ export function HistorySection(): ReactElement {
         </div>
       </Specimen>
       <Specimen
-        title="A session chosen — the line's Resume, live for it"
+        title="A session chosen — its Resume in the palette, the line's New terminal in its project"
         source="history/HistoryView.tsx"
         bleed
       >
@@ -50,7 +51,7 @@ export function HistorySection(): ReactElement {
         </div>
       </Specimen>
       <Specimen
-        title="The chosen session runs here — the line's create says Jump to"
+        title="The chosen session runs here — the palette's row says Jump to"
         source="history/HistoryView.tsx"
         bleed
       >

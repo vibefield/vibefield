@@ -27,7 +27,6 @@ import type {
   TrayAnchor,
 } from "@vibecook/ice/desk";
 import { type BoardPersistenceState, getBoardStatus } from "../../board-status";
-import { lastSend, type SendRecord } from "../../frame/line-send";
 import { type SaidNotice, statusLineSaid } from "../../frame/status-line";
 import type {
   DeskLiveFaceRow,
@@ -35,8 +34,13 @@ import type {
   DeskLiveStats,
 } from "../../surfaces/live/desk-live";
 import { pageStills } from "../../surfaces/live/page-stills";
+import type {
+  DeskSimulatorDevices,
+  DeskSimulatorDevicesStats,
+} from "../../surfaces/live/simulator-devices";
 import { setSurfaceGraceForTest, surfaceGraceMs } from "../../surfaces/pool";
 import { type BarStats, readBarStats } from "./bar/bar-stats";
+import { type CopyRecord, lastCopy } from "./copy/copy-record";
 import { type CoverRecord, coverCaptures, coverRecords } from "./cover-still";
 import { DESK_FACE_URLS, deskText } from "./desk-assets";
 import { deskBlobs } from "./desk-blobs";
@@ -73,6 +77,9 @@ export interface MountedDesk {
   readonly device?: () => GPUDevice | null;
   /** PT-2 — the mount's live pages (the service lent under ICE's `LIVE`); absent where none is lent. */
   readonly live?: DeskLiveSources;
+  /** PT-S3 (D5) — the mount's Simulator devices (the service lent under the SDK's `SIMULATOR_DEVICES`, a phone's attach
+   * reads it); absent where none is lent. */
+  readonly devices?: DeskSimulatorDevices;
   /** PT-5b — the document the mount shows (a page's last still is kept under it); absent: none is kept. */
   readonly docId?: string;
 }
@@ -289,6 +296,13 @@ export interface VfDeskDoor {
    */
   live(): { readonly stats: DeskLiveStats; readonly faces: readonly DeskLiveFaceRow[] } | null;
   /**
+   * PT-S3 (D5) — this Mac's Simulator devices as the mount's service has read them for a phone's attach
+   * (surfaces/live/simulator-devices.ts): the looks it took, the lists it read and those that failed, and how many rows the
+   * last read held — null: none read yet, so `attachable` answers nothing. COUNTS, never a row. Null where no device list is
+   * lent. A read: the phone smoke's wait for a warm list before it presses Attach.
+   */
+  simulatorDevices(): DeskSimulatorDevicesStats | null;
+  /**
    * PT-5b — the TEST door on the live pages' cap (ruling 3: six pages alive at most): read it, or set it — the plan is
    * made again (lowered: pages are put to rest, the unseen first; raised: waiting pages come alive). Null where no live
    * service is lent.
@@ -362,11 +376,11 @@ export interface VfDeskDoor {
    * `HeldScreenFrame` — the shown extent's centre and half extents, CSS px, its scale, whether the pickup settled), the
    * reading fit's witness; null with nothing held. A read. */
   held(): { readonly entity: number; readonly frame: HeldFrame | null } | null;
-  /** DK-14 — the last Send to… as it went (`frame/line-send.ts`): where it was pressed, the chip's face and what it
-   * carries, the capture's rect and the still's size, the still asked without the selection's marks and the selection
-   * observed standing (ICE I40, DK-17b), whether the draft was aimed, and
-   * each step's time; null before any. A read. */
-  sent(): SendRecord | null;
+  /** HN-D3 — the last Copy as it went (`copy/copy-record.ts`): where it was pressed, the objects and the words the
+   * system clipboard was given, the box the card flew from, the capture's rect and the still's size, the still asked
+   * without the selection's marks and the selection observed standing (ICE I40, DK-17b), the card dealt — its id, kind
+   * and title — or why none was, and each step's time; null before any. A read. */
+  copied(): CopyRecord | null;
   /** DK-15 — the covers this renderer has stood, oldest first (the last 8; `cover-still.ts`): each step in the order taken —
    * capture, blur, swap, hide, freeze, park; a re-capture's thaw and one frame; the lowering's thaw, show, drop — with its
    * time, the still's size and px per CSS px, the blur's px, the face (a still or the mat's ground) and what was said. A read. */
@@ -557,6 +571,12 @@ export function installDeskDoor(desk: MountedDesk, platesSet: () => boolean): ()
     objects: (type) => deskObjects(engine, type),
     live: () =>
       desk.live === undefined ? null : { stats: desk.live.stats(), faces: desk.live.faces() },
+    simulatorDevices: () => {
+      if (desk.devices === undefined) return null;
+      // the four counts by name — whatever else the service may count one day is not the door's
+      const { looks, reads, failures, rows } = desk.devices.stats();
+      return { looks, reads, failures, rows };
+    },
     liveCap: (next) => desk.live?.cap(next) ?? null,
     liveGrace: (ms) => (ms === undefined ? surfaceGraceMs() : setSurfaceGraceForTest(ms)),
     liveSettled: async () => {
@@ -646,7 +666,7 @@ export function installDeskDoor(desk: MountedDesk, platesSet: () => boolean): ()
       };
     },
     held: () => heldNow(engine),
-    sent: lastSend,
+    copied: lastCopy,
     covers: coverRecords,
     coverCaptures,
     peers: () => ({

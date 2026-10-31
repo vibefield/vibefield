@@ -10,7 +10,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { AGENT_CATALOG, AgentDistributionRecord, ENV_PREFIXES, LAYOUT } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import {
@@ -18,6 +18,8 @@ import {
   leakedVariables,
   personEnvironment,
   readTypedAgentCalls,
+  STUB_STANDING,
+  stageFirstRun,
   stageTypedAgent,
   startupFilesRead,
   TYPED_AGENT_ID,
@@ -45,6 +47,38 @@ function root(): string {
 function exited(child: ReturnType<typeof spawn>): Promise<number | null> {
   return new Promise((done) => child.on("exit", (code) => done(code)));
 }
+
+/** A pid still running: answering `kill(pid, 0)`, and not a zombie its parent has yet to reap. */
+function alive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+  } catch {
+    return false;
+  }
+  const stat = spawnSync("ps", ["-o", "stat=", "-p", String(pid)], {
+    encoding: "utf8",
+  }).stdout.trim();
+  return stat !== "" && !stat.startsWith("Z");
+}
+
+/** A program run in a terminal of its own, both ends (macOS `script`): the way
+ * fieldd's floor runs a sign-in. The end of this process's input is a ^D typed
+ * at it, and its exit is the program's. `cat` stands between: Node hands a child
+ * its input over a socket, which macOS `script` refuses ("tcgetattr/ioctl:
+ * Operation not supported on socket"), and a pipe it takes. */
+function atATerminal(program: string, args: readonly string[]): ReturnType<typeof spawn> {
+  return spawn("/bin/sh", ["-c", 'cat | script -q /dev/null "$@"', "sh", program, ...args], {
+    stdio: ["pipe", "pipe", "ignore"],
+  });
+}
+
+const terminals =
+  process.platform === "darwin" &&
+  spawnSync(
+    "/bin/sh",
+    ["-c", 'cat | script -q /dev/null /bin/sh -c "test -t 0 && test -t 1 && echo both"'],
+    { encoding: "utf8", input: "" },
+  ).stdout?.includes("both") === true;
 
 describe("stageTypedAgent — the run's own root, before the pair boots", () => {
   it("names the stub as the typed agent's ACTIVE install, and an install that does not exist as every other agent's", () => {
@@ -108,6 +142,111 @@ describe("stageTypedAgent — the run's own root, before the pair boots", () => 
       /only into a root this run created/,
     );
   });
+});
+
+describe("stageFirstRun — the first-run smoke's person (track FG)", () => {
+  it("names the one stub as the ACTIVE install of every row puppeteer launches, by the catalog alone", () => {
+    const vibefieldRoot = root();
+    const staged = stageFirstRun({ vibefieldRoot, source: {}, ownerHome: "/Users/owner" });
+    const record = AgentDistributionRecord.parse(
+      JSON.parse(
+        readFileSync(join(vibefieldRoot, ...LAYOUT.MACHINE_DISTRIBUTION_FILE), "utf8"),
+      ) as unknown,
+    );
+    const launched = AGENT_CATALOG.filter((row) => row.seams.puppeteer !== null).map(
+      (row) => row.id,
+    );
+    expect(launched.length).toBeGreaterThan(1);
+    expect(staged.standsFor).toEqual(launched);
+    for (const id of launched) expect(record.providers[id]?.activeExecutable, id).toBe(staged.stub);
+    // which of them count it installed is each adapter's rule: the stub's own name is
+    // no agent's, so no PATH lookup of an agent's command finds it
+    expect(AGENT_CATALOG.map((row) => row.id)).not.toContain(basename(staged.stub));
+    expect(staged.environment["FIELDD_AGENT_SEARCH_PATH"]).toBe(dirname(staged.stub));
+    expect(staged.environment["HOME"]).toBe(staged.person);
+    // the godview smoke's stage is its own folder, so the two never share a stub
+    expect(staged.stub).toBe(join(vibefieldRoot, "first-run", "bin", "typed-agent"));
+  });
+
+  it("gives the person the typed agent's one conversation: History's one row", () => {
+    const staged = stageFirstRun({ vibefieldRoot: root(), source: {}, ownerHome: "/Users/owner" });
+    const row = AGENT_CATALOG.find((entry) => entry.id === TYPED_AGENT_ID);
+    expect(staged.agentId).toBe(TYPED_AGENT_ID);
+    expect(staged.history.kind).toBe(row?.seams.rosetta?.kind);
+    const projects = join(staged.person, (row?.layoutRoot ?? "").slice(2), "projects");
+    const [project] = readdirSync(projects);
+    expect(
+      existsSync(join(projects, project as string, `${staged.history.nativeSessionId}.jsonl`)),
+    ).toBe(true);
+  });
+
+  it("refuses a root another stage already holds", () => {
+    const vibefieldRoot = root();
+    stageTypedAgent({ vibefieldRoot, source: {}, ownerHome: "/Users/owner" });
+    expect(() => stageFirstRun({ vibefieldRoot, source: {}, ownerHome: "/Users/owner" })).toThrow(
+      /only into a root this run created/,
+    );
+  });
+});
+
+describe("the stub at a terminal — a sign-in stands for the first run, and for no other smoke", () => {
+  it("still has nothing to answer, and leaves at once, for a run with no terminal", () => {
+    const staged = stageFirstRun({ vibefieldRoot: root(), source: {}, ownerHome: "/Users/owner" });
+    const status = spawnSync(staged.stub, ["auth", "status", "--json"], { stdio: "ignore" });
+    expect(status.status).toBe(1);
+    expect(readTypedAgentCalls(staged.calls).map((call) => call.tty)).toEqual([false]);
+  });
+
+  it.skipIf(!terminals)(
+    "stands in a terminal, its one line said, until the terminal's input ends",
+    async () => {
+      const staged = stageFirstRun({
+        vibefieldRoot: root(),
+        source: {},
+        ownerHome: "/Users/owner",
+      });
+      const child = atATerminal(staged.stub, ["login"]);
+      const left = exited(child);
+      let said = "";
+      await new Promise<void>((ready) =>
+        child.stdout?.on("data", (chunk: Buffer) => {
+          said += chunk.toString("utf8");
+          if (said.includes(STUB_STANDING)) ready();
+        }),
+      );
+      // still there: a sign-in waits for its person (the stub's own pid — the terminal's wrapper outlives it)
+      await new Promise((settle) => setTimeout(settle, 300));
+      const [call] = readTypedAgentCalls(staged.calls);
+      expect(call?.argv).toEqual(["login"]);
+      expect(call?.tty).toBe(true);
+      expect(alive(call?.pid ?? 0)).toBe(true);
+      child.stdin?.end();
+      expect(await left).toBe(0);
+      expect(alive(call?.pid ?? 0)).toBe(false);
+    },
+  );
+
+  it.skipIf(!terminals)(
+    "the godview smoke's stub refuses a terminal run: no line, and red",
+    async () => {
+      const staged = stageTypedAgent({
+        vibefieldRoot: root(),
+        source: {},
+        ownerHome: "/Users/owner",
+      });
+      const child = atATerminal(staged.stub, ["login"]);
+      const left = exited(child);
+      let said = "";
+      child.stdout?.on("data", (chunk: Buffer) => {
+        said += chunk.toString("utf8");
+      });
+      // the terminal's input ended at once: a stub that stood would leave on it at 0, one that refuses leaves at 1
+      child.stdin?.end();
+      expect(await left).toBe(1);
+      expect(said).not.toContain(STUB_STANDING);
+      expect(readTypedAgentCalls(staged.calls).map((call) => call.tty)).toEqual([true]);
+    },
+  );
 });
 
 describe("personEnvironment — the pair runs as the person", () => {

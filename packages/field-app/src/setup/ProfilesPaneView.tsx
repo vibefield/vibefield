@@ -101,8 +101,9 @@ function ThisMacRows({
   );
 }
 
-/** The login in the pane; it comes into view as it opens (the glass scrolls a
- * tall pane, and the login is the one thing the person must see). */
+/** The login in the pane; it comes into view as it opens (on the glass the
+ * cards scroll within themselves, and the login is the one thing the person
+ * must see). */
 function SignInSlot({ signIn }: { signIn: PaneSignIn }): ReactElement {
   const slot = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -152,11 +153,22 @@ function AddProfileCard({
   useEffect(() => {
     if (naming) name.current?.focus();
   }, [naming]);
-  // the glass scrolls a tall pane: each step of the add, the login above all,
-  // comes into view as it opens
+  // on the glass the cards scroll within themselves: each step of the add, the
+  // login above all, comes into view as it opens, and again when a card is set
+  // in above it. The new profile's own card lands when the feed answers, on its
+  // own clock: a warm Mac opens the login first, and the card pushed its Cancel
+  // under the pane's foot (row 32 at run52b).
   const shown = step.kind;
   useEffect(() => {
-    if (shown !== "offer") grown.current?.scrollIntoView?.({ block: "nearest" });
+    const at = grown.current;
+    if (shown === "offer" || at === null) return;
+    const intoView = (): void => at.scrollIntoView?.({ block: "nearest" });
+    intoView();
+    const cards = at.parentElement;
+    if (cards === null || typeof MutationObserver === "undefined") return;
+    const setIn = new MutationObserver(intoView);
+    setIn.observe(cards, { childList: true });
+    return () => setIn.disconnect();
   }, [shown]);
   if (step.kind === "offer") {
     // named by its title; the offer is its description, not its name
@@ -395,6 +407,7 @@ export function ProfilesWizardPaneView({
       eyebrow={PROFILES_WORDS.eyebrow}
       title={PROFILES_WORDS.title}
       voice={PROFILES_WORDS.voice}
+      later={holding ? PROFILES_WORDS.finishFirst : PROFILES_WORDS.later}
       onSubmit={() => {
         if (!holding) onContinue();
       }}
@@ -408,7 +421,6 @@ export function ProfilesWizardPaneView({
       }
     >
       {body}
-      <p className={factCls}>{holding ? PROFILES_WORDS.finishFirst : PROFILES_WORDS.later}</p>
     </WizardPane>
   );
 }

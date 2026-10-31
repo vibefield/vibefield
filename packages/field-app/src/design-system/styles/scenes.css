@@ -87,7 +87,8 @@
 }
 
 /* The page's §04 plates: the track, one state each — since FR-2 at the line's
-   left end, cropped out of a 1180 window so the line keeps its own width. */
+   left end, cropped out of a 1180 window so the line keeps its own width; since
+   LN-D1 the line stands at 76 in any window, 16 in from the plate's edge here. */
 .vf-ds-views-plates {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -108,14 +109,14 @@
 .vf-ds-line-stage {
   position: absolute;
   bottom: 0;
-  left: -134px;
+  left: -60px;
   width: 1180px;
   height: 100%;
 }
 
-/* One Frame FR-2 — the line's plates (the page's §03): the shipping line at
-   its place at the plate's foot, one state each. The plate is the window, so a
-   narrow one narrows the line as a narrow window does (the draft gives first). */
+/* One Frame FR-2, LN-D1 — the line's plates: the shipping line at its place at
+   the plate's foot, 76 from its left, one state each; the plate is the window's
+   bottom-left, tall enough for the note over the line. */
 .vf-ds-line-plates {
   display: grid;
   gap: 12px;
@@ -132,33 +133,13 @@
   background-size: var(--vf-mat-lattice-size);
 }
 
-.vf-ds-line-plate[data-state="at"],
-.vf-ds-line-plate[data-state="sent"] {
-  height: 470px;
-}
-
-/* DK-14 — Send to…'s flight, frozen: where the chip left (the selection, a
-   note's box at the plate's upper left), the flier on its way to the caret. */
-.vf-ds-line-plate[data-state="flight"] {
-  height: 260px;
-}
-
-.vf-ds-send-from {
-  position: absolute;
-  top: 34px;
-  left: 104px;
-  width: 72px;
-  height: 72px;
-  border-radius: 6px;
-  outline: 1.5px solid color-mix(in srgb, var(--vf-select) 60%, transparent);
-  outline-offset: 6px;
-  opacity: 0.6;
-}
-
 /* One Frame FR-3 — the head's plates (the page's §05 and §06): the shipping
    head at its place at the plate's top, one state each. The plate is the
    window's top, so a narrow one gives the pill less room, as a narrow window
-   does (FitPath), and a sheet or a menu takes the height it grows into. */
+   does (FitPath), and a sheet or a menu takes the height it grows into. It is
+   a container for the same reason: the Artifacts shelf pins the Hub at the
+   open sheet's width in `cqw`, the window's own in the product, so in a
+   plate it is the plate's (HN-8). */
 .vf-ds-head-plates {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
@@ -170,6 +151,7 @@
   isolation: isolate;
   height: 72px;
   overflow: hidden;
+  container-type: inline-size;
   border-radius: 14px;
   background-color: var(--vf-mat-ground);
   background-image: var(--vf-mat-lattice);
@@ -184,44 +166,25 @@
   height: 248px;
 }
 
-.vf-ds-head-plate:is([data-state="explorer"], [data-state="palette"]) {
+/* The sheet's plates, a whole row each: the 420 it grows to under the plate's top (HN-8 — its two
+   shelves, and the circle's sheet under a cover; the sync question's, which TS-6 left at 72). */
+.vf-ds-head-plate:is(
+  [data-state="explorer"],
+  [data-state="artifacts"],
+  [data-state="artifacts-off"],
+  [data-state="artifacts-cant-run"],
+  [data-state="artifacts-opening"],
+  [data-state="artifacts-not-starting"],
+  [data-state="covered"],
+  [data-state="sync-question"],
+  [data-state="palette"]
+) {
   grid-column: 1 / -1;
   height: 520px;
 }
 
 .vf-ds-head-plate[data-state="palette"] {
   height: 640px;
-}
-
-/* One Frame FR-4 — the edges' plates (the page's edges plates): the window at
-   the drawers' height, the shipping trays at their own places — the notches at
-   mid-edge, the drawers from 64 to 80 above the foot — over the canvas or a
-   covered view's own ground. The two whole-window states span the row. */
-.vf-ds-edges-plates {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(560px, 1fr));
-  gap: 12px;
-}
-
-.vf-ds-edges-plate {
-  position: relative;
-  isolation: isolate;
-  height: 560px;
-  overflow: hidden;
-  border-radius: 14px;
-  background-color: var(--vf-mat-ground);
-  background-image: var(--vf-mat-lattice);
-  background-size: var(--vf-mat-lattice-size);
-}
-
-.vf-ds-edges-plate:is([data-state="canvas"], [data-state="godview"]) {
-  grid-column: 1 / -1;
-}
-
-.vf-ds-edges-ground {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
 }
 
 /* AR-8c — History's plates: a window of the frame's own proportions, the
@@ -248,6 +211,32 @@
 .vf-ds-peek-view {
   position: absolute;
   inset: 0;
+}
+
+/* HN-8 (PL-D2) — the package circle's plates: the window's top over a covered
+   view's own ground (Godview's stage, History's room, the terminals
+   maximized), the shipping circle at its own place, x 96 at the head's left.
+   These only stage it: its selectors are the product's. */
+.vf-ds-package-plates {
+  display: grid;
+  gap: 12px;
+}
+
+.vf-ds-package-plate {
+  position: relative;
+  isolation: isolate;
+  height: 300px;
+  overflow: hidden;
+  border-radius: 14px;
+  background-color: var(--vf-mat-ground);
+  background-image: var(--vf-mat-lattice);
+  background-size: var(--vf-mat-lattice-size);
+}
+
+.vf-ds-package-ground {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
 }
 
 /* One Frame FR-4 — the corner's plates (the page's "Your face" plates): the
@@ -278,6 +267,34 @@
   left: 16px;
 }
 
+/* AU-2 — the update in the corner: the face alone, folded, on the field's
+   ground (the dot's 2px ring is the ground's), then the open menu's plate
+   under its two state switches. The menu's own look is MeMenu.css's. */
+.vf-ds-update-faces {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 16px 18px 0;
+}
+
+.vf-ds-update-face {
+  position: relative;
+  display: grid;
+  width: 112px;
+  height: 88px;
+  place-items: center;
+  border-radius: 14px;
+  background-color: var(--vf-canvas-bg);
+}
+
+.vf-ds-update-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 14px 18px;
+}
+
 .vf-ds-me-stage {
   position: relative;
   height: 420px;
@@ -305,24 +322,55 @@
   z-index: 7;
 }
 
-/* The edge trays' stage: the window's two edges brought together, the canvas
-   between them; the shipping tray view mounts with fixture stills. */
-.vf-ds-edge-stage {
+/* HN — the hand's plates: the window's foot at the plate's size over the mat,
+   the shipping fan placed by the product's own model (the line's place at the
+   left left empty; a held card's plate is the window's height). The faces sit
+   twice their size, a row each, the night row in the dark theme's scope. These
+   only stage the hand: its selectors are the product's. */
+.vf-ds-cards-plates {
+  display: grid;
+  gap: 12px;
+  overflow-x: auto;
+}
+
+.vf-ds-cards-plate {
   position: relative;
-  height: 560px;
+  isolation: isolate;
+  width: 900px;
+  height: 360px;
   overflow: hidden;
+  border-radius: 14px;
   background-color: var(--vf-mat-ground);
   background-image: var(--vf-mat-lattice);
   background-size: var(--vf-mat-lattice-size);
 }
 
-.vf-ds-edge-controls {
+.vf-ds-cards-plate[data-state="held"] {
+  height: 640px;
+}
+
+.vf-ds-card-faces {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 18px;
-  border-bottom: 1px solid var(--vf-hairline);
+  flex-wrap: wrap;
+  gap: 24px;
+  margin-top: 12px;
+  padding: 28px;
+  border-radius: 14px;
+  background-color: var(--vf-mat-ground);
+  background-image: var(--vf-mat-lattice);
+  background-size: var(--vf-mat-lattice-size);
+}
+
+.vf-ds-card-2x {
+  width: 208px;
+  height: 292px;
+}
+
+.vf-ds-card-2x-inner {
+  width: 104px;
+  height: 146px;
+  transform: scale(2);
+  transform-origin: 0 0;
 }
 
 .vf-ds-stage-caption {
@@ -358,7 +406,7 @@
 }
 
 .vf-ds-palette-stage,
-.vf-ds-side-stage {
+.vf-ds-shelf-plate {
   display: grid;
   min-height: 370px;
   place-items: center;
@@ -369,7 +417,7 @@
 }
 
 .dark .vf-ds-palette-stage,
-.dark .vf-ds-side-stage {
+.dark .vf-ds-shelf-plate {
   background:
     radial-gradient(circle, rgba(255, 255, 255, 0.08) 1px, transparent 1px), var(--vf-ds-stage-dark);
   background-size: 20px 20px;
@@ -381,12 +429,23 @@
   overflow: hidden;
 }
 
-.vf-ds-side-stage {
+/* HN-8 — the Hub at its shelf's width (DESIGN.md §8 "Artifacts — the Artifacts
+   shelf's contents"), its production state chosen in the bar above it. */
+.vf-ds-shelf-plate {
   position: relative;
   display: block;
-  min-height: 650px;
+  min-height: 520px;
   overflow: hidden;
   padding: 0;
+}
+
+/* The shelf's box: 504 wide — the sheet's 544 less its 20 at each side — and a
+   container, as the shelf is, so the plugin's own stylesheet answers it with
+   its tile form. It stands under the state bar. */
+.vf-ds-shelf-stage {
+  width: min(100% - 40px, 504px);
+  margin: 76px auto 24px;
+  container-type: inline-size;
 }
 
 .vf-ds-production-statebar {
@@ -621,11 +680,6 @@
   background-size: var(--vf-mat-lattice-size);
 }
 
-.vf-ds-onboarding-production .vf-wizard-shell {
-  width: min(calc(100% - 32px), 44rem);
-  height: min(calc(100% - 32px), 32rem);
-}
-
 .vf-ds-godview-frame {
   position: relative;
   height: min(72vh, 680px);
@@ -638,17 +692,18 @@
   position: absolute;
 }
 
+/* In a package circle's plate (HN-8) the stage is the covered view's ground:
+   it fills it. */
+.vf-ds-package-ground .vf-ds-godview-frame {
+  height: 100%;
+  min-height: 0;
+}
+
 /* The specimen's own staging row above the stage: the catalog's button for the
    System control panel, which the product reaches from the palette (GV-D1). */
 .vf-ds-godview-controls {
   display: flex;
   padding: 10px 12px;
-}
-
-/* In an edges plate (FR-4) the stage is the covered view's ground: it fills it. */
-.vf-ds-edges-ground .vf-ds-godview-frame {
-  height: 100%;
-  min-height: 0;
 }
 
 /* The swarm's bodies (AR-5): the views package's lab fixtures on the SHIPPING
@@ -1342,4 +1397,39 @@
 
 .vf-ds-stage-board .vf-pegboard {
   pointer-events: none;
+}
+
+/* Chat on fixtures (SP-1b): one plate at the frame stage's size, on the canvas's
+   ground, so the panel stands where the cover holds it — the head band above, the
+   reserve below. The panel's own rules are the product's. */
+.vf-ds-chat-plate {
+  position: relative;
+  isolation: isolate;
+  height: 640px;
+  overflow: hidden;
+  background: var(--vf-canvas-bg);
+}
+
+/* The New spark sheet on fixtures (SP-1c): Chat's plate with the sheet over it, drawn into
+   the plate as the product draws it into the window; Chat recedes behind it by the product's
+   rule (`data-peek-recede`). The sheet's own rules are the product's. */
+.vf-ds-new-spark-plate {
+  position: relative;
+  isolation: isolate;
+  height: 640px;
+  overflow: hidden;
+  background: var(--vf-canvas-bg);
+}
+
+.vf-ds-new-spark-view {
+  position: absolute;
+  inset: 0;
+}
+
+.vf-ds-new-spark-again {
+  position: absolute;
+  inset-block-end: 24px;
+  inset-inline: 0;
+  display: flex;
+  justify-content: center;
 }

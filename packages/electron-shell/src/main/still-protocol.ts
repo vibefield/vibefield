@@ -1,4 +1,4 @@
-import { createReadStream, realpathSync } from "node:fs";
+import { realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { Readable } from "node:stream";
 import {
@@ -9,6 +9,7 @@ import {
   screenshotStillUrl,
 } from "@vibefield/contracts";
 import { protocol } from "electron";
+import { openStill, type StillBytesRefusal } from "./screenshot-still-bytes";
 
 // The still scheme (SNAP-3) — how a screenshot's bytes reach the page.
 //
@@ -107,10 +108,21 @@ export interface StillProtocolOptions {
   /** The tool's retained stills, read at REQUEST time — the ring moves. */
   readonly retained: () => readonly string[];
   /** Evidence hook. The URL is attacker-influenced text; a logger owns escaping it. */
-  readonly onRefusal?: (reason: StillRefusal, requestUrl: string) => void;
-  /** Seams for the suite. Production reads the real disk. */
+  readonly onRefusal?: (reason: StillBytesRefusal, requestUrl: string) => void;
+  /** Seam for the suite: a retained still's path opened, judged and made the body to answer
+   * with. Production is `streamStill` — the real disk, through the stills' one opener. */
+  readonly openStill?: (path: string) => Promise<StillStream>;
+}
+
+/** A retained still opened and judged, as the body of the answer; or why not. */
+export type StillStream =
+  | { readonly ok: true; readonly stream: ReadableStream<Uint8Array> }
+  | { readonly ok: false; readonly reason: StillBytesRefusal };
+
+/** What `resolveStillFile` reads: the ring, and a realpath seam for the suite. */
+export interface StillFileOptions {
+  readonly retained: () => readonly string[];
   readonly realpath?: (path: string) => string;
-  readonly openStream?: (path: string) => ReadableStream<Uint8Array>;
 }
 
 const SECURITY_HEADERS: Readonly<Record<string, string>> = {
@@ -135,17 +147,28 @@ function refusalResponse(): Response {
   });
 }
 
-const defaultStream = (path: string): ReadableStream<Uint8Array> =>
-  Readable.toWeb(createReadStream(path)) as unknown as ReadableStream<Uint8Array>;
+/** The stream an `<img>` reads, from the handle `openStill` judged — never the path opened again
+ * (LC-17: a path checked and then reopened is the window a same-uid process swaps a symlink, a FIFO
+ * or a huge file through) — exactly the size it measured, the handle closed when the stream ends
+ * or fails. */
+async function streamStill(path: string): Promise<StillStream> {
+  const held = await openStill(path);
+  if (!held.ok) return held;
+  if (held.size === 0) {
+    await held.handle.close().catch(() => undefined);
+    return { ok: true, stream: new ReadableStream({ start: (controller) => controller.close() }) };
+  }
+  const read = held.handle.createReadStream({ start: 0, end: held.size - 1, autoClose: true });
+  return { ok: true, stream: Readable.toWeb(read) as unknown as ReadableStream<Uint8Array> };
+}
 
 /**
- * Resolve one retained still with the same filesystem authority for both the
- * image protocol and native preview. Filesystem seams are injectable in tests.
+ * Resolve one retained still to a path native preview hands Quick Look (which
+ * opens by path itself). The scheme no longer reads through it: it opens the
+ * still once and streams that handle (`streamStill`). Filesystem seams are
+ * injectable in tests.
  */
-export function resolveStillFile(
-  requestUrl: string,
-  options: Pick<StillProtocolOptions, "retained" | "realpath">,
-): StillResolution {
+export function resolveStillFile(requestUrl: string, options: StillFileOptions): StillResolution {
   const resolution = resolveStill(requestUrl, options.retained());
   if (!resolution.ok) return resolution;
   const realpath = options.realpath ?? realpathSync;
@@ -168,14 +191,19 @@ export function resolveStillFile(
   return { ...resolution, path: realFile };
 }
 
-export function serveStillRequest(requestUrl: string, options: StillProtocolOptions): Response {
-  const resolution = resolveStillFile(requestUrl, options);
-  if (!resolution.ok) {
-    options.onRefusal?.(resolution.reason, requestUrl);
+export async function serveStillRequest(
+  requestUrl: string,
+  options: StillProtocolOptions,
+): Promise<Response> {
+  const resolution = resolveStill(requestUrl, options.retained());
+  const opened = resolution.ok
+    ? await (options.openStill ?? streamStill)(resolution.path)
+    : resolution;
+  if (!opened.ok) {
+    options.onRefusal?.(opened.reason, requestUrl);
     return refusalResponse();
   }
-  const body = (options.openStream ?? defaultStream)(resolution.path);
-  return new Response(body, {
+  return new Response(opened.stream, {
     status: 200,
     headers: { ...SECURITY_HEADERS, "Content-Type": "image/png" },
   });

@@ -1,0 +1,5 @@
+{
+  "connId": "door-4",
+  "state": "closed",
+  "reason": "held-too-long"
+}

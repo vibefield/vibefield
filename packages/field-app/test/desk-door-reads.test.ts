@@ -23,6 +23,7 @@ import { buildRegistry, createFieldEngine, seedField } from "../src/field-engine
 import { createDeskLiveSources } from "../src/surfaces/live/desk-live";
 import { LIVE_PAGES_MAX } from "../src/surfaces/live/live-cap";
 import { pageStills } from "../src/surfaces/live/page-stills";
+import { createSimulatorDevices } from "../src/surfaces/live/simulator-devices";
 import { SURFACE_POOL_GRACE_MS } from "../src/surfaces/pool";
 
 afterEach(() => {
@@ -146,6 +147,63 @@ describe("the desk door's reads (DK-8)", () => {
     });
     expect(door?.live()?.stats).toMatchObject({ opened: 1, refused: 1, open: 1 });
     undo();
+    ce.dispose();
+  });
+
+  it("PT-S3 (D5): reads this Mac's Simulator devices as the mount's service counts them — its looks, its reads and those that failed, the rows of its last read (null: none yet) — counts, never a row; nothing where no device list is lent", async () => {
+    const ce = createFieldEngine(buildRegistry());
+    ce.docs.create();
+    const row = (name: string, booted: boolean) => ({
+      deviceType: "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro",
+      runtime: "com.apple.CoreSimulator.SimRuntime.iOS-26-5",
+      name,
+      booted,
+    });
+    let answer: unknown = {
+      devices: [row("pts3-a1b2-1", true), row("iPhone 17 Pro", false)],
+      runtimes: ["com.apple.CoreSimulator.SimRuntime.iOS-26-5"],
+    };
+    let clock = 0;
+    const devices = createSimulatorDevices({
+      mintClient: () => ({ request: () => Promise.resolve(answer) }),
+      wanted: () => true,
+      now: () => clock,
+      // no timer runs: the test looks by hand
+      timers: { set: () => 0, clear: () => {} },
+    });
+    const undo = installDeskDoor(
+      { engine: ce, handle: {} as never, generation: 1, mount: 0, theme: "light", devices },
+      () => false,
+    );
+    const door = (globalThis as { __vfDesk?: VfDeskDoor }).__vfDesk;
+    if (door === undefined) throw new Error("no door");
+    // cold: nothing looked at, nothing read — the attach answers nothing yet
+    expect(door.simulatorDevices()).toEqual({ looks: 0, reads: 0, failures: 0, rows: null });
+    await devices.look();
+    expect(door.simulatorDevices()).toEqual({ looks: 1, reads: 1, failures: 0, rows: 2 });
+    // COUNTS: no row — no device's name — reaches the door
+    expect(Object.keys(door.simulatorDevices() ?? {}).sort()).toEqual([
+      "failures",
+      "looks",
+      "reads",
+      "rows",
+    ]);
+    expect(JSON.stringify(door.simulatorDevices())).not.toContain("pts3");
+    // a read that fails — a row that names a UDID, which the contract refuses — is counted, and the last read stands
+    answer = {
+      devices: [{ ...row("pts3-a1b2-1", true), udid: "1BD54690-0A1B-4C2D-8E3F-0123456789AB" }],
+    };
+    clock = 10_000;
+    await devices.look();
+    expect(door.simulatorDevices()).toEqual({ looks: 2, reads: 2, failures: 1, rows: 2 });
+    undo();
+    // a mount lent no device list reads none
+    const bare = installDeskDoor(
+      { engine: ce, handle: {} as never, generation: 1, mount: 0, theme: "light" },
+      () => false,
+    );
+    expect((globalThis as { __vfDesk?: VfDeskDoor }).__vfDesk?.simulatorDevices()).toBeNull();
+    bare();
     ce.dispose();
   });
 

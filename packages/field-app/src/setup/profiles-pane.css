@@ -15,6 +15,39 @@
   gap: 8px;
 }
 
+/* On the glass the pane never scrolls (FG-L3, FG-4a): the cards do, within
+   themselves, on the face deck's rule (DESIGN.md §4 `--vf-scroll-fade`), the
+   fact and a notice standing under them. Its body holds 322: five agents on This
+   Mac are 336, Add a profile…'s list of agents 344 from four, and a login more.
+   A step the add opens comes into view clear of the fade. */
+.vf-wizard-shell[data-size="glass"] .vf-profiles-pane {
+  min-height: 0;
+}
+
+.vf-wizard-shell[data-size="glass"] .vf-profiles-pane-cards {
+  min-height: 0;
+  margin: -4px -4px 0;
+  padding: 4px 4px var(--vf-scroll-fade);
+  overflow-y: auto;
+  scroll-padding-bottom: var(--vf-scroll-fade);
+  mask-image: linear-gradient(to bottom, black calc(100% - var(--vf-scroll-fade)), transparent);
+  scrollbar-width: none;
+}
+
+.vf-wizard-shell[data-size="glass"] .vf-profiles-pane-cards::-webkit-scrollbar {
+  display: none;
+}
+
+/* A login's terminal stands 170 on the glass (DESIGN.md §4 `--vf-glass-signin-height`;
+   Settings' keeps its 240), so the add holding it, Cancel with it, comes into view
+   whole above the cards' fade: the login's card and the add's padding of 10 above
+   and below, 269.5 in 278.2. (Corrected 2026-10-31, row 32 at run53b: this said 190,
+   a sum without the add's padding; the add was 289.2 and Cancel's foot 1.3 under
+   the fade.) */
+.vf-wizard-shell[data-size="glass"] .vf-profiles-signin-body {
+  height: var(--vf-glass-signin-height);
+}
+
 .vf-profiles-pane-card,
 .vf-profiles-pane-grown {
   display: flex;

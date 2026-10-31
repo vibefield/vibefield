@@ -88,7 +88,11 @@ export interface ProjectView {
   readonly tailnet: boolean;
 }
 
-/** D8 — the readers' gate, and what the admitted caller may be told. */
+/** D8 — the readers' gate, and what the admitted caller may be told.
+ * *Note 2026-10-29 (CP-1b; TL-D1 A, ruled by James on the Sparks page):* a spark reads the projects through its own
+ * verb, `projects_list` (compose/), which calls the projects service directly and answers it paths as the person's
+ * window would be. The door below still refuses every agent: a plain agent holds no door of the compose plane at all
+ * (CP-L1), and a spark reaches the projects only through the verb its rulings gave it. */
 export function admitProjectReader(ctx: CallerContext, method: string): ProjectView {
   const principal = ctx.principal;
   if (principal.kind === "local-token" || principal.kind === "shell-main")

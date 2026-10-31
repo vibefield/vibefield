@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { accessSync, constants as fsConstants, readFileSync } from "node:fs";
 import { homedir, release, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -6,6 +6,7 @@ import {
   APP_PREFERENCE_KEYS,
   AppPreferences,
   CONTRACTS_VERSION,
+  commitOfBuildId,
   DESKTOP_APP_ID,
   type DesktopShellState,
   DesktopShellState as DesktopShellStateSchema,
@@ -20,6 +21,7 @@ import {
   releasePlatformKey,
   type ScreenshotCaptureResult,
   SHELL_BACKGROUND_RELAUNCH_ARG,
+  SHELL_CLIPBOARD,
   type ShellCommand,
   ShellCommandRequest,
   type ShellExitRecord,
@@ -70,17 +72,20 @@ import { runAuditedSupportExport } from "./audited-support-export";
 import { installDurableClose } from "./close";
 import { ConnectAsks, workingAgents } from "./connect-asks";
 import { CrashArtifactManager, startLocalCrashReporter } from "./crash-artifacts";
-import { installDevSignalQuit } from "./dev-signals";
 import { desktopDevelopmentExtension } from "./development-extension";
 import { installLocalDiagnosticsPort } from "./diagnostics-port";
 import { buildSupervisor, dataRoot } from "./fieldd";
 import { FielddDaemonBootFence, FielddHandleCoordinator } from "./fieldd-handle-coordinator";
 import {
   registerBrowserDataClear,
+  registerClipboardRead,
+  registerClipboardWriteImage,
   registerDeckSet,
   registerRendererReplace,
   registerScreenshotCapture,
   registerScreenshotPreview,
+  registerScreenshotStillBytes,
+  registerScreenshotStillKept,
   registerThemeSet,
   registerUpdateDoors,
   registerUsersRoster,
@@ -98,6 +103,7 @@ import {
 import { isGuardedBrowserSurfaceSession } from "./live-surfaces/browser-security";
 import { createElectronLiveSurfaceTextureTransferApi } from "./live-surfaces/electron-texture-transfer";
 import type { LiveSurfaceRuntimeAuthority } from "./live-surfaces/runtime";
+import { type SimctlCallCounts, simctlCallCounts } from "./live-surfaces/simctl";
 import {
   LiveSurfaceTextureForwarder,
   type LiveSurfaceTextureTransferBudget,
@@ -111,8 +117,10 @@ import {
   isSmokeLike,
   keepsFramesWhenCovered,
   keepsGpu,
+  mintsOnboarded,
   parseMode,
   rendererPolicyMode,
+  smokeSimctlDeveloperDir,
 } from "./modes";
 import { readCensus, requestConsentedStop } from "./pair-stop";
 import { installPluginProtocol } from "./plugin-protocol";
@@ -130,6 +138,7 @@ import { registerShellSchemes } from "./scheme-registration";
 import { withScreenshotScreenBounds } from "./screenshot-bounds";
 import { screenshotHelperSupportsService } from "./screenshot-helper-capabilities";
 import { ScreenshotShortcutController } from "./screenshot-shortcut";
+import { checkStill, readStill } from "./screenshot-still-bytes";
 import {
   installCsp,
   installNavigationPolicy,
@@ -140,14 +149,23 @@ import { buildCsp, importMapHashesFromHtml } from "./security-policy";
 import { backfillMigratedSetupVariant } from "./setup-variant";
 import { shellExitNotice } from "./shell-exit-notice";
 import { RecoveringShellProvider } from "./shell-provider";
+import { installSignalQuit } from "./signal-quit";
 import { isolateSmokeProfile } from "./smoke-profile";
-import { installStillProtocol, resolveStillFile } from "./still-protocol";
+import { installStillProtocol, resolveStill, resolveStillFile } from "./still-protocol";
 import { SupportBundleError, SupportBundleService } from "./support-bundle";
 import { fileThemeStore, THEME_FILE, ThemeOwner } from "./theme";
 import { TrayController } from "./tray-controller";
 import { TrayEvidenceMonitor } from "./tray-evidence";
-import { type TrayLinkState, type TraySnapshot, trayUpdateOf } from "./tray-model";
+import {
+  type TrayLinkState,
+  type TraySnapshot,
+  type TrayUpdateState,
+  trayUpdateOf,
+  type UpdateMenuActs,
+  updateMenuEntry,
+} from "./tray-model";
 import { createElectronTrayRuntime } from "./tray-native";
+import { wordsBox } from "./updates/controller";
 import { readUpdateIdentity } from "./updates/identity";
 import { createElectronApplyPort, installUpdateController } from "./updates/install";
 import { applyProfileUpdate, dealOwedFace } from "./users-profile";
@@ -166,6 +184,9 @@ import { createMainWindow, loadRenderer } from "./windows";
 
 const MODE = parseMode(process.argv);
 const RENDERER_POLICY_MODE = rendererPolicyMode(MODE, process.env["VF_GODVIEW_LAB_RENDERER"]);
+// PT-S3 (P2) — a smoke's simctl developer directory, parsed once, beside the mode: read ONLY in a smoke-like mode
+// (`modes.ts`), so production's simctl always asks xcode-select
+const SMOKE_SIMCTL_DEVELOPER_DIR = smokeSimctlDeveloperDir(MODE, process.env);
 // TP-S3a — the direct terminal door (TP-D1 as ratified): a rollback flag, OFF
 // until S3e; it widens the production CSP to the cells' loopback ports and, at
 // S3b, routes the pool's transport. Parsed once, beside the mode.
@@ -224,6 +245,9 @@ let lifecycleFlow: LifecycleFlow | null = null;
  * pairs exist and after teardown, when a person's quit leaves the pairs as before. */
 let quitGate: QuitGate | null = null;
 let restoreAfterAbortedQuit: (() => void) | null = null;
+/** AU-5 — install on quit, the updater's (assigned once it exists); null in a build with no updater and after teardown,
+ * when a person's quit installs nothing. */
+let quitInstaller: ((context: { readonly ended: number }) => Promise<void>) | null = null;
 /** P8b-2 — the live fieldd client the plugin protocol authorizes against. Null
  * until the pair is up, which is the honest state: with no authority reachable,
  * no plugin module is servable. */
@@ -235,6 +259,10 @@ let supportBundles: SupportBundleService | null = null;
 /** WP12d (L3c-i, §13 C4) — the updater's doctor lines for the support bundle; null where no updater runs */
 let updateDoctorLines: (() => readonly string[]) | null = null;
 let trayController: TrayController | null = null;
+/** AU-4 — the app menu's update item, redrawn from the updater's current view (assigned once the updater exists). Its
+ * acts stop while the app quits, and `quitting` flips outside any update, so a quit's start and its abort redraw it;
+ * null in a build with no updater and after teardown. */
+let redrawUpdateMenu: (() => void) | null = null;
 /** Closing the last window leaves VibeField running: on macOS always, elsewhere
  * while the status item keeps it (the lifecycle's rule, and TS-4's away notice). */
 function staysResident(): boolean {
@@ -378,6 +406,16 @@ async function main(
     });
     await handle.client.request("audit.append", record);
   };
+  // HN-3 (R-T 4) — a smoke drives the desk's real Copy, and a run isolates its profile and its
+  // daemons but never the system clipboard, which is the person's (`gate:landing` runs on their
+  // Mac). So in a MARKED run (`VF_SMOKE_RUN`, run-smoke.mjs's mark — testing/smoke-daemons.ts)
+  // the copy door KEEPS the words instead of writing them and answers as it would: the act's own
+  // record (`wrote`) stays the witness, and the canvas smoke reads what arrived here.
+  const harnessCopies: string[] | null = process.env["VF_SMOKE_RUN"] === undefined ? null : [];
+  // HN-5 — the same for a copy's picture: the clipboard's picture door keeps its PNG's size here
+  // in a marked run, and the words written beside it in `harnessCopies`, instead of writing them,
+  // and answers as it would.
+  const harnessPictures: number[] | null = process.env["VF_SMOKE_RUN"] === undefined ? null : [];
   const installDiagnostics = (window: Electron.BrowserWindow): void => {
     let supportDialogOpen = false;
     installLocalDiagnosticsPort({
@@ -443,10 +481,18 @@ async function main(
         copyText: (raw) => {
           const text =
             typeof raw === "object" && raw !== null && "text" in raw ? raw.text : undefined;
-          if (typeof text !== "string" || Buffer.byteLength(text, "utf8") > 64 * 1024) {
+          // the copy door's bound, by reference since HN-5: the picture door's words read it too
+          if (
+            typeof text !== "string" ||
+            Buffer.byteLength(text, "utf8") > SHELL_CLIPBOARD.WRITE_TEXT_MAX_BYTES
+          ) {
             throw Object.assign(new Error("expected bounded clipboard text"), {
               kind: "PRECONDITION_FAILED",
             });
+          }
+          if (harnessCopies !== null) {
+            harnessCopies.push(text);
+            return { copied: true };
           }
           clipboard.writeText(text);
           return { copied: true };
@@ -991,6 +1037,9 @@ async function main(
   const harnessShellOpens: { opened: string[]; revealed: string[] } | null = isSmokeLike(MODE)
     ? { opened: [], revealed: [] }
     : null;
+  // PT-S3 (D2) — and main's simctl calls are COUNTED, by name — never an argument, so never a UDID: the phone rows read
+  // them on the live census (`state().simulator.simctl`). Production counts nothing.
+  const harnessSimctlCalls: SimctlCallCounts | null = isSmokeLike(MODE) ? simctlCallCounts() : null;
   const wireAttachment = (
     bundle: PairBundle,
     userRoot: string,
@@ -1088,6 +1137,20 @@ async function main(
       // BP-D6: a packaged shell's profiles (its cookie store encrypted — ESP-11's fuse) carry their own name, so an
       // unpackaged shell never opens one, whatever data root it was started on
       browserProfilesPackaged: app.isPackaged,
+      // PT-S2 (R4): a bound phone's Open Settings — the fixed Screen Recording address the screenshot door opens, through
+      // the harness's gate: a smoke records it, and System Settings never opens under a test
+      openSettings: () => {
+        const url = "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture";
+        if (harnessShellOpens === null) return shell.openExternal(url);
+        harnessShellOpens.opened.push(url);
+        return Promise.resolve();
+      },
+      // PT-S3 (P2): a smoke's simctl developer directory, the probe's ONLY candidate (SIM-NONE points it at an empty one)
+      ...(SMOKE_SIMCTL_DEVELOPER_DIR === undefined
+        ? {}
+        : { simctlCandidates: [SMOKE_SIMCTL_DEVELOPER_DIR] }),
+      // PT-S3 (D2): a smoke's count of main's simctl calls, by name (above) — the census's `simctl`
+      ...(harnessSimctlCalls === null ? {} : { simctlCalls: harnessSimctlCalls }),
       logger: logger.child({ component: "live-surfaces.capture" }),
     });
     if (!app.isPackaged && process.env["FIELDD_DATA_DIR"] === undefined && !isSmokeLike(MODE)) {
@@ -1110,6 +1173,10 @@ async function main(
       factories: liveSurfaceSupport.factories,
       enumeration:
         resources.macosLiveSurfaceCapture === null ? null : liveSurfaceSupport.enumeration,
+      // PT-S2 (R11): answered everywhere — a shell with no capture half lists no device
+      simulatorDevices: liveSurfaceSupport.simulatorDevices,
+      // PT-S3 (D1): main's simulator census on `state()` — counts only, read and never made
+      simulatorCensus: liveSurfaceSupport.census,
       logger: logger.child({ component: "live-surfaces.authority" }),
     });
     const shellProvider = new RecoveringShellProvider(
@@ -1146,6 +1213,11 @@ async function main(
           const authority = liveSurfaceAuthority;
           if (authority === null) throw { kind: "UNAVAILABLE" };
           return authority.release(params);
+        },
+        listSimulatorDevices: async () => {
+          const authority = liveSurfaceAuthority;
+          if (authority === null) throw { kind: "UNAVAILABLE" };
+          return authority.simulatorDevices();
         },
       },
       logger.child({ component: "shell.provider" }),
@@ -1266,7 +1338,17 @@ async function main(
     process.env["FIELDD_DATA_DIR"] === undefined
       ? (await testing()).stageTypedAgent({ vibefieldRoot: user.rootReal })
       : undefined;
-  const bootBundle = ensurePairBundle(user.userId, root, typedAgent?.environment);
+  // FG — the first-run smoke answers the Setup Assistant as a person of its own, staged the same way: a throwaway
+  // HOME, the typed agent's one conversation, and one stub as every launchable row's active install.
+  const firstRun =
+    MODE === "smoke-first-run" && process.env["FIELDD_DATA_DIR"] === undefined
+      ? (await testing()).stageFirstRun({ vibefieldRoot: user.rootReal })
+      : undefined;
+  const bootBundle = ensurePairBundle(
+    user.userId,
+    root,
+    typedAgent?.environment ?? firstRun?.environment,
+  );
   supervisor = bootBundle.supervisor;
   fielddHandles = bootBundle.handles;
   let attachmentWiring = wireAttachment(bootBundle, root);
@@ -1475,7 +1557,10 @@ async function main(
   // frame's four), the menu names it, the renderer mirrors it. `redrawMenu` is
   // assigned below for the modes that have a menu; the states exist in every
   // windowed mode because the renderer needs its truth either way.
-  let redrawMenu: (state: AppMenuState) => void = () => undefined;
+  let redrawMenu: (patch: Partial<AppMenuState>) => void = () => undefined;
+  // AU-4 (AU-G9) — the app menu's Settings…, late-bound: the menu is installed
+  // long before the window's reveal exists (a click before then does nothing)
+  let openSettingsFromMenu: (() => void) | null = null;
   const views = new ViewRegistry({
     logger: logger.child({ component: "view" }),
     onChanged: (state, target) => {
@@ -1507,6 +1592,57 @@ async function main(
     registry,
     async () => liveSurfaceSupport?.clearBrowsingData() ?? { profiles: 0, pages: 0 },
     logger.child({ component: "ipc.browser-data" }),
+  );
+  // Item 102: a paste in the deck or the sign-in terminal reads the clipboard here,
+  // for a registered product window while it and its page hold the focus; the
+  // grant set stays empty (ESP §7.4). Audited, best-effort: a paste never waits on
+  // fieldd.
+  const clipboardLogger = logger.child({ component: "ipc.clipboard" });
+  registerClipboardRead(
+    registry,
+    {
+      focused: (sender) =>
+        BrowserWindow.fromWebContents(sender)?.isFocused() === true && sender.isFocused(),
+      read: () => clipboard.readText(),
+      audit: (record) => appendShellAudit(record),
+      operationId: () => randomUUID(),
+      onAuditFailed: (error) =>
+        clipboardLogger.warn(
+          "desktop.clipboard.audit_unavailable",
+          "A clipboard read was answered, and its audit record could not be appended",
+          { error: error instanceof Error ? error.message : String(error) },
+        ),
+    },
+    clipboardLogger,
+  );
+  // HN-5: a copy's picture is written here, the read's other half — for a registered product
+  // window, the text copy's rule, and NO focus gate (LC-18, VF-PM 16:10Z): a write leaks
+  // nothing, where the read's gate is EL7's exposure rule (a page behind must not read what was
+  // copied elsewhere). Its PNG is decoded first and refused when it holds no picture, and the
+  // copy's words go beside it on the same item in ONE write, so neither replaces the other
+  // (LC-19). No audit row: the words' copy door keeps none (LC-13). A marked run keeps the
+  // picture's size and the words instead of writing them (R-T 4, as `harnessCopies`), after
+  // every check a write passes.
+  registerClipboardWriteImage(
+    registry,
+    {
+      decode: (png: Uint8Array) => {
+        const image = nativeImage.createFromBuffer(
+          Buffer.from(png.buffer, png.byteOffset, png.byteLength),
+        );
+        return image.isEmpty() ? null : image;
+      },
+      write: (item) => clipboard.write(item),
+      ...(harnessPictures === null || harnessCopies === null
+        ? {}
+        : {
+            keep: (bytes: number, text: string | undefined) => {
+              harnessPictures.push(bytes);
+              if (text !== undefined) harnessCopies.push(text);
+            },
+          }),
+    },
+    clipboardLogger,
   );
 
   // FR-4: main owns the app's one theme (FC-D5) — Light · Dark · Auto, kept in
@@ -1586,6 +1722,23 @@ async function main(
         if (error !== "") throw new Error(error);
       }
     },
+  );
+  // HN-D7 — a snapshot played onto the desk is printed from its own bytes: asked for by name, found
+  // in the tool's ring (a lookup, not the disk), and judged by the handle it is read from — never
+  // through a symlink, a regular file within the cap (`readStill`, EL7)
+  registerScreenshotStillBytes(
+    registry,
+    (url) => resolveStill(url, screenshotTool?.retainedStills ?? []),
+    readStill,
+    logger.child({ component: "ipc.screenshot" }),
+  );
+  // HN-4 — …and played onto a pane, it pastes the still's path only while that path opens to the
+  // still (`checkStill`: the same lookup and handle check, nothing read)
+  registerScreenshotStillKept(
+    registry,
+    (url) => resolveStill(url, screenshotTool?.retainedStills ?? []),
+    checkStill,
+    logger.child({ component: "ipc.screenshot" }),
   );
   // A global capture can finish with every product window closed. Keep the
   // latest result for the next field, without revealing it before the freeze.
@@ -1700,14 +1853,16 @@ async function main(
   // The rule is a window somebody can press a key in — production, dev, and the
   // godview harness. `smoke` and `spike-loro` have already returned by here;
   // `smoke-canvas`'s window is hidden, so it would be installing accelerators
-  // for nobody.
-  if (MODE !== "smoke-canvas" && MODE !== "smoke-plugin-restart") {
+  // for nobody, and the first-run smoke's is pressed by its own walk alone,
+  // which types a name and presses no chord.
+  if (MODE !== "smoke-canvas" && MODE !== "smoke-plugin-restart" && MODE !== "smoke-first-run") {
     redrawMenu = installAppMenu(process.platform === "darwin" ? "darwin" : "other", {
       setView,
       closeWindow,
       zoom,
       // SNAP-D5: no helper for this platform ⇒ the item stays, disabled.
       ...(screenshotHelperAvailable ? { takeScreenshot } : {}),
+      openSettings: () => openSettingsFromMenu?.(),
     });
   }
 
@@ -1809,7 +1964,44 @@ async function main(
       beforeExit: closeEvidence,
       terminalDirectProof: process.argv.includes("--terminal-direct-proof"),
       ...(harnessShellOpens === null ? {} : { shellOpens: harnessShellOpens }),
+      ...(harnessCopies === null ? {} : { copies: harnessCopies }),
       ...(typedAgent !== undefined ? { typedAgent } : {}),
+      onWindow: (window) => {
+        installLiveSurfaceHost(window, logger);
+        installRendererLogging({
+          window,
+          sink: shellLogging.renderer,
+          pluginRouter: shellLogging.pluginRendererRouter,
+          pluginResolver: pluginProvenance,
+          desktopLogger: logger,
+          onProcessGone: () => {
+            void crashes.refresh("renderer").catch((error) => {
+              logger.error(
+                "desktop.crash.refresh_failed",
+                "Electron could not refresh crash evidence after a renderer exited",
+                error,
+              );
+            });
+          },
+        });
+        installDiagnostics(window);
+      },
+    });
+    return;
+  }
+
+  if (MODE === "smoke-first-run") {
+    await (await testing()).runSmokeFirstRun({
+      handle: await fielddReady,
+      supervisor,
+      root,
+      registry,
+      preloadPath: PRELOAD_PATH,
+      viteUrl: VITE_URL,
+      beforeExit: closeEvidence,
+      staged: firstRun,
+      users: { root: user.rootReal, userId: user.userId },
+      ...(harnessShellOpens === null ? {} : { shellOpens: harnessShellOpens }),
       onWindow: (window) => {
         installLiveSurfaceHost(window, logger);
         installRendererLogging({
@@ -1843,6 +2035,10 @@ async function main(
       preloadPath: PRELOAD_PATH,
       viteUrl: VITE_URL,
       beforeExit: closeEvidence,
+      // PT-S3 (D3): the opener's record, as the godview smoke gets it — a phone's Open Settings is read there
+      ...(harnessShellOpens === null ? {} : { shellOpens: harnessShellOpens }),
+      ...(harnessCopies === null ? {} : { copies: harnessCopies }),
+      ...(harnessPictures === null ? {} : { pictures: harnessPictures }),
       onWindow: (window) => {
         installLiveSurfaceHost(window, logger);
         installRendererLogging({
@@ -2001,6 +2197,13 @@ async function main(
       window.webContents.send(IPC_CHANNELS.shellCommand, ShellCommandRequest.parse({ command }));
     }
   };
+  // AU-4 (AU-G9) — the app menu's Settings… is the status item's: the same command, which REVEALS Settings (the
+  // page's ⌘, toggles it; this never closes it)
+  openSettingsFromMenu = (): void => {
+    void revealSurface("open-settings").catch((error: unknown) => {
+      logger.error("desktop.app_menu.reveal_failed", "Settings… could not open Settings", error);
+    });
+  };
   const setAppPreference = async (
     key: (typeof APP_PREFERENCE_KEYS)[keyof typeof APP_PREFERENCE_KEYS],
     value: boolean,
@@ -2028,6 +2231,17 @@ async function main(
   // delay and a resume checks when the last check is stale (EDP §11.2, no interval stays alive). The apply waits for
   // WP12c's gate — nothing installs on a quit.
   const updateIdentity = readUpdateIdentity(resources);
+  // AU-4 (AU-G9) — About names the version and the commit its build id records: "Version 0.1.0-nightly.20261027
+  // (84509d6)". With no staged build id (development, a stage before WP12c) the commit is left to macOS. macOS only:
+  // the one app menu that carries About.
+  if (process.platform === "darwin") {
+    const commit = commitOfBuildId(updateIdentity?.buildId);
+    app.setAboutPanelOptions({
+      applicationName: "VibeField",
+      applicationVersion: app.getVersion(),
+      ...(commit !== undefined ? { version: commit } : {}),
+    });
+  }
   // WP12c (L2b-ii, build-wp12-updater.md §10) — the apply's port: the census and the consented stop through the held
   // coordinator (from the stop on, nothing may start fieldd), Squirrel staged only after the stop, the quit flow's
   // update mode. macOS only; elsewhere a staged update stays `apply-unbuilt`.
@@ -2038,6 +2252,7 @@ async function main(
     registry.cancelShutdown();
     if (what === "update") lifecycleFlow?.resetAfterAbortedQuit();
     trayController?.update({ quitting: false });
+    redrawUpdateMenu?.();
     void revealPrimaryWindow().catch((error: unknown) => {
       logger.error(
         what === "update" ? "desktop.update.restore_failed" : "desktop.quit.restore_failed",
@@ -2202,6 +2417,10 @@ async function main(
       release: () => {
         for (const bundle of pairBundles.values()) bundle.handles.releaseHold();
       },
+      // AU-5 (LC-24, LC-25, LC-36) — the box's last line, only when this quit will try to install the ready update; a
+      // move to Applications waiting for this quit installs nothing (the update waits for the copy in Applications)
+      installLine: () =>
+        lifecycleFlow?.movePending === true ? null : (updates?.quitInstallLine() ?? null),
       log: logger,
     });
     restoreAfterAbortedQuit = () => restoreAfterAbort("quit");
@@ -2214,6 +2433,37 @@ async function main(
       restoreAfterAbortedQuit = null;
     });
   }
+  // AU-4 (AU-L4) — the update's acts, ONE set: the status item's update item and the app menu's run the same three
+  // through the same doors — the check, a person's Download, the restart with its native consent
+  const updateActs =
+    updates === null
+      ? null
+      : {
+          check: async (): Promise<void> => {
+            await updates.check("manual");
+          },
+          download: async (version: string): Promise<void> => {
+            const outcome = await updates.downloadForPerson(version);
+            logger.info("desktop.update.download_requested", "Download Update was chosen", {
+              ok: outcome.ok,
+              reason: outcome.ok ? null : outcome.reason,
+            });
+            // a menu has no page to say a refusal on: main's own words, in its box, as a restart's refusal is said
+            if (!outcome.ok && outcome.words !== undefined) {
+              await applyPort?.notify(wordsBox(outcome.words));
+            }
+          },
+          restart:
+            applyPort?.wired === true
+              ? async (): Promise<void> => {
+                  const outcome = await updates.restartToInstall();
+                  logger.info("desktop.update.restart_requested", "Restart to Update was chosen", {
+                    ok: outcome.ok,
+                    reason: outcome.ok ? null : outcome.reason,
+                  });
+                }
+              : null,
+        };
   trayController = new TrayController({
     runtime: createElectronTrayRuntime(resources),
     initial: {
@@ -2237,23 +2487,11 @@ async function main(
       openSettings: () => revealSurface("open-settings"),
       openDiagnostics: () => revealSurface("open-diagnostics"),
       connectDevices: () => revealSurface("open-connect"),
-      ...(updates !== null
-        ? {
-            checkForUpdates: async () => {
-              await updates.check("manual");
-            },
-          }
+      ...(updateActs !== null
+        ? { checkForUpdates: updateActs.check, downloadUpdate: updateActs.download }
         : {}),
-      ...(updates !== null && applyPort?.wired === true
-        ? {
-            restartToUpdate: async () => {
-              const outcome = await updates.restartToInstall();
-              logger.info("desktop.update.restart_requested", "Restart to Update was chosen", {
-                ok: outcome.ok,
-                reason: outcome.ok ? null : outcome.reason,
-              });
-            },
-          }
+      ...(updateActs !== null && updateActs.restart !== null
+        ? { restartToUpdate: updateActs.restart }
         : {}),
       ...(screenshotHelperAvailable ? { takeScreenshot: async () => takeScreenshot() } : {}),
       setBackgroundShell: (enabled) =>
@@ -2303,26 +2541,78 @@ async function main(
     onDesktopState: publishDesktopState,
   });
   if (updates !== null) {
-    // C6 — ONE projection feeds the tray's item and the Settings card (through desktopState), so they cannot drift
+    // AU-4 (AU-G9; AU-L4) — the app menu's update item runs the status item's acts; a failed act is logged as the
+    // tray's are, never thrown into Electron's menu
+    const menuActFailed = (act: string) => (error: unknown) => {
+      logger.error(
+        "desktop.app_menu.update_failed",
+        "The app menu's update item could not act",
+        error,
+        { act },
+      );
+    };
+    // guarded as the status item's are (`TrayController.runAction`): none runs while the app quits, so a click that
+    // lands before the redraw has disabled the item does nothing
+    const menuAct = (act: string, run: () => Promise<void>): void => {
+      if (trayController?.current().quitting === true) return;
+      void run().catch(menuActFailed(act));
+    };
+    const restartFromMenu = updateActs?.restart ?? null;
+    const menuUpdateActs: UpdateMenuActs = {
+      ...(updateActs !== null
+        ? {
+            check: () => menuAct("check", updateActs.check),
+            download: (version: string) => menuAct("download", () => updateActs.download(version)),
+          }
+        : {}),
+      ...(restartFromMenu !== null ? { restart: () => menuAct("restart", restartFromMenu) } : {}),
+    };
+    let menuUpdateKey = "";
+    // C6 — ONE projection feeds the tray's item and the Settings card (through desktopState), so they cannot drift.
+    // AU-4: and the app menu's update item, the status item's entry (`updateMenuEntry`). Download progress emits often,
+    // so the menu is rebuilt only when what the item says or does changes: its label, whether it acts, the version a
+    // Download names.
+    const projectUpdateMenu = (update: TrayUpdateState): void => {
+      const entry = updateMenuEntry(
+        update,
+        menuUpdateActs,
+        trayController?.current().quitting !== true,
+      );
+      const key = JSON.stringify([
+        entry.label,
+        entry.enabled,
+        update.kind === "available" ? update.version : null,
+      ]);
+      if (key !== menuUpdateKey) {
+        menuUpdateKey = key;
+        redrawMenu({ update: entry });
+      }
+    };
     const projectUpdate = (): void => {
       const view = updates.view();
       latestUpdateView = view;
-      trayController?.update({ update: trayUpdateOf(view) });
+      const update = trayUpdateOf(view);
+      trayController?.update({ update });
+      projectUpdateMenu(update);
       if (latestDesktopRaw !== null) publishDesktopState(latestDesktopRaw);
     };
     projectUpdate();
     shellDisposers.add(updates.subscribe(() => projectUpdate()));
+    redrawUpdateMenu = () => projectUpdateMenu(trayUpdateOf(updates.view()));
+    shellDisposers.add(() => {
+      redrawUpdateMenu = null;
+    });
     updateDoctorLines = () => updates.doctorLines();
     // C1 — the Settings card's host doors (the narrow preload set; no path, no URL)
     registerUpdateDoors(
       registry,
       {
-        check: async () => {
-          await updates.check("manual");
-        },
+        // AU-1 (LC-5) — a person's check answers when it settles; the tray's and the app menu's stay `check("manual")`
+        check: () => updates.checkForPerson(),
         setEnabled: (enabled) => updates.setEnabled(enabled),
         setChannel: (channel) => updates.setChannel(channel),
         decline: (version) => updates.decline(version),
+        download: (version) => updates.downloadForPerson(version),
         prepareRestart: async () => {
           const prepared = await updates.prepareRestart();
           if (!prepared.ok) return prepared;
@@ -2351,9 +2641,39 @@ async function main(
         },
         confirmRestart: (token) => updates.confirmRestart(token),
         doctor: () => updates.doctorLines(),
+        // AU-7 (AU-G8; LC-10, LC-25, LC-37; main-process.md §8.4) — Move to Applications: a person's quit through the
+        // gate, with the move after a COMPLETE stop (`quitThen`). A copy already in Applications needs none; a quit,
+        // an update's quit or another move underway is busy. An existing copy in Applications goes to the Trash; one
+        // that is running refuses the mover, and this one opens again where it was (logged, no words: the
+        // single-instance lock makes it near-unreachable).
+        moveToApplications: async () => {
+          const where = updates.location;
+          if (where !== "read-only" && where !== "elsewhere")
+            return { ok: false, reason: "not-needed" };
+          const flow = lifecycleFlow;
+          if (flow === null) return { ok: false, reason: "busy" };
+          const outcome = await flow.quitThen(async () =>
+            app.moveToApplicationsFolder({
+              conflictHandler: (conflict) => {
+                logger.warn(
+                  "desktop.update.move_conflict",
+                  "A VibeField is already in Applications",
+                  { conflict, replaced: conflict === "exists" },
+                );
+                return conflict === "exists";
+              },
+            }),
+          );
+          return outcome === "busy" ? { ok: false, reason: "busy" } : { ok: true, outcome };
+        },
       },
       logger.child({ component: "ipc.update" }),
     );
+    // AU-5 (AU-D9 A) — a person's quit that stopped every pair hands a ready update to Squirrel (the lifecycle calls it
+    // only then); the controller says what it did (`desktop.update.quit_install`)
+    quitInstaller = async (context) => {
+      await updates.installOnQuit(context);
+    };
     const launchCheck = setTimeout(() => void updates.check("launch"), UPDATE_LAUNCH_DELAY_MS);
     launchCheck.unref?.();
     // L3b-ii (B4) — the silent apply is considered after a resume (once its check settles), and a few seconds after
@@ -2382,6 +2702,7 @@ async function main(
         : null;
     censusWatch?.unref?.();
     shellDisposers.add(() => {
+      quitInstaller = null;
       clearTimeout(launchCheck);
       if (censusWatch !== null) clearInterval(censusWatch);
       powerMonitor.removeListener("resume", onResume);
@@ -2503,9 +2824,11 @@ if (!hasInstanceLock) {
     const mayWriteUsers = !(isSmokeLike(MODE) && process.env["FIELDD_DATA_DIR"] !== undefined);
     const ensured = await ensureUsersRoot(root, {
       allowMint: mayWriteUsers,
-      // UA-3w — a test harness never meets the Setup Assistant: it has no hands
-      // to answer it with, and a held boot would read as a hung smoke.
-      mintOnboarded: isSmokeLike(MODE),
+      // UA-3w as amended (2026-10-31, track FG) — a test harness never meets the
+      // Setup Assistant: it has no hands to answer it with, and a held boot
+      // would read as a hung smoke. The one that answers it does
+      // (`answersSetup`: the first-run smoke, which walks it).
+      mintOnboarded: mintsOnboarded(MODE),
       onEvent: (event, attrs) => usersLogger.info(event, "user-directory event", attrs),
     });
     const userRoot = ensured.userRoot;
@@ -2624,22 +2947,26 @@ if (!hasInstanceLock) {
       onQuitRequested: () => {
         registry.beginShutdown();
         trayController?.update({ quitting: true });
+        redrawUpdateMenu?.();
       },
       disposeShell: disposeShellState,
       logger,
       closeLogging: closeEvidence,
       getQuitGate: () => quitGate,
       onQuitAborted: () => restoreAfterAbortedQuit?.(),
+      installOnQuit: async (context) => {
+        await quitInstaller?.(context);
+      },
     });
     lifecycleFlow = flow;
-    if (MODE === "dev") {
-      // AL-4 — a signal is never a person's quit: the runner restarts the shell (the next one adopts the pairs), or
-      // ends its session and stops the daemons itself. Only ⌘Q, the Dock, the tray and the menu meet the gate.
-      installDevSignalQuit(process, () => {
-        flow.leavePairsOnQuit("signal");
-        app.quit();
-      });
-    }
+    // AL-4 — a signal is never a person's quit: dev's runner restarts the shell (the next one adopts the pairs), or
+    // ends its session and stops the daemons itself. Only ⌘Q, the Dock, the tray and the menu meet the gate.
+    // AU-5a (LC-26's read) — production too, and every other build: Electron 43 turns SIGTERM, SIGINT and SIGHUP into
+    // an ordinary quit, which met the census gate and stopped the pairs while only dev installed this handler.
+    installSignalQuit(process, () => {
+      flow.leavePairsOnQuit("signal");
+      app.quit();
+    });
     try {
       await main(userRoot, logRoot, logging, localDiagnostics, crashArtifacts, supportBundles, {
         userId: ensured.user.userId,

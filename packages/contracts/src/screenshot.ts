@@ -267,22 +267,35 @@ export const ScreenshotShortcutState = z
   .passthrough();
 export type ScreenshotShortcutState = z.infer<typeof ScreenshotShortcutState>;
 
+/** A retained still as a renderer may name it: its PNG basename, never a path. */
+const ScreenshotStillName = z
+  .string()
+  .min(1)
+  .max(SCREENSHOT_LIMITS.MAX_PATH_CHARS)
+  .refine(
+    (name) => hasNoControlCharacters(name) && !/[\\/]/.test(name) && /\.png$/i.test(name),
+    "expected a PNG basename",
+  );
+
 /** Quick Look names only a retained PNG, never a renderer-supplied disk path. */
-export const ScreenshotPreviewRequest = z
-  .object({
-    name: z
-      .string()
-      .min(1)
-      .max(SCREENSHOT_LIMITS.MAX_PATH_CHARS)
-      .refine(
-        (name) => hasNoControlCharacters(name) && !/[\\/]/.test(name) && /\.png$/i.test(name),
-        "expected a PNG basename",
-      ),
-  })
-  .passthrough();
+export const ScreenshotPreviewRequest = z.object({ name: ScreenshotStillName }).passthrough();
 export type ScreenshotPreviewRequest = z.infer<typeof ScreenshotPreviewRequest>;
 export const ScreenshotPreviewResult = z.discriminatedUnion("ok", [
   z.object({ ok: z.literal(true) }).passthrough(),
   z.object({ ok: z.literal(false), message: ScreenshotMessage }).passthrough(),
 ]);
 export type ScreenshotPreviewResult = z.infer<typeof ScreenshotPreviewResult>;
+
+/** HN-D7 — a retained still's bytes, asked by the same name and nothing else:
+ * the desk prints a snapshot played onto it from the PNG itself, because the
+ * still scheme's `<img>` can show a still but never hand script its pixels.
+ * The answer is the bytes, or null for a still the tool no longer retains. */
+export const ScreenshotStillBytesRequest = z.object({ name: ScreenshotStillName }).passthrough();
+export type ScreenshotStillBytesRequest = z.infer<typeof ScreenshotStillBytesRequest>;
+
+/** HN-4 — whether a retained still is still kept, asked by the same name and
+ * nothing else: a snapshot's card played onto a pane pastes its still's path,
+ * and a path the ring has let go names nothing. The answer is a boolean; no
+ * bytes cross. */
+export const ScreenshotStillKeptRequest = z.object({ name: ScreenshotStillName }).passthrough();
+export type ScreenshotStillKeptRequest = z.infer<typeof ScreenshotStillKeptRequest>;

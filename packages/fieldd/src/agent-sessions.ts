@@ -15,10 +15,14 @@ import {
   type AgentModelSelection,
   AgentMonitorMirror,
   type AgentSessionAttach,
+  type AgentSessionOrigin,
+  type AgentSessionPlacement,
   type AgentSessionRecord,
   AgentSessionRecord as AgentSessionRecordSchema,
   type AgentSessionSummary,
   type AgentStatus,
+  type AgentStopState,
+  type SparkId,
   type TerminalInfo,
 } from "@vibefield/contracts";
 import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/logging";
@@ -334,6 +338,9 @@ export function recordForRun(input: {
   /** RA-D3 — the adapter's attach record (opaque; the same custody as the
    * ingress bearer), the latest it reported before the launch */
   attach?: AgentSessionAttach | undefined;
+  /** Item 121 — the non-agent cell the run's PTY was born on (TC-D4's
+   * fallback), signed with the rest so AR-4b's cell rule can admit it */
+  placement?: AgentSessionPlacement | undefined;
   /** AR-4 — the floor session this run replaced at a resume-when-idle */
   replaced?: string | undefined;
   /** AR-7 — a run ADOPTED in a terminal the person's own shell owns: the
@@ -344,6 +351,10 @@ export function recordForRun(input: {
   /** PJ-6 (Q4) — the model the launch started at (its three keys, as
    * puppeteer took them), so a Resume starts at it again */
   modelSelection?: AgentModelSelection | undefined;
+  /** CP-D15 — who started the run (a spark's `agent_spawn`, a flow's step); absent reads `you` */
+  origin?: AgentSessionOrigin | undefined;
+  /** CP-1c — the spark the run is the own session of */
+  spark?: SparkId | undefined;
 }): AgentSessionRecord {
   const { info } = input;
   return {
@@ -365,6 +376,14 @@ export function recordForRun(input: {
       ? { ingress: { port: input.ingress.port, token: input.ingress.token } }
       : {}),
     ...(input.attach !== undefined ? { attach: input.attach } : {}),
+    ...(input.placement !== undefined
+      ? {
+          placement: {
+            cellBootId: input.placement.cellBootId,
+            workloadClass: input.placement.workloadClass,
+          },
+        }
+      : {}),
     ...(input.replaced !== undefined ? { replaced: input.replaced } : {}),
     createdAt: input.now,
     updatedAt: input.now,
@@ -375,6 +394,8 @@ export function recordForRun(input: {
         }
       : {}),
     ...(input.modelSelection !== undefined ? { modelSelection: input.modelSelection } : {}),
+    ...(input.origin !== undefined ? { origin: input.origin } : {}),
+    ...(input.spark !== undefined ? { spark: input.spark } : {}),
   };
 }
 
@@ -441,6 +462,14 @@ export interface SummarizeInput {
   spawnedBy?: string | undefined;
   /** Q08 — the key `agent.interrupt` presses for this run (`stopKeyOf`) */
   stopKey?: string | undefined;
+  /** CP-D15 — who started the run, as its record says */
+  origin?: AgentSessionOrigin | undefined;
+  /** CP-1c — the spark this run is the own session of */
+  spark?: SparkId | undefined;
+  /** Item 124 — this process was born without its briefing (its executable takes no door) */
+  door?: "off" | undefined;
+  /** ST — the person's Stop while fieldd holds one */
+  stop?: AgentStopState | undefined;
 }
 
 /** Q08 — the floor's own interrupt, which is ⌃C (ghosttea encodes it `\x03`),
@@ -493,6 +522,10 @@ export function summarizeManaged(input: SummarizeInput): AgentSessionSummary {
     continuation: input.record,
     ...(input.spawnedBy !== undefined ? { spawnedBy: input.spawnedBy } : {}),
     ...(input.stopKey !== undefined ? { stopKey: input.stopKey } : {}),
+    ...(input.origin !== undefined ? { origin: input.origin } : {}),
+    ...(input.spark !== undefined ? { spark: input.spark } : {}),
+    ...(input.door !== undefined ? { door: input.door } : {}),
+    ...(input.stop !== undefined ? { stop: input.stop } : {}),
   };
 }
 
@@ -542,6 +575,8 @@ export function summarizeExitedRecord(input: SummarizeExitedInput): AgentSession
     stateChangedAt: record.exited?.at ?? input.since,
     ...(record.title !== undefined ? { title: record.title } : {}),
     continuation: { persisted: true, resumable: input.resumable ?? true, exited: true },
+    ...(record.origin !== undefined ? { origin: record.origin } : {}),
+    ...(record.spark !== undefined ? { spark: record.spark } : {}),
   };
 }
 
@@ -622,5 +657,7 @@ export function summarizePending(input: SummarizePendingInput): AgentSessionSumm
           reason: input.reason,
         },
     ...(record.spawnedBy !== undefined ? { spawnedBy: record.spawnedBy } : {}),
+    ...(record.origin !== undefined ? { origin: record.origin } : {}),
+    ...(record.spark !== undefined ? { spark: record.spark } : {}),
   };
 }

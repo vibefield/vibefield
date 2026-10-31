@@ -37,6 +37,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { BrowserWindow, NativeImage } from "electron";
+import { measureChip } from "./smoke-contrast";
 
 /** The canon's numbers (DESIGN.md §8 "Peers on the mat", R17). */
 export const PEERS = {
@@ -274,61 +275,6 @@ export function judgeIdle(seenAtNotBefore: string | null, hiddenAfterMs: number 
   return problems;
 }
 
-/** WCAG relative luminance of an sRGB colour (0–255). */
-export function luminance([r, g, b]: readonly [number, number, number]): number {
-  const lin = (c: number): number => {
-    const s = c / 255;
-    return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-  };
-  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
-}
-
-/** The contrast of two colours (WCAG 2), ≥ 1. */
-export function contrast(
-  a: readonly [number, number, number],
-  b: readonly [number, number, number],
-): number {
-  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number];
-  return (hi + 0.05) / (lo + 0.05);
-}
-
-/**
- * The chip's ink and ground as MEASURED from its captured pixels (BGRA, Electron's `toBitmap`): the ground is the median
- * of the half of the pixels nearest the chip's mean (the glass), the ink the mean of the 2 % farthest from the ground (the
- * glyphs' cores) — and their contrast.
- */
-export function measureChip(bgra: Uint8Array): {
-  ground: [number, number, number];
-  ink: [number, number, number];
-  ratio: number;
-} {
-  const px: [number, number, number][] = [];
-  for (let i = 0; i + 3 < bgra.length; i += 4)
-    px.push([bgra[i + 2] as number, bgra[i + 1] as number, bgra[i] as number]);
-  const mean = [0, 1, 2].map(
-    (c) => px.reduce((s, p) => s + (p[c] as number), 0) / Math.max(1, px.length),
-  );
-  const dist = (p: readonly number[], q: readonly number[]): number =>
-    Math.hypot(
-      (p[0] as number) - (q[0] as number),
-      (p[1] as number) - (q[1] as number),
-      (p[2] as number) - (q[2] as number),
-    );
-  const byMean = [...px].sort((p, q) => dist(p, mean) - dist(q, mean));
-  const near = byMean.slice(0, Math.max(1, Math.floor(byMean.length / 2)));
-  const median = (c: number): number => {
-    const v = near.map((p) => p[c] as number).sort((x, y) => x - y);
-    return v[Math.floor(v.length / 2)] as number;
-  };
-  const ground: [number, number, number] = [median(0), median(1), median(2)];
-  const far = [...px].sort((p, q) => dist(q, ground) - dist(p, ground));
-  const core = far.slice(0, Math.max(1, Math.floor(far.length * 0.02)));
-  const ink = [0, 1, 2].map((c) =>
-    Math.round(core.reduce((s, p) => s + (p[c] as number), 0) / core.length),
-  ) as [number, number, number];
-  return { ground, ink, ratio: Math.round(contrast(ground, ink) * 10) / 10 };
-}
-
 /** The card a lost device shows, as read off the stage. */
 export interface CardSeen {
   readonly kind: string | null;
@@ -392,8 +338,9 @@ const CANVAS_BG = `(() => {
 })()`;
 
 /** A peer's arrow and chip as A draws them. */
-/** B's page: where its pointer can leave from beside the desk — the line's centre, a head control's (no-drag), a point
- * of the head's drag strip that no control covers — each as the page hit-tests it. */
+/** B's page: where its pointer can leave from beside the desk — the line's snapshot's centre (LN-D1: the line holds no
+ * draft), a head control's (no-drag), a point of the head's drag strip that no control covers — each as the page
+ * hit-tests it. */
 const READ_EXIT_POINTS = `(() => {
   const desk = document.querySelector("[data-desk]");
   const regionOf = (el) => {
@@ -417,7 +364,7 @@ const READ_EXIT_POINTS = `(() => {
     return r.width > 0 && r.height > 0 ? at(r.left + r.width / 2, r.top + r.height / 2) : null;
   };
   const strip = (p) => (p === null ? null : { x: p.x, y: p.y, hit: p.hit, inDesk: p.inDesk, region: p.region });
-  const line = document.querySelector(".vf-line-input");
+  const line = document.querySelector(".vf-line-snapshot");
   let head = null;
   for (const el of document.querySelectorAll(".vf-head-place button, .vf-head-place [role='button'], .vf-head-tools button")) {
     const c = centre(el);

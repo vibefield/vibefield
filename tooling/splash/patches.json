@@ -1,0 +1,26 @@
+[
+  {
+    "name": "post",
+    "why": "the boot's own pass over each frame the field draws, on the field's device and in its command buffer: the Setup Assistant's glass (FG-D24, boot/splash/glass-pass.ts)",
+    "from": "transparent = false, budget = BAKED.budget } = {}) {",
+    "to": "transparent = false, budget = BAKED.budget, post = null } = {}) {"
+  },
+  {
+    "name": "post-usage",
+    "why": "the canvas's texture readable by that pass, since the glass blurs the frame it stands on",
+    "from": "  ctx.configure({ device, format, alphaMode: transparent ? \"premultiplied\" : \"opaque\" });",
+    "to": "  ctx.configure({ device, format, alphaMode: transparent ? \"premultiplied\" : \"opaque\", ...(post ? { usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING } : {}) });"
+  },
+  {
+    "name": "post-encode",
+    "why": "the pass runs after the field's own passes and before the frame is submitted, given the frame as the field drew it",
+    "from": "    encode(seconds, ctx.getCurrentTexture().createView(), encoder);\n",
+    "to": "    const view = ctx.getCurrentTexture().createView();\n    encode(seconds, view, encoder);\n    post?.encode(encoder, { view, size, mark: markTex, seconds });\n"
+  },
+  {
+    "name": "redraw",
+    "why": "the next frame now when no loop runs (reduced motion), after what the pass draws has moved",
+    "from": "  const api = {\n",
+    "to": "  const api = {\n    redraw() {\n      if (!running) draw(shownAt);\n    },\n"
+  }
+]

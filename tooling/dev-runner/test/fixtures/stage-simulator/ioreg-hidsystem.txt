@@ -1,0 +1,18 @@
++-o Root  <class IORegistryEntry, id 0x100000100, retain 33>
+  +-o J616sAP  <class IOPlatformExpertDevice, id 0x100000110, registered, matched, active, busy 0 (5281 ms), retain 37>
+    +-o IOResources  <class IOResources, id 0x100000111, registered, matched, active, busy 0 (0 ms), retain 52>
+      +-o IOHIDSystem  <class IOHIDSystem, id 0x1000004c2, registered, matched, active, busy 0 (0 ms), retain 24>
+        | {
+        |   "HIDKeyboardModifierMappingPairs" = ()
+        |   "IOClass" = "IOHIDSystem"
+        |   "IOProviderClass" = "IOResources"
+        |   "HIDIdleTime" = 187654321098
+        |   "IOResourceMatch" = "IOBSD"
+        |   "HIDParameters" = {"HIDClickTime"=500000000,"HIDKeyRepeat"=83333333,"HIDInitialKeyRepeat"=500000000}
+        |   "IOMatchedAtBoot" = Yes
+        | }
+        |
+        +-o IOHIDUserClient  <class IOHIDUserClient, id 0x1000004c9, !registered, !matched, active, busy 0, retain 6>
+            {
+              "IOUserClientCreator" = "pid 412, WindowServer"
+            }

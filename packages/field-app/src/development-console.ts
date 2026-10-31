@@ -357,8 +357,7 @@ export function emitGodviewMonitorMarker(facts: GodviewMonitorFacts): void {
  * view it names, the view the window was in, and what the frame did with it.
  *
  * The delivery probe's ear at the FRAME. A chord can be caught and change
- * nothing a harness can see — ⌘2 inside Godview, ⌘4 while the Assistant waits —
- * so the frame says what it heard, and the probe sets that beside the pane's
+ * nothing a harness can see — ⌘2 inside Godview — so the frame says what it heard, and the probe sets that beside the pane's
  * own ear (which must stay deaf) and the view the window ends in. Emitted from
  * the frame's own handler, never from a harness's wishes, and only in the
  * godview smoke's modes. */
@@ -367,8 +366,8 @@ export interface ViewKeyFacts {
   view: string;
   from: string;
   /** "moved": the frame asked for another view; "stayed": the window was
-   * already there; "waits": the view is not built (its note said so). */
-  outcome: "moved" | "stayed" | "waits";
+   * already there. */
+  outcome: "moved" | "stayed";
 }
 
 export function emitViewKeyMarker(facts: ViewKeyFacts): void {
@@ -377,14 +376,15 @@ export function emitViewKeyMarker(facts: ViewKeyFacts): void {
 }
 
 /** One key the LINE took for its create (One Frame FR-2, §11): B on Canvas,
- * ⌘T in Godview. The delivery probe's ear at the line, in VIEW_KEY's form —
- * said from the line's own handler, so a key that never arrived says nothing,
- * which is what the probe from a focused pane reads B's silence by. */
+ * ⌘T in Godview and in History (HN-7), ⌘N in Chat (SP-1c). The delivery
+ * probe's ear at the line, in VIEW_KEY's form — said from the line's own
+ * handler, so a key that never arrived says nothing, which is what the probe
+ * from a focused pane reads B's silence by. */
 export interface LineKeyFacts {
   key: string;
   view: string;
-  /** "opened" / "closed": Objects; "refused": Objects while an object is in hand (DK-13, R14); "new-terminal": the
-   * deck was asked. */
+  /** "opened" / "closed": Objects, or Chat's New spark sheet (SP-1c); "refused": Objects while an object is in hand
+   * (DK-13, R14); "new-terminal": the view's New terminal was asked (the deck in Godview; History's door in History). */
   outcome: "opened" | "closed" | "refused" | "new-terminal";
 }
 

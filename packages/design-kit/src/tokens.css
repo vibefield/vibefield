@@ -43,6 +43,10 @@
     );
   --vf-mat-lattice-size: 100px 100px, 100px 100px, 25px 25px, 25px 25px;
   --vf-mat-ink: rgb(255 255 255 / 60%);
+  /* §2.1 the field (track FG): the first face's ground — the website's splash, before its first frame and under its
+     still — and the words that stand on it. One value in both themes: the field is the dark in both. */
+  --vf-field-ground: #04050f;
+  --vf-field-ink: rgb(255 255 255 / 56%);
   /* §2.2 Surfaces */
   --vf-card: #1c1c1e;
   --vf-card-deep: #000000;
@@ -68,10 +72,24 @@
   --vf-chrome-surface-hover: rgb(255 255 255 / 78%);
   --vf-field-surface: rgb(255 255 255 / 60%);
   --vf-wizard-surface: rgb(255 255 255 / 55%);
+  /* §5 the Setup Assistant's frost under its surface (one value in both themes): the blur and the saturation, which
+     the field reads off the glass where it draws the frost itself (track FG, FG-3b, FG-D24) */
+  --vf-wizard-blur: 32px;
+  --vf-wizard-saturate: 1.12;
+  /* §5 the Setup Assistant on the field (track FG, FG-D15 C): its edge and the edge's top light; the grain
+     over its frost (one value in both themes), so the blur never bands */
+  --vf-wizard-edge: rgb(255 255 255 / 60%);
+  --vf-wizard-edge-light: rgb(255 255 255 / 75%);
+  --vf-wizard-grain: 0.03;
+  /* §5 the Setup Assistant's logo (FG-4b): the field's mark, inverted on milk with its colours kept; none by night */
+  --vf-wizard-logo-filter: invert(1) hue-rotate(180deg);
   --vf-backdrop-dim: rgb(0 0 0 / 10%);
   /* §5 the search scrim (the Peek, §8 "Search"; K7): darker than the backdrop
-     dim, under a blur of 18 — the window blurred and dimmed */
+     dim, under a blur of 18 — the window blurred and dimmed. The phone wears its
+     dim alone under a door over a live field (§9, TS-D22; ChromePalette.searchScrim) */
   --vf-search-scrim: rgb(0 0 0 / 16%);
+  /* §8 the New spark sheet's sky (SP-1c): night in both themes, under the star engine's own night where it draws */
+  --vf-spark-night: #060716;
 
   /* §2.5 State & system color */
   --vf-green: #30d158;
@@ -163,6 +181,32 @@
   --vf-folder-portal: #14141f;
   --vf-folder-ink: #eaeaf4;
   --vf-folder-muted: #8b8ba6;
+
+  /* §5 "The hand's cards are paper" (track HN, HN-D1): one white stock for every kind, the same in
+     both themes but for the night's reading light (`.dark` below: it keeps 86% of its day, and its
+     shadow deepens) — the stock and its inks, the index printed in two corners, the cut edge, a
+     pass line in a terminal's output, a picture's ground before it loads, the grain, and the
+     agent's card, the one dark stock. The stock's inks are its own, never the chrome's:
+     `--vf-card-ink` is §2.2's dark surface's, so the stock's are named for the stock. */
+  --vf-card-stock: #fbfaf7;
+  --vf-card-edge: #d6d0c3;
+  --vf-card-stock-ink: rgb(33 31 27 / 92%);
+  --vf-card-stock-ink-2: rgb(33 31 27 / 64%);
+  --vf-card-stock-ink-3: rgb(33 31 27 / 42%);
+  --vf-card-index: rgb(33 31 27 / 58%);
+  --vf-card-cut: rgb(58 46 22 / 15%);
+  --vf-card-pass: #1f7a36;
+  --vf-card-photo: #cfd3cf;
+  --vf-card-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .2  0 0 0 0 .18  0 0 0 0 .14  0 0 0 .9 0'/%3E%3C/filter%3E%3Crect width='150' height='150' filter='url(%23n)'/%3E%3C/svg%3E");
+  --vf-card-dark-stock: #1c1c1e;
+  --vf-card-dark-edge: #050506;
+  --vf-card-dark-ink: rgb(255 255 255 / 92%);
+  --vf-card-dark-ink-2: rgb(255 255 255 / 62%);
+  --vf-card-dark-ink-3: rgb(255 255 255 / 40%);
+  --vf-card-dark-index: rgb(255 255 255 / 46%);
+  --vf-card-dark-cut: rgb(255 255 255 / 9%);
+  --vf-card-dim: 1;
+  --vf-card-shade: 1;
 
   /* §2.7 Godview instrument palette — exact values from the Chopsticks
      Godview reference. Both modes live here because Godview owns a local theme
@@ -279,6 +323,13 @@
   --vf-radius-island: 32px;
   --vf-radius-sheet: 40px;
   --vf-radius-control: 9px;
+  /* §4 (FG-4a): a list that can outgrow what holds it scrolls within itself, its
+     last 20 faded and 20 of padding under its end — the face deck's rule. */
+  --vf-scroll-fade: 20px;
+  /* §4 (FG-4a; 170 since row 32 at run53b): a login's terminal on the Setup
+     Assistant's glass, so the add holding it (the terminal, 79.5 of chrome and the
+     add's padding of 10 above and below) stands whole above Profiles' fade. */
+  --vf-glass-signin-height: 170px;
 
   /* §8 The file tree. Geometry only — every COLOR the tree wears is one of
      the tokens above. The theme itself ships upstream
@@ -301,12 +352,17 @@
   --vf-shadow-side-panel: -20px 0 40px rgb(0 0 0 / 8%);
   /* §5 (2026-09-23, edge trays): the side panel's shadow cast the other way, for a
      panel entering from the LEFT; and the island / edge recipes as drop-shadow
-     filters, for chrome whose silhouette is a path (the notch and its drawer). */
+     filters, for chrome whose silhouette is a path (the notch and its drawer).
+     No wearer since the edges left the frame (HN-8): they stand until a token
+     pass removes them, doc first (§5's edge-tray row). */
   --vf-shadow-edge: 20px 0 40px rgb(0 0 0 / 8%);
   --vf-drop-island: drop-shadow(0 8px 30px rgb(0 0 0 / 8%));
   --vf-drop-edge: drop-shadow(20px 0 40px rgb(0 0 0 / 8%));
   --vf-shadow-dialog: 0 42px 100px rgb(0 0 0 / 18%), 0 12px 36px rgb(0 0 0 / 10%);
   --vf-shadow-wizard: 0 8px 30px rgb(0 0 0 / 8%);
+  /* §5 (track FG): the Setup Assistant's shadow on the field, in the field's ground — one value in both themes,
+     since the field is the dark in both */
+  --vf-shadow-wizard-field: 0 40px 120px rgb(4 5 15 / 55%), 0 12px 32px rgb(4 5 15 / 28%);
   /* §5 the search popup (the Peek, §8 "Search"; GV-D8) — its ring is the strong hairline */
   --vf-shadow-search: 0 40px 100px rgb(0 0 0 / 24%), 0 12px 30px rgb(0 0 0 / 10%);
 
@@ -356,6 +412,9 @@
   --vf-chrome-surface-hover: rgb(255 255 255 / 8%);
   --vf-field-surface: rgb(255 255 255 / 6%);
   --vf-wizard-surface: rgb(28 28 30 / 55%);
+  --vf-wizard-edge: rgb(255 255 255 / 12%);
+  --vf-wizard-edge-light: rgb(255 255 255 / 8%);
+  --vf-wizard-logo-filter: none;
   --vf-backdrop-dim: rgb(0 0 0 / 40%);
   --vf-search-scrim: rgb(0 0 0 / 46%);
   --vf-shadow-island: 0 8px 30px rgb(0 0 0 / 40%);
@@ -368,6 +427,11 @@
   --vf-shadow-dialog: 0 48px 120px rgb(0 0 0 / 48%), 0 14px 40px rgb(0 0 0 / 30%);
   --vf-shadow-wizard: 0 8px 30px rgb(0 0 0 / 40%);
   --vf-shadow-search: 0 40px 100px rgb(0 0 0 / 60%), inset 0 1px 0 rgb(255 255 255 / 6%);
+
+  /* §5 the hand's cards by night: the stock keeps its white, read at 86% of its day, and casts
+     a deeper shadow */
+  --vf-card-dim: 0.86;
+  --vf-card-shade: 1.7;
 
   /* §2.8 the face — the paper stays white; the pewter darkens with the room */
   --vf-sticker-shadow: rgb(0 0 0 / 50%);

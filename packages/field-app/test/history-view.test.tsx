@@ -4,12 +4,18 @@
  * fieldd's ports, rosetta's room inside) in the cover's History slot, exactly
  * as ChromeLayer hands it to the frame. The rows: ⌘3 shows the room and it
  * stays mounted — out to Godview and back keeps its scroll and asks the
- * catalog nothing new; and the line's create in History is Resume — the
- * session the room has chosen, continued by `agent.resume`'s native form with
- * the launcher's own facts, placed through Godview's door, the window moved
- * there to show it; a refusal said on the line in the launcher's words. And
- * the room's host knows the window's home (AR-8 L2): a project rooted under it
- * reads `~/…`, one outside it in full.
+ * catalog nothing new; the chosen session's Resume — the line's create until
+ * HN-7, the palette's History row since, run here as ChromeLayer runs it
+ * (`runChosenSession`) and read through the palette's own table — continues
+ * the session the room has chosen by `agent.resume`'s native form with the
+ * launcher's own facts, placed through Godview's door, the window moved there
+ * to show it, a refusal said on the line in the launcher's words; and the
+ * line's create is New terminal in the project the room shows (HN-7, LN-D2):
+ * the folder ③ shows, asked of Godview's deck, the window moved there once it
+ * opened — with no project, as Godview's — and a folder it cannot open in said
+ * in New agent's words (another desktop's in History's own), the window
+ * staying. And the room's host knows the window's home (AR-8 L2): a project
+ * rooted under it reads `~/…`, one outside it in full.
  */
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -22,11 +28,15 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FrameSurface } from "../src/frame/frame-surface";
 import {
+  chosenSessionWaits,
+  getHistoryLineDoor,
   type LineViewDoor,
   publishGodviewLineDoor,
   resetGodviewLineDoorForTest,
   resetHistoryLineDoorForTest,
+  runChosenSession,
 } from "../src/frame/line-door";
+import { frameActGroups } from "../src/frame/palette-acts";
 import { ViewFrame } from "../src/frame/ViewFrame";
 import { resetActiveViewForTest } from "../src/frame/view-state";
 import { HistoryView } from "../src/history/HistoryView";
@@ -249,9 +259,8 @@ async function until<T>(read: () => T | null | undefined, label: string, ms = 5_
 const historySlot = (): HTMLElement | null =>
   host?.querySelector<HTMLElement>('[data-cover-view="history"]') ?? null;
 
-/** Choose the scripted session in the room, the way a person does: its
- * project, then the session. */
-async function choose(): Promise<void> {
+/** Show the scripted project in the room, the way a person does: its row. */
+async function showProject(): Promise<void> {
   // PJ-4 (ROOM API v3, H4): a project row with a host act (pin, hide) is a
   // box whose covering button is the selection; one without is the button
   const project = await until(
@@ -262,6 +271,10 @@ async function choose(): Promise<void> {
     "the room's project row",
   );
   act(() => project.click());
+}
+
+/** Choose the scripted session in the project the room shows. */
+async function chooseSession(): Promise<void> {
   // PJ-4 (ROOM API v2): a row with a host act is a box whose covering button
   // is the selection; a row without one is the button itself
   const session = await until(
@@ -274,11 +287,35 @@ async function choose(): Promise<void> {
   act(() => session.click());
 }
 
+/** Choose the scripted session in the room, the way a person does: its
+ * project, then the session. */
+async function choose(): Promise<void> {
+  await showProject();
+  await chooseSession();
+}
+
 const create = (): HTMLButtonElement => {
   const button = host?.querySelector<HTMLButtonElement>(".vf-line-create");
   if (!button) throw new Error("the line's create did not render");
   return button;
 };
+
+/** The chosen session's act as the palette's History row draws it (HN-7: the line's create
+ * until then) — the door History's controller published, read through the palette's own table,
+ * as `CommandPalette` reads it. */
+const sessionRow = () => {
+  const door = getHistoryLineDoor();
+  return frameActGroups("history", "mac", chosenSessionWaits(door), door?.live === true)
+    .flatMap((group) => group.acts)
+    .find((entry) => entry.id === "chosen-session");
+};
+
+/** Its press, as the palette's row runs it (ChromeLayer's glue). */
+async function pressSessionRow(): Promise<void> {
+  await act(async () => {
+    await runChosenSession();
+  });
+}
 
 describe("History in the frame (AR-8c)", () => {
   it("⌘3 shows rosetta's room on the cover's glass, and out and back keeps it mounted — its scroll and its feed", async () => {
@@ -313,27 +350,28 @@ describe("History in the frame (AR-8c)", () => {
     expect(client.calls.filter((call) => call.method === "project.subscribe")).toHaveLength(1);
   });
 
-  it("Resume continues the chosen session by its native id with the launcher's facts, placed in Godview's pane", async () => {
+  it("Resume, the palette's History row, continues the chosen session by its native id with the launcher's facts, placed in Godview's pane", async () => {
     const client = fieldd(() => SPAWNED);
     const place = vi.fn<LineViewDoor["place"]>(async () => ({ state: "opened" }));
     publishGodviewLineDoor({
       panes: [],
       onScreen: false,
       newTerminal: async () => ({ state: "opened" }),
-      paste: () => false,
+      pasteInto: () => false,
+      whenInputOpen: async () => false,
       canPlace: true,
       place,
       reveal: async () => ({ state: "opened" }),
     });
     mount(client);
     to("history");
-    expect(create().getAttribute("aria-disabled")).toBe("true");
-    expect(create().title).toContain("choose a session first");
-    await choose();
-    await until(() => (create().hasAttribute("aria-disabled") ? null : true), "Resume to wake");
-    await act(async () => {
-      create().click();
+    expect(sessionRow()).toMatchObject({
+      name: "Resume this session",
+      waits: "choose a session first",
     });
+    await choose();
+    await until(() => (sessionRow()?.waits === null ? true : null), "Resume to wake");
+    await pressSessionRow();
     await until(() => host?.querySelector(".vf-line-note")?.textContent, "the line's note");
     expect(client.calls.find((call) => call.method === "agent.resume")?.params).toEqual({
       provider: "claude",
@@ -354,7 +392,8 @@ describe("History in the frame (AR-8c)", () => {
       panes: [],
       onScreen: false,
       newTerminal: async () => ({ state: "opened" }),
-      paste: () => false,
+      pasteInto: () => false,
+      whenInputOpen: async () => false,
       canPlace: true,
       place: async () => ({ state: "opened" }),
       reveal: async () => ({ state: "opened" }),
@@ -362,10 +401,8 @@ describe("History in the frame (AR-8c)", () => {
     mount(client);
     to("history");
     await choose();
-    await until(() => (create().hasAttribute("aria-disabled") ? null : true), "Resume to wake");
-    await act(async () => {
-      create().click();
-    });
+    await until(() => (sessionRow()?.waits === null ? true : null), "Resume to wake");
+    await pressSessionRow();
     expect(await until(() => host?.querySelector(".vf-line-note")?.textContent, "the note")).toBe(
       `Resumed in the active pane, ${own}`,
     );
@@ -381,10 +418,8 @@ describe("History in the frame (AR-8c)", () => {
     mount(client);
     to("history");
     await choose();
-    await until(() => (create().hasAttribute("aria-disabled") ? null : true), "Resume to wake");
-    await act(async () => {
-      create().click();
-    });
+    await until(() => (sessionRow()?.waits === null ? true : null), "Resume to wake");
+    await pressSessionRow();
     const note = await until(
       () => host?.querySelector(".vf-line-note")?.textContent,
       "the line's note",
@@ -485,7 +520,267 @@ describe("a regroup keeps the chosen session chosen (PJ-4)", () => {
       2_000,
     );
     expect(historySlot()?.querySelector(".ah-project-list-item.is-selected")).not.toBeNull();
-    expect(create().title).not.toContain("choose a session first");
+    // the palette's Resume row (the line's create until HN-7) has its session still
+    expect(sessionRow()?.waits).not.toBe("choose a session first");
+  }, 20_000);
+});
+
+// HN-7 (LN-D2; DESIGN.md §8 "History" — its create is New terminal): the line's
+// create opens a fresh shell in the folder of the project the room shows — the
+// folder ③ shows, kept as the room reports it and found as New agent finds it —
+// asked of Godview's deck, which is up, the window moving there once it opened;
+// with no project shown, as Godview's create opens one — and so in a project
+// the room shows with no folders of fieldd's (rosetta's unassigned bucket); a
+// folder it cannot open in is said in New agent's words, one on another
+// desktop in History's own, the deck's own refusal in the deck's — each said
+// in History, the window staying. (The other refusal — none here — is
+// `startPlaceOf`'s, and a deck not up yet, raised by the move first, is
+// `newTerminalIn`'s: history-host.)
+describe("History's create: New terminal in the project the room shows (HN-7)", () => {
+  const VIBE = PROJECTS.rows[0] as Record<string, unknown> & {
+    places: Array<Record<string, unknown>>;
+  };
+  const HERE = VIBE.places[0] as Record<string, unknown>;
+  const ELSEWHERE = VIBE.places[1] as Record<string, unknown>;
+  /** a second folder of vibe-field on this desktop, after its usual place */
+  const WORKTREE = {
+    ...HERE,
+    ref: { device: STUDIO, placeId: "pl_wt" },
+    name: "feature",
+    path: "/Users/me/wt/feature",
+    branch: "feature",
+    sessions: 1,
+  };
+  /** `project.list`, vibe-field holding these folders */
+  const listed = (places: readonly unknown[]) => ({
+    rows: [{ ...VIBE, places }],
+    sources: PROJECTS.sources,
+    groupingVersion: 2,
+  });
+  /** Godview's door, its new terminal answered as `newTerminal` says */
+  const deck = (newTerminal: LineViewDoor["newTerminal"]): LineViewDoor => ({
+    panes: [],
+    onScreen: false,
+    newTerminal,
+    pasteInto: () => false,
+    whenInputOpen: async () => false,
+    canPlace: true,
+    place: async () => ({ state: "opened" }),
+    reveal: async () => ({ state: "opened" }),
+  });
+  const noteNow = (): string | null | undefined =>
+    host?.querySelector(".vf-line-note")?.textContent;
+  /** the create's tooltip names the project ③ shows (DESIGN.md §8 "The line") */
+  const namesProject = () => (create().title === "New terminal in vibe-field  ⌘T" ? true : null);
+  /** Show the project the room lists as `name`, the way a person does: its row (the room names
+   * the row's selection by the project's name first). */
+  async function showNamed(name: string): Promise<void> {
+    const rows = (): HTMLButtonElement[] => [
+      ...(historySlot()?.querySelectorAll<HTMLButtonElement>(
+        ".ah-project-list-item__hit, button.ah-project-list-item",
+      ) ?? []),
+    ];
+    const row = await until(
+      () => rows().find((button) => button.getAttribute("aria-label")?.startsWith(`${name} · `)),
+      `the room's ${name} row`,
+    );
+    act(() => row.click());
+  }
+
+  it("opens in the folder ③ shows — the usual one, then the chosen session's own — asked of Godview's deck, the window moved there", async () => {
+    const newTerminal = vi.fn<LineViewDoor["newTerminal"]>(async () => ({ state: "opened" }));
+    publishGodviewLineDoor(deck(newTerminal));
+    // the one session ran in the worktree, vibe-field's second folder here
+    const inWorktree = {
+      rows: [{ ...SESSION, cwd: WORKTREE.path, place: WORKTREE.ref }],
+      sources: KEYED.sources,
+    };
+    const client = fieldd(
+      () => SPAWNED,
+      () => ({ sessions: [] }),
+      (method) =>
+        method === "project.list"
+          ? listed([HERE, WORKTREE, ELSEWHERE])
+          : method === "index.sessions"
+            ? inWorktree
+            : undefined,
+    );
+    mount(client);
+    to("history");
+    await showProject();
+    await until(namesProject, "the create to name the project ③ shows");
+    expect(create().getAttribute("aria-label")).toBe("New terminal");
+    expect(create().hasAttribute("aria-disabled")).toBe(false);
+    await act(async () => {
+      create().click();
+    });
+    expect(await until(noteNow, "the line's note")).toBe("Terminal opened in the active pane");
+    // ③ opens on the usual place while no session is chosen
+    expect(newTerminal).toHaveBeenCalledExactlyOnceWith({ cwd: "/Users/me/Projects/vibe-field" });
+    expect(asked).toContain("godview");
+    // a session chosen: ③ follows it to its own folder — the key History keeps — and the
+    // create opens there
+    await chooseSession();
+    await act(async () => {
+      create().click();
+    });
+    await until(() => (newTerminal.mock.calls.length === 2 ? true : null), "the second ask");
+    expect(newTerminal).toHaveBeenLastCalledWith({ cwd: "/Users/me/wt/feature" });
+    // the create is no longer the chosen session's act: nothing was resumed
+    expect(client.calls.some((call) => call.method === "agent.resume")).toBe(false);
+  }, 20_000);
+
+  it("with no project shown, opens as Godview's create does — no folder asked — the window moved there", async () => {
+    const newTerminal = vi.fn<LineViewDoor["newTerminal"]>(async () => ({ state: "opened" }));
+    publishGodviewLineDoor(deck(newTerminal));
+    mount(fieldd(() => SPAWNED));
+    to("history");
+    await until(() => historySlot()?.querySelector(".ah-project-list-item"), "the room's rows");
+    expect(create().title).toBe("New terminal  ⌘T");
+    await act(async () => {
+      create().click();
+    });
+    expect(await until(noteNow, "the line's note")).toBe("Terminal opened in the active pane");
+    expect(newTerminal).toHaveBeenCalledExactlyOnceWith();
+    expect(asked).toContain("godview");
+  });
+
+  // the behaviour lens's 4: the room tells its host what ③ shows only while the host lists the
+  // project's folders, and fieldd lists none for rosetta's own bucket — the create kept the last
+  // project's name and opened there
+  it("follows the room to a project with no folders of fieldd's — rosetta's unassigned bucket — and opens there as Godview's create does", async () => {
+    const newTerminal = vi.fn<LineViewDoor["newTerminal"]>(async () => ({ state: "opened" }));
+    publishGodviewLineDoor(deck(newTerminal));
+    // a second session no place holds yet (the fixture's third): the room files it in its own
+    // bucket, which is no project of fieldd's
+    const client = fieldd(
+      () => SPAWNED,
+      () => ({ sessions: [] }),
+      (method) =>
+        method === "index.sessions"
+          ? { rows: [KEYED.rows[0], KEYED.rows[2]], sources: KEYED.sources }
+          : undefined,
+    );
+    mount(client);
+    to("history");
+    await showNamed("vibe-field");
+    await until(namesProject, "the create to name vibe-field");
+    await showNamed("Unassigned sessions");
+    await until(
+      () => (create().title === "New terminal  ⌘T" ? true : null),
+      "the create to name no project",
+    );
+    await act(async () => {
+      create().click();
+    });
+    expect(await until(noteNow, "the line's note")).toBe("Terminal opened in the active pane");
+    // no folder asked: the bucket reads as no project shown
+    expect(newTerminal).toHaveBeenCalledExactlyOnceWith();
+    expect(asked).toContain("godview");
+    // fieldd is asked a project's suggestions for vibe-field alone, never for the bucket
+    const suggested = client.calls
+      .filter((call) => call.method === "project.get")
+      .map((call) => call.params["key"]);
+    expect(new Set(suggested)).toEqual(new Set([VIBE["key"]]));
+  }, 20_000);
+
+  /** ③ showing vibe-field's one folder here, with `fact` true of it: a press is refused in
+   * `words` — New agent's — before anything moves. */
+  async function refusedIn(fact: Record<string, unknown>, words: string): Promise<void> {
+    const newTerminal = vi.fn<LineViewDoor["newTerminal"]>(async () => ({ state: "opened" }));
+    publishGodviewLineDoor(deck(newTerminal));
+    mount(
+      fieldd(
+        () => SPAWNED,
+        () => ({ sessions: [] }),
+        (method) => (method === "project.list" ? listed([{ ...HERE, ...fact }]) : undefined),
+      ),
+    );
+    to("history");
+    await showProject();
+    await until(namesProject, "the create to name the project ③ shows");
+    await act(async () => {
+      create().click();
+    });
+    const said = await until(noteNow, "the line's note");
+    expect(said).toBe(`Terminal could not be opened — ${words}`);
+    // the deck asked nothing, and the window stays in History
+    expect(newTerminal).not.toHaveBeenCalled();
+    expect(asked).not.toContain("godview");
+  }
+
+  it("a folder gone is said in New agent's words, the deck asked nothing, and the window stays in History", async () => {
+    await refusedIn({ exists: false }, "the folder is gone");
+  }, 20_000);
+
+  it("a folder whose volume is not connected is said the same way, and the window stays", async () => {
+    await refusedIn({ mounted: false }, "its volume is not connected");
+  }, 20_000);
+
+  // the design lens's 9: History's own reason names the desktop, never New agent's track code
+  // ("— not from here until routed acts (DS-2)": ~100 characters for a 2.4 s note that asks
+  // under 70)
+  it("a folder on another desktop names the desktop in History's own words, the deck asked nothing, and the window stays", async () => {
+    const newTerminal = vi.fn<LineViewDoor["newTerminal"]>(async () => ({ state: "opened" }));
+    publishGodviewLineDoor(deck(newTerminal));
+    // the one session ran in vibe-field's folder on the laptop: ③ follows it there once chosen
+    const onLaptop = {
+      rows: [{ ...SESSION, cwd: ELSEWHERE["path"], place: ELSEWHERE["ref"] }],
+      sources: KEYED.sources,
+    };
+    mount(
+      fieldd(
+        () => SPAWNED,
+        () => ({ sessions: [] }),
+        (method) =>
+          method === "project.list"
+            ? listed([HERE, ELSEWHERE])
+            : method === "index.sessions"
+              ? onLaptop
+              : undefined,
+      ),
+    );
+    to("history");
+    await showProject();
+    await until(namesProject, "the create to name the project ③ shows");
+    await chooseSession();
+    await act(async () => {
+      create().click();
+    });
+    expect(await until(noteNow, "the line's note")).toBe(
+      "Terminal could not be opened — vibe-field is on laptop",
+    );
+    expect(newTerminal).not.toHaveBeenCalled();
+    expect(asked).not.toContain("godview");
+  }, 20_000);
+
+  // the behaviour lens's 5 (DESIGN.md §8 "History"): a deck that is up is asked where it stands,
+  // and the window moves only once the terminal opened — its refusal is said in History, where
+  // the person is (a deck not up is raised by the move first: history-host's rows)
+  it("a deck that is up is asked first: its refusal is said in History, and the window stays", async () => {
+    const newTerminal = vi.fn<LineViewDoor["newTerminal"]>(async () => ({
+      state: "refused",
+      reason: "no pane to open it in — open one in the deck first",
+    }));
+    publishGodviewLineDoor(deck(newTerminal));
+    mount(
+      fieldd(
+        () => SPAWNED,
+        () => ({ sessions: [] }),
+        (method) => (method === "project.list" ? listed([HERE]) : undefined),
+      ),
+    );
+    to("history");
+    await showProject();
+    await until(namesProject, "the create to name the project ③ shows");
+    await act(async () => {
+      create().click();
+    });
+    expect(await until(noteNow, "the line's note")).toBe(
+      "Terminal could not be opened — no pane to open it in — open one in the deck first",
+    );
+    expect(newTerminal).toHaveBeenCalledExactlyOnceWith({ cwd: "/Users/me/Projects/vibe-field" });
+    expect(asked).not.toContain("godview");
   }, 20_000);
 });
 
@@ -515,16 +810,17 @@ describe("Jump to, while the chosen session runs here (P3)", () => {
     ],
   });
   const ENDED = { continuation: { persisted: true, resumable: true, exited: true } };
-  const glyphShown = (): string | null | undefined =>
-    create().querySelector("[data-shown]")?.getAttribute("data-glyph");
-  const says = (name: string) => () => (create().getAttribute("aria-label") === name ? true : null);
+  // the chosen session's act: the palette's History row since HN-7, the line's create before
+  const glyphShown = (): string | null | undefined => sessionRow()?.glyph;
+  const says = (name: string) => () => (sessionRow()?.name === name ? true : null);
   const noteNow = (): string | null | undefined =>
     host?.querySelector(".vf-line-note")?.textContent;
   const deck = (overrides: Partial<LineViewDoor> = {}): LineViewDoor => ({
     panes: [],
     onScreen: false,
     newTerminal: async () => ({ state: "opened" }),
-    paste: () => false,
+    pasteInto: () => false,
+    whenInputOpen: async () => false,
     canPlace: true,
     place: async () => ({ state: "opened" }),
     reveal: async () => ({ state: "opened" }),
@@ -540,10 +836,12 @@ describe("Jump to, while the chosen session runs here (P3)", () => {
     mount(client);
     to("history");
     await choose();
-    await until(says("Jump to this session"), "the create to say Jump to");
+    await until(says("Jump to this session"), "the act to say Jump to");
     expect(glyphShown()).toBe("jump");
-    expect(create().title).toBe("Jump to this session");
-    expect(create().hasAttribute("aria-disabled")).toBe(false);
+    expect(sessionRow()?.key).toBeNull();
+    expect(sessionRow()?.waits).toBeNull();
+    // the line's create is New terminal whatever the chosen session does (HN-7)
+    expect(create().getAttribute("aria-label")).toBe("New terminal");
     // one plain request: nothing subscribes to the board for it (PF6)
     expect(client.calls.some((call) => call.method === "agent.list")).toBe(true);
     expect(client.calls.some((call) => call.method === "agent.subscribe")).toBe(false);
@@ -553,7 +851,7 @@ describe("Jump to, while the chosen session runs here (P3)", () => {
     fold = running(ENDED);
     to("godview");
     to("history");
-    await until(says("Resume this session"), "the create to say Resume again");
+    await until(says("Resume this session"), "the act to say Resume again");
     expect(glyphShown()).toBe("resume");
   });
 
@@ -571,10 +869,8 @@ describe("Jump to, while the chosen session runs here (P3)", () => {
     mount(client);
     to("history");
     await choose();
-    await until(says("Jump to this session"), "the create to say Jump to");
-    await act(async () => {
-      create().click();
-    });
+    await until(says("Jump to this session"), "the act to say Jump to");
+    await pressSessionRow();
     expect(await until(noteNow, "the line's note")).toBe("Jumped to its pane");
     expect(reveal).toHaveBeenCalledTimes(1);
     expect(reveal).toHaveBeenCalledWith("pty-agent");
@@ -593,22 +889,20 @@ describe("Jump to, while the chosen session runs here (P3)", () => {
     mount(client);
     to("history");
     await choose();
-    await until(says("Resume this session"), "the create to say Resume");
-    await until(() => (create().hasAttribute("aria-disabled") ? null : true), "Resume to wake");
-    // the run started since the line's reading (in Godview, on the phone…)
+    await until(says("Resume this session"), "the act to say Resume");
+    await until(() => (sessionRow()?.waits === null ? true : null), "Resume to wake");
+    // the run started since the act's reading (in Godview, on the phone…)
     fold = running();
-    await act(async () => {
-      create().click();
-    });
+    await pressSessionRow();
     expect(await until(noteNow, "the line's note")).toBe("This session is running — Jump to it");
     expect(client.calls.some((call) => call.method === "agent.resume")).toBe(false);
     expect(place).not.toHaveBeenCalled();
     expect(asked).not.toContain("godview");
-    await until(says("Jump to this session"), "the create to become Jump to");
+    await until(says("Jump to this session"), "the act to become Jump to");
     expect(glyphShown()).toBe("jump");
   });
 
-  it("fieldd's one-run refusal is said in the same words, and the create becomes Jump to", async () => {
+  it("fieldd's one-run refusal is said in the same words, and the act becomes Jump to", async () => {
     let fold: unknown = { sessions: [] };
     const client = fieldd(
       () => {
@@ -624,15 +918,13 @@ describe("Jump to, while the chosen session runs here (P3)", () => {
     mount(client);
     to("history");
     await choose();
-    await until(() => (create().hasAttribute("aria-disabled") ? null : true), "Resume to wake");
+    await until(() => (sessionRow()?.waits === null ? true : null), "Resume to wake");
     // a fold that has not seen the run yet: the press goes as far as fieldd
-    await act(async () => {
-      create().click();
-    });
+    await pressSessionRow();
     expect(await until(noteNow, "the line's note")).toBe("This session is running — Jump to it");
     expect(client.calls.filter((call) => call.method === "agent.resume")).toHaveLength(1);
     expect(asked).not.toContain("godview");
-    await until(says("Jump to this session"), "the create to become Jump to");
+    await until(says("Jump to this session"), "the act to become Jump to");
   });
 
   it("Jump to after the run ended says so, shows nothing, and becomes Resume", async () => {
@@ -646,15 +938,13 @@ describe("Jump to, while the chosen session runs here (P3)", () => {
     mount(client);
     to("history");
     await choose();
-    await until(says("Jump to this session"), "the create to say Jump to");
+    await until(says("Jump to this session"), "the act to say Jump to");
     fold = { sessions: [] };
-    await act(async () => {
-      create().click();
-    });
+    await pressSessionRow();
     expect(await until(noteNow, "the line's note")).toBe("This session has ended — Resume it");
     expect(reveal).not.toHaveBeenCalled();
     expect(asked).not.toContain("godview");
-    await until(says("Resume this session"), "the create to become Resume");
+    await until(says("Resume this session"), "the act to become Resume");
   });
 
   it("keeps saying Jump to while a new answer is on its way — no flicker through Resume", async () => {
@@ -666,7 +956,7 @@ describe("Jump to, while the chosen session runs here (P3)", () => {
     mount(client);
     to("history");
     await choose();
-    await until(says("Jump to this session"), "the create to say Jump to");
+    await until(says("Jump to this session"), "the act to say Jump to");
     let release: (fold: unknown) => void = () => undefined;
     answer = () =>
       new Promise((resolve) => {
@@ -680,18 +970,18 @@ describe("Jump to, while the chosen session runs here (P3)", () => {
         client.calls.filter((call) => call.method === "agent.list").length > asks ? true : null,
       "History showing again to ask again",
     );
-    // the ask is out and unanswered: the create still says what it said
+    // the ask is out and unanswered: the act still says what it said
     for (let tick = 0; tick < 5; tick++) {
       await act(async () => {
         await new Promise((resolve) => setTimeout(resolve, 10));
       });
-      expect(create().getAttribute("aria-label")).toBe("Jump to this session");
+      expect(sessionRow()?.name).toBe("Jump to this session");
       expect(glyphShown()).toBe("jump");
     }
     await act(async () => {
       release(running(ENDED));
     });
-    await until(says("Resume this session"), "the create to say Resume once answered");
+    await until(says("Resume this session"), "the act to say Resume once answered");
   });
 });
 
@@ -740,16 +1030,14 @@ describe("an act that throws is said and logged (2026-10-11)", () => {
     ]);
   }, 20_000);
 
-  it("the line's Resume that throws is said the same way", async () => {
+  it("the palette's Resume — the line's until HN-7 — that throws is said the same way", async () => {
     const logged = captureLog();
     throwing.act = "resume";
     mount(fieldd(() => SPAWNED));
     to("history");
     await choose();
-    await until(() => (create().hasAttribute("aria-disabled") ? null : true), "Resume to wake");
-    await act(async () => {
-      create().click();
-    });
+    await until(() => (sessionRow()?.waits === null ? true : null), "Resume to wake");
+    await pressSessionRow();
     expect(await until(noteNow, "the line's note", 3_000)).toBe("Could not resume — the act threw");
     expect(logged.filter((entry) => entry.event === "renderer.history.act_failed")).toEqual([
       {
@@ -855,7 +1143,8 @@ describe("PJ-6 — New agent's pages turn in place, over the real room", () => {
       panes: [],
       onScreen: false,
       newTerminal: async () => ({ state: "opened" }),
-      paste: () => false,
+      pasteInto: () => false,
+      whenInputOpen: async () => false,
       canPlace: true,
       place: async () => ({ state: "opened" }),
       reveal: async () => ({ state: "opened" }),

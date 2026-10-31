@@ -5,6 +5,12 @@
       "label": "Claude Code",
       "available": true,
       "resumable": true,
+      "briefing": {
+        "mcpServers": true,
+        "allowTools": true,
+        "instructions": true,
+        "mcpServerProcess": "terminal"
+      },
       "personas": [
         {
           "profileId": "claude:9a3d",

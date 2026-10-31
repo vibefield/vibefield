@@ -1,0 +1,1553 @@
+// FG — THE FIRST RUN, WALKED (`pnpm smoke:first-run`, desk-gates row 32; track FG: FG-6's row, built as a lane of its
+// own after FG-4b, VF-PM 2026-10-31 07:39Z). The one harness that answers the Setup Assistant (UA-3w as amended
+// 2026-10-31: `answersSetup`, modes.ts): main mints this run's user NOT onboarded, so its boot holds at the wizard, and
+// this walks it to the desk by the page's own controls. A press is `sendInputEvent` at a control the page hit-tests to,
+// and a name is typed as characters into the focused field. Never OS input: the window is click-through and never
+// focused (smoke-window.ts), and main's opener records every link instead of opening it (GT-8b).
+//
+// The person it answers as is `stageFirstRun`'s (typed-agent.ts): a throwaway HOME, the typed agent's one conversation
+// (History's one row), and one stub named as every launchable row's active install. Which rows count it installed is
+// each adapter's own rule (an executable the host was configured to launch), never a name of this repo's (AR-L1).
+//
+// Three walks, each its own launch on a fresh profile (`apps/desktop/packaging/run-first-run.mjs`): by DAY and by NIGHT
+// on the live field, the preference pre-seeded in the profile's theme file before the boot (the app's own store,
+// main/theme.ts), and with NO WEBGPU, the page given no `navigator.gpu`, so the glass stands over the field's still.
+// Each keeps its stills in `VF_SMOKE_SHOT_DIR`, outside the run's own folders, so no teardown can take them.
+//
+// What it judges:
+//   · THE LOGO (FG-4b, FG-D24), at the welcome's title card:
+//     - the logo stands (`data-logo`), its box the field's mark at the window's centre (`FIRST_RUN_MARK`);
+//     - on the live field the field draws it (`data-glass="field"`, the page's own logo hidden); over the still the
+//       page's logo stands;
+//     - in the pixels the mark stands at that centre: darker than its glass by day (inverted on milk), lighter by night.
+//   · THE HOLDS (FG-L5, FG-D20; DESIGN.md §6): every load that began to show stood its floor from its fade in, with the
+//     logo, and a line hold said one line.
+//   · THE FRAME (FG-4a, FG-L3): on Agents with More open, the list outgrows its body and scrolls within itself under its
+//     fade, while the head, the foot and Continue stand inside the frame, unmoved by the scroll. Profiles' login
+//     terminal stands 170 tall, with Cancel in view above the fade.
+//   · THE BAND (FG-D22 A): Setting up's segment advances with the boot's progress, then stands full.
+//   · THE HAND-OVER (FG-5; DESIGN.md §6): the glass steps out as the page says, its words and then its clearing, each
+//     once. Judged by order alone, never by how long a step stood: the recorder hears each step as the page sets it.
+//     Two stills of it are for the eye: the logo alone, and the glass clearing as the field's mark takes over.
+//   · THE OPENING (FG-6c; DESIGN.md §6): on the live field the ground opens by the tear and the tear opens (the
+//     field's `data-tear`, "tearing" then "open"); over the still it opens by the fade, and nothing tears. Judged by
+//     order and outcome, heard as the page sets them; a tear that passed its bound, failed or was cut is red. One still
+//     of it is for the eye: the tear about halfway.
+//   · The walk's end: Setting up's welcome said, the durable `onboarded: true`, the wizard gone, no CSP refusal.
+// Printed, never judged (FG-O3, VF-PM 16:04Z): the page's frame intervals and the GPU's load over the tear and over as
+// long a stretch before the hand-over: the GPU process's CPU as Electron counts it, and the GPU's own busy share where
+// the host gives it without root (IOAccelerator's, through `ioreg`), else "not read".
+// Printed, not judged yet (FG-O2, VF-PM 16:51Z): the small words' contrast as DK-16 measured the mat's, each cut from
+// the still that holds it (the window's own capture), its ground and ink read from the pixels and their WCAG ratio:
+// the splash's stage line on its one early still, the band's labels and the line under the actions on Connect's, and a
+// load's sub line on Setting up's welcome. DESIGN.md's 4.5:1 judges them only after one printed run on the mini.
+// Not this row's (desk-gates row 32): Agents with nine installed, History with six rows and Profiles' five cards
+// (James's eye), and the ways out at 6s and Start now at 8s (their unit rows): Start now is said when it shows, and
+// never pressed, so the welcome is always the walk's to see.
+
+import { execFile } from "node:child_process";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join, resolve, sep } from "node:path";
+import { readUsersFile } from "@vibefield/users";
+import type { BrowserWindow, NativeImage, ProcessMetric } from "electron";
+import { loadRenderer } from "../main/windows";
+import { cutChip, measureChip } from "./smoke-contrast";
+import { WITHOUT_WEBGPU } from "./smoke-unavailable";
+import { readTypedAgentCalls, type StagedTypedAgent } from "./typed-agent";
+
+/** The walks, by their names on the launcher's list. */
+export type FirstRunWalk = "day" | "night" | "no-webgpu";
+
+/** Which walk this launch is (`run-first-run.mjs` sets it). */
+export const WALK_ENV = "VF_FIRST_RUN_WALK";
+
+/** What each walk expects of the page. */
+export const FIRST_RUN_WALKS: Readonly<
+  Record<FirstRunWalk, { readonly dark: boolean; readonly webgpu: boolean }>
+> = {
+  day: { dark: false, webgpu: true },
+  night: { dark: true, webgpu: true },
+  "no-webgpu": { dark: false, webgpu: false },
+};
+
+export function parseWalk(value: string | undefined): FirstRunWalk | null {
+  return value !== undefined && Object.hasOwn(FIRST_RUN_WALKS, value)
+    ? (value as FirstRunWalk)
+    : null;
+}
+
+/** The row's numbers. */
+export const FIRST_RUN = {
+  /** a pane, or a load before it, standing */
+  paneMs: 30_000,
+  /** the wizard gone after Setting up's line stands (History's first pass, the welcome's beat, the leave) */
+  revealMs: 90_000,
+  /** DESIGN.md §6: a hold that began to show stands this long from its fade in */
+  floorMs: 800,
+  /** two frames of the page's own sampling, one at each end */
+  floorSlackMs: 34,
+  /** DESIGN.md §8: the frame every pane stands in, in the glass's own px */
+  frame: { width: 560, height: 504 },
+  /** DESIGN.md §4 `--vf-glass-signin-height`: a login's terminal on the glass */
+  signInHeight: 170,
+  /** DESIGN.md §4 `--vf-scroll-fade` */
+  scrollFade: 20,
+  /** how far a box may sit from where it is meant to, in CSS px */
+  slackPx: 1,
+  /** the mark's ink centre found in the pixels, in CSS px of the window */
+  inkSlackPx: 3,
+  /** the margin captured around the logo's box: clear of the card's words, 30 under it */
+  logoMargin: 16,
+  /** a pixel differs from its glass by this much luminance (0…255) to count as the mark's ink */
+  inkStep: 36,
+  /** the ink and its glass apart by at least this much, darker by day, lighter by night */
+  inkContrast: 20,
+  /** the hand-over's stills (FG-5; DESIGN.md §6), for the eye alone: the logo alone, 400ms into its words' step (the
+   * words out in 240ms, then the logo alone for 640ms), and the glass clearing, 150ms into its 600ms */
+  aloneShotMs: 400,
+  clearingShotMs: 150,
+  /** the tear's still (FG-6c), for the eye alone: about halfway through its 1.9s */
+  tearShotMs: 950,
+  /** FG-O3's stretch before the hand-over's first step: as long as the tear */
+  restMs: 1_900,
+  /** FG-O3's readings of the GPU's load, one this often */
+  gpuEveryMs: 100,
+} as const;
+
+/** The field's mark (`boot/splash/field-mark.ts` FIELD_MARK) and the stills it is drawn on (FIELD_STILLS): the
+ * harness's own copy of the spec, held equal to the product's by a unit row, so the row judges the box against the
+ * numbers rather than reading them back from the page. */
+export const FIRST_RUN_MARK = {
+  mark: { width: 128, height: 77 },
+  stills: {
+    wide: { width: 1440, height: 900, density: 1 },
+    tall: { width: 780, height: 1688, density: 2 },
+  },
+} as const;
+
+/** The logo's box on a window of this size: the field's mark at its size on the screen, and over the still the
+ * still's own mark, cover-fitted with the picture (the rule `logoBox` keeps). */
+export function expectedLogoBox(
+  width: number,
+  height: number,
+  still: boolean,
+): { readonly width: number; readonly height: number } {
+  const { mark, stills } = FIRST_RUN_MARK;
+  if (!still || width <= 0 || height <= 0) return mark;
+  const picture = width / height > 1 ? stills.wide : stills.tall;
+  const scale = Math.max(width / picture.width, height / picture.height) * picture.density;
+  return { width: mark.width * scale, height: mark.height * scale };
+}
+
+/** Why a folder may not keep a walk's stills, or null: under a smoke's own folder (its HOME, `vf-smoke-…`, or its
+ * profile, `vf-smoke-profile-…`) a green run's teardown would take them with it. */
+export function shotDirRefusal(shotDir: string): string | null {
+  const under = resolve(shotDir)
+    .split(sep)
+    .find((part) => part.startsWith("vf-smoke-"));
+  return under === undefined
+    ? null
+    : `${shotDir} lies under ${under}, a smoke's own folder, which a green run removes`;
+}
+
+/** One showing of a face as the page's recorder saw it, in the page's own clock (ms). */
+export interface FaceSeen {
+  readonly face: string;
+  /** `line` or `card` for a hold; null for a pane */
+  readonly hold: string | null;
+  readonly shownAt?: number;
+  readonly fullAt?: number;
+  readonly leaveAt?: number;
+  readonly goneAt?: number;
+  /** at its first whole frame: the shell's `data-logo`, `data-glass`, and the standing words' lines */
+  readonly logo?: string | null;
+  readonly glass?: string | null;
+  readonly lines?: readonly string[];
+}
+
+/** What the recorder hands back at the walk's end. */
+export interface FirstRunRecord {
+  readonly faces: readonly FaceSeen[];
+  /** `[ms, progress]` at each change of Setting up's segment */
+  readonly progress: readonly (readonly [number, number])[];
+  /** `[ms, step]` at each step the glass takes out at the hand-over (`data-leaving`, FG-5), as the page sets it */
+  readonly leaving: readonly (readonly [number, string | null])[];
+  /** `[ms, opening]` at each change of how the ground opens (`data-opening`, FG-2's tear or fade), as the page sets it */
+  readonly opening: readonly (readonly [number, string | null])[];
+  /** `[ms, state]` at each change of how the field's tear goes (`data-tear`, FG-6c), as the page sets it */
+  readonly tear: readonly (readonly [number, string | null])[];
+  /** FG-O3's read: the page's frame intervals (ms) over the tear, and over `restMs` before the hand-over's first step */
+  readonly frames: {
+    readonly rest: readonly number[] | null;
+    readonly tear: readonly number[] | null;
+  };
+  readonly now: number;
+  /** the wall's clock (epoch ms) read with `now`, to set the page's moments beside main's readings */
+  readonly epoch: number;
+}
+
+/** The faces every walk stands on (Connect's is one of two, by what the link said). */
+export const WALKED_FACES = [
+  "welcome",
+  "field",
+  "agents",
+  "profiles",
+  "history",
+  "setting-up:line",
+] as const;
+
+/** The recorder kept the whole walk. A page that reloaded under it would hand back a recorder that saw none of it,
+ * and a hold never recorded could never be found standing short. */
+export function judgeRecorded(record: FirstRunRecord): string[] {
+  const seen = new Set(record.faces.filter((f) => f.shownAt !== undefined).map((f) => f.face));
+  const lost = WALKED_FACES.filter((face) => !seen.has(face));
+  return lost.length === 0
+    ? []
+    : [`the page's recorder never saw ${lost.join(", ")} show: it lost the walk`];
+}
+
+/** Every hold that began to show and stood less than its floor from its fade in, or stood without the logo, or (a
+ * line hold) said other than one line. A hold never shown — a load answered before its fade in began — has nothing
+ * to stand. */
+export function judgeHolds(record: FirstRunRecord): { held: string[]; problems: string[] } {
+  const held: string[] = [];
+  const problems: string[] = [];
+  for (const seen of record.faces) {
+    if (seen.hold === null || seen.shownAt === undefined) continue;
+    const until = seen.leaveAt ?? seen.goneAt ?? record.now;
+    const stood = Math.round(until - seen.shownAt);
+    held.push(`${seen.face} ${stood}ms`);
+    if (stood < FIRST_RUN.floorMs - FIRST_RUN.floorSlackMs) {
+      problems.push(
+        `the hold "${seen.face}" stood ${stood}ms from its fade in, under the floor's ${FIRST_RUN.floorMs}`,
+      );
+    }
+    if (seen.fullAt === undefined) continue;
+    if (seen.logo !== "shown") problems.push(`the hold "${seen.face}" stood without the logo`);
+    if (seen.hold === "line" && seen.lines?.length !== 1) {
+      problems.push(
+        `the hold "${seen.face}" said ${JSON.stringify(seen.lines ?? [])}, not one line`,
+      );
+    }
+  }
+  return { held, problems };
+}
+
+/** Setting up's segment: it advanced, came full, and stood full from then on. */
+export function judgeBand(progress: FirstRunRecord["progress"]): string[] {
+  if (progress.length === 0) return ["Setting up's segment never carried the boot's progress"];
+  const values = progress.map(([, value]) => value);
+  const full = values.findIndex((value) => value >= 0.999);
+  if (full < 0) {
+    return [`Setting up's segment never came full (it reached ${Math.max(...values).toFixed(3)})`];
+  }
+  const problems: string[] = [];
+  if (new Set(values.slice(0, full + 1)).size < 2) {
+    problems.push("Setting up's segment never advanced: it began full");
+  }
+  const after = values.slice(full).find((value) => value < 0.999);
+  if (after !== undefined) {
+    problems.push(`Setting up's segment came full, then fell to ${after.toFixed(3)}`);
+  }
+  return problems;
+}
+
+/** What the page set, one value to each change: a value heard twice over is one. */
+export function heard(changes: readonly (readonly [number, string | null])[]): (string | null)[] {
+  return changes
+    .map(([, value]) => value)
+    .filter((value, at, all) => at === 0 || value !== all[at - 1]);
+}
+
+/** The hand-over (FG-5; DESIGN.md §6): the glass stepped out as the page says, its words and then its clearing, each
+ * once. By order alone, never by how long a step stood: the recorder hears each step as the page sets it, so a
+ * loaded host can neither drop one nor redden this by its pace. */
+export function judgeHandOver(leaving: FirstRunRecord["leaving"]): string[] {
+  const steps = heard(leaving);
+  if (steps.length === 0) return ["the glass never stepped out: no hand-over was heard"];
+  return steps.length === 2 && steps[0] === "words" && steps[1] === "clear"
+    ? []
+    : [`the glass stepped out ${JSON.stringify(steps)}, not its words and then its clearing`];
+}
+
+/** The tear's ways of not opening (FieldLayer.tsx's `TearState`, held equal by a unit row), in words. */
+export const TEAR_NOT_OPEN: Readonly<Record<string, string>> = {
+  bound: "its bound passed first, so its frames came late or never",
+  lost: "its reveal failed (a lost device)",
+  cut: "its reveal ended before the window opened",
+};
+
+/** The opening (FG-6c; DESIGN.md §6): on the live field the ground opens by the tear and the tear opens, "tearing"
+ * and then "open"; over the still the ground opens by the fade, and nothing tears. By order and outcome alone, never
+ * by how long the tear took: its bound is the product's own, and a tear that did not open is red (VF-PM 16:04Z). */
+export function judgeOpening(
+  walk: { readonly webgpu: boolean },
+  opening: FirstRunRecord["opening"],
+  tear: FirstRunRecord["tear"],
+): string[] {
+  const problems: string[] = [];
+  const want = walk.webgpu ? "tear" : "fade";
+  const opened = heard(opening);
+  if (opened.length === 0) problems.push("the ground never opened: no opening was heard");
+  else if (opened.length !== 1 || opened[0] !== want) {
+    problems.push(`the ground opened ${JSON.stringify(opened)}, not by the ${want}`);
+  }
+  const torn = heard(tear);
+  if (!walk.webgpu) {
+    if (torn.length > 0) problems.push(`over the still the field tore: ${JSON.stringify(torn)}`);
+    return problems;
+  }
+  const end = torn[1];
+  if (torn.length === 0) problems.push("the field never tore: no tear was heard");
+  else if (
+    torn.length === 2 &&
+    torn[0] === "tearing" &&
+    typeof end === "string" &&
+    Object.hasOwn(TEAR_NOT_OPEN, end)
+  ) {
+    problems.push(`the tear did not open: ${end}, ${TEAR_NOT_OPEN[end]}`);
+  } else if (torn.length !== 2 || torn[0] !== "tearing" || end !== "open") {
+    problems.push(`the tear went ${JSON.stringify(torn)}, not tearing and then open`);
+  }
+  return problems;
+}
+
+/** A stretch of the page's frame intervals in four numbers (ms, the percentiles by nearest rank), or null when the walk
+ * kept none (FG-O3; printed, never judged). */
+export function frameStats(
+  intervals: readonly number[] | null,
+): { n: number; p50: number; p95: number; max: number } | null {
+  if (intervals === null || intervals.length === 0) return null;
+  const sorted = [...intervals].sort((a, b) => a - b);
+  const rank = (q: number): number =>
+    sorted[Math.max(0, Math.ceil(q * sorted.length) - 1)] as number;
+  const tenth = (ms: number): number => Math.round(ms * 10) / 10;
+  return {
+    n: sorted.length,
+    p50: tenth(rank(0.5)),
+    p95: tenth(rank(0.95)),
+    max: tenth(sorted.at(-1) as number),
+  };
+}
+
+/** One reading of the GPU's load (FG-O3; printed, never judged), in main's clock (epoch ms): the GPU process's CPU as
+ * Electron counts it (seconds since it started, and percent since the last reading), and the GPU's own busy share
+ * where the host gives it (`readGpuBusy`), each null where it was not read. */
+export interface GpuSample {
+  readonly at: number;
+  readonly cpuSeconds: number | null;
+  readonly cpuPercent: number | null;
+  readonly busy: number | null;
+}
+
+/** The readings over `[from, to]` (epoch ms), or null with fewer than two: the GPU process's CPU in percent of one
+ * core (its seconds over the stretch, else the mean of the percents after its first reading), and the GPU's busy
+ * share (the mean and the most of its readings, or null where none was read). */
+export function gpuOver(
+  samples: readonly GpuSample[],
+  from: number,
+  to: number,
+): { n: number; cpu: number | null; busy: { mean: number; max: number } | null } | null {
+  const inside = samples.filter((sample) => sample.at >= from && sample.at <= to);
+  const first = inside[0];
+  const last = inside.at(-1);
+  if (first === undefined || last === undefined || inside.length < 2) return null;
+  const tenth = (value: number): number => Math.round(value * 10) / 10;
+  const mean = (values: readonly number[]): number =>
+    values.reduce((sum, value) => sum + value, 0) / values.length;
+  const seconds = (last.at - first.at) / 1_000;
+  const percents = inside.slice(1).flatMap((s) => (s.cpuPercent === null ? [] : [s.cpuPercent]));
+  const cpu =
+    first.cpuSeconds !== null && last.cpuSeconds !== null && seconds > 0
+      ? ((last.cpuSeconds - first.cpuSeconds) / seconds) * 100
+      : percents.length > 0
+        ? mean(percents)
+        : null;
+  const busy = inside.flatMap((s) => (s.busy === null ? [] : [s.busy]));
+  return {
+    n: inside.length,
+    cpu: cpu === null ? null : tenth(cpu),
+    busy: busy.length === 0 ? null : { mean: tenth(mean(busy)), max: Math.max(...busy) },
+  };
+}
+
+/** FG-O3's read (FG-6c; printed, never judged): the page's frame intervals and the GPU's load over the tear, and over
+ * `restMs` just before the hand-over's first step. The page's moments are in its own clock and the readings in
+ * main's, set side by side by the wall's clock the page read with its own at the walk's end. A stretch the walk never
+ * had is null, and the GPU's busy share is "not read" where the host gave none. */
+export function firstRunGpu(record: FirstRunRecord, samples: readonly GpuSample[]) {
+  const wall = (ms: number): number => record.epoch - (record.now - ms);
+  const words = record.leaving.find(([, step]) => step === "words")?.[0];
+  const begun = record.tear.findIndex(([, state]) => state === "tearing");
+  const tearing = record.tear[begun]?.[0];
+  const ended = record.tear.slice(begun + 1).find(([, state]) => state !== "tearing")?.[0];
+  return {
+    frames: { rest: frameStats(record.frames.rest), tear: frameStats(record.frames.tear) },
+    load: {
+      rest:
+        words === undefined ? null : gpuOver(samples, wall(words) - FIRST_RUN.restMs, wall(words)),
+      tear:
+        begun < 0 || tearing === undefined || ended === undefined
+          ? null
+          : gpuOver(samples, wall(tearing), wall(ended)),
+    },
+    readings: samples.length,
+    busy: samples.some((sample) => sample.busy !== null) ? "read" : "not read",
+  };
+}
+
+/** The GPU's busy share in a reading of `ioreg -c IOAccelerator` (its "Device Utilization %", the busiest
+ * accelerator's where there are several), or null where it gives none. */
+export function parseGpuBusy(ioreg: string): number | null {
+  const shares = [...ioreg.matchAll(/"Device Utilization %"=(\d+)/g)].map((match) =>
+    Number(match[1]),
+  );
+  return shares.length === 0 ? null : Math.max(...shares);
+}
+
+/** The GPU's busy share now (FG-O3): IOAccelerator's, as `ioreg` reads it with no root, or null where the host gives
+ * none (or the read takes past a second). Never sudo (VF-PM 16:04Z). */
+export function readGpuBusy(): Promise<number | null> {
+  return new Promise((done) => {
+    execFile(
+      "/usr/sbin/ioreg",
+      ["-r", "-d", "1", "-w", "0", "-c", "IOAccelerator"],
+      { timeout: 1_000 },
+      (error, stdout) => done(error === null ? parseGpuBusy(stdout) : null),
+    );
+  });
+}
+
+/** FG-O2's small words as the page finds them (`inks()`): the box their glyphs take (a range over their text, never
+ * the element's box), in CSS px of the window; what they say; and how much of them shows, their opacity times every
+ * ancestor's. */
+export interface WordsSeen extends Box {
+  readonly text: string;
+  readonly shown: number;
+}
+
+/** FG-O2's read of the page (`inks()`): the window's size, whether the wizard has come, the field under the splash
+ * (its state, and its canvas's opacity while the live field fades in over its still), the splash's stage line, the
+ * band's labels, and the standing pane's line under its actions and a load's sub line, each null where none stands. */
+export interface InksSeen {
+  readonly view: { readonly width: number; readonly height: number };
+  readonly wizard: boolean;
+  readonly field: string | null;
+  readonly canvas: number | null;
+  readonly stage: WordsSeen | null;
+  readonly steps: readonly {
+    readonly step: string | null;
+    readonly state: string | null;
+    readonly words: WordsSeen | null;
+  }[];
+  readonly later: WordsSeen | null;
+  readonly sub: WordsSeen | null;
+}
+
+/** FG-O2: what the splash's one early still does with a read of the page. Its stage line whole on the field that has
+ * come (the still, or the live field with its canvas whole) is the still ("take"); whole on a field still waking or
+ * fading in, the first such capture is kept ("keep") for a wizard that comes before the field; the wizard come, or a
+ * page that can't say, ends the look ("stop"). */
+export function splashLook(seen: InksSeen | null): "take" | "keep" | "wait" | "stop" {
+  if (seen === null || seen.wizard) return "stop";
+  if (seen.stage === null || seen.stage.shown < 0.999) return "wait";
+  if (seen.field === "still") return "take";
+  return seen.field === "live" && (seen.canvas ?? 0) >= 0.999 ? "take" : "keep";
+}
+
+/** Which of FG-O2's small words a still is cut for. */
+export type InkWords = "stage" | "steps" | "later" | "sub";
+
+/** One of FG-O2's small words, cut from a still's capture and measured at the walk's end (`firstRunContrast`). */
+export interface InkCut {
+  readonly words: InkWords;
+  /** the still it was cut from */
+  readonly at: string;
+  /** a band's label: its step */
+  readonly step?: string;
+  /** what prints beside its reading: the stage's words and the field under them, or a label's state */
+  readonly about: Readonly<Record<string, string | number | null>>;
+  readonly shown: number;
+  /** the chip's BGRA (`cutChip`), null where the capture could not be cut */
+  readonly px: Uint8Array | null;
+}
+
+/** FG-O2: the small words a still holds, each cut from its capture where `seen` places it. */
+export function inkCuts(
+  at: string,
+  bitmap: Uint8Array,
+  seen: InksSeen,
+  words: readonly InkWords[],
+): InkCut[] {
+  const cut = (box: WordsSeen): Uint8Array | null => cutChip(bitmap, seen.view, box);
+  const cuts: InkCut[] = [];
+  for (const which of words) {
+    if (which === "steps") {
+      for (const { step, state, words: label } of seen.steps) {
+        if (label === null) continue;
+        cuts.push({
+          words: which,
+          at,
+          step: step ?? "?",
+          about: { state },
+          shown: label.shown,
+          px: cut(label),
+        });
+      }
+      continue;
+    }
+    const seenWords = seen[which];
+    if (seenWords === null) continue;
+    const about =
+      which === "stage" ? { said: seenWords.text, field: seen.field, canvas: seen.canvas } : {};
+    cuts.push({ words: which, at, about, shown: seenWords.shown, px: cut(seenWords) });
+  }
+  return cuts;
+}
+
+/** FG-O2's contrast, printed and not judged yet (DESIGN.md's 4.5:1 judges it only after one printed run on the mini
+ * has shown the numbers), as DK-16 measured the mat's: each of the small words with the still it was cut from, its
+ * ground and its ink as measured and their WCAG ratio, and how much of it showed. The band's labels are keyed by their
+ * step; words the walk never saw are null. */
+export function firstRunContrast(
+  cuts: readonly InkCut[],
+): Record<InkWords, Record<string, unknown> | null> {
+  const reading = (cut: InkCut): Record<string, unknown> => ({
+    ...cut.about,
+    ...(cut.px === null ? { ground: null, ink: null, ratio: null } : measureChip(cut.px)),
+    shown: cut.shown,
+  });
+  const facts: Record<InkWords, Record<string, unknown> | null> = {
+    stage: null,
+    steps: null,
+    later: null,
+    sub: null,
+  };
+  for (const cut of cuts) {
+    if (cut.words !== "steps") {
+      facts[cut.words] = { at: cut.at, ...reading(cut) };
+      continue;
+    }
+    const steps = facts.steps ?? { at: cut.at };
+    steps[cut.step ?? "?"] = reading(cut);
+    facts.steps = steps;
+  }
+  return facts;
+}
+
+/** The mark's ink in a capture `width` × `height` CSS px (BGRA, Electron's `toBitmap`, at the screen's density): the
+ * glass is the median luminance of the capture's border, the ink every pixel that far from it. Its centre `at` is the
+ * centre of the ink's extent, in CSS px of the capture: never its mean, since the field's mark carries more ink in one
+ * lobe than the other and its mean stands off where it is drawn (row 32 at run52b: 10 px right). Null when the buffer
+ * is no picture of that size. */
+export function measureMark(
+  bgra: Uint8Array,
+  width: number,
+  height: number,
+): { glass: number; ink: number; count: number; at: { x: number; y: number } } | null {
+  const pixels = bgra.length / 4;
+  if (width <= 0 || height <= 0 || pixels <= 0) return null;
+  const scale = Math.sqrt(pixels / (width * height));
+  const w = Math.round(width * scale);
+  const h = Math.round(height * scale);
+  if (w * h !== pixels) return null;
+  const luma = (i: number): number =>
+    0.2126 * (bgra[i * 4 + 2] as number) +
+    0.7152 * (bgra[i * 4 + 1] as number) +
+    0.0722 * (bgra[i * 4] as number);
+  const band = Math.max(1, Math.round(4 * scale));
+  const border: number[] = [];
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (x < band || y < band || x >= w - band || y >= h - band) border.push(luma(y * w + x));
+    }
+  }
+  border.sort((a, b) => a - b);
+  const glass = border[Math.floor(border.length / 2)] as number;
+  let count = 0;
+  let sum = 0;
+  let x0 = w;
+  let x1 = 0;
+  let y0 = h;
+  let y1 = 0;
+  for (let y = band; y < h - band; y++) {
+    for (let x = band; x < w - band; x++) {
+      const l = luma(y * w + x);
+      if (Math.abs(l - glass) < FIRST_RUN.inkStep) continue;
+      count += 1;
+      sum += l;
+      x0 = Math.min(x0, x);
+      x1 = Math.max(x1, x + 1);
+      y0 = Math.min(y0, y);
+      y1 = Math.max(y1, y + 1);
+    }
+  }
+  if (count === 0) {
+    return {
+      glass: Math.round(glass),
+      ink: Math.round(glass),
+      count,
+      at: { x: width / 2, y: height / 2 },
+    };
+  }
+  return {
+    glass: Math.round(glass),
+    ink: Math.round(sum / count),
+    count,
+    at: { x: (x0 + x1) / 2 / scale, y: (y0 + y1) / 2 / scale },
+  };
+}
+
+/** The page's half: a recorder armed before any of the page's scripts (DevTools' script on every new document), and
+ * the reads the walk asks of it. It presses nothing; it sets nothing but a list's scroll when asked. */
+export const FIRST_RUN_PAGE = String.raw`(() => {
+  if (globalThis.__vfFirstRun !== undefined) return;
+  const LEAVING = "vf-wizard-pane-leaving";
+  const faces = [];
+  const current = new Map();
+  const progress = [];
+  let lastProgress = null;
+  const leaving = [];
+  const opening = [];
+  const tear = [];
+  // FG-O3's read (FG-6c): the page's frame intervals, the last few hundred kept so the stretch before the hand-over
+  // can be cut from them, and the tear's kept while it runs
+  const recent = [];
+  let lastFrame = null;
+  let restFrames = null;
+  let tearFrames = null;
+  let tearing = false;
+  const shellOf = () => document.querySelector(".vf-wizard-shell");
+  const frameOf = () => shellOf()?.querySelector(".vf-wizard-frame") ?? null;
+  const rootsOf = (frame) => [...frame.children].filter((child) => child.hasAttribute("data-face"));
+  // the root standing in the frame, as the frame itself finds it: its own, never a leaving copy
+  const standingRoot = () => {
+    const frame = frameOf();
+    if (frame === null) return null;
+    return rootsOf(frame).reverse().find((child) => !child.classList.contains(LEAVING)) ?? null;
+  };
+  const opacity = (el) => Number.parseFloat(getComputedStyle(el).opacity);
+  const box = (el) => {
+    if (el === null) return null;
+    const r = el.getBoundingClientRect();
+    return { x: r.x, y: r.y, width: r.width, height: r.height };
+  };
+  // FG-O2's small words: the box their glyphs take (a range over their text, never the element's), what they say, and
+  // how much of them shows (their own opacity times every ancestor's)
+  const wordsOf = (el) => {
+    if (el === null || el.textContent.trim() === "") return null;
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    const r = range.getBoundingClientRect();
+    let shown = 1;
+    for (let at = el; at !== null; at = at.parentElement) shown *= opacity(at);
+    const text = el.textContent.trim();
+    return { x: r.x, y: r.y, width: r.width, height: r.height, text, shown: Math.round(shown * 1000) / 1000 };
+  };
+  // a scope's list (overflow-y auto or scroll): the one that outgrows its box, else the first, which fits
+  const scrollerIn = (scope) => {
+    if (scope === null) return null;
+    const lists = [...scope.querySelectorAll("*")].filter((el) =>
+      /(auto|scroll)/.test(getComputedStyle(el).overflowY));
+    return lists.find((el) => el.scrollHeight > el.clientHeight + 1) ?? lists[0] ?? null;
+  };
+  const sample = () => {
+    const now = performance.now();
+    if (lastFrame !== null) {
+      const interval = Math.round((now - lastFrame) * 10) / 10;
+      recent.push([now, interval]);
+      if (recent.length > 600) recent.shift();
+      if (tearing) tearFrames.push(interval);
+    }
+    lastFrame = now;
+    const shell = shellOf();
+    const frame = frameOf();
+    const seen = new Map();
+    if (frame !== null) {
+      for (const el of rootsOf(frame)) {
+        const face = el.getAttribute("data-face");
+        const o = opacity(el);
+        const was = seen.get(face);
+        if (was === undefined || o > was.o) seen.set(face, { o, el });
+      }
+    }
+    for (const [face, { o, el }] of seen) {
+      let f = current.get(face);
+      if (f === undefined) {
+        f = { face, hold: el.getAttribute("data-hold") };
+        current.set(face, f);
+        faces.push(f);
+      }
+      if (o > 0.02 && f.shownAt === undefined) f.shownAt = now;
+      if (o >= 0.98 && f.fullAt === undefined) {
+        f.fullAt = now;
+        f.logo = shell?.getAttribute("data-logo") ?? null;
+        f.glass = shell?.getAttribute("data-glass") ?? null;
+        f.lines = [...el.querySelectorAll(".vf-wizard-status-words:not([data-state='out']) .vf-wizard-status-line")]
+          .map((line) => line.textContent.trim())
+          .filter((line) => line !== "");
+      }
+      if (f.fullAt !== undefined && f.leaveAt === undefined && o < 0.98) f.leaveAt = now;
+    }
+    for (const [face, f] of current) {
+      if (seen.has(face)) continue;
+      if (f.leaveAt === undefined) f.leaveAt = now;
+      f.goneAt = now;
+      current.delete(face);
+    }
+    const bar = shell?.querySelector('.vf-wizard-steps [data-progress="true"]') ?? null;
+    if (bar !== null) {
+      const value = Number.parseFloat(getComputedStyle(bar).getPropertyValue("--vf-wizard-progress"));
+      if (Number.isFinite(value) && value !== lastProgress) {
+        progress.push([Math.round(now), value]);
+        lastProgress = value;
+      }
+    }
+    requestAnimationFrame(sample);
+  };
+  requestAnimationFrame(sample);
+  // the hand-over (FG-5) and the opening (FG-6c): each step the glass takes out, how the ground opens and how the
+  // field's tear goes, heard as the page sets them and never sampled, so no step falls between two frames of a loaded
+  // host
+  const heard = {
+    "data-leaving": ["vf-wizard-shell", leaving],
+    "data-opening": ["vf-splash", opening],
+    "data-tear": ["vf-field", tear],
+  };
+  new MutationObserver((records) => {
+    for (const record of records) {
+      const [owner, list] = heard[record.attributeName] ?? [];
+      if (owner === undefined || !record.target.classList.contains(owner)) continue;
+      const now = performance.now();
+      const value = record.target.getAttribute(record.attributeName);
+      list.push([Math.round(now), value]);
+      // FG-O3's stretch before the hand-over's first step, as long as the tear
+      if (record.attributeName === "data-leaving" && value === "words" && restFrames === null) {
+        restFrames = recent.filter(([at]) => at >= now - ${FIRST_RUN.restMs}).map(([, ms]) => ms);
+      }
+      if (record.attributeName === "data-tear") {
+        if (value === "tearing" && tearFrames === null) tearFrames = [];
+        tearing = value === "tearing";
+      }
+    }
+  }).observe(document, { subtree: true, attributes: true, attributeFilter: Object.keys(heard) });
+  const targetOf = (spec) => {
+    const root = standingRoot();
+    if (root === null) return null;
+    if (spec.selector !== undefined) return root.querySelector(spec.selector);
+    return [...root.querySelectorAll(spec.within ?? "button")].find(
+      (candidate) => candidate.textContent.trim() === spec.text,
+    ) ?? null;
+  };
+  globalThis.__vfFirstRun = {
+    read: () => ({
+      faces,
+      progress,
+      leaving,
+      opening,
+      tear,
+      frames: { rest: restFrames, tear: tearFrames },
+      now: performance.now(),
+      epoch: Date.now(),
+    }),
+    /** the face standing whole in the frame, with no pane leaving over it */
+    standing: () => {
+      const frame = frameOf();
+      const root = standingRoot();
+      if (frame === null || root === null) return null;
+      if (frame.querySelector(":scope > ." + LEAVING) !== null) return null;
+      return opacity(root) >= 0.999 ? root.getAttribute("data-face") : null;
+    },
+    wizard: () => shellOf() !== null,
+    /** the hand-over's step standing now (FG-5), and how long it has stood */
+    handOver: () => {
+      const last = leaving.at(-1);
+      return last === undefined ? null : { step: last[1], since: performance.now() - last[0] };
+    },
+    /** how the field's tear goes now (FG-6c), and how long it has stood so */
+    tearState: () => {
+      const last = tear.at(-1);
+      return last === undefined ? null : { state: last[1], since: performance.now() - last[0] };
+    },
+    /** a control's centre in the standing root, if the page would hand a press there to it */
+    target: (spec) => {
+      const el = targetOf(spec);
+      if (el === null) return { hit: false, why: "absent" };
+      const r = el.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0) return { hit: false, why: "no box" };
+      if (el.disabled === true) return { hit: false, why: "disabled" };
+      if (getComputedStyle(el).visibility !== "visible") return { hit: false, why: "hidden" };
+      const x = r.x + r.width / 2;
+      const y = r.y + r.height / 2;
+      const under = document.elementFromPoint(x, y);
+      const hit = under !== null && (under === el || el.contains(under));
+      return { hit, x, y, why: hit ? "" : "covered by " + (under?.className || under?.tagName || "nothing") };
+    },
+    /** focus a field and select what it holds, so what is typed replaces it */
+    focusAll: (spec) => {
+      const el = targetOf(spec);
+      if (el === null || typeof el.select !== "function") return false;
+      el.focus();
+      el.select();
+      return document.activeElement === el;
+    },
+    count: (selector) => document.querySelectorAll(selector).length,
+    /** FG-O2's small words where they stand now: the splash's stage line over the field, the band's labels, and the
+     * standing pane's line under its actions and a load's sub line */
+    inks: () => {
+      const root = standingRoot();
+      const field = document.querySelector(".vf-field");
+      const canvas = field?.querySelector(".vf-field-canvas") ?? null;
+      return {
+        view: { width: innerWidth, height: innerHeight },
+        wizard: shellOf() !== null,
+        field: field?.getAttribute("data-field") ?? null,
+        canvas: canvas === null ? null : Math.round(opacity(canvas) * 1000) / 1000,
+        stage: wordsOf(document.querySelector('.vf-field-words > [role="progressbar"] + div')),
+        steps: [...(shellOf()?.querySelectorAll(".vf-wizard-steps li") ?? [])].map((li) => ({
+          step: li.getAttribute("data-step"),
+          state: li.getAttribute("data-state"),
+          words: wordsOf(li.querySelector(".vf-wizard-step-label")),
+        })),
+        later: wordsOf(root?.querySelector(".vf-wizard-later") ?? null),
+        sub: wordsOf(
+          root?.querySelector(".vf-wizard-status-words:not([data-state='out']) .vf-wizard-status-sub") ?? null,
+        ),
+      };
+    },
+    logo: () => {
+      const shell = shellOf();
+      const logo = shell?.querySelector(".vf-wizard-logo") ?? null;
+      if (shell === null || logo === null) return null;
+      return {
+        shown: shell.getAttribute("data-logo"),
+        glass: shell.getAttribute("data-glass"),
+        level: Number.parseFloat(getComputedStyle(shell).getPropertyValue("--vf-glass-logo")),
+        visibility: getComputedStyle(logo).visibility,
+        box: box(logo),
+        viewport: { width: innerWidth, height: innerHeight },
+        dark: matchMedia("(prefers-color-scheme: dark)").matches,
+      };
+    },
+    /** the frame, the standing pane's head and foot, its primary action, and the list that scrolls in its body */
+    frame: () => {
+      const shell = shellOf();
+      const frame = frameOf();
+      const root = standingRoot();
+      if (shell === null || frame === null || root === null) return null;
+      const scroller = scrollerIn(root.querySelector(".vf-wizard-pane-body"));
+      const primary = root.querySelector(".vf-wizard-actions button[type=submit]");
+      const style = scroller === null ? null : getComputedStyle(scroller);
+      return {
+        fit: shell.getBoundingClientRect().width / shell.offsetWidth,
+        frame: box(frame),
+        head: box(root.querySelector(".vf-wizard-pane-head")),
+        foot: box(root.querySelector(".vf-wizard-pane-foot")),
+        primary: primary === null ? null : { ...box(primary), label: primary.textContent.trim() },
+        scroller: scroller === null ? null : {
+          ...box(scroller),
+          scrollHeight: scroller.scrollHeight,
+          clientHeight: scroller.clientHeight,
+          scrollTop: scroller.scrollTop,
+          mask: style.maskImage || style.webkitMaskImage || "none",
+        },
+      };
+    },
+    scrollToEnd: () => {
+      const scroller = scrollerIn(standingRoot()?.querySelector(".vf-wizard-pane-body") ?? null);
+      if (scroller === null) return false;
+      scroller.scrollTop = scroller.scrollHeight;
+      return true;
+    },
+    /** a login's terminal and its Cancel, with the list that scrolls around them */
+    signIn: () => {
+      const shell = shellOf();
+      const section = standingRoot()?.querySelector("section.vf-profiles-signin") ?? null;
+      if (shell === null || section === null) return null;
+      const cancel = section.querySelector(".vf-profiles-signin-row button");
+      let scroller = section.parentElement;
+      while (scroller !== null && !/(auto|scroll)/.test(getComputedStyle(scroller).overflowY)) {
+        scroller = scroller.parentElement;
+      }
+      const at = cancel === null ? null : cancel.getBoundingClientRect();
+      const under = at === null ? null : document.elementFromPoint(at.x + at.width / 2, at.y + at.height / 2);
+      return {
+        fit: shell.getBoundingClientRect().width / shell.offsetWidth,
+        frame: box(frameOf()),
+        body: box(section.querySelector(".vf-profiles-signin-body")),
+        cancel: cancel === null ? null : { ...box(cancel), label: cancel.textContent.trim() },
+        cancelHit: under !== null && cancel !== null && (under === cancel || cancel.contains(under)),
+        scroller: box(scroller),
+      };
+    },
+  };
+})();`;
+
+/** A box as the page reports it, in CSS px of the window. */
+export interface Box {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+export interface LogoSeen {
+  readonly shown: string | null;
+  readonly glass: string | null;
+  readonly level: number;
+  readonly visibility: string;
+  readonly box: Box;
+  readonly viewport: { readonly width: number; readonly height: number };
+  readonly dark: boolean;
+}
+
+export interface FrameSeen {
+  readonly fit: number;
+  readonly frame: Box;
+  readonly head: Box | null;
+  readonly foot: Box | null;
+  readonly primary: (Box & { readonly label: string }) | null;
+  /** the body's list that scrolls (overflow-y auto or scroll), whether it outgrows its box or fits */
+  readonly scroller:
+    | (Box & {
+        readonly scrollHeight: number;
+        readonly clientHeight: number;
+        readonly scrollTop: number;
+        readonly mask: string;
+      })
+    | null;
+}
+
+export interface SignInSeen {
+  readonly fit: number;
+  readonly frame: Box;
+  readonly body: Box | null;
+  readonly cancel: (Box & { readonly label: string }) | null;
+  readonly cancelHit: boolean;
+  readonly scroller: Box | null;
+}
+
+/** The mark found in the pixels: its glass's luminance, its ink's, how many px, and its centre in the window. */
+export interface InkSeen {
+  readonly glass: number;
+  readonly ink: number;
+  readonly count: number;
+  readonly at: { readonly x: number; readonly y: number };
+}
+
+/** `inner` lies inside `outer`, give or take the slack. */
+export function within(inner: Box, outer: Box, slack = 0.5): boolean {
+  return (
+    inner.x >= outer.x - slack &&
+    inner.y >= outer.y - slack &&
+    inner.x + inner.width <= outer.x + outer.width + slack &&
+    inner.y + inner.height <= outer.y + outer.height + slack
+  );
+}
+
+const same = (a: Box | null, b: Box | null): boolean =>
+  a !== null &&
+  b !== null &&
+  Math.abs(a.x - b.x) < 0.5 &&
+  Math.abs(a.y - b.y) < 0.5 &&
+  Math.abs(a.width - b.width) < 0.5 &&
+  Math.abs(a.height - b.height) < 0.5;
+
+/** The frame its size, and the pane's head, foot and primary action inside it (FG-L3). */
+export function judgeFrameParts(pane: string, seen: FrameSeen): string[] {
+  const problems: string[] = [];
+  const { width, height } = FIRST_RUN.frame;
+  if (
+    Math.abs(seen.frame.width - width * seen.fit) > FIRST_RUN.slackPx ||
+    Math.abs(seen.frame.height - height * seen.fit) > FIRST_RUN.slackPx
+  ) {
+    problems.push(
+      `${pane}: the frame is ${seen.frame.width.toFixed(1)} × ${seen.frame.height.toFixed(1)}, not ${width} × ${height} at the glass's fit ${seen.fit.toFixed(3)}`,
+    );
+  }
+  for (const [part, box] of [
+    ["head", seen.head],
+    ["foot", seen.foot],
+    ["primary action", seen.primary],
+  ] as const) {
+    if (box === null) problems.push(`${pane}: no ${part}`);
+    else if (!within(box, seen.frame))
+      problems.push(`${pane}: the ${part} stands outside the frame`);
+  }
+  return problems;
+}
+
+/** The skip a pane's list declares when it fits its body, with the page's own px of slack: FG-L3's scroll is witnessed
+ * only by a list that outgrows it. The glass is one picture at every window size (DESIGN.md §8), so no window makes a
+ * list outgrow it; on Agents only a stage whose adapters take more rows would (row 32 at run52b: two ready and More's
+ * seven fit). Null when the list outgrows its body, or there is none (`judgeFrame` says so). */
+export function listFits(pane: string, seen: FrameSeen): string | null {
+  const list = seen.scroller;
+  if (list === null || list.scrollHeight > list.clientHeight + 1) return null;
+  return `${pane}: the list fits its body (${list.scrollHeight} in ${list.clientHeight}), so the row witnesses no scroll: the glass is one picture at every window size, and only a longer list outgrows it`;
+}
+
+/** The frame's law on a pane with a list (FG-L3): the frame's parts (`judgeFrameParts`) and the list's fade, and a
+ * list that outgrows its body scrolling within itself while the head, the foot and the primary action stand unmoved.
+ * One that fits has no scroll to witness: `listFits` declares it, and the walk prints it. */
+export function judgeFrame(pane: string, before: FrameSeen, after: FrameSeen): string[] {
+  const problems = judgeFrameParts(pane, before);
+  if (before.scroller === null) {
+    problems.push(`${pane}: no list in its body scrolls within itself`);
+    return problems;
+  }
+  if (!before.scroller.mask.includes("linear-gradient")) {
+    problems.push(`${pane}: the list has no fade (mask ${before.scroller.mask})`);
+  }
+  if (listFits(pane, before) !== null) return problems;
+  if (after.scroller === null || after.scroller.scrollTop <= 0) {
+    problems.push(`${pane}: the list did not scroll within itself`);
+  }
+  if (!same(before.head, after.head))
+    problems.push(`${pane}: the head moved with the list's scroll`);
+  if (!same(before.foot, after.foot))
+    problems.push(`${pane}: the foot moved with the list's scroll`);
+  if (!same(before.primary, after.primary)) {
+    problems.push(
+      `${pane}: ${before.primary?.label ?? "the primary action"} moved with the list's scroll`,
+    );
+  }
+  return problems;
+}
+
+/** A box in words: its corner, then its size, in CSS px. */
+function placed(box: Box): string {
+  return `${box.x.toFixed(1)}, ${box.y.toFixed(1)}, ${box.width.toFixed(1)} × ${box.height.toFixed(1)}`;
+}
+
+/** How far a login's Cancel stands clear above its list's fade: its foot to the fade's top, in CSS px (under the
+ * fade, less than 0), or null with no Cancel or no list. */
+export function cancelClearOfFade(seen: SignInSeen): number | null {
+  if (seen.cancel === null || seen.scroller === null) return null;
+  const fadeTop = seen.scroller.y + seen.scroller.height - FIRST_RUN.scrollFade * seen.fit;
+  return fadeTop - (seen.cancel.y + seen.cancel.height);
+}
+
+/** A login's terminal on the glass: 170 tall, and its Cancel inside the frame, in view above the list's fade, and a
+ * press there reaching it. */
+export function judgeSignIn(seen: SignInSeen): string[] {
+  const problems: string[] = [];
+  if (seen.body === null) problems.push("the login has no terminal");
+  else if (Math.abs(seen.body.height - FIRST_RUN.signInHeight * seen.fit) > FIRST_RUN.slackPx) {
+    problems.push(
+      `the login's terminal is ${seen.body.height.toFixed(1)} tall, not ${FIRST_RUN.signInHeight}`,
+    );
+  }
+  if (seen.cancel === null) {
+    problems.push("the login has no Cancel");
+    return problems;
+  }
+  if (!within(seen.cancel, seen.frame))
+    problems.push("the login's Cancel stands outside the frame");
+  if (seen.scroller !== null) {
+    const clear = {
+      ...seen.scroller,
+      height: seen.scroller.height - FIRST_RUN.scrollFade * seen.fit,
+    };
+    if (!within(seen.cancel, clear)) {
+      // said with what the row saw (row 32 at run53b: the line said only this, and Cancel's foot was 1.3 under)
+      const fadeTop = clear.y + clear.height;
+      const under = seen.cancel.y + seen.cancel.height - fadeTop;
+      problems.push(
+        `the login's Cancel is not in view above the list's fade: Cancel at ${placed(seen.cancel)}, the list at ${placed(seen.scroller)}, its fade's top at ${fadeTop.toFixed(1)}: Cancel's foot ${Math.abs(under).toFixed(1)} ${under > 0 ? "under" : "above"} it`,
+      );
+    }
+  }
+  if (!seen.cancelHit) problems.push("a press at the login's Cancel does not reach it");
+  return problems;
+}
+
+/** The logo at the welcome's title card (FG-4b, FG-D24): the page's reading of it, and the mark found in the pixels
+ * around its box (`measureMark`, its centre moved into the window's px). */
+export function judgeLogo(
+  seen: LogoSeen,
+  walk: { readonly dark: boolean; readonly webgpu: boolean },
+  ink: InkSeen | null,
+): string[] {
+  const problems: string[] = [];
+  if (seen.shown !== "shown") problems.push("the welcome stood without the logo (data-logo)");
+  if (seen.dark !== walk.dark) {
+    problems.push(`the page wears the ${seen.dark ? "dark" : "light"} theme, not the walk's`);
+  }
+  if (walk.webgpu) {
+    if (seen.glass !== "field") {
+      problems.push("on the live field the glass is not the field's (data-glass)");
+    }
+    if (seen.visibility !== "hidden") {
+      problems.push("on the live field the page's own logo is not hidden");
+    }
+  } else {
+    if (seen.glass !== null)
+      problems.push(`over the still the glass says data-glass=${seen.glass}`);
+    if (seen.visibility !== "visible") problems.push("over the still the page's logo is hidden");
+  }
+  const want = expectedLogoBox(seen.viewport.width, seen.viewport.height, !walk.webgpu);
+  const centre = { x: seen.viewport.width / 2, y: seen.viewport.height / 2 };
+  const at = { x: seen.box.x + seen.box.width / 2, y: seen.box.y + seen.box.height / 2 };
+  if (
+    Math.abs(seen.box.width - want.width) > FIRST_RUN.slackPx ||
+    Math.abs(seen.box.height - want.height) > FIRST_RUN.slackPx
+  ) {
+    problems.push(
+      `the logo's box is ${seen.box.width.toFixed(1)} × ${seen.box.height.toFixed(1)}, not the mark's ${want.width.toFixed(1)} × ${want.height.toFixed(1)}`,
+    );
+  }
+  if (
+    Math.abs(at.x - centre.x) > FIRST_RUN.slackPx ||
+    Math.abs(at.y - centre.y) > FIRST_RUN.slackPx
+  ) {
+    problems.push(
+      `the logo's box centres at ${at.x.toFixed(1)}, ${at.y.toFixed(1)}, not the window's ${centre.x}, ${centre.y}`,
+    );
+  }
+  if (ink === null || ink.count === 0) {
+    problems.push("no mark in the pixels around the logo's box");
+    return problems;
+  }
+  if (
+    Math.abs(ink.at.x - centre.x) > FIRST_RUN.inkSlackPx ||
+    Math.abs(ink.at.y - centre.y) > FIRST_RUN.inkSlackPx
+  ) {
+    problems.push(
+      `the mark's ink centres at ${ink.at.x.toFixed(1)}, ${ink.at.y.toFixed(1)}, not the window's ${centre.x}, ${centre.y}`,
+    );
+  }
+  if (walk.dark && ink.ink < ink.glass + FIRST_RUN.inkContrast) {
+    problems.push(`by night the mark (${ink.ink}) is not white on its glass (${ink.glass})`);
+  }
+  if (!walk.dark && ink.ink > ink.glass - FIRST_RUN.inkContrast) {
+    problems.push(`by day the mark (${ink.ink}) is not inverted on its milk (${ink.glass})`);
+  }
+  return problems;
+}
+
+/** What the walk needs. */
+export interface FirstRunDriver {
+  readonly win: BrowserWindow;
+  readonly viteUrl: string;
+  readonly walk: FirstRunWalk;
+  /** this walk's own folder of stills, outside the run's own folders (`shotDirRefusal`) */
+  readonly shotDir: string;
+  readonly staged: StagedTypedAgent;
+  /** users.json's root, and the user this window boots as */
+  readonly users: { readonly root: string; readonly userId: string };
+  readonly say: (line: string) => void;
+  /** FG-O3's readers (printed, never judged): this app's processes as Electron counts them (`app.getAppMetrics`),
+   * and the GPU's busy share now (`readGpuBusy`); a walk without them reads no load */
+  readonly processes?: () => readonly ProcessMetric[];
+  readonly gpuBusy?: () => Promise<number | null>;
+}
+
+/** A control the walk presses: by selector, or by its words (in `within`'s elements, buttons by default). */
+interface ControlSpec {
+  readonly selector?: string;
+  readonly text?: string;
+  readonly within?: string;
+}
+
+interface Target {
+  readonly hit: boolean;
+  readonly x?: number;
+  readonly y?: number;
+  readonly why?: string;
+}
+
+/** Connect's asking, run long: its way out. */
+const ASKING_OUT: ControlSpec = { text: "Continue", within: ".vf-wizard-hold-out button" };
+/** A pane's primary action: its form's submit. */
+const PRIMARY: ControlSpec = { selector: ".vf-wizard-actions button[type=submit]" };
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** The walk, from a fresh page to the desk: facts for the verdict line, and every problem in words. A step that
+ * never comes stops the walk, with a still of where it stood: the stop is its last problem, after every one it had
+ * found, and nothing after the walk is read. */
+export async function firstRunRows(
+  d: FirstRunDriver,
+): Promise<{ facts: Record<string, unknown>; problems: string[] }> {
+  const walk = FIRST_RUN_WALKS[d.walk];
+  const problems: string[] = [];
+  const shots: string[] = [];
+  const facts: Record<string, unknown> = { walk: d.walk, shots };
+  const page = async <T>(call: string): Promise<T> =>
+    (await d.win.webContents.executeJavaScript(
+      `globalThis.__vfFirstRun?.${call} ?? null`,
+      true,
+    )) as T;
+  const until = async <T>(
+    what: string,
+    ms: number,
+    read: () => Promise<T | null | false>,
+  ): Promise<T> => {
+    const deadline = Date.now() + ms;
+    for (;;) {
+      const seen = await read();
+      if (seen !== null && seen !== false) return seen;
+      if (Date.now() > deadline) throw new Error(`${what}: not within ${ms}ms`);
+      await sleep(50);
+    }
+  };
+  const standing = async (face: string): Promise<void> => {
+    await until(`the ${face} pane standing`, FIRST_RUN.paneMs, async () =>
+      (await page<string | null>("standing()")) === face ? true : null,
+    );
+    // its own layout settled under the frame's fade
+    await sleep(120);
+  };
+  const keep = (name: string, image: NativeImage): Uint8Array => {
+    const file = `${String(shots.length + 1).padStart(2, "0")}-${name}.png`;
+    writeFileSync(join(d.shotDir, file), image.toPNG());
+    shots.push(file);
+    return new Uint8Array(image.toBitmap());
+  };
+  const capture = async (
+    name: string,
+    rect?: { x: number; y: number; width: number; height: number },
+  ): Promise<Uint8Array> => keep(name, await d.win.capturePage(rect));
+  // FG-O2's small words (printed at the walk's end, not judged yet): on the still just taken, cut from its capture
+  // where the page placed them
+  const inks: InkCut[] = [];
+  const cutFrom = (bitmap: Uint8Array, seen: InksSeen | null, words: readonly InkWords[]): void => {
+    const at = shots.at(-1);
+    if (seen !== null && at !== undefined) inks.push(...inkCuts(at, bitmap, seen, words));
+  };
+  const target = (spec: ControlSpec): Promise<Target | null> =>
+    page<Target | null>(`target(${JSON.stringify(spec)})`);
+  const press = async (spec: ControlSpec, what: string): Promise<void> => {
+    const deadline = Date.now() + FIRST_RUN.paneMs;
+    let seen = await target(spec);
+    while (seen?.hit !== true || seen.x === undefined || seen.y === undefined) {
+      if (Date.now() > deadline) {
+        throw new Error(
+          `${what}: no press reached it within ${FIRST_RUN.paneMs}ms (${seen?.why ?? "no page"})`,
+        );
+      }
+      await sleep(50);
+      seen = await target(spec);
+    }
+    const at = { x: Math.round(seen.x), y: Math.round(seen.y) };
+    const input = d.win.webContents;
+    input.sendInputEvent({ type: "mouseMove", x: at.x, y: at.y });
+    await sleep(40);
+    input.sendInputEvent({ type: "mouseDown", x: at.x, y: at.y, button: "left", clickCount: 1 });
+    await sleep(50);
+    input.sendInputEvent({ type: "mouseUp", x: at.x, y: at.y, button: "left", clickCount: 1 });
+  };
+  const type = async (spec: ControlSpec, text: string, what: string): Promise<void> => {
+    await press(spec, what);
+    await until(`${what} focused`, 5_000, () => page<boolean>(`focusAll(${JSON.stringify(spec)})`));
+    for (const ch of text) {
+      d.win.webContents.sendInputEvent({ type: "char", keyCode: ch });
+      await sleep(30);
+    }
+  };
+  const count = (selector: string): Promise<number> =>
+    page<number>(`count(${JSON.stringify(selector)})`);
+  let at = "";
+  const step = (name: string): void => {
+    at = name;
+    d.say(`SMOKE_FIRST_RUN_STEP ${d.walk} ${name}`);
+  };
+  // FG-O3's readings (FG-6c; printed, never judged): the GPU's load from Setting up's welcome until the wizard goes, one
+  // every `gpuEveryMs` in main's clock; the busy share is asked again only while the host gives it
+  const gpu: GpuSample[] = [];
+  let gpuOn = false;
+  let gpuRun: Promise<void> | null = null;
+  const gpuStart = (): void => {
+    if (gpuRun !== null || (d.processes === undefined && d.gpuBusy === undefined)) return;
+    gpuOn = true;
+    gpuRun = (async () => {
+      let ask = d.gpuBusy !== undefined;
+      while (gpuOn) {
+        const now = Date.now();
+        const cpu = d.processes?.().find((metric) => metric.type === "GPU")?.cpu;
+        const busy = ask ? ((await d.gpuBusy?.()) ?? null) : null;
+        if (gpu.length === 0 && busy === null) ask = false;
+        gpu.push({
+          at: now,
+          cpuSeconds: cpu?.cumulativeCPUUsage ?? null,
+          cpuPercent: cpu?.percentCPUUsage ?? null,
+          busy,
+        });
+        await sleep(FIRST_RUN.gpuEveryMs);
+      }
+    })();
+  };
+  const gpuStop = async (): Promise<void> => {
+    gpuOn = false;
+    await gpuRun;
+  };
+  // the tear's still (FG-6c), in ms into the tear as asked: null while the walk never saw it tearing
+  let tearShot: number | null = null;
+
+  mkdirSync(d.shotDir, { recursive: true });
+  try {
+    // The page's recorder, armed before any of its scripts; with no WebGPU, `navigator.gpu` taken from every
+    // document first (`withoutWebgpu`'s script, on the one DevTools session a window can hold).
+    step("arming");
+    await d.win.loadURL(WITHOUT_WEBGPU.first);
+    const dbg = d.win.webContents.debugger;
+    dbg.attach("1.3");
+    await dbg.sendCommand("Page.enable");
+    if (!walk.webgpu) {
+      await dbg.sendCommand("Page.addScriptToEvaluateOnNewDocument", {
+        source: WITHOUT_WEBGPU.script,
+      });
+    }
+    await dbg.sendCommand("Page.addScriptToEvaluateOnNewDocument", { source: FIRST_RUN_PAGE });
+    await loadRenderer(d.win, "smoke-first-run", d.viteUrl);
+
+    // 0 · the splash (FG-O2): its stage line's one early still, on the field that has come, or on the field still
+    // waking when the wizard comes first
+    step("splash");
+    let early: { image: NativeImage; seen: InksSeen } | null = null;
+    const splashBy = Date.now() + FIRST_RUN.paneMs;
+    while (Date.now() < splashBy) {
+      const seen = await page<InksSeen | null>("inks()");
+      const look = splashLook(seen);
+      if (look === "stop" || seen === null) break;
+      if (look === "take" || (look === "keep" && early === null)) {
+        early = { image: await d.win.capturePage(), seen };
+        if (look === "take") break;
+      }
+      await sleep(50);
+    }
+    if (early !== null) cutFrom(keep("splash", early.image), early.seen, ["stage"]);
+
+    // 1 · the welcome's title card, its logo whole
+    step("welcome");
+    await standing("welcome");
+    await until("the welcome's logo whole", 5_000, async () => {
+      const seen = await page<LogoSeen | null>("logo()");
+      return seen !== null && seen.level >= 0.999 ? seen : null;
+    });
+    // the field draws the level a frame or two after the glass says it
+    await sleep(250);
+    const logo = await until("the welcome's logo read", 5_000, () =>
+      page<LogoSeen | null>("logo()"),
+    );
+    await capture("welcome");
+    const margin = FIRST_RUN.logoMargin;
+    const region = {
+      x: Math.round(logo.box.x - margin),
+      y: Math.round(logo.box.y - margin),
+      width: Math.round(logo.box.width + margin * 2),
+      height: Math.round(logo.box.height + margin * 2),
+    };
+    const mark = measureMark(await capture("welcome-logo", region), region.width, region.height);
+    const ink: InkSeen | null =
+      mark === null ? null : { ...mark, at: { x: region.x + mark.at.x, y: region.y + mark.at.y } };
+    facts["logo"] = { box: logo.box, glass: logo.glass, ink };
+    problems.push(...judgeLogo(logo, walk, ink));
+    await press({ text: "Get started" }, "Get started");
+
+    // 2 · You: a name typed into its field
+    step("you");
+    await standing("field");
+    await capture("you");
+    await type({ selector: 'input[aria-label="Your name"]' }, "Ada", "the name's field");
+    await press(PRIMARY, "You's Continue");
+
+    // 3 · Agents: More open, its list scrolled within itself, or said to fit its body
+    step("agents");
+    await standing("agents");
+    const ready = await count(".vf-agents-pane-ready");
+    facts["agentsReady"] = ready;
+    if (ready < 1)
+      problems.push("Agents counts no agent ready: no adapter took the staged install");
+    await capture("agents");
+    await press({ selector: ".vf-agents-pane-more" }, "More agents");
+    await until(
+      "More agents open",
+      5_000,
+      async () => (await count('.vf-agents-pane-more[aria-expanded="true"]')) > 0,
+    );
+    await sleep(300);
+    const agents = await until("Agents' frame", 5_000, () => page<FrameSeen | null>("frame()"));
+    await capture("agents-more");
+    await page<boolean>("scrollToEnd()");
+    await sleep(200);
+    const scrolled = await until("Agents' frame, scrolled", 5_000, () =>
+      page<FrameSeen | null>("frame()"),
+    );
+    await capture("agents-more-scrolled");
+    facts["agentsList"] =
+      agents.scroller === null
+        ? null
+        : {
+            scrollHeight: agents.scroller.scrollHeight,
+            clientHeight: agents.scroller.clientHeight,
+          };
+    const fits = listFits("Agents", agents);
+    if (fits !== null) d.say(`SMOKE_FIRST_RUN_SKIP ${d.walk} ${fits}`);
+    facts["skipped"] = fits === null ? [] : [fits];
+    problems.push(...judgeFrame("Agents", agents, scrolled));
+    await press(PRIMARY, "Agents' Continue");
+
+    // 4 · Profiles: This Mac's card, then a profile added, its login standing in its terminal, then cancelled
+    step("profiles");
+    await standing("profiles");
+    await capture("profiles");
+    await press({ selector: '[aria-label="Add a profile…"]' }, "Add a profile…");
+    await type({ selector: "#vf-profiles-pane-name" }, "Work", "the profile's name");
+    await press({ text: "Next" }, "the name's Next");
+    const atTerminal = (): number =>
+      readTypedAgentCalls(d.staged.calls).filter((call) => call.tty).length;
+    const logins = atTerminal();
+    await press({ selector: ".vf-profiles-pane-pick" }, "an agent to sign in to");
+    await until("the login's terminal", FIRST_RUN.paneMs, () =>
+      page<SignInSeen | null>("signIn()"),
+    );
+    await until("the login run at a terminal", FIRST_RUN.paneMs, async () => atTerminal() > logins);
+    // a sign-in waits for its person: still standing, its line drawn
+    await sleep(1_500);
+    const signIn = await page<SignInSeen | null>("signIn()");
+    const signingIn = await page<FrameSeen | null>("frame()");
+    await capture("profiles-login");
+    facts["login"] =
+      signIn === null
+        ? null
+        : {
+            terminal: signIn.body?.height ?? null,
+            cancelHit: signIn.cancelHit,
+            cancelClear: cancelClearOfFade(signIn),
+          };
+    if (signIn === null) problems.push("the login did not stand: it ended before Cancel");
+    else problems.push(...judgeSignIn(signIn));
+    if (signingIn !== null) problems.push(...judgeFrameParts("Profiles, signing in", signingIn));
+    await press({ selector: ".vf-profiles-signin-row button" }, "the login's Cancel");
+    await until(
+      "the add offered again",
+      FIRST_RUN.paneMs,
+      async () =>
+        (await count('[aria-label="Add a profile…"]')) > 0 &&
+        (await count("section.vf-profiles-signin")) === 0,
+    );
+    await press(PRIMARY, "Profiles' Continue");
+
+    // 5 · History: the typed agent's one row, its switch on (its primary says so)
+    step("history");
+    await standing("history");
+    const rows = await count('ul[aria-label="Past sessions on this Mac"] > li');
+    facts["historyRows"] = rows;
+    if (rows !== 1) problems.push(`History shows ${rows} rows, not the typed agent's one`);
+    await capture("history");
+    await press(
+      { text: "Bring in history", within: ".vf-wizard-actions button" },
+      "Bring in history",
+    );
+
+    // 6 · Connect: put off, by whatever this Mac's link said — never a sign-in
+    step("connect");
+    const way = await until("Connect, or its asking's way out", FIRST_RUN.paneMs, async () => {
+      const face = await page<string | null>("standing()");
+      if (face === "connect") return "pane";
+      return face === "connect:asking" && (await target(ASKING_OUT))?.hit === true
+        ? "asking"
+        : null;
+    });
+    cutFrom(await capture("connect"), await page<InksSeen | null>("inks()"), ["steps", "later"]);
+    if (way === "asking") {
+      facts["connect"] = "asked long: its way out";
+      await press(ASKING_OUT, "Connect's way out");
+    } else {
+      const notNow = (await target({ text: "Not now" }))?.hit === true;
+      facts["connect"] = notNow ? "Not now" : "Continue";
+      await press(
+        notNow ? { text: "Not now" } : { text: "Continue", within: ".vf-wizard-actions button" },
+        "Connect's way on",
+      );
+    }
+
+    // 7 · Setting up: its line through the work to the welcome, then the desk
+    step("setting-up");
+    await standing("setting-up:line");
+    await capture("setting-up");
+    let welcomed = false;
+    let startNow = false;
+    let alone = false;
+    let clearing = false;
+    await until("the wizard gone, the desk revealed", FIRST_RUN.revealMs, async () => {
+      const welcome = '.vf-wizard-status-words[data-ink="true"]:not([data-state="out"])';
+      if (!welcomed && (await count(welcome)) > 0) {
+        welcomed = true;
+        // its crossfade in
+        await sleep(300);
+        const welcomeStill = await capture("setting-up-welcome");
+        gpuStart();
+        cutFrom(welcomeStill, await page<InksSeen | null>("inks()"), ["sub"]);
+      }
+      if (!startNow) startNow = (await target({ text: "Start now" }))?.hit === true;
+      // the hand-over (FG-5): its stills, each timed from its step as the page set it
+      const handOver = await page<{ step: string | null; since: number } | null>("handOver()");
+      if (!alone && handOver?.step === "words") {
+        alone = true;
+        gpuStart();
+        await sleep(Math.max(0, FIRST_RUN.aloneShotMs - handOver.since));
+        await capture("handover-alone");
+      }
+      if (!clearing && handOver?.step === "clear") {
+        clearing = true;
+        await sleep(Math.max(0, FIRST_RUN.clearingShotMs - handOver.since));
+        await capture("handover-clearing");
+      }
+      // the opening (FG-6c): the tear's still, timed from its state as the page set it; its capture falls inside
+      // FG-O3's read of the tear, and `opening.still` says when
+      if (tearShot === null) {
+        const tear = await page<{ state: string | null; since: number } | null>("tearState()");
+        if (tear?.state === "tearing") {
+          tearShot = Math.round(Math.max(tear.since, FIRST_RUN.tearShotMs));
+          await sleep(Math.max(0, FIRST_RUN.tearShotMs - tear.since));
+          await capture("tear-mid");
+        }
+      }
+      return (await page<boolean | null>("wizard()")) !== true;
+    });
+    await gpuStop();
+    step("desk");
+    await sleep(1_000);
+    await capture("desk");
+    facts["welcomed"] = welcomed;
+    facts["startNowShown"] = startNow;
+    if (!welcomed) problems.push("Setting up's line never said the welcome");
+  } catch (error) {
+    await gpuStop();
+    if (!d.win.isDestroyed()) await capture("at-failure").catch(() => undefined);
+    // said with what the walk had found before it, never alone: at run52b night and no-webgpu stopped at the login's
+    // Cancel, and the reds they had found on the welcome and on Agents were never said
+    facts["stoppedAt"] = at;
+    problems.push(
+      `the walk stopped at ${at}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return { facts, problems };
+  }
+
+  const record = await until("the recorder's reading", 5_000, () =>
+    page<FirstRunRecord | null>("read()"),
+  );
+  problems.push(...judgeRecorded(record));
+  const holds = judgeHolds(record);
+  facts["holds"] = holds.held;
+  problems.push(...holds.problems);
+  problems.push(...judgeBand(record.progress));
+  facts["band"] = {
+    changes: record.progress.length,
+    first: record.progress[0]?.[1] ?? null,
+    last: record.progress.at(-1)?.[1] ?? null,
+  };
+  problems.push(...judgeHandOver(record.leaving));
+  facts["handOver"] = record.leaving.map(([, step]) => step);
+  problems.push(...judgeOpening(walk, record.opening, record.tear));
+  facts["opening"] = { opening: heard(record.opening), tear: heard(record.tear), still: tearShot };
+  facts["gpu"] = firstRunGpu(record, gpu);
+  facts["contrast"] = firstRunContrast(inks);
+  const user = readUsersFile(d.users.root)?.users.find((u) => u.userId === d.users.userId);
+  facts["onboarded"] = user?.onboarded ?? null;
+  if (user?.onboarded !== true) problems.push("the walk ended without the durable onboarded: true");
+  return { facts, problems };
+}

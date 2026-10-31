@@ -1,4 +1,5 @@
 import type { GhostteaWorkspaceProps } from "@vibecook/ghosttea-react/workspace";
+import type { AgentStopState } from "@vibefield/contracts";
 import type { RemoteRefusal, RemoteRefusalState, SessionSeat } from "../terminal/pool";
 
 /** Ghosttea's `SessionSummary`, taken from the prop that receives it rather
@@ -157,4 +158,57 @@ export function describeSeat(seat: SessionSeat | undefined): SeatPaneFace | unde
     size,
     caption: "· click the pane to take it.",
   };
+}
+
+/**
+ * ST-D4 (a) — THE FACE OF A PANE WHOSE RUN A PERSON'S STOP HAS NOT STOPPED
+ * (`StopPaneState`; DESIGN.md §8 "A run a Stop has not stopped"). fieldd holds
+ * the Stop as sent until it hears the run stop (the field row's `stop`), and
+ * the pane speaks only where a press cannot answer itself, in the held-edge
+ * readout's figure:
+ *
+ *   · **Ending** **the run**, over "it did not stop after two sends · ending
+ *     it": fieldd is ending a run whose turn did not stop (`terminating`).
+ *   · **Still** **running**, over "the stop was sent twice and not heard ·"
+ *     and **End run**: fieldd will take it no further (`unheardAt`), and the
+ *     person ends the run.
+ *
+ * A Stop only sent, or sent again, says nothing here: the frame's own verb
+ * says "Stopping the turn…" from the press. Nor does one heard: an exit shows
+ * as any exit, and a turn that stopped leaves its pane live. A stage this
+ * build does not know is still stopping (the contract's open words).
+ */
+export interface StopPaneFace {
+  state: "ending" | "still-running";
+  /** the readout's first word, full */
+  word: string;
+  /** the readout's rest, at 40% */
+  rest: string;
+  /** the caption line */
+  caption: string;
+  /** the figure's one act, when the person has one */
+  act?: "end-run";
+}
+
+/** What a pane says for its run's Stop (undefined: none held, or nothing to say). */
+export function describeStop(stop: AgentStopState | undefined): StopPaneFace | undefined {
+  if (stop === undefined || stop.stage === "heard") return undefined;
+  if (stop.unheardAt !== undefined) {
+    return {
+      state: "still-running",
+      word: "Still",
+      rest: "running",
+      caption: "the stop was sent twice and not heard ·",
+      act: "end-run",
+    };
+  }
+  if (stop.stage === "terminating") {
+    return {
+      state: "ending",
+      word: "Ending",
+      rest: "the run",
+      caption: "it did not stop after two sends · ending it",
+    };
+  }
+  return undefined;
 }

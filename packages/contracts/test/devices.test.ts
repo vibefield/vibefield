@@ -1,6 +1,14 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { DeviceInfo, DeviceSlice } from "../src/devices";
+import { DEVICE_LIMITS, DeviceInfo, DeviceSlice } from "../src/devices";
 import { PORTS } from "../src/registries";
+import { appVersionOfBuildId, commitOfBuildId } from "../src/release-identity";
+
+const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures");
+const golden = (name: string): Record<string, unknown> =>
+  JSON.parse(readFileSync(join(FIXTURES, name), "utf8")) as Record<string, unknown>;
 
 // UA-P-0e (D2) — the roster row has TWO honest shapes now, and the difference
 // between them is the whole of what the ruling changed.
@@ -81,5 +89,79 @@ describe("DeviceInfo — the two shapes of a roster row (UA-P-0e)", () => {
       const { [drop]: _gone, ...rest } = selfRow;
       expect(DeviceSlice.safeParse(rest).success, `${drop} is required on a slice`).toBe(false);
     }
+  });
+});
+
+// AU-3a (AU-D13 A; LC-20) — a desktop says which VibeField it runs. `fielddVersion`
+// is the daemon package's own literal and never moves between builds, so the
+// app's version rides beside it: optional (an older peer does not say it) and
+// tolerant (a malformed one drops ALONE — a slice that fails `DeviceSlice` is
+// dropped at intake, and the device's capabilities with it).
+describe("AU-3a — the app version on the slice and the row", () => {
+  const CUR = "0.1.0-nightly.20261027";
+
+  it("parses the app version a slice and its row say", () => {
+    expect(DeviceSlice.parse(golden("device-slice.app-version.json")).appVersion).toBe(CUR);
+    expect(DeviceInfo.parse(golden("device-info.app-version.json")).appVersion).toBe(CUR);
+  });
+
+  it("reads an older peer's slice, and its row, as saying none", () => {
+    expect(DeviceSlice.parse(golden("device-slice.valid.json")).appVersion).toBeUndefined();
+    expect(DeviceInfo.parse(golden("device-info.valid.json")).appVersion).toBeUndefined();
+  });
+
+  it("drops a malformed app version ALONE, never the slice or the row", () => {
+    const slice = golden("device-slice.app-version.json");
+    const row = golden("device-info.app-version.json");
+    const tooLong = "9".repeat(DEVICE_LIMITS.VERSION_CHARS + 1);
+    for (const appVersion of [7, "", tooLong, null, { version: CUR }]) {
+      const parsedSlice = DeviceSlice.safeParse({ ...slice, appVersion });
+      expect(parsedSlice.success, JSON.stringify(appVersion)).toBe(true);
+      expect(parsedSlice.data?.appVersion).toBeUndefined();
+      // the claims beside it survive: this is what a refused slice would have lost
+      expect(parsedSlice.data?.capabilities.docHost).toBe(true);
+      const parsedRow = DeviceInfo.safeParse({ ...row, appVersion });
+      expect(parsedRow.success, JSON.stringify(appVersion)).toBe(true);
+      expect(parsedRow.data?.appVersion).toBeUndefined();
+    }
+    // the bound is the other versions' own
+    const longest = "9".repeat(DEVICE_LIMITS.VERSION_CHARS);
+    expect(DeviceSlice.parse({ ...slice, appVersion: longest }).appVersion).toBe(longest);
+  });
+});
+
+describe("AU-3a — appVersionOfBuildId: the version a build id carries", () => {
+  it("reads the app version from WP12 D10's `<appVersion>+<commit7>`", () => {
+    expect(appVersionOfBuildId("0.1.0-nightly.20261027+84509d6")).toBe("0.1.0-nightly.20261027");
+    expect(appVersionOfBuildId("0.2.0-beta.3+84509d6a1")).toBe("0.2.0-beta.3");
+    expect(appVersionOfBuildId("0.2.0+84509d6")).toBe("0.2.0");
+  });
+
+  it("says none for any other shape: a dev build, a short commit, no id at all", () => {
+    const others = [
+      "dev-daemon-current",
+      // the dev runner's own shape (`tooling/dev-runner/src/build-id.mjs`)
+      "dev-4f3a91c07b2e5d68a1c40b93",
+      "0.1.0+84509d",
+      "0.1.0+ZZZZZZZ",
+      "0.1.0",
+      "",
+      null,
+      undefined,
+    ];
+    for (const id of others) expect(appVersionOfBuildId(id), String(id)).toBeUndefined();
+  });
+});
+
+describe("AU-4 — commitOfBuildId: the commit About names beside the version", () => {
+  it("reads the commit from WP12 D10's `<appVersion>+<commit7>`, as the stager recorded it", () => {
+    expect(commitOfBuildId("0.1.0-nightly.20261027+84509d6")).toBe("84509d6");
+    expect(commitOfBuildId("0.2.0-beta.3+84509d6a1")).toBe("84509d6a1");
+    expect(commitOfBuildId("0.2.0+84509d6")).toBe("84509d6");
+  });
+
+  it("says none for a shape that names no release build", () => {
+    const others = ["dev-4f3a91c07b2e5d68a1c40b93", "0.1.0+84509d", "0.1.0", "", null, undefined];
+    for (const id of others) expect(commitOfBuildId(id), String(id)).toBeUndefined();
   });
 });

@@ -1,6 +1,9 @@
 import type { ThemePreference } from "@vibefield/contracts";
 import { SegmentedControl as UiSegmentedControl, UnavailableState } from "@vibefield/design-kit";
-import type { ArtifactPanelPreviewState } from "@vibefield/plugin-browser/design-system";
+import {
+  ArtifactPanelPreview,
+  type ArtifactPanelPreviewState,
+} from "@vibefield/plugin-browser/design-system";
 import { type ReactElement, useState } from "react";
 import { LoadingVeilView } from "../../hud/LoadingVeil";
 import { AppearanceSectionView } from "../../panels/AppearanceSection";
@@ -13,7 +16,9 @@ import {
   type SettingsSubpage,
 } from "../../panels/SettingsDialog";
 import { buttonCls } from "../../panels/settings-ui";
+import { UpdatesDevicesView } from "../../panels/UpdatesDevicesSection";
 import { UpdatesDoctorView, UpdatesSectionView } from "../../panels/UpdatesSection";
+import { updateWaits } from "../../panels/update-words";
 import { finishSetupRows } from "../../setup/ledger";
 import { AgentsSettingsPreview } from "../AgentsSettingsPreview";
 import {
@@ -32,7 +37,6 @@ import {
   type DevicesFixtureState,
   devicesFixture,
 } from "../devices-settings-fixtures";
-import { ArtifactsDrawer } from "../EdgesPreview";
 import { ProfilesSettingsPreview, profilesPreviewHead } from "../ProfilesSettingsPreview";
 import {
   FIXTURE_PROFILE_SETS,
@@ -42,7 +46,9 @@ import {
 import { TerminalSettingsPreview } from "../TerminalSettingsPreview";
 import { TERMINAL_FIXTURE_STATES, type TerminalFixtureState } from "../terminal-settings-fixtures";
 import {
+  UPDATES_DEVICES_FIXTURE,
   UPDATES_DOCTOR_FIXTURE,
+  UPDATES_EDGE_STATES,
   UPDATES_FIXTURE_NOW,
   UPDATES_HELD_STATES,
   UPDATES_PATH_STATES,
@@ -167,15 +173,27 @@ export function SurfacesSection(): ReactElement {
       </Specimen>
 
       <Specimen
-        title="Updates — Settings › General: the update's path"
+        title="Settings → Updates — on the path, and Your devices"
         source="panels/UpdatesSection.tsx"
         bleed
       >
-        <UpdatesSettingsSpecimen states={UPDATES_PATH_STATES} label="Update card state" />
+        <UpdatesSettingsSpecimen states={UPDATES_PATH_STATES} label="Updates page state" />
       </Specimen>
 
-      <Specimen title="Updates — held, honest, and absent" source="panels/UpdatesSection.tsx" bleed>
-        <UpdatesSettingsSpecimen states={UPDATES_HELD_STATES} label="Update card held state" />
+      <Specimen
+        title="Settings → Updates — at the edges: your choices, and an install that didn't take"
+        source="panels/UpdatesSection.tsx"
+        bleed
+      >
+        <UpdatesSettingsSpecimen states={UPDATES_EDGE_STATES} label="Updates page edge state" />
+      </Specimen>
+
+      <Specimen
+        title="Settings → Updates — held, honest, and absent"
+        source="panels/UpdatesSection.tsx"
+        bleed
+      >
+        <UpdatesSettingsSpecimen states={UPDATES_HELD_STATES} label="Updates page held state" />
       </Specimen>
 
       <Specimen title="Updater — Settings › Diagnostics" source="panels/UpdatesSection.tsx" bleed>
@@ -189,8 +207,8 @@ export function SurfacesSection(): ReactElement {
           </div>
         </Specimen>
         <Specimen
-          title="Artifacts — the Hub in the right edge's drawer"
-          source="hud/edge-tray/EdgeTray.tsx · DESIGN.md §8"
+          title="Artifacts — the Hub at the Artifacts shelf's width"
+          source="plugins/browser/src/ArtifactPanel.tsx · DESIGN.md §8"
           darkStage
         >
           <ArtifactsSpecimen />
@@ -364,8 +382,9 @@ function TerminalSettingsSpecimen(): ReactElement {
   );
 }
 
-/** Settings › General's update card in the shipping dialog (WP12d L3c-ii, §13 C5): `UpdatesSectionView` over the
- * projections and answers main gives, every production state, never a replica. */
+/** Settings → Updates in the shipping dialog (WP12d L3c-ii, §13 C5; AU-3): `UpdatesSectionView` over the projections
+ * and answers main gives, every production state, never a replica; the Updates nav row wears its mark while an install
+ * waits, and Your devices stands under the page over the fixture roster. */
 function UpdatesSettingsSpecimen({
   states,
   label,
@@ -382,7 +401,7 @@ function UpdatesSettingsSpecimen({
       </div>
       <SettingsDialog
         className="vf-ds-settings-dialog"
-        activePage="general"
+        activePage="updates"
         onSelectPage={() => undefined}
         onClose={() => undefined}
         onUndo={() => undefined}
@@ -392,8 +411,16 @@ function UpdatesSettingsSpecimen({
         redoAvailable={false}
         account={{ me: FIXTURE_ME, others: FIXTURE_OTHERS_WAITING, onSwitch: () => undefined }}
         subpage={null}
+        pageMarks={
+          updateWaits(updatesFixture(state).view)
+            ? { updates: "an update is ready to install" }
+            : undefined
+        }
       >
-        <UpdatesSectionView key={state} now={UPDATES_FIXTURE_NOW} {...updatesFixture(state)} />
+        <div className="space-y-4">
+          <UpdatesSectionView key={state} now={UPDATES_FIXTURE_NOW} {...updatesFixture(state)} />
+          <UpdatesDevicesView state={UPDATES_DEVICES_FIXTURE} />
+        </div>
       </SettingsDialog>
     </div>
   );
@@ -469,14 +496,15 @@ function ProfilesSettingsSpecimen(): ReactElement {
   );
 }
 
-/** The Artifact Hub in every production state, in the drawer that holds it
- * since One Frame FR-4 — the side panel's contents in the 152 column, where
- * the plugin answers with its narrow form. */
+/** The Artifact Hub in every production state at the width the pill's sheet
+ * gives its Artifacts shelf (HN-8, PL-D3) — the stage is a container 504 wide,
+ * the shelf inside the sheet's 544, where the plugin answers with its tile
+ * form. The head's plates show the shelf itself, in the sheet. */
 function ArtifactsSpecimen(): ReactElement {
   const [state, setState] = useState<ArtifactPanelPreviewState>("empty");
   const options = ["empty", "populated", "loading", "unavailable"] as const;
   return (
-    <div className="vf-ds-side-stage">
+    <div className="vf-ds-shelf-plate">
       <div className="vf-ds-production-statebar">
         <span>Production state</span>
         <UiSegmentedControl
@@ -486,7 +514,9 @@ function ArtifactsSpecimen(): ReactElement {
           label="Artifact panel state"
         />
       </div>
-      <ArtifactsDrawer state={state} />
+      <div className="vf-ds-shelf-stage">
+        <ArtifactPanelPreview state={state} />
+      </div>
     </div>
   );
 }

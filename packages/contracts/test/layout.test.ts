@@ -29,6 +29,7 @@ describe("LAYOUT (golden vector)", () => {
     expect(LAYOUT.MESHDATA_SOCKET.at(-1)).toBe(SOCKETS.MESHDATA);
     expect(LAYOUT.TERMINAL_CONTROL_SOCKET.at(-1)).toBe(SOCKETS.TERMINAL_CONTROL);
     expect(LAYOUT.TERMINAL_FRAME_SOCKET.at(-1)).toBe(SOCKETS.TERMINAL_FRAME);
+    expect(LAYOUT.DOOR_SOCKET.at(-1)).toBe(SOCKETS.DOOR);
     expect(LAYOUT.TERMINAL_CONFIG_FILE.at(-1)).toBe(FILES.TERMINAL_CONFIG);
     // the tree hangs together: sockets live in the run dir, run files in theirs
     expect(LAYOUT.MGMT_SOCKET.slice(0, -1)).toEqual([...LAYOUT.NATIVE_RUN_DIR]);
@@ -70,6 +71,7 @@ const FORBIDDEN_RESPELLINGS = [
   '"shell.token"',
   '"mgmt.sock"',
   '"meshdata.sock"',
+  '"door.sock"',
   '"artifacts", "previews"',
   '"plugins", "installed"',
   '"fieldd", "device-id"',

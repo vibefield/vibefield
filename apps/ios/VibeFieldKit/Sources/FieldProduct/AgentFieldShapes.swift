@@ -52,6 +52,35 @@ public struct AgentFieldBlocker: Sendable, Equatable, Identifiable, Decodable {
   }
 }
 
+/// ST-D5 — a person's durable Stop, while the desktop's fieldd holds one for
+/// the run (`AgentStopState`; a Stop is not carried across a fieldd restart,
+/// ST-D8). When the run's own stop was first sent, and how far it went. The
+/// stage is an OPEN word — `sent`, `resent`, `terminating`, `heard` today — so a
+/// word this build has never heard is kept as it came, and a reader takes it as
+/// still stopping.
+public struct AgentFieldStop: Sendable, Equatable, Decodable {
+  public let sentAt: String
+  public let stage: String
+  /// How fieldd heard the run stop, on a `heard` Stop (`exit`, `status`).
+  public let heardBy: String?
+  /// A Stop fieldd will take no further: the person ends the run.
+  public let unheardAt: String?
+  public let unknownFields: [String]
+
+  public init(json: JSONValue) throws {
+    var object = try WireObject(shape: "AgentFieldStop", value: json)
+    sentAt = try object.requiredString("sentAt")
+    stage = try object.requiredString("stage")
+    heardBy = object.string("heardBy")
+    unheardAt = object.string("unheardAt")
+    unknownFields = object.unknownFields
+  }
+
+  public init(from decoder: any Decoder) throws {
+    try self.init(json: try JSONValue(from: decoder))
+  }
+}
+
 /// One agent, as the field draws it.
 public struct AgentFieldRow: Sendable, Equatable, Identifiable, Decodable {
   public let runtimeRunId: String
@@ -97,6 +126,9 @@ public struct AgentFieldRow: Sendable, Equatable, Identifiable, Decodable {
   /// what joins a History row to the card Jump to opens. The id only, never
   /// the folder (EL7 B1); absent until the agent says it.
   public let nativeSessionId: String?
+  /// ST-D5 — the person's Stop while fieldd holds one; absent otherwise, and
+  /// on a row from a daemon before ST.
+  public let stop: AgentFieldStop?
   public let unknownFields: [String]
   /// Blockers that did not read. A row with one unreadable blocker is still a
   /// row — but the count is not nothing, so it rides rather than vanishing.
@@ -145,6 +177,7 @@ public struct AgentFieldRow: Sendable, Equatable, Identifiable, Decodable {
     branch = project.string("branch")
     terminal = try object.decodeObject("terminal", AgentTerminalJoin.init(json:))
     nativeSessionId = object.string("nativeSessionId")
+    stop = try object.decodeObject("stop", AgentFieldStop.init(json:))
     unknownFields = object.unknownFields
   }
 

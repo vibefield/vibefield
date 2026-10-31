@@ -1,4 +1,4 @@
-import { type FrameView, frameViewBuilt } from "@vibefield/contracts";
+import type { FrameView } from "@vibefield/contracts";
 import {
   type MutableRefObject,
   type ReactElement,
@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useSparksNeedingYou } from "../chat/sparks-feed";
 import { emitViewKeyMarker } from "../development-console";
 import { listenForProductChord } from "../field/product-chords";
 import { historyImporting, useIndexStatus } from "../history/first-reading";
@@ -15,7 +16,7 @@ import { getHost } from "../host";
 import { Composer, type LineActs } from "./Composer";
 import type { FrameSurface } from "./frame-surface";
 import { type CoverState, coverAfter, coverAt, ViewCoverView } from "./ViewCover";
-import { type ViewKeyPress, ViewsTrackView } from "./ViewsTrack";
+import { type ViewKeyPress, type ViewsNote, ViewsTrackView } from "./ViewsTrack";
 import { requestView, useActiveView } from "./view-state";
 import { FRAME_VIEWS, viewForKey, viewKeysOf } from "./views";
 
@@ -25,19 +26,21 @@ import { FRAME_VIEWS, viewForKey, viewKeysOf } from "./views";
 // views: the cover the covered views live in, and the line above it with the
 // views track at its left end (FR-2; the line's own controller is
 // `Composer.tsx`). What it owns is only presentation — the ⌘-held light, the
-// key's dip, the Assistant's note, and which motion the cover is making —
+// key's dip, the note that a spark needs you, and which motion the cover is
+// making —
 // never the view, and never which of the frame's surfaces is open, which has
 // its own one owner (`frame-surface.ts`).
 
 /** How long ⌘ is held alone before the keys light (DESIGN.md §8): long enough
  * that ⌘C and ⌘V never set it off. */
 const HOLD_MS = 400;
-/** How long the waiting cell says "not built yet". */
-const NOTE_MS = 1400;
+/** How long the note over Chat's cell says a spark needs you (CH-D4). */
+const NOTE_MS = 2_400;
 
 export function ViewFrame({
   godview,
   history,
+  chat,
   surface,
   onSurfaceChange,
   lineActs,
@@ -47,6 +50,9 @@ export function ViewFrame({
    * once History has first been opened and kept after; `active` is whether it
    * is the view showing. */
   history?: (active: boolean) => ReactNode;
+  /** Chat's view (SP-1b), drawn once Chat has first been opened and kept
+   * after, as History's is; `active` is whether it is the view showing. */
+  chat?: (active: boolean) => ReactNode;
   /** The frame's open surface, from its one owner. */
   surface: FrameSurface | null;
   onSurfaceChange: (next: FrameSurface | null) => void;
@@ -57,13 +63,39 @@ export function ViewFrame({
   const [keys] = useState(() => viewKeysOf(getHost().platform));
   const [held, setHeld] = useState(false);
   const [press, setPress] = useState<ViewKeyPress | null>(null);
-  const [note, setNote] = useState<number | null>(null);
   const presses = useRef(0);
   const current = useRef(view);
   current.current = view;
   // AO-4b — History's cell carries the arc while History imports, heard pushed
   // (`index.status.subscribe`), whether or not History was ever opened.
   const importing = historyImporting(useIndexStatus());
+  // CH-D4 — the sparks that need you (the window's one feed, `chat/sparks-feed.ts`): Chat's cell takes the dot in
+  // another view, and a spark that STARTS to need you there says so over the cell, once. What needed you before
+  // the first reading is no news; the dot says it.
+  const needing = useSparksNeedingYou();
+  const [note, setNote] = useState<ViewsNote | null>(null);
+  const notes = useRef(0);
+  const seen = useRef<ReadonlySet<string> | null>(null);
+  useEffect(() => {
+    if (needing === null) return;
+    const before = seen.current;
+    seen.current = new Set(needing.map((entry) => entry.spark.id));
+    if (before === null || current.current === "assistant") return;
+    const fresh = needing.find((entry) => !before.has(entry.spark.id));
+    if (fresh === undefined) return;
+    notes.current += 1;
+    setNote({
+      seq: notes.current,
+      name: fresh.spark.name,
+      seed: fresh.spark.face.seed,
+      status: fresh.status,
+    });
+  }, [needing]);
+  useEffect(() => {
+    if (note === null) return;
+    const timer = window.setTimeout(() => setNote(null), NOTE_MS);
+    return () => window.clearTimeout(timer);
+  }, [note]);
 
   // The cover's motion is decided when the view changes and KEPT until the
   // next change, so an unrelated render mid-fade (a dip, the ⌘ light) can never
@@ -80,20 +112,16 @@ export function ViewFrame({
   // so ⌘3 out and back in keeps its scroll, its selection and its open stream.
   const [historyOpened, setHistoryOpened] = useState(view === "history");
   if (view === "history" && !historyOpened) setHistoryOpened(true);
+  // Chat's view (SP-1b) mounts the same way: on its first open, and kept.
+  const [chatOpened, setChatOpened] = useState(view === "assistant");
+  if (view === "assistant" && !chatOpened) setChatOpened(true);
 
-  /** A view was chosen — by its key or by its cell. The waiting view says so
-   * and nothing moves (FC-D2); any other is asked of the owner. Only a key
-   * dips the thumb (the button is the key) and tells the probe what it did. */
+  /** A view was chosen — by its key or by its cell — and is asked of the
+   * owner. Only a key dips the thumb (the button is the key) and tells the
+   * probe what it did. */
   const choose = useCallback((asked: FrameView, fromKey: boolean): void => {
     const from = current.current;
     const cell = FRAME_VIEWS.find((entry) => entry.view === asked);
-    if (!frameViewBuilt(asked)) {
-      presses.current += 1;
-      setNote(presses.current);
-      if (fromKey && cell)
-        emitViewKeyMarker({ key: cell.digit, view: asked, from, outcome: "waits" });
-      return;
-    }
     const moved = asked !== from;
     if (fromKey) {
       presses.current += 1;
@@ -189,12 +217,6 @@ export function ViewFrame({
     };
   }, [keys]);
 
-  useEffect(() => {
-    if (note === null) return;
-    const timer = window.setTimeout(() => setNote(null), NOTE_MS);
-    return () => window.clearTimeout(timer);
-  }, [note]);
-
   const select = useCallback((asked: FrameView) => choose(asked, false), [choose]);
 
   return (
@@ -205,6 +227,7 @@ export function ViewFrame({
         motion={cover.motion}
         godview={godview}
         history={historyOpened ? history?.(view === "history") : null}
+        chat={chatOpened ? chat?.(view === "assistant") : null}
       />
       <Composer
         view={view}
@@ -218,9 +241,10 @@ export function ViewFrame({
             keys={keys}
             held={held}
             press={press}
-            note={note}
             onSelect={select}
             importing={importing}
+            needs={view !== "assistant" && needing !== null && needing.length > 0}
+            note={view === "assistant" ? null : note}
           />
         }
       />

@@ -2,34 +2,59 @@ import { resolveTheme, type ThemePreference } from "@vibefield/contracts";
 import { SegmentedControl } from "@vibefield/design-kit/primitives";
 import { type ReactElement, useState } from "react";
 import { MeMenuView } from "../../account/MeMenu";
-import { roundButtonCls } from "../../field/theme-constants";
 import { ComposerLineView } from "../../frame/ComposerLine";
-import type { FrameSurface } from "../../frame/frame-surface";
+import { type FrameSurface, sheetShelf } from "../../frame/frame-surface";
+import { SNAPSHOT_NO_DOOR } from "../../frame/line-model";
 import { ViewsTrackView } from "../../frame/ViewsTrack";
-import { EdgeTrayView } from "../../hud/edge-tray/EdgeTrayView";
 import {
   FIXTURE_ME,
   FIXTURE_ME_OFFLINE,
   FIXTURE_OTHERS,
   FIXTURE_OTHERS_WAITING,
 } from "../account-fixtures";
-import { Icon, Section, Specimen } from "../catalog-ui";
+import { Section, Specimen } from "../catalog-ui";
 
 const ME_STATES = ["Three users", "Waiting", "One user · offline"] as const;
 type MeState = (typeof ME_STATES)[number];
 
-const TRAY_STATES = ["At rest", "Open", "Pinned", "Empty", "No shell"] as const;
-type TrayState = (typeof TRAY_STATES)[number];
+/** AU-2 — the update row's states, in the page's groups (the fixtures'). */
+const UPDATE_GROUP_OPTIONS: readonly { id: UpdateCornerGroup; label: string }[] = [
+  { id: "path", label: "The path" },
+  { id: "edges", label: "Choices · line 3" },
+  { id: "held", label: "Held" },
+  { id: "answers", label: "A check's answers" },
+  { id: "acts", label: "Restart · Download" },
+];
 
-import { ComposerLinePlate, LINE_STATES, SendFlightPlate } from "../ComposerLinePreview";
+import {
+  CARD_FIXTURES,
+  CARDS_STATES,
+  CardFacesPlate,
+  CardsFromPlate,
+  CardsPlate,
+  COPY_FIXTURES,
+  FROM_FIXTURES,
+  FROM_REACHED,
+  WAITING_FIXTURES,
+} from "../CardsPreview";
+import { ChatSpecimen } from "../ChatPreview";
+import { ComposerLinePlate, LINE_STATES } from "../ComposerLinePreview";
 import { AppearancePlate, CORNER_PICKS, CornerPlate } from "../CornerPreview";
 import { DeskPreview } from "../DeskPreview";
-import { ArtifactsDrawer, EDGE_STATES, EdgesPlate, TRAY_TILES } from "../EdgesPreview";
 import { HEAD_STATES, HeadLive, HeadPlate } from "../HeadPreview";
+import { NewSparkSpecimen } from "../NewSparkPreview";
+import { PACKAGE_CIRCLE_STATES, PackageCirclePlate } from "../PackageCirclePreview";
 import { PEERS_STATES, PeersPlate } from "../PeersPreview";
 import { PEGBOARD_STATES, PegboardPlate, StageBoard } from "../PegboardPreview";
 import { BAR_STATES, HAND_STATES, HandPlate, SelectionBarPlate } from "../SelectionBarPreview";
 import { SwitchPreview } from "../SwitchPreview";
+import { UpdateFacePlate, UpdateMenuPlate } from "../UpdateCornerPreview";
+import {
+  UPDATE_CORNER_GROUPS,
+  UPDATE_FACE_STATES,
+  type UpdateCornerGroup,
+  type UpdateCornerState,
+} from "../updates-settings-fixtures";
 import { FRAME_STATES, ViewFramePreview, ViewsTrackSpecimen } from "../ViewFramePreview";
 
 export function ChromeSection({
@@ -45,15 +70,6 @@ export function ChromeSection({
   const trayOpen = surface === "objects";
   const [meOpen, setMeOpen] = useState(false);
   const [meSpecimenOpen, setMeSpecimenOpen] = useState(true);
-  const [trayState, setTrayState] = useState<TrayState>("Pinned");
-  const [trayBumped, setTrayBumped] = useState(false);
-  const trayOpenState = trayState !== "At rest";
-  const trayTiles =
-    trayState === "Empty"
-      ? []
-      : trayState === "No shell"
-        ? TRAY_TILES.map((tile) => ({ ...tile, imageUrl: null }))
-        : TRAY_TILES;
   const [meState, setMeState] = useState<MeState>("Three users");
   // The playground's Theme drives this page's own theme (the app's stand-in):
   // Auto reads the OS's query, as main's owner reads nativeTheme.
@@ -66,6 +82,13 @@ export function ChromeSection({
     if ((resolveTheme(pick, osDark) === "dark") !== dark) onToggleTheme();
   };
   const playgroundTheme = { preference: themePick, resolved: dark ? "dark" : "light" } as const;
+  const [updateGroup, setUpdateGroup] = useState<UpdateCornerGroup>("path");
+  const [updateState, setUpdateState] = useState<UpdateCornerState>("current");
+  const updateStates: readonly UpdateCornerState[] = UPDATE_CORNER_GROUPS[updateGroup];
+  const chooseUpdateGroup = (group: UpdateCornerGroup): void => {
+    setUpdateGroup(group);
+    setUpdateState(UPDATE_CORNER_GROUPS[group][0]);
+  };
 
   const changeSurface = (next: FrameSurface | null): void => {
     setSurface(next);
@@ -83,7 +106,7 @@ export function ChromeSection({
       <Specimen title="Field chrome playground" source="frame/* · hud/*" bleed>
         <div
           className="vf-ds-field-stage"
-          data-docs-open={surface === "fields"}
+          data-docs-open={sheetShelf(surface) !== null}
           data-board-open={trayOpen}
         >
           <DeskPreview
@@ -97,7 +120,9 @@ export function ChromeSection({
           <div className="vf-ds-stage-card card-b" />
           {/* The head on its real controller (One Frame FR-3), in a folder —
               the readout alone at its right since FR-4 (the theme went into
-              the Me menu, Artifacts behind the right notch). */}
+              the Me menu), and Artifacts in the pill since HN-8: its package
+              grows the sheet on that shelf, which waits here, with no plugin
+              host to bind the Hub. */}
           <HeadLive surface={surface} onSurfaceChange={changeSurface} />
 
           {/* Objects: the board risen behind the line (DK-13) — the desk's own drawer in the
@@ -106,12 +131,14 @@ export function ChromeSection({
           <StageBoard open={trayOpen} />
 
           {/* The line is the board's door (One Frame FR-2, DK-13): its create
-              raises the pegboard behind it, and its ⊕ is what turns to ✕. */}
+              raises the pegboard behind it, and its ⊕ is what turns to ✕. A
+              catalog has no capture door, so its snapshot waits and says so. */}
           <ComposerLineView
             view="canvas"
             keys="mac"
             track={<ViewsTrackView view="canvas" keys="mac" />}
             objectsOpen={trayOpen}
+            snapshotWaits={SNAPSHOT_NO_DOOR}
             onCreate={() => changeSurface(trayOpen ? null : "objects")}
           />
 
@@ -135,16 +162,16 @@ export function ChromeSection({
           </div>
         </div>
         <p className="vf-ds-stage-caption">
-          The head — the field's name pill with its crumbs, which grows the fields explorer, and the
-          zoom readout, which grows its menu — the line's Objects and your face are interactive.
-          Open one to inspect its motion and the rule that only one of them is open at a time. Your
-          menu's Theme sets this page's theme, as it sets the app's.
+          The head — the field's name pill with its crumbs, whose chevron and package grow its sheet
+          on Fields or Artifacts, and the zoom readout, which grows its menu — the line's Objects
+          and your face are interactive. Open one to inspect its motion and the rule that only one
+          of them is open at a time. Your menu's Theme sets this page's theme, as it sets the app's.
         </p>
       </Specimen>
 
       <Specimen
-        title="The head — the name pill, the zoom readout, the palette"
-        source="frame/HeadView.tsx · hud/CommandPalette.tsx · DESIGN.md §8, §5, §10"
+        title="The head — the name pill, its sheet's two shelves, the zoom readout, the palette"
+        source="frame/HeadView.tsx · hud/CommandPalette.tsx · DESIGN.md §8, §5, §6, §10"
         bleed
       >
         <div className="vf-ds-head-plates">
@@ -154,11 +181,13 @@ export function ChromeSection({
           <HeadPlate state="zoom" keys="other" />
         </div>
         <p className="vf-ds-stage-caption">
-          Every state the page's head plates draw — the field's top as one name, the crumbs folded
-          into the pill inside a folder, a long path in a narrow window dropping whole leading
-          names, renaming in place, the fields explorer grown from the pill, the zoom's solid menu
-          with its keys, and the palette under the head — then the zoom's keys as Windows says them,
-          in this page's theme. No keycaps and no plus in the head.
+          Every state the page's head plates draw — the field's top as one name, the package after
+          its rule and with its dot while a source is unavailable, the crumbs folded into the pill
+          inside a folder, a long path in a narrow window dropping whole leading names, renaming in
+          place, the sheet grown from the pill on Fields and on Artifacts (the Hub's tiles, the
+          plugin off, the Hub opening), the same sheet under a cover grown from the package circle,
+          the zoom's solid menu with its keys, and the palette under the head — then the zoom's keys
+          as Windows says them, in this page's theme. No keycaps and no plus in the head.
         </p>
       </Specimen>
 
@@ -169,10 +198,11 @@ export function ChromeSection({
       >
         <ViewFramePreview dark={dark} />
         <p className="vf-ds-stage-caption">
-          The canvas is the ground floor; Godview and History are one cover over it, each on its own
-          ground at the covers' 72% glass, their content ending 88 above the foot. The track stands
-          above every view at the line's left end, each key printed under its glyph. Pick a state,
-          or click a cell: the cover rises, swaps in place and lowers, and only the thumb travels.
+          The canvas is the ground floor; Godview, History and Chat are one cover over it, each on
+          its own ground at the covers' 72% glass, their content ending 88 above the foot. The track
+          stands above every view at the line's left end, each key printed under its glyph. Pick a
+          state, or click a cell: the cover rises, swaps in place and lowers, and only the thumb
+          travels.
         </p>
         <div className="vf-ds-views-plates">
           {FRAME_STATES.map((state) => (
@@ -181,13 +211,68 @@ export function ChromeSection({
           <ViewsTrackSpecimen state="rest" keys="other" />
         </div>
         <p className="vf-ds-stage-caption">
-          Every state the page's plates show for the track — at rest, ⌘ held, Godview, History, ⌘4's
-          note, and the keys as Windows prints them — in this page's theme.
+          Every state the page's plates show for the track — at rest, ⌘ held, Godview, History,
+          importing, Chat, a spark that needs you (the cell's dot and the note over it), and the
+          keys as Windows prints them — in this page's theme.
         </p>
       </Specimen>
 
       <Specimen
-        title="The line — [views] create │ draft mic send"
+        title="Chat — the sparks, newest activity first"
+        source="chat/ChatPanelView.tsx · DESIGN.md §8 “Chat's list”, §2.10"
+        bleed
+      >
+        <ChatSpecimen />
+        <p className="vf-ds-stage-caption">
+          The fourth view (SP-1b): the sparks fieldd keeps, each a face, a name and its status word;
+          Asking you, Needs your OK and Stuck in the attention ink with the orange dot. Until the
+          thread comes (SP-1d) its column holds the chosen spark's head and one honest line with its
+          one act. Fixture sparks and rows, read by the product's own reading.
+        </p>
+      </Specimen>
+
+      <Specimen
+        title="The New spark sheet — a name, an agent, and the face it is dealt"
+        source="chat/NewSparkSheetView.tsx · DESIGN.md §8 “The New spark sheet”, §2.10"
+        bleed
+      >
+        <NewSparkSpecimen />
+        <p className="vf-ds-stage-caption">
+          Chat's create (SP-1c): a suggested star name, ↻ for another face, the agent it thinks with
+          and its menu, the profiles once there is more than This Mac, and Create. Live, the
+          product's own sheet over fixture doors (Create hatches after a beat); still, the agent
+          menu, the profiles and a name another spark holds.
+        </p>
+      </Specimen>
+
+      <Specimen
+        title="The package circle — Artifacts under a cover"
+        source="frame/PackageCircleView.tsx · DESIGN.md §8, §10, §6"
+        bleed
+      >
+        <div className="vf-ds-package-plates">
+          {PACKAGE_CIRCLE_STATES.map((state) => (
+            <PackageCirclePlate
+              key={`${state}-${dark ? "dark" : "light"}`}
+              state={state}
+              dark={dark}
+            />
+          ))}
+        </div>
+        <p className="vf-ds-stage-caption">
+          Under a cover the pill is the desk's and hides with it, and Artifacts' door stands alone
+          at the head's left: the package circle, 40 on the line's glass at x 96, search's mirror.
+          Over Godview the Stories row keeps one head gap from it, a side of 148; over History its
+          dot says an artifact's source is unavailable, and its tooltip which — "Artifacts —
+          vibe-field's source is unavailable"; while the terminals are maximized it stands at the
+          left end of their title bar, 30 × 24 in the deck's ink, as search stands at the right, its
+          tooltip saying how many — "Artifacts — 2 sources unavailable". It grows the pill's sheet
+          on its Artifacts shelf, which the head's plates draw.
+        </p>
+      </Specimen>
+
+      <Specimen
+        title="The line — [views] snapshot create"
         source="frame/ComposerLine.tsx · DESIGN.md §8, §5, §10"
         bleed
       >
@@ -196,17 +281,16 @@ export function ChromeSection({
             <ComposerLinePlate key={state} state={state} />
           ))}
           <ComposerLinePlate state="gv" keys="other" />
-          <SendFlightPlate />
         </div>
         <p className="vf-ds-stage-caption">
-          Every state the page's §03 plates draw for the line — at rest, typing with a chip in the
-          sentence, @ open, aimed, Objects out, Godview's New terminal, History's Resume waiting —
-          and Godview's keys as Windows prints them, in this page's theme. One plus: Canvas's create
-          — faint while an object is in hand, "Put it down first" (R14). Send to… (DK-14): a note's
-          chip in its paper and ink with the @ typed after it, a kind's name, several, a missing
-          face's type, an aimed draft that took one with no @ — and the chip in flight to the caret.
-          A failure (D6): a paste too large for its pane's terminal, said over send in the line's
-          own words, its size and how much of it one paste carries.
+          The line, 300 wide at 76 from the left (LN-D1): the views track, the snapshot and the
+          view's one act. The snapshot is a ghost until the pointer comes, filled while the tool is
+          up, and faint where there is no capture door. The create: Canvas's Objects — faint while
+          an object is in hand, "Put it down first" (R14) — Godview's New terminal, History's New
+          terminal in the project the room shows (HN-7); Godview's keys as Windows prints them last.
+          The note at its two places: a new terminal said over the create, and a paste too large for
+          its pane's terminal (D6) said from the line's left edge, its size and how much of it one
+          paste carries.
         </p>
       </Specimen>
 
@@ -255,78 +339,44 @@ export function ChromeSection({
       </Specimen>
 
       <Specimen
-        title="The edges — both notches in every view, slivers over a covered view"
-        source="hud/edge-tray/* · DESIGN.md §8, §10, §6"
+        title="The hand — every copy a card at the foot"
+        source="frame/cards/* · DESIGN.md §8, §5, §6"
         bleed
       >
-        <div className="vf-ds-edges-plates">
-          {EDGE_STATES.map((state) => (
-            <EdgesPlate key={`${state}-${dark ? "dark" : "light"}`} state={state} dark={dark} />
+        <div className="vf-ds-cards-plates">
+          {CARDS_STATES.map((state) => (
+            <CardsPlate key={`${state}-${dark ? "dark" : "light"}`} state={state} />
+          ))}
+          {FROM_REACHED.map((id) => (
+            <CardsFromPlate key={`${id}-${dark ? "dark" : "light"}`} reach={id} />
           ))}
         </div>
         <p className="vf-ds-stage-caption">
-          The page's edges plates: the clipboard's notch on the left and Artifacts' on the right,
-          whole on Canvas; over a covered view each rests as its 7 × 96 sliver in the 8 px the view
-          keeps clear — point at one and it grows into the notch (240 ms) — the notch it grows into
-          over History; the clipboard's drawer open over Godview; and Artifacts' drawer open with
-          the Artifact Hub in its 152 column.
+          The shipping fan over fixture cards, placed by the product's own model: at rest, the top
+          68 of each card fanned about a point below the window, clear of the line at the left; the
+          reach on the third card — up whole and straight, its × inside its top right and where it
+          came from above it; raised (⇧⌘V), every card up and straight, the keyboard's card ringed;
+          a card picked up, at reading size in the middle over the window out of focus, the bar
+          under the head saying where it came from, with Remove and Done; a card carried out of the
+          hand over a pane, its place kept in the fan, the pane ringed and saying "Paste into
+          vibe-field" over the card; and where cards came from, each reached in turn — a paste with
+          no caret by its act alone, a copy made in Settings by the view under it, and one History's
+          room made by History alone.
         </p>
-      </Specimen>
-
-      <Specimen
-        title="Edge trays — the notch and its drawer"
-        source="hud/edge-tray/* · DESIGN.md §8"
-        bleed
-      >
-        <div className="vf-ds-edge-controls">
-          <SegmentedControl
-            options={TRAY_STATES}
-            value={trayState}
-            onChange={setTrayState}
-            label="Tray state"
-          />
-          <button
-            type="button"
-            className={roundButtonCls(false)}
-            aria-label="Play the fly-in's bump"
-            title="Bump the notch — what a landing still does"
-            onClick={() => {
-              setTrayBumped(false);
-              window.setTimeout(() => setTrayBumped(true), 0);
-              window.setTimeout(() => setTrayBumped(false), 460);
-            }}
-          >
-            <Icon name="sparkles" />
-          </button>
-        </div>
-        <div className="vf-ds-edge-stage">
-          <EdgeTrayView
-            side="left"
-            label="Clipboard"
-            open={trayOpenState}
-            pinned={trayState === "Pinned" || trayState === "Empty"}
-            count={trayTiles.length}
-            items={trayTiles}
-            filter=""
-            snap={
-              trayState === "No shell"
-                ? { state: "unavailable", word: "no capture here" }
-                : { state: "ready", word: "snap" }
-            }
-            bumped={trayBumped}
-            hint="Clipboard  ⇧⌘V"
-            emptyWord="nothing here yet — take a screenshot and it lands here"
-            onNubClick={() => setTrayState((s) => (s === "Pinned" ? "At rest" : "Pinned"))}
-            onPointerEnter={() => undefined}
-            onPointerLeave={() => undefined}
-            onSnap={() => undefined}
-          />
-          <ArtifactsDrawer open={false} />
-        </div>
+        <CardFacesPlate cards={CARD_FIXTURES} />
+        <CardFacesPlate cards={CARD_FIXTURES} night />
+        <CardFacesPlate cards={WAITING_FIXTURES} />
+        <CardFacesPlate cards={COPY_FIXTURES} />
+        <CardFacesPlate cards={FROM_FIXTURES} />
         <p className="vf-ds-stage-caption">
-          The shipping tray view with fixture stills: the notch (N1, 26 × 116) and the drawer (P4,
-          152 wide) are one path in the theme's solid chrome, the drawer's hairline gapped under the
-          notch. The right edge is Artifacts' twin at rest — the `package` notch, no count.
+          One stock, six faces (HN-D1), twice their size: text, a file, an agent (the one dark card,
+          its project's dot before its project), a terminal's output, a message and a picture — each
+          its glyph in two corners and its name first; by this page's light, then by the Moon's
+          (86%, its shadow deeper); a drag from another app before it is let go, saying only its
+          kind; what the desk's Copy deals — one note's words as a text card, two objects as a
+          picture called "2 objects"; and what another app, Settings and History deal — a file that
+          is not words, its kind and size; a paste's words; a device's name copied in Settings; a
+          path copied in History.
         </p>
       </Specimen>
 
@@ -364,12 +414,13 @@ export function ChromeSection({
         </div>
         <p className="vf-ds-stage-caption">
           The desk's object chrome (DK-11): the bar on the line's glass, 10 above the selection's
-          brackets (or 10 below under the safe top) — Send to… · rule · the kind's acts · Duplicate
-          · Tape it down · More · rule · Delete. A kind's own drawing is the bar's one path renderer
-          (the clock's stopwatch); an act with no glyph is its label; a name the set lacks is the
+          brackets (or 10 below under the safe top) — Copy · rule · the kind's acts · Duplicate ·
+          Tape it down · More · rule · Delete. Copy (HN-D3, ⌘C) deals the selection into the hand as
+          one card, one object or several. A kind's own drawing is the bar's one path renderer (the
+          clock's stopwatch); an act with no glyph is its label; a name the set lacks is the
           `missing` mark. Taped, Lift the tape and no Duplicate; a missing face names its type and
           word where the acts would stand. More grows the same element into its solid menu — up, or
-          down near the top — nearest first, the eyebrow at the far end. Send to… waits for DK-14.
+          down near the top — nearest first, the eyebrow at the far end.
         </p>
       </Specimen>
 
@@ -386,10 +437,10 @@ export function ChromeSection({
         <p className="vf-ds-stage-caption">
           An object picked up (DK-12): the same element travels into the hand — 560 ms on the island
           curve, its contents cross-fading over the last 120 — and stands under the head at y 64,
-          the held object's reading fit keeping 116 above it and 100 below. Send to… · rule · the
-          kind's tools in their declared order (a 6 gap where the run changes between pages, inks
-          and tools) · the readout · rule · Done. A pen or a marker is a dot in its own ink, the one
-          in hand ringed; a mode without a swatch (the eraser, the calendar's pen) is the inverted
+          the held object's reading fit keeping 116 above it and 100 below. Copy · rule · the kind's
+          tools in their declared order (a 6 gap where the run changes between pages, inks and
+          tools) · the readout · rule · Done. A pen or a marker is a dot in its own ink, the one in
+          hand ringed; a mode without a swatch (the eraser, the calendar's pen) is the inverted
           solid while in hand; the clock draws its own five through the bar's one path renderer.
         </p>
       </Specimen>
@@ -429,6 +480,44 @@ export function ChromeSection({
         <p className="vf-ds-stage-caption">
           Your face, where the Settings gear was. The menu grows above it on the island curve, and
           your face never moves — click it again to fold the menu back.
+        </p>
+      </Specimen>
+
+      <Specimen
+        title="Me menu — the update: the dot and the always-row"
+        source="account/MeMenu.tsx · panels/update-words.ts · DESIGN.md §8"
+        bleed
+      >
+        <div className="vf-ds-update-faces">
+          {UPDATE_FACE_STATES.map((state) => (
+            <UpdateFacePlate key={state} state={state} />
+          ))}
+        </div>
+        <div className="vf-ds-update-controls">
+          <SegmentedControl
+            options={UPDATE_GROUP_OPTIONS}
+            value={updateGroup}
+            onChange={chooseUpdateGroup}
+            label="Update row group"
+          />
+          <SegmentedControl
+            options={updateStates}
+            value={updateState}
+            onChange={setUpdateState}
+            label="Update row state"
+            size="small"
+          />
+        </div>
+        <UpdateMenuPlate
+          key={`${updateState}-${dark ? "dark" : "light"}`}
+          state={updateState}
+          dark={dark}
+        />
+        <p className="vf-ds-stage-caption">
+          AU-2: the menu always carries one row about the app, nearest your face — it checks,
+          downloads and restarts in place, and a restart that ends sessions grows the panel to 320
+          into main's own question, Cancel first. While an install waits on you, a cyan dot sits
+          beside your face: it pops in once, never pulses, and gives way to a waiting count.
         </p>
       </Specimen>
 

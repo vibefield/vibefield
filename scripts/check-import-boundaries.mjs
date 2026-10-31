@@ -245,12 +245,19 @@ const RULES = [
     // hatch for reaching the separate test-only build artifact (dist/testing/*,
     // which the production bundle never contains), so it is exempt FOR R8 ONLY —
     // R1/R5/R9 still catch dynamic imports.
+    // Item 116 (2026-10-31, VF-PM's ruling): `apps/desktop/packaging/` is out of scope. It holds node-run build and
+    // smoke scripts, never app source: the archive is the stage's allowlist (`apps/desktop/packaging/electron-builder.yml`'s
+    // `files:` names package.json, shell/main, shell/preload and shell/renderer alone, never packaging/), and the same list
+    // refuses `!**/testing/**` a second time. So a packaging script reading a package's testing module (the smoke census,
+    // `packages/electron-shell/src/testing/smoke-census.mjs`, which the launcher's row re-exports) puts nothing in the app,
+    // and R8's reason cannot arise there.
     staticOnly: true,
     description:
-      "no production static import of testing/spike- modules under apps/desktop, electron-shell, field-app",
+      "no production static import of testing/spike- modules under apps/desktop (but its node-run packaging/), electron-shell, field-app",
     applies: (p) =>
       SOURCE_EXT.test(p) &&
       underAny(p, ["apps/desktop", "packages/electron-shell", "packages/field-app"]) &&
+      !under(p, "apps/desktop/packaging") &&
       !isTestPath(p) &&
       !isSpikePath(p),
     importTest: importsTestingOrSpike,
@@ -597,6 +604,37 @@ const RULES = [
         s.startsWith("../")
       ),
   },
+  {
+    id: "R29",
+    // CP-1b (the compose plane, version 2; CO): fieldd's compose code composes fieldd's own services (the runtime's
+    // runs, the index, the projects, the audit) and reaches past none of them: no puppeteer package and no rosetta
+    // package, so a spark's verbs cannot branch on a vendor (AR-L1) or read a vendor's transcript. R20 already keeps
+    // the adapters out of all of fieldd; this keeps even the runtime door out of compose/. The flow host (CP-4) gets
+    // its own rule. MT-0 (2026-10-30, the tool plane; thinking-tool-plane.md §3, §13): compose/ became tool-plane/, so
+    // the rule is re-aimed at the whole plane, every room in it.
+    enforce: true,
+    description:
+      "packages/fieldd/src/tool-plane imports no @vibefield/puppeteer-* and no @vibefield/rosetta-* package: it composes fieldd's own services",
+    applies: (p) => SOURCE_EXT.test(p) && under(p, "packages/fieldd/src/tool-plane"),
+    importTest: (s) => s.startsWith("@vibefield/puppeteer-") || s.startsWith("@vibefield/rosetta-"),
+  },
+  {
+    id: "R30",
+    // MT-0 (the tool plane, thinking-tool-plane.md §13; MT-L5: policy in fieldd, mechanism where the kind lives): a
+    // room is an adapter over fieldd's own services. Pixels and input are main's, reached through internal shell.*
+    // doors, and a plugin acts through its declared methods, so no room imports Electron, a plugin's package or the
+    // window's code. R10 keeps the SDK a door, never a way in.
+    enforce: true,
+    description:
+      "packages/fieldd/src/tool-plane/rooms imports no electron, no @vibefield/plugin-* or plugins/ package, and no field-app or electron-shell",
+    applies: (p) => SOURCE_EXT.test(p) && under(p, "packages/fieldd/src/tool-plane/rooms"),
+    importTest: (s) =>
+      importsModule(s, "electron") ||
+      s.startsWith("@vibefield/plugin-") ||
+      importsModule(s, "@vibefield/field-app") ||
+      importsModule(s, "@vibefield/electron-shell") ||
+      /(?:^|\/)plugins\//.test(s),
+  },
 ];
 
 // P2 (R26) — the Peek's watch-only pane, by its directory or its module names.
@@ -664,6 +702,25 @@ const RETIRED_MODULE_NAMES = new Set([
   // the explorer's silhouettes (row 12)
   "doc-thumbnail-scene",
   "doc-thumbnail-worker",
+  // HN (Cards in Hand, 2026-10-29): the clipboard tray's store and fly-in (into the hand,
+  // HN-1), @'s list and the line's send (into Chat's thread and a card's play, LN-D3), Send
+  // to…'s face (into the desk's Copy, HN-D3), and the smokes' rows of the send and Send to…
+  // — `frame/draft` and `desk/send/send-to` are generic names, held by their paths below
+  "clipboard-store",
+  "tray-flight",
+  "at-list",
+  "line-send",
+  "send-face",
+  "smoke-line-send",
+  "smoke-send-to",
+  // HN-8 (Artifacts in the head, 2026-10-30): the edge tray — its controllers and view, its
+  // notch's path and its sheet — and the catalog's plates of it, retired with the edges
+  // (PL-D1…PL-D3: Artifacts into the pill's sheet and the covered views' circle)
+  "EdgeTray",
+  "EdgeTrayView",
+  "notch-path",
+  "edge-tray",
+  "EdgesPreview",
 ]);
 // A deleted DIRECTORY or a generic name, held by its path where it lived.
 function retiredRelative(spec, rel) {
@@ -676,6 +733,11 @@ function retiredRelative(spec, rel) {
     if (/(?:^|\/)terminal\/(?:mirror|widget)(?:\/|$)/.test(spec)) return true;
     if (under(rel, "packages/field-app/src/plugin-host") && /^\.\/faces(?:\.tsx?)?$/.test(spec))
       return true;
+    // HN: the line's draft (LN-D3) and Send to…'s directory (HN-D3)
+    if (/(?:^|\/)frame\/draft(?:\.tsx?)?$/.test(spec)) return true;
+    if (under(rel, "packages/field-app/src/frame") && /^\.\/draft(?:\.tsx?)?$/.test(spec))
+      return true;
+    if (/(?:^|\/)send\/send-(?:to|face)(?:\.tsx?)?$/.test(spec)) return true;
   }
   // design-kit: the `/gl` entry, the preview silhouettes and the card gradient (row 6)
   if (under(rel, "packages/design-kit")) {
@@ -991,6 +1053,12 @@ function runSelfTest() {
       file: "packages/field-app/src/imports-testing.ts",
       body: 'import { M } from "../testing/mock";\n',
     },
+    // item 116: apps/desktop outside its packaging/ is still R8's, so reading a package's testing module there fires.
+    {
+      id: "R8",
+      file: "apps/desktop/imports-testing.mjs",
+      body: 'import { listRunProcesses } from "../../packages/electron-shell/src/testing/smoke-census.mjs";\n',
+    },
     { id: "R9", file: "packages/field-app/src/uses-ws.ts", body: 'import WebSocket from "ws";\n' },
     // R10 covers BOTH plugin roots (plugins/ and examples/plugins/).
     {
@@ -1169,6 +1237,45 @@ function runSelfTest() {
       file: "packages/field-app/src/uses-note.ts",
       body: 'import { notePlugin } from "@vibefield/plugin-note";\n',
     },
+    // HN (R25) — Cards in Hand's deletions imported again, one road each: the line's draft
+    // from its own directory and from another, @'s list, Send to…'s act by its path, the
+    // clipboard tray's store from a test, and a smoke's Send to… rows.
+    {
+      id: "R25",
+      file: "packages/field-app/src/frame/uses-draft.tsx",
+      body: 'import { normalizeDraft } from "./draft";\nexport const d = normalizeDraft;\n',
+    },
+    {
+      id: "R25",
+      file: "packages/field-app/src/field/desk/uses-chip.ts",
+      body: 'import { chipMessage } from "../../frame/draft";\nexport const c = chipMessage;\n',
+    },
+    {
+      id: "R25",
+      file: "packages/field-app/src/design-system/uses-at-list.tsx",
+      body: 'import { atList } from "../frame/at-list";\nexport const a = atList;\n',
+    },
+    {
+      id: "R25",
+      file: "packages/field-app/src/field/desk/bar/uses-send-to.ts",
+      body: 'import { sendSelection } from "../send/send-to";\nexport const s = sendSelection;\n',
+    },
+    {
+      id: "R25",
+      file: "packages/field-app/test/uses-clipboard-store.test.tsx",
+      body: 'import { ClipboardStore } from "../src/hud/edge-tray/clipboard-store";\nexport const t = ClipboardStore;\n',
+    },
+    {
+      id: "R25",
+      file: "packages/electron-shell/src/testing/uses-send-rows.ts",
+      body: 'import { sendToRows } from "./smoke-send-to";\nexport const r = sendToRows;\n',
+    },
+    // HN-8 (R25) — the edge tray imported again: its view from the frame.
+    {
+      id: "R25",
+      file: "packages/field-app/src/frame/uses-edge-tray.tsx",
+      body: 'import { EdgeTrayView } from "../hud/edge-tray/EdgeTrayView";\nexport const e = EdgeTrayView;\n',
+    },
     // P2 (R26) — the Peek's watch-only pane, reached from anywhere but the Peek: the desk,
     // Godview's deck, History, the canvas — by its directory or its module's name.
     {
@@ -1206,8 +1313,33 @@ function runSelfTest() {
       file: "packages/trust/src/uses-kit.ts",
       body: 'import { canonicalJson } from "@vibefield/plugin-build";\nexport const c = canonicalJson;\n',
     },
+    {
+      id: "R29",
+      file: "packages/fieldd/src/tool-plane/uses-runtime.ts",
+      body: 'import { createRuntime } from "@vibefield/puppeteer-runtime";\nexport const r = createRuntime;\n',
+    },
+    {
+      id: "R29",
+      file: "packages/fieldd/src/tool-plane/rooms/compose/uses-rosetta.ts",
+      body: 'import { RosettaClient } from "@vibefield/rosetta-protocol";\nexport const c = RosettaClient;\n',
+    },
+    {
+      id: "R30",
+      file: "packages/fieldd/src/tool-plane/rooms/compose/uses-electron.ts",
+      body: 'import { BrowserWindow } from "electron";\nexport const w = BrowserWindow;\n',
+    },
+    {
+      id: "R30",
+      file: "packages/fieldd/src/tool-plane/rooms/pages/uses-plugin.ts",
+      body: 'import { definePlugin } from "@vibefield/plugin-sdk";\nexport const p = definePlugin;\n',
+    },
   ];
   const cleans = [
+    // MT-0: a room's own imports (contracts, fieldd's services) pass R29 and R30, so neither overfires on the plane.
+    {
+      file: "packages/fieldd/src/tool-plane/rooms/compose/clean-room.ts",
+      body: 'import type { ComposeProject } from "@vibefield/contracts";\nimport { RpcCallError } from "../../../native-link";\nexport const ok: ComposeProject[] = [];\nexport const e = RpcCallError;\n',
+    },
     // react + a DECLARED entry import + plain code: proves R1/R2/R9 don't
     // overfire and R5 accepts what the manifest publishes.
     //
@@ -1252,6 +1384,12 @@ function runSelfTest() {
     {
       file: "packages/electron-shell/src/main/dynamic-testing.ts",
       body: 'const t = () => import("../testing/smoke.cjs");\n',
+    },
+    // item 116: a node-run packaging script may statically read a package's testing module (the launcher's row
+    // re-exports the smoke census); packaging/ never enters the archive.
+    {
+      file: "apps/desktop/packaging/reads-the-census.mjs",
+      body: 'import { listRunProcesses } from "../../../packages/electron-shell/src/testing/smoke-census.mjs";\nexport const l = listRunProcesses;\n',
     },
     // R7 comment stripping: a port named ONLY in a comment must not fire.
     // `//` line comment (with a `:9411` prose mention alongside a bare 9410).
@@ -1347,6 +1485,17 @@ function runSelfTest() {
     {
       file: "packages/field-app/src/clean-mille-client.ts",
       body: 'import { connectFileExplorer } from "@vibecook/mille/port";\nimport { FileTree } from "@vibecook/mille-ui";\nimport { connectWebSocketChannel } from "@vibecook/mille/remote";\nexport const remote = connectWebSocketChannel;\nexport const c = connectFileExplorer;\nexport const t = FileTree;\n',
+    },
+    // HN (R25) — what stands beside Cards in Hand's retired names: the hand's store, lab door
+    // and sources, the snapshot's state, the line's model and door, and the smokes' shell
+    // markers and Copy rows.
+    {
+      file: "packages/field-app/src/frame/clean-hand.ts",
+      body: 'import { noteCapture } from "./capture-state";\nimport { installCardsLab } from "./cards/cards-lab";\nimport { dealCard } from "./cards/cards-sources";\nimport { cardsStore } from "./cards/cards-store";\nimport { sayOnLine } from "./line-door";\nimport { createActOf } from "./line-model";\nexport const h = [noteCapture, installCardsLab, dealCard, cardsStore, sayOnLine, createActOf];\n',
+    },
+    {
+      file: "packages/electron-shell/src/testing/clean-rows.ts",
+      body: 'import { deskCopyRows } from "./smoke-desk-copy";\nimport { judgeCardPlay } from "./smoke-shell-marker";\nexport const r = [deskCopyRows, judgeCardPlay];\n',
     },
     // DK-17 (R25) — what stands beside the retired names: the desk's own entries, the kit's
     // primitives and glyphs, the kept canvas palette, the account's faces, the renamed specimen.

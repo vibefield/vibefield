@@ -26,7 +26,7 @@
 // parsed rather than grepped, a window in which nothing changed also carries
 // the poller's own request count, and the index is asked with a canonical row
 // and a decoy beside it.
-import { type ChildProcess, spawn } from "node:child_process";
+import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import {
   copyFileSync,
   existsSync,
@@ -59,10 +59,14 @@ import {
   type AgentsProfilesDeleteResult,
   type AgentsProfilesListResult,
   type AgentsProfilesLoginResult,
+  type ComposeSparksHatchResult,
   LAYOUT,
   type PlaceFacts,
   SOCKETS,
+  type SparkRecord,
+  TERMINAL_INVENTORY,
   type TerminalInfo,
+  type TerminalRouteSnapshot,
 } from "@vibefield/contracts";
 import {
   type AccountUsageService,
@@ -70,9 +74,11 @@ import {
   type AgentAttachNext,
   type AgentAttachRecord,
   AgentAttachRefusedError,
+  type AgentBriefingCapabilities,
   type AgentHost,
   type AgentModelService,
   type AgentProfile,
+  type AgentRunBriefing,
   type AgentTurnStopService,
   type BoundIngress,
   defineModelService,
@@ -87,10 +93,13 @@ import type {
 } from "@vibefield/puppeteer-runtime";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import WebSocket from "ws";
+import { markedText } from "../src/agent-input-queue";
+import { EXIT_GRACE_MS } from "../src/agent-runtime";
 import { bootstrap, type FielddDaemon, SessionRecordStore } from "../src/index";
 import { RpcCallError } from "../src/native-link";
 import type { SecretStore } from "../src/plugin-settings";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
+import { SparkStore } from "../src/tool-plane/sparks";
 import { RootsRegistry } from "../src/workspace/roots";
 import { born } from "./agent-birth";
 import { catalogWith, SCRIPTED_CATALOG, SCRIPTED_ROW } from "./agent-catalog-fixture";
@@ -174,6 +183,7 @@ interface ScriptedSession {
   bornAt: number;
   /** where this run's `cat` writes whatever is typed into its PTY */
   typedOut: string;
+  briefing: AgentRunBriefing;
 }
 /** AR-4 — what the scripted adapter was asked to attach to. */
 interface ScriptedAttach {
@@ -189,19 +199,56 @@ interface ScriptedAttach {
 /** Step 1 — what the scripted codec captures for every launch (`facts`): a
  * stand-in for a typed root an attach must hand back */
 const SCRIPTED_STATE = JSON.stringify({ root: "scripted-root" });
+const SPARK_BRIEFING: AgentBriefingCapabilities = {
+  mcpServers: true,
+  allowTools: true,
+  instructions: true,
+  mcpServerProcess: "terminal",
+};
+
+/** An older CP-1c run already belonged to a spark but was born before the briefing shipped. */
+function keepLegacySpark(box: Box, runId: string): SparkRecord {
+  const spark: SparkRecord = {
+    format: 1,
+    id: "sp-7k2m9q4x",
+    name: "Vela",
+    face: { seed: 7 },
+    agent: "scripted",
+    profiles: ["native"],
+    thinksUnder: "native",
+    folder: box.envOut,
+    createdAt: "2026-10-29T12:00:00.000Z",
+    updatedAt: "2026-10-29T12:00:00.000Z",
+  };
+  const store = new SparkStore({
+    dir: join(box.dataDir, ...LAYOUT.SPARKS_DIR),
+    keyPath: join(box.dataDir, ...LAYOUT.SPARKS_KEY_FILE),
+  });
+  store.write(spark);
+  writeFileSync(join(spark.folder, "CLAUDE.md"), "The legacy spark's fresh briefing.");
+  box.records.write({ ...readRecord(box.dataDir, runId), spark: spark.id, origin: { by: "you" } });
+  return spark;
+}
 
 /** The text the scripted turn stop types: a line, because the PTY's `cat`
  * reads in canonical mode and a lone key byte would never reach its file. */
 const SCRIPTED_TURN_STOP_TEXT = "scripted-turn-stop\n";
 
+/** ST — the scripted adapter's candidate listener, by terminal, for a binding that witnesses its turns (`observed`). */
+type ScriptedCandidates = Map<string, Parameters<AgentAdapterBinding["events"]["onCandidate"]>[0]>;
+
 /** `turnStops` — Q08: the binding names a turn stop (an `escape` key, by
  * declaration) and records each press, by its terminal; absent, the binding
- * names none, as an adapter that has not been censused yet. */
+ * names none, as an adapter that has not been censused yet. `observed` — ST:
+ * the binding witnesses its turns (`native-hooks`), and a row moves its status
+ * by handing the kept listener a turn (`scriptedTurn`); absent, it reads as
+ * `terminal-only`, a status fieldd cannot read. */
 function scriptedBinding(
   host: AgentHost,
   runtimeSessionId: string,
   sessionId: string,
   turnStops?: string[],
+  observed?: ScriptedCandidates,
 ): AgentAdapterBinding {
   const turnStop: AgentTurnStopService | undefined =
     turnStops === undefined
@@ -222,8 +269,16 @@ function scriptedBinding(
   return {
     sessionId,
     runtimeSessionId,
-    observationLevel: () => "terminal-only",
-    events: { onCandidate: () => () => undefined },
+    observationLevel: () => (observed === undefined ? "terminal-only" : "native-hooks"),
+    events: {
+      onCandidate: (listener) => {
+        if (observed === undefined) return () => undefined;
+        observed.set(runtimeSessionId, listener);
+        return () => {
+          if (observed.get(runtimeSessionId) === listener) observed.delete(runtimeSessionId);
+        };
+      },
+    },
     services: {
       prompt: {
         async submit(submission: PromptSubmission): Promise<PromptReceipt> {
@@ -403,15 +458,23 @@ function scriptedProvider(
     program?: string;
     /** Q08 — each binding names a turn stop, and each press lands here (absent: none named) */
     turnStops?: string[];
+    /** ST — each binding witnesses its turns, its listener kept here (absent: terminal-only) */
+    observed?: ScriptedCandidates;
     /** the re-attach study's Step 1 — a continuation codec (every launch
      * captures `SCRIPTED_STATE`) and an attach record, reported before the
      * launch (`endpoint-<n>`) and again by each attach (`<handed>-attached`) */
     facts?: boolean;
+    briefing?: AgentBriefingCapabilities;
+    exerciseDoor?: boolean;
   } = {},
 ): AgentProvider {
   let counter = 0;
   return {
-    descriptor: { id: "scripted", label: "Scripted" },
+    descriptor: {
+      id: "scripted",
+      label: "Scripted",
+      ...(extra.briefing === undefined ? {} : { briefing: extra.briefing }),
+    },
     ...(extra.facts === true
       ? {
           launch: {
@@ -449,6 +512,13 @@ function scriptedProvider(
           secret: `nonce-${n}`,
         });
       }
+      const doorRecipe = extra.exerciseDoor && options.mcpServers?.vibefield;
+      const briefingFile = join(envOut, `session-${n}.briefing.json`);
+      if (doorRecipe)
+        writeFileSync(
+          briefingFile,
+          JSON.stringify({ server: doorRecipe, output: join(envOut, `session-${n}.tools.json`) }),
+        );
       const { runtimeSessionId } = await options.host.spawnTerminal({
         command: "/bin/sh",
         // the environment lands ATOMICALLY (written beside, then renamed): the
@@ -459,6 +529,12 @@ function scriptedProvider(
           extra.program ??
             `env > "$SCRIPTED_ENV_OUT.part" && mv "$SCRIPTED_ENV_OUT.part" "$SCRIPTED_ENV_OUT"; exec /bin/cat >> "$SCRIPTED_TYPED_OUT"`,
         ],
+        ...(doorRecipe
+          ? {
+              command: process.execPath,
+              args: [join(FIXTURES, "spark-mcp-client.mjs"), briefingFile],
+            }
+          : {}),
         cwd: options.cwd,
         env: {
           // AR-S4d — a host's launch values, beneath the adapter's own, as the built-ins merge them
@@ -480,8 +556,19 @@ function scriptedProvider(
         ingress,
         bornAt,
         typedOut,
+        briefing: {
+          ...(options.mcpServers === undefined ? {} : { mcpServers: options.mcpServers }),
+          ...(options.allowTools === undefined ? {} : { allowTools: options.allowTools }),
+          ...(options.instructions === undefined ? {} : { instructions: options.instructions }),
+        },
       });
-      return scriptedBinding(options.host, runtimeSessionId, sessionId, extra.turnStops);
+      return scriptedBinding(
+        options.host,
+        runtimeSessionId,
+        sessionId,
+        extra.turnStops,
+        extra.observed,
+      );
     },
     // AR-4 — an adapter that can re-attach to its running process: it records
     // what it was handed and binds the same terminal and native session
@@ -511,6 +598,7 @@ function scriptedProvider(
               options.runtimeSessionId,
               options.sessionId,
               extra.turnStops,
+              extra.observed,
             );
           },
         }),
@@ -545,10 +633,14 @@ interface Box {
   models: ScriptedModels;
   /** Q08 — each press of the scripted turn stop, by terminal (`turnStop: true`) */
   turnStops: string[];
+  /** ST — each observed binding's candidate listener, by terminal (`observed: true`) */
+  observed: ScriptedCandidates;
 }
 
 interface SetupConfig {
   floor: "mock" | "real";
+  briefing?: AgentBriefingCapabilities;
+  exerciseDoor?: boolean;
   /** AR-S4d — the keychain fieldd keeps server values in (default: a map; never the machine's) */
   secretStore?: SecretStore;
   realAgent?: boolean;
@@ -581,6 +673,12 @@ interface SetupConfig {
   program?: string;
   /** Q08 — the scripted adapter names a turn stop (default: it names none) */
   turnStop?: boolean;
+  /** ST — the scripted adapter witnesses its turns, `native-hooks` (default: terminal-only, unreadable) */
+  observed?: boolean;
+  /** ST — how long a sent Stop waits to be heard (default: `AGENT_STOP.HEARD_WITHIN_MS`) */
+  stopHeardWithinMs?: number;
+  /** item 121 — the route snapshot THIS boot's class placement reads (default: the snapshot itself) */
+  classRoutes?: (routes: TerminalRouteSnapshot) => TerminalRouteSnapshot;
 }
 
 /** Boot fieldd: over the mock mgmt server (no floor) or the REAL field-native. */
@@ -653,6 +751,7 @@ async function setup(config: SetupConfig): Promise<Box> {
   const seen: Array<AgentProfile | undefined> = restart?.seen ?? [];
   const attached: ScriptedAttach[] = restart?.attached ?? [];
   const turnStops: string[] = restart?.turnStops ?? [];
+  const observed: ScriptedCandidates = restart?.observed ?? new Map();
   const models: ScriptedModels = restart?.models ?? {
     fail: false,
     reads: 0,
@@ -700,25 +799,35 @@ async function setup(config: SetupConfig): Promise<Box> {
             : undefined,
           {
             profiles: config.profiles === true,
+            ...(config.briefing === undefined ? {} : { briefing: config.briefing }),
+            ...(config.exerciseDoor === undefined ? {} : { exerciseDoor: config.exerciseDoor }),
             seen,
             ...(config.extensions === true ? { signInMark: join(root, "scripted-signed-in") } : {}),
             models,
             ...(config.afterBirth !== undefined ? { afterBirth: config.afterBirth } : {}),
             ...(config.program !== undefined ? { program: config.program } : {}),
             ...(config.turnStop === true ? { turnStops } : {}),
+            ...(config.observed === true ? { observed } : {}),
             ...(config.facts === true ? { facts: true } : {}),
           },
         ),
       ];
     },
     ...(config.resumeWhenIdle !== undefined ? { agentResumeWhenIdle: config.resumeWhenIdle } : {}),
+    ...(config.stopHeardWithinMs !== undefined
+      ? { agentStopHeardWithinMs: config.stopHeardWithinMs }
+      : {}),
     // FS-1a — every run's folder becomes a place, a test root under /tmp or
     // /var/folders included: a place refuses only a filesystem root. The
     // /System, /Library and /private exclusion is the browse exports' (and
     // `/` everyone's), so no rule needs lifting here (2026-10-07: this note
     // said one was).
-    // no floor: a spawn must refuse quickly, not wait a cell's whole birth budget
-    ...(config.floor === "mock" ? { terminalBirthWaitMs: 300 } : {}),
+    // no floor: a spawn must refuse quickly, not wait a cell's whole birth budget; nor, item 121, for a class
+    // placement cannot see (the hidden cell is up, so the budget would only ever run out)
+    ...(config.floor === "mock" || config.classRoutes !== undefined
+      ? { terminalBirthWaitMs: 300 }
+      : {}),
+    ...(config.classRoutes !== undefined ? { terminalClassRoutes: config.classRoutes } : {}),
   });
   cleanup.push(() => daemon.stop().catch(() => undefined));
   scene = { dataDir, spawnedAt, link: daemon.native };
@@ -762,7 +871,29 @@ async function setup(config: SetupConfig): Promise<Box> {
     seen,
     models,
     turnStops,
+    observed,
   };
+}
+
+/** ST — the observed scripted agent reports a turn, as an adapter's native hook would: `turn:started` reads as
+ * `working`, `turn:completed` as idle. */
+function scriptedTurn(
+  box: Box,
+  runtimeSessionId: string,
+  type: "turn:started" | "turn:completed",
+): void {
+  const listener = box.observed.get(runtimeSessionId);
+  if (listener === undefined) throw new Error(`no observed binding on ${runtimeSessionId}`);
+  const session = box.sessions.find((s) => s.runtimeSessionId === runtimeSessionId);
+  listener({
+    type,
+    sessionId: session?.sessionId ?? runtimeSessionId,
+    timestamp: new Date().toISOString(),
+    monotonicTime: performance.now(),
+    source: "native-hook",
+    confidence: "authoritative",
+    event: { type },
+  } as Parameters<typeof listener>[0]);
 }
 
 async function openRpc(port: number): Promise<WsRpc> {
@@ -796,13 +927,111 @@ const DECK = ["agent.spawn", "agent.observe", "terminal.attach", "index.read"];
 const FIELD_ROW_KEYS = Object.keys(AgentFieldRow.shape);
 
 /** Every wait in this suite (item 68): at its deadline it says what was awaited, what the row last `seen`, and the
- * row's floor and fieldd logs with the link view (`waitWithEvidence`). The budgets are the rows' own. */
+ * row's floor and fieldd logs with the link view (`waitWithEvidence`), and a `witness`'s word when one is given
+ * (item 97: asked once, at the deadline). The budgets are the rows' own. */
 async function poll<T>(
   fn: (seen: (value: unknown) => void) => Promise<T | undefined>,
   ms: number,
   what = "the row's condition",
+  witness?: () => Promise<string>,
 ): Promise<T> {
-  return await waitWithEvidence(what, fn, ms, () => scene);
+  return await waitWithEvidence(what, fn, ms, () => scene, 100, witness);
+}
+
+/** What an interrupted run's HEARD exit has to read exited in (AR-6-0, MF-1g's `endedRun`): the floor's
+ * interrupt, `cat`'s end, the floor's `session-exited` and the fold, on a loaded host. */
+const INTERRUPTED_EXIT_MS = 15_000;
+
+/** Item 97 — the same exit, never heard. On top of the heard budget, two things:
+ * - the floor's next reconcile lists the kept pane `exited`: the exit itself asks for one at once, and the
+ *   backstop period bounds it;
+ * - fieldd's backstop then waits its grace for an exit event that will not come. */
+const LOST_EXIT_MS = INTERRUPTED_EXIT_MS + TERMINAL_INVENTORY.BACKSTOP_MS + EXIT_GRACE_MS;
+
+/** Item 97 — what a lost exit leaves, for an exit wait's deadline (`poll`'s witness). Three things:
+ * - the floor's own row for the pane: its cell's list, through `runtimeSessions`, listed or not, and whether it
+ *   says the process exited;
+ * - whether fieldd's terminal service heard the floor's `session-exited` (`exitOf`);
+ * - what still holds the run's typed-out file (`lsof -t`, each holder with its `ps` state). That is the scripted
+ *   `cat` the interrupt should have ended.
+ *
+ * Between them they name the case: the interrupt never ended `cat` (it still holds the file); `cat` ended and the
+ * floor never saw it (its row is not `exited`); or the floor saw it and fieldd never heard. */
+function exitWitness(box: Box, paneId: string): () => Promise<string> {
+  return async () => {
+    const floorRow = await box.daemon.terminals.runtimeSessions().then(
+      ({ sessions }) => {
+        const row = sessions.find((session) => session.id === paneId);
+        if (row === undefined) return "not listed";
+        const { exited, exitOutcome, exitCode, exitSignal, pid } = row;
+        return JSON.stringify({ exited, exitOutcome, exitCode, exitSignal, pid });
+      },
+      (error: unknown) => `unread (${error instanceof Error ? error.message : String(error)})`,
+    );
+    const heard = box.daemon.terminals.exitOf(paneId);
+    const typedOut = box.sessions.find((s) => s.runtimeSessionId === paneId)?.typedOut;
+    return [
+      `the floor's row for pane ${paneId}: ${floorRow}`,
+      `fieldd heard its exit: ${heard === undefined ? "no" : JSON.stringify({ exitOutcome: heard.exitOutcome, exitCode: heard.exitCode })}`,
+      typedOut === undefined
+        ? "no typed-out file names this pane"
+        : `holding ${typedOut}: ${holdersOf(typedOut)}`,
+    ].join("\n");
+  };
+}
+
+/** The processes holding `path` open (`lsof -t`, which exits 1 when none does), each with its `ps` state. */
+function holdersOf(path: string): string {
+  let pids: string[];
+  try {
+    pids = execFileSync("lsof", ["-t", path], { encoding: "utf8" }).split("\n").filter(Boolean);
+  } catch (error) {
+    if ((error as { status?: number }).status === 1) return "nothing";
+    return `unread (${error instanceof Error ? error.message : String(error)})`;
+  }
+  return pids
+    .map((pid) => {
+      try {
+        return execFileSync("ps", ["-o", "pid=,stat=,command=", "-p", pid], {
+          encoding: "utf8",
+        }).trim();
+      } catch {
+        return `${pid} (gone)`;
+      }
+    })
+    .join("; ");
+}
+
+/** Item 118 — the scripted pane's prologue's budget on a loaded host: the cell join's (`joinedRow`). */
+const CAT_READY_MS = 15_000;
+
+/** Item 118 — a row that ends the scripted run with the floor's ⌃C first reads that the pane's process IS `cat`.
+ * The program is `/bin/sh -c 'env > … && mv …; exec /bin/cat >> …'`, and macOS's `/bin/sh` is bash 3.2: a ⌃C that
+ * meets `env` or `mv` as it exits cannot kill it, the waiting shell reads a normal exit and goes on to the exec, and the
+ * `cat` after it lives (the floor's row `exited:false`, its pid holding the typed-out file as `/bin/cat`; reproduced
+ * under a PTY in 14 of 456 trials). The cell join says nothing about where the shell is, so the ⌃C waits for the exec:
+ * the floor's own pid for the pane, read by `ps`, names `cat`, and then there is no shell left to swallow it. */
+async function catReady(box: Box, paneId: string): Promise<void> {
+  await poll(
+    async (seen) => {
+      const { sessions } = await box.daemon.terminals.runtimeSessions();
+      const pid = sessions.find((session) => session.id === paneId)?.pid;
+      const image = typeof pid === "number" ? imageOf(pid) : undefined;
+      seen({ pid: pid ?? null, image: image ?? null });
+      return image !== undefined && /(^|\/)cat$/.test(image) ? image : undefined;
+    },
+    CAT_READY_MS,
+    "the scripted pane's process to be `cat`, its prologue done",
+  );
+}
+
+/** The executable a pid runs now (`ps -o comm=`), or undefined once it is gone. */
+function imageOf(pid: number): string | undefined {
+  try {
+    return execFileSync("ps", ["-o", "comm=", "-p", String(pid)], { encoding: "utf8" }).trim();
+  } catch {
+    return undefined;
+  }
 }
 
 const mode = (path: string) => statSync(path).mode & 0o777;
@@ -1307,6 +1536,144 @@ describe("agent.* without a floor (the mock mgmt server)", () => {
 });
 
 describe("managed sessions over the REAL floor (field-native)", () => {
+  it("CP-1d and MT-0 — hatch and run-id resume carry a spark's fresh briefing, and an ordinary run the door with its read-only agent rows", async () => {
+    const briefing: AgentBriefingCapabilities = {
+      mcpServers: true,
+      allowTools: true,
+      instructions: true,
+      mcpServerProcess: "terminal",
+    };
+    const box = await setup({ floor: "real", profiles: true, briefing, exerciseDoor: true });
+    const { daemon, dataDir, sessions } = box;
+    const win = await window(daemon, [...DECK, "agents.manage"], "cp1d");
+    await win.call("agents.profiles.verify", { profileId: "scripted:native-default" });
+    const providers = (await win.call("agent.providers", {})) as AgentProvidersResult;
+    expect(providers.providers.find((p) => p.id === "scripted")?.briefing).toEqual(briefing);
+    const { spark } = (await win.call("compose.sparks.hatch", {
+      name: "Vela",
+      face: { seed: 7 },
+      agent: "scripted",
+      profiles: ["native"],
+      thinksUnder: "native",
+    })) as ComposeSparksHatchResult;
+    const runId = spark.session!.runtimeRunId;
+    const first = sessions[0]!;
+    expect(first.briefing.allowTools).toEqual(["vibefield/*"]);
+    expect(first.briefing.instructions).toContain("You are Vela");
+    expect(first.briefing.mcpServers?.vibefield?.command).toBe(BIN);
+    expect(first.briefing.mcpServers?.vibefield?.args).toContain("door");
+    expect(first.briefing.mcpServers?.vibefield).not.toHaveProperty("env");
+    expect(existsSync(join(spark.folder, ".mcp.json"))).toBe(false);
+    expect(readRecord(dataDir, runId).spark).toBe(spark.id);
+    const doorProof = await poll(async () => {
+      const path = join(box.envOut, "session-1.tools.json");
+      return existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : undefined;
+    }, 25_000);
+    expect(doorProof.error).toBeUndefined();
+    expect(doorProof.listed.tools.map((tool: { name: string }) => tool.name)).toContain(
+      "agents_list",
+    );
+    // CP-2: a spark's door lists the talk room's rows too, over the real door
+    expect(doorProof.listed.tools.map((tool: { name: string }) => tool.name)).toEqual(
+      expect.arrayContaining(["agent_spawn", "agent_send", "agent_interrupt", "agent_stop"]),
+    );
+    expect(doorProof.called.isError).not.toBe(true);
+
+    await win.call("terminal.terminate", { sessionId: first.runtimeSessionId });
+    await poll(async () => (readRecord(dataDir, runId).exited ? true : undefined), 15_000);
+    const revised = "CP1d edited brief, supplied anew on resume.";
+    writeFileSync(join(spark.folder, "CLAUDE.md"), revised);
+    const resumed = (await born(win, "agent.resume", { runtimeRunId: runId })) as AgentSpawnResult;
+    expect(sessions[1]?.briefing.instructions).toBe(revised);
+    expect(sessions[1]?.briefing.allowTools).toEqual(["vibefield/*"]);
+    expect(sessions[1]?.resume).toBe(first.sessionId);
+    const resumedProof = await poll(async () => {
+      const path = join(box.envOut, "session-2.tools.json");
+      return existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : undefined;
+    }, 25_000);
+    expect(resumedProof.error).toBeUndefined();
+    expect(resumedProof.listed.tools.map((tool: { name: string }) => tool.name)).toContain(
+      "agents_list",
+    );
+    const record = readRecord(dataDir, resumed.session.runtimeRunId);
+    expect(record.spark).toBe(spark.id);
+    expect(record.origin).toEqual({ by: "you" });
+    expect(JSON.stringify(record)).not.toContain(revised);
+    expect(JSON.stringify(record)).not.toContain("mcpServers");
+    await win.call("terminal.terminate", { sessionId: resumed.terminal.sessionId });
+
+    const ordinary = (await born(win, "agent.spawn", {
+      provider: "scripted",
+      cwd: box.envOut,
+    })) as AgentSpawnResult;
+    // MT-0 (MT-D7, MT-D9): a plain run carries the door and its read-only `agent` rows by name, and no instructions.
+    expect(sessions[2]?.briefing.allowTools).toEqual([
+      "vibefield/history_search",
+      "vibefield/history_read",
+      "vibefield/projects_list",
+    ]);
+    expect(sessions[2]?.briefing.instructions).toBeUndefined();
+    expect(sessions[2]?.briefing.mcpServers?.vibefield?.command).toBe(BIN);
+    const plainProof = await poll(async () => {
+      const path = join(box.envOut, "session-3.tools.json");
+      return existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : undefined;
+    }, 25_000);
+    expect(plainProof.error).toBeUndefined();
+    expect(plainProof.listed.tools.map((tool: { name: string }) => tool.name)).toEqual([
+      "history_search",
+      "history_read",
+      "projects_list",
+    ]);
+    // MT-L2: a call is held to its row again, so a spark's row answers a plain run as the fact `forbidden`.
+    expect(plainProof.called.isError).toBe(true);
+    expect(plainProof.called.structuredContent?.fact).toBe("forbidden");
+    await win.call("terminal.terminate", { sessionId: ordinary.terminal.sessionId });
+  }, 90_000);
+
+  // CP-2 — the talk room's two ports on the real floor. The queue's idle gate is agent-input-queue.test.ts's: the
+  // scripted agent observes only its terminal, so its monitor never says idle on cue, and this row witnesses what the
+  // queue hands the floor, not when.
+  it("CP-2 — a spark's marked words are pasted into a real run and read by its PTY, and agent_stop's end reaches the floor", async () => {
+    const box = await setup({ floor: "real" });
+    const { daemon, sessions } = box;
+    const win = await window(daemon, DECK, "cp2");
+    const spawned = (await born(win, "agent.spawn", {
+      provider: "scripted",
+      cwd: box.envOut,
+      title: "a talk target",
+    })) as AgentSpawnResult;
+    const runId = spawned.session.runtimeRunId;
+    await joinedRow(win, runId);
+    // the bytes reach the process once it IS `cat` (item 118)
+    await catReady(box, spawned.terminal.sessionId);
+    expect(daemon.agents.isLive(runId)).toBe(true);
+    const text = markedText({
+      id: "x",
+      text: "cp2-delivered",
+      from: { kind: "spark", spark: "sp-vela00000000000", name: "Vela" },
+      at: new Date().toISOString(),
+    });
+    expect(await daemon.agents.submit(runId, text)).toEqual({ status: "confirmed" });
+    const typed = await poll(async () => {
+      const path = sessions[0]?.typedOut;
+      if (path === undefined || !existsSync(path)) return undefined;
+      const read = readFileSync(path, "utf8");
+      return read.includes("cp2-delivered") ? read : undefined;
+    }, 10_000);
+    expect(typed).toContain("Vela (your spark) on your behalf:");
+    await daemon.agents.endRun(runId);
+    await poll(
+      async () => {
+        const { sessions: rows } = (await win.call("agent.list", {})) as AgentListResult;
+        const row = rows.find((r) => r.runtimeRunId === runId);
+        return row === undefined || row.continuation?.exited === true ? true : undefined;
+      },
+      15_000,
+      "the ended run read as exited",
+    );
+    expect(daemon.agents.isLive(runId)).toBe(false);
+  }, 60_000);
+
   it("spawn: a PTY on the agent cell with a CLEAN environment; the fold's row, the record (0600), the ticket, the audit; automation through the host; exit withdraws the row and stamps the record; resume continues from the record; a live run refuses to be resumed", async () => {
     const { daemon, dataDir, envOut, sessions } = await setup({ floor: "real" });
     const win = await window(daemon, DECK, "r1");
@@ -1513,7 +1880,7 @@ describe("managed sessions over the REAL floor (field-native)", () => {
   }, 90_000);
 
   it("QL-D10 — a conversation resumed by its native id: refused while a run continues it; then a new run on puppeteer's continuation, recorded and audited, answered like a spawn; the exited record no longer resumes beside it", async () => {
-    const box = await setup({ floor: "real", catalog: FILED_CATALOG });
+    const box = await setup({ floor: "real", catalog: FILED_CATALOG, briefing: SPARK_BRIEFING });
     const { daemon, dataDir, envOut, sessions, records } = box;
     const win = await window(daemon, DECK, "qn3");
     const spawned = (await born(win, "agent.spawn", {
@@ -1552,6 +1919,7 @@ describe("managed sessions over the REAL floor (field-native)", () => {
       15_000,
     );
 
+    const spark = keepLegacySpark(box, spawned.session.runtimeRunId);
     const resumed = (await born(win, "agent.resume", {
       provider: "scripted",
       nativeSessionId: conversation,
@@ -1565,6 +1933,9 @@ describe("managed sessions over the REAL floor (field-native)", () => {
     // the adapter was asked to CONTINUE the conversation, in the folder named
     expect(sessions).toHaveLength(2);
     expect(sessions[1]?.resume).toBe(conversation);
+    expect(sessions[1]?.briefing.instructions).toBe("The legacy spark's fresh briefing.");
+    expect(readRecord(dataDir, resumed.session.runtimeRunId).spark).toBe(spark.id);
+    expect(readRecord(dataDir, resumed.session.runtimeRunId).origin).toEqual({ by: "you" });
     // the same routed ticket a spawn answers: the pane mounts it the same way
     expect(resumed.terminal.endpoints.controlUrl).toMatch(/^ws:/);
     expect(resumed.terminal).toHaveProperty("attachGrant");
@@ -2779,6 +3150,8 @@ describe('MF-1 — agent.subscribe {projection: "field"} over the wire', () => {
     })) as AgentSpawnResult;
     const runId = spawned.session.runtimeRunId;
     await joinedRow(win, runId);
+    // item 118 — the ⌃C below must meet `cat`, never the shell's prologue
+    await catReady(box, spawned.terminal.sessionId);
 
     // the SNAPSHOT is the live board, not an empty one
     // the floor this subscriber asks for IS the registry's default; naming the
@@ -2924,13 +3297,19 @@ describe("MF-1f/MF-1g — an agent pane outlives its run, and the fold keeps its
     })) as AgentSpawnResult;
     const runId = spawned.session.runtimeRunId;
     await joinedRow(win, runId);
-    // the scripted PTY's `cat` dies of the floor's own interrupt
+    // the scripted PTY's `cat` dies of the floor's own interrupt, once it IS `cat` (item 118)
+    await catReady(box, spawned.terminal.sessionId);
     expect(await win.call("agent.interrupt", { runtimeRunId: runId })).toEqual({ accepted: true });
-    await poll(async () => {
-      const { sessions } = (await win.call("agent.list", {})) as AgentListResult;
-      const row = sessions.find((r) => r.runtimeRunId === runId);
-      return row?.continuation?.exited === true ? row : undefined;
-    }, 15_000);
+    await poll(
+      async () => {
+        const { sessions } = (await win.call("agent.list", {})) as AgentListResult;
+        const row = sessions.find((r) => r.runtimeRunId === runId);
+        return row?.continuation?.exited === true ? row : undefined;
+      },
+      INTERRUPTED_EXIT_MS,
+      "the interrupted run read as exited",
+      exitWitness(box, spawned.terminal.sessionId),
+    );
     return { runId, paneId: spawned.terminal.sessionId };
   }
 
@@ -3160,6 +3539,11 @@ describe("item 81 — an exit that comes before its pane is registered", () => {
 });
 
 describe("item 87 — a run's exit is not held by its workspace's cleanup", () => {
+  /** How long the stalled git holds the cleanup: the bound of what these rows prove. An exit read
+   * inside it was published before the cleanup ended, and the rows stop the git long before it
+   * ends by itself. */
+  const STALLED_GIT_MS = 30_000;
+
   /** A `git` that does not answer: puppeteer finalizes a run's workspace when its process exits, and
    * every git call there is unbounded (puppeteer-workspaces 0.3.0, `git.js`). First on the
    * in-process fieldd's PATH, it stalls that cleanup the way a loaded host can. Each call leaves its
@@ -3168,9 +3552,11 @@ describe("item 87 — a run's exit is not held by its workspace's cleanup", () =
     const dir = join(root, "stalled-git");
     const pids = join(dir, "pids");
     mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, "git"), `#!/bin/sh\necho $$ >> "${pids}"\nexec sleep 30\n`, {
-      mode: 0o755,
-    });
+    writeFileSync(
+      join(dir, "git"),
+      `#!/bin/sh\necho $$ >> "${pids}"\nexec sleep ${STALLED_GIT_MS / 1000}\n`,
+      { mode: 0o755 },
+    );
     return {
       dir,
       called: () => existsSync(pids),
@@ -3214,6 +3600,8 @@ describe("item 87 — a run's exit is not held by its workspace's cleanup", () =
     })) as AgentSpawnResult;
     const runId = spawned.session.runtimeRunId;
     await joinedRow(win, runId);
+    // item 118 — the ⌃C below must meet `cat`, never the shell's prologue
+    await catReady(box, spawned.terminal.sessionId);
     // only now: the launch's own git calls (the workspace's baseline) are behind it
     const git = stalledGit(box.root);
     const path = process.env["PATH"];
@@ -3229,8 +3617,10 @@ describe("item 87 — a run's exit is not held by its workspace's cleanup", () =
           seen({ continuation: found?.continuation ?? null, gitCalled: git.called() });
           return found?.continuation?.exited === true ? found : undefined;
         },
-        5_000,
+        // item 101 — the heard exit's own budget, as AR-6-0's: the cleanup's stall is STALLED_GIT_MS
+        INTERRUPTED_EXIT_MS,
         "the exited row of a run whose workspace cleanup is stalled",
+        exitWitness(box, spawned.terminal.sessionId),
       );
       // exited at once, and not yet resumable: the cleanup still holds the old run's workspace
       expect(row.continuation).toMatchObject({ persisted: true, exited: true, resumable: false });
@@ -3298,6 +3688,8 @@ describe("item 87 — a run's exit is not held by its workspace's cleanup", () =
     })) as AgentSpawnResult;
     const runId = spawned.session.runtimeRunId;
     await joinedRow(win, runId);
+    // item 118 — the ⌃C below must meet `cat`, never the shell's prologue
+    await catReady(box, spawned.terminal.sessionId);
     const git = stalledGit(box.root);
     const path = process.env["PATH"];
     process.env["PATH"] = `${git.dir}:${path ?? ""}`;
@@ -3312,8 +3704,10 @@ describe("item 87 — a run's exit is not held by its workspace's cleanup", () =
           seen(found?.continuation ?? null);
           return found?.continuation?.exited === true ? found : undefined;
         },
-        5_000,
+        // item 101 — the heard exit's own budget, as AR-6-0's: the cleanup's stall is STALLED_GIT_MS
+        INTERRUPTED_EXIT_MS,
         "the exited row of a run whose workspace cleanup is stalled",
+        exitWitness(box, spawned.terminal.sessionId),
       );
       const askedAt = Date.now();
       const refused = await win.callErr("agent.resume", { runtimeRunId: runId });
@@ -3347,7 +3741,8 @@ describe("item 87 — a run's exit is not held by its workspace's cleanup", () =
 
 describe("AR-6-0 — the stop verb (agent.interrupt)", () => {
   it("interrupts a live run through the floor, is refused for an exited or unknown one, needs agent.control, and lands in the ledger", async () => {
-    const { daemon, dataDir, envOut } = await setup({ floor: "real" });
+    const box = await setup({ floor: "real" });
+    const { daemon, dataDir, envOut } = box;
     // the deck's own scopes do NOT include agent.control — the fold's reader
     // is not, by that fact, allowed to steer what it is watching
     const watcher = await window(daemon, DECK, "i0");
@@ -3382,6 +3777,8 @@ describe("AR-6-0 — the stop verb (agent.interrupt)", () => {
     // Q08 — this adapter names no turn stop, so the verb is still the floor's
     // ⌃C, and the row says that key rather than none
     expect(tagged.stopKey).toBe("ctrl-c");
+    // item 118 — and the pane's process is `cat` by now: a ⌃C into the shell's prologue is swallowed
+    await catReady(box, spawned.terminal.sessionId);
 
     // ── the act: the floor takes it, and the scripted PTY's `cat` dies of it ──
     // `accepted` is the FLOOR's word — that the interrupt reached the PTY's
@@ -3391,11 +3788,16 @@ describe("AR-6-0 — the stop verb (agent.interrupt)", () => {
 
     // MF-1g — the row does not leave: the agent is over, its PANE is not, and
     // the card keeps the resume verb over its final screen.
-    await poll(async () => {
-      const { sessions: rows } = (await win.call("agent.list", {})) as AgentListResult;
-      const row = rows.find((r) => r.runtimeRunId === runId);
-      return row?.continuation?.exited === true ? row : undefined;
-    }, 15_000);
+    await poll(
+      async () => {
+        const { sessions: rows } = (await win.call("agent.list", {})) as AgentListResult;
+        const row = rows.find((r) => r.runtimeRunId === runId);
+        return row?.continuation?.exited === true ? row : undefined;
+      },
+      INTERRUPTED_EXIT_MS,
+      "the interrupted run read as exited",
+      exitWitness(box, spawned.terminal.sessionId),
+    );
     const exited = await poll(async () => {
       const record = readRecord(dataDir, runId);
       return record.exited !== undefined ? record : undefined;
@@ -3487,6 +3889,329 @@ describe("AR-6-0 — the stop verb (agent.interrupt)", () => {
     );
     expect(act.outcome.outcome).toBe("succeeded");
     expect(act.outcome.attrs?.["accepted"]).toBe(true);
+  }, 120_000);
+});
+
+// ST (2026-10-31; James's `ds-marks` and `ds-marks-corrections`; `thinking-ar-durable-stop.md` §4) — A DURABLE STOP,
+// on the real floor. A person's Stop stays SENT until fieldd hears the run stop; not heard within its bound, the run's
+// own stop goes once more; still not heard, a run whose status fieldd can read is ended through the floor's ladder,
+// and one whose status it cannot read is left to the person. The bound is the rows' own (`stopHeardWithinMs`), so a
+// row waits its bound rather than the product's 3 s.
+describe("ST — a durable Stop (the real floor)", () => {
+  /** The program that ignores ⌃C while `$SCRIPTED_ENV_OUT.release` is absent, then becomes `cat` (which a ⌃C ends).
+   * The ignore is the shell's own disposition, which `sleep` inherits; it is restored before the exec, so `cat` is
+   * killed by the next ⌃C. `$SCRIPTED_ENV_OUT.trapped` says the ignore stands. */
+  const SWALLOWS_ONE =
+    `trap '' INT; : > "$SCRIPTED_ENV_OUT.trapped"; ` +
+    `while [ ! -e "$SCRIPTED_ENV_OUT.release" ]; do sleep 0.05; done; ` +
+    `trap - INT; exec /bin/cat >> "$SCRIPTED_TYPED_OUT"`;
+  /** The program that ignores ⌃C for good: `cat` inherits the ignore across the exec. A SIGTERM still ends it. */
+  const IGNORES_INT = `trap '' INT; : > "$SCRIPTED_ENV_OUT.trapped"; exec /bin/cat >> "$SCRIPTED_TYPED_OUT"`;
+
+  /** The run's row as a window reads it. */
+  async function rowOf(win: WsRpc, runtimeRunId: string) {
+    const { sessions: rows } = (await win.call("agent.list", {})) as AgentListResult;
+    return rows.find((r) => r.runtimeRunId === runtimeRunId);
+  }
+  /** Waits until the run's row satisfies `ok`, saying what the row held when it gave up. */
+  async function rowWhere(
+    win: WsRpc,
+    runtimeRunId: string,
+    ok: (row: AgentListResult["sessions"][number]) => boolean,
+    what: string,
+    ms = 15_000,
+  ) {
+    return await poll(
+      async (seen) => {
+        const row = await rowOf(win, runtimeRunId);
+        seen({
+          stop: row?.stop ?? null,
+          status: row?.status ?? null,
+          exited: row?.continuation?.exited ?? null,
+        });
+        return row !== undefined && ok(row) ? row : undefined;
+      },
+      ms,
+      what,
+    );
+  }
+  /** The scripted program's `trapped` mark: its ⌃C ignore stands. */
+  async function trapped(box: Box, n = 1): Promise<void> {
+    const mark = join(box.envOut, `session-${n}.env.trapped`);
+    await poll(
+      async () => (existsSync(mark) ? true : undefined),
+      CAT_READY_MS,
+      "the program's ⌃C ignore",
+    );
+  }
+  /** The run's own ⌃C-ignoring PTY, born and joined to its cell. */
+  async function bornRun(box: Box, win: WsRpc) {
+    const spawned = (await born(win, "agent.spawn", {
+      provider: "scripted",
+      cwd: box.envOut,
+    })) as AgentSpawnResult;
+    await joinedRow(win, spawned.session.runtimeRunId);
+    return spawned;
+  }
+  const escalations = (dataDir: string, runtimeRunId: string) =>
+    auditEntries(dataDir).filter(
+      (entry) =>
+        entry.action === "agent.session.stop_escalated" &&
+        entry.phase === "attempt" &&
+        entry.target.id === runtimeRunId,
+    );
+
+  it("re-sends a Stop the run's prologue swallowed, and hears the exit that follows: `exited.stop` says so", async () => {
+    const box = await setup({ floor: "real", program: SWALLOWS_ONE, stopHeardWithinMs: 8_000 });
+    const { daemon, dataDir } = box;
+    const win = await window(daemon, [...DECK, "agent.control"], "ds1");
+    const spawned = await bornRun(box, win);
+    const runId = spawned.session.runtimeRunId;
+    await trapped(box);
+
+    // the first ⌃C meets the ignore: the floor delivered it, and nothing stopped
+    const pressedAt = Date.now();
+    expect(await win.call("agent.interrupt", { runtimeRunId: runId })).toEqual({ accepted: true });
+    const sent = await rowWhere(
+      win,
+      runId,
+      (row) => row.stop?.stage === "sent",
+      "the Stop held as sent",
+    );
+    const sentAt = sent.stop?.sentAt;
+    expect(sentAt).toBeTruthy();
+    // the prologue ends and the pane becomes `cat`, which the re-sent ⌃C ends
+    writeFileSync(join(box.envOut, "session-1.env.release"), "");
+    await catReady(box, spawned.terminal.sessionId);
+    await rowWhere(
+      win,
+      runId,
+      (row) => row.continuation?.exited === true,
+      "the re-sent Stop's exit",
+      8_000 + INTERRUPTED_EXIT_MS,
+    );
+    console.log(
+      `DS_HEARD ${JSON.stringify({ row: "resent", boundMs: 8_000, heardMs: Date.now() - pressedAt })}`,
+    );
+    const exited = await poll(async () => {
+      const record = readRecord(dataDir, runId);
+      return record.exited !== undefined ? record : undefined;
+    }, 10_000);
+    expect(exited.exited?.stop).toEqual({ sentAt, heardBy: "exit" });
+    // the floor's own word for the exit stays beside it
+    expect(exited.exited?.reason).toBeTruthy();
+
+    // the re-send is fieldd's own act, in the ledger as the system's, never the person's
+    const act = await auditAct(
+      dataDir,
+      (entry) => entry.action === "agent.session.stop_escalated" && entry.target.id === runId,
+    );
+    expect(act.attempt.actor.kind).toBe("system");
+    expect(act.attempt.attrs?.["stage"]).toBe("resent");
+    expect(act.outcome.outcome).toBe("succeeded");
+    expect(escalations(dataDir, runId).map((entry) => entry.attrs?.["stage"])).toEqual(["resent"]);
+  }, 120_000);
+
+  it("leaves a run whose status it cannot read to the person: sent twice, then unheard, never ended; End run ends it", async () => {
+    const box = await setup({ floor: "real", program: IGNORES_INT, stopHeardWithinMs: 500 });
+    const { daemon, dataDir } = box;
+    const win = await window(daemon, [...DECK, "agent.control"], "ds2");
+    const spawned = await bornRun(box, win);
+    const runId = spawned.session.runtimeRunId;
+    await trapped(box);
+    await catReady(box, spawned.terminal.sessionId);
+
+    expect(await win.call("agent.interrupt", { runtimeRunId: runId })).toEqual({ accepted: true });
+    const unheard = await rowWhere(
+      win,
+      runId,
+      (row) => row.stop?.unheardAt !== undefined,
+      "the Stop left to the person",
+    );
+    expect(unheard.stop?.stage).toBe("resent");
+    // several bounds later, nothing more was done: no ladder, and the pane is still `cat`
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
+    expect(escalations(dataDir, runId).map((entry) => entry.attrs?.["stage"])).toEqual(["resent"]);
+    expect((await rowOf(win, runId))?.continuation?.exited).not.toBe(true);
+    await catReady(box, spawned.terminal.sessionId);
+
+    // End run: the person's act, `terminal.terminate` on the pane's own session — the exit is the Stop heard
+    await win.call("terminal.terminate", { sessionId: spawned.terminal.sessionId });
+    const exited = await poll(async () => {
+      const record = readRecord(dataDir, runId);
+      return record.exited !== undefined ? record : undefined;
+    }, INTERRUPTED_EXIT_MS);
+    expect(exited.exited?.stop).toEqual({ sentAt: unheard.stop?.sentAt, heardBy: "exit" });
+  }, 120_000);
+
+  it("re-sends a declared turn stop as the run's own stop, never the floor's ⌃C, and leaves it unheard", async () => {
+    const box = await setup({ floor: "real", turnStop: true, stopHeardWithinMs: 500 });
+    const { daemon, turnStops } = box;
+    const win = await window(daemon, [...DECK, "agent.control"], "ds3");
+    const spawned = await bornRun(box, win);
+    const runId = spawned.session.runtimeRunId;
+    const paneId = spawned.terminal.sessionId;
+
+    expect(await win.call("agent.interrupt", { runtimeRunId: runId })).toEqual({ accepted: true });
+    await rowWhere(
+      win,
+      runId,
+      (row) => row.stop?.unheardAt !== undefined,
+      "the Stop left to the person",
+    );
+    // the adapter's own stop, twice, and nothing else
+    expect(turnStops).toEqual([paneId, paneId]);
+    // no ⌃C went with either: the `cat` a ⌃C kills still takes a prompt
+    const agent = daemon.agents.runtime.agent(paneId);
+    expect((await agent?.submitPrompt({ text: "still-running" }))?.status).toBe("confirmed");
+    expect((await rowOf(win, runId))?.continuation?.exited).not.toBe(true);
+  }, 120_000);
+
+  it("ends a run whose status reads working through the floor's ladder after two sends, and hears its exit", async () => {
+    const box = await setup({
+      floor: "real",
+      program: IGNORES_INT,
+      observed: true,
+      stopHeardWithinMs: 500,
+    });
+    const { daemon, dataDir } = box;
+    const win = await window(daemon, [...DECK, "agent.control"], "ds4");
+    const spawned = await bornRun(box, win);
+    const runId = spawned.session.runtimeRunId;
+    const paneId = spawned.terminal.sessionId;
+    await trapped(box);
+    await catReady(box, paneId);
+    scriptedTurn(box, paneId, "turn:started");
+    await rowWhere(win, runId, (row) => row.status === "working", "the observed run working");
+
+    const pressedAt = Date.now();
+    expect(await win.call("agent.interrupt", { runtimeRunId: runId })).toEqual({ accepted: true });
+    const ending = await rowWhere(
+      win,
+      runId,
+      (row) => row.stop?.stage === "terminating",
+      "the Stop ending the run",
+    );
+    expect(ending.stop?.unheardAt).toBeUndefined();
+    // the ladder's interrupt is ignored too; its SIGTERM ends `cat`
+    await rowWhere(
+      win,
+      runId,
+      (row) => row.continuation?.exited === true,
+      "the ladder's exit",
+      INTERRUPTED_EXIT_MS + 5_000,
+    );
+    const heardMs = Date.now() - pressedAt;
+    const exited = await poll(async () => {
+      const record = readRecord(dataDir, runId);
+      return record.exited !== undefined ? record : undefined;
+    }, 10_000);
+    expect(exited.exited?.stop).toEqual({ sentAt: ending.stop?.sentAt, heardBy: "exit" });
+    expect(escalations(dataDir, runId).map((entry) => entry.attrs?.["stage"])).toEqual([
+      "resent",
+      "terminating",
+    ]);
+    const ladder = await auditAct(
+      dataDir,
+      (entry) =>
+        entry.action === "agent.session.stop_escalated" &&
+        entry.target.id === runId &&
+        entry.attrs?.["stage"] === "terminating",
+    );
+    expect(ladder.attempt.actor.kind).toBe("system");
+    expect(ladder.outcome.outcome).toBe("succeeded");
+    // two bounds and the ladder's 4 s, on this host's load: the record's measurement (ST-D1's floor half)
+    console.log(`DS_HEARD ${JSON.stringify({ row: "ladder", boundMs: 500, heardMs })}`);
+  }, 120_000);
+
+  it("hears a Stop by a readable status leaving working: no second send, the pane lives, and the next turn lets it go", async () => {
+    const box = await setup({
+      floor: "real",
+      turnStop: true,
+      observed: true,
+      stopHeardWithinMs: 1_000,
+    });
+    const { daemon, turnStops } = box;
+    const win = await window(daemon, [...DECK, "agent.control"], "ds5");
+    const spawned = await bornRun(box, win);
+    const runId = spawned.session.runtimeRunId;
+    const paneId = spawned.terminal.sessionId;
+    scriptedTurn(box, paneId, "turn:started");
+    await rowWhere(win, runId, (row) => row.status === "working", "the observed run working");
+
+    expect(await win.call("agent.interrupt", { runtimeRunId: runId })).toEqual({ accepted: true });
+    await rowWhere(win, runId, (row) => row.stop?.stage === "sent", "the Stop held as sent");
+    scriptedTurn(box, paneId, "turn:completed");
+    const heard = await rowWhere(
+      win,
+      runId,
+      (row) => row.stop?.stage === "heard",
+      "the Stop heard",
+    );
+    expect(heard.stop?.heardBy).toBe("status");
+    // past two bounds: nothing was sent again, and the pane lives
+    await new Promise((resolve) => setTimeout(resolve, 2_500));
+    expect(turnStops).toEqual([paneId]);
+    expect((await rowOf(win, runId))?.continuation?.exited).not.toBe(true);
+    // the next turn lets the heard Stop go
+    scriptedTurn(box, paneId, "turn:started");
+    await rowWhere(
+      win,
+      runId,
+      (row) => row.status === "working" && row.stop === undefined,
+      "the Stop let go",
+    );
+  }, 120_000);
+});
+
+// Item 97 — an exit fieldd never heard. AR-6-0 reddened three times after item 87 with its run never
+// reading exited and no `fieldd.agents.exit_heard` in the log. The floor's `session-exited` is the one
+// word of an exit fieldd hears, and MF-1g keeps an agent's pane, so the husk stays listed and the old
+// backstop (a row that LEAVES the inventory) never fired. The floor now lists the husk `exited`, and the
+// backstop reads that as an exit after its grace. This row drops the exit at fieldd's own door, for one
+// pane, on the real floor: the Rust half (the floor's row) and fieldd's half (the backstop) end to end.
+describe("item 97 — an exit fieldd never heard (the real floor)", () => {
+  it("a run whose session-exited is lost still reads exited: the floor lists its kept pane exited, and the backstop closes the run after its grace", async () => {
+    const box = await setup({ floor: "real" });
+    const { daemon, dataDir, envOut } = box;
+    const win = await window(daemon, [...DECK, "agent.control"], "i97");
+    const spawned = (await born(win, "agent.spawn", {
+      provider: "scripted",
+      cwd: envOut,
+    })) as AgentSpawnResult;
+    const runId = spawned.session.runtimeRunId;
+    const paneId = spawned.terminal.sessionId;
+    await joinedRow(win, runId);
+    // item 118 — the ⌃C below must meet `cat`, never the shell's prologue
+    await catReady(box, paneId);
+
+    // fieldd deaf at its own door, for this pane alone: daemon.ts hands each `session-exited` to the
+    // runtime by this property, so the floor's exit is dropped where fieldd would have heard it
+    const heard = daemon.agents.handleTerminalExit.bind(daemon.agents);
+    vi.spyOn(daemon.agents, "handleTerminalExit").mockImplementation(async (event) => {
+      if (event.sessionId !== paneId) await heard(event);
+    });
+
+    expect(await win.call("agent.interrupt", { runtimeRunId: runId })).toEqual({ accepted: true });
+    await poll(
+      async () => {
+        const { sessions } = (await win.call("agent.list", {})) as AgentListResult;
+        const row = sessions.find((r) => r.runtimeRunId === runId);
+        return row?.continuation?.exited === true ? row : undefined;
+      },
+      LOST_EXIT_MS,
+      "the run whose exit was lost read as exited",
+      exitWitness(box, paneId),
+    );
+    // the backstop's word, never the floor's outcome: nothing carried the exit but the row
+    const record = await poll(async () => {
+      const read = readRecord(dataDir, runId);
+      return read.exited !== undefined ? read : undefined;
+    }, 10_000);
+    expect(record.exited).toMatchObject({ exitCode: null, signal: null, reason: "unknown" });
+    // the pane is kept, and the floor's own row for it says the process ended
+    expect(daemon.terminals.get(paneId)?.exited).toBe(true);
+    expect(await listed(win, paneId)).toBe(true);
   }, 120_000);
 });
 
@@ -3783,8 +4508,9 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
     const nativeId = spawned.session.sessionId;
     await joinedRow(win1, runId);
     await first.daemon.stop();
+    const spark = keepLegacySpark(first, runId);
 
-    const second = await setup({ floor: "real", restartOf: first });
+    const second = await setup({ floor: "real", restartOf: first, briefing: SPARK_BRIEFING });
     const win2 = await window(second.daemon, DECK, "pe2");
     const pending = await poll(async () => {
       const { sessions } = (await win2.call("agent.list", {})) as AgentListResult;
@@ -3834,6 +4560,15 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
     expect((blind.data?.details as { state?: string } | undefined)?.state).toBe("not-alive");
     expect(await listed(win2, ptyId)).toBe(true); // and the PTY is untouched
 
+    // CP-1d: preparation must finish before the pending process is terminated.
+    rmSync(join(spark.folder, "CLAUDE.md"));
+    await expect(
+      second.daemon.agents.resume({ runtimeRunId: runId }, { kind: "local-token" }),
+    ).rejects.toMatchObject({ details: { reason: "spark-brief-unavailable" } });
+    expect(await listed(win2, ptyId)).toBe(true);
+    expect(first.sessions).toHaveLength(1);
+    writeFileSync(join(spark.folder, "CLAUDE.md"), "Ready for the pending replacement.");
+
     // ── the replacement by hand ──
     // A second window watches the floor's listing for the whole of the resume:
     // the claim ("the old PTY leaves FIRST, and is gone before the new run is
@@ -3860,6 +4595,8 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
     expect(resumed.session.continuation).toEqual({ persisted: true, resumable: false });
     expect(first.sessions).toHaveLength(2);
     expect(first.sessions[1]?.resume).toBe(nativeId);
+    expect(first.sessions[1]?.briefing.instructions).toBe("Ready for the pending replacement.");
+    expect(readRecord(first.dataDir, resumed.session.runtimeRunId).spark).toBe(spark.id);
     // the old PTY is gone before the new run was born; the records say what happened
     await untilListed(win2, ptyId, false);
     const old = readRecord(first.dataDir, runId);
@@ -3928,9 +4665,10 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
 
     const second = await setup({ floor: "real", restartOf: first });
     const win2 = await window(second.daemon, DECK, "ns2");
-    const pending = await poll(async () => {
+    const pending = await poll(async (seen) => {
       const { sessions } = (await win2.call("agent.list", {})) as AgentListResult;
       const found = sessions.find((r) => r.runtimeRunId === runId);
+      seen(found ?? null);
       return found?.continuation?.pending !== undefined ? found : undefined;
     }, 20_000);
     // held, and says no resume is coming (AR-D25's signed-out shape)
@@ -4502,3 +5240,263 @@ describe.skipIf(!REAL_AGENT)(
     }, 300_000);
   },
 );
+
+/** Item 121 — class placement with the agent cell hidden: TC-D4's fallback, made certain while the floor runs both
+ * cells (the agent cell is up and serving; only placement does not see it). */
+const NO_AGENT_CELL = (routes: TerminalRouteSnapshot): TerminalRouteSnapshot => ({
+  ...routes,
+  cells: routes.cells.filter((cell) => cell.workloadClass !== "agent"),
+});
+
+describe("item 121 — a run TC-D4's fallback put on the interactive cell re-attaches on its own signed placement", () => {
+  /** The events this row's fieldd logged, every boot of it, in order. */
+  const fielddEvents = (box: Box): Array<{ event: string; attrs: Record<string, unknown> }> => {
+    const file = join(box.dataDir, "logs", "system", "fieldd.ndjson");
+    if (!existsSync(file)) return [];
+    return readFileSync(file, "utf8")
+      .split("\n")
+      .filter((line) => line.trim() !== "")
+      .map((line) => JSON.parse(line) as { event: string; attrs?: Record<string, unknown> })
+      .map((record) => ({ event: record.event, attrs: record.attrs ?? {} }));
+  };
+
+  /** One scripted run born where the fallback put it. The interactive cell is in the snapshot first, so placement has
+   * a cell to fall back to (the legacy mirror would name none), and the run's row is joined to its cell. */
+  async function fallbackRun(box: Box, suffix: string) {
+    await poll(
+      async (seen) => {
+        const cells = box.daemon.native.terminalRoutes?.cells ?? [];
+        seen(cells.map((cell) => cell.workloadClass ?? "?"));
+        return cells.some((cell) => cell.workloadClass === "interactive") ? true : undefined;
+      },
+      30_000,
+      "the floor's interactive cell in the route snapshot",
+    );
+    const win = await window(box.daemon, DECK, suffix);
+    const spawned = (await born(win, "agent.spawn", {
+      provider: "scripted",
+      cwd: box.envOut,
+      title: "fell back",
+    })) as AgentSpawnResult;
+    const runId = spawned.session.runtimeRunId;
+    const row = await joinedRow(win, runId);
+    return { runId, ptyId: spawned.terminal.sessionId, row };
+  }
+
+  /** The next boot's word on a record it would not act on: the event it logged for that run. */
+  async function refusal(box: Box, runId: string, event: string) {
+    return await poll(
+      async (seen) => {
+        const mine = fielddEvents(box).filter((e) => e.attrs["runtimeRunId"] === runId);
+        seen(mine.map((e) => e.event));
+        return mine.find((e) => e.event === event);
+      },
+      20_000,
+      `the restart's ${event} for the run`,
+    );
+  }
+
+  /** What a refusal leaves: the PTY running (a refusal ends nothing), no re-attach in the ledger, no re-attached row. */
+  async function untouched(box: Box, runId: string, ptyId: string): Promise<void> {
+    const win = await window(box.daemon, DECK, `${runId.slice(-6)}-after`);
+    expect(await listed(win, ptyId), "the refused record's PTY still runs").toBe(true);
+    expect(
+      auditEntries(box.dataDir).some(
+        (entry) => entry.action === "agent.session.reattach" && entry.target.id === runId,
+      ),
+      "no re-attach was attempted",
+    ).toBe(false);
+    const { sessions } = (await win.call("agent.list", {})) as AgentListResult;
+    expect(sessions.find((r) => r.runtimeRunId === runId)?.continuation?.reattached).not.toBe(true);
+  }
+
+  it("is born on the interactive cell with the cell signed into its record and the placement in the ledger; the next boot re-attaches it on that proof, the same PTY at the next epoch", async () => {
+    const first = await setup({ floor: "real", attach: true, classRoutes: NO_AGENT_CELL });
+    const { runId, ptyId, row: bornRow } = await fallbackRun(first, "pl1");
+    // the row says which cell it is on (no new field: the terminal's class is the one the inventory tagged)
+    expect(bornRow.terminal?.workloadClass).toBe("interactive");
+    const cellBootId = bornRow.terminal?.cellBootId;
+    await first.daemon.stop();
+
+    const second = await setup({ floor: "real", attach: true, restartOf: first });
+    const win2 = await window(second.daemon, DECK, "pl2");
+    const row = await poll(
+      async (seen) => {
+        const { sessions } = (await win2.call("agent.list", {})) as AgentListResult;
+        const found = sessions.find((r) => r.runtimeRunId === runId);
+        seen(found?.continuation ?? "not listed");
+        return found?.continuation?.reattached === true ? found : undefined;
+      },
+      20_000,
+      "the fallback-born run re-attached by the next boot",
+    );
+    expect(row.runtimeEpoch).toBe(2);
+    expect(row.terminal).toMatchObject({
+      hosted: "local",
+      runtimeSessionId: ptyId,
+      cellBootId,
+      workloadClass: "interactive",
+    });
+    expect(first.attached[0]).toMatchObject({ runtimeSessionId: ptyId });
+    // the record: the cell fieldd stamped at the birth, kept through the re-attach, under the record's signature
+    const record = readRecord(first.dataDir, runId);
+    expect(record.placement).toEqual({ cellBootId, workloadClass: "interactive" });
+    expect(first.records.verifies(record)).toBe(true);
+    expect(record.reattach).toMatchObject({ state: "attached" });
+    // the ledger: the birth's placement as the daemon's own act, and the re-attach that stood on it
+    const placed = await auditAct(
+      first.dataDir,
+      (entry) => entry.action === "agent.session.placed" && entry.target.id === runId,
+    );
+    expect(placed.attempt.actor.kind).toBe("system");
+    expect(placed.attempt.attrs).toMatchObject({
+      sessionId: ptyId,
+      cellBootId,
+      workloadClass: "interactive",
+      fallbackFrom: "agent",
+    });
+    expect(placed.outcome.outcome).toBe("succeeded");
+    const reattached = await auditAct(
+      first.dataDir,
+      (entry) => entry.action === "agent.session.reattach" && entry.target.id === runId,
+    );
+    expect(reattached.attempt.attrs).toMatchObject({ sessionId: ptyId, placement: "interactive" });
+    expect(reattached.outcome.outcome).toBe("succeeded");
+    // the log says where the birth landed, and that it was said once the class's own cell was not found
+    expect(
+      fielddEvents(first).find((e) => e.event === "fieldd.terminal.class_cell_absent")?.attrs,
+    ).toMatchObject({ workloadClass: "agent" });
+    expect(
+      fielddEvents(first).find((e) => e.event === "fieldd.agents.session_placed")?.attrs,
+    ).toMatchObject({ runtimeRunId: runId, cellBootId, workloadClass: "interactive" });
+  }, 150_000);
+
+  it("a fallback-born run its adapter cannot attach is held pending, and agent.resume ends its PTY on the placement; the successor, born where placement now finds the agent cell, carries none", async () => {
+    const first = await setup({ floor: "real", classRoutes: NO_AGENT_CELL });
+    const { runId, ptyId } = await fallbackRun(first, "pl3");
+    await first.daemon.stop();
+
+    const second = await setup({ floor: "real", restartOf: first });
+    const win2 = await window(second.daemon, [...DECK, "agent.control"], "pl4");
+    const pending = await poll(
+      async (seen) => {
+        const { sessions } = (await win2.call("agent.list", {})) as AgentListResult;
+        const found = sessions.find((r) => r.runtimeRunId === runId);
+        seen(found?.continuation ?? "not listed");
+        return found?.continuation?.pending !== undefined ? found : undefined;
+      },
+      20_000,
+      "the fallback-born run held pending by the next boot",
+    );
+    expect(pending.terminal).toMatchObject({
+      runtimeSessionId: ptyId,
+      workloadClass: "interactive",
+    });
+    const resumed = (await born(win2, "agent.resume", { runtimeRunId: runId })) as AgentSpawnResult;
+    expect(resumed.session.terminal).toMatchObject({ hosted: "local", replaced: ptyId });
+    await untilListed(win2, ptyId, false);
+    expect(readRecord(first.dataDir, runId).exited?.reason).toBe("replaced");
+    const successor = await joinedRow(win2, resumed.session.runtimeRunId);
+    expect(successor.terminal?.workloadClass).toBe("agent");
+    expect(readRecord(first.dataDir, resumed.session.runtimeRunId).placement).toBeUndefined();
+  }, 150_000);
+
+  it("G5 — a fallback-born run whose attach the adapter calls transient is held, and the retry takes it back on the placement the record on disk still verifies", async () => {
+    const first = await setup({ floor: "real", attach: true, classRoutes: NO_AGENT_CELL });
+    const { runId, ptyId } = await fallbackRun(first, "pl8");
+    await first.daemon.stop();
+
+    // the hold re-signs the record on disk; the retry reads the held run's own copy, signed before it
+    const second = await setup({
+      floor: "real",
+      attach: true,
+      restartOf: first,
+      attachRefusals: ["retry"],
+    });
+    const win2 = await window(second.daemon, DECK, "pl9");
+    const row = await poll(
+      async (seen) => {
+        const { sessions } = (await win2.call("agent.list", {})) as AgentListResult;
+        const found = sessions.find((r) => r.runtimeRunId === runId);
+        seen(found?.continuation ?? "not listed");
+        return found?.continuation?.reattached === true ? found : undefined;
+      },
+      20_000,
+      "the fallback-born run re-attached by the retry",
+    );
+    expect(row.terminal).toMatchObject({ runtimeSessionId: ptyId, workloadClass: "interactive" });
+    expect(first.attached.map((a) => a.runtimeSessionId)).toEqual([ptyId, ptyId]);
+    expect(readRecord(first.dataDir, runId).reattach).toMatchObject({ state: "attached" });
+  }, 150_000);
+
+  it("refuses a record that names an interactive-cell PTY with no placement: a shell of the person's, as AR-4b refused it", async () => {
+    const first = await setup({ floor: "real", attach: true, classRoutes: NO_AGENT_CELL });
+    const { runId, ptyId } = await fallbackRun(first, "pl5");
+    await first.daemon.stop();
+    // signed with the daemon's own key, and saying nothing of a cell: every record before item 121, and every record
+    // that names a terminal fieldd never spawned
+    const {
+      placement: _placement,
+      signature: _signature,
+      ...bare
+    } = readRecord(first.dataDir, runId);
+    first.records.write(bare);
+
+    const second = await setup({ floor: "real", attach: true, restartOf: first });
+    const refused = await refusal(second, runId, "fieldd.agents.reattach_refused_cell");
+    expect(refused.attrs).toMatchObject({
+      sessionId: ptyId,
+      why: "no-placement",
+      workloadClass: "interactive",
+    });
+    await untouched(second, runId, ptyId);
+  }, 150_000);
+
+  it("refuses a placement written onto the record on disk: the signature no longer verifies, and the record is set aside", async () => {
+    const first = await setup({ floor: "real", attach: true, classRoutes: NO_AGENT_CELL });
+    const { runId, ptyId } = await fallbackRun(first, "pl6");
+    await first.daemon.stop();
+    // a same-uid writer (EL7) adds the placement the run was born with to a signed record that lacks it: every key
+    // right, and no key to sign them with
+    const { placement, signature: _signature, ...bare } = readRecord(first.dataDir, runId);
+    first.records.write(bare);
+    const path = first.records.path(runId);
+    writeFileSync(
+      path,
+      `${JSON.stringify({ ...JSON.parse(readFileSync(path, "utf8")), placement }, null, 2)}\n`,
+    );
+
+    const second = await setup({ floor: "real", attach: true, restartOf: first });
+    await refusal(second, runId, "fieldd.agents.session_record_forged");
+    expect(
+      fielddEvents(second).some(
+        (e) =>
+          e.event === "fieldd.agents.reattach_refused_cell" && e.attrs["runtimeRunId"] === runId,
+      ),
+      "a forged record never reaches the cell rule",
+    ).toBe(false);
+    await untouched(second, runId, ptyId);
+  }, 150_000);
+
+  it("refuses a signed placement naming another cell than the one the PTY is on", async () => {
+    const first = await setup({ floor: "real", attach: true, classRoutes: NO_AGENT_CELL });
+    const { runId, ptyId } = await fallbackRun(first, "pl7");
+    // the floor's other cell, real and up: the agent cell placement did not see
+    const agentCell = first.daemon.native.terminalRoutes?.cells.find(
+      (cell) => cell.workloadClass === "agent",
+    );
+    expect(agentCell, "the floor runs its agent cell").toBeDefined();
+    await first.daemon.stop();
+    const record = readRecord(first.dataDir, runId);
+    expect(record.placement).toBeDefined();
+    first.records.write({
+      ...record,
+      placement: { cellBootId: agentCell?.cellBootId ?? "", workloadClass: "interactive" },
+    });
+
+    const second = await setup({ floor: "real", attach: true, restartOf: first });
+    const refused = await refusal(second, runId, "fieldd.agents.reattach_refused_cell");
+    expect(refused.attrs).toMatchObject({ sessionId: ptyId, why: "other-cell" });
+    await untouched(second, runId, ptyId);
+  }, 150_000);
+});

@@ -14,10 +14,15 @@
 //     it supervises) and `plugins/` (the roots it reads at spawn);
 //   - shell: every other file in the app (Electron, the asar, the frameworks, the identity).
 //
+// AU-6 (AU-D10 A; LC-19): `merge --notes` writes the release's notes (`scripts/release-notes.mjs`'s output) INTO the
+// manifest before the sign step signs it, so they ride under its one `release` signature: no new signature, no new key.
+// A notes file that is absent (a first release of its channel) leaves the field out.
+//
 // usage: node scripts/release-manifest.mjs hash --app <VibeField.app | unpacked dir> --platform <mac-arm64|…>
 //          --out <platform-hashes.json>
 //        node scripts/release-manifest.mjs merge --hashes <a.json,b.json,…> --version <v> --tag <t> --channel <c>
-//          --commit <sha> [--previous <previous release-manifest.json>] --out <release-manifest.json>
+//          --commit <sha> [--previous <previous release-manifest.json>] [--notes <notes.json>]
+//          --out <release-manifest.json>
 
 import { createHash } from "node:crypto";
 import {
@@ -104,8 +109,17 @@ export function hashPlanes(app) {
   return planes;
 }
 
-/** Merge every platform's hashes into the manifest; `touched` against the previous release's (all on a first). */
-export function mergeManifest({ version, tag, channel, commit, builds, previous }) {
+/** Merge every platform's hashes into the manifest; `touched` against the previous release's (all on a first). AU-6:
+ * `notes`, when given, ride in the manifest; notes counted from a release other than the `previous` it names are
+ * refused here, before signing (both read the same previous manifest in the sign job). */
+export function mergeManifest({ version, tag, channel, commit, builds, previous, notes }) {
+  if (notes !== undefined && notes !== null) {
+    const since = notes.since?.tag ?? null;
+    if (since !== (previous?.tag ?? null))
+      throw new ReleaseManifestError(
+        `the notes count from ${since ?? "no release"}, but the manifest's previous is ${previous?.tag ?? "none"}`,
+      );
+  }
   const touched = PLANES.filter((plane) => {
     if (previous === null) return true;
     return Object.entries(builds).some(([platform, planes]) => {
@@ -122,6 +136,7 @@ export function mergeManifest({ version, tag, channel, commit, builds, previous 
     builds,
     touched,
     previous: previous?.tag ?? null,
+    ...(notes !== undefined && notes !== null ? { notes } : {}),
   };
 }
 
@@ -165,10 +180,15 @@ if (resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) {
           a.previous && existsSync(a.previous)
             ? JSON.parse(readFileSync(a.previous, "utf8"))
             : null,
+        // AU-6: release-notes.mjs writes no file for a first release of its channel
+        ...(a.notes && existsSync(a.notes)
+          ? { notes: JSON.parse(readFileSync(a.notes, "utf8")) }
+          : {}),
       });
       writeFileSync(a.out, `${JSON.stringify(manifest, null, 2)}\n`);
+      const withNotes = manifest.notes !== undefined ? ", with its notes" : "";
       console.log(
-        `release-manifest: ${a.tag} touches ${manifest.touched.join(", ") || "no plane"}`,
+        `release-manifest: ${a.tag} touches ${manifest.touched.join(", ") || "no plane"}${withNotes}`,
       );
     } else {
       throw new ReleaseManifestError(`unknown command "${command ?? ""}" (hash | merge)`);

@@ -8,6 +8,7 @@ import {
   specimensOf,
   trayEntity,
   trayFocus,
+  trayHung,
 } from "@vibecook/ice";
 import {
   type FocusEvent,
@@ -47,8 +48,9 @@ import {
 // calls `toggle()`; `frame/Composer.tsx`). This keeps the rest:
 //  - ONE SURFACE AT A TIME: Objects is one of the frame's open surfaces (§10). The tray's `open` is the truth and the
 //    frame's one value follows it — a board the desk shut (Esc on the desk, a click on the dimmed desk, a take handed
-//    out) folds "objects"; another surface opening (@'s list, the explorer, a menu, a drawer, the palette, a change of
-//    view) shuts the board; "objects" asked of the owner with the board shut opens it, and a refusal (in hand) folds it.
+//    out) folds "objects"; another surface opening (the hand raised, the pill's sheet, a menu, the palette, a
+//    change of view) shuts the board; "objects" asked of the owner with the board shut opens it, and a refusal (in hand)
+//    folds it.
 //  - THE FILTERS, placed imperatively each time the tray publishes — following the drawer every frame of its slide,
 //    fading in over its last 40 % — never a render per frame; All, then the categories the board hangs whose plugin is
 //    on (P3c), chosen by a click or ← → Home End (`tray.category(id)`).
@@ -142,7 +144,7 @@ function laidOf(engine: CanvasEngine, off: ReadonlySet<string>): LaidSpecimen[] 
 
 /**
  * The specimens where the board hangs them (the drawer as last drawn) at the board's scroll — the listbox's options in
- * reading order, and the rows ↑ ↓ step between. Never the ring's place: that is ICE's (`anchor().focused.rect`).
+ * the lay's order, and the rows ↑ ↓ step between. Never the ring's place: that is ICE's (`anchor().focused.rect`).
  */
 function drawnSpecimens(): BoardSpecimen[] {
   const desk = currentDesk();
@@ -150,7 +152,13 @@ function drawnSpecimens(): BoardSpecimen[] {
   if (desk === null || door === null) return [];
   const drawer = door.anchor().drawer;
   if (drawer === null) return [];
-  return boardSpecimens(laidOf(desk.engine, desk.off ?? new Set()), drawer, door.scroll());
+  const engine = desk.engine;
+  return boardSpecimens(
+    laidOf(engine, desk.off ?? new Set()),
+    trayHung(engine.world),
+    drawer,
+    door.scroll(),
+  );
 }
 
 export function Pegboard({

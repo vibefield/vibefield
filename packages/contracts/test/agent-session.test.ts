@@ -8,6 +8,7 @@ import {
   AgentMonitorMirror,
   AgentResumeNativeParams,
   AgentResumeParams,
+  AgentSessionPlacement,
   AgentSessionRecord,
   AgentSessionSummary,
   AgentSpawnParams,
@@ -550,5 +551,80 @@ describe("the record's tamper evidence (AR-4b)", () => {
       reattach: { state: "resumed", at: record.createdAt, replacedBy: "run-next" },
     });
     expect(resumed.reattach?.replacedBy).toBe("run-next");
+  });
+});
+
+describe("item 124 — the row says the door is off for this process", () => {
+  it("carries `door: off` for a run born without its briefing, and a row without it reads as before", () => {
+    const off = AgentSessionSummary.parse(fixture("agent-session-summary.door-off.json"));
+    expect(off.door).toBe("off");
+    // absent is the door as briefed, or none asked: every row from before item 124
+    const before = AgentSessionSummary.parse(fixture("agent-session-summary.valid.json"));
+    expect(before.door).toBeUndefined();
+    // OPEN, like spawnedBy: a later word still reads; an empty one is no word
+    expect(AgentSessionSummary.safeParse({ ...off, door: "later-word" }).success).toBe(true);
+    expect(AgentSessionSummary.safeParse({ ...off, door: "" }).success).toBe(false);
+  });
+
+  it("is never the signed record's: the record keeps no door, so the next birth is briefed afresh", () => {
+    expect(Object.keys(AgentSessionRecord.shape)).not.toContain("door");
+  });
+});
+
+describe("ST-D6 — the record says an exit followed a person's Stop", () => {
+  it("carries when the Stop was sent and how it was heard, beside the floor's own word for the exit", () => {
+    const record = AgentSessionRecord.parse(fixture("agent-session-record.stopped.json"));
+    expect(record.exited?.reason).toBe("application-terminated");
+    expect(record.exited?.stop).toEqual({ sentAt: "2026-10-31T06:00:03.000Z", heardBy: "exit" });
+    // a record from before ST carries none and still parses
+    expect(
+      AgentSessionRecord.parse(fixture("agent-session-record.valid.json")).exited?.stop,
+    ).toBeUndefined();
+  });
+
+  it("refuses an exit's Stop with no clock or no hearing", () => {
+    const record = fixture("agent-session-record.stopped.json") as {
+      exited: Record<string, unknown>;
+    };
+    for (const stop of [{ heardBy: "exit" }, { sentAt: "2026-10-31T06:00:03.000Z" }, "exit"]) {
+      expect(
+        AgentSessionRecord.safeParse({ ...record, exited: { ...record.exited, stop } }).success,
+        JSON.stringify(stop),
+      ).toBe(false);
+    }
+  });
+});
+
+describe("item 121 — the record names the non-agent cell its PTY was born on", () => {
+  it("carries the cell and its class beside the launch facts; a record without one is every agent-cell birth", () => {
+    const record = AgentSessionRecord.parse(fixture("agent-session-record.placed.json"));
+    expect(record.placement).toEqual({
+      cellBootId: "01JCELLBOOT0000000000000001",
+      workloadClass: "interactive",
+    });
+    expect(
+      AgentSessionRecord.parse(fixture("agent-session-record.valid.json")).placement,
+    ).toBeUndefined();
+  });
+
+  it("refuses a placement with no cell or an unknown class, and keeps a key a newer fieldd adds", () => {
+    const record = fixture("agent-session-record.placed.json") as Record<string, unknown>;
+    for (const placement of [
+      { workloadClass: "interactive" },
+      { cellBootId: "", workloadClass: "interactive" },
+      { cellBootId: "01JCELLBOOT0000000000000001", workloadClass: "batch" },
+      "01JCELLBOOT0000000000000001",
+    ]) {
+      expect(
+        AgentSessionRecord.safeParse({ ...record, placement }).success,
+        JSON.stringify(placement),
+      ).toBe(false);
+    }
+    const later = AgentSessionPlacement.parse({
+      cellBootId: "01JCELLBOOT0000000000000001",
+      workloadClass: "interactive",
+      role: "later-word",
+    });
+    expect(later).toMatchObject({ role: "later-word" });
   });
 });

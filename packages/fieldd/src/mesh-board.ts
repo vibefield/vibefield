@@ -1,7 +1,7 @@
 import {
   AGENT_FIELD,
-  AgentFieldDelta,
-  AgentFieldSnapshot,
+  AgentBoardKeyDelta,
+  AgentBoardKeySnapshot,
   type DeviceInfo,
   type RowsDeviceState,
 } from "@vibefield/contracts";
@@ -74,9 +74,17 @@ export function upstreamFloor(projection: BoardProjection, floor: number): numbe
 /** A row as the board holds it: keyed, and otherwise the owner's. A field or
  * desk row (a peer's), or a model-board row (this desktop's own — an
  * `AgentDeskTerminalRow` is no field row, which is why the hub reads nothing
- * but the key). */
+ * but the key). PG-1b: a peer's frames are now PARSED by the key alone too
+ * (`AgentBoardKeySnapshot`/`AgentBoardKeyDelta`), where they used to be held to
+ * the whole field row. That refused a whole desktop for one row this build
+ * could not read, and it was what forced a desk row to carry the field row
+ * beside its model row. The relay logs no unknown fields: it is no business
+ * reader, and every fact past the key is the owner's, for each reader to judge. */
 export type BoardRow = { runtimeRunId: string } & Record<string, unknown>;
 export type BoardSnapshot = { epoch: string; revision: number; rows: BoardRow[] };
+/** A snapshot of this desktop's own board as its subscription emits it: its
+ * chain's epoch is stamped when the subscription was given one. */
+export type LocalBoardSnapshot = { epoch?: string | undefined; revision: number; rows: BoardRow[] };
 export type BoardDelta = {
   epoch?: string | undefined;
   since: number;
@@ -138,10 +146,13 @@ export interface MeshBoardOptions {
   roster: MeshBoardRoster;
   links: MeshBoardLinks;
   upstreams: MeshBoardUpstreams;
+  /** PG-1d — the local board's frames carry their kind: a delta, or a snapshot
+   * that replaces this desktop's copy on its own chain (a re-present on a gate
+   * flip, or the repair after a lost frame). Absent: a delta. */
   openLocal: (
     projection: BoardProjection,
     minIntervalMs: number,
-    emit: (delta: BoardDelta) => void,
+    emit: (frame: BoardDelta | LocalBoardSnapshot, kind?: "delta" | "snapshot") => void,
   ) => LocalBoard;
   now?: () => number;
   /** test seams; the registry's values by default */
@@ -238,6 +249,14 @@ const REFUSALS = new Set(["INCOMPATIBLE", "FORBIDDEN_SCOPE", "PRECONDITION_FAILE
 
 type Member = (frame: MeshBoardFrame) => void;
 
+/** A reader of the mesh board: its open, the open a reader joining now would
+ * get (PG-1c's resync), and its leaving. */
+export interface MeshBoardReader {
+  readonly open: MeshBoardOpen;
+  readonly current: () => MeshBoardOpen;
+  readonly dispose: () => void;
+}
+
 /** Each desktop's LAST board at one projection, beyond any one hub's life
  * (DS-L8): a reader who arrives after the last one left — Godview reopened
  * while a laptop sleeps — is still answered with that desktop's board, greyed
@@ -281,7 +300,7 @@ class BoardHub {
   ) {
     // This desktop's own board, on its own chain; it is always `live` (the
     // daemon answering IS its liveness) and needs no heartbeat.
-    this.#local = opts.openLocal(projection, floor, (delta) => this.#onLocal(delta));
+    this.#local = opts.openLocal(projection, floor, (frame, kind) => this.#onLocal(frame, kind));
     this.#self = { asOf: opts.now(), board: held(this.#local.snapshot) };
     opts.roster.on("changed", this.#onRoster);
     opts.links.on("link-changed", this.#onRoster);
@@ -292,12 +311,17 @@ class BoardHub {
 
   /** A reader joins: it is answered with every device as the hub holds it,
    * and hears every later frame. */
-  join(member: Member): { open: MeshBoardOpen; dispose: () => void } {
+  join(member: Member): MeshBoardReader {
     const open = this.#openAnswer();
     this.#members.add(member);
     let left = false;
     return {
       open,
+      // PG-1c — the hub applies each frame and broadcasts it in one call, so
+      // this equals the state after the last frame the member was sent, and
+      // the next frame chains from it: owners' epochs and revisions as held,
+      // no owner re-asked (DS-L2)
+      current: () => this.#openAnswer(),
       dispose: () => {
         if (left) return;
         left = true;
@@ -359,8 +383,23 @@ class BoardHub {
     }
   }
 
-  #onLocal(delta: BoardDelta): void {
-    if (this.#disposed || isHeartbeat(delta)) return;
+  #onLocal(frame: BoardDelta | LocalBoardSnapshot, kind: "delta" | "snapshot" = "delta"): void {
+    if (this.#disposed) return;
+    if (kind === "snapshot") {
+      // PG-1d — this desktop's own board re-presented (a gate flip) or
+      // repaired: the held copy is REPLACED, as an owner's mid-stream snapshot
+      // replaces a peer's (`#onUpstream`), so a reader joining now and a PG-1c
+      // resync are answered with it too. Its chain is this desktop's own.
+      const snapshot: BoardSnapshot = {
+        ...(frame as LocalBoardSnapshot),
+        epoch: frame.epoch ?? this.#self.board.epoch,
+      };
+      this.#self.board = held(snapshot);
+      this.#broadcast({ device: this.opts.selfDevice(), snapshot });
+      return;
+    }
+    const delta = frame as BoardDelta;
+    if (isHeartbeat(delta)) return;
     const board = this.#self.board;
     apply(board, delta);
     this.#broadcast({ device: this.opts.selfDevice(), delta: { ...delta, epoch: board.epoch } });
@@ -582,7 +621,7 @@ class BoardHub {
     if (this.#disposed || generation !== peer.generation) return;
     const now = this.opts.now();
     if (kind === "snapshot") {
-      const parsed = AgentFieldSnapshot.safeParse(payload);
+      const parsed = AgentBoardKeySnapshot.safeParse(payload);
       if (!parsed.success) {
         this.#refuse(peer, `an unreadable board: ${parsed.error.issues[0]?.message ?? "invalid"}`);
         return;
@@ -602,7 +641,7 @@ class BoardHub {
       this.#setState(peer, "live");
       return;
     }
-    const parsed = AgentFieldDelta.safeParse(payload);
+    const parsed = AgentBoardKeyDelta.safeParse(payload);
     if (!parsed.success) {
       this.#resync(peer, `an unreadable delta: ${parsed.error.issues[0]?.message ?? "invalid"}`);
       return;
@@ -661,7 +700,7 @@ export class MeshBoard {
     projection: BoardProjection,
     minIntervalMs: number,
     emit: (frame: MeshBoardFrame) => void,
-  ): { open: MeshBoardOpen; dispose: () => void } {
+  ): MeshBoardReader {
     if (this.#disposed)
       throw new RpcCallError("UNAVAILABLE", "the mesh board is stopping", true, {
         service: "mesh-board",
@@ -692,6 +731,23 @@ export class MeshBoard {
       this.#hubs.set(key, hub);
     }
     return hub.join(emit);
+  }
+
+  /** The door's install for `agent.subscribe {scope: "mesh"}`: the open as its
+   * snapshot, every per-device frame (a device's delta, reset or state) a
+   * `.delta`, and PG-1c's resync, the whole mesh as it stands now as ONE
+   * `.snapshot`, which the next frame continues. */
+  subscribe(
+    projection: BoardProjection,
+    minIntervalMs: number,
+    emit: (payload: unknown, kind?: "delta" | "snapshot") => void,
+  ): { snapshot: MeshBoardOpen; resync: () => void; dispose: () => void } {
+    const reader = this.open(projection, minIntervalMs, (frame) => emit(frame, "delta"));
+    return {
+      snapshot: reader.open,
+      resync: () => emit(reader.current(), "snapshot"),
+      dispose: reader.dispose,
+    };
   }
 
   /** How many hubs are standing — each one is a set of open upstreams. */

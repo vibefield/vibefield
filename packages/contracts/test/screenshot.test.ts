@@ -13,6 +13,8 @@ import {
   ScreenshotHelperErrorCode,
   ScreenshotHelperEvent,
   ScreenshotHelperOk,
+  ScreenshotStillBytesRequest,
+  ScreenshotStillKeptRequest,
 } from "../src/screenshot";
 
 // SNAP-D2 — the helper's line protocol. The fixtures under fixtures/ are the
@@ -195,5 +197,45 @@ describe("ScreenshotCaptureResult — the shell's answer", () => {
     expect(SCREENSHOT_HELPER_ARGS.once).toBe("--once");
     expect(SCREENSHOT_HELPER_ARGS.captureTest).toBe("--capture-test");
     expect(SCREENSHOT_LIMITS.PRE_OVERLAY_TIMEOUT_MS).toBe(20_000);
+  });
+});
+
+describe("ScreenshotStillBytesRequest — a retained still's bytes, by name (HN-D7)", () => {
+  it("names a still by its PNG basename alone, as Quick Look does — never a path", () => {
+    expect(IPC_CHANNELS.screenshotStillBytes).toBe("vibefield:screenshot:still-bytes");
+    expect(ScreenshotStillBytesRequest.parse({ name: "capture.png" })).toEqual({
+      name: "capture.png",
+    });
+    for (const name of [
+      "/tmp/capture.png",
+      "../capture.png",
+      "..\\capture.png",
+      "capture.jpg",
+      "bad\u0000.png",
+      "",
+    ]) {
+      expect(ScreenshotStillBytesRequest.safeParse({ name }).success, name).toBe(false);
+    }
+    expect(ScreenshotStillBytesRequest.safeParse({}).success).toBe(false);
+  });
+});
+
+describe("ScreenshotStillKeptRequest — whether a retained still is kept, by name (HN-4)", () => {
+  it("asks by the still's PNG basename alone, as its bytes are asked — never a path", () => {
+    expect(IPC_CHANNELS.screenshotStillKept).toBe("vibefield:screenshot:still-kept");
+    expect(ScreenshotStillKeptRequest.parse({ name: "capture.png" })).toEqual({
+      name: "capture.png",
+    });
+    for (const name of [
+      "/tmp/capture.png",
+      "../capture.png",
+      "..\\capture.png",
+      "capture.jpg",
+      "bad\u0000.png",
+      "",
+    ]) {
+      expect(ScreenshotStillKeptRequest.safeParse({ name }).success, name).toBe(false);
+    }
+    expect(ScreenshotStillKeptRequest.safeParse({}).success).toBe(false);
   });
 });

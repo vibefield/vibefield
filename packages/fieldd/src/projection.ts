@@ -205,7 +205,10 @@ export interface RevisionedView<TOpen, TFrame> {
   /** After a lost frame, the frame that REPLACES what the subscriber holds,
    * folded from the source as it is now, and the kind it rides. Absent: the
    * shape leaves a gap to its reader, whose own rule re-subscribes (the
-   * field's wire since MF-1 — it has never carried a mid-stream snapshot). */
+   * field's wire since MF-1 — it has never carried a mid-stream snapshot).
+   * *Corrected 2026-10-31 (PG-1d):* the field's view resets now
+   * (`createFieldSubscription`), so the field's wire carries one: a re-present
+   * on a terminal-gate flip, or the repair after a lost frame. */
   reset?(): { frame: TOpen | TFrame; kind: FrameKind };
 }
 
@@ -443,7 +446,8 @@ export interface SnapshotDeltaViewOptions<R> {
   /** the rows a frame carries, shaped at SEND time (the field's attach gate) */
   present?: (rows: R[]) => R[];
   /** a reset rides a SNAPSHOT frame (`rows.ts` readers take one mid-stream).
-   * Absent or false: gaps are the reader's (the field's wire). */
+   * Absent or false: gaps are the reader's (the field's wire until PG-1d,
+   * 2026-10-31, when its view began to reset). */
   resets?: boolean;
 }
 

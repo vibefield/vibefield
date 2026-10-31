@@ -192,6 +192,74 @@ describe("the two cuts of the model's row (M16, M21)", () => {
     expect(desk.monitorRow).toMatchObject({ attachable: false, writable: false });
     monitor.service.dispose();
   });
+
+  it("F-M4 (PG-1a) — an owner whose doors are down withholds the model's attach promise with the join on its desk cut", async () => {
+    const monitor = await testMonitor({ summaries: [working] });
+    // the backend promises an attach: a PTY is named (M41)
+    expect(monitor.row("run-working")).toMatchObject({ attachable: true, writable: true });
+    const cut = (published: boolean) =>
+      createFieldSubscription({
+        list: () => monitor.fold.list(),
+        subscribe: (fn) => monitor.fold.subscribe(fn),
+        emit: () => {},
+        project: deskProjector((id) => monitor.service.rowForRun(id)),
+        minIntervalMs: AGENT_FIELD.DESK_MIN_INTERVAL_MS,
+        epoch: published ? "boot.up" : "boot.down",
+        terminalPublished: () => published,
+      });
+    const up = cut(true);
+    const down = cut(false);
+    const open = AgentDeskRow.parse(up.snapshot.rows[0]);
+    const held = AgentDeskRow.parse(down.snapshot.rows[0]);
+    expect(open.terminal).toBeDefined();
+    expect(open.monitorRow).toMatchObject({ attachable: true, writable: true });
+    // doors down: neither the join nor the model's word promises a tap
+    expect(held.terminal).toBeUndefined();
+    expect(held.monitorRow).toMatchObject({ attachable: false, writable: false });
+    // and nothing else of the model's row moves
+    expect({ ...held.monitorRow, attachable: true, writable: true }).toEqual(open.monitorRow);
+    up.dispose();
+    down.dispose();
+    monitor.service.dispose();
+  });
+
+  it("PG-1d — an idle desk board re-presented on a gate flip: ONE snapshot at its revision, the attach promise withdrawn", async () => {
+    const monitor = await testMonitor({ summaries: [working] });
+    // the backend promises an attach (M41); `row` brings the model's rows up first
+    expect(monitor.row("run-working")).toMatchObject({ attachable: true, writable: true });
+    const frames: Array<{
+      frame: { epoch?: string; revision: number; rows: unknown[] };
+      kind: string;
+    }> = [];
+    let published = true;
+    const sub = createFieldSubscription({
+      list: () => monitor.fold.list(),
+      subscribe: (fn) => monitor.fold.subscribe(fn),
+      emit: (frame, kind) => frames.push({ frame: frame as never, kind }),
+      project: deskProjector((id) => monitor.service.rowForRun(id)),
+      minIntervalMs: AGENT_FIELD.DESK_MIN_INTERVAL_MS,
+      epoch: "boot.1",
+      terminalPublished: () => published,
+    });
+    const open = AgentDeskRow.parse(sub.snapshot.rows[0]);
+    expect(open.monitorRow).toMatchObject({ attachable: true, writable: true });
+
+    published = false;
+    sub.represent();
+    await new Promise((resolve) => setTimeout(resolve, AGENT_FIELD.DESK_MIN_INTERVAL_MS + 50));
+    expect(frames).toHaveLength(1);
+    expect(frames[0]).toMatchObject({
+      kind: "snapshot",
+      frame: { epoch: "boot.1", revision: sub.snapshot.revision },
+    });
+    const held = AgentDeskRow.parse(frames[0]?.frame.rows[0]);
+    expect(held.terminal).toBeUndefined();
+    expect(held.monitorRow).toMatchObject({ attachable: false, writable: false });
+    // nothing else of the model's row moves
+    expect({ ...held.monitorRow, attachable: true, writable: true }).toEqual(open.monitorRow);
+    sub.dispose();
+    monitor.service.dispose();
+  });
 });
 
 describe("who may ask the model board (MV-D18, M16, L8)", () => {
@@ -208,6 +276,18 @@ describe("who may ask the model board (MV-D18, M16, L8)", () => {
         AgentSubscribeParams.parse({ projection: "model", scope: "mesh", heartbeatMs: 1000 }),
       )?.kind,
     ).toBe("PRECONDITION_FAILED");
+  });
+
+  // Item 100: the gate named the two kinds it refused, so every other kind
+  // was served this desktop's deal.
+  it("is refused to every kind that is not this desktop's own caller: an agent's MCP session, a plugin, a guest", () => {
+    for (const principal of ["mcp-agent", "plugin", "tailnet-guest"] as const) {
+      expect(refuseBoardAsk(principal, ask("model"))?.kind, principal).toBe("FORBIDDEN_SCOPE");
+      expect(refuseBoardAsk(principal, ask("model", "mesh"))?.kind, principal).toBe(
+        "FORBIDDEN_SCOPE",
+      );
+    }
+    expect(refuseBoardAsk("shell-main", ask("model"))).toBeNull();
   });
 
   it("a model hub asks its peers for their desk boards at the desk's floor", () => {
@@ -536,5 +616,105 @@ describe("MV-3d — the chrome's facts ride the window's own run rows (M35, M42)
     }
     board.dispose();
     monitor.service.dispose();
+  });
+});
+
+// PG-1f (PU-I, `draft/petitions/PU-I-puppeteer-idle-cost-step.md`) — an idle
+// board sends nothing; puppeteer-monitor's own README §Cost says "idle emits
+// nothing". At the pin (0.3.2) the usage ledger stamps `lastStepAt` from the
+// clock on every read (`dist/backend/usage-ledger.js:37`), so `settle` finds a
+// PRICED row's history changed at each 30 s step (:87-89), the backend re-emits
+// the row, and this board sends a frame per step for an idle run. An unpriced
+// row's cost stays absent, so it is spared. The two controls keep the `.fails`
+// row honest both ways: the same harness hears a priced run's new spend, and it
+// hears nothing from an unpriced idle run across the same steps.
+describe("PG-1f (PU-I) — an idle priced row across the backend's 30 s cost step", () => {
+  const STEP_MS = 30_000;
+  const IDLE_STEPS = 10;
+  const idle = summary({ runtimeRunId: "run-idle", status: "idle", cumulativeTokens: 900 });
+
+  /** The run's state with core's price on it: a total, and its spend in one
+   * bucket at `at`'s step (so the window empties once ten minutes pass). Each
+   * reading takes its own revision: core never sends one revision twice. */
+  const pricedState = (costUsd: number, at: number, bump: number): AgentMonitorState => {
+    const state = stateOf(idle);
+    return {
+      ...state,
+      revision: state.revision + bump,
+      usage: {
+        ...state.usage,
+        costUsd,
+        costCoverage: "complete",
+        costHistory: [{ at: new Date(at).toISOString(), costUsd }],
+      },
+    } as AgentMonitorState;
+  };
+
+  /** The model board over one idle run, settled past the ledger's ten-minute
+   * window and every recency horizon, its frames counted from there. */
+  async function settledBoard(priced: boolean) {
+    vi.useFakeTimers();
+    const monitor = await testMonitor({ summaries: [idle] });
+    if (priced) monitor.runtime.push(pricedState(0.42, monitor.clock.clock.now(), 1));
+    monitor.rows();
+    const frames: AgentModelDelta[] = [];
+    const board = createModelSubscription({
+      fold: monitor.fold,
+      monitor: monitor.service,
+      emit: (delta) => frames.push(AgentModelDelta.parse(delta)),
+      epoch: "boot.pg1f",
+    });
+    const step = (ms: number): void => {
+      monitor.clock.advance(ms);
+      monitor.scheduler.flush();
+      vi.advanceTimersByTime(AGENT_FIELD.FULL_TICK_MS + 1);
+    };
+    // an hour of quiet: the spend leaves the window, recency has nothing left to flip
+    for (let settled = 0; settled < 120; settled += 1) step(STEP_MS);
+    frames.length = 0;
+    const idleSteps = (): void => {
+      for (let index = 0; index < IDLE_STEPS; index += 1) step(STEP_MS);
+    };
+    const close = (): void => {
+      board.dispose();
+      monitor.service.dispose();
+    };
+    return { monitor, frames, step, idleSteps, close };
+  }
+
+  it("the control: a priced run's new spend is heard on the model board", async () => {
+    const { monitor, frames, step, close } = await settledBoard(true);
+    // the settled board the `.fails` row stands on: priced, its window all zero
+    expect(monitor.row("run-idle").cost?.usd).toBe(0.42);
+    expect(monitor.row("run-idle").cost?.series?.steps.every((usd) => usd === 0)).toBe(true);
+    monitor.runtime.push(pricedState(0.97, monitor.clock.clock.now(), 2));
+    step(0);
+    const heard = frames.flatMap((frame) => frame.upserts);
+    expect(heard.length).toBeGreaterThan(0);
+    expect((heard.at(-1) as { monitorRow: { cost?: { usd: number } } }).monitorRow.cost?.usd).toBe(
+      0.97,
+    );
+    close();
+  });
+
+  it("the control: an unpriced idle run is silent across ten steps", async () => {
+    const { monitor, frames, idleSteps, close } = await settledBoard(false);
+    expect(monitor.row("run-idle").cost).toBeUndefined();
+    idleSteps();
+    expect(frames).toHaveLength(0);
+    close();
+  });
+
+  // `.fails` until PU-I lands upstream: the puppeteer EL8 that carries the fix
+  // turns this row RED in its own `pnpm verify` (`siblings:pin` typechecks the
+  // consumers only), and that red is the signal to drop `.fails` here.
+  it.fails("a priced idle run is silent across ten steps (PU-I)", async () => {
+    const { frames, idleSteps, close } = await settledBoard(true);
+    try {
+      idleSteps();
+      expect(frames).toHaveLength(0);
+    } finally {
+      close();
+    }
   });
 });

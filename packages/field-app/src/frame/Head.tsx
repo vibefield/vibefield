@@ -20,10 +20,24 @@ import { earlierFields, type SyncQuestionDoor } from "../account/sync-question";
 import { emitZoomKeyMarker, emitZoomMenuMarker } from "../development-console";
 import type { DocManagerApi } from "../doc-manager";
 import { useDocSyncStatuses } from "../doc-sync-store";
+import { useReducedMotion } from "../field/desk/bar/bar-motion";
+import { relativeTime } from "../format/relative-time";
+import { PluginSurfaceHost, useVisiblePluginSurfaces } from "../hud/PluginSurfaceSlot";
 import { getRendererLogger } from "../logging";
-import { type FrameSurface, foldSurface } from "./frame-surface";
-import { type HeadDocTile, type HeadDot, HeadView } from "./HeadView";
+import { usePluginRegistrySnapshot } from "../plugin-host/plugin-registry-store";
+import { useGodviewDeckMaximized } from "./deck-door";
+import { type FrameSurface, foldSurface, type SheetShelf, sheetShelf } from "./frame-surface";
+import {
+  type HeadArtifacts,
+  type HeadDocTile,
+  type HeadDot,
+  HeadView,
+  SHEET_FOLD_MS,
+  useLingering,
+} from "./HeadView";
+import { useArtifactsDot, useHubWaits } from "./head-artifacts";
 import type { HeadCanvas } from "./head-canvas";
+import { useFindStep } from "./Peek";
 import type { ViewKeys } from "./views";
 import {
   runZoom,
@@ -36,22 +50,18 @@ import {
 
 // THE HEAD'S CONTROLLER (DESIGN.md §8 "The head", §10; One Frame FR-3). It
 // owns what the head DOES — the field's name and the path to read, renaming in
-// place, the explorer's acts, the zoom's menu and its keys — and nothing it
+// place, the explorer's acts, the zoom's menu and its keys, and since HN-8 the
+// sheet's two shelves and the Hub its Artifacts shelf hosts — and nothing it
 // shows, which is `HeadView`'s. Which of the frame's surfaces is open is NOT
 // its own: that has one owner (FieldView, `frame-surface.ts`), and this asks
-// it. What it reads comes through two doors — the document manager (the
-// field, the fields) and the head's canvas door (the path, the zoom) — so the
-// catalog runs this exact controller on fixtures.
-
-/** "2h ago": a field's time, as its tile says it. */
-function fmtRelative(ms: number, now = Date.now()): string {
-  const s = Math.max(0, Math.floor((now - ms) / 1000));
-  if (s < 60) return "just now";
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-  if (s < 86_400) return `${Math.floor(s / 3600)}h ago`;
-  if (s < 7 * 86_400) return `${Math.floor(s / 86_400)}d ago`;
-  return new Date(ms).toLocaleDateString();
-}
+// it — and which shelf of the sheet shows is that owner's one reading of it
+// (`useShownShelf`, below), handed in as it is to the package circle. What it
+// reads comes through two doors — the document manager (the field, the
+// fields) and the head's canvas door (the path, the zoom) — so the catalog
+// runs this exact controller on fixtures; the package's dot
+// (`head-artifacts.ts`), the Hub's binding (the plugin surfaces) and the
+// terminals' state (`deck-door.ts`) are the window's own stores, which a
+// catalog without a daemon reads empty.
 
 /** C6-4 — the pill's sync dot says STANDING states only (pending, a peer
  * offline, declined, epoch-stale): transient syncing lives in Settings and the
@@ -124,6 +134,10 @@ export interface HeadProps {
   keys: ViewKeys;
   /** The frame's open surface, from its one owner. */
   surface: FrameSurface | null;
+  /** The shelf the sheet shows, or null: the owner's one reading of `surface`
+   * for the view (`useShownShelf`), the same the package circle and the
+   * field's recede read. */
+  shelf: SheetShelf | null;
   onSurfaceChange: (next: FrameSurface | null) => void;
   /** Whether the head binds the zoom's keys on the window. The catalog's live
    * head does not: its page is not a window the head owns. */
@@ -136,6 +150,9 @@ export interface HeadProps {
    * asks it before the field is made. Absent where the head has no daemon (the
    * catalog, its own tests): New field never asks. */
   syncQuestion?: SyncQuestionDoor | undefined;
+  /** HN-8 — the window the Hub's surface is hosted for on the Artifacts shelf
+   * (the side panel's slot, as the right edge's drawer hosted it). */
+  windowId: string;
 }
 
 /** The question while it is open: the posture chosen, the fields added. */
@@ -144,16 +161,34 @@ interface Asking {
   added: ReadonlySet<string>;
 }
 
+/** The shelf the pill's sheet shows (HN-8), or null while it is shut: the
+ * owner's value, in the view that opened it. A change of view folds the sheet
+ * — the line asks the owner, in an effect — and until the owner hears, the
+ * sheet is drawn shut, so it never starts to grow over the next view for the
+ * frame between. Under a cover it shows Artifacts alone: Fields are the
+ * desk's and stay with the pill. Read ONCE, by the owner (FieldView), and
+ * handed to the head, the package circle and the field's recede alike, so the
+ * three never part over that frame (DESIGN.md §8 "The head"). */
+export function useShownShelf(surface: FrameSurface | null, view: FrameView): SheetShelf | null {
+  const shelf = sheetShelf(surface);
+  const [opened, setOpened] = useState({ shelf, view });
+  if (opened.shelf !== shelf) setOpened({ shelf, view });
+  if (shelf === null || opened.view !== view) return null;
+  return view !== "canvas" && shelf === "fields" ? null : shelf;
+}
+
 export function Head({
   manager,
   canvas,
   view,
   keys,
   surface,
+  shelf,
   onSurfaceChange,
   bindKeys = true,
   menuZoom,
   syncQuestion,
+  windowId,
 }: HeadProps): ReactElement {
   const state = useSyncExternalStore(manager.subscribe, manager.getState);
   const path = useSyncExternalStore(canvas.subscribePath, canvas.path, canvas.path);
@@ -161,8 +196,22 @@ export function Head({
   // C6-4 — per-field sync standing (absent: sync has nothing to say).
   const syncStatuses = useDocSyncStatuses() ?? [];
   const busy = state.phase === "loading";
-  const fieldsOpen = surface === "fields";
+  // HN-8 — the pill's sheet is ONE surface on two shelves (PL-D1): `shelf` says which shows.
+  const fieldsOpen = shelf === "fields";
   const zoomOpen = surface === "zoom";
+  // PL-D1 — the package's standing dot, read from the catalog by the head itself.
+  const packageDot = useArtifactsDot();
+  // The Hub the Artifacts shelf hosts — the side panel's one contribution — and,
+  // while none is bound, why: its plugin off or unable to run, the Hub opening,
+  // or still opening after 10 s and not starting.
+  const hub = useVisiblePluginSurfaces("hud.side-panel")[0] ?? null;
+  const waits = useHubWaits(usePluginRegistrySnapshot(), hub !== null);
+  const artifactsHeld = useLingering(shelf === "artifacts", SHEET_FOLD_MS);
+  // PL-D2 with GV-D11 — while Godview's terminals are maximized the package stands in their
+  // title bar, and the covered sheet is shut into that control: read as the circle reads it,
+  // step for step, so the sheet always grows from where the control stands.
+  const deckMaximized = useGodviewDeckMaximized();
+  const circleIn = useFindStep(view === "godview", deckMaximized, useReducedMotion());
   const [renaming, setRenaming] = useState<string | null>(null);
   // Leaving a rename is said twice when Return commits (the input then
   // blurs as it goes); only the first is heard.
@@ -224,18 +273,36 @@ export function Head({
     if (fieldsOpen) void manager.refreshDocs().catch(() => {});
   }, [fieldsOpen, manager]);
 
-  // Esc closes the explorer — on the capture phase, so the canvas keymap's
-  // Esc (which would go up a folder) never also fires; a rename keeps its own.
+  // What held the keyboard as the pill's sheet came to show — the button that
+  // opened it or turned it — for Esc to give it back. Under a cover nothing is
+  // kept: the package circle is the covered sheet's one door, and it takes the
+  // keyboard back on every fold, Esc's included (`PackageCircle`) — a keyboard's
+  // open has by then taken the keyboard into the sheet, to its own package.
+  const opener = useRef<HTMLElement | null>(null);
   useEffect(() => {
-    if (!fieldsOpen) return;
+    const focused = document.activeElement;
+    opener.current =
+      shelf !== null && view === "canvas" && focused instanceof HTMLElement ? focused : null;
+  }, [shelf, view]);
+
+  // Esc shuts the sheet, on either shelf — on the capture phase, so the canvas
+  // keymap's Esc (which would go up a folder) and a covered view's own never
+  // also fire; a rename keeps its own — and, if the keyboard was in the pill's
+  // sheet, gives it back to the button that opened it (DESIGN.md §8 "Artifacts").
+  useEffect(() => {
+    if (shelf === null) return;
     const onEsc = (event: globalThis.KeyboardEvent): void => {
-      if (event.key !== "Escape" || event.target instanceof HTMLInputElement) return;
-      event.stopPropagation();
-      fold("fields");
+      if (event.key !== "Escape" || event.target === renameRef.current) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const focused = document.activeElement;
+      const inside = focused instanceof Element && focused.closest("[data-head-sheet]") !== null;
+      fold(shelf);
+      if (inside) opener.current?.focus({ preventScroll: true });
     };
     window.addEventListener("keydown", onEsc, true);
     return () => window.removeEventListener("keydown", onEsc, true);
-  }, [fieldsOpen, fold]);
+  }, [shelf, fold]);
 
   // The zoom's menu folds on Esc (the readout takes the keyboard back) and on
   // a press anywhere but the readout and its menu.
@@ -400,7 +467,7 @@ export function Head({
         const thumbnailUrl = state.thumbnailUrls[entry.docId];
         return {
           entry,
-          caption: `${fmtRelative(entry.updatedAt)}${word === null ? "" : ` · ${word}`}`,
+          caption: `${relativeTime(entry.updatedAt)}${word === null ? "" : ` · ${word}`}`,
           ...(thumbnailUrl === undefined ? {} : { thumbnailUrl }),
           ...((state.beforeTheDesk ?? []).includes(entry.docId) ? { beforeTheDesk: true } : {}),
         };
@@ -424,20 +491,48 @@ export function Head({
   const current = syncStatuses.find((s) => s.docId === state.doc?.docId);
   const currentId = state.doc?.docId ?? null;
 
+  // The Artifacts shelf's contents while it shows, and through its fold: the Hub,
+  // hosted for this window — its own close shuts the sheet — or why there is none.
+  // An open shelf stays open through the Hub's restart and never folds on an
+  // unbind (DESIGN.md §8 "Artifacts"): it waits in words until the Hub is back.
+  const artifacts: HeadArtifacts | null = !artifactsHeld
+    ? null
+    : hub === null
+      ? { state: waits }
+      : {
+          state: "hub",
+          hub: (
+            <PluginSurfaceHost
+              slot="hud.side-panel"
+              windowId={windowId}
+              requestClose={() => fold("artifacts")}
+              surfaceId={hub.surfaceId}
+            />
+          ),
+        };
+
   return (
     <HeadView
       covered={view !== "canvas"}
+      bar={circleIn.bar}
       place={{
         name: held !== undefined ? IN_MEMORY_NAME : (state.doc?.name ?? "…"),
         path,
         dot: held !== undefined ? heldDot(held) : current === undefined ? null : syncDot(current),
         renaming,
         renameRef,
-        open: fieldsOpen,
+        shelf,
         busy,
         docs,
         currentId,
-        onToggle: (open) => onSurfaceChange(open ? "fields" : foldSurface(surface, "fields")),
+        // The button that is on shuts the sheet; the other opens it on its shelf,
+        // or turns it there in place — one surface, so turning folds nothing.
+        onShelf: (next) => {
+          if (next !== null) onSurfaceChange(next);
+          else if (shelf !== null) fold(shelf);
+        },
+        packageDot,
+        artifacts,
         onJump: (depth) => canvas.exitTo(depth),
         onRename: beginRename,
         onRenameDraft: setRenaming,
@@ -460,7 +555,7 @@ export function Head({
                   .map((entry) => ({
                     docId: entry.docId,
                     name: entry.name,
-                    caption: fmtRelative(entry.updatedAt),
+                    caption: relativeTime(entry.updatedAt),
                   })),
                 added: asking.added,
                 error: answerError ?? syncQuestion.posture.writeError,

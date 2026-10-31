@@ -1,5 +1,9 @@
 import { homedir } from "node:os";
-import { ENV_PREFIXES, type TerminalRuntimeSession } from "@vibefield/contracts";
+import {
+  type AgentSessionPlacement,
+  ENV_PREFIXES,
+  type TerminalRuntimeSession,
+} from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import type {
   AgentHost,
@@ -135,6 +139,8 @@ export interface BornTerminal {
   sessionId: string;
   session: TerminalRuntimeSession;
   cellBootId?: string | undefined;
+  /** Item 121 — the non-agent cell TC-D4's fallback put it on, for its record */
+  placement?: AgentSessionPlacement | undefined;
 }
 
 export interface TerminalAgentHostOptions {
@@ -209,6 +215,7 @@ export function createTerminalAgentHost(options: TerminalAgentHostOptions): Term
       logger.info("fieldd.agents.terminal_spawned", "Agent terminal spawned", {
         sessionId: born.sessionId,
         ...(born.cellBootId !== undefined ? { cellBootId: born.cellBootId } : {}),
+        ...(born.placement !== undefined ? { workloadClass: born.placement.workloadClass } : {}),
         variables: Object.keys(variables).length,
       });
       return { runtimeSessionId: born.sessionId };

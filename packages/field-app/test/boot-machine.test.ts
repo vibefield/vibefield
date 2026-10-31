@@ -85,6 +85,13 @@ function harness(
      * browser harness has and the state every pre-UA-3w test ran in. */
     usersUpdate?: FieldHost["usersUpdate"];
     forceOnboarding?: boolean;
+    /** FG-L6's floor; off unless a row is about it. */
+    floorMs?: number;
+    isHidden?: () => boolean;
+    /** BootRoot's part on a returning boot (FG-2): its ground opens and hands the desk over the
+     * moment the machine is at `handing-over`. "held" keeps it, for the rows about the hold. The
+     * Setup Assistant's last beat is always the row's own to give. */
+    ground?: "opens" | "held";
   } = {},
 ) {
   const marks: string[] = [];
@@ -129,9 +136,18 @@ function harness(
     frameBudgetMs: opts.frameBudgetMs ?? 16,
     stableFrames: opts.stableFrames ?? 3,
     stabilityCapMs: opts.stabilityCapMs ?? 100_000,
+    floorMs: opts.floorMs ?? 0,
+    ...(opts.isHidden === undefined ? {} : { isHidden: opts.isHidden }),
   };
 
   const machine = createBootMachine(deps);
+  if ((opts.ground ?? "opens") === "opens") {
+    machine.subscribe(() => {
+      if (machine.view().phase === "handing-over" && machine.onboarding === null) {
+        machine.revealDesk();
+      }
+    });
+  }
   return {
     machine,
     marks,
@@ -233,7 +249,7 @@ describe("boot machine (ESR slice 4 — splash-gated boot)", () => {
     expect(h.importWorkspace).toHaveBeenCalledTimes(1);
   });
 
-  it("full happy path: bootstrap → client → workspace → document → warm → stabilize → interactive", async () => {
+  it("full happy path: bootstrap → client → workspace → document → warm → stabilize → hand over → interactive", async () => {
     const h = harness();
     const conn = deferred<{ port: number; token: string }>();
     const ws = deferred<WorkspaceModule>();
@@ -283,7 +299,7 @@ describe("boot machine (ESR slice 4 — splash-gated boot)", () => {
       progress: 1,
     });
 
-    // N clean frames → interactive, un-degraded.
+    // N clean frames → handed over (the ground opens at once here) → interactive, un-degraded.
     await feedCleanFrames(h);
     expect(h.machine.view().phase).toBe("interactive");
     expect(h.machine.view().degradedReveal).toBe(false);
@@ -295,6 +311,7 @@ describe("boot machine (ESR slice 4 — splash-gated boot)", () => {
       "opening-document",
       "warming",
       "stabilizing",
+      "handing-over",
       "interactive",
     ]);
   });
@@ -601,7 +618,7 @@ describe("boot machine (ESR slice 4 — splash-gated boot)", () => {
     expect(h.marks.filter((name) => name === "vf:renderer:interactive")).toHaveLength(1);
   });
 
-  it("never holds a desk whose wizard was done before it was ready, nor one no wizard holds", async () => {
+  it("keeps a hand-over given early: a wizard done before its desk was ready reveals it the moment it is stable", async () => {
     // The wizard's beat can end first (a second user has none): the desk then
     // reveals the moment it is stable, with no `handing-over` at all.
     const early = harness({ usersUpdate: vi.fn(async () => NEW_USER) });
@@ -616,17 +633,57 @@ describe("boot machine (ESR slice 4 — splash-gated boot)", () => {
     await feedCleanFrames(early);
     expect(early.machine.view().phase).toBe("interactive");
     expect(seen).not.toContain("handing-over");
+  });
 
-    // A boot no wizard held: revealDesk is inert, and the reveal is the splash's.
-    FakeManager.instances = [];
-    const plain = harness({ usersUpdate: vi.fn(async () => ({ ...NEW_USER, onboarded: true })) });
-    plain.machine.revealDesk();
-    await bootToOnboarding(plain);
-    expect(plain.machine.onboarding).toBeNull();
+  it("holds a returning boot at `handing-over` too, until its ground has opened onto the desk (FG-2)", async () => {
+    const h = harness({
+      usersUpdate: vi.fn(async () => ({ ...NEW_USER, onboarded: true })),
+      ground: "held",
+    });
+    await bootToOnboarding(h);
+    expect(h.machine.onboarding).toBeNull();
     firstManager().emit({ phase: "ready", loading: null });
     await flush();
-    await feedCleanFrames(plain);
-    expect(plain.machine.view().phase).toBe("interactive");
+    await feedCleanFrames(h);
+
+    expect(h.machine.view().phase).toBe("handing-over");
+    expect(h.marks).toContain("vf:renderer:stable");
+    expect(h.marks).not.toContain("vf:renderer:interactive");
+    await vi.advanceTimersByTimeAsync(60_000); // only the ground releases it
+    expect(h.machine.view().phase).toBe("handing-over");
+
+    h.machine.revealDesk();
+    h.machine.revealDesk(); // twice is once
+    await flush();
+    expect(h.machine.view().phase).toBe("interactive");
+    expect(h.marks.filter((name) => name === "vf:renderer:interactive")).toHaveLength(1);
+  });
+
+  it("stands a returning boot's splash 700ms from its first frame before it hands over — a floor, never a stage (FG-L6)", async () => {
+    const h = harness({ floorMs: 700, ground: "held" });
+    await bootToStabilizing(h); // start() at clock 0
+    await feedCleanFrames(h); // stable at clock 24
+    expect(h.machine.view()).toMatchObject({ phase: "stabilizing", stage: "settling" });
+    await vi.advanceTimersByTimeAsync(675);
+    await flush();
+    expect(h.machine.view().phase).toBe("stabilizing");
+    await vi.advanceTimersByTimeAsync(1);
+    await flush();
+    expect(h.machine.view().phase).toBe("handing-over");
+  });
+
+  it("adds no floor to a boot slower than it, nor to a hidden window", async () => {
+    const slow = harness({ floorMs: 700, ground: "held" });
+    await bootToStabilizing(slow);
+    // A clean streak that ends past the floor (the first delta, from 0, is long).
+    for (const at of [990, 998, 1006, 1014]) slow.fireFrame(at);
+    await flush();
+    expect(slow.machine.view().phase).toBe("handing-over");
+
+    FakeManager.instances = [];
+    const hidden = harness({ floorMs: 700, ground: "held", isHidden: () => true });
+    await bootToStabilizing(hidden); // a hidden window judges no frames, and stands no splash
+    expect(hidden.machine.view().phase).toBe("handing-over");
   });
 
   it("the development preview reopens a fresh wizard without changing the durable profile", async () => {

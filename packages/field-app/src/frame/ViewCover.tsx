@@ -10,7 +10,7 @@ import "./view-frame.css";
 // fixtures, the frame's controller hands it the view and the motion.
 
 /** The views a cover can show. */
-export type CoveredView = Exclude<FrameView, "canvas" | "assistant">;
+export type CoveredView = Exclude<FrameView, "canvas">;
 
 /** What the cover is doing this render: rising off the canvas, swapping one
  * covered view for another, lowering back to the canvas, or at rest. Only a
@@ -28,7 +28,7 @@ export interface CoverState {
  * covers, Godview otherwise (the first covered view anyone opens), at rest. */
 export function coverAt(view: FrameView): CoverState {
   return {
-    content: view === "godview" || view === "history" ? view : "godview",
+    content: view === "canvas" ? "godview" : view,
     motion: "rest",
   };
 }
@@ -39,7 +39,7 @@ export function coverAt(view: FrameView): CoverState {
  * what leaves is what was there. The motion is kept until the next move, so a
  * render in between never cuts a fade short. */
 export function coverAfter(cover: CoverState, from: FrameView, to: FrameView): CoverState {
-  const next = to === "godview" || to === "history" ? to : null;
+  const next = to === "canvas" ? null : to;
   return {
     content: next ?? cover.content,
     motion: from === "canvas" ? "rise" : next === null ? "lower" : "swap",
@@ -55,6 +55,7 @@ export interface ViewCoverViewProps {
   motion: CoverMotion;
   godview?: ReactNode;
   history?: ReactNode;
+  chat?: ReactNode;
 }
 
 export function ViewCoverView({
@@ -63,6 +64,7 @@ export function ViewCoverView({
   motion,
   godview,
   history,
+  chat,
 }: ViewCoverViewProps): ReactElement {
   const up = view !== "canvas";
   return (
@@ -92,6 +94,15 @@ export function ViewCoverView({
         inert={!up || content !== "history"}
       >
         {history}
+      </section>
+      <section
+        className="vf-cover-view"
+        data-cover-view="assistant"
+        data-active={content === "assistant" ? "true" : "false"}
+        aria-label="Chat"
+        inert={!up || content !== "assistant"}
+      >
+        {chat}
       </section>
     </div>
   );

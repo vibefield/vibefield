@@ -1,15 +1,13 @@
 /**
  * DK-16 — smoke:canvas's PEERS and FAULT rows and the GPU-less runs' CARD rows, their judges (testing/smoke-peers.ts,
  * testing/smoke-unavailable.ts), and the COVER rows' RIM (testing/smoke-covers.ts): a peer's arrow where B's pointer is
- * through both cameras, the idle hide at 8 s and not before, the chip's contrast measured from its pixels, the lost
- * device's card and the cards no reload can help in the canon's words on the plain ground, a cover over a desk that never
+ * through both cameras, the idle hide at 8 s and not before, the lost device's card and the cards no reload can help in the canon's words on the plain ground, a cover over a desk that never
  * drew, and the receded still's rim the cover's tint over the mat's ground.
  */
 import { describe, expect, it } from "vitest";
 import { CANVAS_BG, COVERS, judgeRim, over, parseColor } from "../src/testing/smoke-covers";
 import {
   type CardSeen,
-  contrast,
   DEGRADED_SENTENCE,
   type ExitSeen,
   expectedBox,
@@ -23,7 +21,6 @@ import {
   judgeLostCard,
   judgePeerPlace,
   LOST_CARD,
-  measureChip,
   type PeerSeen,
   pointKey,
 } from "../src/testing/smoke-peers";
@@ -98,7 +95,7 @@ describe("what a window says of its own pointer — ICE's presence (I42, desk.6)
 });
 
 describe("the window exit from BESIDE the desk (ICE I44) — away within one publish, still away back over the chrome", () => {
-  const line = { x: 677, y: 702, hit: "vf-line-input", inDesk: false, region: "no-drag" };
+  const line = { x: 304, y: 734, hit: "vf-line-snapshot", inDesk: false, region: "no-drag" };
   const said = { reason: null, cursor: { away: true, canvas: "" } };
   const exit = (over: Partial<ExitSeen> = {}): ExitSeen => ({
     from: "line",
@@ -173,21 +170,6 @@ describe("the idle hide — at 8 s after the last move, never before", () => {
     expect(judgeIdle(null, 9_000)[0]).toMatch(/not at 8 s/); // an idle of 9 s is not 8
     expect(judgeIdle(null, 9_600)[0]).toMatch(/not at 8 s/);
     expect(judgeIdle(null, null)[0]).toMatch(/never hidden/);
-  });
-});
-
-describe("the chip's contrast — measured from its pixels", () => {
-  it("reads the glass as the ground and the glyphs' cores as the ink, and their WCAG contrast", () => {
-    // 100 pixels of glass (232, 235, 230) and 4 of ink (58, 59, 60), BGRA
-    const px: number[] = [];
-    for (let i = 0; i < 100; i += 1) px.push(230, 235, 232, 255);
-    for (let i = 0; i < 4; i += 1) px.push(60, 59, 58, 255);
-    const m = measureChip(new Uint8Array(px));
-    expect(m.ground).toEqual([232, 235, 230]);
-    expect(m.ink).toEqual([58, 59, 60]);
-    expect(m.ratio).toBeCloseTo(contrast([232, 235, 230], [58, 59, 60]), 1);
-    expect(m.ratio).toBeGreaterThan(7);
-    expect(contrast([255, 255, 255], [0, 0, 0])).toBeCloseTo(21, 5);
   });
 });
 

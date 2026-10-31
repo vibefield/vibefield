@@ -216,7 +216,11 @@ export const PRODUCT_API_LIMITS = {
   TICK_INTERVAL_MS: 120_000,
   /** The largest frame the product door accepts INBOUND, in bytes (`ws`'s
    * `maxPayload`); a larger one closes the connection 1009. The outbound pair
-   * lives in `MESH_CONTROL_LIMITS` (`PRODUCT_FRAME_BYTES`, `PRODUCT_QUEUED_BYTES`).
+   * lives in `MESH_CONTROL_LIMITS` (`PRODUCT_FRAME_BYTES`, `PRODUCT_QUEUED_BYTES`,
+   * the shed). A phone's subscriptions that can resync (today the mesh board)
+   * stop sending deltas at `TAILNET_QUEUED_BYTES` below (PG-1c); the rest of its
+   * connection (snapshots, replies, the History tail, project.subscribe) keeps
+   * the shed.
    * DS wave 3 landing (2026-10-01): it was a fieldd literal (`product-api.ts:62`)
    * that the corpus cited as a registry number — now it is one.
    * *Errata (2026-10-26, item 60): this said "closes the connection 1013";
@@ -238,6 +242,23 @@ export const PRODUCT_API_LIMITS = {
    * protocol's own pages (`ROWS.SNAPSHOT_PAGE_BYTES`), a one-shot answer by a
    * byte budget with the honest marker its door already has. */
   WS_MAX_INBOUND_BYTES: 4 * 1024 * 1024,
+  /** PG-1c (PG-D11, James's to rule; built at the lean, 256 KiB, 2026-10-29) —
+   * a phone's queue on the door. A `tailnet` principal's subscription whose
+   * producer can resync (today the mesh board, `agent.subscribe {scope:
+   * "mesh"}`) is sent no more deltas once its connection's queued bytes
+   * (`ws.bufferedAmount`) reach this, and ONE fresh snapshot when the queue
+   * drains to half of it: a phone that fell behind gets the board as it is,
+   * never the backlog of what it was. Its snapshots are never held (each
+   * restates everything), never count toward holding it while they are
+   * queued (a board past the cap would hold itself again with each one), and
+   * stay under the connection's shed
+   * (`MESH_CONTROL_LIMITS.PRODUCT_QUEUED_BYTES`, 128 MiB). Every other caller,
+   * a peer daemon on the same door included, and every subscription without a
+   * resync keep that shed alone. The queue it reads is fieldd's own: the
+   * sidecar's and tsnet's buffers lie past it, so the number is confirmed on
+   * the phone under the Network Link Conditioner, not here. One ROWS snapshot
+   * page. */
+  TAILNET_QUEUED_BYTES: 256 * 1024,
 } as const;
 
 /** SP-D13 (a), James, 2026-10-03 — the bound on a TAILNET caller's history.
@@ -261,7 +282,14 @@ export const PRODUCT_API_LIMITS = {
  *
  * AR-8b (2026-10-03): the same bound holds `index.project`'s one per-session
  * list, its contribution rows, which says `clipped` when it cut; the door's
- * other figures are bounded by the window the caller asked for (`sinceMs`). */
+ * other figures are bounded by the window the caller asked for (`sinceMs`).
+ *
+ * Item 105 (2026-10-29): the two DAY doors over the record hold it too, by one
+ * rule (`tailnetRowLimit(principal, undefined, MAX_SAFE_INTEGER)`): `index.activity`
+ * keeps the newest MAX_ROWS sessions and `agent.recordedLanes` the MAX_ROWS ended
+ * lanes that ended last, each saying `clipped`. The first has held it since TL
+ * and was never listed here; the second had no bound. A day door pages by its
+ * window, never by a cursor. */
 export const INDEX_TAILNET_LIMITS = {
   MAX_ROWS: 100,
 } as const;
@@ -388,6 +416,15 @@ export const AGENT_FIELD = {
 export const AGENT_EXIT = {
   CLEANUP_WARN_MS: 2_000,
   RESUME_CLEANUP_WAIT_MS: 5_000,
+} as const;
+
+/** ST-D1 (2026-10-31, James's `ds-marks` at the leans) — a durable Stop. A person's Stop is SENT (the run's own stop,
+ * as `agent.interrupt` delivers it) and stays sent until fieldd HEARS the run stop: its PTY exited, or its status
+ * left `working`. A Stop not heard within HEARD_WITHIN_MS escalates (ST-D2, ST-D3): the same stop once more, then, for
+ * a run whose status can be read, the floor's own terminate ladder. PROVISIONAL: 3 s is a starting point, and it
+ * is final only once it has been measured on James's signed-in agents (`thinking-ar-durable-stop.md` §3, ST-D1). */
+export const AGENT_STOP = {
+  HEARD_WITHIN_MS: 3_000,
 } as const;
 
 /** DS-L3 — the rows protocol's numbers (`rows.ts`; design-06 §8). A snapshot
@@ -747,6 +784,13 @@ export const PROJECT_DOORS = {
   MOVE_HOPS_MAX: 16,
 } as const;
 
+/** IOS-8f — `user.me`'s honest UNAVAILABLE: a daemon that knows no user id (an embedded one) has no person to
+ * name, and says so rather than answer a face for nobody. TS-only: no native reader. */
+export const USER_ME = {
+  SERVICE: "user",
+  STATE_NO_USER: "no-user",
+} as const;
+
 /** DS-D15 / DS-2 — forwarded mutations (`forwarding.ts`). The owner journals
  * one receipt per idempotency key for RECEIPT_TTL_MS, at most
  * RECEIPT_JOURNAL_DEPTH of them; a forward cut mid-flight is recorded
@@ -891,6 +935,30 @@ export const TERMINAL_INVENTORY = {
 export const ORPHAN_BOUND = {
   IDLE_EXIT_MS: 10 * 60_000,
   IDLE_POLL_MS: 30_000,
+} as const;
+
+/** CP-1a (`thinking-roled-agents.md` §16; CP-L3, CP-D1) — the floor's door, ONE authority for the floor (by generation)
+ * and fieldd (by import). The shapes are mgmt.ts's `NativeDoor*`.
+ *  - MAX_OPEN — open doors at once; one past it is refused at accept (`limit`, logged, never announced).
+ *  - HELD_BYTES_PER_DOOR — what a door holds of its caller's bytes while no fieldd is attached (a door outlives
+ *    fieldd: the two planes). Past it the door closes, `held-too-long`.
+ *  - HELD_BYTES_TOTAL — what every door holds together, so 64 full doors cannot pin 16 MiB of the floor; the door
+ *    whose bytes would pass it closes, `held-too-long`.
+ *  - WALK_MAX_STEPS — the parent links the floor follows from the caller to a pane's root process.
+ *  - ROOT_BIRTH_TOLERANCE_MS — how far a pane's root process may have started from the pane's `createdAt` and still be
+ *    its root (agent-gateway.ts's `SHELL_BIRTH_TOLERANCE_MS`; ghosttea stamps `createdAt` right after the spawn).
+ *  - START_RESOLUTION_MS — the resolution two readings of one process's start are compared at (`sameStartSecond`).
+ *  - LINE_MAX_BYTES — the longest line a door carries, its newline included: the bridge (`field-native door`) ends
+ *    with exit 4 on a longer one from its agent, and fieldd's line reader holds the same bound. The floor itself
+ *    carries bytes in chunks and splits no lines. */
+export const NATIVE_DOOR = {
+  MAX_OPEN: 64,
+  HELD_BYTES_PER_DOOR: 256 * 1024,
+  HELD_BYTES_TOTAL: 4 * 1024 * 1024,
+  WALK_MAX_STEPS: 32,
+  ROOT_BIRTH_TOLERANCE_MS: 60_000,
+  START_RESOLUTION_MS: 1_000,
+  LINE_MAX_BYTES: 8 * 1024 * 1024,
 } as const;
 
 /** TPv3 — the terminal pipeline's numbers (terminal-pipeline-v3 §5.1, §8; §20
@@ -1361,6 +1429,10 @@ export const SOCKETS = {
    * path budget in the product; keep them ≤ 14 chars (registry lint). */
   TERMINAL_CONTROL: "termctl.sock",
   TERMINAL_FRAME: "termframe.sock",
+  /** CP-1a (`thinking-roled-agents.md` §16; CP-L3, CP-D1) — the floor's door under native/run/: bound by field-native,
+   * 0600 in the 0700 run dir, dialed by `field-native door --endpoint <path>` from a spark's Claude Code. No token: the
+   * kernel names the caller. */
+  DOOR: "door.sock",
 } as const;
 
 /** P8b (ESP §8.4) — the URL scheme staged plugin modules are served on.
@@ -1545,6 +1617,17 @@ export const LAYOUT = {
    * has kept yet (`AgentProfileDraftsFile`, 0600, written whole). fieldd's; per
    * user, since a profile is one person's. */
   AGENT_PROFILE_DRAFTS_FILE: ["fieldd", "profile-drafts.json"],
+  /** CP-1c (the compose plane, version 2) — the sparks fieldd keeps, one `SparkRecord` per file, 0600 in a 0700
+   * directory, each signed with SPARKS_KEY_FILE's secret (0600, made once, never overwritten), so an agent that edits
+   * one cannot widen its own profiles: an unsigned or forged record is set aside, never served. */
+  SPARKS_DIR: ["fieldd", "sparks"],
+  SPARKS_KEY_FILE: ["fieldd", "sparks.key"],
+  /** CP-1c — each spark's own folder, `sparks/<slug>/`, made when it hatches: where its session works, with the
+   * CLAUDE.md written for it. The person's, to open in Finder; fieldd's records never live in it. */
+  SPARK_HOMES_DIR: ["sparks"],
+  /** CP-2 (CP2-D3) — each session's input queue, one file per run, 0600 in a 0700 directory: a spark's words and
+   * fieldd's wakes that wait for the session's next idle moment, kept across a fieldd restart. */
+  AGENT_INPUTS_DIR: ["fieldd", "inputs"],
   TERMINAL_CONFIG_FILE: ["native", FILES.TERMINAL_CONFIG],
   RESTART_INTENT_FILE: ["native", FILES.RESTART_INTENT],
   // RETIRED 2026-09-14 (TM-3, `thinking-terminal-mesh-cells.md` §7 / TM-D3):
@@ -1559,6 +1642,9 @@ export const LAYOUT = {
   MESHDATA_SOCKET: ["native", "run", SOCKETS.MESHDATA],
   TERMINAL_CONTROL_SOCKET: ["native", "run", SOCKETS.TERMINAL_CONTROL],
   TERMINAL_FRAME_SOCKET: ["native", "run", SOCKETS.TERMINAL_FRAME],
+  /** CP-1a — the floor's door (`SOCKETS.DOOR`): a spark's MCP bridge dials it, and the floor names the caller by
+   * the kernel's word. The floor binds it and answers its endpoint (`native.door.info`); nothing else spells it. */
+  DOOR_SOCKET: ["native", "run", SOCKETS.DOOR],
   CRASH_DIR: ["crash"],
   EXPORTS_STAGING_DIR: ["exports", ".staging"],
   /** PT-4 (PORTALS ruling 3) — this user's BROWSER PROFILES: the persistent sessions of live-surface browser pages
@@ -1747,6 +1833,10 @@ export const IPC_CHANNELS = {
   updatePrepareRestart: "vibefield:update:prepare-restart",
   updateConfirmRestart: "vibefield:update:confirm-restart",
   updateDoctor: "vibefield:update:doctor",
+  /** AU-1 (AU-G5, AU-G6) — a person's download of ONE found version (renderer → main, invoke) */
+  updateDownload: "vibefield:update:download",
+  /** AU-7 (AU-G8) — Move to Applications through the quit gate (renderer → main, invoke; no payload) */
+  updateMoveToApplications: "vibefield:update:move-to-applications",
   // GT-D3's bridge channels (`vibefield:terminal:connect` invoke,
   // `vibefield:terminal:status` event) RETIRED at TP-S3e: the renderer dials
   // the cells' T1 doors directly and main runs no terminal Backend.
@@ -1803,6 +1893,17 @@ export const IPC_CHANNELS = {
   screenshotResult: "vibefield:screenshot:result",
   /** A registered product window asks main to preview one retained still. */
   screenshotPreview: "vibefield:screenshot:preview",
+  /** renderer → main invoke: ScreenshotStillBytesRequest → the still's PNG bytes,
+   * or null — one retained still by its basename, for the desk to print a
+   * snapshot played onto it (HN-D7). The same retained-file authority as the
+   * still scheme and Quick Look: nothing else on the disk answers. */
+  screenshotStillBytes: "vibefield:screenshot:still-bytes",
+  /** renderer → main invoke: ScreenshotStillKeptRequest → boolean — whether main
+   * still retains one still, by its basename: a snapshot's card asks it before
+   * its still's path is pasted into a pane, so a pane is never handed a path the
+   * ring has let go (HN-4). The still-bytes door's retained-file check, and no
+   * bytes. */
+  screenshotStillKept: "vibefield:screenshot:still-kept",
   /** renderer → main invoke: RendererReplaceRequest → RendererReplaceResult — the
    * window's renderer REPLACED at its own asking (DK-9, the runtime with kinds: a
    * plugin update whose kinds this realm defined otherwise — ICE's catalog cannot
@@ -1816,4 +1917,54 @@ export const IPC_CHANNELS = {
    * the desk's browser profile and reloads the open pages on it. No path, no
    * site, no size crosses; a registered window alone may ask. */
   browserDataClear: "vibefield:browser:clear-data",
+  /** renderer → main invoke: ClipboardReadRequest → ClipboardReadResult — a paste
+   * in the deck or the sign-in terminal (item 102; design-03 §5.1's
+   * `shell.clipboard.*`, the product window's read half). Main reads the system
+   * clipboard for a registered product window while it and its page are focused:
+   * the shell session grants no Chromium permission (ESP §7.4), so the web's own
+   * read is denied there by law. */
+  clipboardRead: "vibefield:clipboard:read",
+  /** renderer → main invoke: a PNG's bytes, and the copy's words when it has any →
+   * ClipboardWriteImageResult — a copy's picture put on the system clipboard (HN-5;
+   * design-03 §5.1's `shell.clipboard.*`, the product window's picture write, beside
+   * the read). The bytes are the invoke's first argument and the words its second,
+   * never JSON, and ONE write carries both formats (LC-19). Main decodes and writes
+   * them for a registered product window — the text copy's rule, no focus asked
+   * (LC-18): the shell session grants no Chromium permission (ESP §7.4), so the
+   * web's own write is denied there by law. */
+  clipboardWriteImage: "vibefield:clipboard:write-image",
+} as const;
+
+/** HN-4 (2026-10-29) — a retained still's read cap: the most a still may weigh when
+ * main reads it for the desk's print (`IPC_CHANNELS.screenshotStillBytes`) or judges
+ * it kept (`screenshotStillKept`). One screen's PNG is far below it, so a file past it
+ * is not the still the helper wrote, and main never holds it whole to find out. */
+export const SCREENSHOT_STILL = {
+  MAX_BYTES: 64 * 1024 * 1024,
+} as const;
+
+/** Item 102 (2026-10-29) — the clipboard read door's bound (`IPC_CHANNELS.clipboardRead`).
+ * NOT a number of its own: it reads the cell's paste ceiling, TM/D6's
+ * `TERMINAL_PIPELINE.MAX_PASTE_BYTES`, so the door never refuses a paste a pane
+ * could take and the two cannot drift (the HN lead's reading, ruled 13:24Z).
+ * The carry downstream is smaller: a pane carries one SendInput of at most
+ * `TERMINAL_PIPELINE.MAX_CONTROL_MESSAGE_BYTES`, and the routed encoder refuses
+ * a larger paste in the line's words (D6). That refusal stays the pane's honest
+ * sentence, and the carry rises to MAX_PASTE_BYTES once paste-parts is wired.
+ * Over this bound the door refuses the read whole, in its own words, and never
+ * cuts it: half a paste into a shell is a different command. UTF-8 bytes, the
+ * measure D6 states. */
+export const SHELL_CLIPBOARD = {
+  READ_MAX_BYTES: TERMINAL_PIPELINE.MAX_PASTE_BYTES,
+  /** HN-5 — the picture write's bound (`IPC_CHANNELS.clipboardWriteImage`), not a
+   * number of its own either: the largest picture the hand holds is a still the tool
+   * keeps, so the clipboard takes whole any picture the still door would read whole.
+   * Past it the write is refused with its size, never cut. PNG bytes. */
+  WRITE_IMAGE_MAX_BYTES: SCREENSHOT_STILL.MAX_BYTES,
+  /** HN-5 (LC-19) — the copy door's bound: the most words a copy puts on the system
+   * clipboard, through the host's copy door (`copyText`, main's `clipboard.writeText`)
+   * or beside a picture through the picture door. Main's one literal until HN-5, now
+   * read by both doors' checks. Past it the words are refused whole with their size,
+   * never cut. UTF-8 bytes. */
+  WRITE_TEXT_MAX_BYTES: 64 * 1024,
 } as const;

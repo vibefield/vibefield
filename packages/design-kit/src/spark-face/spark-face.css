@@ -1,0 +1,103 @@
+/* A spark's face (DESIGN.md §2.10). No colour here but the kit's tokens: a face's own colours are
+   its palette's, the engine's data, and they stay inside the face (S-2). */
+
+.vf-spark-face {
+  position: relative;
+  display: inline-block;
+  flex: none;
+  inline-size: var(--vf-spark-face-size);
+  block-size: var(--vf-spark-face-size);
+  line-height: 0;
+  vertical-align: middle;
+}
+
+/* While the engine first loads, a framed face holds its place as its disc in the inset fill; a free
+   face holds its box. */
+.vf-spark-face[data-framed="true"][data-drawn="waiting"] {
+  border-radius: 50%;
+  background: var(--vf-fill);
+}
+
+/* A still. A free face's picture is half again its box (FREE_FACE_ROOM, projected as
+   --vf-spark-face-room), centred on it, so its props are whole. */
+.vf-spark-face-picture {
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  pointer-events: none;
+  user-select: none;
+}
+
+.vf-spark-face[data-framed="false"] > .vf-spark-face-picture {
+  inset: calc((1 - var(--vf-spark-face-room)) / 2 * 100%);
+  inline-size: calc(var(--vf-spark-face-room) * 100%);
+  block-size: calc(var(--vf-spark-face-room) * 100%);
+}
+
+.vf-spark-face-flat {
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  overflow: visible;
+}
+
+/* The window's one stills canvas: laid out, so the engine measures it true, and never seen. */
+.vf-spark-still-canvas {
+  position: fixed;
+  inset-block-start: 0;
+  inset-inline-start: -100000px;
+  inline-size: var(--vf-spark-still-box, 0);
+  block-size: var(--vf-spark-still-box, 0);
+  pointer-events: none;
+  contain: strict;
+}
+
+/* A stage: its live faces move on one layer over it, under whatever covers it. The stage is not
+   the scroller — the scroller sits inside it, under the layer. */
+.vf-spark-stage {
+  position: relative;
+}
+
+.vf-spark-stage-layer {
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  pointer-events: none;
+}
+
+/* The hatch (DESIGN.md §2.10 "The hatch", §8 "The New spark sheet"): the sky's two canvases, one over the other, on the
+   night's ground; without WebGL2 the flat star stands at its centre. */
+.vf-spark-hatch {
+  position: relative;
+  overflow: hidden;
+  background: var(--vf-spark-night);
+}
+
+.vf-spark-hatch-sky,
+.vf-spark-hatch-face {
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  pointer-events: none;
+}
+
+.vf-spark-hatch-still {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+
+/* The flight to a row: one canvas over the whole window for its 0.66 s, above the frame as a carried card is (66). */
+.vf-spark-hatch-flight {
+  position: fixed;
+  inset: 0;
+  inline-size: 100vw;
+  block-size: 100vh;
+  z-index: 67;
+  pointer-events: none;
+}

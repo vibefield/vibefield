@@ -504,4 +504,38 @@ describe("LiveSurfaceRendererTransport", () => {
     expect(attachment.sendInput({ kind: "pointer", action: "move", x: 1, y: 2 })).toBe(false);
     expect(attachment.sendNavigation({ action: "reload" })).toBe(false);
   });
+
+  it("PT-S2: fires a bound Simulator's device ACT on its own control message — the verb alone, parsed at the sender, never a navigation; false, never a throw, once closed", async () => {
+    const { attachment, hostControl } = await attachedTransport();
+
+    // no geometry is needed: an act names no point of the frame
+    expect(attachment.sendDevice({ verb: "boot" })).toBe(true);
+    expect(attachment.sendDevice({ verb: "open-settings" })).toBe(true);
+
+    const rendererMessages = (hostControl.peer?.sent ?? []) as Array<Record<string, unknown>>;
+    expect(rendererMessages.filter((message) => message.type === "device")).toEqual([
+      {
+        v: 1,
+        type: "device",
+        attachmentId: "attachment_0123456789abcdef",
+        command: { verb: "boot" },
+      },
+      {
+        v: 1,
+        type: "device",
+        attachmentId: "attachment_0123456789abcdef",
+        command: { verb: "open-settings" },
+      },
+    ]);
+    // a device act is never a navigation
+    expect(rendererMessages.some((message) => message.type === "navigate")).toBe(false);
+
+    // a verb outside the five (one that would change iOS, or the device's life) never reaches the port
+    expect(() => attachment.sendDevice({ verb: "shutdown" } as never)).toThrow();
+    expect(rendererMessages.filter((message) => message.type === "device")).toHaveLength(2);
+
+    attachment.dispose();
+    expect(attachment.sendDevice({ verb: "retry" })).toBe(false);
+    expect(rendererMessages.filter((message) => message.type === "device")).toHaveLength(2);
+  });
 });

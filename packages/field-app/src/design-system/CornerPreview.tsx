@@ -36,7 +36,6 @@ export function CornerPlate({
         view="canvas"
         keys="mac"
         track={<ViewsTrackView view="canvas" keys="mac" />}
-        blank
       />
       <div className="vf-ds-corner-face">
         <MeMenuView

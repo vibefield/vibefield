@@ -6,8 +6,9 @@
 //
 // Every `latest*.yml` in the directory is walked through the whole chain (trust-root by the EMBEDDED root keys →
 // channels.json → this channel's head → the newest release's policy → the feed), and `release-manifest.json`, when
-// present, is checked against the trust-root's `release` keys too. A directory with no `latest*.yml` is an UNSIGNED
-// release (the sign step ran without the secret): it verifies trivially, and says so.
+// present, is checked against the trust-root's `release` keys too, and its notes (AU-6) parsed strictly. A directory
+// with no `latest*.yml` is an UNSIGNED release (the sign step ran without the secret): it verifies trivially, and says
+// so.
 //
 // usage: node scripts/release-verify.mjs --dir <release dir> --tag <tag> --channel <nightly|beta|stable>
 //          [--root-keys <comma-separated base64 keys>] [--now <ms>]
@@ -51,6 +52,7 @@ registerHooks({
 const load = (rel) => import(pathToFileURL(join(repo, rel)).href);
 const chain = await load("packages/electron-shell/src/main/updates/verify-chain.ts");
 const trust = await load("packages/trust/src/index.ts");
+const contracts = await load("packages/contracts/src/index.ts");
 
 /** A stand-in origin: the chain only ever builds URLs under it, and the fetch below maps them onto the directory. */
 export const VERIFY_ORIGIN = "https://release-verify.invalid/releases";
@@ -132,6 +134,18 @@ export async function verifyReleaseDir({ dir, tag, channel, rootKeys, now = Date
       throw new ReleaseVerifyError(
         "release-manifest.json: not signed by the trust-root's release key",
       );
+    // AU-6 (LC-19): the notes, STRICTLY. A client drops a block it cannot read (verify-chain's 6c, never a refusal);
+    // the publish refuses one, so a notes tool bug fails the release before any client meets it.
+    const { notes } = JSON.parse(readFileSync(manifest, "utf8"));
+    if (notes !== undefined) {
+      const read = contracts.ReleaseNotes.safeParse(notes);
+      if (!read.success) {
+        const issue = read.error.issues[0];
+        throw new ReleaseVerifyError(
+          `release-manifest.json: its notes are not ReleaseNotes — ${issue?.path.join(".") || "notes"}: ${issue?.message ?? "malformed"}`,
+        );
+      }
+    }
     verified.push("release-manifest.json");
   }
   return { unsigned: false, verified };

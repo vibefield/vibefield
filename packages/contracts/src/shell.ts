@@ -3,8 +3,10 @@ import { ARTIFACT_LIMITS, ArtifactId, ArtifactTitle } from "./artifacts";
 import { ClientKind, SemverString } from "./envelope";
 import { ErrorKind } from "./errors";
 import {
+  CoreSimulatorRuntimeIdV1,
   LiveSurfaceAttachTicketV1,
   LiveSurfaceIdV1,
+  LiveSurfaceSimulatorDeviceRowV1,
   LiveSurfaceSourceSpecV1,
   SURFACE_LIMITS,
   SurfaceEnumerationKindV1,
@@ -13,6 +15,7 @@ import {
 } from "./live-surfaces";
 import { isAbsoluteDesktopPath } from "./paths";
 import { PluginId } from "./plugins";
+import { SHELL_CLIPBOARD } from "./registries";
 import { ScreenshotShortcutState } from "./screenshot";
 import { TERMINAL_LINK_MAX_CHARS } from "./terminal";
 import { UpdateView } from "./update-policy";
@@ -148,17 +151,11 @@ export type ShellCommandRequest = z.infer<typeof ShellCommandRequest>;
 
 /** The frame's four views (One Frame FR-1; FC-D2, FV-D7), in the views
  * track's order. The canvas is the ground floor (FV-D1) and the others are
- * drawn as one cover over it. The Assistant's cell exists and waits: it is not
- * built, so no window is ever in it ({@link frameViewBuilt}). */
+ * drawn as one cover over it. The fourth is Chat (SP-1b, 2026-10-31), whose
+ * wire id stays `assistant`. Every view is built: FC-D2's waiting cell retired
+ * with SP-1b, and with it the predicate main and the frame asked of it. */
 export const FrameView = z.enum(["canvas", "godview", "history", "assistant"]);
 export type FrameView = z.infer<typeof FrameView>;
-
-/** Whether a view can be the active one yet — every view but the Assistant
- * (FC-D2: its cell is drawn, faint, "not built yet"). Main refuses the rest,
- * and the frame says so instead of asking. */
-export function frameViewBuilt(view: FrameView): boolean {
-  return view !== "assistant";
-}
 
 /** main → renderer: THIS window's active view (FR-1; GT-D2's Godview bit,
  * grown into the four views and retired into them).
@@ -283,6 +280,117 @@ export const BrowserDataClearResult = z
   .passthrough();
 export type BrowserDataClearResult = z.infer<typeof BrowserDataClearResult>;
 
+/** The UTF-8 bytes of a text: the measure `SHELL_CLIPBOARD.READ_MAX_BYTES` and the
+ * pane's own paste refusal (D6) both state. */
+export function utf8ByteLength(text: string): number {
+  return new TextEncoder().encode(text).byteLength;
+}
+
+/** renderer → main: a paste's read (`IPC_CHANNELS.clipboardRead`; item 102). It
+ * carries nothing: main reads the system clipboard's text, and the page never says
+ * what it holds. */
+export const ClipboardReadRequest = z.object({}).passthrough();
+export type ClipboardReadRequest = z.infer<typeof ClipboardReadRequest>;
+
+/** main → renderer: the clipboard's text, or why it was not read. Both refusals are
+ * honest states of a product window's life:
+ *  · `unfocused` — the window or its page is not the one in front of the person,
+ *    and a paste is that person's chord, so nothing was read for it;
+ *  · `too-large` — the text is over `SHELL_CLIPBOARD.READ_MAX_BYTES`; it is refused
+ *    whole with its size, never cut.
+ * A sender this shell did not register is no state of a product window: main
+ * throws for it and reads nothing. */
+export const ClipboardReadResult = z.discriminatedUnion("status", [
+  z
+    .object({
+      status: z.literal("read"),
+      text: z
+        .string()
+        .refine(
+          (text) => utf8ByteLength(text) <= SHELL_CLIPBOARD.READ_MAX_BYTES,
+          "clipboard text over SHELL_CLIPBOARD.READ_MAX_BYTES",
+        ),
+    })
+    .passthrough(),
+  z
+    .object({
+      status: z.literal("refused"),
+      reason: z.enum(["unfocused", "too-large"]),
+      bytes: z.number().int().min(0).optional(),
+    })
+    .passthrough(),
+]);
+export type ClipboardReadResult = z.infer<typeof ClipboardReadResult>;
+export type ClipboardReadRefusal = Extract<ClipboardReadResult, { status: "refused" }>["reason"];
+
+/** main → renderer: a copy's picture put on the system clipboard, with its words when
+ * the copy has any (`IPC_CHANNELS.clipboardWriteImage`; HN-5, LC-19), or why it was
+ * not. The request is the PNG's bytes themselves and the words beside them, the
+ * invoke's two arguments, checked in main: neither is a field here. Each refusal is
+ * an honest state of a product window's copy, and nothing of it is written:
+ *  · `too-large` — the bytes are over `SHELL_CLIPBOARD.WRITE_IMAGE_MAX_BYTES`, or
+ *    the words over `SHELL_CLIPBOARD.WRITE_TEXT_MAX_BYTES`; refused whole with the
+ *    size that was too large, never cut;
+ *  · `not-an-image` — the bytes decode to no picture.
+ * No focus is asked (LC-18): a write reads nothing, and the words' copy door asks
+ * none. A sender this shell did not register, or a request that is not bytes and
+ * words, is no state of a product window: main throws for it and writes nothing. */
+export const ClipboardWriteImageResult = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("written") }).passthrough(),
+  z
+    .object({
+      status: z.literal("refused"),
+      reason: z.enum(["too-large", "not-an-image"]),
+      bytes: z.number().int().min(0).optional(),
+    })
+    .passthrough(),
+]);
+export type ClipboardWriteImageResult = z.infer<typeof ClipboardWriteImageResult>;
+export type ClipboardWriteImageRefusal = Extract<
+  ClipboardWriteImageResult,
+  { status: "refused" }
+>["reason"];
+
+/** preload → page: why a copy's write was refused, typed (HN-5) — the one shape both copy
+ * doors reject with, the words' (`copyText`, over the diagnostics port) and the picture's
+ * (`writeImage`), for the page to say in Copy's voice, its sizes as §9 counts them, and never
+ * a bridge's error (DESIGN.md §8 "Copy"). A plain record, never an Error: the context bridge
+ * carries an Error across as its message alone, so a refusal's terms would not reach the page.
+ *  · `too-large` — `bytes` is past `max`: the words' UTF-8 (`words`) or the picture's PNG
+ *    (`picture`) against the clipboard's bound (`SHELL_CLIPBOARD`), or the words as the words'
+ *    door sends them (`words-as-sent`) against what one request carries of them, the port's
+ *    cap (`LOG_TRANSPORT_LIMITS.DIAGNOSTIC_PORT_REQUEST_BYTES`) less its envelope. JSON spends
+ *    two bytes on a line break and six on a control character, so words within the clipboard's
+ *    bound can be past the port's. A size within its bound is no refusal of this kind;
+ *  · `not-an-image` — main found no picture in the PNG it was given. */
+export const ClipboardCopyRefusal = z
+  .discriminatedUnion("reason", [
+    z
+      .object({
+        reason: z.literal("too-large"),
+        what: z.enum(["words", "picture", "words-as-sent"]),
+        bytes: z.number().int().min(0),
+        max: z.number().int().min(0),
+      })
+      .passthrough(),
+    z.object({ reason: z.literal("not-an-image") }).passthrough(),
+  ])
+  .refine(
+    (refusal) => refusal.reason !== "too-large" || refusal.bytes > refusal.max,
+    "a size refused as too large is past its bound",
+  );
+export type ClipboardCopyRefusal = z.infer<typeof ClipboardCopyRefusal>;
+/** A copy past its bound: the refusal's `too-large` arm, which the copy door says in sizes. */
+export type ClipboardCopyTooLarge = Extract<ClipboardCopyRefusal, { reason: "too-large" }>;
+
+/** Item 102 — the read door's audit action, appended by main through fieldd's
+ * `audit.append` (wall R17), which admits only registered shell-owned actions. One
+ * outcome for every answer and every refusal, with the bytes and the asking page's
+ * id, never the text. */
+export const SHELL_CLIPBOARD_AUDIT_ACTIONS = {
+  READ: "shell.clipboard.read",
+} as const;
+
 /** Small host fact used only to describe platform-specific desktop behavior in
  * Settings. Unknown Electron platforms collapse to `other` at the preload
  * boundary rather than leaking Node's process object into the renderer. */
@@ -315,8 +423,8 @@ export const DesktopShellState = z
           .nullable(),
       })
       .passthrough(),
-    /** WP12d (L3c-i) — the desktop updater, as the tray and the Settings card render it (`projectUpdateView`); absent
-     * where no updater runs (a development or unpackaged build) */
+    /** WP12d (L3c-i) — the desktop updater, as the tray and the Settings card render it (`UpdateController.view()`);
+     * absent where no updater runs (a development or unpackaged build) */
     update: UpdateView.optional(),
   })
   .passthrough();
@@ -404,6 +512,10 @@ export const SHELL_INTERNAL_PROVIDER_METHODS = [
   "shell.surfaces.enumerate",
   "shell.surfaces.mint",
   "shell.surfaces.release",
+  // PT-S2 (R11) — the attach's device list (`surface.simulator.devices`): this
+  // Mac's simulator devices, REDACTED to the ids a binding is made of. Internal
+  // like its siblings: only the SurfaceService dispatches it.
+  "shell.surfaces.simulatorDevices",
   // The Agents settings section — show a path in the OS file manager. Internal:
   // only fieldd's agent service dispatches it, for a path its own inventory
   // holds; no caller hands main a path to reveal. GT-7: the terminal service
@@ -683,6 +795,9 @@ export const SURFACE_AUTHORITY_LIMITS = {
   ENUMERATE_DEADLINE_MS: 5_000,
   MINT_DEADLINE_MS: 10_000,
   RELEASE_DEADLINE_MS: 5_000,
+  /** PT-S2: one `simctl list --json` (main's own bound is 8 s), after the Xcode probe that precedes every simctl (5 s, on a
+   * cold service) — above main's worst case, 13 s, by an IPC margin, so a slow CoreSimulator's answer is never discarded. */
+  SIMULATOR_DEVICES_DEADLINE_MS: 15_000,
 } as const;
 
 export const ShellSurfacesEnumerateParams = z
@@ -719,6 +834,29 @@ export type ShellSurfacesReleaseParams = z.infer<typeof ShellSurfacesReleasePara
 
 export const ShellSurfacesReleaseResult = z.object({ released: z.boolean() }).passthrough();
 export type ShellSurfacesReleaseResult = z.infer<typeof ShellSurfacesReleaseResult>;
+
+/** PT-S2 (R11) — the attach's device list asks nothing: no window, no participant (a list of what this Mac holds binds
+ * no authority, and the row's `surface.capture` is the whole gate). */
+export const ShellSurfacesSimulatorDevicesParams = z.object({}).passthrough();
+export type ShellSurfacesSimulatorDevicesParams = z.infer<
+  typeof ShellSurfacesSimulatorDevicesParams
+>;
+
+/** PT-S2 (R11) — this Mac's simulator devices, the booted first, REDACTED at main's boundary to the row (a UDID on a
+ * row is refused here too: it can never reach fieldd, let alone a window). Empty: no Simulator here, or none of its
+ * devices. With them the runtimes installed here, the newest first (ids only): the attach's third pick. */
+export const ShellSurfacesSimulatorDevicesResult = z
+  .object({
+    devices: z.array(LiveSurfaceSimulatorDeviceRowV1).max(SURFACE_LIMITS.MAX_SIMULATOR_DEVICES),
+    runtimes: z
+      .array(CoreSimulatorRuntimeIdV1)
+      .max(SURFACE_LIMITS.MAX_SIMULATOR_RUNTIMES)
+      .optional(),
+  })
+  .passthrough();
+export type ShellSurfacesSimulatorDevicesResult = z.infer<
+  typeof ShellSurfacesSimulatorDevicesResult
+>;
 
 export const ShellProviderRegisterParams = z
   .object({ methods: z.array(ShellProviderMethod).min(1).max(SHELL_PROVIDER_METHODS.length) })

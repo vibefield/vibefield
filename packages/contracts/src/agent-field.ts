@@ -1,6 +1,14 @@
 import { z } from "zod";
 import { AgentProfileId, AgentProviderId } from "./agent-index";
-import { AgentSessionTerminal, AgentStatus, AgentTier } from "./agent-session";
+import {
+  AgentSessionOrigin,
+  AgentSessionTerminal,
+  AgentStatus,
+  AgentStopState,
+  AgentTier,
+  SparkId,
+} from "./agent-session";
+import type { Principal } from "./envelope";
 import { INDEX_ACTIVITY } from "./registries";
 import {
   MeshScope,
@@ -132,6 +140,21 @@ export const AgentFieldRow = z
      * a daemon before PJ-7. */
     nativeSessionId: z.string().min(1).max(256).optional(),
     terminal: AgentSessionTerminal.optional(),
+    /** SP-1b (track CO; VF-PM 2026-10-31) — the run is this spark's own
+     * session, the one it thinks in: the fold's `spark`. Chat reads a spark's
+     * status by it. An id, never a name, which can change while the spark
+     * stays. Static for the run's life, so a snapshot-delta pays it once.
+     * Absent on every other run, and on a row from a daemon before SP-1b. */
+    spark: SparkId.optional(),
+    /** SP-1b — who started the run (CP-D15): the fold's `origin`, rebuilt from
+     * its named fields and never spread. Chat reads a spark's agents by it
+     * (CH-D3: "its face is working because its agents are"). Absent reads
+     * `you`, as on the fold's row. */
+    origin: AgentSessionOrigin.optional(),
+    /** ST-D5 (2026-10-31) — the person's durable Stop while fieldd holds one for the run (`AgentStopState`), on
+     * every audience's row: a phone's Stop needs the same truth as a window's. Absent otherwise, and on a row from a
+     * daemon before ST. */
+    stop: AgentStopState.optional(),
   })
   .passthrough();
 export type AgentFieldRow = z.infer<typeof AgentFieldRow>;
@@ -302,6 +325,27 @@ export const MonitorAgentRow = z
   .passthrough();
 export type MonitorAgentRow = z.infer<typeof MonitorAgentRow>;
 
+/** Item 100 (2026-10-29) — whose cut a caller reads of the model's rows and
+ * of the recorded lanes: by its principal's KIND, never its transport (SP-L4's
+ * rule; this table is its instrument). `window` is the whole row, `project.seq`
+ * included. The sequence is this desktop's own deal (M16), so only callers on
+ * this desktop read it: its windows and local clients (`local-token`) and its
+ * shell (`shell-main`). Every other kind is cut as a peer is: a phone, a guest,
+ * a peer daemon, an agent's MCP session, a plugin. Each kind is named, so a
+ * kind added to `Principal` fails the typecheck here until it is given its
+ * cut, and a doubtful kind's cut is `peer`. A TypeScript constant, server-side
+ * as `Principal` is: no wire shape, nothing generated. */
+export type MonitorAudience = "window" | "peer";
+export const MONITOR_AUDIENCE = {
+  "local-token": "window",
+  "shell-main": "window",
+  tailnet: "peer",
+  "tailnet-guest": "peer",
+  "mcp-agent": "peer",
+  "peer-fieldd": "peer",
+  plugin: "peer",
+} as const satisfies Record<Principal["kind"], MonitorAudience>;
+
 /** The run's latest reply, bounded: puppeteer's `MonitorAssistantMessageState`
  * with its text cut to the registry's bound. `at` and `final` are optional
  * because the mirror carries the message as an open object (`agent-session.ts`)
@@ -408,6 +452,12 @@ export const AgentSubscribeParams = z
 export type AgentSubscribeParams = z.infer<typeof AgentSubscribeParams>;
 
 /** The first frame of a field subscription, and what a re-subscribe answers.
+ * *2026-10-31 (PG-1d):* also a mid-stream frame (`.snapshot`), on the same
+ * epoch at the board's CURRENT revision, when fieldd re-presents the board on a
+ * terminal-gate flip or repairs it after a lost frame. That revision is the
+ * reader's own on a quiet flip, past it when a change waiting out the floor is
+ * folded in, and always past it for a repair. The reader replaces its copy and
+ * never compares.
  *
  * DS-3 — `epoch` names the revision CHAIN the frame belongs to (DS-L3's table
  * identity): fieldd ALWAYS sends it, as its boot id plus the chain's ordinal,
@@ -436,6 +486,39 @@ export const AgentFieldDelta = z
   .passthrough();
 export type AgentFieldDelta = z.infer<typeof AgentFieldDelta>;
 
+/** PG-1b (PG-L4.1, 2026-10-29) — the RELAY's reading of every board it carries
+ * (`field`, `desk`, and PG-2's `remote`): each row's KEY and the owner's stamp,
+ * nothing else. Every other fact is the owner's and passes through untouched
+ * (DS-L2: one owner per row, the relay copies; DS-D4: multiplexed, never
+ * re-folded), so a peer whose rows this build's field schema cannot read is
+ * still relayed, and each reader decides what it can read (a window per desktop,
+ * `godview/monitor/board-screen.ts`; the phone per row). It is not a business
+ * reader, so it logs no unknown fields: every field it does not read is
+ * someone else's. The envelopes are `AgentFieldSnapshot`'s and
+ * `AgentFieldDelta`'s with the row swapped for its key. */
+export const AgentBoardRowKey = z
+  .object({ runtimeRunId: z.string().min(1), revision: z.number().int() })
+  .passthrough();
+export type AgentBoardRowKey = z.infer<typeof AgentBoardRowKey>;
+export const AgentBoardKeySnapshot = z
+  .object({
+    epoch: RowsEpoch.optional(),
+    revision: z.number().int(),
+    rows: z.array(AgentBoardRowKey),
+  })
+  .passthrough();
+export type AgentBoardKeySnapshot = z.infer<typeof AgentBoardKeySnapshot>;
+export const AgentBoardKeyDelta = z
+  .object({
+    epoch: RowsEpoch.optional(),
+    since: z.number().int(),
+    revision: z.number().int(),
+    upserts: z.array(AgentBoardRowKey),
+    removed: z.array(z.string()),
+  })
+  .passthrough();
+export type AgentBoardKeyDelta = z.infer<typeof AgentBoardKeyDelta>;
+
 /** DS-3 — the OPEN answer of `agent.subscribe {scope: "mesh"}` (DS-D4): every
  * self desktop the roster lists, each with its state, when that was
  * established, and — once it has answered — its own board at its own
@@ -444,7 +527,13 @@ export type AgentFieldDelta = z.infer<typeof AgentFieldDelta>;
  * numbered them. A `desk` board's rows are `AgentDeskRow`s, which parse here
  * as field rows with the rest passed through. The ANSWERING desktop is listed
  * first — always present, always `live` — so a reader without a roster still
- * knows which board is its own. */
+ * knows which board is its own.
+ *
+ * The same open also arrives MID-STREAM as the subscription's `.snapshot`: the
+ * client's own replay after a reconnect, and the door's resync of a phone that
+ * fell behind its cap (PG-1c, `PRODUCT_API_LIMITS.TAILNET_QUEUED_BYTES`). The
+ * reader replaces its whole board, each device at its owner's `{epoch,
+ * revision}`, and the next delta continues from there. */
 export const AgentMeshOpen = meshRowsOpen(AgentFieldRow);
 /** One device's entry in the open. Written out rather than inferred: the
  * passthrough inference gives every arm a string index signature, and a
@@ -780,8 +869,16 @@ export type MonitorEndedRow = z.infer<typeof MonitorEndedRow>;
  * `unavailable` with `detail` when a record should be here and cannot be read
  * now (rosettad starting, a peer asleep), `partial` when some of it was not.
  * A desktop that keeps no record at all refuses the door NOT_FOUND {state:
- * "no-record"}: its window lends no past and draws today's floor. No cap, no
- * `truncated`: dropped sessions are `partial` with a detail. */
+ * "no-record"}: its window lends no past and draws today's floor. Dropped
+ * sessions are `partial` with a detail. `clipped` is SP-D13's word, as
+ * `index.activity`'s is: a `tailnet` caller's `ended` keeps the newest
+ * `INDEX_TAILNET_LIMITS.MAX_ROWS` lanes by their end and says so, while its
+ * `live` lanes (the model's rows, read whole over the board) stay whole; a window
+ * and a peer daemon read the whole day and are never told. A bound is not
+ * `partial`, which says the record could not be read. A peer reads each ended
+ * title at the desk's bound (M21), as it reads the model's rows.
+ * *Corrected 2026-10-29 (item 105): this said "No cap, no `truncated`", and a
+ * phone's day of ended lanes and their titles was unbounded.* */
 export const AgentRecordedLanesResult = z
   .object({
     sinceMs: z.number().int(),
@@ -792,6 +889,7 @@ export const AgentRecordedLanesResult = z
     detail: z.string().optional(),
     live: z.array(MonitorLivePast),
     ended: z.array(MonitorEndedRow),
+    clipped: z.boolean().optional(),
   })
   .passthrough();
 export type AgentRecordedLanesResult = z.infer<typeof AgentRecordedLanesResult>;

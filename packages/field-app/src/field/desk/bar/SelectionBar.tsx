@@ -1,5 +1,6 @@
 import { type Entity, PrefabId, selectedEntities } from "@vibecook/ice";
 import type { MenuSlot, SelectionAnchor } from "@vibecook/ice/desk";
+import { isEditableTarget, keyboardClaimOf } from "@vibecook/ice/dom";
 import {
   type ReactElement,
   useCallback,
@@ -11,11 +12,11 @@ import {
   useSyncExternalStore,
 } from "react";
 import { type FrameSurface, foldSurface } from "../../../frame/frame-surface";
-import { useLineSendPhase } from "../../../frame/line-send";
+import { isCopyChord, listenForProductChord } from "../../product-chords";
+import { copySelection } from "../copy/copy-to-hand";
 import { inHand } from "../desk-anchor";
 import { currentDesk, type MountedDesk, plainWords, subscribeDesk } from "../desk-door";
 import type { ObjectWords } from "../desk-object-words";
-import { sendSelection } from "../send/send-to";
 import { type BarActId, COMMENT_PAD_TYPE, runBarAct } from "./bar-acts";
 import { offScreen } from "./bar-geometry";
 import { type HandCell, type HeldSlot, handCells, slotsKey } from "./bar-hand";
@@ -55,10 +56,10 @@ import { type SelectionBarHandle, SelectionBarView } from "./SelectionBarView";
 // `ops.putDown()`. While the object flies home (`landing`) the bar steps aside, and comes back over it 200 ms after it
 // lands, as the bar over the selection again.
 //
-// SEND TO… (DK-14; §8 "Send to…"): its three doors — the bar's pill, the grown menu's row, the pill in hand — run ONE
-// act (send/send-to.ts): the selection, or the object in hand, drafted into the line as one chip. Over a selection the
-// bar steps aside while the act is on — the chip flying and @'s list open from it — and comes back as the list folds
-// (`useLineSendPhase`); the tools in hand stay under the head (plan addendum (50)).
+// COPY (HN-D3, where Send to… stood; §8 "The desk's Copy"): its four doors — the bar's pill, the grown menu's row, the
+// pill in hand, and ⌘C over the desk — run ONE act (copy/copy-to-hand.ts): the selection, or the object in hand, dealt
+// into the hand as one card. Nothing is drafted and nothing waits on the line, so the bar never steps aside for it;
+// the tools in hand stay under the head (plan addendum (50)).
 
 export interface SelectionBarProps {
   /** The frame's open surface and its one owner's setter (FR-4). */
@@ -281,10 +282,7 @@ function SelectionBarOn({
   }, [source, desk]);
 
   const shown = !hidden && (facts.inHand || (facts.count > 0 && facts.onScreen));
-  // Send to… on: over a selection the bar stands aside (its brackets are being hidden for the still, then the list is
-  // open); in hand the tools stay
-  const sending = useLineSendPhase() !== "idle" && !facts.inHand;
-  const stepAside = facts.stepAside || sending;
+  const stepAside = facts.stepAside;
 
   // R5: the menu closes on a gesture and when the bar goes — into the hand too
   useEffect(() => {
@@ -330,17 +328,11 @@ function SelectionBarOn({
   }, [desk, engine, handle]);
 
   const cells = useMemo(() => barCells(facts.selection, keys), [facts.selection, keys]);
-  const hand = useMemo(
-    () =>
-      facts.hand === null
-        ? NO_HAND
-        : handCells({
-            tools: facts.hand.tools,
-            active: facts.hand.active,
-            ...(facts.hand.readout === undefined ? {} : { readout: facts.hand.readout }),
-          }),
-    [facts.hand],
-  );
+  const hand = useMemo(() => {
+    if (facts.hand === null) return NO_HAND;
+    const { tools, active, readout } = facts.hand;
+    return handCells({ tools, active, ...(readout === undefined ? {} : { readout }) }, keys);
+  }, [facts.hand, keys]);
   /** The travel the anchor last told while something was in hand (I20) — the way home keeps it after the hand is gone. */
   const travel = useRef(TRAVEL_MS);
   if (facts.hand?.travelMs !== undefined) travel.current = facts.hand.travelMs;
@@ -357,7 +349,7 @@ function SelectionBarOn({
   const onCell = useCallback(
     (cell: BarCell): void => {
       const locked = factsRef.current.locked;
-      if (cell.kind === "send") sendSelection(desk, "bar");
+      if (cell.kind === "copy") copySelection(desk, "bar");
       else if (cell.kind === "act") runBarAct(engine, `act:${cell.id}`, locked);
       else if (cell.kind === "desk" && cell.act !== "more") runBarAct(engine, cell.act, locked);
     },
@@ -366,20 +358,47 @@ function SelectionBarOn({
   const onRow = useCallback(
     (row: MenuRow): void => {
       if (row.waits !== undefined) return;
-      if (row.id === "send") sendSelection(desk, "menu");
+      if (row.id === "copy") copySelection(desk, "menu");
       else runBarAct(engine, row.id as BarActId, factsRef.current.locked);
     },
     [desk, engine],
   );
-  // a tool in hand used through the engine — a mode taken up, an action run — Done, the object put down, or Send to…,
-  // the object drafted while it stays in hand
+  // a tool in hand used through the engine — a mode taken up, an action run — Done, the object put down, or Copy, the
+  // object copied while it stays in hand
   const onHand = useCallback(
     (cell: HandCell): void => {
       if (cell.kind === "tool") engine.ops.useHeldTool(cell.id);
       else if (cell.kind === "done") engine.ops.putDown();
-      else if (cell.kind === "send") sendSelection(desk, "hand");
+      else if (cell.kind === "copy") copySelection(desk, "hand");
     },
     [desk, engine],
+  );
+
+  // ⌘C — Copy over the desk (HN-D3; product-chords' `desk-copy`): a product chord on the capture phase, claimed only
+  // where the bar's Copy could be pressed — the desk showing (no cover over it, no sheet, the board put away), a
+  // selection or an object in hand, no gesture and no writing — and never from a field or a kind that holds the
+  // keyboard (the desk keymap's own gates: a note's editor, a page in hand, any input keep their native copy). Not
+  // claimed, the key goes on as it always did.
+  const hiddenRef = useRef(hidden);
+  hiddenRef.current = hidden;
+  useEffect(
+    () =>
+      listenForProductChord(
+        (event) => {
+          const now = factsRef.current;
+          return (
+            isCopyChord(event, keys) &&
+            !hiddenRef.current &&
+            (now.inHand || (now.count > 0 && !now.stepAside)) &&
+            !isEditableTarget(event.target) &&
+            !keyboardClaimOf(event.target).claimed
+          );
+        },
+        (event) => {
+          if (!event.repeat) copySelection(desk, "key");
+        },
+      ),
+    [desk, keys],
   );
 
   return (

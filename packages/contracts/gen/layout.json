@@ -86,6 +86,21 @@
     "fieldd",
     "profile-drafts.json"
   ],
+  "SPARKS_DIR": [
+    "fieldd",
+    "sparks"
+  ],
+  "SPARKS_KEY_FILE": [
+    "fieldd",
+    "sparks.key"
+  ],
+  "SPARK_HOMES_DIR": [
+    "sparks"
+  ],
+  "AGENT_INPUTS_DIR": [
+    "fieldd",
+    "inputs"
+  ],
   "TERMINAL_CONFIG_FILE": [
     "native",
     "config.ghostty"
@@ -113,6 +128,11 @@
     "native",
     "run",
     "termframe.sock"
+  ],
+  "DOOR_SOCKET": [
+    "native",
+    "run",
+    "door.sock"
   ],
   "CRASH_DIR": [
     "crash"

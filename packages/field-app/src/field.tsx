@@ -26,6 +26,8 @@ import { CoverStill } from "./field/desk/CoverStill";
 import { BEFORE_THE_DESK } from "./field/desk/desk-words";
 import { useWorkspaceSession } from "./field/use-workspace-session";
 import type { FrameSurface } from "./frame/frame-surface";
+import { useShownShelf } from "./frame/Head";
+import { useArtifactCatalogFeed } from "./frame/head-artifacts";
 import { useActiveView } from "./frame/view-state";
 import { type FieldUserProfile, peekHost } from "./host";
 import { useReactiveResource } from "./hud/use-reactive";
@@ -98,6 +100,10 @@ export function FieldView({
   // C6-4: stream per-doc sync standing into its store (the file pill and the
   // Settings Mesh section read it; empty = sync has nothing to say).
   useDocSyncFeed();
+  // HN-8 (PL-D1): stream the artifact catalog into the package's dot (the
+  // pill's package and the covered views' circle read it; no dot = every
+  // source is there).
+  useArtifactCatalogFeed();
   // PLUG-P3b: hand the plugin-client module its backend — plugin-bound leases
   // dial the same daemon this window reached (cleared on unmount, honestly).
   const fielddClient = useFielddClient();
@@ -274,13 +280,13 @@ export function FieldView({
   }, [ce, registry]);
 
   // THE FRAME'S OPEN SURFACE (One Frame FR-2/FR-3/FR-4, `frame/frame-surface.ts`):
-  // its one owner. Objects, @'s list, the fields explorer, the zoom's menu and
-  // the palette are one value, so any one folds the rest; held here because
-  // the recede derives from the explorer in this render. Objects — the desk's
-  // pegboard since DK-13 — recedes nothing: the stage behind it neither recedes
-  // nor dims (R14), the desk dimming under the board itself.
+  // its one owner. Objects, the pill's sheet (Fields or Artifacts, HN-8), the
+  // zoom's menu, the palette, the hand raised and the rest of the frame's
+  // surfaces are one value, so any one folds the rest; held here because the
+  // recede derives from the sheet in this render. Objects — the desk's pegboard
+  // since DK-13 — recedes nothing: the stage behind it neither recedes nor dims
+  // (R14), the desk dimming under the board itself.
   const [surface, setSurfaceRaw] = useState<FrameSurface | null>(null);
-  const docsOpen = surface === "fields";
   const chrome = useChromeState();
   const appearanceSource = appearanceOverrideSource ?? EMPTY_APPEARANCE_SOURCE;
   const appearanceOverride = useSyncExternalStore(
@@ -296,12 +302,21 @@ export function FieldView({
     },
     [chrome.setShowSettings],
   );
-  const sheetOpen = docsOpen || chrome.showSettings;
   // A covered view (One Frame FR-1): the field goes out of reach under it, and
   // the desk becomes a STILL that costs nothing (DK-15, `CoverStill` below —
   // the still recedes, the desk never does).
   const view = useActiveView();
   const covered = view !== "canvas";
+  // THE SHOWN SHELF (HN-8; DESIGN.md §8 "The head"): which shelf of the pill's
+  // sheet shows — Fields or Artifacts, Artifacts alone under a cover, and none
+  // the moment the view changes — read ONCE here and handed to the head, the
+  // package circle and the recede below alike, so the three never part over
+  // the frame between a change of view and the line's fold of the owner.
+  const shelf = useShownShelf(surface, view);
+  // The pill's sheet recedes the field on Canvas alone (DESIGN.md §8 "The
+  // head"): under a cover the package circle grows it over the cover, and
+  // nothing transforms the desk's own box there (DK-15).
+  const sheetOpen = (shelf !== null && !covered) || chrome.showSettings;
 
   const [hudReturning, setHudReturning] = useState(false);
   const hudWasLoading = useRef(docState.phase === "loading");
@@ -335,14 +350,15 @@ export function FieldView({
   // scrim and popup are drawn outside this wrapper, which is out of reach while
   // they stand (a modal: nothing under the scrim may hold the keyboard). What
   // you see recedes under them — the cover's still and the frame's chrome, in
-  // `.field-recede` below — and the desk's own box never does (DK-15).
-  const searching = surface === "search";
+  // `.field-recede` below — and the desk's own box never does (DK-15). The New
+  // spark sheet (SP-1c; §8 "The New spark sheet") is the same kind of modal.
+  const modal = surface === "search" || surface === "new-spark";
 
   return (
     <div
       className="field-wrap"
       data-doc-transition={hudMotion}
-      inert={searching}
+      inert={modal}
       {...(appearanceOverride.appearance === null
         ? {}
         : { "data-appearance-override-revision": appearanceOverride.revision })}
@@ -387,12 +403,12 @@ export function FieldView({
       {/* THE RECEDE UNDER THE PEEK (GV-D8 × DK-15; DESIGN.md §6, §8 "Search —
           the Peek"): what you see over the desk — its still under a cover and
           the frame's chrome, the cover with it — in ONE full-window box that
-          recedes to 0.98 about the window's 50% 46% while the Peek stands
-          (`data-peek-recede`, frame/peek.css). The desk's own box stays outside
+          recedes to 0.98 about the window's 50% 46% while the Peek or the New
+          spark sheet stands (`data-peek-recede`, frame/peek.css). The desk's own box stays outside
           it, so no transform reaches the desk under a cover. At rest the box
           carries no transform (no stacking context) and takes no pointer; its
           children keep theirs (styles/base.css). */}
-      <div className="field-recede" data-peek-recede={searching ? "true" : "false"}>
+      <div className="field-recede" data-peek-recede={modal ? "true" : "false"}>
         {/* THE STILL UNDER THE COVERS (DK-15; DESIGN.md §8): over the desk and
             under every piece of chrome; outside the keyed scene, so a remount
             under a standing cover keeps it. */}
@@ -403,6 +419,7 @@ export function FieldView({
           hudMotion={hudMotion}
           docState={docState}
           surface={surface}
+          shelf={shelf}
           onSurfaceChange={setSurface}
           chrome={chrome}
         />

@@ -52,8 +52,11 @@ import {
   ArtifactRefreshPreviewParams,
   ArtifactUnpublishParams,
   ArtifactUpdateParams,
+  appVersionOfBuildId,
   type CallerContext,
   CONTRACTS_VERSION,
+  ComposeSparksHatchParams,
+  ComposeSparksOpenParams,
   createAgentCatalogReaders,
   DEVICE_LIMITS,
   DeviceGetParams,
@@ -98,7 +101,9 @@ import {
   LOG_STREAMS,
   METHODS,
   type MeshSyncPosture,
+  MONITOR_AUDIENCE,
   NATIVE_SUPERVISION,
+  NativeDoorInfoResult,
   type NativeHealth,
   type NativeLastExit,
   type NativeLinkHealth,
@@ -191,10 +196,13 @@ import { projectPluginAuthority } from "@vibefield/plugin-runtime";
 // the bare wire number (RO-4): the client entry is a DOM program, and fieldd
 // needs only the version its supervisor holds a spawned rosettad to
 import { PROTOCOL_VERSION as ROSETTA_PROTOCOL_VERSION } from "@vibefield/rosetta-protocol/protocol-version";
+import { AgentBriefings } from "./agent-briefing";
 import {
   agentListFor,
+  clipRecordedLanes,
   createFieldSubscription,
   deskProjector,
+  type FieldSubscription,
   malformedBoardAsk,
   projectFieldRow,
   refuseBoardAsk,
@@ -206,11 +214,13 @@ import {
   type ShellIntegration,
 } from "./agent-gateway";
 import { DEFAULT_SEARCH_LIMIT, EnrollmentStore, IndexService } from "./agent-index";
+import { AgentInputQueues } from "./agent-input-queue";
 import { LastRunKeeper, modelBoardSource } from "./agent-last-run";
 import { createModelSubscription } from "./agent-model-board";
 import { type AgentMonitorService, createAgentMonitorService } from "./agent-monitor";
 import { AgentRuntimeService, type AgentRuntimeServiceOptions } from "./agent-runtime";
 import { type AccountUsagePollOptions, AccountUsageService } from "./agent-usage";
+import { AgentWaker, isIdleRow } from "./agent-waker";
 import {
   DEFAULT_APP_PREFERENCES,
   effectiveAppPreferences,
@@ -218,7 +228,7 @@ import {
 } from "./app-preferences";
 import { ArtifactService, type ArtifactServiceHealth } from "./artifact-service";
 import { AuditService, type AuditWriterTestHooks } from "./audit-service";
-import { nativeAlive, nativeEndpoint, nativeMgmtEndpoint } from "./boot-env";
+import { nativeAlive, nativeEndpoint, nativeMgmtEndpoint, splitPathList } from "./boot-env";
 import { DeviceService, localDeviceIdAt } from "./device-service";
 import { DiagnosticsService } from "./diagnostics-service";
 import { DocLane } from "./doc-lane";
@@ -254,7 +264,13 @@ import {
 } from "./library-doc";
 import { LinkService, otherUserLinks } from "./link-service";
 import { McpService } from "./mcp-service";
-import { type BoardDelta, type BoardProjection, type LocalBoard, MeshBoard } from "./mesh-board";
+import {
+  type BoardDelta,
+  type BoardProjection,
+  type LocalBoard,
+  type LocalBoardSnapshot,
+  MeshBoard,
+} from "./mesh-board";
 import { MESH_BUS_CARRIES_CONTENT } from "./mesh-bus";
 import { MeshClient, meshNodeUp, type ServeSpec } from "./mesh-client";
 import { MeshLaneLink } from "./mesh-lane";
@@ -327,8 +343,13 @@ import {
   type TerminalInventoryTimings,
   type TerminalProfileBinding,
   TerminalService,
+  type TerminalServiceOptions,
 } from "./terminal-service";
 import { TokenService } from "./token-service";
+import { composeProjects, ToolPlaneService } from "./tool-plane";
+import type { TalkDeps, TalkSession } from "./tool-plane/rooms/talk/verbs";
+import { SparkService, SparkStore } from "./tool-plane/sparks";
+import { userMe } from "./user-me";
 import type { BrowseFacts } from "./workspace/browse-exports";
 import type { FilesHostLaunch } from "./workspace/launch";
 import { WorkspacePicker } from "./workspace/picker";
@@ -375,6 +396,9 @@ export interface FielddConfig {
   /** TC-S2 test seam: the terminal cell-birth wait budget (production
    * defaults to the cell's genned hello deadline). */
   terminalBirthWaitMs?: number;
+  /** Item 121 test seam: the route snapshot class placement reads
+   * (`TerminalServiceOptions.classRoutes`; production: the snapshot itself). */
+  terminalClassRoutes?: TerminalServiceOptions["classRoutes"];
   /** IL-D4 test seam: fieldd's own half of the inventory bound, over
    * `TERMINAL_INVENTORY` (a row runs a 10 s bound in a fraction of a second).
    * The tick bound it shares with the supervision is `nativeSupervisionTimings`'
@@ -473,7 +497,9 @@ export interface FielddConfig {
    * refuse honestly. bin.ts derives it from the layout (`rootAboveUserRoot`). */
   vibefieldRoot?: string;
   /** AR-2 test seams: the PATH the agent install inventory searches, and the
-   * fetch the release detectors use. Production: the process PATH, global fetch. */
+   * fetch the release detectors use. Production: the process PATH, global fetch.
+   * Setting the search path also isolates the home the inventory searches each
+   * provider's install directories under (`agentInstallHome`, puppeteer 0.3.1). */
   agentSearchPath?: string;
   agentFetch?: typeof fetch;
   /** AR-S1c — read the agents' installs in the background once boot has
@@ -491,6 +517,8 @@ export interface FielddConfig {
   /** AR-4 test seam: resume-when-idle's thresholds (production: 30 s still,
    * asked every 5 s). */
   agentResumeWhenIdle?: AgentRuntimeServiceOptions["resumeWhenIdle"];
+  /** ST test seam: how long a sent Stop waits to be heard (production: `AGENT_STOP.HEARD_WITHIN_MS`). */
+  agentStopHeardWithinMs?: AgentRuntimeServiceOptions["stopHeardWithinMs"];
   /** AR-5d test/product seam: the account-usage polling cadence. Unset ⇒ each
    * adapter's own `refresh.pollIntervalMs` (the provider knows its quota). */
   agentUsage?: AccountUsagePollOptions;
@@ -1072,11 +1100,23 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     logger,
   });
   const projectIntents = projectIntentWriter(projectRecords);
-  const agents = new AgentRuntimeService({
+  const sparkStore = new SparkStore({
+    dir: join(config.dataDir, ...LAYOUT.SPARKS_DIR),
+    keyPath: join(config.dataDir, ...LAYOUT.SPARKS_KEY_FILE),
+    logger: logger.child({ component: "compose.sparks" }),
+  });
+  const briefings: AgentBriefings = new AgentBriefings({
+    spark: (id) => sparkStore.get(id),
+    capabilities: (provider) => agents.runtime.providers().find((p) => p.id === provider)?.briefing,
+    door: async () => NativeDoorInfoResult.parse(await native.request("native.door.info", {})),
+  });
+  const agents: AgentRuntimeService = new AgentRuntimeService({
     userRoot: config.dataDir,
     vibefieldRoot: config.vibefieldRoot ?? null,
     index,
     supervisor: rosettad,
+    sparkBriefing: (spark, provider) => briefings.prepare(spark, provider),
+    runBriefing: (provider) => briefings.forRun(provider),
     terminals: () => terminalsRef,
     deviceId: () => devicesForAgents?.currentDeviceId() ?? "local",
     onProfileSignedIn: async (profileId): Promise<void> => {
@@ -1092,10 +1132,18 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     },
     ...(config.agentProviders !== undefined ? { providers: config.agentProviders } : {}),
     ...(config.agentCatalog !== undefined ? { catalog: config.agentCatalog } : {}),
-    ...(config.agentSearchPath !== undefined ? { searchPath: config.agentSearchPath } : {}),
+    ...(config.agentSearchPath !== undefined
+      ? {
+          searchPath: config.agentSearchPath,
+          installHome: agentInstallHome(config.agentSearchPath, config.dataDir),
+        }
+      : {}),
     ...(config.agentFetch !== undefined ? { fetchFn: config.agentFetch } : {}),
     ...(config.agentResumeWhenIdle !== undefined
       ? { resumeWhenIdle: config.agentResumeWhenIdle }
+      : {}),
+    ...(config.agentStopHeardWithinMs !== undefined
+      ? { stopHeardWithinMs: config.agentStopHeardWithinMs }
       : {}),
     // AR-4 — the daemon's own acts on a session (the re-attach at boot, a
     // resume-when-idle) are ledgered as the system actor
@@ -1206,6 +1254,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // optional the whole way down — with the mesh off (the default) `docSync`
     // stays null and every commit takes the same path it always did.
     let docSync: DocSyncService | null = null;
+    let toolPlane: ToolPlaneService | null = null;
     let presenceRooms: PresenceRoomRouter | null = null;
     // DS-5 (DS-D6) — the holders slice, bound once DeviceService exists below.
     let docHolders: DocHoldersService | null = null;
@@ -1409,6 +1458,34 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         { error: String(error) },
       );
     }
+    // CP-1b — the lane link redials. It was dialed once per boot, so after a floor restart (NativeLink's "connected")
+    // or a dropped socket ("disconnected") every lane's bytes went nowhere until fieldd restarted: doc sync's, and now
+    // the compose plane's doors, whose bridges redial a restarted floor on their own (CP-1a). One dial at a time; a
+    // link this boot closed (doc sync's boot failure above, a shutdown) stays closed.
+    let laneDial: Promise<void> | null = null;
+    const redialLanes = (why: "floor" | "dropped"): void => {
+      if (laneDial !== null || laneLink.connected || laneLink.closed) return;
+      laneDial = laneLink
+        .connect()
+        .then(() => logger.info("fieldd.mesh_lane.redialed", "The MeshData link is back", { why }))
+        .catch((error: unknown) =>
+          logger.warn(
+            "fieldd.mesh_lane.redial_failed",
+            "The MeshData link could not be dialed again",
+            {
+              why,
+              error: String(error),
+            },
+          ),
+        )
+        .finally(() => {
+          laneDial = null;
+        });
+    };
+    native.on("connected", () => redialLanes("floor"));
+    laneLink.on("disconnected", () => {
+      setTimeout(() => redialLanes("dropped"), 1_000).unref?.();
+    });
     // P7 §5.3.1 — fetch/verify/install (user-initiated only; no phone-home)
     const installer = new RegistryInstallService({
       dataDir: config.dataDir,
@@ -1793,6 +1870,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       ...(config.terminalBirthWaitMs !== undefined
         ? { birthWaitMs: config.terminalBirthWaitMs }
         : {}),
+      ...(config.terminalClassRoutes !== undefined
+        ? { classRoutes: config.terminalClassRoutes }
+        : {}),
       remoteCellRewriter: config.terminalRemoteCellRewriter ?? {
         rewrite: (deviceId, endpoints) =>
           (egressCellRewriter ?? NO_EGRESS).rewrite(deviceId, endpoints),
@@ -2020,6 +2100,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     api.register("surface.sources", (ctx, params) => surfaces.sources(ctx, params));
     api.register("surface.open", (ctx, params) => surfaces.open(ctx, params));
     api.register("surface.close", (ctx, params) => surfaces.close(ctx, params));
+    // PT-S2 (R11) — the attach's device list (a phone's "Attach" binds from it)
+    api.register("surface.simulator.devices", (ctx, params) =>
+      surfaces.simulatorDevices(ctx, params),
+    );
 
     api.register("system.health", () => health());
     // WIN-D5 — the stop verb. The response flushes first (setImmediate), then
@@ -2644,6 +2728,225 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
               }),
       },
     });
+    // CP-1b, the tool plane since MT-0 (tool-plane/) — the `vibefield` door. An agent's MCP calls arrive through the
+    // floor's door (native.door.subscribe; the bytes on the meshdata lane link) and are answered with the rows its
+    // audience holds, each held to its Agent Profiles and audited before it acts: a spark (known by its record, CP-1c,
+    // just below) every served row, a plain run the `agent` rows; any other caller is served no tools and leaves its
+    // door's one audit line.
+    // CP-1c (tool-plane/sparks.ts) — the sparks: their signed records under LAYOUT.SPARKS_DIR, each one's folder under
+    // LAYOUT.SPARK_HOMES_DIR, and the window's three doors. CP-1d's route A is prepared at every runtime birth,
+    // including run-id, native-id and idle resumes; no launch configuration is written into the spark's folder.
+    const sparks = new SparkService({
+      store: sparkStore,
+      homes: join(config.dataDir, ...LAYOUT.SPARK_HOMES_DIR),
+      requireSupport: (provider) => briefings.requireSupported(provider),
+      profileSets: async () => (await agents.profiles.sets()).sets,
+      runs: () => agents.list().sessions,
+      spawn: async (launch, spark, principal) => {
+        const result = await agents.spawn(
+          {
+            provider: launch.provider,
+            cwd: launch.cwd,
+            profileSet: launch.profileSet,
+            title: launch.title,
+            ...(launch.modelSelection !== undefined
+              ? { modelSelection: launch.modelSelection }
+              : {}),
+          },
+          principal,
+          undefined,
+          { origin: { by: "you" }, spark },
+        );
+        return { runtimeRunId: result.session.runtimeRunId };
+      },
+      resume: async (runtimeRunId, principal) => {
+        try {
+          return {
+            runtimeRunId: (await agents.resume({ runtimeRunId }, principal)).session.runtimeRunId,
+          };
+        } catch (error) {
+          // a session that cannot be resumed (gone, never resumable) is started again in the spark's folder
+          if (
+            error instanceof RpcCallError &&
+            (error.kind === "PRECONDITION_FAILED" || error.kind === "NOT_FOUND") &&
+            !String((error.details as { reason?: string } | undefined)?.reason ?? "").startsWith(
+              "spark-",
+            )
+          )
+            return undefined;
+          throw error;
+        }
+      },
+      now: () => new Date(),
+      logger: logger.child({ component: "compose.sparks" }),
+    });
+    // CP-2 (`draft/compose-plane/cp2-talk-room.md`, ruled 2026-10-31) — every session's one input queue (CP-L5), kept
+    // under LAYOUT.AGENT_INPUTS_DIR across a restart (CP2-D3), and the waker that tells a spark what its runs did (CP-D4,
+    // CP2-D6). A spark's words land marked as its own and sent on the person's behalf (CP2-D1), at the session's idle.
+    const runRow = (runtimeRunId: string) =>
+      agents.list().sessions.find((row) => row.runtimeRunId === runtimeRunId);
+    const sparkSessionOf = (sparkId: string): string | undefined =>
+      agents.list().sessions.find((row) => row.spark === sparkId && agents.isLive(row.runtimeRunId))
+        ?.runtimeRunId;
+    const inputs = new AgentInputQueues({
+      dir: join(config.dataDir, ...LAYOUT.AGENT_INPUTS_DIR),
+      deliver: (runtimeRunId, text) => agents.submit(runtimeRunId, text),
+      isIdle: (runtimeRunId) => isIdleRow(agents.monitorOf(runtimeRunId)),
+      onOutcome: (runtimeRunId, input, outcome, reason) => {
+        if (input.from.kind !== "spark") return;
+        // CP2-D2: an uncertain delivery is never sent again, and its sender is told
+        if (outcome === "uncertain") waker.uncertain(input.from.spark, runtimeRunId);
+        if (outcome === "waiting") return;
+        // CP-L6: what became of a spark's words, written down as the spark's
+        const spark = input.from.spark;
+        void audit
+          .required(
+            {
+              principal: {
+                kind: "mcp-agent",
+                sessionId: sparkSessionOf(spark) ?? `spark:${spark}`,
+                scopes: [],
+              },
+              transport: "mcp",
+              receivedAt: Date.now(),
+            },
+            {
+              action: "tools.agent_send.delivery",
+              target: { kind: "run", id: runtimeRunId },
+              attrs: { spark, outcome, onBehalf: "you", ...(reason ? { reason } : {}) },
+            },
+            () => undefined,
+            () => ({ outcome: outcome === "delivered" ? "succeeded" : "failed" }),
+          )
+          .catch((err: unknown) =>
+            logger.warn(
+              "fieldd.inputs.audit_failed",
+              "A delivery's audit line could not be written",
+              {
+                reason: (err as Error).message,
+              },
+            ),
+          );
+      },
+      logger: logger.child({ component: "inputs" }),
+    });
+    const waker = new AgentWaker({
+      queues: inputs,
+      spawnerOf: (runtimeRunId) => {
+        const origin = runRow(runtimeRunId)?.origin;
+        return origin?.by === "spark" ? origin.spark : undefined;
+      },
+      sparkSession: sparkSessionOf,
+      label: (runtimeRunId) => {
+        const row = runRow(runtimeRunId);
+        return (
+          row?.title ??
+          (config.agentCatalog ?? AGENT_CATALOG).find((entry) => entry.id === row?.provider)
+            ?.label ??
+          runtimeRunId
+        );
+      },
+      logger: logger.child({ component: "waker" }),
+    });
+    agents.onRunMonitor((runtimeRunId, mirror) => {
+      waker.onMonitor(runtimeRunId, mirror);
+      // a spark whose own session is live again takes the wakes held for it
+      const sparkOf = runRow(runtimeRunId)?.spark;
+      if (sparkOf !== undefined) waker.onSparkLive(sparkOf, runtimeRunId);
+      void inputs.poke(runtimeRunId);
+    });
+    agents.onRunEnded((runtimeRunId) => {
+      waker.onEnded(runtimeRunId);
+      inputs.forget(runtimeRunId);
+    });
+    const kept = inputs.restore();
+    if (kept > 0)
+      logger.info("fieldd.inputs.restored", "Kept inputs wait for their sessions", { kept });
+    const talkSession = (row: ReturnType<typeof runRow>): TalkSession | undefined =>
+      row === undefined
+        ? undefined
+        : {
+            runtimeRunId: row.runtimeRunId,
+            profileSet: row.profileSet,
+            origin: row.origin,
+            spark: row.spark,
+            live: agents.isLive(row.runtimeRunId),
+          };
+    const talk: TalkDeps = {
+      session: (runtimeRunId) => talkSession(runRow(runtimeRunId)),
+      sessions: () =>
+        agents
+          .list()
+          .sessions.map((row) => talkSession(row))
+          .filter((s): s is TalkSession => s !== undefined),
+      spawn: async (launch, spark) => {
+        const result = await agents.spawn(
+          {
+            provider: launch.agent,
+            cwd: launch.cwd,
+            profileSet: launch.profileSet,
+            ...(launch.model !== undefined ? { modelSelection: launch.model } : {}),
+          },
+          // the spark's own door principal: a run's ticket rights follow it (read only), never the person's
+          { kind: "mcp-agent" },
+          undefined,
+          { origin: { by: "spark", spark } },
+        );
+        return { runtimeRunId: result.session.runtimeRunId };
+      },
+      enqueue: (runtimeRunId, text, from) =>
+        inputs.enqueue(runtimeRunId, text, { kind: "spark", spark: from.spark, name: from.name }),
+      interrupt: (runtimeRunId) => agents.interrupt({ runtimeRunId }),
+      end: (runtimeRunId) => agents.endRun(runtimeRunId),
+      watch: (spark, runtimeRunId, on) => waker.watch(spark, runtimeRunId, on),
+    };
+    toolPlane = new ToolPlaneService({
+      native,
+      lanes: laneLink,
+      runForTerminal: (terminalSessionId) => agents.runForTerminal(terminalSessionId),
+      spark: (id) => sparks.get(id),
+      verbs: {
+        profileSets: async () => (await agents.profiles.sets()).sets,
+        agentLabel: (provider) =>
+          (config.agentCatalog ?? AGENT_CATALOG).find((entry) => entry.id === provider)?.label,
+        models: (provider, profileSet) => agents.models({ provider, profileSet }),
+        runs: () => agents.list().sessions,
+        runFacts: (runtimeRunId) => {
+          const row = monitor?.rowForRun(runtimeRunId);
+          if (!row) return undefined;
+          return {
+            ...(row.cost?.usd !== undefined ? { usd: row.cost.usd } : {}),
+            ...(row.effort?.value ? { effort: row.effort.value } : {}),
+          };
+        },
+        projects: () =>
+          composeProjects(
+            projectDoors.list(
+              {},
+              { paths: true, tailnet: false },
+              PROJECT_DOORS.PAGE_DEFAULT_LIMIT,
+            ),
+          ),
+        indexSessionFor: async (nativeSessionId) =>
+          (await index.sessionByNativeId(nativeSessionId))?.id,
+        indexSessionProfile: async (sessionId) => ({
+          profileId: (await index.session(sessionId)).session.profileId,
+        }),
+        timeline: (sessionId, cursor, limit) =>
+          index.timeline({ sessionId, cursor, limit, boundedBelow: true }),
+        search: (q, runtime, limit, afterMs) =>
+          index.search({ q, runtime, limit, ...(afterMs !== undefined ? { afterMs } : {}) }),
+      },
+      talk,
+      audit,
+      version: FIELDD_VERSION,
+      logger: logger.child({ component: "compose" }),
+    });
+    {
+      const door = toolPlane;
+      native.on("connected", () => void door.ensureStarted());
+      void door.ensureStarted();
+    }
     const projectPage = (ctx: { principal: Principal }, asked: number | undefined): number =>
       tailnetRowLimit(ctx.principal, asked, PROJECT_DOORS.PAGE_DEFAULT_LIMIT) ??
       PROJECT_DOORS.PAGE_DEFAULT_LIMIT;
@@ -3525,12 +3828,31 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // a revision of one chain for a revision of another.
     let boardChains = 0;
     const nextBoardEpoch = (): string => `${bootId}.${++boardChains}`;
+    // PG-1d (F-M4's residual) — every live field and desk board of this device
+    // is re-presented when the doors' gate flips: ONE snapshot at the board's
+    // current revision (its reader's own unless a change waiting out the floor
+    // is folded in), its rows shaped by the gate as it reads now. The flip
+    // is read off the gate itself, never off one event: a re-pair to the same
+    // floor reopens it at `connected` (its hello's `terminal-endpoints` fires
+    // while the link is still down), and a link lost with nothing held closes
+    // it with no `terminal-endpoints` at all (`native-link.ts`).
+    const gatedBoards = new Set<FieldSubscription>();
+    let presentedGate = native.terminalMeshPublished();
+    const representOnGateFlip = (): void => {
+      const gate = native.terminalMeshPublished();
+      if (gate === presentedGate) return;
+      presentedGate = gate;
+      for (const board of gatedBoards) board.represent();
+    };
+    for (const event of ["terminal-endpoints", "connected", "reconnecting", "closed", "superseded"])
+      native.on(event, representOnGateFlip);
     /** One board of THIS device at a projection and a floor: a snapshot on its
-     * own chain, then deltas through `emit` (`createFieldSubscription`). */
+     * own chain, then its frames through `emit` (`createFieldSubscription`): its
+     * deltas, and (PG-1d) a snapshot when it is re-presented or repaired. */
     const openLocalBoard = (
       projection: BoardProjection,
       minIntervalMs: number,
-      emit: (delta: BoardDelta) => void,
+      emit: (frame: BoardDelta | LocalBoardSnapshot, kind?: "delta" | "snapshot") => void,
       heartbeatMs?: number,
     ): LocalBoard => {
       const epoch = nextBoardEpoch();
@@ -3583,17 +3905,25 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
             : projectFieldRow,
         minIntervalMs,
         ...(heartbeatMs !== undefined ? { heartbeatMs } : {}),
-        // TM-2 (F-M4) — the SAME gate the store publisher applies below. The
-        // two carriers serve one board, and a row that promises a tap over one
-        // leg while refusing it over the other is the false positive MF-1l
-        // exists to prevent — the phone folds both legs into one card.
+        // TM-2 (F-M4) — the gate on every attach promise a row makes: the
+        // `terminal` join and, on a desk row, `monitorRow.attachable`/
+        // `.writable` (PG-1a). The store publisher it once matched retired at
+        // DS-D14; a promise of a tap the owner refuses is the false positive
+        // MF-1l exists to prevent.
         terminalPublished: () => native.terminalMeshPublished(),
         onError: (error) =>
           logger.warn("fieldd.agents.field_frame_failed", "A field subscriber's frame failed", {
             error: error instanceof Error ? error.message : String(error),
           }),
       });
-      return { snapshot: { ...board.snapshot, epoch }, dispose: board.dispose };
+      gatedBoards.add(board);
+      return {
+        snapshot: { ...board.snapshot, epoch },
+        dispose: () => {
+          gatedBoards.delete(board);
+          board.dispose();
+        },
+      };
     };
     /** DS-3 — the mesh board; built once PeerLink and the federated manager
      * exist (below). Null only in the window before that. */
@@ -3681,19 +4011,27 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
               service: "mesh-board",
               state: "starting",
             });
-          // `.snapshot` carries the whole mesh (the open, and the client's own
-          // replay after a reconnect); `.delta` carries every per-device frame —
-          // a device's delta, a device's reset, a device's state.
-          const reader = meshBoard.open(projection, floor, (frame) => emit(frame, "delta"));
+          // `.snapshot` carries the whole mesh (the open, the client's own
+          // replay after a reconnect, and the door's resync of a phone behind
+          // its cap, PG-1c); `.delta` carries every per-device frame — a
+          // device's delta, a device's reset, a device's state.
+          const install = meshBoard.subscribe(projection, floor, emit);
           return {
-            snapshot: reader.open,
+            ...install,
             dispose: () => {
-              reader.dispose();
+              install.dispose();
               screen?.();
             },
           };
         }
-        const board = openLocalBoard(projection, floor, (delta) => emit(delta), heartbeatMs);
+        // `.delta` carries the board's deltas; `.snapshot` (PG-1d) its
+        // re-present on a gate flip (or a repair), at its current revision
+        const board = openLocalBoard(
+          projection,
+          floor,
+          (frame, kind) => emit(frame, kind),
+          heartbeatMs,
+        );
         return {
           snapshot: board.snapshot,
           dispose: () => {
@@ -3759,8 +4097,13 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // lanes' past as the backend beside the runtime derives it from the record,
     // asked by a window only while a mounted view asks (PF6). Read through to
     // rosettad at each ask (the backend's history port) and held nowhere — not
-    // the removed `agent.history`. A peer reads it without colour sequences
-    // (M16), as it reads the model's rows.
+    // the removed `agent.history`. Only this desktop's own callers read the
+    // colour sequences (M16), as only they read the model's rows: the cut is
+    // `MONITOR_AUDIENCE`'s by the caller's kind. Item 100: it was every kind
+    // but a peer daemon's, so a phone read this desktop's deal. SP-D13-bounded
+    // for a tailnet caller by `index.activity`'s rule (item 105): the newest
+    // MAX_ROWS ended lanes by their end, `clipped` saying so; a window and a
+    // peer daemon read the whole day.
     api.register("agent.recordedLanes", async (ctx, params) => {
       const parsed = AgentRecordedLanesParams.safeParse(params ?? {});
       if (!parsed.success)
@@ -3785,7 +4128,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           service: "agent.monitor",
           state: "no-record",
         });
-      return wireRecordedLanes(past, ctx.principal.kind === "peer-fieldd" ? "peer" : "window");
+      return clipRecordedLanes(
+        wireRecordedLanes(past, MONITOR_AUDIENCE[ctx.principal.kind]),
+        tailnetRowLimit(ctx.principal, undefined, Number.MAX_SAFE_INTEGER),
+      );
     });
     // AR-5d — the usage column's feed (agent-usage.ts). Both doors answer the
     // PROJECTION and nothing else: percentages, labels, the provider's own
@@ -4155,12 +4501,17 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
 
     // -- DeviceService (C4, design-04 D31): the device directory --
     // (also the tailnet door's node-id correlator via devicesRef, assigned below)
+    // AU-3a (AU-D13 A) — the app version this desktop says on its slice, from
+    // the build id its launcher gave (`FIELDD_BUILD_ID`, the staged identity's
+    // `<appVersion>+<commit7>`). A dev runner's id names none, so dev says none.
+    const appVersion = appVersionOfBuildId(config.buildId);
     const devices = new DeviceService({
       dataDir: config.dataDir,
       mesh,
       bootId,
       fielddVersion: FIELDD_VERSION,
       contractsVersion: CONTRACTS_VERSION,
+      ...(appVersion !== undefined ? { appVersion } : {}),
       // NF-3: honest capability — true iff the pairing hello delivered the
       // floor's endpoints (D31; re-synced on the terminal-endpoints event).
       terminalHost: () => native.terminalEndpoints !== undefined,
@@ -4342,6 +4693,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       );
     }
     api.register("device.list", () => ({ devices: devices.list() }));
+    // IOS-8f — this desktop's person, read from its own user row at each ask (`user-me.ts`)
+    api.register("user.me", () =>
+      userMe({ userId: config.userId, root: config.vibefieldRoot, logger }),
+    );
     api.register("device.get", (_ctx, params) => {
       const parsed = DeviceGetParams.safeParse(params);
       if (!parsed.success)
@@ -5639,6 +5994,49 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       setupLedger.answer(parsed.data.step, parsed.data.state);
       return setupLedger.snapshot();
     });
+    // CP-1c — the sparks' doors (compose.ts; METHODS rows under agents.manage, local): the window's, and audited.
+    api.register("compose.sparks.list", (ctx) => {
+      requireDesktopCaller(ctx);
+      return { sparks: sparks.list() };
+    });
+    api.register("compose.sparks.hatch", async (ctx, params) => {
+      requireDesktopCaller(ctx);
+      const parsed = ComposeSparksHatchParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { name, face: { seed }, agent, modelSelection?, profiles, thinksUnder }, thinking under one of its profiles",
+          false,
+        );
+      const ask = parsed.data;
+      return await audit.required(
+        ctx,
+        {
+          action: "compose.spark.hatch",
+          target: { kind: "spark", id: "pending" },
+          attrs: {
+            agent: ask.agent,
+            profiles: ask.profiles.join(","),
+            thinksUnder: ask.thinksUnder,
+          },
+        },
+        async () => ({ spark: await sparks.hatch(ask, ctx.principal) }),
+        (result) => ({ outcome: "succeeded", attrs: { spark: result.spark.id } }),
+      );
+    });
+    api.register("compose.sparks.open", async (ctx, params) => {
+      requireDesktopCaller(ctx);
+      const parsed = ComposeSparksOpenParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { spark }", false);
+      const id = parsed.data.spark;
+      return await audit.required(
+        ctx,
+        { action: "compose.spark.open", target: { kind: "spark", id } },
+        async () => ({ spark: await sparks.open(id, ctx.principal) }),
+        () => ({ outcome: "succeeded" }),
+      );
+    });
     api.register("setup.moment", (ctx, params) => {
       requireDesktopCaller(ctx);
       const parsed = SetupMomentParams.safeParse(params);
@@ -6455,6 +6853,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         detachHealthSources?.();
         links.stop();
         await presenceRooms?.stop();
+        toolPlane?.stop();
         docSync?.stop();
         laneLink.close();
         docs.dispose();
@@ -6505,6 +6904,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       await updateManager.dispose();
       runtimeDiagnostics.dispose();
       await presenceRooms?.stop();
+      toolPlane?.stop();
       docSync?.stop();
       laneLink.close();
       docs.dispose();
@@ -6957,6 +7357,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           api.close();
           docLane.close();
           await presenceRooms?.stop();
+          toolPlane?.stop();
           docSync?.stop();
           laneLink.close();
           docs.dispose();
@@ -7089,6 +7490,16 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     }
     throw e;
   }
+}
+
+/** AO-7 — the home puppeteer searches each provider's install directories under
+ * (`distribution.home`, 0.3.1) when a harness isolates the search path: the
+ * path's first directory, the stub's own in every harness, so the machine
+ * owner's `~/.local/bin` and the like are never read. An empty list falls to the
+ * user root, which here is fieldd's data directory, never $HOME. Production
+ * passes no search path, so its inventory reads the person's own home. */
+function agentInstallHome(searchPath: string, userRoot: string): string {
+  return splitPathList(searchPath)[0] ?? userRoot;
 }
 
 /** TC-D6(a) — Node's diagnostic report is the only stdlib window onto rlimits.

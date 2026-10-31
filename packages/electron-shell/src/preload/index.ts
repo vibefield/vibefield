@@ -1,6 +1,10 @@
 import {
   type BrowserDataClearResult,
   BrowserDataClearResult as BrowserDataClearResultSchema,
+  ClipboardCopyRefusal,
+  ClipboardReadRequest,
+  ClipboardReadResult,
+  ClipboardWriteImageResult,
   CloseRequest,
   CloseResult,
   type DesktopShellState,
@@ -22,6 +26,9 @@ import {
   ScreenshotCaptureResult as ScreenshotCaptureResultSchema,
   ScreenshotPreviewRequest,
   ScreenshotPreviewResult,
+  ScreenshotStillBytesRequest,
+  ScreenshotStillKeptRequest,
+  SHELL_CLIPBOARD,
   type ShellCommand,
   ShellPlatform,
   type ThemePreference,
@@ -29,10 +36,14 @@ import {
   type ThemeState,
   ThemeState as ThemeStateSchema,
   type UpdateChannel,
+  UpdateCheckResult,
   UpdateConfirmRequest,
   UpdateConfirmResult,
   UpdateDeclineRequest,
   UpdateDoctorResult,
+  UpdateDownloadRequest,
+  UpdateDownloadResult,
+  UpdateMoveResult,
   UpdatePrepareResult,
   UpdateSetChannelRequest,
   UpdateSetEnabledRequest,
@@ -42,13 +53,18 @@ import {
   UsersListSnapshot,
   UsersSwitchParams,
   UsersUpdateParams,
+  utf8ByteLength,
   WindowConnection,
   type WindowLightsState,
   WindowLightsState as WindowLightsStateSchema,
 } from "@vibefield/contracts";
-import { contextBridge, ipcRenderer, sharedTexture } from "electron";
+import { contextBridge, ipcRenderer, sharedTexture, webUtils } from "electron";
 import { PreloadDesktopStateBridge } from "./desktop-state";
-import { type DiagnosticsRendererPort, PreloadDiagnosticsBridge } from "./diagnostics";
+import {
+  clipboardTooLarge,
+  type DiagnosticsRendererPort,
+  PreloadDiagnosticsBridge,
+} from "./diagnostics";
 import {
   PreloadLiveSurfaceFrameMux,
   type PreloadLiveSurfacePort,
@@ -245,6 +261,41 @@ async function invokeInHandlerWords(channel: string, payload: unknown): Promise<
   }
 }
 
+/** HN-D7 — a still's bytes as main sends them: a Uint8Array over a plain ArrayBuffer (a Buffer
+ * arrives as one). Told by its tag, never `instanceof`, so the answer is read the same whichever
+ * realm deserialized it. */
+const isStillBytes = (value: unknown): value is Uint8Array<ArrayBuffer> =>
+  ArrayBuffer.isView(value) &&
+  Object.prototype.toString.call(value) === "[object Uint8Array]" &&
+  Object.prototype.toString.call(value.buffer) === "[object ArrayBuffer]";
+
+/** HN-5 — a copy's picture, or the words beside it, past its bound: the typed refusal the page
+ * says in Copy's voice (`clipboardTooLarge`), never a sentence. Null when both are within. */
+function pastBound(png: number, words: number): ClipboardCopyRefusal | null {
+  const picture = SHELL_CLIPBOARD.WRITE_IMAGE_MAX_BYTES;
+  const text = SHELL_CLIPBOARD.WRITE_TEXT_MAX_BYTES;
+  if (png > picture) return clipboardTooLarge("picture", png, picture);
+  if (words > text) return clipboardTooLarge("words", words, text);
+  return null;
+}
+
+/** HN-5 — main's own too-large answer, typed as the page reads it: main measures the picture
+ * before the words and answers the size it refused. Checked against the same bounds here first,
+ * it refuses neither while the two agree; a size within its bound would make a refusal that reads
+ * false, so that crosses as an error, which the page logs and says in its door's own words. */
+function mainTooLarge(png: number, bytes: number | undefined): ClipboardCopyRefusal | Error {
+  const picture = bytes === png;
+  const refusal = ClipboardCopyRefusal.safeParse({
+    reason: "too-large",
+    what: picture ? "picture" : "words",
+    bytes,
+    max: picture ? SHELL_CLIPBOARD.WRITE_IMAGE_MAX_BYTES : SHELL_CLIPBOARD.WRITE_TEXT_MAX_BYTES,
+  });
+  if (refusal.success) return refusal.data;
+  const size = bytes === undefined ? "no size" : `${bytes} bytes`;
+  return new Error(`main refused a copy as too large, within its bound (${size})`);
+}
+
 const platform = ShellPlatform.parse(
   process.platform === "darwin" || process.platform === "win32" || process.platform === "linux"
     ? process.platform
@@ -339,11 +390,65 @@ contextBridge.exposeInMainWorld("vibefield", {
         RendererReplaceRequest.parse({ reason }),
       ),
     ),
+  /** HN-6 — a file another app handed over (a paste's, a drop's) as its path on disk: what a pane
+   * is given for it, the road a Finder drop takes into a terminal. Electron 43 gives a File no
+   * `path`; `webUtils` reads it here in the sandboxed preload, so no IPC channel and no main
+   * handler — the channel table is unchanged. A File not backed by a file on disk (one a page
+   * made) has none, nor does anything that is not a File: null. */
+  pathForFile: (file: File): string | null => {
+    try {
+      const path = webUtils.getPathForFile(file);
+      return path === "" ? null : path;
+    } catch {
+      return null;
+    }
+  },
   /** BP-D4 — Settings' Clear browsing data: main clears this shell's browser profiles and reloads their open pages; the
    * answer is counts only (no path, no site, no size), parsed here before it crosses. */
   browserData: {
     clear: async (): Promise<BrowserDataClearResult> =>
       BrowserDataClearResultSchema.parse(await ipcRenderer.invoke(IPC_CHANNELS.browserDataClear)),
+  },
+  /** Item 102 — a paste's read: main reads the system clipboard for this window
+   * while it and its page are focused (the shell session grants no Chromium
+   * clipboard permission, ESP §7.4). Validated both ways; a refusal rejects with
+   * its reason in words, so the terminal pastes nothing rather than part. */
+  clipboard: {
+    readText: async (): Promise<string> => {
+      const result = ClipboardReadResult.parse(
+        await ipcRenderer.invoke(IPC_CHANNELS.clipboardRead, ClipboardReadRequest.parse({})),
+      );
+      if (result.status === "read") return result.text;
+      throw new Error(
+        result.reason === "too-large"
+          ? `the clipboard holds ${result.bytes ?? "more than"} bytes; a paste reads at most ${SHELL_CLIPBOARD.READ_MAX_BYTES}`
+          : "the clipboard is read only for the focused window",
+      );
+    },
+    /** HN-5 — a copy's picture onto the system clipboard, with the copy's words beside it
+     * when it has any: main decodes the PNG and writes both formats in one write (LC-19),
+     * for this window, asking no focus (LC-18). The bytes, the words and their bounds are
+     * checked here first, so nothing past them crosses; the answer is parsed, and a
+     * refusal rejects typed (`ClipboardCopyRefusal`), never in a sentence, so the copy deals
+     * no card and the page says why in Copy's voice. */
+    writeImage: async (png: Uint8Array, text?: string): Promise<void> => {
+      if (!isStillBytes(png)) throw new Error("a picture is written from its PNG's bytes");
+      if (text !== undefined && typeof text !== "string") {
+        throw new Error("the words written beside a picture are text");
+      }
+      const past = pastBound(png.byteLength, text === undefined ? 0 : utf8ByteLength(text));
+      if (past !== null) throw past;
+      const answer: unknown =
+        text === undefined
+          ? await ipcRenderer.invoke(IPC_CHANNELS.clipboardWriteImage, png)
+          : await ipcRenderer.invoke(IPC_CHANNELS.clipboardWriteImage, png, text);
+      const result = ClipboardWriteImageResult.parse(answer);
+      if (result.status === "written") return;
+      if (result.reason === "not-an-image") {
+        throw ClipboardCopyRefusal.parse({ reason: "not-an-image" });
+      }
+      throw mainTooLarge(png.byteLength, result.bytes);
+    },
   },
   onPrepareClose: (handler: (requestId: string) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, raw: unknown) => {
@@ -408,9 +513,9 @@ contextBridge.exposeInMainWorld("vibefield", {
    * URL, every payload parsed both ways (a malformed one throws here instead of crossing). Its state rides
    * `onDesktopState` (`update`). */
   update: {
-    check: async (): Promise<void> => {
-      await ipcRenderer.invoke(IPC_CHANNELS.updateCheck);
-    },
+    /** AU-1 (LC-5) — answered when the check settles; a found update's download goes on (the view says it) */
+    check: async (): Promise<UpdateCheckResult> =>
+      UpdateCheckResult.parse(await ipcRenderer.invoke(IPC_CHANNELS.updateCheck)),
     setEnabled: async (enabled: boolean): Promise<void> => {
       await ipcRenderer.invoke(
         IPC_CHANNELS.updateSetEnabled,
@@ -426,6 +531,14 @@ contextBridge.exposeInMainWorld("vibefield", {
     decline: async (version: string): Promise<void> => {
       await ipcRenderer.invoke(IPC_CHANNELS.updateDecline, UpdateDeclineRequest.parse({ version }));
     },
+    /** AU-1 (AU-G5, AU-G6) — download THIS found version; a refusal comes back in main's words */
+    download: async (version: string): Promise<UpdateDownloadResult> =>
+      UpdateDownloadResult.parse(
+        await ipcRenderer.invoke(
+          IPC_CHANNELS.updateDownload,
+          UpdateDownloadRequest.parse({ version }),
+        ),
+      ),
     prepareRestart: async (): Promise<UpdatePrepareResult> =>
       UpdatePrepareResult.parse(await ipcRenderer.invoke(IPC_CHANNELS.updatePrepareRestart)),
     confirmRestart: async (token: string): Promise<UpdateConfirmResult> =>
@@ -437,6 +550,9 @@ contextBridge.exposeInMainWorld("vibefield", {
       ),
     doctor: async (): Promise<UpdateDoctorResult> =>
       UpdateDoctorResult.parse(await ipcRenderer.invoke(IPC_CHANNELS.updateDoctor)),
+    /** AU-7 (AU-G8) — Move to Applications through the quit gate; answered when the gate decides */
+    moveToApplications: async (): Promise<UpdateMoveResult> =>
+      UpdateMoveResult.parse(await ipcRenderer.invoke(IPC_CHANNELS.updateMoveToApplications)),
   },
   deck: {
     /** Say Godview's deck state by name — or null for none — never a position
@@ -459,6 +575,28 @@ contextBridge.exposeInMainWorld("vibefield", {
           ScreenshotPreviewRequest.parse({ name }),
         ),
       ),
+    /** HN-D7 — a retained still's PNG bytes by its basename, or null once the
+     * tool no longer keeps it: what the desk prints a snapshot from. The answer
+     * is bytes or null and nothing else, checked here like every answer. */
+    stillBytes: async (name: string): Promise<Uint8Array<ArrayBuffer> | null> => {
+      const answer: unknown = await ipcRenderer.invoke(
+        IPC_CHANNELS.screenshotStillBytes,
+        ScreenshotStillBytesRequest.parse({ name }),
+      );
+      if (answer === null || isStillBytes(answer)) return answer;
+      throw new Error("screenshot still: main answered something other than bytes");
+    },
+    /** HN-4 — whether the tool still keeps a still, by its basename: what a snapshot's card
+     * asks before its still's path is pasted into a pane. The answer is a boolean and nothing
+     * else, checked here like every answer. */
+    stillKept: async (name: string): Promise<boolean> => {
+      const answer: unknown = await ipcRenderer.invoke(
+        IPC_CHANNELS.screenshotStillKept,
+        ScreenshotStillKeptRequest.parse({ name }),
+      );
+      if (typeof answer === "boolean") return answer;
+      throw new Error("screenshot still: main answered something other than kept or not");
+    },
     capture: async (): Promise<ScreenshotCaptureResult> =>
       ScreenshotCaptureResultSchema.parse(
         await ipcRenderer.invoke(

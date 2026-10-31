@@ -77,6 +77,38 @@ export const RETIRED = [
   },
   { name: "the pegboard's re-derived take", pattern: /\blayAtViewCentre\b|\bpegboard-insert\b/u },
   { name: "the pegboard's own walk and scroll", pattern: /\b(?:stepSpecimen|revealScroll)\b/u },
+  // HN — what Cards in Hand retired (LN-D3, HN-1, HN-D3; 2026-10-29): the clipboard tray — its drawer, its store, its
+  // fly-in and its chord's row (into the hand); the line's draft, @'s list and their plates, and the line's send (into
+  // Chat's thread and a card's play); Send to… (into the desk's Copy) — and the smokes' rows of each
+  {
+    name: "the clipboard tray",
+    pattern: /\b(?:ClipboardTray\w*|[Cc]lipboardStore|useClipboardItems)\b|\bclipboard-store\b/u,
+  },
+  {
+    name: "the clipboard tray's flight and chord",
+    pattern: /\btray-flight\b|\b(?:flyToNotch|isClipboardTrayChord)\b|["']clipboard-tray["']/u,
+  },
+  { name: "@'s list", pattern: /\b(?:AtMenuView|vf-at-menu)\b|(?<![\w-])at-list\b/u },
+  {
+    name: "the line's draft",
+    pattern: /\b(?:ChipFlierView|SendFlightPlate)\b|\bvf-line-(?:input|send|mic|rule|chip)\b/u,
+  },
+  {
+    name: "the line's send",
+    pattern: /(?<![\w-])line-send\b|\b(?:sendToLine|useLineSendPhase)\b/u,
+  },
+  {
+    name: "Send to…",
+    pattern: /\b(?:sendSelection|sendToRows)\b|(?<![\w-])send-face\b|__vfDesk\.sent\b/u,
+  },
+  // HN-8 — what Artifacts in the head retired (PL-D1…PL-D3; 2026-10-30): the edge tray — its notch, its sliver, its
+  // drawer, their controllers and its sheet (Artifacts into the pill's sheet and the covered views' circle) — the
+  // catalog's plates of it, and the covered views' gutter for its slivers
+  {
+    name: "the edge tray",
+    pattern:
+      /\b(?:EdgeTray\w*|ArtifactsTray|useEdgeDrawer|EdgeDrawer\w*|EdgesPreview|EdgesPlate|ArtifactsDrawer|COVER_EDGE_CLEAR_PX)\b|\bnotch-path\b|\bvf-edge-tray\b|\bhud\/edge-tray\b/u,
+  },
 ];
 
 /** Files that hold a retired thing ABSENT by naming it — each allowed exactly these names. */
@@ -92,8 +124,13 @@ export const ALLOWED = {
   // no generated page and no scaffold teaches the DOM card
   "tooling/plugin-cli/test/docs-anchors.test.ts": ["CardShell"],
   "tooling/create-plugin/test/output.test.ts": ["CardShell"],
-  // the catalog's boundary: the tray island's files stay gone, the field hands no grid projection
-  "packages/field-app/test/ui-system-boundaries.test.ts": ["WidgetTray", "the magnet grid's code"],
+  // the catalog's boundary: the tray island's files stay gone, the field hands no grid projection, and the edge tray,
+  // its plates and its suite stay gone with nothing mounting, importing or styling it (HN-8)
+  "packages/field-app/test/ui-system-boundaries.test.ts": [
+    "WidgetTray",
+    "the magnet grid's code",
+    "the edge tray",
+  ],
   // ChromeLayer takes no stage hold
   "packages/field-app/test/godview-freeze.test.tsx": ["useStageHold"],
   // the dots named nowhere in the product
@@ -102,6 +139,12 @@ export const ALLOWED = {
   "packages/plugin-sdk/test/terminal-wall.test.ts": ["the terminal mirror"],
   // the local peer carries ICE's cursor and no facet of VibeField's (DK-17b)
   "packages/field-app/test/peers-on-the-mat.test.tsx": ["the interim presence facet"],
+  // HN: the chrome mounts no clipboard tray, the chords keep no tray row, and neither the line nor its catalog plates
+  // draw the draft's field, its send, its mic, its rule or @'s list
+  "packages/field-app/test/cards.test.tsx": ["the clipboard tray"],
+  "packages/field-app/test/product-chords.test.tsx": ["the clipboard tray's flight and chord"],
+  "packages/field-app/test/composer-line.test.tsx": ["the line's draft"],
+  "packages/field-app/test/design-system.test.tsx": ["@'s list", "the line's draft"],
 };
 
 const CODE = /\.(?:[cm]?[jt]sx?|css|json|ya?ml|html)$/u;

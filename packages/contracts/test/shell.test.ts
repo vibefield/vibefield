@@ -1,11 +1,24 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { SURFACE_LIMITS } from "../src/live-surfaces";
 import { METHODS } from "../src/methods";
-import { IPC_CHANNELS } from "../src/registries";
+import {
+  IPC_CHANNELS,
+  SCREENSHOT_STILL,
+  SHELL_CLIPBOARD,
+  TERMINAL_PIPELINE,
+} from "../src/registries";
 import {
   APP_PREFERENCE_KEYS,
   AppPreferenceSetParams,
   AppPreferences,
   BrowserDataClearResult,
+  ClipboardCopyRefusal,
+  ClipboardReadRequest,
+  ClipboardReadResult,
+  ClipboardWriteImageResult,
   CloseReason,
   CloseRequest,
   CloseResult,
@@ -14,7 +27,6 @@ import {
   FrameViewSetRequest,
   FrameViewState,
   FrameZoomRequest,
-  frameViewBuilt,
   GodviewDeckSetRequest,
   GodviewDeckState,
   isUnambiguousLinkText,
@@ -37,8 +49,11 @@ import {
   ShellProviderRegisterResult,
   ShellRendererRequestReplacementParams,
   ShellRendererRequestReplacementResult,
+  ShellSurfacesSimulatorDevicesParams,
+  ShellSurfacesSimulatorDevicesResult,
   ShellWebContentsCaptureArtifactPreviewParams,
   ShellWebContentsCaptureArtifactPreviewResult,
+  SURFACE_AUTHORITY_LIMITS,
   ThemePreference,
   ThemeSetRequest,
   ThemeState,
@@ -221,7 +236,11 @@ describe("Close protocol — CloseReason / CloseRequest / CloseResult (ESR §6.4
 });
 
 describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => {
-  it("exposes exactly the thirty channel keys, in order", () => {
+  // The count lives here alone, in the literal: two lines that each add a channel
+  // meet at it in a merge and conflict out loud, where a number in the title
+  // went stale in silence (item 102, found at HN's rebase rehearsal).
+  it("exposes exactly its channel keys, in order", () => {
+    expect(Object.keys(IPC_CHANNELS)).toHaveLength(36);
     expect(Object.keys(IPC_CHANNELS)).toEqual([
       "windowBootstrap",
       "prepareClose",
@@ -239,6 +258,8 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       "updatePrepareRestart",
       "updateConfirmRestart",
       "updateDoctor",
+      "updateDownload", // AU-1 — a person's download of one found version (AU-G5, AU-G6)
+      "updateMoveToApplications", // AU-7 — Move to Applications through the quit gate (AU-G8)
       // TP-S3e: terminalConnect + terminalStatus retired with the bridge —
       // the renderer dials the cells' T1 doors itself.
       "viewState", // FR-1 — the window's active view (GT-D2's Godview bit, grown into four)
@@ -254,8 +275,13 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       "screenshotCapture", // SNAP-D3 — the native screenshot helper, one capture at a time
       "screenshotResult", // SNAP-3 — main → renderer: the View menu's capture, told to the page
       "screenshotPreview",
+      "screenshotStillBytes", // HN-D7 — a retained still's bytes, for the desk's print of a snapshot
+      "screenshotStillKept", // HN-4 — whether a still is kept, before a pane is given its path
       "rendererReplace", // DK-9 — the window's renderer replaced at its own asking (a plugin's kinds)
       "browserDataClear", // BP-D4 — Settings' Clear browsing data: the desk's profile cleared, its pages reloaded
+      "clipboardRead", // item 102 — a paste's read through main, for the focused product window
+      // HN-5 — a copy's picture written through main, for a registered window (no focus, LC-18)
+      "clipboardWriteImage",
     ]);
   });
 
@@ -276,6 +302,8 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       updatePrepareRestart: "vibefield:update:prepare-restart",
       updateConfirmRestart: "vibefield:update:confirm-restart",
       updateDoctor: "vibefield:update:doctor",
+      updateDownload: "vibefield:update:download",
+      updateMoveToApplications: "vibefield:update:move-to-applications",
       viewState: "vibefield:view:state",
       viewSet: "vibefield:view:set",
       viewZoom: "vibefield:view:zoom",
@@ -289,8 +317,12 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       screenshotCapture: "vibefield:screenshot:capture",
       screenshotResult: "vibefield:screenshot:result",
       screenshotPreview: "vibefield:screenshot:preview",
+      screenshotStillBytes: "vibefield:screenshot:still-bytes",
+      screenshotStillKept: "vibefield:screenshot:still-kept",
       rendererReplace: "vibefield:shell:renderer-replace",
       browserDataClear: "vibefield:browser:clear-data",
+      clipboardRead: "vibefield:clipboard:read",
+      clipboardWriteImage: "vibefield:clipboard:write-image",
     });
   });
 
@@ -321,6 +353,113 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       { profiles: 65, pages: 0 },
     ])
       expect(BrowserDataClearResult.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
+  });
+});
+
+describe("the clipboard read door (item 102)", () => {
+  it("asks with nothing, and answers the text or an honest refusal", () => {
+    expect(ClipboardReadRequest.parse({})).toEqual({});
+    expect(ClipboardReadResult.parse({ status: "read", text: "ls\n" })).toEqual({
+      status: "read",
+      text: "ls\n",
+    });
+    expect(ClipboardReadResult.parse({ status: "refused", reason: "unfocused" })).toEqual({
+      status: "refused",
+      reason: "unfocused",
+    });
+    expect(
+      ClipboardReadResult.parse({ status: "refused", reason: "too-large", bytes: 5_000_000 }),
+    ).toMatchObject({ reason: "too-large", bytes: 5_000_000 });
+    for (const bad of [
+      {},
+      { status: "read" },
+      { status: "read", text: 1 },
+      { status: "refused" },
+      { status: "refused", reason: "because" },
+      { status: "refused", reason: "too-large", bytes: -1 },
+    ])
+      expect(ClipboardReadResult.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
+  });
+
+  it("reads the cell's paste ceiling by reference, never a number of its own, in UTF-8 bytes", () => {
+    expect(SHELL_CLIPBOARD.READ_MAX_BYTES).toBe(TERMINAL_PIPELINE.MAX_PASTE_BYTES);
+    // the pane's own carry is smaller, and D6 refuses past it in the line's words
+    expect(TERMINAL_PIPELINE.MAX_CONTROL_MESSAGE_BYTES).toBeLessThan(
+      SHELL_CLIPBOARD.READ_MAX_BYTES,
+    );
+    const atBound = "é".repeat(SHELL_CLIPBOARD.READ_MAX_BYTES / 2);
+    expect(ClipboardReadResult.safeParse({ status: "read", text: atBound }).success).toBe(true);
+    expect(ClipboardReadResult.safeParse({ status: "read", text: `${atBound}x` }).success).toBe(
+      false,
+    );
+  });
+});
+
+describe("the clipboard picture door (HN-5)", () => {
+  it("answers written, or an honest refusal with the size it refused", () => {
+    expect(ClipboardWriteImageResult.parse({ status: "written" })).toEqual({ status: "written" });
+    expect(ClipboardWriteImageResult.parse({ status: "refused", reason: "not-an-image" })).toEqual({
+      status: "refused",
+      reason: "not-an-image",
+    });
+    const past = SHELL_CLIPBOARD.WRITE_IMAGE_MAX_BYTES + 1;
+    expect(
+      ClipboardWriteImageResult.parse({ status: "refused", reason: "too-large", bytes: past }),
+    ).toMatchObject({ reason: "too-large", bytes: past });
+    // a tolerant reader: a later field rides through
+    expect(ClipboardWriteImageResult.parse({ status: "written", later: 1 })).toMatchObject({
+      status: "written",
+    });
+    for (const bad of [
+      {},
+      { status: "wrote" },
+      { status: "refused" },
+      { status: "refused", reason: "because" },
+      { status: "refused", reason: "too-large", bytes: -1 },
+      { status: "refused", reason: "too-large", bytes: 1.5 },
+      // LC-18: the write asks no focus, so a window behind is no refusal of it
+      { status: "refused", reason: "unfocused" },
+    ])
+      expect(ClipboardWriteImageResult.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
+  });
+
+  it("bounds a picture by the kept still's cap, by reference — never a number of its own", () => {
+    expect(SHELL_CLIPBOARD.WRITE_IMAGE_MAX_BYTES).toBe(SCREENSHOT_STILL.MAX_BYTES);
+    expect(SCREENSHOT_STILL.MAX_BYTES).toBe(64 * 1024 * 1024);
+  });
+
+  it("bounds the words by the copy door's one bound, 64 KiB of UTF-8 (LC-19)", () => {
+    expect(SHELL_CLIPBOARD.WRITE_TEXT_MAX_BYTES).toBe(64 * 1024);
+  });
+});
+
+describe("a copy's refusal, typed for the page (HN-5)", () => {
+  it("names its reason; a size refusal, what it measured, its size and its bound", () => {
+    for (const refusal of [
+      { reason: "too-large", what: "words", bytes: 80_000, max: 65_536 },
+      { reason: "too-large", what: "picture", bytes: 70_000_000, max: 67_108_864 },
+      { reason: "too-large", what: "words-as-sent", bytes: 80_000, max: 65_465 },
+      { reason: "not-an-image" },
+    ])
+      expect(ClipboardCopyRefusal.parse(refusal)).toEqual(refusal);
+    // a tolerant reader: a later field rides through
+    expect(ClipboardCopyRefusal.parse({ reason: "not-an-image", later: 1 })).toMatchObject({
+      reason: "not-an-image",
+    });
+  });
+
+  it("is never a size within its bound, nor an Error — whose terms the bridge would drop", () => {
+    for (const bad of [
+      {},
+      { reason: "unfocused" },
+      { reason: "too-large" },
+      { reason: "too-large", what: "sound", bytes: 2, max: 1 },
+      { reason: "too-large", what: "words", bytes: 1.5, max: 1 },
+      { reason: "too-large", what: "words", bytes: 65_536, max: 65_536 },
+      { reason: "too-large", what: "picture", bytes: 8, max: 67_108_864 },
+    ])
+      expect(ClipboardCopyRefusal.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
+    expect(ClipboardCopyRefusal.safeParse(new Error("the words hold 80 KB")).success).toBe(false);
   });
 });
 
@@ -378,8 +517,8 @@ describe("the frame's active view (FR-1)", () => {
     expect(FrameZoomRequest.safeParse({}).success).toBe(false);
   });
 
-  it("keeps the Assistant's cell waiting: every view but it is built (FC-D2)", () => {
-    expect(FrameView.options.filter(frameViewBuilt)).toEqual(["canvas", "godview", "history"]);
+  it("names the four views in the track's order, Chat by its wire id (SP-1b: every view is built)", () => {
+    expect(FrameView.options).toEqual(["canvas", "godview", "history", "assistant"]);
   });
 
   it("passes unknown fields through, like every other inbound shape (EL9)", () => {
@@ -485,6 +624,20 @@ describe("tray shell commands and app preferences", () => {
         },
       }).success,
     ).toBe(false);
+  });
+
+  it("AU-1 — every update-view fixture parses as the desktop state's update", () => {
+    // the preload drops the WHOLE desktop state when it fails to parse (`preload/desktop-state.ts`): a view field the
+    // contract does not take blanks the tray facts and the Settings card together
+    const fixtures = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures");
+    const views = readdirSync(fixtures).filter((f) => f.startsWith("update-view."));
+    expect(views.length).toBeGreaterThanOrEqual(5);
+    for (const f of views) {
+      const raw: unknown = JSON.parse(readFileSync(join(fixtures, f), "utf8"));
+      const parsed = DesktopShellState.shape.update.safeParse(raw);
+      const issues = parsed.success ? "" : JSON.stringify(parsed.error.issues);
+      expect(parsed.success, `${f}: ${issues}`).toBe(true);
+    }
   });
 
   it("keeps the renderer command set closed", () => {
@@ -695,6 +848,57 @@ describe("AH-3/AH-4 static shell provider", () => {
     expect(SHELL_INTERNAL_PROVIDER_METHODS).toContain("shell.openLink");
     expect(SHELL_PROVIDER_METHODS).toContain("shell.openLink");
     expect(METHODS.some((method) => method.method === "shell.openLink")).toBe(false);
+  });
+
+  it("PT-S2 (R11): the attach's device list is a local `surface.capture` read, carried by an INTERNAL provider verb, and its rows never hold a UDID", () => {
+    expect(METHODS.find((method) => method.method === "surface.simulator.devices")).toEqual({
+      surface: "product",
+      method: "surface.simulator.devices",
+      scope: "surface.capture",
+      idempotent: true,
+      locality: "local",
+    });
+    expect(SHELL_INTERNAL_PROVIDER_METHODS).toContain("shell.surfaces.simulatorDevices");
+    expect(SHELL_PROVIDER_METHODS).toContain("shell.surfaces.simulatorDevices");
+    expect(METHODS.some((method) => method.method === "shell.surfaces.simulatorDevices")).toBe(
+      false,
+    );
+    // above main's own worst case for the call: the Xcode probe (5 s) and the list (8 s)
+    expect(SURFACE_AUTHORITY_LIMITS.SIMULATOR_DEVICES_DEADLINE_MS).toBe(15_000);
+    expect(ShellSurfacesSimulatorDevicesParams.parse({})).toEqual({});
+    const row = {
+      deviceType: "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro",
+      runtime: "com.apple.CoreSimulator.SimRuntime.iOS-26-1",
+      name: "iPhone 17 Pro",
+      booted: true,
+    };
+    expect(ShellSurfacesSimulatorDevicesResult.parse({ devices: [row] })).toEqual({
+      devices: [row],
+    });
+    expect(ShellSurfacesSimulatorDevicesResult.parse({ devices: [] })).toEqual({ devices: [] });
+    // a UDID anywhere refuses the whole list: main's own parse is the last door before fieldd
+    expect(
+      ShellSurfacesSimulatorDevicesResult.safeParse({
+        devices: [{ ...row, udid: "F93EABF3-4281-4EB5-A5F6-A550FBE95CDC" }],
+      }).success,
+    ).toBe(false);
+    expect(
+      ShellSurfacesSimulatorDevicesResult.safeParse({
+        devices: Array.from({ length: SURFACE_LIMITS.MAX_SIMULATOR_DEVICES + 1 }, () => row),
+      }).success,
+    ).toBe(false);
+    // the runtimes installed here ride with them (the attach's third pick): CoreSimulator's ids, never a UDID
+    const runtimes = ["com.apple.CoreSimulator.SimRuntime.iOS-26-1"];
+    expect(ShellSurfacesSimulatorDevicesResult.parse({ devices: [], runtimes })).toEqual({
+      devices: [],
+      runtimes,
+    });
+    expect(
+      ShellSurfacesSimulatorDevicesResult.safeParse({
+        devices: [],
+        runtimes: ["F93EABF3-4281-4EB5-A5F6-A550FBE95CDC"],
+      }).success,
+    ).toBe(false);
   });
 
   it("requires a unique registered static method set and exactly one outcome arm", () => {

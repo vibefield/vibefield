@@ -1292,6 +1292,10 @@
               <figcaption>
                 The agent plane's processes and channels at vibe-field <code>b7ebb444</code>. One fieldd
                 and one rosettad per user root; one field-native per device, whose cells outlive both.
+                <em>Corrected 2026-10-29 (PG, C6):</em> two things drawn here retired on 2026-10-01 with DS-D14
+                (<code>a6a1bfa1</code>, landed with DS wave 3): the <code>AgentFieldPublisher</code> box and the
+                <code>field.agents.v1</code> store on the dashed line. No daemon publishes that store and no phone
+                reads it; the phone reads the field through its home desktop's product API (the solid line, DS-8).
               </figcaption>
             </figure>
             <div class="callout">
@@ -1394,7 +1398,7 @@
                   </tr>
                   <tr>
                     <td><span class="route">agent-field-publisher.ts</span><br /><span class="native-type">342 lines</span></td>
-                    <td><p>Writes this device's slice into the mesh store under two consent gates, with an expiry heartbeat.</p></td>
+                    <td><p>Writes this device's slice into the mesh store under two consent gates, with an expiry heartbeat. <em>Corrected 2026-10-29 (PG, C6): deleted with its test at DS-D14 (2026-10-01, <code>a6a1bfa1</code>); the row is the record of the module at <code>b7ebb444</code>.</em></p></td>
                     <td><p><code>agent-field</code>, the mesh client (structurally typed)</p></td>
                     <td><p>none</p></td>
                     <td><p><code>agent-field-publisher.test.ts</code></p></td>
@@ -1660,7 +1664,13 @@
               facts (floor inventory, profiles, device and project identity) feed it; it derives recency, unread,
               cost, spawn choices and model rows once. <code>agent-model-board.ts</code> publishes that model through
               audience cuts. The desktop's <code>model</code> board carries window-only chrome facts beside its rows;
-              peers get the <code>desk</code> cut and phones the <code>field</code> cut. No runtime object syncs.
+              peers get the <code>desk</code> cut and phones the <code>field</code> cut (as built; <em>Amended 2026-10-29 (James, PG-D1 (a)): both become the model's <code>remote</code> cut at PG-2</em>). No runtime object syncs.
+              <em>Corrected 2026-10-31 (PG-0's re-read):</em> as built, <code>agent-model-board.ts</code> publishes only
+              this desktop's <code>model</code> board. A peer's <code>desk</code> rows and the phone's <code>field</code>
+              rows are <code>agent-field.ts</code>'s cuts: <code>projectDeskRow</code>, the backend's row beside the
+              fold's, and <code>projectFieldRow</code>, the fold's alone, which never reads the backend's model. Only the
+              peers' <code>desk</code> becomes <code>remote</code> at PG-2; the phone reads <code>remote</code> from PG-3,
+              and <code>field</code> stays for an older phone until it retires after one release of skew.
             </p>
             <p>
               <code>GodviewAgentsProvider</code> owns the window's one model subscription and replica. The deck,
@@ -1688,14 +1698,28 @@
               field projection is the same board with its content removed — about 725 B per row as measured (LANDED §MF-1 corrected §5's 300–500 B estimate) —
               and it travels two ways from one shape. The hybrid was ruled as GM-D4: the store carries a
               content-free projection, and content rides the door on tap.
+              <em>Corrected 2026-10-29 (PG, C6):</em> it travels one way now. DS-D14 (ruled 2026-09-30, revisiting
+              GM-D4) retired the store on 2026-10-01 (<code>a6a1bfa1</code>, landed with DS wave 3): no daemon
+              publishes <code>field.agents.v1</code> and no phone reads it. The door is the field's one carrier, and
+              the phone homes to one desktop and reads it through that desktop's mesh board
+              (<code>agent.subscribe {projection: "field", scope: "mesh"}</code>, DS-8).
+              <em>Amended 2026-10-29 (James, PG-D1 (a), PG-D2 (a), PG-D8 (a); <code>draft/thinking-phone-godview.md</code>
+              §6):</em> the phone's Godview will read the backend model's REMOTE cut, the cut a peer desktop's
+              windows will read too — each row cut by its owner, texts bounded at 280 characters, at 1 s with a
+              250 ms urgent edge — and <code>field</code> retires after one release of skew. Nothing of it is built:
+              as built the phone reads <code>field</code> until PG-2 and PG-3.
             </p>
             <div class="cards">
               <div class="card">
                 <h3>Carrier 1 · the door</h3>
                 <p>
                   <code>agent.subscribe {projection: "field"}</code> answers a snapshot then deltas, at a
-                  per-subscriber trailing-edge floor. The door is never capped: it carries the whole
-                  board.
+                  per-subscriber trailing-edge floor. The door is never capped in rows: it carries the whole
+                  board. <em>Since PG-1c (2026-10-31, <code>1790be95f</code>):</em> a phone that falls behind is held
+                  in bytes, never cut. Once 256 KiB is queued on its connection, its mesh board's deltas stop, and at
+                  half it is sent the whole board, once (api, Subscriptions). <em>Since PG-1d (2026-10-31):</em> a
+                  flip of the doors' gate re-presents the board as one snapshot at its current revision, so a
+                  reader learns of the flip at once, not at the board's next change.
                 </p>
                 <span class="badge tone-built">Built</span>
               </div>
@@ -1707,6 +1731,12 @@
                   from the mesh with no fieldd in its read path. Past
                   <code>AGENT_FIELD_SLICE_BYTES</code> (64 KiB, about ninety rows) the publisher drops
                   from the end of the board order and reports <code>omitted</code>.
+                </p>
+                <p>
+                  <em>Corrected 2026-10-29 (PG, C6):</em> retired 2026-10-01 (DS-D14,
+                  <code>a6a1bfa1</code>). The publisher and its tests are deleted; the store id and
+                  <code>AgentFieldSlice</code> stay in contracts marked RETIRED, as the record of what an older
+                  desktop's slice says. The badge is the page's reading at <code>b7ebb444</code>.
                 </p>
                 <span class="badge tone-built">Built</span>
               </div>
@@ -1729,6 +1759,11 @@
               the cost fields the desktop receives do not reach the phone at all. That second one is
               deliberate today and is the real subject of the unruled iOS lean D-i18, not the desktop
               defect above.
+              <em>Amended 2026-10-29 (James, PG-D1 (a); <code>draft/thinking-phone-godview.md</code> §6 item 7):</em>
+              D-i18's door is no longer unruled — Q13 ruled it on 2026-10-28 (the home desktop's <code>desk</code>
+              board), and PG-D1 supersedes that door: the phone's replica will read the model's remote cut, which
+              carries <code>cost</code> with its series and burn rate. The field row itself stays cost-free until it
+              retires. As built, the phone still reads <code>field</code> and receives no cost until PG-2 and PG-3.
             </p>
             <h3>The consent gates on publishing</h3>
             <p class="section-note">
@@ -1738,6 +1773,16 @@
               hello). Mesh-down is a normal state: the slice is simply not written, nothing throws,
               nothing logs at error, and no caller waits. Every slice carries <code>expiresAt</code>, so a
               desktop that is unplugged mid-sentence fades from every phone instead of haunting it.
+              <em>Corrected 2026-10-29 (PG, C6):</em> these gates went with the publisher at DS-D14 (2026-10-01);
+              no slice is written now. The terminal join's gate lives on in the door's own cut
+              (<code>attachableRows</code>, F-M4), and the door compares the caller's WhoIs login to the stored link
+              before it answers. <em>Since PG-1a (2026-10-31, <code>e9a57b4b6</code>):</em> the same gate withdraws
+              the model row's promise with the join. While this device's terminal doors are down, a desk row's
+              <code>monitorRow.attachable</code>, and <code>.writable</code> where declared, read false, so a peer
+              window reading it no longer raises the deck on a run it cannot attach. An owner older than PG-1a still
+              promises, and its readers keep the run-id fallback. <em>Since PG-1d (2026-10-31):</em> a flip of the
+              gate re-presents every live field and desk board at once, so an idle board no longer keeps a stale
+              join or promise until its next change.
             </p>
             <div class="callout foundation">
               <strong>The store's audience is the tailscale login.</strong>
@@ -1750,6 +1795,8 @@
               deliberately so: a per-store allow-list would leave the connection itself open to a foreign
               login for every other namespace on it. VibeField still fuses the roster against the tailnet's own peer
               registry — a slice may describe a device the registry lists, never add one.
+              <em>Corrected 2026-10-29 (PG, C6):</em> the store meant here, <code>field.agents.v1</code>, retired on
+              2026-10-01 (DS-D14); the gate is the node's, and stands without it.
             </div>
             <figure>
               <div class="diagram">
@@ -1811,6 +1858,10 @@
               <figcaption>
                 The field projection's two carriers and the tap that becomes a terminal, at vibe-field
                 <code>b7ebb444</code>.
+                <em>Corrected 2026-10-29 (PG, C6):</em> the lower carrier, the <code>field.agents.v1</code> slice,
+                retired on 2026-10-01 (DS-D14); the door is the field's one carrier, which the phone reads through its
+                home desktop (DS-8). The upper carrier's "never capped" means in rows: since PG-1c (2026-10-31) a
+                phone's mesh board is held in bytes, never cut.
               </figcaption>
             </figure>
           </section>
@@ -2727,7 +2778,7 @@
                   <tr><td><p>The enrollment record and the <code>index.*</code> service</p></td><td><span class="route">packages/fieldd/src/agent-index.ts</span></td></tr>
                   <tr><td><p>Account usage readings and the EL7 projection</p></td><td><span class="route">packages/fieldd/src/agent-usage.ts</span></td></tr>
                   <tr><td><p>The content-free field projection and its revisions</p></td><td><span class="route">packages/fieldd/src/agent-field.ts</span></td></tr>
-                  <tr><td><p>The mesh-store carrier and its consent gates</p></td><td><span class="route">packages/fieldd/src/agent-field-publisher.ts</span></td></tr>
+                  <tr><td><p>The mesh-store carrier and its consent gates <em>(Corrected 2026-10-29, PG C6: retired and the file deleted at DS-D14, 2026-10-01, <code>a6a1bfa1</code>.)</em></p></td><td><span class="route">packages/fieldd/src/agent-field-publisher.ts</span></td></tr>
                   <tr><td><p>One rosettad generation per user root</p></td><td><span class="route">packages/fieldd/src/rosettad-supervisor.ts</span></td></tr>
                   <tr><td><p>The cells, the inventory, the ticket mint, the agent spawn path</p></td><td><span class="route">packages/fieldd/src/terminal-service.ts</span></td></tr>
                   <tr><td><p>Scope and locality enforcement on every door</p></td><td><span class="route">packages/fieldd/src/product-api.ts</span></td></tr>

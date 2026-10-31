@@ -1,4 +1,5 @@
 import { type ReactElement, useEffect, useRef, useState } from "react";
+import { AddPhoneCode } from "../../../account/door/add-phone-code";
 import {
   Constellation,
   type DoorDevice,
@@ -14,16 +15,23 @@ import {
   type LinkFace,
   unlinkedWord,
 } from "../../../account/link";
+import { CopyButton } from "../../../frame/cards/CopyButton";
+import type { DealFrom } from "../../../frame/cards/cards-store";
 import type { FieldUserFace } from "../../../host";
 import {
   BackAction,
   factCls,
+  LATER_ON_DEVICES,
   primaryCls,
   quietCls,
   SkipAction,
+  useWizardFrame,
   voiceCls,
   WizardError,
+  WizardHold,
+  WizardHoldOut,
   WizardPane,
+  WizardStatus,
 } from "../wizard-ui";
 
 // The Connect pane (DESIGN.md §8 "The Connect pane"; track TS, TS-D1…D8,
@@ -33,6 +41,16 @@ import {
 // machinery is the shared door (account/use-link-door.ts); this file draws it
 // in the wizard's glass and keeps the shell's height (nothing here grows it:
 // "What VibeField can see" and the phone's code REPLACE the constellation).
+// On the glass its two waits are loads (FG-L5, FG-4b): the link's read, and
+// Tailscale opening — the logo and one line, with a way out after 6s.
+
+/** The line while an auth key joins this Mac to its network (FG-4b): no
+ * browser opens for a key. */
+const JOINING_LABEL = "Joining your network…";
+
+/** The controller's word that the address is slow, under the opening's line. */
+const SLOW_NOTE =
+  "Still waiting for Tailscale. Check this Mac's internet connection; VibeField keeps trying.";
 
 /** What the pane shows in place of the constellation, chosen by the person. */
 export type ConnectAside = "constellation" | "why" | "other" | "phone" | "key";
@@ -63,9 +81,10 @@ export interface ConnectPaneProps {
   onSendLogs: () => void;
   onCancel: () => void;
   onOpenAgain: () => void;
-  onCopyLink: () => Promise<boolean>;
+  /** HN-5 — a copy deals a card from the button pressed: `from` is its box, under the glass */
+  onCopyLink: (from: DealFrom | null) => Promise<boolean>;
   /** "Copy a request for your admin": the machine and the console, as text */
-  onCopyText: (text: string) => Promise<boolean>;
+  onCopyText: (text: string, from: DealFrom | null) => Promise<boolean>;
   /** "Not this account? Sign in again" and "Use another account": leave this
    * sign-in (unlink archives its identity, so the next sign-in can choose any
    * account — a capture waiting on approval comes back to the same network
@@ -76,7 +95,8 @@ export interface ConnectPaneProps {
   onContinue: () => void;
   /** Not now: the same Ready pane; the face menu keeps the row (§8). */
   onSkip: () => void;
-  /** Esc is Not now on the ask — in the Setup Assistant (§8: "Not now (esc)").
+  /** Esc is the pane's own — in the Setup Assistant: Not now on the ask (§8:
+   * "Not now (esc)"), and Cancel from the start while Tailscale opens (FG-4b).
    * A host whose own Escape means something else (Finish setting up's sheet
    * closes on it) leaves it off. */
   escapeIsNotNow?: boolean;
@@ -101,29 +121,9 @@ function Reasons(): ReactElement {
   );
 }
 
-/** A button that says it worked, for two seconds, in its own words. */
-function CopyButton({
-  label,
-  copy,
-}: {
-  label: string;
-  copy: () => Promise<boolean>;
-}): ReactElement {
-  const [done, setDone] = useState<null | boolean>(null);
-  useEffect(() => {
-    if (done === null) return;
-    const timer = setTimeout(() => setDone(null), 2000);
-    return () => clearTimeout(timer);
-  }, [done]);
-  return (
-    <button type="button" className={quietCls} onClick={() => void copy().then(setDone)}>
-      {done === true ? "Copied" : done === false ? "Couldn't copy" : label}
-    </button>
-  );
-}
-
 export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement {
   const { face, step, me, devices, platform, slow = false, onBack } = props;
+  const frame = useWizardFrame();
   const [aside, setAside] = useState<ConnectAside>(props.initialAside ?? "constellation");
   const [key, setKey] = useState("");
   const thisMac = unlinkedWord(platform).replace(/ only$/, "");
@@ -149,6 +149,21 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [props.escapeIsNotNow, face.kind, aside]);
+
+  // ...and Cancel while Tailscale opens, from the start, though its button
+  // waits 6s under the line (FG-O7 (a))
+  const cancel = useRef(props.onCancel);
+  cancel.current = props.onCancel;
+  const opening =
+    face.kind === "capturing" && face.authUrl === null && face.failure !== "sidecar_missing";
+  useEffect(() => {
+    if (props.escapeIsNotNow !== true || !opening) return;
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === "Escape") cancel.current();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [props.escapeIsNotNow, opening]);
 
   const asideBody = (fallback: ReactElement): ReactElement => {
     switch (aside) {
@@ -226,9 +241,23 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
   switch (face.kind) {
     case "loading":
     case "unavailable":
+      if (face.kind === "loading" && frame === "glass") {
+        // a read with no give-up of its own, so its way out shows once it runs long
+        return (
+          <WizardHold face="connect:asking">
+            <WizardStatus line="Asking this Mac about its link…" />
+            <WizardHoldOut>
+              <button type="button" className={quietCls} onClick={props.onContinue}>
+                Continue
+              </button>
+            </WizardHoldOut>
+          </WizardHold>
+        );
+      }
       return (
         <WizardPane
           eyebrow="Your devices"
+          track="ts"
           title="Your field, on every device."
           onSubmit={props.onContinue}
           actions={
@@ -263,7 +292,9 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
       return (
         <WizardPane
           eyebrow="Your devices"
+          track="ts"
           title={title}
+          later={LATER_ON_DEVICES}
           onSubmit={() => {
             // a refused sign-in kept its identity, so asking again with it lands
             // on the same account: "Use another account" starts over
@@ -287,7 +318,11 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
                 </button>
               )}
               {refusal?.state === "link_corrupt" && (
-                <CopyButton label="Copy path" copy={() => props.onCopyText(refusal.detail)} />
+                <CopyButton
+                  label="Copy path"
+                  copy={(from) => props.onCopyText(refusal.detail, from)}
+                  className={quietCls}
+                />
               )}
               <SkipAction label="Not now" onSkip={props.onSkip} />
               {refusal === null && aside === "constellation" && (
@@ -330,6 +365,7 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
         return (
           <WizardPane
             eyebrow="Your devices"
+            track="ts"
             title="VibeField's network part is missing."
             voice="Reinstall VibeField to connect. Everything local keeps working."
             onSubmit={props.onSkip}
@@ -346,15 +382,31 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
           />
         );
       }
-      const opening = face.authUrl === null;
+      if (opening && frame === "glass") {
+        // Esc cancels from the start (above); the button waits for the load to run long
+        return (
+          <WizardHold face="connect:opening">
+            <WizardStatus
+              line={aside === "key" ? JOINING_LABEL : LINK_ACT_PENDING_LABEL}
+              sub={slow ? SLOW_NOTE : undefined}
+            />
+            <WizardHoldOut>
+              <button type="button" className={quietCls} onClick={props.onCancel}>
+                Cancel
+              </button>
+            </WizardHoldOut>
+          </WizardHold>
+        );
+      }
       return (
         <WizardPane
           eyebrow="Your devices"
+          track="ts"
           title={opening ? LINK_ACT_PENDING_LABEL : "Finish in your browser."}
           voice={
             opening
               ? slow
-                ? "Still waiting for Tailscale. Check this Mac's internet connection; VibeField keeps trying."
+                ? SLOW_NOTE
                 : undefined
               : "Tailscale opened in your browser. This pane follows on its own."
           }
@@ -366,7 +418,9 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
                   Open again
                 </button>
               )}
-              {!opening && <CopyButton label="Copy link" copy={props.onCopyLink} />}
+              {!opening && (
+                <CopyButton label="Copy link" copy={props.onCopyLink} className={quietCls} />
+              )}
               {!opening && aside !== "phone" && (
                 <button type="button" className={quietCls} onClick={() => setAside("phone")}>
                   Sign in on your phone
@@ -406,6 +460,7 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
       return (
         <WizardPane
           eyebrow="Your devices"
+          track="ts"
           title="Waiting for approval."
           voice={
             <>
@@ -421,7 +476,8 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
               </button>
               <CopyButton
                 label="Copy a request for your admin"
-                copy={() => props.onCopyText(request)}
+                copy={(from) => props.onCopyText(request, from)}
+                className={quietCls}
               />
               <button type="button" className={quietCls} onClick={props.onSignInAgain}>
                 Use another account
@@ -450,7 +506,9 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
       return (
         <WizardPane
           eyebrow="Your devices"
+          track="ts"
           title="Your network requires device logs."
+          later={LATER_ON_DEVICES}
           voice="Your Tailscale network's admin turned on network logging, which needs every device to send its logs to Tailscale. VibeField sends none, so this Mac can't join this network."
           onSubmit={props.onSendLogs}
           actions={
@@ -479,6 +537,7 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
         return (
           <WizardPane
             eyebrow="Your devices"
+            track="ts"
             title="Connected, not yet trusted."
             voice="Your network uses Tailnet Lock. Until a device that can sign trusts this Mac, it can't reach your other devices, and they can't reach it."
             onSubmit={props.onContinue}
@@ -488,7 +547,11 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
                   Continue
                 </button>
                 {machine !== null && (
-                  <CopyButton label="Copy" copy={() => props.onCopyText(machine)} />
+                  <CopyButton
+                    label="Copy"
+                    copy={(from) => props.onCopyText(machine, from)}
+                    className={quietCls}
+                  />
                 )}
                 {face.adminUrl !== null && (
                   <a className={quietCls} href={face.adminUrl} target="_blank" rel="noreferrer">
@@ -521,6 +584,7 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
       return (
         <WizardPane
           eyebrow="Your devices"
+          track="ts"
           title="Connected."
           voice={
             <>
@@ -548,11 +612,13 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
           }
         >
           {aside === "phone" ? (
-            <p className={voiceCls}>
-              On your iPhone, open VibeField and Continue with Tailscale, signing in as{" "}
-              <span className="font-mono">{face.link.login ?? "the same account"}</span>. It finds
-              this Mac on its own.
-            </p>
+            // TS-7b — the code that tells the phone which account to expect, naming this Mac by the roster's
+            // own name (the one the phone will show), else Tailscale's machine name
+            <AddPhoneCode
+              login={face.link.login}
+              names={[devices.find((device) => device.self === true)?.name, face.machineName]}
+              className={voiceCls}
+            />
           ) : (
             <Constellation face={me.face} seed={me.seed} devices={arrived} arriving />
           )}
@@ -571,6 +637,7 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
       return (
         <WizardPane
           eyebrow="Your devices"
+          track="ts"
           title={
             face.reason === "removed"
               ? "This Mac was removed from your network."

@@ -65,21 +65,13 @@ function previewClient(state: ArtifactPanelPreviewState): PluginProductClient {
 
 /** Design-page adapter for the real contributed surface. Only the product
  * client is replaced; markup, local interaction state, accessibility, and CSS
- * are exactly the component shipped in the side-panel slot. */
+ * are exactly the component shipped in the side-panel slot. Its form is its
+ * host's: a stage at the Artifacts shelf's width, a container, draws its tiles. */
 export function ArtifactPanelPreview({
   state = "empty",
 }: {
   state?: ArtifactPanelPreviewState;
 }): ReactElement {
   const client = useMemo(() => previewClient(state), [state]);
-  return (
-    <ArtifactPanel
-      client={client}
-      surface={{
-        slot: "hud.side-panel",
-        windowId: "design-system",
-        requestClose: () => undefined,
-      }}
-    />
-  );
+  return <ArtifactPanel client={client} />;
 }

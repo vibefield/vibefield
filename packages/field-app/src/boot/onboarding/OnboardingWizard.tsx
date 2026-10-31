@@ -7,7 +7,15 @@ import { hasLink, linkFace, type UserLinkStatus } from "../../account/link";
 import { type FieldUserProfile, getHost } from "../../host";
 import { answerSetupStep } from "../../setup/ledger";
 import type { BootOnboarding, BootView } from "../machine";
-import { entryAfterName, entryBeforeAsking, nextPane, type Pane, variantOf } from "./order";
+import {
+  entryAfterName,
+  entryBeforeAsking,
+  nextPane,
+  type Pane,
+  STEP_OF,
+  stepsOf,
+  variantOf,
+} from "./order";
 import { AgentsPane } from "./panes/AgentsPane";
 import { ConnectPane } from "./panes/ConnectPane";
 import { FieldPane } from "./panes/FieldPane";
@@ -20,7 +28,7 @@ import {
   OnboardingWelcomeBackPaneView,
   OnboardingWelcomePaneView,
 } from "./views/welcome";
-import { WizardShell } from "./wizard-ui";
+import { type WizardLeaving, WizardShell } from "./wizard-ui";
 
 // The Setup Assistant (UA-3w; spec §6; track AO — draft/thinking-agent-onboarding.md).
 // Held open by the boot machine between a warm daemon and an open document;
@@ -32,8 +40,8 @@ import { WizardShell } from "./wizard-ui";
 //   W2 the mandatory core is a name   — the name pane pre-fills it and Continue never
 //                                       validates; an empty box keeps the
 //                                       pre-filled name rather than blocking.
-//   W3 everything else is skippable   — SkipAction, whose subtitle names the
-//                                       later home verbatim.
+//   W3 everything else is skippable   — SkipAction, its pane's later line naming
+//                                       the later home verbatim.
 //   W4 honest progress only           — Setting up lists the boot machine's own
 //                                       phase and stage for the desk, as it opens.
 //   W5 it ends inside the product     — the answers are a durable write, then the
@@ -57,6 +65,7 @@ export function OnboardingWizard({
   client,
   onboarding,
   boot,
+  leaving = null,
   onComplete,
   onReveal,
   onRetry,
@@ -65,6 +74,8 @@ export function OnboardingWizard({
   onboarding: BootOnboarding;
   /** The boot machine's view — the desk's real phase and stage (W4). */
   boot: BootView;
+  /** How far the hand-over has come (FG-5): the glass leaves, its words first. */
+  leaving?: WizardLeaving | null;
   /** The questions are answered and recorded: the document opens beneath the glass. */
   onComplete: (profile?: FieldUserProfile) => void;
   /** Setting up's last beat is over: the glass hands the window to the desk. */
@@ -77,6 +88,7 @@ export function OnboardingWizard({
       <WizardBody
         onboarding={onboarding}
         boot={boot}
+        leaving={leaving}
         onComplete={onComplete}
         onReveal={onReveal}
         onRetry={onRetry}
@@ -88,12 +100,14 @@ export function OnboardingWizard({
 function WizardBody({
   onboarding,
   boot,
+  leaving,
   onComplete,
   onReveal,
   onRetry,
 }: {
   onboarding: BootOnboarding;
   boot: BootView;
+  leaving: WizardLeaving | null;
   onComplete: (profile?: FieldUserProfile) => void;
   onReveal: () => void;
   onRetry: () => void;
@@ -184,7 +198,26 @@ function WizardBody({
     );
   };
 
-  const shell = (content: ReactElement): ReactElement => <WizardShell>{content}</WizardShell>;
+  // Track FG (FG-3a): the glass stands on the field, and its band shows the
+  // chapter — this variant's steps, and the one this pane stands in, Setting
+  // up's segment filling with the boot's own progress (FG-4b). A new pane fades
+  // the old one out first (FG-4a); deriving is a hold of its own. At the
+  // hand-over the glass leaves as the boot steps it (FG-5).
+  const steps = stepsOf(variant);
+  const shell = (content: ReactElement): ReactElement => (
+    <WizardShell
+      ground="field"
+      band={{
+        steps,
+        at: pane === null ? null : STEP_OF[pane],
+        progress: pane === "setting-up" ? (boot.progress ?? 0) : undefined,
+      }}
+      paneKey={pane ?? "deriving"}
+      leaving={leaving ?? undefined}
+    >
+      {content}
+    </WizardShell>
+  );
 
   if (pane === null) {
     // Deriving. A fact, not a spinner (§8: a state is rendered, never blank).

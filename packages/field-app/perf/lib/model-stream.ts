@@ -88,9 +88,11 @@ export interface ComputedModelStream {
   stream: ModelStream;
 }
 
-const wire = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+// The hosting below is shared with the projection bench (PG-1e0,
+// `projection-bench.ts`), which runs the same desktops under each cut alone.
+export const wire = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
-interface HostedDesktop {
+export interface HostedDesktop {
   device: string;
   service: AgentMonitorService;
   runtime: ScriptedRuntime;
@@ -100,7 +102,7 @@ interface HostedDesktop {
 }
 
 /** A desktop's fieldd, as far as the monitor is concerned. */
-async function hostDesktop(
+export async function hostDesktop(
   device: { id: string; name?: string; platform?: string },
   rows: readonly AgentSessionSummary[],
   floor: readonly TerminalInfo[],
@@ -129,7 +131,7 @@ async function hostDesktop(
 
 /** One fold tick on a desktop: the states that moved on the runtime's bus,
  * then the fold's publish (the order a daemon sees them in). */
-function liveTick(desktop: HostedDesktop, rows: readonly AgentSessionSummary[]): void {
+export function liveTick(desktop: HostedDesktop, rows: readonly AgentSessionSummary[]): void {
   for (const row of rows) {
     const mirror = row.monitor;
     if (mirror === undefined || desktop.pushed.get(row.runtimeRunId) === mirror.revision) continue;
@@ -141,7 +143,7 @@ function liveTick(desktop: HostedDesktop, rows: readonly AgentSessionSummary[]):
 
 /** This desktop's floor: every pane's PTY, the agents' included (the backend
  * dedupes the PTY a run claims and draws the rest as bare terminals). */
-function floorOfPanes(panes: CorpusPanes, agentPtys: ReadonlySet<string>): TerminalInfo[] {
+export function floorOfPanes(panes: CorpusPanes, agentPtys: ReadonlySet<string>): TerminalInfo[] {
   return panes.sessions.map((session) => ({
     sessionId: session.id,
     pid: session.pid ?? undefined,
@@ -173,7 +175,7 @@ function floorOfRows(rows: readonly AgentSessionSummary[]): TerminalInfo[] {
   return floor;
 }
 
-function deviceOf(
+export function deviceOf(
   roster: readonly DeviceInfo[],
   id: string,
 ): { id: string; name?: string; platform?: string } {
@@ -311,7 +313,8 @@ export async function computeModelStream(
               offModel();
             };
           },
-          emit: (delta) => emit(wire(delta), "delta"),
+          // the kind as sent (PG-1d: a re-present or a repair rides `.snapshot`)
+          emit: (frame, kind) => emit(wire(frame), kind),
           epoch,
           project: deskProjector((runtimeRunId) => peer.service.rowForRun(runtimeRunId)),
           minIntervalMs: ask.minIntervalMs,

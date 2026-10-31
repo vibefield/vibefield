@@ -11,9 +11,14 @@ import {
   AgentModelDeskRow,
   type AgentModelLocalFacts,
   type AgentRecordedLanesResult,
+  type AgentSessionOrigin,
   type AgentSessionSummary,
   type AgentSessionTerminal,
+  type AgentStopState,
   type AgentSubscribeParams,
+  MONITOR_AUDIENCE,
+  type MonitorAudience,
+  type Principal,
   type MonitorAgentRow as WireMonitorRow,
 } from "@vibefield/contracts";
 import type { MonitorAgentRow, MonitorPastSnapshot } from "@vibefield/puppeteer-view-sdk/model";
@@ -51,6 +56,8 @@ export function malformedBoardAsk(): RpcCallError {
  *    for it, and the cadence options it cannot honour are refused (MF-1h);
  *  · `desk` carries content for this person's DESKTOPS — a window, or a self
  *    peer daemon relaying to one; a phone (`tailnet`) reads `field` (SP-L4);
+ *  · `model` is this desktop's own windows' (MV-D18, M16): only a caller whose
+ *    `MONITOR_AUDIENCE` is `window` asks it (item 100);
  *  · `scope: "mesh"` is this desktop's clients' aggregate: a peer reads a
  *    desktop's OWN board (DS-L4), and the mesh states each desktop's liveness
  *    itself, so `heartbeatMs` is refused there.
@@ -59,7 +66,10 @@ export function malformedBoardAsk(): RpcCallError {
  * null) out. Availability (the mesh board not built yet) is not a refusal and
  * stays with the handler.
  */
-export function refuseBoardAsk(principal: string, ask: AgentSubscribeParams): RpcCallError | null {
+export function refuseBoardAsk(
+  principal: Principal["kind"],
+  ask: AgentSubscribeParams,
+): RpcCallError | null {
   const projection = ask.projection ?? "full";
   const scope = ask.scope ?? "local";
   const { minIntervalMs, heartbeatMs } = ask;
@@ -99,13 +109,17 @@ export function refuseBoardAsk(principal: string, ask: AgentSubscribeParams): Rp
   // MV-3a (MV-D18, L8, M16) — the model board is THIS desktop's own windows':
   // it carries the colour sequences this desktop dealt and its bare terminals,
   // neither of which crosses the sync plane. A peer reads `desk`, a phone
-  // `field`; both are refused here as they are refused `full`.
-  if (projection === "model" && (principal === "peer-fieldd" || principal === "tailnet"))
+  // `field`. Item 100: who is a window is `MONITOR_AUDIENCE`'s, the one table
+  // the recorded lanes' cut reads too, so every kind that is not (an agent's
+  // MCP session, a plugin, a guest, a kind not yet written) is refused it.
+  if (projection === "model" && MONITOR_AUDIENCE[principal] !== "window")
     return new RpcCallError(
       "FORBIDDEN_SCOPE",
       principal === "tailnet"
         ? "the model projection is this desktop's windows'; a phone reads field (SP-L4)"
-        : "the model projection is this desktop's windows'; a peer reads desk (M16)",
+        : principal === "peer-fieldd"
+          ? "the model projection is this desktop's windows'; a peer reads desk (M16)"
+          : "the model projection is this desktop's windows'",
       false,
       { projection },
     );
@@ -389,6 +403,35 @@ export function projectFieldRow(summary: AgentSessionSummary): ProjectedFieldRow
     // workloadClass?, replaced?}` is what a body's card attaches THROUGH (G3),
     // and every field of it is already content-free.
     ...(summary.terminal !== undefined ? { terminal: summary.terminal } : {}),
+    // SP-1b — whose session the run is, and who started it (CP-D15), so Chat
+    // reads a spark's status from this row. Static for the run's life, and the
+    // origin REBUILT from its named fields, as the bars above are, so nothing
+    // riding its passthrough reaches the wire.
+    ...(summary.spark !== undefined ? { spark: summary.spark } : {}),
+    ...(summary.origin !== undefined ? { origin: originOf(summary.origin) } : {}),
+    // ST-D5 — the person's Stop, on every audience's row: a stage and its clocks, content-free,
+    // REBUILT from its named fields as the origin is, so nothing riding its passthrough travels
+    ...(summary.stop !== undefined ? { stop: stopOf(summary.stop) } : {}),
+  };
+}
+
+/** CP-D15's origin as the field row carries it: its named fields, and only those. */
+function originOf(origin: AgentSessionOrigin): AgentSessionOrigin {
+  return {
+    by: origin.by,
+    ...(origin.spark !== undefined ? { spark: origin.spark } : {}),
+    ...(origin.run !== undefined ? { run: origin.run } : {}),
+    ...(origin.call !== undefined ? { call: origin.call } : {}),
+  };
+}
+
+/** ST-D5's Stop as the field row carries it: its named fields, and only those. */
+function stopOf(stop: AgentStopState): AgentStopState {
+  return {
+    sentAt: stop.sentAt,
+    stage: stop.stage,
+    ...(stop.heardBy !== undefined ? { heardBy: stop.heardBy } : {}),
+    ...(stop.unheardAt !== undefined ? { unheardAt: stop.unheardAt } : {}),
   };
 }
 
@@ -471,10 +514,14 @@ export function windowMonitorRow(row: MonitorAgentRow): WireMonitorRow {
 /** TL — the backend's past (`readPast`) as `agent.recordedLanes` answers it,
  * cut as the model's rows are: `device.self` never travels, and a PEER reads
  * no colour sequence (M16 — desktop-local, it would collide with the reader's
- * own). The snapshot is the SDK's, field for field (the contract mirrors it). */
+ * own) and each ended title at the desk's bound (M21, item 105), as
+ * `peerMonitorRow` bounds the model's rows. The snapshot is the SDK's, field for
+ * field (the contract mirrors it). The door names the audience from
+ * `MONITOR_AUDIENCE` (item 100). */
 export function wireRecordedLanes(
   past: MonitorPastSnapshot,
-  audience: "window" | "peer",
+  audience: MonitorAudience,
+  chars: number = AGENT_FIELD.DESK_TEXT_CHARS,
 ): AgentRecordedLanesResult {
   const spans = (list: MonitorPastSnapshot["live"][number]["spans"]) =>
     list.map(({ kind, from, to }) => ({ kind, from, to }));
@@ -487,11 +534,40 @@ export function wireRecordedLanes(
       return {
         ...lane,
         ...(lane.provider !== undefined ? { provider: { ...lane.provider } } : {}),
+        ...(audience === "peer" && lane.title !== undefined
+          ? { title: boundText(lane.title, chars) }
+          : {}),
         device,
         project: audience === "peer" ? peerProject : { ...lane.project },
         spans: spans(lane.spans),
       };
     }),
+  };
+}
+
+/** `agent.recordedLanes`' answer cut for a tailnet caller (SP-D13, item 105): the
+ * `limit` ended lanes that ended last, in the answer's own order, `clipped`
+ * saying so. It is `index.activity`'s rule for the same record (`clipActivity`),
+ * one rule for the two day doors. The live lanes are the model's rows, which the
+ * caller reads whole over the board, and stay whole. A window's and a peer
+ * daemon's answer (no limit) is whole and says nothing. */
+export function clipRecordedLanes(
+  result: AgentRecordedLanesResult,
+  limit: number | undefined,
+): AgentRecordedLanesResult {
+  if (limit === undefined) return result;
+  if (result.ended.length <= limit) return { ...result, clipped: false };
+  const kept = new Set(
+    result.ended
+      .map((lane, index) => ({ index, endedAt: lane.endedAt }))
+      .sort((a, b) => b.endedAt - a.endedAt || a.index - b.index)
+      .slice(0, limit)
+      .map(({ index }) => index),
+  );
+  return {
+    ...result,
+    ended: result.ended.filter((_lane, index) => kept.has(index)),
+    clipped: true,
   };
 }
 
@@ -623,7 +699,7 @@ export function projectDeskRow(
   summary: AgentSessionSummary,
   chars: number = AGENT_FIELD.DESK_TEXT_CHARS,
   monitorRow?: MonitorAgentRow | undefined,
-  audience: "peer" | "window" = "peer",
+  audience: MonitorAudience = "peer",
 ): ProjectedFieldRow {
   // PJ-7 — the conversation id is the PHONE's (its History row's Jump to): a
   // window reads its own runs' ids from `local`, and no peer's desk asks one
@@ -760,6 +836,14 @@ export class FieldProjection {
  * `alive` is computed from the SUMMARY before this runs, so a pending row
  * (AR-4: a PTY on this device with nothing driving it) keeps reading alive here
  * rather than flipping to "gone" because the mesh is off.
+ *
+ * *2026-10-29 (PG-1a):* the store carrier retired at DS-D14, so the door is the
+ * field's one carrier. A desk row carries a SECOND attach promise beside the
+ * join: its `monitorRow.attachable`/`.writable`, which the backend computes
+ * without knowing this device's doors. It is withdrawn with the join
+ * (`withholdAttachPromise`). Before, a peer window read `attachable: true` with
+ * no join, fell back to the run id, raised the deck and asked the owner for a
+ * session its floor may not hold.
  */
 export function attachableRows(
   rows: readonly AgentFieldRow[],
@@ -767,10 +851,32 @@ export function attachableRows(
 ): AgentFieldRow[] {
   if (terminalPublished) return [...rows];
   return rows.map((row) => {
-    if (row.terminal === undefined) return row;
-    const { terminal: _unreachable, ...rest } = row;
-    return rest;
+    let held = row;
+    if (held.terminal !== undefined) {
+      const { terminal: _unreachable, ...rest } = held;
+      held = rest;
+    }
+    return withholdAttachPromise(held);
   });
+}
+
+/** F-M4 on the model's promise (PG-1a): a row's `monitorRow` that says it can be
+ * attached or written says so no longer while this device's doors are down.
+ * Its keys keep their order, so a frame's bytes move by the two values alone;
+ * a row with no `monitorRow`, or one that promised nothing, is returned as is. */
+function withholdAttachPromise(row: AgentFieldRow): AgentFieldRow {
+  const monitorRow = (row as { monitorRow?: unknown }).monitorRow;
+  if (typeof monitorRow !== "object" || monitorRow === null) return row;
+  const promise = monitorRow as { attachable?: unknown; writable?: unknown };
+  if (promise.attachable !== true && promise.writable !== true) return row;
+  return {
+    ...row,
+    monitorRow: {
+      ...monitorRow,
+      attachable: false,
+      ...(promise.writable !== undefined ? { writable: false } : {}),
+    },
+  };
 }
 
 export interface FieldSubscriptionOptions {
@@ -781,8 +887,11 @@ export interface FieldSubscriptionOptions {
    * second source (MV-3a: the backend's changes behind the desk row) may
    * signal it with none */
   subscribe: (emit: (rows?: AgentListResult) => void) => () => void;
-  /** push one delta frame to this subscriber */
-  emit: (delta: AgentFieldDelta) => void;
+  /** push one frame to this subscriber, and the kind it rides: a delta, or
+   * (PG-1d) a snapshot that replaces the subscriber's copy at the board's
+   * current revision — a re-present on a gate flip, or the repair after a lost
+   * frame */
+  emit: (frame: AgentFieldDelta | AgentFieldSnapshot, kind: "delta" | "snapshot") => void;
   /** per-subscriber trailing-edge floor */
   minIntervalMs?: number;
   /**
@@ -817,6 +926,19 @@ export interface FieldSubscriptionOptions {
    * is precisely what the store carrier's design forbids (MF-1h: the rows'
    * own facts have not moved). The safe direction is already safe — a gate
    * that OPENS late only withholds a true join for a while.
+   *
+   * *2026-10-29 (PG-1a):* the gate withholds the join AND the desk row's
+   * `monitorRow.attachable`/`.writable` (`attachableRows`). The store carrier
+   * retired at DS-D14, so the door is the one carrier the gate keeps honest.
+   * The residual above is PG-1d's (a re-present on a gate flip).
+   *
+   * *2026-10-31 (PG-1d):* the residual is closed. A flip of the gate
+   * re-presents the board (`FieldSubscription.represent`): ONE snapshot at the
+   * board's current revision, its rows shaped by the gate as it reads now. The
+   * flip itself moves no revision (the rows' own facts did not), so MF-1h
+   * holds; only a change already waiting out the floor, folded into the same
+   * snapshot, moves it. The daemon calls it on every live field and desk board
+   * when `terminalMeshPublished()` flips (`daemon.ts`, `openLocalBoard`).
    */
   terminalPublished?: () => boolean;
   onError?: (error: unknown) => void;
@@ -824,6 +946,12 @@ export interface FieldSubscriptionOptions {
 
 export interface FieldSubscription {
   snapshot: AgentFieldSnapshot;
+  /** PG-1d — the next frame re-presents the whole board as a snapshot at its
+   * current revision, at the floor like any frame: what a reader must hear when
+   * the gate that shapes the rows has moved and the rows have not. That is the
+   * subscriber's own revision unless a change still waiting out the floor is
+   * folded into it. */
+  represent: () => void;
   dispose: () => void;
 }
 
@@ -843,7 +971,15 @@ export interface FieldSubscription {
  * waiting out the floor has not moved it yet. A lost frame stays the READER's
  * gap (the view has no `reset`): the field's wire has never carried a
  * mid-stream snapshot, and the tolerant reader re-subscribes on a `since` it
- * does not hold. */
+ * does not hold.
+ *
+ * *Corrected 2026-10-31 (PG-1d):* the view resets now. A re-present and the
+ * repair after a lost frame both ride a mid-stream snapshot at the current
+ * revision, and every reader of the field and desk boards takes one: a mesh
+ * hub's upstreams and its own board (`mesh-board.ts` `#onUpstream`,
+ * `#onLocal`), a window's fold (field-app `model-board.ts` `frame`) and the
+ * phone's mesh copy (`MeshBoardCopy.swift` `apply(.snapshot)`), with the kind
+ * carried through `federated-subs.ts`. */
 export function createFieldSubscription(opts: FieldSubscriptionOptions): FieldSubscription {
   const projection = new FieldProjection(opts.project);
   const published = (): boolean => opts.terminalPublished?.() ?? true;
@@ -855,12 +991,17 @@ export function createFieldSubscription(opts: FieldSubscriptionOptions): FieldSu
       revision: () => projection.revision,
       ...(opts.epoch !== undefined ? { epoch: opts.epoch } : {}),
       present: (rows) => attachableRows(rows, published()),
+      resets: true,
     }),
     subscribe: (onChange) => opts.subscribe(() => onChange()),
-    emit: (frame) => opts.emit(frame as AgentFieldDelta),
+    emit: (frame, kind) => opts.emit(frame as AgentFieldDelta | AgentFieldSnapshot, kind),
     minIntervalMs: opts.minIntervalMs ?? AGENT_FIELD.MIN_INTERVAL_MS,
     ...(opts.heartbeatMs !== undefined ? { heartbeatMs: opts.heartbeatMs } : {}),
     ...(opts.onError !== undefined ? { onError: opts.onError } : {}),
   });
-  return { snapshot: subscriber.snapshot, dispose: () => subscriber.dispose() };
+  return {
+    snapshot: subscriber.snapshot,
+    represent: () => subscriber.resnapshot(),
+    dispose: () => subscriber.dispose(),
+  };
 }

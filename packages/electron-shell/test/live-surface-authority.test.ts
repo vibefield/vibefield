@@ -1,13 +1,16 @@
 import type {
   LiveSurfaceAttachTicketV1,
+  LiveSurfaceSimulatorDeviceRowV1,
   RendererParticipantIdentity,
   ShellSurfacesMintParams,
 } from "@vibefield/contracts";
+import { SURFACE_LIMITS } from "@vibefield/contracts";
 import { describe, expect, it, vi } from "vitest";
 import {
   LiveSurfaceAuthority,
   type LiveSurfaceAuthorityDeps,
   type LiveSurfaceRuntimeHandle,
+  type LiveSurfaceSimulatorCensus,
 } from "../src/main/live-surfaces/authority";
 
 interface IssuedBinding {
@@ -37,6 +40,23 @@ const SCK_SOURCE = {
   captureCursor: false,
 } as const;
 
+/** PT-S2: a phone bound by its device type and runtime — never a UDID. */
+const PHONE_SOURCE = {
+  kind: "ios-simulator-device",
+  binding: {
+    deviceType: "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro",
+    runtime: "com.apple.CoreSimulator.SimRuntime.iOS-26-5",
+  },
+  crop: { mode: "auto" },
+} as const;
+
+const DEVICE_ROW = {
+  deviceType: "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro",
+  runtime: "com.apple.CoreSimulator.SimRuntime.iOS-26-5",
+  name: "iPhone 17 Pro",
+  booted: true,
+} as const;
+
 function fixture(overrides?: Partial<LiveSurfaceAuthorityDeps>) {
   const disposed: string[] = [];
   let built = 0;
@@ -61,6 +81,10 @@ function fixture(overrides?: Partial<LiveSurfaceAuthorityDeps>) {
       return makeRuntime(surfaceId);
     }),
     iosSimulator: vi.fn((surfaceId: string) => {
+      built += 1;
+      return makeRuntime(surfaceId);
+    }),
+    iosSimulatorDevice: vi.fn((surfaceId: string) => {
       built += 1;
       return makeRuntime(surfaceId);
     }),
@@ -110,7 +134,12 @@ describe("LiveSurfaceAuthority", () => {
       emulations: () => switched.get(surfaceId) ?? 0,
     });
     const { authority, windows } = fixture({
-      factories: { browser: runtime, sckWindow: runtime, iosSimulator: runtime },
+      factories: {
+        browser: runtime,
+        sckWindow: runtime,
+        iosSimulator: runtime,
+        iosSimulatorDevice: runtime,
+      },
     });
     const alice = participant("window-1", "document-1");
     windows.set(alice.incarnation, { webContentsId: 7 });
@@ -158,7 +187,12 @@ describe("LiveSurfaceAuthority", () => {
       frameKeysRefused: () => refused.get(surfaceId) ?? 0,
     });
     const { authority, windows } = fixture({
-      factories: { browser: runtime, sckWindow: runtime, iosSimulator: runtime },
+      factories: {
+        browser: runtime,
+        sckWindow: runtime,
+        iosSimulator: runtime,
+        iosSimulatorDevice: runtime,
+      },
     });
     const alice = participant("window-1", "document-1");
     windows.set(alice.incarnation, { webContentsId: 7 });
@@ -185,7 +219,12 @@ describe("LiveSurfaceAuthority", () => {
       handInFlight: () => inFlight.get(surfaceId) ?? 0,
     });
     const { authority, windows } = fixture({
-      factories: { browser: runtime, sckWindow: runtime, iosSimulator: runtime },
+      factories: {
+        browser: runtime,
+        sckWindow: runtime,
+        iosSimulator: runtime,
+        iosSimulatorDevice: runtime,
+      },
     });
     const alice = participant("window-1", "document-1");
     windows.set(alice.incarnation, { webContentsId: 7 });
@@ -212,7 +251,12 @@ describe("LiveSurfaceAuthority", () => {
       pullOnly: () => pulled.get(surfaceId) ?? 0,
     });
     const { authority, windows } = fixture({
-      factories: { browser: runtime, sckWindow: runtime, iosSimulator: runtime },
+      factories: {
+        browser: runtime,
+        sckWindow: runtime,
+        iosSimulator: runtime,
+        iosSimulatorDevice: runtime,
+      },
     });
     const alice = participant("window-1", "document-1");
     windows.set(alice.incarnation, { webContentsId: 7 });
@@ -239,7 +283,12 @@ describe("LiveSurfaceAuthority", () => {
       childSessions: () => sessions.get(surfaceId) ?? 0,
     });
     const { authority, windows } = fixture({
-      factories: { browser: runtime, sckWindow: runtime, iosSimulator: runtime },
+      factories: {
+        browser: runtime,
+        sckWindow: runtime,
+        iosSimulator: runtime,
+        iosSimulatorDevice: runtime,
+      },
     });
     const alice = participant("window-1", "document-1");
     windows.set(alice.incarnation, { webContentsId: 7 });
@@ -273,7 +322,12 @@ describe("LiveSurfaceAuthority", () => {
       dispose: () => undefined,
     });
     const { authority, windows } = fixture({
-      factories: { browser: runtime, sckWindow: capture, iosSimulator: capture },
+      factories: {
+        browser: runtime,
+        sckWindow: capture,
+        iosSimulator: capture,
+        iosSimulatorDevice: capture,
+      },
     });
     const alice = participant("window-1", "document-1");
     windows.set(alice.incarnation, { webContentsId: 7 });
@@ -286,6 +340,31 @@ describe("LiveSurfaceAuthority", () => {
       released: true,
     });
     expect(authority.state().childSessionsBy).toEqual({ [a.surfaceId]: 2 });
+  });
+
+  it("PT-S3 (D1): the census carries main's simulator census as `simulator` — read afresh at each state(), never before — and says none without the dep", () => {
+    const census: LiveSurfaceSimulatorCensus = {
+      sessions: 1,
+      sessionsMade: 2,
+      captureReady: true,
+      helperPresent: true,
+      helper: { helperStarts: 1, helperExits: 0, activeSessions: 1, framesReceived: 12 },
+      vetted: "fallback",
+    };
+    let reads = 0;
+    const { authority } = fixture({
+      simulatorCensus: () => {
+        reads += 1;
+        return { ...census, sessionsMade: census.sessionsMade + reads - 1 };
+      },
+    });
+    expect(reads).toBe(0);
+    expect(authority.state().simulator).toEqual(census);
+    expect(authority.state().simulator?.sessionsMade).toBe(3);
+    expect(reads).toBe(2);
+
+    const { authority: bare } = fixture();
+    expect(bare.state()).not.toHaveProperty("simulator");
   });
 
   it("mints a browser runtime and issues a window-bound interaction ticket", () => {
@@ -540,6 +619,137 @@ describe("LiveSurfaceAuthority", () => {
       title: "iPhone 17 Pro",
       appName: "iOS 26.0",
     });
+  });
+
+  it("PT-S2 (R10): a bound phone dedupes on its binding and crop EVEN WITH a reuse key, and its ticket carries the device acts", () => {
+    const { authority, factories, windows, issued, disposed } = fixture();
+    const alice = participant("window-1", "document-1");
+    const bob = participant("window-2", "document-1");
+    windows.set(alice.incarnation, { webContentsId: 7 });
+    windows.set(bob.incarnation, { webContentsId: 7 });
+
+    const first = authority.mint(mintParams(alice, PHONE_SOURCE, { reuseKey: "phone-1" }));
+    const second = authority.mint(mintParams(alice, PHONE_SOURCE, { reuseKey: "phone-2" }));
+    const third = authority.mint(mintParams(bob, PHONE_SOURCE, { reuseKey: "phone-3" }));
+    expect(factories.iosSimulatorDevice).toHaveBeenCalledTimes(1);
+    expect(factories.iosSimulator).not.toHaveBeenCalled();
+    expect(second.surfaceId).toBe(first.surfaceId);
+    expect(third.surfaceId).toBe(first.surfaceId);
+    expect(issued.map((binding) => binding.sourceKind)).toEqual([
+      "ios-simulator-device",
+      "ios-simulator-device",
+      "ios-simulator-device",
+    ]);
+    // still view-only: its acts, never an input op
+    for (const binding of issued) expect(binding.operations).toEqual(["view", "device"]);
+
+    // another binding, or another crop, is another stream
+    authority.mint(
+      mintParams(alice, {
+        ...PHONE_SOURCE,
+        binding: {
+          ...PHONE_SOURCE.binding,
+          runtime: "com.apple.CoreSimulator.SimRuntime.iOS-26-1",
+        },
+      }),
+    );
+    authority.mint(mintParams(alice, { ...PHONE_SOURCE, crop: { mode: "none" } }));
+    expect(factories.iosSimulatorDevice).toHaveBeenCalledTimes(3);
+
+    for (const owner of [alice, alice, bob]) {
+      authority.release({ surfaceId: first.surfaceId, rendererParticipant: owner });
+    }
+    expect(disposed).toContain(first.surfaceId);
+  });
+
+  it("PT-S2 (R10): a reuse-keyed bound phone still re-binds across a renderer reload", () => {
+    const { authority, factories, windows } = fixture();
+    const before = participant("window-1", "document-1");
+    windows.set(before.incarnation, { webContentsId: 7 });
+    const first = authority.mint(mintParams(before, PHONE_SOURCE, { reuseKey: "phone-1" }));
+    const after = participant("window-1", "document-2");
+    windows.delete(before.incarnation);
+    windows.set(after.incarnation, { webContentsId: 7 });
+    const second = authority.mint(mintParams(after, PHONE_SOURCE, { reuseKey: "phone-1" }));
+    expect(factories.iosSimulatorDevice).toHaveBeenCalledTimes(1);
+    expect(second.surfaceId).toBe(first.surfaceId);
+  });
+
+  it("PT-S2 (R11): the attach's device list is redacted, re-parsed and bounded — a row carrying a UDID never leaves main", async () => {
+    const rows: Record<string, unknown>[] = [
+      { ...DEVICE_ROW, path: "/Users/someone/Library/Developer/CoreSimulator/Devices/X" },
+      { ...DEVICE_ROW, booted: false, udid: "F93EABF3-4281-4EB5-A5F6-A550FBE95CDC" },
+      { ...DEVICE_ROW, deviceType: "iPhone-17-Pro" },
+      ...Array.from({ length: SURFACE_LIMITS.MAX_SIMULATOR_DEVICES + 10 }, () => ({
+        ...DEVICE_ROW,
+        booted: false,
+      })),
+    ];
+    const { authority } = fixture({
+      simulatorDevices: {
+        list: async () => rows as unknown as readonly LiveSurfaceSimulatorDeviceRowV1[],
+      },
+    });
+    const result = await authority.simulatorDevices();
+    expect(result.devices).toHaveLength(SURFACE_LIMITS.MAX_SIMULATOR_DEVICES);
+    expect(result.devices[0]).toEqual(DEVICE_ROW);
+    for (const row of result.devices) {
+      expect(Object.keys(row).sort()).toEqual(["booted", "deviceType", "name", "runtime"]);
+    }
+    expect(JSON.stringify(result)).not.toContain("F93EABF3");
+    expect(JSON.stringify(result)).not.toContain("/Users/");
+  });
+
+  it("PT-S2 (R11): the runtimes installed here ride with the rows, the newest first — each re-parsed (CoreSimulator's ids only) and bounded; a source that says none says none", async () => {
+    const IOS_26_5 = "com.apple.CoreSimulator.SimRuntime.iOS-26-5";
+    const { authority } = fixture({
+      simulatorDevices: {
+        list: async () => [DEVICE_ROW],
+        runtimes: async () => [
+          IOS_26_5,
+          "F93EABF3-4281-4EB5-A5F6-A550FBE95CDC",
+          "iOS 26.1",
+          ...Array.from({ length: SURFACE_LIMITS.MAX_SIMULATOR_RUNTIMES + 10 }, () => IOS_26_5),
+        ],
+      },
+    });
+    const result = await authority.simulatorDevices();
+    expect(result.devices).toEqual([DEVICE_ROW]);
+    expect(result.runtimes).toHaveLength(SURFACE_LIMITS.MAX_SIMULATOR_RUNTIMES);
+    expect(new Set(result.runtimes)).toEqual(new Set([IOS_26_5]));
+    expect(JSON.stringify(result)).not.toContain("F93EABF3");
+    const none = fixture({
+      simulatorDevices: { list: async () => [], runtimes: async () => [] },
+    });
+    await expect(none.authority.simulatorDevices()).resolves.toEqual({
+      devices: [],
+      runtimes: [],
+    });
+  });
+
+  it("PT-S2 (R11): the device list is UNAVAILABLE with no source, after dispose, or when the source fails", async () => {
+    await expect(fixture().authority.simulatorDevices()).rejects.toEqual(
+      expect.objectContaining({ kind: "UNAVAILABLE" }),
+    );
+    await expect(fixture({ simulatorDevices: null }).authority.simulatorDevices()).rejects.toEqual(
+      expect.objectContaining({ kind: "UNAVAILABLE" }),
+    );
+    const failing = fixture({
+      simulatorDevices: {
+        list: async () => {
+          throw new Error("simctl exploded");
+        },
+      },
+    });
+    await expect(failing.authority.simulatorDevices()).rejects.toEqual(
+      expect.objectContaining({ kind: "UNAVAILABLE" }),
+    );
+    const empty = fixture({ simulatorDevices: { list: async () => [] } });
+    await expect(empty.authority.simulatorDevices()).resolves.toEqual({ devices: [] });
+    empty.authority.dispose();
+    await expect(empty.authority.simulatorDevices()).rejects.toEqual(
+      expect.objectContaining({ kind: "UNAVAILABLE" }),
+    );
   });
 
   it("answers UNAVAILABLE when enumeration has no capture stack", async () => {

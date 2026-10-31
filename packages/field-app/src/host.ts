@@ -22,8 +22,11 @@ import type {
   ThemePreference,
   ThemeState,
   UpdateChannel,
+  UpdateCheckResult,
   UpdateConfirmResult,
   UpdateDoctorResult,
+  UpdateDownloadResult,
+  UpdateMoveResult,
   UpdatePrepareResult,
   WindowLightsState,
   WindowTerminalBootstrap,
@@ -61,17 +64,25 @@ export interface FieldConnection {
  * §11.3). Its state rides `onDesktopState` (`update`). Absent in browser harnesses and unpackaged builds. No door
  * takes a path or a URL. */
 export interface FieldUpdatesHost {
-  check(): Promise<void>;
+  /** AU-1 (LC-5) — a person's check, answered when the CHECK settles; a found update's download goes on and the view
+   * says it */
+  check(): Promise<UpdateCheckResult>;
   setEnabled(enabled: boolean): Promise<void>;
   setChannel(channel: UpdateChannel): Promise<void>;
   /** "Skip this version": declined across restarts and a staged download (EDP §11.3) */
   decline(version: string): Promise<void>;
+  /** AU-1 (AU-G5, AU-G6) — download THIS found version: with automatic updates off, or after a skip (its decline is
+   * removed); a refusal comes back in main's words */
+  download(version: string): Promise<UpdateDownloadResult>;
   /** C2's first phase: the snapshot a consent shows, and a token bound to its ids (or the refusal and its words) */
   prepareRestart(): Promise<UpdatePrepareResult>;
   /** C2's second phase: act on THAT snapshot; `expired` means prepare again, never a silent proceed */
   confirmRestart(token: string): Promise<UpdateConfirmResult>;
   /** C4 — the doctor's lines */
   doctor(): Promise<UpdateDoctorResult>;
+  /** AU-7 (AU-G8) — move the app into Applications through the quit gate (it opens again from there); answered when
+   * the gate decides, or a refusal before anything stops */
+  moveToApplications(): Promise<UpdateMoveResult>;
 }
 
 /** BP-D4 (thinking-browser-profile.md §3·3) — Settings › General's "Clear browsing data": main clears this shell's browser
@@ -79,6 +90,22 @@ export interface FieldUpdatesHost {
  * harnesses, where main owns no profile. */
 export interface FieldBrowserDataHost {
   clear(): Promise<BrowserDataClearResult>;
+}
+
+/** Item 102 — the clipboard's read through main (design-03 §5.1's `shell.clipboard.*`):
+ * the shell session grants no Chromium permission (ESP §7.4), so the web's own read is
+ * denied in the desktop app. Main answers only the focused product window, and a
+ * refusal rejects. Absent in browser harnesses (the catalog), where the web's read
+ * stands. */
+export interface FieldClipboardHost {
+  readText(): Promise<string>;
+  /** HN-5 — a copy's picture onto the system clipboard, its PNG's bytes written through
+   * main (the web's write is denied in the app as its read is), with the copy's words
+   * beside it when it has any: ONE write, both formats, so neither replaces the other
+   * (LC-19). No focus is asked, the words' rule (LC-18); a refusal rejects typed
+   * (`ClipboardCopyRefusal`, a plain record), and the copy then deals no card. Words alone
+   * keep `FieldDiagnosticsHost.copyText`. */
+  writeImage(png: Uint8Array, text?: string): Promise<void>;
 }
 
 export interface FieldDiagnosticsHost {
@@ -98,6 +125,9 @@ export interface FieldDiagnosticsHost {
   markCrashViewed(request: { artifactId: string }): Promise<{ viewed: boolean }>;
   previewSupport(selection: SupportBundleSelectionV1): Promise<SupportBundlePreviewV1>;
   exportSupport(request: { previewId: string }): Promise<SupportBundleExportResultV1>;
+  /** HN-5 — a copy's words onto the system clipboard through main. Past main's bound, or past
+   * what one request carries of them as sent, it rejects typed (`ClipboardCopyRefusal`) and
+   * sends nothing; any other failure is the bridge's own error. */
   copyText(text: string): Promise<void>;
 }
 
@@ -209,6 +239,8 @@ export interface FieldHost {
   readonly updates?: FieldUpdatesHost;
   /** BP-D4 — the desk browser's data (`FieldBrowserDataHost`); absent where main owns no browser profile. */
   readonly browserData?: FieldBrowserDataHost;
+  /** Item 102 — the clipboard's read (`FieldClipboardHost`); absent where no main reads it. */
+  readonly clipboard?: FieldClipboardHost;
   readonly platform?: ShellPlatform;
   readonly view?: FieldViewHost;
   /** Optional like `view`: a browser harness has no main to own the theme, and
@@ -269,22 +301,39 @@ export interface FieldHost {
    * users doors: a browser harness has no helper to spawn, and a surface that
    * offers the capture renders disabled and says so. The answer is the
    * contract's own result — a still on disk (and on the clipboard), a cancel,
-   * or a typed error such as `helper-missing` or `permission-denied`. How the
-   * still reaches the canvas is a later slice; the clipboard tray calls this. */
+   * or a typed error such as `helper-missing` or `permission-denied`. A still
+   * reaches the page as a picture card dealt into the hand (HN-2): the line's
+   * snapshot calls this. */
   readonly screenshotCapture?: () => Promise<ScreenshotCaptureResult>;
   /** SNAP-3 — the answer to a capture MAIN ran on the page's behalf (the View
    * menu's item, its accelerator). A capture this page asked for through
    * `screenshotCapture` already answered it; this is how the other door stops
-   * being invisible to the tray that holds the still. Optional like the door:
+   * being invisible to the hand that holds the still. Optional like the door:
    * a browser harness has no menu. */
   readonly onScreenshotResult?: (handler: (result: ScreenshotCaptureResult) => void) => () => void;
   /** SNAP-3 — the URL a retained still is shown through: the shell-owned
    * `vibefield-still://` scheme, which only main can serve. A harness without
-   * the shell leaves this undefined; a tile then renders without its image
-   * and says so, rather than pretending. */
+   * the shell leaves this undefined; a picture's card then shows its ground,
+   * never a broken image. */
   readonly screenshotStillUrl?: (path: string) => string;
   /** Preview a retained still through the native host; no window navigation. */
   readonly screenshotPreview?: (path: string) => Promise<ScreenshotPreviewResult>;
+  /** HN-D7 — a retained still's PNG bytes, for the desk's print of a snapshot
+   * played onto it: the still scheme can show a still but never hand script its
+   * pixels. Null once main no longer keeps the still. Optional like its
+   * neighbours: a harness without the shell has no stills, and the desk says it
+   * cannot place the picture. */
+  readonly screenshotStillBytes?: (path: string) => Promise<Uint8Array<ArrayBuffer> | null>;
+  /** HN-4 — whether main still keeps a retained still: a snapshot's card
+   * played onto a pane pastes its still's path, and asks this first, so a pane
+   * is never handed a path the ring has let go. Optional like its neighbours:
+   * a harness without the shell has no stills to ask about. */
+  readonly screenshotStillKept?: (path: string) => Promise<boolean>;
+  /** HN-6 — a file another app handed over (a paste's, a drop's) as its path on disk, which a
+   * pane is given for it (HN-L5); null for one not on disk. The preload's own read, no IPC.
+   * Optional like its neighbours: a harness without the shell (the catalog) has no paths, and a
+   * file card brought in there says it can't be pasted yet. */
+  readonly pathForFile?: (file: File) => string | null;
   getConnection(): Promise<FieldConnection>;
   onPrepareClose(handler: (requestId: string) => void): () => void;
   completeClose(result: { requestId: string; ok: boolean; error?: string }): void;

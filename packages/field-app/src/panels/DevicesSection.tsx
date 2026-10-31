@@ -2,6 +2,7 @@ import { APP_PREFERENCE_KEYS, type AppPreferences, type DeviceInfo } from "@vibe
 import { SegmentedControl } from "@vibefield/design-kit";
 import { useFielddClient, useSubscription } from "@vibefield/fieldd-client/react";
 import { type ReactElement, type ReactNode, useEffect, useRef, useState } from "react";
+import { AddPhoneCode } from "../account/door/add-phone-code";
 import {
   LINK_ACT_LABEL,
   LINK_ACT_PENDING_LABEL,
@@ -17,6 +18,9 @@ import { TailscaleMark } from "../account/tailscale-mark";
 import { useAccountSnapshot } from "../account/use-account";
 import { copyText, useLinkDoor } from "../account/use-link-door";
 import { leaveFor } from "../boot/switch";
+import { CopyButton } from "../frame/cards/CopyButton";
+import type { DealFrom } from "../frame/cards/cards-store";
+import { COPY_PLACES } from "../frame/cards/cards-words";
 import { osOf } from "../godview/monitor/devices";
 import type { MonitorDeviceFacet } from "../godview/monitor/types";
 import { OsMark } from "../godview/os-marks";
@@ -85,8 +89,9 @@ export interface DevicesSectionViewProps {
   onCancel: () => void;
   onRenew: () => void;
   onOpenAgain: () => void;
-  onCopyLink: () => Promise<boolean>;
-  onCopyText: (text: string) => Promise<boolean>;
+  /** HN-5 — a copy deals a card from the button pressed: `from` is its box */
+  onCopyLink: (from: DealFrom | null) => Promise<boolean>;
+  onCopyText: (text: string, from: DealFrom | null) => Promise<boolean>;
   /** "Use another account" on a refusal: unlink first, then sign in afresh */
   onStartOver: () => void;
   onSheet: (sheet: DevicesSheet) => void;
@@ -116,27 +121,6 @@ export const CONNECT_ASKS_LINE = "At most once a day, and each place once a mont
 /** "2 Nov": the renewal's day, in the person's own calendar words. */
 function dueDay(at: number): string {
   return new Date(at).toLocaleDateString(undefined, { day: "numeric", month: "short" });
-}
-
-/** A button that says it worked, for two seconds, in its own words. */
-function CopyButton({
-  label,
-  copy,
-}: {
-  label: string;
-  copy: () => Promise<boolean>;
-}): ReactElement {
-  const [done, setDone] = useState<null | boolean>(null);
-  useEffect(() => {
-    if (done === null) return;
-    const timer = setTimeout(() => setDone(null), 2000);
-    return () => clearTimeout(timer);
-  }, [done]);
-  return (
-    <button type="button" className={buttonCls} onClick={() => void copy().then(setDone)}>
-      {done === true ? "Copied" : done === false ? "Couldn't copy" : label}
-    </button>
-  );
 }
 
 function Refusal({ reason }: { reason: string }): ReactElement {
@@ -268,7 +252,7 @@ function TailscaleCard(props: DevicesSectionViewProps): ReactElement {
             <button type="button" className={buttonCls} onClick={props.onOpenAgain}>
               Open again
             </button>
-            <CopyButton label="Copy link" copy={props.onCopyLink} />
+            <CopyButton label="Copy link" copy={props.onCopyLink} className={buttonCls} />
             <button type="button" className={buttonCls} onClick={props.onCancel}>
               Cancel
             </button>
@@ -565,7 +549,11 @@ function ThisMac(props: DevicesSectionViewProps): ReactElement {
             <span className={labelCls}>In Tailscale</span>
             <span className="vf-devices-fact-act">
               <span className="vf-ui-mono">{tailscale.machineName}</span>
-              <CopyButton label="Copy" copy={() => props.onCopyText(tailscale.machineName ?? "")} />
+              <CopyButton
+                label="Copy"
+                copy={(from) => props.onCopyText(tailscale.machineName ?? "", from)}
+                className={buttonCls}
+              />
             </span>
           </>
         )}
@@ -683,11 +671,21 @@ function Sheet(props: DevicesSectionViewProps): ReactElement | null {
             label="Device kind"
           />
         </div>
-        <div className={labelCls}>
-          {kind === "phone"
-            ? `On your iPhone, open VibeField and Continue with Tailscale, signing in as ${login ?? "this account"}. It finds this Mac on its own.`
-            : `On your other computer, install VibeField and Continue with Tailscale, signing in as ${login ?? "this account"}. It joins your devices here.`}
-        </div>
+        {kind === "phone" ? (
+          // TS-7b — the code that tells the phone which account to expect (the Connect pane's own drawing)
+          <AddPhoneCode
+            login={props.face.kind === "linked" ? props.face.link.login : null}
+            names={[
+              props.devices.find((device) => device.self)?.name,
+              props.face.kind === "linked" ? props.face.machineName : null,
+            ]}
+            className={labelCls}
+          />
+        ) : (
+          <div className={labelCls}>
+            {`On your other computer, install VibeField and Continue with Tailscale, signing in as ${login ?? "this account"}. It joins your devices here.`}
+          </div>
+        )}
         <div className="vf-devices-acts">
           <button type="button" className={buttonCls} onClick={() => onSheet("none")}>
             Done
@@ -872,14 +870,7 @@ export function DevicesSection({
       onRenew={() => void door.renew()}
       onOpenAgain={door.openAgain}
       onCopyLink={door.copyLink}
-      onCopyText={async (text) => {
-        try {
-          await copyText(text);
-          return true;
-        } catch {
-          return false;
-        }
-      }}
+      onCopyText={(text, from) => copyText(text, COPY_PLACES.settings, from)}
       onStartOver={() => void door.startOver()}
       onSheet={(next) => {
         setDisconnect({ kind: "idle" });

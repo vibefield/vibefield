@@ -9,6 +9,24 @@
   gap: 6px;
 }
 
+/* On the glass the pane never scrolls (FG-L3, FG-4a): the list does, within
+   itself, on the face deck's rule (DESIGN.md §4 `--vf-scroll-fade`). Its body
+   holds 322: six agents here are 330 with More shut, More open is 348 with none
+   and 360 from four, and nine are 448. */
+.vf-wizard-shell[data-size="glass"] .vf-agents-pane {
+  min-height: 0;
+  margin: -4px -4px 0;
+  padding: 4px 4px var(--vf-scroll-fade);
+  overflow-y: auto;
+  scroll-padding-bottom: var(--vf-scroll-fade);
+  mask-image: linear-gradient(to bottom, black calc(100% - var(--vf-scroll-fade)), transparent);
+  scrollbar-width: none;
+}
+
+.vf-wizard-shell[data-size="glass"] .vf-agents-pane::-webkit-scrollbar {
+  display: none;
+}
+
 .vf-agents-pane-rows {
   display: flex;
   flex-direction: column;
@@ -29,6 +47,23 @@
 }
 
 .vf-agents-pane-row:last-child {
+  border-bottom: 0;
+}
+
+/* More agents opens in two columns (FG-D19 A; DESIGN.md §8 "The Setup Assistant's glass"), a little less air per row,
+   so the pane fits the glass's frame. Each column's last row draws no hairline. */
+.vf-agents-pane-rows[data-columns="2"] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: 8px;
+}
+
+.vf-agents-pane-rows[data-columns="2"] > .vf-agents-pane-row {
+  min-height: 40px;
+  padding: 3px 0;
+}
+
+.vf-agents-pane-rows[data-columns="2"] > .vf-agents-pane-row:nth-last-child(2):nth-child(odd) {
   border-bottom: 0;
 }
 

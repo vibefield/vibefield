@@ -1,0 +1,8 @@
+{
+  "phase": "idle",
+  "channel": "nightly",
+  "buildChannel": "nightly",
+  "enabled": true,
+  "lastCheckAt": 1793178000000,
+  "applyWired": true
+}

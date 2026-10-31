@@ -24,6 +24,8 @@
 //! and not run.
 
 mod diagnostics;
+/// CP-1a — `native.door.*`, the floor's door.
+mod door;
 /// T-M4 — PUBLIC so an integration test can build a serve config through the
 /// PRODUCTION mapping rather than a copy of it (`build_serve_config`; the
 /// `terminal_cell_route_probe` row that dials a cell route). Nothing else in
@@ -436,23 +438,18 @@ async fn handle_conn(stream: local_ipc::Stream, state: Arc<DaemonState>, mesh_qu
                 );
             }
             "native.lifecycle.health.subscribe" => {
-                // *Noted 2026-10-28 (item 85, unchanged; its own item):* the
-                // result reads the Sender's value, then `subscribe()` marks
-                // seen whatever the channel holds by then. A send from another
-                // thread between those two statements is never forwarded, the
-                // routes subscription's race in a window with no await in it,
-                // so no current-thread row can drive it. The shape that closes
-                // it is the routes handler's: one receiver, read once with
-                // `borrow_and_update`.
+                // *Corrected 2026-10-29 (item 86):* the result read the
+                // Sender's value, then `subscribe()` marked seen whatever the
+                // channel held by then, so a send from another thread between
+                // the two was never forwarded: the routes subscription's race
+                // (item 85) in a window with no await in it. The receiver is
+                // taken first now, and the result is its reading
+                // (`subscription_reading`, whose row drives that window).
                 let sub_id = state.sub_id();
-                let snapshot = serde_json::to_value(&*state.health_tx.borrow()).unwrap();
+                let mut rx = state.health_tx.subscribe();
+                let snapshot = subscription_reading(&mut rx);
                 send(&tx, ok(id, json!({"subId": sub_id, "snapshot": snapshot})));
-                spawn_forwarder(
-                    tx.clone(),
-                    state.health_tx.subscribe(),
-                    "native.lifecycle.health.delta",
-                    sub_id,
-                );
+                spawn_forwarder(tx.clone(), rx, "native.lifecycle.health.delta", sub_id);
             }
             "native.lifecycle.ping" => {
                 // TC-D2 — the heartbeat probe rides the full control path
@@ -541,17 +538,13 @@ async fn handle_conn(stream: local_ipc::Stream, state: Arc<DaemonState>, mesh_qu
                 send(&tx, ok(id, json!(NativeDetachResult { noted: true })));
             }
             "native.lifecycle.observed.subscribe" => {
-                // *Noted 2026-10-28 (item 85, unchanged; its own item):* the
-                // same window as `health.subscribe` above.
+                // *Corrected 2026-10-29 (item 86):* the same window as
+                // `health.subscribe` above, closed the same way.
                 let sub_id = state.sub_id();
-                let snapshot = serde_json::to_value(&*state.observed_tx.borrow()).unwrap();
+                let mut rx = state.observed_tx.subscribe();
+                let snapshot = subscription_reading(&mut rx);
                 send(&tx, ok(id, json!({"subId": sub_id, "snapshot": snapshot})));
-                spawn_forwarder(
-                    tx.clone(),
-                    state.observed_tx.subscribe(),
-                    "native.lifecycle.observed.delta",
-                    sub_id,
-                );
+                spawn_forwarder(tx.clone(), rx, "native.lifecycle.observed.delta", sub_id);
             }
             "native.lifecycle.terminal.routes.subscribe" => {
                 // TC-D15 — snapshot now, FULL snapshots as deltas (state
@@ -611,6 +604,10 @@ async fn handle_conn(stream: local_ipc::Stream, state: Arc<DaemonState>, mesh_qu
             // no verb on this channel carries a durable secret for it. A
             // pre-TM-3 caller falls through to METHOD_NOT_FOUND below, which is
             // the honest answer: the door is gone, not temporarily unavailable.
+            // CP-1a — the floor's door (`services/door`, `mgmt/door.rs`).
+            m if m.starts_with("native.door.") => {
+                door::handle(&state, &tx, method.as_str(), params, id);
+            }
             "native.diagnostics.query" => {
                 send(&tx, diagnostics::query(&state, &params, id));
             }
@@ -653,7 +650,7 @@ async fn handle_conn(stream: local_ipc::Stream, state: Arc<DaemonState>, mesh_qu
                 // is repaired by the next one.
                 let sub_id = state.sub_id();
                 let mut rx = state.freeway.state_rx();
-                let snapshot = rx.borrow_and_update().clone();
+                let snapshot = subscription_reading(&mut rx);
                 send(
                     &tx,
                     ok(id, json!({ "subId": sub_id.clone(), "snapshot": snapshot })),
@@ -1615,6 +1612,20 @@ fn spawn_routes_forwarder(
     });
 }
 
+/// Item 86 — a watch subscription's result and its forwarder's baseline are
+/// ONE reading. The handler takes the receiver the forwarder will hold, this
+/// reads it with `borrow_and_update`, and only then is the result sent, so a
+/// send after the reading wakes the forwarder however soon it lands. The value
+/// is cloned out of the guard before it is serialized, as `freeway.state`
+/// always did: the lock is held for a clone, never for a serialization.
+fn subscription_reading<T>(rx: &mut tokio::sync::watch::Receiver<T>) -> Value
+where
+    T: serde::Serialize + Clone,
+{
+    let value = rx.borrow_and_update().clone();
+    serde_json::to_value(&value).unwrap()
+}
+
 fn spawn_forwarder<T>(
     tx: MgmtOutbox,
     mut rx: tokio::sync::watch::Receiver<T>,
@@ -2214,5 +2225,60 @@ mod tests {
             next_route_payload(&mut outbox).await.is_none(),
             "once: neither the move nor the result's own snapshot is repeated"
         );
+    }
+
+    /// Item 86 — a send that lands after a subscription's reading, before its
+    /// forwarder holds the receiver, is still owed to that forwarder. The
+    /// window has no await in it, so no runtime can hold it open; the value
+    /// opens it instead: its serialization, after the reading, sends the next
+    /// value on its own channel, once. The old order (the Sender's value read,
+    /// then `subscribe()`) marked that send seen and never forwarded it.
+    #[test]
+    fn a_send_after_a_subscriptions_reading_is_still_owed_to_its_forwarder() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::{OnceLock, Weak};
+
+        type Channel = Arc<OnceLock<Weak<tokio::sync::watch::Sender<Probe>>>>;
+        #[derive(Clone)]
+        struct Probe {
+            n: u32,
+            channel: Channel,
+            sent: Arc<AtomicBool>,
+        }
+        impl serde::Serialize for Probe {
+            fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+                if !self.sent.swap(true, Ordering::SeqCst) {
+                    if let Some(sender) = self.channel.get().and_then(Weak::upgrade) {
+                        sender.send_modify(|probe| probe.n += 1);
+                    }
+                }
+                serializer.serialize_u32(self.n)
+            }
+        }
+
+        let channel: Channel = Arc::new(OnceLock::new());
+        let (sender, _) = tokio::sync::watch::channel(Probe {
+            n: 0,
+            channel: channel.clone(),
+            sent: Arc::new(AtomicBool::new(false)),
+        });
+        let sender = Arc::new(sender);
+        channel
+            .set(Arc::downgrade(&sender))
+            .expect("the channel is set once");
+
+        // the subscribe: the receiver the forwarder will hold, then its reading
+        let mut rx = sender.subscribe();
+        let snapshot = subscription_reading(&mut rx);
+        assert_eq!(
+            snapshot,
+            json!(0),
+            "the result carries the value the reading saw"
+        );
+        assert!(
+            rx.has_changed().expect("the channel is open"),
+            "the send after the reading is still owed to the forwarder"
+        );
+        assert_eq!(rx.borrow().n, 1);
     }
 }

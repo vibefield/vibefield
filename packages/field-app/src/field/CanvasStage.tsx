@@ -31,6 +31,11 @@ import { createDeskLiveSources, type DeskLiveSources } from "../surfaces/live/de
 import { createLiveEyes } from "../surfaces/live/live-eyes";
 import { createLiveGate } from "../surfaces/live/live-gate";
 import { pageStills } from "../surfaces/live/page-stills";
+import {
+  createSimulatorDevices,
+  type DeskSimulatorDevices,
+  simulatorObjectsStand,
+} from "../surfaces/live/simulator-devices";
 import { createStillDecoder, createStillTaker } from "../surfaces/live/still-taker";
 import { getSurfacePool, surfaceGraceMs } from "../surfaces/pool";
 import { useAppTheme } from "../theme";
@@ -149,9 +154,10 @@ export function CanvasStage({
   });
 
   // A new factory per engine and per remount: `<Desk>` re-boots on a new identity, never on a render.
-  const { layer, live } = useMemo<{
+  const { layer, live, devices } = useMemo<{
     layer: LayerFactory;
     live: DeskLiveSources | undefined;
+    devices: DeskSimulatorDevices | undefined;
   }>(() => {
     const dressed = themeRef.current;
     const gpu = deskGpu(mount, typeof location === "undefined" ? "" : location.search);
@@ -183,6 +189,15 @@ export function CanvasStage({
             exists: eyes.exists,
             graceMs: surfaceGraceMs,
           });
+    // PT-S2 (R11) — THIS MAC'S SIMULATOR DEVICES, as a phone's attach reads them: read on the window's product connection
+    // while a phone stands on the board (an object whose plugin holds the Simulator's scopes — the same registry's grants)
+    const devices =
+      registry === undefined
+        ? undefined
+        : createSimulatorDevices({
+            mintClient: currentWindowClient,
+            wanted: simulatorObjectsStand({ engine: ce, registry }),
+          });
     const factory = fieldDeskLayer({
       engine: ce,
       theme: dressed,
@@ -193,6 +208,7 @@ export function CanvasStage({
         deviceRef.current = device;
       },
       ...(live === undefined ? {} : { live }),
+      ...(devices === undefined ? {} : { devices }),
     });
     // the kinds of what is ON (DK-9): a plugin that is off has its types left out of the catalog the
     // layer is mounted with — read once, at the mount, as ICE reads it
@@ -213,7 +229,7 @@ export function CanvasStage({
       wornRef.current = dressed;
       return handle;
     };
-    return { layer, live };
+    return { layer, live, devices };
   }, [ce, mount, kinds, registry]);
   // the mount's faces closed with it (its kinds close theirs on their own dispose — this is the service's word); and, PT-5a
   // (ruling 5), the desk's PARK told to it as the frame gate announces it (ICE I41): a parked desk's kinds are not ticked
@@ -228,6 +244,8 @@ export function CanvasStage({
       live.dispose();
     };
   }, [live, ce]);
+  // PT-S2 — the devices' looks run with the mount (a discarded memo's twin never starts one)
+  useEffect(() => devices?.watch(), [devices]);
 
   // THE THEME BRIDGE (ruling 2; r4 §4): every change of the owner's answer re-dresses the live desk
   // — and only a change: the layer was MADE in the theme it wears (`wornRef`).
@@ -276,6 +294,8 @@ export function CanvasStage({
       off: mountedOff,
       device: () => deviceRef.current,
       ...(live === undefined ? {} : { live }),
+      // PT-S3 (D5) — the devices the mount's phones attach by, read on the door
+      ...(devices === undefined ? {} : { devices }),
       ...(docIdRef.current === undefined ? {} : { docId: docIdRef.current }),
     };
     deskRef.current = desk;
@@ -386,7 +406,7 @@ export function CanvasStage({
       if (deskRef.current === desk) deskRef.current = null;
       if (handleRef.current === handle) handleRef.current = null;
     };
-  }, [ce, generation, mount, remount, live]);
+  }, [ce, generation, mount, remount, live, devices]);
 
   if (refused !== null) {
     return (

@@ -9,10 +9,13 @@
     "./tokens.css": "./src/tokens.css",
     "./primitives": "./src/primitives.tsx",
     "./project-ink": "./src/project-ink.ts",
+    "./spark-face": "./src/spark-face/index.ts",
     "./glyphs": "./src/glyphs/index.ts"
   },
   "sideEffects": [
-    "*.css"
+    "*.css",
+    "./src/spark-face/vendor/sparks.js",
+    "./src/spark-face/vendor/star-spark.js"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit"

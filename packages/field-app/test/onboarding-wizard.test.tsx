@@ -12,7 +12,10 @@ import { afterEach, beforeEach, describe, expect, vi, it as vitestIt } from "vit
 import { BootRoot } from "../src/boot/BootRoot";
 import type { BootMachine, BootOnboarding, BootView } from "../src/boot/machine";
 import { OnboardingWizard } from "../src/boot/onboarding/OnboardingWizard";
+import { glassFit, type WizardLeaving } from "../src/boot/onboarding/wizard-ui";
+import { cardsStore } from "../src/frame/cards/cards-store";
 import { type FieldHost, type FieldUserProfile, type FieldUserRoster, setHost } from "../src/host";
+import { observeFrames } from "./wizard-frame-fixture";
 
 // UA-3w — the Setup Assistant (spec §6). The cases that matter are the ones
 // where the wizard must NOT behave like a form: it is entered from durable
@@ -71,13 +74,14 @@ function act(callback: () => void | Promise<void>): Promise<void> {
   });
 }
 
-/** DESIGN.md §6, the hand-over: the welcome's beat before the glass leaves. */
-const WELCOME_BEAT_MS = 1_400;
+/** DESIGN.md §6, the hand-over: the welcome's beat before the glass leaves (1.6s since FG-5). */
+const WELCOME_BEAT_MS = 1_600;
 /** DESIGN.md §8 (AO-D4): how long past the desk Setting up waits for History's
  * first pass before it offers Start now. */
 const START_NOW_AFTER_MS = 8_000;
 const ENTRY_SETTLE_MS = 1_200;
 const WIZARD_CSS = readFileSync(join(process.cwd(), "src/boot/onboarding/wizard-ui.css"), "utf8");
+const TOKENS = readFileSync(join(process.cwd(), "../design-kit/src/tokens.css"), "utf8");
 
 const noopLogger: FieldHost["logger"] = {
   child: () => noopLogger,
@@ -331,6 +335,8 @@ interface MountProps {
   onReveal?: () => void;
   onRetry?: () => void;
   boot?: BootView;
+  /** how far the boot has stepped the hand-over (FG-5) */
+  leaving?: WizardLeaving | null;
 }
 let mounted: (MountProps & { boot: BootView }) | null = null;
 
@@ -341,6 +347,7 @@ function render(): void {
       client: mounted.fieldd,
       onboarding: mounted.onboarding,
       boot: mounted.boot,
+      leaving: mounted.leaving ?? null,
       onComplete: mounted.onComplete,
       onReveal: mounted.onReveal ?? (() => undefined),
       onRetry: mounted.onRetry ?? (() => undefined),
@@ -367,19 +374,33 @@ async function boot(view: BootView): Promise<void> {
   await act(async () => render());
 }
 
-/** The visible title. Setting up's two titles share one cell (M1), and the one
- * not showing is hidden from assistive tech, so it is not the title. */
-const title = (): string => {
-  const heading = container?.querySelector("h1");
-  const swap = heading?.querySelector(".vf-wizard-title-swap");
-  if (swap === null || swap === undefined) return heading?.textContent ?? "";
-  return Array.from(swap.children)
-    .filter((part) => part.getAttribute("aria-hidden") !== "true")
-    .map((part) => part.textContent ?? "")
-    .join("");
-};
+/** The boot steps the hand-over (FG-5): the wizard is told how far its glass has left. */
+async function leave(leaving: WizardLeaving): Promise<void> {
+  if (mounted === null) throw new Error("nothing is mounted");
+  mounted = { ...mounted, leaving };
+  await act(async () => render());
+}
+
+/** The visible title: a pane's, or the welcome's title card. A load says its
+ * words as a hold's line instead (`holdLine`). */
+const title = (): string => container?.querySelector("h1")?.textContent ?? "";
+
+/** A hold's words standing (FG-L5; FG-4b): its line and the sub under it, never
+ * the words leaving, which happy-dom keeps, running no CSS animations. */
+const standingWords = (): Element | null =>
+  container?.querySelector('.vf-wizard-status-words:not([data-state="out"])') ?? null;
+const holdLine = (): string =>
+  standingWords()?.querySelector(".vf-wizard-status-line")?.textContent ?? "";
+const holdSub = (): string =>
+  standingWords()?.querySelector(".vf-wizard-status-sub")?.textContent ?? "";
 
 const text = (): string => container?.textContent ?? "";
+
+/** The band's steps as `step:state` (FG-D22 A): done, now or next. */
+const band = (): string[] =>
+  Array.from(container?.querySelectorAll(".vf-wizard-steps li") ?? []).map(
+    (step) => `${step.getAttribute("data-step")}:${step.getAttribute("data-state")}`,
+  );
 
 function button(label: string): HTMLButtonElement {
   const found = Array.from(container?.querySelectorAll("button") ?? []).find(
@@ -409,6 +430,22 @@ async function arrive(done: () => boolean): Promise<void> {
       for (let hop = 0; hop < 8; hop += 1) await Promise.resolve();
     });
   }
+}
+
+/** Agents' and History's looks are holds with no way out of their own (FG-L5;
+ * VF-PM 2026-10-31 05:42Z): this harness's daemon answers neither, so each gives
+ * up after 15s onto its pane, which claims nothing, and Continue moves on
+ * recording nothing. A second at a time, the pane's code arriving inside act,
+ * until `done` holds; bounded, so a wrong pane still fails. */
+async function pastLook(done: () => boolean): Promise<void> {
+  for (let turn = 0; turn < 40 && !done(); turn += 1) {
+    await act(async () => {
+      await vi.dynamicImportSettled();
+      row.getStore()?.signal.throwIfAborted();
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+  }
+  expect(done()).toBe(true);
 }
 
 /** AO-5 — Profiles has nothing to explain from this harness (its daemon has no
@@ -482,17 +519,22 @@ describe("Setup Assistant", () => {
     await click("Continue");
     expect(updates).toEqual([{ name: "James", face: { emoji: other, frame: "sticker" } }]);
 
-    // 3 — the agent chapter (AO-5): Agents opens on the inventory. This
-    // harness's daemon has none to give, so the pane claims nothing, says it
-    // is looking, and Continue moves on without recording anything.
-    expect(title()).toBe("Your agents.");
-    expect(text()).toContain("Looking on this Mac…");
+    // 3 — the agent chapter (AO-5): Agents opens on the inventory. A load is a
+    // hold (FG-L5): the logo and the look's own line, with no way out of its
+    // own. This harness's daemon has none to give, so after 15s the look gives
+    // up onto the pane, which claims nothing, and Continue moves on without
+    // recording anything.
+    expect(holdLine()).toBe("Looking on this Mac…");
+    expect(container?.querySelector(".vf-wizard-hold button")).toBeNull();
+    await pastLook(() => title() === "Your agents.");
+    expect(text()).toContain("VibeField couldn't read the agents on this Mac.");
     await click("Continue");
     await pastProfiles();
 
-    // History (AO-3) asks whose past comes in; with no census to give it
-    // says it is looking too, and Continue moves on.
-    expect(text()).toContain("Bring in your past sessions.");
+    // History (AO-3) asks whose past comes in; with no census to give, its
+    // look holds too, then gives up onto the pane, and Continue moves on.
+    expect(holdLine()).toBe("Looking for past sessions…");
+    await pastLook(() => text().includes("Bring in your past sessions."));
     expect(text()).not.toContain("Your field is already running"); // pane 3 retired (AO-D2)
     await click("Continue");
 
@@ -509,27 +551,29 @@ describe("Setup Assistant", () => {
     ]);
     expect(onComplete).toHaveBeenCalledTimes(1);
     expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ onboarded: true }));
-    expect(title()).toBe("Getting your desk ready.");
-    // W4 — the desk's line is the boot machine's own phase and stage, never a bar.
+    // Setting up is one line under the logo (FG-D21 B), the desk's while it opens.
+    expect(container?.querySelector('.vf-wizard-hold[data-face="setting-up:line"]')).not.toBeNull();
+    expect(holdLine()).toBe("Opening your field…");
+    // W4 — the line is the boot machine's own, its stage under it, never a bar of
+    // its own; the band's segment fills with the boot's own progress (FG-4b).
     await boot(bootAt("warming", { stage: "drawing the board", progress: 0.6 }));
-    const desk = container?.querySelector('.vf-wizard-phase[data-state="live"]');
-    expect(desk?.textContent).toContain("Your desk");
-    expect(desk?.textContent).toContain("drawing the board");
+    expect(holdLine()).toBe("Opening your field…");
+    expect(holdSub()).toBe("drawing the board");
     expect(container?.querySelector('[role="progressbar"]')).toBeNull();
-    // The welcome's words hold their cell from the start (M1), hidden until Ready.
-    expect(container?.querySelector(".vf-wizard-title-swap")?.children).toHaveLength(2);
-    expect(title()).not.toContain("Welcome");
-
-    // 6 — the desk is warm and stable behind the glass: the title becomes the
-    // welcome in place, with where Settings went said once (DESIGN.md §8)...
-    await boot(bootAt("handing-over"));
-    expect(container?.querySelector('.vf-wizard-phase[data-state="done"]')?.textContent).toContain(
-      "Your desk",
+    const segment = container?.querySelector<HTMLElement>(
+      '.vf-wizard-steps li[data-step="setting-up"]',
     );
-    expect(title()).toBe("Welcome to your field, James.");
-    expect(
-      container?.querySelector('.vf-wizard-ready-line[aria-hidden="false"]')?.textContent,
-    ).toContain("Your face in the bottom-left corner opens Settings — so does");
+    expect(segment?.getAttribute("data-progress")).toBe("true");
+    expect(segment?.style.getPropertyValue("--vf-wizard-progress")).toBe("0.6");
+    expect(text()).not.toContain("Welcome to your field");
+
+    // 6 — the desk is warm and stable behind the glass: the line becomes the
+    // welcome in place, in ink, with where Settings went said once under it
+    // (DESIGN.md §8)...
+    await boot(bootAt("handing-over"));
+    expect(holdLine()).toBe("Welcome to your field, James.");
+    expect(standingWords()?.getAttribute("data-ink")).toBe("true");
+    expect(holdSub()).toContain("Your face in the bottom-left corner opens Settings — so does");
     // ...and holds it one beat before the glass hands the window over (W5).
     await tick(WELCOME_BEAT_MS - 1);
     expect(onReveal).not.toHaveBeenCalled();
@@ -620,7 +664,7 @@ describe("Setup Assistant", () => {
     expect(text()).not.toContain("Your field, on every device.");
     expect(onComplete).toHaveBeenCalledTimes(1);
     await boot(bootAt("handing-over"));
-    expect(title()).toBe("Welcome to your field, james.");
+    expect(holdLine()).toBe("Welcome to your field, james.");
     await tick(WELCOME_BEAT_MS);
     expect(onReveal).toHaveBeenCalledTimes(1);
   });
@@ -650,7 +694,8 @@ describe("Setup Assistant", () => {
     );
     expect(text()).not.toContain("Your field now lives in a user");
     expect(container?.querySelector('input[aria-label="Your name"]')).not.toBeNull();
-    expect(text()).toContain("New user");
+    // the band stands on You: on the glass it names the step, where "New user" was the pane's eyebrow (FG-L7)
+    expect(band()).toContain("you:now");
     // No roster door on this host, so no chooser to go back to — and nothing
     // offers to.
     expect(
@@ -659,11 +704,12 @@ describe("Setup Assistant", () => {
       ),
     ).toBe(false);
 
-    await click("Continue"); // the name → Agents (each person's own chapter)
-    expect(title()).toBe("Your agents.");
+    await click("Continue"); // the name → Agents (each person's own chapter), which looks first
+    expect(holdLine()).toBe("Looking on this Mac…");
+    await pastLook(() => title() === "Your agents.");
     await click("Continue"); // → Profiles, which moves on here, → History
     await pastProfiles();
-    expect(text()).toContain("Bring in your past sessions.");
+    await pastLook(() => text().includes("Bring in your past sessions."));
     await click("Continue"); // → Connect
     expect(text()).toContain("Your field, on every device.");
 
@@ -694,7 +740,8 @@ describe("Setup Assistant", () => {
       onboarding: onboarding({ fuid: 2, setupVariant: "second-user" }),
       onComplete: vi.fn(),
     });
-    expect(text()).toContain("New user");
+    // the band stands on You: on the glass it names the step, where "New user" was the pane's eyebrow (FG-L7)
+    expect(band()).toContain("you:now");
 
     // The user being set up already exists, so Back means: choose who to enter.
     await click("Back");
@@ -833,12 +880,13 @@ describe("Setup Assistant", () => {
       onboarding: onboarding({ color: "accent-2" }),
       onComplete: vi.fn(),
     });
-    // the name was answered (a legacy accent says so); the chapter was not
-    expect(title()).toBe("Your agents.");
+    // the name was answered (a legacy accent says so); the chapter was not, and Agents looks first
+    expect(holdLine()).toBe("Looking on this Mac…");
     expect(text()).not.toContain("Bring in your past sessions.");
+    await pastLook(() => title() === "Your agents.");
     await click("Continue"); // nothing known from this harness's inventory
     await pastProfiles();
-    expect(text()).toContain("Bring in your past sessions.");
+    await pastLook(() => text().includes("Bring in your past sessions."));
   });
 
   it("records Agents answered from the inventory and moves on to History (AO-5)", async () => {
@@ -861,7 +909,7 @@ describe("Setup Assistant", () => {
       state: "answered",
     });
     await pastProfiles();
-    expect(text()).toContain("Bring in your past sessions.");
+    await pastLook(() => text().includes("Bring in your past sessions."));
   });
 
   it("resumes at History when the ledger holds no answer for it, before Connect (W6, AO-3)", async () => {
@@ -881,8 +929,9 @@ describe("Setup Assistant", () => {
       onboarding: onboarding({ color: "accent-2" }),
       onComplete: vi.fn(),
     });
-    // the name was answered (a legacy accent says so); History was not
-    expect(text()).toContain("Bring in your past sessions.");
+    // the name was answered (a legacy accent says so); History was not, and it looks first
+    expect(holdLine()).toBe("Looking for past sessions…");
+    await pastLook(() => text().includes("Bring in your past sessions."));
     expect(text()).not.toContain("Your field, on every device.");
     await click("Continue"); // nothing to ask from this harness's census
     expect(text()).toContain("Your field, on every device.");
@@ -897,7 +946,7 @@ describe("Setup Assistant", () => {
     });
 
     // straight to Setting up: the first new field after connecting asks it
-    expect(container?.querySelector('ul[aria-label="Setting up"]')).not.toBeNull();
+    expect(container?.querySelector('.vf-wizard-hold[data-face="setting-up:line"]')).not.toBeNull();
     expect(text()).not.toContain("Your field, on every device.");
     expect(container?.querySelector('[role="radiogroup"][aria-label="Sync posture"]')).toBeNull();
   });
@@ -1089,6 +1138,57 @@ describe("Setup Assistant", () => {
     expect(title()).not.toBe("Waiting for approval.");
   });
 
+  it("deals a copy from its button's box, under the glass (HN-5)", async () => {
+    // DESIGN.md §8 "Copy" (LC-22): a copy made under a sheet is dealt into the hand under it,
+    // from the button pressed, and the button's "Copied" is its sign while the sheet stands
+    const copied: string[] = [];
+    host(
+      vi.fn(async () => ({ ...FRESH, color: "accent-2" }) as FieldUserProfile),
+      {
+        diagnostics: {
+          copyText: async (words: string) => {
+            copied.push(words);
+          },
+        } as unknown as NonNullable<FieldHost["diagnostics"]>,
+      },
+    );
+    const admin = "https://login.tailscale.com/admin/machines";
+    await mount({
+      fieldd: client({
+        link: {
+          ...NO_LINK,
+          meshEnabled: true,
+          nodeState: "NeedsMachineAuth",
+          linkState: "awaiting_approval",
+          machineName: "truffle-vibefield-studio",
+          adminUrl: admin,
+        },
+      }),
+      onboarding: onboarding({ color: "accent-2" }),
+      onComplete: vi.fn(),
+    });
+
+    const copy = button("Copy a request for your admin");
+    const box = { left: 420, top: 560, width: 220, height: 32 };
+    vi.spyOn(copy, "getBoundingClientRect").mockReturnValue(box as DOMRect);
+    await act(async () => {
+      copy.click();
+      for (let hop = 0; hop < 30; hop += 1) await Promise.resolve();
+    });
+    expect(copied).toEqual([
+      `Please approve truffle-vibefield-studio in the Tailscale admin console: ${admin}`,
+    ]);
+    const card = cardsStore.snapshot().cards.at(-1);
+    expect(card).toMatchObject({
+      kind: "text",
+      paste: copied[0],
+      origin: { place: "Setup Assistant", how: "copy" },
+    });
+    expect(cardsStore.snapshot().arriving.get(card?.id ?? "")).toEqual(box);
+    expect(button("Copied")).not.toBeUndefined();
+    if (card !== undefined) cardsStore.remove(card.id);
+  });
+
   it("says what capture is waiting on before the node offers an address", async () => {
     host(vi.fn(async () => ({ ...FRESH, color: "accent-2" }) as FieldUserProfile));
     await mount({
@@ -1099,15 +1199,55 @@ describe("Setup Assistant", () => {
       onComplete: vi.fn(),
     });
 
-    expect(title()).toBe("Opening Tailscale…");
-    expect(text()).toContain("Sign in or create an account at Tailscale");
+    // a load is a hold (FG-L5): Tailscale opening, its one line under the logo
+    expect(holdLine()).toBe("Opening Tailscale…");
+    expect(title()).toBe("");
     // Capture is already running — offering to start it again would be a lie.
     expect(
       Array.from(container?.querySelectorAll("button") ?? []).some(
         (candidate) => candidate.textContent?.trim() === "Continue with Tailscale",
       ),
     ).toBe(false);
-    expect(button("Cancel")).not.toBeUndefined();
+    // its way out, Cancel, stands under the line once the opening has run 6s (FG-O7 (a))
+    expect(button("Cancel").closest(".vf-wizard-hold-out")?.getAttribute("data-late")).toBe("true");
+  });
+
+  it("cancels Tailscale opening with Esc from the start, and says a slow one under its line (FG-O7 (a))", async () => {
+    host(vi.fn(async () => ({ ...FRESH, color: "accent-2" }) as FieldUserProfile));
+    const fieldd = client({
+      link: { ...NO_LINK, meshEnabled: true, nodeState: "Starting", linkState: "capturing" },
+    });
+    await mount({ fieldd, onboarding: onboarding({ color: "accent-2" }), onComplete: vi.fn() });
+    expect(holdLine()).toBe("Opening Tailscale…");
+    expect(holdSub()).toBe("");
+    // a slow opening (20s) says so under the line, where the pane said it in its voice
+    await tick(20_000);
+    expect(holdLine()).toBe("Opening Tailscale…");
+    expect(holdSub()).toBe(
+      "Still waiting for Tailscale. Check this Mac's internet connection; VibeField keeps trying.",
+    );
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    });
+    expect(fieldd.request).toHaveBeenCalledWith("user.link.cancel", {});
+  });
+
+  it("holds on the link's read with Continue under it after 6s: a read with no give-up of its own needs a way out (FG-4b)", async () => {
+    host(vi.fn(async () => ({ ...FRESH, color: "accent-2" }) as FieldUserProfile));
+    const fieldd = client({ link: NO_LINK });
+    const answered = fieldd.subscribe;
+    // the link's read never answers
+    fieldd.subscribe = vi.fn((method: string, ...rest: unknown[]) =>
+      method === "user.link.subscribe"
+        ? new Promise<never>(() => undefined)
+        : (answered as (method: string, ...rest: unknown[]) => Promise<unknown>)(method, ...rest),
+    ) as unknown as FielddClient["subscribe"];
+    await mount({ fieldd, onboarding: onboarding({ color: "accent-2" }), onComplete: vi.fn() });
+    expect(holdLine()).toBe("Asking this Mac about its link…");
+    const out = button("Continue").closest(".vf-wizard-hold-out");
+    expect(out?.getAttribute("data-late")).toBe("true");
+    await click("Continue");
+    expect(container?.querySelector('.vf-wizard-hold[data-face="setting-up:line"]')).not.toBeNull();
   });
 
   it("holds the pane and says why when the profile write is refused", async () => {
@@ -1202,9 +1342,8 @@ describe("Setup Assistant", () => {
     // The boot proceeds — the wizard is a hold, never a trap — and the
     // unflipped record means it honestly asks again next launch.
     expect(onComplete).toHaveBeenCalledTimes(1);
-    // Setting up carries on as for anyone: the desk opens beneath the glass.
-    expect(title()).toBe("Getting your desk ready.");
-    expect(text()).toContain("Your desk");
+    // Setting up carries on as for anyone: the desk opens beneath the glass, on its one line.
+    expect(holdLine()).toBe("Opening your field…");
   });
 
   it("is operable from the keyboard alone: the field takes focus and Enter advances", async () => {
@@ -1230,7 +1369,8 @@ describe("Setup Assistant", () => {
     await act(async () => {
       form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     });
-    expect(title()).toBe("Your agents.");
+    // → Agents, whose look holds first (FG-L5)
+    expect(holdLine()).toBe("Looking on this Mac…");
   });
 
   it("respects reduced motion — the pane entrance has a fade fallback, no transitions survive", async () => {
@@ -1247,14 +1387,167 @@ describe("Setup Assistant", () => {
     expect(button("Get started").className).toContain("motion-reduce:transition-none");
   });
 
-  it("centres the shell safely, so a tall pane never loses its title above the fold", () => {
-    // Pane 2 with its face picker open (UA-D17) is taller than a small shell.
-    // Plain centring inside a scroller overflows both ways, and the top half
-    // can never be scrolled to; `safe` sends the overflow downward only.
-    expect(WIZARD_CSS).toMatch(/\.vf-wizard-shell-content \{[^}]*align-items: safe center;/);
+  it("lays every pane into the one frame: its head at the top, its body under it, its actions on the foot over a kept later line, and the pane never scrolls (FG-L3)", async () => {
+    host(vi.fn(async () => FRESH));
+    await mount({
+      fieldd: client({ link: NO_LINK }),
+      onboarding: onboarding(),
+      onComplete: vi.fn(),
+    });
+    await click("Get started");
+
+    const pane = container?.querySelector(".vf-wizard-frame > form.vf-wizard-pane");
+    expect(Array.from(pane?.children ?? [], (part) => part.className)).toEqual([
+      "vf-wizard-pane-head",
+      "vf-wizard-pane-body",
+      "vf-wizard-pane-foot",
+    ]);
+    const foot = pane?.querySelector(".vf-wizard-pane-foot");
+    expect(Array.from(foot?.children ?? [], (part) => part.className)).toEqual([
+      "vf-wizard-actions",
+      "vf-wizard-later",
+    ]);
+    // a pane that names no later home still draws the line, so its room is kept and the actions never move
+    expect(foot?.querySelector(".vf-wizard-later")?.textContent).toBe("");
+    // the frame is the pane's whole room, and never a scroller; the head and the foot never give
+    // way, so only the body yields room, and a list in it that can outgrow it scrolls within
+    // itself (the Agents, History and Profiles panes' own rows hold that rule)
+    const frame = WIZARD_CSS.match(/\n\.vf-wizard-frame \{([^}]*)\}/u)?.[1];
+    expect(frame).toBeDefined();
+    expect(frame).not.toMatch(/overflow|align-items|justify-content/u);
+    expect(WIZARD_CSS).toMatch(
+      /\n\.vf-wizard-pane \{\s*position: absolute;\s*inset: 0;\s*display: flex;\s*flex-direction: column;/u,
+    );
+    expect(WIZARD_CSS).toMatch(/\n\.vf-wizard-pane-head \{[^}]*flex: none;[^}]*gap: 8px;/u);
+    expect(WIZARD_CSS).toMatch(
+      /\n\.vf-wizard-pane-body \{[^}]*min-height: 0;[^}]*gap: 16px;\s*margin-top: 20px;/u,
+    );
+    expect(WIZARD_CSS).toMatch(
+      /\n\.vf-wizard-pane\[data-track="ts"\] \.vf-wizard-pane-body \{\s*gap: 18px;/u,
+    );
+    expect(WIZARD_CSS).toMatch(
+      /\n\.vf-wizard-pane-foot \{[^}]*flex: none;[^}]*margin-top: auto;\s*padding-top: 16px;/u,
+    );
+    expect(WIZARD_CSS).toMatch(/\n\.vf-wizard-later \{\s*min-height: 17px;/u);
+    // the glass is never reflowed, so You keeps its one layout, its face in a slot of its own
+    expect(WIZARD_CSS).not.toContain("@media (max-width");
+    expect(pane?.querySelector(".vf-wizard-face > .vf-wizard-face-slot")).not.toBeNull();
+    expect(WIZARD_CSS).toMatch(
+      /\n\.vf-wizard-face-slot \{\s*display: grid;\s*width: 112px;\s*height: 104px;\s*place-items: center;/u,
+    );
   });
 
-  it("puts every wizard pane on the shared rounded glass surface", async () => {
+  it("draws no eyebrow on the glass, where the band names the step (FG-L7)", async () => {
+    host(vi.fn(async () => FRESH));
+    await mount({
+      fieldd: client({ link: NO_LINK }),
+      onboarding: onboarding(),
+      onComplete: vi.fn(),
+    });
+    await click("Get started");
+
+    expect(band()[0]).toBe("you:now");
+    const head = container?.querySelector(".vf-wizard-pane-head");
+    expect(Array.from(head?.children ?? [], (part) => part.tagName)).toEqual(["H1", "P"]);
+  });
+
+  it("fades the old pane out first and then the new one in, and nothing rises (FG-L3)", async () => {
+    const animations: {
+      target: HTMLElement;
+      keyframes: Keyframe[];
+      options: KeyframeAnimationOptions;
+    }[] = [];
+    let finish: () => void = () => undefined;
+    const finished = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    Object.defineProperty(HTMLElement.prototype, "animate", {
+      configurable: true,
+      value(this: HTMLElement, keyframes: Keyframe[], options: KeyframeAnimationOptions) {
+        animations.push({ target: this, keyframes, options });
+        return { finished };
+      },
+    });
+    try {
+      // the frame hears its swap by hand too: happy-dom can lose an observer to a collection
+      const heard = observeFrames();
+      host(vi.fn(async () => FRESH));
+      await mount({
+        fieldd: client({ link: NO_LINK }),
+        onboarding: onboarding(),
+        onComplete: vi.fn(),
+      });
+      // the welcome, a title card under the logo, arrives with the glass (FG-4b)
+      const welcome = container?.querySelector(".vf-wizard-frame > form.vf-wizard-hold");
+      expect(welcome?.getAttribute("data-face")).toBe("welcome");
+      expect(animations).toHaveLength(1);
+      // (happy-dom hands `animate` a form's own object, not the proxy a query returns: read its face)
+      expect(animations[0]?.target.getAttribute("data-face")).toBe("welcome");
+      expect(animations[0]?.keyframes).toEqual([{ opacity: 0 }, { opacity: 1 }]);
+      expect(animations[0]?.options).toMatchObject({ duration: 240, delay: 0, fill: "backwards" });
+      expect(container?.querySelector(".vf-wizard-shell")?.getAttribute("data-logo")).toBe("shown");
+      await click("Get started");
+      heard.hear();
+
+      expect(animations).toHaveLength(3);
+      const [, leaving, entering] = animations;
+      // the welcome leaves as a still copy laid over the frame, inert and hidden, fading out in 120ms
+      expect(leaving?.target.classList.contains("vf-wizard-pane-leaving")).toBe(true);
+      expect(leaving?.target.textContent).toBe(welcome?.textContent);
+      expect(leaving?.target.hasAttribute("inert")).toBe(true);
+      expect(leaving?.target.getAttribute("aria-hidden")).toBe("true");
+      expect(leaving?.target.parentElement?.className).toBe("vf-wizard-frame");
+      expect(leaving?.keyframes).toEqual([{ opacity: 1, easing: "ease" }, { opacity: 0 }]);
+      expect(leaving?.options).toEqual({ duration: 120, fill: "forwards" });
+      // its logo goes as it does, and You, mounted at once, waits under it for the logo's 280ms
+      expect(container?.querySelector(".vf-wizard-shell")?.hasAttribute("data-logo")).toBe(false);
+      expect(entering?.target.querySelector("h1")?.textContent).toBe(title());
+      expect(entering?.keyframes).toEqual([{ opacity: 0 }, { opacity: 1 }]);
+      expect(entering?.options).toMatchObject({
+        duration: 240,
+        delay: 280,
+        easing: "ease",
+        fill: "backwards",
+      });
+      // the copy goes once its fade ends
+      await act(async () => finish());
+      expect(container?.querySelectorAll(".vf-wizard-pane-leaving")).toHaveLength(0);
+      // a pane's own changes never fade: typing redraws You, and nothing animates
+      const name = container?.querySelector<HTMLInputElement>('input[aria-label="Your name"]');
+      await act(async () => {
+        if (name === null || name === undefined) return;
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(
+          name,
+          "jam",
+        );
+        name.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      expect(name?.value).toBe("jam");
+      expect(animations).toHaveLength(3);
+    } finally {
+      delete (HTMLElement.prototype as { animate?: unknown }).animate;
+      vi.unstubAllGlobals();
+    }
+
+    // the frame plays the glass's fades, so its panes and holds carry no entrance of their own; the
+    // sheet's pane rises in as it did, and under reduced motion fades in at 160ms
+    expect(WIZARD_CSS).not.toMatch(/\n\.vf-wizard-pane \{[^}]*animation/u);
+    expect(WIZARD_CSS).not.toMatch(/\n\.vf-wizard-hold \{[^}]*animation/u);
+    expect(WIZARD_CSS).toMatch(
+      /\n\.vf-wizard-shell\[data-size="sheet"\] \.vf-wizard-pane \{[^}]*animation: vf-wizard-in 320ms var\(--vf-ease-island\) both;/u,
+    );
+    const reduced = WIZARD_CSS.slice(WIZARD_CSS.indexOf("@media (prefers-reduced-motion: reduce)"));
+    expect(reduced).toMatch(
+      /\.vf-wizard-shell\[data-size="sheet"\] \.vf-wizard-pane \{\s*animation: vf-wizard-fade 160ms ease both;/u,
+    );
+    // its keyframes stand outside the reduced-motion block, where a hold's line names them too
+    expect(WIZARD_CSS.indexOf("@keyframes vf-wizard-fade")).toBeGreaterThan(-1);
+    expect(WIZARD_CSS.indexOf("@keyframes vf-wizard-fade")).toBeLessThan(
+      WIZARD_CSS.indexOf("@media (prefers-reduced-motion: reduce)"),
+    );
+  });
+
+  it("stands every pane in one glass on the field: 880 × 640, one frame, its material in layers (FG-L2, FG-L3)", async () => {
     host(vi.fn(async () => FRESH));
     await mount({
       fieldd: client({ link: NO_LINK }),
@@ -1263,17 +1556,229 @@ describe("Setup Assistant", () => {
     });
 
     const shell = container?.querySelector(".vf-wizard-shell");
-    expect(shell).not.toBeNull();
-    expect(container?.querySelector("form.vf-wizard-pane")).not.toBeNull();
-    expect(WIZARD_CSS).toContain("border-radius: var(--vf-radius-island)");
-    expect(WIZARD_CSS).toContain("width: min(calc(100vw - 2rem), 44rem)");
-    expect(WIZARD_CSS).toContain("height: min(calc(100vh - 2rem), 32rem)");
+    expect(shell?.getAttribute("data-ground")).toBe("field");
+    expect(shell?.getAttribute("data-size")).toBe("glass");
+    expect(
+      shell?.querySelector('.vf-wizard-frame > form.vf-wizard-hold[data-face="welcome"]'),
+    ).not.toBeNull();
+    // the material in CSS's order, under everything the glass holds, then the logo over it (FG-4b)
+    expect(Array.from(shell?.children ?? [], (child) => child.className).slice(0, 5)).toEqual([
+      "vf-wizard-glass-shadow",
+      "vf-wizard-glass-frost",
+      "vf-wizard-glass-grain",
+      "vf-wizard-glass-edge",
+      "vf-wizard-logo",
+    ]);
+    expect(shell?.querySelector(".vf-wizard-logo")?.getAttribute("aria-hidden")).toBe("true");
+    expect(WIZARD_CSS).toMatch(
+      /\n\.vf-wizard-shell \{[^}]*width: 880px;\s*height: 640px;\s*margin: -320px 0 0 -440px;\s*border-radius: var\(--vf-radius-island\);/,
+    );
+    expect(WIZARD_CSS).toMatch(
+      /\.vf-wizard-frame \{[^}]*top: 96px;\s*right: 160px;\s*bottom: 40px;\s*left: 160px;/,
+    );
+    // §5's tier at full frost: the surface over the frost's blur and saturation, both tokens (FG-3b)
     expect(WIZARD_CSS).toContain("background: var(--vf-wizard-surface)");
-    expect(WIZARD_CSS).toContain("backdrop-filter: blur(32px) saturate(1.12)");
+    expect(WIZARD_CSS).toContain(
+      "backdrop-filter: blur(calc(var(--vf-wizard-blur) * var(--vf-glass-frost)))",
+    );
+    expect(WIZARD_CSS).toContain(
+      "saturate(calc(1 + (var(--vf-wizard-saturate) - 1) * var(--vf-glass-frost)))",
+    );
+    // on the field: the edge and its light, the field's own shadow, and the grain
+    expect(WIZARD_CSS).toContain("box-shadow: var(--vf-shadow-wizard-field)");
+    expect(WIZARD_CSS).toContain("inset 0 0 0 1px var(--vf-wizard-edge),");
+    expect(WIZARD_CSS).toContain("inset 0 1px 0 var(--vf-wizard-edge-light)");
+    expect(WIZARD_CSS).toContain("opacity: calc(var(--vf-wizard-grain) * var(--vf-glass-frost))");
 
     await click("Get started");
     expect(container?.querySelector(".vf-wizard-shell")).toBe(shell);
     expect(container?.querySelector("form.vf-wizard-pane")).not.toBeNull();
+  });
+
+  it("hands its one glass the boot's hand-over, step by step, taking no press from the first (FG-5)", async () => {
+    host(vi.fn(async () => FRESH));
+    await mount({
+      fieldd: client({ link: NO_LINK }),
+      onboarding: onboarding(),
+      onComplete: vi.fn(),
+    });
+    const shell = container?.querySelector(".vf-wizard-shell");
+    expect(shell?.hasAttribute("data-leaving")).toBe(false);
+    expect(shell?.hasAttribute("inert")).toBe(false);
+
+    await leave("words");
+    expect(container?.querySelector(".vf-wizard-shell")).toBe(shell);
+    expect(shell?.getAttribute("data-leaving")).toBe("words");
+    expect(shell?.hasAttribute("inert")).toBe(true);
+    await leave("clear");
+    expect(container?.querySelector(".vf-wizard-shell")).toBe(shell);
+    expect(shell?.getAttribute("data-leaving")).toBe("clear");
+  });
+
+  it("projects the glass's tokens from DESIGN.md §5: one frost, and on the field one shadow and one grain, for both themes", () => {
+    const [day = "", night = ""] = TOKENS.split("\n.dark {");
+    expect(day).toContain("--vf-wizard-blur: 32px;");
+    expect(day).toContain("--vf-wizard-saturate: 1.12;");
+    expect(day).toContain("--vf-wizard-edge: rgb(255 255 255 / 60%);");
+    expect(day).toContain("--vf-wizard-edge-light: rgb(255 255 255 / 75%);");
+    expect(day).toContain("--vf-wizard-grain: 0.03;");
+    expect(day).toContain(
+      "--vf-shadow-wizard-field: 0 40px 120px rgb(4 5 15 / 55%), 0 12px 32px rgb(4 5 15 / 28%);",
+    );
+    expect(night).toContain("--vf-wizard-edge: rgb(255 255 255 / 12%);");
+    expect(night).toContain("--vf-wizard-edge-light: rgb(255 255 255 / 8%);");
+    // the field is the dark in both themes, so its shadow and the grain never change; nor does the frost
+    expect(night).not.toContain("--vf-shadow-wizard-field");
+    expect(night).not.toContain("--vf-wizard-grain");
+    expect(night).not.toContain("--vf-wizard-blur");
+    expect(night).not.toContain("--vf-wizard-saturate");
+  });
+
+  it("stands the browser's glass down where the field draws it, keeping the edge (FG-3b, FG-D24)", () => {
+    // the shadow, the frost (its tint is its ::after) and the grain, hidden but keeping their style, which is the
+    // recipe the field reads; the frost's backdrop filter off, so nothing blurs the field but the field
+    expect(WIZARD_CSS).toMatch(
+      /\n\.vf-wizard-shell\[data-glass="field"\] \.vf-wizard-glass-shadow,\n\.vf-wizard-shell\[data-glass="field"\] \.vf-wizard-glass-frost,\n\.vf-wizard-shell\[data-glass="field"\] \.vf-wizard-glass-grain \{\s*visibility: hidden;\s*\}/u,
+    );
+    expect(WIZARD_CSS).toMatch(
+      /\n\.vf-wizard-shell\[data-glass="field"\] \.vf-wizard-glass-frost \{\s*-webkit-backdrop-filter: none;\s*backdrop-filter: none;\s*\}/u,
+    );
+    // the logo too, which the field draws over its frost from its own mark (FG-4b)
+    expect(WIZARD_CSS).toMatch(
+      /\n\.vf-wizard-shell\[data-glass="field"\] \.vf-wizard-logo \{\s*visibility: hidden;\s*\}/u,
+    );
+    // the edge and its light stay the browser's, at the screen's own pixels
+    expect(WIZARD_CSS).not.toMatch(/data-glass="field"\] \.vf-wizard-glass-edge/u);
+    // nothing else answers to the attribute
+    expect(WIZARD_CSS.match(/\[data-glass="field"\]/gu)).toHaveLength(5);
+  });
+
+  it("scales the glass as one picture to fit its ground, never reflowing it (FG-L2)", async () => {
+    const glass = { width: 880, height: 640 };
+    // at or above 976 × 736 the glass stands at its own size
+    expect(glassFit({ width: 1180, height: 780 }, glass)).toBe(1);
+    expect(glassFit({ width: 976, height: 736 }, glass)).toBe(1);
+    // below it, 48 a side is kept and the tighter side decides
+    expect(glassFit({ width: 800, height: 600 }, glass)).toBeCloseTo(504 / 640);
+    expect(glassFit({ width: 700, height: 900 }, glass)).toBeCloseTo(604 / 880);
+    // a ground not laid out yet draws it at its own size
+    expect(glassFit({ width: 0, height: 0 }, glass)).toBe(1);
+    expect(WIZARD_CSS).toMatch(
+      /\.vf-wizard-fit \{[^}]*transform: scale\(var\(--vf-glass-fit, 1\)\);/,
+    );
+
+    host(vi.fn(async () => FRESH));
+    await mount({
+      fieldd: client({ link: NO_LINK }),
+      onboarding: onboarding(),
+      onComplete: vi.fn(),
+    });
+    const ground = container?.querySelector<HTMLElement>(".vf-wizard-ground");
+    expect(ground?.style.getPropertyValue("--vf-glass-fit")).toBe("1");
+  });
+
+  it("forms the glass on the field by its frost and its rise, and fades nothing that holds the frost (DESIGN.md §6)", () => {
+    expect(WIZARD_CSS).toMatch(
+      /@property --vf-glass-frost \{[^}]*syntax: "<number>";[^}]*initial-value: 1;/,
+    );
+    expect(WIZARD_CSS).toMatch(
+      /@property --vf-glass-rise \{[^}]*syntax: "<number>";[^}]*initial-value: 1;/,
+    );
+    expect(WIZARD_CSS).toContain(
+      '.vf-wizard-shell[data-ground="field"] {\n  animation: vf-glass-form 560ms var(--vf-ease-island) both;',
+    );
+    // the edge and its shadow form with the frost, at their own level (FG-5)
+    expect(WIZARD_CSS).toMatch(
+      /@keyframes vf-glass-form \{\s*from \{\s*--vf-glass-frost: 0;\s*--vf-glass-edge: 0;\s*--vf-glass-rise: 0\.985;/,
+    );
+    // reduced motion: the frost alone, halved, and nothing rises (M6)
+    expect(WIZARD_CSS).toContain("animation: vf-glass-frost-in 280ms ease both;");
+    expect(WIZARD_CSS).toMatch(
+      /@keyframes vf-glass-frost-in \{\s*from \{\s*--vf-glass-frost: 0;\s*--vf-glass-edge: 0;\s*\}/,
+    );
+    // A backdrop filter samples nothing past an ancestor that sets opacity, a
+    // filter or a mask, so nothing that holds the frost may set one.
+    for (const holder of ["vf-wizard-ground", "vf-wizard-fit", "vf-wizard-shell"]) {
+      const rule = WIZARD_CSS.match(new RegExp(`\\n\\.${holder} \\{([^}]*)\\}`))?.[1];
+      expect(rule, holder).toBeDefined();
+      expect(rule, holder).not.toMatch(/opacity|filter|mask/);
+    }
+  });
+
+  it("shows the chapter along the glass's top: absent on the welcome, filled as you arrive, emptied as you go back (FG-D22 A)", async () => {
+    host(
+      vi.fn(
+        async (params: Record<string, unknown>) => ({ ...FRESH, ...params }) as FieldUserProfile,
+      ),
+    );
+    await mount({
+      fieldd: client({ link: NO_LINK }),
+      onboarding: onboarding(),
+      onComplete: vi.fn(),
+    });
+
+    const steps = container?.querySelector(".vf-wizard-steps");
+    expect(Array.from(steps?.querySelectorAll("li") ?? []).map((step) => step.textContent)).toEqual(
+      ["You", "Agents", "Profiles", "History", "Devices", "Setting up"],
+    );
+    // the welcome stands in no step: the band waits there, faded and silent
+    expect(steps?.getAttribute("data-shown")).toBe("false");
+    expect(steps?.getAttribute("aria-hidden")).toBe("true");
+    expect(container?.querySelector('[aria-current="step"]')).toBeNull();
+
+    await click("Get started");
+    expect(steps?.getAttribute("data-shown")).toBe("true");
+    expect(band()).toEqual([
+      "you:now",
+      "agents:next",
+      "profiles:next",
+      "history:next",
+      "devices:next",
+      "setting-up:next",
+    ]);
+    expect(container?.querySelector('[aria-current="step"]')?.textContent).toBe("You");
+
+    await click("Continue");
+    // Agents' look holds first, the band already on its step
+    expect(holdLine()).toBe("Looking on this Mac…");
+    expect(band().slice(0, 3)).toEqual(["you:done", "agents:now", "profiles:next"]);
+
+    await pastLook(() => title() === "Your agents.");
+    await click("Back");
+    expect(band().slice(0, 3)).toEqual(["you:now", "agents:next", "profiles:next"]);
+    // one band for the chapter: only its states change
+    expect(container?.querySelector(".vf-wizard-steps")).toBe(steps);
+  });
+
+  it("fills Setting up's segment with the boot's own progress, then stands it full (FG-4b)", async () => {
+    host(vi.fn(async () => ({ ...FRESH, color: "accent-2" }) as FieldUserProfile));
+    await mount({
+      fieldd: client({ link: LINKED }),
+      onboarding: onboarding({ color: "accent-2" }),
+      onComplete: vi.fn(),
+    });
+    const segment = (): HTMLElement | null | undefined =>
+      container?.querySelector<HTMLElement>('.vf-wizard-steps li[data-step="setting-up"]');
+    // nothing reported yet: an empty segment, not a full one
+    expect(segment()?.getAttribute("data-state")).toBe("now");
+    expect(segment()?.style.getPropertyValue("--vf-wizard-progress")).toBe("0");
+    await boot(bootAt("warming", { stage: "drawing the board", progress: 0.42 }));
+    expect(segment()?.style.getPropertyValue("--vf-wizard-progress")).toBe("0.42");
+    await boot(bootAt("stabilizing", { progress: 1 }));
+    expect(segment()?.style.getPropertyValue("--vf-wizard-progress")).toBe("1");
+    // only the step it stands in carries it
+    expect(container?.querySelectorAll(".vf-wizard-steps li[data-progress]")).toHaveLength(1);
+    // as the work reports it, 260ms linear (at once reduced); any other step fills as you arrive
+    expect(WIZARD_CSS).toMatch(
+      /\n\.vf-wizard-steps li\[data-state="now"\] \.vf-wizard-step-seg > span \{\s*transform: scaleX\(var\(--vf-wizard-progress, 1\)\);/u,
+    );
+    expect(WIZARD_CSS).toMatch(
+      /\n\.vf-wizard-steps li\[data-progress\] \.vf-wizard-step-seg > span \{\s*transition:\s*transform 260ms linear,\s*background-color 240ms ease;/u,
+    );
+    const reduced = WIZARD_CSS.slice(WIZARD_CSS.indexOf("@media (prefers-reduced-motion: reduce)"));
+    expect(reduced).toMatch(
+      /\.vf-wizard-steps li\[data-progress\] \.vf-wizard-step-seg > span \{\s*transition: background-color 120ms ease;/u,
+    );
   });
 
   it("keeps the app's round light/dark control in the shell", async () => {
@@ -1308,9 +1813,11 @@ describe("Setup Assistant", () => {
 
     await click("Get started");
     await click("Continue"); // nothing to write to — the pane still advances
-    await click("Continue"); // Agents, with no inventory from this harness
+    await pastLook(() => title() === "Your agents."); // Agents, with no inventory from this harness
+    await click("Continue");
     await pastProfiles(); // Profiles, with nothing to explain
-    await click("Continue"); // History, with nothing to ask from this harness
+    await pastLook(() => text().includes("Bring in your past sessions.")); // History, with nothing to ask
+    await click("Continue");
     await click("Not now");
     expect(onComplete).toHaveBeenCalledTimes(1);
     await boot(bootAt("handing-over"));
@@ -1335,7 +1842,7 @@ describe("Setup Assistant", () => {
     const fieldd = client({ link: LINKED });
     await mount({ fieldd, onboarding: onboarding({ color: "accent-2" }), onComplete: vi.fn() });
     // straight to Setting up: the sync question left setup at TS-6 (TS-D13)
-    expect(container?.querySelector('ul[aria-label="Setting up"]')).not.toBeNull();
+    expect(container?.querySelector('.vf-wizard-hold[data-face="setting-up:line"]')).not.toBeNull();
     expect(fieldd.request).not.toHaveBeenCalledWith("setup.answer", expect.anything());
   });
 
@@ -1363,17 +1870,18 @@ describe("Setup Assistant", () => {
       }),
     );
 
-    // The splash's rule, on the glass: the plain reason, then Retry (§8).
-    const desk = container?.querySelector('.vf-wizard-phase[data-state="failed"]');
-    expect(desk?.textContent).toContain("Your desk");
-    expect(desk?.textContent).toContain("document open failed");
+    // The splash's rule, on the glass: what went wrong stays a pane — the plain
+    // reason, then Retry (§8; FG-4b).
+    expect(container?.querySelector(".vf-wizard-hold")).toBeNull();
+    expect(title()).toBe("Getting your desk ready.");
+    expect(text()).toContain("document open failed");
     await click("Retry");
     expect(onRetry).toHaveBeenCalledTimes(1);
     expect(onReveal).not.toHaveBeenCalled();
 
     // The retried boot reaches the desk, and the end goes on as for anyone.
     await boot(bootAt("handing-over"));
-    expect(title()).toBe("Welcome to your field, james.");
+    expect(holdLine()).toBe("Welcome to your field, james.");
     await tick(WELCOME_BEAT_MS);
     expect(onReveal).toHaveBeenCalledTimes(1);
   });
@@ -1418,8 +1926,6 @@ describe("Setup Assistant", () => {
         })),
       },
     );
-    const line = () => container?.querySelector(".vf-wizard-phase[data-state] + .vf-wizard-phase");
-
     async function toSettingUp(index: unknown, onReveal = vi.fn()): Promise<typeof onReveal> {
       host(vi.fn(async () => ({ ...FRESH, color: "accent-2" }) as FieldUserProfile));
       await mount({
@@ -1433,21 +1939,22 @@ describe("Setup Assistant", () => {
       return onReveal;
     }
 
-    it("waits for the first pass in the room's own words, then says what it found and hands over", async () => {
+    it("waits for the first pass in the room's own words, its count under the line, then welcomes and hands over", async () => {
       const onReveal = await toSettingUp(FINDING);
-      expect(line()?.getAttribute("data-state")).toBe("live");
-      expect(line()?.textContent).toContain("Discovering conversations · 1,215 files checked");
-      // the desk is ready, but the first pass is not: no welcome yet
-      expect(title()).toBe("Getting your desk ready.");
+      // the desk is ready, but the first pass is not: the line is History's, and no welcome yet
+      expect(holdLine()).toBe("Discovering conversations…");
+      expect(holdSub()).toBe("1,215 files checked");
       await tick(WELCOME_BEAT_MS);
       expect(onReveal).not.toHaveBeenCalled();
 
       await act(async () => pushIndex?.(FOUND));
-      expect(line()?.getAttribute("data-state")).toBe("done");
-      expect(line()?.textContent).toContain(
-        "4,441 sessions found in 74 projects · Reading conversations, in the background",
-      );
-      expect(title()).toBe("Welcome to your field, james.");
+      // the pass is in, so the welcome follows on the same line at once: what it found, a line
+      // never shown, is the room's to say (FG-4b)
+      expect(holdLine()).toBe("Welcome to your field, james.");
+      expect(text()).not.toContain("4,441 sessions found");
+      expect(
+        container?.querySelector('.vf-wizard-status-words[data-state="out"]')?.textContent,
+      ).toContain("Discovering conversations…");
       await tick(WELCOME_BEAT_MS);
       expect(onReveal).toHaveBeenCalledTimes(1);
     });
@@ -1457,13 +1964,18 @@ describe("Setup Assistant", () => {
       await tick(START_NOW_AFTER_MS - 1);
       expect(text()).not.toContain("Start now");
       await tick(1);
-      expect(text()).toContain(
+      // AO's reason and Start now stand under the line as soon as they are given, with no 6s of
+      // their own: AO-D4's 8s have waited already
+      const out = container?.querySelector(".vf-wizard-hold-out");
+      expect(out?.hasAttribute("data-late")).toBe(false);
+      expect(out?.querySelector(".vf-wizard-hold-why")?.textContent).toBe(
         "Finding sessions in a history this size takes longer. It carries on in History.",
       );
+      expect(holdLine()).toBe("Discovering conversations…");
       await click("Start now");
-      expect(title()).toBe("Welcome to your field, james.");
-      // History carries on, and says so
-      expect(line()?.getAttribute("data-state")).toBe("live");
+      // History carries on in its room; the line welcomes, and nothing is left to start
+      expect(holdLine()).toBe("Welcome to your field, james.");
+      expect(container?.querySelector(".vf-wizard-hold-out")).toBeNull();
       await tick(WELCOME_BEAT_MS);
       expect(onReveal).toHaveBeenCalledTimes(1);
     });
@@ -1481,8 +1993,8 @@ describe("Setup Assistant", () => {
                 enrollment: { enabledKinds: [], runtimes: [], retired: [], updatedAt: null },
               };
         const onReveal = await toSettingUp(nothing);
-        expect(line()).toBeNull();
-        expect(title()).toBe("Welcome to your field, james.");
+        expect(text()).not.toContain("Finding your history");
+        expect(holdLine()).toBe("Welcome to your field, james.");
         await tick(WELCOME_BEAT_MS);
         expect(onReveal).toHaveBeenCalledTimes(1);
         await act(async () => root?.unmount());
@@ -1493,26 +2005,53 @@ describe("Setup Assistant", () => {
     });
   });
 
-  it("cross-fades the welcome in place, and keeps reduced motion to fades with no breath", () => {
-    // M1 — the two titles share one grid cell, so nothing below the title moves.
-    expect(WIZARD_CSS).toMatch(/\.vf-wizard-title-swap \{[^}]*display: grid;/);
-    expect(WIZARD_CSS).toMatch(/\.vf-wizard-title-swap > span \{[^}]*grid-area: 1 \/ 1;/);
-    expect(WIZARD_CSS).toContain("transition: opacity 180ms ease");
-    // §6's loop: the live phase breathes 1.1s, 1 → 1.06, and stops under M6.
-    expect(WIZARD_CSS).toContain("animation: vf-wizard-breath 1.1s ease-in-out infinite alternate");
-    expect(WIZARD_CSS).toMatch(/transform: scale\(1\.06\)/);
-    const reduced = WIZARD_CSS.slice(WIZARD_CSS.indexOf("prefers-reduced-motion: reduce"));
-    expect(reduced).toContain("transition-duration: 90ms");
+  it("crossfades a hold's line in its one cell, from where it had come, and halves it under reduced motion (FG-4b)", () => {
+    // M1 — the words standing and the words leaving share one cell, so nothing under the line moves
+    expect(WIZARD_CSS).toMatch(/\n\.vf-wizard-status \{\s*display: grid;\s*\}/u);
+    expect(WIZARD_CSS).toMatch(/\n\.vf-wizard-status-words \{\s*grid-area: 1 \/ 1;\s*\}/u);
+    // 140ms out from the opacity the words had come to, then 240ms in, each line's delay counted from its
+    // own age, and from its place when it took the place of words never shown
+    expect(WIZARD_CSS).toMatch(
+      /\n\.vf-wizard-status-words\[data-state="out"\] \{\s*animation: vf-wizard-fade-out 140ms ease both;\s*animation-delay: calc\(0ms - var\(--vf-wizard-age, 0ms\)\);/u,
+    );
+    expect(WIZARD_CSS).toMatch(
+      /\n\.vf-wizard-status-words\[data-state="in"\] \{\s*animation: vf-wizard-fade 240ms ease both;\s*animation-delay: calc\(140ms - var\(--vf-wizard-ahead, 0ms\) - var\(--vf-wizard-age, 0ms\)\);/u,
+    );
+    expect(WIZARD_CSS).toMatch(
+      /@keyframes vf-wizard-fade-out \{\s*from \{\s*opacity: var\(--vf-wizard-from, 1\);\s*\}\s*to \{\s*opacity: 0;/u,
+    );
+    // the line in t2 and the sub in t3, in tabular figures, the sub's 17 kept; the welcome's line in ink
+    expect(WIZARD_CSS).toMatch(
+      /\n\.vf-wizard-status-line \{\s*margin: 0;\s*color: var\(--vf-text-secondary\);\s*font-size: 14px;\s*font-variant-numeric: tabular-nums;\s*font-weight: 400;\s*line-height: 1\.4;/u,
+    );
+    expect(WIZARD_CSS).toMatch(
+      /\n\.vf-wizard-status-sub \{\s*min-height: 17px;\s*margin: 4px 0 0;\s*color: var\(--vf-text-tertiary\);\s*font-size: 12px;\s*font-variant-numeric: tabular-nums;\s*line-height: 1\.4;/u,
+    );
+    expect(WIZARD_CSS).toMatch(
+      /\n\.vf-wizard-status-words\[data-ink="true"\] \.vf-wizard-status-line \{\s*color: var\(--vf-foreground\);/u,
+    );
+    // one line, so no title swaps and no phase breathes (FG-D21 B)
+    expect(WIZARD_CSS).not.toContain("vf-wizard-title-swap");
+    expect(WIZARD_CSS).not.toContain("vf-wizard-breath");
+    expect(WIZARD_CSS).not.toContain("vf-wizard-phase");
+    const reduced = WIZARD_CSS.slice(WIZARD_CSS.indexOf("@media (prefers-reduced-motion: reduce)"));
     expect(reduced).toMatch(
-      /\.vf-wizard-phase\[data-state="live"\] \.vf-wizard-phase-mark::before \{\s*animation: none;/,
+      /\.vf-wizard-status-words\[data-state="in"\] \{\s*animation-duration: 120ms;\s*animation-delay: calc\(60ms - var\(--vf-wizard-ahead, 0ms\) - var\(--vf-wizard-age, 0ms\)\);/u,
+    );
+    expect(reduced).toMatch(
+      /\.vf-wizard-status-words\[data-state="out"\] \{\s*animation-duration: 60ms;\s*\}/u,
     );
   });
 });
 
 describe("BootRoot during onboarding", () => {
   /** A hand-driven machine: its view moves when the test says, and it holds the
-   * wizard (client live, the onboarding input set) from the start. */
-  function heldMachine(initial: BootView = bootAt("onboarding")): {
+   * wizard (client live, the onboarding input set) from the start — or from
+   * when `holds` says so. */
+  function heldMachine(
+    initial: BootView = bootAt("onboarding"),
+    holds: () => boolean = () => true,
+  ): {
     machine: BootMachine;
     set: (next: BootView) => Promise<void>;
   } {
@@ -1533,7 +2072,7 @@ describe("BootRoot during onboarding", () => {
         return fieldd;
       },
       get onboarding() {
-        return input;
+        return holds() ? input : null;
       },
       start: () => {},
       retry: () => {},
@@ -1568,11 +2107,33 @@ describe("BootRoot during onboarding", () => {
     const ground = container?.querySelector(".vf-splash");
     expect(ground).not.toBeNull();
     expect(ground?.className).toContain("absolute inset-0");
-    // ...without the splash's own face: no bar, no stage line.
+    // ...without the splash's own face: no bar, no stage line, and the field's
+    // mark gone under the glass (track FG).
     expect(container?.querySelector('[role="progressbar"]')).toBeNull();
+    expect(ground?.querySelector(".vf-field")?.getAttribute("data-mark")).toBe("hidden");
     expect(text()).toContain(
       "Manage all your agents and compose your agentic workflow in one place.",
     );
+  });
+
+  it("stands the glass on the splash's own field: one node from the first paint, its mark gone under the glass (track FG)", async () => {
+    host(vi.fn(async () => FRESH));
+    let holding = false;
+    const { machine, set } = heldMachine(
+      bootAt("connecting-fieldd", { stage: "waking the daemon" }),
+      () => holding,
+    );
+    await mountBoot(machine);
+    const field = container?.querySelector(".vf-splash .vf-field");
+    expect(field?.getAttribute("data-mark")).toBe("shown");
+    expect(container?.querySelector('[role="progressbar"]')).not.toBeNull();
+
+    holding = true;
+    await set(bootAt("onboarding"));
+    expect(container?.querySelector(".vf-splash .vf-field")).toBe(field);
+    expect(field?.getAttribute("data-mark")).toBe("hidden");
+    expect(container?.querySelector('[role="progressbar"]')).toBeNull();
+    expect(container?.querySelector(".vf-wizard-shell")).not.toBeNull();
   });
 
   it("keeps the wizard's glass while the desk opens beneath it, then leaves as the splash would (AO-D2)", async () => {
@@ -1580,12 +2141,15 @@ describe("BootRoot during onboarding", () => {
     const { machine, set } = heldMachine();
     await mountBoot(machine);
     const ground = container?.querySelector(".vf-splash");
+    const field = ground?.querySelector(".vf-field");
 
     // Past the hold the document opens, warms, settles and waits — and the
-    // wizard keeps the window the whole way: the splash never comes back.
+    // wizard keeps the window the whole way: the splash never comes back, and
+    // the field under the glass is the one it stood on.
     for (const phase of ["opening-document", "warming", "stabilizing", "handing-over"] as const) {
       await set(bootAt(phase, { stage: phase === "warming" ? "drawing the board" : "" }));
       expect(container?.querySelector(".vf-splash")).toBe(ground);
+      expect(ground?.querySelector(".vf-field")).toBe(field);
       expect(container?.querySelector(".vf-wizard-shell")).not.toBeNull();
       expect(container?.querySelector('[role="progressbar"]')).toBeNull();
       expect(ground?.className).toContain("opacity-100");

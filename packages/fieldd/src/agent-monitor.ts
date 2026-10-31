@@ -200,10 +200,10 @@ function epochMs(iso: string | undefined): number | undefined {
  *    drew for it before (a dead run was no row; its pane was a terminal);
  *  · AR-4's `replaced` names the PTY the run took the place of, so the old
  *    pane is not a phantom terminal during the hand-over;
- *  · the project's key is the renderer's own rule (`agent-status.ts`
- *    `projectKey`): the workspace's root, else its source path; the backend
- *    falls back to the live state's cwd, as the renderer fell back to the
- *    mirror's;
+ *  · the project's key is the rule the renderer's `projectKey` wrote
+ *    (`agent-status.ts`, retired unused at item 125, 2026-10-31): the
+ *    workspace's root, else its source path; the backend falls back to the
+ *    live state's cwd, as the renderer fell back to the mirror's;
  *  · the row's ID is the backend's (M22): a run whose PTY the floor lists —
  *    a shell promoted to an agent, or born with it — carries the shell's id,
  *    so the body a window drew for the shell is the agent's; fieldd never

@@ -987,7 +987,8 @@
 }
 
 /* THE WELL (GV-D7): what the panes sit in, set into the frame. 8 in from the
-   sheet's sides and its foot — the 8 a covered view keeps clear (FC-D15) —
+   sheet's sides and its foot — its own frame, which outlived the 8 a covered
+   view kept clear for the slivers (FC-D15, until HN-8) —
    corners 10 (a selected pane's 8, the 1 gap, the 1 edge), and a rim of light
    under its foot. It has no ground of its own: the panes paint theirs over
    the frame's.
@@ -1749,6 +1750,203 @@
   }
 }
 
+/* ST-D4 (a) — A RUN A STOP HAS NOT STOPPED (`StopPaneState.tsx`; DESIGN.md
+   §8). item 42's held-edge readout figure, veil, glows and bloom, for the two
+   states a press cannot answer: **Ending** **the run** while fieldd ends a run
+   whose turn did not stop, lit in the pane colour (nothing is asked), and
+   **Still** **running** once fieldd takes the Stop no further, lit in the
+   attention fill (§2.5: needs you), its caption in the attention ink (§2.7)
+   and its one act, **End run**, in the danger text. The words stay text main,
+   as item 42's do. The line stays the frame's own 1px. With the seat state,
+   under the pane's frame (7). Only the act takes a pointer: the pane's press
+   answers nothing here, so the act lives in the figure (§8's rule). */
+.vf-godview-stop-state {
+  /* the pane colour as the frame reads it (`deck-frame.css`), as the seat's */
+  --pane-color: var(
+    --ghostty-pane-color,
+    color-mix(in srgb, var(--vf-godview-terminal-ink, currentcolor) 70%, transparent)
+  );
+  position: absolute;
+  z-index: 5;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 24px;
+  border-radius: inherit;
+  font-family: var(--vf-font-sans);
+  text-align: center;
+  pointer-events: none;
+}
+
+/* needs you: the light takes the attention fill in place of the pane colour */
+.vf-godview-stop-state[data-stop-state="still-running"] {
+  --pane-color: var(--vf-orange);
+}
+
+.vf-godview-stop-state-veil {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--deck-ground) 62%, transparent);
+  transition: opacity 200ms ease;
+}
+
+.vf-godview-stop-state-bloom {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 600px;
+  height: 380px;
+  margin: -190px 0 0 -300px;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--pane-color) 50%, transparent),
+    color-mix(in srgb, var(--pane-color) 16%, transparent) 52%,
+    transparent
+  );
+  transition:
+    opacity 600ms var(--vf-ease-island) 140ms,
+    transform 600ms var(--vf-ease-island) 140ms;
+}
+
+.vf-godview-stop-state-glow {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow:
+    inset 0 0 30px 2px color-mix(in srgb, var(--pane-color) 74%, transparent),
+    inset 0 0 130px 18px color-mix(in srgb, var(--pane-color) 30%, transparent);
+  transition: opacity 600ms var(--vf-ease-island);
+}
+
+.vf-godview-stop-state-words {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 0;
+  color: var(--text-main);
+  font: 800 64px / 1 var(--vf-font-sans);
+  letter-spacing: -0.04em;
+  white-space: nowrap;
+  text-shadow:
+    0 0 40px var(--deck-ground),
+    0 0 18px var(--deck-ground);
+}
+
+/* the word whole on the pop, 140ms behind the veil (the seat's letters' curve) */
+.vf-godview-stop-state-word {
+  display: inline-block;
+  transition:
+    opacity 280ms var(--vf-ease-pop) 140ms,
+    transform 280ms var(--vf-ease-pop) 140ms;
+}
+
+/* the rest's 40% is its colour, as the seat's verb's */
+.vf-godview-stop-state-rest {
+  margin-top: 4px;
+  color: color-mix(in srgb, var(--text-main) 40%, transparent);
+  transition:
+    opacity 560ms var(--vf-ease-island) 340ms,
+    letter-spacing 560ms var(--vf-ease-island) 340ms;
+}
+
+/* the launch caption's type (11px 600, the terminal's ink at 72%) */
+.vf-godview-stop-state-caption {
+  position: relative;
+  margin: 20px 0 0;
+  color: color-mix(in srgb, var(--vf-godview-terminal-ink, currentcolor) 72%, transparent);
+  font-size: 11px;
+  font-weight: 600;
+  text-shadow:
+    0 0 12px var(--deck-ground),
+    0 0 6px var(--deck-ground);
+  transition:
+    opacity 240ms var(--vf-ease-island) 540ms,
+    transform 240ms var(--vf-ease-island) 540ms;
+}
+
+/* the small state word that has to be read takes the attention ink (§2.7) */
+.vf-godview-stop-state[data-stop-state="still-running"] .vf-godview-stop-state-caption {
+  color: var(--vf-monitor-ink-attention);
+}
+
+/* End run: a text button in the caption's size and weight, its words in the
+   danger text (§2.5 as AU-0 amended it), the figure's one pointer target */
+.vf-godview-stop-state-act {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--vf-red);
+  font: inherit;
+  text-shadow: inherit;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.vf-godview-stop-state-act:focus-visible {
+  outline: 1px solid currentcolor;
+  outline-offset: 2px;
+}
+
+/* THE ENTRANCE PLAYS ONCE, at once (fieldd's fact, never a glance), from these
+   starting styles, on the seat's curves and times. Then it holds still, and it
+   goes at once — it unmounts — when fieldd lets the hold go. */
+@starting-style {
+  .vf-godview-stop-state-veil,
+  .vf-godview-stop-state-glow {
+    opacity: 0;
+  }
+
+  .vf-godview-stop-state-bloom {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+
+  .vf-godview-stop-state-word {
+    opacity: 0;
+    transform: translateY(0.5em);
+  }
+
+  .vf-godview-stop-state-rest {
+    opacity: 0;
+    letter-spacing: 0.34em;
+  }
+
+  .vf-godview-stop-state-caption {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.vf-godview[data-godview-animations="off"] .vf-godview-stop-state,
+.vf-godview[data-godview-animations="off"] .vf-godview-stop-state * {
+  transition: none;
+}
+
+/* M6: the whole of it fades in over 100ms, with no travel and no stagger */
+@media (prefers-reduced-motion: reduce) {
+  .vf-godview-stop-state {
+    transition: opacity 100ms ease;
+  }
+
+  @starting-style {
+    .vf-godview-stop-state {
+      opacity: 0;
+    }
+  }
+
+  .vf-godview-stop-state-veil,
+  .vf-godview-stop-state-bloom,
+  .vf-godview-stop-state-glow,
+  .vf-godview-stop-state-word,
+  .vf-godview-stop-state-rest,
+  .vf-godview-stop-state-caption {
+    transition: none;
+  }
+}
+
 /* M49 — a deck piece behind its own boundary (the views package's
    ChromeBoundary) says "<name> unavailable" in a status span where the piece
    stood, and wears the deck's own unavailable face. The frames and launchers
@@ -1939,15 +2137,12 @@
 }
 
 /* FC-D15: the content ends at 692 — the 88 reserve above the window's foot,
-   where the frame's line floats over the deck's own ground — and keeps 8px
-   clear of each edge for the notches' slivers. The sheet's ground still runs to
-   the foot and to the edges; only what it holds stops short. The deck's well
-   keeps that 8 at its sides wherever it is drawn; here its foot is the reserve. */
-.vf-cover .vf-godview-monitor-stage {
-  width: auto;
-  margin-inline: 8px;
-}
-
+   where the frame's line floats over the deck's own ground. The sheet's ground
+   still runs to the foot; only what it holds stops short. Its sides are the
+   window's: the monitor kept 8px clear of each for the notches' slivers until
+   the edges left the frame (HN-8; DESIGN.md §10). The deck's well keeps its own
+   8 at its sides wherever it is drawn — the deck's frame, not a gutter — and
+   here its foot is the reserve. */
 .vf-cover .vf-godview-deck-well {
   margin-bottom: 88px;
 }

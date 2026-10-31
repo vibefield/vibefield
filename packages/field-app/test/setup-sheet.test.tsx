@@ -1,5 +1,7 @@
 // @vitest-environment happy-dom
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { FielddClient } from "@vibefield/fieldd-client";
 import { FielddProvider } from "@vibefield/fieldd-client/react";
 import { act, createElement } from "react";
@@ -95,6 +97,8 @@ async function open(onClose: () => void): Promise<FielddClient> {
 const sheet = (): HTMLElement | null =>
   document.body.querySelector<HTMLElement>('[role="dialog"][aria-label="Finish setting up"]');
 
+const WIZARD_CSS = readFileSync(join(process.cwd(), "src/boot/onboarding/wizard-ui.css"), "utf8");
+
 describe("Finish setting up's sheet (AO-D10)", () => {
   it("opens the put-off step's own pane on the wizard's glass, over the app, holding focus", async () => {
     const client = await open(vi.fn());
@@ -123,6 +127,57 @@ describe("Finish setting up's sheet (AO-D10)", () => {
       window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
     });
     expect(onClose).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps the size it had before FG, unfitted and with no band: the sheet is no step of the chapter (FG-D26)", async () => {
+    await open(vi.fn());
+    const glass = sheet()?.querySelector(".vf-wizard-shell");
+    expect(glass?.getAttribute("data-size")).toBe("sheet");
+    expect(glass?.getAttribute("data-ground")).toBe("app");
+    expect(glass?.querySelector(".vf-wizard-steps")).toBeNull();
+    // never fitted: no fit is measured onto its ground
+    const ground = sheet()?.querySelector<HTMLElement>(".vf-wizard-ground");
+    expect(ground?.style.getPropertyValue("--vf-glass-fit")).toBe("");
+    // today's geometry, exactly: its size, and its body inside the old border's pixel and padding
+    expect(WIZARD_CSS).toMatch(
+      /\.vf-wizard-shell\[data-size="sheet"\] \{\s*inset: 0;\s*width: min\(calc\(100vw - 2rem\), 44rem\);\s*height: min\(calc\(100vh - 2rem\), 32rem\);\s*margin: auto;\s*\}/,
+    );
+    expect(WIZARD_CSS).toMatch(
+      /\.vf-wizard-shell\[data-size="sheet"\] \.vf-wizard-frame \{\s*inset: calc\(1px \+ clamp\(2rem, 5vw, 4rem\)\);/,
+    );
+    // and its panes as they stood (FG-4a): with no band to name the step, the pane's eyebrow; centred in the
+    // sheet, SAFE, so a tall pane overflows downward only; 30rem at most, 20 between its parts; rising in
+    expect(glass?.querySelector(".vf-wizard-pane-head > span")?.textContent).toBe("Your devices");
+    expect(WIZARD_CSS).toMatch(
+      /\.vf-wizard-shell\[data-size="sheet"\] \.vf-wizard-frame \{[^}]*display: flex;\s*align-items: safe center;\s*justify-content: center;\s*overflow-y: auto;\s*\}/,
+    );
+    expect(WIZARD_CSS).toMatch(
+      /\.vf-wizard-shell\[data-size="sheet"\] \.vf-wizard-pane \{\s*position: relative;\s*inset: auto;\s*width: 100%;\s*max-width: 30rem;\s*gap: 20px;\s*animation: vf-wizard-in 320ms var\(--vf-ease-island\) both;\s*\}/,
+    );
+    expect(WIZARD_CSS).toMatch(
+      /\.vf-wizard-shell\[data-size="sheet"\] \.vf-wizard-pane-body:empty,\n\.vf-wizard-shell\[data-size="sheet"\] \.vf-wizard-later:empty \{\s*display: none;/,
+    );
+  });
+
+  it("lets a press beside its glass reach the scrim: nothing between the sheet and its glass takes one (FG-D27)", async () => {
+    // Found at FG-3a: the shell's full-size wrapper took every press beside the
+    // glass, so the scrim's close above was never reachable by a hand. The
+    // glass's ground takes no press now, and its fit inherits that; only the
+    // glass does. This DOM does no hit-testing, so the rule is the witness
+    // here; the physical press is the hand's.
+    await open(vi.fn());
+    const between: string[] = [];
+    for (
+      let node = sheet()?.querySelector(".vf-wizard-shell")?.parentElement;
+      node && node !== sheet();
+      node = node.parentElement
+    ) {
+      between.push(node.className);
+    }
+    expect(between).toEqual(["vf-wizard-fit", "vf-wizard-ground"]);
+    expect(WIZARD_CSS).toMatch(/\n\.vf-wizard-ground \{[^}]*pointer-events: none;/);
+    expect(WIZARD_CSS).not.toMatch(/\n\.vf-wizard-fit \{[^}]*pointer-events/);
+    expect(WIZARD_CSS).toMatch(/\n\.vf-wizard-shell \{[^}]*pointer-events: auto;/);
   });
 
   it("closes by itself when nothing is left to ask", async () => {

@@ -245,6 +245,8 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
     expect(live.faces()).toEqual([
       {
         key: "13918995204487956201-1",
+        // PT-S2: what the face shows — a page; no Simulator's words, no acts
+        source: "browser",
         demand: undefined,
         wire: null,
         surface: null,
@@ -267,6 +269,8 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
         rested: false,
         still: null,
         stillAt: null,
+        simulator: null,
+        acts: 0,
       },
     ]);
     face.demand(UNSEEN);
@@ -290,6 +294,7 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
     expect(live.faces()).toEqual([
       {
         key: "13918995204487956201-1",
+        source: "browser",
         demand: SEEN,
         wire: { revision: 2, mode: "live", targetFps: 30 },
         surface: "surface_0123456789abcdef",
@@ -312,15 +317,18 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
         rested: false,
         still: null,
         stillAt: null,
+        simulator: null,
+        acts: 0,
       },
     ]);
-    expect(live.stats()).toMatchObject({ presented: 1, dropped: 1, writers: 1 });
+    expect(live.stats()).toMatchObject({ presented: 1, dropped: 1, writers: 1, acts: 0 });
     // a refused face is a row too: its state says why, and it counts nothing
     const refused = setup({ gate: () => ({ refused: "no object on this board holds this face" }) });
     refused.live.open("k-2", PAGE, () => {});
     expect(refused.live.faces()).toEqual([
       {
         key: "k-2",
+        source: "browser",
         demand: undefined,
         wire: null,
         surface: null,
@@ -343,6 +351,8 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
         rested: false,
         still: null,
         stillAt: null,
+        simulator: null,
+        acts: 0,
       },
     ]);
   });

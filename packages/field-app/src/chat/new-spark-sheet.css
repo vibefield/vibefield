@@ -1,0 +1,351 @@
+/* The New spark sheet (SP-1c; DESIGN.md §8 "The New spark sheet", §5 the Sheet tier and the search popup's shadow, §6),
+   after the Sparks page's `ns-polaris`, `ns-brain` and `ns-profiles`. Tokens only. */
+
+/* over the cover (60) and the line (62), as the Peek's popup is (64); under a carried card (66) and the palette (70) */
+.vf-new-spark {
+  position: absolute;
+  inset: 0;
+  z-index: 64;
+  display: grid;
+  place-items: center;
+}
+
+/* the backdrop dim (§5) over the receded view */
+.vf-new-spark-scrim {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  background: var(--vf-backdrop-dim);
+  animation: vf-new-spark-fade 240ms ease both;
+}
+
+.vf-new-spark-sheet {
+  position: relative;
+  inline-size: 540px;
+  max-inline-size: calc(100% - 32px);
+  padding: 10px;
+  border-radius: 40px;
+  background: color-mix(in srgb, var(--vf-chrome-solid) 90%, transparent);
+  backdrop-filter: blur(64px) saturate(1.2);
+  box-shadow:
+    0 0 0 1px var(--vf-hairline-strong),
+    var(--vf-shadow-search);
+  animation: vf-new-spark-in 560ms var(--vf-ease-island) both;
+}
+
+.vf-new-spark-sky {
+  block-size: 300px;
+  border-radius: 30px;
+}
+
+.vf-new-spark-form {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 22px 20px 0;
+}
+
+.vf-new-spark-namerow {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 320px) 32px;
+  align-items: center;
+  gap: 8px;
+}
+
+.vf-new-spark-name {
+  inline-size: 100%;
+  block-size: 46px;
+  padding: 0 8px;
+  border: 0;
+  outline: 0;
+  border-radius: 12px;
+  background: transparent;
+  text-align: center;
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 46px;
+  letter-spacing: -0.02em;
+  color: var(--vf-text-primary);
+  transition: background 160ms ease;
+}
+
+.vf-new-spark-name:hover,
+.vf-new-spark-name:focus {
+  background: color-mix(in srgb, var(--vf-foreground) 4%, transparent);
+}
+
+.vf-new-spark-another {
+  inline-size: 32px;
+  block-size: 32px;
+  border: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--vf-text-secondary);
+  background: transparent;
+  transition:
+    transform 280ms var(--vf-ease-pop),
+    background 160ms ease;
+}
+
+.vf-new-spark-another:hover {
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+}
+
+.vf-new-spark-another:active {
+  transform: rotate(-60deg);
+}
+
+.vf-new-spark-agent {
+  margin-block-start: 12px;
+  block-size: 34px;
+  padding: 0 12px 0 8px;
+  border: 0;
+  border-radius: 17px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--vf-text-primary);
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+  transition: background 160ms ease;
+}
+
+.vf-new-spark-agent:hover,
+.vf-new-spark-agent[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--vf-foreground) 14%, transparent);
+}
+
+.vf-new-spark-agent-mark {
+  inline-size: 18px;
+  block-size: 18px;
+  display: inline-grid;
+  place-items: center;
+}
+
+.vf-new-spark-agent-profile {
+  padding-inline-start: 9px;
+  border-inline-start: 1px solid var(--vf-hairline-strong);
+  color: var(--vf-text-secondary);
+}
+
+/* the agent menu: a solid menu (§5), 300 wide */
+.vf-new-spark-menu {
+  position: absolute;
+  inset-inline-start: 50%;
+  inset-block-start: 380px;
+  z-index: 2;
+  inline-size: 300px;
+  margin-inline-start: -150px;
+  padding: 6px;
+  border-radius: 18px;
+  background: var(--vf-chrome-solid);
+  box-shadow:
+    0 0 0 1px var(--vf-hairline-strong),
+    var(--vf-shadow-island);
+}
+
+.vf-new-spark-menu-head,
+.vf-new-spark-menu-row {
+  inline-size: 100%;
+  min-block-size: 32px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  text-align: start;
+  font-size: 13px;
+  color: var(--vf-text-primary);
+  background: transparent;
+}
+
+.vf-new-spark-menu-head {
+  font-weight: 600;
+}
+
+.vf-new-spark-menu-head small,
+.vf-new-spark-menu-note {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--vf-text-tertiary);
+}
+
+.vf-new-spark-menu-head[data-off] {
+  color: color-mix(in srgb, var(--vf-text-faint) 55%, transparent);
+}
+
+.vf-new-spark-menu-row:hover {
+  background: color-mix(in srgb, var(--vf-foreground) 6%, transparent);
+}
+
+.vf-new-spark-menu-note {
+  margin: 0;
+  padding: 6px 10px;
+}
+
+.vf-new-spark-effort {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 4px 2px 10px;
+  border-block-start: 1px solid var(--vf-hairline);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--vf-text-secondary);
+}
+
+.vf-new-spark-segments {
+  margin-inline-start: auto;
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 9px;
+  background: var(--vf-fill);
+}
+
+.vf-new-spark-segments button {
+  block-size: 24px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--vf-text-secondary);
+  background: transparent;
+}
+
+.vf-new-spark-segments button[aria-pressed="true"] {
+  color: var(--vf-text-primary);
+  background: var(--vf-chrome-solid);
+  box-shadow: 0 0 0 1px var(--vf-hairline);
+}
+
+.vf-new-spark-profiles {
+  margin-block-start: 12px;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+
+.vf-new-spark-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+}
+
+.vf-new-spark-chips-label {
+  margin-inline-end: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--vf-text-tertiary);
+}
+
+.vf-new-spark-chip {
+  block-size: 28px;
+  padding: 0 10px 0 9px;
+  border: 0;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--vf-text-secondary);
+  background: transparent;
+}
+
+.vf-new-spark-chip:hover,
+.vf-new-spark-chip[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+}
+
+.vf-new-spark-chip[aria-pressed="true"] {
+  color: var(--vf-text-primary);
+  box-shadow: inset 0 0 0 1.5px var(--vf-text-primary);
+}
+
+.vf-new-spark-chip[data-home] {
+  cursor: default;
+}
+
+.vf-new-spark-reach {
+  margin: 0;
+  font-size: 12px;
+  color: var(--vf-text-tertiary);
+}
+
+.vf-new-spark-refusal {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--vf-ink-attention);
+  text-align: center;
+}
+
+.vf-new-spark-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 22px 10px 8px;
+}
+
+/* its leave: 240 ms on the retract curve (§6), back the way it rose, the scrim with it; nothing in it answers meanwhile */
+.vf-new-spark[data-open="false"] {
+  pointer-events: none;
+}
+
+.vf-new-spark[data-open="false"] .vf-new-spark-sheet {
+  animation: vf-new-spark-out 240ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+.vf-new-spark[data-open="false"] .vf-new-spark-scrim {
+  animation: vf-new-spark-fade-out 240ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+@keyframes vf-new-spark-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.97);
+  }
+}
+
+@keyframes vf-new-spark-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes vf-new-spark-out {
+  to {
+    opacity: 0;
+    transform: translateY(16px) scale(0.97);
+  }
+}
+
+@keyframes vf-new-spark-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+/* M6: no rise and no turn; the sheet appears and leaves by its opacity alone */
+@media (prefers-reduced-motion: reduce) {
+  .vf-new-spark-sheet {
+    animation: vf-new-spark-fade 120ms ease both;
+  }
+
+  .vf-new-spark[data-open="false"] .vf-new-spark-sheet {
+    animation: vf-new-spark-fade-out 120ms ease both;
+  }
+
+  .vf-new-spark-another,
+  .vf-new-spark-another:active {
+    transform: none;
+    transition: background 160ms ease;
+  }
+}

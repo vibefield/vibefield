@@ -6,7 +6,7 @@ import { readdir, readFile, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import type { AuditAppendV1 } from "@vibefield/contracts/diagnostics";
 import type { FielddHandle } from "@vibefield/fieldd-supervisor";
-import { dialog, net, autoUpdater as squirrel } from "electron";
+import { app, dialog, net, autoUpdater as squirrel } from "electron";
 import { autoUpdater, CancellationToken } from "electron-updater";
 import { getAppCacheDir } from "electron-updater/out/AppAdapter";
 import { readCensus, requestConsentedStop } from "../pair-stop";
@@ -27,6 +27,7 @@ import {
 } from "./controller";
 import { readDisplayHeldAwake } from "./display-awake";
 import type { UpdateIdentity } from "./identity";
+import { readAppLocation } from "./location";
 import { hashNativePlane } from "./native-plane";
 import { VibeFieldUpdateProvider } from "./provider";
 import { UpdateStateStore } from "./state-store";
@@ -114,12 +115,16 @@ export function installUpdateController(options: {
     ...(options.appendAudit !== undefined ? { appendAudit: options.appendAudit } : {}),
     ...(options.apply !== undefined ? { apply: options.apply } : {}),
     ...(options.currentVersion !== undefined ? { currentVersion: options.currentVersion } : {}),
+    // AU-6 (LC-18) — when this build was made, from the staged identity (absent on a stage cut before AU-6)
+    ...(options.identity.builtAt !== undefined ? { builtAt: options.identity.builtAt } : {}),
     ...(options.safeWindowContext !== undefined
       ? { safeWindowContext: options.safeWindowContext }
       : {}),
     fetch: electronFetchBytes,
     // B4 — the display clause, read fresh by each silent evaluation (`unknown` off macOS: closed)
     displayHeldAwake: () => readDisplayHeldAwake(options.platform ?? process.platform),
+    // AU-7 — where the bundle runs (macOS; absent elsewhere), read once by the controller
+    location: () => readAppLocation(app, { platform: options.platform ?? process.platform }),
     ...(resourcesPath !== undefined && options.appName !== undefined
       ? { stagedCache: createStagedCache(resourcesPath, options.appName) }
       : {}),

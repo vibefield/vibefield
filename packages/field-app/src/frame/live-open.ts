@@ -13,7 +13,8 @@ import { requestView } from "./view-state";
 // waits for a deck that can place, and the deck REVEALS the run's floor
 // session by that rule, in the focused pane; a peer's run, which has no floor
 // session here, is selected through the find door Godview publishes as it
-// opens.
+// opens. From Chat (SP-1b) it is a spark's Show: its own session's pane, by
+// the same path from History's.
 
 /** How long a pick from History waits for Godview's deck (or its monitor) —
  * mounted on Godview's first open — to be able to show the run (Resume's). */
@@ -38,7 +39,7 @@ const FRAME_DOORS: LiveOpenDoors = {
 };
 
 export async function openLiveRow(
-  row: PeekLiveRow,
+  row: Pick<PeekLiveRow, "id" | "floorSessionId">,
   from: FrameView,
   doors: LiveOpenDoors = FRAME_DOORS,
 ): Promise<LiveOpenOutcome> {

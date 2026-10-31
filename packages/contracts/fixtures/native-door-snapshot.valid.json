@@ -1,0 +1,26 @@
+{
+  "doors": [
+    {
+      "connId": "door-3",
+      "laneId": 4294967303,
+      "state": "open",
+      "caller": {
+        "pid": 51842,
+        "startedAtMs": 1792431662417
+      },
+      "pane": {
+        "terminalSessionId": "5e6f7a8b-9c0d-4e1f-a2b3-c4d5e6f7a8b9",
+        "depth": 2
+      }
+    },
+    {
+      "connId": "door-4",
+      "laneId": 4294967304,
+      "state": "open",
+      "caller": {
+        "pid": 51907,
+        "startedAtMs": 1792431671093
+      }
+    }
+  ]
+}
