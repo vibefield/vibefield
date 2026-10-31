@@ -22844,3 +22844,94 @@ that read packages, never the reverse.
   read).
 
 **Owed.** A fresh floor's two cells' hello times, measured idle and under burners (item 122's floor half).
+
+## PG-1d — a gate flip re-presents the board: every live field and desk board sends one snapshot at its current revision when the doors' gate flips, and the hub takes its own board's snapshot (F-M4's residual) (PG-D9 A) (2026-10-31; `38f722c3b`, the merge of main `db8733770` into `098ae53d1` on `2eb42abd8`, lane `pg/1d-represent`)
+
+**What.** The record's §8 rung, "re-present on a gate flip (F-M4's residual)", started on VF-PM's word (04:44Z). The
+gate (`terminalMeshPublished()`) shapes field and desk rows at SEND time, so an idle board kept a stale `terminal`
+join, and since PG-1a a stale `monitorRow.attachable`/`.writable`, until its next change. That was already true for
+unpriced rows, and would be for every row once PU-I removes the 30 s cost step that re-gates priced rows by accident.
+One commit, `098ae53d1` on `2eb42abd8`, 16 files, +368 −35:
+- **The board** (fieldd `agent-field.ts`): the field view resets (`resets: true`), and `FieldSubscription.represent()`
+  is `RevisionedSubscription.resnapshot()`, the machinery index-tail already uses. The next frame, at the floor, is
+  ONE snapshot on the same epoch at the board's current revision, its rows shaped by the gate as it reads now. A quiet
+  flip moves no revision (MF-1h); a change already waiting out the floor is folded into the same snapshot. The emit
+  carries the kind.
+- **The flip** (`daemon.ts`): a Set of the live field and desk boards (`openLocalBoard` registers each; dispose
+  deregisters it) and ONE watcher, which compares `terminalMeshPublished()` with the last value it presented and
+  re-presents every live board on a change. It listens on `terminal-endpoints`, `connected`, `reconnecting`, `closed`
+  and `superseded`, because no single event carries every flip. The local door forwards the kind as `agent.snapshot`.
+  The model board (this desktop's own window rows) is ungated and untouched.
+- **The hub** (`mesh-board.ts`): `BoardHub.#onLocal` takes its own board's snapshot: it REPLACES the held self board
+  and broadcasts `{device: self, snapshot}`, as `#onUpstream` does for a peer. A reader joining later and PG-1c's
+  resync are answered with the re-presented board.
+- **`NativeLink`** sets an explicit listener bound (20), the count in its comment. The watcher was the eleventh
+  `connected` listener on this daemon-lifetime emitter, past Node's default of ten.
+- **Dated corrections at their sources:** fieldd `agent-field.ts` (the RESIDUAL note, closed; "never carried a
+  mid-stream snapshot"), `projection.ts` (two), contracts `rows.ts` (a same-epoch reset), `AgentFieldSnapshot`, and
+  `methods.ts`'s `snapshot-delta` shape. The seam pages first: api.html's Revisions card, and system.html's Carrier 1
+  card and F-M4 sentence. The perf harness passes the kind through.
+
+**Found:**
+- A re-pair to the same floor reopens the gate at `connected` alone: the hello's `terminal-endpoints` fires while the
+  link is still down (`native-link.ts`). A watcher on that event alone would never have re-presented the doors coming
+  back. A link lost with nothing held closes the gate with no `terminal-endpoints` at all.
+- Of every reader of the field and desk boards (a peer hub's upstreams, a window's fold and board-screen, the phone's
+  `MeshBoardCopy`, fieldd-client), only the hub's OWN board could not take a mid-stream snapshot. `#onLocal` was
+  delta-only, so a snapshot would have thrown in `isHeartbeat`, and the phone's home rows would have frozen.
+- PG-1d's watcher is the eleventh `connected` listener. Without the bound, Node's MaxListenersExceededWarning was real
+  on every fieldd boot: 17 in one run of fieldd's six files on the unbounded candidate, and 0 after. Main before PG-1d
+  sat at ten, exactly at the default, with no warning (the mini's runs 35 and 36: 0), and run 37 has none.
+- "The field's wire has never carried a mid-stream snapshot" (fieldd `agent-field.ts`, `projection.ts`) was falsified by
+  this slice, as it was for the mesh board by PG-1c, and is corrected at its sources.
+- The review found the first wording, "at the revision the reader holds", false for a folded change and for a
+  lost-frame repair. There is one wording now: the board's current revision, the reader's own on a quiet flip.
+- Not in this slice:
+  - the F-H2 rider: the board's gate reads the floor's boolean, while the ticket mint reads the live serve, so a row
+    can carry a join `openTicket` refuses;
+  - an old owner's readers keep the run-id fallback (a design question);
+  - `AgentTerminalFace.swift:23-30` says the door-fed board has no such filter: a kit comment true when TM-5a wrote
+    it, false since TM-r7 (`b35842969`) gave the door the gate.
+
+**Validation.**
+- **The lane:** `/Volumes/SamsungRed/lanes/ios` (the worktree `vibe-field`, branch `pg/1d-represent` off
+  `2eb42abd8`).
+- **The map, before any code:** three readers at `2eb42abd8` (the emitters, every reader of the field and desk frames,
+  the flip).
+- **The rows and red-first** (`lanes/ios/pg1d-rows.sh`): green at 05:28:41Z (biome, the three typechecks, contracts'
+  agent-field 38, fieldd's six files 103). At `2eb42abd8` with the commit's tests, exactly the five PG-1d rows were red
+  (95 others passing): the idle board across a flip; the idle desk board; the hub's own snapshot; the door on a
+  published-boolean flip both ways; the doors reopening after a re-pair.
+- **The adversarial review** (four lenses, a skeptic per finding): 13 confirmed, several duplicates, all folded.
+- **The light** (`lanes/ios/pg1d-light.sh`, 05:31:22–05:34:31Z, at nice 19 under the guard), green:
+  - the tip: preflight, the walls, biome, the typechecks, contracts 38, fieldd's six files 103, no listener warning,
+    and the seam check (each page that states the field board's frames carries its PG-1d clause);
+  - the mint's content, `de8185226` + `098ae53d1` (tree `f939f7a7b`; api.html and fieldd `daemon.ts` on both sides
+    with CP-2's): the walls, the typechecks, and fieldd's twelve files, PG-1d's six and CP-2's six, 290 passed and 2
+    skipped.
+  Logs: `lanes/ios/logs/pg1d-rows-098ae53d1*`, `pg1d-light-098ae53d1*`.
+- **No verify on this Mac** (James, 2026-10-29 09:05Z: the Mac mini's verify lane).
+- **The landed tip** is `38f722c3b`: main `db8733770` merged into `098ae53d1`. a9 minted it from the shared objects
+  (the lane is a worktree, so no lane bundle) and carried it to the mini as `mrun37.bundle` (sha256 `f59d1d2b…`). Its
+  tree `5d8017832` is VF-PM's merge-tree. Main had gained nothing in PG-1d's files since the light's `de8185226`, so
+  the light's mint pass covers the pairing. The mini's `next` ran 06:14:29–06:14:41Z: the locks stood, field-native
+  was built, and preflight exited 0 with the standing R23 candidate warning.
+- **The mini, run 37, `pnpm verify` at `38f722c3b`:** exit 0, armed 06:14:47Z, done 06:19:37Z (load 2.41 → 9.85),
+  whole: preflight through `gen:check`.
+  - `pnpm test` ran 28 projects: vitest 11,031 passed, 0 failed, 18 skipped, five more than run 36's 11,026 (PG-1d's
+    rows). Among them: fieldd's agent-field 37, agent-model-board 17, mesh-board 28, its e2e 6, agent-field-daemon 5,
+    tailnet-backpressure 10 and agent-desk 13; contracts' agent-field 38.
+  - `pnpm test:rust`: 532 passed, 0 failed, 14 ignored, over 33 binaries. The tree was clean after, with no stub left
+    and no listener warning.
+  - No smoke ran on M37: the console was locked. The watcher re-armed on M37 at 06:19:49Z (a9's 06:20Z report; its
+    watcher log on the mini), so the next unlock's smoke chain runs on it.
+  Logs: `lanes/ts6/logs/mini/run37/`.
+- **Landed:** main fast-forwarded `db8733770` → `38f722c3b` at 06:23:31Z on VF-PM's GO (the fixer's `land-stack.sh`);
+  VF-PM pushes it.
+
+**Records.** The design record is `draft/thinking-phone-godview.md` §8 (1d as built), at the next draft queue.
+
+**Owed.**
+- PG-1e0 (the projection bench, then 1e1 or 1e2 by the numbers), with PG-1f (the PU-I petition and its pin test).
+- The F-H2 rider, the old owner's fallback (a design question) and the kit comment at `AgentTerminalFace.swift`.
+- Items 109 and 110; the cap read on the phone under the link conditioner (PG-9).
