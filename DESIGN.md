@@ -567,6 +567,9 @@ the shakes and the falling star (M6).
 hit; Create flies the face to its row in Chat. *When it plays is NS-D3, not yet ruled: its lean, "on open,
 and when the name settles", lost its second trigger when NS-D2 ruled B, and the reading put to James is
 "on open, and on each reroll".* Reduced motion: no falling star; the face fades in where it lands.
+*Ruled 2026-10-30 (James, the Sparks page v8, 18:41–18:48Z): NS-D3 A, read as put, "on open, and on each reroll".
+Built at SP-1c: the sky is James's star engine (`star-spark/engine.js` at `025b495`, vendored byte for byte as the kit's
+`spark-face/vendor/star-spark.js` with its first user, the sheet; a test holds its SHA-256 as it does the face's).*
 
 **Where it lives in code.** The engine is vendored from James's `research/spark`
 (`agent-sparks/sparks.js` at `025b495`, and `star-spark.js` beside it), byte for byte: a newer version
@@ -1378,7 +1381,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     showed); **History — New terminal** (`start`, ⌘T; LN-D2, HN-7): a fresh shell in the folder of
     the project History shows, placed as Godview's is, the window going to Godview as Resume does;
     with no project shown it opens as Godview's, and a project whose folder is on another desktop,
-    not mounted or gone says so in New agent's words while the window stays. Resume and Jump to are
+    not mounted or gone says so in New agent's words while the window stays; **Chat — New spark**
+    (`sparkle`, ⌘N; SP-1c): the New spark sheet (§8), which the create's glyph says while open, as
+    Objects does. Resume and Jump to are
     the chosen session's acts — its row, ④'s head and the palette (§8 "History"). Between views the
     glyph cross-fades in place, 200ms `ease` (One Frame §12); the tooltip says the act and its key
     ("Objects  B", "New terminal  ⌘T", "New terminal in vibe-field  ⌘T"), open it says "Close  Esc".
@@ -1468,7 +1473,48 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     your sparks", with fieldd's words under it, when it cannot be read. Each is secondary, centred in the panel, and
     never a blank.
   - **No create yet.** Chat's line holds the views and the snapshot. Its create, **New spark** (⌘N, `sparkle`), comes
-    with its sheet in SP-1c.
+    with its sheet in SP-1c. *(Built at SP-1c, 2026-10-31: §8 "The New spark sheet", and the line's create above.)*
+- **The New spark sheet — a name, an agent, and the face it is dealt** (SP-1c; NS-D1 A, NS-D2 B, NS-D3 A and NS-D5,
+  ruled by James on the Sparks page, 2026-10-30; its plates `ns-polaris`, `ns-brain` and `ns-profiles` were drawn
+  before NS-D2 ruled B, so on them ↻ deals a name where the sheet's deals a face).
+  - **Its door:** Chat's line create, New spark (⌘N), opens it. It is one of the frame's open surfaces (`new-spark`,
+    §10), so opening it folds the rest, and Esc, Cancel or the scrim folds it.
+  - **The sheet:** 540 wide, padding 10, corners 40, in the Sheet tier (§5: the chrome at 90% over a 64 blur, saturate
+    1.2), ringed by the strong hairline, with the search popup's shadow (§5), over the backdrop dim. The view behind it
+    recedes to `scale(0.98)`. It rises in 560 ms on the island curve, from 16 below at 0.97, and leaves in 240 ms on the
+    retract curve.
+  - **The sky:** 300 tall, corners 30, night in both themes. Its ground is `--vf-spark-night` (`#060716`, one value in
+    both), under the star engine's own night where WebGL2 draws it. The hatch (§2.10) plays there on open and on each
+    reroll: a star falls at an angle, lands and bursts, and the face is born where it hit, free at 104. Without
+    WebGL2 the face is the flat star on that ground, never a blank.
+  - **The name:** centred under the sky, 30 semibold at −0.02em, 46 tall and at most 320 wide; its hover and
+    focus take the foreground at 4%. It opens holding a suggested star name, selected, so typing replaces it. A name is
+    1–32 characters (`SparkName`).
+  - **↻ Another face** (NS-D2 B): 32 round beside the name, `reset` 15. It deals a new face (a new seed), and the hatch
+    plays again; the name stays. Pressed, it turns −60° on the pop curve.
+  - **The agent:** one pill under the name, 34 tall, corners 17, in the ready fill: the agent's mark at 18, then its
+    name, 13 medium.
+    - Untouched, the spark thinks at its agent's own model and effort (no model asked). A model chosen in the menu is
+      said beside the agent ("Claude Code · Opus 5.5 · high").
+    - Once there is more than This Mac, the profile it thinks under follows a hairline.
+    - The pill opens the agent menu (§5: a solid menu, 300 wide), placed as a macOS pop-up so the chosen row lands on
+      the pill. It holds each agent's models as its picker lists them (`agent.models`), the profile whose sign-in it
+      thinks under on that agent's head, and Effort as a small segmented control.
+    - An agent that cannot take the briefing yet is listed, disabled, with why ("can't take VibeField's tools yet"),
+      read from `agent.providers[].briefing`.
+  - **Its profiles** (NS-D5), once there is more than This Mac: a row of chips, 28 tall, corners 14, 12.5 medium. A
+    checked chip takes the ready fill and a 1.5 inset ring. The default comes checked; the one it thinks under is always
+    checked and cannot be unchecked. Under them, tertiary: "Sees 3 sessions · starts Claude Code and Codex".
+  - **The foot:** Cancel (quiet) and **Create Polaris** (primary), both big, at its right. Create waits on a name.
+  - **Create** calls `compose.sparks.hatch {name, face, agent, modelSelection?, profiles, thinksUnder}`. A refusal is
+    said where the sheet asked:
+    - a name another spark holds, under the name ("Vela is taken");
+    - a profile with no sign-in for the agent, under the agent ("Work has no Claude Code sign-in");
+    - a profile that is gone, under the profiles;
+    - anything else under the foot, in fieldd's words.
+    Created, the face flies to its row in Chat (§2.10), the sheet folds, and Chat chooses the new spark.
+  - **Reduced motion:** no falling star and no flight; the face fades in, and the sheet appears and leaves by opacity
+    alone.
 - **Chat's composer — the line's draft, moved into the thread** (LN-D3 ruled by James 2026-10-29,
   Cards in Hand; **not built — CO's SP-1d builds it**, with the Assistant's cell becoming Chat *(the cell became Chat
   at SP-1b, 2026-10-31, §8 "Chat's list"; the composer is still SP-1d's)*. The
@@ -4715,7 +4761,9 @@ their place". "Fullscreen" stays the pane's word (§8).
   pill's sheet is ONE surface on two shelves — `fields` or
   `artifacts`, the value naming the shelf that shows (§8 "The head"):
   `objects · fields | artifacts · zoom · palette · me · cards · selection · search`, so opening the
-  sheet on either shelf folds the rest, and turning it to its other shelf folds nothing.* **The
+  sheet on either shelf folds the rest, and turning it to its other shelf folds nothing.* *Since
+  SP-1c (2026-10-31) the New spark sheet, Chat's create, is one of them too: **`new-spark`** (§8 "The
+  New spark sheet").* **The
   app's theme has ONE owner, main's** (FC-D5): Light · Dark · Auto, one value per device kept by the
   shell, Auto following the OS through Electron's `nativeTheme`, and the owner projects what it
   resolves to back into `nativeTheme` — so the window's native chrome, its menus and the page's
