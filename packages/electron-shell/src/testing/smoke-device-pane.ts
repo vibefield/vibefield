@@ -6,7 +6,7 @@
 //   LAPTOP  — the pane as laid: the ENGINE's own agent — Chrome at the bundled Chromium's major, no app's token — its hints
 //             with it (never empty), no fingers, 1280 × 800 @2;
 //   TITLE   — in hand, the held bar's readout says the fixture's TITLE (the address stays on the capsule), and the page is
-//             called by it (the face's label — what "Send to…" prints);
+//             called by it (the face's label — what the desk's Copy titles its card);
 //   FAVICON — the fixture's one-colour icon is on the head's capsule: the head says the page's own favicon and its hue is in the
 //             head's band; at `/next`, which names none, the head says the generic mark and the hue is gone;
 //   PHONE   — the bar's iPhone act: the page is told and loads ONCE more — it sees an iPhone's agent, the mobile hint, five

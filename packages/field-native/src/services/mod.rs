@@ -1,3 +1,5 @@
+/// CP-1a — the floor's door.
+pub mod door;
 pub mod freeway;
 pub mod lane_transport;
 mod lossy_lane;
@@ -27,6 +29,10 @@ use tokio::sync::mpsc::UnboundedSender;
 /// Whether the terminal doors are PUBLISHED is a fact the mgmt hello composes
 /// from the config's plan and the gateway's live node, and fieldd owns the
 /// routes that do the publishing (TM-2).
+///
+/// CP-1a — the door unit follows the bridge, whose local lanes its doors open,
+/// and its handle is the sixth door returned: mgmt answers `native.door.*`
+/// from it, and the boot sequence wires the panes its walk reads.
 pub fn build_units(
     config: &NativeConfig,
     secret: [u8; 32],
@@ -38,21 +44,27 @@ pub fn build_units(
     mesh_bridge::BridgeHandle,
     terminal::TerminalHandle,
     freeway::FreewayHandle,
+    door::DoorHandle,
 ) {
     let mesh_unit = mesh::MeshUnit::new(config, ping.clone());
     let handle = mesh_unit.handle();
     let terminal_unit = terminal::TerminalUnit::new(config, ping.clone());
     let terminal_handle = terminal_unit.handle();
     let bridge = mesh_bridge::MeshBridge::new(config, secret, ping.clone());
+    let ping_door = ping.clone();
     let bridge_handle = bridge.handle();
     // F1 — after the terminal unit, whose cells the host's walls reach.
     let freeway_unit = freeway::FreewayUnit::new(config, boot_id, ping, terminal_handle.clone());
     let freeway_handle = freeway_unit.handle();
+    // CP-1a — after the bridge, whose local lanes its doors open.
+    let door_unit = door::DoorUnit::new(config, ping_door, bridge_handle.clone());
+    let door_handle = door_unit.handle();
     let units: Vec<Box<dyn NativeService>> = vec![
         Box::new(mesh_unit),
         Box::new(terminal_unit),
         Box::new(bridge),
         Box::new(freeway_unit),
+        Box::new(door_unit),
         Box::new(stubs::StubService::new("process", &[])),
     ];
     (
@@ -61,5 +73,6 @@ pub fn build_units(
         bridge_handle,
         terminal_handle,
         freeway_handle,
+        door_handle,
     )
 }

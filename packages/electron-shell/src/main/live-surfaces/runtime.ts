@@ -1,5 +1,6 @@
 import type {
   LiveSurfaceDemandV1,
+  LiveSurfaceDeviceCommandV1,
   LiveSurfaceFrameMetadataV1,
   LiveSurfaceInputEventV1,
   LiveSurfaceNavigationCommandV1,
@@ -44,6 +45,12 @@ export interface LiveSurfaceRuntimeAttachment {
   dispatchInput?(input: LiveSurfaceInputEventV1, geometryRevision: number): void;
   /** Chrome navigation (browser runtimes). Same optionality and fire-and-forget contract. */
   navigate?(command: LiveSurfaceNavigationCommandV1): void;
+  /**
+   * PT-S2 — a bound simulator face's act (boot, create, show, retry, Open Settings), on its own `device` operation.
+   * Same optionality and fire-and-forget contract: absent on every other runtime, and an act its device's condition does
+   * not offer is the runtime's silent no-op (the face races the summary), never a fault.
+   */
+  device?(command: LiveSurfaceDeviceCommandV1): void;
   dispose(): void;
 }
 

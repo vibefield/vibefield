@@ -385,6 +385,15 @@ impl NativeConfig {
             crate::registries::layout::MESHDATA_SOCKET,
         )
     }
+    /// CP-1a — the floor's door, which a spark's MCP bridge dials
+    /// (`services/door`). A third socket beside mgmt and meshdata: its callers
+    /// are agents, never the product plane, and none of them is paired.
+    pub fn door_endpoint(&self) -> Option<String> {
+        self.local_endpoint(
+            crate::registries::sockets::DOOR,
+            crate::registries::layout::DOOR_SOCKET,
+        )
+    }
     pub fn terminal_control_endpoint(&self) -> Option<String> {
         self.local_endpoint(
             crate::registries::sockets::TERMINAL_CONTROL,

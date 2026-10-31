@@ -10,25 +10,25 @@
  *     on Esc (taken before the desk's keymap), a press elsewhere, a gesture and a change of selection (R5);
  *   THE KEYS — a toolbar named "Selection" with one tab stop, ← → between its cells, Esc back to the desk (R9);
  *   RIGHT-CLICK — the object under the pointer selected FIRST by the desk's pick, then the same menu grown (R26);
- *   THE ACTS — through the engine's ops.
+ *   THE ACTS — through the engine's ops; COPY — its four doors, ⌘C among them, deal ONE card (HN-D3).
  */
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { CanvasEngine, Entity } from "@vibecook/ice";
+import { type CanvasEngine, type Entity, setWidgetProps } from "@vibecook/ice";
 import type { SelectionAnchor } from "@vibecook/ice/desk";
 import { act, createElement, type ReactElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readBarStats, resetBarStatsForTest } from "../src/field/desk/bar/bar-stats";
 import { SelectionBar } from "../src/field/desk/bar/SelectionBar";
+import { lastCopy } from "../src/field/desk/copy/copy-record";
 import { createDeskBlobStore } from "../src/field/desk/desk-blobs";
 import { deskObjects, type MountedDesk, publishDesk } from "../src/field/desk/desk-door";
 import type { ObjectWords } from "../src/field/desk/desk-object-words";
 import { buildRegistry, createFieldEngine, seedField } from "../src/field-engine";
-import type { DeskChip } from "../src/frame/draft";
+import { cardsStore } from "../src/frame/cards/cards-store";
 import type { FrameSurface } from "../src/frame/frame-surface";
-import { lastSend, publishLineSend, setLineSendPhase } from "../src/frame/line-send";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -159,7 +159,7 @@ beforeEach(async () => {
       pick,
       canvas,
       status: () => ({ state: "ready" }),
-      // DK-14: the capture door and the frame counters Send to…'s still reads (no still here: undefined)
+      // HN-D3: the capture door and the frame counters Copy's still reads (no still here: undefined)
       capture: vi.fn(async () => undefined),
       perf: () => ({ frames: 0 }),
       dirty: () => false,
@@ -194,8 +194,8 @@ describe("the selection bar over the desk's anchor (DK-11)", () => {
   it("stands over the selection, in the canon's order, as a toolbar named Selection with ONE tab stop", () => {
     mount();
     expect(bar().dataset.shown).toBe("true");
-    expect(cellActs()).toEqual(["send", "|", "duplicate", "tape", "more", "|", "delete"]);
-    expect(cell("send").textContent).toBe("Send to…");
+    expect(cellActs()).toEqual(["copy", "|", "duplicate", "tape", "more", "|", "delete"]);
+    expect(cell("copy").textContent).toBe("Copy");
     expect(cell("tape").getAttribute("title")).toBe("Tape it down  ⇧⌘L");
     expect(cell("duplicate").getAttribute("title")).toBe("Duplicate  ⌘D");
     expect(cell("delete").getAttribute("title")).toBe("Delete  ⌫");
@@ -226,15 +226,15 @@ describe("the selection bar over the desk's anchor (DK-11)", () => {
     expect(after.placements).toBeLessThanOrEqual(after.publishes);
   });
 
-  it('says "Send 2 to…" for two, and "Lift the tape" with no Duplicate for a taped selection', () => {
+  it('says Copy for two as for one, and "Lift the tape" with no Duplicate for a taped selection', () => {
     mount();
     act(() => {
       ce.ops.setSelection([note, pad]);
       selection.publish({ count: 2 });
     });
-    expect(cell("send").textContent).toBe("Send 2 to…");
+    expect(cell("copy").textContent).toBe("Copy");
     act(() => selection.publish({ count: 1, locked: true }));
-    expect(cellActs()).toEqual(["send", "|", "tape", "more", "|", "delete"]);
+    expect(cellActs()).toEqual(["copy", "|", "tape", "more", "|", "delete"]);
     expect(cell("tape").getAttribute("aria-label")).toBe("Lift the tape");
     expect(cell("tape").querySelector("[data-glyph]")?.getAttribute("data-glyph")).toBe("lift");
   });
@@ -243,7 +243,7 @@ describe("the selection bar over the desk's anchor (DK-11)", () => {
     words = (type) => ({ type, title: "Note", state: "plugin off", label: "Note · plugin off" });
     mount();
     expect(cellActs()).toEqual([
-      "send",
+      "copy",
       "|",
       "words:Note · plugin off",
       "duplicate",
@@ -280,15 +280,15 @@ describe("the selection bar over the desk's anchor (DK-11)", () => {
       selection.publish({ count: 2 });
     });
     const said = cellActs();
-    expect(cell("send").textContent).toBe("Send 2 to…");
+    expect(said).toEqual(["copy", "|", "duplicate", "tape", "more", "|", "delete"]);
     act(() => {
       ce.ops.clearSelection();
-      selection.publish({ count: 0, box: null });
+      selection.publish({ count: 0, box: null, locked: true });
     });
     expect(bar().dataset.shown).toBe("false");
     expect(bar().style.transition).toBe("opacity 120ms ease-out, visibility 0s linear 120ms");
+    // what it said, not what an empty selection would (a taped one: no Duplicate)
     expect(cellActs()).toEqual(said);
-    expect(cell("send").textContent).toBe("Send 2 to…"); // what it said, not what an empty selection would
   });
 
   it("hides for a selection wholly off-screen, and under a cover or a sheet (R7)", () => {
@@ -336,13 +336,13 @@ describe("the bar grown — More, and right-click (DK-11)", () => {
     expect(surfaceNow).toBe("selection");
     expect(bar().hasAttribute("data-open")).toBe(true);
     expect(cell("more").getAttribute("aria-expanded")).toBe("true");
-    expect(rows()).toEqual(["comment", "send", "duplicate", "front", "back", "tape", "delete"]);
+    expect(rows()).toEqual(["comment", "copy", "duplicate", "front", "back", "tape", "delete"]);
     expect(bar().querySelector(".vf-bar-eye")?.textContent).toBe("NOTE");
     // the nearest takeable row is hot; keys at the rows' ends
     expect(bar().querySelector("[data-hot]")?.getAttribute("data-row")).toBe("comment");
     expect(
       [...bar().querySelectorAll(".vf-bar-list .vf-bar-key")].map((el) => el.textContent),
-    ).toEqual(["⌘D", "⇧⌘L", "⌫"]);
+    ).toEqual(["⌘C", "⌘D", "⇧⌘L", "⌫"]);
   });
 
   it("closes on Esc — taken BEFORE the desk's keymap (R5)", () => {
@@ -377,10 +377,10 @@ describe("the bar grown — More, and right-click (DK-11)", () => {
     mount();
     const front = vi.spyOn(ce.ops, "reorder");
     act(() => cell("more").click());
-    // grown up (the default room) the list reads bottom-up: ↑ walks away from the bar — comment, then Send to…
-    // (DK-14: a row like any other), then Duplicate, then Bring to front
+    // grown up (the default room) the list reads bottom-up: ↑ walks away from the bar — comment, then Copy
+    // (HN-D3: a row like any other), then Duplicate, then Bring to front
     key("ArrowUp", document.body);
-    expect(bar().querySelector("[data-hot]")?.getAttribute("data-row")).toBe("send");
+    expect(bar().querySelector("[data-hot]")?.getAttribute("data-row")).toBe("copy");
     key("ArrowUp", document.body);
     key("ArrowUp", document.body);
     expect(bar().querySelector("[data-hot]")?.getAttribute("data-row")).toBe("front");
@@ -466,7 +466,7 @@ describe("the bar grown — More, and right-click (DK-11)", () => {
 describe("the bar's keys and acts (R9; the engine's ops)", () => {
   it("← → move between its cells (the rules and the words are no stops), Esc goes back to the desk — the desk's keys never see them", () => {
     mount();
-    act(() => cell("send").focus());
+    act(() => cell("copy").focus());
     key("ArrowRight");
     expect(document.activeElement).toBe(cell("duplicate"));
     key("ArrowRight");
@@ -494,12 +494,12 @@ describe("the bar's keys and acts (R9; the engine's ops)", () => {
     expect(remove).toHaveBeenCalledTimes(1);
   });
 
-  it("is reached by Tab from the draft: the bar stands after the line in the chrome's document order (R9)", () => {
+  it("is reached by Tab from the line: the bar stands after the line in the chrome's document order (R9)", () => {
     const chrome = readFileSync(
       join(dirname(fileURLToPath(import.meta.url)), "../src/field/ChromeLayer.tsx"),
       "utf8",
     );
-    // the line (the draft, the mic, send) is the frame's — <ViewFrame> — and the bar comes next, before the status line
+    // the line (its snapshot, its create) is the frame's — <ViewFrame> — and the bar comes next, before the status line
     const frame = chrome.indexOf("<ViewFrame");
     const theBar = chrome.indexOf("<SelectionBar");
     expect(frame).toBeGreaterThan(0);
@@ -518,8 +518,8 @@ describe("the bar's keys and acts (R9; the engine's ops)", () => {
 
 // DK-12 — THE TOOLS IN HAND (DESIGN.md §8 "Tools in hand"; R13; ICE I20, I22): when the anchor carries `held` (an object
 // picked up, not flying home) the SAME element travels to y 64 under the head over the anchor's `travelMs` on the island
-// curve, its contents swapping by a 120 ms cross-fade over the travel's last 120 ms, and becomes the tools in hand: Send
-// to… · rule · the kind's tools (dots, cells, faint) · the readout · rule · Done — each tool used through
+// curve, its contents swapping by a 120 ms cross-fade over the travel's last 120 ms, and becomes the tools in hand: Copy
+// · rule · the kind's tools (dots, cells, faint) · the readout · rule · Done — each tool used through
 // `ops.useHeldTool`, Done through `ops.putDown`; hidden while the object flies home, back over it 200 ms after it lands.
 describe("the tools in hand (DK-12)", () => {
   /** The notebook's slots as the anchor carries them (bar-hand's own test holds the real kinds' to the canon). */
@@ -663,7 +663,7 @@ describe("the tools in hand (DK-12)", () => {
     mount();
     inHandNow();
     expect(handSaid()).toEqual([
-      "send",
+      "copy",
       "|",
       "turn:-1",
       "turn:1",
@@ -690,7 +690,7 @@ describe("the tools in hand (DK-12)", () => {
     const done = handRow().querySelector<HTMLElement>('[data-act="done"]');
     expect(done?.textContent).toBe("Done");
     expect(done?.getAttribute("title")).toBe("Put it down  Esc");
-    expect(handRow().querySelector('[data-act="send"]')?.getAttribute("title")).toBe("Send to…");
+    expect(handRow().querySelector('[data-act="copy"]')?.getAttribute("title")).toBe("Copy  ⌘C");
     // the mode in hand moved: the ring and the press follow it
     act(() => selection.publish({ held: held({ active: "pen:red" }) }));
     expect(tool("pen:red").getAttribute("aria-pressed")).toBe("true");
@@ -728,7 +728,7 @@ describe("the tools in hand (DK-12)", () => {
     expect(keymapHeard).toEqual([]);
     expect(tool("later").getAttribute("aria-disabled")).toBe("true");
     act(() => tool("later").click());
-    act(() => handRow().querySelector<HTMLElement>('[data-act="send"]')?.click());
+    act(() => handRow().querySelector<HTMLElement>('[data-act="copy"]')?.click());
     expect(use).toHaveBeenCalledTimes(3);
     act(() => handRow().querySelector<HTMLElement>('[data-act="done"]')?.click());
     expect(putDown).toHaveBeenCalledTimes(1);
@@ -791,7 +791,7 @@ describe("the tools in hand (DK-12)", () => {
     key("ArrowRight");
     expect(document.activeElement?.getAttribute("data-act")).toBe("done");
     key("ArrowRight");
-    expect(document.activeElement?.getAttribute("data-act")).toBe("send");
+    expect(document.activeElement?.getAttribute("data-act")).toBe("copy");
     key("ArrowLeft");
     key("ArrowLeft");
     expect(document.activeElement).toBe(tool("undo"));
@@ -831,7 +831,7 @@ describe("the tools in hand (DK-12)", () => {
     expect(bar().dataset.shown).toBe("false");
     act(() => vi.advanceTimersByTime(1));
     expect(bar().dataset.shown).toBe("true");
-    expect(cellActs()).toEqual(["send", "|", "duplicate", "tape", "more", "|", "delete"]);
+    expect(cellActs()).toEqual(["copy", "|", "duplicate", "tape", "more", "|", "delete"]);
     expect(bar().querySelector('[data-face-row="hand"]')).toBeNull();
   });
 
@@ -900,74 +900,114 @@ describe("the tools in hand (DK-12)", () => {
   });
 });
 
-// ── DK-14 — SEND TO…'s THREE DOORS (DESIGN.md §8 "Send to…"; R25; plan addendum (50)) ───────────────────────────────
-// The bar's pill, the grown menu's row and the pill in hand each run ONE act: the selection — or the object in hand —
-// handed to the line as ONE chip (a stand-in line here takes it). Over a selection the bar steps aside while the act is
-// on and comes back as it ends; in hand the tools stay under the head and the object stays in hand.
-describe("Send to… — the three doors draft ONE chip (DK-14)", () => {
-  let taken: DeskChip[];
-  let off: () => void;
+// ── HN-D3 — COPY's FOUR DOORS (DESIGN.md §8 "The desk's Copy"; R25; plan addendum (50)) ─────────────────────────────
+// The bar's pill, the grown menu's row, the pill in hand and ⌘C over the desk each run ONE act: the selection — or the
+// object in hand — dealt into the window's hand as ONE card. Nothing waits on the line, so the bar never steps aside
+// for it; in hand the tools stay under the head and the object stays in hand.
+describe("Copy — four doors deal ONE card (HN-D3)", () => {
+  const WRITING = "Ship the desk by Friday. Then the covers.";
   beforeEach(() => {
-    taken = [];
-    off = publishLineSend({
-      receive(chip) {
-        taken.push(chip);
-        setLineSendPhase("flying"); // the line's own first step
-        return { attach: () => undefined };
-      },
-    });
+    // the note holds a line of writing: its copy is a text card, dealt at once (a picture needs the desk's GPU)
+    const doc = ce.docs.current()?.store;
+    if (doc === undefined) throw new Error("no document");
+    setWidgetProps(doc, ce.world, note, { text: WRITING });
+    ce.world.sync();
   });
   afterEach(() => {
-    off();
-    setLineSendPhase("idle");
+    for (const card of cardsStore.snapshot().cards) cardsStore.remove(card.id);
   });
 
-  /** The act's still-taking tail is over (its capture answered — the selection observed standing as at the press). */
+  /** The act's tail is over: the selection observed standing as at the press. */
   const settled = async (): Promise<void> => {
-    await vi.waitFor(() => expect(lastSend()?.at.pressed).toBeDefined(), { timeout: 2_000 });
-    await vi.waitFor(() => expect(lastSend()?.kept).not.toBeNull(), { timeout: 2_000 });
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 20));
-    });
+    await vi.waitFor(() => expect(lastCopy()?.kept).not.toBeNull(), { timeout: 2_000 });
   };
 
-  it("the BAR's pill is live — its tip its name, no key — and drafts the selection; the bar steps aside until the act is over", async () => {
+  it("the BAR's pill — Copy, clipboard 16, its key said — deals the selection as ONE card, and the bar stays", async () => {
     mount();
-    const pill = cell("send");
-    expect(pill.hasAttribute("aria-disabled")).toBe(false);
-    expect(pill.getAttribute("title")).toBe("Send to…");
+    const pill = cell("copy");
+    expect(pill.textContent).toBe("Copy");
+    expect(pill.getAttribute("title")).toBe("Copy  ⌘C");
+    expect(pill.querySelector("[data-glyph]")?.getAttribute("data-glyph")).toBe("clipboard");
     act(() => pill.click());
-    expect(taken).toHaveLength(1);
-    expect(taken[0]).toMatchObject({ kind: "desk", glyph: "snippets", label: "Note" });
-    expect(taken[0]?.objects.map((o) => o.type)).toEqual(["desk.note"]);
-    expect(lastSend()?.from).toBe("bar");
-    // away at once: the act is on (its chip flies, then @'s list is open)
-    expect(bar().getAttribute("data-shown")).toBe("false");
-    await settled();
-    act(() => setLineSendPhase("listing"));
-    expect(bar().getAttribute("data-shown")).toBe("false");
-    act(() => setLineSendPhase("idle"));
-    // back 200 ms after the list folds (R8's back)
-    expect(bar().getAttribute("data-shown")).toBe("false");
-    await vi.waitFor(() => expect(bar().getAttribute("data-shown")).toBe("true"), {
-      timeout: 2_000,
+    const cards = cardsStore.snapshot().cards;
+    expect(cards).toHaveLength(1);
+    expect(cards[0]).toMatchObject({
+      kind: "text",
+      title: "Ship the desk by Friday.",
+      origin: { view: "canvas", how: "copy" },
     });
+    expect(lastCopy()?.from).toBe("bar");
+    // nothing waits on the line: the bar never steps aside for a copy
+    expect(bar().getAttribute("data-shown")).toBe("true");
+    await settled();
+    expect(bar().getAttribute("data-shown")).toBe("true");
   });
 
-  it("the GROWN MENU's row is taken like any other: the menu folds and the same act runs", async () => {
+  it("the GROWN MENU's row — Copy ⌘C — is taken like any other: the menu folds and the same act runs", async () => {
     mount();
     act(() => cell("more").click());
     expect(surfaceNow).toBe("selection");
-    const row = bar().querySelector<HTMLElement>('.vf-bar-list [data-row="send"]');
+    const row = bar().querySelector<HTMLElement>('.vf-bar-list [data-row="copy"]');
     expect(row?.hasAttribute("aria-disabled")).toBe(false);
+    expect(row?.querySelector(".vf-bar-key")?.textContent).toBe("⌘C");
     act(() => row?.click());
     expect(surfaceNow).toBeNull();
-    expect(taken).toHaveLength(1);
-    expect(lastSend()?.from).toBe("menu");
+    expect(lastCopy()?.from).toBe("menu");
+    expect(cardsStore.snapshot().cards).toHaveLength(1);
     await settled();
   });
 
-  it("IN HAND: the pill in hand drafts the object as DRAWN — it stays in hand, the tools stay under the head", async () => {
+  it("⌘C over the desk is Copy — never from a field or a kind holding the keyboard, nor with nothing selected, nor under a cover", async () => {
+    mount();
+    const chord = (target: EventTarget, init: KeyboardEventInit = { metaKey: true }) => {
+      const event = new KeyboardEvent("keydown", {
+        key: "c",
+        bubbles: true,
+        cancelable: true,
+        ...init,
+      });
+      act(() => {
+        target.dispatchEvent(event);
+      });
+      return event;
+    };
+    expect(chord(document.body).defaultPrevented).toBe(true);
+    expect(lastCopy()?.from).toBe("key");
+    expect(cardsStore.snapshot().cards).toHaveLength(1);
+    expect(keymapHeard).not.toContain("c");
+    await settled();
+    const seq = lastCopy()?.seq;
+    // a field keeps its own copy
+    const field = document.createElement("input");
+    document.body.append(field);
+    expect(chord(field).defaultPrevented).toBe(false);
+    field.remove();
+    // so does a kind that holds the keyboard — the desk's editor while a note is written, a page in hand
+    const claim = document.createElement("div");
+    claim.setAttribute("data-canvas-keyboard", "");
+    document.body.append(claim);
+    expect(chord(claim).defaultPrevented).toBe(false);
+    claim.remove();
+    // Ctrl+C on the Mac is a shell's interrupt, never Copy
+    expect(chord(document.body, { ctrlKey: true }).defaultPrevented).toBe(false);
+    // nothing selected: nothing to copy
+    act(() => {
+      ce.ops.clearSelection();
+      selection.publish({ count: 0, box: null });
+    });
+    expect(chord(document.body).defaultPrevented).toBe(false);
+    // under a cover (the bar hidden), a selection all the same
+    act(() => {
+      ce.ops.setSelection([note]);
+      selection.publish({ count: 1, box: BOX });
+    });
+    mount(true);
+    expect(chord(document.body).defaultPrevented).toBe(false);
+    expect(lastCopy()?.seq).toBe(seq);
+    expect(cardsStore.snapshot().cards).toHaveLength(1);
+  });
+
+  it("IN HAND: the pill in hand copies the object as DRAWN — it stays in hand, the tools stay under the head", async () => {
     vi.useFakeTimers();
     mount();
     const notebook = deskObjects(ce, "desk.notebook")[0]?.entity as Entity;
@@ -982,25 +1022,24 @@ describe("Send to… — the three doors draft ONE chip (DK-14)", () => {
       }),
     );
     act(() => vi.advanceTimersByTime(660));
-    const pill = bar().querySelector<HTMLElement>('[data-face-row="hand"] [data-act="send"]');
-    expect(pill?.hasAttribute("aria-disabled")).toBe(false);
-    expect(pill?.getAttribute("title")).toBe("Send to…");
+    const pill = bar().querySelector<HTMLElement>('[data-face-row="hand"] [data-act="copy"]');
+    expect(pill?.getAttribute("title")).toBe("Copy  ⌘C");
     const putDown = vi.spyOn(ce.ops, "putDown");
     act(() => pill?.click());
-    expect(taken).toHaveLength(1);
-    // its name as this harness's words give it (the type id; the product's words say "Notebook" — smoke:canvas HAND)
-    expect(taken[0]?.label).toBe("desk.notebook");
-    expect(taken[0]?.objects.map((o) => o.type)).toEqual(["desk.notebook"]);
-    expect(lastSend()).toMatchObject({
+    expect(lastCopy()).toMatchObject({
       from: "hand",
-      fromBox: { x0: 470, y0: 222, x1: 710, y1: 542 },
+      fromBox: { left: 470, top: 222, width: 240, height: 320 },
       marks: false,
     });
+    expect(lastCopy()?.objects.map((o) => o.type)).toEqual(["desk.notebook"]);
     // the object stays in hand; the tools are not stepped aside
     expect(putDown).not.toHaveBeenCalled();
     expect(bar().getAttribute("data-role")).toBe("hand");
     expect(bar().getAttribute("data-shown")).toBe("true");
     vi.useRealTimers();
     await settled();
+    // this harness's desk draws nothing (its capture door answers none): no picture, no card — and the line is told
+    expect(lastCopy()?.refused).toBe("Not copied — the desk could not draw it");
+    expect(cardsStore.snapshot().cards).toEqual([]);
   });
 });

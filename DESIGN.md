@@ -38,7 +38,8 @@ Three surface families, one physics:
 mat (§2.1), not dots, and what sits on it are the desk's objects, each drawn by its kind on the GPU
 (ICE's object model; DK-3…DK-17), not DOM cards. An object's own surface is still content, never
 theme (§2.2). The chrome's family is One Frame's five places (§10) — the head, the line, the two
-edges, the corner, and an object's own chrome — with the menus they grow; the HUD islands and the
+edges, the corner, and an object's own chrome — with the menus they grow (*amended 2026-10-29, Cards
+in Hand:* the left edge's clipboard became the hand, at the foot beside the line; §8 "The hand"); the HUD islands and the
 tray retired into the line and the pegboard (FR-2, 2026-10-03; DK-13, 2026-10-06).
 
 ### 1.1 Godview visual source
@@ -154,7 +155,7 @@ gobo plates are the product's assets; the engine ships the mat's law and its two
 
 | Token | Value | Use |
 |---|---|---|
-| `--vf-card` | `#1C1C1E` | the dark-elevated content surface (iOS) — both themes: the clipboard's tiles and the capture's fly-in ghost (§8, edge trays) |
+| `--vf-card` | `#1C1C1E` | the dark-elevated content surface (iOS) — both themes; no product wearer since HN-1 (2026-10-29): the clipboard's tiles and the capture's fly-in ghost retired with the left tray, and the catalog's Foundations swatch shows it until a token pass removes it, doc first. The hand's cards have their own stock (§5) |
 | `--vf-card-deep` | `#000000` | the deepest content surface: the terminal preview's miniature cards (Settings → Terminal) |
 | content surfaces | per object | committed gradients/colors are content, not theme; on the desk each kind draws its own (§5.1's materials). Kept as values: the weather `linear-gradient(135deg, #3A86FF 0%, #1D4ED8 55%, #0B2AB5 100%)`, which the catalog's weather card carries as its own content (`docs/UI_SYSTEM.md`), and the note's sticky `#F6E7A9` (`--vf-note-surface`) |
 | `--vf-fill` | light `#F2F2F7` · dark `#2C2C2E` | inset fills: segmented tracks, chip resting |
@@ -603,7 +604,7 @@ text belongs to Ghosttea's renderer, not CSS.
 |---|---|---|
 | **Eyebrow** | 10–11px · medium · uppercase · `tracking-wider` (0.05–0.08em) · 60–80% opacity | section labels, the switch's "Switching to" (§8) |
 | **Label** | 11–13px · medium | buttons, chips, badges, row names |
-| **Body** | 13–14px · regular · 1.45 line height | the line's draft (14, §8), notes, prose, settings |
+| **Body** | 13–14px · regular · 1.45 line height | Chat's draft (14, §8; the line's until HN-2), notes, prose, settings |
 | **Title** | 12px · semibold | row titles |
 | **Data numeral** | 28–34px · **light** · `tabular-nums` · `leading-none` | the hero number — no desktop surface draws one today |
 | **Data small** | 12px · medium · `tabular-nums` | times, counts, sizes |
@@ -651,7 +652,7 @@ dark, or hard. The exact recipes (do not eyeball new ones):
 | Island / floating chrome | `0 8px 30px rgba(0,0,0,0.08)` · dark `rgba(0,0,0,0.4)` |
 | Sheet (rises from bottom) | `0 -20px 40px rgba(0,0,0,0.08)` · dark `0.4` |
 | Side panel (enters from right) | `-20px 0 40px rgba(0,0,0,0.08)` · dark `0.4` |
-| Edge tray (enters from the left; 2026-09-23) | `20px 0 40px rgba(0,0,0,0.08)` · dark `0.4` — the side panel's shadow cast the other way; as `drop-shadow()` where the silhouette is a path (`--vf-drop-edge`, and `--vf-drop-island` for the island recipe) |
+| Edge tray (enters from the left; 2026-09-23) | `20px 0 40px rgba(0,0,0,0.08)` · dark `0.4` — the side panel's shadow cast the other way; as `drop-shadow()` where the silhouette is a path (`--vf-drop-edge`, and `--vf-drop-island` for the island recipe); the left tray retired into the hand at HN-1 (2026-10-29), and the right twin wears it mirrored |
 | Drag proxy (above everything) | `drop-shadow(0 24px 48px rgba(0,0,0,0.35))` |
 | Search popup (the Peek, §8 "Search"; GV-D8, built 2026-10-08) | `0 40px 100px rgba(0,0,0,0.24), 0 12px 30px rgba(0,0,0,0.10)` · dark `0 40px 100px rgba(0,0,0,0.6)` and a 6% top light (`inset 0 1px 0` white/6) — ringed by the strong hairline |
 
@@ -665,7 +666,7 @@ the side panel's still names the edge tray's, cast the other way. The tray tile'
 (`drop-shadow(0 10px 18px rgba(0,0,0,0.16))`) left with the tray at DK-13.
 
 **One exception to "chrome is glass" (2026-09-23, James — the notch):** the edge tray's notch
-and its drawer (§8, edge trays) are OPAQUE solid chrome (`--vf-chrome-solid`, the theme's
+and its drawer (§8, edge trays; the right edge's alone since HN-1) are OPAQUE solid chrome (`--vf-chrome-solid`, the theme's
 colour), because they belong to the window's edge rather than floating over the field — a
 fixture, not a control; a hardware notch, not a pane of glass. Nothing else in chrome may
 claim it.
@@ -685,8 +686,8 @@ claim it.
 **Menus are solid, floating controls are glass** (One Frame FR-7, FC-D14 ruled 2026-10-01): a menu
 is rows to be read, so it is `--vf-chrome-solid` — opaque — ringed by `--vf-hairline-strong`, with
 the island shadow and corners 18 (the Me menu keeps its 28, concentric with the face). The Me menu
-(2026-09-22) was the first; @'s list in the line (§8) is the second; the zoom's menu and the palette
-are the third and fourth (the head, §8; FR-3, 2026-10-03). A menu opens over the stage and never over
+(2026-09-22) was the first; @'s list (§8, in the line until HN-2 and in Chat's composer since) is the
+second; the zoom's menu and the palette are the third and fourth (the head, §8; FR-3, 2026-10-03). A menu opens over the stage and never over
 the frame: the line's menus grow upward from the line, 8 above it; the head's grow downward from the
 head — the zoom's 4 under it, the palette 16 — and end 8 above the line; the corner's, the Me menu,
 grows upward from your face's column and stands 8 above the line with the face beneath it (FR-4,
@@ -704,6 +705,26 @@ the desk's chrome); no DOM card exists to carry a shadow, so the two card rows o
 are the record of the card that retired, and the rest are the chrome's — the line's glass, the
 sheets, the edges, the menus. What the desk's materials mean is the material book's (§5.1).
 
+**The hand's cards are paper, not chrome** (Cards in Hand, HN-D1 ruled 2026-10-29; built at HN-1): a
+card in the hand (§8 "The hand") is an object you hold, so it is drawn as the desk draws paper (§5.1)
+— opaque and lit — never as glass, and the same in both themes. **The stock:** `--vf-card-stock` (`#fbfaf7`),
+under a fine grain (`--vf-card-grain`, multiplied at 5%), a catch of light down its face (a 170°
+gradient, white 60% to nothing by 36%, and a 3.5% darker foot) and along its top (an inset 1px white
+line at 90%), its cut edge (an inset 0.5px `--vf-card-cut`) and its thickness under it — a 0.7px lip
+of `--vf-card-edge` (`#d6d0c3`) before any shadow; the cut is `rgb(58 46 22 / 15%)`. Its inks are its own, never the theme's: `--vf-card-stock-ink`,
+`--vf-card-stock-ink-2`, `--vf-card-stock-ink-3` (`rgb(33 31 27)` at 92 / 64 / 42%), the index `--vf-card-index` (58%), a
+pass line `--vf-card-pass` (`#1f7a36`), and `--vf-card-photo` (`#cfd3cf`) under a picture until it draws (`--vf-card-ink`,
+§2.2's white, stays Settings → Terminal's). **The agent's card** is the one dark stock
+(`--vf-card-dark-stock` `#1c1c1e`, `--vf-card-dark-edge` `#050506`, its cut `--vf-card-dark-cut`, white at 9%; its inks
+`--vf-card-dark-ink`, `-2`, `-3`, white at 92 / 62 / 40%, its index `--vf-card-dark-index` at 46%), the
+session card's. **Its shadow is cast down and a little right**, as the desk's objects cast theirs, and
+grows as the card rises — for its lift `l` (0…1): `0 0.7px 0 0.15px` the edge · `0 0.6px 1.4px`
+black at 15% · `(0.5 + 1.5l)px (2 + 7l)px (5 + 12l)px` black at (7 + 5l)% · `(1 + 4l)px (7 + 20l)px
+(18 + 30l)px` black at (8 + 9l)%, every alpha times `--vf-card-shade`. **By night** a card keeps 86% of
+its day (`--vf-card-dim`, a brightness on the whole card — the reading light a held object keeps) and
+its shadow deepens (`--vf-card-shade` 1.7). A thin gloss crosses its face as it turns (white 9%,
+screen).
+
 ### 5.1 The material book — what the desk's materials mean (DK-D5; a stub)
 
 **Ruled 2026-09-25 (DK-D5; thinking-the-desk §6): §5 is the material book.** The desk's materials
@@ -716,9 +737,9 @@ rect, its props, its stratum (pads · sheets · things), taped or not — is ICE
 
 | Material | Means | Wears it | On the desk |
 |---|---|---|---|
-| **paper** | writable | notes, the notebook's pages, the calendar, the whiteboard's face | drawn |
+| **paper** | writable | notes, the notebook's pages, the calendar, the whiteboard's face; off the desk, the hand's cards (§5, HN-D1) | drawn |
 | **ink** | drawn by hand | strokes on a board or a page, a note's handwriting | drawn |
-| **pictures** | a captured image | prints | drawn — device-local until the upload plane (DK-D21) |
+| **pictures** | a captured image | prints; off the desk, the print on a picture card (§8 "The hand") | drawn — device-local until the upload plane (DK-D21) |
 | **string** | a relation | wires, mind-map edges, patch cables | not yet — STRING |
 | **boards** (the mat) | a place: it holds a desk | the mat itself, the ground (§2.1); the mini mat, a desk inside the desk | drawn |
 | **stickers** (tape) | an attachment, a label | tags — the masking and label tape are already marks | not yet, as objects |
@@ -1064,7 +1085,8 @@ head's menus grow from their control on the island curve in 240ms (the zoom's fr
 palette from the head); the zoom's folds at once, as @'s list does, and the palette fades out over
 200ms `ease`. Reduced motion fades them in over 120ms at full size.
 
-**The edges and the corner (One Frame §10, §12; FR-4, 2026-10-03).** Over a covered view a notch
+**The edges and the corner (One Frame §10, §12; FR-4, 2026-10-03; one notch, the right's, since HN-1,
+2026-10-29).** Over a covered view a notch
 rests as its **sliver** (§8, edge trays) and on approach — the pointer reaching the 8px it rests in,
 or the keyboard's focus — becomes the notch in **240ms on the island curve**: ONE path morphing (M1),
 the sliver's 7 × 96 drawing into the notch's 26 × 116 (both drawn by the notch's builder, so every
@@ -1094,6 +1116,35 @@ the still under it and the frame's chrome, together** in one box the size of the
 at rest that box carries no transform, so it stacks and takes the pointer as if it were not there. Folding, the popup goes at once — what you picked is already opening
 behind it — the scrim fades out over the same 240ms and the window comes forward over the same
 420ms. Reduced motion (M6): no pop and no recede — the scrim and the popup fade in over 120ms.
+
+**The hand (Cards in Hand; built at HN-1 and HN-4).** Every curve is the table's but one, the deal's arc
+(below). **The deal:** a card leaves its source's box as the card it will be — scaled to the box and turned
+−7°, the page's toss — and travels to its place at the hand's right end in **560ms**: across on the island
+curve, and up and over on **the arc** (below), so it is tossed rather than slid; its turn comes to the
+fan's on the pop curve. The hand opens room for it in 240ms on the island curve. A card with nowhere to
+leave from (a region off the window) rises from the window's foot on the same two curves. The card a
+thirteenth pushes off slides down past the foot on the retract curve, 240ms — it never fades, since only a
+cancelled ghost fades (M4). The start is committed by a forced reflow, never an animation frame — a window
+the snapshot tool has just uncovered may paint none (SNAP-3a's lesson). **The reach:** 240ms on the island
+curve, every card at once, its shadow growing with its lift (§5). **The carry** follows the pointer
+unsmoothed, leaning with its speed (the page's 90ms); over the line the carried card ducks to 0.55 in
+160ms plain `ease`. **The play:** the card
+shrinks into the place it was let go over (to 0.12, 200ms on the retract curve) and flies home straight in
+440ms on the island curve, the fan's tilt settling once it lands; the place's ring stays through the play
+and fades over 120ms. **Spring-loading:** the cell's ring fills over 520ms, linear, then the view switches
+as its key would. **The pick-up:** 560ms on the island curve to the window's centre at 2.6×, the scrim's
+blur and dim fading in over 240ms plain `ease`; putting it back waits 140ms (the scrim leaves first) and
+flies home in 440ms on the island curve. **Raised:** every card to its raised place in 240ms on the island
+curve. **A twin paste** (HN-D10): the card rises 12 on the pop curve (280ms), holds 1.2s under its words,
+and settles on the retract curve. Reduced motion (M6): nothing travels — a dealt card fades into its place
+over 120ms, the reach and the raise move at once, a card pushed off fades, a played card's place rings
+once (its fade halved to 60ms), and a card picked up fades in at the centre over a scrim that fades with it (120ms).
+
+One more curve, with its reason — **the arc** (Cards in Hand, 2026-10-29; the ruled page's own toss):
+`cubic-bezier(0.45, -0.3, 0.7, 1)`, the deal's vertical travel alone. Its negative start lifts the card a
+little before it falls into the hand, so a deal reads as a card tossed into a hand rather than a box
+sliding along a straight line; the horizontal travel keeps the island curve, so the two together draw the
+arc. It is worn nowhere else.
 
 ---
 
@@ -1166,46 +1217,38 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   it is not a warning banner or a green reachability promise.
 - **Edge trays — the notch and its drawer** (2026-09-23, James; the record is
   `draft/composer/compact.html` §15–19 and `compact.md` Parts II–IV): a spine-owned tray on the
-  window's LEFT edge — the **clipboard** — with its twin on the right for Artifacts (*corrected
-  2026-10-28:* this said "reserved for Artifacts once D-7 is ruled"; FC-D10 closed D-7 and FR-4
-  built the twin on 2026-10-03, below). The **notch** (N1) sits at the edge's mid-height: 26 × 116, one path drawn
-  FROM the wall — a concave fillet of 12 into the edge, a convex face of 14 — in the theme's
-  solid chrome with the strong hairline, the island shadow at rest; the glyph (16px) and the
-  count (9px mono) on the text ramp. Hover widens it 15% from the wall on the island curve;
-  the pin is a 1.5px ring in `--vf-foreground` (§2.3: 1.5px is a selection ring). The
-  **drawer** (P4) is the same path at 152 wide — a fillet of 18 into the window's edge, a face
-  of 22 — from `top-16` to `bottom-20`, opaque solid chrome, the hairline along the whole
-  silhouette and GAPPED under the notch so the two outlines are one line; the edge shadow
-  (§5) when open, cast by the whole. The notch rides the panel's outer edge, so its fillets
-  always flare into whatever wall is there. Inside: ONE column of 128 × 128 tiles with 10px
-  between them, grouped by day under a 9px mono caption, dealt in 26ms apart on the island
-  curve; no head, no find line, no pills — the notch carries the count and the pin; typing
-  while pinned filters. Hover opens after 120ms and closes after a 320ms grace; click pins;
-  ⇧⌘V pins from the keyboard; Escape unpins. Non-modal like the Artifact panel: no backdrop,
-  recede, stage hold or focus trap. A capture (SNAP-3) **flies in**: a ghost of the still
-  travels from where the capture was to the notch on the island curve (560ms), shrinking along
-  its travel (M4), then the notch bumps on the pop and the count ticks; reduced motion fades it
-  at the notch (M6). The column ends with the **Snap** tile, the product's door to the capture,
-  disabled with the honest word when the door is absent or refused.
-  **Both edges, every view (One Frame §10, FR-1, FR-4; FC-D10; built 2026-10-03):** the clipboard
-  on the left as above, and **Artifacts on the right** — the twin, mirrored, its notch wearing
-  `package` and no count (the catalog's count is the plugin's to say, in its own header inside the
-  drawer), its drawer the Artifact Hub's column (above); the head's Artifacts button is gone. With
-  no Hub bound (its plugin off or reloading) there is no right notch — a door to nothing would lie,
-  as the side panel's toggle had the same rule — and an open drawer folds with it. The
-  notches' tooltips say their keys (FR-5): "Clipboard  ⇧⌘V", "Artifacts". **Over a covered view**
-  (Godview, History) a notch rests as a **sliver** — its own 7 × 96 path from the notch's builder,
-  a fillet of 5 into the wall and a face of 2, in the same solid chrome with its own strong
-  hairline and the island's drop, glyph and count hidden — in the 8px the view keeps clear at each
-  edge; **its hit box is the sliver** (no wider target), so a pane's text beside it never takes a
-  stray press, and on approach it becomes the notch (§6: 240ms, island; its hover delay the growth
-  plus the notch's own); on Canvas it rests whole. The edges are the frame's, not the canvas's:
-  they stand above the cover with the line (§10), so a drawer opens over Godview's deck or History's
-  room as it does over the field. **One owner:** each drawer is one of the frame's open surfaces
-  (§10) — opening one, by hover or by pin, folds @'s list, Objects, the fields explorer, the zoom's
-  menu, the palette, the Me menu and the other drawer, and any of them opening folds it (F11). A
-  drawer that holds the keyboard's focus — a field in the Hub's Add step — stays open when the
-  pointer leaves it; Escape folds it and gives focus back to its notch.
+  window's RIGHT edge — **Artifacts** — until PL-D1/PL-D2 move Artifacts into the head (Cards in Hand,
+  HN-8). *Amended 2026-10-29 (Cards in Hand, HN-1):* the LEFT edge's tray, the **clipboard** — its
+  notch with the count, its drawer of 128 tiles grouped by day, ⇧⌘V's pin, the capture's fly-in and
+  the Snap tile — retired into the hand (§8 "The hand"): its store became the hand's, ⇧⌘V raises the
+  hand, a capture deals a card, and the snapshot is the line's (§8 "The line"). The **notch** (N1)
+  sits at the edge's mid-height: 26 × 116, one path drawn FROM the wall — a concave fillet of 12 into
+  the edge, a convex face of 14 — in the theme's solid chrome with the strong hairline, the island
+  shadow at rest; the glyph (16px) on the text ramp. Hover widens it 15% from the wall on the island
+  curve; the pin is a 1.5px ring in `--vf-foreground` (§2.3: 1.5px is a selection ring). The
+  **drawer** (P4) is the same path at 152 wide — a fillet of 18 into the window's edge, a face of
+  22 — from `top-16` to `bottom-20`, opaque solid chrome, the hairline along the whole silhouette and
+  GAPPED under the notch so the two outlines are one line; the edge shadow (§5) when open, cast by
+  the whole. The notch rides the panel's outer edge, so its fillets always flare into whatever wall
+  is there. Hover opens after 120ms and closes after a 320ms grace; click pins; Escape unpins.
+  Non-modal: no backdrop, recede, stage hold or focus trap.
+  **The right edge, every view (One Frame §10, FR-1, FR-4; FC-D10; built 2026-10-03):** its notch
+  wears `package` and no count (the catalog's count is the plugin's to say, in its own header inside
+  the drawer), its drawer the Artifact Hub's column (above); the head's Artifacts button is gone.
+  With no Hub bound (its plugin off or reloading) there is no notch — a door to nothing would lie —
+  and an open drawer folds with it. The notch's tooltip says its name, "Artifacts". **Over a covered
+  view** (Godview, History) the notch rests as a **sliver** — its own 7 × 96 path from the notch's
+  builder, a fillet of 5 into the wall and a face of 2, in the same solid chrome with its own strong
+  hairline and the island's drop, glyph hidden — in the 8px the view keeps clear at the edge; **its
+  hit box is the sliver** (no wider target), so a pane's text beside it never takes a stray press,
+  and on approach it becomes the notch (§6: 240ms, island; its hover delay the growth plus the
+  notch's own); on Canvas it rests whole. The edge is the frame's, not the canvas's: it stands above
+  the cover with the line (§10), so the drawer opens over Godview's deck or History's room as it does
+  over the field. **One owner:** the drawer is one of the frame's open surfaces (§10) — opening it,
+  by hover or by pin, folds Objects, the fields explorer, the zoom's menu, the palette, the Me menu
+  and the cards, and any of them opening folds it (F11). A drawer that holds the keyboard's focus — a
+  field in the Hub's Add step — stays open when the pointer leaves it; Escape folds it and gives
+  focus back to its notch.
 - **Segmented control**: full-round track in `--vf-fill`, sliding solid thumb
   (white / `#2C2C2E`, hairline + `shadow-sm`), 300ms island ease; labels 13px medium,
   active full-opacity, rest `/50`. A **small** size (26px thumb, 11px labels) for a switch that
@@ -1239,92 +1282,196 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   over the glyph at a third of its ink, until the room says the archive is ready. It carries no
   number, never a badge or a count, and its accessible name adds "importing" ("History, importing").
   The cell is otherwise unchanged and still presses at once.
-- **The line** (One Frame FR-2, FR-3, §5; FC-D1, FC-D3, FC-D14 ruled 2026-10-01; built
-  2026-10-03): the frame's foot (§10), the same in every view — `[views] create │ draft mic send`,
-  the composer as one product composition. 880 × 52 on the line's glass (§5), padding 5 × 6, its
-  pieces 2 apart and centred on the foot axis. From the left:
-  - **the views track** (above), its left end;
-  - **create** — 32 round in the ready fill (the foreground at 8%; 14% under the pointer, where it
-    grows 1.06 on the pop curve), 6 clear of the track, its glyph 16 in secondary ink (primary while
-    open or hovered). It is the view's own act (FC-D3), and only Canvas's is a bare plus (FR-3):
-    **Canvas — Objects** (`plus`, B): the objects rise behind the line and the plus turns 135° into
-    ✕ over 600ms on the island curve; **Godview — New terminal** (`start`, ⌘T): a fresh shell, which
-    shows its launcher, placed as a session with no pane is (the deck, below; GV-D4) — in the
-    focused pane, whose session runs on (*corrected 2026-10-18*, GV-D4 re-ruled: it opened beside
-    the focused pane while fewer than three panes showed); **History — Resume**
-    (`resume`): waiting, faint by ink as
-    the Assistant's cell is, until a session is chosen — and **Jump to** (`jump`) while the chosen
-    session runs on this desktop (§8 "History", 2026-10-08). Between views the glyph cross-fades in
+- **The line** (One Frame FR-2, FR-3, §5; FC-D1, FC-D3, FC-D14 ruled 2026-10-01; built 2026-10-03;
+  *shortened by Cards in Hand — LN-D1 and LN-D3 ruled by James 2026-10-29, the leans; built at HN-2*):
+  the frame's foot (§10), the same in every view — `[views] snapshot create`: the views, the snapshot
+  and the view's one act. It is no longer the composer: typing lives where it is read, in a pane or
+  in Chat's thread (HN-L6). **300 × 52** on the line's glass (§5), padding 5 × 6, corners 26, its
+  pieces 6 apart and centred on the foot axis, standing **76 from the window's left** — never nearer,
+  so it never meets the corner's face — on y 734 (x 76–376, y 708–760 at the default 1180 × 780); the
+  hand takes the middle of the foot (§8 "The hand"). From the left:
+  - **the views track** (above), its left end, unchanged;
+  - **the snapshot** — 40 round, 6 after the track, `capture` 18 in secondary ink: a ghost, no fill,
+    until the pointer comes, so create stays the line's one solid button; under the pointer the
+    ready fill (the foreground at 8%) and primary ink, and it stays filled while the snapshot tool is
+    up for its own press. It opens the snapshot tool (SNAP; the shell's capture door, the one ⌃⌘A and the View menu's
+    Take Screenshot open): the screen freezes, you drag a region or click for a window, mark it up,
+    and Return or Done keeps it; what you kept leaves its region as a picture card and arcs into the
+    hand (§8 "The hand", §6), the still on the system clipboard as the tool has always put it. A
+    cancel says nothing; a refusal says why on the note, in the words the clipboard tray's Snap
+    tile said — "Screen Recording is off — System Settings › Privacy & Security", "Not captured — no
+    capture helper on this platform", "Not captured — one capture at a time" — else "Not captured —"
+    and the tool's own reason. Its
+    tooltip says its key, "Snapshot  ⌃⌘A". With no capture door (no shell) or no helper on this
+    platform it waits, faint by ink, and its tooltip says why ("Snapshot — no capture here", "Snapshot
+    — no capture helper on this platform"); with Screen Recording refused it stays pressable and its
+    tooltip says so ("Snapshot — Screen Recording is off — System Settings › Privacy & Security") —
+    the clipboard tray's Snap tile's words, which moved here with the door. A refusal from any door (the
+    line's own, ⌃⌘A, the View menu) is remembered until the next capture lands;
+  - **create** — **40 round** in the ready fill, its corners concentric with the line's (26 − 6), 6
+    after the snapshot, the line's right end; its glyph 16 in secondary ink (primary while open or
+    hovered), growing 1.06 under the pointer on the pop curve (14% fill). It is the view's own act
+    (FC-D3), and only Canvas's is a bare plus (FR-3): **Canvas — Objects** (`plus`, B): the objects
+    rise behind the line and the plus turns 135° into ✕ over 600ms on the island curve; **Godview —
+    New terminal** (`start`, ⌘T): a fresh shell, which shows its launcher, placed as a session with
+    no pane is (the deck, below; GV-D4) — in the focused pane, whose session runs on (*corrected
+    2026-10-18*, GV-D4 re-ruled: it opened beside the focused pane while fewer than three panes
+    showed); **History — Resume** (`resume`): waiting, faint by ink as the Assistant's cell is, until
+    a session is chosen — and **Jump to** (`jump`) while the chosen session runs on this desktop (§8
+    "History", 2026-10-08), until LN-D2's New terminal in the project History shows replaces them
+    here (HN-7; Resume and Jump to stay on the room's rows). Between views the glyph cross-fades in
     place, 200ms `ease` (One Frame §12), and so does History's between Resume and Jump to; the
     tooltip says the act and its key ("Objects  B", "New terminal ⌘T", "Resume this session —
-    choose a session first", "Jump to this session"), open it says "Close  Esc";
-  - **the rule** — 1 × 18 in the strong hairline, 8 after create and 6 before the draft;
-  - **the draft** — an editor, not a field: 14px body (§3 — the page drew 15, off the ramp, F15) in
-    primary ink, padded 10, one line that keeps the caret in view (typing past one line is the
-    page's next drawing, One Frame §21, and is not built). Its placeholder, tertiary, teaches the one
-    way in at rest — **"Message, or type @ to add…"** in every view (the page's own ruling of its
-    text, One Frame §21) — and once a chip aims it, says who it goes to: **"Message vibe-field…"**;
-  - **mic** — 36 round in the ready fill, `mic` 17. The desktop has no dictation door yet, so the
-    mic waits, faint by ink, and says so in its tooltip ("Dictation — not on the desktop yet");
-    nothing is faked;
+    choose a session first", "Jump to this session"), open it says "Close  Esc". *Was 32 round, 6
+    clear of the track, until HN-2.*
+  **The note** — the frame's voice at the foot: solid chrome, 12/500 in secondary ink, rising 4px as
+  it fades in, for 2.4s. Create's outcomes and what History's acts say stand **centred over create**
+  ("Terminal opened in the active pane": it takes the focused pane, GV-D4 — "… in a new pane"
+  retired with the re-ruling of 2026-10-18); everything else stands with **its left edge on the
+  line's**, growing rightward, so a long sentence never leaves the window by its left edge — a
+  pane's refusal, the Peek's refused pick, a ⌘W the deck could not take, a refused snapshot, a
+  card's play (§8 "The hand"). *Corrected 2026-10-29 (HN-2):* the other anchor stood over send,
+  growing leftward, until send left the line. A paste larger than a terminal can take — ⌘V into a
+  pane, or a card played into one — is never dropped unsaid: the note says its size and how much of
+  it one paste carries, both as Finder counts the text (§9 — its own bytes, in thousands; its tabs,
+  quotes and control characters cost the link more, so the second figure is this paste's, "of it",
+  not a fixed one), the size rounded up and what fits down so the two never read as equal — "Not
+  pasted into vibe-field — 300 KB, and one paste carries 261 KB of it". Typed text that large says
+  "Not typed into vibe-field — 300 KB, and typed text carries 261 KB of it"; a session no pane of the
+  deck shows is "the terminal". The phone's terminal card says the same sentence, with "the terminal"
+  for the name and the limit its leg negotiated, so one paste reads alike on every device. Each is
+  under 70 characters beside the pane's name, to be read in the note's 2.4s; what to do next is in
+  its numbers. *Corrected 2026-10-11:* "Pasted into" was said while the pane's input was closed, and
+  the paste was lost; it is never said for a paste the pane did not take.
+  **Where the typing went** (LN-D3; HN-2, 2026-10-29): the rule, the draft and @'s list, the mic and
+  send left the line, and with them the interim send (thinking-four-views §11: a draft aimed at a
+  pane was pasted there, else copied, "Copied — no agent takes a message from here yet") and the
+  desk's Send to…, which drafted into it (§8 "Copy" replaced it). In Godview you type into the pane
+  itself; a capture, a selection or another app's words reach a pane as a card (§8 "The hand");
+  Chat's input is its own composer at the foot of the open thread, which holds the line's draft
+  canon (§8 "Chat's composer"). *History:* `[views] create │ draft mic send`, 880 × 52, centred and
+  never nearer the left than 76 — FC-D1, built FR-2…FR-4 (2026-10-03), shortened at HN-2.
+  **One surface at a time, at the line** (One Frame FR-4, F11): the objects are one of the frame's
+  open surfaces (§10) — opening them folds the others, and Settings, the palette, the fields
+  explorer, the Me menu, the hand raised or a card picked up, and the Artifacts drawer fold them.
+  *Since FR-3 (2026-10-03) the owner is the frame's, not the line's (the head, below); @'s list, the
+  line's other surface, left with the draft at HN-2.*
+- **Chat's composer — the line's draft, moved into the thread** (LN-D3 ruled by James 2026-10-29,
+  Cards in Hand; **not built**: CO's SP-1 builds it, with the Assistant's cell becoming Chat — CO's
+  rulings, `draft/compose-plane/`, decide what this entry does not): a composer at the foot of
+  Chat's open thread, scoped to the spark that thread is — the draft, @, the mic and send, as the
+  line drew them from FR-2 to HN-2. The line's code for them left main at HN-2 and stays in git for
+  SP-1 to take what it wants. Until SP-1 draws it anew, the line's canon stands for it:
+  - **the draft** — an editor, not a field: 14px body (§3) in primary ink, padded 10, one line that
+    keeps the caret in view (typing past one line is the page's next drawing, One Frame §21). Its
+    placeholder, tertiary, says who it goes to — the spark's name, "Message Lyra…" (it said "Message,
+    or type @ to add…" on the line);
+  - **mic** — 36 round in the ready fill, `mic` 17, waiting faint by ink with its reason in its
+    tooltip ("Dictation — not on the desktop yet") until a dictation door exists; nothing faked;
   - **send** — 40 round, 4 after the mic, `arrow` (up) 17: the ready fill and tertiary ink while there
-    is nothing to send, **inverted** (`--vf-foreground`, the inverse ink) once there is (D1). Return
-    sends.
+    is nothing to send, **inverted** (`--vf-foreground`, the inverse ink) once there is. Return sends.
   **@ is typed, never a button** (FC-D1; no attach button either). An @ typed at the start of a word
   opens **@'s list** — a menu (§5: solid, the strong hairline, the island shadow, corners 18,
   padding 6), 316 wide, grown upward from the caret (its left 10 before the @, its foot 8 above the
-  line), read bottom-up, nearest first: **Send to** nearest the line ("Send to a pane" in Godview,
-  where the panes lead) — what the deck shows, each named by its folder as the swarm names its body,
-  with what runs there and its state word; above it **Add** — From the clipboard (its three newest as
-  34px thumbnails, corners 8), File…, Capture…, Past session…. Rows 36 tall (Send to's 46, a name
-  over a small line), corners 12, 13/500; eyebrows 10px mono capitals in tertiary ink; the hot row
-  in the ready fill. Typing after the @ filters both groups; ↑ ↓ move, Return or Tab takes the row,
+  composer), read bottom-up, nearest first; its rows are CO's to rule (CH-D5: the agents to start and
+  the sessions in the spark's profiles; EW-D3: @ lives only in Chat). Rows 36 tall (46 with a small
+  line under the name), corners 12, 13/500; eyebrows 10px mono capitals in tertiary ink; the hot row
+  in the ready fill. Typing after the @ filters every group; ↑ ↓ move, Return or Tab takes the row,
   Esc closes the list and keeps what was typed. A row with no door behind it says why and cannot be
-  taken (File… "no file door on the desktop yet", Past session… "History is not wired yet") — never
-  faked. A paste or a drop lands at the caret, as plain text. *Corrected 2026-10-03 (AR-8c):*
-  History is wired — it is rosetta's room (below) — but a past session still has no door into a
-  message, so Past session… says "no past-session door on the line yet".
+  taken — never faked. A paste or a drop lands at the caret, as plain text; **a card played on the
+  composer** (§8 "The hand") lands as a chip in the sentence and carries the whole card to the spark
+  — "Added to your message to Lyra" — and a card stays in the hand (HN-D4).
   **The chip** (D1, ruled 12 Sep): a token in the sentence, 24 tall, corners 7, 12.5/500, its glyph
   13, padded 0 8 0 6, ringed 1px; it never splits a word, Backspace takes it as one character and ×
-  on hover removes it. A capture wears `capture` on the select blue at 14%. **The aim** — a Send to
-  row taken — is the chip that leads the draft (`@vibe-field`, the fill, primary ink): the target is
-  always named (CB-1), and it stays across sends until changed or removed.
-  **Send, until the agent seam** (thinking-four-views §11, the interim send): aimed at a pane the
-  deck is showing, the draft is PASTED into that pane's input — the road ⌘V takes, bracketed, Return
-  never pressed for you — and the line's note says "Pasted into vibe-field"; otherwise it goes to the
-  clipboard, and the note says that and why: "Copied — no agent takes a message from here yet". When
-  the aimed pane cannot take it, the draft is copied all the same and the note names the pane and
-  its reason: "Copied — vibe-field's pane is not on screen" while another view is up, and "Copied —
-  vibe-field's pane is not taking input" while the pane is shown and its input is closed (a terminal
-  still reopening after a change of view, a read-only one), where a paste would be dropped. "Pasted
-  into" is never said for a paste the pane did not take. *Corrected 2026-10-11:* it was said while
-  the pane's input was closed, and the paste was lost. A paste larger than a terminal can take — ⌘V
-  into a pane — is never dropped unsaid either: the note says its size and how much of it one paste
-  carries, both as Finder counts the text (§9 — its own bytes, in thousands; its tabs, quotes and
-  control characters cost the link more, so the second figure is this paste's, "of it", not a fixed
-  one), the size rounded up and what fits down so the two never read as equal — "Not pasted into
-  vibe-field — 300 KB, and one paste carries 261 KB of it". Typed text that large says "Not typed
-  into vibe-field — 300 KB, and typed text carries 261 KB of it"; a session no pane of the deck
-  shows is "the terminal". The phone's terminal card says the same sentence, with "the terminal" for
-  the name and the limit its leg negotiated, so one paste reads alike on every device. A draft SENT
-  that large is copied, as any aim the pane cannot take: "Copied — too large for vibe-field: 300 KB,
-  and one paste carries 261 KB of it" — the pane's handler claims the paste it refuses, so "Pasted
-  into" is never said over that refusal. Each is under 70 characters beside the pane's name, to be
-  read in the note's 2.4s; what to do next is in its numbers. The
-  note is the views track's note (solid, 12/500 in secondary ink, rising 4px as it fades in), over
-  send with its right edge on send's (so a long sentence grows leftward, never past the window's
-  right edge) — or, for create's outcomes ("Terminal opened in the active pane": it takes the
-  focused pane, GV-D4 — "… in a new pane" retired with the re-ruling of 2026-10-18), centred over
-  create — for 2.4s. *Corrected 2026-10-18:* this said a long sentence never leaves the window; in
-  a window too narrow for it, its first words run past the left edge. Sending clears the draft's
-  words and chips and keeps the aim.
-  **One surface at a time, at the line** (One Frame FR-4, F11): @'s list and the objects are ONE
-  owner's two surfaces — opening either folds the other — and Settings, the palette, the docs
-  explorer, the Artifact panel and the Me menu fold them as they folded the tray. The Me menu and
-  the edges' drawers join the owner with FR-4. *Since FR-3 (2026-10-03) the owner is the frame's,
-  not the line's: the head's three surfaces — the fields explorer, the zoom's menu, the palette —
-  are in the same one value (the head, below). Since FR-4 (2026-10-03) the Me menu and the two
-  drawers are in it too (§10).*
+  on hover removes it. A picture wears `capture` on the select blue at 14%; a card's chip wears its
+  kind's index glyph (§8 "The hand").
+- **The hand — the clipboard you can see** (Cards in Hand: HN-D1…HN-D10 ruled by James 2026-10-29,
+  all at their leans — HN-D1 his own pick on the page; the record is `thinking-cards-in-hand.md`;
+  built at HN-1, HN-2 and HN-4; it replaced the clipboard's edge tray): every copy made in VibeField,
+  and what is brought in from another app, lands as a **card** at the window's foot, fanned like a
+  hand you hold. The hand comes with you through every view, so you copy in History and play in
+  Godview (HN-L1). It stands with the frame, above the cover (§10), in the middle of the foot beside
+  the line.
+  - **A card** (HN-D1, one stock and six faces): poker size and proportion, **104 × 146**, corners 6.
+    Every card is the same card — one white stock (§5 "The hand's cards are paper"), its kind's glyph
+    printed in two corners as playing cards print their index (the top left, the one corner a fanned
+    hand shows, and the bottom right turned 180°, in the card's index ink) — and one thing on its
+    face, its name first, in one column 1em inside the card's sides. Every measure is in ems of a
+    9.5px face, so a card picked up sets the same design finer and reads more of itself. **Text**
+    (`snippets`): its first sentence run in bold, then its words, seven lines at most. **Picture**
+    (`capture`): the print at its own proportion across the column, then its name and its size in
+    mono. **File** (`code`): its name, its folder in mono, its first lines fading out. **Agent**
+    (`agents`): the one dark card, in the session card's stock — its handle with the project's dot on
+    top (so it shows at rest), the agent's mark, the state dot. **Terminal** (`terminal`): the first
+    line in mono 500, the rest cut by a right fade, a pass line in the card's pass ink. **Message**
+    (`message`): the speaker and the time, then the words. No rules, holes, stamps or bands — round
+    1's six desk materials (HN-D1 B) were not taken.
+  - **Holding them**: at rest the hand shows the top **68** of every card — their tips on y 712,
+    level with the line's top — fanned about a point below the window: up to **66** apart, never
+    steeper than **±6.5°** at its ends, the ends a little lower; centred on the window and pushed
+    right to stay **28** clear of the line and 24 from the window's right edge. Within the foot's band
+    (the window's bottom 214, the fan's ends ± 70) the cards near the pointer rise by a smoothstep on
+    their distance — up to **86** within **120** of it, 240ms on the island curve — and straighten as
+    they come, the nearest in front. The card under the pointer rises whole, says where it came from
+    above itself — "Godview · claude·2 · 2m ago", "Canvas · snapshot · just now", on solid chrome at
+    12/500 in secondary ink — and shows its **×** inside its top right corner, across from the index:
+    18 round on the card's ink at 8%, `--vf-red` with a white × under the pointer, "Remove  ⌫". Above
+    the fan's rest line the card the pointer is on holds the reach while the pointer moves across it,
+    so its corner can be reached (a middle card's × otherwise lies nearer its neighbour's centre). ⌫
+    removes the card the pointer is on — only that card, and never while a field holds the caret, Settings
+    is open or a card is being carried; a held ⌫ removes one card, not the hand.
+  - **Raised** (⇧⌘V, "Your hand"): every card up by the full lift and straight, no more than 14 between them; ←
+    → walk them (a 2px `--vf-select` ring, offset 2), Return picks one up, ⌫ removes it, Esc lowers; an
+    empty hand raised says "Nothing in your hand yet". Raised, the fan is a list a screen reader walks — a
+    listbox named "Your hand", the card in focus its active option, named by its name and where it came
+    from — and it takes the keyboard's focus while it is up, giving it back when it lowers. While the
+    pegboard is out the hand steps down 120 out of its way (300ms on the retract curve; back in 420ms on
+    the island curve).
+  - **Where cards come from** (HN-D2, HN-D3, HN-L1): a copy **deals** a card — it leaves its source as
+    the card it will be and arcs into the hand's right end in 560ms on the island curve, a small toss
+    on the way (§6), while the hand opens room for it; with nowhere to leave from it rises into its
+    place. A snapshot — the line's, ⌃⌘A, the View menu's Take Screenshot — deals a picture card from
+    the region it kept (the still is main's; its ring keeps twelve, as the hand does); the desk's
+    **Copy** (§8) deals a picture of the selection, or a text card for one note. ⌘C in a pane, Copy in
+    History and in Chat's thread, and another app's copy brought in — ⌘V with no caret anywhere, or a
+    drag let go away from a pane and the prompt — deal as their doors arrive (*as built*, below).
+    Another app's clipboard is never read on its own: what is copied elsewhere, passwords included,
+    stays out. **Twelve** (HN-D8): the thirteenth pushes the oldest off the left end. **This window's
+    session** (HN-D9): closing the window or quitting empties the hand; nothing of it is written
+    anywhere.
+  - **Where cards go** (HN-D4, HN-D6, HN-D7, HN-L5): drag a card out of the hand and every place that
+    takes it answers under the pointer — its 1.5px `--vf-select` ring (a selection, §2.3) and, over
+    the card, what letting go will do: "Paste into claude·2", "Place as a note", "Place as a print";
+    a place that cannot take it says why in the same voice, never red — "The desk can't hold a file
+    yet". Let go and a **copy** plays in: the card shrinks into the place, then springs back to its
+    own (HN-D4: a card is never spent; × or ⌫ removes it), and the line's note says what happened,
+    once ("Pasted into claude·2", "Placed as a note"). **A Godview pane** takes the card's text
+    pasted at its prompt — bracketed when its program asked, Return never pressed for you (a trailing
+    line break is never given), the paste's size refusal included (the note's own sentence, §8 "The
+    line"); a file pastes its path and a picture its file's path, the road Finder's drop takes; a
+    picture with no file says it can't be pasted yet, and a snapshot whose still main no longer keeps
+    says "Not pasted — that snapshot is no longer kept". **The desk** (Canvas) takes text as a note and a picture as a print, where you let go
+    (HN-D7); a file or an agent says the desk can't hold it yet. **Chat's composer** takes a card as a
+    chip (§8 "Chat's composer"). Over the line the carried card ducks to 0.55; **held over a view's
+    cell for 520ms** (HN-D6) that view opens under it, the cell saying "Opening Godview" with its
+    progress — copy in History and play in Godview in one drag.
+  - **Picking one up** (HN-D5): a click picks a card up the way the desk opens its notebook — it flies
+    to the window's centre and grows to reading size, **2.6×**, in 560ms on the island curve, while
+    the window behind it blurs 14 and dims 8% (the desk's held object, §8); the bar under the head,
+    at the tools in hand's place (y 64), says where it came from and holds **Remove** and **Done**.
+    Esc, Done ("Done  Esc") or a click on the blur puts it back: 140ms, then 440ms home. A card picked up
+    is a modal (the Peek's rule): nothing under the scrim gets a key — ⌫ removes the card, Esc puts it back,
+    Tab stays in its bar — and the keyboard's focus goes to Done and comes back when the card goes home.
+  - **One owner** (§10; HN-L7): the hand raised and a card picked up are the frame's open surface
+    `cards` — raising the hand folds the others, and another opening lowers it. The hand stands above the
+    line (z 63; the line 62), a card picked up above it (64), a carried card above both (66). The label
+    over a carried card is the line note's voice — solid chrome, secondary ink — never the select blue
+    the page drew.
+  - *As built (HN-1, HN-2, HN-4, 2026-10-29):* the snapshot's cards, the desk's Copy, and the plays
+    into a pane, onto the desk and through a view's cell. ⌘C in a pane waits on ghosttea's routed
+    selection text (petition G30: its routed `copySelection` answers nothing at 0.13.7); Copy in
+    History on a copy port in rosetta's room (petition RO-31); another app's paste and drag, and
+    picture cards on the system clipboard, are HN-5 and HN-6 (ROADMAP).
 - **Pills** (`UiPill`; the settings rows' `SettingsPill`): full-round, padded 2 × 8, 10px
   medium in tertiary ink on the foreground at 5% — a label, never a control: a plugin's source
   (below), a fact beside a name.
@@ -1993,10 +2140,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     the line's glass (§5) with its hairline and the island shadow; cells **32** × 32, corners 16,
     their glyphs **16** in secondary ink (primary under the pointer); the rule 1 × 18 in the strong
     hairline, 5 clear each side.
-  - **Order** — **Send to…** · rule · the kind's acts · Duplicate (`duplicate`) · Tape it down
-    (`tape`) · More (`ellipsis`) · rule · Delete (`trash`). *Send to…* is the bar's one word:
-    `agents` 16 and "Send to…" at 13/500 in primary ink, resting on the ready fill (the foreground
-    at 8%), a 32-tall pill padded 0 12 0 10, gap 7; several selected, it counts them — "Send 2 to…".
+  - **Order** — **Copy** · rule · the kind's acts · Duplicate (`duplicate`) · Tape it down
+    (`tape`) · More (`ellipsis`) · rule · Delete (`trash`). *Copy* is the bar's one word (HN-D3,
+    2026-10-29; it was Send to…, `agents`, "Send 2 to…"): `clipboard` 16 and "Copy" at 13/500 in
+    primary ink, resting on the ready fill (the foreground at 8%), a 32-tall pill padded 0 12 0 10,
+    gap 7; with several selected it still says Copy — the card it deals names how many.
     **The kind's acts** are those every selected object's type declares (the anchor's `menu`, ICE
     K8a), each a 32 cell wearing its glyph by §13's table (R2) — a `{ path, fill? }` drawing
     through the bar's one path renderer, a name the set lacks as `missing`, said once — and an act
@@ -2005,21 +2153,21 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     `locked`: every selected object taped): no Duplicate, and the tape act becomes **Lift the
     tape**, wearing `lift` — an ACTION whose name changes, never a toggle and never `aria-pressed`
     (R10).
-  - **States** — hover the ready fill (8%) · press the foreground at 14% and scale 0.95 · Send to…,
+  - **States** — hover the ready fill (8%) · press the foreground at 14% and scale 0.95 · Copy,
     which rests on the ready fill, steps to 14% under the pointer and 0.97 pressed (R25) · More,
     its menu open, shown on — the inverted solid · Delete arms only while hovered:
     `--vf-ink-danger` on `--vf-red` at 12% · focus a 2px `--vf-select` ring, offset 2.
   - **Keyboard** (R9) — a toolbar named "Selection": ← → move between its cells, Esc goes back to
-    the desk, and Tab from the draft reaches it. A tooltip says the act and its key, the frame's way
+    the desk, and Tab reaches it. A tooltip says the act and its key, the frame's way
     (FR-5): "Duplicate  ⌘D", "Tape it down  ⇧⌘L", "Delete  ⌫" — the desk's keymap (DK-D24);
     ⇧⌘L is the DESK's act, ICE's default keymap's (`keymap.ts:172`), not a kind's, so it is printed
     (R23, reversed 13:40Z). A kind's act prints none on this build — its declared keys are ICE's
-    demo's (R1, DK-D24); Send to… and More have none.
+    demo's (R1, DK-D24); Copy says the frame's ⌘C ("Copy  ⌘C", HN-D3) and More has none.
   - **Motion** — away for a gesture (a drag, a marquee, a pan, a pinch) and while a note is being
     written (the anchor's `gesturing`, `editing`): out in 90ms, back 200ms after it ends, in over
-    180ms (ICE's, as built); away too from Send to…'s press while its chip flies and @'s list is
-    open (below). Deselected, it fades out over 120ms `ease-out` (R8). Reduced motion (M6) halves
-    every duration, fades only (R8).
+    180ms (ICE's, as built). Copy's card leaves from the selection while the bar stays (HN-3; Send
+    to… stepped it aside while its chip flew). Deselected, it fades out over 120ms `ease-out` (R8).
+    Reduced motion (M6) halves every duration, fades only (R8).
   - **A missing face** selected (below): the bar names the type where the kind's acts would stand.
 - **The bar grown — More, and right-click** (Chrome on the Mat §3.2; MC-D6 ruled through One Frame's
   lock; FC-D14 solid; R1, R4, R5, R6, R20, R23, R26; DK-D29, DK-D24; DK-11): **More grows the bar
@@ -2040,11 +2188,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   upward the list reads bottom-up, nearest first. **The order, nearest first:** the kind's acts
   (`ops.runMenuAction`; no keys, R1) · **Open** (↩) — only when exactly one object is selected and
   its type opens (`engine.catalog.widget(type).openable`), running `ops.open`; a container (the mini
-  mat) has no row, ⏎ enters it (R4) · Send to… | Duplicate (⌘D; not while taped) · Bring to front ·
+  mat) has no row, ⏎ enters it (R4) · Copy (⌘C) | Duplicate (⌘D; not while taped) · Bring to front ·
   Send to back (`ops.reorder`) · **Clean up** (two or more selected: `ops.arrange` tidies them into
   reading-order rows, one undo step — DK-D29) | Tape it down, or Lift the tape (⇧⌘L, R23) | Delete
-  (⌫, armed red under the pointer). No Copy: the engine has no copy op. Send to…, Bring to front,
-  Send to back and Clean up print no key — DK-D24 binds none. **The eyebrow** names what it acts on,
+  (⌫, armed red under the pointer). Copy's ⌘C is the frame's, not the engine's — ICE has no copy op
+  (HN-D3); Bring to front, Send to back and Clean up print no key — DK-D24 binds none.
+  **The eyebrow** names what it acts on,
   at the far end, in the mat's print: mono 10, capitals, 0.08em, tertiary, padded 8 10 5 — NOTE · 2
   OBJECTS · CLOCK, the host's read of the types' names (the doors, above), and a missing face's type
   with its word: NOTE · PLUGIN OFF. Rows fade and rise 4px nearest first, 160ms + 26ms a row (cap
@@ -2070,7 +2219,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   the window — the field, then what you hold; object chrome, not the head's (FR-1). The held
   object's **reading fit keeps 116** above it (the bar's foot, 104, + 12) **and 100** below (the
   line's 88 + 12): I20's `deskLayer({ hold: { top: 116, band: 100, travelMs: 560 } })` — ICE's own
-  56 / 72 are its demo's. **Order:** Send to… · rule · the kind's tools · the readout · rule · Done.
+  56 / 72 are its demo's. **Order:** Copy · rule · the kind's tools · the readout · rule · Done.
   **The tools** are the anchor's slots (`HeldAnchor.tools`; each `HeldSlot` an `id`, a `label`, a
   `kind`, a `hint`, a `glyph`, a `swatch`), **in their declared order, never regrouped** (R13), a 6
   gap where the run changes between pages, inks and tools; each runs through `ops.useHeldTool(id)`.
@@ -2131,7 +2280,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   one at the view's centre — `handle.tray.lay()`, the tray's own take: one undo step, selected, the
   board folding as a handed take's does; Esc closes the board; the filters and the board are two
   stops of Tab. **One surface at a time:** Objects is one of the frame's open surfaces (§10) — it
-  folds @'s list, the explorer, the menus, the drawers and the palette, and they fold it; Esc
+  folds the explorer, the menus, the drawer, the cards and the palette, and they fold it; Esc
   closes it ("Close  Esc"); B toggles it, never while typing and never under a cover. **The tray
   island and its state are gone** (R21) — the pegboard replaced them.
   *History:* DK-13 (2026-10-06) built the board and deleted the tray island and its state (R21); its
@@ -2139,40 +2288,23 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   ICE `0.15.0-desk.6`, petition I37):* the walk, the scroll and the lay moved onto ICE's doors and the
   ring onto `focused.rect`; ICE's scroll does not keep the focused hang out of the content's fade under
   the header, as DK-13's own did.
-- **Send to…** (Chrome on the Mat §3.6; MC-D5 ruled through One Frame's lock: hand off to the line;
-  DK-D26; One Frame §7, FC-D1; R15, R25; DK-14): **it only drafts** — it never sends and never
-  aims; VibeField aims in one place, the line. Pressed (on the bar, in hand or in the menu), the
-  selection becomes **one chip** in the draft: the host inserts it at the caret, focuses the draft
-  and **types the @**, so @'s list opens exactly as typing opens it (FC-D1), the caret after the
-  chip (R15). Before it lands, a chip of the object's face **flies from the selection to the caret
-  on a straight line, 1.25 → 0.86, 560ms on the island curve** (R15; M4, shrinking along its
-  travel), and the @ comes 180ms after it lands; a draft already aimed takes the chip with no @,
-  and send arms (Chrome on the Mat §3.6). It lands as the line's chip (§8, the line: 24 tall,
-  corners 7, 12.5/500, the glyph 13). **Its face** (R15): a note wears its paper — its `paper` prop
-  through the palette's CSS colour — and its ink, `snippets` and its first 24 characters; any other
-  kind its NAME and no glyph ("Clock") — neither ICE's `TrayEntry` nor DK-0f's contribution carries
-  one (R15, amended 13:40Z); several, `package` and "N objects"; a missing face, its type's name.
-  **What it
-  carries** (DK-D26): the objects' names, their durable text and a still through the capture door of
-  the anchor's box WITHOUT the brackets' 6 / 10 outset — `handle.capture({ rect, marks: false })`
-  (ICE I23, I40), drawn without the selection's marks and taken at once, of the last presented frame
-  (R15). The selection is **never cleared or put back**: no selection write during Send to…, and
-  nothing a peer could see blink (smoke:canvas holds the selection's count on every frame from the
-  press). **The bar steps aside from the press** and comes back 200ms after the list folds (R8's 200;
-  aimed, 200 after the chip lands, there being no list — DK-14 measured it away 16ms after the press
-  and back 208ms after the fold). The tools in hand never step aside for it (plan addendum (50)): the
-  hand is drawn out of the marks. Whether the bar should wait for the list again, now that nothing is
-  cleared, is James's call (plan addendum (95)); it stands as built until he rules. Reduced motion
-  (M6): no flight — the chip fades in at the caret. The picker Marks on the Mat drew growing out of the
-  bar was never built and is not; an agent reading or rendering the desk itself is the AGENT'S EYES
-  program, beyond a chip.
-  *History:* the canon's first words (DK-0d, 2026-10-03) hid the marks by the host's own doors and
-  stepped the bar aside only while the list was open. *Corrected 2026-10-06 (DK-14, measured):* hiding
-  the marks cleared the selection for one fade of the brackets and a capture (the act's record: the
-  still taken 144–160ms after the press, the selection put back then), and a bar left standing would
-  have faded out and back in under the flying chip (R8's deselect) — so the bar stepped aside from the
-  press. *Amended 2026-10-07 (DK-17b, ICE `0.15.0-desk.6`, petition I40):* ICE's capture hides the marks
-  itself; the clear and the put-back are gone, and with them the step-aside's first reason.
+- **Copy** (Cards in Hand: HN-D3 ruled by James 2026-10-29 — it replaced **Send to…**, MC-D5, which
+  only drafted into the line; DK-D26's still; built at HN-3): the selection bar's one word, on the
+  bar, in its grown menu and in hand, and the desk's **⌘C**. It **only copies**: the selection becomes
+  one card dealt into the hand (§8 "The hand") — one note's words as a text card; anything else, or
+  several, as a picture card of the selection through the capture door, of the anchor's box WITHOUT
+  the brackets' 6 / 10 outset (`handle.capture({ rect, marks: false })`, ICE I23, I40), drawn
+  without the selection's marks and taken at once, of the last presented frame (R15), titled by its
+  face's name ("Clock", "2 objects", a missing face's type). The card leaves from the selection's
+  box and arcs into the hand's right end in 560ms on the island curve (§6); the text half also goes
+  on the system clipboard (the host's copy door). The selection is **never cleared or put back**: no
+  selection write during Copy, and nothing a peer could see blink. ⌘C copies only on Canvas, with a
+  selection, outside any field — a note being written copies its own text — and never under a cover.
+  Reduced motion (M6): the card fades into its place.
+  *History:* **Send to…** (DK-0d…DK-17b, 2026-10-03…10-07) flew a chip of the object's face from the
+  selection to the line's caret (1.25 → 0.86, 560ms) and typed the @ 180ms after it landed, so @'s
+  list opened; the bar stepped aside from the press while the chip flew. It left with the line's
+  draft (LN-D3, HN-2). A picture on the system clipboard waits for its door (HN-5).
 - **The missing face** (DK-D18 as amended 2026-10-03: no VibeField kind; ICE I24; R11, R12, R24):
   an object the desk cannot draw — its type has **no kind** on this desk (a plugin off or gone, a
   type this build never registered — ghost stubs register faceless types only — or one registered
@@ -2185,8 +2317,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   why, in one of five words (R12, R24): **"plugin off"** (its plugin disabled) · **"plugin gone"**
   (uninstalled) · **"no kind"** (never registered) · **"remount to draw it"** (registered after the
   mount, I25) · **"can't draw"** (its kind faulted) — "Note · plugin off" — 13/500 in secondary
-  ink, a label and not a control; the grown menu's eyebrow says the same in capitals, and Send to…
-  carries the type's name. It is said once, in the status line (R12, above), never painted onto the
+  ink, a label and not a control; the grown menu's eyebrow says the same in capitals, and Copy's
+  card carries the type's name. It is said once, in the status line (R12, above), never painted onto the
   object as an alarm.
 - **The covers over the desk** (DK-D25 ruled 2026-10-02 — "frozen desk should be still and consume
   no render time at all"; FC-D13, FC-D15, FC-D16; ICE I23; R16; DK-15): **under a cover the desk is
@@ -4103,6 +4235,18 @@ tap, key or button until PT-S4's touch lands.
 | at rest | its last frame, with the rest mark | — |
 | stopped | "The Simulator stopped", over its still | "Try again" |
 
+**The phone's two acts on the selection menu** (track PT, PT-S2; R11, ruled 2026-10-30) — said for the phones selected, one
+undo step for each phone it changes, quoted exactly by the plugin (`plugins/simulator`'s `attach.ts`). **Attach** binds each
+phone to a Simulator of this Mac's own: the booted device of the phone's own model, else the first booted iPhone (the phone
+morphs into its model), else the phone's own model on the newest iOS this Mac has, whose face then says what is true of it
+— off, with "Boot", or no device, with "Create it". **Finish** turns each phone to the next of its model's launch colours,
+and round to the first. There is no Model act: a bound phone's model is its device's, and only Attach sets it — a model
+unlike its device would show another iPhone's screen in its frame. A binding names a model and an iOS, never one Mac's
+device, so on another Mac the same phone shows that Mac's own Simulator of its model. "The newest iOS this Mac has" is its
+newest INSTALLED iOS runtime, whether or not any device runs it yet: the face then shows the model's device on whatever
+runtime has one, or says "no device", with "Create it". Attach changes nothing on a Mac with no iOS runtime installed, or
+before VibeField has read this Mac's devices.
+
 **The update's words** (track AU, AU-L2, AU-L3, AU-L6; ruled 2026-10-29). **A version is said two ways:** exactly
 where it can be copied — `0.1.0-nightly.20261027` in mono on Settings → Updates' head — and in friendly words in a
 sentence: a nightly is "the Oct 27 nightly" (its day, from `-nightly.YYYYMMDD`; "The Oct 27 nightly" at a sentence's
@@ -4172,9 +4316,12 @@ their place". "Fullscreen" stays the pane's word (§8).
 - **One frame, every view — five places, two axes** (One Frame FR-1 and FR-6, ruled
   2026-10-01; first built 2026-10-03). Chrome lives in FIVE places: **the head** (the window's top
   0–52, its controls 40 tall at `top-2`, centred on the lights' axis), **the line** (the foot:
-  880 × 52 at 20 from the bottom — x 150–1030, y 708–760 at the default 1180 × 780 — never
-  starting nearer the left than 76, so it never meets the corner), **the two edges** (the notches
-  and their drawers, §8), **the corner** (your face, centred on the foot axis), or **on its own
+  300 × 52, 76 from the left and 20 from the bottom — x 76–376, y 708–760 at the default
+  1180 × 780 — never nearer the left than 76, so it never meets the corner; *880 × 52 and centred
+  until HN-2, 2026-10-29*) and beside it **the hand** (the foot's middle, from 28 past the line's
+  right end to 24 from the window's right: the cards' tips on y 712, §8; HN-1), **the two edges**
+  (the notches and their drawers, §8 — the right's alone since HN-1, the left's clipboard having
+  become the hand), **the corner** (your face, centred on the foot axis), or **on its own
   object** (the desk's selection bar, the tools in hand, a pane's band; object chrome stays with its object,
   even where it stands under the head). **Two axes:** everything in the head centres on y 28, the
   traffic lights' centre; everything at the foot on y 734, the line's centre. **The frame stands
@@ -4182,10 +4329,13 @@ their place". "Fullscreen" stays the pane's word (§8).
   Assistant are views drawn as ONE cover over it (§6), each on its own ground at the covers' glass,
   72% (FC-D16) — with no blur until the field's still exists to blur (the desk's, DK-15: §8, the
   covers over the desk). A covered view ends its content at 692, the **reserve** of 88 above the
-  window's foot, and keeps 8px clear at each edge for the notches' slivers; its own ground runs
+  window's foot, and keeps 8px clear at each edge for the notches' slivers (the left 8px stays until the right
+  notch leaves too, HN-8, so a view keeps one margin); its own ground runs
   under the line, and only the canvas runs content
   under it. Above the frame stand only Settings, the palette, the Peek's scrim and popup (64, §8
-  "Search — the Peek", 2026-10-08) and the loading veil (and, until
+  "Search — the Peek", 2026-10-08), the hand's own card picked up and its scrim (64) and the card
+  being carried (66) — the hand itself stands with the frame, just above the line (63; §8 "The
+  hand") — and the loading veil (and, until
   FR-4 opens it above the line, the open Me menu, which grows over the track's left end — *since
   FR-4 it stands with the frame, above the line, and nothing of the frame's is under it*).
   **The active view has ONE owner** — the window's, held in main beside the menu that names it,
@@ -4195,10 +4345,14 @@ their place". "Fullscreen" stays the pane's word (§8).
   nothing else switches views (FC-D4) — they are the product's own chords, taken on the window's
   capture phase before a focused pane can see them, printed on the views track's cells (§8) and
   said in the View menu. **The line's own keys** (One Frame §11) belong to its create and are SAID,
-  never printed (FR-5): **B** toggles Objects on Canvas — never while typing (the draft, a note, any
-  field) and never under a cover; **⌘T** (Ctrl+T) is Godview's New terminal, a product chord taken
-  on the capture phase in Godview so a focused pane never sees it (ghostty's new_tab); and **@ is
-  never a shortcut** — it is typed in the draft. **Search's key** (§8 "Search — the Peek",
+  never printed (FR-5): **B** toggles Objects on Canvas — never while typing (a note, any field) and never
+  under a cover; **⌘T** (Ctrl+T) is Godview's New terminal, a product chord taken on the capture
+  phase in Godview so a focused pane never sees it (ghostty's new_tab). **⇧⌘V** raises the hand in
+  every view (§8 "The hand"), a product chord taken on the capture phase; **⌘C** on Canvas is the
+  desk's Copy while something is selected and no field holds the caret (§8 "Copy") — the desk's
+  chord, never the product's: a pane never sees the desk's ⌘C (the cover hides the desk's bar), so
+  Settings → Terminal → Keyboard says Ghostty's ⌘C runs in the deck. @ is never a
+  shortcut: it is typed in Chat's composer (§8). **Search's key** (§8 "Search — the Peek",
   2026-10-08) is PRINTED under the frame's search button: **⌘F** (Ctrl+F) opens the Peek, a product
   chord taken on the capture phase while History or Godview is the view (Godview's own Find left
   with P2, 2026-10-09) — so Settings → Terminal → Keyboard says Ghostty's find never reaches a pane
@@ -4215,7 +4369,7 @@ their place". "Fullscreen" stays the pane's word (§8).
   typing (it types "!"). A key they take is claimed, so the View menu's item never answers it a
   second time (the menu's zoom is an act the head answers since FR-4, below). **The frame's open
   surfaces have ONE owner** (FR-4; the line's, renamed at FR-3 when
-  the head's joined): @'s list, Objects, the fields explorer, the zoom's menu and the palette are
+  the head's joined): @'s list (until HN-2), Objects, the fields explorer, the zoom's menu and the palette are
   one value, so opening any one folds the rest, and Settings folds them and is folded by them
   (*corrected 2026-10-28:* this said "every surface that folded the tray folds them"; the tray left
   at DK-13). *History (folded 2026-10-28):* the frame was built in four slices on 2026-10-03 — FR-1
@@ -4231,7 +4385,10 @@ their place". "Fullscreen" stays the pane's word (§8).
   *Until the Peek lands (2026-10-04, the search interim), History's room's sheet is a ninth,
   `history-search` (§8 "History").* *Since 2026-10-08 (the Peek, P1) **`search`**, the Peek's popup,
   is one of them (§8 "Search — the Peek") and `history-search` left with the room's sheet; beside
-  the desk's selection menu (DK-11, §10 "The mat's places") the one owner holds ten.* **The
+  the desk's selection menu (DK-11, §10 "The mat's places") the one owner holds ten.* *Since Cards in
+  Hand (2026-10-29, HN-1 and HN-2) @'s list has left with the line's draft and the clipboard's drawer
+  with the left edge, and **`cards`** — the hand raised, or a card picked up — is one of them (§8 "The
+  hand"; HN-L7): `objects · fields · zoom · palette · me · cards · artifacts · search · selection`.* **The
   app's theme has ONE owner, main's** (FC-D5): Light · Dark · Auto, one value per device kept by the
   shell, Auto following the OS through Electron's `nativeTheme`, and the owner projects what it
   resolves to back into `nativeTheme` — so the window's native chrome, its menus and the page's
@@ -4320,7 +4477,7 @@ I-5) and never a colour of its own. Two constructions, one set:
 | **Hardware** (10) | close · check · search · rename (pencil) · return · backspace · more (ellipsis) · arrow · general (sliders) · keyboard | one solid silhouette as a single `evenodd` path — bodies and their holes, no masks, no filters — so the same geometry is a template asset on iOS |
 
 **Sizes** are the host's, by CSS: 12 (captions) · 13–16 (row controls) · 18 (the Settings rail, the
-Snap tile, the Me menu) · 20 (the 40px round buttons) · 22 (the artifact choices) ·
+line's snapshot, the Me menu) · 20 (the 40px round buttons) · 22 (the artifact choices) ·
 28 (the Agents head). *(Corrected 2026-10-28, the housekeeping pass: the consumers above named the
 HUD's round buttons, the file pill and the tray's plus at 22, which retired with the island, the
 pill and the tray — FR-2, FR-3, DK-13; the line's create draws its glyph at 16, §8 "The line".)* Instrument's stroke therefore renders 1 px at 12 and 1.67 px at 20 — one
@@ -4342,8 +4499,12 @@ and resume-play-T3) are the composer's create in Godview and in History (§8, th
 window with its chevron, the frame opened at the lower right to hold the verb — a plus for a session
 started, play for one resumed — so the noun travels with the verb (One Frame FR-3: only Canvas's
 create is a bare plus). Their Hardware records are the page's T4 column, drawn and not shipped.
-**Send** needs no glyph of its own: it is `arrow`, as drawn (up). No `attach`: the line has no attach
-button (FC-D1 ruled type @).
+**Send** (Chat's composer, §8) needs no glyph of its own: it is `arrow`, as drawn (up). No `attach`:
+@ is typed (FC-D1). **The hand's indexes** (Cards in Hand, HN-D1, 2026-10-29): a card prints its kind's
+glyph twice, as a playing card prints its rank — `snippets` (text) · `capture` (a picture; the line's
+snapshot wears it too) · `code` (a file) · `agents` (an agent) · `terminal` · `message` — in the card's
+index ink, never a colour of its own (§5). `clipboard` is the selection bar's Copy (HN-D3), its notch
+having left with the clipboard's tray (HN-1).
 **The update** (track AU, AU-D7 ruled A 2026-10-29) needs no glyph of its own either: a download is `arrow` turned
 180 (down), the restart and Settings → Updates' rail are `reset`, an update that has installed is `check`. The dot
 beside the face is not a glyph: it is the badge slot's state (§2.8 I-5, §2.5). The status item's update image — the
@@ -4357,9 +4518,10 @@ the page's T4. Since 2026-10-08 (P3) it is also History's create while the chose
 ICE's selection glyphs redrawn in the Instrument construction for the desk's chrome (§8):
 `duplicate` · `tape` · `lift` · `trash` on the selection bar — `tape` and `lift` are one padlock, shut
 and opened — and `pen` · `eraser` · `today`, the modes and the act the held kinds declare; their
-Hardware records are drawn, not shipped. The rest of that chrome borrows the set as drawn: `agents`
-(Send to…), `ellipsis` (More), `plus` (Objects, turned 135° to close), `chevron` (a page or a month,
-turned 180° to go back), `undo` (flipped for redo), `snippets` (a note's chip). **A desk kind may draw
+Hardware records are drawn, not shipped. The rest of that chrome borrows the set as drawn: `clipboard`
+(Copy; `agents` while it was Send to…), `ellipsis` (More), `plus` (Objects, turned 135° to close),
+`chevron` (a page or a month,
+turned 180° to go back), `undo` (flipped for redo), `snippets` (a note's card, §8 "The hand"). **A desk kind may draw
 its own act and tool glyphs beyond the set** (MC-D8) — ICE's `{ path }` drawing, held to this
 construction (the 24-unit box, one 2-unit stroke, `currentColor`) and drawn as the set's are, never as
 an inline `<svg>` in product code; the mini mat's "Change the vinyl" is the first built-in to (the

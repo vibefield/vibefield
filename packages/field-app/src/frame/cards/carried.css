@@ -1,0 +1,166 @@
+/* THE CARRIED CARD (track HN, HN-4; DESIGN.md §8 "The hand", where cards go) — the one card a
+   drag carries and what the places under it say, above the hand (63, over the line's 62) and a
+   card picked up (64), as the line's own flier stood above the line: never a target. Nothing here
+   takes the pointer, so what is under it is found past this layer. The motion is CSS transitions
+   (M3), ended by the machine's timers (card-drag.ts), never by `transitionend`. */
+.vf-cards-carried-layer {
+  position: fixed;
+  z-index: 66;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* a card in hand is grabbed (§7, where a thing is dragged): the document's cursor for the carry's
+   life (card-drag.ts sets the attribute), whatever the inert layer leaves the pointer over — a
+   pane's I-beam, a button's hand */
+:root[data-vf-cards-carrying],
+:root[data-vf-cards-carrying] * {
+  /* biome-ignore lint/complexity/noImportantStyles: it outranks each element's own, inline too. */
+  cursor: grabbing !important;
+}
+
+/* the ANCHOR: a point in window px — the pointer while carried, the slot's pivot going home */
+.vf-cards-carried {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+  /* the card's own shadow, lifted (the page's `.card.drag`): the card reads its lift, turn and
+     scale from these (cards.css). Its own turn and scale are held at rest here, wherever the layer
+     is mounted, because these two boxes do the turning and scaling about the grab point. */
+  --vf-cards-lp: 1;
+  --vf-cards-r: 0deg;
+  --vf-cards-s: 1;
+}
+
+/* the CARD, turned and scaled about the anchor: while carried its lean follows in 90ms (the page's
+   `.card.drag`) and its size — the lift, or the duck over the line to 0.55 — in 160ms plain `ease`
+   (§6), each on its own property; its place at once */
+.vf-cards-carried-card {
+  transform-origin: 0 0;
+  transition:
+    transform 90ms ease,
+    scale 160ms ease;
+}
+
+/* let go on a place that took it: it shrinks into the point, accelerating (the retract, §6) */
+.vf-cards-carried[data-phase="play"] .vf-cards-carried-card {
+  transition:
+    transform var(--vf-cards-carried-play-ms) cubic-bezier(0.4, 0, 1, 1),
+    scale var(--vf-cards-carried-play-ms) cubic-bezier(0.4, 0, 1, 1);
+}
+
+/* home: the anchor and the card travel together on the island curve, so the card lands on its
+   slot with no jump; with no slot to go to, it fades where it is (M4: a cancelled ghost) */
+.vf-cards-carried[data-phase="home"],
+.vf-cards-carried[data-phase="home"] .vf-cards-carried-card {
+  transition:
+    transform var(--vf-cards-carried-home-ms) var(--vf-ease-island),
+    scale var(--vf-cards-carried-home-ms) var(--vf-ease-island),
+    opacity var(--vf-cards-carried-home-ms) ease;
+}
+
+/* …and it settles as it goes: the shadow comes down to the slot's at rest */
+.vf-cards-carried[data-phase="home"] {
+  --vf-cards-lp: 0;
+}
+
+.vf-cards-carried[data-homeless] {
+  opacity: 0;
+}
+
+/* the place that will take it: its box ringed in the select blue, 1.5px inside (§7, a sole
+   selection), the frame's active pane's corner */
+.vf-cards-carried-ring {
+  position: absolute;
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1.5px var(--vf-select);
+  animation: vf-cards-carried-ring 120ms ease both;
+  pointer-events: none;
+}
+
+@keyframes vf-cards-carried-ring {
+  from {
+    opacity: 0;
+  }
+}
+
+/* let go on it, the place's ring fades over 120ms while the card goes in (§6) */
+.vf-cards-carried-ring[data-phase="play"] {
+  animation: vf-cards-carried-ring-out 120ms ease both;
+}
+
+@keyframes vf-cards-carried-ring-out {
+  to {
+    opacity: 0;
+  }
+}
+
+/* HN-D6 — the view's cell under the card: its ring fills while its clock runs, then the view
+   opens (the page's `.vcell.spring`). Linear, because it is a clock: the fill says how much of
+   the hold is left, so it moves at the hold's own pace. */
+.vf-cards-carried-opening {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px solid var(--vf-select);
+  border-radius: 999px;
+  clip-path: inset(0 100% 0 0 round 999px);
+  animation-name: vf-cards-carried-opening;
+  animation-duration: var(--vf-cards-carried-spring-ms);
+  animation-timing-function: linear;
+  animation-delay: var(--vf-cards-carried-opening-from, 0ms);
+  animation-fill-mode: forwards;
+  pointer-events: none;
+}
+
+@keyframes vf-cards-carried-opening {
+  to {
+    clip-path: inset(0 0 0 0 round 999px);
+  }
+}
+
+/* what the place says, above the card (or above the cell it opens): the line's note's voice —
+   solid chrome, 12/500, secondary ink; a refusal in the same voice, never red (HN-L5) */
+.vf-cards-carried-label {
+  position: absolute;
+  max-width: 360px;
+  padding: 7px 10px;
+  overflow: hidden;
+  border-radius: 10px;
+  color: var(--vf-text-secondary);
+  background: var(--vf-chrome-solid);
+  box-shadow:
+    0 0 0 1px var(--vf-hairline-strong),
+    var(--vf-shadow-island);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  transform: translate(-50%, -100%);
+  pointer-events: none;
+}
+
+/* M6 — no travel: let go, it fades where it is while its place rings once (the ring's fade halved,
+   inside the halved play); home, it fades in on its slot (or stays gone) */
+@media (prefers-reduced-motion: reduce) {
+  .vf-cards-carried-card,
+  .vf-cards-carried[data-phase="play"] .vf-cards-carried-card,
+  .vf-cards-carried[data-phase="home"] .vf-cards-carried-card {
+    transition: none;
+  }
+
+  .vf-cards-carried[data-phase="play"] {
+    opacity: 0;
+    transition: opacity var(--vf-cards-carried-play-ms) ease;
+  }
+
+  .vf-cards-carried[data-phase="home"] {
+    transition: opacity var(--vf-cards-carried-home-ms) ease;
+  }
+
+  .vf-cards-carried-ring[data-phase="play"] {
+    animation-duration: 60ms;
+  }
+}

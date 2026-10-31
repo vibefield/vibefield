@@ -7,8 +7,9 @@
 // the bar's counters, the status line's said notices):
 //   ONE      — the clock selected: the bar over its brackets (centred, its foot 10 above them, or 10 below under the
 //              safe top; 42 from the sides; 40 tall), in the canon's order with the clock's own act drawn by the bar's
-//              ONE path renderer and no key printed for it; "Tape it down  ⇧⌘L" printed (R23 reversed);
-//   TWO      — ⇧ and the note: "Send 2 to…", and More grows "Clean up" under "2 OBJECTS";
+//              ONE path renderer and no key printed for it; "Tape it down  ⇧⌘L" and "Copy  ⌘C" printed (R23
+//              reversed; HN-D3);
+//   TWO      — ⇧ and the note: one Copy for both (never counted), and More grows "Clean up" under "2 OBJECTS";
 //   TAPED    — the note taped from the bar: "Lift the tape" wearing `lift`, no Duplicate; lifted again;
 //   MENU     — More on the note: the grown menu nearest first under "NOTE", at least 244 wide, inside 94…the line's
 //              reserve, the bar's own row unmoved; Esc folds it;
@@ -55,7 +56,8 @@ export interface BarSeen {
   readonly dir: string | null;
   /** the cells in order: their acts, `|` for a rule, `words:<label>` for a missing face's words */
   readonly cells: readonly string[];
-  readonly send: string | null;
+  /** the Copy pill's word (HN-D3) */
+  readonly copy: string | null;
   readonly tips: Readonly<Record<string, string>>;
   /** each kind act's drawn glyph (`data-glyph`) */
   readonly glyphs: Readonly<Record<string, string | null>>;
@@ -174,7 +176,7 @@ const READ_BAR = `(() => {
     panel: open ? rect(bar.querySelector(".vf-bar-panel")) : null,
     dir: bar.getAttribute("data-dir"),
     cells,
-    send: bar.querySelector('[data-act="send"]')?.textContent ?? null,
+    copy: bar.querySelector('[data-act="copy"]')?.textContent ?? null,
     tips,
     glyphs,
     rows: [...bar.querySelectorAll(".vf-bar-list [data-row]")].map((el) => el.getAttribute("data-row")),
@@ -385,7 +387,7 @@ export async function selectionBarRows(d: BarRowsDriver): Promise<string[]> {
   );
   const oneAnchor = await js<DoorAnchor>(ANCHOR);
   const oneOrder = [
-    "send",
+    "copy",
     "|",
     `act:${BAR_CLOCK_ACT}`,
     "duplicate",
@@ -399,7 +401,9 @@ export async function selectionBarRows(d: BarRowsDriver): Promise<string[]> {
     problems.push(
       `ONE: the bar's cells were ${JSON.stringify(one.cells)}, not ${JSON.stringify(oneOrder)}`,
     );
-  if (one.send !== "Send to…") problems.push(`ONE: Send to… read ${JSON.stringify(one.send)}`);
+  if (one.copy !== "Copy") problems.push(`ONE: Copy read ${JSON.stringify(one.copy)}`);
+  if (one.tips["copy"] !== "Copy  ⌘C")
+    problems.push(`ONE: Copy's tip read ${JSON.stringify(one.tips["copy"])}`);
   if (one.glyphs[`act:${BAR_CLOCK_ACT}`] !== "kind")
     problems.push(
       `ONE: the clock's act was not drawn by the bar's path renderer (${JSON.stringify(one.glyphs)})`,
@@ -421,11 +425,11 @@ export async function selectionBarRows(d: BarRowsDriver): Promise<string[]> {
     await theme("light");
   }
 
-  // ── TWO: ⇧ and the note — "Send 2 to…", and More grows Clean up under "2 OBJECTS" ─────────────────────────
+  // ── TWO: ⇧ and the note — one Copy for both, and More grows Clean up under "2 OBJECTS" ────────────────────
   await select("desk.note", ["shift"]);
   const two = await settled(
     "the bar over two",
-    `(() => { const b = ${READ_BAR}; return b !== null && b.shown && b.send === "Send 2 to…"; })()`,
+    `(() => { const b = ${READ_BAR}; return b !== null && b.shown && b.copy === "Copy" && globalThis.__vfDesk.anchor()?.count === 2; })()`,
   );
   await pressCell("more");
   const twoMenu = await settled(
@@ -435,7 +439,7 @@ export async function selectionBarRows(d: BarRowsDriver): Promise<string[]> {
   if (twoMenu.eyebrow !== "2 OBJECTS")
     problems.push(`TWO: the eyebrow read ${JSON.stringify(twoMenu.eyebrow)}`);
   say(
-    `SMOKE_CANVAS_BAR_TWO ${JSON.stringify({ send: two.send, rows: twoMenu.rows, eyebrow: twoMenu.eyebrow })}`,
+    `SMOKE_CANVAS_BAR_TWO ${JSON.stringify({ copy: two.copy, rows: twoMenu.rows, eyebrow: twoMenu.eyebrow })}`,
   );
   await key("Escape");
   await until(
@@ -486,7 +490,7 @@ export async function selectionBarRows(d: BarRowsDriver): Promise<string[]> {
   );
   if (before !== null)
     problems.push(...judgeMenuPlace(view, before, grown).map((p) => `MENU: ${p}`));
-  const nearestFirst = ["comment", "send", "duplicate", "front", "back", "tape", "delete"];
+  const nearestFirst = ["comment", "copy", "duplicate", "front", "back", "tape", "delete"];
   if (JSON.stringify(menu.rows) !== JSON.stringify(nearestFirst))
     problems.push(
       `MENU: the rows were ${JSON.stringify(menu.rows)}, not ${JSON.stringify(nearestFirst)}`,

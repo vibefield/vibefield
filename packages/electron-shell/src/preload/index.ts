@@ -24,6 +24,8 @@ import {
   ScreenshotCaptureResult as ScreenshotCaptureResultSchema,
   ScreenshotPreviewRequest,
   ScreenshotPreviewResult,
+  ScreenshotStillBytesRequest,
+  ScreenshotStillKeptRequest,
   SHELL_CLIPBOARD,
   type ShellCommand,
   ShellPlatform,
@@ -251,6 +253,14 @@ async function invokeInHandlerWords(channel: string, payload: unknown): Promise<
     throw new Error(message.replace(REMOTE_ERROR_PREFIX, ""));
   }
 }
+
+/** HN-D7 — a still's bytes as main sends them: a Uint8Array over a plain ArrayBuffer (a Buffer
+ * arrives as one). Told by its tag, never `instanceof`, so the answer is read the same whichever
+ * realm deserialized it. */
+const isStillBytes = (value: unknown): value is Uint8Array<ArrayBuffer> =>
+  ArrayBuffer.isView(value) &&
+  Object.prototype.toString.call(value) === "[object Uint8Array]" &&
+  Object.prototype.toString.call(value.buffer) === "[object ArrayBuffer]";
 
 const platform = ShellPlatform.parse(
   process.platform === "darwin" || process.platform === "win32" || process.platform === "linux"
@@ -494,6 +504,28 @@ contextBridge.exposeInMainWorld("vibefield", {
           ScreenshotPreviewRequest.parse({ name }),
         ),
       ),
+    /** HN-D7 — a retained still's PNG bytes by its basename, or null once the
+     * tool no longer keeps it: what the desk prints a snapshot from. The answer
+     * is bytes or null and nothing else, checked here like every answer. */
+    stillBytes: async (name: string): Promise<Uint8Array<ArrayBuffer> | null> => {
+      const answer: unknown = await ipcRenderer.invoke(
+        IPC_CHANNELS.screenshotStillBytes,
+        ScreenshotStillBytesRequest.parse({ name }),
+      );
+      if (answer === null || isStillBytes(answer)) return answer;
+      throw new Error("screenshot still: main answered something other than bytes");
+    },
+    /** HN-4 — whether the tool still keeps a still, by its basename: what a snapshot's card
+     * asks before its still's path is pasted into a pane. The answer is a boolean and nothing
+     * else, checked here like every answer. */
+    stillKept: async (name: string): Promise<boolean> => {
+      const answer: unknown = await ipcRenderer.invoke(
+        IPC_CHANNELS.screenshotStillKept,
+        ScreenshotStillKeptRequest.parse({ name }),
+      );
+      if (typeof answer === "boolean") return answer;
+      throw new Error("screenshot still: main answered something other than kept or not");
+    },
     capture: async (): Promise<ScreenshotCaptureResult> =>
       ScreenshotCaptureResultSchema.parse(
         await ipcRenderer.invoke(

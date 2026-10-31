@@ -211,6 +211,39 @@ private func desktopLive(_ id: String, in link: FieldLink) -> Bool? {
     #expect(!link.notes.contains { $0.contains("re-subscribing") })
   }
 
+  /// PG-1c — the door's resync of a phone behind its cap: the whole mesh,
+  /// mid-stream, as `agent.snapshot` (the door's own spelling, `${base}.snapshot`).
+  /// It replaces the board, the chain goes on from its revisions, and the phone
+  /// asks the home for nothing.
+  @Test func aMidStreamMeshSnapshotReplacesTheBoardWithoutAskingAgain() async throws {
+    let door = LinkDoor(script: selfDoor)
+    await door.route(
+      studioDoorHost, homeDoor([MeshEntry(device: "dev-studio", rows: [boardRow(id: "s-1")])]))
+    let (link, _) = try await homedLink(door: door)
+    defer { link.stop() }
+    try await waitUntil("the board") { link.agents.map(\.id) == ["s-1"] }
+
+    let home = try #require(await door.latest(to: studioDoorHost))
+    // the deltas the door held are never sent: the resync stands at revision 14
+    await home.deliver(
+      event(
+        method: "agent.snapshot", subId: "m1",
+        payload: meshOpen([
+          MeshEntry(
+            device: "dev-studio", rows: [boardRow(id: "s-2"), boardRow(id: "s-3")], revision: 14)
+        ])))
+    try await waitUntil("the resync replaced the board") {
+      Set(link.agents.map(\.id)) == ["s-2", "s-3"]
+    }
+    // the next delta continues from the snapshot's revision
+    await home.deliver(
+      meshFrame(meshDelta("dev-studio", since: 14, revision: 15, removed: ["s-2"])))
+    try await waitUntil("the next delta applied") { link.agents.map(\.id) == ["s-3"] }
+    #expect(await home.methods.filter { $0 == "agent.subscribe" }.count == 1)
+    #expect(
+      !link.notes.contains { $0.contains("re-subscribing") || $0.contains("does not continue") })
+  }
+
   /// A frame that does not continue its desktop's chain is a GAP: the phone
   /// asks the home for a fresh board, and the board on the field STAYS until
   /// it lands — a repair is not a reason to draw nothing.

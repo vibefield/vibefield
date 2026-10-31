@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { SURFACE_LIMITS } from "../src/live-surfaces";
 import { METHODS } from "../src/methods";
 import { IPC_CHANNELS, SHELL_CLIPBOARD, TERMINAL_PIPELINE } from "../src/registries";
 import {
@@ -42,8 +43,11 @@ import {
   ShellProviderRegisterResult,
   ShellRendererRequestReplacementParams,
   ShellRendererRequestReplacementResult,
+  ShellSurfacesSimulatorDevicesParams,
+  ShellSurfacesSimulatorDevicesResult,
   ShellWebContentsCaptureArtifactPreviewParams,
   ShellWebContentsCaptureArtifactPreviewResult,
+  SURFACE_AUTHORITY_LIMITS,
   ThemePreference,
   ThemeSetRequest,
   ThemeState,
@@ -230,7 +234,7 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
   // meet at it in a merge and conflict out loud, where a number in the title
   // went stale in silence (item 102, found at HN's rebase rehearsal).
   it("exposes exactly its channel keys, in order", () => {
-    expect(Object.keys(IPC_CHANNELS)).toHaveLength(33);
+    expect(Object.keys(IPC_CHANNELS)).toHaveLength(35);
     expect(Object.keys(IPC_CHANNELS)).toEqual([
       "windowBootstrap",
       "prepareClose",
@@ -265,6 +269,8 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       "screenshotCapture", // SNAP-D3 — the native screenshot helper, one capture at a time
       "screenshotResult", // SNAP-3 — main → renderer: the View menu's capture, told to the page
       "screenshotPreview",
+      "screenshotStillBytes", // HN-D7 — a retained still's bytes, for the desk's print of a snapshot
+      "screenshotStillKept", // HN-4 — whether a still is kept, before a pane is given its path
       "rendererReplace", // DK-9 — the window's renderer replaced at its own asking (a plugin's kinds)
       "browserDataClear", // BP-D4 — Settings' Clear browsing data: the desk's profile cleared, its pages reloaded
       "clipboardRead", // item 102 — a paste's read through main, for the focused product window
@@ -303,6 +309,8 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       screenshotCapture: "vibefield:screenshot:capture",
       screenshotResult: "vibefield:screenshot:result",
       screenshotPreview: "vibefield:screenshot:preview",
+      screenshotStillBytes: "vibefield:screenshot:still-bytes",
+      screenshotStillKept: "vibefield:screenshot:still-kept",
       rendererReplace: "vibefield:shell:renderer-replace",
       browserDataClear: "vibefield:browser:clear-data",
       clipboardRead: "vibefield:clipboard:read",
@@ -763,6 +771,57 @@ describe("AH-3/AH-4 static shell provider", () => {
     expect(SHELL_INTERNAL_PROVIDER_METHODS).toContain("shell.openLink");
     expect(SHELL_PROVIDER_METHODS).toContain("shell.openLink");
     expect(METHODS.some((method) => method.method === "shell.openLink")).toBe(false);
+  });
+
+  it("PT-S2 (R11): the attach's device list is a local `surface.capture` read, carried by an INTERNAL provider verb, and its rows never hold a UDID", () => {
+    expect(METHODS.find((method) => method.method === "surface.simulator.devices")).toEqual({
+      surface: "product",
+      method: "surface.simulator.devices",
+      scope: "surface.capture",
+      idempotent: true,
+      locality: "local",
+    });
+    expect(SHELL_INTERNAL_PROVIDER_METHODS).toContain("shell.surfaces.simulatorDevices");
+    expect(SHELL_PROVIDER_METHODS).toContain("shell.surfaces.simulatorDevices");
+    expect(METHODS.some((method) => method.method === "shell.surfaces.simulatorDevices")).toBe(
+      false,
+    );
+    // above main's own worst case for the call: the Xcode probe (5 s) and the list (8 s)
+    expect(SURFACE_AUTHORITY_LIMITS.SIMULATOR_DEVICES_DEADLINE_MS).toBe(15_000);
+    expect(ShellSurfacesSimulatorDevicesParams.parse({})).toEqual({});
+    const row = {
+      deviceType: "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro",
+      runtime: "com.apple.CoreSimulator.SimRuntime.iOS-26-1",
+      name: "iPhone 17 Pro",
+      booted: true,
+    };
+    expect(ShellSurfacesSimulatorDevicesResult.parse({ devices: [row] })).toEqual({
+      devices: [row],
+    });
+    expect(ShellSurfacesSimulatorDevicesResult.parse({ devices: [] })).toEqual({ devices: [] });
+    // a UDID anywhere refuses the whole list: main's own parse is the last door before fieldd
+    expect(
+      ShellSurfacesSimulatorDevicesResult.safeParse({
+        devices: [{ ...row, udid: "F93EABF3-4281-4EB5-A5F6-A550FBE95CDC" }],
+      }).success,
+    ).toBe(false);
+    expect(
+      ShellSurfacesSimulatorDevicesResult.safeParse({
+        devices: Array.from({ length: SURFACE_LIMITS.MAX_SIMULATOR_DEVICES + 1 }, () => row),
+      }).success,
+    ).toBe(false);
+    // the runtimes installed here ride with them (the attach's third pick): CoreSimulator's ids, never a UDID
+    const runtimes = ["com.apple.CoreSimulator.SimRuntime.iOS-26-1"];
+    expect(ShellSurfacesSimulatorDevicesResult.parse({ devices: [], runtimes })).toEqual({
+      devices: [],
+      runtimes,
+    });
+    expect(
+      ShellSurfacesSimulatorDevicesResult.safeParse({
+        devices: [],
+        runtimes: ["F93EABF3-4281-4EB5-A5F6-A550FBE95CDC"],
+      }).success,
+    ).toBe(false);
   });
 
   it("requires a unique registered static method set and exactly one outcome arm", () => {

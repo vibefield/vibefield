@@ -2,6 +2,7 @@ import { AgentModelMeshFrame, AgentModelMeshOpen } from "@vibefield/contracts";
 import { createMonitorReplica, type MonitorReplica } from "@vibefield/puppeteer-monitor/replica";
 import type { FrameScheduler } from "@vibefield/puppeteer-view-sdk/model";
 import { useEffect, useState } from "react";
+import { BoardScreen } from "./board-screen";
 import type { ChromeFacts } from "./chrome-facts";
 import { modelBoardFailure } from "./doors";
 import { type HeldModelRow, type ModelBoardDevice, ModelBoardFold } from "./model-board";
@@ -100,6 +101,8 @@ export function createGodviewMonitorFeed(
     ...(opts.onError !== undefined ? { onListenerError: opts.onError } : {}),
   });
   const fold = new ModelBoardFold();
+  /** PG-1b — the board read one desktop at a time, before the envelope */
+  const screen = new BoardScreen();
   const listeners = new Set<() => void>();
   const chromeListeners = new Set<() => void>();
   /** the runs the chrome's listeners last heard of */
@@ -175,7 +178,7 @@ export function createGodviewMonitorFeed(
     const mine = ++generation;
     const live = (): boolean => !disposed && mine === generation;
     const deliverOpen = (payload: unknown): void => {
-      const parsed = AgentModelMeshOpen.safeParse(payload);
+      const parsed = AgentModelMeshOpen.safeParse(screen.open(payload));
       if (!parsed.success) {
         publish({
           state: "unavailable",
@@ -191,6 +194,14 @@ export function createGodviewMonitorFeed(
       sendReport();
     };
     const deliverFrame = (payload: unknown): void => {
+      // PG-1b — a desktop's unreadable rows leave the frame; its standing may
+      // follow as a frame of its own. A reopen on the way ends the rest.
+      for (const screened of screen.frame(payload)) {
+        if (!live()) return;
+        deliverOne(screened);
+      }
+    };
+    const deliverOne = (payload: unknown): void => {
       const parsed = AgentModelMeshFrame.safeParse(payload);
       if (!parsed.success) {
         // a frame the fold cannot read is one its copy cannot follow: a gap

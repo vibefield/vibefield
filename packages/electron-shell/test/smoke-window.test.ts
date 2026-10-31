@@ -15,12 +15,12 @@ const read = (file: string): string => readFileSync(join(testing, file), "utf8")
 /** The desk smokes' row modules — everything smoke:canvas, smoke:kind-faults and smoke:plugin-restart drive. */
 const ROWS = [
   "smoke-covers.ts",
+  "smoke-desk-copy.ts",
   "smoke-desk-rig.ts",
   "smoke-pegboard.ts",
   "smoke-peers.ts",
   "smoke-rest.ts",
   "smoke-selection-bar.ts",
-  "smoke-send-to.ts",
   "smoke-thumb.ts",
   "smoke-tools-in-hand.ts",
   "smoke-try.ts",
@@ -58,6 +58,6 @@ describe("the desk smokes keep their windows from the person's input", () => {
 
   it("would see one if it were there (the scan is not blind)", () => {
     expect(FOCUS.test("    b.focus();\n")).toBe(true);
-    expect(FOCUS.test('await js(`document.querySelector(".vf-line-input")?.focus()`)')).toBe(false);
+    expect(FOCUS.test('await js(`document.querySelector(".vf-line")?.focus()`)')).toBe(false);
   });
 });

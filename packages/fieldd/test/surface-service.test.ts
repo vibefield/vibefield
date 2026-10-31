@@ -15,6 +15,8 @@ import type {
   ShellSurfacesMintResult,
   ShellSurfacesReleaseParams,
   ShellSurfacesReleaseResult,
+  ShellSurfacesSimulatorDevicesParams,
+  ShellSurfacesSimulatorDevicesResult,
 } from "@vibefield/contracts";
 import type { AuditPhaseV1 } from "@vibefield/contracts/diagnostics";
 import { describe, expect, it } from "vitest";
@@ -48,6 +50,24 @@ const SIM_SOURCE: LiveSurfaceSourceSpecV1 = {
   kind: "ios-simulator",
   udid: "ABCDEF01-2345-6789-ABCD-EF0123456789",
   crop: { mode: "auto" },
+};
+
+/** PT-S2 (R1): a phone on the desk asks for its device by its binding — never a UDID. */
+const PHONE_SOURCE: LiveSurfaceSourceSpecV1 = {
+  kind: "ios-simulator-device",
+  binding: {
+    deviceType: "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro",
+    runtime: "com.apple.CoreSimulator.SimRuntime.iOS-26-1",
+  },
+  crop: { mode: "auto" },
+};
+
+/** PT-S2 (R11): one of main's redacted device rows. */
+const DEVICE_ROW: ShellSurfacesSimulatorDevicesResult["devices"][number] = {
+  deviceType: "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro",
+  runtime: "com.apple.CoreSimulator.SimRuntime.iOS-26-1",
+  name: "iPhone 17 Pro",
+  booted: true,
 };
 
 /** A renderer window's local-token principal: the only principal shape that
@@ -156,7 +176,11 @@ interface FakeAuthority extends SurfaceAuthority {
   enumerated: ShellSurfacesEnumerateParams[];
   minted: ShellSurfacesMintParams[];
   released: ShellSurfacesReleaseParams[];
+  listed: ShellSurfacesSimulatorDevicesParams[];
   sources: ShellSurfacesEnumerateResult["sources"];
+  devices: ShellSurfacesSimulatorDevicesResult["devices"];
+  /** the runtimes main says are installed (undefined: unsaid) */
+  runtimes?: ShellSurfacesSimulatorDevicesResult["runtimes"];
   mintResult: () => Promise<ShellSurfacesMintResult>;
   releaseResult: (params: ShellSurfacesReleaseParams) => Promise<ShellSurfacesReleaseResult>;
 }
@@ -176,7 +200,9 @@ function fakeAuthority(): FakeAuthority {
     enumerated: [],
     minted: [],
     released: [],
+    listed: [],
     sources: [],
+    devices: [],
     mintResult: async () => {
       mintSeq += 1;
       return { surfaceId: `${SURFACE_ID}${mintSeq}`, ticket: TICKET };
@@ -195,6 +221,14 @@ function fakeAuthority(): FakeAuthority {
     async surfacesRelease(params) {
       authority.released.push(params);
       return await authority.releaseResult(params);
+    },
+    async surfacesSimulatorDevices(params) {
+      authority.listed.push(params);
+      if (!authority.available) throw shellUnavailable();
+      return {
+        devices: authority.devices,
+        ...(authority.runtimes === undefined ? {} : { runtimes: authority.runtimes }),
+      };
     },
   };
   return authority;
@@ -299,6 +333,133 @@ describe("SurfaceService.open — the kind→scope matrix", () => {
     });
     expect(result.surfaceId).toBe(`${SURFACE_ID}1`);
     expect(authority.minted[0]?.source).toStrictEqual(SCK_SOURCE);
+  });
+
+  it("PT-S2 (R1): a phone bound by its device type and runtime costs the capture scope — it is the Simulator's window captured, whatever main resolves it to", async () => {
+    const authority = fakeAuthority();
+    const { surfaces, audit } = service(authority);
+    const refused = await refusal(
+      surfaces.open(windowContext(["surface.attach", "surface.browser"]), {
+        source: PHONE_SOURCE,
+        reuseKey: "desk:phone-1",
+      }),
+    );
+    expect(refused.kind).toBe("FORBIDDEN_SCOPE");
+    expect(refused.details).toEqual({ required: "surface.capture" });
+    expect(authority.minted).toEqual([]);
+
+    const opened = await surfaces.open(windowContext(["surface.attach", "surface.capture"]), {
+      source: PHONE_SOURCE,
+      reuseKey: "desk:phone-1",
+    });
+    expect(opened.surfaceId).toBe(`${SURFACE_ID}1`);
+    // the binding crosses fieldd verbatim, with the desk object's continuity key
+    expect(authority.minted).toEqual([
+      { rendererParticipant: PARTICIPANT, source: PHONE_SOURCE, reuseKey: "desk:phone-1" },
+    ]);
+    // the ledger learns the kind, never the binding
+    const attempt = audit.rows.find((row) => row.phase === "attempt" && row.attrs["sourceKind"]);
+    expect(attempt?.attrs).toEqual({
+      sourceKind: "ios-simulator-device",
+      participantId: "win-1",
+      incarnation: "gen-1",
+    });
+    expect(JSON.stringify(audit.rows)).not.toContain("SimDeviceType");
+  });
+});
+
+describe("SurfaceService.simulatorDevices — PT-S2 (R11), the attach's device list", () => {
+  it("passes main's redacted rows through, asking main nothing", async () => {
+    const authority = fakeAuthority();
+    authority.devices = [
+      DEVICE_ROW,
+      {
+        deviceType: "com.apple.CoreSimulator.SimDeviceType.iPhone-17",
+        runtime: "com.apple.CoreSimulator.SimRuntime.iOS-26-1",
+        name: "iPhone 17",
+        booted: false,
+      },
+    ];
+    const { surfaces, audit } = service(authority);
+    const result = await surfaces.simulatorDevices(windowContext(["surface.capture"]), {});
+    expect(result.devices).toEqual(authority.devices);
+    expect(authority.listed).toEqual([{}]);
+    // a bare call asks the same nothing
+    await surfaces.simulatorDevices(windowContext(["surface.capture"]), undefined);
+    expect(authority.listed).toEqual([{}, {}]);
+    // a read: nothing is audited, nothing is minted
+    expect(audit.rows).toEqual([]);
+    expect(authority.minted).toEqual([]);
+  });
+
+  it("carries main's installed runtimes through, the newest first — the attach's third pick, even with no device here", async () => {
+    const authority = fakeAuthority();
+    authority.runtimes = [
+      "com.apple.CoreSimulator.SimRuntime.iOS-26-1",
+      "com.apple.CoreSimulator.SimRuntime.iOS-18-6",
+    ];
+    const { surfaces } = service(authority);
+    const result = await surfaces.simulatorDevices(windowContext(["surface.capture"]), {});
+    expect(result).toEqual({ devices: [], runtimes: authority.runtimes });
+    // one that is not CoreSimulator's runtime id is refused at this door, as a row with a UDID is
+    authority.runtimes = ["ABCDEF01-2345-6789-ABCD-EF0123456789"];
+    await expect(
+      surfaces.simulatorDevices(windowContext(["surface.capture"]), {}),
+    ).rejects.toThrow();
+  });
+
+  it("needs no window: a list binds nothing, so a caller with no renderer participant is answered too", async () => {
+    const authority = fakeAuthority();
+    authority.devices = [DEVICE_ROW];
+    const { surfaces } = service(authority);
+    const result = await surfaces.simulatorDevices(agentContext(["surface.capture"]), {});
+    expect(result.devices).toEqual([DEVICE_ROW]);
+  });
+
+  it("answers UNAVAILABLE for surfaces when the authority is absent, before the door", async () => {
+    const authority = fakeAuthority();
+    authority.available = false;
+    const { surfaces } = service(authority);
+    const error = await refusal(surfaces.simulatorDevices(windowContext(["surface.capture"]), {}));
+    expect(error.kind).toBe("UNAVAILABLE");
+    expect(error.retryable).toBe(true);
+    expect(error.details).toEqual({ service: "surfaces", state: "authority-unavailable" });
+    expect(authority.listed).toEqual([]);
+  });
+
+  it("renames the shell's provider-loss mid-call as the surfaces authority", async () => {
+    const authority = fakeAuthority();
+    authority.surfacesSimulatorDevices = async () => {
+      throw shellUnavailable();
+    };
+    const { surfaces } = service(authority);
+    const error = await refusal(surfaces.simulatorDevices(windowContext(["surface.capture"]), {}));
+    expect(error.kind).toBe("UNAVAILABLE");
+    expect(error.details).toEqual({ service: "surfaces", state: "authority-unavailable" });
+  });
+
+  it("refuses params that are not an object", async () => {
+    const authority = fakeAuthority();
+    const { surfaces } = service(authority);
+    const error = await refusal(
+      surfaces.simulatorDevices(windowContext(["surface.capture"]), "devices"),
+    );
+    expect(error.kind).toBe("PRECONDITION_FAILED");
+    expect(authority.listed).toEqual([]);
+  });
+
+  it("never hands on a row that carries a UDID: main's redaction is re-checked at this door", async () => {
+    const authority = fakeAuthority();
+    authority.devices = [
+      {
+        ...DEVICE_ROW,
+        udid: "ABCDEF01-2345-6789-ABCD-EF0123456789",
+      } as unknown as typeof DEVICE_ROW,
+    ];
+    const { surfaces } = service(authority);
+    await expect(
+      surfaces.simulatorDevices(windowContext(["surface.capture"]), {}),
+    ).rejects.toThrow();
   });
 });
 

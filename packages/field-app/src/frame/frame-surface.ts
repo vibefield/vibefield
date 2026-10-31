@@ -14,13 +14,14 @@
 // search interim's `history-search`, the room's own sheet, which left with it.
 // DK-11: the selection bar's grown menu joins them — the canon's ninth
 // (DESIGN.md §10 "The mat's places", R5), the tenth value beside the Peek's.
+// HN (Cards in Hand, 2026-10-29): @'s list left with the line's draft (LN-D3)
+// and the left drawer with the clipboard tray; the hand raised, or a card
+// picked up, is `cards` (HN-L7).
 
 export type FrameSurface =
   /** Objects — the desk's pegboard behind the line (DK-13): the board out is this surface; the tray's `open` is
    * the truth and this follows it (`field/desk/pegboard/Pegboard.tsx`). */
   | "objects"
-  /** @'s list, grown upward from the caret. */
-  | "at"
   /** The fields explorer, grown from the head's name pill. */
   | "fields"
   /** The zoom's menu, grown from the head's readout. */
@@ -29,8 +30,9 @@ export type FrameSurface =
   | "palette"
   /** The Me menu, above the line, over your face in the corner. */
   | "me"
-  /** The left edge's drawer: the clipboard. */
-  | "clipboard"
+  /** The hand raised (⇧⌘V), or a card picked up (HN-D5) — the frame's cards
+   * (DESIGN.md §8 "The hand"; HN-L7). */
+  | "cards"
   /** The right edge's drawer: Artifacts (the Artifact Hub). */
   | "artifacts"
   /** Search — the Peek: the frame's popup over the scrim, opened by its
@@ -42,7 +44,7 @@ export type FrameSurface =
   | "selection";
 
 /** What a surface's own close asks of the owner: fold it if it is the one
- * open, and leave the others alone — the tray's Esc must not close @'s list. */
+ * open, and leave the others alone — the board's Esc must not close the palette. */
 export function foldSurface(
   current: FrameSurface | null,
   closing: FrameSurface,

@@ -58,6 +58,16 @@ describe("PRODUCT_API_LIMITS — the door's inbound cap is a registry number (DS
       MESH_CONTROL_LIMITS.PRODUCT_FRAME_BYTES,
     );
   });
+
+  it("holds a phone's queue at one number, short of the shed (PG-1c, PG-D11)", () => {
+    // James's ruling moves this one number and this one row
+    expect(PRODUCT_API_LIMITS.TAILNET_QUEUED_BYTES).toBe(256 * 1024);
+    expect(PRODUCT_API_LIMITS.TAILNET_QUEUED_BYTES).toBeLessThan(
+      MESH_CONTROL_LIMITS.PRODUCT_QUEUED_BYTES,
+    );
+    // it holds deltas, never a snapshot, so a snapshot page always fits under the shed
+    expect(ROWS.SNAPSHOT_PAGE_BYTES).toBeLessThanOrEqual(MESH_CONTROL_LIMITS.PRODUCT_QUEUED_BYTES);
+  });
 });
 
 describe("method registry lint (design-01 §9.2 + D36)", () => {

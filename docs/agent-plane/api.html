@@ -1485,6 +1485,12 @@
               the consent the caller had to be granted; the columns after it say what the door does with
               it.
             </p>
+            <p class="section-note">
+              <em>Corrected 2026-10-30 (CO, adding the compose plane's doors below):</em> the count is stale. The
+              families below have grown well past thirty-six, and this page no longer keeps a total. The terminal
+              rows that are routed rather than <code>local</code> say so in their own note, and the floor's door
+              (<code>native.door.*</code>) is listed here though it is mgmt, not product.
+            </p>
 
             <h3 id="cat-agent">agent.* — managed sessions and the fold</h3>
             <p class="section-note">
@@ -1811,6 +1817,136 @@
             <p class="contract-caption">
               <code>index.enroll</code> is idempotent by being declarative — it names the complete consented
               set, so the same set twice writes nothing and restarts nothing.
+            </p>
+
+            <h3 id="cat-compose">compose.sparks.* — the window's doors to the sparks</h3>
+            <p class="section-note">
+              The compose plane, version 2 (ruled 2026-10-29; <code>packages/contracts/src/compose.ts</code>). A spark
+              is an agent of the person's that may start agents. fieldd keeps it as a signed record
+              (<code>LAYOUT.SPARKS_DIR</code>, an HMAC-SHA256 under <code>SPARKS_KEY_FILE</code>'s secret) outside its
+              own folder (<code>LAYOUT.SPARK_HOMES_DIR</code>), so an agent that edits files cannot widen its Agent
+              Profiles. Chat's list, the New spark sheet and waking a spark call these three doors. They hold
+              <code>agents.manage</code>, like the other acts a person takes on this machine's agents: hatching an
+              agent that may start agents is not a plugin's call to make. All three are <code>local</code>, because a
+              spark lives on the desktop that hatched it. A refusal is <code>PRECONDITION_FAILED</code> with its
+              <code>reason</code> in the details, for the sheet to put into words. CP-1c <code>f98d0d2b</code> ·
+              <code>1060d4b2</code>.
+            </p>
+            <div class="table-wrap">
+              <table class="reference-table">
+                <thead>
+                  <tr><th>Door</th><th>Params → result</th><th>Scope</th><th>Idem</th><th>Wraps upstream</th><th>Status</th><th>Witness</th></tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><span class="route">compose.sparks.list</span></td>
+                    <td><p><code>—</code> → <code>ComposeSparksListResult {sparks: SparkSummary[]}</code></p></td>
+                    <td><p><code>agents.manage</code></p></td>
+                    <td><p>yes</p></td>
+                    <td><p>nothing upstream: fieldd's verified records, each joined to the fold's runs. A summary carries its session's <code>runtimeRunId</code>, its pane while it has one, and <code>live</code> (awake while its process runs, asleep otherwise, CP-D14). A record that is unsigned, does not verify, does not parse, or is exposed to other users is set aside and never served.</p></td>
+                    <td><span class="badge tone-built">Built</span></td>
+                    <td><p><code>compose-sparks.test.ts</code></p></td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">compose.sparks.hatch</span></td>
+                    <td><p><code>ComposeSparksHatchParams {name, face, agent, modelSelection?, profiles, thinksUnder}</code> → <code>ComposeSparksHatchResult {spark}</code></p></td>
+                    <td><p><code>agents.manage</code></p></td>
+                    <td><p><strong>no</strong></p></td>
+                    <td><p>the New spark sheet's answers (NS-D1, NS-D2 B, NS-D5). Refused before anything is written: a profile that does not exist (<code>{reason: "unknown-profile", profile}</code>), a <code>thinksUnder</code> profile with no sign-in for the agent (<code>{reason: "no-sign-in", agent, profile}</code>), and a name another spark holds (<code>{reason: "name-taken"}</code>). Then fieldd writes the record and makes the folder with its brief (<code>CLAUDE.md</code>, written once and the person's to edit after). The spark's session is born as <code>agent.spawn</code>'s is (<code>runtime.spawn()</code>), in the folder, under <code>thinksUnder</code>'s sign-in and with the spark's model, its origin <code>you</code> and the spark's id on its signed session record.</p></td>
+                    <td><span class="badge tone-built">Built</span></td>
+                    <td><p><code>compose-sparks.test.ts</code></p></td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">compose.sparks.open</span></td>
+                    <td><p><code>ComposeSparksOpenParams {spark}</code> → <code>ComposeSparksOpenResult {spark}</code></p></td>
+                    <td><p><code>agents.manage</code></p></td>
+                    <td><p>yes</p></td>
+                    <td><p>wakes a spark (CR-D11, CP-D14). Declarative: a live spark is answered as it is. A sleeping one is resumed in its last session (<code>runtime.resume()</code>, as <code>agent.resume</code> does), or started again in its folder when that session cannot be resumed. An unknown id is <code>NOT_FOUND</code>.</p></td>
+                    <td><span class="badge tone-built">Built</span></td>
+                    <td><p><code>compose-sparks.test.ts</code></p></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <h3 id="cat-compose-door">The <code>vibefield</code> MCP door — a spark's tools</h3>
+            <p class="section-note">
+              These are not METHODS rows. A spark's tools are compose.ts's verb catalog (<code>COMPOSE_VERBS</code>,
+              projected as <code>@vibefield/contracts/compose-tools</code>), served by fieldd's hand-written MCP server
+              (<code>packages/fieldd/src/compose/</code>), and their names are a tool's, never a dotted method's. The
+              spark's agent runs the floor's bridge, <code>field-native door --endpoint &lt;path&gt;</code>, as an MCP
+              stdio server, and its lines reach fieldd through the floor's door (<a href="#cat-door">below</a>) on a
+              lane of their own. One connection serves two eras, as the 2026-07-28 revision allows. In
+              <code>2026-07-28</code>, which is stateless, every request carries <code>_meta</code>,
+              <code>server/discover</code> is answered, every result says <code>resultType</code>, and a list gives
+              <code>ttlMs</code> with <code>cacheScope: "private"</code>. The handshake before it serves
+              <code>2025-11-25</code>, <code>2025-06-18</code> and <code>2025-03-26</code>. Claude Code 2.1.312 opens
+              with <code>server/discover</code> (measured 2026-10-29).
+            </p>
+            <p class="section-note">
+              Who is served is decided without a token (CP-D1): the floor's walk names the pane, and fieldd maps the
+              pane to its run. A spark's own session, known by its signed record, is listed the tools below. Another
+              run, a pane with no run, and a caller outside every pane are listed none, and each such door leaves one
+              audit line (<code>compose.door.plain</code>, outcome <code>denied</code>). Every call is held to the
+              spark's Agent Profiles (TL-D5) and checked against its input schema; a bad input answers
+              <code>isError</code> with the field that failed. Each call is written to the audit log as
+              <code>compose.&lt;tool&gt;</code> before it acts (CP-L6), under the principal <code>mcp-agent</code> with
+              the run's id. The door knows no vendor (AR-L1): any agent that speaks MCP over stdio is served the same
+              way. The later families (<code>talk</code>, <code>flows</code>, <code>canvas</code>, <code>you</code>,
+              and <code>agent_spawn</code> with the watches) are in the catalog and are served when their slices
+              (CP-2…CP-4) build them. A spark's agent is handed the bridge at launch by the agent runtime's per-run
+              briefing (CP-1d). Until then a spark hatches and thinks without tools (route A, ruled on the board
+              2026-10-29). CP-1b <code>42748065</code> · <code>3e93ba71</code>.
+            </p>
+            <div class="table-wrap">
+              <table class="reference-table">
+                <thead><tr><th>Tool</th><th>Family</th><th>Answers</th><th>Status</th></tr></thead>
+                <tbody>
+                  <tr><td><span class="route">agents_available</span></td><td><p><code>agents</code></p></td><td><p>The agents the spark can start: each signed in under its Agent Profiles, with its models and their efforts.</p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">projects_list</span></td><td><p><code>agents</code></p></td><td><p>The person's projects, each with its name and the folders it has on this desktop.</p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">agents_list</span></td><td><p><code>watch</code></p></td><td><p>The sessions under its profiles: each one's agent, state, folder, model, cost, and who started it.</p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">agent_read</span></td><td><p><code>watch</code></p></td><td><p>One session's latest turns, bounded; <code>before</code> pages back.</p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">history_search</span></td><td><p><code>history</code></p></td><td><p>Past sessions under its profiles, asked once per runtime with the hits merged: the matching turns with their session, agent, folder and time.</p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">history_read</span></td><td><p><code>history</code></p></td><td><p>A past session's turns from History, bounded; <code>before</code> pages back.</p></td><td><span class="badge tone-built">Built</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <h3 id="cat-door">native.door.* — the floor's door (mgmt)</h3>
+            <p class="section-note">
+              These are not product doors. They are three verbs on the management channel, fieldd's own link to the
+              floor, which no other caller reaches (scope <code>null</code>, <code>local</code>). field-native hosts
+              the door, <code>door.sock</code> (<code>SOCKETS.DOOR</code>), 0600 in its 0700 run dir. The kernel names
+              each caller: its real pid (macOS <code>LOCAL_PEERPID</code>, never the effective pid a delegated socket
+              reports; Linux <code>SO_PEERCRED</code>), its uid, which must be the floor's own, and its start. The floor
+              walks the caller's parents, at most <code>NATIVE_DOOR.WALK_MAX_STEPS</code> (32), to the first live
+              pane's own root process that started within <code>ROOT_BIRTH_TOLERANCE_MS</code> (60 s) of the pane's
+              <code>createdAt</code>. The bytes ride a meshdata lane of their own (<code>protocol: "mcp"</code>,
+              <code>peer: "door:&lt;connId&gt;"</code>), never mgmt (EL2), and the floor parses no message. A door
+              refused at accept (<code>refused-uid</code>, <code>delegated</code>, <code>peer-gone</code>,
+              <code>limit</code>) opened no lane, so the floor logs it and never announces it. A door outlives fieldd.
+              The floor keeps it, accepts new ones, and holds their inbound bytes to <code>NATIVE_DOOR</code>'s bounds
+              (64 open, 256 KiB per door, 4 MiB in all). The next subscribe's snapshot re-announces each door, and its
+              lane resumes. CP-1a <code>6b64620c</code> … <code>5aa29020</code>.
+            </p>
+            <div class="table-wrap">
+              <table class="reference-table">
+                <thead><tr><th>Verb</th><th>Params → result</th><th>Idem</th><th>What it is for</th></tr></thead>
+                <tbody>
+                  <tr><td><span class="route">native.door.subscribe</span></td><td><p><code>{}</code> → <code>NativeDoorSubscribeResult {subId, snapshot}</code>, then <code>native.door.snapshot</code> and <code>native.door.delta</code></p></td><td><p>yes</p></td><td><p>The door's one announcement, snapshot then delta. Each open door has the floor's <code>connId</code> (unique for its boot), its <code>laneId</code>, its <code>caller {pid, startedAtMs}</code>, and the <code>pane {terminalSessionId, depth}</code> the floor walked to. The pane is absent for a caller outside every pane, whose door still opens. A close says its <code>reason</code> (<code>eof</code>, <code>held-too-long</code>, <code>closed-by-fieldd</code>, an open vocabulary). <code>native.mesh.lane.subscribe</code> never announces a door's lane. A backlog coalesces into one snapshot, because the mgmt outbox closes on overflow and a same-uid caller looping on connect must not reach it (EL7).</p></td></tr>
+                  <tr><td><span class="route">native.door.close</span></td><td><p><code>NativeDoorCloseParams {connId, reason?}</code> → <code>{closed}</code></p></td><td><p>yes</p></td><td><p>fieldd closes a door, and its delta then says <code>closed-by-fieldd</code> or the reason given. A door already gone answers <code>closed: false</code>, never an error.</p></td></tr>
+                  <tr><td><span class="route">native.door.info</span></td><td><p><code>{}</code> → <code>NativeDoorInfoResult {endpoint, command, args}</code></p></td><td><p>yes</p></td><td><p>The bridge a spark's agent runs: the door's absolute path, the floor's own executable, and <code>["door", "--endpoint", &lt;endpoint&gt;]</code>. It is asked at every launch, so an app update or a dev target never leaves a stale path. A platform with no door answers <code>UNAVAILABLE {service: "door"}</code>; on Windows, a named pipe's client pid is outside CP-1a.</p></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="contract-caption">
+              The bridge, <code>field-native door --endpoint &lt;path&gt;</code>, proves nothing and carries nothing
+              but bytes. It reads no environment and touches no data dir, because the floor names the caller by the
+              kernel's word. It carries whole lines only, both ways, up to <code>NATIVE_DOOR.LINE_MAX_BYTES</code>
+              (8 MiB, its newline included), and fieldd's line reader holds the same bound. On a floor restart it
+              dials again while its stdin stays open, spending one budget of doubling delays. The new connection is a
+              new door, walked again to the same pane. It exits 0 when stdin closes or stdout goes, 2 on a usage error,
+              3 when the door is unreachable at the first dial or for a whole budget, and 4 on a longer line.
             </p>
 
             <h3 id="cat-terminal">terminal.* — the agent-relevant subset</h3>

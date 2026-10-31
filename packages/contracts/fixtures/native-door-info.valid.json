@@ -1,0 +1,9 @@
+{
+  "endpoint": "/Users/james/Library/Application Support/VibeField/native/run/door.sock",
+  "command": "/Applications/VibeField.app/Contents/Resources/bin/field-native",
+  "args": [
+    "door",
+    "--endpoint",
+    "/Users/james/Library/Application Support/VibeField/native/run/door.sock"
+  ]
+}

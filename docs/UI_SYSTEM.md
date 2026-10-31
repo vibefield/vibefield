@@ -84,10 +84,16 @@ The catalog currently mounts these shipping views directly:
 - the view frame (One Frame FR-1): the views track in every state the design's plates show — at
   rest, ⌘ held, Godview, History, the Assistant's note, Windows' keys — and the cover rising,
   swapping and lowering over a field with Godview's stage and History's room, on fixture state
-- the line (One Frame FR-2): `ComposerLineView` and @'s `AtMenuView` in every state the page's §03
-  plates draw — at rest, typing with a chip, @ open, aimed, Objects out, Godview's New terminal,
-  History's Resume, Windows' keys — and the live line on its real controller (`Composer`) over the
-  frame's field, with fixture doors for what Godview lends it, the clipboard and the capture
+- the line (One Frame FR-2; shortened by Cards in Hand, HN-2): `ComposerLineView` in every state the
+  Cards in Hand page's line plates draw — at rest, the snapshot under the pointer, in flight and
+  waiting with no capture door, Objects out, Godview's New terminal, History's Resume, Windows' keys
+  — and the live line on its real controller (`Composer`) over the frame's field, with fixture doors
+  for what Godview lends it and the capture. @'s `AtMenuView` and the draft's plates left with the
+  draft (LN-D3)
+- the hand (Cards in Hand, HN-1): the shipping `CardsView` and `CardFace` over fixture cards
+  (`CardsPreview`) — the six faces in both lights, the fan at rest, a card reached with its ×, the
+  hand raised with a card in the keyboard's focus, a card picked up over its scrim, and a card from
+  another app still waiting
 - the head (One Frame FR-3): `HeadView` in every state the page's head plates draw — the field's
   name at its top, the crumbs folded in inside a folder, FitPath in a narrow window, renaming in
   place, the fields explorer grown from the pill, the zoom readout's menu (and Windows' keys), the
@@ -98,10 +104,10 @@ The catalog currently mounts these shipping views directly:
   state, a plate per Theme it holds — Light, Dark, and Auto following the page's own theme — and
   Settings → Appearance (`AppearanceSectionView`) in the shipping dialog, the same setting; the
   Settings specimen's old Appearance replica is gone
-- the edges (One Frame FR-4): `EdgeTrayView` on both sides in every state the page's edges plates
-  draw — both notches whole on Canvas, both slivers over Godview, the notch a sliver grows into
-  (over History), the clipboard's drawer open over Godview, and Artifacts' drawer holding the Hub
-  through the plugin's own fixture door (`ArtifactsDrawer`)
+- the edge (One Frame FR-4; the right edge alone since HN-1): `EdgeTrayView` in every state the
+  page's edges plates draw — the notch whole on Canvas, the sliver over Godview, the notch a sliver
+  grows into (over History), and Artifacts' drawer holding the Hub through the plugin's own fixture
+  door (`ArtifactsDrawer`); the clipboard's left notch and drawer retired into the hand
 - search, the frame's Peek (GV-D8, 2026-10-08): the shipping controller (`Peek`) over a fixture
   port answering from the room package's demo (`peek-fixtures.ts`) — the frame's button at rest
   over History before anything is read, and the popup holding words over the shipping History view
@@ -127,12 +133,10 @@ The catalog currently mounts these shipping views directly:
   (fading in), and a specimen in the keyboard's focus (ringed); the filters placed and filled by
   the product's own model (`placeFilters`, `filterOptions`); and the line's create in hand, faint,
   "Put it down first"
-- Send to… (DK-14): the shipping `ComposerLineView` with the desk's chip in its draft — a note's chip
-  in its paper and ink (the palette's own colours), `snippets` and its first 24 characters, the @
-  typed after it and @'s list open; a kind's name, several ("2 objects", `package`) and a missing
-  face's type side by side; an aimed draft that took a chip with no @, send armed — and the chip IN
-  FLIGHT, the shipping flier (`ChipFlierView`) frozen on its straight line to the caret
-  (`SendFlightPlate`)
+- Copy (HN-3; it replaced Send to…, DK-14): the selection bar's Copy on the shipping
+  `SelectionBarView` (its plates read the product's model), and the cards it deals — a note's words
+  as a text card, two objects as a picture card — on the shipping `CardFace`. Send to…'s plates (the
+  chip in the draft, `ChipFlierView`, `SendFlightPlate`) left with the line's draft
 - the peers on the mat (DK-16): `PeersLayerView` and `PeerCursorView` over fixture peers on a stand-in
   for the lit mat (`--vf-mat-ground`, where the desk draws its own) — a peer, and two with one at the
   mat's edge — each arrow placed by the product's own model through a fixture camera (`arrowBoxAt`)

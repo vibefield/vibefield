@@ -2,12 +2,14 @@ import { useSyncExternalStore } from "react";
 import type { DeckPlaced } from "../godview/deck-placement";
 import type { RoutedInputRefusal } from "../terminal/pool";
 
-// WHAT GODVIEW LENDS THE LINE (One Frame FR-2; DESIGN.md §8 "The line").
-// The line is the frame's and Godview is a view below it, but two of the
-// line's acts only Godview can do: its create — a new terminal, as the swarm's
-// hold makes one — and the interim send's paste into an aimed pane. Both live
-// where a pane and its session meet, which is the deck, so the deck publishes
-// this door and the line's controller reads it.
+// WHAT GODVIEW LENDS THE FRAME (One Frame FR-2; DESIGN.md §8 "The line").
+// The line is the frame's and Godview is a view below it, but some of the
+// frame's acts only Godview can do: the line's create — a new terminal, as the
+// swarm's hold makes one — History's Resume and Jump to, and a paste into a
+// pane (a card played onto it, HN-D4; the interim send that pasted from the
+// line's draft left with the draft, LN-D3). They live where a pane and its
+// session meet, which is the deck, so the deck publishes this door and the
+// frame reads it.
 //
 // A module store (view-state.ts's shape, for the same reason): the publisher
 // sits deep inside the cover and the reader in the frame above it, and
@@ -15,9 +17,14 @@ import type { RoutedInputRefusal } from "../terminal/pool";
 // second owner of something it never reads. Verbs and plain facts only — no
 // runtime, no workspace, no session object ever crosses (GT-D17's rule).
 
-/** A pane the deck shows, as the line's @ list names it. */
+/** A pane the deck shows, as the frame names it — in the line's note, and to a
+ * card carried over it. */
 export interface LinePane {
-  /** The floor session the pane shows: what an aim holds. */
+  /** The pane itself (the workspace's id, `[data-pane-id]` in the DOM): what a
+   * card played onto it is pasted into (HN-4), since two panes may show one
+   * session. */
+  readonly paneId: string;
+  /** The floor session the pane shows: what a paste is aimed at. */
   readonly sessionId: string;
   /** As the swarm names its body — the agent's project, else the folder. */
   readonly name: string;
@@ -25,7 +32,7 @@ export interface LinePane {
   readonly runs: string;
   /** The agent's state; null for a shell, which has none to say. */
   readonly state: "working" | "idle" | "blocked" | null;
-  /** The deck's active pane, which the list puts nearest. */
+  /** The deck's active pane — the one the person was in. */
   readonly active: boolean;
 }
 
@@ -45,14 +52,19 @@ export interface LineViewDoor {
    * without a spot to land on — in the focused pane, whose session runs on
    * (GV-D4, re-ruled 2026-10-18). */
   newTerminal(): Promise<NewTerminalOutcome>;
-  /** Paste `text` into the input of the pane showing `sessionId` — the road ⌘V
-   * takes, so the pane brackets it and nothing presses Return. True when the
-   * pane took it; false, with nothing handed to the pane, while its input is
-   * closed (a paste there would be dropped), and the line copies instead.
-   * D6: a paste too large for the pane's terminal is claimed and then refused
-   * INSIDE this call — the line hears that refusal (`inputRefusals`) and copies
-   * then too; true alone never says the paste was sent. */
-  paste(sessionId: string, text: string): boolean;
+  /** HN-4 — paste `text` into ONE pane, the pane a card is let go on (DESIGN.md
+   * §8 "The hand", where cards go): the road ⌘V takes, so the pane brackets it
+   * and nothing presses Return. True when the pane took it; false, with nothing
+   * handed to the pane, while its session's input is closed (a paste there would
+   * be dropped). D6: a paste too large for the pane's terminal is claimed and
+   * then refused INSIDE this call — heard through `hearTerminalInputRefusals`;
+   * true alone never says the paste arrived. */
+  pasteInto(paneId: string, text: string): boolean;
+  /** HN-4 — a card spring-loaded into Godview lands while the pane's routed input
+   * may still be reopening after the change of view (ghosttea drops input while
+   * it is): resolves true once that pane's session takes input, false when it has
+   * not within `timeoutMs` (or the pane is gone). */
+  whenInputOpen(paneId: string, timeoutMs: number): Promise<boolean>;
   /** AR-8c — whether `place` can mount now: the deck has its door. */
   readonly canPlace: boolean;
   /** AR-8c — History's Resume lands here: the create ticket `agent.resume`
@@ -406,10 +418,38 @@ export function inputRefusalWhy(refusal: RoutedInputRefusal): string {
   return `${size}, and ${what} carries ${fits} of it`;
 }
 
-/** What the line says of a refused input, naming the pane as @'s list names it
+/** What the line says of a refused input, naming the pane as the deck names it
  * (`name`; absent — no pane of the deck shows that session — "the terminal"). */
 export function inputRefusalNote(refusal: RoutedInputRefusal, name?: string): string {
   const into = name ?? "the terminal";
   const verb = refusal.kind === "text" ? "typed" : "pasted";
   return `Not ${verb} into ${into} — ${inputRefusalWhy(refusal)}`;
+}
+
+// A paste the frame makes ITSELF into a pane — a card played from the hand
+// (HN-4) — says its own outcome, its refusal included, so the refusal is said
+// once (HN-L5): while that paste runs, the line's hearer leaves every refusal
+// to the paste's outcome. Every one, whatever its session: a refusal is
+// announced INSIDE the input call that caused it (encode-input.ts, through the
+// pool's hearers), so a refusal heard while the frame's paste runs is that
+// paste's — and the session a pane shows can change while a card waits for its
+// input to open (⌘T, a Resume), so a claim kept to the session the card was
+// aimed at would miss it, and the refusal would be said twice.
+let claims = 0;
+
+/** Run `paste` — a paste the frame makes into a pane — with every refusal heard
+ * while it runs claimed for its own outcome. */
+export function claimingRefusals<T>(paste: () => T): T {
+  claims += 1;
+  try {
+    return paste();
+  } finally {
+    claims -= 1;
+  }
+}
+
+/** The line's hearer asks: is a paste the frame makes itself running now — one that says its own
+ * refusal? */
+export function refusalClaimed(): boolean {
+  return claims > 0;
 }

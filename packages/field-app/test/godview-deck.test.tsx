@@ -55,6 +55,15 @@ const paletteOpens: unknown[][] = [];
 /** FR-2 — each session's routed activation as the runtime would answer it
  * (`routedActivation`): the line door's paste asks whether its input is open. */
 const routedActivations = new Map<string, { inputAllowed: boolean }>();
+/** HN-4 — who hears the runtime announce a change of a session's activation
+ * (`routed-activation-state`): a card's wait for a pane's input to reopen. A
+ * case announces one by hand (`announceActivation`); nothing else fires. */
+const activationHearers = new Set<(event: Event) => void>();
+const announceActivation = (sessionId: string): void => {
+  for (const hear of [...activationHearers]) {
+    hear(new CustomEvent("routed-activation-state", { detail: { sessionId } }));
+  }
+};
 
 vi.mock("@vibecook/ghosttea-react", () => ({
   // QL-2: the deck hands the launch ghosttea's fixed cell metrics.
@@ -70,9 +79,14 @@ vi.mock("@vibecook/ghosttea-react", () => ({
       // GT-3p: the real runtime is an EventTarget and the deck listens on it
       // for `renderer-status` (the device-ready mark, and the backend the lab
       // reports). The stub answers the surface without ever firing — a fixture
-      // that announced a backend would be asserting about its own stub.
-      addEventListener: () => undefined,
-      removeEventListener: () => undefined,
+      // that announced a backend would be asserting about its own stub. HN-4:
+      // it keeps who hears a session's activation change, for a case to announce.
+      addEventListener: (type: string, hear: (event: Event) => void) => {
+        if (type === "routed-activation-state") activationHearers.add(hear);
+      },
+      removeEventListener: (type: string, hear: (event: Event) => void) => {
+        if (type === "routed-activation-state") activationHearers.delete(hear);
+      },
       // The launcher's gate and the clean-exit handoff ask these of every
       // pane (22e4e16c): this deck's shells never had input and none is a
       // peer's replica.
@@ -186,6 +200,7 @@ const { GodviewAgentsProvider } = await import("../src/godview/monitor/GodviewAg
 const { paneCwd, readDeviceHost } = await import("../src/godview/deck-restore");
 type RemoteSessionDoor = import("../src/godview/monitor/remote-door").RemoteSessionDoor;
 const { getGodviewLineDoor, hearLineSays } = await import("../src/frame/line-door");
+const { cardTargets } = await import("../src/frame/cards/card-targets");
 const { answerGodviewDeckUp } = await import("../src/frame/deck-door");
 const { publishDeckWrapperFacts, resetDeckWrapperFactsForTest } = await import(
   "../src/godview/deck-wrapper-witness"
@@ -385,6 +400,7 @@ beforeEach(() => {
   runtimeOptionsSeen.length = 0;
   paletteOpens.length = 0;
   routedActivations.clear();
+  activationHearers.clear();
   floor = [];
   listSessions = () => Promise.resolve(floor.map((row) => ({ id: row.sessionId })));
   ownerSessions = (device) => Promise.resolve({ sessions: ownerFloors[device] ?? [] });
@@ -2580,13 +2596,14 @@ describe("the line door's reveal, History's Jump to (P3)", () => {
   });
 });
 
-// FR-2 — the interim send's paste rides the pane's own input, and that input's
-// handler claims the paste event whether or not the runtime sent it: while the
-// routed activation's input is closed ghosttea drops the paste silently and the
-// event still reads as taken. So the door asks the runtime first — a pane that
-// would drop the paste is a `false`, and the line copies and says why instead
-// of "Pasted into …" (the honest-states rule).
-describe("the line door's paste, the interim send (FR-2)", () => {
+// FR-2, kept for HN-4 — the door's paste rides the pane's own input, and that
+// input's handler claims the paste event whether or not the runtime sent it:
+// while the routed activation's input is closed ghosttea drops the paste
+// silently and the event still reads as taken. So the door asks the runtime
+// first — a pane that would drop the paste is a `false`, and a card's play says
+// so instead of "Pasted into …" (the honest-states rule). The interim send that
+// first took this road left with the line's draft (LN-D3).
+describe("the line door's paste guard (FR-2, HN-4)", () => {
   const lineDoor = (): LineViewDoor => {
     const door = getGodviewLineDoor();
     if (door === null) throw new Error("the deck published no line door");
@@ -2621,13 +2638,13 @@ describe("the line door's paste, the interim send (FR-2)", () => {
     // the pane is back on screen and its activation is still recovering
     routedActivations.set("agent-pty", { inputAllowed: false });
 
-    expect(lineDoor().paste("agent-pty", "run the tests")).toBe(false);
+    expect(lineDoor().pasteInto("pane-1", "run the tests")).toBe(false);
     expect(pasted, "a paste the runtime would drop was handed to the pane").toEqual([]);
     expect(document.activeElement, "a refused paste took the keyboard").not.toBe(input);
 
     // …and the same pane takes it once its input is open
     routedActivations.set("agent-pty", { inputAllowed: true });
-    expect(lineDoor().paste("agent-pty", "run the tests")).toBe(true);
+    expect(lineDoor().pasteInto("pane-1", "run the tests")).toBe(true);
     expect(pasted).toEqual(["run the tests"]);
     expect(document.activeElement).toBe(input);
 
@@ -2642,8 +2659,150 @@ describe("the line door's paste, the interim send (FR-2)", () => {
     const { dispose } = await mountDeckWithDoor(store);
     const { pasted } = drawPane("pane-1");
 
-    expect(lineDoor().paste("agent-pty", "run the tests")).toBe(false);
+    expect(lineDoor().pasteInto("pane-1", "run the tests")).toBe(false);
     expect(pasted).toEqual([]);
+
+    await dispose();
+  });
+});
+
+// HN-4 — a card played from the hand lands in the ONE pane it is let go on (two
+// panes may show one session), by the guard above; and a card
+// spring-loaded into Godview waits, bounded, for that pane's input to reopen —
+// on the runtime's own announcement, never a poll.
+describe("the line door's paste into one pane, a card played (HN-4)", () => {
+  const lineDoor = (): LineViewDoor => {
+    const door = getGodviewLineDoor();
+    if (door === null) throw new Error("the deck published no line door");
+    return door;
+  };
+  const drawPane = (paneId: string): { input: HTMLTextAreaElement; pasted: string[] } => {
+    const deck = container?.querySelector(".vf-deck-zoom");
+    if (deck === null || deck === undefined) throw new Error("the deck drew no zoom host");
+    const pane = document.createElement("div");
+    pane.setAttribute("data-pane-id", paneId);
+    const input = document.createElement("textarea");
+    pane.appendChild(input);
+    deck.appendChild(pane);
+    const pasted: string[] = [];
+    input.addEventListener("paste", (event) => {
+      pasted.push((event as ClipboardEvent).clipboardData?.getData("text/plain") ?? "");
+      event.preventDefault();
+    });
+    return { input, pasted };
+  };
+
+  it("names each pane by its own id, and pastes into the one named — never its twin", async () => {
+    const store = workspaceProbe({
+      panes: [
+        { id: "pane-1", session: { id: "agent-pty", cols: 100, rows: 30 } },
+        { id: "pane-2", session: { id: "agent-pty", cols: 100, rows: 30 } },
+      ],
+      activePaneId: "pane-1",
+    });
+    const { dispose } = await mountDeckWithDoor(store);
+    const one = drawPane("pane-1");
+    const two = drawPane("pane-2");
+    expect(lineDoor().panes.map((pane) => pane.paneId)).toEqual(["pane-1", "pane-2"]);
+
+    // the guard is the send's: a closed input is handed nothing
+    routedActivations.set("agent-pty", { inputAllowed: false });
+    expect(lineDoor().pasteInto("pane-2", "ls -la")).toBe(false);
+    expect(two.pasted).toEqual([]);
+
+    routedActivations.set("agent-pty", { inputAllowed: true });
+    expect(lineDoor().pasteInto("pane-2", "ls -la")).toBe(true);
+    expect(two.pasted).toEqual(["ls -la"]);
+    expect(one.pasted, "the twin showing the same session took it").toEqual([]);
+    expect(document.activeElement).toBe(two.input);
+    expect(lineDoor().pasteInto("pane-9", "ls -la")).toBe(false);
+
+    await dispose();
+  });
+
+  it("waits for a pane's input to reopen on the runtime's announcement, bounded", async () => {
+    const store = workspaceProbe({
+      panes: [{ id: "pane-1", session: { id: "agent-pty", cols: 100, rows: 30 } }],
+      activePaneId: "pane-1",
+    });
+    const { dispose } = await mountDeckWithDoor(store);
+
+    // open now: at once
+    routedActivations.set("agent-pty", { inputAllowed: true });
+    await expect(lineDoor().whenInputOpen("pane-1", 1_500)).resolves.toBe(true);
+
+    // the clock stands still from here, so whatever ends a wait, it is never the bound running out
+    // (the deck hears the same announcement for its own reasons: only the wait's own ear counts)
+    const deckEars = activationHearers.size;
+    let answered: boolean | null = null;
+    vi.useFakeTimers();
+    try {
+      // still reopening after a change of view: the announcement that it opened ends the wait
+      routedActivations.set("agent-pty", { inputAllowed: false });
+      void lineDoor()
+        .whenInputOpen("pane-1", 1_500)
+        .then((open) => {
+          answered = open;
+        });
+      expect(activationHearers.size, "the wait does not hear the runtime").toBe(deckEars + 1);
+      announceActivation("agent-pty");
+      await Promise.resolve();
+      expect(answered, "an announcement that changed nothing ended the wait").toBeNull();
+      routedActivations.set("agent-pty", { inputAllowed: true });
+      announceActivation("agent-pty");
+      await Promise.resolve();
+      expect(answered, "the announcement that it opened did not end the wait").toBe(true);
+      expect(activationHearers.size, "the wait kept listening").toBe(deckEars);
+
+      // never reopened: false at its bound, and not a moment before
+      routedActivations.set("agent-pty", { inputAllowed: false });
+      answered = null;
+      void lineDoor()
+        .whenInputOpen("pane-1", 1_500)
+        .then((open) => {
+          answered = open;
+        });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_499);
+      });
+      expect(answered).toBeNull();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1);
+      });
+      expect(answered).toBe(false);
+      expect(activationHearers.size).toBe(deckEars);
+    } finally {
+      vi.useRealTimers();
+    }
+
+    // no pane by that id: false at once
+    await expect(lineDoor().whenInputOpen("pane-9", 1_500)).resolves.toBe(false);
+
+    await dispose();
+  });
+
+  it("is ONE place a card plays into while it is on screen, and none once it is not", async () => {
+    const store = workspaceProbe({
+      panes: [{ id: "pane-1", session: { id: "agent-pty", cols: 100, rows: 30 } }],
+      activePaneId: "pane-1",
+    });
+    const { dispose } = await mountDeckWithDoor(store);
+    const places = (): string[] =>
+      cardTargets
+        .list()
+        .filter((target) => target.kind === "pane")
+        .map((target) => target.id);
+    expect(places()).toEqual(["godview-panes"]);
+
+    // away (or another view): the deck stays mounted, and takes no card
+    await act(async () => {
+      root?.render(
+        <GodviewAgentsProvider door={null}>
+          <GodviewDeck active={false} theme="light" />
+        </GodviewAgentsProvider>,
+      );
+    });
+    expect(places()).toEqual([]);
 
     await dispose();
   });

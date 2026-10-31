@@ -276,9 +276,10 @@ export type CoreSimulatorRuntimeIdV1 = z.infer<typeof CoreSimulatorRuntimeIdV1>;
 /**
  * PT-S1 — THE DEVICE A PHONE ON THE DESK IS BOUND TO: a CoreSimulator device type and runtime — the durable half of a
  * simulator surface, kept in the document as the phone's `binding` prop. Never a UDID: a UDID names one simulator on
- * one Mac, so each Mac attaches its OWN simulator of the bound type (the resolver in main finds or creates one, then
- * mints the UDID-keyed `LiveSurfaceIosSimulatorSourceV1` above, which never leaves this machine). The resolver
- * re-validates a binding it reads, as it does every privileged spec.
+ * one Mac, so each Mac attaches its OWN simulator of the bound type (the phone asks main with the
+ * `LiveSurfaceIosSimulatorDeviceSourceV1` below — PT-S2 —, and main finds or creates one and resolves it to the UDID-keyed
+ * `LiveSurfaceIosSimulatorSourceV1` above, which never leaves this machine). The resolver re-validates a binding it reads,
+ * as it does every privileged spec.
  */
 export const LiveSurfaceIosSimulatorBindingV1 = z
   .object({
@@ -288,10 +289,37 @@ export const LiveSurfaceIosSimulatorBindingV1 = z
   .passthrough();
 export type LiveSurfaceIosSimulatorBindingV1 = z.infer<typeof LiveSurfaceIosSimulatorBindingV1>;
 
+/** PT-S2 — NEVER A UDID OUTSIDE MAIN: a `udid` on a shape the renderer sends or reads of a bound phone is REFUSED, never
+ * carried along (each such shape is otherwise a tolerant reader) — a main-side spread of a device row fails main's own
+ * parse instead of handing the window a UDID. */
+const LiveSurfaceNoUdidV1 = z.never().optional();
+
+/**
+ * PT-S2 (R1) — A PHONE ASKS MAIN FOR ITS DEVICE BY ITS BINDING: the bound device type and runtime, never a UDID. Main
+ * resolves it on THIS Mac and keeps what it picked — the exact type on the exact runtime; else the same type on any
+ * installed runtime, a booted one first, then the newest; else none (the summary's `simulator` says which, and what it
+ * attached). A NEW kind, not `ios-simulator` with an exactly-one-of refine: a discriminated union cannot hold two
+ * `ios-simulator` shapes, and a refine would make this union a ZodEffects inside every params that embeds it. ONE stream
+ * a device: main dedupes this kind on its binding and crop even when a `reuseKey` is sent, and two bindings that resolve
+ * to one device share it. Created, never listed (as a browser source is): it enumerates nothing.
+ */
+export const LiveSurfaceIosSimulatorDeviceSourceV1 = z
+  .object({
+    kind: z.literal("ios-simulator-device"),
+    binding: LiveSurfaceIosSimulatorBindingV1,
+    crop: LiveSurfaceCropV1.default({ mode: "auto" }),
+    udid: LiveSurfaceNoUdidV1,
+  })
+  .passthrough();
+export type LiveSurfaceIosSimulatorDeviceSourceV1 = z.infer<
+  typeof LiveSurfaceIosSimulatorDeviceSourceV1
+>;
+
 export const LiveSurfaceSourceSpecV1 = z.discriminatedUnion("kind", [
   LiveSurfaceBrowserSourceV1,
   LiveSurfaceSckWindowSourceV1,
   LiveSurfaceIosSimulatorSourceV1,
+  LiveSurfaceIosSimulatorDeviceSourceV1,
 ]);
 export type LiveSurfaceSourceSpecV1 = z.infer<typeof LiveSurfaceSourceSpecV1>;
 
@@ -568,6 +596,82 @@ export const LiveSurfaceBrowserStateV1 = z
   .passthrough();
 export type LiveSurfaceBrowserStateV1 = z.infer<typeof LiveSurfaceBrowserStateV1>;
 
+/** PT-S2: a simulator device's name as a face may say it — the SDK's reader (`liveSimulatorFace`) takes no longer one, and
+ * a face whose words it refuses says none of them; main omits a name past it. */
+const LiveSurfaceSimulatorNameV1 = z
+  .string()
+  .min(1)
+  .max(128)
+  .refine(hasNoControlCharacters, "control characters are forbidden");
+
+/**
+ * PT-S2 (R2) — WHERE A BOUND SIMULATOR IS, in its producer's FACT words (the renderer says each in the SDK's nine —
+ * `LIVE_SIMULATOR_STATES` — as it says `LiveSurfaceLoadFailureV1` in `LIVE_BROWSER_FAILURES`; `live` and `at rest` are the
+ * renderer's own knowledge: its ask, the desk's cap, the frames it has shown):
+ *  - `no-simulator` — no Simulator on this Mac: `xcode-select -p` or the simctl binary failed main's probe (no `xcrun` runs
+ *    before it passes), or this shell has no capture helper (not a Mac, or a build without one);
+ *  - `no-permission` — the system refused main the Simulator's window (Screen Recording);
+ *  - `no-device` — no device of the bound type on this Mac, on any installed runtime;
+ *  - `off` — the device is shut down (or shutting down);
+ *  - `booting` — the device is on its way up: CoreSimulator's own booting or creating, or an act's boot or create still
+ *    running, until its window can be streamed;
+ *  - `no-window` — booted, and Simulator.app shows no window of it;
+ *  - `streaming` — booted, its window found, the capture granted: main forwards the renderer's demand, so frames flow
+ *    under a live one (main withholds demand until here, and re-forwards the last ask when it arrives);
+ *  - `stopped` — it WAS streaming and its window went while the device stayed booted (Simulator.app quit or crashed):
+ *    the device's condition beats it — a device shut down mid-stream is `off`.
+ */
+export const LiveSurfaceSimulatorConditionV1 = z.enum([
+  "no-simulator",
+  "no-permission",
+  "no-device",
+  "off",
+  "booting",
+  "no-window",
+  "streaming",
+  "stopped",
+]);
+export type LiveSurfaceSimulatorConditionV1 = z.infer<typeof LiveSurfaceSimulatorConditionV1>;
+
+/**
+ * PT-S2 (R4) — THE ACTS A BOUND SIMULATOR'S FACE OFFERS, as main runs them (each single-flight; the device and its UDID
+ * are main's own, so no verb takes an argument):
+ *  - `boot` — boot the device, then show its window;
+ *  - `create` — create one of the bound type (on the binding's runtime if installed, else the newest that runs the type),
+ *    boot it and show its window: ONE act;
+ *  - `show` — show the device's window (Simulator.app, opened on that device);
+ *  - `retry` — stream again on a fresh live demand, the device's window shown first when it has none (a device shut
+ *    down is `off`, whose act is `boot`);
+ *  - `open-settings` — the system's Screen Recording settings, at main's own fixed address.
+ */
+export const LiveSurfaceDeviceVerbV1 = z.enum(["boot", "create", "show", "retry", "open-settings"]);
+export type LiveSurfaceDeviceVerbV1 = z.infer<typeof LiveSurfaceDeviceVerbV1>;
+
+/**
+ * PT-S2 — A BOUND SIMULATOR'S FACTS, carried on runtime summaries as `browser` carries a page's: plain state, no revision
+ * of its own — a change republishes the summary at the same `stateRevision`, which the control session allows. Never a
+ * UDID (refused, as on the source):
+ *  - `condition` — where the device is (above);
+ *  - `name` — the attached device's name as simctl says it (with no device, its type's) — absent: main knows none;
+ *  - `deviceType`, `runtime` — what main ATTACHED, which may not be the binding's runtime when this Mac lacks the bound
+ *    one (R3: the face says so honestly) — absent while nothing is attached;
+ *  - `acting` — the act in flight, while it runs — absent: none;
+ *  - `degraded` — true when the crop fell back to the whole window (R6: no Accessibility to find the screen in it): still
+ *    `streaming`, its title bar and bezel showing — absent: the crop is the screen's, or there is no stream.
+ */
+export const LiveSurfaceSimulatorStateV1 = z
+  .object({
+    condition: LiveSurfaceSimulatorConditionV1,
+    name: LiveSurfaceSimulatorNameV1.optional(),
+    deviceType: CoreSimulatorDeviceTypeIdV1.optional(),
+    runtime: CoreSimulatorRuntimeIdV1.optional(),
+    acting: LiveSurfaceDeviceVerbV1.optional(),
+    degraded: z.boolean().optional(),
+    udid: LiveSurfaceNoUdidV1,
+  })
+  .passthrough();
+export type LiveSurfaceSimulatorStateV1 = z.infer<typeof LiveSurfaceSimulatorStateV1>;
+
 export const LiveSurfaceRuntimeSummaryV1 = z
   .object({
     v: z.literal(LIVE_SURFACE_PROTOCOL_VERSION_V1),
@@ -580,6 +684,8 @@ export const LiveSurfaceRuntimeSummaryV1 = z
     geometry: LiveSurfaceGeometryV1.optional(),
     /** Browser sources only: the producer's committed navigation truth. */
     browser: LiveSurfaceBrowserStateV1.optional(),
+    /** PT-S2 — bound-simulator sources only (`ios-simulator-device`): where the device is, in the producer's facts. */
+    simulator: LiveSurfaceSimulatorStateV1.optional(),
     error: LiveSurfaceErrorV1.optional(),
   })
   .passthrough();
@@ -616,11 +722,13 @@ export type LiveSurfaceAttachmentDescriptorV1 = z.infer<typeof LiveSurfaceAttach
 // Fire-and-forget renderer→main events on the SAME generation-scoped control
 // port the attachment already rides, gated main-side by the ticket's
 // operations ("pointer"/"keyboard"/"navigate" — browser sources mint them,
-// capture and Simulator stay view-only). Coordinates are CSS LOGICAL pixels in
-// the surface's `logicalSize` space (LSF §10.2): the sender maps its canvas
-// box to logical space and NEVER re-scales by raster or visibleRect; the
-// input envelope carries the geometry revision that mapping used, and the
-// PRODUCER drops stale revisions rather than guessing.
+// capture and Simulator stay view-only; PT-S2: a bound Simulator mints
+// "device" for its face's acts, which manage the device and never reach inside
+// it). Coordinates are CSS LOGICAL pixels in the surface's `logicalSize` space
+// (LSF §10.2): the sender maps its canvas box to logical space and NEVER
+// re-scales by raster or visibleRect; the input envelope carries the geometry
+// revision that mapping used, and the PRODUCER drops stale revisions rather
+// than guessing.
 
 export const LiveSurfacePointerButtonV1 = z.enum(["left", "middle", "right"]);
 export type LiveSurfacePointerButtonV1 = z.infer<typeof LiveSurfacePointerButtonV1>;
@@ -709,6 +817,13 @@ export const LiveSurfaceNavigationCommandV1 = z.discriminatedUnion("action", [
 ]);
 export type LiveSurfaceNavigationCommandV1 = z.infer<typeof LiveSurfaceNavigationCommandV1>;
 
+/** PT-S2 — a bound simulator face's act (`LiveSurfaceDeviceVerbV1`), on its own message and its own operation (`device`),
+ * never a navigation: a browser ticket sends no device verb and a simulator ticket navigates nothing. A verb alone — the
+ * device, its name and its UDID are main's (LSF-D6: no caller identifier becomes authority); an act sent in another
+ * condition than its own is nothing, since the face races the summary. */
+export const LiveSurfaceDeviceCommandV1 = z.object({ verb: LiveSurfaceDeviceVerbV1 }).passthrough();
+export type LiveSurfaceDeviceCommandV1 = z.infer<typeof LiveSurfaceDeviceCommandV1>;
+
 /** Renderer → main messages carried only by the generation-scoped control port. */
 export const LiveSurfaceRendererControlMessageV1 = z.discriminatedUnion("type", [
   z
@@ -760,6 +875,14 @@ export const LiveSurfaceRendererControlMessageV1 = z.discriminatedUnion("type", 
       type: z.literal("navigate"),
       attachmentId: LiveSurfaceAttachmentIdV1,
       navigation: LiveSurfaceNavigationCommandV1,
+    })
+    .passthrough(),
+  z
+    .object({
+      v: z.literal(LIVE_SURFACE_PROTOCOL_VERSION_V1),
+      type: z.literal("device"),
+      attachmentId: LiveSurfaceAttachmentIdV1,
+      command: LiveSurfaceDeviceCommandV1,
     })
     .passthrough(),
 ]);
@@ -836,16 +959,27 @@ export type LiveSurfaceFrameEnvelopeV1 = z.infer<typeof LiveSurfaceFrameEnvelope
 // and never returns to a caller; enumeration rows are REDACTED to what a
 // picker face needs (LSF-16: routing identity, never authority).
 
-export const LiveSurfaceSourceKindV1 = z.enum(["browser", "sck-window", "ios-simulator"]);
+export const LiveSurfaceSourceKindV1 = z.enum([
+  "browser",
+  "sck-window",
+  "ios-simulator",
+  "ios-simulator-device",
+]);
 export type LiveSurfaceSourceKindV1 = z.infer<typeof LiveSurfaceSourceKindV1>;
 
-/** Only capture kinds enumerate: browser sources are created, never listed. */
+/** Only capture kinds enumerate: browser sources are created, never listed — nor is a bound simulator (PT-S2), which
+ * asks by its binding, not by a picker's row. */
 export const SurfaceEnumerationKindV1 = z.enum(["sck-window", "ios-simulator"]);
 export type SurfaceEnumerationKindV1 = z.infer<typeof SurfaceEnumerationKindV1>;
 
 export const SURFACE_LIMITS = {
   MAX_ENUMERATED_SOURCES: 256,
   IDEMPOTENCY_KEY_CHARS: 64,
+  /** PT-S2: the attach's device rows — main lists the booted ones first, so a bound that bites drops only devices at
+   * rest. */
+  MAX_SIMULATOR_DEVICES: 256,
+  /** PT-S2: the attach's installed runtimes — main lists the newest first, so a bound that bites drops only the oldest. */
+  MAX_SIMULATOR_RUNTIMES: 64,
 } as const;
 
 /** One redacted picker row. `sourceRef` is the producer boundary's opaque
@@ -870,6 +1004,44 @@ export const SurfaceSourcesResultV1 = z
   })
   .passthrough();
 export type SurfaceSourcesResultV1 = z.infer<typeof SurfaceSourcesResultV1>;
+
+/**
+ * PT-S2 (R11) — ONE SIMULATOR DEVICE ON THIS MAC, as the attach reads it: its type, its runtime, its name and whether it
+ * is booted — the ids a phone's binding is made of, and never a UDID (refused): a phone binds by `{ deviceType, runtime }`
+ * and each Mac attaches its OWN simulator of the type. REDACTED like a picker row: no path, no state beyond booted, no
+ * window. The attach picks from these — the booted device of the phone's own model, else the first booted iPhone, else
+ * the phone's own model on the newest installed runtime.
+ */
+export const LiveSurfaceSimulatorDeviceRowV1 = z
+  .object({
+    deviceType: CoreSimulatorDeviceTypeIdV1,
+    runtime: CoreSimulatorRuntimeIdV1,
+    name: LiveSurfaceSimulatorNameV1,
+    booted: z.boolean(),
+    udid: LiveSurfaceNoUdidV1,
+  })
+  .passthrough();
+export type LiveSurfaceSimulatorDeviceRowV1 = z.infer<typeof LiveSurfaceSimulatorDeviceRowV1>;
+
+/** PT-S2 (R11): the attach's device list asks nothing — what this Mac holds is main's to say (`surface.capture`, as
+ * `sources` is: a device list is a capture kind's catalogue). */
+export const SurfaceSimulatorDevicesParamsV1 = z.object({}).passthrough();
+export type SurfaceSimulatorDevicesParamsV1 = z.infer<typeof SurfaceSimulatorDevicesParamsV1>;
+
+/** PT-S2 (R11): this Mac's simulator devices, the booted first. Empty: no Simulator here, or none of its devices. With
+ * them the RUNTIMES installed here, the newest first — ids only, never a UDID — what the attach's third pick binds to
+ * (the model on the newest installed iOS, whether or not a device runs it yet). Absent: unsaid — the attach falls back
+ * to the newest runtime a device row is on. */
+export const SurfaceSimulatorDevicesResultV1 = z
+  .object({
+    devices: z.array(LiveSurfaceSimulatorDeviceRowV1).max(SURFACE_LIMITS.MAX_SIMULATOR_DEVICES),
+    runtimes: z
+      .array(CoreSimulatorRuntimeIdV1)
+      .max(SURFACE_LIMITS.MAX_SIMULATOR_RUNTIMES)
+      .optional(),
+  })
+  .passthrough();
+export type SurfaceSimulatorDevicesResultV1 = z.infer<typeof SurfaceSimulatorDevicesResultV1>;
 
 /** DT-1c — caller-scoped continuity key (typically the widget's durable entity
  * key). Custody in Electron main dedupes mints on {participant, kind, reuseKey},

@@ -123,6 +123,10 @@ export function mountProductHost(
       screenshotStillUrl: (path) => screenshotStillUrl(path),
       screenshotPreview: (path) =>
         window.vibefield.screenshot.preview(screenshotStillBasename(path)),
+      screenshotStillBytes: (path) =>
+        window.vibefield.screenshot.stillBytes(screenshotStillBasename(path)),
+      screenshotStillKept: (path) =>
+        window.vibefield.screenshot.stillKept(screenshotStillBasename(path)),
       onPrepareClose: (handler) => window.vibefield.onPrepareClose(handler),
       completeClose: (result) => window.vibefield.completeClose(result),
       onShellCommand: (handler) => window.vibefield.onShellCommand(handler),

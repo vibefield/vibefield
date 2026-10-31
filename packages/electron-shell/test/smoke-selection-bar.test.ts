@@ -90,7 +90,7 @@ describe("the grown menu's place, judged (R6, R20)", () => {
     panel: { x0: 370, y0: 100, x1: 630, y1: 290 },
     dir: "up",
     cells: [],
-    send: null,
+    copy: null,
     tips: {},
     glyphs: {},
     rows: [],

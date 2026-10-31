@@ -597,6 +597,19 @@ const RULES = [
         s.startsWith("../")
       ),
   },
+  {
+    id: "R29",
+    // CP-1b (the compose plane, version 2; CO): fieldd's compose code composes fieldd's own services (the runtime's
+    // runs, the index, the projects, the audit) and reaches past none of them: no puppeteer package and no rosetta
+    // package, so a spark's verbs cannot branch on a vendor (AR-L1) or read a vendor's transcript. R20 already keeps
+    // the adapters out of all of fieldd; this keeps even the runtime door out of compose/. The flow host (CP-4) gets
+    // its own rule.
+    enforce: true,
+    description:
+      "packages/fieldd/src/compose imports no @vibefield/puppeteer-* and no @vibefield/rosetta-* package: it composes fieldd's own services",
+    applies: (p) => SOURCE_EXT.test(p) && under(p, "packages/fieldd/src/compose"),
+    importTest: (s) => s.startsWith("@vibefield/puppeteer-") || s.startsWith("@vibefield/rosetta-"),
+  },
 ];
 
 // P2 (R26) — the Peek's watch-only pane, by its directory or its module names.
@@ -664,6 +677,17 @@ const RETIRED_MODULE_NAMES = new Set([
   // the explorer's silhouettes (row 12)
   "doc-thumbnail-scene",
   "doc-thumbnail-worker",
+  // HN (Cards in Hand, 2026-10-29): the clipboard tray's store and fly-in (into the hand,
+  // HN-1), @'s list and the line's send (into Chat's thread and a card's play, LN-D3), Send
+  // to…'s face (into the desk's Copy, HN-D3), and the smokes' rows of the send and Send to…
+  // — `frame/draft` and `desk/send/send-to` are generic names, held by their paths below
+  "clipboard-store",
+  "tray-flight",
+  "at-list",
+  "line-send",
+  "send-face",
+  "smoke-line-send",
+  "smoke-send-to",
 ]);
 // A deleted DIRECTORY or a generic name, held by its path where it lived.
 function retiredRelative(spec, rel) {
@@ -676,6 +700,11 @@ function retiredRelative(spec, rel) {
     if (/(?:^|\/)terminal\/(?:mirror|widget)(?:\/|$)/.test(spec)) return true;
     if (under(rel, "packages/field-app/src/plugin-host") && /^\.\/faces(?:\.tsx?)?$/.test(spec))
       return true;
+    // HN: the line's draft (LN-D3) and Send to…'s directory (HN-D3)
+    if (/(?:^|\/)frame\/draft(?:\.tsx?)?$/.test(spec)) return true;
+    if (under(rel, "packages/field-app/src/frame") && /^\.\/draft(?:\.tsx?)?$/.test(spec))
+      return true;
+    if (/(?:^|\/)send\/send-(?:to|face)(?:\.tsx?)?$/.test(spec)) return true;
   }
   // design-kit: the `/gl` entry, the preview silhouettes and the card gradient (row 6)
   if (under(rel, "packages/design-kit")) {
@@ -1169,6 +1198,39 @@ function runSelfTest() {
       file: "packages/field-app/src/uses-note.ts",
       body: 'import { notePlugin } from "@vibefield/plugin-note";\n',
     },
+    // HN (R25) — Cards in Hand's deletions imported again, one road each: the line's draft
+    // from its own directory and from another, @'s list, Send to…'s act by its path, the
+    // clipboard tray's store from a test, and a smoke's Send to… rows.
+    {
+      id: "R25",
+      file: "packages/field-app/src/frame/uses-draft.tsx",
+      body: 'import { normalizeDraft } from "./draft";\nexport const d = normalizeDraft;\n',
+    },
+    {
+      id: "R25",
+      file: "packages/field-app/src/field/desk/uses-chip.ts",
+      body: 'import { chipMessage } from "../../frame/draft";\nexport const c = chipMessage;\n',
+    },
+    {
+      id: "R25",
+      file: "packages/field-app/src/design-system/uses-at-list.tsx",
+      body: 'import { atList } from "../frame/at-list";\nexport const a = atList;\n',
+    },
+    {
+      id: "R25",
+      file: "packages/field-app/src/field/desk/bar/uses-send-to.ts",
+      body: 'import { sendSelection } from "../send/send-to";\nexport const s = sendSelection;\n',
+    },
+    {
+      id: "R25",
+      file: "packages/field-app/test/uses-clipboard-store.test.tsx",
+      body: 'import { ClipboardStore } from "../src/hud/edge-tray/clipboard-store";\nexport const t = ClipboardStore;\n',
+    },
+    {
+      id: "R25",
+      file: "packages/electron-shell/src/testing/uses-send-rows.ts",
+      body: 'import { sendToRows } from "./smoke-send-to";\nexport const r = sendToRows;\n',
+    },
     // P2 (R26) — the Peek's watch-only pane, reached from anywhere but the Peek: the desk,
     // Godview's deck, History, the canvas — by its directory or its module's name.
     {
@@ -1205,6 +1267,16 @@ function runSelfTest() {
       id: "R28",
       file: "packages/trust/src/uses-kit.ts",
       body: 'import { canonicalJson } from "@vibefield/plugin-build";\nexport const c = canonicalJson;\n',
+    },
+    {
+      id: "R29",
+      file: "packages/fieldd/src/compose/uses-runtime.ts",
+      body: 'import { createRuntime } from "@vibefield/puppeteer-runtime";\nexport const r = createRuntime;\n',
+    },
+    {
+      id: "R29",
+      file: "packages/fieldd/src/compose/uses-rosetta.ts",
+      body: 'import { RosettaClient } from "@vibefield/rosetta-protocol";\nexport const c = RosettaClient;\n',
     },
   ];
   const cleans = [
@@ -1347,6 +1419,17 @@ function runSelfTest() {
     {
       file: "packages/field-app/src/clean-mille-client.ts",
       body: 'import { connectFileExplorer } from "@vibecook/mille/port";\nimport { FileTree } from "@vibecook/mille-ui";\nimport { connectWebSocketChannel } from "@vibecook/mille/remote";\nexport const remote = connectWebSocketChannel;\nexport const c = connectFileExplorer;\nexport const t = FileTree;\n',
+    },
+    // HN (R25) — what stands beside Cards in Hand's retired names: the hand's store, lab door
+    // and sources, the snapshot's state, the line's model and door, and the smokes' shell
+    // markers and Copy rows.
+    {
+      file: "packages/field-app/src/frame/clean-hand.ts",
+      body: 'import { noteCapture } from "./capture-state";\nimport { installCardsLab } from "./cards/cards-lab";\nimport { dealCard } from "./cards/cards-sources";\nimport { cardsStore } from "./cards/cards-store";\nimport { sayOnLine } from "./line-door";\nimport { createActOf } from "./line-model";\nexport const h = [noteCapture, installCardsLab, dealCard, cardsStore, sayOnLine, createActOf];\n',
+    },
+    {
+      file: "packages/electron-shell/src/testing/clean-rows.ts",
+      body: 'import { deskCopyRows } from "./smoke-desk-copy";\nimport { judgeCardPlay } from "./smoke-shell-marker";\nexport const r = [deskCopyRows, judgeCardPlay];\n',
     },
     // DK-17 (R25) — what stands beside the retired names: the desk's own entries, the kit's
     // primitives and glyphs, the kept canvas palette, the account's faces, the renamed specimen.
