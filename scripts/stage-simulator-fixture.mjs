@@ -19,8 +19,10 @@
 //   VF_PHONE_GUARD_AWK, VF_PHONE_PERF_LOCK, VF_PHONE_DISK_FLOORS (`<path>:<GiB>[,…]`)
 //                              another host's house rules (the mini's); unset, this Mac's. PHONE_HOUSE_RULES says which
 // Exit: the command's own code; 1 for a red preflight, rows record or restore; 2 for a usage error; 75 NOT ARMED or
-// STOPPED (a hand, a foreign device booted mid-run, a Simulator.app not proven the run's) over a restored host — a STOP
-// whose teardown left the host unrestored is 1 and PHONE_STOP_UNRESTORED; 128+n on a signal.
+// STOPPED (a hand, a locked console, a foreign device booted mid-run, a Simulator.app not proven the run's) over a
+// restored host — a DETERMINISTIC stop (RM4.5's own-input reset; the press gate refusing an act or a device not the
+// run's) is 1 and PHONE_STOP_FINAL, and a STOP whose teardown left the host unrestored is 1 and PHONE_STOP_UNRESTORED;
+// 128+n on a signal.
 //
 // THE SMOKE'S SIDE (`es/testing/smoke-phone.ts`). The command's env carries `VF_PHONE_HOST` (`http://127.0.0.1:<port>`),
 // `VF_PHONE_TOKEN`, `VF_PHONE_MODE`, `VF_PHONE_RUNTIME` (the ONE iOS runtime the stage picked: never a literal, RM4.1),
@@ -48,7 +50,7 @@
 //                                                booted set ⊆ the run's own — and `device` Booted; never a launch
 // and it prints `PHONE_ROWS_BEGIN mode=<m>` first, `PHONE_ROWS_END n=<k>` last (k = the rows it opened and closed).
 //
-// Lines a reader greps: PHONE_PREFLIGHT, PHONE_HOUSE_RULES, NOT ARMED, ARMED, PHONE_STOP_UNRESTORED, PHONE_CRASH_BEFORE, PHONE_XCODE_SELECT, PHONE_DEVICE,
+// Lines a reader greps: PHONE_PREFLIGHT, PHONE_HOUSE_RULES, NOT ARMED, ARMED, PHONE_STOP_FINAL, PHONE_STOP_UNRESTORED, PHONE_CRASH_BEFORE, PHONE_XCODE_SELECT, PHONE_DEVICE,
 // PHONE_COMMAND_ENV, PHONE_ROW, PHONE_STOP, PHONE_ROWS, PHONE_COST_SAMPLE, PHONE_ENUM, RESPONSIBLE, HID:, PHONE_REDACTED,
 // PHONE_OBSERVATION, PHONE_HOST_RESTORED, PHONE_SWEEP. Every line — the command's stdout and stderr, and the stage's own —
 // passes the redactor LINE-BUFFERED: the run's UDIDs read `<pts3-dev-n>`, every other device's `<host-dev-k>`.
@@ -991,10 +993,12 @@ export async function readList(run, deps) {
 
 const ownUdids = (run) => new Set([...run.own.values()].map((d) => d.udid.toUpperCase()));
 
-/** STOP the console acts: every later act and row is answered `stop`; the command is given time to end its rows. */
-export function stopRun(run, deps, why) {
+/** STOP the console acts: every later act and row is answered `stop`; the command is given time to end its rows. `final`
+ * marks a DETERMINISTIC stop — one a relaunch would only repeat (RM4.5's own-input reset; the press gate refusing an act
+ * outside the gated set or a device not the run's): it exits 1 with PHONE_STOP_FINAL, never 75 (RM6 S-3). */
+export function stopRun(run, deps, why, { final = false } = {}) {
   if (run.stopped !== null) return;
-  run.stopped = { why };
+  run.stopped = { why, final };
   deps.say(`PHONE_STOP ${why}`);
   deps.onStop?.(why);
 }
@@ -1222,15 +1226,16 @@ export async function doorRow(body, run, deps) {
     return json(200, { go: true });
   }
   if (phase === "press") {
-    // every refusal here STOPS the console acts: the smoke presses nothing on a stop
-    const halt = (status, why) => {
-      stopRun(run, deps, `${name}: the press gate: ${why}`);
+    // every refusal here STOPS the console acts: the smoke presses nothing on a stop. The act and the device are the
+    // smoke's and the product's own: their refusals are FINAL (a relaunch asks the same); the host's are transient
+    const halt = (status, why, final = false) => {
+      stopRun(run, deps, `${name}: the press gate: ${why}`, { final });
       return refuse(run, "press", status, { stop: true, why: run.stopped.why });
     };
     const act = body.act;
-    if (!GATED_ACTS.includes(act)) return halt(403, `it refuses act ${act}`);
+    if (!GATED_ACTS.includes(act)) return halt(403, `it refuses act ${act}`, true);
     const own = [...run.own.values()].find((d) => d.name === body.device);
-    if (own === undefined) return halt(403, "the phone's device is not one of this run's");
+    if (own === undefined) return halt(403, "the phone's device is not one of this run's", true);
     const fence = await fenceAgain(run, deps);
     if (!fence.ok)
       return run.stopped === null
@@ -1279,7 +1284,8 @@ export async function doorRow(body, run, deps) {
   };
   if (verdict.stop) {
     run.ownInput = true;
-    stopRun(run, deps, `${name}: ${verdict.why}`);
+    // RM4.5: P10's assumption failed — the run never loops on it
+    stopRun(run, deps, `${name}: ${verdict.why}`, { final: true });
     voided(verdict.why);
     return json(409, { stop: true, why: verdict.why });
   }
@@ -2287,29 +2293,34 @@ async function launch(mode, command, opts) {
   }
   const exit = launchExit({
     signal: signalled === null ? null : constants.signals[signalled],
-    stopped: run.stopped !== null,
+    stopped: run.stopped,
     deadlineHit,
     code,
     restored,
   });
-  if (exit.line !== null) deps.say(exit.line);
+  for (const line of exit.lines) deps.say(line);
   return exit.code;
 }
 
-/** A launch's exit: 128+n on a signal; a STOP is 75 — "NOT ARMED: relaunch later" (§6.3) — only over a restored host;
- * a STOP that left it unrestored (an own device booted, Simulator.app refused) is 1 and PHONE_STOP_UNRESTORED, so no
- * caller relaunches over it; past the deadline 1; else the command's code, 1 for its 0 over an unrestored host. */
+/** A launch's exit, and the lines it says: 128+n on a signal. A STOP (`stopped`: the run's `{why, final}`, or null) is 75
+ * — "NOT ARMED: relaunch later" (§6.3) — only when it is TRANSIENT (a hand at a begin, a locked console, the fence, a
+ * Simulator.app not proven the run's) over a restored host. A DETERMINISTIC stop (`final`: RM4.5's own-input reset, the
+ * press gate refusing an act or a device) would repeat on a relaunch: 1 and PHONE_STOP_FINAL <why> (RM6 S-3). A STOP
+ * that left the host unrestored (an own device booted, Simulator.app refused) is 1 and PHONE_STOP_UNRESTORED, so no
+ * caller relaunches over it. Past the deadline 1; else the command's code, 1 for its 0 over an unrestored host. */
 export function launchExit({ signal, stopped, deadlineHit, code, restored }) {
-  if (signal !== null) return { code: 128 + signal, line: null };
-  if (stopped)
-    return restored
-      ? { code: NOT_ARMED, line: null }
-      : {
-          code: 1,
-          line: "PHONE_STOP_UNRESTORED the run stopped and its teardown left the host unrestored (PHONE_HOST_RESTORED): restore it by hand before any relaunch",
-        };
-  if (deadlineHit) return { code: 1, line: null };
-  return { code: code === 0 && !restored ? 1 : code, line: null };
+  if (signal !== null) return { code: 128 + signal, lines: [] };
+  if (stopped) {
+    const lines = [];
+    if (stopped.final) lines.push(`PHONE_STOP_FINAL ${stopped.why}`);
+    if (!restored)
+      lines.push(
+        "PHONE_STOP_UNRESTORED the run stopped and its teardown left the host unrestored (PHONE_HOST_RESTORED): restore it by hand before any relaunch",
+      );
+    return { code: lines.length === 0 ? NOT_ARMED : 1, lines };
+  }
+  if (deadlineHit) return { code: 1, lines: [] };
+  return { code: code === 0 && !restored ? 1 : code, lines: [] };
 }
 
 function startCostSampler(run, deps) {

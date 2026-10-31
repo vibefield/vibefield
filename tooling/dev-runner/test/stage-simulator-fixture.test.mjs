@@ -507,19 +507,21 @@ test("launchChecks: right before the command, the responsible app is the one ENU
 });
 
 test("launchExit: a STOP reads 75 (relaunch later) only when the host is restored; unrestored, 1 and a line (S8)", () => {
-  const ran = { signal: null, stopped: false, deadlineHit: false, code: 0, restored: true };
-  assert.deepEqual(launchExit(ran), { code: 0, line: null });
-  assert.deepEqual(launchExit({ ...ran, code: 3 }), { code: 3, line: null });
-  assert.deepEqual(launchExit({ ...ran, restored: false }), { code: 1, line: null });
-  assert.deepEqual(launchExit({ ...ran, deadlineHit: true }), { code: 1, line: null });
-  assert.deepEqual(launchExit({ ...ran, stopped: true }), { code: NOT_ARMED, line: null });
-  const unrestored = launchExit({ ...ran, stopped: true, restored: false });
+  const ran = { signal: null, stopped: null, deadlineHit: false, code: 0, restored: true };
+  assert.deepEqual(launchExit(ran), { code: 0, lines: [] });
+  assert.deepEqual(launchExit({ ...ran, code: 3 }), { code: 3, lines: [] });
+  assert.deepEqual(launchExit({ ...ran, restored: false }), { code: 1, lines: [] });
+  assert.deepEqual(launchExit({ ...ran, deadlineHit: true }), { code: 1, lines: [] });
+  const hand = { why: "a hand at the Mac before SIM-LIVE", final: false };
+  assert.deepEqual(launchExit({ ...ran, stopped: hand }), { code: NOT_ARMED, lines: [] });
+  const unrestored = launchExit({ ...ran, stopped: hand, restored: false });
   assert.equal(unrestored.code, 1);
+  assert.equal(unrestored.lines.length, 1);
   assert.match(
-    unrestored.line,
+    unrestored.lines[0],
     /^PHONE_STOP_UNRESTORED .*PHONE_HOST_RESTORED.*before any relaunch/u,
   );
-  assert.equal(launchExit({ ...ran, signal: 2, stopped: true, restored: false }).code, 130);
+  assert.equal(launchExit({ ...ran, signal: 2, stopped: hand, restored: false }).code, 130);
 });
 
 test("preflightLines: one line per failure, its fix named; ok alone when none", () => {
@@ -1716,6 +1718,72 @@ test("doorRow: a row stopped mid-way still takes its END (the record keeps two l
     ["SIM-USE"],
   );
   assert.equal(later.hands, 1);
+});
+
+test("a DETERMINISTIC stop is FINAL — exit 1 and PHONE_STOP_FINAL, never 75; a transient one keeps 75 (S-3)", async () => {
+  /** A run with its first row begun (or, with `begin: false`, none), the samples given, then `act` — its stop answered. */
+  const stopOf = async (samples, act, { begin = true } = {}) => {
+    const run = ownRun();
+    run.last = sample(0, 300);
+    const host = fakeHost({ samples });
+    if (begin) await doorRow({ name: "SIM-STAGED", phase: "begin" }, run, host.deps);
+    await act(run, host);
+    assert.notEqual(run.stopped, null, "the act stopped the run");
+    return run.stopped;
+  };
+  const press = (act, device) => (run, host) =>
+    doorRow({ name: "SIM-STAGED", phase: "press", act, device }, run, host.deps);
+  const final = {
+    // RM4.5: the run's own input moved HIDIdleTime — a relaunch moves it again
+    "own input": await stopOf([sample(10, 310), sample(40, 2)], async (run, host) => {
+      await doorRow({ name: "SIM-STAGED", phase: "input" }, run, host.deps);
+      await doorRow({ name: "SIM-STAGED", phase: "end" }, run, host.deps);
+    }),
+    // the press gate: an act outside the gated set, a device not the run's — the smoke's or the product's own binding
+    "act create": await stopOf([sample(10, 310)], press("create", `pts3-${RUN}-1`)),
+    "another's device": await stopOf([sample(10, 310)], press("show", "James's iPhone")),
+  };
+  const transient = {
+    "a hand at a begin": await stopOf(
+      [sample(60, 5)],
+      (run, host) => doorRow({ name: "SIM-LIVE", phase: "begin" }, run, host.deps),
+      { begin: false },
+    ),
+    "a locked console": await stopOf(
+      [sample(10, 310, "Yes")],
+      (run, host) => doorRow({ name: "SIM-LIVE", phase: "begin" }, run, host.deps),
+      { begin: false },
+    ),
+    "the fence": await stopOf([sample(10, 310)], (run, host) => {
+      host.state.list = hostList([{ udid: FOREIGN, state: "Booted" }]);
+      return press("show", `pts3-${RUN}-3`)(run, host);
+    }),
+    "a Simulator.app not the run's": await stopOf([sample(10, 310)], (run, host) => {
+      host.state.pgrep = "777";
+      host.state.lstart = lstartOf(ARMED - 60_000);
+      return press("show", `pts3-${RUN}-3`)(run, host);
+    }),
+  };
+  const restored = { signal: null, deadlineHit: false, code: 0, restored: true };
+  for (const [what, stopped] of Object.entries(final)) {
+    assert.equal(stopped.final, true, what);
+    assert.deepEqual(
+      launchExit({ ...restored, stopped }),
+      { code: 1, lines: [`PHONE_STOP_FINAL ${stopped.why}`] },
+      what,
+    );
+  }
+  for (const [what, stopped] of Object.entries(transient)) {
+    assert.equal(stopped.final, false, what);
+    assert.deepEqual(launchExit({ ...restored, stopped }), { code: NOT_ARMED, lines: [] }, what);
+  }
+  // FINAL over an unrestored own side: both said — never relaunch as is, and restore first
+  const both = launchExit({ ...restored, restored: false, stopped: final["own input"] });
+  assert.equal(both.code, 1);
+  assert.deepEqual(
+    both.lines.map((line) => line.split(" ")[0]),
+    ["PHONE_STOP_FINAL", "PHONE_STOP_UNRESTORED"],
+  );
 });
 
 // ─── the command: settled on its exit ─────────────────────────────────────────────────────────────────────────────────
