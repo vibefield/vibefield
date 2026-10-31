@@ -236,6 +236,8 @@ const EVIDENCE_ATTRS = [
   "terminated",
   // item 87 — how long a run's exit cleanup had been pending when it was warned
   "pendingMs",
+  // item 121 — the class of the cell a refused re-attach's terminal was on (`fieldd.agents.reattach_refused_cell`)
+  "workloadClass",
 ] as const;
 
 /** The streams a real-floor row's evidence reads, under `<dataDir>/logs/system/`: the floor's (the suites set

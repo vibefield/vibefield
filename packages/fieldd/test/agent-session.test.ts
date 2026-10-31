@@ -4110,9 +4110,10 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
 
     const second = await setup({ floor: "real", restartOf: first });
     const win2 = await window(second.daemon, DECK, "ns2");
-    const pending = await poll(async () => {
+    const pending = await poll(async (seen) => {
       const { sessions } = (await win2.call("agent.list", {})) as AgentListResult;
       const found = sessions.find((r) => r.runtimeRunId === runId);
+      seen(found ?? null);
       return found?.continuation?.pending !== undefined ? found : undefined;
     }, 20_000);
     // held, and says no resume is coming (AR-D25's signed-out shape)
