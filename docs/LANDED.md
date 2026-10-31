@@ -24843,3 +24843,135 @@ MaxListeners 0; the bundle unchanged.
 
 **Landed:** local main fast-forwarded `ce8864e86` → `a8bdb8057` at 2026-10-31T18:06:54Z by `land-stack4.sh`, on VF-PM's
 GO. VF-PM closes PR #6 naming the sha.
+
+## FG-O2's judge — every word on the glass at 4.5:1: the day's milk at 75% (James's "b", amending his FG-D15 C), the ramp stopped at t2 on the glass, the wizard's own inks on the ramp, and row 32 judging every lettered word of the band and the standing pane (desk-gates row 32)
+
+**Why.** FG-O2's printed run, row 32 on M57 at run57b, put the glass's small words short of DESIGN.md's 4.5:1 on every
+walk (day / night / over the still): the band's done labels 2.2–2.4 / 3.2–3.8 / 2.2–2.4:1, its next 1.7 / 2.5 / 1.7,
+the line under the actions 2.2 / 3.7 / 2.2 and a load's sub line 2.2 / 3.2 / 2.2. The stage line (6.4–6.5:1) and the
+band's now (6.6–13:1) passed. a5's proposal (17:42Z, `lanes/fg2/judge/proposal.md`) worked the arithmetic over
+run57b's own chips (`ramp.py`, which reproduces every printed ratio within 0.1 by day and 0.16 by night, a little
+high):
+- t3 cannot reach 4.5:1, or even 3:1, on any light ground (2.85:1 on white). One step up, to t2, gives 3.74–4.46 by
+  day (3.79–4.59 over the still) and 5.45–7.41 at night, and 4.5:1 needs the ink at about 79% by day on the worst
+  ground measured. So the night is the plan's one step, and the day is the gap.
+- Three ways. (a) A glass-only quiet ink, t1 by day and t2 at night, the milk kept: 5.05–6.42 by day. (b) A lighter
+  day glass, the milk from 55% to 75% with the small words at t2: 4.90–5.29 by day and 4.93–5.36 over the still (at
+  70% only 4.61, too little margin for a model that runs a little high), the night unchanged. (c) A lower bar, 3:1,
+  for the band's done and next labels, which would make a 10px label a mark and fixes neither reading line. The lean
+  was (b), DESIGN.md first, James's to overturn, since FG-D15 C was his pick.
+- The sheet James ruled on (`lanes/fg2/judge/sheet.png`, sent through VF-PM at 17:48Z): run57b's own Connect still
+  as it is beside (a) and (b) by day, and as it is beside (a) = (b) by night, each quiet word re-inked at its tier over
+  the ground it stood on.
+- **James ruled "b" at 18:25Z** (through VF-PM): the lighter day glass, amending his own FG-D15 C; (a) not taken.
+  VF-PM ruled the slice's scope at its leans, James's to overturn: every word on the glass, its panes' with its own,
+  with no exceptions list (18:05Z); every lettered text of the band and the standing pane measured on each still, the
+  wizard's class inks onto the ramp, and the name field's placeholder to item 127 (18:11Z); a word in a control that
+  is off passed over and said so (18:40Z).
+
+**What landed** (`6adf58dd3`, built and lit in lane fg2 on `fg/judge` over `bd9ecd159`, in the stacked mint M59
+with the fixer's item 129 on top, `2d2f41046`; Checks), in the commit's own order:
+- DESIGN.md first (the text drafted while the slice was held, in `lanes/fg2/judge/design/`, applied byte for byte
+  with James's time):
+  - §5, the Setup Assistant tier: its words (on the glass the ramp stops at t2, t3 and t4 re-projected there; a quiet
+    button's words at t1 on its fill; every word on it at 4.5:1), the milk at 75% by day in its recipe, and FG-D15
+    C's amendment in its Use cell.
+  - §8, the Setup Assistant's glass: the material sentence; the bar, **Its words read**, which row 32 measures, a
+    word in a control that is off or under a list's fade passed over and said so; the band's labels (done and to
+    come in t2, the current in ink); a load's sub in t2, told by its size; and one dated amendment after FG-4b's
+    status, with run57b's numbers, the milk, the words each tier gives up, the class inks §10 already ruled out, the
+    model's numbers until the row measures them, the marks that follow, what it costs to see, and Settings and the
+    placeholder left to item 127.
+- `tokens.css`: `--vf-wizard-surface` white 75% by day; the night's smoke stays 55%. One token serves both glasses
+  (FG-D24): the browser's over the field's still wears it on the frost's layer, and the field's own over the live
+  field reads that layer's computed style (`glass-look.ts`). The catalog's glass follows the token, nothing copied.
+- `wizard-ui.css`: on `.vf-wizard-shell` t3 and t4 are re-projected to t2, so the panes' words come up with the
+  wizard's own (AO's and TS's quiet words, the face deck's labels, Devices' small print and a ghost's name) and
+  Settings keeps its ramp; the marks those tokens colour follow them (a done segment's fill, a ghost's disc). The
+  re-projection is the composition's, never the kit's: `tokens.css` holds `:root` and `.dark` alone. The wizard's
+  own words name t2: the band's labels (the done label's rule merged away), the line under the actions, a load's sub
+  and a user's detail.
+- `wizard-ui.tsx`: the class inks leave fixed black and white (§10: product code consumes tokens) for the ramp:
+  `factCls` and `eyebrowCls` at t3 (t2 on the glass), `voiceCls` at t2, and `quietCls`'s words at t1 on its fill,
+  its hover the foreground.
+- Row 32's judge (`smoke-first-run.ts`):
+  - The page reads every lettered text of the band and the standing pane (`wordsIn`), one text node at a time: each
+    line's box from a range, clipped by every box around it that cuts what overflows (an ellipsis's cut excepted);
+    how much of it shows; whether it stands in a control that is off, or under a box still moving; its computed
+    colour; and the list it scrolls in, with its fade.
+  - Every pane's still is read on both sides of its capture (`captureWords`): the welcome, You, Agents three times,
+    Profiles twice, History, Connect, Setting up and its welcome. Each word is cut from the capture by its own
+    lines, joined, and measured by DK-16's method at the walk's end.
+  - `passedOver` says why a word is not held: in a control that is off (WCAG 1.4.3's exemption for an inactive
+    control), fading (an animation running and the word shown less than whole), cut off at its list's edge or by its
+    box, under its list's fade, or changed under the capture. A word dimmed to stay so is measured as it shows.
+  - The walk's `contrast` prints per still how many words were held, the lowest three with their ratios, every short
+    one in full (its text, colour, ground, ink and ratio) and every one passed over with why. `judgeContrast` makes
+    each short word red with its numbers, an unread one red, and the splash's stage line red under 4.5:1, judged as
+    it is cut.
+- desk-gates row 32: **The contrast**, judged now.
+- Tests: FG-O2's block in `smoke-first-run.test.ts` rewritten as the judge's, five rows where its three stood; one row
+  in `onboarding-wizard.test.tsx` (the milk at 75% by day and 55% by night, the re-projection, the t2 names, no fixed
+  ink in the four constants); and FG-4b's crossfade row moved with the sub to t2 (Found).
+
+**Checks.**
+- Red first, each half set aside at `bd9ecd159`'s text and restored byte for byte (cmp checked;
+  `lanes/fg2/judge/light/`):
+  - The judge, under its rows: 4 failed, 40 passed of 44 (`(0 , passedOver) is not a function`,
+    `(0 , judgeContrast) is not a function`, and the old reading's shape where `{ stage, words }` was asked, twice),
+    the splash's row green on `splashLook`, which the slice leaves; then 44/44.
+  - The inks (`tokens.css`, `wizard-ui.css`, `wizard-ui.tsx`) under the new row: 1 failed, the day's milk at 55%
+    where 75% was asked; then green.
+  - FG-4b's crossfade row as moved, under `wizard-ui.css`: 1 failed, the sub at t3 where t2 was asked; then green.
+- The lane's light (19:19:48–19:24:53Z, nice 19 under the guard, on the vitest lane cp-landing handed over at
+  19:19:00Z), in two passes, the second on the staged tree `f20162bc0`, the same before and after, all green:
+  - `git diff --check`; biome over the six code files; `check:walls` clean; the typecheck of electron-shell,
+    field-app and design-kit (at 18:36Z, before the one later code edit, FG-4b's regex, which biome and vitest
+    parsed);
+  - electron-shell's whole vitest: 160 files, 2,426 passed, 3 skipped (+4 over FG-O2's light: the judge's two more
+    rows, and PR #6's two in `studio-publish-scheduler.test.ts`);
+  - field-app's whole vitest: 267 files and 1 skipped, 3,485 passed, 3 skipped, with ui-system-boundaries 40/40 and
+    `design-system.test.tsx` 8/8 in 48.2 s (item 129's file, green on this Mac);
+  - design-kit has no test target of its own; its tokens are held by field-app's rows.
+- VF-PM's read (19:32Z): `6adf58dd3` on `bd9ecd159`, tree `f20162bc0`, 8 files +631 −173; DESIGN.md quotes James's
+  "b" at 18:25Z and names the off control's pass-over; the milk at 75%; the four constants carry no fixed black or
+  white; no hex outside `tokens.css`; no path in common with item 129.
+- **Run 59:** M59 is the stacked tip `2d2f41046`: the judge's `6adf58dd3` on `bd9ecd159` with the fixer's item 129
+  re-cut on top path for path, its tree `9ca93834b` (VF-PM's merge-tree of the two); a9's run on the Mac mini.
+  - `pnpm verify` went green at 19:35:59Z (exit 0; armed 19:31:08Z), with 0 FAIL rows in VF-PM's stripped read.
+    - vitest: 11,372 passed, 0 failed, 18 skipped. That is +4 over run 58: smoke-first-run 42 → 44 (the judge's
+      five rows where FG-O2's three stood), onboarding-wizard 56 → 57 (the judge's row) and head 95 → 96 (item
+      129's row).
+    - cargo: `test result: ok.` × 33. typecheck and test ran for 28 projects. MaxListeners 0, the tree clean, and no
+      stubs.
+    - The bundle's assert held at 911.0 KB raw and 240.6 KB gz (911.3 KB raw at run 58: the judge's inks and
+      stylesheet).
+- **Landed:** main fast-forwarded `bd9ecd159` → `2d2f41046` at 2026-10-31 19:38:05Z on VF-PM's GO (land-stack4.sh,
+  the ff path, no lock wait; M59 is the stacked tip itself): two commits, the judge's `6adf58dd3` (8 files, +631
+  −173, tree `f20162bc0`, the light's) and item 129's `2d2f41046` on it.
+
+**Found while building.**
+- FG-4b's crossfade row pinned a load's sub at t3. (b) moves the sub to t2, told from its line by its size, so the row
+  moved with it: the first pass's whole field-app run found it (1 failed, 3,484 passed), and the second pass ran its
+  red first and both packages whole again.
+- A word can stand dimmed in a control that is off: a primary at 40% while it writes, waits or is busy, or Profiles'
+  Next before a name. WCAG 1.4.3 exempts an inactive control, so the judge passes such a word over and says so
+  (VF-PM's ruling, 18:40Z), and the bar's sentence names it. A word dimmed to stay so is measured, and only a running
+  animation counts as fading.
+- The wizard's fills stand outside the tokens: `primaryCls`'s black fill with its white words, and `quietCls`'s black
+  at 5% (white at 10% by night). They are fills, not inks, so item 127 takes them (VF-PM, 18:40Z).
+
+**Owed.**
+- **Row 32 OWED at James's unlock (the console locked at the mint):** row 32 alone on M59 (run59b), the
+  every-word judge's first live run: on each walk every pane still's count, its lowest words and any short one, and
+  the stage line judged as it is cut. Its counts fold in here as one `  >` block when the row runs.
+- At the next draft queue the PM opens: FG-D15's status line in DECISIONS (C, amended by James's "b" at 18:25Z), and
+  the thinking doc's dated correction at its source: its FG-O2 says "If a small ink falls short, it moves one ink
+  step", which run57b showed false by day.
+- Item 127's list (a5's, after this judge): DESIGN.md §2.4 against the tokens (the light ramp's t3 and t4 under 3:1 on
+  light chrome, 2.85:1 and 1.92:1 on white), Settings' ramp, the name field's placeholder, and the wizard's fills
+  outside the tokens (`primaryCls`'s black fill and its white words, `quietCls`'s black at 5%).
+- Not claimed: the night's and the still's numbers beyond the model until the row measures them, and any word on a
+  pane or in a state the walk does not stand on.
+- FG-6's remaining gates, in the ruled order: the catalog over the field's still (a fixture adapter, never a copy),
+  then the field's glass against the CSS glass on a frozen frame (a test-only seam, ruled on its own).
