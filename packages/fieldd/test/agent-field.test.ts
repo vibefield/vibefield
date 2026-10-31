@@ -144,6 +144,9 @@ const maximalSummary = (): AgentSessionSummary => ({
   }),
   profileId: "work",
   lastActivityAt: "2026-09-13T10:06:00.000Z",
+  // SP-1b — whose session it is, and who started it, the origin carrying a key the contract does not name
+  spark: "sp-vela01",
+  origin: { by: "flow", run: "fr-1", call: 2, note: "rides the passthrough and must never travel" },
 });
 
 describe("projectFieldRow — facts kept, content dropped (§10.1)", () => {
@@ -167,10 +170,12 @@ describe("projectFieldRow — facts kept, content dropped (§10.1)", () => {
     // the PRODUCER and those goldens cannot drift apart — a fixture nobody
     // produces is a fixture that can quietly stop describing the product.
     // PJ-7 — the native id joined the row in a golden of its own: the slice's
-    // is the kit's mirror and stays byte for byte as it shipped.
+    // is the kit's mirror and stays byte for byte as it shipped. SP-1b — the
+    // spark and the origin joined it in another golden of their own.
     const rows = [
       "agent-field-slice.valid.json",
       "agent-field-snapshot.native-session.json",
+      "agent-field-snapshot.spark.json",
     ].flatMap(
       (name) =>
         (
@@ -252,6 +257,22 @@ describe("projectFieldRow — facts kept, content dropped (§10.1)", () => {
     // the id moves with the fold's (a configured claim corrected by observation)
     const corrected = projectFieldRow({ ...summary({}), sessionId: "observed-later" });
     expect(corrected.nativeSessionId).toBe("observed-later");
+  });
+
+  it("SP-1b — carries whose session it is and who started it, the origin rebuilt from its named fields", () => {
+    const own = projectFieldRow({ ...summary({}), spark: "sp-vela01", origin: { by: "you" } });
+    expect(own.spark).toBe("sp-vela01");
+    expect(own.origin).toEqual({ by: "you" });
+    const started = projectFieldRow({
+      ...summary({}),
+      origin: { by: "flow", run: "fr-1", call: 2, note: "rides the passthrough" },
+    });
+    // rebuilt, never spread: a key the contract does not name stays home
+    expect(started.origin).toEqual({ by: "flow", run: "fr-1", call: 2 });
+    // a run that is neither carries neither key at all
+    const plain = Object.keys(projectFieldRow(summary({})));
+    expect(plain).not.toContain("spark");
+    expect(plain).not.toContain("origin");
   });
 
   it("names the FOLDER and never the path (EL7 B1), honestly about git", () => {

@@ -217,6 +217,44 @@ describe("PJ-7 — the phone's row knows its conversation (Q3 (a))", () => {
   });
 });
 
+describe("SP-1b — the row says whose session it is and who started it (track CO)", () => {
+  it("carries the spark and the origin, and a row with neither still parses", () => {
+    const snapshot = AgentFieldSnapshot.parse(golden("agent-field-snapshot.spark.json"));
+    const [own, started, plain] = snapshot.rows;
+    expect(own?.spark).toBe("sp-vela01");
+    expect(own?.origin).toEqual({ by: "you" });
+    expect(started?.spark).toBeUndefined();
+    expect(started?.origin).toEqual({ by: "spark", spark: "sp-vela01" });
+    expect(plain?.spark).toBeUndefined();
+    expect(plain?.origin).toBeUndefined();
+    // the goldens from before SP-1b carry neither, and still parse: the tolerant reader
+    for (const name of [
+      "agent-field-snapshot.valid.json",
+      "agent-field-snapshot.native-session.json",
+    ]) {
+      const older = AgentFieldSnapshot.parse(golden(name));
+      expect(
+        older.rows.every((row) => row.spark === undefined && row.origin === undefined),
+        name,
+      ).toBe(true);
+    }
+  });
+
+  it("refuses a spark that is not an id, and an origin that names no one, rather than coercing them", () => {
+    const row = AgentFieldSnapshot.parse(golden("agent-field-snapshot.spark.json"))
+      .rows[0] as Record<string, unknown>;
+    expect(AgentFieldRow.safeParse(row).success).toBe(true);
+    for (const bad of ["", "Vela", "sp-", 42]) {
+      expect(AgentFieldRow.safeParse({ ...row, spark: bad }).success, String(bad)).toBe(false);
+    }
+    expect(AgentFieldRow.safeParse({ ...row, origin: { by: "" } }).success).toBe(false);
+    expect(AgentFieldRow.safeParse({ ...row, origin: { spark: "sp-vela01" } }).success).toBe(false);
+    // the desk row is a field row: it reads both the same way
+    expect(AgentDeskRow.safeParse(row).success).toBe(true);
+    expect(AgentDeskRow.safeParse({ ...row, spark: "Vela" }).success).toBe(false);
+  });
+});
+
 describe("DS-3 — the subscription's new options", () => {
   it("a mesh board is field or desk at a scope; today's callers ask none of it", () => {
     const parsed = AgentSubscribeParams.parse({ projection: "desk", scope: "mesh" });

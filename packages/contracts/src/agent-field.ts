@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { AgentProfileId, AgentProviderId } from "./agent-index";
-import { AgentSessionTerminal, AgentStatus, AgentTier } from "./agent-session";
+import {
+  AgentSessionOrigin,
+  AgentSessionTerminal,
+  AgentStatus,
+  AgentTier,
+  SparkId,
+} from "./agent-session";
 import type { Principal } from "./envelope";
 import { INDEX_ACTIVITY } from "./registries";
 import {
@@ -133,6 +139,17 @@ export const AgentFieldRow = z
      * a daemon before PJ-7. */
     nativeSessionId: z.string().min(1).max(256).optional(),
     terminal: AgentSessionTerminal.optional(),
+    /** SP-1b (track CO; VF-PM 2026-10-31) — the run is this spark's own
+     * session, the one it thinks in: the fold's `spark`. Chat reads a spark's
+     * status by it. An id, never a name, which can change while the spark
+     * stays. Static for the run's life, so a snapshot-delta pays it once.
+     * Absent on every other run, and on a row from a daemon before SP-1b. */
+    spark: SparkId.optional(),
+    /** SP-1b — who started the run (CP-D15): the fold's `origin`, rebuilt from
+     * its named fields and never spread. Chat reads a spark's agents by it
+     * (CH-D3: "its face is working because its agents are"). Absent reads
+     * `you`, as on the fold's row. */
+    origin: AgentSessionOrigin.optional(),
   })
   .passthrough();
 export type AgentFieldRow = z.infer<typeof AgentFieldRow>;

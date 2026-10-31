@@ -11,6 +11,7 @@ import {
   AgentModelDeskRow,
   type AgentModelLocalFacts,
   type AgentRecordedLanesResult,
+  type AgentSessionOrigin,
   type AgentSessionSummary,
   type AgentSessionTerminal,
   type AgentSubscribeParams,
@@ -401,6 +402,22 @@ export function projectFieldRow(summary: AgentSessionSummary): ProjectedFieldRow
     // workloadClass?, replaced?}` is what a body's card attaches THROUGH (G3),
     // and every field of it is already content-free.
     ...(summary.terminal !== undefined ? { terminal: summary.terminal } : {}),
+    // SP-1b — whose session the run is, and who started it (CP-D15), so Chat
+    // reads a spark's status from this row. Static for the run's life, and the
+    // origin REBUILT from its named fields, as the bars above are, so nothing
+    // riding its passthrough reaches the wire.
+    ...(summary.spark !== undefined ? { spark: summary.spark } : {}),
+    ...(summary.origin !== undefined ? { origin: originOf(summary.origin) } : {}),
+  };
+}
+
+/** CP-D15's origin as the field row carries it: its named fields, and only those. */
+function originOf(origin: AgentSessionOrigin): AgentSessionOrigin {
+  return {
+    by: origin.by,
+    ...(origin.spark !== undefined ? { spark: origin.spark } : {}),
+    ...(origin.run !== undefined ? { run: origin.run } : {}),
+    ...(origin.call !== undefined ? { call: origin.call } : {}),
   };
 }
 
