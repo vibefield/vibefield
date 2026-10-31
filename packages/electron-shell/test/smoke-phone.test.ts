@@ -26,6 +26,7 @@ vi.mock("node:child_process", async (importOriginal) => {
   };
 });
 
+import { dimmed } from "../src/testing/smoke-last-still";
 import {
   actScan,
   BAND_PALETTE,
@@ -577,11 +578,25 @@ describe("PT-S3 — the rows' judges", () => {
       live: measure(),
       reloaded: true,
       rested: { still: 1_700_000_000_000, rested: true },
-      seen: measure({ colors: 300 }),
+      seen: measure({ colors: 300, bandMean: [128, 22, 76] }),
       predicted: [128, 22, 76],
       handover: proof,
     };
     expect(judgeStill(seen)).toEqual([]);
+    // R2: the law's 0.7 dim moves a band less than BAND_TOL, so an UNDIMMED live band still counts as band pixels —
+    // the still is told from a live face by which it is nearer: the law's dim, or the live band
+    for (let k = 0; k < 48; k += 1) {
+      const band = bandColour(bandNonce(k));
+      const dim = dimmed(band, band, PHONE.still).map(Math.round);
+      expect(Math.max(...dim.map((v, i) => Math.abs(v - (band[i] ?? 0))))).toBeLessThanOrEqual(
+        BAND_TOL,
+      );
+    }
+    const live = judgeStill({ ...seen, seen: measure({ colors: 300 }) });
+    expect(live.join(" ")).toMatch(/nearer the live band .* a live face, not its still/u);
+    expect(
+      judgeStill({ ...seen, seen: measure({ colors: 300, bandMean: [134, 25, 80] }) }),
+    ).toEqual([]);
     const literal = `ios-simulator:${TP}/com.apple.CoreSimulator.SimRuntime.iOS-26-5`;
     expect(judgeStill({ ...seen, address: literal }).join(" ")).toMatch(/filed under/u);
     expect(judgeStill({ ...seen, seen: measure({ colors: 100 }) }).join(" ")).toMatch(

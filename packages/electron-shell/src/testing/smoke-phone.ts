@@ -833,6 +833,10 @@ export interface StillSeen {
   readonly handover: LiveProof | null;
 }
 
+/** Two colours' distance: their farthest channel. */
+const apart = (a: readonly number[], b: readonly number[]): number =>
+  Math.max(...a.map((v, i) => Math.abs(v - (b[i] ?? v))));
+
 export function judgeStill(s: StillSeen): string[] {
   const out: string[] = [];
   if (s.taken.after !== s.taken.before + 1)
@@ -856,6 +860,15 @@ export function judgeStill(s: StillSeen): string[] {
     else if (s.seen.band < BAND_FLOOR * s.seen.px)
       out.push(
         `SIM-STILL: the band at the law's dim (${JSON.stringify(s.predicted)}) holds ${s.seen.band} of ${s.seen.px} pixels`,
+      );
+    else if (
+      s.seen.bandMean !== null &&
+      s.live.bandMean !== null &&
+      apart(s.seen.bandMean, s.predicted) >= apart(s.seen.bandMean, s.live.bandMean)
+    )
+      // the law's dim moves a band less than BAND_TOL: an undimmed live band counts as band pixels too (R2)
+      out.push(
+        `SIM-STILL: the band reads ${JSON.stringify(s.seen.bandMean)}, nearer the live band ${JSON.stringify(s.live.bandMean)} than the law's dim ${JSON.stringify(s.predicted)} — a live face, not its still`,
       );
   }
   out.push(...judgeLiveProven("SIM-STILL (the hand-over)", s.handover));
@@ -2207,15 +2220,22 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
         `globalThis.__vfDesk.pageStill(${JSON.stringify(p)}).then((s) => s?.address ?? null)`,
       );
       const extraStill = (await screenOf(p))?.still ?? false;
-      // reopened off view: the reload, the phone unseen
-      await away();
+      // reopened off view: the reload frames the content on arrival (use-workspace-session), so away AFTER it (R3)
       const reloaded = await d.reload();
       await still();
       await d.focused();
+      await away();
       await sleep(1_500);
-      const rested = await faceOf(p).then((f) =>
-        f === null ? null : { still: f.still, rested: f.rested || f.simulator?.is === "at-rest" },
-      );
+      const back = await faceOf(p);
+      if (back !== null && (back.alive || back.presented > 0))
+        return {
+          problems: [],
+          staging: `after the reload φP was seen live (presented ${back.presented}) before it went off view`,
+        };
+      const rested =
+        back === null
+          ? null
+          : { still: back.still, rested: back.rested || back.simulator?.is === "at-rest" };
       // the still SEEN: the cap at 1 held by a playing pane, the phone brought into view waits at rest on its still
       pane ??= await placePane(0);
       await view([pane]);
@@ -2228,9 +2248,24 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
       await js("globalThis.__vfDesk.liveCap(1)");
       await view([pane, p]);
       await sleep(1_000);
-      // the band's live colour at the law's dim: its own light at `display.still` (the page IS the band there)
+      // the still SEEN only while the phone rests on it — at rest, a still, not alive (R2)
+      const atSeen = await faceOf(p);
+      const resting =
+        atSeen !== null &&
+        atSeen.still !== null &&
+        !atSeen.alive &&
+        (atSeen.rested || atSeen.simulator?.is === "at-rest");
+      if (!resting) {
+        await js(`globalThis.__vfDesk.liveCap(${capNow ?? 6})`);
+        return {
+          problems: [],
+          staging: `seen under the cap φP is not at rest on its still (${JSON.stringify({ rested: atSeen?.rested, still: atSeen?.still, alive: atSeen?.alive })})`,
+        };
+      }
+      // the band's live colour at the law's dim: the PAGE's light (the band the page draws) at `display.still`, the
+      // glass's own beyond it kept (dimmed()'s `page`)
       const lit = live === null ? null : live.bandMean;
-      const dim = lit === null ? null : dimmed(lit, lit, PHONE.still);
+      const dim = lit === null ? null : dimmed(lit, band, PHONE.still);
       const predicted: [number, number, number] | null =
         dim === null ? null : [Math.round(dim[0]), Math.round(dim[1]), Math.round(dim[2])];
       const seenStill = await glassOf(p, false, predicted);
