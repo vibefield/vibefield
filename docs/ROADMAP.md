@@ -225,16 +225,22 @@
   orchestrator's leans. A bound phone's screen is wired through LSF-5's ScreenCaptureKit capture on `LIVE`, its nine
   faces and their acts mapped from the shell's facts, "Attach" and "Finish" on its menu (no free Model act, PT-S2's
   R11). No smoke row: its desk evidence is PT-S3's live run, and no real Simulator pixels have been seen on the desk.
-- Next: **PT-S3** (the gates and the live witness: a booted simulator streams its real pixels to the desk, a still at
-  rest, each honest face witnessed, the Screen Recording and Accessibility flows, "Show it" on a running Simulator.app
-  (its launch arguments reach only a fresh launch), the fps buckets (PT-S2's R9: the law's 12 at rest arrives as 10),
-  the letter of PT-S2's R7 (a split's second inner runtime, only with no face attached), the cost at the cap beside a
-  pane) → PT-S4 (touch through serve-sim, supervised, after its `killPortHolder` is fixed: an EL8 pin event, loopback
+- **PT-S3, the gates**: built code-only on James's board word (10-31 01:16Z: "write the checks now, run on my
+  unlock"), light-green on this Mac 10-31, LANDED 10-31 (`d3f974f84` in the mint `c564de0e4`, the mini's run 52;
+  LANDED "PT-S3"); its brief's P1–P16 are the orchestrator's leans. `pnpm smoke:phone` (L2), `:none` (L1) and `:cost`
+  (L3) run the phone's rows under a stage that arms on the console's idle, makes and deletes only its own devices and
+  restores the host (desk-gates row 33: landing-only, never inside `gate:landing`); P1 finds Xcode beside the Command
+  Line Tools. Nothing live has run: no real Simulator pixels have been seen on the desk.
+- Next: **PT-S3's live run, on James's unlock** (§6 step 3a's build and preflight, then L0 ENUM with him at the screen,
+  L1 and L2; L3 on the mini on his word, or skipped): a booted simulator streams its real pixels to the desk, each
+  honest face, the Screen Recording and Accessibility flows, "Show it" on a running Simulator.app (P7: recorded, its
+  fix ruled after), the stopped word (P8), the fps buckets (PT-S2's R9: the law's 12 at rest arrives as 10), the
+  letter of PT-S2's R7, the cost at the cap beside a pane
+  → PT-S4 (touch through serve-sim, supervised, after its `killPortHolder` is fixed: an EL8 pin event, loopback
   only, never `--allow-exec`). The capture bake-off (PT-S-B1, prepared in `/Volumes/SamsungRed/lanes/pts/bakeoff/`)
   stays queued on the mini; its result decides whether serve-sim's stream later replaces SCK's.
-- Owed: whether the phone ships among `BUNDLED_PLUGINS` (James's, §5; PT-S2's R13 left it and the dev bundled set
-  (`field-engine.ts`) untouched); PT-S1's host-bound files and its two ICE candidates (§6 PORTALS); a stale comment in
-  `plugins/simulator/src/live.ts:17-20`, "(the cap shared with panes is PT-S2's)": the cap is built, a one-line fix.
+- Owed: whether the phone ships among `BUNDLED_PLUGINS` (James's, §5; PT-S2's R13 and PT-S3's P14 left it and the
+  dev bundled set (`field-engine.ts`) untouched); PT-S1's host-bound files and its two ICE candidates (§6 PORTALS).
 
 **CO — the compose plane (sparks and their doors)** · cp-landing (lanes `co` and `mt/mt0`; the tool plane's build too, since the MT lead's session, vibe-field-dc, ended 10-31) · law `draft/compose-plane/thinking-roled-agents.md` §15–§17 and `draft/compose-plane/v2/` (version 2, ruled 2026-10-29), `draft/thinking-tool-plane.md` (MT, ruled 2026-10-30), DESIGN.md §2.10
 - Re-entered 10-28 on James's word, with its rulings since:
@@ -401,7 +407,7 @@
 | Desk Phase 6 | STRING (ports on objects, ICE's wires, the Wire tool DK-D29) · OBJECT KIT (panel, controls, screens, cables, `process`) · AGENT'S EYES, now the tool plane's rooms (`thinking-tool-plane.md` §13; the `canvas_*` rows for DK-D26's MCP canvas tools; DT-5's control lane, the reserved `surface.control` scope) · UPLOAD PLANE + the mini-app bridge (SP-D9/SP-D7; UP v0.1 and MB v0.1 drafted 10-01; UP-D1…D8, MB-D1…D9 unruled; AH-D10's cross-device CAS rides it). It replaces the four dogfood packs (Q9); the microservice pack retires or becomes an OBJECT KIT `process` candidate | a thinking doc each; STRING first | `thinking-desk-migration.md`, `thinking-upload-plane.md`, `thinking-mini-app-bridge.md` |
 | Mind map pack | waits for STRING; redesign from Paper & String (MD-1…MD-15); v3's MM-D1…D14 were cut for the pre-desk canvas, MM-D14 moot (DK-D30) | STRING's thinking doc | `draft/mindmap/`, `thinking-mindmap-pack.md`, `predesign-mindmap-evidence.md` |
 | The bare mat's menu | "Paste here", "New note here": unbuilt | a desk lane | DESIGN.md §8, ICE design-015 §7 |
-| PT — PORTALS | PT-S is §2's (resumed 10-29; PT-S1 built 10-18 and 10-29, gated and looked at 10-29, LANDED 10-30 `1de84540b`; item 119's fix LANDED 10-31 `265325d09`; PT-S2 built code-only and light-green 10-30, LANDED 10-31 `e4aa3d367`) · then PT-C, PT-T (form ruled last, PT-D10) · James's 10-14 A2, B4, the 5 s wind tail, unbuilt | PT-C, PT-T: after PT-S (PT-D11's order: the simulator, window capture, the terminal) · A2, B4, the tail: a PT lane | `thinking-portals.md`, `draft/portals-maps/`, ICE design-019 |
+| PT — PORTALS | PT-S is §2's (resumed 10-29; PT-S1 built 10-18 and 10-29, gated and looked at 10-29, LANDED 10-30 `1de84540b`; item 119's fix LANDED 10-31 `265325d09`; PT-S2 built code-only and light-green 10-30, LANDED 10-31 `e4aa3d367`; PT-S3 built code-only and light-green 10-31, LANDED 10-31 `c564de0e4`, its live run owed to James's unlock) · then PT-C, PT-T (form ruled last, PT-D10) · James's 10-14 A2, B4, the 5 s wind tail, unbuilt | PT-C, PT-T: after PT-S (PT-D11's order: the simulator, window capture, the terminal) · A2, B4, the tail: a PT lane | `thinking-portals.md`, `draft/portals-maps/`, ICE design-019 |
 | AH | AH-4's runtime on main since `cce684ce3` (08-03), unledgered by its own rule until review + witnesses · AH-1 two-client proof · AH-3 physical closeout · AH-5 the phone list · device-retirement GC | an owner; GC with TS's "forget a device" | `specs/artifact-hub.md` |
 | PLUG follow-ups | the KIT slice · third-party listing (P8e: TD registry + R2 process host; PA-24, §20.5, §21.8) · sideload · R2 `host:"process"` · PRC-5's power loss (§6) · PRC residual policies (§14–§15) · per-section undo/⌘Z/timeline (D29′, P7) | first-party publishing; third-party plugins; a Settings history design; runtime validation is tracked separately in §6 | `specs/plugin-architecture.md`, `thinking-p8-loadable-artifact.md` |
 | TP / TC | D6's cell half, C5, D5, the lineage break (§6) · TC RATIFIED as built (Q6: TC-D1/D2 as amended by WG-D1, D3, D15, L1c at TM-1); TC-S4…S8 (vault, broker, replay, drain-migrate, warm tiers) parked · TP-S4…S6 (S4's typeable mirror struck) | a TP lane · a ghosttea next-major or a P0 witness across a floor restart · measured demand | `specs/terminal-pipeline-v3*.md`, `specs/terminal-custody.md` |
@@ -423,7 +429,7 @@
 - NF-D3/NF-D5's long-pending read, or record them as answered by the as-built code.
 - MB-D1…D9 and UP-D1…D8 (proposal pages owed first, LANDED :7954) · SP-D4, D11, D12.
 - Whether the phone (`vibefield.simulator`) ships among `BUNDLED_PLUGINS` (`apps/desktop/packaging/bundled-list.mjs`;
-  PT-S1 and PT-S2 left it untouched) · WIN-D6…D9 · LOG-V8. `PT-S-vs-PHONE.md` §5's seven choices are ruled (James,
+  PT-S1…PT-S3 left it untouched) · WIN-D6…D9 · LOG-V8. `PT-S-vs-PHONE.md` §5's seven choices are ruled (James,
   2026-10-29 00:25Z, "Go with your leans"; its §6, the work kept) and leave the list.
 - DK's parked build rulings ((17)/(53), (48), (83), (92), (95), (97); DECISIONS DK addenda). (86) is answered by Q18
   and D22's "packaged built-ins" by WP8 (`5e7507d6c`); both leave the list.
@@ -672,7 +678,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | DS / SP — sync planes (was C — mesh) | PARKED; waves 1–3 landed | design-04, `design-06-sync-planes.md`, `thinking-desktop-sync-plane.md`, `thinking-sync-planes.md`, `thinking-c6-meshdata.md` | DS-7 with an owner + the two-desktop run |
 | FW — the freeway | PARKED; F1 landed 10-20, packaging 10-27 | `thinking-freeway.md` | James's device round; FD1/FD2's owner |
 | FS — files service | PARKED; FS-1a/1b/2 landed | `thinking-files-service.md`, `build-fs.md` | FS-3 on the desk; mille's release |
-| PT — PORTALS | ACTIVE (PT-S, resumed 10-29); browser landed 10-14; PT-S1 (the phone as a kind) built 10-18 and 10-29, gated and looked at 10-29, LANDED 10-30 (`1de84540b`); PT-S2 (the phone's producer) built code-only and light-green 10-30, LANDED 10-31 (`e4aa3d367`) | `thinking-portals.md`, `draft/portals-maps/` (PT-S: `PT-S-the-simulator.md`), `draft/ground/PHONE.md`, ICE design-019, LSF spec | PT-S3 (the gates and the live witness) → PT-S4 (touch); then PT-C, PT-T |
+| PT — PORTALS | ACTIVE (PT-S, resumed 10-29); browser landed 10-14; PT-S1 (the phone as a kind) built 10-18 and 10-29, gated and looked at 10-29, LANDED 10-30 (`1de84540b`); PT-S2 (the phone's producer) built code-only and light-green 10-30, LANDED 10-31 (`e4aa3d367`); PT-S3 (the gates) built code-only and light-green 10-31, LANDED 10-31 (`c564de0e4`) | `thinking-portals.md`, `draft/portals-maps/` (PT-S: `PT-S-the-simulator.md`), `draft/ground/PHONE.md`, ICE design-019, LSF spec | PT-S3's live run (on James's unlock) → PT-S4 (touch); then PT-C, PT-T |
 | Desk Phase 6 | PARKED; replaces the four dogfood packs (Q9) | `thinking-desk-migration.md` | STRING's thinking doc |
 | DK — the desk migration | COMPLETE; landed 10-09 | `thinking-desk-migration.md`, `thinking-the-desk.md`, ICE design-015…018, `docs/desk-gates.md` | James's parked build rulings |
 | GT — Godview terminal | PARKED; the deck's ladder done (GT-0…GT-8) | `specs/godview-terminal.md` | G29; GT-D22; row 13b |

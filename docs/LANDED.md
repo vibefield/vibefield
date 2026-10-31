@@ -23752,3 +23752,159 @@ was drafted on 2026-10-29 and is NOT filed; James files it or says to.
 draft queue.
 
 **Owed.** PU-I's filing (James's). PG-2 (the remote cut), on James's go.
+
+## PT-S3 — the gates: the phone's live rows written and lit code-only, `pnpm smoke:phone` (L1 none · L2 devices · L3 cost) under a stage that arms on the console's idle, makes and deletes only its own devices and restores the host; the developer dir found beside the Command Line Tools (P1), and five smoke doors; the live run owed to James's unlock (2026-10-31; `d3f974f84`, lane `portals/pt-s3`, 64 commits re-cut onto M48 `7310560ea`, in the mini's mint `c564de0e4`, run 52, over main `3798a5fc1`; James's board word 2026-10-31 01:16:19Z; the brief's P1–P16 at the orchestrator's leans and RM1–RM8)
+
+**Why:** the PT-S ladder's third rung (PORTALS, track PT). The design `draft/portals-maps/PT-S-the-simulator.md` §5:
+PT-S1 the kind, PT-S2 the producer, PT-S3 the gates, PT-S4 touch. PT-S2 landed 2026-10-31 (`e4aa3d367`, LANDED
+§PT-S2) with no smoke row: its desk evidence was named PT-S3's live run, and no real Simulator pixels had been seen on
+the desk.
+- James's word on the board (`pt-next-s3-or-s4`, 01:16:19Z, relayed by VF-PM): "(A) PT-S3 — write the checks now, run on
+  my unlock." So the slice is two halves: the checks written and lit CODE-ONLY (this entry), and the console rows run on
+  his unlock (owed, below).
+- James's second word (03:03Z, typed in the orchestrator's session): "yes" — each console run may delete, at teardown,
+  the simulator devices that run created (`pts3-<run>-1..3`) and nothing else (P5; the brief's RM2).
+- Brief: `draft/portals-maps/briefs/PT-S3-the-gates.md` (669 lines): its rulings P1–P16 (the orchestrator's, 01:35Z,
+  amended 03:00Z, at the leans; none is James's but P5's delete), VF-PM's acceptance and its thirteen answers (RM1,
+  03:03Z), §4's six corrections (RM4), and the mid-slice rulings RM5–RM8. Its three read-only maps (harness, host,
+  witness) are in the orchestrator's scratchpad, dev-local.
+- **The finding that became P1:** this Mac's `xcode-select -p` prints `/Library/Developer/CommandLineTools`, which has
+  no `simctl`; PT-S2 as shipped read `no-simulator` here (its R5 vetted only the selected dir).
+
+**What landed** (by part and commit subject; against M48 32 files, +11,348 −61; no lock, sibling-pin or Rust change):
+- **Main — the product half** ("PT-S3 (main)" `7a91f170f`, `9740e2516`, `6516188d1`, `969a848d1`):
+  - **P1, the developer dir (R5′):** `SimctlService.probe` keeps `xcode-select -p` first; when that dir lacks
+    `usr/bin/simctl` it falls back to `/Applications/Xcode.app/Contents/Developer` if THAT has it — one fixed path, no
+    search. Every spawn pins `DEVELOPER_DIR` to the dir found, the legacy resolver's catalog included
+    (`authority-production.ts`, routed through the one service; the build's M4, accepted). DESIGN.md §9's
+    no-simulator words stay, and are now true: no usable Xcode.
+  - **P2, the smoke-only override:** `VF_SMOKE_SIMCTL_DEVELOPER_DIR`, read only through `modes.ts`'s
+    `smokeSimctlDeveloperDir(mode, env)` in a smoke-like mode, is the probe's ONLY candidate — so a phone row can
+    witness `no-simulator` on a Mac that has a Simulator. Production and dev never read it (`authority-production.test.ts`
+    holds main's call site in its source, the grade's P-1).
+  - **D1:** main's simulator census on `authority.state()` / `LiveCensus` — sessions, inner runtimes, helper sessions,
+    frames — counts only, read and never made.
+  - **D2:** the simctl call record, SMOKE-ONLY and redacted: verbs and counts, never arguments or a UDID, counted into
+    `census().simctl`.
+- **The doors** ("PT-S3 (doors)" `f0f848f34`, `05eedb056`, `0890aae6b`; "PT-S2 owed" `fe7abda3b`):
+  - **D3:** `shellOpens` handed into `runSmokeCanvas`; a phone's Open Settings is recorded, never opened, and judged by
+    `testing/smoke-opens.ts`'s `judgeOpens`, which prints counts and addresses with any UUID-shaped run masked.
+  - **D4:** the device's name, deviceType and runtime on `DeskLiveSimulatorRow`, from main's facts, null when unsaid.
+  - **D5:** the host's device list on the desk door: `MountedDesk` carries `devices`; `VfDeskDoor` reads its rows,
+    reads and failures (`desk-door.ts`, `CanvasStage.tsx`, `desk-live.ts`).
+  - PT-S2's owed one-line fix: `plugins/simulator/src/live.ts`'s header and its test title now say the cap it shares
+    with panes is the host's.
+- **The stage** ("PT-S3 (stage)" `37aecea4e`, `ca2d18049`, `3e3f95d75`): `scripts/stage-simulator-fixture.mjs`, new —
+  `<none|devices|cost> -- <command…>`, `enum`, `--preflight-only`, `--sweep <run>`; options by env (`VF_PHONE_RUN`,
+  `VF_PHONE_HID_LOG`, `VF_PHONE_DEADLINE_MS` ≤ 6 h, `VF_PHONE_DELETE_DEVICES=1`); spawn-free on import, every spawn
+  through an injected `exec`, its pure functions exported.
+  - **The preflight** FAILS LOUD, naming each fix: the SCK helper and adapter built and no older than their sources;
+    the plugin's and the shell's dist no older than theirs and `smoke.cjs` holding the literal `--phone`. Its build fix
+    is `pnpm --filter @vibefield/desktop build:all --skip-nx-cache` (the light's find, below).
+  - **ARMED/END (the HID record):** a launch arms only with the console unlocked and idle ≥ 120 s, else NOT ARMED,
+    exit 75; `caffeinate -d -i -w <pid>`; each row's BEGIN/END reads HIDIdleTime, and the first INPUT row witnesses that
+    the run's own `sendInputEvent` does not move it (RM4.5). A guarded `<run>-hid.log`.
+  - **Its own devices only (P5):** `pts3-<run>-1..3`, of iPhone TYPES with no device on the host at arm, UDIDs recorded
+    at creation; booted, shut down and — under `VF_PHONE_DELETE_DEVICES=1`, the console runs' flag — deleted at
+    teardown in a `finally`. It never boots, shuts, opens or deletes another device; it quits Simulator.app only when
+    the run itself launched it, read against a fence of foreign booted devices right before its SIGTERM.
+  - **The host door** the smoke reads (loopback, token), its press gate on the act and the device, the redactor (no UDID
+    leaves the stage), the teardown, and `PHONE_HOST_RESTORED` judged on the run's OWN side, another's change said as a
+    `PHONE_OBSERVATION`.
+  - **Exits:** 0 every row as judged and the host restored; **75** NOT ARMED, a transient STOP over a restored own side,
+    or another's hand on the host (`PHONE_HOST_UNPROVEN`: relaunch on a quiet host); **1** with `PHONE_STOP_FINAL`
+    (deterministic: do not relaunch), with `PHONE_STOP_UNRESTORED` (restore the run's own side by hand first), or a red
+    row or the deadline; **128+n** a signal. No exit is 0 while HOST_RESTORED is red. The stage's STOP, HOST_RESTORED,
+    HOST_UNPROVEN and HID lines are mirrored into `<logs>/<run>/<run>-stage.log`, where they outlive a reader gone.
+- **The rows** ("PT-S3 (rows)" `26ab6e7bc`, `97200fbc3`, `7f53d90d0`, `d42b2d829`):
+  - `packages/electron-shell/src/testing/smoke-phone.ts`, new: `PHONE_FLAG` (`--phone`, beside `--smoke-canvas`; one
+    else-if in `smoke.ts`'s flag chain, no new ShellMode) and `phoneRows`; the table `PHONE_ROWS` — none 2, devices
+    20, cost 1 — each row taken in order and the table run out before `PHONE_ROWS_END` (R-6). `layObject` lays any kind
+    on its chip; `FACE` exported.
+  - LIVE-PROVEN: `condition` streaming, presented Δ ≥ 3 and D1's framesReceived Δ ≥ 3, still streaming 2 s later.
+  - `pnpm smoke:phone` (L2), `smoke:phone:none` (L1, no simctl), `smoke:phone:cost` (L3), with root proxies; each is
+    `node ../../scripts/stage-simulator-fixture.mjs <mode> -- node packaging/run-smoke.mjs --smoke-canvas --phone` and
+    builds NOTHING.
+  - `docs/desk-gates.md` row **33** (FG-6 landed row 32 first): INTERACTION class, landing-only, beside the gate and
+    never inside `gate:landing`, on James's unlock; the count rule, what each exit asks, and the build before it.
+- **Units:** new files `smoke-phone.test.ts` (53), `smoke-opens.test.ts` (7) and dev-runner's
+  `stage-simulator-fixture.test.mjs` (75, with committed `ioreg` fixtures; `node:child_process` throws in it, so no unit
+  spawns); rows added to `simctl.test.ts`, `authority-production.test.ts`, `modes.test.ts`,
+  `ios-simulator-device-runtime.test.ts`, `live-surface-authority.test.ts`, `desk-door-reads.test.ts`,
+  `desk-live-simulator.test.ts` and the plugin's `live.test.ts`. Several wirings are held as source text with in-unit
+  mutations that must go red (P-1, RM7.2a–c).
+- **Untouched:** `BUNDLED_PLUGINS` (James's open call), `gate-landing.mjs`'s list, smoke:canvas's default order, and
+  every ShellMode. No smoke row of PT-S3's ran: every Electron row is a CONSOLE row.
+
+**Validation** (CODE-ONLY; the light on this Mac; verify on the mini):
+- **The build:** workflow `wf_2645fdd9-9d0`, four builders (main ∥ doors ∥ stage ∥ rows), 15 commits, then three review
+  lenses (main, the stage, the rows): **32 findings** — 2 BLOCKER (S1 the command settled on its exit; R1 SIM-STOPPED
+  read green on a wrong word), 13 MAJOR, 17 MINOR. Fixed in 25 commits (`b8c9fa958`…`1cdb82f6f`); M4 and M5 accepted
+  as deviations (RM5).
+- **The grade** (`wf_a6df2805-cc6`, read-only; three lenses, each finding proved by a skeptic with a temp test):
+  **15 confirmed, none a blocker** (P-1; S-1…S-6; R-1…R-8). Fixed red-first in one round, 15 commits
+  (`2d36dcf6d`…`d17f0be32`), checked read-only by reverting mutations: 14 CLOSED, S-1 PARTIAL (a run that did not stop
+  exited 0 over another's change). Ruled RM7 and fixed in 5 commits (`dc0b34223`…`afe4ec58d`), checked again: all
+  CLOSED, 24 reverting mutations all RED; the check's NIT in `43765efdf`.
+- **The light** (this Mac, VF-PM's grants; each row alone at nice 19, the guard, PERF.lock and both disk floors read
+  before each, load < 10):
+  - Run 1 (109e38f22): green but `check:walls` — R6 caught two raw `vibefield://` literals in D3's unit; fixed in
+    `7665fb658` (a neutral scheme: the judge masks a UUID whatever the scheme).
+  - Run 2 (a9df5f841): the preflight after the builds RED. `gen:check` had rewritten a generated source byte-for-byte
+    (its mtime moved, its bytes not), and `build:all`, served from nx's local cache, left the outputs' mtimes as they
+    were — so the preflight's own fix line, a plain `build:all`, would never clear it: James would have met that loop
+    at the console after any `gen` or checkout. Fixed red-first in `b10df8fb6`: every build fix is
+    `build:all --skip-nx-cache`, and desk-gates' row says so.
+  - Run 3 was stopped by the orchestrator for the re-cut.
+  - **At the re-cut tip `d3f974f84`, 10:32–10:45Z, ALL GREEN (21/21):** diff-check; the preflight RED before the
+    builds (exit 1, each fix named); biome; typecheck; the touched units (electron-shell 246, field-app 34,
+    plugin-simulator 7, the stage 75); the suites whole (electron-shell 2,397, field-app 3,476, plugin-simulator 131,
+    dev-runner 338; 0 failed); `check:walls`, `check:deps`, `gen:check`, `lint`; `build:all --skip-nx-cache` (no
+    cache hit), `bundle-report --assert`, `build:live-surfaces-native`; the preflight `PHONE_PREFLIGHT ok`; the tree
+    clean.
+- **The re-cut** (VF-PM 10:24Z/10:31Z): a5's FG-6 (M48 `7310560ea`) took desk-gates row 32 and the same place in
+  `modes.ts`; the first to land keeps the number. The lane was rebased onto `7310560ea` (rehearsed first in a
+  throwaway worktree; backup `portals/pt-s3-pre-m48` = `bbe1e3d53`), seven stops resolved by script — `modes.ts` keeps
+  FG-6's `answersSetup`/`mintsOnboarded` then P2's `smokeSimctlDeveloperDir` (PT-S3 adds no mode: smoke:phone's is
+  smoke-canvas, inside `isSmokeLike`, so `mintsOnboarded` holds for it); the row becomes 33 after FG-6's 32 and its
+  landing-only sentence sits on FG-6's paragraph — and `d3f974f84` renumbers the one other mention. Every other path
+  equals git's own merge-tree of the two; 64 commits, linear, no merge inside.
+- **The hand** (10:46Z): T = `d3f974f84` on `7310560ea`; `merge-tree` clean against main `4c86c2923` (M49), then by
+  VF-PM against M50 `5aa41562f` and M51 `3798a5fc1`, no file shared with them.
+- **The mint, run 52:** M52 `c564de0e4` = `d3f974f84` × `3798a5fc1` (the merge shape). Run 52 GREEN at 11:01:20Z: vitest 11,326 / 0 / 18 (+96: smoke-phone 53, simctl +9, modes +14, authority-production 10, smoke-opens 7, live-surface-authority +1, desk-live-simulator +1, desk-door-reads +1); the node runner 338/338 (+75, the stage); electron-shell 2,397 with 3 skipped; biome 2,937 files; the bundle unchanged.
+- **Landed:** main fast-forwarded `3798a5fc1` → `c564de0e4` at 11:02:50Z, and was pushed at 11:03:58Z as push 26 (`588405291..c564de0e4`, 73 commits); origin == main.
+
+**The rulings that governed** (the brief's P1–P16, at the orchestrator's leans; as built):
+- **P1** the developer-dir fallback (above) · **P2** the smoke-only override, with the helper asserted present so the
+  no-simulator row cannot pass for the wrong reason · **P3** the stage fails loud on a missing or stale helper;
+  `build:all` unchanged · **P4** the `--phone` sub-flag, no ShellMode; every phone row INTERACTION class, out of
+  `gate:landing` and smoke:canvas's order.
+- **P5** the run's own devices only (above); KEPT by default, deleted under the console runs' flag on James's "yes"
+  · **P6** harness-only verbs on own devices (`simctl create/boot/shutdown/delete`, `openurl` a loopback page, `io
+  screenshot`, `open -a … -CurrentDeviceUDID <own>`), no osascript or System Events; the door adds `state` and
+  `quit-app` (03:00Z).
+- **P7** Show it on a running Simulator.app is STAGED and RECORDED (risk 1); its fix is ruled after the live row shows
+  what a person sees · **P8** the "stopped" word is RECORDED if it reads `off`; the window-closed case is James's hand
+  (SIM-STOPPED-CLOSED, an OBSERVATION).
+- **P9** the doors D1–D5 · **P10** every Electron row a console row: this Mac first, under the HID gate, ENUM attended
+  · **P11** TCC as assumed (Screen Recording held by the launching app's responsible process, which app NOT recorded;
+  Accessibility not assumed) · **P12** the rate an OBSERVATION · **P13** the cost row on the mini on James's word or
+  skipped · **P14** the plugin staged by the path that grants `surface.capture`; `BUNDLED_PLUGINS` untouched · **P15**
+  code-only, then the light · **P16** not here: touch (PT-S4), serve-sim, the bake-off, BUNDLED_PLUGINS, the
+  no-permission hand row, the Show-it fix, the stopped-word ruling.
+- **RM1–RM8** (the brief's §13): VF-PM's acceptance and answers; James's P5 "yes"; the lane's birth; §4's six
+  corrections; the build's open questions; the grade; the exit codes as above; the light's two finds and the re-cut.
+
+**Not witnessed** (all of it is the live run's): real Simulator pixels on the desk; each honest face; Show it on a
+running Simulator.app (P7); the stopped word (P8); the Screen Recording and Accessibility flows; PT-S2's R9 buckets and
+R7's letter; the cost at the cap beside a pane.
+
+**Owed:**
+- **The console run, on James's unlock only:** §6 step 3a first (`build:all --skip-nx-cache`, `bundle-report`,
+  `build:live-surfaces-native`, `--preflight-only` → `PHONE_PREFLIGHT ok`); then L0 ENUM with James AT the screen (a
+  Screen Recording prompt is his to answer), L1 `smoke:phone:none`, L2 `smoke:phone` (`VF_PHONE_DELETE_DEVICES=1`),
+  each under the HID record; a second hand-back with each launch's logs. L3 cost on the mini on his word, or skipped.
+  VF-PM ruled (10:50Z) that smoke:phone does not join the mini's owed chain.
+- After it: the P7 fix and the P8 word, ruled on what the rows record (James's if they change words or add a grant).
+- **PT-S4, touch,** through serve-sim: an EL8 pin event, loopback only, never `--allow-exec`.
+- `BUNDLED_PLUGINS` stays James's.
