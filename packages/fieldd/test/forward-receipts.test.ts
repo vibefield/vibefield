@@ -285,6 +285,26 @@ describe("the owner's journal", () => {
     expect(journal.size()).toBe(0);
   });
 
+  // F1b (FW-D5) — a forwarded `freeway.approve` is a keyed mutation too, and its answer is a
+  // credential of the same class: an approval lives half an hour under one floor boot's key, so a
+  // day-long receipt would replay one the host refuses (4401). Minting again doubles nothing — the
+  // first, lost in flight, lapses unused, and each mint is its own audit row.
+  it("F1b — a freeway approval is never journaled either: its same-key retry mints afresh", async () => {
+    const { journal } = ownerJournal();
+    let minted = 0;
+    const approve = async () => {
+      minted += 1;
+      return { approval: { claims: { nonce: `n-${minted}` } }, expiresAt: 1_801_000 };
+    };
+    const ask = call({ method: "freeway.approve", digest: forwardDigest({}) });
+    const first = await journal.run(ask, approve);
+    const retry = await journal.run(ask, approve);
+    expect(minted).toBe(2);
+    expect(retry).not.toEqual(first);
+    expect(journal.receipt("dev-a", KEY)).toBeUndefined();
+    expect(journal.size()).toBe(0);
+  });
+
   it("an answer carrying a transport grant replays only while the grant lives — past its own expiry the retry answers the receipt, never the stale ticket, and the act never runs twice", async () => {
     const { journal, tick } = ownerJournal(); // the journal's clock starts at 1_000
     let born = 0;

@@ -142,6 +142,7 @@ import {
 } from "../src/docs";
 import { Hello, HelloAck, RpcRequest, RpcResponse, TerminalRouteSnapshot } from "../src/envelope";
 import { ErrorData } from "../src/errors";
+import { ForwardEnvelope } from "../src/forwarding";
 import {
   FreewayApproval,
   FreewayApproveResult,
@@ -404,6 +405,11 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // welcome, the declaration, the state and the revoke each have TWO fixtures on purpose: a phone's
   // welcome and a desktop's (no client id, no rights), a phone-only declaration and a pair's (the
   // product door), the state up and down (the host gone: no port, no secrets), one client and all.
+  // F1b — the params a home's forward of `freeway.approve` carries for its phone: the routing key
+  // and the envelope, whose `onBehalfOf` names the phone's roster device. A fieldd-to-fieldd seam,
+  // so both sides are TS: the forwarder's writer and the owner's tolerant reader each read this one
+  // (fieldd's forward-envelope.test.ts).
+  "forward-envelope": ForwardEnvelope,
   "freeway-approval": FreewayApproval,
   "freeway-approve-result": FreewayApproveResult,
   "freeway-hello": FreewayHello,

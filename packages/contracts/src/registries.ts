@@ -345,10 +345,9 @@ export const FREEWAY_APPROVAL = {
   STATE_UNREAD: "unread",
   /** the freeway host is not running: no declaration yet, between generations, or parked */
   STATE_DOWN: "down",
-  /** this desktop's roster does not correlate the calling node to a device (yet) */
+  /** this desktop's roster does not correlate the calling node — or, for an ask a self peer daemon
+   * forwards (F1b), the phone it names — to a device (yet) */
   STATE_UNCORRELATED: "uncorrelated",
-  /** FW-D5's approval forwarded through a self peer daemon for a phone (F1b) */
-  STATE_FORWARDING_UNBUILT: "forwarding-unbuilt",
 } as const;
 
 /** TC-D6(c) — per-class scrollback byte caps, enforced at the NATIVE create

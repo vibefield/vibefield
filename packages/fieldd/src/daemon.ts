@@ -6726,9 +6726,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     });
     // FW-D1 — the phone's approval: fieldd's one mint for a link (the host mints every grant after
     // it), audited like a ticket. The roster decides who is a phone; the floor's state holds the key.
+    // F1b — forwarded by the phone's home for a link to this desktop, it is minted here, under the
+    // linked login, for the phone this roster knows.
     const freewayApprover = new FreewayApprover({
       state: () => freewayFloor.state(),
       roster: devices,
+      linkedLogin,
     });
     api.register("freeway.approve", async (ctx, params) => {
       const ask = freewayApprover.check(ctx, params);
