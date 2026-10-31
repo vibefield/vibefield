@@ -19835,6 +19835,8 @@ files, +1154 −15:
 
 **Found:**
 - biome 2.5.4's stdin route rewrites a bare U+26A0 to "!", and it never lints: it is a formatter only.
+  > **Correction (2026-10-31, at the draft queue's read):** the fact stands, but "it never lints" was found on FG-2's
+  > drafts (2026-10-29 12:40Z), not by IOS-8f, which found the U+26A0 rewrite alone (`0e004bafe`).
 - As built, against the record's plan (`thinking-ios-account.md` §3): the result carries `dealt`, and its name is
   absent without a row; the phone asks only its HOME, latched once per connection as the catalog ask is (at the
   home's hello and on the sweep, beside `device.list` and the catalog), where the plan read it through
