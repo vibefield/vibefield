@@ -22446,3 +22446,88 @@ them over the live field (VF-PM's split, 13:17Z).
   `history-finish/build-hf.md` §3d, the survey's §4.4 and §8 defect 1) carry dated "Landed" clauses from that queue.
 
 **Owed.** Nothing for items 100 and 105. Items 107 and 108 stay queued.
+
+## CP-2 — start and talk: a spark starts agents one level deep, watches them and talks to them through each session's one input queue, its words landing at the session's idle marked as its own and sent on the person's behalf (2026-10-31; `713c6be0f` — the code `ae2d08fdf` and the docs `713c6be0f` on main `9e6ac500d` — lane `co/cp2`, in the mini's mint `b4357a345` over main `2eb42abd8`)
+
+The talk room (`draft/compose-plane/cp2-talk-room.md`, v0.2) was ruled by James on 2026-10-31 at 03:49:24Z. He typed
+"go with your lean" in cp-landing, on the board approval `cp2-marks`, so CP2-D1…D7 stand on their leans. It is built on
+the tool plane MT-0 landed.
+
+**What.**
+- **The six rows are served to sparks** (`contracts/src/tools.ts`, `compose.ts`): `agent_spawn`, `agent_watch`,
+  `agent_unwatch`, `agent_send`, `agent_interrupt` and `agent_stop`.
+  - Each answers what was queued or sent, never what the other agent did with it. No call blocks (CP-L5).
+  - `agent_send`'s own words read "marked as yours, sent on the user's behalf" (CP2-D1 A).
+- **The talk room** (`fieldd/src/tool-plane/rooms/talk/`). Every call is held to the spark's profiles (CP-L4) and its
+  reach (CP-D5, CP-D6):
+  - it sends only to his sessions or its own agents, never another spark nor another spark's agents;
+  - it interrupts any session in scope but a spark's own;
+  - it ends only its own agents;
+  - past 8 live agents, a spawn is refused as the fact `limit` (CP-D7, CP2-D5 A).
+  - Each call's audit line says `onBehalf: you` (CP-L6), and each delivery adds its own line
+    (`tools.agent_send.delivery`).
+- **One input queue per session** (`fieldd/src/agent-input-queue.ts`, CP-L5):
+  - delivery at the monitor's idle with no blocker, one input per idle moment, through puppeteer's `submitPrompt`;
+  - the text marked by its source: "Vela (your spark) on your behalf:", or "VibeField: …" for a wake (CP2-D1);
+  - a rejected receipt waits for the next idle; an uncertain one is never resent, and its sender is told (CP2-D2);
+  - kept as one 0600 file per session in a 0700 `LAYOUT.AGENT_INPUTS_DIR`, read back at boot, so it outlives a fieldd
+    restart (CP2-D3).
+- **The waker** (`fieldd/src/agent-waker.ts`, CP-D4, CP2-D6 A). It reads the monitor rows fieldd already hears: finished,
+  asking, failed, ended.
+  - It wakes the spark that started a run and the sparks watching it, with one line of facts that joins the wakes
+    already waiting.
+  - A spark with no live session keeps its wakes until one opens.
+- **The runtime's seams** (`AgentRuntimeService`): `submit`, `monitorOf`, `isLive`, `onRunMonitor`, `onRunEnded` and
+  `endRun`. A run's end fires on the floor's exit only, never on puppeteer's withdraw at a fieldd stop, which runs
+  outlive.
+- **The docs:** `api.html`'s six rows are Built; `spark-briefings.md` has the talk room.
+
+**Real vs not yet.**
+- Real: the room, the queue, the waker and the seams. In fieldd's units the floor is faked. On the real floor:
+  - a spark's door lists the talk rows;
+  - the delivery port pastes marked words into a real PTY, which reads them;
+  - `endRun` ends a run.
+- Not yet:
+  - **CP2-D7's A, "wait for his quiet", waits on a floor fact:** the time of the person's last accepted keystroke in a
+    pane, which the floor does not give fieldd. Until it lands, the mark's B stands: the terminal service's ordering
+    against accepted human input (`terminal-service.ts` :1597–1601). The floor/ghosttea request is drafted at the next
+    draft queue.
+  - CP-D3's allowance (a send into a session with approvals off) and CP-D7's needs-you card come with CP-3.
+  - Sparks other than Claude come with CP-5, which is MT-7.
+
+**Found.**
+- The scripted agent observes only its terminal, so its monitor never reads idle on cue. The queue's idle gate is
+  therefore witnessed in units, and the real floor witnesses what the queue hands the floor, not when.
+- puppeteer 0.3.2's `submitPrompt` carries no sender and waits for no idle. Claude's adapter refuses while a dialog is
+  open and never queues. That is why the queue is VibeField's (`cp2-talk-room.md` §3).
+
+**Validation.**
+- **In the lane** (lanes/cp2, nice 19, guard clear, before the light):
+  - tsc contracts 0 and fieldd 0;
+  - contracts tools, compose and fixtures 540/540, and layout 16/16;
+  - the plane's units 74/74 under a lane-local config with no globalSetup;
+  - biome on every touched file; walls clean (R29, R30).
+- **The lane light** (`lanes/cp2/logs/light-cp2.out`; `cp2-light.sh 9e6ac500d`, co-light's rows, with
+  `CARGO_TARGET_DIR=/Volumes/SamsungRed/rust/cp2`; 2026-10-31 04:42:59–04:47:47Z, load 7–112):
+  - `== cp2-light GREEN 04:47:47Z; HEAD 717678d0b`, on the first run.
+  - preflight, walls, biome, tsc contracts and fieldd, and gen fresh were all 0. `cargo test -p field-native --test
+    layout_vector` was 0 (129 s, the lane's first field-native build).
+  - contracts: "Test Files 5 passed (5) Tests 602 passed (602)".
+  - fieldd: "Test Files 12 passed (12) Tests 173 passed | 4 skipped (177)". The 4 skips are opt-in: two need the real
+    rosettad, two the real Claude.
+  - Per file: agent-input-queue 6, agent-waker 5, tool-plane-talk 6, tool-plane-service 6, tool-plane-door 9,
+    tool-plane-mcp 9, agent-briefing 18, compose-verbs 6, compose-sparks 9, agent-runtime 37, agent-session-records 5,
+    agent-session 57.
+  - The real-floor rows:
+    - "CP-2 — a spark's marked words are pasted into a real run and read by its PTY, and agent_stop's end reaches the
+      floor", 487 ms;
+    - "CP-1d and MT-0 — …", 4403 ms, now also listing the talk rows over the real door.
+  - The light ran on `717678d0b`. The tip `713c6be0f` differs only in the code commit's message, which said 7 rows for
+    tool-plane-talk where there are 6; its tree is the same (`791f45070`).
+- **Run 33: the mint `b4357a345` over main `2eb42abd8`.** The merge-tree over `2eb42abd8` was clean (tree
+  `9fead38b5`), with one both-sides file, `agent-session.test.ts`, against item 118's slice 2. `pnpm verify` armed at 04:52:20Z and exited 0 at 04:57:06Z. Its counts: 11,015 passed, 0 failed, 18 skipped over 822 files; cargo 33/0; gen:check clean ("tools: 12 served of 20 rows"); the CP-2 real-floor row ✓ 506 ms (VF-PM's read, 04:59Z).
+- **Landed:** main fast-forwarded to `b4357a345` at 04:59:11Z (main's reflog) (the fixer, on VF-PM's GO).
+
+**Owed.**
+- CP-3 (the person: `ask_user`, `notify`, the needs-you queue, with CP-D3's allowance and CP-D7's card).
+- The floor fact for CP2-D7 A, at the next draft queue.

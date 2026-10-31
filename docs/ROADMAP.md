@@ -241,10 +241,13 @@
 - **MT-0, the tool plane's first slice**: LANDED 10-31 (`b3a0cc95a`, the mini's run 29; LANDED "MT-0").
   - `contracts/src/tools.ts` is the one catalog, with audience and scope columns, and `fieldd/src/tool-plane/` serves
     each caller its rows: a spark every served row, a plain run History and the projects list, by its own briefing.
+- **CP-2, start and talk**: LANDED 10-31 (`b4357a345`, the mini's run 33; LANDED "CP-2").
+  - A spark starts agents one level deep, watches them and talks to them through each session's one input queue; its
+    words land at the session's idle, marked as its own and sent on the person's behalf (CP2-D1).
+  - CP2-D7's quiet wait waits on a floor fact (the person's last keystroke); the ordering guard stands meanwhile.
 - Next, in order:
   - **SP-1b** (Chat's list) and **SP-1c** (the New spark sheet): renderer only, on James's go.
   - **SP-1d**: the thread and Chat's composer (HN B1 and B2 landed 10-31).
-  - **CP-2**: start and talk (`rooms/talk/`).
   - **CP-3**: the person (`ask_user`, `notify`).
   - **CP-4**: flows and the desk applier.
   - **CP-5**, which is MT-7: Codex and Grok, once their MCP processes can be named.
@@ -646,7 +649,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | SD — sound | PARKED (James's lab, Q27) | `draft/sound/design-sound.md` | James's call |
 | WIN — Windows port | PARKED since 08-24 (`c16e618f4`) | `thinking-windows-port.md`, `docs/WINDOWS_PORT_STATUS.md` | a Windows leg on the rails |
 | LSF — live surfaces foundation | COMPLETE; LSF-4 landed 10-26 | `specs/live-surfaces-foundation.md` | consumed by PT; §18 Windows rows with WIN |
-| CO — the compose plane | ACTIVE; CP-0, SP-1a, CP-1a…1c, CP-1d and MT-0 landed | `compose-plane/thinking-roled-agents.md` §15–§17, `compose-plane/v2/`, `thinking-tool-plane.md`; DESIGN.md §2.10 | SP-1b/1c → CP-2 |
+| CO — the compose plane | ACTIVE; CP-0, SP-1a, CP-1a…1c, CP-1d, MT-0 and CP-2 landed | `compose-plane/thinking-roled-agents.md` §15–§17, `compose-plane/v2/`, `thinking-tool-plane.md`; DESIGN.md §2.10 | SP-1b/1c → CP-3 |
 | A — shell and spine | COMPLETE | design-03, `specs/electron-shell-refactor.md` | Settings on demand (Q20, §3 item 6) |
 
 **Retired and superseded tracks**
