@@ -750,10 +750,11 @@ export function redactStream(redactor, source, write) {
 
 // ─── the rows record ──────────────────────────────────────────────────────────────────────────────────────────────────
 
-/** The fewest rows each mode runs, one `/row` pair per §4 MUST row of the launch: L1 SIM-NONE and SIM-NO-UDID; L2 the
- * seventeen from SIM-STAGED to SIM-NO-UDID (SIM-P1 its own row, VOID on an Xcode-selected host); L3 SIM-COST. NICE and
- * OBSERVATION rows may add to L2's. The exact count is the door's: `PHONE_ROWS_END n=` must equal the rows it saw. */
-export const MODE_ROWS_FLOOR = { none: 2, devices: 17, cost: 1 };
+/** The rows each mode runs — its count, exact (§2: the driver reds a `k` that "is not the mode's count"), one `/row` pair
+ * each: L1 SIM-NONE and SIM-NO-UDID; L2 twenty, the seventeen MUST from SIM-STAGED to SIM-NO-UDID (SIM-P1 its own row,
+ * VOID on an Xcode-selected host) with SIM-RATE (OBSERVATION) and SIM-SHARE, SIM-REBIND (NICE); L3 SIM-COST. The smoke's
+ * `PHONE_ROWS` is held to these by its unit; `PHONE_ROWS_END n=` must also equal the rows the door saw. */
+export const MODE_ROWS = { none: 2, devices: 20, cost: 1 };
 
 /** A `PHONE_ROWS_BEGIN`/`END` line, or null. */
 export function rowsMark(line) {
@@ -764,7 +765,7 @@ export function rowsMark(line) {
 }
 
 /** Red when the smoke never said BEGIN or END ("--phone not in this build"), said another mode, or its count is not the
- * rows the door saw open and close, or under the mode's floor. */
+ * rows the door saw open and close, or not the mode's count. */
 export function rowsVerdict({ mode, begin, end, served }) {
   if (begin === null)
     return { ok: false, why: "no PHONE_ROWS_BEGIN: --phone is not in this build" };
@@ -772,8 +773,8 @@ export function rowsVerdict({ mode, begin, end, served }) {
   if (end === null) return { ok: false, why: "no PHONE_ROWS_END: the rows never finished" };
   if (end !== served)
     return { ok: false, why: `PHONE_ROWS_END n=${end}, but the door saw ${served} row(s)` };
-  if (end < MODE_ROWS_FLOOR[mode])
-    return { ok: false, why: `${end} row(s): ${mode} runs at least ${MODE_ROWS_FLOOR[mode]}` };
+  if (end !== MODE_ROWS[mode])
+    return { ok: false, why: `${end} row(s): ${mode} runs ${MODE_ROWS[mode]}` };
   return { ok: true, why: `${end} row(s)` };
 }
 

@@ -122,7 +122,7 @@ describe("PT-S3 — the stage's word: the env", () => {
     expect(phoneEnv({ ...ENV, VF_PHONE_DEVICES: `1:${UDID}` })).toMatch(/not <n>:<device type>/u);
   });
 
-  it("names the flag and the rows: L1 two, L2 the seventeen MUST from SIM-STAGED to SIM-NO-UDID (last), L3 one", () => {
+  it("names the flag and the rows: L1 two; L2 twenty — the seventeen MUST from SIM-STAGED to SIM-NO-UDID (last), an OBSERVATION and two NICE; L3 one", () => {
     expect(PHONE_FLAG).toBe("--phone");
     expect(PHONE.type).toBe("vibefield.simulator");
     expect(PHONE.category).toBe("devices");
@@ -130,6 +130,12 @@ describe("PT-S3 — the stage's word: the env", () => {
     expect(PHONE_ROWS.none.map((r) => r.name)).toEqual(["SIM-NONE", "SIM-NO-UDID"]);
     const l2 = PHONE_ROWS.devices;
     expect(l2.filter((r) => r.klass === "MUST")).toHaveLength(17);
+    // each mode's count, exact: the stage's MODE_ROWS reds any other `PHONE_ROWS_END n=` (R16)
+    expect({
+      none: PHONE_ROWS.none.length,
+      devices: l2.length,
+      cost: PHONE_ROWS.cost.length,
+    }).toEqual({ none: 2, devices: 20, cost: 1 });
     expect(l2[0]?.name).toBe("SIM-STAGED");
     expect(l2[l2.length - 1]?.name).toBe("SIM-NO-UDID");
     expect(PHONE_ROWS.cost.map((r) => r.name)).toEqual(["SIM-COST"]);

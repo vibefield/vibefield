@@ -43,7 +43,7 @@ const {
   isOwnName,
   launchChecks,
   launchExit,
-  MODE_ROWS_FLOOR,
+  MODE_ROWS,
   nativeFresh,
   NONE_DEVELOPER_DIR,
   newestMtime,
@@ -919,8 +919,14 @@ test("rowsMark and rowsVerdict: BEGIN and END said, the mode's, and END's count 
   assert.deepEqual(rowsMark("x PHONE_ROWS_BEGIN mode=devices"), { begin: "devices" });
   assert.deepEqual(rowsMark("PHONE_ROWS_END n=17"), { end: 17 });
   assert.equal(rowsMark("PHONE_ROWS n=17"), null);
-  assert.deepEqual(MODE_ROWS_FLOOR, { none: 2, devices: 17, cost: 1 });
-  assert.equal(rowsVerdict({ mode: "devices", begin: "devices", end: 19, served: 19 }).ok, true);
+  // the mode's count, exact (§2: "whose k is not the mode's count"); smoke-phone.test.ts holds PHONE_ROWS to it (R16)
+  assert.deepEqual(MODE_ROWS, { none: 2, devices: 20, cost: 1 });
+  assert.equal(rowsVerdict({ mode: "devices", begin: "devices", end: 20, served: 20 }).ok, true);
+  assert.match(
+    rowsVerdict({ mode: "devices", begin: "devices", end: 19, served: 19 }).why,
+    /19 row\(s\): devices runs 20/u,
+  );
+  assert.equal(rowsVerdict({ mode: "devices", begin: "devices", end: 21, served: 21 }).ok, false);
   assert.match(
     rowsVerdict({ mode: "devices", begin: null, end: null, served: 0 }).why,
     /--phone is not in this build/u,
@@ -933,7 +939,7 @@ test("rowsMark and rowsVerdict: BEGIN and END said, the mode's, and END's count 
   assert.match(rowsVerdict({ mode: "none", begin: "none", end: 2, served: 1 }).why, /door saw 1/u);
   assert.match(
     rowsVerdict({ mode: "devices", begin: "devices", end: 9, served: 9 }).why,
-    /at least 17/u,
+    /devices runs 20/u,
   );
 });
 
