@@ -1694,6 +1694,64 @@
                       <p>SB-2 <code>2b61dd9d</code> … <code>b4de67c8</code>. This row owns the seam; upstream, puppeteer's <code>docs/agent-management-api.html</code> and RFC 006 ("the pane is the profile boundary").</p>
                     </td>
                   </tr>
+                  <tr>
+                    <td><span class="route">the floor's door (CP-1a)</span></td>
+                    <td><span class="badge tone-vibefield">contracts</span></td>
+                    <td><span class="badge tone-vibefield">field-native</span></td>
+                    <td>
+                      <p>
+                        <code>packages/contracts/src/mgmt.ts</code> (<code>NativeDoor*</code>) ·
+                        <code>registries.ts</code> (<code>NATIVE_DOOR</code>, <code>SOCKETS.DOOR</code>)<br />
+                        <code>packages/field-native/src/services/door/</code> · <code>door_bridge.rs</code><br />
+                        <code>packages/fieldd/src/compose/door.ts</code>
+                      </p>
+                    </td>
+                    <td>
+                      <p>
+                        Where a spark's agent reaches VibeField. The agent runs the floor's bridge as an MCP stdio
+                        server, and the bridge connects to <code>door.sock</code>. The kernel names the caller (its real
+                        pid, uid and start), and the floor walks it to the pane that holds it: identity from the
+                        process, with no token (CP-L3, CP-D1). Control crosses on mgmt
+                        (<code>native.door.subscribe</code>'s snapshot then deltas, <code>native.door.close</code>,
+                        <code>native.door.info</code>). Bytes cross on a meshdata lane of the door's own, and the floor
+                        parses no message (EL2). A door outlives fieldd, its inbound bytes held to
+                        <code>NATIVE_DOOR</code>'s bounds, and the bridge outlives a floor restart for one budget.
+                      </p>
+                    </td>
+                    <td>
+                      <span class="badge tone-built">Built</span>
+                      <p>CP-1a <code>6b64620c</code> … <code>5aa29020</code>. The seam's owner is api's <a href="api.html#cat-door"><code>native.door.*</code></a>.</p>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">fieldd's door: the <code>vibefield</code> MCP server (CP-1b)</span></td>
+                    <td><span class="badge tone-vibefield">contracts</span></td>
+                    <td><span class="badge tone-vibefield">fieldd</span></td>
+                    <td>
+                      <p>
+                        <code>packages/contracts/src/compose.ts</code> (<code>COMPOSE_VERBS</code>, projected as
+                        <code>compose-tools</code>)<br />
+                        <code>packages/fieldd/src/compose/index.ts</code> · <code>mcp.ts</code> · <code>verbs.ts</code>
+                      </p>
+                    </td>
+                    <td>
+                      <p>
+                        MCP over the door's lane, one JSON-RPC message per line: <code>2026-07-28</code> (stateless:
+                        <code>server/discover</code>, <code>_meta</code> on every request, <code>resultType</code>, a
+                        list's <code>ttlMs</code>) and the handshake before it, on the same connection. fieldd maps the
+                        floor's pane to its run. A spark's own session, known by its signed record (CP-1c), is served
+                        the six CP-1 read tools, each held to the spark's Agent Profiles and written to the audit log
+                        before it acts (CP-L6). Any other caller is served none and leaves one
+                        <code>compose.door.plain</code> line (CP-L1). The door knows no vendor (AR-L1): any agent that
+                        speaks MCP over stdio is served the same way, and who it is comes from the walk. The lane link
+                        redials after a floor restart or a dropped socket.
+                      </p>
+                    </td>
+                    <td>
+                      <span class="badge tone-built">Built</span>
+                      <p>CP-1b <code>42748065</code> · <code>3e93ba71</code>; CP-1c <code>f98d0d2b</code> · <code>1060d4b2</code>. The seam's owner is api's <a href="api.html#cat-compose-door"><code>vibefield</code> MCP door</a>, and the window's <a href="api.html#cat-compose"><code>compose.sparks.*</code></a> doors are beside it.</p>
+                    </td>
+                  </tr>
                 </tbody>
               </table>
             </div>

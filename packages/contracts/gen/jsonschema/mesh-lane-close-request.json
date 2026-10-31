@@ -460,6 +460,9 @@
         "cwd": {
           "type": "string"
         },
+        "exited": {
+          "type": "boolean"
+        },
         "cell": {
           "$ref": "#/definitions/ObservedTerminalCell"
         }
@@ -1006,7 +1009,8 @@
       "type": "string",
       "enum": [
         "doc-sync",
-        "presence"
+        "presence",
+        "mcp"
       ]
     },
     "MeshLaneOpenRequest": {
@@ -1093,6 +1097,178 @@
       "required": [
         "laneId",
         "reason"
+      ],
+      "additionalProperties": true
+    },
+    "NativeDoorCaller": {
+      "type": "object",
+      "properties": {
+        "pid": {
+          "type": "integer",
+          "exclusiveMinimum": 0
+        },
+        "startedAtMs": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "pid",
+        "startedAtMs"
+      ],
+      "additionalProperties": true
+    },
+    "NativeDoorPane": {
+      "type": "object",
+      "properties": {
+        "terminalSessionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "depth": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "terminalSessionId",
+        "depth"
+      ],
+      "additionalProperties": true
+    },
+    "NativeDoorOpen": {
+      "type": "object",
+      "properties": {
+        "connId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "laneId": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "state": {
+          "type": "string",
+          "const": "open"
+        },
+        "caller": {
+          "$ref": "#/definitions/NativeDoorCaller"
+        },
+        "pane": {
+          "$ref": "#/definitions/NativeDoorPane"
+        }
+      },
+      "required": [
+        "connId",
+        "laneId",
+        "state",
+        "caller"
+      ],
+      "additionalProperties": true
+    },
+    "NativeDoorClosed": {
+      "type": "object",
+      "properties": {
+        "connId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "state": {
+          "type": "string",
+          "const": "closed"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "connId",
+        "state",
+        "reason"
+      ],
+      "additionalProperties": true
+    },
+    "NativeDoorSnapshot": {
+      "type": "object",
+      "properties": {
+        "doors": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/NativeDoorOpen"
+          }
+        }
+      },
+      "required": [
+        "doors"
+      ],
+      "additionalProperties": true
+    },
+    "NativeDoorSubscribeResult": {
+      "type": "object",
+      "properties": {
+        "subId": {
+          "type": "string"
+        },
+        "snapshot": {
+          "$ref": "#/definitions/NativeDoorSnapshot"
+        }
+      },
+      "required": [
+        "subId",
+        "snapshot"
+      ],
+      "additionalProperties": true
+    },
+    "NativeDoorCloseParams": {
+      "type": "object",
+      "properties": {
+        "connId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "connId"
+      ],
+      "additionalProperties": true
+    },
+    "NativeDoorCloseResult": {
+      "type": "object",
+      "properties": {
+        "closed": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "closed"
+      ],
+      "additionalProperties": true
+    },
+    "NativeDoorInfoResult": {
+      "type": "object",
+      "properties": {
+        "endpoint": {
+          "type": "string",
+          "minLength": 1
+        },
+        "command": {
+          "type": "string",
+          "minLength": 1
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "endpoint",
+        "command",
+        "args"
       ],
       "additionalProperties": true
     },

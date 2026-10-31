@@ -28,8 +28,8 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::sync::broadcast;
 use tokio::sync::mpsc::{self, UnboundedSender};
+use tokio::sync::{broadcast, watch};
 
 // ---- the wire, mirrored from @vibefield/contracts src/meshdata.ts ----------
 // These are CONSTANTS, not generated shapes, so nothing regenerates them into
@@ -221,6 +221,14 @@ pub trait LaneTransport: Send + Sync {
     async fn close(&self, lane: &Lane) -> anyhow::Result<()>;
 }
 
+/// CP-1a — the other end of a lane that stays ON this device: the floor's door (`services/door`). Its outbound bytes
+/// go to the door's caller and never to the remote leg. `send` is synchronous and never waits. The serve loop below
+/// carries every lane's writes in one order, so a caller that stops reading costs its own door, which its sink
+/// closes past the door's bound, and never another lane's turn.
+pub trait LocalLaneSink: Send + Sync {
+    fn send(&self, payload: &[u8]) -> anyhow::Result<()>;
+}
+
 /// A transport that loops every write straight back as an inbound delivery.
 /// Not a mock in the pejorative sense — it is how the LOCAL half is proven
 /// without a tailnet, and it is what the socket/lane/routing tests run against.
@@ -281,6 +289,12 @@ struct Shared {
     transport: Mutex<Option<Arc<dyn LaneTransport>>>,
     events: broadcast::Sender<LaneEvent>,
     next_inbound: AtomicU64,
+    /// CP-1a — the local lanes, by id: a lane with a sink here is a door's, its bytes go to the sink, and it is never
+    /// announced on `lane.subscribe`.
+    sinks: Mutex<HashMap<u64, Arc<dyn LocalLaneSink>>>,
+    /// CP-1a — counts the clients that have authenticated, so a door that holds bytes for fieldd learns when a client
+    /// can take them. Bumped after the client's HELLO_OK is queued, so nothing reaches it ahead of its ack.
+    attached: watch::Sender<u64>,
 }
 
 impl Shared {
@@ -295,9 +309,16 @@ impl Shared {
     }
 
     fn send_to_client(&self, frame: Vec<u8>) {
-        if let Some(slot) = self.out.lock().unwrap().as_ref() {
-            let _ = slot.tx.send(frame);
-        }
+        self.try_send_to_client(frame);
+    }
+
+    /// `send_to_client`, saying whether a client took the frame.
+    fn try_send_to_client(&self, frame: Vec<u8>) -> bool {
+        self.out
+            .lock()
+            .unwrap()
+            .as_ref()
+            .is_some_and(|slot| slot.tx.send(frame).is_ok())
     }
 
     /// Is this connection still the live one? A superseded connection must stop
@@ -330,6 +351,8 @@ impl BridgeHandle {
         // and both build a stream — one of which then leaks, unreachable. The
         // window is narrow today (mgmt dispatch is serial per connection) and
         // costs one line to close, which is the wrong trade to defer.
+        // (A door's lane ids are the floor's, from the inbound base: the check
+        // below keeps fieldd from ever naming one.)
         let lane_id = lane.lane_id;
         {
             let mut lanes = self.shared.lanes.lock().unwrap();
@@ -350,6 +373,12 @@ impl BridgeHandle {
     /// native.mesh.lane.close — idempotent by intent: both ends hanging up at
     /// once is the normal race, not an error to report.
     pub async fn close_lane(&self, lane_id: u64) -> anyhow::Result<()> {
+        // CP-1a — a door's lane ends with its door (`native.door.close`), which also hangs up on its caller. Ending
+        // only the lane here would leave a caller writing into a door with nowhere to go.
+        anyhow::ensure!(
+            !self.shared.sinks.lock().unwrap().contains_key(&lane_id),
+            "lane {lane_id} is a door's; it closes through native.door.close"
+        );
         // Both guards are taken and RELEASED before the await. A MutexGuard held
         // across an await point can deadlock the runtime — and in a tuple
         // scrutinee the temporary lives to the end of the block, which is how
@@ -379,7 +408,10 @@ impl BridgeHandle {
         self.shared.lanes.lock().unwrap().len()
     }
 
-    /// Every live lane, id-ordered — the snapshot half of `lane.subscribe`.
+    /// Every live lane but the local ones, id-ordered — the snapshot half of
+    /// `lane.subscribe`. A door's lane is never on that stream (CP-1a, the CO
+    /// lead's ruling of 2026-10-29): the door stream announces it, with who is
+    /// calling, and fieldd routes it by the id that stream gives.
     pub fn lanes(&self) -> Vec<Lane> {
         let mut lanes: Vec<Lane> = self
             .shared
@@ -389,8 +421,68 @@ impl BridgeHandle {
             .values()
             .cloned()
             .collect();
+        let sinks = self.shared.sinks.lock().unwrap();
+        lanes.retain(|lane| !sinks.contains_key(&lane.lane_id));
+        drop(sinks);
         lanes.sort_by_key(|l| l.lane_id);
         lanes
+    }
+
+    /// CP-1a — open a lane whose other end is on this device: an inbound id, its sink installed, and NO
+    /// announcement. The caller says who it is on its own stream.
+    pub fn open_local_lane(
+        &self,
+        class: LaneClass,
+        peer: String,
+        protocol: String,
+        sink: Arc<dyn LocalLaneSink>,
+    ) -> Lane {
+        let lane = self.reserve_inbound_lane(class, peer, protocol, None);
+        self.shared.sinks.lock().unwrap().insert(lane.lane_id, sink);
+        lane
+    }
+
+    /// CP-1a — end a local lane, silently: its owner announces the end on its own stream. The lane leaves the table
+    /// under the table's guard, so a delivery that races it cannot reach fieldd under a retired id (the fence
+    /// `deliver_inbound` keeps).
+    pub fn close_local_lane(&self, lane_id: u64) -> bool {
+        let removed = self.shared.lanes.lock().unwrap().remove(&lane_id).is_some();
+        self.shared.sinks.lock().unwrap().remove(&lane_id);
+        removed
+    }
+
+    /// CP-1a — a local lane's inbound bytes, framed to the connected fieldd client. `false` when no client took them
+    /// (none is attached, or the lane is gone), and the caller keeps them.
+    pub fn deliver_local(&self, lane_id: u64, payload: &[u8]) -> bool {
+        let lanes = self.shared.lanes.lock().unwrap();
+        if !lanes.contains_key(&lane_id) {
+            return false;
+        }
+        let taken = match encode_frame(FRAME_DATA, lane_id, payload) {
+            Ok(frame) => self.shared.try_send_to_client(frame),
+            Err(e) => {
+                tracing::warn!(
+                    event = "field_native.mesh_bridge.inbound_unframable",
+                    component = "mesh_bridge",
+                    lane_id,
+                    error = %e,
+                    "A local lane delivery could not be framed"
+                );
+                false
+            }
+        };
+        drop(lanes);
+        taken
+    }
+
+    /// CP-1a — is a fieldd client attached to the byte plane now?
+    pub fn client_attached(&self) -> bool {
+        self.shared.out.lock().unwrap().is_some()
+    }
+
+    /// CP-1a — changes each time a client authenticates.
+    pub fn attached_rx(&self) -> watch::Receiver<u64> {
+        self.shared.attached.subscribe()
     }
 
     pub fn subscribe_events(&self) -> broadcast::Receiver<LaneEvent> {
@@ -538,6 +630,8 @@ impl MeshBridge {
                 transport: Mutex::new(None),
                 events: broadcast::channel(LANE_EVENT_CAPACITY).0,
                 next_inbound: AtomicU64::new(0),
+                sinks: Mutex::new(HashMap::new()),
+                attached: watch::channel(0).0,
             }),
             task: Mutex::new(None),
         }
@@ -606,6 +700,7 @@ impl NativeService for MeshBridge {
         }
         *self.shared.out.lock().unwrap() = None;
         self.shared.lanes.lock().unwrap().clear();
+        self.shared.sinks.lock().unwrap().clear();
         if let Some(endpoint) = &self.endpoint {
             let _ = local_ipc::remove_stale_endpoint(endpoint);
         }
@@ -667,6 +762,13 @@ async fn serve_client(stream: local_ipc::Stream, shared: Arc<Shared>, secret: [u
                     break;
                 };
                 authed = true;
+                // The ack FIRST, on this connection's own channel, and only then
+                // the slot: a delivery is framed into the slot, so with the slot
+                // installed first, an inbound byte arriving between the two could
+                // reach the client ahead of its own HELLO_OK (CP-1a, found
+                // writing the door's flush on attach; a peer lane's delivery had
+                // the same window).
+                let _ = tx.send(encode_frame(FRAME_HELLO_OK, 0, &ack_body).unwrap_or_default());
                 // REPLACE and drop, rather than overwrite: dropping the previous
                 // sender closes the old writer's channel, which ends its task and
                 // its write half. That is what makes "supersedes" true rather
@@ -684,7 +786,9 @@ async fn serve_client(stream: local_ipc::Stream, shared: Arc<Shared>, secret: [u
                     );
                 }
                 drop(previous);
-                let _ = tx.send(encode_frame(FRAME_HELLO_OK, 0, &ack_body).unwrap_or_default());
+                shared
+                    .attached
+                    .send_modify(|count| *count = count.wrapping_add(1));
                 tracing::info!(
                     event = "field_native.mesh_bridge.client_authenticated",
                     component = "mesh_bridge",
@@ -714,6 +818,24 @@ async fn serve_client(stream: local_ipc::Stream, shared: Arc<Shared>, secret: [u
                     );
                     continue;
                 };
+                // CP-1a — a door's lane: to its caller, never the remote leg.
+                let sink = shared.sinks.lock().unwrap().get(&frame.lane_id).cloned();
+                if let Some(sink) = sink {
+                    if let Err(e) = sink.send(&frame.payload) {
+                        let _ = tx.send(
+                            encode_frame(FRAME_ERR, frame.lane_id, b"{\"reason\":\"send-failed\"}")
+                                .unwrap_or_default(),
+                        );
+                        tracing::warn!(
+                            event = "field_native.mesh_bridge.local_send_failed",
+                            component = "mesh_bridge",
+                            lane_id = frame.lane_id,
+                            error = %e,
+                            "A local lane's send failed"
+                        );
+                    }
+                    continue;
+                }
                 let transport = shared.transport.lock().unwrap().clone();
                 let Some(t) = transport else {
                     // A lane with nowhere to go. `lane.open` refuses when the

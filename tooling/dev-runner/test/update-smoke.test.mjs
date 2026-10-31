@@ -11,8 +11,10 @@ import {
   footprintChanged,
   footprintSnapshot,
   freewayHostOf,
+  judgeQuit,
   judgeRun,
   readEvents,
+  readLastApply,
 } from "../../../apps/desktop/packaging/run-update-smoke.mjs";
 
 const work = mkdtempSync(join(tmpdir(), "vf-update-smoke-test-"));
@@ -227,4 +229,71 @@ test("F1: every run's freeway host is the app's own — by real path, with the f
   ])
     assert.equal(freewayHostOf([other], hostPath, real), null, JSON.stringify(other));
   assert.equal(freewayHostOf([], hostPath, real), null);
+});
+
+// AU-5 (LC-29) — the opt-in quit run: a PERSON's quit through the gate, judged from outside after the exit.
+test("AU-5 · quit: green on the gate, a stop, THEN Squirrel's refusal, the record, exit 0 and no relaunch", () => {
+  const atom = { method: "GET", path: "/vibefield/vibefield/releases.atom" };
+  const events = [
+    event("desktop.update.staged", { version: RELEASE.version }),
+    event("desktop.quit.census_read", { pairs: 1, sessions: 0 }),
+    event("desktop.quit.pair_stopped", { pair: "Me" }),
+    event("desktop.update.squirrel_refused", { error: "code signature" }),
+    event("desktop.update.quit_install", {
+      installing: false,
+      reason: "squirrel-refused",
+      version: RELEASE.version,
+    }),
+  ];
+  const seen = {
+    events,
+    afterQuit: [atom],
+    zips: 1,
+    lastApply: { branch: "exited", reason: "squirrel-refused", trigger: "quit" },
+    exit: { code: 0, signal: null },
+    relaunched: [],
+  };
+  const green = judgeQuit(seen);
+  assert.equal(green.ok, true, JSON.stringify(green));
+  assert.equal(green.saw, "quit_install squirrel-refused");
+
+  const red = (changes, pattern) => {
+    const verdict = judgeQuit({ ...seen, ...changes });
+    assert.equal(verdict.ok, false, JSON.stringify(changes));
+    assert.match(verdict.problems.join("\n"), pattern);
+  };
+  // a signal's quit (or none): no gate, no stop, no install
+  red({ events: [events[0]] }, /the gate did not run/);
+  // Squirrel touched before the stop
+  red({ events: [events[0], events[1], events[3], events[2], events[4]] }, /BEFORE a pair stopped/);
+  red({ events: events.slice(0, 4) }, /install on quit never ran/);
+  red(
+    {
+      events: [
+        ...events.slice(0, 3),
+        event("desktop.update.quit_install", { installing: false, reason: "policy-unreachable" }),
+      ],
+    },
+    /policy-unreachable/,
+  );
+  red({ afterQuit: [] }, /no fresh policy read at the quit/);
+  red({ zips: 2 }, /asked for 2 times/);
+  red({ lastApply: null }, /lastApply is null/);
+  red({ lastApply: { ...seen.lastApply, trigger: "restart" } }, /lastApply/);
+  red({ exit: null }, /did not exit/);
+  red({ exit: { code: null, signal: "SIGKILL" } }, /exited SIGKILL/);
+  red({ relaunched: [4242] }, /a relaunch/);
+});
+
+test("AU-5 · the run's lastApply is read from its own profile, and is null when there is none", () => {
+  const profile = join(work, "profile");
+  assert.equal(readLastApply(profile), null);
+  mkdirSync(join(profile, "updates"), { recursive: true });
+  writeFileSync(
+    join(profile, "updates", "state.json"),
+    JSON.stringify({ schemaVersion: 1, lastApply: { branch: "exited", trigger: "quit" } }),
+  );
+  assert.deepEqual(readLastApply(profile), { branch: "exited", trigger: "quit" });
+  writeFileSync(join(profile, "updates", "state.json"), "not json");
+  assert.equal(readLastApply(profile), null);
 });

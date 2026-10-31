@@ -209,6 +209,12 @@ export class MeshLaneLink extends EventEmitter {
     return this.#sock?.writableLength ?? 0;
   }
 
+  /** CP-1b — whether `close()` ended this link for good (a dropped socket is
+   * not closed: `connect()` may dial it again, and the daemon's redial does). */
+  get closed(): boolean {
+    return this.#closed;
+  }
+
   /** Register the consumer for a lane. Any bytes that arrived before the
    * announcement are replayed IMMEDIATELY, in arrival order, so an inbound
    * lane's first update is never the one that goes missing. */

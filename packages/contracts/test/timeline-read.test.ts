@@ -91,7 +91,8 @@ describe("the record's words ride through; the past never says blocked or unseen
       expect(MonitorPastSpan.safeParse({ kind, from: 0, to: 1 }).success, kind).toBe(false);
     const floor = AgentRecordedLanesResult.parse(fixture("agent-recorded-lanes.floor.json"));
     expect(floor.ended.flatMap((lane) => lane.spans.map((span) => span.kind))).toEqual(["bounds"]);
-    // no cap, no `truncated`, no "loading": the states are three
+    // no `truncated`, no "loading": the states are three (SP-D13's cut is
+    // `clipped`, its own word, item 105)
     expect(AgentRecordedLanesResult.shape.state.options).toEqual([
       "complete",
       "partial",
@@ -102,6 +103,19 @@ describe("the record's words ride through; the past never says blocked or unseen
       title: "Split the invoice writer",
       profileSet: "native",
     });
+  });
+
+  it("a tailnet caller's day says clipped, SP-D13's word, as the activity door's does (item 105)", () => {
+    const clipped = AgentRecordedLanesResult.parse(fixture("agent-recorded-lanes.clipped.json"));
+    expect(clipped.clipped).toBe(true);
+    // a bound is not `partial`: the record was read, and the phone was given its share
+    expect(clipped.state).toBe("complete");
+    const whole = fixture("agent-recorded-lanes.valid.json") as Record<string, unknown>;
+    expect(AgentRecordedLanesResult.parse(whole)).not.toHaveProperty("clipped");
+    for (const bad of ["yes", 1, null]) {
+      const parsed = AgentRecordedLanesResult.safeParse({ ...whole, clipped: bad });
+      expect(parsed.success, String(bad)).toBe(false);
+    }
   });
 
   it("both doors ride the record's consent and are asked where the record lives", () => {

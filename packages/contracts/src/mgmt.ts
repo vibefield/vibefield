@@ -18,7 +18,7 @@ export type UnitState = z.infer<typeof UnitState>;
 
 export const UnitHealth = z
   .object({
-    /** "mgmt" | "mesh-gateway" | "terminal" | "mesh-bridge" | "freeway" | "process" */
+    /** "mgmt" | "mesh-gateway" | "terminal" | "mesh-bridge" | "freeway" | "door" | "process" */
     unit: z.string(),
     state: UnitState,
     detail: z.string().optional(),
@@ -102,6 +102,13 @@ export const ObservedTerminal = z
     persistence: z.string().optional(),
     title: z.string().optional(),
     cwd: z.string().optional(),
+    /** Item 97 (2026-10-29) — the row's process has ended and its cell still lists the pane: a
+     * `keep-until-explicit-close` husk (MF-1g keeps an agent's), from which no exit event will
+     * come again. `true` only, and only once exited: ABSENT on a live row and from a floor older
+     * than item 97, so absence never says the process lives. fieldd's agent backstop reads a
+     * husk's `true` as an exit, after the grace that lets the floor's own `session-exited`
+     * carry the outcome first (AgentRuntime.handleInventory). */
+    exited: z.boolean().optional(),
     /** TC-S3 — the hosting cell. ABSENT on a pre-TC-S3 floor and in the
      * mesh-flagged in-process serve (there is no cell; tolerant readers fall
      * back to the legacy single-cell reading). */
@@ -940,8 +947,9 @@ export type MeshLaneClass = z.infer<typeof MeshLaneClass>;
 
 /** What the lane carries. The BRIDGE does not interpret this — it is dumb by
  * design (D5) — but fieldd routes inbound lanes by it, and it is what makes a
- * `lane.peerOpened` actionable without decoding a byte. */
-export const MeshLaneProtocol = z.enum(["doc-sync", "presence"]);
+ * `lane.peerOpened` actionable without decoding a byte. `mcp` is a door lane's
+ * (CP-1a, below): a local caller's bytes, announced on the door stream alone. */
+export const MeshLaneProtocol = z.enum(["doc-sync", "presence", "mcp"]);
 export type MeshLaneProtocol = z.infer<typeof MeshLaneProtocol>;
 
 /** native.mesh.lane.open — fieldd asks the bridge for a lane to a peer.
@@ -1001,6 +1009,146 @@ export const MeshLaneClosed = z
   })
   .passthrough();
 export type MeshLaneClosed = z.infer<typeof MeshLaneClosed>;
+
+// ---- the floor's door (CP-1a · `thinking-roled-agents.md` §16 · CP-L3, CP-D1) ----
+//
+// field-native hosts the `vibefield` door: `door.sock` (SOCKETS.DOOR) in the 0700 run dir, 0600. The kernel names each
+// caller: its REAL pid (macOS `LOCAL_PEERPID`, never the effective pid a delegated socket reports; Linux
+// `SO_PEERCRED`), its uid, which must be the floor's own, and its start. The floor walks the caller's parents to the
+// pane that holds it, and the caller's bytes reach fieldd on a meshdata lane (`protocol: "mcp"`, minted from the
+// inbound base, `peer: "door:<connId>"`). The floor never parses MCP. CONTROL only here (EL2): the lifecycle is
+// `native.door.subscribe`; no byte rides mgmt.
+//
+// Door lanes are lanes in the bridge's table, but `native.mesh.lane.subscribe` never announces them: the door stream is
+// their one announcement, and it carries who is calling.
+//
+// A door outlives fieldd (the two planes): while no fieldd is attached the floor keeps its doors, accepts new ones,
+// and holds their inbound bytes to NATIVE_DOOR's bounds. The next subscribe's snapshot re-announces every open door,
+// and its lane resumes.
+//
+// A refusal at accept (`refused-uid`, `delegated`, `peer-gone`, `limit`) opened no lane, so fieldd has nothing to close:
+// the floor logs it (`field_native.door.refused`, rate-limited, with a count) and never announces it. The mgmt outbox
+// closes its channel on overflow, so a same-uid caller looping on connect must not reach it (EL7). For the same
+// reason the stream coalesces: a backlog becomes one `.snapshot`.
+
+/** Who called, as the kernel says: the connecting process and when it started (ms since the epoch, from the
+ * kernel's start time). A process that started after the floor accepted the connection cannot be the one that
+ * connected; the floor refuses it (`peer-gone`). Compare `startedAtMs` with another reading of a start only through
+ * `sameStartSecond`. */
+export const NativeDoorCaller = z
+  .object({
+    pid: z.number().int().positive(),
+    startedAtMs: z.number().int().nonnegative(),
+  })
+  .passthrough();
+export type NativeDoorCaller = z.infer<typeof NativeDoorCaller>;
+
+/** The pane that holds the caller: the first process up the caller's parent chain (at most
+ * NATIVE_DOOR.WALK_MAX_STEPS links) that is a live pane's own root process, its start within
+ * NATIVE_DOOR.ROOT_BIRTH_TOLERANCE_MS of the pane's `createdAt`. A pane the floor lists exited is no root. `depth` is
+ * the links walked (0 when the caller is the root). fieldd maps the pane to its run and never walks. */
+export const NativeDoorPane = z
+  .object({
+    terminalSessionId: z.string().min(1),
+    depth: z.number().int().nonnegative(),
+  })
+  .passthrough();
+export type NativeDoorPane = z.infer<typeof NativeDoorPane>;
+
+/** An open door, as a `.delta` says it and as a `.snapshot` lists it. `connId` is the floor's, unique for the floor's
+ * boot (a door outlives fieldd, so it outlives fieldd's ids too). `pane` is ABSENT for a caller outside every pane,
+ * whose door still opens: fieldd answers it with no tools. */
+export const NativeDoorOpen = z
+  .object({
+    connId: z.string().min(1),
+    laneId: z.number().int().nonnegative(),
+    state: z.literal("open"),
+    caller: NativeDoorCaller,
+    pane: NativeDoorPane.optional(),
+  })
+  .passthrough();
+export type NativeDoorOpen = z.infer<typeof NativeDoorOpen>;
+
+/** The reasons a door closes. OPEN on the wire (tolerant reader): a reason this list lacks is logged verbatim, never
+ * refused. `eof`, `held-too-long` and `closed-by-fieldd` are what a `.delta` says; the accept-time four
+ * (`refused-uid`, `delegated`, `peer-gone`, `limit`) are the floor's log's, and a `.delta`'s only for a door that was
+ * announced first. */
+export const NATIVE_DOOR_CLOSE_REASONS = [
+  "eof",
+  "refused-uid",
+  "delegated",
+  "peer-gone",
+  "limit",
+  "held-too-long",
+  "closed-by-fieldd",
+] as const;
+
+/** A door that closed. Its lane is gone with it. */
+export const NativeDoorClosed = z
+  .object({
+    connId: z.string().min(1),
+    state: z.literal("closed"),
+    /** NATIVE_DOOR_CLOSE_REASONS, open vocabulary */
+    reason: z.string(),
+  })
+  .passthrough();
+export type NativeDoorClosed = z.infer<typeof NativeDoorClosed>;
+
+/** `native.door.snapshot`'s payload, and the subscribe answer's `snapshot`: every open door. */
+export const NativeDoorSnapshot = z
+  .object({
+    doors: z.array(NativeDoorOpen),
+  })
+  .passthrough();
+export type NativeDoorSnapshot = z.infer<typeof NativeDoorSnapshot>;
+
+/** `native.door.subscribe`'s answer: snapshot-then-delta (P5). The stream's notifications are `native.door.snapshot`
+ * (a `NativeDoorSnapshot`) and `native.door.delta` (a `NativeDoorOpen` or a `NativeDoorClosed`, told apart by
+ * `state`). */
+export const NativeDoorSubscribeResult = z
+  .object({
+    subId: z.string(),
+    snapshot: NativeDoorSnapshot,
+  })
+  .passthrough();
+export type NativeDoorSubscribeResult = z.infer<typeof NativeDoorSubscribeResult>;
+
+/** `native.door.close` — fieldd closes a door (its delta then says `closed-by-fieldd`, or the reason given). Idempotent:
+ * a door already gone answers `closed: false`. */
+export const NativeDoorCloseParams = z
+  .object({
+    connId: z.string().min(1),
+    reason: z.string().optional(),
+  })
+  .passthrough();
+export type NativeDoorCloseParams = z.infer<typeof NativeDoorCloseParams>;
+
+export const NativeDoorCloseResult = z
+  .object({
+    closed: z.boolean(),
+  })
+  .passthrough();
+export type NativeDoorCloseResult = z.infer<typeof NativeDoorCloseResult>;
+
+/** `native.door.info` — the bridge command fieldd writes into a spark's `.mcp.json` at every launch: the door's
+ * absolute path, the floor's own executable, and the arguments (`["door", "--endpoint", <endpoint>]`). Asked at every
+ * launch, so an app update or a dev target never leaves a stale path. A platform with no door (Windows: a named pipe's
+ * client pid is out of CP-1a's scope) answers `UNAVAILABLE {service: "door"}`. */
+export const NativeDoorInfoResult = z
+  .object({
+    endpoint: z.string().min(1),
+    command: z.string().min(1),
+    args: z.array(z.string()),
+  })
+  .passthrough();
+export type NativeDoorInfoResult = z.infer<typeof NativeDoorInfoResult>;
+
+/** The ONE rule for comparing a door caller's `startedAtMs` with another reading of the same process's start (CP-1a):
+ * the same whole second (NATIVE_DOOR.START_RESOLUTION_MS). The floor reads the kernel's microseconds; `ps -o lstart=`
+ * and its kin say whole seconds, truncated. Never compare the two as strings or to the millisecond. */
+export function sameStartSecond(aMs: number, bMs: number): boolean {
+  return Math.floor(aMs / 1_000) === Math.floor(bMs / 1_000);
+}
 
 // ---- egress (DS-1 · design-02 §2.4's egress bullet · design-06 §3 · petition T7 = truffle RFC 026) ----
 //

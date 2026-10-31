@@ -99,13 +99,16 @@ const laid = (
 ): LaidSpecimen => ({ type, label: type, hang: { x, y, w, h }, natural });
 
 describe("the specimens where the board draws them (R14)", () => {
-  it("is the kernel's fit in each hang, offset by the drawer as drawn and its scroll, in reading order", () => {
+  it("is the kernel's fit in each hang, offset by the drawer as drawn and its scroll, in the lay's order", () => {
+    // the specimens in their sibling order; the lay's: a b on its first line, c on its second
     const specimens = boardSpecimens(
       [laid("b", 200, 80), laid("c", 40, 280), laid("a", 40, 80)],
+      ["a", "b", "c"],
       { x: 30, y: 437 },
       20,
     );
     expect(specimens.map((s) => s.type)).toEqual(["a", "b", "c"]);
+    expect(specimens.map((s) => s.row)).toEqual([0, 0, 1]);
     const fit = specimenFit({ x: 40, y: 80, w: 120, h: 160 }, { w: 220, h: 280 });
     expect(specimens[0]?.rect).toEqual({
       x0: 30 + fit.x,
@@ -113,7 +116,12 @@ describe("the specimens where the board draws them (R14)", () => {
       x1: 30 + fit.x + fit.w,
       y1: 437 + fit.y + fit.h - 20,
     });
-    expect(specimens[0]?.row).toBe(80);
+  });
+
+  it("leaves out a type the lay does not name", () => {
+    expect(
+      boardSpecimens([laid("a", 40, 80), laid("b", 200, 80)], ["b"], { x: 0, y: 0 }, 0),
+    ).toHaveLength(1);
   });
 });
 

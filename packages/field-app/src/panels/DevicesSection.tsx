@@ -2,6 +2,7 @@ import { APP_PREFERENCE_KEYS, type AppPreferences, type DeviceInfo } from "@vibe
 import { SegmentedControl } from "@vibefield/design-kit";
 import { useFielddClient, useSubscription } from "@vibefield/fieldd-client/react";
 import { type ReactElement, type ReactNode, useEffect, useRef, useState } from "react";
+import { AddPhoneCode } from "../account/door/add-phone-code";
 import {
   LINK_ACT_LABEL,
   LINK_ACT_PENDING_LABEL,
@@ -27,6 +28,7 @@ import { getHost } from "../host";
 import { MeshSection } from "./MeshSection";
 import {
   buttonCls,
+  CopyButton,
   fieldCls,
   labelCls,
   SettingsRow,
@@ -670,11 +672,21 @@ function Sheet(props: DevicesSectionViewProps): ReactElement | null {
             label="Device kind"
           />
         </div>
-        <div className={labelCls}>
-          {kind === "phone"
-            ? `On your iPhone, open VibeField and Continue with Tailscale, signing in as ${login ?? "this account"}. It finds this Mac on its own.`
-            : `On your other computer, install VibeField and Continue with Tailscale, signing in as ${login ?? "this account"}. It joins your devices here.`}
-        </div>
+        {kind === "phone" ? (
+          // TS-7b — the code that tells the phone which account to expect (the Connect pane's own drawing)
+          <AddPhoneCode
+            login={props.face.kind === "linked" ? props.face.link.login : null}
+            names={[
+              props.devices.find((device) => device.self)?.name,
+              props.face.kind === "linked" ? props.face.machineName : null,
+            ]}
+            className={labelCls}
+          />
+        ) : (
+          <div className={labelCls}>
+            {`On your other computer, install VibeField and Continue with Tailscale, signing in as ${login ?? "this account"}. It joins your devices here.`}
+          </div>
+        )}
         <div className="vf-devices-acts">
           <button type="button" className={buttonCls} onClick={() => onSheet("none")}>
             Done

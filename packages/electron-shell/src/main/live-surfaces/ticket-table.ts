@@ -7,7 +7,9 @@ export type LiveSurfacePresentationOperation =
   | "keyboard"
   | "navigate"
   | "resize"
-  | "crop";
+  | "crop"
+  /** PT-S2 — a bound simulator's acts (`ios-simulator-device` tickets only) */
+  | "device";
 
 export interface LiveSurfaceTicketBinding<TAuthority> {
   readonly targetWebContentsId: number;

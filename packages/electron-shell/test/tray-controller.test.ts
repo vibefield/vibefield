@@ -7,8 +7,14 @@ import {
   type TrayNativeState,
   type TrayPlacement,
   type TrayRuntime,
+  trayImageKind,
 } from "../src/main/tray-controller";
-import type { TrayMenuItem, TrayPlatform, TraySnapshot } from "../src/main/tray-model";
+import type {
+  TrayMenuItem,
+  TrayPlatform,
+  TraySnapshot,
+  TrayUpdateState,
+} from "../src/main/tray-model";
 
 class FakeTray implements NativeTrayPort {
   readonly setImage = vi.fn();
@@ -40,6 +46,7 @@ function harness(
   failCreate = false,
   initial: Partial<TraySnapshot> = {},
   initialPlacement: TrayPlacement = "visible",
+  extraActions: Partial<TrayControllerActions> = {},
 ) {
   const trays: FakeTray[] = [];
   const menus: (readonly TrayMenuItem[])[] = [];
@@ -90,6 +97,7 @@ function harness(
     setBackgroundShell: vi.fn(async () => {}),
     setTrayVisible: vi.fn(async () => {}),
     quit: vi.fn(),
+    ...extraActions,
   };
   const onError = vi.fn();
   const desktopStates: DesktopShellState[] = [];
@@ -244,6 +252,36 @@ describe("TrayController", () => {
     expect(h.actions.openPrimaryWindow).toHaveBeenCalledTimes(1);
   });
 
+  it("wears the update image while an install waits, and drops it when the update goes (AU-4)", () => {
+    const h = harness("darwin", false, { link: "ready" });
+    h.controller.update({
+      update: { kind: "staged", version: "2.0.0", sessions: 0, applyWired: true },
+    });
+    vi.advanceTimersByTime(100);
+    expect(h.trays[0]?.setImage).toHaveBeenLastCalledWith({ kind: "update" });
+    h.controller.update({ update: { kind: "idle" } });
+    vi.advanceTimersByTime(100);
+    expect(h.trays[0]?.setImage).toHaveBeenLastCalledWith({ kind: "base" });
+  });
+
+  it("routes Download Update through the same guarded actions, with its version (AU-4)", async () => {
+    const downloadUpdate = vi.fn(async (_version: string) => {});
+    const h = harness("darwin", false, {}, "visible", { downloadUpdate });
+    h.controller.update({
+      update: { kind: "available", version: "2.0.0", declined: false, enabled: false },
+    });
+    vi.advanceTimersByTime(100);
+    menuItem(h.menus.at(-1)!, "update").click?.();
+    await Promise.resolve();
+    expect(downloadUpdate).toHaveBeenCalledWith("2.0.0");
+    // a menu built before the quit began acts on nothing after it
+    const before = h.menus.at(-1)!;
+    h.controller.update({ quitting: true });
+    menuItem(before, "update").click?.();
+    await Promise.resolve();
+    expect(downloadUpdate).toHaveBeenCalledTimes(1);
+  });
+
   it("disposes idempotently and cancels a pending rebuild", () => {
     const h = harness();
     h.controller.update({ link: "ready" });
@@ -253,5 +291,42 @@ describe("TrayController", () => {
     expect(h.trays[0]?.destroy).toHaveBeenCalledTimes(1);
     expect(h.runtime.buildMenu).toHaveBeenCalledTimes(1);
     expect(h.stopDisplayObservation).toHaveBeenCalledTimes(1);
+  });
+});
+
+// AU-4 (AU-G14) — the attention badge keeps ONE meaning (a degraded service or a failed check); an install that
+// waits on the person wears the update image of its own, and only where an apply exists.
+describe("trayImageKind", () => {
+  const staged = (applyWired?: boolean): TrayUpdateState => ({
+    kind: "staged",
+    version: "2.0.0",
+    sessions: 0,
+    ...(applyWired === undefined ? {} : { applyWired }),
+  });
+  const snap = (patch: Partial<TraySnapshot>) => snapshot({ link: "ready", ...patch });
+
+  it.each([
+    ["an install waits", { update: staged(true) }, "update"],
+    ["staged where no apply exists", { update: staged(false) }, "base"],
+    ["staged from an older caller", { update: staged() }, "base"],
+    ["a failed check", { update: { kind: "failed" } }, "attention"],
+    [
+      "a degraded service, over a waiting install",
+      { evidence: "degraded", update: staged(true) },
+      "attention",
+    ],
+    [
+      "no service, over a waiting install",
+      { link: "unavailable", update: staged(true) },
+      "offline",
+    ],
+    ["at rest", {}, "base"],
+    [
+      "a found update with updates off",
+      { update: { kind: "available", version: "2.0.0", declined: false, enabled: false } },
+      "base",
+    ],
+  ] as const)("%s", (_case, patch, kind) => {
+    expect(trayImageKind(snap(patch))).toBe(kind);
   });
 });

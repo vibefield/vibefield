@@ -7,12 +7,15 @@ use std::time::Duration;
 /// field-native is configured by its environment alone, and with none set it serves the installed app's user
 /// root. So an argument it did not know used to be IGNORED and the daemon booted: a lane's `field-native --help`
 /// once ran 10 s against a person's own data dir. Every launcher passes either nothing (fieldd's `bin.ts`, the
-/// suites' harnesses) or `--version` (the launch check).
+/// suites' harnesses) or `--version` (the launch check). CP-1a adds one subcommand, `door`, which is no daemon: it
+/// reads no environment and touches no data dir (`door_bridge`).
 const USAGE: &str = "\
 usage: field-native [--version | --help]
+       field-native door --endpoint <path>
 
 VibeField's native plane. It takes no other argument: it is configured by its
 environment, and with none set it serves this user's installed VibeField data.
+`door` is the MCP stdio bridge a spark's agent runs to the floor's door.
   FIELD_NATIVE_DATA_DIR                 the user root it serves
   FIELD_LOG_DIR                         its log root (honored only with
   FIELD_NATIVE_ALLOW_LOG_DIR_OVERRIDE=1)
@@ -26,8 +29,12 @@ async fn main() -> anyhow::Result<()> {
     // field-native once linked Homebrew's harfbuzz; LANDED "BP-1b").
     // Item 64: `--help` prints the usage and exits 0; any other argument is refused, exit 2, before any config is
     // read or any file touched. Only a bare invocation boots.
-    if let Some(arg) = std::env::args().nth(1) {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if let Some(arg) = args.first() {
         match arg.as_str() {
+            // CP-1a — the bridge, before any config: it reads none. It exits through `process::exit`, because tokio's
+            // stdin is a blocking read the runtime's shutdown would wait on until the agent wrote another line.
+            "door" => std::process::exit(field_native::door_bridge::main(&args[1..]).await),
             "--version" => println!("field-native {}", env!("CARGO_PKG_VERSION")),
             "--help" | "-h" => print!("{USAGE}"),
             other => {

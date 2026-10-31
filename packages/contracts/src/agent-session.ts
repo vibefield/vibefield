@@ -154,6 +154,31 @@ export type AgentSessionWorkspace = z.infer<typeof AgentSessionWorkspace>;
 export const AGENT_SPAWNED_BY = ["app", "user-shell"] as const;
 export type AgentSpawnedBy = (typeof AGENT_SPAWNED_BY)[number];
 
+/** CO (the compose plane, version 2; `draft/compose-plane/v2/`, ruled by James 2026-10-29) — a spark's id: fieldd's,
+ * minted when it hatches and never reused. Never its name, which can change while its face and folder stay. Defined
+ * here rather than in compose.ts because a run's record names it (`spark`, `origin.spark`), and compose.ts reads this
+ * module's model selection. */
+export const SparkId = z.string().regex(/^sp-[0-9a-z]{6,32}$/);
+export type SparkId = z.infer<typeof SparkId>;
+
+/** CP-D15 — who started a run fieldd launched: `you` (a door you pressed: the spawn button, a resume, a spark you
+ * hatched or opened), `spark` (its `agent_spawn`; `spark` names it), `flow` (a run's step: `run` and its `call`).
+ * OPEN on the wire, like `spawnedBy`: a word this build never heard of must not refuse a row. Absent reads `you`. */
+export const AGENT_ORIGIN_BY = ["you", "spark", "flow"] as const;
+export type AgentOriginBy = (typeof AGENT_ORIGIN_BY)[number];
+
+export const AgentSessionOrigin = z
+  .object({
+    by: z.string().min(1).max(32),
+    spark: SparkId.optional(),
+    /** a flow run's id (CP-4) */
+    run: z.string().min(1).max(64).optional(),
+    /** the run's call that started it, counted from 1 in the run's journal */
+    call: z.number().int().positive().optional(),
+  })
+  .passthrough();
+export type AgentSessionOrigin = z.infer<typeof AgentSessionOrigin>;
+
 /** SessionSummary v2 — the fold's row (design-01 §6.2 as amended by AR-D4).
  * `sessionId` is the provider-native session id, THE spine every repo joins
  * on (puppeteer `nativeSession.id`, rosetta `native_session_id`); before an
@@ -225,6 +250,11 @@ export const AgentSessionSummary = z
      * none. Absent: the stop presses no key (the agent's own control stops the
      * turn), or a daemon from before Q08. */
     stopKey: z.string().min(1).max(32).optional(),
+    /** CP-D15 — who started the run (`AgentSessionOrigin`; absent reads `you`), as its record says. Godview's rim
+     * and History's "Lyra's" are joins over it (EW-D1). */
+    origin: AgentSessionOrigin.optional(),
+    /** CO — the run is this spark's own session, the one it thinks in. */
+    spark: SparkId.optional(),
   })
   .passthrough();
 export type AgentSessionSummary = z.infer<typeof AgentSessionSummary>;
@@ -382,6 +412,13 @@ export const AgentSessionRecord = z
      * verifies — the same under an older fieldd, whose passthrough keeps the
      * key it does not know. */
     modelSelection: AgentModelSelection.optional(),
+    /** CP-D15 — who started the run (`AgentSessionOrigin`; absent reads `you`: every record written before CO). The
+     * audit's spawn line says the same. Optional, like AR-7's fields, so a record without it canonicalises — and so
+     * verifies — exactly as before. */
+    origin: AgentSessionOrigin.optional(),
+    /** CO — the run is this spark's own session, the one it thinks in. A spark that thinks under another profile
+     * starts a fresh session (NS-D6), so each of its past sessions carries it too. */
+    spark: SparkId.optional(),
   })
   .passthrough();
 export type AgentSessionRecord = z.infer<typeof AgentSessionRecord>;

@@ -1,4 +1,5 @@
 import { type ReactElement, useEffect, useRef, useState } from "react";
+import { AddPhoneCode } from "../../../account/door/add-phone-code";
 import {
   Constellation,
   type DoorDevice,
@@ -541,11 +542,13 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
           }
         >
           {aside === "phone" ? (
-            <p className={voiceCls}>
-              On your iPhone, open VibeField and Continue with Tailscale, signing in as{" "}
-              <span className="font-mono">{face.link.login ?? "the same account"}</span>. It finds
-              this Mac on its own.
-            </p>
+            // TS-7b — the code that tells the phone which account to expect, naming this Mac by the roster's
+            // own name (the one the phone will show), else Tailscale's machine name
+            <AddPhoneCode
+              login={face.link.login}
+              names={[devices.find((device) => device.self === true)?.name, face.machineName]}
+              className={voiceCls}
+            />
           ) : (
             <Constellation face={me.face} seed={me.seed} devices={arrived} arriving />
           )}

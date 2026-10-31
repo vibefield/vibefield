@@ -30,6 +30,10 @@ export const FEED_FILE = "latest-mac.yml";
 /** The five runs, in order (§4 WP12f, §14). */
 export const UPDATE_RUNS = ["staged", "forged", "rollback", "killed", "unresolved"];
 
+/** AU-5 (LC-29) — runs only a `--runs` names, never the row's default: `quit` sends a PERSON's quit (an Apple Event to
+ * the run's pid), whose trigger is unverified unattended (TCC may ask a person first). */
+export const OPT_IN_RUNS = ["quit"];
+
 /** The run's keys: TD-1's shape (two root keys, one each for release, bundled and registry), secrets in memory only. */
 export function mintKeys() {
   const [rootA, rootB, release, bundled, registry] = Array.from({ length: 5 }, () =>
@@ -156,6 +160,9 @@ export function buildRelease({
  * 3. rollback — the beta policy at v2 against a remembered v5: `policy-rollback`
  * 4. killed — the kill switch on beta, advertising N (a lever bites only on a FOUND update)
  * 5. unresolved — nightly-only heads for the beta build: `channel-unresolved`, never the nightly
+ * AU-5, opt-in (`OPT_IN_RUNS`):
+ * - quit — the good chain with `requireUserConfirmation` off, so a person's quit may install it: `staged` first, then
+ *   (`next: "quit-install"`) the quit hands the random bytes to Squirrel after the stop, which refuses them
  */
 export function buildRun(name, { root, keys, trustRoot, current, now = Date.now() }) {
   const dir = join(root, name);
@@ -198,8 +205,15 @@ export function buildRun(name, { root, keys, trustRoot, current, now = Date.now(
         seed: null,
         expect: "channel-unresolved",
       };
+    case "quit":
+      return {
+        releases: [buildRelease({ ...base, dir, levers: { requireUserConfirmation: false } })],
+        seed: null,
+        expect: "staged",
+        next: "quit-install",
+      };
     default:
-      throw new Error(`unknown run "${name}" (${UPDATE_RUNS.join(", ")})`);
+      throw new Error(`unknown run "${name}" (${[...UPDATE_RUNS, ...OPT_IN_RUNS].join(", ")})`);
   }
 }
 
