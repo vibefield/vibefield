@@ -393,4 +393,40 @@ describe("the simctl call record is SMOKE-ONLY — held in main's source (main/i
     // the ONE `simctlCalls:` main writes is that conditional spread's
     expect(index.match(/simctlCalls:/gu)).toHaveLength(1);
   });
+
+  /** P2's call site as main's source must hold it (the grade's P-1): the variable read ONLY through the mode's gate
+   * (`smokeSimctlDeveloperDir`, unit-held in modes.test.ts), and the ONE `simctlCandidates:` main writes the conditional
+   * spread of what that gate answered — so a production or dev shell started with it set still asks xcode-select. */
+  const p2Held = (src: string): void => {
+    expect(src).toContain(
+      "const SMOKE_SIMCTL_DEVELOPER_DIR = smokeSimctlDeveloperDir(MODE, process.env);",
+    );
+    const start = src.indexOf("liveSurfaceSupport = createProductionLiveSurfaceSupport({");
+    expect(start).toBeGreaterThanOrEqual(0);
+    const call = src.slice(start, src.indexOf("\n    });", start));
+    expect(call).toMatch(
+      /\.\.\.\(SMOKE_SIMCTL_DEVELOPER_DIR === undefined\s*\?\s*\{\}\s*:\s*\{ simctlCandidates: \[SMOKE_SIMCTL_DEVELOPER_DIR\] \}\),/u,
+    );
+    expect(src).not.toContain("VF_SMOKE_SIMCTL_DEVELOPER_DIR");
+    expect(src.match(/simctlCandidates:/gu)).toHaveLength(1);
+  };
+
+  it("P2: main reads VF_SMOKE_SIMCTL_DEVELOPER_DIR only through the mode's gate, and hands simctlCandidates only when a smoke said one (P-1)", () => {
+    p2Held(index);
+  });
+
+  it("P2: an edit that reads the variable ungated, or spreads the candidates without the gate, is caught (P-1)", () => {
+    const direct = index.replace(
+      "smokeSimctlDeveloperDir(MODE, process.env)",
+      'process.env["VF_SMOKE_SIMCTL_DEVELOPER_DIR"]',
+    );
+    expect(direct).not.toBe(index);
+    expect(() => p2Held(direct)).toThrow();
+    const ungated = index.replace(
+      /\.\.\.\(SMOKE_SIMCTL_DEVELOPER_DIR === undefined\s*\?\s*\{\}\s*:\s*\{ simctlCandidates: \[SMOKE_SIMCTL_DEVELOPER_DIR\] \}\),/u,
+      '...(process.env["VF_SMOKE_SIMCTL_DEVELOPER_DIR"] === undefined ? {} : { simctlCandidates: [process.env["VF_SMOKE_SIMCTL_DEVELOPER_DIR"]] }),',
+    );
+    expect(ungated).not.toBe(index);
+    expect(() => p2Held(ungated)).toThrow();
+  });
 });
