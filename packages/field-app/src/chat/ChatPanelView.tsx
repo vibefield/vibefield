@@ -6,17 +6,24 @@ import {
   type SparkStatus,
   sparkStatusWord,
 } from "@vibefield/design-kit/spark-face";
-import type { CSSProperties, ReactElement } from "react";
+import { ChromeBoundary } from "@vibefield/puppeteer-views";
+import type { CSSProperties, ReactElement, ReactNode } from "react";
 import { COVER_RESERVE_PX, HEAD_BAND_PX } from "../frame/frame-geometry";
+import { SparkPaneView } from "./SparkPaneView";
 import { activityWords, type SparkEntry } from "./spark-status";
 import type { SparksReading } from "./sparks-feed";
+import { ThreadItemsView } from "./ThreadItemsView";
+import type { ThreadItem } from "./thread-items";
+import { NO_LATCHES, type ThreadMark, threadMarksOf } from "./thread-marks";
 import "./chat.css";
 
-// CHAT, THE PANEL (SP-1b; DESIGN.md §8 "Chat's list"; the Sparks page's `ch-view`, `ch-needs`) — controller-free, so
-// the catalog mounts this exact markup on fixtures. The list's column holds the sparks fieldd keeps, newest activity
-// first (CH-D1); a row is the face, the name and the status word (CH-D3); the needs-you three take the attention ink
-// and the orange dot (CH-D4). The thread's column holds, until SP-1d mounts the spark's pane there, the chosen
-// spark's head and one honest line with its one act.
+// CHAT, THE PANEL (SP-1b, SP-1d; DESIGN.md §8 "Chat's list", "Chat's thread"; the Sparks page's `ch-view`,
+// `ch-needs`) — controller-free, so the catalog mounts this exact markup on fixtures. The list's column holds the
+// sparks fieldd keeps, newest activity first (CH-D1); a row is the face, the name and the status word (CH-D3); the
+// needs-you three take the attention ink (CH-D4), and a row wears its thread's mark: the orange dot, or unread's cyan
+// one (SP-1d). The thread's column is a fixed box: the chosen spark's head, then its own pane (the controller's
+// `SparkPane`, handed in) — or, asleep or not started, one honest line with its one act — then the thread's foot: its
+// composer, handed in, and its items standing over the pane.
 
 /** What the chosen spark's act is doing: at rest, under way, or refused in fieldd's words. */
 export type ChatAct =
@@ -30,12 +37,24 @@ export interface ChatPanelViewProps {
   chosen: SparkId | null;
   /** the clock the rows' times are said by, epoch ms */
   now: number;
+  /** each thread's mark, by its spark (the window's feed keeps them: `useThreadMarks`); absent, the reading's alone,
+   * a need standing now */
+  marks?: ReadonlyMap<SparkId, ThreadMark>;
   act?: ChatAct;
   onChoose?: (spark: SparkId) => void;
-  /** its pane, in Godview (History's Jump to) */
-  onShow?: (entry: SparkEntry) => void;
   /** its last session, resumed (`compose.sparks.open`) */
   onWake?: (entry: SparkEntry) => void;
+  /** the shown spark's own pane, while it is awake (the product's `SparkPane`); absent, the pane's place says what a
+   * window with no terminals says */
+  pane?: ReactNode;
+  /** what stands in the shown thread over its pane, in order (`threadItemsOf`) */
+  items?: readonly ThreadItem[];
+  /** a starter pressed in the thread's hello: its words, sent as Send sends */
+  onStarter?: ((words: string) => void) | undefined;
+  /** a send into the shown thread runs, a starter's or Send's: the starters wait */
+  sending?: boolean | undefined;
+  /** the shown thread's composer, in its foot (the product's `ChatComposer`; the catalog's `ChatComposerView`) */
+  composer?: ReactNode;
   /** the locale the times are said in; the window's own when absent */
   locale?: string;
 }
@@ -50,23 +69,43 @@ const AT_WORK: ReadonlySet<SparkStatus> = new Set([
   "focus",
 ]);
 
-/** Which of the thread column's three honest lines the spark is on. */
-export type ThreadLine = "in-godview" | "asleep" | "not-started";
+/** The line the thread's column says under the head in place of a pane: asleep, or not started. */
+export type ThreadLine = "asleep" | "not-started";
 
-export function threadLineOf(entry: SparkEntry): ThreadLine {
+/** The spark's line, or null while it is awake: then its pane is the thread (DESIGN.md §8 "Chat's thread"). */
+export function threadLineOf(entry: SparkEntry): ThreadLine | null {
   if (entry.status === "sleeping") return "asleep";
   if (entry.run === null && entry.spark.session === undefined) return "not-started";
-  return "in-godview";
+  return null;
+}
+
+/** The floor session the spark's own run's terminal is — the board's row first, else its record — or null while
+ * fieldd has not named one (just after a hatch or a wake). */
+export function paneSessionOf(entry: SparkEntry): string | null {
+  return entry.run?.terminal?.runtimeSessionId ?? entry.spark.session?.terminalSessionId ?? null;
+}
+
+/** The spark the thread's column shows: the chosen one while the list holds it, else the newest. */
+export function shownOf(
+  entries: readonly SparkEntry[],
+  chosen: SparkId | null,
+): SparkEntry | undefined {
+  return entries.find((entry) => entry.spark.id === chosen) ?? entries[0];
 }
 
 export function ChatPanelView({
   reading,
   chosen,
   now,
+  marks,
   act = { state: "idle" },
   onChoose,
-  onShow,
   onWake,
+  pane,
+  items = [],
+  onStarter,
+  sending = false,
+  composer,
   locale,
 }: ChatPanelViewProps): ReactElement {
   const place = {
@@ -102,7 +141,8 @@ export function ChatPanelView({
         </div>
       );
     }
-    const shown = entries.find((entry) => entry.spark.id === chosen) ?? entries[0];
+    const shown = shownOf(entries, chosen);
+    const marked = marks ?? threadMarksOf(entries, NO_LATCHES);
     return (
       <>
         <section className="vf-chat-list" aria-label="Sparks">
@@ -116,6 +156,7 @@ export function ChatPanelView({
                 key={entry.spark.id}
                 entry={entry}
                 on={entry === shown}
+                mark={marked.get(entry.spark.id) ?? null}
                 time={activityWords(entry.activityAt, now, locale)}
                 onChoose={onChoose}
               />
@@ -123,7 +164,16 @@ export function ChatPanelView({
           </div>
         </section>
         {shown === undefined ? null : (
-          <ThreadColumn entry={shown} act={act} onShow={onShow} onWake={onWake} />
+          <ThreadColumn
+            entry={shown}
+            act={act}
+            onWake={onWake}
+            pane={pane}
+            items={items}
+            onStarter={onStarter}
+            sending={sending}
+            composer={composer}
+          />
         )}
       </>
     );
@@ -133,11 +183,13 @@ export function ChatPanelView({
 function SparkRow({
   entry,
   on,
+  mark,
   time,
   onChoose,
 }: {
   entry: SparkEntry;
   on: boolean;
+  mark: ThreadMark | null;
   time: string;
   onChoose: ((spark: SparkId) => void) | undefined;
 }): ReactElement {
@@ -162,7 +214,9 @@ function SparkRow({
           {sparkStatusWord(status)}
         </span>
       </span>
-      {needsYou ? <span className="vf-chat-row-dot" aria-hidden="true" /> : null}
+      {mark === null ? null : (
+        <span className="vf-chat-row-dot" data-mark={mark} aria-hidden="true" />
+      )}
     </button>
   );
 }
@@ -170,13 +224,21 @@ function SparkRow({
 function ThreadColumn({
   entry,
   act,
-  onShow,
   onWake,
+  pane,
+  items,
+  onStarter,
+  sending,
+  composer,
 }: {
   entry: SparkEntry;
   act: ChatAct;
-  onShow: ((entry: SparkEntry) => void) | undefined;
   onWake: ((entry: SparkEntry) => void) | undefined;
+  pane: ReactNode;
+  items: readonly ThreadItem[];
+  onStarter: ((words: string) => void) | undefined;
+  sending: boolean;
+  composer: ReactNode;
 }): ReactElement {
   const { spark, status, needsYou } = entry;
   const line = threadLineOf(entry);
@@ -194,35 +256,39 @@ function ThreadColumn({
           </span>
         </span>
       </header>
-      <p className="vf-chat-thread-line" data-line={line} role="status">
-        <span>{lineWords(spark.name, line, act)}</span>
-        {line === "in-godview" ? (
-          <UiButton disabled={act.state === "busy"} onClick={() => onShow?.(entry)}>
-            {act.state === "busy" ? "Showing…" : "Show"}
-          </UiButton>
-        ) : line === "asleep" ? (
-          <UiButton disabled={act.state === "busy"} onClick={() => onWake?.(entry)}>
-            {act.state === "busy" ? "Waking…" : "Wake"}
-          </UiButton>
-        ) : null}
-      </p>
+      {line === null ? (
+        // the pane is a chrome piece of its own, tried again for the session it shows
+        <ChromeBoundary name="Spark pane" retryKey={paneSessionOf(entry) ?? spark.id}>
+          {pane ?? <SparkPaneView name={spark.name} state="no-terminals" />}
+        </ChromeBoundary>
+      ) : (
+        <p className="vf-chat-thread-line" data-line={line} role="status">
+          <span>{lineWords(spark.name, line, act)}</span>
+          {line === "asleep" ? (
+            <UiButton disabled={act.state === "busy"} onClick={() => onWake?.(entry)}>
+              {act.state === "busy" ? "Waking…" : "Wake"}
+            </UiButton>
+          ) : null}
+        </p>
+      )}
+      <div className="vf-chat-foot">
+        <ThreadItemsView items={items} onStarter={onStarter} sending={sending} />
+        {composer}
+      </div>
     </section>
   );
 }
 
-/** The one line under the head (DESIGN.md §8 "Chat's list", the thread's column at SP-1b), or what its act was refused. */
+/** The one line under the head while there is no pane (DESIGN.md §8 "Chat's list", the thread's column as SP-1d
+ * built it): asleep or not started, a wake under way, or a wake refused in fieldd's words. A refusal is said here only
+ * when Wake asked; Send says its own in its note. */
 function lineWords(name: string, line: ThreadLine, act: ChatAct): string {
-  if (act.state === "refused") {
-    return line === "asleep"
-      ? `Couldn't wake ${name}: ${act.reason}`
-      : `Couldn't show ${name}'s pane: ${act.reason}`;
-  }
+  if (act.state === "refused") return `Couldn't wake ${name}: ${act.reason}`;
   switch (line) {
-    case "in-godview":
-      return `${name}'s pane is in Godview`;
     case "asleep":
       return `${name} is asleep`;
     case "not-started":
-      return `${name} hasn't started yet`;
+      // no act of its own: Send wakes it, and the line says so while it does
+      return act.state === "busy" ? "Waking…" : `${name} hasn't started yet`;
   }
 }

@@ -41,6 +41,7 @@ import {
   cardTargets,
   TARGET_LAYER,
 } from "../src/frame/cards/card-targets";
+import { paneTextOf, shellPath, stillOf } from "../src/frame/cards/card-text";
 import {
   type Card,
   type PictCard,
@@ -53,13 +54,7 @@ import { OUTCOME_WORDS, TARGET_WORDS } from "../src/frame/cards/cards-words";
 import { hearLineSays, type LineViewDoor, refusalClaimed } from "../src/frame/line-door";
 import { ViewsTrackView } from "../src/frame/ViewsTrack";
 import { resetActiveViewForTest, subscribeActiveView } from "../src/frame/view-state";
-import { type PaneInputSource, whenPaneInputOpen } from "../src/godview/line-panes";
-import {
-  PANE_INPUT_WAIT_MS,
-  paneCardTarget,
-  paneTextOf,
-  shellPath,
-} from "../src/godview/pane-card-target";
+import { PANE_INPUT_WAIT_MS, paneCardTarget } from "../src/godview/pane-card-target";
 import { type FieldHost, setHost } from "../src/host";
 import type { RendererLogger } from "../src/logging";
 import type { RoutedInputRefusal } from "../src/terminal/pool";
@@ -802,6 +797,15 @@ describe("Godview's panes take a card (HN-4, HN-L5)", () => {
     });
   });
 
+  it("names a snapshot's still by its path, and no other card's: a picture from another app names the person's own file (card-text.ts)", () => {
+    expect(stillOf(SNAPSHOT)).toBe("/tmp/vibefield-screenshot-1.png");
+    const brought: Card = { ...SNAPSHOT, origin: { view: "outside", how: "paste" } };
+    expect(stillOf(brought)).toBeNull();
+    const { path: _path, ...noFile } = SNAPSHOT;
+    expect(stillOf(noFile)).toBeNull();
+    for (const card of [text("Run it."), FILE, AGENT, MESSAGE]) expect(stillOf(card)).toBeNull();
+  });
+
   it("plays into the pane under the point through the door, once its input is open, and says so", async () => {
     const { root } = deckOf();
     const whenInputOpen = vi.fn(async () => true);
@@ -857,43 +861,6 @@ describe("Godview's panes take a card (HN-4, HN-L5)", () => {
     // only a snapshot's still is asked about: words, a file and an agent are pasted as they are
     for (const card of [text("Run it."), FILE, AGENT]) await target.play(card, { x: 900, y: 300 });
     expect(asked).toHaveLength(2);
-  });
-
-  it("waits for a pane's input on the runtime's announcement, bounded: open the moment it opens, closed at the bound", async () => {
-    const hearers = new Set<() => void>();
-    let inputAllowed = false;
-    const source: PaneInputSource = {
-      routedActivation: () => ({ inputAllowed }),
-      addEventListener: (_type, hear) => {
-        hearers.add(hear);
-      },
-      removeEventListener: (_type, hear) => {
-        hearers.delete(hear);
-      },
-    };
-    const answers: boolean[] = [];
-
-    void whenPaneInputOpen(source, () => "s-ros", PANE_INPUT_WAIT_MS).then((open) => {
-      answers.push(open);
-    });
-    await advance(PANE_INPUT_WAIT_MS - 1);
-    expect(answers).toEqual([]);
-    inputAllowed = true;
-    for (const hear of [...hearers]) hear();
-    await advance(0);
-    expect(answers).toEqual([true]);
-    expect(hearers.size, "the wait kept listening").toBe(0);
-
-    inputAllowed = false;
-    void whenPaneInputOpen(source, () => "s-ros", PANE_INPUT_WAIT_MS).then((open) => {
-      answers.push(open);
-    });
-    for (const hear of [...hearers]) hear();
-    await advance(PANE_INPUT_WAIT_MS - 1);
-    expect(answers, "an announcement that opened nothing ended the wait").toEqual([true]);
-    await advance(1);
-    expect(answers).toEqual([true, false]);
-    expect(hearers.size).toBe(0);
   });
 
   it("a pane whose input never opened in its wait is handed nothing, and says it is not taking input", async () => {

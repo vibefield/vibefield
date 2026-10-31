@@ -1,4 +1,5 @@
 import { type FrameView, SCREENSHOT_LIMITS } from "@vibefield/contracts";
+import { COVER_RESERVE_PX } from "../frame-geometry";
 
 /**
  * The hand (track HN, *Cards in Hand*; DESIGN.md §8 "The hand"): every copy made
@@ -139,6 +140,32 @@ export const RAISED_GAP = 14;
  * answer the pointer. */
 export const REACH_BAND = 214;
 export const REACH_SIDE = 70;
+
+/** How the hand answers the pointer in a view (DESIGN.md §8 "The hand", Holding them): the foot's
+ * band it hears the pointer in, and how far the reach lifts a card. */
+export interface CardReach {
+  /** the foot's band: the window's bottom this many px */
+  readonly band: number;
+  /** how far the reach lifts a card */
+  readonly lift: number;
+}
+
+/** In every view but Chat: the bottom 214, and up to 86. */
+export const HAND_REACH: CardReach = { band: REACH_BAND, lift: CARD_LIFT };
+
+/** While Chat shows (SP-1d; Q5): the band begins at the panel's foot — the cover's reserve,
+ * FC-D15 — so a pointer on the thread, its composer or the 16 under it lifts no card, and a card
+ * rises only its tip to that foot (20), never over the composer or under it. */
+export const CHAT_REACH: CardReach = {
+  band: COVER_RESERVE_PX,
+  lift: COVER_RESERVE_PX - CARD_PEEK,
+};
+
+/** The reach in a view: Chat's, or the hand's. PURE. */
+export function reachIn(view: FrameView): CardReach {
+  return view === "assistant" ? CHAT_REACH : HAND_REACH;
+}
+
 /** The line's right end, which the fan keeps clear of: the line is 300 wide at
  * 76 in (LN-D1), so 376 at every window width (DESIGN.md §10 "One frame, every
  * view"). The line's own CSS draws it; the fan only stands clear of it. */
@@ -212,15 +239,17 @@ export function reachLift(slots: readonly CardSlot[], x: number | null): readonl
   });
 }
 
-/** Is the pointer in the foot's band, where the cards answer it? PURE. */
+/** Is the pointer in the foot's band, where the cards answer it — the view's band (`reachIn`)?
+ * PURE. */
 export function inReach(
   layout: CardLayout,
   win: CardWindow,
   pointer: { readonly x: number; readonly y: number } | null,
+  reach: CardReach = HAND_REACH,
 ): boolean {
   if (pointer === null || layout.slots.length === 0) return false;
   return (
-    pointer.y > win.height - REACH_BAND &&
+    pointer.y > win.height - reach.band &&
     pointer.x > layout.left - REACH_SIDE &&
     pointer.x < layout.right + REACH_SIDE
   );

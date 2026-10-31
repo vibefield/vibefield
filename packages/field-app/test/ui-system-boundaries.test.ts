@@ -120,6 +120,9 @@ describe("UI system ownership boundaries", () => {
     const fixtures = source("design-system/chat-fixtures.ts");
     expect(preview).toMatch(/<ChatPanelView\s/u);
     expect(fixtures).toContain("sparkEntriesOf");
+    // SP-1d: the thread's items are the product's own reading of the shown spark, never a drawn copy of the hello
+    expect(preview).toContain("threadItemsOf");
+    expect(preview).not.toMatch(/<ThreadItemsView\s/u);
     for (const file of [preview, fixtures]) {
       expect(file).not.toMatch(/className="vf-chat/);
       expect(file).not.toContain("<style");
@@ -130,6 +133,43 @@ describe("UI system ownership boundaries", () => {
     }
     // the frame's cover mounts the same preview, as it mounts History's
     expect(source("design-system/ViewFramePreview.tsx")).toContain("<ChatPreview");
+  });
+
+  it("never mounts the thread's live pane in Chat's catalog — the pane's place is the shipping view's words (SP-1d)", () => {
+    // A catalog holds no terminal pool ("a host, never a painter"): the live pane (`SparkPane`, the controller) and the
+    // pool are never reached from Chat's plates, and no picture of a terminal stands in. The pane's place is the
+    // shipping `SparkPaneView`, in the words the product's pane says for the state a plate shows.
+    const preview = source("design-system/ChatPreview.tsx");
+    const fixtures = source("design-system/chat-fixtures.ts");
+    expect(preview).toMatch(/<SparkPaneView\s/u);
+    for (const file of [preview, fixtures]) {
+      expect(file).not.toMatch(/<SparkPane[\s/>]/u);
+      expect(file).not.toMatch(/from "\.\.\/chat\/SparkPane"/u);
+      expect(file).not.toContain("terminal/pool");
+      expect(file).not.toContain("useTerminalPool");
+      expect(file).not.toContain("terminalPoolRuntime");
+      expect(file).not.toContain("@vibecook/ghosttea-react");
+    }
+  });
+
+  it("keeps Chat's composer fixture an ADAPTER — the shipping view over fixture drafts and @ rows, never its controller (SP-1d)", () => {
+    // The catalog stands in for what the composer's controller would hand its view — a draft, @'s rows read by the
+    // product's own `atRowsOf`, an agent's menu read by the sheet's own `agentMenuOf` — and mounts the shipping
+    // `ChatComposerView`. Never the controller (it registers the hand's place and sends), never the hand's registry,
+    // never the product's doors or feed.
+    const preview = source("design-system/ChatPreview.tsx");
+    const fixtures = source("design-system/chat-fixtures.ts");
+    expect(preview).toMatch(/<ChatComposerView\s/u);
+    expect(fixtures).toContain("atRowsOf");
+    expect(fixtures).toContain("agentMenuOf");
+    for (const file of [preview, fixtures]) {
+      expect(file).not.toMatch(/<ChatComposer[\s/>]/u);
+      expect(file).not.toMatch(/from "\.\.\/chat\/ChatComposer"/u);
+      expect(file).not.toContain("cardTargets");
+      expect(file).not.toContain("sendToThread");
+      expect(file).not.toContain("sparksPortOver");
+      expect(file).not.toContain("newSparkPortOver");
+    }
   });
 
   it("keeps the New spark sheet's fixture an ADAPTER — the product's sheet over a fixture port, never its markup (SP-1c)", () => {
@@ -944,6 +984,13 @@ describe("UI system ownership boundaries", () => {
       // SP-1b — Chat
       "chat/ChatView.tsx",
       "chat/ChatPanelView.tsx",
+      // SP-1d — the thread
+      "chat/SparkPane.tsx",
+      "chat/SparkPaneView.tsx",
+      "chat/ThreadItemsView.tsx",
+      // SP-1d — Chat's composer
+      "chat/ChatComposer.tsx",
+      "chat/ChatComposerView.tsx",
       // SP-1c — the New spark sheet
       "chat/NewSparkSheet.tsx",
       "chat/NewSparkSheetView.tsx",
@@ -986,6 +1033,7 @@ describe("UI system ownership boundaries", () => {
       "field/desk/pegboard/pegboard.css",
       "field/desk/peers/peers.css",
       "chat/chat.css",
+      "chat/chat-composer.css",
       "chat/new-spark-sheet.css",
     ]) {
       expect(source(stylesheet), stylesheet).not.toMatch(/#[\da-f]{3,8}\b/i);

@@ -290,6 +290,23 @@ describe("the frame's one owner of the open surface", () => {
     expect(surfaceNow).toBeNull();
   });
 
+  it("holds @'s list in the same one value — opening it folds the rest, any other opening folds it, and so does leaving Chat (SP-1d)", () => {
+    mount();
+    act(() => setViewNow?.("assistant"));
+    click(".vf-head-zoom");
+    expect(surfaceNow).toBe("zoom");
+    act(() => setSurfaceNow?.("at"));
+    expect($(".vf-head-zoom-menu")).toBeNull();
+    click(".vf-me-face");
+    expect(surfaceNow).toBe("me");
+    // its own fold leaves another surface alone, and folds itself
+    expect(foldSurface("me", "at")).toBe("me");
+    expect(foldSurface("at", "at")).toBeNull();
+    act(() => setSurfaceNow?.("at"));
+    act(() => setViewNow?.("godview"));
+    expect(surfaceNow).toBeNull();
+  });
+
   it("folds whatever is open when the view changes — a change of place", () => {
     mount();
     click(".vf-head-zoom");

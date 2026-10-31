@@ -20,6 +20,9 @@
 // with the edge, and the pill's sheet is ONE surface on two shelves —
 // `fields` or `artifacts` names the shelf that shows, so opening the sheet on
 // either folds the rest, and turning it to its other shelf folds nothing.
+// SP-1d (CO): @'s list came back, in Chat's composer only (EW-D3 B) — `at`, so
+// it folds the rest and is folded by them and by a change of view, as it was
+// on the line.
 
 export type FrameSurface =
   /** Objects — the desk's pegboard behind the line (DK-13): the board out is this surface; the tray's `open` is
@@ -50,7 +53,10 @@ export type FrameSurface =
   | "selection"
   /** The New spark sheet (SP-1c; DESIGN.md §8 "The New spark sheet"), Chat's line create: a name, an agent and the
    * face it is dealt. */
-  | "new-spark";
+  | "new-spark"
+  /** @'s list, grown upward from the caret in Chat's composer (SP-1d; DESIGN.md §8 "Chat's
+   * composer", §10): the agents to start and the sessions running in the spark's profiles. */
+  | "at";
 
 /** What a surface's own close asks of the owner: fold it if it is the one
  * open, and leave the others alone — the board's Esc must not close the palette. */

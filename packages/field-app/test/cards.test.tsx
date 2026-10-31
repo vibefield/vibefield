@@ -759,6 +759,129 @@ describe("the reach, the press and the drag", () => {
     point("pointermove", window, restSlot(3, 2).x + CARD_W / 2, FOOT);
     expect(el.querySelector(".vf-card-x")).toBeNull();
   });
+
+  it("answers nothing while @'s list is the open surface (DESIGN.md §8 \"Chat's composer\", One surface)", () => {
+    const store = handOf("a", "b", "c");
+    const el = mount(<Owned store={store} host={fakeHost()} />);
+    act(() => setSurfaceNow?.("at"));
+    point("pointermove", window, restSlot(3, 1).x + CARD_W / 2, FOOT);
+    expect(el.querySelector(".vf-card-x")).toBeNull();
+    expect(el.querySelector(".vf-cards-label")).toBeNull();
+  });
+});
+
+describe('the reach while Chat shows (SP-1d; Q5, DESIGN.md §8 "The hand", Holding them)', () => {
+  /** The panel's foot in the default window: the cover's reserve above the window's foot. */
+  const PANEL_FOOT = WIN.height - 88;
+
+  /** The window in Chat (⌘4), as main says it (`view-state.ts`: the host's view door). */
+  function inChat(): void {
+    setHost({
+      logger: {} as RendererLogger,
+      getConnection: () => Promise.resolve({ port: 1, token: "t" }),
+      onPrepareClose: () => () => undefined,
+      completeClose: () => undefined,
+      platform: "darwin",
+      view: {
+        set: (next) => Promise.resolve({ view: next }),
+        onState: (handler) => {
+          handler({ view: "assistant" });
+          return () => undefined;
+        },
+      },
+    } as FieldHost);
+  }
+
+  /** Where a card in the fan is drawn now: its top, lifted by the reach. */
+  const drawnTop = (el: HTMLElement, id: string): number =>
+    Number.parseFloat(
+      el
+        .querySelector<HTMLElement>(`[data-slot="${id}"] .vf-cards-lift`)
+        ?.style.getPropertyValue("--vf-cards-y") ?? "NaN",
+    );
+
+  it("lifts no card for a pointer on the panel — on the thread, its composer or the 16 under it — though the same pointer reaches the hand in any other view", () => {
+    const store = handOf("a", "b", "c");
+    const x = restSlot(3, 1).x + CARD_W / 2;
+    // under the composer (y 676–692 at 1180 × 780), inside the panel: elsewhere it is the band
+    const el = mount(<Owned store={store} host={fakeHost()} />);
+    point("pointermove", window, x, 684);
+    expect(
+      el.querySelector('[data-slot="b"] .vf-card-x'),
+      "the band, on the canvas",
+    ).not.toBeNull();
+    act(() => root?.unmount());
+    root = null;
+    container?.remove();
+    container = null;
+    resetActiveViewForTest();
+
+    inChat();
+    const chat = mount(<Owned store={store} host={fakeHost()} />);
+    for (const y of [684, 676, 640, PANEL_FOOT]) {
+      point("pointermove", window, x, y);
+      expect(chat.querySelector(".vf-card-x"), `y ${y}`).toBeNull();
+      expect(chat.querySelector(".vf-cards-label"), `y ${y}`).toBeNull();
+      for (const [index, id] of ["a", "b", "c"].entries()) {
+        expect(drawnTop(chat, id), `${id} at y ${y}`).toBeCloseTo(restSlot(3, index).y, 1);
+      }
+    }
+  });
+
+  it("closes the leak: a pointer that comes in under the composer and moves up onto where a card would rise finds none there", () => {
+    inChat();
+    const store = handOf("a", "b", "c");
+    const el = mount(<Owned store={store} host={fakeHost()} />);
+    const x = restSlot(3, 1).x + CARD_W / 2;
+    point("pointermove", window, x, 680);
+    // the old rule lifted the card to 626 (712 − 86), over the composer: the pointer then met the
+    // card, not the composer, and the card held the reach
+    point("pointermove", faceOf(el, "b"), x, 640);
+    expect(el.querySelector(".vf-card-x")).toBeNull();
+    expect(drawnTop(el, "b")).toBeCloseTo(restSlot(3, 1).y, 1);
+  });
+
+  it("lifts the near card 20 at most from under the panel: its tip to the panel's foot, never over the composer, its words 32 over that", () => {
+    inChat();
+    const store = handOf("a", "b", "c");
+    const el = mount(<Owned store={store} host={fakeHost()} />);
+    const slot = restSlot(3, 1);
+    point("pointermove", faceOf(el, "b"), slot.x + CARD_W / 2, FOOT);
+    expect(
+      el.querySelector('[data-slot="b"] .vf-card-x'),
+      "the card under it is reached",
+    ).not.toBeNull();
+    expect(drawnTop(el, "b")).toBeCloseTo(slot.y - 20, 1);
+    for (const id of ["a", "b", "c"]) {
+      expect(drawnTop(el, id), id).toBeGreaterThanOrEqual(PANEL_FOOT);
+    }
+    const label = el.querySelector<HTMLElement>(".vf-cards-label");
+    expect(label?.textContent).toContain("History");
+    expect(Number.parseFloat(label?.style.top ?? "NaN")).toBeCloseTo(slot.y - 20 - 32, 1);
+  });
+
+  it("grabs a press where the card is drawn, risen its 20", () => {
+    inChat();
+    const store = handOf("a", "b", "c");
+    const el = mount(<Owned store={store} host={fakeHost()} />);
+    const slot = restSlot(3, 1);
+    point("pointermove", faceOf(el, "b"), slot.x + CARD_W / 2, FOOT);
+    point("pointerdown", faceOf(el, "b"), slot.x + 50, slot.y - 20 + 30);
+    point("pointermove", window, slot.x + 56, slot.y - 20 + 30);
+    expect(drag.starts).toHaveLength(1);
+    expect(drag.starts[0]).toMatchObject({ grab: { x: 50, y: 30 } });
+  });
+
+  it("raised (⇧⌘V) is asked for: the hand rises its whole lift over the composer, as in every view", () => {
+    inChat();
+    const store = handOf("a", "b", "c");
+    const el = mount(<Owned store={store} host={fakeHost()} />);
+    press(document.body, { key: "V", metaKey: true, shiftKey: true });
+    expect(el.querySelector(".vf-cards")?.hasAttribute("data-raised")).toBe(true);
+    for (const id of ["a", "b", "c"]) {
+      expect(drawnTop(el, id), id).toBeCloseTo(WIN.height - 68 - 86, 1);
+    }
+  });
 });
 
 describe("the twelve (HN-D8) and the mount", () => {

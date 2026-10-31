@@ -1,0 +1,368 @@
+/* Chat's composer (SP-1d; DESIGN.md §8 "Chat's composer"): `draft mic send` at the thread's foot, and @'s list grown
+   upward from the caret. Every number is DESIGN.md's — §8 the composer, the chip and @'s list, §5 the line's glass and
+   the solid menu. The numbers came back from the line's stylesheet in git (`0e2ad08bc:…/frame/composer.css`) under
+   the composer's own names. Tokens only; the ready fill is the foreground at the doc's percentages. */
+
+/* ── THE COMPOSER, on the line's glass (§5's Line tier, without the blur: the panel under it is solid) ──
+   As wide as the thread's foot (640), 52 tall, padded 5 6, corners 26, so the mic and send are concentric with it. */
+.vf-chat-composer {
+  position: relative;
+  display: flex;
+  height: 52px;
+  align-items: center;
+  gap: 2px;
+  padding: 5px 6px;
+  border-radius: 26px;
+  background: color-mix(in srgb, var(--vf-chrome-solid) 88%, transparent);
+  box-shadow:
+    0 0 0 1px var(--vf-hairline),
+    var(--vf-shadow-island);
+}
+
+.dark .vf-chat-composer {
+  background: color-mix(in srgb, var(--vf-chrome-solid) 94%, transparent);
+  box-shadow:
+    0 0 0 1px var(--vf-hairline-strong),
+    var(--vf-shadow-island),
+    inset 0 1px 0 rgb(255 255 255 / 6%);
+}
+
+.vf-chat-mic:focus-visible,
+.vf-chat-send:focus-visible,
+.vf-chat-chip-x:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: 2px;
+}
+
+/* ── THE DRAFT: an editor on one line, padded 10, that keeps the caret in view ── */
+.vf-chat-draft {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+  align-items: center;
+  padding: 0 10px;
+}
+
+.vf-chat-input {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--vf-text-primary);
+  font-size: 14px;
+  line-height: 24px;
+  /* one line, its spaces kept as typed: a chip's space after it is a real space, never collapsed away when the next
+     character comes */
+  white-space: pre;
+  caret-color: var(--vf-select);
+  outline: none;
+  cursor: text;
+  scrollbar-width: none;
+}
+
+.vf-chat-input br {
+  display: none;
+}
+
+.vf-chat-ph {
+  position: absolute;
+  top: 50%;
+  left: 10px;
+  right: 10px;
+  overflow: hidden;
+  color: var(--vf-text-tertiary);
+  font-size: 14px;
+  line-height: 24px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+/* ── THE CHIP (D1): a token in the sentence, 24 tall, corners 7, 12.5/500, its glyph 13, padded 0 8 0 6, ringed 1px.
+   On solid chrome ringed in the strong hairline; a picture's on the select blue at 14%. ── */
+.vf-chat-chip {
+  display: inline-flex;
+  height: 24px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px 0 6px;
+  border-radius: 7px;
+  vertical-align: middle;
+  color: var(--vf-text-primary);
+  background: var(--vf-chrome-solid);
+  box-shadow: inset 0 0 0 1px var(--vf-hairline-strong);
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.vf-chat-chip[data-chip="agent"] {
+  cursor: pointer;
+}
+
+.vf-chat-chip-label {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* a session's handle, and a terminal card's name, in mono */
+.vf-chat-chip[data-chip="session"] .vf-chat-chip-label,
+.vf-chat-chip[data-card="term"] .vf-chat-chip-label {
+  font-family: var(--vf-font-mono);
+}
+
+.vf-chat-chip[data-card="pict"] {
+  background: color-mix(in srgb, var(--vf-select) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vf-select) 22%, transparent);
+}
+
+.vf-chat-chip[data-card="pict"] > .vf-glyph {
+  color: var(--vf-select);
+}
+
+.vf-chat-chip-mark {
+  display: inline-grid;
+  width: 15px;
+  height: 15px;
+  place-items: center;
+}
+
+.vf-chat-chip-x {
+  display: grid;
+  width: 14px;
+  height: 14px;
+  margin-right: -3px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  color: var(--vf-text-tertiary);
+  background: none;
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 120ms ease;
+}
+
+.vf-chat-chip:hover .vf-chat-chip-x,
+.vf-chat-chip-x:focus-visible {
+  opacity: 1;
+}
+
+/* ── MIC (waiting: no dictation door on the desktop) and SEND ── */
+.vf-chat-mic {
+  display: grid;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 18px;
+  color: color-mix(in srgb, var(--vf-text-faint) 55%, transparent);
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+  cursor: default;
+}
+
+.vf-chat-send {
+  display: grid;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  margin-left: 4px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 20px;
+  color: var(--vf-text-tertiary);
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+  cursor: default;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease;
+}
+
+.vf-chat-send[data-armed] {
+  color: var(--vf-foreground-inverse);
+  background: var(--vf-foreground);
+  cursor: pointer;
+}
+
+.vf-chat-send[aria-busy="true"] {
+  cursor: progress;
+}
+
+/* ── @'S LIST (§8, §5: solid, the strong hairline, the island shadow, corners 18, padding 6) ──
+   316 wide, its foot 8 above the composer, its left set by the controller 10 before the @ it grew from; over the
+   thread's items. An agent's menu stands in the same box. */
+.vf-chat-at {
+  position: absolute;
+  z-index: 3;
+  bottom: calc(100% + 8px);
+  display: flex;
+  width: 316px;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px;
+  border-radius: 18px;
+  color: var(--vf-text-primary);
+  background: var(--vf-chrome-solid);
+  box-shadow:
+    0 0 0 1px var(--vf-hairline-strong),
+    var(--vf-shadow-island);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  transform-origin: 10px 100%;
+  animation: vf-chat-at-grow 240ms var(--vf-ease-island) both;
+}
+
+@keyframes vf-chat-at-grow {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.vf-chat-at-eye {
+  padding: 8px 10px 5px;
+  color: var(--vf-text-tertiary);
+  font-family: var(--vf-font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* rows 36 tall (46 with a small line under the name), corners 12, 13/500; the hot row in the ready fill */
+.vf-chat-at-row {
+  display: flex;
+  width: 100%;
+  min-height: 36px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 12px;
+  color: var(--vf-text-primary);
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.vf-chat-at-row[data-hot] {
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+}
+
+.vf-chat-at-row[data-kind="session"] {
+  min-height: 46px;
+  padding: 5px 10px;
+}
+
+.vf-chat-at-mark {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  place-items: center;
+}
+
+.vf-chat-at-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-chat-at-row[data-kind="session"] b {
+  font-family: var(--vf-font-mono);
+  font-weight: 500;
+}
+
+.vf-chat-at-row small {
+  display: block;
+  margin-top: 3px;
+  color: var(--vf-text-tertiary);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.25;
+}
+
+.vf-chat-at-row small [data-tone="attention"] {
+  color: var(--vf-ink-attention);
+}
+
+.vf-chat-at-pill {
+  flex: none;
+}
+
+.vf-chat-at-quiet {
+  padding: 10px;
+  color: var(--vf-text-tertiary);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+/* an agent's menu: its head, then its models, then Effort under a model that has one */
+.vf-chat-at-head {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  font-weight: 600;
+}
+
+.vf-chat-at-head small {
+  color: var(--vf-text-tertiary);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.vf-chat-at-row[data-kind="model"] > .vf-glyph {
+  flex: none;
+  color: var(--vf-text-secondary);
+}
+
+.vf-chat-at-effort {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 4px 2px 10px;
+  border-top: 1px solid var(--vf-hairline);
+  color: var(--vf-text-secondary);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.vf-chat-at-effort > :last-child {
+  margin-left: auto;
+}
+
+/* reduced motion: @'s list fades in over 120ms at full size */
+@media (prefers-reduced-motion: reduce) {
+  .vf-chat-at {
+    animation: vf-chat-at-fade 120ms ease both;
+  }
+
+  @keyframes vf-chat-at-fade {
+    from {
+      opacity: 0;
+    }
+
+    to {
+      opacity: 1;
+    }
+  }
+}

@@ -6,6 +6,10 @@
  * `electron-shell/test/view-state.test.ts`; the delivery of ⌘1–⌘4 from a
  * focused terminal pane in a live window is the godview smoke's row 11g.
  */
+
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type {
   AgentFieldRow,
   FrameView,
@@ -18,7 +22,7 @@ import { FielddProvider } from "@vibefield/fieldd-client/react";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { type SparksPort, startSparksFeed } from "../src/chat/sparks-feed";
+import { type SparksPort, showThread, startSparksFeed } from "../src/chat/sparks-feed";
 import { ViewFrame } from "../src/frame/ViewFrame";
 import {
   getActiveView,
@@ -568,7 +572,7 @@ describe("the View menu's zoom door (One Frame FR-4, 3b)", () => {
   });
 });
 
-describe('a spark that needs you, from another view (CH-D4; DESIGN.md §8 "Chat\'s list")', () => {
+describe('a spark that needs you, and a thread unread, from another view (CH-D4, SP-1d; DESIGN.md §8 "Chat\'s list")', () => {
   const AT = "2026-10-31T05:00:00.000Z";
   const vela: SparkSummary = {
     id: "sp-vela0001",
@@ -582,38 +586,41 @@ describe('a spark that needs you, from another view (CH-D4; DESIGN.md §8 "Chat\
     updatedAt: AT,
     session: { runtimeRunId: "run-vela", live: true },
   };
-  const velaRow = (asking: boolean, revision: number): AgentFieldRow => ({
+  /** What Vela's own run is doing on the board: idle, at work (her turn), or asking you a question. */
+  type Doing = "idle" | "working" | "asking";
+  const velaRow = (doing: Doing, revision: number): AgentFieldRow => ({
     runtimeRunId: "run-vela",
     revision,
     kind: "claude",
     label: "Claude Code",
     tier: "managed",
     device: "dev-1",
-    status: asking ? "blocked" : "idle",
+    status: doing === "asking" ? "blocked" : doing,
     statusSince: AT,
     stateChangedAt: AT,
     createdAt: AT,
     alive: true,
-    blockers: asking ? [{ id: "q-1", kind: "question", since: AT }] : [],
+    blockers: doing === "asking" ? [{ id: "q-1", kind: "question", since: AT }] : [],
     spark: "sp-vela0001",
   });
   let frame: ((payload: unknown, kind: "snapshot" | "delta") => void) | null = null;
   let revision = 0;
   let stop: (() => void) | null = null;
   afterEach(() => {
+    act(() => showThread(null));
     stop?.();
     stop = null;
     frame = null;
   });
 
-  /** The window's feed over a port the test moves: Vela, asking or not from the first reading. */
-  async function feed(asking: boolean): Promise<void> {
+  /** The window's feed over a port the test moves: Vela, doing `doing` from the first reading. */
+  async function feed(doing: Doing): Promise<void> {
     revision = 1;
     const port: SparksPort = {
       list: async () => [vela],
       watch: async (onFrame) => {
         frame = onFrame;
-        onFrame({ revision, rows: [velaRow(asking, revision)] }, "snapshot");
+        onFrame({ revision, rows: [velaRow(doing, revision)] }, "snapshot");
         return () => undefined;
       },
       open: async () => vela,
@@ -621,24 +628,32 @@ describe('a spark that needs you, from another view (CH-D4; DESIGN.md §8 "Chat\
     stop = startSparksFeed(port);
     await act(async () => undefined);
   }
-  const say = (asking: boolean): Promise<void> =>
+  const say = (doing: Doing): Promise<void> =>
     act(async () => {
       const since = revision;
       revision += 1;
-      frame?.({ since, revision, upserts: [velaRow(asking, revision)], removed: [] }, "delta");
+      frame?.({ since, revision, upserts: [velaRow(doing, revision)], removed: [] }, "delta");
     });
+  /** Vela's thread opened and left, as Chat does while it shows her (ChatView's own call: chat-view.test.tsx). */
+  const openVela = (): void => {
+    to("assistant");
+    act(() => showThread("sp-vela0001"));
+    act(() => showThread(null));
+    to("godview");
+  };
   const note = (): HTMLElement | null => track().querySelector<HTMLElement>(".vf-views-note");
-  const dot = (): Element | null => cell("assistant").querySelector(".vf-views-dot");
+  const dot = (): HTMLElement | null =>
+    cell("assistant").querySelector<HTMLElement>(".vf-views-dot");
 
   it("puts the orange dot on Chat's cell, and says it over the cell for 2.4s when a spark starts to need you", async () => {
-    await feed(false);
+    await feed("idle");
     mountFrame();
     to("godview");
     expect(dot()).toBeNull();
     expect(note()).toBeNull();
     vi.useFakeTimers();
-    await say(true);
-    expect(dot()).not.toBeNull();
+    await say("asking");
+    expect(dot()?.dataset.mark).toBe("needs");
     expect(cell("assistant").getAttribute("aria-label")).toBe("Chat, a spark needs you");
     expect(note()?.textContent).toBe("Vela needs you");
     expect(note()?.querySelector(".vf-spark-face")).not.toBeNull();
@@ -650,15 +665,56 @@ describe('a spark that needs you, from another view (CH-D4; DESIGN.md §8 "Chat\
       vi.advanceTimersByTime(1);
     });
     expect(note()).toBeNull();
-    // the dot lasts while the need does (SP-1b; the thread's "until you open it" is SP-1d's)
-    expect(dot()).not.toBeNull();
-    await say(false);
+    // SP-1d: the dot lasts until you open the thread, even after the need ends
+    await say("idle");
+    expect(dot()?.dataset.mark).toBe("needs");
+    expect(cell("assistant").getAttribute("aria-label")).toBe("Chat, a spark needs you");
+    openVela();
     expect(dot()).toBeNull();
     expect(cell("assistant").getAttribute("aria-label")).toBe("Chat");
   });
 
+  it("puts the cyan dot on Chat's cell when a spark's own turn ends off screen, until its thread is opened — and says no note", async () => {
+    await feed("idle");
+    mountFrame();
+    to("godview");
+    await say("working");
+    // a turn under way is not news
+    expect(dot()).toBeNull();
+    await say("idle");
+    expect(dot()?.dataset.mark).toBe("unread");
+    expect(cell("assistant").getAttribute("aria-label")).toBe("Chat, a thread is unread");
+    expect(note()).toBeNull();
+    // a need outranks it: the one dot is orange while the need's dot stands
+    await say("working");
+    await say("asking");
+    expect(dot()?.dataset.mark).toBe("needs");
+    expect(note()?.textContent).toBe("Vela needs you");
+    // answered in her pane in Godview, and her turn ends again: still the one orange dot
+    await say("working");
+    await say("idle");
+    expect(dot()?.dataset.mark).toBe("needs");
+    // opening the thread reads both
+    openVela();
+    expect(dot()).toBeNull();
+    // a turn that ends while the thread is on screen leaves nothing
+    to("assistant");
+    act(() => showThread("sp-vela0001"));
+    await say("working");
+    await say("idle");
+    act(() => showThread(null));
+    to("godview");
+    expect(dot()).toBeNull();
+  });
+
+  it("names the unread cell in DESIGN.md's words", () => {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const design = readFileSync(join(here, "../../../DESIGN.md"), "utf8").replace(/\s+/g, " ");
+    expect(design).toContain('"Chat, a thread is unread"');
+  });
+
   it("says nothing of what needed you before the first reading, and nothing at all in Chat", async () => {
-    await feed(true);
+    await feed("asking");
     mountFrame();
     to("godview");
     // the dot says it; no note was earned
@@ -667,8 +723,8 @@ describe('a spark that needs you, from another view (CH-D4; DESIGN.md §8 "Chat\
     // in Chat the row says it: no dot on the cell that is on, and no note
     to("assistant");
     expect(dot()).toBeNull();
-    await say(false);
-    await say(true);
+    await say("idle");
+    await say("asking");
     expect(note()).toBeNull();
     expect(dot()).toBeNull();
   });

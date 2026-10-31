@@ -244,7 +244,22 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       [...(container?.querySelectorAll(".vf-ds-views-plate") ?? [])].map((plate) =>
         plate.getAttribute("data-state"),
       ),
-    ).toEqual(["rest", "cmd", "gv", "hx", "import", "chat", "needs", "rest"]);
+    ).toEqual(["rest", "cmd", "gv", "hx", "import", "chat", "needs", "unread", "rest"]);
+    // CH-D4, SP-1d — Chat's cell's dot on the shipping track: orange while a spark needs you, cyan while a thread
+    // is unread, each named for what it says
+    const chatCell = (state: string): Element | null | undefined =>
+      container?.querySelector(
+        `.vf-ds-views-plate[data-state="${state}"] .vf-views-cell[data-view="assistant"]`,
+      );
+    expect(chatCell("needs")?.querySelector(".vf-views-dot")?.getAttribute("data-mark")).toBe(
+      "needs",
+    );
+    expect(chatCell("needs")?.getAttribute("aria-label")).toBe("Chat, a spark needs you");
+    expect(chatCell("unread")?.querySelector(".vf-views-dot")?.getAttribute("data-mark")).toBe(
+      "unread",
+    );
+    expect(chatCell("unread")?.getAttribute("aria-label")).toBe("Chat, a thread is unread");
+    expect(chatCell("gv")?.querySelector(".vf-views-dot")).toBeNull();
     // AO-4b — History's arc on the shipping track, on the canvas while it imports
     const importing = container?.querySelector('.vf-ds-views-plate[data-state="import"]');
     expect(

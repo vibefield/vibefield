@@ -355,7 +355,21 @@ export function getHost(): FieldHost {
 
 /** The host if one is wired, else null — for the few readers that also serve a
  * page with none (the catalog, a component's own test) and keep a stand-in
- * there: the app's theme (`theme.ts`). Everything else asks `getHost()`. */
+ * there: the app's theme (`theme.ts`), and whether a still is kept
+ * (`stillKept`). Everything else asks `getHost()`. */
 export function peekHost(): FieldHost | null {
   return current;
+}
+
+/** HN-4 — whether main still keeps a retained still, the one reading of the
+ * still door for every place that hands a snapshot's path on (Godview's panes,
+ * Chat's Send): a path is never given while it names nothing. A host with no
+ * still door (a harness without the shell) has no stills, so none to lose,
+ * and is not asked. `host` undefined: the window's. */
+export function stillKept(
+  path: string,
+  host: Pick<FieldHost, "screenshotStillKept"> | null = peekHost(),
+): Promise<boolean> {
+  const kept = host?.screenshotStillKept;
+  return kept === undefined ? Promise.resolve(true) : kept(path);
 }
