@@ -139,9 +139,8 @@ export function ChromeSection({
         <p className="vf-ds-stage-caption">
           The head — the field's name pill with its crumbs, whose chevron and package grow its sheet
           on Fields or Artifacts, and the zoom readout, which grows its menu — the line's Objects
-          and your face are interactive.
-          Open one to inspect its motion and the rule that only one of them is open at a time. Your
-          menu's Theme sets this page's theme, as it sets the app's.
+          and your face are interactive. Open one to inspect its motion and the rule that only one
+          of them is open at a time. Your menu's Theme sets this page's theme, as it sets the app's.
         </p>
       </Specimen>
 
@@ -162,8 +161,8 @@ export function ChromeSection({
           inside a folder, a long path in a narrow window dropping whole leading names, renaming in
           place, the sheet grown from the pill on Fields and on Artifacts (the Hub's tiles, the
           plugin off, the Hub opening), the same sheet under a cover grown from the package circle,
-          the zoom's solid menu with its keys, and the palette under the head — then the zoom's
-          keys as Windows says them, in this page's theme. No keycaps and no plus in the head.
+          the zoom's solid menu with its keys, and the palette under the head — then the zoom's keys
+          as Windows says them, in this page's theme. No keycaps and no plus in the head.
         </p>
       </Specimen>
 
