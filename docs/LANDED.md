@@ -21988,6 +21988,9 @@ Mac mini, verify only).
   across 815 files, and cargo 33 binaries ok, 0 FAILED (VF-PM's counts). Verify only.
 - **Not run at the landing:** the desk smokes, smoke:canvas's RIM and BAR rows and the Hub in the head under
   smoke:godview. They are a recorded debt for James's console window, as B1's and B2's were.
+  > **2026-10-31 05:52:34Z:** run 35b's smoke:godview (M35 `733f24ed5`) went red at QL-2's launch rung (item 124,
+  > cp-landing's) before the Hub, and before B1's 11h and B2's 11j: they stay owed to the next console window after
+  > 124's fix. smoke:canvas's RIM and BAR ran green at run 30b.
 - **Landed:** main fast-forwarded `e71f2d332` → `e31e55ecd` at 03:09:01Z on VF-PM's GO (`land-stack.sh`). HN B2's
   records landed on it as `4a638384e` at 03:09:13Z, and VF-PM's push of 03:10:19Z carried both.
 
