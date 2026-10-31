@@ -9781,6 +9781,407 @@ export async function runSmokeGodview(opts: {
     }
     verdict["headKeys"] = headKeys;
 
+    // 11k. THE HUB IN THE HEAD, UNDER GODVIEW'S COVER (HN-8, PL-D1…PL-D3;
+    //      DESIGN.md §8 "The head", the package circle). Under a cover the pill
+    //      is the desk's and hides with it, and Artifacts' door is the package
+    //      circle at the head's left (the terminals' title bar while they are
+    //      maximized). Pressed the way a pointer presses it, it grows the pill's
+    //      sheet on its Artifacts shelf alone: the circle steps aside, on and
+    //      saying Close, and the pill's own sheet stays shut. The shelf is never
+    //      blank — it hosts the Hub's own `hud.side-panel` contribution (the
+    //      Browser plugin's Artifact Hub, once, in this sheet only), or says in
+    //      one of its four waits why none is bound: off, can't run, opening, or
+    //      not starting, the last after the head's own 10 s. The rung waits for
+    //      the shelf to settle past "Opening…", says which it found, and folds
+    //      the sheet back with the sheet's own package, where the circle stood.
+    //      Added 2026-10-31: HN B3's records claimed this witness of the row and
+    //      no rung gave it (LANDED "HN B3", corrected at run 38b). Before 11h,
+    //      which must stay last.
+    const hubInHead: Record<string, string> = {};
+    /** The shelf's four waits as a person reads them (`HeadView`'s words; DESIGN.md §8
+     * "Artifacts"). */
+    const HUB_WAITS = [
+      "Artifacts are off",
+      "Artifacts can't run",
+      "Opening Artifacts…",
+      "Artifacts aren't starting",
+    ] as const;
+    type HubBox = { x: number; y: number; w: number; h: number };
+    type HubFacts = {
+      view: string;
+      circle: { open: boolean; bar: boolean; box: HubBox | null } | null;
+      sheet: { open: boolean; inert: boolean; box: HubBox; name: string | null } | null;
+      /** The pill's own sheet: its `data-open`, or "absent". */
+      pill: string;
+      shown: boolean;
+      /** The Hub's panel stands in the covered sheet's shelf. */
+      hub: boolean;
+      /** Artifact Hubs in the whole page: one while bound, never one in each sheet. */
+      hubs: number;
+      /** The words of the wait the shelf says, or null. */
+      wait: string | null;
+    };
+    /** The covered sheet, its circle and its shelf as the page shows them now. Under a cover
+     * `.vf-head-sheet` is the circle's sheet alone: the pill is `.vf-head-place`. */
+    const HUB_FACTS = `(() => {
+      const box = (el) => {
+        if (el === null) return null;
+        const r = el.getBoundingClientRect();
+        return {
+          x: Math.round(r.left),
+          y: Math.round(r.top),
+          w: Math.round(r.width),
+          h: Math.round(r.height),
+        };
+      };
+      const circle = document.querySelector(".vf-package-circle");
+      const sheet = document.querySelector(".vf-head-sheet");
+      const shelf = sheet === null ? null : sheet.querySelector('[data-shelf="artifacts"]');
+      const face =
+        shelf === null ? null : shelf.querySelector(".vf-head-waits-face:not([data-leaving])");
+      const hub =
+        shelf === null ? null : shelf.querySelector('.vf-head-hub [aria-label="Artifact Hub"]');
+      return {
+        view: ${VIEW_NOW},
+        circle: circle === null ? null : {
+          open: circle.getAttribute("data-open") === "true",
+          bar: circle.hasAttribute("data-bar"),
+          box: box(circle.querySelector(".vf-package-button")),
+        },
+        sheet: sheet === null ? null : {
+          open: sheet.getAttribute("data-open") === "true",
+          inert: sheet.hasAttribute("inert"),
+          box: box(sheet),
+          name: sheet.querySelector(".vf-head-sheet-name")?.textContent ?? null,
+        },
+        pill: document.querySelector(".vf-head-place")?.getAttribute("data-open") ?? "absent",
+        shown: shelf !== null && shelf.hasAttribute("data-shown"),
+        hub: hub !== null,
+        hubs: document.querySelectorAll('[aria-label="Artifact Hub"]').length,
+        wait: face === null ? null : (face.textContent ?? "").trim(),
+      };
+    })()`;
+    const hubFacts = async (): Promise<HubFacts> =>
+      (await win.webContents.executeJavaScript(HUB_FACTS)) as HubFacts;
+    const waitSaid = (facts: HubFacts): (typeof HUB_WAITS)[number] | undefined =>
+      HUB_WAITS.find((words) => facts.wait?.startsWith(words) === true);
+    /** A press the way a pointer presses it, at the middle of what `selector` names: moved
+     * there, down, up — a click with a count, so the circle takes it as the pointer's. */
+    const pressAt = async (selector: string): Promise<{ x: number; y: number }> => {
+      const at = (await win.webContents.executeJavaScript(`(() => {
+        const el = document.querySelector(${JSON.stringify(selector)});
+        if (el === null) return null;
+        const r = el.getBoundingClientRect();
+        return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
+      })()`)) as { x: number; y: number } | null;
+      if (at === null) throw new Error(`no ${selector} to press under Godview`);
+      win.webContents.sendInputEvent({ type: "mouseMove", x: at.x, y: at.y });
+      await sleep(40);
+      win.webContents.sendInputEvent({
+        type: "mouseDown",
+        x: at.x,
+        y: at.y,
+        button: "left",
+        clickCount: 1,
+      });
+      await sleep(50);
+      win.webContents.sendInputEvent({
+        type: "mouseUp",
+        x: at.x,
+        y: at.y,
+        button: "left",
+        clickCount: 1,
+      });
+      return at;
+    };
+    const shut = await hubFacts();
+    const circle = shut.circle;
+    if (shut.view !== "godview") throw new Error(`11k began outside Godview: ${shut.view}`);
+    if (circle === null || circle.box === null) {
+      throw new Error(`Godview's head has no package circle: ${JSON.stringify(shut)}`);
+    }
+    if (circle.open || shut.sheet?.open === true) {
+      throw new Error(`the covered sheet was already open: ${JSON.stringify(shut)}`);
+    }
+    const circleBox = circle.box;
+    const circleAt = await pressAt(".vf-package-circle .vf-package-button");
+    await untilRenderer(
+      win,
+      "the circle's sheet grown on Artifacts",
+      `(() => { const f = ${HUB_FACTS};
+        return f.sheet !== null && f.sheet.open && !f.sheet.inert && f.shown
+          ? "ok" : JSON.stringify(f); })()`,
+      5_000,
+    );
+    // It grows over its 600ms (the island curve): read it once it has.
+    await sleep(800);
+    const grown = await hubFacts();
+    if (grown.sheet === null || grown.circle === null) {
+      throw new Error(`the covered sheet went as it grew: ${JSON.stringify(grown)}`);
+    }
+    if (!grown.circle.open) {
+      throw new Error(`the circle did not step aside for its sheet: ${JSON.stringify(grown)}`);
+    }
+    if (grown.pill !== "false") {
+      throw new Error(`the pill's own sheet opened under Godview: ${JSON.stringify(grown)}`);
+    }
+    if (grown.sheet.name !== "Artifacts") {
+      throw new Error(`the covered sheet is not Artifacts': ${JSON.stringify(grown)}`);
+    }
+    // Grown, not its size: DESIGN.md §8 holds the size, and the catalog's plates draw it.
+    if (grown.sheet.box.w < circleBox.w * 4 || grown.sheet.box.h < circleBox.h * 4) {
+      throw new Error(
+        `the sheet did not grow out of the circle: ${JSON.stringify(circleBox)} → ` +
+          JSON.stringify(grown.sheet.box),
+      );
+    }
+    const sheetBox = grown.sheet.box;
+    // The shelf settles: the Hub binds, or a wait stands. "Opening…" is a passage — the
+    // head turns it to "not starting" after its own 10 s (`HUB_START_BOUND_MS`) — so it is
+    // waited past.
+    const settleBy = Date.now() + 15_000;
+    let shelf = grown;
+    let said = waitSaid(shelf);
+    while (
+      !shelf.hub &&
+      (said === undefined || said === "Opening Artifacts…") &&
+      Date.now() < settleBy
+    ) {
+      await sleep(250);
+      shelf = await hubFacts();
+      said = waitSaid(shelf);
+    }
+    if (shelf.hub) {
+      if (shelf.hubs !== 1) {
+        throw new Error(
+          `${shelf.hubs} Artifact Hubs in the page, not one: ${JSON.stringify(shelf)}`,
+        );
+      }
+      hubInHead["the shelf"] = 'the Hub bound: its "Artifact Hub" in the shelf, once in the page';
+    } else if (said === undefined) {
+      throw new Error(
+        `the Artifacts shelf said nothing, neither the Hub nor a wait: ${JSON.stringify(shelf)}`,
+      );
+    } else if (said === "Opening Artifacts…") {
+      throw new Error(
+        `the shelf still said "${said}" after 15 s, past the head's own 10 s: ` +
+          JSON.stringify(shelf),
+      );
+    } else {
+      hubInHead["the shelf"] = `no Hub bound, and the shelf said why: "${said}"`;
+    }
+    // The sheet's own package ("Close  Esc"), where the circle stood, folds it into the circle.
+    const packAt = await pressAt(".vf-head-sheet .vf-head-pack");
+    await untilRenderer(
+      win,
+      "the sheet folded back into the circle",
+      `(() => { const f = ${HUB_FACTS};
+        const shut = f.sheet !== null && !f.sheet.open && f.sheet.inert;
+        return shut && f.circle !== null && !f.circle.open ? "ok" : JSON.stringify(f); })()`,
+      5_000,
+    );
+    const folded = await hubFacts();
+    if (folded.view !== "godview") {
+      throw new Error(`the Artifacts sheet moved the window: ${folded.view}`);
+    }
+    hubInHead["the circle"] =
+      `under Godview at ${circleBox.x},${circleBox.y}, ${circleBox.w} × ${circleBox.h}` +
+      `${circle.bar ? " in the terminals' bar" : ""}; pressed by the pointer at ` +
+      `${circleAt.x},${circleAt.y}`;
+    hubInHead["the sheet"] =
+      `grew on Artifacts to ${sheetBox.w} × ${sheetBox.h}; the circle stepped aside, and the ` +
+      `pill's own sheet stayed shut`;
+    hubInHead["the fold"] =
+      `the sheet's own package at ${packAt.x},${packAt.y} folded it into the circle; ` +
+      "still in Godview";
+    verdict["hubInHead"] = hubInHead;
+
+    // 11l. CHAT'S NEW SPARK, ⌘N (SP-1c; DESIGN.md §8 "The New spark sheet") — the
+    //      line's create in Chat, pressed the way a keyboard presses it (⌘N, Ctrl+N
+    //      off the Mac), and the LINE says what it took: its LINE_KEY line, as B's
+    //      and ⌘T's say. In Chat the line takes ⌘N on the window's capture phase, so
+    //      focus never decides it; in Godview it is never pressed, because there a
+    //      focused pane's ghostty keeps ⌘N (new_window). Open: LINE_KEY "opened",
+    //      the sheet a modal dialog portaled to the body, the field behind it inert
+    //      and receded, the name field holding the keyboard and a suggested star
+    //      name, the create on and saying Close, the hatch in one of its states. ⌘N
+    //      again: LINE_KEY "closed", the sheet gone after its 240ms leave, the field
+    //      live again. Esc folds it too, and says no LINE_KEY; on Canvas ⌘N does
+    //      nothing. Create is never pressed: it hatches a real spark through the
+    //      run's fieldd. Back to Godview's deck for 11h, which must stay last.
+    const newSpark: Record<string, string> = {};
+    /** The key as the line names it in its LINE_KEY line: ⌘N on the Mac, Ctrl+N elsewhere. */
+    const NEW_SPARK_KEY = process.platform === "darwin" ? "⌘N" : "Ctrl+N";
+    type LineKeyFacts = { key: string; view: string; outcome: string };
+    type SparkFacts = {
+      view: string;
+      /** The sheet's layer under the body: its `data-open`, or null while there is none. */
+      layer: string | null;
+      dialog: boolean;
+      fieldInert: boolean | null;
+      recede: string | null;
+      nameFocused: boolean;
+      name: string | null;
+      create: { expanded: string | null; label: string | null; keys: string | null } | null;
+      hatch: string | null;
+    };
+    /** Every LINE_KEY line, as said: an absence is read by its count. */
+    const lineKeysSaid: string[] = [];
+    const hearLineKeys = (...args: unknown[]): void => {
+      for (const arg of args) {
+        const text = consoleText(arg);
+        if (text.startsWith("LINE_KEY ")) lineKeysSaid.push(text.slice("LINE_KEY ".length));
+      }
+    };
+    /** The New spark sheet and what stands behind it, as the page shows them now. */
+    const SPARK_FACTS = `(() => {
+      const layer = document.querySelector("body > .vf-new-spark");
+      const dialog = layer === null ? null : layer.querySelector(
+        'section.vf-new-spark-sheet[role="dialog"][aria-modal="true"][aria-label="New spark"]',
+      );
+      const name = layer === null ? null : layer.querySelector("input.vf-new-spark-name");
+      const hatch = layer === null ? null : layer.querySelector(".vf-spark-hatch");
+      const create = document.querySelector('button.vf-line-create[data-view="assistant"]');
+      const field = document.querySelector(".field-wrap");
+      return {
+        view: ${VIEW_NOW},
+        layer: layer === null ? null : layer.getAttribute("data-open"),
+        dialog: dialog !== null,
+        fieldInert: field === null ? null : field.hasAttribute("inert"),
+        recede: document.querySelector(".field-recede")?.getAttribute("data-peek-recede") ?? null,
+        nameFocused: name !== null && document.activeElement === name,
+        name: name === null ? null : name.value,
+        create: create === null ? null : {
+          expanded: create.getAttribute("aria-expanded"),
+          label: create.getAttribute("aria-label"),
+          keys: create.getAttribute("aria-keyshortcuts"),
+        },
+        hatch: hatch === null ? null : hatch.getAttribute("data-hatch"),
+      };
+    })()`;
+    const sparkFacts = async (): Promise<SparkFacts> =>
+      (await win.webContents.executeJavaScript(SPARK_FACTS)) as SparkFacts;
+    const SPARK_OPEN = `(() => { const f = ${SPARK_FACTS};
+      const open = f.layer === "true" && f.dialog && f.fieldInert === true;
+      return open && f.nameFocused && (f.name ?? "") !== "" && f.hatch !== null
+        ? "ok" : JSON.stringify(f); })()`;
+    const SPARK_GONE = `(() => { const f = ${SPARK_FACTS};
+      return f.layer === null && f.fieldInert === false ? "ok" : JSON.stringify(f); })()`;
+    /** ⌘N as a keyboard presses it, and the LINE_KEY the line says for it. */
+    const newSparkKey = async (): Promise<LineKeyFacts> => {
+      const heard = waitForConsole(win, "LINE_KEY ", 10_000);
+      pressProductChord(win, "n");
+      return JSON.parse(await heard) as LineKeyFacts;
+    };
+    const openSheet = async (label: string): Promise<SparkFacts> => {
+      const said = await newSparkKey();
+      if (said.key !== NEW_SPARK_KEY || said.view !== "assistant" || said.outcome !== "opened") {
+        throw new Error(`${label} was heard as ${JSON.stringify(said)}`);
+      }
+      await untilRenderer(
+        win,
+        `${label}: the New spark sheet open over the field`,
+        SPARK_OPEN,
+        5_000,
+      );
+      return sparkFacts();
+    };
+    win.webContents.on("console-message", hearLineKeys);
+    try {
+      pressViewKey(win, "assistant");
+      await untilRenderer(
+        win,
+        "⌘4 to Chat",
+        `${VIEW_NOW} === "assistant" ? "ok" : ${VIEW_NOW}`,
+        10_000,
+      );
+      await untilRenderer(
+        win,
+        "the pane letting go of the keyboard under Chat",
+        `document.activeElement?.classList.contains("terminal-input") ? "still focused" : "ok"`,
+        5_000,
+      );
+      const before = await sparkFacts();
+      if (before.layer !== null || before.fieldInert !== false || before.create === null) {
+        throw new Error(`Chat was not ready for ⌘N: ${JSON.stringify(before)}`);
+      }
+
+      // ⌘N opens the sheet.
+      const open = await openSheet("⌘N in Chat");
+      if (open.create?.expanded !== "true" || open.create.label !== "Close the sheet") {
+        throw new Error(`Chat's create did not turn to Close: ${JSON.stringify(open)}`);
+      }
+      if (open.recede !== "true") {
+        throw new Error(`the field did not recede behind the sheet: ${JSON.stringify(open)}`);
+      }
+      if (open.hatch === null || !["loading", "live", "flat"].includes(open.hatch)) {
+        throw new Error(`the sheet's hatch is in no state of its own: ${JSON.stringify(open)}`);
+      }
+      newSpark["⌘N"] =
+        `opened (LINE_KEY): a modal "New spark" over the field, which is inert and receded; the ` +
+        `name field holds the keyboard and "${open.name}"; the create says ` +
+        `"${open.create.label}"; the hatch ${open.hatch}`;
+
+      // ⌘N again closes it.
+      const closed = await newSparkKey();
+      if (
+        closed.key !== NEW_SPARK_KEY ||
+        closed.view !== "assistant" ||
+        closed.outcome !== "closed"
+      ) {
+        throw new Error(`⌘N again in Chat was heard as ${JSON.stringify(closed)}`);
+      }
+      await untilRenderer(win, "the New spark sheet gone after its leave", SPARK_GONE, 2_000);
+      const shut = await sparkFacts();
+      if (shut.create?.expanded !== "false" || shut.create.label !== "New spark") {
+        throw new Error(`Chat's create did not turn back to New spark: ${JSON.stringify(shut)}`);
+      }
+      newSpark["⌘N again"] =
+        `closed (LINE_KEY): the sheet gone and the field live; the create says ` +
+        `"${shut.create.label}" (${shut.create.keys ?? "no keys said"})`;
+
+      // Esc folds it too, and the line says nothing.
+      await openSheet("⌘N in Chat, before Esc");
+      const saidBeforeEsc = lineKeysSaid.length;
+      win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
+      await untilRenderer(win, "Esc folding the New spark sheet", SPARK_GONE, 2_000);
+      await sleep(1_000);
+      if (lineKeysSaid.length > saidBeforeEsc) {
+        throw new Error(`Esc said a LINE_KEY: ${lineKeysSaid.slice(saidBeforeEsc).join(" · ")}`);
+      }
+      newSpark["Esc"] = "folded the sheet, and the line said no LINE_KEY";
+
+      // On Canvas ⌘N does nothing. An absence is watched for a while (⇧⇧'s rule).
+      pressViewKey(win, "canvas");
+      await untilRenderer(
+        win,
+        "⌘1 to the canvas",
+        `${VIEW_NOW} === "canvas" ? "ok" : ${VIEW_NOW}`,
+        10_000,
+      );
+      await win.webContents.executeJavaScript(`document.activeElement?.blur?.(); "ok"`);
+      const saidOnCanvas = lineKeysSaid.length;
+      pressProductChord(win, "n");
+      await sleep(1_500);
+      const canvas = await sparkFacts();
+      if (lineKeysSaid.length > saidOnCanvas || canvas.layer !== null) {
+        throw new Error(
+          `⌘N on the canvas did something: ${lineKeysSaid.slice(saidOnCanvas).join(" · ")} · ` +
+            JSON.stringify(canvas),
+        );
+      }
+      if (canvas.view !== "canvas") {
+        throw new Error(`⌘N moved the window off the canvas: ${canvas.view}`);
+      }
+      newSpark["on the canvas"] = "⌘N did nothing: no LINE_KEY, no sheet";
+      pressViewKey(win, "godview");
+      await deck.until((facts) => facts.active, "⌘2 back to the deck", 30_000);
+    } finally {
+      win.webContents.off("console-message", hearLineKeys);
+    }
+    verdict["newSpark"] = newSpark;
+
     // 11h. THE LINE'S KEYS, DELIVERED FROM A FOCUSED PANE (One Frame FR-2,
     //      §11) — the probes B and ⌘T owe before they ship, in 11g's form: a
     //      pane holds focus, the ear listens at every pane input, each key is

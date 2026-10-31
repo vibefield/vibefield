@@ -155,17 +155,20 @@ function Sheet({
     };
   }, [port]);
 
-  // Esc folds the sheet, as Cancel does; with the menu open, it folds the menu first
+  // While open, Esc is the sheet's before anything else hears it, on the window's capture phase as the Peek's is: under
+  // a cover the frame stops every key aimed at the body there (`frame/ViewFrame.tsx`), so a sheet that heard Esc on
+  // the bubble phase stayed open once the keyboard was on the body. The agent menu folds first, then the sheet.
   useEffect(() => {
     if (!open || !bindKeys) return;
     const onKey = (event: KeyboardEvent): void => {
       if (event.key !== "Escape") return;
       event.preventDefault();
+      event.stopPropagation();
       if (menuOpen) setMenuOpen(false);
       else onClose();
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
   }, [bindKeys, menuOpen, onClose, open]);
 
   const modelsKey =
