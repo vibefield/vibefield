@@ -1,14 +1,12 @@
-import { execFile } from "node:child_process";
 import { readdirSync, readFileSync, readlinkSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { FIRST_PARTY_RETENTION, type NodeLogging, PLUGIN_RETENTION } from "@vibefield/logging";
+import { FIRST_PARTY_RETENTION, PLUGIN_RETENTION } from "@vibefield/logging";
 import { app, type BrowserWindow } from "electron";
+import { type ResourceProbeOptions, runResourceProbe } from "./plugin-runtime-diagnostics";
 
-const MiB = 1024 * 1024;
 const MAX_CYCLES = 10_000;
 const MAX_DURATION_MS = 24 * 60 * 60 * 1_000;
 const MAX_CYCLE_DELAY_MS = 5 * 60 * 1_000;
-const COMMAND_OUTPUT_BYTES = 4 * MiB;
 
 export const PLUGIN_RUNTIME_SOAK_EXACT_KEYS = [
   "bootstrapVectorMismatches",
@@ -175,19 +173,6 @@ export function vectorMismatches(expected: CountVector, actual: CountVector): nu
   return mismatches;
 }
 
-function run(command: string, args: readonly string[]): Promise<string | null> {
-  return new Promise((resolve) => {
-    execFile(
-      command,
-      args,
-      { encoding: "utf8", maxBuffer: COMMAND_OUTPUT_BYTES },
-      (error, stdout) => {
-        resolve(error === null ? stdout : null);
-      },
-    );
-  });
-}
-
 export function pidAlive(pid: number): boolean {
   if (!Number.isSafeInteger(pid) || pid <= 0) return false;
   try {
@@ -214,8 +199,13 @@ function parseSizeKb(raw: string): number | null {
 
 async function darwinDescriptors(
   pid: number,
+  probe: ResourceProbeOptions,
 ): Promise<{ fds: number; networkSockets: number } | null> {
-  const raw = await run("/usr/sbin/lsof", ["-n", "-P", "-a", "-p", String(pid), "-Fft"]);
+  const raw = await runResourceProbe(
+    "/usr/sbin/lsof",
+    ["-n", "-P", "-a", "-p", String(pid), "-Fft"],
+    probe,
+  );
   if (raw === null) return null;
   let fds = 0;
   let networkSockets = 0;
@@ -249,7 +239,7 @@ function linuxDescriptors(pid: number): { fds: number; networkSockets: number } 
   }
 }
 
-async function threadCount(pid: number): Promise<number | null> {
+async function threadCount(pid: number, probe: ResourceProbeOptions): Promise<number | null> {
   if (process.platform === "linux") {
     try {
       const match = /^Threads:\s+(\d+)$/mu.exec(readFileSync(`/proc/${pid}/status`, "utf8"));
@@ -259,7 +249,7 @@ async function threadCount(pid: number): Promise<number | null> {
     }
   }
   if (process.platform === "darwin") {
-    const raw = await run("/bin/ps", ["-M", "-p", String(pid)]);
+    const raw = await runResourceProbe("/bin/ps", ["-M", "-p", String(pid)], probe);
     if (raw === null) return null;
     return Math.max(0, raw.trim().split("\n").length - 1);
   }
@@ -269,9 +259,10 @@ async function threadCount(pid: number): Promise<number | null> {
 export async function sampleProcessFootprintKb(
   pid: number,
   enabled: boolean,
+  probe: ResourceProbeOptions = {},
 ): Promise<number | null> {
   if (!enabled || process.platform !== "darwin") return null;
-  const raw = await run("/usr/bin/vmmap", ["-summary", String(pid)]);
+  const raw = await runResourceProbe("/usr/bin/vmmap", ["-summary", String(pid)], probe);
   if (raw === null) return null;
   for (const line of raw.split("\n")) {
     const match = /^Physical footprint:\s*(\S+)/u.exec(line.trim());
@@ -292,6 +283,7 @@ export interface ProcessResourceSample {
 export async function sampleProcessResources(
   pid: number,
   footprint: boolean,
+  probe: ResourceProbeOptions = {},
 ): Promise<ProcessResourceSample> {
   if (!pidAlive(pid)) {
     return {
@@ -305,13 +297,13 @@ export async function sampleProcessResources(
   }
   const descriptors =
     process.platform === "darwin"
-      ? await darwinDescriptors(pid)
+      ? await darwinDescriptors(pid, probe)
       : process.platform === "linux"
         ? linuxDescriptors(pid)
         : null;
   const [threads, footprintKb] = await Promise.all([
-    threadCount(pid),
-    sampleProcessFootprintKb(pid, footprint),
+    threadCount(pid, probe),
+    sampleProcessFootprintKb(pid, footprint, probe),
   ]);
   return {
     pid,
@@ -410,32 +402,3 @@ export const LOG_CENSUS_CEILINGS = Object.freeze({
   pluginBytes: PLUGIN_RETENTION.categoryCapBytes + 3 * PLUGIN_RETENTION.maxSegmentBytes,
   pluginFiles: 3 * (PLUGIN_RETENTION.maxClosedSegments + 2),
 });
-
-interface LoggingHealthLike {
-  readonly queue?: { readonly records?: number; readonly bytes?: number };
-  readonly counters?: Readonly<Record<string, number>>;
-}
-
-export function loggingCensus(
-  sinks: readonly NodeLogging[],
-  remote: readonly (LoggingHealthLike | null | undefined)[],
-): { queueRecords: number; queueBytes: number; unexplainedDrops: number } {
-  const health = [...sinks.map((sink) => sink.health()), ...remote.filter((row) => row != null)];
-  let queueRecords = 0;
-  let queueBytes = 0;
-  let unexplainedDrops = 0;
-  for (const row of health) {
-    queueRecords += row.queue?.records ?? 0;
-    queueBytes += row.queue?.bytes ?? 0;
-    const counters = row.counters ?? {};
-    unexplainedDrops +=
-      (counters["rejected"] ?? 0) +
-      (counters["droppedTrace"] ?? 0) +
-      (counters["droppedDebug"] ?? 0) +
-      (counters["droppedInfo"] ?? 0) +
-      (counters["droppedWarn"] ?? 0) +
-      (counters["droppedError"] ?? 0) +
-      (counters["emergencyFallbacks"] ?? 0);
-  }
-  return { queueRecords, queueBytes, unexplainedDrops };
-}

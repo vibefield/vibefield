@@ -166,7 +166,6 @@ export function evaluatePhysicalSoak(
   }
   let previousElapsed = 0;
   let maximumObservedGapMs = 0;
-  let maximumObservedGapCycle = samples[0]!.cycle;
   for (const [index, sample] of samples.entries()) {
     nonNegativeInteger(sample.cycle, `samples[${index}].cycle`);
     const elapsed = finite(sample.elapsedMs, `samples[${index}].elapsedMs`);
@@ -176,7 +175,6 @@ export function evaluatePhysicalSoak(
     const gap = elapsed - previousElapsed;
     if (gap > maximumObservedGapMs) {
       maximumObservedGapMs = gap;
-      maximumObservedGapCycle = sample.cycle;
     }
     previousElapsed = elapsed;
   }
@@ -200,15 +198,20 @@ export function evaluatePhysicalSoak(
   if (maximumSampleGapMs !== undefined) {
     const maximumGap = finite(maximumSampleGapMs, "maximumSampleGapMs");
     if (maximumGap < 0) throw new TypeError("maximumSampleGapMs must be non-negative");
-    if (maximumObservedGapMs > maximumGap) {
-      failures.push({
-        kind: "sample-gap",
-        metric: "sampleGapMs",
-        sample: maximumObservedGapCycle,
-        actual: maximumObservedGapMs,
-        maximum: maximumGap,
-        message: `physical soak went ${maximumObservedGapMs}ms without a completed observation`,
-      });
+    let previous = 0;
+    for (const sample of samples) {
+      const gap = sample.elapsedMs - previous;
+      if (gap > maximumGap) {
+        failures.push({
+          kind: "sample-gap",
+          metric: "sampleGapMs",
+          sample: sample.cycle,
+          actual: gap,
+          maximum: maximumGap,
+          message: `physical soak went ${gap}ms without a completed observation`,
+        });
+      }
+      previous = sample.elapsedMs;
     }
   }
 
