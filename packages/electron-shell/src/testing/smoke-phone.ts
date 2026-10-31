@@ -1055,6 +1055,22 @@ export function judgeStopped(s: StoppedSeen): {
     : { problems: [], recorded: true, staging: finding };
 }
 
+/** The host's device reads as the desk's door counts them (D5): reads BEGUN, those that failed, the last one's rows
+ * (null: none read yet). */
+export interface DeviceReads {
+  readonly reads: number;
+  readonly failures: number;
+  readonly rows: number | null;
+}
+
+/** SIM-ATTACH's poll (the grade's R-4, RM6): the attachable answer is read only once a device read BEGUN after `base`
+ * (taken when R's boot returned) has LANDED — `reads` counts a read as it begins, one may be in flight (they never
+ * overlap), and a failed one leaves the last snapshot standing — so tier 1's leg never judges a snapshot from before
+ * the boot (where no booted model would answer tier 3, the same `deviceType`). */
+export function readSince(base: DeviceReads, now: DeviceReads): boolean {
+  return now.rows !== null && now.reads - base.reads - 1 - (now.failures - base.failures) >= 1;
+}
+
 /** SIM-ATTACH: ONE undo step binds; ONE undoes; Finish cycles and reverts. */
 export interface AttachSeen {
   readonly bound: { readonly deviceType: string; readonly runtime: string } | null;
@@ -2747,6 +2763,10 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
     await row("SIM-ATTACH", "MUST", async () => {
       const staged0 = await ensure(3, "Booted");
       if (staged0 !== null) return { problems: [], staging: staged0 };
+      // the host's device reads as R's boot left them: the answer is polled from a read begun after it (R-4)
+      const devicesRead = (): Promise<DeviceReads | null> =>
+        js("globalThis.__vfDesk.simulatorDevices()");
+      const base = await devicesRead();
       // φA's attachment to R, released at ⌘Z, reaped at once: never warm on R's session in SIM-GONE (R5)
       await js("globalThis.__vfDesk.liveGrace(1000)");
       const a = await placePhone("φA", 4, typeOf(3), false);
@@ -2754,11 +2774,14 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
         await view([a]);
         const tr = JSON.stringify(typeOf(3));
         let answer: { deviceType: string; runtime: string } | null = null;
-        const deadline = Date.now() + 20_000;
+        // two reads begun after the boot at the host's cadence (a look each 2 s, a read once the last is 5 s old): ~14 s
+        const deadline = Date.now() + 30_000;
         while (Date.now() < deadline && answer === null) {
-          answer =
-            await js(`(() => { const rows = globalThis.__vfDesk.simulatorDevices()?.rows ?? null; if (rows === null) return null;
-            return globalThis.__vfDesk.local(${T})?.devices?.()?.attachable(${tr}) ?? null; })()`);
+          const now = await devicesRead();
+          if (base !== null && now !== null && readSince(base, now))
+            answer = await js(
+              `globalThis.__vfDesk.local(${T})?.devices?.()?.attachable(${tr}) ?? null`,
+            );
           if (answer === null) await sleep(500);
         }
         // THE GATE (§4), its first leg: the answer its own type (tier 1). Its second is the door's, right before the

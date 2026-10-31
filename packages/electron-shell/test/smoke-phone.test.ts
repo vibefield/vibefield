@@ -71,6 +71,7 @@ import {
   phoneProblems,
   pressInHand,
   quitStaging,
+  readSince,
   rowMark,
   type StillSeen,
   stillAddress,
@@ -914,6 +915,20 @@ describe("PT-S3 — SIM-STOPPED's word (P8 amended)", () => {
     expect(mark({ ...seen, word: "off", stateP: "Shutdown", retry: null, shot: false })).toBe(
       "red",
     );
+  });
+});
+
+describe("PT-S3 — SIM-ATTACH's poll: an answer from a read taken after R's boot (R-4, RM6)", () => {
+  // `reads` counts a read as it BEGINS (one may be in flight, and they never overlap); a failed one leaves the last
+  // snapshot standing — so the answer is a post-boot read's only once one begun after the baseline has LANDED, not failed
+  const base = { reads: 4, failures: 1, rows: 3 };
+  it("waits past a read begun but maybe in flight, and past one that may have failed", () => {
+    expect(readSince(base, base)).toBe(false);
+    expect(readSince(base, { ...base, reads: 5 })).toBe(false);
+    expect(readSince(base, { ...base, reads: 6 })).toBe(true);
+    expect(readSince(base, { ...base, reads: 6, failures: 2 })).toBe(false);
+    expect(readSince(base, { ...base, reads: 7, failures: 2 })).toBe(true);
+    expect(readSince(base, { reads: 9, failures: 1, rows: null })).toBe(false);
   });
 });
 
