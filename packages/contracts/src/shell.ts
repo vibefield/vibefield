@@ -3,8 +3,10 @@ import { ARTIFACT_LIMITS, ArtifactId, ArtifactTitle } from "./artifacts";
 import { ClientKind, SemverString } from "./envelope";
 import { ErrorKind } from "./errors";
 import {
+  CoreSimulatorRuntimeIdV1,
   LiveSurfaceAttachTicketV1,
   LiveSurfaceIdV1,
+  LiveSurfaceSimulatorDeviceRowV1,
   LiveSurfaceSourceSpecV1,
   SURFACE_LIMITS,
   SurfaceEnumerationKindV1,
@@ -404,6 +406,10 @@ export const SHELL_INTERNAL_PROVIDER_METHODS = [
   "shell.surfaces.enumerate",
   "shell.surfaces.mint",
   "shell.surfaces.release",
+  // PT-S2 (R11) — the attach's device list (`surface.simulator.devices`): this
+  // Mac's simulator devices, REDACTED to the ids a binding is made of. Internal
+  // like its siblings: only the SurfaceService dispatches it.
+  "shell.surfaces.simulatorDevices",
   // The Agents settings section — show a path in the OS file manager. Internal:
   // only fieldd's agent service dispatches it, for a path its own inventory
   // holds; no caller hands main a path to reveal. GT-7: the terminal service
@@ -683,6 +689,9 @@ export const SURFACE_AUTHORITY_LIMITS = {
   ENUMERATE_DEADLINE_MS: 5_000,
   MINT_DEADLINE_MS: 10_000,
   RELEASE_DEADLINE_MS: 5_000,
+  /** PT-S2: one `simctl list --json` (main's own bound is 8 s), after the Xcode probe that precedes every simctl (5 s, on a
+   * cold service) — above main's worst case, 13 s, by an IPC margin, so a slow CoreSimulator's answer is never discarded. */
+  SIMULATOR_DEVICES_DEADLINE_MS: 15_000,
 } as const;
 
 export const ShellSurfacesEnumerateParams = z
@@ -719,6 +728,29 @@ export type ShellSurfacesReleaseParams = z.infer<typeof ShellSurfacesReleasePara
 
 export const ShellSurfacesReleaseResult = z.object({ released: z.boolean() }).passthrough();
 export type ShellSurfacesReleaseResult = z.infer<typeof ShellSurfacesReleaseResult>;
+
+/** PT-S2 (R11) — the attach's device list asks nothing: no window, no participant (a list of what this Mac holds binds
+ * no authority, and the row's `surface.capture` is the whole gate). */
+export const ShellSurfacesSimulatorDevicesParams = z.object({}).passthrough();
+export type ShellSurfacesSimulatorDevicesParams = z.infer<
+  typeof ShellSurfacesSimulatorDevicesParams
+>;
+
+/** PT-S2 (R11) — this Mac's simulator devices, the booted first, REDACTED at main's boundary to the row (a UDID on a
+ * row is refused here too: it can never reach fieldd, let alone a window). Empty: no Simulator here, or none of its
+ * devices. With them the runtimes installed here, the newest first (ids only): the attach's third pick. */
+export const ShellSurfacesSimulatorDevicesResult = z
+  .object({
+    devices: z.array(LiveSurfaceSimulatorDeviceRowV1).max(SURFACE_LIMITS.MAX_SIMULATOR_DEVICES),
+    runtimes: z
+      .array(CoreSimulatorRuntimeIdV1)
+      .max(SURFACE_LIMITS.MAX_SIMULATOR_RUNTIMES)
+      .optional(),
+  })
+  .passthrough();
+export type ShellSurfacesSimulatorDevicesResult = z.infer<
+  typeof ShellSurfacesSimulatorDevicesResult
+>;
 
 export const ShellProviderRegisterParams = z
   .object({ methods: z.array(ShellProviderMethod).min(1).max(SHELL_PROVIDER_METHODS.length) })

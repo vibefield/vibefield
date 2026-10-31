@@ -20432,3 +20432,577 @@ desk-gates row 30's quit run.
   answers"; during the stop's re-ask box, "Quit and end N sessions" finishes the stop already under way.
 - LC-52 ("Check for Updates…" keeps its ellipsis) is James's.
 - B4 (AU-6a `4c25147bf`, AU-6b `2b1cfff6f`, their pre-rebase shas of 2026-10-29) waits for HN B1 and is rebased over it.
+
+## FG-3a — the Setup Assistant stands in one glass on the field: 880 × 640, fitted as one picture, its material in layers, its steps along its top from TS-6's order alone (FG-L2, FG-L3, FG-D3 A, FG-D22 A, FG-D23 A, FG-D26, FG-D27) (2026-10-30; `e012d1f50`, lane `fg/build`, in the mini's mint `5cc2d1108` over main `12a9a4e4b`)
+
+**What.** FG-3 split at VF-PM's word (13:17Z): 3a is the glass's DOM; 3b, the field drawing it (FG-D24), follows.
+- **The glass** (`boot/onboarding/wizard-ui.tsx` + `.css`) is 880 × 640 on every step.
+  - It is centred on its ground and scaled as one picture by `glassFit` = min(1, (w − 96)/880, (h − 96)/640), never
+    reflowed.
+  - Its material is four layers under its contents: shadow, frost, grain and edge.
+  - On the field it wears `--vf-wizard-edge`, `--vf-wizard-edge-light`, `--vf-shadow-wizard-field` and the grain.
+    The tokens are in `tokens.css`, from DESIGN.md §5.
+  - It forms where the splash stood: `--vf-glass-frost` 0 → 1 and `--vf-glass-rise` .985 → 1, 560ms island,
+    registered with `@property`. Under reduced motion it is the frost alone, 280ms.
+  - Nothing that holds the frost sets opacity, filter or mask (a backdrop root), and a test row holds that.
+- **The steps** (FG-D22 A, FG-D23 A) have ONE source, TS-6's `order.ts`.
+  - `STEP_OF` maps each pane to its step or none, total by `satisfies Record<Pane, …>`.
+  - `stepsOf(variant)` walks `nextPane`, and `topOf(variant)` is the one "top".
+  - The band: You · Agents · Profiles · History · Devices · Setting up, done/now/next, `aria-current="step"`. It is
+    absent on the welcomes and the chooser, fades in with You (240ms), and fills as you arrive (480ms island).
+- **The frame** (FG-L3) is 96/160/40, 560 wide. A pane centres in it, scrolling downward only, until FG-4 lays its
+  head, body and foot.
+- **Finish setting up's sheet is unchanged** (FG-D26, VF-PM's lean): one size prop on the shell, `glass` | `sheet`.
+  The sheet's is today's exact geometry, never fitted, with no band.
+- **Moved to FG-4** (VF-PM 13:45Z): the logo and the words' fade at the forming; Setting up's progress fill; the
+  panes in the frame, including the fade in place of the rise; the eyebrows' retirement; "never scrolling".
+
+**Found.**
+- **The sheet's scrim close was never reachable** (FG-D27). It was found on AO's surface and fixed at the cause by
+  the ground's `pointer-events`.
+  - The close (`SetupSheet.tsx`, on a press of the sheet itself) was designed but no hand could reach it: the shell's
+    full-size wrapper took every press beside the glass.
+  - The glass's ground now takes no press (`pointer-events: none`; the fit inherits it) and only the glass does.
+  - Witness: `setup-sheet.test.tsx`'s rule row (its DOM does no hit-testing); the physical press is the hand's.
+- **The sheet's 200ms opacity fade-in sits above the frost** (FG-D28). For those frames the frost samples nothing
+  behind the sheet. Noted for AO and left unchanged.
+- **Main moved twice under the apply**, each time on VF-PM's word, and the light ran over each base.
+  - PRs #8 and #5 (`78ed1d946`) touch no file of FG's. `fg/build` fast-forwarded with the apply carried, and the light
+    was green. FG-3a was committed there as `e56aea503`, now parked on `fg/3a-over-78ed1d946`.
+  - AU B2 (`0ce140178`) touches `scenes.css`. `fg/build` was reset to main and the drafts were re-applied three ways.
+    Ten files came out byte-equal to `e56aea503`, and `scenes.css` takes FG's same −5 over AU B2's version.
+  - `lanes/fg/fg3ab-rehearsal.sh` was clean over each base.
+  - Before the light could read main's packages, the lane's were brought to the lock, offline (rosetta 0.1.2, then
+    puppeteer 0.3.2).
+
+**Validation.**
+- The landing light (`lanes/fg/fg3a-light.sh`, each row alone at nice 19 under the guard, read once) was GREEN over main
+  `0ce140178`, 20:50:33–21:01:35Z, all 29 rows rc 0:
+  - typecheck for field-app (44 s) and electron-shell (37 s);
+  - 23 vitest files, 453 tests: the new `wizard-steps.test.ts` (4), `onboarding-wizard` 48, `setup-sheet` 5, and the
+    four tokens.css readers the rehearsal's 19 lacked (`peers-on-the-mat`, `document-presence`, `godview-monitor`,
+    `godview-stage-rule`). AU B2's rows ran among them: `settings-dialog-account` 14, `ui-system-boundaries` 35;
+  - biome (23 files), check:walls, check:retired, build:renderer (the production UI boundary OK, 78 files),
+    diff --check.
+  - Over `ffe9d9b40` (20:34:08–20:37:30Z) and `78ed1d946` (20:38:48–20:47:48Z) the same rows were green, with 449
+    tests each.
+  Logs: `lanes/fg/logs/fg3a-light-0ce140178.out`; the earlier bases' runs are in `fg3a-light-ffe9d9b40/` and
+  `fg3a-light-78ed1d946/`.
+- **No verify on this Mac** (James, 2026-10-29 09:05Z: the Mac mini's verify lane). FG-3a went to the mini as the
+  bundle `fg3a-e012d1f50.bundle` (sha256 `de03f621…`, requiring `6a41ba1d8` only). At each turn, a9 minted
+  `e012d1f50` × the then-main there (mint-main), as PORTALS was minted.
+- **Run 12: the mint `1669134bf` over main `097edb32c`.** DESIGN.md was the one file both sides touch, and it merged
+  clean. a9's `next` ran from 21:27:01Z: no re-install (the locks stand), field-native built, and preflight exited 0
+  with R23's one known warning.
+  - `pnpm verify` armed at 21:27:11Z (load 1.48) and exited 1 at 21:29:59Z (load 36). It was red on ONE row, fieldd's
+    `agent-session` MF-1f/MF-1g: "the interrupted run read as exited did not hold within 15000 ms". fieldd's other
+    2,620 tests passed. FG-3a touches no fieldd file.
+  - The row's evidence reads as cause A of item 87's three: the floor's row says exited:false, and its `/bin/cat` is
+    still alive at 15 s. Item 87 landed C3, so its fix cannot touch this shape. It is filed as item 118, the fixer's
+    (VF-PM, 21:34Z; `lanes/records/item118/item.md`).
+  - Run 12b, a full verify on the same tree, was green. It armed at 23:12:18Z (load 1.19) and exited 0 at 23:16:42Z:
+    28 projects; vitest 10,306 (10,288 passed, 0 failed, 18 skipped); rust 499 / 0 / 14 over 31 binaries; gen and the
+    tree clean.
+- **`smoke:canvas` on run 12's mint** (21:32:48–21:49:06Z, exit 2) was red on four judges, none of them FG-3a's. The
+  control on main alone (ctl119, `bef070265`, 23:17:36–23:33:35Z) decided them (VF-PM, 23:38Z):
+  - HAND is item 117's class: the notebook 267, the whiteboard 250 and the calendar 250 ms, against 200 ± 40. The
+    control repeats it (the whiteboard and the calendar, 250 ms).
+  - KEYS ("→ moved the focus to vibefield.simulator, not the next specimen desk.note") and IDLE (the desk submitted
+    3 times for a still page in hand) are item 119, main's. The control repeats both. KEYS is field-app's row key
+    under PT-S1's shelf hang, and IDLE is ICE's held-pane blur, the 10-26 class.
+  - REST ACT ("with the wind the desk never rested after the act") was a hand at the mini during the row.
+  - The control was also red on PEERS CONTRAST ("no chip to measure by night"), which run 12's row was not.
+  - The desk's boot compiled its pipelines in 578 ms on run 12's row and in 140 ms on the control after it (presented
+    at 605 and 166 ms, 3 frames each). The retry's remount compiled in 62 and 67 ms. FG-3a touches no pipeline.
+    VF-PM reads the 578 as the cache compiling across the two rows, and FG owes nothing.
+- **Run 13: the mint `5cc2d1108` over main `12a9a4e4b`** (PR #3's rulers and AU's records). DESIGN.md was again the
+  one file both sides touch; it merged clean, with no markers. Run 13 is verify only: FG-3a's smoke evidence is run
+  12's row (VF-PM, 23:38Z). `pnpm verify` armed at 23:35:06Z (load 1.52) and exited 0 at 23:39:35Z (load 7.70):
+  28 projects; vitest 10,306 (10,288 passed, 0 failed, 18 skipped); rust 499 / 0 / 14 over 31 binaries; gen and the
+  tree clean. Logs: `lanes/ts6/logs/mini/` `run12/`, `run12b/`, `ctl119/` and `run13/`.
+- No smoke reaches the Setup Assistant until FG-6's `smoke:first-run`. The glass by eye is James's, and so is the
+  sheet's scrim close by hand (§5's Eyeballs).
+- **Landed:** main fast-forwarded `12a9a4e4b` → `5cc2d1108` at 23:41:18Z, and was pushed at 23:41:41Z.
+- The 13:50Z rehearsal (a dangling commit over the merge-tree base, in a fresh detached worktree removed after) was an
+  early read only.
+
+**Owed.**
+- FG-3b: the field draws the glass (FG-D24). The vendor patches go in the vendor check, and the look posted to the
+  worker is the CSS layers' computed style.
+- FG-4 (the panes in the frame and the logo), FG-5 (the hand-over), FG-6 (the gates; the catalog over the field's
+  still).
+- AO: rule D26 (the sheet's size) and D28 (its fade above the frost).
+
+## PT-S1 fix — item 119: the pegboard's rows are the lay's lines, not the hangs' tops; a hook and a shelf on one line read as one row, so → and the listbox agree again (2026-10-31; `88bf4605d`, lane `portals/item119-rows` on `bef070265`, in the mini's mint `265325d09` over main `eb3a562ac`; VF-PM's GO 2026-10-30 23:30Z)
+
+**What.**
+- The board's specimens (`field/desk/pegboard/pegboard-model.ts`, `boardSpecimens(laid, order, drawer, scroll)`) are
+  drawn in the lay's own order: core's `trayHung`, which reads `TrayContent.order`, the types `layTray` placed line by
+  line. That is the order ← → walk (ICE's `tray.focus`). A type the lay does not name is left out.
+- A specimen's row is the lay's line, numbered from 0. The kernel writes no line into the world, so it is read back
+  from that order: a line starts wherever a hang's x falls back, since `layTray` starts each line at the margin.
+  `rowStep` (↑ ↓) is unchanged.
+- `Pegboard.tsx`'s `drawnSpecimens` passes `trayHung(engine.world)`. `laidOf` is unchanged: the specimens' sibling order
+  is not the lay's, since a re-lay appends new ones.
+- smoke:canvas's KEYS expectation is untouched (`smoke-pegboard.ts`: → lands on `first.options[1]`).
+
+**Found.**
+- **The cause was field-app's.** PT-S1 exposed it and did not make it.
+  - `boardSpecimens` keyed a row on the hang's exact top (`row: s.hang.y`) and sorted the listbox's options by it.
+  - ICE hangs a line's specimens with their tops together only "as near as their holes allow".
+  - PT-S1's phone is the first shelf on line 0. ICE 0.16.0 lays it beside the comment pad's hook, at y 132.52 against
+    the hook's 130: 2.52 px apart, so the board read two rows.
+  - The listbox went [pad, note, …, phone] while → walked pad → phone. That is run 12's "→ moved the focus to
+    vibefield.simulator, not the next specimen desk.note".
+- **Found and fixed with it, predating PT-S1 on that desk:** line 1 of `pegboard.test.tsx`'s desk, which has no phone.
+  It was measured on `bef070265`'s code with an uncommitted log.
+  - main's rows were the pad, the note, the photo, the notebook and the calendar at 130; the minimat and the board at
+    450; and the browser pane, a shelf laid first on line 1, alone at 471.42 and listed last.
+  - So ↓ from the pad (centre 120) skipped the browser pane right below it (centre 180) and went to the minimat
+    (centre 460).
+  - With the fix, ↓ lands on the browser pane, row 1. It is the same cause, with one fix.
+- **The ring reads back at the CSSOM's grain.** That ↓ row's `expect(ringRect()).toEqual(ringOnFocus())` then went red
+  by 3.7e-8 px.
+  - A width serializes at six decimals: "213.44498px" for the browser pane's 213.444979…, where the minimat's was a
+    round 217px.
+  - The four ring checks now share `expectRingOnFocus()`: each edge `toBeCloseTo(…, 5)`, and null where ICE has no
+    focus.
+  - VF-PM ruled it the unit's float grain, not a wider slack on a judged motion (23:45Z).
+
+**Validation.**
+- **The witness came first.** A probe, uncommitted, on main `bef070265` alone laid the two manifests' hangs with ICE's
+  own `layTray` (1120 px at `DRAWER.pitch` 40).
+  - It was green on its precondition: both hangs valid, both on line 0.
+  - It was red on the row: "expected 2 to be 1". Log: `lanes/pts/logs/probe119-keys-bef070265.log`.
+  - It is promoted to `test/pegboard-rows.test.ts`, which reads both manifests' tray entries and lays them on the widest
+    drawer (`DRAWER.maxWidth`, `DRAWER.pitch`). Its two rows: "is laid on one line by the kernel (the precondition)" and
+    "reads as one row, in the lay's order".
+- **The control decided the owner.** ctl119, smoke:canvas on `bef070265` alone (exit 2 at 23:33:35Z, VF-PM 23:37Z),
+  repeated KEYS byte for byte: first comment-pad, → vibefield.simulator, ↓ desk.calendar. Its IDLE was the 10-26 class.
+  REST ACT was absent on main alone (FG-3a's entry carries that read).
+- **The light**, on this Mac at nice 19, the guard read once and clear, armed 2026-10-30 23:40:41Z, each row alone (logs:
+  `lanes/pts/logs/item119-light/`):
+  - pegboard-rows + pegboard-model: 12 / 12;
+  - field-app's whole suite: 2,967 passed, 3 skipped (236 files);
+  - electron-shell's smoke-use-pane and smoke-pegboard: 23 / 23;
+  - `check:walls` clean; `pnpm typecheck` 28 projects; `git diff --cached --check` clean.
+  - The first pass (`item119-light-r1/`) was red on two rows, both fixed before the commit: the typecheck on the new
+    unit's optional `order` (exactOptionalPropertyTypes), and the ↓ ring above.
+- **The bundle:** `lanes/pts/item119-keys-88bf4605d.bundle` (sha256 `97a4b627…`), cut over M14 `0b40e56da` and carrying
+  the one commit, requiring `bef070265`.
+- **Run 15: the mint `265325d09` over main `eb3a562ac`** (M14, SP-1a, and FG-3a's records).
+  - Its first `pnpm verify` armed at 23:54:43Z and exited 1 at 23:57:29Z on ONE row: fieldd's `terminal-service.test.ts`
+    "TC-S3 — class cells (K=2) and solo isolation > a class with no cell of its own lands on the interactive one after
+    the birth budget". That is item 120, a timer-vs-`Date.now()` truncation and the fixer's. This fix touches no fieldd
+    file.
+  - Run 15b, a full verify on the same `265325d09`, armed at 00:16:41Z and exited 0 at 00:21:05Z: 28 projects; vitest
+    10,303 / 0 / 18 (VF-PM's counts); cargo 31 binaries, 0 FAILED.
+- **smoke:canvas on M15** (00:00:38Z → 00:16:41Z, exit 2, under the held console): **KEYS is absent.**
+  - The board's keys: first vibefield.comment-pad, → vibefield.simulator, which is now the listbox's second option and
+    so the agreed answer, and ↓ vibefield.browser-pane, where main gave desk.calendar.
+  - The run's failed line has two clauses, neither this fix's: "HAND_NOTEBOOK: the bar came back 250 ms after the
+    landing, not 200" (item 117) and "IDLE: the desk submitted 3 times for a still page in hand — +40 ms … +41 ms …
+    +41 ms" (the 10-26 class, ICE's held-pane blur).
+  - REST and PEERS CONTRAST were absent: the wind 22,081 ms with wakes {world 2, doc 1}; contrast day 7.2, night 9.2.
+  - The HID idle read was ARMED 2192 s and END 3154 s over the 963 s row: nobody touched the mini (VF-PM's read).
+  - Logs: `lanes/ts6/logs/mini/run15/` and `run15b/`.
+- **Landed:** main fast-forwarded `eb3a562ac` → `265325d09` at 00:32:09Z, and was pushed at 00:32:26Z.
+
+**Owed.**
+- Item 120 (fieldd TC-S3) is the fixer's. HAND (item 117) and IDLE (the 10-26 class) stay their own; neither is
+  item 119's.
+
+## SP-1a — a spark's face in the kit: `SparkFace` by seed, status, size and frame; stills on one canvas, live faces on their stage's layer, the flat star from the same DNA; James's engine vendored byte for byte (2026-10-30; `6d7a3eb4c` — the doc `79b96e7cc` and the face `fcb6054ae` on CP-0 `aaa9c22fa`, main `aa2be72c9` merged — lane `sp1/sp1a-main`, in the mini's mint `0b40e56da` over main `5cc2d1108`)
+
+SP here is the sparks' ladder, SP-1a…SP-1d (`draft/compose-plane/thinking-roled-agents.md` §17). It is not the sync
+planes' SP-1…SP-8 or SP-D1…SP-D13.
+
+**What.**
+- **DESIGN.md §2.10 first** (`79b96e7cc`, +33, the doc commit before any code, on CP-0, where §2.10 lives).
+  - "Still and live" is amended: the live layer is one per STAGE (Chat's list, a thread's head, the sheet), never over
+    the window. A window-wide layer would draw a face over a menu or a sheet covering it.
+  - Outside a stage a face is a still. The stills share one off-screen canvas and keep the last 256 pictures. The flat
+    star comes from the same DNA (`agentDNA`'s points and palette).
+  - "Where it lives in code" is amended: the kit's `./spark-face` entry, with ONE adapter (`SparkFaceRenderer`, the flat
+    star, for the catalog and the tests, never the product). The engine is held by its SHA-256 and revision. The kit
+    stays pure at import.
+  - The same day's correction at its source: §2.10 had named `star-spark.js`. The falling star's engine is
+    `star-spark/engine.js`, vendored with its first user, SP-1c's hatch.
+- **The kit's `./spark-face` entry** (`fcb6054ae`; `packages/design-kit/src/spark-face/`, eleven files). It is drawn on
+  CP-0's `SparkFace.seed`.
+  - `vendor/sparks.js` is James's `research/spark` `agent-sparks/sparks.js` at `025b495`, byte for byte (1,196 lines,
+    sha256 `baa846ee…`). biome skips it, `vendor/sparks.d.ts` types it as a module that exports nothing, and
+    `sideEffects` names it.
+  - `engine.ts` is the typed door. It loads the engine, an IIFE that sets `window.Sparklings`, with ONE memoized dynamic
+    import, and tries again after a failed load.
+  - `SparkFace` (seed, status, size, framed, live, label):
+    - a still is drawn once by the window's one off-screen WebGL2 canvas and kept as a picture (256, keyed by
+      everything that changes one);
+    - a live face joins its `SparkStage`;
+    - without WebGL2 it is the flat star (an SVG of its DNA's points, the palette, the disc's gradient, two pill eyes);
+    - while the engine first loads, a framed face is its disc in `--vf-fill`.
+  - `SparkStage` is one canvas over the stage, holding up to 64 faces, each clipped to its scrollport. An
+    IntersectionObserver hides faces off screen, and the rAF loop runs only while a face is on screen.
+  - Reduced motion is the engine's own switch: set aside while the preference holds, restored when it lifts.
+  - The statuses: the nineteen ids and words, and S-4's four that need you (`SPARK_NEEDS_YOU`).
+- **The catalog** (Foundations, beside §2.8's faces; `FoundationsSection.tsx` +94, `foundations.css` +40,
+  `spark-fixtures.ts` +30): the nineteen statuses at 40, the framed and free ladders, a live stage of four, and the
+  flat star. All are the shipping view on fixed seeds. `docs/UI_SYSTEM.md` lists it (+4).
+- **Real vs not yet** (`fcb6054ae`'s own words): everything above is real. No product surface uses the face yet; Chat's
+  list (SP-1b) and the New spark sheet (SP-1c) will.
+
+**Found.**
+- §2.10's code paragraph named `star-spark.js`. It is corrected at its source in the doc commit.
+- No test scanned the kit for hex; only the account's face had a colour row. The spark face now has its own.
+- biome's a11y rule reads a `<canvas>` as focusable. The repo's other canvases carry no aria-hidden, and these follow
+  suit.
+- The `design-system` test prints 136 "not wrapped in act" warnings. The CO lane without SP-1a prints the same 136, so
+  they are not this slice's.
+- **The merge of main `aa2be72c9`** (`6d7a3eb4c`) had two conflicts, both config, each Q19's retirement of Fieldmarks
+  and Face Club (`7aaa9cace`) meeting an SP-1a addition. Main's removals and SP-1a's additions were both kept:
+  - `biome.jsonc`: main dropped the design-kit assets ignore; SP-1a adds `vendor/sparks.js`'s.
+  - `packages/design-kit/package.json`: main dropped `./icons` and `./face-stickers`; SP-1a adds `./spark-face`.
+- **The mint over main `5cc2d1108`** (`0b40e56da`) was a criss-cross: two merge bases, `aa2be72c9` and CP-0's
+  `aaa9c22fa`, merged by ort over their virtual base. The both-sides files were `biome.jsonc`, DESIGN.md and
+  `docs/UI_SYSTEM.md`, with 0 markers.
+- The landed diff (`5cc2d1108`..`0b40e56da`) is 19 files, +2,681 −2. It touches no fieldd file and no lock.
+
+**Validation.**
+- **The lane's tests** (`fcb6054ae`'s message: lane, nice 19, guard clear):
+  - `spark-face.test.tsx`, 12 new rows, all green: the hash and revision; one dynamic import and no static one; the
+    statuses are the engine's own and §2.10's table, read from DESIGN.md; the flat star's disc, points and eyes; its
+    palette; free with no disc; the eyes' scale at 32 and 40 px; aria; the adapter and a stage without WebGL2; reduced
+    motion; no colour literal in the kit's spark-face sources.
+  - Also green: `ui-system-boundaries` 34, `design-system` 8, `glyphs` and `user-face-view` (23 across the three). The
+    kit's `tsc --noEmit` was clean, and biome was clean on every touched file.
+- **The governing doc's as-built note** (`thinking-roled-agents.md` §17, "SP-1a, as built (2026-10-29)"; read, not
+  re-run):
+  - the light pass was green at 16:48:56Z, 203 of 203;
+  - its bundle was `sp1a-fcb6054ae`;
+  - *2026-10-29 16:55:44Z, first sight:* James saw the WebGL2 star in a real window, in the lane's browser catalog
+    (`pnpm dev:design:web`, Foundations → "Spark faces"), and clicked A on the board: "seen and the faces look right".
+    SP-1a stands as built.
+- **Not read:** the light pass against main that `6d7a3eb4c`'s message says "follows when the host is free" (no log of
+  it read here).
+- **Run 14: the mint `0b40e56da` over main `5cc2d1108`.** `pnpm verify` armed at 23:44:49Z (load 1.43) and exited 0 at
+  23:49:17Z (load 8.12): "Successfully ran target test for 28 projects"; vitest 10,300 / 0 / 18 (VF-PM's counts);
+  "cargo test results: ok 31, FAILED 0"; the tree clean. Run 14 was verify only; its logs hold no smoke row. Logs:
+  `lanes/ts6/logs/mini/run14/`.
+- **Landed:** main fast-forwarded `5cc2d1108` → `0b40e56da` at 23:51:00Z, and the push of 23:51:52Z
+  (`5cc2d1108`..`eb3a562ac`) carried it with FG-3a's records (VF-PM).
+
+**Owed.**
+- SP-1b (Chat), SP-1c (the New spark sheet, with the falling star's engine `star-spark/engine.js` and the NS-D3 fold
+  into §2.10's hatch paragraph) and SP-1d (the thread), per §17's ladder. No product surface draws the face until
+  SP-1b.
+
+## PT-S2 — the phone's producer: a phone on the desk bound to a real iOS Simulator device of this Mac's own, its live screen wired through LSF-5's ScreenCaptureKit capture (its desk witness PT-S3's), its nine faces said from main's facts, and Attach and Finish on its menu; bound by model and iOS, never a UDID (2026-10-31; `762f24978`, lane `portals/pt-s2`, 23 commits on `f21d45cfa`, PT-S1's fix `b72c46dfd` merged as `9bc80f6e1` (the brief's mid-slice M1) and main `097edb32c` merged as `762f24978`, in the mini's mint `e4aa3d367`, run 16, over main `265325d09`; James's word 2026-10-30 18:25Z; the brief's R1–R16 at the orchestrator's leans)
+
+**Why:** the PT-S ladder's second rung (PORTALS, track PT). The design `draft/portals-maps/PT-S-the-simulator.md` §5:
+PT-S1 the kind, PT-S2 the producer, PT-S3 the gates, PT-S4 touch. PT-S1 landed 2026-10-30 (`1de84540b`, LANDED §PT-S1)
+with the fixture as its frame-source seam's only source, no simulator spec routed by desk-live, and no capability.
+PT-S2 wires LSF-5's ScreenCaptureKit producer, already in the main process, behind that seam (the design's §2, amended
+2026-10-29), with `simctl`, the binding → this Mac's device, the nine states and their acts, the demand, the cap, the
+manifest's scopes and the attach.
+- It was built CODE-ONLY, on James's word, 2026-10-30 18:25Z: "can we continue on implementation and defer testing?"
+  No install, typecheck, tests, build, smoke, cargo, xcodebuild, simctl or Electron ran on the host until VF-PM granted
+  the light.
+- VF-PM's bounds (18:27Z): at most 3 agents, at nice 19; nothing touches `lanes/pts`; delete nothing.
+- Brief: `draft/portals-maps/briefs/PT-S2-the-producer.md`: parts 1–4, the rulings R1–R16 written before the build at
+  the orchestrator's leans (none is James's), and the mid-slice ruling M1. Its three maps (main, host, plugin) are in
+  the orchestrator's scratchpad, dev-local.
+
+**What landed** (by part and commit subject; against main 58 files, +7,783 −360; no lock, sibling-pin or Rust change):
+- **Contracts first** ("PT-S2 (contracts)" `329a0bb7b`; "(review, contracts)" `a87ffaab2`, `527be1541`).
+  `packages/contracts/src/live-surfaces.ts`, and `shell.ts` in the two review commits, with their tests:
+  - the source `ios-simulator-device` `{ kind, binding, crop }`, a new union member (R1). The UDID-keyed
+    `ios-simulator` source is unchanged, for the lab and the resolver;
+  - `LiveSurfaceSimulatorStateV1` on `summary.simulator?`: its `condition` no-simulator · no-permission · no-device ·
+    off · booting · no-window · streaming · stopped, plus `name?`, `deviceType?`, `runtime?`, `acting?` and
+    `degraded?` (R2: main reports FACTS);
+  - `LiveSurfaceDeviceVerbV1` (boot | create | show | retry | open-settings) and `LiveSurfaceDeviceCommandV1`
+    `{ verb }`, on a `{ type: "device" }` control message;
+  - `LiveSurfaceSimulatorDeviceRowV1` `{ deviceType, runtime, name, booted }`;
+  - a `udid` key REFUSED on the source, the state and the row; the name bounded at 128;
+  - `SurfaceSimulatorDevicesParamsV1`/`ResultV1`, with `runtimes?` (`MAX_SIMULATOR_DEVICES` 256,
+    `MAX_SIMULATOR_RUNTIMES` 64; `runtimes` with `527be1541`, on the shell's result too);
+  - `SIMULATOR_DEVICES_DEADLINE_MS` raised 10 → 15 s in `shell.ts` (`a87ffaab2`).
+- **fieldd** ("PT-S2 (fieldd)" `268e4e519`; "(review, fieldd)" `a9ba7e925`): the shell method
+  `surface.simulator.devices` (its row in `contracts/src/methods.ts`) through `shell.surfaces.simulatorDevices`
+  (`contracts/src/shell.ts`, its deadline then 10 s); `SURFACE_KIND_SCOPE` names the new kind under `surface.capture`;
+  the device-list method passes main's rows and runtimes re-parsed (`surface-service.ts`, `shell-provider.ts`,
+  `product-api.ts`, `daemon.ts`).
+- **Main** (four "PT-S2 (main)" commits `2c3d9ac28`, `0a472b7a9`, `5c8da6b2e`, `be15a1946`; "(review, main)"
+  `192384887`, `fb70b756e`; "(grade, main)" `77c501ba4`), in `packages/electron-shell/src/main/` (all but two under
+  `live-surfaces/`):
+  - `simctl.ts`, new: one exec seam with an allow-list (list, boot, create, shutdown, which no act reaches, and show);
+    the `xcode-select -p` probe before any xcrun, cached 30 s, with `DEVELOPER_DIR` pinned; one shared list per tick
+    (R8); `pickDevice` in R3's order. Show opens `$(xcode-select -p)/Applications/Simulator.app --args
+    -CurrentDeviceUDID <udid>`.
+  - `ios-simulator-device-runtime.ts`, new: the condition machine over ONE inner Simulator runtime (R7); demand withheld
+    until streaming; single-flight acts that settle on a fresh CoreSimulator read (R4); R3's sharing of one device
+    between bindings that agree, split at idle when they part, and re-keyed when its opener leaves; no Accessibility is
+    streaming with `degraded: true`, still live (R6).
+  - `SckCaptureClientError` gains a typed `reason` (`sck-producer.ts`, `ios-simulator-producer.ts`).
+  - The authority's canonical key `simdev\0deviceType\0runtime\0crop`, deduped even with a `reuseKey` (R10); a `device`
+    ticket op (`ticket-table.ts`); `case "device"` in `control-session.ts`; `runtime-support.ts`'s kind.
+  - Production (`authority-production.ts`, and the two outside `live-surfaces/`: `shell-provider.ts` and `index.ts`):
+    a lazy simctl; a mint on non-darwin reports `no-simulator` (R5); Open Settings opens the Screen Recording pane
+    through `harnessShellOpens`.
+- **The renderer** ("PT-S2 (renderer)" `c7385c092`, `5ff8892f1`; "(review, renderer)" `cd8436ea4`):
+  - `transport.sendDevice` (`packages/live-surfaces/src/renderer/transport.ts`), `SurfaceHandle.device`
+    (`surface-pool.ts`), and `live-gate.ts`'s `SIMULATOR_SCOPES`;
+  - `desk-live.ts`'s simulator lane beside the browser's, sharing the closure's helpers (the seat, the still clock, the
+    stills), the six-face cap (R10 counts faces) and the stills (R14: no `extra.still`; R15: a rebind's still only for
+    the same binding);
+  - `surfaces/live/simulator-face.ts`, new: main's facts mapped to the SDK's nine words and each state's one act (R2);
+  - a phone's pool key carries its binding;
+  - the kind's live ask stays on the wire while main holds a non-streaming device (the blocker's fix).
+- **The attach** ("PT-S2 (design)" `43c63f0b7`, `13e4eec8a`; "(door, SDK)" `e2a8a24b5`; "(host, devices)"
+  `0b0d78a5f`, `87263f38a`; "(plugin)" `07d77dda7`; "(review, design)" `bb90b8e78`; "(review, host, devices)"
+  `fcada4643`):
+  - DESIGN.md §9 first: "The phone's two acts on the selection menu", **Attach** and **Finish**, one undo step for each
+    phone an act changes. The words landed before any code quoted them;
+  - the SDK's `SIMULATOR_DEVICES = serviceKey("vibefield.simulator.devices")` (`plugin-sdk/src/desk.ts`), with a
+    synchronous `attachable(preferDeviceType)` and `LiveSimulatorBinding`, and its wall row in `desk-door.test.ts`;
+  - lent at `desk-layer.ts` beside `BROWSER_NAVIGATION` (`surfaces/live/simulator-devices.ts`, new, watched from
+    `CanvasStage.tsx`). The list is read only while a phone stands: a look every 2 s, a read at most every 5 s;
+  - the plugin's capabilities `["surface.attach", "surface.capture"]` in `manifest.ts`, hand-written into
+    `vibefield.plugin.json` (byte-equal to the emission at the light);
+  - `attach.ts`, new, with `PHONE_ACTS` (attach, finish), its menu and its drivers (`object.ts`, `local.ts`,
+    `index.ts`);
+  - R11's pick: the booted device of the phone's own model, else the first booted iPhone, else its own model on the
+    newest INSTALLED iOS runtime. No free Model act.
+- **Units:** six new files (`simctl.test.ts`, `ios-simulator-device-runtime.test.ts`, `desk-layer-services.test.ts`,
+  `desk-live-simulator.test.ts`, `simulator-devices.test.ts`, `attach.test.ts`), and rows in the authority,
+  control-session, producer, shell-provider, contracts, fieldd surface-service, transport, live-gate, pool, door,
+  kind and manifest tests.
+- **Untouched:** `BUNDLED_PLUGINS` (R13, James's open call) and the dev bundled set (owed under a PM grant, R13). No
+  live-texture charging (R12).
+  R9 (12 fps arriving as 10 through the buckets) is unchanged code, unwitnessed.
+
+**The deviations the builders named** (the main ones; all are in the commits):
+- **Contracts:**
+  - the condition and the command take the brief's shape, not the map's;
+  - `acting` is typed by a new `LiveSurfaceDeviceVerbV1`;
+  - the state's `name`, `deviceType` and `runtime` are optional;
+  - a `udid` key is refused on the source, the state and the row, and the name is bounded at 128.
+- **Main:**
+  - "Create it" avoids ALL existing device names, not only the booted ones;
+  - Show and retry are offered whenever the device is booted;
+  - an unknown window verdict reads as streaming once the inner streams;
+  - the device list returns `[]` on a Mac without Xcode, not UNAVAILABLE;
+  - R3 joins only a pristine inner (revision 0): two sessions that converge on one device AFTER both have published
+    keep two streams.
+- **The renderer:** a phone's pool key carries its binding, so a rebind is a new lane and never re-takes the old
+  device's attachment; the live gate takes a source word; acts are withheld while main is acting.
+- **The attach:**
+  - DESIGN.md §9 took two commits at the build: the words first (`43c63f0b7`), then two claims said exactly
+    (`13e4eec8a`), both before any code quoted them;
+  - the menu acts carry no glyph, so the bar prints §9's words;
+  - the host finds "a phone stands" by the plugin's grants, never its type name.
+- **The fix round:** `runtimes` is optional on the device list's result, and absent means unsaid; the R3 split happens
+  only at idle, never under a face.
+- **Hand-written, as the brief asks:** `plugins/simulator/vibefield.plugin.json`'s capabilities, reproduced byte for
+  byte by the light's `gen:manifest`. `docs/plugin-authoring` did not move: `SIMULATOR_DEVICES` is outside every docs
+  region.
+
+**Validation** (the build CODE-ONLY; the light on this Mac; verify on the mini):
+- **The build:** workflow `wf_76529ded-ec6`, one run, about 2 h 7 min, 8 agents: contracts → main ∥ renderer → attach
+  → three review lenses (main, renderer, plugin) → one fixer.
+- **The review found 6, one a BLOCKER.** All 6 were fixed in 8 commits (`cd8436ea4`…`fcada4643`):
+  - **the blocker:** the renderer stopped the kind's live ask under any non-streaming condition, so Show it, Try again
+    and a Screen Recording grant could never return to streaming (`cd8436ea4`);
+  - an act's `finally` re-planned from a pre-act pick, so a second "Create it" could make a twin (`192384887`);
+  - R3's joined binding was never re-picked by its own binding (`192384887`);
+  - `SIMULATOR_DEVICES_DEADLINE_MS` at 10 s was below main's 13 s worst case; it is 15 s (`a87ffaab2`);
+  - F5 and F6: Attach's third pick used device rows rather than installed runtimes (`bb90b8e78`, `527be1541`,
+    `fb70b756e`, `a9ba7e925`, `fcada4643`).
+- **Lint:** biome check was clean on all 57 changed files before the grade (20:57Z).
+- **The grade** (`wf_97ad4464-8d9`, read-only; three lenses, each with a skeptic: compile and units by eye; the fix
+  round; brief and walls). 1 minor finding survived, fixround-1: a shared R3 session kept picking by its departed
+  opener's binding. Fixed in `77c501ba4`, with one unit row.
+- **The merges.**
+  - `9bc80f6e1` merges `b72c46dfd`, PT-S1's build-edges fix (field-app's devDependency on the simulator plugin and 3
+    lock lines). Taken by merge, never re-typed (the mid-slice ruling M1).
+  - `762f24978` merges main `097edb32c` (PT-S1 landed as M10 `1de84540b`, AU B3 M11 `20783c656`, and the records):
+    parents `77c501ba4` + `097edb32c`, base `b72c46dfd`. Five files changed on both sides, all auto-merged with 0
+    markers, each kept whole by line count: DESIGN.md, `contracts/src/methods.ts`, `contracts/test/shell.test.ts`,
+    `electron-shell/src/main/index.ts` and `fieldd/src/daemon.ts`. VF-PM read it and accepted it at 21:37Z.
+- **The light** (this Mac, VF-PM's grant 21:12Z; `762f24978`; 21:37:26–21:46:28Z; each row alone; ALL GREEN):
+  - `git diff --check 097edb32c HEAD`: no whitespace errors;
+  - (a) `pnpm typecheck`: "NX Successfully ran target typecheck for 28 projects";
+  - (b) the units by file, none skipped: contracts 2 files, 77 tests; electron-shell 7 files, 269; fieldd 1 file, 35;
+    live-surfaces 1 file, 12; plugin-sdk 1 file, 12; field-app 6 files, 97; plugin-simulator 4 files, 64.
+    fixround-1's row passed by name ("R3 picks by a binding a member HOLDS: …"), and law.test's installed-iPhones row
+    ran on Xcode 17F113;
+  - (b) the whole suites: contracts 52 files, 1333 tests; electron-shell 149 files, 2174 passed + 3 skipped; fieldd
+    206 files + 3 skipped, 2611 passed + 29 skipped; live-surfaces 8 files, 39 tests; plugin-sdk 10 files, 87 tests;
+    field-app 237 files + 1 skipped, 3004 passed + 3 skipped; plugin-simulator 13 files, 131 tests;
+  - (c) `check:walls`: "check-import-boundaries: clean";
+  - (d) `check:deps`: "check-single-copy: ok …". Green in a lane for the first time: the lane had its OWN
+    `../mille-pin`, a local clone at `c8160d585` prepared from the lane by `siblings.mjs install-js/build-js mille`, so
+    mille's host peers link into the lane's tree;
+  - (e) `gen:check`: clean. The plugin's `gen:manifest` reproduced the hand-written `vibefield.plugin.json` byte for
+    byte;
+  - the tree was clean after.
+  - Lane prep: its own mille-pin (320 MB); a read-only rosetta-pin link; `target` → `/Volumes/SamsungRed/rust/pts2`,
+    its own cargo target, where field-native was cold-built in 2m30s (2.5 GB with mille's napi); the frozen offline
+    install, 6 s.
+- **The mint, run 16:** M16 `e4aa3d367`, "Merge main 265325d09 into portals/pt-s2 — PT-S2 over main 265325d09: AU B3,
+  PR #3's rulers, FG-3a, SP-1a, item 119's rows fix and the records". 58 files, +7,783 −360; its tree `158a48c7c`
+  equals the merge-tree.
+  - The orchestrator's preview (merge-tree `762f24978` × `265325d09`, 00:32Z): 0 conflicts. Two files changed on both
+    sides since `097edb32c`, both kept whole (merged = ours + theirs − base per line, 0 mismatched): DESIGN.md
+    4395 base / 4407 / 4441 → 4453; `field/desk/desk-layer.ts` 110 / 120 / 112 → 122, where main's hunk is
+    `5dcf72205`'s ruler margin 60 → 0.
+  - The bundle: `lanes/pts2/pts2-762f24978.bundle` (sha256 `585ee3f0…`), cut `^265325d09`, 25 commits, requiring
+    `b72c46dfd`, `f21d45cfa` and `097edb32c`, all on main.
+  - GREEN on the mini at 00:38:54Z: verify 0 FAIL, 10,423 passed / 0 / 18 skipped, +120 tests and +6 files over run
+    15b, all PT-S2's own; cargo 31 ok / 0; gen freshness passed with PT-S2's contracts change.
+  - No smoke row: PT-S2's desk evidence is PT-S3's live run.
+- **Landed:** main fast-forwarded `265325d09` → `e4aa3d367` at 00:43:46Z, and was pushed at 00:44Z as
+  `265325d09..e9a400fef`, with bb's item 119 records (`e9a400fef`) on top.
+
+**The rulings that governed** (the brief's, written 2026-10-30 at the orchestrator's leans; as built):
+- **R1, the source:** a new union member `ios-simulator-device`, not `ios-simulator` with a refine.
+- **R2, the words:** main reports facts (`summary.simulator.condition`); `simulator-face.ts` maps them to the SDK's
+  nine.
+- **R3, the resolution:** exact type and runtime → the same type on any runtime, booted first, then the newest →
+  `no-device`; bindings that agree share one inner runtime, and a shared session picks by a binding a member holds.
+- **R4, the acts:** Boot is boot then show; Create it is create, boot and show in one act; Try again is show when booted
+  with no window; each act single-flight, `acting` said while it runs.
+- **R5, no Simulator:** the `xcode-select -p` probe before any xcrun; a non-darwin or helper-less shell mints and says
+  `no-simulator`.
+- **R6, no Accessibility:** `streaming` with `degraded: true`, still live, not a tenth state.
+- **R7, the inner runtime:** one inner SCK runtime per surface for its life (its letter is named for PT-S3, below).
+- **R8, the cost:** one `simctl list --json` snapshot per tick, shared across every surface.
+- **R9, the rate:** 12 fps arrives as 10 through `liveDemandIntent`'s buckets, accepted for v1; unchanged, unwitnessed.
+- **R10, the cap:** it counts faces, six in all; main's canonical key dedupes a stream even with a `reuseKey` (the
+  brief said one stream per device; R3's pristine-only join can leave two).
+- **R11, the attach:** one "Attach" plus "Finish", over the synchronous `SIMULATOR_DEVICES`; no free Model act.
+- **R12:** the phone charges no live texture to the desk budget; the six-face cap bounds it.
+- **R13:** `BUNDLED_PLUGINS` untouched, the call James's and still open; the dev bundled set (`field-engine.ts`,
+  field-app's `package.json`) untouched too, since it needs an install (the brief: owed under a PM grant).
+- **R14:** no `extra.still` on the simulator route.
+- **R15, the rebind:** a reopened face takes the key's last still only when it was taken on the same binding.
+- **R16, rotation:** a Simulator rotated by hand shows cropped sideways in v1; rotation input is PT-S4's.
+- **M1 (2026-10-30 19:05Z, from VF-PM):** no builder touched field-app's `package.json` or `pnpm-lock.yaml`; PT-S1's
+  fix came by the orchestrator's merge `9bc80f6e1`.
+
+**Not witnessed** (named, not found; for PT-S3's live run):
+1. `show`'s launch arguments reach only a FRESH Simulator.app launch. It may not reopen a closed device window while
+   Simulator.app runs (the orchestrator's main map's risk 5, not the brief's ruling R5).
+2. R7's letter: a split gives a surface a second inner runtime, only with no face attached.
+3. Unseen: real Simulator pixels on the desk, the Screen Recording and Accessibility flows, and the fps buckets.
+
+**Owed:**
+- A stale comment in `plugins/simulator/src/live.ts:17-20`, "(the cap shared with panes is PT-S2's)": the cap is built
+  now. A one-line follow-up.
+- Whether the phone joins `BUNDLED_PLUGINS`: James's (ROADMAP §5).
+- **PT-S3, the gates,** and the live witness of the three above.
+- **PT-S4, touch,** through serve-sim: an EL8 pin event, loopback only, never `--allow-exec`.
+- The lane's records (the light log, the landing log's entries) go to the next draft queue, not main.
+- The lane `/Volumes/SamsungRed/lanes/pts2` holds about 3.7 GB. Reclaiming it is James's.
+
+## PG-1a…1c — the desktop's efficiencies first: the model's attach promise withdrawn with the join (1a); the mesh relay reads each peer row's key alone, and the window screens each desktop (1b); a phone behind the door's 256 KiB cap gets the board as it is (1c) (PG-D9 A, PG-D11 A) (2026-10-31; `1790be95f`, the merge of main `204240a7b` into `83e08f1e1` on item 100's `a025af02e`, lane `pg/1c-tailnet-backpressure`)
+
+**What.** James opened the track in chat on 2026-10-29 (07:24Z and 07:25Z: "full godview experience on phone", over
+the backend model, aligned with the sync-plane design). He ruled the slate on the page *The Phone's Godview*
+(https://claude.ai/artifact/AAYgPk8oLbw7RZkanc4mhF) between 08:17:14Z and 08:30:42Z: all ten (a), nine at their
+leans. PG-D9 (a) puts the audit's efficiencies first, as desktop gains of their own, before any phone replica. He
+ruled PG-D11 A on the PM board at 16:22:36Z. VF-PM sliced PG-1 at the leans (13:16Z, the brief
+`lanes/ios/PG1-BRIEF.md`). Five commits on item 100's `a025af02e`, 17 files, +1312 −37:
+- **PG-1a (`e9a57b4b6`): F-M4 on the model's promise.** While this device's terminal doors were unpublished,
+  `attachableRows` withheld the desk row's `terminal` join but passed the backend's own `monitorRow.attachable` and
+  `.writable`. A peer window read `attachable: true` with no join, fell back to the run id and asked the owner for a
+  session its floor may not hold. `withholdAttachPromise` now says `attachable: false`, and `writable: false` where
+  declared, while the doors are down, with the keys in order. No wire shape, contract, gen or kit change: the values
+  move.
+- **PG-1b (`f2d76f7bf`, `8a3b64ced`): the key-only relay, and the window's screen.**
+  - The mesh relay (PG-L4.1) parsed every peer frame as whole field rows though it reads only the key, so one row this
+    build could not read refused or resynced the whole desktop. It now parses `AgentBoardKeySnapshot` and
+    `AgentBoardKeyDelta`, over contracts' additive, TS-only `AgentBoardRowKey {runtimeRunId, revision}`, and every
+    envelope rule stands. No wire bytes change.
+  - The window (admitted into 1b by VF-PM, 13:16Z): `godview/monitor/board-screen.ts` reads each row alone before the
+    envelope. An unreadable row is dropped, and its desktop reads as another version while it holds one; its readable
+    rows stand, with no gap and no reopen.
+  - The review's three (`8a3b64ced`): the contracts test's optional epoch under `exactOptionalPropertyTypes`; a shown
+    row that turns unreadable leaves the board; "another version" is stamped now.
+- **PG-1c (`2392b0ef8`, `83e08f1e1`): tailnet backpressure (PG-D11 A).**
+  - The number, in one place: `PRODUCT_API_LIMITS.TAILNET_QUEUED_BYTES = 256 * 1024`; the drain point is derived at
+    half.
+  - The door (`product-api.ts`): a `tailnet` principal's subscription that declares a `resync` is held once the
+    connection's queue reaches the cap. Its deltas stop, sticky until a resync; snapshots are never held. Every
+    write's callback is the drain check, and at half the cap ONE fresh snapshot is sent. A resync that throws closes
+    the connection.
+  - Who and what (VF-PM, 14:15Z): the phone alone (the `tailnet` principal) and the mesh board alone
+    (`MeshBoard.subscribe`'s install; its resync is the open a reader joining now would get, at the owners'
+    revisions). A peer daemon on the same door, and loopback, keep the 128 MiB shed.
+  - The review's five (`83e08f1e1`): a board past the cap held itself in a loop, so its own queued snapshots now never
+    count (`Hold.inflight`); the install moved onto the board, so a deleted daemon line fails a row; a red-first row
+    that was green at the parent; the registry's note.
+  - The kit (EL9, one test row): `aMidStreamMeshSnapshotReplacesTheBoardWithoutAskingAgain` pins the phone's routing
+    of a mid-stream snapshot. No kit product change.
+
+**Found:**
+- F-M4's promise gap (1a) and a single unreadable peer row refusing a whole desktop at the relay (1b): the two defects
+  the slices fix.
+- 1c's first cut held a board past the cap in a loop with its own snapshots (the review, from two lenses).
+- The phone's History tail and `project.subscribe` stay on the shed, each its own item, both reachable today: 109 (a
+  tail reset's hole below the newest 100 rows) and 110 (the phone's no-op snapshot).
+- The first kit try (10-29 14:35Z) named the test FILE in `-only-testing`, matched nothing, and exited 0 with
+  "Executed 0 tests": a false green, caught because the script grepped for the row. `pg1c-kit.sh` now names the
+  `@Suite` and requires the named row to run and pass.
+- Main gained PT-S2 (`e4aa3d367`) between the first simulated mint and run 18, touching `daemon.ts` and
+  `product-api.ts` beside PG-1, so the light was run again on the real pairing.
+
+**Validation.**
+- **The lane:** `/Volumes/SamsungRed/lanes/ios` (the worktree `vibe-field`), 1a → 1b → 1c as one line on item 100,
+  tip `83e08f1e1` on `pg/1c-tailnet-backpressure`.
+- **The light and red-first, 10-29, at each slice's tip** (`pg1-light.sh`, at nice 19 under the guard: the green half
+  at the slice's tip, then the slice's tests on its parent, which must go red):
+  - 1a at `e9a57b4b6`: red at `a025af02e` (fieldd, 3 of 52); green 13:39:16Z (contracts 35, fieldd 81 in 5 files,
+    field-app 21).
+  - 1b at its first cut `4d3053fe0` (1b alone on item 100): red in contracts (3 of 38), fieldd (3 of 25) and
+    field-app (1 of 13); green 13:40:14Z (contracts 38, fieldd 82, field-app 29).
+  - 1c at `83e08f1e1`: red at `8a3b64ced` in contracts (1 of 44) and fieldd (9 of 37); green 14:33:50Z (contracts 82,
+    fieldd 104 in 7 files, field-app 29).
+  Logs: `lanes/ios/logs/pg1-light-*`, `pg1-light-run.out`, `pg1c-run.out`.
+- **The kit row at `83e08f1e1`** (Xcode 26.6, the iPhone 17 Pro simulator): build-for-testing, then
+  `FieldLinkHomeFieldTests` 6 of 6 with the named row passed, 14:36:55Z. Logs: `lanes/ios/logs/kit-83e08f1e1/`.
+- **The sim light, 10-31 00:41:19Z,** over a simulated mint: main `265325d09` + item 105 `f948f0088`, then
+  `83e08f1e1` (`pg/sim-run18`, `25ff2105b`, tree `824068067`, never pushed), because item 105 and PG-1 share four
+  files. Preflight, the walls, the iOS fixtures, biome and the three typechecks; contracts 92, fieldd 128 (8 files,
+  item 105's `index-activity-doors` among them), field-app 29. Logs: `lanes/ios/logs/pg1-sim-light-25ff2105b*`.
+- **The light on the real pairing `a3e35579f`, 01:02:30Z** (`204240a7b` + `83e08f1e1`, tree `621b2400f`, M18's): the
+  same rows, green. Its typecheck covers PT-S2's `daemon.ts` and `product-api.ts` beside PG-1's. Logs:
+  `lanes/ios/logs/pg1-sim-light-a3e35579f*`.
+- **Kit row on the real pairing `a3e35579f`, this Mac, 01:04:56Z:** build-for-testing exit 0, then
+  `FieldLinkHomeFieldTests` 6 of 6 with the named row passed. Logs: `lanes/ios/logs/kit-a3e35579f/`.
+- **No verify on this Mac** (James, 2026-10-29 09:05Z: the Mac mini's verify lane).
+- **The landed tip** is `1790be95f` (M18): main `204240a7b` merged into `83e08f1e1` by a9, tree `621b2400f`. Six files
+  sit on both sides (contracts' `agent-field.ts`, `registries.ts` and `registry.test.ts`; fieldd's `agent-field.ts`,
+  `daemon.ts` and `product-api.ts`), each ours + theirs − base exactly, with 0 markers. The bundle
+  `lanes/ios/pg1-83e08f1e1.bundle` (sha256 `1cd7949f…`) requires item 100's `a025af02e` alone.
+- **The mini, run 18, `pnpm verify` at `1790be95f`:** exit 0, armed 01:01:04Z, done 01:05:39Z (load 1.82 → 9.28),
+  whole: preflight through `gen:check`.
+  - `pnpm test` ran 28 projects: vitest 10,464 passed, 0 failed, 18 skipped. Contracts 1340, field-app 3040, fieldd
+    2655 + 11 skipped, electron-shell 2174 + 3 skipped; `tailnet-backpressure` (10) and `board-screen` (7) among them.
+  - `pnpm test:rust`: 499 passed, 0 failed, 14 ignored, over 31 binaries. The tree was clean after, with no stub left.
+  Logs: `lanes/ts6/logs/mini/run18/`.
+- **Landed:** main fast-forwarded `204240a7b` → `1790be95f` at 01:07:32Z on VF-PM's GO, and was pushed at 01:08:04Z.
+
+**Records.** The design record is `draft/thinking-phone-godview.md` (§7 the ruled table, §8 the ladder, each rung as
+built). Its §8 "NOT LANDED" and the PG-D11 clauses at design-06, thinking-sync-planes and thinking-upload-plane ride
+the next draft queue. DECISIONS gains the PG row, and ROADMAP the PG track.
+
+**Owed.**
+- PG-1d (re-present an unchanged row when the doors' gate flips: F-M4's residual), PG-1e0 (the projection bench, then
+  1e1 or 1e2 by the numbers) and PG-1f (the puppeteer-monitor step-idle petition and its pin test). A new reader of an
+  old owner keeps the run-id fallback: a PG-1d candidate, and a design question.
+- PG-0, the records at their sources (`860a2449f`, queued). Then the agent-plane pages' clauses (api.html's
+  subscription byte bound, system.html's "never capped", the model's promise), which follow PG-0's edit of api.html.
+- The cap read on the phone under the Network Link Conditioner (PG-9): `bufferedAmount` is fieldd's own queue, and
+  the sidecar's and tsnet's buffers lie past it.
+- Items 109 and 110.

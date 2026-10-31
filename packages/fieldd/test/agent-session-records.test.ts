@@ -123,3 +123,28 @@ describe("PJ-6 (Q4) — a record carrying the launch's model selection", () => {
     expect(records.read("run-old")).not.toHaveProperty("modelSelection");
   });
 });
+
+describe("CP-1c — a record carrying who started the run and the spark it is", () => {
+  it("reads back and verifies, an older fieldd keeps both through its passthrough, and a record that claims a spark it was not written with is set aside", () => {
+    const records = store();
+    const origin = { by: "spark", spark: "sp-7k2m9q4x" };
+    records.write({ ...record("run-started", FIRST!, "2026-10-29T12:00:00.000Z"), origin });
+    records.write({
+      ...record("run-own", FIRST!, "2026-10-29T12:01:00.000Z"),
+      spark: "sp-7k2m9q4x",
+    });
+    expect(records.read("run-started")?.origin).toEqual(origin);
+    expect(records.read("run-own")?.spark).toBe("sp-7k2m9q4x");
+
+    const raw = JSON.parse(readFileSync(records.path("run-own"), "utf8")) as AgentSessionRecord;
+    const older = AgentSessionRecord.omit({ origin: true, spark: true }).parse(raw);
+    expect(older).toHaveProperty("spark", "sp-7k2m9q4x");
+    expect(records.verifies(older as AgentSessionRecord)).toBe(true);
+    // the signature covers it: an agent that writes `spark` into a run's record to be served a spark's tools is
+    // refused, because the record no longer verifies (the door reads a verified record only)
+    const plain = JSON.parse(
+      readFileSync(records.path("run-started"), "utf8"),
+    ) as AgentSessionRecord;
+    expect(records.verifies({ ...plain, spark: "sp-7k2m9q4x" })).toBe(false);
+  });
+});

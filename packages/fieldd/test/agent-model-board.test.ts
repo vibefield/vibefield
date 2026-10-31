@@ -192,6 +192,36 @@ describe("the two cuts of the model's row (M16, M21)", () => {
     expect(desk.monitorRow).toMatchObject({ attachable: false, writable: false });
     monitor.service.dispose();
   });
+
+  it("F-M4 (PG-1a) — an owner whose doors are down withholds the model's attach promise with the join on its desk cut", async () => {
+    const monitor = await testMonitor({ summaries: [working] });
+    // the backend promises an attach: a PTY is named (M41)
+    expect(monitor.row("run-working")).toMatchObject({ attachable: true, writable: true });
+    const cut = (published: boolean) =>
+      createFieldSubscription({
+        list: () => monitor.fold.list(),
+        subscribe: (fn) => monitor.fold.subscribe(fn),
+        emit: () => {},
+        project: deskProjector((id) => monitor.service.rowForRun(id)),
+        minIntervalMs: AGENT_FIELD.DESK_MIN_INTERVAL_MS,
+        epoch: published ? "boot.up" : "boot.down",
+        terminalPublished: () => published,
+      });
+    const up = cut(true);
+    const down = cut(false);
+    const open = AgentDeskRow.parse(up.snapshot.rows[0]);
+    const held = AgentDeskRow.parse(down.snapshot.rows[0]);
+    expect(open.terminal).toBeDefined();
+    expect(open.monitorRow).toMatchObject({ attachable: true, writable: true });
+    // doors down: neither the join nor the model's word promises a tap
+    expect(held.terminal).toBeUndefined();
+    expect(held.monitorRow).toMatchObject({ attachable: false, writable: false });
+    // and nothing else of the model's row moves
+    expect({ ...held.monitorRow, attachable: true, writable: true }).toEqual(open.monitorRow);
+    up.dispose();
+    down.dispose();
+    monitor.service.dispose();
+  });
 });
 
 describe("who may ask the model board (MV-D18, M16, L8)", () => {
@@ -208,6 +238,18 @@ describe("who may ask the model board (MV-D18, M16, L8)", () => {
         AgentSubscribeParams.parse({ projection: "model", scope: "mesh", heartbeatMs: 1000 }),
       )?.kind,
     ).toBe("PRECONDITION_FAILED");
+  });
+
+  // Item 100: the gate named the two kinds it refused, so every other kind
+  // was served this desktop's deal.
+  it("is refused to every kind that is not this desktop's own caller: an agent's MCP session, a plugin, a guest", () => {
+    for (const principal of ["mcp-agent", "plugin", "tailnet-guest"] as const) {
+      expect(refuseBoardAsk(principal, ask("model"))?.kind, principal).toBe("FORBIDDEN_SCOPE");
+      expect(refuseBoardAsk(principal, ask("model", "mesh"))?.kind, principal).toBe(
+        "FORBIDDEN_SCOPE",
+      );
+    }
+    expect(refuseBoardAsk("shell-main", ask("model"))).toBeNull();
   });
 
   it("a model hub asks its peers for their desk boards at the desk's floor", () => {

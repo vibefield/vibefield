@@ -4,15 +4,26 @@
 // plugin's EFFECTIVE capabilities (a staged plugin's: fieldd's record; a bundled one's: computed from its manifest exactly as its
 // activation is — `computeEffectiveGrants`). A browser page needs `surface.attach` and `surface.browser` — the plugin door's own
 // pair (surface-door.tsx), with the same words for a refusal. A type no plugin contributes (the desk's built-ins) opens nothing.
+// PT-S2: the scopes are the SOURCE's — the desk's LIVE service names what a face shows (`LiveFaceSource`), and the gate asks
+// the pair that source needs: a bound Simulator's is `surface.attach` and `surface.capture` (its window captured — Screen
+// Recording's consent class), as fieldd's kind→scope matrix asks of its mint. Still by the OBJECT: a phone's spec grants nothing.
 
 import type { CanvasEngine, WidgetType } from "@vibecook/ice";
 import { PrefabId } from "@vibecook/ice";
 import { computeEffectiveGrants } from "@vibefield/contracts";
 import type { PluginRegistry, RegisteredPlugin } from "@vibefield/plugin-runtime";
-import type { LiveGateAnswer } from "./desk-live";
+import type { LiveFaceSource, LiveGateAnswer } from "./desk-live";
 
 /** What a browser page asks of the plugin whose object opens it. */
 export const BROWSER_PAGE_SCOPES = ["surface.attach", "surface.browser"] as const;
+/** PT-S2: what a bound Simulator asks of the plugin whose phone opens it. */
+export const SIMULATOR_SCOPES = ["surface.attach", "surface.capture"] as const;
+
+/** PT-S2: each source's scopes — the pair the gate asks of the object's plugin. */
+export const LIVE_FACE_SCOPES: Readonly<Record<LiveFaceSource, readonly string[]>> = {
+  browser: BROWSER_PAGE_SCOPES,
+  "ios-simulator": SIMULATOR_SCOPES,
+};
 
 /** A registered plugin's effective capabilities — its record's grants (staged), or its manifest's as its activation computes them. */
 export function grantsOf(plugin: RegisteredPlugin<WidgetType>): readonly string[] {
@@ -30,8 +41,8 @@ export function grantsOf(plugin: RegisteredPlugin<WidgetType>): readonly string[
 export function createLiveGate(deps: {
   readonly engine: CanvasEngine;
   readonly registry: PluginRegistry<WidgetType>;
-}): (key: string) => LiveGateAnswer {
-  return (key) => {
+}): (key: string, source?: LiveFaceSource) => LiveGateAnswer {
+  return (key, source = "browser") => {
     const store = deps.engine.docs.current()?.store;
     const entity = store?.resolve(key as never);
     if (entity === undefined || !deps.engine.world.isAlive(entity))
@@ -42,7 +53,7 @@ export function createLiveGate(deps: {
     const plugin = pluginId === undefined ? undefined : deps.registry.plugin(pluginId);
     if (plugin === undefined) return { refused: `${type} is no plugin's: it opens no page` };
     const granted = grantsOf(plugin);
-    for (const scope of BROWSER_PAGE_SCOPES)
+    for (const scope of LIVE_FACE_SCOPES[source])
       if (!granted.includes(scope))
         return { refused: `FORBIDDEN_SCOPE: plugin ${plugin.id} is not granted ${scope}` };
     return { type };

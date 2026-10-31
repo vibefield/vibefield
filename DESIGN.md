@@ -541,6 +541,16 @@ keeps the picture, cached by its seed, status, size, frame, ground and theme. A 
 (blinks, gaze, its status's motion), drawn by one layer over the window only while a live face is
 on screen. Without WebGL2, a face is the **flat star**: its own points and palette in SVG, on its
 disc when framed, two pill eyes, no glow. It is never a blank.
+*Amended 2026-10-29 (SP-1a, the face in the kit):* the live layer is one per **stage**, never one
+over the window, which would draw a face over a menu or sheet that covers it. A composition that
+shows live faces (Chat's list, a thread's head, the New spark sheet) is a stage: one transparent
+canvas over it and under whatever covers it, each face clipped to the scrollport it sits in and
+dropped while out of sight, drawing only while one of its faces is live and on screen. A face
+outside a stage is a still. The stills share one canvas for the window, laid out out of sight so it
+measures true, and keep the last 256 pictures. The flat star is drawn from the same DNA as the star
+(`agentDNA`'s points and palette), so a face is the same face with or without WebGL2. While the
+engine first loads (below), a framed face holds its place as its disc in the inset fill
+(`--vf-fill`), and a free face as its box.
 
 **Motion.** Reduced motion keeps the faces, their blinks and their status changes, and drops the hops,
 the shakes and the falling star (M6).
@@ -557,6 +567,29 @@ so it is a design event, said here first. SP-1 moves it into the design kit as a
 by seed, status, size, frame and ground, with a fixture in the catalog (UI_SYSTEM's order). Its
 palettes are the engine's art, carried as data inside the vendored files. That is the one place a hex
 outside `tokens.css` is allowed, the way an emoji's bitmap is a user's face's (§2.8).
+*Amended 2026-10-29 (SP-1a):* the face is `packages/design-kit/src/spark-face/`, the kit's
+`./spark-face` entry:
+- `SparkFace` (seed, status, size, framed or free, live), the stage `SparkStage`, and the statuses
+  with their words (the table above; a test reads the table, so the two never drift). The surface
+  behind a framed face, for its cut ring, is read where the face sits, again when the theme turns.
+- One adapter: `SparkFaceRenderer` tells the faces inside it to draw as the flat star. Without
+  it, a face draws the star where the window has WebGL2. The catalog's flat specimen and the tests
+  use it; the product never does.
+- The engine is `spark-face/vendor/sparks.js`. A test holds its SHA-256 and its revision, so an
+  edit in place fails and a newer copy moves both in one commit.
+- The kit stays pure at import (UI_SYSTEM): the engine is an IIFE that sets one global,
+  `window.Sparklings`, so the first face to mount loads it with a dynamic import, and the kit's
+  `sideEffects` names the vendored file so no bundler drops that global.
+- Reduced motion is the engine's own switch, as its page sets it: its motions are set aside while
+  the preference holds and restored when it lifts, never patched in place.
+- The kit's spark-face sources (TSX, TS, CSS) hold no colour literal of any spelling. The palettes
+  reach the page only as the engine's data, and `spark-face.test.tsx` holds both rules.
+- The catalog's Foundations section shows the shipping `SparkFace` beside §2.8's faces: every
+  status at the sizes above, framed and free, in both themes, the flat star, and a live stage.
+
+*Corrected the same day:* this said `star-spark.js` beside it. The falling star's engine is
+`star-spark/engine.js`, and it is vendored with its first user, the New spark sheet's hatch
+(SP-1c), not before.
 
 ---
 
@@ -4077,6 +4110,18 @@ tap, key or button until PT-S4's touch lands.
 | live | the stream | — |
 | at rest | its last frame, with the rest mark | — |
 | stopped | "The Simulator stopped", over its still | "Try again" |
+
+**The phone's two acts on the selection menu** (track PT, PT-S2; R11, ruled 2026-10-30) — said for the phones selected, one
+undo step for each phone it changes, quoted exactly by the plugin (`plugins/simulator`'s `attach.ts`). **Attach** binds each
+phone to a Simulator of this Mac's own: the booted device of the phone's own model, else the first booted iPhone (the phone
+morphs into its model), else the phone's own model on the newest iOS this Mac has, whose face then says what is true of it
+— off, with "Boot", or no device, with "Create it". **Finish** turns each phone to the next of its model's launch colours,
+and round to the first. There is no Model act: a bound phone's model is its device's, and only Attach sets it — a model
+unlike its device would show another iPhone's screen in its frame. A binding names a model and an iOS, never one Mac's
+device, so on another Mac the same phone shows that Mac's own Simulator of its model. "The newest iOS this Mac has" is its
+newest INSTALLED iOS runtime, whether or not any device runs it yet: the face then shows the model's device on whatever
+runtime has one, or says "no device", with "Create it". Attach changes nothing on a Mac with no iOS runtime installed, or
+before VibeField has read this Mac's devices.
 
 **The update's words** (track AU, AU-L2, AU-L3, AU-L6; ruled 2026-10-29). **A version is said two ways:** exactly
 where it can be copied — `0.1.0-nightly.20261027` in mono on Settings → Updates' head — and in friendly words in a

@@ -4581,6 +4581,9 @@ mod tests {
         // tests build it: the unit binds a loopback listener on port 0 and never declares, so
         // no host starts.
         let terminal = TerminalUnit::new(&config, ping.clone());
+        // CP-1a's door seam, built the way bootstrap builds it; never started here.
+        let door =
+            crate::services::door::DoorUnit::new(&config, ping.clone(), bridge.clone()).handle();
         let freeway = crate::services::freeway::FreewayUnit::new(
             &config,
             "boot-under-test",
@@ -4613,6 +4616,7 @@ mod tests {
             .1,
             crate::config::MeshPlan::resolve(&config),
             freeway,
+            door,
             None,
         )
     }

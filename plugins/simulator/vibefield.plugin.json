@@ -2,7 +2,10 @@
   "activation": [
     "onObject:vibefield.simulator"
   ],
-  "capabilities": [],
+  "capabilities": [
+    "surface.attach",
+    "surface.capture"
+  ],
   "contributes": {
     "objects": [
       {

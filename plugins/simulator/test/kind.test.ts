@@ -89,7 +89,7 @@ describe("the phone's kind, judged by the kind-conformance harness WITH the prod
     expect(refusals(r)).toEqual([]);
   });
 
-  it("the host's compile takes it: a desk kind named by its type, things, its opening and its one tool", () => {
+  it("the host's compile takes it: a desk kind named by its type, things, its opening, its one tool and its menu — Attach and Finish", () => {
     const kind = simulator.kind;
     expect(isObjectKind(kind)).toBe(true);
     expect(kind.name).toBe(row?.type);
@@ -99,13 +99,19 @@ describe("the phone's kind, judged by the kind-conformance harness WITH the prod
       type: "test.simulator-compile",
       kind: simulatorKind(),
       size: PHONE_SIZE,
+      ...(simulator.drivers !== undefined ? { drivers: simulator.drivers } : {}),
+      ...(simulator.menu !== undefined ? { menu: simulator.menu } : {}),
     });
     expect(objectKindOf(type)?.name).toBe("vibefield.simulator");
     expect(type.openable).toBe(true);
     expect(type.heldTools.map((t) => t.id)).toEqual(["touch"]);
-    // no driver of its own (core's drag carries it on the desk's springs) and no menu (the model's writer is PT-S2's attach)
-    expect(simulator.drivers).toBeUndefined();
-    expect(simulator.menu).toBeUndefined();
+    // PT-S2 — its menu (R11: the attach, and the finish; no Model act), each in the words DESIGN.md §9 says, with no glyph
+    expect(type.menu.map((a) => a.id)).toEqual(["attach", "finish"]);
+    expect(type.menu.map((a) => a.label)).toEqual(["Attach", "Finish"]);
+    expect(type.menu.map((a) => a.glyph)).toEqual([undefined, undefined]);
+    // and its driver factory is the menu's bridge alone: core's drag carries the phone, no driver of its own is made
+    expect(typeof simulator.drivers).toBe("function");
+    expect(simulator.drivers?.({ world: {}, local: undefined } as never)).toBeUndefined();
   });
 });
 
