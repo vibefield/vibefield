@@ -7,6 +7,7 @@
  * clear of the status bar's minute; SIM-STILL's address built from the stage's runtime, never a literal (RM4.1); the rows'
  * marks and which of them are problems; and the door's token in a header, never in an address.
  */
+import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("node:child_process", async (importOriginal) => {
@@ -93,6 +94,18 @@ const ENV = {
   VF_PHONE_DEVDIR_BY: "fallback",
 };
 const UDID = "5F1C2A3B-4D5E-6F70-8192-A3B4C5D6E7F8";
+
+/** The runner's own source: the rows' bodies are closures over the window, so what they call is held here as source. */
+const SOURCE = readFileSync(new URL("../src/testing/smoke-phone.ts", import.meta.url), "utf8");
+/** Each `await row("NAME", "KLASS", …)` the runner calls, in source order, its body up to the next one. */
+const rowBodies = (src: string): { name: string; klass: string; body: string }[] => {
+  const at = [...src.matchAll(/await row\("([^"]+)", "([A-Z]+)"/gu)];
+  return at.map((m, i) => ({
+    name: m[1] ?? "",
+    klass: m[2] ?? "",
+    body: src.slice(m.index ?? 0, at[i + 1]?.index ?? src.length),
+  }));
+};
 
 describe("PT-S3 — the stage's word: the env", () => {
   it("reads the mode, the door, the runtime, the devices by number and the run id — any iOS runtime, never a literal", () => {
@@ -694,6 +707,35 @@ describe("PT-S3 — a row staged on Simulator.app NOT running (R7)", () => {
     for (const word of ["failed", "refused", "stop", "unanswered"])
       expect(quitStaging(word)).toBe(`quit-app read ${word}: Simulator.app may be running`);
     expect(rowMark([], { staging: quitStaging("failed") }).mark).toBe("STAGING NOT MET");
+  });
+
+  it("every row that quits Simulator.app to stage holds the quit's word to quitStaging at once — SIM-SHOW-RUNNING too, its quit in every seen (R-2)", () => {
+    const quitting = rowBodies(SOURCE).filter((r) => r.body.includes("quitApp()"));
+    expect(quitting.map((r) => r.name)).toEqual([
+      "SIM-SHOW-FRESH",
+      "SIM-OFF-BOOT",
+      "SIM-SHOW-RUNNING",
+      "SIM-STOPPED",
+      "SIM-GONE",
+    ]);
+    for (const r of quitting) {
+      expect(r.body.match(/quitApp\(\)/gu)).toHaveLength(1);
+      // SIM-STOPPED's quit is its STIMULUS (the quit mid-stream), its word judged by judgeStopped — not a staging
+      if (r.name === "SIM-STOPPED") {
+        expect(r.body).toMatch(/quit,\s/u);
+        expect(r.body).toContain("judgeStopped(");
+        continue;
+      }
+      expect(r.body).toMatch(
+        /const quit = await quitApp\(\);\s*const running = quitStaging\(quit\);\s*if \(running !== null\) return \{ problems: \[\], staging: running, seen: \{ quit \} \};|const running = quitStaging\(await quitApp\(\)\);\s*if \(running !== null\) return \{ problems: \[\], staging: running \};/u,
+      );
+    }
+    // a quit that did not happen is STAGING NOT MET, never "Simulator.app showed every booted device" (risk 1): the
+    // quit's word rides every return of SIM-SHOW-RUNNING
+    const running = quitting.find((r) => r.name === "SIM-SHOW-RUNNING")?.body ?? "";
+    const returns = running.split("return {").slice(1);
+    expect(returns.length).toBeGreaterThanOrEqual(5);
+    for (const ret of returns) expect(ret.slice(0, ret.indexOf("};"))).toMatch(/seen: \{ quit\b/u);
   });
 });
 

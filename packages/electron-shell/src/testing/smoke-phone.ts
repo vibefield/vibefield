@@ -2568,17 +2568,27 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
     });
 
     await row("SIM-SHOW-RUNNING", "MUST", async () => {
-      // P7 row 1, risk 1: Show it while Simulator.app ALREADY runs — written, may be red, RECORDED and ruled after
+      // P7 row 1, risk 1: Show it while Simulator.app ALREADY runs — written, may be red, RECORDED and ruled after.
+      // Its stimulus quits first, so the run's Simulator.app shows P ONLY: a quit that did not happen is STAGING NOT
+      // MET, said with its word — never "Simulator.app showed every booted device", a finding on risk 1 (R-2)
       const quit = await quitApp();
+      const running = quitStaging(quit);
+      if (running !== null) return { problems: [], staging: running, seen: { quit } };
       const q = await placePhone("φQ", 3, typeOf(2));
       try {
         const b2 = await ensure(2, "Booted");
         const b1 = await ensure(1, "Booted");
-        if (b2 !== null || b1 !== null) return { problems: [], staging: b2 ?? b1, recorded: true };
+        if (b2 !== null || b1 !== null)
+          return { problems: [], staging: b2 ?? b1, recorded: true, seen: { quit } };
         await openUrl(2, "/motion", nonce());
         const shown = await doorAct("show-app", 1);
         if (shown.state !== "shown")
-          return { problems: [], staging: `show-app P read ${shown.state}`, recorded: true };
+          return {
+            problems: [],
+            staging: `show-app P read ${shown.state}`,
+            recorded: true,
+            seen: { quit },
+          };
         await sleep(3_000);
         await view([q]);
         await until(
@@ -2593,6 +2603,7 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
             problems: [],
             staging: `Simulator.app showed every booted device (φQ read ${f0?.simulator?.is ?? "nothing"})`,
             recorded: true,
+            seen: { quit },
           };
         await pickUp(q);
         await pressAct("SIM-SHOW-RUNNING", q, 2, "show");
