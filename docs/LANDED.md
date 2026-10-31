@@ -22330,3 +22330,44 @@ them over the live field (VF-PM's split, 13:17Z).
 **Owed.**
 - Item 121's study (the RA owner's product question: TC-D4's interactive fallback against AR-4b's cell rule) and
   item 122's (the other three real-floor files), after the queue.
+
+## item 123 — smoke:canvas's tools-in-hand rows expect Copy to lead the bar in hand, as HN-D3 made it, and judge its tip (2026-10-31; test only)
+
+**What.**
+- `packages/electron-shell/src/testing/smoke-tools-in-hand.ts`:
+  - The expected cells begin with `"copy"`, not `"send"` (:554), with a comment naming HN-D3.
+  - The hand's Copy tip is judged beside Done's: `seen.tips["copy"]` is `"Copy  ⌘C"`. The hand's Copy is
+    `handCells`' own cell (`field-app/src/field/desk/bar/bar-hand.ts:89`), apart from the bar at rest's
+    (`bar-model.ts:94`), whose tip only smoke-selection-bar's ONE row judged.
+- One file, +6 −1 (`2a4f4dee8` on main `9e6ac500d`). No product code changes.
+
+**Found.**
+- Run 30b (M30 `c8e4c55eb`, 03:42:42Z) was the first smoke:canvas on a main holding HN. HAND_NOTEBOOK,
+  HAND_WHITEBOARD, HAND_CALENDAR and HAND_CLOCK were red deterministically: "the tools in hand were ["copy","|",…],
+  not ["send","|",…]". It was not a lottery, so there was no re-run.
+- The readouts were never a second problem, since the judge maps them to READOUT (:561). Item 117's bar-return pair
+  (251 ms on WHITEBOARD and CALENDAR) rode beside it as the standing class.
+- **The cause.** HN-1…HN-4 (`6835b5398`, on main since run 22) made the hand's lead cell `copy`, but this judge's list
+  (last changed in `8546cb91b`, DK-12) still began with `"send"`. B1 re-aimed smoke-desk-copy.ts and the selection
+  bar's smoke but missed this file. HN's three landings ran no desk smoke, because the console was locked at runs 22,
+  26 and 28, so nothing saw it until 30b.
+
+**Gates.**
+- The light at `739f2ff97` on `c8e4c55eb` (2026-10-31 03:52:26Z, the lane, nice 19 under the guard) was green:
+  preflight, walls, deps, retired, ios-fixtures and biome; typecheck electron-shell; the smoke's own unit
+  (`test/smoke-tools-in-hand.test.ts`, 7 passed). The smoke's own bundle (`esbuild src/testing/smoke.ts` →
+  `smoke.cjs`) built in 162 ms.
+- It was re-cut onto `9e6ac500d` (docs alone between) as `2a4f4dee8`, with the patch-id unchanged.
+- **Run 32: the mint `aeb2e8712`** (`2a4f4dee8` × main `3e39d1467`, tree `fbcd788e3`). Verify armed at 04:20:47Z and
+  exited 0 at 04:25:32Z: vitest 10,996 passed, 0 failed and 18 skipped across 819 files, cargo 33 binaries ok and 0
+  FAILED (532 passed, 14 ignored), and typecheck and test for 28 projects (VF-PM's counts).
+- **smoke:canvas on the mint was SKIPPED (run 32b)**: the mini's console was locked, with HID idle 3,825 s at 04:26Z,
+  and only James's hand unlocks it. It is owed as this slice's witness. a9's watcher runs it, then smoke:godview, when
+  the unlock lands, with the mini's HEAD held at `aeb2e8712` until then, and its verdict is recorded at its source.
+- **Landed:** main fast-forwarded `3e39d1467` → `aeb2e8712` at 2026-10-31 04:26:52Z (the fixer, on VF-PM's GO).
+
+**Owed.**
+- smoke:canvas's other HN rows (B1's Copy, B2's picture Copy and DROP, B3's RIM and BAR) ran green at run 30b, so
+  their console-window debt is paid. smoke:godview's HN rungs (11h, 11j, the Hub in the head) are still owed.
+- This slice's own witness: smoke:canvas's four HAND rows on `aeb2e8712`, at the unlock (above).
+- Record: `lanes/records/item123/item.md`.
