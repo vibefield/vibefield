@@ -51,7 +51,12 @@ reach, and is written to the audit log before it acts.
 - **Receipts** (CP2-D2). A rejected delivery (a dialog open, another injection, or the person's keystrokes overtaking it)
   waits for the next idle. An uncertain one is never resent, and its sender is told on its next wake.
 - **Kept** (CP2-D3). Each session's queue is one file under `LAYOUT.AGENT_INPUTS_DIR` (0600 in 0700), so it outlives a
-  fieldd restart.
+  fieldd restart. Since CP-3 (LEANS P3) each file is signed by fieldd's one record signer under
+  `LAYOUT.AGENT_INPUTS_KEY_FILE`, its run inside the signature. At restore a file that is unsigned (CP-2's own bare
+  array among them), does not verify, does not parse, names another run, or is exposed to other users is set aside
+  (`fieldd.inputs.set_aside`) and never delivered. That holds against an edit. The key is 0600 to the same uid, so it
+  is no wall against an agent that reads it (EL7), nor against one that puts back a file fieldd once wrote for that
+  run.
 - **Wakes** (CP2-D6, `fieldd/src/agent-waker.ts`). They come from the monitor rows fieldd already hears: a run finished,
   is asking, failed, or ended. They wake the spark that started it and the sparks watching it, and a spark with no live
   session keeps its wakes until one opens.

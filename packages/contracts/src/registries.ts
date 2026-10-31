@@ -1626,8 +1626,12 @@ export const LAYOUT = {
    * CLAUDE.md written for it. The person's, to open in Finder; fieldd's records never live in it. */
   SPARK_HOMES_DIR: ["sparks"],
   /** CP-2 (CP2-D3) — each session's input queue, one file per run, 0600 in a 0700 directory: a spark's words and
-   * fieldd's wakes that wait for the session's next idle moment, kept across a fieldd restart. */
+   * fieldd's wakes that wait for the session's next idle moment, kept across a fieldd restart. Since CP-3 (LEANS P3)
+   * each `AgentInputQueueFile` is signed with AGENT_INPUTS_KEY_FILE's secret (0600, made once, never overwritten), so
+   * an agent that writes or edits one cannot speak as a spark or as VibeField: an unsigned or forged queue is set
+   * aside at restore, never delivered. */
   AGENT_INPUTS_DIR: ["fieldd", "inputs"],
+  AGENT_INPUTS_KEY_FILE: ["fieldd", "inputs.key"],
   TERMINAL_CONFIG_FILE: ["native", FILES.TERMINAL_CONFIG],
   RESTART_INTENT_FILE: ["native", FILES.RESTART_INTENT],
   // RETIRED 2026-09-14 (TM-3, `thinking-terminal-mesh-cells.md` §7 / TM-D3):

@@ -109,6 +109,7 @@ import {
   LocalArtifactIntent,
 } from "../src/artifacts";
 import {
+  AgentInputQueueFile,
   ComposeAgentsAvailableOutput,
   ComposeAgentsListOutput,
   ComposeHistorySearchOutput,
@@ -831,6 +832,8 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "compose-agents-list": ComposeAgentsListOutput,
   "compose-agent-read": ComposeReadOutput,
   "compose-history-search": ComposeHistorySearchOutput,
+  // CP-2's input queue as fieldd keeps it, signed since CP-3 (LEANS P3): the signature rides the passthrough
+  "agent-input-queue": AgentInputQueueFile,
   // IOS-8f — who this desktop's person is: a written face with a name, and the deal with none
   "user-me": UserMeResult,
 };

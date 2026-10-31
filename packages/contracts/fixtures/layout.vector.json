@@ -25,6 +25,7 @@
   "SPARKS_KEY_FILE": ["fieldd", "sparks.key"],
   "SPARK_HOMES_DIR": ["sparks"],
   "AGENT_INPUTS_DIR": ["fieldd", "inputs"],
+  "AGENT_INPUTS_KEY_FILE": ["fieldd", "inputs.key"],
   "TERMINAL_CONFIG_FILE": ["native", "config.ghostty"],
   "RESTART_INTENT_FILE": ["native", "restart-intent.json"],
   "MGMT_SOCKET": ["native", "run", "mgmt.sock"],

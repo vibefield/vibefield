@@ -8,8 +8,10 @@ import { createNoopLogger, type Logger } from "@vibefield/logging";
 // Each record carries an HMAC-SHA256 over its canonical JSON (contracts' one form), keyed by a secret made once per
 // store per user root, so an edit is refused: a file that is unsigned, does not verify, does not parse, or is exposed
 // to other users is set aside by its store and never served. SparkStore signs here (a spark's record bounds what its
-// verbs reach, TL-D5). SessionRecordStore (agent-sessions.ts) still keeps its own copy of the same HMAC and key rule,
-// its key in base64; moving it here is a follow-up.
+// verbs reach, TL-D5), and so do the sessions' input queues (agent-input-queue.ts: what a kept queue holds is pasted
+// into a session, marked as a spark's words or as VibeField's). Each store has a key of its own. SessionRecordStore
+// (agent-sessions.ts) still keeps its own copy of the same HMAC and key rule, its key in base64; moving it here is a
+// follow-up.
 //
 // What it holds against is an EDIT. The key is 0600 to the same uid, so an agent that reads it can sign (EL7): the
 // signature is evidence against a careless or partial adversary, never a wall against one that reads fieldd's files.

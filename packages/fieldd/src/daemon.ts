@@ -2781,7 +2781,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       logger: logger.child({ component: "compose.sparks" }),
     });
     // CP-2 (`draft/compose-plane/cp2-talk-room.md`, ruled 2026-10-31) — every session's one input queue (CP-L5), kept
-    // under LAYOUT.AGENT_INPUTS_DIR across a restart (CP2-D3), and the waker that tells a spark what its runs did (CP-D4,
+    // under LAYOUT.AGENT_INPUTS_DIR across a restart (CP2-D3), signed under LAYOUT.AGENT_INPUTS_KEY_FILE since CP-3 so
+    // a file an agent wrote is never delivered (LEANS P3), and the waker that tells a spark what its runs did (CP-D4,
     // CP2-D6). A spark's words land marked as its own and sent on the person's behalf (CP2-D1), at the session's idle.
     const runRow = (runtimeRunId: string) =>
       agents.list().sessions.find((row) => row.runtimeRunId === runtimeRunId);
@@ -2790,6 +2791,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         ?.runtimeRunId;
     const inputs = new AgentInputQueues({
       dir: join(config.dataDir, ...LAYOUT.AGENT_INPUTS_DIR),
+      keyPath: join(config.dataDir, ...LAYOUT.AGENT_INPUTS_KEY_FILE),
       deliver: (runtimeRunId, text) => agents.submit(runtimeRunId, text),
       isIdle: (runtimeRunId) => isIdleRow(agents.monitorOf(runtimeRunId)),
       onOutcome: (runtimeRunId, input, outcome, reason) => {

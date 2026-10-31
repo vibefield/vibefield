@@ -389,3 +389,44 @@ export const ComposeAgentStopOutput = z
   .object({ session: z.string().min(1), ending: z.literal(true) })
   .passthrough();
 export type ComposeAgentStopOutput = z.infer<typeof ComposeAgentStopOutput>;
+
+// ── a session's input queue, as fieldd keeps it (CP2-D3; signed since CP-3, LEANS P3) ──
+
+/** Who a kept input is from: a spark, by id and by the name its words are marked with; or fieldd's own wake. CLOSED:
+ * an input lands marked by its source (CP2-D1), so one from a source this build cannot mark is never delivered. */
+export const AgentInputSender = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("spark"), spark: SparkId, name: SparkName }).passthrough(),
+  z.object({ kind: z.literal("fieldd") }).passthrough(),
+]);
+export type AgentInputSender = z.infer<typeof AgentInputSender>;
+
+/** One input that waits for a session's next idle moment. Its text has no bound here: fieldd's wakes that wait join
+ * into one line (CP-D4), and a spark's own words were bounded at its call (COMPOSE_TEXT_MAX). */
+export const AgentQueuedInput = z
+  .object({
+    id: z.string().min(1).max(64),
+    text: z.string().min(1),
+    from: AgentInputSender,
+    /** when it was queued (ISO) */
+    at: z.string().min(1),
+  })
+  .passthrough();
+export type AgentQueuedInput = z.infer<typeof AgentQueuedInput>;
+
+export const AGENT_INPUT_QUEUE_FORMAT = 1;
+
+/** One session's queue, one file per run under LAYOUT.AGENT_INPUTS_DIR, signed with AGENT_INPUTS_KEY_FILE's secret by
+ * fieldd's one record signer. The schema is the unsigned body; the file adds its `signature`. A file a same-uid agent
+ * wrote or edited would otherwise speak as a spark or as VibeField into the session at its next idle, so fieldd sets
+ * aside, and never delivers, a file that is unsigned, does not verify, does not parse, or names another run. */
+export const AgentInputQueueFile = z
+  .object({
+    format: z.literal(AGENT_INPUT_QUEUE_FORMAT),
+    /** the run it waits for, its file's name too: inside the signature, so a file copied to another run's name is
+     * refused there */
+    run: z.string().min(1),
+    /** oldest first; an empty queue keeps no file */
+    inputs: z.array(AgentQueuedInput).min(1),
+  })
+  .passthrough();
+export type AgentInputQueueFile = z.infer<typeof AgentInputQueueFile>;

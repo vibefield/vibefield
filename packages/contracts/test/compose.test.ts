@@ -3,8 +3,14 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { AgentSessionRecord, AgentSessionSummary } from "../src/agent-session";
-import { ComposeSparksHatchParams, SparkRecord, SparkSummary } from "../src/compose";
+import {
+  AgentInputQueueFile,
+  ComposeSparksHatchParams,
+  SparkRecord,
+  SparkSummary,
+} from "../src/compose";
 import { METHODS } from "../src/methods";
+import { LAYOUT, LAYOUT_ROOT_LEVEL } from "../src/registries";
 
 // CO — the compose plane, version 2 (ruled 2026-10-29; draft/compose-plane/v2/). What these hold: the window's spark
 // doors are local agents.manage rows; a spark thinks under one of its own profiles; and a run's origin is read the way
@@ -90,5 +96,34 @@ describe("a run's origin (CP-D15)", () => {
     const { origin: _o, spark: _s, ...before } = record;
     expect(AgentSessionRecord.safeParse(before).success).toBe(true);
     expect(AgentSessionRecord.safeParse({ ...record, spark: "Vela" }).success).toBe(false);
+  });
+});
+
+describe("a session's kept input queue (CP2-D3; signed since CP-3, LEANS P3)", () => {
+  const kept = AgentInputQueueFile.parse(fixture("agent-input-queue.valid"));
+
+  it("is one run's, its inputs marked as a spark's or as VibeField's, and its signature rides beside the body", () => {
+    expect(kept.run).toBe("run-12");
+    expect(kept.inputs.map((input) => input.from.kind)).toEqual(["spark", "fieldd"]);
+    expect(kept.signature).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("refuses an input from a source it cannot mark, a spark it cannot name, and an empty queue", () => {
+    const [words, wake] = kept.inputs;
+    const as = (from: unknown) => ({ ...kept, inputs: [{ ...words, from }] });
+    expect(AgentInputQueueFile.safeParse(as({ kind: "person" })).success).toBe(false);
+    expect(AgentInputQueueFile.safeParse(as({ kind: "spark", name: "Vela" })).success).toBe(false);
+    expect(
+      AgentInputQueueFile.safeParse(as({ kind: "spark", spark: "Vela", name: "Vela" })).success,
+    ).toBe(false);
+    expect(AgentInputQueueFile.safeParse({ ...kept, inputs: [] }).success).toBe(false);
+    // the CP-2 file was a bare array: it is no queue now
+    expect(AgentInputQueueFile.safeParse([words, wake]).success).toBe(false);
+  });
+
+  it("keeps its key under this user's fieldd, beside the queues, never at the root", () => {
+    expect(LAYOUT.AGENT_INPUTS_KEY_FILE).toEqual(["fieldd", "inputs.key"]);
+    expect(LAYOUT.AGENT_INPUTS_KEY_FILE.slice(0, -1)).toEqual(LAYOUT.AGENT_INPUTS_DIR.slice(0, -1));
+    expect(LAYOUT_ROOT_LEVEL).not.toContain("AGENT_INPUTS_KEY_FILE");
   });
 });
