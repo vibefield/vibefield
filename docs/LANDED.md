@@ -22371,3 +22371,76 @@ them over the live field (VF-PM's split, 13:17Z).
   their console-window debt is paid. smoke:godview's HN rungs (11h, 11j, the Hub in the head) are still owed.
 - This slice's own witness: smoke:canvas's four HAND rows on `aeb2e8712`, at the unlock (above).
 - Record: `lanes/records/item123/item.md`.
+
+## TL fix — item 100: only this desktop's own callers read its colour deal; the recorded lanes and the model board read one contracts table by the caller's kind (2026-10-29, landed 2026-10-31; `a025af02e`, lane `fix/item100-recorded-lanes-cut` on `e23fa8a1f`, landed with item 105 as the mint `2943ec558`, the mini's run 17b; the fixer's)
+
+**What.**
+- `MONITOR_AUDIENCE` in contracts' `agent-field.ts`, beside M16's `seq`: keyed by `Principal["kind"]` and exhaustive by
+  `satisfies Record<Principal["kind"], MonitorAudience>`. `window` for `local-token` and `shell-main`, `peer` for every
+  other kind. It is SP-L4's rule (by the principal's kind, never its transport), and this table is its instrument
+  (DECISIONS' SP row).
+  - A kind added to `Principal` fails the typecheck until it is given its cut. It is a TypeScript constant with no zod
+    shape: no wire shape changes and nothing is generated.
+- `agent.recordedLanes` reads `MONITOR_AUDIENCE[ctx.principal.kind]`, and `refuseBoardAsk` refuses `model` unless the
+  caller's audience is `window`. One authority, not two.
+- 7 files, +106 −18.
+
+**Found.**
+- **The bug:** the door cut a caller as `kind === "peer-fieldd" ? "peer" : "window"`, so a phone (`tailnet`, which
+  reaches the door by `index.search`) read this desktop's `project.seq`, which M16 keeps to its own windows. So would
+  `tailnet-guest`, `mcp-agent`, `plugin` and any kind not yet written. `refuseBoardAsk` held the same knowledge as a
+  deny-list of two literals.
+- **A vacuous row:** M16's "a peer reads no colour sequence" (`index-activity-doors.test.ts`) dealt no colour, so it
+  stayed green with the peer on the window's cut. The world now writes the identity record dealing `/work/app` sequence
+  0 before bootstrap.
+
+**Validation.**
+- **The light** (2026-10-29 13:03–13:07Z, this Mac, nice 19, each row alone behind the guard): typecheck (contracts,
+  fieldd), biome on the 7 files, contracts agent-field (35), and fieldd agent-field + agent-model-board +
+  index-activity-doors (69), all green. `pnpm gen:check` regenerated nothing.
+- **Red-first:** on the parent's two fieldd sources, exactly the two predicted reds (`mcp-agent: expected undefined to
+  be 'FORBIDDEN_SCOPE'`; the phone's lane `{ name: 'app', seq: 0 }`).
+- **Run 17 and 17b:** see the entry below; the two landed together.
+
+## TL fix — item 105: a phone's day of ended lanes is SP-D13's — the newest hundred by their end, said `clipped`, and every ended title a peer reads at the desk's bound (2026-10-29, landed 2026-10-31; `f948f0088`, lane `fix/item105-recorded-lanes-bound` on item 100's `a025af02e`, main `e9a400fef` merged as `2943ec558`, the mini's run 17b; the fixer's; VF-PM's ruling 2026-10-29 13:54Z)
+
+**What.**
+- `agent.recordedLanes` clips by `index.activity`'s rule, through the same call
+  (`tailnetRowLimit(principal, undefined, Number.MAX_SAFE_INTEGER)`). One rule for the two day doors:
+  - a `tailnet` or `tailnet-guest` caller's `ended` keeps the `INDEX_TAILNET_LIMITS.MAX_ROWS` lanes that ended last, in
+    the answer's own order, and the answer says `clipped` (false when the day fit);
+  - `live` (the model's rows) stays whole; a window and a peer daemon read the whole day and are never told;
+  - never a cursor (the day window is the cursor), and never `partial`.
+- Every ended title the `peer` audience reads is bounded at `AGENT_FIELD.DESK_TEXT_CHARS` (280), as `peerMonitorRow`
+  bounds the live rows (M21). A window's stay whole.
+- The contract: `AgentRecordedLanesResult.clipped` (optional boolean); its "No cap, no `truncated`" sentence carries a
+  dated correction at the source. A new EL9 fixture, `agent-recorded-lanes.clipped.json`. TS-only: nothing regenerates.
+- 7 files, +226 −8.
+
+**Found.**
+- `index.activity` has held SP-D13's clip since TL and was never in `INDEX_TAILNET_LIMITS`' list of the doors it
+  bounds. The list now names both day doors.
+- Filed after it, not here: items 107 (the spans per lane, unbounded in count; a measurement first) and 108 (the bytes
+  half for a peer daemon, item 60's class).
+
+**Validation.**
+- **The light** (2026-10-29 14:00–14:03Z, this Mac, nice 19, each row alone): the frozen install; the merge-tree over
+  PG-1's `8a3b64ced` (clean); typecheck ×2; biome (7 files); the walls; contracts 481/481; field-native's build; fieldd
+  24/24 (`index-activity-doors`); gen:check, all exit 0.
+- **Red-first:** the parent's fieldd sources give exactly the 3 predicted reds (the phone told nothing; the cut absent;
+  a peer's 389-point title against the 280 bound), and the parent's contract exactly 1 (a non-boolean `clipped`
+  admitted by passthrough).
+- **The merge:** `2943ec558` merged main `e9a400fef` (TS-6 and the item 94 stack through PT-S2, and item 119's records).
+  Both-sides files: contracts `registries.ts` and fieldd `daemon.ts`, ours + theirs − base, 0 markers. 10 files over
+  main, +328 −22; no lock or pin.
+- **Run 17** (M17 `2943ec558`, armed 00:46:41Z, exit 1 at 00:49:28Z, load 38.21): red on ONE row that is not these
+  items', AR-6-0's stop verb, item 118's second witness (its ⌃C swallowed in the pane's prologue).
+- **Run 17b**, the same M17, the lottery's one re-run: armed 00:51:32Z, exit 0 at 00:55:56Z. vitest 10,431 passed,
+  0 failed, 18 skipped (784 files passed, 3 skipped); cargo 31 ok, 0 FAILED; typecheck and test for 28 projects; tree
+  clean; stubs 0.
+- **Landed:** main fast-forwarded `e9a400fef` → `2943ec558` at 2026-10-31 00:57:33Z (the fixer, on VF-PM's GO).
+- **These two entries were written late** (2026-10-31, after the 04:30Z draft queue): the landing went in without its
+  records, and the fixer's queue pass found the gap (VF-PM's word 04:33Z). Their draft notes (SP-D13's extension,
+  `history-finish/build-hf.md` §3d, the survey's §4.4 and §8 defect 1) carry dated "Landed" clauses from that queue.
+
+**Owed.** Nothing for items 100 and 105. Items 107 and 108 stay queued.
