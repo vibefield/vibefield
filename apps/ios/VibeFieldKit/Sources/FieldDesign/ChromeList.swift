@@ -99,10 +99,13 @@ public struct ChromeListFoot: View {
   }
 }
 
-/// §8's fact label: a hairline chip, no fill, no hue — solid for a fact,
-/// dashed for something the phone cannot read yet, dotted for something not
-/// built. Ownership and timing are not states of concern, so a tag never takes
-/// a hue.
+/// §8's fact label: a hairline chip, no fill, no hue, in §8's grammar — solid
+/// for a standing fact (scope, whose word a value is, Live), dashed for a value
+/// known but not shown yet (the desktop's "Kept, not drawn"; the phone's "No
+/// desktop yet"), dotted for one not in this build (the desktop's "Next
+/// ghosttea"; the phone's "Not yet"). It sits on a section head, or on a row
+/// only where the row is itself the unit (an ability). Ownership and timing are
+/// not states of concern, so a tag never takes a hue.
 public struct FactTag: View {
   public enum Line: Sendable {
     case solid, dashed, dotted

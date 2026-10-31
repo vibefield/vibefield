@@ -168,4 +168,12 @@ struct SettingsAccountTests {
     #expect(face(desktops: [desktop()]).drawsDesktopSection)
     #expect(face(foreign: 1).drawsDesktopSection)
   }
+
+  /// The sign-out words say Appearance stays: the sweep names this phone's look
+  /// by the key Appearance keeps it under, so the two cannot drift apart.
+  @Test("signing out keeps this phone's look, by Appearance's own key")
+  func signOutKeepsTheLook() {
+    #expect(SignOutSweep.kept.contains(PhoneAppearance.storageKey))
+    #expect(SettingsWords.signOutMessage.contains("Appearance"))
+  }
 }

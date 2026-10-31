@@ -5,10 +5,13 @@ import SwiftUI
 /// runs on, whether it serves its terminals to your devices, and what this
 /// phone can do with it. Nothing here manages the desktop; its own Settings
 /// does. A desktop that is not reachable now keeps its facts, dimmed, and says
-/// why in words — asleep is grey, never "offline" (§9).
+/// why in words — asleep is grey, never "offline" (§9); what the phone can do
+/// with it is drawn only while it is connected.
 ///
-/// Later slices read more over its door (its agents and profiles, its
-/// History's index, its VibeField version), each a glance like these.
+/// Later slices read more, each a glance like these: its agent catalog and
+/// profile sets over its door, its History's index, its VibeField version
+/// (the roster's `appVersion`). Its running agents are the Field's, read
+/// through the home (PG-L4.6), never here.
 struct DesktopPage: View {
   let desktop: SettingsDesktop
   let standing: SettingsAccount.Standing
@@ -36,7 +39,9 @@ struct DesktopPage: View {
       }
       .chromeRows()
       .opacity(desktop.isAsleep ? 0.62 : 1)
-      if !desktop.isAsleep {
+      // Its abilities while it answers: one dialing, refused or incompatible
+      // says so in its head and is not asked for anything (DS-L9).
+      if desktop.reach == .connected {
         Section {
           ForEach(SettingsModel.abilities(desktop), id: \.title) { ability in
             HStack(spacing: 12) {

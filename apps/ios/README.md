@@ -34,6 +34,7 @@ connection, whole mesh through it), EL3/EL7 as ever.
 | `VibeFieldKit/Sources/FieldSwarm` | the swarm on Metal (IOS-6c, D-i11): the six shaders transcribed from the reference's WGSL (they ride as resources and compile at first use, D-i14), `SwarmRenderer` (the same five pipelines in painter's order, the same buffer layouts, one upload a frame), the glyph atlas (CoreText at the screen's scale into an `r8` shelf-packed texture; the folder outlined and solid, the state marks, the dot and the two flames drawn from paths into it), the mark atlas (the reference's `marks.png` byte for byte), `SwarmTheme` (one surface and one ink resolved from `FieldPalette` per scheme, the state hues fit to be read, lit and grounded — the reference's `readable` · `vivid` · `stateGlow` · `stateGround`, tuned by the STATE GLOW parameters), `SwarmStage` (the loop: the blend, the radius spring, the arrival curve, draw order, hit testing, drag / tap / hold, VoiceOver focus), `SwarmMetalView`, the SwiftUI `SwarmField` with its chrome slot and `.swarmObstacle()`, and the design lab behind `-vf-swarm-lab` (D-i15) |
 | `VibeFieldKit/Sources/FieldHistory` | the HISTORY tab (IOS-9b, H-D4): the ledger (`HistoryLedgerView` — large title, the scope line in the record's three states, Live now, projects by spend or recency with the tint wash and the sparkline), a project (`HistoryProjectView` — the four figures, the 53-week ribbon, sessions under their days), a session's document (`HistorySessionView` — the prompt as the one filled panel, response heads, runs folded to a sentence of nouns with the failed count red, the day pill, the live line), search (`HistorySearchView` — the system's search role, recent searches, hits grouped under session heads with the terms marked, the quiet states) and the match stepper that rides the bar; `FieldHistoryModel` is every decision as a pure function, `HistoryRouter` the shared stack a hit lands into, `HistoryCorpus` the VALUES all of it reads — today filled only by the mock (`-vf-mock`); the index reads (H-1) fill the same values. Chrome family only, never the godview ink |
 | `VibeFieldKit/Sources/FieldWorkspace` | FS-2's folder picker and launch sheet: Recent places, home and volumes on a selected desktop; confined list/search rows with exact absolute Copy path, paging and honest offline/partial states; `agent.spawn {cwd}` through that desktop's existing product door using its catalog and default profile. Hold empty ground to create; the folder chooser opens above a single-height launch sheet. No file bodies and no additional phone connection budget. |
+| `VibeFieldKit/Sources/FieldSettings` | the phone's SETTINGS (IOS-10a, DESIGN.md §8 "The phone's Settings"): a sheet on paper headed by you — your desktops as glances in the corner's words, Account (your face and whose word it is, Tailscale's card, Network details, Sign out), This phone's Appearance (Light · Dark · Auto, worn by the window) and Terminal (`FieldTerminal`'s `TerminalSettingsPage`), About and Acknowledgements — over one `NavigationPath` (`SettingsRoute`, `SettingsOpening`); `SettingsModel` holds every word, tested. It draws what FieldHome hands it (`FieldHomeModel.settingsAccount`) and asks nothing of the mesh |
 | `VibeFieldKit/Sources/FieldHome` | the home composition: the field mounted over the dressed rows, the session card, the BAR (IOS-9e, `AppBar.swift`: the account circle at the LEFT, Field · History in a capsule at the centre, search at the RIGHT — one 62 pt row of the system's Liquid Glass (`GlassEffectContainer`, `glassEffect`, `glassEffectID` morphs; the chrome family's recipe below iOS 26), every number measured off iOS 26's own tab bar and pinned by `AppBarTests`. It is ours rather than `TabView`'s because the system bar pins its capsule to the left once search is a tab and seats nothing before the tabs; the three pages are stacked under it and kept alive the way a TabView keeps its tabs. History's scroll folds the capsule to its glyph at the left, the match stepper rides above the bar or inline when folded, and the search circle morphs into the field above the keyboard), and since IOS-8 the ACCOUNT CORNER (`AccountCorner.swift`: the owner's face in the bar's left corner, a glass circle the search circle's size, and the menu grown up and to the right of it — you · your desktops · Settings… · Sign in (only while the tailnet asks) · Sign out — and `FieldHomeModel.accountFace`, the decision behind every word; the mesh chip, its line and the mesh sheet retired into it) — hold-to-create — plus `FieldHomeModel`, the screen's decisions as pure functions (discovery lifecycle, the card's face, the write claims) so the integrator is testable without a simulator |
 
 **Write keys (IOS-3c) — DELETED at TM-3, 2026-09-14.** This phone held one
@@ -240,7 +241,8 @@ physically flow around
 terminal leg — re-footed at **TM-5**: ATTACH is a routed T1 client dialing a
 desktop CELL's two doors with a ticket fieldd minted, the cell's own TRF1 into
 the Ghosttea Metal surface (no replica, no on-device encode), 602 themes + 4
-shader ports in the settings sheet, and our own banner. What went with TSP1: the
+shader ports in Settings › Terminal (the settings sheet until IOS-10a), and our
+own banner. What went with TSP1: the
 per-host discovery that put every peer's session on the field as a bubble (the
 field's rows are the FOLD's agent runs now), and upstream's reconnect banner
 with the connection it described;
@@ -305,10 +307,11 @@ on a device.** IOS-5v re-skinned every
 surface of it into the chrome family and changed no behaviour, so every device
 gate below is still open and still says the same thing; what the simulator
 witnessed of the re-skin is our own pixels in both themes, which is all a
-screenshot can ever witness. **The rest of the phone's chrome has not moved
-yet** — the session card's header, the settings sheet and the mesh sheet still
-speak godview, which is right for the terminal deck they sit on and a decision
-nobody has made for the others. Typing is the gate that
+screenshot can ever witness. **The rest of the phone's chrome has moved
+since:** the mesh sheet retired into the account corner (IOS-8), and the
+settings sheet became Settings › Terminal in the chrome family's voice
+(IOS-10a); the session card's header still speaks godview, which is right for
+the terminal deck it sits on. Typing is the gate that
 proves the whole of it — type into a desktop's session and watch it land — and
 it wants a phone, a tailnet and a serving desktop, so it is a device run that no
 simulator can stand in for; the same run is what would prove IOS-5b's encodings

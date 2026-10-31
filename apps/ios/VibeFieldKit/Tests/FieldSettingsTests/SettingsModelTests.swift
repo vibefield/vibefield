@@ -119,19 +119,26 @@ struct SettingsModelTests {
 
   // MARK: - A desktop's page
 
-  @Test("what the phone can do with a desktop: the same for every one, and approvals not yet")
+  @Test("what the phone can do with a desktop: the same for every one; approving from the card not yet")
   func abilities() {
     let all = SettingsModel.abilities(desktop(.connected))
     #expect(all.map(\.title) == [
-      "Watch its agents", "Start agents in its folders", "Open terminals and type",
-      "Read and search its History", "Answer approvals",
+      "Watch its agents", "Start agents in its folders", "Open its agents’ terminals and type",
+      "Read and search its History", "Approve from the card",
     ])
     #expect(all.map(\.can) == [true, true, true, true, false])
     // A desktop that said its terminals are not served: the row says so, in words.
     let closed = SettingsModel.abilities(desktop(.connected, terminals: false))
-    #expect(closed[2] == .init(title: "Open terminals and type", detail: "studio doesn’t serve its terminals to your devices.", can: false))
+    #expect(
+      closed[2]
+        == .init(
+          title: "Open its agents’ terminals and type", detail: "studio doesn’t serve its terminals to your devices.",
+          can: false))
     // Not said is not a refusal.
     #expect(SettingsModel.abilities(desktop(.connected, terminals: nil))[2].can)
+    // The welcome promises "Approve agents" — by typing into the pane, which
+    // works — so nothing here may say approvals cannot be answered at all.
+    #expect(!all.contains { $0.title.localizedCaseInsensitiveContains("answer approvals") })
   }
 
   @Test("terminals: served, not served, or not drawn when not said")
@@ -141,13 +148,20 @@ struct SettingsModelTests {
     #expect(SettingsModel.terminalsValue(desktop(.connected, terminals: nil)) == nil)
   }
 
-  @Test("an unreachable desktop says why, in words")
+  @Test("an unreachable desktop says why, in words, and that what was read stays (DS-L8)")
   func asleepFoot() {
     let mini = desktop(.asleep(lastHeard: nil), name: "mini")
-    #expect(SettingsModel.asleepFoot(mini, standing: .connected).hasPrefix("Tailscale doesn’t list mini right now"))
+    let asleep = SettingsModel.asleepFoot(mini, standing: .connected)
+    #expect(
+      asleep
+        == "Tailscale doesn’t list mini right now: it’s asleep, or VibeField isn’t running on it. "
+        + "What you already opened from it stays on this phone; its terminals and search answer when it wakes.")
     #expect(
       SettingsModel.asleepFoot(mini, standing: .signInAgain)
-        == "Its agents, terminals and History show again once you sign in to Tailscale again.")
+        == "What you already opened from it stays on this phone. "
+        + "Its terminals and search answer once you sign in to Tailscale again.")
+    // A desktop is any OS: the words never assume a Mac.
+    #expect(!asleep.contains("Mac"))
   }
 
   // MARK: - Account
@@ -186,7 +200,12 @@ struct SettingsModelTests {
   func signOutWords() {
     #expect(SettingsWords.signOutTitle(login: "me@jamesyong42.com") == "Sign out of me@jamesyong42.com?")
     #expect(SettingsWords.signOutTitle(login: nil) == "Sign out of this account?")
-    #expect(SettingsWords.signOutMessage.hasSuffix("Appearance, snippets and clipboard history stay."))
+    // What `SignOutSweep` removes and keeps, said whole: the project colours
+    // go; this phone's look and the terminal's look stay.
+    #expect(
+      SettingsWords.signOutMessage
+        == "This phone forgets your Tailscale sign-in, your desktops, your face and your project colours. "
+        + "Appearance, the terminal’s look, snippets and clipboard history stay.")
   }
 
   // MARK: - About

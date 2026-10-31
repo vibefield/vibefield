@@ -167,9 +167,12 @@ public enum SettingsWords {
     "Sign out of \(login ?? "this account")?"
   }
 
+  /// What `SignOutSweep` removes and keeps, in the person's words: the
+  /// project colours go with the account (the project ledger); Appearance —
+  /// this phone's look — and the terminal's look stay with the person.
   public static let signOutMessage =
-    "This phone forgets your Tailscale sign-in, your desktops and your face. "
-    + "Appearance, snippets and clipboard history stay."
+    "This phone forgets your Tailscale sign-in, your desktops, your face and your project colours. "
+    + "Appearance, the terminal’s look, snippets and clipboard history stay."
 
   /// TS-7 (DESIGN.md §13): the phone wears Tailscale's mark on its sign-in and
   /// in Settings › Account, so About says this.

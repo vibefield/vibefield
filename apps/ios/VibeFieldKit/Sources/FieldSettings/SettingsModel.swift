@@ -95,8 +95,11 @@ public enum SettingsModel {
 
   // MARK: - A desktop's page
 
-  /// What the phone can do with a desktop of yours — the same for every one,
-  /// because the phone is you (UA-P-D4) — and the one thing not built yet.
+  /// What the phone can do with a desktop of yours while it answers — the same
+  /// for every one, because each mints the phone what it mints every self
+  /// principal (DS-D5) under the phone's one scope set (`TAILNET_SCOPES`) —
+  /// and the one thing not built yet. Drawn only for a desktop that is
+  /// connected: one that is refused or incompatible is not asked (DS-L9).
   public struct Ability: Equatable, Sendable {
     public let title: String
     public let detail: String?
@@ -104,16 +107,22 @@ public enum SettingsModel {
   }
 
   public static func abilities(_ desktop: SettingsDesktop) -> [Ability] {
+    // Its agents' terminals: a bare terminal is no body on the phone until
+    // PG-D5 brings them onto the remote cut (`thinking-phone-godview.md` §1).
     let terminals: Ability =
       desktop.servesTerminals == false
-      ? Ability(title: "Open terminals and type", detail: "\(desktop.name) doesn’t serve its terminals to your devices.", can: false)
-      : Ability(title: "Open terminals and type", detail: nil, can: true)
+      ? Ability(
+        title: "Open its agents’ terminals and type",
+        detail: "\(desktop.name) doesn’t serve its terminals to your devices.", can: false)
+      : Ability(title: "Open its agents’ terminals and type", detail: nil, can: true)
     return [
       Ability(title: "Watch its agents", detail: nil, can: true),
       Ability(title: "Start agents in its folders", detail: nil, can: true),
       terminals,
       Ability(title: "Read and search its History", detail: nil, can: true),
-      Ability(title: "Answer approvals", detail: nil, can: false),
+      // Approving by typing into the pane works today (the welcome's "Approve
+      // agents"); the verdict from the card is AR-6's, and not built.
+      Ability(title: "Approve from the card", detail: nil, can: false),
     ]
   }
 
@@ -126,11 +135,14 @@ public enum SettingsModel {
     }
   }
 
-  /// The words under a desktop that is not reachable now.
+  /// The words under a desktop that is not reachable now. What the phone
+  /// already read stays (DS-L8: a sleeping desktop's rows stay; History keeps
+  /// what was opened, and says so in its own words); only what needs the
+  /// desktop itself waits — its terminals, and search, which runs on its index.
   public static func asleepFoot(_ desktop: SettingsDesktop, standing: SettingsAccount.Standing) -> String {
     standing == .signInAgain
-      ? "Its agents, terminals and History show again once you sign in to Tailscale again."
-      : "Tailscale doesn’t list \(desktop.name) right now: the Mac is asleep, or VibeField isn’t running on it. Its agents, terminals and History show when it answers."
+      ? "What you already opened from it stays on this phone. Its terminals and search answer once you sign in to Tailscale again."
+      : "Tailscale doesn’t list \(desktop.name) right now: it’s asleep, or VibeField isn’t running on it. What you already opened from it stays on this phone; its terminals and search answer when it wakes."
   }
 
   // MARK: - Account

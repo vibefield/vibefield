@@ -4564,17 +4564,25 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   revised 2026-10-31; its eight marks are unpicked and stand at their leans: History's heads, bare
   glyphs, the ink switch). A sheet on paper (`--vf-chrome-solid`, opaque: a page to read, not glass),
   headed by you, as the desktop's Settings is (*The Me menu*): your face at 60 pt, tilted (§2.8), your
-  name, and your login in mono open **Account**; signed out, the head is **Continue with Tailscale**.
-  iOS's own parts speak the chrome family's voice: a navigation stack with the system's large and
-  inline titles, back and close; inset-grouped lists whose rows sit on `--vf-fill` tiles; History's
-  group head (11 medium, uppercase, 0.08em, the ramp's faint step) with *Fact labels* on its right;
+  name, and your login in mono open **Account**; signed out, the head is **Continue with Tailscale**
+  (reached today only by signing out inside Settings, which keeps the sheet open, until the page's
+  signed-out mark gives the corner a way in). iOS's own parts speak the chrome family's voice: a
+  navigation stack with the system's large and inline titles, back and close; inset-grouped lists
+  whose rows sit on `--vf-fill` tiles; History's group head (11 medium, uppercase, 0.08em, the ramp's
+  faint step) with *Fact labels* on its right, in their recipe and grammar — scope (**This phone**,
+  **Read-only**), whose word a value is (**From studio**), timing (**Live**); DASHED for a value known
+  but not shown yet (**No desktop yet**), DOTTED for one not in this build (**Not yet**) — and on a
+  row only where the row is itself the unit (an ability);
   §13's glyphs bare in the secondary ink, a desktop its OS mark at 19 pt; the design kit's switch (an
   ink track, the knob its inverse, because green says healthy, §2.5); every size a text style, so the
   pages move with the reader's text size. **Your desktops** are glances in the corner's words: the
   home says **Connected · your field comes through it**, a sleeping one **Asleep · last heard
   yesterday, 18:02**, grey and never "offline" (§9); a desktop's page says what it runs on, whether it
-  serves its terminals, and what the phone can do with it, with **Answer approvals** dotted **Not
-  yet**. **Account** holds your face and whose word it is (**From studio**, **This phone** while
+  serves its terminals, and — while it is connected — what the phone can do with it (DS-D5: what
+  every desktop mints every self principal), with **Approve from the card** dotted **Not yet**
+  (approving by typing into the pane works today, as the welcome says); one asleep says that what
+  you already opened from it stays on the phone (DS-L8) and that its terminals and search answer
+  when it wakes. **Account** holds your face and whose word it is (**From studio**, **This phone** while
   dealt, **No desktop yet** dashed), Tailscale's card (its mark at 56, the state in §9's words:
   **Connected**, **Sign in to Tailscale again**, **Waiting for approval**), Network details (this
   phone's machine name in mono with Copy, the tailnet) and Sign out, confirmed in the corner's words.
@@ -4582,8 +4590,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   so the field, History and every sheet change with it; **Terminal** is the terminal sheet re-voiced
   in the desktop's Look words (Theme, its 602 searchable; Background opacity; Font size; Effects, each
   with its licence; Animate effects). **About** gives the version, your desktops, Acknowledgements,
-  and Tailscale's trademark line, which left the terminal sheet's foot. The corner's **Settings…**
-  opens the root and *you* open Account; the card's `···` opens Terminal, Settings one step back.
+  and Tailscale's trademark line, which left the terminal sheet's foot (§13). The corner's
+  **Settings…** opens the root and *you* open Account; the card's `···` menu's **Terminal look…**
+  opens Terminal, Settings one step back.
   Not yet drawn: Field, Keyboard, Notifications, Privacy & data, Developer, a desktop's agents and
   History, and its VibeField version.
 - **The file tree** (mille; 2026-08-09 — first consumer is the History room's files rail,
@@ -5203,12 +5212,14 @@ row and the bottom centre solid, the other five at 40% — never in one colour, 
 48 × 48 px (drawn at 56, so the dots themselves span 48), never on a busy ground, in
 `--vf-tailscale-ink` (`#1E1E1F` on light, `#FFFFFF` on dark, its two files' inks). It appears only
 where trust is decided — the Connect pane's partner line, Settings → Devices' card, the phone's
-sign-in — and every button stays words. It is drawn inline in `account/tailscale-mark.tsx`, the
+sign-in and the phone's Settings › Account card (IOS-10a) — and every button stays words. It is
+drawn inline in `account/tailscale-mark.tsx`, the
 glyph test's allow-list naming it, and About carries "Tailscale is a registered trademark of
 Tailscale Inc.". The phone's copy (TS-7) is FieldDesign's `TailscaleMark` in
 `ChromePalette.tailscaleInk`, drawn from the same constants and held to them by
-`pnpm check:ios-fixtures`; having no About, the phone carries the trademark line at the foot of its
-settings sheet. On the
+`pnpm check:ios-fixtures`; the phone's About carries the trademark line at its foot, as the
+desktop's does (IOS-10a; until the phone had an About, TS-7 put it at the foot of its terminal
+settings sheet). On the
 phone (PJ-7) the OS marks are template SVGs in FieldDesign's `OSMarks.xcassets` (`DeviceMark`),
 copies of `os-marks.tsx`'s paths that `pnpm check:ios-fixtures` holds to them; and `start`,
 `resume` and `jump` join the phone's picks, so History's New agent, Resume and Jump to draw the
