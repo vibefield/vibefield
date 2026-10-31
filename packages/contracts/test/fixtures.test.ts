@@ -33,6 +33,9 @@ import {
   AgentModelMeshOpen,
   AgentRecordedLanesParams,
   AgentRecordedLanesResult,
+  AgentRemoteMeshFrame,
+  AgentRemoteMeshOpen,
+  AgentRemoteRow,
   AgentReportShownParams,
   MonitorAgentRow,
 } from "../src/agent-field";
@@ -687,21 +690,28 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "agent-mesh-open": AgentMeshOpen,
   "agent-mesh-frames": z.array(AgentMeshFrame),
   // MV-3a (MV-D22, MV-D18) — the model's row as the backend beside the runtime
-  // emits it (mirroring the SDK's `MonitorAgentRow`); the desk row carrying one
-  // as a PEER's cut (no `project.seq`, M16); a bare terminal's row, this
-  // desktop's windows only (L8); the window's one door — this desktop's model
-  // board with its terminal first, a peer's desk board beside it, an asleep
-  // desktop carrying none — and its frames in order (a terminal going idle with
-  // the run's row removed, a peer going stale, the peer's run leaving); the
-  // report of what a window shows (L5).
+  // emits it (mirroring the SDK's `MonitorAgentRow`); a bare terminal's row on
+  // this desktop's own board (L8); the window's one door — this desktop's model
+  // board with its terminal first, a peer's remote board beside it (PG-2; its
+  // desk board before), an asleep desktop carrying none — and its frames in
+  // order (a terminal going idle with the run's row removed, a peer going
+  // stale, the peer's run leaving); the report of what a window shows (L5).
   "monitor-agent-row": MonitorAgentRow,
-  "agent-desk-row.model": AgentDeskRow,
   "agent-desk-terminal-row": AgentDeskTerminalRow,
   "agent-model-mesh-open": AgentModelMeshOpen,
   "agent-model-mesh-frames": z.array(AgentModelMeshFrame),
   // MV-3d (M35) — a run's row on this desktop's own `model` board: the desk row
   // with the model's row whole and the chrome's facts (`local`) beside it.
   "agent-model-desk-row": AgentModelDeskRow,
+  // PG-2 (PG-L1, PG-D5) — the model's REMOTE cut, as its owner cuts it for every
+  // other screen: an agent's row (the model's row for a peer and the joins, no
+  // field half), a bare terminal's (its directory as its folder); the phone's
+  // mesh door — its home's board first, a peer's, an asleep desktop — and its
+  // frames in order (the home's run answered and its terminal gone, the peer's
+  // board re-presented with its doors down, the peer going stale).
+  "agent-remote-row": AgentRemoteRow,
+  "agent-remote-mesh-open": AgentRemoteMeshOpen,
+  "agent-remote-mesh-frames": z.array(AgentRemoteMeshFrame),
   "agent-report-shown": AgentReportShownParams,
   // TL (B-D6 (a)) — the lanes' past as the backend derives it (the SDK's
   // `MonitorPastSnapshot`): the ask; a live row's past with a silence across
