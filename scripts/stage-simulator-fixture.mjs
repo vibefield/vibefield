@@ -11,8 +11,10 @@
 //   node scripts/stage-simulator-fixture.mjs --sweep <runId>                      the run's `pts3-<runId>-n` shut down
 // Options come by ENV, since a pnpm script's trailing arguments reach Electron:
 //   VF_PHONE_RUN               the run's id, `^[a-z0-9]+(-[a-z0-9]+)*$` (its devices are `pts3-<runId>-1..3`)
-//   VF_PHONE_HID_LOG           `<logs>/<run>/<run>-hid.log`: the HID record; `shots/` is made beside it, and ENUM's
-//                              record (`phone-enum.json`) lives in `<logs>`, where every launch reads it
+//   VF_PHONE_HID_LOG           `<logs>/<run>/<run>-hid.log`: the HID record; `shots/` is made beside it, and
+//                              `<run>-stage.log` (the run's STOP, HOST_RESTORED and HID lines, mirrored: they outlive an
+//                              output whose reader went away); ENUM's record (`phone-enum.json`) lives in `<logs>`,
+//                              where every launch reads it
 //   VF_PHONE_DEADLINE_MS       past it the command is stopped and the host restored (default 30 min, at most 6 h)
 //   VF_PHONE_DELETE_DEVICES=1  teardown (and --sweep) DELETES the run's own devices; unset, they are KEPT, shut down and
 //                              named (P5's default; the console runs set it on James's word, brief §13 RM2)
@@ -235,6 +237,8 @@ export function readOptions(env) {
     deleteDevices: del === "1",
     shotDir: runDir === null ? null : join(runDir, "shots"),
     enumRecord: runDir === null ? null : join(dirname(runDir), "phone-enum.json"),
+    // S-2: the run's STOP, HOST_RESTORED and HID lines, mirrored (`MIRRORED`) — kept if the output goes away
+    stageLog: runDir === null || !runIdOk(run) ? null : join(runDir, `${run}-stage.log`),
     errors,
   };
 }
@@ -1736,10 +1740,51 @@ const sha256File = (path) => {
   }
 };
 
+/** THE STAGE'S OUTPUT, GUARDED (RM6 S-2). Every line the stage writes, its own and the command's, goes to a stream
+ * whose reader may go away: a closed terminal's EIO, a dropped ssh, a dead `| tee`'s EPIPE, a full disk. Unguarded,
+ * that write's `error` has no listener and kills the stage before or during its teardown: own devices left booted,
+ * Simulator.app up, PERF.lock held, the HID END never written. Guarded, the first error marks the stream gone (`onGone`
+ * once, with its code), later writes are dropped, and nothing throws. */
+export function guardedOutput(stream, onGone = () => {}) {
+  let gone = null;
+  const lose = (error) => {
+    if (gone !== null) return;
+    gone = String(error?.code ?? error?.message ?? error);
+    try {
+      onGone(gone);
+    } catch {}
+  };
+  stream.on("error", lose);
+  return {
+    write(text) {
+      if (gone !== null) return false;
+      try {
+        stream.write(text);
+        return true;
+      } catch (error) {
+        lose(error);
+        return false;
+      }
+    },
+    gone: () => gone,
+  };
+}
+
+/** The stage's lines mirrored into the run's log folder (`<run>-stage.log`, RM6 S-2), so the run's end outlives an output
+ * gone: its STOP (`PHONE_STOP`, `_FINAL`, `_UNRESTORED`), PHONE_HOST_RESTORED and the HID summary. */
+export const MIRRORED = /^(PHONE_STOP|PHONE_HOST_RESTORED |HID: )/u;
+
 /** The host's own deps: the real exec (and the command's own spawn), the clock, the files. `say` writes through the
- * redactor. */
-function hostDeps(redactor) {
-  const out = redactStream(redactor, "driver", (line) => process.stdout.write(line));
+ * redactor to `write` (the guarded stdout unless given), and each MIRRORED line, as redacted, to `mirror` too. Exported
+ * for its unit: building it spawns nothing. */
+export function hostDeps(
+  redactor,
+  { write = guardedOutput(process.stdout).write, mirror = () => {} } = {},
+) {
+  const out = redactStream(redactor, "driver", (line) => {
+    if (MIRRORED.test(line)) mirror(line);
+    write(line);
+  });
   return {
     exec: realExec,
     spawn,
@@ -2174,8 +2219,21 @@ export async function sweep(
 
 /** One launch — enum, none, devices or cost. */
 async function launch(mode, command, opts) {
+  // S-2: the output guarded before a line is said — a reader gone never kills the run before or during its teardown —
+  // and the run's STOP, HOST_RESTORED and HID lines mirrored beside its HID log, where they outlive it
+  const mirror = (line) => {
+    try {
+      appendFileSync(opts.stageLog, line);
+    } catch {}
+  };
+  const gone = (which) => (why) =>
+    mirror(
+      `stage-simulator-fixture: ${which} went away (${why}): its later lines are dropped; this file keeps the run's STOP, HOST_RESTORED and HID lines\n`,
+    );
+  const stdout = guardedOutput(process.stdout, gone("stdout"));
+  const stderr = guardedOutput(process.stderr, gone("stderr"));
   const redactor = createRedactor();
-  const deps = hostDeps(redactor);
+  const deps = hostDeps(redactor, { write: stdout.write, mirror });
   const run = newRun(mode, opts, redactor);
   mkdirSync(dirname(opts.hidLog), { recursive: true });
   deps.hid = (line) => appendFileSync(opts.hidLog, `${line}\n`);
@@ -2316,9 +2374,9 @@ async function launch(mode, command, opts) {
         };
         const out = redactStream(redactor, "main", (line) => {
           watch(line);
-          process.stdout.write(line);
+          stdout.write(line);
         });
-        const err = redactStream(redactor, "main", (line) => process.stderr.write(line));
+        const err = redactStream(redactor, "main", (line) => stderr.write(line));
         running = runCommand({ command, env, deadlineMs: opts.deadlineMs, deps, out, err });
         let sampler = null;
         if (mode === "cost") sampler = startCostSampler(run, deps);

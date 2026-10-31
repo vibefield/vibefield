@@ -4,6 +4,7 @@ import { EventEmitter } from "node:events";
 import { readFileSync } from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
 import { join } from "node:path";
+import { Writable } from "node:stream";
 import test, { after } from "node:test";
 
 // PT-S3 (P3/P5/P6/P10) — the phone's stage (scripts/stage-simulator-fixture.mjs): its preflight, its arming, its fence, its
@@ -37,9 +38,11 @@ const {
   enumVerdict,
   fenceAgain,
   fenceClear,
+  guardedOutput,
   handleDoor,
   hidLines,
   hidSummary,
+  hostDeps,
   houseRules,
   isOwnName,
   launchChecks,
@@ -77,6 +80,7 @@ const {
   simulatorProof,
   simulatorSettled,
   startDoor,
+  stopRun,
   sweep,
   teardownPlan,
   XCODE_DEVELOPER_DIR,
@@ -325,6 +329,8 @@ test("readOptions: the run, the HID log, a 30-minute deadline by default, and KE
   assert.equal(opts.deleteDevices, false);
   assert.equal(opts.shotDir, "/lanes/pts3/logs/l2-t1/shots");
   assert.equal(opts.enumRecord, "/lanes/pts3/logs/phone-enum.json");
+  // S-2: the run's STOP, HOST_RESTORED and HID lines mirrored beside its HID log
+  assert.equal(opts.stageLog, "/lanes/pts3/logs/l2-t1/l2-t1-stage.log");
   const del = readOptions({
     VF_PHONE_RUN: "l2-t1",
     VF_PHONE_HID_LOG: hidLog,
@@ -2393,6 +2399,80 @@ test("teardown's quit reads the fence AGAIN after the settle, right before its S
   assert.deepEqual(alone.host.killed, [{ pid: 4242, signal: "SIGTERM" }]);
   const kill = alone.order.indexOf("kill SIGTERM");
   assert.equal(alone.order[kill - 1], "list", alone.order.join(" → "));
+});
+
+test("the stage's output, guarded: a reader gone never kills the run — later lines dropped, teardown runs, its STOP, HOST_RESTORED and HID lines mirrored (S-2)", async () => {
+  // launch() guards stdout and stderr BEFORE the arm, and writes nothing raw (the command's lines among it)
+  const launch = launchSource();
+  assert.doesNotMatch(launch, /process\.(stdout|stderr)\.write/u);
+  const armed = launch.indexOf("await arm(");
+  for (const stream of ["process.stdout", "process.stderr"]) {
+    const at = launch.indexOf(`guardedOutput(${stream}`);
+    assert.ok(at >= 0 && at < armed, `${stream} guarded before the arm`);
+  }
+  // a pipe whose reader went away (a closed terminal's EIO alike): its first write errors EPIPE — and with no listener
+  // that `error` would end the process before teardown
+  const written = [];
+  const pipe = new Writable({
+    write(chunk, _encoding, done) {
+      written.push(String(chunk));
+      done(Object.assign(new Error("write EPIPE"), { code: "EPIPE" }));
+    },
+  });
+  const lost = [];
+  const out = guardedOutput(pipe, (why) => lost.push(why));
+  const mirrored = [];
+  const run = ownRun();
+  run.othersAtArm.set(FOREIGN, "Shutdown");
+  const stage = hostDeps(run.redactor, { write: out.write, mirror: (line) => mirrored.push(line) });
+  stage.say("PHONE_ROW SIM-STAGED BEGIN");
+  await new Promise((done) => setImmediate(done));
+  assert.deepEqual(lost, ["EPIPE"]);
+  assert.equal(out.gone(), "EPIPE");
+  // the run goes on through its STOP and its whole teardown on that same say — nothing thrown, nothing written after
+  stopRun(run, stage, "SIM-LIVE: a hand at the Mac before SIM-LIVE");
+  stage.say(`PHONE_STOP_UNRESTORED planted ${OWN[0]}`);
+  const host = fakeHost();
+  const verdict = await restoreHost(
+    run,
+    { ...host.deps, say: stage.say },
+    {
+      deleteDevices: false,
+      defaultsBefore: "",
+      crashDir: join(FIXTURES, "no-crash-reports-here"),
+      crashBefore: [],
+    },
+  );
+  assert.equal(verdict.ownOk, true);
+  stage.say(
+    hidSummary({
+      armed: sample(0, 300),
+      end: sample(60, 360),
+      armedAt: ARMED,
+      hands: 1,
+      ownInput: false,
+    }),
+  );
+  stage.say("PHONE_REDACTED {}");
+  assert.equal(written.length, 1, "the one write that found the reader gone");
+  // the mirror: the STOP lines, HOST_RESTORED and the HID summary — redacted, and nothing else
+  assert.deepEqual(
+    mirrored.map((line) => line.split(" ")[0]),
+    ["PHONE_STOP", "PHONE_STOP_UNRESTORED", "PHONE_HOST_RESTORED", "HID:"],
+  );
+  assert.ok(mirrored.every((line) => line.endsWith("\n")));
+  assert.ok(!holdsUdid(mirrored.join("")));
+  assert.match(mirrored[1], /planted <pts3-dev-1>/u);
+  // a stream that throws on write (a tty's EIO, said at once) is gone too, never thrown
+  const tty = guardedOutput(
+    Object.assign(new EventEmitter(), {
+      write() {
+        throw Object.assign(new Error("write EIO"), { code: "EIO" });
+      },
+    }),
+  );
+  assert.doesNotThrow(() => tty.write("PHONE_ROWS {}\n"));
+  assert.equal(tty.gone(), "EIO");
 });
 
 // ─── the responsible app, ENUM and the cost sampler ───────────────────────────────────────────────────────────────────
