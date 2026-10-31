@@ -92,16 +92,21 @@
   the one harness minted not onboarded, UA-3w as amended), as the mint `7310560ea`, run 48 on the Mac mini: verify
   green; the row's first console run RED at run52b in two classes (A: the mark's ink +10 px, and no scroll to witness
   on the mini's 1180 × 748; B: the sign-in pane's Cancel under the pane's foot in warm walks, a timing race per the
-  day-alone probe at 13:48Z) (LANDED "FG-1", "FG-2", "FG-3a", "FG-3b", "FG-4a", "FG-4b", "FG-6").
-- Next: FG-6's follow-up slice (classes A and B, each red first where it reproduces) → row 32 again on the Mac mini
-  at James's next unlock → James's look at its stills (one contact sheet) → FG-5 (the hand-over, written in the lane
-  and uncommitted; its commit carries the hand-over's stills and order check into row 32). Then the rest of FG-6's
-  gates: the catalog over the field's still, the tear judged in the walk, the field's glass against the CSS glass on a
-  frozen frame, FG-O2's contrast and FG-O3's GPU read during the tear. Each verifies on the Mac mini.
+  day-alone probe at 13:48Z); **FG-6's follow-up slice** (`7d25cdc80`, B: the add brought back into view when a
+  card is set in above it; `618b35429`, A: the mark centred by its ink's extent, and a list that fits its body a
+  declared, printed skip), as the mint `618b35429`, run 53 on the Mac mini: verify green (LANDED "FG-1", "FG-2",
+  "FG-3a", "FG-3b", "FG-4a", "FG-4b", "FG-6", "FG-6's follow-up slice").
+- Next: row 32 again on the Mac mini, the chain re-armed on M53 with row 32 alone (run53b: by itself while the
+  console stands unlocked and idle, else at James's next unlock) → James's look at its stills (one contact sheet)
+  → FG-5 (the hand-over, written in the lane and uncommitted; its commit carries the hand-over's stills and order
+  check into row 32). Then the rest of FG-6's gates: the catalog over the field's still, the tear judged in the
+  walk, the field's glass against the CSS glass on a frozen frame, FG-O2's contrast and FG-O3's GPU read during the
+  tear. Each verifies on the Mac mini.
 - Owed: James's eye list from row 32: Agents with nine installed (PU-L, drafted, would bring nine into the walk),
   History with six rows, and Profiles' five cards. FG-4b's rulings at VF-PM's leans (05:42Z: the hold's floor, the link
   read's Continue, the swap on `data-face`) and FG-O7 (a) (§9) are James's to overturn. FG-6's lane (07:39Z) was ruled
-  by James at 13:37:07Z (accept all three).
+  by James at 13:37:07Z (accept all three). The follow-up's declared skip for a list that fits its body is VF-PM's
+  ruling (14:20Z), James's to overturn.
 
 **AL — what Quit means** · better-quit (lanes `al2`, `al/chords`, `al/chords-2`) · law `draft/thinking-app-lifecycle.md` v0.2 §8, ESR §7.3 (amended), design-00 EL1
 - Landed: AL-1…AL-3 (`7ebb1eeda` · `5eea4b2d5` · `697beb199`; AL-4 folded in), AL-5, AL-7, AL-8a, **AL-9** (`933d2fba3`,

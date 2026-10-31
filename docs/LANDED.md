@@ -24037,6 +24037,12 @@ overturn). VF-PM ruled its staging (a) at 07:48Z, History and Profiles at 09:17Z
   >   cold first walk escaped.
   > Its 31 stills are kept (day 13, night 9, no-webgpu 9; `~/vf-lanes/verify/logs/run52b/first-run-shots` on the mini).
   > The row's first green stays owed: FG-6's follow-up slice takes A and B, then row 32 runs again.
+  > **Errata (2026-10-31 14:34Z, found cutting FG-6's follow-up records):** this block's "A (day, which reached the
+  > desk)" is what the row printed, not what it found. A walk that throws prints only its throw, so night's and
+  > no-webgpu's A reds were never said. On the kept crops, by the row's own rule, the mark's mean stood +8.5 px off by
+  > night and +4.9 px over the still, and every walk's Agents list fits (its stills): A was red on every walk. By its
+  > extent the mark stands off (+1.0, −1.0) px by day, (+0.5, −1.0) by night and (0.0, 0.0) over the still, against
+  > the slack of 3. M53 (`618b35429`, FG-6's follow-up slice) covers A on all three walks.
 - James's look: one contact sheet of the three walks, and his eye list (row 32's "not this row's"):
   - Agents with nine installed (PU-L, drafted 2026-10-31 and not filed, would bring nine into the walk's own staging);
   - History with six rows;
@@ -24096,3 +24102,86 @@ row 1 at James's next unlock, armed on M52.
   >   canvas "nothing focused: Objects rose behind the line; B again put it away".
   > So the rungs' console witness is paid: 11k's, 11l's with its Esc from the body, and 11h's again (first paid at run
   > 38b).
+
+## FG-6's follow-up slice — row 32's own readings and a login kept in view: the mark centred by its ink's extent, a list that fits its body declared and printed, and the add brought back into view when its profile's card lands above it (desk-gates row 32) (2026-10-31; `7d25cdc80` and `618b35429` on main `2f71beb2e`, lane `fg/first-run`, the mini's mint M53 being the tip itself, run 53)
+
+**Why.** Row 32's first console run (run52b on the Mac mini, James's 13:34Z unlock) was RED in two classes, as
+FG-6's Owed block says. The day walk alone, run warm at 13:47:38Z, was red on B's line, so B is a timing race. VF-PM
+gave the slice to a5 at 13:53Z: B red first on this Mac, and A by viewport, "stage overflow at every window size, or
+a declared skip that the row prints".
+
+**What landed.**
+- B, in the product (`7d25cdc80`, `ProfilesPaneView.tsx`'s AddProfileCard).
+  - The race: `pick` starts the new profile's sign-in, then sets the step to signing-in, and the add brought its
+    login into view once, as that step opened. The profile's own card comes from the profiles feed on its own clock.
+    On a warm Mac the login opened first. The feed then set the Work card in above it, which pushed the login's
+    Cancel under the pane's foot, and nothing scrolled again. Run52b's cold first walk escaped: its feed answered
+    first.
+  - The fix: while a step of the add stands, a MutationObserver on the cards list (childList) brings the add back
+    into view (`block: "nearest"`) each time a card is set in or taken out. It disconnects when the step changes. A
+    host without MutationObserver keeps the one-time scroll.
+- A1, in the row (`618b35429`, `measureMark`): the mark's centre is its ink's extent, never its mean. One lobe of the
+  field's mark carries more ink (in run52b's day crop, 417 of its 657 ink px stand right of the window's centre), so
+  the mean stood 10 px right of where the mark is drawn.
+- A2, in the row (`618b35429`): a list that fits its body is a skip the row declares and prints.
+  - The glass is one picture at every window size (880 × 640, fitted; DESIGN.md §8), so no viewport makes a list
+    outgrow its body. At puppeteer 0.3.x two adapters take the stage's stub, so two ready rows and More's seven fit on
+    every host. Overflow by staging would need a third adapter to take the stub, and that rule is theirs (AR-L1).
+  - The page's `scrollerIn` reads the body's list whether it outgrows its box or fits. It takes the one that
+    outgrows, else the first, so nothing changes where a list overflows.
+  - `listFits(pane, seen)` gives the skip with its numbers, by the page's own 1 px of slack. `judgeFrame` holds the
+    frame's parts and the list's fade either way, judges the scroll only for a list that outgrows its body, and is
+    red for a body with no list that scrolls.
+  - The walk prints `SMOKE_FIRST_RUN_SKIP <walk> Agents: the list fits its body (N in M), so the row witnesses no
+    scroll: …` and keeps it in its facts' `skipped`. `agentsList` carries the numbers for a list that fits too.
+- desk-gates row 32: the logo is "centred by its extent", and the frame's clause is rewritten with a dated
+  correction (it said the list outgrows its body). Its status column stays "not yet run" until the records after
+  run53b (VF-PM 14:20Z).
+- 5 files, +187 −39.
+
+**Checks.**
+- Red first, on the committed tests: each fix set aside to HEAD's text, its rows run, then the fix restored byte for
+  byte (sha checked; `lanes/fg2/reds.out`).
+  - B: `AssertionError: expected 0 to be greater than 0 ❯ test/profiles-pane.test.tsx:584:28` (1 failed, 12
+    passed), then 13/13.
+  - A: 3 failed and 18 passed, then 21/21. A1: `expected 23 to be close to 20, received difference is 3 ❯
+    test/smoke-first-run.test.ts:276:26`. A2: 410:46 (`Agents: the list did not scroll within itself`) and 438:73
+    (the old `the list fits its body, so nothing scrolls…`).
+- On run52b's kept crops, by the row's own glass and ink rule, the extent's centre stands off the window's by
+  (+1.0, −1.0) px by day, (+0.5, −1.0) by night and (0.0, 0.0) over the still; the slack is 3. The mean stood off
+  by (+9.9, −0.4) by day (the row's 599.9, 373.6), (+8.5, 0.0) by night and (+4.9, +1.4) over the still.
+- The lane's light (14:12–14:15Z, nice 19 under the guard), all green:
+  - field-app's typecheck, and electron-shell's in both configs (again after biome's format);
+  - biome on the four files (its one info, `noUselessStringRaw` on `FIRST_RUN_PAGE`, is HEAD's), and
+    `git diff --check`;
+  - field-app's whole vitest: 267 files, 3470 passed, 3 skipped;
+  - electron-shell's whole vitest: 158 files, 2399 passed, 3 skipped.
+- VF-PM's read (14:20Z): main is an ancestor of the tip, so the mint is the tip itself, tree `49d1ec505` (its
+  merge-tree); check clean, no markers, no pin, lock or package.json, and nothing in draft/.
+- **Run 53:** M53 is `618b35429` itself.
+  - `pnpm verify` armed at 14:21:06Z and went green at 14:25:54Z (exit 0).
+    - vitest: 11,329 passed, 0 failed, 18 skipped. That is the slice's +3 over run 52: profiles-pane's one row and
+      smoke-first-run's two.
+    - cargo: `test result: ok.` × 33. typecheck and test ran for 28 projects. MaxListeners 0, the tree clean, and
+      no stubs.
+  - Row 32's own run on M53 is owed (below).
+- **Landed:** main fast-forwarded `2f71beb2e` → `618b35429` at 2026-10-31 14:30:34Z (the fixer's land-stack.sh on
+  VF-PM's GO at 14:30Z, the ff path, M53 as its own sha): 5 files, +187 −39, no lock collision.
+
+**Found while building.**
+- desk-gates row 32 said Agents' list outgrows its body with More open. At puppeteer 0.3.x it never did: two ready
+  rows and More's seven fit (run52b's stills). It is corrected at its source.
+- A one-time `scrollIntoView` cannot hold a view against content set in above it later. The cards list has to be
+  watched for as long as the add stands.
+- A walk that throws prints only its throw: `firstRunRows` rethrows without the problems it had found, and
+  `runSmokeFirstRun` says the throw alone. At run52b night and no-webgpu threw on B, so their reds before it were
+  never said. Class A was red on every walk, not on day alone: by the mean, night's mark stood +8.5 px off and
+  the still's +4.9, and every walk's Agents list fits.
+
+**Owed.**
+- Row 32's first green: a9 re-arms the chain on M53 with row 32 alone after the green (VF-PM 14:20Z, 14:31Z). It
+  runs by itself while the console stands unlocked and idle, else at James's next unlock, and its stills come home
+  under run53b. It is B's witness (Cancel reached on all three walks), A1's (the mark within 3 px by its extent) and
+  A2's (the skip line, with the list's first measured numbers).
+- desk-gates row 32's status column, at the records after run53b.
+- James's look and FG-5's cut, as FG-6's entry says.
