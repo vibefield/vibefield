@@ -83,15 +83,19 @@
 - Landed 10-31: **FG-3b** (`be1dd92ad`, the field drawing the glass in its own frame, FG-D24: its shadow, frost, tint
   and grain read off the glass's own layers), as the mint `c8e4c55eb`, run 30 on the Mac mini: verify green; **FG-4a**
   (`fc1fc0f75`, the panes in the frame: head at 96, actions on the foot, no eyebrow on the glass, the old pane out
-  first, and only a list scrolls, within itself), as the mint `733f24ed5`, run 35 on the Mac mini: verify green
-  (LANDED "FG-1", "FG-2", "FG-3a", "FG-3b", "FG-4a").
-- Next: **FG-4b** (the holds and the logo: a load as the logo and one line, the welcome's title card, Setting up's one
-  line, the band's fill, the logo drawn by the field) → FG-5 (the hand-over) → FG-6 (the gates: the catalog, a
-  `smoke:first-run` row that judges the field's mode at boot, live or its still, and its own live pass with the new
-  canvas usage in Electron, which no smoke judged at FG-3b; contrast). Each verifies on the Mac mini.
-- Owed: at FG-4b's console window, FG-4a's pixel witness (Agents with nine installed, History with six rows, Profiles'
-  add with its login) beside `smoke:canvas` and `smoke:canvas:no-webgpu`. FG-O7 (§9) is ruled (a) at the lean and is
-  built with FG-4b.
+  first, and only a list scrolls, within itself), as the mint `733f24ed5`, run 35 on the Mac mini: verify green;
+  **FG-4b** (`07b1dad5e`, the holds and the logo: a load as the logo and one line, standing at least 800ms once it
+  shows, the welcome's title card, Setting up's one line with Start now, the band's fill, the logo drawn by the field
+  over the live field and the still's own mark over the still, and a way out after 6 s), as the mint `a5106c727`, run
+  40 on the Mac mini: verify green (LANDED "FG-1", "FG-2", "FG-3a", "FG-3b", "FG-4a", "FG-4b").
+- Next: FG-5 (the hand-over) → FG-6 (the gates: the catalog, a `smoke:first-run` row that judges the field's mode at
+  boot, live or its still, and its own live pass with the new canvas usage in Electron, which no smoke judged at
+  FG-3b; contrast). Each verifies on the Mac mini.
+- Owed: the pixel witness of FG-4a's three rows (Agents with nine installed, History with six rows, Profiles' add with
+  its login) and of FG-4b's holds and logo, to console rows that drive the wizard: a lane of its own, proposed after
+  FG-4b's landing. No smoke reaches the Setup Assistant (a smoke boot mints an onboarded user, UA-3w), and FG-4b's
+  glass pass draws its logo only there, so `smoke:canvas` cannot witness it. FG-4b's rulings at VF-PM's leans (05:42Z:
+  the hold's floor, the link read's Continue, the swap on `data-face`) and FG-O7 (a) (§9) are James's to overturn.
 
 **AL — what Quit means** · better-quit (lanes `al2`, `al/chords`, `al/chords-2`) · law `draft/thinking-app-lifecycle.md` v0.2 §8, ESR §7.3 (amended), design-00 EL1
 - Landed: AL-1…AL-3 (`7ebb1eeda` · `5eea4b2d5` · `697beb199`; AL-4 folded in), AL-5, AL-7, AL-8a, **AL-9** (`933d2fba3`,
@@ -461,10 +465,12 @@
   stack): Animate effects only where it means something; licences visible.
 - Godview round 3 on a real window: the lights' move, a real fling, launch's first call, ⌘W on the last pane (re-read
   after AL-9), other heights. Fold into QA wave 1 if the plan covers it.
-- The Setup Assistant's glass on the field (FG-3a; drawn by the field since FG-3b; its panes in the frame since FG-4a):
-  the forming, the fit in a small window, the steps' band, both themes, and the hand-off's frame or two as it forms;
-  each pane's head and actions at one height, a long list's scroll under its fade, Profiles' login whole above it; the
-  sheet's scrim close by hand (FG-D27).
+- The Setup Assistant's glass on the field (FG-3a; drawn by the field since FG-3b; its panes in the frame since FG-4a;
+  its holds and the logo since FG-4b): the forming, the fit in a small window, the steps' band, both themes, and the
+  hand-off's frame or two as it forms; each pane's head and actions at one height, a long list's scroll under its
+  fade, Profiles' login whole above it; a load's logo and one line, never a flash, the welcome's title card, Setting
+  up's line and Start now, the band's fill, and the logo inverted by day and white by night, over the live field and
+  over the still; the sheet's scrim close by hand (FG-D27).
 - Cards in Hand's B1: the hand at the window's foot (a capture dealt, a card held and reached, ⇧⌘V's list), the line
   `[views] snapshot create`, the desk's Copy ⌘C, a card played into a pane and onto the desk.
 - Cards in Hand's B2: Settings', History's and the Setup Assistant's copies dealt into the hand from their buttons; a
@@ -636,7 +642,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 |---|---|---|---|
 | TS — the Tailscale door | ACTIVE; TS-0…3b, 4a, 4b, 5, 6, 7, 8a, 8b landed | `thinking-tailscale-onboarding.md`; DESIGN.md §5/§6/§8/§9/§13 | TS-8c (T8, after its live probe) |
 | AO — Bring Your Agents | ACTIVE; AO-0…6b3 landed | `thinking-agent-onboarding.md` | AO-7 on a puppeteer release after 0.3.0 (`installRecipe`) |
-| FG — the first run on the field | ACTIVE; FG-0…3a landed 10-30, FG-3b and FG-4a 10-31 | `thinking-first-run-glass.md`; DESIGN.md §2.1/§5/§6/§8/§13 | FG-4b |
+| FG — the first run on the field | ACTIVE; FG-0…3a landed 10-30, FG-3b, FG-4a and FG-4b 10-31 | `thinking-first-run-glass.md`; DESIGN.md §2.1/§5/§6/§8/§13 | FG-5 |
 | AL — app lifecycle | ACTIVE; AL-1…3, 5, 7, 8a, 9 landed | `thinking-app-lifecycle.md`; ESR §7.3 | AL-6, Last exit, relaunch cap |
 | AU — Updates That Wait | ACTIVE; B1–B4 (AU-0…AU-7) landed 10-30/31 | `thinking-update-ux.md` §7 (page sources `draft/update-ux/`); DESIGN.md §2.5/§2.8/§6/§8/§9/§13; EDP §5.2/§6.4/§11; ESR §7.3 | the owed eyeballs, the first signed nightly with notes, the physical rows |
 | PG — the phone's Godview | ACTIVE; PG-0, PG-1a…1d landed 10-31 | `thinking-phone-godview.md` §7/§8; `design-mv.md`; `design-06-sync-planes.md` | PG-1e0, with PG-1f |
@@ -708,7 +714,8 @@ D-1 and D-10, he ruled A the same morning (DECISIONS' compact row). What stays o
 3. **FG-O7, the way out of a long load** (`draft/thinking-first-run-glass.md` §8): Opening Tailscale's Cancel shows
    only after 6 s, where TS shows it beside its pill from the start. Lean (the page's): after 6 s, by James's round-3
    words on loads ("nothing more"). *Ruled (a) at the lean, 2026-10-31 04:15Z (VF-PM; James may overturn): Cancel
-   shows under the line after 6 s. Built with FG-4b.*
+   shows under the line after 6 s. Built with FG-4b and landed in its mint `a5106c727` (run 40), with Esc cancelling
+   from the start in the Setup Assistant.*
 4. **HN's D10, the sheet's two shelf headers** (`draft/thinking-cards-in-hand.md`; B3's design review): the page drew
    one caption style for both of the pill's sheet's shelves, and the build keeps each shelf's own header, as the doc
    allows. Lean: as built.

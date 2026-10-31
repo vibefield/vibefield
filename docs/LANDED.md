@@ -23120,3 +23120,129 @@ corrections (05:23Z). It is `thinking-roled-agents.md` §17's SP-1b, on the Spar
 sparks' renderer (SP-1a and SP-1b); ROADMAP's CO block is rewritten in place.
 
 James's first sight: `pnpm dev`, then ⌘4 or the views track's fourth cell.
+
+## FG-4b — a load is the logo and one line: the holds and their floor, the welcome's title card, Setting up's one line with Start now, the band's progress, the logo on the glass and in the field's pass, and a way out after 6s (FG-L5, FG-D20, FG-D21 B, FG-D22 A, FG-D24, FG-O7 (a)) (2026-10-31; `07b1dad5e`, lane `fg/build` on FG-4a's `fc1fc0f75`, in the mini's mint `a5106c727` over main `270c5ded8`)
+
+**What landed.**
+- The frame (`PaneSwap`, `boot/onboarding/wizard-ui.tsx`) swaps on a pane's face (`data-face`), watching its own
+  children with one childList MutationObserver. This is **at the lean** (VF-PM 05:42Z (3); James may overturn).
+  - A `WizardPane`'s face is its step's, so a pane's own changes never fade, and a hold names its own.
+  - A new root with the face standing (a load's fallback, then the view it waited for) is carried with the fade it
+    had.
+  - A pane replaced before its fade in began was never seen: it leaves no copy, and the next follows the one before
+    it.
+  - The sheet never swaps (FG-D26).
+- §6's floor, **at the lean** (VF-PM 05:42Z (1); DESIGN.md §6 first):
+  - A load answered before the old pane has faded out (120ms) shows no hold.
+  - A hold that has begun to show stands at least 800ms from its fade in, and its leaving copy stays whole until then.
+    `leavingFrames` makes that one animation. No pane carries a timer.
+- The logo stands while a hold does (`data-logo` on the shell drives `--vf-glass-logo`, a registered `<number>`). It
+  fades in over 400ms once the last words are out, and out over 280ms before the next words come, which wait for it
+  (160 and 120 reduced).
+  - Its box is the field's mark at the window's centre and at its size on the screen (`logoBox`, `field-mark.ts`: the
+    splash's 128 × 77, `FIELD_MARK`, held equal to the vendored `BAKED.logo`). Over the still, it is the still's own
+    mark, cover-fitted with the picture (`FIELD_STILLS`).
+  - Its filter is a token, DESIGN.md §5 first: `--vf-wizard-logo-filter`, inverted on milk with its colours kept by
+    day, `none` by night.
+  - Over the live field the field draws it (FG-D24, FG-D17 A). `glass-pass.ts` draws the field's own mark texture over
+    the frost at the pose's `logo`, wearing the filter where the look's `logoInvert` says, and the browser's logo is
+    hidden there (`data-glass="field"`). These changes to the pass run only once a look is set, that is in the Setup
+    Assistant.
+- The holds (FG-L5, FG-D20). `WizardHold` spans the glass, with its words 26 under the logo.
+  - `WizardStatus` sets one line and its sub in one cell. A new line crossfades with its sub (140 out, then 240 in;
+    60 and 120 reduced). A line followed before it began to show is never shown: the next takes its place
+    (`crossfade`).
+  - Each timed part carries `data-born`, so the frame's leaving copy resumes it as old as it was.
+  - The loads: the read before the first pane; Agents' and History's looks, one face with their code's fallback; the
+    link's read ("Asking this Mac about its link…"); Tailscale opening ("Opening Tailscale…", and "Joining your
+    network…" for an auth key).
+- A way out (`WizardHoldOut`, FG-O7 (a), **at the lean**: VF-PM 04:15Z) stays hidden, taking no focus and no press,
+  until the load has run 6s. Then it fades in.
+  - The link's read gets Continue (VF-PM 05:42Z (2)): a read with no give-up of its own needs the way out.
+  - Tailscale opening gets Cancel, and its Esc works from the start in the Setup Assistant. The sheet's Escape stays
+    the sheet's.
+  - Agents' and History's looks carry none: each gives up after 15s onto its unavailable pane. DESIGN.md §8 records
+    the asymmetry.
+- The welcome is a title card: "Welcome." (32px, light), AO's line under it, and Get started, which Enter presses.
+- Setting up is one line (FG-D21 B), in the work's own words:
+  - "Opening your field…" over the boot's stage;
+  - then History's first pass, "Finding your history…" and then "Discovering conversations…" over the files checked;
+  - then the welcome on the same line, in ink, over the Settings sentence.
+  - Start now and its reason stand under the line at AO-D4's 8s. What went wrong stays a pane.
+- The band (FG-D22 A): Setting up's segment fills with the boot's own progress, then stands full.
+- The catalog (`OnboardingPreview`) mounts the shipping views, which speak the new lines.
+- DESIGN.md: §5's Setup Assistant row gains the logo's filter; §6 gains the floor; §8 gains a dated *Status
+  2026-10-31 (FG-4b, built)*.
+
+**Checks.**
+- Before the commit (06:58:44–07:03:18Z), each row alone at nice 19 under the guard:
+  - field-app's typecheck;
+  - 28 field-app vitest files and plugin-simulator's two, all green: onboarding-wizard 55, wizard-frame 23 (new),
+    setup-sheet 5, agents-pane 12, history-consent 10, profiles-pane 12, wizard-steps 4, field-glass 13, glass-look 14,
+    glass-pass 16, field-door 15, design-system 8, ui-system-boundaries 38, and DESIGN.md's and `tokens.css`'s other
+    readers;
+  - biome and `git diff --check`.
+  - Two mutation probes on wizard-frame each turned the right row red: a floor of 700, and a frame that never carries a
+    face. The source was restored byte for byte.
+- The light over the commit (07:04:30–07:07:40Z) ran the same rows, green, plus `check:walls`, `check:retired` and
+  `catalog:check` (R23).
+  - It also ran the glass pass on this Mac's GPU (`lanes/fg/fg4b-gpu-check.mjs`, dawn.node, once and alone; VF-PM
+    07:03Z): GREEN, 21 PASS lines.
+  - The shader compiles with its mark binding. The logo stands inverted by day, white by night, not at all at a logo
+    of 0, and alone on glass not yet frosted.
+- After the light, a test-only change made the commit `07b1dad5e` (it was `2261a5f29`): the rows that swap also deliver
+  each swap by hand (below).
+  - Its rows ran green at 07:11–07:13Z: the typecheck, wizard-frame 23, onboarding-wizard 55 and biome.
+  - With the frame's real observer blinded, both files stay green on the hand delivery alone. Blinded with no hand
+    delivery, wizard-frame goes 8 red.
+- **Run 40:** the mint `a5106c727` ("Merge main 270c5ded8 into fg/build") over main `270c5ded8`.
+  - The merge-tree was clean (tree `9ca62460a`). DESIGN.md and `design-system.test.tsx` changed on both sides, in
+    hunks apart.
+  - `pnpm verify` armed at 07:19:26Z and exited 0 at 07:24:09Z (283 s).
+    - vitest: 11,104 passed, 0 failed, 18 skipped. That is FG-4b's +37 over run 39's 11,067.
+    - cargo: 33 ok, 0 FAILED.
+    - typecheck and test ran for 28 projects; gen:check left the tree clean; `check:ios-fixtures` found the copies
+      identical; preflight warned only R23's standing `acp`.
+  - The Setup Assistant's rows: onboarding-wizard 55, wizard-frame 23, setup-sheet 5, agents-pane 12, history-consent
+    10, profiles-pane 12, wizard-steps 4, field-glass 13, glass-look 14, glass-pass 16, field-door 15, design-system 8,
+    ui-system-boundaries 39. The lottery's rows (terminal-seam 6, terminal-remote-door.e2e 1) passed with no re-run.
+    (VF-PM's read, 07:26Z; the logs are the mini's `lanes/ts6/logs/mini/run40/`.)
+  - a9's read: field-app whole, 265 files, 3,434 passed, 0 skipped; godview-monitor 89 (with its history 25, lifetime
+    4, status 10 and doors 34); godview-deck-edge 58; plugin-simulator's design 8 and attach 11 (the package 130 passed,
+    1 skipped). The mini's HID idle went from 841 to 1,124 s over the run: no input reached it.
+  - No smoke ran on M40, since none reaches the Setup Assistant. The GPU row is the light's (dawn.node on this Mac,
+    07:07Z, 21 PASS), not a smoke's.
+- **Landed:** main fast-forwarded `270c5ded8` → `a5106c727` at 2026-10-31 07:26:26Z (the fixer's land-stack.sh, on
+  VF-PM's GO at 07:26Z): 32 files, +2394 −564. FG-4b's +37 tests are wizard-frame's 23, field-glass's 5, glass-look's 4,
+  onboarding-wizard's 3 and glass-pass's 2.
+
+**Found while building.**
+- `WizardStatus`'s first build snapped a line in at full opacity when it was replaced before it had begun to show,
+  because its words started a fresh wait while the words before them were still leaving. `crossfade`'s rule replaces
+  it: words never seen take no part.
+- A hold's leaving copy resumes each timed part at that part's own age, not the hold's. Otherwise a way out not yet
+  shown would flash in the copy. Hence `data-born` per part.
+- History's first-pass count is never on the glass: the welcome follows it at once, so by the crossfade's rule it never
+  shows, and the room says it. The "· M found" that the record's §5.6 put in the discovering sub was not added.
+- happy-dom (20.11):
+  - Its `HTMLFormElement` is a Proxy, so the rows compare faces, never identity.
+  - It hands each observed node its MutationObserver's report through a WeakRef that nothing else holds, so a
+    collection can silence the frame's observer (godview-deck-frames met it, 2026-09-30). The rows that swap take
+    `observeFrames` (`test/wizard-frame-fixture.ts`): the observers stay real, and each swap is also delivered by hand
+    inside act.
+  - vitest 3 fakes `performance` with the timers.
+- The split (04:15Z) expected FG-4b to touch the worker on every boot's path. As built, the glass pass's changes run
+  only under a look:
+  - An ordinary boot makes no pipeline, as at FG-3b.
+  - No smoke reaches the Setup Assistant, because a smoke boot mints an onboarded user (UA-3w).
+  - So `smoke:canvas` cannot witness the logo. Its GPU witness is the light's dawn.node row.
+
+**Owed.**
+- The pixel witness of FG-4a's three rows (Agents with nine installed, History with six rows, and Profiles' add with its
+  login) and of FG-4b's holds and logo goes to console rows that drive the wizard. That is a lane of its own, proposed
+  after this landing.
+- The rulings at the lean stay James's to overturn: the hold's floor, the link read's Continue, the swap on
+  `data-face`, FG-O7 (a), and FG-4a's two.
+- The lane's draft record took its 4a and 4b clauses at the 06:59Z queue (copied at 07:15:53Z); its snapshot is
+  VF-PM's at the queue's close.
+- Next: FG-5 (the hand-over), then FG-6.
